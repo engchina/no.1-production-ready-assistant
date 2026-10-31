@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pypdf import PdfReader
 from rag_parser_core.preprocess import ConvertOutcome
 from rag_parser_core.result import ParserRegistryResult
@@ -363,7 +364,7 @@ class FakeEmbeddingClient(OciGenAiClient):
         input_type: str = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
         _ = input_type
-        return [[1.0] + [0.0] * 1535 for _ in texts]
+        return [[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts]
 
 
 class FailingEmbeddingClient(OciGenAiClient):

@@ -7,6 +7,8 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
+
 from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
 from app.clients.oci_genai import OciGenAiClient
 from app.config import Settings
@@ -209,7 +211,7 @@ class _EmbeddingClient(OciGenAiClient):
         input_type: str = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
         _ = input_type
-        return [[1.0] + [0.0] * 1535 for _ in texts]
+        return [[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts]
 
 
 class _FakeObjectStorage:

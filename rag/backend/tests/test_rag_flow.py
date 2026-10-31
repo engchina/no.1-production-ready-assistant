@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import httpx
 import pytest
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pytest import LogCaptureFixture, MonkeyPatch
 from rag_parser_core.result import ParserRegistryResult
 
@@ -646,7 +647,7 @@ class StubEmbeddingClient(OciGenAiClient):
         *,
         input_type: str = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
-        return [[1.0] + [0.0] * 1535 for _ in texts]
+        return [[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts]
 
 
 class FailingEmbeddingClient(OciGenAiClient):
