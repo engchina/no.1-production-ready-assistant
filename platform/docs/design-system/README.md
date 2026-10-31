@@ -20,7 +20,7 @@
 | `components-reference.md` | 新規・変更されたコンポーネントの**参照実装**（React + インラインスタイル） | **そのまま出荷しない。** `packages/ui` の既存 `.tsx` / Tailwind の書き方に合わせて書き直す |
 | `reference/` | **目視確認用の HTML** | ブラウザで開いて見た目を確認するだけ。製品コードではない |
 
-`reference/` をブラウザで開くと、ライト／ダーク並びで全トークンと、ボタン・タブの実物が見えます。
+`reference/` をブラウザで開くと、全トークン（ライト）と、ボタン・タブの実物が見えます。テーマはライトの 1 種類だけです（§2「テーマはライトだけ」。#17）。
 
 ---
 
@@ -71,26 +71,23 @@ TIER 3   components/components.css  hover / focus / disabled の状態のみ。T
 **命名規約:** `--color-<category>-<role>[-<state>]`
 `category` = `canvas | surface | fg | border | accent | success | warning | danger | info | focus`
 
-### テーマ切替は `color-scheme` 一本
+### テーマはライトだけ（#17）
 
-各トークンは CSS の `light-dark()` で **1宣言＝両テーマ**を解決します。`.dark` に全値を複製する運用は廃止。
-
-```html
-<html>                     <!-- ライト（既定） -->
-<html class="light">       <!-- ライト（明示。旧 API。既存3アプリ互換） -->
-<html data-theme="dark">   <!-- ダーク -->
-<html class="dark">        <!-- ダーク（旧 API。既存3アプリ互換） -->
-<html data-theme="auto">   <!-- OS 設定に追従（新機能） -->
-```
+画面のテーマは**ライトの 1 種類**です。ダークテーマ・OS の配色設定への追従・外観の設定のテーマの選択は持ちません。`<html>` は常に `color-scheme: light` で、テーマを切り替える属性・class（`data-theme` / `.dark`）は CSS も JS も読みません。
 
 ```css
-:root                        { color-scheme: light; }
-[data-theme="light"], .light { color-scheme: light; }
-[data-theme="dark"],  .dark  { color-scheme: dark;  }
-[data-theme="auto"]          { color-scheme: light dark; }
+:root { color-scheme: light; }
 ```
 
-**ブラウザ要件:** `light-dark()` は Chrome 123+ / Safari 17.5+ / Firefox 120+。**社内の対応ブラウザ下限がこれを下回る場合は §6-B のフォールバックを使ってください。**
+**1 テーマにした理由**
+- **配色を 1 つに固定して製品の見た目を一意にする**（#18 のティールの配色で、元の Production Ready と一目で見分けられる状態を保つ）。2 テーマでは同じ判断を 2 回し、片方だけ直す事故が起きる。
+- **検収とテストの費用が半分になる**。3 製品の e2e がテーマごとに同じ画面を 2 回描いて確かめており（約 100 spec）、UI の変更のたびに両テーマの実画面とコントラストの確認が要った。
+- **業務アプリは日中の事務所で使う**。ダークの需要より、1 つの配色のコントラスト（本文・淡い面の上の文字 4.5:1、フォーカスリング 3:1）を確実に満たす方を優先する。
+- 弱視・まぶしさへの配慮は OS / ブラウザの設定（`prefers-contrast: more`・強制カラーモード。`tokens/a11y.css`）とブラウザの拡大で行う。これらは引き続き対応する。
+
+`light-dark()` は残しますが、第 2 引数（暗い値）は**常時暗いスラブ**（サイドバー `[data-surface="inverted"]`・コード `[data-surface="code"]`。`color-scheme: dark`）の内側でだけ使われます。スラブの中の部品が追加コードなしで暗い面の見た目になるための仕組みで、画面のテーマではありません。保存済みのテーマの選好（旧版の `theme: "dark"` / `"system"`）は `createUiStore` が読み捨て、ライトで表示します。
+
+**ブラウザ要件:** `light-dark()` は Chrome 123+ / Safari 17.5+ / Firefox 120+。
 
 ### 面スコープ（最重要の再利用ポイント）
 
@@ -220,7 +217,7 @@ readme が規定していた「左右ガター 2rem / セクション間 1.5rem�
 - **例外（幅を持ってよいもの）**: `FormGrid`（フォームの欄の並び。60rem）、Modal / Dialog / Drawer / Popover / Toast / Tooltip の本体、`EmptyState` の文言、3 行以上の長文段落の `max-w-prose`（段落にだけ付け、コンテナには付けない）、アイコン / バッジ / チップの truncate 用 `max-w-*`、`max-w-full`。
 - **1280px で崩さない**: 段組みは `lg`（1024px）以上でだけ増やす。サイドバーを引いた本文幅で窮屈なら `xl` / `2xl` から増やす。
 - 業務 repo は Tailwind のレイアウトユーティリティ（`grid` / `col-span-*` / `grid-cols-[…]`）だけで実装する。3 製品で同じフォーム grid が必要になったら、業務 repo に部品を作らず `packages/ui` への追加を Issue にする。
-- **検証**: Playwright で 1280 / 1920 / 2560px × ライト / ダークを表示し、「カード内幅（全幅の親の内幅）の 75% 未満・左寄せ・右隣に兄弟要素が無い、入力欄 / 表 / 入力欄を含む塊 / 枠付きの塊」（左寄せ取り残し）が 0 件であることを確認する（例外を除く）。
+- **検証**: Playwright で 1280 / 1920 / 2560px を表示し、「カード内幅（全幅の親の内幅）の 75% 未満・左寄せ・右隣に兄弟要素が無い、入力欄 / 表 / 入力欄を含む塊 / 枠付きの塊」（左寄せ取り残し）が 0 件であることを確認する（例外を除く）。
 
 ### `PageHeader`（変更）
 
@@ -1050,9 +1047,9 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 
 ### 面と段 (elevation)
 
-**ライトは影で、ダークは面の明度で段を作ります。** ダークで影がほぼ見えないのは物理的事実です。**この順序を崩さないこと。**
+**段は影で作ります**（テーマはライトだけ。#17）。暗い値は常時暗いスラブの内側の段で、そこでは面の明度で段を作ります。**この順序を崩さないこと。**
 
-| トークン | light | dark | 用途 |
+| トークン | 値 | スラブの内側 | 用途 |
 |---|---|---|---|
 | `--color-canvas` | `#f7f8fa` | `#101318` | ページ / シェルの地 |
 | `--color-surface` | `#ffffff` | `#181c23` | カード・パネル |
@@ -1062,11 +1059,11 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 | `--color-surface-hover` | `#f2f4f7` | `#20252e` | 行 hover |
 | `--color-surface-disabled` | `#f2f4f7` | `#252b34` | 無効コントロールの地 |
 
-影も両テーマで値が変わります（`tokens/elevation.css`）。ダークでは `rgb(0 0 0 / .45〜.70)` まで濃くしたうえで、**必ず `-raised` / `-overlay` と併用**してください。影だけでは段になりません。
+影の暗い値（`rgb(0 0 0 / .45〜.70)`。`tokens/elevation.css`）はスラブの内側だけで使い、**必ず `-raised` / `-overlay` と併用**してください。
 
 ### 文字 (4段)
 
-| トークン | light | dark | コントラスト(light) | 用途 |
+| トークン | 値 | スラブの内側 | コントラスト | 用途 |
 |---|---|---|---|---|
 | `--color-fg` | `#1c1e21` | `#f2f4f7` | 15.3:1 | 本文・見出し |
 | `--color-fg-muted` | `#6b7280` | `#b2bac5` | 4.61:1 | 副次テキスト、**プレースホルダ** |
@@ -1077,11 +1074,11 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 
 ### 罫線 (3段) — ★本移行の中核
 
-| トークン | light | dark | コントラスト | 要件 | 使う場所 |
+| トークン | 値 | スラブの内側 | コントラスト | 要件 | 使う場所 |
 |---|---|---|---|---|---|
 | `--color-border` | `#e3e6ea` | `#343b46` | 1.25:1 | **なし（装飾）** | カード縁、表の罫線、ヘッダー下線、区切り |
 | `--color-border-strong` | `#cfd5dd` | `#4a5260` | 1.6:1 | なし | 読ませたい区切り、入れ子の境界 |
-| `--color-border-control` | `#8893a3` | `#5d6878` | **3.10 / 3.04:1** | **WCAG 1.4.11 で 3:1 必須** | 入力欄、セレクト、secondary ボタン、チップ = **「押せる／入力できる」ものの輪郭** |
+| `--color-border-control` | `#8893a3` | `#5d6878` | **3.10:1** | **WCAG 1.4.11 で 3:1 必須** | 入力欄、セレクト、secondary ボタン、チップ = **「押せる／入力できる」ものの輪郭** |
 
 **ボタンの枠線の方針（明文化）**
 - `primary` / `danger`（塗り）→ `border: 1px solid transparent`。**透明な枠線を必ず残す**（secondary と並べた時の 1px ズレ防止）
@@ -1089,32 +1086,42 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 - `ghost` → 枠線なし
 - **入力欄と secondary ボタンは同一トークン。** これで「隣り合う操作要素の枠線が2.5倍違う」問題が消えます
 
-### アクセントと情報色 — ★青を1色相に統合
+### アクセントと情報色 — ★深いティールの 1 色相（#18）
 
-| トークン | light | dark |
-|---|---|---|
-| `--color-accent-fg` | `#1a73c1` (4.94:1) | `#69adff` (7.4:1) |
-| `--color-accent-fg-strong` | `#155a97` (7.15:1) | `#7cbbff` |
-| `--color-accent-emphasis` | `#1a73c1` | `#286abd` |
-| `--color-accent-emphasis-hover` | 88% mix with `#000` | 同 |
-| `--color-accent-emphasis-active` | 76% mix with `#000` | 同 |
-| `--color-accent-muted` | emphasis 12% on surface | **22%** |
-| `--color-accent-subtle` | emphasis 8% on surface | **16%** |
+アクセントは**深いティール（青緑。色相 174〜176）**です。元の Production Ready の青（`#1a73c1`、色相 208）から変えました。
 
-情報色 `#1d4ed8`（紫寄りの別の青）を**廃止**し、`--color-info-fg` をアクセントと**同一色相**の `--blue-650 #155a97` にしました（淡青面上 5.84:1、白上 7.15:1）。**色相は1つ、明度で役割を分ける**のが標準解です。
+**この系統にした理由**
+- **元の青と色相が 30 度以上離れ、別の製品に見える**（サイドバーの地も紺 `#11253f` → 深いティール `#0f2c2a` に変え、画面の大きな面で違いが分かる）。
+- **業務アプリとして落ち着きがある**。彩度を抑えた深い色で、状態色（success の緑 `#047857`・warning・danger）と並べても主張しすぎない。success の緑とは明度・色相（緑 160 前後 / ティール 174）が近いため、状態は従来どおりアイコンと語で冗長に符号化する（§4「StatusBadge」）。
+- **白地で 4.5:1 を取りやすい**。`--teal-500` は白上 5.65:1 で、旧い青（4.92:1）より余裕があり、淡い面の上でも `-fg` のまま 4.62:1 以上になる。
 
-暗い面ではトーンが沈むため、`-muted` / `-subtle` の混合率をダークで上げています。塗りの上の文字は常に `--color-fg-on-accent`（白・両テーマ 4.9:1 以上）。**製品ごとのアクセント色は作らない。**
+| トークン | 値 | スラブの内側 | コントラスト（実測） |
+|---|---|---|---|
+| `--color-accent-fg` | `--teal-500` `#0d7469` | `--teal-400` `#4cc7b4` | 白上 **5.65:1** / canvas（`#f7f8fa`）上 **5.31:1** / 淡い面の上 4.62〜5.12:1 |
+| `--color-accent-fg-strong` | `--teal-650` `#0a5850` | `--teal-300` `#5fd4c2` | 白上 8.32:1 / 淡い面の上 **6.81〜7.55:1** |
+| `--color-accent-emphasis` | `--teal-500` `#0d7469` | `--teal-600` `#118075` | 白の文字（primary ボタン）**5.65:1**。スラブの内側の塗りは白の文字 4.81:1 |
+| `--color-accent-emphasis-hover` | 88% mix with `#000` | 同 | 白の文字 6.83:1 |
+| `--color-accent-emphasis-active` | 76% mix with `#000` | 同 | 白の文字 8.30:1 |
+| `--color-accent-muted` | emphasis 12% on surface（`#e2eeed`） | 22% | 本文 14.10:1 |
+| `--color-accent-subtle` | emphasis 8% on surface（`#ecf4f3`） | 16% | 本文 14.94:1 |
+| `--color-focus-ring` | `--teal-500` `#0d7469` | `--teal-300` `#5fd4c2` | 白上 **5.65:1** / canvas 上 5.31:1 / accent-muted 上 4.77:1 / サイドバー上 **8.26:1**（WCAG 1.4.11 の 3:1 以上） |
+| `--color-info-fg` | `--teal-650` `#0a5850` | `--teal-450` `#57ccba` | info-subtle 上 7.19:1 |
+| `--color-info-subtle` | `--teal-100` `#e1f2ef` | `--teal-800` `#123d39` | — |
+| `--color-sidebar` | `--teal-850` `#0f2c2a` | — | 白の文字 14.85:1 / `--slab-fg-muted`（`#d3e3e0`）11.20:1 |
+| `--color-code-canvas` | `--teal-900` `#0a1a19` | — | `--slab-code-fg` 14.50:1 |
 
-**淡い色の面の上の文字（`[data-surface-tint]`、platform #64 / #1671）。** 淡い色の面（`--color-accent-subtle` / `-muted` と、状態色の `--color-<s>-subtle`）の上では、ライトの `--color-fg-muted`（#6b7280）が accent 4.36 / info 3.96 / success 4.26 / warning 4.34 / danger 3.96:1、`--color-accent-fg` が 4.03〜4.43:1 に下がり AA を満たしません。他の系統の淡い面に載せた success / warning の文字（info の面の上の warning 4.12:1 など）も同じです。淡い面を塗る要素に `data-surface-tint="<系統>"` を付けると、内側の文字が次の値に替わります（ダークはすべて据え置きで 5.5:1 以上）。
+情報色はアクセントと**同一色相**の `--teal-650` です。**色相は1つ、明度で役割を分ける**のが標準解です（別の色相を足すと単なるブレに見える）。塗りの上の文字は常に `--color-fg-on-accent`（白）。**製品ごとのアクセント色は作らない**（3 製品で同じ 1 系統）。値はトークン（`tokens/palette.css` の `--teal-*`）だけにあり、部品・製品は `--color-*` を参照するので、配色の変更でコンポーネントは変わりません。コントラストはトークンの単体テスト（`packages/ui/tests/tokens-css.test.ts`）が計算して確かめます。
+
+**淡い色の面の上の文字（`[data-surface-tint]`、platform #64 / #1671）。** 淡い色の面（`--color-accent-subtle` / `-muted` と、状態色の `--color-<s>-subtle`）の上では、`--color-fg-muted`（#6b7280）が accent 4.08〜4.32 / info 3.98 / success 4.26 / warning 4.34 / danger 3.96:1 に下がり AA を満たしません。他の系統の淡い面に載せた success / warning の文字（info の面の上の warning 4.12:1 など）も同じです。淡い面を塗る要素に `data-surface-tint="<系統>"` を付けると、内側の文字が次の値に替わります。
 
 | 内側の文字 | ライトの値 | 淡い面の上のコントラスト（ライト） |
 |---|---|---|
-| `--color-fg-muted` | `--neutral-650`（#5d6878） | 4.63〜5.09:1（ダーク 6.58〜7.58:1） |
-| `--color-accent-fg` | `--color-accent-fg-strong`（`--blue-650`） | 5.84〜6.43:1 |
-| `--color-success-fg` | `--color-success-fg-strong`（`--green-800` #065f46）。success の面の上は `-fg` のまま（4.84:1） | 6.29〜6.92:1 |
-| `--color-warning-fg` | `--color-warning-fg-strong`（`--amber-800` #92400e）。warning の面の上は `-fg` のまま（4.51:1） | 5.80〜6.39:1 |
+| `--color-fg-muted` | `--neutral-650`（#5d6878） | 4.63〜5.13:1 |
+| `--color-accent-fg` | `--color-accent-fg-strong`（`--teal-650` #0a5850） | 6.81〜7.55:1 |
+| `--color-success-fg` | `--color-success-fg-strong`（`--green-800` #065f46）。success の面の上は `-fg` のまま（4.84:1） | 6.29〜6.97:1 |
+| `--color-warning-fg` | `--color-warning-fg-strong`（`--amber-800` #92400e）。warning の面の上は `-fg` のまま（4.51:1） | 5.80〜6.43:1 |
 
-灰色の面を常に塗る要素（`bg-surface-hover` のチップ・事実の欄・グループの見出し。ライトの `fg-muted` は 4.39:1）にも同じ仕組みを `data-surface-tint="neutral"` で使います（5.13:1。#1671 の axe の nightly で検出）。`info-fg`（5.84:1 以上）・`danger-fg`（5.30:1 以上）・`fg` は深くしなくても満たします。値は系統によらず同じで、系統は「どの面か」と自分の系統の文字を元の色に保つためだけに使います。`[data-surface]` と違って面のトークン一式は宣言し直さないので、`prefers-contrast: more` の強い値は残ります（a11y.css もこのセレクタを対象にしています）。トークンの単体テスト（`packages/ui/tests/tokens-css.test.ts`）が、5 つの淡い面と accent-muted の上の `fg` / `fg-muted` / `accent-fg` / 状態色の `fg` を両テーマで計算して 4.5:1 以上を確かめます。
+灰色の面を常に塗る要素（`bg-surface-hover` のチップ・事実の欄・グループの見出し。ライトの `fg-muted` は 4.39:1）にも同じ仕組みを `data-surface-tint="neutral"` で使います（5.13:1。#1671 の axe の nightly で検出）。`info-fg`（6.81:1 以上）・`danger-fg`（5.30:1 以上）・`fg` は深くしなくても満たします。値は系統によらず同じで、系統は「どの面か」と自分の系統の文字を元の色に保つためだけに使います。`[data-surface]` と違って面のトークン一式は宣言し直さないので、`prefers-contrast: more` の強い値は残ります（a11y.css もこのセレクタを対象にしています）。トークンの単体テスト（`packages/ui/tests/tokens-css.test.ts`）が、5 つの淡い面と accent-muted の上の `fg` / `fg-muted` / `accent-fg` / 状態色の `fg` を計算して 4.5:1 以上を確かめます。
 
 - **部品は自分で付けます**: `DataTable` の選択行、`StatusBadge`、`Banner`、`ConfirmDialog` のアイコン、`Disclosure` の tone、`BlockedPageNotice`、`ExecutionConfirmationField` の状態、`SelectField` / `SearchableOptions` / `ListPicker` の選んだ・強調した行、`Tabs` の件数、`ErrorState` など。
 - **製品が `bg-*-subtle`・`bg-surface-hover` を className に書くときは、同じ要素に `data-surface-tint` を付けます**（条件で塗るなら同じ条件の式）。adherence の lint（`design-system/restricted-syntax`）が付け忘れを検出します。対応表・関数で class を組み立てる箇所は lint が追えないので、`data-surface-tint={surfaceTintFor(className)}`（`@production-ready/ui`）で付けます。
@@ -1131,7 +1138,7 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 | `--color-<s>-subtle` | 淡い面（Banner / StatusBadge の地） |
 | `--color-<s>-border` | 輪郭（= `-fg` の30%混合。従来 `color-mix` を各所に直書き） |
 
-実測コントラスト（`-fg` on `-subtle`）: light は success 4.89 / warning 4.54 / danger 5.36 / info 5.84、dark は success 7.25 / warning 8.36 / danger 5.87 / info 6.27。**全て AA 合格。**
+実測コントラスト（`-fg` on `-subtle`）: success 4.84 / warning 4.51 / danger 5.30 / info 7.19（#18 のティール）。**全て AA 合格。**
 
 ### z-index (7段)
 
@@ -1238,7 +1245,7 @@ RAG の指示の編集欄では、保存・破棄と並んでいた既定への�
 
 品質評価の長い根拠・Excel 入力・ケース別結果は、共通のリスト上限（17.5 / 28rem）で止めて内部スクロールします。表は `PagedDataTable viewport="bounded"` を使い、表頭とページ送りを保ちます。Excel のプレビューはカードの幅を使い、六つの入力列を省略せず、狭い画面では表の中で横スクロールします（#3595）。
 
-QA に事前共有してください。**175点あります。**
+QA に事前共有してください。**178点あります。**
 
 | # | 変更 | 旧 → 新 | 理由 |
 |---|---|---|---|
@@ -1419,6 +1426,8 @@ QA に事前共有してください。**175点あります。**
 | 174 | **処理の詳細と軌跡の調査を 3 製品で統一する**（#3918） | 処理の詳細は Trace ID・会話 ID・回答メッセージ ID（各コピー付き）と末尾の使用モデルだけ。経過は名前・状態・所要時間・結果の摘要と必要な説明。軌跡は同じ順序・階層・名称・書式で、処理内容と資料 → 時刻（表示の時間帯と元の ISO のコピー）→ 技術属性。時間条・字体・状態アイコン・フィールドの間隔を共有 | 識別子を探しやすくし、視点を切り替えても表示密度をそろえる。上方の時間の概観の選択輪郭は保持する |
 | 175 | **3 製品のチャットの対象の選択をツールバーに統合する**（#3918） | 独立したカードと上のラベル → 会話の履歴・会話名・新しい会話と同じ行の compact な選択 | 会話の表示領域を広げ、対象を常に確認・変更できる。狭い幅ではツールバー内で縦に並べ、選択名は省略して全文を title と読み上げ名に残す |
 | 176 | **RAG の文書解析から MinerU・Dots.OCR・OCI Document Understanding の使用エンジンのカードと「外部 GPU 解析エンジンの接続」の節が消え、サービス管理の「文書解析(OCI)」の節と「準備中（ロードマップ）」の行が消える**（#22） | 使用エンジンの 2 列の grid に Dots.OCR・MinerU（灰色の「準備中（ロードマップ）」）・OCI Document Understanding が並び、その下に「外部 GPU 解析エンジンの接続」（Endpoint・Model・API key・接続を確認）と MinerU のライセンスの確認があった。処理レシピの「文書解析」の選択肢にも灰色の 2 件が出た。サービス管理に「文書解析(OCI)」の節と準備中の行があった → 使用エンジンは Docling・Unstructured / 構造化レコード JSONL・XML ツリー JSON の 2 行だけ（375px は 1 列で同じ順）。外部の接続の節・ライセンスの確認・Dots.OCR の読み取りプロンプトは無い。処理レシピの選択肢は4 件すべて選べる。サービス管理は「文書解析(CPU)」だけで、準備中の行と「準備中（ロードマップ）」のバッジは出ない | OCI に依存しない構成へ移し、外部サービスへ接続する解析エンジンを外す（ユーザーの判断） |
+| 177 | **ダークテーマと、外観の設定のテーマの選択（ライト / ダーク / 自動）が無くなる**（#17） | 外観と証明書の画面に「配色テーマ」のカード（ライト / ダーク / 自動（OS 設定））があり、`html.dark`・`data-theme` の属性・OS の配色設定のメディアクエリでトークンが暗い値に切り替わった。保存した選好は localStorage に残った → 画面は常にライト（`color-scheme: light`）。外観と証明書の画面は #19 で画面ごと削除した。保存済みの `dark` / `system` は読み捨ててライトで表示する。サイドバーの下部のテーマ切替（`SidebarAccountFooter` の `onToggleTheme`）も削除。サイドバー・コードの暗いスラブは変わらない | 配色を 1 つに固定し、検収とテストを 1 テーマにする（§2「テーマはライトだけ」） |
+| 178 | **アクセントが青から深いティールになる**（#18） | アクセント・フォーカスリング・primary ボタン `#1a73c1`（白上 4.92:1）、淡い面の上の文字・情報色 `#155a97`、淡いアクセント面（青の 8 / 12%）、info の淡い面 `#dbeafe`、サイドバーの地 `#11253f`（紺）、コードの地 `#0b1220`、サイドバーの副次文字 `#d7e0ec`、サイドバーのフォーカス `#7cbbff` → `#0d7469`（白上 5.65:1）、`#0a5850`（淡い面の上 6.81:1 以上）、ティールの 8 / 12%（`#ecf4f3` / `#e2eeed`）、`#e1f2ef`、`#0f2c2a`、`#0a1a19`、`#d3e3e0`、`#5fd4c2`（サイドバー上 8.26:1）。neutral（面・罫線・本文）・状態色・グラフの色・文字・余白・角丸・影・モーションは変えない | 元の Production Ready と一目で見分けられる共通の 1 系統にする（製品ごとには分けない。§6「アクセントと情報色」） |
 
 確認カードの質問見出しは、青い外枠を表示しない。読み上げのための自動フォーカスと操作部品のキーボードフォーカス表示は維持する（#3118）。
 
@@ -1527,17 +1536,7 @@ QA に事前共有してください。**175点あります。**
 
 ### B. `light-dark()` が使えない場合のフォールバック
 
-対応ブラウザ下限が Chrome 123 / Safari 17.5 を下回る場合のみ。`tokens/colors.css` を次の形に展開します。
-
-```css
-:root, [data-theme="light"], .light { --color-surface: var(--neutral-0);   /* … */ }
-[data-theme="dark"], .dark          { --color-surface: var(--neutral-900); /* … */ }
-@media (prefers-color-scheme: dark) {
-  [data-theme="auto"]               { --color-surface: var(--neutral-900); /* … */ }
-}
-```
-
-**この場合もダーク値の記述が2箇所に増えるだけで、TIER 1 / TIER 2 の分離は維持されます**（旧構成との本質的な違いはそこ）。`[data-surface]` スコープは `color-scheme` に依存しているので、フォールバック時はスコープ内で全トークンを明示的に上書きしてください。
+テーマはライトだけ（#17）なので、`light-dark()` が使えない場合は各トークンの第 1 引数（ライトの値）を直接書き、常時暗いスラブ（`[data-surface="inverted"]` / `[data-surface="code"]`）の内側で暗い値を明示的に上書きします。TIER 1 / TIER 2 の分離は維持されます。
 
 ### C. Tailwind v4 の `@theme` に載せる場合
 
@@ -1552,11 +1551,10 @@ TIER 2 のトークンを `@theme inline` に登録すると `bg-surface` / `tex
       （`grep -rn "var(--card)\|var(--muted)\|var(--background)\|var(--control-border)\|var(--button-border)"`）
 - [ ] `compat.css` を外してもビルドと画面が壊れない
 - [ ] `.dark` に色値の手書き宣言が1つも残っていない
-- [ ] 入力欄・secondary ボタン・チップの枠線コントラストが **3:1 以上**（light / dark 両方）
-- [ ] ダークで card / popover / dialog の背景色が**それぞれ異なる**
+- [ ] 入力欄・secondary ボタン・チップの枠線コントラストが **3:1 以上**
+- [ ] テーマはライトだけ: CSS に `data-theme` の dark・OS の配色設定のメディアクエリ・`.dark` が無い（`tokens-css.test.ts`）、`<html>` の `color-scheme` が `light`、外観の設定にテーマの選択が無い（#17）
+- [ ] アクセント（`--color-accent-*`・フォーカスリング・淡いアクセント面・サイドバー）が深いティールの 1 系統で、本文・淡い面の上の文字・ボタンの文字が **4.5:1 以上**、フォーカスリングが **3:1 以上**（#18。`tokens-css.test.ts`）
 - [ ] サイドバーとコードブロックに `#ffffff` / `rgb(255 255 255 / …)` の直書きが0件
-- [ ] `data-theme="auto"` で OS 設定に追従する
-- [ ] `class="light"` / `class="dark"` の旧 API が引き続き動く
 
 **タイポグラフィ**
 - [ ] 本文が 14px、表・メタが 12px でレンダリングされる
@@ -1610,13 +1608,13 @@ TIER 2 のトークンを `@theme inline` に登録すると `bg-surface` / `tex
 | `css/tokens/colors-graph.css` | グラフ配色（NL2SQL 固有の語彙） |
 | `css/tokens/typography.css` | タイプスケール（px） |
 | `css/tokens/spacing.css` | 余白 + アイコン寸法 + `--content-max-width` + `--tab-height` / `--tab-fade-width` |
-| `css/tokens/elevation.css` | 影（両テーマ）+ z-index 7段 |
+| `css/tokens/elevation.css` | 影（スラブの内側は暗い値）+ z-index 7段 |
 | `css/tokens/base.css` | 14px ルート、日本語行組版、フォーカス、スキップリンク |
 | `css/tokens/a11y.css` | `forced-colors` / `prefers-contrast` 応答層 |
 | `css/tokens/compat.css` | 旧名 → 新名の `@deprecated` エイリアス。**移行完了後に削除** |
 | `css/components/components.css` | **TIER 3** 状態（button / tab / chip / input / nav / sort header） |
 | `components-reference.md` | 参照実装 9 件。**新規** `Tabs` / `PageBody`（+`Section`）、**変更** `PageHeader` / `Button` / `StatusBadge` / `DataTable` / `Pagination` / `AppShell` / `Sidebar`。props の型も併記 |
-| `reference/*.html` | 目視確認用。ブラウザで開くとライト／ダーク並びで見える |
+| `reference/*.html` | 目視確認用。ブラウザで開くとライトのトークンが見える（ダークの欄は #17 で削除） |
 | `ARCHITECTURE.md` | 依存の向き、責任の境界、アプリ別の作業、変更を入れたいときの手順 |
 | `adherence.oxlintrc.json` | lint ルール（oxlint / ESLint 共通の純粋な JSON） |
 | `design-system-plugin.mjs` | oxlint 用 JS プラグイン（`no-restricted-syntax` 相当） |
@@ -1627,7 +1625,7 @@ TIER 2 のトークンを `@theme inline` に登録すると `bg-surface` / `tex
 
 **実装前に確認が必要**
 
-1. **社内の対応ブラウザ下限。** `light-dark()` は Chrome 123+ / Safari 17.5+ / Firefox 120+。下回る場合は §8-B。
+1. **社内の対応ブラウザ下限。** `light-dark()`（常時暗いスラブで使う）は Chrome 123+ / Safari 17.5+ / Firefox 120+。下回る場合は §8-B。
 2. **Tailwind v4 の `@theme` に載せるか。** 載せる場合 TIER 1 は入れない（§8-C）。
 3. **表の行高が増えることの是非。** 文字が 10.5→12px になるため、1画面に収まる行数が減ります。`DataTable` の `dense` を既定にするか検討してください。
 

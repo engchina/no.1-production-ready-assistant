@@ -672,17 +672,6 @@ const okReply = {
 };
 
 
-/** ライト・ダークの両方の画面を残す（処理の段階の色は共有のトークン。#1146）。 */
-async function screenshotBothThemes(page: Page, path: (theme: string) => string) {
-  for (const theme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: theme });
-    await page.evaluate((value) => {
-      document.documentElement.dataset.theme = value;
-    }, theme);
-    await page.screenshot({ path: path(theme), fullPage: false });
-  }
-}
-
 /**
  * 回答（`messageId`）の処理の経過（span のイベント。#3226）を、配信の chunk を送ったときに表へ書いたものとして
  * 記録する（回答の trace の API が返す）。時刻は配信した時刻に置き換える（mockStreams）。
@@ -895,7 +884,7 @@ for (const viewport of [
       "failed"
     );
     await progress.scrollIntoViewIfNeeded();
-    await screenshotBothThemes(page, (theme) => `test-results/answer-progress-chat-failed-${viewport.name}-${theme}.png`);
+    await page.screenshot({ path: `test-results/answer-progress-chat-failed-${viewport.name}.png`, fullPage: false });
     // 会話を取り直すと保存した失敗の回答に置き換わり、処理の経過は表の span（回答の trace の API）から同じ失敗で
     // 出し直す（#3226）。
     await expect(page.getByTestId("chat-live-turn")).toHaveCount(0, { timeout: 5_000 });
@@ -927,7 +916,7 @@ for (const viewport of [
     const summaryBox = await summary.boundingBox();
     expect(answerBox && summaryBox && summaryBox.y < answerBox.y).toBeTruthy();
     await summary.scrollIntoViewIfNeeded();
-    await screenshotBothThemes(page, (theme) => `test-results/answer-progress-chat-done-${viewport.name}-${theme}.png`);
+    await page.screenshot({ path: `test-results/answer-progress-chat-done-${viewport.name}.png`, fullPage: false });
     await expectNoPageOverflow(page);
     const requests = await streamRequests(page, "chat");
     expect(requests).toHaveLength(2);
@@ -1090,7 +1079,7 @@ test("リランクの論理要求は新規配信と保存したtraceで同じ名
     await expectNoPageOverflow(page);
   }
   await checkRows("search-run-progress");
-  await screenshotBothThemes(page, (theme) => testInfo.outputPath(`rerank-live-${theme}.png`));
+  await page.screenshot({ path: testInfo.outputPath("rerank-live.png"), fullPage: false });
 
   // 同じ保存済みイベントを会話のtrace APIから再読込する。記録は書き換えない。
   await page.route("**/api/chat/models", route => route.fulfill({ json: { data: [], error_messages: [], warning_messages: [] } }));
@@ -1105,5 +1094,5 @@ test("リランクの論理要求は新規配信と保存したtraceで同じ名
   await expect(page.getByText(content, { exact: true })).toBeVisible();
   await page.getByTestId("chat-answer-progress-summary").click();
   await checkRows("chat-answer-progress");
-  await screenshotBothThemes(page, (theme) => testInfo.outputPath(`rerank-saved-${theme}.png`));
+  await page.screenshot({ path: testInfo.outputPath("rerank-saved.png"), fullPage: false });
 });

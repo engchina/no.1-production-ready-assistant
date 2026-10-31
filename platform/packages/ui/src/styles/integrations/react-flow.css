@@ -1,14 +1,12 @@
 /* ─────────────────────────────────────────────────────────────────────────
    外部ライブラリの配色 — React Flow（@xyflow/react）
 
-   React Flow の既定の配色（@xyflow/react/dist/style.css）は生の色で、ダークは `.react-flow.dark`
-   （`colorMode="dark"`）のときだけ切り替わる。製品は colorMode を渡していないため、ダークテーマでも
-   Controls（＋ − 全体表示）・帰属表示・辺のラベルの地が白いまま出ていた（#1137）。
+   React Flow の既定の配色（@xyflow/react/dist/style.css）は生の色で、Controls（＋ − 全体表示）・
+   帰属表示・辺の色がデザインシステムのトークンとずれていた（#1137）。
 
    React Flow の各色は `var(--xy-<名前>, var(--xy-<名前>-default))` で読まれる。ここでは `-default`
-   ではない方の変数を意味トークンに結び付ける。トークンは light-dark() で解決済みなので、
-   light / dark / auto のどれでも `<html>` のテーマに追従し、製品は colorMode を渡さなくてよい
-   （colorMode="system" は OS の設定に従い、画面の外観の設定と食い違う）。
+   ではない方の変数を意味トークンに結び付ける。テーマはライトだけ（#17）なので、製品は
+   colorMode を渡さない（colorMode="dark" / "system" はトークンと食い違う）。
    製品が props で渡した色（`<Background color>`・`<MiniMap bgColor>` など。`--xy-*-props`）は
    これより優先される。
 

@@ -53,12 +53,6 @@ test("業務 Agent は全件を名前の自然順・同名は ID 順にしてか
   await page.screenshot({ path: test.info().outputPath("agent-name-order.png"), fullPage: true });
 });
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -248,33 +242,30 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`業務 Agent のエディタの「変更を破棄」と段組み (${theme})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await useTheme(page, theme);
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto("/agents?id=default");
-    await expect(page.getByRole("heading", { name: "資料・データ横断アシスタント", level: 1 })).toBeVisible();
-    const discard = page.getByRole("button", { name: "変更を破棄" });
-    await expect(discard).toBeDisabled();
-    const name = page.locator("#default-agent-name");
-    const original = await name.inputValue();
-    await name.fill("名前を変えた Agent");
-    await expect(discard).toBeEnabled();
-    await discard.click();
-    await expect(name).toHaveValue(original);
-    await expect(discard).toBeDisabled();
+test(`業務 Agent のエディタの「変更を破棄」と段組み`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/agents?id=default");
+  await expect(page.getByRole("heading", { name: "資料・データ横断アシスタント", level: 1 })).toBeVisible();
+  const discard = page.getByRole("button", { name: "変更を破棄" });
+  await expect(discard).toBeDisabled();
+  const name = page.locator("#default-agent-name");
+  const original = await name.inputValue();
+  await name.fill("名前を変えた Agent");
+  await expect(discard).toBeEnabled();
+  await discard.click();
+  await expect(name).toHaveValue(original);
+  await expect(discard).toBeDisabled();
 
-    // 欄は値の種類の幅（#1891）: 名前は md（20rem = 280px）、説明は全幅でも FormGrid の 60rem（840px）で止まる。
-    const nameBox = await name.boundingBox();
-    const descriptionBox = await page.locator("#default-agent-description").boundingBox();
-    expect(nameBox && Math.abs(nameBox.width - 280) < 2).toBe(true);
-    expect(descriptionBox && descriptionBox.width <= 841).toBe(true);
-    expect(descriptionBox && nameBox && Math.abs(descriptionBox.x - nameBox.x) < 2).toBe(true);
-    // スキルは ListPicker（検索・選択中だけ表示）。
-    await expect(page.getByRole("listbox", { name: "業務 Agent に割り当てるスキル" })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`agent-editor-${theme}.png`), fullPage: true });
-  });
-}
+  // 欄は値の種類の幅（#1891）: 名前は md（20rem = 280px）、説明は全幅でも FormGrid の 60rem（840px）で止まる。
+  const nameBox = await name.boundingBox();
+  const descriptionBox = await page.locator("#default-agent-description").boundingBox();
+  expect(nameBox && Math.abs(nameBox.width - 280) < 2).toBe(true);
+  expect(descriptionBox && descriptionBox.width <= 841).toBe(true);
+  expect(descriptionBox && nameBox && Math.abs(descriptionBox.x - nameBox.x) < 2).toBe(true);
+  // スキルは ListPicker（検索・選択中だけ表示）。
+  await expect(page.getByRole("listbox", { name: "業務 Agent に割り当てるスキル" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`agent-editor.png`), fullPage: true });
+});
 
 test("MCP 接続の API キーは SecretField（保存済み / 未設定・表示の切り替え）", async ({ page }) => {
   await page.goto("/settings/mcp-connections?id=new");

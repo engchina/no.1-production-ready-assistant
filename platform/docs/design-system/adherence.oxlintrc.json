@@ -100,7 +100,7 @@
           },
           {
             "selector": "JSXOpeningElement[name.name='select']",
-            "message": "選択欄はネイティブの <select> を手書きせず SelectField（@production-ready/ui。候補が数十件を超えるなら SearchableSelectField）を使う。開いた一覧の見た目・キーボード操作・typeahead・ダークテーマの一覧の面・ラベル・補足・エラーの関連付け・無効（disabled）を 1 つの実装にそろえる（#631）。<optgroup> や選べない選択肢（<option disabled>）が要るなど SelectField で表せない所だけ、理由を添えて局所的に除外し、fieldControlClassName({ size, width }) で見た目をそろえる。"
+            "message": "選択欄はネイティブの <select> を手書きせず SelectField（@production-ready/ui。候補が数十件を超えるなら SearchableSelectField）を使う。開いた一覧の見た目・キーボード操作・typeahead・一覧の面・ラベル・補足・エラーの関連付け・無効（disabled）を 1 つの実装にそろえる（#631）。<optgroup> や選べない選択肢（<option disabled>）が要るなど SelectField で表せない所だけ、理由を添えて局所的に除外し、fieldControlClassName({ size, width }) で見た目をそろえる。"
           },
           {
             "selector": "JSXOpeningElement[name.name='details']",
@@ -148,7 +148,7 @@
           },
           {
             "selector": ":matches(Literal[value=/(?<![a-zA-Z])(?:rgba?|hsla?|hwb|oklch|oklab)\\(/], TemplateElement[value.raw=/(?<![a-zA-Z])(?:rgba?|hsla?|hwb|oklch|oklab)\\(/])",
-            "message": "rgba() / rgb() / hsl() などの生の色を書かない。色トークン（bg-surface / ring-surface / var(--color-*)）を使い、透過は bg-accent-emphasis/15 のような不透明度の修飾か color-mix(in srgb, var(--color-*) …) で作る。生の色はダークテーマで切り替わらない（#800）。"
+            "message": "rgba() / rgb() / hsl() などの生の色を書かない。色トークン（bg-surface / ring-surface / var(--color-*)）を使い、透過は bg-accent-emphasis/15 のような不透明度の修飾か color-mix(in srgb, var(--color-*) …) で作る。生の色はトークンの変更（配色の変更）に追従しない（#800）。"
           },
           {
             "selector": "Property[key.name=/^(?:fontSize|lineHeight|letterSpacing)$/] > Literal[raw=/^[\\d.]+$/]",

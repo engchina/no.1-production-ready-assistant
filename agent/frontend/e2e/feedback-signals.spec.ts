@@ -19,12 +19,6 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 const KINDS = [
   "not_helpful",
   "validation_failed",
@@ -81,98 +75,95 @@ function seedSignals(mockApi: MockApi, items = [
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`確かめるべき実行の集計・種類・一覧と詳細を出す (${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      seedSignals(mockApi);
-      await page.goto("/feedback");
+  test(`確かめるべき実行の集計・種類・一覧と詳細を出す (${viewport.name})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    seedSignals(mockApi);
+    await page.goto("/feedback");
 
-      // 既定の見方は「確かめるべき実行」。
-      await expect(page.getByRole("heading", { name: "フィードバック", level: 1 })).toBeVisible();
-      await expect(page.getByRole("tab", { name: "確かめるべき実行" })).toHaveAttribute("aria-selected", "true");
-      const summary = page.getByTestId("signals-summary");
-      await expect(summary).toContainText("確かめるべき実行");
-      await expect(summary).toContainText("15%");
-      await expect(summary).toContainText("前の期間から −10 ポイント");
-      await expect(summary).toContainText("前の期間から −2");
-      await expect(summary).toContainText("40");
-      // 種類ごとの件数と前の期間からの増減（色だけに頼らず文言と数で出す）。
-      await expect(page.getByTestId("signals-kind-tool_failed")).toContainText("ツールの失敗");
-      await expect(page.getByTestId("signals-kind-tool_failed")).toContainText("前の期間から −1");
-      await expect(page.getByTestId("signals-kind-validation_failed")).toContainText("前の期間から +1");
-      await expect(page.getByTestId("signals-kind-unvalidated")).toContainText("前の期間と同じ");
-      await expect(page.getByTestId("signals-kind-ungrounded_no_tools")).toContainText("根拠を使わずに答えた");
-      await expect(page.getByTestId("signals-kind-ungrounded_no_tools")).toContainText("前の期間から +2");
+    // 既定の見方は「確かめるべき実行」。
+    await expect(page.getByRole("heading", { name: "フィードバック", level: 1 })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "確かめるべき実行" })).toHaveAttribute("aria-selected", "true");
+    const summary = page.getByTestId("signals-summary");
+    await expect(summary).toContainText("確かめるべき実行");
+    await expect(summary).toContainText("15%");
+    await expect(summary).toContainText("前の期間から −10 ポイント");
+    await expect(summary).toContainText("前の期間から −2");
+    await expect(summary).toContainText("40");
+    // 種類ごとの件数と前の期間からの増減（色だけに頼らず文言と数で出す）。
+    await expect(page.getByTestId("signals-kind-tool_failed")).toContainText("ツールの失敗");
+    await expect(page.getByTestId("signals-kind-tool_failed")).toContainText("前の期間から −1");
+    await expect(page.getByTestId("signals-kind-validation_failed")).toContainText("前の期間から +1");
+    await expect(page.getByTestId("signals-kind-unvalidated")).toContainText("前の期間と同じ");
+    await expect(page.getByTestId("signals-kind-ungrounded_no_tools")).toContainText("根拠を使わずに答えた");
+    await expect(page.getByTestId("signals-kind-ungrounded_no_tools")).toContainText("前の期間から +2");
 
-      const layout = page.getByTestId("list-detail-feedback-signals");
-      const list = page.getByTestId("list-detail-feedback-signals-list");
-      await expect(layout).toHaveAttribute("data-list-detail-layout", "single");
-      await expect(page.getByTestId("list-detail-feedback-signals-detail")).toBeHidden();
-      const [listBox, layoutBox] = await Promise.all([list.boundingBox(), layout.boundingBox()]);
-      expect(listBox!.width).toBeCloseTo(layoutBox!.width, 0);
-      const countToolbar = page.getByTestId("signals-list-toolbar");
-      expect(await countToolbar.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
-      // 主一覧は外側のカードを持たず、件数は表の右端、見出しは共通 Section の大きさにする。
-      const appearance = await list.evaluate((element) => {
-        const style = getComputedStyle(element);
-        const heading = element.querySelector("h2")!;
-        return { border: style.borderTopWidth, shadow: style.boxShadow, position: style.position, fontSize: getComputedStyle(heading).fontSize };
-      });
-      expect(appearance).toEqual({ border: "0px", shadow: "none", position: "static", fontSize: "16px" });
-      const [toolbarBox, mainListBox] = await Promise.all([countToolbar.boundingBox(), list.boundingBox()]);
-      expect(toolbarBox!.x + toolbarBox!.width).toBeCloseTo(mainListBox!.x + mainListBox!.width, 0);
-      const table = page.getByRole("table", { name: "確かめるべき実行の一覧" });
-      await expect(table.getByRole("columnheader", { name: "シグナル", exact: true })).toHaveCount(viewport.width >= 1024 ? 1 : 0);
-      const toolRow = table.getByRole("row", { name: /run-tool/ });
-      await expect(toolRow).toContainText("ツールの失敗");
-      await expect(toolRow).toContainText("答えられなかった");
-      // 主一覧は質問とシグナル・実行日時を比較し、業務 Agent と利用者は詳細で見る。
-      await expect(toolRow).not.toContainText("山田 太郎");
-      await expect(table.getByRole("row", { name: /run-failed/ })).toContainText("実行の失敗・取り消し");
-
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`feedback-signals-${viewport.name}-${theme}.png`), fullPage: true });
-      await list.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`feedback-signals-list-${viewport.name}-${theme}.png`) });
-
-      // 行から全幅の詳細へ進み、一覧と集計・条件を隠して内容を読む。
-      await toolRow.getByRole("button", { name: /run-tool の質問/ }).click();
-      await expect(page).toHaveURL(/signal=run-tool/);
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-      const detail = page.getByRole("region", { name: "確かめるべき実行の詳細" });
-      const signals = detail.getByTestId("signals-detail-signals");
-      await expect(signals).toContainText("ツールの呼び出しが失敗しました。");
-      await expect(signals).toContainText("失敗したツールの呼び出し: 2 件");
-      await expect(signals).toContainText("回答の対応: 根拠不足");
-      await expect(detail.locator("strong").filter({ hasText: "確認結果" })).toBeVisible();
-      await expect(detail.getByRole("table", { name: "回答の表", exact: true })).toContainText("1200");
-      await expect(detail.getByTestId("signals-open-run")).toHaveAttribute("href", "/runs?id=run-tool");
-      await expect(detail.getByTestId("signals-add-case-toggle")).toBeVisible();
-      await expect(detail).toContainText("山田 太郎");
-      await expect(list).toBeHidden();
-      await expect(summary).toBeHidden();
-      await expect(page.getByTestId("signals-filters")).toBeHidden();
-      await expect(detail.getByRole("heading", { name: "確かめるべき実行の詳細" })).toBeInViewport();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`feedback-signals-detail-${viewport.name}-${theme}.png`) });
-      await page.getByTestId("signals-detail-pager-next").click();
-      await expect(page).toHaveURL(/signal=run-failed/);
-      await expect(page.getByTestId("signals-detail-pager-next")).toBeDisabled();
-      await page.getByTestId("feedback-detail-back").click();
-      await expect(list).toBeVisible();
-      await expect(table.getByRole("button", { name: /run-failed の質問/ })).toBeFocused();
-      await expect(summary).toBeVisible();
-      await toolRow.getByRole("button", { name: /run-tool の質問/ }).click();
-      await page.goBack();
-      await expect(list).toBeVisible();
-      await expect(toolRow.getByRole("button", { name: /run-tool の質問/ })).toBeFocused();
-      await page.goForward();
-      await expect(detail).toBeVisible();
-      await page.reload();
-      await expect(page.getByTestId("signals-detail")).toContainText("失敗したツールの呼び出し: 2 件");
+    const layout = page.getByTestId("list-detail-feedback-signals");
+    const list = page.getByTestId("list-detail-feedback-signals-list");
+    await expect(layout).toHaveAttribute("data-list-detail-layout", "single");
+    await expect(page.getByTestId("list-detail-feedback-signals-detail")).toBeHidden();
+    const [listBox, layoutBox] = await Promise.all([list.boundingBox(), layout.boundingBox()]);
+    expect(listBox!.width).toBeCloseTo(layoutBox!.width, 0);
+    const countToolbar = page.getByTestId("signals-list-toolbar");
+    expect(await countToolbar.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(0);
+    // 主一覧は外側のカードを持たず、件数は表の右端、見出しは共通 Section の大きさにする。
+    const appearance = await list.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const heading = element.querySelector("h2")!;
+      return { border: style.borderTopWidth, shadow: style.boxShadow, position: style.position, fontSize: getComputedStyle(heading).fontSize };
     });
-  }
+    expect(appearance).toEqual({ border: "0px", shadow: "none", position: "static", fontSize: "16px" });
+    const [toolbarBox, mainListBox] = await Promise.all([countToolbar.boundingBox(), list.boundingBox()]);
+    expect(toolbarBox!.x + toolbarBox!.width).toBeCloseTo(mainListBox!.x + mainListBox!.width, 0);
+    const table = page.getByRole("table", { name: "確かめるべき実行の一覧" });
+    await expect(table.getByRole("columnheader", { name: "シグナル", exact: true })).toHaveCount(viewport.width >= 1024 ? 1 : 0);
+    const toolRow = table.getByRole("row", { name: /run-tool/ });
+    await expect(toolRow).toContainText("ツールの失敗");
+    await expect(toolRow).toContainText("答えられなかった");
+    // 主一覧は質問とシグナル・実行日時を比較し、業務 Agent と利用者は詳細で見る。
+    await expect(toolRow).not.toContainText("山田 太郎");
+    await expect(table.getByRole("row", { name: /run-failed/ })).toContainText("実行の失敗・取り消し");
+
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-signals-${viewport.name}.png`), fullPage: true });
+    await list.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`feedback-signals-list-${viewport.name}.png`) });
+
+    // 行から全幅の詳細へ進み、一覧と集計・条件を隠して内容を読む。
+    await toolRow.getByRole("button", { name: /run-tool の質問/ }).click();
+    await expect(page).toHaveURL(/signal=run-tool/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const detail = page.getByRole("region", { name: "確かめるべき実行の詳細" });
+    const signals = detail.getByTestId("signals-detail-signals");
+    await expect(signals).toContainText("ツールの呼び出しが失敗しました。");
+    await expect(signals).toContainText("失敗したツールの呼び出し: 2 件");
+    await expect(signals).toContainText("回答の対応: 根拠不足");
+    await expect(detail.locator("strong").filter({ hasText: "確認結果" })).toBeVisible();
+    await expect(detail.getByRole("table", { name: "回答の表", exact: true })).toContainText("1200");
+    await expect(detail.getByTestId("signals-open-run")).toHaveAttribute("href", "/runs?id=run-tool");
+    await expect(detail.getByTestId("signals-add-case-toggle")).toBeVisible();
+    await expect(detail).toContainText("山田 太郎");
+    await expect(list).toBeHidden();
+    await expect(summary).toBeHidden();
+    await expect(page.getByTestId("signals-filters")).toBeHidden();
+    await expect(detail.getByRole("heading", { name: "確かめるべき実行の詳細" })).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-signals-detail-${viewport.name}.png`) });
+    await page.getByTestId("signals-detail-pager-next").click();
+    await expect(page).toHaveURL(/signal=run-failed/);
+    await expect(page.getByTestId("signals-detail-pager-next")).toBeDisabled();
+    await page.getByTestId("feedback-detail-back").click();
+    await expect(list).toBeVisible();
+    await expect(table.getByRole("button", { name: /run-failed の質問/ })).toBeFocused();
+    await expect(summary).toBeVisible();
+    await toolRow.getByRole("button", { name: /run-tool の質問/ }).click();
+    await page.goBack();
+    await expect(list).toBeVisible();
+    await expect(toolRow.getByRole("button", { name: /run-tool の質問/ })).toBeFocused();
+    await page.goForward();
+    await expect(detail).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("signals-detail")).toContainText("失敗したツールの呼び出し: 2 件");
+  });
 }
 
 for (const viewport of VIEWPORTS) {

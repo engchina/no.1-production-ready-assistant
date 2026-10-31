@@ -222,25 +222,6 @@ test.describe("回答前の確認のカード", { tag: "@responsive" }, () => {
     await expect(freeRecord.locator("dd")).toHaveText("請求の資料");
   });
 
-  test("ダークテーマでも確認のカードと答えの記録を出す", async ({ page, mockApi }, testInfo) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: "dark" }, version: 0 }));
-    });
-    seedRun(mockApi, "run-dark-0", {
-      goal: "前の質問",
-      created_at: "2026-09-01T00:00:00Z",
-      artifacts: answer("run-dark-0", "前の回答"),
-      confirmations: [{ ...AGENT_CONFIRMATION, id: "confirmation_dark_0", status: "answered", answers: [{ item_id: "item_1", option_ids: ["option_1"], other_text: "" }] }],
-    });
-    seedRun(mockApi, "run-dark-1", { status: "waiting_confirmation", confirmations: [AGENT_CONFIRMATION] });
-    await openSeedThread(page, "前の質問");
-    await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-    await expect(page.getByTestId("chat-confirmation-record-confirmation_dark_0").getByText("今月")).toBeVisible();
-    await expect(page.getByTestId("chat-turn-run-dark-1").getByTestId("chat-confirmation")).toBeVisible();
-    await expectNoHorizontalOverflow(page);
-    await page.screenshot({ path: testInfo.outputPath("agent-confirmation-dark.png"), fullPage: true });
-  });
-
   test("「確認せずに回答」は前提を示して回答し、「確認せずに回答しました」を残す", async ({ page, mockApi }) => {
     seedRun(mockApi, "run-ask-2", { status: "waiting_confirmation", confirmations: [AGENT_CONFIRMATION] });
     await openSeedThread(page);

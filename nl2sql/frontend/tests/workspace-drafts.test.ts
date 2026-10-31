@@ -11,7 +11,7 @@ class Storage implements DraftStorage {
 }
 test("草稿はユーザー・DB・ページ・field で隔離し、別ログインと失効で消去する", () => {
   const storage = new Storage();
-  storage.setItem("theme", "dark");
+  storage.setItem("locale", "ja");
   bindWorkspaceOwner(storage, "alice");
   const key = draftKey("alice", "db1", "/query", "question:p1");
   assert.equal(writeDraft(storage, "alice", key, "下書き", 100), true);
@@ -24,7 +24,7 @@ test("草稿はユーザー・DB・ページ・field で隔離し、別ログイ
   assert.equal(writeDraft(storage, "alice", key, "遅延応答"), false);
   clearWorkspaceDrafts(storage);
   assert.equal(storage.length, 1);
-  assert.equal(storage.getItem("theme"), "dark");
+  assert.equal(storage.getItem("locale"), "ja");
 });
 test("壊れた値・型の違う値・巨大な草稿・書込失敗を安全に扱う", () => {
   const storage = new Storage();

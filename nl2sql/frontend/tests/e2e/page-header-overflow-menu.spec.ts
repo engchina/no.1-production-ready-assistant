@@ -12,7 +12,7 @@ async function openFixture(page: Page) {
   await page.route("**/__header-overflow-menu", (route) =>
     route.fulfill({
       contentType: "text/html",
-      body: `<html data-theme="light" lang="ja"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module">import RefreshRuntime from "/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type; window.__vite_plugin_react_preamble_installed__ = true;</script><script type="module" src="/tests/fixtures/header-utilities.tsx"></script></body></html>`,
+      body: `<html lang="ja"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module">import RefreshRuntime from "/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type; window.__vite_plugin_react_preamble_installed__ = true;</script><script type="module" src="/tests/fixtures/header-utilities.tsx"></script></body></html>`,
     })
   );
   await page.goto("/__header-overflow-menu");

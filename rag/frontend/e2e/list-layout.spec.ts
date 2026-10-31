@@ -13,15 +13,13 @@ import {
 // Issue 1891（段 2）: RAG の一覧の件数・ページ送り・欄の幅を 3 製品の基準にそろえる。
 // - 件数はツールバーの右の ListCount 1 か所（「全 N 件」/「N 件（全 M 件）」）。1 ページでも出す。
 // - ページ送りは共通の advanced（範囲・表示件数 10 / 25 / 50 / 100・ページ番号の入力）。ページと表示件数は作業状態に残す。
-// - 横あふれ・placeholder の切れ・幅の段の外の欄が無い（desktop の 1280 / 1920px と 375px、ライト / ダーク）。
+// - 横あふれ・placeholder の切れ・幅の段の外の欄が無い（desktop の 1280 / 1920px と 375px）。
 // Issue 1933（段 2）: ツールバーの部品は同じ高さで縦の中心をそろえ、縦に積んだときは欄が左の群れの幅いっぱい
 // （findToolbarMisalignment / findToolbarFieldWidthMismatch）。実行履歴も #1955 の共通の部品で対象にする。
 
 const NOW = "2026-10-15T00:00:00Z";
 // 既定の 25 件/ページ（#1952）で 3 ページになる件数。
 const TOTAL = 55;
-
-type Theme = "light" | "dark";
 
 function envelope<T>(data: T) {
   return { json: { data, error_messages: [], warning_messages: [] } };
@@ -184,12 +182,6 @@ async function mockLists(page: Page) {
   });
 }
 
-async function useTheme(page: Page, theme: Theme) {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 interface ListScreen {
   name: string;
   path: string;
@@ -256,30 +248,27 @@ test.describe("一覧の件数・ページ送り・欄の幅 (#1891)", { tag: "@
     await mockLists(page);
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    test(`一覧の画面は件数をツールバーの右に出し、崩れない (${theme})`, async ({ page }, testInfo) => {
-      await useTheme(page, theme);
-      const desktop = testInfo.project.name === "desktop";
-      const widths = desktop ? [1280, 1920] : [null];
-      for (const width of widths) {
-        if (width) await page.setViewportSize({ width, height: 900 });
-        for (const screen of SCREENS) {
-          await page.goto(screen.path);
-          const pagination = page.getByTestId(screen.pagination);
-          await expect(pagination, screen.name).toContainText("1–25 / 55 件");
-          await expect(page.getByTestId(screen.toolbar), screen.name).toContainText(screen.count);
-          // 表示件数（10 / 25 / 50 / 100）はページ送りの左。
-          await expect(pagination.getByRole("combobox", { name: "表示件数" }), screen.name).toBeVisible();
-          await expectListLayout(page, desktop, screen.filtersMigrated ? screen.toolbar : undefined);
-        }
-        await page.goto("/feedback?period=all&sort=newest&size=25&page=1");
-        await expect(page.getByTestId("feedback-filters-toolbar")).toContainText("全 120 件");
-        await expect(page.getByTestId("feedback-pagination")).toContainText("1–25 / 120 件");
-        await expectListLayout(page, desktop, "feedback-filters-toolbar");
-        await expectListLayout(page, desktop, "feedback-list-toolbar");
+  test("一覧の画面は件数をツールバーの右に出し、崩れない", async ({ page }, testInfo) => {
+    const desktop = testInfo.project.name === "desktop";
+    const widths = desktop ? [1280, 1920] : [null];
+    for (const width of widths) {
+      if (width) await page.setViewportSize({ width, height: 900 });
+      for (const screen of SCREENS) {
+        await page.goto(screen.path);
+        const pagination = page.getByTestId(screen.pagination);
+        await expect(pagination, screen.name).toContainText("1–25 / 55 件");
+        await expect(page.getByTestId(screen.toolbar), screen.name).toContainText(screen.count);
+        // 表示件数（10 / 25 / 50 / 100）はページ送りの左。
+        await expect(pagination.getByRole("combobox", { name: "表示件数" }), screen.name).toBeVisible();
+        await expectListLayout(page, desktop, screen.filtersMigrated ? screen.toolbar : undefined);
       }
-    });
-  }
+      await page.goto("/feedback?period=all&sort=newest&size=25&page=1");
+      await expect(page.getByTestId("feedback-filters-toolbar")).toContainText("全 120 件");
+      await expect(page.getByTestId("feedback-pagination")).toContainText("1–25 / 120 件");
+      await expectListLayout(page, desktop, "feedback-filters-toolbar");
+      await expectListLayout(page, desktop, "feedback-list-toolbar");
+    }
+  });
 
   test("ページ番号を入れて移り、表示件数を変えると 1 ページ目へ戻り、再読込でも残る", async ({ page }) => {
     for (const screen of SCREENS) {

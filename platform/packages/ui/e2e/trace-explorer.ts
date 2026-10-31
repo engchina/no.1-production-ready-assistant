@@ -81,10 +81,7 @@ export async function confirmTraceExplorer(page: ExplorerPage, testInfo: {output
   await explorer.getByRole("tab", {name: "階層", exact: true}).press("ArrowRight");
   await check(explorer.getByRole("tab", {name: "開始時刻順", exact: true})).toHaveAttribute("aria-selected", "true");
   await explorer.getByRole("tab", {name: "階層", exact: true}).click();
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(value => { document.documentElement.classList.remove("light", "dark"); document.documentElement.dataset.theme = value; }, theme);
-    await explorer.screenshot({path: testInfo.outputPath(`trace-explorer-list-${theme}.png`)});
-  }
+  await explorer.screenshot({path: testInfo.outputPath(`trace-explorer-list.png`)});
   await search.fill("synthetic-call-input");
   await check(explorer.locator("[data-trace-record]").first()).toBeVisible();
   await explorer.locator("[data-trace-record] button").first().click();
@@ -102,10 +99,7 @@ export async function confirmTraceExplorer(page: ExplorerPage, testInfo: {output
   await inspector.getByRole("tab", {name: "思考", exact: true}).click();
   await check(inspector.locator("[data-call-readable] details[open] [data-markdown-text]")).toContainText("synthetic-call-thinking");
   await check(inspector.locator("[data-call-readable] details[open] [data-markdown-text]")).toBeVisible();
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(value => { document.documentElement.classList.remove("light", "dark"); document.documentElement.dataset.theme = value; }, theme);
-    await inspector.screenshot({path: testInfo.outputPath(`trace-thinking-${theme}.png`)});
-  }
+  await inspector.screenshot({path: testInfo.outputPath(`trace-thinking.png`)});
   await inspector.getByRole("tab", {name: "Schema", exact: true}).click();
   await check(inspector).toContainText("synthetic-call-schema");
   await check(inspector.locator("[data-trace-timing]")).toContainText("開始時刻");
@@ -122,11 +116,8 @@ export async function confirmTraceExplorer(page: ExplorerPage, testInfo: {output
   }, undefined)).toBe(true);
   await inspector.getByRole("tab", {name: "入力", exact: true}).click();
   check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth, undefined)).toBe(true);
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(value => { document.documentElement.classList.remove("light", "dark"); document.documentElement.dataset.theme = value; }, theme);
-    await explorer.screenshot({path: testInfo.outputPath(`trace-explorer-detail-${theme}.png`)});
-    await page.screenshot({path: testInfo.outputPath(`trace-explorer-page-${theme}.png`), fullPage: true});
-  }
+  await explorer.screenshot({path: testInfo.outputPath(`trace-explorer-detail.png`)});
+  await page.screenshot({path: testInfo.outputPath(`trace-explorer-page.png`), fullPage: true});
   if (probeLayout) {
     const original = page.viewportSize();
     await page.emulateMedia({reducedMotion: "reduce"});
@@ -161,10 +152,7 @@ export async function confirmTraceExplorer(page: ExplorerPage, testInfo: {output
     const result = content?.querySelector("dl");
     return fields[fields.length - 1] === "結果" && result?.nextElementSibling?.tagName === "UL";
   }, undefined)).toBe(true);
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-    await inspector.screenshot({path: testInfo.outputPath(`trace-stage-timing-${theme}.png`)});
-  }
+  await inspector.screenshot({path: testInfo.outputPath(`trace-stage-timing.png`)});
   await explorer.getByRole("button", {name: "経過に戻る", exact: true}).click();
   await check(page.getByRole("button", {name: "軌跡を調べる", exact: true}).first()).toBeFocused();
 }

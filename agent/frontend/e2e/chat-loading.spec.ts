@@ -13,12 +13,6 @@ import { MOCK_NOW, expect, test, type MockApi } from "./fixtures/mock-api";
 const THREAD_ID = `thread_${"b".repeat(32)}`;
 const AGENTS_URL = /\/api\/agents(\?.*)?$/;
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 /** 業務 Agent の一覧の応答を、戻り値の関数を呼ぶまで止める。 */
 async function holdAgents(page: Page) {
   let release!: () => void;
@@ -50,51 +44,48 @@ function seedThread(mockApi: MockApi) {
   });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`業務 Agent の読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    await useTheme(page, theme);
-    await page.goto("/chat");
-    const composer = page.getByRole("textbox", { name: "質問" });
-    await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
-    await composer.fill("書きかけの質問");
+test(`業務 Agent の読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す`, async ({
+  page,
+}, testInfo) => {
+  await page.goto("/chat");
+  const composer = page.getByRole("textbox", { name: "質問" });
+  await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
+  await composer.fill("書きかけの質問");
 
-    // 再読込: 書きかけの質問は作業状態から戻る。業務 Agent の一覧の応答を止める。
-    const release = await holdAgents(page);
-    await page.reload();
+  // 再読込: 書きかけの質問は作業状態から戻る。業務 Agent の一覧の応答を止める。
+  const release = await holdAgents(page);
+  await page.reload();
 
-    // 上のカードは文言と経過時間（同じ取得の経過時間はここだけ）。
-    await expect(page.getByTestId("chat-agents-loading")).toContainText("業務 Agent を読み込んでいます");
-    // 会話の欄は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
-    await expect(page.getByTestId("chat-conversation-skeleton")).toBeVisible();
-    await expect(page.getByText("質問を入力して会話を始めます")).toHaveCount(0);
-    await expect(page.getByRole("timer")).toHaveCount(1);
-    // 入力欄（書いた文字は残す）・送信・新しい会話・履歴の開閉は無効。
-    await expect(composer).toBeDisabled();
-    await expect(composer).toHaveValue("書きかけの質問");
-    await expect(page.getByTestId("chat-send")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeDisabled();
-    await expect(page.getByTestId("chat-history-toggle")).toBeDisabled();
-    await page.screenshot({ path: testInfo.outputPath(`chat-loading-${theme}.png`) });
+  // 上のカードは文言と経過時間（同じ取得の経過時間はここだけ）。
+  await expect(page.getByTestId("chat-agents-loading")).toContainText("業務 Agent を読み込んでいます");
+  // 会話の欄は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
+  await expect(page.getByTestId("chat-conversation-skeleton")).toBeVisible();
+  await expect(page.getByText("質問を入力して会話を始めます")).toHaveCount(0);
+  await expect(page.getByRole("timer")).toHaveCount(1);
+  // 入力欄（書いた文字は残す）・送信・新しい会話・履歴の開閉は無効。
+  await expect(composer).toBeDisabled();
+  await expect(composer).toHaveValue("書きかけの質問");
+  await expect(page.getByTestId("chat-send")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeDisabled();
+  await expect(page.getByTestId("chat-history-toggle")).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath(`chat-loading.png`) });
 
-    // 読み込み後: 空の状態と、使える入力欄。
-    release();
-    await expect(page.getByTestId("chat-agents-loading")).toHaveCount(0);
+  // 読み込み後: 空の状態と、使える入力欄。
+  release();
+  await expect(page.getByTestId("chat-agents-loading")).toHaveCount(0);
 
-    const toolbarTarget = page.locator("[data-chat-toolbar] #chat-agent");
-    await expect(toolbarTarget).toBeVisible();
-    expect(await toolbarTarget.evaluate(node => node.closest("[data-chat-target-selector]") !== null)).toBe(true);
+  const toolbarTarget = page.locator("[data-chat-toolbar] #chat-agent");
+  await expect(toolbarTarget).toBeVisible();
+  expect(await toolbarTarget.evaluate(node => node.closest("[data-chat-target-selector]") !== null)).toBe(true);
 
-    await expect(page.getByTestId("chat-conversation-skeleton")).toHaveCount(0);
-    await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
-    await expect(composer).toBeEnabled();
-    await expect(composer).toHaveValue("書きかけの質問");
-    await expect(page.getByTestId("chat-send")).toBeEnabled();
-    await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeEnabled();
-    await expect(page.getByTestId("chat-history-toggle")).toBeEnabled();
-  });
-}
+  await expect(page.getByTestId("chat-conversation-skeleton")).toHaveCount(0);
+  await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue("書きかけの質問");
+  await expect(page.getByTestId("chat-send")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeEnabled();
+  await expect(page.getByTestId("chat-history-toggle")).toBeEnabled();
+});
 
 test("業務 Agent の一覧を読めなかったときは、空の状態ではなく失敗と再試行を出す", async ({ page }) => {
   let fail = true;

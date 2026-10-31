@@ -2216,7 +2216,7 @@ test("Select AI Credential を明示確認で作成し、成功状態だけを�
 });
 
 test("Select AI Credential のリージョンは短い選択の幅で、placeholder が欄に収まる（#1891）", { tag: "@responsive" }, async ({ page }) => {
-  // 2 つの幅 × ライト / ダークを 1 つの test で回る。
+  // 2 つの幅を 1 つの test で回る。
   test.setTimeout(90_000);
   await page.unroute("**/api/settings/database/select-ai-credential");
   await page.route("**/api/settings/database/select-ai-credential", (route) =>
@@ -2236,19 +2236,16 @@ test("Select AI Credential のリージョンは短い選択の幅で、placehol
   const widths = projectWidth < 640 ? [projectWidth] : [1280, 1920];
   for (const width of widths) {
     await page.setViewportSize({ width, height });
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      const where = `${width}px ${colorScheme}`;
-      await page.goto("/settings/select-ai-credential");
-      const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
-      await expect(region).toBeVisible();
-      expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
-      expect(await findClippedPlaceholders(page), where).toEqual([]);
-      if (width < 640) continue;
-      expect(await findFieldsOffWidthScale(page), where).toEqual([]);
-      // リージョンは短い選択（sm 12rem = 168px）。
-      expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
-    }
+    const where = `${width}px`;
+    await page.goto("/settings/select-ai-credential");
+    const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
+    await expect(region).toBeVisible();
+    expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
+    expect(await findClippedPlaceholders(page), where).toEqual([]);
+    if (width < 640) continue;
+    expect(await findFieldsOffWidthScale(page), where).toEqual([]);
+    // リージョンは短い選択（sm 12rem = 168px）。
+    expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
   }
 });
 
@@ -2493,6 +2490,42 @@ test("Select AI Credential API 失敗は固定 alert だけに表示し Toast �
   await expect(card.getByRole("link", { name: "OCI 認証設定を開く" })).toHaveCount(0);
   await expect(page.getByText(apiError, { exact: true })).toHaveCount(1);
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+});
+
+test("配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
+  await page.goto("/settings/oci");
+  await expect(page.locator("#oci-user-ocid")).toBeVisible();
+  const html = page.locator("html");
+  // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
+  // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
+  const hexToRgb = (hex: string) => {
+    const value = Number.parseInt(hex.slice(1), 16);
+    return `rgb(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255})`;
+  };
+  // body { background: var(--color-canvas) }
+  const bgVar = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const tokenVar = (name: string) =>
+    page.evaluate((tokenName) => {
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = `var(${tokenName})`;
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }, name);
+  // OS が dark でも、html は class・data-theme を持たず color-scheme: light のまま。
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.reload();
+    await expect(page.locator("#oci-user-ocid")).toBeVisible();
+    await expect(html).toHaveCSS("color-scheme", "light");
+    await expect(html).not.toHaveAttribute("data-theme");
+    expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
+    await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
+    // canvas = neutral-50 / accent-emphasis = teal-500 / sidebar = teal-850
+    expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#0d7469"));
+    expect(await tokenVar("--color-sidebar")).toBe(hexToRgb("#0f2c2a"));
+  }
 });
 
 test("OCI 初期取得失敗は編集を許可せず、再試行後の遅延保存中も入力と重複操作を防ぐ", async ({ page }) => {

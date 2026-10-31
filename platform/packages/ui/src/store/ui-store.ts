@@ -10,9 +10,6 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
  * このストアは「アプリ側の利便フック」という位置づけ。
  */
 
-/** 配色テーマ。"system" は OS の prefers-color-scheme に追従。既定は "light"。 */
-export type ThemePreference = "light" | "dark" | "system";
-
 export interface UiState {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -24,9 +21,6 @@ export interface UiState {
    */
   collapsedSections: Record<string, boolean>;
   setSectionCollapsed: (key: string, collapsed: boolean) => void;
-  /** 配色テーマの選好（永続化）。適用（html.dark 付与）はアプリ側で行う。 */
-  theme: ThemePreference;
-  setTheme: (theme: ThemePreference) => void;
 }
 
 export interface CreateUiStoreOptions {
@@ -86,14 +80,14 @@ export function createUiStore(options: CreateUiStoreOptions) {
           set((state) => ({
             collapsedSections: { ...state.collapsedSections, [key]: collapsed },
           })),
-        theme: "light",
-        setTheme: (theme) => set({ theme }),
       }),
       {
         name: options.storageKey,
         merge: (persisted, current) => {
-          const saved = persisted && typeof persisted === "object"
-            ? persisted as Partial<UiState> : {};
+          // 配色テーマ（theme）は #17 で廃止した（ライトだけ）。旧版が保存した "dark" / "system" は読み捨てる。
+          const saved: Partial<UiState> & { theme?: unknown } = persisted && typeof persisted === "object"
+            ? { ...(persisted as Partial<UiState>) } : {};
+          delete saved.theme;
           const collapsedSections = { ...saved.collapsedSections };
           for (const [oldKey, newKey] of Object.entries(options.sectionKeyMigrations ?? {})) {
             if (Object.hasOwn(collapsedSections, oldKey)) {
@@ -106,7 +100,6 @@ export function createUiStore(options: CreateUiStoreOptions) {
         partialize: (state) => ({
           sidebarCollapsed: state.sidebarCollapsed,
           collapsedSections: state.collapsedSections,
-          theme: state.theme,
         }),
         storage: createJSONStorage(resolveStorage),
       }

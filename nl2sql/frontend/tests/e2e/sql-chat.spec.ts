@@ -395,16 +395,9 @@ test("送信の応答が上限までに届かないと、英語の signal timed 
         document.documentElement.clientWidth,
     ),
   ).toBeLessThanOrEqual(0);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate(
-      (dark) => document.documentElement.classList.toggle("dark", dark),
-      colorScheme === "dark",
-    );
-    await failure.screenshot({
-      path: testInfo.outputPath(`chat-send-timeout-${colorScheme}.png`),
-    });
-  }
+  await failure.screenshot({
+    path: testInfo.outputPath(`chat-send-timeout-light.png`),
+  });
   await release();
 });
 
@@ -808,16 +801,9 @@ test("送った質問はジョブの投入の応答を待たずに会話の欄�
         document.documentElement.clientWidth,
     ),
   ).toBeLessThanOrEqual(0);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate(
-      (dark) => document.documentElement.classList.toggle("dark", dark),
-      colorScheme === "dark",
-    );
-    await page.getByTestId("sql-chat-panel").screenshot({
-      path: testInfo.outputPath(`chat-sending-${colorScheme}.png`),
-    });
-  }
+  await page.getByTestId("sql-chat-panel").screenshot({
+    path: testInfo.outputPath(`chat-sending-light.png`),
+  });
 
   // 投入できたら、同じ位置のジョブの表示に置き換える（質問を二重に出さない）。
   release();
@@ -1034,14 +1020,6 @@ const pendingSteps = () =>
     (stage) => ({ stage, status: "pending" }),
   );
 
-async function applyColorScheme(page: Page, colorScheme: "light" | "dark") {
-  await page.emulateMedia({ colorScheme });
-  await page.evaluate(
-    (dark) => document.documentElement.classList.toggle("dark", dark),
-    colorScheme === "dark",
-  );
-}
-
 for (const width of [1280, 375]) {
   test(`回答の場所に開始待ち・実行中の段階を出し、完了後は「処理の経過」に畳む (#1145, ${width}px)`, async ({
     page,
@@ -1122,13 +1100,9 @@ for (const width of [1280, 375]) {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBeLessThanOrEqual(0);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyColorScheme(page, colorScheme);
-      await turn.screenshot({
-        path: testInfo.outputPath(`chat-progress-running-${colorScheme}.png`),
-      });
-    }
-    await applyColorScheme(page, "light");
+    await turn.screenshot({
+      path: testInfo.outputPath(`chat-progress-running-light.png`),
+    });
 
     // #1176: 経過時間は処理全体（送信）から数え、段階が変わっても 0 に戻さない。安全性の確認の後
     // （実行・結果の整形）も今の段階の行を出す（「N ステップ完了」だけにしない）。
@@ -1216,12 +1190,9 @@ for (const width of [1280, 375]) {
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBeLessThanOrEqual(0);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyColorScheme(page, colorScheme);
-      await turn.screenshot({
-        path: testInfo.outputPath(`chat-progress-done-${colorScheme}.png`),
-      });
-    }
+    await turn.screenshot({
+      path: testInfo.outputPath(`chat-progress-done-light.png`),
+    });
   });
 }
 
@@ -1267,8 +1238,7 @@ test("生成に失敗した段階は「処理の経過」を開いて失敗を�
   await expect(failure).toContainText("ジョブ ID を添えて管理者に連絡してください");
   await expect(failure.locator("details")).toHaveAttribute("open", "");
   await expect(failure.locator("details")).toContainText("止まった段");
-  await applyColorScheme(page, "dark");
-  await turn.screenshot({ path: testInfo.outputPath("chat-progress-failed-dark.png") });
+  await turn.screenshot({ path: testInfo.outputPath("chat-progress-failed.png") });
 });
 
 test("上を読んでいる間に回答が届いても引き戻さず「最新のメッセージへ」を出し、押すと末尾へ戻る (#1161)", async ({
@@ -1465,59 +1435,56 @@ async function screenshotWhole(page: Page, locator: Locator, path: string) {
 }
 
 // #1718: チャットの「SQL の要件（AI の理解）」は SQL 生成の画面と同じ部品・同じ振る舞い（違いは置き場所と幅）。
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`チャットの要件は要確認の行で候補を押して答え、答えたら畳んだ要約にする (#1718, ${colorScheme})`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    const viewport = testInfo.project.name;
-    const state = await setup(page, {
-      create: "date_column",
-      answers: ["date_column_basis_answered", "date_column_answered"],
-    });
-    await page.goto("/chat");
-    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    const composer = page.getByRole("textbox", { name: "質問", exact: true });
-    await composer.fill("直近 1 年の社員");
-    await composer.press("Enter");
-
-    const turn = page.getByTestId("sql-chat-requirement-turn");
-    const requirements = turn.getByTestId("nl2sql-clarification-requirements");
-    await expect(requirements).toHaveAttribute("data-needs-answer", "true");
-    await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 2 件");
-    const question = turn.getByTestId("nl2sql-clarification-question");
-    await expect(question).toHaveAttribute("data-item-key", "period_date_column");
-    const row = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_reference_basis"]');
-    await expect(row.getByText("「直近 1 年」は、いつから数えますか？")).toBeVisible();
-    await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
-      "指定なし: 結合・絞り込み・集計・並び順・サブクエリ・その他"
-    );
-    expect(await noHorizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-needs-answer-${viewport}-${colorScheme}.png`));
-
-    await row.getByRole("button", { name: "「実行日（2026-10-11）から」と答える" }).click();
-    await expect.poll(() => state.requirement.answers.length).toBe(1);
-    expect(state.requirement.answers[0]).toMatchObject({
-      item_id: "item-e-basis",
-      selected_candidate_ids: ["candidate-basis-execution"],
-      free_text: "",
-    });
-    await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 1 件");
-    await question.getByRole("radio", { name: /EMPLOYEE\.HIRE_DATE/ }).check();
-    await question.getByRole("button", { name: "この内容で回答" }).click();
-    await expect.poll(() => state.requirement.answers.length).toBe(2);
-    await expect(requirements).toHaveAttribute("data-needs-answer", "false");
-    const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
-    await expect(toggle).toContainText("確認の必要なし");
-    await expect(toggle).toContainText("使用テーブル ADMIN.EMPLOYEE ／ 表示列 ADMIN.EMPLOYEE.*");
-    await expect(turn.getByRole("button", { name: /この内容で SQL を生成/ })).toBeVisible();
-    expect(await noHorizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-answered-${viewport}-${colorScheme}.png`));
-    await toggle.click();
-    await expect(requirements.getByTestId("nl2sql-requirement-item")).toHaveCount(5);
-    await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-answered-open-${viewport}-${colorScheme}.png`));
+test(`チャットの要件は要確認の行で候補を押して答え、答えたら畳んだ要約にする (#1718)`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  const viewport = testInfo.project.name;
+  const state = await setup(page, {
+    create: "date_column",
+    answers: ["date_column_basis_answered", "date_column_answered"],
   });
-}
+  await page.goto("/chat");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const composer = page.getByRole("textbox", { name: "質問", exact: true });
+  await composer.fill("直近 1 年の社員");
+  await composer.press("Enter");
+
+  const turn = page.getByTestId("sql-chat-requirement-turn");
+  const requirements = turn.getByTestId("nl2sql-clarification-requirements");
+  await expect(requirements).toHaveAttribute("data-needs-answer", "true");
+  await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 2 件");
+  const question = turn.getByTestId("nl2sql-clarification-question");
+  await expect(question).toHaveAttribute("data-item-key", "period_date_column");
+  const row = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_reference_basis"]');
+  await expect(row.getByText("「直近 1 年」は、いつから数えますか？")).toBeVisible();
+  await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
+    "指定なし: 結合・絞り込み・集計・並び順・サブクエリ・その他"
+  );
+  expect(await noHorizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-needs-answer-${viewport}-light.png`));
+
+  await row.getByRole("button", { name: "「実行日（2026-10-11）から」と答える" }).click();
+  await expect.poll(() => state.requirement.answers.length).toBe(1);
+  expect(state.requirement.answers[0]).toMatchObject({
+    item_id: "item-e-basis",
+    selected_candidate_ids: ["candidate-basis-execution"],
+    free_text: "",
+  });
+  await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 1 件");
+  await question.getByRole("radio", { name: /EMPLOYEE\.HIRE_DATE/ }).check();
+  await question.getByRole("button", { name: "この内容で回答" }).click();
+  await expect.poll(() => state.requirement.answers.length).toBe(2);
+  await expect(requirements).toHaveAttribute("data-needs-answer", "false");
+  const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
+  await expect(toggle).toContainText("確認の必要なし");
+  await expect(toggle).toContainText("使用テーブル ADMIN.EMPLOYEE ／ 表示列 ADMIN.EMPLOYEE.*");
+  await expect(turn.getByRole("button", { name: /この内容で SQL を生成/ })).toBeVisible();
+  expect(await noHorizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-answered-${viewport}-light.png`));
+  await toggle.click();
+  await expect(requirements.getByTestId("nl2sql-requirement-item")).toHaveCount(5);
+  await screenshotWhole(page, turn, testInfo.outputPath(`chat-date-column-answered-open-${viewport}-light.png`));
+});
 
 // desktop（1280px）と 375px は playwright の project で分ける。
 test("チャットで確認の質問・回答・まとめ・骨組みを経て SQL を作る (#1442)", { tag: "@responsive" }, async ({
@@ -2068,13 +2035,9 @@ test.describe("チャットの回答前の確認の確認のカード (#1761)", 
     // 下に入るので、説明とボタンの行が見える位置の画面を撮る。
     await page.emulateMedia({ reducedMotion: "reduce" });
     await generate.scrollIntoViewIfNeeded();
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyColorScheme(page, colorScheme);
-      await page.screenshot({
-        path: testInfo.outputPath(`chat-confirm-pending-hint-${testInfo.project.name}-${colorScheme}.png`),
-      });
-    }
-    await applyColorScheme(page, "light");
+    await page.screenshot({
+      path: testInfo.outputPath(`chat-confirm-pending-hint-${testInfo.project.name}-light.png`),
+    });
 
     await freeText.fill("   ");
     await expect(hint).toHaveCount(0);
@@ -2127,13 +2090,9 @@ test.describe("チャットの回答前の確認の確認のカード (#1761)", 
     // #1772 の test と同じく、transition の途中を撮らず、説明とボタンの行が見える位置の画面を撮る。
     await page.emulateMedia({ reducedMotion: "reduce" });
     await generate.scrollIntoViewIfNeeded();
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyColorScheme(page, colorScheme);
-      await page.screenshot({
-        path: testInfo.outputPath(`chat-confirm-target-hint-${testInfo.project.name}-${colorScheme}.png`),
-      });
-    }
-    await applyColorScheme(page, "light");
+    await page.screenshot({
+      path: testInfo.outputPath(`chat-confirm-target-hint-${testInfo.project.name}-light.png`),
+    });
 
     await original.check();
     await expect(hint).toHaveCount(0);

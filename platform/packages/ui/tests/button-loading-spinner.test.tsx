@@ -139,7 +139,7 @@ describe("Spinner の CSS（トークン・reduced-motion）", () => {
       /--color-spinner-track: light-dark\(\s*color-mix\(in srgb, currentColor 30%, transparent\),\s*color-mix\(in srgb, currentColor 35%, transparent\)\s*\);/
     );
     // color-scheme を切り替える要素すべてで宣言し直すブロックの中に置く（Lightning CSS 変換後もダーク値になる）
-    const scoped = colorsCss.slice(colorsCss.indexOf(":root, [data-theme], [data-surface] {"));
+    const scoped = colorsCss.slice(colorsCss.indexOf(":root, [data-surface] {"));
     expect(scoped.slice(0, scoped.indexOf("\n}\n"))).toContain("--color-spinner-track:");
     expect(baseCss).toMatch(/\.pr-spinner-track\s*\{\s*stroke:\s*var\(--color-spinner-track\);/);
     // 強制カラーモードでは透過色を使わずシステム色にする

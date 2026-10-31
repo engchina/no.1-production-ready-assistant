@@ -136,7 +136,7 @@ export type TextFieldProps = {
  *   value を制御して使う。
  * - `trailing`: 末尾の任意の要素（単位・件数・ボタンなど）。枠線の内側の右端に置き、実際の幅の分だけ文字の右の余白を空ける。
  * - `suggestions`: 候補を選べる自由入力（editable combobox）。独自の listbox ではなくネイティブの `<datalist>` にする
- *   （キー操作・読み上げ・モバイルの候補表示・`color-scheme` によるダークテーマを OS / ブラウザに任せる。
+ *   （キー操作・読み上げ・モバイルの候補表示・`color-scheme` による配色を OS / ブラウザに任せる。
  *   `type="date"` の日付選択と同じ扱い）。ブラウザの入力履歴を候補に混ぜないよう既定で `autoComplete="off"`。
  */
 export function TextField({
