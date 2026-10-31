@@ -286,7 +286,6 @@ describe("runConversationHref（会話を開く。Issue 2343）", () => {
     expect(runConversationHref(run({ thread_id: null }), canOpen)).toBeNull();
     expect(runConversationHref(run({ thread_id: "t1", metadata: { source: "mcp" } }), canOpen)).toBeNull();
     expect(runConversationHref(run({ thread_id: "t1", metadata: { evaluation_job_id: "j" } }), canOpen)).toBeNull();
-    expect(runConversationHref(run({ thread_id: "t1", metadata: { automation_id: "a" } }), canOpen)).toBeNull();
     expect(runConversationHref(run({ thread_id: "t1", owned_by_me: false }), canOpen)).toBeNull();
     expect(runConversationHref(run({ thread_id: "t1" }), { seesAllUsers: false, canOpenChat: false })).toBeNull();
     // system_admin は他の利用者の会話も開ける。

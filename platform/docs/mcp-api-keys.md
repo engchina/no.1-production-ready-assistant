@@ -58,7 +58,7 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 | `agent_skill_export` | 使える業務 Agent が使うスキルを Agent Skills の形（`SKILL.md` と `references/` のファイル）で返す。`name` のフォルダに置くと外部の Agent でも使える |
 
 - 業務 Agent は画面のチャットと同じく、公開中の版で RAG / NL2SQL などを調べて答える。会話（`thread_id`）は画面のチャットの会話と同じで、作った利用者だけが続けられる。
-- MCP から作った Run は、**承認の要るツールを呼ばない**（自動実行と同じ。承認する人が画面にいるとは限らないため）。業務 Agent は使えなかったツールを「確かめられなかった点」として答え、`skipped_approval_tools` に出す。
+- MCP から作った Run は、**承認の要るツールを呼ばない**（承認する人が画面にいるとは限らないため）。業務 Agent は使えなかったツールを「確かめられなかった点」として答え、`skipped_approval_tools` に出す。
 - 既定の待ち時間（50 秒）は Claude Code のツールの待ち時間の既定（60 秒）より短い。長くかかる質問は `agent_get_run` で続きを読むか、`MCP_TOOL_TIMEOUT` を延ばして `wait_seconds` を大きくする。
 
 ## 例

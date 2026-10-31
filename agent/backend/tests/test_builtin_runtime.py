@@ -28,7 +28,6 @@ from app.features.agent.builtin_runtime import ModelTarget
 from app.features.agent.config import runtime_config_store
 from app.features.agent.run_facts import fact_from_run
 from app.features.agent.runtime import (
-    AUTOMATION_APPROVAL_SKIPPED_CODE,
     BUILTIN_RUNTIME_ID,
     DELETED_THREAD_METADATA_KEY,
     MCP_APPROVAL_SKIPPED_CODE,
@@ -39,7 +38,6 @@ from app.features.agent.runtime import (
     RunStatus,
     ThreadBusyError,
     ThreadNotFoundError,
-    automation_approval_message,
     builtin_resume_pending,
     get_runtime_repository,
     mcp_approval_message,
@@ -407,50 +405,6 @@ def test_rejected_tool_is_not_executed(monkeypatch: MonkeyPatch, calls: _Calls) 
     assert [step.status for step in run.steps] == ["cancelled"]
 
 
-def test_automation_run_does_not_wait_for_approval(monkeypatch: MonkeyPatch, calls: _Calls) -> None:
-    """自動実行の Run は無人なので、承認が要るツールを呼ばずに回答まで続ける（#1813）。"""
-    model = _script(
-        monkeypatch,
-        [
-            function_call(LOOKUP, {"query": "売上"}, call_id="call-l"),
-            function_call(WRITE, {"query": "登録"}, call_id="call-w"),
-        ],
-        [assistant_message("売上は 3 件です。確かめられなかった点: 登録はできませんでした。")],
-    )
-    run = runtime_repository.create_builtin_run(
-        RunCreateRequest(
-            goal="売上を調べて登録して",
-            agent_id=AGENT_ID,
-            metadata={"automation_id": "auto_1813", "automation_trigger": "schedule"},
-        ),
-        created_by_user_uuid=USER_UUID,
-    )
-
-    anyio.run(builtin_runtime.execute_run, run.id)
-
-    finished = runtime_repository.get_run(run.id)
-    # 承認待ちにせず、承認の要らないツールだけを実行して完了する。
-    assert finished.status == RunStatus.COMPLETED
-    assert finished.approvals == []
-    assert [name for name, _, _ in calls.items] == [LOOKUP]
-    # 監査（ツールの step）と Run の経過に、承認が要るため使わなかったことを残す。
-    skipped = next(
-        step for step in finished.steps if step.tool_call and step.tool_call.name == WRITE
-    )
-    assert skipped.status == "cancelled"
-    assert skipped.tool_result is not None
-    assert skipped.tool_result.error_code == AUTOMATION_APPROVAL_SKIPPED_CODE
-    assert skipped.tool_result.policy_decision == "ask"
-    assert any(
-        event.payload.get("error_code") == AUTOMATION_APPROVAL_SKIPPED_CODE
-        and WRITE in event.message
-        for event in finished.events
-    )
-    # モデルにはツールの結果として、自動実行では使えないことを返す。
-    assert automation_approval_message(WRITE) in str(model.calls[1].input)
-    assert "_builtin_sdk_state" not in finished.metadata
-
-
 def test_mcp_run_does_not_wait_for_approval(monkeypatch: MonkeyPatch, calls: _Calls) -> None:
     """外部の MCP クライアントの Run も無人の実行と同じく承認の要るツールを呼ばない（#1874）。"""
     model = _script(
@@ -484,7 +438,7 @@ def test_mcp_run_does_not_wait_for_approval(monkeypatch: MonkeyPatch, calls: _Ca
 def test_chat_run_still_waits_for_approval_of_the_same_tool(
     monkeypatch: MonkeyPatch, calls: _Calls
 ) -> None:
-    """自動実行でない Run（チャット）は今どおり承認待ちにする（#1813）。"""
+    """無人でない Run（画面のチャット）は今どおり承認待ちにする（#1813）。"""
     _script(monkeypatch, [function_call(WRITE, {"query": "登録"}, call_id="call-chat")])
     run_id = _create_run("登録して")
 
@@ -494,33 +448,9 @@ def test_chat_run_still_waits_for_approval_of_the_same_tool(
     assert waiting.status == RunStatus.WAITING_APPROVAL
     assert calls.items == []
     assert not any(
-        step.tool_result and step.tool_result.error_code == AUTOMATION_APPROVAL_SKIPPED_CODE
+        step.tool_result and step.tool_result.error_code == MCP_APPROVAL_SKIPPED_CODE
         for step in waiting.steps
     )
-
-
-def test_automation_approval_tools_lists_tools_that_need_approval(calls: _Calls) -> None:
-    """自動実行の編集画面の警告: 業務 Agent のスキルのツールのうち承認が要るもの（#1813）。"""
-    from security_support import client
-
-    del calls
-    response = client.get(f"/api/automations/agents/{AGENT_ID}/approval-tools")
-    assert response.status_code == 200, response.text
-    data = response.json()["data"]
-    # 判定は Run と同じ ToolPolicy.decide（読み取りは承認なし、書き込みは既定で承認）。
-    assert data == {"agent_id": AGENT_ID, "approval_required_tools": [WRITE], "warnings": []}
-
-    # ツールのポリシーで許可すれば、自動実行でも使える（警告に出ない）。
-    original = runtime_config_store.get_tool_policy()
-    runtime_config_store.patch_tool_policy(allow=[WRITE])
-    try:
-        allowed = client.get(f"/api/automations/agents/{AGENT_ID}/approval-tools")
-        assert allowed.json()["data"]["approval_required_tools"] == []
-    finally:
-        runtime_config_store.patch_tool_policy(allow=sorted(original.allow))
-
-    missing = client.get("/api/automations/agents/no-such-agent-1813/approval-tools")
-    assert missing.status_code == 404
 
 
 def _usage(requests: int, input_tokens: int, output_tokens: int) -> Usage:

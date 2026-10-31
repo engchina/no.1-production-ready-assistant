@@ -31,7 +31,6 @@ import app.features.agent.router as agent_router
 import app.features.settings.system_tables as system_tables_api
 from app.cli import agent_system_schema
 from app.features.agent import control_plane_store, runtime, storage_bootstrap
-from app.features.agent.automations import automation_store
 from app.features.agent.config import runtime_config_store
 from app.features.agent.control_plane_store import (
     WRITES_PAUSED_MESSAGE,
@@ -285,7 +284,6 @@ def control_plane_file(tmp_path: Path) -> Iterator[Path]:
     skills = skill_registry.export("runtime")
     servers = [item for item in runtime_config_store.list_mcp_servers()]
     policy = runtime_config_store.get_tool_policy()
-    automations = automation_store.list()
     sets = evaluation_set_store.list()
     jobs = evaluation_store.list()
     path = tmp_path / "agent-runtime.control-plane.json"
@@ -296,7 +294,6 @@ def control_plane_file(tmp_path: Path) -> Iterator[Path]:
         set_control_plane_store(None)
         skill_registry.replace_runtime(skills)
         runtime_config_store.replace_restored(servers, policy)
-        automation_store.replace_all(automations)
         evaluation_set_store.replace_all(sets)
         evaluation_store.replace_all(jobs)
 
