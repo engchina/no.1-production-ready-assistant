@@ -37,14 +37,14 @@ const historyItems: HistoryRecord[] = [
   {
     id: "history-new",
     question: "未入金の顧客を確認",
-    engine: "select_ai_agent",
+    engine: "enterprise_ai_direct",
     generated_sql: "SELECT CUSTOMER_NAME FROM INVOICES WHERE PAID_AT IS NULL",
     executable_sql: "SELECT CUSTOMER_NAME FROM INVOICES WHERE PAID_AT IS NULL FETCH FIRST 100 ROWS ONLY",
     created_at: "2026-06-22T10:00:00.000Z",
     elapsed_ms: 250,
     generation_elapsed_ms: 180,
     engine_timings: [
-      { engine: "select_ai_agent", elapsed_ms: 80, status: "failed", error: "team execution failed" },
+      { engine: "enterprise_ai_direct", elapsed_ms: 80, status: "failed", error: "team execution failed" },
       { engine: "enterprise_ai_direct", elapsed_ms: 100, status: "success", error: "" },
     ],
     // 処理の経過は実行の span の木（#3226）。生成の中のモデルの呼び出しの 1 回目は失敗。
@@ -63,7 +63,7 @@ const historyItems: HistoryRecord[] = [
           status: "done",
           startedAt: "2026-06-22T10:00:00.030Z",
           finishedAt: "2026-06-22T10:00:00.210Z",
-          params: { engine: "select_ai_agent" },
+          params: { engine: "enterprise_ai_direct" },
           children: [{ name: "gen_ai.chat", status: "failed", attributes: { "gen_ai.request.model": "test-text-model", "error.type": "TimeoutError" } }],
         },
         safety_check: { status: "done", startedAt: "2026-06-22T10:00:00.210Z", finishedAt: "2026-06-22T10:00:00.225Z", params: { tables: "APP.INVOICES", table_count: 1 } },
@@ -92,7 +92,7 @@ const historyItems: HistoryRecord[] = [
     owned_by_me: true,
     kind: "chat",
     session_id: "conversation-finance-1",
-    // Select AI Agent（DB の中の呼び出しは計測できない）と Enterprise AI Direct の呼び出しが混ざる実行（#3543）。
+    // 計測できない呼び出しと Enterprise AI Direct の呼び出しが混ざる実行（#3543）。
     usage: {
       models: ["test-text-model"],
       requests: 2,
@@ -103,13 +103,13 @@ const historyItems: HistoryRecord[] = [
       reasoning_output_tokens: null,
       measurement: "partial",
       measured_requests: 1,
-      unmeasured_sources: ["select_ai_agent"],
+      unmeasured_sources: ["external_model"],
     },
   },
   {
     id: "history-middle",
     question: "請求金額を確認",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     generated_sql: "SELECT TOTAL_AMOUNT FROM INVOICES",
     executable_sql: "SELECT TOTAL_AMOUNT FROM INVOICES",
     created_at: "2026-06-21T10:00:00.000Z",
@@ -122,7 +122,7 @@ const historyItems: HistoryRecord[] = [
     result_row_count: 4,
     result_columns: ["TOTAL_AMOUNT"],
     feedback_comment: "集計条件が違います",
-    // Select AI だけの実行は数を作らず未計測（#3543）。
+    // 計測できない呼び出しだけの実行は数を作らず未計測（#3543）。
     usage: {
       models: [],
       requests: 0,
@@ -131,7 +131,7 @@ const historyItems: HistoryRecord[] = [
       total_tokens: 0,
       measurement: "unmeasured",
       measured_requests: 0,
-      unmeasured_sources: ["select_ai"],
+      unmeasured_sources: ["external_model"],
     },
     actor_user_uuid: "me",
     executed_by_me: true,
@@ -143,7 +143,7 @@ const historyItems: HistoryRecord[] = [
   {
     id: "history-old",
     question: "監査ログを削除",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     generated_sql: "DELETE FROM AUDIT_LOG",
     executable_sql: "",
     created_at: "2026-06-20T10:00:00.000Z",
@@ -425,7 +425,7 @@ test("実行の詳細はチャットの往復だけ「会話を開く」を出�
   await expect(page.getByTestId("history-detail-open-chat")).toHaveCount(0);
   await expect(page.getByTestId("history-detail-open-query")).toHaveAttribute(
     "href",
-    /\/query\?question=%E8%AB%8B%E6%B1%82%E9%87%91%E9%A1%8D%E3%82%92%E7%A2%BA%E8%AA%8D&engine=select_ai&profile_id=default$/
+    /\/query\?question=%E8%AB%8B%E6%B1%82%E9%87%91%E9%A1%8D%E3%82%92%E7%A2%BA%E8%AA%8D&profile_id=default$/
   );
   // SQL 生成の画面の権限が無ければ出さない。
   permissions = ["menu.history", "menu.chat"];
@@ -772,7 +772,7 @@ test("詳細は概要 → 処理の経過（処理の詳細を含む）→ SQL �
   await page.screenshot({ path: testInfo.outputPath("history-detail.png"), fullPage: true });
 });
 
-test("一覧の token の列と詳細の概要は、記録した利用量・一部計測・未計測（Select AI・記録なし）を RAG と同じ形で出す（#3543）", { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
+test("一覧の token の列と詳細の概要は、記録した利用量・一部計測・未計測（計測できない呼び出し・記録なし）を RAG と同じ形で出す（#3543）", { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
   await mockHistory(page);
   await page.goto("/history");
   await expect(table(page).locator("[data-run-id]")).toHaveCount(3);
@@ -784,7 +784,7 @@ test("一覧の token の列と詳細の概要は、記録した利用量・一�
     await expect(usageHeader).toBeVisible();
     await expect(row(page, "history-new")).toContainText("12,345 token");
     await expect(row(page, "history-new").locator("[data-run-usage-note]")).toHaveText("一部計測");
-    // Select AI だけの実行と、記録の無い行は数を作らず未計測（0 token と出さない）。
+    // 計測できない呼び出しだけの実行と、記録の無い行は数を作らず未計測（0 token と出さない）。
     for (const id of ["history-middle", "history-old"]) {
       await expect(row(page, id).locator("[data-run-usage-note]")).toHaveText("未計測");
       await expect(row(page, id)).not.toContainText("0 token");
@@ -797,7 +797,7 @@ test("一覧の token の列と詳細の概要は、記録した利用量・一�
   await expect(fact("model")).toHaveText("test-text-model");
   await expect(fact("tokens")).toHaveText("12,345 token（一部計測）");
   await expect(fact("modelCalls")).toHaveText("2 回（うち 1 回を計測。入力 12,000 / 出力 345 token）");
-  await expect(fact("unmeasuredCalls")).toHaveText("Select AI Agent（データベースの中で呼ぶモデル）");
+  await expect(fact("unmeasuredCalls")).toHaveText("external_model");
   // 並びは RAG の概要と同じ（モデル → token → モデルの呼び出し）。
   const order = await summary.locator("[data-run-fact]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-run-fact")));
   expect(order.slice(order.indexOf("model"), order.indexOf("model") + 4)).toEqual(["model", "tokens", "modelCalls", "unmeasuredCalls"]);
@@ -807,9 +807,9 @@ test("一覧の token の列と詳細の概要は、記録した利用量・一�
   await page.goto("/history?id=history-middle");
   await expect(fact("tokens")).toHaveText("未計測");
   await expect(fact("modelCalls")).toHaveText("未計測");
-  await expect(fact("unmeasuredCalls")).toHaveText("Select AI（データベースの中で呼ぶモデル）");
+  await expect(fact("unmeasuredCalls")).toHaveText("external_model");
   await expect(summary.locator('[data-run-fact="model"]')).toHaveCount(0);
-  await summary.screenshot({ path: testInfo.outputPath("history-detail-usage-select-ai.png") });
+  await summary.screenshot({ path: testInfo.outputPath("history-detail-usage-unmeasured.png") });
 
   await page.goto("/history?id=history-old");
   await expect(fact("tokens")).toHaveText("未計測");

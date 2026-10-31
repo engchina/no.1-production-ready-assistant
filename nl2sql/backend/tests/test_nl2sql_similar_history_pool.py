@@ -388,42 +388,6 @@ def test_similar_history_generation_reserves_profile_few_shot_slots(
     ]
 
 
-def test_select_ai_engines_do_not_surface_similar_history_for_few_shot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    profile = Nl2SqlProfile(
-        id="default",
-        name="default profile",
-        few_shot_examples=[{"question": "固定例", "sql": "SELECT 1 FROM DUAL"}],
-    )
-    monkeypatch.setattr(service, "get_profile", lambda _profile_id=None: profile)
-    monkeypatch.setattr(
-        service,
-        "_similar_history_candidates",
-        lambda **_kwargs: pytest.fail("Select AI 系では類似履歴を few-shot 候補化しない"),
-    )
-
-    for engine in (Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT):
-        data = service.similar_history(
-            SimilarHistoryRequest(
-                question="請求金額を確認したい",
-                profile_id="default",
-                engine=engine,
-            )
-        )
-        examples = service._learning_examples_for_generation(  # noqa: SLF001
-            question="請求金額を確認したい",
-            profile=profile,
-            engine=engine,
-        )
-
-        assert data.items == []
-        assert data.used_for_generation is False
-        assert data.engine == engine
-        assert examples == []
-
-
 def test_oracle_vector_history_receives_allowed_profile_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

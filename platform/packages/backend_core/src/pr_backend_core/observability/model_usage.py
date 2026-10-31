@@ -11,7 +11,7 @@ span の知らせ（`SpanUpdate`）だけで、別の計測は持たない。数
 - 利用量の無い呼び出し（失敗・取消・provider が返さない）・終わっていない呼び出し・記録の上限
   で切った trace は「一部計測」（`measurement="partial"`）。LLM を呼ばなかった実行は実測の 0
   （`complete`）。
-- アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ Select AI など）は、その span に
+- アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ呼び出しなど）は、その span に
   `UNMEASURED_SOURCE_ATTRIBUTE`（出どころの名前）を付ける。数は作らず、出どころを
   `unmeasured_sources` に残す: ほかに LLM の呼び出しが無ければ「未計測」（`unmeasured`）、
   あれば「一部計測」。
@@ -36,8 +36,8 @@ from pydantic import BaseModel, Field
 from .tracing import SpanUpdate, observe_spans
 
 LLM_CALL_SPAN = "gen_ai.chat"
-# アプリが利用量を受け取れないモデルの呼び出しを含む span の属性（値は出どころの名前。例: Select AI
-# の `select_ai`）。属性は `tracing._SAFE_ATTRIBUTES` に載せている。
+# アプリが利用量を受け取れないモデルの呼び出しを含む span の属性（値は出どころの名前。例:
+# `db_model`）。属性は `tracing._SAFE_ATTRIBUTES` に載せている。
 UNMEASURED_SOURCE_ATTRIBUTE = "pr.gen_ai.unmeasured_source"
 _TOKEN_ATTRIBUTES = {
     "input": "gen_ai.usage.input_tokens",
@@ -72,7 +72,7 @@ class RunModelUsage(BaseModel):
     measurement: UsageMeasurement = "complete"
     # 利用量（入力と出力）を計測できた呼び出しの数。
     measured_requests: int = Field(default=0, ge=0)
-    # 利用量を計測できない呼び出しの出どころ（Select AI など。最初に呼んだ順。回数は数えない）。
+    # 利用量を計測できない呼び出しの出どころ（最初に呼んだ順。回数は数えない）。
     unmeasured_sources: list[str] = Field(default_factory=list)
 
 
@@ -173,7 +173,7 @@ class ModelUsageCollector:
 
         measurement: UsageMeasurement
         if unmeasured and not leaves:
-            # 計測できない呼び出しだけ（Select AI だけの実行）。数を作らない。
+            # 計測できない呼び出しだけの実行。数を作らない。
             measurement = "unmeasured"
         elif unmeasured or truncated or len(measured) < len(leaves):
             measurement = "partial"

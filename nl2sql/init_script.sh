@@ -458,7 +458,6 @@ WorkingDirectory=${BACKEND_DIR}
 Environment=HOME=/home/${APP_USER}
 Environment=PYTHONUNBUFFERED=1
 Environment=UV_NO_PROGRESS=1
-Environment=NL2SQL_SYNTHETIC_WORKER_MODE=external
 ExecStart=${exec_start}
 Restart=always
 RestartSec=5
@@ -490,10 +489,11 @@ configure_systemd() {
     "/usr/local/bin/uv run python -m app.features.nl2sql.ontology_worker" \
     "Production Ready NL2SQL ontology worker"
 
-  write_systemd_unit \
-    "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-synthetic-worker.service" \
-    "/usr/local/bin/uv run python -m app.cli.nl2sql_synthetic_worker" \
-    "Production Ready NL2SQL synthetic data worker"
+  # 合成データの worker は機能ごと削除した（#7）。以前の配備の unit が残っていれば止めて消す。
+  if [ -f "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-synthetic-worker.service" ]; then
+    systemctl disable --now production-ready-nl2sql-synthetic-worker.service || true
+    rm -f "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-synthetic-worker.service"
+  fi
 
   systemctl daemon-reload
   systemctl enable production-ready-nl2sql-backend.service
@@ -501,13 +501,11 @@ configure_systemd() {
   if [ "${DATABASE_INITIALIZATION_READY}" = "true" ]; then
     systemctl enable --now \
       production-ready-nl2sql-schema-refresh-worker.service \
-      production-ready-nl2sql-synthetic-worker.service \
       production-ready-nl2sql-quality-evaluation-worker.service \
       production-ready-nl2sql-ontology-worker.service
   else
     systemctl disable --now \
       production-ready-nl2sql-schema-refresh-worker.service \
-      production-ready-nl2sql-synthetic-worker.service \
       production-ready-nl2sql-quality-evaluation-worker.service \
       production-ready-nl2sql-ontology-worker.service || true
   fi

@@ -4,7 +4,7 @@
     "is_safe": false,
     "row_limit": 100,
     "note": "SELECT/WITH 以外の SQL は実行できません。",
-    "engine": "select_ai",
+    "engine": "enterprise_ai_direct",
     "engine_meta": {
       "runtime": "deterministic",
       "profile_id": "default"
@@ -48,4 +48,3 @@
   "error_messages": [],
   "warning_messages": []
 }
-

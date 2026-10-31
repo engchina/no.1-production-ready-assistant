@@ -9,7 +9,6 @@ import { queryKeys } from "@/lib/queries";
 
 /**
  * データベース設定。画面の実体は platform の共有パッケージ（#108）。
- * Select AI Credential は運用設定の専用の画面（`/settings/select-ai-credential`。#658）。
  */
 export function DatabaseSettingsClient() {
   const queryClient = useQueryClient();

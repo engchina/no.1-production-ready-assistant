@@ -4,7 +4,7 @@
     "is_safe": true,
     "row_limit": 100,
     "note": "SELECT-only として実行可能です。",
-    "engine": "select_ai",
+    "engine": "enterprise_ai_direct",
     "engine_meta": {
       "runtime": "deterministic",
       "profile_id": "default",
@@ -56,4 +56,3 @@
   "error_messages": [],
   "warning_messages": []
 }
-

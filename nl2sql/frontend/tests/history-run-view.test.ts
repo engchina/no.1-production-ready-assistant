@@ -33,7 +33,7 @@ import type { HistoryItem } from "../src/features/nl2sql/types.ts";
 const base: HistoryItem = {
   id: "h1",
   question: "先月の売上は？",
-  engine: "select_ai",
+  engine: "enterprise_ai_direct",
   generated_sql: "SELECT 1 FROM DUAL",
   created_at: "2026-10-15T00:00:00+00:00",
   elapsed_ms: 320,
@@ -170,18 +170,12 @@ test("「SQL 生成で開く」は本人の SQL 生成の実行だけ、質問�
   const query: HistoryItem = { ...base, question: "合成の質問 A", kind: "query", executed_by_me: true };
   const canOpen = { canOpenQuery: true };
   const href = historySqlGenerationHref(query, canOpen);
-  assert.equal(href, "/query?question=%E5%90%88%E6%88%90%E3%81%AE%E8%B3%AA%E5%95%8F+A&engine=select_ai&profile_id=sales");
+  assert.equal(href, "/query?question=%E5%90%88%E6%88%90%E3%81%AE%E8%B3%AA%E5%95%8F+A&profile_id=sales");
   // 画面が URL から読む値と同じ（質問は書き換えない）。
   assert.deepEqual(prefillFromSearchParams(new URLSearchParams(href?.split("?")[1])), {
     question: "合成の質問 A",
-    engine: "select_ai",
     profileId: "sales",
   });
-  // 画面で選べない方式は入れない（業務プロファイルの既定に任せる）。
-  assert.equal(
-    historySqlGenerationHref({ ...query, engine: "auto" as HistoryItem["engine"] }, canOpen),
-    "/query?question=%E5%90%88%E6%88%90%E3%81%AE%E8%B3%AA%E5%95%8F+A&profile_id=sales"
-  );
   // 他の人の実行（system_admin が見る）・権限が無い・チャット・MCP・品質評価・古い応答は出さない。
   assert.equal(historySqlGenerationHref({ ...query, executed_by_me: false }, canOpen), null);
   assert.equal(historySqlGenerationHref({ ...query, executed_by_me: undefined }, canOpen), null);
@@ -198,14 +192,14 @@ const ROOT = "0".repeat(16);
 /** 実行の span の木（実行の全体の下に工程の span。合成の値）。 */
 function spanEvents(): unknown[] {
   const at = { emitted_at: "2026-10-23T00:00:02Z", started_at: "2026-10-23T00:00:00Z" };
-  const event = (seq: number, value: Record<string, unknown>) => ({ schema_version: 1, target_id: "synthetic", seq, attempt: 0, type: "step", trace_id: TRACE_ID, ...at, ...value });
+  const event = (seq: number, value: Record<string, unknown>) => ({ schema_version: 1, target_id: "trace-target", seq, attempt: 0, type: "step", trace_id: TRACE_ID, ...at, ...value });
   return [
     event(1, { step_id: ROOT, name: "nl2sql.execute", root: true, status: "running" }),
     event(2, { step_id: "1".padStart(16, "0"), kind: "generate_sql", name: "nl2sql.generate_sql", parent_id: ROOT, status: "done", finished_at: "2026-10-23T00:00:02Z", params: { engine: "enterprise_ai_direct" } }),
     event(3, { step_id: "2".padStart(16, "0"), name: "gen_ai.chat", parent_id: "1".padStart(16, "0"), status: "done", finished_at: "2026-10-23T00:00:01Z" }),
     event(4, { step_id: "3".padStart(16, "0"), kind: "safety_check", name: "nl2sql.safety_check", parent_id: ROOT, status: "skipped", finished_at: "2026-10-23T00:00:02Z", params: { safety_check_skipped: true }, details: { fields: [{ label: "結果", value: "合成の結果" }] } }),
     event(5, { step_id: ROOT, name: "nl2sql.execute", root: true, status: "done", finished_at: "2026-10-23T00:00:02Z" }),
-    { schema_version: 1, target_id: "synthetic", seq: 6, attempt: 0, type: "terminal", status: "done", emitted_at: "2026-10-23T00:00:02Z" },
+    { schema_version: 1, target_id: "trace-target", seq: 6, attempt: 0, type: "terminal", status: "done", emitted_at: "2026-10-23T00:00:02Z" },
   ];
 }
 
@@ -246,7 +240,7 @@ test("停止の行は状態「停止」と、取り消した人と入口の「�
   assert.equal(view(cancelled(null)), null);
 });
 
-test("model usage: Enterprise AI は記録した数、Select AI は数を作らず未計測、記録の無い行は未計測（#3543）", () => {
+test("model usage: Enterprise AI は記録した数、計測できない呼び出しは数を作らず未計測、記録の無い行は未計測（#3543）", () => {
   const measured = historyUsageView({
     usage: {
       models: ["model-a"],
@@ -266,7 +260,7 @@ test("model usage: Enterprise AI は記録した数、Select AI は数を作ら�
     unmeasuredCalls: null,
   });
 
-  const selectAi = historyUsageView({
+  const unmeasured = historyUsageView({
     usage: {
       models: [],
       requests: 0,
@@ -275,12 +269,13 @@ test("model usage: Enterprise AI は記録した数、Select AI は数を作ら�
       total_tokens: 0,
       measurement: "unmeasured",
       measured_requests: 0,
-      unmeasured_sources: ["select_ai"],
+      unmeasured_sources: ["external_model"],
     },
   });
-  assert.deepEqual(selectAi.usage, { tokens: null, note: "未計測" });
-  assert.equal(selectAi.modelCalls, "未計測");
-  assert.equal(selectAi.unmeasuredCalls, "Select AI（データベースの中で呼ぶモデル）");
+  assert.deepEqual(unmeasured.usage, { tokens: null, note: "未計測" });
+  assert.equal(unmeasured.modelCalls, "未計測");
+  // 出どころの表示名を持たない値は ID のまま出す。
+  assert.equal(unmeasured.unmeasuredCalls, "external_model");
 
   const mixed = historyUsageView({
     usage: {
@@ -291,12 +286,12 @@ test("model usage: Enterprise AI は記録した数、Select AI は数を作ら�
       total_tokens: 12,
       measurement: "partial",
       measured_requests: 1,
-      unmeasured_sources: ["select_ai_agent"],
+      unmeasured_sources: ["external_model"],
     },
   });
   assert.deepEqual(mixed.usage, { tokens: 12, note: "一部計測" });
   assert.equal(mixed.modelCalls, "1 回（うち 1 回を計測。入力 10 / 出力 2 token）");
-  assert.equal(mixed.unmeasuredCalls, "Select AI Agent（データベースの中で呼ぶモデル）");
+  assert.equal(mixed.unmeasuredCalls, "external_model");
 
   // この機能より前の行: 0 にしない。
   assert.deepEqual(historyUsageView({ usage: null }).usage, { tokens: null, note: "未計測" });

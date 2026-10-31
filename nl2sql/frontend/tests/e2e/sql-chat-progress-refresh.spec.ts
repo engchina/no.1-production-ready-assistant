@@ -38,7 +38,7 @@ function firstTurn(createdAt: string) {
   return {
     job_id: "chat-1",
     question: "カテゴリ別売上",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     status: "done",
     created_at: createdAt,
     started_at: createdAt,
@@ -63,7 +63,7 @@ function secondTurn(phase: Phase, createdAt: string) {
   const base = {
     job_id: "chat-2",
     question: "多い順にして",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     previous_job_id: "chat-1",
     created_at: createdAt,
     started_at: createdAt,

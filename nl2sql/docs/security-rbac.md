@@ -23,8 +23,7 @@ schema refresh は `nl2sql.schema.refresh`、schema 参照は `nl2sql.schema.rea
 直接実行、本人履歴への feedback 登録を利用できる。`menu.direct_sql` は `nl2sql.sql.execute` だけを
 継承し、`/api/nl2sql/jobs`、`recommend-profile`、`rewrite`、`similar-history` などの生成補助 API は
 利用できない。feedback 管理一覧、admin review、feedback index/config は `nl2sql.feedback.manage` を
-要求し、普通ユーザーは自分の履歴にだけ feedback を登録できる。Select AI / Agent の低レベル資産 API は
-`nl2sql.select_ai_assets.read` / `refresh` / `manage`、sample data は
+要求し、普通ユーザーは自分の履歴にだけ feedback を登録できる。sample data は
 `nl2sql.sample_data.manage`、legacy learning material は `nl2sql.learning_material.manage`、
 diagnostics は `nl2sql.system_status.read`、persistence recover は `nl2sql.persistence.recover` で制御する。
 Ontology query-session 系も同じ境界に従う。`/api/nl2sql/query-sessions`、`generate-sql`、
@@ -339,45 +338,15 @@ timeout に拡張できる。これは production 既定値ではない。
 | owner 省略の旧形式 | `"Mixed_Case"` はカタログの引用名の表に解決する。引用なしの `mixed_case` は `MIXED_CASE` として解決し、引用名の表 `Mixed_Case` には解決しない |
 | SQL 安全性検査（許可表の照合） | SQL の表参照は sqlglot の引用情報（`SqlTableReference.owner_quoted` / `name_quoted`）を使い、引用なしを大文字、引用ありを書かれたとおりに解釈する。`SALES.MIXED_CASE` だけを許可したとき `SELECT * FROM SALES."Mixed_Case"` を拒否し、逆も拒否する（修正前はどちらも `SALES.MIXED_CASE` として許可していた） |
 | SQL 生成の schema context | Profile の対象から schema catalog の詳細を読むとき、大文字小文字だけが異なる表の定義は使わない（#563 で schema catalog の詳細取得自体が大文字小文字を区別するようになった） |
-| Select AI の `object_list` | #564 で実 Oracle の挙動を確認し、引用が必要な owner / 表名は `{"owner": "SALES", "name": "\"Mixed_Case\""}` の token で反映する（下記「確認結果」）。#561 の時点では確認前のため `PROFILE_OBJECT_LIST_UNSUPPORTED` で同期を止めていたが、#564 で解除した。引用が不要な名前の `object_list` は従来と同じ |
 | オントロジー | 質問補完の代表値も引用規則どおりに Profile の対象へ絞る。node の識別と Profile の view は #563、AI 構築・業務定義・SQL 接地は #573 で引用名に対応した（次節） |
 | 画面（業務プロファイル・スキーマ参照） | 対象の選択・件数・一括選択・未保存判定のキーを `normalizeDbObjectKey`（`dbObjectIdentity.ts`）にそろえ、引用名を大文字化しない |
 
-#### 確認結果: Select AI の `object_list`・合成データ生成と引用名（Issue #564）
-
-Oracle のドキュメント（`DBMS_CLOUD_AI` の profile 属性 `object_list`）は `{"owner": "SH", "name": "customers"}` の
-形式だけを示し、大文字小文字や二重引用符の扱いを規定していない。そこで実 Oracle で次を確認した。
-
-- 環境: Oracle Autonomous AI Database（Oracle AI Database Enterprise Edition Release 23.26.3.3.0）、2026-09-14 実施。
-- 同じ owner に `ZZ_CLAUDE_QV_<時刻>`（列 `ID` / `UPPER_ONLY_COL`）と `"Zz_Claude_Qv_<時刻>"`（列 `"Id"` /
-  `"Quoted_Only_Col"`）を作り、`object_list` の表記ごとに Select AI profile を作成して `showprompt` / `showsql` と
-  `GENERATE_SYNTHETIC_DATA`（1 行）を実行した。検証用の表・profile は確認後にすべて削除した。
-
-| 渡した表記 | `USER_CLOUD_AI_PROFILE_ATTRIBUTES` の再読込 | `showprompt` の表定義 / `showsql` の FROM | 合成データの生成先 |
-|---|---|---|---|
-| `{"owner": "ADMIN", "name": "Zz_Claude_Qv_…"}`（引用なし・大文字小文字混在） | 渡したとおり | **大文字の表** `"ADMIN"."ZZ_CLAUDE_QV_…"` | `object_name` / `object_list` とも **大文字の表** |
-| `{"owner": "ADMIN", "name": "\"Zz_Claude_Qv_…\""}`（引用あり） | 渡したとおり（引用符付き） | 引用名の表 `"ADMIN"."Zz_Claude_Qv_…"` | `object_name` / `object_list` とも引用名の表 |
-| `{"owner": "\"ADMIN\"", "name": "\"Zz_Claude_Qv_…\""}` | 渡したとおり | 引用名の表 | — |
-| `{"owner": "ADMIN", "name": "ZZ_CLAUDE_QV_…"}` / `{"owner": "admin", "name": "zz_claude_qv_…"}` | 渡したとおり | 大文字の表 | — |
-
-`DBMS_CLOUD_AI` は `object_list` の owner / name と `GENERATE_SYNTHETIC_DATA` の `owner_name` / `object_name` を
-**SQL 識別子として解釈する**（引用なしは大文字化、`"..."` は大文字小文字を保持）。そのため:
-
-- `select_ai_object_list_entry`（`oracle_adapter.py`）は、カタログ上の名前を `format_object_part` の token
-  （引用が必要な部分だけ `"..."`）で渡す。引用が不要な名前は従来と同じ値になる。
-  Select AI / Select AI Agent の Profile 同期は引用名の表でも通常どおり行い、`PROFILE_OBJECT_LIST_UNSUPPORTED` は廃止した。
-- `generate_synthetic_data` も owner / 表名を同じ token で渡す。修正前はカタログ上の名前（`Mixed_Case`）をそのまま
-  渡していたため、**引用名の表を対象にすると大文字の同名表に行を生成する**経路があった（現行の受付は必ずプレビュー経由で
-  `NL2SQL_SP_…` の一時表を生成対象にするため該当しない。`preview=false` で受け付けた旧履歴の実行と
-  `Nl2SqlService.generate_synthetic_data` の直接呼び出しが該当する）。
-- 再読込の照合（`_select_ai_object_scope_set`）は、Oracle が返す表記を同じ規則（`parse_object_identity`）で解釈する。
-
 #### 既存 Profile の互換と誤保存の検出
 
-引用が不要な名前の保存値・Select AI の `object_list`・SQL は変わらないため、自動移行はしない。
+引用が不要な名前の保存値・SQL は変わらないため、自動移行はしない。
 #561 より前は、画面の選択と保存の両方で引用符を外して大文字化していたため、引用名の表を選ぶと
 **大文字の同名表 `SALES.MIXED_CASE` として保存されていた**（同名表が無い場合も `SALES.MIXED_CASE` として保存され、
-Oracle 反映時に object が見つからない）。保存値から利用者の意図は判別できず、別の表へ自動で付け替えると
+SQL の生成時に object が見つからない）。保存値から利用者の意図は判別できず、別の表へ自動で付け替えると
 Profile の公開範囲が変わるため、次の SQL（アプリの管理 schema で実行する参考例。実 Oracle では未検証）で
 大文字小文字だけが異なる表・ビューを持つ Profile を洗い出し、画面で対象を選び直して保存し直すこと。
 
@@ -485,18 +454,11 @@ system_admin は全員の会話、それ以外は自分の会話だけ（他人�
 閲覧と削除だけで、続きの質問・実行・SQL の置き換え・名前の変更は持ち主だけ（403。#3244）。
 詳細は [db-admin-chat.md](./db-admin-chat.md)。
 
-Select AI `DBMS_CLOUD_AI.GENERATE` と Select AI Agent の
-`DBMS_CLOUD_AI_AGENT.RUN_TEAM` / `RUN_TOOL` と会話の `DBMS_CLOUD_AI.CREATE_CONVERSATION` は、非
-`system_admin` の SQL 生成でも `system_admin` と同じ Thin + mTLS の通常 Oracle user 接続で実行する。
 NL2SQL job の生成済み SELECT 実行は、actor の種類で pool を分けたアプリの接続を使う（#904）。
 
-Select AI / Select AI Agent が生成した SQL には、アプリの安全確認（SELECT-only guard・危険な関数・
-bind の placeholder・未承認の関数・他製品のシステムの表・業務プロファイルの表と列の範囲）を掛けない
-（#1523。ユーザーの決定。生成する SQL は既定で SELECT 文）。業務プロファイルの列の制限は、Select AI の
-profile の `object_list` が表の単位のため、この 2 方式では効かない。実行は上の読み取り専用の data
-connection のままなので、行・列の制限は業務プロファイルの表の範囲までとなる。OCI Enterprise AI で
-生成した SQL と、利用者が入力・編集した SQL は従来どおりすべてを確かめる（[sql-chat.md](./sql-chat.md)
-「生成の方式ごとの安全確認」）。
+OCI Enterprise AI で生成した SQL と、利用者が入力・編集した SQL は、アプリの安全確認（SELECT-only guard・
+危険な関数・bind の placeholder・未承認の関数・他製品のシステムの表・業務プロファイルの表と列の範囲）を
+すべて掛ける（[sql-chat.md](./sql-chat.md)）。
 
 ## 主要な安全境界
 

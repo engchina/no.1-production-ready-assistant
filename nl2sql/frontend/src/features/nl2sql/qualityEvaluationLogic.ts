@@ -42,15 +42,6 @@ export function validateQualityEvaluationInput(
   return errors;
 }
 
-export function toggleQualityEvaluationEngine(
-  engines: QualityEvaluationEngine[],
-  engine: QualityEvaluationEngine
-): QualityEvaluationEngine[] {
-  return engines.includes(engine)
-    ? engines.filter((item) => item !== engine)
-    : [...engines, engine];
-}
-
 export function qualityEvaluationAttemptCount(
   caseCount: number,
   engineCount: number,

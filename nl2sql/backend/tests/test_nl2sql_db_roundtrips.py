@@ -10,7 +10,7 @@ fake で、次を数える。
   LOB の read は起きない。python-oracledb Thin と同じ数え方）
 
 状態の保存先（`NL2SQL_*` の表）は、結果をメモリの repository で作り、往復は Oracle の repository の
-SQL を同じ引数で fake 接続へ流して数える（`_ShadowStateRepository`）。業務データの SQL・Select AI は
+SQL を同じ引数で fake 接続へ流して数える（`_ShadowStateRepository`）。業務データの SQL は
 `OracleNl2SqlAdapter` をそのまま fake 接続で動かす。投入（`start_job`）と worker の処理を
 分けて数え、pool がすでにある 2 回目のジョブ（定常）を比べる。
 
@@ -577,19 +577,16 @@ def _clob(document: dict[str, Any]) -> Clob:
     return Clob(json.dumps(_memory_document_payload(document), ensure_ascii=False))
 
 
-# --- 業務データの SQL・Select AI の応答 ----------------------------------------------------------
+# --- 業務データの SQL の応答 ---------------------------------------------------------------------
 
 
 def _runtime_responder(sql: str, _binds: dict[str, Any]) -> list[tuple[Any, ...]]:
     text = sql.upper()
-    if "DBMS_CLOUD_AI.GENERATE" in text:
-        # DBMS_CLOUD_AI.GENERATE は CLOB を返す。
-        return [(Clob("SELECT ID FROM APP.ORDERS"),)]
     if text.startswith("SELECT ID FROM APP.ORDERS"):
         return [(1,), (2,)]
     if text.startswith("ALTER SESSION"):
         return []
-    raise AssertionError(f"業務データ・Select AI の未対応の SQL です: {sql}")
+    raise AssertionError(f"業務データの未対応の SQL です: {sql}")
 
 
 # --- シナリオ -------------------------------------------------------------------------------
@@ -774,20 +771,18 @@ def _chat_turn(engine: Nl2SqlEngine, previous_job_id: str | None) -> JobCreateRe
 
 
 # 定常（pool があり、キャッシュが温まった 2 回目以降）の 1 ジョブの上限（#904 の修正後の値）。
-# 修正前（main）: SQL 生成の worker は Select AI で新しい接続 2・往復 54、Enterprise AI で
-# 新しい接続 1・往復 60。チャットの投入は 2 ターン目で往復 14 から 1 ターンごとに 5 増えていた。
+# 修正前（main）: SQL 生成の worker は Enterprise AI で新しい接続 1・往復 60。チャットの投入は
+# 2 ターン目で往復 14 から 1 ターンごとに 5 増えていた。
 # 業務データの SELECT は、session の時間帯を設定の時間帯にする・UTC に戻すの 2 往復を含む
 # （#3265。設定が UTC なら 0）。
 _SQL_JOB_LIMITS = {
     # engine: (投入の往復, worker の往復)
-    Nl2SqlEngine.SELECT_AI: (2, 28),
     Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (2, 36),
 }
 _CHAT_TURN_LIMITS = {
-    Nl2SqlEngine.SELECT_AI: (4, 28),
     Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (4, 36),
 }
-_ENGINE_IDS = ["select_ai", "enterprise_ai_direct"]
+_ENGINE_IDS = ["enterprise_ai_direct"]
 
 
 @pytest.mark.parametrize("engine", list(_SQL_JOB_LIMITS), ids=_ENGINE_IDS)
@@ -804,12 +799,12 @@ def test_sql_generation_job_db_round_trips(
     print(f"[{engine.value}] SQL 生成 定常 worker: {run.describe()}")
 
     submit_limit, run_limit = _SQL_JOB_LIMITS[engine]
-    # 定常では新しい接続を張らない（業務データ・Select AI も pool から借りる）。
+    # 定常では新しい接続を張らない（業務データも pool から借りる）。
     assert submit.total_new_connections == 0
     assert run.total_new_connections == 0
     assert submit.total_round_trips <= submit_limit
     assert run.total_round_trips <= run_limit
-    # 1 回目でも、業務データ・Select AI の新しい接続は pool の 1 本だけ。
+    # 1 回目でも、業務データの新しい接続は pool の 1 本だけ。
     assert cold_run.new_connections.get("app-connect", 0) == 0
     assert cold_run.new_connections.get("runtime-admin", 0) <= 1
     calls = h.recorder.window(0)
@@ -903,10 +898,9 @@ def test_business_sql_connection_follows_job_actor(
     - system_admin: アプリの接続の system_admin 用の pool（`nl2sql-runtime-admin`）
     - 非 system_admin: アプリの接続の非 system_admin 用の pool（`nl2sql-runtime-user`）。
       資格情報は同じでも、system_admin と pool・接続を共有しない
-    - 状態の保存先の SQL は状態の pool だけ。業務データの SQL・Select AI と混ぜない
+    - 状態の保存先の SQL は状態の pool だけ。業務データの SQL と混ぜない
     """
     h = harness()
-    app_plane = "runtime-admin" if is_system_admin else "runtime-user"
     connections_by_kind: dict[bool, set[int]] = {True: set(), False: set()}
     job = _sql_job(engine).model_copy(update={"chat": True}) if chat else _sql_job(engine)
     for actor in ("user-a", "user-b"):  # 同じ worker が 2 人の利用者のジョブを続けて処理する
@@ -917,11 +911,6 @@ def test_business_sql_connection_follows_job_actor(
         business = [c for c in calls if c.op == "execute" and c.detail == _BUSINESS_SQL]
         assert [c.plane for c in business] == [business_plane]
         connections_by_kind[is_system_admin].update(c.connection_id for c in business)
-        if engine == Nl2SqlEngine.SELECT_AI:
-            # Select AI の生成は今までどおりアプリの接続（利用者の context を使わない）。actor の
-            # 種類ごとに別の pool。
-            generate = [c for c in calls if "DBMS_CLOUD_AI.GENERATE" in c.detail]
-            assert [c.plane for c in generate] == [app_plane]
         state_sql = [c for c in calls if c.op == "execute" and "NL2SQL_" in c.detail]
         assert state_sql
         assert {c.plane for c in state_sql} == {"state-pool"}

@@ -8,10 +8,6 @@ import {
   type ChatRequirementMockOptions,
 } from "./_helpers/chat-requirement";
 import { openSidebarNav, closeSidebarNav } from "./_helpers/sidebar-nav";
-import {
-  chooseSelectFieldOption,
-  expectSelectFieldValue,
-} from "./_helpers/select-field";
 import { expectedControlHeight } from "./_helpers/control-height";
 import {
   expectProgressTimerMonotonic,
@@ -611,84 +607,6 @@ test("業務プロファイルの欄は RAG の検索・回答プロファイル
   await expect(field).toBeFocused();
 });
 
-test("生成方法は入力欄の直上で選び、Select AI Agent も送れる", { tag: "@responsive" }, async ({
-  page,
-  isMobile,
-}) => {
-  const state = await setup(page);
-  await page.goto("/chat");
-  const row = page.getByTestId("sql-chat-engine-row");
-  const engine = page.getByRole("combobox", { name: "生成方法", exact: true });
-  await expect(row).toContainText("生成方法");
-  await expectSelectFieldValue(engine, "select_ai");
-  // 選んだ生成方法の説明は常設せず、ラベルの横の info アイコンから出す（#901）。
-  const description = page.getByTestId("sql-chat-engine-description");
-  const info = row.getByRole("button", { name: "生成方法の説明", exact: true });
-  await expect(description).toBeHidden();
-  await expect(info).toHaveAccessibleDescription(/Oracle Select AI/);
-  // マウスはポインタを乗せると出し、離すと閉じる。タッチ端末（ホバーが無い）はタップで出し、外側のタップで閉じる。
-  if (isMobile) await info.tap();
-  else await info.hover();
-  await expect(description).toBeVisible();
-  await expect(description).toContainText("Oracle Select AI");
-  if (isMobile) await row.getByText("生成方法", { exact: true }).first().tap();
-  else await page.mouse.move(0, 0);
-  await expect(description).toBeHidden();
-  // 入力欄の直上の行（RAG のチャットの「回答するモデル」と同じ位置。#890）。
-  const composer = page.getByRole("textbox", { name: "質問", exact: true });
-  const rowBox = (await row.boundingBox())!;
-  const composerBox = (await composer.boundingBox())!;
-  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(composerBox.y);
-  expect(composerBox.y - (rowBox.y + rowBox.height)).toBeLessThan(24);
-  // 選択欄にも、選んだ生成方法の説明を結び付ける（閉じている吹き出しの文を読む）。
-  await expect(engine).toHaveAccessibleDescription(/Oracle Select AI/);
-  expect((await engine.boundingBox())!.height).toBe(
-    await expectedControlHeight(page, "sm"),
-  );
-  await engine.click();
-  await expect(page.getByRole("option")).toHaveText([
-    "Select AI",
-    "Select AI Agent",
-    "Enterprise AI",
-  ]);
-  await page.keyboard.press("Escape");
-  await chooseSelectFieldOption(engine, "select_ai_agent");
-  // キーボード: 選択欄から Shift+Tab で info アイコンへ戻るとフォーカスで出し、Escape で閉じる（フォーカスは動かさない）。
-  await expect(engine).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(info).toBeFocused();
-  // タッチ端末ではフォーカスだけでは出さないので、Enter で開く（マウス・キーボードの環境はフォーカスで出る）。
-  if (isMobile) await page.keyboard.press("Enter");
-  await expect(description).toBeVisible();
-  await expect(description).toContainText(
-    "Select AI Agent が SQL 生成ツールを呼び出して",
-  );
-  await page.keyboard.press("Escape");
-  await expect(description).toBeHidden();
-  await expect(info).toBeFocused();
-  await composer.fill("カテゴリ別売上");
-  await composer.press("Enter");
-  await confirmChatRequirement(page);
-  await expect(page.getByText("安全検査済み・未実行")).toBeVisible();
-  expect(state.requests[0]).toMatchObject({
-    engine: "select_ai_agent",
-    chat: true,
-  });
-  // 生成方法は作業状態に残る。
-  await page.reload();
-  await expectSelectFieldValue(
-    page.getByRole("combobox", { name: "生成方法", exact: true }),
-    "select_ai_agent",
-  );
-  expect(
-    await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth -
-        document.documentElement.clientWidth,
-    ),
-  ).toBeLessThanOrEqual(0);
-});
-
 test("業務プロファイルの方針が「前提を示して SQL を生成する」なら、確認事項を聞かずに SQL を作る (#1839)", async ({
   page,
 }) => {
@@ -707,37 +625,6 @@ test("業務プロファイルの方針が「前提を示して SQL を生成す
   expect(state.requests[0]).not.toHaveProperty("requirement_session_id");
   // 利用者が飛ばしたのではないので、「確認せずに…」は残さない。
   await expect(page.getByTestId("sql-chat-turn-clarification")).toHaveCount(0);
-});
-
-test("生成方法の初期の選択は業務プロファイルの既定の生成方式 (#1524)", async ({
-  page,
-}) => {
-  const state = await setup(page);
-  // 後から登録した route が先に当たる。
-  await page.route("**/api/nl2sql/profiles/*/usage-context", (route) =>
-    route.fulfill({
-      json: { data: { ...profile, default_engine: "enterprise_ai_direct" } },
-    }),
-  );
-  await page.goto("/chat");
-  const engine = page.getByRole("combobox", { name: "生成方法", exact: true });
-  await expectSelectFieldValue(engine, "enterprise_ai_direct");
-  const composer = page.getByRole("textbox", { name: "質問", exact: true });
-  await composer.fill("カテゴリ別売上");
-  await composer.press("Enter");
-  await confirmChatRequirement(page);
-  await expect(page.getByText("安全検査済み・未実行")).toBeVisible();
-  expect(state.requests[0]).toMatchObject({
-    engine: "enterprise_ai_direct",
-    chat: true,
-  });
-  // 利用者が選んだ方式は、業務プロファイルの既定より優先して作業状態に残る。
-  await chooseSelectFieldOption(engine, "select_ai");
-  await page.reload();
-  await expectSelectFieldValue(
-    page.getByRole("combobox", { name: "生成方法", exact: true }),
-    "select_ai",
-  );
 });
 
 // #907: 送った質問は、ジョブの投入の応答を待たずにすぐ会話の欄の末尾へ出す（楽観的な表示）。
@@ -1014,10 +901,9 @@ test("会話の履歴と会話の読み込み中は、文言と経過時間を�
   await expect(
     conversationLoading.locator(".animate-pulse").first(),
   ).toBeVisible();
-  // 会話の内容の読み込み中も入力欄と生成方法は使える（書いている途中で無効にしない）。送信だけを止める（#1188）。
+  // 会話の内容の読み込み中も入力欄は使える（書いている途中で無効にしない）。送信だけを止める（#1188）。
   const composer = page.getByRole("textbox", { name: "質問", exact: true });
   await expect(composer).toBeEnabled();
-  await expect(page.locator("#sql-chat-engine")).toBeEnabled();
   await composer.fill("続きの質問");
   await expect(page.getByTestId("sql-chat-send")).toBeDisabled();
   releaseConversation();
@@ -1092,7 +978,7 @@ for (const width of [1280, 375]) {
       ],
     });
     await expect(current).toHaveAttribute("data-step-id", "generate_sql");
-    await expect(current).toContainText("SQL を生成しています（Select AI）");
+    await expect(current).toContainText("SQL を生成しています（Enterprise AI）");
     // 遅延の案内は見出し「処理中（N ステップ完了）」の直下に、段階の名前を添えずに出す（#2426）。
     const slowNotice = progress.getByTestId("sql-chat-progress-slow");
     await expect(slowNotice).toHaveText("通常より時間がかかっています。");
@@ -1242,7 +1128,7 @@ test("生成に失敗した段階は「処理の経過」を開いて失敗を�
     created_at: iso(6_000),
     started_at: iso(5_000),
     finished_at: iso(0),
-    error_message: "Select AI で SQL を生成できませんでした。",
+    error_message: "OCI Enterprise AI で SQL を生成できませんでした。",
     steps: [
       { stage: "prepare_context", status: "done", started_at: iso(5_000), finished_at: iso(4_000) },
       { stage: "generate_sql", status: "error", started_at: iso(4_000), finished_at: iso(0) },
@@ -1260,7 +1146,7 @@ test("生成に失敗した段階は「処理の経過」を開いて失敗を�
   await expect(failed).toContainText("失敗");
   // 後の段は始まっていないので span が無い（行を出さない。#3226）。
   await expect(progress.getByTestId("sql-chat-progress-step-safety_check")).toHaveCount(0);
-  await expect(turn.getByText("Select AI で SQL を生成できませんでした。")).toBeVisible();
+  await expect(turn.getByText("OCI Enterprise AI で SQL を生成できませんでした。")).toBeVisible();
   // 失敗は 3 製品共通の失敗のカード: 止まった段・原因・次の操作・開いた「詳細」（#2342）。
   const failure = turn.getByTestId("sql-chat-turn-failure");
   await expect(failure.getByRole("alert")).toContainText("「SQL の生成」で処理が止まりました。");
@@ -1334,7 +1220,7 @@ for (const width of [1280, 375]) {
       steps: {
         queue: "done",
         prepare_context: "done",
-        generate_sql: { status: "running", params: { engine: "select_ai" } },
+        generate_sql: { status: "running", params: { engine: "enterprise_ai_direct" } },
       },
     });
     // span は worker が共通の span の表に書く（会話のターンの保存を待たない）。画面は処理の経過の API を読み直す。
@@ -1351,14 +1237,14 @@ for (const width of [1280, 375]) {
     // 会話のターンは実行中のまま（段階を持たない）。span の表には生成の途中まで入っている。
     Object.assign(state.turns[0], {
       status: "running",
-      engine: "select_ai",
+      engine: "enterprise_ai_direct",
       created_at: createdAt,
       started_at: createdAt,
     });
     recordMockTrace("chat-1", generating, { pinned: true });
     const current = page.getByTestId("sql-chat-turn").getByTestId("sql-chat-progress-current");
     await expect(current).toHaveAttribute("data-step-id", "generate_sql");
-    await expect(current).toContainText("SQL を生成しています（Select AI）");
+    await expect(current).toContainText("SQL を生成しています（Enterprise AI）");
     expect(traceReads).toBeGreaterThan(0);
     // 完了は会話の取り直しで届く（ジョブの状態が正本）。
     const generatedSql = "SELECT CATEGORY, SUM(AMOUNT) FROM APP.SALES GROUP BY CATEGORY";
@@ -1372,7 +1258,7 @@ for (const width of [1280, 375]) {
           prepare_context: "done",
           generate_sql: {
             status: "done",
-            params: { engine: "select_ai" },
+            params: { engine: "enterprise_ai_direct" },
             details: { code: [{ label: "生成した SQL", language: "sql", text: generatedSql }] },
           },
           safety_check: "running",
@@ -1400,7 +1286,7 @@ for (const width of [1280, 375]) {
           prepare_context: "done",
           generate_sql: {
             status: "done",
-            params: { engine: "select_ai" },
+            params: { engine: "enterprise_ai_direct" },
             details: { code: [{ label: "生成した SQL", language: "sql", text: generatedSql }] },
           },
           safety_check: {
@@ -2183,67 +2069,6 @@ test("確認の途中で再読込しても、同じ確認を続けられる (#14
   expect(state.requests[0]).toMatchObject({ requirement_session_id: REQUIREMENT_SESSION_ID });
 });
 
-test("Select AI Credential が無いと Select AI の送信を止めて入力欄の下に事前条件を示し、Enterprise AI は送れる (#1688)", { tag: "@responsive" }, async ({
-  page,
-}, testInfo) => {
-  const state = await setup(page);
-  const readiness = { exists: false };
-  await page.route("**/api/nl2sql/select-ai/credential-readiness", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          credential_required: true,
-          credential_name: "NL2SQL_OCI_CRED",
-          credential_exists: readiness.exists,
-        },
-      }),
-    }),
-  );
-  await page.goto("/chat");
-  const composer = page.getByRole("textbox", { name: "質問", exact: true });
-  const send = page.getByTestId("sql-chat-send");
-  const precondition = page.getByTestId("sql-chat-credential-precondition");
-  await expect(precondition).toContainText("Select AI Credential が作成されていません");
-  await expect(precondition).toContainText("作成するまで送信できません。");
-  await composer.fill("カテゴリ別売上");
-  // 書いた質問は残し、送信だけを止める（Enter でも送らない）。
-  await expect(send).toHaveAttribute("aria-disabled", "true");
-  await composer.press("Enter");
-  await expect(composer).toHaveValue("カテゴリ別売上");
-  expect(state.requests).toHaveLength(0);
-  // 入力欄の下（送信の行の直下）に全幅で出す。
-  const composerBox = (await composer.boundingBox())!;
-  const noticeBox = (await precondition.boundingBox())!;
-  expect(noticeBox.y).toBeGreaterThanOrEqual(composerBox.y + composerBox.height);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    ),
-  ).toBeLessThanOrEqual(0);
-  await precondition.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("chat-credential-missing.png") });
-
-  // OCI Enterprise AI の直接の生成は Credential を使わないので送れる。
-  await chooseSelectFieldOption(
-    page.getByRole("combobox", { name: "生成方法", exact: true }),
-    "enterprise_ai_direct",
-  );
-  await expect(precondition).toHaveCount(0);
-  await chooseSelectFieldOption(
-    page.getByRole("combobox", { name: "生成方法", exact: true }),
-    "select_ai",
-  );
-  readiness.exists = true;
-  await precondition.getByRole("button", { name: "再試行" }).click();
-  await expect(precondition).toHaveCount(0);
-  await composer.press("Enter");
-  await confirmChatRequirement(page);
-  await expect.poll(() => state.requests.length).toBe(1);
-  expect(state.requests[0]).toMatchObject({ engine: "select_ai", chat: true });
-});
-
 test("実行の詳細の「会話を開く」の URL で、その会話をチャットで開く (#2343)", { tag: "@responsive" }, async ({ page }) => {
   const state = await setup(page);
   state.turns.push({
@@ -2309,7 +2134,7 @@ test("処理の経過は span の木で、段の中のモデルの呼び出し�
     progress_events: jobProgressEvents("chat-1", { at: now, terminal: "done", steps: {
       queue: "done",
       prepare_context: "done",
-      generate_sql: { status: "done", params: { engine: "enterprise_ai_direct" }, children: [{ name: "gen_ai.chat", status: "done", attributes: { "gen_ai.request.model": "synthetic-model", "pr.gen_ai.purpose": "sql.generate" } }] },
+      generate_sql: { status: "done", params: { engine: "enterprise_ai_direct" }, children: [{ name: "gen_ai.chat", status: "done", attributes: { "gen_ai.request.model": "fixture-model", "pr.gen_ai.purpose": "sql.generate" } }] },
       safety_check: "done",
       execute_sql: "done",
       format_results: "done",
@@ -2329,7 +2154,7 @@ test("処理の経過は span の木で、段の中のモデルの呼び出し�
   await expect(model).toContainText("質問に答える SQL を作る");
   await expect(model).not.toContainText("用途の記録なし");
   await inspectTraceStep(page, progress, "generate_sql.1");
-  await expect(page.locator("[data-trace-technical]")).toContainText("synthetic-model");
+  await expect(page.locator("[data-trace-technical]")).toContainText("fixture-model");
   await page.getByRole("button", {name: "経過に戻る", exact: true}).click();
   await expect(progress.locator('[data-level="1"]')).toContainText("質問に答える SQL を作る");
   // 「トレースの詳細」の 2 つ目の表示は無い。Trace ID は処理の詳細にコピーのボタンと出す。
@@ -2386,7 +2211,7 @@ test("書けなかった span がある記録は、処理の経過の中に一�
 
 test("チャットと履歴の工程の内容・階層・状態・時間が一致する", {tag: "@responsive"}, async ({page}, testInfo) => {
   const state = await setup(page);
-  const turn: Turn = {job_id: "synthetic-parity", question: "合成の質問", status: "done", created_at: now, engine: "enterprise_ai_direct", steps: [{stage: "safety_check", status: "skipped"}],
+  const turn: Turn = {job_id: "fixture-parity", question: "合成の質問", status: "done", created_at: now, engine: "enterprise_ai_direct", steps: [{stage: "safety_check", status: "skipped"}],
     result: {generated_sql: "SELECT 1 AS VALUE FROM DUAL", original_question: "合成の質問", explanation: "合成の回答", safety: {is_safe: true, safety_checked: false}}};
   state.turns.push(turn);
   const events = turnProgressEvents(turn);
@@ -2399,13 +2224,13 @@ test("チャットと履歴の工程の内容・階層・状態・時間が一�
   expect(liveTypography.summary?.fontSize).toBe("12px");
   expect(live).toHaveLength(6);
   await page.screenshot({path: testInfo.outputPath("chat-process.png")});
-  await page.route("**/api/nl2sql/history/synthetic-parity", (route) => route.fulfill({json: {data: withRecordedTrace("synthetic-parity", {
-    id: "synthetic-parity", kind: "chat", session_id: "chat-1", question: "合成の質問", engine: "enterprise_ai_direct", generated_sql: "SELECT 1 AS VALUE FROM DUAL",
+  await page.route("**/api/nl2sql/history/fixture-parity", (route) => route.fulfill({json: {data: withRecordedTrace("fixture-parity", {
+    id: "fixture-parity", kind: "chat", session_id: "chat-1", question: "合成の質問", engine: "enterprise_ai_direct", generated_sql: "SELECT 1 AS VALUE FROM DUAL",
     executable_sql: "SELECT 1 AS VALUE FROM DUAL", created_at: now, elapsed_ms: 0, engine_timings: [], stage_timings: [],
     profile_id: "sales", profile_name: "プロファイル A", rewritten_question: "合成の質問", safety_is_safe: true,
     result_row_count: 1, result_columns: ["VALUE"], feedback_comment: "", feedback_updated_at: "", progress_events: events,
   })}}));
-  await page.goto("/history?id=synthetic-parity");
+  await page.goto("/history?id=fixture-parity");
   await expect(page.getByTestId("history-detail-summary")).toBeVisible();
   await expect(page.getByTestId("history-detail-summary").locator("[data-run-summary-heading] [data-status-variant]")).toHaveCount(0);
   await page.getByTestId("history-detail-timeline-summary").click();
@@ -2416,7 +2241,7 @@ test("チャットと履歴の工程の内容・階層・状態・時間が一�
   const details = page.locator("[data-run-process-details]");
   await expect(details).not.toHaveAttribute("open", "");
   await details.locator(":scope > summary").click();
-  await expect(details.locator("[data-trace-id-row]")).toContainText(`Trace ID: ${jobProgressTraceId("synthetic-parity")}`);
+  await expect(details.locator("[data-trace-id-row]")).toContainText(`Trace ID: ${jobProgressTraceId("fixture-parity")}`);
   await expect(page.getByTestId("trace-details-toggle")).toHaveCount(0);
   await page.getByTestId("history-detail-timeline").screenshot({path: testInfo.outputPath("history-process.png")});
 });

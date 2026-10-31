@@ -65,38 +65,11 @@ from pr_system_settings.upload_storage import (
 from pr_system_settings.upload_storage import (
     UploadStorageSettingsUpdate as UploadStorageSettingsUpdate,
 )
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-SelectAiCredentialRegion = Literal["ap-osaka-1", "us-chicago-1"]
-SelectAiCredentialOperation = Literal["created", "recreated", "already_exists"]
 # 状態・操作の型と、操作の状態・初期化の request は 3 製品共通（#325）。
 SystemTableSchemaStatus = SystemSchemaStatus
 SystemTableOperationResult = SystemSchemaOperation
-
-
-class SelectAiCredentialData(BaseModel):
-    """Select AI Credential の安全な表示用状態。秘密鍵本文は含めない。"""
-
-    credential_name: Literal["NL2SQL_OCI_CRED"] = "NL2SQL_OCI_CRED"
-    schema_name: str
-    exists: bool
-    region: SelectAiCredentialRegion
-    oci_auth_ready: bool
-    missing_fields: list[str] = Field(default_factory=list)
-    operation: SelectAiCredentialOperation | None = None
-
-
-class SelectAiCredentialCreateRequest(BaseModel):
-    """Credential 作成・再作成の明示操作 payload。"""
-
-    region: SelectAiCredentialRegion = "us-chicago-1"
-    confirmation: str = Field(default="", max_length=64)
-    recreate: bool = False
-
-    @field_validator("confirmation")
-    @classmethod
-    def strip_confirmation(cls, value: str) -> str:
-        return value.strip()
 
 
 class SystemTableMissingObject(BaseModel):

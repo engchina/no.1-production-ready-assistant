@@ -6,7 +6,7 @@ export type TraceCategory = "model" | "tool" | "stage";
 export type TraceOrder = "hierarchy" | "time";
 export function traceCategory(step: RunTimelineStep): TraceCategory {
   const name = step.operationName ?? "";
-  if (name === "gen_ai.chat" || name === "oracle.select_ai") return "model";
+  if (name === "gen_ai.chat") return "model";
   if (name === "gen_ai.execute_tool" || name.startsWith("mcp.")) return "tool";
   return "stage";
 }

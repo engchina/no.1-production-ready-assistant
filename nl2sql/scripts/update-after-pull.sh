@@ -67,7 +67,6 @@ SUDO_REEXEC_ENV_VARS=(
 BACKEND_SERVICE="production-ready-nl2sql-backend.service"
 WORKER_SERVICES=(
   "production-ready-nl2sql-schema-refresh-worker.service"
-  "production-ready-nl2sql-synthetic-worker.service"
   "production-ready-nl2sql-quality-evaluation-worker.service"
   "production-ready-nl2sql-ontology-worker.service"
 )
@@ -288,15 +287,6 @@ validate_fixed_oci_layout() {
   else
     [ "${configured_wallet}" = "/u01/aipoc/wallet" ] || \
       fail "PLATFORM_ORACLE_WALLET_DIR は /u01/aipoc/wallet 固定です。"
-  fi
-  # 旧デプロイには合成生成専用 unit が無い。backend の inprocess 実行で継続する。
-  if ! service_exists "production-ready-nl2sql-synthetic-worker.service"; then
-    WORKER_SERVICES=(
-      "production-ready-nl2sql-schema-refresh-worker.service"
-      "production-ready-nl2sql-quality-evaluation-worker.service"
-      "production-ready-nl2sql-ontology-worker.service"
-    )
-    ALL_SERVICES=("${BACKEND_SERVICE}" "${WORKER_SERVICES[@]}")
   fi
   for service in "${ALL_SERVICES[@]}"; do
     service_exists "${service}" || fail "systemd unit がありません: ${service}"

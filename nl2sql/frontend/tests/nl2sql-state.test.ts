@@ -46,7 +46,6 @@ import {
 } from "../src/features/nl2sql/previewState.ts";
 import {
   querySqlGenerationUrl,
-  parseNl2SqlEngine,
   prefillFromSearchParams,
 } from "../src/features/nl2sql/queryPrefillState.ts";
 import { formatSampleValues, formatSchemaCount } from "../src/features/nl2sql/schemaDisplayCore.ts";
@@ -416,13 +415,13 @@ test("job status helpers identify in-flight and terminal states", () => {
   assert.equal(isJobTerminal("running"), false);
 });
 
-test("preview response maps to a synthetic timeline job", () => {
+test("preview response maps to a placeholder timeline job", () => {
   const preview: PreviewData = {
     sql: "SELECT TOTAL_AMOUNT FROM INVOICES",
     is_safe: true,
     row_limit: 0,
     note: "preview ready",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     engine_meta: { profile_name: "P" },
     fallback_reason: "",
     rewritten_question: "請求金額を一覧で見る",
@@ -462,13 +461,13 @@ test("preview response maps to a synthetic timeline job", () => {
   assert.deepEqual(job.result?.results, { columns: [], rows: [], total: 0 });
 });
 
-test("Select AI の SQL で省略した安全性の確認は、プレビューのタイムラインでも未実行（#1523）", () => {
+test("安全性の確認をしていない結果は、プレビューのタイムラインでも未実行", () => {
   const preview: PreviewData = {
     sql: "SELECT TOTAL_AMOUNT FROM INVOICES",
     is_safe: true,
     row_limit: 0,
     note: "preview ready",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     engine_meta: {},
     fallback_reason: "",
     rewritten_question: "",
@@ -482,7 +481,7 @@ test("Select AI の SQL で省略した安全性の確認は、プレビュー�
       referenced_tables: ["APP.INVOICES"],
       referenced_columns: [],
       safety_checked: false,
-      safety_check_skip_reason: "Select AI が生成した SELECT 文のため省略しました。",
+      safety_check_skip_reason: "省略しました。",
     },
     recommendations: [],
     repaired_sql: "",
@@ -511,11 +510,11 @@ test("preview execute payload preserves selected allowed objects", () => {
   );
 });
 
-test("history rerun URL and query prefill preserve question, engine, and profile", () => {
+test("history rerun URL and query prefill preserve question and profile", () => {
   const item: HistoryItem = {
     id: "h1",
     question: "請求 金額を再実行",
-    engine: "select_ai_agent",
+    engine: "enterprise_ai_direct",
     generated_sql: "SELECT TOTAL_AMOUNT FROM INVOICES",
     created_at: "2026-01-01T00:00:00Z",
     elapsed_ms: 12,
@@ -531,15 +530,11 @@ test("history rerun URL and query prefill preserve question, engine, and profile
   };
 
   const url = querySqlGenerationUrl(item);
-  assert.equal(url, "/query?question=%E8%AB%8B%E6%B1%82+%E9%87%91%E9%A1%8D%E3%82%92%E5%86%8D%E5%AE%9F%E8%A1%8C&engine=select_ai_agent&profile_id=finance");
+  assert.equal(url, "/query?question=%E8%AB%8B%E6%B1%82+%E9%87%91%E9%A1%8D%E3%82%92%E5%86%8D%E5%AE%9F%E8%A1%8C&profile_id=finance");
   assert.deepEqual(prefillFromSearchParams(new URLSearchParams(url.split("?")[1])), {
     question: "請求 金額を再実行",
-    engine: "select_ai_agent",
     profileId: "finance",
   });
-  assert.equal(parseNl2SqlEngine("bad_engine"), null);
-  // 廃止済みの "auto" は prefill でも受理しない(既定エンジンに倒す)。
-  assert.equal(parseNl2SqlEngine("auto"), null);
 });
 
 test("job snapshots isolate owners and databases and cannot return after logout", () => {

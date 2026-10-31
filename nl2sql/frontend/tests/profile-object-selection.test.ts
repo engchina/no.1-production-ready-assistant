@@ -224,13 +224,6 @@ test("手動更新の失敗は初回ロード用 Banner state と分離して保
   assert.match(profilePage, /: refreshError\n\s*\? \{ tone: "danger" as const/u);
 });
 
-test("保存成功時に実行確認語をクリアして破壊的操作のゲートを再武装する", () => {
-  assert.match(
-    profilePage,
-    /setRequiredErrors\(\{\}\);\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*setOracleConfirmation\(""\);/u,
-  );
-});
-
 test("未保存判定は許可オブジェクトの並び順で変化しない", () => {
   const baseline = {
     name: "SALES",

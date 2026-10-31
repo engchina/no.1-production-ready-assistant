@@ -115,19 +115,6 @@ async function mockProfilePage(page: Page, persistenceMode: "memory" | "oracle" 
       default_row_limit: 100,
       safety_policy: "select_only",
       few_shot_examples: [],
-      select_ai_config: {
-        profile_name: "NL2SQL_PERSISTED_PROFILE",
-        region: "ap-osaka-1",
-        model: "",
-        embedding_model: "cohere.embed-v4.0",
-        max_tokens: 32000,
-        enforce_object_list: true,
-        comments: true,
-        annotations: false,
-        constraints: false,
-        role: "",
-        additional_instructions: "",
-      },
       archived: false,
     },
   ];
@@ -175,9 +162,6 @@ async function mockProfilePage(page: Page, persistenceMode: "memory" | "oracle" 
   );
   await page.route("**/api/nl2sql/db-admin/views", (route) =>
     fulfill(route, { runtime: "deterministic", items: [], warnings: [] })
-  );
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfill(route, { runtime: "deterministic", profiles: [], warnings: [] })
   );
   await page.route("**/api/nl2sql/profiles", (route) => fulfill(route, profiles));
   await page.route("**/api/nl2sql/profiles/search?*", (route) =>
@@ -654,7 +638,6 @@ test("Profile 保存が 503 のとき成功通知を出さず失敗を通知す�
   // 名称は識別子規則(英字開始・英数字/アンダースコア)、カテゴリは必須のクライアント検証あり。
   await page.getByLabel("名称").fill("SAVE_FAIL_PROFILE");
   await page.getByLabel("カテゴリ").fill("保存失敗検証");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
   await expect(

@@ -3,8 +3,8 @@
 - 状態の保存先（業務プロファイル・ジョブ・履歴・オントロジー・評価）は、読み書きのたびに新しい接続を
   張らず、`nl2sql-state` の pool から借りる。1 回のジョブで新しい接続を張る回数は、状態の読み書きの
   回数に比例しない
-- 業務データ・Select AI の接続は状態の保存先の pool に混ぜない（`connection()` の単発の接続、
-  または業務データの読み取り・Select AI の生成の `nl2sql-runtime` の pool。#904）
+- 業務データの接続は状態の保存先の pool に混ぜない（`connection()` の単発の接続、
+  または業務データの読み取りの `nl2sql-runtime` の pool。#904）
 - stage の境界の実行所有権とキャンセル要求は、直前の stage の保存で読んだ job の文書で確かめる
   （#830 で 1 回の往復にし、#904 で保存と同じ往復にした）
 """
@@ -189,7 +189,7 @@ def test_nested_state_connection_does_not_wait_for_itself(
 def test_business_data_connection_stays_single_shot(
     fake_oracledb: _FakeOracledb, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Select AI・利用者の SQL の接続は session の状態を持ち得るため pool に混ぜない。"""
+    """利用者の SQL の接続は session の状態を持ち得るため pool に混ぜない。"""
     adapter = _adapter(fake_oracledb, monkeypatch)
 
     with adapter.connection() as connection:

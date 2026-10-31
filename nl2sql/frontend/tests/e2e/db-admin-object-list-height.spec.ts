@@ -22,7 +22,6 @@ import {
 test.beforeEach(async ({ page }) => {
   await mockDatabaseGateReady(page);
   // 共通 job 表示が購読する API も隔離し、未 mock の 404 を console 検証に混ぜない。
-  await page.route("**/api/nl2sql/synthetic-data/runs", (route) => fulfillJson(route, []));
 });
 
 async function fulfillJson(route: Route, data: unknown) {
@@ -190,34 +189,7 @@ const sampleProfile = {
   default_row_limit: 100,
   safety_policy: "select_only",
   few_shot_examples: [{ question: "売上を見せて", sql: "SELECT * FROM TABLE_01" }],
-  select_ai_config: {
-    profile_name: "NL2SQL_DEFAULT_PROFILE",
-    region: "ap-osaka-1",
-    model: "cohere.command-r-plus",
-    embedding_model: "cohere.embed-v4.0",
-    max_tokens: 32000,
-    enforce_object_list: true,
-    comments: true,
-    annotations: false,
-    constraints: false,
-  },
   archived: false,
-};
-
-const selectAiProfile = {
-  name: "NL2SQL_DEFAULT_PROFILE",
-  status: "ENABLED",
-  owner: "APP",
-  created_at: "2026-06-21T10:00:00.000Z",
-  description: "Default profile",
-  category: "既定",
-  object_list: ["TABLE_01", "VIEW_01"],
-  tables: ["TABLE_01"],
-  views: ["VIEW_01"],
-  region: "ap-osaka-1",
-  model: "cohere.command-r-plus",
-  embedding_model: "cohere.embed-v4.0",
-  attributes: { object_list: ["TABLE_01", "VIEW_01"] },
 };
 
 const managementCatalog = {
@@ -271,7 +243,6 @@ const prepareManagementScenarios = [
       // データの表示は一覧 + 詳細（ListDetailLayout）で、一覧と詳細の列がそれぞれ枠を持つので外側の枠を付けない（#2315）。
       { id: "preview", tabName: "テーブル・ビューデータの表示", listDetail: true },
       { id: "csv", tabName: "Excel/CSV アップロード(既存テーブル)" },
-      { id: "synthetic", tabName: "合成データ生成" },
     ],
   },
   {
@@ -486,9 +457,6 @@ async function mockDataManagementApi(page: Page) {
       warnings: [],
     });
   });
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] })
-  );
 }
 
 async function mockSortableDataManagementApi(page: Page) {
@@ -740,9 +708,6 @@ async function mockProfileManagementApi(page: Page) {
   await page.route("**/api/schema/catalog", (route) => fulfillJson(route, managementCatalog));
   await page.route("**/api/nl2sql/db-admin/views", (route) => fulfillJson(route, viewObjects));
   await page.route("**/api/nl2sql/profiles", (route) => fulfillJson(route, [sampleProfile]));
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] })
-  );
 }
 
 async function mockPrepareManagementApi(page: Page, path: string) {
@@ -1379,46 +1344,6 @@ for (const scenario of metadataScenarios) {
   });
 }
 
-test("合成データ生成は対象テーブル一覧を5行の固定高さに収める", { tag: "@responsive" }, async ({ page }) => {
-  const syntheticTables = Array.from(
-    { length: 8 },
-    (_, index) => `APP.SYNTHETIC_TABLE_${String(index + 1).padStart(2, "0")}`
-  );
-  await mockDataManagementApi(page);
-  await page.unroute("**/api/nl2sql/select-ai/db-profiles**");
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) => {
-    const pathname = new URL(route.request().url()).pathname;
-    if (pathname.endsWith("/NL2SQL_DEFAULT_PROFILE")) {
-      return fulfillJson(route, {
-        runtime: "deterministic",
-        profile: {
-          ...selectAiProfile,
-          object_list: syntheticTables,
-          attributes: { profile_attributes: { object_list: syntheticTables } },
-        },
-        warnings: [],
-      });
-    }
-    return fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] });
-  });
-
-  await page.goto("/data-management");
-  await page.getByRole("tab", { name: "合成データ生成" }).click();
-  const syntheticPanel = page.locator("#data-management-panel-synthetic");
-  await syntheticPanel.getByRole("button", { name: "テーブル一覧を取得" }).click();
-
-  // 対象の表は共通の ListPicker（#608）。md 未満は 5 行（17.5rem）、md 以上は 8 行（28rem）で中をスクロールする。
-  const list = page.getByTestId("data-synthetic-table-scroll-region");
-  await expect(list.getByRole("option")).toHaveCount(syntheticTables.length);
-  const fit = await list.evaluate((node) => ({
-    listHeight: node.getBoundingClientRect().height,
-    scrolls: node.scrollHeight > node.clientHeight,
-  }));
-  const narrow = page.viewportSize()!.width < 768;
-  expect(Math.abs(fit.listHeight - (narrow ? 247 : 394))).toBeLessThanOrEqual(4);
-  expect(fit.scrolls).toBe(true);
-});
-
 test("データ管理のテーブル・ビュー件数 badge は API 総数を表示する", async ({ page }) => {
   await mockPagedDbAdminObjectsApi(page);
   await page.goto("/data-management");
@@ -1727,52 +1652,6 @@ for (const colorScheme of ["light", "dark"] as const) {
     });
     expect(colors.background).not.toBe(colors.color);
     await picker.screenshot({ path: testInfo.outputPath(`comment-target-picker-${colorScheme}.png`) });
-    await expectNoHorizontalScroll(page);
-  });
-
-  test(`合成データの対象の表は大量でも ListPicker で検索して選べる (${colorScheme})`, async ({ page }, testInfo) => {
-    await setUiTheme(page, colorScheme);
-    const syntheticTables = Array.from(
-      { length: 240 },
-      (_, index) => `APP.SYNTHETIC_TABLE_${String(index + 1).padStart(3, "0")}`
-    );
-    await mockDataManagementApi(page);
-    await page.unroute("**/api/nl2sql/select-ai/db-profiles**");
-    await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname.endsWith("/NL2SQL_DEFAULT_PROFILE")) {
-        return fulfillJson(route, {
-          runtime: "deterministic",
-          profile: {
-            ...selectAiProfile,
-            object_list: syntheticTables,
-            attributes: { profile_attributes: { object_list: syntheticTables } },
-          },
-          warnings: [],
-        });
-      }
-      return fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] });
-    });
-
-    await page.goto("/data-management");
-    await page.getByRole("tab", { name: "合成データ生成" }).click();
-    const syntheticPanel = page.locator("#data-management-panel-synthetic");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(colorScheme === "dark");
-    await syntheticPanel.getByRole("button", { name: "テーブル一覧を取得" }).click();
-
-    const picker = page.getByTestId("data-synthetic-table");
-    await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("240 / 240 件を表示、選択 0 件");
-    // 100 行を超えると見えている行だけを描く（仮想スクロール）。
-    expect(await picker.getByRole("option").count()).toBeLessThan(60);
-    // 検索は ListPicker の左端の検索欄（入力に合わせて絞る。候補は全件を読んでいるので画面側で絞る）。
-    await picker.getByRole("searchbox").fill("TABLE_23");
-    await expect(picker.getByRole("option")).toHaveCount(10);
-    await picker.getByTestId("data-synthetic-table-bulk-actions").getByRole("button", { name: "表示中をすべて選択" }).click();
-    await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("10 / 240 件を表示、選択 10 件");
-    await expect(syntheticPanel.getByText("選択 10 件", { exact: true })).toBeVisible();
-    await picker.screenshot({ path: testInfo.outputPath(`synthetic-table-picker-${colorScheme}.png`) });
     await expectNoHorizontalScroll(page);
   });
 }
@@ -3121,14 +3000,6 @@ for (const scenario of prepareManagementScenarios) {
     await page.keyboard.press("ArrowRight");
     await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(`#${scenario.idPrefix}-panel-${second.id}`)).toBeVisible();
-
-    if (scenario.tabs.length > 2) {
-      const third = scenario.tabs[2]!;
-      const thirdTab = page.getByRole("tab", { name: third.tabName });
-      await page.keyboard.press("ArrowRight");
-      await expect(thirdTab).toHaveAttribute("aria-selected", "true");
-      await expect(page.locator(`#${scenario.idPrefix}-panel-${third.id}`)).toBeVisible();
-    }
 
     await page.keyboard.press("Home");
     await expect(firstTab).toHaveAttribute("aria-selected", "true");

@@ -1004,7 +1004,7 @@ def _object_storage_candidate(settings: Any, payload: OciObjectStorageSettingsUp
 
 # --------------------------------------------------------------------------- public API
 
-# 製品側（NL2SQL の Select AI / ADB、RAG の guardrail readiness など）が使う関数。
+# 製品側（NL2SQL の ADB、RAG の guardrail readiness など）が使う関数。
 oci_settings_data = _oci_settings_data
 oci_config_file = _oci_config_file
 oci_profile = _oci_profile

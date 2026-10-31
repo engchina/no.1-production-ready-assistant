@@ -17,7 +17,6 @@ from app.features.nl2sql.models import (
     JobData,
     JobStatus,
     JobStepStatus,
-    Nl2SqlEngine,
     Nl2SqlProfile,
     QueryResults,
     SafetyReport,
@@ -271,51 +270,6 @@ def test_chat_history_has_generation_only_marker(chat: ChatFixture) -> None:
 def test_chat_rejects_blank_query() -> None:
     with pytest.raises(ValidationError):
         JobCreateRequest(question=" ", generation_only=True)
-
-
-def test_chat_accepts_select_ai_agent_and_generates_without_execution(
-    chat: ChatFixture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Select AI Agent もチャットで選べる（#890）。SQL ツールは SHOWSQL で、送信では実行しない。"""
-
-    service, _, _ = chat
-    assert JobCreateRequest(
-        question="注文", engine=Nl2SqlEngine.SELECT_AI_AGENT, generation_only=True
-    ).generation_only
-    calls: list[dict[str, object]] = []
-
-    def _run_team(**kwargs: object) -> tuple[str, str]:
-        # 実 Oracle の DBMS_CLOUD_AI_AGENT.RUN_TEAM の代わりの決定論スタブ。
-        calls.append(kwargs)
-        sql = "SELECT ID FROM APP.ORDERS" + (" ORDER BY ID DESC" if len(calls) > 1 else "")
-        return sql, f"conversation-{len(calls)}"
-
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_assert_select_ai_scope_ready", lambda _profile: None)
-    monkeypatch.setattr(service._oracle_adapter, "run_select_ai_agent_team", _run_team)  # noqa: SLF001
-    monkeypatch.setattr(
-        service, "execute_sql", lambda *args, **kwargs: pytest.fail("送信で SQL を実行")
-    )
-    agent = {"engine": Nl2SqlEngine.SELECT_AI_AGENT}
-    first = run(service, request().model_copy(update=agent))
-    assert first.status == JobStatus.DONE, first.error_message
-    assert first.result is not None
-    assert first.result.engine == Nl2SqlEngine.SELECT_AI_AGENT
-    assert first.result.generated_sql.startswith("SELECT ID FROM APP.ORDERS")
-    assert first.result.results.total == 0
-    assert (
-        next(step for step in first.steps if step.stage == "execute_sql").status
-        == JobStepStatus.SKIPPED
-    )
-    second = run(service, request("新しい順にして", first.job_id).model_copy(update=agent))
-    assert second.status == JobStatus.DONE, second.error_message
-    assert second.conversation_id == first.job_id
-    # 継続のターンは、前の質問と生成 SQL を Agent への依頼文に含める。
-    question = str(calls[-1]["question"])
-    assert "注文一覧" in question
-    assert "SELECT ID FROM APP.ORDERS" in question
-    # 利用者の自然言語の入力は「質問」と呼ぶ（#1183）。
-    assert "最新の質問: 新しい順にして" in question
 
 
 def test_client_job_id_replays_the_created_job_after_lost_response(chat: ChatFixture) -> None:

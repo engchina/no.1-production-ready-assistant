@@ -50,9 +50,6 @@ from app.security.permissions import (
     SCHEMA_READ_PERMISSION,
     SCHEMA_REFRESH_PERMISSION,
     SECURITY_USER_ROLE_ROUTE_PERMISSIONS,
-    SELECT_AI_ASSETS_MANAGE_PERMISSION,
-    SELECT_AI_ASSETS_READ_PERMISSION,
-    SELECT_AI_ASSETS_REFRESH_PERMISSION,
     SQL_EXECUTE_PERMISSION,
     SYSTEM_STATUS_READ_PERMISSION,
     UNCLASSIFIED_PERMISSION,
@@ -1563,15 +1560,6 @@ def test_every_api_route_is_classified_by_manifest() -> None:
     assert permission_for_route("POST", "/nl2sql/feedback") == frozenset(
         {FEEDBACK_WRITE_PERMISSION, FEEDBACK_MANAGE_PERMISSION}
     )
-    assert permission_for_route("GET", "/nl2sql/select-ai/db-profiles") == frozenset(
-        {SELECT_AI_ASSETS_READ_PERMISSION}
-    )
-    assert permission_for_route("POST", "/nl2sql/select-ai/db-profiles/refresh-jobs") == frozenset(
-        {SELECT_AI_ASSETS_REFRESH_PERMISSION}
-    )
-    assert permission_for_route("POST", "/nl2sql/select-ai/db-profiles") == frozenset(
-        {SELECT_AI_ASSETS_MANAGE_PERMISSION}
-    )
     assert permission_for_route("GET", "/nl2sql/legacy-learning-material") == frozenset(
         {LEARNING_MATERIAL_MANAGE_PERMISSION, "menu.glossary_rules", "menu.global_rules"}
     )
@@ -1802,30 +1790,14 @@ def test_route_permissions_cover_every_mounted_route() -> None:
     mounted = _mounted_api_operations()
     # SQL チャットの一覧・会話取得も、生成権限で保護する（#871）。チャットのターンの SQL の実行
     # （#1154）と、ジョブの中で実行した結果の受け取り（#1176）は実行の権限で保護する。ジョブの
-    # 処理の段階のイベント（polling・SSE。#1359）はジョブの取得と同じ権限。生成の方式の選択肢
-    # （#1524）は業務プロファイルの管理と SQL の生成の権限。業務プロファイルの保存（Oracle 反映）の
-    # 事前条件の Select AI の Credential の状態（#1683 / #1688）は、Credential が前提の操作の
-    # いずれかの権限で読める。会話の名前の変更・削除（#1817）は生成の権限で本人の会話だけ。
+    # 処理の段階のイベント（polling・SSE。#1359）はジョブの取得と同じ権限。
+    # 会話の名前の変更・削除（#1817）は生成の権限で本人の会話だけ。
     # 実行履歴の 1 行（全幅の詳細。#1955）は一覧と同じ権限。DB 管理チャット（#2264）の生成・実行・
     # 失敗の分析と会話の履歴（#2319）は menu.db_admin_chat だけ。回答の注意書きの取得・保存
     # （#2405）は menu.settings_answer_notice。チャットの添付（#2517）は生成の権限、使うかの設定は
     # menu.settings_chat_attachments。軌跡の本文記録は menu.settings_trace_recording。
-    assert len(mounted) == 293
-    assert len(ROUTE_PERMISSIONS) == 281
-    assert ROUTE_PERMISSIONS[("GET", "/nl2sql/select-ai/credential-readiness")] == frozenset(
-        {
-            "nl2sql.profiles.manage",
-            "nl2sql.select_ai_assets.refresh",
-            "nl2sql.select_ai_assets.manage",
-            QUERY_GENERATE_PERMISSION,
-            "menu.sample_data",
-            "menu.data_management",
-            "menu.evaluation",
-        }
-    )
-    assert ROUTE_PERMISSIONS[("GET", "/nl2sql/engines")] == frozenset(
-        {PROFILE_MANAGE_PERMISSION, QUERY_GENERATE_PERMISSION}
-    )
+    assert len(mounted) == 254
+    assert len(ROUTE_PERMISSIONS) == 242
     for path in ("/nl2sql/chats", "/nl2sql/chats/{conversation_id}"):
         assert ROUTE_PERMISSIONS[("GET", path)] == frozenset({QUERY_GENERATE_PERMISSION})
     # 処理の経過（#3226 の案 A）は記録と同じ権限。
@@ -1942,11 +1914,6 @@ _LEGACY_PREFIX_RULE_RESULTS: tuple[tuple[str, str, set[str]], ...] = (
         "/nl2sql/metadata-samples",
         {"menu.annotation_management", "menu.comment_management", "menu.domain_management"},
     ),
-    (
-        "POST",
-        "/nl2sql/synthetic-data/runs/{run_id}/apply",
-        {"menu.data_management", "menu.sample_data"},
-    ),
     ("GET", "/nl2sql/profiles/search", {"nl2sql.profiles.read"}),
     ("GET", "/nl2sql/profiles/{profile_id}/usage-context", {"nl2sql.profiles.read"}),
     (
@@ -2004,29 +1971,6 @@ _LEGACY_PREFIX_RULE_RESULTS: tuple[tuple[str, str, set[str]], ...] = (
     ),
     ("POST", "/nl2sql/ontology/revisions/{revision_id}/publish", {"menu.ontology_build"}),
     ("GET", "/nl2sql/ontology-build/{job_id}", {"menu.ontology_build"}),
-    (
-        "POST",
-        "/nl2sql/oracle-sync-jobs/{job_id}/retry",
-        {"nl2sql.profiles.manage", "nl2sql.select_ai_assets.refresh"},
-    ),
-    ("GET", "/nl2sql/select-ai/db-profile-refresh-jobs/{job_id}", {"nl2sql.select_ai_assets.read"}),
-    ("POST", "/nl2sql/select-ai/db-profiles/refresh-jobs", {"nl2sql.select_ai_assets.refresh"}),
-    ("PATCH", "/nl2sql/select-ai/db-profiles/{profile_name}", {"nl2sql.select_ai_assets.manage"}),
-    ("GET", "/nl2sql/select-ai/db-profiles/{profile_name}", {"nl2sql.select_ai_assets.read"}),
-    (
-        "POST",
-        "/nl2sql/select-ai/feedback/vector-index",
-        {"nl2sql.feedback.manage", "nl2sql.select_ai_assets.manage"},
-    ),
-    ("POST", "/nl2sql/select-ai/profiles/refresh", {"nl2sql.select_ai_assets.refresh"}),
-    ("GET", "/nl2sql/select-ai/profiles/export.json", {"nl2sql.select_ai_assets.manage"}),
-    ("POST", "/nl2sql/select-ai/profiles/import-json", {"nl2sql.select_ai_assets.manage"}),
-    ("POST", "/nl2sql/select-ai/assets/cleanup", {"nl2sql.select_ai_assets.manage"}),
-    ("POST", "/nl2sql/select-ai-agent/assets/refresh", {"nl2sql.select_ai_assets.refresh"}),
-    ("POST", "/nl2sql/select-ai-agent/assets/cleanup", {"nl2sql.select_ai_assets.manage"}),
-    ("POST", "/nl2sql/select-ai-agent/run-team", {"nl2sql.select_ai_assets.manage"}),
-    ("POST", "/nl2sql/select-ai-agent/conversations/create", {"nl2sql.select_ai_assets.manage"}),
-    ("GET", "/nl2sql/select-ai-agent/privileges/check", {"nl2sql.select_ai_assets.read"}),
     ("POST", "/nl2sql/feedback/admin-review", {"nl2sql.feedback.manage"}),
     ("POST", "/nl2sql/feedback-index/rebuild", {"nl2sql.feedback.manage"}),
     ("PATCH", "/nl2sql/feedback-config", {"nl2sql.feedback.manage"}),
@@ -2081,18 +2025,6 @@ def test_route_permissions_match_legacy_prefix_rules(
     assert permission_for_route(method, route_path) == frozenset(expected)
 
 
-@pytest.mark.parametrize("method", ["GET", "POST"])
-def test_select_ai_credential_uses_its_own_menu_permission(method: str) -> None:
-    """Select AI Credential は運用設定の専用の画面の権限で操作する（#658）。"""
-
-    assert permission_for_route(method, "/settings/database/select-ai-credential") == frozenset(
-        {"menu.settings_select_ai_credential"}
-    )
-    catalog = {item.code: item for item in PERMISSION_CATALOG}
-    assert catalog["menu.settings_select_ai_credential"].group == "運用設定"
-    assert catalog["menu.security_permissions"].group == "セキュリティ設定"
-
-
 @pytest.mark.parametrize(
     ("method", "route_path"),
     [
@@ -2102,7 +2034,6 @@ def test_select_ai_credential_uses_its_own_menu_permission(method: str) -> None:
         ("POST", "/nl2sql/db-admin/new-operation"),
         ("GET", "/nl2sql/profiles/{profile_id}/new-view"),
         ("DELETE", "/nl2sql/profiles/{profile_id}/ontology-results/{result_id}"),
-        ("PUT", "/nl2sql/select-ai/db-profiles/{profile_name}"),
         ("POST", "/nl2sql/persistence/new-operation"),
         ("GET", "/schema/new-listing"),
         ("POST", "/settings/oci/new-operation"),
@@ -2242,7 +2173,7 @@ def test_sql_use_roles_can_read_profile_usage_context_without_profile_management
             usage_payload = usage_context.json()["data"]
             assert usage_payload["id"] == "default"
             assert "few_shot_examples" not in usage_payload
-            assert "select_ai_config" not in usage_payload
+            assert "sql_rules" not in usage_payload
             assert (await client.get("/api/schema/objects")).status_code == 200
             active_schema_refresh = await client.get("/api/schema/refresh-jobs/active")
             assert active_schema_refresh.status_code == 200
@@ -2283,7 +2214,7 @@ def test_sql_use_roles_can_read_profile_usage_context_without_profile_management
             assert full_profile.status_code == 200
             full_payload = full_profile.json()["data"]
             assert "few_shot_examples" in full_payload
-            assert "select_ai_config" in full_payload
+            assert "sql_rules" in full_payload
 
     try:
         asyncio.run(exercise())
@@ -2532,7 +2463,7 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         HistoryItem(
             id="query-history",
             question="社員一覧",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
             created_at="2026-08-20T00:00:00+00:00",
             actor_user_uuid=query_user.user_uuid,
@@ -2540,7 +2471,7 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         HistoryItem(
             id="other-history",
             question="部署一覧",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql="SELECT DEPARTMENT_ID FROM DEPARTMENT",
             created_at="2026-08-20T00:01:00+00:00",
             actor_user_uuid="other-user",
@@ -2592,12 +2523,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
                 )
             ).status_code == 403
             assert (await client.get("/api/nl2sql/legacy-learning-material")).status_code == 403
-            assert (
-                await client.post(
-                    "/api/nl2sql/select-ai/db-profiles/refresh-jobs",
-                    headers={"X-CSRF-Token": csrf},
-                )
-            ).status_code == 403
 
             _, csrf = await _login_api(client, "direct.only", "DirectOnlyPass!123")
             analyze = await client.post(
@@ -2655,7 +2580,7 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
             assert (await client.get("/api/nl2sql/feedback-index")).status_code == 200
 
             await _login_api(client, "data.manager", "DataManagerPass!123")
-            assert (await client.get("/api/nl2sql/select-ai/db-profiles")).status_code == 200
+            assert (await client.get("/api/schema/objects")).status_code == 200
 
     try:
         asyncio.run(exercise())
@@ -4408,14 +4333,14 @@ def test_history_api_scopes_items_to_actor_except_system_admin(
                 HistoryItem(
                     id="legacy-history",
                     question="所有者不明",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     generated_sql="SELECT 1 FROM DUAL",
                     created_at="2026-08-17T00:00:00+00:00",
                 ),
                 HistoryItem(
                     id="admin-history",
                     question="管理者履歴",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     generated_sql="SELECT 1 FROM DUAL",
                     created_at="2026-08-17T00:01:00+00:00",
                     actor_user_uuid=admin_user_id,
@@ -4423,7 +4348,7 @@ def test_history_api_scopes_items_to_actor_except_system_admin(
                 HistoryItem(
                     id="viewer-history",
                     question="自分の履歴",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     generated_sql="SELECT 1 FROM DUAL",
                     created_at="2026-08-17T00:02:00+00:00",
                     actor_user_uuid=viewer_user_id,
@@ -4431,7 +4356,7 @@ def test_history_api_scopes_items_to_actor_except_system_admin(
                 HistoryItem(
                     id="other-history",
                     question="他人の履歴",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     generated_sql="SELECT 1 FROM DUAL",
                     created_at="2026-08-17T00:03:00+00:00",
                     actor_user_uuid="other-user",
@@ -4478,70 +4403,6 @@ def test_history_api_scopes_items_to_actor_except_system_admin(
         asyncio.run(exercise())
     finally:
         reset_security_service()
-
-
-@pytest.mark.parametrize("actor_kind", ["system_admin", "data_operator", "denied"])
-def test_nested_synthetic_routes_use_authenticated_effective_path(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, actor_kind: str
-) -> None:
-    """実 app の login→多重 include router→RBAC を通し、principal 注入で迂回しない。"""
-    from app.features.nl2sql import synthetic_router
-    from app.features.nl2sql.service import nl2sql_service
-    from app.features.nl2sql.synthetic_service import SyntheticService
-    from app.features.nl2sql.synthetic_store import SyntheticStore
-
-    _patch_app_admin_env(monkeypatch, tmp_path)
-    security = _configure_memory_api_auth(monkeypatch)
-    synthetic = SyntheticService(get_settings(), store=SyntheticStore())
-    monkeypatch.setattr(synthetic_router, "get_synthetic_service", lambda: synthetic)
-    monkeypatch.setattr(nl2sql_service, "ensure_persistence_available", lambda: None)
-    login_id, password = "system_admin", "AppAdminPass123"
-    if actor_kind != "system_admin":
-        admin, _, _ = security.login(login_id, password)
-        role = security.create_role(
-            role_code="SYNTHETIC_READER",
-            display_name="生成状態参照",
-            description="",
-            permissions=(
-                {"menu.data_management"} if actor_kind == "data_operator" else {"menu.query"}
-            ),
-            actor=admin,
-        )
-        login_id, password = "synthetic-reader", "SyntheticReaderPass!123"
-        _create_active_user(
-            security,
-            admin,
-            login_user_id=login_id,
-            display_name="生成状態参照",
-            role_ids=[role.role_id],
-            password=password,
-        )
-
-    async def exercise() -> None:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            current, csrf = await _login_api(client, login_id, password)
-            assert (await client.get("/api/auth/me")).status_code == 200
-            if actor_kind == "system_admin":
-                assert current["is_system_admin"] is True
-            response = await client.get("/api/nl2sql/synthetic-data/runs")
-            assert response.status_code == (403 if actor_kind == "denied" else 200), response.text
-            if actor_kind != "denied":
-                assert response.json()["data"] == []
-            # 有効な role でも確認語の検証は省略しない。未認可は domain mutation 前に拒否。
-            response = await client.post(
-                "/api/nl2sql/synthetic-data/runs",
-                headers={"X-CSRF-Token": csrf},
-                json={
-                    "table_name": "APP.T",
-                    "profile_name": "P",
-                    "idempotency_key": "nested-route-key-001",
-                },
-            )
-            assert response.status_code == (403 if actor_kind == "denied" else 400), response.text
-
-    asyncio.run(exercise())
 
 
 def test_db_admin_chat_requires_its_own_menu_permission(

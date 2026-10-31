@@ -1120,7 +1120,7 @@ test("SQL 生成だけのユーザーは結果接地で ontology 管理 API の 
       timing: null,
       result: {
         history_id: "hist-query-ontology-403",
-        engine: "select_ai",
+        engine: "enterprise_ai_direct",
         engine_meta: { profile: "NL2SQL_DEFAULT_PROFILE" },
         fallback_reason: "",
         original_question: question,

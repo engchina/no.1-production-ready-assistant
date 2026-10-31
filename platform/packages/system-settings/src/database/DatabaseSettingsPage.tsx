@@ -135,7 +135,7 @@ export interface DatabaseSettingsPageProps {
   loadingFallback?: ReactNode;
   /** 離脱確認ダイアログの文言の上書き。 */
   draftGuardMessages?: Partial<DraftGuardMessages>;
-  /** 接続設定の下に置く製品固有のカード（NL2SQL の Select AI、RAG のシステムテーブル）。 */
+  /** 接続設定の下に置く製品固有のカード（RAG のシステムテーブルなど）。 */
   children?: ReactNode;
 }
 
@@ -728,7 +728,7 @@ interface AdbOperationLogEntry {
 
 /**
  * Autonomous Database をサポートするリージョン（Terraform の stack の `region` の validation と同じ。#660）。
- * us-chicago-1 はサポートしない。OCI 認証設定・Select AI のリージョンの候補とは別の一覧。
+ * us-chicago-1 はサポートしない。OCI 認証設定のリージョンの候補とは別の一覧。
  */
 const ADB_REGION_OPTIONS = [
   { value: "ap-tokyo-1", label: "ap-tokyo-1" },

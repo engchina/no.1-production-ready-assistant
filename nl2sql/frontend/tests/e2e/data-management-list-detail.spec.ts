@@ -25,7 +25,6 @@ async function fulfillJson(route: Route, data: unknown) {
 async function mockDataManagement(page: Page) {
   const previewRequests: string[] = [];
   await mockDatabaseGateReady(page);
-  await page.route("**/api/nl2sql/synthetic-data/runs", (route) => fulfillJson(route, []));
   await page.route("**/api/nl2sql/db-admin/objects?*", (route) => {
     const url = new URL(route.request().url());
     const type = url.searchParams.get("type") ?? "all";

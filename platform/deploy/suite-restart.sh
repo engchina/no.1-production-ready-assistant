@@ -10,7 +10,7 @@
 #   （起動しない）。ADB を停止する処理は持たない。
 # 既定（build して再起動）:
 #   1. 各製品の今の backend/.env を props（cloud-init が置いた元）へ写す。suite-init.sh は props から backend/.env を
-#      作り直すため、写さないと画面で保存した値（RAG の HuggingFace・解析後の処理、NL2SQL の Select AI Credential・
+#      作り直すため、写さないと画面で保存した値（RAG の HuggingFace・解析後の処理
 #      など）が消える。元の props は recovery/<時刻>/ に退避する。platform/.env・Wallet・HTTPS の CA は
 #      suite-init.sh がそのまま保つ。
 #   2. suite-init.sh を再実行する（依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・

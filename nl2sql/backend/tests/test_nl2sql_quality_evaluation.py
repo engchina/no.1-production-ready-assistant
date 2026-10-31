@@ -12,7 +12,6 @@ from openpyxl import Workbook, load_workbook  # type: ignore[import-untyped]
 
 import app.features.nl2sql.router as nl2sql_router_module
 from app.features.nl2sql.models import (
-    AssetRefreshData,
     Nl2SqlEngine,
     Nl2SqlProfile,
     SampleDataMutationRequest,
@@ -115,7 +114,7 @@ def _evaluation_job(
         job_id=job_id,
         profile_id=profile_id,
         profile_name=profile_id,
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         cases=[
             QualityEvaluationCase(
@@ -133,7 +132,7 @@ def _evaluation_job(
                 QualityEvaluationRunningAttempt(
                     case_no=1,
                     case_id="A",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     repetition_no=1,
                     started_at=current_attempt_started_at,
                 )
@@ -159,7 +158,7 @@ def _evaluation_result(job_id: str) -> QualityEvaluationResult:
         excel_row=2,
         question="q",
         expected_sql="SELECT 1 FROM dual",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         repetition_no=1,
         generated_sql="SELECT 1 FROM dual",
         normalized_sql="SELECT 1 FROM DUAL",
@@ -206,11 +205,7 @@ def _configure_strict_engine_runtime(
     service: Nl2SqlService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "nl2sql_select_ai_enabled", True)
-    monkeypatch.setattr(settings, "nl2sql_select_ai_agent_enabled", True)
     monkeypatch.setattr(settings, "nl2sql_enterprise_ai_direct_enabled", True)
-    monkeypatch.setattr(settings, "nl2sql_select_ai_provider", "oci")
-    monkeypatch.setattr(settings, "nl2sql_select_ai_credential_name", "NL2SQL_CRED")
     monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
     monkeypatch.setattr(service._oracle_adapter, "is_configured", lambda: True)
     monkeypatch.setattr(service._enterprise_ai_client, "is_configured", lambda: True)
@@ -437,7 +432,7 @@ def test_submit_validates_engines_repeat_profile_and_attempt_limit(
     with pytest.raises(QualityEvaluationValidationError, match="1〜10"):
         service.submit(
             profile_id="default",
-            engines=[Nl2SqlEngine.SELECT_AI],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=11,
             content=workbook,
             filename="cases.xlsx",
@@ -445,7 +440,7 @@ def test_submit_validates_engines_repeat_profile_and_attempt_limit(
     with pytest.raises(QualityEvaluationValidationError, match="業務プロファイル"):
         service.submit(
             profile_id="missing",
-            engines=[Nl2SqlEngine.SELECT_AI],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=1,
             content=workbook,
             filename="cases.xlsx",
@@ -455,8 +450,8 @@ def test_submit_validates_engines_repeat_profile_and_attempt_limit(
     with pytest.raises(QualityEvaluationValidationError, match="総試行回数"):
         service.submit(
             profile_id="default",
-            engines=[Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT],
-            repeat_count=1,
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
+            repeat_count=2,
             content=workbook,
             filename="cases.xlsx",
         )
@@ -472,7 +467,7 @@ def test_submit_accepts_repeat_boundaries_and_rejects_unavailable_engine(
     assert (
         service.submit(
             profile_id="default",
-            engines=[Nl2SqlEngine.SELECT_AI],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=1,
             content=workbook,
             filename="cases.xlsx",
@@ -482,7 +477,7 @@ def test_submit_accepts_repeat_boundaries_and_rejects_unavailable_engine(
     assert (
         service.submit(
             profile_id="default",
-            engines=[Nl2SqlEngine.SELECT_AI],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=10,
             content=workbook,
             filename="cases.xlsx",
@@ -494,13 +489,13 @@ def test_submit_accepts_repeat_boundaries_and_rejects_unavailable_engine(
         engine_runner=lambda *_args: "SELECT 1 FROM dual",
         judge_runner=_judge,
         readiness_provider=lambda _profile_id: {
-            Nl2SqlEngine.SELECT_AI: (False, "Select AI profile が未構成です。")
+            Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (False, "OCI Enterprise AI が未構成です。")
         },
     )
     with pytest.raises(QualityEvaluationValidationError, match="未構成"):
         unavailable.submit(
             profile_id="default",
-            engines=[Nl2SqlEngine.SELECT_AI],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=1,
             content=workbook,
             filename="cases.xlsx",
@@ -669,7 +664,7 @@ def test_quality_evaluation_summary_exposes_current_attempt_deadline() -> None:
 
     assert summary.current_attempt_deadline_at == "2026-07-22T08:10:00+00:00"
     assert summary.current_case_id == "A"
-    assert summary.current_engine == Nl2SqlEngine.SELECT_AI
+    assert summary.current_engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     assert summary.current_repetition == 1
     assert [item.deadline_at for item in summary.running_attempts] == ["2026-07-22T08:10:00+00:00"]
     assert completed.current_attempt_deadline_at is None
@@ -689,14 +684,14 @@ def test_quality_evaluation_summary_reports_oldest_of_running_attempts() -> None
                 QualityEvaluationRunningAttempt(
                     case_no=1,
                     case_id="B",
-                    engine=Nl2SqlEngine.SELECT_AI_AGENT,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     repetition_no=2,
                     started_at="2026-07-22T08:01:00+00:00",
                 ),
                 QualityEvaluationRunningAttempt(
                     case_no=1,
                     case_id="A",
-                    engine=Nl2SqlEngine.SELECT_AI,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     repetition_no=1,
                     started_at="2026-07-22T08:00:00+00:00",
                 ),
@@ -831,7 +826,7 @@ def test_quality_evaluation_cancel_is_idempotent_and_rejects_completed_jobs() ->
         service.cancel_job("missing-job")
 
 
-def test_worker_records_select_ai_agent_timeout_as_error_result(
+def test_worker_records_engine_timeout_as_error_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = get_settings()
@@ -839,13 +834,13 @@ def test_worker_records_select_ai_agent_timeout_as_error_result(
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_attempt_timeout_seconds", 300.0)
 
     def engine(_question: str, selected: Nl2SqlEngine, _profile: str) -> str:
-        assert selected == Nl2SqlEngine.SELECT_AI_AGENT
+        assert selected == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
         raise RuntimeError("DPI-1067: call timeout of 300000 ms exceeded")
 
     service = _service(engine_runner=engine, judge_runner=_judge)
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI_AGENT],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -855,7 +850,7 @@ def test_worker_records_select_ai_agent_timeout_as_error_result(
 
     result = service.list_results(job_id=submitted.job_id, limit=1).items[0]
     assert result.verdict == QualityEvaluationVerdict.NOT_ANALYZED
-    assert "Select AI Agent" in result.generation_error
+    assert "Enterprise AI Direct" in result.generation_error
     assert "300 秒" in result.generation_error
     assert "タイムアウト" in result.generation_error
     assert service.get_job(submitted.job_id).status == QualityEvaluationStatus.COMPLETED_WITH_ERRORS
@@ -875,7 +870,7 @@ def test_evaluation_worker_discards_result_after_expired_lease_is_reclaimed(
     )
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -925,7 +920,7 @@ def test_expired_lease_reclaim_synthesizes_timeout_result(
             job_id="expired-attempt",
             profile_id="default",
             profile_name="default",
-            engines=[Nl2SqlEngine.SELECT_AI_AGENT],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=1,
             cases=[
                 QualityEvaluationCase(
@@ -942,7 +937,7 @@ def test_expired_lease_reclaim_synthesizes_timeout_result(
                 QualityEvaluationRunningAttempt(
                     case_no=1,
                     case_id="A",
-                    engine=Nl2SqlEngine.SELECT_AI_AGENT,
+                    engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     repetition_no=1,
                     started_at=(now - timedelta(seconds=360)).isoformat(),
                 )
@@ -1001,7 +996,7 @@ def test_expired_lease_reclaim_times_out_each_running_attempt(
         return QualityEvaluationRunningAttempt(
             case_no=case_no,
             case_id=case_id,
-            engine=Nl2SqlEngine.SELECT_AI_AGENT,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             repetition_no=1,
             started_at=(now - timedelta(seconds=seconds_ago)).isoformat(),
         )
@@ -1012,7 +1007,7 @@ def test_expired_lease_reclaim_times_out_each_running_attempt(
             job_id="expired-attempts",
             profile_id="default",
             profile_name="default",
-            engines=[Nl2SqlEngine.SELECT_AI_AGENT],
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=1,
             cases=cases,
             status=QualityEvaluationStatus.RUNNING,
@@ -1129,10 +1124,10 @@ def _capture_evaluation_caller(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     return events
 
 
-def _submit_cases(service: QualityEvaluationService, *, cases: int, repeat: int = 2) -> str:
+def _submit_cases(service: QualityEvaluationService, *, cases: int, repeat: int = 4) -> str:
     return service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=repeat,
         content=_xlsx(
             [[f"C{index}", f"質問{index}", "SELECT 1 FROM dual"] for index in range(cases)]
@@ -1161,12 +1156,9 @@ def test_attempts_run_concurrently_and_results_keep_their_positions(
     assert engine.max_active == 3
     # 結果はケース・engine・繰り返しの位置に書く（終わる順に関わらない）。
     assert [(item.case_id, item.engine, item.repetition_no) for item in items] == [
-        (f"C{case}", selected, repetition)
+        (f"C{case}", Nl2SqlEngine.ENTERPRISE_AI_DIRECT, repetition)
         for case in range(3)
-        for selected in sorted(
-            [Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT], key=lambda e: e.value
-        )
-        for repetition in (1, 2)
+        for repetition in (1, 2, 3, 4)
     ]
     assert all(item.generated_sql == f"SELECT '{item.question}' FROM dual" for item in items)
 
@@ -1249,7 +1241,7 @@ def test_cancelled_job_is_not_overwritten_by_late_worker_return(
     service._engine_runner = engine  # noqa: SLF001
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -1304,67 +1296,6 @@ def test_default_quality_evaluation_enterprise_ai_calls_disable_retries(
     assert fake_client.calls[0]["max_retries"] == 0
 
 
-def test_quality_evaluation_readiness_allows_profile_engines_without_cached_asset_meta(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    _configure_strict_engine_runtime(service, monkeypatch)
-
-    readiness = service.quality_evaluation_engine_readiness(profile_id="default")
-
-    assert readiness[Nl2SqlEngine.SELECT_AI] == (True, "")
-    assert readiness[Nl2SqlEngine.SELECT_AI_AGENT] == (True, "")
-    assert readiness[Nl2SqlEngine.ENTERPRISE_AI_DIRECT] == (True, "")
-
-
-def test_quality_evaluation_readiness_blocks_known_unsynced_current_profile(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    _configure_strict_engine_runtime(service, monkeypatch)
-    profile_name = service._select_ai_profile_name(service.get_profile("default"))  # noqa: SLF001
-    service._asset_meta[Nl2SqlEngine.SELECT_AI] = AssetRefreshData(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI,
-        refreshed=False,
-        status="error",
-        profile_name=profile_name,
-        engine_meta={
-            "profile_scope_states": {profile_name.upper(): {"refreshed": False, "status": "error"}}
-        },
-    )
-
-    readiness = service.quality_evaluation_engine_readiness(profile_id="default")
-
-    assert readiness[Nl2SqlEngine.SELECT_AI][0] is False
-    assert "未同期" in readiness[Nl2SqlEngine.SELECT_AI][1]
-    assert readiness[Nl2SqlEngine.SELECT_AI_AGENT][0] is False
-    assert "未同期" in readiness[Nl2SqlEngine.SELECT_AI_AGENT][1]
-
-
-def test_quality_evaluation_readiness_ignores_other_profile_stale_asset_meta(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    _configure_strict_engine_runtime(service, monkeypatch)
-    service._asset_meta[Nl2SqlEngine.SELECT_AI] = AssetRefreshData(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI,
-        refreshed=False,
-        status="error",
-        profile_name="NL2SQL_OTHER_PROFILE",
-    )
-    service._asset_meta[Nl2SqlEngine.SELECT_AI_AGENT] = AssetRefreshData(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI_AGENT,
-        refreshed=False,
-        status="error",
-        profile_name="NL2SQL_OTHER_PROFILE",
-    )
-
-    readiness = service.quality_evaluation_engine_readiness(profile_id="default")
-
-    assert readiness[Nl2SqlEngine.SELECT_AI] == (True, "")
-    assert readiness[Nl2SqlEngine.SELECT_AI_AGENT] == (True, "")
-
-
 def test_worker_runs_every_attempt_and_isolates_generation_and_judge_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1377,7 +1308,7 @@ def test_worker_runs_every_attempt_and_isolates_generation_and_judge_errors(
         with calls_lock:
             calls[key] = calls.get(key, 0) + 1
             count = calls[key]
-        if selected == Nl2SqlEngine.SELECT_AI_AGENT and count == 1:
+        if count == 1:
             raise RuntimeError("strict engine failure")
         return "SELECT 1 FROM dual"
 
@@ -1397,8 +1328,8 @@ def test_worker_runs_every_attempt_and_isolates_generation_and_judge_errors(
     service = _service(engine_runner=engine, judge_runner=judge)
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT],
-        repeat_count=2,
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
+        repeat_count=4,
         content=_xlsx(
             [
                 ["A", "ok", "SELECT 1 FROM dual"],
@@ -1453,7 +1384,7 @@ def test_worker_aggregates_verdict_distribution_and_normalized_consistency(
     service = _service(engine_runner=engine, judge_runner=judge)
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=2,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -1486,7 +1417,7 @@ def test_normalized_sql_consistency_preserves_literal_case_and_ignores_comments(
     service = _service(engine_runner=engine, judge_runner=_judge)
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=2,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -1508,7 +1439,7 @@ def test_worker_records_empty_engine_output_as_generation_error(
     service = _service(engine_runner=lambda *_args: "   ", judge_runner=_judge)
     submitted = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -1607,11 +1538,7 @@ def test_strict_enterprise_ai_direct_generation_passes_timeout_override(
 
 @pytest.mark.parametrize(
     "engine",
-    [
-        Nl2SqlEngine.SELECT_AI,
-        Nl2SqlEngine.SELECT_AI_AGENT,
-        Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
-    ],
+    [Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
 )
 def test_strict_generation_never_uses_deterministic_fallback(
     engine: Nl2SqlEngine, monkeypatch: pytest.MonkeyPatch
@@ -1642,7 +1569,7 @@ def test_memory_repository_reclaims_expired_lease_and_preserves_result_idempoten
         job_id="job-1",
         profile_id="default",
         profile_name="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         cases=[
             QualityEvaluationCase(
@@ -1683,7 +1610,7 @@ def test_oracle_repository_materializes_quality_evaluation_lobs_before_connectio
         job_id="job-1",
         profile_id="default",
         profile_name="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         cases=[
             QualityEvaluationCase(
@@ -1706,7 +1633,7 @@ def test_oracle_repository_materializes_quality_evaluation_lobs_before_connectio
         excel_row=2,
         question="q",
         expected_sql="SELECT 1 FROM dual",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         repetition_no=1,
         generated_sql="SELECT 1 FROM dual",
         normalized_sql="SELECT 1 FROM DUAL",
@@ -1943,14 +1870,14 @@ def test_result_and_job_pagination_use_offsets(
     )
     first = service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=2,
         content=_xlsx([["A", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
     )
     service.submit(
         profile_id="default",
-        engines=[Nl2SqlEngine.SELECT_AI],
+        engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
         repeat_count=1,
         content=_xlsx([["B", "質問", "SELECT 1 FROM dual"]]),
         filename="cases.xlsx",
@@ -1989,8 +1916,12 @@ def test_openapi_exposes_new_quality_flow_and_removes_legacy_evaluation_routes()
     assert "/api/nl2sql/analyze" in paths
     assert "/api/nl2sql/repair" not in paths
     assert "/api/nl2sql/reverse" in paths
-    assert "/api/nl2sql/synthetic-data/generate" in paths
     removed = {
+        # 生成方式の選択・Select AI の資産・合成データは削除した（#7）。
+        "/api/nl2sql/engines",
+        "/api/nl2sql/synthetic-data/generate",
+        "/api/nl2sql/synthetic-data/runs",
+        "/api/nl2sql/oracle-sync-jobs/{job_id}",
         "/api/nl2sql/evaluate",
         "/api/nl2sql/evaluation-sets",
         "/api/nl2sql/evaluation-runs",
@@ -1999,3 +1930,27 @@ def test_openapi_exposes_new_quality_flow_and_removes_legacy_evaluation_routes()
         "/api/nl2sql/synthetic-data/operations/{operation_id}",
     }
     assert removed.isdisjoint(paths)
+
+
+def test_capabilities_expose_only_enterprise_ai_direct() -> None:
+    capabilities = _service().capabilities()
+
+    assert [item.engine for item in capabilities.engines] == [Nl2SqlEngine.ENTERPRISE_AI_DIRECT]
+
+
+def test_stored_records_with_removed_engine_values_are_read_as_enterprise_ai_direct() -> None:
+    """削除した生成方式（#7）で保存した評価の記録も、唯一の方式として読み戻せる。"""
+
+    job = _evaluation_job("legacy-job").model_dump(mode="json")
+    job["engines"] = ["select_ai", "select_ai_agent"]
+    result = _evaluation_result("legacy-job").model_dump(mode="json")
+    result["engine"] = "select_ai_agent"
+
+    restored_job = QualityEvaluationJobRecord.model_validate(job)
+    restored_result = QualityEvaluationResult.model_validate(result)
+
+    assert restored_job.engines == [
+        Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
+        Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
+    ]
+    assert restored_result.engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT

@@ -39,7 +39,7 @@ APP_TABLESPACE = "DATA"
 APP_PROFILE = "ORA_APP_PROFILE"
 APP_USER_GRANTS = (
     # ADB の DBA 相当。表・索引・sequence・view・package・SQL ドメイン・Oracle Text（CTXAPP）・Vector の索引・
-    # DBA_* / V$ の参照（SELECT ANY DICTIONARY）・Select AI（DBMS_CLOUD / DBMS_CLOUD_AI）・role の作成を含む。
+    # DBA_* / V$ の参照（SELECT ANY DICTIONARY）・DBMS_CLOUD・role の作成を含む。
     "GRANT PDB_DBA TO {user}",
 )
 # 付けた後に、アプリのユーザーの session で効いていることを確かめる権限（PDB_DBA の代表）。

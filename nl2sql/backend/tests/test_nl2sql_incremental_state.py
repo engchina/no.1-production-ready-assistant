@@ -1774,6 +1774,7 @@ async def test_similar_history_lob_read_does_not_block_following_job(
         {
             "id": "history-1",
             "question": "部署名を検索",
+            # 削除した生成方式（#7）で保存した履歴も読める。
             "engine": "select_ai",
             "generated_sql": "SELECT DEPARTMENT_NAME FROM ADMIN.DEPARTMENT",
             "created_at": "2026-07-20T00:00:00+00:00",
@@ -1827,7 +1828,7 @@ async def test_similar_history_lob_read_does_not_block_following_job(
     job_response = nl2sql_router.create_job(
         JobCreateRequest(
             question="部署名を検索",
-            engine="select_ai",
+            engine="enterprise_ai_direct",
             profile_id="default",
         ),
         cast(Request, SimpleNamespace(state=SimpleNamespace(principal=None))),
@@ -3453,10 +3454,6 @@ async def test_lifespan_interrupts_build_jobs_off_loop_before_closing_pools(
         assert runtime is ontology_runtime
         calls.append("preparation_shutdown")
 
-    def profile_shutdown() -> None:
-        assert threading.get_ident() != loop_thread
-        calls.append("profile_shutdown")
-
     def publish_shutdown() -> None:
         assert threading.get_ident() != loop_thread
         calls.append("publish_shutdown")
@@ -3468,27 +3465,17 @@ async def test_lifespan_interrupts_build_jobs_off_loop_before_closing_pools(
         assert runtime is ontology_runtime
         calls.append("validation_shutdown")
 
-    def profile_list_shutdown() -> None:
-        assert threading.get_ident() != loop_thread
-        calls.append("profile_list_shutdown")
-
-    monkeypatch.setattr(
-        "app.main.nl2sql_service.shutdown_select_ai_db_profile_refresh_jobs", profile_list_shutdown
-    )
     monkeypatch.setattr(main, "shutdown_validation_jobs", validation_shutdown)
     monkeypatch.setattr("app.main.ontology_publish_service.shutdown", publish_shutdown)
-    monkeypatch.setattr("app.main.profile_sync_service.shutdown", profile_shutdown)
     monkeypatch.setattr(main, "shutdown_markdown_preparations", preparation_shutdown)
     monkeypatch.setattr("app.main.ontology_build_service.shutdown", shutdown)
     monkeypatch.setattr(main, "close_oracle_pools", lambda: calls.append("close_pools"))
     async with main.lifespan(FastAPI()):
         assert calls == []
     assert calls == [
-        "profile_shutdown",
         "preparation_shutdown",
         "build_shutdown",
         "publish_shutdown",
         "validation_shutdown",
-        "profile_list_shutdown",
         "close_pools",
     ]

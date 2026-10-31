@@ -139,7 +139,6 @@ test("利用者の自然言語の入力とその実行を「検索」と呼ば�
     "nl2sql.action.run",
     "nl2sql.results.title",
     "nl2sql.error.submitFailed",
-    "nl2sql.selectAiOverrides.hint",
     "nl2sql.schema.description",
     "nl2sql.sample.importHint",
     "nl2sql.ontology.nodeKind.queryPlan",

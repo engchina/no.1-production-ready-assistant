@@ -1,8 +1,7 @@
 """NL2SQL は seed を送らない（#3529）。
 
 - Enterprise AI Direct: テキストと画像の呼び出しの payload に `seed` を入れない
-- Select AI / Select AI Agent: AI profile に `seed` 属性を入れない（保存済みの業務プロファイルの
-  `seed` は読み捨てる）
+- 保存済みの業務プロファイル・PATCH の `seed` は読み捨てる
 
 HTTP は httpx.MockTransport（決定論）で受け、Oracle へは接続しない。
 """
@@ -16,10 +15,7 @@ import httpx
 import pytest
 
 from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
-from app.features.nl2sql.models import Nl2SqlProfile, ProfilePatchRequest, ProfileSelectAiConfig
-from app.features.nl2sql.oracle_adapter import OracleNl2SqlAdapter
-from app.features.nl2sql.service import Nl2SqlService
-from app.features.nl2sql.store import MemoryNl2SqlStore
+from app.features.nl2sql.models import Nl2SqlProfile, ProfilePatchRequest
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
 ENDPOINT = "https://primary.example/openai/v1"
@@ -69,28 +65,9 @@ def test_text_and_image_calls_do_not_send_seed(payloads: list[dict[str, Any]]) -
     assert all("seed" not in payload for payload in payloads)
 
 
-def test_select_ai_profile_attributes_have_no_seed() -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    profile = Nl2SqlProfile(id="profile-a", name="プロファイル A")
-
-    assert "seed" not in service.build_select_ai_profile_attributes(profile)
-
-
-def test_adapter_profile_attributes_have_no_seed() -> None:
-    """Select AI Agent の assets の profile の属性（adapter が組み立てる）にも seed が無い。"""
-    adapter = OracleNl2SqlAdapter(_settings())
-
-    attributes = adapter._select_ai_profile_attributes(  # noqa: SLF001
-        allowed_tables=["SALES"], row_limit=None, description=""
-    )
-
-    assert "seed" not in attributes
-
-
 def test_stored_seed_is_ignored() -> None:
     """保存済みの業務プロファイル・PATCH の `seed` は読み捨てる。"""
-    config = ProfileSelectAiConfig.model_validate({"seed": 42})
-    assert "seed" not in config.model_dump()
-    patch = ProfilePatchRequest.model_validate({"select_ai_config": {"seed": 7}})
-    assert patch.select_ai_config is not None
-    assert "seed" not in patch.select_ai_config.model_dump()
+    profile = Nl2SqlProfile.model_validate({"id": "profile-a", "name": "A", "seed": 42})
+    assert "seed" not in profile.model_dump()
+    patch = ProfilePatchRequest.model_validate({"seed": 7})
+    assert "seed" not in patch.model_dump()

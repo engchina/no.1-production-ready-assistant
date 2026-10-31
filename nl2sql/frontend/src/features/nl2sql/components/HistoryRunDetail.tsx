@@ -94,8 +94,8 @@ function HistoryRunView({ item }: { item: HistoryItem }) {
   const cancelled = isCancelledHistory(item);
   const executed = !item.generation_only && item.safety_is_safe && !cancelled;
 
-  // モデル・token・モデルの呼び出し（ジョブの中の LLM の呼び出し。RAG の実行の詳細と同じ形・文言。#3543）。Select AI は
-  // DB の中でモデルを呼ぶので数を作らず、「未計測の呼び出し」に出どころを出す。
+  // モデル・token・モデルの呼び出し（ジョブの中の LLM の呼び出し。RAG の実行の詳細と同じ形・文言。#3543）。計測できない
+  // 呼び出しは数を作らず、「未計測の呼び出し」に出どころを出す。
   const usageView = historyUsageView(item);
   const extraFacts: RunFact[] = [
     // 「モデル」「token」の直後（RAG の概要と同じ並び）。

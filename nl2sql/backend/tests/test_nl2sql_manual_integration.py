@@ -11,8 +11,6 @@ from typing import Any, cast
 import pytest
 
 from app.features.nl2sql.models import (
-    DiagnosticReadiness,
-    DiagnosticsData,
     Nl2SqlEngine,
     SchemaRefreshJobStatus,
 )
@@ -43,11 +41,18 @@ def test_parse_engines_rejects_unknown_engine() -> None:
         script._parse_engines("auto")
 
 
-def test_parse_engines_accepts_concrete_select_ai_engines() -> None:
-    assert script._parse_engines("select_ai,select_ai_agent") == [
-        Nl2SqlEngine.SELECT_AI,
-        Nl2SqlEngine.SELECT_AI_AGENT,
-    ]
+def test_parse_engines_accepts_enterprise_ai_direct() -> None:
+    assert script._parse_engines("enterprise_ai_direct") == [Nl2SqlEngine.ENTERPRISE_AI_DIRECT]
+
+
+def test_parse_engines_rejects_removed_engine() -> None:
+    with pytest.raises(argparse.ArgumentTypeError):
+        script._parse_engines("enterprise_ai_direct,removed_engine")
+
+
+def test_default_engines_are_enterprise_ai_direct() -> None:
+    args = script._build_parser().parse_args([])
+    assert args.engines == [Nl2SqlEngine.ENTERPRISE_AI_DIRECT]
 
 
 def test_manual_integration_preview_smoke(
@@ -133,7 +138,7 @@ def test_manual_integration_diagnostics_only_writes_single_step_report(
         [
             "--diagnostics-only",
             "--engines",
-            "select_ai_agent,select_ai",
+            "enterprise_ai_direct",
             "--json-report",
             str(report_path),
         ]
@@ -143,7 +148,7 @@ def test_manual_integration_diagnostics_only_writes_single_step_report(
     output = capsys.readouterr().out
     assert "[ok] diagnostics:" in output
     assert "[ok] json_report:" in output
-    assert "preview_select_ai" not in output
+    assert "preview_enterprise_ai_direct" not in output
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["ok"] is True
     assert report["started_at"].endswith("Z")
@@ -237,47 +242,6 @@ def test_manual_integration_require_oracle_persistence_stops_when_memory_store(
     assert "PLATFORM_ORACLE_PASSWORD" not in output
 
 
-def test_manual_integration_require_refreshed_assets_checks_selected_engines(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        cast(Any, script).nl2sql_service,
-        "diagnostics",
-        lambda: DiagnosticsData(
-            checks=[],
-            readiness=[
-                DiagnosticReadiness(
-                    area="select_ai",
-                    label="Select AI",
-                    status="ok",
-                    summary="ready",
-                ),
-                DiagnosticReadiness(
-                    area="select_ai_agent",
-                    label="Select AI Agent",
-                    status="warning",
-                    summary="not refreshed",
-                ),
-            ],
-        ),
-    )
-
-    select_ai_only = script._diagnostics(
-        require_oracle=False,
-        require_refreshed_assets=True,
-        engines=[Nl2SqlEngine.SELECT_AI],
-    )
-    agent_required = script._diagnostics(
-        require_oracle=False,
-        require_refreshed_assets=True,
-        engines=[Nl2SqlEngine.SELECT_AI_AGENT],
-    )
-
-    assert select_ai_only.ok
-    assert not agent_required.ok
-    assert "select_ai_agent:warning" in agent_required.message
-
-
 def test_manual_integration_refresh_catalog_uses_durable_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -349,23 +313,6 @@ def test_manual_integration_execute_feedback_index_smoke(
             ),
         ),
     )
-    monkeypatch.setattr(
-        script,
-        "_legacy_db_profile_smoke",
-        lambda *, execute_drop, drop_name: [
-            script.StepResult(
-                name="legacy_db_profile_list",
-                ok=True,
-                message=f"execute={execute_drop}; drop={drop_name}",
-            ),
-            script.StepResult(
-                name="legacy_db_profile_drop",
-                ok=True,
-                message=f"execute={execute_drop}; drop={drop_name}",
-            ),
-        ],
-    )
-
     exit_code = script.main(
         [
             "--engines",
@@ -411,8 +358,6 @@ def test_manual_integration_full_smoke_runs_supporting_checks_and_jobs(
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "[ok] refresh_enterprise_ai_direct:" in output
-    assert "[ok] diagnostics_after_refresh:" in output
     assert "[ok] support_comments:" in output
     assert "[ok] support_feedback_index:" in output
     assert "[ok] preview_enterprise_ai_direct:" in output
@@ -434,15 +379,12 @@ def test_manual_integration_release_gate_expands_production_gate_steps(
         require_enterprise_ai: bool = False,
         require_feedback_embedding: bool = False,
         require_oracle_persistence: bool = False,
-        require_refreshed_assets: bool = False,
-        engines: object = None,
     ) -> script.StepResult:
         diagnostics_calls.append(
             {
                 "require_oracle": require_oracle,
+                "require_enterprise_ai": require_enterprise_ai,
                 "require_oracle_persistence": require_oracle_persistence,
-                "require_refreshed_assets": require_refreshed_assets,
-                "engines": engines,
                 "timeout_seconds": timeout_seconds,
             }
         )
@@ -466,13 +408,6 @@ def test_manual_integration_release_gate_expands_production_gate_steps(
         lambda *, profile_id, allowed_tables, row_limit: (
             script.StepResult(name="prepare_profile", ok=True, message="profile=manual"),
             "manual_integration",
-        ),
-    )
-    monkeypatch.setattr(
-        script,
-        "_refresh_asset",
-        lambda engine, profile_id: script.StepResult(
-            name=f"refresh_{engine.value}", ok=True, message=f"profile={profile_id}"
         ),
     )
     monkeypatch.setattr(
@@ -504,7 +439,7 @@ def test_manual_integration_release_gate_expands_production_gate_steps(
         [
             "--release-gate",
             "--engines",
-            "select_ai_agent,select_ai",
+            "enterprise_ai_direct",
             "--allowed-table",
             "DENPYO_REGISTRATIONS",
             "--json-report",
@@ -516,17 +451,14 @@ def test_manual_integration_release_gate_expands_production_gate_steps(
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "[ok] refresh_select_ai_agent:" in output
-    assert "[ok] refresh_select_ai:" in output
-    assert "[ok] diagnostics_after_refresh:" in output
     assert "[ok] support_feedback_index:" in output
-    assert "[ok] preview_select_ai_agent:" in output
-    assert "[ok] job_select_ai:" in output
+    assert "[ok] preview_enterprise_ai_direct:" in output
+    assert "[ok] job_enterprise_ai_direct:" in output
     assert "[ok] json_report:" in output
     assert diagnostics_calls[0]["require_oracle"] is True
     assert diagnostics_calls[0]["require_oracle_persistence"] is True
-    assert diagnostics_calls[0]["require_refreshed_assets"] is False
-    assert diagnostics_calls[1]["require_refreshed_assets"] is True
+    assert diagnostics_calls[0]["require_enterprise_ai"] is True
+    assert len(diagnostics_calls) == 1
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["schema_version"] == "nl2sql_manual_integration_report_v1"
     assert report["release_gate"] is True
@@ -537,38 +469,14 @@ def test_manual_integration_release_gate_expands_production_gate_steps(
     assert report["generated_at"] == report["finished_at"]
     assert isinstance(report["elapsed_ms"], int)
     assert report["elapsed_ms"] >= 0
-    assert report["engines"] == ["select_ai_agent", "select_ai"]
+    assert report["engines"] == ["enterprise_ai_direct"]
     assert report["allowed_tables"] == ["DENPYO_REGISTRATIONS"]
     assert report["summary"]["failed"] == 0
     assert {step["name"] for step in report["steps"]} >= {
         "diagnostics",
-        "diagnostics_after_refresh",
-        "preview_select_ai_agent",
-        "job_select_ai",
+        "preview_enterprise_ai_direct",
+        "job_enterprise_ai_direct",
     }
-    assert "PLATFORM_ORACLE_PASSWORD" not in output
-
-
-def test_manual_integration_reports_diagnostics_after_asset_refresh(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    exit_code = script.main(
-        [
-            "--engines",
-            "select_ai",
-            "--question",
-            "社員一覧を確認したい",
-            "--import-sample-data",
-            "--refresh-assets",
-            "--require-refreshed-assets",
-        ]
-    )
-
-    assert exit_code == 0
-    output = capsys.readouterr().out
-    assert "[ok] refresh_select_ai:" in output
-    assert "[ok] diagnostics_after_refresh:" in output
-    assert "select_ai:ok" in output
     assert "PLATFORM_ORACLE_PASSWORD" not in output
 
 
@@ -606,7 +514,6 @@ def test_manual_integration_legacy_absorption_flags_and_report(
         captured.update(kwargs)
         return [
             script.StepResult(name="legacy_classifier", ok=True, message="ready=True"),
-            script.StepResult(name="legacy_db_profile_drop", ok=True, message="skipped"),
         ]
 
     monkeypatch.setattr(script, "_legacy_absorption_checks", legacy_stub)
@@ -618,22 +525,6 @@ def test_manual_integration_legacy_absorption_flags_and_report(
             ok=include_bad,
             message="execute=True; executed=True",
         ),
-    )
-    monkeypatch.setattr(
-        script,
-        "_legacy_db_profile_smoke",
-        lambda *, execute_drop, drop_name: [
-            script.StepResult(
-                name="legacy_db_profile_list",
-                ok=True,
-                message=f"execute={execute_drop}; drop={drop_name}",
-            ),
-            script.StepResult(
-                name="legacy_db_profile_drop",
-                ok=True,
-                message=f"execute={execute_drop}; drop={drop_name}",
-            ),
-        ],
     )
     monkeypatch.setattr(
         script,
@@ -655,12 +546,8 @@ def test_manual_integration_legacy_absorption_flags_and_report(
             "請求金額を確認したい",
             "--allowed-table",
             "NL2SQL_DISPOSABLE_TABLE",
-            "--execute-db-profile-drop",
-            "--db-profile-drop-name",
-            "NL2SQL_DISPOSABLE_PROFILE",
             "--execute-comments",
             "--execute-annotations",
-            "--execute-synthetic-data",
             "--execute-feedback-index",
             "--require-classifier-oracle-state",
             "--json-report",
@@ -671,20 +558,14 @@ def test_manual_integration_legacy_absorption_flags_and_report(
     assert exit_code == 0
     output = capsys.readouterr().out
     assert "[ok] legacy_classifier:" in output
-    assert "[ok] legacy_db_profile_drop:" in output
     assert captured["allowed_tables"] == ["NL2SQL_DISPOSABLE_TABLE"]
-    assert captured["db_profile_drop_name"] == "NL2SQL_DISPOSABLE_PROFILE"
-    assert captured["execute_db_profile_drop"] is True
     assert captured["execute_comments"] is True
     assert captured["execute_annotations"] is True
-    assert captured["execute_synthetic_data"] is True
     assert captured["execute_feedback_index"] is True
     assert captured["require_classifier_oracle_state"] is True
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert {step["name"] for step in report["steps"]} >= {
         "legacy_classifier",
-        "legacy_db_profile_drop",
-        "legacy_db_profile_drop_execute",
         "feedback_index_rebuild",
     }
     assert "PLATFORM_ORACLE_PASSWORD" not in output
@@ -708,21 +589,6 @@ def test_manual_integration_legacy_classifier_requires_oracle_state(
     assert "persistence_mode=memory" in result.message
 
 
-def test_manual_integration_execute_db_profile_drop_requires_explicit_name() -> None:
-    with pytest.raises(SystemExit):
-        script.main(
-            [
-                "--check-legacy-absorption",
-                "--execute-db-profile-drop",
-            ]
-        )
-
-
-def test_manual_integration_db_profile_drop_name_requires_legacy_absorption() -> None:
-    with pytest.raises(SystemExit):
-        script.main(["--db-profile-drop-name", "NL2SQL_DISPOSABLE_PROFILE"])
-
-
 def test_manual_integration_table_mutation_requires_disposable_allowed_table() -> None:
     with pytest.raises(SystemExit):
         script.main(
@@ -733,99 +599,6 @@ def test_manual_integration_table_mutation_requires_disposable_allowed_table() -
                 "DENPYO_REGISTRATIONS",
             ]
         )
-
-
-def test_manual_integration_debug_raw_preview_smoke(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        script,
-        "_debug_raw_preview",
-        lambda *, profile_id, question: [
-            script.StepResult(
-                name="debug_select_ai_generate_raw",
-                ok=True,
-                message="profile=NL2SQL_DEFAULT_PROFILE; len=8; raw='SELECT 1'",
-            )
-        ],
-    )
-
-    exit_code = script.main(
-        [
-            "--engines",
-            "enterprise_ai_direct",
-            "--question",
-            "社員一覧を確認したい",
-            "--import-sample-data",
-            "--debug-raw-preview",
-        ]
-    )
-
-    assert exit_code == 0
-    output = capsys.readouterr().out
-    assert "[ok] debug_select_ai_generate_raw:" in output
-    assert "raw='SELECT 1'" in output
-    assert "PLATFORM_ORACLE_PASSWORD" not in output
-
-
-def test_raw_summary_truncates_multiline_text() -> None:
-    raw = "SELECT 1\nFROM DUAL " + ("x" * 2000)
-
-    summary = script._raw_summary(raw, max_len=80)
-
-    assert summary.startswith("len=")
-    assert "\n" not in summary
-    assert summary.endswith("...'")
-
-
-def test_manual_integration_cleanup_assets_requires_confirm(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        script,
-        "_diagnostics_with_timeout",
-        lambda _require_oracle, _timeout: pytest.fail("cleanup validation should run first"),
-    )
-
-    with pytest.raises(SystemExit):
-        script.main(
-            [
-                "--cleanup-assets",
-                "--engines",
-                "select_ai_agent",
-                "--profile-id",
-                "default",
-            ]
-        )
-
-
-def test_manual_integration_cleanup_requires_confirm_for_explicit_profile_id(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(
-        script,
-        "_diagnostics_with_timeout",
-        lambda _require_oracle, _timeout: pytest.fail("cleanup validation should run first"),
-    )
-
-    with pytest.raises(SystemExit):
-        script.main(
-            [
-                "--cleanup-assets",
-                "--engines",
-                "select_ai_agent",
-                "--profile-id",
-                "manual_agent_v9",
-            ]
-        )
-
-
-def test_manual_integration_confirm_cleanup_requires_cleanup_flag() -> None:
-    with pytest.raises(SystemExit):
-        script.main(["--confirm-cleanup"])
 
 
 def test_manual_integration_stops_when_required_oracle_diagnostics_fails(
@@ -849,3 +622,12 @@ def test_manual_integration_stops_when_required_oracle_diagnostics_fails(
     assert exit_code == 1
     output = capsys.readouterr().out
     assert "[ng] diagnostics: diagnostics timeout after 1.0s" in output
+
+
+@pytest.mark.parametrize(
+    "removed_option",
+    ["--refresh-assets", "--cleanup-assets", "--debug-raw-preview", "--require-refreshed-assets"],
+)
+def test_manual_integration_rejects_removed_options(removed_option: str) -> None:
+    with pytest.raises(SystemExit):
+        script.main([removed_option])

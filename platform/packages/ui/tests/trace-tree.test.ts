@@ -41,7 +41,6 @@ describe("span の表示名（#3219。3 製品の 9 画面で共通の規則）"
     stage("7", "3", "gen_ai.embeddings", { "gen_ai.request.model": "embed-x" }),
     stage("8", "3", "gen_ai.rerank", { "gen_ai.request.model": "rerank-x" }),
     stage("9", "3", "gen_ai.invoke_agent", { "gen_ai.request.model": "model-x" }),
-    stage("a", "3", "oracle.select_ai"),
     stage("b", "3", "custom.operation"),
     stage("c", "5", "mcp.request", { "mcp.method.name": "tools/call", "gen_ai.tool.name": "tool_y" }),
     stage("d", "5", "mcp.request", { "mcp.method.name": "initialize" }),
@@ -52,7 +51,7 @@ describe("span の表示名（#3219。3 製品の 9 画面で共通の規則）"
       "実行の全体（2 回目）", "処理を実行する", "処理を実行する", "モデルを呼び出す（用途の記録なし）", "ツールの実行 · tool_y", "MCP の呼び出し（3 回目）",
       // 技術の trace の一覧は MCP の手続きも残し、呼んだツールか method を添える（#3272）。
       "MCP の呼び出し · tool_y", "MCP の呼び出し · initialize",
-      "テキストの埋め込みを作る · embed-x", "質問との関連度で候補を並べ替える · rerank-x", "AI の呼び出し · model-x", "Select AI の呼び出し", "処理を実行する",
+      "テキストの埋め込みを作る · embed-x", "質問との関連度で候補を並べ替える · rerank-x", "AI の呼び出し · model-x", "処理を実行する",
     ]);
   });
   it("MCP の呼び出しは呼んだツールの表示名（pr.tool.title）を先に添え、内部名は詳細に残す（#3468）", () => {
@@ -168,8 +167,8 @@ describe("モデル用途の共通表示", () => {
     ] }).steps;
     expect(steps.map(step => step.label)).toEqual(["モデルを呼び出す（用途の記録なし）", "HTTP の要求"]);
   });
-  it("Select AI の用途と再試行回数を表示する", () => {
-    const steps = traceTimeline({ spans: [{ ...span("1", "0"), operation_name: "oracle.select_ai", attributes: {
+  it("埋め込みの用途と再試行回数を表示する", () => {
+    const steps = traceTimeline({ spans: [{ ...span("1", "0"), operation_name: "gen_ai.embeddings", attributes: {
       "pr.gen_ai.purpose": "sql.generate", "pr.attempt": 2,
     } }] }).steps;
     expect(steps[0].label).toBe("質問に答える SQL を作る（2 回目）");
@@ -178,7 +177,7 @@ describe("モデル用途の共通表示", () => {
 
 
 describe("モデル接続確認の用途", () => {
-  it.each(["gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank", "oracle.select_ai"])("%s は接続確認を明示し、モデル名を詳細に残す", (operation_name) => {
+  it.each(["gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank"])("%s は接続確認を明示し、モデル名を詳細に残す", (operation_name) => {
     const step = traceTimeline({ spans: [{ ...span("1", "0"), operation_name, attributes: { "pr.gen_ai.purpose": "connection.check", "gen_ai.request.model": "model-probe" } }] }).steps[0];
     expect(step.label).toBe("モデルが応答するか接続を確かめる");
     expect(step.details?.fields?.some(field => field.value === "model-probe")).toBe(true);

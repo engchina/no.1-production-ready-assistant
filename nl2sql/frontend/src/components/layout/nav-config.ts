@@ -6,7 +6,6 @@ import {
   BriefcaseBusiness,
   Eye,
   FileCode2,
-  FileKey,
   FileSpreadsheet,
   FlaskConical,
   History,
@@ -192,14 +191,6 @@ export const NAV_SECTIONS: NavSection[] = [
         labelKey: "nav.settingsAnswerNotice",
         icon: ANSWER_NOTICE_NAV_ITEM.icon,
         permission: MENU_PERMISSIONS.settingsAnswerNotice,
-      },
-      // Select AI Credential はデータベース設定から分けた運用の操作（#658）。
-      {
-        href: APP_ROUTES.settingsSelectAiCredential,
-        labelKey: "nav.settingsSelectAiCredential",
-        sidebarLabelKey: "nav.settingsSelectAiCredential.sidebar",
-        icon: FileKey,
-        permission: MENU_PERMISSIONS.settingsSelectAiCredential,
       },
     ],
   },

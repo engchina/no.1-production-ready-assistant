@@ -74,7 +74,7 @@ npx playwright test tests/e2e/<対象>.spec.ts               # e2e（関係す�
 ```
 
 - CI の job は `NL2SQL / Backend`・`NL2SQL / Frontend`・`NL2SQL / E2E smoke`。backend は pytest、frontend のロジックは `node --test`（`frontend/tests/*.test.ts`）、UI とユーザー操作は Playwright。
-- 時間のかかる処理（DB 構造の再取得・SQL 生成評価・オントロジー構築・合成データ生成）は永続 job にし、API は job を投入して返す。本番では `init_script.sh` が作る systemd の worker（`production-ready-nl2sql-{schema-refresh,quality-evaluation,ontology,synthetic}-worker`）が処理する（[docs/compute-operations.md](./docs/compute-operations.md)）。
+- 時間のかかる処理（DB 構造の再取得・SQL 生成評価・オントロジー構築）は永続 job にし、API は job を投入して返す。本番では `init_script.sh` が作る systemd の worker（`production-ready-nl2sql-{schema-refresh,quality-evaluation,ontology}-worker`）が処理する（[docs/compute-operations.md](./docs/compute-operations.md)）。
 
 ## 横断的な保守・セキュリティ契約
 

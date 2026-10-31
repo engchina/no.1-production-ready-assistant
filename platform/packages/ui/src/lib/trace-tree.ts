@@ -20,7 +20,6 @@ const TECHNICAL_SPANS: Readonly<Record<string, { name: Exclude<keyof TraceSpanNa
   "rerank.request": { name: "rerankRequest" },
   "gen_ai.execute_tool": { name: "executeTool", target: ["gen_ai.tool.name"] },
   "mcp.request": { name: "mcpRequest", target: ["pr.tool.title", "gen_ai.tool.name", "mcp.method.name"] },
-  "oracle.select_ai": { name: "selectAi" },
   "http.request": { name: "httpRequest" },
 };
 
@@ -33,7 +32,7 @@ export interface TraceSpanNameInput {
 
 /**
  * span の行の名前（3 製品の 9 画面で共通の規則。#3219）。root は「実行の全体」、段（`pr.stage`）は製品の段の名前
- * （処理の経過と同じ。無ければ `pr.stage` の値）、`gen_ai.*`・MCP・Select AI・HTTP は日本語の名前に対象を添え、
+ * （処理の経過と同じ。無ければ `pr.stage` の値）、`gen_ai.*`・MCP・HTTP は日本語の名前に対象を添え、
  * それ以外は `operation_name`。2 回目以降の試行（`pr.attempt`）は回数を付ける。元の名前は詳細の `Span name` に残す。
  */
 export function traceSpanDisplayName(span: TraceSpanNameInput, labels: TraceDetailsLabels = DEFAULT_TRACE_DETAILS_LABELS): string {
@@ -48,7 +47,7 @@ export function traceSpanDisplayName(span: TraceSpanNameInput, labels: TraceDeta
     const technical = TECHNICAL_SPANS[span.operationName] ?? (span.operationName.startsWith("gen_ai.") ? { name: "genAi" as const, target: ["gen_ai.request.model"] } : undefined);
     if (!technical) return names.other;
     const target = technical.target?.map((key) => textAttribute(span.attributes, key)).find(Boolean);
-    const purpose = ["gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank", "oracle.select_ai"].includes(span.operationName) ? textAttribute(span.attributes, "pr.gen_ai.purpose") : undefined;
+    const purpose = ["gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank"].includes(span.operationName) ? textAttribute(span.attributes, "pr.gen_ai.purpose") : undefined;
     const purposeName = purpose ? labels.modelPurposes?.[purpose] : undefined;
     name = purposeName || (span.operationName === "gen_ai.chat" ? names.chat : target ? `${names[technical.name]} · ${target.slice(0, 128)}` : names[technical.name]);
   }

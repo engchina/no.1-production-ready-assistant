@@ -61,7 +61,7 @@ export function formatRunTokens(tokens: number | null | undefined, notRecorded =
 
 /**
  * 計測の状態。complete: すべての呼び出しを計測した。partial: 一部の呼び出しの利用量が無い。
- * unmeasured: アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ Select AI など）だけで、数を持たない。
+ * unmeasured: アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ呼び出しなど）だけで、数を持たない。
  */
 export type RunUsageMeasurement = "complete" | "partial" | "unmeasured";
 
@@ -78,7 +78,7 @@ export interface RunModelUsageRecord {
   reasoning_output_tokens?: number | null;
   measurement: RunUsageMeasurement;
   measured_requests: number;
-  /** 利用量を計測できない呼び出しの出どころ（`select_ai` など。回数は数えない）。古い記録は無い。 */
+  /** 利用量を計測できない呼び出しの出どころ（`db_model` など。回数は数えない）。古い記録は無い。 */
   unmeasured_sources?: string[];
 }
 
@@ -115,7 +115,7 @@ export interface RunUsageView {
  * 実行のモデルと利用量の表示（3 製品で同じ規則）。モデルは実行のときに記録した ID だけを出し、今の設定から推測しない。
  *
  * - 利用量の記録が無い（この機能より前の記録・trace の始まる前に失敗した実行）: token と呼び出しは「未計測」（0 にしない）。
- * - 計測できない呼び出しだけ（Select AI だけの実行）: token と呼び出しは「未計測」で、出どころを `unmeasuredCalls` に出す。
+ * - 計測できない呼び出しだけ（それだけの実行）: token と呼び出しは「未計測」で、出どころを `unmeasuredCalls` に出す。
  * - 一部の呼び出しの利用量が無い・計測できない呼び出しが混ざる: 計測できた分の数に「一部計測」を添える。
  * - LLM を呼ばなかった実行: 実測の 0。
  */

@@ -52,7 +52,7 @@ def test_recorder_numbers_events_and_orders_steps_by_declaration() -> None:
     recorder.declare("queue", "generate", "execute")
     recorder.start("queue")
     recorder.start("generate", exclusive=True)
-    recorder.finish("generate", params={"engine": "select_ai"})
+    recorder.finish("generate", params={"engine": "enterprise_ai_direct"})
     recorder.start("execute")
     recorder.complete("done")
 
@@ -64,7 +64,7 @@ def test_recorder_numbers_events_and_orders_steps_by_declaration() -> None:
     assert isinstance(events[-1], ChatProgressTerminalEvent)
     assert recorder.terminal == "done"
     generate = recorder.step("generate")
-    assert generate is not None and generate.params == {"engine": "select_ai"}
+    assert generate is not None and generate.params == {"engine": "enterprise_ai_direct"}
     assert generate.started_at is not None and generate.finished_at is not None
 
 

@@ -87,7 +87,6 @@ from app.features.nl2sql.ontology_router import (
     RequirementApplyRequest,
 )
 from app.features.nl2sql.ontology_service import OntologyNotFoundError, OntologyServiceError
-from app.features.nl2sql.oracle_adapter import SelectAiCredentialMissingError
 from app.features.nl2sql.profile_access import (
     allowed_profile_ids_for_request,
     assert_profile_access,
@@ -95,7 +94,6 @@ from app.features.nl2sql.profile_access import (
     profile_access_denied,
 )
 from app.features.nl2sql.router import _with_requirement
-from app.features.nl2sql.select_ai_readiness import select_ai_credential_missing_message
 from app.features.nl2sql.service import (
     JOB_CANCELLED_ERROR_CODE,
     JOB_FAILED_ERROR_CODE,
@@ -516,10 +514,7 @@ class Nl2SqlJobResult(VersionedOutput):
     safety_issues: list[str] = Field(default_factory=list)
     safety_check: Literal["checked", "skipped"] | None = Field(
         default=None,
-        description=(
-            "SQL の安全確認。checked（確かめた）/ skipped（Select AI・Select AI Agent が生成した "
-            "SELECT 文のため省略。業務プロファイルの表・列の範囲の照合も行わない）"
-        ),
+        description=("SQL の安全確認。checked（確かめた）/ skipped（確かめなかった）"),
     )
     columns: list[str] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
@@ -589,9 +584,6 @@ def _translate_domain_errors[A, R](
             # 他の利用者の会話・実行に内容を足す system_admin（画面の 403 と同じ。code は 3 製品の
             # MCP で同じ。#3244）。
             raise _others_content_forbidden() from exc
-        except SelectAiCredentialMissingError as exc:
-            # Select AI / Select AI Agent の生成は Credential が前提（画面の 409 と同じ。#1688）。
-            raise McpToolError(exc.code, select_ai_credential_missing_message(exc)) from exc
         except OntologyServiceError as exc:
             # SQL の生成前の確認の業務エラー（Schema が読めない・LLM が使えない・session の
             # 終了など）。
@@ -1127,7 +1119,7 @@ def build_mcp_server(request: Request) -> McpServer:
                     or arguments.requirement_session_id
                 ):
                     raise
-                # OCI Enterprise AI を設定していない構成（Select AI だけ・ローカルの決定論）は、
+                # OCI Enterprise AI を設定していない構成（ローカルの決定論など）は、
                 # SQL の生成前の確認をせずに SQL を作る。確かめていないことを requirement で返す。
                 requirement_trace.set_status("skipped")
                 return (
@@ -1202,8 +1194,7 @@ def build_mcp_server(request: Request) -> McpServer:
                 raise HTTPException(status_code=409, detail="回答前の確認の要件がありません。")
             # 画面と同じく、確かめた要件（構造化した要件と書き直した質問の文）で job を作る。質問の
             # 文は利用者の質問のままにし、書き直した文は生成にだけ使う（`generation_question`。
-            # #1727）。生成の方式は指定せず、ジョブの作成が業務プロファイルの既定の生成方式にする
-            # （#1524）。use_ontology_context 等は画面と同じく JobCreateRequest の既定で作る。
+            # #1727）。use_ontology_context 等は画面と同じく JobCreateRequest の既定で作る。
             # row_limit は必ず渡す（None だと全件を取得する）。
             job_request = _with_requirement(
                 JobCreateRequest(

@@ -105,7 +105,6 @@ const ANNOTATION_EXTRA_TEXT =
   "- VALUESはコメント・サンプルに根拠がある場合だけ付け、推測しない\n" +
   "- DROPとADDは同一文で混在させず、別々のALTER文に分割。既存値の更新はADD OR REPLACE、新規のみはADD IF NOT EXISTS\n" +
   "- DOMAIN=が付いた列はドメインから継承されるため \"JOIN COLUMN\" など表固有の情報だけを付ける\n" +
-  "- Select AIで使うには業務プロファイルの「アノテーションを利用」を有効にする\n" +
   "例(表): ALTER TABLE CUST_MST ANNOTATIONS (ADD OR REPLACE \"DESCRIPTION\" 'Customer master. One row represents one customer.', ADD OR REPLACE \"ALIASES\" 'customers, 顧客');\n" +
   "例(列): ALTER TABLE CUST_MST MODIFY (STAT_CD ANNOTATIONS (ADD OR REPLACE \"VALUES\" 'A = active (有効); I = inactive (休眠).'));\n" +
   "例(ビュー列): ALTER VIEW SALES_V MODIFY (AMT ANNOTATIONS (ADD OR REPLACE \"UNITS\" 'Japanese yen (JPY).'));";
@@ -117,7 +116,6 @@ const DOMAIN_EXTRA_TEXT =
   "- 既存データが違反しうるCHECK制約は付けない(サンプルから値集合が明確な場合のみ)\n" +
   "- ANNOTATIONSは \"DESCRIPTION\"(意味)、\"ALIASES\"(英語・日本語の同義語)、\"VALUES\"(コード値の意味)、\"UNITS\"(単位)で付ける。annotation名COMMENTは使わない\n" +
   "- ビュー/MVの列には関連付けない。既にドメインが付いた列は MODIFY (<列>) DROP DOMAIN で外してから付け替える\n" +
-  "- 継承されるannotationをSelect AIで使うには業務プロファイルの「アノテーションを利用」を有効にする\n" +
   "例(定義): CREATE DOMAIN IF NOT EXISTS CUSTOMER_ID_D AS NUMBER(10) ANNOTATIONS (\"DESCRIPTION\" 'Unique identifier for a customer.', \"ALIASES\" 'customer id, 顧客ID, 顧客番号');\n" +
   "例(関連付け): ALTER TABLE ORD_TXN MODIFY (CUST_ID) ADD DOMAIN CUSTOMER_ID_D;";
 

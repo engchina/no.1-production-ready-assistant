@@ -21,7 +21,6 @@ from app.features.nl2sql.enterprise_ai_client import EnterpriseAiDirectError
 from app.features.nl2sql.models import (
     AllowedObjects,
     AnnotationApplyRequest,
-    AssetRefreshData,
     CommentApplyRequest,
     CsvImportColumn,
     DbAdminAiAnalysisRequest,
@@ -38,18 +37,12 @@ from app.features.nl2sql.models import (
     DomainInventoryRequest,
     MetadataSqlGenerateRequest,
     MetadataSqlSampleRequest,
-    Nl2SqlEngine,
-    Nl2SqlProfile,
-    ProfileSelectAiProfileRequest,
     QueryResults,
     SampleDataMutationRequest,
     SampleDataStep,
     SchemaCatalog,
     SchemaColumn,
     SchemaTable,
-    SelectAiDbProfileRefreshMode,
-    SelectAiDbProfileRefreshTarget,
-    SelectAiDbProfileUpsertRequest,
 )
 from app.features.nl2sql.oracle_adapter import (
     SELECT_FETCH_BATCH_SIZE,
@@ -58,7 +51,6 @@ from app.features.nl2sql.oracle_adapter import (
     TabularImportValidationError,
     _domain_column_type,
     _flexible_date_value,
-    _normalize_select_ai_object_list,
 )
 from app.features.nl2sql.router import db_admin_import_tabular, db_admin_upload_csv
 from app.features.nl2sql.service import (
@@ -66,7 +58,6 @@ from app.features.nl2sql.service import (
     Nl2SqlPersistenceUnavailable,
     Nl2SqlService,
     SchemaRefreshMutationSync,
-    SelectAiDbProfileListRefreshSync,
     _admin_statement_type,
     _db_admin_error,
     _normalize_oracle_sql_text,
@@ -251,170 +242,6 @@ class _FakeCsvUploadAdapter:
         return self.result
 
 
-class _FakeSelectAiProfileAdapter:
-    """DBMS_CLOUD_AI profile list/detail を固定で返す fake adapter。"""
-
-    def __init__(self) -> None:
-        self.list_calls = 0
-        self.name_fetch_calls: list[set[str] | None] = []
-        self.detail_calls: list[str] = []
-
-    def list_select_ai_profiles(self) -> list[dict[str, Any]]:
-        self.list_calls += 1
-        return [
-            {
-                "name": "FINANCE_SELECT_AI",
-                "status": "available",
-                "description": "財務 profile",
-                "created_at": "2026-07-10T00:00:00+00:00",
-            }
-        ]
-
-    def fetch_select_ai_profile_names(
-        self,
-        profile_names: set[str] | None = None,
-    ) -> set[str]:
-        self.name_fetch_calls.append(set(profile_names) if profile_names is not None else None)
-        names = {"FINANCE_SELECT_AI"}
-        return names if profile_names is None else names & {name.upper() for name in profile_names}
-
-    def get_select_ai_profile_detail(self, *, profile_name: str) -> dict[str, Any]:
-        self.detail_calls.append(profile_name)
-        assert profile_name == "FINANCE_SELECT_AI"
-        return {
-            "name": profile_name,
-            "attributes": {
-                "provider": "oci",
-                "region": "ap-osaka-1",
-                "model": "cohere.command-r-plus",
-                "embedding_model": "cohere.embed-v4.0",
-                "object_list": [
-                    {"owner": "APP", "name": "INVOICES"},
-                    {"owner": "APP", "name": "V_INVOICE_SUMMARY"},
-                ],
-            },
-        }
-
-
-class _FakeMixedSelectAiProfileAdapter:
-    """業務 profile 由来/無関係の DBMS_CLOUD_AI profile を混在させる fake adapter。"""
-
-    def __init__(self) -> None:
-        self.detail_calls: list[str] = []
-        self.list_calls = 0
-        self.name_fetch_calls: list[set[str] | None] = []
-
-    def list_select_ai_profiles(self) -> list[dict[str, Any]]:
-        self.list_calls += 1
-        return [
-            {"name": "FINANCE_SELECT_AI", "status": "available"},
-            {"name": "ARCHIVED_SELECT_AI", "status": "available"},
-            {"name": "NL2SQL_DERIVED_FILTER_PROFILE", "status": "available"},
-            {"name": "MANUAL_SELECT_AI", "status": "available"},
-        ]
-
-    def fetch_select_ai_profile_names(
-        self,
-        profile_names: set[str] | None = None,
-    ) -> set[str]:
-        self.name_fetch_calls.append(set(profile_names) if profile_names is not None else None)
-        names = {
-            "FINANCE_SELECT_AI",
-            "ARCHIVED_SELECT_AI",
-            "NL2SQL_DERIVED_FILTER_PROFILE",
-            "MANUAL_SELECT_AI",
-        }
-        return names if profile_names is None else names & {name.upper() for name in profile_names}
-
-    def get_select_ai_profile_detail(self, *, profile_name: str) -> dict[str, Any]:
-        self.detail_calls.append(profile_name)
-        return {
-            "name": profile_name,
-            "attributes": {
-                "provider": "oci",
-                "object_list": [{"owner": "APP", "name": "INVOICES"}],
-            },
-        }
-
-
-class _MutableSelectAiProfileAdapter:
-    """Targeted DB profile list refresh 用の可変 fake adapter。"""
-
-    def __init__(self, profiles: dict[str, dict[str, Any]] | None = None) -> None:
-        self.profiles = {
-            name.upper(): {
-                "name": name.upper(),
-                "status": "available",
-                "attributes": dict((profile or {}).get("attributes") or {}),
-            }
-            for name, profile in (profiles or {}).items()
-        }
-        self.list_calls = 0
-        self.name_fetch_calls: list[set[str] | None] = []
-        self.detail_calls: list[str] = []
-        self.upsert_calls: list[tuple[str, str]] = []
-        self.drop_calls: list[str] = []
-
-    def list_select_ai_profiles(self) -> list[dict[str, Any]]:
-        self.list_calls += 1
-        return [
-            {"name": name, "status": profile.get("status", "available")}
-            for name, profile in sorted(self.profiles.items())
-        ]
-
-    def fetch_select_ai_profile_names(
-        self,
-        profile_names: set[str] | None = None,
-    ) -> set[str]:
-        self.name_fetch_calls.append(set(profile_names) if profile_names is not None else None)
-        names = set(self.profiles)
-        return names if profile_names is None else names & {name.upper() for name in profile_names}
-
-    def get_select_ai_profile_detail(self, *, profile_name: str) -> dict[str, Any]:
-        name = profile_name.upper()
-        self.detail_calls.append(name)
-        if name not in self.profiles:
-            raise OracleAdapterError(f"{name} が見つかりません")
-        return dict(self.profiles[name])
-
-    def upsert_select_ai_profile_low_level(
-        self,
-        *,
-        profile_name: str,
-        attributes: dict[str, Any],
-        description: str = "",
-        original_name: str = "",
-    ) -> dict[str, Any]:
-        new_name = profile_name.upper()
-        old_name = original_name.upper()
-        self.upsert_calls.append((new_name, old_name))
-        if old_name and old_name != new_name:
-            self.profiles.pop(old_name, None)
-        self.profiles[new_name] = {
-            "name": new_name,
-            "status": "available",
-            "description": description,
-            "attributes": dict(attributes),
-        }
-        return {"profile_name": new_name, "status": "saved"}
-
-    def drop_select_ai_profile(self, *, profile_name: str) -> dict[str, Any]:
-        name = profile_name.upper()
-        self.drop_calls.append(name)
-        self.profiles.pop(name, None)
-        return {"profile_name": name, "status": "dropped"}
-
-
-def _run_db_profile_refresh(service: Nl2SqlService, job_id: str = "") -> Any:
-    if not job_id:
-        job = service.start_select_ai_db_profile_refresh_job(dispatch=False)
-        job_id = job.job_id
-    assert service._run_select_ai_db_profile_refresh_job(job_id) is True  # noqa: SLF001
-    result = service.get_select_ai_db_profile_refresh_job(job_id)
-    assert result is not None
-    return result
-
-
 def _import_sample(service: Nl2SqlService) -> None:
     service.import_sample_data(
         SampleDataMutationRequest(
@@ -574,470 +401,6 @@ def test_admin_statements_dynamic_sql_is_blocked_before_policy_and_oracle() -> N
     assert result.statements[0].status == "blocked"
     assert "PL/SQL の動的 SQL" in result.statements[0].error_message
     assert adapter.calls == []
-
-
-def test_select_ai_db_profiles_include_detail_enriches_objects_and_models() -> None:
-    adapter = _FakeSelectAiProfileAdapter()
-    service = _OracleRuntimeService(adapter)
-    cast(Any, service)._catalog = SchemaCatalog(
-        refreshed_at="2026-07-10T00:00:00+00:00",
-        tables=[
-            SchemaTable(table_name="INVOICES", logical_name="請求", table_type="TABLE"),
-            SchemaTable(
-                table_name="V_INVOICE_SUMMARY",
-                logical_name="請求サマリ",
-                table_type="VIEW",
-            ),
-        ],
-    )
-    _run_db_profile_refresh(service)
-    adapter.detail_calls.clear()
-
-    data = service.list_select_ai_db_profiles(include_detail=True)
-
-    assert data.runtime == "oracle"
-    assert data.warnings == []
-    assert adapter.list_calls == 0
-    assert adapter.detail_calls == []
-    assert len(data.profiles) == 1
-    profile = data.profiles[0]
-    assert profile.name == "FINANCE_SELECT_AI"
-    assert profile.tables == ["APP.INVOICES"]
-    assert profile.views == ["APP.V_INVOICE_SUMMARY"]
-    assert profile.region == "ap-osaka-1"
-    assert profile.model == "cohere.command-r-plus"
-    assert profile.embedding_model == "cohere.embed-v4.0"
-
-
-def test_select_ai_db_profiles_can_filter_to_business_profile_names() -> None:
-    adapter = _FakeMixedSelectAiProfileAdapter()
-    service = _OracleRuntimeService(adapter)
-    service.create_profile(
-        Nl2SqlProfile(
-            id="finance_filter",
-            name="財務プロファイル",
-            description="明示 profile 名で照合する。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-            select_ai_config={"profile_name": "FINANCE_SELECT_AI"},
-        )
-    )
-    service.create_profile(
-        Nl2SqlProfile(
-            id="archived_filter",
-            name="アーカイブプロファイル",
-            description="archived も既定では照合対象にする。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-            select_ai_config={"profile_name": "ARCHIVED_SELECT_AI"},
-            archived=True,
-        )
-    )
-    service.create_profile(
-        Nl2SqlProfile(
-            id="derived_filter",
-            name="導出名プロファイル",
-            description="profile_name 空欄時は既存導出名で照合する。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-        )
-    )
-    _run_db_profile_refresh(service)
-    adapter.detail_calls.clear()
-
-    data = service.list_select_ai_db_profiles(
-        include_detail=True,
-        business_profiles_only=True,
-        include_archived_business_profiles=True,
-    )
-
-    assert [profile.name for profile in data.profiles] == [
-        "ARCHIVED_SELECT_AI",
-        "FINANCE_SELECT_AI",
-        "NL2SQL_DERIVED_FILTER_PROFILE",
-    ]
-    assert adapter.list_calls == 0
-    assert adapter.detail_calls == []
-
-    active_only = service.list_select_ai_db_profiles(
-        business_profiles_only=True,
-        include_archived_business_profiles=False,
-    )
-
-    assert [profile.name for profile in active_only.profiles] == [
-        "FINANCE_SELECT_AI",
-        "NL2SQL_DERIVED_FILTER_PROFILE",
-    ]
-
-
-def test_select_ai_db_profiles_filter_also_applies_to_asset_metadata_fallback() -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    service.create_profile(
-        Nl2SqlProfile(
-            id="finance_filter",
-            name="財務プロファイル",
-            description="deterministic fallback の照合対象。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-            select_ai_config={"profile_name": "FINANCE_SELECT_AI"},
-        )
-    )
-    cast(Any, service)._asset_meta = {
-        Nl2SqlEngine.SELECT_AI: AssetRefreshData(
-            engine=Nl2SqlEngine.SELECT_AI,
-            refreshed=True,
-            status="ready",
-            profile_name="FINANCE_SELECT_AI",
-        ),
-        Nl2SqlEngine.SELECT_AI_AGENT: AssetRefreshData(
-            engine=Nl2SqlEngine.SELECT_AI_AGENT,
-            refreshed=True,
-            status="ready",
-            profile_name="MANUAL_SELECT_AI",
-        ),
-    }
-
-    data = service.list_select_ai_db_profiles(business_profiles_only=True)
-
-    assert data.runtime == "deterministic"
-    assert [profile.name for profile in data.profiles] == ["FINANCE_SELECT_AI"]
-
-
-def test_select_ai_db_profiles_reports_uninitialized_read_model() -> None:
-    service = _OracleRuntimeService(_MutableSelectAiProfileAdapter())
-
-    data = service.list_select_ai_db_profiles()
-
-    assert data.profiles == []
-    assert data.profile_list_refresh_required is True
-    assert data.profile_list_refresh_reason_code == "profile_list_read_model_uninitialized"
-    # 再取得を求める状態は構造化した項目だけで返し、同じ文を warnings に重ねない（#2034）。
-    assert not any("DB Profile 一覧" in warning for warning in data.warnings)
-
-
-def test_select_ai_db_profiles_initialized_empty_list_does_not_require_refresh() -> None:
-    service = _OracleRuntimeService(_MutableSelectAiProfileAdapter())
-    _run_db_profile_refresh(service)
-
-    data = service.list_select_ai_db_profiles()
-
-    assert data.profiles == []
-    assert data.profile_list_refresh_required is False
-    assert data.profile_list_refresh_reason_code == ""
-    assert not any("read model が未初期化" in warning for warning in data.warnings)
-
-
-def test_select_ai_db_profiles_existing_profile_does_not_require_refresh() -> None:
-    service = _OracleRuntimeService(
-        _MutableSelectAiProfileAdapter({"FINANCE_SELECT_AI": {"attributes": {"object_list": []}}})
-    )
-    _run_db_profile_refresh(service)
-
-    data = service.list_select_ai_db_profiles()
-
-    assert [profile.name for profile in data.profiles] == ["FINANCE_SELECT_AI"]
-    assert data.profile_list_refresh_required is False
-    assert data.profile_list_refresh_reason_code == ""
-
-
-def test_select_ai_profiles_export_can_filter_to_business_profile_names() -> None:
-    adapter = _FakeMixedSelectAiProfileAdapter()
-    service = _OracleRuntimeService(adapter)
-    service.create_profile(
-        Nl2SqlProfile(
-            id="finance_filter",
-            name="財務プロファイル",
-            description="export JSON の照合対象。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-            select_ai_config={"profile_name": "FINANCE_SELECT_AI"},
-        )
-    )
-    service.create_profile(
-        Nl2SqlProfile(
-            id="archived_filter",
-            name="アーカイブプロファイル",
-            description="archived の export filter を確認する。",
-            allowed_tables=["INVOICES"],
-            glossary={},
-            sql_rules=[],
-            default_row_limit=100,
-            few_shot_examples=[],
-            select_ai_config={"profile_name": "ARCHIVED_SELECT_AI"},
-            archived=True,
-        )
-    )
-    _run_db_profile_refresh(service)
-    adapter.detail_calls.clear()
-
-    exported = service.export_select_ai_profiles_json(
-        business_profiles_only=True,
-        include_archived_business_profiles=True,
-    )
-
-    assert [profile.name for profile in exported.profiles] == [
-        "ARCHIVED_SELECT_AI",
-        "FINANCE_SELECT_AI",
-    ]
-
-    active_only = service.export_select_ai_profiles_json(
-        business_profiles_only=True,
-        include_archived_business_profiles=False,
-    )
-
-    assert [profile.name for profile in active_only.profiles] == ["FINANCE_SELECT_AI"]
-    assert adapter.list_calls == 0
-    assert adapter.detail_calls == []
-
-
-def test_select_ai_db_profile_upsert_submits_targeted_refresh_without_full_list(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _MutableSelectAiProfileAdapter()
-    service = _OracleRuntimeService(adapter)
-    monkeypatch.setattr(
-        service,
-        "_dispatch_select_ai_db_profile_refresh_job",
-        lambda _job_id: False,
-    )
-
-    result = service.upsert_select_ai_db_profile(
-        SelectAiDbProfileUpsertRequest(
-            profile_name="finance_select_ai",
-            attributes={"object_list": []},
-            confirmation="finance_select_ai",
-            reason="pytest",
-        )
-    )
-    adapter.detail_calls.clear()
-
-    assert result.executed is True
-    assert result.profile_list_refresh_job_id
-    assert result.profile_list_refresh_required is False
-    _run_db_profile_refresh(service, result.profile_list_refresh_job_id)
-
-    data = service.list_select_ai_db_profiles()
-    assert [profile.name for profile in data.profiles] == ["FINANCE_SELECT_AI"]
-    assert adapter.list_calls == 0
-    assert adapter.name_fetch_calls[-1] == {"FINANCE_SELECT_AI"}
-    assert adapter.detail_calls == ["FINANCE_SELECT_AI"]
-
-
-def test_select_ai_db_profile_mutations_return_refresh_required_without_warning_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """一覧の再取得の要否は profile_list_refresh_* だけで返す（warnings に重ねない。#2034）。"""
-
-    adapter = _MutableSelectAiProfileAdapter(
-        {"DROP_SELECT_AI": {"attributes": {"object_list": []}}}
-    )
-    service = _OracleRuntimeService(adapter)
-    _run_db_profile_refresh(service)
-    monkeypatch.setattr(
-        service,
-        "_submit_select_ai_db_profile_list_refresh_after_mutation",
-        lambda **_kwargs: SelectAiDbProfileListRefreshSync(
-            required=True,
-            reason_code="profile_list_refresh_target_unresolved",
-        ),
-    )
-
-    upserted = service.upsert_select_ai_db_profile(
-        SelectAiDbProfileUpsertRequest(
-            profile_name="finance_select_ai",
-            attributes={"object_list": []},
-            confirmation="finance_select_ai",
-            reason="pytest",
-        )
-    )
-    dropped = service.drop_select_ai_db_profile(
-        "DROP_SELECT_AI",
-        confirmation="DROP_SELECT_AI",
-        reason="pytest",
-    )
-
-    assert upserted.profile_list_refresh_required is True
-    assert upserted.profile_list_refresh_reason_code == "profile_list_refresh_target_unresolved"
-    assert not any("DB Profile 一覧" in warning for warning in upserted.warnings)
-    assert dropped.profile_list_refresh_required is True
-    assert "DB Profile 一覧" not in dropped.warning
-
-
-def test_select_ai_db_profile_drop_removes_only_target_profile(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _MutableSelectAiProfileAdapter(
-        {
-            "KEEP_SELECT_AI": {"attributes": {"object_list": []}},
-            "DROP_SELECT_AI": {"attributes": {"object_list": []}},
-        }
-    )
-    service = _OracleRuntimeService(adapter)
-    _run_db_profile_refresh(service)
-    monkeypatch.setattr(
-        service,
-        "_dispatch_select_ai_db_profile_refresh_job",
-        lambda _job_id: False,
-    )
-    adapter.detail_calls.clear()
-    adapter.name_fetch_calls.clear()
-
-    result = service.drop_select_ai_db_profile(
-        "DROP_SELECT_AI",
-        confirmation="DROP_SELECT_AI",
-        reason="pytest",
-    )
-
-    assert result.executed is True
-    assert result.profile_list_refresh_job_id
-    _run_db_profile_refresh(service, result.profile_list_refresh_job_id)
-
-    data = service.list_select_ai_db_profiles()
-    assert [profile.name for profile in data.profiles] == ["KEEP_SELECT_AI"]
-    assert adapter.list_calls == 0
-    assert adapter.name_fetch_calls == [{"DROP_SELECT_AI"}]
-    assert adapter.detail_calls == []
-
-
-def test_select_ai_db_profile_rename_deletes_old_and_upserts_new(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _MutableSelectAiProfileAdapter({"OLD_SELECT_AI": {"attributes": {"object_list": []}}})
-    service = _OracleRuntimeService(adapter)
-    _run_db_profile_refresh(service)
-    monkeypatch.setattr(
-        service,
-        "_dispatch_select_ai_db_profile_refresh_job",
-        lambda _job_id: False,
-    )
-    adapter.detail_calls.clear()
-    adapter.name_fetch_calls.clear()
-
-    result = service.upsert_select_ai_db_profile(
-        SelectAiDbProfileUpsertRequest(
-            profile_name="NEW_SELECT_AI",
-            original_name="OLD_SELECT_AI",
-            attributes={"object_list": []},
-            confirmation="NEW_SELECT_AI",
-            reason="pytest",
-        )
-    )
-    adapter.detail_calls.clear()
-
-    assert result.executed is True
-    _run_db_profile_refresh(service, result.profile_list_refresh_job_id)
-
-    data = service.list_select_ai_db_profiles()
-    assert [profile.name for profile in data.profiles] == ["NEW_SELECT_AI"]
-    assert adapter.list_calls == 0
-    assert adapter.name_fetch_calls[-1] == {"OLD_SELECT_AI", "NEW_SELECT_AI"}
-    assert adapter.detail_calls == ["NEW_SELECT_AI"]
-
-
-def test_profile_select_ai_upsert_passes_previous_profile_name_to_adapter(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _MutableSelectAiProfileAdapter({"SALES_PROFILE": {"attributes": {}}})
-    service = _OracleRuntimeService(adapter)
-    monkeypatch.setattr(
-        service,
-        "_dispatch_select_ai_db_profile_refresh_job",
-        lambda _job_id: False,
-    )
-    created = service.create_profile(
-        Nl2SqlProfile(
-            id="sales-profile",
-            name="SALES_PROFILE",
-            category="販売",
-            allowed_tables=["APP.TABLE_01"],
-            select_ai_config={"profile_name": "SALES_PROFILE"},
-        )
-    )
-    renamed = service.update_profile(
-        created.id,
-        lambda profile: profile.model_copy(
-            update={
-                "name": "SALES_PROFILE_V2",
-                "select_ai_config": profile.select_ai_config.model_copy(
-                    update={"profile_name": "SALES_PROFILE_V2"}
-                ),
-            }
-        ),
-    )
-
-    result = service.upsert_profile_select_ai_profile(
-        renamed.id,
-        ProfileSelectAiProfileRequest(
-            confirmation="ADMIN_EXECUTE",
-            reason="pytest",
-        ),
-    )
-
-    assert result.executed is True
-    assert renamed.select_ai_config.previous_profile_name == "SALES_PROFILE"
-    assert adapter.upsert_calls[-1] == ("SALES_PROFILE_V2", "SALES_PROFILE")
-
-
-def test_select_ai_db_profile_target_mismatch_keeps_old_read_model() -> None:
-    adapter = _MutableSelectAiProfileAdapter(
-        {"KEEP_SELECT_AI": {"attributes": {"object_list": []}}}
-    )
-    service = _OracleRuntimeService(adapter)
-    _run_db_profile_refresh(service)
-    adapter.detail_calls.clear()
-    adapter.name_fetch_calls.clear()
-
-    job = service.start_select_ai_db_profile_refresh_job(
-        dispatch=False,
-        mode=SelectAiDbProfileRefreshMode.TARGETED,
-        source="pytest",
-        target_profiles=[
-            SelectAiDbProfileRefreshTarget(
-                profile_name="KEEP_SELECT_AI",
-                expected_state="absent",
-            )
-        ],
-    )
-
-    assert service._run_select_ai_db_profile_refresh_job(job.job_id) is False  # noqa: SLF001
-    failed = service.get_select_ai_db_profile_refresh_job(job.job_id)
-    assert failed is not None
-    assert failed.status == "error"
-    assert failed.requires_full_refresh is True
-    assert failed.error_code == "profile_list_refresh_full_required"
-    assert [profile.name for profile in service.list_select_ai_db_profiles().profiles] == [
-        "KEEP_SELECT_AI"
-    ]
-    assert adapter.list_calls == 0
-    assert adapter.detail_calls == []
-
-
-def test_select_ai_db_profile_target_unresolved_requires_manual_refresh() -> None:
-    service = _OracleRuntimeService(_MutableSelectAiProfileAdapter())
-
-    sync = service._submit_select_ai_db_profile_list_refresh_after_mutation(  # noqa: SLF001
-        target_profiles=[],
-        source="pytest",
-    )
-
-    assert sync.job_id == ""
-    assert sync.required is True
-    assert sync.reason_code == "profile_list_refresh_target_unresolved"
 
 
 def test_statement_policy_view_ddl_and_data_dml() -> None:
@@ -2137,7 +1500,7 @@ def test_annotation_generation_ports_reference_prompt_and_filters_sample_annotat
     assert result.sql == "ALTER TABLE T1 ANNOTATIONS (ADD IF NOT EXISTS UI_Display 'T, One');"
     assert "COMMENT: は入力メタデータ" in enterprise_ai.calls[0]["prompt"]
     assert (
-        "sample_header / sample_data は Select AI が DDL から得るため生成しない"
+        "sample_header / sample_data は SQL の生成が DDL から得るため生成しない"
         in (enterprise_ai.calls[0]["prompt"])
     )
     assert '"JOIN COLUMN": 外部キー情報から結合先' in enterprise_ai.calls[0]["prompt"]
@@ -2158,7 +1521,7 @@ def test_annotation_generation_ports_reference_prompt_and_filters_sample_annotat
         )
     )
 
-    # サンプルがあっても sample_header / sample_data は Select AI に不要なため常に除外する。
+    # サンプルがあっても sample_header / sample_data は SQL の生成に不要なため常に除外する。
     assert "sample_header" not in with_samples.sql
     assert "sample_data" not in with_samples.sql
     assert with_samples.sql == "ALTER TABLE T1 ANNOTATIONS (ADD IF NOT EXISTS UI_Display 'T One');"
@@ -3321,146 +2684,6 @@ def test_oracle_adapter_non_admin_select_uses_runtime_connection(
     ]
     assert result.rows == [{"ID": 3}]
     assert result.execution_context == "oracle_data_plane"
-
-
-class _SelectAiCursor:
-    def __init__(self, calls: list[str]) -> None:
-        self.calls = calls
-        self.row: tuple[str] = ("",)
-
-    def __enter__(self) -> _SelectAiCursor:
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        return None
-
-    def execute(self, sql: str, *_args: object) -> None:
-        self.calls.append(sql)
-        if "CREATE_CONVERSATION" in sql:
-            self.row = ("conversation-1",)
-            return
-        self.row = ("SELECT ID FROM T1",)
-
-    def fetchone(self) -> tuple[str]:
-        return self.row
-
-
-class _SelectAiConnection:
-    def __init__(self, calls: list[str]) -> None:
-        self.calls = calls
-
-    def cursor(self) -> _SelectAiCursor:
-        return _SelectAiCursor(self.calls)
-
-
-def test_oracle_adapter_non_admin_select_ai_generation_uses_normal_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    settings = get_settings()
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-
-    with actor_scope("business-user", is_system_admin=False):
-        sql = adapter.generate_select_ai_sql(profile_name="NL2SQL_PROFILE", question="一覧")
-
-    assert sql == "SELECT ID FROM T1"
-    assert any("DBMS_CLOUD_AI.GENERATE" in call for call in calls)
-
-
-def test_oracle_adapter_system_admin_select_ai_generation_uses_normal_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    settings = get_settings()
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-
-    with actor_scope("system-admin", is_system_admin=True):
-        sql = adapter.generate_select_ai_sql(profile_name="NL2SQL_PROFILE", question="一覧")
-
-    assert sql == "SELECT ID FROM T1"
-    assert any("DBMS_CLOUD_AI.GENERATE" in call for call in calls)
-
-
-def test_oracle_adapter_non_admin_select_ai_agent_team_uses_normal_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    settings = get_settings()
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "connection", normal_connection)
-
-    with actor_scope("business-user", is_system_admin=False):
-        sql, conversation_id = adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_TEAM",
-            question="一覧",
-            tool_name="NL2SQL_TOOL",
-        )
-
-    assert sql == "SELECT ID FROM T1"
-    assert conversation_id == "conversation-1"
-    assert any("CREATE_CONVERSATION" in call for call in calls)
-    assert any("RUN_TEAM" in call for call in calls)
-
-
-def test_oracle_adapter_non_admin_select_ai_agent_tool_uses_normal_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    settings = get_settings()
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "connection", normal_connection)
-
-    with actor_scope("business-user", is_system_admin=False):
-        sql, conversation_id = adapter.run_select_ai_agent_tool(
-            tool_name="NL2SQL_TOOL",
-            question="一覧",
-        )
-
-    assert sql == "SELECT ID FROM T1"
-    assert conversation_id == "run_tool:NL2SQL_TOOL"
-    assert any("RUN_TOOL" in call for call in calls)
-
-
-def test_oracle_adapter_non_admin_select_ai_agent_conversation_uses_normal_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    settings = get_settings()
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "connection", normal_connection)
-
-    with actor_scope("business-user", is_system_admin=False):
-        conversation_id = adapter.create_agent_conversation()
-
-    assert conversation_id == "conversation-1"
-    assert any("CREATE_CONVERSATION" in call for call in calls)
 
 
 def test_oracle_adapter_explain_uses_normal_connection(
@@ -4935,21 +4158,6 @@ def test_flexible_date_value_parses_common_formats() -> None:
     assert _flexible_date_value("") is None
 
 
-def test_select_ai_object_list_normalizes_nested_oracle_profile_attributes() -> None:
-    oracle_object_list_json = (
-        '[{"OWNER": "APP", "NAME": "PAYMENTS"}, '
-        '{"owner": "APP", "name": "INVOICES"}, '
-        '{"owner": "APP", "name": "VECTOR_IDX$VECTAB"}, '
-        '{"owner": "APP", "name": "SYS#AUDIT"}]'
-    )
-    object_list = _normalize_select_ai_object_list(
-        {"PROFILE_ATTRIBUTES": {"OBJECT_LIST": oracle_object_list_json}}
-    )
-
-    assert [item["name"] for item in object_list] == ["PAYMENTS", "INVOICES"]
-    assert object_list[0]["owner"] == "APP"
-
-
 class _FakeLob:
     """oracledb LOB を模した read() 対応の値。"""
 
@@ -4958,52 +4166,6 @@ class _FakeLob:
 
     def read(self) -> str:
         return self._text
-
-
-class _FakeAttributesCursor:
-    """USER_CLOUD_AI_PROFILE_ATTRIBUTES 相当の属性行を返す fake cursor。"""
-
-    def __init__(self, rows: list[tuple[str, object]]) -> None:
-        self._rows = rows
-
-    def execute(self, sql: str, binds: dict[str, object]) -> None:
-        assert "USER_CLOUD_AI_PROFILE_ATTRIBUTES" in sql
-        assert binds["profile_name"] == "HR_PROFILE"
-
-    def fetchall(self) -> list[tuple[str, object]]:
-        return self._rows
-
-
-def test_fetch_cloud_ai_profile_attributes_builds_object_list_from_lob_rows() -> None:
-    # 属性ビューは 1 属性 = 1 行、object_list 値は JSON 文字列(LOB)で入る。
-    rows: list[tuple[str, object]] = [
-        ("provider", "oci"),
-        (
-            "object_list",
-            _FakeLob(
-                '[{"owner":"ADMIN","name":"DEPARTMENT"},'
-                '{"owner":"ADMIN","name":"EMPLOYEE"},'
-                '{"owner":"ADMIN","name":"PROJECT"}]'
-            ),
-        ),
-    ]
-    attributes = OracleNl2SqlAdapter._fetch_cloud_ai_profile_attributes(
-        _FakeAttributesCursor(rows), "HR_PROFILE"
-    )
-    assert attributes["provider"] == "oci"
-    object_list = _normalize_select_ai_object_list(attributes)
-    assert [item["name"] for item in object_list] == ["DEPARTMENT", "EMPLOYEE", "PROJECT"]
-    assert object_list[0]["owner"] == "ADMIN"
-
-
-def test_fetch_cloud_ai_profile_attributes_degrades_on_missing_view() -> None:
-    class _RaisingCursor:
-        def execute(self, sql: str, binds: dict[str, object]) -> None:
-            raise RuntimeError("ORA-00942: table or view does not exist")
-
-    assert (
-        OracleNl2SqlAdapter._fetch_cloud_ai_profile_attributes(_RaisingCursor(), "HR_PROFILE") == {}
-    )
 
 
 def test_analyze_error_uses_enterprise_ai_and_falls_back() -> None:
@@ -5153,10 +4315,6 @@ def test_extract_join_where_unconfigured_keeps_selected_prompt_profile() -> None
 
 def test_named_target_confirmation_rejects_admin_execute_master_word() -> None:
     """対象名確認を要求する操作は ADMIN_EXECUTE では迂回できない。"""
-    from app.features.nl2sql.models import (
-        SyntheticDataGenerateRequest,
-    )
-
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     _import_sample(service)
     table = service._catalog.tables[0]
@@ -5186,25 +4344,6 @@ def test_named_target_confirmation_rejects_admin_execute_master_word() -> None:
     )
     assert uploaded.executed is False
     assert any("ADMIN_EXECUTE では代替できません" in warning for warning in uploaded.warnings)
-
-    synthetic = service.generate_synthetic_data(
-        SyntheticDataGenerateRequest(
-            table_name=table.table_name,
-            row_count=5,
-            confirmation="ADMIN_EXECUTE",
-        )
-    )
-    assert synthetic.status == "confirmation_required"
-
-    # 対象名の完全一致は通過し、非 Oracle runtime のため requires_oracle まで進む。
-    synthetic_named = service.generate_synthetic_data(
-        SyntheticDataGenerateRequest(
-            table_name=table.table_name,
-            row_count=5,
-            confirmation=table.table_name,
-        )
-    )
-    assert synthetic_named.status == "requires_oracle"
 
 
 _DOMAIN_STRUCTURE_TEXT = (

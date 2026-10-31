@@ -54,8 +54,6 @@ import { listLoadMoreErrorMessage } from "@/lib/load-more-error";
 import { formatDateTime } from "@/lib/format";
 import { API_TIMEOUT_MS } from "@/lib/requestPolicy";
 import { DbObjectPanelHeader } from "./components/DbObjectManagementShared";
-import { EngineSelector } from "./components/EngineSelector";
-import { useProfileEngine } from "./useProfileEngine";
 import { GuidedClarificationPanel } from "./components/GuidedClarificationPanel";
 import { Nl2SqlExecutionOptionsPanel } from "./components/Nl2SqlExecutionOptionsPanel";
 import { QueryResultCard } from "./components/QueryResultTable";
@@ -72,12 +70,9 @@ import {
   useSchemaCatalogHead,
   useSchemaObjects,
 } from "./incrementalQueries";
-import { SelectAiFeedbackAddPanel } from "./components/SelectAiFeedbackAddPanel";
 import { isJobInFlight } from "./jobPersistence";
 import { submitNl2SqlJob } from "./jobSubmission";
-import { SelectAiCredentialPrecondition } from "./components/SelectAiCredentialPrecondition";
-import { engineUsesSelectAiCredential } from "./selectAiCredentialReadiness";
-import { useSelectAiCredentialReadiness } from "./useSelectAiCredentialReadiness";
+import { ResultFeedbackPanel } from "./components/ResultFeedbackPanel";
 import { prefillFromSearchParams, type QueryPrefill } from "./queryPrefillState";
 import { QUESTION_TEMPLATES } from "./questionTemplates";
 import { profileDisplayLabel } from "./profileDisplay";
@@ -123,18 +118,15 @@ function goodFeedbackSimilarHistory(items: SimilarHistoryItem[]): SimilarHistory
   return items;
 }
 
-/** 「SQL を生成して実行」の aria-describedby が指す、Select AI の Credential の事前条件（#1688）。 */
-const QUERY_CREDENTIAL_PRECONDITION_ID = "nl2sql-credential-precondition";
-
-function engineUsesSimilarHistoryFewShot(engine: Nl2SqlEngine): boolean {
-  return engine !== "select_ai" && engine !== "select_ai_agent";
-}
+/** SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+const ENGINE: Nl2SqlEngine = "enterprise_ai_direct";
 
 type PageErrorSource = "profile-load" | "schema-load" | "schema-refresh" | "sample-import";
 type PageError = { source: PageErrorSource; message: string; code?: string } | null;
 
 const PROFILE_RECOMMENDATION_APPLY_THRESHOLD = 0.3;
 // URL で受け取るクエリ画面の初期値（一度だけ適用して URL から消す）。
+// 旧い URL の `engine`（生成の方式は 1 つだけになった）は読まずに URL から外す。
 const QUERY_PREFILL_KEYS = ["question", "engine", "profile_id"];
 /** 「スキーマを更新」の起点（SchemaRefreshCoordinator の start(origin)。押したボタンだけを回す。#821）。 */
 /** DB 構造の再取得の失敗の案内の「DB 構造を再取得」。進行はその案内の中に出す（#2034）。 */
@@ -208,7 +200,6 @@ function ExecutableNl2SqlWorkbench() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceActive = useWorkspaceActive();
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   useWorkspaceRevalidation();
   const [profileId, setProfileId] = useWorkspaceState("profileId", "");
   // プロファイル未確定（""）の間に入力した質問は、確定した時点で新しいプロファイルの下書きへ引き継ぐ（#168）。
@@ -219,6 +210,7 @@ function ExecutableNl2SqlWorkbench() {
   });
   const [selection, setSelection] = useState<SchemaSelection>(() => emptySelection());
   const [result, setResult] = useState<Nl2SqlResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   // 結果の SQL を実行して結果を整形したか（ジョブが done で終わったか）。遮断・実行の失敗のジョブも
   // 生成 SQL を確かめられるよう空の results を持つ result を返すので、結果の表はこれで出し分ける（#917）。
   const [resultExecuted, setResultExecuted] = useState(false);
@@ -232,14 +224,8 @@ function ExecutableNl2SqlWorkbench() {
   const [rewriteUseGlossary, setRewriteUseGlossary] = useWorkspaceState("rewriteUseGlossary", false);
   const [useOntologyContext, setUseOntologyContext] = useWorkspaceState("useOntologyContext", true);
   const [includeInterpretation, setIncludeInterpretation] = useWorkspaceState("includeInterpretation", true);
-  // Show Prompt は Select AI への追加 round-trip を伴うため既定 OFF(必要な人だけ ON にする)。
-  const [includeShowPrompt, setIncludeShowPrompt] = useWorkspaceState("includeShowPrompt", false);
   const [executionOptionsOpen, setExecutionOptionsOpen] = useWorkspaceState("executionOptionsOpen", false);
-  const [selectAiAdvancedOpen, setSelectAiAdvancedOpen] = useWorkspaceState("selectAiAdvancedOpen", false);
-  const [selectAiRoleAdvancedOpen, setSelectAiRoleAdvancedOpen] = useWorkspaceState("selectAiRoleAdvancedOpen", false);
   const [similarHistoryOpen, setSimilarHistoryOpen] = useState(false);
-  const [selectAiRoleOverride, setSelectAiRoleOverride] = useWorkspaceState(`selectAiRoleOverride:${profileId}`, "");
-  const [selectAiInstructionsOverride, setSelectAiInstructionsOverride] = useWorkspaceState(`selectAiInstructionsOverride:${profileId}`, "");
   const [schemaSearch, setSchemaSearch] = useWorkspaceState("schemaSearch", "");
   const [schemaDetails, setSchemaDetails] = useState<Record<string, SchemaObjectDetail>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -294,13 +280,6 @@ function ExecutableNl2SqlWorkbench() {
   const [pendingPrefill, setPendingPrefill] = useState<QueryPrefill | null>(null);
   const selectedProfileQuery = useProfileUsageContext(profileId);
   const selectedProfile = selectedProfileQuery.data?.profile ?? null;
-  // 生成の方式は業務プロファイルごとに残し、選んでいなければ業務プロファイルの既定の生成方式にする（#1524）。
-  const [engine, setEngine] = useProfileEngine(profileId, selectedProfile?.default_engine);
-  // Select AI / Select AI Agent の生成は Select AI の Credential が前提（#1688）。無いと分かったら
-  // 「SQL を生成して実行」の直前に事前条件を示し、実行を止める（OCI Enterprise AI の生成は止めない）。
-  const selectAiCredential = useSelectAiCredentialReadiness();
-  const selectAiCredentialBlocked =
-    engineUsesSelectAiCredential(engine) && selectAiCredential.missing;
   const profileOptions = useMemo(() => {
     if (!selectedProfile || profiles.some((profile) => profile.id === selectedProfile.id)) {
       return profiles;
@@ -474,7 +453,7 @@ function ExecutableNl2SqlWorkbench() {
   );
   // 一覧に無いが後のページにあるかもしれない業務プロファイル。利用の情報の 404 / 403 を「使えない」として扱う。
   const [prefillProfileToVerify, setPrefillProfileToVerify] = useState("");
-  /** 初期値を入れる（別の業務プロファイルの質問・方式は、その業務プロファイルの草稿へ先に書く）。草稿の失敗で true。 */
+  /** 初期値を入れる（別の業務プロファイルの質問は、その業務プロファイルの草稿へ先に書く）。草稿の失敗で true。 */
   const applyPrefill = (prefill: QueryPrefill): boolean => {
     const otherProfile = Boolean(prefill.profileId && prefill.profileId !== profileId);
     if (prefill.question) {
@@ -484,13 +463,6 @@ function ExecutableNl2SqlWorkbench() {
           return true;
         }
       } else setQuestion(prefill.question);
-    }
-    // 生成の方式は業務プロファイルごとに残すので、別の業務プロファイルの方式はその草稿へ書く（#1524）。
-    if (prefill.engine) {
-      if (!otherProfile) setEngine(prefill.engine);
-      else if (!writeDraft(`engine:${prefill.profileId}`, prefill.engine)) {
-        setActionError(t("workspace.storageFailed"));
-      }
     }
     if (prefill.profileId) setProfileId(prefill.profileId);
     return false;
@@ -636,6 +608,7 @@ function ExecutableNl2SqlWorkbench() {
     onHistoryRefresh: refreshHistory,
     onHistoryRefreshFailed: handleHistoryRefreshFailed,
   });
+  const latestHistory = useMemo(() => lastMatchingHistory(history, result), [history, result]);
   // 実行中 job の協調キャンセル要求。停止自体は polling が terminal 遷移で拾う。
   // backend は実行中の段階が終わってから止めるので、受け付けたジョブを覚えて、止まるまで受付を出し
   // 「実行を中止」を押せなくする。要求の失敗は中止のボタンの行に出す（messaging §10.1。#918）。
@@ -680,11 +653,10 @@ function ExecutableNl2SqlWorkbench() {
   const active = jobActive || detecting || guidedClarificationOpen;
   const actionBusy = submitting;
   const showSimilarHistoryPanel =
-    engineUsesSimilarHistoryFewShot(engine) &&
-    (similarHistoryPanelVisible ||
-      similarHistoryLoading ||
-      similarHistorySearchCompleted ||
-      similarHistory.length > 0);
+    similarHistoryPanelVisible ||
+    similarHistoryLoading ||
+    similarHistorySearchCompleted ||
+    similarHistory.length > 0;
   const beginActionFeedback = useCallback(() => {
     setActionError("");
     setActionOperationKey((current) => current + 1);
@@ -693,17 +665,6 @@ function ExecutableNl2SqlWorkbench() {
     setActionError(actionErrorMessage(err, fallback));
     setActionOperationKey((current) => current + 1);
   }, []);
-  const latestHistory = useMemo(() => lastMatchingHistory(history, result), [history, result]);
-  const selectAiOverrides = useMemo(() => {
-    if (engine !== "select_ai") return null;
-    const role = selectAiRoleOverride.trim();
-    const additionalInstructions = selectAiInstructionsOverride.trim();
-    if (!role && !additionalInstructions) return null;
-    return {
-      role,
-      additional_instructions: additionalInstructions,
-    };
-  }, [engine, selectAiInstructionsOverride, selectAiRoleOverride]);
   // 送信 payload と結果の比較条件を同じ値から作り、実行条件の追加漏れを防ぐ。
   const requirementActive = Boolean(
     appliedRequirement
@@ -712,31 +673,23 @@ function ExecutableNl2SqlWorkbench() {
   );
   const generationRequest = {
     question: question.trim(),
-    engine,
+    engine: ENGINE,
     profile_id: profileId || null,
     ...(requirementActive && appliedRequirement
       ? { requirement_session_id: appliedRequirement.sessionId }
       : {}),
     allowed_objects: toAllowedObjects(selection),
-    select_ai_overrides: selectAiOverrides,
     use_glossary: rewriteUseGlossary,
     use_ontology_context: useOntologyContext,
     include_interpretation: includeInterpretation,
-    include_show_prompt: includeShowPrompt,
   };
-  const selectAiRoleHasOverride = Boolean(selectAiRoleOverride.trim());
-  const hasSelectAiOverrideInputs = useMemo(
-    () => Boolean(selectAiRoleHasOverride || selectAiInstructionsOverride.trim()),
-    [selectAiInstructionsOverride, selectAiRoleHasOverride]
-  );
-  const selectAiRolePanelOpen = selectAiRoleAdvancedOpen;
   const profileAllowedTableNames = useMemo(() => {
     if (!selectedProfile) return null;
     const names = [...selectedProfile.allowed_tables, ...selectedProfile.allowed_views];
     return names.length > 0 ? names : null;
   }, [selectedProfile]);
 
-  // URL の初期値（question / engine / profile_id）は render 中に state へ反映し、URL からの削除は effect で行う。
+  // URL の初期値（question / profile_id）は render 中に state へ反映し、URL からの削除は effect で行う。
   // 別 Profile の質問は、その Profile の草稿（sessionStorage）へ先に書いてから Profile を切り替える。
   const [prefillDraftFailed, setPrefillDraftFailed] = useState(false);
   if (useValuesChanged([searchParams, workspaceActive])) {
@@ -848,8 +801,8 @@ function ExecutableNl2SqlWorkbench() {
 
   // 類似履歴を検索しない条件・実行中は、表示を render 中に直す（検索は下の effect で行う）。
   const similarHistoryDisabled =
-    !engineUsesSimilarHistoryFewShot(engine) || question.trim().length < 4 || profiles.length === 0;
-  if (useValuesChanged([active, engine, profileId, profiles.length, question])) {
+    question.trim().length < 4 || profiles.length === 0;
+  if (useValuesChanged([active, profileId, profiles.length, question])) {
     if (similarHistoryDisabled) {
       setSimilarHistory([]);
       setSimilarHistorySearchCompleted(false);
@@ -865,7 +818,7 @@ function ExecutableNl2SqlWorkbench() {
   }
   useEffect(() => {
     const trimmed = question.trim();
-    if (!engineUsesSimilarHistoryFewShot(engine) || trimmed.length < 4 || profiles.length === 0) {
+    if (trimmed.length < 4 || profiles.length === 0) {
       return undefined;
     }
     if (active) return undefined;
@@ -876,12 +829,12 @@ function ExecutableNl2SqlWorkbench() {
       void apiPost<SimilarHistoryData>("/api/nl2sql/similar-history", {
         question: trimmed,
         profile_id: profileId || null,
-        engine,
+        engine: ENGINE,
       }, { signal: controller.signal })
         .then((data) => {
           if (!controller.signal.aborted) {
             const usedForGeneration =
-              data.used_for_generation ?? engineUsesSimilarHistoryFewShot(engine);
+              data.used_for_generation ?? true;
             const goodHistory = usedForGeneration ? goodFeedbackSimilarHistory(data.items) : [];
             setSimilarHistory(goodHistory);
             setSimilarHistoryUsedForGeneration(usedForGeneration);
@@ -907,7 +860,7 @@ function ExecutableNl2SqlWorkbench() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [active, engine, profileId, profiles.length, question]);
+  }, [active, profileId, profiles.length, question]);
 
   const insertSchemaText = (text: string) => {
     setRewriteData(null);
@@ -1112,7 +1065,7 @@ function ExecutableNl2SqlWorkbench() {
     const trimmed = question.trim();
     // 回答前の確認のパネルから「確認せずに SQL を生成」したときは、閉じる途中のパネルを開いている扱いにしない。
     const busy = options.closingClarification ? jobActive || detecting : active;
-    if (!trimmed || busy || !profileSelectionReady || selectAiCredentialBlocked) return;
+    if (!trimmed || busy || !profileSelectionReady) return;
     beginActionFeedback();
     clearGeneratedOutput();
     setSubmitting(true);
@@ -1135,7 +1088,6 @@ function ExecutableNl2SqlWorkbench() {
       trackJob(data, startedAt);
     } catch (err) {
       showActionError(err, t("nl2sql.error.submitFailed"));
-      selectAiCredential.refreshAfterError(err);
       clearTrackedJob();
     } finally {
       setSubmitting(false);
@@ -1333,14 +1285,6 @@ function ExecutableNl2SqlWorkbench() {
                   description={t("nl2sql.workbench.description")}
                 />
                 <div className="space-y-5">
-                  <EngineSelector
-                    value={engine}
-                    onChange={(nextEngine) => {
-                      setEngine(nextEngine);
-                      setActionError("");
-                    }}
-                    disabled={active}
-                  />
 
               <div className="grid gap-4">
                 <div className="grid gap-1">
@@ -1540,7 +1484,7 @@ function ExecutableNl2SqlWorkbench() {
                           <GuidedClarificationPanel
                             question={question.trim()}
                             profileId={profileId}
-                            engine={engine}
+                            engine={ENGINE}
                             allowedObjects={toAllowedObjects(selection)}
                             onApplyRequirement={handleApplyRequirement}
                             onSkip={skipGuidedClarification}
@@ -1620,97 +1564,6 @@ function ExecutableNl2SqlWorkbench() {
                             {t("nl2sql.clarification.queryRequired")}
                           </p>
                         ) : null}
-                        {engine === "select_ai" && (
-                          <section className="overflow-hidden rounded-md border border-dashed border-border bg-surface-sunken">
-                            <Button className="w-full justify-between"
-                              type="button"
-                              variant="ghost"
-                              size="md"
-                              aria-expanded={selectAiAdvancedOpen}
-                              aria-controls="select-ai-request-overrides"
-                              onClick={() => setSelectAiAdvancedOpen((current) => !current)}
-                              disabled={active}
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <Sparkles size={16} className="shrink-0 text-fg" aria-hidden="true" />
-                                <span className="min-w-0 [overflow-wrap:anywhere]">
-                                  {t("nl2sql.selectAiOverrides.title")}
-                                </span>
-                                {hasSelectAiOverrideInputs && (
-                                  <span data-surface-tint="accent" className="shrink-0 rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-accent-fg">
-                                    {t("nl2sql.selectAiOverrides.activeBadge")}
-                                  </span>
-                                )}
-                              </span>
-                              <DisclosureChevron
-                                expanded={selectAiAdvancedOpen}
-                                size={16}
-                              />
-                            </Button>
-                            {/* aria-controls の参照先を常時レンダし、閉時は hidden にする
-                                (Nl2SqlExecutionOptionsPanel と同方式)。 */}
-                            <div
-                              id="select-ai-request-overrides"
-                              hidden={!selectAiAdvancedOpen}
-                              className="grid gap-3 border-t border-border p-3"
-                            >
-                                <p className="text-xs leading-5 text-fg-muted">
-                                  {t("nl2sql.selectAiOverrides.hint")}
-                                </p>
-                                <TextareaField
-                                  id="nl2sql-select-ai-instructions-override"
-                                  label={t("nl2sql.selectAiOverrides.additionalInstructions")}
-                                  value={selectAiInstructionsOverride}
-                                  onChange={(event) => setSelectAiInstructionsOverride(event.currentTarget.value)}
-                                  disabled={active}
-                                  rows={3}
-                                  width="full"
-                                  placeholder={t("nl2sql.selectAiOverrides.additionalInstructionsPlaceholder")}
-                                />
-                                <div className="overflow-hidden rounded-md border border-border bg-surface">
-                                  <Button className="w-full justify-between"
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    aria-expanded={selectAiRolePanelOpen}
-                                    aria-controls="select-ai-role-override"
-                                    onClick={() => setSelectAiRoleAdvancedOpen((current) => !current)}
-                                    disabled={active}
-                                  >
-                                    <span className="flex min-w-0 items-center gap-2">
-                                      <UserCog size={14} className="shrink-0 text-fg-muted" aria-hidden="true" />
-                                      <span>{t("nl2sql.selectAiOverrides.roleToggle")}</span>
-                                      {selectAiRoleHasOverride && (
-                                        <span data-surface-tint="neutral" className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
-                                          {t("nl2sql.selectAiOverrides.activeBadge")}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <DisclosureChevron
-                                      expanded={selectAiRolePanelOpen}
-                                      size={16}
-                                    />
-                                  </Button>
-                                  <div
-                                    id="select-ai-role-override"
-                                    hidden={!selectAiRolePanelOpen}
-                                    className="border-t border-border p-3"
-                                  >
-                                    <TextareaField
-                                      id="nl2sql-select-ai-role-override-input"
-                                      label={t("nl2sql.selectAiOverrides.role")}
-                                      value={selectAiRoleOverride}
-                                      onChange={(event) => setSelectAiRoleOverride(event.currentTarget.value)}
-                                      disabled={active}
-                                      rows={2}
-                                      width="full"
-                                      placeholder={t("nl2sql.selectAiOverrides.rolePlaceholder")}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                          </section>
-                        )}
                       </div>
                     </div>
                     <div className="rounded-md border border-border bg-surface-sunken p-3">
@@ -1754,18 +1607,14 @@ function ExecutableNl2SqlWorkbench() {
 
                   <Nl2SqlExecutionOptionsPanel
                     disabled={active}
-                    engine={engine}
                     includeInterpretation={includeInterpretation}
-                    includeShowPrompt={includeShowPrompt}
                     open={executionOptionsOpen}
                     useOntologyContext={useOntologyContext}
                     onIncludeInterpretationChange={setIncludeInterpretation}
-                    onIncludeShowPromptChange={setIncludeShowPrompt}
                     onOpenChange={setExecutionOptionsOpen}
                     onRewriteUseGlossaryChange={setRewriteUseGlossary}
                     onUseOntologyContextChange={setUseOntologyContext}
                     rewriteUseGlossary={rewriteUseGlossary}
-                    selectAiOverridesInactive={engine !== "select_ai" && hasSelectAiOverrideInputs}
                   />
                   {rewriteData && rewriteChanged && (
                     <div
@@ -1917,19 +1766,6 @@ function ExecutableNl2SqlWorkbench() {
                     </section>
                   )}
 
-                  {/* Select AI の Credential の事前条件（#1688）。実行の操作の直前に全幅で出す。 */}
-                  {selectAiCredentialBlocked ? (
-                    <SelectAiCredentialPrecondition
-                      id={QUERY_CREDENTIAL_PRECONDITION_ID}
-                      testId="nl2sql-credential-precondition"
-                      operation={t("selectAiCredential.precondition.operation.generate")}
-          action={t("nl2sql.action.run")}
-          credentialName={selectAiCredential.credentialName}
-                      canOpenSettings={selectAiCredential.canOpenSettings}
-                      rechecking={selectAiCredential.rechecking}
-                      onRecheck={() => void selectAiCredential.recheck()}
-                    />
-                  ) : null}
                   {/* 主アクションバー(button spec §2/§4): size lg、primary → secondary、
                       border-t で末尾に区切る。 */}
                   <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
@@ -1940,10 +1776,7 @@ function ExecutableNl2SqlWorkbench() {
                       // 送信中だけ loading にする。job の間は disabled にし、スピナーは下の進行状況
                       // （OperationStatusStrip）が 1 つ出す（同じ処理のスピナーは 1 つ。messaging §3.7、#416）。
                       loading={submitting}
-                      disabled={!question.trim() || active || !profileSelectionReady || selectAiCredentialBlocked}
-                      aria-describedby={
-                        selectAiCredentialBlocked ? QUERY_CREDENTIAL_PRECONDITION_ID : undefined
-                      }
+                      disabled={!question.trim() || active || !profileSelectionReady}
                       onClick={() => void submit()} icon={Play}>
                       <span>{t("nl2sql.action.run")}</span>
                     </Button>
@@ -1953,7 +1786,7 @@ function ExecutableNl2SqlWorkbench() {
                       size="lg"
                       disabled={active}
                       onClick={async () => {
-                        if ((question.trim() || selectAiRoleOverride || selectAiInstructionsOverride) && !await confirmDiscard({ title: t("workspace.discardTitle"), description: t("nl2sql.query.discardDescription"), confirmLabel: t("nl2sql.query.actions.startNew"), tone: "warning" })) return;
+                        if (question.trim() && !await confirmDiscard({ title: t("workspace.discardTitle"), description: t("nl2sql.query.discardDescription"), confirmLabel: t("nl2sql.query.actions.startNew"), tone: "warning" })) return;
                         setSelection(emptySelection());
                         setQuestion("");
                         setResult(null);
@@ -1961,13 +1794,8 @@ function ExecutableNl2SqlWorkbench() {
                         setRewriteUseGlossary(false);
                         setUseOntologyContext(true);
                         setIncludeInterpretation(true);
-                        setIncludeShowPrompt(false);
                         setExecutionOptionsOpen(false);
                         clearTrackedJob();
-                        setSelectAiRoleOverride("");
-                        setSelectAiInstructionsOverride("");
-                        setSelectAiAdvancedOpen(false);
-                        setSelectAiRoleAdvancedOpen(false);
                         setPageError(null);
                         setSchemaDetailError("");
                         setActionError("");
@@ -2046,7 +1874,7 @@ function ExecutableNl2SqlWorkbench() {
         <WorkspaceResultNotice result={result} inputSignature={JSON.stringify(generationRequest)} finishedAt={result?.timing?.finished_at} />
         {/* 実行していない SQL（遮断・実行の失敗）の空の results を「0 件」と見せない（#917）。 */}
         <QueryResultCard results={resultExecuted ? result?.results ?? null : null} csvFilePrefix="nl2sql-sql-generation-result" />
-        <SelectAiFeedbackAddPanel
+        <ResultFeedbackPanel
           result={result}
           history={latestHistory}
           questionText={question}

@@ -26,18 +26,18 @@ import type {
 } from "../types";
 
 type Rating = "good" | "bad";
-type SelectAiFeedbackSource = (GeneratedSqlPanelData | Nl2SqlResult) & {
+type ResultFeedbackSource = (GeneratedSqlPanelData | Nl2SqlResult) & {
   original_question?: string;
   history_id?: string;
 };
 
-export function SelectAiFeedbackAddPanel({
+export function ResultFeedbackPanel({
   result,
   history,
   questionText,
   onSaved,
 }: {
-  result: SelectAiFeedbackSource | null;
+  result: ResultFeedbackSource | null;
   history: HistoryItem | null;
   questionText?: string;
   onSaved: () => void | Promise<void>;
@@ -73,14 +73,14 @@ export function SelectAiFeedbackAddPanel({
 
     if (!question.trim()) return;
     if (!historyId) {
-      setMessage(t("nl2sql.selectAiFeedbackAdd.requiresHistory"));
+      setMessage(t("nl2sql.resultFeedback.requiresHistory"));
       return;
     }
     // 「違う」のコメントの未入力は欄の直下に出し、その欄へフォーカスする（#541）。backend も同じ規則で拒否する（#540）。
     if (rating === "bad" && !trimmedContent) {
       setMessage("");
-      setContentError(t("nl2sql.selectAiFeedbackAdd.requiresContent"));
-      document.getElementById("nl2sql-select-ai-feedback-content")?.focus();
+      setContentError(t("nl2sql.resultFeedback.requiresContent"));
+      document.getElementById("nl2sql-result-feedback-content")?.focus();
       return;
     }
     setContentError("");
@@ -97,13 +97,13 @@ export function SelectAiFeedbackAddPanel({
       });
       try {
         await onSaved();
-        toast.success(t("nl2sql.selectAiFeedbackAdd.saved"));
+        toast.success(t("nl2sql.resultFeedback.saved"));
       } catch {
-        toast.warning(t("nl2sql.selectAiFeedbackAdd.refreshFailed"));
+        toast.warning(t("nl2sql.resultFeedback.refreshFailed"));
       }
     } catch (err) {
       if (currentHistoryId.current === historyId) {
-        setMessage(err instanceof Error ? err.message : t("nl2sql.selectAiFeedbackAdd.failed"));
+        setMessage(err instanceof Error ? err.message : t("nl2sql.resultFeedback.failed"));
       }
     } finally {
       saving.current = false;
@@ -117,9 +117,9 @@ export function SelectAiFeedbackAddPanel({
         <div className="space-y-2">
           <CardTitle className="flex items-center gap-2">
             <MessageSquareText size={20} aria-hidden="true" />
-            {t("nl2sql.selectAiFeedbackAdd.title")}
+            {t("nl2sql.resultFeedback.title")}
           </CardTitle>
-          <p className="text-sm text-fg-muted">{t("nl2sql.selectAiFeedbackAdd.description")}</p>
+          <p className="text-sm text-fg-muted">{t("nl2sql.resultFeedback.description")}</p>
         </div>
         {history?.feedback_rating && (
           <div className="flex flex-wrap justify-end gap-2">
@@ -134,21 +134,21 @@ export function SelectAiFeedbackAddPanel({
         {/* 生成 SQL・改善点と評価の行は FormGrid の読みやすい幅（60rem）まで（#1891）。 */}
         <FormGrid columns={1}>
           <TextareaField
-            id="nl2sql-select-ai-feedback-response"
-            label={t("nl2sql.selectAiFeedbackAdd.response")}
+            id="nl2sql-result-feedback-response"
+            label={t("nl2sql.resultFeedback.response")}
             surface="code"
             value={generatedSql}
             readOnly
             rows={12}
             width="full"
-            placeholder={t("nl2sql.selectAiFeedbackAdd.responsePlaceholder")}
+            placeholder={t("nl2sql.resultFeedback.responsePlaceholder")}
           />
           {/* 評価は送信ボタンで決まるので、入力の aria-required ではなく「「違う」のとき必須」のタグで条件を伝える（#531）。 */}
           <TextareaField
-            id="nl2sql-select-ai-feedback-content"
-            label={t("nl2sql.selectAiFeedbackAdd.content")}
+            id="nl2sql-result-feedback-content"
+            label={t("nl2sql.resultFeedback.content")}
             required
-            requiredLabel={t("nl2sql.selectAiFeedbackAdd.contentRequiredWhenBad")}
+            requiredLabel={t("nl2sql.resultFeedback.contentRequiredWhenBad")}
             requiredAnnouncedByControl={false}
             disabled={savingRating !== null}
             value={feedbackContent}
@@ -159,7 +159,7 @@ export function SelectAiFeedbackAddPanel({
             rows={3}
             width="full"
             error={contentError || undefined}
-            placeholder={t("nl2sql.selectAiFeedbackAdd.contentPlaceholder")}
+            placeholder={t("nl2sql.resultFeedback.contentPlaceholder")}
           />
           <div className="flex flex-wrap items-center justify-end gap-3">
             <FormStatus
@@ -171,7 +171,7 @@ export function SelectAiFeedbackAddPanel({
                 選択状態は枠線 + aria-pressed で表現する。 */}
             <div
               role="group"
-              aria-label={t("nl2sql.selectAiFeedbackAdd.rating")}
+              aria-label={t("nl2sql.resultFeedback.rating")}
               className="flex flex-wrap items-center gap-3"
             >
               <Button

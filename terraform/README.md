@@ -167,18 +167,13 @@ GRANT PDB_DBA TO ADB_APP_USER;                       -- Autonomous AI Database �
 | RAG の検索 | `VECTOR` 列・HNSW の vector index・`VECTOR_DISTANCE`・`V$VECTOR_GRAPH_INDEX`、Oracle Text（`CTX_DDL.CREATE_PREFERENCE` / `CREATE_STOPLIST`・`CTXSYS.CONTEXT` の索引・`CONTAINS`・`CTX_USER_PREFERENCES`） | OK |
 | NL2SQL の DB 構造の取得 | 他の schema の `ALL_TABLES` / `ALL_TAB_COLS`（`DOMAIN_NAME`）/ `ALL_TAB_COMMENTS` / `ALL_COL_COMMENTS` / `ALL_CONSTRAINTS` / `ALL_DEPENDENCIES` / `ALL_DOMAINS` / `ALL_DOMAIN_COLS` / `ALL_ANNOTATIONS_USAGE` / `ALL_TRIGGERS` / `ALL_MVIEWS` / `ALL_USERS`、業務表の `SELECT`、`EXPLAIN PLAN`（他の schema）と `PLAN_TABLE`、`DBMS_METADATA.GET_DDL`（他の schema の view・MV） | OK |
 | NL2SQL のデータ準備（コメント・アノテーション・ドメイン・DB 管理・CSV） | 他の schema への `COMMENT ON TABLE / COLUMN / MATERIALIZED VIEW`、`ALTER TABLE / VIEW / MATERIALIZED VIEW … ANNOTATIONS`（列も）、`CREATE DOMAIN IF NOT EXISTS`・`ALTER DOMAIN`・`ALTER TABLE MODIFY … ADD / DROP DOMAIN`・`DROP DOMAIN FORCE`、`CREATE TABLE` / `CREATE VIEW`（管理 SQL・AI の DDL）、`INSERT` / `UPDATE` / `DELETE`、`TRUNCATE TABLE`・`DROP TABLE PURGE`・`DROP VIEW` | OK |
-| NL2SQL の Select AI | `DBMS_CLOUD.CREATE_CREDENTIAL`（API キーの形）/ `DROP_CREDENTIAL`、`DBMS_CLOUD_AI.CREATE_PROFILE`（`object_list` は他の schema）/ `DROP_PROFILE`、`DBMS_CLOUD_AI.GENERATE`（`showsql` / `showprompt`。実の OCI Generative AI で SQL が返る）、`USER_CLOUD_AI_PROFILES` / `_ATTRIBUTES`、`ALL_PROCEDURES`（package の可視性） | OK |
-| NL2SQL のフィードバック | `DBMS_CLOUD_AI.FEEDBACK`（`ADD` / `DELETE`。`sql_text` と `response` で、`select ai` を実行していない文でも登録できる。feedback の vector 表 `<profile>_FEEDBACK_VECINDEX$VECTAB` を Oracle が作る）、`DBMS_CLOUD_AI.UPDATE_VECTOR_INDEX`、`DBMS_LOCK.REQUEST / RELEASE`（無名 block） | OK |
-| NL2SQL の合成データ | `DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA`（他の schema の表へ。実の LLM で 3 行）、`DBA_LOAD_OPERATIONS`・`V$SESSION`、preview の `CREATE TABLE … AS SELECT`（元は他の schema）・`ADD CONSTRAINT … ENABLE NOVALIDATE`・`LOCK TABLE <他の schema> IN SHARE ROW EXCLUSIVE MODE NOWAIT` | OK |
-| NL2SQL の Select AI Agent | `DBMS_CLOUD_AI_AGENT.CREATE_TOOL / CREATE_AGENT / CREATE_TASK / CREATE_TEAM`、`RUN_TOOL`・`RUN_TEAM`（実の LLM。`params` の `conversation_id` で同じ会話を続ける）、`DROP_* (force => TRUE)`、`DBMS_SQL_TRANSLATOR.DROP_PROFILE`、会話の `DBMS_CLOUD_AI.CREATE_CONVERSATION`・`USER_CLOUD_AI_CONVERSATION_PROMPTS`・`USER_AI_AGENT_TEAM_HISTORY`（#1681） | OK |
+| NL2SQL のフィードバック | `DBMS_LOCK.REQUEST / RELEASE`（無名 block。フィードバックのベクトルの再構築） | OK |
 | NL2SQL のオントロジーの操作 | 業務表への `SELECT … FOR UPDATE WAIT 5` と `UPDATE`（他の schema） | OK |
 | Agent・platform | 自分の schema の表・`MERGE`・`LOCK TABLE`・`SELECT … FOR UPDATE SKIP LOCKED`・`USER_*` の参照だけ（上の system schema の初期化で確かめた） | OK |
 
 - **使っていないもの**（コードを grep して確かめた）: `DBMS_SCHEDULER`・`DBMS_VECTOR` / `DBMS_VECTOR_CHAIN`（DB の中の embedding）・`DBMS_CLOUD` の Object Storage
   （`COPY_DATA`・`PUT_OBJECT`・外部表。Object Storage は OCI SDK で使う）・`DBMS_CLOUD_PIPELINE`・`UTL_*`・PUBLIC SYNONYM・DIRECTORY・DATABASE LINK・
-  `ALTER SYSTEM`・`CREATE USER`（アプリのコードとして）。Select AI の network ACL（`DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE`）は、provider が OCI Generative AI で
-  [公式の文書](https://docs.oracle.com/en/cloud/paas/autonomous-database/serverless/adbsb/select-ai-manage-profiles.html)が不要と書くため付けません。
-  resource principal（`DBMS_CLOUD_ADMIN.ENABLE_RESOURCE_PRINCIPAL`）も、credential が API キーの形だけなので使いません。
+  `ALTER SYSTEM`・`CREATE USER`（アプリのコードとして）・resource principal（`DBMS_CLOUD_ADMIN.ENABLE_RESOURCE_PRINCIPAL`）。
 - **stored PL/SQL の注意**: role 経由の権限は definer-rights の stored PL/SQL では効きません（例: package の中の `DBMS_LOCK` は `PLS-00201`）。
   今のコードが作る package（`NL2SQL_ONT_ACTION_TX`）は自分の表と `DBMS_SESSION`（PUBLIC）だけを参照するため問題ありません。
   今後 package の中から `DBMS_*` や `DBA_*` を使うときは、`EXECUTE` / `SELECT` を直接 grant する必要があります（`suite-db-user.py` の `APP_USER_GRANTS` に足す）。
@@ -230,10 +225,9 @@ SELECT COUNT(*) FROM DBA_TABLES WHERE OWNER = 'ADB_APP_USER' AND TABLE_NAME LIKE
   - `DB_DEVELOPER_ROLE` を使わない場合は、`CREATE TABLE`・`CREATE SEQUENCE`・`CREATE VIEW`・`CREATE PROCEDURE` と、RAG の全文検索（Oracle Text の索引・lexer・stoplist）の `CTXAPP`（または `EXECUTE ON CTXSYS.CTX_DDL`）を付与します。
   - 表領域の quota が無いと `ORA-01950`、権限が無いと `ORA-01031`（Oracle Text は `PLS-00201`）で初期化が失敗し、配備の最後の確認が NG になります。
   - NL2SQL が SQL を生成・実行する業務データが別の schema にあるときは、その表・view の `SELECT` を付与します。コメント・アノテーション・ドメイン・
-    DB 管理・CSV・合成データ・オントロジーの操作で他の schema を変えるときは、その表への `ALTER` / `INSERT` / `UPDATE` / `DELETE` などか、
+    DB 管理・CSV・オントロジーの操作で他の schema を変えるときは、その表への `ALTER` / `INSERT` / `UPDATE` / `DELETE` などか、
     `COMMENT ANY TABLE`・`ALTER ANY TABLE`・`CREATE ANY DOMAIN`・`LOCK ANY TABLE` などの ANY 権限が要ります。
-  - NL2SQL の機能ごとに使うとき: フィードバックのベクトルの再構築は `EXECUTE ON DBMS_LOCK`、Select AI は `EXECUTE ON DBMS_CLOUD_AI`・`EXECUTE ON DBMS_CLOUD`
-    （Select AI Agent は `EXECUTE ON DBMS_CLOUD_AI_AGENT`）、合成データの生成は `SELECT ON SYS.DBA_LOAD_OPERATIONS` と `SELECT ON SYS.V_$SESSION`。
+  - NL2SQL の機能ごとに使うとき: フィードバックのベクトルの再構築は `EXECUTE ON DBMS_LOCK`。
 
 ## 製品ごとの入力と instance 上の構成
 

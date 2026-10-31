@@ -134,5 +134,5 @@ def close_oracle_pools() -> None:
     close_auth_connection_pool()
     # 状態の保存先の接続 pool も閉じる（#830）。
     close_state_connection_pool()
-    # 業務データの読み取り・Select AI の生成の接続 pool も閉じる（#904）。
+    # 業務データの読み取りの接続 pool も閉じる（#904）。
     close_runtime_connection_pool()

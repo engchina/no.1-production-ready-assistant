@@ -40,7 +40,7 @@ def _history(actor_user_uuid: str) -> HistoryItem:
     return HistoryItem(
         id="history-1",
         question="社員一覧",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
         created_at="2026-10-01T00:00:00+00:00",
         profile_id="default",

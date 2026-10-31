@@ -70,22 +70,12 @@ from .models import (
     HISTORY_RUN_STATUS_CANCELLED,
     AdminFeedbackReviewData,
     AdminFeedbackReviewRequest,
-    AgentConversationCreateData,
-    AgentConversationCreateRequest,
-    AgentConversationsData,
-    AgentPrivilegeCheckData,
-    AgentTeamRunData,
-    AgentTeamRunRequest,
-    AgentToolRunRequest,
     AllowedObjects,
     AnalyzeData,
     AnalyzeRequest,
     AnnotationApplyData,
     AnnotationApplyRequest,
     AnnotationSuggestionData,
-    AssetCleanupData,
-    AssetCleanupRequest,
-    AssetRefreshData,
     ClassifierFeedbackImportData,
     ClassifierFeedbackImportRequest,
     ClassifierImportData,
@@ -159,7 +149,6 @@ from .models import (
     MetadataSqlSampleData,
     MetadataSqlSampleRequest,
     Nl2SqlEngine,
-    Nl2SqlEnginesData,
     Nl2SqlProfile,
     PersistenceStatusData,
     PreviewData,
@@ -169,11 +158,7 @@ from .models import (
     ProfilePatchRequest,
     ProfileRecommendationData,
     ProfileRecommendationRequest,
-    ProfileSelectAiConfig,
-    ProfileSelectAiProfileRequest,
     ProfileSummaryPage,
-    ProfileSyncJobData,
-    ProfileSyncJobRequest,
     ProfileUpsertRequest,
     ProfileUsageContext,
     QueryResults,
@@ -186,22 +171,6 @@ from .models import (
     SampleDataMutationData,
     SampleDataMutationRequest,
     SampleDataset,
-    SelectAiAgentAssetsData,
-    SelectAiCredentialReadinessData,
-    SelectAiDbProfileDetailData,
-    SelectAiDbProfileDropRequest,
-    SelectAiDbProfileMutationData,
-    SelectAiDbProfileRefreshJobData,
-    SelectAiDbProfilesData,
-    SelectAiDbProfileUpsertRequest,
-    SelectAiFeedbackAddData,
-    SelectAiFeedbackAddRequest,
-    SelectAiFeedbackDeleteRequest,
-    SelectAiFeedbackEntriesData,
-    SelectAiFeedbackMutationData,
-    SelectAiFeedbackVectorIndexRequest,
-    SelectAiProfilesExportData,
-    SelectAiProfilesImportRequest,
     SimilarHistoryData,
     SimilarHistoryRequest,
     SqlChatData,
@@ -211,16 +180,12 @@ from .models import (
     SqlChatUpdateRequest,
     StructureToSqlData,
     StructureToSqlRequest,
-    SyntheticDataGenerateRequest,
-    SyntheticDataOperationData,
-    SyntheticDataResultsData,
     TraceProgressData,
     normalize_profile_identifier,
     validate_profile_identifier,
 )
 from .oracle_adapter import (
     OracleAdapterError,
-    SelectAiCredentialMissingError,
     TabularImportValidationError,
 )
 from .profile_access import (
@@ -240,12 +205,6 @@ from .quality_evaluation_service import (
     QualityEvaluationValidationError,
     quality_evaluation_service,
 )
-from .select_ai_readiness import (
-    assert_select_ai_credential_ready,
-    select_ai_credential_missing_detail,
-    select_ai_credential_readiness,
-    uses_select_ai_credential,
-)
 from .service import (
     _SCHEMA_EMPTY_MESSAGE,
     ChatConversationBusyError,
@@ -256,7 +215,6 @@ from .service import (
     JobTraceData,
     OthersContentForbiddenError,
     ProfileNameConflict,
-    ProfileOracleCleanupFailed,
     ProfileScopePermissionError,
     SchemaCatalogEmptyError,
     nl2sql_service,
@@ -745,9 +703,6 @@ def create_job(req: JobCreateRequest, request: Request) -> ApiResponse[JobCreate
     except PermissionError as exc:
         # 見えない他の利用者の会話は存在を漏らさない 404。
         raise _chat_not_found() from exc
-    except SelectAiCredentialMissingError as exc:
-        # Select AI / Select AI Agent の生成は Credential が前提（#1688）。
-        raise _select_ai_credential_missing_exception(exc) from exc
     except JobIdConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValidationError:
@@ -1040,7 +995,7 @@ def _job_trace_for_request(job_id: str, request: Request) -> JobTraceData:
 def get_job_trace(job_id: str, request: Request) -> ApiResponse[TraceProgressData]:
     """ジョブの処理の経過（共通の span の表の snapshot。#3226 の案 A）。
 
-    span は worker（別の process）が書くので、実行中も段の中の span（モデルの呼び出し・Select AI）
+    span は worker（別の process）が書くので、実行中も段の中の span（モデルの呼び出し）
     まで読める。画面は実行中に 1 秒ごとに読み直す。最終の状態はジョブの状態（正本）で決める。
     """
     return ApiResponse(data=_job_trace_for_request(job_id, request).trace)
@@ -1151,7 +1106,6 @@ def get_profile_usage_context(
                     "description",
                     "allowed_tables",
                     "allowed_views",
-                    "default_engine",
                     "clarification_policy",
                     "archived",
                     "object_scope_version",
@@ -1185,18 +1139,11 @@ def get_profile_detail(
     return ApiResponse(data=profile)
 
 
-@router.get("/engines", response_model=ApiResponse[Nl2SqlEnginesData])
-def list_engines() -> ApiResponse[Nl2SqlEnginesData]:
-    """この環境で使える生成の方式（業務プロファイルの既定の生成方式の選択肢。#1524）。"""
-    return ApiResponse(data=Nl2SqlEnginesData(engines=nl2sql_service.engine_availability()))
-
-
 @router.post("/profiles", response_model=ApiResponse[Nl2SqlProfile])
 def create_profile(req: ProfileUpsertRequest, response: Response) -> ApiResponse[Nl2SqlProfile]:
     """NL2SQL profile を作成する。"""
     profile = Nl2SqlProfile(id=str(uuid.uuid4()), **req.model_dump())
     try:
-        nl2sql_service.assert_engine_available(profile.default_engine)
         stored = nl2sql_service.create_profile(profile)
     except ProfileNameConflict as exc:
         raise _profile_name_conflict_exception(exc) from exc
@@ -1224,28 +1171,9 @@ def update_profile(
 
         def apply_profile_patch(current: Nl2SqlProfile) -> Nl2SqlProfile:
             update = dict(patch_data)
-            # 既定の生成方式を変えるときだけ、この環境で使えるかを確かめる（#1524）。
-            # 設定を外した後も、ほかの項目の保存は止めない。
-            requested_engine = update.get("default_engine")
-            if requested_engine is not None and requested_engine != current.default_engine:
-                nl2sql_service.assert_engine_available(Nl2SqlEngine(requested_engine))
             profile_name = normalize_profile_identifier(update.get("name", current.name))
             validate_profile_identifier(profile_name)
             update["name"] = profile_name
-            select_ai_patch = update.pop("select_ai_config", None)
-            if select_ai_patch is not None:
-                select_ai_config_data = {
-                    **current.select_ai_config.model_dump(),
-                    **select_ai_patch,
-                    "profile_name": profile_name,
-                }
-                update["select_ai_config"] = ProfileSelectAiConfig.model_validate(
-                    select_ai_config_data
-                )
-            else:
-                update["select_ai_config"] = current.select_ai_config.model_copy(
-                    update={"profile_name": profile_name}
-                )
             return current.model_copy(update=update)
 
         updated = nl2sql_service.update_profile(
@@ -1283,19 +1211,17 @@ def delete_profile(
     try:
         if nl2sql_service.uses_incremental_store and not if_match:
             raise HTTPException(status_code=428, detail="If-Match header が必要です。")
-        deleted = nl2sql_service.delete_profile_with_oracle_cleanup(
+        deleted = nl2sql_service.delete_profile_with_result(
             profile_id,
             expected_etag=if_match.strip('"') if if_match else None,
         )
         # Profile/view の DB transaction が確定してから job と runtime cache を片付ける。
         # build worker は proposal 書込直前にも Profile の存在を確認する。
         from .ontology_router import ontology_build_service, ontology_runtime
-        from .profile_sync import profile_sync_service
 
         for cleanup in (
             ontology_build_service.cancel_profile_jobs,
             ontology_build_service.purge_profile_source_documents,
-            profile_sync_service.cancel_for_profile,
             ontology_runtime.delete_profile_state,
         ):
             try:
@@ -1309,8 +1235,6 @@ def delete_profile(
                     extra={"profile_id": profile_id, "cleanup": cleanup.__name__},
                 )
         return ApiResponse(data=deleted)
-    except ProfileOracleCleanupFailed as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except IncrementalVersionConflict as exc:
         raise HTTPException(
             status_code=409,
@@ -1472,446 +1396,6 @@ def restore_profile(profile_id: str, request: Request) -> ApiResponse[Nl2SqlProf
         ) from exc
     except ProfileNameConflict as exc:
         raise _profile_name_conflict_exception(exc) from exc
-
-
-@router.post(
-    "/profiles/{profile_id}/select-ai-profile",
-    response_model=ApiResponse[SelectAiDbProfileMutationData],
-)
-def upsert_profile_select_ai_profile(
-    profile_id: str,
-    req: ProfileSelectAiProfileRequest,
-    request: Request,
-) -> ApiResponse[SelectAiDbProfileMutationData]:
-    """業務 profile から Oracle DBMS_CLOUD_AI profile を作成する。"""
-    _assert_profile_access(request, profile_id)
-    try:
-        return ApiResponse(data=nl2sql_service.upsert_profile_select_ai_profile(profile_id, req))
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=404, detail="指定された業務プロファイルが見つかりません。"
-        ) from exc
-
-
-def _select_ai_credential_missing_exception(exc: SelectAiCredentialMissingError) -> HTTPException:
-    """Select AI の Credential が足りないときの 409（#1683 / #1688）。"""
-    return HTTPException(status_code=409, detail=select_ai_credential_missing_detail(exc))
-
-
-def _assert_select_ai_credential_ready() -> None:
-    """Oracle に触る前に Select AI の Credential を確かめ、無ければ 409 で止める（#1688）。"""
-    try:
-        assert_select_ai_credential_ready(nl2sql_service._oracle_adapter)  # noqa: SLF001
-    except SelectAiCredentialMissingError as exc:
-        raise _select_ai_credential_missing_exception(exc) from exc
-
-
-@router.get(
-    "/select-ai/credential-readiness",
-    response_model=ApiResponse[SelectAiCredentialReadinessData],
-)
-def get_select_ai_credential_readiness() -> ApiResponse[SelectAiCredentialReadinessData]:
-    """Select AI の Credential が作成済みかを返す（#1683 / #1688）。
-
-    業務プロファイルの保存（Oracle 反映）・SQL 生成とチャットの Select AI / Select AI Agent・
-    合成データ・SQL 生成評価の画面が、操作の前に事前条件を示すのに使う。運用設定の
-    Select AI Credential 管理の権限が無い利用者でも読める。秘密は返さない。
-    """
-    return ApiResponse(
-        data=select_ai_credential_readiness(nl2sql_service._oracle_adapter)  # noqa: SLF001
-    )
-
-
-@router.post(
-    "/profiles/{profile_id}/oracle-sync-jobs",
-    response_model=ApiResponse[ProfileSyncJobData],
-    status_code=202,
-)
-def create_profile_oracle_sync_job(
-    profile_id: str,
-    req: ProfileSyncJobRequest,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
-    request: Request,
-) -> ApiResponse[ProfileSyncJobData]:
-    """保存済み業務 Profile の Oracle 反映を永続 queue へ投入する。"""
-    _assert_profile_access(request, profile_id)
-
-    from .profile_sync import profile_sync_service
-
-    try:
-        return ApiResponse(
-            data=profile_sync_service.start(
-                profile_id,
-                req,
-                idempotency_key=idempotency_key,
-            )
-        )
-    except SelectAiCredentialMissingError as exc:
-        raise _select_ai_credential_missing_exception(exc) from exc
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=404, detail="指定された業務プロファイルが見つかりません。"
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get(
-    "/oracle-sync-jobs/{job_id}",
-    response_model=ApiResponse[ProfileSyncJobData],
-)
-def get_profile_oracle_sync_job(
-    job_id: str,
-    request: Request,
-) -> ApiResponse[ProfileSyncJobData]:
-    """Oracle Profile 同期 job の進捗を返す。"""
-
-    from .profile_sync import profile_sync_service
-
-    job = profile_sync_service.peek(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="指定された同期 job が見つかりません。")
-    _assert_profile_access(request, job.profile_id)
-    return ApiResponse(data=profile_sync_service.get(job_id) or job)
-
-
-@router.post(
-    "/oracle-sync-jobs/{job_id}/retry",
-    response_model=ApiResponse[ProfileSyncJobData],
-    status_code=202,
-)
-def retry_profile_oracle_sync_job(
-    job_id: str,
-    request: Request,
-) -> ApiResponse[ProfileSyncJobData]:
-    """失敗した Oracle Profile 同期 job を最新版 Profile で再試行する。"""
-
-    from .profile_sync import profile_sync_service
-
-    try:
-        job = profile_sync_service.peek(job_id)
-        if job is None:
-            raise KeyError(job_id)
-        _assert_profile_access(request, job.profile_id)
-        return ApiResponse(data=profile_sync_service.retry(job_id))
-    except SelectAiCredentialMissingError as exc:
-        raise _select_ai_credential_missing_exception(exc) from exc
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="指定された同期 job が見つかりません。",
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@router.post("/select-ai/profiles/refresh", response_model=ApiResponse[AssetRefreshData])
-def refresh_select_ai_profile(
-    request: Request,
-    profile_id: str | None = None,
-) -> ApiResponse[AssetRefreshData]:
-    """Oracle Select AI profile を作成/更新する adapter boundary。"""
-    _assert_profile_access(request, profile_id, default_profile=True)
-    _assert_select_ai_credential_ready()
-    try:
-        return ApiResponse(data=nl2sql_service.refresh_select_ai_profile(profile_id))
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=404, detail="指定された業務プロファイルが見つかりません。"
-        ) from exc
-
-
-@router.post("/select-ai-agent/assets/refresh", response_model=ApiResponse[AssetRefreshData])
-def refresh_select_ai_agent_assets(
-    request: Request,
-    profile_id: str | None = None,
-) -> ApiResponse[AssetRefreshData]:
-    """Oracle Select AI Agent assets を作成/更新する adapter boundary。"""
-    _assert_profile_access(request, profile_id, default_profile=True)
-    _assert_select_ai_credential_ready()
-    try:
-        return ApiResponse(data=nl2sql_service.refresh_select_ai_agent_assets(profile_id))
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=404, detail="指定された業務プロファイルが見つかりません。"
-        ) from exc
-
-
-@router.post("/select-ai/assets/cleanup", response_model=ApiResponse[list[AssetCleanupData]])
-def cleanup_select_ai_assets(
-    req: AssetCleanupRequest,
-    request: Request,
-) -> ApiResponse[list[AssetCleanupData]]:
-    """Oracle Select AI / Agent assets の cleanup を実行する。"""
-    _assert_profile_access(request, req.profile_id, default_profile=True)
-    return ApiResponse(
-        data=nl2sql_service.cleanup_select_ai_assets(
-            profile_id=req.profile_id,
-            engines=req.engines,
-            confirmation=req.confirmation,
-            reason=req.reason,
-        )
-    )
-
-
-@router.get("/select-ai/db-profiles", response_model=ApiResponse[SelectAiDbProfilesData])
-def select_ai_db_profiles(
-    include_detail: bool = False,
-    business_profiles_only: bool = False,
-    include_archived_business_profiles: bool = True,
-) -> ApiResponse[SelectAiDbProfilesData]:
-    """Oracle DBMS_CLOUD_AI profile 一覧を返す。"""
-    return ApiResponse(
-        data=nl2sql_service.list_select_ai_db_profiles(
-            include_detail=include_detail,
-            business_profiles_only=business_profiles_only,
-            include_archived_business_profiles=include_archived_business_profiles,
-        )
-    )
-
-
-@router.post(
-    "/select-ai/db-profiles/refresh-jobs",
-    response_model=ApiResponse[SelectAiDbProfileRefreshJobData],
-    status_code=202,
-)
-def create_select_ai_db_profile_refresh_job() -> ApiResponse[SelectAiDbProfileRefreshJobData]:
-    """Oracle DBMS_CLOUD_AI profile 一覧を手動で全量再取得する。"""
-    return ApiResponse(data=nl2sql_service.start_select_ai_db_profile_refresh_job())
-
-
-@router.get(
-    "/select-ai/db-profile-refresh-jobs/{job_id}",
-    response_model=ApiResponse[SelectAiDbProfileRefreshJobData],
-)
-def get_select_ai_db_profile_refresh_job(
-    job_id: str,
-) -> ApiResponse[SelectAiDbProfileRefreshJobData]:
-    """Oracle DBMS_CLOUD_AI profile 一覧 refresh job の進捗を返す。"""
-    job = nl2sql_service.get_select_ai_db_profile_refresh_job(job_id)
-    if job is None:
-        raise HTTPException(
-            status_code=404,
-            detail="指定された DB Profile 一覧 refresh job が見つかりません。",
-        )
-    return ApiResponse(data=job)
-
-
-@router.get(
-    "/select-ai/db-profiles/{profile_name}",
-    response_model=ApiResponse[SelectAiDbProfileDetailData],
-)
-def select_ai_db_profile_detail(
-    profile_name: str,
-) -> ApiResponse[SelectAiDbProfileDetailData]:
-    """Oracle DBMS_CLOUD_AI profile 詳細を返す。"""
-    return ApiResponse(data=nl2sql_service.get_select_ai_db_profile(profile_name))
-
-
-@router.get("/select-ai/feedback", response_model=ApiResponse[SelectAiFeedbackEntriesData])
-def select_ai_feedback(
-    profile_name: str,
-    paging: Annotated[
-        OffsetParams, Depends(offset_params(default=DEFAULT_PAGE_LIMIT, max_limit=100))
-    ],
-) -> ApiResponse[SelectAiFeedbackEntriesData]:
-    """Oracle DBMS_CLOUD_AI profile feedback vector entries の 1 ページ（offset 型。#1891）。"""
-    return ApiResponse(
-        data=nl2sql_service.list_select_ai_feedback_entries(
-            profile_name, limit=paging.limit, offset=paging.offset
-        )
-    )
-
-
-@router.post(
-    "/select-ai/feedback/add",
-    response_model=ApiResponse[SelectAiFeedbackAddData],
-)
-def add_select_ai_feedback(
-    req: SelectAiFeedbackAddRequest,
-) -> ApiResponse[SelectAiFeedbackAddData]:
-    """Oracle DBMS_CLOUD_AI profile feedback entry を追加する。"""
-    return ApiResponse(data=nl2sql_service.add_select_ai_feedback(req))
-
-
-@router.post(
-    "/select-ai/feedback/delete",
-    response_model=ApiResponse[SelectAiFeedbackMutationData],
-)
-def delete_select_ai_feedback(
-    req: SelectAiFeedbackDeleteRequest,
-) -> ApiResponse[SelectAiFeedbackMutationData]:
-    """Oracle DBMS_CLOUD_AI profile feedback entry を削除する。"""
-    return ApiResponse(data=nl2sql_service.delete_select_ai_feedback(req))
-
-
-@router.post(
-    "/select-ai/feedback/vector-index",
-    response_model=ApiResponse[SelectAiFeedbackMutationData],
-)
-def update_select_ai_feedback_vector_index(
-    req: SelectAiFeedbackVectorIndexRequest,
-) -> ApiResponse[SelectAiFeedbackMutationData]:
-    """Oracle DBMS_CLOUD_AI feedback vector index attributes を更新する。"""
-    return ApiResponse(data=nl2sql_service.update_select_ai_feedback_vector_index(req))
-
-
-@router.post(
-    "/select-ai/db-profiles",
-    response_model=ApiResponse[SelectAiDbProfileMutationData],
-)
-def upsert_select_ai_db_profile(
-    req: SelectAiDbProfileUpsertRequest,
-) -> ApiResponse[SelectAiDbProfileMutationData]:
-    """Oracle DBMS_CLOUD_AI profile を low-level JSON から作成/更新する。"""
-    return ApiResponse(data=nl2sql_service.upsert_select_ai_db_profile(req))
-
-
-@router.patch(
-    "/select-ai/db-profiles/{profile_name}",
-    response_model=ApiResponse[SelectAiDbProfileMutationData],
-)
-def patch_select_ai_db_profile(
-    profile_name: str,
-    req: SelectAiDbProfileUpsertRequest,
-) -> ApiResponse[SelectAiDbProfileMutationData]:
-    """Oracle DBMS_CLOUD_AI profile を名前指定で更新する。"""
-    return ApiResponse(
-        data=nl2sql_service.upsert_select_ai_db_profile(
-            req.model_copy(
-                update={
-                    "profile_name": req.profile_name or profile_name,
-                    "original_name": req.original_name or profile_name,
-                }
-            )
-        )
-    )
-
-
-@router.get(
-    "/select-ai/profiles/export.json",
-    response_model=ApiResponse[SelectAiProfilesExportData],
-)
-def export_select_ai_profiles_json(
-    business_profiles_only: bool = False,
-    include_archived_business_profiles: bool = True,
-) -> ApiResponse[SelectAiProfilesExportData]:
-    """Oracle DBMS_CLOUD_AI profile definitions を JSON として返す。"""
-    return ApiResponse(
-        data=nl2sql_service.export_select_ai_profiles_json(
-            business_profiles_only=business_profiles_only,
-            include_archived_business_profiles=include_archived_business_profiles,
-        )
-    )
-
-
-@router.post(
-    "/select-ai/profiles/import-json",
-    response_model=ApiResponse[list[SelectAiDbProfileMutationData]],
-)
-def import_select_ai_profiles_json(
-    req: SelectAiProfilesImportRequest,
-) -> ApiResponse[list[SelectAiDbProfileMutationData]]:
-    """Oracle DBMS_CLOUD_AI profile definitions JSON を import する。"""
-    return ApiResponse(data=nl2sql_service.import_select_ai_profiles_json(req))
-
-
-@router.post(
-    "/select-ai/db-profiles/{profile_name}/drop",
-    response_model=ApiResponse[AssetCleanupData],
-)
-def drop_select_ai_db_profile(
-    profile_name: str,
-    req: SelectAiDbProfileDropRequest,
-) -> ApiResponse[AssetCleanupData]:
-    """Oracle DBMS_CLOUD_AI profile を名前指定で drop する。"""
-    return ApiResponse(
-        data=nl2sql_service.drop_select_ai_db_profile(
-            profile_name,
-            confirmation=req.confirmation,
-            reason=req.reason,
-        )
-    )
-
-
-@router.get("/select-ai-agent/assets", response_model=ApiResponse[SelectAiAgentAssetsData])
-def select_ai_agent_assets() -> ApiResponse[SelectAiAgentAssetsData]:
-    """Oracle Select AI Agent low-level asset names を返す。"""
-    return ApiResponse(data=nl2sql_service.list_select_ai_agent_assets())
-
-
-@router.post("/select-ai-agent/run-team", response_model=ApiResponse[AgentTeamRunData])
-def run_select_ai_agent_team(
-    req: AgentTeamRunRequest,
-) -> ApiResponse[AgentTeamRunData]:
-    """Oracle Select AI Agent team を実行する。"""
-    _assert_select_ai_credential_ready()
-    try:
-        return ApiResponse(data=nl2sql_service.run_select_ai_agent_team(req))
-    except OracleAdapterError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@router.post("/select-ai-agent/run-tool", response_model=ApiResponse[AgentTeamRunData])
-def run_select_ai_agent_tool(
-    req: AgentToolRunRequest,
-) -> ApiResponse[AgentTeamRunData]:
-    """Oracle Select AI Agent tool を明示名で実行する。"""
-    _assert_select_ai_credential_ready()
-    try:
-        return ApiResponse(data=nl2sql_service.run_select_ai_agent_tool(req))
-    except OracleAdapterError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@router.post(
-    "/select-ai-agent/conversations/create",
-    response_model=ApiResponse[AgentConversationCreateData],
-)
-def create_select_ai_agent_conversation(
-    req: AgentConversationCreateRequest,
-) -> ApiResponse[AgentConversationCreateData]:
-    """Oracle Select AI Agent conversation を作成する（DBMS_CLOUD_AI.CREATE_CONVERSATION）。"""
-    try:
-        return ApiResponse(data=nl2sql_service.create_select_ai_agent_conversation(req))
-    except OracleAdapterError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@router.post("/select-ai-agent/assets/cleanup", response_model=ApiResponse[list[AssetCleanupData]])
-def cleanup_select_ai_agent_assets(
-    req: AssetCleanupRequest,
-    request: Request,
-) -> ApiResponse[list[AssetCleanupData]]:
-    """Oracle Select AI Agent low-level assets の cleanup を実行する。"""
-    _assert_profile_access(request, req.profile_id, default_profile=True)
-    return ApiResponse(data=nl2sql_service.cleanup_select_ai_agent_assets_low_level(req))
-
-
-@router.get(
-    "/select-ai-agent/conversations",
-    response_model=ApiResponse[AgentConversationsData],
-)
-def select_ai_agent_conversations(
-    team_name: str | None = None,
-    limit: int = 20,
-) -> ApiResponse[AgentConversationsData]:
-    """Oracle Select AI Agent conversation 履歴を返す。"""
-    return ApiResponse(
-        data=nl2sql_service.list_select_ai_agent_conversations(
-            team_name=team_name,
-            limit=max(1, min(limit, 100)),
-        )
-    )
-
-
-@router.get(
-    "/select-ai-agent/privileges/check",
-    response_model=ApiResponse[AgentPrivilegeCheckData],
-)
-def check_select_ai_agent_privileges() -> ApiResponse[AgentPrivilegeCheckData]:
-    """Oracle Select AI Agent 実行に必要な package/view 可視性を確認する。"""
-    return ApiResponse(data=nl2sql_service.check_select_ai_agent_privileges())
 
 
 @router.get("/history", response_model=ApiResponse[HistoryData])
@@ -2221,7 +1705,7 @@ def admin_review_feedback(
     req: AdminFeedbackReviewRequest,
     request: Request,
 ) -> ApiResponse[AdminFeedbackReviewData]:
-    """管理者 review を保存し、必要な場合だけ Select AI feedback へ登録する。"""
+    """管理者 review を保存する（良いと判断した履歴は類似履歴として公開する）。"""
     try:
         data = nl2sql_service.save_admin_feedback_review(
             req,
@@ -2733,7 +2217,6 @@ def quality_evaluation_template() -> Response:
 async def create_quality_evaluation(
     request: Request,
     profile_id: Annotated[str, Form()],
-    engines: Annotated[list[Nl2SqlEngine], Form()],
     repeat_count: Annotated[int, Form()],
     file: Annotated[UploadFile, File()],
 ) -> ApiResponse[QualityEvaluationJobSummary]:
@@ -2743,15 +2226,11 @@ async def create_quality_evaluation(
     content = await file.read(maximum + 1)
     principal = getattr(request.state, "principal", None)
     actor_user_uuid = str(getattr(principal, "user_uuid", ""))
-    if uses_select_ai_credential(engines):
-        # Select AI / Select AI Agent の評価は Credential が前提。
-        # 評価の job を作る前に止める（#1688）。
-        await run_sync_io(_assert_select_ai_credential_ready)
     try:
         data = await run_sync_io(
             quality_evaluation_service.submit,
             profile_id=profile_id,
-            engines=engines,
+            engines=[Nl2SqlEngine.ENTERPRISE_AI_DIRECT],
             repeat_count=repeat_count,
             content=content,
             filename=file.filename or "evaluation.xlsx",
@@ -3506,68 +2985,7 @@ def db_admin_export_view_xlsx(view_name: str, limit: int = 1000, owner: str = ""
     )
 
 
-@router.post(
-    "/synthetic-data/generate",
-    status_code=202,
-    deprecated=True,
-    response_model=ApiResponse[SyntheticDataOperationData],
-)
-def generate_synthetic_data(
-    req: SyntheticDataGenerateRequest,
-    request: Request,
-) -> ApiResponse[SyntheticDataOperationData]:
-    """旧クライアントも永続受理へ統合し、手続き応答を生成成功と扱わない。"""
-    from uuid import uuid4
-
-    from .models import TimingEnvelope
-    from .synthetic_models import SyntheticRunRequest
-    from .synthetic_service import get_synthetic_service
-
-    run = get_synthetic_service().create(
-        SyntheticRunRequest(**req.model_dump(), idempotency_key=str(uuid4())),
-        getattr(request.state, "principal", None),
-    )
-    return ApiResponse(
-        data=SyntheticDataOperationData(
-            table_name=run.targets[0].table_name,
-            object_list=[target.table_name for target in run.targets],
-            row_count=run.targets[0].requested_rows,
-            executed=False,
-            runtime="oracle",
-            status="accepted",
-            message="生成を受け付けました。生成状況で完了と追加件数を確認してください。",
-            engine_meta={
-                "run_id": run.run_id,
-                "status_url": f"/api/nl2sql/synthetic-data/runs/{run.run_id}",
-            },
-            timing=TimingEnvelope(created_at=run.created_at, stage_timings=[]),
-        )
-    )
-
-
-@router.get("/synthetic-data/results", response_model=ApiResponse[SyntheticDataResultsData])
-def synthetic_data_results(
-    table_name: str,
-    limit: int = Query(default=100, ge=1, le=100000),
-) -> ApiResponse[SyntheticDataResultsData]:
-    """Synthetic DB data generation 後の table preview を返す。"""
-    try:
-        return ApiResponse(
-            data=nl2sql_service.synthetic_data_results(
-                table_name=table_name,
-                limit=limit,
-            )
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @router.get("/diagnostics", response_model=ApiResponse[DiagnosticsData])
 def diagnostics() -> ApiResponse[DiagnosticsData]:
     """OCI / Oracle / NL2SQL エンジン設定の非 secret 診断を返す。"""
     return ApiResponse(data=nl2sql_service.diagnostics())
-
-
-from .synthetic_router import router as synthetic_router  # noqa: E402
-
-router.include_router(synthetic_router)

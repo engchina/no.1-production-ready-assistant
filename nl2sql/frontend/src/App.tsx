@@ -22,7 +22,6 @@ import { useDatabaseStatus } from "@/lib/queries";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { PageHeader, AppShell, PageBody, PageLoadingState } from "@production-ready/ui";
 import { DatabaseGate } from "@/components/system/DatabaseGate";
-import { SyntheticRunNotifications } from "@/features/nl2sql/syntheticRuns";
 import { SchemaRefreshCoordinator } from "@/features/nl2sql/SchemaRefreshCoordinator";
 import { APP_ROUTES } from "@/lib/routes";
 import { t } from "@/lib/i18n";
@@ -168,11 +167,6 @@ const SystemTablesCard = lazy(() =>
     default: module.SystemTablesCard,
   }))
 );
-const SelectAiCredentialCard = lazy(() =>
-  import("@/components/settings/SelectAiCredentialCard").then((module) => ({
-    default: module.SelectAiCredentialCard,
-  }))
-);
 const TraceRecordingSettingsClient = lazy(() =>
   import("@/components/settings/TraceRecordingSettingsClient").then((module) => ({default: module.TraceRecordingSettingsClient})),
 );
@@ -311,7 +305,6 @@ function AuthorizedApplication() {
           <ScopedWorkspace>
           <Suspense fallback={<RouteLoadingFallback />}>
             <WorkspaceDraftWarning />
-            <SyntheticRunNotifications />
             <KeepAlivePages />
             <Routes>
             <Route path={APP_ROUTES.home} element={<Navigate to={auth.hasPermission(ROUTE_PERMISSIONS[APP_ROUTES.query]) ? APP_ROUTES.query : firstAllowedRoute(auth.hasPermission)} replace />} />
@@ -347,10 +340,6 @@ function AuthorizedApplication() {
               path={APP_ROUTES.settingsSystemTables}
               element={<SettingsSystemTablesRoute />}
             />
-            <Route
-              path={APP_ROUTES.settingsSelectAiCredential}
-              element={<SettingsSelectAiCredentialRoute />}
-            />
             <Route path={APP_ROUTES.settingsAppearance} element={<AppearanceSettings />} />
             <Route path={APP_ROUTES.settingsAnswerNotice} element={<SettingsAnswerNoticeRoute />} />
             <Route path={APP_ROUTES.settingsTraceRecording} element={<SettingsTraceRecordingRoute />} />
@@ -362,7 +351,7 @@ function AuthorizedApplication() {
             <Route path={APP_ROUTES.securityPermissions} element={<SecurityPermissionsPage />} />
             <Route
               path={APP_ROUTES.legacyNl2sqlModelLearning}
-              element={<Navigate to={`${APP_ROUTES.profiles}#profile-select-ai`} replace />}
+              element={<Navigate to={APP_ROUTES.profiles} replace />}
             />
             <Route path="/settings" element={<Navigate to={APP_ROUTES.settingsOci} replace />} />
             <Route path="*" element={<Navigate to={defaultEntryRoute(auth.hasPermission)} replace />} />
@@ -562,21 +551,6 @@ function SettingsDatabaseRoute() {
     <>
       <PageHeader wide title={t("nav.settingsDatabase")} subtitle={t("settings.database.subtitle")} />
       <DatabaseSettingsClient />
-    </>
-  );
-}
-
-/** Select AI Credential（運用設定。構成はシステムテーブル管理と同じ。#658）。 */
-function SettingsSelectAiCredentialRoute() {
-  return (
-    <>
-      <PageHeader wide
-        title={t("nav.settingsSelectAiCredential")}
-        subtitle={t("settings.selectAiCredential.subtitle")}
-      />
-      <PageBody wide>
-        <SelectAiCredentialCard />
-      </PageBody>
     </>
   );
 }

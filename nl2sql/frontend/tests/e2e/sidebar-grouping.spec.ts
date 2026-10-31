@@ -116,8 +116,8 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
     icons.map((icon) => icon.innerHTML.replace(/\s+/g, " ").trim())
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
-  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足して 36 項目。
-  expect(menuIconSignatures).toHaveLength(36);
+  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足して 34 項目（#7 で運用設定の 1 項目を削除）。
+  expect(menuIconSignatures).toHaveLength(34);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -196,19 +196,17 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   for (const label of ["OCI 認証", "アップロード保存先", "モデル", "データベース"]) {
     await expect(sidebar.getByText(label, { exact: true })).toBeVisible();
   }
-  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き → Select AI Credential」（#658・#2449・#2517・#2546）。
+  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き」（#2449・#2517・#2546）。
   const systemTablesBox = await sidebar.getByText("システムテーブル", { exact: true }).boundingBox();
   const traceRecordingBox = await sidebar.getByText("軌跡の記録", { exact: true }).boundingBox();
   const answerNoticeBox = await sidebar.getByText("回答の注意書き", { exact: true }).boundingBox();
   const attachmentsBox = await sidebar.getByText("チャットの添付", { exact: true }).boundingBox();
-  const credentialBox = await sidebar.getByText("Select AI Credential", { exact: true }).boundingBox();
-  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox || !credentialBox) {
+  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox) {
     throw new Error("運用設定のメニュー位置を取得できませんでした。");
   }
   expect(systemTablesBox.y).toBeLessThan(traceRecordingBox.y);
   expect(traceRecordingBox.y).toBeLessThan(attachmentsBox.y);
   expect(attachmentsBox.y).toBeLessThan(answerNoticeBox.y);
-  expect(answerNoticeBox.y).toBeLessThan(credentialBox.y);
 
   // 「API キー」（全員のキーの管理。RAG / NL2SQL だけ。#1805）はユーザーとロールの末尾。アカウント欄の
   // 「API キー」（自分のキー。ボタン）と区別するため、ナビのリンクで探す。

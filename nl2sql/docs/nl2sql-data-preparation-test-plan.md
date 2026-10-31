@@ -9,7 +9,7 @@
 | 管理 SQL を実行 | SELECT/WITH、確認済み DML/DDL/PLSQL、SQL ファイル読込、確認語、部分成功 | `POST /api/nl2sql/db-admin/execute` |
 | テーブルの管理 | 一覧/検索/絞込/並び替え、詳細、DDL 後追い取得、正確件数、作成、表形式取込、列 Excel 出力、削除 | `GET /api/nl2sql/db-admin/objects`, `GET /tables/{name}`, `POST /db-admin/statements`, `POST /db-admin/import-tabular`, `POST /db-admin/drop-table` |
 | ビューの管理 | 一覧/詳細/作成/削除、JOIN/WHERE 抽出、列 Excel 出力 | `GET /views/{name}`, `POST /db-admin/extract-join-where`, `POST /db-admin/drop-view` |
-| データの管理 | テーブル/ビュー表示、WHERE/limit、Excel 出力、既存表 CSV 取込、合成データ生成 | `POST /db-admin/preview-data`, `POST /db-admin/upload-csv`, `POST /synthetic-data/generate` |
+| データの管理 | テーブル/ビュー表示、WHERE/limit、Excel 出力、既存表 CSV 取込 | `POST /db-admin/preview-data`, `POST /db-admin/upload-csv` |
 | コメント管理 | 対象選択、構造/サンプル取得、COMMENT SQL 生成、実行、policy block | `POST /metadata-samples`, `POST /comments/generate-sql`, `POST /db-admin/statements` |
 | アノテーション管理 | 対象選択、構造/サンプル取得、ANNOTATIONS SQL 生成、実行、policy block | `POST /annotations/generate-sql`, `POST /db-admin/statements` |
 | ドメイン管理 | 対象選択、構造/サンプル/既存ドメイン取得、作成・更新・再作成・削除の SQL 生成、実行、policy block | `POST /domains/inventory`, `POST /domains/generate-sql`, `POST /db-admin/statements` |
@@ -110,8 +110,6 @@
 | DP-DATA-005 | `import/td_nl2sql_orders_delta.csv` / `.xlsx` | 表形式取込: table=`TD_NL2SQL_ORDERS`, mode=`insert`, confirmation=`TD_NL2SQL_ORDERS` | 2 行 inserted、件数が 10 になる |
 | DP-DATA-006 | `import/td_nl2sql_orders_delta_extra_column.csv` | CSV 取込 | `unmatched_csv_columns` に `MEMO_FOR_TEST` が出る |
 | DP-DATA-007 | `import/td_nl2sql_orders_bad_type.csv` | CSV 取込 | 数値/日付不正の row error が表示される |
-| DP-DATA-008 | 合成データ | Business profile を選択し table を 1 つ選ぶ。confirmation は table 名 | operation が submitted/executed になり status/results を取得できる |
-| DP-DATA-009 | 合成データ複数 table | 2 tables 選択。confirmation=`ADMIN_EXECUTE` | 複数 table では `ADMIN_EXECUTE` が期待確認語になる |
 
 ## コメント管理
 
@@ -133,7 +131,6 @@
 | DP-ANN-004 | view annotation | `V_TD_NL2SQL_OPEN_ORDERS` | `ALTER VIEW ... ANNOTATIONS` が実行できる |
 | DP-ANN-005 | view 列 annotation | `V_TD_NL2SQL_OPEN_ORDERS` の列 | `ALTER VIEW ... MODIFY (<列> ANNOTATIONS (...))` が生成・実行できる(MV 列は生成されない) |
 | DP-ANN-006 | 語彙 | `TD_NL2SQL_ORDERS` の STATUS 列(サンプルあり) | `"DESCRIPTION"` / `"ALIASES"` / `"VALUES"` / `"UNITS"` / `"JOIN COLUMN"` が生成され、`data_type` / `nullable` / `sample_*` は生成されない。ドメイン付き列には `"JOIN COLUMN"` 等の表固有情報だけ |
-| DP-ANN-007 | Select AI 連携 | 業務プロファイルの「アノテーションを利用」= true で SQL 生成 | `DBMS_CLOUD_AI.GENERATE(action=>'showprompt')` に annotation が含まれ、コード値(例: `'A'`)の WHERE 条件が正しく生成される |
 
 ## ドメイン管理
 

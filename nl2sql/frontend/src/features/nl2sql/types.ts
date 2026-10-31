@@ -2,7 +2,7 @@ import type { ChatAttachmentApiReference, RunModelUsageRecord, RunUsageMeasureme
 
 import type { OntologyGraph } from "./ontology/types";
 
-export type Nl2SqlEngine = "select_ai" | "select_ai_agent" | "enterprise_ai_direct";
+export type Nl2SqlEngine = "enterprise_ai_direct";
 
 export type JobStatus = "pending" | "running" | "done" | "error";
 export type JobStepStatus = "pending" | "running" | "done" | "error" | "skipped";
@@ -105,26 +105,6 @@ export interface AllowedObjects {
   columns: Record<string, string[]>;
 }
 
-export interface ProfileSelectAiConfig {
-  profile_name: string;
-  previous_profile_name?: string;
-  region: string;
-  model: string;
-  embedding_model: string;
-  max_tokens: number;
-  enforce_object_list: boolean;
-  comments: boolean;
-  annotations: boolean;
-  constraints: boolean;
-  role: string;
-  additional_instructions: string;
-}
-
-export interface SelectAiRequestOverrides {
-  role: string;
-  additional_instructions: string;
-}
-
 export interface Nl2SqlProfile {
   id: string;
   name: string;
@@ -137,11 +117,6 @@ export interface Nl2SqlProfile {
   default_row_limit: number;
   safety_policy: string;
   few_shot_examples: Array<Record<string, string>>;
-  select_ai_config: ProfileSelectAiConfig;
-  /** 既定の生成方式（#1524）。SQL 生成・チャットの初期の選択と、方式を指定しないジョブ（Agent の MCP）が使う。 */
-  default_engine?: Nl2SqlEngine;
-  /** 保存（Oracle 反映）のたびに Select AI Agent アセットも再構築するか（#1690）。 */
-  rebuild_agent_assets_on_save?: boolean;
   /**
    * 回答前の確認（#1839）の方針。`confirm` は曖昧な質問を確認してから SQL を生成し、`assume` は確認せずに
    * 前提を示して生成する（チャットと Agent の MCP。SQL 生成の画面の「回答前の確認」のボタンは変えない）。
@@ -185,8 +160,6 @@ export interface ProfileUsageContext {
   description: string;
   allowed_tables: string[];
   allowed_views: string[];
-  /** 既定の生成方式（#1524）。SQL 生成・チャットの初期の選択。 */
-  default_engine?: Nl2SqlEngine;
   /** 回答前の確認の方針（#1839）。`assume` ならチャットは確認事項を聞かずに作る。 */
   clarification_policy?: ClarificationPolicy;
   archived: boolean;
@@ -194,17 +167,6 @@ export interface ProfileUsageContext {
   version: number;
   etag: string;
   updated_at: string;
-}
-
-/** この環境で使える生成の方式（`GET /api/nl2sql/engines`。#1524）。 */
-export interface Nl2SqlEngineAvailability {
-  engine: Nl2SqlEngine;
-  available: boolean;
-  reason: string;
-}
-
-export interface Nl2SqlEnginesData {
-  engines: Nl2SqlEngineAvailability[];
 }
 
 export interface SchemaCatalogHead {
@@ -294,9 +256,6 @@ export interface ProfileUpsertPayload {
   default_row_limit?: number;
   safety_policy: string;
   few_shot_examples?: Array<Record<string, string>>;
-  select_ai_config: ProfileSelectAiConfig;
-  default_engine: Nl2SqlEngine;
-  rebuild_agent_assets_on_save: boolean;
   clarification_policy: ClarificationPolicy;
   clarification_max_rounds: number;
 }
@@ -492,7 +451,7 @@ export interface SafetyReport {
   warnings: string[];
   referenced_tables: string[];
   referenced_columns: string[];
-  /** 安全性の確認をしたか。Select AI / Select AI Agent の SQL は省略する（#1523）。旧い結果には無い。 */
+  /** 安全性の確認をしたか。旧い結果には無い。 */
   safety_checked?: boolean;
   /** 安全性の確認を省略した理由（省略しなかったときは空）。 */
   safety_check_skip_reason?: string;
@@ -576,15 +535,6 @@ export interface Nl2SqlInterpretationArtifact {
   warnings: string[];
 }
 
-export interface Nl2SqlShowPromptArtifact {
-  available: boolean;
-  engine: Nl2SqlEngine;
-  action: string;
-  prompt: string;
-  unavailable_reason: string;
-  warnings: string[];
-}
-
 export interface Nl2SqlResult {
   history_id?: string;
   engine: Nl2SqlEngine;
@@ -602,7 +552,6 @@ export interface Nl2SqlResult {
   results: QueryResults;
   timing: TimingEnvelope;
   interpretation?: Nl2SqlInterpretationArtifact | null;
-  show_prompt?: Nl2SqlShowPromptArtifact | null;
   /** 回答の注意書き（システム設定の文。SQL を実行して答えた job だけ。#2405）。 */
   notice?: string | null;
 }
@@ -620,7 +569,6 @@ export interface GeneratedSqlPanelData {
   optimization_hints: string[];
   rewritten_question: string;
   interpretation?: Nl2SqlInterpretationArtifact | null;
-  show_prompt?: Nl2SqlShowPromptArtifact | null;
 }
 
 export interface PreviewData {
@@ -798,7 +746,7 @@ export interface HistoryItem {
   cancellation?: HistoryCancellation | null;
   /**
    * 実行のモデルの呼び出しの回数と利用量（ジョブの中の LLM の呼び出し。3 製品で共通の形。#3543）。この機能より前の行は
-   * null（「未計測」。0 にしない）。Select AI の DB の中の呼び出しは数を作らず `unmeasured_sources` に出る。
+   * null（「未計測」。0 にしない）。計測できない呼び出しは数を作らず `unmeasured_sources` に出る。
    */
   usage?: RunModelUsageRecord | null;
   /** 一覧の「token」の列: 合計の token と計測の状態（記録の無い行はどちらも null）。 */
@@ -1182,80 +1130,8 @@ export interface DiagnosticCheck {
   message: string;
 }
 
-export interface AssetRefreshData {
-  engine: Nl2SqlEngine;
-  refreshed: boolean;
-  status: string;
-  refreshed_at: string;
-  profile_name: string;
-  team_name: string;
-  warning: string;
-  asset_names: Record<string, string>;
-  engine_meta: Record<string, unknown>;
-}
-
-export type ProfileSyncJobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
-
-export type ProfileSyncJobPhase =
-  | "queued"
-  | "syncing_oracle_profile"
-  | "rebuilding_agent_assets"
-  | "verifying"
-  | "succeeded"
-  | "failed"
-  | "cancelled";
-
-/** Select AI の Credential の事前条件（`GET /api/nl2sql/select-ai/credential-readiness`。#1683 / #1688）。 */
-export interface SelectAiCredentialReadinessData {
-  /** Oracle runtime で Credential 名が設定されているときだけ true。 */
-  credential_required: boolean;
-  credential_name: string;
-  /** USER_CREDENTIALS で確かめた結果。確かめられなかったときは null。 */
-  credential_exists: boolean | null;
-}
-
-export interface ProfileSyncJobData {
-  job_id: string;
-  profile_id: string;
-  profile_etag: string;
-  status: ProfileSyncJobStatus;
-  phase: ProfileSyncJobPhase;
-  rebuild_agent_assets: boolean;
-  oracle_result?: SelectAiDbProfileMutationData | null;
-  agent_result?: AssetRefreshData | null;
-  error_code: string;
-  error_message_ja: string;
-  /** 失敗した工程（失敗時に phase は failed になるため別に持つ）。古い job には無い。 */
-  failed_phase?: ProfileSyncJobPhase | null;
-  retry_of_job_id?: string | null;
-  created_at: string;
-  started_at?: string | null;
-  finished_at?: string | null;
-}
-
-export interface AssetCleanupData {
-  engine: Nl2SqlEngine;
-  executed: boolean;
-  status: string;
-  cleaned_at: string;
-  profile_name: string;
-  team_name: string;
-  warning: string;
-  asset_names: Record<string, string>;
-  engine_meta: Record<string, unknown>;
-  profile_list_refresh_job_id?: string;
-  profile_list_refresh_required?: boolean;
-  profile_list_refresh_reason_code?: string;
-}
-
 export interface ProfileDeleteData {
   profile: Nl2SqlProfile;
-  oracle_cleanup: AssetCleanupData[];
 }
 
 export interface DbAdminObjectSummary {
@@ -1693,137 +1569,11 @@ export interface DbAdminJoinWhereData {
   structure_markdown?: string;
 }
 
-export interface SelectAiDbProfile {
-  name: string;
-  status: string;
-  owner: string;
-  created_at: string;
-  description?: string;
-  category?: string;
-  object_list?: Array<Record<string, unknown> | string>;
-  tables?: string[];
-  views?: string[];
-  region?: string;
-  model?: string;
-  embedding_model?: string;
-  schema_text?: string;
-  context_ddl?: string;
-  attributes: Record<string, unknown>;
-}
-
-export interface SelectAiDbProfilesData {
-  runtime: string;
-  profiles: SelectAiDbProfile[];
-  warnings: string[];
-  profile_list_refresh_required?: boolean;
-  profile_list_refresh_reason_code?: string;
-}
-
-export interface SelectAiDbProfileDetailData {
-  runtime: string;
-  profile: SelectAiDbProfile;
-  warnings: string[];
-}
-
-export type SelectAiDbProfileRefreshMode = "full" | "targeted";
-
-export type SelectAiDbProfileRefreshStatus = "pending" | "running" | "done" | "error";
-
-export type SelectAiDbProfileRefreshPhase = "queued" | "fetching" | "persisting" | "done";
-
-export interface SelectAiDbProfileRefreshTarget {
-  profile_name: string;
-  expected_state: "present" | "absent" | "unknown";
-}
-
-export interface SelectAiDbProfileRefreshJobData {
-  job_id: string;
-  status: SelectAiDbProfileRefreshStatus;
-  mode: SelectAiDbProfileRefreshMode;
-  source: string;
-  target_profiles: SelectAiDbProfileRefreshTarget[];
-  requires_full_refresh: boolean;
-  phase: SelectAiDbProfileRefreshPhase;
-  created_at: string;
-  started_at?: string | null;
-  finished_at?: string | null;
-  total_profiles: number;
-  processed_profiles: number;
-  scanned_profiles: number;
-  changed_profiles: number;
-  deleted_profiles: number;
-  error_code: string;
-  error_message: string;
-}
-
-export interface SelectAiDbProfileMutationData {
-  runtime: string;
-  executed: boolean;
-  status: string;
-  profile_name: string;
-  original_name: string;
-  ddl: string[];
-  profile?: SelectAiDbProfile | null;
-  warnings: string[];
-  engine_meta: Record<string, unknown>;
-  profile_list_refresh_job_id?: string;
-  profile_list_refresh_required?: boolean;
-  profile_list_refresh_reason_code?: string;
-}
-
-export interface SelectAiProfilesExportData {
-  profiles: SelectAiDbProfile[];
-  exported_at: string;
-}
-
-export interface SelectAiFeedbackEntry {
-  content: string;
-  sql_id: string;
-  sql_text: string;
-  attributes: Record<string, unknown>;
-  raw_attributes: string;
-}
-
-export interface SelectAiFeedbackEntriesData {
-  runtime: string;
-  profile_name: string;
-  index_name: string;
-  table_name: string;
-  /** feedback vector table の所有者（current schema）と所有者付き名前。旧 backend では未返却。 */
-  table_owner?: string;
-  table_qualified_name?: string;
-  /** 1 ページ分（offset 型。#1891）。`total` は全件、絞り込みが無いので `unfiltered_total` も同じ。 */
-  items: SelectAiFeedbackEntry[];
-  total: number;
-  limit: number;
-  offset: number;
-  has_next: boolean;
-  unfiltered_total: number;
-  warnings: string[];
-}
-
-export type SelectAiFeedbackAddType = "positive" | "negative";
-
-export interface SelectAiFeedbackAddData {
-  runtime: string;
-  executed: boolean;
-  status: string;
-  profile_name: string;
-  index_name: string;
-  table_name: string;
-  sql_text: string;
-  stored_feedback_type: string;
-  plsql_preview: string;
-  warnings: string[];
-  engine_meta: Record<string, unknown>;
-}
-
 export interface AdminFeedbackReviewData {
   history_id: string;
   rating: FeedbackRating;
   saved: boolean;
   feedback_content: string;
-  select_ai_feedback?: SelectAiFeedbackAddData | null;
   similar_history_publish?: SimilarHistoryPublishData | null;
 }
 
@@ -1834,93 +1584,6 @@ export interface SimilarHistoryPublishData {
   executed: boolean;
   table_name: string;
   index_name: string;
-  warnings: string[];
-}
-
-export interface SelectAiFeedbackMutationData {
-  runtime: string;
-  executed: boolean;
-  status: string;
-  profile_name: string;
-  index_name: string;
-  table_name: string;
-  warnings: string[];
-  engine_meta: Record<string, unknown>;
-}
-
-export interface AgentTeamRunData {
-  team_name: string;
-  prompt: string;
-  generated_sql: string;
-  conversation_id: string;
-  runtime: string;
-  warnings: string[];
-  engine_meta: Record<string, unknown>;
-}
-
-export interface SelectAiAgentAsset {
-  profile_id: string;
-  profile_name: string;
-  tool_name: string;
-  agent_name: string;
-  task_name: string;
-  team_name: string;
-  source: string;
-  attributes: Record<string, unknown>;
-}
-
-export interface SelectAiAgentAssetsData {
-  runtime: string;
-  items: SelectAiAgentAsset[];
-  warnings: string[];
-}
-
-export interface AgentConversationCreateData {
-  conversation_id: string;
-  runtime: string;
-  warnings: string[];
-}
-
-export interface AgentConversationItem {
-  conversation_id: string;
-  prompt: string;
-  response: string;
-  created_at: string;
-  team_name: string;
-}
-
-export interface AgentConversationsData {
-  runtime: string;
-  items: AgentConversationItem[];
-  warnings: string[];
-}
-
-export interface AgentPrivilegeCheckData {
-  runtime: string;
-  status: string;
-  checks: DiagnosticCheck[];
-  warnings: string[];
-}
-
-export interface SyntheticDataOperationData {
-  table_name: string;
-  object_list?: string[];
-  row_count: number;
-  executed: boolean;
-  runtime: string;
-  status: string;
-  message: string;
-  warnings: string[];
-  engine_meta: Record<string, unknown>;
-  timing: TimingEnvelope;
-}
-
-export interface SyntheticDataResultsData {
-  preview_digest?: string;
-  run_id?: string;
-  table_name: string;
-  runtime: string;
-  results: QueryResults;
   warnings: string[];
 }
 

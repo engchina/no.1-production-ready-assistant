@@ -59,7 +59,7 @@ from pr_system_settings.model import enterprise_ai_vision_model_id as enterprise
 from pydantic import Field, field_validator
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-# 製品固有の設定（NL2SQL_*）。Select AI Credential など製品固有の writer が書く。
+# 製品固有の設定（NL2SQL_*）。製品固有の writer が書く。
 BACKEND_ENV_FILE = product_env_file("NL2SQL_", BACKEND_DIR)
 # 3製品共通の設定（PLATFORM_*）。システム設定画面と構成管理者のパスワード変更が書く（#211）。
 PLATFORM_ENV_FILE = platform_env_file(BACKEND_DIR)
@@ -181,15 +181,13 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 同時に実行する NL2SQL job worker 数の上限(超過分は pending のまま待機)。
     # in-process queue worker 数をこの値で抑え、Oracle セッションの枯渇を防ぐ。
     nl2sql_job_max_concurrency: int = Field(default=4, ge=1, le=64)
-    # inprocess: local/CI 用 bounded worker、external: API は永続 queue への投入だけを行う。
-    nl2sql_synthetic_worker_mode: Literal["inprocess", "external"] = "inprocess"
     nl2sql_job_worker_mode: Literal["inprocess", "external"] = "inprocess"
     nl2sql_job_worker_poll_seconds: float = 1.0
     nl2sql_job_lease_seconds: float = 900.0
     # legacy snapshot の running job が lease を持たずこの秒数更新されない場合のみ、
     # 再起動前の中断として扱う。新しい queue job は lease 期限後に worker が再 claim する。
     nl2sql_job_stale_after_seconds: float = Field(default=1800.0, ge=60.0)
-    # oracle（既定）: python-oracledb 経由で Oracle / Select AI を呼ぶ。
+    # oracle（既定）: python-oracledb 経由で Oracle を呼ぶ。
     # deterministic: CI / テスト用の決定論スタブで、tests/conftest.py が明示する（#897）。
     nl2sql_runtime_mode: str = "oracle"
     # oracle が既定。memory は local/CI で明示指定する非永続モード。
@@ -204,7 +202,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     nl2sql_schema_refresh_worker_enabled: bool = True
     # inprocess: local 開発用 thread、external: API は job 永続化だけを行う。
     nl2sql_schema_refresh_worker_mode: str = "inprocess"
-    nl2sql_profile_list_refresh_timeout_seconds: float = Field(default=600.0, ge=30)
     nl2sql_schema_refresh_lease_seconds: float = 900.0
     # 明示 system schema DDL が既存 DML lock の解放を待つ上限。
     nl2sql_system_schema_ddl_lock_timeout_seconds: int = Field(
@@ -224,7 +221,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 上限つきの並行の実行器）。SQL の生成と判定の呼び出しは 1 つの実行器を共有し、429 を受けたら
     # 全体で待って並行の数を下げる（最小 1）。結果はケース・engine・繰り返しの位置に書く。
     # 1 は 1 件ずつ。
-    # Select AI / Select AI Agent の試行は DB の接続を使うため、接続の pool の上限より小さくする。
     nl2sql_quality_evaluation_concurrency: int = Field(default=2, ge=1, le=8)
     # Ontology worker / reasoning。typo(例: "in-process")だと job が誰にも処理されず
     # queued のまま沈黙するため、起動時に Literal で検証する。
@@ -254,23 +250,14 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     nl2sql_ontology_worker_claim_timeout_seconds: float = 3900.0
     nl2sql_ontology_build_timeout_seconds: float = Field(default=21600.0, gt=0)
     nl2sql_ontology_build_lease_seconds: float = Field(default=120.0, ge=30)
-    # Oracle Profile 同期は永続 job で実行し、DB round-trip と job 全体を別々に制限する。
+    # Oracle の 1 回の DB round-trip の上限（秒）。
     nl2sql_oracle_call_timeout_seconds: float = 120.0
-    nl2sql_profile_sync_job_timeout_seconds: float = 300.0
     nl2sql_ontology_reasoning_profile: str = "owl2rl"
     nl2sql_ontology_shacl_enabled: bool = True
     nl2sql_ontology_profile_confirmation_required: bool = True
     nl2sql_ontology_confirmation_ttl_seconds: int = 900
-    # ユーザ要望により Oracle Select AI / Select AI Agent を NL2SQL エンジンとして同時サポートする。
-    # local / CI では deterministic adapter、実運用では Oracle DB adapter に差し替える。
-    nl2sql_select_ai_enabled: bool = True
-    nl2sql_select_ai_agent_enabled: bool = True
+    # SQL の生成（OCI Enterprise AI を直接呼ぶ方式）を使うか。
     nl2sql_enterprise_ai_direct_enabled: bool = True
-    nl2sql_select_ai_profile_prefix: str = "NL2SQL"
-    nl2sql_select_ai_provider: str = "oci"
-    nl2sql_select_ai_credential_name: str = "NL2SQL_OCI_CRED"
-    nl2sql_select_ai_region: str = "us-chicago-1"
-    nl2sql_select_ai_model: str = ""
     nl2sql_schema_owner_allowlist: list[str] = Field(default_factory=list)
     nl2sql_schema_sample_rows: int = 3
     nl2sql_schema_sample_columns_per_table: int = 6
@@ -279,9 +266,9 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     nl2sql_oracle_connect_timeout_seconds: int = 5
     # 状態の保存先（業務プロファイル・ジョブ・履歴・オントロジー・評価）の接続 pool の上限（#830）。
     # ジョブの worker・heartbeat・API の要求が短く借りて返す。
-    # 業務データ・Select AI の接続は含まない。
+    # 業務データの接続は含まない。
     nl2sql_oracle_state_pool_max: int = Field(default=8, ge=1, le=64)
-    # アプリの接続で業務データを読む（SELECT の実行）・Select AI で生成するときの接続 pool の上限
+    # アプリの接続で業務データを読む（SELECT の実行）ときの接続 pool の上限
     # （#904）。system_admin 用と非 system_admin 用の 2 つの pool に、それぞれこの上限を使う。
     # 状態の保存先の接続は含まない。
     nl2sql_oracle_runtime_pool_max: int = Field(default=8, ge=1, le=64)

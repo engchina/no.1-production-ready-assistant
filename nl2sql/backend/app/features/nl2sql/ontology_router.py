@@ -52,6 +52,7 @@ from .models import (
     PreviewRequest,
     QueryResults,
     SqlRequirementSpec,
+    StoredNl2SqlEngine,
 )
 from .object_identity import catalog_match_key, object_match_key, object_name_tokens
 from .ontology_build import (
@@ -402,7 +403,7 @@ class QuerySessionApiCreate(OntologyContract):
     profile_id: str = Field(min_length=1)
     allowed_objects: AllowedObjects = Field(default_factory=AllowedObjects)
     row_limit: int | None = Field(default=None, ge=1, le=5000)
-    engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
+    engine: Nl2SqlEngine = Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     profile_confirmation_token: str = ""
     clarification_mode: ClarificationMode = ClarificationMode.REVIEW_ONLY
     # チャットの回答前の確認（#1442）。業務プロファイルはチャットの画面で利用者が選んでいるので、
@@ -556,7 +557,7 @@ class ProfileOntologyViewPatch(OntologyContract):
 class QueryRuntimeContext(OntologyContract):
     allowed_objects: AllowedObjects
     row_limit: int | None = Field(default=None, ge=1, le=5000)
-    engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
+    engine: StoredNl2SqlEngine = Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     retrieved_node_ids: list[str] = Field(default_factory=list)
     profile_recommendation_id: str = ""
     profile_selection_source: str = "legacy"
@@ -4188,7 +4189,9 @@ class OntologyApiRuntime:
                     profile_id=current.profile_id,
                     chat=current.chat,
                     previous_job_id=current.chat_previous_job_id,
-                    engine=runtime_context.engine if runtime_context else Nl2SqlEngine.SELECT_AI,
+                    engine=runtime_context.engine
+                    if runtime_context
+                    else Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                     clarification_mode=ClarificationMode.GUIDED,
                     attachment_ids=runtime_context.attachment_ids if runtime_context else [],
                 ),

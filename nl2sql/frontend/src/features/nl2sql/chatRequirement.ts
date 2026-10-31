@@ -38,7 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const ENGINES: readonly Nl2SqlEngine[] = ["select_ai", "select_ai_agent", "enterprise_ai_direct"];
+const ENGINES: readonly Nl2SqlEngine[] = ["enterprise_ai_direct"];
 
 /** 作業状態から戻した値を検査する（古い形・壊れた値は捨てる）。 */
 export function parseChatRequirementCheck(value: unknown): ChatRequirementCheck | null {

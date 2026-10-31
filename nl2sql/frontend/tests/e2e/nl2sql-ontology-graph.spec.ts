@@ -26,7 +26,6 @@ const profile = {
   default_row_limit: 100,
   safety_policy: "select_only",
   few_shot_examples: [],
-  select_ai_config: null,
   archived: false,
 };
 

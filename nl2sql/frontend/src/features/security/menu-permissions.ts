@@ -33,7 +33,6 @@ export const MENU_PERMISSIONS = {
   settingsModel: "menu.settings_model",
   settingsDatabase: "menu.settings_database",
   settingsSystemTables: "menu.settings_system_tables",
-  settingsSelectAiCredential: "menu.settings_select_ai_credential",
   settingsAppearance: "menu.settings_appearance",
   settingsAnswerNotice: "menu.settings_answer_notice",
   settingsTraceRecording: "menu.settings_trace_recording",
@@ -49,9 +48,6 @@ export const CAPABILITY_PERMISSIONS = {
   sqlExecute: "nl2sql.sql.execute",
   feedbackWrite: "nl2sql.feedback.write",
   feedbackManage: "nl2sql.feedback.manage",
-  selectAiAssetsRead: "nl2sql.select_ai_assets.read",
-  selectAiAssetsRefresh: "nl2sql.select_ai_assets.refresh",
-  selectAiAssetsManage: "nl2sql.select_ai_assets.manage",
   sampleDataManage: "nl2sql.sample_data.manage",
   learningMaterialManage: "nl2sql.learning_material.manage",
   systemStatusRead: "nl2sql.system_status.read",
@@ -104,8 +100,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
   [MENU_PERMISSIONS.dataManagement]: [
     CAPABILITY_PERMISSIONS.schemaRead,
     CAPABILITY_PERMISSIONS.schemaRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
   ],
   // コメント・アノテーション・ドメインの管理も DDL を実行し、「スキーマを更新」と実行後の job の追跡を使う（#972）。
   [MENU_PERMISSIONS.commentManagement]: [
@@ -131,9 +125,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
     CAPABILITY_PERMISSIONS.profilesManage,
     CAPABILITY_PERMISSIONS.schemaRead,
     CAPABILITY_PERMISSIONS.schemaRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsManage,
     CAPABILITY_PERMISSIONS.learningMaterialManage,
   ],
   [MENU_PERMISSIONS.ontologyBuild]: [
@@ -146,8 +137,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
     CAPABILITY_PERMISSIONS.profilesRead,
     CAPABILITY_PERMISSIONS.feedbackWrite,
     CAPABILITY_PERMISSIONS.feedbackManage,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsManage,
   ],
   [MENU_PERMISSIONS.questionClassifierModels]: [
     CAPABILITY_PERMISSIONS.profilesRead,
@@ -173,13 +162,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
   [CAPABILITY_PERMISSIONS.feedbackManage]: [
     CAPABILITY_PERMISSIONS.feedbackWrite,
     CAPABILITY_PERMISSIONS.profilesRead,
-  ],
-  [CAPABILITY_PERMISSIONS.selectAiAssetsRefresh]: [
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-  ],
-  [CAPABILITY_PERMISSIONS.selectAiAssetsManage]: [
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
   ],
   [CAPABILITY_PERMISSIONS.persistenceRecover]: [
     CAPABILITY_PERMISSIONS.systemStatusRead,
@@ -260,7 +242,6 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
   ],
   "settings.database.manage": [
     MENU_PERMISSIONS.settingsDatabase,
-    MENU_PERMISSIONS.settingsSelectAiCredential,
   ],
   "settings.database.sql_execute": [
     MENU_PERMISSIONS.adminSql,

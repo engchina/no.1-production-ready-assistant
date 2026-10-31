@@ -26,10 +26,8 @@ os.environ["PLATFORM_AUTH_MODE"] = "local"
 
 
 os.environ["NL2SQL_ENABLE_METRICS"] = "false"
-os.environ["NL2SQL_SYNTHETIC_WORKER_MODE"] = "external"
 os.environ["NL2SQL_RUNTIME_MODE"] = "deterministic"
 os.environ["NL2SQL_PERSISTENCE_MODE"] = "memory"
-os.environ["NL2SQL_SELECT_AI_CREDENTIAL_NAME"] = ""
 os.environ["PLATFORM_ORACLE_USER"] = "APP"
 # 業務データの SELECT の間だけ session の時間帯を切り替える経路（#3265）を通すため、
 # 既定（UTC。#3274）ではない時間帯にする。UTC のときに切り替えないことは個別のテストで確かめる。

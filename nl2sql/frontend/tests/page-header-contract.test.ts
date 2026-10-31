@@ -66,26 +66,17 @@ test("refresh 系の完了状態はヘッダー横 badge に残さない", () =>
   }
   assert.match(schemaRefreshPresentationSource, /job\.status === "done"/u);
   assert.match(schemaRefreshPresentationSource, /return null/u);
-  // DB Profile 一覧の再取得の見出しのバッジは実行中だけ。失敗は案内（ページの先頭か保存の結果の直下）が出し、
-  // バッジと 2 か所に出さない（#2034）。
-  assert.match(profileManagementPage, /const headerRefreshStatus = dbProfileRefreshing \?/u);
-  assert.doesNotMatch(profileManagementPage, /headerRefreshStatus === "done"/u);
 });
 
-test("業務プロファイルの schema / DB Profile refresh ボタンは押した側だけを送信の間 loading にする", () => {
-  // どちらも durable job。開始のボタンは押した側だけを送信の間 loading にし、job の間は disabled にするだけ。
+test("業務プロファイルの schema refresh ボタンは押した側だけを送信の間 loading にする", () => {
+  // durable job。開始のボタンは押した側だけを送信の間 loading にし、job の間は disabled にするだけ。
   // 押した側は送信の間ネイティブの disabled にしない（フォーカスを保つ。#355）。job の間のスピナーは進行の表示（#821）。
   assert.match(profileManagementPage, /id: "schema-refresh"/u);
   assert.match(profileManagementPage, /loading: headerSchemaRefreshStarting/u);
   assert.match(profileManagementPage, /disabled: schemaRefreshing && !headerSchemaRefreshStarting/u);
   assert.match(profileManagementPage, /sharedSchemaRefresh\.start\(PROFILE_SCHEMA_REFRESH_HEADER\)/u);
-  assert.match(profileManagementPage, /id: "db-profile-refresh"/u);
-  assert.match(profileManagementPage, /loading: headerDbProfileRefreshStarting/u);
-  assert.match(profileManagementPage, /disabled: dbProfileRefreshBusy && !headerDbProfileRefreshStarting/u);
-  // 案内の「DB Profile 一覧を再取得」は共有の DbProfileListSyncNotice が押した側だけを回す（#2034）。
-  assert.match(profileManagementPage, /<DbProfileListSyncNotice[\s\S]*scope="page"/u);
+  assert.doesNotMatch(profileManagementPage, /id: "db-profile-refresh"|DbProfileListSync/u);
   assert.doesNotMatch(profileManagementPage, /loading: schemaRefreshing/u);
-  assert.doesNotMatch(profileManagementPage, /loading=\{startDbProfileRefresh\.isPending \|\| dbProfileRefreshing\}/u);
 });
 
 test("移行対象ページは共有 PageHeader を使い、旧トップ概覧カードを表示しない", () => {

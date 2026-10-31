@@ -27,7 +27,7 @@ LLM/VLM の接続先は既存の OCI Enterprise AI を維持し、Responses 互�
 
 質問意図の `filters.value` は任意の JSON 型を持つため、wire では `value_json:string` に JSON エンコードし、検証後に元の型へ戻す。`"001"` と `1`、null、配列、object を区別する。外部 API と保存データは従来の `value` のまま。`created_at` はサーバーが生成するため LLM Schema には含めない。
 
-Oracle Select AI は DB 内の生成機構、決定論的 SQL 解析・fallback は非 LLM 処理であり、この HTTP 契約の対象外。OCI Generative AI の embedding/rerank も Responses に置き換えない。別 provider・ベクトル DB は追加しない。
+決定論的 SQL 解析・fallback は非 LLM 処理であり、この HTTP 契約の対象外。OCI Generative AI の embedding/rerank も Responses に置き換えない。別 provider・ベクトル DB は追加しない。
 
 ## 失敗・retry
 

@@ -184,7 +184,7 @@ REQUIRED_BACKEND_ENV_LINES = {
         "RAG_SERVICE_CONTROL_ENABLED=true\n",
     ],
     "nl2sql": [
-        "NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED\n",
+        "NL2SQL_ONTOLOGY_WORKER_MODE=external\n",
     ],
     "agent": [
         "AGENT_RUNTIME_REPOSITORY_BACKEND=${var.agent_runtime_repository_backend}\n",

@@ -25,17 +25,17 @@ backend/                  FastAPI アプリ（uv の venv。pyproject.toml に r
     settings.py           設定（PLATFORM_* は platform/.env、NL2SQL_* は backend/.env）
     api/                  ルーターの集約・health / readiness・problem 応答・run_sync_io（concurrency.py）
     features/nl2sql/      NL2SQL の業務機能（SQL 生成・DB 管理・業務プロファイル・オントロジー・
-                          フィードバック・評価・合成データ・job と worker）
+                          フィードバック・評価・job と worker）
     features/schema/      DB 構造の API
     features/settings/    システム設定の API（platform の pr_system_settings の共通 API ＋
-                          Select AI の資格情報・システムテーブル管理）
+                          システムテーブル管理）
     features/mcp/         他製品（Agent）から呼ぶ MCP（POST /api/mcp）
     security/             権限管理・認可の判定
     clients/              oci_enterprise_ai（LLM/VLM）/ oci_genai（embed・rerank）/ oracle
     cli/                  migration・system schema・各 worker のエントリ
     schemas/              設定 API のスキーマ
   migrations/             Oracle の DDL（番号順）
-  scripts/                実 Oracle / Select AI への手動の接続確認
+  scripts/                実 Oracle / OCI Enterprise AI への手動の接続確認
   tests/                  pytest
 frontend/                 Vite + React Router + Tailwind v4 + 共有 UI
   src/App.tsx             ルート定義

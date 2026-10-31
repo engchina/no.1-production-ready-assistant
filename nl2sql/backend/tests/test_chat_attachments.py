@@ -3,7 +3,7 @@
 - 添付の Excel・CSV のシートを WITH 句の行の表 `ATTACHMENT_<n>` にし、SQL の生成（Enterprise AI
   Direct）に表の名前・列・型・先頭の行を渡す。検証は列の形だけの CTE で、実行は JSON_TABLE と
   CLOB の bind で行い、動的な CREATE TABLE はしない。
-- チャットの送信: 添付を会話に結び付け、ターンに添付の名前を残す。Select AI の方式では止める。
+- チャットの送信: 添付を会話に結び付け、ターンに添付の名前を残す。
 - 業務の表との JOIN は検証を通り、業務プロファイルの外の表は今までどおり止める。
 
 保存は platform のメモリの store、モデルは決定論の fake（合成のデータ）。
@@ -215,17 +215,6 @@ def test_chat_turn_binds_attachments_and_passes_tables_to_generation(
     assert any("attachment_tables:" in context for context in client.contexts)
     assert job.result is not None and job.result.generated_sql.endswith("o.ID")
     assert job.result.safety.is_safe, job.result.safety.blocked_reason
-
-
-def test_select_ai_engine_refuses_attachments(service: ChatAttachmentService) -> None:
-    worker = _worker(_repository())
-    attachment_id = _upload(service)
-    with pytest.raises(ValueError, match="Enterprise AI"):
-        worker.start_job(
-            _chat_request([attachment_id], Nl2SqlEngine.SELECT_AI),
-            actor_user_uuid="user-1",
-            actor_is_system_admin=True,
-        )
 
 
 def test_attachments_of_others_are_not_found(service: ChatAttachmentService) -> None:

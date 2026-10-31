@@ -69,8 +69,6 @@ const STAGE_LABELS: Record<ChatStage, Record<ChatProgressLabelState, string>> = 
 };
 
 const ENGINE_LABELS: Record<Nl2SqlEngine, string> = {
-  select_ai: t("chat.engine.selectAi"),
-  select_ai_agent: t("chat.engine.selectAiAgent"),
   enterprise_ai_direct: t("chat.engine.enterprise"),
 };
 
@@ -161,7 +159,6 @@ function dbAdminCheckDetail(params: ChatProgressParams): string | undefined {
  * - 開始待ち（ジョブの作成から worker が処理を始めるまで）: worker が起動していない・混んでいるときに、生成では
  *   なく開始を待っていることが分かる。
  * - 生成の段階の補足は生成方法、安全性の確認（完了）は参照した表、実行（完了）は取得した行数。
- *   Select AI / Select AI Agent の SQL で省略した安全性の確認（未実行）は省略の理由。
  * - DB 管理チャットの SQL の確認（`db_admin_check`）は安全性の確認と同じ名前で、補足は文の分類ごとの数。
  */
 export const CHAT_PROGRESS_STEP_DEFINITIONS: ChatProgressStepDefinitions = {
@@ -173,13 +170,7 @@ export const CHAT_PROGRESS_STEP_DEFINITIONS: ChatProgressStepDefinitions = {
   },
   safety_check: {
     label: label("safety_check"),
-    detail: (status, params) =>
-      status === "done"
-        ? tablesDetail(params)
-        : // Select AI / Select AI Agent の SQL で省略した（#1523）。
-          status === "skipped" && params.safety_check_skipped === true
-          ? t("chat.progress.safety_check.safetyCheckSkipped")
-          : undefined,
+    detail: (status, params) => (status === "done" ? tablesDetail(params) : undefined),
   },
   db_admin_check: {
     label: label("safety_check"),

@@ -16,7 +16,7 @@ const at = (seconds: number) => new Date(Date.parse(T0) + seconds * 1000).toISOS
 const runningSteps: ChatProgressStep[] = [
   { id: "queue", label: "処理を開始しました", status: "done", startedAt: at(0), finishedAt: at(0.4) },
   { id: "schema", label: "対象の表を調べました", status: "done", startedAt: at(0.4), finishedAt: at(2) },
-  { id: "generate_sql", label: "SQL を生成しています", status: "running", startedAt: at(2), detail: "Select AI" },
+  { id: "generate_sql", label: "SQL を生成しています", status: "running", startedAt: at(2), detail: "Enterprise AI" },
   { id: "safety", label: "安全性を確認します", status: "pending" },
 ];
 
@@ -87,7 +87,7 @@ describe("ChatProgress", () => {
     const current = q("p-current")!;
     expect(current.dataset.stepId).toBe("generate_sql");
     expect(current.textContent).toContain("SQL を生成しています");
-    expect(current.textContent).toContain("（Select AI）");
+    expect(current.textContent).toContain("（Enterprise AI）");
     // 経過時間は処理全体（最初の段階の開始 0 秒）から数える（#1176。段階ごとに 0 へ戻さない）。
     expect(q("p-timer")!.getAttribute("aria-label")).toBe("経過時間 00:05");
     expect(q("p-timer")!.getAttribute("aria-live")).toBe("off");

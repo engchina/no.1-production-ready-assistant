@@ -13,11 +13,9 @@ from fastapi import HTTPException, Request
 from pr_backend_core.api import OffsetParams
 
 from app.features.nl2sql import ontology_router
-from app.features.nl2sql import profile_sync as profile_sync_module
 from app.features.nl2sql import router as nl2sql_router
 from app.features.nl2sql.models import (
     AdminFeedbackReviewRequest,
-    AssetCleanupRequest,
     ClassifierPredictRequest,
     ClassifierTrainingExampleUpdateRequest,
     ClassifierTrainRequest,
@@ -29,8 +27,6 @@ from app.features.nl2sql.models import (
     Nl2SqlEngine,
     Nl2SqlProfile,
     ProfileRecommendationRequest,
-    ProfileSyncJobData,
-    ProfileSyncJobStatus,
 )
 from app.features.nl2sql.ontology_models import (
     ProfileRecommendation,
@@ -178,28 +174,6 @@ class _QualityEvaluationService:
         return self.peek_job(job_id)
 
 
-class _ProfileSyncService:
-    def __init__(self) -> None:
-        self.retried: list[str] = []
-        self.jobs = {
-            "sync-b": ProfileSyncJobData(
-                job_id="sync-b",
-                profile_id="profile-b",
-                status=ProfileSyncJobStatus.FAILED,
-            )
-        }
-
-    def peek(self, job_id: str) -> ProfileSyncJobData | None:
-        return self.jobs.get(job_id)
-
-    def get(self, job_id: str) -> ProfileSyncJobData | None:
-        raise AssertionError("認可前に状態回復を実行してはいけません")
-
-    def retry(self, job_id: str) -> ProfileSyncJobData:
-        self.retried.append(job_id)
-        return self.jobs[job_id]
-
-
 def _classifier_artifact(*classes: str) -> bytes:
     vector = [0.0] * 1536
     payload = {
@@ -230,7 +204,7 @@ def _history_item(history_id: str, profile_id: str) -> HistoryItem:
     return HistoryItem(
         id=history_id,
         question=f"{profile_id} の質問",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT 1 FROM DUAL",
         created_at=datetime(2026, 9, 3, tzinfo=UTC).isoformat(),
         feedback_rating=FeedbackRating.GOOD,
@@ -378,37 +352,6 @@ def test_feedback_write_routes_enforce_profile_access_for_scoped_manager(
     assert cleared.data.history_id == "history-a"
 
 
-def test_select_ai_refresh_and_cleanup_require_default_profile_access(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = SimpleNamespace(
-        refresh_select_ai_profile=lambda _profile_id=None: pytest.fail(
-            "refresh should be blocked before service call"
-        ),
-        refresh_select_ai_agent_assets=lambda _profile_id=None: pytest.fail(
-            "agent refresh should be blocked before service call"
-        ),
-        cleanup_select_ai_assets=lambda **_kwargs: pytest.fail(
-            "cleanup should be blocked before service call"
-        ),
-        cleanup_select_ai_agent_assets_low_level=lambda _req: pytest.fail(
-            "agent cleanup should be blocked before service call"
-        ),
-    )
-    monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
-    request = _request({"profile-a"})
-
-    for call in (
-        lambda: nl2sql_router.refresh_select_ai_profile(request),
-        lambda: nl2sql_router.refresh_select_ai_agent_assets(request),
-        lambda: nl2sql_router.cleanup_select_ai_assets(AssetCleanupRequest(), request),
-        lambda: nl2sql_router.cleanup_select_ai_agent_assets(AssetCleanupRequest(), request),
-    ):
-        with pytest.raises(HTTPException) as exc_info:
-            call()
-        assert exc_info.value.status_code == 403
-
-
 def test_classifier_training_import_delete_and_scores_enforce_profile_access(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -521,23 +464,6 @@ def test_classifier_training_import_delete_and_scores_enforce_profile_access(
     )
     assert recommendation.recommendation_source == "classifier"
     assert set(recommendation.category_scores) == {"profile-a"}
-
-
-def test_oracle_sync_job_routes_enforce_profile_access(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = _ProfileSyncService()
-    monkeypatch.setattr(profile_sync_module, "profile_sync_service", service)
-    request = _request({"profile-a"})
-
-    with pytest.raises(HTTPException) as get_exc:
-        nl2sql_router.get_profile_oracle_sync_job("sync-b", request)
-    with pytest.raises(HTTPException) as retry_exc:
-        nl2sql_router.retry_profile_oracle_sync_job("sync-b", request)
-
-    assert get_exc.value.status_code == 403
-    assert retry_exc.value.status_code == 403
-    assert service.retried == []
 
 
 def test_ontology_profile_recommendation_and_session_routes_enforce_profile_access(

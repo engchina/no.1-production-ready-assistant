@@ -7,7 +7,7 @@ AI Database, form inputs, packaging, and releases), see
 
 This page covers what runs on the NL2SQL Compute instance and how to operate it.
 The Resource Manager inputs for NL2SQL are prefixed with `nl2sql_`
-(for example `nl2sql_select_ai_region`). The configuration administrator
+(for example `nl2sql_application_url`). The configuration administrator
 password `app_admin_login_user_password` (login user ID `system_admin`) is shared
 with RAG.
 
@@ -61,21 +61,6 @@ values supplied in Resource Manager, written to `platform/.env`:
 - `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin`
 - `PLATFORM_ADMIN_LOGIN_USER_PASSWORD`
 
-The stack reserves a fixed Oracle Select AI credential name and the default
-Select AI region:
-
-- `NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED`
-- `NL2SQL_SELECT_AI_REGION=us-chicago-1`
-
-After deployment, open `運用設定 > Select AI Credential`.
-The administrator explicitly creates `NL2SQL_OCI_CRED` for the current Oracle schema
-from the server-side OCI config signing key. The private key is passed to
-`DBMS_CLOUD.CREATE_CREDENTIAL` only as an Oracle bind variable; Terraform,
-browser responses, and persisted application settings never receive it. An
-existing credential is not overwritten automatically and requires the explicit
-recreate confirmation flow. Historical Profile sync jobs are not retried
-automatically after credential creation.
-
 This configured administrator is independent from the database connection user,
 does not read from `PLATFORM_USERS`, and does not require the auth/RBAC tables
 to exist. Application-local users are checked from `PLATFORM_USERS`. The
@@ -104,22 +89,17 @@ HTTP を使うローカルの構成では `platform_environment=local` を明示
 
 ## Updating an Existing Compute Deployment
 
-### Renaming the Select AI credential to `NL2SQL_OCI_CRED` (#1712)
+### SQL generation by OCI Enterprise AI only (#7)
 
-The Select AI credential is now named `NL2SQL_OCI_CRED` so that it follows the
-database object prefix rule and does not collide with an `OCI_CRED` owned by
-another application in the same schema. The backend no longer uses the old
-name. After updating an instance whose credential is still `OCI_CRED`:
-
-1. Open `運用設定 > Select AI Credential` as an administrator and create the
-   credential. The screen shows `NL2SQL_OCI_CRED` as missing; creating it also
-   writes `NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED` to `backend/.env`.
-   (Alternatively, set that value in `backend/.env` yourself and restart the
-   backend before creating the credential.)
-2. Run the Oracle 反映 (Profile sync) again for each business profile so that
-   the `DBMS_CLOUD_AI` profiles reference `NL2SQL_OCI_CRED`.
-3. Only if no other application in the schema uses it, drop the old credential
-   with `BEGIN DBMS_CLOUD.DROP_CREDENTIAL('OCI_CRED'); END;`.
+NL2SQL now generates SQL only by calling OCI Enterprise AI directly
+(`enterprise_ai_direct`). The update does not drop the database-side AI
+profiles, agent assets, or the `NL2SQL_OCI_CRED` credential that earlier
+versions may have created in the application schema; drop them manually only if
+no other application uses them (for example
+`BEGIN DBMS_CLOUD.DROP_CREDENTIAL('NL2SQL_OCI_CRED'); END;`). Old
+`NL2SQL_*` keys for the removed engine in `backend/.env` are ignored, and
+`init_script.sh` stops and removes the worker unit of the removed data
+generation feature if it is still installed.
 
 ### Moving to the shared `platform/.env` (#211)
 

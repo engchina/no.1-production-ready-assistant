@@ -11,23 +11,6 @@ import {
 
 test.beforeEach(async ({ page }) => mockDatabaseGateReady(page));
 
-async function expectButtonsSameHeight(primary: Locator, secondary: Locator) {
-  await expect(primary).toBeVisible();
-  await expect(secondary).toBeVisible();
-  await expect
-    .poll(async () => {
-      const [primaryBox, secondaryBox] = await Promise.all([
-        primary.boundingBox(),
-        secondary.boundingBox(),
-      ]);
-      if (!primaryBox || !secondaryBox) {
-        return Number.POSITIVE_INFINITY;
-      }
-      return Math.abs(primaryBox.height - secondaryBox.height);
-    })
-    .toBeLessThanOrEqual(1);
-}
-
 async function fulfillJson(route: Route, data: unknown) {
   await route.fulfill({
     status: 200,
@@ -35,20 +18,6 @@ async function fulfillJson(route: Route, data: unknown) {
     body: JSON.stringify({ data }),
   });
 }
-
-const selectAiConfig = {
-  profile_name: "NL2SQL_DEFAULT_PROFILE",
-  region: "ap-osaka-1",
-  model: "cohere.command-r-plus",
-  embedding_model: "cohere.embed-v4.0",
-  max_tokens: 32000,
-  enforce_object_list: true,
-  comments: true,
-  annotations: false,
-  constraints: false,
-  role: "既定の Oracle SQL アシスタント",
-  additional_instructions: "金額は円単位で表示する。",
-};
 
 const schemaCatalog = {
   refreshed_at: "2026-06-21T10:00:00.000Z",
@@ -115,48 +84,9 @@ const profiles = [
     default_row_limit: 100,
     safety_policy: "select_only",
     few_shot_examples: [],
-    select_ai_config: selectAiConfig,
     archived: false,
   },
 ];
-
-const dbProfiles = {
-  runtime: "deterministic",
-  profiles: [
-    {
-      name: "NL2SQL_DEFAULT_PROFILE",
-      status: "ready",
-      owner: "APP",
-      created_at: "2026-06-21T10:00:00.000Z",
-      description: "既定プロファイル",
-      category: "既定プロファイル",
-      object_list: [
-        { owner: "APP", name: "TABLE_01" },
-        { owner: "APP", name: "VIEW_02" },
-      ],
-      tables: ["APP.TABLE_01"],
-      views: ["APP.VIEW_02"],
-      region: "ap-osaka-1",
-      model: "cohere.command-r-plus",
-      embedding_model: "cohere.embed-v4.0",
-      schema_text: "",
-      context_ddl: "",
-      attributes: {
-        provider: "oci",
-        region: "ap-osaka-1",
-        model: "cohere.command-r-plus",
-        embedding_model: "cohere.embed-v4.0",
-        role: "既定の Oracle SQL アシスタント",
-        additional_instructions: "金額は円単位で表示する。",
-        object_list: [
-          { owner: "APP", name: "TABLE_01" },
-          { owner: "APP", name: "VIEW_02" },
-        ],
-      },
-    },
-  ],
-  warnings: [],
-};
 
 type MockDbObjectSummary = {
   name: string;
@@ -258,22 +188,10 @@ async function mockProfileApi(
     tableItems?: MockDbObjectSummary[];
     viewItems?: MockDbObjectSummary[];
     profileItems?: typeof profiles;
-    dbProfileData?: typeof dbProfiles;
     schemaObjectTotals?: Partial<Record<"TABLE" | "VIEW", number>>;
     profileSearchTotal?: number;
   } = {}
 ) {
-  await page.route("**/api/settings/database/select-ai-credential", (route) =>
-    fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "us-chicago-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: null,
-    })
-  );
   const tableItems = options.tableItems ?? [
     { name: "TABLE_01", owner: "APP", object_type: "TABLE", row_count: null, comment: "table" },
     { name: "SYS$AUDIT", owner: "SYS", object_type: "TABLE", row_count: null, comment: "system" },
@@ -371,10 +289,6 @@ async function mockProfileApi(
       warnings: [],
     })
   );
-  await page.route(
-    "**/api/nl2sql/select-ai/db-profiles?business_profiles_only=true&include_archived_business_profiles=true",
-    (route) => fulfillJson(route, options.dbProfileData ?? dbProfiles)
-  );
   await page.route("**/api/nl2sql/profiles", async (route) => {
     if (route.request().method() === "GET") {
       await fulfillJson(route, profileItems);
@@ -439,44 +353,6 @@ async function mockProfileApi(
       published_revision: null,
       draft_etag: "",
       published_at: null,
-    })
-  );
-  await page.route("**/api/nl2sql/profiles/*/oracle-sync-jobs", (route) =>
-    fulfillJson(route, {
-      job_id: "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:00Z",
-    })
-  );
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", (route) =>
-    fulfillJson(route, {
-      job_id: "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "succeeded",
-      phase: "succeeded",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:00Z",
-      finished_at: "2026-07-22T00:00:01Z",
-      oracle_result: {
-        runtime: "oracle",
-        executed: true,
-        status: "saved",
-        profile_name: "NL2SQL_DEFAULT_PROFILE",
-        original_name: "",
-        ddl: [],
-        profile: dbProfiles.profiles[0],
-        warnings: [],
-        engine_meta: {},
-      },
     })
   );
 }
@@ -793,9 +669,6 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
   let profileSearchRequests = 0;
   let schemaRefreshSubmissions = 0;
   let schemaRefreshPolls = 0;
-  let dbProfileRefreshSubmissions = 0;
-  let dbProfileRefreshPolls = 0;
-  let dbProfileRefreshCanComplete = false;
 
   page.on("request", (request) => {
     if (
@@ -840,55 +713,10 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
       error_code: "",
     });
   });
-  await page.route("**/api/nl2sql/select-ai/db-profiles/refresh-jobs", async (route) => {
-    dbProfileRefreshSubmissions += 1;
-    await fulfillJson(route, {
-      job_id: "profile-db-profile-refresh",
-      status: "pending",
-      mode: "full",
-      source: "manual",
-      target_profiles: [],
-      requires_full_refresh: false,
-      phase: "queued",
-      created_at: "2026-07-23T00:00:01Z",
-      total_profiles: 0,
-      processed_profiles: 0,
-      scanned_profiles: 0,
-      changed_profiles: 0,
-      deleted_profiles: 0,
-      error_code: "",
-      error_message: "",
-    });
-  });
-  await page.route("**/api/nl2sql/select-ai/db-profile-refresh-jobs/profile-db-profile-refresh", async (route) => {
-    dbProfileRefreshPolls += 1;
-    const done = dbProfileRefreshCanComplete && dbProfileRefreshPolls >= 2;
-    await fulfillJson(route, {
-      job_id: "profile-db-profile-refresh",
-      status: done ? "done" : "running",
-      mode: "full",
-      source: "manual",
-      target_profiles: [],
-      requires_full_refresh: false,
-      phase: done ? "done" : "fetching",
-      created_at: "2026-07-23T00:00:01Z",
-      started_at: "2026-07-23T00:00:01Z",
-      finished_at: done ? "2026-07-23T00:00:02Z" : null,
-      total_profiles: 2,
-      processed_profiles: done ? 2 : 1,
-      scanned_profiles: done ? 2 : 1,
-      changed_profiles: done ? 1 : 0,
-      deleted_profiles: 0,
-      error_code: "",
-      error_message: "",
-    });
-  });
-
   await page.goto("/profiles");
 
   await expect(page.getByRole("region", { name: "業務プロファイル状態" })).toHaveCount(0);
   await expect(page.getByText("許可オブジェクト", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Oracle Profile", { exact: true })).toHaveCount(0);
 
   const actions = page.getByTestId("profile-management-actions");
   // 共有 PageHeader(@production-ready/ui)の並び順は danger → utility → secondary → primary(主操作が右端、
@@ -912,13 +740,10 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
     await expect(menu.getByRole("menuitem")).toHaveText([
       "最新情報を取得",
       "DB 構造を再取得",
-      "DB Profile 一覧を再取得",
     ]);
     await expect(menu.getByRole("menuitem", { name: "最新情報を取得" })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: "DB 構造を再取得" })).toBeFocused();
-    await page.keyboard.press("End");
-    await expect(menu.getByRole("menuitem", { name: "DB Profile 一覧を再取得" })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: "最新情報を取得" })).toBeFocused();
     await page.keyboard.press("Escape");
@@ -941,22 +766,6 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
     await expect(page.getByText(/DB 構造(再取得|差分同期): 完了/)).toHaveCount(0);
     await expect(menu.getByRole("menuitem", { name: "DB 構造を再取得" })).toBeEnabled();
 
-    await menu.getByRole("menuitem", { name: "DB Profile 一覧を再取得" }).click();
-    await expect.poll(() => dbProfileRefreshSubmissions).toBe(1);
-    const headerStatus = page.locator('header [data-page-header-status="true"]');
-    await expect(headerStatus).toContainText(/DB Profile 一覧更新: (待機中|実行中)/);
-    await expect(page.getByTestId("profile-management-workspace-processing")).toContainText(
-      "DB Profile 一覧を再取得しています"
-    );
-    await moreButton.click();
-    await expect(menu.getByRole("menuitem", { name: "DB Profile 一覧を再取得" })).toBeDisabled();
-    await page.keyboard.press("Escape");
-    // job の間のスピナーは一覧の上の進行の表示の 1 つだけ（#821）。
-    await expectSingleSpinner(page, page.getByTestId("profile-management-workspace-processing"));
-    dbProfileRefreshCanComplete = true;
-    await expect.poll(() => dbProfileRefreshPolls).toBeGreaterThanOrEqual(2);
-    await expect(page.getByText("DB Profile 一覧更新: 完了", { exact: true })).toHaveCount(0);
-    await expect(headerStatus).toHaveCount(0);
   } else {
     const actionButtons = actions.getByRole("button");
     const refreshButton = actions.getByRole("button", { name: "最新情報を取得", exact: true });
@@ -964,47 +773,37 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
       name: "DB 構造を再取得",
       exact: true,
     });
-    const dbProfileRefreshButton = actions.getByRole("button", {
-      name: "DB Profile 一覧を再取得",
-      exact: true,
-    });
 
     await expect(actionButtons).toHaveText([
       "最新情報を取得",
       "DB 構造を再取得",
-      "DB Profile 一覧を再取得",
       "新規作成",
     ]);
     // 更新系は utility。共有 PageHeader は utility を secondary と同じ枠付きの見た目で描く（UX 契約 buttons.md §5）。
-    for (const button of [refreshButton, schemaRefreshButton, dbProfileRefreshButton]) {
+    for (const button of [refreshButton, schemaRefreshButton]) {
       await expect(button).toHaveClass(/\bborder-border-control\b/);
       await expect(button).toHaveClass(/\bbg-surface\b/);
       await expect(button).not.toHaveClass(/\bbg-transparent\b/);
     }
 
-    const [createBox, refreshBox, schemaRefreshBox, dbProfileRefreshBox] = await Promise.all([
+    const [createBox, refreshBox, schemaRefreshBox] = await Promise.all([
       createButton.boundingBox(),
       refreshButton.boundingBox(),
       schemaRefreshButton.boundingBox(),
-      dbProfileRefreshButton.boundingBox(),
     ]);
     expect(createBox).not.toBeNull();
     expect(refreshBox).not.toBeNull();
     expect(schemaRefreshBox).not.toBeNull();
-    expect(dbProfileRefreshBox).not.toBeNull();
     const visuallyAfter = (
       previous: NonNullable<typeof createBox>,
       next: NonNullable<typeof createBox>
     ) => next.y > previous.y + previous.height / 2 || next.x > previous.x;
     expect(visuallyAfter(refreshBox!, schemaRefreshBox!)).toBe(true);
-    expect(visuallyAfter(schemaRefreshBox!, dbProfileRefreshBox!)).toBe(true);
-    expect(visuallyAfter(dbProfileRefreshBox!, createBox!)).toBe(true);
+    expect(visuallyAfter(schemaRefreshBox!, createBox!)).toBe(true);
 
     await refreshButton.focus();
     await page.keyboard.press("Tab");
     await expect(schemaRefreshButton).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(dbProfileRefreshButton).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(createButton).toBeFocused();
 
@@ -1021,21 +820,6 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
     await expect(page.getByText(/DB 構造(再取得|差分同期): 完了/)).toHaveCount(0);
     await expect(schemaRefreshButton).toBeEnabled();
 
-    await dbProfileRefreshButton.click();
-    await expect.poll(() => dbProfileRefreshSubmissions).toBe(1);
-    const headerStatus = page.locator('header [data-page-header-status="true"]');
-    await expect(headerStatus).toContainText(/DB Profile 一覧更新: (待機中|実行中)/);
-    await expect(page.getByTestId("profile-management-workspace-processing")).toContainText(
-      "DB Profile 一覧を再取得しています"
-    );
-    await expect(dbProfileRefreshButton).toBeDisabled();
-    // job の間は押したボタンも回さず無効にするだけ。スピナーは一覧の上の進行の表示の 1 つだけ（#821）。
-    await expect(dbProfileRefreshButton).not.toHaveAttribute("aria-busy", "true");
-    await expectSingleSpinner(page, page.getByTestId("profile-management-workspace-processing"));
-    dbProfileRefreshCanComplete = true;
-    await expect.poll(() => dbProfileRefreshPolls).toBeGreaterThanOrEqual(2);
-    await expect(page.getByText("DB Profile 一覧更新: 完了", { exact: true })).toHaveCount(0);
-    await expect(headerStatus).toHaveCount(0);
   }
 
   const viewportWidth = await page.evaluate(() => ({
@@ -1047,32 +831,17 @@ test("業務プロファイルの更新操作はテーブル管理と同じ文�
 
 test("業務プロファイルは表とビューを固定高リストで管理できる", { tag: "@responsive" }, async ({ page }) => {
   let savedPayload: Record<string, unknown> | null = null;
-  let oracleSyncPayload: Record<string, unknown> | null = null;
   await mockProfileApi(page);
   await page.route("**/api/nl2sql/profiles/default**", async (route) => {
     if (route.request().url().includes("/ontology-view")) {
       await route.fallback();
       return;
     }
-    // Oracle 反映の job の終了後に詳細を取り直す（GET。#963）ので、保存の本文は PATCH だけから取る。
+    // 保存の本文は PATCH だけから取る（GET は詳細の取り直し）。
     if (route.request().method() === "PATCH") {
       savedPayload = route.request().postDataJSON() as Record<string, unknown>;
     }
     await fulfillJson(route, { ...profiles[0], ...savedPayload, id: "default" });
-  });
-  await page.route("**/api/nl2sql/profiles/default/oracle-sync-jobs", async (route) => {
-    oracleSyncPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await fulfillJson(route, {
-      job_id: "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:00Z",
-    });
   });
 
   await page.goto("/profiles");
@@ -1110,8 +879,8 @@ test("業務プロファイルは表とビューを固定高リストで管理�
   await expect(page.getByRole("textbox", { name: "語彙・同義語" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "few-shot 例" })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "SQL ルール" })).toHaveCount(0);
-  await expect(page.locator("#profile-select-ai")).toBeVisible();
-  await expect(page.locator("#profile-select-ai-additional-instructions")).toBeVisible();
+  await expect(page.locator("#profile-sql-rules")).toBeVisible();
+  await expect(page.locator("#profile-sql-rules-input")).toBeVisible();
 
   // 対象オブジェクト選択はタブなしで常時表示される
   const tableList = page.getByTestId("profile-allowed-table-list");
@@ -1224,64 +993,29 @@ test("業務プロファイルは表とビューを固定高リストで管理�
 
   await tableList.getByLabel("APP.TABLE_03").check();
   await viewList.getByLabel("APP.VIEW_04").check();
-  const roleField = page.getByLabel("アシスタントロール");
   const instructionsField = page.getByLabel("追加指示", { exact: true });
-  const roleBox = await roleField.boundingBox();
-  const instructionsBox = await instructionsField.boundingBox();
-  expect(roleBox?.height).toBe(instructionsBox?.height);
+  await expect(instructionsField).toHaveValue("SELECT のみ");
   const nameField = page.getByLabel("名称");
   await nameField.fill("sales_profile");
   await expect(nameField).toHaveValue("SALES_PROFILE");
-  await roleField.fill("財務分析向け Oracle SQL アシスタント");
-  await instructionsField.fill("日付は DATE 型で返す。");
-  // ADMIN_EXECUTE ゲートを満たすと保存ボタンが有効になり、Oracle 反映 job を投入する。
+  await instructionsField.fill("日付は DATE 型で返す。\n日付は DATE 型で返す。\n金額は円単位で表示する。");
+  // 保存に確認語は要らない（業務プロファイルの表への保存だけ）。
   const saveButton = page.getByRole("button", { name: "保存", exact: true });
-  await expect(saveButton).toBeDisabled();
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
-  // 業務プロファイルの保存後はすぐに解除され、Oracle 反映は polling で完了を受け取る。
-  const saveProgress = page.getByTestId("profile-save-progress");
-  await expect(saveProgress).toHaveAttribute("data-job-status", "succeeded");
-  await expect(page.getByTestId("profile-save-step-save_profile")).toHaveAttribute(
-    "data-step-status",
-    "done"
-  );
-  await expect(page.getByTestId("profile-save-step-rebuild_agent_assets")).toHaveAttribute(
-    "data-step-status",
-    "skipped"
-  );
-  await expect(page.getByTestId("profile-oracle-result")).toHaveCount(0);
+  await expect(page.getByText("業務プロファイルを保存しました。", { exact: true })).toBeVisible();
   const payload = savedPayload as {
     name: string;
     allowed_tables: string[];
     allowed_views: string[];
-    select_ai_config: Record<string, unknown>;
   } | null;
   expect(payload?.name).toBe("SALES_PROFILE");
   expect(payload?.allowed_tables).toEqual(["APP.TABLE_01", "APP.TABLE_03"]);
   expect(payload?.allowed_views).toEqual(["APP.VIEW_02", "APP.VIEW_04"]);
-  expect(payload).toHaveProperty("sql_rules", []);
-  expect(payload?.select_ai_config).toMatchObject({
-    profile_name: "SALES_PROFILE",
-    embedding_model: "cohere.embed-v4.0",
-    enforce_object_list: true,
-    role: "財務分析向け Oracle SQL アシスタント",
-    additional_instructions: "日付は DATE 型で返す。",
-  });
-  expect(payload?.select_ai_config).not.toHaveProperty("seed");
-
-  expect(oracleSyncPayload).toMatchObject({
-    confirmation: "ADMIN_EXECUTE",
-    reason: "ui-profile-management-save",
-    rebuild_agent_assets: false,
-  });
-  expect(oracleSyncPayload).not.toHaveProperty("execute");
+  // ルールは 1 行 1 件で、空行と重複を除いて保存する。
+  expect(payload).toHaveProperty("sql_rules", ["日付は DATE 型で返す。", "金額は円単位で表示する。"]);
 
   await page.setViewportSize({ width: 375, height: 900 });
-  const mobileRoleBox = await roleField.boundingBox();
-  const mobileInstructionsBox = await instructionsField.boundingBox();
-  expect(mobileRoleBox?.height).toBe(mobileInstructionsBox?.height);
   const [mobileToolbarBox, mobileSearchBox] = await Promise.all([
     objectSearchToolbar.boundingBox(),
     objectSearch.boundingBox(),
@@ -1297,524 +1031,6 @@ test("業務プロファイルは表とビューを固定高リストで管理�
   expect(bodyWidth.scrollWidth).toBeLessThanOrEqual(bodyWidth.clientWidth + 1);
 });
 
-test("Oracle 反映失敗を明示し Ontology に触れず再試行できる", async ({ page }) => {
-  await mockProfileApi(page);
-  let ontologyRequests = 0;
-  let retryCalls = 0;
-  let retried = false;
-  page.on("request", (request) => {
-    if (request.url().includes("/ontology-view")) ontologyRequests += 1;
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*/retry", async (route) => {
-    retryCalls += 1;
-    retried = true;
-    await fulfillJson(route, {
-      job_id: "profile-sync-retry",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      retry_of_job_id: "profile-sync-default",
-      created_at: "2026-07-22T00:00:02Z",
-    });
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", async (route) => {
-    await fulfillJson(route, {
-      job_id: retried ? "profile-sync-retry" : "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: retried ? "succeeded" : "failed",
-      phase: retried ? "succeeded" : "failed",
-      rebuild_agent_assets: false,
-      error_code: retried ? "" : "ORACLE_TIMEOUT",
-      error_message_ja: retried ? "" : "Oracle 呼出しが 120 秒でタイムアウトしました。",
-      created_at: "2026-07-22T00:00:00Z",
-      finished_at: "2026-07-22T00:00:01Z",
-      oracle_result: retried
-        ? {
-            runtime: "oracle",
-            executed: true,
-            status: "saved",
-            profile_name: "NL2SQL_DEFAULT_PROFILE",
-            original_name: "",
-            ddl: [],
-            profile: dbProfiles.profiles[0],
-            warnings: [],
-            engine_meta: {},
-          }
-        : null,
-    });
-  });
-
-  await page.goto("/profiles");
-  const profileRow = page.getByRole("row").filter({ hasText: "既定プロファイル" });
-  await profileRow.locator("td").nth(1).click();
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  const save = page.getByRole("button", { name: "保存", exact: true });
-  await save.click();
-  // 保存が通ると実行確認語はクリアされ、破壊的操作のゲートが再武装する。
-  await expect(page.getByLabel("実行確認語")).toHaveValue("");
-  await expect(save).toBeDisabled();
-
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toContainText(
-    "業務プロファイルは保存されましたが、Oracle 反映に失敗しました。"
-  );
-  await expect(status).toContainText("Oracle 呼出しが 120 秒でタイムアウトしました。");
-  await expect(page.getByTestId("profile-save-step-save_profile")).toHaveAttribute(
-    "data-step-status",
-    "done"
-  );
-  await expect(page.getByTestId("profile-save-step-sync_oracle_profile")).toHaveAttribute(
-    "data-step-status",
-    "error"
-  );
-  expect(ontologyRequests).toBe(0);
-
-  const retry = status.getByRole("button", { name: "Oracle 反映を再試行" });
-  await retry.focus();
-  await expect(retry).toBeFocused();
-  await page.keyboard.press("Enter");
-
-  await expect(status).toHaveAttribute("data-job-status", "succeeded");
-  expect(retryCalls).toBe(1);
-  expect(ontologyRequests).toBe(0);
-});
-
-test("Oracle 反映の再起動・期限切れを表示して明示的に再試行できる", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  let ontologyRequests = 0;
-  let retryCalls = 0;
-  let retried = false;
-  page.on("request", (request) => {
-    if (request.url().includes("/ontology-view")) ontologyRequests += 1;
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*/retry", async (route) => {
-    retryCalls += 1;
-    retried = true;
-    await fulfillJson(route, {
-      job_id: "profile-sync-retry",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      retry_of_job_id: "profile-sync-default",
-      created_at: "2026-07-22T00:00:02Z",
-    });
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", async (route) => {
-    await fulfillJson(route, {
-      job_id: retried ? "profile-sync-retry" : "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: retried ? "succeeded" : "failed",
-      phase: retried ? "succeeded" : "failed",
-      rebuild_agent_assets: false,
-      error_code: retried ? "" : "PROFILE_SYNC_TIMEOUT",
-      error_message_ja: retried ? "" : "Oracle 反映の実行期限を超えました。反映済みの可能性があるため、Oracle Profile と Agent の状態を確認してから再試行してください。",
-      created_at: "2026-07-22T00:00:00Z",
-      finished_at: "2026-07-22T00:00:01Z",
-      oracle_result: retried
-        ? {
-            runtime: "oracle",
-            executed: true,
-            status: "saved",
-            profile_name: "NL2SQL_DEFAULT_PROFILE",
-            original_name: "",
-            ddl: [],
-            profile: dbProfiles.profiles[0],
-            warnings: [],
-            engine_meta: {},
-          }
-        : null,
-    });
-  });
-
-  await page.goto("/profiles");
-  const profileRow = page.getByRole("row").filter({ hasText: "既定プロファイル" });
-  await profileRow.locator("td").nth(1).click();
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  const save = page.getByRole("button", { name: "保存", exact: true });
-  await save.click();
-  // 保存が通ると実行確認語はクリアされ、破壊的操作のゲートが再武装する。
-  await expect(page.getByLabel("実行確認語")).toHaveValue("");
-  await expect(save).toBeDisabled();
-
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toContainText(
-    "業務プロファイルは保存されましたが、Oracle 反映に失敗しました。"
-  );
-  await expect(status).toContainText("Oracle 反映の実行期限を超えました。反映済みの可能性があるため、Oracle Profile と Agent の状態を確認してから再試行してください。");
-  await expect(page.getByTestId("profile-save-step-save_profile")).toHaveAttribute(
-    "data-step-status",
-    "done"
-  );
-  await expect(page.getByTestId("profile-save-step-sync_oracle_profile")).toHaveAttribute(
-    "data-step-status",
-    "error"
-  );
-  expect(ontologyRequests).toBe(0);
-
-  const retry = status.getByRole("button", { name: "Oracle 反映を再試行" });
-  for (const width of (testInfo.project.name === "desktop" ? [1280, 1920] : [375])) {
-    await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await retry.focus();
-      await expect(retry).toBeFocused();
-      await page.screenshot({ path: testInfo.outputPath(`profile-sync-recovery-${width}-${theme}.png`) });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    }
-  }
-  expect(retryCalls).toBe(0);
-  await retry.focus();
-  await expect(retry).toBeFocused();
-  await page.keyboard.press("Enter");
-
-  await expect(status).toHaveAttribute("data-job-status", "succeeded");
-  expect(retryCalls).toBe(1);
-  expect(ontologyRequests).toBe(0);
-});
-
-
-test("新規保存直後の Oracle 反映再試行は保存時の確認語を再利用する", async ({ page }) => {
-  await mockProfileApi(page);
-  const savedProfile = {
-    ...profiles[0],
-    id: "sales-profile",
-    name: "SALES_PROFILE",
-    category: "販売",
-    allowed_tables: [],
-    allowed_views: [],
-    select_ai_config: {
-      ...selectAiConfig,
-      profile_name: "SALES_PROFILE",
-      model: "xai.grok-4.6",
-      constraints: true,
-    },
-    etag: "etag-sales-profile",
-  };
-  const syncSubmissions: Record<string, unknown>[] = [];
-  let savedPayload: Record<string, unknown> | undefined;
-
-  await page.route("**/api/nl2sql/profiles", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-    savedPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await fulfillJson(route, savedProfile);
-  });
-  await page.route("**/api/nl2sql/profiles/sales-profile", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, savedProfile);
-  });
-  await page.route("**/api/nl2sql/profiles/sales-profile/oracle-sync-jobs", async (route) => {
-    syncSubmissions.push(route.request().postDataJSON() as Record<string, unknown>);
-    if (syncSubmissions.length === 1) {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ detail: "Oracle Profile 同期を受付できませんでした。" }),
-      });
-      return;
-    }
-    await fulfillJson(route, {
-      job_id: "profile-sync-sales-retry",
-      profile_id: "sales-profile",
-      profile_etag: "etag-sales-profile",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:03Z",
-    });
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/profile-sync-sales-retry", async (route) => {
-    await fulfillJson(route, {
-      job_id: "profile-sync-sales-retry",
-      profile_id: "sales-profile",
-      profile_etag: "etag-sales-profile",
-      status: "succeeded",
-      phase: "succeeded",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:03Z",
-      finished_at: "2026-07-22T00:00:04Z",
-      oracle_result: {
-        runtime: "oracle",
-        executed: true,
-        status: "saved",
-        profile_name: "SALES_PROFILE",
-        original_name: "",
-        ddl: [],
-        profile: {
-          ...dbProfiles.profiles[0],
-          name: "SALES_PROFILE",
-        },
-        warnings: [],
-        engine_meta: {},
-      },
-    });
-  });
-
-  await page.goto("/profiles");
-  await page.getByRole("button", { name: "新規作成", exact: true }).click();
-  await page.getByLabel("名称").fill("sales_profile");
-  await page.getByLabel("カテゴリ").fill("販売");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-
-  await expect(page).toHaveURL(/profile=sales-profile/);
-  expect(savedPayload?.select_ai_config).toMatchObject({
-    model: "xai.grok-4.6",
-    constraints: true,
-  });
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toHaveAttribute("data-job-status", "submission_failed");
-  await expect(status).toContainText(
-    "業務プロファイルは保存されましたが、Oracle 反映を開始できませんでした。"
-  );
-  await expect(page.getByLabel("実行確認語")).toHaveValue("");
-
-  await status.getByRole("button", { name: "Oracle 反映を再試行" }).click();
-
-  await expect(status).toHaveAttribute("data-job-status", "succeeded");
-  expect(syncSubmissions).toHaveLength(2);
-  expect(syncSubmissions[0]).toMatchObject({
-    confirmation: "ADMIN_EXECUTE",
-    reason: "ui-profile-management-save",
-  });
-  expect(syncSubmissions[1]).toMatchObject({
-    confirmation: "ADMIN_EXECUTE",
-    reason: "ui-profile-management-retry",
-  });
-});
-
-test("新規作成の最初の保存で、保存・Oracle 反映の経過を出し、Agent アセットの再構築まで最後まで追跡する (#1784)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  const createdProfile = {
-    ...profiles[0],
-    id: "created-profile",
-    name: "CREATED_PROFILE",
-    category: "販売",
-    allowed_tables: [],
-    allowed_views: [],
-    rebuild_agent_assets_on_save: true,
-    select_ai_config: { ...selectAiConfig, profile_name: "CREATED_PROFILE" },
-    etag: "etag-created-profile",
-  };
-  let profileCreates = 0;
-  const syncSubmissions: Record<string, unknown>[] = [];
-  let jobPolls = 0;
-  await page.route("**/api/nl2sql/profiles", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-    profileCreates += 1;
-    await fulfillJson(route, createdProfile);
-  });
-  await page.route("**/api/nl2sql/profiles/created-profile", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, createdProfile);
-  });
-  const job = {
-    job_id: "profile-sync-created",
-    profile_id: "created-profile",
-    profile_etag: "etag-created-profile",
-    rebuild_agent_assets: true,
-    error_code: "",
-    error_message_ja: "",
-    created_at: "2026-10-14T00:00:00Z",
-    started_at: "2026-10-14T00:00:00Z",
-  };
-  await page.route("**/api/nl2sql/profiles/created-profile/oracle-sync-jobs", async (route) => {
-    syncSubmissions.push(route.request().postDataJSON() as Record<string, unknown>);
-    // 実 backend と同じく、ジョブの開始の応答は、画面が作成した業務プロファイル（?profile=<ID>）の
-    // 編集に切り替わった後に届く順序にする（切り替えの後は削除の操作が出る）。
-    await page.waitForURL(/profile=created-profile/);
-    await page.getByTestId("profile-editor-actions").waitFor();
-    await fulfillJson(route, { ...job, status: "queued", phase: "queued" });
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/profile-sync-created", async (route) => {
-    jobPolls += 1;
-    const phases = ["syncing_oracle_profile", "rebuilding_agent_assets", "verifying"] as const;
-    if (jobPolls <= phases.length) {
-      await fulfillJson(route, { ...job, status: "running", phase: phases[jobPolls - 1] });
-      return;
-    }
-    await fulfillJson(route, {
-      ...job,
-      status: "succeeded",
-      phase: "succeeded",
-      finished_at: "2026-10-14T00:00:05Z",
-      oracle_result: {
-        runtime: "oracle",
-        executed: true,
-        status: "saved",
-        profile_name: "CREATED_PROFILE",
-        original_name: "",
-        ddl: [],
-        profile: { ...dbProfiles.profiles[0], name: "CREATED_PROFILE" },
-        warnings: [],
-        engine_meta: {},
-      },
-    });
-  });
-
-  await page.goto("/profiles?profile=new");
-  await page.getByLabel("名称").fill("created_profile");
-  await page.getByLabel("カテゴリ").fill("販売");
-  await page
-    .getByRole("checkbox", { name: "保存時に Select AI Agent アセット(tool / agent / task / team)も再構築する" })
-    .check();
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-
-  await expect(page).toHaveURL(/profile=created-profile/);
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toBeVisible();
-  await expect(status).toContainText("業務プロファイル保存・Oracle反映");
-  await expect(page.getByTestId("profile-save-step-rebuild_agent_assets")).toBeVisible();
-  await expect(status).toHaveAttribute("data-job-status", "succeeded", { timeout: 15_000 });
-  for (const step of ["save_profile", "sync_oracle_profile", "rebuild_agent_assets", "verify"]) {
-    await expect(page.getByTestId(`profile-save-step-${step}`)).toHaveAttribute("data-step-status", "done");
-  }
-  await expect(page.getByTestId("profile-save-error")).toHaveCount(0);
-  expect(profileCreates).toBe(1);
-  expect(syncSubmissions).toHaveLength(1);
-  expect(syncSubmissions[0]).toMatchObject({
-    confirmation: "ADMIN_EXECUTE",
-    reason: "ui-profile-management-save",
-    rebuild_agent_assets: true,
-  });
-  // 実行中の 3 工程を経てから成功を受け取るまで、ジョブを取り続けた。
-  expect(jobPolls).toBeGreaterThan(3);
-  await status.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: testInfo.outputPath(`profile-create-first-save-${testInfo.project.name}.png`),
-    fullPage: false,
-  });
-});
-
-test("Credential が Osaka でも新規 Region は Chicago で未編集の破棄確認を出さない", async ({
-  page,
-}) => {
-  await mockProfileApi(page);
-  await page.route("**/api/settings/database/select-ai-credential", (route) =>
-    fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: true,
-      region: "ap-osaka-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: null,
-    })
-  );
-
-  await page.goto("/profiles?profile=new");
-
-  await expect(page.locator("#profile-select-ai-region")).toContainText("us-chicago-1");
-  await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
-
-  await expect(page.getByRole("alertdialog", { name: "変更を破棄しますか" })).toHaveCount(0);
-  await expect(page.locator("#profile-management-panel-list")).toBeVisible();
-  await expect(page).toHaveURL(/\/profiles$/);
-});
-
-test("保存済み Region は Osaka を保持しキーボードで変更できる", async ({ page }) => {
-  await mockProfileApi(page);
-  await page.goto("/profiles?profile=default");
-  await expect(page.getByLabel("LLM Model")).toHaveValue(selectAiConfig.model);
-  await expect(page.getByRole("checkbox", { name: "制約を利用", exact: true })).not.toBeChecked();
-  const region = page.getByRole("combobox", { name: "Region" });
-  await expect(region).toContainText("ap-osaka-1");
-  await region.focus();
-  await region.press("Enter");
-  await page.keyboard.press("Home");
-  await page.keyboard.press("Enter");
-  await expect(region).toContainText("us-chicago-1");
-  await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
-  await expect(page.getByRole("alertdialog", { name: "変更を破棄しますか" })).toBeVisible();
-});
-
-test("既定の生成方式はこの環境で使える方式だけから選んで保存する (#1524)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  // Select AI Agent は使える・OCI Enterprise AI は未設定の環境。
-  await page.route("**/api/nl2sql/engines", (route) =>
-    fulfillJson(route, {
-      engines: [
-        { engine: "select_ai", available: true, reason: "" },
-        { engine: "select_ai_agent", available: true, reason: "" },
-        { engine: "enterprise_ai_direct", available: false, reason: "未設定" },
-      ],
-    })
-  );
-  let savedPayload: { default_engine?: string } | null = null;
-  await page.route("**/api/nl2sql/profiles/default", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fallback();
-      return;
-    }
-    savedPayload = route.request().postDataJSON() as { default_engine?: string };
-    await fulfillJson(route, { ...profiles[0], ...savedPayload, id: "default", etag: "etag-default-2" });
-  });
-  await page.goto("/profiles?profile=default");
-
-  const engine = page.getByRole("combobox", { name: "既定の生成方式" });
-  // 既定の生成方式を持たない業務プロファイルは Select AI。
-  await expectSelectFieldValue(engine, "select_ai");
-  await expect(page.getByText("方式を指定しない問い合わせ（Agent からの問い合わせ）もこの方式で SQL を生成します。", { exact: false })).toBeVisible();
-  // 入力欄の高さは名称・カテゴリと同じ段（md）。
-  const [engineBox, categoryBox] = await Promise.all([
-    engine.boundingBox(),
-    page.locator("#profile-category").boundingBox(),
-  ]);
-  expect(Math.abs((engineBox?.height ?? 0) - (categoryBox?.height ?? 0))).toBeLessThanOrEqual(1);
-  // ライト / ダークの見た目を確かめるための画像（失敗の判定には使わない）。
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await testInfo.attach(`default-engine-${colorScheme}`, {
-      body: await engine.locator("xpath=ancestor::section[1]").screenshot(),
-      contentType: "image/png",
-    });
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.evaluate(() => document.documentElement.classList.remove("dark"));
-
-  await engine.click();
-  const listbox = page.locator(`[id="${await engine.getAttribute("aria-controls")}"]`);
-  await expect(listbox.getByRole("option")).toHaveText(["Select AI", "Select AI Agent"]);
-  await page.keyboard.press("Escape");
-  await chooseSelectFieldOption(engine, "select_ai_agent");
-
-  // 固定データの名称（日本語）は保存できない名称なので、保存できる名称にする。
-  await page.getByLabel("名称").fill("SALES_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByTestId("profile-save-progress")).toHaveAttribute("data-job-status", "succeeded");
-  expect((savedPayload as { default_engine?: string } | null)?.default_engine).toBe("select_ai_agent");
-  await expectNoDocumentHorizontalOverflow(page);
-});
 
 test("回答前の確認の方針と確認の上限（往復）を業務プロファイルに保存する (#1839)", { tag: "@responsive" }, async ({ page }, testInfo) => {
   await mockProfileApi(page);
@@ -1852,165 +1068,10 @@ test("回答前の確認の方針と確認の上限（往復）を業務プロ�
   await expect(maxRounds).toBeDisabled();
 
   await page.getByLabel("名称").fill("SALES_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByTestId("profile-save-progress")).toHaveAttribute("data-job-status", "succeeded");
+  await expect(page.getByText("業務プロファイルを保存しました。", { exact: true })).toBeVisible();
   expect(savedPayload).toMatchObject({ clarification_policy: "assume", clarification_max_rounds: 2 });
   await expectNoDocumentHorizontalOverflow(page);
-});
-
-test("保存済みの既定の生成方式が使えない環境でも選択を残して示す (#1524)", async ({ page }) => {
-  await mockProfileApi(page, {
-    profileItems: [{ ...profiles[0], default_engine: "enterprise_ai_direct" } as (typeof profiles)[number]],
-  });
-  await page.route("**/api/nl2sql/engines", (route) =>
-    fulfillJson(route, {
-      engines: [
-        { engine: "select_ai", available: true, reason: "" },
-        { engine: "select_ai_agent", available: false, reason: "無効" },
-        { engine: "enterprise_ai_direct", available: false, reason: "未設定" },
-      ],
-    })
-  );
-  await page.goto("/profiles?profile=default");
-  const engine = page.getByRole("combobox", { name: "既定の生成方式" });
-  await expectSelectFieldValue(engine, "enterprise_ai_direct");
-  await expect(engine).toContainText("Enterprise AI Direct（この環境では使えません）");
-  await engine.click();
-  const listbox = page.locator(`[id="${await engine.getAttribute("aria-controls")}"]`);
-  await expect(listbox.getByRole("option")).toHaveText([
-    "Select AI",
-    "Enterprise AI Direct（この環境では使えません）",
-  ]);
-});
-
-test("Credential 不足からデータベース設定で作成し、履歴 job を自動再試行しない", async ({
-  page,
-}) => {
-  await mockProfileApi(page);
-  let credentialCreated = false;
-  let retryCalls = 0;
-  let retried = false;
-
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*/retry", async (route) => {
-    retryCalls += 1;
-    retried = true;
-    await fulfillJson(route, {
-      job_id: "profile-sync-credential-retry",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "queued",
-      phase: "queued",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      retry_of_job_id: "profile-sync-default",
-      created_at: "2026-08-31T00:00:02Z",
-    });
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", async (route) => {
-    await fulfillJson(route, {
-      job_id: retried ? "profile-sync-credential-retry" : "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: retried ? "succeeded" : "failed",
-      phase: retried ? "succeeded" : "failed",
-      rebuild_agent_assets: false,
-      error_code: retried ? "" : "SELECT_AI_CREDENTIAL_MISSING",
-      error_message_ja: retried
-        ? ""
-        : "Select AI Credential がありません。ORA-06512: internal stack must not be shown",
-      created_at: "2026-08-31T00:00:00Z",
-      finished_at: "2026-08-31T00:00:01Z",
-      oracle_result: retried
-        ? {
-            runtime: "oracle",
-            executed: true,
-            status: "saved",
-            profile_name: "NL2SQL_DEFAULT_PROFILE",
-            original_name: "",
-            ddl: [],
-            profile: dbProfiles.profiles[0],
-            warnings: [],
-            engine_meta: {},
-          }
-        : null,
-    });
-  });
-
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") credentialCreated = true;
-    await fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: credentialCreated,
-      region: "ap-osaka-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: credentialCreated ? "created" : null,
-    });
-  });
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(route, {
-      user: "ADMIN",
-      dsn: "nl2sqldb_high",
-      driver_mode: "thin",
-      connection_security: "wallet_mtls",
-      client_lib_dir: "",
-      wallet_dir: "/u01/aipoc/wallet",
-      wallet_uploaded: true,
-      available_services: ["nl2sqldb_high"],
-      has_password: true,
-      has_wallet_password: false,
-      readiness: "ok",
-      embedding_dimension: 1536,
-      vector_column: "VECTOR(1536, FLOAT32)",
-      adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-      region: "ap-osaka-1",
-      config_source: "runtime",
-    })
-  );
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfillJson(route, {
-      status: "success",
-      message: "ADB を取得しました。",
-      id: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-      display_name: "nl2sqldb",
-      lifecycle_state: "AVAILABLE",
-      db_name: "NL2SQLDB",
-      cpu_core_count: 2,
-      data_storage_size_in_tbs: 1,
-      region: "ap-osaka-1",
-    })
-  );
-
-  await page.goto("/profiles");
-  await page.getByRole("row").filter({ hasText: "既定プロファイル" }).locator("td").nth(1).click();
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-
-  const failedStatus = page.getByTestId("profile-save-progress");
-  await expect(failedStatus).toContainText("現在の Oracle schema に NL2SQL_OCI_CRED がありません");
-  await expect(failedStatus).not.toContainText("ORA-06512");
-  const settingsLink = failedStatus.getByRole("link", { name: "Select AI Credential を開く" });
-  await settingsLink.click();
-  // Select AI Credential は運用設定の専用の画面（#658）。
-  await expect(page).toHaveURL(/\/settings\/select-ai-credential$/u);
-
-  const card = page.getByTestId("select-ai-credential-card");
-  await card.getByTestId("execution-confirmation-field").getByRole("textbox").fill(
-    "ADMIN_EXECUTE"
-  );
-  await card.getByRole("button", { name: "Credential を作成" }).click();
-  await expect.poll(() => credentialCreated).toBe(true);
-  expect(retryCalls).toBe(0);
-
-  const success = card.getByTestId("select-ai-credential-success");
-  await expect(success).toContainText("Select AI Credential を作成");
-  await expect(success.getByRole("link")).toHaveCount(0);
-  expect(retryCalls).toBe(0);
 });
 
 test("異なる schema の同名表を別々に選択できる", async ({ page }) => {
@@ -2081,7 +1142,7 @@ test("異なる schema の同名表を別々に選択できる", async ({ page }
   await expect(tableList.getByLabel("APP.ORDERS")).toHaveCount(0);
 });
 
-test("引用が必要な表名は大文字化せず、大文字の同名表と別に選択・保存し Oracle へ反映する (#561, #564)", async ({ page }) => {
+test("引用が必要な表名は大文字化せず、大文字の同名表と別に選択・保存する (#561, #564)", async ({ page }) => {
   const quotedCatalog = {
     ...schemaCatalog,
     tables: [
@@ -2150,13 +1211,10 @@ test("引用が必要な表名は大文字化せず、大文字の同名表と�
   await expect(tableList).toContainText("選択 1 件");
 
   await page.getByLabel("名称").fill("SALES_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
-  // #564: 引用名の表も Select AI Profile の object_list に `"Mixed_Case"` として反映できる
-  // （実 Oracle で確認済み）。同期 job は通常どおり成功し、未対応エラーにしない。
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toHaveAttribute("data-job-status", "succeeded");
+  // #564: 引用名の表は `"Mixed_Case"` の表記のまま保存する。
+  await expect(page.getByText("業務プロファイルを保存しました。", { exact: true })).toBeVisible();
   const payload = savedPayload as { allowed_tables: string[] } | null;
   expect(payload?.allowed_tables).toEqual(['SALES."Mixed_Case"']);
   await expectNoDocumentHorizontalOverflow(page);
@@ -2249,7 +1307,6 @@ test("小文字を含む owner は大文字の同名 owner と別のスキーマ
   expect(snapshotOwners).toEqual(["SALES", '"Sales"']);
 
   await page.getByLabel("名称").fill("SALES_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect.poll(() => savedPayload?.allowed_tables).toEqual(['"Sales".ORDERS']);
   await expectNoDocumentHorizontalOverflow(page);
@@ -2381,116 +1438,6 @@ test("$ と NL2SQL_ のシステム object は業務プロファイルの対象�
   await expect(viewList.getByText("選択できるビューがありません。")).toBeVisible();
 });
 
-test("Select AI 設定は requested order で並び狭い幅でも重ならない", { tag: "@responsive" }, async ({ page }) => {
-  await mockProfileApi(page);
-  await page.goto("/profiles");
-
-  await page.getByRole("button", { name: "新規作成", exact: true }).click();
-
-  await expect(page.getByLabel("Oracle Profile 名")).toHaveCount(0);
-  // 必須はすべて共有の「必須」バッジ（aria-hidden）+ aria-required で示す。独自の * は出さない。
-  for (const fieldId of [
-    "profile-name",
-    "profile-category",
-    "profile-select-ai-region",
-    "profile-select-ai-model",
-    "profile-select-ai-max-tokens",
-    "profile-select-ai-embedding-model",
-  ]) {
-    await expect(page.locator(`label[for="${fieldId}"] span[aria-hidden="true"]`)).toHaveText("必須");
-    await expect(page.locator(`#${fieldId}`)).toHaveAttribute("aria-required", "true");
-  }
-  // 名称・カテゴリも共有の TextField（#631）。ネイティブ検証は使わず、保存時にアプリ側で検証する。
-  const region = page.getByRole("combobox", { name: "Region" });
-  const model = page.getByLabel("LLM Model");
-  const maxTokens = page.getByLabel("Max Tokens");
-  const embeddingModel = page.getByLabel("Embedding Model");
-  await expect(region).toBeVisible();
-  await expect(region).toHaveAttribute("aria-required", "true");
-  await expect(region).toContainText("us-chicago-1");
-  await region.click();
-  await expect(page.getByRole("option", { name: "ap-osaka-1" })).toBeVisible();
-  await expect(page.getByRole("option", { name: "us-chicago-1" })).toBeVisible();
-  await expect(page.getByRole("option", { name: "ap-tokyo-1" })).toHaveCount(0);
-  await page.getByRole("option", { name: "us-chicago-1" }).click();
-  await expect(region).toContainText("us-chicago-1");
-  await expect(model).toBeVisible();
-  await expect(model).toHaveValue("xai.grok-4.6");
-  const constraints = page.getByRole("checkbox", { name: "制約を利用", exact: true });
-  await expect(constraints).toBeChecked();
-  await constraints.focus();
-  await constraints.press("Space");
-  await expect(constraints).not.toBeChecked();
-  await constraints.press("Space");
-  await expect(constraints).toBeChecked();
-  await expect(maxTokens).toBeVisible();
-  await expect(embeddingModel).toBeVisible();
-  await expect(maxTokens).toHaveAttribute("min", "4096");
-  await expect(maxTokens).toHaveAttribute("max", "32000");
-  await expect(maxTokens).toHaveAttribute("step", "1");
-
-  const [regionBox, modelBox, maxTokensBox, embeddingModelBox] = await Promise.all([
-    region.boundingBox(),
-    model.boundingBox(),
-    maxTokens.boundingBox(),
-    embeddingModel.boundingBox(),
-  ]);
-  expect(regionBox).not.toBeNull();
-  expect(modelBox).not.toBeNull();
-  expect(maxTokensBox).not.toBeNull();
-  expect(embeddingModelBox).not.toBeNull();
-  // 欄は FormGrid（置き場所 42rem 以上で 2 列。#1891）に、値の種類の幅（Region sm・モデル lg・Max Tokens xs）で並ぶ。
-  const twoColumns = (await page.locator("#profile-select-ai [data-form-grid='2']").first().evaluate((element) =>
-    getComputedStyle(element.firstElementChild ?? element).gridTemplateColumns.split(" ").length
-  )) === 2;
-  if (twoColumns) {
-    const rowAlignmentTolerance = 2;
-    expect(Math.abs(regionBox!.y - modelBox!.y)).toBeLessThanOrEqual(rowAlignmentTolerance);
-    expect(Math.abs(maxTokensBox!.y - embeddingModelBox!.y)).toBeLessThanOrEqual(rowAlignmentTolerance);
-    expect(maxTokensBox!.y).toBeGreaterThan(regionBox!.y + regionBox!.height - 1);
-    expect(regionBox!.x).toBeLessThan(modelBox!.x);
-    expect(Math.abs(regionBox!.x - maxTokensBox!.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(modelBox!.x - embeddingModelBox!.x)).toBeLessThanOrEqual(1);
-    expect(Math.round(regionBox!.width)).toBe(12 * 14);
-    expect(Math.round(modelBox!.width)).toBe(28 * 14);
-    expect(Math.round(maxTokensBox!.width)).toBe(8 * 14);
-  } else {
-    expect(regionBox!.y).toBeLessThanOrEqual(modelBox!.y);
-    expect(modelBox!.y).toBeLessThanOrEqual(maxTokensBox!.y);
-    expect(maxTokensBox!.y).toBeLessThanOrEqual(embeddingModelBox!.y);
-    const bodyWidth = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }));
-    expect(bodyWidth.scrollWidth).toBeLessThanOrEqual(bodyWidth.clientWidth + 1);
-  }
-
-  await maxTokens.fill("4095");
-  await maxTokens.blur();
-  await expect(maxTokens).toHaveValue("4096");
-  await maxTokens.fill("32001");
-  await maxTokens.blur();
-  await expect(maxTokens).toHaveValue("32000");
-
-  // AI profile に seed 属性を入れないので、seed の欄は無い（#3529）。
-  await expect(page.locator("#profile-select-ai-seed")).toHaveCount(0);
-  // 推論の量（共通のモデル設定）は Select AI・Select AI Agent に効かないことを常設で示す。
-  await expect(page.getByTestId("profile-select-ai-reasoning-note")).toHaveText(
-    /Select AI・Select AI Agent には、システム設定 › モデル の推論の量は効きません/
-  );
-  // Region・LLM Model は Select AI 用で、Enterprise AI Direct は既定のテキストモデルを使う（#1684）。
-  await expect(page.getByTestId("profile-select-ai-reasoning-note")).toContainText(
-    "Region・LLM Model は Select AI・Select AI Agent（Oracle の AI profile）にだけ使います。Enterprise AI Direct は、システム設定 › モデル の既定のテキストモデルを使います。"
-  );
-
-  await page.setViewportSize({ width: 375, height: 900 });
-  const mobileViewport = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }));
-  expect(mobileViewport.scrollWidth).toBeLessThanOrEqual(mobileViewport.clientWidth + 1);
-});
-
 test("業務プロファイル必須項目は空欄保存を止める", async ({ page }) => {
   await mockProfileApi(page);
   let saveRequests = 0;
@@ -2503,22 +1450,15 @@ test("業務プロファイル必須項目は空欄保存を止める", async ({
 
   await page.getByRole("button", { name: "新規作成", exact: true }).click();
   await page.getByLabel("名称").fill("SALES_PROFILE");
-  await page.getByLabel("カテゴリ").fill("販売");
-  await page.getByLabel("LLM Model").fill("");
-  await page.getByLabel("Embedding Model").fill("");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
+  await page.getByLabel("カテゴリ").fill("");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
-  await expect(page.getByRole("alert").filter({ hasText: "LLM Model を入力してください。" })).toBeVisible();
-  await expect(page.getByRole("alert").filter({ hasText: "Embedding Model を入力してください。" })).toBeVisible();
-  await expect(page.getByLabel("LLM Model")).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByLabel("Embedding Model")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert").filter({ hasText: "カテゴリを入力してください。" })).toBeVisible();
+  await expect(page.getByLabel("カテゴリ")).toHaveAttribute("aria-invalid", "true");
   expect(saveRequests).toBe(0);
 
-  await page.getByLabel("LLM Model").fill("cohere.command-r-plus");
-  await page.getByLabel("Embedding Model").fill("cohere.embed-v4.0");
-  await expect(page.getByRole("alert").filter({ hasText: "LLM Model を入力してください。" })).toHaveCount(0);
-  await expect(page.getByRole("alert").filter({ hasText: "Embedding Model を入力してください。" })).toHaveCount(0);
+  await page.getByLabel("カテゴリ").fill("販売");
+  await expect(page.getByRole("alert").filter({ hasText: "カテゴリを入力してください。" })).toHaveCount(0);
 });
 
 test("業務プロファイル重複名称は名称欄のエラーとして表示する", async ({ page }) => {
@@ -2563,7 +1503,6 @@ test("業務プロファイル重複名称は名称欄のエラーとして表�
   await page.getByRole("button", { name: "新規作成", exact: true }).click();
   await page.getByLabel("名称").fill("sales_profile");
   await page.getByLabel("カテゴリ").fill("販売");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
   const duplicateError = page
@@ -2585,8 +1524,7 @@ test("名称は英字開始の識別子だけ保存でき小文字は自動大�
 
   await page.getByRole("button", { name: "新規作成", exact: true }).click();
 
-  // ADMIN_EXECUTE ゲートを満たして保存ボタンを有効化するが、名称は空のまま保存する。
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
+  // 名称は空のまま保存する。
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
   // spec §2 error-placement: 該当欄の直下に role=alert で表示される。
@@ -3295,51 +2233,6 @@ test("手動更新の失敗通知はクエリ再描画で消えない", { tag: "
   await expect(notice).toBeVisible();
 });
 
-test("保存が成功したら実行確認語をクリアして保存ボタンを再ゲートする", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-
-  await page.goto("/profiles?profile=default");
-
-  const confirmationField = page.getByLabel("実行確認語");
-  const saveButton = page.getByRole("button", { name: "保存", exact: true });
-  const clearButton = page
-    .getByTestId("execution-confirmation-field")
-    .getByRole("button", { name: "実行設定・同期表示をリセット", exact: true });
-
-  await page.getByLabel("名称").fill("sales_profile");
-  await page.getByLabel("カテゴリ").fill("finance");
-  await expect(saveButton).toBeDisabled();
-  await expect(clearButton).toBeDisabled();
-  await confirmationField.fill("ADMIN_EXECUTE");
-  await expect(saveButton).toBeEnabled();
-  await expect(clearButton).toBeEnabled();
-  await expectButtonsSameHeight(saveButton, clearButton);
-  const rebuild = page.getByRole("checkbox", { name: "保存時に Select AI Agent アセット(tool / agent / task / team)も再構築する" });
-  await rebuild.check();
-  await expect(clearButton).toHaveText("実行設定・同期表示をリセット");
-  await expect(page.getByLabel("名称")).toHaveValue("SALES_PROFILE");
-  await clearButton.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("profile-execution-reset.png") });
-  await expectNoDocumentHorizontalOverflow(page);
-  await clearButton.press("Enter");
-  await expect(confirmationField).toHaveValue("");
-  // 「保存時に Select AI Agent アセットも再構築する」は業務プロファイルの設定で、実行設定のリセットの
-  // 対象ではない（#1690）。
-  await expect(rebuild).toBeChecked();
-  await expect(page.getByLabel("名称")).toHaveValue("SALES_PROFILE");
-  await expect(page.getByLabel("カテゴリ")).toHaveValue("finance");
-  await expect(saveButton).toBeDisabled();
-  await expect(clearButton).toBeDisabled();
-  await confirmationField.fill("ADMIN_EXECUTE");
-  await expect(saveButton).toBeEnabled();
-  await saveButton.click();
-
-  await expect(page.getByTestId("profile-save-progress")).toBeVisible();
-  // 破壊的操作のゲートなので、保存成功後は再入力を求める。
-  await expect(confirmationField).toHaveValue("");
-  await expect(saveButton).toBeDisabled();
-});
-
 test("チェックを付け外しして元に戻したら未保存確認を出さない", async ({ page }) => {
   await mockProfileApi(page, {
     profileItems: [
@@ -3394,7 +2287,6 @@ test("保存中はプロファイル編集と競合操作を固定し失敗後�
   await page.goto("/profiles?profile=default");
   const name = page.locator("#profile-name");
   await name.fill("PENDING_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   let release: (() => void) | undefined;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   let saves = 0;
@@ -3407,7 +2299,7 @@ test("保存中はプロファイル編集と競合操作を固定し失敗後�
   await page.getByRole("button", { name: "保存", exact: true }).click();
   try {
     await expect(name).toBeDisabled();
-    await expect(page.getByLabel("実行確認語")).toBeDisabled();
+    await expect(page.getByRole("button", { name: "変更を破棄", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "一覧へ戻る", exact: true })).toBeDisabled();
     await expect(page.getByTestId("profile-allowed-table-list").getByRole("option").first()).toBeDisabled();
   } finally { release?.(); }
@@ -3449,7 +2341,6 @@ test("保存の 409（ほかの更新）は文に合わせて「最新の内容�
   await page.goto("/profiles?profile=default");
   const category = page.getByLabel("カテゴリ");
   await category.fill("finance");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
   const saveError = page.getByTestId("profile-save-error");
@@ -3473,7 +2364,6 @@ test("保存の 409（ほかの更新）は文に合わせて「最新の内容�
 
   // 最新の版の ETag で保存し直せる。
   await category.fill("経理");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect.poll(() => ifMatches.length).toBe(2);
   expect(ifMatches).toEqual(['"etag-default"', '"etag-default-2"']);
@@ -3491,7 +2381,6 @@ test("スキーマ一括選択中は保存と対象切替を固定する", async
     if (new URL(route.request().url()).searchParams.get("owner") === "APP") await gate;
     await route.fallback();
   });
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await list.getByRole("button", { name: "APP をすべて選択", exact: true }).click();
   try {
     await expect(page.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
@@ -3524,393 +2413,6 @@ test("プロファイル詳細取得失敗は選択 URL を保持し再試行で
   await expect(page).toHaveURL(/profile=missing/);
 });
 
-test("名称を変えた保存の Oracle 反映が終わったら最新の ETag を取り直し、続けて保存できる", async ({ page }) => {
-  await mockProfileApi(page);
-  // backend と同じく、名称の変更の Oracle 反映は旧名の印（previous_profile_name）を消して ETag を進める
-  // （ProfileSyncService._execute → clear_profile_select_ai_previous_name）。
-  let serverProfile: Record<string, unknown> = { ...profiles[0], etag: "etag-default" };
-  const patchIfMatch: string[] = [];
-  await page.route("**/api/nl2sql/profiles/default", async (route) => {
-    const method = route.request().method();
-    if (method === "GET") {
-      await fulfillJson(route, serverProfile);
-      return;
-    }
-    if (method !== "PATCH") {
-      await route.fallback();
-      return;
-    }
-    const ifMatch = (await route.request().headerValue("if-match")) ?? "";
-    patchIfMatch.push(ifMatch);
-    if (ifMatch !== `"${serverProfile.etag as string}"`) {
-      await route.fulfill({
-        status: 409,
-        contentType: "application/json",
-        body: JSON.stringify({ detail: "業務プロファイルが更新されています。再読込してください。" }),
-      });
-      return;
-    }
-    const payload = route.request().postDataJSON() as Record<string, unknown>;
-    const renamed = payload.name !== (serverProfile.name as string);
-    serverProfile = {
-      ...serverProfile,
-      ...payload,
-      select_ai_config: {
-        ...(payload.select_ai_config as Record<string, unknown>),
-        previous_profile_name: renamed ? "NL2SQL_DEFAULT_PROFILE" : "",
-      },
-      etag: `etag-saved-${patchIfMatch.length}`,
-    };
-    await fulfillJson(route, serverProfile);
-  });
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", async (route) => {
-    serverProfile = {
-      ...serverProfile,
-      select_ai_config: {
-        ...(serverProfile.select_ai_config as Record<string, unknown>),
-        previous_profile_name: "",
-      },
-      etag: "etag-after-sync",
-    };
-    await fulfillJson(route, {
-      job_id: "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-after-sync",
-      original_name: "NL2SQL_DEFAULT_PROFILE",
-      status: "succeeded",
-      phase: "succeeded",
-      rebuild_agent_assets: false,
-      error_code: "",
-      error_message_ja: "",
-      created_at: "2026-07-22T00:00:00Z",
-      finished_at: "2026-07-22T00:00:01Z",
-      oracle_result: {
-        runtime: "oracle",
-        executed: true,
-        status: "saved",
-        profile_name: "SALES_PROFILE",
-        original_name: "NL2SQL_DEFAULT_PROFILE",
-        ddl: [],
-        profile: dbProfiles.profiles[0],
-        warnings: [],
-        engine_meta: {},
-      },
-    });
-  });
-
-  await page.goto("/profiles?profile=default");
-  const confirmationField = page.getByLabel("実行確認語");
-  const saveButton = page.getByRole("button", { name: "保存", exact: true });
-  const progress = page.getByTestId("profile-save-progress");
-  await page.getByLabel("名称").fill("SALES_PROFILE");
-  await confirmationField.fill("ADMIN_EXECUTE");
-  await saveButton.click();
-  await expect(progress).toHaveAttribute("data-job-status", "succeeded");
-
-  // 反映の後に別の項目を直して保存しても、ETag の食い違い（409）にならない。
-  await page.getByLabel("カテゴリ").fill("販売");
-  await confirmationField.fill("ADMIN_EXECUTE");
-  await saveButton.click();
-  await expect.poll(() => patchIfMatch).toEqual(['"etag-default"', '"etag-after-sync"']);
-  await expect(page.getByTestId("profile-save-error")).toHaveCount(0);
-  await expect(progress).toHaveAttribute("data-job-status", "succeeded");
-
-  // 利用者は保存の後に何も変えていないので、一覧へ戻るときに破棄の確認を出さない。
-  await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
-  await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect(page).not.toHaveURL(/profile=/);
-});
-
-test("DBMS_CLOUD_AI Profile の反映後に Agent アセットの再構築だけが失敗したら、反映が済んだことと失敗した工程を示す", async ({ page }) => {
-  await mockProfileApi(page);
-  await page.route("**/api/nl2sql/oracle-sync-jobs/*", (route) =>
-    fulfillJson(route, {
-      job_id: "profile-sync-default",
-      profile_id: "default",
-      profile_etag: "etag-default",
-      status: "failed",
-      phase: "failed",
-      rebuild_agent_assets: true,
-      error_code: "AGENT_ASSETS_REBUILD_FAILED",
-      error_message_ja:
-        "Select AI Agent アセットの再構築に失敗しました。データベース設定と Select AI Agent の構成を確認してから再試行してください。",
-      created_at: "2026-07-22T00:00:00Z",
-      finished_at: "2026-07-22T00:00:01Z",
-      oracle_result: {
-        runtime: "oracle",
-        executed: true,
-        status: "saved",
-        profile_name: "NL2SQL_DEFAULT_PROFILE",
-        original_name: "",
-        ddl: [],
-        profile: dbProfiles.profiles[0],
-        warnings: [],
-        engine_meta: {},
-      },
-      agent_result: null,
-    })
-  );
-
-  await page.goto("/profiles?profile=default");
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page
-    .getByRole("checkbox", { name: "保存時に Select AI Agent アセット(tool / agent / task / team)も再構築する" })
-    .check();
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-
-  const status = page.getByTestId("profile-save-progress");
-  await expect(status).toHaveAttribute("data-job-status", "failed");
-  await expect(page.getByTestId("profile-save-step-sync_oracle_profile")).toHaveAttribute(
-    "data-step-status",
-    "done"
-  );
-  await expect(page.getByTestId("profile-save-step-rebuild_agent_assets")).toHaveAttribute(
-    "data-step-status",
-    "error"
-  );
-  // DBMS_CLOUD_AI Profile は反映済みなので、「Oracle 反映に失敗」とは書かない。
-  await expect(status).not.toContainText("Oracle 反映に失敗しました");
-  await expect(status).not.toContainText("Oracleへの反映を完了できませんでした");
-  await expect(status).toContainText("DBMS_CLOUD_AI Profile への反映は完了しました");
-  await expect(status).toContainText("Select AI Agent アセットの再構築に失敗しました");
-  await expect(status.getByRole("button", { name: "Oracle 反映を再試行" })).toBeVisible();
-});
-
-// ---- 保存（Oracle 反映）の事前条件: Select AI の Credential（#1683） ----------------------------
-
-async function mockOracleSyncReadiness(page: Page, state: { exists: boolean | null }) {
-  await page.route("**/api/nl2sql/select-ai/credential-readiness", (route) =>
-    fulfillJson(route, {
-      credential_required: true,
-      credential_name: "NL2SQL_OCI_CRED",
-      credential_exists: state.exists,
-    })
-  );
-}
-
-test("Select AI Credential が無いと保存の前に事前条件を示して保存を止め、作成後は保存できる (#1683)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  const readiness = { exists: false as boolean | null };
-  await mockOracleSyncReadiness(page, readiness);
-  let syncRequests = 0;
-  let profileWrites = 0;
-  await page.route("**/api/nl2sql/profiles/default/oracle-sync-jobs", async (route) => {
-    syncRequests += 1;
-    await route.fallback();
-  });
-  await page.route("**/api/nl2sql/profiles/default", async (route) => {
-    if (route.request().method() === "PATCH") profileWrites += 1;
-    await route.fallback();
-  });
-
-  await page.goto("/profiles?profile=default");
-
-  const precondition = page.getByTestId("profile-save-credential-precondition");
-  await expect(precondition).toBeVisible();
-  await expect(precondition).toContainText("Select AI Credential が作成されていません");
-  await expect(precondition).toContainText("Select AI Credential（NL2SQL_OCI_CRED）が必要です");
-  await expect(precondition).toContainText("運用設定の「Select AI Credential」で作成してから、再試行してください。");
-  const settingsLink = precondition.getByRole("link", { name: "Select AI Credential を開く" });
-  await expect(settingsLink).toHaveAttribute("href", /\/settings\/select-ai-credential$/u);
-
-  // 事前条件の案内は「保存」の操作の直前（確認語の欄の上）に出し、保存は確認語を入れても押せない。
-  const confirmationField = page.getByTestId("execution-confirmation-field");
-  const saveButton = page.getByRole("button", { name: "保存", exact: true });
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await expect(saveButton).toBeDisabled();
-  await expect(saveButton).toHaveAttribute("aria-describedby", "profile-save-credential-precondition");
-  const [preconditionBox, confirmationBox] = await Promise.all([
-    precondition.boundingBox(),
-    confirmationField.boundingBox(),
-  ]);
-  expect(preconditionBox && confirmationBox).toBeTruthy();
-  expect(preconditionBox!.y + preconditionBox!.height).toBeLessThanOrEqual(confirmationBox!.y + 1);
-  // 案内は確認語の欄と同じ幅（全幅）で出す（messaging.md §10.1）。
-  expect(Math.abs(preconditionBox!.width - confirmationBox!.width)).toBeLessThanOrEqual(1);
-  await expectNoDocumentHorizontalOverflow(page);
-  await precondition.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: testInfo.outputPath("credential-missing.png"),
-  });
-  expect(syncRequests).toBe(0);
-  expect(profileWrites).toBe(0);
-
-  // 別の画面で Credential を作った後に「再試行」すると、案内が消えて保存できる。
-  readiness.exists = true;
-  await precondition.getByRole("button", { name: "再試行" }).click();
-  await expect(precondition).toHaveCount(0);
-  await expect(saveButton).toBeEnabled();
-  await expect(saveButton).not.toHaveAttribute("aria-describedby", /.+/u);
-  await saveButton.click();
-  await expect(page.getByTestId("profile-save-progress")).toBeVisible();
-  expect(profileWrites).toBe(1);
-  expect(syncRequests).toBe(1);
-  await page.getByTestId("profile-save-progress").scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: testInfo.outputPath("credential-ready-saved.png"),
-  });
-});
-
-test("Select AI Credential が無いときは新規作成でも保存を止める (#1683)", async ({ page }) => {
-  await mockProfileApi(page);
-  await mockOracleSyncReadiness(page, { exists: false });
-  let profileCreates = 0;
-  await page.route("**/api/nl2sql/profiles", async (route) => {
-    if (route.request().method() === "POST") profileCreates += 1;
-    await route.fallback();
-  });
-
-  await page.goto("/profiles");
-  await page.getByRole("button", { name: "新規作成", exact: true }).click();
-  await page.getByLabel("名称").fill("NEW_PROFILE");
-  await page.getByLabel("カテゴリ").fill("finance");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-
-  await expect(page.getByTestId("profile-save-credential-precondition")).toBeVisible();
-  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
-  expect(profileCreates).toBe(0);
-});
-
-test("Credential の画面の権限が無い利用者には、リンクの代わりに管理者への依頼を案内する (#1683)", async ({ page }) => {
-  await page.unroute("**/api/auth/me");
-  await page.route("**/api/auth/me", (route) =>
-    fulfillJson(route, {
-      ...systemAdminMe,
-      role_codes: ["PROFILE_EDITOR"],
-      is_system_admin: false,
-      permissions: ["menu.profiles"],
-    })
-  );
-  await mockProfileApi(page);
-  await mockOracleSyncReadiness(page, { exists: false });
-
-  await page.goto("/profiles?profile=default");
-
-  const precondition = page.getByTestId("profile-save-credential-precondition");
-  await expect(precondition).toContainText("システム管理者に連絡して、Select AI Credential の作成を依頼してください。");
-  await expect(precondition.getByRole("link")).toHaveCount(0);
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeDisabled();
-});
-
-test("状態を確かめられないときは保存を止めず、反映の開始の 409 で Credential の案内とリンクを出す (#1683)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  // 状態を確かめられない（DB に接続できない等）。保存は止めない。
-  const readiness = { exists: null as boolean | null };
-  await mockOracleSyncReadiness(page, readiness);
-  await page.route("**/api/nl2sql/profiles/default/oracle-sync-jobs", async (route) => {
-    // 開始の時点で Credential が無いと分かった（backend の事前条件の確認）。
-    readiness.exists = false;
-    const message =
-      'SELECT_AI_CREDENTIAL_MISSING: Select AI Credential "ADMIN"."NL2SQL_OCI_CRED" が存在しません。' +
-      "Select AI・Select AI Agent の処理には Select AI Credential が必要です。運用設定の「Select AI Credential」で作成してから、再試行してください。";
-    await route.fulfill({
-      status: 409,
-      contentType: "application/json",
-      // backend の problem 応答（HTTPException の detail の code / message_ja を写したもの）。
-      body: JSON.stringify({
-        data: null,
-        error_messages: [message],
-        warning_messages: [],
-        error_code: "SELECT_AI_CREDENTIAL_MISSING",
-        problem: {
-          type: "urn:nl2sql:problem:select-ai-credential-missing",
-          title: "処理を続けられません",
-          status: 409,
-          detail: message,
-          code: "SELECT_AI_CREDENTIAL_MISSING",
-          request_id: "req-credential-missing",
-          retryable: false,
-          field_errors: [],
-        },
-      }),
-    });
-  });
-
-  await page.goto("/profiles?profile=default");
-  await expect(page.getByTestId("profile-save-credential-precondition")).toHaveCount(0);
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  const saveButton = page.getByRole("button", { name: "保存", exact: true });
-  await expect(saveButton).toBeEnabled();
-  await saveButton.click();
-
-  const progress = page.getByTestId("profile-save-progress");
-  await expect(progress).toContainText("Select AI Credential が無いため Oracle 反映を開始できませんでした");
-  const link = progress.getByRole("link", { name: "Select AI Credential を開く" });
-  await expect(link).toHaveAttribute("href", /\/settings\/select-ai-credential$/u);
-  // 反映を始められなかったので「反映はバックグラウンドで続きます」の Toast は出さない。
-  await expect(page.getByText("Oracle Profile の反映はバックグラウンドで続きます。")).toHaveCount(0);
-  // 409 の後は事前条件を取り直し、保存の前に案内を出す。
-  await expect(page.getByTestId("profile-save-credential-precondition")).toBeVisible();
-  await expectNoDocumentHorizontalOverflow(page);
-  await progress.scrollIntoViewIfNeeded();
-  await page.screenshot({
-    path: testInfo.outputPath("credential-409.png"),
-  });
-});
-
-// ---- 「保存時に Select AI Agent アセットも再構築する」は業務プロファイルに保存する（#1690） ------------
-
-test("Select AI Agent アセットの再構築のチェックは保存して開き直しても保つ (#1690)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await mockProfileApi(page);
-  // 保存した業務プロファイルを返す（PATCH の内容を次の GET に反映する）。
-  let stored: Record<string, unknown> = { ...profiles[0], etag: "etag-default" };
-  const patchPayloads: Array<Record<string, unknown>> = [];
-  const syncPayloads: Array<Record<string, unknown>> = [];
-  await page.route("**/api/nl2sql/profiles/default", async (route) => {
-    const method = route.request().method();
-    if (method === "PATCH") {
-      const payload = route.request().postDataJSON() as Record<string, unknown>;
-      patchPayloads.push(payload);
-      stored = { ...stored, ...payload, etag: `etag-default-${patchPayloads.length}` };
-    } else if (method !== "GET") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, stored);
-  });
-  await page.route("**/api/nl2sql/profiles/default/oracle-sync-jobs", async (route) => {
-    syncPayloads.push(route.request().postDataJSON() as Record<string, unknown>);
-    await route.fallback();
-  });
-
-  await page.goto("/profiles?profile=default");
-  const rebuild = page.getByRole("checkbox", {
-    name: "保存時に Select AI Agent アセット(tool / agent / task / team)も再構築する",
-  });
-  await expect(rebuild).not.toBeChecked();
-  await page.getByLabel("名称").fill("DEFAULT_PROFILE");
-  await rebuild.check();
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByTestId("profile-save-progress")).toBeVisible();
-  expect(patchPayloads.at(-1)?.rebuild_agent_assets_on_save).toBe(true);
-  expect(syncPayloads.at(-1)?.rebuild_agent_assets).toBe(true);
-
-  // 開き直すと、保存した値でチェックされている。
-  await page.reload();
-  await expect(page.getByLabel("名称")).toHaveValue("DEFAULT_PROFILE");
-  await expect(rebuild).toBeChecked();
-  await rebuild.scrollIntoViewIfNeeded();
-  await expectNoDocumentHorizontalOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("agent-rebuild-reloaded.png") });
-
-  // 外して保存すると、開き直しても外れている（既存のアセットは消さない）。
-  await rebuild.uncheck();
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect.poll(() => patchPayloads.length).toBe(2);
-  expect(patchPayloads.at(-1)?.rebuild_agent_assets_on_save).toBe(false);
-  await expect.poll(() => syncPayloads.length).toBe(2);
-  expect(syncPayloads.at(-1)?.rebuild_agent_assets).toBe(false);
-  await page.reload();
-  await expect(page.getByLabel("名称")).toHaveValue("DEFAULT_PROFILE");
-  await expect(rebuild).not.toBeChecked();
-});
-
 test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 / 375px・ライト / ダークで欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
   // 一覧の件数はツールバーの ListCount、編集のフォームは FormGrid と値の種類の幅（#1891）。
   test.slow();
@@ -3925,7 +2427,7 @@ test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 /
         if (path === "/profiles") {
           await expect(page.getByTestId("profile-list-toolbar").getByRole("status")).toHaveText(/^全 \d+ 件$/u);
         } else {
-          await expect(page.locator("#profile-select-ai-embedding-model")).toBeVisible();
+          await expect(page.locator("#profile-sql-rules-input")).toBeVisible();
           await expect(page.getByTestId("profile-allowed-table-list")).toBeVisible();
         }
         const label = `${path} ${width}px ${colorScheme}`;

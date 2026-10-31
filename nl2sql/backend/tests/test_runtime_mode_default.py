@@ -1,6 +1,6 @@
 """NL2SQL_RUNTIME_MODE の既定（#897）。
 
-既定は Oracle / Select AI を呼ぶ `oracle`。`deterministic` は CI / テスト用で、
+既定は Oracle を呼ぶ `oracle`。`deterministic` は CI / テスト用で、
 `tests/conftest.py` が明示する。
 """
 
