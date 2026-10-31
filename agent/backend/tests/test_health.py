@@ -2732,7 +2732,7 @@ def test_replay_run_creates_new_builtin_run_with_same_goal(monkeypatch: MonkeyPa
 
 
 def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) -> None:
-    """再実行は新しい Run。評価の dry-run・自動実行・MCP の印を引き継がない（#911）。"""
+    """再実行は新しい Run。評価の dry-run・MCP の印を引き継がない（#911）。"""
     monkeypatch.setattr(agent_router, "_schedule_builtin_run", lambda run: None)
     source = runtime_module.runtime_repository.create_builtin_run(
         RunCreateRequest(
@@ -2742,7 +2742,6 @@ def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) ->
                 "evaluation_job_id": "job-911",
                 "evaluation_case_id": "case-911",
                 runtime_module.EVALUATION_DRY_RUN_KEY: True,
-                "automation_id": "automation-911",
                 "source": "mcp",
             },
         ),
@@ -2758,7 +2757,6 @@ def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) ->
         "evaluation_job_id",
         "evaluation_case_id",
         runtime_module.EVALUATION_DRY_RUN_KEY,
-        "automation_id",
         "source",
     } & set(metadata)
     assert inherited == set()

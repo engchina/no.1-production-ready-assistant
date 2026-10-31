@@ -1,7 +1,6 @@
 """FastAPI エントリポイント。共通 app factory で薄く構成する。"""
 
 import asyncio
-import contextlib
 import logging
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -50,16 +49,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await start_trace_export_retry_worker()
         # 処理の経過の span の書き手（共通の span の表。#3226 の案 A。in_process の実行が書く）。
         await asyncio.to_thread(trace_spans.start)
-        # 業務 Agent の自動実行のスケジューラ（#784。gunicorn は 1 worker のため 1 つだけ動く）。
-        from app.features.agent.automations import run_scheduler
-
-        scheduler = asyncio.create_task(run_scheduler())
         try:
             yield
         finally:
-            scheduler.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await scheduler
             storage_bootstrap.stop_background_load()
             await stop_trace_export_retry_worker()
             # 待っている span を書いてから終える（書けなければ書き手がログに残す）。

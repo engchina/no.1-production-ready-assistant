@@ -114,7 +114,7 @@ Agent が RAG / NL2SQL を呼ぶときは、呼び先の `POST /api/mcp`（MCP �
   - 呼び出し元（Agent の組み込み Runtime）も同じ範囲を tool handler で強制する（多層の防御。Agent の
     `features/agent/data_scope.py`）。呼び先の強制は、Runtime の不具合・新しいツールの追加漏れ・Runtime を通さない
     呼び出しでも範囲を越えさせないためのもの。
-- 呼び出しのきっかけ（#1986）: Agent は Run のきっかけ（`run_facts.run_source`。`user` / `automation` / `evaluation` /
+- 呼び出しのきっかけ（#1986）: Agent は Run のきっかけ（`run_facts.run_source`。`user` / `evaluation` /
   `mcp` / `replay`）を任意の claim `run_source` に入れる（`ToolInvocationContext.run_source` → `McpConnectionClient._service_token`。
   Run の外の呼び出し〔画面の単発のツール呼び出しなど〕は付けない）。呼び先は**見え方だけ**に使う: NL2SQL は MCP の入口で
   claim `run_source` = `evaluation` の実行を実行履歴の種類「品質評価」、それ以外のサービストークンと API キーの呼び出しを

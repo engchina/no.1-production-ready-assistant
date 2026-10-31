@@ -4,8 +4,8 @@ import { TRACE_DETAILS_JA } from "@production-ready/ui";
  */
 export const ja = {
   ...TRACE_DETAILS_JA,
-  "app.title": "Production Ready RAG",
-  "app.sidebarTitle.line1": "Production Ready",
+  "app.title": "Private RAG",
+  "app.sidebarTitle.line1": "Private",
   "app.sidebarTitle.line2": "RAG",
 
   // 共通メッセージ機構・ボタン（docs/frontend-messaging-spec.md / frontend-button-spec.md）

@@ -41,18 +41,18 @@ for (const viewport of [
     await page.goto("/settings/upload-storage");
 
     const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
-    const brand = sidebar.locator('[title="Production Ready RAG"]').first();
+    const brand = sidebar.locator('[title="Private RAG"]').first();
     const uploadLink = sidebar.getByRole("link", { name: "文書アップロード" });
 
     if (viewport.width < 768) {
       // md 未満はドロワー（#367）。上端のバーに製品名を出し、開いたドロワーは展開して描く（折りたたみボタンは無い）。
-      const banner = page.getByTestId("nav-drawer-bar").locator('[title="Production Ready RAG"]');
-      await expect(banner.getByText("Production Ready", { exact: true })).toBeVisible();
+      const banner = page.getByTestId("nav-drawer-bar").locator('[title="Private RAG"]');
+      await expect(banner.getByText("Private", { exact: true })).toBeVisible();
       await expect(banner.getByText("RAG", { exact: true })).toBeVisible();
       await openSidebarNav(page);
       // 文書アップロードは既定で閉じている「ナレッジ構築」にある（#1563）。
       await expandSidebarSections(sidebar, "ナレッジ構築");
-      await expect(brand.getByText("Production Ready", { exact: true })).toBeVisible();
+      await expect(brand.getByText("Private", { exact: true })).toBeVisible();
       await expect(uploadLink.getByText("文書アップロード", { exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("document-upload-menu.png") });
       await expect(page.getByRole("button", { name: "サイドバーを展開" })).toHaveCount(0);
@@ -61,7 +61,7 @@ for (const viewport of [
     }
 
     await expect(brand).toBeVisible();
-    await expect(brand.getByText("Production Ready", { exact: true })).toBeVisible();
+    await expect(brand.getByText("Private", { exact: true })).toBeVisible();
     await expect(brand.getByText("RAG", { exact: true })).toBeVisible();
     await expandSidebarSections(sidebar, "ナレッジ構築");
     await expect(uploadLink).toHaveAttribute("href", /\/upload$/);
@@ -71,7 +71,7 @@ for (const viewport of [
     await page.getByRole("button", { name: "サイドバーを折りたたむ" }).click();
 
     await expect(brand).toHaveAttribute("aria-hidden", "true");
-    await expect(brand.getByText("Production Ready", { exact: true })).toBeHidden();
+    await expect(brand.getByText("Private", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "サイドバーを展開" })).toBeVisible();
     await expect(uploadLink).toBeVisible();
   });

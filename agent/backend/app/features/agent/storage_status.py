@@ -49,7 +49,7 @@ class RuntimeStorageStatus(BaseModel):
     backend: StorageBackend
     # 設定の値（`AGENT_RUNTIME_REPOSITORY_BACKEND`。既定は `auto`）。
     configured_backend: str
-    # 業務 Agent・スキル・MCP 接続・実行・自動実行・品質評価などが再起動の後も残るか。
+    # 業務 Agent・スキル・MCP 接続・実行・品質評価などが再起動の後も残るか。
     persistent: bool
     # 共通の PLATFORM_ORACLE_* の設定がそろっているか（接続は試さない）。
     database_configured: bool

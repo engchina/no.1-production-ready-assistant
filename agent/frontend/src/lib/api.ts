@@ -644,67 +644,6 @@ export interface EvaluationComparison {
 /** 評価の履歴の 1 ページ（共通の `Page`。`total` は対象の評価の件数。#1266）。 */
 export type EvaluationJobsPage = Page<EvaluationJobItem>;
 
-/** 業務 Agent の自動実行（スケジュール。#784・#1799）。 */
-export type ScheduleFrequency = "daily" | "weekdays" | "weekly" | "hourly";
-
-export interface AutomationSchedule {
-  frequency: ScheduleFrequency;
-  /** HH:MM（毎日・平日・毎週）。 */
-  time: string;
-  /** 0 = 月曜 … 6 = 日曜（毎週）。 */
-  weekdays: number[];
-  /** 毎時の分。 */
-  minute: number;
-  timezone: string;
-}
-
-export interface AutomationInput {
-  agent_id: string;
-  name: string;
-  goal: string;
-  enabled: boolean;
-  schedule: AutomationSchedule;
-}
-
-export interface Automation extends AutomationInput {
-  id: string;
-  run_as_user_uuid: string;
-  created_by_user_uuid: string;
-  next_run_at: string | null;
-  last_run_at: string | null;
-  last_run_id: string | null;
-  last_trigger: string | null;
-  /** Run の作成（created）・前回の Run が終わっていないため飛ばした（skipped）・作れなかった（failed_to_start）。 */
-  last_result: "created" | "skipped" | "failed_to_start" | null;
-  last_message: string | null;
-  /** 前回の Run（`last_run_id`）の今の状態（表示のときに引く。#1812）。Run の記録が無ければ null。 */
-  last_run_status?: RunState["status"] | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** 業務 Agent のスキルが使うツールのうち、自動実行で使えない（承認が要る）もの（#1813）。 */
-export interface AutomationToolCheck {
-  agent_id: string;
-  approval_required_tools: string[];
-  /** ツールを確かめられなかった MCP 接続の理由。 */
-  warnings: string[];
-}
-
-export interface AutomationRun {
-  run_id: string;
-  status: RunState["status"];
-  trigger: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AutomationFired {
-  run_id: string | null;
-  result: "created" | "skipped" | "failed_to_start";
-  message: string;
-}
-
 /** Run が使ったモデルの量（承認待ちからの再開を含めた累計。#772）。 */
 /** 実行の詳細の「取消」（backend の `RunCancellationView`。#3348）。 */
 export interface RunCancellationView {
@@ -794,7 +733,7 @@ export interface ToolCallAuditRecord extends ToolAuditRecord {
   agent_id: string;
   run_created_at: string;
   run_updated_at: string;
-  /** Run のきっかけ（user / automation / evaluation / mcp / replay。#1874）。 */
+  /** Run のきっかけ（user / evaluation / mcp / replay。#1874）。 */
   run_source?: string;
   /** MCP の Run の API キーの名前（「MCP（キーの名前）」）。 */
   api_key_name?: string | null;
@@ -1413,7 +1352,7 @@ export interface RunSummary {
 export type RunListStatus = "active" | "waiting" | RunState["status"];
 
 /** 実行履歴の種類（きっかけ。backend の `run_facts.run_source`）の絞り込み（#1955）。 */
-export type RunListKind = "user" | "automation" | "evaluation" | "mcp" | "replay";
+export type RunListKind = "user" | "evaluation" | "mcp" | "replay";
 /** 種類の絞り込みで送る値。`not_evaluation` は品質評価の Run を除く（画面の既定。#1983）。 */
 export type RunListKindQuery = RunListKind | "not_evaluation";
 
@@ -1981,23 +1920,6 @@ export const agentApi = {
       method: "POST",
       body: JSON.stringify({ description }),
     }),
-  /** 自動実行（#784）。 */
-  listAutomations: () => request<{ automations: Automation[]; persistent: boolean }>("/api/automations"),
-  getAutomation: (automationId: string) =>
-    request<{ automation: Automation; runs: AutomationRun[] }>(`/api/automations/${encodeURIComponent(automationId)}`),
-  createAutomation: (payload: AutomationInput) =>
-    request<Automation>("/api/automations", { method: "POST", body: JSON.stringify(payload) }),
-  updateAutomation: (automationId: string, payload: AutomationInput) =>
-    request<Automation>(`/api/automations/${encodeURIComponent(automationId)}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
-  deleteAutomation: (automationId: string) =>
-    request<null>(`/api/automations/${encodeURIComponent(automationId)}`, { method: "DELETE" }),
-  automationApprovalTools: (agentId: string) =>
-    request<AutomationToolCheck>(`/api/automations/agents/${encodeURIComponent(agentId)}/approval-tools`),
-  runAutomation: (automationId: string) =>
-    request<AutomationFired>(`/api/automations/${encodeURIComponent(automationId)}/run`, { method: "POST" }),
   /** 品質評価（#776）。 */
   listEvaluationSets: (agentId?: string) =>
     request<{ sets: EvaluationSetItem[] }>(

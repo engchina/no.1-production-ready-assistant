@@ -13,7 +13,6 @@ from pytest import MonkeyPatch
 from security_support import ProductionAuth, client, enable_production_auth, login
 
 from app.security.permissions import (
-    MENU_AUTOMATIONS,
     MENU_EVALUATION,
     MENU_FEEDBACK,
     MENU_RUNS,
@@ -29,9 +28,9 @@ def auth(monkeypatch: MonkeyPatch) -> Iterator[ProductionAuth]:
     set_security_service(None)
 
 
-@pytest.mark.parametrize("menu", [MENU_AUTOMATIONS, MENU_EVALUATION, MENU_FEEDBACK])
+@pytest.mark.parametrize("menu", [MENU_EVALUATION, MENU_FEEDBACK])
 def test_agent_pickers_can_read_the_agents_in_scope(auth: ProductionAuth, menu: str) -> None:
-    """自動実行・品質評価・フィードバックは業務 Agent を選ぶ・名前で示す（対象範囲で絞る）。"""
+    """品質評価・フィードバックは業務 Agent を選ぶ・名前で示す（対象範囲で絞る）。"""
     login_id = f"menu-{menu}"
     auth.user_with_permissions(login_id, [menu], agent_ids=["default"])
     response = client.get("/api/agents", headers=login(login_id))

@@ -111,20 +111,6 @@ from app.features.agent import (
     control_plane_store,
     run_facts_store,
 )
-from app.features.agent.automations import (
-    Automation,
-    AutomationDetail,
-    AutomationFired,
-    AutomationInput,
-    AutomationsData,
-    AutomationToolCheck,
-    AutomationView,
-    automation_store,
-    automation_view,
-    recent_runs,
-    with_last_run_status,
-)
-from app.features.agent.automations import fire as fire_automation
 from app.features.agent.chat_attachments import chat_attachment_service
 from app.features.agent.chat_progress import run_trace_events
 from app.features.agent.config import McpAuthMode, McpConnectionConfig, runtime_config_store
@@ -135,7 +121,6 @@ from app.features.agent.confirmation import (
 )
 from app.features.agent.control_plane_store import (
     ControlPlaneStoreError,
-    get_control_plane_store,
 )
 from app.features.agent.data_scope import (
     DATA_SCOPE_CONNECTIONS,
@@ -556,7 +541,7 @@ class ToolCallAuditRecord(ToolAuditRecord):
     agent_id: str
     run_created_at: str
     run_updated_at: str
-    # Run のきっかけ（user / automation / evaluation / mcp / replay。#1874）と、MCP の Run の
+    # Run のきっかけ（user / evaluation / mcp / replay。#1874）と、MCP の Run の
     # API キーの名前（監査の「MCP（キーの名前）」）。
     run_source: str = "user"
     api_key_name: str | None = None
@@ -1234,7 +1219,10 @@ def _post_openai_compatible(
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
     )
     # HTTPError はそのまま伝播させる（`status` を持つので共有 router が失敗を表示できる）。
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+    # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+    if request.type not in ("http", "https"):
+        raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"{url} の応答が object ではありません。")
@@ -1762,7 +1750,7 @@ _ACTIVE_RUN_STATUSES = frozenset(
 _WAITING_RUN_STATUSES = frozenset({RunStatus.WAITING_APPROVAL, RunStatus.WAITING_CONFIRMATION})
 # 実行履歴の種類（きっかけ。`run_facts.run_source`）の絞り込み（#1955）。`not_evaluation` は
 # 品質評価の Run（`source = "evaluation"`）を除く（画面の既定「種類: 品質評価以外」。#1983）。
-RunKindFilter = Literal["user", "automation", "evaluation", "mcp", "replay", "not_evaluation"]
+RunKindFilter = Literal["user", "evaluation", "mcp", "replay", "not_evaluation"]
 _EVALUATION_RUN_SOURCE = "evaluation"
 # 承認の状態の絞り込み。`decided` は判断済み（承認・却下・取り消し）。
 ApprovalStatusFilter = Literal["pending", "decided"]
@@ -1978,7 +1966,7 @@ async def create_run(
 ) -> ApiResponse[RunState]:
     try:
         _require_agent_access(request, run_request.agent_id)
-        # Control Plane の予約の metadata（再開の状態・評価・自動実行・MCP の印）は
+        # Control Plane の予約の metadata（再開の状態・評価・MCP の印）は
         # 利用者に付けさせない（#1130）。
         reserved = reserved_run_metadata_keys(run_request.metadata)
         if reserved:
@@ -2507,159 +2495,6 @@ async def get_run_audit(
 async def list_agent_templates() -> ApiResponse[AgentTemplatesData]:
     """業種テンプレート（#780）。業務 Agent の新規作成の画面がフォームに入れる出発点。"""
     return ApiResponse(data=AgentTemplatesData(templates=list(AGENT_TEMPLATES)))
-
-
-def _require_runnable_agent(agent_id: str) -> None:
-    """自動実行の Run は利用者の Run なので、公開した版の無い業務 Agent は選べない（#792）。"""
-    try:
-        agent: AgentProfile | None = _control_plane_agent(agent_id)
-    except KeyError:
-        # 存在しない（消した）業務 Agent も「見つかりません」の 422 にする（500 にしない。#927）。
-        agent = None
-    reason = agent_unavailable_reason(agent)
-    if reason is not None:
-        raise HTTPException(
-            status_code=422, detail={"code": "agent_unavailable", "message": reason}
-        )
-
-
-def _automation_for_actor(request: Request, automation_id: str) -> Automation:
-    try:
-        item = automation_store.get(automation_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="自動実行が見つかりません。") from exc
-    if not _agent_allowed(request, item.agent_id):
-        raise HTTPException(status_code=404, detail="自動実行が見つかりません。")
-    return item
-
-
-@router.get("/automations", response_model=ApiResponse[AutomationsData])
-async def list_automations(request: Request) -> ApiResponse[AutomationsData]:
-    """業務 Agent の自動実行（#784。利用できる業務 Agent のものだけ）。"""
-    items = [item for item in automation_store.list() if _agent_allowed(request, item.agent_id)]
-    return ApiResponse(
-        data=AutomationsData(
-            automations=with_last_run_status(items),
-            persistent=get_control_plane_store().persistent,
-        )
-    )
-
-
-@router.get(
-    "/automations/agents/{agent_id}/approval-tools",
-    response_model=ApiResponse[AutomationToolCheck],
-)
-async def automation_approval_tools(
-    agent_id: str, request: Request
-) -> ApiResponse[AutomationToolCheck]:
-    """業務 Agent のスキルが使うツールのうち、自動実行で使えない（承認が要る）もの（#1813）。
-
-    自動実行の Run は承認が要るツールを呼ばないため、編集画面で警告する。業務 Agent は公開中の
-    版のスキル（自動実行の Run が使う版）で、MCP のツールはログイン中の利用者として
-    `tools/list` で取る。
-    """
-    _require_agent_access(request, agent_id)
-    try:
-        agent = _control_plane_agent(agent_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="業務 Agent が見つかりません。") from exc
-    published = agent.published()
-    skill_ids = list(published.skill_ids if published is not None else agent.skill_ids)
-    context = ToolInvocationContext(agent_id=agent_id, user_uuid=_run_creator_user_uuid(request))
-    names, warnings = await asyncio.to_thread(
-        builtin_runtime.approval_required_tools, skill_ids, context=context
-    )
-    return ApiResponse(
-        data=AutomationToolCheck(
-            agent_id=agent_id, approval_required_tools=names, warnings=warnings
-        )
-    )
-
-
-@router.post("/automations", response_model=ApiResponse[AutomationView])
-async def create_automation(
-    payload: AutomationInput,
-    request: Request,
-    _: None = Depends(require_admin),
-) -> ApiResponse[AutomationView]:
-    """自動実行を作る。Run は作った利用者として作る（RAG / NL2SQL の MCP もこの利用者）。"""
-    _require_agent_access(request, payload.agent_id)
-    _require_runnable_agent(payload.agent_id)
-    owner = _run_creator_user_uuid(request)
-    if owner is None:
-        raise HTTPException(status_code=401, detail="ログインしてください。")
-    try:
-        created = automation_store.create(payload, owner=owner, now=datetime.now(UTC))
-    except ControlPlaneStoreError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return ApiResponse(data=automation_view(created))
-
-
-@router.get("/automations/{automation_id}", response_model=ApiResponse[AutomationDetail])
-async def get_automation(automation_id: str, request: Request) -> ApiResponse[AutomationDetail]:
-    """自動実行と、最近の Run（新しい順に 10 件）。"""
-    item = _automation_for_actor(request, automation_id)
-    return ApiResponse(
-        data=AutomationDetail(automation=automation_view(item), runs=recent_runs(item.id))
-    )
-
-
-@router.put("/automations/{automation_id}", response_model=ApiResponse[AutomationView])
-async def update_automation(
-    automation_id: str,
-    payload: AutomationInput,
-    request: Request,
-    _: None = Depends(require_admin),
-) -> ApiResponse[AutomationView]:
-    item = _automation_for_actor(request, automation_id)
-    agent_changed = payload.agent_id != item.agent_id
-    if agent_changed:
-        _require_agent_access(request, payload.agent_id)
-    # 実行できる業務 Agent かは、業務 Agent を変えるときと有効のまま保存するときだけ確かめる。
-    # 業務 Agent が無効・未公開・削除になった後でも、自動実行を無効にする保存は
-    # できるようにする（#927）。
-    if agent_changed or payload.enabled:
-        _require_runnable_agent(payload.agent_id)
-    try:
-        updated = automation_store.update(item.id, payload, now=datetime.now(UTC))
-    except ControlPlaneStoreError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return ApiResponse(data=automation_view(updated))
-
-
-@router.delete("/automations/{automation_id}", response_model=ApiResponse[None])
-async def delete_automation_endpoint(
-    automation_id: str,
-    request: Request,
-    _: None = Depends(require_admin),
-) -> ApiResponse[None]:
-    item = _automation_for_actor(request, automation_id)
-    try:
-        automation_store.delete(item.id)
-    except ControlPlaneStoreError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return ApiResponse(data=None)
-
-
-@router.post("/automations/{automation_id}/run", response_model=ApiResponse[AutomationFired])
-async def run_automation_now(
-    automation_id: str,
-    request: Request,
-    _: None = Depends(require_admin),
-) -> ApiResponse[AutomationFired]:
-    """今すぐ実行する（スケジュールと同じく、前回の Run が終わっていなければ飛ばす）。"""
-    item = _automation_for_actor(request, automation_id)
-    fired = await run_in_threadpool(fire_automation, item.id, trigger="manual")
-    _schedule_automation_runs(fired)
-    return ApiResponse(data=fired)
-
-
-def _schedule_automation_runs(fired: AutomationFired) -> None:
-    """スレッドで作った Run を、このプロセス（in-process のモード）で実行する。"""
-    if not fired.run_id:
-        return
-    with contextlib.suppress(KeyError):
-        _schedule_builtin_run(runtime_repository.get_run(fired.run_id))
 
 
 # 実行中の評価の task（GC で消えないよう参照を持つ。#776）。
@@ -3642,7 +3477,7 @@ async def replay_run(
     try:
         # 同じ Agent・ゴールの新しい Run として組み込み Runtime で実行する
         # （再実行を指示した利用者として。旧エンジンの Run も同じ）。元の Run の起点の印
-        # （品質評価の dry-run・自動実行・MCP など）は引き継がない（#911）。会話は引き継がず、
+        # （品質評価の dry-run・MCP など）は引き継がない（#911）。会話は引き継がず、
         # 再実行した利用者の新しい会話にする（system_admin が他の利用者の Run を再実行しても、
         # 持ち主の会話には足さない。#3244）。
         replayed = await run_in_threadpool(
