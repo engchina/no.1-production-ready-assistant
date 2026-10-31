@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3002",
+    "dev": "vite --host 0.0.0.0 --port 3102",
     "lint": "eslint . --max-warnings 0",
     "build": "tsc --noEmit && vite build",
-    "start": "vite preview --host 0.0.0.0 --port 3002",
+    "start": "vite preview --host 0.0.0.0 --port 3102",
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "check": "npm run lint && npm run build && npm run test && npm run test:e2e",

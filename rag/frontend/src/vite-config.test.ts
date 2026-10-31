@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import viteConfig from "../vite.config";
 
-// BACKEND_URL 未設定で既定の backend（localhost:8000 等）へ proxy する fallback を戻さないための契約テスト。
+// BACKEND_URL 未設定で既定の backend（localhost:8100 等）へ proxy する fallback を戻さないための契約テスト。
 function resolveConfig(env: { BACKEND_URL?: string; PLAYWRIGHT_HERMETIC_API?: string }): UserConfig {
   vi.stubEnv("BACKEND_URL", env.BACKEND_URL);
   vi.stubEnv("PLAYWRIGHT_HERMETIC_API", env.PLAYWRIGHT_HERMETIC_API);

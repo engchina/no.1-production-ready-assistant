@@ -32,7 +32,7 @@
 
     uv run python -m app.rag.evaluation_corpus_cli \\
         ../evaluation/business-support/business-support.json \\
-        --api-base-url http://127.0.0.1:8000 --output /tmp/business-support.resolved.json \\
+        --api-base-url http://127.0.0.1:8100 --output /tmp/business-support.resolved.json \\
         --guides ../evaluation/business-support/support-guides.json \\
         --guided-output /tmp/business-support.guided.json
 """
@@ -51,7 +51,7 @@ from typing import Any
 import httpx
 
 FILE_REFERENCE_PREFIX = "file:"
-DEFAULT_API_BASE_URL = "http://localhost:8000"
+DEFAULT_API_BASE_URL = "http://localhost:8100"
 DEFAULT_TIMEOUT_SECONDS = 1800.0
 DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 REQUEST_TIMEOUT_SECONDS = 120.0

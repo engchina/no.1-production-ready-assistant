@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { fileURLToPath, URL } from "node:url";
 
 const MISSING_BACKEND_URL_WARNING =
-  "[nl2sql] BACKEND_URL が未設定のため /api を proxy せず 404 を返します（hermetic）。backend に接続する場合は BACKEND_URL=http://127.0.0.1:8010 npm run dev のように明示してください。";
+  "[nl2sql] BACKEND_URL が未設定のため /api を proxy せず 404 を返します（hermetic）。backend に接続する場合は BACKEND_URL=http://127.0.0.1:8110 npm run dev のように明示してください。";
 
 /**
  * 配信のパスの前置き（#1316）。1 台の Compute で 3 製品を Nginx の `/rag/` `/nl2sql/` `/agent/` に分けて
@@ -32,7 +32,7 @@ function hermeticApiNotFound(req: IncomingMessage, res: ServerResponse) {
 }
 
 export default defineConfig(({ command, isPreview }) => {
-  // /api は BACKEND_URL を明示したときだけ proxy する。既定の接続先（localhost:8010 等）は持たない。
+  // /api は BACKEND_URL を明示したときだけ proxy する。既定の接続先（localhost:8110 等）は持たない。
   // 未設定のまま起動した dev サーバ（古い worktree、globalSetup の無い Playwright 設定、手動起動）が
   // 利用者の実 backend / Oracle 環境へ接続することを防ぐ。
   const backendUrl = process.env.BACKEND_URL?.trim() || undefined;
@@ -77,7 +77,7 @@ export default defineConfig(({ command, isPreview }) => {
     },
     server: {
       host: "0.0.0.0",
-      port: 3001,
+      port: 3101,
       // hermetic では proxy 自体を持たない（未モック API は上の middleware が 404 で終端する）。
       proxy: hermeticApi
         ? undefined
@@ -87,7 +87,7 @@ export default defineConfig(({ command, isPreview }) => {
     },
     preview: {
       host: "0.0.0.0",
-      port: 3001,
+      port: 3101,
     },
   };
 });

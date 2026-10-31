@@ -97,7 +97,7 @@ REMOVED_SINGLE_COMPUTE_INPUTS = (
     "_APP_AUTH_SESSION_COOKIE_NAME",
     "_APP_AUTH_CSRF_COOKIE_NAME",
 )
-# 各製品の backend の port（127.0.0.1。1 台の Compute で衝突しない。ローカルの開発と同じ。#1316）。
+# 各製品の backend の port（127.0.0.1。1 台の Compute で衝突しない。#1316。ローカルの開発の port は別。#25）。
 BACKEND_PORTS = {"rag": "8000", "nl2sql": "8010", "agent": "8020"}
 # 証明書の発行者・サーバーの subject は固定（Terraform の変数にしない。#1316）。
 TLS_CA_SUBJECT = "/C=JP/ST=Tokyo/L=Minato-ku/O=Oracle/OU=Production Ready Suite/CN=Production Ready Root CA"

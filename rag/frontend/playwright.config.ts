@@ -5,8 +5,8 @@ import { mobileProjectScope } from "../../platform/scripts/e2e-impact/mobile-sco
 import { nightlyOnlyIgnore } from "../../platform/scripts/e2e-impact/nightly-only";
 
 const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
-// 開発用 dev サーバ（3000）と衝突しない既定ポート。
-const port = process.env.PLAYWRIGHT_PORT ?? "3100";
+// 開発用 dev サーバ（3100）と衝突しない既定ポート（#25）。
+const port = process.env.PLAYWRIGHT_PORT ?? "3200";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 // PLAYWRIGHT_WEB_SERVER=preview なら、vite build の成果物を vite preview で配信する（PR の CI。#1583）。
 // dev サーバより画面の読み込みが速い。e2e の影響分析の記録（E2E_IMPACT_DIR。nightly）は dev サーバの

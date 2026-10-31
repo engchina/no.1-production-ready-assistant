@@ -41,7 +41,7 @@ for (const viewport of VIEWPORTS) {
     test.beforeEach(async ({ page, mockApi, context, baseURL }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       mockApi.setCurrentUser(SECURITY_ADMIN);
-      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3042" }]);
+      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3142" }]);
     });
 
     test("ユーザー管理とロール管理を開け、ロールの詳細から権限管理へ移れる", async ({ page }) => {
