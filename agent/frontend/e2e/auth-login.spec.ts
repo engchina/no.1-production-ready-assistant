@@ -65,7 +65,7 @@ for (const viewport of VIEWPORTS) {
       await expect(page).toHaveURL(/\/login$/);
       await expect(page.getByRole("heading", { name: "システムにログイン" })).toBeVisible();
       // wordmark は Agent。ログイン画面は AppShell の外（サイドナビなし）。
-      await expect(page.getByText("Production Ready", { exact: true })).toBeVisible();
+      await expect(page.getByText("Private", { exact: true })).toBeVisible();
       await expect(page.getByText("Agent", { exact: true })).toBeVisible();
       await expect(sidebar(page)).toHaveCount(0);
       await expectNoPageOverflow(page);

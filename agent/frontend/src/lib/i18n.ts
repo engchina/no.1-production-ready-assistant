@@ -4,8 +4,8 @@ import { ja as ragJa } from "@/lib/rag-i18n";
 // 最小 i18n。日本語第一。UI 文言はここ経由で参照し、ハードコードしない。
 const agentJa = {
   ...TRACE_DETAILS_JA,
-  "app.title": "Production Ready Agent",
-  "app.sidebarTitle.line1": "Production Ready",
+  "app.title": "Private Agent",
+  "app.sidebarTitle.line1": "Private",
   "app.sidebarTitle.line2": "Agent",
   "app.route.loading": "画面を読み込んでいます",
   "settings.toolPolicy.search": "ツール名・説明・接続で絞り込み",

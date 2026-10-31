@@ -270,8 +270,8 @@ const nl2sqlJa = {
   "security.deepsec.entitlements.expression.loading": "関連情報を取得しています…",
   "security.deepsec.entitlements.expression.retry": "再試行",
 
-  "app.title": "Production Ready NL2SQL",
-  "app.sidebarTitle.line1": "Production Ready",
+  "app.title": "Private NL2SQL",
+  "app.sidebarTitle.line1": "Private",
   "app.sidebarTitle.line2": "NL2SQL",
   "app.route.loading": "画面を読み込んでいます…",
 
