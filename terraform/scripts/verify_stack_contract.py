@@ -1049,9 +1049,6 @@ def _verify_app_db_user(schema: str, variables: str, adb: str, locals_source: st
         script,
         [
             '"GRANT PDB_DBA TO {user}"',
-            '"GRANT GRANT ANY DATA ROLE TO {user}"',
-            '"GRANT ADMINISTER ANY DATA GRANT TO {user}"',
-            '"GRANT SET USE DATA GRANTS ONLY TO {user}"',
             'APP_PROFILE = "ORA_APP_PROFILE"',
         ],
         context="suite-db-user.py grants",

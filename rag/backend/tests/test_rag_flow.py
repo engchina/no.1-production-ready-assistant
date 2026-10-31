@@ -530,7 +530,7 @@ async def test_candidate_mode_failure_does_not_error_document() -> None:
 def test_prompt_injection_query_is_blocked(
     caplog: LogCaptureFixture, monkeypatch: MonkeyPatch
 ) -> None:
-    """OCI を有効にした検索では、検出した攻撃を監査へ記録して拒否する。"""
+    """安全チェックの段が止めた検索は、検出した攻撃を監査へ記録して拒否する。"""
     from tests.guardrail_support import enable_scripted_guardrails
 
     enable_scripted_guardrails(monkeypatch)
@@ -547,7 +547,7 @@ def test_prompt_injection_query_is_blocked(
     audit_event = cast(Any, audit_record).audit_event
     assert audit_event["trace_id"] == data["trace_id"]
     assert audit_event["outcome"] == "blocked"
-    assert audit_event["guardrail_codes"] == ["oci_prompt_injection"]
+    assert audit_event["guardrail_codes"] == ["synthetic_prompt_injection"]
     assert audit_event["citation_count"] == 0
 
 
@@ -1306,7 +1306,7 @@ def test_ingest_rejects_source_hash_mismatch() -> None:
 
 
 def test_ingest_rejects_non_local_uri_in_local_upload_storage_backend() -> None:
-    """local upload storage backend では OCI URI をローカルキーとして誤解釈しない。"""
+    """以前の OCI Object Storage の参照（`oci://`）はローカルキーとして読まず、原本なしで失敗させる（#11）。"""
     with audit_request_context():
         detail = _create_document_with_source_metadata(
             "external.txt", "oci://namespace/bucket/external.txt"
@@ -1315,7 +1315,5 @@ def test_ingest_rejects_non_local_uri_in_local_upload_storage_backend() -> None:
         job = _run_ingestion_and_get_job(detail.id, headers=NO_TENANT_HEADERS)
 
         assert job["status"] == "FAILED"
-        assert job["error_message"] == "原本ファイルの参照パスが不正です。"
-        _assert_recipe_failed_without_document_error(
-            detail.id, "原本ファイルの参照パスが不正です。"
-        )
+        assert job["error_message"] == "原本ファイルが見つかりません。"
+        _assert_recipe_failed_without_document_error(detail.id, "原本ファイルが見つかりません。")
