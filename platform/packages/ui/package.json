@@ -7,7 +7,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/engchina/no.1-production-ready-suite.git",
+    "url": "git+https://github.com/engchina/no.1-production-ready-assistant.git",
     "directory": "platform/packages/ui"
   },
   "sideEffects": [

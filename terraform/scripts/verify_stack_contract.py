@@ -25,7 +25,7 @@ ALLOWED_ACCESS = "許可されたIPおよびVCN限定のセキュア・アクセ
 EVERYWHERE_ACCESS = "すべての場所からのセキュア・アクセス"
 IP_OR_CIDR = "IPアドレスまたはCIDRブロック"
 # 製品と共有 platform は monorepo から1回の clone で取得する。
-APPLICATION_GIT_URL = "https://github.com/engchina/no.1-production-ready-suite.git"
+APPLICATION_GIT_URL = "https://github.com/engchina/no.1-production-ready-assistant.git"
 WALLET_DIR = "/u01/aipoc/wallet"
 
 REQUIRED_ENTRIES = {
@@ -464,7 +464,7 @@ def _verify_package_entries(archive: zipfile.ZipFile) -> None:
 def _verify_schema(schema: str, variables: str) -> None:
     _require_all(
         schema,
-        ["schemaVersion: 1.1.0", "Production Ready Suite"],
+        ["schemaVersion: 1.1.0", "Production Ready Assistant"],
         context="Resource Manager schema header",
     )
     terraform_names = set(re.findall(r'(?m)^variable "([a-z0-9_]+)" \{', variables))
@@ -929,7 +929,7 @@ def _verify_bootstrap(bootstrap: str) -> None:
         bootstrap,
         [
             'APP_ROOT="/u01/aipoc"',
-            'SUITE_REPO_DIR="$${APP_ROOT}/no.1-production-ready-suite"',
+            'SUITE_REPO_DIR="$${APP_ROOT}/no.1-production-ready-assistant"',
             'clone_or_update_repo "${application_git_url}" "${application_git_ref}" "$${SUITE_REPO_DIR}"',
             # 1 台の Compute の配備は platform/deploy/suite-init.sh が行う（#1316）。
             'local init_script="$${SUITE_REPO_DIR}/platform/deploy/suite-init.sh"',

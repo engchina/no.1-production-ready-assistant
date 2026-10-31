@@ -11,18 +11,18 @@ Generative AI.
 Click the button below to open OCI Resource Manager with the Osaka region
 (`ap-osaka-1`) selected by default.
 
-[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-suite/releases/download/suite-v0.1.0/production-ready-suite-terraform-stack.zip)
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-assistant/releases/download/suite-v0.1.0/production-ready-assistant-terraform-stack.zip)
 
 NL2SQL is deployed by the suite-wide stack (`terraform/stack/` at the monorepo
 root, #217). One Autonomous AI Database is shared with RAG and the Agent Control
 Plane, and NL2SQL gets its own Compute instance. Select NL2SQL under
 「配備する製品」 in the Resource Manager form. The button uses the pinned
-`suite-v0.1.0` release asset `production-ready-suite-terraform-stack.zip`; it
+`suite-v0.1.0` release asset `production-ready-assistant-terraform-stack.zip`; it
 works once that release is published. Always pin a `suite-v*` tag instead of
 `releases/latest`.
 
 The per-product release
-[nl2sql-v0.1.32](https://github.com/engchina/no.1-production-ready-suite/releases/tag/nl2sql-v0.1.32)
+[nl2sql-v0.1.32](https://github.com/engchina/no.1-production-ready-assistant/releases/tag/nl2sql-v0.1.32)
 remains available but is no longer updated. Releases up to v0.1.31 remain in the
 archived `no.1-production-ready-nl2sql` repository, but they clone the old
 two-repository layout and must not be used for new deployments.
@@ -37,7 +37,7 @@ Compute instance, updates, and troubleshooting, see
 
 ## OCI Compute のソース更新後の再デプロイ
 
-NL2SQL は monorepo `/u01/aipoc/no.1-production-ready-suite` の `nl2sql/` に、共有 platform は同じ repository の
+NL2SQL は monorepo `/u01/aipoc/no.1-production-ready-assistant` の `nl2sql/` に、共有 platform は同じ repository の
 `platform/` に配置します。[`scripts/update-after-pull.sh`](scripts/update-after-pull.sh) は `platform/` の更新も NL2SQL に反映します。
 **スクリプト自身は `git pull` を含む Git 操作を行わないため、先に suite repository を更新してください。**
 旧構成（`/u01/aipoc/no.1-production-ready-nl2sql` と `/u01/aipoc/no.1-production-ready-platform` の2つの repository）から
@@ -57,7 +57,7 @@ DB に接続できず migration が失敗すると、frontend のビルドが成
 **pull が成功した場合だけ** `&&` に続く再デプロイを実行します。
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql &&
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql &&
 ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh
 ```
 

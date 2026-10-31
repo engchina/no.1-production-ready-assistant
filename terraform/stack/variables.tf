@@ -663,7 +663,7 @@ variable "https_port" {
 variable "application_git_url" {
   description = "Git repository URL for the Production Ready suite monorepo (rag/, nl2sql/, agent/, and platform/)."
   type        = string
-  default     = "https://github.com/engchina/no.1-production-ready-suite.git"
+  default     = "https://github.com/engchina/no.1-production-ready-assistant.git"
 
   validation {
     condition     = trimspace(var.application_git_url) != ""

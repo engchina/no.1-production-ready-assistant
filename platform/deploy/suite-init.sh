@@ -54,7 +54,7 @@ APP_ROOT="${APP_ROOT:-/u01/aipoc}"
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
 APP_HOME="${APP_HOME:-/home/${APP_USER}}"
-SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-suite}"
+SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-assistant}"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 SSL_DIR="${SUITE_SSL_DIR:-${APP_ROOT}/ssl}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
@@ -506,7 +506,7 @@ write_tls_renew_units() {
   cat > "${SYSTEMD_UNIT_DIR}/${TLS_RENEW_UNIT}.service" <<EOF
 # platform/deploy/suite-init.sh が生成する（手で編集しない）。#1316
 [Unit]
-Description=Renew the Production Ready Suite HTTPS server certificate when it is about to expire
+Description=Renew the Production Ready Assistant HTTPS server certificate when it is about to expire
 
 [Service]
 Type=oneshot
@@ -517,7 +517,7 @@ EOF
   cat > "${SYSTEMD_UNIT_DIR}/${TLS_RENEW_UNIT}.timer" <<EOF
 # platform/deploy/suite-init.sh が生成する（手で編集しない）。#1316
 [Unit]
-Description=Daily check of the Production Ready Suite HTTPS server certificate
+Description=Daily check of the Production Ready Assistant HTTPS server certificate
 
 [Timer]
 OnCalendar=daily

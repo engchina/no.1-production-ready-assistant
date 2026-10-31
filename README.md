@@ -1,4 +1,4 @@
-# No.1 Production Ready Suite
+# No.1 Production Ready Assistant
 
 Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
 
@@ -8,9 +8,9 @@ Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL 
 
 - **latest**: 東京（`ap-tokyo-1`）/ 大阪（`ap-osaka-1`）リージョンだけをサポートします（既定は大阪）。
 
-  [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-suite/releases/latest/download/production-ready-suite-terraform-stack.zip)
+  [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-assistant/releases/latest/download/production-ready-assistant-terraform-stack.zip)
 
-ボタンは[最新の release](https://github.com/engchina/no.1-production-ready-suite/releases/latest) の `production-ready-suite-terraform-stack.zip` を読み込みます。
+ボタンは[最新の release](https://github.com/engchina/no.1-production-ready-assistant/releases/latest) の `production-ready-assistant-terraform-stack.zip` を読み込みます。
 
 入力の変数・手動でのアップロード・配備後の確認・トラブルシューティングは [terraform/README.md](./terraform/README.md) を参照してください。
 
@@ -76,18 +76,18 @@ stack は VCN・subnet・security list・NSG を作らず、フォームで選�
 
 ## 配備した後の運用
 
-Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。output の `ssh_to_instance`。repository は `/u01/aipoc/no.1-production-ready-suite`）。
+Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。output の `ssh_to_instance`。repository は `/u01/aipoc/no.1-production-ready-assistant`）。
 
 最新のコード（main）を取得して反映する（取得 → build → 全サービスの再起動）:
 
 ```bash
-sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-update.sh
+sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-update.sh
 ```
 
 全サービスを再起動する（今のコードから build してから再起動。`suite-pull.sh` で取得したコードもこれで反映されます）:
 
 ```bash
-sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh
+sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 ```
 
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd・Nginx まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
@@ -190,8 +190,8 @@ done
 ### 4. スキルを入れる
 
 ```bash
-claude plugin marketplace add https://github.com/engchina/no.1-production-ready-suite.git --sparse .claude-plugin skills
-claude plugin install production-ready-skills@production-ready-suite
+claude plugin marketplace add https://github.com/engchina/no.1-production-ready-assistant.git --sparse .claude-plugin skills
+claude plugin install production-ready-skills@production-ready-assistant
 ```
 
 repo を clone 済みの環境（配備した Compute など）では、`claude plugin marketplace add <repo のパス>` でその checkout の `skills/` を使えます（配備の更新でスキルも新しくなります）。
@@ -201,7 +201,7 @@ repo を clone 済みの環境（配備した Compute など）では、`claude 
 ```bash
 # 環境変数を空にして、デスクトップ版と同じ条件で確かめる（rag・nl2sql・agent が ✔ Connected）
 env -i HOME="$HOME" PATH="$PATH" claude mcp list
-claude plugin list   # production-ready-skills@production-ready-suite が ✔ enabled
+claude plugin list   # production-ready-skills@production-ready-assistant が ✔ enabled
 # ツールの一覧（キー・CA・URL の切り分け）
 ( . ~/.config/production-ready/env
   curl -sS --cacert ~/.config/production-ready/ca.crt -H "Authorization: Bearer $PR_API_KEY" -H 'Content-Type: application/json' \
@@ -214,7 +214,7 @@ claude plugin list   # production-ready-skills@production-ready-suite が ✔ en
 
 ### 更新・キーの削除
 
-- スキルの更新: `claude plugin marketplace update production-ready-suite` の後に `claude plugin update production-ready-skills@production-ready-suite`。
+- スキルの更新: `claude plugin marketplace update production-ready-assistant` の後に `claude plugin update production-ready-skills@production-ready-assistant`。
 - キーを替える: 新しいキーを発行して `~/.config/production-ready/env` を書き換え（次の接続から使われます。開いているセッションは `/mcp` で接続し直します）、古いキーをアカウントの画面の「API キー」から削除します（削除はすぐに効き、元に戻せません）。全員のキーは「ユーザーとロール」→「API キー」で管理します。
 
 応答の一覧（401 / 403 / 429）・呼び出しの上限・Agent のツールは [platform/docs/mcp-api-keys.md](./platform/docs/mcp-api-keys.md)、つまずく所・設定の JSON・長くかかるツール・Codex は [skills/README.md](./skills/README.md) を参照してください。

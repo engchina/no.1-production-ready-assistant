@@ -3,7 +3,7 @@ name: Terraform Release Package
 # OCI Resource Manager の統合 stack（terraform/stack、#217）の release。tag は suite-v*（例: suite-v0.1.0）。
 # ADB 1つと、選んだ製品（RAG / NL2SQL / Agent）ごとの Compute を1つの zip で配る。
 # 製品ごとの release（<製品>-v*、#94）は作らない（既存の release は残す）。
-#   terraform/scripts/package_stack.py              → terraform/dist/production-ready-suite-terraform-stack.zip
+#   terraform/scripts/package_stack.py              → terraform/dist/production-ready-assistant-terraform-stack.zip
 #   terraform/scripts/verify_stack_contract.py <zip> → stack の契約検証
 #
 # 公開の前に確かめること（#1594）:
@@ -12,7 +12,7 @@ name: Terraform Release Package
 #     push の CI が動かないので、毎日の schedule か `gh workflow run ci.yml --ref main` の成功を待ってから release する。
 #   - 配備の検証（suite-deploy.yml。PR の CI の Suite / Deploy と同じ）が通る。
 # zip には provenance（actions/attest-build-provenance）を付ける。利用者は
-# `gh attestation verify <zip> --repo engchina/no.1-production-ready-suite` で、この workflow が作ったことを確かめられる。
+# `gh attestation verify <zip> --repo engchina/no.1-production-ready-assistant` で、この workflow が作ったことを確かめられる。
 # workflow を変えたら `gh workflow run terraform-release.yml --ref main -f version=v0.0.0 -f dry_run=true` で、
 # 公開せずに確かめられる（tag の push の経路は dry run できない）。
 
@@ -103,7 +103,7 @@ jobs:
       run:
         working-directory: terraform
     env:
-      PACKAGE_NAME: production-ready-suite-terraform-stack.zip
+      PACKAGE_NAME: production-ready-assistant-terraform-stack.zip
     steps:
       - name: Resolve release tag
         working-directory: .
@@ -162,7 +162,7 @@ jobs:
             gh release create "$RELEASE_TAG" \
               --target "$TARGET_SHA" \
               --title "$RELEASE_TAG" \
-              --notes "OCI Resource Manager Terraform stack package for the Production Ready Suite (RAG / NL2SQL / Agent Control Plane on one shared Autonomous AI Database)."
+              --notes "OCI Resource Manager Terraform stack package for the Production Ready Assistant (RAG / NL2SQL / Agent Control Plane on one shared Autonomous AI Database)."
           fi
           gh release upload "$RELEASE_TAG" \
             "dist/$PACKAGE_NAME" \

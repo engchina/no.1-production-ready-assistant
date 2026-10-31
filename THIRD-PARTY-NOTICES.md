@@ -1,6 +1,6 @@
 # 第三者の部品の通知（THIRD-PARTY NOTICES）
 
-No.1 Production Ready Suite（`platform/`・`rag/`・`nl2sql/`・`agent/`）が使う第三者の部品のうち、許諾の条件に表示・原文の同梱・ソースの提供などの義務があるもの、または permissive（MIT・BSD・Apache-2.0 など）でないものの一覧です（#3392）。自前のコードのライセンスは [LICENSE](./LICENSE)（MIT）です。
+No.1 Production Ready Assistant（`platform/`・`rag/`・`nl2sql/`・`agent/`）が使う第三者の部品のうち、許諾の条件に表示・原文の同梱・ソースの提供などの義務があるもの、または permissive（MIT・BSD・Apache-2.0 など）でないものの一覧です（#3392）。自前のコードのライセンスは [LICENSE](./LICENSE)（MIT）です。
 
 > **これは法的な助言ではありません。** 技術の調査（lockfile・package の metadata・wheel に同梱されたライセンスのファイル）の結果であり、利用・納品・再配布の形に合わせた最終の判断は、法務・知財の担当者が行ってください。各部品のライセンスの正本は、その部品の配布物に含まれるライセンスのファイルです。
 

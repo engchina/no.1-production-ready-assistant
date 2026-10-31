@@ -94,8 +94,8 @@ jobs:
           terraform fmt -check -recursive stack
           (cd stack && terraform init -backend=false && terraform validate)
           python -m unittest discover -s scripts/tests -v
-          python scripts/package_stack.py --output "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
-          python scripts/verify_stack_contract.py "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
+          python scripts/package_stack.py --output "${RUNNER_TEMP}/production-ready-assistant-terraform-stack.zip"
+          python scripts/verify_stack_contract.py "${RUNNER_TEMP}/production-ready-assistant-terraform-stack.zip"
 
       # 1 台の Compute の配備（platform/deploy。#1316）: suite-init の振る舞い、自作の CA と IP の証明書（openssl）、
       # Nginx の site（prefix・SSE・MCP・login の上限・/ → /agent/・HTTPS on / off）を隔離した Nginx で検証する。

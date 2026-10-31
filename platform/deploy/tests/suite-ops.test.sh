@@ -120,7 +120,7 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 #    （元の props は退避）、suite-init.sh を実行する（#1577。suite-pull.sh の後の再起動で最新のコードを使う）。
 (
   export APP_ROOT="${task_dir}/rebuild"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   mkdir -p "${SUITE_REPO_DIR}/rag/backend" "${SUITE_REPO_DIR}/agent/backend" "${PROPS_DIR}"
   printf 'rag agent\n' > "${PROPS_DIR}/products.txt"
@@ -157,7 +157,7 @@ grep -qxF '  export SUITE_OPS_RERUN_COMMAND="${SUITE_DEPLOY_DIR}/suite-update.sh
 #    suite-adb.py の状態ごとの振る舞いは suite-adb.test.sh が確かめる。
 (
   export APP_ROOT="${task_dir}/adb"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   export SUITE_OPS_INHERITED=true
   mkdir -p "${PROPS_DIR}"
@@ -231,7 +231,7 @@ grep -qxF '  export SUITE_OPS_RERUN_COMMAND="${SUITE_DEPLOY_DIR}/suite-update.sh
 #    repository の platform/.env を渡して実行する（root なら APP_USER で。ここは root でないのでそのまま）。
 (
   export APP_ROOT="${task_dir}/adb-run"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   mkdir -p "${PROPS_DIR}" "${SUITE_REPO_DIR}/agent/backend/.venv/bin"
   printf 'rag agent\n' > "${PROPS_DIR}/products.txt"

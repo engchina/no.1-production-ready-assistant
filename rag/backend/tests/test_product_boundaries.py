@@ -43,7 +43,7 @@ OTHER_PACKAGE_NAMES = frozenset(
     {
         "production-ready-agent-backend",
         "production-ready-nl2sql-backend",
-        "production-ready-suite-evaluation",
+        "production-ready-assistant-evaluation",
     }
 )
 # 他の製品・suite のディレクトリ（`agent/backend`・`../nl2sql/frontend`・`suite/evaluation` など）

@@ -284,10 +284,10 @@ case_dir="${task_dir}/timeout"
 write_env "${case_dir}"
 status=0
 run_adb "${case_dir}" "$(state_json '["STOPPED", "STARTING"]')" ensure --timeout-seconds 0.5 --interval-seconds 0.1 \
-  --script-name /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-update.sh || status=$?
+  --script-name /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-update.sh || status=$?
 [ "${status}" -eq 1 ] || fail "時間切れで 1 にならない（${status}）"
 last_line "${case_dir}" | grep -qF "ADB が 0.5 秒以内に AVAILABLE になりません（今の状態 STARTING）" || fail "時間切れの理由: $(cat "${case_dir}/out.log")"
-last_line "${case_dir}" | grep -qF "起動すれば、そのまま DB を使えます（sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-update.sh の再実行は要りません）" \
+last_line "${case_dir}" | grep -qF "起動すれば、そのまま DB を使えます（sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-update.sh の再実行は要りません）" \
   || fail "実行し直すコマンド: $(cat "${case_dir}/out.log")"
 
 # 7. 権限が無い・認証の失敗: 試し直さずに止める（404 は ADB が無いか inspect が無い、起動の 404 は use が無い）。
@@ -388,7 +388,7 @@ assert_no_secret "${case_dir}"
 #     AVAILABLE を待ってから build する。
 (
   export APP_ROOT="${task_dir}/restart"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   export SUITE_OPS_INHERITED=true
   export SUITE_ADB_START_TIMEOUT_SECONDS=5 SUITE_ADB_POLL_INTERVAL_SECONDS=0

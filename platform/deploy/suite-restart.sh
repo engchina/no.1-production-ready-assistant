@@ -33,7 +33,7 @@ source "${SUITE_DEPLOY_DIR}/suite-nginx.sh"
 source "${SUITE_DEPLOY_DIR}/suite-health.sh"
 
 APP_ROOT="${APP_ROOT:-/u01/aipoc}"
-SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-suite}"
+SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-assistant}"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 SUITE_RECOVERY_DIR="${SUITE_RECOVERY_DIR:-${APP_ROOT}/recovery}"
 SUITE_INIT_SCRIPT="${SUITE_INIT_SCRIPT:-${SUITE_DEPLOY_DIR}/suite-init.sh}"

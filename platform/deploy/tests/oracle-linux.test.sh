@@ -125,11 +125,11 @@ id nginx >/dev/null 2>&1 || fail "nginx ユーザーが無い"
 # Nginx の worker（nginx ユーザー）が dist と CA 証明書を辿れるようにする（mktemp の directory は 0700）。
 chmod 0755 "${task_dir}"
 app_root="${task_dir}/app"
-mkdir -p "${app_root}/props" "${app_root}/no.1-production-ready-suite"
-ln -s "${repo}/platform" "${app_root}/no.1-production-ready-suite/platform"
+mkdir -p "${app_root}/props" "${app_root}/no.1-production-ready-assistant"
+ln -s "${repo}/platform" "${app_root}/no.1-production-ready-assistant/platform"
 for product in rag nl2sql agent; do
-  mkdir -p "${app_root}/no.1-production-ready-suite/${product}/frontend/dist"
-  printf '<!doctype html><title>%s</title>\n' "${product}" > "${app_root}/no.1-production-ready-suite/${product}/frontend/dist/index.html"
+  mkdir -p "${app_root}/no.1-production-ready-assistant/${product}/frontend/dist"
+  printf '<!doctype html><title>%s</title>\n' "${product}" > "${app_root}/no.1-production-ready-assistant/${product}/frontend/dist/index.html"
 done
 chmod -R a+rX "${app_root}"
 (

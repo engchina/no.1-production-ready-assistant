@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 
-PACKAGE_NAME = "production-ready-suite-terraform-stack.zip"
+PACKAGE_NAME = "production-ready-assistant-terraform-stack.zip"
 
 
 def _terraform_root() -> Path:

@@ -13,8 +13,8 @@ with RAG.
 
 ## Runtime Notes
 
-The bootstrap script writes `/u01/aipoc/no.1-production-ready-suite/nl2sql/backend/.env`
-and `/u01/aipoc/no.1-production-ready-suite/platform/.env` (both `0600`)
+The bootstrap script writes `/u01/aipoc/no.1-production-ready-assistant/nl2sql/backend/.env`
+and `/u01/aipoc/no.1-production-ready-assistant/platform/.env` (both `0600`)
 on the instance and starts in the background from cloud-init, matching the
 proven No.1-SQL-Assist Terraform bootstrap pattern. Track progress in
 `/var/log/cloud-init-custom.log` and `/var/log/nl2sql-init.log` until the
@@ -144,7 +144,7 @@ such an instance, stop the backend and workers, pull the source, and move the
 settings once:
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite
+cd /u01/aipoc/no.1-production-ready-assistant
 uv run --project platform/packages/backend_core \
   python platform/scripts/migrate_env_to_platform.py --product nl2sql          # review
 uv run --project platform/packages/backend_core \
@@ -168,7 +168,7 @@ rewrite `backend/.env`, `platform/.env`, the Wallet contents, systemd units, or 
 configuration.
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql
 ./scripts/update-after-pull.sh --check
 ./scripts/update-after-pull.sh --repair-only
 ./scripts/update-after-pull.sh
@@ -211,7 +211,7 @@ restored while the successfully initialized backend and workers remain running.
 The command log is appended to `/var/log/nl2sql-update.log`.
 
 The shared platform defaults to `platform/` in the same suite checkout
-(`/u01/aipoc/no.1-production-ready-suite/platform`). For a nonstandard installation,
+(`/u01/aipoc/no.1-production-ready-assistant/platform`). For a nonstandard installation,
 override `PLATFORM_REPO_DIR`. `BACKEND_HEALTH_URL`, `PUBLIC_HEALTH_URL`,
 `HEALTHCHECK_TIMEOUT_SECONDS`, and `HEALTHCHECK_INTERVAL_SECONDS` are also
 available for nondefault ports or health-check timing.
@@ -226,7 +226,7 @@ renders the backend's JSON log lines in human-readable form. It never restarts
 or otherwise mutates a service. Run it on the Compute instance:
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql
 ./scripts/tail-logs.sh --status          # unit state + backend/public health check
 ./scripts/tail-logs.sh                   # follow the four application units
 ./scripts/tail-logs.sh --backend         # backend only
@@ -244,7 +244,7 @@ The equivalent manual commands, and everything the script does not cover:
 ```bash
 sudo tail -f /var/log/cloud-init-custom.log
 sudo tail -f /var/log/nl2sql-init.log
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql
 sudo systemctl status production-ready-nl2sql-backend
 sudo journalctl -u production-ready-nl2sql-backend -f
 sudo journalctl -u production-ready-nl2sql-schema-refresh-worker -f
@@ -328,7 +328,7 @@ or `ORA-01950` when the database user lacks a privilege or tablespace quota; see
 `terraform/README.md`), then run:
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql/backend
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql/backend
 sudo -u opc /usr/local/bin/uv run python -m app.cli.nl2sql_system_schema --initialize
 sudo -u opc /usr/local/bin/uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
 sudo systemctl restart production-ready-nl2sql-backend

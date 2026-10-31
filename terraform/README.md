@@ -1,4 +1,4 @@
-# Production Ready Suite — OCI Resource Manager stack
+# Production Ready Assistant — OCI Resource Manager stack
 
 `terraform/stack/` は、3製品（RAG / NL2SQL / Agent Control Plane）を OCI Resource Manager から配備する **1つだけの** Terraform stack です（#217）。
 以前は製品ごとに `rag/` `nl2sql/` `agent/` の下に stack がありましたが、この stack に統合しました。
@@ -317,14 +317,14 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
 | backend | `production-ready-rag-backend.service`（`127.0.0.1:8000`）と `production-ready-rag-ingestion-worker.service`。Nginx が `/rag/` で `frontend/dist` を配信し `/rag/api/` を proxy |
 | 前処理 / parser | `production-ready-rag-<service>.service`（`rag/services/*/*/.venv`、`127.0.0.1:18010〜18028`） |
 | 実行ユーザー | `opc`（1 台の Compute。#1316・#1611） |
-| 設定 | `/u01/aipoc/no.1-production-ready-suite/rag/backend/.env` と `platform/.env`（`0600`） |
+| 設定 | `/u01/aipoc/no.1-production-ready-assistant/rag/backend/.env` と `platform/.env`（`0600`） |
 | ログ | `/var/log/rag-init.log`、`sudo journalctl -u production-ready-rag-backend.service -f` |
 
 ```bash
 sudo tail -f /var/log/rag-init.log
 systemctl list-units --all 'production-ready-rag-*'
 # RAG の system schema の初期化（冪等）を手動で再実行する
-cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
 sudo -u opc .venv/bin/python -m app.rag.system_schema_cli initialize
 sudo systemctl restart production-ready-rag-backend.service
 ```
@@ -359,7 +359,7 @@ sudo systemctl restart production-ready-rag-backend.service
 | 項目 | 値 |
 |---|---|
 | backend | `production-ready-agent-backend.service`（`127.0.0.1:8020`、1 worker） |
-| 設定 | `/u01/aipoc/no.1-production-ready-suite/agent/backend/.env` |
+| 設定 | `/u01/aipoc/no.1-production-ready-assistant/agent/backend/.env` |
 | データ | `/u01/data/production-ready-agent`（model 設定、Binding、Artifact） |
 | ログ | `/var/log/agent-init.log`、`journalctl -u production-ready-agent-backend` |
 
@@ -368,7 +368,7 @@ sudo tail -f /var/log/agent-init.log
 sudo journalctl -u production-ready-agent-backend -f
 curl -i http://127.0.0.1:8020/api/health
 # システムテーブル（認証・権限）の作成・更新（冪等）を手動で再実行する。画面の 運用設定 > システムテーブル でもできる
-cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/local/bin/uv run python -m app.cli.agent_system_schema --initialize
+cd /u01/aipoc/no.1-production-ready-assistant/agent/backend && sudo -u opc /usr/local/bin/uv run python -m app.cli.agent_system_schema --initialize
 ```
 
 既存の Agent の instance（Basic 認証で配備したもの）を更新する手順は [agent/docs/security-rbac.md §8](../agent/docs/security-rbac.md#8-既存環境の更新手順215) を参照してください。
@@ -415,7 +415,7 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
     各製品の「システム設定 > 外観と証明書」の「HTTPS の証明書」から、ダウンロードと端末への取り込み方を確認できます。
   - 公開 IP は OCI の instance metadata に無いため、Compute に公開 IP があるときだけ外部のサービス（既存の No.1-RAG / No.1-SQL-Assist と同じ `http://whatismyip.akamai.com/`、取れなければ `https://checkip.amazonaws.com`）に
     送信元の IP を問い合わせます。分からないときは private IP だけの証明書を作り、`/var/log/suite-init.log` に警告を出します。
-    公開 IP を指定して作り直す: `sudo bash /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-tls.sh renew --public-ip <公開 IP>`
+    公開 IP を指定して作り直す: `sudo bash /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-tls.sh renew --public-ip <公開 IP>`
   - **公開の URL（`PLATFORM_PUBLIC_BASE_URL`。#1870）**: suite-init.sh は製品の配備の前に、上と同じ決め方の公開 IP（無ければ private IP）と
     公開の port（HTTPS が on なら `https_port`、off なら `http_port`。既定の 443 / 80 は付けない）から `https://<公開 IP>[:<port>]` を作り、
     `platform/.env`（初回は props の `platform.env` から写す）の `PLATFORM_PUBLIC_BASE_URL` に書きます（再配備のたびに書き直す）。
@@ -483,7 +483,7 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
 
 SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 
-- `semanage fcontext -a -t usr_t '/u01/aipoc/no.1-production-ready-suite(/.*)?'` と `restorecon -R`: systemd（`init_t`）は `/u01` の既定の
+- `semanage fcontext -a -t usr_t '/u01/aipoc/no.1-production-ready-assistant(/.*)?'` と `restorecon -R`: systemd（`init_t`）は `/u01` の既定の
   `default_t` のファイルを実行も読みもできないため、repository を `usr_t` にする（RAG の unit の `.venv/bin/gunicorn` と `EnvironmentFile`）。
   新しく作るファイル（venv・`node_modules`・`git pull` の分）は親の `usr_t` を受け継ぐ。
 - `semanage fcontext -a -t httpd_sys_content_t '<repository>/<製品>/frontend/dist(/.*)?'`: Nginx が配信する dist。build の後に `restorecon -R`。
@@ -525,7 +525,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
   dispatcher・読み直せなかった backend）を再起動する（backend は `suite-restart.sh --no-build`）。CLI で適用したときは、
   動いている backend を再起動する（`suite-restart.sh` は再起動まで行う）。
 - **配備が途中で失敗したときのやり直し**（#1994）: 先に `sudo tail -n 50 /var/log/cloud-init-custom.log` と `/var/log/suite-init.log` で止まった所を確かめ、
-  原因（`/` の空き〔`df -h /`。#1984〕・ネットワーク・ADB など）を直してから、repo（`/u01/aipoc/no.1-production-ready-suite`）があれば
+  原因（`/` の空き〔`df -h /`。#1984〕・ネットワーク・ADB など）を直してから、repo（`/u01/aipoc/no.1-production-ready-assistant`）があれば
   `sudo .../platform/deploy/suite-update.sh`（最新の main を取得して再配備）か `suite-restart.sh`（今のコードで再配備）を実行する。
   repo の clone の前に止まったときだけ `sudo bash /u01/aipoc/bootstrap-suite.sh` を実行する（repo があれば所有者〔opc〕で更新してから
   `suite-init.sh` を実行する）。stack の再 apply はしない（cloud-init の user_data が変わると Compute が作り直される）。
@@ -611,7 +611,7 @@ RAG `-m app.rag.system_schema_cli check`・NL2SQL `-m app.cli.nl2sql_system_sche
 Agent `-m app.cli.agent_system_schema --check`。
 
 - 配備の直後は `sudo tail -n 20 /var/log/suite-init.log` の最後の `check:` の行を見る。
-- 後から確かめるときは `sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh --status`（再起動しない）。
+- 後から確かめるときは `sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh --status`（再起動しない）。
 
 ### ログインの試行の回数の共有（#1173）
 
@@ -644,13 +644,13 @@ Agent `-m app.cli.agent_system_schema --check`。
 
    ```bash
    # RAG
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u opc .venv/bin/python -m app.rag.system_schema_cli initialize
    # NL2SQL
-   cd /u01/aipoc/no.1-production-ready-suite/nl2sql/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/nl2sql/backend
    sudo -u opc /usr/local/bin/uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
    # Agent
-   cd /u01/aipoc/no.1-production-ready-suite/agent/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/agent/backend
    sudo -u opc /usr/local/bin/uv run python -m app.cli.agent_system_schema --initialize
    ```
 
@@ -693,10 +693,10 @@ monorepo root から実行します。
 
 ```bash
 python terraform/scripts/package_stack.py
-python terraform/scripts/verify_stack_contract.py terraform/dist/production-ready-suite-terraform-stack.zip
+python terraform/scripts/verify_stack_contract.py terraform/dist/production-ready-assistant-terraform-stack.zip
 ```
 
-出力は `terraform/dist/production-ready-suite-terraform-stack.zip` です。この zip を Resource Manager へ upload して stack を作成します。
+出力は `terraform/dist/production-ready-assistant-terraform-stack.zip` です。この zip を Resource Manager へ upload して stack を作成します。
 `verify_stack_contract.py` は、フォーム（`schema.yaml`）と Terraform 変数の一致、製品選択と 1 台の Compute・HTTPS の入力の契約、製品ごとの `backend/.env` の key が各製品の Settings にあること、
 backend の port（RAG 8000・NL2SQL 8010・Agent 8020）が init_script.sh・Nginx・MCP の URL で一致し衝突しないこと、証明書の固定の subject、
 RAG の前処理 / parser（`rag/scripts/rag-systemd.sh` の unit の定義と uv.lock があること）、各製品の `init_script.sh` の配備契約
@@ -711,9 +711,9 @@ CI（`.github/workflows/ci.yml` の `Suite / Deploy`。中身は `.github/workfl
 ## release
 
 `.github/workflows/terraform-release.yml` が `suite-v*` の tag（例: `suite-v0.1.0`）から release を作り、
-`production-ready-suite-terraform-stack.zip` と `.sha256` を公開し、その release を GitHub の Latest にします。次のボタンは最新の release を配備します。
+`production-ready-assistant-terraform-stack.zip` と `.sha256` を公開し、その release を GitHub の Latest にします。次のボタンは最新の release を配備します。
 
-[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-suite/releases/latest/download/production-ready-suite-terraform-stack.zip)
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-assistant/releases/latest/download/production-ready-assistant-terraform-stack.zip)
 
 root の [README.md](../README.md)「OCI へのデプロイ」のボタンも `releases/latest` を指すので、release のたびに書き換えません。版ごとの変更は release のノートに書きます。
 

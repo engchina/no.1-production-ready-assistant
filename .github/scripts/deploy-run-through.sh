@@ -36,7 +36,7 @@ base_image="${DEPLOY_IMAGE_BASE:-oraclelinux:9}"
 host_port="${DEPLOY_HTTPS_PORT:-8443}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 app_root="/u01/aipoc"
-repo_dir="${app_root}/no.1-production-ready-suite"
+repo_dir="${app_root}/no.1-production-ready-assistant"
 props="${app_root}/props"
 products="rag nl2sql agent"
 

@@ -37,8 +37,8 @@ APP_GROUP="${APP_GROUP:-${APP_USER}}"
 SERVICE_USER="${SERVICE_USER:-ragsvc}"
 SERVICE_GROUP="${SERVICE_GROUP:-${SERVICE_USER}}"
 SERVICE_HOME="${SERVICE_HOME:-/var/lib/production-ready-rag}"
-# RAG と共有 platform は monorepo（no.1-production-ready-suite）の rag/ と platform/ にある。
-SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+# RAG と共有 platform は monorepo（no.1-production-ready-assistant）の rag/ と platform/ にある。
+SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
 APP_REPO_DIR="${SUITE_REPO_DIR}/rag"
 BACKEND_DIR="${APP_REPO_DIR}/backend"
 # 3製品共通の設定（PLATFORM_*）の共通 .env（#211）。システム設定画面の保存先（model-settings.json も同じ場所）。

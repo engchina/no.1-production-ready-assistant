@@ -1,6 +1,6 @@
 # Handoff: 基盤トークン再設計 + タイプスケール + 新コンポーネント
 
-**対象リポジトリ:** `engchina/no.1-production-ready-suite` の `platform/packages/ui` (`@production-ready/ui`)
+**対象リポジトリ:** `engchina/no.1-production-ready-assistant` の `platform/packages/ui` (`@production-ready/ui`)
 **影響範囲:** `packages/ui` + 消費側3アプリ（RAG / NL2SQL / Agent）
 **種別:** 基盤リファクタリング（見た目の意図的な変更を多数含む）
 **忠実度:** **hifi** — 全値が確定済み。ここに書かれた hex・px・トークン名をそのまま実装してください。

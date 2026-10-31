@@ -16,7 +16,7 @@ prepare_case() {
   local case_dir="$1"
   mkdir -p \
     "${case_dir}/app/props" \
-    "${case_dir}/app/no.1-production-ready-suite/agent/backend" \
+    "${case_dir}/app/no.1-production-ready-assistant/agent/backend" \
     "${case_dir}/units"
   export APP_ROOT="${case_dir}/app"
   export AGENT_INIT_TEST_MODE=true
@@ -62,7 +62,7 @@ run_systemd_case() (
 run_install_env_case() (
   local case_dir="${TEST_TMP_DIR}/install-env"
   prepare_case "${case_dir}"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/platform"
   APP_USER="$(id -un)"
   APP_GROUP="$(id -gn)"
   export APP_USER APP_GROUP
@@ -105,7 +105,7 @@ done
 
 # --- 共通 .env（platform/.env）と Agent の backend/.env（#211） ---
 run_install_env_case
-install_suite="${TEST_TMP_DIR}/install-env/app/no.1-production-ready-suite"
+install_suite="${TEST_TMP_DIR}/install-env/app/no.1-production-ready-assistant"
 grep -qx 'PLATFORM_ORACLE_DSN=agentdb_high' "${install_suite}/platform/.env" \
   || fail "共通 .env が platform/.env に置かれていない"
 test "$(stat -c '%a' "${install_suite}/platform/.env")" = "600" || fail "platform/.env の permission が 0600 ではない"

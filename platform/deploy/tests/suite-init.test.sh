@@ -12,9 +12,9 @@ fail() {
 
 prepare_case() {
   local case_dir="$1"
-  mkdir -p "${case_dir}/app/props" "${case_dir}/app/no.1-production-ready-suite" "${case_dir}/units" \
+  mkdir -p "${case_dir}/app/props" "${case_dir}/app/no.1-production-ready-assistant" "${case_dir}/units" \
     "${case_dir}/conf.d"
-  ln -s "${repo}/platform" "${case_dir}/app/no.1-production-ready-suite/platform"
+  ln -s "${repo}/platform" "${case_dir}/app/no.1-production-ready-assistant/platform"
   export SUITE_INIT_TEST_MODE=true
   export APP_ROOT="${case_dir}/app"
   export SYSTEMD_UNIT_DIR="${case_dir}/units"
@@ -122,18 +122,18 @@ prepare_case() {
   [ -f "${NGINX_CONF_DIR}/production-ready-logging.conf" ] || fail "logging.conf を置かない"
   [ -f "${NGINX_CONF_DIR}/production-ready-login-rate-limit.conf" ] || fail "login-rate-limit.conf を置かない"
   grep -qx 'nginx -t' "${case_dir}/commands.log" || fail "nginx -t を実行しない"
-  printf 'RAG_MAX_UPLOAD_BYTES=104857600\n' > "${case_dir}/app/no.1-production-ready-suite/rag/backend/.env"
+  printf 'RAG_MAX_UPLOAD_BYTES=104857600\n' > "${case_dir}/app/no.1-production-ready-assistant/rag/backend/.env"
   [ "$(product_client_max_body_size rag)" = "110M" ] || fail "RAG_MAX_UPLOAD_BYTES から上限を作る"
   # MiB へ切り上げ、引用符を扱う。不正な値なら失敗する（#306）。
-  printf "RAG_MAX_UPLOAD_BYTES='1000000'\n" > "${case_dir}/app/no.1-production-ready-suite/rag/backend/.env"
+  printf "RAG_MAX_UPLOAD_BYTES='1000000'\n" > "${case_dir}/app/no.1-production-ready-assistant/rag/backend/.env"
   [ "$(product_client_max_body_size rag)" = "11M" ] || fail "RAG_MAX_UPLOAD_BYTES を MiB へ切り上げていない"
-  printf 'RAG_MAX_UPLOAD_BYTES=200MB\n' > "${case_dir}/app/no.1-production-ready-suite/rag/backend/.env"
+  printf 'RAG_MAX_UPLOAD_BYTES=200MB\n' > "${case_dir}/app/no.1-production-ready-assistant/rag/backend/.env"
   if product_client_max_body_size rag >/dev/null 2>&1; then fail "不正な RAG_MAX_UPLOAD_BYTES を受け入れた"; fi
   # NL2SQL / Agent も backend/.env の <製品>_MAX_UPLOAD_BYTES から（無ければ backend の既定値 + 10 MiB。#1597）。
   [ "$(product_client_max_body_size nl2sql)" = "210M" ] || fail "NL2SQL の既定の上限（200 MiB + 10 MiB）"
   [ "$(product_client_max_body_size agent)" = "110M" ] || fail "Agent の既定の上限（100 MiB + 10 MiB）"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/nl2sql/backend"
-  printf 'NL2SQL_MAX_UPLOAD_BYTES=52428800\n' > "${case_dir}/app/no.1-production-ready-suite/nl2sql/backend/.env"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/nl2sql/backend"
+  printf 'NL2SQL_MAX_UPLOAD_BYTES=52428800\n' > "${case_dir}/app/no.1-production-ready-assistant/nl2sql/backend/.env"
   [ "$(product_client_max_body_size nl2sql)" = "60M" ] || fail "NL2SQL_MAX_UPLOAD_BYTES から上限を作る"
 )
 
@@ -313,8 +313,8 @@ prepare_case() {
   prepare_case "${case_dir}"
   # shellcheck source=../suite-init.sh
   source "${repo}/platform/deploy/suite-init.sh"
-  rm -f -- "${case_dir}/app/no.1-production-ready-suite/platform"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform"
+  rm -f -- "${case_dir}/app/no.1-production-ready-assistant/platform"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/platform"
   printf 'PLATFORM_ORACLE_USER=APP\n' > "${PROPS_DIR}/platform.env"
   printf 'PLATFORM_ORACLE_USER=APP\nPLATFORM_PUBLIC_BASE_URL=https://198.51.100.1\nPLATFORM_OCI_REGION=ap-tokyo-1\n' \
     > "${SUITE_REPO_DIR}/platform/.env"
@@ -352,8 +352,8 @@ prepare_case() {
   prepare_case "${case_dir}"
   # shellcheck source=../suite-init.sh
   source "${repo}/platform/deploy/suite-init.sh"
-  rm -f -- "${case_dir}/app/no.1-production-ready-suite/platform"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform" "${case_dir}/bin" "${case_dir}/zoneinfo/Asia" \
+  rm -f -- "${case_dir}/app/no.1-production-ready-assistant/platform"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/platform" "${case_dir}/bin" "${case_dir}/zoneinfo/Asia" \
     "${case_dir}/zoneinfo/Etc"
   : > "${case_dir}/zoneinfo/Asia/Tokyo"
   : > "${case_dir}/zoneinfo/UTC"

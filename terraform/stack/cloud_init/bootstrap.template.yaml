@@ -108,7 +108,7 @@ write_files:
 
       APP_ROOT="/u01/aipoc"
       # 3 製品（rag/ nl2sql/ agent/）と共有 platform（platform/）は同じ monorepo にあるため、clone は1回だけ行う。
-      SUITE_REPO_DIR="$${APP_ROOT}/no.1-production-ready-suite"
+      SUITE_REPO_DIR="$${APP_ROOT}/no.1-production-ready-assistant"
 
       log() {
         printf '[suite-bootstrap] %s\n' "$*"
