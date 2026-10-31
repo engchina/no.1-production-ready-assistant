@@ -2583,9 +2583,10 @@ async function mockDocumentWorkspace(
       json: {
         data: {
           settings: {
-            enterprise_ai: {},
+            enterprise_ai: { default_embedding_model_id: "text-embedding-v4" },
           },
           checks: {},
+          embedding_dim: 1536,
           model_settings_file: "models.json",
           source: "runtime",
         },

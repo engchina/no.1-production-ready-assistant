@@ -948,7 +948,47 @@ test("アップロード保存先は OCI の region と namespace 不足を保�
   await expectNoHorizontalOverflow(page);
 });
 
+// 埋め込み / 再ランクの登録モデルも持つ構成（行ごとのテストボタンが種類で分岐する。#45）。
+async function routeModelSettingsWithEmbeddingRerank(page: Page) {
+  const base = modelSettingsFixture();
+  const enterpriseAi = base.settings.enterprise_ai;
+  await page.unroute("**/api/settings/model");
+  await page.route("**/api/settings/model", (route) =>
+    fulfillJson(
+      route,
+      modelSettingsFixture({
+        settings: {
+          ...base.settings,
+          enterprise_ai: {
+            ...enterpriseAi,
+            models: [
+              ...enterpriseAi.models,
+              {
+                model_id: "text-embedding-v4",
+                display_name: "埋め込み",
+                vision_enabled: false,
+                kind: "embedding",
+                connection_id: "primary",
+              },
+              {
+                model_id: "qwen3-rerank",
+                display_name: "再ランク",
+                vision_enabled: false,
+                kind: "rerank",
+                connection_id: "primary",
+              },
+            ],
+            default_embedding_model_id: "text-embedding-v4",
+            default_rerank_model_id: "qwen3-rerank",
+          },
+        },
+      })
+    )
+  );
+}
+
 test("システム設定のテスト成功結果を共通パネルで表示する", async ({ page }, testInfo) => {
+  await routeModelSettingsWithEmbeddingRerank(page);
   await page.goto("/settings/oci");
   const ociTestButton = page.getByRole("button", { name: /接続テスト/ });
   await ociTestButton.focus();
@@ -1041,6 +1081,7 @@ test("システム設定のテスト成功結果を共通パネルで表示す�
 });
 
 test("システム設定の失敗と API エラーを共通 danger パネルで表示する", async ({ page }) => {
+  await routeModelSettingsWithEmbeddingRerank(page);
   await page.unroute("**/api/settings/oci/config/test");
   await page.route("**/api/settings/oci/config/test", (route) =>
     fulfillJson(
