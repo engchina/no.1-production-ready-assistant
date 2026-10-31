@@ -1,4 +1,4 @@
-"""OCI / Oracle staging 用の RAG smoke test CLI。
+"""Oracle / モデルの接続先を使う staging 用の RAG smoke test CLI。
 
 CI では実行せず、staging 環境で実接続情報を設定してから
 `python -m app.rag.staging_smoke` として実行する。
@@ -14,13 +14,13 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oracle import OracleClient, close_oracle_pool
 from app.config import Settings, get_settings
 from app.rag.ingestion import IngestionPipeline
 from app.rag.pipeline import RagPipeline
 from app.rag.request_context import with_system_access
-from app.readiness import READINESS_INVALID, readiness_checks, readiness_checks_are_ok
+from app.readiness import readiness_checks, readiness_checks_are_ok
 from app.schemas.document import FileStatus
 from app.schemas.search import SearchRequest
 
@@ -141,7 +141,7 @@ async def run_staging_smoke(
     body = _smoke_document_body(marker)
     object_key = f"staging-smoke/{suffix}.txt"
 
-    storage = ObjectStorageClient(settings=resolved_settings)
+    storage = FileStorageClient(settings=resolved_settings)
     oracle = OracleClient(settings=resolved_settings)
 
     stage = "prepare"
@@ -161,7 +161,7 @@ async def run_staging_smoke(
         stage = "object_storage_get"
         fetched = await storage.get(object_uri)
         if fetched != body:
-            raise RuntimeError("Object Storage の put/get roundtrip が一致しません。")
+            raise RuntimeError("保存先の put/get roundtrip が一致しません。")
 
         stage = "oracle_create_document"
         document = await oracle.create_document(
@@ -255,9 +255,6 @@ def staging_smoke_preflight(
     """staging smoke 前に設定だけを検証する。"""
     resolved_settings = settings or get_settings()
     checks = readiness_checks(resolved_settings)
-    if resolved_settings.upload_storage_backend != "oci":
-        checks = {**checks, "smoke_object_storage_backend": READINESS_INVALID}
-
     ok = readiness_checks_are_ok(checks)
     message = (
         "staging smoke preflight ok"
@@ -298,7 +295,7 @@ def _initial_cleanup_status(cleanup: bool) -> dict[str, str]:
 
 async def _cleanup_smoke_resources(
     *,
-    storage: ObjectStorageClient,
+    storage: FileStorageClient,
     oracle: OracleClient,
     object_uri: str | None,
     document_id: str | None,

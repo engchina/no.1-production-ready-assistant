@@ -2,7 +2,6 @@
 
 import asyncio
 import copy
-import hashlib
 import json
 import stat
 from collections.abc import Sequence
@@ -13,11 +12,8 @@ from typing import Any
 from zipfile import ZipFile
 
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from dotenv import dotenv_values
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
-from pr_system_settings import oci_connectivity
 from pr_system_settings.model import ModelSettingsTestRequest
 from pr_system_settings.model_test_input import MODEL_TEST_IMAGE_BYTES
 from pytest import MonkeyPatch
@@ -986,77 +982,13 @@ def test_update_chunking_settings_allows_fixed_delimiter_without_chunk_bounds(
     assert "RAG_CHUNK_DELIMITER=---" in env_file.read_text(encoding="utf-8")
 
 
-def test_guardrail_settings_exposes_independent_switches(monkeypatch: MonkeyPatch) -> None:
-    for side in ("input", "output"):
-        monkeypatch.setattr(get_settings(), f"rag_guardrails_{side}_enabled", False)
-    body = client.get("/api/settings/guardrail").json()["data"]
-    assert body["input_enabled"] is False and body["output_enabled"] is False
-    assert set(body) == {
-        "input_enabled",
-        "output_enabled",
-        "oci_configured",
-        "oci_warning_code",
-        "config_source",
-    }
-
-
-@pytest.mark.parametrize("input_enabled", [True, False])
-@pytest.mark.parametrize("output_enabled", [True, False])
-def test_guardrail_switches_persist_env(
-    monkeypatch: MonkeyPatch, tmp_path: Path, input_enabled: bool, output_enabled: bool
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_guardrails_input_enabled", not input_enabled)
-    monkeypatch.setattr(settings, "rag_guardrails_output_enabled", not output_enabled)
-    monkeypatch.setattr(settings_routes, "_oci_guardrails_readiness_code", lambda _: None)
-    env_file = _settings_env_file(monkeypatch, tmp_path)
-    body = {"input_enabled": input_enabled, "output_enabled": output_enabled}
-    response = client.patch("/api/settings/guardrail", json=body)
-    assert response.status_code == 200
-    for side, enabled in (("input", input_enabled), ("output", output_enabled)):
-        assert response.json()["data"][f"{side}_enabled"] is enabled
-        assert getattr(settings, f"rag_guardrails_{side}_enabled") is enabled
-        assert (
-            f"RAG_GUARDRAILS_{side.upper()}_ENABLED={str(enabled).lower()}" in env_file.read_text()
-        )
-
-
-@pytest.mark.parametrize("side", ["input", "output"])
-def test_guardrail_on_rejects_missing_oci_configuration(
-    monkeypatch: MonkeyPatch, side: str
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_guardrails_input_enabled", False)
-    monkeypatch.setattr(settings, "rag_guardrails_output_enabled", False)
-    monkeypatch.setattr(settings, "oci_guardrails_compartment_id", "")
-    monkeypatch.setattr(settings, "oci_compartment_id", "")
-    body = {"input_enabled": False, "output_enabled": False, f"{side}_enabled": True}
-    assert client.patch("/api/settings/guardrail", json=body).status_code == 422
-    assert not settings.rag_guardrails_input_enabled and not settings.rag_guardrails_output_enabled
-
-
-def test_guardrail_off_does_not_require_oci_configuration(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(get_settings(), "rag_guardrails_input_enabled", True)
-    monkeypatch.setattr(get_settings(), "rag_guardrails_output_enabled", True)
-    monkeypatch.setattr(settings_routes, "_oci_guardrails_readiness_code", lambda _: "missing")
-    _settings_env_file(monkeypatch, tmp_path)
-    response = client.patch(
-        "/api/settings/guardrail", json={"input_enabled": False, "output_enabled": False}
+@pytest.mark.parametrize("method", ["GET", "PATCH"])
+def test_removed_guardrail_settings_api_is_not_routed(method: str) -> None:
+    # OCI Guardrails の設定 API は #11 で削除した。
+    response = client.request(
+        method, "/api/settings/guardrail", json={"input_enabled": True, "output_enabled": True}
     )
-    assert response.status_code == 200
-    assert (
-        not response.json()["data"]["input_enabled"]
-        and not response.json()["data"]["output_enabled"]
-    )
-
-
-def test_guardrail_rejects_removed_policy_and_backend() -> None:
-    response = client.patch(
-        "/api/settings/guardrail", json={"enabled": False, "policy": "strict", "backend": "local"}
-    )
-    assert response.status_code == 422
+    assert response.status_code == 404
 
 
 def _stub_vector_index_build(monkeypatch: MonkeyPatch, actual: tuple[int, int] | None) -> None:
@@ -1758,679 +1690,6 @@ def test_model_settings_rejects_non_1536_embedding_dim() -> None:
     assert body["error_messages"]
 
 
-def test_read_oci_config_uses_runtime_config_and_profile(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """読むのは実行中の設定の config / profile（要求の path は使わない。#1067）。"""
-    config_file = tmp_path / "config"
-    config_file.write_text(
-        "\n".join(
-            [
-                "[DEFAULT]",
-                "tenancy=ocid1.tenancy.oc1..shared",
-                "region=ap-tokyo-1",
-                "key_file=/home/app/.oci/default.pem",
-                "[RAG_PROD]",
-                "user=ocid1.user.oc1..prod",
-                "fingerprint=12:34:56:78",
-                "region=ap-osaka-1",
-                "compartment=ocid1.compartment.oc1..prod",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "RAG_PROD")
-
-    resp = client.post(
-        "/api/settings/oci/config/read",
-        json={"config_file": str(tmp_path / "other"), "profile": "DEFAULT"},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body == {
-        "profile": "RAG_PROD",
-        "user": "ocid1.user.oc1..prod",
-        "fingerprint": "12:34:56:78",
-        "tenancy": "ocid1.tenancy.oc1..shared",
-        "region": "ap-osaka-1",
-        "key_file": "/home/app/.oci/default.pem",
-        "applied_fields": [
-            "user",
-            "fingerprint",
-            "tenancy",
-            "region",
-            "key_file",
-        ],
-    }
-    assert "compartment" not in body
-
-
-def test_get_oci_settings_returns_runtime_and_config_values(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    key_file.parent.mkdir()
-    key_file.write_text(
-        "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
-    config_file = tmp_path / ".oci" / "config"
-    config_file.write_text(
-        "\n".join(
-            [
-                "[DEFAULT]",
-                "user=ocid1.user.oc1..runtime",
-                "fingerprint=12:34:56:78",
-                "tenancy=ocid1.tenancy.oc1..runtime",
-                "region=ap-tokyo-1",
-                "key_file=/tmp/ignored.pem",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oci_region", "us-chicago-1")
-
-    resp = client.get("/api/settings/oci")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body == {
-        "config_file": str(config_file),
-        "profile": "DEFAULT",
-        "user": "ocid1.user.oc1..runtime",
-        "fingerprint": "12:34:56:78",
-        "tenancy": "ocid1.tenancy.oc1..runtime",
-        "region": "ap-tokyo-1",
-        "key_file": "~/.oci/oci_api_key.pem",
-        "key_file_exists": True,
-        "config_file_exists": True,
-        "config_source": "runtime",
-        "config_error": None,
-    }
-
-
-def test_get_oci_settings_reports_missing_private_key_without_failing(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(tmp_path / ".oci" / "missing-config"))
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oci_region", "ap-osaka-1")
-
-    resp = client.get("/api/settings/oci")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["user"] == ""
-    assert body["fingerprint"] == ""
-    assert body["tenancy"] == ""
-    assert body["region"] == ""
-    assert body["key_file"] == "~/.oci/oci_api_key.pem"
-    assert body["key_file_exists"] is False
-    assert body["config_file_exists"] is False
-
-
-def test_update_oci_settings_creates_config_dir_and_file_with_private_permissions(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oci_region", "us-chicago-1")
-    env_file = _platform_env_file(
-        monkeypatch,
-        tmp_path,
-        "\n".join(
-            [
-                "# 既存設定",
-                "PLATFORM_OCI_REGION=us-chicago-1",
-                "",
-            ]
-        ),
-    )
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    config_dir = tmp_path / ".oci"
-    config_file = config_dir / "config"
-    assert config_dir.is_dir()
-    assert config_file.is_file()
-    assert stat.S_IMODE(config_dir.stat().st_mode) == 0o700
-    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
-    content = config_file.read_text(encoding="utf-8")
-    assert "[DEFAULT]" in content
-    assert "user=ocid1.user.oc1..new" in content
-    assert "fingerprint=12:34:56:78:90:ab:cd:ef" in content
-    assert "tenancy=ocid1.tenancy.oc1..new" in content
-    assert "region=ap-osaka-1" in content
-    assert "key_file=~/.oci/oci_api_key.pem" in content
-    assert settings.oci_region == "ap-osaka-1"
-    assert body["config_file_exists"] is True
-    assert body["key_file_exists"] is False
-    persisted = env_file.read_text(encoding="utf-8")
-    assert "# 既存設定" in persisted
-    assert "PLATFORM_OCI_CONFIG_FILE=~/.oci/config" in persisted
-    assert "PLATFORM_OCI_CONFIG_PROFILE=DEFAULT" in persisted
-    assert "PLATFORM_OCI_REGION=ap-osaka-1" in persisted
-
-
-def test_update_oci_settings_does_not_write_empty_config_defaults(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oci_region", "us-chicago-1")
-    env_file = _platform_env_file(monkeypatch, tmp_path)
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "",
-            "fingerprint": "",
-            "tenancy": "",
-            "region": "",
-        },
-    )
-
-    assert resp.status_code == 200
-    content = (tmp_path / ".oci" / "config").read_text(encoding="utf-8")
-    assert "user=" not in content
-    assert "fingerprint=" not in content
-    assert "tenancy=" not in content
-    assert "region=" not in content
-    assert "key_file=" not in content
-    assert settings.oci_region == ""
-    assert "PLATFORM_OCI_REGION" not in env_file.read_text(encoding="utf-8")
-
-
-def test_update_oci_settings_preserves_existing_non_default_profile(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    config_dir = tmp_path / ".oci"
-    config_dir.mkdir()
-    config_file = config_dir / "config"
-    config_file.write_text(
-        "\n".join(
-            [
-                "[DEFAULT]",
-                "user=ocid1.user.oc1..old",
-                "fingerprint=aa:bb:cc:dd",
-                "[ADMIN_USER]",
-                "user=ocid1.user.oc1..admin",
-                "fingerprint=11:22:33:44",
-                "tenancy=ocid1.tenancy.oc1..admin",
-                "region=us-chicago-1",
-                "key_file=keys/admin.pem",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    _settings_env_file(monkeypatch, tmp_path)
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    content = config_file.read_text(encoding="utf-8")
-    assert "[ADMIN_USER]" in content
-    assert "user=ocid1.user.oc1..admin" in content
-    assert "key_file=keys/admin.pem" in content
-    assert "user=ocid1.user.oc1..new" in content
-
-
-def test_update_oci_settings_does_not_mutate_runtime_when_env_write_fails(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oci_region", "us-chicago-1")
-    monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path)
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 500
-    assert settings.oci_region == "us-chicago-1"
-
-
-def test_update_oci_object_storage_settings_persists_env_and_mutates_runtime(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "object_storage_region", "ap-osaka-1")
-    monkeypatch.setattr(settings, "object_storage_namespace", "old-namespace")
-    env_file = _platform_env_file(
-        monkeypatch,
-        tmp_path,
-        "\n".join(
-            [
-                "# OCI Object Storage",
-                "PLATFORM_OBJECT_STORAGE_REGION=ap-osaka-1",
-                "PLATFORM_OBJECT_STORAGE_NAMESPACE=old-namespace",
-                "PLATFORM_OBJECT_STORAGE_BUCKET=rag-originals",
-                "",
-            ]
-        ),
-    )
-
-    resp = client.patch(
-        "/api/settings/oci/object-storage",
-        json={
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "mytenancynamespace",
-        },
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["object_storage_region"] == "us-chicago-1"
-    assert body["object_storage_namespace"] == "mytenancynamespace"
-    assert settings.object_storage_region == "us-chicago-1"
-    assert settings.object_storage_namespace == "mytenancynamespace"
-    persisted = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_OBJECT_STORAGE_REGION=us-chicago-1" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_NAMESPACE=mytenancynamespace" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_BUCKET=rag-originals" in persisted
-
-
-def test_update_oci_object_storage_settings_does_not_mutate_runtime_when_env_write_fails(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "object_storage_region", "ap-osaka-1")
-    monkeypatch.setattr(settings, "object_storage_namespace", "old-namespace")
-    monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path)
-
-    resp = client.patch(
-        "/api/settings/oci/object-storage",
-        json={
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "mytenancynamespace",
-        },
-    )
-
-    assert resp.status_code == 500
-    assert settings.object_storage_region == "ap-osaka-1"
-    assert settings.object_storage_namespace == "old-namespace"
-
-
-def test_update_oci_object_storage_settings_rejects_invalid_values() -> None:
-    resp = client.patch(
-        "/api/settings/oci/object-storage",
-        json={
-            "object_storage_region": "US_CHICAGO_1",
-            "object_storage_namespace": "invalid namespace",
-        },
-    )
-
-    assert resp.status_code == 422
-    assert resp.json()["error_messages"]
-
-
-def test_test_oci_config_reports_missing_private_key_after_save(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    _settings_env_file(monkeypatch, tmp_path)
-    client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    resp = client.post("/api/settings/oci/config/test")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["status"] == "failed"
-    assert body["config_file_exists"] is True
-    assert body["key_file_exists"] is False
-    assert body["missing_fields"] == []
-    assert body["oci_directory_mode"] == "0700"
-    assert body["config_file_mode"] == "0600"
-    assert body["key_file_mode"] is None
-    assert "秘密鍵ファイルが見つかりません" in body["message"]
-
-
-def test_test_oci_config_succeeds_with_private_key_and_permissions(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    _settings_env_file(monkeypatch, tmp_path)
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_der = private_key.public_key().public_bytes(
-        serialization.Encoding.DER,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    digest = hashlib.md5(public_der, usedforsecurity=False).hexdigest()
-    fingerprint = ":".join(digest[index : index + 2] for index in range(0, 32, 2))
-    client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": fingerprint,
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    key_file.write_bytes(
-        private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-    )
-    key_file.chmod(0o600)
-    namespace_calls: list[str] = []
-    monkeypatch.setattr(
-        oci_connectivity,
-        "_get_object_storage_namespace",
-        lambda config: namespace_calls.append(str(config["region"])),
-    )
-
-    resp = client.post("/api/settings/oci/config/test")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["status"] == "success"
-    assert body["key_file_exists"] is True
-    assert body["permission_issues"] == []
-    assert body["key_file_mode"] == "0600"
-    assert [stage["status"] for stage in body["stages"]] == ["success"] * 4
-    assert namespace_calls == ["ap-osaka-1"]
-    assert fingerprint not in resp.text
-
-
-def test_test_oci_config_reports_encrypted_private_key_without_pass_phrase(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", "~/.oci/config")
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    _settings_env_file(monkeypatch, tmp_path)
-    client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..new",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..new",
-            "region": "ap-osaka-1",
-        },
-    )
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    key_file.write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
-    key_file.chmod(0o600)
-
-    resp = client.post("/api/settings/oci/config/test")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["status"] == "failed"
-    assert body["key_file_exists"] is True
-    assert body["error_type"] == "OciPrivateKeyPassPhraseRequiredError"
-    assert "暗号化されています" in body["message"]
-
-
-def test_read_oci_config_rejects_missing_requested_profile(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    config_file = tmp_path / "config"
-    config_file.write_text(
-        "[DEFAULT]\nuser=ocid1.user.oc1..default\n",
-        encoding="utf-8",
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "RAG_PROD")
-
-    resp = client.post(
-        "/api/settings/oci/config/read",
-        json={"config_file": str(config_file), "profile": "RAG_PROD"},
-    )
-
-    assert resp.status_code == 404
-    assert "指定した OCI config profile が見つかりません。" in resp.text
-
-
-def test_read_object_storage_namespace_uses_oci_sdk(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    captured: dict[str, Any] = {}
-
-    class FakeObjectStorageClient:
-        def __init__(self, config: dict[str, Any]) -> None:
-            captured["config"] = config
-
-        def get_namespace(self) -> object:
-            captured["get_namespace_called"] = True
-            return SimpleNamespace(data="mytenancynamespace")
-
-    def fake_from_file(path: str, profile: str) -> dict[str, Any]:
-        captured["config_path"] = path
-        captured["profile"] = profile
-        return {"region": "ap-tokyo-1"}
-
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return SimpleNamespace(from_file=fake_from_file)
-        if name == "oci.object_storage":
-            return SimpleNamespace(ObjectStorageClient=FakeObjectStorageClient)
-        raise AssertionError(f"unexpected module import: {name}")
-
-    monkeypatch.setattr("pr_system_settings.oci.importlib.import_module", fake_import_module)
-    config_file = tmp_path / "config"
-    # 取得に使う config は実行中の設定のもの（要求の config_file は使わない。#1067）。
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-
-    resp = client.post(
-        "/api/settings/oci/object-storage/namespace",
-        json={
-            "config_file": str(tmp_path / "other"),
-            "profile": "OTHER",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"] == {"namespace": "mytenancynamespace"}
-    assert captured["config_path"] == str(config_file)
-    assert captured["profile"] == "DEFAULT"
-    assert captured["config"] == {"region": "ap-osaka-1"}
-    assert captured["get_namespace_called"] is True
-
-
-def test_read_object_storage_namespace_reports_oci_errors(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return SimpleNamespace(from_file=lambda path, profile: {"region": "ap-tokyo-1"})
-        if name == "oci.object_storage":
-            raise RuntimeError("sdk unavailable")
-        raise AssertionError(f"unexpected module import: {name}")
-
-    monkeypatch.setattr("pr_system_settings.oci.importlib.import_module", fake_import_module)
-
-    resp = client.post(
-        "/api/settings/oci/object-storage/namespace",
-        json={
-            "config_file": str(tmp_path / "config"),
-            "profile": "DEFAULT",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 502
-    assert "namespace を取得できませんでした" in resp.text
-
-
-def test_read_object_storage_namespace_refuses_encrypted_private_key_without_prompt(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    key_file = tmp_path / "encrypted.pem"
-    key_file.write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
-    initialized = False
-
-    class FakeObjectStorageClient:
-        def __init__(self, config: dict[str, Any]) -> None:
-            nonlocal initialized
-            initialized = True
-
-        def get_namespace(self) -> object:
-            return SimpleNamespace(data="mytenancynamespace")
-
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return SimpleNamespace(
-                from_file=lambda path, profile: {
-                    "key_file": str(key_file),
-                    "region": "ap-tokyo-1",
-                }
-            )
-        if name == "oci.object_storage":
-            return SimpleNamespace(ObjectStorageClient=FakeObjectStorageClient)
-        raise AssertionError(f"unexpected module import: {name}")
-
-    monkeypatch.setattr("pr_system_settings.oci.importlib.import_module", fake_import_module)
-
-    resp = client.post(
-        "/api/settings/oci/object-storage/namespace",
-        json={
-            "config_file": str(tmp_path / "config"),
-            "profile": "DEFAULT",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 502
-    assert "暗号化されています" in resp.text
-    assert initialized is False
-
-
-def test_upload_oci_private_key_overwrites_fixed_path(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    pem = b"-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n"
-
-    resp = client.post(
-        "/api/settings/oci/key-file",
-        files={"file": ("new-key.pem", pem, "application/x-pem-file")},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body == {"key_file": "~/.oci/oci_api_key.pem", "saved": True}
-    target = tmp_path / ".oci" / "oci_api_key.pem"
-    assert target.read_bytes() == pem
-    assert stat.S_IMODE(target.stat().st_mode) == 0o600
-    assert "PRIVATE KEY" not in resp.text
-
-
-def test_upload_oci_private_key_rejects_invalid_content(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    resp = client.post(
-        "/api/settings/oci/key-file",
-        files={"file": ("new-key.pem", b"not a pem", "application/x-pem-file")},
-    )
-
-    assert resp.status_code == 400
-    assert not (tmp_path / ".oci" / "oci_api_key.pem").exists()
-
-
-def test_upload_oci_private_key_rejects_encrypted_content(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    pem = b"-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n"
-
-    resp = client.post(
-        "/api/settings/oci/key-file",
-        files={"file": ("encrypted.pem", pem, "application/x-pem-file")},
-    )
-
-    assert resp.status_code == 400
-    assert "pass phrase" in resp.text
-    assert not (tmp_path / ".oci" / "oci_api_key.pem").exists()
-
-
 def test_get_database_settings_masks_secrets(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "oracle_user", "rag_app")
@@ -2936,25 +2195,20 @@ def test_get_upload_storage_settings_returns_runtime_values(
     tmp_path: Path,
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path / "uploads"))
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
-    monkeypatch.setattr(settings, "object_storage_namespace", "example-namespace")
-    monkeypatch.setattr(settings, "object_storage_bucket", "rag-originals")
     monkeypatch.setattr(settings, "max_upload_bytes", 12345)
 
     resp = client.get("/api/settings/upload-storage")
 
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["backend"] == "local"
-    assert body["local_storage_dir"] == str(tmp_path / "uploads")
-    assert body["object_storage_region"] == "us-chicago-1"
-    assert body["object_storage_namespace"] == "example-namespace"
-    assert body["object_storage_bucket"] == "rag-originals"
-    assert body["readiness"] == "ok"
-    assert body["max_upload_bytes"] == 12345
-    assert body["config_source"] == "runtime"
+    # 保存先はローカルのディレクトリだけ（#11）。OCI Object Storage の項目は返さない。
+    assert body == {
+        "local_storage_dir": str(tmp_path / "uploads"),
+        "readiness": "ok",
+        "max_upload_bytes": 12345,
+        "config_source": "runtime",
+    }
 
 
 def test_update_upload_storage_settings_persists_env_and_mutates_runtime(
@@ -2962,17 +2216,14 @@ def test_update_upload_storage_settings_persists_env_and_mutates_runtime(
     tmp_path: Path,
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
-    monkeypatch.setattr(settings, "object_storage_namespace", "global-namespace")
     env_file = _upload_storage_env_file(
         monkeypatch,
         tmp_path,
         "\n".join(
             [
                 "# 既存設定",
-                "PLATFORM_UPLOAD_STORAGE_BACKEND=local",
                 "PLATFORM_LOCAL_STORAGE_DIR=/old/uploads",
-                "PLATFORM_UPLOAD_STORAGE_BACKEND=duplicate",
+                "PLATFORM_LOCAL_STORAGE_DIR=/duplicate/uploads",
                 "",
             ]
         ),
@@ -2980,56 +2231,20 @@ def test_update_upload_storage_settings_persists_env_and_mutates_runtime(
 
     resp = client.patch(
         "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/production-ready-rag",
-            "object_storage_bucket": "rag-originals",
-        },
+        json={"local_storage_dir": "/u01/data/production-ready-rag"},
     )
 
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["backend"] == "oci"
+    assert body["local_storage_dir"] == "/u01/data/production-ready-rag"
     assert body["readiness"] == "ok"
-    assert settings.upload_storage_backend == "oci"
     assert settings.local_storage_dir == "/u01/data/production-ready-rag"
-    assert settings.object_storage_namespace == "global-namespace"
-    assert settings.object_storage_bucket == "rag-originals"
     persisted = env_file.read_text(encoding="utf-8")
     assert "# 既存設定" in persisted
-    assert persisted.count("PLATFORM_UPLOAD_STORAGE_BACKEND=") == 1
-    assert "PLATFORM_UPLOAD_STORAGE_BACKEND=oci" in persisted
+    assert persisted.count("PLATFORM_LOCAL_STORAGE_DIR=") == 1
     assert "PLATFORM_LOCAL_STORAGE_DIR=/u01/data/production-ready-rag" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_REGION=us-chicago-1" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_NAMESPACE=global-namespace" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_BUCKET=rag-originals" in persisted
-
-
-def test_update_upload_storage_settings_can_apply_namespace_from_oci_settings_draft(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "object_storage_namespace", "")
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
-    env_file = _upload_storage_env_file(monkeypatch, tmp_path)
-
-    resp = client.patch(
-        "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/production-ready-rag",
-            "object_storage_namespace": "oci-page-namespace",
-            "object_storage_bucket": "rag-originals",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert settings.object_storage_namespace == "oci-page-namespace"
-    assert settings.object_storage_bucket == "rag-originals"
-    persisted = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_OBJECT_STORAGE_NAMESPACE=oci-page-namespace" in persisted
-    assert "PLATFORM_OBJECT_STORAGE_BUCKET=rag-originals" in persisted
+    assert "PLATFORM_UPLOAD_STORAGE_BACKEND" not in persisted
+    assert "PLATFORM_OBJECT_STORAGE_" not in persisted
 
 
 def test_update_upload_storage_settings_does_not_mutate_runtime_when_env_write_fails(
@@ -3037,79 +2252,33 @@ def test_update_upload_storage_settings_does_not_mutate_runtime_when_env_write_f
     tmp_path: Path,
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "local_storage_dir", "/old/uploads")
-    monkeypatch.setattr(settings, "object_storage_namespace", "global-namespace")
-    monkeypatch.setattr(settings, "object_storage_bucket", "old-bucket")
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
     monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path)
 
     resp = client.patch(
         "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/production-ready-rag",
-            "object_storage_bucket": "rag-originals",
-        },
+        json={"local_storage_dir": "/u01/data/production-ready-rag"},
     )
 
     assert resp.status_code == 500
-    assert settings.upload_storage_backend == "local"
     assert settings.local_storage_dir == "/old/uploads"
-    assert settings.object_storage_namespace == "global-namespace"
-    assert settings.object_storage_bucket == "old-bucket"
 
 
-def test_update_upload_storage_settings_rejects_missing_selected_backend_fields(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """OCI の必須項目が欠けていれば保存しない（#97 で NL2SQL の仕様に統一）。"""
-    settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
-    monkeypatch.setattr(settings, "object_storage_namespace", "global-namespace")
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
-    env_file = _upload_storage_env_file(monkeypatch, tmp_path)
-    before = env_file.read_text(encoding="utf-8") if env_file.exists() else None
-
-    resp = client.patch(
-        "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/production-ready-rag",
-            "object_storage_bucket": "",
-        },
-    )
-
-    assert resp.status_code == 422
-    assert settings.upload_storage_backend == "local"
-    after = env_file.read_text(encoding="utf-8") if env_file.exists() else None
-    assert after == before
-
-
-def test_update_upload_storage_settings_rejects_missing_global_namespace(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """namespace が未設定のまま OCI を選ぶと保存しない（#97 で NL2SQL の仕様に統一）。"""
-    settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
-    monkeypatch.setattr(settings, "object_storage_namespace", "")
-    monkeypatch.setattr(settings, "object_storage_region", "us-chicago-1")
-    _upload_storage_env_file(monkeypatch, tmp_path)
-
-    resp = client.patch(
-        "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/production-ready-rag",
-            "object_storage_bucket": "rag-originals",
-        },
-    )
-
-    assert resp.status_code == 422
-    assert "Object Storage namespace" in str(resp.json())
-    assert settings.upload_storage_backend == "local"
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/api/settings/upload-storage/test"),
+        ("GET", "/api/settings/oci"),
+        ("PATCH", "/api/settings/oci"),
+        ("POST", "/api/settings/oci/config/test"),
+        ("POST", "/api/settings/oci/key-file"),
+        ("POST", "/api/settings/database/wallet/download"),
+    ],
+)
+def test_removed_oci_settings_routes_are_not_routed(method: str, path: str) -> None:
+    """OCI 認証・Object Storage の確認・Wallet の OCI からの取得の API は持たない（#11）。"""
+    response = client.request(method, path)
+    assert response.status_code in {404, 405}
 
 
 def _database_env_file(
@@ -3506,94 +2675,6 @@ def test_answering_audit_mode_rejects_unknown_value() -> None:
         client.patch("/api/settings/answering", json={"answer_audit_mode": "automatic"}).status_code
         == 422
     )
-
-
-class _MissingBucketError(Exception):
-    """OCI SDK の ServiceError と同じ属性を持つ（HeadBucket の 404 BucketNotFound）。"""
-
-    status = 404
-    code = "BucketNotFound"
-    request_id = "req-test"
-
-
-class _MissingBucketStorage:
-    def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-        raise _MissingBucketError("bucket not found")
-
-
-def _stub_missing_bucket(monkeypatch: MonkeyPatch) -> None:
-    from pr_system_settings import upload_storage_check
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _MissingBucketStorage(),
-    )
-
-
-def test_update_upload_storage_rejects_missing_bucket_without_saving(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """存在しない bucket は、保存せずに理由と直し方を返す（#2101）。"""
-    settings = get_settings()
-    env_file = _upload_storage_env_file(monkeypatch, tmp_path)
-    _stub_missing_bucket(monkeypatch)
-    before = settings.upload_storage_backend
-
-    resp = client.patch(
-        "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/check",
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "examplenamespace",
-            "object_storage_bucket": "missing-bucket",
-        },
-    )
-
-    assert resp.status_code == 422
-    body = resp.json()
-    detail = json.dumps(body, ensure_ascii=False)  # 製品ごとのエラーの形に依らない
-    assert "保存していません" in detail
-    assert "404 BucketNotFound" in detail
-    assert "missing-bucket" not in detail
-    assert settings.upload_storage_backend == before
-    assert not env_file.exists() or "missing-bucket" not in env_file.read_text(encoding="utf-8")
-
-
-def test_upload_storage_check_reports_stages_without_saving(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """「接続を確認」は入力中の値で段階ごとの結果を返し、保存しない（#2101）。"""
-    settings = get_settings()
-    env_file = _upload_storage_env_file(monkeypatch, tmp_path)
-    _stub_missing_bucket(monkeypatch)
-
-    resp = client.post(
-        "/api/settings/upload-storage/test",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/check",
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "examplenamespace",
-            "object_storage_bucket": "missing-bucket",
-        },
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "failed"
-    assert [stage["status"] for stage in data["stages"]] == [
-        "success",
-        "failed",
-        "skipped",
-        "skipped",
-        "skipped",
-    ]
-    assert not env_file.exists() or "missing-bucket" not in env_file.read_text(encoding="utf-8")
-    assert settings.object_storage_bucket != "missing-bucket"
 
 
 @pytest.mark.parametrize("enabled", [True, False])

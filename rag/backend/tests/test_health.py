@@ -69,10 +69,7 @@ def test_unsafe_request_id_header_is_not_reflected() -> None:
 
 def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "oci")
     for field in (
-        "oci_region",
-        "oci_compartment_id",
         "oci_enterprise_ai_endpoint",
         "oci_enterprise_ai_project_ocid",
         "oci_enterprise_ai_api_key",
@@ -84,8 +81,6 @@ def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> N
         "oracle_password",
         "oracle_dsn",
         "oracle_wallet_dir",
-        "object_storage_namespace",
-        "object_storage_bucket",
     ):
         monkeypatch.setattr(settings, field, "")
     monkeypatch.setattr(settings, "oci_enterprise_ai_models", [])
@@ -96,11 +91,10 @@ def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> N
     body = resp.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"] == {
-        "oci_common": "missing",
         "enterprise_ai": "missing",
         "genai": "missing",
         "oracle": "missing",
-        "object_storage": "missing",
+        "local_storage": "ok",
     }
 
 
@@ -117,11 +111,10 @@ def test_readiness_oci_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_di
     body = resp.json()
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"] == {
-        "oci_common": "ok",
         "enterprise_ai": "ok",
         "genai": "ok",
         "oracle": "ok",
-        "object_storage": "ok",
+        "local_storage": "ok",
     }
     assert "super-secret-password" not in str(body)
 
@@ -133,7 +126,6 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
 ) -> None:
     _configure_oci_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
     settings = get_settings()
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path / "upload-storage"))
 
     resp = client.get("/api/ready")
@@ -141,7 +133,6 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
     assert resp.status_code == 200
     body = resp.json()
     assert body["data"]["checks"] == {
-        "oci_common": "ok",
         "enterprise_ai": "ok",
         "genai": "ok",
         "oracle": "ok",
@@ -184,11 +175,10 @@ def test_readiness_production_oci_requires_audit_salt(
     body = resp.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"] == {
-        "oci_common": "ok",
         "enterprise_ai": "ok",
         "genai": "ok",
         "oracle": "ok",
-        "object_storage": "ok",
+        "local_storage": "ok",
         "audit_context_salt": "missing",
     }
 
@@ -210,11 +200,10 @@ def test_readiness_production_oci_complete_config_is_ok(
     body = resp.json()
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"] == {
-        "oci_common": "ok",
         "enterprise_ai": "ok",
         "genai": "ok",
         "oracle": "ok",
-        "object_storage": "ok",
+        "local_storage": "ok",
         "audit_context_salt": "ok",
     }
     assert "production-audit-salt" not in str(body)
@@ -593,9 +582,6 @@ def _configure_oci_readiness(
 ) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "environment", environment)
-    monkeypatch.setattr(settings, "upload_storage_backend", "oci")
-    monkeypatch.setattr(settings, "oci_region", "ap-osaka-1")
-    monkeypatch.setattr(settings, "oci_compartment_id", "ocid1.compartment.oc1..example")
     monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://enterprise-ai.example")
     monkeypatch.setattr(
         settings,
@@ -629,9 +615,6 @@ def _configure_oci_readiness(
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.com/rag")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", oracle_client_lib_dir)
     monkeypatch.setattr(settings, "oracle_wallet_dir", oracle_wallet_dir)
-    monkeypatch.setattr(settings, "object_storage_region", "ap-osaka-1")
-    monkeypatch.setattr(settings, "object_storage_namespace", "example-namespace")
-    monkeypatch.setattr(settings, "object_storage_bucket", "rag-originals")
     monkeypatch.setattr(settings, "audit_context_hash_salt", audit_context_hash_salt)
 
 

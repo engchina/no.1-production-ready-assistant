@@ -666,7 +666,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         timezone=env.get("PLATFORM_TIMEZONE", "").strip() or DEFAULT_TIMEZONE,
     )
 
-    if "adb_settings" not in overrides and all(env.get(key) for key in ("ADB_OCID", "ADB_WALLET_PASSWORD", "ADB_DB_PASSWORD")):
+    if "adb_settings" not in overrides and all(env.get(key) for key in ("ADB_WALLET_PASSWORD", "ADB_DB_PASSWORD")):
         from rag_engine.adapters.oracle.connection import load_adb_settings
 
         settings = replace(settings, adb_settings=load_adb_settings(environ=env, env_path=dotenv_path or ".env"))

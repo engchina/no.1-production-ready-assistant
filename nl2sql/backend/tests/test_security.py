@@ -2374,8 +2374,9 @@ def test_route_permissions_cover_every_mounted_route() -> None:
     # 失敗の分析と会話の履歴（#2319）は menu.db_admin_chat だけ。回答の注意書きの取得・保存
     # （#2405）は menu.settings_answer_notice。チャットの添付（#2517）は生成の権限、使うかの設定は
     # menu.settings_chat_attachments。軌跡の本文記録は menu.settings_trace_recording。
-    assert len(mounted) == 304
-    assert len(ROUTE_PERMISSIONS) == 292
+    # OCI 認証の 7 route・アップロード保存先の確認・Wallet の OCI からの取得は削除した（#11）。
+    assert len(mounted) == 295
+    assert len(ROUTE_PERMISSIONS) == 283
     assert ROUTE_PERMISSIONS[("GET", "/nl2sql/select-ai/credential-readiness")] == frozenset(
         {
             "nl2sql.profiles.manage",
@@ -2415,15 +2416,8 @@ _LEGACY_PREFIX_RULE_RESULTS: tuple[tuple[str, str, set[str]], ...] = (
     ("GET", "/security/permissions", {"menu.security_permissions"}),
     ("GET", "/security/profile-access/profiles", {"menu.security_permissions"}),
     ("PATCH", "/security/deepsec/config", {"menu.security_deepsec"}),
-    (
-        "PATCH",
-        "/settings/oci/object-storage",
-        {"menu.settings_oci", "menu.settings_upload_storage"},
-    ),
-    ("POST", "/settings/oci/key-file", {"menu.settings_oci"}),
-    ("GET", "/settings/upload-storage", {"menu.settings_oci", "menu.settings_upload_storage"}),
+    ("GET", "/settings/upload-storage", {"menu.settings_upload_storage"}),
     ("PATCH", "/settings/upload-storage", {"menu.settings_upload_storage"}),
-    ("POST", "/settings/upload-storage/test", {"menu.settings_upload_storage"}),
     ("POST", "/settings/model/test", {"menu.settings_model"}),
     ("POST", "/settings/database/system-tables/initialize", {"menu.settings_system_tables"}),
     ("POST", "/settings/database/wallet", {"menu.settings_database"}),
@@ -2670,7 +2664,7 @@ def test_select_ai_credential_uses_its_own_menu_permission(method: str) -> None:
         ("PUT", "/nl2sql/select-ai/db-profiles/{profile_name}"),
         ("POST", "/nl2sql/persistence/new-operation"),
         ("GET", "/schema/new-listing"),
-        ("POST", "/settings/oci/new-operation"),
+        ("POST", "/settings/upload-storage/new-operation"),
         ("DELETE", "/settings/database"),
         ("GET", "/security/deepsec/new-listing"),
         ("POST", "/security/profile-access/profiles"),
@@ -6077,21 +6071,36 @@ def test_role_restore_validates_access_before_store_write(
         assert store.get_role(target.role_id) == target
 
 
-@pytest.mark.parametrize(
-    "permission, expected_read", [("menu.settings_oci", 200), ("menu.settings_appearance", 403)]
-)
-def test_oci_settings_can_read_shared_storage_without_write_permission(
-    monkeypatch: pytest.MonkeyPatch, permission: str, expected_read: int
+def test_removed_oci_settings_permission_left_in_saved_role_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """削除した OCI 認証の権限（menu.settings_oci）が保存済みのロールに残っても読まない（#11）。
+
+    ロールの読み込み・ログインは落とさず、権限としては扱わない（アップロード保存先も読めない）。
+    新しく付けようとすると未登録の権限コードとして拒否する。
+    """
     service = _configure_memory_api_auth(monkeypatch)
     admin, _, _ = service.login("ADMIN", "BootstrapPass!123")
     role = service.create_role(
         role_code="SETTINGS_REVIEW",
         display_name="設定レビュー",
         description="",
-        permissions={permission},
+        permissions={"menu.settings_appearance"},
         entitlements=[],
         actor=admin,
+    )
+    store = service.store
+    assert isinstance(store, InMemorySecurityStore)
+    store.roles[role.role_id] = RoleRecord(
+        role_id=role.role_id,
+        role_code=role.role_code,
+        display_name=role.display_name,
+        description=role.description,
+        is_built_in=role.is_built_in,
+        archived=role.archived,
+        version=role.version,
+        permissions={"menu.settings_oci", "menu.settings_appearance"},
+        entitlements=[],
     )
     _create_active_user(
         service,
@@ -6101,26 +6110,29 @@ def test_oci_settings_can_read_shared_storage_without_write_permission(
         role_ids=[role.role_id],
         password="SettingsReview!123",
     )
-    before = get_settings().model_dump()
+    with pytest.raises(SecurityApiError) as rejected:
+        service.create_role(
+            role_code="SETTINGS_OCI",
+            display_name="OCI",
+            description="",
+            permissions={"menu.settings_oci"},
+            entitlements=[],
+            actor=admin,
+        )
+    assert rejected.value.status_code == 400
+    assert "menu.settings_oci" not in ALL_PERMISSION_CODES
 
     async def exercise() -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            _, csrf = await _login_api(client, "settings.review", "SettingsReview!123")
-            assert (await client.get("/api/settings/upload-storage")).status_code == expected_read
-            response = await client.patch(
-                "/api/settings/upload-storage",
-                headers={"X-CSRF-Token": csrf},
-                json={
-                    "backend": "local",
-                    "local_storage_dir": "/tmp/forbidden-review",
-                    "object_storage_bucket": "review",
-                },
-            )
-            assert response.status_code == 403
-            assert get_settings().model_dump() == before
+            await _login_api(client, "settings.review", "SettingsReview!123")
+            assert (await client.get("/api/settings/upload-storage")).status_code == 403
+            assert (await client.get("/api/settings/oci")).status_code in {403, 404}
 
     asyncio.run(exercise())
+    loaded = service.get_role(role.role_id)
+    assert loaded is not None
+    assert RoleData.from_record(loaded).permissions == ["menu.settings_appearance"]
 
 
 def test_profile_access_profiles_search_and_page_on_server(

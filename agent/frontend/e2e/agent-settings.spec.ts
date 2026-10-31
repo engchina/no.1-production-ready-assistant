@@ -48,15 +48,6 @@ async function expectDocumentScrollLocked(page: Page) {
   expect(metrics.rootScrollHeight).toBeLessThanOrEqual(metrics.rootClientHeight + 1);
 }
 
-async function expectElementAbove(page: Page, upperSelector: string, lowerSelector: string) {
-  const upperBox = await page.locator(upperSelector).boundingBox();
-  const lowerBox = await page.locator(lowerSelector).boundingBox();
-
-  expect(upperBox).not.toBeNull();
-  expect(lowerBox).not.toBeNull();
-  expect(upperBox!.y).toBeLessThan(lowerBox!.y);
-}
-
 /** テキストの欄が Vision の欄より先（同じ行なら左、縦積みなら上）にある（#566）。 */
 async function expectTextBeforeVision(text: Locator, vision: Locator) {
   const textBox = await text.boundingBox();
@@ -78,63 +69,7 @@ async function fillOrSelectDsn(page: Page, value: string) {
   await dsnControl.fill(value);
 }
 
-async function mockMissingOciRuntimeSettings(page: Page) {
-  await page.route("**/api/settings/oci/object-storage/namespace", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          namespace: "mytenancynamespace",
-        },
-      }),
-    });
-  });
-  await page.route("**/api/settings/oci/object-storage", async (route) => {
-    if (route.request().method() !== "PATCH") {
-      // 保存などは e2e/fixtures/mock-api.ts が扱う（実 backend へは流さない）。
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          backend: "local",
-          local_storage_dir: "/u01/data/production-ready-agent",
-          object_storage_region: "",
-          object_storage_namespace: "mytenancynamespace",
-          object_storage_bucket: "",
-          readiness: "ok",
-          max_upload_bytes: 104857600,
-          config_source: "runtime",
-        },
-      }),
-    });
-  });
-  await page.route("**/api/settings/oci", async (route) => {
-    if (route.request().method() !== "GET") {
-      // 保存などは e2e/fixtures/mock-api.ts が扱う（実 backend へは流さない）。
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          config_file: "~/.oci/config",
-          profile: "DEFAULT",
-          user: "",
-          fingerprint: "",
-          tenancy: "",
-          region: "",
-          key_file: "~/.oci/oci_api_key.pem",
-          key_file_exists: false,
-          config_file_exists: false,
-          config_source: "runtime",
-        },
-      }),
-    });
-  });
+async function mockRuntimeSettings(page: Page) {
   await page.route("**/api/settings/upload-storage", async (route) => {
     if (route.request().method() !== "GET") {
       // 保存などは e2e/fixtures/mock-api.ts が扱う（実 backend へは流さない）。
@@ -145,11 +80,7 @@ async function mockMissingOciRuntimeSettings(page: Page) {
       contentType: "application/json",
       body: JSON.stringify({
         data: {
-          backend: "local",
           local_storage_dir: "/u01/data/production-ready-agent",
-          object_storage_region: "",
-          object_storage_namespace: "",
-          object_storage_bucket: "",
           readiness: "ok",
           max_upload_bytes: 104857600,
           config_source: "runtime",
@@ -182,8 +113,6 @@ async function mockMissingOciRuntimeSettings(page: Page) {
           readiness: "ok",
           embedding_dimension: 1536,
           vector_column: "VECTOR(1536, FLOAT32)",
-          adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.agent",
-          region: "ap-osaka-1",
           config_source: "runtime",
         },
       }),
@@ -192,56 +121,17 @@ async function mockMissingOciRuntimeSettings(page: Page) {
 }
 
 test.describe("Agent Runtime settings", () => {
-  test("RAG 由来のシステム設定 4 画面を表示・保存できる", { tag: "@responsive" }, async ({ page, mockApi }) => {
-    await mockMissingOciRuntimeSettings(page);
-    await page.goto("/settings/oci");
-    await expect(page.getByRole("heading", { name: "OCI 認証設定", level: 1 })).toBeVisible();
-    await expectDocumentScrollLocked(page);
-    await expectElementAbove(page, "#oci-config-file", "#oci-user-ocid");
-    await expectElementAbove(page, "#oci-config-profile", "#oci-tenancy-ocid");
-    await expect(page.getByLabel("ユーザー OCID")).toHaveValue("");
-    await expect(page.getByLabel("テナンシ OCID")).toHaveValue("");
-    await expect(page.getByLabel("フィンガープリント")).toHaveValue("");
-    await expect(page.getByRole("combobox", { name: "リージョン", exact: true })).toContainText("選択してください");
-    await expect(page.getByText("PLATFORM_OCI_REGION=ap-osaka-1")).toHaveCount(0);
-    await expect(page.getByText(/=None/)).toHaveCount(0);
-    await page.locator("main").evaluate((main) => {
-      main.scrollTop = main.scrollHeight;
-    });
-    await expectDocumentScrollLocked(page);
-    await page.getByLabel("ユーザー OCID").fill("ocid1.user.oc1..aaaaaaaa");
-    await page.getByLabel("テナンシ OCID").fill("ocid1.tenancy.oc1..aaaaaaaa");
-    await page.getByLabel("フィンガープリント").fill("12:34:56:78:90:ab:cd:ef");
-    await page.getByRole("combobox", { name: "リージョン", exact: true }).click();
-    await page.getByRole("option", { name: "ap-osaka-1" }).click();
-    await page.getByRole("button", { name: /OCI 設定を保存/ }).click();
-    await expect(page.getByText("保存しました").first()).toBeVisible();
-    expect(mockApi.lastRequest("PATCH", "/api/settings/oci")?.body).toMatchObject({
-      user: "ocid1.user.oc1..aaaaaaaa",
-      tenancy: "ocid1.tenancy.oc1..aaaaaaaa",
-      fingerprint: "12:34:56:78:90:ab:cd:ef",
-      region: "ap-osaka-1",
-    });
-    await page.getByRole("combobox", { name: "Object Storage リージョン" }).click();
-    await page.getByRole("option", { name: "ap-osaka-1" }).click();
-    await page.getByRole("button", { name: /Object Storage ネームスペース: 取得/ }).click();
-    await expect(
-      page.getByRole("textbox", { name: /Object Storage ネームスペース/ })
-    ).toHaveValue(
-      "mytenancynamespace"
-    );
-    await expect(page.getByText("namespace の取得に失敗しました。")).toHaveCount(0);
-    await page.getByRole("button", { name: /Object Storage: 保存/ }).click();
-    await expect(page.getByText("Object Storage 設定を保存しました。").first()).toBeVisible();
-    await expectNoHorizontalOverflow(page);
-
+  test("RAG 由来のシステム設定 3 画面を表示・保存できる", { tag: "@responsive" }, async ({ page, mockApi }) => {
+    await mockRuntimeSettings(page);
     await page.goto("/settings/upload-storage");
     await expect(page.getByRole("heading", { name: "アップロード保存先", level: 1 })).toBeVisible();
+    await expectDocumentScrollLocked(page);
+    // 保存先はローカルだけ（OCI Object Storage・OCI 認証は扱わない。#11）。
+    await expect(page.getByText(/Object Storage|OCI/)).toHaveCount(0);
     await page.getByLabel("ローカル保存ディレクトリ").fill("/u01/data/production-ready-agent");
     await page.getByRole("button", { name: "保存" }).click();
     await expect(page.getByText("保存しました")).toBeVisible();
-    expect(mockApi.lastRequest("PATCH", "/api/settings/upload-storage")?.body).toMatchObject({
-      backend: "local",
+    expect(mockApi.lastRequest("PATCH", "/api/settings/upload-storage")?.body).toEqual({
       local_storage_dir: "/u01/data/production-ready-agent",
     });
     await expectNoHorizontalOverflow(page);
@@ -319,7 +209,6 @@ test.describe("Agent Runtime settings", () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     for (const route of [
-      "/settings/oci",
       "/settings/upload-storage",
       "/settings/model",
       "/settings/database",

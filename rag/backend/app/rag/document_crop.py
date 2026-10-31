@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oracle import OracleClient
 from app.rag.pdf_backend import PageSource, SourceOpenError, intersect, open_source, png_bytes
 from app.schemas.document import DocumentPreprocessArtifact
@@ -31,7 +31,7 @@ async def load_parsed_source(
 
     ``recipe_id`` を渡すと、その処理レシピのファイル準備後の artifact を使う(レシピごとに
     解析したファイルが違うため、bbox はそのファイルの座標。#1282)。レシピが無ければ文書の
-    artifact に戻す。参照パスが不正な場合は ValueError(ObjectStorageClient の契約)。
+    artifact に戻す。参照パスが不正な場合は ValueError(FileStorageClient の契約)。
     """
     detail = await oracle.get_document(document_id)
     if detail is None or detail.object_storage_path is None:
@@ -48,7 +48,7 @@ async def load_parsed_source(
         else detail.object_storage_path
     )
     try:
-        return await ObjectStorageClient().get(path)
+        return await FileStorageClient().get(path)
     except FileNotFoundError as exc:
         raise DocumentSourceNotFoundError("原本ファイルが見つかりません。") from exc
 

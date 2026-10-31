@@ -178,7 +178,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/chat-attachments" },
   { path: "/settings/answer-notice" },
   { path: "/settings/select-ai-credential" },
-  { path: "/settings/oci" },
   { path: "/settings/upload-storage" },
   { path: "/settings/model" },
   { path: "/settings/database" },

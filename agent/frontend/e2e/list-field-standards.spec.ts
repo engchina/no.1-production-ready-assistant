@@ -113,8 +113,7 @@ const SCREENS: ReadonlyArray<{ name: string; path: string; ready: (page: Page) =
     ready: (page) => page.locator('[data-testid="account-password-form"], [data-testid="account-password-local"]'),
   },
   { name: "system-tables", path: "/settings/system-tables", ready: (page) => page.getByRole("heading", { level: 1 }) },
-  { name: "oci", path: "/settings/oci", ready: (page) => page.locator("#oci-config-profile") },
-  { name: "upload-storage", path: "/settings/upload-storage", ready: (page) => page.locator("#upload-storage-local") },
+  { name: "upload-storage", path: "/settings/upload-storage", ready: (page) => page.locator("#upload-storage-local-dir") },
   { name: "model", path: "/settings/model", ready: (page) => page.locator("#genai-embedding-model") },
   { name: "database", path: "/settings/database", ready: (page) => page.locator("#oracle-user") },
 ];

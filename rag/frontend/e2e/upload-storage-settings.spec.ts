@@ -1,23 +1,16 @@
 import { expect, type Page, test } from "./fixtures/test";
 import { mockDatabaseReady, mockLocalAuth } from "./_helpers";
 
+// 保存先はローカルのディレクトリだけ（OCI Object Storage は #11 で削除した）。
 interface UploadStorageSettingsData {
-  backend: "local" | "oci";
   local_storage_dir: string;
-  object_storage_region: string;
-  object_storage_namespace: string;
-  object_storage_bucket: string;
   readiness: string;
   max_upload_bytes: number;
   config_source: "runtime";
 }
 
 const localStorageSettings: UploadStorageSettingsData = {
-  backend: "local",
   local_storage_dir: "/u01/data/production-ready-rag",
-  object_storage_region: "ap-osaka-1",
-  object_storage_namespace: "",
-  object_storage_bucket: "",
   readiness: "ok",
   max_upload_bytes: 200 * 1024 * 1024,
   config_source: "runtime",
@@ -29,13 +22,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 // 画面は platform の共有パッケージ（NL2SQL と同じ画面。#97）。右側の状態パネル / .env プレビューは持たない。
-test("アップロード保存先設定で OCI Object Storage に切り替えて保存できる", async ({
+test("アップロード保存先設定でローカルの保存ディレクトリを変えて保存できる", { tag: "@responsive" }, async ({
   page,
 }) => {
-  let current: UploadStorageSettingsData = {
-    ...localStorageSettings,
-    object_storage_namespace: "oci-page-namespace",
-  };
+  let current: UploadStorageSettingsData = { ...localStorageSettings };
   let lastPayload: unknown = null;
   await mockUploadStorageSettings(
     page,
@@ -61,27 +51,26 @@ test("アップロード保存先設定で OCI Object Storage に切り替えて
   await expect(page.getByRole("button", { name: ".env をコピー" })).toHaveCount(
     0,
   );
-  await expect(page.locator("#upload-storage-local-dir")).toHaveValue(
-    "/u01/data/production-ready-rag",
-  );
+  // 保存先の種類の選択・OCI 認証設定への案内・「接続を確認」は持たない。
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await expect(page.getByText("OCI Object Storage")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "接続を確認" })).toHaveCount(0);
+  const localDir = page.locator("#upload-storage-local-dir");
+  await expect(localDir).toHaveValue("/u01/data/production-ready-rag");
 
-  await page.getByRole("radio", { name: /OCI Object Storage/ }).check();
-  await expect(page.getByLabel(/Object Storage ネームスペース/)).toHaveValue(
-    "oci-page-namespace",
-  );
-  await page.getByLabel(/Object Storage バケット/).fill("rag-originals");
+  await localDir.fill("/u01/data/rag-uploads");
   await page.getByRole("button", { name: "保存" }).click();
 
   await expect(page.getByText("保存しました")).toBeVisible();
-  expect(lastPayload).toMatchObject({
-    backend: "oci",
-    object_storage_region: "ap-osaka-1",
-    object_storage_namespace: "oci-page-namespace",
-    object_storage_bucket: "rag-originals",
-  });
+  expect(lastPayload).toEqual({ local_storage_dir: "/u01/data/rag-uploads" });
+  await expect(localDir).toHaveValue("/u01/data/rag-uploads");
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("アップロード保存先は OCI の未設定項目があると保存前に止め、OCI 認証設定へ案内する", async ({
+test("アップロード保存先は保存ディレクトリが空なら保存前に止める", async ({
   page,
 }) => {
   let patchCount = 0;
@@ -95,28 +84,15 @@ test("アップロード保存先は OCI の未設定項目があると保存前
 
   await page.goto("/settings/upload-storage");
 
-  await page.getByRole("radio", { name: /OCI Object Storage/ }).check();
-  // 警告は Banner 1 枚で、対処の操作は Banner の中に置く（面を二重にしない。#722）。
-  const ociWarning = page
-    .getByRole("status")
-    .filter({
-      hasText:
-        "OCI Object Storage を使うには、リージョンとネームスペースの設定が必要です。",
-    });
-  await expect(ociWarning).toBeVisible();
-  await expect(
-    ociWarning.getByRole("button", { name: "OCI 認証設定を開く" }),
-  ).toBeVisible();
+  const localDir = page.locator("#upload-storage-local-dir");
+  await expect(localDir).toHaveValue(localStorageSettings.local_storage_dir);
+  await localDir.fill("");
   await page.getByRole("button", { name: "保存" }).click();
 
   await expect(
-    page.getByText(
-      "OCI 認証設定で Object Storage ネームスペースを設定してください。",
-    ),
+    page.getByText("ローカル保存ディレクトリを入力してください。"),
   ).toBeVisible();
-  await expect(
-    page.getByText("Object Storage バケットを入力してください。"),
-  ).toBeVisible();
+  await expect(localDir).toBeFocused();
   expect(patchCount).toBe(0);
 });
 
@@ -210,12 +186,7 @@ test("保存の後の再取得に失敗してもフォームを残し、警告�
 test("アップロード画面は現在の保存先を表示し、保存先設定の導線を出さない", { tag: "@responsive" }, async ({
   page,
 }) => {
-  await mockUploadStorageSettings(page, () => ({
-    ...localStorageSettings,
-    backend: "oci",
-    object_storage_namespace: "example-namespace",
-    object_storage_bucket: "rag-originals",
-  }));
+  await mockUploadStorageSettings(page, () => localStorageSettings);
   await mockKnowledgeBases(page);
   await mockIngestionJobs(page);
 
@@ -240,7 +211,8 @@ test("アップロード画面は現在の保存先を表示し、保存先設�
   // 音声・動画は取り込まない形式で、ファイル選択に出さない（#3369）。
   expect(acceptedTypes).not.toContain("audio/");
   expect(acceptedTypes).not.toContain(".mp3");
-  await expect(page.getByText("example-namespace/rag-originals")).toBeVisible();
+  await expect(page.getByText("現在の保存先: ローカルディレクトリ")).toBeVisible();
+  await expect(page.getByText("/u01/data/production-ready-rag")).toBeVisible();
   await expect(page.getByRole("link", { name: "保存先設定" })).toHaveCount(0);
 });
 
@@ -393,179 +365,6 @@ test("複数ファイルをまとめてアップロードし結果を確認で�
   await expect(
     page.getByRole("button", { name: "アップロードを開始（1 件）" }),
   ).toBeEnabled();
-});
-
-const ociStorageSettings: UploadStorageSettingsData = {
-  ...localStorageSettings,
-  backend: "oci",
-  object_storage_namespace: "oci-page-namespace",
-  object_storage_bucket: "rag-originals",
-};
-
-function checkResult(
-  failedStage: "bucket" | "write" | null,
-  overrides: Record<string, unknown> = {},
-) {
-  const keys = ["config", "bucket", "write", "read", "delete"] as const;
-  const failedAt = failedStage ? keys.indexOf(failedStage) : -1;
-  return {
-    status: failedStage ? "failed" : "success",
-    retryable: false,
-    message: failedStage
-      ? "bucket が見つからないか、bucket を参照する権限がありません。（404 BucketNotFound）"
-      : "bucket を確認し、object の書き込み・読み取り・削除ができました。",
-    stages: keys.map((key, index) => ({
-      key,
-      status:
-        failedAt < 0 || index < failedAt
-          ? "success"
-          : index === failedAt
-            ? "failed"
-            : "skipped",
-      message:
-        index === failedAt ? "bucket が見つかりません。" : `${key} の確認の文`,
-      action:
-        index === failedAt
-          ? "bucket 名・リージョン・namespace が正しいかと、IAM ポリシーで `read buckets` が許可されているかを確かめてください。"
-          : null,
-    })),
-    elapsed_ms: 812,
-    region: "ap-osaka-1",
-    http_status: failedStage ? 404 : null,
-    service_code: failedStage ? "BucketNotFound" : null,
-    request_id: failedStage ? "req-e2e" : null,
-    error_type: failedStage ? "ServiceError" : null,
-    ...overrides,
-  };
-}
-
-// 「接続を確認」は入力中の値で bucket と権限を確かめ、結果を操作の直下に段階ごとに出す（#2101）。
-test("アップロード保存先の「接続を確認」は入力中の値で確かめ、段階ごとの結果と直し方を出す", async ({
-  page,
-}) => {
-  await mockUploadStorageSettings(page, () => ociStorageSettings);
-  let checkPayload: unknown = null;
-  let release: () => void = () => undefined;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/api/settings/upload-storage/test", async (route) => {
-    checkPayload = route.request().postDataJSON();
-    await gate;
-    await route.fulfill({
-      json: {
-        data: checkResult("bucket"),
-        error_messages: [],
-        warning_messages: [],
-      },
-    });
-  });
-
-  await page.goto("/settings/upload-storage");
-  await page.getByLabel(/Object Storage バケット/).fill("missing-bucket");
-  const checkButton = page.getByRole("button", { name: "接続を確認" });
-  await checkButton.click();
-
-  // 処理中はボタンの loading と経過時間（ラベルは変えない）
-  await expect(checkButton).toHaveAttribute("aria-busy", "true");
-  await expect(
-    page.getByTestId("settings-upload-storage-check-processing"),
-  ).toBeVisible();
-  release();
-
-  const result = page.getByTestId("settings-upload-storage-check-result");
-  await expect(result).toHaveAttribute("data-tone", "danger");
-  await expect(result).toContainText("bucket が見つからないか");
-  await expect(result).toContainText("read buckets");
-  const stages = page.getByTestId("settings-upload-storage-check-stages");
-  await expect(stages.locator('[data-stage="config"]')).toHaveAttribute(
-    "data-stage-status",
-    "success",
-  );
-  await expect(stages.locator('[data-stage="bucket"]')).toHaveAttribute(
-    "data-stage-status",
-    "failed",
-  );
-  await expect(stages.locator('[data-stage="delete"]')).toContainText("未実施");
-  expect(checkPayload).toMatchObject({
-    backend: "oci",
-    object_storage_bucket: "missing-bucket",
-  });
-
-  // 入力を変えたら、前の値の結果は出さない
-  await page.getByLabel(/Object Storage バケット/).fill("rag-originals");
-  await expect(result).toHaveCount(0);
-
-  // ローカルを選んでいるときは「接続を確認」を出さない
-  await page.getByRole("radio", { name: /ローカルディレクトリ/ }).check();
-  await expect(page.getByRole("button", { name: "接続を確認" })).toHaveCount(0);
-});
-
-test("アップロード保存先は bucket が無いと保存せず、保存の行に理由と直し方を出す", async ({
-  page,
-}) => {
-  const current = ociStorageSettings;
-  await page.route("**/api/settings/upload-storage", async (route) => {
-    if (route.request().method() === "PATCH") {
-      await route.fulfill({
-        status: 422,
-        json: {
-          data: null,
-          error_messages: [
-            "OCI Object Storage を確認できなかったため、保存していません: bucket が見つからないか、bucket を参照する権限がありません。（404 BucketNotFound） bucket 名・リージョン・namespace が正しいかを確かめてください。",
-          ],
-          warning_messages: [],
-        },
-      });
-      return;
-    }
-    await route.fulfill({
-      json: { data: current, error_messages: [], warning_messages: [] },
-    });
-  });
-
-  await page.goto("/settings/upload-storage");
-  await page.getByLabel(/Object Storage バケット/).fill("missing-bucket");
-  await page.getByRole("button", { name: "保存" }).click();
-
-  await expect(
-    page.getByText(/保存していません: bucket が見つからないか/),
-  ).toBeVisible();
-  await expect(page.getByText("保存しました")).toHaveCount(0);
-  // 入力は残す（直して保存し直せる）
-  await expect(page.getByLabel(/Object Storage バケット/)).toHaveValue(
-    "missing-bucket",
-  );
-});
-
-test("アップロード保存先を確かめられずに保存したときは、warning の結果を残す", async ({
-  page,
-}) => {
-  await mockUploadStorageSettings(
-    page,
-    () =>
-      ({
-        ...ociStorageSettings,
-        storage_check: checkResult("bucket", {
-          retryable: true,
-          message: "OCI Object Storage へ接続できませんでした。",
-          http_status: null,
-          service_code: null,
-          error_type: "ConnectionError",
-        }),
-      }) as UploadStorageSettingsData,
-  );
-
-  await page.goto("/settings/upload-storage");
-  await page.getByLabel(/Object Storage バケット/).fill("rag-originals-2");
-  await page.getByRole("button", { name: "保存" }).click();
-
-  const result = page.getByTestId("settings-upload-storage-check-result");
-  await expect(result).toHaveAttribute("data-tone", "warning");
-  await expect(result).toContainText(
-    "保存しましたが、OCI Object Storage を確かめられませんでした。",
-  );
-  await expect(page.getByText("保存しました", { exact: true })).toHaveCount(0);
 });
 
 async function mockUploadStorageSettings(

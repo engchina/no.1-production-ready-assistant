@@ -727,10 +727,7 @@ describe("api.request envelope", () => {
 
   it("updateUploadStorageSettings は保存先 payload を設定 API へ送る", async () => {
     const payload = {
-      backend: "oci" as const,
       local_storage_dir: "/u01/data/production-ready-rag",
-      object_storage_namespace: "example-namespace",
-      object_storage_bucket: "rag-originals",
     };
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({
@@ -748,7 +745,7 @@ describe("api.request envelope", () => {
 
     const result = await api.updateUploadStorageSettings(payload);
 
-    expect(result.backend).toBe("oci");
+    expect(result.local_storage_dir).toBe("/u01/data/production-ready-rag");
     expect(result.max_upload_bytes).toBe(209715200);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/settings/upload-storage",
@@ -1007,187 +1004,6 @@ describe("api.request envelope", () => {
         body: JSON.stringify(requestPayload),
       })
     );
-  });
-
-  it("readOciObjectStorageNamespace は OCI 設定 payload を送る", async () => {
-    const payload = {
-      config_file: "~/.oci/config",
-      profile: "DEFAULT",
-      region: "ap-osaka-1",
-    };
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: { namespace: "mytenancynamespace" },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.readOciObjectStorageNamespace(payload);
-
-    expect(result.namespace).toBe("mytenancynamespace");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/oci/object-storage/namespace",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify(payload),
-      })
-    );
-  });
-
-  it("updateOciSettings は OCI config 保存 payload を設定 API へ送る", async () => {
-    const payload = {
-      user: "ocid1.user.oc1..example",
-      fingerprint: "12:34:56:78:90:ab:cd:ef",
-      tenancy: "ocid1.tenancy.oc1..example",
-      region: "ap-osaka-1",
-    };
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: {
-          config_file: "~/.oci/config",
-          profile: "DEFAULT",
-          user: payload.user,
-          fingerprint: payload.fingerprint,
-          tenancy: payload.tenancy,
-          region: payload.region,
-          key_file: "~/.oci/oci_api_key.pem",
-          key_file_exists: false,
-          config_file_exists: true,
-          config_source: "runtime",
-        },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.updateOciSettings(payload);
-
-    expect(result.config_file_exists).toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/oci",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      })
-    );
-  });
-
-  it("updateOciObjectStorageSettings は Object Storage payload を設定 API へ送る", async () => {
-    const payload = {
-      object_storage_region: "us-chicago-1",
-      object_storage_namespace: "mytenancynamespace",
-    };
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: {
-          backend: "local",
-          local_storage_dir: "/u01/data/production-ready-rag",
-          object_storage_region: payload.object_storage_region,
-          object_storage_namespace: payload.object_storage_namespace,
-          object_storage_bucket: "",
-          readiness: "ok",
-          max_upload_bytes: 209715200,
-          config_source: "runtime",
-        },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.updateOciObjectStorageSettings(payload);
-
-    expect(result.object_storage_region).toBe("us-chicago-1");
-    expect(result.object_storage_namespace).toBe("mytenancynamespace");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/oci/object-storage",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      })
-    );
-  });
-
-  it("testOciConfig は保存済み OCI config のテスト API を呼ぶ", async () => {
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: {
-          status: "success",
-          profile: "DEFAULT",
-          config_file: "~/.oci/config",
-          key_file: "~/.oci/oci_api_key.pem",
-          config_file_exists: true,
-          key_file_exists: true,
-          missing_fields: [],
-          permission_issues: [],
-          oci_directory_mode: "0700",
-          config_file_mode: "0600",
-          key_file_mode: "0600",
-          message: "OCI へ認証付きで接続できました（Object Storage GetNamespace）。",
-          elapsed_ms: 412,
-          checked_at: "2026-06-14T00:00:00Z",
-          error_type: null,
-          stages: [
-            { key: "config_format", status: "success", message: "形式を確認しました。", action: null },
-            { key: "key_file", status: "success", message: "鍵を確認しました。", action: null },
-            { key: "region", status: "success", message: "応答がありました。", action: null },
-            { key: "authentication", status: "success", message: "認証しました。", action: null },
-          ],
-          region: "ap-osaka-1",
-          auth_check_operation: "Object Storage GetNamespace",
-          http_status: null,
-          service_code: null,
-          request_id: null,
-        },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.testOciConfig();
-
-    expect(result.status).toBe("success");
-    expect(result.stages.map((stage) => stage.status)).toEqual([
-      "success",
-      "success",
-      "success",
-      "success",
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/oci/config/test",
-      expect.objectContaining({ method: "POST" })
-    );
-  });
-
-  it("uploadOciPrivateKey は秘密鍵ファイルを FormData で送る", async () => {
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: { key_file: "~/.oci/oci_api_key.pem", saved: true },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const file = new File(["-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"], "key.pem", {
-      type: "application/x-pem-file",
-    });
-    const result = await api.uploadOciPrivateKey(file);
-
-    expect(result.key_file).toBe("~/.oci/oci_api_key.pem");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/oci/key-file",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.any(FormData),
-      })
-    );
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
-    expect((init.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
   });
 });
 

@@ -1713,7 +1713,6 @@ async def test_http_ontology_build_persists_current_form_inputs(
     api, store, _legacy = runtime
     settings = get_settings()
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "max_upload_bytes", 1024 * 1024)
     monkeypatch.setattr(settings, "nl2sql_ontology_worker_mode", "external")
     source_storage = OntologySourceStorage(settings)
@@ -2013,7 +2012,6 @@ async def test_http_ontology_build_replay_race_discards_uploads_not_used_by_retu
     settings = get_settings()
     monkeypatch.setattr(settings, "auth_mode", "local")
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "max_upload_bytes", 1024 * 1024)
     monkeypatch.setattr(settings, "nl2sql_ontology_worker_mode", "external")
     source_storage = OntologySourceStorage(settings)
@@ -2077,7 +2075,6 @@ async def test_http_ontology_build_discards_earlier_uploads_when_later_file_is_i
     settings = get_settings()
     monkeypatch.setattr(settings, "auth_mode", "local")
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path))
-    monkeypatch.setattr(settings, "upload_storage_backend", "local")
     monkeypatch.setattr(settings, "max_upload_bytes", 1024 * 1024)
     monkeypatch.setattr(settings, "nl2sql_ontology_worker_mode", "external")
     source_storage = OntologySourceStorage(settings)

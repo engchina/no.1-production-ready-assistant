@@ -668,7 +668,7 @@ backfill）の順に 1 回だけ読み込む。
   `agent_storage_not_ready`。済んだらログ `agent_storage_ready`）。自動実行のスケジューラは読み込みが済むまで判定しない。
 - 業務の API は、読み込みが済むまで最初の要求で読み込みを試み（`app.api.router.require_agent_storage`。認証の前）、
   読み込めなければ 503（`error_code=agent_storage_unavailable`、`Retry-After: 15`）。
-  DB の状態・システム設定（データベース・システムテーブル・モデル・OCI・アップロード保存先）・認証・ユーザーとロールの API は待たない。
+  DB の状態・システム設定（データベース・システムテーブル・モデル・アップロード保存先）・認証・ユーザーとロールの API は待たない。
   画面は DB ゲートで案内し、DB に接続できるようになれば再起動せずに読み込む。
 - DB に接続できない（`is_oracle_connection_error`）ときは memory に縮退しない（`AgentRuntimeStorageUnavailableError`）。
   済んだ段階は持ち越す。失敗の直後 5 秒は接続を試さずに同じ理由を返す（wallet の接続記述子の `retry_count` /

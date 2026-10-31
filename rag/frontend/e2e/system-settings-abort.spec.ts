@@ -10,7 +10,6 @@ import { mockLocalAuth } from "./_helpers";
 // マウントのやり直しだけで中断が起きて通っていた。PR の CI は build の成果物で実行する。#1583）。
 const CASES: ReadonlyArray<{ path: string; api: string; alsoHold?: readonly string[] }> = [
   { path: "/settings/upload-storage", api: "/api/settings/upload-storage" },
-  { path: "/settings/oci", api: "/api/settings/oci", alsoHold: ["/api/settings/upload-storage"] },
   { path: "/settings/model", api: "/api/settings/model" },
   { path: "/settings/database", api: "/api/settings/database" },
 ];

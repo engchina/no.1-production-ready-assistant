@@ -3,7 +3,7 @@
 policy → groundedness 厳格度(min_overlap / min_ratio)+ audit_emphasis を決定論で解決する。
 NeMo Guardrails 的な strict/regulated は「より厳しい groundedness + 監査強調」へ再マップ済み。
 block_prompt_injection / PII マスク / max_query_chars は backend 設定由来のため backend 側で
-上乗せする。OCI Generative AI Guardrails backend は別レイヤー(app.clients.oci_guardrails)で共存。
+上乗せする（OCI Generative AI Guardrails は #11 で削除した）。
 Settings 非依存(policy 名のみ)。外部安全 SaaS は導入しない。
 """
 

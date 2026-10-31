@@ -14,7 +14,7 @@ describe("loginEntryRoute", () => {
     const hasPermission = allow("menu.file_list", "menu.chat");
     expect(loginEntryRoute("/file-list")(hasPermission)).toBe("/file-list");
     // 権限の無い URL・認証画面・外部 URL・不正な値は既定の入口（チャット。#432）へ。
-    expect(loginEntryRoute("/settings/oci")(hasPermission)).toBe(APP_ROUTES.chat);
+    expect(loginEntryRoute("/settings/upload-storage")(hasPermission)).toBe(APP_ROUTES.chat);
     expect(loginEntryRoute(APP_ROUTES.login)(hasPermission)).toBe(APP_ROUTES.chat);
     expect(loginEntryRoute(APP_ROUTES.forbidden)(hasPermission)).toBe(APP_ROUTES.chat);
     expect(loginEntryRoute("//evil.example.com")(hasPermission)).toBe(APP_ROUTES.chat);
@@ -26,10 +26,9 @@ describe("loginEntryRoute", () => {
 });
 
 describe("isDatabaseGateExempt", () => {
-  it("ゲートを通さないのはシステム設定の 5 画面だけ（NL2SQL と同じ）", () => {
+  it("ゲートを通さないのはシステム設定の 4 画面だけ（NL2SQL と同じ）", () => {
     expect(isDatabaseGateExempt("/settings")).toBe(true);
     for (const route of [
-      APP_ROUTES.settingsOci,
       APP_ROUTES.settingsUploadStorage,
       APP_ROUTES.settingsModel,
       APP_ROUTES.settingsDatabase,

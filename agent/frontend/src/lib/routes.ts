@@ -38,7 +38,6 @@ export const APP_ROUTES = {
   feedback: "/feedback",
   usage: "/usage",
   settingsSystemTables: "/settings/system-tables",
-  settingsOci: "/settings/oci",
   settingsUploadStorage: "/settings/upload-storage",
   settingsModel: SYSTEM_SETTINGS_PATHS.model,
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,

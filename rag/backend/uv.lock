@@ -2384,7 +2384,6 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "fastapi", specifier = ">=0.121,<1.0" },
-    { name = "oci", marker = "extra == 'oci'", specifier = ">=2.168" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "production-ready-backend-core", editable = "../../platform/packages/backend_core" },
     { name = "production-ready-enterprise-ai", editable = "../../platform/packages/enterprise_ai" },
@@ -2394,14 +2393,12 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
 ]
-provides-extras = ["oci"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit", specifier = ">=1.8" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "mypy", specifier = ">=1.14" },
-    { name = "oci", specifier = ">=2.168" },
     { name = "pip-audit", specifier = ">=2.9" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6.0" },
@@ -2971,7 +2968,6 @@ pdf = [
 requires-dist = [
     { name = "docling", marker = "extra == 'docling'", specifier = ">=2.0" },
     { name = "docling-parse", marker = "extra == 'docling'", specifier = ">=7.22.2,<8.0" },
-    { name = "oci", marker = "extra == 'oracle'", specifier = ">=2.185.0" },
     { name = "openai", specifier = ">=1.99,<2" },
     { name = "openpyxl", marker = "extra == 'excel'", specifier = ">=3.1" },
     { name = "oracledb", marker = "extra == 'oracle'", specifier = ">=2.5.0" },

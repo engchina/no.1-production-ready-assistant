@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./fixtures/test";
-import { LOCAL_AUTH_ME, openSidebarNav } from "./_helpers";
+import { LOCAL_AUTH_ME, expandSidebarSections, openSidebarNav } from "./_helpers";
 
 async function mockApi(page: Page) {
   await page.route("**/api/**", async (route) => {
@@ -10,44 +10,31 @@ async function mockApi(page: Page) {
       return;
     }
 
-    if (url.pathname === "/api/settings/oci") {
+    // 戻る前の画面は、内容が画面より長い検索方法（OCI 認証の画面は #11 で削除した）。
+    // 検索方法はデータベースの状態の確認を通る画面なので、準備済みを返す。
+    const settingsData: Record<string, unknown> = {
+      "/api/ready/database": { status: "ok", check: "ok", detail: null },
+      "/api/settings/answer-prompts": { prompts: [], stages: [] },
+      "/api/settings/answering": {
+        query_strategy: "auto_routing",
+        answer_flow: "crag",
+        neighbor_child_count: 3,
+        rerank_enabled: true,
+        screen_linking_enabled: false,
+        request_coverage_retrieval_enabled: false,
+        auto_field_filter_enabled: false,
+        config_source: "runtime",
+      },
+      "/api/settings/upload-storage": {
+        local_storage_dir: "/u01/data/production-ready-rag",
+        readiness: "ok",
+        max_upload_bytes: 209715200,
+        config_source: "runtime",
+      },
+    };
+    if (url.pathname in settingsData) {
       await route.fulfill({
-        json: {
-          data: {
-            config_file: "~/.oci/config",
-            profile: "DEFAULT",
-            user: "ocid1.user.oc1..example",
-            fingerprint: "12:34:56:78:90:ab:cd:ef",
-            tenancy: "ocid1.tenancy.oc1..example",
-            region: "ap-osaka-1",
-            key_file: "~/.oci/oci_api_key.pem",
-            key_file_exists: true,
-            config_file_exists: true,
-            config_source: "runtime",
-          },
-          error_messages: [],
-          warning_messages: [],
-        },
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/settings/upload-storage") {
-      await route.fulfill({
-        json: {
-          data: {
-            backend: "oci",
-            local_storage_dir: "/u01/data/production-ready-rag",
-            object_storage_region: "ap-osaka-1",
-            object_storage_namespace: "mytenancynamespace",
-            object_storage_bucket: "rag-originals",
-            readiness: "ok",
-            max_upload_bytes: 209715200,
-            config_source: "runtime",
-          },
-          error_messages: [],
-          warning_messages: [],
-        },
+        json: { data: settingsData[url.pathname], error_messages: [], warning_messages: [] },
       });
       return;
     }
@@ -62,12 +49,12 @@ test("sidebar route changes reset the main pane while browser back restores it",
   page,
 }) => {
   await mockApi(page);
-  await page.goto("/settings/oci");
+  await page.goto("/settings/retrieval");
 
   const main = page.getByRole("main");
-  await expect(page.getByRole("heading", { name: "OCI 認証設定", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "検索方法", level: 1 })).toBeVisible();
 
-  const ociScrollTop = await main.evaluate((element) => {
+  const startScrollTop = await main.evaluate((element) => {
     element.scrollTo({
       top: Math.min(620, element.scrollHeight - element.clientHeight),
       left: 0,
@@ -76,9 +63,11 @@ test("sidebar route changes reset the main pane while browser back restores it",
     element.dispatchEvent(new Event("scroll"));
     return element.scrollTop;
   });
-  expect(ociScrollTop).toBeGreaterThan(100);
+  expect(startScrollTop).toBeGreaterThan(100);
 
-  await (await openSidebarNav(page)).getByRole("link", { name: "アップロード保存先" }).click();
+  const sidebar = await openSidebarNav(page);
+  await expandSidebarSections(sidebar, "システム設定");
+  await sidebar.getByRole("link", { name: "アップロード保存先" }).click();
 
   await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   await expect(
@@ -88,9 +77,9 @@ test("sidebar route changes reset the main pane while browser back restores it",
 
   await page.goBack();
 
-  await expect(page).toHaveURL(/\/settings\/oci$/);
-  await expect(page.getByRole("heading", { name: "OCI 認証設定", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/retrieval$/);
+  await expect(page.getByRole("heading", { name: "検索方法", level: 1 })).toBeVisible();
   await expect
     .poll(() => main.evaluate((element) => element.scrollTop))
-    .toBeGreaterThanOrEqual(ociScrollTop - 1);
+    .toBeGreaterThanOrEqual(startScrollTop - 1);
 });

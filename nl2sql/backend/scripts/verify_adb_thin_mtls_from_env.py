@@ -7,7 +7,6 @@ Oracle AI Database の接続設定は3製品共通（PLATFORM_ORACLE_*）なの�
 from __future__ import annotations
 
 import argparse
-import asyncio
 import os
 import re
 import socket
@@ -56,22 +55,9 @@ def main() -> int:
         action="store_true",
         help="外部サービスによる public egress IP 確認を省略します。",
     )
-    parser.add_argument(
-        "--refresh-wallet-from-oci",
-        action="store_true",
-        help=(
-            "OCI Database API で ADB Wallet を再生成し、PLATFORM_ORACLE_WALLET_DIR に設置して "
-            "PLATFORM_ORACLE_WALLET_PASSWORD を共通 .env へ保存してから検証します。"
-        ),
-    )
     args = parser.parse_args()
 
     env_file = Path(args.env_file).expanduser().resolve()
-    if args.refresh_wallet_from_oci:
-        print_header("Refresh Wallet From OCI")
-        if not refresh_wallet_from_oci():
-            return 2
-
     env = load_env(env_file)
 
     print_header("Environment")
@@ -84,8 +70,6 @@ def main() -> int:
     print_setting(env, "PLATFORM_ORACLE_CLIENT_LIB_DIR")
     print_setting(env, "PLATFORM_ORACLE_WALLET_DIR")
     print_setting(env, "PLATFORM_ORACLE_WALLET_PASSWORD", secret=True)
-    print_setting(env, "PLATFORM_ORACLE_ADB_OCID", secret=True)
-    print_setting(env, "PLATFORM_ORACLE_ADB_REGION")
 
     driver_mode = normalized(env, "PLATFORM_ORACLE_DRIVER_MODE", "thin")
     connection_security = normalized(env, "PLATFORM_ORACLE_CONNECTION_SECURITY", "wallet_mtls")
@@ -177,56 +161,6 @@ def load_env(env_file: Path) -> dict[str, str]:
     for key, val in os.environ.items():
         values.setdefault(key, val)
     return values
-
-
-def refresh_wallet_from_oci() -> bool:
-    try:
-        from pr_system_settings import database as shared_database
-        from pr_system_settings.oci_database import OciDatabaseClient
-
-        from app.clients.oracle import close_oracle_pool
-        from app.settings import PLATFORM_ENV_FILE, get_settings
-    except Exception as exc:
-        print(f"refresh_wallet_error=import_failed ({type(exc).__name__}: {exc})")
-        return False
-
-    async def run() -> bool:
-        settings = get_settings()
-        adb_ocid = settings.oracle_adb_ocid.strip()
-        if not adb_ocid:
-            print("refresh_wallet_error=missing_oracle_adb_ocid")
-            return False
-        try:
-            password = shared_database.wallet_download_password(settings)
-        except Exception as exc:
-            print(f"refresh_wallet_error={type(exc).__name__}: {exc}")
-            return False
-        client = OciDatabaseClient(settings=settings)
-        try:
-            info = await client.get_autonomous_database(adb_ocid)
-            generate_type = None if info.is_dedicated is True else "SINGLE"
-            wallet_zip = await client.download_autonomous_database_wallet(
-                adb_ocid,
-                password,
-                generate_type,
-                shared_database.ORACLE_WALLET_MAX_BYTES,
-            )
-            settings_data = shared_database.install_downloaded_database_wallet(
-                settings,
-                wallet_zip,
-                password,
-                env_file=PLATFORM_ENV_FILE,
-                on_saved=lambda _settings: close_oracle_pool(),
-            )
-        except Exception as exc:
-            print(f"refresh_wallet_error={type(exc).__name__}: {exc}")
-            return False
-        print("refresh_wallet_status=downloaded")
-        print(f"refresh_wallet_dir={settings_data.wallet_dir}")
-        print("refresh_wallet_password_saved=yes")
-        return True
-
-    return asyncio.run(run())
 
 
 def print_header(title: str) -> None:

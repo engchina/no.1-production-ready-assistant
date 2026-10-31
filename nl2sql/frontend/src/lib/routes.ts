@@ -37,7 +37,6 @@ export const APP_ROUTES = {
   questionClassifierModels: "/question-classifier-models",
   history: "/history",
   evaluation: "/evaluation",
-  settingsOci: "/settings/oci",
   settingsUploadStorage: "/settings/upload-storage",
   settingsModel: SYSTEM_SETTINGS_PATHS.model,
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,

@@ -1720,19 +1720,7 @@ def _is_retryable_error(exc: Exception) -> bool:
         openai_errors: tuple[type[BaseException], ...] = ()
     else:
         openai_errors = (APIConnectionError,)
-    # OCI SDK は同梱の `oci._vendor.requests` を使うため、接続タイムアウトの `oci.exceptions.ConnectTimeout` と
-    # 読み取りタイムアウトを含むその他の通信失敗 `oci.exceptions.RequestException` は、top-level の requests 例外とも
-    # builtin の ConnectionError とも別クラスになる（両者に共通の親は vendored の RequestException だけで、
-    # ConnectTimeout は oci.exceptions.RequestException の派生ではない）。全 OCI 呼び出しは NoneRetryStrategy で
-    # SDK 側の再試行を切っているので、ここで拾わないと無再試行になる (#743)。
-    try:
-        from oci.exceptions import ConnectTimeout as OciConnectTimeout
-        from oci.exceptions import RequestException as OciRequestException
-    except ImportError:
-        oci_errors: tuple[type[BaseException], ...] = ()
-    else:
-        oci_errors = (OciConnectTimeout, OciRequestException)
-    return isinstance(exc, (TimeoutError, ConnectionError, *request_errors, *httpx_errors, *openai_errors, *oci_errors))
+    return isinstance(exc, (TimeoutError, ConnectionError, *request_errors, *httpx_errors, *openai_errors))
 
 
 def _json_dumps(value: Any) -> str:

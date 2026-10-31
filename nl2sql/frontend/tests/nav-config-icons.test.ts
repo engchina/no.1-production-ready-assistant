@@ -78,8 +78,7 @@ const EXPECTED_ICON_NAMES_BY_LABEL_KEY = new Map<string, string>([
   ["nav.settingsAnswerNotice", "MessageSquareWarning"],
   ["nav.settingsSelectAiCredential", "FileKey"],
   // システム設定（3製品共通）
-  ["nav.settingsOci", "KeyRound"],
-  ["nav.settingsUploadStorage", "Cloud"],
+  ["nav.settingsUploadStorage", "HardDrive"],
   ["nav.settingsModel", "BrainCog"],
   ["nav.settingsDatabase", "Database"],
   ["nav.settingsAppearance", "Palette"],

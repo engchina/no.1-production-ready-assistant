@@ -81,8 +81,6 @@ import {
   type SearchExtractionFieldsData,
   type PipelineSettingsData,
   type PipelineSettingsUpdate,
-  type GuardrailSettingsData,
-  type GuardrailSettingsUpdate,
   type VectorIndexSettingsData,
   type VectorIndexSettingsUpdate,
   type EvaluationSettingsData,
@@ -200,7 +198,6 @@ export const queryKeys = {
   chunkingSettings: ["settings", "chunking"] as const,
   languagePack: ["settings", "language-pack"] as const,
   languagePackHistory: ["settings", "language-pack", "history"] as const,
-  guardrailSettings: ["settings", "guardrail"] as const,
   extractionFieldsSettings: ["settings", "extraction-fields"] as const,
   pipelineSettings: ["settings", "pipeline"] as const,
   vectorIndexSettings: ["settings", "vector-index"] as const,
@@ -2161,27 +2158,6 @@ export function useExtractionFieldsSettings(enabled = true) {
     queryFn: api.getExtractionFieldsSettings,
     enabled,
     retry: false,
-  });
-}
-
-/** Guardrail アダプター(安全)の runtime 設定。 */
-export function useGuardrailSettings() {
-  return useQuery<GuardrailSettingsData>({
-    queryKey: queryKeys.guardrailSettings,
-    queryFn: api.getGuardrailSettings,
-    retry: false,
-  });
-}
-
-/** Guardrail アダプター設定をランタイム保存。 */
-export function useUpdateGuardrailSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: GuardrailSettingsUpdate) =>
-      api.updateGuardrailSettings(payload),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.guardrailSettings, data);
-    },
   });
 }
 

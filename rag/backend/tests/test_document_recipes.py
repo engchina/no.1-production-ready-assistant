@@ -17,7 +17,7 @@ from app.api.routes.documents import (
     _materialize_experiment_candidate,
     _recipe_steps,
 )
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oracle import (
     ReviewedExtractionWrite,
     oracle_chunk_set_schema_sql,
@@ -886,7 +886,7 @@ async def _decide_next_phase(
 ) -> IngestionJobPhase | None:
     """EXTRACT 完了直後の materialize が返す「次フェーズ」の決定だけを取り出す。"""
     fake = _FakeRecipeJobOracle()
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     monkeypatch.setattr(documents_route, "IngestionPipeline", _FakeRecipeJobPipeline)
     monkeypatch.setattr(
         documents_route,
@@ -925,7 +925,7 @@ async def test_recipe_extract_job_enqueues_chunk_after_current_job_finishes(
     """
     fake = _FakeRecipeJobOracle()
     fake.jobs["job-extract-1"] = _extract_job()
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     monkeypatch.setattr(documents_route, "OracleClient", lambda: fake)
     monkeypatch.setattr(documents_route, "IngestionPipeline", _FakeRecipeJobPipeline)
     monkeypatch.setattr(
@@ -955,7 +955,7 @@ async def test_recipe_extract_job_stays_in_review_when_auto_chunk_disabled(
     """auto_chunk 無効時は EXTRACT job 完了後も CHUNK job を投入しない。"""
     fake = _FakeRecipeJobOracle()
     fake.jobs["job-extract-1"] = _extract_job()
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     monkeypatch.setattr(documents_route, "OracleClient", lambda: fake)
     monkeypatch.setattr(documents_route, "IngestionPipeline", _FakeRecipeJobPipeline)
     monkeypatch.setattr(
@@ -990,7 +990,7 @@ async def test_recipe_job_cancelled_during_finish_does_not_enqueue_next_phase(
     """完了処理が RUNNING を読んだ直後に cancel されたら、SUCCEEDED にせず次工程も入れない。"""
     fake = _FakeRecipeJobOracle()
     fake.jobs["job-extract-1"] = _extract_job()
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     monkeypatch.setattr(documents_route, "OracleClient", lambda: fake)
     monkeypatch.setattr(documents_route, "IngestionPipeline", _FakeRecipeJobPipeline)
     monkeypatch.setattr(
@@ -1404,7 +1404,7 @@ async def test_recipe_job_records_success_outcome_once_after_succeeded(
     記録する。
     """
     fake = _EventRecipeOracle()
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     job_id = _prepare_recipe_run(monkeypatch, fake, phase)
 
     await documents_route._run_ingestion_job(job_id, propagate_errors=True)
@@ -1602,7 +1602,7 @@ async def test_recipe_job_source_fetch_failure_marks_only_recipe_error(
     """
     object_path = "local://uploaded/source-failure.pdf"
     if stored_bytes is not None:
-        object_path = await ObjectStorageClient().put(
+        object_path = await FileStorageClient().put(
             "uploaded/source-failure.pdf", stored_bytes, "application/pdf"
         )
     fake = _SourceFailureRecipeOracle(object_path)

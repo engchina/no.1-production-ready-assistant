@@ -207,7 +207,6 @@ REQUIRED_BACKEND_ENV_LINES = {
 REQUIRED_PLATFORM_ENV_LINES = [
     # 時間帯（#3255）: Terraform の timezone を共通の設定へ書く（suite-init.sh が OS の時間帯にも使う）。
     "PLATFORM_TIMEZONE=${var.timezone}\n",
-    "PLATFORM_OCI_COMPARTMENT_ID=${var.compartment_ocid}\n",
     "PLATFORM_ORACLE_USER='${local.effective_oracle_user}'\n",
     "PLATFORM_ORACLE_PASSWORD='${local.effective_oracle_password}'\n",
     "PLATFORM_ORACLE_DSN='${local.effective_oracle_dsn}'\n",
@@ -216,7 +215,6 @@ REQUIRED_PLATFORM_ENV_LINES = [
     "PLATFORM_ORACLE_CLIENT_LIB_DIR=\n",
     "PLATFORM_ORACLE_WALLET_DIR=${local.wallet_dir_host}\n",
     "PLATFORM_ORACLE_WALLET_PASSWORD='${local.effective_oracle_wallet_password}'\n",
-    "PLATFORM_ORACLE_ADB_OCID=${local.effective_adb_ocid}\n",
     "PLATFORM_ADMIN_LOGIN_USER_ID=${var.app_admin_login_user_id}\n",
     "PLATFORM_ADMIN_LOGIN_USER_PASSWORD=${var.app_admin_login_user_password}\n",
     # 3製品で同じサービス間 token の署名鍵（#233）。stack が1つ生成して全 Compute に配る。

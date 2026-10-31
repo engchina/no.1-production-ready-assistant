@@ -37,7 +37,7 @@
   - `us-chicago-1`: `ocid1.image.oc1.us-chicago-1.aaaaaaaaltnu52rsd7s6p7yepblc6cdq7b7orqkndiwlz2eggv5ja2ltn52a`
   - image を新しくするときは、`schema.yaml`・`variables.tf`・`terraform/scripts/verify_stack_contract.py`（`ORACLE_LINUX_IMAGES`）を同じ PR でそろえます。
   これら以外のリージョンで stack を作ると、`region` の validation で plan が失敗します。
-- 共通 `.env` の `PLATFORM_ORACLE_ADB_REGION` には stack のリージョンが入ります（OCI からの Wallet の取得に使います）。システム設定 > データベース は ADB の起動・停止・状態の取得を扱いません（#10）。
+- システム設定 > データベース は ADB の起動・停止・状態の取得を扱いません（#10）。
 
 ## フォームの入力順
 

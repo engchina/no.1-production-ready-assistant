@@ -100,11 +100,11 @@ src/main.tsx                         <ConfirmProvider labels navigationKey> + <T
 
 - ✅ モデル設定のモデル削除に `useConfirm()` の確認ゲートを導入(`ModelSettingsClient`)。
 - ✅ `ModelSettingsClient` のローカル `Notice` を撤廃し、通知/エラー/検証を共通 `<Banner>` へ統合。
-- ✅ `OciSettingsClient` / `DatabaseSettingsClient` / `UploadStorageSettingsClient` の保存結果インライン表示を `<FormStatus>` へ統一。
+- ✅ `DatabaseSettingsClient` / `UploadStorageSettingsClient` の保存結果インライン表示を `<FormStatus>` へ統一（OCI 認証の画面は #11 で削除）。
 - ✅ `SearchClient`(エラー・ガードレール警告)・`DocumentWorkspace`(重複/エラー/索引完了)の手書き tone ボックスを `<Banner>` へ統一。
 - ✅ spec 準拠監査(全画面)を実施し、手書き tone ボックスを統一:
   - `<Banner>` 化: ログインエラー、文書抽出の警告、評価の閾値失敗/検証/実行エラー。
-  - `<FieldError>` 化: `SelectField` 本体および OCI/アップロード保存先の各フィールドエラー(`aria-describedby` 連携を維持)。
+  - `<FieldError>` 化: `SelectField` 本体および アップロード保存先の各フィールドエラー(`aria-describedby` 連携を維持)。
   - `<FormStatus>` 化: コピー失敗などのアクション結果。
 - ✅ `problem` 契約と JSON Pointer field binding を導入。ユーザーID/ロールコード競合は FieldError へ結び付け、
   入力変更時の局所クリア、最初のエラーへのフォーカス、FormStatus との重複抑止を実装。

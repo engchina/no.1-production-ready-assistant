@@ -119,7 +119,7 @@ def figures(monkeypatch: MonkeyPatch) -> type[_ScopedFigureOracle]:
     _FigureStorage.reads = []
     monkeypatch.setattr(mcp_tools, "OracleClient", _ScopedFigureOracle)
     monkeypatch.setattr(figures_route, "OracleClient", _ScopedFigureOracle)
-    monkeypatch.setattr(document_crop, "ObjectStorageClient", _FigureStorage)
+    monkeypatch.setattr(document_crop, "FileStorageClient", _FigureStorage)
     return _ScopedFigureOracle
 
 

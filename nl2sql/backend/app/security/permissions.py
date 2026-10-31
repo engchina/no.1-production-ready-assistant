@@ -263,7 +263,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission("menu.settings_answer_notice", "運用設定", "回答の注意書き"),
     # データベース設定から分けた運用の操作（#658）。
     _menu_permission("menu.settings_select_ai_credential", "運用設定", "Select AI Credential"),
-    _menu_permission("menu.settings_oci", "システム設定", "OCI 認証"),
     _menu_permission("menu.settings_upload_storage", "システム設定", "アップロード保存先"),
     _menu_permission("menu.settings_model", "システム設定", "モデル"),
     _menu_permission(
@@ -488,8 +487,6 @@ LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
         "menu.question_classifier_models",
         "menu.evaluation",
     ),
-    "settings.oci.view": ("menu.settings_oci",),
-    "settings.oci.manage": ("menu.settings_oci",),
     "settings.object_storage.view": ("menu.settings_upload_storage",),
     "settings.object_storage.manage": ("menu.settings_upload_storage",),
     "settings.models.view": ("menu.settings_model",),
@@ -677,10 +674,8 @@ _SELECT_AI_ASSETS_REFRESH = _allowed(SELECT_AI_ASSETS_REFRESH_PERMISSION)
 _SETTINGS_DATABASE = _allowed("menu.settings_database")
 _SETTINGS_SELECT_AI_CREDENTIAL = _allowed("menu.settings_select_ai_credential")
 _SETTINGS_MODEL = _allowed("menu.settings_model")
-_SETTINGS_OCI = _allowed("menu.settings_oci")
 _SQL_EXECUTE = _allowed(SQL_EXECUTE_PERMISSION)
 _SQL_TO_QUESTION = _allowed("menu.sql_to_question")
-_SETTINGS_OBJECT_STORAGE = _allowed("menu.settings_oci", "menu.settings_upload_storage")
 _QUERY_HISTORY_READ = _allowed(
     "menu.history", QUERY_GENERATE_PERMISSION, FEEDBACK_MANAGE_PERMISSION
 )
@@ -754,19 +749,9 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/security/deepsec/target-objects"): _SECURITY_DEEPSEC,
     ("GET", "/security/deepsec/target-objects/{owner}/{object_name}"): _SECURITY_DEEPSEC,
     ("POST", "/security/deepsec/verify"): _SECURITY_DEEPSEC,
-    # ---- システム設定: OCI 認証（Object Storage の設定はアップロード保存先の画面も使う） ----
-    ("GET", "/settings/oci"): _SETTINGS_OCI,
-    ("PATCH", "/settings/oci"): _SETTINGS_OCI,
-    ("POST", "/settings/oci/config/read"): _SETTINGS_OCI,
-    ("POST", "/settings/oci/config/test"): _SETTINGS_OCI,
-    ("POST", "/settings/oci/key-file"): _SETTINGS_OCI,
-    ("PATCH", "/settings/oci/object-storage"): _SETTINGS_OBJECT_STORAGE,
-    ("POST", "/settings/oci/object-storage/namespace"): _SETTINGS_OBJECT_STORAGE,
-    # ---- システム設定: アップロード保存先（参照は OCI 認証の画面も使う） ----
-    ("GET", "/settings/upload-storage"): _SETTINGS_OBJECT_STORAGE,
+    # ---- システム設定: アップロード保存先 ----
+    ("GET", "/settings/upload-storage"): _allowed("menu.settings_upload_storage"),
     ("PATCH", "/settings/upload-storage"): _allowed("menu.settings_upload_storage"),
-    # 確認は確認用の object を書くので、保存と同じ権限（#2101）。
-    ("POST", "/settings/upload-storage/test"): _allowed("menu.settings_upload_storage"),
     # ---- システム設定: モデル ----
     ("GET", "/settings/model"): _SETTINGS_MODEL,
     ("PATCH", "/settings/model"): _SETTINGS_MODEL,
@@ -793,7 +778,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/settings/database/select-ai-credential"): _SETTINGS_SELECT_AI_CREDENTIAL,
     ("POST", "/settings/database/test"): _SETTINGS_DATABASE,
     ("POST", "/settings/database/wallet"): _SETTINGS_DATABASE,
-    ("POST", "/settings/database/wallet/download"): _SETTINGS_DATABASE,
     # ---- DB 構造（schema catalog） ----
     ("GET", "/schema/catalog"): _SCHEMA_READ,
     ("GET", "/schema/catalog/head"): _SCHEMA_READ,

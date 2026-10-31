@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 class Settings(ModelSecretStateMixin, BaseServiceSettings):
     """サービス固有設定。
 
-    共通の属性（OCI / Oracle / モデル / アップロード保存先 / 構成管理者・認証ポリシー）は
+    共通の属性（Oracle / モデル / アップロード保存先 / 構成管理者・認証ポリシー）は
     共通 `.env` の `PLATFORM_*`、それ以外は製品の `backend/.env` の `NL2SQL_*` から読む（#211）。
     属性名は変えず、環境変数名は `product_settings_config` の規則で決まる。
     """
@@ -94,17 +94,12 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_deepsec_enabled: bool = False
     oracle_deepsec_data_user: str = "DEEPSEC_DATA_USER"
     oracle_deepsec_data_user_password: str = ""
-    oracle_adb_ocid: str = ""
-    oracle_adb_region: str = ""
+    # Select AI（profile の属性と Credential の作成）だけが読む。Select AI と一緒に削除する（#7）。
+    # 共通の設定から外した（#11）ので env 名は NL2SQL_OCI_*。
     oci_region: str = ""
     oci_compartment_id: str = ""
     oci_config_file: str = "~/.oci/config"
     oci_config_profile: str = "DEFAULT"
-    oci_auth_mode: str = "config_file"
-    oci_user_ocid: str = ""
-    oci_fingerprint: str = ""
-    oci_tenancy_ocid: str = ""
-    oci_key_file: str = ""
     oci_genai_endpoint: str = ""
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
     oci_genai_embedding_dim: int = 1536
@@ -179,11 +174,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         le=CHAT_ATTACHMENT_MAX_FILES_MAX,
     )
     model_settings_file: str = DEFAULT_MODEL_SETTINGS_FILE
-    upload_storage_backend: str = "local"
     local_storage_dir: str = "/u01/data/production-ready-nl2sql"
-    object_storage_region: str = ""
-    object_storage_namespace: str = ""
-    object_storage_bucket: str = "production-ready"
     max_upload_bytes: int = 200 * 1024 * 1024
     # NL2SQL 安全境界（既定: SELECT のみ許可）。DDL/DML/PLSQL は禁止する方針。
     nl2sql_allow_select_only: bool = True
@@ -382,11 +373,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         return self
 
     @property
-    def resolved_oci_config_profile(self) -> str:
-        """PLATFORM_OCI_CONFIG_PROFILE。空なら DEFAULT。"""
-        return self.oci_config_profile.strip() or "DEFAULT"
-
-    @property
     def resolved_oracle_wallet_dir(self) -> str:
         """明示 Wallet 配置先を優先し、未指定時だけ Thick の既定位置を返す。"""
         wallet_dir = self.oracle_wallet_dir.strip()
@@ -398,11 +384,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         if client_lib_dir:
             return str(Path(client_lib_dir).expanduser() / "network" / "admin")
         return ""
-
-    @property
-    def resolved_oracle_adb_region(self) -> str:
-        """ADB 管理専用 region。未設定なら PLATFORM_OCI_REGION へ fallback する。"""
-        return self.oracle_adb_region.strip() or self.oci_region.strip()
 
     @field_validator("model_settings_file")
     @classmethod
@@ -530,7 +511,7 @@ class _DeepSecEnvReloader:
 
 _DEEPSEC_ENV_RELOADER = _DeepSecEnvReloader()
 
-# 3 製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース・認証ポリシーなど）は
+# 3 製品共通の設定（アップロード保存先・モデル・データベース・認証ポリシーなど）は
 # `platform/.env`。別の製品・別の worker の画面で保存した値を、再起動なしで次のリクエストから
 # 使う（#2092・#2102）。テストが差し替えられるよう、呼出時に値を引く。
 _PLATFORM_ENV_RELOADER = EnvFieldReloader(

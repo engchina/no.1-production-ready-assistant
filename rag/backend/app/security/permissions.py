@@ -74,14 +74,12 @@ MENU_SETTINGS_LANGUAGE_PACK = "menu.settings_language_pack"
 MENU_SETTINGS_VECTOR_INDEX = "menu.settings_vector_index"
 MENU_SETTINGS_RETRIEVAL = "menu.settings_retrieval"
 MENU_SETTINGS_PROMPTS = "menu.settings_prompts"
-MENU_SETTINGS_GUARDRAIL = "menu.settings_guardrail"
 MENU_SETTINGS_EVALUATION = "menu.settings_evaluation"
 MENU_SETTINGS_ENTITY_INDEX = "menu.settings_entity_index"
 MENU_SETTINGS_GRAPH = "menu.settings_graph"
 MENU_SETTINGS_SYSTEM_TABLES = "menu.settings_system_tables"
 MENU_SETTINGS_HUGGINGFACE = "menu.settings_huggingface"
 MENU_SETTINGS_SERVICES = "menu.settings_services"
-MENU_SETTINGS_OCI = "menu.settings_oci"
 MENU_SETTINGS_UPLOAD_STORAGE = "menu.settings_upload_storage"
 MENU_SETTINGS_MODEL = "menu.settings_model"
 MENU_SETTINGS_DATABASE = "menu.settings_database"
@@ -146,7 +144,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission(MENU_SETTINGS_GRAPH, _GROUP_PIPELINE, "文書構造索引"),
     _menu_permission(MENU_SETTINGS_RETRIEVAL, _GROUP_PIPELINE, "検索方法"),
     _menu_permission(MENU_SETTINGS_PROMPTS, _GROUP_PIPELINE, "回答プロンプト"),
-    _menu_permission(MENU_SETTINGS_GUARDRAIL, _GROUP_PIPELINE, "安全チェック"),
     _menu_permission(MENU_SETTINGS_EVALUATION, _GROUP_PIPELINE, "評価の基準"),
     _menu_permission(MENU_EVALUATION, _GROUP_IMPROVE, "品質評価"),
     _permission(
@@ -178,7 +175,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission(MENU_SETTINGS_ANSWER_NOTICE, _GROUP_OPERATIONS, "回答の注意書き"),
     _menu_permission(MENU_SETTINGS_HUGGINGFACE, _GROUP_OPERATIONS, "HuggingFace"),
     _menu_permission(MENU_SETTINGS_SERVICES, _GROUP_OPERATIONS, "サービス"),
-    _menu_permission(MENU_SETTINGS_OCI, _GROUP_SETTINGS, "OCI 認証"),
     _menu_permission(MENU_SETTINGS_UPLOAD_STORAGE, _GROUP_SETTINGS, "アップロード保存先"),
     _menu_permission(MENU_SETTINGS_MODEL, _GROUP_SETTINGS, "モデル"),
     _menu_permission(MENU_SETTINGS_DATABASE, _GROUP_SETTINGS, "データベース"),
@@ -573,23 +569,8 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # 承認済み FAQ への反映（回答の書き込み）だけは rag.feedback.manage。
     ("POST", "/feedback/{feedback_id}/approved-faq"): _any(FEEDBACK_MANAGE),
     # ---- システム設定（3 製品共通の画面） ----
-    ("GET", "/settings/upload-storage"): _any(
-        MENU_SETTINGS_UPLOAD_STORAGE, MENU_SETTINGS_OCI, MENU_UPLOAD
-    ),
+    ("GET", "/settings/upload-storage"): _any(MENU_SETTINGS_UPLOAD_STORAGE, MENU_UPLOAD),
     ("PATCH", "/settings/upload-storage"): _any(MENU_SETTINGS_UPLOAD_STORAGE),
-    # 確認は確認用の object を書くので、保存と同じ権限（#2101）。
-    ("POST", "/settings/upload-storage/test"): _any(MENU_SETTINGS_UPLOAD_STORAGE),
-    ("GET", "/settings/oci"): _any(MENU_SETTINGS_OCI),
-    ("PATCH", "/settings/oci"): _any(MENU_SETTINGS_OCI),
-    ("PATCH", "/settings/oci/object-storage"): _any(
-        MENU_SETTINGS_OCI, MENU_SETTINGS_UPLOAD_STORAGE
-    ),
-    ("POST", "/settings/oci/config/read"): _any(MENU_SETTINGS_OCI),
-    ("POST", "/settings/oci/config/test"): _any(MENU_SETTINGS_OCI),
-    ("POST", "/settings/oci/object-storage/namespace"): _any(
-        MENU_SETTINGS_OCI, MENU_SETTINGS_UPLOAD_STORAGE
-    ),
-    ("POST", "/settings/oci/key-file"): _any(MENU_SETTINGS_OCI),
     # 文書ワークスペースは VLM の設定有無を表示に使う。
     ("GET", "/settings/model"): _any(MENU_SETTINGS_MODEL, MENU_UPLOAD, MENU_FILE_LIST),
     ("PATCH", "/settings/model"): _any(MENU_SETTINGS_MODEL),
@@ -597,7 +578,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
     ("PATCH", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/wallet"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/wallet/download"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/test"): _any(MENU_SETTINGS_DATABASE),
     # 回答の注意書き（設定は製品ごと。#2449）。
     ("GET", "/settings/answer-notice"): _any(MENU_SETTINGS_ANSWER_NOTICE),
@@ -704,8 +684,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ),
     ("PATCH", "/settings/section-rules"): _any(MENU_SETTINGS_PARSER_ADAPTERS),
     ("DELETE", "/settings/section-rules"): _any(MENU_SETTINGS_PARSER_ADAPTERS),
-    ("GET", "/settings/guardrail"): _any(MENU_SETTINGS_GUARDRAIL),
-    ("PATCH", "/settings/guardrail"): _any(MENU_SETTINGS_GUARDRAIL),
     ("GET", "/settings/vector-index"): _any(MENU_SETTINGS_VECTOR_INDEX),
     ("PATCH", "/settings/vector-index"): _any(MENU_SETTINGS_VECTOR_INDEX),
     # 品質評価の画面は評価設定（既定値）を読む。

@@ -250,31 +250,3 @@ def _markdown_rule_parser(request: pytest.FixtureRequest, monkeypatch: pytest.Mo
 
     monkeypatch.setattr(parser, "parse_rendered_markdown", lambda _markdown: None)
     monkeypatch.setattr(parser, "parse_markdown_rules", all_free)
-
-
-@pytest.fixture(autouse=True)
-def _stub_upload_storage_object_storage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """アップロード保存先の保存の前の確認（#2101）で、実の OCI を呼ばない（既定は成功）。
-
-    失敗を確かめるテストは `default_object_storage_client` をさらに差し替える。
-    """
-    from pr_system_settings import upload_storage_check
-
-    class _ObjectStorageStub:
-        def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def put_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def get_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def delete_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _ObjectStorageStub(),
-    )

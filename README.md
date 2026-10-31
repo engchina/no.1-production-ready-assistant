@@ -30,22 +30,13 @@ stack は VCN・subnet・security list・NSG を作らず、フォームで選�
 - 公開の port は、フォームで選んだ値を開けます（443 以外にしたら URL は `https://<IP>:<port>/`）。HTTPS が on のとき `http_port` は Compute で使わないので開けません。Compute の OS の firewall（firewalld）は配備のスクリプトが同じ port を開けます。
 - ADB の 1522 は、ADB のアクセス・タイプが「プライベート・エンドポイント・アクセスのみ」（既定）のときの規則です。Compute と ADB のプライベート・エンドポイントが同じ subnet でも、その subnet の security list に「送信元 = その subnet 自身の CIDR、port `1522`」を足します（同じ subnet の中の通信にも security list の規則が要ります）。
   - 「許可された IP および VCN 限定のセキュア・アクセス」（ACL）なら、security list ではなく ADB の ACL で Compute の subnet（または VCN）を許可します。「すべての場所からのセキュア・アクセス」なら足すものはありません。
-- egress: Compute は配備と実行で外部（GitHub・dnf・uv / npm の取得、OCI Generative AI・OCI Enterprise AI・Object Storage）へ HTTPS で出ます。Compute の subnet の security list の egress（既定は `0.0.0.0/0` のすべて）を絞っているなら TCP `443` の egress を残し、private subnet なら NAT gateway（と Service gateway）の経路を用意します。
+- egress: Compute は配備と実行で外部（GitHub・dnf・uv / npm の取得、OCI Generative AI・OCI Enterprise AI）へ HTTPS で出ます。Compute の subnet の security list の egress（既定は `0.0.0.0/0` のすべて）を絞っているなら TCP `443` の egress を残し、private subnet なら NAT gateway（と Service gateway）の経路を用意します。
 - 製品間の通信（Agent → RAG / NL2SQL の MCP）は同じ Compute の `127.0.0.1` なので、security list は要りません。
 - bastion を Compute と同じ subnet に置く（`bastion_subnet_id` を空にする）ときも、上の bastion の規則は「送信元 = その subnet 自身の CIDR」で足します。ADB が ACL（許可された IP および VCN）なら、ADB の ACL で bastion の subnet（または VCN）も許可します。
 
-### 配備の前に: Object Storage の bucket
+### アップロードした原本の保存先
 
-アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（stack が `platform/.env` に `PLATFORM_UPLOAD_STORAGE_BACKEND=local` を書きます）。保存先を OCI Object Storage にするときは、stack が bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
-
-| 用意するもの | 内容 |
-|---|---|
-| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは既定では stack と同じ（stack が `PLATFORM_OBJECT_STORAGE_REGION` に stack の `region` を書きます）。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
-| IAM の policy | 「システム設定 › OCI 認証」で設定する API キーのユーザーのグループに、bucket の参照と object の読み書き・削除を許します: `Allow group <group> to read buckets in compartment <bucket の compartment>` と `Allow group <group> to manage objects in compartment <bucket の compartment>` |
-
-- 配備の後に `system_admin` でログインし、「システム設定 › OCI 認証」の「Object Storage」で、namespace を「取得」ボタンで取得して（手入力はできません）リージョンとともに保存します。続けて「システム設定 › アップロード保存先」で「OCI Object Storage」を選び、bucket を指定して「接続を確認」を押します。設定は 3 製品で共通です。
-- 「接続を確認」と保存のときは、bucket の参照（`read buckets`）と、確認用の小さな object の書き込み・読み取り・削除（`manage objects`）を試します。bucket が無い・権限が足りないときは保存しません（#2101）。
-- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します（上の egress）。
+アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、Compute のディスク（`/u01/data/production-ready-<製品>` の下。`platform/.env` の `PLATFORM_LOCAL_STORAGE_DIR`）に保存します。保存先は「システム設定 › アップロード保存先」でローカルのディレクトリだけを選べます（OCI Object Storage は使いません。#11）。
 
 ## 配備した後の初期設定（推奨のロールとユーザー）
 
@@ -57,7 +48,7 @@ stack は VCN・subnet・security list・NSG を作らず、フォームで選�
 | `APP_ADMIN` | アプリ管理者 | 3 製品の「システム設定」**以外**のすべての権限 |
 | `APP_USER` | 一般利用者 | 3 製品の「AI 活用」の権限だけ |
 
-- 「システム設定」（OCI 認証・アップロード保存先・モデル・データベース・外観と証明書）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
+- 「システム設定」（アップロード保存先・モデル・データベース・外観と証明書）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
 
 動作確認用のユーザー（配備の後に、ロールと権限が意図どおりかを確かめるためのもの）:
 

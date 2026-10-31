@@ -165,9 +165,6 @@ PLATFORM_ENVIRONMENT=${var.platform_environment}
 PLATFORM_AUTH_MODE=authenticated
 PLATFORM_TIMEZONE=${var.timezone}
 
-PLATFORM_OCI_REGION=${var.region}
-PLATFORM_OCI_COMPARTMENT_ID=${var.compartment_ocid}
-
 PLATFORM_ORACLE_USER='${local.effective_oracle_user}'
 PLATFORM_ORACLE_PASSWORD='${local.effective_oracle_password}'
 PLATFORM_ORACLE_DSN='${local.effective_oracle_dsn}'
@@ -176,13 +173,6 @@ PLATFORM_ORACLE_CONNECTION_SECURITY=${local.nl2sql_oracle_connection_security}
 PLATFORM_ORACLE_CLIENT_LIB_DIR=
 PLATFORM_ORACLE_WALLET_DIR=${local.wallet_dir_host}
 PLATFORM_ORACLE_WALLET_PASSWORD='${local.effective_oracle_wallet_password}'
-PLATFORM_ORACLE_ADB_OCID=${local.effective_adb_ocid}
-PLATFORM_ORACLE_ADB_REGION=${var.region}
-
-PLATFORM_UPLOAD_STORAGE_BACKEND=local
-PLATFORM_OBJECT_STORAGE_REGION=${var.region}
-PLATFORM_OBJECT_STORAGE_BUCKET=production-ready
-PLATFORM_OBJECT_STORAGE_NAMESPACE=
 
 PLATFORM_ADMIN_LOGIN_USER_ID=${var.app_admin_login_user_id}
 PLATFORM_ADMIN_LOGIN_USER_PASSWORD=${var.app_admin_login_user_password}

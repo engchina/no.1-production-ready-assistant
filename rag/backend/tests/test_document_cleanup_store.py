@@ -74,12 +74,13 @@ def test_targets_round_trip_through_json() -> None:
         source_uri="local://uploaded/a/source.txt",
         artifact_uris=("local://artifacts/x.json",),
         prefixes=("artifacts/extractions/doc-1/",),
-        include_oci=True,
     )
 
     assert DocumentCleanupTargets.from_json(targets.to_json()) == targets
     assert DocumentCleanupTargets.from_json('{"artifact_uris": [1, ""]}').is_empty
     assert DocumentCleanupTargets().is_empty
+    # 以前の記録の `include_oci`（OCI の prefix も消す。#11 で削除）は読み捨てる。
+    assert DocumentCleanupTargets.from_json({**targets.to_json(), "include_oci": True}) == targets
 
 
 def test_find_for_document_is_limited_to_the_deleting_user(

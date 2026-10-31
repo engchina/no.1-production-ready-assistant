@@ -30,6 +30,7 @@ from security_support import (
 )
 
 import app.features.agent.router as agent_router
+import app.settings as app_settings
 from app.features.agent.runtime import AgentProfile, runtime_repository
 from app.main import app
 from app.security import dependencies as security_dependencies
@@ -223,11 +224,12 @@ def test_manifest_key_assignments() -> None:
     # 業務 Agent の作成は、自分の業務 Agent の作成（持ち主の判定は router。#2523）でもできる。
     assert _perm("POST", "/agents") == {"agent.admin", "agent.agents.build"}
     assert _perm("POST", "/agents/{agent_id}/share-request/approve") == {"agent.admin"}
-    assert _perm("PATCH", "/settings/oci") == {"menu.settings_oci"}
-    assert _perm("POST", "/settings/oci/object-storage/namespace") == {
-        "menu.settings_oci",
-        "menu.settings_upload_storage",
-    }
+    assert _perm("GET", "/settings/upload-storage") == {"menu.settings_upload_storage"}
+    assert _perm("PATCH", "/settings/upload-storage") == {"menu.settings_upload_storage"}
+    # OCI 認証・Object Storage の確認・Wallet の OCI からの取得の API は持たない（#11）。
+    assert not any(path.startswith("/settings/oci") for _method, path in ROUTE_PERMISSIONS)
+    assert ("POST", "/settings/upload-storage/test") not in ROUTE_PERMISSIONS
+    assert ("POST", "/settings/database/wallet/download") not in ROUTE_PERMISSIONS
     assert _perm("PATCH", "/settings/model") == {"menu.settings_model"}
     assert _perm("POST", "/settings/database/wallet") == {"menu.settings_database"}
     # ADB の起動・停止・情報取得の API は持たない（#10）。
@@ -251,7 +253,6 @@ def test_manifest_key_assignments() -> None:
         "menu.settings_external_mcp"
     }
     assert _perm("GET", "/audit/tool-calls") == {"menu.audit"}
-    assert _perm("GET", "/settings/oci") == {"menu.settings_oci"}
     assert _perm("GET", "/security/roles/{role_id}") == {
         "menu.security_users",
         "menu.security_roles",
@@ -293,6 +294,12 @@ def test_retired_permission_codes_are_not_in_catalog_or_manifest() -> None:
     assert expand_permissions(retired) == set()
 
 
+def test_removed_oci_settings_menu_is_ignored_when_stored() -> None:
+    """削除した「OCI 認証」のメニュー権限（#11）は、ロールに残っていても読まない。"""
+    assert "menu.settings_oci" not in ALL_PERMISSION_CODES
+    assert expand_permissions({"menu.settings_oci"}) == set()
+
+
 def test_capabilities_map_to_legacy_roles_and_imply_menus() -> None:
     assert CAPABILITY_ROLES == {
         "agent.runs.view": "viewer",
@@ -305,7 +312,7 @@ def test_capabilities_map_to_legacy_roles_and_imply_menus() -> None:
     assert "menu.approvals" in expand_permissions({"agent.approvals.decide"})
     assert "menu.audit" in expand_permissions({"agent.audit.view"})
     admin = expand_permissions({"agent.admin"})
-    assert {"menu.agents", "menu.settings_oci", "menu.settings_external_mcp"} <= admin
+    assert {"menu.agents", "menu.settings_upload_storage", "menu.settings_external_mcp"} <= admin
     # ユーザーとロール・権限管理は agent.admin に含めない。
     assert not {"menu.security_users", "menu.security_roles", "menu.security_permissions"} & admin
     # メニュー権限は capability を暗黙に含まない（昇格しない）。
@@ -343,7 +350,7 @@ def test_production_without_cookie_is_401(auth: ProductionAuth) -> None:
         ("GET", "/api/observability/status"),
         ("GET", "/api/audit/tool-calls"),
         ("GET", "/api/settings/mcp-connections"),
-        ("GET", "/api/settings/oci"),
+        ("GET", "/api/settings/upload-storage"),
         ("GET", "/api/security/permissions"),
         ("POST", "/api/runs"),
     ):
@@ -522,7 +529,7 @@ def test_user_without_roles_is_denied_everything_except_auth(auth: ProductionAut
         ("GET", "/api/audit/tool-calls"),
         ("GET", "/api/security/permissions"),
         ("GET", "/api/security/users"),
-        ("GET", "/api/settings/oci"),
+        ("GET", "/api/settings/upload-storage"),
     ):
         assert client.request(method, path, headers=headers).status_code == 403, path
 
@@ -1149,10 +1156,10 @@ def test_pool_kwargs_strip_descriptor_retry_only_in_cli(cli: bool) -> None:
         assert kwargs["tcp_connect_timeout"] == 10.0
 
 
-def _read_missing_oci_config(headers: dict[str, str], tmp_path: Any) -> int:
-    response = client.post(
-        "/api/settings/oci/config/read",
-        json={"config_file": str(tmp_path / "missing-config"), "profile": "DEFAULT"},
+def _save_upload_storage(headers: dict[str, str], tmp_path: Any) -> int:
+    response = client.patch(
+        "/api/settings/upload-storage",
+        json={"local_storage_dir": str(tmp_path / "uploads")},
         headers=headers,
     )
     return response.status_code
@@ -1162,20 +1169,25 @@ def test_system_settings_actions_use_menu_permissions_for_session(
     monkeypatch: MonkeyPatch, auth: ProductionAuth, tmp_path: Any
 ) -> None:
     """共通のシステム設定の保存・操作は Cookie ではメニュー権限で許可（RAG / NL2SQL と同じ）。"""
-    auth.user_with_permissions("oci-admin", ["menu.settings_oci"])
+    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", tmp_path / "platform.env")
+    settings = SimpleNamespace(local_storage_dir="/u01/data/x", max_upload_bytes=1)
+    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
+    auth.user_with_permissions("storage-admin", ["menu.settings_upload_storage"])
     auth.user_with_permissions("model-admin", ["menu.settings_model"])
-    oci_admin = login("oci-admin")
+    storage_admin = login("storage-admin")
     model_admin = login("model-admin")
-    # 権限があれば認可を通り、処理の結果（ファイルがない）になる。
-    assert _read_missing_oci_config(oci_admin, tmp_path) not in {401, 403}
-    assert _read_missing_oci_config(model_admin, tmp_path) == 403
+    # 権限があれば認可を通り、保存できる。
+    assert _save_upload_storage(storage_admin, tmp_path) == 200
+    assert _save_upload_storage(model_admin, tmp_path) == 403
     # Agent 固有の設定は agent.admin のまま。
-    assert client.patch("/api/settings/tool-policy", json={}, headers=oci_admin).status_code == 403
+    assert (
+        client.patch("/api/settings/tool-policy", json={}, headers=storage_admin).status_code == 403
+    )
 
     # router 側の判定（require_system_settings_write）も同じ権限を確認する。
     monkeypatch.setattr(security_dependencies, "permission_for_route", lambda *_args: None)
-    assert _read_missing_oci_config(model_admin, tmp_path) == 403
-    assert _read_missing_oci_config(oci_admin, tmp_path) not in {401, 403}
+    assert _save_upload_storage(model_admin, tmp_path) == 403
+    assert _save_upload_storage(storage_admin, tmp_path) == 200
 
 
 def test_api_key_menu_can_list_and_revoke_other_users_keys(auth: ProductionAuth) -> None:

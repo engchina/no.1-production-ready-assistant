@@ -7,7 +7,7 @@ const NOTICE_TITLE = "データベースに接続できません";
 const NOTICE_MESSAGE =
   "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
 const NOTICE_HINT =
-  "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
 const RAW_DATABASE_ERROR = "Oracle に接続できませんでした (ORA-12514)。";
 
 function envelope(data: unknown) {
@@ -100,20 +100,6 @@ type Scenario = {
 };
 
 const databaseIndependentScenarios: Scenario[] = [
-  {
-    name: "OCI 認証設定",
-    path: "/settings/oci",
-    heading: "OCI 認証設定",
-    setup: async (page, countRequest) => {
-      await page.route("**/api/settings/oci", (route) => {
-        countRequest();
-        return fulfill(route, "OCI 設定を読み込めませんでした。", 500);
-      });
-      await page.route("**/api/settings/upload-storage", (route) =>
-        fulfill(route, "保存先設定を読み込めませんでした。", 500)
-      );
-    },
-  },
   {
     name: "アップロード保存先",
     path: "/settings/upload-storage",
@@ -262,20 +248,17 @@ for (const scenario of databaseIndependentScenarios) {
   });
 }
 
-test("設定入口はDB未到達でもOCI認証設定へ遷移する", async ({ page }) => {
+test("設定入口はDB未到達でもアップロード保存先へ遷移する", async ({ page }) => {
   await mockAuthenticatedGate(page, () => true);
-  await page.route("**/api/settings/oci", (route) =>
-    fulfill(route, "OCI 設定を読み込めませんでした。", 500)
-  );
   await page.route("**/api/settings/upload-storage", (route) =>
     fulfill(route, "保存先設定を読み込めませんでした。", 500)
   );
 
   await page.goto("/settings");
 
-  await expect(page).toHaveURL(/\/settings\/oci$/);
+  await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   await expect(
-    page.getByRole("heading", { name: "OCI 認証設定", exact: true, level: 1 })
+    page.getByRole("heading", { name: "アップロード保存先", exact: true, level: 1 })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: NOTICE_TITLE })).toHaveCount(0);
 });

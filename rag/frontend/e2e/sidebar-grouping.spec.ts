@@ -42,11 +42,12 @@ test("サイドバーのセクション再編とラベルを確認", { tag: "@re
     "検索インデックス",
     "検索方法",
     "回答プロンプト",
-    "安全チェック",
     "評価の基準",
   ]) {
     await expect(pipelineSection.getByText(label, { exact: true })).toBeVisible();
   }
+  // OCI Guardrails の安全チェックの画面は削除した（#11）。
+  await expect(pipelineSection.getByText("安全チェック", { exact: true })).toHaveCount(0);
   // 根拠確認・回答スタイル・高度な検索の画面は削除した（#595）。
   for (const removed of ["根拠確認", "回答スタイル", "高度な検索"]) {
     await expect(pipelineSection.getByText(removed, { exact: true })).toHaveCount(0);
@@ -88,10 +89,10 @@ test("サイドバーのセクション再編とラベルを確認", { tag: "@re
   await expect(operationsSection.getByRole("link", { name: /HuggingFace/ })).toBeVisible();
   await expect(operationsSection.getByRole("link", { name: /サービス管理/ })).toBeVisible();
 
-  // システム設定は3製品で共通の5項目だけを持つ（回答の注意書きは運用設定。#2449）。
+  // システム設定は3製品で共通の4項目だけを持つ（回答の注意書きは運用設定。#2449。OCI 認証は #11 で削除）。
   const settingsSection = sidebar.locator("#nav-section-nav-section-settings");
-  await expect(settingsSection.getByRole("link")).toHaveCount(5);
-  for (const label of ["OCI 認証", "アップロード保存先", "モデル", "データベース", "外観と証明書"]) {
+  await expect(settingsSection.getByRole("link")).toHaveCount(4);
+  for (const label of ["アップロード保存先", "モデル", "データベース", "外観と証明書"]) {
     await expect(settingsSection.getByText(label, { exact: true })).toBeVisible();
   }
 
@@ -105,7 +106,7 @@ test("セクション見出しクリックで配下項目を開閉できる", { 
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApi(page);
   // システム設定が現在地。取込・検索・回答設定は非アクティブなので折りたためる。
-  await page.goto("/settings/oci");
+  await page.goto("/settings/upload-storage");
 
   const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
   const parserLink = sidebar.getByText("文書解析", { exact: true });
@@ -128,7 +129,7 @@ test("セクション見出しクリックで配下項目を開閉できる", { 
 test("アクティブ経路のセクションは折りたたみ状態でも自動展開する", { tag: "@responsive" }, async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApi(page);
-  await page.goto("/settings/oci");
+  await page.goto("/settings/upload-storage");
 
   const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
   // まず取込・検索・回答設定を開いてから畳む（localStorage に折りたたみ状態を保持。既定でも閉じている。#1563）。

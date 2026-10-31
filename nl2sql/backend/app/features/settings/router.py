@@ -1,6 +1,6 @@
 """RAG 由来のシステム設定 API。
 
-OCI 認証、アップロード保存先、モデル、データベース設定画面が期待する
+アップロード保存先、モデル、データベース設定画面が期待する
 契約を NL2SQL プロジェクトにも提供する。値は現在の Settings インスタンスへ
 反映し、secret 本文はレスポンスに返さない。
 """
@@ -33,11 +33,6 @@ from pr_system_settings.model_test_input import (
     MODEL_TEST_VISION_PROMPT,
     model_test_text_context,
 )
-from pr_system_settings.oci import build_oci_router
-from pr_system_settings.oci import oci_config_file as _oci_config_file
-from pr_system_settings.oci import oci_profile as _oci_profile
-from pr_system_settings.oci import parse_oci_config as _parse_oci_config
-from pr_system_settings.oci import read_oci_config_text as _read_oci_config_text
 from pr_system_settings.system_schema import oracle_error_code, system_tables_status_error
 from pr_system_settings.trace_recording import build_trace_recording_router
 from pr_system_settings.upload_storage import (
@@ -48,10 +43,6 @@ from starlette.responses import JSONResponse
 from app import settings as app_settings
 from app.api.concurrency import run_sync_io
 from app.api.problems import api_problem_response
-from app.clients.oci_auth import (
-    pem_file_is_encrypted,
-    resolve_oci_key_file,
-)
 from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
 from app.clients.oci_genai import OciGenAiClient
 from app.clients.oracle import close_oracle_pool, test_oracle_connection
@@ -60,6 +51,16 @@ from app.env_file import locked_env_file, replace_env_file
 from app.features.nl2sql.oracle_adapter import (
     OracleNl2SqlAdapter,
     SelectAiCredentialExistsError,
+)
+from app.features.settings.select_ai_oci_config import oci_config_file as _oci_config_file
+from app.features.settings.select_ai_oci_config import oci_profile as _oci_profile
+from app.features.settings.select_ai_oci_config import parse_oci_config as _parse_oci_config
+from app.features.settings.select_ai_oci_config import (
+    pem_file_is_encrypted,
+    resolve_oci_key_file,
+)
+from app.features.settings.select_ai_oci_config import (
+    read_oci_config_text as _read_oci_config_text,
 )
 from app.features.settings.system_schema import SystemSchemaError, system_schema_manager
 from app.features.settings.system_schema_runtime import reset_system_schema_runtime
@@ -85,14 +86,6 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 # テストで get_settings / PLATFORM_ENV_FILE を差し替えられるよう、呼出時に module の値を参照する。
 router.include_router(
     build_upload_storage_router(
-        get_settings=lambda: get_settings(),
-        env_file=lambda: app_settings.PLATFORM_ENV_FILE,
-    )
-)
-# OCI 認証も3製品共通の実装（pr_system_settings.oci。#100）。
-# 権限は既存の RBAC（route manifest）が判定する。
-router.include_router(
-    build_oci_router(
         get_settings=lambda: get_settings(),
         env_file=lambda: app_settings.PLATFORM_ENV_FILE,
     )
@@ -143,7 +136,6 @@ router.include_router(
 logger = logging.getLogger(__name__)
 run_in_threadpool = run_sync_io
 ENV_ASSIGNMENT_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
-OCI_DIRECTORY_MODE = 0o700
 OCI_PRIVATE_KEY_MAX_BYTES = 64 * 1024
 SELECT_AI_CREDENTIAL_NAME = "NL2SQL_OCI_CRED"
 SELECT_AI_CREDENTIAL_REGIONS = frozenset({"ap-osaka-1", "us-chicago-1"})

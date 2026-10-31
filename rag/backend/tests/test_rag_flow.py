@@ -10,7 +10,7 @@ import pytest
 from pytest import LogCaptureFixture, MonkeyPatch
 from rag_parser_core.result import ParserRegistryResult
 
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oci_genai import OciGenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.parser_service import ParserServiceClient
@@ -617,9 +617,9 @@ def test_prompt_injection_query_is_blocked(
     caplog: LogCaptureFixture, monkeypatch: MonkeyPatch
 ) -> None:
     """OCI を有効にした検索では、検出した攻撃を監査へ記録して拒否する。"""
-    from tests.guardrail_support import enable_oci_stub
+    from tests.guardrail_support import enable_scripted_guardrails
 
-    enable_oci_stub(monkeypatch)
+    enable_scripted_guardrails(monkeypatch)
     with caplog.at_level(logging.INFO, logger="app.audit"):
         response = client.post(
             "/api/search",
@@ -1398,7 +1398,7 @@ def test_ingest_rejects_source_size_mismatch() -> None:
     with audit_request_context():
         data = b"policy body"
         object_path = asyncio.run(
-            ObjectStorageClient().put("uploaded/size-mismatch.txt", data, "text/plain")
+            FileStorageClient().put("uploaded/size-mismatch.txt", data, "text/plain")
         )
         detail = asyncio.run(
             OracleClient().create_document(
@@ -1424,7 +1424,7 @@ def test_ingest_rejects_source_hash_mismatch() -> None:
     with audit_request_context():
         data = b"policy body"
         object_path = asyncio.run(
-            ObjectStorageClient().put("uploaded/hash-mismatch.txt", data, "text/plain")
+            FileStorageClient().put("uploaded/hash-mismatch.txt", data, "text/plain")
         )
         detail = asyncio.run(
             OracleClient().create_document(

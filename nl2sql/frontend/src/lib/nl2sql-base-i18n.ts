@@ -18,7 +18,7 @@ export const ja = {
   "dbGate.notConfigured.message":
     "NL2SQL の各機能（SQL 生成・データ準備・改善・運用）を利用するには、まずデータベースの接続情報を設定してください。設定が完了すると、この画面は自動的に利用できるようになります。",
   "dbGate.setupRequired.settingsHint":
-    "OCI 認証・アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
+    "アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
   "dbGate.recovering": "保存済みの業務データを復元しています…",
   "dbGate.persistenceFailed.title": "保存済みの業務データを復元できません",
   "dbGate.persistenceFailed.message":
@@ -45,8 +45,6 @@ export const ja = {
   "settings.preview.copy.failed": "コピーできませんでした",
 
   // ページタイトルは AGENTS.md 準拠の正式名を維持し、サイドバー表示のみ短縮形(*.sidebar)。
-  "nav.settingsOci": "OCI 認証設定",
-  "nav.settingsOci.sidebar": "OCI 認証",
   "nav.settingsUploadStorage": "アップロード保存先",
   "nav.settingsModel": "モデル設定",
   "nav.settingsModel.sidebar": "モデル",
@@ -58,9 +56,8 @@ export const ja = {
   "nav.settingsSelectAiCredential.sidebar": "Select AI Credential",
   "command.count": "{count} 件",
 
-  "settings.oci.subtitle": "OCI API キー認証情報を設定します。",
   "settings.uploadStorage.subtitle":
-    "ドキュメントアップロード時の原本保存先を local または OCI Object Storage から選択します。",
+    "ドキュメントアップロード時の原本を保存するローカルのディレクトリを設定します。",
 
   "settings.model.subtitle":
     "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",

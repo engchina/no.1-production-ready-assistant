@@ -40,7 +40,6 @@ import { AnswerNoticeSettingsClient } from "@/components/settings/AnswerNoticeSe
 import { ChatAttachmentSettingsClient } from "@/components/settings/ChatAttachmentSettingsClient";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { ModelSettingsClient } from "@/components/settings/ModelSettingsClient";
-import { OciSettingsClient } from "@/components/settings/OciSettingsClient";
 import { ParserAdapterSettingsClient } from "@/components/settings/ParserAdapterSettingsClient";
 import { ChunkingSettingsClient } from "@/components/settings/ChunkingSettingsClient";
 import { LanguagePackSettingsClient } from "@/components/settings/LanguagePackSettingsClient";
@@ -49,7 +48,6 @@ import { ServicesManagementClient } from "@/components/settings/ServicesManageme
 import { SystemTablesCard } from "@/components/settings/SystemTablesCard";
 import { RetrievalSettingsClient } from "@/components/settings/RetrievalSettingsClient";
 import { AnswerPromptSettingsClient } from "@/components/settings/AnswerPromptSettingsClient";
-import { GuardrailSettingsClient } from "@/components/settings/GuardrailSettingsClient";
 import { VectorIndexSettingsClient } from "@/components/settings/VectorIndexSettingsClient";
 import { EvaluationSettingsClient } from "@/components/settings/EvaluationSettingsClient";
 import { EntityIndexSettingsClient } from "@/components/settings/EntityIndexSettingsClient";
@@ -121,7 +119,6 @@ export function App() {
           }
         />
         <Route path={APP_ROUTES.settingsPipeline} element={<SettingsPipelineRoute />} />
-        <Route path={APP_ROUTES.settingsOci} element={<SettingsOciRoute />} />
         <Route
           path={APP_ROUTES.settingsUploadStorage}
           element={<SettingsUploadStorageRoute />}
@@ -144,7 +141,6 @@ export function App() {
           />
         ))}
         <Route path={APP_ROUTES.settingsPrompts} element={<SettingsPromptsRoute />} />
-        <Route path={APP_ROUTES.settingsGuardrail} element={<SettingsGuardrailRoute />} />
         <Route path={APP_ROUTES.settingsVectorIndex} element={<SettingsVectorIndexRoute />} />
         <Route path={APP_ROUTES.settingsEvaluation} element={<SettingsEvaluationRoute />} />
         <Route path={APP_ROUTES.settingsEntityIndex} element={<SettingsEntityIndexRoute />} />
@@ -380,15 +376,6 @@ function SettingsPipelineRoute() {
   );
 }
 
-function SettingsOciRoute() {
-  return (
-    <div>
-      <PageHeader wide title={t("nav.settingsOci")} subtitle={t("settings.oci.subtitle")} />
-      <OciSettingsClient />
-    </div>
-  );
-}
-
 function SettingsAnswerNoticeRoute() {
   return (
     <div>
@@ -508,19 +495,6 @@ function SettingsPromptsRoute() {
     <div>
       <PageHeader wide title={t("nav.settingsPrompts")} subtitle={t("settings.prompts.subtitle")} />
       <AnswerPromptSettingsClient />
-    </div>
-  );
-}
-
-function SettingsGuardrailRoute() {
-  return (
-    <div>
-      <PageHeader
-        wide
-        title={t("nav.settingsGuardrail")}
-        subtitle={t("settings.guardrail.subtitle")}
-      />
-      <GuardrailSettingsClient />
     </div>
   );
 }

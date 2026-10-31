@@ -12,9 +12,8 @@ from pr_backend_core.observability.tracing import (
     shutdown_tracing,
 )
 
-from app.clients.oci_guardrails import GuardrailInspection
 from app.config import Settings
-from app.rag.guardrails import GuardrailPolicy
+from app.rag.guardrails import GuardrailFinding, GuardrailPolicy, GuardrailResult
 from app.rag.pipeline import SearchStageProgress, _observe_stage, guardrail_stage_outcome
 from app.rag.step_details import answer_guardrail_details
 from tests.span_progress_support import RecordingTrace
@@ -22,34 +21,42 @@ from tests.span_progress_support import RecordingTrace
 pytestmark = pytest.mark.usefixtures("trace_body_enabled")
 
 
+_BLOCKED = GuardrailResult(
+    allowed=False,
+    sanitized_text="",
+    findings=[GuardrailFinding("synthetic_block", "error", "合成の停止")],
+)
+_UNAVAILABLE = GuardrailResult(allowed=False, sanitized_text="", findings=[], backend_degraded=True)
+
+
 @pytest.mark.parametrize(
-    "enabled,inspection,expected_outcome,expected_status,expected_verdict",
+    "result_override,expected_outcome,expected_status,expected_verdict",
     [
-        (False, GuardrailInspection(), "skipped", "skipped", "無効のため省略"),
-        (True, GuardrailInspection(), "success", "done", "問題なし"),
-        (True, GuardrailInspection(prompt_injection=True), "success", "done", "回答を止めました"),
-        (True, None, "error", "failed", "安全検査を完了できず、回答を止めました"),
+        # 本番の安全チェックは通過だけ（#11。省略として記録する）。
+        (None, "skipped", "skipped", "無効のため省略"),
+        (
+            GuardrailResult(allowed=True, sanitized_text="合成の回答", findings=[]),
+            "success",
+            "done",
+            "問題なし",
+        ),
+        (_BLOCKED, "success", "done", "回答を止めました"),
+        (_UNAVAILABLE, "error", "failed", "安全検査を完了できず、回答を止めました"),
     ],
-    ids=["disabled", "clean", "blocked", "unavailable"],
+    ids=["passthrough", "clean", "blocked", "unavailable"],
 )
 async def test_inspection_outcome_reaches_progress_chat_and_trace(
-    enabled: bool,
-    inspection: GuardrailInspection | None,
+    monkeypatch: pytest.MonkeyPatch,
+    result_override: GuardrailResult | None,
     expected_outcome: str,
     expected_status: str,
     expected_verdict: str,
 ) -> None:
-    calls: list[str] = []
-
-    class Client:
-        def inspect_text(self, text: str) -> GuardrailInspection | None:
-            calls.append(text)
-            return inspection
-
-    policy = GuardrailPolicy(
-        Settings(rag_guardrails_input_enabled=False, rag_guardrails_output_enabled=enabled),
-        Client(),
-    )
+    if result_override is not None:
+        monkeypatch.setattr(
+            GuardrailPolicy, "validate_answer", lambda *args, **kwargs: result_override
+        )
+    policy = GuardrailPolicy(Settings())
     events: list[SearchStageProgress] = []
     tracker = RecordingTrace(model_id="synthetic")
 
@@ -69,7 +76,6 @@ async def test_inspection_outcome_reaches_progress_chat_and_trace(
                 result_outcome=guardrail_stage_outcome,
                 result_details=lambda value: answer_guardrail_details(value, "合成の回答"),
             )
-        assert calls == (["合成の回答"] if enabled else [])
         assert [event.outcome for event in events] == ["started", expected_outcome]
         # 処理の経過は span（#3226）。検査の段の span に、種類と検査の結果の詳細を付ける。
         rows = fold_chat_progress_events(tracker.events).step_list()
@@ -86,9 +92,7 @@ async def test_inspection_outcome_reaches_progress_chat_and_trace(
             ).status
             == expected_status
         )
-        assert result.allowed == (
-            not enabled or inspection is not None and not inspection.prompt_injection
-        )
+        assert result.allowed == (result_override is None or result_override.allowed)
     finally:
         shutdown_tracing()
 
@@ -159,7 +163,7 @@ async def test_saved_validation_and_evaluation_follow_the_final_body(
     )
     oracle = SavingOracle()
     response = await RagPipeline(
-        settings=Settings(rag_guardrails_input_enabled=False),
+        settings=Settings(),
         oracle=cast(Any, oracle),
         genai=cast(Any, FakeGenAi()),
     ).run(SearchRequest(query="合成の質問", knowledge_base_ids=["kb-1"]))

@@ -22,23 +22,23 @@ for (const viewport of [
   test(`settings sidebar icons are semantic on ${viewport.name}`, { tag: "@responsive" }, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockApi(page);
-    await page.goto("/settings/oci");
+    await page.goto("/settings/upload-storage");
 
     const sidebar = await openSidebarNav(page);
-    const ociSettings = sidebar.getByRole("link", { name: "OCI 認証設定" });
+    const uploadStorageSettings = sidebar.getByRole("link", { name: "アップロード保存先" });
     const modelSettings = sidebar.getByRole("link", { name: "モデル設定" });
 
-    await expect(ociSettings).toBeVisible();
+    await expect(uploadStorageSettings).toBeVisible();
     await expect(modelSettings).toBeVisible();
-    await expect(ociSettings.locator("svg").first()).toHaveClass(/lucide-key-round/);
-    // システム設定の共通5項目のアイコンは共有パッケージが決める（NL2SQL と同じ。#116）。
+    await expect(uploadStorageSettings.locator("svg").first()).toHaveClass(/lucide-hard-drive/);
+    // システム設定の共通4項目のアイコンは共有パッケージが決める（NL2SQL と同じ。#116。OCI 認証は #11 で削除）。
     await expect(modelSettings.locator("svg").first()).toHaveClass(/lucide-brain-cog/);
   });
 
   test(`sidebar brand and menu labels are stable on ${viewport.name}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockApi(page);
-    await page.goto("/settings/oci");
+    await page.goto("/settings/upload-storage");
 
     const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
     const brand = sidebar.locator('[title="Production Ready RAG"]').first();

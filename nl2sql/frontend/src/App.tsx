@@ -143,11 +143,6 @@ const EvaluationPage = lazy(() =>
     default: module.EvaluationPage,
   }))
 );
-const OciSettingsClient = lazy(() =>
-  import("@/components/settings/OciSettingsClient").then((module) => ({
-    default: module.OciSettingsClient,
-  }))
-);
 const UploadStorageSettingsClient = lazy(() =>
   import("@/components/settings/UploadStorageSettingsClient").then((module) => ({
     default: module.UploadStorageSettingsClient,
@@ -341,7 +336,6 @@ function AuthorizedApplication() {
             <Route path={APP_ROUTES.questionClassifierModels} element={<QuestionClassifierModelsPage />} />
             <Route path={APP_ROUTES.history} element={<HistoryPage />} />
             <Route path={APP_ROUTES.evaluation} element={<EvaluationPage />} />
-            <Route path={APP_ROUTES.settingsOci} element={<SettingsOciRoute />} />
             <Route
               path={APP_ROUTES.settingsUploadStorage}
               element={<SettingsUploadStorageRoute />}
@@ -370,7 +364,7 @@ function AuthorizedApplication() {
               path={APP_ROUTES.legacyNl2sqlModelLearning}
               element={<Navigate to={`${APP_ROUTES.profiles}#profile-select-ai`} replace />}
             />
-            <Route path="/settings" element={<Navigate to={APP_ROUTES.settingsOci} replace />} />
+            <Route path="/settings" element={<Navigate to={APP_ROUTES.settingsUploadStorage} replace />} />
             <Route path="*" element={<Navigate to={defaultEntryRoute(auth.hasPermission)} replace />} />
             </Routes>
           </Suspense>
@@ -513,15 +507,6 @@ function decodeHashId(hash: string) {
   } catch {
     return id;
   }
-}
-
-function SettingsOciRoute() {
-  return (
-    <>
-      <PageHeader wide title={t("nav.settingsOci")} subtitle={t("settings.oci.subtitle")} />
-      <OciSettingsClient />
-    </>
-  );
 }
 
 function SettingsTraceRecordingRoute() {

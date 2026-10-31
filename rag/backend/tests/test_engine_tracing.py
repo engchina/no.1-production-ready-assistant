@@ -1,7 +1,6 @@
 """engine へ注入した observer が backend に依存せず親子関係を保つ。"""
 
 import asyncio
-import importlib
 from typing import Any
 
 import pytest
@@ -55,18 +54,12 @@ async def test_engine_stage_and_client_keep_parent_across_thread() -> None:
         shutdown_tracing()
 
 
-def test_sdk_snapshot_keeps_rerank_diagnostics_and_omits_image() -> None:
-    models = importlib.import_module("oci.generative_ai_inference.models")
-
-    request = models.EmbedTextDetails(
-        inputs=["合成の入力"],
-        serving_mode=models.OnDemandServingMode(model_id="synthetic-model"),
-        embed_contents=[
-            models.EmbedImageContent(
-                image_url=models.ImageUrl(url="data:image/png;base64,synthetic-image")
-            )
-        ],
-    )
+def test_call_snapshot_keeps_rerank_diagnostics_and_omits_image() -> None:
+    request = {
+        "model": "synthetic-model",
+        "input": ["合成の入力"],
+        "contents": [{"image_url": {"url": "data:image/png;base64,synthetic-image"}}],
+    }
     configure_tracing(TracingSettings(), service_name="synthetic")
     try:
         with (

@@ -16,7 +16,7 @@ from time import perf_counter
 from typing import Protocol
 from uuid import uuid4
 
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oracle import OracleClient, close_oracle_pool
 from app.config import Settings, get_settings
 from app.rag.file_processing_evaluation import (
@@ -362,7 +362,7 @@ async def run_file_processing_staging_checks_with_real_clients(
     """実 OCI / Oracle client を使って staging checks を実行する。"""
     resolved_settings = settings or get_settings()
     oracle = OracleClient(settings=resolved_settings)
-    storage = ObjectStorageClient(settings=resolved_settings)
+    storage = FileStorageClient(settings=resolved_settings)
     try:
         return await run_file_processing_staging_checks(
             manifest,

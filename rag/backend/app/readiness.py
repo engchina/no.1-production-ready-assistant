@@ -28,12 +28,8 @@ def readiness_checks_are_ok(checks: Mapping[str, str]) -> bool:
 
 
 def readiness_checks(settings: Settings) -> dict[str, str]:
-    """OCI / Oracle 前提の readiness check を実行する。"""
+    """モデル / Oracle / 保存先の readiness check を実行する。"""
     checks = {
-        "oci_common": _required_values_check(
-            settings.oci_region,
-            settings.oci_compartment_id,
-        ),
         "enterprise_ai": _enterprise_ai_check(settings),
         "genai": _genai_check(settings),
         "oracle": _oracle_check(settings),
@@ -93,15 +89,7 @@ def _local_storage_check(settings: Settings) -> str:
 
 
 def _upload_storage_checks(settings: Settings) -> dict[str, str]:
-    """アップロード原本の保存先設定を確認する。"""
-    if settings.upload_storage_backend == "oci":
-        return {
-            "object_storage": _required_values_check(
-                settings.object_storage_region,
-                settings.object_storage_namespace,
-                settings.object_storage_bucket,
-            )
-        }
+    """アップロード原本の保存先（ローカルのディレクトリ）を確認する。"""
     return {"local_storage": _local_storage_check(settings)}
 
 

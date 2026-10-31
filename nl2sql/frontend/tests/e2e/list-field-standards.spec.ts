@@ -32,11 +32,10 @@ const NON_PAGE_ROUTES = new Set<string>([
   APP_ROUTES.questionLearning,
   APP_ROUTES.legacyNl2sqlModelLearning,
 ]);
-// 3 製品共通の画面（platform の system-settings。OCI 認証・アップロード保存先・モデル・データベース・外観・ユーザー・
+// 3 製品共通の画面（platform の system-settings。アップロード保存先・モデル・データベース・外観・ユーザー・
 // ロール・API キー）の欄の幅は #1891 の段 4 で platform の検査が受け持つ。ここでは横あふれと placeholder（NL2SQL が
 // i18n で上書きする文言がある）だけを見る。
 const PLATFORM_ROUTES = new Set<string>([
-  APP_ROUTES.settingsOci,
   APP_ROUTES.settingsUploadStorage,
   APP_ROUTES.settingsModel,
   APP_ROUTES.settingsDatabase,

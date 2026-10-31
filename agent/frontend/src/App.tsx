@@ -46,9 +46,6 @@ const AppearanceSettings = lazy(() =>
 const ModelSettingsClient = lazy(() =>
   import("@/components/settings/ModelSettingsClient").then((module) => ({ default: module.ModelSettingsClient }))
 );
-const OciSettingsClient = lazy(() =>
-  import("@/components/settings/OciSettingsClient").then((module) => ({ default: module.OciSettingsClient }))
-);
 const AnswerNoticeSettingsClient = lazy(() =>
   import("@/components/settings/AnswerNoticeSettingsClient").then((module) => ({ default: module.AnswerNoticeSettingsClient }))
 );
@@ -178,7 +175,6 @@ export function App() {
         <Route path={APP_ROUTES.evaluation} element={<EvaluationPage />} />
         <Route path={APP_ROUTES.usage} element={<UsagePage />} />
         <Route path={APP_ROUTES.settingsSystemTables} element={<SettingsSystemTablesRoute />} />
-        <Route path={APP_ROUTES.settingsOci} element={<SettingsOciRoute />} />
         <Route path={APP_ROUTES.settingsUploadStorage} element={<SettingsUploadStorageRoute />} />
         <Route path={APP_ROUTES.settingsModel} element={<ModelSettingsClient />} />
         <Route path={APP_ROUTES.settingsDatabase} element={<SettingsDatabaseRoute />} />
@@ -245,7 +241,7 @@ function AuthorizedLayout() {
       mainClassName="[contain:layout]"
       skipLinkLabel={t("common.skipToMain")}
     >
-      {/* DB が使えるまで本文だけを案内に替える（サイドナビは残し、システム設定の 5 画面は開ける。#325）。 */}
+      {/* DB が使えるまで本文だけを案内に替える（サイドナビは残し、システム設定の 4 画面は開ける。#325）。 */}
       <DatabaseGate>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Outlet />
@@ -286,15 +282,6 @@ function Capability({
     <CapabilityGate allowed={capabilities[need]} title={t(titleKey)} requirement={t(CAPABILITY_REQUIREMENTS[need])}>
       {children}
     </CapabilityGate>
-  );
-}
-
-function SettingsOciRoute() {
-  return (
-    <div>
-      <PageHeader wide title={t("nav.settingsOci")} subtitle={t("settings.oci.subtitle")} />
-      <OciSettingsClient />
-    </div>
   );
 }
 

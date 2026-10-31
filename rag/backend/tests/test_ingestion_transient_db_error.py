@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from app.api.routes import documents as documents_route
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.config import Settings
 from app.schemas.document import (
     DocumentDetail,
@@ -60,7 +60,7 @@ async def _prepare_recipe_job(
     fake.jobs["job-extract-1"] = _extract_job().model_copy(
         update={"attempt_count": attempt_count, "max_attempts": max_attempts}
     )
-    await ObjectStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
+    await FileStorageClient().put("prepared/policy.pdf", b"prepared pdf bytes", "application/pdf")
     monkeypatch.setattr(documents_route, "OracleClient", lambda: fake)
     monkeypatch.setattr(documents_route, "IngestionPipeline", _TransientFailPipeline)
     monkeypatch.setattr(

@@ -10,7 +10,6 @@ import {
   type ApiErrorPresentation,
 } from "@production-ready/ui";
 
-// OCI 認証 API の型は platform の共有パッケージが正本（#100）。
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
@@ -21,14 +20,12 @@ export type {
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
   DatabaseStatusData,
-  DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 import type {
   DatabaseConnectionTestResult,
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
   DatabaseStatusData,
-  DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 // システムテーブルの API 型は3製品共通（platform の共有パッケージ。#325 / #751）。
 import type {
@@ -58,34 +55,6 @@ import type {
   ModelSettingsTestRequest,
   ModelSettingsTestResult,
 } from "@production-ready/system-settings";
-export type {
-  OciConfigField,
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciConfigTestStage,
-  OciConfigTestStageKey,
-  OciConfigTestStageStatus,
-  OciConfigTestStatus,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
-import type {
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
-
 // 回答の注意書き API の型は platform の共有パッケージが正本（#2405）。
 import type {
   AnswerNoticeSettingsData,
@@ -101,13 +70,10 @@ import type {
 
 // アップロード保存先 API の型は platform の共有パッケージが正本（#97）。
 export type {
-  UploadStorageBackend,
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
 import type {
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
@@ -2259,13 +2225,6 @@ export const api = {
       body: form,
     });
   },
-  downloadDatabaseWallet: () =>
-    request<DatabaseWalletDownloadData>(
-      "/api/settings/database/wallet/download",
-      {
-        method: "POST",
-      },
-    ),
   testDatabaseSettings: (body: DatabaseSettingsUpdate) =>
     request<DatabaseConnectionTestResult>(
       "/api/settings/database/test",
@@ -2310,45 +2269,4 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  // 入力中の値で OCI Object Storage の bucket と権限を確かめる（保存しない。#2101）。
-  testUploadStorageSettings: (body: UploadStorageSettingsUpdate) =>
-    request<UploadStorageCheckResult>("/api/settings/upload-storage/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-
-  getOciSettings: (options: SettingsRequestOptions = {}) =>
-    request<OciSettingsData>("/api/settings/oci", { signal: options.signal }),
-  updateOciSettings: (body: OciSettingsUpdate) =>
-    request<OciSettingsData>("/api/settings/oci", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  updateOciObjectStorageSettings: (body: OciObjectStorageSettingsUpdate) =>
-    request<UploadStorageSettingsData>("/api/settings/oci/object-storage", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  readOciConfig: (body: OciConfigReadRequest) =>
-    request<OciConfigReadData>("/api/settings/oci/config/read", jsonBody(body)),
-  testOciConfig: () =>
-    request<OciConfigTestResult>("/api/settings/oci/config/test", {
-      method: "POST",
-    }),
-  readOciObjectStorageNamespace: (body: OciObjectStorageNamespaceRequest) =>
-    request<OciObjectStorageNamespaceData>(
-      "/api/settings/oci/object-storage/namespace",
-      jsonBody(body),
-    ),
-  uploadOciPrivateKey: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return request<OciPrivateKeyUploadData>("/api/settings/oci/key-file", {
-      method: "POST",
-      body: form,
-    });
-  },
 };

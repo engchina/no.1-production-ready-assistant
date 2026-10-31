@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Literal
 from urllib.parse import urlsplit
 
-# OCI 認証の schema は3製品共通（platform の pr_system_settings。#100）。互換のため re-export する。
 # データベース設定の schema は3製品共通（pr_system_settings。#108）。互換のため re-export する。
 from pr_system_settings.database import DatabaseConnectionTestResult as DatabaseConnectionTestResult
 from pr_system_settings.database import DatabaseConnectionTestStatus as DatabaseConnectionTestStatus
@@ -25,22 +24,6 @@ from pr_system_settings.model import ModelSettingsTestRequest as ModelSettingsTe
 from pr_system_settings.model import ModelSettingsTestResult as ModelSettingsTestResult
 from pr_system_settings.model import ModelSettingsTestStatus as ModelSettingsTestStatus
 from pr_system_settings.model import ModelSettingsTestTargetType as ModelSettingsTestTargetType
-from pr_system_settings.oci import OciConfigField as OciConfigField
-from pr_system_settings.oci import OciConfigReadData as OciConfigReadData
-from pr_system_settings.oci import OciConfigReadRequest as OciConfigReadRequest
-from pr_system_settings.oci import OciConfigTestResult as OciConfigTestResult
-from pr_system_settings.oci import OciConfigTestStage as OciConfigTestStage
-from pr_system_settings.oci import OciConfigTestStageKey as OciConfigTestStageKey
-from pr_system_settings.oci import OciConfigTestStageStatus as OciConfigTestStageStatus
-from pr_system_settings.oci import OciConfigTestStatus as OciConfigTestStatus
-from pr_system_settings.oci import OciObjectStorageNamespaceData as OciObjectStorageNamespaceData
-from pr_system_settings.oci import (
-    OciObjectStorageNamespaceRequest as OciObjectStorageNamespaceRequest,
-)
-from pr_system_settings.oci import OciObjectStorageSettingsUpdate as OciObjectStorageSettingsUpdate
-from pr_system_settings.oci import OciPrivateKeyUploadData as OciPrivateKeyUploadData
-from pr_system_settings.oci import OciSettingsData as OciSettingsData
-from pr_system_settings.oci import OciSettingsUpdate as OciSettingsUpdate
 from pr_system_settings.system_schema import (
     SystemSchemaOperation,
     SystemSchemaOrphanOperation,
@@ -976,21 +959,3 @@ class GraphSettingsUpdate(BaseModel):
     """関係情報設定の更新 payload。"""
 
     profile: GraphProfileName
-
-
-class GuardrailSettingsData(BaseModel):
-    """OCI Guardrails の有効状態と設定の準備状況。"""
-
-    input_enabled: bool
-    output_enabled: bool
-    oci_configured: bool
-    oci_warning_code: str | None = None
-    config_source: str = "runtime"
-
-
-class GuardrailSettingsUpdate(BaseModel):
-    """OCI Guardrails の有効・無効だけを更新する。"""
-
-    model_config = ConfigDict(extra="forbid")
-    input_enabled: bool
-    output_enabled: bool

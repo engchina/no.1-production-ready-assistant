@@ -1966,8 +1966,6 @@ test("Credential 不足からデータベース設定で作成し、履歴 job �
       readiness: "ok",
       embedding_dimension: 1536,
       vector_column: "VECTOR(1536, FLOAT32)",
-      adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-      region: "ap-osaka-1",
       config_source: "runtime",
     })
   );

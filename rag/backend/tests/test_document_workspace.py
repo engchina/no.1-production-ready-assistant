@@ -12,7 +12,7 @@ import pytest
 
 from app.api.routes import documents as documents_route
 from app.clients.document_cleanup_store import DocumentCleanupTargets, DocumentCleanupTask
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oracle import DocumentReviewEditConflictError, ReviewedExtractionWrite
 from app.config import Settings, get_settings
 from app.main import app
@@ -2126,7 +2126,7 @@ def test_preprocess_reprocess_clears_prepared_artifact_and_outputs(
     """PREPROCESS 再処理は処理後ファイル情報と抽出/Chunk を削除して原本からやり直す。"""
     document_id = _upload("policy.txt", b"original-body", "text/plain")
     prepared_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/canonical/{document_id}/old-prepared.txt",
         b"old-prepared",
         "text/plain",
@@ -2184,7 +2184,7 @@ def test_extract_reprocess_uses_existing_prepared_artifact(
     document_id = _upload("policy.txt", b"original-body", "text/plain")
     prepared_body = b"prepared-body"
     prepared_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/canonical/{document_id}/prepared.txt",
         prepared_body,
         "text/plain",
@@ -2795,7 +2795,7 @@ def test_document_content_returns_prepared_artifact(
     document_id = _upload("私の上司.docx", b"office-body", "application/octet-stream")
     prepared_body = b"%PDF-1.7\nprepared"
     prepared_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/canonical/{document_id}/prepared.pdf",
         prepared_body,
         "application/pdf",
@@ -2887,7 +2887,7 @@ def test_document_content_missing_original_returns_reason_and_next_action(
     document_id = _upload("policy.txt", b"body", "text/plain")
     path = fake_document_dependencies.documents[document_id].object_storage_path
     assert path is not None
-    assert anyio.run(ObjectStorageClient().delete, path)
+    assert anyio.run(FileStorageClient().delete, path)
 
     for url in (
         f"/api/documents/{document_id}/content",
@@ -3072,7 +3072,7 @@ def test_delete_document_removes_record_and_original_file(
     document_id = _upload("policy.txt", body, "text/plain")
     detail = fake_document_dependencies.documents[document_id]
     assert detail.object_storage_path is not None
-    assert anyio.run(ObjectStorageClient().get, detail.object_storage_path) == body
+    assert anyio.run(FileStorageClient().get, detail.object_storage_path) == body
 
     resp = client.delete(f"/api/documents/{document_id}")
 
@@ -3083,7 +3083,7 @@ def test_delete_document_removes_record_and_original_file(
     assert data["object_deleted"] is True
     assert document_id not in fake_document_dependencies.documents
     with pytest.raises(FileNotFoundError):
-        anyio.run(ObjectStorageClient().get, detail.object_storage_path)
+        anyio.run(FileStorageClient().get, detail.object_storage_path)
     assert client.get(f"/api/documents/{document_id}").status_code == 404
 
 
@@ -3093,19 +3093,19 @@ def test_delete_document_removes_extraction_artifacts(
     """document 削除 API は抽出 artifact cache と segment artifact も best-effort で削除する。"""
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
     full_artifact_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/extractions/{document_id}/full.json",
         b'{"raw_text":"redacted"}',
         "application/json",
     )
     segment_artifact_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/extractions/{document_id}/segments/p1.json",
         b'{"raw_text":"redacted segment"}',
         "application/json",
     )
     prepared_artifact_path = anyio.run(
-        ObjectStorageClient().put,
+        FileStorageClient().put,
         f"artifacts/canonical/{document_id}/prepared.pdf",
         b"%PDF-1.7\nprepared",
         "application/pdf",
@@ -3158,13 +3158,13 @@ def test_delete_document_removes_extraction_artifacts(
     assert data["artifact_deleted_count"] == 3
     assert data["artifact_delete_failed_count"] == 0
     with pytest.raises(FileNotFoundError):
-        anyio.run(ObjectStorageClient().get, full_artifact_path)
+        anyio.run(FileStorageClient().get, full_artifact_path)
     with pytest.raises(FileNotFoundError):
-        anyio.run(ObjectStorageClient().get, segment_artifact_path)
+        anyio.run(FileStorageClient().get, segment_artifact_path)
     with pytest.raises(FileNotFoundError):
-        anyio.run(ObjectStorageClient().get, prepared_artifact_path)
+        anyio.run(FileStorageClient().get, prepared_artifact_path)
     with pytest.raises(FileNotFoundError):
-        anyio.run(ObjectStorageClient().get, original_path)
+        anyio.run(FileStorageClient().get, original_path)
 
 
 def test_delete_document_removes_queued_ingestion_state(
@@ -3241,7 +3241,7 @@ def test_delete_document_removes_past_ingestion_artifacts_by_prefix(
     """参照が残っていない過去の取込の成果物とレシピの preprocess_artifact も消す（#303）。"""
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
     other_id = _upload("other.txt", b"other policy", "text/plain")
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     past_paths = [
         anyio.run(
             storage.put,
@@ -3311,11 +3311,11 @@ def test_delete_document_keeps_deleting_when_prefix_cleanup_fails(
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
 
     async def failing_delete_prefix(
-        self: ObjectStorageClient, prefix: str, **kwargs: object
+        self: FileStorageClient, prefix: str, **kwargs: object
     ) -> object:
         raise RuntimeError(f"list failed: {prefix}")
 
-    monkeypatch.setattr(ObjectStorageClient, "delete_prefix", failing_delete_prefix)
+    monkeypatch.setattr(FileStorageClient, "delete_prefix", failing_delete_prefix)
 
     resp = client.delete(f"/api/documents/{document_id}")
 
@@ -3331,15 +3331,15 @@ def _fail_storage_delete_for(
     monkeypatch: pytest.MonkeyPatch, failing: set[str], calls: list[str]
 ) -> None:
     """``failing`` の URI の削除だけを一時的な保存先の障害（OSError）にする。"""
-    original_delete = ObjectStorageClient.delete
+    original_delete = FileStorageClient.delete
 
-    async def flaky_delete(self: ObjectStorageClient, key: str) -> bool:
+    async def flaky_delete(self: FileStorageClient, key: str) -> bool:
         calls.append(key)
         if key in failing:
             raise OSError("temporary storage failure")
         return await original_delete(self, key)
 
-    monkeypatch.setattr(ObjectStorageClient, "delete", flaky_delete)
+    monkeypatch.setattr(FileStorageClient, "delete", flaky_delete)
 
 
 def test_delete_document_retries_source_cleanup_after_storage_recovers(
@@ -3349,7 +3349,7 @@ def test_delete_document_retries_source_cleanup_after_storage_recovers(
     """原本の削除に失敗しても、保存先の復旧後に同じ文書の削除で原本を消し直せる（#2452）。"""
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
     other_id = _upload("other.txt", b"other policy", "text/plain")
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     source_path = str(fake_cleanup_store.oracle.documents[document_id].object_storage_path)
     other_path = str(fake_cleanup_store.oracle.documents[other_id].object_storage_path)
     failing = {source_path}
@@ -3394,7 +3394,7 @@ def test_delete_document_retries_artifact_and_prefix_cleanup_in_worker_sweep(
     """成果物・prefix の削除の失敗も記録に残り、取込ワーカーの定期の後始末で消える（#2452）。"""
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
     other_id = _upload("other.txt", b"other policy", "text/plain")
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     artifact_path = anyio.run(
         storage.put,
         f"legacy-artifacts/{document_id}/full.json",
@@ -3420,15 +3420,15 @@ def test_delete_document_retries_artifact_and_prefix_cleanup_in_worker_sweep(
     failing = {artifact_path}
     calls: list[str] = []
     _fail_storage_delete_for(monkeypatch, failing, calls)
-    original_delete_prefix = ObjectStorageClient.delete_prefix
+    original_delete_prefix = FileStorageClient.delete_prefix
     prefix_failing = [True]
 
-    async def flaky_delete_prefix(self: ObjectStorageClient, prefix: str, **kwargs: bool) -> object:
+    async def flaky_delete_prefix(self: FileStorageClient, prefix: str, **kwargs: bool) -> object:
         if prefix_failing[0]:
             raise OSError(f"list failed: {prefix}")
         return await original_delete_prefix(self, prefix, **kwargs)
 
-    monkeypatch.setattr(ObjectStorageClient, "delete_prefix", flaky_delete_prefix)
+    monkeypatch.setattr(FileStorageClient, "delete_prefix", flaky_delete_prefix)
 
     resp = client.delete(f"/api/documents/{document_id}")
 
@@ -3465,7 +3465,7 @@ def test_document_cleanup_record_survives_interruption_after_db_delete(
 ) -> None:
     """文書の行を消した直後に止まっても、記録から原本・成果物を消せる。繰り返しても成功する。"""
     document_id = _upload("policy.txt", b"sample policy", "text/plain")
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     source_path = str(fake_cleanup_store.oracle.documents[document_id].object_storage_path)
     past_path = anyio.run(
         storage.put,
@@ -3513,7 +3513,7 @@ def test_document_cleanup_does_not_delete_files_of_remaining_documents(
 ) -> None:
     """記録の URI を別の文書が参照していれば、その URI と同じ ID の文書の prefix は消さない。"""
     remaining_id = _upload("remaining.txt", b"remaining policy", "text/plain")
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     remaining_source = str(fake_cleanup_store.oracle.documents[remaining_id].object_storage_path)
     remaining_artifact = anyio.run(
         storage.put,

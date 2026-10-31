@@ -24,7 +24,6 @@ export const MENU_PERMISSIONS = {
   usage: "menu.usage",
   settingsSystemTables: "menu.settings_system_tables",
   settingsExternalMcp: "menu.settings_external_mcp",
-  settingsOci: "menu.settings_oci",
   settingsUploadStorage: "menu.settings_upload_storage",
   settingsModel: "menu.settings_model",
   settingsDatabase: "menu.settings_database",

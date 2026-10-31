@@ -41,8 +41,6 @@ const databaseSettings = {
   readiness: "ok",
   embedding_dimension: 1536,
   vector_column: "VECTOR(1536, FLOAT32)",
-  adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-  region: "ap-osaka-1",
   config_source: "runtime",
 };
 
@@ -777,7 +775,7 @@ test("接続・操作失敗を操作領域で通知し、復旧方法を提示�
   ).toHaveCount(0);
   await expect(
     card.getByText(
-      "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。",
+      "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。",
       { exact: true }
     )
   ).toHaveCount(0);

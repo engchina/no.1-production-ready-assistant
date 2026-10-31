@@ -6,8 +6,6 @@ export const ja = {
   "common.confirm": "実行",
 
   // ページタイトルは AGENTS.md 準拠の正式名を維持し、サイドバー表示のみ短縮形(*.sidebar)。
-  "nav.settingsOci": "OCI 認証設定",
-  "nav.settingsOci.sidebar": "OCI 認証",
   "nav.settingsUploadStorage": "アップロード保存先",
   "nav.settingsModel": "モデル設定",
   "nav.settingsModel.sidebar": "モデル",
@@ -16,9 +14,7 @@ export const ja = {
   "nav.section.toggle.collapse": "{section} を折りたたむ",
   "nav.section.toggle.expand": "{section} を展開",
 
-  "settings.oci.subtitle": "OCI API キー認証情報を設定します。",
-  "settings.uploadStorage.subtitle":
-    "ドキュメントアップロード時の原本保存先を local または OCI Object Storage から選択します。",
+  "settings.uploadStorage.subtitle": "ドキュメントアップロード時の原本を保存するローカルのディレクトリを設定します。",
   "settings.model.subtitle":
     "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
   "settings.database.subtitle": "Oracle AI Database への接続を設定します。",

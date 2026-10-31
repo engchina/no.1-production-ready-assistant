@@ -24,7 +24,7 @@ from app.clients.document_cleanup_store import (
     DocumentCleanupTargets,
     DocumentCleanupTask,
 )
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def _ref_hash(value: str) -> str:
 
 async def run_document_cleanup(
     store: DocumentCleanupRecords,
-    storage: ObjectStorageClient,
+    storage: FileStorageClient,
     task: DocumentCleanupTask,
 ) -> DocumentCleanupOutcome:
     """記録の対象を保存先から消し、残った対象を記録に書き戻す。"""
@@ -151,7 +151,6 @@ async def run_document_cleanup(
             )
 
     # 参照が残っていない過去の取込の成果物も、文書の prefix ごと消す（#303）。
-    # 保存先を切り替えた後でも、文書が OCI の参照を持てば OCI の prefix も消す（#2093）。
     remaining_prefixes: list[str] = []
     prefixes = targets.prefixes
     if live_document:
@@ -159,9 +158,7 @@ async def run_document_cleanup(
         prefixes = ()
     for artifact_prefix in prefixes:
         try:
-            prefix_result = await storage.delete_prefix(
-                artifact_prefix, include_oci=targets.include_oci
-            )
+            prefix_result = await storage.delete_prefix(artifact_prefix)
         except Exception as exc:  # noqa: BLE001 - 失敗は記録に残してやり直す
             outcome.artifact_delete_failed_count += 1
             remaining_prefixes.append(artifact_prefix)
@@ -186,7 +183,6 @@ async def run_document_cleanup(
         source_uri=remaining_source,
         artifact_uris=tuple(remaining_artifacts),
         prefixes=tuple(remaining_prefixes),
-        include_oci=targets.include_oci,
     )
     try:
         await store.save_progress(
@@ -223,11 +219,11 @@ async def retry_due_document_cleanups(
     limit: int,
     min_age_seconds: float,
     store: DocumentCleanupRecords | None = None,
-    storage: ObjectStorageClient | None = None,
+    storage: FileStorageClient | None = None,
 ) -> int:
     """残っている後始末をやり直し、すべて消せた記録の数を返す（取込ワーカーの定期の処理）。"""
     resolved_store: DocumentCleanupRecords = store or DocumentCleanupStore()
-    resolved_storage = storage or ObjectStorageClient()
+    resolved_storage = storage or FileStorageClient()
     completed = 0
     for task in await resolved_store.list_due(limit=limit, min_age_seconds=min_age_seconds):
         outcome = await run_document_cleanup(resolved_store, resolved_storage, task)

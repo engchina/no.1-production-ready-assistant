@@ -29,7 +29,6 @@ def test_query_overrides_apply() -> None:
     merged, applied = resolve_search_answer_profile_settings(settings, config)
     assert applied is True
     assert merged.rag_max_anchors_per_document == 2
-    assert merged.rag_guardrails_input_enabled is settings.rag_guardrails_input_enabled
     # グローバルは破壊しない。
     assert settings.rag_query_strategy == "simple_retrieval"
 
@@ -168,10 +167,10 @@ def test_parse_tolerates_broken_payload() -> None:
 
 
 def test_removed_guardrail_policy_cannot_override_or_be_saved() -> None:
-    settings = get_settings().model_copy(update={"rag_guardrails_input_enabled": True})
+    settings = get_settings()
     config = SearchAnswerProfileConfig(query=KnowledgeBaseQueryConfig(guardrail_policy="regulated"))
     merged, applied = resolve_search_answer_profile_settings(settings, config)
-    assert merged.rag_guardrails_input_enabled is True
+    assert not hasattr(merged, "rag_guardrails_input_enabled")
     assert applied is False
     assert "guardrail_policy" not in config.model_dump()["query"]
 

@@ -501,14 +501,14 @@ def signed_targets(monkeypatch: MonkeyPatch) -> None:
     _Storage.reads = []
     monkeypatch.setattr(mcp_tools, "OracleClient", _PreviewOracle)
     monkeypatch.setattr(source_previews_route, "OracleClient", _PreviewOracle)
-    monkeypatch.setattr(documents_route, "ObjectStorageClient", _Storage)
+    monkeypatch.setattr(documents_route, "FileStorageClient", _Storage)
     _ScopedFigureOracle.visible = {("d1", "c-fig"): _figure_chunk()}
     _ScopedFigureOracle.stale = set()
     _ScopedFigureOracle.contexts = []
     _FigureStorage.files = {"docs/d1/r-1/prepared.pdf": _figure_pdf()}
     _FigureStorage.reads = []
     monkeypatch.setattr(figures_route, "OracleClient", _ScopedFigureOracle)
-    monkeypatch.setattr(document_crop, "ObjectStorageClient", _FigureStorage)
+    monkeypatch.setattr(document_crop, "FileStorageClient", _FigureStorage)
 
 
 def _preview_token(subject: str, *, document_id: str = "d1", now: float | None = None) -> str:
@@ -772,7 +772,7 @@ def test_document_preview_pages_follow_the_viewer_scope(
     status: int,
 ) -> None:
     monkeypatch.setattr(documents_route, "OracleClient", lambda *a, **k: _ScopedDocumentOracle())
-    monkeypatch.setattr(documents_route, "ObjectStorageClient", _Storage)
+    monkeypatch.setattr(documents_route, "FileStorageClient", _Storage)
     _Storage.files = {"docs/d1/source.pdf": _figure_pdf()}
     auth.user_with_permissions("pages-viewer", permissions, knowledge_base_ids=knowledge_bases)
     headers = login(client, "pages-viewer")

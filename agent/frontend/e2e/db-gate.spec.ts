@@ -4,7 +4,7 @@ import { dbUser } from "./fixtures/auth";
 import { expect, test, type MockApi } from "./fixtures/mock-api";
 
 /**
- * DB ゲート（3製品共通の部品。#325）。システム設定の 5 画面以外は、DB が使えるまで本文だけを
+ * DB ゲート（3製品共通の部品。#325）。システム設定の 4 画面以外は、DB が使えるまで本文だけを
  * 案内に替える（サイドナビは残す）。状態（未設定・接続できない・初期化が必要）ごとに見出しと導線を
  * 分け、設定を開けない利用者にはシステム管理者への連絡を案内する（#820）。
  */
@@ -15,7 +15,7 @@ const VIEWPORTS = [
 ] as const;
 
 const SETTINGS_HINT =
-  "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
 
 type DbStatus = "ok" | "not_configured" | "unreachable" | "setup_required";
 
@@ -169,11 +169,10 @@ for (const viewport of VIEWPORTS) {
       await expectNoHorizontalOverflow(page);
     });
 
-    test("システム設定の 5 画面は DB が使えなくても開け、ユーザー管理はゲートを通す", async ({ page, mockApi }) => {
+    test("システム設定の 4 画面は DB が使えなくても開け、ユーザー管理はゲートを通す", async ({ page, mockApi }) => {
       setDatabaseStatus(mockApi, "not_configured");
 
       for (const { path, title } of [
-        { path: "/settings/oci", title: "OCI 認証設定" },
         { path: "/settings/upload-storage", title: "アップロード保存先" },
         { path: "/settings/model", title: "モデル設定" },
         { path: "/settings/database", title: "データベース設定" },

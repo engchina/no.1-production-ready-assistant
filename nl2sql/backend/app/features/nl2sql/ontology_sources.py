@@ -7,12 +7,10 @@ import contextlib
 import contextvars
 import csv
 import hashlib
-import importlib
 import io
 import json
 import logging
 import mimetypes
-import re
 import threading
 import unicodedata
 import zipfile
@@ -25,7 +23,6 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from app.clients.oci_auth import load_oci_config_without_prompt
 from app.settings import Settings, get_settings
 
 from .ontology_models import (
@@ -61,27 +58,8 @@ _ALLOWED_MEDIA_TYPES: dict[str, frozenset[str]] = {
 }
 
 
-# OCI SDK の既定(8 回・最大 600 秒の再試行)では、Object Storage に届かないときに資料の保存・
-# 読み取りが長く止まる。RAG の保存(#2093)と同じ値で接続・読み取りの時間と再試行を区切る。
-OCI_CONNECT_TIMEOUT_SECONDS = 10.0
-OCI_READ_TIMEOUT_SECONDS = 120.0
-OCI_MAX_ATTEMPTS = 3
-OCI_RETRY_TOTAL_ELAPSED_SECONDS = 30
-OCI_RETRY_MAX_WAIT_SECONDS = 5
-ONTOLOGY_SOURCE_OBJECT_PREFIX = "ontology-sources/"
-_MAX_OBJECT_NAME_LENGTH = 1024
-# OCI の namespace / bucket の名前(設定と、保存した `oci://` の参照の検証)。
-_OBJECT_STORAGE_NAME_RE = re.compile(r"[A-Za-z0-9._-]+")
-# OCI に届かない(DNS・接続・時間切れ)ときの例外の型の名前(OCI SDK・requests・urllib3)。
-_OCI_UNREACHABLE_ERROR_NAMES = frozenset(
-    {"RequestException", "ConnectTimeout", "ConnectionError", "Timeout", "ReadTimeout"}
-)
-# 操作ごとの (名詞, 失敗の述語)。利用者向けの文に使う。
-_OBJECT_STORAGE_OPERATIONS: dict[str, tuple[str, str]] = {
-    "put": ("保存", "保存できませんでした"),
-    "get": ("読み取り", "読み取れませんでした"),
-    "delete": ("削除", "削除できませんでした"),
-}
+# 以前の保存先(OCI Object Storage。#11 で削除)の資料の参照の接頭辞。読み取れない資料として扱う。
+_REMOVED_OBJECT_STORAGE_URI_PREFIX = "oci://"
 logger = logging.getLogger(__name__)
 
 
@@ -249,20 +227,14 @@ def _rmdir_if_empty(path: Path) -> None:
 
 
 class OntologySourceStorage:
-    """local / OCI Object Storage を同じ URI 契約で扱う。
+    """構築資料をローカルのディレクトリ(`local_storage_dir`)に保存する。
 
-    OCI に保存した資料の参照は `oci://<namespace>/<bucket>/<object>`。読み取り・削除は、今の
-    設定ではなく参照の namespace・bucket を使う(設定を後で変えても前の資料を読める)。
-    OCI の失敗は利用者向けの日本語の `OntologySourceError` にし、OCI の詳細はログだけに出す。
+    以前の OCI Object Storage に保存した資料(参照が `oci://`)は読み取れない資料として扱い、
+    削除は保存の実体が無いものとして済ませる(保存済みの行はそのまま残す。#11)。
     """
 
-    def __init__(
-        self,
-        settings: Settings | None = None,
-        storage_client: Any | None = None,
-    ) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
-        self._storage_client = storage_client
 
     async def save_upload(
         self,
@@ -315,21 +287,6 @@ class OntologySourceStorage:
             await asyncio.to_thread(_rmdir_if_empty, target.parent)
             raise
         storage_uri = str(target)
-        if self.settings.upload_storage_backend.strip().lower() == "oci":
-            try:
-                storage_uri = await asyncio.to_thread(
-                    self._put_object,
-                    profile_storage_key,
-                    source_id,
-                    filename,
-                    target,
-                    media_type,
-                )
-            finally:
-                # OCI へ移した後(アップロード失敗時も)ローカルコピーは残さない
-                # (最大 200MiB×5/build のディスクリーク防止)
-                await asyncio.to_thread(_unlink_missing_ok, target)
-                await asyncio.to_thread(_rmdir_if_empty, target.parent)
         return OntologySourceDocument(
             id=source_id,
             profile_id=profile_id,
@@ -342,23 +299,11 @@ class OntologySourceStorage:
         )
 
     def load(self, document: OntologySourceDocument) -> bytes:
-        if document.storage_uri.startswith("oci://"):
-            namespace, bucket, object_name = parse_ontology_source_object_uri(document.storage_uri)
-            try:
-                response = self._object_storage_client().get_object(namespace, bucket, object_name)
-                return _response_body_to_bytes(response)
-            except Exception as exc:
-                _log_object_storage_failure("get", exc)
-                if _is_oci_object_not_found(exc):
-                    raise OntologySourceError(
-                        "ONTOLOGY_SOURCE_OBJECT_NOT_FOUND",
-                        "保存済みの資料が Object Storage に見つかりません。"
-                        "資料をアップロードし直してください。",
-                    ) from exc
-                raise OntologySourceError(
-                    "ONTOLOGY_SOURCE_STORAGE_READ_FAILED",
-                    _object_storage_error_message("get", exc),
-                ) from exc
+        if document.storage_uri.startswith(_REMOVED_OBJECT_STORAGE_URI_PREFIX):
+            raise OntologySourceError(
+                "ONTOLOGY_SOURCE_OBJECT_NOT_FOUND",
+                "保存済みの資料が見つかりません。資料をアップロードし直してください。",
+            )
         try:
             return Path(document.storage_uri).read_bytes()
         except FileNotFoundError as exc:
@@ -380,189 +325,15 @@ class OntologySourceStorage:
     def delete(self, document: OntologySourceDocument) -> None:
         """アップロード実体を削除する(Profile 削除時の cleanup 用)。失敗は握り潰さない。
 
-        OCI の object が既に無いときは削除済みとして扱う。
+        以前の Object Storage の参照(`oci://`)は、ローカルに実体が無いので削除済みとして扱う。
         """
 
-        if document.storage_uri.startswith("oci://"):
-            namespace, bucket, object_name = parse_ontology_source_object_uri(document.storage_uri)
-            try:
-                self._object_storage_client().delete_object(namespace, bucket, object_name)
-            except Exception as exc:
-                if _is_oci_object_not_found(exc):
-                    return
-                _log_object_storage_failure("delete", exc)
-                raise OntologySourceError(
-                    "ONTOLOGY_SOURCE_STORAGE_DELETE_FAILED",
-                    _object_storage_error_message("delete", exc),
-                ) from exc
+        if document.storage_uri.startswith(_REMOVED_OBJECT_STORAGE_URI_PREFIX):
             return
         target = Path(document.storage_uri)
         target.unlink(missing_ok=True)
         with contextlib.suppress(OSError):
             target.parent.rmdir()
-
-    def _put_object(
-        self,
-        profile_storage_key: str,
-        source_id: str,
-        filename: str,
-        target: Path,
-        media_type: str,
-    ) -> str:
-        namespace = self.settings.object_storage_namespace.strip()
-        bucket = self.settings.object_storage_bucket.strip()
-        if not (
-            _OBJECT_STORAGE_NAME_RE.fullmatch(namespace)
-            and _OBJECT_STORAGE_NAME_RE.fullmatch(bucket)
-        ):
-            raise OntologySourceError(
-                "ONTOLOGY_SOURCE_STORAGE_NOT_CONFIGURED",
-                "Object Storage の namespace / bucket が未設定か不正です。"
-                "システム設定 > アップロード保存先 を確認してください。",
-            )
-        object_name = f"{ONTOLOGY_SOURCE_OBJECT_PREFIX}{profile_storage_key}/{source_id}/{filename}"
-        try:
-            with target.open("rb") as stream:
-                self._object_storage_client().put_object(
-                    namespace,
-                    bucket,
-                    object_name,
-                    stream,
-                    content_type=media_type,
-                )
-        except Exception as exc:
-            _log_object_storage_failure("put", exc)
-            raise OntologySourceError(
-                "ONTOLOGY_SOURCE_STORAGE_FAILED",
-                _object_storage_error_message("put", exc),
-            ) from exc
-        return ontology_source_object_uri(namespace, bucket, object_name)
-
-    def _object_storage_client(self) -> Any:
-        """OCI Object Storage client を作る(timeout と再試行の上限つき)。
-
-        OCI 認証・保存先の設定は画面で変わるため、注入されていなければ呼ぶたびに作る。
-        """
-
-        if self._storage_client is not None:
-            return self._storage_client
-        oci_config = importlib.import_module("oci.config")
-        object_storage = importlib.import_module("oci.object_storage")
-        oci_retry = importlib.import_module("oci.retry")
-        config = load_oci_config_without_prompt(
-            oci_config,
-            self.settings.oci_config_file,
-            self.settings.resolved_oci_config_profile,
-            region=self.settings.object_storage_region or self.settings.oci_region or None,
-        )
-        return object_storage.ObjectStorageClient(
-            config,
-            timeout=(OCI_CONNECT_TIMEOUT_SECONDS, OCI_READ_TIMEOUT_SECONDS),
-            retry_strategy=oci_retry.RetryStrategyBuilder(
-                max_attempts=OCI_MAX_ATTEMPTS,
-                total_elapsed_time_seconds=OCI_RETRY_TOTAL_ELAPSED_SECONDS,
-                retry_max_wait_between_calls_seconds=OCI_RETRY_MAX_WAIT_SECONDS,
-            ).get_retry_strategy(),
-        )
-
-
-def ontology_source_object_uri(namespace: str, bucket: str, object_name: str) -> str:
-    """OCI に保存した資料の参照(`oci://<namespace>/<bucket>/<object>`)を作る。"""
-
-    return f"oci://{namespace}/{bucket}/{object_name}"
-
-
-def parse_ontology_source_object_uri(uri: str) -> tuple[str, str, str]:
-    """`oci://<namespace>/<bucket>/<object>` を (namespace, bucket, object) に分ける。
-
-    object は `ontology-sources/` の下に限る。形が違う参照(namespace を含まない参照を含む)は
-    OCI を呼ばずに `OntologySourceError` にする。
-    """
-
-    parts = uri.strip().removeprefix("oci://").split("/", 2)
-    if len(parts) == 3:
-        namespace, bucket, object_name = parts
-        if (
-            _OBJECT_STORAGE_NAME_RE.fullmatch(namespace)
-            and _OBJECT_STORAGE_NAME_RE.fullmatch(bucket)
-            and object_name.startswith(ONTOLOGY_SOURCE_OBJECT_PREFIX)
-            and len(object_name) <= _MAX_OBJECT_NAME_LENGTH
-            and all(segment not in ("", ".", "..") for segment in object_name.split("/"))
-        ):
-            return namespace, bucket, object_name
-    raise OntologySourceError(
-        "ONTOLOGY_SOURCE_REFERENCE_INVALID",
-        "保存済みの資料の参照の形式が不正なため、資料を扱えません。"
-        "資料をアップロードし直してください。",
-    )
-
-
-def _is_oci_object_not_found(exc: BaseException) -> bool:
-    """OCI SDK の「object が無い」(404 ObjectNotFound)か。bucket が無い 404 は含めない。"""
-
-    return getattr(exc, "status", None) == 404 and getattr(exc, "code", None) == "ObjectNotFound"
-
-
-def _object_storage_error_message(operation: str, exc: BaseException) -> str:
-    """OCI の失敗を、直す場所の分かる日本語の汎用の文にする(namespace・bucket の値は入れない)。"""
-
-    noun, failed = _OBJECT_STORAGE_OPERATIONS[operation]
-    status = getattr(exc, "status", None)
-    if isinstance(status, int) and getattr(exc, "code", None) is not None:
-        if status == 401:
-            return (
-                f"OCI の認証に失敗したため、Object Storage の資料を{failed}。"
-                "システム設定 > OCI 認証 の設定を確認してください。"
-            )
-        if status in (403, 404):
-            return (
-                f"Object Storage の bucket が見つからないか、資料を{noun}する権限がありません。"
-                "システム設定 > アップロード保存先 の bucket 名と、OCI の IAM ポリシーを"
-                "確認してください。"
-            )
-    elif any(cls.__name__ in _OCI_UNREACHABLE_ERROR_NAMES for cls in type(exc).__mro__):
-        return (
-            f"Object Storage に接続できなかったため、資料を{failed}。ネットワークと、"
-            "システム設定 > アップロード保存先 のリージョンを確認してから、"
-            "もう一度実行してください。"
-        )
-    return (
-        f"資料を Object Storage で{failed}。時間をおいてもう一度実行してください。"
-        "続く場合は管理者に連絡してください。"
-    )
-
-
-def _log_object_storage_failure(operation: str, exc: BaseException) -> None:
-    """OCI の失敗の詳細(HTTP status・サービスコード・request id・例外)はログだけに出す。"""
-
-    logger.warning(
-        "ontology_source_object_storage_failed",
-        exc_info=exc,
-        extra={
-            "operation": operation,
-            "http_status": getattr(exc, "status", None),
-            "service_code": getattr(exc, "code", None),
-            "request_id": getattr(exc, "request_id", None),
-            "error_type": type(exc).__name__,
-        },
-    )
-
-
-def _response_body_to_bytes(response: Any) -> bytes:
-    """OCI SDK の get_object の応答から本文の bytes を取り出す。"""
-
-    data = getattr(response, "data", None)
-    if isinstance(data, bytes):
-        return data
-    content = getattr(data, "content", None)
-    if isinstance(content, bytes):
-        return content
-    read = getattr(data, "read", None)
-    if callable(read):
-        body = read()
-        if isinstance(body, bytes):
-            return body
-    raise ValueError("OCI Object Storage の応答に本文がありません。")
 
 
 def extract_ontology_source(

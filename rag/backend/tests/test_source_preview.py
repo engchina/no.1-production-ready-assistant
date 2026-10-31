@@ -180,7 +180,7 @@ def previews(monkeypatch: MonkeyPatch) -> type[_PreviewOracle]:
 
     monkeypatch.setattr(mcp_tools, "OracleClient", _PreviewOracle)
     monkeypatch.setattr(source_previews_route, "OracleClient", _PreviewOracle)
-    monkeypatch.setattr(documents_route, "ObjectStorageClient", _Storage)
+    monkeypatch.setattr(documents_route, "FileStorageClient", _Storage)
     return _PreviewOracle
 
 

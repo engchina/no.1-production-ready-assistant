@@ -56,11 +56,7 @@ async function mockApi(page: Page, currentUser: CurrentUser = SYSTEM_ADMIN_USER)
           ? []
         : path === "/api/settings/upload-storage"
           ? {
-              backend: "local",
               local_storage_dir: "/u01/data/production-ready-nl2sql",
-              object_storage_region: "ap-osaka-1",
-              object_storage_namespace: "exampletenancy",
-              object_storage_bucket: "nl2sql-originals",
               readiness: "ok",
               max_upload_bytes: 104857600,
               config_source: "runtime",
@@ -111,14 +107,15 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("フィードバック管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 
   const menuIconSignatures = await sidebar.locator("nav a svg").evaluateAll((icons) =>
     icons.map((icon) => icon.innerHTML.replace(/\s+/g, " ").trim())
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
-  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足して 36 項目。
-  expect(menuIconSignatures).toHaveLength(36);
+  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足し、
+  // システム設定の OCI 認証を削除して（#11）35 項目。
+  expect(menuIconSignatures).toHaveLength(35);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -194,7 +191,7 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   await expect(sidebar.getByText("質問学習", { exact: true })).toHaveCount(0);
   await expect(sidebar.getByText("接続診断", { exact: true })).toHaveCount(0);
 
-  for (const label of ["OCI 認証", "アップロード保存先", "モデル", "データベース"]) {
+  for (const label of ["アップロード保存先", "モデル", "データベース"]) {
     await expect(sidebar.getByText(label, { exact: true })).toBeVisible();
   }
   // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き → Select AI Credential」（#658・#2449・#2517・#2546）。
@@ -362,14 +359,14 @@ test("セクション折りたたみで所属項目だけを隠し、他セク�
   await expect(sidebar.getByText("SQL 生成", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("フィードバック管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("質問分類モデル管理", { exact: true })).toBeHidden();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 
   await sidebar.getByRole("button", { name: "セキュリティ設定 を展開" }).click();
   await expect(sidebar.getByText("権限管理", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Deep Data Security", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 });
 
 test("手動で展開したセクションは再読み込み後も保存状態を維持する", { tag: "@responsive" }, async ({ page }) => {
