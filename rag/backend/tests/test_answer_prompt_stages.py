@@ -230,7 +230,6 @@ def test_catalog_separates_independent_preparation_and_orders_evaluation_calls()
     ]
     # 取込内の順は設定の概要が参照するレシピの実行順と同じ。
     assert [stage.id for stage in PROMPT_STAGES if stage.phase == "ingestion"] == [
-        "external_ocr",
         "picture_description",
         "heading_levels",
         "field_extraction",

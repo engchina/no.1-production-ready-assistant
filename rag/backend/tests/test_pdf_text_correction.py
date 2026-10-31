@@ -191,7 +191,7 @@ def test_consolidation_corrects_text_paths_navigation_and_chunks() -> None:
 
 def test_no_text_layer_and_other_parser_are_not_corrected() -> None:
     pdf, record = _fixture()
-    record["engine"] = "mineru"
+    record["engine"] = "other_engine"
     assert correct_docling_pdf_text([record], pdf) == set()
     record["engine"] = "docling"
     empty = blank_pdf()

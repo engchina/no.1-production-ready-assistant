@@ -1265,7 +1265,7 @@ def test_retrieve_evidence_skips_answer_generation(
         },
         _token(user.user_uuid),
     )["structuredContent"]
-    # 元の質問（#2261）は検索の要求に渡す（条の選択だけが使う）。
+    # 元の質問（#2261）は検索の要求に渡す（ルールと用語の照合に使う）。
     assert captured == {
         "generate_answer": False,
         "profile": "bv-1",
@@ -1705,10 +1705,10 @@ def test_retrieve_evidence_queries_need_caller_planning(
     )
 
 
-def test_retrieve_evidence_appends_catalog_articles_outside_the_limit(
+def test_retrieve_evidence_ignores_the_removed_article_catalog(
     auth: ProductionAuth, monkeypatch: MonkeyPatch
 ) -> None:
-    """条の目録で選んだ条のうち根拠に無い条を、上限の外で選んだ順に末尾へ足す（#2254）。"""
+    """条の目録（#2254）は削除した（#42）。診断に残った選んだ条は読まず、根拠の上限の外に足さない。"""
     from app.schemas.search import SearchDiagnostics
 
     loaded: list[tuple[str, str]] = []
@@ -1716,68 +1716,14 @@ def test_retrieve_evidence_appends_catalog_articles_outside_the_limit(
     class _ArticleOracle:
         async def retrievable_chunk(self, document_id: str, chunk_id: str) -> Any:
             loaded.append((document_id, chunk_id))
-            return None if chunk_id == "art-gone" else _chunk(chunk_id, text="第二条 本文")
-
-    async def fake_run(request: SearchRequest, **_: Any) -> SearchResponse:
-        del request
-        articles = [
-            {"order": 2, "document_id": "doc-law", "chunk_id": "art-2", "title": "第二条"},
-            {"order": 0, "document_id": "d1", "chunk_id": "c0", "title": "根拠にある条"},
-            {"order": 1, "document_id": "doc-law", "chunk_id": "art-gone", "title": "読めない"},
-            {"order": 3, "document_id": "doc-law", "chunk_id": None, "title": "章節が無い"},
-        ]
-        return SearchResponse(
-            answer="",
-            # context に足した選んだ条（role=catalog_article）は上限に数えない（#2261）。
-            citations=[
-                _chunk("ctx-art", used=False, evidence_role="catalog_article"),
-                *[_chunk(f"c{index}", used=False) for index in range(3)],
-            ],
-            trace_id="trace-a",
-            elapsed_ms=1.0,
-            diagnostics=SearchDiagnostics(answer={"article_catalog": {"articles": articles}}),
-        )
-
-    monkeypatch.setattr(search_route, "_run_search_with_timeout", fake_run)
-    monkeypatch.setattr(mcp_tools, "OracleClient", _ArticleOracle)
-    user = auth.user_with_permissions("searcher", ["menu.search"])
-    body = _call(
-        "rag_retrieve_evidence",
-        {"query": "届出の期限", "evidence_limit": 2},
-        _token(user.user_uuid),
-    )["structuredContent"]
-
-    assert [item["chunk_id"] for item in body["evidence"]] == ["c0", "c1", "ctx-art", "art-2"]
-    assert [item["role"] for item in body["evidence"][2:]] == ["catalog_article"] * 2
-    assert body["evidence_omitted"] == 1
-    assert loaded == [("doc-law", "art-gone"), ("doc-law", "art-2")]
-
-
-@pytest.mark.parametrize(
-    ("cap", "expected"), [(2, ["ctx-art", "art-1"]), (1, ["ctx-art"]), (0, [])]
-)
-def test_retrieve_evidence_caps_the_catalog_articles(
-    auth: ProductionAuth, monkeypatch: MonkeyPatch, cap: int, expected: list[str]
-) -> None:
-    """条の目録で選んだ条の根拠は、context に足した分と合わせて設定の件数まで（選んだ順）。"""
-    from app.schemas.search import SearchDiagnostics
-
-    class _ArticleOracle:
-        async def retrievable_chunk(self, document_id: str, chunk_id: str) -> Any:
             return _chunk(chunk_id, text="第二条 本文")
 
     async def fake_run(request: SearchRequest, **_: Any) -> SearchResponse:
         del request
-        articles = [
-            {"order": index, "document_id": "doc-law", "chunk_id": f"art-{index}", "title": "条"}
-            for index in range(1, 6)
-        ]
+        articles = [{"order": 0, "document_id": "doc-law", "chunk_id": "art-2", "title": "第二条"}]
         return SearchResponse(
             answer="",
-            citations=[
-                _chunk("ctx-art", used=False, evidence_role="catalog_article"),
-                _chunk("c0", used=False),
-            ],
+            citations=[_chunk(f"c{index}", used=False) for index in range(3)],
             trace_id="trace-a",
             elapsed_ms=1.0,
             diagnostics=SearchDiagnostics(answer={"article_catalog": {"articles": articles}}),
@@ -1785,7 +1731,6 @@ def test_retrieve_evidence_caps_the_catalog_articles(
 
     monkeypatch.setattr(search_route, "_run_search_with_timeout", fake_run)
     monkeypatch.setattr(mcp_tools, "OracleClient", _ArticleOracle)
-    monkeypatch.setattr(get_settings(), "rag_mcp_catalog_article_evidence_limit", cap)
     user = auth.user_with_permissions("searcher", ["menu.search"])
     body = _call(
         "rag_retrieve_evidence",
@@ -1793,7 +1738,9 @@ def test_retrieve_evidence_caps_the_catalog_articles(
         _token(user.user_uuid),
     )["structuredContent"]
 
-    assert [item["chunk_id"] for item in body["evidence"][1:]] == expected
+    assert [item["chunk_id"] for item in body["evidence"]] == ["c0", "c1"]
+    assert body["evidence_omitted"] == 1
+    assert loaded == []
 
 
 def test_search_limits_evidence(auth: ProductionAuth, monkeypatch: MonkeyPatch) -> None:
@@ -2489,15 +2436,6 @@ class _DocumentOracle:
     async def accessible_chunk_exists(self, document_id: str, chunk_id: str) -> bool:
         return document_id == "d1" and chunk_id.startswith("d1:cs-old:")
 
-    async def retrievable_citation_chunk(
-        self, document_id: str, citation_key: str
-    ) -> RetrievedChunk | None:
-        for chunk in self.chunks:
-            keys = str(chunk.metadata.get("xml_tree_lookup_keys") or "").splitlines()
-            if document_id == "d1" and citation_key in keys:
-                return chunk
-        return None
-
     async def retrievable_element_chunk(
         self, document_id: str, extraction_recipe_id: str, element_id: str
     ) -> RetrievedChunk | None:
@@ -2989,28 +2927,17 @@ def test_read_section_continues_with_cursor_without_gaps(
     assert read.replace("\n", "") == "".join(texts)
 
 
-def test_read_section_by_citation_label_in_either_numeral_form(
+def test_read_section_no_longer_takes_citation_label(
     auth: ProductionAuth, document_oracle: type[_DocumentOracle]
 ) -> None:
-    """XML ツリー JSON の段落を引用ラベルで読む（漢数字・算用数字・空白の違いは同じ。#2024）。"""
-    from rag_parser_core.xml_tree_json import xml_tree_citation_key
-
-    keys = "\n".join(
-        xml_tree_citation_key(label) for label in ("第三条第二項", "規程 第三条第二項")
-    )
-    document_oracle.chunks[3] = _doc_chunk(
-        3, "承認の本文。", "規程 > 第3章 承認", 3, xml_tree_lookup_keys=keys
-    )
+    """引用ラベル（citation）で読む引数は、XML ツリー JSON の解析とともに削除した（#21）。"""
+    del document_oracle
     user = auth.user_with_permissions("searcher", ["menu.search"])
     headers = _token(user.user_uuid)
 
-    for citation in ("第3条第2項", "第三条第二項", "規程 第３条 第２項"):
-        body = _read_section({"citation": citation}, headers)
-        assert body["section"]["section_id"] == "s22", citation
-        assert body["text"] == "--- p.3 ---\n承認の本文。"
-    missing = _call("rag_read_section", {"document_id": "d1", "citation": "第9条"}, headers)
-    assert missing["isError"] is True
-    assert missing["structuredContent"]["error_code"] == mcp_tools.SECTION_NOT_FOUND_CODE
+    result = _call("rag_read_section", {"document_id": "d1", "citation": "第3条"}, headers)
+
+    assert result["isError"] is True
 
 
 def test_read_section_errors(auth: ProductionAuth, document_oracle: type[_DocumentOracle]) -> None:

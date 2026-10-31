@@ -16,8 +16,6 @@ const RECIPE_DEFAULTS = {
   parser_adapter_backend: "docling",
   parser_docling_enabled: true,
   parser_unstructured_enabled: false,
-  parser_mineru_enabled: false,
-  parser_dots_ocr_enabled: false,
   vision_enabled: true,
   chunking_strategy: "structure_aware",
   chunk_size: 800,
@@ -214,11 +212,6 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(items.locator('[data-config-field="parser_adapter_backend"]')).toContainText("Docling");
     await expect(items.locator('[data-config-field="vision_enabled"]')).toContainText("有効");
     await expect(items.locator('[data-config-field="field_extraction_enabled"]')).toContainText("無効");
-    // XML ツリー JSON は使用エンジンの 1 つで、別の項目を持たない（#2042）。
-    await expect(items.locator('[data-config-field="parser_xml_tree_json_enabled"]')).toHaveCount(0);
-    await expect(
-      items.locator('[data-config-field="parser_structured_records_jsonl_enabled"]')
-    ).toHaveCount(0);
 
     // 各項目から、その全体の既定を変える画面へ移動できる。
     await expect(

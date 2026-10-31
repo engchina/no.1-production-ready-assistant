@@ -19,5 +19,3 @@ GRAPH_EXPANSION_STAGE = "文書構造による検索拡張"
 IMAGE_EVIDENCE_STAGE = "根拠の図の切り出し"
 # 短い読み取り（文書の分類・文書の背景〔1 ページ目の本文〕）は 1 つの段にまとめる。
 DOCUMENT_INFO_STAGE = "文書の分類と背景の読み込み"
-# 元の質問（業務 Agent が注入した質問）での検索（条の目録の文書の順位だけに使う。rag_engine の文書の検索。#3475）。
-ORIGINAL_QUESTION_SEARCH_STAGE = "元の質問の検索"

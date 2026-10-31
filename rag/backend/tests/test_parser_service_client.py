@@ -19,7 +19,6 @@ from app.clients.parser_service import (
     supported_formats_label,
 )
 from app.config import Settings
-from app.rag.mineru_license import set_mineru_license_acknowledgement
 from app.schemas.document import SourceModality, SourceProfile
 
 
@@ -135,24 +134,22 @@ def test_runner_fail_fast_raises_when_service_unreachable(
     assert "選択した文書解析サービス（Unstructured）に接続できません" in str(exc_info.value)
 
 
-def test_runner_fail_fast_raises_when_external_parser_is_unconfigured() -> None:
-    settings = Settings(rag_parser_mineru_api_host="")
-    set_mineru_license_acknowledgement(settings, by="", at="2026-10-26T00:00:00+00:00")
+def test_runner_fail_fast_raises_when_service_url_is_unconfigured() -> None:
+    settings = Settings(rag_parser_unstructured_service_url="")
     client = ParserServiceClient(settings)
 
     with pytest.raises(ParserServiceUnavailableError) as exc_info:
         client.runner(
-            "mineru",
+            "unstructured",
             b"%PDF",
             _profile(),
             "application/pdf",
             fail_fast=True,
         )
 
-    assert exc_info.value.backend == "mineru"
+    assert exc_info.value.backend == "unstructured"
     assert exc_info.value.reason == "unconfigured"
-    assert exc_info.value.warning_code == "mineru_unconfigured"
-    assert "MinerU）の接続先 URL が未設定です" in str(exc_info.value)
+    assert "Unstructured）の接続先 URL が未設定です" in str(exc_info.value)
 
 
 def test_runner_retries_retryable_status_then_returns_success(

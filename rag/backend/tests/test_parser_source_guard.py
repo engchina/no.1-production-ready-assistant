@@ -220,28 +220,29 @@ def test_office_to_pdf_does_not_convert_excel(file_name: str, content_type: str)
     assert block.code == "office_to_pdf_spreadsheet_not_supported"
     assert "Word・PowerPoint だけ" in block.message
     assert "「Excel→JSONL」" in block.message
-    jsonl = _preprocess("excel_to_jsonl", rag_parser_adapter_backend="structured_records_jsonl")
+    jsonl = _preprocess("excel_to_jsonl")
     assert parser_source_block(jsonl, profile) is None
 
 
 @pytest.mark.parametrize(("file_name", "content_type"), [("old.doc", _WORD), ("macro.docm", _DOCM)])
 def test_word_to_jsonl_converts_legacy_and_macro_word(file_name: str, content_type: str) -> None:
-    """Word→JSONL は .doc / .docm を変換する（#2457 の ④。解析エンジンは構造化レコード JSONL）。"""
+    """Word→JSONL は .doc / .docm を変換する（#2457 の ④）。
+
+    成果物は既定の Docling・Unstructured のサービスが読む（#21。取込前に止めない）。
+    """
     profile = _profile(file_name, content_type)
-    jsonl = _preprocess("word_to_jsonl", rag_parser_adapter_backend="structured_records_jsonl")
+    jsonl = _preprocess("word_to_jsonl")
     assert parser_source_guard.settings_convert_source(jsonl, profile)
     assert parser_source_block(jsonl, profile) is None
-    # 解析エンジンが構造化レコード JSONL でなければ、選ぶよう案内する（形式で自動に切り替えない）。
-    docling = parser_source_block(_preprocess("word_to_jsonl"), profile)
-    assert docling is not None
-    assert docling.suggested_backend == "structured_records_jsonl"
+    unstructured = _preprocess("word_to_jsonl", rag_parser_adapter_backend="unstructured")
+    assert parser_source_block(unstructured, profile) is None
     # 変換を選ばないときの案内に、Word→JSONL も出す。
     block = parser_source_block(get_settings(), profile)
     assert block is not None and "「Office→PDF」か「Word→JSONL」" in block.message
 
 
 def test_word_to_jsonl_does_not_convert_excel_or_powerpoint() -> None:
-    jsonl = _preprocess("word_to_jsonl", rag_parser_adapter_backend="structured_records_jsonl")
+    jsonl = _preprocess("word_to_jsonl")
     for file_name, content_type in (("old.xls", _XLS), ("old.ppt", _PPT), ("macro.xlsm", _XLSM)):
         block = parser_source_block(jsonl, _profile(file_name, content_type))
         assert block is not None and block.code == "office_conversion_required"
@@ -249,7 +250,7 @@ def test_word_to_jsonl_does_not_convert_excel_or_powerpoint() -> None:
 
 def test_excel_to_jsonl_does_not_convert_word() -> None:
     profile = _profile("old.doc", _WORD)
-    jsonl = _preprocess("excel_to_jsonl", rag_parser_adapter_backend="structured_records_jsonl")
+    jsonl = _preprocess("excel_to_jsonl")
     block = parser_source_block(jsonl, profile)
     assert block is not None and block.code == "office_conversion_required"
 
@@ -257,7 +258,7 @@ def test_excel_to_jsonl_does_not_convert_word() -> None:
 @pytest.mark.parametrize("preprocess", ["word_to_jsonl", "excel_to_jsonl"])
 def test_only_office_to_pdf_converts_odt_rtf(preprocess: str) -> None:
     """ODT・RTF は Office→PDF だけが変換する(pandoc を入れない。#3351)。"""
-    settings = _preprocess(preprocess, rag_parser_adapter_backend="structured_records_jsonl")
+    settings = _preprocess(preprocess)
     for profile in (_profile("memo.odt", _ODT), _profile("memo.rtf", "text/rtf")):
         block = parser_source_block(settings, profile)
         assert block is not None and block.code == "office_conversion_required"

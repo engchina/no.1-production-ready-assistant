@@ -1595,7 +1595,7 @@ def test_rag_evidence_tools_get_the_run_goal_as_original_question(
 ) -> None:
     """Control Plane が RAG の根拠を集めるツールに利用者の元の質問を付ける（#2261）。
 
-    モデルが検索文を短く言い換えても、RAG が条で構成された文書の根拠の条を選ぶ手がかりを失わない。
+    モデルが検索文を短く言い換えても、RAG が元の質問の要求の単位を失わない。
     モデルが付けた値はそのまま送る。
     """
     _script(

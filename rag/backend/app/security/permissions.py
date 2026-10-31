@@ -637,7 +637,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
         MENU_SETTINGS_PARSER_ADAPTERS, MENU_UPLOAD, MENU_FILE_LIST
     ),
     ("PATCH", "/settings/parser-adapters"): _any(MENU_SETTINGS_PARSER_ADAPTERS),
-    ("GET", "/settings/parser-adapters/{backend}/status"): _any(MENU_SETTINGS_PARSER_ADAPTERS),
     ("GET", "/settings/preprocess"): _any(MENU_SETTINGS_PREPROCESS),
     ("PATCH", "/settings/preprocess"): _any(MENU_SETTINGS_PREPROCESS),
     ("GET", "/settings/chunking"): _any(MENU_SETTINGS_CHUNKING),
@@ -749,7 +748,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
 ANSWER_PROMPT_EDIT_PERMISSIONS: dict[str, str] = {
     "vlm_answer": MENU_SETTINGS_PROMPTS,
     "image_retrieval": MENU_SETTINGS_PARSER_ADAPTERS,
-    "external_ocr": MENU_SETTINGS_PARSER_ADAPTERS,
     "heading_levels": MENU_SETTINGS_PARSER_ADAPTERS,
     "field_extraction": MENU_SETTINGS_PARSER_ADAPTERS,
     "navigation_summary": MENU_SETTINGS_PARSER_ADAPTERS,

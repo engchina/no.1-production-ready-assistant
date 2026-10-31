@@ -230,19 +230,17 @@ export function isStructuredRecordsPreprocess(profile: PreprocessProfileName | n
 }
 
 /**
- * ファイル準備を選んだときのレシピの上書き（#2457）。CSV→JSONL・Excel→JSONL・Word→JSONL を選んだら、解析エンジン
- * 「構造化レコード JSONL」と分割「固定分割符」・記録の境界のマーカーを、画面に見える上書きとして入れる
- * （実行時に隠れて切り替えない）。利用者が選んだ分割方式・分割符はそのまま残す。
+ * ファイル準備を選んだときのレシピの上書き（#2457）。CSV→JSONL・Excel→JSONL・Word→JSONL を選んだら、分割
+ * 「固定分割符」・記録の境界のマーカーを、画面に見える上書きとして入れる（実行時に隠れて切り替えない）。
+ * 利用者が選んだ分割方式・分割符はそのまま残す。解析エンジンは変えない（成果物の JSONL は Docling・
+ * Unstructured のサービスが読む。#21）。
  */
 export function preprocessSelectionPatch(
   current: DocumentProcessingConfig,
   profile: PreprocessProfileName | null
 ): Partial<DocumentProcessingConfig> {
   if (!isStructuredRecordsPreprocess(profile)) return { preprocess_profile: profile };
-  const patch: Partial<DocumentProcessingConfig> = {
-    preprocess_profile: profile,
-    parser_adapter_backend: "structured_records_jsonl",
-  };
+  const patch: Partial<DocumentProcessingConfig> = { preprocess_profile: profile };
   if (current.chunking_strategy == null) patch.chunking_strategy = "fixed_delimiter";
   const strategy = patch.chunking_strategy ?? current.chunking_strategy;
   if (strategy === "fixed_delimiter" && current.chunk_delimiter == null) {

@@ -10,7 +10,7 @@ from rag_engine.parsing.content_labels import content_labels
 # 旧い解析の結果に残る OCR の欄の名前（保存済みのデータの形。読むときだけ使う）。
 LEGACY_PICTURE_OCR_TEXT_LABELS = ("Docling OCR",)
 
-# 図の中の文字の record（Docling・MinerU・Vision の解析が図と同じ bbox で作る）。図そのものではなく、
+# 図の中の文字の record（Docling・Vision の解析が図と同じ bbox で作る）。図そのものではなく、
 # 持ち主の図の文字として扱う（#3455）。
 PICTURE_OCR_TEXT_RAW_TYPE = "picture_ocr_text"
 

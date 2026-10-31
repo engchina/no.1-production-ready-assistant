@@ -31,10 +31,6 @@ ServiceCategory = Literal[
 # プロキシ microservice(GPU 不要・OCI 認証はメイン設定を継承)。
 ServiceProfile = Literal["cpu", "gpu", "oci"]
 ServiceExecutionPolicy = Literal["selected_adapter", "default_adapter"]
-# available=使える、roadmap=準備中(ロードマップ)。roadmap のサービスは実装を repo に残すが、
-# 配備しない(rag/scripts/rag-systemd.sh の RAG_ROADMAP_SERVICES と同じ。テストで照合する)。
-# 画面では灰色にし、状態を問い合わせず、起動・再起動を拒否する(#3374)。
-ServiceAvailability = Literal["available", "roadmap"]
 
 # systemd の unit 名の接頭辞。init_script.sh / scripts/rag-services.sh が作る unit と同じ。
 SYSTEMD_UNIT_PREFIX = "production-ready-rag-"
@@ -53,9 +49,8 @@ class ServiceCatalogEntry:
     - ``port``: ``127.0.0.1`` で listen するポート(本番・開発で共通)。URL 設定の既定値と一致させる。
     - ``execution_policy``: 停止時・未使用時の runtime 契約。UI/API で fallback 境界を明示する。
     - ``model_cache_path``: モデル DL を行うサービスのキャッシュ親(実行ユーザーの ``~/.cache``)。
-      HF・docling・mineru など tool 別キャッシュをまとめて含めるため ``huggingface`` ではなく
+      HF・docling など tool 別キャッシュをまとめて含めるため ``huggingface`` ではなく
       ``.cache`` 親を指す。None のサービスはモデル DL なし。
-    - ``availability``: ``roadmap`` は準備中(ロードマップ)で、配備・起動しない(#3374)。
     """
 
     service_id: str
@@ -67,12 +62,6 @@ class ServiceCatalogEntry:
     port: int
     execution_policy: ServiceExecutionPolicy = "selected_adapter"
     model_cache_path: str | None = None
-    availability: ServiceAvailability = "available"
-
-    @property
-    def is_roadmap(self) -> bool:
-        """準備中(ロードマップ)で、まだ使えないサービスか。"""
-        return self.availability == "roadmap"
 
     @property
     def systemd_unit(self) -> str:
@@ -141,42 +130,6 @@ SERVICE_CATALOG: tuple[ServiceCatalogEntry, ...] = (
         label_key="settings.services.item.parserUnstructured",
         working_dir="services/parsers/unstructured",
         port=18022,
-    ),
-    # 前処理の構造化レコードの JSONL を記録の単位で解析し、検索用テキストを記録の境界で区切る
-    # 解析(#2457)。rag_parser_core だけで動く軽いサービスで、使用エンジンで選んだときに使う。
-    ServiceCatalogEntry(
-        service_id="parser-structured-records-jsonl",
-        category="parser",
-        profile="cpu",
-        url_field="rag_parser_structured_records_jsonl_service_url",
-        label_key="settings.services.item.parserStructuredRecordsJsonl",
-        working_dir="services/parsers/structured_records_jsonl",
-        port=18023,
-    ),
-    # XML ツリー JSON(XML の要素の木の JSON)を要素の階層のまま段落の単位にする
-    # 解析(#2024)。標準ライブラリだけで動く軽いサービスで、使用エンジンで選んだときに使う(#2042)。
-    ServiceCatalogEntry(
-        service_id="parser-xml-tree-json",
-        category="parser",
-        profile="cpu",
-        url_field="rag_parser_xml_tree_json_service_url",
-        label_key="settings.services.item.parserXmlTreeJson",
-        working_dir="services/parsers/xml_tree_json",
-        port=18021,
-    ),
-    # ---- parser マイクロサービス(OCI クラウド・OCI 認証はメイン設定を継承)----
-    # OCI を呼ぶだけの軽量プロキシ。OCI 認証はメイン設定(共通 .env・backend/.env と、backend が書く
-    # サービス実行用の env ファイル)を systemd の EnvironmentFile で継承する。
-    # OCI Document Understanding は準備中(ロードマップ)。実装は残し、配備・起動しない(#3374)。
-    ServiceCatalogEntry(
-        service_id="parser-oci-document-understanding",
-        category="parser",
-        profile="oci",
-        url_field="rag_parser_oci_document_understanding_service_url",
-        label_key="settings.services.item.parserOciDocumentUnderstanding",
-        working_dir="services/parsers/oci_document_understanding",
-        port=18028,
-        availability="roadmap",
     ),
 )
 

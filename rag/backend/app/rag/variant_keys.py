@@ -37,7 +37,8 @@ from app.rag.preprocess_strategy import preprocess_options
 KEY_VERSION = "v6"
 
 # 前処理 csv_to_jsonl / excel_to_jsonl / word_to_jsonl の成果物の形式(抽出の ID に入れる。#2457)。
-STRUCTURED_RECORDS_FORMAT_ID = "structured_records_jsonl_v1"
+# #21 で読み手を Docling・Unstructured のサービスに移したため、版の名前からエンジン名を外した。
+STRUCTURED_RECORDS_FORMAT_ID = "structured_records_v1"
 # 1 文書あたりの抽出(preprocess x parser 組合せ)上限。組合せ暴発の安全弁。
 MAX_EXTRACTIONS_PER_DOCUMENT = 8
 
@@ -52,17 +53,6 @@ _COMMON_EXTRACTION_RECIPE_FIELDS: tuple[str, ...] = (
 _BACKEND_EXTRACTION_RECIPE_FIELDS: dict[str, tuple[str, ...]] = {
     "docling": ("rag_parser_docling_enabled",),
     "unstructured": ("rag_parser_unstructured_enabled",),
-    "structured_records_jsonl": ("rag_parser_structured_records_jsonl_enabled",),
-    "xml_tree_json": ("rag_parser_xml_tree_json_enabled",),
-    "mineru": (
-        "rag_parser_mineru_enabled",
-        "rag_parser_mineru_tier",
-    ),
-    "dots_ocr": (
-        "rag_parser_dots_ocr_enabled",
-        "rag_parser_dots_ocr_model",
-        "rag_parser_dots_ocr_dpi",
-    ),
 }
 
 # chunk text(と、それに従属する embedding)を決める分割軸。

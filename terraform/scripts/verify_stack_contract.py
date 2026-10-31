@@ -152,17 +152,11 @@ RAG_BASE_SERVICES = [
     "preprocess-excel-to-jsonl",
     "preprocess-word-to-jsonl",
     "parser-docling",
-    # 構造化レコード JSONL・XML ツリー JSON は使用エンジンに選べる解析エンジン。常に配備する
-    # (#2457・#2042)。
-    "parser-structured-records-jsonl",
-    "parser-xml-tree-json",
 ]
 # parser-unstructured は Docling が扱えない形式(テキスト・Office・メール など)を取り込むための parser(#286)。
 RAG_OPTIONAL_SERVICES = [
     "parser-unstructured",
 ]
-# 準備中（ロードマップ）で配備しない parser（#3374）。入力は残すが画面に出さず、rag_services に入れない。
-RAG_ROADMAP_SERVICES = {"parser-oci-document-understanding": "rag_enable_oci_cloud_parsers"}
 # systemd の unit の Environment（init_script.sh）と Settings の既定値が正本の key。RAG の .env に書くと、
 # 配備が前提にする場所とずれるため、共通 .env にも書かない。
 RAG_UNIT_OWNED_ENV_KEYS = {
@@ -263,7 +257,7 @@ INIT_SCRIPT_CONTRACTS = {
         'BACKEND_PORT="8000"',
         # 必ず配備する parser と前処理 Word→JSONL（stack の RAG_BASE_SERVICES にもある）。以前の stack の一覧に
         # 無くても足す（#2042・#2457）。
-        "REQUIRED_RAG_SERVICES=(parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)",
+        "REQUIRED_RAG_SERVICES=(parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)",
         'source "${INIT_SCRIPT_DIR}/scripts/rag-systemd.sh"',
         'find "${WALLET_DIR}" -type f -exec chmod 0600 {} \\;',
         "python -m app.rag.system_schema_cli initialize",
@@ -906,9 +900,6 @@ def _verify_rag_services(locals_source: str) -> None:
         ],
         context="RAG optional services",
     )
-    roadmap = sorted(name for name in RAG_ROADMAP_SERVICES if f'"{name}"' in services_local)
-    if roadmap:
-        raise AssertionError(f"RAG roadmap services must not be deployed: {roadmap}")
     # 各サービスは rag/scripts/rag-systemd.sh に unit の定義（venv のディレクトリ・port）がある。
     defined = _rag_systemd_services()
     missing = sorted(name for name in listed if name not in defined)
@@ -1476,7 +1467,6 @@ def verify(package_path: Path) -> None:
 
     _verify_schema(sources["schema.yaml"], sources["variables.tf"])
     _verify_timezone(sources["schema.yaml"], sources["variables.tf"])
-    _verify_rag_roadmap_inputs(sources["schema.yaml"], sources["variables.tf"])
     _verify_terraform(
         sources["variables.tf"],
         sources["adb.tf"],
@@ -1639,21 +1629,6 @@ def _verify_bastion(schema: str, variables: str, bastion: str, outputs: str, scr
 # 配備した後の platform/.env の PLATFORM_TIMEZONE は任意の IANA の地域名を受ける（入口だけを絞る）。
 TIMEZONE_CHOICES = ["UTC", "Asia/Tokyo"]
 DEFAULT_TIMEZONE = "UTC"
-
-
-def _verify_rag_roadmap_inputs(schema: str, variables: str) -> None:
-    """準備中（ロードマップ）の parser の入力は、既定 false で画面に出さない（#3374。変数は残す）。"""
-    for variable_name in RAG_ROADMAP_SERVICES.values():
-        _require_all(
-            _schema_variable(schema, variable_name),
-            ["type: boolean", "visible: false", "default: false"],
-            context=f"{variable_name} schema",
-        )
-        _require_all(
-            _terraform_variable(variables, variable_name),
-            ["default     = false"],
-            context=f"Terraform variable {variable_name}",
-        )
 
 
 def _verify_timezone(schema: str, variables: str) -> None:

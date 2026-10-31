@@ -8,7 +8,6 @@ from pr_backend_core.config import Environment
 from pydantic import BaseModel, Field
 
 from app.services.catalog import (
-    ServiceAvailability,
     ServiceCategory,
     ServiceExecutionPolicy,
     ServiceProfile,
@@ -46,13 +45,6 @@ class ServiceCatalogItemData(BaseModel):
     )
     systemd_unit: str = Field(
         description="起動/停止・ログに使う systemd の unit 名。",
-    )
-    availability: ServiceAvailability = Field(
-        default="available",
-        description=(
-            "available=使える、roadmap=準備中(ロードマップ)。roadmap は配備・起動せず、"
-            "status は問い合わせずに roadmap を返す(#3374)。"
-        ),
     )
     model_cache: ServiceModelCacheData | None = Field(
         default=None,

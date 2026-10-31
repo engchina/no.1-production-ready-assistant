@@ -99,6 +99,7 @@ def test_catalog_covers_preprocess_and_parser_without_gpu() -> None:
         "parser-mineru",
         "parser-dots-ocr",
         "parser-glm-ocr",
+        "parser-oci-document-understanding",
     ):
         assert get_catalog_entry(service_id) is None
         directory = service_id.removeprefix("parser-").replace("-", "_")
@@ -147,17 +148,10 @@ def test_model_cache_path_set_only_for_model_downloading_parsers() -> None:
     assert with_cache == {"parser-docling": "~/.cache"}
 
 
-def test_parser_catalog_order_lists_cpu_then_oci() -> None:
-    """サービス管理の文書解析の並び(#2042・#2457): CPU(Docling → Unstructured → 構造化レコード JSONL
-    → XML ツリー JSON)→ OCI。"""
+def test_parser_catalog_order_lists_cpu_parsers() -> None:
+    """サービス管理の文書解析の並び(#2042・#21): Docling → Unstructured。"""
     parsers = [entry.service_id for entry in SERVICE_CATALOG if entry.category == "parser"]
-    assert parsers == [
-        "parser-docling",
-        "parser-unstructured",
-        "parser-structured-records-jsonl",
-        "parser-xml-tree-json",
-        "parser-oci-document-understanding",
-    ]
+    assert parsers == ["parser-docling", "parser-unstructured"]
 
 
 def test_catalog_ports_are_unique_and_high() -> None:
@@ -798,14 +792,14 @@ def _probe_statuses(settings: Any, service_ids: list[str]) -> dict[str, str]:
 def test_probe_without_systemd_uses_health_only(fake_http: type[_FakeAsyncClient]) -> None:
     fake_http.routes = {
         _url("parser-docling"): _FakeResponse({"status": "ok"}),
-        _url("parser-xml-tree-json"): _FakeResponse({"status": "degraded"}),
+        _url("preprocess-office-to-pdf"): _FakeResponse({"status": "degraded"}),
     }
     fake_http.raise_on_connect = {_url("parser-unstructured")}
     statuses = _probe_statuses(
-        get_settings(), ["parser-docling", "parser-xml-tree-json", "parser-unstructured"]
+        get_settings(), ["parser-docling", "preprocess-office-to-pdf", "parser-unstructured"]
     )
     assert statuses["parser-docling"] == "running"
-    assert statuses["parser-xml-tree-json"] == "degraded"
+    assert statuses["preprocess-office-to-pdf"] == "degraded"
     assert statuses["parser-unstructured"] == "stopped"
 
 
@@ -927,10 +921,10 @@ def test_get_service_status_probes_only_target(monkeypatch: MonkeyPatch) -> None
         return "starting"
 
     monkeypatch.setattr("app.api.routes.services.probe_service_status", fake_probe)
-    resp = client.get("/api/services/parser-xml-tree-json/status")
+    resp = client.get("/api/services/parser-unstructured/status")
     assert resp.status_code == 200
     assert resp.json()["data"]["status"] == "starting"
-    assert seen == ["parser-xml-tree-json"]
+    assert seen == ["parser-unstructured"]
 
 
 def test_get_service_logs_returns_journal_tail(monkeypatch: MonkeyPatch) -> None:
@@ -1000,56 +994,6 @@ def test_control_unknown_service_is_404(monkeypatch: MonkeyPatch) -> None:
     assert client.post("/api/services/unknown-service/stop").status_code == 404
     assert client.post("/api/services/sshd/stop").status_code == 404
     assert fake.calls == []
-
-
-ROADMAP_SERVICE_ID = "parser-oci-document-understanding"
-
-
-def test_catalog_marks_roadmap_service_as_unavailable() -> None:
-    """OCI Document Understanding は準備中(ロードマップ)。カタログが roadmap を返す(#3374)。"""
-    resp = client.get("/api/services/catalog")
-    assert resp.status_code == 200
-    by_id = {item["service_id"]: item for item in resp.json()["data"]["services"]}
-    assert by_id[ROADMAP_SERVICE_ID]["availability"] == "roadmap"
-    assert {item["availability"] for sid, item in by_id.items() if sid != ROADMAP_SERVICE_ID} == {
-        "available"
-    }
-
-
-def test_roadmap_service_status_is_roadmap_without_probe(monkeypatch: MonkeyPatch) -> None:
-    """準備中のサービスは systemd・/health を問い合わせず roadmap を返す(エラーにしない。#3374)。"""
-    fake = _FakeSystemd().install(monkeypatch)
-    resp = client.get(f"/api/services/{ROADMAP_SERVICE_ID}/status")
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "roadmap"
-    assert resp.json()["data"]["availability"] == "roadmap"
-    assert fake.calls == []
-
-
-@pytest.mark.parametrize("action", ["start", "restart"], ids=["start", "restart"])
-def test_control_rejects_starting_roadmap_service(monkeypatch: MonkeyPatch, action: str) -> None:
-    """準備中のサービスは起動・再起動を 409 で拒否し、systemctl を実行しない(#3374)。"""
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_service_control_enabled", True)
-    fake = _FakeSystemd().install(monkeypatch)
-    resp = client.post(f"/api/services/{ROADMAP_SERVICE_ID}/{action}")
-    assert resp.status_code == 409
-    assert "準備中（ロードマップ）" in resp.text
-    assert fake.calls == []
-
-
-def test_control_can_stop_roadmap_service_left_by_old_deployment(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """以前の配備に残った準備中のサービスの unit は止められる(disable --now。#3374)。"""
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_service_control_enabled", True)
-    fake = _FakeSystemd().install(monkeypatch)
-    resp = client.post(f"/api/services/{ROADMAP_SERVICE_ID}/stop")
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "roadmap"
-    unit = f"{SYSTEMD_UNIT_PREFIX}{ROADMAP_SERVICE_ID}.service"
-    assert systemctl_action_argv("stop", unit) in fake.calls
 
 
 def test_docker_build_and_remove_endpoints_are_gone(monkeypatch: MonkeyPatch) -> None:
@@ -1186,7 +1130,6 @@ def test_preprocess_service_url_uses_resolved_setting(monkeypatch: MonkeyPatch) 
     [
         ("docling", "parser-docling"),
         ("unstructured", "parser-unstructured"),
-        ("xml_tree_json", "parser-xml-tree-json"),
     ],
 )
 def test_catalog_marks_the_current_global_parser_as_default(

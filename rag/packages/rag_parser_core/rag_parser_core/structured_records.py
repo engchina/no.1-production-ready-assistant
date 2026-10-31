@@ -40,7 +40,8 @@ CSV・Excel・Word の前処理は、原本を 1 行 1 オブジェクトの JSO
 Excel の記録は `rag_parser_core.sheet_records` の行の記録（`SheetRecordsDocument`）と相互に変換し、
 要素化は `sheet_records_extraction` を使う（要素の ID・metadata・分割の挙動を変えない）。
 
-解析エンジン「構造化レコード JSONL」（`STRUCTURED_RECORDS_JSONL_BACKEND`）は、要素の本文を記録の
+この JSONL は、選んだ文書解析エンジン（Docling・Unstructured）のサービスが外部の parser に渡さず
+共通の契約で読む（`rag_parser_core.registry`。専用の解析エンジンは #21 で削除）。要素の本文を記録の
 境界のマーカー（`JSONL_RECORD_BOUNDARY`）で区切った検索用テキストを ``raw_text`` にする
 （`with_record_boundaries`）。マーカーは記録と記録の間に独立した行で置き、先頭・末尾には置かない。
 JSONL のファイルには置かない。原文の同じ文字列は ``<<<`` + k 個の ``\\`` +
@@ -102,13 +103,8 @@ STRUCTURED_RECORD_ID_KEY = "structured_record_id"
 STRUCTURED_RECORDS_FILE_EXTENSION = ".jsonl"
 # 1 つの要素の本文の上限（`sheet_records` と同じ。極端に長い行で chunk を壊さない）。
 _RECORD_TEXT_MAX_CHARS = _BLOCK_TEXT_MAX_CHARS
-# 解析エンジン「構造化レコード JSONL」（parser-structured-records-jsonl のサービス。#2457）。
-STRUCTURED_RECORDS_JSONL_BACKEND = "structured_records_jsonl"
-STRUCTURED_RECORDS_JSONL_PARSER_VERSION = "structured_records_jsonl_v1"
-# 構造化レコードの JSONL を、構造化レコード JSONL 以外の解析エンジンが受けたときの診断。
-STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING = (
-    "structured_records_requires_structured_records_jsonl"
-)
+# 構造化レコードの JSONL を読んだ抽出の parser_version（読み手は契約の版で決まる。#21）。
+STRUCTURED_RECORDS_PARSER_VERSION = "structured_records_v1"
 # 検索用テキスト（raw_text）の記録と記録の間に、独立した行で置く境界のマーカー（ASCII の完全一致）。
 JSONL_RECORD_BOUNDARY = "<<<JSONL_RECORD_BOUNDARY>>>"
 # 抽出の parser_artifacts に刻む、raw_text の境界のマーカーと境界の数（記録数 − 1）。
@@ -1152,7 +1148,7 @@ def structured_records_extraction(
     )
 
 
-# ---- 記録の境界（解析エンジン「構造化レコード JSONL」の検索用テキスト）-----------------------
+# ---- 記録の境界（構造化レコードの JSONL を読んだ抽出の検索用テキスト）-----------------------
 
 
 class RecordBoundaryError(ValueError):
@@ -1186,7 +1182,7 @@ def join_record_boundary_text(texts: Iterable[str]) -> str:
 
 
 def has_record_boundaries(extraction: StructuredExtraction) -> bool:
-    """raw_text が記録の境界のマーカーで区切られた抽出か（構造化レコード JSONL の解析）。"""
+    """raw_text が記録の境界のマーカーで区切られた抽出か（構造化レコードの JSONL を読んだ抽出）。"""
     return extraction.parser_artifacts.get(STRUCTURED_RECORDS_BOUNDARY_ARTIFACT_KEY) == (
         JSONL_RECORD_BOUNDARY
     )
@@ -1248,7 +1244,7 @@ def record_boundary_plain_text(extraction: StructuredExtraction) -> str:
 def oversized_record_line(document: StructuredRecordsDocument) -> int | None:
     """本文が 1 要素の上限を超える記録の JSONL の行番号（無ければ None）。
 
-    既存の要素化は上限で本文を切る。構造化レコード JSONL の解析は黙って切らずに診断で止める。
+    既存の要素化は上限で本文を切る。構造化レコードの JSONL の読み取りは黙って切らずに診断で止める。
     行番号は document の行（1 行目）を含めた 1 始まり。
     """
     roles_by_sheet: dict[str, dict[str, str]] = {}
@@ -1314,9 +1310,7 @@ __all__ = [
     "STRUCTURED_RECORDS_ARTIFACT_KEY",
     "STRUCTURED_RECORDS_BOUNDARY_ARTIFACT_KEY",
     "STRUCTURED_RECORDS_BOUNDARY_COUNT_ARTIFACT_KEY",
-    "STRUCTURED_RECORDS_JSONL_BACKEND",
-    "STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING",
-    "STRUCTURED_RECORDS_JSONL_PARSER_VERSION",
+    "STRUCTURED_RECORDS_PARSER_VERSION",
     "STRUCTURED_RECORDS_CONTENT_TYPE",
     "STRUCTURED_RECORDS_FILE_EXTENSION",
     "STRUCTURED_RECORDS_SCHEMA",

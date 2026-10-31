@@ -5,15 +5,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
-import pytest
 from pytest import MonkeyPatch
-from rag_parser_core import registry as parser_registry
 from rag_parser_core.result import ParserRegistryResult
 
 from app.config import Settings
 from app.rag import parser_adapter_contract as parser_adapter_contract_module
 from app.rag import parser_adapter_contract_cli, parser_adapter_readiness
-from app.rag.mineru_license import set_mineru_license_acknowledgement
 from app.rag.parser_adapter_contract import (
     ParserAdapterCompatibilityCase,
     ParserAdapterCompatibilityMatrix,
@@ -212,123 +209,6 @@ def test_compatibility_matrix_runs_installed_adapter_remap(
     assert case.element_count == 1
     assert "schema_remap_contract_ok" in case.reason_codes
     assert "非機密 artifact" not in json.dumps(asdict(matrix), ensure_ascii=False)
-
-
-def test_compatibility_matrix_uses_parser_service_runner_for_dots_ocr(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """GPU OCR adapter は backend in-process ではなく parser service runner で検証する。"""
-    fixture_root = tmp_path / "fixtures"
-    fixture_root.mkdir()
-    (fixture_root / "scan.png").write_bytes(b"\x89PNG scanned")
-    monkeypatch.setattr(
-        parser_adapter_readiness,
-        "_package_info",
-        lambda *_args: (False, None, None),
-    )
-    calls: list[str] = []
-
-    def parser_service_runner(
-        _self: object,
-        backend: str,
-        source_bytes: bytes,
-        source_profile: Any,
-        content_type: str,
-        *,
-        fail_fast: bool = False,
-    ) -> ParserRegistryResult:
-        calls.append(backend)
-        assert source_bytes == b"\x89PNG scanned"
-        assert source_profile.sanitized_file_name == "scan.png"
-        assert content_type == "image/png"
-        assert fail_fast is False
-        return ParserRegistryResult(
-            extraction=StructuredExtraction(
-                raw_text="artifact には raw_text を出さない",
-                elements=[
-                    DocumentElement(
-                        kind="text",
-                        text="非機密 artifact には入れない本文",
-                        element_id="dots-ocr-el-1",
-                        source_parser="dots_ocr_adapter",
-                        page_number=1,
-                        bbox=[0.1, 0.1, 0.9, 0.2],
-                    )
-                ],
-            ),
-            parser_backend="dots_ocr",
-            parser_version="dots_ocr:test",
-            template="ocr_page",
-        )
-
-    monkeypatch.setattr(
-        parser_adapter_contract_module.ParserServiceClient,
-        "runner",
-        parser_service_runner,
-    )
-
-    matrix = run_parser_adapter_compatibility_matrix(
-        Settings(
-            rag_parser_adapter_backend="dots_ocr",
-            rag_parser_dots_ocr_enabled=True,
-            rag_parser_dots_ocr_api_host="http://external-dots",
-        ),
-        fixture_root=fixture_root,
-        fixture_specs=(
-            ParserAdapterFixtureSpec(
-                source_kind="image",
-                file_name="scan.png",
-                content_type="image/png",
-            ),
-        ),
-        backends=["dots_ocr"],
-    )
-
-    assert calls == ["dots_ocr"]
-    assert matrix.passed is True
-    assert matrix.cases[0].status == "passed"
-
-
-@pytest.mark.usefixtures("mineru_selectable")
-def test_compatibility_matrix_mineru_unconfigured_connection_is_missing(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """外部接続未設定時は GPU OCR を in-process 起動せず missing として記録する。"""
-    fixture_root = tmp_path / "fixtures"
-    fixture_root.mkdir()
-    (fixture_root / "scan.pdf").write_bytes(b"%PDF-1.7 scanned")
-    monkeypatch.setattr(
-        parser_adapter_readiness,
-        "_package_info",
-        lambda *_args: (False, None, None),
-    )
-    monkeypatch.setattr(parser_registry, "_module_available", lambda name: name == "mineru")
-    settings = Settings(
-        rag_parser_adapter_backend="mineru",
-        rag_parser_mineru_enabled=True,
-        rag_parser_mineru_api_host="",
-    )
-    set_mineru_license_acknowledgement(settings, by="", at="2026-10-26T00:00:00+00:00")
-
-    matrix = run_parser_adapter_compatibility_matrix(
-        settings,
-        fixture_root=fixture_root,
-        fixture_specs=(
-            ParserAdapterFixtureSpec(
-                source_kind="pdf",
-                file_name="scan.pdf",
-                content_type="application/pdf",
-            ),
-        ),
-        backends=["mineru"],
-    )
-
-    case = matrix.cases[0]
-    assert matrix.passed is False
-    assert case.status == "missing"
-    assert case.warning_codes == ("external_parser_unconfigured",)
 
 
 def test_compatibility_matrix_uses_manifest_fixtures_for_real_remap(

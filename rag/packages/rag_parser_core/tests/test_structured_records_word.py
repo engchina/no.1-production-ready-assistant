@@ -13,6 +13,7 @@ from rag_parser_core.registry import run_external_adapter
 from rag_parser_core.structured_records import (
     JSONL_RECORD_BOUNDARY,
     STRUCTURED_RECORD_ID_KEY,
+    STRUCTURED_RECORDS_CONTENT_TYPE,
     DocumentLine,
     PassageLine,
     RecordLocation,
@@ -32,7 +33,8 @@ from rag_parser_core.structured_records import (
     word_passage_text,
 )
 
-BACKEND = "structured_records_jsonl"
+# 前処理の JSONL は選んだ解析エンジンのサービスが共通の契約で読む（#21）。
+BACKEND = "docling"
 _SHA = "0" * 64
 
 
@@ -245,7 +247,9 @@ def test_empty_passage_without_heading_is_rejected() -> None:
 
 
 def test_parser_makes_one_element_per_passage_with_boundaries() -> None:
-    result = run_external_adapter(BACKEND, dump_structured_records(_word_lines()), None, "")
+    result = run_external_adapter(
+        BACKEND, dump_structured_records(_word_lines()), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     extraction = result.extraction
     assert extraction is not None
     assert [element.element_id for element in extraction.elements] == ["p0001", "p0002", "p0003"]
@@ -288,7 +292,9 @@ def test_parser_rejects_oversized_word_record() -> None:
         location=_location(9),
         blocks=[WordParagraph(text="長" * 9000, body_index=9, paragraph_index=9)],
     )
-    result = run_external_adapter(BACKEND, dump_structured_records([*lines, big]), None, "")
+    result = run_external_adapter(
+        BACKEND, dump_structured_records([*lines, big]), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is None
     assert any("record_too_large" in warning for warning in result.warnings)
 
@@ -328,7 +334,7 @@ def test_word_table_part_and_multiple_tables_rows() -> None:
         _table_passage("p0102", [part.model_copy(update={"body_index": 12}), other]),
     ]
     data = dump_structured_records(lines)  # type: ignore[arg-type]
-    result = run_external_adapter(BACKEND, data, None, "")
+    result = run_external_adapter(BACKEND, data, None, STRUCTURED_RECORDS_CONTENT_TYPE)
     assert result.extraction is not None
     single, multiple = result.extraction.elements
     assert single.content_kind == "table"

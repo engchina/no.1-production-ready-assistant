@@ -46,8 +46,14 @@ def test_builtin_skill_ids_are_in_display_order() -> None:
         "business-rag-research",
         "structured-data-query",
         "rag-and-structured-data",
-        "article-catalog-lookup",
     )
+
+
+def test_removed_article_catalog_skill_is_not_resolved() -> None:
+    """削除した条の目録のスキル（#42）は、保存済みの業務 Agent に残っても解決しない。"""
+    from app.features.agent.skills import resolve_skill
+
+    assert resolve_skill("article-catalog-lookup") is None
 
 
 def test_list_skills_puts_builtin_first_then_by_name(runtime_skills: None) -> None:

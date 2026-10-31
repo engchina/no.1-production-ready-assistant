@@ -122,12 +122,12 @@ export const SMALL_TO_BIG_PARAMS: readonly SmallToBigParamSpec[] = [
 ];
 
 /**
- * 固定分割符の既定（backend の `RAG_CHUNK_DELIMITER` の既定と同じ。#2457）。構造化レコード JSONL の
- * 解析が記録と記録の間に置く境界のマーカー。
+ * 固定分割符の既定（backend の `RAG_CHUNK_DELIMITER` の既定と同じ。#2457）。構造化レコードの JSONL を
+ * 読んだ抽出が記録と記録の間に置く境界のマーカー。
  */
 export const JSONL_RECORD_BOUNDARY = "<<<JSONL_RECORD_BOUNDARY>>>";
 
-/** 構造化レコードの JSONL を作るファイル準備（解析エンジンは構造化レコード JSONL だけ）。 */
+/** 構造化レコードの JSONL を作るファイル準備（成果物は Docling・Unstructured のサービスが読む。#21）。 */
 export const STRUCTURED_RECORDS_PREPROCESS_PROFILES = ["csv_to_jsonl", "excel_to_jsonl", "word_to_jsonl"] as const;
 
 export const DEFAULT_SMALL_TO_BIG_PARAMS: SmallToBigParams = Object.fromEntries(
