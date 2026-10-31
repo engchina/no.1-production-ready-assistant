@@ -103,16 +103,14 @@ describe("CSV→JSONL・Excel→JSONL の選択", () => {
     expect(labels.indexOf("Word→JSONL")).toBe(labels.indexOf("Excel→JSONL") + 1);
   });
 
-  it("準備中（ロードマップ）の OCI Document Understanding・MinerU は、灰色のバッジと理由つきで選べない", () => {
-    const roadmap = PARSER_OPTIONS.find((option) => option.value === "oci_document_understanding");
-    expect(roadmap).toMatchObject({
-      disabled: true,
-      badge: "準備中（ロードマップ）",
-      disabledReason: "準備中（ロードマップ）のため、まだ選べません。",
-    });
-    expect(
-      PARSER_OPTIONS.filter((option) => option.disabled).map((option) => option.value)
-    ).toEqual(["mineru", "oci_document_understanding"]);
+  it("解析エンジンの選択肢はすべて選べる（#22 で外部 parser を削除した）", () => {
+    expect(PARSER_OPTIONS.filter((option) => option.disabled)).toEqual([]);
+    expect(PARSER_OPTIONS.map((option) => option.value)).toEqual([
+      "docling",
+      "unstructured",
+      "structured_records_jsonl",
+      "xml_tree_json",
+    ]);
   });
 
   it("構造化レコード JSONL は XML ツリー JSON の直前に並ぶ", () => {

@@ -5,7 +5,7 @@ LlamaIndex の階層の分割と同じ考え方)。子だけを索引単位と�
 (``chunk_group_id`` / ``parent_text``)に保持して、既存の group sibling 展開と回答文脈で使う。
 親子の作り方は抽出の形で選ぶ(解析エンジンの名前では選ばない。#3377):
 
-- 解析の ``parser_artifacts["layout_records"]``(Docling・MinerU〔#1334〕の LayoutRecord)があれば、
+- 解析の ``parser_artifacts["layout_records"]``(Docling の LayoutRecord)があれば、
   ``rag_engine.chunking.build_small_to_big_chunks`` で親子チャンクを作る。Oracle Text と embedding
   には rag_poc の search_text を使う。文書の 1 ページ目の本文(回答の「文書の背景」)は先頭の chunk
   にだけ載せ、保存のときに chunk set へ 1 つだけ移す(#557。検索用 text には入れない)。
@@ -56,11 +56,10 @@ if TYPE_CHECKING:
 
 SMALL_TO_BIG_STRATEGY = "small_to_big"
 LAYOUT_ARTIFACT = "layout_records"
-# chunk の source_parser(解析エンジンの名前 + "_layout")。Docling は "docling_layout"、MinerU は
-# "mineru_layout"(``layout_source_parser``)。
+# chunk の source_parser(解析エンジンの名前 + "_layout")。Docling は "docling_layout"。
 LAYOUT_SOURCE_PARSER = "docling_layout"
 # record の engine → 分割の結果に出す解析エンジンの表示名。
-_ENGINE_LABELS = {"docling": "Docling", "mineru": "MinerU"}
+_ENGINE_LABELS = {"docling": "Docling"}
 # 検索・embedding 用 text(rag_poc の retrieval_text)を載せる metadata key。
 ENGINE_SEARCH_TEXT_KEY = "engine_search_text"
 # 文書の物理 1 ページ目の本文(回答の「文書の背景」。rag_poc の first_page_context)を JSON で

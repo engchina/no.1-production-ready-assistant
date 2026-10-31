@@ -8,8 +8,7 @@ type ServiceStatus =
   | "failed"
   | "stopped"
   | "not_installed"
-  | "unconfigured"
-  | "roadmap";
+  | "unconfigured";
 
 interface ServiceRow {
   service_id: string;
@@ -19,7 +18,6 @@ interface ServiceRow {
   execution_policy: "selected_adapter" | "default_adapter";
   status: ServiceStatus;
   configured: boolean;
-  availability?: "available" | "roadmap";
 }
 
 function defaultServices(): ServiceRow[] {
@@ -68,17 +66,6 @@ function defaultServices(): ServiceRow[] {
       execution_policy: "selected_adapter",
       status: "stopped",
       configured: true,
-    },
-    {
-      service_id: "parser-oci-document-understanding",
-      category: "parser",
-      profile: "oci",
-      label_key: "settings.services.item.parserOciDocumentUnderstanding",
-      execution_policy: "selected_adapter",
-      // 準備中（ロードマップ。#3374）。backend は状態を問い合わせず roadmap を返す。
-      status: "roadmap",
-      configured: true,
-      availability: "roadmap",
     },
   ];
 }
@@ -242,14 +229,10 @@ for (const viewport of [
       "GLM-OCR",
       "ASR(音声文字起こし)",
       "OCI Generative AI (Vision)",
+      "OCI Document Understanding",
     ]) {
       await expect(page.getByText(removed, { exact: true })).toHaveCount(0);
     }
-    // OCI クラウド parser は CPU の次のグループ「文書解析(OCI)」として表示。
-    await expect(
-      page.getByText("OCI Document Understanding", { exact: true })
-    ).toBeVisible();
-    await expect(page.getByText("OCI 認証はメイン設定を継承", { exact: false })).toBeVisible();
     // 単一プロファイルの工程は接尾辞なし（上の見出しの確認に含む）。
     await expect(page.getByText("選択時のみ使用").first()).toBeVisible();
     await expect(
@@ -518,42 +501,6 @@ for (const viewport of [
     await page.getByRole("button", { name: "Docling の操作" }).click();
     await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText(["ログ"]);
     await page.keyboard.press("Escape");
-  });
-}
-
-for (const viewport of [
-  { name: "desktop", width: 1280, height: 760 },
-  { name: "mobile", width: 375, height: 812 },
-]) {
-  test(`準備中（ロードマップ）の OCI Document Understanding は灰色で、操作を出さず状態も問い合わせない (${viewport.name})`, async ({
-    page,
-  }, testInfo) => {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    const statusRequests: string[] = [];
-    page.on("request", (request) => {
-      const match = request.url().match(/\/api\/services\/([^/]+)\/(status|start|stop|restart)/);
-      if (match) statusRequests.push(`${decodeURIComponent(match[1])}:${match[2]}`);
-    });
-    await mockServices(page, { controlEnabled: true, deploymentMode: "local" });
-
-    await page.goto("/settings/services");
-    const row = page.getByTestId("service-row-parser-oci-document-understanding");
-    await expect(row).toBeVisible();
-    await expect(row).toHaveAttribute("data-availability", "roadmap");
-    await expect(row.locator("[data-roadmap-badge]")).toHaveText("準備中（ロードマップ）");
-    await expect(row).toContainText("まだ配備・起動できません");
-    // 起動・停止・操作メニューを出さない。
-    await expect(row.getByRole("button")).toHaveCount(0);
-    await expect(page.getByTestId("service-row-parser-docling").getByRole("button")).toHaveCount(2);
-    expect(statusRequests.filter((entry) => entry.startsWith("parser-oci-document-understanding"))).toEqual(
-      []
-    );
-    await expectNoHorizontalOverflow(page);
-    await row.scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: testInfo.outputPath(`services-roadmap-${viewport.name}.png`),
-      fullPage: true,
-    });
   });
 }
 

@@ -17,13 +17,6 @@ from rag_parser_core.source import SourceModality, SourceProfile
 from rag_parser_core.structured_records import STRUCTURED_RECORDS_CONTENT_TYPE
 
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".bmp"})
-_OPENXML_CONTENT_TYPES = frozenset(
-    {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }
-)
 _OPENXML_EXTENSIONS = frozenset({".docx", ".pptx", ".xlsx"})
 
 
@@ -37,21 +30,12 @@ class ParserBackendCapability:
     content_type_prefixes: frozenset[str] = frozenset()
 
 
-_PDF_AND_IMAGE = ParserBackendCapability(
-    modalities=frozenset({SourceModality.PDF, SourceModality.IMAGE}),
-    extensions=frozenset({".pdf"}) | _IMAGE_EXTENSIONS,
-    content_types=frozenset({"application/pdf"}),
-    content_type_prefixes=frozenset({"image/"}),
-)
-
 _IMAGE_ONLY = ParserBackendCapability(
     modalities=frozenset({SourceModality.IMAGE}),
     extensions=_IMAGE_EXTENSIONS,
     content_type_prefixes=frozenset({"image/"}),
 )
 
-# OCI service backend の宣言。oci_document_understanding は PDF/PNG/JPEG(TIFF はアップロード時に
-# unsupported_tiff_image で遮断済み)で、実質 PDF+画像として宣言する。
 ADAPTER_CAPABILITIES: Mapping[str, ParserBackendCapability] = {
     # Docling の parser サービス(services/parsers/docling。Docling のレイアウト解析)は
     # PDF と画像だけを解析する(rag_engine.parsing.rendering.SUPPORTED_SOURCE_FILE_TYPES)。
@@ -118,15 +102,6 @@ ADAPTER_CAPABILITIES: Mapping[str, ParserBackendCapability] = {
         extensions=frozenset({".json"}),
         content_types=frozenset({"application/json"}),
     ),
-    "mineru": ParserBackendCapability(
-        modalities=frozenset({SourceModality.PDF, SourceModality.IMAGE, SourceModality.OFFICE}),
-        extensions=frozenset({".pdf"}) | _IMAGE_EXTENSIONS | _OPENXML_EXTENSIONS,
-        content_types=frozenset({"application/pdf"}) | _OPENXML_CONTENT_TYPES,
-        content_type_prefixes=frozenset({"image/"}),
-    ),
-    # 外部 API は画像入力。backend が PDF をページ画像へ変換して順序を維持する。
-    "dots_ocr": _PDF_AND_IMAGE,
-    "oci_document_understanding": _PDF_AND_IMAGE,
 }
 
 # 表示用の modality 並び(SourceModality の定義順。UNKNOWN は表示しない)

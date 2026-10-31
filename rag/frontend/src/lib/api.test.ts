@@ -774,11 +774,11 @@ describe("api.request envelope", () => {
           warning_code: null,
         },
         {
-          backend: "dots_ocr",
-          package_name: "dots_ocr",
-          import_name: "dots_ocr",
+          backend: "unstructured",
+          package_name: "unstructured",
+          import_name: "unstructured",
           distribution_name: null,
-          install_package: "git+https://github.com/rednote-hilab/dots.ocr.git",
+          install_package: "unstructured[all-docs]==0.23.1",
           enabled: true,
           selected: false,
           installed: false,
@@ -787,38 +787,17 @@ describe("api.request envelope", () => {
           warning_code: "adapter_flag_ignored_by_backend",
         },
         {
-          backend: "unstructured",
-          package_name: "unstructured",
-          import_name: "unstructured",
+          backend: "xml_tree_json",
+          package_name: "rag_parser_core",
+          import_name: "rag_parser_core",
           distribution_name: null,
-          install_package: "unstructured[all-docs]==0.23.1",
+          install_package: "rag-parser-core",
           enabled: false,
           selected: false,
           installed: false,
           status: "disabled",
           version: null,
           warning_code: null,
-        },
-        {
-          backend: "mineru",
-          package_name: "mineru",
-          import_name: "mineru",
-          distribution_name: null,
-          install_package: "mineru[core]==3.4.0",
-          enabled: false,
-          selected: false,
-          installed: false,
-          status: "disabled",
-          version: null,
-          warning_code: null,
-        },
-      ],
-      service_backends: [
-        {
-          backend: "oci_document_understanding",
-          selected: false,
-          configured: false,
-          warning_code: "oci_document_understanding_unconfigured",
         },
       ],
       scorecard: {
@@ -844,7 +823,7 @@ describe("api.request envelope", () => {
             warning_codes: [],
           },
           {
-            backend: "mineru",
+            backend: "unstructured",
             rank: 2,
             score: 24,
             status: "disabled",
@@ -864,7 +843,7 @@ describe("api.request envelope", () => {
       source_routes: [
         {
           source_kind: "pdf",
-          candidate_order: ["docling", "unstructured", "mineru", "dots_ocr"],
+          candidate_order: ["docling", "unstructured"],
           attempted_order: ["docling"],
           active_order: ["docling"],
           selected_backend: "docling",
@@ -899,10 +878,8 @@ describe("api.request envelope", () => {
     expect(result.adapter_backend).toBe("docling");
     expect(result.effective_order).toEqual(["docling"]);
     expect(result.adapters[1].warning_code).toBe("adapter_flag_ignored_by_backend");
-    expect(result.adapters.map((adapter) => adapter.backend)).toContain("dots_ocr");
-    expect(result.adapters.map((adapter) => adapter.backend)).toContain("mineru");
-    expect(result.service_backends[0].backend).toBe("oci_document_understanding");
-    expect(result.source_routes[0].candidate_order).toContain("mineru");
+    expect(result.adapters.map((adapter) => adapter.backend)).toContain("xml_tree_json");
+    expect(result.source_routes[0].candidate_order).toEqual(["docling", "unstructured"]);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/settings/parser-adapters",
       expect.objectContaining({
@@ -916,8 +893,8 @@ describe("api.request envelope", () => {
       adapter_backend: "docling" as const,
       docling_enabled: true,
       unstructured_enabled: true,
-      mineru_enabled: false,
-      dots_ocr_enabled: false,
+      structured_records_jsonl_enabled: false,
+      xml_tree_json_enabled: false,
     };
     const responsePayload = {
       adapter_backend: "docling",
@@ -950,11 +927,11 @@ describe("api.request envelope", () => {
           warning_code: "adapter_flag_ignored_by_backend",
         },
         {
-          backend: "dots_ocr",
-          package_name: "dots_ocr",
-          import_name: "dots_ocr",
+          backend: "xml_tree_json",
+          package_name: "rag_parser_core",
+          import_name: "rag_parser_core",
           distribution_name: null,
-          install_package: "git+https://github.com/rednote-hilab/dots.ocr.git",
+          install_package: "rag-parser-core",
           enabled: false,
           selected: false,
           installed: false,
@@ -963,7 +940,6 @@ describe("api.request envelope", () => {
           warning_code: null,
         },
       ],
-      service_backends: [],
       scorecard: {
         selected_backend: "docling",
         recommended_backend: "local",
@@ -995,7 +971,7 @@ describe("api.request envelope", () => {
     const result = await api.updateParserAdapterSettings(requestPayload);
 
     expect(result.effective_order).toEqual(["docling"]);
-    expect(result.adapters.map((adapter) => adapter.backend)).toContain("dots_ocr");
+    expect(result.adapters.map((adapter) => adapter.backend)).toContain("xml_tree_json");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/settings/parser-adapters",
       expect.objectContaining({
@@ -1241,30 +1217,6 @@ describe("api.services", () => {
     expect(result.status).toBe("running");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/services/parser-xml-tree-json/status",
-      expect.anything()
-    );
-  });
-
-  it("getExternalParserStatus は外部解析エンジンの接続状態を取得する", async () => {
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      jsonResponse({
-        data: {
-          backend: "dots_ocr",
-          status: "available",
-          version: "served-dots",
-          warning_code: null,
-        },
-        error_messages: [],
-        warning_messages: [],
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.getExternalParserStatus("dots_ocr");
-
-    expect(result.status).toBe("available");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/parser-adapters/dots_ocr/status",
       expect.anything()
     );
   });

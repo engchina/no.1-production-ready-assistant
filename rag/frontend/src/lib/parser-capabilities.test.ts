@@ -10,7 +10,7 @@ import {
 } from "@/lib/parser-capabilities";
 
 const CAPABILITIES: ParserBackendCapabilityData[] = [
-  { backend: "dots_ocr", modalities: ["pdf", "image"], extensions: [".pdf", ".png"] },
+  { backend: "docling", modalities: ["pdf", "image"], extensions: [".pdf", ".png"] },
   {
     backend: "unstructured",
     modalities: ["pdf", "image", "text", "html", "email", "office"],
@@ -20,7 +20,7 @@ const CAPABILITIES: ParserBackendCapabilityData[] = [
 
 describe("formatSupportedFormats", () => {
   it("modality を日本語ラベルで「・」連結する", () => {
-    expect(formatSupportedFormats(findParserCapability(CAPABILITIES, "dots_ocr"))).toBe(
+    expect(formatSupportedFormats(findParserCapability(CAPABILITIES, "docling"))).toBe(
       "PDF・画像"
     );
   });
@@ -43,21 +43,21 @@ describe("effectiveModalityForParser", () => {
 });
 
 describe("parserSupportsDocument", () => {
-  it("dots_ocr × office は非対応", () => {
+  it("docling × office は非対応", () => {
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "office",
       })
     ).toBe(false);
   });
 
-  it("dots_ocr × office でも office_to_pdf 変換があれば対応", () => {
+  it("docling × office でも office_to_pdf 変換があれば対応", () => {
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "office",
         preprocessProfile: "office_to_pdf",
       })
@@ -73,12 +73,12 @@ describe("parserSupportsDocument", () => {
       })
     ).toBeNull();
     expect(
-      parserSupportsDocument({ capabilities: undefined, backend: "dots_ocr", modality: "pdf" })
+      parserSupportsDocument({ capabilities: undefined, backend: "docling", modality: "pdf" })
     ).toBeNull();
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "unknown",
       })
     ).toBeNull();

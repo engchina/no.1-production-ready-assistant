@@ -43,7 +43,7 @@ def test_configure_logging_filters_service_status_access_logs() -> None:
         logging.INFO,
         __file__,
         1,
-        '127.0.0.1:1 - "GET /api/services/parser-mineru/status HTTP/1.1" 200 OK',
+        '127.0.0.1:1 - "GET /api/services/parser-docling/status HTTP/1.1" 200 OK',
         (),
         None,
     )

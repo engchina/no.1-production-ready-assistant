@@ -33,13 +33,6 @@ UNSTRUCTURED_TEXT_CONTRACT = "html_structural_roles_v3"
 EXTERNAL_ADAPTER_PACKAGES = {
     "docling": "docling",
     "unstructured": "unstructured",
-    # MinerU は外部で運用する MinerU の HTTP API(backend の app.clients.external_parser)だけで
-    # 呼ぶ(#3359)。この package の中では MinerU を import・実行せず、in-process の要求は
-    # adapter_unsupported(未導入なら package_missing)で止まる。名前は結果の識別に使う。
-    "mineru": "mineru",
-    # PoweRAG 由来。未導入時は package_missing、導入のみで未実装なら adapter_unsupported を
-    # 返して安全に fallback する(実 OCR は OCI Enterprise AI VLM へ再マップ)。
-    "dots_ocr": "dots_ocr",
     # XML ツリー JSON を要素の階層のまま段落の単位にする解析(#2024)。標準ライブラリだけで動き、
     # 実体は rag_parser_core.xml_tree_json(parser-xml-tree-json のサービスが実行する)。
     # 構造化レコードの JSONL を記録の境界で区切る解析(#2457)。外部の parser の package は使わず、
@@ -48,10 +41,6 @@ EXTERNAL_ADAPTER_PACKAGES = {
     "structured_records_jsonl": "rag_parser_core.structured_records",
     "xml_tree_json": "rag_parser_core.xml_tree_json",
 }
-
-# service 系 backend。backend が OCI クラウドサービス(Document Understanding)を呼ぶ
-# parser microservice へ委譲する。
-SERVICE_ADAPTER_BACKENDS = frozenset({"oci_document_understanding"})
 
 # 外部 adapter 実行の注入点。backend は HTTP runner を、service/test は in-process を渡す。
 ExternalAdapterRunner = Callable[[str, bytes, "SourceProfile | None", str], "ParserRegistryResult"]

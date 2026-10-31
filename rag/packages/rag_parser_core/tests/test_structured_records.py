@@ -410,7 +410,7 @@ def test_content_type_detection_ignores_parameters() -> None:
 def test_docling_and_unstructured_stop_on_jsonl_with_diagnostic() -> None:
     """Docling / Unstructured は構造化レコードの JSONL を黙って変換せず、診断で止める（#2457）。"""
     data = dump_structured_records(_csv_lines())
-    for backend in ("docling", "unstructured", "dots_ocr", "xml_tree_json"):
+    for backend in ("docling", "unstructured", "xml_tree_json"):
         assert not adapter_supports_source(
             backend, source_profile=None, content_type=STRUCTURED_RECORDS_CONTENT_TYPE
         )

@@ -316,7 +316,6 @@ def _pipeline(settings: Any) -> Any:
         genai=cast(Any, object()),
         oracle=cast(Any, object()),
         object_storage=cast(Any, object()),
-        document_understanding=cast(Any, object()),
         settings=settings,
     )
 

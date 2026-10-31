@@ -99,9 +99,6 @@ _BACKEND_LABELS = {
     "unstructured": "Unstructured",
     "structured_records_jsonl": "構造化レコード JSONL",
     "xml_tree_json": "XML ツリー JSON",
-    "mineru": "MinerU",
-    "dots_ocr": "Dots.OCR",
-    "oci_document_understanding": "OCI Document Understanding",
 }
 # サービス管理の状態(app.services.status)のうち、Unstructured を使える状態。
 _SERVICE_AVAILABLE_STATUSES = frozenset({"running", "degraded", "starting"})

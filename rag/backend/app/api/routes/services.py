@@ -79,7 +79,6 @@ def _catalog_item(settings: Settings, entry: ServiceCatalogEntry) -> ServiceCata
         execution_policy=effective_execution_policy(settings, entry),
         configured=bool(service_health_url(settings, entry)),
         systemd_unit=entry.systemd_unit,
-        availability=entry.availability,
         model_cache=_model_cache(entry),
     )
 
@@ -167,13 +166,6 @@ async def _control(service_id: str, action: ServiceAction) -> ApiResponse[Servic
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="指定したサービスが見つかりません。",
-        )
-    # 準備中(ロードマップ)のサービスは起動しない(#3374)。停止は、以前の配備に残った unit を
-    # 止められるよう受ける。
-    if entry.is_roadmap and action != "stop":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(f"{entry.service_id} は準備中（ロードマップ）のため、まだ起動できません。"),
         )
     try:
         await _control_client.control(settings, entry, action)

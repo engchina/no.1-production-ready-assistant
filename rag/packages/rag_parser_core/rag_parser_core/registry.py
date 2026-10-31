@@ -14,11 +14,9 @@ import importlib
 import importlib.util
 import inspect
 import logging
-import os
 import re
 import sys
 import tempfile
-import types
 import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -55,9 +53,6 @@ from rag_parser_core.result import (
     LOCAL_PARSER_VERSION,
     UNSTRUCTURED_TEXT_CONTRACT,
     ExternalAdapterRunner,
-)
-from rag_parser_core.result import (
-    SERVICE_ADAPTER_BACKENDS as SERVICE_ADAPTER_BACKENDS,
 )
 from rag_parser_core.result import (
     ParserRegistryResult as ParserRegistryResult,
@@ -637,8 +632,6 @@ def parse_with_registry(
     adapter_backend: str = "local",
     docling_enabled: bool = False,
     unstructured_enabled: bool = False,
-    mineru_enabled: bool = False,
-    dots_ocr_enabled: bool = False,
     external_adapter_runner: ExternalAdapterRunner | None = None,
 ) -> ParserRegistryResult:
     """source profile に基づき、ローカル parser で処理できる場合は抽出する。
@@ -684,25 +677,12 @@ def parse_with_registry(
             unsupported_reason="odt_rtf_not_supported",
         )
 
-    normalized_backend = adapter_backend.strip().casefold()
-    if normalized_backend in SERVICE_ADAPTER_BACKENDS:
-        # 明示選択された service backend は core では実行せず、backend(ingestion)が
-        # OCI クラウドサービスを直接呼ぶ。fallback ではなく意図的な選択なので
-        # fallback_used は立てない。
-        return ParserRegistryResult(
-            extraction=None,
-            parser_backend=normalized_backend,
-            template="enterprise_ai_fallback",
-        )
-
     adapter_warnings = _external_adapter_disabled_warnings(
         adapter_backend=adapter_backend,
         source_profile=source_profile,
         content_type=content_type,
         docling_enabled=docling_enabled,
         unstructured_enabled=unstructured_enabled,
-        mineru_enabled=mineru_enabled,
-        dots_ocr_enabled=dots_ocr_enabled,
     )
     adapter_fallback_used = bool(adapter_warnings)
     for backend in _requested_external_adapters(
@@ -711,8 +691,6 @@ def parse_with_registry(
         content_type=content_type,
         docling_enabled=docling_enabled,
         unstructured_enabled=unstructured_enabled,
-        mineru_enabled=mineru_enabled,
-        dots_ocr_enabled=dots_ocr_enabled,
     ):
         runner = external_adapter_runner or _default_external_adapter_runner
         adapter_result = runner(
@@ -787,8 +765,6 @@ def _requested_external_adapters(
     content_type: str,
     docling_enabled: bool,
     unstructured_enabled: bool,
-    mineru_enabled: bool,
-    dots_ocr_enabled: bool,
 ) -> tuple[str, ...]:
     normalized = adapter_backend.strip().casefold()
     if normalized in EXTERNAL_ADAPTER_PACKAGES:
@@ -796,8 +772,6 @@ def _requested_external_adapters(
             normalized,
             docling_enabled=docling_enabled,
             unstructured_enabled=unstructured_enabled,
-            mineru_enabled=mineru_enabled,
-            dots_ocr_enabled=dots_ocr_enabled,
         ) and _external_adapter_supports_source(
             normalized,
             source_profile=source_profile,
@@ -815,8 +789,6 @@ def _external_adapter_disabled_warnings(
     content_type: str,
     docling_enabled: bool,
     unstructured_enabled: bool,
-    mineru_enabled: bool,
-    dots_ocr_enabled: bool,
 ) -> tuple[str, ...]:
     normalized = adapter_backend.strip().casefold()
     if normalized not in EXTERNAL_ADAPTER_PACKAGES:
@@ -825,8 +797,6 @@ def _external_adapter_disabled_warnings(
         normalized,
         docling_enabled=docling_enabled,
         unstructured_enabled=unstructured_enabled,
-        mineru_enabled=mineru_enabled,
-        dots_ocr_enabled=dots_ocr_enabled,
     ):
         if _external_adapter_supports_source(
             normalized,
@@ -885,14 +855,10 @@ def _external_adapter_flag_enabled(
     *,
     docling_enabled: bool,
     unstructured_enabled: bool,
-    mineru_enabled: bool,
-    dots_ocr_enabled: bool,
 ) -> bool:
     return {
         "docling": docling_enabled,
         "unstructured": unstructured_enabled,
-        "mineru": mineru_enabled,
-        "dots_ocr": dots_ocr_enabled,
     }.get(backend, False)
 
 
@@ -905,7 +871,7 @@ def run_external_adapter(
     """単一の外部 adapter を同一プロセス内で実行する公開 API。
 
     parser マイクロサービスはこの関数を呼んで、その image に導入済みの adapter
-    (docling/unstructured/dots_ocr)で parse し、結果を
+    (docling/unstructured)で parse し、結果を
     `ParseResponse` として返す。package 未導入なら `*_adapter_package_missing`、
     parse 失敗なら `*_adapter_failed: <例外の型名>` の fallback を返す。
     """
@@ -964,12 +930,6 @@ def _external_adapter_result(
                 source_profile=source_profile,
                 content_type=content_type,
             )
-        if backend == "dots_ocr":
-            return _dots_ocr_adapter_result(
-                source_bytes,
-                source_profile=source_profile,
-                content_type=content_type,
-            )
         if backend == "xml_tree_json":
             return _xml_tree_json_adapter_result(source_bytes)
     except Exception as exc:
@@ -1006,7 +966,7 @@ _INVALID_INPUT_EXCEPTION_NAMES = frozenset(
         "PSSyntaxError",
         "UnidentifiedImageError",  # PIL(画像系 OCR adapter)
         "BadZipFile",  # docx/pptx/xlsx(unstructured/docling)
-        "FileDataError",  # dots.ocr の公式 parser が内部で PDF を開けないとき
+        "FileDataError",  # 解析の package が内部で PDF を開けないとき
         "EmptyFileError",
     }
 )
@@ -1463,260 +1423,6 @@ def _restore_html_table_captions(
     )
 
 
-def _run_dots_ocr(path: Path) -> object:
-    """Dots.OCR(GPU)で 1 ファイルを OCR して document/markdown を得る(GPU 統合シーム)。"""
-    module = importlib.import_module("dots_ocr")
-    for attr in ("parse", "ocr", "to_markdown", "convert", "infer", "run"):
-        candidate = getattr(module, attr, None)
-        if callable(candidate):
-            return candidate(str(path))
-    return _run_dots_ocr_parser(path)
-
-
-def _run_dots_ocr_parser(path: Path) -> str:
-    """Dots.OCR 公式 parser を実行し、生成 markdown を返す。"""
-    runtime = os.environ.get("DOTS_OCR_RUNTIME", "vllm").strip().lower() or "vllm"
-    parser: Any
-    if runtime in {"vllm", "official_vllm"}:
-        parser = _load_dots_ocr_vllm_parser()
-    elif runtime in {"hf", "hf_explicit_cuda"}:
-        parser = _load_dots_ocr_hf_parser()
-    else:
-        raise RuntimeError(
-            "dots_ocr_invalid_runtime: set DOTS_OCR_RUNTIME to vllm or hf_explicit_cuda"
-        )
-    prompt_mode = os.environ.get("DOTS_OCR_PROMPT_MODE", "prompt_layout_all_en").strip()
-    if not prompt_mode:
-        prompt_mode = "prompt_layout_all_en"
-    fitz_preprocess = _env_enabled("DOTS_OCR_FITZ_PREPROCESS", default=True)
-    with tempfile.TemporaryDirectory(prefix="dots-ocr-output-") as output_dir:
-        result = parser.parse_file(
-            str(path),
-            output_dir=output_dir,
-            prompt_mode=prompt_mode,
-            fitz_preprocess=fitz_preprocess,
-        )
-        markdown_files = _dots_ocr_markdown_files(result, Path(output_dir))
-        if not markdown_files:
-            raise RuntimeError("dots_ocr: parser did not produce markdown")
-        return "\n\n".join(
-            markdown_file.read_text(encoding="utf-8", errors="replace")
-            for markdown_file in markdown_files
-        )
-
-
-_DOTS_OCR_VLLM_PARSER_CACHE: dict[str, object] = {}
-_DOTS_OCR_PARSER_CACHE: dict[str, object] = {}
-
-
-def _load_dots_ocr_vllm_parser() -> object:
-    """Dots.OCR 公式推奨の vLLM server 向け parser を遅延ロードする。"""
-    protocol = os.environ.get("DOTS_OCR_PROTOCOL", "http").strip() or "http"
-    ip = os.environ.get("DOTS_OCR_IP", "127.0.0.1").strip()
-    if not ip:
-        ip = "127.0.0.1"
-    port = int(os.environ.get("DOTS_OCR_PORT", "8080"))
-    model_name = os.environ.get("DOTS_OCR_MODEL_NAME", "model").strip() or "model"
-    cache_key = "|".join((protocol, ip, str(port), model_name))
-    cached = _DOTS_OCR_VLLM_PARSER_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-    parser_module = importlib.import_module("dots_ocr.parser")
-    parser = parser_module.DotsOCRParser(
-        protocol=protocol,
-        ip=ip,
-        port=port,
-        model_name=model_name,
-        temperature=float(os.environ.get("DOTS_OCR_TEMPERATURE", "0.1")),
-        top_p=float(os.environ.get("DOTS_OCR_TOP_P", "1.0")),
-        max_completion_tokens=int(os.environ.get("DOTS_OCR_MAX_COMPLETION_TOKENS", "16384")),
-        num_thread=int(os.environ.get("DOTS_OCR_NUM_THREAD", "1")),
-        dpi=int(os.environ.get("DOTS_OCR_DPI", "200")),
-        output_dir=os.environ.get("DOTS_OCR_OUTPUT_DIR", "/tmp/dots-ocr-output"),
-        min_pixels=_optional_int_env("DOTS_OCR_MIN_PIXELS"),
-        max_pixels=_optional_int_env("DOTS_OCR_MAX_PIXELS"),
-        use_hf=False,
-    )
-    _DOTS_OCR_VLLM_PARSER_CACHE[cache_key] = parser
-    return parser
-
-
-def _load_dots_ocr_hf_parser() -> object:
-    """Dots.OCR HF parser を明示 CUDA mode で遅延ロードする(公式 vLLM 不可時の退避経路)。"""
-    model_id = (
-        os.environ.get("DOTS_OCR_MODEL_ID", "rednote-hilab/dots.mocr").strip()
-        or "rednote-hilab/dots.mocr"
-    )
-    dtype_name = os.environ.get("DOTS_OCR_TORCH_DTYPE", "bfloat16").strip() or "bfloat16"
-    device_name = os.environ.get("DOTS_OCR_DEVICE", "cuda:0").strip() or "cuda:0"
-    attention_impl = os.environ.get("DOTS_OCR_ATTENTION_IMPLEMENTATION", "sdpa").strip() or "sdpa"
-    cache_key = "|".join((model_id, dtype_name, device_name, attention_impl))
-    cached = _DOTS_OCR_PARSER_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-
-    parser_module = importlib.import_module("dots_ocr.parser")
-    base_parser = parser_module.DotsOCRParser
-
-    class ExplicitCudaDotsOCRParser(base_parser):  # type: ignore[misc, valid-type]
-        def _load_hf_model(self) -> None:
-            torch = importlib.import_module("torch")
-            if not torch.cuda.is_available():
-                raise RuntimeError("dots_ocr_cuda_unavailable: Dots.OCR requires a CUDA GPU")
-            transformers = importlib.import_module("transformers")
-            qwen_vl_utils = importlib.import_module("qwen_vl_utils")
-            model_ref = _resolve_dots_ocr_model_ref(model_id)
-            dtype = _torch_dtype(
-                torch,
-                dtype_name,
-                error_prefix="dots_ocr",
-            )
-            device = torch.device(device_name)
-            config = transformers.AutoConfig.from_pretrained(model_ref, trust_remote_code=True)
-            vision_config = getattr(config, "vision_config", None)
-            if isinstance(vision_config, dict):
-                vision_config["attn_implementation"] = attention_impl
-            elif vision_config is not None:
-                vision_config.attn_implementation = attention_impl
-            _ensure_flash_attn_importable_for_dots(attention_impl)
-            self.processor = transformers.AutoProcessor.from_pretrained(
-                model_ref,
-                trust_remote_code=True,
-                use_fast=True,
-            )
-            model = transformers.AutoModelForCausalLM.from_pretrained(
-                model_ref,
-                config=config,
-                trust_remote_code=True,
-                dtype=dtype,
-            )
-            model.to(device)
-            model.eval()
-            self.model = model
-            self.process_vision_info = qwen_vl_utils.process_vision_info
-            self._rag_cuda_device = device
-
-        def _inference_with_hf(self, image: object, prompt: str) -> str:
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": image},
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ]
-            text = self.processor.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-            image_inputs, video_inputs = self.process_vision_info(messages)
-            inputs = self.processor(
-                text=[text],
-                images=image_inputs,
-                videos=video_inputs,
-                padding=True,
-                return_tensors="pt",
-            )
-            inputs = inputs.to(self._rag_cuda_device)
-            max_new_tokens = int(os.environ.get("DOTS_OCR_MAX_NEW_TOKENS", "24000"))
-            generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
-            generated_ids_trimmed = [
-                out_ids[len(in_ids) :]
-                for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
-            ]
-            decoded = self.processor.batch_decode(
-                generated_ids_trimmed,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
-            )
-            return decoded[0] if decoded else ""
-
-    parser = ExplicitCudaDotsOCRParser(
-        num_thread=1,
-        dpi=int(os.environ.get("DOTS_OCR_DPI", "200")),
-        output_dir=os.environ.get("DOTS_OCR_OUTPUT_DIR", "/tmp/dots-ocr-output"),
-        min_pixels=_optional_int_env("DOTS_OCR_MIN_PIXELS"),
-        max_pixels=_optional_int_env("DOTS_OCR_MAX_PIXELS"),
-        use_hf=True,
-    )
-    _DOTS_OCR_PARSER_CACHE[cache_key] = parser
-    return parser
-
-
-def _resolve_dots_ocr_model_ref(model_id: str) -> str:
-    """HF repo id を local snapshot path へ解決し、remote code の相対 import を安定させる。"""
-    local_path = Path(model_id).expanduser()
-    if local_path.exists():
-        return str(local_path)
-    huggingface_hub = importlib.import_module("huggingface_hub")
-    return str(huggingface_hub.snapshot_download(model_id))
-
-
-def _ensure_flash_attn_importable_for_dots(attention_impl: str) -> None:
-    """Dots.OCR remote code の無条件 import を sdpa/eager 利用時だけ安全に満たす。"""
-    if attention_impl == "flash_attention_2":
-        return
-    if "flash_attn" in sys.modules:
-        return
-    try:
-        if importlib.util.find_spec("flash_attn") is not None:
-            return
-    except (ImportError, ValueError):
-        pass
-
-    fake_flash_attn = types.ModuleType("flash_attn")
-    fake_flash_attn.__spec__ = importlib.machinery.ModuleSpec("flash_attn", loader=None)
-    fake_flash_attn.__dict__["__version__"] = "0.0.0"
-
-    def _flash_attn_varlen_func(*_args: object, **_kwargs: object) -> object:
-        raise RuntimeError(
-            "dots_ocr_flash_attention_unavailable: set "
-            "DOTS_OCR_ATTENTION_IMPLEMENTATION=sdpa or install flash_attn"
-        )
-
-    fake_flash_attn.__dict__["flash_attn_varlen_func"] = _flash_attn_varlen_func
-    sys.modules["flash_attn"] = fake_flash_attn
-
-
-def _dots_ocr_markdown_files(result: object, output_dir: Path) -> list[Path]:
-    """Dots.OCR parse_file の戻り値と出力 directory から markdown path を収集する。"""
-    markdown_files: list[Path] = []
-    if isinstance(result, Sequence) and not isinstance(result, str | bytes | bytearray):
-        for item in result:
-            if isinstance(item, Mapping):
-                for key in ("md_content_path", "md_content_nohf_path"):
-                    value = item.get(key)
-                    if isinstance(value, str) and value:
-                        markdown_files.append(Path(value))
-    if not markdown_files:
-        markdown_files = sorted(output_dir.rglob("*.md"))
-    seen: set[Path] = set()
-    existing: list[Path] = []
-    for markdown_file in markdown_files:
-        resolved = markdown_file.resolve()
-        if resolved in seen or not markdown_file.exists():
-            continue
-        seen.add(resolved)
-        existing.append(markdown_file)
-    return existing
-
-
-def _env_enabled(name: str, *, default: bool) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.strip().lower() not in {"0", "false", "no", "off"}
-
-
-def _optional_int_env(name: str) -> int | None:
-    value = os.environ.get(name)
-    if value is None or not value.strip():
-        return None
-    return int(value)
-
-
 def _torch_dtype(torch: Any, dtype_name: str | None, *, error_prefix: str) -> object:
     """GPU OCR parser の dtype を明示的に解決する。未知値は実行時に誤設定として落とす。"""
     normalized = (dtype_name or "bfloat16").strip().lower()
@@ -1737,28 +1443,6 @@ def _torch_dtype(torch: Any, dtype_name: str | None, *, error_prefix: str) -> ob
             f"{error_prefix}_invalid_torch_dtype: set {error_prefix.upper()}_TORCH_DTYPE to "
             "bfloat16, float16, or float32"
         ) from exc
-
-
-def _ocr_engine_adapter_result(
-    backend: str,
-    source_bytes: bytes,
-    *,
-    source_profile: SourceProfile | None,
-    content_type: str,
-    runner: Callable[[Path], object],
-) -> ParserRegistryResult:
-    """GPU OCR engine の document/markdown 出力を共通抽出 schema へ再マップする。
-
-    GPU 上の実 OCR 実行(`runner`)以外は docling と同じ汎用 remap を再利用するため、
-    fixture(fake module)で remap 層だけを決定論テストできる。
-    """
-    with _temporary_source_file(source_bytes, source_profile, content_type) as path:
-        rendered = runner(path)
-    return remap_external_ocr_output(
-        backend,
-        rendered,
-        source_profile=source_profile,
-    )
 
 
 def remap_external_ocr_output(
@@ -1837,22 +1521,6 @@ def remap_external_ocr_output(
         parser_backend=backend,
         parser_version=version,
         template=template,
-    )
-
-
-def _dots_ocr_adapter_result(
-    source_bytes: bytes,
-    *,
-    source_profile: SourceProfile | None,
-    content_type: str,
-) -> ParserRegistryResult:
-    """Dots.OCR(GPU)の OCR 結果を共通抽出 schema へ再マップする。"""
-    return _ocr_engine_adapter_result(
-        "dots_ocr",
-        source_bytes,
-        source_profile=source_profile,
-        content_type=content_type,
-        runner=_run_dots_ocr,
     )
 
 
