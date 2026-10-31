@@ -508,10 +508,16 @@ jobs:
   # base と head の差分で確かめる（#1588）。lock / manifest が変わった PR だけ（約 10 秒）。high 以上の脆弱性で失敗する。
   # PR が触らない依存の advisory は dependency-audit-nightly.yml（pip-audit・npm audit）が毎晩検査する。
   # license は job の summary に出すだけ（allow / deny の一覧は決めていない）。
+  #
+  # private repository では GitHub Advanced Security が無いと action 自体が動かない（"Dependency review is not
+  # supported on this repository"）。public のときだけ実行し、private では skip する（#3）。private でも
+  # dependency-audit-nightly.yml の pip-audit・npm audit は毎晩走るので、依存の advisory の検査は残る。
   dependency-review:
     name: Dependency review
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.deps_manifest == 'true'
+    if: >-
+      github.event_name == 'pull_request' && needs.changes.outputs.deps_manifest == 'true'
+      && github.event.repository.visibility == 'public'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
