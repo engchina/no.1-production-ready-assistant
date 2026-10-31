@@ -17,7 +17,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.addInitScript(({ key, theme }) => {
         localStorage.setItem(key, JSON.stringify({ state: { theme }, version: 0 }));
       }, { key: "production-ready-nl2sql.ui", theme });
-      for (const route of ["/profiles", "/history", "/settings/appearance"]) {
+      for (const route of ["/profiles", "/history", "/settings/oci"]) {
         await page.goto(route);
         await expect(page.locator("main h1")).toBeVisible();
         await page.evaluate(() => document.fonts.ready);

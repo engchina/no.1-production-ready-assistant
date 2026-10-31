@@ -346,6 +346,8 @@ def _legacy_database() -> _FakeDatabase:
         ("role-b", "menu.plugins"),
         # 外部向けの MCP と API キーの削除（#1809）で消すコード。
         ("role-a", "menu.settings_api_keys"),
+        # 「外観と証明書」の画面の削除（#19）で消すコード（migration 018）。
+        ("role-b", "menu.settings_appearance"),
     }
     database.control_plane_items = {
         ("marketplace", "official"),

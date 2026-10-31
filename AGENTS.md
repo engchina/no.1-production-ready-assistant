@@ -12,7 +12,7 @@
 | CI の job・workflow・テストの書き方・ローカルの検証の範囲 | [docs/agents/ci.md](./docs/agents/ci.md) |
 | UI（画面・部品・lint・e2e） | [docs/agents/ui.md](./docs/agents/ui.md) と [ARCHITECTURE.md](./platform/docs/design-system/ARCHITECTURE.md) |
 | LLM への指示・`skills/`・MCP の instructions とツールの説明・Runtime の指示 | [docs/agents/prompts.md](./docs/agents/prompts.md) |
-| 配備（Terraform・Compute・Nginx・DB ユーザー・release） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
+| 配備（Terraform・Compute・DB ユーザー・release） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
 | 3 製品で同じ機能（システム設定・ナビ・API キー・アカウント・データの見え方・権限管理） | [docs/agents/shared-features.md](./docs/agents/shared-features.md) |
 | `.env` の変数・DB の object の名前 | [docs/agents/naming.md](./docs/agents/naming.md) |
 | backend の実装の標準 | [platform/docs/backend-standard.md](./platform/docs/backend-standard.md) |
@@ -98,9 +98,9 @@
 
 詳細は [docs/agents/deploy.md](./docs/agents/deploy.md)。
 
-- 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd + Nginx。Dockerfile・compose は持たない）。
+- 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd。Dockerfile・compose は持たない）。reverse proxy（Nginx など）と TLS の証明書は配備しない（置くかは利用者の選択。#19）。
 - **再配備は repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。**
-- Terraform stack は `terraform/stack/` に 1 つだけ。選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。Nginx の location は `platform/deploy/suite-nginx.sh` だけに書く。
+- Terraform stack は `terraform/stack/` に 1 つだけ。選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。
 - 3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない）で接続する。DB の新しい機能を使うときは付ける権限で足りるかを確かめる。release tag は `suite-v*` だけ。
 
 ## 共通の仕組みと設定・命名

@@ -284,6 +284,7 @@ def test_retired_permission_codes_are_not_in_catalog_or_manifest() -> None:
         "menu.plugins",
         "menu.settings_api_keys",
         "menu.settings_runtime_snapshot",
+        "menu.settings_appearance",
     )
     retired = set(RETIRED_PERMISSION_CODES)
     assert not retired & ALL_PERMISSION_CODES

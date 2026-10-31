@@ -18,7 +18,7 @@ const hermeticApiMiddleware: Connect.NextHandleFunction = (req, res) => {
 };
 
 /**
- * 画面の配信の基点（#1316）。1 台の Compute に 3 製品を置く配備では Nginx が RAG を `/rag/` の下で配信するため、
+ * 画面の配信の基点（#1316）。1 台の Compute に 3 製品を置く配備では前段の reverse proxy（利用者が置く。#19）が RAG を `/rag/` の下で配信するため、
  * `FRONTEND_BASE_PATH=/rag/ npm run build` で build する。未設定・空は `/`（ローカルの開発・e2e・製品ごとの配備）。
  * 前後の `/` はそろえる（`rag` → `/rag/`）。
  */

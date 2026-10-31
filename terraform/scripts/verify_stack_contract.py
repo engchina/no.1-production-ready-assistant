@@ -2,7 +2,7 @@
 """統合 OCI Resource Manager stack zip の入力契約と配備契約を検証する（#217）。
 
 1つの ADB を全製品で共有し、選んだ製品（RAG / NL2SQL / Agent）をすべて 1 台の Compute に入れる stack（#1316）の、
-Resource Manager フォーム・Terraform・cloud-init と、platform/deploy の suite の配備（Nginx の prefix・HTTPS）、
+Resource Manager フォーム・Terraform・cloud-init と、platform/deploy の suite の配備、
 各製品の init_script.sh / Settings との整合を確かめる。
 stdlib だけで動かす（CI と release workflow で追加依存なしに実行するため）。
 """
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import math
 import re
 import stat
 import sys
@@ -99,9 +98,6 @@ REMOVED_SINGLE_COMPUTE_INPUTS = (
 )
 # 各製品の backend の port（127.0.0.1。1 台の Compute で衝突しない。ローカルの開発と同じ。#1316）。
 BACKEND_PORTS = {"rag": "8000", "nl2sql": "8010", "agent": "8020"}
-# 証明書の発行者・サーバーの subject は固定（Terraform の変数にしない。#1316）。
-TLS_CA_SUBJECT = "/C=JP/ST=Tokyo/L=Minato-ku/O=Oracle/OU=Production Ready Suite/CN=Production Ready Root CA"
-TLS_SERVER_SUBJECT_PREFIX = "/C=JP/ST=Tokyo/L=Minato-ku/O=Oracle/OU=Production Ready Suite/CN="
 SUITE_DEPLOY_DIR = REPO_ROOT / "platform" / "deploy"
 # 3製品の構成管理者（system_admin。共通 .env の PLATFORM_ADMIN_*）のパスワードは共通の入力（#214 / #215）。
 # 製品を選ばないとフォームから消えるため、Resource Manager では任意入力にして Terraform の precondition で必須にする。
@@ -1093,21 +1089,18 @@ def _verify_app_db_user(schema: str, variables: str, adb: str, locals_source: st
 
 
 def _verify_reserved_ports(locals_source: str) -> None:
-    """公開の port に使えない port の一覧を Terraform（locals.tf）と配備のスクリプトでそろえる（#1316）。"""
-    suite_nginx = (SUITE_DEPLOY_DIR / "suite-nginx.sh").read_text(encoding="utf-8")
+    """公開の port に使えない port の一覧（Terraform の locals.tf。#1316）。配備のスクリプトの側の一覧は、Nginx の
+    配備（suite-nginx.sh）と一緒に削除した（#19）。"""
     tf_ports = re.search(r"(?m)^  reserved_ports = \[([0-9, ]+)\]$", locals_source)
     tf_ranges = re.findall(r"\[(\d+), (\d+)\]", (re.search(r"(?m)^  reserved_port_ranges = (.*)$", locals_source) or [""])[0])
-    sh_ports = re.search(r"(?m)^SUITE_RESERVED_PORTS=\(([0-9 ]+)\)$", suite_nginx)
-    sh_ranges = re.findall(r'"(\d+)-(\d+)"', (re.search(r"(?m)^SUITE_RESERVED_PORT_RANGES=\((.*)\)$", suite_nginx) or [""])[0])
-    if tf_ports is None or sh_ports is None:
-        raise AssertionError("reserved ports are missing from locals.tf or platform/deploy/suite-nginx.sh")
+    if tf_ports is None:
+        raise AssertionError("reserved ports are missing from locals.tf")
     # 公開する port は 1 つだけ（HTTPS が on なら https_port、off なら http_port。#1638）。
     if "public_ports = var.https_enabled ? [var.https_port] : [var.http_port]" not in locals_source:
         raise AssertionError("locals.tf public_ports must be [https_port] when HTTPS is on and [http_port] when off (#1638)")
     tf_set = {int(port) for port in tf_ports.group(1).split(",")}
-    sh_set = {int(port) for port in sh_ports.group(1).split()}
-    if tf_set != sh_set or sorted(tf_ranges) != sorted(sh_ranges) or not tf_ranges:
-        raise AssertionError(f"reserved ports differ: Terraform {sorted(tf_set)} {tf_ranges} / suite {sorted(sh_set)} {sh_ranges}")
+    if not tf_ranges:
+        raise AssertionError("reserved port ranges are missing from locals.tf")
     # frontend の開発・プレビューの port（vite。RAG 3000・NL2SQL 3001・Agent 3002）も拒む（#1747）。
     required = {22, 3000, 3001, 3002, *(int(port) for port in BACKEND_PORTS.values())}
     if not required <= tf_set:
@@ -1124,19 +1117,18 @@ def _verify_reserved_ports(locals_source: str) -> None:
 
 
 def _verify_suite_deploy(init_sources: dict[str, str]) -> None:
-    """platform/deploy の 1 台の Compute の配備（Nginx の prefix・HTTPS・証明書。#1316）。"""
+    """platform/deploy の 1 台の Compute の配備（#1316）。Nginx と TLS の証明書は配備しない（#19）。"""
     suite_init = (SUITE_DEPLOY_DIR / "suite-init.sh").read_text(encoding="utf-8")
-    suite_nginx = (SUITE_DEPLOY_DIR / "suite-nginx.sh").read_text(encoding="utf-8")
-    suite_tls = (SUITE_DEPLOY_DIR / "suite-tls.sh").read_text(encoding="utf-8")
-    # backend の port は製品の init_script.sh・Nginx・Agent の MCP の URL で同じ値（衝突しない）。
+    suite_products = (SUITE_DEPLOY_DIR / "suite-products.sh").read_text(encoding="utf-8")
+    # backend の port は製品の init_script.sh・suite・Agent の MCP の URL で同じ値（衝突しない）。
     if len(set(BACKEND_PORTS.values())) != len(BACKEND_PORTS):
         raise AssertionError("backend ports must differ on the single Compute")
     for product, port in BACKEND_PORTS.items():
         if f'BACKEND_PORT="{port}"' not in init_sources[product]:
             raise AssertionError(f"{product}/init_script.sh BACKEND_PORT must be {port}")
         name = f"SUITE_{product.upper()}_BACKEND_PORT"
-        if f'{name}="${{{name}:-{port}}}"' not in suite_nginx:
-            raise AssertionError(f"platform/deploy/suite-nginx.sh must proxy {product} to 127.0.0.1:{port}")
+        if f'{name}="${{{name}:-{port}}}"' not in suite_products:
+            raise AssertionError(f"platform/deploy/suite-products.sh must use 127.0.0.1:{port} for {product}")
     # RAG の前処理 / parser の port（127.0.0.1:18010〜）は backend の port と重ならない。
     rag_systemd = (REPO_ROOT / "rag" / "scripts" / "rag-systemd.sh").read_text(encoding="utf-8")
     block = re.search(r"(?ms)^RAG_MICROSERVICES=\(\n(.*?)^\)$", rag_systemd)
@@ -1146,245 +1138,24 @@ def _verify_suite_deploy(init_sources: dict[str, str]) -> None:
     overlap = sorted(set(service_ports) & set(BACKEND_PORTS.values()))
     if overlap or len(set(service_ports)) != len(service_ports):
         raise AssertionError(f"RAG service ports must be unique and differ from the backend ports: {overlap}")
-    # Nginx の upload の上限は RAG の backend の RAG_MAX_UPLOAD_BYTES の既定値（rag/backend/app/config.py）+ 余白。
-    rag_config = (REPO_ROOT / "rag" / "backend" / "app" / "config.py").read_text(encoding="utf-8")
-    default = re.search(r"max_upload_bytes: int = Field\(default=([0-9 *]+),", rag_config)
-    default_bytes = math.prod(int(part) for part in default.group(1).split("*")) if default else None
-    if default_bytes is None or f"RAG_DEFAULT_MAX_UPLOAD_BYTES={default_bytes}" not in suite_init:
-        raise AssertionError("platform/deploy/suite-init.sh RAG_DEFAULT_MAX_UPLOAD_BYTES must match rag/backend/app/config.py")
-    # 単独の配備（製品ごとの Nginx の site）は製品の init_script.sh に残さない。
+    # 単独の配備（製品ごとの Nginx の site）は製品の init_script.sh に残さない。suite も Nginx を配備しない（#19）。
     for product, source in init_sources.items():
         leftovers = [name for name in REMOVED_STANDALONE_DEPLOY if name in source]
         if leftovers:
             raise AssertionError(f"{product}/init_script.sh must not deploy standalone (#1316): {leftovers}")
-    _require_all(
-        suite_nginx,
-        [
-            "listen ${https_listen} ssl http2 default_server;",
-            "ssl_protocols TLSv1.2 TLSv1.3;",
-            "location = /platform/ca.crt {",
-            "default_type application/x-x509-ca-cert;",
-            'filename="production-ready-root-ca.crt"',
-            "location /platform/ {",
-            "return 302 ${root_target};",
-            "printf '/agent/\\n'",
-            "limit_req zone=pr_login burst=30 nodelay;",
-            "proxy_buffering off;",
-        ],
-        context="platform/deploy/suite-nginx.sh",
-    )
-    if "Strict-Transport-Security" in suite_nginx:
-        raise AssertionError("HSTS must not be sent (IP certificate signed by a private CA)")
-    # HTTPS が on のときは http_port を listen せず、HTTP から HTTPS へ転送しない（#1638）。
-    if "return 301 https://" in suite_nginx:
-        raise AssertionError("platform/deploy/suite-nginx.sh must not redirect http_port to HTTPS (#1638)")
-    if "ca.key" in suite_nginx:
-        raise AssertionError("the CA private key must never be served")
-    _require_all(
-        suite_tls,
-        [
-            f'SUITE_TLS_CA_SUBJECT="{TLS_CA_SUBJECT}"',
-            f'SUITE_TLS_SERVER_SUBJECT_PREFIX="{TLS_SERVER_SUBJECT_PREFIX}"',
-            "SUITE_TLS_KEY_BITS=3072",
-            "SUITE_TLS_CA_DAYS=3650",
-            "SUITE_TLS_SERVER_DAYS=397",
-            'chmod 0600 "${dir}/ca.key" "${dir}/server.key"',
-        ],
-        context="platform/deploy/suite-tls.sh",
-    )
-    if "No.1" in TLS_CA_SUBJECT + TLS_SERVER_SUBJECT_PREFIX:
-        raise AssertionError("the certificate subject must not contain No.1")
+    for removed in ("suite-nginx.sh", "suite-tls.sh", "configure_nginx", "configure_tls", "TLS_RENEW_UNIT", "SUITE_SITE_NAME"):
+        if removed in suite_init:
+            raise AssertionError(f"platform/deploy/suite-init.sh must not deploy Nginx or TLS certificates (#19): {removed}")
     _require_all(
         suite_init,
         [
             '"FRONTEND_BASE_PATH=/${product}/"',
             '"BACKEND_ENV_SOURCE=${PROPS_DIR}/${product}.backend.env"',
             '"SERVICE_USER=${APP_USER}"',
-            "suite_tls_ensure",
-            "suite_nginx_site",
-            'local site="${NGINX_CONF_DIR}/${SUITE_SITE_NAME}.conf"',
-            'install -m 0644 "${template_dir}/nginx.conf" "${NGINX_MAIN_CONF}"',
+            'source "${SUITE_DEPLOY_DIR}/suite-products.sh"',
         ],
         context="platform/deploy/suite-init.sh",
     )
-
-
-def _shell_scalar(source: str, name: str, *, context: str) -> str:
-    """`NAME=value` か `NAME="${NAME:-value}"` の値（既定値）。"""
-    match = re.search(rf'(?m)^{name}=(?:"\$\{{{name}:-([^}}]+)\}}"|([^\s#]+))$', source)
-    if match is None:
-        raise AssertionError(f"{context}: {name} not found")
-    return match.group(1) or match.group(2)
-
-
-def _shell_array(source: str, name: str, *, context: str) -> list[str]:
-    match = re.search(rf"(?ms)^{name}=\((.*?)^\)$", source)
-    if match is None:
-        raise AssertionError(f"{context}: {name} not found")
-    return re.findall(r"'([^']+)'", match.group(1))
-
-
-def _python_number(source: str, pattern: str, *, context: str) -> float:
-    match = re.search(pattern, source)
-    if match is None:
-        raise AssertionError(f"{context}: {pattern} not found")
-    return float(math.prod(float(part.replace("_", "")) for part in match.group(1).split("*")))
-
-
-def _route_paths(module: Path, prefix: str = "") -> set[str]:
-    """FastAPI の route の path（`@router.<method>(path)`。module の str 定数と APIRouter の prefix を解く）。"""
-    tree = ast.parse(module.read_text(encoding="utf-8"))
-    constants: dict[str, str] = {}
-
-    def value(node: ast.AST) -> str | None:
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return node.value
-        if isinstance(node, ast.Name):
-            return constants.get(node.id)
-        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-            left, right = value(node.left), value(node.right)
-            return None if left is None or right is None else left + right
-        return None
-
-    router_prefix = ""
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            name = node.targets[0].id
-            if isinstance(node.value, ast.Call) and getattr(node.value.func, "id", "") == "APIRouter":
-                if name == "router":
-                    router_prefix = next((value(k.value) or "" for k in node.value.keywords if k.arg == "prefix"), "")
-            elif (text := value(node.value)) is not None:
-                constants[name] = text
-    paths: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for decorator in node.decorator_list:
-            if (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and getattr(decorator.func.value, "id", "") == "router"
-                and decorator.args
-                and (path := value(decorator.args[0])) is not None
-            ):
-                paths.add(prefix + router_prefix + path)
-    return paths
-
-
-def _rag_route_paths() -> set[str]:
-    """RAG の /api の下の route（app/api/router.py の include_router の prefix を付ける）。"""
-    api_dir = REPO_ROOT / "rag" / "backend" / "app" / "api"
-    tree = ast.parse((api_dir / "router.py").read_text(encoding="utf-8"))
-    paths: set[str] = set()
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "include_router" and node.args):
-            continue
-        target = node.args[0]
-        if not (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)):
-            continue
-        module = api_dir / "routes" / f"{target.value.id}.py"
-        prefix = next(
-            (k.value.value for k in node.keywords if k.arg == "prefix" and isinstance(k.value, ast.Constant)), ""
-        )
-        if module.exists():
-            paths |= _route_paths(module, prefix)
-    return paths
-
-
-def _verify_nginx_limits() -> None:
-    """Nginx の時間切れ・本文の上限・ストリームの値を、3 製品の backend の値と照合する（#1597）。"""
-    context = "platform/deploy/suite-nginx.sh"
-    suite_nginx = (SUITE_DEPLOY_DIR / "suite-nginx.sh").read_text(encoding="utf-8")
-    suite_init = (SUITE_DEPLOY_DIR / "suite-init.sh").read_text(encoding="utf-8")
-    rag_config = (REPO_ROOT / "rag" / "backend" / "app" / "config.py").read_text(encoding="utf-8")
-    nl2sql_settings = (REPO_ROOT / "nl2sql" / "backend" / "app" / "settings.py").read_text(encoding="utf-8")
-    agent_settings = (REPO_ROOT / "agent" / "backend" / "app" / "settings.py").read_text(encoding="utf-8")
-    agent_router_path = REPO_ROOT / "agent" / "backend" / "app" / "features" / "agent" / "router.py"
-    agent_router = agent_router_path.read_text(encoding="utf-8")
-    nl2sql_router_path = REPO_ROOT / "nl2sql" / "backend" / "app" / "features" / "nl2sql" / "router.py"
-
-    # 本文の上限: backend の <製品>_MAX_UPLOAD_BYTES の既定値 + 余白（suite-init.sh と suite-nginx.sh の既定）。
-    margin_mib = int(_shell_scalar(suite_init, "NGINX_UPLOAD_MARGIN_MIB", context="platform/deploy/suite-init.sh"))
-    upload_defaults = {
-        "rag": _python_number(rag_config, r"max_upload_bytes: int = Field\(default=([0-9 *]+),", context="rag config"),
-        "nl2sql": _python_number(nl2sql_settings, r"max_upload_bytes: int = ([0-9 *]+)\n", context="nl2sql settings"),
-        "agent": _python_number(agent_settings, r"max_upload_bytes: int = ([0-9 *]+)\n", context="agent settings"),
-    }
-    for product, default_bytes in upload_defaults.items():
-        name = f"{product.upper()}_DEFAULT_MAX_UPLOAD_BYTES"
-        if f"{name}={int(default_bytes)}" not in suite_init:
-            raise AssertionError(f"platform/deploy/suite-init.sh {name} must match the {product} backend default")
-        expected = f"{math.ceil(default_bytes / 1048576) + margin_mib}M"
-        actual = _shell_scalar(suite_nginx, f"SUITE_{product.upper()}_CLIENT_MAX_BODY_SIZE", context=context)
-        if actual != expected:
-            raise AssertionError(f"{context}: {product} client_max_body_size must be {expected} (backend + margin): {actual}")
-
-    # 時間切れ: 既定は 600 秒。SSE の heartbeat はそれより十分短い（間が空かない）。
-    default_timeout = float(_shell_scalar(suite_nginx, "SUITE_PROXY_TIMEOUT_SECONDS", context=context))
-    chat_progress = (
-        REPO_ROOT / "platform" / "packages" / "backend_core" / "src" / "pr_backend_core" / "chat_progress.py"
-    ).read_text(encoding="utf-8")
-    heartbeats = {
-        "pr_backend_core.chat_progress": _python_number(
-            chat_progress, r"(?m)^CHAT_PROGRESS_SSE_HEARTBEAT_SECONDS = ([0-9.]+)", context="chat_progress"
-        ),
-        "rag chat SSE": _python_number(
-            (REPO_ROOT / "rag" / "backend" / "app" / "api" / "routes" / "chat.py").read_text(encoding="utf-8"),
-            r"(?m)^SSE_HEARTBEAT_SECONDS = ([0-9.]+)",
-            context="rag chat",
-        ),
-        "agent run SSE": _python_number(
-            (REPO_ROOT / "agent" / "backend" / "app" / "features" / "agent" / "runtime.py").read_text(encoding="utf-8"),
-            r"idle_timeout_seconds: float = ([0-9.]+)",
-            context="agent runtime",
-        ),
-    }
-    for name, seconds in heartbeats.items():
-        if not 0 < seconds * 4 <= default_timeout:
-            raise AssertionError(f"{name} heartbeat {seconds}s must be well below proxy_read_timeout {default_timeout}s")
-
-    # RAG: 回答の通しの上限（上限 600 秒）< 画面の待ち時間（630 秒）< Nginx。
-    rag_timeout = float(_shell_scalar(suite_nginx, "SUITE_RAG_LONG_API_TIMEOUT_SECONDS", context=context))
-    rag_answer_max = _python_number(
-        rag_config, r"(?m)^OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = ([0-9.]+)", context="rag config"
-    )
-    rag_api = (REPO_ROOT / "rag" / "frontend" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
-    for name in ("ANSWER_GENERATION_TIMEOUT_MS",):
-        frontend_seconds = _python_number(rag_api, rf"export const {name} = ([0-9_]+);", context="rag api.ts") / 1000
-        if not rag_answer_max < frontend_seconds < rag_timeout:
-            raise AssertionError(
-                f"RAG {name} ({frontend_seconds}s) must be between the answer limit ({rag_answer_max}s) "
-                f"and Nginx ({rag_timeout}s)"
-            )
-    # NL2SQL: LLM 1 回の timeout × 試行の回数（再試行 + 1。timeout も再試行する）+ 60 秒。
-    nl2sql_timeout = float(_shell_scalar(suite_nginx, "SUITE_NL2SQL_LONG_API_TIMEOUT_SECONDS", context=context))
-    llm_seconds = _python_number(
-        nl2sql_settings, r"oci_enterprise_ai_timeout_seconds: float = ([0-9.]+)", context="nl2sql settings"
-    )
-    llm_retries = _python_number(
-        nl2sql_settings, r"oci_enterprise_ai_max_retries: int = ([0-9]+)", context="nl2sql settings"
-    )
-    if nl2sql_timeout != llm_seconds * (llm_retries + 1) + 60:
-        raise AssertionError(
-            f"{context}: SUITE_NL2SQL_LONG_API_TIMEOUT_SECONDS must be {llm_seconds} x {llm_retries + 1} + 60"
-        )
-    # Agent: 外部 MCP の timeout の上限 + 60 秒（tools/invoke はツールの応答を同期で待つ）。
-    agent_timeout = float(_shell_scalar(suite_nginx, "SUITE_AGENT_LONG_API_TIMEOUT_SECONDS", context=context))
-    mcp_max = _python_number(agent_router, r"(?m)^_MCP_TIMEOUT_MAX_SECONDS = ([0-9.]+)", context="agent router")
-    if agent_timeout != mcp_max + 60:
-        raise AssertionError(f"{context}: SUITE_AGENT_LONG_API_TIMEOUT_SECONDS must be {mcp_max} + 60")
-
-    # 長い待ち時間の API は、今の backend の route にある（route の名前が変わったら気づく）。
-    routes = {
-        "rag": _rag_route_paths(),
-        "nl2sql": _route_paths(nl2sql_router_path),
-        "agent": _route_paths(agent_router_path),
-    }
-    for product, paths in routes.items():
-        patterns = {re.sub(r"\{[^}]+\}", "[^/]+", path) for path in paths}
-        for path in _shell_array(suite_nginx, f"SUITE_{product.upper()}_LONG_API_PATHS", context=context):
-            if f"/{path}" not in patterns:
-                raise AssertionError(f"{context}: {product} long API path /api/{path} is not a backend route")
 
 
 def _verify_init_scripts(init_sources: dict[str, str]) -> None:
@@ -1500,7 +1271,6 @@ def verify(package_path: Path) -> None:
             raise AssertionError(f"removed per-product Compute input / resource remains (#1316): {removed}")
     _verify_init_scripts(init_sources)
     _verify_suite_deploy(init_sources)
-    _verify_nginx_limits()
     _verify_reserved_ports(sources["locals.tf"])
     _verify_no_own_container_images()
     deploy_sources = {
@@ -1713,19 +1483,7 @@ def _verify_oracle_linux(
         scripts["platform/deploy/suite-init.sh"],
         [
             f'APP_USER="${{APP_USER:-{COMPUTE_USER}}}"',
-            'NGINX_MODULE_STREAM="1.24"',
-            'suite_dnf module enable "nginx:${NGINX_MODULE_STREAM}"',
-            "systemctl enable --now firewalld",
-            'firewall-cmd --permanent --add-port="${port}/tcp"',
-            # HTTPS が on なら、以前に開けた http_port を閉じる（#1638）。
-            'firewall-cmd --permanent --query-port="${http}/tcp"',
-            'firewall-cmd --permanent --remove-port="${http}/tcp"',
-            "firewall-cmd --reload",
-            "setsebool -P httpd_can_network_connect 1",
             'semanage fcontext -a -t usr_t "${SUITE_REPO_DIR}(/.*)?"',
-            'semanage fcontext -a -t httpd_sys_content_t "${SUITE_REPO_DIR}/${product}/frontend/dist(/.*)?"',
-            'semanage fcontext -a -t cert_t "${SSL_DIR}(/.*)?"',
-            'semanage port -a -t http_port_t -p tcp "${port}"',
             # 開発用の worktree と repository の中の一時ファイルは辿らない（#2258）。
             'restorecon -R "${excludes[@]}" "${SUITE_REPO_DIR}"',
             'source "${SUITE_DEPLOY_DIR}/suite-repo.sh"',
@@ -1735,17 +1493,9 @@ def _verify_oracle_linux(
     # 製品の venv・systemd の unit を作る前に、SELinux の context の規則を置く。
     _require_in_order(
         scripts["platform/deploy/suite-init.sh"],
-        ["  install_os_packages\n", "  configure_firewall\n", "  configure_selinux\n", "  deploy_products\n"],
+        ["  install_os_packages\n", "  configure_selinux\n", "  deploy_products\n"],
         context="platform/deploy/suite-init.sh main order (Oracle Linux)",
     )
-    template = (REPO_ROOT / "platform" / "templates" / "nginx" / "nginx.conf").read_text(encoding="utf-8")
-    _require_all(
-        template,
-        ["user nginx;", "include /usr/share/nginx/modules/*.conf;", "include /etc/nginx/conf.d/*.conf;"],
-        context="platform/templates/nginx/nginx.conf",
-    )
-    if re.search(r"(?m)^\s*(?:server|listen)\b", template):
-        raise AssertionError("platform/templates/nginx/nginx.conf must not keep the package default server")
     packages = re.search(r"(?ms)^packages:\n(.*?)^\S", bootstrap)
     if packages is None or "  - curl\n" in packages.group(1):
         raise AssertionError("cloud-init packages must not list curl (curl-minimal of the Oracle Linux image conflicts)")

@@ -182,7 +182,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/upload-storage" },
   { path: "/settings/model" },
   { path: "/settings/database" },
-  { path: "/settings/appearance" },
 ];
 
 /**

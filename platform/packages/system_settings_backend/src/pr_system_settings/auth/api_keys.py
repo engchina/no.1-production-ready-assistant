@@ -470,8 +470,8 @@ class ApiKeysListData(BaseModel):
 class MyApiKeysListData(ApiKeysListData):
     """自分のキーの一覧。画面の接続先に出す公開の URL も返す（#1870）。"""
 
-    # 配備（`platform/deploy/suite-init.sh`）が書く `PLATFORM_PUBLIC_BASE_URL`
-    # （例 `https://<公開 IP>`）。
+    # 利用者が `platform/.env` に書く `PLATFORM_PUBLIC_BASE_URL`（前段の reverse proxy の URL。
+    # 例 `https://<公開 IP>`。#19 で配備は書かなくなった）。
     # 未設定・不正な値は空（画面は今開いている URL だけを出す）。
     public_base_url: str = ""
 

@@ -701,6 +701,36 @@ async function mockDeepSecDataEntitlements(page: Page, rows: unknown[] = [system
   await page.route("**/api/security/deepsec/data-entitlements", (route) => fulfill(route, rows));
 }
 
+// DB に依存しない共有のシステム設定の画面（OCI 認証）を mock で開く。
+async function mockOciSettingsPage(page: Page) {
+  await page.route("**/api/settings/oci", (route) =>
+    fulfill(route, {
+      config_file: "~/.oci/config",
+      profile: "DEFAULT",
+      user: "ocid1.user.oc1..example",
+      fingerprint: "12:34:56:78:90:ab:cd:ef",
+      tenancy: "ocid1.tenancy.oc1..example",
+      region: "ap-osaka-1",
+      key_file: "~/.oci/oci_api_key.pem",
+      key_file_exists: true,
+      config_file_exists: true,
+      config_source: "runtime",
+    })
+  );
+  await page.route("**/api/settings/upload-storage", (route) =>
+    fulfill(route, {
+      backend: "local",
+      local_storage_dir: "/u01/data/production-ready-nl2sql",
+      object_storage_region: "ap-osaka-1",
+      object_storage_namespace: "exampletenancy",
+      object_storage_bucket: "nl2sql-originals",
+      readiness: "ok",
+      max_upload_bytes: 104857600,
+      config_source: "runtime",
+    })
+  );
+}
+
 async function mockDeepSecTargetObjects(page: Page) {
   await page.route("**/api/security/deepsec/target-objects?*", (route) =>
     fulfill(route, {
@@ -731,11 +761,13 @@ test("ローカル DEBUG はログインせず SYSTEM_ADMIN として入り、�
     })
   );
 
-  await page.goto("/settings/appearance");
+  await mockOciSettingsPage(page);
+
+  await page.goto("/settings/oci");
 
   // 375px ではナビがドロワー（#367）。開いてから読む。
   const sidebar = await openSidebarNav(page);
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/oci$/);
   await expect(page.getByRole("heading", { name: "システムにログイン" })).toHaveCount(0);
   await expect(
     sidebar.getByRole("status", {
@@ -763,28 +795,29 @@ test("ローカル DEBUG はログインせず SYSTEM_ADMIN として入り、�
   expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
 });
 
-test("外観と証明書のページは専用権限だけで表示でき、権限なしでは直達できない", async ({ page }) => {
+test("OCI 認証のページは専用権限だけで表示でき、権限なしでは直達できない", async ({ page }) => {
   await mockDatabaseGateReady(page);
+  await mockOciSettingsPage(page);
   await page.unroute("**/api/auth/me");
   await page.route("**/api/auth/me", (route) =>
     fulfill(route, {
       ...systemAdminMe,
-      user_uuid: "appearance-viewer",
-      login_user_id: "appearance.viewer",
-      display_name: "外観閲覧ユーザー",
-      role_codes: ["APPEARANCE_VIEWER"],
+      user_uuid: "oci-settings-viewer",
+      login_user_id: "oci.settings.viewer",
+      display_name: "OCI 認証担当ユーザー",
+      role_codes: ["OCI_SETTINGS_VIEWER"],
       is_system_admin: false,
-      permissions: ["menu.settings_appearance"],
+      permissions: ["menu.settings_oci"],
       password_change_allowed: true,
     })
   );
 
   await page.goto("/");
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/oci$/);
+  await expect(page.getByRole("heading", { name: "OCI 認証設定", level: 1 })).toBeVisible();
   // 375px ではナビがドロワー（#367）。開いてから読む。
   const sidebar = await openSidebarNav(page);
-  await expect(sidebar.getByRole("link", { name: "外観と証明書" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "OCI 認証" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "SQL 生成" })).toHaveCount(0);
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoPageHorizontalScroll(page);
@@ -803,7 +836,7 @@ test("外観と証明書のページは専用権限だけで表示でき、権�
     })
   );
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/oci");
   await expect(page.getByRole("heading", { name: "この機能を利用する権限がありません" })).toBeVisible();
 });
 
@@ -2927,10 +2960,10 @@ test("ロール管理はテーブル一覧と詳細で表示し、権限の選�
   await mockDatabaseGateReady(page);
   const permissionRows = [
     {
-      code: "menu.settings_appearance",
+      code: "menu.settings_oci",
       group: "システム設定",
-      label: "外観と証明書",
-      description: "外観と証明書を表示し、関連操作を利用できます。",
+      label: "OCI 認証",
+      description: "OCI 認証を表示し、関連操作を利用できます。",
       implies: [],
     },
     {
@@ -3040,12 +3073,12 @@ test("ロール管理はテーブル一覧と詳細で表示し、権限の選�
   await expect(page.getByText("ダッシュボード表示", { exact: true })).toHaveCount(0);
   await expect(page.getByText("security.users.view", { exact: true })).toHaveCount(0);
   await expect(page.getByText("security.users.manage", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: /外観と証明書/ })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /OCI 認証/ })).toBeVisible();
   const permissionBulkActions = page.getByTestId("security-roles-permission-selection-actions");
   await expect(permissionBulkActions.getByRole("button", { name: "すべて選択" })).toBeEnabled();
   await expect(permissionBulkActions.getByRole("button", { name: "選択をすべて解除" })).toBeEnabled();
   await permissionBulkActions.getByRole("button", { name: "すべて選択" }).click();
-  await expect(page.getByRole("checkbox", { name: /外観と証明書/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /OCI 認証/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /ユーザー管理/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /^ロール管理/ })).toBeChecked();
   // 機能の一覧は左のナビのグループ・名前にそろえる（Issue 567）。backend のグループ「セキュリティ管理」・

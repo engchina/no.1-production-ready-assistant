@@ -8,7 +8,7 @@ const MISSING_BACKEND_URL_WARNING =
   "[nl2sql] BACKEND_URL が未設定のため /api を proxy せず 404 を返します（hermetic）。backend に接続する場合は BACKEND_URL=http://127.0.0.1:8010 npm run dev のように明示してください。";
 
 /**
- * 配信のパスの前置き（#1316）。1 台の Compute で 3 製品を Nginx の `/rag/` `/nl2sql/` `/agent/` に分けて
+ * 配信のパスの前置き（#1316）。1 台の Compute で 3 製品を前段の reverse proxy（利用者が置く。#19）の `/rag/` `/nl2sql/` `/agent/` に分けて
  * 配信するときに、build の環境変数 `FRONTEND_BASE_PATH=/nl2sql/` で渡す。未設定・空なら `/`（今までどおり）。
  * 先頭と末尾の `/` は補う（`nl2sql` → `/nl2sql/`）。dev サーバ（e2e を含む）は `/` のまま動かす。
  */

@@ -143,9 +143,6 @@ url="${*: -1}"
 if [ "${FAIL_STAGE:-}" = "backend-health" ] && [ "${url}" = "${BACKEND_HEALTH_URL}" ]; then
   exit 1
 fi
-if [ "${FAIL_STAGE:-}" = "public-health" ] && [ "${url}" = "${PUBLIC_HEALTH_URL}" ]; then
-  exit 1
-fi
 exit 0
 EOF
 
@@ -215,7 +212,6 @@ run_case() {
     FAIL_STAGE="${fail_stage}" \
     LOCK_FILE="${case_dir}/update.lock" \
     BACKEND_HEALTH_URL="http://backend.test/api/health" \
-    PUBLIC_HEALTH_URL="http://public.test/api/health" \
     HEALTHCHECK_TIMEOUT_SECONDS=0 \
     HEALTHCHECK_INTERVAL_SECONDS=0 \
     "${UPDATE_SCRIPT}" "${args[@]}"
@@ -471,7 +467,7 @@ test_health_retry_logging() (
   esac
 )
 
-for health_label in backend public; do
+for health_label in backend; do
   for health_scenario in immediate recovering refused http-error request-timeout; do
     test_health_retry_logging "${health_label}" "${health_scenario}"
   done
@@ -510,7 +506,10 @@ fi
 grep -Fq 'uv|' "${repair_log}"
 grep -Fq 'nl2sql_system_schema --initialize' "${repair_log}"
 grep -Fq 'app_security_migrate --apply --skip-bootstrap' "${repair_log}"
-grep -Fq 'curl|-fsS --max-time 5 http://public.test/api/health' "${repair_log}"
+grep -Fq 'curl|-fsS --max-time 5 http://backend.test/api/health' "${repair_log}"
+if grep -Fq 'public.test' "${repair_log}"; then
+  fail_test "--repair-only checked a reverse proxy"
+fi
 test -f "$(find "${repair_case}/recovery" -name backend.env -print -quit)"
 test -f "$(find "${repair_case}/recovery" -name platform.env -print -quit)"
 test "$(stat -c %a "${repair_case}")" = 775
@@ -529,7 +528,6 @@ grep -Fq 'systemctl|enable production-ready-nl2sql-backend.service' "${success_l
 grep -Fq 'systemctl|restart production-ready-nl2sql-backend.service' "${success_log}"
 grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' "${success_log}"
 grep -Fq 'curl|-fsS --max-time 5 http://backend.test/api/health' "${success_log}"
-grep -Fq 'curl|-fsS --max-time 5 http://public.test/api/health' "${success_log}"
 assert_before '^uv\|.*sync --locked --no-dev' '^uv\|.*compileall -q app' "${success_log}"
 assert_before 'compileall -q app' '^npm\|.*no.1-production-ready-suite/platform.*\|ci$' "${success_log}"
 assert_before '^npm\|.*no.1-production-ready-suite/nl2sql/frontend.*run build' '^sudo\|-n -- mktemp -d .*/recovery/' "${success_log}"
@@ -538,7 +536,6 @@ assert_before '^systemctl\|stop production-ready-nl2sql-backend.service' \
   "^sudo\\|-n -- chown root:$(id -gn) ${success_case}$" "${success_log}"
 assert_before 'nl2sql_system_schema --initialize' 'systemctl\|restart production-ready-nl2sql-backend.service' "${success_log}"
 assert_before 'curl\|.*backend.test' 'systemctl\|restart .*worker' "${success_log}"
-assert_before 'systemctl\|is-active --quiet production-ready-nl2sql-ontology-worker.service' 'curl\|.*public.test' "${success_log}"
 test ! -e "${success_case}/must-not-run"
 
 for failure_stage in backend-sync frontend-build; do
@@ -560,17 +557,6 @@ for failure_stage in system-migration security-migration backend-health worker-r
   assert_old_frontend "${failure_case}"
   assert_degraded "${failure_case}/commands.log"
 done
-
-public_health_case="$(make_case public-health)"
-if run_case "${public_health_case}" "" public-health; then
-  fail_test "public-health unexpectedly succeeded"
-fi
-assert_old_frontend "${public_health_case}"
-if grep -Fq 'systemctl|disable --now' "${public_health_case}/commands.log"; then
-  fail_test "public health failure disabled healthy workers"
-fi
-grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' \
-  "${public_health_case}/commands.log"
 
 wallet_override_case="$(make_case wallet-override)"
 printf 'PLATFORM_ORACLE_WALLET_DIR=%s/other-wallet\n' "${wallet_override_case}" > \

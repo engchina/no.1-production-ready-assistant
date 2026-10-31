@@ -8,8 +8,8 @@
 - Oracle Autonomous AI Database を **1つ**（新規作成、または既存 ADB の選択）と、その Wallet。選んだ製品すべてで共有する
 - OCI Compute を **1台だけ**（Oracle Linux 9。ログインのユーザーは `opc`。#1316・#1611）。選んだ製品（`deploy_rag` / `deploy_nl2sql` / `deploy_agent`）をすべてこの 1 台に入れる
 - Compute の cloud-init。suite monorepo を1回 clone し、[`platform/deploy/suite-init.sh`](../platform/deploy/suite-init.sh) が
-  選んだ製品の `init_script.sh`（[`rag/`](../rag/init_script.sh) / [`nl2sql/`](../nl2sql/init_script.sh) / [`agent/`](../agent/init_script.sh)）を順に呼び、
-  Nginx の site（製品の path の prefix と HTTPS）を 1 つだけ書く
+  選んだ製品の `init_script.sh`（[`rag/`](../rag/init_script.sh) / [`nl2sql/`](../nl2sql/init_script.sh) / [`agent/`](../agent/init_script.sh)）を順に呼ぶ。
+  reverse proxy（Nginx など）と TLS の証明書は作らない（#19。前段に置くかは利用者の選択。[README](../README.md#各製品の公開reverse-proxy-は利用者の選択)）
 - 3製品で共通のサービス間 token の署名鍵（`random_password`。共通 `.env` の `PLATFORM_SERVICE_TOKEN_SECRET`。#233）
 - 任意で bastion の Compute を 1 台（`bastion_enabled`、既定 off。VNC のデスクトップと Google Chrome 入り。製品は入れない。下の「bastion の Compute」。#2670）
 
@@ -20,11 +20,10 @@
                              │ Wallet（1つ）
   ┌──────────────────────────┴───────────────────────────────────────────────┐
   │ Compute（1台。PRODUCTION_READY_SUITE）                                    │
-  │   Nginx :443（HTTPS。:80 は開けない）/ HTTPS が off なら :80                 │
-  │     /rag/    → frontend の dist、/rag/api/    → 127.0.0.1:8000（RAG）       │
-  │     /nl2sql/ → frontend の dist、/nl2sql/api/ → 127.0.0.1:8010（NL2SQL）    │
-  │     /agent/  → frontend の dist、/agent/api/  → 127.0.0.1:8020（Agent）     │
-  │     /        → /agent/（302）、/platform/ca.crt → 自作の Root CA の証明書     │
+  │   RAG    backend 127.0.0.1:8000・frontend の dist（base /rag/）           │
+  │   NL2SQL backend 127.0.0.1:8010・frontend の dist（base /nl2sql/）        │
+  │   Agent  backend 127.0.0.1:8020・frontend の dist（base /agent/）         │
+  │   （reverse proxy は配備しない。前段に置くかは利用者の選択。#19）              │
   │   systemd: 各製品の backend・worker、RAG の前処理 / parser（127.0.0.1:18010〜） │
   └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -62,8 +61,8 @@ Resource Manager の画面では製品を選ばず、RAG / NL2SQL / Agent Contro
 - `app_admin_login_user_password`（構成管理者 `system_admin`、3 製品で共通）は必須です。
   NL2SQL で Deep Data Security を有効にする場合は `nl2sql_oracle_deepsec_data_user_password` も必要です。
 - 製品の選択は Compute の cloud-init に入るため、選択を変えて apply すると **Compute は作り直されます**（OCI provider は `user_data` の変更で instance を置き換える）。データの正本は ADB で、
-  Compute の中のローカルの保存（アップロードの原本・`platform/.env` を画面で変えた値・HTTPS の CA）は失われます。
-- 配備が終わると、`/var/log/suite-init.log` に入口の URL（`suite:`。`/` は Agent Control Plane へ転送。#1561）、製品ごとの URL、CA 証明書の URL を出します。
+  Compute の中のローカルの保存（アップロードの原本・`platform/.env` を画面で変えた値）は失われます。
+- 配備が終わると、`/var/log/suite-init.log` に製品ごとの backend の health の URL と frontend の dist の場所を出します。
   その後に配備全体の確認の結果（`check:` の行）を出します（下の「配備が正常かの確認」）。
 
 ## Autonomous AI Database（全製品で共有）
@@ -277,7 +276,7 @@ token も出力の上限に数えるため、1200 のような小さい値では
 
 ### RAG（`deploy_rag`）
 
-RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv の venv + systemd + Nginx）で動かします（#286）。
+RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv の venv + systemd）で動かします（#286）。
 文書の前処理と解析は、依存が大きく異なるためサービスごとに uv の venv を分け、それぞれを systemd の unit にします。
 詳細と既存環境（Docker Compose で配備した Compute）からの移行は [rag/docs/deployment.md](../rag/docs/deployment.md) を参照してください。
 
@@ -314,7 +313,7 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
 
 | 項目 | 値 |
 |---|---|
-| backend | `production-ready-rag-backend.service`（`127.0.0.1:8000`）と `production-ready-rag-ingestion-worker.service`。Nginx が `/rag/` で `frontend/dist` を配信し `/rag/api/` を proxy |
+| backend | `production-ready-rag-backend.service`（`127.0.0.1:8000`）と `production-ready-rag-ingestion-worker.service`。`frontend/dist` は `/rag/` を base に build する（配信と `/rag/api/` の proxy は利用者が置く reverse proxy。#19） |
 | 前処理 / parser | `production-ready-rag-<service>.service`（`rag/services/*/*/.venv`、`127.0.0.1:18010〜18028`） |
 | 実行ユーザー | `opc`（1 台の Compute。#1316・#1611） |
 | 設定 | `/u01/aipoc/no.1-production-ready-suite/rag/backend/.env` と `platform/.env`（`0600`） |
@@ -334,7 +333,7 @@ sudo systemctl restart production-ready-rag-backend.service
 - ログイン: 構成管理者 `SYSTEM_ADMIN`（ユーザー ID は `system_admin` 固定、RAG と共通）。`app_admin_login_user_password`（12〜30 文字、`admin` と `"` を含まない）。
 - Deep Data Security: `nl2sql_oracle_deepsec_enabled`（既定 `false`。使う環境だけがオンにします。#1707）。オンの場合は `nl2sql_oracle_deepsec_data_user_password` が必要です。
   配備した後に「セキュリティ設定 > Deep Data Security」で DATA USER のパスワードを保存しても有効になります（`backend/.env` に `NL2SQL_ORACLE_DEEPSEC_ENABLED=true` を書きます）。
-- Nginx + systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（ローカルの開発と同じ。#1316 で 8000 から変えた）。
+- systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（ローカルの開発と同じ。#1316 で 8000 から変えた）。
 - instance 上の構成・更新手順・障害対応は [nl2sql/docs/compute-operations.md](../nl2sql/docs/compute-operations.md) を参照してください。
 
 ### Agent Control Plane（`deploy_agent`）
@@ -347,11 +346,11 @@ sudo systemctl restart production-ready-rag-backend.service
   Cookie のないリクエストは 401 です（header / JWT の認可は #750 で削除。[agent/docs/security-rbac.md](../agent/docs/security-rbac.md)）。
 - RAG / NL2SQL との連携（#233）: 同じ stack で RAG / NL2SQL も配備すると、Agent の `backend/.env` に
   `AGENT_EXTERNAL_RAG_MCP_URL` / `AGENT_EXTERNAL_NL2SQL_MCP_URL`（同じ Compute の backend を直接呼ぶ `http://127.0.0.1:8000/api/mcp` /
-  `http://127.0.0.1:8010/api/mcp`。Nginx を通さない。#1316）を書きます。
+  `http://127.0.0.1:8010/api/mcp`。reverse proxy を通さない。#1316）を書きます。
   これは Agent の「MCP 接続」の `rag` / `nl2sql` の初期値です（#757）。配備しなかった製品の URL は空で、後から画面の「MCP 接続」で設定できます。Agent は Run を作った利用者として
   呼び、認証は共通 `.env` の `PLATFORM_SERVICE_TOKEN_SECRET`（stack が生成して全 Compute に同じ値を配る）で署名した短命の token です。
   あわせて `AGENT_EXTERNAL_RAG_PUBLIC_URL=/rag` を書きます。Agent の画面で RAG の図の根拠・根拠の原文を開く短命の URL（#1311・#2389）を、
-  同じ origin の `/rag` の下（Nginx が `/rag/api/` を RAG の backend へ渡す）に付け替えます（#1316）。
+  同じ origin の `/rag` の下（前段の reverse proxy が `/rag/api/` を RAG の backend へ渡す構成。#19）に付け替えます（#1316）。
 - Agent の実行は Control Plane の組み込み Runtime（OpenAI Agents SDK と OCI Enterprise AI の Responses API。#754）。外部の Runtime と Docker は使いません。
   モデルは「システム設定 > モデル」の OCI Enterprise AI の接続と既定のテキストモデルです。
 - Runtime 状態（Run・業務 Agent）と画面で変えた定義（Skill・MCP 接続・ツール権限）は Oracle に保存します（`oracle_checkpoint`。接続は共通の `PLATFORM_ORACLE_*`、table は `init_script.sh` の `agent_system_schema --initialize` が作成。#764）。旧 `AGENT_RUNTIME_ORACLE_*` は書きません。gunicorn は 1 worker、dispatcher は `in_process` に固定します。
@@ -373,7 +372,7 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
 
 既存の Agent の instance（Basic 認証で配備したもの）を更新する手順は [agent/docs/security-rbac.md §8](../agent/docs/security-rbac.md#8-既存環境の更新手順215) を参照してください。
 
-### Compute・Nginx・HTTPS（3 製品で共通。#1316）
+### Compute（3 製品で共通。#1316）
 
 - 3 製品を入れる Compute は 1 台です（bastion の Compute は別。下の「bastion の Compute」）。既定は **4 OCPU / 32 GB / boot volume 200 GB**。RAG の CPU の parser（Docling）が最も多く使うので、
   文書の取込が多いときは OCPU とメモリを上げてください。
@@ -383,56 +382,21 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
   （無ければ `oci-utils` を入れる）、`suite-init.sh` も最初に同じことをして `/` の空きを log に出します（空きが 30 GB 未満なら警告）。
   この変更の前に作った Compute で `df -h /` が 30 GB のまま満杯なら、`sudo /usr/libexec/oci-growfs -y` で広げてから
   `sudo .../platform/deploy/suite-restart.sh` で配備をやり直してください。
-- Nginx は 1 つの site（`/etc/nginx/conf.d/production-ready-suite.conf`。`platform/deploy/suite-nginx.sh` が生成）で、製品を path の prefix で分けます。
-  `/etc/nginx/nginx.conf` は、package の既定の server（port 80）を外したもの（`platform/templates/nginx/nginx.conf`）に置き換えます。
-
-  | path | 内容 |
-  |---|---|
-  | `/rag/` `/nl2sql/` `/agent/` | 各製品の frontend（`FRONTEND_BASE_PATH=/<製品>/` で build した dist）。画面の URL は `index.html` に返す |
-  | `/<製品>/api/...` | 製品の prefix だけを外して各 backend（`127.0.0.1:8000` / `8010` / `8020`）へ。SSE・MCP・ログインの上限（#1173）も今までと同じ。待ち時間は既定 600 秒（SSE は heartbeat）、LLM を同期で呼ぶ API は RAG 660 秒・NL2SQL 2460 秒・Agent の `tools/invoke` 960 秒。本文の上限は各製品の `<製品>_MAX_UPLOAD_BYTES` + 10 MiB（既定は RAG・NL2SQL 210M、Agent 110M）。値の根拠は `platform/deploy/suite-nginx.sh`（#1597） |
-  | `/<製品>/health` | backend の `/api/health` |
-  | `/` | `/agent/` へ 302（Agent を配備しないときは、最初に配備した製品へ） |
-  | `/platform/ca.crt` | 自作の Root CA の証明書（HTTPS が on のときだけ）。`/platform/` は platform（共通基盤）が配る共有の内容のために予約し、ほかの path は 404 |
-
-- **HTTPS（`https_enabled`、既定 on）**: Nginx が `https_port`（既定 443）だけで TLS 1.2 / 1.3 を受けます。`http_port`（既定 80）は
-  firewalld でも開けず、Nginx も listen しません（`http://` から https への転送もしません。#1638）。HSTS は付けません（IP の証明書のため）。
-  off にすると `http_port` の HTTP だけで配信します。フォームには on なら `https_port`、off なら `http_port` が出ます。
-  以前の配備（`http_port` も開けて https へ転送していた版）は、`suite-restart.sh` / `suite-update.sh` の再配備で firewalld に残った
-  `http_port` を閉じます（`firewall-cmd --permanent --remove-port=<http_port>/tcp`。`/var/log/suite-init.log` に出ます）。
-  既定でない port は output の URL に付きます（例 `https://<IP>:8443/rag/`）。
-- **使えない port**: SSH（22）・よく使われる service（25 / 53 / 111 / 1521 / 1522 / 3306 / 5432 / 6379 / 9090）・Compute の中で製品が使う port
-  （frontend の開発・プレビューの 3000 / 3001 / 3002、backend の 8000 / 8010 / 8020、RAG の前処理 / parser の 18000〜18099）と、1〜65535 の外。一覧は `terraform/stack/locals.tf` の
-  `reserved_ports` / `reserved_port_ranges`（apply の precondition）と `platform/deploy/suite-nginx.sh` の `SUITE_RESERVED_PORTS` /
-  `SUITE_RESERVED_PORT_RANGES`（手で配備したときも先に失敗する）が同じ値を持ち、`verify_stack_contract.py` が照合します。
-  - 証明書は初回の起動で Compute の中で作ります（`platform/deploy/suite-tls.sh`）。発行者などは固定で、stack の入力にはしません。
-
-    | | subject | 鍵・有効期間 |
-    |---|---|---|
-    | Root CA | `C=JP, ST=Tokyo, L=Minato-ku, O=Oracle, OU=Production Ready Suite, CN=Production Ready Root CA` | RSA 3072・SHA-256・3650 日 |
-    | サーバー | `C=JP, ST=Tokyo, L=Minato-ku, O=Oracle, OU=Production Ready Suite, CN=<公開 IP>`、SAN = 公開 IP + private IP | RSA 3072・SHA-256・397 日 |
-
-  - CA の秘密鍵は `/u01/aipoc/ssl/ca.key`（root の 0600）で、Compute の外へは出しません。利用者には CA の証明書（`/platform/ca.crt`）だけを配ります。
-    各製品の「システム設定 > 外観と証明書」の「HTTPS の証明書」から、ダウンロードと端末への取り込み方を確認できます。
-  - 公開 IP は OCI の instance metadata に無いため、Compute に公開 IP があるときだけ外部のサービス（既存の No.1-RAG / No.1-SQL-Assist と同じ `http://whatismyip.akamai.com/`、取れなければ `https://checkip.amazonaws.com`）に
-    送信元の IP を問い合わせます。分からないときは private IP だけの証明書を作り、`/var/log/suite-init.log` に警告を出します。
-    公開 IP を指定して作り直す: `sudo bash /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-tls.sh renew --public-ip <公開 IP>`
-  - **公開の URL（`PLATFORM_PUBLIC_BASE_URL`。#1870）**: suite-init.sh は製品の配備の前に、上と同じ決め方の公開 IP（無ければ private IP）と
-    公開の port（HTTPS が on なら `https_port`、off なら `http_port`。既定の 443 / 80 は付けない）から `https://<公開 IP>[:<port>]` を作り、
-    `platform/.env`（初回は props の `platform.env` から写す）の `PLATFORM_PUBLIC_BASE_URL` に書きます（再配備のたびに書き直す）。
-    API キーの画面の接続先に「公開の URL（OCI）」として出ます（[platform/docs/mcp-api-keys.md](../platform/docs/mcp-api-keys.md)）。
-    公開 IP が変わったら、`platform/.env` を直して 3 製品を再起動するか（`suite-restart.sh`）、`suite-update.sh` で再配備します。
-  - サーバー証明書は、期限の 30 日前から timer（`production-ready-suite-tls-renew.timer`、毎日）が作り直して Nginx を reload します。CA は作り直しません。
-    状態は `sudo bash .../platform/deploy/suite-tls.sh status` で確認します。
+- **reverse proxy と HTTPS（#19）**: 配備は Nginx などの reverse proxy・TLS の証明書（以前の自作の Root CA と IP のサーバー証明書・
+  更新の timer・`/platform/ca.crt`）を作らず、OS の firewall（firewalld）の port も開けません。各製品は backend を `127.0.0.1` の
+  製品の port（RAG 8000・NL2SQL 8010・Agent 8020）で動かし、frontend は `FRONTEND_BASE_PATH=/<製品>/` で `dist/` を build します。
+  利用者に公開するときは、前段に reverse proxy を置くかを利用者が決めます（手順と注意は [README](../README.md#各製品の公開reverse-proxy-は利用者の選択)）。
+  stack の `https_enabled`・`http_port`・`https_port` の入力と `ca_certificate_url` の output は、この stack の削除（#12）まで残りますが、配備では使いません。
+  `PLATFORM_PUBLIC_BASE_URL`（API キーの画面の「公開の URL」）も配備は書きません。reverse proxy の URL を利用者が `platform/.env` に書きます。
 - **subnet の security list または NSG**（stack の外で管理。stack は ingress の規則・NSG を作りません。#259）で、利用者の端末からの
-  TCP `https_port`（HTTPS が off なら `http_port`）だけを許可してください（HTTPS が on のとき `http_port` は Compute で使いません）。
+  TCP は、前段に置いた reverse proxy の port だけを許可してください。
   SSH の 22 と ADB への 1522 を含む規則の一覧は直下の [README.md](../README.md#配備の前に-vcn-の-security-list) にあります。
-  Compute の OS の firewall（firewalld）は suite-init.sh が選んだ port を開けます（`firewall-cmd --permanent --add-port=<port>/tcp`）。製品間の通信（Agent → RAG / NL2SQL の MCP）は同じ Compute の
+  OS の firewall（firewalld）も、reverse proxy の port を利用者が開けます。製品間の通信（Agent → RAG / NL2SQL の MCP）は同じ Compute の
   127.0.0.1 なので、security list は要りません。
 - ログインのセッションは 3 製品で共通です（#1565。下の「ログインのセッションの共有（#1565）」）。`/`（Agent、無ければ最初の製品）を含め、
   どの製品の `/login` でログインしても全製品を使えます。
 - Wallet は `/u01/aipoc/wallet`、ログは `/var/log/cloud-init-custom.log`（bootstrap）・`/var/log/suite-init.log`（全体）・`/var/log/<製品>-init.log`。
-- apply 後の output に、`application_url`（`/`）、製品ごとの URL（`rag_application_url` など。配備しなかった製品は表示されない）、
-  `ca_certificate_url`（HTTPS のとき）、`ssh_to_instance`、bastion を作ったときは `bastion_vnc_address`・`ssh_to_bastion` が出ます。
+- apply 後の output に、`ssh_to_instance`、bastion を作ったときは `bastion_vnc_address`・`ssh_to_bastion` が出ます。
 
 #### bastion の Compute（任意。#2670）
 
@@ -461,13 +425,12 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
   | 足す security list | 送信元 CIDR | 宛先の port（TCP） | 用途 |
   |---|---|---|---|
   | bastion の subnet | 管理者の端末の CIDR（`0.0.0.0/0` にしない。VNC の認証はパスワードだけ） | `22`・`5901` | bastion への SSH と VNC |
-  | Compute の subnet | bastion の subnet の CIDR | 公開の port（`https_port`、既定 `443`。HTTPS が off なら `http_port`）・`22` | bastion の Chrome から 3 製品の画面、bastion から Compute への SSH |
+  | Compute の subnet | bastion の subnet の CIDR | reverse proxy の port・`22` | bastion の Chrome から 3 製品の画面、bastion から Compute への SSH |
   | ADB のプライベート・エンドポイントの subnet | bastion の subnet の CIDR | `1522` | bastion から ADB への接続 |
 
   - bastion と Compute（または ADB）が同じ subnet でも、その subnet の security list に「送信元 = その subnet 自身の CIDR」の規則が要ります。
   - ADB が「許可された IP および VCN 限定のセキュア・アクセス」（ACL）なら、security list ではなく ADB の ACL で bastion の subnet（または VCN）を許可します。
   - egress: bastion は dnf と Google Chrome の取得（`dl.google.com`）で外部へ HTTPS で出ます。private subnet なら NAT gateway の経路を用意します。
-  - Suite の Compute の HTTPS の証明書は自作の CA なので、bastion の Chrome で警告を消すには `ca_certificate_url` の CA を Chrome に取り込みます。
 
 #### Compute の OS（Oracle Linux 9。#1611）
 
@@ -475,9 +438,8 @@ cd /u01/aipoc/no.1-production-ready-suite/agent/backend && sudo -u opc /usr/loca
 |---|---|
 | 時間帯 | stack の `timezone`（`UTC`〔既定〕か `Asia/Tokyo`。値は OCI と同じ IANA の地域名。#3255・#3274）。配備した後は `platform/.env` の `PLATFORM_TIMEZONE` に任意の IANA の地域名を書ける（`suite-restart.sh` で OS にも反映）。cloud-init の `timezone` と、`suite-init.sh` の `configure_timezone`（`platform/.env` の `PLATFORM_TIMEZONE` を `timedatectl set-timezone` で。同じなら変えない。再配備でも効く）が合わせる。不正な値は配備の最初で失敗する。時刻の保存は UTC のまま |
 | ログイン・実行ユーザー | `opc`（`ssh opc@<IP>`。3 製品のプロセスと repository の所有者。sudo は OCI の image の設定のまま無制限） |
-| package | `dnf`。BaseOS / AppStream だけを使い、EPEL・CodeReady Builder は有効にしない。Nginx は module `nginx:1.24`、Node.js は module `nodejs:24`（入らなければ公式の tarball を SHASUMS256 で確かめて `/usr/local/lib/nodejs`）。Python は今までどおり uv の `uv python install 3.12` |
-| Nginx | site は `/etc/nginx/conf.d/production-ready-suite.conf`。worker のユーザーは `nginx`、ログは `/var/log/nginx/production-ready-<製品>-*.log` |
-| firewall | `firewalld`。HTTPS が on なら `https_port` だけ、off なら `http_port` だけを `--permanent` で開ける（on のときに `http_port` が開いていれば閉じる。#1638） |
+| package | `dnf`。BaseOS / AppStream だけを使い、EPEL・CodeReady Builder は有効にしない。Node.js は module `nodejs:24`（入らなければ公式の tarball を SHASUMS256 で確かめて `/usr/local/lib/nodejs`）。Python は今までどおり uv の `uv python install 3.12` |
+| reverse proxy・firewall | 配備しない（#19）。前段に置くときは利用者が入れて port を開ける |
 | SELinux | enforcing のまま（無効にしない）。`suite-init.sh` の `configure_selinux` が次を設定する |
 | RAG の前処理 / parser の OS の依存 | LibreOffice（`libreoffice-core` / `-writer` / `-impress` / `-calc`、AppStream の 7.1）・`google-noto-sans-cjk-ttc-fonts` / `google-noto-serif-cjk-ttc-fonts`・`poppler-utils`・`tesseract` / `tesseract-langpack-eng` / `tesseract-langpack-jpn` |
 
@@ -486,13 +448,10 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 - `semanage fcontext -a -t usr_t '/u01/aipoc/no.1-production-ready-suite(/.*)?'` と `restorecon -R`: systemd（`init_t`）は `/u01` の既定の
   `default_t` のファイルを実行も読みもできないため、repository を `usr_t` にする（RAG の unit の `.venv/bin/gunicorn` と `EnvironmentFile`）。
   新しく作るファイル（venv・`node_modules`・`git pull` の分）は親の `usr_t` を受け継ぐ。
-- `semanage fcontext -a -t httpd_sys_content_t '<repository>/<製品>/frontend/dist(/.*)?'`: Nginx が配信する dist。build の後に `restorecon -R`。
-- `semanage fcontext -a -t cert_t '/u01/aipoc/ssl(/.*)?'`: Nginx が読む証明書と鍵（`/platform/ca.crt` も）。
-- `setsebool -P httpd_can_network_connect 1`: Nginx から `127.0.0.1` の各製品の backend への proxy。
 - `restorecon -v /usr/local/bin/uv /usr/local/bin/uvx`（各製品の `init_script.sh` の `install_uv`。#1642）: uv の installer は一時の場所から
   移すため `bin_t` にならず、systemd が NL2SQL / Agent の unit の `ExecStart=/usr/local/bin/uv` を実行できない（`status=203/EXEC`）。
   suite-v0.1.3 までの Compute は、`sudo restorecon -v /usr/local/bin/uv /usr/local/bin/uvx` の後、systemd の自動の再起動で起動する。
-- 公開する port（HTTPS が on なら `https_port`、off なら `http_port`）が 80 / 443 以外なら `semanage port -a -t http_port_t -p tcp <port>`。
+- reverse proxy を同じ Compute に置くときは、その reverse proxy の SELinux の設定（dist の `httpd_sys_content_t`・`httpd_can_network_connect` など）を利用者が行います（#19 で配備から外した）。
 - Ubuntu で配備した Compute は更新しません。Oracle Linux 9 にするには stack を apply して Compute を作り直してください（データの正本は ADB。
   Compute の中だけにあるものは下の「製品ごとの Compute の stack からの更新」と同じく引き継がれません）。
 
@@ -512,13 +471,13 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 | スクリプト（`platform/deploy/`） | 実行 | 内容 |
 |---|---|---|
 | `suite-pull.sh` | opc か `sudo` | repository の所有者（opc）で `origin/main` を取得し、`main` を付け替える（clone は depth 1）。追跡ファイルに変更があれば中止し、未追跡のファイルは保つ。取得だけで、build・再起動はしない |
-| `suite-restart.sh` | `sudo` | DB の起動・停止はしない（#10）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・Nginx・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service と Nginx だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
+| `suite-restart.sh` | `sudo` | DB の起動・停止はしない（#10）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
 | `suite-update.sh` | `sudo` | `suite-pull.sh` で取得し、取得した新しい `suite-restart.sh`（既定）を実行する |
 
 - `suite-init.sh` は props（Resource Manager の入力）から、各製品の `backend/.env` を作り直す。
   - そのため `suite-restart.sh` は、build の前に今の `backend/.env` を `/u01/aipoc/props/<製品>.backend.env` へ写す（画面で保存した値を保つ）。
   - 元の props は `/u01/aipoc/recovery/<時刻>/` に退避する。
-  - `platform/.env`・Wallet・HTTPS の CA は、`suite-init.sh` がそのまま保つ。
+  - `platform/.env`・Wallet は、`suite-init.sh` がそのまま保つ。
 - 画面の「運用設定 › システムテーブル」の「作成・更新」で、保存済みのデータを書き換える migration（Agent の
   業務 Agent のスキルの ID の改名など）を適用したとき、Agent の backend は同じプロセスのメモリを保存先から読み直す
   （再起動は要らない。#1844）。結果に「再起動が必要なプロセスがあります」と出たら、挙げたプロセス（別に動かす
@@ -533,7 +492,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 - cloud-init は `git` と `tmux` を入れる。
 - 製品の `init_script.sh` は backend の `/api/health` を 3 秒ごとに最大 300 秒待ち（`SUITE_BACKEND_HEALTH_TIMEOUT_SECONDS`）、15 秒ごとに経過・状態・
   再起動の回数を出す。service が `failed` になるか再起動を 3 回繰り返したら、すぐに status と journal を出して失敗にする（#1642）。
-- OS の再起動では、enabled の unit（`WantedBy=multi-user.target`）と Nginx が自動で起動する。
+- OS の再起動では、enabled の unit（`WantedBy=multi-user.target`）が自動で起動する。
   - enabled の unit は、各製品の backend・worker と、起動にした RAG の前処理 / parser。
   - DB は Compute の外にあるため、OS の再起動では起動しない。配備のスクリプト（`suite-restart.sh`・`suite-update.sh`）と
     システム設定の画面は DB の起動・停止を扱わない（#10）。止まっていれば OCI のコンソール（ADB Free コンテナなら
@@ -543,9 +502,8 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 
 `suite-init.sh` の最後（`suite-restart.sh` の最後と `--status` も同じ。`platform/deploy/suite-health.sh` の `suite_check_deployment`）に、次を確かめる。
 
-- 有効な `production-ready-*` の service（証明書の更新の oneshot を除く）がすべて `active` で、再起動を繰り返していないか
-- 配備した製品の backend の `/api/health`（`127.0.0.1:<port>`）と、Nginx を通した `/<製品>/api/health`（HTTPS が on なら `https://127.0.0.1:<https_port>`）
-- Nginx が `active` か
+- 有効な `production-ready-*` の service がすべて `active` で、再起動を繰り返していないか
+- 配備した製品の backend の `/api/health`（`127.0.0.1:<port>`）。reverse proxy は配備しないので確かめない（#19）
 - 各製品の system schema が ready か（#1648。製品の schema の CLI の `check`。DDL は実行しない）。`init_script.sh` は表の作成・更新に
   失敗しても backend を起動する（画面から直せる）ため、health だけでは OK に見える。NG なら CLI の要約（状態・不足の object・
   前回の失敗の ORA コード）、製品の初期化の log（`/var/log/<製品>-init.log`）の最後の ORA コード、権限の不足の手がかりを出す
@@ -553,14 +511,13 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 結果は製品ごとに 1 行で出す。1 つでも NG なら、NG の service の journal の末尾を出し、0 以外で終わる。
 
 ```
-[suite-init] check: rag backend OK / services 4/4 active / nginx OK
-[suite-init] check: nl2sql backend OK / services 5/5 active / nginx OK
-[suite-init] check: agent backend OK / services 1/1 active / nginx OK
-[suite-init] check: nginx.service active（https://127.0.0.1:443）
+[suite-init] check: rag backend OK / services 4/4 active
+[suite-init] check: nl2sql backend OK / services 5/5 active
+[suite-init] check: agent backend OK / services 1/1 active
 [suite-init] check: rag schema OK（status=ready）
 [suite-init] check: nl2sql schema OK（status=ready）
 [suite-init] check: agent schema OK（status=ready）
-[suite-init] check: OK（すべての service が active で、各製品の health が backend と Nginx の両方で応答し、system schema が ready です）。
+[suite-init] check: OK（すべての service が active で、各製品の backend の health が応答し、system schema が ready です）。
 ```
 
 schema の CLI（backend の directory で `sudo -u opc .venv/bin/python <下の引数>`。ready なら 0）:
@@ -588,11 +545,9 @@ Agent `-m app.cli.agent_system_schema --check`。
   （停止中にプロセス内で数えた失敗も、窓の中なら合わせて数える）。ログインは止まりません（構成管理者は DB の停止中もログインできる）。
 - テーブルは各製品のシステムテーブルの初期化（RAG `app.rag.system_schema_cli initialize`・NL2SQL `app.cli.app_security_migrate --apply`・
   Agent `app.cli.agent_system_schema --initialize`。どれも `init_script.sh` が実行する）が、`PLATFORM_USERS` などと一緒に冪等に作ります。
-- Nginx: 3 製品の Nginx（`init_script.sh` が書く）は、`/api/auth/login` だけに送信元 IP ごとの緩い上限（1 秒あたり 1 回、burst 30。
-  zone は `/etc/nginx/conf.d/production-ready-login-rate-limit.conf`）を掛けます。回数の制限の正本は backend で、Nginx の上限は 1 つの送信元からの
-  大量の要求（429 の連打を含む）を照合・DB の前で止めるためのものです。超えたときは backend と同じ形の JSON（`error_code`
-  `SECURITY_RATE_LIMITED`）と `Retry-After: 60` の 429 を返します。backend の 429 はそのまま返します。Compute の前にロードバランサーなどの
-  proxy を置く場合は、Nginx が利用者の IP を見られるように（`real_ip` など）してください（見られないと、全員が 1 つの送信元として数えられる）。
+- reverse proxy: 配備は reverse proxy を作らないので、ログインの API（`/api/auth/login`）の送信元 IP ごとの上限は backend だけが持ちます（#19）。
+  前段に reverse proxy を置くときは、backend が利用者の IP を見られるように（`X-Forwarded-For` と uvicorn の proxy headers など）してください
+  （見られないと、全員が 1 つの送信元として数えられる）。必要なら reverse proxy の側でも `/api/auth/login` に緩い上限を掛けます。
 
 既存環境の更新（3 製品は同じ schema を共有するので、テーブルの作成はどれか 1 つの製品で行えばよい）:
 
@@ -611,8 +566,7 @@ Agent `-m app.cli.agent_system_schema --check`。
    sudo -u opc /usr/local/bin/uv run python -m app.cli.agent_system_schema --initialize
    ```
 
-3. Nginx のログインの API の上限は、`platform/deploy/suite-nginx.sh` の site（`/<製品>/api/auth/login`）に入っています。
-4. 確認: backend のログに `auth_login_throttle_shared_store_unavailable` が出ないこと。存在しないログイン ID で 1 回ログインに失敗すると、
+3. 確認: backend のログに `auth_login_throttle_shared_store_unavailable` が出ないこと。存在しないログイン ID で 1 回ログインに失敗すると、
    `SELECT COUNT(*) FROM PLATFORM_LOGIN_ATTEMPTS` が 2 増えること（窓を過ぎると、次の失敗のときに消える）。
 
 ### ログインのセッションの共有（#1565）
@@ -654,15 +608,14 @@ python terraform/scripts/verify_stack_contract.py terraform/dist/production-read
 ```
 
 出力は `terraform/dist/production-ready-suite-terraform-stack.zip` です。この zip を Resource Manager へ upload して stack を作成します。
-`verify_stack_contract.py` は、フォーム（`schema.yaml`）と Terraform 変数の一致、製品選択と 1 台の Compute・HTTPS の入力の契約、製品ごとの `backend/.env` の key が各製品の Settings にあること、
-backend の port（RAG 8000・NL2SQL 8010・Agent 8020）が init_script.sh・Nginx・MCP の URL で一致し衝突しないこと、証明書の固定の subject、
+`verify_stack_contract.py` は、フォーム（`schema.yaml`）と Terraform 変数の一致、製品選択と 1 台の Compute の入力の契約、製品ごとの `backend/.env` の key が各製品の Settings にあること、
+backend の port（RAG 8000・NL2SQL 8010・Agent 8020）が init_script.sh・`platform/deploy/suite-products.sh`・MCP の URL で一致し衝突しないこと、
 RAG の前処理 / parser（`rag/scripts/rag-systemd.sh` の unit の定義と uv.lock があること）、各製品の `init_script.sh` の配備契約
 （Docker を入れないこと、RAG の sudoers・状態の保持を含む）と、Dockerfile・compose が無いこと（#356 / #754）を検証します。
 
 CI（`.github/workflows/ci.yml` の `Suite / Deploy`。中身は `.github/workflows/suite-deploy.yml` で、release の workflow も再利用する。#1592）は、
 `terraform fmt` / `terraform validate`（Terraform 1.5.7）と上の2つに加え、
-`platform/deploy/tests/`（suite-init の振る舞い、openssl で証明書の subject・SAN・拡張・有効期間、隔離した Nginx で prefix・SSE・MCP・ログインの上限・
-`/` → `/agent/`・HTTPS on / off）と、各製品の `init_script.sh` と配備・更新のスクリプトのテスト（`<製品>/scripts/tests/`）を 1 つの job で実行します。
+`platform/deploy/tests/`（suite-init の振る舞い・配備全体の確認）と、各製品の `init_script.sh` と配備・更新のスクリプトのテスト（`<製品>/scripts/tests/`）を 1 つの job で実行します。
 製品の frontend・共有 UI・Markdown だけの変更では動きません。実テナンシーへの配備確認は手動で行います。
 
 ## release

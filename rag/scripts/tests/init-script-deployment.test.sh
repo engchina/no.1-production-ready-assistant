@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # rag/init_script.sh（OCI Resource Manager stack の Compute 初期化）の振る舞いを外部依存なしで検証する。
-# RAG は Docker を使わず、uv の venv + systemd + Nginx で動かす（#286）。systemctl / nginx / runuser は
+# RAG は Docker を使わず、uv の venv + systemd で動かす（#286）。systemctl / runuser は
 # fake にし、手元の systemd は触らない。visudo があれば、生成した sudoers の構文も確かめる。
 set -euo pipefail
 
@@ -28,7 +28,6 @@ prepare_case() {
   export RAG_INIT_TEST_MODE=true
   export SYSTEMD_UNIT_DIR="${case_dir}/units"
   export SUDOERS_DIR="${case_dir}/sudoers.d"
-  export NGINX_LOGGING_CONF_DIR="${case_dir}/conf.d"
   export DATA_DIR="${case_dir}/data"
   export SERVICE_HOME="${case_dir}/service-home"
   export LEGACY_COMPOSE_WRAPPER="${case_dir}/bin/rag-compose"
@@ -687,8 +686,7 @@ test "$(cat "${migration_dir}/data/uploads/a.pdf")" = "original" \
   || fail "アップロード原本を docker volume から移していない、または 2 回目で上書きした"
 test -f "${migration_dir}/service-home/.oci/config" || fail "OCI の設定を docker volume から移していない"
 
-# --- Nginx: RAG は単独では配備しない（#1316）。site は platform/deploy/suite-nginx.sh の 1 つだけ ---
-# （/rag/ の location・回答生成と MCP の待ち時間・SSE・ログインの上限・upload の上限は platform/deploy/tests/ が確かめる）
+# --- reverse proxy: RAG は単独では配備せず（#1316）、suite も reverse proxy（Nginx）を配備しない（#19） ---
 for unexpected in configure_nginx nginx_client_max_body_size sites-available proxy_pass APPLICATION_PORT; do
   if grep -Fq "${unexpected}" "${REPO_DIR}/init_script.sh"; then
     fail "単独の配備の Nginx の設定（${unexpected}）が残っている"
@@ -696,26 +694,13 @@ for unexpected in configure_nginx nginx_client_max_body_size sites-available pro
 done
 grep -Fq 'FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/rag/}"' "${REPO_DIR}/init_script.sh" \
   || fail "frontend を /rag/ を base に build しない"
-# suite の Nginx の site を生成して確かめる（path と待ち時間の値は suite-nginx.sh の SUITE_RAG_LONG_API_*。#1597）。
-suite_site="$(bash -c 'source "$1"; suite_nginx_site false /srv/suite /srv/ssl 80 443 rag' _ \
-  "${REPO_DIR}/../platform/deploy/suite-nginx.sh")"
-for path in 'search' 'search/stream' \
-  'search-answer-profiles/[^/]+/support-guides/[^/]+/try' 'evaluation/run' \
-  'chat/conversations/[^/]+/messages/stream' 'chat/conversations/[^/]+/messages/[^/]+/stream' 'mcp'; do
-  printf '%s\n' "${suite_site}" | grep -E '^    location ~ \^/rag/api/\(' | grep -Fq "|${path}|" \
-    || printf '%s\n' "${suite_site}" | grep -E '^    location ~ \^/rag/api/\(' | grep -Fq "(${path}|" \
-    || printf '%s\n' "${suite_site}" | grep -E '^    location ~ \^/rag/api/\(' | grep -Fq "|${path})" \
-    || fail "評価・回答生成・MCP の待ち時間を延ばす location に ${path} がない"
-done
-printf '%s\n' "${suite_site}" | grep -Fq 'proxy_read_timeout 660s;' \
-  || fail "評価・回答生成の待ち時間が backend（600 秒）・画面（630 秒）より長くない"
-# backend の回答生成の上限（RAG_ANSWER_TIMEOUT_SECONDS の設定の上限）が Nginx（660 秒）・画面（630 秒）より短いこと。
+# backend の回答生成の上限（RAG_ANSWER_TIMEOUT_SECONDS の設定の上限）が画面（630 秒）より短いこと。
 answer_timeout_max="$(sed -n 's/^OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = \([0-9]*\)\.0$/\1/p' "${REPO_DIR}/backend/app/config.py")"
 test "${answer_timeout_max}" = "600" || fail "LLM 1 回の timeout の上限（回答生成の上限）が 600 秒ではない"
 awk '/rag_answer_timeout_seconds: float = Field\(/ {found = 1} found {print} found && /^    \)$/ {exit}' \
   "${REPO_DIR}/backend/app/config.py" | grep -Fq 'le=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,' \
   || fail "回答生成の上限（RAG_ANSWER_TIMEOUT_SECONDS）が LLM 1 回の timeout の上限で抑えられていない"
-# 上限の値は suite の Nginx の 1 か所だけにする（固定値を持つ別の Nginx 設定を置かない。#306）。
+# reverse proxy の設定の雛形を製品に置かない（#306・#19）。
 test ! -e "${REPO_DIR}/frontend/nginx.conf.template" \
   || fail "使われない frontend/nginx.conf.template が固定の upload の上限を持ったまま残っている"
 
@@ -735,11 +720,6 @@ if grep -Eq '^\s*(docker|docker-compose)\b|docker-ce|docker-compose-plugin|downl
 fi
 grep -Fq 'uv sync --locked --no-dev --python ${RAG_PYTHON_VERSION}' "${init_script}" \
   || fail "backend の venv を Python 3.12 の lock どおりに作っていない"
-# Nginx の既定の上限の元（suite-init.sh の既定値）は backend の max_upload_bytes の既定値と同じ（#1316）。
-grep -Fq 'RAG_DEFAULT_MAX_UPLOAD_BYTES=209715200' "${REPO_DIR}/../platform/deploy/suite-init.sh" \
-  || fail "RAG_MAX_UPLOAD_BYTES の既定値が変わった"
-grep -Fq 'max_upload_bytes: int = Field(default=200 * 1024 * 1024' "${REPO_DIR}/backend/app/config.py" \
-  || fail "backend の RAG_MAX_UPLOAD_BYTES の既定値が suite-init.sh と合っていない"
 
 # --- 既定は停止のサービス（#2453）: XML ツリー JSON だけ。開発の install も初回は起動しない ---
 bash -c 'source "$1/scripts/rag-systemd.sh"; rag_service_default_stopped parser-xml-tree-json && ! rag_service_default_stopped parser-docling' _ "${REPO_DIR}" \
@@ -789,7 +769,7 @@ while IFS= read -r lock; do
 done < <(find "${REPO_DIR}/backend" "${REPO_DIR}/packages" "${REPO_DIR}/services" -name uv.lock -not -path '*/.venv/*' | sort)
 test "${torch_locks}" -ge 2 || fail "torch を持つ lock が見つからない（parser-docling・parser-unstructured）"
 
-# --- OS の package（Oracle Linux 9 の dnf。#1611）: 前処理 / parser の分だけ足す。Nginx は suite-init.sh が入れる ---
+# --- OS の package（Oracle Linux 9 の dnf。#1611）: 前処理 / parser の分だけ足す ---
 os_packages="$(
   RAG_INIT_TEST_MODE=true bash -c 'source "$1/init_script.sh"; RAG_SERVICES=(parser-docling); system_packages; echo ---; RAG_SERVICES=(parser-docling preprocess-office-to-pdf parser-unstructured preprocess-word-to-jsonl); system_packages' _ "${REPO_DIR}"
 )"
@@ -804,7 +784,7 @@ for package in libreoffice-core google-noto-sans-cjk-ttc-fonts poppler-utils tes
 done
 test "$(printf '%s\n' "${all_packages}" | grep -cx 'libreoffice-core')" -eq 1 || fail "同じ package を重ねて入れる"
 for package in nginx netfilter-persistent build-essential fonts-noto-cjk tesseract-ocr; do
-  printf '%s\n' "${all_packages}" | grep -qx "${package}" && fail "${package} を入れる（Oracle Linux に無い・suite が入れる）"
+  printf '%s\n' "${all_packages}" | grep -qx "${package}" && fail "${package} を入れる（Oracle Linux に無い・配備しない）"
 done
 grep -Fq 'dnf_cmd install --setopt=install_weak_deps=False "${packages[@]}"' "${REPO_DIR}/init_script.sh" \
   || fail "推奨の package を入れずに dnf で入れない"

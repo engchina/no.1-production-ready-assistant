@@ -13,7 +13,6 @@
 | モデル | `/settings/model` | OCI Enterprise AI / OCI Generative AI 設定、モデル一覧、接続テスト、テンプレート検証 |
 | データベース | `/settings/database` | Oracle 接続設定、wallet upload / 自動取得、ADB start / stop、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
-| 外観と証明書 | `/settings/appearance` | light / dark / system theme 切替、localStorage 永続化 |
 
 テストデータ配置先:
 
@@ -155,19 +154,7 @@
 | ST-009 | 実行権限なし | `settings.database.sql_execute` なしで開く | 状態は閲覧可、初期化/再作成は disabled または非表示 | `mock-responses/system-tables-ready.json` |
 | ST-010 | DB 未接続 | GET が DB unavailable を返す | 画面全体が落ちず、DB 設定ページへの導線が表示される | `mock-responses/system-tables-failed.json` |
 
-## 9. 外観と証明書
-
-外観と証明書の画面の配色テーマは backend API を呼ばず、`localStorage` の `production-ready-nl2sql.ui` に保存される。
-
-| ID | 機能 | 手順 | 期待結果 | テストデータ |
-| --- | --- | --- | --- | --- |
-| APP-001 | 初期表示 | 外観と証明書のページを開く | ライト / ダーク / システムの toggle が表示され、既定はライト | `appearance/theme-light.localstorage.json` |
-| APP-002 | ダーク切替 | ダークを選択し reload | `html.dark` 相当のテーマが適用され、localStorage に `theme: "dark"` が残る | `appearance/theme-dark.localstorage.json` |
-| APP-003 | システム切替 | system を選択し OS preference を mock | prefers-color-scheme に応じて light/dark が適用される | `appearance/theme-system.localstorage.json` |
-| APP-004 | API 非依存 | Network tab を監視しながら切替 | theme 切替で settings API が呼ばれない | - |
-| APP-005 | サイドバー状態との共存 | sidebarCollapsed / collapsedSections を含む保存値で開く | theme と sidebar 状態が同じ storage key 内で維持される | `appearance/theme-system.localstorage.json` |
-
-## 10. 推奨 Playwright fixture 利用例
+## 9. 推奨 Playwright fixture 利用例
 
 ```ts
 import { test, expect } from "@playwright/test";
@@ -184,7 +171,7 @@ test("モデル設定を表示できる", async ({ page }) => {
 });
 ```
 
-## 11. 後片付け
+## 10. 後片付け
 
 - 実 DB / OCI 接続を使った場合は、検証後にダミー secret が runtime 設定へ残っていないことを確認する。
 - `wallet-valid.zip` をアップロードした検証環境では、wallet 配置ディレクトリを検証用に限定する。

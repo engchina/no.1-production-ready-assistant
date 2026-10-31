@@ -43,7 +43,6 @@ export const APP_ROUTES = {
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,
   settingsSystemTables: "/settings/system-tables",
   settingsSelectAiCredential: "/settings/select-ai-credential",
-  settingsAppearance: SYSTEM_SETTINGS_PATHS.appearance,
   // 回答の注意書き（設定は製品ごと。#2405・#2449）
   settingsAnswerNotice: ANSWER_NOTICE_PATH,
   // チャットの添付（設定は製品ごと。#2517）

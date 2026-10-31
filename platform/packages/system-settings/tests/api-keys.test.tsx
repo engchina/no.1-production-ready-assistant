@@ -13,7 +13,6 @@ import {
   ApiKeysAdminPage,
   accountTabPath,
   MyApiKeysPanel,
-  caCertificateUrl,
   mcpEndpointRows,
   mcpEndpoints,
   mcpRegistrationExample,
@@ -68,7 +67,7 @@ describe("mcpEndpoints（#1805）", () => {
 });
 
 describe("接続先の行と登録の例（#1870）", () => {
-  const labels = { keyComment: "KEY", timeoutComment: "TIMEOUT", caComment: "CA {url}" };
+  const labels = { keyComment: "KEY", timeoutComment: "TIMEOUT" };
 
   it("公開の URL があれば 3 製品の行に足す（この画面から分からない URL は null）", () => {
     const local = mcpEndpoints("nl2sql", "/", "http://localhost:5174");
@@ -83,13 +82,7 @@ describe("接続先の行と登録の例（#1870）", () => {
     ]);
   });
 
-  it("CA の証明書の場所は https の URL だけ", () => {
-    expect(caCertificateUrl("https://203.0.113.10:8443/rag/api/mcp")).toBe("https://203.0.113.10:8443/platform/ca.crt");
-    expect(caCertificateUrl("http://localhost:8000/api/mcp")).toBeNull();
-    expect(caCertificateUrl("not a url")).toBeNull();
-  });
-
-  it("登録の例は skills/README.md と同じ形（サーバー名 rag / nl2sql / agent・単一引用符の ${PR_API_KEY}・待ち時間・CA）", () => {
+  it("登録の例は skills/README.md と同じ形（サーバー名 rag / nl2sql / agent・単一引用符の ${PR_API_KEY}・待ち時間）", () => {
     const rows = mcpEndpointRows(mcpEndpoints("rag", "/rag/", "https://203.0.113.10"), "https://203.0.113.10");
     expect(mcpRegistrationExample(rows, labels)).toBe(
       [
@@ -101,11 +94,10 @@ describe("接続先の行と登録の例（#1870）", () => {
         "claude mcp add --scope user --transport http agent https://203.0.113.10/agent/api/mcp \\",
         "  --header 'Authorization: Bearer ${PR_API_KEY}'",
         "export MCP_TOOL_TIMEOUT=600000   # TIMEOUT",
-        "export NODE_EXTRA_CA_CERTS=~/production-ready-ca.crt   # CA https://203.0.113.10/platform/ca.crt",
         "claude",
       ].join("\n")
     );
-    // http（開発）では CA の行を出さず、公開の URL が無い製品はこの画面の URL で書く。
+    // 公開の URL が無い製品はこの画面の URL で書く。証明書の配布は持たない（#19）。
     const dev = mcpRegistrationExample(mcpEndpointRows(mcpEndpoints("rag", "/", "http://localhost:3000"), ""), labels);
     expect(dev).toContain("claude mcp add --scope user --transport http rag http://localhost:3000/api/mcp");
     expect(dev).not.toContain("NODE_EXTRA_CA_CERTS");
@@ -139,10 +131,11 @@ describe("API キーの画面（#1805）", () => {
     expect(html).toContain("未使用");
     // 自分の画面には利用者の列を出さない。
     expect(html).not.toContain("利用者</th>");
-    // 公開の URL が無いときは、この画面の URL だけを出す。https なら CA の案内を添える（#1870）。
+    // 公開の URL が無いときは、この画面の URL だけを出す（#1870）。CA の証明書の案内は出さない（#19）。
     expect(html).toContain("この画面の URL");
     expect(html).not.toContain("公開の URL（OCI）");
-    expect(html).toContain("https://suite.example.com/platform/ca.crt");
+    expect(html).not.toContain("/platform/ca.crt");
+    expect(html).not.toContain('data-testid="api-keys-ca-note"');
     // 発行の既定の製品は、開いている製品によらず 3 製品のすべて（#1869・#1874）。
     expect(html).toMatch(/checked="" value="rag"/);
     expect(html).toMatch(/checked="" value="nl2sql"/);
@@ -179,7 +172,7 @@ describe("API キーの画面（#1805）", () => {
     expect(html).toContain("RAG・Agent（2 件に限定）");
   });
 
-  it("公開の URL があれば、この画面の URL と公開の URL を製品ごとに出し、CA の案内を添える（#1870）", () => {
+  it("公開の URL があれば、この画面の URL と公開の URL を製品ごとに出す（#1870）", () => {
     const html = render(<MyApiKeysPanel api={myApi} endpoints={mcpEndpoints("nl2sql", "/", "http://localhost:5174")} />, {
       mine: [],
       publicBaseUrl: "https://203.0.113.10:8443",
@@ -189,8 +182,7 @@ describe("API キーの画面（#1805）", () => {
     expect(html).toContain("https://203.0.113.10:8443/nl2sql/api/mcp");
     expect(html).toContain("公開の URL（OCI）");
     expect(html).toContain('aria-label="NL2SQLの公開の URL（OCI）: URL をコピー"');
-    expect(html).toContain("https://203.0.113.10:8443/platform/ca.crt");
-    expect(html).toContain('data-testid="api-keys-ca-note"');
+    expect(html).not.toContain("/platform/ca.crt");
     // 配備した画面で開いて、この画面の URL と公開の URL が同じなら 1 行。
     const same = render(
       <MyApiKeysPanel api={myApi} endpoints={mcpEndpoints("rag", "/rag/", "https://203.0.113.10:8443")} />,

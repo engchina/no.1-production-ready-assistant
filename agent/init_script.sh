@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # OCI Resource Manager の統合 stack（terraform/stack、#217）の cloud-init から呼ばれる agent の Compute 初期化スクリプト。
-# Agent Control Plane を Docker なしで Nginx + systemd に直接配備する。
+# Agent Control Plane を Docker なしで systemd に直接配備する。
 # ADB の DDL は持たない。Runtime 状態の table は backend 起動時に Oracle repository が作成し、
 # 共通認証（PLATFORM_*）と Agent のシステムテーブル（AGENT_*）はアプリの CLI（agent_system_schema）が作成する（#751）。
 # ログインは共通認証（PLATFORM_AUTH_MODE=authenticated。構成管理者 system_admin と DB ユーザー。#215）。
 # 3 製品は 1 台の Compute にセットで配備する（#1316。単独では配備しない）。platform/deploy/suite-init.sh が呼び、
-# Nginx の site は suite が 1 つだけ書く（ここでは書かない）。frontend は FRONTEND_BASE_PATH（/agent/）を base に build する。
+# reverse proxy の site は書かない（#19）。frontend は FRONTEND_BASE_PATH（/agent/）を base に build する。
 set -euo pipefail
 
 if [ "${AGENT_INIT_TEST_MODE:-false}" != "true" ]; then
@@ -33,7 +33,7 @@ WALLET_DIR="${APP_ROOT}/wallet"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${PROPS_DIR}/backend.env}"
-# frontend の base（Vite の base・React Router の basename）。Nginx の /agent/ の下で配信する（#1316）。
+# frontend の base（Vite の base・React Router の basename）。reverse proxy の /agent/ の下で配信する前提（#1316）。
 FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/agent/}"
 # true なら共有 UI（platform）を build し直さない（suite で先の製品が build したとき）。
 PR_SUITE_SKIP_PLATFORM_UI_BUILD="${PR_SUITE_SKIP_PLATFORM_UI_BUILD:-false}"
@@ -94,7 +94,7 @@ run_as_app_user_in_dir() {
   run_as_app_user bash -lc "cd '${workdir}' && $*"
 }
 
-# Agent が使う OS の package（Nginx・firewalld は platform/deploy/suite-init.sh が入れる）。
+# Agent が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。
 # gcc・make は wheel の無い Python の依存を build するため。curl は image にある。
 SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl tar unzip)
 

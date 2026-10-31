@@ -18,7 +18,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.addInitScript(({ key, theme }) => {
         localStorage.setItem(key, JSON.stringify({ state: { theme }, version: 0 }));
       }, { key: "production-ready-rag.ui", theme });
-      for (const route of ["/search-answer-profiles", "/knowledge-bases", "/settings/appearance"]) {
+      for (const route of ["/search-answer-profiles", "/knowledge-bases", "/settings/database"]) {
         await page.goto(route);
         await expect(page.locator("main h1")).toBeVisible();
         await page.evaluate(() => document.fonts.ready);

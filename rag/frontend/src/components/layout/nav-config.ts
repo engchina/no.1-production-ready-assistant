@@ -68,13 +68,12 @@ export interface NavSection {
   defaultCollapsed?: boolean;
 }
 
-/** 共通5項目（共有パッケージ）に付ける RAG の menu 権限（NL2SQL と同じコード）。 */
+/** 共通4項目（共有パッケージ）に付ける RAG の menu 権限（NL2SQL と同じコード）。 */
 const SYSTEM_SETTINGS_MENU_PERMISSIONS = {
   oci: MENU_PERMISSIONS.settingsOci,
   uploadStorage: MENU_PERMISSIONS.settingsUploadStorage,
   model: MENU_PERMISSIONS.settingsModel,
   database: MENU_PERMISSIONS.settingsDatabase,
-  appearance: MENU_PERMISSIONS.settingsAppearance,
 } satisfies Record<SystemSettingsKey, string>;
 
 /** 共通2項目（ユーザー管理・ロール管理）に付ける RAG の menu 権限。 */

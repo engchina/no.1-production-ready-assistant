@@ -92,9 +92,9 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 # 同期の品質評価（golden set。`/run`）の全体の時間の上限（秒。#383）。評価は同期の
 # HTTP で、1 ケースごとに回答生成（`rag_answer_timeout_seconds`）を行うため、ケース数 × 上限では
-# Nginx の待ちを超える。保存済みの回答の評価（#304）と同じく、LLM 1 回の timeout の設定の上限
+# 前段の reverse proxy の待ちを超える。保存済みの回答の評価（#304）と同じく、LLM 1 回の timeout の設定の上限
 # （`OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS` = 600 秒）で打ち切り、上限に達した後のケースは実行せずに
-# 失敗として返す。Nginx の待ち時間（660 秒。`init_script.sh` が生成する設定）はこれより長くし、
+# 失敗として返す。前段に reverse proxy を置くときは、その待ち時間をこれより長くし（#19）、
 # 打ち切った結果を呼び出し元に届ける。
 # 画面と評価 CLI は job の API（`/jobs/run`。#390）に移した。job の全体の上限は
 # 回答の回数に比例させる（`evaluation_job_time_limit_seconds`。#1430）。同期の API は、外部から

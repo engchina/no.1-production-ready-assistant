@@ -11,8 +11,8 @@ const focusedInsideDrawer = (page: Page) =>
 test.describe("md 未満のナビのドロワー (mobile-375)", { tag: "@responsive" }, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/settings/appearance");
-    await expect(page.getByRole("heading", { name: "外観と証明書", level: 1 })).toBeVisible();
+    await page.goto("/settings/model");
+    await expect(page.getByRole("heading", { name: "モデル設定", level: 1 })).toBeVisible();
   });
 
   test("閉じている間はサイドバーを出さず、上端のバーに「メニュー」と製品名を出す", async ({ page }) => {
@@ -65,7 +65,7 @@ test.describe("md 未満のナビのドロワー (mobile-375)", { tag: "@respons
 
 test("desktop（1280px）は従来どおりサイドバーを出し、メニューボタンを出さない", { tag: "@responsive" }, async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/model");
   const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
   await expect(sidebar).toBeVisible();
   await expect(page.getByTestId("nav-drawer-trigger")).toHaveCount(0);

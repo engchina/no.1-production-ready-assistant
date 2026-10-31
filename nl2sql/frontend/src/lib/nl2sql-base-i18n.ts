@@ -18,7 +18,7 @@ export const ja = {
   "dbGate.notConfigured.message":
     "NL2SQL の各機能（SQL 生成・データ準備・改善・運用）を利用するには、まずデータベースの接続情報を設定してください。設定が完了すると、この画面は自動的に利用できるようになります。",
   "dbGate.setupRequired.settingsHint":
-    "OCI 認証・アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
+    "OCI 認証・アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
   "dbGate.recovering": "保存済みの業務データを復元しています…",
   "dbGate.persistenceFailed.title": "保存済みの業務データを復元できません",
   "dbGate.persistenceFailed.message":

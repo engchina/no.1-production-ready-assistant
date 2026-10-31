@@ -5,6 +5,7 @@ import {
   CAPABILITY_PERMISSIONS,
   MENU_PERMISSIONS,
   currentUserHasPermission,
+  normalizeMenuPermissions,
 } from "../src/features/security/menu-permissions.ts";
 import type { CurrentUser } from "../src/features/security/types.ts";
 
@@ -72,4 +73,14 @@ test("用語・同義語と共通ルールの権限は業務プロファイル�
     assert.equal(currentUserHasPermission(user, CAPABILITY_PERMISSIONS.learningMaterialManage), false);
     assert.equal(currentUserHasPermission(user, MENU_PERMISSIONS.profiles), false);
   }
+});
+
+test("廃止した外観と証明書の権限（#19）は正規化で落とし、ほかの権限は残す", () => {
+  const normalized = normalizeMenuPermissions([
+    "menu.settings_appearance",
+    "dashboard.view",
+    "settings.appearance.view",
+    MENU_PERMISSIONS.settingsOci,
+  ]);
+  assert.deepEqual([...normalized], [MENU_PERMISSIONS.settingsOci]);
 });

@@ -4,7 +4,7 @@
 # pr_system_settings.model の resolve_api_key（payload の api_key を引数に渡す行）を誤検知したもの（#103）。
 8cb12f5a5bc52ebbed7566c7d9b6f29e6607bdfb:platform/packages/system_settings_backend/src/pr_system_settings/model.py:generic-api-key:414
 
-# #858: 隔離 Nginx の脱機密化検証で使う合成 sentinel。実 credential は含まない。
+# #858: 隔離 Nginx の脱機密化検証で使った合成 sentinel（テストは #19 で削除。履歴の commit の検出を抑える）。実 credential は含まない。
 7166487cbf3749b1983702feea1fda8107be027d:platform/scripts/tests/nginx-logging.test.sh:curl-auth-header:36
 
 # #1594: tests / test-data のディレクトリの丸ごとの除外をやめたときに検出された、テストの意図的なダミー値。

@@ -99,7 +99,7 @@ Backend は常に OCI Enterprise AI、OCI Generative AI、Oracle AI Database を
 ## OCI への配備（Resource Manager）
 
 3製品共通の Terraform stack（monorepo root の `terraform/stack/`）で配備します。Oracle Autonomous AI Database は NL2SQL / Agent と共有し、
-RAG は専用の Compute 1 台に NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）を作ります
+RAG は専用の Compute 1 台に NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd。Docker は使わない。#286。reverse proxy は利用者の選択。#19）を作ります
 （CPU の parser だけを配備する）。以前の Docker Compose で配備した環境の移行は [docs/deployment.md](./docs/deployment.md) を参照してください。
 「配備する製品」で RAG を選び、入力・配備方式・instance 上の構成・制約は [terraform/README.md](../terraform/README.md) を参照してください。
 

@@ -1,6 +1,6 @@
 # システム設定のボタン別レビュー（2026-09-11）
 
-対象は OCI 認証、アップロード保存先、モデル、データベース、システムテーブル、外観と証明書の6画面。UI の event handler → API payload → backend の認可・状態更新・永続化を確認し、下表の action を desktop 1280×900 / mobile-375 で検証した。
+対象は OCI 認証、アップロード保存先、モデル、データベース、システムテーブルの5画面（外観と証明書の画面は #19 で削除）。UI の event handler → API payload → backend の認可・状態更新・永続化を確認し、下表の action を desktop 1280×900 / mobile-375 で検証した。
 
 ## 発見した問題と修正
 
@@ -80,13 +80,6 @@
 
 画面（`SystemTablesCard`）と backend の schema manager の骨格（lease・台帳・状態の分類・確認語の検証）は 3 製品共通になった（#325。画面は `@production-ready/system-settings`、backend は `pr_system_settings.system_schema`）。NL2SQL が持つのは migration ファイル・manifest・外部キーの検証・実行中の job の確認と、確認語 `RECREATE_NL2SQL_SYSTEM_TABLES`・製品固有の文言・所有者付きの object 名の表示だけ。
 
-## 外観と証明書
-
-|操作|確認した挙動|
-|---|---|
-|ライト・ダーク|配色 token と aria-pressed が変わり、再読込で選択を復元。|
-|自動（OS 設定）|表示中の OS color scheme 変更にも追従する。|
-
 ## 検証と制約
 
 - Playwright: `frontend/tests/e2e/nl2sql-system-settings.spec.ts`、`system-tables.spec.ts`、`database-unavailable-settings.spec.ts`。
@@ -94,7 +87,7 @@
 - `npm run build` — pass。
 - `npm run test:logic` — 379 passed。
 - `npm run test:e2e -- tests/e2e/nl2sql-system-settings.spec.ts tests/e2e/system-tables.spec.ts tests/e2e/database-unavailable-settings.spec.ts` — 146 passed（desktop / mobile-375、1.3分）。
-- 6画面×2 viewport のスクリーンショットを取得。OCI / モデル desktop とモデル / DB mobile を目視し、幅・入力ラベル・focus 表示を確認。全画面の横幅・focus は Playwright でも確認。
+- 当時の6画面（削除済みの外観と証明書を含む）×2 viewport のスクリーンショットを取得。OCI / モデル desktop とモデル / DB mobile を目視し、幅・入力ラベル・focus 表示を確認。全画面の横幅・focus は Playwright でも確認。
 - `git diff --check` — pass。
 - UI 検証は隔離 API fixture、backend は一時ファイル・InMemory/モックを使用。実 OCI lifecycle、鍵、Wallet、DB credential、実 schema DDL の変更は行っていない。
 - 共通未保存ガードは内部 link・画面内遷移・reload/tab close が対象。BrowserRouter の既存制約により browser back/forward の完全ブロックは含まない。秘密情報を新たに browser storage に保存しない。

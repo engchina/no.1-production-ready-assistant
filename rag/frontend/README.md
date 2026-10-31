@@ -28,7 +28,7 @@ npm run build
 ## 本番配信
 
 本番（`rag/init_script.sh`）は `package-lock.json` を前提に `npm ci` で再現可能に依存解決して build し、
-host の Nginx が Vite の `dist/` を配信して `/api/*` を backend へリバースプロキシする（Docker は使わない。#286 / #356）。
+`dist/` の配信と `/api/*` の backend へのリバースプロキシは、利用者が前段に置く reverse proxy が行う（配備は reverse proxy を作らない。#19。Docker は使わない。#286 / #356）。
 
 ## 構成
 

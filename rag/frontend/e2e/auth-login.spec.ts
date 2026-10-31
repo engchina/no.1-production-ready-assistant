@@ -218,7 +218,7 @@ test("ログイン中に API が 401 を返したらログイン画面へ戻す"
         })
   );
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   const sidebar = await openSidebarNav(page);
   // 文書インデックスは既定で閉じている「ナレッジ構築」にある（#1563）。
   await expandSidebarSections(sidebar, "ナレッジ構築");
@@ -243,17 +243,17 @@ test("起動時のログインの確認が 503 ならログイン画面へ移さ
       : route.fallback()
   );
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   const error = page.getByTestId("auth-session-error");
   await expect(error).toContainText("ログインの状態を確認できませんでした。");
   await expect(error).toContainText("一時的に利用できません。");
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/database$/);
   await expectNoPageOverflow(page);
 
   unavailable = false;
   await error.getByRole("button", { name: "再試行" }).click();
-  await expect(page.getByRole("heading", { name: "外観と証明書", level: 1 })).toBeVisible();
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page.getByRole("heading", { name: "データベース設定", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/database$/);
 });
 
 test("アカウントの欄からアカウントの画面を開き、タブを切り替えてパスワードを変える（#1873）", { tag: "@responsive" }, async ({
@@ -264,7 +264,7 @@ test("アカウントの欄からアカウントの画面を開き、タブを�
   const auth = await mockAuthApi(page, loginTarget("admin.user"));
   await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3100" }]);
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   // 375px ではナビがドロワー（#367）。開いて文言付きの操作を使う。
   const sidebar = await openSidebarNav(page);
   // アカウント欄の 1 行目はログイン ID。表示名はほかの画面で使い、アカウント欄には出さない（#1696）。
@@ -314,7 +314,7 @@ test("アカウントの欄からアカウントの画面を開き、タブを�
 test("アカウント欄のログアウト", async ({ page }) => {
   const auth = await mockAuthApi(page, loginTarget("admin.user"));
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   const sidebar = await openSidebarNav(page);
   await sidebar.getByRole("button", { name: "ログアウト" }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -394,7 +394,7 @@ for (const theme of ["light", "dark"] as const) {
     // 構成のシステム管理者: 1 行目はログイン ID（表示名「システム管理者」ではない。#1696）、2 行目はロールの表示名（code ではない）。
     const auth = await mockAuthApi(page, user("system_admin", "システム管理者", [["SYSTEM_ADMIN", "システム管理者"]]));
 
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
     await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(theme === "dark");
     const sidebar = await openSidebarNav(page);
     await expect(sidebar.getByText("system_admin", { exact: true })).toBeVisible();

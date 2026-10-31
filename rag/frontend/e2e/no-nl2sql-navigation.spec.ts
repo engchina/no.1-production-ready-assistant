@@ -21,7 +21,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
 
     const sidebar = await openSidebarNav(page);
     // 既定では「AI 活用」と今のページのセクションだけが開いている（#1563）。すべて開いて項目を確かめる。

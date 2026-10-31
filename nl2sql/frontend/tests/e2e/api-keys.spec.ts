@@ -83,15 +83,16 @@ test.describe("API キー", { tag: "@responsive" }, () => {
     await page.getByRole("button", { name: "NL2SQLの公開の URL（OCI）: URL をコピー" }).click();
     await expect(page.getByText("URL をコピーしました")).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://203.0.113.10/nl2sql/api/mcp");
-    await expect(page.getByTestId("api-keys-ca-note")).toContainText("https://203.0.113.10/platform/ca.crt");
-    // 登録の例は skills/README.md と同じ形（サーバー名 rag / nl2sql・単一引用符・待ち時間・自作の CA）。
+    // 自作の CA の証明書は配らない（#19）。CA の証明書の案内は出さない。
+    await expect(page.getByTestId("api-keys-ca-note")).toHaveCount(0);
+    // 登録の例は skills/README.md と同じ形（サーバー名 rag / nl2sql・単一引用符・待ち時間）。
     await page.getByText("Claude Code の登録の例").click();
     const example = page.getByTestId("api-keys-example");
     await expect(example).toContainText("claude mcp add --scope user --transport http rag https://203.0.113.10/rag/api/mcp");
     await expect(example).toContainText("claude mcp add --scope user --transport http nl2sql https://203.0.113.10/nl2sql/api/mcp");
     await expect(example).toContainText("--header 'Authorization: Bearer ${PR_API_KEY}'");
     await expect(example).toContainText("export MCP_TOOL_TIMEOUT=600000");
-    await expect(example).toContainText("NODE_EXTRA_CA_CERTS");
+    await expect(example).not.toContainText("NODE_EXTRA_CA_CERTS");
     // 発行の既定の製品は、開いている製品によらず 3 製品のすべて（#1869・#1874）。
     await expect(page.getByTestId("api-key-product-nl2sql")).toBeChecked();
     await expect(page.getByTestId("api-key-product-rag")).toBeChecked();

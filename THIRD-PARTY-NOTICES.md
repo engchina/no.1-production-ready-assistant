@@ -93,7 +93,7 @@ Playwright（Apache-2.0。NOTICE あり）も e2e だけで使い、成果物に
 | Roboto | `@fontsource/roboto` | ラテン文字の fallback |
 | Google Sans Code | `@fontsource/google-sans-code` | 等幅（ID・ログ・SQL） |
 
-OFL-1.1 は、書体を配布するときに著作権表示とライセンスの原文を添えることを求めます。3 製品の `npm run build` は、使っている書体の package の `LICENSE` を `dist/licenses/fonts/<書体>-OFL.txt` に、一覧を `dist/licenses/fonts/README.txt` に出します（package から読むので、版を上げたときに原文を手で直さない）。配備では Nginx がこれを `/<製品>/licenses/fonts/` で配信します。書体を改変（subset の再生成など）して配るときは、OFL の Reserved Font Name の条件を確かめてください。
+OFL-1.1 は、書体を配布するときに著作権表示とライセンスの原文を添えることを求めます。3 製品の `npm run build` は、使っている書体の package の `LICENSE` を `dist/licenses/fonts/<書体>-OFL.txt` に、一覧を `dist/licenses/fonts/README.txt` に出します（package から読むので、版を上げたときに原文を手で直さない）。`dist/` を配信すると、これも `/<製品>/licenses/fonts/` で配信されます。書体を改変（subset の再生成など）して配るときは、OFL の Reserved Font Name の条件を確かめてください。
 
 ## Apache-2.0 の NOTICE
 
@@ -323,7 +323,7 @@ Copyright 2019 Kenneth Reitz
 | `poppler-utils` | RAG の parser（`parser-unstructured` の PDF の画像化） | (GPLv2 or GPLv3) and GPLv2+ and LGPLv2+ and MIT。別の process のコマンドとして起動する |
 | `tesseract`・`tesseract-langpack-eng`・`tesseract-langpack-jpn` | RAG の parser の OCR | ASL 2.0（Apache-2.0） |
 | `google-noto-sans-cjk-ttc-fonts`・`google-noto-serif-cjk-ttc-fonts` | LibreOffice の PDF 化の書体 | OFL（OFL-1.1） |
-| `nginx`・`firewalld`・`git`・`openssl`・`policycoreutils-python-utils`・`gcc`・`gcc-c++`・`make` ほか | 配信・firewall・配備の道具（`SUITE_OS_PACKAGES`・`BASE_SYSTEM_PACKAGES`） | 各 package の記載のとおり |
+| `git`・`openssl`・`policycoreutils-python-utils`・`gcc`・`gcc-c++`・`make` ほか | 配備の道具（`SUITE_OS_PACKAGES`・`BASE_SYSTEM_PACKAGES`） | 各 package の記載のとおり |
 
 ## 任意の部品（配備は入れない）
 
