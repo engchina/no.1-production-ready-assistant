@@ -284,8 +284,7 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
 - ログイン: 共通認証（`PLATFORM_AUTH_MODE=authenticated`。#214）。最初は構成管理者 `system_admin`（`app_admin_login_user_password`）でログインし、
   「ユーザーとロール」でユーザーとロールを作り、「セキュリティ設定 > 権限管理」でロールごとのメニュー・検索・回答プロファイル・ナレッジベースを設定します。
   Cookie を HTTPS 限定にするか（`PLATFORM_AUTH_COOKIE_SECURE`）は `https_enabled` から決まります。`RAG_AUDIT_CONTEXT_HASH_SALT` は instance 上で生成します。
-- 前処理 4 つと CPU の parser を配備します（出力 `rag_services`）。GPU の parser（MinerU / Dots.OCR）は含めず、
-  起動後に「取込・検索・回答設定 > 文書解析」で外部 API として指定します。音声・動画のファイルは取り込みません。
+- 前処理 4 つと CPU の parser を配備します（出力 `rag_services`）。GPU の parser は含めません。音声・動画のファイルは取り込みません。
 
   | service | 既定 | 入力 |
   |---|---|---|
@@ -293,7 +292,6 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
   | `parser-unstructured` | 配備する（#1559。文書解析の設定でも有効にする: `RAG_PARSER_UNSTRUCTURED_ENABLED`） | `rag_enable_parser_unstructured`（テキスト・HTML・Office・メールなど Docling が扱えない形式を、処理レシピで Unstructured を選んで取り込む場合） |
   | `parser-structured-records-jsonl` | 常に配備（#2457） | 構造化レコード JSONL の解析エンジン（`RAG_PARSER_ADAPTER_BACKEND=structured_records_jsonl`。ファイル準備の CSV→JSON・Excel→JSON が作る構造化レコードの JSONL）。文書解析の既定か処理レシピの使用エンジンで選んだときだけ使います。CSV / Excel の前処理と同じく、初めて配備したときに起動します |
   | `parser-xml-tree-json` | 常に配備・既定は停止（#2453） | XML ツリー JSON の解析エンジン（`RAG_PARSER_ADAPTER_BACKEND=xml_tree_json`。対応する形の `.json`）。文書解析の既定か処理レシピの使用エンジンで選んだときだけ使います（#2042）。初めて配備しても起動しないので、使うときは「運用設定 > サービス管理」で起動します |
-  | `parser-oci-document-understanding` | 配備しない（準備中〔ロードマップ〕。#3374） | なし（入力 `rag_enable_oci_cloud_parsers` は既定 false のまま画面に出さず、値に関わらず配備しません） |
 
   Docling を配備するかを選ぶ入力（以前の `rag_enable_parser_docling`）は廃止しました（Docling は既定の解析エンジンのため常に配備します）。
   Marker の parser（`parser-marker`）と入力 `rag_enable_parser_marker` は削除しました（#270）。
@@ -301,8 +299,7 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
   スキャン画像の補正（`preprocess-image-enhance`）と URL→Markdown（`preprocess-url-to-markdown`）は削除しました（#2042）。
   前処理の「PDF を画像として読み直す」（`preprocess-pdf-to-page-images`）も削除しました（#3347。スキャンの PDF は Docling が OCR で読みます）。
   取込時の「PIIマスク」（`preprocess-pii-redact`）と、その spaCy の日本語モデルの取得も削除しました（#3358）。
-  OCI Document Understanding の parser は準備中（ロードマップ。#3374）で、まだ使えません。入力 `rag_enable_oci_cloud_parsers` は残しますが、Resource Manager の画面には出さず、
-  値に関わらず配備しません（以前の配備で入れた unit は、再配備で止めて〔`disable --now`〕消し、sudoers からも外します）。既存の Compute は
+  OCI Document Understanding の parser（`parser-oci-document-understanding`）と入力 `rag_enable_oci_cloud_parsers` は削除しました（#22。以前の配備で入れた unit は、再配備で止めて〔`disable --now`〕消し、sudoers からも外します）。既存の Compute は
   `sudo platform/deploy/suite-update.sh` の再配備で `parser-structured-records-jsonl`（起動します）と `parser-xml-tree-json`（起動はしません）の unit が入り、削除したサービスの unit は止めて消されます
   （以前の stack が書いた `/u01/aipoc/props/rag_services.txt` も今の一覧に書き戻します）。
 
@@ -687,7 +684,7 @@ root の [README.md](../README.md)「OCI へのデプロイ」のボタンも `r
 | 旧（製品ごとの stack） | 新（統合 stack） |
 |---|---|
 | RAG の `app_login_user` / `app_login_password` / `app_auth_cookie_secure` | 廃止（ログインは構成管理者 `app_admin_login_user_password` と DB ユーザー。#214） / 廃止 / `rag_app_auth_cookie_secure` |
-| RAG の `enable_parser_docling` / `enable_parser_marker` / `enable_oci_cloud_parsers` | 廃止（Docling は常に配備。#286） / 廃止（Marker は削除。#270） / `rag_enable_oci_cloud_parsers` |
+| RAG の `enable_parser_docling` / `enable_parser_marker` / `enable_oci_cloud_parsers` | 廃止（Docling は常に配備。#286） / 廃止（Marker は削除。#270） / 廃止（OCI Document Understanding の parser は削除。#22） |
 | NL2SQL の `app_admin_login_user_password` / `oracle_deepsec_enabled` / `oracle_deepsec_data_user_password` | `app_admin_login_user_password`（RAG と共通） / `nl2sql_oracle_deepsec_enabled` / `nl2sql_oracle_deepsec_data_user_password` |
 | NL2SQL の `app_environment` / `app_auth_cookie_secure` / `app_admin_login_user_id` | `platform_environment` / `https_enabled` / `app_admin_login_user_id`（RAG と共通） |
 | Agent の `app_basic_auth_user` / `app_basic_auth_password` | 廃止（ログインは構成管理者 `app_admin_login_user_password` と DB ユーザー。#215） |

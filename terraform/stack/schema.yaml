@@ -136,7 +136,6 @@ variableGroups:
     visible: deploy_rag
     variables:
       - rag_enable_parser_unstructured
-      - rag_enable_oci_cloud_parsers
 
   - title: "NL2SQL Deep Data Security"
     visible: deploy_nl2sql
@@ -860,15 +859,6 @@ variables:
     title: "Unstructured parser (CPU)"
     description: "The Docling parser (CPU, PDF and images) is always installed as the default document parser. This option also installs and starts parser-unstructured as a systemd service and enables it in the document parsing settings, to ingest text, Markdown, CSV, JSON, XML, HTML, Office, and e-mail files; select Unstructured in the document's processing recipe."
     default: true
-
-  # OCI Document Understanding の parser は準備中（ロードマップ。#3374）。画面には出さず、配備もしない（変数は残す）。
-  rag_enable_oci_cloud_parsers:
-    type: boolean
-    required: true
-    visible: false
-    title: "OCI Document Understanding parser (roadmap)"
-    description: "OCI Document Understanding parser is on the roadmap and not available yet. It is not installed regardless of this value."
-    default: false
 
 
 

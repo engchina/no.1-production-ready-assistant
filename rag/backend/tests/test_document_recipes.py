@@ -211,7 +211,7 @@ def test_recipe_steps_attribute_full_run_failure_to_failed_phase() -> None:
     failed = _recipe_job(
         IngestionJobPhase.PREPROCESS,
         IngestionJobStatus.FAILED,
-        error_message="選択した文書解析サービス(MinerU)に接続できません。",
+        error_message="選択した文書解析サービス(Unstructured)に接続できません。",
     )
     steps = _recipe_steps(
         {
@@ -221,7 +221,7 @@ def test_recipe_steps_attribute_full_run_failure_to_failed_phase() -> None:
         [failed],
     )
     assert [step.status for step in steps] == [_S, DocumentRecipeStepStatus.FAILED, _P, _P]
-    assert steps[1].error_message == "選択した文書解析サービス(MinerU)に接続できません。"
+    assert steps[1].error_message == "選択した文書解析サービス(Unstructured)に接続できません。"
     assert steps[0].error_message is None
 
 
@@ -455,7 +455,7 @@ class _RecipeStatusOracle:
 @pytest.mark.parametrize(
     ("job_phase", "recipe_status", "expected"),
     [
-        # 通しジョブが抽出まで進んで失敗 → EXTRACT に帰属(MinerU 接続失敗など)。
+        # 通しジョブが抽出まで進んで失敗 → EXTRACT に帰属(Unstructured 接続失敗など)。
         (IngestionJobPhase.PREPROCESS, FileStatus.INGESTING, IngestionJobPhase.EXTRACT),
         # 前処理中の失敗はそのまま。
         (IngestionJobPhase.PREPROCESS, FileStatus.PREPROCESSING, IngestionJobPhase.PREPROCESS),

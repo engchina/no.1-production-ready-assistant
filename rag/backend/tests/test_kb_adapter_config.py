@@ -1,10 +1,8 @@
 """KB 単位構築設定(kb_adapter_config)の単体テスト。"""
 
 import pytest
-from pydantic import ValidationError
 
 from app.config import get_settings
-from app.main import app
 from app.rag.kb_adapter_config import (
     KbAdapterConfigError,
     KnowledgeBaseAdapterConfig,
@@ -17,8 +15,7 @@ from app.rag.kb_adapter_config import (
     resolve_effective_adapter_config,
     resolve_effective_settings,
 )
-from app.schemas.document import DocumentProcessingConfig, DocumentProcessingConfigInput
-from tests.support import AsgiTestClient
+from app.schemas.document import DocumentProcessingConfig
 
 
 def _config(**raw: object) -> KnowledgeBaseAdapterConfig:
@@ -79,13 +76,12 @@ def test_settings_overrides_uses_allowlist_only() -> None:
     assert config.settings_overrides("query") == {}
 
 
-@pytest.mark.usefixtures("mineru_selectable")
 def test_external_parser_backend_enables_feature_flag() -> None:
     """外部 parser backend を選ぶと対応 feature flag が有効になる。"""
     for backend, flag_field in (
         ("unstructured", "rag_parser_unstructured_enabled"),
-        ("mineru", "rag_parser_mineru_enabled"),
-        ("dots_ocr", "rag_parser_dots_ocr_enabled"),
+        ("structured_records_jsonl", "rag_parser_structured_records_jsonl_enabled"),
+        ("xml_tree_json", "rag_parser_xml_tree_json_enabled"),
     ):
         # グローバル既定が無効でも backend 選択で有効化されることを確かめる。
         settings = get_settings().model_copy(update={flag_field: False})
@@ -195,10 +191,10 @@ def test_removed_parser_engine_in_saved_config_inherits_global_default(removed: 
     assert removed not in str(dumped)
 
 
-def test_saved_roadmap_parser_engine_inherits_global_default() -> None:
-    """保存済みのレシピに準備中(ロードマップ)のエンジンが残っても global 既定を継承する(#3374)。
+def test_saved_removed_external_parser_engine_inherits_global_default() -> None:
+    """保存済みのレシピに削除した外部の解析エンジンが残っても global 既定を継承する(#22)。
 
-    画面・取込を壊さず、取込の経路は準備中のエンジンを選ばない。他の上書きは保つ。
+    画面・取込を壊さず、他の上書きは保つ。
     """
     saved = DocumentProcessingConfig.model_validate(
         {"parser_adapter_backend": "oci_document_understanding", "chunking_strategy": "page_level"}
@@ -210,31 +206,15 @@ def test_saved_roadmap_parser_engine_inherits_global_default() -> None:
     assert "rag_parser_adapter_backend" not in config.settings_overrides("ingestion")
 
 
-def test_recipe_input_rejects_roadmap_parser_engine_with_reason() -> None:
-    """処理レシピの保存の入力で準備中のエンジンを選ぶと、理由の分かる検証のエラーにする(#3374)。"""
-    with pytest.raises(ValidationError, match="準備中（ロードマップ）"):
-        DocumentProcessingConfigInput.model_validate(
-            {"parser_adapter_backend": "oci_document_understanding"}
-        )
-    # 使える解析エンジンと継承(None)はそのまま受ける。
+def test_recipe_put_accepts_available_parser_engine() -> None:
+    """``PUT /api/documents/{id}/recipes/{recipe_id}`` は使える解析エンジンを受ける(#22)。"""
     assert (
-        DocumentProcessingConfigInput.model_validate(
+        DocumentProcessingConfig.model_validate(
             {"parser_adapter_backend": "docling"}
         ).parser_adapter_backend
         == "docling"
     )
-    assert DocumentProcessingConfigInput.model_validate({}).parser_adapter_backend is None
-
-
-def test_recipe_put_rejects_roadmap_parser_engine_before_saving() -> None:
-    """``PUT /api/documents/{id}/recipes/{recipe_id}`` は保存する前に 422 にする(#3374)。"""
-    resp = AsgiTestClient(app).put(
-        "/api/documents/doc-a/recipes/recipe-a",
-        json={"parser_adapter_backend": "oci_document_understanding"},
-    )
-
-    assert resp.status_code == 422
-    assert "準備中（ロードマップ）" in resp.text
+    assert DocumentProcessingConfig.model_validate({}).parser_adapter_backend is None
 
 
 def test_ingestion_scope_overlays_advanced_axes() -> None:

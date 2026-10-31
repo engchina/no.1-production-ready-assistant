@@ -100,9 +100,8 @@ def test_extraction_recipe_id_changes_with_parser_axis() -> None:
 @pytest.mark.parametrize(
     ("backend", "field", "value"),
     [
-        ("mineru", "rag_parser_mineru_tier", "standard"),
-        ("dots_ocr", "rag_parser_dots_ocr_model", "dots-v2"),
-        ("dots_ocr", "rag_parser_dots_ocr_dpi", 400),
+        ("docling", "rag_parser_docling_enabled", True),
+        ("xml_tree_json", "rag_parser_xml_tree_json_enabled", True),
     ],
 )
 def test_extraction_recipe_id_changes_with_output_affecting_parser_setting(
@@ -110,7 +109,9 @@ def test_extraction_recipe_id_changes_with_output_affecting_parser_setting(
     field: str,
     value: object,
 ) -> None:
-    base = get_settings().model_copy(update={"rag_parser_adapter_backend": backend})
+    base = get_settings().model_copy(
+        update={"rag_parser_adapter_backend": backend, field: not value}
+    )
     changed = base.model_copy(update={field: value})
     base_id = compute_extraction_recipe_id(SRC, base)
     changed_id = compute_extraction_recipe_id(SRC, changed)
@@ -124,9 +125,8 @@ def test_extraction_recipe_id_changes_with_output_affecting_parser_setting(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("rag_parser_mineru_tier", "standard"),
-        ("rag_parser_dots_ocr_dpi", 400),
-        ("rag_parser_dots_ocr_model", "dots-v2"),
+        ("rag_parser_xml_tree_json_enabled", True),
+        ("rag_parser_structured_records_jsonl_enabled", True),
     ],
 )
 def test_extraction_recipe_id_ignores_unselected_parser_setting(
@@ -142,9 +142,8 @@ def test_extraction_recipe_id_ignores_unselected_parser_setting(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("rag_parser_dots_ocr_api_host", "https://new.example.com"),
-        ("rag_parser_dots_ocr_api_key", "new-secret"),
-        ("rag_parser_dots_ocr_pdf_workers", 12),
+        ("rag_parser_docling_service_url", "http://new.example.com"),
+        ("rag_parser_service_timeout_seconds", 123.0),
     ],
 )
 def test_extraction_recipe_id_ignores_parser_deployment_setting(
@@ -160,19 +159,16 @@ def test_extraction_recipe_id_ignores_parser_deployment_setting(
 def test_extraction_recipe_diagnostics_match_hashed_non_secret_settings() -> None:
     settings = get_settings().model_copy(
         update={
-            "rag_parser_adapter_backend": "dots_ocr",
-            "rag_parser_dots_ocr_model": "dots-diagnostic",
-            "rag_parser_dots_ocr_api_key": "never-persist-this",
+            "rag_parser_adapter_backend": "xml_tree_json",
+            "rag_parser_xml_tree_json_enabled": True,
         }
     )
 
     subset = extraction_recipe_subset(settings)
 
-    assert subset["rag_parser_dots_ocr_model"] == "dots-diagnostic"
-    assert "rag_parser_dots_ocr_api_key" not in subset
-    assert "rag_parser_dots_ocr_api_host" not in subset
-    assert "rag_parser_dots_ocr_pdf_workers" not in subset
-    assert "rag_parser_mineru_tier" not in subset
+    assert subset["rag_parser_xml_tree_json_enabled"] is True
+    assert "rag_parser_docling_service_url" not in subset
+    assert "rag_parser_service_timeout_seconds" not in subset
 
 
 def test_extraction_recipe_id_changes_with_preprocess_axis_and_source() -> None:

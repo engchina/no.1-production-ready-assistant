@@ -22,8 +22,6 @@ const PARSER_PROFILE_KEYS: Record<string, I18nKey> = {
 const PARSER_BACKEND_ALIASES: Record<string, string> = {
   docling_adapter: "docling",
   unstructured_adapter: "unstructured",
-  mineru_adapter: "mineru",
-  dots_ocr_adapter: "dots_ocr",
 };
 
 const PARSER_BACKEND_LABELS: Record<string, string> = {
@@ -31,9 +29,6 @@ const PARSER_BACKEND_LABELS: Record<string, string> = {
   unstructured: "Unstructured",
   structured_records_jsonl: "構造化レコード JSONL",
   xml_tree_json: "XML ツリー JSON",
-  mineru: "MinerU",
-  dots_ocr: "Dots.OCR",
-  oci_document_understanding: "OCI Document Understanding",
   enterprise_ai: "OCI Enterprise AI",
   local: t("sourceProfile.backend.local"),
   local_partition: t("sourceProfile.backend.local"),

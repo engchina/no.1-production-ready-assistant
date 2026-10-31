@@ -32,7 +32,7 @@ No.1 Production Ready Suite（`platform/`・`rag/`・`nl2sql/`・`agent/`）が�
 
 | 部品 | 取得元 | ライセンス | 場所 | 使い方と注記 |
 |---|---|---|---|---|
-| `crc32c` | PyPI | LGPL-2.1-or-later | `oci`（OCI SDK）の必須の依存。`rag/backend`・`rag/services/parsers/oci_document_understanding`（OCI Document Understanding の parser） | C 拡張を Python から import する（動的リンクに相当）。改変しない |
+| `crc32c` | PyPI | LGPL-2.1-or-later | `oci`（OCI SDK）の必須の依存。`rag/backend` | C 拡張を Python から import する（動的リンクに相当）。改変しない |
 | `opencv-python-headless` | PyPI | Apache-2.0。wheel の `opencv_python_headless.libs` に FFmpeg（libavcodec・libavformat・libavutil・libswscale・libswresample。LGPL-2.1-or-later）、libvpx・libaom・libavif（BSD 系）、OpenBLAS（BSD-3-Clause）、GCC runtime（`libgfortran`・`libquadmath`。下の numpy と同じ）を同梱 | `rag/services/parsers/docling`・`rag/services/parsers/unstructured` | 画像の処理に使う。同梱の部品のライセンスは wheel の `LICENSE-3RD-PARTY.txt` |
 | `opencv-python` | PyPI | Apache-2.0。FFmpeg（LGPL-2.1-or-later）と Qt（LGPL-3.0）を同梱 | `rag/backend` と `rag/packages/rag_engine` の任意の extra `docling` だけ | 配備は extra を入れないので、配備先には入らない（開発の環境だけ） |
 | `shapely` | PyPI | BSD-3-Clause。wheel の `shapely.libs` に GEOS（`libgeos`・`libgeos_c`。LGPL-2.1）を同梱 | `rag/services/parsers/docling`（RapidOCR の依存）、`rag/backend` の extra `docling` | GEOS のライセンスは wheel の `LICENSE_GEOS` |

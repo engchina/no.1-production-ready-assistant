@@ -54,8 +54,6 @@ locals {
     ],
     var.rag_enable_parser_unstructured ? ["parser-unstructured"] : [],
     ["parser-structured-records-jsonl", "parser-xml-tree-json"],
-    # parser-oci-document-understanding（OCI Document Understanding）は準備中（ロードマップ。#3374）で配備しない。
-    # 入力 rag_enable_oci_cloud_parsers は残すが（既定 false・画面に出さない）、今は使わない。
   )
 
   # rag/backend/.env（RAG_*）。backend が python-dotenv で読み、OCI parser の unit も EnvironmentFile で読む。

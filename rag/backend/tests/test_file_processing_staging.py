@@ -266,7 +266,7 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
     route_by_kind = {
         route["source_kind"]: route for route in payload["parser_adapter_source_routes"]
     }
-    assert route_by_kind["pdf"]["candidate_order"] == ("docling", "unstructured", "mineru")
+    assert route_by_kind["pdf"]["candidate_order"] == ("docling", "unstructured")
     assert route_by_kind["pdf"]["attempted_order"] == ()
     assert route_by_kind["pdf"]["selected_backend"] == "local"
     assert route_by_kind["email"]["candidate_order"] == ("unstructured",)
@@ -362,11 +362,7 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
     trend_route_by_kind = {
         route["source_kind"]: route for route in trend["parser_adapter_source_routes"]
     }
-    assert trend_route_by_kind["pdf"]["candidate_order"] == [
-        "docling",
-        "mineru",
-        "unstructured",
-    ]
+    assert trend_route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured"]
     assert trend_route_by_kind["pdf"]["selected_backend"] == "local"
     assert trend_route_by_kind["email"]["candidate_order"] == ["unstructured"]
     assert trend["parser_adapter_scorecard"]["recommended_backend"] == "local"
@@ -1524,7 +1520,7 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
     route_by_kind = {
         route["source_kind"]: route for route in payload["parser_adapter_source_routes"]
     }
-    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured", "mineru"]
+    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured"]
     assert route_by_kind["email"]["candidate_order"] == ["unstructured"]
     assert "super-secret-password" not in output_path.read_text(encoding="utf-8")
 
@@ -1828,13 +1824,13 @@ def test_report_payload_source_routes_are_contract_aware(
     route_by_kind = {
         route["source_kind"]: route for route in payload["parser_adapter_source_routes"]
     }
-    assert route_by_kind["pdf"]["candidate_order"] == ("docling", "unstructured", "mineru")
+    assert route_by_kind["pdf"]["candidate_order"] == ("docling", "unstructured")
     assert route_by_kind["pdf"]["selected_backend"] == "docling"
     assert "selected_adapter_supported_for_source" in route_by_kind["pdf"]["reason_codes"]
     # Docling は PDF と画像だけを解析するため、Docling を選んでも office は
     # Docling に回らない(#366)。取込では parser_source_guard が取込前に止めて案内する
     # (自動で Unstructured へ振り分けない)。
-    assert route_by_kind["office"]["candidate_order"] == ("unstructured", "mineru")
+    assert route_by_kind["office"]["candidate_order"] == ("unstructured",)
     assert route_by_kind["office"]["selected_backend"] == "local"
     assert "selected_adapter_unsupported_for_source" in route_by_kind["office"]["reason_codes"]
     assert "docling_adapter_source_unsupported" in route_by_kind["office"]["warning_codes"]

@@ -165,11 +165,11 @@ def test_parser_artifacts_accepts_nested_source_derivation_roundtrip() -> None:
                 "page_map": {"1": 1},
                 "warnings": [],
             },
-            "ocr_backend": "oci_document_understanding",
+            "ocr_backend": "removed_ocr_backend",
         },
     )
     restored = StructuredExtraction.model_validate_json(extraction.model_dump_json())
     derivation = restored.parser_artifacts["source_derivation"]
     assert isinstance(derivation, dict)
     assert derivation["derivation_id"] == "d1"
-    assert restored.parser_artifacts["ocr_backend"] == "oci_document_understanding"
+    assert restored.parser_artifacts["ocr_backend"] == "removed_ocr_backend"

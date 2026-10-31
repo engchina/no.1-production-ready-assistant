@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 #   unit の外のプロセスが同じポートで応答しているときは、その /health の状態を返す
 # - not_installed: systemd の unit が登録されていない(配備で選ばなかったサービスなど)
 # - unconfigured: URL 未設定
-# - roadmap: 準備中(ロードマップ)のサービス。配備しないので問い合わせない(#3374。エラーではない)
 ServiceRuntimeStatus = Literal[
     "running",
     "degraded",
@@ -39,7 +38,6 @@ ServiceRuntimeStatus = Literal[
     "stopped",
     "not_installed",
     "unconfigured",
-    "roadmap",
 ]
 HealthStatus = Literal["ok", "degraded", "unreachable"]
 _ACTIVE_STATES = {"active", "reloading", "activating"}  # unit が動いている(起動中を含む)
@@ -74,8 +72,6 @@ async def probe_service_status(
     settings: Settings, entry: ServiceCatalogEntry
 ) -> ServiceRuntimeStatus:
     """1 サービスの unit の状態と /health を問い合わせて稼働状態を返す。"""
-    if entry.is_roadmap:
-        return "roadmap"
     url = service_health_url(settings, entry)
     if not url:
         return "unconfigured"

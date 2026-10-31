@@ -15,10 +15,6 @@ from typing import Literal
 
 from pr_backend_core.internal_http import http_client_options
 
-from app.clients.external_parser import (
-    ENGINE_SPECS,
-    external_parser_connection,
-)
 from app.clients.http_retry import request_with_retry, retry_config_from_settings
 from app.config import ParserAdapterBackend, Settings
 
@@ -37,8 +33,6 @@ ParserAdapterName = Literal[
     "unstructured",
     "structured_records_jsonl",
     "xml_tree_json",
-    "mineru",
-    "dots_ocr",
 ]
 ParserAdapterStatus = Literal["active", "available", "disabled", "ignored", "missing"]
 
@@ -75,26 +69,12 @@ ADAPTER_PACKAGES: dict[ParserAdapterName, ParserAdapterPackageSpec] = {
         distribution_names=("rag-parser-core",),
         install_package="rag-parser-core",
     ),
-    # 外部 native API の接続設定を実装証跡として扱う。
-    "mineru": ParserAdapterPackageSpec(
-        import_name="external_api",
-        distribution_names=("mineru_v1",),
-        install_package="外部 MinerU API",
-    ),
-    # 外部 OpenAI 互換 API の接続設定を実装証跡として扱う。
-    "dots_ocr": ParserAdapterPackageSpec(
-        import_name="external_api",
-        distribution_names=("openai_chat_completions",),
-        install_package="外部 Dots.OCR API",
-    ),
 }
 ADAPTER_ORDER: tuple[ParserAdapterName, ...] = (
     "docling",
     "unstructured",
     "structured_records_jsonl",
     "xml_tree_json",
-    "mineru",
-    "dots_ocr",
 )
 ADAPTER_BACKENDS: tuple[ParserAdapterBackend, ...] = (
     "local",
@@ -102,11 +82,6 @@ ADAPTER_BACKENDS: tuple[ParserAdapterBackend, ...] = (
     "unstructured",
     "structured_records_jsonl",
     "xml_tree_json",
-    "mineru",
-    "dots_ocr",
-    # service 系 backend(OCI クラウドサービスを呼ぶ)。package readiness の対象外だが、
-    # 選択値の正規化では受理する。
-    "oci_document_understanding",
 )
 
 
@@ -173,12 +148,7 @@ def _adapter_status(
     installed: bool
     version: str | None
     distribution_name: str | None
-    if backend in ENGINE_SPECS:
-        connection = external_parser_connection(settings, backend)
-        installed = connection.configured
-        version = connection.model
-        distribution_name = connection.protocol
-    elif settings.rag_parser_readiness_probe_enabled:
+    if settings.rag_parser_readiness_probe_enabled:
         # 本番: parser サービスの /health で導入状況・version を解決する。
         installed, version, distribution_name = _probe_service_health(settings, backend)
     else:
@@ -197,9 +167,7 @@ def _adapter_status(
         status = "active"
     elif selected:
         status = "missing"
-        warning_code = (
-            "external_parser_unconfigured" if backend in ENGINE_SPECS else "adapter_package_missing"
-        )
+        warning_code = "adapter_package_missing"
     elif enabled:
         status = "ignored"
         warning_code = "adapter_flag_ignored_by_backend"

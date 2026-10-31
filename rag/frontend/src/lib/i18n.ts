@@ -206,82 +206,15 @@ export const ja = {
   "settings.parserAdapters.backend.local.description": "旧 in-process 解析。既定の Docling へ正規化",
   "settings.parserAdapters.backend.docling.description": "既定の解析エンジン。PDF と画像を解析",
   "settings.parserAdapters.backend.unstructured.description": "テキスト・HTML・Office・メールなども受ける汎用の解析。選んだ場合だけ使用",
-  "settings.parserAdapters.backend.mineru.description":
-    "外部 MinerU API を使用。ライセンスの条件の確認が要る",
-  // MinerU のライセンス（MinerU Open Source License）の主な条件と、利用の前の確認（#3359）。
-  "mineruLicense.title": "MinerU のライセンス（MinerU Open Source License）の主な条件",
-  "mineruLicense.intro":
-    "MinerU は Apache-2.0 に追加の条件を付けたライセンスで提供されています。主な条件は次のとおりです。",
-  "mineruLicense.point.threshold":
-    "利用者とその関連会社の合算で、月間アクティブユーザーが 1 億を超えるか、月の売上が 2,000 万米ドルを超えると、MinerU のチームの別途の商用ライセンスが要ります。",
-  "mineruLicense.point.attribution":
-    "MinerU を使って第三者にオンラインサービスを提供するときは、サービスの画面か公開の文書の目立つ所に、MinerU を使っていることを明示します。",
-  "mineruLicense.point.termination":
-    "上の条件を満たさないと、ライセンスは通知なしに自動で終わります。",
-  "mineruLicense.point.model":
-    "旧モデルの MinerU2.5-2509-1.2B は AGPL-3.0 です。MinerU2.5-Pro-2605-1.2B（Apache-2.0）を使ってください。",
-  "mineruLicense.confirmFullText":
-    "利用の前に、ライセンスの全文を確認してください。この案内は主な条件の抜粋で、法的な助言ではありません。",
-  "mineruLicense.link.repository": "MinerU の公式リポジトリ（GitHub）",
-  "mineruLicense.link.license": "ライセンスの全文（LICENSE.md）",
-  "mineruLicense.link.newTab": "（新しいタブで開く）",
-  "mineruLicense.acknowledge": "MinerU のライセンスの条件を確認した",
-  "mineruLicense.acknowledgeHelper":
-    "確認すると、MinerU を使用エンジンに選べます。確認した人と日時は保存の時に記録します。",
-  "mineruLicense.acknowledgedBy": "確認済み: {name}（{at}）",
-  "mineruLicense.acknowledgedAt": "確認済み（{at}）",
-  "mineruLicense.withdrawLocked":
-    "MinerU を使用エンジンにしている間は、確認を外せません。先に別の使用エンジンを選んでください。",
-  "mineruLicense.compact":
-    "MinerU のライセンス（MinerU Open Source License）は Apache-2.0 に追加の条件（企業の規模による別途の商用ライセンス・オンラインサービスでの利用の明示）があります。利用の前に全文を確認してください。",
-  "mineruLicense.adminOnly":
-    "MinerU のライセンスの条件の確認と取り消しは、システム管理者だけができます。",
-  "mineruLicense.selectBlocked":
-    "MinerU を選ぶには、先に下の「MinerU のライセンスの条件を確認した」を確かめてください。",
-  "mineruLicense.recipeUnacknowledged":
-    "MinerU を選ぶには、システム管理者が「取込・検索・回答設定 › 文書解析」で MinerU のライセンスの条件を確認する必要があります。",
-  "settings.parserAdapters.backend.dots_ocr.description": "外部 Dots.OCR API を使用",
-  "settings.parserAdapters.backend.oci_document_understanding": "OCI Document Understanding",
-  "settings.parserAdapters.backend.oci_document_understanding.description":
-    "OCI Document Understanding による OCR・表抽出を予定（未実装）",
   "settings.parserAdapters.capabilities": "対応形式",
   "settings.parserAdapters.legacyBackendNotice":
     "旧『local』設定です。未選択時は既定の Docling で解析します(内蔵フォールバックは廃止)。下から解析方式を選ぶと上書きされます。",
-  "settings.parserAdapters.serviceBackend.unconfigured": "未設定",
-  "settings.parserAdapters.roadmap.badge": "準備中（ロードマップ）",
-  "settings.parserAdapters.roadmap.reason": "準備中（ロードマップ）のため、まだ選べません。",
   "settings.parserAdapters.backend.structured_records_jsonl": "構造化レコード JSONL",
   "settings.parserAdapters.backend.structured_records_jsonl.description":
     "ファイル準備の CSV→JSONL・Excel→JSONL・Word→JSONL が作る構造化レコードの JSONL を、記録の単位で解析。一般の JSONL ではなく、この構造化レコード形式が対象。解析後の分割は「文書分割」の設定で決まります",
   "settings.parserAdapters.backend.xml_tree_json": "XML ツリー JSON",
   "settings.parserAdapters.backend.xml_tree_json.description":
     "XML の要素の木（tag / attr / children）を JSON にした文書を、要素の階層のまま解析。選んだ場合だけ使用",
-  "settings.parserAdapters.connection.title": "外部 GPU 解析エンジンの接続",
-  "settings.parserAdapters.connection.description":
-    "接続先とモデルを保存してから接続を確認します。API key は再表示されず、空欄のまま保存すると現在値を保持します。",
-  "settings.parserAdapters.connection.endpoint": "Endpoint",
-  "settings.parserAdapters.connection.model": "Model",
-  "settings.parserAdapters.connection.apiKey": "API key",
-  "settings.parserAdapters.connection.nativeModel": "接続先の MinerU 設定を使用",
-  "settings.parserAdapters.connection.apiKeyRetained": "設定済み（空欄なら保持）",
-  "settings.parserAdapters.connection.clearApiKey": "保存済み API key を削除",
-  "settings.parserAdapters.connection.configured": "設定済み",
-  "settings.parserAdapters.connection.test": "接続を確認",
-  "settings.parserAdapters.connection.testing": "{backend} への接続を確認しています",
-  "settings.parserAdapters.connection.saveBeforeTest":
-    "接続確認には保存済み設定を使います。先に変更を保存してください。",
-  "settings.parserAdapters.connection.testFailed": "接続を確認できませんでした。",
-  "settings.parserAdapters.connection.invalidEndpoint":
-    "http または https の Endpoint を入力してください。認証情報、query、fragment は URL に含められません。",
-  "settings.parserAdapters.connection.modelRequired": "Model を入力してください。",
-  "settings.parserAdapters.connection.status.available": "接続できました。",
-  "settings.parserAdapters.connection.status.unconfigured": "接続設定が未完了です。",
-  "settings.parserAdapters.connection.status.unreachable":
-    "接続先へ到達できません。Endpoint、ネットワーク、認証を確認してください。",
-  "settings.parserAdapters.connection.status.model_missing":
-    "設定した Model が接続先にありません。Model 名を確認してください。",
-  "settings.parserAdapters.connection.status.invalid_response":
-    "接続先の応答形式を確認できませんでした。対応プロトコルを確認してください。",
   "settings.parserAdapters.effectiveOrder": "実行順",
   "settings.parserAdapters.noEffectiveOrder": "外部解析方式なし",
   "settings.parserAdapters.source": "設定元",
@@ -1753,9 +1686,6 @@ export const ja = {
   "settings.services.status.not_installed":
     "未登録",
   "settings.services.status.unconfigured": "未設定",
-  "settings.services.status.roadmap": "準備中（ロードマップ）",
-  "settings.services.roadmapHint":
-    "このサービスは準備中（ロードマップ）です。まだ配備・起動できません（実装は今後の版で使えるようにします）。",
   "settings.services.status.loading": "確認中",
   "settings.services.status.error": "取得失敗",
   "settings.services.modelCache.label": "モデルキャッシュ",
@@ -1817,7 +1747,6 @@ export const ja = {
   "settings.services.item.parserUnstructured": "Unstructured",
   "settings.services.item.parserStructuredRecordsJsonl": "構造化レコード JSONL",
   "settings.services.item.parserXmlTreeJson": "XML ツリー JSON",
-  "settings.services.item.parserOciDocumentUnderstanding": "OCI Document Understanding",
   "settings.services.loadError": "サービス一覧を取得できませんでした。",
   "settings.retrieval.subtitle":
     "回答の検索方法と生成方式の全体設定、および検索に使うプロンプトを設定します。",
@@ -3915,9 +3844,6 @@ export const ja = {
   "settings.answerPrompts.fixedRules": "図・画像の指示と出力形式",
   "settings.answerPrompts.visionInstructions.description": "保存した指示は次の画像の読み取りから使います。処理済みの文書への反映には再処理が必要です。出力形式と上限は読み取り専用です。保存済みの出力例を編集しても、固定の項目・型・件数上限は変わりません。",
   "settings.answerPrompts.noPlaceholders": "必須の placeholder はありません。",
-  "settings.answerPrompts.external_ocr.title": "Dots.OCR の読み取りプロンプト",
-  "settings.answerPrompts.external_ocr.description": "文書解析で Dots.OCR を使用するときに、ページごとに渡す指示です。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
-  "settings.answerPrompts.external_ocr.field": "プロンプト",
   "settings.answerPrompts.heading_levels.title": "見出しの階層の推定プロンプト",
   "settings.answerPrompts.heading_levels.description": "「見出しの階層の推定（AI）」が有効で、対象の条件を満たす文書に使います。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
   "settings.answerPrompts.heading_levels.field": "プロンプト",
@@ -3931,8 +3857,6 @@ export const ja = {
   "settings.answerPrompts.raptor_summary_system.description": "文書分割後、RAPTOR の階層の要約が有効なときに使う共通の指示です。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
   "settings.answerPrompts.raptor_summary_system.field": "プロンプト",
   "settings.raptor.description": "文書解析の章節の要約の後、文書を Chunk に分割してから、RAPTOR で階層ごとの要約を作り、Embedding・索引へ進みます。章節の要約とは独立した機能です。この設定を有効にすると、次の取込・再処理から実行します。既定は無効です。",
-  "settings.answerPrompts.stage.external_ocr": "外部の Dots.OCR で読み取る",
-  "settings.answerPrompts.stage.external_ocr.condition": "文書解析の使用エンジンが「Dots.OCR」のとき（ページごと）",
   "settings.answerPrompts.stage.picture_description": "図・画像の説明",
   "settings.answerPrompts.stage.picture_description.condition":
     "「図・画像を AI で読み取る」を有効にしたとき（図・表の画像ごと）。指示は文書解析の「図・画像の読み取りプロンプト」で編集します。出力形式と上限は読み取り専用です。",

@@ -221,7 +221,7 @@ def test_settings_read_platform_and_rag_env_names_only(monkeypatch: pytest.Monke
     monkeypatch.setenv("PLATFORM_ORACLE_DSN", "platform-dsn")
     monkeypatch.setenv("PLATFORM_AUTH_MODE", "authenticated")
     monkeypatch.setenv("RAG_HUGGINGFACE_ENDPOINT", "hf-mirror.com")
-    monkeypatch.setenv("RAG_OCI_DOCUMENT_UNDERSTANDING_LANGUAGE", "en")
+    monkeypatch.setenv("RAG_PARSER_SERVICE_TIMEOUT_SECONDS", "123")
     monkeypatch.setenv("HF_TOKEN", "legacy-token")
 
     settings = Settings(_env_file=None)
@@ -229,7 +229,7 @@ def test_settings_read_platform_and_rag_env_names_only(monkeypatch: pytest.Monke
     assert settings.oracle_dsn == "platform-dsn"
     assert settings.auth_mode == "authenticated"
     assert settings.huggingface_endpoint == "https://hf-mirror.com"
-    assert settings.oci_document_understanding_language == "en"
+    assert settings.rag_parser_service_timeout_seconds == 123.0
     assert settings.huggingface_token == ""
 
 
@@ -244,14 +244,14 @@ def test_settings_do_not_read_legacy_env_names(
     monkeypatch.delenv("RAG_LOG_LEVEL", raising=False)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     monkeypatch.setenv("ORACLE_DSN", "legacy-dsn")
-    monkeypatch.setenv("OCI_DOCUMENT_UNDERSTANDING_NAMESPACE", "legacy-namespace")
+    monkeypatch.setenv("OBJECT_STORAGE_NAMESPACE", "legacy-namespace")
     backend_env = tmp_path / "backend.env"
     backend_env.write_text("LOG_LEVEL=WARN\nORACLE_USER=legacy-user\n", encoding="utf-8")
 
     settings = Settings(_env_file=backend_env)
 
     assert settings.oracle_dsn == ""
-    assert settings.oci_document_understanding_namespace == ""
+    assert settings.object_storage_namespace == ""
     assert settings.log_level == "INFO"
     assert settings.oracle_user == ""
     # 属性名での生成（テストや設定画面の候補作成）は引き続き使える。
@@ -348,30 +348,6 @@ def test_http_service_retry_defaults_to_five_attempts_and_is_bounded() -> None:
         Settings(rag_http_service_retry_attempts=0)
     with pytest.raises(ValidationError):
         Settings(rag_http_service_retry_attempts=11)
-
-
-def test_external_gpu_parser_connection_defaults() -> None:
-    """外部 GPU parser は未接続を既定とし、旧 service URL を読まない。"""
-    settings = Settings()
-
-    assert settings.rag_parser_mineru_api_host == ""
-    assert settings.rag_parser_dots_ocr_api_host == ""
-    assert settings.rag_parser_mineru_tier == "basic"
-    assert settings.rag_parser_mineru_job_timeout_seconds == 1800.0
-    assert settings.rag_parser_dots_ocr_model == "rednote-hilab/dots.mocr"
-
-    assert Settings(rag_parser_mineru_tier="advanced").rag_parser_mineru_tier == "advanced"
-    # 3.x の解析の方式（pipeline 等）は 4.0 の tier ではない（#1329）。
-    with pytest.raises(ValidationError):
-        Settings(rag_parser_mineru_tier="pipeline")
-
-
-def test_legacy_gpu_service_url_is_not_migrated(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RAG_PARSER_MINERU_SERVICE_URL", "http://legacy-mineru:8000/parse")
-
-    settings = Settings(_env_file=None)
-
-    assert settings.rag_parser_mineru_api_host == ""
 
 
 def test_enterprise_ai_timeout_defaults_to_pdf_friendly_value() -> None:
@@ -473,15 +449,11 @@ def test_ingestion_job_stall_timeout_default_starts_with_deployed_parser_timeout
     [
         ({"ingestion_job_stall_timeout_seconds": 1800.0}, "PLATFORM_OCI_ENTERPRISE_AI"),
         (
-            {"rag_parser_mineru_job_timeout_seconds": 7200.0},
-            "RAG_PARSER_MINERU_JOB_TIMEOUT_SECONDS",
-        ),
-        (
             {"rag_parser_service_timeout_seconds": 3600.0},
             "RAG_PARSER_SERVICE_TIMEOUT_SECONDS",
         ),
     ],
-    ids=["stall-too-short", "mineru-longer", "parser-service-longer"],
+    ids=["stall-too-short", "parser-service-longer"],
 )
 def test_ingestion_job_stall_timeout_rejects_shorter_than_silent_call(
     overrides: dict[str, float], setting_name: str
@@ -511,8 +483,7 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
         "RAG_PARSER_ADAPTER_BACKEND",
         "RAG_PARSER_DOCLING_ENABLED",
         "RAG_PARSER_UNSTRUCTURED_ENABLED",
-        "RAG_PARSER_MINERU_ENABLED",
-        "RAG_PARSER_DOTS_OCR_ENABLED",
+        "RAG_PARSER_XML_TREE_JSON_ENABLED",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = Settings(_env_file=None)
@@ -521,8 +492,7 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.rag_parser_adapter_backend == "docling"
     assert settings.rag_parser_docling_enabled is True
     assert settings.rag_parser_unstructured_enabled is False
-    assert settings.rag_parser_mineru_enabled is False
-    assert settings.rag_parser_dots_ocr_enabled is False
+    assert settings.rag_parser_xml_tree_json_enabled is False
     # auto(旧既定)は既定 docling へ。local_partition は baseline 値 local へ。
     # local は正規化せず baseline 値として残す(runtime は ingestion で既定エンジンへマップ)。
     assert Settings(rag_parser_adapter_backend="auto").rag_parser_adapter_backend == "docling"

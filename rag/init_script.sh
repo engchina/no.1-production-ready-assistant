@@ -82,9 +82,9 @@ DATABASE_INITIALIZATION_READY=false
 
 # この stack が配備してよい前処理 / parser（CPU / OCI だけ。並びは scripts/rag-systemd.sh の RAG_MICROSERVICES と同じ）。
 # rag_services.txt に、提供するサービス（RAG_MICROSERVICES）のうちこれ以外の名前があれば失敗させる。
-# 提供しなくなったサービス（RAG_MICROSERVICES に無い名前）と準備中（ロードマップ）のサービス
-# （rag-systemd.sh の RAG_ROADMAP_SERVICES。#3374）は、以前の stack が書いた rag_services.txt に
-# 残っていても読み飛ばす（その unit は configure_systemd が止めて消し、sudoers からも外す）。
+# 提供しなくなったサービス（RAG_MICROSERVICES に無い名前）は、以前の stack が書いた
+# rag_services.txt に残っていても読み飛ばす（その unit は configure_systemd が止めて消し、
+# sudoers からも外す）。
 ALLOWED_RAG_SERVICES=(
   preprocess-office-to-pdf
   preprocess-csv-to-jsonl
@@ -221,10 +221,6 @@ load_rag_services() {
     fi
     if ! rag_service_definition "${name}" >/dev/null; then
       log "Skipping RAG service that is no longer provided: ${name}"
-      continue
-    fi
-    if rag_service_roadmap "${name}"; then
-      log "Skipping RAG service that is on the roadmap (not available yet): ${name}"
       continue
     fi
     if ! contains_value "${name}" "${ALLOWED_RAG_SERVICES[@]}"; then

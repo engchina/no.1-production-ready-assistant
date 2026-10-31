@@ -24,7 +24,6 @@ from rag_engine.knowledge.prompt_files import (
 from rag_engine.parsing.vision_prompt_rules import split_image_retrieval_prompt
 
 INGESTION_PROMPT_REFS = {
-    "external_ocr": "app.clients.external_parser:DOTS_OCR_PROMPT",
     "heading_levels": "app.rag.ingestion_prompts:HEADING_LEVEL_PROMPT",
     "field_extraction": "app.rag.ingestion_prompts:FIELD_EXTRACTION_PROMPT",
     "navigation_summary": "app.rag.ingestion_prompts:NAVIGATION_SUMMARY_PROMPT",
@@ -96,11 +95,6 @@ class PromptStage:
 # 載せ忘れると tests/test_answer_prompt_stages.py が失敗する。編集できる指示
 # (EDITABLE_PROMPT_KEYS)は編集欄で示す。
 PROMPT_STAGES: tuple[PromptStage, ...] = (
-    PromptStage(
-        "external_ocr",
-        "ingestion",
-        (("instruction", "app.clients.external_parser:DOTS_OCR_PROMPT"),),
-    ),
     PromptStage(
         "picture_description",
         "ingestion",

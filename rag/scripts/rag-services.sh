@@ -18,11 +18,8 @@
 #           parser-xml-tree-json（XML ツリー JSON の .json。文書解析の使用エンジンに XML ツリー JSON を選んだときに
 #           使う。install は登録だけして起動しない）
 #   --unstructured  parser-unstructured（Docling が扱えないテキスト・Office・メール などを取り込む場合）
-#   --all   すべて（準備中〔ロードマップ〕のサービスは入れない）
+#   --all   すべて
 #   <service_id>  個別に指定（例: parser-docling）
-#
-# 準備中（ロードマップ）のサービス（rag-systemd.sh の RAG_ROADMAP_SERVICES。OCI Document Understanding の
-# parser-oci-document-understanding。#3374）は選べない（実装は repo に残すが、登録・起動しない）。
 #
 # torch を使うサービス（parser-docling・parser-unstructured）の lock は、PyTorch の CPU 版の index の torch を
 # 持ち、CUDA の wheel（triton・nvidia-* / cuda-*）を入れない（各 pyproject.toml の [[tool.uv.index]]。#1650）。
@@ -82,10 +79,6 @@ add_selected() {
       log "未知のサービスです: ${service}"
       return 1
     fi
-    if rag_service_roadmap "${service}"; then
-      log "${service} は準備中（ロードマップ）のため、まだ登録・起動できません。"
-      return 1
-    fi
     if [[ " ${SELECTED[*]} " != *" ${service} "* ]]; then
       SELECTED+=("${service}")
     fi
@@ -104,10 +97,6 @@ parse_targets() {
       --cpu) add_selected "${CPU_SERVICES[@]}" ;;
       --unstructured) add_selected "${UNSTRUCTURED_SERVICES[@]}" ;;
       --all) add_selected "${CPU_SERVICES[@]}" "${UNSTRUCTURED_SERVICES[@]}" ;;
-      --oci)
-        log "OCI の parser（parser-oci-document-understanding）は準備中（ロードマップ）のため、まだ登録・起動できません。"
-        return 1
-        ;;
       *) add_selected "${arg}" ;;
     esac
   done

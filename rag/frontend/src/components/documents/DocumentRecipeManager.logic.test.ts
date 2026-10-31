@@ -20,8 +20,6 @@ const emptyConfig: DocumentProcessingConfig = {
   parser_adapter_backend: null,
   parser_docling_enabled: null,
   parser_unstructured_enabled: null,
-  parser_mineru_enabled: null,
-  parser_dots_ocr_enabled: null,
   vision_enabled: null,
   chunking_strategy: null,
   chunk_size: null,

@@ -111,7 +111,7 @@ def test_only_structured_records_jsonl_reads_sheet_records() -> None:
     """行の記録は構造化レコード JSONL だけが要素にする（Docling・Unstructured は診断で止める）。"""
     profile = _xlsx_profile()
     assert adapter_supports_source("docling", source_profile=profile, content_type="") is False
-    for backend in ("docling", "unstructured", "mineru"):
+    for backend in ("docling", "unstructured", "xml_tree_json"):
         assert not adapter_supports_source(
             backend, source_profile=profile, content_type=f"{STRUCTURED_RECORDS_CONTENT_TYPE}; x=1"
         )

@@ -57,10 +57,8 @@ from app.config import (
     QueryStrategy,
     Settings,
     VectorIndexProfile,
-    is_roadmap_parser_adapter_backend,
     normalize_legacy_chunking_strategy_value,
     normalize_removed_preprocess_profile,
-    reject_roadmap_parser_adapter_backend,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,8 +81,6 @@ _INGESTION_FIELD_MAP: dict[str, str] = {
     "parser_adapter_backend": "rag_parser_adapter_backend",
     "parser_docling_enabled": "rag_parser_docling_enabled",
     "parser_unstructured_enabled": "rag_parser_unstructured_enabled",
-    "parser_mineru_enabled": "rag_parser_mineru_enabled",
-    "parser_dots_ocr_enabled": "rag_parser_dots_ocr_enabled",
     "parser_structured_records_jsonl_enabled": "rag_parser_structured_records_jsonl_enabled",
     "parser_xml_tree_json_enabled": "rag_parser_xml_tree_json_enabled",
     # 図・画像を AI で読み取る(Vision)。解析エンジンに関係なく効く(#497)。
@@ -158,8 +154,6 @@ _EXTERNAL_PARSER_BACKEND_FLAGS: dict[str, str] = {
     "unstructured": "rag_parser_unstructured_enabled",
     "structured_records_jsonl": "rag_parser_structured_records_jsonl_enabled",
     "xml_tree_json": "rag_parser_xml_tree_json_enabled",
-    "mineru": "rag_parser_mineru_enabled",
-    "dots_ocr": "rag_parser_dots_ocr_enabled",
 }
 
 
@@ -167,7 +161,7 @@ class KbAdapterConfigError(ValueError):
     """KB 構築設定がグローバル設定と整合しないときに送出する。"""
 
 
-# 削除した文書解析エンジン(#270)の有効化フラグ。保存済みの KB 構築設定・文書レシピ・
+# 削除した文書解析エンジン(#270・#22)の有効化フラグ。保存済みの KB 構築設定・文書レシピ・
 # 取込ジョブの snapshot に残っていても読めるよう、検証前に取り除く。
 _REMOVED_PARSER_FLAG_FIELDS = frozenset(
     f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS
@@ -195,9 +189,7 @@ def _migrate_legacy_vision_fields(data: dict[object, object]) -> dict[object, ob
 def _clean_persisted_ingestion_config(data: object) -> object:
     """保存値・入力の取込設定から削除済みの項目を除き、旧値を読み替える(KnowledgeBaseIngestionConfig)。
 
-    削除済みエンジン(#270)と準備中(ロードマップ)のエンジン(#3374)は「global 既定の文書解析エンジンを
-    継承」(None)へ寄せる。準備中のエンジンを選ぶ保存(処理レシピの PUT)は、入力のモデル
-    (``DocumentProcessingConfigInput``)が検証のエラーにする。
+    削除済みエンジン(#270・#22)は「global 既定の文書解析エンジンを継承」(None)へ寄せる。
     """
     if not isinstance(data, dict):
         return data
@@ -209,29 +201,12 @@ def _clean_persisted_ingestion_config(data: object) -> object:
     backend = cleaned.get("parser_adapter_backend")
     if isinstance(backend, str) and backend.strip().casefold() in REMOVED_PARSER_ADAPTER_BACKENDS:
         cleaned["parser_adapter_backend"] = None
-    elif is_roadmap_parser_adapter_backend(backend):
-        logger.warning(
-            "保存済みの処理レシピの解析エンジン %s は準備中（ロードマップ）のため使わず、"
-            "全体の既定を継承します。",
-            backend,
-        )
-        cleaned["parser_adapter_backend"] = None
     # 削除したファイル準備の変換方式(#2042)は「変換なし」へ寄せる(ログに出す)。
     if "preprocess_profile" in cleaned:
         cleaned["preprocess_profile"] = normalize_removed_preprocess_profile(
             cleaned["preprocess_profile"]
         )
     return cleaned
-
-
-def reject_roadmap_parser_backend_input(data: object) -> object:
-    """処理レシピの保存の入力で、準備中(ロードマップ)の解析エンジンを検証のエラーにする(#3374)。"""
-    if isinstance(data, Mapping):
-        reject_roadmap_parser_adapter_backend(data.get("parser_adapter_backend"))
-        # MinerU の flag(parser_mineru_enabled)で選ぶことも止める(#3359)。
-        if data.get("parser_mineru_enabled") is True:
-            reject_roadmap_parser_adapter_backend("mineru")
-    return data
 
 
 class KnowledgeBaseIngestionConfig(BaseModel):
@@ -259,8 +234,6 @@ class KnowledgeBaseIngestionConfig(BaseModel):
     parser_adapter_backend: ParserAdapterBackend | None = None
     parser_docling_enabled: bool | None = None
     parser_unstructured_enabled: bool | None = None
-    parser_mineru_enabled: bool | None = None
-    parser_dots_ocr_enabled: bool | None = None
     parser_structured_records_jsonl_enabled: bool | None = None
     parser_xml_tree_json_enabled: bool | None = None
     vision_enabled: bool | None = None

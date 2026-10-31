@@ -195,3 +195,20 @@ def test_continuation_stops_at_heading() -> None:
     result = consolidate_document_extraction(_extraction(records), source_bytes=b"")
 
     assert not _continues(result)
+
+
+def test_consolidation_is_idempotent_and_skips_other_engines() -> None:
+    """何度当てても同じ結果にし、Docling 以外の engine の record は変えない(#22)。"""
+    records = [
+        _record(1, 1, "Text", PREVIOUS_TEXT, [LEFT, 500.0, 520.0, 560.0]),
+        _record(2, 1, "Text", CURRENT_TEXT, [LEFT, 50.0, 520.0, 110.0]),
+    ]
+
+    once = consolidate_document_extraction(_extraction(records), source_bytes=b"")
+    twice = consolidate_document_extraction(once, source_bytes=b"")
+
+    assert twice.parser_artifacts == once.parser_artifacts
+    assert _continues(once)
+
+    other_engine = _extraction([{**record, "engine": "other_engine"} for record in records])
+    assert consolidate_document_extraction(other_engine, source_bytes=b"") == other_engine

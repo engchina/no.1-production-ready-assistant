@@ -35,23 +35,8 @@ export const PREPROCESS_OPTIONS: SelectFieldOption<PreprocessProfileName>[] = PR
 
 // 並びは文書解析の画面の使用エンジンのカードと同じ正本（PARSER_BACKEND_ORDER。#3359）。
 export const PARSER_VALUES = PARSER_BACKEND_ORDER;
-// 準備中（ロードマップ）の解析エンジン（OCI Document Understanding は #3374、MinerU は #3359）。
-// 選択肢には灰色で出し、選ばせない（backend も保存を 422 にする）。
-export const ROADMAP_PARSER_VALUES: readonly ParserAdapterBackend[] = [
-  "mineru",
-  "oci_document_understanding",
-];
 export const PARSER_OPTIONS: SelectFieldOption<ParserAdapterBackend>[] = PARSER_VALUES.map(
-  (value) =>
-    ROADMAP_PARSER_VALUES.includes(value)
-      ? {
-          value,
-          label: parserBackendLabel(value),
-          disabled: true,
-          badge: t("settings.parserAdapters.roadmap.badge"),
-          disabledReason: t("settings.parserAdapters.roadmap.reason"),
-        }
-      : { value, label: parserBackendLabel(value) }
+  (value) => ({ value, label: parserBackendLabel(value) })
 );
 
 const CHUNKING_VALUES = [
