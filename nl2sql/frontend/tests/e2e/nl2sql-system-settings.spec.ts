@@ -90,9 +90,11 @@ function modelSettingsFixture(overrides: Record<string, unknown> = {}) {
         max_retries: 3,
       },
       generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
+        embedding_model: "text-embedding-v4",
         embedding_dim: 1536,
-        rerank_model: "cohere.rerank-v4.0-fast",
+        embedding_base_url: "",
+        rerank_model: "qwen3-rerank",
+        rerank_base_url: "",
       },
     },
     model_settings_file: "runtime-settings",
@@ -422,7 +424,7 @@ async function expectModelSaveButtonsUsePrimaryStyle(page: Page) {
   const buttons = [
     page.getByRole("button", { name: "OCI Enterprise AI: 保存" }),
     page.getByRole("button", { name: "登録モデル: 保存" }),
-    page.getByRole("button", { name: "OCI Generative AI: 保存" }),
+    page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }),
   ];
   await page.mouse.move(0, 0);
   await Promise.all(buttons.map((button) => button.evaluate(async (element) => {
@@ -674,11 +676,11 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "登録モデル", exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "OCI Generative AI", exact: true })
+    page.getByRole("heading", { name: "埋め込み / 再ランク", exact: true })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "OCI Generative AI: 保存" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
   await expect(page.locator("#enterprise-api-path")).toHaveCount(0);
   await expect(page.locator("#enterprise-vlm-input-mode")).toHaveCount(0);
@@ -878,19 +880,19 @@ test("システム設定のテスト成功結果を共通パネルで表示す�
   await expect(enterpriseResult).toContainText("vision");
 
   await page
-    .getByRole("button", { name: "cohere.embed-v4.0 をテスト", exact: true })
+    .getByRole("button", { name: "text-embedding-v4 をテスト", exact: true })
     .click();
   const embeddingResult = page
-    .getByText("cohere.embed-v4.0 の設定を確認しました。", { exact: true })
+    .getByText("text-embedding-v4 の設定を確認しました。", { exact: true })
     .locator("xpath=ancestor::*[@data-settings-test-result][1]");
   await expect(embeddingResult).toContainText("vector_dim");
   await expect(embeddingResult).toContainText("1536");
 
   await page
-    .getByRole("button", { name: "cohere.rerank-v4.0-fast をテスト", exact: true })
+    .getByRole("button", { name: "qwen3-rerank をテスト", exact: true })
     .click();
   const rerankResult = page
-    .getByText("cohere.rerank-v4.0-fast の設定を確認しました。", { exact: true })
+    .getByText("qwen3-rerank の設定を確認しました。", { exact: true })
     .locator("xpath=ancestor::*[@data-settings-test-result][1]");
   await expect(rerankResult).toContainText("top_score");
   await expectNoHorizontalOverflow(page);
@@ -969,7 +971,7 @@ test("システム設定の失敗と API エラーを共通 danger パネルで�
     fulfillJson(route, {
       status: "failed",
       target_type: "embedding",
-      model_id: "cohere.embed-v4.0",
+      model_id: "text-embedding-v4",
       message: "Embedding モデルのテストに失敗しました。",
       troubleshooting: ["OCI Generative AI の設定を確認してください。"],
       raw_error: "gateway timeout",
@@ -981,7 +983,7 @@ test("システム設定の失敗と API エラーを共通 danger パネルで�
   );
   await page.goto("/settings/model");
   await page
-    .getByRole("button", { name: "cohere.embed-v4.0 をテスト", exact: true })
+    .getByRole("button", { name: "text-embedding-v4 をテスト", exact: true })
     .click();
   const modelResult = page
     .getByText("Embedding モデルのテストに失敗しました。", { exact: true })
@@ -1622,7 +1624,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expect(enterpriseSaving).toHaveAttribute("aria-busy", "true");
   await expectLargeActionButton(enterpriseSaving);
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "OCI Generative AI: 保存" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeDisabled();
   firstSaveGate.release();
   await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。")).toBeVisible();
 
@@ -1642,7 +1644,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   ).toBe("enterprise-nl2sql-llm");
   expect(
     (connectionRequest.generative_ai as Record<string, unknown>).embedding_model
-  ).toBe("cohere.embed-v4.0");
+  ).toBe("text-embedding-v4");
   await expect(page.getByRole("textbox", { name: "モデル ID 1" })).toHaveValue(
     "enterprise-unsaved-model"
   );
@@ -1664,15 +1666,15 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
     "enterprise-unsaved-model"
   );
   expect((modelsRequest.generative_ai as Record<string, unknown>).embedding_model).toBe(
-    "cohere.embed-v4.0"
+    "text-embedding-v4"
   );
   await expect(page.locator("#genai-embedding-model")).toHaveValue("cohere.unsaved-embed");
 
-  const generativeSave = page.getByRole("button", { name: "OCI Generative AI: 保存" });
+  const generativeSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
   await generativeSave.focus();
   await expect(generativeSave).toBeFocused();
   await generativeSave.press("Enter");
-  await expect(page.getByText("OCI Generative AI 設定を保存しました。")).toBeVisible();
+  await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。")).toBeVisible();
   const generativeRequest = requests[2];
   expect(
     (generativeRequest.generative_ai as Record<string, unknown>).embedding_model
@@ -1705,7 +1707,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expectNoHorizontalOverflow(page);
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "OCI Generative AI: 保存" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
 });
 

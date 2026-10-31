@@ -71,7 +71,9 @@ async def test_spans_are_nested_under_the_step_that_did_the_work(
     monkeypatch.setattr(engine_oci, "parse_text_response", _traced_llm)
     pipeline = RagPipeline(
         # 質問の言い換えに LLM を使う戦略（元の質問の検索を並行に先読みする。#1499）。
-        settings=Settings(rag_query_strategy="auto_routing", oci_compartment_id="synthetic"),
+        settings=Settings(
+            rag_query_strategy="auto_routing", embedding_base_url="https://synthetic.test/v1"
+        ),
         oracle=_TracedOracle(),  # type: ignore[arg-type]
         genai=_TracedGenAi(),  # type: ignore[arg-type]
     )

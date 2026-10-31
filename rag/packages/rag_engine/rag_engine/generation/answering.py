@@ -580,7 +580,7 @@ def _rerank_skip_reason(records: Sequence[AnswerRecord], settings: Settings | No
     if not enabled:
         return "無効の設定"
     if settings is None or not _rerank_configured(settings):
-        return "モデルまたはコンパートメントが未設定"
+        return "モデルまたは Base URL が未設定"
     if not records:
         return "対象の根拠なし"
     return ""

@@ -158,7 +158,18 @@ def _rank_records_with_scores(
 
 
 def _rerank_configured(settings: Settings) -> bool:
-    return bool(str(getattr(settings, "rerank_model", "") or "").strip() and str(getattr(settings, "oci_compartment_id", "") or "").strip())
+    """再ランクを実行できるか（#8）。
+
+    model があり、Base URL が決まること。Base URL は `rerank_base_url`、
+    `embedding_base_url`、LLM の既定の接続の endpoint のいずれかで決まる。
+    """
+    if not str(getattr(settings, "rerank_model", "") or "").strip():
+        return False
+    for name in ("rerank_base_url", "embedding_base_url"):
+        if str(getattr(settings, name, "") or "").strip():
+            return True
+    providers = getattr(settings, "llm_providers", None) or {}
+    return any(str(getattr(provider, "endpoint", "") or "").strip() for provider in providers.values())
 
 
 def _retrieval_candidate_limit(top_k: int, settings: Settings | None = None) -> int:

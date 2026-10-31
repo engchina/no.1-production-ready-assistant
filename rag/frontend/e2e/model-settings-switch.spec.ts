@@ -60,9 +60,11 @@ function createModelSettings({
         max_retries: 3,
       },
       generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
+        embedding_model: "text-embedding-v4",
         embedding_dim: 1536,
-        rerank_model: "cohere.rerank-v4.0-fast",
+        embedding_base_url: "",
+        rerank_model: "qwen3-rerank",
+        rerank_base_url: "",
       },
     },
     model_settings_file: "model-settings.json",
@@ -161,20 +163,20 @@ for (const viewport of [
     );
     const enterpriseSave = page.getByRole("button", { name: "OCI Enterprise AI: 保存" });
     const modelsSave = page.getByRole("button", { name: "登録モデル: 保存" });
-    const genaiSave = page.getByRole("button", { name: "OCI Generative AI: 保存" });
+    const genaiSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
     const enterpriseTestButton = page.getByRole("button", { name: "enterprise-llm をテスト" });
     const embeddingTestButton = page.getByRole("button", {
-      name: "cohere.embed-v4.0 をテスト",
+      name: "text-embedding-v4 をテスト",
     });
     const rerankTestButton = page.getByRole("button", {
-      name: "cohere.rerank-v4.0-fast をテスト",
+      name: "qwen3-rerank をテスト",
     });
     await expectActionInsideCard(page, "OCI Enterprise AI", enterpriseSave);
     await expectActionInsideCard(page, "登録モデル", modelsSave);
     await expectActionInsideCard(page, "登録モデル", enterpriseTestButton);
-    await expectActionInsideCard(page, "OCI Generative AI", genaiSave);
-    await expectActionInsideCard(page, "OCI Generative AI", embeddingTestButton);
-    await expectActionInsideCard(page, "OCI Generative AI", rerankTestButton);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", genaiSave);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", embeddingTestButton);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", rerankTestButton);
 
     for (const button of [
       enterpriseSave,
@@ -256,7 +258,7 @@ for (const viewport of [
     });
     await page.goto("/settings/model");
     const rerank = page.getByRole("textbox", { name: "リランクモデル ID" });
-    await expect(rerank).toHaveValue("cohere.rerank-v4.0-fast");
+    await expect(rerank).toHaveValue("qwen3-rerank");
 
     // ほかの製品がセカンダリ接続とリランクモデルを保存した。
     const other = createModelSettings({ secondary: true });
@@ -264,14 +266,14 @@ for (const viewport of [
     current = { ...other, revision: "rev-2" };
 
     await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "OCI Generative AI: 保存" }).click();
+    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
 
     await expect(page.getByText("この画面を開いた後にほかの画面（別の製品を含む）で更新されました。")).toBeVisible();
     expect(patches).toEqual([{ base_revision: "rev-1" }]);
     await expect(rerank).toHaveValue("rerank-mine");
     const reload = page.getByRole("button", { name: "最新の設定を読み込む" });
     await expect(reload).toHaveCount(1);
-    await expectActionInsideCard(page, "OCI Generative AI", reload);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", reload);
     await expectNoPageOverflow(page);
     await page.screenshot({
       path: test.info().outputPath(`model-settings-conflict-${viewport.name}.png`),
@@ -287,8 +289,8 @@ for (const viewport of [
     await expect(reload).toHaveCount(0);
 
     await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "OCI Generative AI: 保存" }).click();
-    await expect(page.getByText("OCI Generative AI 設定を保存しました。").first()).toBeVisible();
+    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
+    await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。").first()).toBeVisible();
     expect(patches.at(-1)).toEqual({ base_revision: "rev-2" });
   });
 }
@@ -723,9 +725,9 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
   await expect(page.getByText("surface")).toBeVisible();
   await expect(page.getByText("llm", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "cohere.embed-v4.0 をテスト" }).click();
+  await page.getByRole("button", { name: "text-embedding-v4 をテスト" }).click();
   await expect(
-    page.getByText("Embedding モデル「cohere.embed-v4.0」のテストに失敗しました。")
+    page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。")
   ).toBeVisible();
   await expect(page.getByText("確認ポイント")).toBeVisible();
   await expect(page.getByText("OCI config、設定名、region")).toBeVisible();
@@ -736,7 +738,7 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
   await expectNoPageOverflow(page);
   await page.screenshot({path: testInfo.outputPath("model-test-error-detail.png"), fullPage: true});
   // 結果は操作した欄の行のすぐ下に出す: Embedding の結果は Rerank の欄より上（messaging.md §10）。
-  const embeddingResult = page.getByText("Embedding モデル「cohere.embed-v4.0」のテストに失敗しました。");
+  const embeddingResult = page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。");
   const embeddingBox = await embeddingResult.boundingBox();
   const embeddingFieldBox = await page.locator("#genai-embedding-model").boundingBox();
   const rerankFieldBox = await page.locator("#genai-rerank-model").boundingBox();
