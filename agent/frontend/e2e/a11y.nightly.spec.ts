@@ -10,17 +10,15 @@ import { expectMainActionsClearOfToast } from "./fixtures/toast-placement";
  * （名前の `*.nightly.spec.ts`。platform/scripts/e2e-impact/nightly-only.ts）。ローカルは `npx playwright test e2e/a11y.nightly.spec.ts`。
  *
  * - 対象はサイドナビの全項目の画面（SCREENS。ナビとずれたら「ナビの全項目」のテストが失敗する）と、淡い色の面
- *   （選んだ行・状態の表示）が出る状態（STATES）。それぞれライトとダークで確かめる。API は mock-api の fixture。
+ *   （選んだ行・状態の表示）が出る状態（STATES）。テーマはライトだけ（#17）。API は mock-api の fixture。
  * - 対象は WCAG 2.x の A / AA（2.0 と 2.1）。失敗にするのは impact が serious / critical の違反だけ。
  * - 違反は rule id・impact・件数・対象（selector）を失敗の文と添付（axe-violations.json）に出す。
  * - 既知の例外は KNOWN_EXCEPTIONS に rule id・画面・理由を書く（直すのに設計の判断が要るもの。別 Issue で直す）。
- * - 同じ SCREENS で、通知（Toast）の決まった置き場所が主操作と重ならないことも確かめる（#1728。ライトだけ、desktop と 375px）。
+ * - 同じ SCREENS で、通知（Toast）の決まった置き場所が主操作と重ならないことも確かめる（#1728。desktop と 375px）。
  */
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 const BLOCKING_IMPACTS = new Set(["serious", "critical"]);
-const THEMES = ["light", "dark"] as const;
-type Theme = (typeof THEMES)[number];
 
 /** 既知の例外（画面の path → 除く rule id）。空なら除かない。 */
 const KNOWN_EXCEPTIONS: Record<string, readonly string[]> = {};
@@ -40,7 +38,6 @@ const SCREENS: Screen[] = [
   { path: "/runs" },
   { path: "/agents" },
   { path: "/skills" },
-  { path: "/automations" },
   { path: "/evaluation" },
   { path: "/feedback" },
   { path: "/usage" },
@@ -162,13 +159,6 @@ const STATES: (Screen & { name: string })[] = [
 
 const pathOf = (screen: Screen) => screen.path.split("?")[0];
 
-/** テーマは ui-store（localStorage）の保存値で決める（既定はライト）。 */
-async function useTheme(page: Page, theme: Theme) {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 /** 表示の途中（フェードイン・色の transition）の色で color-contrast を測らない。無限の animation（Spinner など）は待たない。 */
 async function waitForSettledAnimations(page: Page) {
   await page.waitForFunction(() =>
@@ -204,20 +194,17 @@ async function expectNoSeriousViolations(page: Page, testInfo: TestInfo, path: s
 }
 
 /** 画面を開き、読み込んだ後の状態にする。 */
-async function openScreen(page: Page, mockApi: MockApi, screen: Screen, theme: Theme) {
-  await useTheme(page, theme);
+async function openScreen(page: Page, mockApi: MockApi, screen: Screen) {
   screen.setup?.(mockApi);
   await page.goto(screen.path);
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
-  if (theme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-  else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
   // 読み込み中の Skeleton ではなく、読み込んだ後の画面を確かめる。
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await screen.act?.(page);
 }
 
-async function openAndCheck(page: Page, mockApi: MockApi, testInfo: TestInfo, screen: Screen, theme: Theme) {
-  await openScreen(page, mockApi, screen, theme);
+async function openAndCheck(page: Page, mockApi: MockApi, testInfo: TestInfo, screen: Screen) {
+  await openScreen(page, mockApi, screen);
   await expectNoSeriousViolations(page, testInfo, pathOf(screen));
 }
 
@@ -232,29 +219,27 @@ test.describe("画面の a11y（axe）", { tag: "@a11y" }, () => {
     expect(hrefs).toEqual(SCREENS.map(pathOf));
   });
 
-  for (const theme of THEMES) {
-    for (const screen of SCREENS) {
-      test(`${pathOf(screen)}（${theme}）に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
-        await openAndCheck(page, mockApi, testInfo, screen, theme);
-      });
-    }
-    for (const screen of NON_NAV_SCREENS) {
-      test(`${screen.path}（${theme}）に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
-        await openAndCheck(page, mockApi, testInfo, screen, theme);
-      });
-    }
-    for (const state of STATES) {
-      test(`${state.name}（${theme}）に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
-        await openAndCheck(page, mockApi, testInfo, state, theme);
-      });
-    }
+  for (const screen of SCREENS) {
+    test(`${pathOf(screen)}に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
+      await openAndCheck(page, mockApi, testInfo, screen);
+    });
+  }
+  for (const screen of NON_NAV_SCREENS) {
+    test(`${screen.path}に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
+      await openAndCheck(page, mockApi, testInfo, screen);
+    });
+  }
+  for (const state of STATES) {
+    test(`${state.name}に WCAG 2.1 A / AA の serious / critical の違反が無い`, async ({ page, mockApi }, testInfo) => {
+      await openAndCheck(page, mockApi, testInfo, state);
+    });
   }
   // #1728: 通知（Toast）の決まった置き場所（desktop は画面の右下、375px は上端のバー）が、主操作（PageHeader の
   // ページの操作・FormActionBar・ObjectActionBar・チャットの入力欄と送信・ページの末尾の操作）と重ならない。
   // 通知は本文より上に重なるので、重なると操作が隠れる（WCAG 2.2 の 2.4.11 Focus Not Obscured の考え方）。
   for (const screen of [...SCREENS, ...NON_NAV_SCREENS]) {
     test(`${screen.path} の主操作は通知の置き場所と重ならない`, { tag: "@responsive" }, async ({ page, mockApi }) => {
-      await openScreen(page, mockApi, screen, "light");
+      await openScreen(page, mockApi, screen);
       await expectMainActionsClearOfToast(page);
     });
   }

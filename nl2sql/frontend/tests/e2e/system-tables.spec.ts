@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route, type TestInfo } from "./_helpers/test";
 import { openSidebarNav } from "./_helpers/sidebar-nav";
 import { measuredVisibleRowsHeight } from "./_helpers/data-table";
-import { mockDatabaseGateReady, systemAdminMe } from "./_helpers/database-gate";
+import { systemAdminMe } from "./_helpers/database-gate";
 import { expectToastPlacement } from "./_helpers/toast";
 
 function envelope(data: unknown, errors: string[] = [], errorCode?: string) {
@@ -44,18 +44,6 @@ const databaseSettings = {
   adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
   region: "ap-osaka-1",
   config_source: "runtime",
-};
-
-const adbInfo = {
-  status: "success",
-  message: "ADB OCID が設定されています。",
-  id: databaseSettings.adb_ocid,
-  display_name: "nl2sqldb",
-  lifecycle_state: "AVAILABLE",
-  db_name: "NL2SQLDB",
-  cpu_core_count: 2,
-  data_storage_size_in_tbs: 1,
-  region: "ap-osaka-1",
 };
 
 type SchemaStatus = "missing" | "partial" | "outdated" | "ready";
@@ -219,7 +207,6 @@ async function mockDatabasePage(page: Page, user = systemAdminMe) {
     fulfill(route, { status: "ok", check: "ok", detail: null })
   );
   await page.route("**/api/settings/database", (route) => fulfill(route, databaseSettings));
-  await page.route("**/api/settings/database/adb", (route) => fulfill(route, adbInfo));
   await page.route("**/api/schema/owners", (route) =>
     fulfill(route, {
       current_owner: "NL2SQL_APP",
@@ -269,57 +256,6 @@ test("運用設定のメニューからシステムテーブル管理を開け�
   await expect(page.locator("#system-tables")).toBeVisible();
   await expect(page.locator("#system-tables").getByText("初期化済み", { exact: true })).toBeVisible();
   await expectNoPageOverflow(page);
-});
-
-test("dark theme の状態フィードバックは semantic container 色を使う", async ({ page }, testInfo) => {
-  await mockDatabaseGateReady(page);
-  await page.route("**/api/auth/login**", (route) => fulfill(route, systemAdminMe));
-  await page.route("**/api/settings/database/system-tables", (route) =>
-    fulfill(route, systemTables("ready"))
-  );
-
-  await page.goto("/settings/system-tables");
-  const loginHeading = page.getByRole("heading", { name: "システムにログイン" });
-  const systemTablesCard = page.locator("#system-tables");
-  await expect(systemTablesCard.or(loginHeading)).toBeVisible();
-  if (await loginHeading.isVisible()) {
-    await page.getByLabel("ログインユーザーID").fill("SYSTEM");
-    await page.getByLabel("パスワード").fill("password");
-    await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(loginHeading).toHaveCount(0);
-  }
-  await page.evaluate(() => {
-    if (window.location.pathname === "/settings/system-tables") return;
-    window.history.pushState({}, "", "/settings/system-tables");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  });
-  await expect(systemTablesCard).toBeVisible();
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  const readyBadge = page
-    .locator("#system-tables")
-    .locator('[data-status-variant="success"]')
-    .filter({ hasText: "初期化済み" });
-  await expect(readyBadge).toBeVisible();
-  await expect(readyBadge).toHaveCSS("background-color", "rgb(18, 56, 45)");
-  await expect(readyBadge).toHaveCSS("color", "rgb(101, 215, 165)");
-  const summarySurface = page
-    .getByText("存在テーブル / 必須テーブル", { exact: true })
-    .locator("..");
-  // 旧 bg-muted/30 → 共有トークン bg-surface-hover。ダークでは
-  // --color-surface-hover = light-dark(neutral-100, neutral-850 #20252e)、文字は
-  // --color-fg-muted = light-dark(neutral-600, neutral-350 #b2bac5)
-  // (packages/ui/src/styles/tokens/colors.css, palette.css)。暗い面のまま一段だけ持ち上げる。
-  await expect(summarySurface).toHaveCSS("background-color", "rgb(32, 37, 46)");
-  await expect(summarySurface.getByText("存在テーブル / 必須テーブル", { exact: true })).toHaveCSS(
-    "color",
-    "rgb(178, 186, 197)"
-  );
-  await expectNoPageOverflow(page);
-  await page.screenshot({
-    path: testInfo.outputPath(`system-tables-dark-status-${testInfo.project.name}.png`),
-    fullPage: true,
-  });
 });
 
 test("状態取得中は aria status を表示し、完了後に操作を有効化する", async ({ page }) => {
@@ -675,11 +611,6 @@ test("no-op Toast は文末で折り返し、通知領域・焦点・閉じる�
   expect(closeBox?.height ?? 0).toBeGreaterThanOrEqual(43.9);
   await expectNoPageOverflow(page);
 
-  const lightBackground = await toastStatus.evaluate((node) => getComputedStyle(node).backgroundColor);
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
-  const darkBackground = await toastStatus.evaluate((node) => getComputedStyle(node).backgroundColor);
-  expect(darkBackground).not.toBe(lightBackground);
-
   await close.focus();
   await page.keyboard.press("Enter");
   await expect(toastStatus).toHaveCount(0);
@@ -784,7 +715,7 @@ test("接続・操作失敗を操作領域で通知し、復旧方法を提示�
   await expect(card.getByText("データベースに接続できません", { exact: true })).toBeVisible();
   await expect(
     card.getByText(
-      "データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。",
+      "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。",
       { exact: true }
     )
   ).toHaveCount(0);

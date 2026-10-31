@@ -440,8 +440,8 @@ describe("resolveIngestionParserDisplay", () => {
       segments: [
         {
           status: "RUNNING",
-          parser_backend: "mineru",
-          parser_profile: "mineru",
+          parser_backend: "unstructured",
+          parser_profile: "unstructured",
         },
       ],
       extractionBackend: null,
@@ -450,8 +450,8 @@ describe("resolveIngestionParserDisplay", () => {
     });
 
     expect(display).toEqual({
-      backend: "mineru",
-      profile: "mineru",
+      backend: "unstructured",
+      profile: "unstructured",
       source: "segment",
     });
   });
@@ -637,20 +637,20 @@ describe("resolveIngestionProgressSummary", () => {
 describe("resolveIngestionErrorDisplayPlan", () => {
   it("job の原因を優先し、同じ原因の segment と document banner を隠す", () => {
     const plan = resolveIngestionErrorDisplayPlan({
-      latestJobErrorMessage: " dots_ocr_adapter_failed ",
+      latestJobErrorMessage: " unstructured_adapter_failed ",
       segments: [
         {
           segment_id: "segment-1",
           status: "FAILED",
-          error_message: "dots_ocr_adapter_failed",
+          error_message: "unstructured_adapter_failed",
         },
       ],
-      documentErrorMessage: "dots_ocr_adapter_failed",
-      queuedJobErrorMessage: "dots_ocr_adapter_failed",
-      retriedSegmentJobErrorMessage: "dots_ocr_adapter_failed",
+      documentErrorMessage: "unstructured_adapter_failed",
+      queuedJobErrorMessage: "unstructured_adapter_failed",
+      retriedSegmentJobErrorMessage: "unstructured_adapter_failed",
     });
 
-    expect(plan.jobMessage).toBe("dots_ocr_adapter_failed");
+    expect(plan.jobMessage).toBe("unstructured_adapter_failed");
     expect(Array.from(plan.segmentIds)).toEqual([]);
     expect(plan.documentMessage).toBeNull();
     expect(plan.queuedJobMessage).toBeNull();

@@ -2125,191 +2125,20 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
     assert observed[0][3] == "image/jpeg"
 
 
-def test_adb_start_uses_oci_database_client(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..example")
-    monkeypatch.setattr(settings, "oracle_adb_region", "ap-osaka-1")
-    calls: list[tuple[str, str]] = []
-
-    class FakeDatabaseClient:
-        def __init__(self, settings: Settings) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            calls.append(("get", adb_ocid))
-            return AutonomousDatabaseInfo(
-                id=adb_ocid,
-                display_name="NL2SQLADB",
-                lifecycle_state="STOPPED",
-                db_name="NL2SQL",
-                cpu_core_count=1,
-                data_storage_size_in_tbs=1,
-            )
-
-        async def start_autonomous_database(self, adb_ocid: str) -> None:
-            calls.append(("start", adb_ocid))
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeDatabaseClient)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "accepted"
-    assert data["lifecycle_state"] == "STARTING"
-    assert data["region"] == "ap-osaka-1"
-    assert calls == [
-        ("get", "ocid1.autonomousdatabase.oc1..example"),
-        ("start", "ocid1.autonomousdatabase.oc1..example"),
-    ]
-
-
-def test_adb_info_failure_returns_safe_error_code(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..example")
-    monkeypatch.setattr(settings, "oracle_adb_region", "ap-osaka-1")
-
-    class FakeDatabaseClient:
-        def __init__(self, settings: Settings) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            raise RuntimeError(_raw_adb_oci_failure())
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeDatabaseClient)
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    _assert_safe_adb_failure(data, error_code="ADB_INFO_UNAVAILABLE")
-    assert data["message"].startswith("ADB 情報を取得できませんでした。")
-    assert data["region"] == "ap-osaka-1"
-
-
-def test_adb_start_failure_returns_safe_error_code(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..example")
-    monkeypatch.setattr(settings, "oracle_adb_region", "ap-osaka-1")
-
-    class FakeDatabaseClient:
-        def __init__(self, settings: Settings) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            return AutonomousDatabaseInfo(
-                id=adb_ocid,
-                display_name="NL2SQLADB",
-                lifecycle_state="STOPPED",
-                db_name="NL2SQL",
-                cpu_core_count=1,
-                data_storage_size_in_tbs=1,
-            )
-
-        async def start_autonomous_database(self, adb_ocid: str) -> None:
-            raise RuntimeError(_raw_adb_oci_failure())
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeDatabaseClient)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    _assert_safe_adb_failure(data, error_code="ADB_START_FAILED")
-    assert data["message"].startswith("ADB の起動を開始できませんでした。")
-    assert data["lifecycle_state"] == "STOPPED"
-
-
-def test_adb_stop_failure_returns_safe_error_code(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..example")
-    monkeypatch.setattr(settings, "oracle_adb_region", "ap-osaka-1")
-
-    class FakeDatabaseClient:
-        def __init__(self, settings: Settings) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            return AutonomousDatabaseInfo(
-                id=adb_ocid,
-                display_name="NL2SQLADB",
-                lifecycle_state="AVAILABLE",
-                db_name="NL2SQL",
-                cpu_core_count=1,
-                data_storage_size_in_tbs=1,
-            )
-
-        async def stop_autonomous_database(self, adb_ocid: str) -> None:
-            raise RuntimeError(_raw_adb_oci_failure())
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeDatabaseClient)
-
-    resp = client.post("/api/settings/database/adb/stop")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    _assert_safe_adb_failure(data, error_code="ADB_STOP_FAILED")
-    assert data["message"].startswith("ADB の停止を開始できませんでした。")
-    assert data["lifecycle_state"] == "AVAILABLE"
-
-
-def test_adb_info_not_configured_returns_safe_code(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "")
-    monkeypatch.setattr(settings, "oracle_adb_region", "ap-osaka-1")
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "not_configured"
-    assert data["error_code"] == "ADB_NOT_CONFIGURED"
-    assert data["message"] == "ADB OCID が設定されていません。"
-    assert data["id"] is None
-
-
-def test_update_adb_settings_persists_dedicated_region(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    env_file = tmp_path / ".env"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "")
-    monkeypatch.setattr(settings, "oracle_adb_region", "")
-    calls: list[str] = []
-
-    class FakeDatabaseClient:
-        def __init__(self, settings: Settings) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            calls.append(adb_ocid)
-            return AutonomousDatabaseInfo(
-                id=adb_ocid,
-                display_name="NL2SQLADB",
-                lifecycle_state="STOPPED",
-                db_name="NL2SQL",
-                cpu_core_count=1,
-                data_storage_size_in_tbs=1,
-            )
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeDatabaseClient)
-
-    resp = client.post(
-        "/api/settings/database/adb/settings",
-        json={"adb_ocid": "ocid1.autonomousdatabase.oc1..saved", "region": "ap-tokyo-1"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["region"] == "ap-tokyo-1"
-    assert settings.oracle_adb_ocid == "ocid1.autonomousdatabase.oc1..saved"
-    assert settings.oracle_adb_region == "ap-tokyo-1"
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_ORACLE_ADB_OCID=ocid1.autonomousdatabase.oc1..saved" in env_text
-    assert "PLATFORM_ORACLE_ADB_REGION=ap-tokyo-1" in env_text
-    assert "PLATFORM_OCI_REGION=ap-tokyo-1" not in env_text
-    assert calls == ["ocid1.autonomousdatabase.oc1..saved"]
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/settings/database/adb"),
+        *(
+            ("POST", f"/api/settings/database/adb/{action}")
+            for action in ("settings", "start", "stop")
+        ),
+    ],
+)
+def test_adb_control_routes_are_removed(method: str, path: str) -> None:
+    """ADB の情報取得・起動・停止の API は持たない（#10。起動・停止は docker 側の責務）。"""
+    response = client.get(path) if method == "GET" else client.post(path)
+    assert response.status_code in {404, 405}
 
 
 def test_oracle_adapter_wallet_only_connection_uses_wallet_kwargs(
@@ -2475,24 +2304,6 @@ def _adb_info(adb_ocid: str, *, is_dedicated: bool) -> AutonomousDatabaseInfo:
     )
 
 
-def _raw_adb_oci_failure() -> str:
-    return (
-        "ServiceError: GET https://database.ap-osaka-1.oraclecloud.com/20160918/"
-        "autonomousDatabases/ocid1.autonomousdatabase.oc1..leaked failed "
-        "request target=/adb secret=raw-sdk-detail"
-    )
-
-
-def _assert_safe_adb_failure(data: dict[str, Any], *, error_code: str) -> None:
-    assert data["status"] == "error"
-    assert data["error_code"] == error_code
-    message = data["message"]
-    assert "ServiceError" not in message
-    assert "https://" not in message
-    assert "ocid1.autonomousdatabase.oc1..leaked" not in message
-    assert "raw-sdk-detail" not in message
-
-
 def _wallet_zip_bytes() -> bytes:
     buffer = BytesIO()
     with ZipFile(buffer, "w") as archive:
@@ -2507,10 +2318,7 @@ def _wallet_zip_bytes() -> bytes:
     return buffer.getvalue()
 
 
-@pytest.mark.parametrize("target", ["object_storage", "adb"])
-def test_failed_settings_persistence_preserves_runtime(
-    monkeypatch: MonkeyPatch, target: str
-) -> None:
+def test_failed_settings_persistence_preserves_runtime(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
     before = settings.model_dump()
 
@@ -2518,21 +2326,14 @@ def test_failed_settings_persistence_preserves_runtime(
         assert candidate is not settings
         raise HTTPException(status_code=500, detail="設定を保存できませんでした。")
 
-    if target == "object_storage":
-        monkeypatch.setattr(shared_oci, "_persist_oci_object_storage_settings", fail_persist)
-        response = client.patch(
-            "/api/settings/oci/object-storage",
-            json={
-                "object_storage_region": "ap-tokyo-1",
-                "object_storage_namespace": "newnamespace",
-            },
-        )
-    else:
-        monkeypatch.setattr(shared_database, "_persist_adb_settings", fail_persist)
-        response = client.post(
-            "/api/settings/database/adb/settings",
-            json={"adb_ocid": "ocid1.autonomousdatabase.oc1..changed", "region": "ap-tokyo-1"},
-        )
+    monkeypatch.setattr(shared_oci, "_persist_oci_object_storage_settings", fail_persist)
+    response = client.patch(
+        "/api/settings/oci/object-storage",
+        json={
+            "object_storage_region": "ap-tokyo-1",
+            "object_storage_namespace": "newnamespace",
+        },
+    )
     assert response.status_code == 500
     assert settings.model_dump() == before
 

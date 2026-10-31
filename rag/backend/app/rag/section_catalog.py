@@ -1,7 +1,6 @@
 """章節の目録の行（章節を 1 行ずつ、階層で字下げ。見出しの語の無い章節は本文の書き出しを添える）。
 
-MCP の ``rag_outline`` の compact（#2252）と、回答のときに条の目録から条を選ぶ段（#2254）が
-同じ行を使う。
+MCP の ``rag_outline`` の compact（#2252）が使う。
 """
 
 from __future__ import annotations

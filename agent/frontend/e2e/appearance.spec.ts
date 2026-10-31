@@ -1,44 +1,29 @@
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "./fixtures/mock-api";
 import { expandSidebarSections, openSidebarNav } from "./fixtures/nav";
 
-// 外観と証明書（テーマ切替）は platform の共有パッケージの画面を使う（#95）。
-
-async function isDark(page: Page) {
-  return page.evaluate(() => document.documentElement.classList.contains("dark"));
-}
+// 外観と証明書は platform の共有パッケージの画面を使う（#95）。テーマはライトだけで、選択は無い（#17）。
 
 for (const viewport of [
   { name: "desktop", width: 1280, height: 800 },
   { name: "mobile", width: 375, height: 812 },
 ]) {
-  test(`外観と証明書でライト / ダーク / 自動を切り替え、再読込後も保持する (${viewport.name})`, { tag: "@responsive" }, async ({ page }) => {
+  test(`外観と証明書にテーマの選択を出さず、ライトで描く (${viewport.name})`, { tag: "@responsive" }, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.emulateMedia({ colorScheme: "light" });
+    // OS がダークでも、保存済みの theme が dark でもライトで描く。
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.addInitScript(() => {
+      window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: "dark" }, version: 0 }));
+    });
     await page.goto("/settings/appearance");
 
     await expect(page.getByRole("heading", { name: "外観と証明書", level: 1 })).toBeVisible();
-    const toggle = page.getByTestId("appearance-theme-toggle");
-    await expect(toggle.getByRole("button", { name: "ライト" })).toHaveAttribute("aria-pressed", "true");
-    expect(await isDark(page)).toBe(false);
-
-    await toggle.getByRole("button", { name: "ダーク" }).click();
-    await expect(toggle.getByRole("button", { name: "ダーク" })).toHaveAttribute("aria-pressed", "true");
-    await expect.poll(() => isDark(page)).toBe(true);
-
-    await page.reload();
-    await expect(page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "ダーク" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await expect.poll(() => isDark(page)).toBe(true);
-
-    // 自動は OS 設定に追従する
-    await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "自動（OS 設定）" }).click();
-    await expect.poll(() => isDark(page)).toBe(false);
-    await page.emulateMedia({ colorScheme: "dark" });
-    await expect.poll(() => isDark(page)).toBe(true);
+    await expect(page.getByTestId("appearance-ca-certificate")).toBeVisible();
+    await expect(page.getByTestId("appearance-theme-toggle")).toHaveCount(0);
+    for (const name of ["ライト", "ダーク", "自動（OS 設定）"]) {
+      await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    }
+    await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("light");
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -53,46 +38,42 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 800 },
   { name: "mobile", width: 375, height: 812 },
 ]) {
-  for (const theme of ["ライト", "ダーク"] as const) {
-    test(`外観と証明書の HTTPS の証明書（${viewport.name}・${theme}）`, { tag: "@responsive" }, async ({ page }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto("/settings/appearance");
-      await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: theme }).click();
-      await expect.poll(() => isDark(page)).toBe(theme === "ダーク");
+  test(`外観と証明書の HTTPS の証明書（${viewport.name}）`, { tag: "@responsive" }, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/settings/appearance");
 
-      // 配っていない環境（ローカルの開発）: 説明だけで、ダウンロードは出さない。
-      const card = page.getByTestId("appearance-ca-certificate");
-      await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
-      await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
-      await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
-      await page.screenshot({ path: test.info().outputPath("ca-certificate-unavailable.png"), fullPage: true });
+    // 配っていない環境（ローカルの開発）: 説明だけで、ダウンロードは出さない。
+    const card = page.getByTestId("appearance-ca-certificate");
+    await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
+    await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
+    await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("ca-certificate-unavailable.png"), fullPage: true });
 
-      // 配っている環境: ダウンロードのリンクと、端末への取り込み方。
-      await page.route("**/platform/ca.crt", (route) =>
-        route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-      );
-      await page.reload();
-      const download = card.getByRole("link", { name: "CA の証明書をダウンロード" });
-      await expect(download).toHaveAttribute("href", "/platform/ca.crt");
-      await card.getByText("端末への取り込み方").click();
-      // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
-      await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
-        "Windows（Edge・Chrome）",
-        "macOS（Safari・Chrome・Edge）",
-        "iPhone / iPad（すべてのブラウザ）",
-        "Android（Chrome）",
-        "Edge",
-        "Chrome",
-        "Firefox",
-      ]);
-      await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
-      await page.screenshot({ path: test.info().outputPath("ca-certificate-available.png"), fullPage: true });
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
-    });
-  }
+    // 配っている環境: ダウンロードのリンクと、端末への取り込み方。
+    await page.route("**/platform/ca.crt", (route) =>
+      route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
+    );
+    await page.reload();
+    const download = card.getByRole("link", { name: "CA の証明書をダウンロード" });
+    await expect(download).toHaveAttribute("href", "/platform/ca.crt");
+    await card.getByText("端末への取り込み方").click();
+    // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
+    await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
+      "Windows（Edge・Chrome）",
+      "macOS（Safari・Chrome・Edge）",
+      "iPhone / iPad（すべてのブラウザ）",
+      "Android（Chrome）",
+      "Edge",
+      "Chrome",
+      "Firefox",
+    ]);
+    await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("ca-certificate-available.png"), fullPage: true });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
 }
 
 test("サイドナビのシステム設定に外観と証明書がある", { tag: "@responsive" }, async ({ page }) => {
@@ -147,7 +128,7 @@ for (const viewport of [
         .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
     expect(await linkHrefs("use")).toEqual(["/chat", "/approvals", "/runs"]);
     // Agent 構築は管理者が業務 Agent を作る画面（RAG のナレッジ構築・NL2SQL のデータ準備に当たる）。
-    expect(await linkHrefs("build")).toEqual(["/agents", "/skills", "/automations"]);
+    expect(await linkHrefs("build")).toEqual(["/agents", "/skills"]);
     // 改善・運用は RAG / NL2SQL と同じ品質評価・フィードバックの後に、Agent の利用状況（#772）と監査ログ（#791）。
     expect(await linkHrefs("improve")).toEqual(["/evaluation", "/feedback", "/usage", "/audit"]);
     // セキュリティ設定は権限管理、運用設定はシステムテーブル（先頭。#751）と Agent 固有の2項目

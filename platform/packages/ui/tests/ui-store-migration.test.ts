@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createUiStore } from "../src/store/ui-store";
 
 afterEach(() => vi.unstubAllGlobals());
-it("ナビの旧 key を移し、現在の設定とテーマを保持する", () => {
+it("ナビの旧 key を移して現在の設定を保持し、廃止した配色テーマ（#17）は読み捨てる", () => {
   const items = new Map<string, string>();
   const localStorage = {
     getItem: (key: string) => items.get(key) ?? null,
@@ -16,8 +16,9 @@ it("ナビの旧 key を移し、現在の設定とテーマを保持する", ()
   }, version: 0 }));
   const store = createUiStore({ storageKey: "rag-test", sectionKeyMigrations: { "nav.section.rag": "nav.section.use" } });
   expect(store.getState().collapsedSections).toEqual({ "nav.section.use": true, other: true });
-  expect(store.getState().theme).toBe("dark");
+  expect(store.getState()).not.toHaveProperty("theme");
   expect(store.getState().sidebarCollapsed).toBe(true);
   store.getState().setSectionCollapsed("nav.section.use", false);
   expect(localStorage.getItem("rag-test")).not.toContain("nav.section.rag");
+  expect(localStorage.getItem("rag-test")).not.toContain("theme");
 });

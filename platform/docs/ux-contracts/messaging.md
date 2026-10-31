@@ -205,13 +205,12 @@ DB ゲートは、DB が使えない理由を利用者が取り違えないよ�
 | 状態（状態 API の `status`） | 見出し（アイコン） | 管理者の導線 | 意味 |
 |---|---|---|---|
 | `not_configured` | データベースの接続情報が未設定です（`Settings`） | データベース設定を開く | 接続情報が足りない（接続は試さない） |
-| `unreachable` | データベースに接続できません（`Unplug`） | データベース設定を開く（ADB 管理のカード `#adb-management`） | 停止中・起動中・ネットワーク・資格情報。接続の後に接続・pool が失敗したときも含む |
-| `unreachable` + `adb_lifecycle_state` | Autonomous Database が停止しています（`PowerOff`）/ 起動しています（`Hourglass`、info）/ 利用できない状態です（`ServerOff`）。起動済みなら「データベースに接続できません」で接続情報とネットワークを案内 | データベース設定を開く（起動済みのときは接続情報、それ以外は ADB 管理のカード） | ADB の状態は `StatusBadge`（「Autonomous Database: 停止済み」）でも出す |
+| `unreachable` | データベースに接続できません（`Unplug`） | データベース設定を開く | ネットワーク・接続設定（ユーザー・パスワード・サービス名）・Wallet・DB の停止。接続の後に接続・pool が失敗したときも含む。DB の起動・停止と状態の表示は画面では扱わない（#10） |
 | `setup_required` | システムテーブルの作成・更新が必要です（`Wrench`） | システムテーブルを開く | DB には接続できている。テーブルの不足・未適用の migration |
 | 状態 API の失敗（`check_failed`） | データベースの状態を確認できません（`ServerCrash`） | なし（再試行だけ） | バックエンドに届かない。設定を直しても解消しない |
 
 - **再試行は全状態に出す。** 導線（リンク）は再試行より前に置く（Tab 順）。
-- **権限で出し分ける。** 導線は、その画面を開ける利用者（製品の権限でデータベース設定・システムテーブルのメニュー権限を持つ利用者）だけに出す。開けない利用者には、本文で「システム管理者に連絡して、…を依頼してください。」と次の行動を示し、フッターに「データベースの起動・接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。」を出す。リンクは出さない（押しても開けない導線を出さない）。製品は共通の `DatabaseGate` に `canManageDatabase` / `canManageSystemTables` を渡す。既定は false（分からないときは導線を出さない）。
+- **権限で出し分ける。** 導線は、その画面を開ける利用者（製品の権限でデータベース設定・システムテーブルのメニュー権限を持つ利用者）だけに出す。開けない利用者には、本文で「システム管理者に連絡して、…を依頼してください。」と次の行動を示し、フッターに「データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。」を出す。リンクは出さない（押しても開けない導線を出さない）。製品は共通の `DatabaseGate` に `canManageDatabase` / `canManageSystemTables` を渡す。既定は false（分からないときは導線を出さない）。
 - 縮退の banner（`DatabaseUnavailableNotice` の `mode="banner"`）のデータベース設定へのリンクも、`canManageDatabase` のときだけ出す。
 - 接続先・資格情報・ORA コード（状態 API の `detail`）は画面に出さない。診断コード（`check`）は今までどおり補足付きで出す。
 
@@ -621,7 +620,7 @@ header           : StatusBadge（エンティティの状態の正本 = P1）
   - 対象の一覧を読めなかった: 上のカードに失敗の表示（`ApiErrorBanner` / `ApiErrorState`。原因・「詳細」・再試行）を出し、会話の欄は出さない（0 件のとき＝「使える◯◯がありません」と同じく、対象が無いと会話できないため）。0 件の案内（空の状態）と失敗を同じ分岐にしない。
   - 開いている会話の内容を読めなかった: 会話の欄に失敗の表示（再試行付き）を出し、空の状態は出さない。送信は無効のまま（内容の分からない会話に続けて送らない）。「新しい会話」と履歴は使えるままにし、失敗の後も別の会話へ移れるようにする。
 - 送った質問の表示（§11.1）を出している間は、その会話の読み込み中の表示で隠さない（作った会話の内容はキャッシュに先に入れる。§11.2）。
-- 実装: `ChatSkeleton`（`packages/ui`、[components-reference.md](../design-system/components-reference.md)「読み込み中と一覧の表示密度」）。製品は RAG `components/chat/ChatClient.tsx`、NL2SQL `features/nl2sql/SqlChatPage.tsx`、Agent `pages/ChatPage.tsx`。Playwright は対象の一覧の応答を遅らせ、空の状態が出ず Skeleton が出ること・経過時間が 1 つであること・入力欄と送信などが無効で入力欄の文字が残ること・読み込み後に使えること・失敗の表示を、会話の内容の応答を遅らせ、入力欄に書けて送信だけが止まることを、desktop / 375px・light / dark で確かめる（RAG `e2e/chat-loading.spec.ts`・NL2SQL `tests/e2e/sql-chat-loading.spec.ts`・Agent `e2e/chat-loading.spec.ts`）。
+- 実装: `ChatSkeleton`（`packages/ui`、[components-reference.md](../design-system/components-reference.md)「読み込み中と一覧の表示密度」）。製品は RAG `components/chat/ChatClient.tsx`、NL2SQL `features/nl2sql/SqlChatPage.tsx`、Agent `pages/ChatPage.tsx`。Playwright は対象の一覧の応答を遅らせ、空の状態が出ず Skeleton が出ること・経過時間が 1 つであること・入力欄と送信などが無効で入力欄の文字が残ること・読み込み後に使えること・失敗の表示を、会話の内容の応答を遅らせ、入力欄に書けて送信だけが止まることを、desktop / 375pxで確かめる（RAG `e2e/chat-loading.spec.ts`・NL2SQL `tests/e2e/sql-chat-loading.spec.ts`・Agent `e2e/chat-loading.spec.ts`）。
 
 ### 処理の詳細とトレースの階層（#3201）
 

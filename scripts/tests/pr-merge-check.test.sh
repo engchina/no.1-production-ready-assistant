@@ -139,7 +139,7 @@ run_case "main の platform のソースの変更は全体に効くファイル�
 set_main rag/frontend/e2e/chat.spec.ts .github/ISSUE_TEMPLATE/issue.md .github/dependabot.yml \
   platform/scripts/log_viewer.py rag/frontend/src/package-info.ts nl2sql/frontend/tests/e2e/chat.spec.ts \
   rag/backend/pyproject.md
-set_pr terraform/a.tf
+set_pr suite/a.txt
 run_case "全体に効くファイルに似た名前は重ならない" ready-to-merge 0 1
 
 # --- (a) 同じファイル。
@@ -164,7 +164,7 @@ for path in package.json platform/package-lock.json .python-version \
   nl2sql/frontend/tests/e2e/_helpers/test.ts platform/packages/ui/package.json \
   platform/scripts/e2e_impact.py platform/scripts/e2e-impact/fixture.ts; do
   set_main docs/note.md "${path}"
-  set_pr terraform/a.tf
+  set_pr suite/a.txt
   run_case "全体に効くファイル ${path}" needs-update-branch 3 1
   expect_log "全体に効くファイル ${path}" "  ${path}"
 done
@@ -174,7 +174,7 @@ for path in rag/frontend/package.json rag/frontend/package-lock.json rag/backend
   rag/services/parsers/docling/uv.lock nl2sql/backend/pyproject.toml agent/backend/uv.lock; do
   dir="${path%/*}"
   set_main docs/note.md "${path}"
-  set_pr terraform/a.tf
+  set_pr suite/a.txt
   run_case "別の場所の製品の依存 ${path}" ready-to-merge 0 1
   set_main docs/note.md "${path}"
   set_pr "${dir}/src/a.txt"

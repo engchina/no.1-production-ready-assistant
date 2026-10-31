@@ -585,37 +585,28 @@ function ingestionJob(documentId: string, status: string, skipReason: string | n
   };
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`作り直しが必要な派生情報がある文書に、状態の横へ印を出す (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    // 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れておく。
-    await page.addInitScript((value) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme: value }, version: 0 })
-      );
-    }, theme);
-    const stale = { ...documentSummary("doc-stale", "stale.pdf", "INDEXED"), layers_rebuild_required: true };
-    const fresh = documentSummary("doc-fresh", "fresh.pdf", "INDEXED");
-    await mockFileListApi(page, [stale, fresh]);
+test(`作り直しが必要な派生情報がある文書に、状態の横へ印を出す`, async ({
+  page,
+}, testInfo) => {
+  const stale = { ...documentSummary("doc-stale", "stale.pdf", "INDEXED"), layers_rebuild_required: true };
+  const fresh = documentSummary("doc-fresh", "fresh.pdf", "INDEXED");
+  await mockFileListApi(page, [stale, fresh]);
 
-    await page.goto("/file-list");
+  await page.goto("/file-list");
 
-    // 状態（索引済み）はそのままに、警告の印をアイコンと文言で添える（#550）。
-    const badge = page.getByTestId("file-list-rebuild-doc-stale");
-    await expect(badge).toContainText("作り直しが必要");
-    await expect(badge.locator("svg")).toHaveCount(1);
-    await expect(badge).toHaveAttribute("title", /「再処理」すると作り直せます/);
-    await expect(page.getByTestId("file-list-rebuild-doc-fresh")).toHaveCount(0);
-    await expect(badge.locator("..")).toContainText("索引済み");
-    await expectNoPageOverflow(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`file-list-rebuild-${theme}.png`),
-      fullPage: true,
-    });
+  // 状態（索引済み）はそのままに、警告の印をアイコンと文言で添える（#550）。
+  const badge = page.getByTestId("file-list-rebuild-doc-stale");
+  await expect(badge).toContainText("作り直しが必要");
+  await expect(badge.locator("svg")).toHaveCount(1);
+  await expect(badge).toHaveAttribute("title", /「再処理」すると作り直せます/);
+  await expect(page.getByTestId("file-list-rebuild-doc-fresh")).toHaveCount(0);
+  await expect(badge.locator("..")).toContainText("索引済み");
+  await expectNoPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath("file-list-rebuild.png"),
+    fullPage: true,
   });
-}
+});
 
 test("新しい版に置き換えた文書（旧版）に印を出す（#1248）", async ({ page }) => {
   const old = {

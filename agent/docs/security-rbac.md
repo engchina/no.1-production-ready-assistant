@@ -10,7 +10,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 | 値 | 画面と API | ユーザー・ロール | 用途 |
 |---|---|---|---|
 | `local`（既定） | ログインを省略し、全権限のローカル利用者として使う（DB セッションを作らない） | Oracle の `PLATFORM_*` / `AGENT_ROLE_*`（RAG / NL2SQL と同じ） | 開発 |
-| `production` | 共通認証のログインが必要（Cookie のセッション）。Cookie のないリクエストは **401**（`X-Agent-Roles` などの header は使わない） | 同上 | 本番（Resource Manager の stack は常にこちら） |
+| `production` | 共通認証のログインが必要（Cookie のセッション）。Cookie のないリクエストは **401**（`X-Agent-Roles` などの header は使わない） | 同上 | 本番（Compute の配備は常にこちら） |
 
 - local でもユーザー管理・ロール管理・権限管理は共通 DB を読み書きします。共通 `.env` の `PLATFORM_ORACLE_*` が必要です
   （RAG / NL2SQL と同じ。旧版は local だけ InMemory で、画面が 0 件になり再起動で消えていました）。
@@ -21,7 +21,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 - 認証ポリシー（セッションの有効期限・ロック・ログインの試行の回数の制限・パスワード長・Argon2 のコスト・`PLATFORM_AUTH_COOKIE_SECURE`）は共通 `.env` の `PLATFORM_AUTH_*`。
   ログインの失敗が多すぎる送信元（ログイン ID と送信元 IP の組・送信元 IP ごと）には、構成管理者を含めて `429 SECURITY_RATE_LIMITED` を返します（#1087。`PLATFORM_AUTH_LOGIN_ATTEMPT_*`）。
   失敗の回数は共通のテーブル `PLATFORM_LOGIN_ATTEMPTS` で 3 製品・全 worker が共有して数えます（#1173。ログイン ID・送信元 IP は HMAC だけを保存。
-  テーブルが無い・DB の停止中はプロセス内で数える）。詳細と既存環境の更新手順は [terraform/README.md](../../terraform/README.md) の「ログインの試行の回数の共有（#1173）」。
+  テーブルが無い・DB の停止中はプロセス内で数える）。詳細と既存環境の更新手順は [platform/docs/deployment.md](../../platform/docs/deployment.md) の「ログインの試行の回数の共有（#1173）」。
 - ログインのセッションは 3 製品で共通です（#1565）。Cookie 名は共通 `.env` の `PLATFORM_AUTH_SESSION_COOKIE_NAME`（既定 `pr_session`）/
   `PLATFORM_AUTH_CSRF_COOKIE_NAME`（既定 `pr_csrf`）で、1 台に配備した `/rag/`・`/nl2sql/`・`/agent/` は同じ Cookie を読むため、
   1 つの製品でログインすればほかの製品でもログイン済みになります（構成管理者 `system_admin` の token も 3 製品で共通）。
@@ -68,7 +68,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 | グループ | コード |
 |---|---|
 | AI 活用 | `menu.chat`（チャット。`agent.runs.operate` が含む。#768）/ `menu.runs`（実行履歴）/ `menu.approvals`（承認） |
-| Agent 構築 | `menu.agents`（業務 Agent）/ `menu.skills`（スキル）/ `menu.automations`（自動実行。#784） |
+| Agent 構築 | `menu.agents`（業務 Agent）/ `menu.skills`（スキル） |
 | 改善・運用 | `menu.evaluation`（品質評価。#776。評価の Run は始めた利用者の Run なので、業務 Agent の対象範囲も確かめる。下書きの評価は下書きの実行と同じく `agent.admin` だけで、それ以外の利用者の既定は公開中の版。#2522） / `menu.feedback`（フィードバック。#774。集計は Run の一覧と同じく利用できる業務 Agent の Run だけ。チャットの回答の評価は `agent.runs.operate` を持つ会話の本人が付け、管理者の評価（`PUT /api/runs/{id}/admin-review`）は `agent.admin` がだれの回答にも本人の評価とは別に付ける） / `menu.usage`（利用状況。#772。集計は Run の一覧と同じく利用できる業務 Agent の Run だけ）/ `menu.audit`（監査ログ） |
 | セキュリティ設定 | `menu.security_permissions` |
 | ユーザーとロール（3 製品共通） | `menu.security_users` / `menu.security_roles` |
@@ -134,7 +134,7 @@ API は `(method, route template)` ごとに登録し、登録のない API は�
 3 製品共通の規則（[backend-standard.md](../../platform/docs/backend-standard.md)「「AI 活用」の下の機能のデータの見え方」）:
 **system_admin は全員のデータ、それ以外の利用者は自分のデータだけ**。判定は `pr_system_settings.auth.visibility`。
 
-- Run の持ち主は Run を実行した利用者（actor。`RunState.created_by_user_uuid`）。自動実行の Run は実行する利用者（`run_as_user_uuid`）、品質評価の Run は評価を始めた利用者。持ち主の無い古い Run は system_admin だけが見られる。
+- Run の持ち主は Run を実行した利用者（actor。`RunState.created_by_user_uuid`）。品質評価の Run は評価を始めた利用者。持ち主の無い古い Run は system_admin だけが見られる。
 - 会話の持ち主は会話を始めた利用者（`RunState.thread_owner_user_uuid`。記録の無い既存の Run は会話の最初の Run の `created_by_user_uuid`）。#3244 より前に system_admin が続けた往復があっても、会話の持ち主は変わらない。
 - 「AI 活用」の API（実行履歴の `GET /runs`、Run の詳細・監査・成果物・図の URL・イベント・処理の段階、取消・再開・再実行・回答前の確認への回答・評価、チャットの会話）は、自分が実行した Run・自分の会話の Run か system_admin だけ（system_admin が他の利用者のデータにできる操作は下の「system_admin の操作」）。ほかの利用者の Run は 404 で、存在を漏らさない。対象範囲（業務 Agent）の判定はその上に重ねてかかる（自分の Run でも範囲外は 403）。
 - `agent.admin`（Agent 管理）・`agent.audit.view`・`agent.approvals.decide` は、「AI 活用」の画面で全員を見る理由にしない。
@@ -208,7 +208,7 @@ Run は RAG から受け取った根拠（ツールの結果・`tool.completed` 
    HTTPS で配信している場合は `PLATFORM_AUTH_COOKIE_SECURE=true`。
 2. `agent/backend/.env` に `PLATFORM_AUTH_MODE=authenticated` を書く。
 3. テーブルを作る: `cd agent/backend && uv sync --locked --no-dev && uv run python -m app.cli.agent_system_schema --initialize`（画面の 運用設定 > システムテーブル でもよい）。
-4. Nginx の Basic 認証を廃止する（Resource Manager の stack で配備した instance）。`/etc/nginx/sites-available/production-ready-agent` から
+4. Nginx の Basic 認証を廃止する（以前の stack で配備した instance）。`/etc/nginx/sites-available/production-ready-agent` から
    `auth_basic` / `auth_basic_user_file` を削除し、`location /api/` の `proxy_set_header Host` を `$http_host` にして
    `sudo nginx -t && sudo systemctl reload nginx`。`/etc/nginx/production-ready-agent.htpasswd` と
    `/u01/aipoc/props/basic_auth_*` は削除してよい（`init_script.sh` を再実行しても同じ設定になる）。
@@ -233,11 +233,3 @@ Run は RAG から受け取った根拠（ツールの結果・`tool.completed` 
 - 範囲が制限された利用者の `GET /observability/events` は、件数上限（limit）を適用した後に範囲で絞ります。
 - local の Run は Run の利用者が `00000000-0000-0000-0000-000000000000`（ローカル利用者）です。production の RAG / NL2SQL を呼ぶと、
   その利用者は呼び先に存在しないため拒否されます（local 同士で使う）。
-
-## 自動実行（スケジュール。#784）
-
-- メニュー権限 `menu.automations`（Agent 構築 /「自動実行」）。作成・変更・削除・今すぐ実行は `agent.admin`。
-- 自動実行は作った利用者として Run を作る（実行のたびに利用者の現在の権限と対象範囲を確かめ、実行できなければ「開始できず」）。前回の Run が終わっていなければ、その回は飛ばす。
-- 起動はスケジュール（毎日・平日・毎週・毎時）と、画面の「今すぐ実行」だけ。外から自動実行を起動する公開の入口は持たない（#1799）。
-- 無人の実行なので、ツール権限で承認が要るツールは呼ばない（承認待ちで止めない。#1813）。モデルへは使えないことを返し、Run の監査に `automation.approval_required` の step を残す。自動実行で使うには、ツール権限でそのツールを「自動実行」（allow）にする（承認の画面の「承認して今後は自動で実行」でもよい。#1832）。NL2SQL の `nl2sql_query` は既定で承認なし（#1832）なので、ツール権限で ask にしていなければ自動実行でも使える。編集画面の警告は `GET /api/automations/agents/{agent_id}/approval-tools`（`menu.automations`）。
-- 「前回」は自動実行に保存した結果（Run を作った・飛ばした・開始できず）ではなく、Run を作った回はその Run の今の状態を表示のときに引いて出す（#1812）。

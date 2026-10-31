@@ -18,7 +18,6 @@ export const queryKeys = {
   selectAiCredential: ["settings", "database", "select-ai-credential"] as const,
   systemTables: SYSTEM_TABLES_QUERY_KEY,
   schemaOwners: ["schema", "owners"] as const,
-  adbInfo: ["settings", "database", "adb"] as const,
   uploadStorageSettings: ["settings", "upload-storage"] as const,
 };
 

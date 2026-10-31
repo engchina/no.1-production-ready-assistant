@@ -252,7 +252,7 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         "business_words",
         "compare_ignored_chars",
     ),
-    # 解析が作る表示のラベル（XML ツリー JSON の部・別表・前文・範囲・版・文書の情報の項目の名前）。
+    # 解析が作る表示のラベル（部・別表・前文・範囲・版・文書の情報の項目の名前）。
     *_fields(
         "labels",
         _T,
@@ -272,7 +272,6 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         "year",
         "month",
         "day",
-        "xml_tree_document_type",
         "field_title",
         "field_number",
         "field_id",
@@ -979,9 +978,31 @@ def _builtin_data(locale: str = DEFAULT_LOCALE) -> dict[str, Any]:
     return data
 
 
+# 削除した項目（節, 項目）→ 削除する前の組み込みの値（#42: XML ツリー JSON の文書の種類）。
+# 保存済みの公開版・下書き・上書きに残った値は読み捨てる。hash は削除する前と同じ値になるよう、
+# 残った値（無ければ削除する前の組み込みの値）を含めて計算する（公開版の照合を壊さず、
+# 取込済みの文書を作り直しにしない）。
+REMOVED_FIELDS: Mapping[tuple[str, str], str] = {("labels", "xml_tree_document_type"): "XML ツリー"}
+
+
+def _removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], str]:
+    """hash に含める削除した項目の値（保存内容に残った値、無ければ削除する前の組み込みの値）。"""
+    values: dict[tuple[str, str], str] = {}
+    for (section, key), default in REMOVED_FIELDS.items():
+        fields = data.get(section)
+        raw = fields.get(key) if isinstance(fields, Mapping) else None
+        text = str(raw).strip() if raw is not None else ""
+        values[(section, key)] = text or default
+    return values
+
+
 def complete_compatible_pack(data: Mapping[str, Any]) -> dict[str, Any]:
-    """追加した表示文言の欠けだけを補い、呼び出し元の保存内容は変更しない。"""
+    """追加した表示文言の欠けだけを補い、削除した項目を除く。呼び出し元の保存内容は変更しない。"""
     result = dict(data)
+    for section, key in REMOVED_FIELDS:
+        fields = result.get(section)
+        if isinstance(fields, Mapping) and key in fields:
+            result[section] = {name: value for name, value in fields.items() if name != key}
     labels = data.get("answer_labels")
     if isinstance(labels, Mapping):
         completed = dict(labels)
@@ -1007,11 +1028,12 @@ def stored_pack_hash(data: Mapping[str, Any], pack: LanguagePack) -> str:
             and spec.key not in labels
         )
     )
-    return _digest(pack.locale, pack.sections, specs)
+    return _digest(pack.locale, pack.sections, specs, _removed_values(data))
 
 
 def build_pack(data: Mapping[str, Any]) -> LanguagePack:
-    """追加表示文言の欠けだけ補い、それ以外の欠け・余り・形の誤りを拒否する。"""
+    """追加表示文言の欠けを補い、削除した項目を除き、それ以外の欠け・余り・形の誤りを拒否する。"""
+    removed = _removed_values(data)
     data = complete_compatible_pack(data)
     errors: dict[str, str] = {}
     sections: dict[str, dict[str, Any]] = {section: {} for section in SECTIONS}
@@ -1036,21 +1058,28 @@ def build_pack(data: Mapping[str, Any]) -> LanguagePack:
     return LanguagePack(
         locale=locale,
         sections=sections,
-        hash=_digest(locale, sections, FIELD_SPECS),
-        ingest_hash=_digest(locale, sections, tuple(spec for spec in FIELD_SPECS if spec.ingest)),
+        hash=_digest(locale, sections, FIELD_SPECS, removed),
+        ingest_hash=_digest(
+            locale, sections, tuple(spec for spec in FIELD_SPECS if spec.ingest), removed
+        ),
     )
 
 
 def _digest(
-    locale: str, sections: Mapping[str, Mapping[str, Any]], specs: tuple[FieldSpec, ...]
+    locale: str,
+    sections: Mapping[str, Mapping[str, Any]],
+    specs: tuple[FieldSpec, ...],
+    removed: Mapping[tuple[str, str], str],
 ) -> str:
+    # 削除した項目は取込の項目だった（全体の hash と取込の hash の両方に含める）。
+    entries = [
+        [spec.section, spec.key, list(value) if isinstance(value, tuple) else value]
+        for spec in specs
+        for value in (sections[spec.section][spec.key],)
+    ]
+    entries += [[section, key, value] for (section, key), value in removed.items()]
     canonical = json.dumps(
-        [
-            [spec.section, spec.key, list(value) if isinstance(value, tuple) else value]
-            for spec in sorted(specs, key=lambda spec: (spec.section, spec.key))
-            for value in (sections[spec.section][spec.key],)
-        ],
-        ensure_ascii=False,
+        sorted(entries, key=lambda entry: (entry[0], entry[1])), ensure_ascii=False
     )
     return hashlib.sha256(f"{locale}\n{canonical}".encode()).hexdigest()[:16]
 
@@ -1071,6 +1100,8 @@ def resolve(base: LanguagePack, *overrides: Mapping[str, Mapping[str, Any]] | No
     for override in overrides:
         for section, fields in (override or {}).items():
             for key, value in (fields or {}).items():
+                if (section, key) in REMOVED_FIELDS:
+                    continue
                 if (section, key) not in _SPECS:
                     unknown[f"{section}.{key}"] = "知らない項目です。"
                     continue
@@ -1159,6 +1190,7 @@ def bind_pack(pack: LanguagePack | None) -> Iterator[None]:
 
 
 __all__ = [
+    "REMOVED_FIELDS",
     "DEFAULT_LOCALE",
     "LANGUAGE_PACK_HASH_KEY",
     "FIELD_SPECS",

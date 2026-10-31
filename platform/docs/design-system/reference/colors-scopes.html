@@ -2,7 +2,7 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
 <style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pair{display:grid;grid-template-columns:1fr;gap:14px}
 .pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
 .ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
 .grid{display:grid;gap:8px}
@@ -30,5 +30,5 @@ FROM SALES.INVOICES
 WHERE issued_at &gt;= :from
 GROUP BY region;</pre></div>
 </div>
-<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0">サイドバーとコードブロックはライトテーマでも暗い面です。スコープが <code>color-scheme:dark</code> ごと差し替えるので、<b>内側のコンポーネントは 1 行も変更せずに成立</b>します（上の secondary ボタンは通常のものと同一コード）。旧実装が <code>#ffffff</code> と <code>rgb(255 255 255/.1)</code> を直書きしていた箇所はすべてこれに置換済み。フォーカスリングも暗紺地で 1.9:1 だった青から明るい <code>--blue-300</code> に差し替わります。</p>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0">サイドバー（#0f2c2a。深いティール）とコードブロックは常に暗い面です。スコープが <code>color-scheme:dark</code> ごと差し替えるので、<b>内側のコンポーネントは 1 行も変更せずに成立</b>します（上の secondary ボタンは通常のものと同一コード）。旧実装が <code>#ffffff</code> と <code>rgb(255 255 255/.1)</code> を直書きしていた箇所はすべてこれに置換済み。フォーカスリングも暗紺地で 1.9:1 だった青から明るい <code>--blue-300</code> に差し替わります。</p>
 </body></html>

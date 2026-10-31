@@ -17,12 +17,6 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 const SET = {
   id: "evset-seeded",
   agent_id: "default",
@@ -212,52 +206,49 @@ for (const viewport of VIEWPORTS) {
     await expectNoHorizontalOverflow(page);
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    test(`前回との比較・ツールの選択・ケースの詳細を出す (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      seedFinishedJobs(mockApi);
-      await page.goto("/evaluation");
+  test(`前回との比較・ツールの選択・ケースの詳細を出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    seedFinishedJobs(mockApi);
+    await page.goto("/evaluation");
 
-      const summary = page.getByTestId("evaluation-summary");
-      await expect(summary).toContainText("67%");
-      await expect(summary).toContainText("前回から +67 ポイント");
-      await expect(summary).toContainText("50%");
-      await expect(summary).toContainText("1 / 2 件");
-      // どの版どうしの比較かを出す（#810）。
-      await expect(page.getByTestId("evaluation-previous")).toContainText("同じ評価ケースで完了した前回の評価（v1・");
-      await expect(page.getByText("経理の評価（資料・データ横断アシスタント・下書き）")).toBeVisible();
-      await expect(
-        page.getByRole("table", { name: "最近の評価" }).getByRole("row").nth(1)
-      ).toContainText("下書き");
-      const results = page.getByRole("table", { name: "ケース別結果" });
-      await expect(results.getByRole("row", { name: /sales-total/ })).toContainText("期待と違う");
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`evaluation-${viewport.name}-${theme}.png`), fullPage: true });
+    const summary = page.getByTestId("evaluation-summary");
+    await expect(summary).toContainText("67%");
+    await expect(summary).toContainText("前回から +67 ポイント");
+    await expect(summary).toContainText("50%");
+    await expect(summary).toContainText("1 / 2 件");
+    // どの版どうしの比較かを出す（#810）。
+    await expect(page.getByTestId("evaluation-previous")).toContainText("同じ評価ケースで完了した前回の評価（v1・");
+    await expect(page.getByText("経理の評価（資料・データ横断アシスタント・下書き）")).toBeVisible();
+    await expect(
+      page.getByRole("table", { name: "最近の評価" }).getByRole("row").nth(1)
+    ).toContainText("下書き");
+    const results = page.getByRole("table", { name: "ケース別結果" });
+    await expect(results.getByRole("row", { name: /sales-total/ })).toContainText("期待と違う");
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`evaluation-${viewport.name}.png`), fullPage: true });
 
-      await results.getByRole("button", { name: /今月の売上の合計はいくらですか？/ }).click();
-      const detail = page.getByRole("dialog", { name: "ケースの詳細" });
-      await expect(detail).toContainText("合計金額（円）");
-      await expect(detail).toContainText("金額を答えていません。");
-      await expect(detail).toContainText("nl2sql_query");
-      await expect(detail).toContainText("承認が要るツールを実行せずに");
-      await expect(detail).toBeInViewport({ ratio: 1 });
-      // ケースの詳細のシートは md（40rem = 560px。画面の幅 − 3.5rem まで。#2283）。
-      const sheetBox = await detail.boundingBox();
-      expect(Math.round(sheetBox!.width)).toBe(Math.min(560, viewport.width - 49));
-      await expect(results.getByRole("button", { name: /今月の売上の合計はいくらですか？/ })).toHaveAttribute("aria-current", "true");
-      await page.screenshot({ path: testInfo.outputPath(`evaluation-detail-${viewport.name}-${theme}.png`) });
-      // 見出しの行の「前へ / 次へ」で、シートを開いたまま評価の結果の前後のケースへ移る。
-      const previousCase = page.getByTestId("evaluation-case-pager-previous");
-      const nextCase = page.getByTestId("evaluation-case-pager-next");
-      const forward = (await nextCase.isEnabled()) ? nextCase : previousCase;
-      const back = forward === nextCase ? previousCase : nextCase;
-      await forward.click();
-      await expect(detail).not.toContainText("金額を答えていません。");
-      await back.click();
-      await expect(detail).toContainText("金額を答えていません。");
-    });
-  }
+    await results.getByRole("button", { name: /今月の売上の合計はいくらですか？/ }).click();
+    const detail = page.getByRole("dialog", { name: "ケースの詳細" });
+    await expect(detail).toContainText("合計金額（円）");
+    await expect(detail).toContainText("金額を答えていません。");
+    await expect(detail).toContainText("nl2sql_query");
+    await expect(detail).toContainText("承認が要るツールを実行せずに");
+    await expect(detail).toBeInViewport({ ratio: 1 });
+    // ケースの詳細のシートは md（40rem = 560px。画面の幅 − 3.5rem まで。#2283）。
+    const sheetBox = await detail.boundingBox();
+    expect(Math.round(sheetBox!.width)).toBe(Math.min(560, viewport.width - 49));
+    await expect(results.getByRole("button", { name: /今月の売上の合計はいくらですか？/ })).toHaveAttribute("aria-current", "true");
+    await page.screenshot({ path: testInfo.outputPath(`evaluation-detail-${viewport.name}.png`) });
+    // 見出しの行の「前へ / 次へ」で、シートを開いたまま評価の結果の前後のケースへ移る。
+    const previousCase = page.getByTestId("evaluation-case-pager-previous");
+    const nextCase = page.getByTestId("evaluation-case-pager-next");
+    const forward = (await nextCase.isEnabled()) ? nextCase : previousCase;
+    const back = forward === nextCase ? previousCase : nextCase;
+    await forward.click();
+    await expect(detail).not.toContainText("金額を答えていません。");
+    await back.click();
+    await expect(detail).toContainText("金額を答えていません。");
+  });
 }
 
 for (const viewport of VIEWPORTS) {

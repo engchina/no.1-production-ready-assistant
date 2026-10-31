@@ -339,7 +339,7 @@ def test_builtin_published_agents_keep_rag_planning(
 
 @pytest.mark.parametrize(
     "skill_id",
-    ["business-rag-research", "rag-and-structured-data", "article-catalog-lookup"],
+    ["business-rag-research", "rag-and-structured-data"],
 )
 def test_builtin_rag_skills_declare_caller_planning(skill_id: str) -> None:
     skill = skill_registry.get(skill_id)

@@ -728,6 +728,15 @@ class SystemSchemaManager(SystemSchemaManagerBase):
             objects = {
                 (str(row[0]).upper(), str(row[1]).upper()): row[2] for row in cursor.fetchall()
             }
+        # ベクトル索引（HNSW）は版によって USER_OBJECTS に出ない（Autonomous Database Free 23.9 で
+        # 確認。#10）。INDEX は USER_INDEXES でも確かめ、作成済みの索引を「不足」と誤らない。
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT INDEX_NAME FROM USER_INDEXES WHERE INDEX_NAME IN ({placeholders})",  # nosec B608 - fixed binds
+                binds,
+            )
+            for row in cursor.fetchall():
+                objects.setdefault((str(row[0]).upper(), "INDEX"), None)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT PRE_NAME FROM CTX_USER_PREFERENCES "

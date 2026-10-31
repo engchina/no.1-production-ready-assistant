@@ -159,51 +159,37 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 900 },
   { name: "mobile", width: 375, height: 900 },
 ]) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`検索だけの結果（回答なし）は件数と時間と引用を出す (#593, ${viewport.name}, ${theme})`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      // 外観（テーマ）は共有 UI の ui-store の保存値で決まる。
-      await page.addInitScript(
-        (value) =>
-          window.localStorage.setItem(
-            "production-ready-rag.ui",
-            JSON.stringify({ state: { theme: value }, version: 0 })
-          ),
-        theme
-      );
-      await mockKbPage(page, 1);
-      // 回答エンジンが検索だけを行ったときの応答（delta の本文が空）。
-      const body = searchStreamBody("policy.pdf", 2).replace(
-        'event: delta\ndata: {"text":"これはテスト回答です。"}',
-        'event: delta\ndata: {"text":""}'
-      );
-      await page.route("**/api/search/stream", (route) =>
-        route.fulfill({ status: 200, contentType: "text/event-stream", body })
-      );
+  test(`検索だけの結果（回答なし）は件数と時間と引用を出す (#593, ${viewport.name})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await mockKbPage(page, 1);
+    // 回答エンジンが検索だけを行ったときの応答（delta の本文が空）。
+    const body = searchStreamBody("policy.pdf", 2).replace(
+      'event: delta\ndata: {"text":"これはテスト回答です。"}',
+      'event: delta\ndata: {"text":""}'
+    );
+    await page.route("**/api/search/stream", (route) =>
+      route.fulfill({ status: 200, contentType: "text/event-stream", body })
+    );
 
-      await page.goto("/knowledge-bases/kb-1");
-      await expect
-        .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-        .toBe(theme === "dark");
-      await page.getByPlaceholder("このナレッジベースに質問してみる…").fill("有給休暇の付与日数は？");
-      await page.getByRole("button", { name: "検索テスト" }).click();
+    await page.goto("/knowledge-bases/kb-1");
+    await page.getByPlaceholder("このナレッジベースに質問してみる…").fill("有給休暇の付与日数は？");
+    await page.getByRole("button", { name: "検索テスト" }).click();
 
-      await expect(page.getByTestId("kb-search-test-meta")).toHaveText("2 件 / 120 ms");
-      await expect(page.getByText("policy.pdf")).toBeVisible();
-      await expect(page.getByRole("heading", { name: "検索結果（2）" })).toBeVisible();
-      // 回答の欄は出さない（空の回答の枠を残さない）。
-      await expect(page.getByRole("heading", { name: "回答", exact: true })).toHaveCount(0);
-      await expectNoPageOverflow(page);
-      // 検索だけの結果の箇所は、パネルの見出しを「検索で見つかった箇所」にする（#2360）。
-      await page.getByRole("button", { name: /の根拠を表示$/ }).first().click();
-      const sheet = page.getByRole("dialog", { name: "検索で見つかった箇所" });
-      await expect(sheet).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(sheet).toBeHidden();
-    });
-  }
+    await expect(page.getByTestId("kb-search-test-meta")).toHaveText("2 件 / 120 ms");
+    await expect(page.getByText("policy.pdf")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "検索結果（2）" })).toBeVisible();
+    // 回答の欄は出さない（空の回答の枠を残さない）。
+    await expect(page.getByRole("heading", { name: "回答", exact: true })).toHaveCount(0);
+    await expectNoPageOverflow(page);
+    // 検索だけの結果の箇所は、パネルの見出しを「検索で見つかった箇所」にする（#2360）。
+    await page.getByRole("button", { name: /の根拠を表示$/ }).first().click();
+    const sheet = page.getByRole("dialog", { name: "検索で見つかった箇所" });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+  });
 }
 
 // #349: 回答の引用のプレビューでも、要素の表示領域（要素ごとの bbox）を強調し、1 画面分の高さで表示する。

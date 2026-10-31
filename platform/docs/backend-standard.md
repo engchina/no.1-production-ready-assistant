@@ -12,7 +12,7 @@
 | Web | FastAPI（本番: Gunicorn + `uvicorn.workers.UvicornWorker` / 開発: `uvicorn --reload`） |
 | Validation / Config | Pydantic v2 + pydantic-settings（`.env` + 任意 JSON 設定） |
 | HTTP client | httpx |
-| DB / Vector | Oracle AI Database + python-oracledb（Oracle AI Vector Search / Oracle Text）。対応バージョンは [terraform/README.md](../../terraform/README.md) |
+| DB / Vector | Oracle AI Database + python-oracledb（Oracle AI Vector Search / Oracle Text）。対応バージョンは [deployment.md](./deployment.md) |
 | LLM・VLM | OCI Enterprise AI |
 | Embedding・Rerank | OCI Generative AI（Cohere） |
 | Observability | Prometheus metrics + JSON logging + request-id |
@@ -64,10 +64,10 @@ FastAPI の API ドキュメント（Swagger UI `/docs`・ReDoc `/redoc`・`/ope
 
 画面の DB ゲートが使う DB の状態は、3製品とも `pr_system_settings.database_status.build_database_status_router` で提供する（製品が独自に実装しない）。ログイン不要の公開 path にする（各製品の `PUBLIC_API_PATHS`）。
 
-- 応答: `{status: ok|not_configured|unreachable|setup_required, check, detail, context_id, schema_status, adb_lifecycle_state}`。常に HTTP 200。`adb_lifecycle_state` は `unreachable` のときだけ入る（#820）。
+- 応答: `{status: ok|not_configured|unreachable|setup_required, check, detail, context_id, schema_status}`。常に HTTP 200。
 - 判定の順: `short_circuit`（DB を使わない構成）→ システム設定画面と同じ `database_readiness`（`ok` 以外は `not_configured`。接続は試さない）→ 製品の `test_connection`（bounded。失敗は `unreachable`）→ 製品の `schema_probe`（準備状態の確認）→ `ok`。
 - `schema_probe` の例外は、接続・pool のエラー（`pr_backend_core.oracle_errors.is_oracle_connection_error`。`DPY-4005`・`DPY-6xxx`・`DPY-4011`・`ORA-125xx` / `12170`・`ORA-03113` / `03114`・`ORA-01017` など。`raise ... from` の原因の連鎖も見る）なら `unreachable`、それ以外（辞書・DDL・権限など）だけを `setup_required`（`check=schema_check_failed`）にする（#820）。接続確認の後に pool が接続を返さないとき、「初期化が必要」と案内しない。製品の `schema_probe` が自分で例外を正規化するとき（NL2SQL の `migration_check_failed`）も同じ関数で分ける。
-- `unreachable` のときは、ADB OCID（`PLATFORM_ORACLE_ADB_OCID`）があれば OCI の API で ADB のライフサイクル状態を取り（上限 5 秒、`adb_lifecycle`。失敗しても判定は変えない）、`adb_lifecycle_state` に入れる（#820）。画面は停止中・起動中・利用できない状態・起動済み（ネットワーク・接続情報の問題）を分けて案内する。
+- `unreachable` のときも OCI の制御 API へ DB の状態を問い合わせない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。画面は接続設定と Wallet の確認を案内する。
 - `detail` は接続先・資格情報・Wallet の path を返さない（ORA / DPY / DPI のコードだけ）。`context_id` は接続先の値の SHA-256 で、生値は返さない。
 - 製品が注入するもの: `test_connection`（接続 pool と接続処理は製品が持つ）、`extra_readiness`（システム設定画面の `build_database_router` と同じもの）、`schema_probe`（RAG の system schema、NL2SQL の incremental store）、`short_circuit`（NL2SQL の memory モード、Agent のローカル認証）、`context_fields`（NL2SQL は実行モード・保存モードも含める）。
 - `ok` の結果だけを、接続先と資格情報の指紋（hash。生値は持たない）ごとに 30 秒サーバー側で cache する（`ok_cache_seconds`。#793）。設定の判定は毎回行い、`unreachable` / `setup_required` は cache しない。DB 設定の保存（`build_database_router`）とシステムテーブルの操作（`SystemSchemaManagerBase.initialize` / `delete_orphaned_rows`）で `clear_database_status_cache` が捨てる。テストは autouse の fixture で捨てる。
@@ -114,7 +114,7 @@ Agent が RAG / NL2SQL を呼ぶときは、呼び先の `POST /api/mcp`（MCP �
   - 呼び出し元（Agent の組み込み Runtime）も同じ範囲を tool handler で強制する（多層の防御。Agent の
     `features/agent/data_scope.py`）。呼び先の強制は、Runtime の不具合・新しいツールの追加漏れ・Runtime を通さない
     呼び出しでも範囲を越えさせないためのもの。
-- 呼び出しのきっかけ（#1986）: Agent は Run のきっかけ（`run_facts.run_source`。`user` / `automation` / `evaluation` /
+- 呼び出しのきっかけ（#1986）: Agent は Run のきっかけ（`run_facts.run_source`。`user` / `evaluation` /
   `mcp` / `replay`）を任意の claim `run_source` に入れる（`ToolInvocationContext.run_source` → `McpConnectionClient._service_token`。
   Run の外の呼び出し〔画面の単発のツール呼び出しなど〕は付けない）。呼び先は**見え方だけ**に使う: NL2SQL は MCP の入口で
   claim `run_source` = `evaluation` の実行を実行履歴の種類「品質評価」、それ以外のサービストークンと API キーの呼び出しを
@@ -297,7 +297,7 @@ API・worker・RAG の独立微サービス・browser の共通 schema、JST 時
 - **「今日」と既定の時間帯は共通の設定 `PLATFORM_TIMEZONE`（属性 `timezone`。既定 `UTC`）から決める**（`pr_backend_core.timezones.local_today(settings)` / `configured_timezone(settings)`）。`date.today()`・`datetime.now()`（時間帯なし）・時間帯の名前の定数を使わない。
 - **画面の日時はこの時間帯で表示する（#3265）。** `GET /api/auth/me` とログインの応答の `timezone`（`pr_system_settings.auth.router.DisplayTimezoneData`。製品の `CurrentUserData` が継承する）を `AuthProvider` が `@production-ready/ui` の `setDisplayTimeZone` に渡し、日時は `formatDisplayDateTime` / `displayDateTimeFormat` / `formatRunDateTime` などで書く（ブラウザの時間帯・`timeZone` の直書きを使わない）。
 - **業務データの SQL の「今」はこの時間帯（#3265）。** 業務データの SELECT を実行する間だけ `local_session_time_zone(connection, session_time_zone_offset(settings))` で session の時間帯を offset にし、抜けると `'+00:00'` に戻す（pool に返す接続とアプリの表は UTC のまま）。`CURRENT_DATE` / `CURRENT_TIMESTAMP` が設定の時間帯の今を返す（NL2SQL は生成した SQL の `SYSDATE` / `SYSTIMESTAMP` をこれに置き換える）。
-- ADB の `SYSDATE` / `SYSTIMESTAMP` は UTC を返す。`SYSDATE_AT_DBTIMEZONE` を `TRUE` にしない（手順と理由は [terraform/README.md](../../terraform/README.md)「Autonomous AI Database（全製品で共有）」）。
+- ADB の `SYSDATE` / `SYSTIMESTAMP` は UTC を返す。`SYSDATE_AT_DBTIMEZONE` を `TRUE` にしない（手順と理由は [deployment.md](./deployment.md)「Autonomous AI Database（全製品で共有）」）。
 
 ### 別の製品・別の worker が保存した共通の設定の反映（#465・#2092・#2102）
 
@@ -367,7 +367,7 @@ Agent の既存の終了イベントは実行 span とは別の log として扱
 3. 古いコードが `.env` を再読込して免ログインに切り替わらないよう、旧変数の削除はコード更新とサービスの停止・再起動を一体で行う。秘密の値は表示・commit しない。
 4. HTTPS と3製品のログイン、`/api/ready`、サービス管理の環境表示を確認する。
 
-Terraform の環境入力は3製品共通の `platform_environment`（既定 `staging`）を使う。staging / production で HTTPS を無効にした構成は配備前に拒否する。
+配備の環境は3製品共通の `PLATFORM_ENVIRONMENT` を使う。
 
 チャット添付の初期配備は 3 製品とも無効です。製品ごとに設定 API で有効化した保存値は再配備でも維持します。`.env` に有効化の既定値は置きません。
 

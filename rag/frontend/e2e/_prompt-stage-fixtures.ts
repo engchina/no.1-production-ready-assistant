@@ -27,7 +27,6 @@ export const FLOW_STAGES: StageFixture[] = [
   { id: "routing", phase: "question", prompts: [{ id: "system", content: "ルーティングの system" }] },
   { id: "expansion", phase: "question", prompts: [{ id: "system", content: "検索文の指示" }] },
   { id: "screen_linking", phase: "retrieval", prompts: [{ id: "system", content: "画面の system" }] },
-  { id: "article_catalog", phase: "retrieval", prompts: [{ id: "system", content: "目録の指示" }] },
   { id: "crag", phase: "grounding", prompts: [{ id: "system", content: "判定の system" }] },
   { id: "section_extraction", phase: "grounding", prompts: [{ id: "system", content: "抽出の指示" }] },
   { id: "faq_answer", phase: "generation", prompts: [{ id: "system", content: "FAQ の指示" }] },

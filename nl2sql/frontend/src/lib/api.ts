@@ -30,9 +30,6 @@ import {
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
-  AdbInfoData,
-  AdbOperationStatus,
-  AdbSettingsUpdate,
   DatabaseConnectionSecurity,
   DatabaseConnectionTestResult,
   DatabaseConnectionTestStatus,
@@ -42,8 +39,6 @@ export type {
   DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 import type {
-  AdbInfoData,
-  AdbSettingsUpdate,
   DatabaseConnectionTestResult,
   DatabasePasswordRevealData,
   DatabaseSettingsData,
@@ -963,24 +958,6 @@ export const api = {
       "/api/settings/database/test",
       jsonBody(body),
     ),
-
-  getAdbInfo: (options: ApiRequestOptions = {}) =>
-    settingsRequest<AdbInfoData>("/api/settings/database/adb", {
-      signal: options.signal,
-    }),
-  updateAdbSettings: (body: AdbSettingsUpdate) =>
-    settingsRequest<AdbInfoData>(
-      "/api/settings/database/adb/settings",
-      jsonBody(body),
-    ),
-  startAdb: () =>
-    settingsRequest<AdbInfoData>("/api/settings/database/adb/start", {
-      method: "POST",
-    }),
-  stopAdb: () =>
-    settingsRequest<AdbInfoData>("/api/settings/database/adb/stop", {
-      method: "POST",
-    }),
 
   // 回答の注意書き（設定は製品ごと。#2405・#2449）
   // チャットの添付（#2517）

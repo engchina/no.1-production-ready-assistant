@@ -5,38 +5,28 @@
    命名規約:  --color-<category>-<role>[-<state>]
               category = canvas|surface|fg|border|accent|success|warning|danger|info|focus
 
-   テーマ切替は `color-scheme` 一本。light-dark() が各トークンを一度の宣言で
-   両テーマ分解決します（= .dark の全値手書き複製を廃止）。
+   テーマはライトの 1 種類だけ（#17。ダークテーマ・OS 設定への追従は持たない）。
+   <html> は常に color-scheme: light で、テーマを切り替える属性・class（data-theme / .dark）は無い。
 
-       <html>                       → ライト（既定）
-       <html class="light">         → ライト（明示。既定と同じ）
-       <html data-theme="dark">     → ダーク
-       <html data-theme="auto">     → OS 設定に追従
-       <html class="dark">          → 旧 API（互換のため維持）
-
-   .light / .dark は既存 3 アプリが使っている旧 API です。新規コードは data-theme を使うこと。
-   .light / .dark はルート要素（<html>）でだけ効きます。外部ライブラリの同名 class（React Flow の
-   .react-flow.light 等）でテーマが切り替わらないようにするためです。部分テーマは data-theme を使うこと。
+   light-dark() の第 2 引数（暗い値）は、常時暗いスラブ（下部の [data-surface="inverted"] /
+   [data-surface="code"]。color-scheme: dark）の内側でだけ使われる。スラブの中の部品が
+   追加コードなしで暗い面の見た目になるための仕組みで、画面全体のテーマではない。
 
    面のスコープ（TIER 2.5）は下部の [data-surface] を参照。
    ───────────────────────────────────────────────────────────────────────── */
 
 :root { color-scheme: light; }
-[data-theme="light"], :root.light { color-scheme: light; }
-[data-theme="dark"], :root.dark { color-scheme: dark; }
-[data-theme="auto"]  { color-scheme: light dark; }
 
-/* light-dark() を含むトークンは、color-scheme を切り替えるすべての要素で宣言し直す。
+/* light-dark() を含むトークンは、color-scheme を切り替えるすべての要素（:root と暗いスラブ）で宣言し直す。
    アプリの Tailwind ビルド（Lightning CSS）は light-dark() を --lightningcss-light/dark 変数に変換し、
    値が「宣言した要素」で確定してから継承される。:root だけで宣言すると [data-surface] の内側で
    上書きしていないトークンがライト値のまま残るため。 */
-:root, [data-theme], [data-surface] {
+:root, [data-surface] {
   /* 書体の並び（--font-sans / --font-mono）は fonts.css（内容の言語で切り替えるため、ここでは宣言し直さない。#3335）。 */
 
   /* ── 面 (surface) ──────────────────────────────────────────────────────
-     ライトでは「浮き」を影で、ダークでは「浮き」を明るさで表現します。
-     ダークで影が見えないのは物理的事実なので、面の明度を段に持たせるのが標準解。
-        canvas 950 → surface 900 → raised 850 → overlay 800
+     「浮き」は影で表現します。暗い値（第 2 引数）は暗いスラブの内側で、
+     浮きを明るさで表すための段（canvas 950 → surface 900 → raised 850 → overlay 800）。
      この順序を崩さないこと。 */
   --color-canvas:           light-dark(var(--neutral-50),  var(--neutral-950));
   --color-surface:          light-dark(var(--neutral-0),   var(--neutral-900));
@@ -69,10 +59,11 @@
         -emphasis  塗り背景
         -muted     12/20% トーン（押下・選択中）
         -subtle    8/14% トーン（hover・候補行） */
-  /* アクセントの文字を淡青面に載せるときは -fg-strong（深い同系色）を使う。 */
-  --color-accent-fg:             light-dark(var(--blue-500), var(--blue-400));
-  --color-accent-fg-strong:      light-dark(var(--blue-650), var(--blue-300));
-  --color-accent-emphasis:       light-dark(var(--blue-500), var(--blue-600));
+  /* アクセントは深いティール（#18）。淡いティールの面に載せる文字は -fg-strong（深い同系色）を使う
+     （-fg のままでも 4.65:1 以上だが、[data-surface-tint] で 1 段深くして余裕を持たせる）。 */
+  --color-accent-fg:             light-dark(var(--teal-500), var(--teal-400));
+  --color-accent-fg-strong:      light-dark(var(--teal-650), var(--teal-300));
+  --color-accent-emphasis:       light-dark(var(--teal-500), var(--teal-600));
   --color-accent-emphasis-hover: color-mix(in srgb, var(--color-accent-emphasis) 88%, #000);
   --color-accent-emphasis-active:color-mix(in srgb, var(--color-accent-emphasis) 76%, #000);
   /* light-dark() は色しか受け付けないため、混合率ではなく混合結果の色を渡す。 */
@@ -107,20 +98,21 @@
 
   /* info はアクセントと同一色相。管理コンソールで「情報」と「主要操作」は
      同じ中立的シグナルなので、別の青を使うとユーザーには単なるブレに見えます。
-     文字は淡青面上で 4.5:1 を満たす深い同系色（--blue-650）を使います。 */
-  --color-info-fg:          light-dark(var(--blue-650), var(--blue-450));
-  --color-info-emphasis:    light-dark(var(--blue-500), var(--blue-600));
-  --color-info-subtle:      light-dark(var(--blue-100), var(--blue-800));
+     文字は淡いティールの面の上で 4.5:1 を満たす深い同系色（--teal-650）を使います（6.81:1 以上）。 */
+  --color-info-fg:          light-dark(var(--teal-650), var(--teal-450));
+  --color-info-emphasis:    light-dark(var(--teal-500), var(--teal-600));
+  --color-info-subtle:      light-dark(var(--teal-100), var(--teal-800));
   --color-info-border:      color-mix(in srgb, var(--color-info-fg) 30%, transparent);
 
   /* ── フォーカス ───────────────────────────────────────────────────────
+     白上 5.65:1 / canvas 上 5.31:1 / accent-muted 上 4.77:1（WCAG 1.4.11 の 3:1 以上）。
      暗い面の上では [data-surface] 側で明るいリングに差し替わります。 */
-  --color-focus-ring: light-dark(var(--blue-500), var(--blue-300));
+  --color-focus-ring: light-dark(var(--teal-500), var(--teal-300));
 
   /* ── スピナーのトラック（#395）───────────────────────────────────────
      アークと同じ色（currentColor）を透かす。置かれた面・文字色（accent-fg / fg-muted / 白）に追従する。
      濃さは「アーク対トラックの境目が 3:1 以上」を保つ上限: ライト 30%（surface-hover 上で 3.00:1）、
-     ダーク 35%（surface-overlay 上で 3.05:1）。トラック対地はライト 1.45〜1.52:1 / ダーク 1.95〜2.15:1。
+     暗いスラブ 35%。トラック対地はライト 1.45〜1.52:1。
      currentColor はこのトークンを使う要素（Spinner の circle）で解決される。 */
   --color-spinner-track: light-dark(
     color-mix(in srgb, currentColor 30%, transparent),
@@ -128,19 +120,15 @@
   );
 }
 
-/* ── 常時暗いスラブの地の色（テーマで濃さだけ変わる）
+/* ── 常時暗いスラブの地の色
    [data-surface="inverted"]（color-scheme: dark）の内側で参照されるため light-dark() では書けない
-   （常にダーク値になる）。外側のテーマで確定値にし、スコープで宣言し直さないよう :root 系だけに置く。 */
-:root { --color-sidebar: var(--blue-850); --color-code-canvas: var(--blue-900); }
-[data-theme="dark"], :root.dark { --color-sidebar: var(--neutral-1000); }
-@media (prefers-color-scheme: dark) {
-  [data-theme="auto"] { --color-sidebar: var(--neutral-1000); }
-}
+   （常にダーク値になる）。スコープで宣言し直さないよう :root だけに置く。 */
+:root { --color-sidebar: var(--teal-850); --color-code-canvas: var(--teal-900); }
 
 /* ─────────────────────────────────────────────────────────────────────────
    TIER 2.5 — SURFACE SCOPES（面コンテキスト）
 
-   この design system には色文脈が 3 つある（ライト面・ダーク面・常時暗いスラブ）
+   この design system には色文脈が 2 つある（ライトの面と常時暗いスラブ）
    のに、テーマスコープは 2 つしかなかった。だからサイドバーが #ffffff 直書きに
    なっていた。スコープを宣言すれば、同じコンポーネントが文脈を跨いで動きます:
 
@@ -161,8 +149,8 @@
   --color-border:         rgb(255 255 255 / 0.12);
   --color-border-strong:  rgb(255 255 255 / 0.20);
   --color-border-control: rgb(255 255 255 / 0.28);
-  --color-accent-emphasis: light-dark(var(--blue-500), var(--blue-600));
-  --color-focus-ring: var(--blue-300); /* 暗紺地の上で #1a73c1 は 1.9:1 ＝不可視だった */
+  --color-accent-emphasis: light-dark(var(--teal-500), var(--teal-600));
+  --color-focus-ring: var(--teal-300); /* サイドバーの地（--teal-850）の上で 8.26:1。アクセントの --teal-500 のままでは 2.6:1 */
 }
 
 [data-surface="code"] {
@@ -172,7 +160,7 @@
   --color-fg:       var(--slab-code-fg);
   --color-fg-muted: color-mix(in srgb, var(--slab-code-fg) 65%, transparent);
   --color-border:   rgb(255 255 255 / 0.10);
-  --color-focus-ring: var(--blue-300);
+  --color-focus-ring: var(--teal-300);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -181,14 +169,14 @@
    淡い色の面（--color-accent-subtle / -muted と、状態色の --color-<s>-subtle）と、灰色の面を常に塗る要素
    （bg-surface-hover のチップ・事実の欄など。fg-muted は 4.39:1。値は "neutral"）に付ける。
    ライトの --color-fg-muted（#6b7280）は canvas / surface 上で 4.5:1 を満たすが、淡い面の上では
-   accent 4.36 / info 3.96 / success 4.26 / warning 4.34 / danger 3.96:1 に下がる（WCAG 1.4.3 不適合）。
-   --color-accent-fg（4.03〜4.43:1）と、他の系統の淡い面の上の success / warning の文字（4.11〜4.49:1）も同じ。
-   内側の文字だけを 1 段深くする（ライトの値。ダークは据え置きで、すべて 5.5:1 以上）:
-       fg-muted    --neutral-650                 4.63〜5.09:1（ダーク 6.58〜7.58:1）
-       accent-fg   --color-accent-fg-strong      5.84〜6.43:1（ダーク 6.39〜7.33:1）
-       success-fg  --color-success-fg-strong     6.29〜6.92:1（success の面の上は -fg のまま 4.84:1）
-       warning-fg  --color-warning-fg-strong     5.80〜6.39:1（warning の面の上は -fg のまま 4.51:1）
-   info-fg（5.84:1 以上）と danger-fg（5.30:1 以上）は深くしなくても満たす。
+   accent 4.08〜4.32 / info 3.98 / success 4.26 / warning 4.34 / danger 3.96:1 に下がる（WCAG 1.4.3 不適合）。
+   他の系統の淡い面の上の success / warning の文字（4.11〜4.49:1）も同じ。
+   内側の文字だけを 1 段深くする（ティールのアクセント #18 での値）:
+       fg-muted    --neutral-650                 4.63〜5.13:1
+       accent-fg   --color-accent-fg-strong      6.81〜7.55:1（-fg の --teal-500 のままでも 4.62〜5.12:1）
+       success-fg  --color-success-fg-strong     6.29〜6.97:1（success の面の上は -fg のまま 4.84:1）
+       warning-fg  --color-warning-fg-strong     5.80〜6.43:1（warning の面の上は -fg のまま 4.51:1）
+   info-fg（6.81:1 以上）と danger-fg（5.30:1 以上）は深くしなくても満たす。
    値は面の系統によらず同じ。系統の値は「どの面か」を記録し、自分の系統の文字を元の色に保つためだけに使う。
    [data-surface] と違い、面のトークン一式は宣言し直さない（外側の prefers-contrast の値を潰さないため）。
    a11y.css の forced-colors / prefers-contrast はこのセレクタも対象にしている。

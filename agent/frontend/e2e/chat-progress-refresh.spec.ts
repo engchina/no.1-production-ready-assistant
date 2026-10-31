@@ -16,12 +16,6 @@ function iso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 function seedRunningRun(mockApi: MockApi) {
   const startedAt = iso(-3_000);
   const progress = new ProgressLog(RUN_ID, undefined, startedAt).step("chat-1", "running", { startedAt });
@@ -90,69 +84,65 @@ async function openThread(page: Page, title = "契約の更新条件を調べて
   }
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`段階の配信が応答しなくなったら「接続を確認しています」を出して取り直し、完了が出る（${theme}）`, async ({
-    page,
-    mockApi,
-  }, testInfo) => {
-    test.setTimeout(90_000);
-    const { run, progress } = seedRunningRun(mockApi);
-    const control = await controlProgressFetch(page);
-    await useTheme(page, theme);
-    await page.goto("/chat");
-    await openThread(page);
+test(`段階の配信が応答しなくなったら「接続を確認しています」を出して取り直し、完了が出る`, async ({
+  page,
+  mockApi,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const { run, progress } = seedRunningRun(mockApi);
+  const control = await controlProgressFetch(page);
+  await page.goto("/chat");
+  await openThread(page);
 
-    const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
-    const current = turn.getByTestId("chat-progress-current");
-    await expect(current).toContainText(MODEL_CALL);
-    // 応答を止める（3 回の読み出し。1 回の読み出しは時間の上限で打ち切って読み直す）。修正前（#1160）は 1 回目の
-    // 取得を待ったまま取り直しが止まった。
-    control.hang = 3;
-    const reconnecting = turn.getByTestId("chat-progress-reconnecting");
-    await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 30_000 });
-    // 案内は見出し「処理中（N ステップ完了）」の直下（左の見出しの側の 2 行目）に出す。今の段階の行の下・右の経過時間の
-    // 列には出さない（#2426）。
-    const timerBox = await turn.getByTestId("chat-progress-timer").boundingBox();
-    const noticeBox = await reconnecting.boundingBox();
-    expect(timerBox && noticeBox && noticeBox.y >= timerBox.y + timerBox.height - 1).toBeTruthy();
-    expect(timerBox && noticeBox && noticeBox.x < timerBox.x).toBeTruthy();
-    await expect(turn.getByTestId("chat-progress-current").getByTestId("chat-progress-reconnecting")).toHaveCount(0);
-    await expect(turn.getByTestId("chat-progress-running").getByTestId("chat-progress-reconnecting")).toHaveCount(1);
-    await expect(current).toHaveAttribute("data-reconnecting", "true");
-    await expect(turn.getByTestId("chat-progress-timer")).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`progress-reconnecting-${theme}.png`) });
-    complete(run, progress);
-    await expect(turn.getByText("契約は 1 年ごとに更新します。")).toBeVisible({ timeout: 40_000 });
-    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "done");
-    await expect(reconnecting).toHaveCount(0);
-    await expect(page.getByTestId("chat-send")).toHaveAccessibleName("送信");
-  });
+  const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
+  const current = turn.getByTestId("chat-progress-current");
+  await expect(current).toContainText(MODEL_CALL);
+  // 応答を止める（3 回の読み出し。1 回の読み出しは時間の上限で打ち切って読み直す）。修正前（#1160）は 1 回目の
+  // 取得を待ったまま取り直しが止まった。
+  control.hang = 3;
+  const reconnecting = turn.getByTestId("chat-progress-reconnecting");
+  await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 30_000 });
+  // 案内は見出し「処理中（N ステップ完了）」の直下（左の見出しの側の 2 行目）に出す。今の段階の行の下・右の経過時間の
+  // 列には出さない（#2426）。
+  const timerBox = await turn.getByTestId("chat-progress-timer").boundingBox();
+  const noticeBox = await reconnecting.boundingBox();
+  expect(timerBox && noticeBox && noticeBox.y >= timerBox.y + timerBox.height - 1).toBeTruthy();
+  expect(timerBox && noticeBox && noticeBox.x < timerBox.x).toBeTruthy();
+  await expect(turn.getByTestId("chat-progress-current").getByTestId("chat-progress-reconnecting")).toHaveCount(0);
+  await expect(turn.getByTestId("chat-progress-running").getByTestId("chat-progress-reconnecting")).toHaveCount(1);
+  await expect(current).toHaveAttribute("data-reconnecting", "true");
+  await expect(turn.getByTestId("chat-progress-timer")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`progress-reconnecting.png`) });
+  complete(run, progress);
+  await expect(turn.getByText("契約は 1 年ごとに更新します。")).toBeVisible({ timeout: 40_000 });
+  await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "done");
+  await expect(reconnecting).toHaveCount(0);
+  await expect(page.getByTestId("chat-send")).toHaveAccessibleName("送信");
+});
 
-  test(`段階の配信の失敗が続いても backoff して再開し、失敗の終端が出る（${theme}）`, async ({ page, mockApi }) => {
-    test.setTimeout(90_000);
-    const { run, progress } = seedRunningRun(mockApi);
-    const control = await controlProgressFetch(page);
-    await useTheme(page, theme);
-    await page.goto("/chat");
-    await openThread(page);
+test(`段階の配信の失敗が続いても backoff して再開し、失敗の終端が出る`, async ({ page, mockApi }) => {
+  test.setTimeout(90_000);
+  const { run, progress } = seedRunningRun(mockApi);
+  const control = await controlProgressFetch(page);
+  await page.goto("/chat");
+  await openThread(page);
 
-    const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
-    await expect(turn.getByTestId("chat-progress-current")).toContainText(MODEL_CALL);
-    control.fail = 6;
-    await expect.poll(() => control.fail, { timeout: 60_000 }).toBe(0);
-    run.status = "failed";
-    progress.step("chat-1", "failed").terminal("failed");
-    run.events = [
-      ...(run.events as Record<string, unknown>[]),
-      { id: "ev-failed", run_id: RUN_ID, type: "runtime.failed", message: "モデルの呼び出しに失敗しました（APIError）。", payload: {}, created_at: iso(0) },
-    ];
-    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "failed", { timeout: 30_000 });
-    await expect(turn.getByText("モデルの呼び出しに失敗しました（APIError）。")).toBeVisible();
-    await expect(turn.getByTestId("chat-progress-reconnecting")).toHaveCount(0);
-    // 一時的な失敗で会話が消えて新しい会話に戻らない。
-    await expect(turn).toBeVisible();
-  });
-}
+  const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
+  await expect(turn.getByTestId("chat-progress-current")).toContainText(MODEL_CALL);
+  control.fail = 6;
+  await expect.poll(() => control.fail, { timeout: 60_000 }).toBe(0);
+  run.status = "failed";
+  progress.step("chat-1", "failed").terminal("failed");
+  run.events = [
+    ...(run.events as Record<string, unknown>[]),
+    { id: "ev-failed", run_id: RUN_ID, type: "runtime.failed", message: "モデルの呼び出しに失敗しました（APIError）。", payload: {}, created_at: iso(0) },
+  ];
+  await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "failed", { timeout: 30_000 });
+  await expect(turn.getByText("モデルの呼び出しに失敗しました（APIError）。")).toBeVisible();
+  await expect(turn.getByTestId("chat-progress-reconnecting")).toHaveCount(0);
+  // 一時的な失敗で会話が消えて新しい会話に戻らない。
+  await expect(turn).toBeVisible();
+});
 
 // 処理の経過（span の木）の名前と Trace ID は、実際の会話の API と画面を通して確かめる（#3226）。
 test("処理の経過は span の木を日本語の名前で出し、処理の詳細に Trace ID を出す", { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
@@ -232,11 +222,7 @@ test("深いリランク要求とSDKの親子を一覧内でたどれ、保存�
     await sdk.scrollIntoViewIfNeeded();
   }
   async function screenshots(phase: string) {
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => document.documentElement.setAttribute("data-theme", value), theme);
-      await page.screenshot({ path: testInfo.outputPath(`deep-rerank-${phase}-${theme}.png`), fullPage: true });
-    }
-    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    await page.screenshot({ path: testInfo.outputPath(`deep-rerank-${phase}.png`), fullPage: true });
   }
   await verify();
   await screenshots("live");

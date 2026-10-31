@@ -284,4 +284,4 @@
 - [WCAG 2.2 Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum/)：AA の 24 CSS px（例外あり）を下限として参照。3製品はモバイルを 44px にする。
 - `ui-ux-pro-max`：touch target 44px、間隔 8px、キーボード focus、loading feedback と reduced motion。
 
-各製品は、実際の部品を使って light / dark × desktop / mobile-375 の寸法・状態・操作・focus・danger の確認・overflow を Playwright で確認する（例：NL2SQL の `tests/e2e/button-standards.spec.ts`）。
+各製品は、実際の部品を使って desktop / mobile-375（テーマはライトだけ。#17） の寸法・状態・操作・focus・danger の確認・overflow を Playwright で確認する（例：NL2SQL の `tests/e2e/button-standards.spec.ts`）。

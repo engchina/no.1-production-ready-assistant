@@ -440,20 +440,6 @@ function finishEvaluation(job: Json) {
   job.summary = evaluationSummary(job.results as Json[]);
 }
 
-/** 自動実行の入力を保存する形にする（次回は MOCK_NOW の翌日。無効は無し。トリガーはスケジュールだけ。#1799）。 */
-function automationFields(body: Json): Json {
-  // backend の `AutomationSchedule()` の既定と同じ（毎日 09:00）。
-  const schedule = body.schedule ?? { frequency: "daily", time: "09:00", weekdays: [0], minute: 0, timezone: "Asia/Tokyo" };
-  return {
-    agent_id: body.agent_id,
-    name: body.name,
-    goal: body.goal,
-    enabled: body.enabled ?? true,
-    schedule,
-    next_run_at: (body.enabled ?? true) ? new Date(Date.parse(MOCK_NOW) + 86_400_000).toISOString() : null,
-  };
-}
-
 function answerTextOf(run: Json): string {
   const answer = ((run.artifacts as Json[] | undefined) ?? []).find((artifact) => artifact.kind === "answer");
   const text = (answer?.content as Json | undefined)?.text;
@@ -808,13 +794,6 @@ function createState() {
     feedbackReport: null as Json | null,
     // 確かめるべき実行（`GET /api/feedback/signals`。#1822）。null なら Run から作る。
     signalReport: null as Json | null,
-    // 自動実行（#784）。`automationRuns` は自動実行ごとの実行履歴。
-    automations: [] as Json[],
-    automationsPersistent: true,
-    automationRuns: {} as Record<string, Json[]>,
-    // 業務 Agent ごとの、自動実行で使えない（承認が要る）ツール（#1813）と、確かめられなかった接続の理由。
-    automationApprovalTools: {} as Record<string, string[]>,
-    automationApprovalWarnings: {} as Record<string, string[]>,
     // 品質評価（#776）。新しい順。作成直後は実行中で、`pollsUntilDone` 回の取得の後に完了する。
     evaluations: [] as Json[],
     evaluationPollsUntilDone: 1,
@@ -836,7 +815,6 @@ function createState() {
     mcpConnectionErrors: {} as Record<string, string>,
     modelSettings: d.modelSettings as Json,
     databaseSettings: d.databaseSettings as Json,
-    adbInfo: d.adbInfo as Json,
     uploadStorage: d.uploadStorage as Json,
     // 回答の注意書き（設定は製品ごと。#2405・#2449）。既定は未設定（既定の文）。
     answerNotice: { enabled: true, text: null } as { enabled: boolean; text: string | null },
@@ -857,7 +835,6 @@ function createState() {
       detail: null,
       context_id: "e2e-context",
       schema_status: null,
-      adb_lifecycle_state: null,
     } as Json,
     // 認証（#215）。既定はローカルの全権限の利用者（ログインなし）。null は未ログイン（me が 401）。
     auth: {
@@ -1280,13 +1257,11 @@ function runSummaryOf(run: Json): Json {
     // きっかけ（backend の `run_facts.run_source`。#1874）。
     source: metadata.evaluation_job_id
       ? "evaluation"
-      : metadata.automation_id
-        ? "automation"
-        : metadata.source === "mcp"
-          ? "mcp"
-          : metadata.replayed_from_run_id
-            ? "replay"
-            : "user",
+      : metadata.source === "mcp"
+        ? "mcp"
+        : metadata.replayed_from_run_id
+          ? "replay"
+          : "user",
     api_key_name: typeof metadata.api_key_name === "string" ? metadata.api_key_name : null,
     // 終了日時・所要時間・token（#1955）。
     finished_at: runFinishedAt(run),
@@ -2386,80 +2361,6 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
       return null;
     }
   }
-  // --- 自動実行（#784） ---
-  // 実行できる業務 Agent か（backend の `_require_runnable_agent` / `agent_unavailable_reason`。#927）。
-  const requireRunnableAgent = (agentId: unknown) => {
-    const agent = state.agents.find((candidate) => candidate.id === agentId);
-    if (!agent) throw new HttpError(422, "業務 Agent が見つかりません。");
-    if (!agent.enabled || agent.migration_required) throw new HttpError(422, "この業務 Agent は実行できない状態です。");
-    if (agent.published_version === null) {
-      throw new HttpError(422, "公開していない業務 Agent は実行できません。公開してから使ってください。");
-    }
-  };
-  if (method === "GET" && at("automations")) {
-    return {
-      automations: state.automations.filter((item) => agentAllowed(state, item.agent_id)),
-      persistent: state.automationsPersistent,
-    };
-  }
-  if (method === "POST" && at("automations")) {
-    requireRunnableAgent(body.agent_id);
-    const item: Json = {
-      ...automationFields(body),
-      id: `auto-${state.automations.length + 1}`,
-      run_as_user_uuid: "local",
-      created_by_user_uuid: "local",
-      last_run_at: null,
-      last_run_id: null,
-      last_trigger: null,
-      last_result: null,
-      last_message: null,
-      created_at: MOCK_NOW,
-      updated_at: MOCK_NOW,
-    };
-    state.automations.unshift(item);
-    return item;
-  }
-  if (method === "GET" && at("automations", "agents", "*", "approval-tools")) {
-    const agentId = String(third);
-    findOr404(state.agents, "id", agentId, "agent");
-    return {
-      agent_id: agentId,
-      approval_required_tools: state.automationApprovalTools[agentId] ?? [],
-      warnings: state.automationApprovalWarnings[agentId] ?? [],
-    };
-  }
-  if (head === "automations" && second) {
-    const item = findOr404(state.automations, "id", second, "automation");
-    if (method === "GET" && at("automations", "*")) {
-      return { automation: item, runs: state.automationRuns[String(item.id)] ?? [] };
-    }
-    if (method === "PUT" && at("automations", "*")) {
-      // 業務 Agent を変えるときと有効のまま保存するときだけ確かめる（無効にする保存は通す）。
-      if (body.agent_id !== item.agent_id || body.enabled) requireRunnableAgent(body.agent_id);
-      Object.assign(item, automationFields(body), { updated_at: MOCK_NOW });
-      return item;
-    }
-    if (method === "DELETE" && at("automations", "*")) {
-      state.automations = state.automations.filter((candidate) => candidate !== item);
-      return null;
-    }
-    if (method === "POST" && at("automations", "*", "run")) {
-      const runs = (state.automationRuns[String(item.id)] ??= []);
-      const runId = `run-auto-${runs.length + 1}`;
-      runs.unshift({ run_id: runId, status: "queued", trigger: "manual", created_at: MOCK_NOW, updated_at: MOCK_NOW });
-      Object.assign(item, {
-        last_run_at: MOCK_NOW,
-        last_run_id: runId,
-        last_trigger: "manual",
-        last_result: "created",
-        last_message: "実行を作りました。",
-        // 前回の Run の今の状態（backend は表示のときに Run の保存先から引く。#1812）。
-        last_run_status: "queued",
-      });
-      return { run_id: runId, result: "created", message: "実行を作りました。" };
-    }
-  }
   if (method === "GET" && at("usage")) {
     const days = Number(query.get("days") ?? 30);
     if (!REPORT_PERIOD_DAYS.includes(days)) throw new HttpError(422, REPORT_PERIOD_DETAIL);
@@ -2993,23 +2894,8 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
       }
     }
     if (method === "POST" && at("settings", "database", "wallet", "download")) {
-      // 共有画面（#108）は ADB の保存後に OCI から Wallet の取得を試みる。
+      // 共有画面（#108）は Wallet が無く ADB OCID があれば OCI から Wallet の取得を試みる。
       return { status: "already_configured", settings: state.databaseSettings };
-    }
-    if (method === "GET" && at("settings", "database", "adb")) return state.adbInfo;
-    if (method === "POST" && at("settings", "database", "adb", "settings")) {
-      const adbOcid = String(body.adb_ocid ?? "").trim();
-      state.databaseSettings.adb_ocid = adbOcid;
-      state.databaseSettings.region = String(body.region ?? "").trim();
-      state.adbInfo = {
-        ...state.adbInfo,
-        status: adbOcid ? "success" : "not_configured",
-        message: adbOcid ? "ADB OCID を保存しました。" : "ADB OCID が未設定です。",
-        id: adbOcid || null,
-        lifecycle_state: adbOcid ? "AVAILABLE" : null,
-        region: state.databaseSettings.region || null,
-      };
-      return state.adbInfo;
     }
     if (at("settings", "answer-notice")) {
       if (method === "PUT") {

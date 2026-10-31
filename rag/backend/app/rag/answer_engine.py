@@ -52,7 +52,6 @@ from rag_engine.generation.answer_models import ANSWER_USES
 from rag_engine.resources.deadline import DeadlineExceeded, check_deadline, current_deadline
 from rag_engine.resources.runtime import saved_prompt_overrides
 from rag_engine.resources.tracing import observe_call
-from rag_engine.retrieval.article_catalog import ARTICLE_UNIT_KEY
 from rag_engine.retrieval.attachment_evidence import ATTACHMENT_EVIDENCE_KEY
 from rag_engine.retrieval.search_stages import (
     CONTEXT_SIBLINGS_STAGE,
@@ -218,17 +217,6 @@ _ENTITY_SCORE_DECAY = 0.5
 _GRAPH_INSERT_AFTER = 5
 # 関係情報で足した chunk の RRF の点(起点の点に掛ける。rerank が無効なときの並びに使う)。
 _GRAPH_SCORE_DECAY = 0.5
-# 条の目録(#2254)の文字数の上限と、見出しの語の無い条に添える本文の書き出しの文字数
-# (MCP の rag_outline の compact の既定と同じ)。
-_ARTICLE_CATALOG_MAX_CHARS = 40000
-# 条の目録で選んだ条の context の理由(rag_engine の context_builder)と、根拠の役割(#2261)。
-CATALOG_ARTICLE_REASON = "catalog_article"
-CATALOG_ARTICLE_ROLE = "catalog_article"
-# 検索の範囲の条で構成された文書の一覧の cache((条件, 索引の状態) → 一覧。#2254)。
-_ARTICLE_DOCUMENTS_CACHE: dict[tuple[str, str], list[tuple[str, str]]] = {}
-_ARTICLE_CATALOG_LEAD_CHARS = 60
-# 条の選択の 2 段目で見せる本文の書き出しの文字数(条の名前が質問の語から遠い条を本文で判断させる)。
-_ARTICLE_REFINE_LEAD_CHARS = 120
 # 診断に出す、関係情報で使った entity の数の上限。
 _GRAPH_DIAGNOSTICS_ENTITIES = 10
 
@@ -423,13 +411,6 @@ class _SearchState:
     )
     # 章節の拡張(#1436)の章節の一覧((document_id, chunk_set_id) ごと。1 回の回答で 1 回だけ読む)。
     section_outlines: dict[tuple[str, str], Any] = field(default_factory=dict)
-    # 条の目録(#2254。document_id ごと。条で構成された文書でなければ None)。1 回の回答で 1 回だけ
-    # 作る。
-    article_catalogs: dict[str, Any] = field(default_factory=dict)
-    # 検索の範囲の条で構成された文書の一覧(#2254。1 回の回答で 1 回だけ読む)。
-    article_documents: list[tuple[str, str]] | None = None
-    # 目録で選んだ条(#2254。chunk_id か section_id ごと。診断の article_catalog に残す)。
-    article_selections: dict[str, dict[str, object]] = field(default_factory=dict)
     # 利用者が明示した基準日(as_of。無ければ空)。検索の条件は 1 回の回答の初めに決めた基準日を
     # 使い(``_with_effective_as_of``。#2602)、回答のプロンプトと記録の分類の条件には明示した値
     # だけを渡す。
@@ -558,28 +539,6 @@ def _attached_image_count(result: object) -> int:
     )
 
 
-# 条の選択の記録(#3507)の既定の置き場所(PLATFORM_LOCAL_STORAGE_DIR の下)。
-# 3 製品で同じ保存先を設定しても、RAG の名前の下に分ける。
-_ARTICLE_CATALOG_CACHE_SUBDIR = Path("cache") / "rag-article-catalog"
-
-
-def resolve_article_catalog_cache_dir(settings: Settings) -> Path | None:
-    """条の選択の記録の置き場所(#3507)。明示の設定、無ければローカルの保存先の下。
-
-    どちらも無ければ None(process をまたぐ記録を使わない)。
-    """
-    explicit = str(getattr(settings, "rag_article_catalog_cache_dir", "") or "").strip()
-    if explicit:
-        return Path(explicit).expanduser()
-    root = str(getattr(settings, "local_storage_dir", "") or "").strip()
-    return Path(root).expanduser() / _ARTICLE_CATALOG_CACHE_SUBDIR if root else None
-
-
-def article_catalog_cache_dir(settings: Settings) -> Path | None:
-    """rag_engine に渡す条の選択の記録の置き場所(テストは保存先を分けるため差し替える)。"""
-    return resolve_article_catalog_cache_dir(settings)
-
-
 def _reasoning_effort_override(value: str) -> str:
     """用途ごとの推論の量の設定を rag_engine へ渡す値にする(#1499。model は空 = 登録値のまま)。"""
     return "" if value == "model" else value
@@ -682,42 +641,6 @@ def build_engine_settings(
         "LLM_RETRIES": str(int(settings.oci_enterprise_ai_max_retries)),
         # 画面目録で操作画面を探す(#554)。rag_engine は明示した environ だけを読む。
         "RAG_ENGINE_SCREEN_LINKING": "1" if settings.rag_screen_linking_enabled else "0",
-        # 条の目録から根拠の条を選ぶ段(#2254)。
-        "RAG_ENGINE_ARTICLE_CATALOG": "1" if settings.rag_article_catalog_enabled else "0",
-        "RAG_ENGINE_ARTICLE_CATALOG_MAX_DOCUMENTS": str(settings.rag_article_catalog_max_documents),
-        "RAG_ENGINE_ARTICLE_CATALOG_MAX_ARTICLES": str(settings.rag_article_catalog_max_articles),
-        "RAG_ENGINE_ARTICLE_CATALOG_CONTEXT_RECORDS": str(
-            settings.rag_article_catalog_context_records
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_SCOPE_DOCUMENTS": str(
-            settings.rag_article_catalog_scope_documents
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_ORIGINAL_QUESTION_SEARCH": (
-            "1" if settings.rag_article_catalog_original_question_search else "0"
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_REFINE_ARTICLES": str(
-            settings.rag_article_catalog_refine_articles
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_REFINE_CANDIDATES": str(
-            settings.rag_article_catalog_refine_candidates
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_OUTPUT_TOKEN_CAP": str(
-            settings.rag_article_catalog_output_token_cap
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_CALL_TIMEOUT_SECONDS": str(
-            settings.rag_article_catalog_call_timeout_seconds
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_REVIEW": (
-            "1" if settings.rag_article_catalog_review_enabled else "0"
-        ),
-        # 条の選択の結果を process をまたいで使う記録(#3507)。置き場所が無ければ process の中だけ。
-        "RAG_ENGINE_ARTICLE_CATALOG_CACHE_DIR": str(article_catalog_cache_dir(settings) or ""),
-        "RAG_ENGINE_ARTICLE_CATALOG_CACHE_TTL_SECONDS": str(
-            settings.rag_article_catalog_cache_ttl_seconds
-        ),
-        "RAG_ENGINE_ARTICLE_CATALOG_CACHE_MAX_ENTRIES": str(
-            settings.rag_article_catalog_cache_max_entries
-        ),
         # 回答の最終の検証の入力の上限。
         "RAG_ENGINE_ANSWER_VALIDATION_MAX_INPUT_BYTES": str(
             settings.rag_answer_validation_max_input_bytes
@@ -940,7 +863,7 @@ class AnswerEngine:
         # RAG 検索の画面は True（チャットと同じ根拠を集め、回答の生成の手前で止める）。
         self._complete_evidence = complete_evidence
         # 呼び出し元（業務 Agent）が作った検索文（#2651）。None 以外なら、回答を作らない検索で、
-        # 質問に応じた推論の LLM（検索戦略の判定・質問拡張・条の目録の選択・画面目録の連携）と根拠の
+        # 質問に応じた推論の LLM（検索戦略の判定・質問拡張・画面目録の連携）と根拠の
         # 画像の切り出しを設定に関わらず使わない。決定的な工程（規則の質問の理解・用語の別名・
         # hybrid search・rerank・親子と前後の文脈・交差参照・実体の拡張）は通常の検索と同じ。
         self._caller_queries = tuple(caller_queries) if caller_queries is not None else None
@@ -948,7 +871,6 @@ class AnswerEngine:
             settings = settings.model_copy(
                 update={
                     "rag_query_strategy": CALLER_QUERY_STRATEGY,
-                    "rag_article_catalog_enabled": False,
                     "rag_screen_linking_enabled": False,
                 }
             )
@@ -1075,17 +997,6 @@ class AnswerEngine:
                 "added_count": len(state.entity_expansions),
                 "max_chunks": self._settings.rag_entity_expansion_max_chunks,
                 "chunks": list(state.entity_expansions.values())[:_REFERENCE_DIAGNOSTICS_LIMIT],
-            }
-        if state.article_selections:
-            outcome.diagnostics["article_catalog"] = {
-                "documents": [
-                    catalog.file_name
-                    for catalog in state.article_catalogs.values()
-                    if catalog is not None
-                ],
-                "max_documents": self._settings.rag_article_catalog_max_documents,
-                "context_records": self._settings.rag_article_catalog_context_records,
-                "articles": list(state.article_selections.values()),
             }
         if self._settings.rag_graph_expansion_enabled:
             outcome.diagnostics["graph_expansion"] = _graph_expansion_diagnostics(
@@ -1463,24 +1374,6 @@ class AnswerEngine:
             prefetch_search=lambda **kwargs: run_async(
                 lambda: self._prefetch_query_hits(request, state, **kwargs)
             ),
-            # 条の目録から根拠の条を選ぶ段(#2254)。章節と chunk の対応(#1438)を読む。
-            article_catalogs=lambda *, document_ids, limit, **kwargs: run_async(
-                lambda: self._article_catalogs(state, document_ids, limit)
-            ),
-            article_chunks=lambda *, articles, **kwargs: run_async(
-                lambda: self._article_chunks(request, state, articles)
-            ),
-            article_documents=lambda **kwargs: run_async(
-                lambda: self._article_documents(request, state)
-            ),
-            # 条の選択の 2 段目で見せる、同じ章の条と別の章の条（選んだ条の名指しを探す）の
-            # 本文の書き出し。
-            article_leads=lambda *, document_id, chunk_set_id, sections, **kwargs: run_async(
-                lambda: self._article_leads(document_id, chunk_set_id, sections, state=state)
-            ),
-            # 呼び出し元が検索文を短く言い換えたときの元の質問(#2261)。条の選択に使う(回答の要求の
-            # 単位には answer_question_result の request_question で使う。#2665)。
-            article_question=lambda: request.original_question,
             # 業務ガイドの手順の充足を意味の近さで決める embedding(#2649)。検索と同じ Cohere Embed。
             embedder=_LoopEmbedder(self._genai, loop),
             # rag_engine の中の補助の処理(画面の選択など)の失敗を、同じ記録に残す(#3259)。
@@ -3023,196 +2916,6 @@ class AnswerEngine:
             complete=text.complete and len(text.chunks) >= text.section.chunk_count,
         )
 
-    async def _article_catalogs(
-        self, state: _SearchState, document_ids: Sequence[str], limit: int
-    ) -> list[Any]:
-        """候補の文書のうち、条で構成された文書の章節の目録を順位の順に limit 件まで返す(#2254)。
-
-        条で構成された文書は、候補の chunk が XML ツリー JSON の引用ラベルを持つ文書。目録は
-        ``rag_outline`` の compact と同じ行(``compact_section_lines``)。読めない文書は飛ばす
-        (回答は続ける)。
-        """
-        from rag_engine.retrieval.article_catalog import ArticleCatalog
-
-        from app.rag.section_catalog import compact_section_lines
-        from app.rag.section_chunk_map import ROOT_SECTION_ID
-        from app.rag.section_map_service import section_outline
-
-        article_documents = {
-            chunk.document_id
-            for chunk in state.chunks.values()
-            if _xml_tree_location_labels(chunk.metadata) is not None
-        } | {document_id for document_id, _ in state.article_documents or ()}
-        catalogs: list[Any] = []
-        for document_id in document_ids:
-            if len(catalogs) >= limit:
-                break
-            if document_id not in article_documents:
-                continue
-            if document_id not in state.article_catalogs:
-                catalog = None
-                try:
-                    outline = await section_outline(document_id, oracle=self._oracle)
-                    if outline is not None:
-                        nodes = [
-                            node for node in outline.sections if node.section_id != ROOT_SECTION_ID
-                        ]
-                        lines, _omitted = await compact_section_lines(
-                            self._oracle,
-                            outline,
-                            nodes,
-                            _ARTICLE_CATALOG_LEAD_CHARS,
-                            max_chars=_ARTICLE_CATALOG_MAX_CHARS,
-                        )
-                        if lines:
-                            catalog = ArticleCatalog(
-                                document_id=document_id,
-                                file_name=outline.chunk_set.file_name or "",
-                                chunk_set_id=outline.chunk_set.chunk_set_id,
-                                lines=tuple(lines),
-                                section_ids=tuple(node.section_id for node in nodes[: len(lines)]),
-                            )
-                except Exception as exc:  # noqa: BLE001 - 条の選択は補助。この文書を飛ばして続ける。
-                    logger.warning("article catalog load failed", exc_info=True)
-                    state.record_degraded("article_catalog", exc)
-                state.article_catalogs[document_id] = catalog
-            if state.article_catalogs[document_id] is not None:
-                catalogs.append(state.article_catalogs[document_id])
-        return catalogs
-
-    async def _article_leads(
-        self,
-        document_id: str,
-        chunk_set_id: str,
-        sections: Mapping[str, str],
-        *,
-        state: _SearchState | None = None,
-    ) -> dict[str, str]:
-        """章節の本文の書き出し(条の選択の 2 段目)。
-
-        章節の最初の chunk から、名前と見出しの括弧を除く。
-        読めないときは空(条の名前だけで選ばせる)。
-        """
-        from app.clients.section_map_store import SectionMapStore
-        from app.rag.section_catalog import section_lead
-
-        if not sections:
-            return {}
-        try:
-            chunks = await SectionMapStore(self._oracle).section_first_chunks(
-                document_id, chunk_set_id=chunk_set_id, section_ids=list(sections)
-            )
-        except Exception as exc:  # noqa: BLE001 - 2 段目は補助。書き出し無しで続ける。
-            logger.warning("article lead load failed", exc_info=True)
-            if state is not None:
-                state.record_degraded("article_lead", exc)
-            return {}
-        leads: dict[str, str] = {}
-        for section_id, chunk in chunks.items():
-            text = section_lead(
-                sections.get(section_id, ""), chunk.text, _ARTICLE_REFINE_LEAD_CHARS
-            )
-            if text:
-                leads[section_id] = text
-        return leads
-
-    async def _article_documents(
-        self, request: SearchRequest, state: _SearchState
-    ) -> list[tuple[str, str]]:
-        """検索の範囲の条で構成された文書の (document_id, 文書名)(#2254)。
-
-        範囲と索引の状態ごとに process の中で cache する(画面目録と同じ)。読めないときは空
-        (候補の文書だけを読む)。
-        """
-        if state.article_documents is not None:
-            return state.article_documents
-        filters = _screen_filters(request, state)
-        try:
-            index_state = await self._oracle.retrieval_scope_state(filters)
-            key = (json.dumps(filters, ensure_ascii=False, sort_keys=True), index_state)
-            documents = _ARTICLE_DOCUMENTS_CACHE.get(key)
-            if documents is None:
-                documents = await self._oracle.retrieval_article_documents(filters)
-                if len(_ARTICLE_DOCUMENTS_CACHE) >= _SCREEN_CATALOG_CACHE_SIZE:
-                    _ARTICLE_DOCUMENTS_CACHE.clear()
-                _ARTICLE_DOCUMENTS_CACHE[key] = documents
-        except Exception as exc:  # noqa: BLE001 - 一覧は補助。候補の文書だけで続ける。
-            logger.warning("article documents load failed", exc_info=True)
-            state.record_degraded("article_documents", exc)
-            documents = []
-        state.article_documents = list(documents)
-        return state.article_documents
-
-    async def _article_chunks(
-        self, request: SearchRequest, state: _SearchState, articles: Sequence[Any]
-    ) -> list[Any]:
-        """目録で選んだ条の章節の最初の child(印を付ける)と、その親を読む(#2254)。
-
-        読んだ chunk は引用へ戻せるよう ``state.chunks`` に入れ、分類・1 ページ目の本文・根拠画像は
-        検索の候補と同じく付ける。読めない条は足さない(回答は続ける)。
-        """
-        from rag_engine.retrieval.article_catalog import ARTICLE_CATALOG_KEY
-
-        from app.clients.section_map_store import SectionMapStore
-
-        groups: dict[tuple[str, str], list[Any]] = {}
-        for article in articles:
-            groups.setdefault((article.document_id, article.chunk_set_id), []).append(article)
-        found: list[tuple[RetrievedChunk, Any]] = []
-        for (document_id, chunk_set_id), items in groups.items():
-            try:
-                firsts = await SectionMapStore(self._oracle).section_first_chunks(
-                    document_id,
-                    chunk_set_id=chunk_set_id,
-                    section_ids=[item.section_id for item in items],
-                )
-            except Exception as exc:  # noqa: BLE001 - 条の根拠は補助。この文書の条を足さずに続ける。
-                logger.warning("article chunks load failed", exc_info=True)
-                state.record_degraded("article_chunks", exc)
-                continue
-            found.extend(
-                (firsts[item.section_id], item)
-                for item in items
-                if item.section_id in firsts and not is_derived_chunk(firsts[item.section_id])
-            )
-            for item in items:
-                chunk = firsts.get(item.section_id)
-                key = chunk.chunk_id if chunk is not None else f"{document_id}:{item.section_id}"
-                state.article_selections.setdefault(
-                    key,
-                    {
-                        "order": item.order,
-                        "document_id": document_id,
-                        "document": item.file_name,
-                        "title": item.title,
-                        "chunk_id": chunk.chunk_id if chunk is not None else None,
-                    },
-                )
-        if not found:
-            return []
-        chunks = [state.chunks.setdefault(chunk.chunk_id, chunk) for chunk, _ in found]
-        await self._load_classifications(chunks, state)
-        await self._load_first_page_contexts(chunks, state)
-        if self._attach_images:
-            for chunk in chunks:
-                await self._materialize_image_evidence(chunk, state)
-            chunks = [state.chunks[chunk.chunk_id] for chunk in chunks]
-        children = []
-        for chunk, (_, article) in zip(chunks, found, strict=True):
-            child = _stored_child(
-                chunk,
-                rrf_score=0.0,
-                classification=state.classifications.get(chunk.document_id),
-                first_page_context=_first_page_context(chunk, state),
-            )
-            child.metadata[ARTICLE_CATALOG_KEY] = {
-                "order": article.order,
-                "document": article.file_name,
-                "title": article.title,
-            }
-            children.append(child)
-        return [*children, *_stored_parents(children, state)]
-
     async def _load_classifications(
         self, chunks: Sequence[RetrievedChunk], state: _SearchState
     ) -> None:
@@ -3771,12 +3474,6 @@ def _stored_child(
     if location := _sheet_location(chunk.metadata):
         # 表計算の根拠の場所(#1221)。回答の本文の出典を「シート・セル範囲」にする(#1224)。
         metadata["sheet_location"] = location
-    if xml_tree_location := _xml_tree_location_labels(chunk.metadata):
-        # XML ツリー JSON の段落の根拠(#2024)。回答の本文の出典を引用ラベルにする(ページの
-        # 無い原本なので「p.1」にしない)。親(単位)の場所は単位のラベル。
-        metadata["location_label"], metadata["parent_location_label"] = xml_tree_location
-        # 条で構成された文書の条の根拠(#3526)。回答はこの根拠を出典にした説明を事実の監査に掛ける。
-        metadata[ARTICLE_UNIT_KEY] = True
     if chunk.metadata.get("document_superseded") is True:
         # 新しい版に置き換えた文書(旧版)の chunk(#1248)。rag_engine は旧版の説明を今の手順として
         # 公開しない(#1492)。
@@ -3848,24 +3545,6 @@ def _source_file_name(chunk: RetrievedChunk) -> str:
 
 
 _CELL_RANGE = re.compile(r"^([A-Z]+)(\d+):([A-Z]+)(\d+)$")
-
-
-def _xml_tree_location_labels(metadata: Mapping[str, object]) -> tuple[str, str] | None:
-    """XML ツリー JSON の段落の chunk の場所(子の引用ラベル, 親(単位)のラベル)(#2024)。
-
-    算用数字の形にする。親は単位のラベル(単位の無い段落は子と同じ)。この解析でなければ None。
-    """
-    label = metadata.get("xml_tree_label_arabic")
-    if not isinstance(label, str) or not label.strip():
-        return None
-    unit = metadata.get("xml_tree_parent_label_arabic")
-    title = metadata.get("xml_tree_document_title")
-    parent = label
-    if isinstance(unit, str) and unit.strip():
-        parent = unit.strip()
-        if isinstance(title, str) and title and parent.startswith(f"{title} "):
-            parent = parent[len(title) + 1 :]
-    return label.strip(), parent
 
 
 def _sheet_location(metadata: Mapping[str, object]) -> dict[str, object] | None:
@@ -4215,9 +3894,6 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
                     "chunk_id": chunk_id,
                     "role": str(child.get("retrieval_role") or ""),
                     "reason": str(child.get("context_reason") or ""),
-                    # 条の目録で選んだ条と、そのために足した親の chunk(#2261)。
-                    "catalog": CATALOG_ARTICLE_REASON
-                    in {child.get("context_reason"), parent.get("context_reason")},
                     "is_model_used": used,
                     # 子そのものは引用していないが、回答が親（まとまり）を参照した（#2710）。
                     "parent_used": not used and child.get("parent_model_used") is True,
@@ -4271,10 +3947,7 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
         if evidence.get("parent_used"):
             # 回答が親（まとまり）だけを参照した子（#2710）。「回答で引用」とは分けて数える。
             metadata[EVIDENCE_PARENT_USED_KEY] = True
-        if evidence.get("catalog"):
-            # 条の目録で選んだ条(#2261)。MCP は検索の根拠の上限に数えず、後ろに足す。
-            metadata["evidence_role"] = CATALOG_ARTICLE_ROLE
-        elif ENTITY_EXPANSION_KEY in chunk.metadata and evidence["role"] in {
+        if ENTITY_EXPANSION_KEY in chunk.metadata and evidence["role"] in {
             "retrieved_anchor",
             "",
         }:

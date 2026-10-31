@@ -40,7 +40,7 @@ const authApi: AuthApi = {
 };
 
 const routes = { login: "/login", passwordChange: "/password/change", forbidden: "/forbidden" };
-const brand = { line1: "Production Ready", line2: "RAG" };
+const brand = { line1: "Private", line2: "RAG" };
 
 function user(overrides: Partial<BaseCurrentUser> = {}): BaseCurrentUser {
   return {
@@ -193,7 +193,7 @@ describe("認証画面", () => {
 
   it("ログイン画面は wordmark と NL2SQL と同じ入力 ID を持つ", () => {
     const html = render(<LoginPage brand={brand} routes={routes} entryRoute={() => "/"} />);
-    expect(html).toContain("Production Ready");
+    expect(html).toContain("Private");
     expect(html).toContain("システムにログイン");
     expect(html).toContain('id="auth-login-user-id"');
     expect(html).toContain('id="auth-login-password"');

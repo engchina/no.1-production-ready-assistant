@@ -45,11 +45,7 @@ export async function captureTraceLayouts(
   const mobile = (page.viewportSize()?.width ?? 1280) <= 375;
   for (const width of mobile ? [375] : [1280, 1920]) {
     await page.setViewportSize({ width, height: mobile ? 812 : 900 });
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => {
-        document.documentElement.classList.remove("light", "dark");
-        document.documentElement.setAttribute("data-theme", value);
-      }, theme);
+    {
       await page.evaluate(() => document.fonts.ready);
       if (!(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))) throw new Error("ページに横方向のはみ出しがあります。");
       // Trace ID が折り返しても、コピーのボタンは同じ行に置く（#3219）。
@@ -58,7 +54,7 @@ export async function captureTraceLayouts(
         return text != null && button != null && button.top < text.bottom && text.top < button.bottom;
       }));
       if (!sameRow) throw new Error("Trace ID とコピーのボタンが別の行にあります。");
-      await page.screenshot({ path: testInfo.outputPath(`${name}-${width}-${theme}.png`), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
     }
   }
 }
@@ -92,8 +88,8 @@ export function syntheticSpanEvents(
 }
 
 /**
- * 処理の経過（trace の投影。#3226）の画面の幅とテーマの確認。「処理の詳細」を開いて Trace ID の行（コピーのボタンが
- * 同じ行）を確かめ、1280 / 1920 / 375px・ライト / ダークで横あふれが無いことを確かめて撮る。
+ * 処理の経過（trace の投影。#3226）の画面の幅の確認。「処理の詳細」を開いて Trace ID の行（コピーのボタンが
+ * 同じ行）を確かめ、1280 / 1920 / 375px で横あふれが無いことを確かめて撮る（テーマはライトだけ。#17）。
  */
 export async function captureSpanProgressLayouts(
   page: {
@@ -113,11 +109,7 @@ export async function captureSpanProgressLayouts(
   const mobile = (page.viewportSize()?.width ?? 1280) <= 375;
   for (const width of mobile ? [375] : [1280, 1920]) {
     await page.setViewportSize({ width, height: mobile ? 812 : 900 });
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => {
-        document.documentElement.classList.remove("light", "dark");
-        document.documentElement.setAttribute("data-theme", value);
-      }, theme);
+    {
       await page.evaluate(() => document.fonts.ready);
       if (!(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))) throw new Error("ページに横方向のはみ出しがあります。");
       const sameRow = await page.evaluate(() => [...document.querySelectorAll("[data-trace-id-row]")].every(row => {
@@ -126,7 +118,7 @@ export async function captureSpanProgressLayouts(
       }));
       if (!sameRow) throw new Error("Trace ID とコピーのボタンが別の行にあります。");
       if (await page.evaluate(() => document.querySelector('[data-testid="trace-details"]') != null)) throw new Error("処理の経過のほかに「トレースの詳細」が出ています。");
-      await page.screenshot({ path: testInfo.outputPath(`${name}-${width}-${theme}.png`), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
     }
   }
 }

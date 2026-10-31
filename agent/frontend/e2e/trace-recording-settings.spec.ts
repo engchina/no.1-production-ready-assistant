@@ -20,10 +20,7 @@ test("軌跡の本文記録を既定の無効から切り替えて保存する",
     await expect(page.getByRole("button",{name:"保存",exact:true})).toBeEnabled();
     await page.reload();await expect(toggle).toHaveAttribute("aria-checked",String(state));
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    for(const theme of ["light","dark"]) {
-      await page.evaluate(value=>{document.documentElement.dataset.theme=value;document.documentElement.classList.remove("light","dark");},theme);
-      await page.screenshot({path:testInfo.outputPath(`trace-recording-${state?"on":"off"}-${theme}.png`),fullPage:true});
-    }
+    await page.screenshot({path:testInfo.outputPath(`trace-recording-${state?"on":"off"}.png`),fullPage:true});
   }
   expect(saved).toEqual([true,false]);
 });

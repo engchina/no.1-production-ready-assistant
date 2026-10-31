@@ -7,7 +7,6 @@ import {
   citationMetadataChips,
   citationModelUsed,
   citationParentUsed,
-  citationSourceUrl,
   type CitationMetadataChip,
 } from "@/lib/chunk-metadata";
 import { t } from "@/lib/i18n";
@@ -54,8 +53,6 @@ export function citationEvidenceItem(chunk: RetrievedChunk): EvidenceListItem {
       value: chipValue(chip),
     })),
     tags,
-    // 原典の URL（XML ツリー JSON の文書。#2024）。根拠を原典で確かめる。
-    sourceUrl: citationSourceUrl(chunk.metadata),
     sourceUnavailable: attachment,
   };
 }
@@ -85,8 +82,6 @@ function chipValue(chip: CitationMetadataChip): string {
       return chip.value;
     case "context_header_enabled":
       return t(chip.value === "true" ? "search.citation.contextHeaderOn" : chip.value === "false" ? "search.citation.contextHeaderOff" : "search.citation.contextHeaderUnknown");
-    case "citation_label":
-      return chip.value;
     case "page":
       // 印刷のページ番号があれば物理頁と並べる（「p.12（資料の表記: 3-4）」。#1287）。
       return chip.printed
@@ -111,8 +106,6 @@ function chipLabel(chip: CitationMetadataChip): string {
       return t("search.citation.contextHeaderLabel");
     case "context_header_enabled":
       return t("search.citation.contextHeaderStatusLabel");
-    case "citation_label":
-      return t("search.citation.citationLabelLabel");
     case "page":
       return t("search.citation.pageLabel");
     case "content_kind":

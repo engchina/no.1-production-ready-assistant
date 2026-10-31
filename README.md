@@ -2,50 +2,178 @@
 
 Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
 
-## OCI へのデプロイ
+## ローカルで動かす（Oracle Autonomous Database Free コンテナ）
 
-ボタンを押すと、大阪リージョン（`ap-osaka-1`）を選んだ状態で OCI Resource Manager の stack の作成画面が開きます。1 つの Autonomous AI Database と、3 製品（RAG / NL2SQL / Agent）をまとめて入れる 1 台の Compute を作ります。
+DB は docker の **Oracle Autonomous Database Free**（ADB Free）コンテナを使います。OCI のアカウントは要りません。
 
-- **latest**: 東京（`ap-tokyo-1`）/ 大阪（`ap-osaka-1`）リージョンだけをサポートします（既定は大阪）。
+### 1. コンテナを起動する
 
-  [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-suite/releases/latest/download/production-ready-suite-terraform-stack.zip)
+イメージは Oracle Container Registry から**ログインなしで** pull できます（約 5 GB）。
 
-ボタンは[最新の release](https://github.com/engchina/no.1-production-ready-suite/releases/latest) の `production-ready-suite-terraform-stack.zip` を読み込みます。
+```bash
+docker pull container-registry.oracle.com/database/adb-free:latest-23ai
+```
 
-入力の変数・手動でのアップロード・配備後の確認・トラブルシューティングは [terraform/README.md](./terraform/README.md) を参照してください。
+データを残す volume を作り、コンテナの中の `oracle` ユーザー（uid 1001）が書けるようにしておきます。所有者が root のままだと、起動時に `PermissionError: [Errno 13] Permission denied: '/u01/data/MYATP.pdb.partial'` で止まります。
 
-### 配備の前に: VCN の security list
+```bash
+docker volume create adb-free-data
+docker run --rm -u 0 -v adb-free-data:/u01/data --entrypoint chown \
+  container-registry.oracle.com/database/adb-free:latest-23ai -R 1001:1001 /u01/data
+```
 
-stack は VCN・subnet・security list・NSG を作らず、フォームで選んだ既存の subnet をそのまま使います（ingress の規則も足しません。#259）。配備の前に、OCI のコンソールの「ネットワーキング › 仮想クラウド・ネットワーク › 〈VCN〉 › セキュリティ・リスト」で、次の ingress の規則（ステートフル・TCP）を足してください（subnet を NSG で管理しているなら、同じ規則を NSG に足します）。足さないと、画面・MCP にも DB にも届きません。
+```bash
+docker run -d --name adb-free \
+  -p 1525:1522 -p 8543:8443 \
+  -e WORKLOAD_TYPE=ATP \
+  -e ADMIN_PASSWORD='<ADMIN のパスワード>' \
+  -e WALLET_PASSWORD='<Wallet のパスワード>' \
+  --cap-add SYS_ADMIN --device /dev/fuse \
+  -v adb-free-data:/u01/data \
+  container-registry.oracle.com/database/adb-free:latest-23ai
+```
 
-| 足す security list | 送信元 CIDR | 宛先の port（TCP） | 用途 |
-|---|---|---|---|
-| Compute の subnet | 利用者の端末の CIDR（社内の出口の範囲など。どこからでも使わせるなら `0.0.0.0/0`） | 公開の port: フォームの `https_port`（既定 `443`）。HTTPS を off にしたときは `http_port`（既定 `80`） | 3 製品の画面と MCP（`https://<host>/<製品>/`） |
-| Compute の subnet | 管理者の端末の CIDR | `22` | SSH（`ssh opc@<IP>`。[配備した後の運用](#配備した後の運用)） |
-| ADB のプライベート・エンドポイントの subnet | **Compute の subnet の CIDR**（例 `10.0.1.0/24`） | `1522` | Compute（3 製品と配備の `suite-init.sh`）から ADB への接続 |
-| bastion の subnet（`bastion_enabled` のときだけ） | 管理者の端末の CIDR（`0.0.0.0/0` にしない） | `22`・`5901` | bastion への SSH と VNC（[terraform/README.md「bastion の Compute」](./terraform/README.md#bastion-の-compute任意2670)） |
-| Compute の subnet（`bastion_enabled` のときだけ） | **bastion の subnet の CIDR** | 公開の port（既定 `443`）・`22` | bastion の Chrome から 3 製品の画面、bastion から Compute への SSH |
-| ADB のプライベート・エンドポイントの subnet（`bastion_enabled` のときだけ） | **bastion の subnet の CIDR** | `1522` | bastion（SQL の道具など）から ADB への接続 |
+| host の port | コンテナの port | 用途 |
+|---|---|---|
+| `1525` | `1522` | SQL*Net（mTLS。Wallet で接続） |
+| `8543` | `8443` | ORDS / Database Actions（`https://localhost:8543/ords/`） |
 
-- 公開の port は、フォームで選んだ値を開けます（443 以外にしたら URL は `https://<IP>:<port>/`）。HTTPS が on のとき `http_port` は Compute で使わないので開けません。Compute の OS の firewall（firewalld）は配備のスクリプトが同じ port を開けます。
-- ADB の 1522 は、ADB のアクセス・タイプが「プライベート・エンドポイント・アクセスのみ」（既定）のときの規則です。Compute と ADB のプライベート・エンドポイントが同じ subnet でも、その subnet の security list に「送信元 = その subnet 自身の CIDR、port `1522`」を足します（同じ subnet の中の通信にも security list の規則が要ります）。
-  - 「許可された IP および VCN 限定のセキュア・アクセス」（ACL）なら、security list ではなく ADB の ACL で Compute の subnet（または VCN）を許可します。「すべての場所からのセキュア・アクセス」なら足すものはありません。
-- egress: Compute は配備と実行で外部（GitHub・dnf・uv / npm の取得、OCI Generative AI・OCI Enterprise AI・Object Storage）へ HTTPS で出ます。Compute の subnet の security list の egress（既定は `0.0.0.0/0` のすべて）を絞っているなら TCP `443` の egress を残し、private subnet なら NAT gateway（と Service gateway）の経路を用意します。
-- 製品間の通信（Agent → RAG / NL2SQL の MCP）は同じ Compute の `127.0.0.1` なので、security list は要りません。
-- bastion を Compute と同じ subnet に置く（`bastion_subnet_id` を空にする）ときも、上の bastion の規則は「送信元 = その subnet 自身の CIDR」で足します。ADB が ACL（許可された IP および VCN）なら、ADB の ACL で bastion の subnet（または VCN）も許可します。
+- 初回は PDB の展開で 2〜3 分かかります。`docker ps` の STATUS が `(healthy)` になったら使えます。
+- `ADMIN_PASSWORD` と `WALLET_PASSWORD` は **12〜30 文字で、大文字・小文字・数字を含め、`admin` と二重引用符を含めない**必要があります（ADB の mandatory profile が強制し、満たさないと `ORA-28219` になります）。
+- 起動・停止・状態は docker で行います（画面からは操作しません）。
+
+```bash
+docker start adb-free     # 起動
+docker stop adb-free      # 停止
+docker ps -a --filter name=adb-free   # 状態
+docker logs --tail 50 adb-free        # ログ
+```
+
+### 2. Wallet を取り出す
+
+Wallet はコンテナの中で作られます。host に取り出し、`tnsnames.ora` の port をコンテナの `1522` から host の `1525` に書き換えます。repository の外に置いてください。
+
+```bash
+docker cp adb-free:/u01/app/oracle/wallets/tls_wallet /u01/workspace/adb-free-wallet
+sed -i 's/(port=1522)/(port=1525)/g' /u01/workspace/adb-free-wallet/tnsnames.ora
+chmod 700 /u01/workspace/adb-free-wallet
+```
+
+サービス名は `myatp_low` / `myatp_medium` / `myatp_high` / `myatp_tp` / `myatp_tpurgent` です（mTLS。末尾が `_tls` のものは host に公開していない port を使うので使えません）。
+
+### 3. アプリ用の DB ユーザーを作る
+
+3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。
+
+```sql
+CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>"
+  DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
+GRANT PDB_DBA TO ASSISTANT;
+```
+
+- パスワードの規則は ADMIN と同じです（ADB の mandatory profile。`PASSWORD_VERIFY_FUNCTION NULL` の profile を作っても回避できません）。
+- `PDB_DBA` に `CTXAPP`（Oracle Text）・`DB_DEVELOPER_ROLE`（表・sequence・view・procedure・job の作成）が含まれます。
+
+```bash
+cd rag/backend && uv run python - <<'PY'
+import oracledb
+W = "/u01/workspace/adb-free-wallet"
+c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>", dsn="myatp_low",
+                     config_dir=W, wallet_location=W, wallet_password="<Wallet のパスワード>")
+cur = c.cursor()
+cur.execute('CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>" '
+            'DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE')
+cur.execute("GRANT PDB_DBA TO ASSISTANT")
+PY
+```
+
+### 4. `.env` を置く
+
+```bash
+cp platform/.env.example platform/.env
+cp rag/backend/.env.example rag/backend/.env
+cp nl2sql/backend/.env.example nl2sql/backend/.env
+cp agent/backend/.env.example agent/backend/.env
+```
+
+`platform/.env`（3 製品共通。git には入りません）の次の値を書き換えます。
+
+```dotenv
+PLATFORM_ENVIRONMENT=local
+PLATFORM_AUTH_COOKIE_SECURE=false            # http://localhost で動かすため
+PLATFORM_ADMIN_LOGIN_USER_PASSWORD=<system_admin のパスワード>
+PLATFORM_ORACLE_USER=ASSISTANT
+PLATFORM_ORACLE_PASSWORD=<アプリのパスワード>
+PLATFORM_ORACLE_DSN=myatp_low
+PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls
+PLATFORM_ORACLE_WALLET_DIR=/u01/workspace/adb-free-wallet
+PLATFORM_ORACLE_WALLET_PASSWORD=<Wallet のパスワード>
+```
+
+`system_admin` のパスワードにも同じ規則（12〜30 文字・大文字/小文字/数字・`admin` を含まない）があり、満たさないと「構成管理者の認証情報が設定されていません」（503）になります。
+
+### 5. システムの表を作る（初期化）
+
+どれも冪等で、何度実行してもかまいません。
+
+```bash
+cd rag/backend    && uv sync --locked --dev && uv run python -m app.rag.system_schema_cli initialize
+cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize \
+                  && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
+cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize
+```
+
+できているかの確認（ready なら 0 で終わります）:
+
+```bash
+cd rag/backend    && uv run python -m app.rag.system_schema_cli check
+cd nl2sql/backend && uv run python -m app.cli.nl2sql_system_schema --check
+cd agent/backend  && uv run python -m app.cli.agent_system_schema --check
+```
+
+### 6. 起動する
+
+先に共有の UI を build します（各製品の frontend は `file:` で参照します）。
+
+```bash
+cd platform && npm ci && npm run build
+```
+
+製品ごとに backend と frontend をまとめて起動します（Ctrl+C で両方止まります）。
+
+```bash
+cd rag    && (cd frontend && npm ci) && bash scripts/start-all.sh
+cd nl2sql && (cd frontend && npm ci) && bash scripts/start-all.sh
+cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
+```
+
+| 製品 | 画面 | backend |
+|---|---|---|
+| RAG | http://localhost:3000 | http://localhost:8000/api/health |
+| NL2SQL | http://localhost:3001 | http://localhost:8010/api/health |
+| Agent | http://localhost:3002 | http://localhost:8020/api/health |
+
+`system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
+
+## 配備
+
+OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン）による配備は廃止しました（#12）。
+ローカルで動かす手順は、上の「ローカルで動かす（Oracle Autonomous Database Free コンテナ）」を参照してください。
+1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・Nginx・HTTPS・更新・確認の仕組みは
+[platform/docs/deployment.md](./platform/docs/deployment.md) にあります。
 
 ### 配備の前に: Object Storage の bucket
 
-アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（stack が `platform/.env` に `PLATFORM_UPLOAD_STORAGE_BACKEND=local` を書きます）。保存先を OCI Object Storage にするときは、stack が bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
+アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（`platform/.env` の `PLATFORM_UPLOAD_STORAGE_BACKEND=local`）。保存先を OCI Object Storage にするときは、配備は bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
 
 | 用意するもの | 内容 |
 |---|---|
-| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは既定では stack と同じ（stack が `PLATFORM_OBJECT_STORAGE_REGION` に stack の `region` を書きます）。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
+| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは `platform/.env` の `PLATFORM_OBJECT_STORAGE_REGION` です。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
 | IAM の policy | 「システム設定 › OCI 認証」で設定する API キーのユーザーのグループに、bucket の参照と object の読み書き・削除を許します: `Allow group <group> to read buckets in compartment <bucket の compartment>` と `Allow group <group> to manage objects in compartment <bucket の compartment>` |
 
 - 配備の後に `system_admin` でログインし、「システム設定 › OCI 認証」の「Object Storage」で、namespace を「取得」ボタンで取得して（手入力はできません）リージョンとともに保存します。続けて「システム設定 › アップロード保存先」で「OCI Object Storage」を選び、bucket を指定して「接続を確認」を押します。設定は 3 製品で共通です。
 - 「接続を確認」と保存のときは、bucket の参照（`read buckets`）と、確認用の小さな object の書き込み・読み取り・削除（`manage objects`）を試します。bucket が無い・権限が足りないときは保存しません（#2101）。
-- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します（上の egress）。
+- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します。
 
 ## 配備した後の初期設定（推奨のロールとユーザー）
 
@@ -76,7 +204,7 @@ stack は VCN・subnet・security list・NSG を作らず、フォームで選�
 
 ## 配備した後の運用
 
-Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。output の `ssh_to_instance`。repository は `/u01/aipoc/no.1-production-ready-suite`）。
+Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。repository は `/u01/aipoc/no.1-production-ready-suite`）。
 
 最新のコード（main）を取得して反映する（取得 → build → 全サービスの再起動）:
 
@@ -91,7 +219,7 @@ sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh
 ```
 
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd・Nginx まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
-- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [terraform/README.md](./terraform/README.md#adb-の自動の起動1745) を参照してください。
+- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [platform/docs/deployment.md](./platform/docs/deployment.md#adb-の自動の起動1745) を参照してください。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
 - 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）、Wallet、HTTPS の CA は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
@@ -114,7 +242,7 @@ sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh
 
 ## Claude Code から RAG / NL2SQL / Agent を使う（MCP とスキル）
 
-配備した Suite の 3 製品は MCP（`POST /<製品>/api/mcp`）を公開しています。Claude Code などの外部の Agent は、利用者が自分で発行した API キーで接続し、`skills/` の 3 つのスキル（業務 RAG 調査・構造化データ照会・資料とデータの横断調査）と組み合わせて使います。以下の `<host>` は配備した Compute のアドレス（例 `203.0.113.10`。公開の port が 443 以外なら `203.0.113.10:8443`）です。Claude Code を動かす端末から公開の port に届くよう、[security list](#配備の前に-vcn-の-security-list) で許可しておきます。
+配備した Suite の 3 製品は MCP（`POST /<製品>/api/mcp`）を公開しています。Claude Code などの外部の Agent は、利用者が自分で発行した API キーで接続し、`skills/` の 3 つのスキル（業務 RAG 調査・構造化データ照会・資料とデータの横断調査）と組み合わせて使います。以下の `<host>` は配備した Compute のアドレス（例 `203.0.113.10`。公開の port が 443 以外なら `203.0.113.10:8443`）です。Claude Code を動かす端末から公開の port に届くよう、subnet の security list か NSG で許可しておきます。
 
 ### 1. API キーを発行する
 
@@ -218,6 +346,20 @@ claude plugin list   # production-ready-skills@production-ready-suite が ✔ en
 - キーを替える: 新しいキーを発行して `~/.config/production-ready/env` を書き換え（次の接続から使われます。開いているセッションは `/mcp` で接続し直します）、古いキーをアカウントの画面の「API キー」から削除します（削除はすぐに効き、元に戻せません）。全員のキーは「ユーザーとロール」→「API キー」で管理します。
 
 応答の一覧（401 / 403 / 429）・呼び出しの上限・Agent のツールは [platform/docs/mcp-api-keys.md](./platform/docs/mcp-api-keys.md)、つまずく所・設定の JSON・長くかかるツール・Codex は [skills/README.md](./skills/README.md) を参照してください。
+
+## ローカル開発の port
+
+ローカルの開発（`<製品>/scripts/start-*.sh`・`npm run dev` / `npm run start`・`uvicorn --port`）の既定の port は、元の `no.1-production-ready-suite`（frontend `3000`〜`3002`・backend `8000` / `8010` / `8020`）と重ならない帯にしています。同じマシンで suite と併走できます（#25）。
+
+| 製品 | frontend（dev / preview） | backend | e2e（Playwright の既定） |
+|---|---|---|---|
+| RAG | `3100` | `8100` | `3200` |
+| NL2SQL | `3101` | `8110` | `3201`（preview の CI は fixture 用に `3202` も） |
+| Agent | `3102` | `8120` | `3142` |
+
+- 起動 script は `PORT` / `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_URL` で上書きできます。
+- OCI Compute への配備（`init_script.sh` の systemd・Nginx・Terraform）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
+- 文書の解析・前処理のサービス（`127.0.0.1:18010`〜`18023`）は変えていません。
 
 ## 開発ルール
 

@@ -93,7 +93,6 @@ _READS: list[tuple[str, Callable[[OracleClient], Coroutine[Any, Any, Any]]]] = [
         "retrievable_element_chunk",
         lambda client: client.retrievable_element_chunk("doc-1", "recipe-1", "element-1"),
     ),
-    ("retrievable_citation_chunk", lambda client: client.retrievable_citation_chunk("doc-1", "k")),
     ("document_reading_index", lambda client: client.document_reading_index("doc-1")),
     (
         "readable_document_chunks",

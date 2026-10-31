@@ -16,13 +16,12 @@ import { expectSpinnerStable } from "./_spinner-stability";
 
 type DbStatus = "ok" | "not_configured" | "unreachable" | "setup_required";
 
-function dbStatus(status: DbStatus, check?: string, adbLifecycleState: string | null = null) {
+function dbStatus(status: DbStatus, check?: string) {
   return {
     data: {
       status,
       check: check ?? (status === "not_configured" ? "missing" : "ok"),
       detail: status === "unreachable" ? "Oracle connection probe failed (ORA-12514)." : null,
-      adb_lifecycle_state: adbLifecycleState,
     },
     error_messages: [],
     warning_messages: [],
@@ -41,7 +40,7 @@ async function expectGate(
   {
     title,
     actionName = "データベース設定を開く",
-    actionHref = "/settings/database#adb-management",
+    actionHref = "/settings/database",
     settingsHint = SETTINGS_HINT,
   }: { title: string; actionName?: string; actionHref?: string; settingsHint?: string }
 ) {
@@ -84,7 +83,7 @@ test("DB 接続済みでも schema 未作成ならシステムテーブルへ案
   await expect(page.locator('section[aria-labelledby="database-unavailable-title"]')).toHaveCount(0);
 });
 
-test("DB 接続不可時、機能ページはエラーではなく起動の案内を表示する", async ({ page }) => {
+test("DB 接続不可時、機能ページはエラーではなく接続設定と Wallet の確認の案内を表示する", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
     route.fulfill({ json: dbStatus("unreachable") })
@@ -252,28 +251,22 @@ test("確認が 10 秒を超えて遅延の案内が出ても、読み込みの�
   await loading.screenshot({ path: testInfo.outputPath("db-gate-slow.png") });
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`確認中のスピナーは回転しても見た目の重心が上下・左右に動かず、カードと行も動かない（#1180、${theme}）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await routeAuth(page);
-    // アプリの外観の設定（localStorage）でテーマを切り替える。
-    await page.addInitScript((value) => {
-      window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-    }, theme);
-    await page.route("**/api/ready/database", () => new Promise<void>(() => undefined));
+test(`確認中のスピナーは回転しても見た目の重心が上下・左右に動かず、カードと行も動かない（#1180）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  await routeAuth(page);
+  await page.route("**/api/ready/database", () => new Promise<void>(() => undefined));
 
-    await page.goto("/file-list");
+  await page.goto("/file-list");
 
-    const loading = page.getByTestId("database-gate-loading");
-    await expect(loading).toContainText("データベースの状態を確認しています");
-    await page.evaluate(() => document.fonts.ready.then(() => undefined));
-    const card = await loading.boundingBox();
-    // 共有の Spinner（固定の正方形の箱の中で 180 度対称のアークだけが回る）。旧形（270 度の 1 本）は
-    // 見た目の重心が 1 回転で上下・左右に 1.8px 動き、揺れて見えた。
-    await expectSpinnerStable(loading.locator(".pr-spinner"));
-    expect(await loading.boundingBox()).toEqual(card);
-    await page.screenshot({ path: testInfo.outputPath(`db-gate-checking-${theme}.png`) });
-  });
-}
+  const loading = page.getByTestId("database-gate-loading");
+  await expect(loading).toContainText("データベースの状態を確認しています");
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const card = await loading.boundingBox();
+  // 共有の Spinner（固定の正方形の箱の中で 180 度対称のアークだけが回る）。旧形（270 度の 1 本）は
+  // 見た目の重心が 1 回転で上下・左右に 1.8px 動き、揺れて見えた。
+  await expectSpinnerStable(loading.locator(".pr-spinner"));
+  expect(await loading.boundingBox()).toEqual(card);
+  await page.screenshot({ path: testInfo.outputPath("db-gate-checking.png") });
+});
 
 test("システム設定の 5 画面は DB が無くてもゲートを通さずに開ける", async ({ page }) => {
   await routeAuth(page);
@@ -325,16 +318,17 @@ test("DB 利用可能時は本来のページを表示する", async ({ page }) 
   ).toHaveCount(0);
 });
 
-test("ADB が停止中なら停止の案内と ADB 管理への導線を出す", async ({ page }) => {
+test("接続できないときは ADB の状態を出さず、接続設定と Wallet の確認を案内する（#10）", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
-    route.fulfill({ json: dbStatus("unreachable", "ok", "STOPPED") })
+    route.fulfill({ json: dbStatus("unreachable", "ok") })
   );
 
   await page.goto("/file-list");
 
-  await expectGate(page, { title: "Autonomous Database が停止しています" });
-  await expect(page.getByText("Autonomous Database: 停止済み", { exact: true })).toBeVisible();
+  await expectGate(page, { title: "データベースに接続できません" });
+  await expect(page.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
+  await expect(page.getByText(/Autonomous Database/)).toHaveCount(0);
 });
 
 test("設定を開けない利用者には導線を出さず、システム管理者への連絡を案内する", async ({ page }) => {
@@ -346,7 +340,7 @@ test("設定を開けない利用者には導線を出さず、システム管�
 
   const card = page.locator('section[aria-labelledby="database-unavailable-title"]');
   await expect(card.getByRole("heading", { level: 1, name: "データベースに接続できません" })).toBeVisible();
-  await expect(card.getByText(/システム管理者に連絡して、データベースの起動と接続の確認を依頼してください。$/)).toBeVisible();
+  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/)).toBeVisible();
   await expect(card.getByRole("link")).toHaveCount(0);
   await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
   await expectNoPageOverflow(page);

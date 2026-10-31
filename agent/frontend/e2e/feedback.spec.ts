@@ -18,12 +18,6 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 /** フィードバックの「利用者の評価」の見方を開く（既定の見方は「確かめるべき実行」。#1822）。 */
 async function openRatings(page: Page) {
   await page.goto("/feedback");
@@ -126,50 +120,47 @@ for (const viewport of VIEWPORTS) {
     await expectNoHorizontalOverflow(page);
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    test(`フィードバックの集計・理由・一覧と詳細を出す (${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      seedReport(mockApi);
-      await openRatings(page);
+  test(`フィードバックの集計・理由・一覧と詳細を出す (${viewport.name})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    seedReport(mockApi);
+    await openRatings(page);
 
-      await expect(page.getByRole("heading", { name: "フィードバック", level: 1 })).toBeVisible();
-      const summary = page.getByTestId("feedback-summary");
-      await expect(summary).toContainText("有効な評価");
-      await expect(summary).toContainText("60%");
-      await expect(summary).toContainText("前の期間から +10 ポイント");
-      await expect(summary).toContainText("前の期間から +2");
-      const reasons = page.getByTestId("feedback-reasons");
-      await expect(reasons).toContainText("情報が足りない");
-      await expect(reasons).toContainText("3 / 75%");
-      await expect(page.getByTestId("feedback-admin-summary")).toHaveText(
-        "管理者の評価: 3 件（うち役に立たなかった 1 件）"
-      )
+    await expect(page.getByRole("heading", { name: "フィードバック", level: 1 })).toBeVisible();
+    const summary = page.getByTestId("feedback-summary");
+    await expect(summary).toContainText("有効な評価");
+    await expect(summary).toContainText("60%");
+    await expect(summary).toContainText("前の期間から +10 ポイント");
+    await expect(summary).toContainText("前の期間から +2");
+    const reasons = page.getByTestId("feedback-reasons");
+    await expect(reasons).toContainText("情報が足りない");
+    await expect(reasons).toContainText("3 / 75%");
+    await expect(page.getByTestId("feedback-admin-summary")).toHaveText(
+      "管理者の評価: 3 件（うち役に立たなかった 1 件）"
+    )
 
-      // 一覧の列（狭い列）の行は質問と補足 1 行（本人の評価・管理者の評価・評価日時）。理由・利用者は詳細で見る（#2283）。
-      const table = page.getByRole("table", { name: "フィードバックの一覧" });
-      const bad = table.getByRole("row", { name: /run-a/ });
-      await expect(bad).toContainText("役に立たなかった");
-      await expect(bad).not.toContainText("山田 太郎");
+    // 一覧の列（狭い列）の行は質問と補足 1 行（本人の評価・管理者の評価・評価日時）。理由・利用者は詳細で見る（#2283）。
+    const table = page.getByRole("table", { name: "フィードバックの一覧" });
+    const bad = table.getByRole("row", { name: /run-a/ });
+    await expect(bad).toContainText("役に立たなかった");
+    await expect(bad).not.toContainText("山田 太郎");
 
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`feedback-${viewport.name}-${theme}.png`), fullPage: true });
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-${viewport.name}.png`), fullPage: true });
 
-      // 行から詳細（質問・回答・理由・コメント）を一覧 + 詳細の詳細の列で開く（モーダルにしない）。
-      await bad.getByRole("button", { name: /run-a の質問/ }).click();
-      await expect(page).toHaveURL(/feedback=run-a/);
-      const detail = page.getByRole("region", { name: "フィードバックの詳細" });
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-      await expect(detail.locator("strong").filter({ hasText: "確認結果" })).toBeVisible();
-      await expect(detail.getByRole("table", { name: "回答の表", exact: true }).getByRole("cell", { name: "1200", exact: true })).toBeVisible();
-      await expect(detail).toContainText("先月との比較が無い。");
-      await expect(detail).toContainText("情報が足りない");
-      await expect(detail).toContainText("山田 太郎");
-      await expect(detail.getByRole("heading", { name: "フィードバックの詳細" })).toBeInViewport();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`feedback-detail-${viewport.name}-${theme}.png`) });
-    });
-  }
+    // 行から詳細（質問・回答・理由・コメント）を一覧 + 詳細の詳細の列で開く（モーダルにしない）。
+    await bad.getByRole("button", { name: /run-a の質問/ }).click();
+    await expect(page).toHaveURL(/feedback=run-a/);
+    const detail = page.getByRole("region", { name: "フィードバックの詳細" });
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(detail.locator("strong").filter({ hasText: "確認結果" })).toBeVisible();
+    await expect(detail.getByRole("table", { name: "回答の表", exact: true }).getByRole("cell", { name: "1200", exact: true })).toBeVisible();
+    await expect(detail).toContainText("先月との比較が無い。");
+    await expect(detail).toContainText("情報が足りない");
+    await expect(detail).toContainText("山田 太郎");
+    await expect(detail.getByRole("heading", { name: "フィードバックの詳細" })).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-detail-${viewport.name}.png`) });
+  });
 }
 
 for (const viewport of VIEWPORTS) {
@@ -467,51 +458,48 @@ async function openDislikedDetail(page: Page) {
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`役に立たなかった回答を既存の評価セットに追加する (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      seedDislikedRun(mockApi);
-      seedEvaluationSets(mockApi);
-      const detail = await openDislikedDetail(page);
+  test(`役に立たなかった回答を既存の評価セットに追加する (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    seedDislikedRun(mockApi);
+    seedEvaluationSets(mockApi);
+    const detail = await openDislikedDetail(page);
 
-      await detail.getByTestId("feedback-add-case-toggle").click();
-      const form = detail.getByTestId("feedback-add-case-form");
-      // 質問・管理者のコメント・呼んだツールが入り、同じ質問を持たない評価セットが既定の追加先。
-      await expect(form.getByLabel("質問")).toHaveValue(DISLIKED_QUESTION);
-      await expect(form.getByLabel("期待する回答の要点")).toHaveValue("件数は 15 件が正しい");
-      await expect(form.getByLabel("期待するツール")).toHaveValue("nl2sql__nl2sql_query, rag__rag_search");
-      const set = form.getByTestId("feedback-add-case-set");
-      await expect(set).toContainText("月次の評価（1 件）");
+    await detail.getByTestId("feedback-add-case-toggle").click();
+    const form = detail.getByTestId("feedback-add-case-form");
+    // 質問・管理者のコメント・呼んだツールが入り、同じ質問を持たない評価セットが既定の追加先。
+    await expect(form.getByLabel("質問")).toHaveValue(DISLIKED_QUESTION);
+    await expect(form.getByLabel("期待する回答の要点")).toHaveValue("件数は 15 件が正しい");
+    await expect(form.getByLabel("期待するツール")).toHaveValue("nl2sql__nl2sql_query, rag__rag_search");
+    const set = form.getByTestId("feedback-add-case-set");
+    await expect(set).toContainText("月次の評価（1 件）");
 
-      // 同じ質問を持つ評価セットを選ぶと、その場で知らせて追加しない。
-      await set.click();
-      await page.getByRole("option", { name: "契約の評価（1 件）" }).click();
-      await expect(form.getByText("同じ質問のケースが既にあります")).toBeVisible();
-      await form.getByRole("button", { name: "評価ケースに追加" }).click();
-      expect(mockApi.lastRequest("POST", "/api/evaluation-sets/evset-dup/cases")).toBeUndefined();
+    // 同じ質問を持つ評価セットを選ぶと、その場で知らせて追加しない。
+    await set.click();
+    await page.getByRole("option", { name: "契約の評価（1 件）" }).click();
+    await expect(form.getByText("同じ質問のケースが既にあります")).toBeVisible();
+    await form.getByRole("button", { name: "評価ケースに追加" }).click();
+    expect(mockApi.lastRequest("POST", "/api/evaluation-sets/evset-dup/cases")).toBeUndefined();
 
-      await form.getByLabel("期待するツール").fill("nl2sql_query");
-      await set.click();
-      await page.getByRole("option", { name: "月次の評価（1 件）" }).click();
-      await expect(set).toHaveAttribute("aria-invalid", "false");
-      await expect(form.getByText("同じ質問のケースが既にあります")).toHaveCount(0);
-      await expect(form.getByRole("button", { name: "評価ケースに追加" })).toBeInViewport();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`feedback-add-case-${viewport.name}-${theme}.png`) });
-      await form.getByRole("button", { name: "評価ケースに追加" }).click();
+    await form.getByLabel("期待するツール").fill("nl2sql_query");
+    await set.click();
+    await page.getByRole("option", { name: "月次の評価（1 件）" }).click();
+    await expect(set).toHaveAttribute("aria-invalid", "false");
+    await expect(form.getByText("同じ質問のケースが既にあります")).toHaveCount(0);
+    await expect(form.getByRole("button", { name: "評価ケースに追加" })).toBeInViewport();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`feedback-add-case-${viewport.name}.png`) });
+    await form.getByRole("button", { name: "評価ケースに追加" }).click();
 
-      await expect(page.getByText("「月次の評価」に評価ケースを追加しました")).toBeVisible();
-      expect(mockApi.lastRequest("POST", "/api/evaluation-sets/evset-open/cases")?.body).toEqual({
-        question: DISLIKED_QUESTION,
-        expected: "件数は 15 件が正しい",
-        expected_tools: ["nl2sql_query"],
-        source_run_id: "run-dislike-810",
-      });
-      // 追加したら閉じる。
-      await expect(detail.getByTestId("feedback-add-case-form")).toHaveCount(0);
+    await expect(page.getByText("「月次の評価」に評価ケースを追加しました")).toBeVisible();
+    expect(mockApi.lastRequest("POST", "/api/evaluation-sets/evset-open/cases")?.body).toEqual({
+      question: DISLIKED_QUESTION,
+      expected: "件数は 15 件が正しい",
+      expected_tools: ["nl2sql_query"],
+      source_run_id: "run-dislike-810",
     });
-  }
+    // 追加したら閉じる。
+    await expect(detail.getByTestId("feedback-add-case-form")).toHaveCount(0);
+  });
 }
 
 test("評価セットが無ければ新しい評価セットを作り、期待する回答の要点は必須にする", async ({ page, mockApi }) => {
@@ -653,7 +641,6 @@ test("評価の詳細から最初のクリックでシグナルへ切り替わ�
 for (const resize of [false, true]) {
   test(`評価ケース追加の通知を閉じずに一覧へ戻れる (${resize ? "縮小後" : "最初から375px"})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
     await page.setViewportSize({ width: resize ? 1440 : 375, height: 900 });
-    await useTheme(page, resize ? "dark" : "light");
     seedDislikedRun(mockApi);
     const detail = await openDislikedDetail(page);
     await detail.getByTestId("feedback-add-case-toggle").click();

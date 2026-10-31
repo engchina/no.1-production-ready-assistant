@@ -786,7 +786,7 @@ const reveal = (collapsed) => ({ opacity: collapsed ? 0 : 1, transition: "opacit
  * sections: [{ key, title, collapsed?, items: [{ href, label, sidebarLabel?, icon }] }]
  * account: { name, roles } — renders SidebarAccountFooter (PROPOSED shared footer).
  */
-export function Sidebar({ product, sections = [], currentPath, collapsed = false, onToggleCollapsed, onToggleSection, onNavigate, account, theme = "light", onToggleTheme, onLogout }) {
+export function Sidebar({ product, sections = [], currentPath, collapsed = false, onToggleCollapsed, onToggleSection, onNavigate, account, onLogout }) {
   const isActive = (href) => currentPath === href || (currentPath || "").startsWith(href + "/");
   return (
     <aside
@@ -851,13 +851,13 @@ export function Sidebar({ product, sections = [], currentPath, collapsed = false
         })}
       </nav>
 
-      {account ? <SidebarAccountFooter account={account} collapsed={collapsed} theme={theme} onToggleTheme={onToggleTheme} onLogout={onLogout} /> : null}
+      {account ? <SidebarAccountFooter account={account} collapsed={collapsed} onLogout={onLogout} /> : null}
     </aside>
   );
 }
 
-/** PROPOSED shared footer: user + roles, logout, theme toggle. Replaces three app-specific footers. */
-export function SidebarAccountFooter({ account, collapsed = false, theme = "light", onToggleTheme, onLogout }) {
+/** PROPOSED shared footer: user + roles, logout（テーマ切替は #17 で廃止）. Replaces three app-specific footers. */
+export function SidebarAccountFooter({ account, collapsed = false, onLogout }) {
   const row = { display: "flex", alignItems: "center", gap: "var(--space-2-5)", height: "var(--nav-item-height)", border: 0, borderRadius: "var(--radius-md)", background: "transparent", color: "inherit", font: "var(--text-body)", cursor: "pointer" };
   return (
     <div style={{ borderTop: "1px solid var(--color-border)", padding: collapsed ? "var(--space-3) var(--space-2)" : "var(--space-3)" }}>
@@ -876,9 +876,6 @@ export function SidebarAccountFooter({ account, collapsed = false, theme = "ligh
         <button type="button" className="pr-nav-row" onClick={onLogout} aria-label="ログアウト" style={{ ...row, flex: 1, justifyContent: collapsed ? "center" : "flex-start", padding: collapsed ? 0 : "0 var(--space-3)" }}>
           <Icon name="LogOut" size={18} />
           {collapsed ? null : <span>ログアウト</span>}
-        </button>
-        <button type="button" className="pr-nav-row" onClick={onToggleTheme} aria-label={theme === "dark" ? "ライトテーマに切り替え" : "ダークテーマに切り替え"} style={{ ...row, justifyContent: "center", width: collapsed ? "100%" : "var(--nav-item-height)", padding: 0, border: "1px solid var(--color-border)" }}>
-          <Icon name={theme === "dark" ? "Sun" : "Moon"} size={18} />
         </button>
       </div>
     </div>
@@ -1106,11 +1103,11 @@ export declare const toast: {
   title="データベースに接続できません"
   titleId="database-unavailable-title"
   icon={Unplug}
-  message="データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。"
+  message="データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。"
   details={<p role="status">診断コード: wallet_not_found</p>}
   actions={
     <>
-      <ButtonLink to="/settings/database#adb-management" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
+      <ButtonLink to="/settings/database" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
       <Button variant="secondary" icon={RefreshCw} onClick={retry}>再試行</Button>
     </>
   }
@@ -1696,12 +1693,12 @@ export type TextFieldProps = {
 
 | 決めたこと | 理由 |
 |---|---|
-| 候補の一覧は独自の listbox ではなく、ネイティブの `<datalist>`（入力欄の `list`） | キー操作（↓ で開く・Enter で選ぶ）・読み上げ（role=combobox）・モバイルの候補表示・`color-scheme` によるダークテーマを OS / ブラウザに任せる。`type="date"` の日付選択と同じ扱いで、選んだ値は普通の入力と同じく `onChange` / `onValueChange` に届く |
+| 候補の一覧は独自の listbox ではなく、ネイティブの `<datalist>`（入力欄の `list`） | キー操作（↓ で開く・Enter で選ぶ）・読み上げ（role=combobox）・モバイルの候補表示・`color-scheme` による配色を OS / ブラウザに任せる。`type="date"` の日付選択と同じ扱いで、選んだ値は普通の入力と同じく `onChange` / `onValueChange` に届く |
 | 候補があるときだけ `list` と `autoComplete="off"`（呼び出し側の `autoComplete` が優先） | ブラウザの入力履歴を候補に混ぜない。候補が無いときは従来と同じ入力欄 |
 | `list` 属性は props で受け取らない（`TextFieldProps` から除く） | datalist の id は `useId` で作り、ほかの入力欄の候補と取り違えない |
 
 - 候補の一覧の見た目（ポップアップ）はブラウザが描くため、トークンの色・角丸にはなりません（日付選択と同じ）。候補を絞り込む・複数選ぶ・候補に無い値を拒む入力は、この部品ではなく `SelectField` や `SearchableSelectField` / `SearchableMultiSelect`（#578）の型です。
-- テストは `packages/ui/tests/text-field-slots.test.tsx`（datalist との結び付き・`autocomplete`）、実ブラウザは RAG の `e2e/structure-explainability.spec.ts`（文書詳細の分類、desktop / 375px、light / dark）。
+- テストは `packages/ui/tests/text-field-slots.test.tsx`（datalist との結び付き・`autocomplete`）、実ブラウザは RAG の `e2e/structure-explainability.spec.ts`（文書詳細の分類、desktop / 375px）。
 
 
 ## TextareaField — 新規（#584）
@@ -2162,7 +2159,7 @@ export function isSubmitEnter(event: KeyboardEventLike): boolean;  // key === "E
 | 入力欄が外れるときは待っている分を確定する。部品の外の状態（作業状態）が同じ画面に残るとき、消した・入力した検索語が戻らない。画面ごと外れる（別のページへ移る）ときは親の状態も消えるので、残したい e2e は Enter で確定してから移る | 一覧 ⇄ 作成の切り替えで、消したはずの検索語が一覧に戻っていた |
 
 - 単体テストは `packages/ui/tests/search-field.test.tsx`（debounce・Enter・trim・正規化・`formatInput`・IME の `compositionstart` 〜 `compositionend` と確定の Enter・消去・外からの変更・外れるときの確定・件数の読み上げ。fake timers）。
-- 実ブラウザは RAG `e2e/list-search.spec.ts`（検索・回答プロファイル・ナレッジベース。ボタンなし・入力に合わせた問い合わせ・IME・0 件の「検索語をクリア」、desktop / 375px、ライト / ダーク）、Agent `e2e/list-search.spec.ts`（メモリ）、NL2SQL `tests/e2e/nl2sql-workflows.spec.ts`（学習候補・アプリ内フィードバック）。IME は `compositionstart` → `isComposing` の `input` → `compositionend` の DOM event を出して確かめる（Playwright の keyboard は IME を通さない）。
+- 実ブラウザは RAG `e2e/list-search.spec.ts`（検索・回答プロファイル・ナレッジベース。ボタンなし・入力に合わせた問い合わせ・IME・0 件の「検索語をクリア」、desktop / 375px）、Agent `e2e/list-search.spec.ts`（メモリ）、NL2SQL `tests/e2e/nl2sql-workflows.spec.ts`（学習候補・アプリ内フィードバック）。IME は `compositionstart` → `isComposing` の `input` → `compositionend` の DOM event を出して確かめる（Playwright の keyboard は IME を通さない）。
 - 製品の置き換え: RAG（ナレッジベース・検索・回答プロファイル・文書・フィードバック・ナレッジベース詳細の追加する文書）、NL2SQL（`DbManagementSearchField` / `DbOwnerPrefixFilterField` を使う全一覧・DB 管理のオブジェクト一覧・スキーマ参照・アプリ内フィードバック・学習候補）、Agent（メモリ）、system-settings（`SecuritySearchField`: ユーザー・ロール・権限管理・権限の対象。NL2SQL の Deep Data Security も使う）。
 
 ## SearchableSelectField / SearchableMultiSelect — **新規**（#578）
@@ -2213,7 +2210,7 @@ import { SearchableMultiSelect, SearchableSelectField } from "@production-ready/
 
 - 開いた一覧の幅の計算は `packages/ui/tests/searchable-panel-layout.test.ts`、実ブラウザの下部の行と位置は共通の e2e の検査 `measureSearchablePanels`（`packages/ui/e2e/layout-checks.ts`。RAG の `expectSearchablePanelFits`・Agent の `agent-data-scope.spec.ts`）（#2091）。
 - 単体テストは `packages/ui/tests/searchable-select.test.tsx`（300 件の画面側の絞り込み・`remote`・↑↓/Enter/Esc/Tab・IME の `compositionstart`〜`compositionend` と確定の Enter・chip・hideable・件数の読み上げ・ボタンの名前）。
-- 実ブラウザは RAG `e2e/knowledge-base-searchable-select.spec.ts`（モックで 300 件と 120 件。評価・文書インデックス・アップロード・検索・回答プロファイル、desktop / 375px、ライト / ダーク）。
+- 実ブラウザは RAG `e2e/knowledge-base-searchable-select.spec.ts`（モックで 300 件と 120 件。評価・文書インデックス・アップロード・検索・回答プロファイル、desktop / 375px）。
 - 製品の置き換え: RAG（文書インデックスの絞り込み、アップロードの登録先、検索・回答プロファイルの参照 KB、品質評価、文書詳細の所属先、RAG 検索・チャットの対象の検索・回答プロファイル（#635 で単一選択の `SearchableSelectField` に統一））。RAG 固有の `MultiSelectCombobox` は削除した。
 - `leadingIcon`（任意。#635、#1771 で用途を限った）: 単一選択のボタンの先頭に 16px のアイコン（読み上げない）を出す。**対象の種類を表すアイコン（`Database`・`Bot` など）にだけ使い、虫眼鏡（`Search` 系）は渡さない**（adherence の lint が検出する。上の表）。#635 の RAG の対象の検索・回答プロファイルと NL2SQL のチャットの業務プロファイルの `leadingIcon={Search}` は #1771 で外し、3 製品の単一選択はどれもボタンにアイコンを持たない。
 
@@ -2516,7 +2513,7 @@ type SaveErrorBannerProps = {
 | Toast・フォームの下の `FormStatus` と併用しない | 同じ失敗が 2 か所に出ていた（検索・回答プロファイルなど） |
 
 - 単体テストは `packages/ui/tests/save-error-banner.test.tsx`（空のときは描かない・`role="alert"`・失敗と再試行のときだけ画面に入れる）。
-- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット・自動実行）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
+- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
 
 ---
 
@@ -2567,7 +2564,7 @@ import { ListPicker, ListToolbar, SearchField, FormActionBar } from "@production
 | `LoadMoreFooter` は失敗中は「さらに読み込む」を出さず、Banner の「再試行」だけにする | 同じ処理のスピナー・ボタンを 1 つにする（messaging §3.7） |
 
 - 単体テストは `packages/ui/tests/list-picker.test.tsx`（読み上げの属性・↑↓ / Home / End / Space / Enter・IME の確定の Enter・グループ間の移動・3,000 件の仮想スクロール・検索欄の IME と件数の読み上げ・0 件・追加読み込みと再試行・一括選択と「選択中だけ表示」・無効・`list-window` の計算）。
-- 実ブラウザは RAG `e2e/knowledge-bases.spec.ts`（モックで 3,000 件から検索して複数を追加、desktop / 375px、ライト / ダーク、キーボード。所属文書の検索とページング）と NL2SQL `tests/e2e/profile-allowed-objects.spec.ts`（許可する表・ビュー）。
+- 実ブラウザは RAG `e2e/knowledge-bases.spec.ts`（モックで 3,000 件から検索して複数を追加、desktop / 375px、キーボード。所属文書の検索とページング）と NL2SQL `tests/e2e/profile-allowed-objects.spec.ts`（許可する表・ビュー）。
 - 製品の置き換え: RAG（ナレッジベースの「文書を追加」、所属文書・ナレッジベース・検索・回答プロファイル・文書の一覧のツールバー）、NL2SQL（業務プロファイルの許可する表・ビュー、`DbObjectSelectorFooter`）、system-settings（権限管理の「利用できる対象」。`RolePermissionTargetOption` は削除）。
 
 ## ColumnBrowser — **新規**（#2141）
@@ -2999,7 +2996,7 @@ export function isRepeatedActivationKey(event: { key: string; repeat?: boolean }
 | 停止は赤塗り・赤文字にしない | 取り消せる停止で、途中までの内容は残る（buttons.md §3） |
 
 - 単体テストは `packages/ui/tests/run-stop-button.test.tsx`（判定・要素が替わらない・`aria-disabled`・ダブルクリック・Enter の繰り返し）。
-- 実ブラウザは RAG `e2e/chat.spec.ts` / `e2e/search-review.spec.ts` / `e2e/knowledge-base-search-test.spec.ts` / `e2e/answer-progress.spec.ts`、Agent `e2e/chat.spec.ts`（実行中の停止 → `POST /api/runs/{id}/cancel` → 送信に戻る。desktop / 375px、ライト / ダーク）。
+- 実ブラウザは RAG `e2e/chat.spec.ts` / `e2e/search-review.spec.ts` / `e2e/knowledge-base-search-test.spec.ts` / `e2e/answer-progress.spec.ts`、Agent `e2e/chat.spec.ts`（実行中の停止 → `POST /api/runs/{id}/cancel` → 送信に戻る。desktop / 375px）。
 - 製品の置き換え: RAG の `components/RunStopButton.tsx` と `lib/run-stop.ts` は削除した。Agent のチャットの送信（`loading` / `disabled` の `Button`）を置き換えた。
 
 ---
@@ -3155,7 +3152,7 @@ function submit() {
 | 会話の持ち主以外（#3244 より前の system_admin。#1928）が送った質問は `senderLabel`（`ChatTurn` は `questionSender`）に「〈名前〉 が送信」を渡し、吹き出しの上に `UserRound`（14px）付きの `text-xs text-fg-muted` の文で出す（`data-chat-sender`）。持ち主が送った質問には渡さない | 同じ会話に別の人の質問が混ざることを、色ではなく文で分かるようにする。持ち主だけの会話は今までと同じ見た目 |
 
 - 単体テストは `packages/ui/tests/chat-message.test.tsx`。
-- 実ブラウザは RAG `e2e/chat.spec.ts`・NL2SQL `tests/e2e/sql-chat.spec.ts`・Agent `e2e/chat.spec.ts` の「#907」のテスト（応答を遅らせて、送信の直後に質問と作成中の表示が出ること、新しい会話・続きの会話、失敗 → 再送信、停止。desktop / 375px、ライト / ダーク）。
+- 実ブラウザは RAG `e2e/chat.spec.ts`・NL2SQL `tests/e2e/sql-chat.spec.ts`・Agent `e2e/chat.spec.ts` の「#907」のテスト（応答を遅らせて、送信の直後に質問と作成中の表示が出ること、新しい会話・続きの会話、失敗 → 再送信、停止。desktop / 375px）。
 - 使う所: RAG の `components/chat/ChatClient.tsx`、NL2SQL の `features/nl2sql/SqlChatPage.tsx`、Agent の `pages/ChatPage.tsx`（保存済みの質問の吹き出しも同じ部品）。
 
 ## ChatProgress — **新規**（#1145）
@@ -3242,7 +3239,7 @@ import { ChatProgress } from "@production-ready/ui";
 | `ProcessingIndicator` / `WorkflowProgressStrip` を拡張せず、新しい部品にした | `ProcessingIndicator` は 1 つの処理の 1 行（段階を持たない）で、設定・一覧の読み込みなど多くの所で使う。`WorkflowProgressStrip` は NL2SQL の SQL 生成の画面だけの工程の帯（工程ごとの説明・結果の中身・中止を持つ）。チャットの段階は両者の間の密度で、3 製品が使うため `packages/ui` に置く。経過時間の計算は `useOperationTiming`、開閉は `Disclosure`、スピナーは `Spinner` を使い回す |
 
 - 単体テストは `packages/ui/tests/chat-progress.test.tsx`。
-- 実ブラウザは NL2SQL `tests/e2e/sql-chat.spec.ts` の「#1145」のテスト（応答を遅らせて、送信・開始待ち・実行中・完了・失敗の段階を desktop / 375px・light / dark で確かめる）。
+- 実ブラウザは NL2SQL `tests/e2e/sql-chat.spec.ts` の「#1145」のテスト（応答を遅らせて、送信・開始待ち・実行中・完了・失敗の段階を desktop / 375pxで確かめる）。
 - 使う所: NL2SQL の `features/nl2sql/SqlChatPage.tsx`、RAG の `components/chat/ChatClient.tsx`、Agent の `pages/ChatPage.tsx`。段階は 3 製品とも `useChatProgressStream`（下の節）で backend の段階のイベントから作り、名前は製品の段階の定義（NL2SQL `features/nl2sql/chatProgress.ts`・RAG `lib/chat-progress.ts`・Agent `lib/chat-progress.ts`）で付ける（#1359）。
 
 ### useChatProgressTracker — 処理の経過の状態を追う（#1160）
@@ -3415,7 +3412,7 @@ splitMarkdownTables(answer).map((segment) =>
 - 表とみなす形: `{ columns, rows }`（`columns` は列名の文字列か `{ name, label?, type? }`、`rows` はオブジェクトか配列の配列。列の指定があれば 0 行も表）、`{ rows }`（オブジェクトの配列。1 行以上）、オブジェクトの配列（1 行以上。key の和集合を列にする）。行に無い値は `null`。
 - セルは文字列・数値・真偽値・null だけ。入れ子のオブジェクト・配列を持つ値、列の分からない 0 行、`columns: []` の 0 行（実行中のジョブ）は表にしない（`null`）。
 - Markdown の表は GFM の表頭・区切りの行・本文の行。セルの足りない行は空の文字列、`\|` は `|`、`**` と `` ` `` は除く。値がすべて数（桁区切り・小数・%）の列は `type: "number"`（右寄せ）。
-- 単体テストは `packages/ui/tests/tabular-data.test.ts`、実ブラウザは Agent の `e2e/run-result-tables.spec.ts`（チャットと実行履歴の詳細、desktop / 375px、light / dark、60 行・0 行・打ち切り・表でない JSON）。
+- 単体テストは `packages/ui/tests/tabular-data.test.ts`、実ブラウザは Agent の `e2e/run-result-tables.spec.ts`（チャットと実行履歴の詳細、desktop / 375px、60 行・0 行・打ち切り・表でない JSON）。
 
 ## ChatLayout / useChatHistoryPanel — **新規**（#1161）
 

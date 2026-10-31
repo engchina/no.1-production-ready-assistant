@@ -4,7 +4,7 @@
 
 ## UI/UX
 
-- ナビは上に一般の利用者の画面、下に管理者の画面を置く（RAG / NL2SQL と同じ）。**AI 活用**: チャット / 実行履歴 / 承認 → **Agent 構築**: 業務 Agent / スキル / 自動実行 → **改善・運用**: 品質評価 / フィードバック / 利用状況 / 監査ログ → セキュリティ設定 → ユーザーとロール → 運用設定 → システム設定。既定の入口はチャット。
+- ナビは上に一般の利用者の画面、下に管理者の画面を置く（RAG / NL2SQL と同じ）。**AI 活用**: チャット / 実行履歴 / 承認 → **Agent 構築**: 業務 Agent / スキル → **改善・運用**: 品質評価 / フィードバック / 利用状況 / 監査ログ → セキュリティ設定 → ユーザーとロール → 運用設定 → システム設定。既定の入口はチャット。
   - Tools を独立ナビに戻さない。ツール権限はナビに出さない。Planner・Memory・Command Policy・Runtime Safety の画面とコマンド実行ツール（`sandbox_command_run`）は作り直さない（#756 で削除）。
   - **運用設定**: システムテーブル（先頭）/ 実行環境（組み込み Runtime の状態）/ MCP 接続。**システム設定**: OCI 認証 / アップロード保存先 / モデル / データベース / 外観と証明書（3 製品で共通。platform の共有パッケージ）。
 - 画面・ナビの文言に「Control Plane」「Runtime」のような基盤の用語を使わない（識別子・URL・権限コードは変えない）。用語は Run → 「実行」、Skill → 「スキル」、組み込み Runtime → 「実行環境」（表は docs/frontend-page-archetypes-spec.md §1）。
@@ -17,6 +17,6 @@
 - 業務 Agent の編集画面は指示・スキル・モデル・データの範囲を選ぶ（範囲の強制は組み込み Runtime の tool handler。モデルの指示に頼らない。docs/agent-control-plane-design.md §2）。実行（Run）は業務 Agent と目標だけで作る（実行先の選択は無い）。
 - 空、読込、エラー、モデル未設定（組み込み Runtime が実行できない）、承認待ちを明示する。
 - 各ページの型（A〜D）の割り当て、離脱ガードの対象画面、作業状態として残す field は [docs/frontend-page-archetypes-spec.md](../../docs/frontend-page-archetypes-spec.md) に書く。
-- サイドバーのアカウント領域（ユーザー・ロール・ログアウト・テーマ切替）は `SidebarAccountFooter` を `Sidebar` の `footer` に渡す。ダークテーマ（`data-theme="dark"`）に追従するため、色の直書きを残さない。
+- サイドバーのアカウント領域（ユーザー・ロール・ログアウト）は `SidebarAccountFooter` を `Sidebar` の `footer` に渡す。テーマはライトだけ（#17）だが、サイドバーは暗い面（`data-surface="inverted"`）なので、色の直書きを残さずトークンを使う。
 - lint は `frontend/eslint.config.js` が `../../platform/docs/design-system/adherence.oxlintrc.json` を import する。
 - Playwright は `desktop` と `mobile-375`（Pixel 5、375×812、タッチ）の 2 project。spec の中で viewport を回しているテストと、画面幅に関係しない spec は `mobile-375` では実行しない（`playwright.config.ts`）。PR の CI の `mobile-375` は、さらに `@responsive` の tag の test だけ（全件は nightly。root の [docs/agents/ui.md](../../../docs/agents/ui.md)「UI 変更の検証」）。

@@ -2,11 +2,8 @@ import { useMemo, type ComponentProps, type ReactNode } from "react";
 import {
   ArrowRight,
   DatabaseZap,
-  Hourglass,
-  PowerOff,
   RefreshCw,
   ServerCrash,
-  ServerOff,
   Settings,
   Unplug,
   Wrench,
@@ -18,47 +15,24 @@ import {
   BlockedPageNotice,
   Button,
   ButtonLink,
-  StatusBadge,
   type ButtonLinkComponent,
   type FeedbackTone,
-  type StatusVariant,
 } from "@production-ready/ui";
 
 import { formatMessage } from "../auth/messages";
-import { DATABASE_MESSAGES, type DatabaseMessageKey } from "../database/messages";
 import {
   DATABASE_GATE_MESSAGES,
   databaseCheckMessageKey,
   type DatabaseGateMessageKey,
   type DatabaseGateMessages,
 } from "./messages";
-import { ADB_MANAGEMENT_ANCHOR_ID, type DatabaseGateRoutes, type DatabaseNoticeStatus } from "./types";
+import type { DatabaseGateRoutes, DatabaseNoticeStatus } from "./types";
 
 /** 見出しの id（カードの `aria-labelledby`。3 製品の E2E が参照する）。 */
 export const DATABASE_UNAVAILABLE_TITLE_ID = "database-unavailable-title";
 
-/**
- * 接続できない（`unreachable`）ときの ADB の状態の分け方（#820）。
- * `unknown` は ADB OCID が未設定か、状態を取得できなかったとき。
- */
-export type AdbLifecycleGroup = "stopped" | "starting" | "unavailable" | "available" | "unknown";
-
-export function adbLifecycleGroup(state: string | null | undefined): AdbLifecycleGroup {
-  const value = state?.trim().toUpperCase();
-  if (!value) return "unknown";
-  if (value === "AVAILABLE") return "available";
-  if (value === "STARTING") return "starting";
-  if (value === "STOPPED" || value === "STOPPING") return "stopped";
-  return "unavailable";
-}
-
-/** 案内の種類（未設定・接続できない（ADB の状態で細分）・初期化が必要・状態を確認できない）。 */
-export type DatabaseNoticeKind =
-  | DatabaseNoticeStatus
-  | "adb_stopped"
-  | "adb_starting"
-  | "adb_unavailable"
-  | "adb_available";
+/** 案内の種類（未設定・接続できない・初期化が必要・状態を確認できない）。 */
+export type DatabaseNoticeKind = DatabaseNoticeStatus;
 
 /** 設定の画面への導線。 */
 export interface DatabaseNoticeAction {
@@ -68,7 +42,7 @@ export interface DatabaseNoticeAction {
   target: "database" | "systemTables";
 }
 
-/** 案内の見出し・本文・アイコン・導線（状態 × ADB の状態 × 権限）。 */
+/** 案内の見出し・本文・アイコン・導線（状態 × 権限）。 */
 export interface DatabaseNoticeContent {
   kind: DatabaseNoticeKind;
   title: DatabaseGateMessageKey;
@@ -82,95 +56,32 @@ export interface DatabaseNoticeContent {
 
 export interface DatabaseNoticeContentInput {
   status: DatabaseNoticeStatus;
-  adbLifecycleState?: string | null;
   routes: DatabaseGateRoutes;
   canManageDatabase: boolean;
   canManageSystemTables: boolean;
 }
 
-/** データベース設定の URL（ADB 管理のカードへ案内するときだけ hash を付ける）。 */
-export function databaseSettingsHref(path: string, adbCard: boolean): string {
-  const base = path.split("#", 1)[0];
-  return adbCard ? `${base}#${ADB_MANAGEMENT_ANCHOR_ID}` : base;
+/** データベース設定の URL（hash は付けない。接続設定と Wallet は同じカードにある）。 */
+export function databaseSettingsHref(path: string): string {
+  return path.split("#", 1)[0];
 }
-
-interface UnreachableCopy {
-  kind: DatabaseNoticeKind;
-  title: DatabaseGateMessageKey;
-  message: DatabaseGateMessageKey;
-  contactAdmin: DatabaseGateMessageKey;
-  icon: LucideIcon;
-  tone: FeedbackTone;
-  /** データベース設定の ADB 管理のカードへ案内するか。 */
-  adbCard: boolean;
-}
-
-const UNREACHABLE_COPY: Record<AdbLifecycleGroup, UnreachableCopy> = {
-  unknown: {
-    kind: "unreachable",
-    title: "dbGate.unreachable.title",
-    message: "dbGate.unreachable.message",
-    contactAdmin: "dbGate.unreachable.contactAdmin",
-    icon: Unplug,
-    tone: "warning",
-    // ADB の状態が分からないときも、多い原因（停止中）の復旧の場所（ADB 管理のカード）へ案内する。
-    adbCard: true,
-  },
-  stopped: {
-    kind: "adb_stopped",
-    title: "dbGate.adbStopped.title",
-    message: "dbGate.adbStopped.message",
-    contactAdmin: "dbGate.adbStopped.contactAdmin",
-    icon: PowerOff,
-    tone: "warning",
-    adbCard: true,
-  },
-  starting: {
-    kind: "adb_starting",
-    title: "dbGate.adbStarting.title",
-    message: "dbGate.adbStarting.message",
-    contactAdmin: "dbGate.adbStarting.contactAdmin",
-    icon: Hourglass,
-    tone: "info",
-    adbCard: true,
-  },
-  unavailable: {
-    kind: "adb_unavailable",
-    title: "dbGate.adbUnavailable.title",
-    message: "dbGate.adbUnavailable.message",
-    contactAdmin: "dbGate.adbUnavailable.contactAdmin",
-    icon: ServerOff,
-    tone: "warning",
-    adbCard: true,
-  },
-  available: {
-    kind: "adb_available",
-    title: "dbGate.unreachable.title",
-    message: "dbGate.adbAvailable.message",
-    contactAdmin: "dbGate.adbAvailable.contactAdmin",
-    icon: Unplug,
-    tone: "warning",
-    adbCard: false,
-  },
-};
 
 /**
  * 状態ごとに見出し・本文・アイコン・導線を分ける（#820。単体テストのため純粋関数）。
  * - 未設定 → データベース設定（接続情報）
- * - 接続できない → データベース設定の ADB 管理のカード（ADB は起動済みと分かっているときは接続情報）
+ * - 接続できない → データベース設定（接続設定と Wallet を確かめる。DB の起動・停止は画面では扱わない。#10）
  * - 初期化が必要 → システムテーブル（`systemTables` が無い製品はデータベース設定）
  * - 状態を確認できない → 導線なし（再試行だけ）
  * - その画面を開けない利用者 → 導線を出さず、システム管理者への連絡を案内する
  */
 export function databaseNoticeContent({
   status,
-  adbLifecycleState,
   routes,
   canManageDatabase,
   canManageSystemTables,
 }: DatabaseNoticeContentInput): DatabaseNoticeContent {
-  const databaseAction = (adbCard: boolean): DatabaseNoticeAction => ({
-    href: databaseSettingsHref(routes.databaseSettings, adbCard),
+  const databaseAction = (): DatabaseNoticeAction => ({
+    href: databaseSettingsHref(routes.databaseSettings),
     label: "dbGate.openDatabaseSettings",
     icon: Settings,
     target: "database",
@@ -183,19 +94,18 @@ export function databaseNoticeContent({
       message: canManageDatabase ? "dbGate.notConfigured.message" : "dbGate.notConfigured.contactAdmin",
       icon: Settings,
       tone: "warning",
-      action: canManageDatabase ? databaseAction(false) : null,
+      action: canManageDatabase ? databaseAction() : null,
       footer: canManageDatabase ? "dbGate.settingsHint" : "dbGate.contactAdmin.footer",
     };
   }
   if (status === "unreachable") {
-    const copy = UNREACHABLE_COPY[adbLifecycleGroup(adbLifecycleState)];
     return {
-      kind: copy.kind,
-      title: copy.title,
-      message: canManageDatabase ? copy.message : copy.contactAdmin,
-      icon: copy.icon,
-      tone: copy.tone,
-      action: canManageDatabase ? databaseAction(copy.adbCard) : null,
+      kind: status,
+      title: "dbGate.unreachable.title",
+      message: canManageDatabase ? "dbGate.unreachable.message" : "dbGate.unreachable.contactAdmin",
+      icon: Unplug,
+      tone: "warning",
+      action: canManageDatabase ? databaseAction() : null,
       footer: canManageDatabase ? "dbGate.settingsHint" : "dbGate.contactAdmin.footer",
     };
   }
@@ -206,7 +116,7 @@ export function databaseNoticeContent({
     if (canManage) {
       action = routes.systemTables
         ? { href: routes.systemTables, label: "dbGate.openSystemTables", icon: DatabaseZap, target: "systemTables" }
-        : databaseAction(false);
+        : databaseAction();
     }
     return {
       kind: status,
@@ -230,30 +140,12 @@ export function databaseNoticeContent({
   };
 }
 
-const ADB_LIFECYCLE_VARIANT: Record<AdbLifecycleGroup, StatusVariant> = {
-  stopped: "neutral",
-  starting: "info",
-  unavailable: "warning",
-  available: "success",
-  unknown: "neutral",
-};
-
-/** ADB の状態の表示名（データベース設定の画面と同じ文言。無い値はそのまま出す）。 */
-export function adbLifecycleLabel(state: string): string {
-  const key = `settings.adb.lifecycle.${state.trim().toUpperCase()}`;
-  return Object.prototype.hasOwnProperty.call(DATABASE_MESSAGES, key)
-    ? DATABASE_MESSAGES[key as DatabaseMessageKey]
-    : state;
-}
-
 export interface DatabaseUnavailableNoticeProps {
   /** `gate`＝主領域の中央の案内カード、`banner`＝カードやページの先頭の常設の Banner。 */
   mode?: "gate" | "banner";
   status?: DatabaseNoticeStatus;
   /** 診断コード（状態 API の `check` など）。`ok` と空は出さない。 */
   reasonCode?: string | null;
-  /** ADB のライフサイクル状態（状態 API の `adb_lifecycle_state`。`unreachable` のときだけ使う）。 */
-  adbLifecycleState?: string | null;
   routes: DatabaseGateRoutes;
   messages?: Partial<DatabaseGateMessages>;
   /**
@@ -273,7 +165,7 @@ export interface DatabaseUnavailableNoticeProps {
   /** 本文の上書き（banner では本文の中身）。 */
   message?: ReactNode;
   /**
-   * banner にデータベース設定（ADB 管理のカード）へのリンクを添える（`canManageDatabase` のときだけ
+   * banner にデータベース設定へのリンクを添える（`canManageDatabase` のときだけ
    * 出す）。
    */
   settingsLink?: boolean;
@@ -305,7 +197,6 @@ export function DatabaseUnavailableNotice({
   mode = "gate",
   status = "unreachable",
   reasonCode,
-  adbLifecycleState,
   routes,
   messages,
   canManageDatabase = false,
@@ -322,7 +213,6 @@ export function DatabaseUnavailableNotice({
   const linkComponent = useReturnToLink(returnTo);
   const content = databaseNoticeContent({
     status,
-    adbLifecycleState,
     routes,
     canManageDatabase,
     canManageSystemTables,
@@ -354,7 +244,7 @@ export function DatabaseUnavailableNotice({
               {retryButton}
               {showSettingsLink ? (
                 <ButtonLink
-                  to={databaseSettingsHref(routes.databaseSettings, true)}
+                  to={databaseSettingsHref(routes.databaseSettings)}
                   linkComponent={linkComponent}
                   variant="secondary"
                   size="sm"
@@ -375,7 +265,6 @@ export function DatabaseUnavailableNotice({
 
   const code = databaseReasonCode(reasonCode);
   const codeMessageKey = code ? databaseCheckMessageKey(code) : undefined;
-  const adbState = status === "unreachable" ? adbLifecycleState?.trim() : undefined;
   const action = content.action;
 
   return (
@@ -388,16 +277,8 @@ export function DatabaseUnavailableNotice({
       className={className}
       testId="database-unavailable-notice"
       details={
-        adbState || code ? (
+        code ? (
           <>
-            {adbState ? (
-              <div className="flex justify-center pb-1" data-testid="database-gate-adb-state">
-                <StatusBadge
-                  variant={ADB_LIFECYCLE_VARIANT[adbLifecycleGroup(adbState)]}
-                  label={formatMessage(m["dbGate.adbState"], { state: adbLifecycleLabel(adbState) })}
-                />
-              </div>
-            ) : null}
             {codeMessageKey ? <p>{m[codeMessageKey]}</p> : null}
             {code ? <p role="status">{formatMessage(m["dbGate.reasonCode"], { code })}</p> : null}
           </>

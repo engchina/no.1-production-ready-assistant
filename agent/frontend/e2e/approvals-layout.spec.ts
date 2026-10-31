@@ -315,35 +315,30 @@ for (const viewport of [
     for (let index = 0; index < 14; index++) seedApproval(mockApi, `approval-${index}`);
     await page.goto("/approvals");
     await expect(page.locator('a[data-approval-id="approval-0"]')).toBeVisible();
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate((theme) => {
-        document.documentElement.dataset.theme = theme;
-      }, theme);
-      await page.screenshot({ path: testInfo.outputPath(`approvals-list-${theme}.png`) });
-      await page.locator('a[data-approval-id="approval-0"]').click();
-      const detail = page.getByRole("region", { name: "承認の詳細" });
-      await expect(detail).toContainText("データの参照範囲を確認してください。");
-      const bounds = () =>
-        page.evaluate(() => ({
-          width: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          height: document.documentElement.scrollHeight - document.documentElement.clientHeight,
-          main: document.querySelector("main")!.clientWidth,
-        }));
-      const before = await bounds();
-      expect(before.width).toBeLessThanOrEqual(0);
-      expect(before.height).toBeLessThanOrEqual(0);
-      await page.screenshot({ path: testInfo.outputPath(`approvals-detail-${theme}.png`) });
-      await page.evaluate(() => {
-        document.documentElement.style.fontSize = "20px";
-      });
-      expect((await bounds()).width).toBeLessThanOrEqual(0);
-      expect((await bounds()).height).toBeLessThanOrEqual(0);
-      await page.evaluate(() => {
-        document.documentElement.style.fontSize = "";
-      });
-      await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
-      expect((await bounds()).main).toBe(before.main);
-    }
+    await page.screenshot({ path: testInfo.outputPath(`approvals-list.png`) });
+    await page.locator('a[data-approval-id="approval-0"]').click();
+    const detail = page.getByRole("region", { name: "承認の詳細" });
+    await expect(detail).toContainText("データの参照範囲を確認してください。");
+    const bounds = () =>
+      page.evaluate(() => ({
+        width: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        height: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+        main: document.querySelector("main")!.clientWidth,
+      }));
+    const before = await bounds();
+    expect(before.width).toBeLessThanOrEqual(0);
+    expect(before.height).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath(`approvals-detail.png`) });
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "20px";
+    });
+    expect((await bounds()).width).toBeLessThanOrEqual(0);
+    expect((await bounds()).height).toBeLessThanOrEqual(0);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "";
+    });
+    await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
+    expect((await bounds()).main).toBe(before.main);
   });
 }
 

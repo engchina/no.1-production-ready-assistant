@@ -35,7 +35,7 @@ HTTP request を延長せず durable job へ移す。静かな polling、prefetc
 - publish: worker が manifest 差分を取得し、成功時だけ active catalog を切り替える。失敗時は旧版を維持する。
 - concurrency: read path は Schema refresh のプロセス内実行 lock を取得しない。
 
-本番（Resource Manager の stack の systemd 配備）は、Schema refresh を `NL2SQL_SCHEMA_REFRESH_WORKER_MODE=external` と
+本番（Compute の systemd 配備）は、Schema refresh を `NL2SQL_SCHEMA_REFRESH_WORKER_MODE=external` と
 `production-ready-nl2sql-schema-refresh-worker.service` で処理する。通常の SQL 生成 job は既定の `inprocess` で、
 別プロセスにする場合は `NL2SQL_JOB_WORKER_MODE=external` にして `uv run python -m app.cli.nl2sql_job_worker` を
 起動する（stack はこの unit を作らない）。ローカル実行はどちらも `inprocess` を既定とする。
@@ -49,7 +49,7 @@ frontend は mutation response の `schema_refresh_job_id` を追跡し、同じ
 
 ## 可用性と repository circuit
 
-可用性は OCI ADB lifecycle、Oracle SQL connection、NL2SQL persistence/read model を別々に扱う。
+可用性は Oracle SQL connection と NL2SQL persistence/read model を別々に扱う（DB の起動・停止と lifecycle の取得は扱わない。#10）。
 `/api/ready/database` は polling 互換のため常に HTTP 200 とし、接続状態は response body で判定する。判定の順と応答の形は 3 製品共通の `pr_system_settings.database_status`（#325）が持ち、設定の判定はシステム設定画面と同じ `database_readiness`（DeepSec の判定を含む）を使う。NL2SQL は memory モードの short circuit、incremental store の確認、`context_id` の元にする値を注入する。
 業務 API の 503 は persistence status と安定 `error_code` を併せて確認する。
 

@@ -70,11 +70,6 @@ def rag_config_fingerprint(settings: Settings | None = None) -> str:
         "neighbor_child_count": resolved_settings.rag_neighbor_child_count,
         "rerank_enabled": resolved_settings.rag_rerank_enabled,
         "screen_linking_enabled": resolved_settings.rag_screen_linking_enabled,
-        # 条の目録から根拠の条を選ぶ段(#2254)。
-        "article_catalog_enabled": resolved_settings.rag_article_catalog_enabled,
-        "article_catalog_max_documents": resolved_settings.rag_article_catalog_max_documents,
-        "article_catalog_context_records": resolved_settings.rag_article_catalog_context_records,
-        "article_catalog_scope_documents": resolved_settings.rag_article_catalog_scope_documents,
         "request_coverage_retrieval_enabled": (
             resolved_settings.rag_request_coverage_retrieval_enabled
         ),

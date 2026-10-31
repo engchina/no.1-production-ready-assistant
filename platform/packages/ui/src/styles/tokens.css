@@ -18,7 +18,7 @@
  *   TIER 2   colors.css    意味トークン（--color-*）+ [data-surface] スコープ
  *   a11y.css               forced-colors / prefers-contrast。base の規則も上書きするので後ろ
  *
- * テーマ: <html class="dark"> / data-theme="dark" | "light" | "auto"（color-scheme + light-dark()）。
+ * テーマ: ライトの 1 種類だけ（#17）。light-dark() の暗い値は常時暗いスラブ（[data-surface]）の内側でだけ使う。
  */
 
 @import "./tokens/palette.css";

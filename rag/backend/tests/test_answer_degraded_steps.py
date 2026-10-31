@@ -1,6 +1,6 @@
 """回答の検索の補助の処理の失敗を、診断で「当たらなかった」と分ける(#3259)。
 
-補助の処理(業務の名前・実体・関係情報・参照先・画面目録・章節・条の目録・編集したプロンプト)は、
+補助の処理(業務の名前・実体・関係情報・参照先・画面目録・章節・編集したプロンプト)は、
 失敗しても空のまま回答を続ける。失敗は ``_SearchState.degraded`` に処理の種類・回数・例外の型の
 名前だけを残し、回答の診断(``degraded_steps``)と根拠 0 件の診断(``zero_evidence``)に出す。
 例外の文・SQL・本文・識別子は出さない。外部 I/O はすべてスタブ。
@@ -11,7 +11,6 @@ from collections.abc import Awaitable, Callable, Iterator
 from typing import Any, cast
 
 import pytest
-from rag_engine.retrieval.article_catalog import SelectedArticle
 
 from app.config import Settings
 from app.rag import answer_engine as answer_engine_module
@@ -93,9 +92,6 @@ class _ScopeOracle(FakeOracle):
             raise Boom(SECRET)
         return []
 
-    async def retrieval_article_documents(self, filters: dict[str, str]) -> list[tuple[str, str]]:
-        return []
-
 
 @pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
 async def test_business_names_failure_is_recorded(fail: bool) -> None:
@@ -139,100 +135,6 @@ async def test_screen_chunks_failure_is_recorded(fail: bool) -> None:
     assert stored == []
     if fail:
         _assert_degraded(state, "screen_chunks")
-    else:
-        assert state.degraded_steps() == []
-
-
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-async def test_article_documents_failure_is_recorded(
-    monkeypatch: pytest.MonkeyPatch, fail: bool
-) -> None:
-    monkeypatch.setattr(answer_engine_module, "_ARTICLE_DOCUMENTS_CACHE", {})
-    state = _SearchState()
-
-    documents = await _engine(_ScopeOracle(fail=fail))._article_documents(
-        SearchRequest(query="q"), state
-    )
-
-    assert documents == []
-    if fail:
-        _assert_degraded(state, "article_documents")
-    else:
-        assert state.degraded_steps() == []
-
-
-def _section_store(monkeypatch: pytest.MonkeyPatch, *, fail: bool) -> None:
-    from app.clients import section_map_store
-
-    class Store:
-        def __init__(self, oracle: Any) -> None:
-            pass
-
-        async def section_first_chunks(
-            self, document_id: str, *, chunk_set_id: str, section_ids: list[str]
-        ) -> dict[str, RetrievedChunk]:
-            if fail:
-                raise Boom(SECRET)
-            return {}
-
-    monkeypatch.setattr(section_map_store, "SectionMapStore", Store)
-
-
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-async def test_article_lead_failure_is_recorded(
-    monkeypatch: pytest.MonkeyPatch, fail: bool
-) -> None:
-    _section_store(monkeypatch, fail=fail)
-    state = _SearchState()
-
-    leads = await _engine(FakeOracle())._article_leads(
-        "doc-a", "cs-a", {"s1": "第一条"}, state=state
-    )
-
-    assert leads == {}
-    if fail:
-        _assert_degraded(state, "article_lead")
-    else:
-        assert state.degraded_steps() == []
-
-
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-async def test_article_chunks_failure_is_recorded(
-    monkeypatch: pytest.MonkeyPatch, fail: bool
-) -> None:
-    _section_store(monkeypatch, fail=fail)
-    state = _SearchState()
-    articles = [SelectedArticle("doc-a", "文書A.json", "cs-a", "s1", "第一条", 0)]
-
-    stored = await _engine(FakeOracle())._article_chunks(SearchRequest(query="q"), state, articles)
-
-    assert stored == []
-    if fail:
-        _assert_degraded(state, "article_chunks")
-    else:
-        assert state.degraded_steps() == []
-
-
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-async def test_article_catalog_failure_is_recorded(
-    monkeypatch: pytest.MonkeyPatch, fail: bool
-) -> None:
-    from app.rag import section_map_service
-
-    async def outline(document_id: str, **kwargs: Any) -> Any:
-        if fail:
-            raise Boom(SECRET)
-        return None
-
-    monkeypatch.setattr(section_map_service, "section_outline", outline)
-    state = _SearchState()
-    state.article_documents = [("doc-a", "文書A.json")]
-
-    catalogs = await _engine(FakeOracle())._article_catalogs(state, ["doc-a"], 3)
-
-    assert catalogs == []
-    if fail:
-        _assert_degraded(state, "article_catalog")
     else:
         assert state.degraded_steps() == []
 

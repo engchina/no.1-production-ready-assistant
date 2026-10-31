@@ -355,7 +355,7 @@ async def _resolve_query_context(
         profile_config = view.config
         if explicit_model := _answer_model_id(request, global_settings):
             profile_config = profile_config.model_copy(update={"answer_model_id": explicit_model})
-        # 回答を作らない検索も、根拠を集める LLM（質問拡張・条の選択・CRAG など）はチャットと同じ
+        # 回答を作らない検索も、根拠を集める LLM（質問拡張・CRAG など）はチャットと同じ
         # 回答のモデルで呼ぶ（#3506。回答の有無でモデルを変えない）。ただし回答を作らない検索は、
         # 登録を外したモデルを選んだままのプロファイルでも止めず、既定のモデルで根拠を集める。
         settings, applied = resolve_search_answer_profile_settings(

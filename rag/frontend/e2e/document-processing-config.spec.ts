@@ -41,8 +41,6 @@ function config(): DocumentProcessingConfig {
     parser_adapter_backend: null,
     parser_docling_enabled: null,
     parser_unstructured_enabled: null,
-    parser_mineru_enabled: null,
-    parser_dots_ocr_enabled: null,
     chunking_strategy: null,
     chunk_size: 800,
     chunk_overlap: null,
@@ -107,8 +105,6 @@ async function mockWorkspace(
     storedChunkMetadata?: Record<string, string>;
     /** 設定を保存するまで、レシピの処理の投入を 409 にする文(#2639)。 */
     enqueueConflictUntilSaved?: string;
-    /** 管理者が MinerU のライセンスの条件を確認済みか（#3359。既定は確認済み）。 */
-    mineruLicenseAcknowledged?: boolean;
   } = {}
 ) {
   const status = options.documentStatus ?? "INDEXED";
@@ -150,21 +146,9 @@ async function mockWorkspace(
     };
   };
 
-  // 処理設定パネルは文書解析の設定から対応形式と MinerU のライセンスの確認を読む（#3359）。
-  const mineruLicenseAcknowledged = options.mineruLicenseAcknowledged ?? true;
+  // 処理設定パネルは文書解析の設定から対応形式を読む。
   await page.route("**/api/settings/parser-adapters", (route) =>
-    route.fulfill({
-      json: ok({
-        capabilities: [],
-        mineru_license: mineruLicenseAcknowledged
-          ? {
-              acknowledged: true,
-              acknowledged_by: "管理者 A",
-              acknowledged_at: "2026-10-26T00:00:00+00:00",
-            }
-          : { acknowledged: false, acknowledged_by: null, acknowledged_at: null },
-      }),
-    })
+    route.fulfill({ json: ok({ capabilities: [] }) })
   );
   await page.route("**/api/knowledge-bases**", (route) =>
     route.fulfill({
@@ -376,20 +360,10 @@ test("文書処理設定を保存し、手動再処理を案内する", async ({
 
   await panel.getByRole("group", { name: "文書解析" }).getByText("上書き").click();
   await panel.getByRole("combobox", { name: "文書解析" }).click();
-  // 解析エンジンの選択肢は文書解析の画面のカードと同じ並び（PARSER_BACKEND_ORDER。#3359）。
-  // 構造化レコード JSONL は Unstructured の後、XML ツリー JSON の前（#2457）。続いて Dots.OCR →
-  // MinerU → OCI Document Understanding（利用者の判断）。MinerU（#3359）と OCI Document
-  // Understanding（#3374）は準備中（ロードマップ）の印と理由つきで、選べない選択肢として並ぶ。
-  await expect(page.getByRole("option")).toHaveText([
-    "Docling",
-    "Unstructured",
-    "構造化レコード JSONL",
-    "XML ツリー JSON",
-    "Dots.OCR",
-    /^MinerU準備中（ロードマップ）準備中（ロードマップ）のため、まだ選べません。$/,
-    /^OCI Document Understanding準備中（ロードマップ）準備中（ロードマップ）のため、まだ選べません。$/,
-  ]);
-  await page.getByRole("option", { name: "Dots.OCR" }).click();
+  // 解析エンジンの選択肢は文書解析の画面のカードと同じ並び（PARSER_BACKEND_ORDER）。
+  // 構造化レコード JSONL・XML ツリー JSON の専用のエンジンは削除した（#21）。
+  await expect(page.getByRole("option")).toHaveText(["Docling", "Unstructured"]);
+  await page.getByRole("option", { name: "Unstructured" }).click();
   // Vision は解析エンジンに関係なくレシピで選べる。「図表 VLM 要約」は Vision に統合した(#497)。
   await expect(panel.getByText("図表 VLM 要約")).toHaveCount(0);
   // 概要(読み取り専用)にも同じ見出しがあるので、編集欄(説明付き)に絞る。
@@ -404,7 +378,7 @@ test("文書処理設定を保存し、手動再処理を案内する", async ({
 
   await expect(page.getByText(/この文書の処理設定を保存しました/)).toBeVisible();
   expect(state.saved()).toMatchObject({
-    parser_adapter_backend: "dots_ocr",
+    parser_adapter_backend: "unstructured",
     vision_enabled: true,
     chunk_size: 800,
   });
@@ -424,11 +398,11 @@ test("Excel の読み方を上書きして保存する", async ({ page }) => {
   await panel.getByRole("group", { name: "ファイル準備", exact: true }).getByText("上書き").click();
   await panel.getByRole("combobox", { name: "ファイル準備", exact: true }).click();
   await page.getByRole("option", { name: "Excel→JSONL" }).click();
-  // JSONL のファイル準備は、解析エンジン・分割（固定分割符・記録の境界）も見える上書きにする（#2457）。
-  await expect(panel.getByText(/文書解析と分割（固定分割符・記録の境界）を合わせて上書きしました/)).toBeVisible();
-  await expect(panel.getByRole("combobox", { name: "文書解析", exact: true })).toContainText(
-    "構造化レコード JSONL"
-  );
+  // JSONL のファイル準備は、分割（固定分割符・記録の境界）も見える上書きにする（#2457）。解析エンジンは
+  // 変えない（成果物の JSONL は Docling・Unstructured のサービスが読む。#21）。
+  await expect(panel.getByText(/分割（固定分割符・記録の境界）を合わせて上書きしました/)).toBeVisible();
+  // 文書解析は全体の既定を継承したまま（上書きの選択欄を出さない）。
+  await expect(panel.getByRole("combobox", { name: "文書解析", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("combobox", { name: "文書分割", exact: true })).toContainText(
     "固定分割符"
   );
@@ -491,7 +465,6 @@ test("Excel の読み方を上書きして保存する", async ({ page }) => {
   await expect(page.getByText(/この文書の処理設定を保存しました/)).toBeVisible();
   expect(state.saved()).toMatchObject({
     preprocess_profile: "excel_to_jsonl",
-    parser_adapter_backend: "structured_records_jsonl",
     chunking_strategy: "fixed_delimiter",
     chunk_delimiter: "<<<JSONL_RECORD_BOUNDARY>>>",
     excel_options: {
@@ -803,61 +776,12 @@ test("保存失敗時は編集値を保持する", async ({ page }) => {
   await panel.getByRole("button", { name: "処理設定を編集" }).click();
   await panel.getByRole("group", { name: "文書解析" }).getByText("上書き").click();
   await panel.getByRole("combobox", { name: "文書解析" }).click();
-  await page.getByRole("option", { name: "Dots.OCR" }).click();
+  await page.getByRole("option", { name: "Unstructured" }).click();
   await panel.getByRole("button", { name: "構築設定を保存" }).click();
 
   await expect(panel).toContainText("取込ジョブの実行中は設定を変更できません");
-  await expect(panel.getByRole("combobox", { name: "文書解析" })).toContainText("Dots.OCR");
+  await expect(panel.getByRole("combobox", { name: "文書解析" })).toContainText("Unstructured");
 });
-
-for (const viewport of [
-  { name: "desktop", width: 1280, height: 760 },
-  { name: "mobile", width: 375, height: 812 },
-]) {
-  test(
-    `準備中（ロードマップ）の解析エンジンは、処理レシピの選択肢に灰色で出て選べない (${viewport.name})`,
-    { tag: "@responsive" },
-    async ({ page }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await mockWorkspace(page);
-      await page.goto("/documents/doc-1");
-
-      const panel = page.getByRole("region", { name: "処理レシピ", exact: true });
-      await panel.getByRole("button", { name: "処理設定を編集" }).click();
-      await panel.getByRole("group", { name: "文書解析" }).getByText("上書き").click();
-      const combobox = panel.getByRole("combobox", { name: "文書解析" });
-      await combobox.click();
-      // MinerU（#3359）も OCI Document Understanding（#3374）と同じく準備中の印と理由つきで選べない。
-      const mineru = page.getByRole("option", { name: /^MinerU/ });
-      await expect(mineru).toHaveAttribute("aria-disabled", "true");
-      await expect(mineru).toContainText("準備中（ロードマップ）のため、まだ選べません。");
-      const roadmap = page.getByRole("option", { name: /OCI Document Understanding/ });
-      await expect(roadmap).toHaveAttribute("aria-disabled", "true");
-      await expect(roadmap).toContainText("準備中（ロードマップ）のため、まだ選べません。");
-      await expect(page.getByRole("option", { name: "Docling", exact: true })).not.toHaveAttribute(
-        "aria-disabled",
-        "true"
-      );
-      await expectNoPageOverflow(page);
-      await page.screenshot({
-        path: testInfo.outputPath(`recipe-parser-roadmap-${viewport.name}.png`),
-        fullPage: false,
-      });
-      // 押しても選ばれず、一覧は開いたまま（値は変わらない）。
-      const before = await combobox.getAttribute("data-value");
-      // aria-disabled の選択肢は Playwright が押せないものとして待つため、押す操作を強制して確かめる。
-      await roadmap.click({ force: true });
-      await expect(page.getByRole("listbox")).toBeVisible();
-      await expect(combobox).toHaveAttribute("data-value", before ?? "");
-      // キーボードでも選べない: 強調して Enter を押しても値は変わらない。
-      await roadmap.hover({ force: true });
-      await page.keyboard.press("Enter");
-      await expect(combobox).toHaveAttribute("data-value", before ?? "");
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("listbox")).toHaveCount(0);
-    }
-  );
-}
 
 for (const viewport of [
   { name: "desktop", width: 1280, height: 760 },
@@ -882,7 +806,7 @@ for (const viewport of [
       await panel.getByRole("button", { name: "処理設定を編集" }).click();
       await panel.getByRole("group", { name: "文書解析" }).getByText("上書き").click();
       await panel.getByRole("combobox", { name: "文書解析" }).click();
-      await page.getByRole("option", { name: "Dots.OCR" }).click();
+      await page.getByRole("option", { name: "Unstructured" }).click();
       await panel.getByRole("button", { name: "構築設定を保存" }).click();
       await expect(page.getByText(/この文書の処理設定を保存しました/)).toBeVisible();
       await expect(panel.getByText(conflict)).toHaveCount(0);
@@ -1030,135 +954,119 @@ test("派生レイヤー状態チップ・項目の定義が 0 件の警告・�
   await expectNoPageOverflow(page);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`項目抽出を有効にすると、標準の項目で抽出することを案内する (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    // #556: 全体の既定を保存していない環境は標準の項目で動くため、警告ではなく案内を出す。
-    await setTheme(page, theme);
-    await mockWorkspace(page);
-    await page.route("**/api/settings/extraction-fields", (route) =>
-      route.fulfill({
-        json: ok({
-          fields: [
-            { name: "文書の種類", description: "", value_type: "string" },
-            { name: "文書タイトル", description: "", value_type: "string" },
-            { name: "発行日・作成日", description: "", value_type: "date" },
-            { name: "発行元・作成部署", description: "", value_type: "string" },
-          ],
-          uses_standard: true,
-        }),
-      })
-    );
+test(`項目抽出を有効にすると、標準の項目で抽出することを案内する`, async ({
+  page,
+}, testInfo) => {
+  // #556: 全体の既定を保存していない環境は標準の項目で動くため、警告ではなく案内を出す。
+  await mockWorkspace(page);
+  await page.route("**/api/settings/extraction-fields", (route) =>
+    route.fulfill({
+      json: ok({
+        fields: [
+          { name: "文書の種類", description: "", value_type: "string" },
+          { name: "文書タイトル", description: "", value_type: "string" },
+          { name: "発行日・作成日", description: "", value_type: "date" },
+          { name: "発行元・作成部署", description: "", value_type: "string" },
+        ],
+        uses_standard: true,
+      }),
+    })
+  );
 
-    await page.goto("/documents/doc-1");
+  await page.goto("/documents/doc-1");
 
-    const panel = page.getByRole("region", { name: "処理レシピ", exact: true });
-    await panel.getByRole("button", { name: "処理設定を編集" }).click();
-    const fieldGroup = panel.getByText("メタデータ/項目抽出", { exact: true }).locator("../..");
-    await fieldGroup.getByText("上書き", { exact: true }).click();
-    await fieldGroup.getByText("有効", { exact: true }).click();
-    // 編集欄の行（要約の一覧にも同じ data-config-field の行があるため、最後の 1 つ）。
-    const fieldRow = panel.locator('[data-config-field="field_extraction_enabled"]').last();
-    await expect(fieldRow).toContainText(
-      "標準の項目（文書の種類・文書タイトル・発行日・作成日・発行元・作成部署）を抽出します。"
-    );
-    await expect(panel).not.toContainText("0 件で保存されているため");
-    await expect(panel).not.toContainText("未設定のため");
-    if (process.env.RAG_E2E_SCREENSHOT_DIR) {
-      await fieldRow.screenshot({
-        path: `${process.env.RAG_E2E_SCREENSHOT_DIR}/recipe-field-standard-${testInfo.project.name}-${theme}.png`,
-      });
-    }
-    await expectNoPageOverflow(page);
-  });
-}
+  const panel = page.getByRole("region", { name: "処理レシピ", exact: true });
+  await panel.getByRole("button", { name: "処理設定を編集" }).click();
+  const fieldGroup = panel.getByText("メタデータ/項目抽出", { exact: true }).locator("../..");
+  await fieldGroup.getByText("上書き", { exact: true }).click();
+  await fieldGroup.getByText("有効", { exact: true }).click();
+  // 編集欄の行（要約の一覧にも同じ data-config-field の行があるため、最後の 1 つ）。
+  const fieldRow = panel.locator('[data-config-field="field_extraction_enabled"]').last();
+  await expect(fieldRow).toContainText(
+    "標準の項目（文書の種類・文書タイトル・発行日・作成日・発行元・作成部署）を抽出します。"
+  );
+  await expect(panel).not.toContainText("0 件で保存されているため");
+  await expect(panel).not.toContainText("未設定のため");
+  if (process.env.RAG_E2E_SCREENSHOT_DIR) {
+    await fieldRow.screenshot({
+      path: `${process.env.RAG_E2E_SCREENSHOT_DIR}/recipe-field-standard-${testInfo.project.name}.png`,
+    });
+  }
+  await expectNoPageOverflow(page);
+});
 
-async function setTheme(page: Page, theme: "light" | "dark") {
-  // 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れておく。
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
-}
-
-for (const theme of ["light", "dark"] as const) {
-  test(`作成後に項目の定義が変わったレイヤーに作り直しの印と再処理の案内を出す (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    await setTheme(page, theme);
-    await mockWorkspace(page);
-    // 後着 route が優先される。項目抽出だけが作り直しが必要（#550）。
-    await page.route("**/api/documents/doc-1/chunk-sets", (route) =>
-      route.fulfill({
-        json: ok([
-          {
-            chunk_set_id: "chunk-set-recipe-1",
-            extraction_recipe_id: "er-recipe-1-r1",
-            extraction_status: "materialized",
-            extraction_reason: null,
-            status: "INDEXED",
-            chunk_count: 2,
-            vector_count: 2,
-            is_serving: true,
-            created_at: "2026-06-15T00:00:10Z",
-            extraction_id: "ex-1",
-            parser: "docling",
-            preprocess: "office_to_pdf",
-            knowledge_base_ids: ["kb-1"],
-            serving_knowledge_base_ids: ["kb-1"],
-            layer_statuses: {
-              metadata: {
-                layer_id: "md-1",
-                requested: true,
-                status: "materialized",
-                reason: "項目抽出は保存済み抽出 artifact から実体化済みです。",
-                rebuild_required: true,
-                rebuild_inputs: ["field_schema_hash"],
-              },
-              graph: { layer_id: null, requested: false, status: "not_requested", reason: null },
-              navigation: {
-                layer_id: "nv-1",
-                requested: true,
-                status: "materialized",
-                reason: null,
-                rebuild_required: false,
-                rebuild_inputs: [],
-              },
+test(`作成後に項目の定義が変わったレイヤーに作り直しの印と再処理の案内を出す`, async ({
+  page,
+}, testInfo) => {
+  await mockWorkspace(page);
+  // 後着 route が優先される。項目抽出だけが作り直しが必要（#550）。
+  await page.route("**/api/documents/doc-1/chunk-sets", (route) =>
+    route.fulfill({
+      json: ok([
+        {
+          chunk_set_id: "chunk-set-recipe-1",
+          extraction_recipe_id: "er-recipe-1-r1",
+          extraction_status: "materialized",
+          extraction_reason: null,
+          status: "INDEXED",
+          chunk_count: 2,
+          vector_count: 2,
+          is_serving: true,
+          created_at: "2026-06-15T00:00:10Z",
+          extraction_id: "ex-1",
+          parser: "docling",
+          preprocess: "office_to_pdf",
+          knowledge_base_ids: ["kb-1"],
+          serving_knowledge_base_ids: ["kb-1"],
+          layer_statuses: {
+            metadata: {
+              layer_id: "md-1",
+              requested: true,
+              status: "materialized",
+              reason: "項目抽出は保存済み抽出 artifact から実体化済みです。",
+              rebuild_required: true,
+              rebuild_inputs: ["field_schema_hash"],
+            },
+            graph: { layer_id: null, requested: false, status: "not_requested", reason: null },
+            navigation: {
+              layer_id: "nv-1",
+              requested: true,
+              status: "materialized",
+              reason: null,
+              rebuild_required: false,
+              rebuild_inputs: [],
             },
           },
-        ]),
-      })
-    );
+        },
+      ]),
+    })
+  );
 
-    await page.goto("/documents/doc-1");
+  await page.goto("/documents/doc-1");
 
-    const layerChips = page.getByTestId("recipe-layer-statuses");
-    const metadata = layerChips.getByTestId("recipe-layer-metadata");
-    // 状態（構築済み）は変えず、別の印として「作り直しが必要」をアイコンと文言で出す。
-    await expect(metadata).toContainText("構築済み");
-    await expect(metadata).toContainText("作り直しが必要");
-    await expect(metadata).toHaveAttribute("data-rebuild-required", "true");
-    await expect(metadata.locator("svg")).toHaveCount(1);
-    await expect(metadata).toHaveAttribute("title", /項目の定義が変わりました/);
-    const navigation = layerChips.getByTestId("recipe-layer-navigation");
-    await expect(navigation).not.toContainText("作り直しが必要");
-    await expect(navigation).not.toHaveAttribute("data-rebuild-required", "true");
+  const layerChips = page.getByTestId("recipe-layer-statuses");
+  const metadata = layerChips.getByTestId("recipe-layer-metadata");
+  // 状態（構築済み）は変えず、別の印として「作り直しが必要」をアイコンと文言で出す。
+  await expect(metadata).toContainText("構築済み");
+  await expect(metadata).toContainText("作り直しが必要");
+  await expect(metadata).toHaveAttribute("data-rebuild-required", "true");
+  await expect(metadata.locator("svg")).toHaveCount(1);
+  await expect(metadata).toHaveAttribute("title", /項目の定義が変わりました/);
+  const navigation = layerChips.getByTestId("recipe-layer-navigation");
+  await expect(navigation).not.toContainText("作り直しが必要");
+  await expect(navigation).not.toHaveAttribute("data-rebuild-required", "true");
 
-    // 自動では作り直さず、既存の「再処理」の導線を案内する（画面幅に関係なく読める文言）。
-    await expect(page.getByTestId("recipe-layer-rebuild")).toContainText(
-      "項目抽出は、作成後に項目の定義が変わりました。レシピの再処理で作り直すまで"
-    );
-    await expect(page.getByRole("button", { name: "再処理" }).first()).toBeVisible();
-    await expectNoPageOverflow(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`layer-rebuild-${theme}.png`),
-      fullPage: true,
-    });
+  // 自動では作り直さず、既存の「再処理」の導線を案内する（画面幅に関係なく読める文言）。
+  await expect(page.getByTestId("recipe-layer-rebuild")).toContainText(
+    "項目抽出は、作成後に項目の定義が変わりました。レシピの再処理で作り直すまで"
+  );
+  await expect(page.getByRole("button", { name: "再処理" }).first()).toBeVisible();
+  await expectNoPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath("layer-rebuild.png"),
+    fullPage: true,
   });
-}
+});
 
 test("処理途中の文書は設定を編集できない", async ({ page }) => {
   await mockWorkspace(page, { documentStatus: "REVIEW" });

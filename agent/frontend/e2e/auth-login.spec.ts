@@ -65,7 +65,7 @@ for (const viewport of VIEWPORTS) {
       await expect(page).toHaveURL(/\/login$/);
       await expect(page.getByRole("heading", { name: "システムにログイン" })).toBeVisible();
       // wordmark は Agent。ログイン画面は AppShell の外（サイドナビなし）。
-      await expect(page.getByText("Production Ready", { exact: true })).toBeVisible();
+      await expect(page.getByText("Private", { exact: true })).toBeVisible();
       await expect(page.getByText("Agent", { exact: true })).toBeVisible();
       await expect(sidebar(page)).toHaveCount(0);
       await expectNoPageOverflow(page);
@@ -139,7 +139,7 @@ for (const viewport of VIEWPORTS) {
       mockApi,
     }) => {
       mockApi.setCurrentUser(null);
-      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3042" }]);
+      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3142" }]);
 
       await page.goto("/login");
       await page.getByLabel("ログインユーザーID").fill("first.user");
@@ -199,7 +199,7 @@ for (const viewport of VIEWPORTS) {
       mockApi,
     }) => {
       mockApi.setCurrentUser(ADMIN_USER);
-      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3042" }]);
+      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3142" }]);
 
       await page.goto("/runs");
       await expandSidebarOnMobile(page);
@@ -239,7 +239,7 @@ for (const viewport of VIEWPORTS) {
 
     test("アカウント欄のログアウト（CSRF header 付き）", async ({ page, context, baseURL, mockApi }) => {
       mockApi.setCurrentUser(ADMIN_USER);
-      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3042" }]);
+      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3142" }]);
 
       await page.goto("/runs");
       await expandSidebarOnMobile(page);

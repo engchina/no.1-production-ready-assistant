@@ -5,22 +5,18 @@ import {
   citationCountLabel,
   citationMetadataChips,
   citationModelUsed,
-  citationSourceUrl,
 } from "./chunk-metadata";
 
 const sourceChips = (metadata: Parameters<typeof citationMetadataChips>[0]) => citationMetadataChips(metadata).filter(chip => chip.id !== "context_header_enabled");
 
 describe("citationMetadataChips", () => {
-  it("XML ツリー JSON の段落の引用ラベルを先頭の chip にする（issue 2024）", () => {
+  it("取込済みの文書に残った XML ツリー JSON の引用ラベルは chip にしない（issue 42）", () => {
     expect(
       sourceChips({
         xml_tree_citation_label_arabic: "サンプル規程 第7条第1項",
         section_path: "サンプル規程 > 第七条（対象の範囲）",
       })
-    ).toEqual([
-      { id: "citation_label", value: "サンプル規程 第7条第1項" },
-      { id: "section_path", value: "サンプル規程 > 第七条（対象の範囲）" },
-    ]);
+    ).toEqual([{ id: "section_path", value: "サンプル規程 > 第七条（対象の範囲）" }]);
   });
 
   it("ページ範囲と構造 metadata を chip 化する", () => {
@@ -127,16 +123,6 @@ describe("citationCountLabel", () => {
   });
 });
 
-describe("citationSourceUrl", () => {
-  it("https の原典の URL だけを返す（issue 2024）", () => {
-    expect(citationSourceUrl({ xml_tree_source_url: "https://example.test/doc/1" })).toBe(
-      "https://example.test/doc/1"
-    );
-    expect(citationSourceUrl({ xml_tree_source_url: "javascript:alert(1)" })).toBeNull();
-    expect(citationSourceUrl({ xml_tree_source_url: "http://example.test/doc/1" })).toBeNull();
-    expect(citationSourceUrl({})).toBeNull();
-  });
-});
 
  it("文脈ヘッダの実値と有効・無効・未記録を区別する", () => {
     expect(citationMetadataChips({context_header: "文書 A > 上位 > 下位", context_header_enabled: true})).toEqual([

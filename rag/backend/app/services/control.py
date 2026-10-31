@@ -130,7 +130,8 @@ def unit_not_found_message(entry: ServiceCatalogEntry) -> str:
     """unit が登録されていないときの案内(操作・ログ共通)。"""
     return (
         f"{entry.service_id} の systemd の unit「{entry.systemd_unit}」が登録されていません。"
-        "本番は rag/init_script.sh(Terraform の stack で選んだサービスだけを登録します)、"
+        "本番は rag/init_script.sh(配備の props の rag_services.txt で選んだサービスだけを"
+        "登録します)、"
         "開発は rag/scripts/rag-services.sh install で登録してください(rag/docs/deployment.md)。"
     )
 

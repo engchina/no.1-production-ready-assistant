@@ -17,7 +17,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
-os.environ["AGENT_CORS_ORIGINS"] = '["http://localhost:3002"]'
+os.environ["AGENT_CORS_ORIGINS"] = '["http://localhost:3102"]'
 
 import anyio
 import httpx
@@ -27,12 +27,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from mcp_support import fake_product_mcp
 from pr_backend_core.oracle_session import SESSION_INIT_SQL
-from pr_system_settings import database as shared_database
 from pr_system_settings import oci as shared_oci
 from pr_system_settings import oci_connectivity
 from pr_system_settings.auth.domain import LOCAL_DEBUG_USER_UUID
 from pr_system_settings.model import ModelSettingsTestRequest
-from pr_system_settings.oci_database import AutonomousDatabaseInfo
 from pytest import MonkeyPatch
 
 import app.features.agent.router as agent_router
@@ -1266,50 +1264,6 @@ def test_database_save_preserves_uploaded_wallet_and_writes_env_like_rag(
     data = resp.json()["data"]
     assert data["wallet_dir"] == str(wallet_dir)
     assert data["wallet_uploaded"] is True
-
-
-def test_adb_settings_save_writes_dedicated_region_env(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    env_file = tmp_path / ".env"
-    settings = Settings(_env_file=None)
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
-
-    class FakeOciDatabaseClient:
-        """ADB は共有の OCI client で実際に呼ぶ（#108）。テストでは OCI を呼ばない。"""
-
-        def __init__(self, settings: object) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            return AutonomousDatabaseInfo(
-                id=adb_ocid,
-                display_name="agentdb",
-                lifecycle_state="AVAILABLE",
-                db_name="AGENTDB",
-                cpu_core_count=2,
-                data_storage_size_in_tbs=1.0,
-            )
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", FakeOciDatabaseClient)
-
-    resp = client.post(
-        "/api/settings/database/adb/settings",
-        json={"adb_ocid": "ocid1.autonomousdatabase.oc1..agent", "region": "ap-tokyo-1"},
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["id"] == "ocid1.autonomousdatabase.oc1..agent"
-    assert data["region"] == "ap-tokyo-1"
-    assert settings.oracle_adb_ocid == "ocid1.autonomousdatabase.oc1..agent"
-    assert settings.oracle_adb_region == "ap-tokyo-1"
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_ORACLE_ADB_OCID=ocid1.autonomousdatabase.oc1..agent" in env_text
-    assert "PLATFORM_ORACLE_ADB_REGION=ap-tokyo-1" in env_text
-    assert "PLATFORM_OCI_REGION=ap-tokyo-1" not in env_text
 
 
 def test_database_connection_test_uses_oracledb_like_rag(
@@ -3080,7 +3034,7 @@ def test_replay_run_creates_new_builtin_run_with_same_goal(monkeypatch: MonkeyPa
 
 
 def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) -> None:
-    """再実行は新しい Run。評価の dry-run・自動実行・MCP の印を引き継がない（#911）。"""
+    """再実行は新しい Run。評価の dry-run・MCP の印を引き継がない（#911）。"""
     monkeypatch.setattr(agent_router, "_schedule_builtin_run", lambda run: None)
     source = runtime_module.runtime_repository.create_builtin_run(
         RunCreateRequest(
@@ -3090,7 +3044,6 @@ def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) ->
                 "evaluation_job_id": "job-911",
                 "evaluation_case_id": "case-911",
                 runtime_module.EVALUATION_DRY_RUN_KEY: True,
-                "automation_id": "automation-911",
                 "source": "mcp",
             },
         ),
@@ -3106,7 +3059,6 @@ def test_replay_run_does_not_inherit_source_markers(monkeypatch: MonkeyPatch) ->
         "evaluation_job_id",
         "evaluation_case_id",
         runtime_module.EVALUATION_DRY_RUN_KEY,
-        "automation_id",
         "source",
     } & set(metadata)
     assert inherited == set()

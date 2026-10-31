@@ -41,23 +41,6 @@ function databaseSettingsFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function adbInfoFixture(overrides: Record<string, unknown> = {}) {
-  return {
-    status: "success",
-    message: "ADB OCID が設定されています。",
-    error_code: null,
-    id: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-    display_name: "nl2sqldb",
-    lifecycle_state: "AVAILABLE",
-    db_name: "NL2SQLDB",
-    cpu_core_count: 2,
-    data_storage_size_in_tbs: 1,
-    region: "ap-osaka-1",
-    ...overrides,
-  };
-}
-
-const WALLET_PENDING_MESSAGE = "OCI から Wallet を取得し、サーバーへ安全に設定しています…";
 
 /** モデル設定の payload のプライマリ接続（#533。接続は一覧で持つ）。 */
 function primaryConnection(enterprise: unknown): Record<string, unknown> {
@@ -233,8 +216,6 @@ async function mockNl2sqlSettingsApi(page: Page) {
     operation: null as "created" | "recreated" | null,
   };
 
-  const adbInfo = adbInfoFixture();
-
   await page.route("**/api/settings/oci", (route) => fulfillJson(route, ociSettings));
   await page.route("**/api/settings/oci/config/test", (route) =>
     fulfillJson(route, ociConfigTestFixture())
@@ -368,16 +349,6 @@ async function mockNl2sqlSettingsApi(page: Page) {
   await page.route("**/api/settings/database/wallet/download", (route) =>
     fulfillJson(route, { status: "already_configured", settings: databaseSettings })
   );
-  await page.route("**/api/settings/database/adb", (route) => fulfillJson(route, adbInfo));
-  await page.route("**/api/settings/database/adb/settings", (route) =>
-    fulfillJson(route, adbInfo)
-  );
-  await page.route("**/api/settings/database/adb/start", (route) =>
-    fulfillJson(route, adbInfo)
-  );
-  await page.route("**/api/settings/database/adb/stop", (route) =>
-    fulfillJson(route, adbInfo)
-  );
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -388,74 +359,6 @@ async function expectNoHorizontalOverflow(page: Page) {
       )
     )
     .toBeTruthy();
-}
-
-async function expectNoElementOverlap(items: Array<{ label: string; locator: Locator }>) {
-  const boxes = await Promise.all(
-    items.map(async (item) => ({ ...item, box: await item.locator.boundingBox() }))
-  );
-
-  for (const item of boxes) {
-    if (!item.box) {
-      throw new Error(`${item.label} の位置を取得できません。`);
-    }
-  }
-
-  for (let index = 0; index < boxes.length; index += 1) {
-    for (let compareIndex = index + 1; compareIndex < boxes.length; compareIndex += 1) {
-      const current = boxes[index];
-      const next = boxes[compareIndex];
-      const currentBox = current.box;
-      const nextBox = next.box;
-      if (!currentBox || !nextBox) continue;
-
-      const horizontalOverlap =
-        Math.min(currentBox.x + currentBox.width, nextBox.x + nextBox.width) -
-        Math.max(currentBox.x, nextBox.x);
-      const verticalOverlap =
-        Math.min(currentBox.y + currentBox.height, nextBox.y + nextBox.height) -
-        Math.max(currentBox.y, nextBox.y);
-
-      expect(
-        horizontalOverlap > 1 && verticalOverlap > 1,
-        `${current.label} と ${next.label} が重なっています。`
-      ).toBeFalsy();
-    }
-  }
-}
-
-async function expectAdbActionButtonsStableDuringOperation(
-  page: Page,
-  operation: "start" | "stop"
-) {
-  const adbCard = page.locator("#adb-management");
-  const saveButton = adbCard.getByRole("button", { name: "保存", exact: true });
-  // 共有 Button の loading はラベルを差し替えない（DS ルール: 「起動中…」「停止中…」にしない）。
-  // 操作中のボタンは同じラベルのまま先頭アイコンがスピナーになり aria-busy + disabled になる。
-  const startButton = adbCard.getByRole("button", { name: "起動", exact: true });
-  const stopButton = adbCard.getByRole("button", { name: "停止", exact: true });
-  const busyButton = operation === "start" ? startButton : stopButton;
-
-  await expect(busyButton).toHaveAttribute("aria-busy", "true");
-  await expect(busyButton).toBeDisabled();
-  await expect(busyButton.locator("svg.animate-spin")).toBeVisible();
-  await expect(saveButton).toBeDisabled();
-  await expect(adbCard.getByRole("button", { name: "保存中…", exact: true })).toHaveCount(0);
-  await expectNoAdbWalletPendingStatus(page);
-  await expectNoElementOverlap([
-    { label: "保存ボタン", locator: saveButton },
-    { label: "起動ボタン", locator: startButton },
-    { label: "停止ボタン", locator: stopButton },
-  ]);
-  await expectNoHorizontalOverflow(page);
-}
-
-async function expectNoAdbWalletPendingStatus(page: Page) {
-  await expect(
-    page.locator("#adb-management").getByRole("status").filter({
-      hasText: WALLET_PENDING_MESSAGE,
-    })
-  ).toHaveCount(0);
 }
 
 async function expectModelPreviewPanelsAbsent(page: Page) {
@@ -651,27 +554,13 @@ async function expectWalletAboveServiceDsn(page: Page) {
   expect(walletBox.y).toBeLessThan(serviceBox.y);
 }
 
-async function expectAdbManagementAboveDatabaseSettings(page: Page) {
-  const adbHeading = page
-    .locator("#adb-management")
-    .getByRole("heading", { name: "Autonomous Database 管理" });
-  const databaseHeading = page
-    .locator("form")
-    .getByRole("heading", { name: "データベース設定" });
-
-  await expect(adbHeading).toBeVisible();
-  await expect(databaseHeading).toBeVisible();
-
-  const [adbBox, databaseBox] = await Promise.all([
-    adbHeading.boundingBox(),
-    databaseHeading.boundingBox(),
-  ]);
-
-  if (!adbBox || !databaseBox) {
-    throw new Error("ADB 管理カード / データベース設定カードの位置を取得できません。");
-  }
-
-  expect(adbBox.y).toBeLessThan(databaseBox.y);
+async function expectNoAdbManagementPanel(page: Page) {
+  // DB の起動・停止・状態の取得は画面で扱わない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。
+  await expect(page.locator("form").getByRole("heading", { name: "データベース設定" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Autonomous Database 管理" })).toHaveCount(0);
+  await expect(page.locator("#adb-management")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "起動", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止", exact: true })).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -804,7 +693,7 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   await page.goto("/settings/database");
   await expect(page.getByRole("heading", { name: "データベース設定" }).first()).toBeVisible();
   await expect(page.getByLabel("データベースユーザー")).toBeVisible();
-  await expectAdbManagementAboveDatabaseSettings(page);
+  await expectNoAdbManagementPanel(page);
   await expectWalletAboveServiceDsn(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
   const databaseSavedSecretBadgeStyle = await getSavedSecretBadgeStyle(page, "oracle-password");
@@ -817,9 +706,6 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
     "success"
   );
   await expectNoOperationsMemoOrReadiness(page);
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByText("操作履歴")).toBeVisible();
-  await expect(page.getByText("ADB OCID が設定されています。")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -1273,7 +1159,7 @@ test("データベース設定は Wallet ZIP の下にサービス名を置き�
   await expect.poll(() => revealCount).toBe(0);
 
   await expectWalletAboveServiceDsn(page);
-  await expectAdbManagementAboveDatabaseSettings(page);
+  await expectNoAdbManagementPanel(page);
 
   const password = page.getByLabel("データベースパスワード");
   await expect(password).toHaveValue("");
@@ -1304,7 +1190,7 @@ test("データベース設定は Wallet ZIP の下にサービス名を置き�
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 375, height: 812 });
-  await expectAdbManagementAboveDatabaseSettings(page);
+  await expectNoAdbManagementPanel(page);
   await expectWalletAboveServiceDsn(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
   await expectNoHorizontalOverflow(page);
@@ -1479,7 +1365,7 @@ test("データベース設定は右側情報カラムを表示しない", { tag
   await page.goto("/settings/database");
 
   await expect(page.getByRole("heading", { name: "データベース設定" }).first()).toBeVisible();
-  await expectAdbManagementAboveDatabaseSettings(page);
+  await expectNoAdbManagementPanel(page);
   await expectWalletAboveServiceDsn(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
   await expectNoHorizontalOverflow(page);
@@ -2255,397 +2141,6 @@ test("有効な Wallet がある場合は OCI 自動取得を呼ばない", asyn
   ).toHaveCount(0);
 });
 
-test("ADB 起動中は保存ボタンを無効化して保存表示のままにする", { tag: "@responsive" }, async ({ page }) => {
-  const settingsGate = createRequestGate();
-  const startGate = createRequestGate();
-  let settingsCount = 0;
-  let startCount = 0;
-
-  await page.unroute("**/api/settings/database/adb");
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfillJson(route, adbInfoFixture({ lifecycle_state: "STOPPED" }))
-  );
-  await page.unroute("**/api/settings/database/adb/settings");
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    settingsCount += 1;
-    await settingsGate.promise;
-    await fulfillJson(route, adbInfoFixture({ lifecycle_state: "STOPPED" }));
-  });
-  await page.unroute("**/api/settings/database/adb/start");
-  await page.route("**/api/settings/database/adb/start", async (route) => {
-    startCount += 1;
-    await startGate.promise;
-    await fulfillJson(
-      route,
-      adbInfoFixture({
-        lifecycle_state: "STARTING",
-        message: "データベース 'NL2SQLDB' の起動を開始しました。",
-      })
-    );
-  });
-
-  await page.goto("/settings/database");
-  const adbCard = page.locator("#adb-management");
-  await adbCard.getByRole("button", { name: "起動", exact: true }).click();
-
-  await expect.poll(() => settingsCount).toBe(1);
-  await expectAdbActionButtonsStableDuringOperation(page, "start");
-
-  settingsGate.release();
-  await expect.poll(() => startCount).toBe(1);
-  await expectAdbActionButtonsStableDuringOperation(page, "start");
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expectAdbActionButtonsStableDuringOperation(page, "start");
-
-  startGate.release();
-  await expect(page.getByText("データベース 'NL2SQLDB' の起動を開始しました。")).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
-
-test("ADB 停止中は保存ボタンを無効化して保存表示のままにする", { tag: "@responsive" }, async ({ page }) => {
-  const settingsGate = createRequestGate();
-  const stopGate = createRequestGate();
-  let settingsCount = 0;
-  let stopCount = 0;
-
-  await page.unroute("**/api/settings/database/adb/settings");
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    settingsCount += 1;
-    await settingsGate.promise;
-    await fulfillJson(route, adbInfoFixture({ lifecycle_state: "AVAILABLE" }));
-  });
-  await page.unroute("**/api/settings/database/adb/stop");
-  await page.route("**/api/settings/database/adb/stop", async (route) => {
-    stopCount += 1;
-    await stopGate.promise;
-    await fulfillJson(
-      route,
-      adbInfoFixture({
-        lifecycle_state: "STOPPING",
-        message: "データベース 'NL2SQLDB' の停止を開始しました。",
-      })
-    );
-  });
-
-  await page.goto("/settings/database");
-  const adbCard = page.locator("#adb-management");
-  await adbCard.getByRole("button", { name: "停止", exact: true }).click();
-
-  await expect.poll(() => settingsCount).toBe(1);
-  await expectAdbActionButtonsStableDuringOperation(page, "stop");
-
-  settingsGate.release();
-  await expect.poll(() => stopCount).toBe(1);
-  await expectAdbActionButtonsStableDuringOperation(page, "stop");
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expectAdbActionButtonsStableDuringOperation(page, "stop");
-
-  stopGate.release();
-  await expect(page.getByText("データベース 'NL2SQLDB' の停止を開始しました。")).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
-
-test("ADB 情報の status=error は lifecycle がなくても表示する", async ({ page }) => {
-  const safeMessage =
-    "ADB 情報を取得できませんでした。OCI 認証、リージョン、ADB OCID を確認して再試行してください。";
-
-  await page.unroute("**/api/settings/database/adb");
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfillJson(
-      route,
-      adbInfoFixture({
-        status: "error",
-        message: safeMessage,
-        error_code: "ADB_INFO_UNAVAILABLE",
-        display_name: null,
-        lifecycle_state: null,
-        db_name: null,
-        cpu_core_count: null,
-        data_storage_size_in_tbs: null,
-      })
-    )
-  );
-
-  await page.goto("/settings/database");
-
-  const adbCard = page.locator("#adb-management");
-  const alert = adbCard.getByRole("alert").filter({ hasText: safeMessage });
-  await expect(alert).toBeVisible();
-  await expect(adbCard.getByText("raw-sdk-detail")).toHaveCount(0);
-  await expect(adbCard.getByText("OCI ADB")).toHaveCount(0);
-  await expectNoHorizontalOverflow(page);
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expect(alert).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
-
-test("ADB 情報の not_configured は lifecycle がなくても表示する", async ({ page }) => {
-  await page.unroute("**/api/settings/database");
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(route, databaseSettingsFixture({ adb_ocid: "" }))
-  );
-  await page.unroute("**/api/settings/database/adb");
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfillJson(
-      route,
-      adbInfoFixture({
-        status: "not_configured",
-        message: "ADB OCID が設定されていません。",
-        error_code: "ADB_NOT_CONFIGURED",
-        id: null,
-        display_name: null,
-        lifecycle_state: null,
-        db_name: null,
-        cpu_core_count: null,
-        data_storage_size_in_tbs: null,
-      })
-    )
-  );
-
-  await page.goto("/settings/database");
-
-  const adbCard = page.locator("#adb-management");
-  await expect(adbCard.getByRole("status")).toContainText("ADB OCID が設定されていません。");
-  await expectNoHorizontalOverflow(page);
-});
-
-test("ADB のリージョンは ap-tokyo-1 / ap-osaka-1 だけを候補に出す（#660）", async ({ page }) => {
-  await page.goto("/settings/database");
-
-  const adbCard = page.locator("#adb-management");
-  const region = adbCard.getByRole("combobox", { name: "リージョン", exact: true });
-  await expect(region).toContainText("ap-osaka-1");
-  await region.click();
-  const listbox = page.getByRole("listbox", { name: "リージョン", exact: true });
-  await expect(listbox.getByRole("option")).toHaveText(["ap-tokyo-1", "ap-osaka-1"]);
-  await page.keyboard.press("Escape");
-  await expect(listbox).toBeHidden();
-  await expect(adbCard.getByText("はサポートしていません")).toHaveCount(0);
-});
-
-test("ADB のリージョンの保存値が us-chicago-1 でも画面を出し、選び直しを案内する（#660）", async ({ page }) => {
-  await page.unroute("**/api/settings/database");
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(route, databaseSettingsFixture({ region: "us-chicago-1" }))
-  );
-
-  await page.goto("/settings/database");
-
-  const adbCard = page.locator("#adb-management");
-  const region = adbCard.getByRole("combobox", { name: "リージョン", exact: true });
-  const unsupported = adbCard.getByText(
-    "保存済みのリージョン us-chicago-1 はサポートしていません。ap-tokyo-1 または ap-osaka-1 を選んで保存してください。"
-  );
-  await expect(region).toContainText("us-chicago-1");
-  await expect(unsupported).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-
-  await region.click();
-  const listbox = page.getByRole("listbox", { name: "リージョン", exact: true });
-  await expect(listbox.getByRole("option")).toHaveText(["ap-tokyo-1", "ap-osaka-1"]);
-  await listbox.getByRole("option", { name: "ap-tokyo-1", exact: true }).click();
-  await expect(region).toContainText("ap-tokyo-1");
-  await expect(unsupported).toHaveCount(0);
-});
-
-test("ADB 情報の query error をカード内に表示する", async ({ page }) => {
-  const apiError =
-    "ADB 情報を取得できませんでした。OCI 認証、リージョン、ADB OCID を確認して再試行してください。";
-
-  await page.unroute("**/api/settings/database/adb");
-  await page.route("**/api/settings/database/adb", (route) =>
-    route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: null,
-        error_messages: [apiError],
-        warning_messages: [],
-        error_code: "ADB_INFO_UNAVAILABLE",
-        request_id: "req-adb-info",
-      }),
-    })
-  );
-
-  await page.goto("/settings/database");
-
-  const adbCard = page.locator("#adb-management");
-  const alert = adbCard.getByRole("alert").filter({ hasText: apiError });
-  await expect(alert).toBeVisible();
-  await expect(alert).toContainText("req-adb-info");
-  await expectNoHorizontalOverflow(page);
-});
-
-test("情報を再取得は ADB 情報更新後に Wallet 取得も実行し進行メッセージは出さない", async ({
-  page,
-}) => {
-  const walletGate = createRequestGate();
-  let adbRefreshCount = 0;
-  let walletDownloadCount = 0;
-
-  await page.unroute("**/api/settings/database/adb/settings");
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    adbRefreshCount += 1;
-    await fulfillJson(route, adbInfoFixture());
-  });
-  await page.unroute("**/api/settings/database/wallet/download");
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    walletDownloadCount += 1;
-    await walletGate.promise;
-    await fulfillJson(route, {
-      status: "downloaded",
-      settings: databaseSettingsFixture(),
-    });
-  });
-
-  await page.goto("/settings/database");
-  await expect.poll(() => walletDownloadCount).toBe(0);
-
-  const adbCard = page.locator("#adb-management");
-  const refreshButton = adbCard.getByRole("button", { name: "情報を再取得" });
-  await refreshButton.click();
-  await expect.poll(() => adbRefreshCount).toBe(1);
-  await expect.poll(() => walletDownloadCount).toBe(1);
-  await expectNoAdbWalletPendingStatus(page);
-  // スピナーは押した「情報を再取得」だけが出す。同じ保存と Wallet の取得を使う「保存」は無効にするだけ（#819）。
-  await expect(refreshButton).toHaveAttribute("aria-busy", "true");
-  const adbSaveButton = adbCard.getByRole("button", { name: "保存", exact: true });
-  await expect(adbSaveButton).toBeDisabled();
-  await expect(adbSaveButton).not.toHaveAttribute("aria-busy", /.*/);
-  await expect(adbCard.locator("svg.animate-spin:visible")).toHaveCount(1);
-
-  walletGate.release();
-
-  await expectNoAdbWalletPendingStatus(page);
-  await expect(page.getByText("ADB OCID が設定されています。")).toBeVisible();
-  await expect(page.getByText("設定済み", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Oracle Wallet を OCI から取得し、サーバーへ設定しました。")
-  ).toBeVisible();
-  await expect(
-    page.getByText("Oracle Wallet を OCI から取得し、サーバーへ設定しました。")
-  ).toHaveCount(1);
-  await expectNoHorizontalOverflow(page);
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expectNoAdbWalletPendingStatus(page);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("保存は ADB 情報更新後に Wallet 取得も実行し進行メッセージは出さない", async ({
-  page,
-}) => {
-  const walletGate = createRequestGate();
-  let adbRefreshCount = 0;
-  let walletDownloadCount = 0;
-
-  await page.unroute("**/api/settings/database/adb/settings");
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    adbRefreshCount += 1;
-    await fulfillJson(route, adbInfoFixture());
-  });
-  await page.unroute("**/api/settings/database/wallet/download");
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    walletDownloadCount += 1;
-    await walletGate.promise;
-    await fulfillJson(route, {
-      status: "downloaded",
-      settings: databaseSettingsFixture(),
-    });
-  });
-
-  await page.goto("/settings/database");
-  await expect.poll(() => walletDownloadCount).toBe(0);
-
-  const adbCard = page.locator("#adb-management");
-  await adbCard.getByRole("button", { name: "保存", exact: true }).click();
-  await expect.poll(() => adbRefreshCount).toBe(1);
-  await expect.poll(() => walletDownloadCount).toBe(1);
-  await expectNoAdbWalletPendingStatus(page);
-  await expectNoHorizontalOverflow(page);
-
-  walletGate.release();
-
-  await expectNoAdbWalletPendingStatus(page);
-  await expect(page.getByText("ADB OCID が設定されています。")).toBeVisible();
-  await expect(
-    page.getByText("Oracle Wallet を OCI から取得し、サーバーへ設定しました。")
-  ).toBeVisible();
-  await expect(
-    page.getByText("Oracle Wallet を OCI から取得し、サーバーへ設定しました。")
-  ).toHaveCount(1);
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expectNoAdbWalletPendingStatus(page);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("情報を再取得の Wallet 取得失敗は ADB 操作フィードバックとして表示する", async ({
-  page,
-}) => {
-  let adbRefreshCount = 0;
-  let walletDownloadCount = 0;
-  const walletError =
-    "Wallet 保存領域を使用できません。管理者に保存領域の書き込み権限を確認するよう依頼してから再試行してください。";
-
-  await page.unroute("**/api/settings/database/adb/settings");
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    adbRefreshCount += 1;
-    await fulfillJson(route, adbInfoFixture());
-  });
-  await page.unroute("**/api/settings/database/wallet/download");
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    walletDownloadCount += 1;
-    await route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      headers: { "X-Request-ID": "wallet-storage-unavailable-request" },
-      body: JSON.stringify({
-        data: null,
-        error_messages: [walletError],
-        warning_messages: [],
-        error_code: "WALLET_STORAGE_UNAVAILABLE",
-        problem: {
-          type: "urn:nl2sql:problem:wallet-storage-unavailable",
-          title: "サーバー内部でエラーが発生しました",
-          status: 500,
-          detail: walletError,
-          code: "WALLET_STORAGE_UNAVAILABLE",
-          request_id: "wallet-storage-unavailable-request",
-          retryable: true,
-          field_errors: [],
-        },
-      }),
-    });
-  });
-
-  await page.goto("/settings/database");
-  await page.getByRole("button", { name: "情報を再取得" }).click();
-
-  await expect.poll(() => adbRefreshCount).toBe(1);
-  await expect.poll(() => walletDownloadCount).toBe(1);
-  const adbAlert = page
-    .locator("#adb-management")
-    .getByRole("alert")
-    .filter({ hasText: /保存領域の書き込み権限を確認/ });
-  await expect(adbAlert).toBeVisible();
-  await expect(
-    page.getByRole("alert").filter({ hasText: /保存領域の書き込み権限を確認/ })
-  ).toHaveCount(1);
-  await expect(adbAlert).toContainText("リクエストID: wallet-storage-unavailable-request");
-  await expect(page.getByRole("button", { name: "OCI から Wallet を再取得" })).toHaveCount(
-    0
-  );
-  await expectNoHorizontalOverflow(page);
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expect(adbAlert).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
-
 test("ADB OCID がない場合は自動取得せず手動アップロードを案内する", async ({ page }) => {
   let downloadCount = 0;
   await page.route("**/api/settings/database", (route) =>
@@ -2727,7 +2222,7 @@ test("Select AI Credential を明示確認で作成し、成功状態だけを�
 });
 
 test("Select AI Credential のリージョンは短い選択の幅で、placeholder が欄に収まる（#1891）", { tag: "@responsive" }, async ({ page }) => {
-  // 2 つの幅 × ライト / ダークを 1 つの test で回る。
+  // 2 つの幅を 1 つの test で回る。
   test.setTimeout(90_000);
   await page.unroute("**/api/settings/database/select-ai-credential");
   await page.route("**/api/settings/database/select-ai-credential", (route) =>
@@ -2747,19 +2242,16 @@ test("Select AI Credential のリージョンは短い選択の幅で、placehol
   const widths = projectWidth < 640 ? [projectWidth] : [1280, 1920];
   for (const width of widths) {
     await page.setViewportSize({ width, height });
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      const where = `${width}px ${colorScheme}`;
-      await page.goto("/settings/select-ai-credential");
-      const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
-      await expect(region).toBeVisible();
-      expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
-      expect(await findClippedPlaceholders(page), where).toEqual([]);
-      if (width < 640) continue;
-      expect(await findFieldsOffWidthScale(page), where).toEqual([]);
-      // リージョンは短い選択（sm 12rem = 168px）。
-      expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
-    }
+    const where = `${width}px`;
+    await page.goto("/settings/select-ai-credential");
+    const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
+    await expect(region).toBeVisible();
+    expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
+    expect(await findClippedPlaceholders(page), where).toEqual([]);
+    if (width < 640) continue;
+    expect(await findFieldsOffWidthScale(page), where).toEqual([]);
+    // リージョンは短い選択（sm 12rem = 168px）。
+    expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
   }
 });
 
@@ -3006,20 +2498,23 @@ test("Select AI Credential API 失敗は固定 alert だけに表示し Toast �
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
 });
 
-test("外観設定でダーク/ライト/自動テーマを切り替えられる", async ({ page }) => {
+test("外観と証明書にテーマの選択は無く、配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
   await page.goto("/settings/appearance");
   await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+  await expect(page.getByText("HTTPS の接続に使う証明書を取得します。配色はライトの 1 種類で、切り替えはありません。")).toBeVisible();
+  await expect(page.getByTestId("appearance-theme-toggle")).toHaveCount(0);
+  for (const name of ["ライト", "ダーク", "自動（OS 設定）"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
   const html = page.locator("html");
-  // dev サーバでは getPropertyValue が "light-dark(a, b)" 文字列を返すため、変数の文字列ではなく
-  // 実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
-  // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / blue スケール由来。
+  // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
+  // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
   const hexToRgb = (hex: string) => {
     const value = Number.parseInt(hex.slice(1), 16);
     return `rgb(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255})`;
   };
-  // body { background: var(--color-canvas) }（旧 --background 相当）
-  const bgVar = () =>
-    page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  // body { background: var(--color-canvas) }
+  const bgVar = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const tokenVar = (name: string) =>
     page.evaluate((tokenName) => {
       const probe = document.createElement("div");
@@ -3029,80 +2524,19 @@ test("外観設定でダーク/ライト/自動テーマを切り替えられる
       probe.remove();
       return color;
     }, name);
-  const sidebarBgVar = () => tokenVar("--color-sidebar");
-
-  // 既定はライト。
-  await expect(html).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-
-  const toggle = page.getByTestId("appearance-theme-toggle");
-  await toggle.getByRole("button", { name: "ダーク" }).click();
-  await expect(html).toHaveClass(/dark/);
-  // 冷調 blue-gray の semantic token。純黒・大面積の純白は使わない。
-  // canvas = neutral-950 / sidebar = neutral-1000 / fg = neutral-100 / fg-muted = neutral-350 /
-  // border-control = neutral-650 / accent-emphasis = blue-600（いずれもダーク側の値）
-  await expect.poll(bgVar).toBe(hexToRgb("#101318"));
-  expect(await sidebarBgVar()).toBe(hexToRgb("#0b0e13"));
-  expect(await tokenVar("--color-fg")).toBe(hexToRgb("#f2f4f7"));
-  expect(await tokenVar("--color-fg-muted")).toBe(hexToRgb("#b2bac5"));
-  expect(await tokenVar("--color-border-control")).toBe(hexToRgb("#5d6878"));
-  expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#286abd"));
-  await expect(toggle.getByRole("button", { name: "ダーク" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toHaveCSS(
-    "color",
-    "rgb(242, 244, 247)"
-  );
-
-  // 再読込しても永続化される。
-  await page.reload();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-
-  // 自動テーマは実行中の OS 設定変更にも追従する。
-  await page.emulateMedia({ colorScheme: "dark" });
-  await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "自動（OS 設定）" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#101318"));
-  await page.emulateMedia({ colorScheme: "light" });
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-
-  await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "ライト" }).click();
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-});
-
-test("テーマ切替は transition で旧テーマの色から補間せず、一度で切り替える (#571)", async ({ page }) => {
-  await page.goto("/settings/appearance");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
-
-  for (const label of ["ダーク", "ライト"]) {
-    // クリックと同じタスク内で次のフレームまで待ち、実行中の CSS transition を集める。
-    // 押したトグル自身の aria-pressed の変化は操作へのフィードバックなので対象外にする。
-    const running = await page.evaluate(async (name) => {
-      const group = document.querySelector('[data-testid="appearance-theme-toggle"]')!;
-      const button = Array.from(group.querySelectorAll("button")).find((node) => node.textContent?.trim() === name)!;
-      button.click();
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      return document
-        .getAnimations()
-        .filter((animation): animation is CSSTransition => animation instanceof CSSTransition)
-        .filter((animation) => {
-          const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
-          return !(target instanceof Node && group.contains(target));
-        })
-        .map((animation) => {
-          const target = (animation.effect as KeyframeEffect).target as Element;
-          return `${target.tagName.toLowerCase()}.${String(target.className).slice(0, 40)} ${animation.transitionProperty}`;
-        });
-    }, label);
-    expect(running, `${label} へ切り替えた直後の transition`).toEqual([]);
+  // OS が dark でも、html は class・data-theme を持たず color-scheme: light のまま。
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+    await expect(html).toHaveCSS("color-scheme", "light");
+    await expect(html).not.toHaveAttribute("data-theme");
+    expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
+    await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
+    // canvas = neutral-50 / accent-emphasis = teal-500 / sidebar = teal-850
+    expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#0d7469"));
+    expect(await tokenVar("--color-sidebar")).toBe(hexToRgb("#0f2c2a"));
   }
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-
-  // 切替後は通常どおり transition が効く（止めたままにしない）。
-  await expect
-    .poll(() => page.locator('aside a[aria-current="page"]').evaluate((node) => getComputedStyle(node).transitionDuration))
-    .not.toBe("0s");
 });
 
 test("OCI 初期取得失敗は編集を許可せず、再試行後の遅延保存中も入力と重複操作を防ぐ", async ({ page }) => {
@@ -3420,6 +2854,10 @@ test("未保存の変更があるときはブラウザの戻る操作でも破�
 });
 
 test("レビュー補完: システム設定6画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
+  // 外観と証明書はテーマの選択が無い（#17）ので、CA の証明書を配る状態にしてダウンロードのリンクへフォーカスする。
+  await page.route("**/platform/ca.crt", (route) =>
+    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
+  );
   for (const slug of ["oci", "upload-storage", "model", "database", "system-tables", "appearance"]) {
     await page.goto(`/settings/${slug}`);
     await expect(page.locator("main")).toBeVisible();
@@ -3428,7 +2866,7 @@ test("レビュー補完: システム設定6画面の表示とキーボード�
       : slug === "model" ? page.locator("#enterprise-endpoint")
       : slug === "database" ? page.locator("#oracle-user")
       : slug === "system-tables" ? page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" })
-      : page.getByRole("button", { name: "ライト", exact: true });
+      : page.getByRole("link", { name: "CA の証明書をダウンロード" });
     await expect(ready).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await ready.focus();
@@ -3445,37 +2883,33 @@ test.afterEach(async ({ page }, testInfo) => {
 
 // HTTPS の証明書（#1316）: 1 台の Compute の Nginx が /platform/ca.crt で CA の証明書を配る。製品は /<製品>/ の下でも
 // サイトの root の /platform/ca.crt を見る。ローカルの開発（Vite）は配っていないので説明だけを出す。
-for (const theme of ["ライト", "ダーク"] as const) {
-  test(`外観と証明書の HTTPS の証明書（${theme}）`, async ({ page }) => {
-    await page.goto("/settings/appearance");
-    await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: theme }).click();
-    await expect(page.locator("html")).toHaveClass(theme === "ダーク" ? /dark/ : /^(?!.*\bdark\b).*$/);
+test("外観と証明書の HTTPS の証明書", async ({ page }) => {
+  await page.goto("/settings/appearance");
 
-    const card = page.getByTestId("appearance-ca-certificate");
-    await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
-    await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
-    await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
+  const card = page.getByTestId("appearance-ca-certificate");
+  await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
+  await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
+  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
 
-    await page.route("**/platform/ca.crt", (route) =>
-      route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-    );
-    await page.reload();
-    await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
-    await card.getByText("端末への取り込み方").click();
-    // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
-    await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
-      "Windows（Edge・Chrome）",
-      "macOS（Safari・Chrome・Edge）",
-      "iPhone / iPad（すべてのブラウザ）",
-      "Android（Chrome）",
-      "Edge",
-      "Chrome",
-      "Firefox",
-    ]);
-    await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
-  });
-}
+  await page.route("**/platform/ca.crt", (route) =>
+    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
+  );
+  await page.reload();
+  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
+  await card.getByText("端末への取り込み方").click();
+  // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
+  await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
+    "Windows（Edge・Chrome）",
+    "macOS（Safari・Chrome・Edge）",
+    "iPhone / iPad（すべてのブラウザ）",
+    "Android（Chrome）",
+    "Edge",
+    "Chrome",
+    "Firefox",
+  ]);
+  await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

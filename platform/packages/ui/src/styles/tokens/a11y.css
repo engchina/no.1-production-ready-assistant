@@ -15,7 +15,7 @@
 
 /* セレクタが :root だけでないのは colors.css と同じ理由（スコープ内で宣言し直すトークンに負けないため）。 */
 @media (forced-colors: active) {
-  :root, [data-theme], [data-surface], [data-surface-tint] {
+  :root, [data-surface], [data-surface-tint] {
     --color-canvas:  Canvas;
     --color-surface: Canvas;
     --color-surface-raised:  Canvas;
@@ -48,7 +48,7 @@
   }
   /* 状態色は強制カラーモードでは表現できません。語とアイコンが意味を運びます
      （だから StatusBadge / Banner / Toast はアイコンを必須にしてあります）。 */
-  :root, [data-theme], [data-surface], [data-surface-tint] {
+  :root, [data-surface], [data-surface-tint] {
     --color-success-fg: CanvasText; --color-success-emphasis: Canvas; --color-success-subtle: Canvas; --color-success-border: CanvasText;
     --color-warning-fg: CanvasText; --color-warning-emphasis: Canvas; --color-warning-subtle: Canvas; --color-warning-border: CanvasText;
     --color-danger-fg:  CanvasText; --color-danger-emphasis:  Canvas; --color-danger-subtle:  Canvas; --color-danger-border:  CanvasText;
@@ -63,15 +63,15 @@
 @media (prefers-contrast: more) {
   /* [data-surface] は含めない: 暗い面は自前の罫線（白の透過）を持つ。
      [data-surface-tint] は含める: 淡い色の面が文字を 1 段深くした値（colors.css）を、ここでさらに強める。 */
-  :root, [data-theme], [data-surface-tint] {
+  :root, [data-surface-tint] {
     --color-fg-muted:       light-dark(var(--neutral-700), var(--neutral-100));
     --color-fg-subtle:      light-dark(var(--neutral-600), var(--neutral-350));
     --color-fg-disabled:    light-dark(var(--neutral-600), var(--neutral-400));
     --color-border:         light-dark(var(--neutral-400), var(--neutral-600));
     --color-border-strong:  light-dark(var(--neutral-600), var(--neutral-400));
     --color-border-control: light-dark(var(--neutral-700), var(--neutral-350));
-    --color-accent-fg:      light-dark(var(--blue-650), var(--blue-300));
-    --color-focus-ring:     light-dark(var(--blue-650), var(--blue-300));
+    --color-accent-fg:      light-dark(var(--teal-650), var(--teal-300));
+    --color-focus-ring:     light-dark(var(--teal-650), var(--teal-300));
   }
   :focus-visible { outline-width: 3px; }
 }

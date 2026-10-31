@@ -13,7 +13,7 @@
 | モデル | `/settings/model` | 接続（プライマリ / セカンダリ / ターシャリ）、登録モデル（種類: テキスト / 埋め込み / 再ランク）、既定のモデル、接続テスト、テンプレート検証 |
 | データベース | `/settings/database` | Oracle 接続設定、wallet upload / 自動取得、ADB start / stop、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
-| 外観と証明書 | `/settings/appearance` | light / dark / system theme 切替、localStorage 永続化 |
+| 外観と証明書 | `/settings/appearance` | HTTPS の CA 証明書の取得。テーマの選択は無い（配色はライトだけ。#17） |
 
 テストデータ配置先:
 
@@ -119,15 +119,11 @@
 - `POST /api/settings/database/test`
 - `POST /api/settings/database/wallet`
 - `POST /api/settings/database/wallet/download`
-- `GET /api/settings/database/adb`
-- `POST /api/settings/database/adb/settings`
-- `POST /api/settings/database/adb/start`
-- `POST /api/settings/database/adb/stop`
 - `GET /api/schema/owners`
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、wallet_dir、wallet 状態、接続状態、ADB 情報が表示される | `mock-responses/database-settings.success.json`、`mock-responses/adb-available.json` |
+| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、wallet_dir、wallet 状態、接続状態が表示され、ADB の起動・停止・状態は表示されない（#10） | `mock-responses/database-settings.success.json` |
 | DB-002 | 必須入力 | user / dsn を空にして保存 | 保存されず必須エラーが表示される | `api/database-settings.patch.json` |
 | DB-003 | password 保存 | password を入力して保存 | password 本文は応答に出ず、has_password が true になる | `api/database-settings.patch.json` |
 | DB-004 | password clear | clear_password を有効にして保存 | 保存後 has_password が false になる | `api/database-settings-clear-password.patch.json` |
@@ -135,12 +131,9 @@
 | DB-006 | wallet upload 成功 | ZIP wallet を選択する | wallet_dir / wallet_uploaded / service list が更新される | `database/wallet-valid.zip` |
 | DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
 | DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
-| DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `api/adb-settings.request.json` |
+| DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `mock-responses/database-settings.success.json` |
 | DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1536, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
-| DB-012 | ADB 情報更新 | ADB 情報を再取得する | lifecycle_state、display_name、region、ocid のマスク表示が更新される | `mock-responses/adb-available.json` |
-| DB-013 | ADB start | stopped 状態で start を実行 | start 中はボタン disabled、完了後 available 表示へ変わる | `mock-responses/adb-stopped.json` |
-| DB-014 | ADB stop | available 状態で stop を実行 | 確認後に stop API が呼ばれ、状態更新が行われる | `mock-responses/adb-available.json` |
 
 ## 8. システムテーブル
 
@@ -164,15 +157,13 @@
 
 ## 9. 外観と証明書
 
-外観と証明書の画面の配色テーマは backend API を呼ばず、`localStorage` の `production-ready-nl2sql.ui` に保存される。
+配色はライトの 1 種類だけで、テーマの選択は無い（#17）。共有 UI の CSS は `html` を常に `color-scheme: light` にし、class・属性・OS の配色設定に反応しない。サイドバーの暗いスラブ（`[data-surface="inverted"]`）とコードの面（`[data-surface="code"]`）はテーマではなく、常に暗い面である。
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| APP-001 | 初期表示 | 外観と証明書のページを開く | ライト / ダーク / システムの toggle が表示され、既定はライト | `appearance/theme-light.localstorage.json` |
-| APP-002 | ダーク切替 | ダークを選択し reload | `html.dark` 相当のテーマが適用され、localStorage に `theme: "dark"` が残る | `appearance/theme-dark.localstorage.json` |
-| APP-003 | システム切替 | system を選択し OS preference を mock | prefers-color-scheme に応じて light/dark が適用される | `appearance/theme-system.localstorage.json` |
-| APP-004 | API 非依存 | Network tab を監視しながら切替 | theme 切替で settings API が呼ばれない | - |
-| APP-005 | サイドバー状態との共存 | sidebarCollapsed / collapsedSections を含む保存値で開く | theme と sidebar 状態が同じ storage key 内で維持される | `appearance/theme-system.localstorage.json` |
+| APP-001 | 初期表示 | 外観と証明書のページを開く | HTTPS の証明書のカードだけを表示する。テーマの選択（`appearance-theme-toggle`、「ライト」「ダーク」「自動（OS 設定）」）は無く、`html` の `color-scheme` は `light` | - |
+| APP-002 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
+| APP-003 | 旧い保存値の読み捨て | 旧い `theme` を含む保存値（`production-ready-nl2sql.ui`）で開く | 配色はライトのまま。sidebarCollapsed / collapsedSections は維持し、`theme` は読み捨てる | `appearance/legacy-theme.localstorage.json` |
 
 ## 10. 推奨 Playwright fixture 利用例
 

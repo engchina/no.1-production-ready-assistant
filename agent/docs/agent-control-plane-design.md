@@ -85,7 +85,7 @@ v1 として公開する。
 業務 Agent の `skill_policy`（版の項目）は `pinned`（既定。公開の版に固定）か `latest`（公開中の版でも今のスキルで動き、
 更新の印を出さない。開発・検証用）。画面は業務 Agent の一覧の「スキルの更新があります（N 件）」と確かめて選んで再公開する
 side sheet、詳細の差分・「スキルの更新だけを公開」・品質評価への導線（`/evaluation?agent=<id>`）。
-利用者の Run を作る入口（チャットの選択肢・自動実行の作成と実行）は、
+利用者の Run を作る入口（チャットの選択肢）は、
 公開した版の無い Agent を出さず・選ばせない（`runtime.agent_unavailable_reason`。#792）。品質評価は下書きでも評価できる。
 品質評価（#810）は評価の開始で「公開中の版」か「下書き」を選ぶ（`EvaluationRequest.agent_version`。省略時は公開して
 いない変更があれば下書き、なければ公開中の版。公開した版が無ければ下書きだけ）。job は `agent_version`（版の番号か
@@ -171,7 +171,7 @@ Skill は AgentSkills 互換の指示本体であり、次の内部依存を持�
   テーブルの migration `20261014_013_rename_builtin_skill_ids` が新しい ID にする（読み込みで読み替えるコードは持たない）。
 - 手順の形は作業に合わせる: `business-rag-research` は順番が意味を持つ多段の質問なので一直線の手順の Step
   （各 Step に呼ぶツールと「→ Step N」の行き先）、`rag-and-structured-data` は順序を決めない判断のループ（足りないものを
-  判断 → ツールを呼ぶ → 結果を確かめて戻る）の Step、`structured-data-query`・`article-catalog-lookup` は短い番号付きの
+  判断 → ツールを呼ぶ → 結果を確かめて戻る）の Step、`structured-data-query` は短い番号付きの
   手順を 1 つの Step に置き、`status` ごとの対応を `結果ごとの対応` の Step に置く。
 - `business-rag-research` は、元の指示の順（根拠を集める段の決まり → 多段の手順 → 検索の前の確認）を保ち、
   `rag_search` を独立の Step の見出しにしない。実モデル（`openai.gpt-oss-120b`）の比較で、`rag_search` の Step を
@@ -248,13 +248,11 @@ Agent はプラグインを持たず、スキルだけを持つ（#1798 でマ�
   を Run の metadata（`_builtin_sdk_state`）に保存して `waiting_approval` にする。すべて決まると `queued` に戻り、
   状態を復元して承認・却下を反映し再開する。承認済みのツールは中断時の step を実行中にして結果を記録する。
   無人の Run は承認待ちにしない（`_unattended_approvals`）: 品質評価の Run（`evaluation_dry_run`。#776）は承認が要る
-  ツールを実行せずに dry-run の step を残し、自動実行の Run（`metadata.automation_id`。スケジュールも今すぐ実行も。#1813）は
+  ツールを実行せずに dry-run の step を残し、外部の MCP クライアントの Run（`metadata.source=mcp`。#1874）は
   承認が要るツールを呼ばない（無人の実行は事前に許可したツールだけを使う）。どちらも SDK の却下（`rejection_message`）で
-  モデルへ理由を返して回答まで続ける。自動実行では「自動実行では承認の要るツール（名前）を使えません。管理者がツールの
-  ポリシーで許可すると使えます。」を返し、取り消しの step（`error_code=automation.approval_required`、監査ログに出る）と
-  Run の経過のイベント（warning）を残す。自動実行の編集画面は `GET /api/automations/agents/{agent_id}/approval-tools`
-  （公開中の版のスキルのツールを Run と同じ `ToolPolicy.decide` で判定）で使えないツールを警告する。
-  `_` で始まる key と Control Plane の予約の key（`RESERVED_RUN_METADATA_KEYS`。評価・自動実行・MCP・再実行の印）は、
+  モデルへ理由を返して回答まで続ける。MCP では取り消しの step（`error_code=mcp.approval_required`、監査ログに出る）と
+  Run の経過のイベント（warning）を残す。定時実行（スケジュール）は #20 で削除した。
+  `_` で始まる key と Control Plane の予約の key（`RESERVED_RUN_METADATA_KEYS`。評価・MCP・再実行の印）は、
   利用者が `POST /api/runs` の `metadata` で付けると 422 にする（再開の状態や出所を偽らせない。#1130）。
 - tracing: `set_tracing_disabled(True)`（業務データを外部へ送らない）。
 - テスト: SDK の `agents.testing.ScriptedModel` でモデルを台本にする（`tests/test_builtin_runtime.py`）。
@@ -436,7 +434,7 @@ NL2SQL の SQL に書き込みの文があれば `nl2sql.non_readonly_sql_return
     「確認せずに回答」は前提を示して答える指示を渡し、NL2SQL の確認なら `nl2sql_query` を `requirement_session_id` と
     `skip_clarification: true` で呼び直させる（NL2SQL が確認せずに SQL を作り、`requirement.status=skipped`）。会話に残す記録は
     `outcome=skipped`。会話が先へ進んだら、答えていない確認は `expired` にする。
-    利用者に確認しない Run（「確認せずに回答」を選んだ Run・方針が `assume`・確認の上限に達した Run・自動実行）は、Control Plane が
+    利用者に確認しない Run（「確認せずに回答」を選んだ Run・方針が `assume`・確認の上限に達した Run）は、Control Plane が
     `rag_search` の引数に `skip_clarification: true` を決定的に付け（入力の schema にあるときだけ。モデルに任せない）、RAG に
     ルールの確認を出させずに回答させる。品質評価の Run は利用者のチャットと同じく確認を出させ、評価ケースの答えで答える
     （`ConfirmationBudget.skips_tool_clarification`。#2117）。複数選べる確認（`multiple`）はカードでも複数選べる。
@@ -466,7 +464,7 @@ NL2SQL の SQL に書き込みの文があれば `nl2sql.non_readonly_sql_return
     `nl2sql_cancel_requirement` で閉じる。
   - **業務 Agent の方針**（`clarification_policy`: `confirm` = 確認してから回答する（既定）/ `assume` = 前提を示して回答する、
     `clarification_max_rounds`: 確認の上限（往復。0 は既定の 3 回、2〜6。NL2SQL の業務プロファイルと同じ））: 確認できる Run にだけ `ask_user_confirmation` を渡す。前提を示す
-    Run（方針が `assume`・上限に達した・「確認せずに回答」の次の Run・無人の Run（品質評価・自動実行））は、ツールを渡さず、RAG の
+    Run（方針が `assume`・上限に達した・「確認せずに回答」の次の Run・無人の Run（品質評価））は、ツールを渡さず、RAG の
     確認の次の手を `answer_with_assumptions`（聞き返さずに前提を示す）に変え、RAG の確認のカードを出さない。往復は、答えで作った
     Run の始めの `clarification_round` と、その Run の Agent 自身の確認の数で数える。
   - **「確認せずに回答」を選んだ Run**（ツールの結果の確認のスキップで作った次の Run と、Agent 自身の確認のスキップで再開した
@@ -573,7 +571,7 @@ memory backend は process 間共有されないため production dispatcher に
 接続できた時点で読み込む（#1212。§5.1.1）。今の保存先は `GET /api/runtime/storage`（`backend`・
 `persistent`・`database_configured`・`reason`。接続先は返さない。#839）で分かり、「運用設定 > 実行環境」の「保存先」の
 カードが `StatusBadge` と直し方を出す。保存していない（`persistent=false`）ときは、業務 Agent・スキル・
-実行履歴・自動実行・品質評価・MCP 接続・ツール権限・システムテーブルの
+実行履歴・品質評価・MCP 接続・ツール権限・システムテーブルの
 画面の先頭に warning の Banner（`NonPersistentStorageNotice`）を出し、実行環境へ案内する。理由は、DB の設定がそろって
 いれば `memory_backend`（memory などを明示。保存先の設定を直す）か `restart_required`（`auto` で起動時は DB が未設定だった。
 再起動する）、そろっていなければ `database_not_configured`（DB の設定から直す）。`auto` で保存済みの checkpoint 全体が読めず memory で
@@ -595,7 +593,7 @@ memory backend は process 間共有されないため production dispatcher に
   `AGENT_RUNTIME_CHECKPOINTS`、008〜011 は `AGENT_CONTROL_PLANE_ITEMS`）と全再作成は、`storage_bootstrap.rewrite_saved_data`
   で包む（#1844）。書き換えの間は Run の repository の lock を持って変更・保存を待たせ（Run・業務 Agent）、定義の保存は
   `ControlPlaneStoreError`（API は 503「システムテーブルを更新しています…」）で断る。書き換えの後に、同じプロセスの
-  Run の repository を checkpoint から、定義の registry（スキル・MCP 接続・ツール権限・自動実行・品質評価）を保存先から
+  Run の repository を checkpoint から、定義の registry（スキル・MCP 接続・ツール権限・品質評価）を保存先から
   読み直し、保存先から消えた定義はメモリからも消す（実行中の評価の job はメモリの値を残す）。読み直しの間の保存が
   古いメモリの値で migration の結果を上書きしないため。
   - 別のプロセスのメモリは読み直せないので、結果の `restart_required`（画面は「作成・更新」の直下の warning の Banner）で
@@ -660,12 +658,11 @@ backfill）の順に 1 回だけ読み込む。
   `error_code=runtime.interrupted`、`payload.source="startup"`、文「サーバーの再起動で実行が中断されました。もう一度送信して
   ください。」。途中の step も `failed`）。起動の後の Run は触らない（このプロセスが始めたものか、別のプロセスが動かしている途中）。
   承認待ち・確認待ちは保存した SDK の状態から再開できるので触らない。dispatcher（`in_process` 以外）のときは触らない
-  （dispatcher が lease で claim する）。チャットは Run の失敗の文をそのまま出し、自動実行は前回の Run が終わったので次を
-  作れる。品質評価の job は `evaluation_store.restore` が中断として終える（#1432）。読み込み（`rewrite_saved_data` の読み直しを
+  （dispatcher が lease で claim する）。チャットは Run の失敗の文をそのまま出す。品質評価の job は `evaluation_store.restore` が中断として終える（#1432）。読み込み（`rewrite_saved_data` の読み直しを
   含む）の 2 回目以降は行わない。ログ `agent_interrupted_runs_failed`。
 
 - 起動時（lifespan）はバックグラウンド（daemon thread）で読み込みを始め、済むまで 15 秒ごとに再試行する（ログ
-  `agent_storage_not_ready`。済んだらログ `agent_storage_ready`）。自動実行のスケジューラは読み込みが済むまで判定しない。
+  `agent_storage_not_ready`。済んだらログ `agent_storage_ready`）。
 - 業務の API は、読み込みが済むまで最初の要求で読み込みを試み（`app.api.router.require_agent_storage`。認証の前）、
   読み込めなければ 503（`error_code=agent_storage_unavailable`、`Retry-After: 15`）。
   DB の状態・システム設定（データベース・システムテーブル・モデル・OCI・アップロード保存先）・認証・ユーザーとロールの API は待たない。
@@ -757,7 +754,7 @@ Snapshot v2 は runs/agents を持つ（旧版の `control_plane_state.runtimes/
 
 ## 8. UI information architecture
 
-サイドナビは上に一般の利用者の画面（AI 活用：チャット / 実行履歴 / 承認）、その下に管理者の画面（Agent 構築：業務 Agent / スキル / 自動実行、改善・運用、セキュリティ設定、ユーザーとロール、運用設定、システム設定）を置く（#791。構成は docs/frontend-page-archetypes-spec.md）。Agent 画面では指示・Skill・モデルを選ぶ。
+サイドナビは上に一般の利用者の画面（AI 活用：チャット / 実行履歴 / 承認）、その下に管理者の画面（Agent 構築：業務 Agent / スキル、改善・運用、セキュリティ設定、ユーザーとロール、運用設定、システム設定）を置く（#791。構成は docs/frontend-page-archetypes-spec.md）。Agent 画面では指示・Skill・モデルを選ぶ。
 
 チャット（`/chat`。#768）は業務利用者の入口。使ってよい Agent を選び、会話の履歴（既定で閉じ、会話の欄の上端の行の左端の
 開閉ボタンで開く。lg 以上は左のパネル、未満は side sheet。#889）・会話・入力欄を出す（RAG のチャットと同じ型）。1 往復が 1 Run で、`RunCreateRequest.thread_id` で会話を続ける
@@ -820,7 +817,7 @@ Run の最初の区間（`agent.execute`）は、Run を受け付けた要求（
 続けた道具（`continued_with`）を Run の step から決定的に残す（`run_route`）。`outcome` が `needs_clarification` の
 ときは `action="ask_clarification"`（`questions` に確かめる問い）を足し、手順・分岐ごとの答えより先に問いを返させる
 （#1322）。
-Agent が編成する根拠の取得（#2651）: RAG を使う標準のスキル（`business-rag-research`・`rag-and-structured-data`・`article-catalog-lookup`）は `rag_search`（RAG が回答まで作る）を使わず、`rag_retrieve_evidence` で根拠を集め、不足を確かめて引き直す・読み足す（`rag_read_source`・`rag_read_section`。図に依る質問だけ `include_image`）・回答を書くまでをモデルが行い、最終の検証（`rag_validate_answer`）は今までどおり Control Plane が行う。単純な質問は 1 回の取得の根拠で答え、分解・追加の探索・図の確認は要るときだけにする（planner・grader を足さない）。スキルは接続ごとに Agent 主体の取得を宣言する（`mcp_requirements` の `evidence_planning=caller`。SKILL.md は metadata の `production-ready-evidence-planning: "rag:caller"`）。宣言は公開の版に固定する要件の中にあるので、宣言の無い旧版のスキルを固定した公開版は今までどおり RAG が検索文を計画し、下書きの Run と再公開の後の Run だけが切り替わる。固定の中身の無い公開の版（#1855 より前の版と、組み込みの業務 Agent の版）は今のスキルで動くが、公開した時点の宣言を確かめられないので caller にしない（`AgentProfile.caller_planning_allowed`。「常に最新」〔`skill_policy=latest`〕を選んだ版は利用者が今のスキルを選んでいるので今の宣言に従う）（`agent_caller_planned_connections`。同じ接続を使うスキルのどれかが宣言すればその接続の取得はすべて caller）。宣言した接続では、組み込み Runtime が `rag_retrieve_evidence` に `planning=caller`（検索文はモデルが作った `query`・`queries` だけで、RAG は質問に応じた推論の LLM / VLM を呼ばない）と追跡 ID `request_id`（`<run_id>:<呼び出し ID>`）を決定的に付け、モデルに見せた schema から外す（`support_task.caller_planned_arguments` / `caller_planned_schema`。`planning` を持たない古い RAG には送らない）。利用者に確認しない Run は `rag_search` と同じく `skip_clarification` を付ける。取得が検索・回答プロファイルのルールの確認（`clarifications`）を返したら、`rag_search` の `needs_clarification` と同じ次の手（`evidence_clarification_step`）・確かめ中の問い（`apply_retrieve`）にする。取得が返す検索・回答プロファイルの承認済みのルール・用語の説明（`profile_knowledge`。#2701）は、根拠（`evidence`）と分けたままモデルへ渡し、回答の根拠（AI に渡した根拠・引用）と最終の検証の根拠には入れない。渡したことは Run の step の結果（全文）とログ `builtin_runtime_profile_knowledge_passed`（数と版だけ。`support_task.profile_knowledge_summary`）に残る（設定の画面の一致の確かめ〔preview〕とは別に、実行でモデルに渡った内容を追える）。
+Agent が編成する根拠の取得（#2651）: RAG を使う標準のスキル（`business-rag-research`・`rag-and-structured-data`）は `rag_search`（RAG が回答まで作る）を使わず、`rag_retrieve_evidence` で根拠を集め、不足を確かめて引き直す・読み足す（`rag_read_source`・`rag_read_section`。図に依る質問だけ `include_image`）・回答を書くまでをモデルが行い、最終の検証（`rag_validate_answer`）は今までどおり Control Plane が行う。単純な質問は 1 回の取得の根拠で答え、分解・追加の探索・図の確認は要るときだけにする（planner・grader を足さない）。スキルは接続ごとに Agent 主体の取得を宣言する（`mcp_requirements` の `evidence_planning=caller`。SKILL.md は metadata の `production-ready-evidence-planning: "rag:caller"`）。宣言は公開の版に固定する要件の中にあるので、宣言の無い旧版のスキルを固定した公開版は今までどおり RAG が検索文を計画し、下書きの Run と再公開の後の Run だけが切り替わる。固定の中身の無い公開の版（#1855 より前の版と、組み込みの業務 Agent の版）は今のスキルで動くが、公開した時点の宣言を確かめられないので caller にしない（`AgentProfile.caller_planning_allowed`。「常に最新」〔`skill_policy=latest`〕を選んだ版は利用者が今のスキルを選んでいるので今の宣言に従う）（`agent_caller_planned_connections`。同じ接続を使うスキルのどれかが宣言すればその接続の取得はすべて caller）。宣言した接続では、組み込み Runtime が `rag_retrieve_evidence` に `planning=caller`（検索文はモデルが作った `query`・`queries` だけで、RAG は質問に応じた推論の LLM / VLM を呼ばない）と追跡 ID `request_id`（`<run_id>:<呼び出し ID>`）を決定的に付け、モデルに見せた schema から外す（`support_task.caller_planned_arguments` / `caller_planned_schema`。`planning` を持たない古い RAG には送らない）。利用者に確認しない Run は `rag_search` と同じく `skip_clarification` を付ける。取得が検索・回答プロファイルのルールの確認（`clarifications`）を返したら、`rag_search` の `needs_clarification` と同じ次の手（`evidence_clarification_step`）・確かめ中の問い（`apply_retrieve`）にする。取得が返す検索・回答プロファイルの承認済みのルール・用語の説明（`profile_knowledge`。#2701）は、根拠（`evidence`）と分けたままモデルへ渡し、回答の根拠（AI に渡した根拠・引用）と最終の検証の根拠には入れない。渡したことは Run の step の結果（全文）とログ `builtin_runtime_profile_knowledge_passed`（数と版だけ。`support_task.profile_knowledge_summary`）に残る（設定の画面の一致の確かめ〔preview〕とは別に、実行でモデルに渡った内容を追える）。
 多段の質問（#1345・#1351。RAG は部品を出し、組み立ては Agent が行う。planner・workflow engine は作らない〔#756〕）: スキル `business-rag-research` の指示が、問いを段に分け、段ごとに前の段で分かった実体で `rag_retrieve_evidence` を呼び、
 段の query は質問全体ではなく「実体（正式名・略号・ID）＋引く属性」だけにし（件数の `top_k`・`evidence_limit` は既定より小さくしない。多段の質問では省略する）、
 資料が台帳・一覧で確かめると示したらその実体でその台帳・一覧を引き、同じ段で 2 回言い換えても根拠が出なければその段を
@@ -998,12 +995,12 @@ SDK の Agent・ツール・予算。利用量は前の分に積む。差し戻�
 回答の対応（`answer_outcome`・`answer_basis`）と、拒答が根拠・データのツールで調べる前か後か（`refusal_stage` の
 `before_tools` / `after_tools`）を持ち、集計は `refused_before_tools` / `refused_after_tools` で数える（調べた結果として根拠が
 無かった拒答と、調べずに拒答したものを分ける）。差し戻し・拒答と元の回答は Run の経過（イベントの
-`tool_grounding`）にだけ残す。呼んだかは Run の step で数え（失敗・承認の却下・評価の dry-run・自動実行で承認が要るため
+`tool_grounding`）にだけ残す。呼んだかは Run の step で数え（失敗・承認の却下・評価の dry-run・無人の Run で承認が要るため
 呼ばなかったものも数える）、Control Plane が自分で呼んだもの（確認の取り消し・業務ガイドの照合）は数えない。対象外は、
 確認のツールを渡さない Run（上限に達した Run）の確認の質問だけの回答・NL2SQL の SQL の生成前の確認で止まった Run・利用者が確認を取り消した Run（#1441・#1445）・根拠・データの
 ツールを持たない Agent・同じ会話の前の Run（会話の履歴の上限 `PLATFORM_CHAT_HISTORY_MAX_TURNS` の中。#1818）のどれかが
 根拠・データのツールを呼んで結果を得て答えた Run（「前の回答を表にして」「もっと短く」などの言い換え・整形。前のターンの事実の
-確かめは、前のターンで裏付けた根拠を今のターンの最終の検証に渡す #1837 に任せる。今のターンに根拠が無くても、その根拠だけで検証する。#1879）。チャット・自動実行・品質評価の Run は同じ扱い。
+確かめは、前のターンで裏付けた根拠を今のターンの最終の検証に渡す #1837 に任せる。今のターンに根拠が無くても、その根拠だけで検証する。#1879）。チャット・品質評価の Run は同じ扱い。
 根拠・データのツールの実行の失敗（#2475）: モデルが根拠・データのツールを呼んだが 1 つも結果を得られず、呼び先で実行できずに
 失敗した呼び出し（`mcp.*` / `external_mcp.*` / `tool.unhandled_error`。`mcp.tool_error` は呼び先が 4xx〔引数・権限・対象が
 無い〕で返したものを除く）があるまま回答を確定したら、回答を出さずに Run を失敗（`runtime.grounding_tool_failed`。ツールの名前と
@@ -1013,7 +1010,7 @@ SDK の Agent・ツール・予算。利用量は前の分に積む。差し戻�
 5xx（`RAG_ANSWER_AI_API_FAILED`。`details` は種類・例外の型・呼び先の status と error code・工程・呼び先が示した待ちの秒数だけ）で返す（REST の検索・業務ガイドの下書きの試答も同じ分類の status と文。#2667）。
 差し戻しの文と本文の確認の質問は Run で分ける（`tool_grounding.retry_message`）: 確認のツール（`ask_user_confirmation`）を渡した
 Run は「先に資料・業務データのツールで調べ、決まらなければ確認のツールで聞く。本文に確認の質問を書かない」（#1881）、利用者に
-確認しない Run（方針 `assume` と「確認せずに回答」を選んだ Run と、無人の Run〔品質評価・自動実行。利用者に聞けない。#1959〕。#1903）は
+確認しない Run（方針 `assume` と「確認せずに回答」を選んだ Run と、無人の Run〔品質評価。利用者に聞けない。#1959〕。#1903）は
 「確認の質問はせず、ツールで調べ、決まらない点は前提を示して答える（条件ごとに分ける）。業務プロファイルなどの推薦が null でも
 聞き返さず、推薦の候補か一覧の説明から最も合うものを選んで調べる」（どのプロファイルで調べたかは回答に書かない。使ったツールと根拠は回答とは別に示す。#2328）、それ以外（上限に達した Run）は「曖昧なら
 確認の質問だけを返してよい」。確認のツールを渡した Run と利用者に確認しない Run では、ツールを呼ばずに本文の確認の質問だけを返した回答も 1 回

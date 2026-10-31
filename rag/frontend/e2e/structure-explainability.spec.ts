@@ -64,7 +64,7 @@ test("文書詳細で埋め込み base64 を畳んで本文を読みやすく表
           order: 0,
           element_id: "el-0000",
           content_kind: "figure",
-          source_parser: "oci_document_understanding",
+          source_parser: "unstructured_adapter",
           page_number: 1,
           section_path: [],
           confidence: 0.8,
@@ -87,7 +87,7 @@ test("文書詳細で埋め込み base64 を畳んで本文を読みやすく表
         section_path: null,
         content_kind: "figure",
         chunk_group_id: "grp-1",
-        source_parser: "oci_document_understanding",
+        source_parser: "unstructured_adapter",
         element_ids: ["el-0000"],
         metadata: {},
       },
@@ -156,18 +156,12 @@ test("文書詳細で所属ナレッジベースを更新できる", async ({ pa
 });
 
 for (const viewport of [
-  { name: "desktop", width: 1280, height: 900, theme: "light" },
-  { name: "mobile", width: 375, height: 900, theme: "dark" },
+  { name: "desktop", width: 1280, height: 900 },
+  { name: "mobile", width: 375, height: 900 },
 ] as const) {
-  test(`文書詳細で分類と有効期間を保存できる (${viewport.name} / ${viewport.theme})`, async ({
+  test(`文書詳細で分類と有効期間を保存できる (${viewport.name})`, async ({
     page,
   }, testInfo) => {
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 }),
-      );
-    }, viewport.theme);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const state = await mockDocumentDetail(page);
 
@@ -214,7 +208,7 @@ for (const viewport of [
     await expectNoHorizontalOverflow(page);
     await page.getByRole("heading", { name: "文書の分類と有効期間" }).scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: testInfo.outputPath(`document-classification-${viewport.name}-${viewport.theme}.png`),
+      path: testInfo.outputPath(`document-classification-${viewport.name}.png`),
     });
   });
 }
@@ -519,18 +513,12 @@ test("章節を直し・追加・削除して保存し、抽出結果に戻せ�
 });
 
 for (const viewport of [
-  { name: "desktop", width: 1280, height: 900, theme: "light" },
-  { name: "mobile", width: 375, height: 900, theme: "dark" },
+  { name: "desktop", width: 1280, height: 900 },
+  { name: "mobile", width: 375, height: 900 },
 ] as const) {
-  test(`文書詳細で新しい版を選んで保存し、解除できる (${viewport.name} / ${viewport.theme})`, { tag: "@responsive" }, async ({
+  test(`文書詳細で新しい版を選んで保存し、解除できる (${viewport.name})`, { tag: "@responsive" }, async ({
     page,
   }, testInfo) => {
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 }),
-      );
-    }, viewport.theme);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const state = await mockDocumentDetail(page);
 
@@ -563,7 +551,7 @@ for (const viewport of [
     await expectNoHorizontalOverflow(page);
     await section.scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: testInfo.outputPath(`document-version-${viewport.name}-${viewport.theme}.png`),
+      path: testInfo.outputPath(`document-version-${viewport.name}.png`),
     });
 
     await section.getByRole("button", { name: "置き換えを解除" }).click();

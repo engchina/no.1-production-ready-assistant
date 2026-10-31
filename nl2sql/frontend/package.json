@@ -4,14 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3001",
+    "dev": "vite --host 0.0.0.0 --port 3101",
     "build": "tsc --noEmit && vite build",
-    "start": "vite preview --host 0.0.0.0 --port 3001",
+    "start": "vite preview --host 0.0.0.0 --port 3101",
     "test": "npm run test:startup && npm run test:logic",
     "test:startup": "bash ../scripts/tests/start-frontend.test.sh && bash ../scripts/tests/init-script-nodejs.test.sh",
     "test:logic": "tsc -p tsconfig.test.json && node --test scripts/run-unit-tests.test.mjs && node scripts/run-unit-tests.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:oci-resource-manager": "playwright test --config playwright.oci-resource-manager.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings"
   },

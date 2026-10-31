@@ -35,12 +35,6 @@ const INTERNAL_WORDS = [
   "{",
 ];
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -225,61 +219,58 @@ async function openSeedThread(page: Page) {
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`回答の下に確かめた条件・確認待ち・業務ガイドを出し、除いた内容は本文の節の 1 か所に件数と一致させて出す (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi, "run-review-1", [answer(WITHHELD_ANSWER), supportTask(), WITHHELD]);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await openSeedThread(page);
+  test(`回答の下に確かめた条件・確認待ち・業務ガイドを出し、除いた内容は本文の節の 1 か所に件数と一致させて出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi, "run-review-1", [answer(WITHHELD_ANSWER), supportTask(), WITHHELD]);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await openSeedThread(page);
 
-      const turn = page.getByTestId("chat-turn-run-review-1");
-      await expect(turn.getByText("精算は申請から始めます。")).toBeVisible();
-      // 予算の上限は控えめな案内だけ（内部の語は出さない）。
-      await expect(turn.getByTestId("chat-review-run-review-1-limit")).toContainText(
-        "資料を調べられる回数の上限に達したため、ここまでに集めた資料で答えています。"
-      );
-      // 畳んでいても、照合の結果は見出しのバッジで分かる（アイコン付き）。件数は本文の節の項目の数と一致する。
-      const summary = turn.getByTestId("chat-review-run-review-1-summary");
-      await expect(summary).toContainText("資料との照合");
-      const badge = summary.locator("[data-status-variant]");
-      await expect(badge).toHaveText(`確かめられない点 ${WITHHELD_ITEMS.length} 件`);
-      await expect(badge).toHaveAttribute("data-status-variant", "warning");
-      await expect(badge.locator("svg")).toHaveCount(1);
-      const panel = turn.getByTestId("chat-review-run-review-1");
-      await expect(panel).not.toHaveAttribute("open", "");
+    const turn = page.getByTestId("chat-turn-run-review-1");
+    await expect(turn.getByText("精算は申請から始めます。")).toBeVisible();
+    // 予算の上限は控えめな案内だけ（内部の語は出さない）。
+    await expect(turn.getByTestId("chat-review-run-review-1-limit")).toContainText(
+      "資料を調べられる回数の上限に達したため、ここまでに集めた資料で答えています。"
+    );
+    // 畳んでいても、照合の結果は見出しのバッジで分かる（アイコン付き）。件数は本文の節の項目の数と一致する。
+    const summary = turn.getByTestId("chat-review-run-review-1-summary");
+    await expect(summary).toContainText("資料との照合");
+    const badge = summary.locator("[data-status-variant]");
+    await expect(badge).toHaveText(`確かめられない点 ${WITHHELD_ITEMS.length} 件`);
+    await expect(badge).toHaveAttribute("data-status-variant", "warning");
+    await expect(badge.locator("svg")).toHaveCount(1);
+    const panel = turn.getByTestId("chat-review-run-review-1");
+    await expect(panel).not.toHaveAttribute("open", "");
 
-      await summary.click();
-      await expect(panel).toHaveAttribute("open", "");
-      const conditions = panel.getByRole("group", { name: "確かめた条件" });
-      await expect(conditions.getByRole("listitem")).toHaveText([
-        "経費の種類：出張（あなたの答えから）前の値：交際費",
-        "金額：5 万円未満（質問の文から）",
-      ]);
-      const clarifications = panel.getByRole("group", { name: "確認待ちの質問" });
-      await expect(clarifications).toContainText("領収書はありますか？");
-      await expect(clarifications).toContainText("選択肢：ある / ない");
-      await expect(panel.getByRole("group", { name: "使った業務ガイド" })).toHaveText(
-        "使った業務ガイド経費精算ガイド（第 3 版）"
-      );
-      await expect(panel.getByRole("group", { name: "まだ足りない情報" })).toContainText("精算の締め日");
-      // 開いた中に、小見出し「資料で確かめた結果」・同じバッジ・除いた内容（とその説明）を出し直さない。
-      await expect(panel.getByRole("group", { name: "資料で確かめた結果" })).toHaveCount(0);
-      await expect(panel.locator("[data-status-variant]")).toHaveCount(1);
-      await expect(panel.getByTestId("answer-review-unverified")).toHaveCount(0);
-      await expect(panel.getByTestId("answer-review-validation")).toHaveCount(0);
-      for (const item of WITHHELD_ITEMS) await expect(panel).not.toContainText(item);
-      // 除いた内容は本文の節の 1 か所に、全件を同じ書式で出す（「ほか N 件」で切らない）。件数はバッジと同じ。
-      const body = turn.getByTestId("chat-answer-run-review-1");
-      await expect(body.getByRole("listitem")).toHaveText(WITHHELD_ITEMS);
-      await expect(body).not.toContainText("ほか");
-      await expect(turn).not.toContainText("出さない警告");
-      await expectNoInternalWords(turn);
+    await summary.click();
+    await expect(panel).toHaveAttribute("open", "");
+    const conditions = panel.getByRole("group", { name: "確かめた条件" });
+    await expect(conditions.getByRole("listitem")).toHaveText([
+      "経費の種類：出張（あなたの答えから）前の値：交際費",
+      "金額：5 万円未満（質問の文から）",
+    ]);
+    const clarifications = panel.getByRole("group", { name: "確認待ちの質問" });
+    await expect(clarifications).toContainText("領収書はありますか？");
+    await expect(clarifications).toContainText("選択肢：ある / ない");
+    await expect(panel.getByRole("group", { name: "使った業務ガイド" })).toHaveText(
+      "使った業務ガイド経費精算ガイド（第 3 版）"
+    );
+    await expect(panel.getByRole("group", { name: "まだ足りない情報" })).toContainText("精算の締め日");
+    // 開いた中に、小見出し「資料で確かめた結果」・同じバッジ・除いた内容（とその説明）を出し直さない。
+    await expect(panel.getByRole("group", { name: "資料で確かめた結果" })).toHaveCount(0);
+    await expect(panel.locator("[data-status-variant]")).toHaveCount(1);
+    await expect(panel.getByTestId("answer-review-unverified")).toHaveCount(0);
+    await expect(panel.getByTestId("answer-review-validation")).toHaveCount(0);
+    for (const item of WITHHELD_ITEMS) await expect(panel).not.toContainText(item);
+    // 除いた内容は本文の節の 1 か所に、全件を同じ書式で出す（「ほか N 件」で切らない）。件数はバッジと同じ。
+    const body = turn.getByTestId("chat-answer-run-review-1");
+    await expect(body.getByRole("listitem")).toHaveText(WITHHELD_ITEMS);
+    await expect(body).not.toContainText("ほか");
+    await expect(turn).not.toContainText("出さない警告");
+    await expectNoInternalWords(turn);
 
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`review-${viewport.name}-${theme}.png`), fullPage: true });
-    });
-  }
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`review-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test("資料との照合の結果は、照合済み・確かめられない点（過去の Run）・照合できなかった・対象外を見分けて出し、理由があるときだけ開ける", async ({ page, mockApi }) => {
@@ -453,62 +444,59 @@ test("実行の詳細は内部の記録を成果物に出さず、監査ログ�
 
 // #1314: 回答の対応（成果物 answer の outcome）を、RAG の回答の詳細（#1252）と同じ文言・色のバッジで出す。
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`回答の対応のバッジを照合のバッジと並べて見出しに出し、狭い幅では折り返す (${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi, "run-outcome-1", [
-        { ...answer("精算は申請から始めます。", outcome("conditional")), id: "answer-outcome-1" },
-        supportTask(),
-        WITHHELD,
-      ]);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await openSeedThread(page);
+  test(`回答の対応のバッジを照合のバッジと並べて見出しに出し、狭い幅では折り返す (${viewport.name})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi, "run-outcome-1", [
+      { ...answer("精算は申請から始めます。", outcome("conditional")), id: "answer-outcome-1" },
+      supportTask(),
+      WITHHELD,
+    ]);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await openSeedThread(page);
 
-      const turn = page.getByTestId("chat-turn-run-outcome-1");
-      const summary = turn.getByTestId("chat-review-run-outcome-1-summary");
-      await expect(summary).toBeVisible();
-      // 見出し → 対応 → 検証の順に並ぶ（どちらもアイコン付き。色だけに頼らない）。
-      const badges = summary.locator("[data-status-variant]");
-      await expect(badges).toHaveText(["条件付きの回答", "確かめられない点 4 件"]);
-      const outcomeBadge = turn.getByTestId("chat-review-run-outcome-1-outcome").locator("[data-status-variant]");
-      await expect(outcomeBadge).toHaveAttribute("data-status-variant", "warning");
-      await expect(outcomeBadge.locator("svg")).toHaveCount(1);
-      await expect(badges.nth(1).locator("svg")).toHaveCount(1);
+    const turn = page.getByTestId("chat-turn-run-outcome-1");
+    const summary = turn.getByTestId("chat-review-run-outcome-1-summary");
+    await expect(summary).toBeVisible();
+    // 見出し → 対応 → 検証の順に並ぶ（どちらもアイコン付き。色だけに頼らない）。
+    const badges = summary.locator("[data-status-variant]");
+    await expect(badges).toHaveText(["条件付きの回答", "確かめられない点 4 件"]);
+    const outcomeBadge = turn.getByTestId("chat-review-run-outcome-1-outcome").locator("[data-status-variant]");
+    await expect(outcomeBadge).toHaveAttribute("data-status-variant", "warning");
+    await expect(outcomeBadge.locator("svg")).toHaveCount(1);
+    await expect(badges.nth(1).locator("svg")).toHaveCount(1);
 
-      // 見出しの文字は 1 行のまま、バッジは要約の幅に収まる（はみ出さない・切れない）。
-      const title = summary.getByText("資料との照合", { exact: true });
-      const titleBox = await title.boundingBox();
-      const lineHeight = await title.evaluate((node) => parseFloat(getComputedStyle(node).lineHeight));
-      expect(titleBox!.height).toBeLessThanOrEqual(lineHeight + 1);
-      const answerBox = await turn.getByTestId("chat-review-run-outcome-1").boundingBox();
-      for (const badge of await badges.all()) {
-        const box = await badge.boundingBox();
-        expect(box!.x + box!.width).toBeLessThanOrEqual(answerBox!.x + answerBox!.width + 1);
-        expect(await badge.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-      }
-      if (viewport.width < 640) {
-        // 375px では検証のバッジが次の行へ折り返す（見出しの文字を縦に潰さない）。
-        const first = await badges.nth(0).boundingBox();
-        const second = await badges.nth(1).boundingBox();
-        expect(second!.y).toBeGreaterThan(first!.y);
-      }
-      // 資料との照合は回答の本文の下（処理の経過 → 回答 → 資料との照合。#2123 / #2324）。
-      const bodyBox = await turn.getByTestId("chat-answer-run-outcome-1").boundingBox();
-      expect(bodyBox!.y).toBeLessThan(answerBox!.y);
-      await expectNoOutcomeInternalWords(turn);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`outcome-chat-${viewport.name}-${theme}.png`), fullPage: true });
+    // 見出しの文字は 1 行のまま、バッジは要約の幅に収まる（はみ出さない・切れない）。
+    const title = summary.getByText("資料との照合", { exact: true });
+    const titleBox = await title.boundingBox();
+    const lineHeight = await title.evaluate((node) => parseFloat(getComputedStyle(node).lineHeight));
+    expect(titleBox!.height).toBeLessThanOrEqual(lineHeight + 1);
+    const answerBox = await turn.getByTestId("chat-review-run-outcome-1").boundingBox();
+    for (const badge of await badges.all()) {
+      const box = await badge.boundingBox();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(answerBox!.x + answerBox!.width + 1);
+      expect(await badge.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    }
+    if (viewport.width < 640) {
+      // 375px では検証のバッジが次の行へ折り返す（見出しの文字を縦に潰さない）。
+      const first = await badges.nth(0).boundingBox();
+      const second = await badges.nth(1).boundingBox();
+      expect(second!.y).toBeGreaterThan(first!.y);
+    }
+    // 資料との照合は回答の本文の下（処理の経過 → 回答 → 資料との照合。#2123 / #2324）。
+    const bodyBox = await turn.getByTestId("chat-answer-run-outcome-1").boundingBox();
+    expect(bodyBox!.y).toBeLessThan(answerBox!.y);
+    await expectNoOutcomeInternalWords(turn);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`outcome-chat-${viewport.name}.png`), fullPage: true });
 
-      // 実行の概要の見出しにはバッジを出さない。
-      await page.goto("/runs?id=run-outcome-1");
-      await expect(page.getByTestId("run-summary")).toBeVisible();
-      const runBadge = page.getByTestId("run-answer-outcome-answer-outcome-1").locator("[data-status-variant]");
-      await expect(runBadge).toHaveCount(0);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`outcome-run-${viewport.name}-${theme}.png`), fullPage: true });
-    });
-  }
+    // 実行の概要の見出しにはバッジを出さない。
+    await page.goto("/runs?id=run-outcome-1");
+    await expect(page.getByTestId("run-summary")).toBeVisible();
+    const runBadge = page.getByTestId("run-answer-outcome-answer-outcome-1").locator("[data-status-variant]");
+    await expect(runBadge).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`outcome-run-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 // #1835: 根拠・データのツールを呼ばずに作った回答は、backend が決まった拒答の文に置き換える。チャットと実行の詳細に

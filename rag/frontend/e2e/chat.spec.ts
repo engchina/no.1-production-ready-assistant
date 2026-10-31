@@ -1213,139 +1213,136 @@ for (const viewport of [
 
 // #2096 / #3226: 回答の処理の経過は、回答の trace の span の木（工程の span は種類 answer_step と工程名・LLM の回数）を
 // 1 か所に出す。名前は「処理の経過」1 つで、処理の経過 → 回答の本文 → 根拠の一覧 → 評価 の順（#2115）。
-for (const theme of ["light", "dark"] as const) {
-  test(`保存した回答の処理の経過は工程の一覧を閉じて出し、開くと入れ子と計測値を出す (${theme})`, { tag: "@responsive" }, async ({
-    page,
-  }) => {
-    const at = (seconds: number) => new Date(Date.parse("2026-01-01T00:00:01Z") + seconds * 1000).toISOString();
-    let seq = 0;
-    // span のイベント（step_id は span の id、親子は parent_id。実行の全体の span は行にしない。#3226）。
-    const step = (
-      stepId: string,
-      kind: string,
-      start: number,
-      end: number,
-      params?: Record<string, string | number>,
-      details?: Record<string, unknown>,
-      parent = "s0"
-    ) => ({
-      schema_version: 1,
-      seq: ++seq,
-      target_id: "a1",
-      attempt: 0,
-      emitted_at: at(end),
-      type: "step",
-      step_id: stepId,
-      kind,
-      status: "done",
-      started_at: at(start),
-      finished_at: at(end),
-      ...(params ? { params } : {}),
-      ...(details ? { details } : {}),
-      name: kind === "answer_step" ? "rag.engine.stage" : `rag.${kind}`,
-      parent_id: parent,
-      trace_id: SPAN_TRACE_ID,
-    });
-    const progress = [
-      { ...step("s0", "s0", 0, 9), name: "rag.answer", parent_id: undefined, root: true },
-      // 前の会話を踏まえて質問を補うの詳細（#2341。パイプラインの工程の詳細）。
-      step("s1", "history_rewrite", 0, 0.4, undefined, {
-        fields: [
-          { label: "参照した会話", value: "2 件の発言" },
-          { label: "書き換えた質問", value: "合成の書き換えた質問" },
-        ],
-      }),
-      step("s2", "answer_step", 0.4, 1.2, { name: "質問の理解", llm_calls: 1 }),
-      step("s3", "answer_step", 1.2, 9, { name: "回答生成フロー", llm_calls: 2 }),
-      // 工程の詳細（見出しと値・行。#2294 / #2341。backend が回答の記録の工程の詳細を段の詳細にする）。
-      step(
-        "s4",
-        "answer_step",
-        1.3,
-        1.34,
-        { name: "文書検索", note: "該当なし" },
-        { fields: [{ label: "検索の候補", value: "0 件" }, { label: "結果", value: "回答に渡す根拠 0 件" }], lines: ["検索文: 2 本"] },
-        "s3"
-      ),
-      step("s5", "answer_step", 2, 9, { name: "回答文の生成と根拠確認（1回目）", llm_calls: 2 }, undefined, "s3"),
-      { schema_version: 1, seq: ++seq, target_id: "a1", attempt: 0, emitted_at: at(9), type: "terminal", status: "done" },
-    ];
-    await page.emulateMedia({ colorScheme: theme });
-    await mockChat(page, "ready", [userMessage, { ...assistantMessage, progress }]);
-
-    await page.goto("/chat");
-    await selectSearchAnswerProfile(page, "経理アシスタント");
-    const history = await openChatHistory(page);
-    await history.getByRole("button", { name: /^経費の上限は？ 2件/ }).click();
-    if (await history.isVisible().catch(() => false)) {
-      // lg 未満の履歴はシート。会話を選ぶと閉じる。
-      await expect(page.getByRole("dialog", { name: "会話の履歴" })).toHaveCount(0);
-    }
-
-    const summary = page.getByTestId("chat-answer-progress-summary");
-    await expect(summary).toHaveText("処理の経過（5 ステップ・9.0 秒）");
-    const process = page.getByRole("region", { name: "処理の経過" });
-    // 完了した回答は一覧を閉じて出し（#2118）、押すと開く。
-    await expect(process.locator("details").first()).not.toHaveAttribute("open", "");
-    await summary.click();
-    await expect(process.locator("details").first()).toHaveAttribute("open", "");
-    const nested = page.getByTestId("chat-answer-progress-step-s4");
-    await expect(nested).toHaveAttribute("data-level", "1");
-    await expect(nested).toContainText("検索文から根拠の候補を集める");
-    // 計測値（工程の結果・LLM の回数）は名前の後ろの括弧、所要時間は右の列（実行の詳細と同じ RunTimeline。#2265）。
-    await expect(nested).toContainText("該当なし");
-    await expect(nested).toContainText("0.1 秒未満");
-    const understood = page.getByTestId("chat-answer-progress-step-s2");
-    await expect(understood).toContainText("LLM 1 回");
-    await expect(understood).toContainText("0.8 秒");
-    // 工程の行は span なので、開くと工程の詳細の後ろに技術の値（span の名前）が付く（既定で閉じる。#2294 / #3226）。
-    await inspectTraceStep(page, process, "s2");
-    await expect(page.locator("[data-trace-technical]")).toContainText("rag.engine.stage");
-    await page.getByRole("button", {name: "経過に戻る", exact: true}).click();
-    const nestedToggle = page.getByTestId("chat-answer-progress-step-s4-toggle");
-    await expect(nestedToggle).toHaveAttribute("aria-expanded", "false");
-    await nestedToggle.click();
-    await expect(nestedToggle).toHaveAttribute("aria-expanded", "true");
-    const nestedDetails = page.getByTestId("chat-answer-progress-step-s4-details");
-    // 文字の横のアイコン（状態・開閉の印）は、文字の 1 行目の中心にそろえる（#2371）。
-    expect(await findIconTextMisalignment(page, { root: '[data-testid="chat-answer-progress"]' })).toEqual([]);
-    await expect(nestedDetails.locator("dt").first()).toHaveText("検索の候補");
-    await expect(nestedDetails).toContainText("回答に渡す根拠 0 件");
-    await expect(nestedDetails).toContainText("検索文: 2 本");
-    await nestedToggle.click();
-    await expect(nestedDetails).toBeHidden();
-    // パイプラインの工程（前の会話を踏まえて質問を補う）の詳細も同じ形で開ける（#2341）。
-    await page.getByTestId("chat-answer-progress-step-s1-toggle").click();
-    await expect(page.getByTestId("chat-answer-progress-step-s1-details")).toContainText("合成の書き換えた質問");
-    await page.getByTestId("chat-answer-progress-step-s1-toggle").click();
-    // 完了した一覧は時間の線つき（375px は線を隠し、所要時間の文字だけ）。
-    const bars = process.locator("[data-run-timeline-bar]");
-    await expect(bars).toHaveCount(5);
-    if ((page.viewportSize()?.width ?? 1280) >= 1280) await expect(bars.first()).toBeVisible();
-    else await expect(bars.first()).toBeHidden();
-    await expect(page.getByTestId("chat-answer-progress-step-s1")).toContainText("前の会話を踏まえて質問を補う");
-    // 状態は英語の生の値ではなくアイコンと読み上げの文言で示す。「実行記録」の表示は無い。
-    await expect(process.getByText(/complete/)).toHaveCount(0);
-    await expect(page.getByText(/実行記録/)).toHaveCount(0);
-    // 処理の経過 → 回答の本文 → 根拠の一覧 → 評価 の順（処理の経過は回答の上。#2115）。
-    const [answerBox, citationBox, processBox, feedbackBox] = await Promise.all([
-      page.getByText(assistantMessage.content).first().boundingBox(),
-      page.locator("summary").filter({ hasText: "AI に渡した 1 件" }).boundingBox(),
-      summary.boundingBox(),
-      page.getByRole("group", { name: "この回答は役に立ちましたか？" }).boundingBox(),
-    ]);
-    expect(processBox!.y).toBeLessThan(answerBox!.y);
-    expect(answerBox!.y).toBeLessThan(citationBox!.y);
-    expect(citationBox!.y).toBeLessThan(feedbackBox!.y);
-    // 字下げは位置でも分かる（入れ子の行の左端が親より右）。
-    const [parentLeft, childLeft] = await Promise.all([
-      page.getByTestId("chat-answer-progress-step-s3").locator("svg").first().boundingBox(),
-      nested.locator("svg").first().boundingBox(),
-    ]);
-    expect(childLeft!.x).toBeGreaterThan(parentLeft!.x);
-    await expectNoPageOverflow(page);
+test(`保存した回答の処理の経過は工程の一覧を閉じて出し、開くと入れ子と計測値を出す`, { tag: "@responsive" }, async ({
+  page,
+}) => {
+  const at = (seconds: number) => new Date(Date.parse("2026-01-01T00:00:01Z") + seconds * 1000).toISOString();
+  let seq = 0;
+  // span のイベント（step_id は span の id、親子は parent_id。実行の全体の span は行にしない。#3226）。
+  const step = (
+    stepId: string,
+    kind: string,
+    start: number,
+    end: number,
+    params?: Record<string, string | number>,
+    details?: Record<string, unknown>,
+    parent = "s0"
+  ) => ({
+    schema_version: 1,
+    seq: ++seq,
+    target_id: "a1",
+    attempt: 0,
+    emitted_at: at(end),
+    type: "step",
+    step_id: stepId,
+    kind,
+    status: "done",
+    started_at: at(start),
+    finished_at: at(end),
+    ...(params ? { params } : {}),
+    ...(details ? { details } : {}),
+    name: kind === "answer_step" ? "rag.engine.stage" : `rag.${kind}`,
+    parent_id: parent,
+    trace_id: SPAN_TRACE_ID,
   });
-}
+  const progress = [
+    { ...step("s0", "s0", 0, 9), name: "rag.answer", parent_id: undefined, root: true },
+    // 前の会話を踏まえて質問を補うの詳細（#2341。パイプラインの工程の詳細）。
+    step("s1", "history_rewrite", 0, 0.4, undefined, {
+      fields: [
+        { label: "参照した会話", value: "2 件の発言" },
+        { label: "書き換えた質問", value: "合成の書き換えた質問" },
+      ],
+    }),
+    step("s2", "answer_step", 0.4, 1.2, { name: "質問の理解", llm_calls: 1 }),
+    step("s3", "answer_step", 1.2, 9, { name: "回答生成フロー", llm_calls: 2 }),
+    // 工程の詳細（見出しと値・行。#2294 / #2341。backend が回答の記録の工程の詳細を段の詳細にする）。
+    step(
+      "s4",
+      "answer_step",
+      1.3,
+      1.34,
+      { name: "文書検索", note: "該当なし" },
+      { fields: [{ label: "検索の候補", value: "0 件" }, { label: "結果", value: "回答に渡す根拠 0 件" }], lines: ["検索文: 2 本"] },
+      "s3"
+    ),
+    step("s5", "answer_step", 2, 9, { name: "回答文の生成と根拠確認（1回目）", llm_calls: 2 }, undefined, "s3"),
+    { schema_version: 1, seq: ++seq, target_id: "a1", attempt: 0, emitted_at: at(9), type: "terminal", status: "done" },
+  ];
+  await mockChat(page, "ready", [userMessage, { ...assistantMessage, progress }]);
+
+  await page.goto("/chat");
+  await selectSearchAnswerProfile(page, "経理アシスタント");
+  const history = await openChatHistory(page);
+  await history.getByRole("button", { name: /^経費の上限は？ 2件/ }).click();
+  if (await history.isVisible().catch(() => false)) {
+    // lg 未満の履歴はシート。会話を選ぶと閉じる。
+    await expect(page.getByRole("dialog", { name: "会話の履歴" })).toHaveCount(0);
+  }
+
+  const summary = page.getByTestId("chat-answer-progress-summary");
+  await expect(summary).toHaveText("処理の経過（5 ステップ・9.0 秒）");
+  const process = page.getByRole("region", { name: "処理の経過" });
+  // 完了した回答は一覧を閉じて出し（#2118）、押すと開く。
+  await expect(process.locator("details").first()).not.toHaveAttribute("open", "");
+  await summary.click();
+  await expect(process.locator("details").first()).toHaveAttribute("open", "");
+  const nested = page.getByTestId("chat-answer-progress-step-s4");
+  await expect(nested).toHaveAttribute("data-level", "1");
+  await expect(nested).toContainText("検索文から根拠の候補を集める");
+  // 計測値（工程の結果・LLM の回数）は名前の後ろの括弧、所要時間は右の列（実行の詳細と同じ RunTimeline。#2265）。
+  await expect(nested).toContainText("該当なし");
+  await expect(nested).toContainText("0.1 秒未満");
+  const understood = page.getByTestId("chat-answer-progress-step-s2");
+  await expect(understood).toContainText("LLM 1 回");
+  await expect(understood).toContainText("0.8 秒");
+  // 工程の行は span なので、開くと工程の詳細の後ろに技術の値（span の名前）が付く（既定で閉じる。#2294 / #3226）。
+  await inspectTraceStep(page, process, "s2");
+  await expect(page.locator("[data-trace-technical]")).toContainText("rag.engine.stage");
+  await page.getByRole("button", {name: "経過に戻る", exact: true}).click();
+  const nestedToggle = page.getByTestId("chat-answer-progress-step-s4-toggle");
+  await expect(nestedToggle).toHaveAttribute("aria-expanded", "false");
+  await nestedToggle.click();
+  await expect(nestedToggle).toHaveAttribute("aria-expanded", "true");
+  const nestedDetails = page.getByTestId("chat-answer-progress-step-s4-details");
+  // 文字の横のアイコン（状態・開閉の印）は、文字の 1 行目の中心にそろえる（#2371）。
+  expect(await findIconTextMisalignment(page, { root: '[data-testid="chat-answer-progress"]' })).toEqual([]);
+  await expect(nestedDetails.locator("dt").first()).toHaveText("検索の候補");
+  await expect(nestedDetails).toContainText("回答に渡す根拠 0 件");
+  await expect(nestedDetails).toContainText("検索文: 2 本");
+  await nestedToggle.click();
+  await expect(nestedDetails).toBeHidden();
+  // パイプラインの工程（前の会話を踏まえて質問を補う）の詳細も同じ形で開ける（#2341）。
+  await page.getByTestId("chat-answer-progress-step-s1-toggle").click();
+  await expect(page.getByTestId("chat-answer-progress-step-s1-details")).toContainText("合成の書き換えた質問");
+  await page.getByTestId("chat-answer-progress-step-s1-toggle").click();
+  // 完了した一覧は時間の線つき（375px は線を隠し、所要時間の文字だけ）。
+  const bars = process.locator("[data-run-timeline-bar]");
+  await expect(bars).toHaveCount(5);
+  if ((page.viewportSize()?.width ?? 1280) >= 1280) await expect(bars.first()).toBeVisible();
+  else await expect(bars.first()).toBeHidden();
+  await expect(page.getByTestId("chat-answer-progress-step-s1")).toContainText("前の会話を踏まえて質問を補う");
+  // 状態は英語の生の値ではなくアイコンと読み上げの文言で示す。「実行記録」の表示は無い。
+  await expect(process.getByText(/complete/)).toHaveCount(0);
+  await expect(page.getByText(/実行記録/)).toHaveCount(0);
+  // 処理の経過 → 回答の本文 → 根拠の一覧 → 評価 の順（処理の経過は回答の上。#2115）。
+  const [answerBox, citationBox, processBox, feedbackBox] = await Promise.all([
+    page.getByText(assistantMessage.content).first().boundingBox(),
+    page.locator("summary").filter({ hasText: "AI に渡した 1 件" }).boundingBox(),
+    summary.boundingBox(),
+    page.getByRole("group", { name: "この回答は役に立ちましたか？" }).boundingBox(),
+  ]);
+  expect(processBox!.y).toBeLessThan(answerBox!.y);
+  expect(answerBox!.y).toBeLessThan(citationBox!.y);
+  expect(citationBox!.y).toBeLessThan(feedbackBox!.y);
+  // 字下げは位置でも分かる（入れ子の行の左端が親より右）。
+  const [parentLeft, childLeft] = await Promise.all([
+    page.getByTestId("chat-answer-progress-step-s3").locator("svg").first().boundingBox(),
+    nested.locator("svg").first().boundingBox(),
+  ]);
+  expect(childLeft!.x).toBeGreaterThan(parentLeft!.x);
+  await expectNoPageOverflow(page);
+});
 test("回答の根拠は Agent と同じ一覧（まとまりの表示・タブなし）で、カードの「根拠を表示」でパネルを開く（#2388）", { tag: "@responsive" }, async ({ page }, testInfo) => {
   // chunk の ID は「文書 ID:chunk set の hash:番号」の長い文字列。既定では画面に出さない。
   const longId = (n: number) => `doc-1:${"a1b2c3d4".repeat(8)}:${n}`;
@@ -2002,15 +1999,10 @@ for (const viewport of [
     expect(clarifyQueries).toEqual([{ query: "申請の期限は？", conversation_id: "conv-1" }]);
     expect(streamBodies).toEqual([]);
     await expectNoPageOverflow(page);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-      await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-      await choice.screenshot({
-        path: test.info().outputPath(`chat-confirm-before-answer-${viewport.name}-${colorScheme}.png`),
-      });
-    }
-    await page.emulateMedia({ colorScheme: "light" });
-    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await choice.screenshot({
+      path: test.info().outputPath(`chat-confirm-before-answer-${viewport.name}.png`),
+    });
 
     // 選ぶ前に再読込しても残る（作業状態）。
     await page.reload();
@@ -2079,13 +2071,10 @@ for (const viewport of [
     await expect(record).toContainText("名前 A");
     await expect(record).not.toContainText("その他: 名前 A");
     await expectNoPageOverflow(page);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-      await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-      await record.screenshot({
-        path: test.info().outputPath(`chat-clarification-record-${viewport.name}-${colorScheme}.png`),
-      });
-    }
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await record.screenshot({
+      path: test.info().outputPath(`chat-clarification-record-${viewport.name}.png`),
+    });
   });
 }
 
@@ -2163,16 +2152,6 @@ async function expectChatScrolledToEnd(page: Page) {
 
 const chatComposer = (page: Page) => page.getByRole("textbox", { name: "質問", exact: true });
 
-async function screenshotBothThemes(page: Page, target: Locator, path: (theme: string) => string) {
-  for (const theme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: theme });
-    await page.evaluate((value) => {
-      document.documentElement.dataset.theme = value;
-    }, theme);
-    await target.screenshot({ path: path(theme) });
-  }
-}
-
 for (const viewport of [
   { name: "desktop", width: 1280, height: 800 },
   { name: "mobile", width: 375, height: 812 },
@@ -2216,9 +2195,9 @@ for (const viewport of [
     await expectSingleChatSpinner(page);
     await expectChatScrolledToEnd(page);
     await expectNoPageOverflow(page);
-    await screenshotBothThemes(page, page.getByRole("region", { name: "チャット" }), (theme) =>
-      testInfo.outputPath(`chat-sending-${viewport.name}-${theme}.png`)
-    );
+    await page
+      .getByRole("region", { name: "チャット" })
+      .screenshot({ path: testInfo.outputPath(`chat-sending-${viewport.name}.png`) });
 
     // 会話ができても回答（start）の前は、同じ質問を出し続ける。
     create.open();
@@ -2298,9 +2277,7 @@ for (const viewport of [
     await expect(live.getByTestId("chat-answer-progress")).toHaveCount(0);
     await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
     await expectNoPageOverflow(page);
-    await screenshotBothThemes(page, live, (theme) =>
-      testInfo.outputPath(`chat-failed-${viewport.name}-${theme}.png`)
-    );
+    await live.screenshot({ path: testInfo.outputPath(`chat-failed-${viewport.name}.png`) });
 
     await failure.getByRole("button", { name: "再送信" }).click();
     await expect(page.getByText("経費の上限は 10 万円です。").first()).toBeVisible();
@@ -2569,11 +2546,8 @@ test("業務ガイドの自由入力条件だけを確認して回答へ進め�
   await answer.fill("資料 A の項目 B");
   await expect(confirm).toBeEnabled();
   await expectNoPageOverflow(page);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await card.screenshot({ path: test.info().outputPath(`guide-text-${colorScheme}.png`) });
-  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await card.screenshot({ path: test.info().outputPath("guide-text.png") });
   await confirm.click();
   await expect.poll(() => bodies.length).toBe(1);
   expect(bodies[0]).toMatchObject({

@@ -12,8 +12,8 @@ import { t } from "@/lib/i18n";
 import { APP_ROUTES } from "@/lib/routes";
 
 /**
- * DB ゲートの導線（接続情報の確認と ADB の起動はデータベース設定。ADB が停止中などは共通の案内が
- * ADB 管理のカードを付ける。初期化はシステムテーブル。#820）。
+ * DB ゲートの導線（接続設定と Wallet の確認はデータベース設定。DB の起動・停止は画面では扱わない。#10。
+ * 初期化はシステムテーブル。#820）。
  */
 export const DATABASE_GATE_ROUTES: DatabaseGateRoutes = {
   databaseSettings: APP_ROUTES.settingsDatabase,
