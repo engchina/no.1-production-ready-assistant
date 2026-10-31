@@ -1486,7 +1486,6 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
         file_processing_staging_cli,
         "get_settings",
         lambda: Settings(
-            oci_compartment_id="",
             oci_enterprise_ai_endpoint="",
             oci_enterprise_ai_project_ocid="",
             oci_enterprise_ai_api_key="",

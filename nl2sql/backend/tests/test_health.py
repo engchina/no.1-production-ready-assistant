@@ -2630,7 +2630,7 @@ async def test_diagnostics_reads_platform_env_file_not_current_working_directory
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     (run_dir / ".env").write_text(
-        "PLATFORM_ORACLE_DSN=cwd_dsn\nPLATFORM_OCI_REGION=us-chicago-1\n",
+        "PLATFORM_ORACLE_DSN=cwd_dsn\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(run_dir)
@@ -2643,7 +2643,7 @@ async def test_diagnostics_reads_platform_env_file_not_current_working_directory
     checks = {check["name"]: check for check in diagnostics_resp.json()["data"]["checks"]}
     assert checks["PLATFORM_ORACLE_USER"]["status"] == "ok"
     assert checks["PLATFORM_ORACLE_DSN"]["status"] == "warning"
-    assert checks["PLATFORM_OCI_REGION"]["status"] == "warning"
+    assert "PLATFORM_OCI_REGION" not in checks
 
 
 async def test_nl2sql_store_persists_profiles_jobs_history_and_feedback() -> None:

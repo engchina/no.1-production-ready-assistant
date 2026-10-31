@@ -36,7 +36,7 @@ OCI Enterprise AI の接続はプライマリ接続・セカンダリ接続・�
 次回のモデル設定保存で `.env` へ移し、secret を含まない v2 JSON へ更新する。
 API 応答は `has_api_key`、`secret_source`、`legacy_secret_detected` だけを返す。
 
-OCI SDK の profile は `PLATFORM_OCI_CONFIG_PROFILE` だけで決める（空なら `DEFAULT`）。旧 `OCI_PROFILE` は読まない。
+OCI SDK・OCI config は使わない（#11）。`PLATFORM_OCI_CONFIG_*` と旧 `OCI_PROFILE` は読まない。
 
 ## 設定の監査
 
@@ -102,8 +102,8 @@ OCI Compute（Terraform で配備した環境）での手順を示す。パス�
    ```
 
    - 旧 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD`（`APP_ADMIN_LOGIN_USER_*` より前の旧名）と `OCI_PROFILE` は移さない。
-     使っていた場合は `platform/.env` に `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` /
-     `PLATFORM_ADMIN_LOGIN_USER_PASSWORD`、`PLATFORM_OCI_CONFIG_PROFILE` を手で設定する。
+     管理者を使っていた場合は `platform/.env` に `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` /
+     `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` を手で設定する（`OCI_PROFILE` は OCI SDK を使わないので不要。#11）。
    - `model-settings.json` は共通 `.env` の場所になければコピーされる（`PLATFORM_MODEL_SETTINGS_FILE` を
      絶対パスで指定している場合はそのファイルを使い続ける）。
 

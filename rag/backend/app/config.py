@@ -510,13 +510,6 @@ class Settings(
     # CORS 許可オリジン（フロントエンド）
     cors_origins: list[str] = Field(default=["http://localhost:3000"])
 
-    # --- OCI SDK の認証（OCI Document Understanding だけが使う。RAG_OCI_*）---
-    # oci_compartment_id は Enterprise AI の payload テンプレートの compartment_id にも入る。
-    oci_config_file: str = Field(default="~/.oci/config")
-    oci_config_profile: str = Field(default="DEFAULT")
-    oci_region: str = Field(default="")
-    oci_compartment_id: str = Field(default="")
-
     # --- OCI Enterprise AI（LLM / Vision-capable LLM）---
     # 注意: OCI Generative AI の chat 推論 API ではなく Enterprise AI を使う
     oci_enterprise_ai_endpoint: str = Field(default="")
@@ -690,13 +683,6 @@ class Settings(
         le=100,
         description="Oracle AI Vector Search の FETCH APPROX target accuracy。",
     )
-
-    # --- OCI Object Storage（OCI Document Understanding の入出力だけが使う）---
-    # アップロード原本の保存先はローカルのディレクトリだけ（#11）。DU の設定が空のときの
-    # 既定（RAG_OBJECT_STORAGE_*）として DU だけが読む。
-    object_storage_region: str = Field(default="")
-    object_storage_namespace: str = Field(default="")
-    object_storage_bucket: str = Field(default="production-ready")
 
     # --- ローカルアップロード保存先 ---
     local_storage_dir: str = Field(default=DEFAULT_LOCAL_STORAGE_DIR)

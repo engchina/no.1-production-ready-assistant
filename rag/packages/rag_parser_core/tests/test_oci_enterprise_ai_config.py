@@ -12,7 +12,6 @@ def test_config_from_env_reads_platform_names() -> None:
             "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT": "https://inference.example/openai/v1",
             "PLATFORM_OCI_ENTERPRISE_AI_API_KEY": "sk-test",
             "PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID": "ocid1.generativeaiproject.oc1..x",
-            "PLATFORM_OCI_COMPARTMENT_ID": "ocid1.compartment.oc1..x",
             "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL": "vendor.vision",
             "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL": "vendor.llm",
             "PLATFORM_OCI_ENTERPRISE_AI_TIMEOUT_SECONDS": "30",
@@ -21,7 +20,7 @@ def test_config_from_env_reads_platform_names() -> None:
 
     assert config.oci_enterprise_ai_endpoint == "https://inference.example/openai/v1"
     assert config.oci_enterprise_ai_api_key == "sk-test"
-    assert config.oci_compartment_id == "ocid1.compartment.oc1..x"
+    assert not hasattr(config, "oci_compartment_id")
     assert config.vision_model_id == "vendor.vision"
     assert config.default_model_id == "vendor.llm"
     assert config.oci_enterprise_ai_timeout_seconds == 30.0

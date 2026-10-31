@@ -7,7 +7,6 @@ import stat
 from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from zipfile import ZipFile
 

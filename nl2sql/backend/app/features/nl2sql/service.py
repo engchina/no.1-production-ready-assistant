@@ -16026,9 +16026,6 @@ class Nl2SqlService:
         checks = [
             check_present("PLATFORM_ORACLE_DSN", "Oracle DSN"),
             check_present("PLATFORM_ORACLE_USER", "Oracle user"),
-            check_present("PLATFORM_ORACLE_ADB_OCID", "ADB OCID"),
-            check_present("PLATFORM_OCI_REGION", "OCI region"),
-            check_present("PLATFORM_OCI_COMPARTMENT_ID", "OCI compartment"),
             # テキストモデルの接続（#533）。セカンダリ接続なら
             # PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_*。
             DiagnosticCheck(
@@ -16354,8 +16351,6 @@ class Nl2SqlService:
                 ),
                 required_env_vars=[
                     env_var("NL2SQL_FEEDBACK_EMBEDDING_ENABLED"),
-                    env_var("PLATFORM_OCI_REGION"),
-                    env_var("PLATFORM_OCI_COMPARTMENT_ID"),
                     env_var("PLATFORM_OCI_GENAI_ENDPOINT"),
                     env_var("PLATFORM_OCI_GENAI_EMBED_MODEL_ID"),
                 ],
@@ -16365,8 +16360,6 @@ class Nl2SqlService:
                 ],
                 env_template=(
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true\n"
-                    "PLATFORM_OCI_REGION=<oci-region>\n"
-                    "PLATFORM_OCI_COMPARTMENT_ID=<compartment-ocid>\n"
                     "PLATFORM_OCI_GENAI_ENDPOINT=<oci-genai-endpoint>\n"
                     "PLATFORM_OCI_GENAI_EMBED_MODEL_ID=cohere.embed-v4.0\n"
                     "NL2SQL_FEEDBACK_VECTOR_TABLE=NL2SQL_FEEDBACK_VECTORS\n"
@@ -16458,10 +16451,7 @@ class Nl2SqlService:
                 "Feedback embedding は無効です。必要な場合は "
                 "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true にしてください。"
                 if not settings.nl2sql_feedback_embedding_enabled
-                else (
-                    "Feedback embedding 用 OCI SDK / endpoint / region / compartment を"
-                    "確認してください。"
-                )
+                else ("Feedback embedding 用の endpoint とモデルを確認してください。")
             )
         )
         persistence_summary = (
@@ -16489,7 +16479,6 @@ class Nl2SqlService:
                     "NL2SQL_RUNTIME_MODE",
                     "PLATFORM_ORACLE_DSN",
                     "PLATFORM_ORACLE_USER",
-                    "PLATFORM_ORACLE_ADB_OCID",
                     "PYTHON_ORACLEDB",
                     "ORACLE_RUNTIME_READY",
                 ],

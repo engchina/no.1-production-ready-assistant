@@ -32,7 +32,6 @@ No.1 Production Ready Suite（`platform/`・`rag/`・`nl2sql/`・`agent/`）が�
 
 | 部品 | 取得元 | ライセンス | 場所 | 使い方と注記 |
 |---|---|---|---|---|
-| `crc32c` | PyPI | LGPL-2.1-or-later | `oci`（OCI SDK）の必須の依存。`rag/backend` | C 拡張を Python から import する（動的リンクに相当）。改変しない |
 | `opencv-python-headless` | PyPI | Apache-2.0。wheel の `opencv_python_headless.libs` に FFmpeg（libavcodec・libavformat・libavutil・libswscale・libswresample。LGPL-2.1-or-later）、libvpx・libaom・libavif（BSD 系）、OpenBLAS（BSD-3-Clause）、GCC runtime（`libgfortran`・`libquadmath`。下の numpy と同じ）を同梱 | `rag/services/parsers/docling`・`rag/services/parsers/unstructured` | 画像の処理に使う。同梱の部品のライセンスは wheel の `LICENSE-3RD-PARTY.txt` |
 | `opencv-python` | PyPI | Apache-2.0。FFmpeg（LGPL-2.1-or-later）と Qt（LGPL-3.0）を同梱 | `rag/backend` と `rag/packages/rag_engine` の任意の extra `docling` だけ | 配備は extra を入れないので、配備先には入らない（開発の環境だけ） |
 | `shapely` | PyPI | BSD-3-Clause。wheel の `shapely.libs` に GEOS（`libgeos`・`libgeos_c`。LGPL-2.1）を同梱 | `rag/services/parsers/docling`（RapidOCR の依存）、`rag/backend` の extra `docling` | GEOS のライセンスは wheel の `LICENSE_GEOS` |
@@ -108,9 +107,7 @@ Apache License 2.0 §4(d) は、NOTICE のファイルを持つ部品を再配�
 | `onnx` | PyPI | Apache-2.0 | `rag/backend`・`rag/services/parsers/unstructured` | 1.22.0 |
 | `oracledb` | PyPI | UPL-1.0 OR Apache-2.0 | `agent/backend`・`nl2sql/backend`・`rag/backend` | 4.0.2 |
 | `prometheus-client` | PyPI | Apache-2.0 AND BSD-2-Clause | すべての backend・サービス | 0.26.0 |
-| `propcache` | PyPI | Apache-2.0 | OCI SDK・aiohttp の依存（`oci` を使う backend） | 0.5.2 |
 | `requests` | PyPI | Apache-2.0 | すべての backend・サービス | 2.34.2 |
-| `yarl` | PyPI | Apache-2.0 | OCI SDK・aiohttp の依存（`oci` を使う backend） | 1.25.1 |
 
 ### aiofiles 25.1.0
 
@@ -268,47 +265,11 @@ This product bundles decorator 4.0.10 which is available under a "2-clause BSD"
 license. For details, see prometheus_client/decorator.py.
 ```
 
-### propcache 0.5.2
-
-```text
-   Copyright 2016-2021, Andrew Svetlov and aio-libs team
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-```
-
 ### requests 2.34.2
 
 ```text
 Requests
 Copyright 2019 Kenneth Reitz
-```
-
-### yarl 1.25.1
-
-```text
-   Copyright 2016-2021, Andrew Svetlov and aio-libs team
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
 ```
 
 `onnxruntime`（MIT。`rag/backend`・`rag/services/parsers/docling`・`rag/services/parsers/unstructured`）は、同梱する第三者の部品の通知を package の `onnxruntime/ThirdPartyNotices.txt` に置いています（約 5,000 行のためここには写しません）。

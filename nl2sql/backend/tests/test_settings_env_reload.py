@@ -74,7 +74,7 @@ def test_get_settings_ignores_removed_oci_keys_left_in_platform_env(
         assert not hasattr(settings, "upload_storage_backend")
         assert not hasattr(settings, "object_storage_bucket")
         assert not hasattr(settings, "oracle_adb_ocid")
-        assert settings.oci_config_file == "~/.oci/config"
+        assert not hasattr(settings, "oci_config_file")
     finally:
         app_settings.reset_settings_cache()
 

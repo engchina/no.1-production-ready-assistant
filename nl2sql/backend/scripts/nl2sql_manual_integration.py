@@ -138,8 +138,7 @@ def _diagnostics(
             check.name
             for check in diagnostics.checks
             if (
-                check.name in {"PLATFORM_OCI_REGION", "PLATFORM_OCI_COMPARTMENT_ID"}
-                or check.name.startswith("OCI_GENAI")
+                check.name.startswith("OCI_GENAI")
                 or check.name == "NL2SQL_FEEDBACK_EMBEDDING_ENABLED"
             )
             and check.status != "ok"

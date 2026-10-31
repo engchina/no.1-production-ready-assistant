@@ -72,7 +72,6 @@ class OciEnterpriseAiConfig:
     vision_oci_enterprise_ai_endpoint: str | None = None
     vision_oci_enterprise_ai_api_key: str | None = None
     vision_oci_enterprise_ai_project_ocid: str | None = None
-    oci_compartment_id: str = ""
     vision_model_id: str = ""
     default_model_id: str = ""
     oci_enterprise_ai_llm_path: str = "/responses"
@@ -130,7 +129,6 @@ class OciEnterpriseAiConfig:
             oci_enterprise_ai_endpoint=_get("PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT"),
             oci_enterprise_ai_api_key=_get("PLATFORM_OCI_ENTERPRISE_AI_API_KEY"),
             oci_enterprise_ai_project_ocid=_get("PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID"),
-            oci_compartment_id=_get("PLATFORM_OCI_COMPARTMENT_ID"),
             vision_model_id=vision_model_id,
             default_model_id=_get("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL")
             or vision_model_id,
@@ -1087,7 +1085,6 @@ def _build_vlm_payload(
         "model": model_id,
         "project": config.oci_enterprise_ai_project_ocid,
         "project_ocid": config.oci_enterprise_ai_project_ocid,
-        "compartment_id": config.oci_compartment_id,
         "task": "structured_document_extraction",
         "language": "ja",
         "parser_profile": parser_profile,
@@ -1298,7 +1295,6 @@ def _build_llm_payload(
         "model": model_id,
         "project": config.oci_enterprise_ai_project_ocid,
         "project_ocid": config.oci_enterprise_ai_project_ocid,
-        "compartment_id": config.oci_compartment_id,
         "task": "rag_answer_generation",
         "language": "ja",
         "prompt": prompt,

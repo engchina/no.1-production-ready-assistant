@@ -251,7 +251,7 @@ def test_settings_do_not_read_legacy_env_names(
     settings = Settings(_env_file=backend_env)
 
     assert settings.oracle_dsn == ""
-    assert settings.object_storage_namespace == ""
+    assert not hasattr(settings, "object_storage_namespace")
     assert settings.log_level == "INFO"
     assert settings.oracle_user == ""
     # 属性名での生成（テストや設定画面の候補作成）は引き続き使える。
@@ -782,7 +782,7 @@ def test_chunking_accepts_product_maximums_and_rejects_larger_values() -> None:
 def test_removed_oci_platform_settings_are_not_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """共通 .env に残った OCI 認証・Object Storage・ADB の値は読まない（#11）。"""
+    """共通 .env・RAG の .env に残った OCI 認証・Object Storage・ADB の値は読まない（#11）。"""
     platform_env = tmp_path / "platform.env"
     platform_env.write_text(
         "PLATFORM_UPLOAD_STORAGE_BACKEND=oci\n"
@@ -805,9 +805,8 @@ def test_removed_oci_platform_settings_are_not_read(
 
     assert not hasattr(settings, "upload_storage_backend")
     assert not hasattr(settings, "oracle_adb_ocid")
-    # OCI Document Understanding が読む値は RAG の .env（RAG_*）に置く。
-    assert settings.object_storage_namespace == ""
-    assert settings.oci_region == ""
+    assert not hasattr(settings, "object_storage_namespace")
+    assert not hasattr(settings, "oci_region")
 
 
 def test_local_storage_dir_defaults_to_u01_persistent_path() -> None:

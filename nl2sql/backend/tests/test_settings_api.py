@@ -53,8 +53,6 @@ class _AsgiTestClient:
 client = _AsgiTestClient()
 
 
-
-
 def test_upload_database_wallet_extracts_to_thick_resolved_wallet_dir(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
@@ -719,8 +717,8 @@ def test_settings_ignore_legacy_env_names(
     settings = Settings(_env_file=(platform_env, backend_env))
 
     assert settings.oracle_dsn == ""
-    assert settings.oci_compartment_id == ""
-    assert settings.oci_region == ""
+    assert not hasattr(settings, "oci_compartment_id")
+    assert not hasattr(settings, "oci_region")
     assert settings.log_level == "INFO"
     assert settings.nl2sql_default_row_limit == 100
     # 属性名での生成（テストや内部の Settings(oracle_dsn=...)）は引き続き使える。

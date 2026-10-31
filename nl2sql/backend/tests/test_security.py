@@ -1796,12 +1796,10 @@ def test_route_permissions_cover_every_mounted_route() -> None:
     # 失敗の分析と会話の履歴（#2319）は menu.db_admin_chat だけ。回答の注意書きの取得・保存
     # （#2405）は menu.settings_answer_notice。チャットの添付（#2517）は生成の権限、使うかの設定は
     # menu.settings_chat_attachments。軌跡の本文記録は menu.settings_trace_recording。
-    # OCI 認証の 7 route・アップロード保存先の確認・Wallet の OCI からの取得は削除した（#11）。
-    assert len(mounted) == 295
-    assert len(ROUTE_PERMISSIONS) == 283
-    assert ROUTE_PERMISSIONS[("GET", "/nl2sql/engines")] == frozenset(
-        {PROFILE_MANAGE_PERMISSION, QUERY_GENERATE_PERMISSION}
-    )
+    # Select AI（#7）・Deep Data Security（#23）と、OCI 認証の 7 route・アップロード保存先の確認・
+    # Wallet の OCI からの取得・ADB の管理（#11）は削除した。
+    assert len(mounted) == 241
+    assert len(ROUTE_PERMISSIONS) == 229
     for path in ("/nl2sql/chats", "/nl2sql/chats/{conversation_id}"):
         assert ROUTE_PERMISSIONS[("GET", path)] == frozenset({QUERY_GENERATE_PERMISSION})
     # 処理の経過（#3226 の案 A）は記録と同じ権限。

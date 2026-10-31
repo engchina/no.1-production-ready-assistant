@@ -1,18 +1,15 @@
 import type { FullConfig } from "@playwright/test";
 import { stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const HERMETIC_MARKER = "e2e unmocked API";
 
 // 実 backend が書き込む、利用者の実環境の設定ファイル（backend/app/api/routes/settings.py の
-// _write_oci_config / _install_oci_private_key / _write_env_values / _persist_model_settings の既定の書込先）。
+// _write_env_values / _persist_model_settings の既定の書込先。OCI config は #11 で書かなくなった）。
 function protectedFiles(config: FullConfig): string[] {
   // frontend/playwright.config.ts の隣の backend/。
   const backendDir = resolve(dirname(config.configFile ?? join(process.cwd(), "playwright.config.ts")), "../backend");
   return [
-    join(homedir(), ".oci", "config"),
-    join(homedir(), ".oci", "oci_api_key.pem"),
     join(backendDir, ".env"),
     join(backendDir, "model-settings.json"),
   ];
