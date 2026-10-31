@@ -56,12 +56,6 @@ async function mockList(
   return queries;
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 /**
  * IME の変換中の入力を再現する（compositionstart → isComposing の input → compositionend）。
  * Playwright の keyboard は IME を通さないため、React が受ける DOM event を直接出す。
@@ -102,40 +96,37 @@ test.beforeEach(async ({ page }) => {
   await mockLocalAuth(page);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`検索・回答プロファイルの一覧は検索ボタンを置かず、入力に合わせて絞り込む (${theme})`, async ({ page }, testInfo) => {
-    await useTheme(page, theme);
-    await mockList(page, "**/api/knowledge-bases**", knowledgeBases);
-    const queries = await mockList(page, "**/api/search-answer-profiles**", searchAnswerProfiles);
-    await page.goto("/search-answer-profiles");
+test("検索・回答プロファイルの一覧は検索ボタンを置かず、入力に合わせて絞り込む", async ({ page }, testInfo) => {
+  await mockList(page, "**/api/knowledge-bases**", knowledgeBases);
+  const queries = await mockList(page, "**/api/search-answer-profiles**", searchAnswerProfiles);
+  await page.goto("/search-answer-profiles");
 
-    const search = page.getByRole("searchbox", { name: "名前・説明で検索" });
-    await expect(page.getByTestId("search-answer-profile-row-bv-1")).toBeVisible();
-    // 検索ボタン（旧「名前・説明で検索」のボタン）はない。
-    await expect(page.getByRole("button", { name: "名前・説明で検索" })).toHaveCount(0);
+  const search = page.getByRole("searchbox", { name: "名前・説明で検索" });
+  await expect(page.getByTestId("search-answer-profile-row-bv-1")).toBeVisible();
+  // 検索ボタン（旧「名前・説明で検索」のボタン）はない。
+  await expect(page.getByRole("button", { name: "名前・説明で検索" })).toHaveCount(0);
 
-    await search.pressSequentially("経理", { delay: 30 });
-    await expect(page.getByTestId("search-answer-profile-row-bv-2")).toHaveCount(0);
-    await expect(page.getByTestId("search-answer-profile-row-bv-1")).toBeVisible();
-    // 1 文字ずつではなく、入力が止まってから確定した値で問い合わせる。
-    expect(queries.filter((q) => q !== "")).toEqual(["経理"]);
-    await expect(page.getByRole("status").filter({ hasText: "1 件が一致しました" })).toHaveCount(1);
-    await expectNoPageOverflow(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`search-answer-profiles-search-${testInfo.project.name}-${theme}.png`),
-    });
-
-    // 0 件は空の状態と「検索語をクリア」。押すと元の一覧へ戻る。
-    await search.fill("該当なし");
-    await expect(page.getByText("検索に一致する検索・回答プロファイルがありません")).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath(`search-answer-profiles-search-empty-${testInfo.project.name}-${theme}.png`),
-    });
-    await page.getByRole("main").getByRole("button", { name: "検索語をクリア" }).last().click();
-    await expect(search).toHaveValue("");
-    await expect(page.getByTestId("search-answer-profile-row-bv-3")).toBeVisible();
+  await search.pressSequentially("経理", { delay: 30 });
+  await expect(page.getByTestId("search-answer-profile-row-bv-2")).toHaveCount(0);
+  await expect(page.getByTestId("search-answer-profile-row-bv-1")).toBeVisible();
+  // 1 文字ずつではなく、入力が止まってから確定した値で問い合わせる。
+  expect(queries.filter((q) => q !== "")).toEqual(["経理"]);
+  await expect(page.getByRole("status").filter({ hasText: "1 件が一致しました" })).toHaveCount(1);
+  await expectNoPageOverflow(page);
+  await page.screenshot({
+    path: testInfo.outputPath(`search-answer-profiles-search-${testInfo.project.name}.png`),
   });
-}
+
+  // 0 件は空の状態と「検索語をクリア」。押すと元の一覧へ戻る。
+  await search.fill("該当なし");
+  await expect(page.getByText("検索に一致する検索・回答プロファイルがありません")).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath(`search-answer-profiles-search-empty-${testInfo.project.name}.png`),
+  });
+  await page.getByRole("main").getByRole("button", { name: "検索語をクリア" }).last().click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByTestId("search-answer-profile-row-bv-3")).toBeVisible();
+});
 
 test("検索・回答プロファイルの一覧は IME の変換中に絞り込まず、確定した値で絞り込む", async ({ page }) => {
   await mockList(page, "**/api/knowledge-bases**", knowledgeBases);

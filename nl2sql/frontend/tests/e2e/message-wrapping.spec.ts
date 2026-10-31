@@ -11,9 +11,9 @@ test.use({ baseURL: FIXTURE_BASE_URL });
 // 以前は通知の幅が 22rem 固定で、業務プロファイルの保存の後の「Oracle Profile の反映が完了しました。」が
 // desktop でも「…完了しま / した。」と 2 行になった。通知の幅は内容に合わせて 22〜32rem の間で広がり、
 // メッセージの本文は `.pr-message-text`（word-break: auto-phrase / text-wrap: pretty）で文節で折り返す。
-async function openFixture(page: Page, theme: "light" | "dark") {
+async function openFixture(page: Page) {
   await page.route("**/__message-wrapping", (route) => route.fulfill({ contentType: "text/html", body:
-    `<html class="${theme === "dark" ? "dark" : ""}" lang="ja"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module">import RefreshRuntime from "/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type; window.__vite_plugin_react_preamble_installed__ = true;</script><script type="module" src="/tests/fixtures/message-wrapping.tsx"></script></body></html>` }));
+    `<html lang="ja"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module">import RefreshRuntime from "/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type; window.__vite_plugin_react_preamble_installed__ = true;</script><script type="module" src="/tests/fixtures/message-wrapping.tsx"></script></body></html>` }));
   // HMR timestamp 付きの自己 import で fixture が二重に実行されないようにする（toast-placement.spec.ts と同じ）。
   await page.route(/\/tests\/fixtures\/message-wrapping\.tsx\?t=\d+/, (route) => route.fulfill({
     contentType: "text/javascript", body: 'export * from "/tests/fixtures/message-wrapping.tsx";' }));
@@ -81,51 +81,49 @@ async function wrappedLines(target: Locator): Promise<WrappedLines> {
   });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`${theme}: 通知と画面の中のメッセージは語の途中で折り返さない`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    const mobile = testInfo.project.name === "mobile-375";
-    await openFixture(page, theme);
-    const region = page.getByRole("region", { name: "通知", exact: true });
+test(`通知と画面の中のメッセージは語の途中で折り返さない`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const mobile = testInfo.project.name === "mobile-375";
+  await openFixture(page);
+  const region = page.getByRole("region", { name: "通知", exact: true });
 
-    // 業務プロファイルの保存の後の通知。desktop は 1 行に収まり、375px でも語の途中で切らない。
-    await page.getByRole("group", { name: "ページ操作" }).getByRole("button", { name: "保存", exact: true }).click();
-    const synced = region.getByRole("status").filter({ hasText: "Oracle Profile の反映が完了しました。" });
-    await expect(synced).toBeVisible();
-    await expectToastPlacement(page);
-    const syncedLines = await wrappedLines(synced.locator("[data-message-text]"));
-    expect(syncedLines.midWord).toEqual([]);
-    // 以前の「…完了しま / した。」（`Intl.Segmenter` は「しま｜した」を語の境界とみなすため、行の先頭で確かめる）。
-    expect(syncedLines.lines.some((line) => /^(?:した|ました)/u.test(line))).toBe(false);
-    if (!mobile) expect(syncedLines.lines).toEqual(["Oracle Profile の反映が完了しました。"]);
-    // 短い通知は従来の幅（22rem）のまま、長くても 32rem まで。
-    const rem = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
-    const width = (await region.boundingBox())!.width;
-    if (!mobile) {
-      expect(width).toBeGreaterThanOrEqual(22 * rem - 1);
-      expect(width).toBeLessThanOrEqual(32 * rem + 1);
-    }
-    await page.screenshot({ path: testInfo.outputPath(`message-wrapping-toast-${theme}.png`) });
+  // 業務プロファイルの保存の後の通知。desktop は 1 行に収まり、375px でも語の途中で切らない。
+  await page.getByRole("group", { name: "ページ操作" }).getByRole("button", { name: "保存", exact: true }).click();
+  const synced = region.getByRole("status").filter({ hasText: "Oracle Profile の反映が完了しました。" });
+  await expect(synced).toBeVisible();
+  await expectToastPlacement(page);
+  const syncedLines = await wrappedLines(synced.locator("[data-message-text]"));
+  expect(syncedLines.midWord).toEqual([]);
+  // 以前の「…完了しま / した。」（`Intl.Segmenter` は「しま｜した」を語の境界とみなすため、行の先頭で確かめる）。
+  expect(syncedLines.lines.some((line) => /^(?:した|ました)/u.test(line))).toBe(false);
+  if (!mobile) expect(syncedLines.lines).toEqual(["Oracle Profile の反映が完了しました。"]);
+  // 短い通知は従来の幅（22rem）のまま、長くても 32rem まで。
+  const rem = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+  const width = (await region.boundingBox())!.width;
+  if (!mobile) {
+    expect(width).toBeGreaterThanOrEqual(22 * rem - 1);
+    expect(width).toBeLessThanOrEqual(32 * rem + 1);
+  }
+  await page.screenshot({ path: testInfo.outputPath(`message-wrapping-toast-light.png`) });
 
-    // 2 文の通知: 文末を優先して折り返し、文の中でも語の途中で切らない。
-    await page.getByRole("group", { name: "ページ操作" }).getByRole("button", { name: "長い通知" }).click();
-    const long = region.getByRole("status").filter({ hasText: "バックグラウンドで続きます" });
-    await expect(long).toBeVisible();
-    expect((await wrappedLines(long.locator("[data-message-text]"))).midWord).toEqual([]);
-    if (!mobile) {
-      // 積んだ通知は最も広い通知の幅にそろい、上限（32rem）を超えない。
-      expect((await region.boundingBox())!.width).toBeLessThanOrEqual(32 * rem + 1);
-    }
-    await expectToastPlacement(page);
+  // 2 文の通知: 文末を優先して折り返し、文の中でも語の途中で切らない。
+  await page.getByRole("group", { name: "ページ操作" }).getByRole("button", { name: "長い通知" }).click();
+  const long = region.getByRole("status").filter({ hasText: "バックグラウンドで続きます" });
+  await expect(long).toBeVisible();
+  expect((await wrappedLines(long.locator("[data-message-text]"))).midWord).toEqual([]);
+  if (!mobile) {
+    // 積んだ通知は最も広い通知の幅にそろい、上限（32rem）を超えない。
+    expect((await region.boundingBox())!.width).toBeLessThanOrEqual(32 * rem + 1);
+  }
+  await expectToastPlacement(page);
 
-    // Banner（見出し・本文）と FormStatus。
-    const banner = page.getByRole("alert").filter({ hasText: "システムテーブルの作成に失敗しました。" });
-    for (const message of await banner.locator("[data-message-text]").all()) {
-      expect((await wrappedLines(message)).midWord).toEqual([]);
-    }
-    const formStatus = page.getByRole("alert").filter({ hasText: "別の名前を入力してください。" });
-    expect((await wrappedLines(formStatus.locator("[data-message-text]"))).midWord).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`message-wrapping-${theme}.png`), fullPage: true });
+  // Banner（見出し・本文）と FormStatus。
+  const banner = page.getByRole("alert").filter({ hasText: "システムテーブルの作成に失敗しました。" });
+  for (const message of await banner.locator("[data-message-text]").all()) {
+    expect((await wrappedLines(message)).midWord).toEqual([]);
+  }
+  const formStatus = page.getByRole("alert").filter({ hasText: "別の名前を入力してください。" });
+  expect((await wrappedLines(formStatus.locator("[data-message-text]"))).midWord).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath(`message-wrapping-light.png`), fullPage: true });
 
-    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
-  });
-}
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+});

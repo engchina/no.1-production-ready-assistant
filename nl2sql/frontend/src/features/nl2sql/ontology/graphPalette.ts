@@ -3,7 +3,7 @@ import type { OntologyEdge, OntologyNode } from "./types";
 /**
  * ontology グラフの配色を「型チャネル（塗り）」と「状態チャネル（枠/線）」に分離した単一の正。
  * React Flow 版（JS style）と SVG 版の両レンダラが同一マッピングを参照し、
- * 色は共有トークンの CSS 変数（`--color-graph-*` / semantic）を使うのでダークテーマにも追従する。
+ * 色は共有トークンの CSS 変数（`--color-graph-*` / semantic）を使う（配色はライトだけ。#17）。
  * 状態は色だけでなく形状・線幅・破線でも冗長符号化する（color-not-only）。
  */
 

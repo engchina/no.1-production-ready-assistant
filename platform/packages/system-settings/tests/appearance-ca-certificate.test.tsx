@@ -26,7 +26,7 @@ afterEach(() => {
 
 async function render(probe: (url: string) => Promise<boolean>) {
   await act(async () => {
-    root.render(<AppearanceSettingsPage theme="light" onThemeChange={() => undefined} probeCaCertificate={probe} />);
+    root.render(<AppearanceSettingsPage probeCaCertificate={probe} />);
   });
   await act(async () => {
     await Promise.resolve();

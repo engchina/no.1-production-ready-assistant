@@ -77,13 +77,13 @@
 
 ## 既存ルールとの優先順位
 
-- 部品の見た目と振る舞い（サイズ・variant・アイコン・loading・ヘッダーの並び・フォーカス・ダークテーマ）は、`ui-ux-pro-max` skill の一般論や製品の `docs/` より `platform/docs/design-system/` を優先する。
+- 部品の見た目と振る舞い（サイズ・variant・アイコン・loading・ヘッダーの並び・フォーカス・テーマ）は、`ui-ux-pro-max` skill の一般論や製品の `docs/` より `platform/docs/design-system/` を優先する。
 - 画面の振る舞いは `platform/docs/ux-contracts/` が 3 製品共通の正本。製品の `docs/frontend-*.md` には、それらが決めない製品固有の差分（割り当て・例外）だけを書く。
 
 ## UI 変更の検証
 
 - **UI/UX の作業（設計・実装・レビュー・改善）は必ず `ui-ux-pro-max` skill を使う。**
-- 変更ごとに Playwright で実画面を確かめる: desktop と 375px、必要に応じて空 / 読込 / エラー / ブロック、ライト / ダーク、1280px / 1920px（タイトルと本文の左端が揃う）、キーボード（最初の Tab で「本文へスキップ」、フォーカスリング、`Tabs` の ← → / Home / End）。状態は色だけで表さない。意図的な見た目の変更は README §7 と照合して PR に書く。
+- 変更ごとに Playwright で実画面を確かめる: desktop と 375px、必要に応じて空 / 読込 / エラー / ブロック、1280px / 1920px（タイトルと本文の左端が揃う）、キーボード（最初の Tab で「本文へスキップ」、フォーカスリング、`Tabs` の ← → / Home / End）。状態は色だけで表さない。意図的な見た目の変更は README §7 と照合して PR に書く。
 - ローカルの e2e は関係する spec だけを、1 回おおむね 1 分以内で（`-g` や spec のパス）。
 - **画面幅で結果が変わる test には `{ tag: "@responsive" }` を付ける**（レイアウトの位置・幅・並び、ナビのドロワー、横スクロール・折り返し、タッチ端末の高さ・タップ、`isMobile` / project 名で確かめる内容が変わるもの。mobile だけで実行する test は必ず。spec 全体なら先頭の describe に）。中で `setViewportSize` で幅を決める test と、末尾の汎用の横あふれの確認だけの test には付けない。迷ったら付ける。規則の正本は `platform/scripts/e2e-impact/mobile-scope.ts`。PR の mobile と同じ範囲は `E2E_MOBILE_SCOPE=responsive npx playwright test …` で確かめる。
 - **画面のコードを変えたら、その画面を検証する既存の spec も同じ PR で直す（#885）。** 影響を受ける spec は `python3 platform/scripts/e2e_impact.py select --product <製品> --base origin/main --download`（CI の `e2e-impact` と同じ選択）で選び、PR の前に実行する。spec は `test` を製品の fixture（RAG・Agent `e2e/fixtures/test.ts`、NL2SQL `tests/e2e/_helpers/test.ts`）から import する（CI の `check-imports`）。

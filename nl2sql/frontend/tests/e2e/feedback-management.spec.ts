@@ -500,22 +500,19 @@ test("フィードバック履歴が 0 件なら空の状態を出し、ペー�
 test("履歴の絞り込みは FilterSelect で 1 行にそろい、狭い画面はシート、条件をクリアで既定に戻す (#1933)", { tag: "@responsive" }, async ({ page, isMobile }) => {
   const state = await mockFeedbackApi(page);
   const widths = isMobile ? [375] : [1280, 1920];
-  for (const theme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: theme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto("/feedback-management?tab=appFeedback");
-      const toolbar = page.getByTestId("feedback-app-filters");
-      await expect(toolbar.getByRole("searchbox", { name: "履歴検索" })).toBeVisible();
-      await expect(page.getByTestId("feedback-history-row")).toHaveCount(1);
-      // 検索・利用者評価・業務プロファイルの 3 つ。ツールバーが 28rem 未満ならシートにまとめる
-      // （一覧の列は既定 20rem なので、広い画面でもシート。#2283）。
-      expect(await listToolbarUsesSheet(toolbar), `${width}px`).toBe(true);
-      expect(await findToolbarMisalignment(page), `${width}px・${theme}`).toEqual([]);
-      expect(await findToolbarFieldWidthMismatch(page), `${width}px・${theme}`).toEqual([]);
-      expect(await findClippedPlaceholders(page), `${width}px・${theme}`).toEqual([]);
-      expect(await measureHorizontalOverflow(page), `${width}px・${theme}`).toBeLessThanOrEqual(1);
-    }
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/feedback-management?tab=appFeedback");
+    const toolbar = page.getByTestId("feedback-app-filters");
+    await expect(toolbar.getByRole("searchbox", { name: "履歴検索" })).toBeVisible();
+    await expect(page.getByTestId("feedback-history-row")).toHaveCount(1);
+    // 検索・利用者評価・業務プロファイルの 3 つ。ツールバーが 28rem 未満ならシートにまとめる
+    // （一覧の列は既定 20rem なので、広い画面でもシート。#2283）。
+    expect(await listToolbarUsesSheet(toolbar), `${width}px`).toBe(true);
+    expect(await findToolbarMisalignment(page), `${width}px`).toEqual([]);
+    expect(await findToolbarFieldWidthMismatch(page), `${width}px`).toEqual([]);
+    expect(await findClippedPlaceholders(page), `${width}px`).toEqual([]);
+    expect(await measureHorizontalOverflow(page), `${width}px`).toBeLessThanOrEqual(1);
   }
 
   const toolbar = page.getByTestId("feedback-app-filters");

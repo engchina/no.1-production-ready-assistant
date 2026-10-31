@@ -18,12 +18,6 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 function seedAutomation(mockApi: MockApi, overrides: Record<string, unknown> = {}) {
   mockApi.state.automations.push({
     id: "auto-seeded",
@@ -47,54 +41,51 @@ function seedAutomation(mockApi: MockApi, overrides: Record<string, unknown> = {
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`スケジュールの自動実行を作り、一覧に次回とスケジュールを出す (${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      // 既定の時間帯はブラウザではなくシステムの設定の時間帯（/api/auth/me の timezone。#3265）。
-      mockApi.setCurrentUser({ ...LOCAL_CURRENT_USER, timezone: "UTC" });
-      await page.goto("/automations");
-      await expect(page.getByRole("heading", { name: "自動実行", level: 1 })).toBeVisible();
-      await expect(page.getByText("自動実行はまだありません")).toBeVisible();
+  test(`スケジュールの自動実行を作り、一覧に次回とスケジュールを出す (${viewport.name})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    // 既定の時間帯はブラウザではなくシステムの設定の時間帯（/api/auth/me の timezone。#3265）。
+    mockApi.setCurrentUser({ ...LOCAL_CURRENT_USER, timezone: "UTC" });
+    await page.goto("/automations");
+    await expect(page.getByRole("heading", { name: "自動実行", level: 1 })).toBeVisible();
+    await expect(page.getByText("自動実行はまだありません")).toBeVisible();
 
-      await page.getByRole("button", { name: "自動実行を作成" }).first().click();
-      await expect(page).toHaveURL(/\/automations\?id=new$/);
-      // トリガーはスケジュールだけなので、種類の選択は出さず、スケジュールの設定だけを出す（#1799）。
-      await expect(page.getByRole("heading", { name: "スケジュール", level: 2 })).toBeVisible();
-      await expect(page.getByRole("radio")).toHaveCount(0);
-      // 必須の入力が無ければ保存しない。
-      await page.getByRole("button", { name: "作成", exact: true }).first().click();
-      await expect(page.getByText("名前を入力してください。")).toBeVisible();
-      await expect(page.getByText("指示を入力してください。")).toBeVisible();
+    await page.getByRole("button", { name: "自動実行を作成" }).first().click();
+    await expect(page).toHaveURL(/\/automations\?id=new$/);
+    // トリガーはスケジュールだけなので、種類の選択は出さず、スケジュールの設定だけを出す（#1799）。
+    await expect(page.getByRole("heading", { name: "スケジュール", level: 2 })).toBeVisible();
+    await expect(page.getByRole("radio")).toHaveCount(0);
+    // 必須の入力が無ければ保存しない。
+    await page.getByRole("button", { name: "作成", exact: true }).first().click();
+    await expect(page.getByText("名前を入力してください。")).toBeVisible();
+    await expect(page.getByText("指示を入力してください。")).toBeVisible();
 
-      await page.getByLabel("名前").fill("週次の品質の点検");
-      await page.locator("#automation-goal").fill("先週の不良率を確認し、基準を超えたラインを報告してください。");
-      await chooseSelectFieldOption(page.locator("#automation-frequency"), "weekly");
-      await page.getByRole("checkbox", { name: "水" }).check();
-      await page.getByLabel("時刻").fill("08:30");
-      await page.screenshot({ path: testInfo.outputPath(`automation-editor-${viewport.name}-${theme}.png`), fullPage: true });
-      await page.getByRole("button", { name: "作成", exact: true }).first().click();
+    await page.getByLabel("名前").fill("週次の品質の点検");
+    await page.locator("#automation-goal").fill("先週の不良率を確認し、基準を超えたラインを報告してください。");
+    await chooseSelectFieldOption(page.locator("#automation-frequency"), "weekly");
+    await page.getByRole("checkbox", { name: "水" }).check();
+    await page.getByLabel("時刻").fill("08:30");
+    await page.screenshot({ path: testInfo.outputPath(`automation-editor-${viewport.name}.png`), fullPage: true });
+    await page.getByRole("button", { name: "作成", exact: true }).first().click();
 
-      await expect(page.getByText("自動実行を作成しました")).toBeVisible();
-      await expect(page).toHaveURL(/\/automations\?id=auto-1$/);
-      const body = mockApi.lastRequest("POST", "/api/automations")?.body as Record<string, unknown>;
-      expect(body).toMatchObject({
-        agent_id: "default",
-        name: "週次の品質の点検",
-        enabled: true,
-        schedule: { frequency: "weekly", time: "08:30", weekdays: [0, 2], minute: 0, timezone: "UTC" },
-      });
-      expect(body).not.toHaveProperty("trigger");
-      await expect(page.getByTestId("automation-next")).toContainText("次回の実行");
-
-      await page.getByRole("button", { name: "一覧へ戻る" }).last().click();
-      const row = page.getByRole("table", { name: "自動実行の一覧" }).getByRole("row", { name: /週次の品質の点検/ });
-      await expect(row).toContainText("毎週 月・水 08:30");
-      await expect(row).toContainText("有効");
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`automations-${viewport.name}-${theme}.png`), fullPage: true });
+    await expect(page.getByText("自動実行を作成しました")).toBeVisible();
+    await expect(page).toHaveURL(/\/automations\?id=auto-1$/);
+    const body = mockApi.lastRequest("POST", "/api/automations")?.body as Record<string, unknown>;
+    expect(body).toMatchObject({
+      agent_id: "default",
+      name: "週次の品質の点検",
+      enabled: true,
+      schedule: { frequency: "weekly", time: "08:30", weekdays: [0, 2], minute: 0, timezone: "UTC" },
     });
-  }
+    expect(body).not.toHaveProperty("trigger");
+    await expect(page.getByTestId("automation-next")).toContainText("次回の実行");
+
+    await page.getByRole("button", { name: "一覧へ戻る" }).last().click();
+    const row = page.getByRole("table", { name: "自動実行の一覧" }).getByRole("row", { name: /週次の品質の点検/ });
+    await expect(row).toContainText("毎週 月・水 08:30");
+    await expect(row).toContainText("有効");
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`automations-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test("保存したスケジュールを編集し、次回と一覧のスケジュールを更新する", async ({ page, mockApi }) => {

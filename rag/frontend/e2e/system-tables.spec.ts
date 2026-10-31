@@ -385,16 +385,6 @@ const disabledForeignKey = {
 };
 const orphanedForeignKey = { ...chunkSetsDocumentForeignKey, orphan_rows: 240 };
 
-/** アプリの外観の設定（localStorage）でテーマを切り替える（`emulateMedia` では切り替わらない）。 */
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
-}
-
 /**
  * 領域の中の文字（段落・一覧・ボタン）の、背景に対するコントラスト比の最小値。
  * 色は canvas に塗って sRGB に直し、半透明の文字・背景は祖先の背景に重ねて求める（WCAG 2.x）。
@@ -456,79 +446,73 @@ async function minimumTextContrast(page: Page, selector: string) {
 
 const screenshotDir = process.env.SYSTEM_TABLES_SCREENSHOT_DIR;
 
-for (const theme of ["light", "dark"] as const) {
-  test(`外部キーの差分と参照先のない行の警告を並べ、文字のコントラストを保つ（#511・${theme}）`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    await useTheme(page, theme);
-    await mockSettings(page, {
-      initialStatus: "outdated",
-      statusExtra: {
-        pending_versions: [],
-        missing_foreign_keys: [{ ...chunkSetsDocumentForeignKey, orphan_rows: 3 }],
-        mismatched_foreign_keys: [mismatchedForeignKey],
-        disabled_foreign_keys: [disabledForeignKey],
-        orphaned_foreign_keys: [
-          {
-            ...orphanedForeignKey,
-            name: "RAG_DOC_EXT_DOCUMENT_FK",
-            table_name: "RAG_DOCUMENT_EXTRACTIONS",
-          },
-        ],
-      },
-    });
-    await page.goto("/settings/system-tables");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    const card = page.locator("#system-tables");
-
-    const mismatched = card.getByTestId("system-tables-mismatched-foreign-keys");
-    await expect(mismatched).toContainText("削除規則が正本と異なる外部キーが 1 件あります");
-    await expect(mismatched).toContainText("RAG_DOCUMENT_RECIPES (DOCUMENT_ID) → RAG_DOCUMENTS");
-    await expect(mismatched).toContainText("削除規則 NO ACTION → CASCADE");
-    const disabled = card.getByTestId("system-tables-disabled-foreign-keys");
-    await expect(disabled).toContainText("無効になっている外部キーが 1 件あります");
-    await expect(disabled).toContainText("参照先のない行 12 件");
-    await expect(card.getByTestId("system-tables-missing-foreign-keys")).toContainText(
-      "参照先のない行 3 件"
-    );
-    await expect(
-      card.getByRole("button", { name: "参照先のない行を削除 RAG_DOC_EXT_DOCUMENT_FK" })
-    ).toBeVisible();
-
-    const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
-    expect(contrast.count).toBeGreaterThan(5);
-    expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
-
-    const pageOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-    );
-    expect(pageOverflow).toBeLessThanOrEqual(1);
-
-    // 目視用の画像（環境変数を指定したときだけ。CI では撮らない）。
-    if (screenshotDir) {
-      const widths = testInfo.project.name === "mobile" ? [375] : [1280, 1920];
-      const banners = card.locator("[role='status']");
-      for (const width of widths) {
-        await page.setViewportSize({ width, height: 900 });
-        for (const [index, name] of ["outdated", "orphaned"].entries()) {
-          await banners.nth(index).screenshot({
-            path: `${screenshotDir}/system-tables-fk-${name}-${theme}-${width}.png`,
-            animations: "disabled",
-          });
-        }
-      }
-      await card.getByRole("button", { name: "参照先のない行を削除 RAG_DOC_EXT_DOCUMENT_FK" }).click();
-      const dialog = page.getByRole("alertdialog");
-      await expect(dialog.getByRole("button", { name: "キャンセル" })).toBeVisible();
-      await dialog.screenshot({
-        path: `${screenshotDir}/system-tables-fk-dialog-${theme}-${widths[widths.length - 1]}.png`,
-        animations: "disabled",
-      });
-    }
+test(`外部キーの差分と参照先のない行の警告を並べ、文字のコントラストを保つ（#511）`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  await mockSettings(page, {
+    initialStatus: "outdated",
+    statusExtra: {
+      pending_versions: [],
+      missing_foreign_keys: [{ ...chunkSetsDocumentForeignKey, orphan_rows: 3 }],
+      mismatched_foreign_keys: [mismatchedForeignKey],
+      disabled_foreign_keys: [disabledForeignKey],
+      orphaned_foreign_keys: [
+        {
+          ...orphanedForeignKey,
+          name: "RAG_DOC_EXT_DOCUMENT_FK",
+          table_name: "RAG_DOCUMENT_EXTRACTIONS",
+        },
+      ],
+    },
   });
-}
+  await page.goto("/settings/system-tables");
+  const card = page.locator("#system-tables");
+
+  const mismatched = card.getByTestId("system-tables-mismatched-foreign-keys");
+  await expect(mismatched).toContainText("削除規則が正本と異なる外部キーが 1 件あります");
+  await expect(mismatched).toContainText("RAG_DOCUMENT_RECIPES (DOCUMENT_ID) → RAG_DOCUMENTS");
+  await expect(mismatched).toContainText("削除規則 NO ACTION → CASCADE");
+  const disabled = card.getByTestId("system-tables-disabled-foreign-keys");
+  await expect(disabled).toContainText("無効になっている外部キーが 1 件あります");
+  await expect(disabled).toContainText("参照先のない行 12 件");
+  await expect(card.getByTestId("system-tables-missing-foreign-keys")).toContainText(
+    "参照先のない行 3 件"
+  );
+  await expect(
+    card.getByRole("button", { name: "参照先のない行を削除 RAG_DOC_EXT_DOCUMENT_FK" })
+  ).toBeVisible();
+
+  const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
+  expect(contrast.count).toBeGreaterThan(5);
+  expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
+
+  const pageOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(pageOverflow).toBeLessThanOrEqual(1);
+
+  // 目視用の画像（環境変数を指定したときだけ。CI では撮らない）。
+  if (screenshotDir) {
+    const widths = testInfo.project.name === "mobile" ? [375] : [1280, 1920];
+    const banners = card.locator("[role='status']");
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const [index, name] of ["outdated", "orphaned"].entries()) {
+        await banners.nth(index).screenshot({
+          path: `${screenshotDir}/system-tables-fk-${name}-${width}.png`,
+          animations: "disabled",
+        });
+      }
+    }
+    await card.getByRole("button", { name: "参照先のない行を削除 RAG_DOC_EXT_DOCUMENT_FK" }).click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog.getByRole("button", { name: "キャンセル" })).toBeVisible();
+    await dialog.screenshot({
+      path: `${screenshotDir}/system-tables-fk-dialog-${widths[widths.length - 1]}.png`,
+      animations: "disabled",
+    });
+  }
+});
 
 test("参照先のない行の削除は確認ダイアログで表・外部キー・件数を示し、承認したときだけ確認した件数で削除する（#511）", async ({
   page,
@@ -615,117 +599,105 @@ const destructiveMigration = {
     "旧い標準の回答フローのテーブル rag_agent_memories・rag_prompt_versions・rag_generation_settings を削除し（PURGE のため復元できません）、ロールに付いた廃止済みのメニュー権限の行を削除します。残す行は先に app.rag.legacy_export で書き出してください。",
 };
 
-for (const theme of ["light", "dark"] as const) {
-  test(`データを削除する未適用の migration は警告し、確認ダイアログで承認したときだけ適用する（#619・${theme}）`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    await useTheme(page, theme);
-    const mock = await mockSettings(page, {
-      initialStatus: "outdated",
-      statusExtra: {
-        pending_versions: [destructiveMigration.name],
-        pending_destructive_migrations: [destructiveMigration],
-      },
-    });
-    await page.goto("/settings/system-tables");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    const card = page.locator("#system-tables");
-
-    const warning = card.getByTestId("system-tables-destructive-migrations");
-    await expect(warning).toContainText("削除したデータは元に戻せません");
-    await expect(warning).toContainText(destructiveMigration.name);
-    await expect(warning).toContainText("rag_agent_memories");
-    await expect(warning).toContainText("「作成・更新」を押すと、削除の確認を求めます。");
-    await expect(card).not.toContainText("無損失で更新できます");
-
-    const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
-    expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
-    const pageOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-    );
-    expect(pageOverflow).toBeLessThanOrEqual(1);
-
-    // 目視用の画像（環境変数を指定したときだけ。CI では撮らない）。
-    const width = testInfo.project.name === "mobile" ? 375 : 1280;
-    if (screenshotDir) {
-      await warning.screenshot({
-        path: `${screenshotDir}/system-tables-destructive-${theme}-${width}.png`,
-        animations: "disabled",
-      });
-    }
-
-    // 取り消したときは送らない。
-    await card.getByRole("button", { name: "作成・更新" }).click();
-    const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toContainText("データを削除する更新を実行しますか？");
-    await expect(dialog).toContainText(destructiveMigration.name);
-    await expect(dialog).toContainText("元に戻せません");
-    if (screenshotDir) {
-      await dialog.screenshot({
-        path: `${screenshotDir}/system-tables-destructive-dialog-${theme}-${width}.png`,
-        animations: "disabled",
-      });
-    }
-    await dialog.getByRole("button", { name: "キャンセル" }).click();
-    await expect(dialog).toHaveCount(0);
-    expect(mock.initializeCalls()).toBe(0);
-
-    await card.getByRole("button", { name: "作成・更新" }).click();
-    await dialog.getByRole("button", { name: "削除して更新" }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect.poll(() => mock.initializeCalls()).toBe(1);
-    expect(mock.recreatePayload()).toEqual({ recreate: false, allow_destructive: true });
+test(`データを削除する未適用の migration は警告し、確認ダイアログで承認したときだけ適用する（#619）`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  const mock = await mockSettings(page, {
+    initialStatus: "outdated",
+    statusExtra: {
+      pending_versions: [destructiveMigration.name],
+      pending_destructive_migrations: [destructiveMigration],
+    },
   });
-}
+  await page.goto("/settings/system-tables");
+  const card = page.locator("#system-tables");
+
+  const warning = card.getByTestId("system-tables-destructive-migrations");
+  await expect(warning).toContainText("削除したデータは元に戻せません");
+  await expect(warning).toContainText(destructiveMigration.name);
+  await expect(warning).toContainText("rag_agent_memories");
+  await expect(warning).toContainText("「作成・更新」を押すと、削除の確認を求めます。");
+  await expect(card).not.toContainText("無損失で更新できます");
+
+  const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
+  expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
+  const pageOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(pageOverflow).toBeLessThanOrEqual(1);
+
+  // 目視用の画像（環境変数を指定したときだけ。CI では撮らない）。
+  const width = testInfo.project.name === "mobile" ? 375 : 1280;
+  if (screenshotDir) {
+    await warning.screenshot({
+      path: `${screenshotDir}/system-tables-destructive-${width}.png`,
+      animations: "disabled",
+    });
+  }
+
+  // 取り消したときは送らない。
+  await card.getByRole("button", { name: "作成・更新" }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("データを削除する更新を実行しますか？");
+  await expect(dialog).toContainText(destructiveMigration.name);
+  await expect(dialog).toContainText("元に戻せません");
+  if (screenshotDir) {
+    await dialog.screenshot({
+      path: `${screenshotDir}/system-tables-destructive-dialog-${width}.png`,
+      animations: "disabled",
+    });
+  }
+  await dialog.getByRole("button", { name: "キャンセル" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(mock.initializeCalls()).toBe(0);
+
+  await card.getByRole("button", { name: "作成・更新" }).click();
+  await dialog.getByRole("button", { name: "削除して更新" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => mock.initializeCalls()).toBe(1);
+  expect(mock.recreatePayload()).toEqual({ recreate: false, allow_destructive: true });
+});
 
 // ---- 台帳が最新でも欠けた列（#2450） --------------------------------------------------
 
-for (const theme of ["light", "dark"] as const) {
-  test(`台帳が最新でも既存の表に無い列を更新必要として並べる（#2450・${theme}）`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    await useTheme(page, theme);
-    const mock = await mockSettings(page, {
-      initialStatus: "outdated",
-      statusExtra: {
-        pending_versions: [],
-        missing_columns: [
-          { table_name: "RAG_DOCUMENTS", column_name: "CLASSIFICATION" },
-        ],
-      },
-    });
-    await page.goto("/settings/system-tables");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    const card = page.locator("#system-tables");
-    await expect(card.getByText("更新必要", { exact: true }).first()).toBeVisible();
-    const missing = card.getByTestId("system-tables-missing-columns");
-    await expect(missing).toContainText("既存のテーブルに必須の列が 1 件ありません");
-    await expect(missing).toContainText("RAG_DOCUMENTS.CLASSIFICATION");
-
-    const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
-    expect(contrast.count).toBeGreaterThan(2);
-    expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
-    const pageOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
-    );
-    expect(pageOverflow).toBeLessThanOrEqual(1);
-
-    if (screenshotDir) {
-      const width = testInfo.project.name === "mobile" ? 375 : 1280;
-      await page.setViewportSize({ width, height: 900 });
-      await card.locator("[role='status']").first().screenshot({
-        path: `${screenshotDir}/system-tables-columns-${theme}-${width}.png`,
-        animations: "disabled",
-      });
-    }
-
-    await card.getByRole("button", { name: "作成・更新" }).click();
-    await expect(card.getByText("初期化済み", { exact: true })).toBeVisible();
-    expect(mock.initializeCalls()).toBe(1);
-    await expect(missing).toHaveCount(0);
+test(`台帳が最新でも既存の表に無い列を更新必要として並べる（#2450）`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  const mock = await mockSettings(page, {
+    initialStatus: "outdated",
+    statusExtra: {
+      pending_versions: [],
+      missing_columns: [
+        { table_name: "RAG_DOCUMENTS", column_name: "CLASSIFICATION" },
+      ],
+    },
   });
-}
+  await page.goto("/settings/system-tables");
+  const card = page.locator("#system-tables");
+  await expect(card.getByText("更新必要", { exact: true }).first()).toBeVisible();
+  const missing = card.getByTestId("system-tables-missing-columns");
+  await expect(missing).toContainText("既存のテーブルに必須の列が 1 件ありません");
+  await expect(missing).toContainText("RAG_DOCUMENTS.CLASSIFICATION");
+
+  const contrast = await minimumTextContrast(page, "#system-tables [role='status']");
+  expect(contrast.count).toBeGreaterThan(2);
+  expect(contrast.minimum.ratio, contrast.minimum.text).toBeGreaterThanOrEqual(4.5);
+  const pageOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(pageOverflow).toBeLessThanOrEqual(1);
+
+  if (screenshotDir) {
+    const width = testInfo.project.name === "mobile" ? 375 : 1280;
+    await page.setViewportSize({ width, height: 900 });
+    await card.locator("[role='status']").first().screenshot({
+      path: `${screenshotDir}/system-tables-columns-${width}.png`,
+      animations: "disabled",
+    });
+  }
+
+  await card.getByRole("button", { name: "作成・更新" }).click();
+  await expect(card.getByText("初期化済み", { exact: true })).toBeVisible();
+  expect(mock.initializeCalls()).toBe(1);
+  await expect(missing).toHaveCount(0);
+});

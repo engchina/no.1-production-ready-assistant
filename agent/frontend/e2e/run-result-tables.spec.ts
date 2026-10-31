@@ -104,12 +104,6 @@ function seedRun(mockApi: MockApi) {
   });
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -173,85 +167,81 @@ async function expectLargeResultTable(page: Page, table: Locator, testId: string
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`チャットで表の形のツールの結果と回答の表を共通の結果の表で出す (${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await openThread(page);
+  test(`チャットで表の形のツールの結果と回答の表を共通の結果の表で出す (${viewport.name})`, { tag: "@responsive" }, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await openThread(page);
 
-      const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
-      // 回答の Markdown の表は表で出し、前後の文はそのまま出す。`|` の並んだ文を出さない。
-      const answer = turn.getByTestId(`chat-answer-${RUN_ID}`);
-      await expect(answer.getByText("部門別の売上をまとめました。")).toBeVisible();
-      await expect(answer.getByText("上位の部門は表のとおりです。")).toBeVisible();
-      const answerTable = answer.getByTestId(`chat-answer-${RUN_ID}-table-1`);
-      await expect(answerTable.getByTestId(`chat-answer-${RUN_ID}-table-1-summary`)).toContainText("2 行");
-      await expect(answerTable.getByRole("cell", { name: "部門 2" })).toBeVisible();
-      await answerTable.getByRole("button", { name: "すべての行を見る" }).click();
-      const smallSheet = page.getByTestId(`chat-answer-${RUN_ID}-table-1-sheet`);
-      const smallPagination = smallSheet.locator("nav[data-pagination]");
-      await expect(smallPagination).toContainText("1–2 / 2 件");
-      await expect(smallPagination.getByRole("button", { name: "次へ" })).toBeDisabled();
-      await expect(smallPagination.getByRole("button", { name: "次へ" })).toBeInViewport();
-      await page.keyboard.press("Escape");
-      await expect(smallSheet).toBeHidden();
-      await expect(turn).not.toContainText("|---|");
+    const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
+    // 回答の Markdown の表は表で出し、前後の文はそのまま出す。`|` の並んだ文を出さない。
+    const answer = turn.getByTestId(`chat-answer-${RUN_ID}`);
+    await expect(answer.getByText("部門別の売上をまとめました。")).toBeVisible();
+    await expect(answer.getByText("上位の部門は表のとおりです。")).toBeVisible();
+    const answerTable = answer.getByTestId(`chat-answer-${RUN_ID}-table-1`);
+    await expect(answerTable.getByTestId(`chat-answer-${RUN_ID}-table-1-summary`)).toContainText("2 行");
+    await expect(answerTable.getByRole("cell", { name: "部門 2" })).toBeVisible();
+    await answerTable.getByRole("button", { name: "すべての行を見る" }).click();
+    const smallSheet = page.getByTestId(`chat-answer-${RUN_ID}-table-1-sheet`);
+    const smallPagination = smallSheet.locator("nav[data-pagination]");
+    await expect(smallPagination).toContainText("1–2 / 2 件");
+    await expect(smallPagination.getByRole("button", { name: "次へ" })).toBeDisabled();
+    await expect(smallPagination.getByRole("button", { name: "次へ" })).toBeInViewport();
+    await page.keyboard.press("Escape");
+    await expect(smallSheet).toBeHidden();
+    await expect(turn).not.toContainText("|---|");
 
-      // 表の形のツールの結果だけを表で出す（RAG の結果は表にしない）。
-      await expect(turn.locator('section[data-testid^="chat-tool-table-"]')).toHaveCount(2);
-      await expect(turn.getByTestId("chat-tool-table-step-rag")).toHaveCount(0);
-      const query = turn.getByTestId("chat-tool-table-step-query");
-      // 業務データの照会の結果は、NL2SQL のチャットと同じ共有の部品で SQL の塊 → 結果の表の順（#2346）。
-      await expect(query).toHaveAttribute("aria-label", "SQL の実行結果");
-      await expect(query.getByTestId("chat-tool-table-step-query-sql")).toHaveText("select department, amount, note from sales");
-      await expect(query.locator("[data-status-variant]").first()).toHaveText("安全検査済み・実行済み");
-      await expect(query.getByRole("button", { name: "SQL をコピー" })).toBeVisible();
-      await expect(query).not.toContainText("nl2sql__nl2sql_query");
-      await expectLargeResultTable(page, query, "chat-tool-table-step-query-result");
+    // 表の形のツールの結果だけを表で出す（RAG の結果は表にしない）。
+    await expect(turn.locator('section[data-testid^="chat-tool-table-"]')).toHaveCount(2);
+    await expect(turn.getByTestId("chat-tool-table-step-rag")).toHaveCount(0);
+    const query = turn.getByTestId("chat-tool-table-step-query");
+    // 業務データの照会の結果は、NL2SQL のチャットと同じ共有の部品で SQL の塊 → 結果の表の順（#2346）。
+    await expect(query).toHaveAttribute("aria-label", "SQL の実行結果");
+    await expect(query.getByTestId("chat-tool-table-step-query-sql")).toHaveText("select department, amount, note from sales");
+    await expect(query.locator("[data-status-variant]").first()).toHaveText("安全検査済み・実行済み");
+    await expect(query.getByRole("button", { name: "SQL をコピー" })).toBeVisible();
+    await expect(query).not.toContainText("nl2sql__nl2sql_query");
+    await expectLargeResultTable(page, query, "chat-tool-table-step-query-result");
 
-      // 0 行は「該当する行はありません」で、すべての行・CSV を出さない。
-      const empty = turn.getByTestId("chat-tool-table-step-empty");
-      await expect(empty.getByTestId("chat-tool-table-step-empty-result-summary")).toContainText("該当する行はありません");
-      await expect(empty.getByTestId("chat-tool-table-step-empty-result-view-all")).toHaveCount(0);
+    // 0 行は「該当する行はありません」で、すべての行・CSV を出さない。
+    const empty = turn.getByTestId("chat-tool-table-step-empty");
+    await expect(empty.getByTestId("chat-tool-table-step-empty-result-summary")).toContainText("該当する行はありません");
+    await expect(empty.getByTestId("chat-tool-table-step-empty-result-view-all")).toHaveCount(0);
 
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}-${theme}.png`), fullPage: true });
-    });
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}.png`), fullPage: true });
+  });
 
-    test(`実行履歴の詳細で成果物・ツールの結果の表を共通の結果の表で出し、内部の記録は成果物に出さない (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto(`/runs?id=${RUN_ID}`);
+  test(`実行履歴の詳細で成果物・ツールの結果の表を共通の結果の表で出し、内部の記録は成果物に出さない (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(`/runs?id=${RUN_ID}`);
 
-      // 結果: 回答の表・構造化データの成果物の表。表の成果物があるので「構造化データ」のカードは重ねない。
-      await expect(page.getByTestId("run-answer-answer-table-1").getByRole("cell", { name: "部門 1" })).toBeVisible();
-      const artifact = page.getByTestId("run-artifact-table-artifact-query");
-      await expectLargeResultTable(page, artifact, "run-artifact-table-artifact-query");
-      await expect(page.getByText("select department, amount, note from sales").first()).toBeVisible();
-      await expect(page.getByTestId("run-structured-table")).toHaveCount(0);
-      // 利用者向けの出力でない種類の成果物（内部の記録）は「成果物」に出さない（監査ログで見る。#2403）。
-      await expect(page.getByTestId("run-artifacts-section").locator('[data-testid^="run-artifact-artifact-"]')).toHaveCount(1);
-      await expect(page.getByTestId("run-artifact-artifact-raw")).toHaveCount(0);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`run-result-${viewport.name}-${theme}.png`), fullPage: true });
+    // 結果: 回答の表・構造化データの成果物の表。表の成果物があるので「構造化データ」のカードは重ねない。
+    await expect(page.getByTestId("run-answer-answer-table-1").getByRole("cell", { name: "部門 1" })).toBeVisible();
+    const artifact = page.getByTestId("run-artifact-table-artifact-query");
+    await expectLargeResultTable(page, artifact, "run-artifact-table-artifact-query");
+    await expect(page.getByText("select department, amount, note from sales").first()).toBeVisible();
+    await expect(page.getByTestId("run-structured-table")).toHaveCount(0);
+    // 利用者向けの出力でない種類の成果物（内部の記録）は「成果物」に出さない（監査ログで見る。#2403）。
+    await expect(page.getByTestId("run-artifacts-section").locator('[data-testid^="run-artifact-artifact-"]')).toHaveCount(1);
+    await expect(page.getByTestId("run-artifact-artifact-raw")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`run-result-${viewport.name}.png`), fullPage: true });
 
-      // 処理の経過（#1955）: 段の行を開くと、表の形のツールの結果は表、元の JSON は畳む。RAG の結果は JSON のまま。
-      const timeline = page.getByTestId("run-timeline-section");
-      await page.getByTestId("run-timeline-section-summary").click();
-      const closed = timeline.locator('[data-run-timeline-step] > div:first-child button[aria-expanded="false"]');
-      while ((await closed.count()) > 0) await closed.first().click();
-      const stepTable = page.getByTestId("run-step-table-step-query");
-      await expect(stepTable.getByTestId("run-step-table-step-query-summary")).toContainText("全 1,234 行");
-      await expect(page.getByTestId("run-step-table-step-empty-summary")).toContainText("該当する行はありません");
-      await expect(page.getByTestId("run-step-table-step-rag")).toHaveCount(0);
-      await expect(page.locator("pre").filter({ hasText: "根拠付き回答" })).toBeVisible();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`run-process-${viewport.name}-${theme}.png`), fullPage: true });
-    });
-  }
+    // 処理の経過（#1955）: 段の行を開くと、表の形のツールの結果は表、元の JSON は畳む。RAG の結果は JSON のまま。
+    const timeline = page.getByTestId("run-timeline-section");
+    await page.getByTestId("run-timeline-section-summary").click();
+    const closed = timeline.locator('[data-run-timeline-step] > div:first-child button[aria-expanded="false"]');
+    while ((await closed.count()) > 0) await closed.first().click();
+    const stepTable = page.getByTestId("run-step-table-step-query");
+    await expect(stepTable.getByTestId("run-step-table-step-query-summary")).toContainText("全 1,234 行");
+    await expect(page.getByTestId("run-step-table-step-empty-summary")).toContainText("該当する行はありません");
+    await expect(page.getByTestId("run-step-table-step-rag")).toHaveCount(0);
+    await expect(page.locator("pre").filter({ hasText: "根拠付き回答" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`run-process-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test("表の成果物が無い Run は、表の形のツールの結果を「構造化データ」のカードに出す（列名の文字列の配列も読む）", async ({ page, mockApi }) => {

@@ -145,7 +145,7 @@ test("OCI リージョンの候補を指定順で表示し、選択できる", a
     "ap-osaka-1",
     "us-chicago-1",
   ]);
-  // 浮いた面は popover の影トークンを使う（ダークテーマでも段が見える）
+  // 浮いた面は popover の影トークンを使う（面の段が見える）
   await expect(listbox).toHaveClass(/shadow-\[var\(--shadow-popover\)\]/);
 
   await listbox.getByRole("option", { name: "ap-tokyo-1" }).click();

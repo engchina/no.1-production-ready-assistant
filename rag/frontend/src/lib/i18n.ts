@@ -123,17 +123,12 @@ export const ja = {
   "nav.section.improve": "改善・運用",
   "nav.section.operations": "運用設定",
   "nav.section.settings": "システム設定",
-  // 「外観と証明書」は配色テーマと HTTPS の証明書を扱う（#1316）。副題・カードの文言は platform の既定を使う。
+  // 「外観と証明書」は HTTPS の証明書を扱う（#1316。配色テーマの選択は #17 で廃止）。副題・カードの文言は platform の既定を使う。
   "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",
   "nav.settingsChatAttachments": "チャットの添付",
-  "appearance.theme.label": "配色テーマ",
-  "appearance.theme.hint": "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  "appearance.theme.light": "ライト",
-  "appearance.theme.dark": "ダーク",
-  "appearance.theme.system": "自動（OS 設定）",
   "nav.upload": "文書アップロード",
   "nav.upload.sidebar": "文書アップロード",
   "nav.fileList": "文書インデックス",

@@ -857,35 +857,30 @@ test("一覧の読み込みに失敗したら一覧の位置に再試行付き�
   await expect(table(page).locator("[data-run-id]")).toHaveCount(3);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`実行履歴の一覧と詳細は 1280 / 1920 / 375px で横にあふれず、見出しと本文の左端がそろう: ${theme}`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
-    await page.addInitScript((value) => {
-      localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-    }, theme);
-    const long = {
-      ...historyItems[0],
-      id: "history-long",
-      question: "対象テーブル：VERY_LONG_UNBROKEN_IDENTIFIER_WITHOUT_SPACES_0123456789_ABCDEFGHIJKLMNOPQRSTUVWXYZ の売上を地域別・月別に集計して前年同月比も出す",
-      profile_name: "プロファイル_WITH_A_VERY_LONG_UNBROKEN_IDENTIFIER_0123456789",
-      executable_sql: `SELECT "VERY_LONG_UNBROKEN_FILTER_IDENTIFIER_0123456789" FROM "V_EMP_DEPT"`,
-    };
-    await mockHistory(page, { items: [long, ...historyItems.slice(1)], othersVisible: true });
-    await page.goto("/history");
-    await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
-    for (const width of isMobile ? [375] : [1280, 1920]) {
-      await page.setViewportSize({ width, height: 900 });
-      await expect(table(page).locator("[data-run-id]")).toHaveCount(3);
-      expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-      await expectAlignedHeader(page);
-      await page.screenshot({ path: testInfo.outputPath(`history-list-${theme}-${width}.png`), fullPage: true });
-      await titleLink(page, String(long.question)).click();
-      await expect(page.getByTestId("history-detail-summary")).toBeVisible();
-      expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-      await page.screenshot({ path: testInfo.outputPath(`history-detail-${theme}-${width}.png`), fullPage: true });
-      await page.getByRole("button", { name: "実行履歴の一覧へ戻る" }).click();
-    }
-  });
-}
+test(`実行履歴の一覧と詳細は 1280 / 1920 / 375px で横にあふれず、見出しと本文の左端がそろう`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
+  const long = {
+    ...historyItems[0],
+    id: "history-long",
+    question: "対象テーブル：VERY_LONG_UNBROKEN_IDENTIFIER_WITHOUT_SPACES_0123456789_ABCDEFGHIJKLMNOPQRSTUVWXYZ の売上を地域別・月別に集計して前年同月比も出す",
+    profile_name: "プロファイル_WITH_A_VERY_LONG_UNBROKEN_IDENTIFIER_0123456789",
+    executable_sql: `SELECT "VERY_LONG_UNBROKEN_FILTER_IDENTIFIER_0123456789" FROM "V_EMP_DEPT"`,
+  };
+  await mockHistory(page, { items: [long, ...historyItems.slice(1)], othersVisible: true });
+  await page.goto("/history");
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+  for (const width of isMobile ? [375] : [1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(table(page).locator("[data-run-id]")).toHaveCount(3);
+    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+    await expectAlignedHeader(page);
+    await page.screenshot({ path: testInfo.outputPath(`history-list-light-${width}.png`), fullPage: true });
+    await titleLink(page, String(long.question)).click();
+    await expect(page.getByTestId("history-detail-summary")).toBeVisible();
+    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`history-detail-light-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "実行履歴の一覧へ戻る" }).click();
+  }
+});
 
 test("最初の Tab で本文へスキップでき、一覧の題名のリンクへキーボードで届く", async ({ page }) => {
   await mockHistory(page);

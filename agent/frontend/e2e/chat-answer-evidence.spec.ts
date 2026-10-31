@@ -449,15 +449,6 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByTestId("run-answer-passages")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`answer-marks-run-${viewport.name}.png`), fullPage: true });
-
-    // ダークのテーマでも同じ印・線・節を出す（色は共有のトークン）。
-    await page.evaluate(() =>
-      window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: "dark" }, version: 0 }))
-    );
-    await page.reload();
-    await expect(page.getByTestId("run-answer-section").getByTestId("answer-passage-mark")).toHaveCount(2);
-    await page.getByTestId("run-answer-section").getByTestId("answer-passage-mark-toggle").nth(1).click();
-    await page.screenshot({ path: testInfo.outputPath(`answer-marks-run-dark-${viewport.name}.png`), fullPage: true });
   });
 }
 
