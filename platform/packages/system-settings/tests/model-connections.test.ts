@@ -106,13 +106,12 @@ describe("接続（#533 / #542）", () => {
     expect(addConnection([primary, tertiary], "tertiary")).toEqual([primary, tertiary]);
   });
 
-  it("セカンダリ接続を設定したら Endpoint URL・Project OCID・API key は必須（プライマリは止めない）", () => {
+  it("セカンダリ接続を設定したら Endpoint URL・API key は必須（プライマリは止めない）", () => {
     expect(validateConnections([emptyConnection("primary")])).toEqual({});
     const errors = validateConnections([primary, emptyConnection("secondary")]);
     expect(errors).toEqual({
       secondary: {
         endpoint: "Endpoint URL を入力してください。",
-        project_ocid: "Project OCID を入力してください。",
         api_key: "API key を入力してください。",
       },
     });
@@ -122,6 +121,11 @@ describe("接続（#533 / #542）", () => {
     });
     expect(validateConnections([primary, secondary])).toEqual({});
     expect(firstConnectionError({})).toBeNull();
+  });
+
+  it("Project OCID はどの接続でも任意（#9）", () => {
+    const blank = { ...secondary, project_ocid: "" };
+    expect(validateConnections([primary, blank])).toEqual({});
   });
 
   it("API key は新しい入力か、削除しない保存済みの key があればよい", () => {

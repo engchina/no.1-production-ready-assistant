@@ -8,8 +8,6 @@ export const MODEL_MESSAGES = {
   "settings.model.connection.error.apiKeyRequired": "API key を入力してください。",
   "settings.model.connection.error.endpointRequired":
     "Endpoint URL を入力してください。",
-  "settings.model.connection.error.projectRequired":
-    "Project OCID を入力してください。",
   "settings.model.connection.error.missing":
     "「{model}」の接続がありません。登録されている接続から選び直してください。",
   "settings.model.connection.error.unsaved":
@@ -102,8 +100,6 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.modelsSaved": "登録モデルを保存しました。",
   "settings.model.enterprise.project": "Project OCID",
   "settings.model.enterprise.projectHelp":
-    "OCI OpenAI-compatible API 呼び出しに必要な Generative AI project OCID。",
-  "settings.model.enterprise.projectHelpTertiary":
     "OCI Enterprise AI を使うときだけ、Generative AI project OCID を入力します（入力したときだけ OpenAI-Project ヘッダーで送ります）。OpenAI や OpenAI 互換 API では空のままにします。",
   "settings.model.enterprise.parameterHelp": "推論の量・入力と出力の上限について",
   "settings.model.enterprise.modelDocs": "Oracle 公式: モデルの仕様",
