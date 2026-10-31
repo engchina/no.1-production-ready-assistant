@@ -362,8 +362,8 @@ def unstructured_service_hint(status: str | None) -> str:
     if status == "not_installed":
         return (
             "Unstructured の解析サービス（parser-unstructured）は配備されていません。"
-            "本番は Terraform の stack で Unstructured parser（rag_enable_parser_unstructured）を"
-            "有効にして再配備し、開発は rag/scripts/rag-services.sh install parser-unstructured で"
+            "本番は配備の props の rag_services.txt に parser-unstructured を足して"
+            "再配備し、開発は rag/scripts/rag-services.sh install parser-unstructured で"
             "登録してから、「運用設定 › サービス管理」で起動してください。"
         )
     if status == "unconfigured":

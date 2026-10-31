@@ -6,7 +6,7 @@
 
 ## 適用前提
 
-- データベース: Oracle AI Database（対応バージョンは [terraform/README.md](../../terraform/README.md) の「Autonomous AI Database（全製品で共有）」）。
+- データベース: Oracle AI Database（対応バージョンは [platform/docs/deployment.md](../../platform/docs/deployment.md) の「Autonomous AI Database（全製品で共有）」）。
 - ベクトル列: `VECTOR(1536, FLOAT32)`。
 - 埋め込み: OCI Generative AI Cohere Embed v4、1536 次元。
 - RAG 検索の優先度: まず根拠チャンクの召回率と回答の根拠性を重視し、その後にリランク、フィルタ、キャッシュでレイテンシを最適化する。

@@ -2,15 +2,14 @@
 
 OCI Document Understanding を呼ぶ parser マイクロサービス(OCI クラウド・薄いプロキシ)。
 
-> **準備中（ロードマップ。#3374）。** 実装は今後の版のために残していますが、まだ使えません。文書解析の設定・処理レシピでは選べず、サービス管理では起動できず、Terraform の stack・`rag/init_script.sh`・`rag/scripts/rag-services.sh` は配備しません（開発で動きを確かめるときだけ `scripts/rag-services.sh run parser-oci-document-understanding` で前面に起動できます）。
+> **準備中（ロードマップ。#3374）。** 実装は今後の版のために残していますが、まだ使えません。文書解析の設定・処理レシピでは選べず、サービス管理では起動できず、`rag/init_script.sh`・`rag/scripts/rag-services.sh` は配備しません（開発で動きを確かめるときだけ `scripts/rag-services.sh run parser-oci-document-understanding` で前面に起動できます）。
 
 - 共有 core `rag_parser_core.oci_document_understanding` を **env 由来 config** で駆動する。
 - `POST /parse`(file + content_type)→ OCI Document Understanding の非同期 processor job
   で OCR/表抽出 → `StructuredExtraction`(ParseResponse)で返す。
 - `GET /health` は OCI 設定の充足(compartment / namespace / 入力 bucket)で ok/degraded。
 - **OCI 認証はメインプロジェクト設定を継承**: systemd の unit が共通 `platform/.env`・`backend/.env` を EnvironmentFile で読み、
-  OCI の設定ファイルは実行ユーザーの `~/.oci/config` を使う(#286。個別設定なし)。Terraform の stack では
-  `rag_enable_oci_cloud_parsers` で配備する。
+  OCI の設定ファイルは実行ユーザーの `~/.oci/config` を使う(#286。個別設定なし)。
 - 未設定/SDK 失敗/job 失敗/timeout 時は extraction=None を返し、backend 側で既存
   in-process / ローカルフローへ安全に縮退する。
 - job の入力（`<入力 prefix>/<document_id>.<拡張子>`。原本の写し）と出力（`<出力 prefix>/<job_id>/`）は、

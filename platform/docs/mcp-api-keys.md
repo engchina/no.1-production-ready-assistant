@@ -14,9 +14,9 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 | Agent | `https://<host>[:<https_port>]/agent/api/mcp` | `http://localhost:8020/api/mcp` |
 
 - 配備では Nginx の `/<製品>/api/` の location が backend へ転送する（`platform/deploy/suite-nginx.sh`。`Authorization` ヘッダーはそのまま渡る）。RAG の `mcp` は LLM を待つため長い待ち時間の location に入っている。
-- HTTPS は既定で Suite の自作の CA で署名している。クライアントの OS / ランタイムに CA 証明書（`https://<host>/platform/ca.crt`）を信頼させるか、正規の証明書に替える（`terraform/README.md`）。
+- HTTPS は既定で Suite の自作の CA で署名している。クライアントの OS / ランタイムに CA 証明書（`https://<host>/platform/ca.crt`）を信頼させるか、正規の証明書に替える（[deployment.md](./deployment.md)「Compute・Nginx・HTTPS」）。
 - 画面の「API キー」の「接続先」に、製品ごとに **この画面の URL**（今開いている環境。Suite の配備では 3 製品、開発の dev server では開いている製品だけ）と **公開の URL（OCI）** を出す（同じなら 1 行。どちらもコピーできる。#1870）。
-- 公開の URL は `platform/.env` の `PLATFORM_PUBLIC_BASE_URL`（例 `https://203.0.113.10` / `https://203.0.113.10:8443`）+ `/<製品>/api/mcp`。OCI の配備では `platform/deploy/suite-init.sh` が、証明書と同じ決め方の公開 IP（無ければ private IP）と公開の port から書く（[terraform/README.md](../../terraform/README.md)「HTTPS」）。backend は自分のキーの一覧（`GET /api/account/api-keys`）の `public_base_url` で返す（`scheme://host[:port]` 以外の値は空として扱う）。空なら画面はこの画面の URL だけを出す。
+- 公開の URL は `platform/.env` の `PLATFORM_PUBLIC_BASE_URL`（例 `https://203.0.113.10` / `https://203.0.113.10:8443`）+ `/<製品>/api/mcp`。OCI の配備では `platform/deploy/suite-init.sh` が、証明書と同じ決め方の公開 IP（無ければ private IP）と公開の port から書く（[deployment.md](./deployment.md)「Compute・Nginx・HTTPS」）。backend は自分のキーの一覧（`GET /api/account/api-keys`）の `public_base_url` で返す（`scheme://host[:port]` 以外の値は空として扱う）。空なら画面はこの画面の URL だけを出す。
 - https の URL のとき、画面は自作の CA の証明書（`https://<host>/platform/ca.crt`）と、MCP クライアントに信頼させる設定（Claude Code は `NODE_EXTRA_CA_CERTS`）を添える。画面の「Claude Code の登録の例」は下の例と同じ形で、公開の URL があればその URL で書く。
 
 ## API キー

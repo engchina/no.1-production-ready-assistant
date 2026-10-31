@@ -78,7 +78,7 @@ Marker / Unlimited-OCR / GLM-OCR への対応は削除した(#270)。
 - 起動 = `systemctl enable --now`、停止 = `systemctl disable --now`。利用者が最後に操作した状態が再起動・再配備後も保たれる。
 - backend は、sudoers で許可した unit の `systemctl` / `journalctl` だけを `sudo -n` で実行する。unit 名は
   `app/services/catalog.py` の allowlist で検証し、argv は固定(任意のコマンドは実行できない)。
-- 本番は `RAG_SERVICE_CONTROL_ENABLED=true`(Terraform の stack の既定)のときだけ操作でき、開発(`PLATFORM_ENVIRONMENT=local`)は自動で有効。
+- 本番は `RAG_SERVICE_CONTROL_ENABLED=true`(配備の props の `rag.backend.env` の既定)のときだけ操作でき、開発(`PLATFORM_ENVIRONMENT=local`)は自動で有効。
 - 開発環境の unit と sudoers は `scripts/rag-services.sh install` で登録する(systemd の無い環境は
   `scripts/rag-services.sh run <service>` で前面に起動)。手順は [docs/deployment.md](./docs/deployment.md)。
 
@@ -96,12 +96,12 @@ Marker / Unlimited-OCR / GLM-OCR への対応は削除した(#270)。
 
 Backend は常に OCI Enterprise AI、OCI Generative AI、Oracle AI Database を前提に動作します。開発・staging・本番のいずれも OCI / Oracle 接続情報を共通 `.env`（リポジトリの `platform/.env`、`PLATFORM_*`）または設定画面から注入してください。RAG 固有の設定は `backend/.env`（`RAG_*`）に置きます（#211。詳細と既存環境の移行は [docs/deployment.md](docs/deployment.md)）。
 
-## OCI への配備（Resource Manager）
+## 配備
 
-3製品共通の Terraform stack（monorepo root の `terraform/stack/`）で配備します。Oracle Autonomous AI Database は NL2SQL / Agent と共有し、
-RAG は専用の Compute 1 台に NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）を作ります
-（CPU の parser だけを配備する）。以前の Docker Compose で配備した環境の移行は [docs/deployment.md](./docs/deployment.md) を参照してください。
-「配備する製品」で RAG を選び、入力・配備方式・instance 上の構成・制約は [terraform/README.md](../terraform/README.md) を参照してください。
+OCI Resource Manager の Terraform stack による配備は廃止しました（#12）。RAG は NL2SQL / Agent と同じ 1 台の Compute に、
+ネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）で入れます（`platform/deploy/` の配備のスクリプト。
+仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。以前の Docker Compose で配備した環境の移行は
+[docs/deployment.md](./docs/deployment.md) を参照してください。
 
 ## ロードマップ
 
@@ -109,7 +109,7 @@ RAG は専用の Compute 1 台に NL2SQL / Agent と同じネイティブ配備�
 
 | 機能 | 状態 | 今の扱い |
 |---|---|---|
-| OCI Document Understanding の解析（`oci_document_understanding`・サービス `parser-oci-document-understanding`） | 準備中（ロードマップ） | 「取込・検索・回答設定 › 文書解析」の使用エンジンと処理レシピの「文書解析」では選べず、API・`RAG_PARSER_ADAPTER_BACKEND` で選ぶと検証のエラーになります。「運用設定 › サービス管理」では起動できず、Terraform の stack・`rag/init_script.sh`・`scripts/rag-services.sh` も配備しません（既存の Compute の unit は再配備で止めて消します）。実装（`services/parsers/oci_document_understanding`・client）は今後の版のために残しています |
+| OCI Document Understanding の解析（`oci_document_understanding`・サービス `parser-oci-document-understanding`） | 準備中（ロードマップ） | 「取込・検索・回答設定 › 文書解析」の使用エンジンと処理レシピの「文書解析」では選べず、API・`RAG_PARSER_ADAPTER_BACKEND` で選ぶと検証のエラーになります。「運用設定 › サービス管理」では起動できず、`rag/init_script.sh`・`scripts/rag-services.sh` も配備しません（既存の Compute の unit は再配備で止めて消します）。実装（`services/parsers/oci_document_understanding`・client）は今後の版のために残しています |
 | MinerU の解析（`mineru`。外部で運用する MinerU 4.x の V1 API） | 準備中（ロードマップ） | 「取込・検索・回答設定 › 文書解析」の使用エンジン（Dots.OCR の次、OCI Document Understanding の前）と処理レシピの「文書解析」では選べず、API・`RAG_PARSER_ADAPTER_BACKEND`・処理レシピの保存で選ぶと検証のエラーになります。保存済みの値は既定（全体は Docling、レシピは全体の継承）に寄せ、取込では呼びません。外部接続の欄も出しません。ライセンスは「MinerU Open Source License」（Apache-2.0 に追加の条件。企業の規模による別途の商用ライセンス・オンラインサービスでの利用の明示・満たさないと自動で終わる。旧モデル `MinerU2.5-2509-1.2B` は AGPL-3.0）で、画面のカードの下にも短い案内と [公式のリポジトリ](https://github.com/opendatalab/MinerU)・[LICENSE.md](https://github.com/opendatalab/MinerU/blob/master/LICENSE.md) へのリンクを出します（主な条件は上の「MinerU のライセンス」）。実装（`app/clients/external_parser.py` の HTTP の client、system_admin だけが確認できるライセンスの確認）は今後の版のために残しています |
 
 ## 外部の MCP クライアントから使う（Claude Code など）

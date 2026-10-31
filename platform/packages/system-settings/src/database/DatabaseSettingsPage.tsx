@@ -727,7 +727,7 @@ interface AdbOperationLogEntry {
 }
 
 /**
- * Autonomous Database をサポートするリージョン（Terraform の stack の `region` の validation と同じ。#660）。
+ * Autonomous Database をサポートするリージョン（#660）。
  * us-chicago-1 はサポートしない。OCI 認証設定・Select AI のリージョンの候補とは別の一覧。
  */
 const ADB_REGION_OPTIONS = [

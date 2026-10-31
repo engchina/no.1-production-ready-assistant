@@ -318,7 +318,7 @@ PLATFORM_AUTH_LOGIN_ATTEMPT_WINDOW_MINUTES=15
 プロセス内だけで数える）。テーブルが無い・DB に接続できないときは、プロセス内の記録に自動で切り替えて
 制限を続け（ログ `auth_login_throttle_shared_store_unavailable`）、30 秒ごとに DB を試し直す。テーブルは
 `app_security_migrate --apply` が作る。既存環境の更新手順と Nginx のログインの API の上限は
-[terraform/README.md](../../terraform/README.md) の「ログインの試行の回数の共有（#1173）」を参照する。
+[platform/docs/deployment.md](../../platform/docs/deployment.md) の「ログインの試行の回数の共有（#1173）」を参照する。
 
 既定では、通常ユーザーの無操作 timeout は 60 分、session の絶対有効期限は 12 時間とする。
 業務端末が管理下にあり、無人端末リスクを組織として受容できる低リスク環境でだけ、
@@ -331,8 +331,7 @@ timeout に拡張できる。これは production 既定値ではない。
 
 ## DeepSec V001 の前提
 
-DeepSec は既定で無効（`NL2SQL_ORACLE_DEEPSEC_ENABLED` の未指定・`backend/.env.example`・Terraform の
-`nl2sql_oracle_deepsec_enabled` の既定は `false`。#1707）で、使う環境だけが有効にする。Deep Data Security 画面で
+DeepSec は既定で無効（`NL2SQL_ORACLE_DEEPSEC_ENABLED` の未指定・`backend/.env.example` の既定は `false`。#1707）で、使う環境だけが有効にする。Deep Data Security 画面で
 DATA USER password を保存すると、`backend/.env` に `NL2SQL_ORACLE_DEEPSEC_ENABLED=true` を書いて有効にする。
 
 DeepSec は python-oracledb Thin mode のみ対応する。`NL2SQL_ORACLE_DEEPSEC_ENABLED=true` の場合、
@@ -350,7 +349,7 @@ DeepSec V001 と `DATA USER 認証` の同期を実行する `PLATFORM_ORACLE_US
 `CREATE PROCEDURE`、対象 object への `GRANT SELECT`（別の schema なら `GRANT ANY OBJECT PRIVILEGE`）、DeepSec metadata view 参照権限と、
 Data Grant の `GRANT ANY DATA ROLE`（DATA ROLE を END USER に付ける）・`ADMINISTER ANY DATA GRANT`（Data Grant の作成・削除）・
 `SET USE DATA GRANTS ONLY` が必要。Autonomous AI Database の `PDB_DBA` は最後の 3 つを含まない（無いと `ORA-01031`）。
-統合 stack の配備は、アプリ用の DB ユーザーに `PDB_DBA` とこの 3 つを付ける（[terraform/README.md「アプリ用の DB ユーザー」](../../terraform/README.md#アプリ用の-db-ユーザー16681675)。#1668・#1675）。
+配備は、アプリ用の DB ユーザーに `PDB_DBA` とこの 3 つを付ける（[platform/docs/deployment.md「アプリ用の DB ユーザー」](../../platform/docs/deployment.md#アプリ用の-db-ユーザー16681675)。#1668・#1675）。
 `ORA-01017` が通常ユーザーの SELECT 実行時だけ発生する場合は、application RBAC ではなく
 DATA USER password の漂移を疑い、Deep Data Security 画面で password を保存し直すか、
 `Oracle へ同期` を再実行する。

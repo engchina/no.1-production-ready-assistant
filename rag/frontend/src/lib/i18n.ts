@@ -1770,7 +1770,7 @@ export const ja = {
   "settings.services.statusLoadingHint": "状態確認中です。",
   "settings.services.statusLoadErrorHint": "状態を取得できませんでした。更新してください。",
   "settings.services.notInstalledHint":
-    "systemd の unit が登録されていません。本番は Terraform の stack で配備を選び、開発は rag/scripts/rag-services.sh install で登録します。",
+    "systemd の unit が登録されていません。本番は配備の props の rag_services.txt に足して再配備し、開発は rag/scripts/rag-services.sh install で登録します。",
   "settings.services.failedHint":
     "起動に失敗しました。ログで原因を確認してから起動し直してください。",
   "settings.services.executionPolicy.defaultAdapter": "既定で使用",
