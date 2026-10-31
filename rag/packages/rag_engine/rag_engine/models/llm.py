@@ -429,35 +429,6 @@ class RequestScopePlan(_StrictModel):
     request_coverage: list[RequestCoverage] = Field(max_length=64, description="質問契約の要求ごとに使用する Evidence の計画。")
 
 
-class CatalogClaimSupport(_StrictModel):
-    """条の根拠が支える説明 1 つ（#3526）。"""
-
-    item_index: int = Field(description="items の index（0 始まり）。")
-    lines: str = Field(
-        default="",
-        max_length=20,
-        description="text を支える行の番号か範囲（例: 3、3-5）。行番号（`3| `）の付いた根拠では必ず書き、行番号の無い根拠は空。",
-    )
-
-
-class CatalogEvidenceReview(_StrictModel):
-    """条の目録で選んだ条の根拠 1 つの検討の結果（#3526）。"""
-
-    evidence_id: str = Field(description="evidence の evidence_id。")
-    supports: list[CatalogClaimSupport] = Field(
-        default_factory=list,
-        max_length=4,
-        description="この根拠の原文がそれだけで text の全体を支える items。原文が text の一部だけを述べる、別の対象・場面の規定なら選ばない。"
-        "支える item が無ければ空。",
-    )
-
-
-class CatalogEvidenceReviews(_StrictModel):
-    """条の目録で選んだ条の根拠を、回答の説明の出典に使えるか 1 つずつ検討する（#3526）。"""
-
-    reviews: list[CatalogEvidenceReview] = Field(max_length=16, description="evidence の各根拠を 1 回ずつ判定する。")
-
-
 class ExternalDataItem(_StrictModel):
     """回答の確定に確かめる点 1 件と、観察できる事実 (#1453、#1492)。
 

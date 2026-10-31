@@ -3,14 +3,13 @@
 // capabilities で配信)。frontend には複製を持たない。
 
 import type { ParserBackendCapabilityData } from "@/lib/api";
+import { STRUCTURED_RECORDS_PREPROCESS_PROFILES } from "@/lib/chunking";
 import { t, type I18nKey } from "@/lib/i18n";
 
 // preprocess 変換で parser へ渡る実効 modality が変わるもののみ列挙する。
 // 未知の組合せは「判定しない」(null)へ倒し、誤警告を出さない。
 const PREPROCESS_MODALITY_TRANSFORMS: Record<string, { from: string; to: string }> = {
   office_to_pdf: { from: "office", to: "pdf" },
-  excel_to_jsonl: { from: "office", to: "text" },
-  word_to_jsonl: { from: "office", to: "text" },
 };
 
 export function findParserCapability(
@@ -21,21 +20,11 @@ export function findParserCapability(
   return capabilities.find((item) => item.backend === backend) ?? null;
 }
 
-/**
- * 「PDF・画像」形式の日本語ラベル。宣言なし/空は空文字。
- * modality を持たない backend（XML ツリー JSON）は拡張子の名前（「JSON」）にする（#2042。backend の
- * `supported_formats_label` と同じ）。
- */
+/** 「PDF・画像」形式の日本語ラベル。宣言なし/空は空文字。 */
 export function formatSupportedFormats(
   capability: ParserBackendCapabilityData | null
 ): string {
   if (!capability) return "";
-  if (capability.modalities.length === 0) {
-    return [...capability.extensions]
-      .sort()
-      .map((extension) => extension.replace(/^\./, "").toUpperCase())
-      .join("・");
-  }
   return capability.modalities
     .map((modality) => t(`sourceProfile.modality.${modality}` as I18nKey))
     .join("・");
@@ -78,10 +67,12 @@ export function parserSupportsDocument({
 }): boolean | null {
   const capability = findParserCapability(capabilities, backend);
   if (!capability || !modality) return null;
+  // 構造化レコードの JSONL を作るファイル準備（CSV / Excel / Word→JSONL）の成果物は、どの解析エンジンの
+  // サービスも共通の契約で読む（#2457・#21。backend の rag_parser_core.capabilities と同じ）。
+  if ((STRUCTURED_RECORDS_PREPROCESS_PROFILES as readonly string[]).includes(preprocessProfile ?? "")) {
+    return true;
+  }
   const effective = effectiveModalityForParser(modality, preprocessProfile);
   if (effective === "unknown") return null;
-  // modality を持たない backend（XML ツリー JSON は拡張子 .json で判定する）。テキストの文書は
-  // JSON かどうかを modality だけでは決められないので判定しない（取込の前の検査に任せる）。
-  if (capability.modalities.length === 0) return effective === "text" ? null : false;
   return capability.modalities.includes(effective);
 }

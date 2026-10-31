@@ -8,8 +8,8 @@ FastAPI + OCI Enterprise AI（LLM/VLM）+ OCI Generative AI（埋め込み/リ�
 uv sync                       # 依存解決（共有 package rag-parser-core を path 依存で取り込む）
 cp ../../platform/.env.example ../../platform/.env   # 3製品共通の設定（PLATFORM_*。初回だけ）
 cp .env.example .env          # RAG 固有の設定（RAG_*）
-uv run uvicorn app.main:app --reload
-# -> http://localhost:8000/api/health（API ドキュメント /docs は公開しない。#748）
+uv run uvicorn app.main:app --reload --port 8100
+# -> http://localhost:8100/api/health（API ドキュメント /docs は公開しない。#748）
 ```
 
 本番は `rag/init_script.sh` が作る systemd の unit（`production-ready-rag-backend.service`）で、
@@ -17,7 +17,7 @@ Gunicorn + `uvicorn.workers.UvicornWorker`（`127.0.0.1:8000`、workers 2、time
 取込キューは別の unit（`production-ready-rag-ingestion-worker.service`）が消費します。Docker は使いません（#286 / #356）。
 local 開発だけ `uvicorn --reload` を使います。前処理 / parser の開発環境は `../scripts/rag-services.sh`（[docs/deployment.md](../docs/deployment.md)）。
 
-外部 parser(Docling / Unstructured / MinerU / Dots.OCR)は **backend には載せず**、
+外部 parser(Docling / Unstructured)は **backend には載せず**、
 独立した FastAPI マイクロサービス(`services/parsers/<name>`)で動かします。backend は取込時に
 `app.clients.parser_service` で HTTP 委譲します。未達・空振り時は別経路へ縮退せず取込を止めます。
 既定の解析エンジンは Docling(`RAG_PARSER_ADAPTER_BACKEND=docling`、#286)です。Unstructured などは
@@ -75,7 +75,7 @@ Backend は常に以下の OCI / Oracle 実装を使います。local / oci の�
 
 設定は、3製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース。`PLATFORM_*`）を共通 `.env`（リポジトリの `platform/.env`、場所は `PLATFORM_ENV_FILE` で上書き可）、RAG 固有の設定（`RAG_*`）を `backend/.env` に置きます。環境変数 → 共通 `.env` → `backend/.env` の順に読み、旧名（接頭辞のない名前や `HF_TOKEN` / `HF_ENDPOINT`）は読みません（#211。既存環境の移行は [docs/deployment.md](../docs/deployment.md) の「既存環境の更新手順（#211）」）。システム設定画面（OCI 認証・アップロード保存先・データベース）は共通 `.env` に、RAG 固有の設定画面は `backend/.env` に保存します。
 
-モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。文書解析の外部 parser の API key（`RAG_PARSER_MINERU_API_KEY` / `RAG_PARSER_DOTS_OCR_API_KEY`）は RAG 固有のため `backend/.env` に保存します（#106 / #211）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
+モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
 
 `OciEnterpriseAiClient` は Enterprise AI の実 endpoint / model deployment / gateway が返す JSON envelope の揺れを吸収します。VLM は `structured_extraction`、`extraction`、`prediction(s)`、`output(s)`、JSON 文字列などから `StructuredExtraction` を取り出して Pydantic で検証します。`StructuredExtraction` は `raw_text` と `elements` を持ち、ページ、読み順、見出し、本文、リスト、表、図、header/footer などを同じ JSON で表せます。LLM は `answer`、`text`、`output_text`、`generated_text`、`choices[].message.content`、`inference_response` などから回答 text を取り出します。独自 gateway がさらに深い envelope を返す場合は `PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_RESPONSE_PATH` に JSON Pointer 形式(`/payload/results/0/text` など)を設定して候補 node を明示できます。いずれも OCI Generative AI chat API には接続しません。
 
@@ -140,7 +140,7 @@ checks は `oci_common`、`enterprise_ai`、`genai`、`oracle`、`object_storage
 
 ## DB の状態（`GET /api/ready/database`）
 
-画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 5 画面（OCI 認証・アップロード保存先・モデル・データベース・外観と証明書）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status, adb_lifecycle_state}` です。
+画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 5 画面（OCI 認証・アップロード保存先・モデル・データベース・外観と証明書）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status}` です（DB の起動・停止と状態の取得は扱わない。#10）。
 
 1. 設定の判定（上の Readiness の `oracle` と同じ）が `ok` でなければ `not_configured`（接続は試さない）
 2. `test_oracle_connection` の bounded な接続確認に失敗すれば `unreachable`

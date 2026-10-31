@@ -10,7 +10,7 @@ import {
 } from "@/lib/parser-capabilities";
 
 const CAPABILITIES: ParserBackendCapabilityData[] = [
-  { backend: "dots_ocr", modalities: ["pdf", "image"], extensions: [".pdf", ".png"] },
+  { backend: "docling", modalities: ["pdf", "image"], extensions: [".pdf", ".png"] },
   {
     backend: "unstructured",
     modalities: ["pdf", "image", "text", "html", "email", "office"],
@@ -20,7 +20,7 @@ const CAPABILITIES: ParserBackendCapabilityData[] = [
 
 describe("formatSupportedFormats", () => {
   it("modality を日本語ラベルで「・」連結する", () => {
-    expect(formatSupportedFormats(findParserCapability(CAPABILITIES, "dots_ocr"))).toBe(
+    expect(formatSupportedFormats(findParserCapability(CAPABILITIES, "docling"))).toBe(
       "PDF・画像"
     );
   });
@@ -43,21 +43,21 @@ describe("effectiveModalityForParser", () => {
 });
 
 describe("parserSupportsDocument", () => {
-  it("dots_ocr × office は非対応", () => {
+  it("docling × office は非対応", () => {
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "office",
       })
     ).toBe(false);
   });
 
-  it("dots_ocr × office でも office_to_pdf 変換があれば対応", () => {
+  it("docling × office でも office_to_pdf 変換があれば対応", () => {
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "office",
         preprocessProfile: "office_to_pdf",
       })
@@ -73,12 +73,12 @@ describe("parserSupportsDocument", () => {
       })
     ).toBeNull();
     expect(
-      parserSupportsDocument({ capabilities: undefined, backend: "dots_ocr", modality: "pdf" })
+      parserSupportsDocument({ capabilities: undefined, backend: "docling", modality: "pdf" })
     ).toBeNull();
     expect(
       parserSupportsDocument({
         capabilities: CAPABILITIES,
-        backend: "dots_ocr",
+        backend: "docling",
         modality: "unknown",
       })
     ).toBeNull();
@@ -104,19 +104,19 @@ describe("formatSupportedExtensions", () => {
   });
 });
 
-describe("modality を持たない backend（XML ツリー JSON。issue 2042）", () => {
-  const capabilities = [{ backend: "xml_tree_json", modalities: [], extensions: [".json"] }];
-
-  it("対応形式は拡張子の名前で出す", () => {
-    expect(formatSupportedFormats(capabilities[0])).toBe("JSON");
-  });
-
-  it("テキストの文書は判定せず、ほかの形式は扱えないと判定する", () => {
-    expect(
-      parserSupportsDocument({ capabilities, backend: "xml_tree_json", modality: "text" })
-    ).toBeNull();
-    expect(
-      parserSupportsDocument({ capabilities, backend: "xml_tree_json", modality: "pdf" })
-    ).toBe(false);
+describe("構造化レコードの JSONL を作るファイル準備（issue 21）", () => {
+  it("Docling・Unstructured のどちらでも対応（共通の契約で読む）", () => {
+    for (const preprocessProfile of ["csv_to_jsonl", "excel_to_jsonl", "word_to_jsonl"]) {
+      for (const backend of ["docling", "unstructured"]) {
+        expect(
+          parserSupportsDocument({
+            capabilities: CAPABILITIES,
+            backend,
+            modality: preprocessProfile === "csv_to_jsonl" ? "text" : "office",
+            preprocessProfile,
+          })
+        ).toBe(true);
+      }
+    }
   });
 });

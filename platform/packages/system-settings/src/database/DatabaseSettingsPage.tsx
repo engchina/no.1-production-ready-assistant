@@ -25,11 +25,7 @@ import {
   CloudDownload,
   Database,
   PlugZap,
-  Power,
-  PowerOff,
-  RefreshCw,
   Save,
-  Server,
 } from "lucide-react";
 import {
   useCallback,
@@ -50,21 +46,16 @@ import {
   toSettingsTestResultDetails,
 } from "../oci/SettingsTestResultPanel";
 import {
-  useAdbInfo,
   useDatabaseSettings,
   useDownloadDatabaseWallet,
   useRevealDatabasePassword,
-  useStartAdb,
-  useStopAdb,
   useTestDatabaseSettings,
-  useUpdateAdbSettings,
   useUpdateDatabaseSettings,
   useUploadDatabaseWallet,
   type DatabaseChangedHandler,
 } from "./hooks";
-import { t, type DatabaseMessageKey } from "./messages";
+import { t } from "./messages";
 import type {
-  AdbInfoData,
   DatabaseConnectionSecurity,
   DatabaseConnectionTestResult,
   DatabaseSettingsApi,
@@ -90,8 +81,7 @@ interface DatabaseSettingsFormErrors {
   wallet?: string;
 }
 
-type WalletDownloadSource = "auto" | "wallet-field" | "adb-refresh";
-type AdbManagementOperation = "save" | "refresh" | "start" | "stop";
+type WalletDownloadSource = "auto" | "wallet-field";
 
 const EMPTY_FORM: DatabaseSettingsForm = {
   user: "",
@@ -129,7 +119,7 @@ export interface DatabaseSettingsPageProps {
   errorMessage?: (error: unknown) => string | undefined;
   /** Walletless TLS を選べるようにする（backend の接続処理が対応している製品だけ）。 */
   connectionSecurity?: boolean;
-  /** 接続設定・Wallet・ADB の起動を変えたあとに呼ぶ（製品の DB 接続状態の query を更新する）。 */
+  /** 接続設定・Wallet を変えたあとに呼ぶ（製品の DB 接続状態の query を更新する）。 */
   onDatabaseChanged?: DatabaseChangedHandler;
   /** 読み込み中の表示（NL2SQL は経過時間付きの表示を渡す）。 */
   loadingFallback?: ReactNode;
@@ -142,7 +132,8 @@ export interface DatabaseSettingsPageProps {
 /**
  * データベース設定（3製品共通。NL2SQL の画面を基準に移設。#108）。PageHeader は製品の route が描く。
  *
- * - ADB の情報取得・起動・停止、Oracle AI Database の接続設定、Wallet（アップロード / OCI から自動取得）
+ * - Oracle AI Database の接続設定、Wallet（アップロード / OCI から自動取得）、接続テスト
+ * - DB の起動・停止はこの画面では扱わない（ADB Free コンテナは `docker start` / `docker stop`。#10）
  * - 保存中・テスト中は入力を止め、未保存のまま離れようとすると確認する
  * - 背景の再取得では、利用者が編集していない項目だけを更新する
  */
@@ -223,7 +214,6 @@ export function DatabaseSettingsPage({
   }, [acceptSettings, query.data]);
 
   const downloadWallet = walletDownload.mutate;
-  const downloadWalletAsync = walletDownload.mutateAsync;
   const resetWalletDownload = walletDownload.reset;
 
   useEffect(() => {
@@ -373,13 +363,6 @@ export function DatabaseSettingsPage({
     });
   }
 
-  async function ensureWalletFromOci() {
-    setWalletDownloadSource("adb-refresh");
-    resetWalletDownload();
-    resetTest();
-    return await downloadWalletAsync();
-  }
-
   const saveError =
     errorMessage?.(save.error) ?? t("settings.database.saveError");
   const walletUploadError =
@@ -392,9 +375,7 @@ export function DatabaseSettingsPage({
     errorMessage?.(passwordReveal.error) ??
     t("settings.database.secrets.revealError");
   const testResult = test.data;
-  const adbWalletDownloadActive = walletDownloadSource === "adb-refresh";
-  const walletFieldDownloadActive =
-    walletDownloadSource === "auto" || walletDownloadSource === "wallet-field";
+  const walletFieldDownloadActive = walletDownloadSource !== null;
 
   if (query.isPending) {
     return (
@@ -438,23 +419,6 @@ export function DatabaseSettingsPage({
           ネイティブの disabled になり、フォーカスが body へ外れるため（#355）。他の操作は部品ごとに disabled にし、
           押したボタンは loading（aria-disabled）でフォーカスを保つ（#835）。 */}
       <div aria-busy={operationBusy} className="min-w-0 space-y-6">
-        <AdbManagementCard
-          api={api}
-          errorMessage={errorMessage}
-          onDatabaseChanged={onDatabaseChanged}
-          settings={settings}
-          ensureWalletFromOci={ensureWalletFromOci}
-          walletEnsureError={
-            walletDownload.isError && adbWalletDownloadActive
-              ? walletDownloadError
-              : null
-          }
-          walletEnsurePending={
-            walletDownload.isPending && adbWalletDownloadActive
-          }
-          externalBusy={operationBusy && !(walletDownload.isPending && adbWalletDownloadActive)}
-        />
-
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -718,463 +682,6 @@ export function DatabaseSettingsPage({
       </div>
     </PageBody>
   );
-}
-
-interface AdbOperationLogEntry {
-  status: AdbInfoData["status"];
-  message: string;
-  timestamp: string;
-}
-
-/**
- * Autonomous Database をサポートするリージョン（Terraform の stack の `region` の validation と同じ。#660）。
- * us-chicago-1 はサポートしない。OCI 認証設定・Select AI のリージョンの候補とは別の一覧。
- */
-const ADB_REGION_OPTIONS = [
-  { value: "ap-tokyo-1", label: "ap-tokyo-1" },
-  { value: "ap-osaka-1", label: "ap-osaka-1" },
-] satisfies SelectFieldOption<string>[];
-
-const ADB_DEFAULT_REGION = "ap-osaka-1";
-
-const ADB_LIFECYCLE_LABEL_KEYS: Record<string, DatabaseMessageKey> = {
-  AVAILABLE: "settings.adb.lifecycle.AVAILABLE",
-  STARTING: "settings.adb.lifecycle.STARTING",
-  STOPPING: "settings.adb.lifecycle.STOPPING",
-  STOPPED: "settings.adb.lifecycle.STOPPED",
-  UNAVAILABLE: "settings.adb.lifecycle.UNAVAILABLE",
-  PROVISIONING: "settings.adb.lifecycle.PROVISIONING",
-  TERMINATING: "settings.adb.lifecycle.TERMINATING",
-  TERMINATED: "settings.adb.lifecycle.TERMINATED",
-  FAILED: "settings.adb.lifecycle.FAILED",
-  UPDATING: "settings.adb.lifecycle.UPDATING",
-  RESTORING: "settings.adb.lifecycle.RESTORING",
-  BACKUP_IN_PROGRESS: "settings.adb.lifecycle.BACKUP_IN_PROGRESS",
-  MAINTENANCE_IN_PROGRESS: "settings.adb.lifecycle.MAINTENANCE_IN_PROGRESS",
-  ROLE_CHANGE_IN_PROGRESS: "settings.adb.lifecycle.ROLE_CHANGE_IN_PROGRESS",
-  UPGRADING: "settings.adb.lifecycle.UPGRADING",
-  INACCESSIBLE: "settings.adb.lifecycle.INACCESSIBLE",
-  STANDBY: "settings.adb.lifecycle.STANDBY",
-};
-
-/** Autonomous Database の情報取得・起動・停止を行う運用パネル。 */
-function AdbManagementCard({
-  api,
-  errorMessage,
-  onDatabaseChanged,
-  settings,
-  ensureWalletFromOci,
-  walletEnsureError,
-  walletEnsurePending,
-  externalBusy,
-}: {
-  api: DatabaseSettingsApi;
-  errorMessage?: (error: unknown) => string | undefined;
-  onDatabaseChanged?: DatabaseChangedHandler;
-  settings: DatabaseSettingsData;
-  ensureWalletFromOci: () => Promise<unknown>;
-  walletEnsureError: string | null;
-  walletEnsurePending: boolean;
-  /** DB 接続のカードの処理中（保存・接続テスト・Wallet・パスワードの表示）。このカードの操作を無効にする。 */
-  externalBusy: boolean;
-}) {
-  const infoQuery = useAdbInfo(api);
-  const saveSettings = useUpdateAdbSettings(api);
-  const start = useStartAdb(api, onDatabaseChanged);
-  const stop = useStopAdb(api);
-
-  // ADB OCID は platform/.env を正本とする読み取り専用値。
-  const ocid = settings.adb_ocid;
-  const [region, setRegion] = useState(settings.region || ADB_DEFAULT_REGION);
-  const [log, setLog] = useState<AdbOperationLogEntry[]>([]);
-  const [refreshAttemptedWallet, setRefreshAttemptedWallet] = useState(false);
-  const [activeOperation, setActiveOperation] =
-    useState<AdbManagementOperation | null>(null);
-
-  useEffect(() => {
-    setRegion(settings.region || ADB_DEFAULT_REGION);
-    setRefreshAttemptedWallet(false);
-  }, [settings.region]);
-
-  const regionSupported = ADB_REGION_OPTIONS.some(
-    (option) => option.value === region,
-  );
-  const info = infoQuery.data;
-  const lifecycle = info?.lifecycle_state ?? null;
-  const canStart = lifecycle === "STOPPED" || lifecycle === "UNAVAILABLE";
-  const canStop = lifecycle === "AVAILABLE";
-  const showInfoPanel = Boolean(
-    info && (info.lifecycle_state || info.status !== "success"),
-  );
-  const refreshWalletPending = refreshAttemptedWallet && walletEnsurePending;
-  // 「保存」と「情報を再取得」は同じ保存の mutation と Wallet の取得を使うが、スピナーは
-  // 押したボタンだけが出す。もう一方は下の busy で disabled にするだけ（buttons.md §8。#819）。
-  const saveOrRefreshPending = saveSettings.isPending || refreshWalletPending;
-  const saveButtonLoading = activeOperation === "save" && saveOrRefreshPending;
-  const refreshButtonLoading =
-    activeOperation === "refresh" && saveOrRefreshPending;
-  // 遷移中は useAdbInfo が背景ポーリングするため、その isFetching で操作ボタンを
-  // 無効化しない(4 秒ごとのちらつき/無効化を避ける)。明示的な操作の最中だけ busy。
-  const busy =
-    activeOperation !== null ||
-    saveSettings.isPending ||
-    start.isPending ||
-    stop.isPending ||
-    walletEnsurePending ||
-    externalBusy;
-  // 押したボタンは busy でも disabled にしない（loading の aria-disabled でフォーカスを保つ。#355 / #835）。
-  const startPressed =
-    activeOperation === "start" && (saveSettings.isPending || start.isPending);
-  const stopPressed =
-    activeOperation === "stop" && (saveSettings.isPending || stop.isPending);
-
-  function appendLog(result: AdbInfoData) {
-    setLog((current) =>
-      [
-        {
-          status: result.status,
-          message: result.message,
-          timestamp: formatDateTime(new Date().toISOString()),
-        },
-        ...current,
-      ].slice(0, 3),
-    );
-  }
-
-  async function persist(): Promise<AdbInfoData | null> {
-    if (!ocid.trim()) return null;
-    try {
-      return await saveSettings.mutateAsync({
-        adb_ocid: ocid.trim(),
-        region: region.trim(),
-      });
-    } catch {
-      return null;
-    }
-  }
-
-  async function handleRefresh(
-    operation: Extract<AdbManagementOperation, "save" | "refresh">,
-  ) {
-    setActiveOperation(operation);
-    try {
-      const result = await persist();
-      if (!result) return;
-      appendLog(result);
-      setRefreshAttemptedWallet(true);
-      try {
-        await ensureWalletFromOci();
-      } catch {
-        /* Wallet 取得エラーは ADB 操作フィードバックの FormStatus が担う */
-      }
-    } finally {
-      setActiveOperation(null);
-    }
-  }
-
-  async function handleStart() {
-    setActiveOperation("start");
-    try {
-      if (!(await persist())) return;
-      const result = await start.mutateAsync();
-      appendLog(result);
-    } catch {
-      /* mutation error surface は下部の FormStatus が担う */
-    } finally {
-      setActiveOperation(null);
-    }
-  }
-
-  async function handleStop() {
-    setActiveOperation("stop");
-    try {
-      if (!(await persist())) return;
-      const result = await stop.mutateAsync();
-      appendLog(result);
-    } catch {
-      /* mutation error surface は下部の FormStatus が担う */
-    } finally {
-      setActiveOperation(null);
-    }
-  }
-
-  const startButtonLoading = startPressed || lifecycle === "STARTING";
-  const stopButtonLoading = stopPressed || lifecycle === "STOPPING";
-
-  // 押した操作の説明を優先する（STARTING / STOPPING の間に「情報を再取得」を押したときなど）。
-  const adbProcessingLabel =
-    saveButtonLoading || refreshButtonLoading
-      ? t("settings.adb.processing.refresh")
-      : startButtonLoading
-        ? t("settings.adb.processing.start")
-        : stopButtonLoading
-          ? t("settings.adb.processing.stop")
-          : null;
-
-  const apiMessage = (error: unknown) =>
-    error ? errorMessage?.(error) : undefined;
-  const actionError =
-    apiMessage(saveSettings.error) ??
-    apiMessage(start.error) ??
-    apiMessage(stop.error) ??
-    (refreshAttemptedWallet && walletEnsureError
-      ? walletEnsureError
-      : start.isError || stop.isError || saveSettings.isError
-        ? t("settings.adb.notify.actionFailed")
-        : null);
-  const infoError =
-    apiMessage(infoQuery.error) ??
-    (infoQuery.isError ? t("settings.adb.notify.infoFailed") : null);
-
-  return (
-    <Card id="adb-management" className="scroll-mt-4">
-      <CardHeader>
-        {/* 見出しの行の右端に、カード全体を対象にする「情報を再取得」を置く。 */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="flex flex-wrap items-center gap-2">
-              <Server size={16} className="text-accent-fg" aria-hidden />
-              {t("settings.adb.title")}
-              {/* ADB の稼働状態は見出しの StatusBadge で出す。常設の success の面にしない（messaging.md §10。#705）。 */}
-              {showInfoPanel && info?.lifecycle_state ? (
-                <StatusBadge
-                  variant={ADB_LIFECYCLE_VARIANT[adbLifecycleTone(info.lifecycle_state)]}
-                  label={`${t("settings.adb.operational.lifecycle")}: ${adbLifecycleLabel(info.lifecycle_state)}`}
-                />
-              ) : null}
-            </CardTitle>
-            <CardDescription>{t("settings.adb.description")}</CardDescription>
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            loading={refreshButtonLoading}
-            disabled={busy && !refreshButtonLoading}
-            onClick={() => void handleRefresh("refresh")}
-            icon={RefreshCw}
-          >
-            {t("settings.adb.action.refresh")}
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-5">
-
-        {/* リージョンは短い値（sm）、OCID は長い値なので全幅（FormGrid の最大 60rem まで。#1891）。 */}
-        <FormGrid>
-          <SelectField
-            id="adb-region"
-            label={t("settings.adb.field.region")}
-            value={region}
-            options={ADB_REGION_OPTIONS}
-            onValueChange={setRegion}
-            disabled={busy}
-            width="sm"
-            helper={
-              // 候補に無い保存値（以前の候補の us-chicago-1 など）はそのまま出し、選び直すよう案内する（#660）。
-              regionSupported
-                ? undefined
-                : t("settings.adb.helper.regionUnsupported", { region })
-            }
-          />
-          <TextField
-            id="adb-ocid"
-            label={t("settings.adb.field.ocid")}
-            value={ocid}
-            readOnly
-            width="full"
-            className="col-span-full"
-            placeholder={t("settings.adb.placeholder.ocidEmpty")}
-            helper={
-              // 環境変数名（PLATFORM_ORACLE_ADB_OCID）は長い 1 語なので、375px でも折り返せるようにする。
-              <span className="pr-break-anywhere">
-                {t("settings.adb.helper.ocidReadonly")}
-              </span>
-            }
-          />
-        </FormGrid>
-
-        <FormActionBar
-          ariaLabel={t("settings.adb.actions.label")}
-          primaryActions={[
-            {
-              id: "save",
-              label: t("settings.database.actions.save"),
-              icon: Save,
-              loading: saveButtonLoading,
-              disabled: (busy && !saveButtonLoading) || !ocid.trim(),
-              onClick: () => void handleRefresh("save"),
-            },
-          ]}
-          secondaryActions={[
-            {
-              id: "start",
-              label: t("settings.adb.action.start"),
-              icon: Power,
-              loading: startButtonLoading,
-              disabled: startPressed ? false : busy || !ocid.trim() || !canStart,
-              onClick: () => void handleStart(),
-            },
-            {
-              id: "stop",
-              label: t("settings.adb.action.stop"),
-              icon: PowerOff,
-              loading: stopButtonLoading,
-              disabled: stopPressed ? false : busy || !ocid.trim() || !canStop,
-              onClick: () => void handleStop(),
-            },
-          ]}
-          status={
-            actionError ? (
-              <FormStatus
-                tone="danger"
-                className="text-xs"
-                message={actionError}
-              />
-            ) : null
-          }
-        />
-
-        {adbProcessingLabel ? (
-          // ADB の起動・停止は OCI 側の遷移（STARTING / STOPPING）が終わるまで数分かかる。
-          // スピナーは操作したボタンが担う（messaging.md §3.7）。
-          <ProcessingIndicator
-            active
-            label={adbProcessingLabel}
-            operationKey={adbProcessingLabel}
-            placement="action"
-            activityIcon="none"
-            testId="settings-adb-processing"
-          />
-        ) : null}
-
-        {infoQuery.isPending ? (
-          // ADB の状態（見出しの StatusBadge）と起動・停止の可否は OCI から取得する。取得の間は
-          // 経過時間付きで示す（起動・停止が押せない理由を空白にしない。AGENTS.md「読み込み中」）。
-          // 下を情報のパネルの形の Skeleton で覆い、届いたときに下の内容を押し下げない（#2510）。
-          <TimedLoadingState
-            label={t("settings.adb.loading")}
-            operationKey="settings-adb-info"
-            framed={false}
-            testId="settings-adb-loading"
-          >
-            <Skeleton className="h-24 w-full" />
-          </TimedLoadingState>
-        ) : null}
-
-        {infoError ? (
-          <FormStatus tone="danger" className="text-xs" message={infoError} />
-        ) : null}
-
-        {showInfoPanel && info ? <AdbInfoPanel info={info} /> : null}
-
-        {log.length > 0 ? <AdbOperationLog entries={log} /> : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AdbInfoPanel({ info }: { info: AdbInfoData }) {
-  const known = info.status === "success" || info.status === "accepted";
-  const messageTone = info.status === "error" ? "danger" : "warning";
-  // 自己完結したステータスバーを余分なパネルで囲まない。
-  return (
-    <div className="space-y-2">
-      {!known ? (
-        <FormStatus
-          tone={messageTone}
-          className="text-xs"
-          message={info.message}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function AdbOperationLog({ entries }: { entries: AdbOperationLogEntry[] }) {
-  return (
-    <div className="space-y-2">
-      <span className="block text-sm font-medium text-fg">
-        {t("settings.adb.operationResult.title")}
-      </span>
-      <ul className="space-y-1.5">
-        {entries.map((entry, index) => (
-          <li
-            key={`${entry.timestamp}-${index}`}
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-surface px-3 py-2 text-xs"
-          >
-            <span className="text-fg-muted">{entry.timestamp}</span>
-            {/* 操作の結果の状態は StatusBadge（アイコン + 日本語の状態）で出す。API の enum を画面に出さない（messaging.md §10。#722）。 */}
-            <StatusBadge
-              variant={ADB_OPERATION_STATUS_VARIANT[entry.status] ?? "warning"}
-              label={adbOperationStatusLabel(entry.status)}
-            />
-            <span className="text-fg">{entry.message}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const ADB_OPERATION_STATUS_VARIANT: Record<
-  AdbInfoData["status"],
-  "success" | "info" | "warning" | "danger"
-> = {
-  success: "success",
-  accepted: "success",
-  already_available: "info",
-  already_stopped: "info",
-  not_configured: "warning",
-  cannot_start: "warning",
-  cannot_stop: "warning",
-  error: "danger",
-};
-
-const ADB_OPERATION_STATUS_LABEL_KEYS: Record<
-  AdbInfoData["status"],
-  DatabaseMessageKey
-> = {
-  success: "settings.adb.operationStatus.success",
-  accepted: "settings.adb.operationStatus.accepted",
-  already_available: "settings.adb.operationStatus.already_available",
-  already_stopped: "settings.adb.operationStatus.already_stopped",
-  not_configured: "settings.adb.operationStatus.not_configured",
-  cannot_start: "settings.adb.operationStatus.cannot_start",
-  cannot_stop: "settings.adb.operationStatus.cannot_stop",
-  error: "settings.adb.operationStatus.error",
-};
-
-/** 想定外の値（API の追加など）は値をそのまま出す。 */
-function adbOperationStatusLabel(status: AdbInfoData["status"]): string {
-  const key = ADB_OPERATION_STATUS_LABEL_KEYS[status];
-  return key ? t(key) : status;
-}
-
-function adbLifecycleLabel(state: string | null): string {
-  if (!state) return t("settings.adb.statusUnknown");
-  const key = ADB_LIFECYCLE_LABEL_KEYS[state];
-  return key ? t(key) : state;
-}
-
-const ADB_LIFECYCLE_VARIANT = {
-  ok: "success",
-  danger: "danger",
-  warning: "warning",
-  muted: "neutral",
-} as const;
-
-function adbLifecycleTone(
-  state: string | null,
-): "ok" | "danger" | "warning" | "muted" {
-  if (state === "AVAILABLE") return "ok";
-  if (state === "FAILED" || state === "TERMINATED" || state === "INACCESSIBLE")
-    return "danger";
-  if (state === "STOPPED" || state === "UNAVAILABLE" || state === "STANDBY")
-    return "muted";
-  if (!state) return "muted";
-  return "warning";
 }
 
 function WalletServiceField({

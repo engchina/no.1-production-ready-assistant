@@ -82,7 +82,7 @@ def test_health_reports_backend_and_version(client: TestClient) -> None:
 
 def test_health_reports_ok_when_runtime_health_is_ready() -> None:
     app = create_parse_app(
-        backend="dots_ocr",
+        backend="unstructured",
         import_name="pydantic",
         distribution_names=("pydantic",),
         runtime_health=lambda: True,
@@ -90,7 +90,7 @@ def test_health_reports_ok_when_runtime_health_is_ready() -> None:
     payload = TestClient(app).get("/health").json()
 
     assert payload["status"] == "ok"
-    assert payload["backend"] == "dots_ocr"
+    assert payload["backend"] == "unstructured"
     assert payload["package_version"] is not None
 
 
@@ -99,7 +99,7 @@ def test_health_reports_degraded_when_runtime_health_fails() -> None:
         raise ConnectionError("vllm refused")
 
     app = create_parse_app(
-        backend="dots_ocr",
+        backend="unstructured",
         import_name="pydantic",
         distribution_names=("pydantic",),
         runtime_health=fail_runtime,
@@ -107,7 +107,7 @@ def test_health_reports_degraded_when_runtime_health_fails() -> None:
     payload = TestClient(app).get("/health").json()
 
     assert payload["status"] == "degraded"
-    assert payload["backend"] == "dots_ocr"
+    assert payload["backend"] == "unstructured"
     assert payload["package_version"] is not None
 
 
@@ -169,7 +169,7 @@ def test_parse_runs_external_adapter_in_worker(
     monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
     monkeypatch.setattr(service_module, "run_external_adapter", fake_run)
     app = create_parse_app(
-        backend="dots_ocr",
+        backend="unstructured",
         import_name="pydantic",
         distribution_names=("pydantic",),
     )
@@ -206,16 +206,16 @@ def test_service_failure_warning_surfaces_safe_message() -> None:
         safe_for_user = True
 
     warning = service_failure_warning(
-        "oci_document_understanding",
+        "removed_ocr_backend",
         _SafeError("VLM が   max_output_tokens 上限で\n途中終了しました。"),
     )
     # 利用者向けメッセージを上流へ届ける(空白は畳む)。
     assert warning == (
-        "oci_document_understanding_unavailable: VLM が max_output_tokens 上限で 途中終了しました。"
+        "removed_ocr_backend_unavailable: VLM が max_output_tokens 上限で 途中終了しました。"
     )
 
 
 def test_service_failure_warning_hides_unsafe_detail() -> None:
-    warning = service_failure_warning("oci_document_understanding", RuntimeError("secret://token"))
+    warning = service_failure_warning("removed_ocr_backend", RuntimeError("secret://token"))
     # safe_for_user でない例外は型名のみ(情報漏えい回避)。
-    assert warning == "oci_document_understanding_unavailable: RuntimeError"
+    assert warning == "removed_ocr_backend_unavailable: RuntimeError"

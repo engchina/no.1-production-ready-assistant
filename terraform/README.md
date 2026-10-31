@@ -37,7 +37,7 @@
   - `us-chicago-1`: `ocid1.image.oc1.us-chicago-1.aaaaaaaaltnu52rsd7s6p7yepblc6cdq7b7orqkndiwlz2eggv5ja2ltn52a`
   - image を新しくするときは、`schema.yaml`・`variables.tf`・`terraform/scripts/verify_stack_contract.py`（`ORACLE_LINUX_IMAGES`）を同じ PR でそろえます。
   これら以外のリージョンで stack を作ると、`region` の validation で plan が失敗します。
-- 共通 `.env` の `PLATFORM_ORACLE_ADB_REGION` には stack のリージョンが入ります。システム設定 > データベース の「Autonomous Database 管理」のリージョンの選択肢は東京・大阪のみです。Chicago の保存値には非対応の案内が残ります（#3904）。これは画面の案内の制限で、管理 API の失敗を確認したものではありません。
+- 共通 `.env` の `PLATFORM_ORACLE_ADB_REGION` には stack のリージョンが入ります（OCI からの Wallet の取得に使います）。システム設定 > データベース は ADB の起動・停止・状態の取得を扱いません（#10）。
 
 ## フォームの入力順
 
@@ -284,16 +284,12 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
 - ログイン: 共通認証（`PLATFORM_AUTH_MODE=authenticated`。#214）。最初は構成管理者 `system_admin`（`app_admin_login_user_password`）でログインし、
   「ユーザーとロール」でユーザーとロールを作り、「セキュリティ設定 > 権限管理」でロールごとのメニュー・検索・回答プロファイル・ナレッジベースを設定します。
   Cookie を HTTPS 限定にするか（`PLATFORM_AUTH_COOKIE_SECURE`）は `https_enabled` から決まります。`RAG_AUDIT_CONTEXT_HASH_SALT` は instance 上で生成します。
-- 前処理 4 つと CPU の parser を配備します（出力 `rag_services`）。GPU の parser（MinerU / Dots.OCR）は含めず、
-  起動後に「取込・検索・回答設定 > 文書解析」で外部 API として指定します。音声・動画のファイルは取り込みません。
+- 前処理 4 つと CPU の parser を配備します（出力 `rag_services`）。GPU の parser は含めません。音声・動画のファイルは取り込みません。
 
   | service | 既定 | 入力 |
   |---|---|---|
   | `parser-docling` | 常に配備 | 既定の解析エンジン（`RAG_PARSER_ADAPTER_BACKEND=docling`。PDF と画像。#286） |
   | `parser-unstructured` | 配備する（#1559。文書解析の設定でも有効にする: `RAG_PARSER_UNSTRUCTURED_ENABLED`） | `rag_enable_parser_unstructured`（テキスト・HTML・Office・メールなど Docling が扱えない形式を、処理レシピで Unstructured を選んで取り込む場合） |
-  | `parser-structured-records-jsonl` | 常に配備（#2457） | 構造化レコード JSONL の解析エンジン（`RAG_PARSER_ADAPTER_BACKEND=structured_records_jsonl`。ファイル準備の CSV→JSON・Excel→JSON が作る構造化レコードの JSONL）。文書解析の既定か処理レシピの使用エンジンで選んだときだけ使います。CSV / Excel の前処理と同じく、初めて配備したときに起動します |
-  | `parser-xml-tree-json` | 常に配備・既定は停止（#2453） | XML ツリー JSON の解析エンジン（`RAG_PARSER_ADAPTER_BACKEND=xml_tree_json`。対応する形の `.json`）。文書解析の既定か処理レシピの使用エンジンで選んだときだけ使います（#2042）。初めて配備しても起動しないので、使うときは「運用設定 > サービス管理」で起動します |
-  | `parser-oci-document-understanding` | 配備しない（準備中〔ロードマップ〕。#3374） | なし（入力 `rag_enable_oci_cloud_parsers` は既定 false のまま画面に出さず、値に関わらず配備しません） |
 
   Docling を配備するかを選ぶ入力（以前の `rag_enable_parser_docling`）は廃止しました（Docling は既定の解析エンジンのため常に配備します）。
   Marker の parser（`parser-marker`）と入力 `rag_enable_parser_marker` は削除しました（#270）。
@@ -301,15 +297,16 @@ RAG は NL2SQL / Agent と同じく、Docker を使わずネイティブ（uv �
   スキャン画像の補正（`preprocess-image-enhance`）と URL→Markdown（`preprocess-url-to-markdown`）は削除しました（#2042）。
   前処理の「PDF を画像として読み直す」（`preprocess-pdf-to-page-images`）も削除しました（#3347。スキャンの PDF は Docling が OCR で読みます）。
   取込時の「PIIマスク」（`preprocess-pii-redact`）と、その spaCy の日本語モデルの取得も削除しました（#3358）。
-  OCI Document Understanding の parser は準備中（ロードマップ。#3374）で、まだ使えません。入力 `rag_enable_oci_cloud_parsers` は残しますが、Resource Manager の画面には出さず、
-  値に関わらず配備しません（以前の配備で入れた unit は、再配備で止めて〔`disable --now`〕消し、sudoers からも外します）。既存の Compute は
-  `sudo platform/deploy/suite-update.sh` の再配備で `parser-structured-records-jsonl`（起動します）と `parser-xml-tree-json`（起動はしません）の unit が入り、削除したサービスの unit は止めて消されます
+  OCI Document Understanding の parser（`parser-oci-document-understanding`）と入力 `rag_enable_oci_cloud_parsers` は削除しました（#22。以前の配備で入れた unit は、再配備で止めて〔`disable --now`〕消し、sudoers からも外します）。
+  構造化レコード JSONL の parser（`parser-structured-records-jsonl`）と XML ツリー JSON の parser（`parser-xml-tree-json`）も削除しました（#21。
+  ファイル準備の CSV→JSONL・Excel→JSONL・Word→JSONL の成果物は `parser-docling`・`parser-unstructured` が読みます）。既存の Compute は
+  `sudo platform/deploy/suite-update.sh` の再配備で、削除したサービスの unit が止めて消されます
   （以前の stack が書いた `/u01/aipoc/props/rag_services.txt` も今の一覧に書き戻します）。
 
 - 前処理 / parser の起動 / 停止は「運用設定 > サービス管理」画面から行えます（`RAG_SERVICE_CONTROL_ENABLED=true`）。backend の実行ユーザーには、
   配備した前処理 / parser の unit の `systemctl enable --now / disable --now / restart` と `journalctl -u <unit>` を
   sudoers（`/etc/sudoers.d/production-ready-rag-services`）で許可します。利用者が最後に操作した起動 / 停止の状態は、再起動・再配備でも保たれます
-  （初めて配備する unit は起動します。既定は停止の `parser-xml-tree-json` は起動しません）。
+  （初めて配備する unit は起動します）。
 - RAG も NL2SQL / Agent と同じユーザー `opc` で動きます（#1316・#1611）。
 
 | 項目 | 値 |
@@ -334,7 +331,7 @@ sudo systemctl restart production-ready-rag-backend.service
 - ログイン: 構成管理者 `SYSTEM_ADMIN`（ユーザー ID は `system_admin` 固定、RAG と共通）。`app_admin_login_user_password`（12〜30 文字、`admin` と `"` を含まない）。
 - Deep Data Security: `nl2sql_oracle_deepsec_enabled`（既定 `false`。使う環境だけがオンにします。#1707）。オンの場合は `nl2sql_oracle_deepsec_data_user_password` が必要です。
   配備した後に「セキュリティ設定 > Deep Data Security」で DATA USER のパスワードを保存しても有効になります（`backend/.env` に `NL2SQL_ORACLE_DEEPSEC_ENABLED=true` を書きます）。
-- Nginx + systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（ローカルの開発と同じ。#1316 で 8000 から変えた）。
+- Nginx + systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（#1316 で 8000 から変えた。ローカルの開発の port は 8110 で別。#25）。
 - instance 上の構成・更新手順・障害対応は [nl2sql/docs/compute-operations.md](../nl2sql/docs/compute-operations.md) を参照してください。
 
 ### Agent Control Plane（`deploy_agent`）
@@ -512,7 +509,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 | スクリプト（`platform/deploy/`） | 実行 | 内容 |
 |---|---|---|
 | `suite-pull.sh` | opc か `sudo` | repository の所有者（opc）で `origin/main` を取得し、`main` を付け替える（clone は depth 1）。追跡ファイルに変更があれば中止し、未追跡のファイルは保つ。取得だけで、build・再起動はしない |
-| `suite-restart.sh` | `sudo` | 最初に ADB が止まっていれば起動して `AVAILABLE` を待つ（下の「ADB の自動の起動」。`--status` を除く。起動できなくても続ける）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・Nginx・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service と Nginx だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
+| `suite-restart.sh` | `sudo` | DB の起動・停止はしない（#10）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・Nginx・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service と Nginx だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
 | `suite-update.sh` | `sudo` | `suite-pull.sh` で取得し、取得した新しい `suite-restart.sh`（既定）を実行する |
 
 - `suite-init.sh` は props（Resource Manager の入力）から、各製品の `backend/.env` を作り直す。
@@ -535,52 +532,9 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
   再起動の回数を出す。service が `failed` になるか再起動を 3 回繰り返したら、すぐに status と journal を出して失敗にする（#1642）。
 - OS の再起動では、enabled の unit（`WantedBy=multi-user.target`）と Nginx が自動で起動する。
   - enabled の unit は、各製品の backend・worker と、起動にした RAG の前処理 / parser。
-  - ADB は Compute の外にあるため、OS の再起動では起動しない。止まっていれば `suite-restart.sh`（`--no-build` でもよい）を
-    実行する（下の「ADB の自動の起動」）か、OCI のコンソールから起動する。
-
-#### ADB の自動の起動（#1745）
-
-`suite-restart.sh`（既定と `--no-build`）と `suite-update.sh` は、DB を使う処理（build の migration・system schema の初期化・
-サービスの起動）の前に、ADB の状態を確かめる（`platform/deploy/suite-adb.py`。製品の backend の venv の Python で、`opc` として実行する）。
-
-- 対象は `platform/.env` の `PLATFORM_ORACLE_ADB_OCID`（stack が書く）、region は `PLATFORM_ORACLE_ADB_REGION`（空なら `PLATFORM_OCI_REGION`）。
-- OCI の呼び出しはシステム設定 › データベース の「起動」と同じ（`pr_system_settings.oci_database`）。認証は `PLATFORM_OCI_AUTH_MODE` で選ぶ。
-  - `config_file`（既定。未設定も同じ）: システム設定 › OCI 認証 で保存する `opc` の `~/.oci/config`（`PLATFORM_OCI_CONFIG_FILE` /
-    `PLATFORM_OCI_CONFIG_PROFILE`）。
-  - `instance_principal`: Compute の instance principal。
-- 状態ごとの振る舞い:
-
-| 状態 | 振る舞い |
-|---|---|
-| `AVAILABLE`（と、DB を開いたままの `AVAILABLE_NEEDS_ATTENTION`・`BACKUP_IN_PROGRESS`・`SCALE_IN_PROGRESS`） | そのまま進む |
-| `STOPPED` | 起動を要求し、`AVAILABLE` を待つ |
-| `STARTING`・`STOPPING`（`STOPPED` になってから起動）・`PROVISIONING`・`RESTARTING`・`UPDATING`・`MAINTENANCE_IN_PROGRESS` など | 待つ |
-| `UNAVAILABLE`・`TERMINATED`・`RESTORE_FAILED`・`INACCESSIBLE`・`STANDBY` など | 起動せず、理由を warning として出して続ける |
-
-- 待つ上限は 600 秒（`SUITE_ADB_START_TIMEOUT_SECONDS`）。15 秒ごとに状態を問い合わせ、状態が変わったときと 60 秒ごとに経過を
-  `/var/log/suite-ops.log` に出す。
-- 確認・起動は best effort（#1756）。使える状態にできないとき（`PLATFORM_ORACLE_ADB_OCID`・OCI の認証の設定が無い、401・404、時間切れ、
-  上の続ける状態）は、`[suite-adb] NG:` の行に理由と起動する方法（画面・OCI のコンソール・`oci db autonomous-database start`）を出し、
-  `[suite-restart] WARNING:` の行を出して、build・再起動をそのまま続ける（DB に接続できなくてもアプリケーションは起動する）。
-  ADB の NG だけでは終了コードを失敗にしない。DB に接続できない間は、各製品の system schema の初期化が warning のまま進み、
-  最後の確認（[配備が正常かの確認](#配備が正常かの確認1642)）が `check: <製品> schema NG` で 0 以外を返す（配備の時点の DB を見た結果）。
-  DB に接続できない間も、構成管理者 `system_admin` はログインできる。`system_admin` で「システム設定 › データベース」から ADB を
-  起動すれば、そのまま DB を使える（`suite-restart.sh` の再実行は要らない。#1762）。認証の値・secret は出さない。
-- `--status` は状態を見るだけで起動しない（結果は確認の終了コードに含めない）。ADB を停止する処理は持たない。
-- OCI の認証を Compute に置かず、ADB を手で起動して運用するときは `SUITE_ADB_AUTOSTART=skip` で確認を飛ばせる
-  （`sudo SUITE_ADB_AUTOSTART=skip .../suite-restart.sh`。飛ばさなくても warning が出るだけで続く）。
-
-要る IAM の権限（状態の取得 `GetAutonomousDatabase` は `AUTONOMOUS_DATABASE_INSPECT`＝`inspect`、起動 `StartAutonomousDatabase` は
-`AUTONOMOUS_DATABASE_UPDATE`＝`use`）。`use autonomous-databases` は `inspect` を含む:
-
-| 認証（`PLATFORM_OCI_AUTH_MODE`） | policy の例 |
-|---|---|
-| `config_file`（API キーのユーザー） | `Allow group <group> to use autonomous-databases in compartment <compartment>` |
-| `instance_principal` | dynamic group（例: `instance.id = '<Compute の OCID>'`）を作り、`Allow dynamic-group <dynamic-group> to use autonomous-databases in compartment <compartment>` |
-
-起動だけを許すときは `use` の代わりに `inspect autonomous-databases` と
-`manage autonomous-databases where request.operation = 'StartAutonomousDatabase'` を付ける。権限が無いと OCI は 404
-（`NotAuthorizedOrNotFound`）を返し、`[suite-adb] NG:` に要る verb を出す。
+  - DB は Compute の外にあるため、OS の再起動では起動しない。配備のスクリプト（`suite-restart.sh`・`suite-update.sh`）と
+    システム設定の画面は DB の起動・停止を扱わない（#10）。止まっていれば OCI のコンソール（ADB Free コンテナなら
+    `docker start <コンテナ名>`）から起動する。
 
 ### 配備が正常かの確認（#1642）
 
@@ -730,7 +684,7 @@ root の [README.md](../README.md)「OCI へのデプロイ」のボタンも `r
 | 旧（製品ごとの stack） | 新（統合 stack） |
 |---|---|
 | RAG の `app_login_user` / `app_login_password` / `app_auth_cookie_secure` | 廃止（ログインは構成管理者 `app_admin_login_user_password` と DB ユーザー。#214） / 廃止 / `rag_app_auth_cookie_secure` |
-| RAG の `enable_parser_docling` / `enable_parser_marker` / `enable_oci_cloud_parsers` | 廃止（Docling は常に配備。#286） / 廃止（Marker は削除。#270） / `rag_enable_oci_cloud_parsers` |
+| RAG の `enable_parser_docling` / `enable_parser_marker` / `enable_oci_cloud_parsers` | 廃止（Docling は常に配備。#286） / 廃止（Marker は削除。#270） / 廃止（OCI Document Understanding の parser は削除。#22） |
 | NL2SQL の `app_admin_login_user_password` / `oracle_deepsec_enabled` / `oracle_deepsec_data_user_password` | `app_admin_login_user_password`（RAG と共通） / `nl2sql_oracle_deepsec_enabled` / `nl2sql_oracle_deepsec_data_user_password` |
 | NL2SQL の `app_environment` / `app_auth_cookie_secure` / `app_admin_login_user_id` | `platform_environment` / `https_enabled` / `app_admin_login_user_id`（RAG と共通） |
 | Agent の `app_basic_auth_user` / `app_basic_auth_password` | 廃止（ログインは構成管理者 `app_admin_login_user_password` と DB ユーザー。#215） |

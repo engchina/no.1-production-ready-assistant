@@ -32,10 +32,11 @@ OCI_INFERENCE_ENDPOINT_TEMPLATE = "https://inference.generativeai.{region}.oci.o
 DEFAULT_OCI_VISION_ENDPOINT = OCI_INFERENCE_ENDPOINT_TEMPLATE.format(region=DEFAULT_CHICAGO_REGION)
 OPENAI_RESPONSES_LLM_API_MODE = "openai_responses"
 DEFAULT_LLM_API_MODE = OPENAI_RESPONSES_LLM_API_MODE
-DEFAULT_EMBEDDING_REGION = DEFAULT_OSAKA_REGION
-DEFAULT_EMBEDDING_MODEL = "cohere.embed-v4.0"
+DEFAULT_EMBEDDING_MODEL = "text-embedding-v4"
 DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS = 1536
-DEFAULT_EMBEDDING_BATCH_SIZE = 32
+# 百煉（DashScope）の OpenAI 互換 API は 1 要求 10 件まで。超えると 400 が返る（#8）。
+DEFAULT_EMBEDDING_BATCH_SIZE = 10
+DEFAULT_RERANK_MODEL = "qwen3-rerank"
 DEFAULT_IMAGE_EMBEDDING_RRF_WEIGHT = 0.75
 DEFAULT_MAX_ANCHORS_PER_PARENT = 2
 # rerank の後、起点（上位 top_k）に採る同じ文書の child の上限（#2167）。0 は上限なし（SDK の既定）。
@@ -213,7 +214,9 @@ class Settings:
     answer_max_tokens: int
     default_rerank_enabled: bool
     rerank_model: str
-    oci_rerank_endpoint: str
+    # 再ランクの OpenAI 互換 Base URL。空なら埋め込みの Base URL から読み替える（#8。百煉は
+    # 再ランクだけ `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
+    rerank_base_url: str
     rerank_request_timeout_seconds: int
     rerank_retries: int
     rerank_retry_initial_wait_seconds: float
@@ -229,8 +232,8 @@ class Settings:
     # 1 以上なら、選んだ画面ごとの最上位の child を rerank 後の順位 N 位（2 つ目は N+1 位…）より下に置かない。
     # 0（既定）は候補に加えるだけで順位は rerank に任せる。比較実験用 (#1108)。
     screen_linking_reserve_rank: int
-    embedding_region: str
-    embedding_endpoint: str
+    # 埋め込みの OpenAI 互換 Base URL。空なら LLM のプライマリ接続の endpoint を使う（#8）。
+    embedding_base_url: str
     embedding_model: str
     embedding_output_dimensions: int
     embedding_batch_size: int
@@ -314,44 +317,6 @@ class Settings:
     answer_max_input_tokens: int = 128_000
     # 同時に呼ぶ数（既定 4）。
     section_extraction_concurrency: int = 4
-    # 条の目録から条を選ぶ段（#2254）。融合の候補の上位の条で構成された文書（article_catalog_max_documents 件まで）の
-    # 章節の目録を LLM に文書ごとに 1 回渡して条を選ばせ（文書ごとに article_catalog_max_articles 件まで）、その条の
-    # 根拠を候補に加える。選んだ条は rerank の順に article_catalog_context_records 件まで、context の起点・親の枠の外に
-    # 足す（検索の根拠を減らさない）。目録と chunk を注入した呼び出し元（`AnswerDependencies.article_catalogs` /
-    # `article_chunks`）でだけ動き、条で構成された文書が候補に無ければ LLM を呼ばない。
-    article_catalog_enabled: bool = True
-    # 既定は評価の実測（必要な文書の順位は最大 8・条の 1 段目の位置は最大 6）に余裕を持たせた 2 のべき（#3518）。
-    article_catalog_max_documents: int = 16
-    article_catalog_max_articles: int = 8
-    article_catalog_context_records: int = 6
-    # 検索の範囲の条で構成された文書の一覧から LLM が選ぶ文書の数（候補の文書の外。手続の一般的な規則の文書など）。
-    # 0 は候補の文書だけを読む。一覧を注入した呼び出し元（`AnswerDependencies.article_documents`）でだけ動く。
-    article_catalog_scope_documents: int = 2
-    # 元の質問（注入されたとき）でも 1 回ベクトル検索し、その候補を目録を読む文書の順位に足す（候補・context には足さない）。
-    # 業務 Agent の短い検索文では、事例の論点の文書（政令・手続の規則など）が候補の上位に出ないため。
-    article_catalog_original_question_search: bool = True
-    # 条の選択の LLM の呼び出し 1 回の出力の上限（token）と時間の上限（秒）。選ぶ出力は目録の番号の列で、通常は数百
-    # token・数秒で終わる。まれにモデルが同じ出力を繰り返して回答の上限まで書き続け、1 回で数分かかって段全体を
-    # 待たせるため、役目に合わせて抑え、超えた文書は選ばずに続ける（工程に残す）。0 は抑えない。
-    # 条の選択の 2 段目: 1 段目で選んだ条と同じ章の条と、選んだ条の番号を書き出しで名指しする別の章の条（附則の特例・
-    # 読替えなど。#3517）を合わせて article_catalog_refine_candidates 件まで（名指しの条はその 3 分の 1 まで。#3531）
-    # 本文の書き出しつきで見せ、足りない論点の条を文書ごとに article_catalog_refine_articles 件まで足させる。条の名前が
-    # 質問の語から遠い条（重なったときの扱い・特例など）を拾う。書き出しを注入した呼び出し元
-    # （`AnswerDependencies.article_leads`）でだけ動く。0 は 2 段目を行わない。
-    article_catalog_refine_articles: int = 6
-    article_catalog_refine_candidates: int = 60
-    article_catalog_output_token_cap: int = 8192
-    article_catalog_call_timeout_seconds: float = 180.0
-    # 目録で選んだ条を生成が引かなかったとき、条ごとに原文が支える説明を別の呼び出しで検討させ、その説明の出典に足す
-    # （#3526。`grounded.CATALOG_REVIEW_SYSTEM_PROMPT`）。評価で確かめた説明に根拠の無い条の出典が付いたので既定は無効。
-    # 無効なら検討の呼び出しをしない。
-    article_catalog_review: bool = False
-    # 条の選択と範囲の文書の選択の結果を、process をまたいで時間を区切って使う記録の置き場所・有効期間（秒）・件数の
-    # 上限（#3507）。key は索引の版（chunk_set）・目録の内容・質問・モデル・選択の設定。ディレクトリが無い・有効期間か
-    # 件数が 0 なら process の中の記録だけを使う。選び方は変えない（同じ入力の LLM の結果を使い回すだけ）。
-    article_catalog_cache_dir: Path | None = None
-    article_catalog_cache_ttl_seconds: float = 86400.0
-    article_catalog_cache_max_entries: int = 4096
     # 回答の最終の検証（rag_validate_answer）でモデルに渡す入力の上限（UTF-8 の bytes。指示・質問・回答・根拠を含む）。
     # 根拠は渡された順に収まるだけ渡し、収まらない根拠は検証に使わない（結果の evidence_truncated）。品質評価の
     # 主張の監査の予算（`MAX_EVALUATION_INPUT_BYTES`）とは別。
@@ -505,7 +470,6 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         ENTERPRISE_AI_LLM_PROVIDER,
     )
     runtime_knowledge_raw = env.get("RUNTIME_KNOWLEDGE_PATH", "").strip()
-    cache_dir_raw = env.get("RAG_ENGINE_ARTICLE_CATALOG_CACHE_DIR", "").strip()
     settings = Settings(
         original_query_weighting_enabled=_env_bool(env, "RETRIEVAL_ORIGINAL_QUERY_WEIGHTING", True),
         original_query_only=_env_bool(env, "RETRIEVAL_ORIGINAL_QUERY_ONLY", False),
@@ -542,8 +506,8 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         default_rerank_enabled=_env_bool(env, "RAG_ENGINE_DEFAULT_RERANK_ENABLED", True),
         approved_faq_semantic_matching_enabled=_env_bool(env, "APPROVED_FAQ_SEMANTIC_MATCHING_ENABLED", True),
         approved_faq_semantic_suggestions_enabled=_env_bool(env, "APPROVED_FAQ_SEMANTIC_SUGGESTIONS_ENABLED", False),
-        rerank_model=env.get("RERANK_MODEL", "cohere.rerank-v4.0-fast").strip(),
-        oci_rerank_endpoint=env.get("OCI_RERANK_ENDPOINT", "").strip(),
+        rerank_model=env.get("RERANK_MODEL", DEFAULT_RERANK_MODEL).strip() or DEFAULT_RERANK_MODEL,
+        rerank_base_url=env.get("RERANK_BASE_URL", "").strip(),
         rerank_request_timeout_seconds=_env_int(env, "RERANK_REQUEST_TIMEOUT_SECONDS", 90),
         rerank_retries=_env_int(env, "RERANK_RETRIES", 3),
         rerank_retry_initial_wait_seconds=_env_float(env, "RERANK_RETRY_INITIAL_WAIT_SECONDS", 2.0),
@@ -556,8 +520,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         document_selection_score_ratio=max(0.0, min(1.0, _env_float(env, "RAG_ENGINE_DOCUMENT_SELECTION_SCORE_RATIO", 0.5))),
         screen_linking_enabled=_env_bool(env, "RAG_ENGINE_SCREEN_LINKING", False),
         screen_linking_reserve_rank=max(0, _env_int(env, "RAG_ENGINE_SCREEN_LINKING_RESERVE_RANK", 0)),
-        embedding_region=env.get("EMBEDDING_REGION", DEFAULT_EMBEDDING_REGION).strip() or DEFAULT_EMBEDDING_REGION,
-        embedding_endpoint=env.get("EMBEDDING_ENDPOINT", "").strip(),
+        embedding_base_url=env.get("EMBEDDING_BASE_URL", "").strip(),
         embedding_model=env.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL,
         embedding_output_dimensions=_env_int(
             env,
@@ -605,20 +568,6 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         ),
         answer_max_input_tokens=max(1, _env_int(env, "OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS", 128_000)),
         section_extraction_concurrency=max(1, _env_int(env, "RAG_ENGINE_SECTION_EXTRACTION_CONCURRENCY", 4)),
-        article_catalog_enabled=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG", True),
-        article_catalog_max_documents=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_MAX_DOCUMENTS", 16)),
-        article_catalog_max_articles=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_MAX_ARTICLES", 8)),
-        article_catalog_context_records=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_CONTEXT_RECORDS", 6)),
-        article_catalog_scope_documents=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_SCOPE_DOCUMENTS", 2)),
-        article_catalog_original_question_search=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG_ORIGINAL_QUESTION_SEARCH", True),
-        article_catalog_refine_articles=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_REFINE_ARTICLES", 6)),
-        article_catalog_refine_candidates=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_REFINE_CANDIDATES", 60)),
-        article_catalog_output_token_cap=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_OUTPUT_TOKEN_CAP", 8192)),
-        article_catalog_call_timeout_seconds=max(0.0, _env_float(env, "RAG_ENGINE_ARTICLE_CATALOG_CALL_TIMEOUT_SECONDS", 180.0)),
-        article_catalog_review=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG_REVIEW", False),
-        article_catalog_cache_dir=Path(cache_dir_raw).expanduser() if cache_dir_raw else None,
-        article_catalog_cache_ttl_seconds=max(0.0, _env_float(env, "RAG_ENGINE_ARTICLE_CATALOG_CACHE_TTL_SECONDS", 86400.0)),
-        article_catalog_cache_max_entries=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_CACHE_MAX_ENTRIES", 4096)),
         answer_validation_max_input_bytes=max(16_000, _env_int(env, "RAG_ENGINE_ANSWER_VALIDATION_MAX_INPUT_BYTES", 96_000)),
         strategy_reasoning_effort=normalize_reasoning_effort_override(env.get("RAG_ENGINE_STRATEGY_REASONING_EFFORT")),
         judge_reasoning_effort=normalize_reasoning_effort_override(env.get("RAG_ENGINE_JUDGE_REASONING_EFFORT")),

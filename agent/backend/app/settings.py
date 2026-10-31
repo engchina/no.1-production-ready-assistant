@@ -64,6 +64,8 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     model_config = product_settings_config(prefix="AGENT_", backend_dir=BACKEND_DIR)
 
     service_name: str = "production-ready-agent"
+    # CORS 許可オリジンの既定は製品の dev server（suite と衝突しない port。#25）。
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3102"])
     # 実行環境と認証方式は platform の RuntimeSettings を継承する。
     # 構成管理者・認証ポリシー・ログインの Cookie 名は共通 `.env` の PLATFORM_ADMIN_* /
     # PLATFORM_AUTH_*（#211）。Cookie は 3 製品で共有し、1 回のログインで全製品を使える（#1565）。
@@ -172,6 +174,9 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
     oci_genai_embedding_dim: int = 1536
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
+    # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の接続から）。
+    embedding_base_url: str = ""
+    rerank_base_url: str = ""
     oracle_dsn: str | None = None
     oracle_user: str | None = None
     oracle_password: str | None = None

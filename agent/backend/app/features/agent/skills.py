@@ -31,7 +31,7 @@ from app.features.agent.profile_name_migration import migrate_tool_name
 JsonObject = dict[str, Any]
 
 # 根拠の取得（`rag_retrieve_evidence`）の検索文を作る主体（#2651）。rag = RAG が質問に応じて
-# 言い換え・条の選択を足す（今までのスキル）/ caller = スキルの指示に沿ってモデルが検索文を作り、
+# 言い換えを足す（今までのスキル）/ caller = スキルの指示に沿ってモデルが検索文を作り、
 # RAG は推論を重ねない（組み込み Runtime が `planning=caller` を付ける）。
 EvidencePlanning = Literal["rag", "caller"]
 EVIDENCE_PLANNING_RAG: EvidencePlanning = "rag"
@@ -212,18 +212,17 @@ class AgentSkillListOutput(BaseModel):
 # （小文字・数字・ハイフン。フォルダ名と同じ）で、定義は repo 直下の
 # `skills/<name>/SKILL.md`（#1816）。
 # この tuple の順が、スキルの一覧・業務 Agent の編集で組み込みのスキルを先頭に並べる順（#1866）。
-# ID の文字の順ではなく、業務 RAG 調査 → 構造化データ照会 → 資料とデータの横断調査 → 条の目録から
-# 根拠を探す。
+# ID の文字の順ではなく、業務 RAG 調査 → 構造化データ照会 → 資料とデータの横断調査。
+# 条の目録から根拠を探すスキル（`article-catalog-lookup`。#2254）は、RAG の条の目録とともに
+# 削除した（#42）。保存済みの業務 Agent に残った ID は、解決できないスキルとして読み飛ばす
+# （`resolve_skill`）。
 BUSINESS_RAG_RESEARCH_SKILL_ID = "business-rag-research"
 STRUCTURED_DATA_QUERY_SKILL_ID = "structured-data-query"
 RAG_AND_STRUCTURED_DATA_SKILL_ID = "rag-and-structured-data"
-# 条の目録から根拠の条を選んで読むスキル（#2254。business-rag-research と一緒に使う）。
-ARTICLE_CATALOG_LOOKUP_SKILL_ID = "article-catalog-lookup"
 BUILTIN_SKILL_IDS: tuple[str, ...] = (
     BUSINESS_RAG_RESEARCH_SKILL_ID,
     STRUCTURED_DATA_QUERY_SKILL_ID,
     RAG_AND_STRUCTURED_DATA_SKILL_ID,
-    ARTICLE_CATALOG_LOOKUP_SKILL_ID,
 )
 
 

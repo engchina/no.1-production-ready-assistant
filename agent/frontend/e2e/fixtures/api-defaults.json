@@ -259,9 +259,11 @@
         "max_retries": 3
       },
       "generative_ai": {
-        "embedding_model": "cohere.embed-v4.0",
+        "embedding_model": "text-embedding-v4",
         "embedding_dim": 1536,
-        "rerank_model": "cohere.rerank-v4.0-fast"
+        "embedding_base_url": "",
+        "rerank_model": "qwen3-rerank",
+        "rerank_base_url": ""
       }
     },
     "model_settings_file": "model-settings.json",
@@ -283,17 +285,6 @@
     "adb_ocid": "",
     "region": "",
     "config_source": "runtime"
-  },
-  "adbInfo": {
-    "status": "not_configured",
-    "message": "ADB OCID が未設定です。",
-    "id": null,
-    "display_name": null,
-    "lifecycle_state": null,
-    "db_name": null,
-    "cpu_core_count": null,
-    "data_storage_size_in_tbs": null,
-    "region": null
   },
   "uploadStorage": {
     "backend": "local",

@@ -15,6 +15,7 @@ from pytest import MonkeyPatch
 from rag_engine.generation.table_binding import unbound_table_values
 from rag_engine.generation.table_records import TABLE_RECORD_KEY, record_tables
 from rag_parser_core.registry import run_external_adapter
+from rag_parser_core.structured_records import STRUCTURED_RECORDS_CONTENT_TYPE
 
 from app.config import get_settings
 from app.rag.answer_validation import EvidenceRef, table_record, validate_answer
@@ -39,7 +40,7 @@ def _csv_chunks(document_id: str, chunk_set_id: str) -> list[RetrievedChunk]:
     outcome = _csv_converter().convert(source, "text/csv", "csv_to_jsonl", None)
     assert outcome.converted is True
     extraction = run_external_adapter(
-        "structured_records_jsonl", outcome.derived_bytes, None, ""
+        "docling", outcome.derived_bytes, None, STRUCTURED_RECORDS_CONTENT_TYPE
     ).extraction
     assert extraction is not None
     chunks = chunk_extraction_with_strategy(

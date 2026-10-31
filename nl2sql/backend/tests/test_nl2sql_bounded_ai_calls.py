@@ -21,12 +21,16 @@ from test_enterprise_ai_output_budget import (
     _service,
     _settings,
 )
-from test_nl2sql_embedding_client import _FakeEmbedModels, _FakeEmbedResponse
 from test_nl2sql_embedding_client import _settings as _embedding_settings
 
 from app.features.nl2sql import ai_calls
 from app.features.nl2sql.ai_calls import nl2sql_error_kind
-from app.features.nl2sql.embedding_client import EmbeddingClientError, OciGenAiEmbeddingClient
+from app.features.nl2sql.embedding_client import (
+    EMBED_BATCH_SIZE,
+    EMBED_DIMENSIONS,
+    EmbeddingClientError,
+    OpenAiCompatibleEmbeddingClient,
+)
 from app.features.nl2sql.enterprise_ai_client import EnterpriseAiDirectError
 from app.settings import get_settings
 
@@ -131,7 +135,7 @@ def test_nl2sql_error_kind_maps_non_http_codes() -> None:
 
 
 class _OciError(Exception):
-    """OCI SDK の ServiceError と同じく ``status`` と ``headers`` を持つスタブ。"""
+    """HTTP の失敗のスタブ。``status`` を持つので共通の分類器が種類を決める。"""
 
     def __init__(self, status: int) -> None:
         super().__init__(f"status {status}")
@@ -140,48 +144,57 @@ class _OciError(Exception):
 
 
 class _ThrottledEmbedClient:
+    """OpenAI 互換の `/embeddings` のスタブ（#8。HTTP は送らない）。"""
+
     def __init__(self, *, errors: list[Exception]) -> None:
         self.errors = errors
         self.lock = threading.Lock()
         self.calls: list[list[str]] = []
         self.peak = _Peak()
 
-    def embed_text(self, details: Any) -> _FakeEmbedResponse:
+    def __call__(self, url: str, body: Any, api_key: str, timeout: int) -> dict[str, Any]:
         with self.peak:
             time.sleep(0.02)
             with self.lock:
-                self.calls.append(list(details.inputs))
+                self.calls.append(list(body["input"]))
                 error = self.errors.pop(0) if self.errors else None
             if error is not None:
                 raise error
-            return _FakeEmbedResponse(
-                [[float(int(text.rsplit("-", 1)[1])), *([0.0] * 1535)] for text in details.inputs]
-            )
+            return {
+                "data": [
+                    {
+                        "index": index,
+                        "embedding": [
+                            float(int(text.rsplit("-", 1)[1])),
+                            *([0.0] * (EMBED_DIMENSIONS - 1)),
+                        ],
+                    }
+                    for index, text in enumerate(body["input"])
+                ]
+            }
 
 
 def test_embedding_429_keeps_order_and_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = OciGenAiEmbeddingClient(_embedding_settings())
+    client = OpenAiCompatibleEmbeddingClient(_embedding_settings())
     fake = _ThrottledEmbedClient(errors=[_OciError(429)])
-    monkeypatch.setattr(client, "_get_client", lambda: fake)
-    monkeypatch.setattr(client, "_load_models", lambda: _FakeEmbedModels)
+    monkeypatch.setattr("app.features.nl2sql.embedding_client._post_json", fake)
 
-    vectors = client.embed_texts([f"text-{index}" for index in range(400)])
+    vectors = client.embed_texts([f"text-{index}" for index in range(40)])
 
-    assert [vector[0] for vector in vectors] == [float(index) for index in range(400)]
-    # 5 組（96 件ずつ）と 429 の再試行 1 回。上限（既定 2）を超えない。
-    assert len(fake.calls) == 6
+    assert [vector[0] for vector in vectors] == [float(index) for index in range(40)]
+    # 4 組（10 件ずつ。EMBED_BATCH_SIZE）と 429 の再試行 1 回。上限（既定 2）を超えない。
+    assert len(fake.calls) == 40 // EMBED_BATCH_SIZE + 1
     assert fake.peak.peak <= client.settings.nl2sql_embedding_concurrency == 2
 
 
 def test_embedding_permission_error_raises_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = OciGenAiEmbeddingClient(_embedding_settings())
+    client = OpenAiCompatibleEmbeddingClient(_embedding_settings())
     fake = _ThrottledEmbedClient(errors=[_OciError(403)] * 10)
-    monkeypatch.setattr(client, "_get_client", lambda: fake)
-    monkeypatch.setattr(client, "_load_models", lambda: _FakeEmbedModels)
+    monkeypatch.setattr("app.features.nl2sql.embedding_client._post_json", fake)
     client.settings.nl2sql_embedding_concurrency = 1
 
     with pytest.raises(EmbeddingClientError) as exc_info:
-        client.embed_texts([f"text-{index}" for index in range(200)])
+        client.embed_texts([f"text-{index}" for index in range(20)])
 
     assert "権限" in str(exc_info.value)
     assert len(fake.calls) == 1

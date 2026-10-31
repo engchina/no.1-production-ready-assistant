@@ -162,9 +162,9 @@ EOF
 )
 
 # configure_systemd を 2 回（初回の配備・再配備）実行する。初回の前に、以前の配備が置いた
-# 提供しなくなったサービス（parser-asr・parser-oci-genai-vision。#2042）の unit を置く。再配備の前に、
-# 利用者が画面で parser-unstructured を停止し（disable --now）、既定は停止の parser-xml-tree-json を起動した
-# （enable --now。#2453）状態にし、stack から parser-oci-document-understanding を外す。
+# 提供しなくなったサービス（parser-asr・parser-oci-genai-vision。#2042。parser-structured-records-jsonl・
+# parser-xml-tree-json。#21）の unit を置く。再配備の前に、利用者が画面で parser-unstructured を停止した
+# （disable --now）状態にし、stack から preprocess-csv-to-jsonl を外す。
 run_systemd_case() (
   local case_dir="${TEST_TMP_DIR}/systemd"
   prepare_case "${case_dir}"
@@ -178,27 +178,26 @@ run_systemd_case() (
   fi
 
   local removed
-  for removed in parser-asr parser-oci-genai-vision; do
+  for removed in parser-asr parser-oci-genai-vision parser-structured-records-jsonl parser-xml-tree-json; do
     printf '[Unit]\nDescription=removed %s\n' "${removed}" > "${SYSTEMD_UNIT_DIR}/production-ready-rag-${removed}.service"
     touch "${case_dir}/enabled/production-ready-rag-${removed}.service"
   done
-  RAG_SERVICES=(preprocess-office-to-pdf parser-docling parser-unstructured parser-structured-records-jsonl parser-xml-tree-json parser-oci-document-understanding)
+  RAG_SERVICES=(preprocess-office-to-pdf preprocess-csv-to-jsonl parser-docling parser-unstructured)
   configure_systemd > "${case_dir}/first.log" 2>&1
   cp "${case_dir}/systemctl.log" "${case_dir}/first-systemctl.log"
   cp "${SUDOERS_DIR}/production-ready-rag-services" "${case_dir}/first-sudoers"
 
-  # 画面で parser-unstructured を停止し、parser-xml-tree-json を起動した（app.services.systemd の disable / enable --now）。
+  # 画面で parser-unstructured を停止した（app.services.systemd の disable --now）。
   systemctl disable --now production-ready-rag-parser-unstructured.service
-  systemctl enable --now production-ready-rag-parser-xml-tree-json.service
   : > "${case_dir}/systemctl.log"
-  RAG_SERVICES=(preprocess-office-to-pdf parser-docling parser-unstructured parser-structured-records-jsonl parser-xml-tree-json)
+  RAG_SERVICES=(preprocess-office-to-pdf parser-docling parser-unstructured)
   configure_systemd > "${case_dir}/second.log" 2>&1
   cp "${case_dir}/systemctl.log" "${case_dir}/second-systemctl.log"
 )
 
 # 既存の Compute の再配備（suite-update.sh → suite-restart.sh → suite-init.sh → init_script.sh の main。#2042）。
-# 以前の stack が書いた rag_services.txt（parser-xml-tree-json が無く、提供しなくなった preprocess-url-to-markdown・preprocess-image-enhance・parser-oci-genai-vision・
-# parser-asr・preprocess-pdf-to-page-images（#3347）・preprocess-pii-redact（#3358）がある）と、以前の配備の unit がある状態から、main と同じ順に load_rag_services → configure_systemd を実行する。
+# 以前の stack が書いた rag_services.txt（提供しなくなった preprocess-url-to-markdown・preprocess-image-enhance・parser-oci-genai-vision・
+# parser-asr・preprocess-pdf-to-page-images（#3347）・preprocess-pii-redact（#3358）・parser-structured-records-jsonl・parser-xml-tree-json（#21）がある）と、以前の配備の unit がある状態から、main と同じ順に load_rag_services → configure_systemd を実行する。
 run_redeploy_case() (
   local case_dir="${TEST_TMP_DIR}/redeploy"
   local service
@@ -210,10 +209,10 @@ run_redeploy_case() (
     visudo() { :; }
   fi
 
-  printf '%s\n' 'preprocess-office-to-pdf preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-docling parser-oci-genai-vision parser-asr parser-oci-document-understanding' \
+  printf '%s\n' 'preprocess-office-to-pdf preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-docling parser-oci-genai-vision parser-asr parser-oci-document-understanding parser-mineru parser-structured-records-jsonl parser-xml-tree-json' \
     > "${APP_ROOT}/props/rag_services.txt"
   chmod 0640 "${APP_ROOT}/props/rag_services.txt"
-  for service in preprocess-office-to-pdf preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-docling parser-oci-genai-vision parser-asr parser-oci-document-understanding; do
+  for service in preprocess-office-to-pdf preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-docling parser-oci-genai-vision parser-asr parser-oci-document-understanding parser-mineru parser-structured-records-jsonl parser-xml-tree-json; do
     printf '[Unit]\nDescription=previous %s\n' "${service}" > "${SYSTEMD_UNIT_DIR}/production-ready-rag-${service}.service"
     touch "${case_dir}/enabled/production-ready-rag-${service}.service"
   done
@@ -295,49 +294,51 @@ EOF
 )
 
 # --- 配備する前処理 / parser（CPU / OCI だけ。提供しないサービスは読み飛ばし、必ず配備する parser は足す） ---
-# stack が配備してよい一覧は、提供するサービス（rag-systemd.sh の RAG_MICROSERVICES）から準備中（ロードマップ）の
-# サービス（RAG_ROADMAP_SERVICES。#3374）を除いたものと同じ並び。
+# stack が配備してよい一覧は、提供するサービス（rag-systemd.sh の RAG_MICROSERVICES）と同じ並び。
 allowed_order="$(RAG_INIT_TEST_MODE=true bash -c 'source "$1/init_script.sh"; printf "%s\n" "${ALLOWED_RAG_SERVICES[*]}"' _ "${REPO_DIR}")"
-provided_order="$(bash -c 'source "$1/scripts/rag-systemd.sh"; for e in "${RAG_MICROSERVICES[@]}"; do id="${e%%|*}"; rag_service_roadmap "${id}" || printf "%s " "${id}"; done' _ "${REPO_DIR}")"
+provided_order="$(bash -c 'source "$1/scripts/rag-systemd.sh"; for e in "${RAG_MICROSERVICES[@]}"; do printf "%s " "${e%%|*}"; done' _ "${REPO_DIR}")"
 test "${allowed_order} " = "${provided_order}" \
-  || fail "init_script.sh の ALLOWED_RAG_SERVICES が rag-systemd.sh の RAG_MICROSERVICES（準備中を除く）と一致しない: ${allowed_order}"
-run_services_case services-default "preprocess-office-to-pdf parser-unstructured parser-docling parser-structured-records-jsonl parser-xml-tree-json"
+  || fail "init_script.sh の ALLOWED_RAG_SERVICES が rag-systemd.sh の RAG_MICROSERVICES と一致しない: ${allowed_order}"
+run_services_case services-default "preprocess-office-to-pdf parser-unstructured parser-docling"
 test "$(cat "${TEST_TMP_DIR}/services-default/result")" = "ok" || fail "既定の service が拒否された"
 test "$(cat "${TEST_TMP_DIR}/services-default/services")" = \
-  "preprocess-office-to-pdf parser-unstructured parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  "preprocess-office-to-pdf parser-unstructured parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "service の一覧が rag_services.txt と一致しない"
 run_services_case services-legacy-file "backend ingestion-worker parser-unstructured parser-docling" compose_services.txt
 test "$(cat "${TEST_TMP_DIR}/services-legacy-file/result")" = "ok" \
   || fail "以前の stack の compose_services.txt を読めない"
 test "$(cat "${TEST_TMP_DIR}/services-legacy-file/services")" = \
-  "parser-unstructured parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  "parser-unstructured parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "以前の stack の backend / ingestion-worker を前処理 / parser として扱った"
 # 以前の stack が書いた一覧に、提供しなくなったサービス（#270 の parser-marker・#2042 の parser-asr /
-# parser-oci-genai-vision・preprocess-url-to-markdown・preprocess-image-enhance・#3347 の preprocess-pdf-to-page-images・#3358 の preprocess-pii-redact）や未知の名前があっても、再配備を止めずに読み飛ばす。
-run_services_case services-removed "parser-docling parser-asr parser-oci-genai-vision preprocess-url-to-markdown preprocess-image-enhance preprocess-pdf-to-page-images preprocess-pii-redact parser-marker frontend"
+# parser-oci-genai-vision・preprocess-url-to-markdown・preprocess-image-enhance・#3347 の preprocess-pdf-to-page-images・#3358 の preprocess-pii-redact・
+# #21 の parser-structured-records-jsonl / parser-xml-tree-json）や未知の名前があっても、再配備を止めずに読み飛ばす。
+run_services_case services-removed "parser-docling parser-asr parser-oci-genai-vision preprocess-url-to-markdown preprocess-image-enhance preprocess-pdf-to-page-images preprocess-pii-redact parser-marker parser-structured-records-jsonl parser-xml-tree-json frontend"
 test "$(cat "${TEST_TMP_DIR}/services-removed/result")" = "ok" \
   || fail "提供しなくなったサービスが rag_services.txt にあると再配備が失敗する"
-test "$(cat "${TEST_TMP_DIR}/services-removed/services")" = "parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+test "$(cat "${TEST_TMP_DIR}/services-removed/services")" = "parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "提供しなくなったサービスを配備の対象にした"
-grep -Fqx '[rag-init] Skipping RAG service that is no longer provided: parser-asr' "${TEST_TMP_DIR}/services-removed/load.log" \
-  || fail "提供しなくなったサービスを読み飛ばしたことを log に出していない"
+for removed in parser-asr parser-structured-records-jsonl parser-xml-tree-json; do
+  grep -Fqx "[rag-init] Skipping RAG service that is no longer provided: ${removed}" "${TEST_TMP_DIR}/services-removed/load.log" \
+    || fail "提供しなくなった ${removed} を読み飛ばしたことを log に出していない"
+done
 run_services_case services-glob "parser-docling *"
 test "$(cat "${TEST_TMP_DIR}/services-glob/result")" = "ok" || fail "glob の名前で再配備が失敗した"
-test "$(cat "${TEST_TMP_DIR}/services-glob/services")" = "parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+test "$(cat "${TEST_TMP_DIR}/services-glob/services")" = "parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "glob が展開された、または読み飛ばされていない"
 # 提供するが stack が許可しないサービスは拒否する。
 run_services_case services-not-allowed "parser-docling parser-unstructured" rag_services.txt \
-  "parser-docling parser-structured-records-jsonl parser-xml-tree-json"
+  "parser-docling"
 test "$(cat "${TEST_TMP_DIR}/services-not-allowed/result")" = "rejected" \
   || fail "stack が許可していない service を拒否していない"
-# 必ず配備する parser（parser-docling・parser-structured-records-jsonl・parser-xml-tree-json）と前処理 preprocess-word-to-jsonl が
+# 必ず配備する parser（parser-docling）と前処理 preprocess-word-to-jsonl が
 # 以前の stack の一覧に無くても、足して配備する。
 run_services_case services-missing-required "parser-unstructured preprocess-office-to-pdf"
 test "$(cat "${TEST_TMP_DIR}/services-missing-required/result")" = "ok" \
   || fail "必ず配備する parser が無い一覧で再配備が失敗した"
 test "$(cat "${TEST_TMP_DIR}/services-missing-required/services")" = \
-  "parser-unstructured preprocess-office-to-pdf parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
-  || fail "必ず配備する parser（parser-docling・parser-structured-records-jsonl・parser-xml-tree-json）を足していない"
+  "parser-unstructured preprocess-office-to-pdf parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  || fail "必ず配備する parser（parser-docling）を足していない"
 grep -Fq 'Adding required RAG service missing from' "${TEST_TMP_DIR}/services-missing-required/load.log" \
   || fail "必ず配備する parser を足したことを log に出していない"
 
@@ -402,8 +403,7 @@ service_user="$(id -un)"
 backend_unit="${units}/production-ready-rag-backend.service"
 worker_unit="${units}/production-ready-rag-ingestion-worker.service"
 docling_unit="${units}/production-ready-rag-parser-docling.service"
-oci_du_unit="${units}/production-ready-rag-parser-oci-document-understanding.service"
-xml_unit="${units}/production-ready-rag-parser-xml-tree-json.service"
+csv_unit="${units}/production-ready-rag-preprocess-csv-to-jsonl.service"
 first_log="${TEST_TMP_DIR}/systemd/first-systemctl.log"
 second_log="${TEST_TMP_DIR}/systemd/second-systemctl.log"
 grep -Fqx "ExecStart=${rag_dir}/backend/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:8000 --workers 2 --timeout 60 --graceful-timeout 30 --keep-alive 5 --error-logfile - --no-control-socket" "${backend_unit}" \
@@ -441,32 +441,17 @@ fi
 if grep -Eiq 'docker|compose' "${backend_unit}" "${worker_unit}" "${docling_unit}"; then
   fail "systemd の unit が docker を使っている"
 fi
-# 初回の配備: 既定のサービスを起動し（既定は停止の parser-xml-tree-json は起動しない）、backend / worker を enable + restart する。
+# 初回の配備: 既定のサービスを起動し、backend / worker を enable + restart する。
 grep -qx 'enable production-ready-rag-backend.service production-ready-rag-ingestion-worker.service' "${first_log}" \
   || fail "backend / ingestion-worker を enable していない"
 grep -qx 'restart production-ready-rag-backend.service production-ready-rag-ingestion-worker.service' "${first_log}" \
   || fail "backend / ingestion-worker を restart していない"
-# 構造化レコード JSONL（#2457）は CSV / Excel の前処理と同じく、初めて配備したときに起動する。
-for unit in preprocess-office-to-pdf parser-docling parser-unstructured parser-structured-records-jsonl parser-oci-document-understanding; do
+for unit in preprocess-office-to-pdf preprocess-csv-to-jsonl parser-docling parser-unstructured; do
   grep -qx "enable --now production-ready-rag-${unit}.service" "${first_log}" \
     || fail "初回の配備で ${unit} を起動していない"
 done
-# parser-xml-tree-json は既定は停止（#2453）: unit は書くが、enable も起動もしない。
-if grep -Eq '^(enable|start|restart)( --now)? production-ready-rag-parser-xml-tree-json.service$' "${first_log}"; then
-  fail "初回の配備で既定は停止の parser-xml-tree-json を enable / 起動した"
-fi
-test -f "${xml_unit}" || fail "初回の配備で parser-xml-tree-json の unit を書いていない"
-grep -Fq '/usr/bin/systemctl enable --now production-ready-rag-parser-xml-tree-json.service' "${TEST_TMP_DIR}/systemd/first-sudoers" \
-  || fail "sudoers が parser-xml-tree-json の起動（enable --now。サービス管理画面の「起動」）を許可していない"
-grep -Fq 'Leaving production-ready-rag-parser-xml-tree-json.service stopped (first deployment; stopped by default).' \
-  "${TEST_TMP_DIR}/systemd/first.log" || fail "既定は停止の parser-xml-tree-json を起動しないことを log に出していない"
-grep -Fqx "ExecStart=${rag_dir}/services/parsers/structured_records_jsonl/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:18023 --workers 1 --timeout 300 --graceful-timeout 30 --error-logfile -" \
-  "${units}/production-ready-rag-parser-structured-records-jsonl.service" \
-  || fail "parser-structured-records-jsonl が自分の venv で 127.0.0.1:18023 に bind していない"
-grep -Fqx "ExecStart=${rag_dir}/services/parsers/xml_tree_json/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:18021 --workers 1 --timeout 300 --graceful-timeout 30 --error-logfile -" "${xml_unit}" \
-  || fail "parser-xml-tree-json が自分の venv で 127.0.0.1:18021 に bind していない"
-# 以前の配備が置いた、提供しなくなったサービスの unit は止めて消す（#2042）。
-for removed in parser-asr parser-oci-genai-vision; do
+# 以前の配備が置いた、提供しなくなったサービスの unit は止めて消す（#2042・#21）。
+for removed in parser-asr parser-oci-genai-vision parser-structured-records-jsonl parser-xml-tree-json; do
   grep -qx "disable --now production-ready-rag-${removed}.service" "${first_log}" \
     || fail "提供しなくなった ${removed} を止めていない"
   test ! -e "${units}/production-ready-rag-${removed}.service" || fail "提供しなくなった ${removed} の unit が残っている"
@@ -477,8 +462,6 @@ done
 # 再配備: 最後に「起動」した unit は restart、最後に「停止」した unit は停止のまま。
 grep -qx 'restart production-ready-rag-parser-docling.service' "${second_log}" \
   || fail "再配備で起動中の parser-docling を restart していない"
-grep -qx 'restart production-ready-rag-parser-xml-tree-json.service' "${second_log}" \
-  || fail "画面で起動した parser-xml-tree-json を再配備で restart していない"
 if grep -Eq '^(enable --now|restart) production-ready-rag-parser-unstructured.service$' "${second_log}"; then
   fail "利用者が停止した parser-unstructured を再配備で起動した"
 fi
@@ -487,9 +470,9 @@ grep -qx 'stop production-ready-rag-parser-unstructured.service' "${second_log}"
 test ! -e "${TEST_TMP_DIR}/systemd/enabled/production-ready-rag-parser-unstructured.service" \
   || fail "再配備で parser-unstructured が enable に戻った"
 # stack から外したサービスの unit は止めて消す。
-grep -qx 'disable --now production-ready-rag-parser-oci-document-understanding.service' "${second_log}" \
-  || fail "stack から外した parser-oci-document-understanding を止めていない"
-test ! -e "${oci_du_unit}" || fail "stack から外した parser-oci-document-understanding の unit が残っている"
+grep -qx 'disable --now production-ready-rag-preprocess-csv-to-jsonl.service' "${second_log}" \
+  || fail "stack から外した preprocess-csv-to-jsonl を止めていない"
+test ! -e "${csv_unit}" || fail "stack から外した preprocess-csv-to-jsonl の unit が残っている"
 test -e "${backend_unit}" || fail "backend の unit を消した"
 # sudoers: 画面から操作する unit の systemctl / journalctl だけ（引数まで固定）。backend / worker は含めない。
 sudoers="${TEST_TMP_DIR}/systemd/sudoers.d/production-ready-rag-services"
@@ -504,11 +487,11 @@ grep -Fq '/usr/bin/journalctl -u production-ready-rag-parser-docling.service -n 
   || fail "sudoers が parser-docling のログ（backend と同じ argv）を許可していない"
 grep -Fqx "${service_user} ALL=(root) NOPASSWD: RAG_SERVICE_CONTROL" "${sudoers}" \
   || fail "sudoers が SERVICE_USER に限定されていない"
-if grep -Eq 'backend\.service|ingestion-worker\.service|oci-document-understanding|NOPASSWD: ALL|\*' "${sudoers}"; then
+if grep -Eq 'backend\.service|ingestion-worker\.service|NOPASSWD: ALL|\*' "${sudoers}"; then
   fail "sudoers が画面の対象外の unit・任意のコマンドを許可している"
 fi
-grep -Fq 'production-ready-rag-parser-oci-document-understanding' "${TEST_TMP_DIR}/systemd/first-sudoers" \
-  || fail "初回の sudoers に配備した parser-oci-document-understanding が入っていない"
+grep -Fq 'production-ready-rag-preprocess-csv-to-jsonl' "${TEST_TMP_DIR}/systemd/first-sudoers" \
+  || fail "初回の sudoers に配備した preprocess-csv-to-jsonl が入っていない"
 if command -v visudo >/dev/null 2>&1; then
   visudo -cf "${sudoers}" >/dev/null || fail "生成した sudoers を visudo が受け付けない"
 fi
@@ -528,23 +511,16 @@ test "${main_order}" = "load_rag_services configure_systemd " \
 run_redeploy_case
 redeploy_dir="${TEST_TMP_DIR}/redeploy"
 redeploy_log="${redeploy_dir}/systemctl.log"
-# 準備中（ロードマップ）の parser-oci-document-understanding（#3374）は以前の一覧にあっても書き戻さない。
+# 削除した parser-oci-document-understanding・parser-mineru（#22）・parser-structured-records-jsonl・
+# parser-xml-tree-json（#21）は以前の一覧にあっても書き戻さない。
 test "$(cat "${redeploy_dir}/app/props/rag_services.txt")" = \
-  "preprocess-office-to-pdf parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  "preprocess-office-to-pdf parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "再配備で rag_services.txt を今の一覧に書き戻していない: $(cat "${redeploy_dir}/app/props/rag_services.txt")"
 test "$(stat -c '%a' "${redeploy_dir}/app/props/rag_services.txt")" = "640" \
   || fail "rag_services.txt の書き戻しで mode が変わった"
 find "${redeploy_dir}/app/props" -name 'rag_services.txt.*' | grep -q . && fail "rag_services.txt の一時ファイルが残っている"
 grep -Fq 'Adding required RAG service missing from' "${redeploy_dir}/load.log" \
-  || fail "必ず配備する parser-xml-tree-json を足したことを log に出していない"
-test -f "${redeploy_dir}/units/production-ready-rag-parser-xml-tree-json.service" \
-  || fail "再配備で parser-xml-tree-json の unit を書いていない"
-if grep -Eq '^(enable|start|restart)( --now)? production-ready-rag-parser-xml-tree-json.service$' "${redeploy_log}"; then
-  fail "再配備で初めて入れた parser-xml-tree-json を enable / 起動した（既定は停止。#2453）"
-fi
-# 再配備で初めて入れた parser-structured-records-jsonl は、CSV / Excel の前処理と同じく起動する（#2457）。
-grep -qx 'enable --now production-ready-rag-parser-structured-records-jsonl.service' "${redeploy_log}" \
-  || fail "再配備で初めて入れた parser-structured-records-jsonl を起動していない"
+  || fail "必ず配備する前処理（CSV→JSONL など）を足したことを log に出していない"
 grep -qx 'restart production-ready-rag-parser-docling.service' "${redeploy_log}" \
   || fail "再配備で起動中の parser-docling を restart していない"
 # #2484 の前の再配備で CSV / Excel の前処理が一覧から消えた環境も、再配備で unit・sudoers を入れて起動する（#2486）。
@@ -555,7 +531,7 @@ for service in preprocess-csv-to-jsonl preprocess-excel-to-jsonl; do
     "${redeploy_dir}/sudoers.d/production-ready-rag-services" \
     || fail "再配備の sudoers が ${service} の操作を許可していない"
 done
-for removed in preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-oci-genai-vision parser-asr; do
+for removed in preprocess-pdf-to-page-images preprocess-pii-redact preprocess-url-to-markdown preprocess-image-enhance parser-oci-genai-vision parser-asr parser-oci-document-understanding parser-mineru parser-structured-records-jsonl parser-xml-tree-json; do
   grep -Fqx "[rag-init] Skipping RAG service that is no longer provided: ${removed}" "${redeploy_dir}/load.log" \
     || fail "提供しなくなった ${removed} を読み飛ばしたことを log に出していない"
   grep -qx "disable --now production-ready-rag-${removed}.service" "${redeploy_log}" \
@@ -568,25 +544,6 @@ for removed in preprocess-pdf-to-page-images preprocess-pii-redact preprocess-ur
     fail "再配備の sudoers が提供しなくなった ${removed} を許可している"
   fi
 done
-grep -Fq '/usr/bin/systemctl enable --now production-ready-rag-parser-xml-tree-json.service' \
-  "${redeploy_dir}/sudoers.d/production-ready-rag-services" \
-  || fail "再配備の sudoers が parser-xml-tree-json の操作を許可していない"
-# 準備中（ロードマップ）の parser-oci-document-understanding（#3374）: 以前の配備で起動していた unit を、再配備で
-# 止めて（disable --now）消し、sudoers からも外す。起動・再起動はしない。
-roadmap_unit="production-ready-rag-parser-oci-document-understanding.service"
-grep -Fqx "[rag-init] Skipping RAG service that is on the roadmap (not available yet): parser-oci-document-understanding" \
-  "${redeploy_dir}/load.log" \
-  || fail "準備中の parser-oci-document-understanding を読み飛ばしたことを log に出していない"
-grep -qx "disable --now ${roadmap_unit}" "${redeploy_log}" \
-  || fail "再配備で準備中の parser-oci-document-understanding を止めていない"
-if grep -Eq "^(enable|start|restart)( --now)? ${roadmap_unit}$" "${redeploy_log}"; then
-  fail "再配備で準備中の parser-oci-document-understanding を起動した"
-fi
-test ! -e "${redeploy_dir}/units/${roadmap_unit}" \
-  || fail "再配備で準備中の parser-oci-document-understanding の unit が残っている"
-if grep -Fq "${roadmap_unit}" "${redeploy_dir}/sudoers.d/production-ready-rag-services"; then
-  fail "再配備の sudoers が準備中の parser-oci-document-understanding を許可している"
-fi
 # rag_services.txt を書けなくても配備は続ける（読み込みで毎回直す）。
 (
   case_dir="${TEST_TMP_DIR}/redeploy-readonly"
@@ -596,7 +553,7 @@ fi
   printf '%s\n' 'parser-docling parser-asr' > "${APP_ROOT}/props/rag_services.txt"
   mktemp() { return 1; }
   load_rag_services > "${case_dir}/load.log" 2>&1 || fail "rag_services.txt を書けないと配備が止まる"
-  test "${RAG_SERVICES[*]}" = "parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  test "${RAG_SERVICES[*]}" = "parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
     || fail "書けないときの一覧が違う: ${RAG_SERVICES[*]}"
   grep -Fq 'WARNING: Could not update' "${case_dir}/load.log" || fail "書けなかったことを log に出していない"
   test "$(cat "${APP_ROOT}/props/rag_services.txt")" = "parser-docling parser-asr" || fail "書けないはずの rag_services.txt が変わった"
@@ -616,7 +573,7 @@ fi
 run_services_case services-renamed "preprocess-csv-to-json preprocess-excel-to-json preprocess-office-to-pdf parser-docling"
 test "$(cat "${TEST_TMP_DIR}/services-renamed/result")" = "ok" || fail "改名したサービスの旧名で再配備が失敗した"
 test "$(cat "${TEST_TMP_DIR}/services-renamed/services")" = \
-  "preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-office-to-pdf parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-word-to-jsonl" \
+  "preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-office-to-pdf parser-docling preprocess-word-to-jsonl" \
   || fail "改名したサービスの旧名を新名として配備の対象にしていない: $(cat "${TEST_TMP_DIR}/services-renamed/services")"
 grep -Fqx '[rag-init] Reading renamed RAG service as its new name: preprocess-csv-to-json -> preprocess-csv-to-jsonl' \
   "${TEST_TMP_DIR}/services-renamed/load.log" || fail "旧名を新名として読んだことを log に出していない"
@@ -626,14 +583,14 @@ fi
 # 旧名と新名が両方あっても、新名を 1 つだけ配備する。
 run_services_case services-renamed-duplicate "preprocess-csv-to-jsonl preprocess-csv-to-json parser-docling"
 test "$(cat "${TEST_TMP_DIR}/services-renamed-duplicate/services")" = \
-  "preprocess-csv-to-jsonl parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
+  "preprocess-csv-to-jsonl parser-docling preprocess-excel-to-jsonl preprocess-word-to-jsonl" \
   || fail "旧名と新名の両方があると新名を重ねて配備する"
 run_renamed_redeploy_case
 renamed_dir="${TEST_TMP_DIR}/renamed"
 renamed_first_log="${renamed_dir}/first-systemctl.log"
 renamed_second_log="${renamed_dir}/second-systemctl.log"
 test "$(cat "${renamed_dir}/first-rag_services.txt")" = \
-  "preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-office-to-pdf parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-word-to-jsonl" \
+  "preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-office-to-pdf parser-docling preprocess-word-to-jsonl" \
   || fail "旧名の rag_services.txt を新名で書き戻していない: $(cat "${renamed_dir}/first-rag_services.txt")"
 for service in preprocess-csv-to-jsonl preprocess-excel-to-jsonl; do
   test -f "${renamed_dir}/units/production-ready-rag-${service}.service" || fail "旧名からの更新で ${service} の unit を書いていない"
@@ -741,21 +698,15 @@ grep -Fq 'RAG_DEFAULT_MAX_UPLOAD_BYTES=209715200' "${REPO_DIR}/../platform/deplo
 grep -Fq 'max_upload_bytes: int = Field(default=200 * 1024 * 1024' "${REPO_DIR}/backend/app/config.py" \
   || fail "backend の RAG_MAX_UPLOAD_BYTES の既定値が suite-init.sh と合っていない"
 
-# --- 既定は停止のサービス（#2453）: XML ツリー JSON だけ。開発の install も初回は起動しない ---
-bash -c 'source "$1/scripts/rag-systemd.sh"; rag_service_default_stopped parser-xml-tree-json && ! rag_service_default_stopped parser-docling' _ "${REPO_DIR}" \
-  || fail "既定は停止のサービスが parser-xml-tree-json だけになっていない"
-grep -Fq '[[ " ${new_units[*]} " == *" ${unit} "* ]] && rag_service_default_stopped "${service}"; then' "${REPO_DIR}/scripts/rag-services.sh" \
-  || fail "scripts/rag-services.sh install が既定は停止のサービスを初回に起動する"
-
 # --- 開発環境（scripts/rag-services.sh）も本番と同じ unit と sudoers を作る ---
 dev_dir="${TEST_TMP_DIR}/dev-render"
 bash "${REPO_DIR}/scripts/rag-services.sh" render "${dev_dir}" > "${TEST_TMP_DIR}/dev-render.log" 2>&1 \
   || fail "scripts/rag-services.sh render が失敗した"
 test -f "${dev_dir}/production-ready-rag-parser-docling.service" || fail "開発環境の parser-docling の unit を作っていない"
-test -f "${dev_dir}/production-ready-rag-parser-structured-records-jsonl.service" \
-  || fail "開発環境の既定（--cpu）に parser-structured-records-jsonl を含めていない"
-test -f "${dev_dir}/production-ready-rag-parser-xml-tree-json.service" \
-  || fail "開発環境の既定（--cpu）に parser-xml-tree-json を含めていない"
+for removed in parser-structured-records-jsonl parser-xml-tree-json; do
+  test ! -e "${dev_dir}/production-ready-rag-${removed}.service" \
+    || fail "開発環境の既定（--cpu）に削除した ${removed} を含めた（#21）"
+done
 test ! -e "${dev_dir}/production-ready-rag-parser-unstructured.service" \
   || fail "開発環境の既定（--cpu）に Unstructured を含めた（Docling が既定。--unstructured で足す）"
 grep -Fqx "ExecStart=${REPO_DIR}/services/parsers/docling/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:18020 --workers 1 --timeout 300 --graceful-timeout 30 --error-logfile -" \

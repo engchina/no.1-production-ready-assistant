@@ -34,7 +34,7 @@ async def _service_parse(
 def _service_apps() -> list[FastAPI]:
     return [
         create_parse_app(backend="docling", import_name="docling"),
-        create_service_parse_app(backend="oci_document_understanding", parse=_service_parse),
+        create_service_parse_app(backend="unstructured", parse=_service_parse),
         create_preprocess_app(converter=_convert, health_probe=ConvertHealth),
     ]
 

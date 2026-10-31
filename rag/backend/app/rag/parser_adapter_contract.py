@@ -584,8 +584,6 @@ def _compatibility_case(
         adapter_backend=adapter.backend,
         docling_enabled=adapter.backend == "docling",
         unstructured_enabled=adapter.backend == "unstructured",
-        mineru_enabled=adapter.backend == "mineru",
-        dots_ocr_enabled=adapter.backend == "dots_ocr",
         external_adapter_runner=external_adapter_runner,
     )
     if result.extraction is None or result.parser_backend != adapter.backend:

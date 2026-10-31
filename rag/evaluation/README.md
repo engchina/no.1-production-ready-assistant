@@ -10,11 +10,11 @@
 
 ```bash
 cp evaluation/golden-set.example.json evaluation/golden-set.json
-curl -X POST http://localhost:8000/api/evaluation/jobs/run \
+curl -X POST http://localhost:8100/api/evaluation/jobs/run \
   -H 'Content-Type: application/json' \
   -d @evaluation/golden-set.json
 # 返った job_id で、status が RUNNING でなくなるまで取得する
-curl http://localhost:8000/api/evaluation/jobs/<job_id>
+curl http://localhost:8100/api/evaluation/jobs/<job_id>
 ```
 
 job 全体の時間の上限は、投入時の回答の回数（ケース × 往復）× 回答生成の上限で、
@@ -67,7 +67,7 @@ CI / nightly では CLI を使うと、評価結果 JSON を artifact として�
 cd backend
 uv run python -m app.rag.evaluation_cli \
   ../evaluation/golden-set.json \
-  --api-base-url http://localhost:8000 \
+  --api-base-url http://localhost:8100 \
   --output ../evaluation/evaluation-result.json
 ```
 

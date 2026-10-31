@@ -78,28 +78,8 @@ const databaseSettings = {
   config_source: "runtime",
 };
 
-function adbInfo(lifecycleState: string) {
-  return {
-    status: lifecycleState === "STARTING" ? "accepted" : "success",
-    message: `ADB ${lifecycleState}`,
-    id: databaseSettings.adb_ocid,
-    display_name: "nl2sqldb",
-    lifecycle_state: lifecycleState,
-    db_name: "NL2SQLDB",
-    cpu_core_count: 2,
-    data_storage_size_in_tbs: 1,
-    region: "ap-osaka-1",
-  };
-}
-
-async function mockDatabaseSettings(page: Page, lifecycle: () => string) {
+async function mockDatabaseSettings(page: Page) {
   await page.route("**/api/settings/database", (route) => fulfill(route, databaseSettings));
-  await page.route("**/api/settings/database/adb/settings", (route) =>
-    fulfill(route, adbInfo(lifecycle()))
-  );
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfill(route, adbInfo(lifecycle()))
-  );
 }
 
 async function mockProfilePage(page: Page, persistenceMode: "memory" | "oracle" = "oracle") {
@@ -215,7 +195,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 const DATABASE_UNAVAILABLE_MESSAGE =
-  "データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。";
+  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
 const DATABASE_SETTINGS_HINT =
   "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
 
@@ -225,7 +205,7 @@ async function expectDatabaseGate(
     title = "データベースに接続できません",
     message = DATABASE_UNAVAILABLE_MESSAGE,
     actionName = "データベース設定を開く",
-    actionHref = "/settings/database#adb-management",
+    actionHref = "/settings/database",
     settingsHint = DATABASE_SETTINGS_HINT,
   }: {
     title?: string;
@@ -244,7 +224,7 @@ async function expectDatabaseGate(
   return actionLink;
 }
 
-test("DB 到達不可では Profile を空表示せず ADB 管理へ誘導する", async ({ page }) => {
+test("DB 到達不可では Profile を空表示せずデータベース設定へ誘導する", async ({ page }) => {
   let profileRequests = 0;
   await page.route("**/api/ready/database", (route) =>
     fulfill(route, { status: "unreachable", check: "ok", detail: "ORA-12514" })
@@ -253,7 +233,7 @@ test("DB 到達不可では Profile を空表示せず ADB 管理へ誘導する
     profileRequests += 1;
     await fulfill(route, []);
   });
-  await mockDatabaseSettings(page, () => "STOPPED");
+  await mockDatabaseSettings(page);
 
   await page.goto("/profiles");
 
@@ -264,9 +244,10 @@ test("DB 到達不可では Profile を空表示せず ADB 管理へ誘導する
   await expect(settingsLink).toBeFocused();
   await settingsLink.click();
 
-  await expect(page).toHaveURL(/\/settings\/database#adb-management$/);
-  await expect(page.locator("#adb-management")).toBeVisible();
-  await expect(page.getByRole("button", { name: "起動" })).toBeEnabled();
+  await expect(page).toHaveURL(/\/settings\/database$/);
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
+  // DB の起動・停止は docker 側の責務（#10）。ADB の運用パネルは出さない。
+  await expect(page.getByRole("button", { name: "起動", exact: true })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -292,7 +273,7 @@ test("未設定でも共通の起動案内から設定ページを Gate 外で�
   await page.route("**/api/ready/database", (route) =>
     fulfill(route, { status: "not_configured", check: "missing", detail: null })
   );
-  await mockDatabaseSettings(page, () => "STOPPED");
+  await mockDatabaseSettings(page);
 
   await page.goto("/profiles");
   const settingsLink = await expectDatabaseGate(page, {
@@ -307,7 +288,7 @@ test("未設定でも共通の起動案内から設定ページを Gate 外で�
   // 未設定は接続情報の入力（ページの先頭）へ案内する（#820）。
   await settingsLink.click();
   await expect(page).toHaveURL(/\/settings\/database$/);
-  await expect(page.locator("#adb-management")).toBeVisible();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
 });
 
 test("migration 未適用では通常機能を止め、システムテーブル管理は開ける", async ({ page }) => {
@@ -375,34 +356,14 @@ test("migration 未適用では通常機能を止め、システムテーブル�
   await expectNoHorizontalOverflow(page);
 });
 
-test("STOPPED から起動し AVAILABLE 後もサービス利用状態と戻る導線を表示しない", async ({
+test("DB 到達不可から設定画面へ移ってもサービス利用状態と戻る導線を表示しない", async ({
   page,
 }) => {
-  let lifecycle = "STOPPED";
-  let adbPollsAfterStart = 0;
   let recoveryRequests = 0;
   await page.route("**/api/ready/database", (route) =>
-    fulfill(route, {
-      status: lifecycle === "AVAILABLE" ? "ok" : "unreachable",
-      check: "ok",
-      detail: lifecycle === "AVAILABLE" ? null : "ORA-12514",
-    })
+    fulfill(route, { status: "unreachable", check: "ok", detail: "ORA-12514" })
   );
-  await page.route("**/api/settings/database", (route) => fulfill(route, databaseSettings));
-  await page.route("**/api/settings/database/adb/settings", (route) =>
-    fulfill(route, adbInfo(lifecycle))
-  );
-  await page.route("**/api/settings/database/adb/start", async (route) => {
-    lifecycle = "STARTING";
-    await fulfill(route, adbInfo(lifecycle));
-  });
-  await page.route("**/api/settings/database/adb", async (route) => {
-    if (lifecycle === "STARTING") {
-      adbPollsAfterStart += 1;
-      if (adbPollsAfterStart >= 2) lifecycle = "AVAILABLE";
-    }
-    await fulfill(route, adbInfo(lifecycle));
-  });
+  await mockDatabaseSettings(page);
   await mockProfilePage(page);
   await page.route("**/api/nl2sql/persistence", (route) =>
     fulfill(route, {
@@ -430,36 +391,33 @@ test("STOPPED から起動し AVAILABLE 後もサービス利用状態と戻る�
 
   await page.goto("/profiles");
   await page.getByRole("link", { name: /データベース設定を開く/ }).click();
-  await expect(page.getByText("OCI ADB: 停止済み")).toBeVisible();
-  await page.getByRole("button", { name: "起動" }).click();
-  await expect(page.getByText("OCI ADB: 起動中")).toBeVisible();
-  await expect(page.getByText("OCI ADB: 起動済み")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "停止" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
   await expect(page.getByText("サービス利用状態")).toHaveCount(0);
   await expect(page.getByText("Oracle SQL 接続")).toHaveCount(0);
   await expect(page.getByText("NL2SQL 保存領域")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "保存領域へ再接続" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "元の画面に戻る" })).toHaveCount(0);
-  await expect(page).toHaveURL(/\/settings\/database#adb-management$/);
+  await expect(page).toHaveURL(/\/settings\/database$/);
   expect(recoveryRequests).toBe(0);
   await expectNoHorizontalOverflow(page);
 });
 
-test("ADB 起動済みでも設定画面にはサービス利用状態を表示しない", async ({ page }) => {
+test("DB 到達不可でも設定画面にはサービス利用状態と ADB の起動・停止を表示しない", async ({ page }) => {
   await page.route("**/api/ready/database", (route) =>
     fulfill(route, { status: "unreachable", check: "ok", detail: "ORA-12514" })
   );
-  await mockDatabaseSettings(page, () => "AVAILABLE");
+  await mockDatabaseSettings(page);
 
-  await page.goto("/settings/database#adb-management");
+  await page.goto("/settings/database");
 
-  await expect(page.getByText("OCI ADB: 起動済み")).toBeVisible();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
   await expect(page.getByText(/Wallet のサービス名、DSN、認証情報/)).toHaveCount(0);
   await expect(page.getByText("サービス利用状態")).toHaveCount(0);
   await expect(page.getByText("Oracle SQL 接続")).toHaveCount(0);
   await expect(page.getByText("NL2SQL 保存領域")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "保存領域へ再接続" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "起動" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "起動", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "元の画面に戻る" })).toHaveCount(0);
 });
 
@@ -471,7 +429,7 @@ test("保存領域が閉じていても設定画面には分離表示と再接�
   await page.route("**/api/ready/database", (route) =>
     fulfill(route, { status: "ok", check: "ok", detail: null })
   );
-  await mockDatabaseSettings(page, () => "AVAILABLE");
+  await mockDatabaseSettings(page);
   await page.route("**/api/nl2sql/persistence", (route) =>
     fulfill(route, {
       mode: "oracle",
@@ -511,7 +469,7 @@ test("保存領域が閉じていても設定画面には分離表示と再接�
   ).toBeVisible();
   await page.getByRole("link", { name: "データベース設定を開く" }).click();
 
-  await expect(page.getByText("OCI ADB: 起動済み")).toBeVisible();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
   await expect(page.getByText("サービス利用状態")).toHaveCount(0);
   await expect(page.getByText("Oracle SQL 接続")).toHaveCount(0);
   await expect(page.getByText("NL2SQL 保存領域")).toHaveCount(0);
@@ -521,8 +479,7 @@ test("保存領域が閉じていても設定画面には分離表示と再接�
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 375, height: 900 });
-  await expect(page.locator("#adb-management")).toBeVisible();
-  await expect(page.getByText("OCI ADB: 起動済み")).toBeVisible();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
   await expect(page.getByText("サービス利用状態")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
@@ -686,25 +643,24 @@ test("設定を開けない利用者には導線を出さず、システム管�
       password_change_allowed: true,
     })
   );
-  let status: { status: string; check: string; detail: string | null; adb_lifecycle_state: string | null } = {
+  let status: { status: string; check: string; detail: string | null } = {
     status: "unreachable",
     check: "ok",
     detail: "ORA-12514",
-    adb_lifecycle_state: "STOPPED",
   };
   await page.route("**/api/ready/database", (route) => fulfill(route, status));
 
   await page.goto("/profiles");
 
   const card = page.locator('section[aria-labelledby="database-unavailable-title"]');
-  await expect(card.getByRole("heading", { name: "Autonomous Database が停止しています" })).toBeVisible();
-  await expect(card.getByText(/^システム管理者に連絡して、Autonomous Database の起動を依頼してください。/)).toBeVisible();
-  await expect(card.getByText("Autonomous Database: 停止済み", { exact: true })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "データベースに接続できません" })).toBeVisible();
+  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/)).toBeVisible();
+  await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
   await expect(card.getByRole("link")).toHaveCount(0);
   await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  status = { status: "setup_required", check: "migration_required", detail: null, adb_lifecycle_state: null };
+  status = { status: "setup_required", check: "migration_required", detail: null };
   await card.getByRole("button", { name: "再試行" }).click();
   await expect(card.getByRole("heading", { name: "システムテーブルの作成・更新が必要です" })).toBeVisible();
   await expect(card.getByText(/システム管理者に連絡して、システムテーブルの作成・更新を依頼してください。$/)).toBeVisible();

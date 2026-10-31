@@ -97,7 +97,6 @@ def test_formal_answer_keeps_scope_when_guide_search_has_no_material(monkeypatch
         section_expansion_enabled=False,
         document_selection_enabled=False,
         screen_linking_enabled=False,
-        article_catalog_enabled=False,
         default_rerank_enabled=False,
         request_coverage_retrieval_enabled=False,
         guide_step_retrieval_enabled=reason != "disabled",

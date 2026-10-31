@@ -715,16 +715,6 @@ variable "rag_enable_parser_unstructured" {
   default     = true
 }
 
-variable "rag_enable_oci_cloud_parsers" {
-  # OCI Document Understanding の parser は準備中（ロードマップ。#3374）。入力は残すが、今は配備しない
-  # （locals の rag_services に入れず、rag/init_script.sh も読み飛ばす）。Resource Manager の画面にも出さない。
-  description = "Reserved for the OCI Document Understanding parser (parser-oci-document-understanding), which is on the roadmap and not available yet. The parser is not installed regardless of this value."
-  type        = bool
-  default     = false
-}
-
-# GPU の parser（MinerU / Dots.OCR）はこの stack に含めない。
-# RAG はこれらを外部 API として「文書解析」設定の API host で指定する。
 
 # ---------------------------------------------------------------- NL2SQL
 

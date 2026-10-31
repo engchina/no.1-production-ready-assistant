@@ -55,14 +55,6 @@ _PAGE_AND_SECTION_KEYS = (
     "sheet_name",
     "row_start",
     "row_end",
-    # XML ツリー JSON の段落の引用ラベルと原典の URL（#2024。引用カードの印と出典の行）。
-    "xml_tree_document_id",
-    "xml_tree_document_title",
-    "xml_tree_source_url",
-    "xml_tree_citation_label",
-    "xml_tree_citation_label_arabic",
-    "xml_tree_part",
-    "xml_tree_part_label",
 )
 _EVIDENCE_KEYS = (
     # 回答に使った根拠か・根拠の役割・本文の出典行の番号・検索の順位の印。

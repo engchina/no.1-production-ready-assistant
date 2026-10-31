@@ -1,7 +1,7 @@
 """rag_engine の中の補助の処理の失敗を、呼び出し元の記録（``report_degraded``）に渡す（#3284・#3286）。
 
 補助の処理（要求ごとの根拠の探し直し・用語・同義語と回答ルールの読み込み・rerank・追加の検索文の rerank・CRAG の
-根拠確認・全文検索の語の分割・章節の子の並べ替え・条の目録の元の質問の検索）は、失敗しても縮退して
+根拠確認・全文検索の語の分割・章節の子の並べ替え）は、失敗しても縮退して
 回答を続ける。失敗は処理の種類と例外を ``report_degraded`` に渡し、呼び出し元（backend）が回答の
 診断の ``degraded_steps`` に型の名前だけを残す。結果が空なだけのとき（失敗ではない）は渡さない。
 診断と工程の詳細には例外の文を入れない。外部 I/O と LLM はすべてスタブ。
@@ -383,24 +383,3 @@ def test_section_child_rerank_failure_is_reported(fail: bool) -> None:
     # どちらも語の重なりで並べる。記録で失敗と「rerank の結果が空」を分ける。
     assert ranking == "lexical" and len(ranked) == 3
     assert reported == ([("section_child_rerank", "Boom")] if fail else [])
-
-
-# ---- 条の目録の元の質問の検索 ----
-
-
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-def test_article_original_question_search_failure_is_reported(monkeypatch: pytest.MonkeyPatch, fail: bool) -> None:
-    def search(**kwargs: Any) -> Any:
-        if fail:
-            raise Boom(SECRET)
-        return SimpleNamespace(child_chunks=[])
-
-    monkeypatch.setattr(answering, "search_adb_hybrid_chunks", search)
-    settings = get_settings(environ={}, dotenv_path=None)
-    options = {"chunk_run_id": "", "retrieval_queries": ["書類 表記"], "settings": settings}
-
-    with _recording(article_question=lambda: "取引先から届いた書類の補正を求めるべきか") as reported:
-        found = answering._original_question_children("書類 表記", ["書類 表記"], dict(options), None, settings)
-
-    assert found == []
-    assert reported == ([("article_original_question", "Boom")] if fail else [])

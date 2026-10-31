@@ -3,7 +3,7 @@ import type { Plugin, UserConfig, ViteDevServer } from "vite";
 
 import viteConfig from "../vite.config";
 
-// BACKEND_URL 未設定で既定の backend（localhost:8020 等）へ proxy する fallback を戻さないための契約テスト。
+// BACKEND_URL 未設定で既定の backend（localhost:8120 等）へ proxy する fallback を戻さないための契約テスト。
 // frontend に unit test 基盤がないため、ブラウザを使わない Playwright test として vite.config.ts を直接評価する。
 const ENV_KEYS = ["BACKEND_URL", "PLAYWRIGHT_HERMETIC_API", "FRONTEND_BASE_PATH"] as const;
 type ProxyEnv = Partial<Record<(typeof ENV_KEYS)[number], string>>;
@@ -89,7 +89,7 @@ test.describe("vite.config base（FRONTEND_BASE_PATH）", () => {
     expect(resolveConfig({ FRONTEND_BASE_PATH: "agent" }).base).toBe("/agent/");
     expect(resolveConfig({ FRONTEND_BASE_PATH: "//agent//" }).base).toBe("/agent/");
     const config = resolveConfig({ FRONTEND_BASE_PATH: "/agent/" });
-    expect(config.server?.port).toBe(3002);
+    expect(config.server?.port).toBe(3102);
     expect(startDevServer(config).middlewarePaths).toEqual(["/api"]);
   });
 });

@@ -233,27 +233,6 @@ def test_systemd_units_match_service_catalog() -> None:
     assert f'RAG_UNIT_PREFIX="{SYSTEMD_UNIT_PREFIX}"' in _systemd_script()
 
 
-def test_roadmap_services_match_service_catalog() -> None:
-    """準備中(ロードマップ)のサービスは、unit のスクリプトと backend のカタログで同じ(#3374)。
-
-    配備のスクリプトは配備・登録せず(RAG_ROADMAP_SERVICES)、画面は灰色にして起動させない
-    (catalog の availability="roadmap")。init_script.sh の配備してよい一覧にも入れない。
-    """
-    import re
-
-    from app.services.catalog import SERVICE_CATALOG
-
-    block = re.search(r"(?m)^RAG_ROADMAP_SERVICES=\(([^)]*)\)$", _systemd_script())
-    assert block is not None, "RAG_ROADMAP_SERVICES が見つからない"
-    script_roadmap = set(block.group(1).split())
-    catalog_roadmap = {entry.service_id for entry in SERVICE_CATALOG if entry.is_roadmap}
-    assert script_roadmap == catalog_roadmap == {"parser-oci-document-understanding"}
-    init_script = (REPO_ROOT / "init_script.sh").read_text(encoding="utf-8")
-    allowed = re.search(r"(?ms)^ALLOWED_RAG_SERVICES=\(\n(.*?)^\)$", init_script)
-    assert allowed is not None, "ALLOWED_RAG_SERVICES が見つからない"
-    assert not script_roadmap & set(allowed.group(1).split())
-
-
 def test_systemd_sudoers_matches_backend_argv() -> None:
     """sudoers は backend が sudo -n で実行する argv と引数まで同じ(違うと操作が拒否される)。"""
     from app.services.systemd import (

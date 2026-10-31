@@ -40,7 +40,6 @@ from app.features.agent.rag_retrieval_state import (
     zero_evidence_stage,
 )
 from app.features.agent.runtime import (
-    AUTOMATION_APPROVAL_SKIPPED_CODE,
     MCP_APPROVAL_SKIPPED_CODE,
     RunState,
     RunStep,
@@ -93,7 +92,7 @@ _ERROR_CODE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 _OTHER_ERROR_CODE = "tool_error"
 _RAG_PREFIX = f"{RAG_CONNECTION_ID}{MCP_TOOL_SEPARATOR}"
 _NL2SQL_PREFIX = f"{NL2SQL_CONNECTION_ID}{MCP_TOOL_SEPARATOR}"
-_APPROVAL_SKIPPED_CODES = frozenset({MCP_APPROVAL_SKIPPED_CODE, AUTOMATION_APPROVAL_SKIPPED_CODE})
+_APPROVAL_SKIPPED_CODES = frozenset({MCP_APPROVAL_SKIPPED_CODE})
 
 ObservedToolStatus = Literal[
     "pending",

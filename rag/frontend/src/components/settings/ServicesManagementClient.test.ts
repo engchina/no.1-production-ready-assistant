@@ -3,27 +3,12 @@ import { describe, expect, it } from "vitest";
 import { t } from "@/lib/i18n";
 
 import {
-  isRoadmapService,
   SERVICE_STATUS_BADGE,
   serviceCanRestart,
   serviceExecutionPolicyLabelKey,
   servicePrimaryAction,
   serviceStoppedHintKey,
 } from "./ServicesManagementClient";
-
-describe("ServicesManagementClient roadmap services", () => {
-  it("availability が roadmap のサービスだけを準備中として扱う", () => {
-    expect(isRoadmapService({ availability: "roadmap" })).toBe(true);
-    expect(isRoadmapService({ availability: "available" })).toBe(false);
-    expect(isRoadmapService({})).toBe(false);
-  });
-
-  it("準備中の状態は中立色で、エラーにしない", () => {
-    expect(SERVICE_STATUS_BADGE.roadmap.variant).toBe("neutral");
-    expect(t("settings.services.status.roadmap")).toBe("準備中（ロードマップ）");
-    expect(t("settings.services.roadmapHint")).toContain("まだ配備・起動できません");
-  });
-});
 
 describe("ServicesManagementClient service policy helpers", () => {
   it("maps execution policies to compact badge labels", () => {

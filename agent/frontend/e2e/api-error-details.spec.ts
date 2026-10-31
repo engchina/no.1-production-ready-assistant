@@ -5,27 +5,27 @@ import { expect, test } from "./fixtures/mock-api";
 
 test("エラーの内部の原文は要約に出さず「詳細」にだけ出す", async ({ page }) => {
   test.setTimeout(60_000);
-  await page.route("**/api/automations", async (route) => {
+  await page.route("**/api/skills", async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     await route.fulfill({
       status: 409,
       json: {
         data: null,
-        error_messages: ["自動実行の一覧を読み込めませんでした。時間をおいて、もう一度開いてください。"],
+        error_messages: ["スキルの一覧を読み込めませんでした。時間をおいて、もう一度開いてください。"],
         warning_messages: [],
-        error_code: "automation_store_unavailable",
+        error_code: "skill_store_unavailable",
         error_details: { reason: "store is locked" },
       },
     });
   });
-  await page.goto("/automations");
+  await page.goto("/skills");
 
-  const failure = page.getByRole("alert").filter({ hasText: "自動実行の一覧を読み込めませんでした。" }).first();
+  const failure = page.getByRole("alert").filter({ hasText: "スキルの一覧を読み込めませんでした。" }).first();
   await expect(failure).toBeVisible({ timeout: 20_000 });
   const details = failure.locator("details");
   await expect(details).toContainText("元のメッセージ");
   await expect(details).toContainText("store is locked");
-  await expect(details).toContainText("automation_store_unavailable");
+  await expect(details).toContainText("skill_store_unavailable");
   const outside = await failure.evaluate((element) => {
     const clone = element.cloneNode(true) as HTMLElement;
     clone.querySelectorAll("details").forEach((node) => node.remove());

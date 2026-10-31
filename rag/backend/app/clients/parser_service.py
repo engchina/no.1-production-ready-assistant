@@ -1,7 +1,6 @@
-"""parser マイクロサービスまたは外部解析 API を呼ぶ HTTP クライアント。
+"""parser マイクロサービスを呼ぶ HTTP クライアント。
 
-CPU adapter は各 parser サービスへ HTTP で委譲する。GPU OCR は外部のネイティブ API を
-直接呼び、応答を `StructuredExtraction` へ変換する。接続失敗・timeout・retry 後の 5xx 時は
+各 adapter は parser サービスへ HTTP で委譲する。接続失敗・timeout・retry 後の 5xx 時は
 通常 warning 付き fallback(`extraction=None`)を返す。ユーザーが明示選択した backend は
 fail-fast にし、友好的なエラーで取込を止める。
 
@@ -15,38 +14,24 @@ import logging
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import cast
 
 import httpx
 from pr_backend_core.internal_http import http_client_options
 from pr_backend_core.logging import safe_exception_fields, safe_url
 from pr_backend_core.observability.request_context import outbound_correlation_headers
-from rag_parser_core.capabilities import ADAPTER_CAPABILITIES, supported_modalities
+from rag_parser_core.capabilities import supported_modalities
 from rag_parser_core.language import overrides_payload
 from rag_parser_core.result import ParseResponse, ParserRegistryResult
-from rag_parser_core.structured_records import STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING
 
-from app.clients.external_parser import (
-    ENGINE_SPECS,
-    ExternalParserBackend,
-    ExternalParserCallError,
-    ExternalParserClient,
-)
 from app.clients.http_retry import request_with_retry, retry_config_from_settings
 from app.config import Settings
 from app.rag.language_pack_releases import active_release
-from app.rag.mineru_license import (
-    MINERU_LICENSE_REQUIRED_MESSAGE,
-    MINERU_LICENSE_UNACKNOWLEDGED_REASON,
-)
 from app.schemas.document import SourceProfile
 
 logger = logging.getLogger(__name__)
 
 # 解析中のページの進捗を読む timeout(秒)。進捗は補助なので短くし、再試行しない(#1999)。
 _PROGRESS_TIMEOUT_SECONDS = 3.0
-# 構造化レコードの JSONL を構造化レコード JSONL 以外の解析エンジンに渡したときの理由(#2457)。
-STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON = "structured_records_requires_jsonl_backend"
 # 解析サービスへ送る進捗の id(#1999)。``asyncio.to_thread`` の thread も context を引き継ぐ。
 _PARSE_PROGRESS_ID: ContextVar[str | None] = ContextVar("rag_parse_progress_id", default=None)
 
@@ -65,23 +50,12 @@ def parse_progress_id(progress_id: str | None) -> Iterator[None]:
 _SERVICE_URL_FIELDS: dict[str, str] = {
     "docling": "rag_parser_docling_service_url",
     "unstructured": "rag_parser_unstructured_service_url",
-    # 構造化レコード JSONL(#2457)。前処理の構造化レコードの JSONL だけを解析する。
-    "structured_records_jsonl": "rag_parser_structured_records_jsonl_service_url",
-    # XML ツリー JSON(#2024)。tag / attr / children の木の JSON だけを解析する。
-    "xml_tree_json": "rag_parser_xml_tree_json_service_url",
-    # OCI クラウド service 系 backend(薄いプロキシ microservice)。
-    "oci_document_understanding": "rag_parser_oci_document_understanding_service_url",
 }
 
 
 _SERVICE_LABELS: dict[str, str] = {
     "docling": "Docling",
     "unstructured": "Unstructured",
-    "structured_records_jsonl": "構造化レコード JSONL",
-    "xml_tree_json": "XML ツリー JSON",
-    "mineru": "MinerU",
-    "dots_ocr": "Dots.OCR",
-    "oci_document_understanding": "OCI Document Understanding",
 }
 
 _MODALITY_LABELS: dict[str, str] = {
@@ -95,23 +69,11 @@ _MODALITY_LABELS: dict[str, str] = {
 
 
 def supported_formats_label(backend: str) -> str:
-    """backend の対応形式を「PDF・画像」形式の日本語ラベルにする(未宣言は空文字)。
-
-    modality を持たない backend(XML ツリー JSON)は拡張子の名前(「JSON」)にする。
-    """
+    """backend の対応形式を「PDF・画像」形式の日本語ラベルにする(未宣言は空文字)。"""
     modalities = supported_modalities(backend)
-    if not modalities:
-        capability = ADAPTER_CAPABILITIES.get(backend)
-        extensions = sorted(capability.extensions) if capability is not None else []
-        return "・".join(extension.lstrip(".").upper() for extension in extensions)
     return "・".join(
         _MODALITY_LABELS.get(modality.value, modality.value) for modality in modalities
     )
-
-
-# 準備中(ロードマップ)の解析エンジンが選ばれていたときの理由とエラーコード(#3374)。
-PARSER_ENGINE_ROADMAP_REASON = "engine_roadmap"
-PARSER_ENGINE_ROADMAP_WARNING = "parser_engine_roadmap"
 
 
 class ParserServiceUnavailableError(RuntimeError):
@@ -159,7 +121,6 @@ class ParserServiceClient:
         self._settings = settings
         self._timeout = float(settings.rag_parser_service_timeout_seconds)
         self._retry = retry_config_from_settings(settings)
-        self._external = ExternalParserClient(settings)
         # 解析中の進捗の id → 解析サービスの URL(#1999)。解析の呼び出しの間だけ持つ。
         self._progress_urls: dict[str, str] = {}
 
@@ -181,41 +142,12 @@ class ParserServiceClient:
         content_type: str,
         *,
         fail_fast: bool = False,
-        dots_ocr_prompt: str | None = None,
     ) -> ParserRegistryResult:
         """`ExternalAdapterRunner` 互換: 1 backend を HTTP で実行する。
 
         ``parse_progress_id`` の中で呼ぶと、その id を解析サービスへ送り、解析の間は
-        ``fetch_progress`` でページの進捗を読めるようにする(#1999)。外部の解析 API には送らない。
+        ``fetch_progress`` でページの進捗を読めるようにする(#1999)。
         """
-        if backend in ENGINE_SPECS:
-            external_backend = backend
-            try:
-                external = (
-                    ExternalParserClient(self._settings, dots_ocr_prompt=dots_ocr_prompt)
-                    if dots_ocr_prompt is not None
-                    else self._external
-                )
-                return external.parse(
-                    external_backend,
-                    source_bytes,
-                    source_profile,
-                    content_type,
-                )
-            except ExternalParserCallError as exc:
-                if fail_fast:
-                    raise ParserServiceUnavailableError(
-                        backend,
-                        exc.reason,
-                        service_url=self._external_connection_url(backend),
-                        status_code=exc.status_code,
-                        attempts=self._retry.attempts,
-                        warning_code=exc.warning_code,
-                    ) from exc
-                return _fallback(
-                    backend,
-                    exc.warning_code or f"{backend}_external_unavailable",
-                )
         url = self.service_url(backend)
         if url is None:
             if fail_fast:
@@ -359,96 +291,6 @@ class ParserServiceClient:
             )
         return result
 
-    def _external_connection_url(self, backend: str) -> str | None:
-        spec = ENGINE_SPECS.get(cast(ExternalParserBackend, backend))
-        if spec is None:
-            return None
-        return str(getattr(self._settings, spec.endpoint_field, "") or "").strip() or None
-
-    def run_service_backend(
-        self,
-        backend: str,
-        source_bytes: bytes,
-        *,
-        content_type: str,
-        document_id: str,
-        prompt: str = "",
-    ) -> ParserRegistryResult:
-        """OCI クラウド service 系 backend を microservice へ HTTP 委譲する。
-
-        ``runner`` と異なり source_profile 不要で document_id(OCI 入力 object 名の一意化用)
-        と prompt(VLM 抽出指示)を渡す。未到達/失敗/未設定時は extraction=None の fallback を
-        返し、呼び出し側で既存 in-process フローへ安全に縮退させる。
-        """
-        url = self.service_url(backend)
-        if url is None:
-            return _fallback(backend, f"{backend}_adapter_service_unconfigured")
-        files = {"file": ("upload", source_bytes, content_type or "application/octet-stream")}
-        data = {
-            "content_type": content_type,
-            "document_id": document_id,
-            "prompt": prompt,
-        }
-        try:
-            payload = self._post_parse_json(backend, url, files=files, data=data)
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "parser service returned error status",
-                extra={
-                    "parser_backend": backend,
-                    "service_url": safe_url(url),
-                    "status_code": exc.response.status_code,
-                    "attempts": self._retry.attempts,
-                    **safe_exception_fields(exc),
-                },
-            )
-            return _fallback(backend, f"{backend}_adapter_service_unreachable")
-        except httpx.TimeoutException as exc:
-            logger.warning(
-                "parser service call timed out",
-                extra={
-                    "parser_backend": backend,
-                    "service_url": safe_url(url),
-                    "attempts": self._retry.attempts,
-                    **safe_exception_fields(exc),
-                },
-            )
-            return _fallback(backend, f"{backend}_adapter_service_unreachable")
-        except httpx.HTTPError as exc:
-            logger.warning(
-                "parser service call failed",
-                extra={
-                    "parser_backend": backend,
-                    "service_url": safe_url(url),
-                    "attempts": self._retry.attempts,
-                    **safe_exception_fields(exc),
-                },
-            )
-            return _fallback(backend, f"{backend}_adapter_service_unreachable")
-        except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning(
-                "parser service returned invalid JSON",
-                extra={
-                    "parser_backend": backend,
-                    "service_url": safe_url(url),
-                    "attempts": self._retry.attempts,
-                    **safe_exception_fields(exc),
-                },
-            )
-            return _fallback(backend, f"{backend}_adapter_service_invalid_response")
-        try:
-            return ParseResponse.model_validate(payload).to_result()
-        except ValueError as exc:
-            logger.warning(
-                "parser service returned invalid payload",
-                extra={
-                    "parser_backend": backend,
-                    "service_url": safe_url(url),
-                    **safe_exception_fields(exc),
-                },
-            )
-            return _fallback(backend, f"{backend}_adapter_service_invalid_response")
-
     def _post_parse_json(
         self,
         backend: str,
@@ -549,8 +391,6 @@ def split_parser_warning(warning: str) -> tuple[str, str | None]:
 def _parser_result_failure_reason(result: ParserRegistryResult) -> str:
     """HTTP 200 でも parser が extraction を返せない理由を user-facing reason へ寄せる。"""
     warnings = tuple(split_parser_warning(warning)[0] for warning in result.warnings)
-    if STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING in warnings:
-        return STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON
     if any(warning.endswith("_adapter_package_missing") for warning in warnings):
         return "adapter_package_missing"
     if any(warning.endswith("_adapter_source_unsupported") for warning in warnings):
@@ -575,16 +415,6 @@ def _parser_result_failure_reason(result: ParserRegistryResult) -> str:
     return "adapter_empty_result"
 
 
-def structured_records_requires_jsonl_backend_message(label: str) -> str:
-    """構造化レコードの JSONL を、構造化レコード JSONL 以外の解析エンジンに渡したときの案内。"""
-    return (
-        "ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が作る構造化レコードの JSONL は、"
-        f"文書解析の「構造化レコード JSONL」だけが解析できます。選択中の解析エンジン（{label}）では"
-        "変換せずに取込を停止しました。この文書の「処理レシピ」で「文書解析」を"
-        "「構造化レコード JSONL」に変えてから再実行してください。"
-    )
-
-
 def _service_unavailable_message(
     backend: str,
     reason: str,
@@ -597,7 +427,6 @@ def _service_unavailable_message(
 ) -> str:
     label = _SERVICE_LABELS.get(backend, backend)
     service_id = f"parser-{backend.replace('_', '-')}"
-    external = backend in ENGINE_SPECS
     retry_suffix = f"{attempts} 回試行しました。" if attempts > 1 else ""
     warning_suffix = f" エラーコード: {warning_code}" if warning_code else ""
     # 例外の型名(例: ImportError)。ログを開く前に失敗の種類が分かるようにする(#310)。
@@ -608,34 +437,14 @@ def _service_unavailable_message(
             "旧結果は保持されていますが、新しい処理は開始できません。"
             "文書レシピで利用可能な解析エンジンを選び直してください。"
         )
-    if reason == MINERU_LICENSE_UNACKNOWLEDGED_REASON:
-        return MINERU_LICENSE_REQUIRED_MESSAGE + warning_suffix
-    if reason == PARSER_ENGINE_ROADMAP_REASON:
-        # 準備中(ロードマップ)のエンジンは選べない(#3374)。保存済みの値でも呼ばずに止める。
-        return (
-            f"この文書レシピが参照する解析エンジン（{label}）は準備中（ロードマップ）のため、"
-            "まだ使えません。別の解析エンジンには切り替えずに取込を停止しました。"
-            "文書レシピか「取込・検索・回答設定 › 文書解析」で Docling などの使える解析エンジンを"
-            "選び直してから再実行してください。"
-        )
-    if reason == STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON:
-        return structured_records_requires_jsonl_backend_message(label) + warning_suffix
     if reason == "unconfigured":
         return (
-            f"選択した文書解析エンジン（{label}）の接続先 URL が未設定です。"
-            "「取込・検索・回答設定 › 文書解析」で外部接続を保存してから再実行してください。"
-        )
-    if reason == "model_missing":
-        return (
-            f"選択した文書解析エンジン（{label}）に設定したモデルが見つかりません。"
-            "外部接続のモデル ID を確認し、接続テストを再実行してください。"
+            f"選択した文書解析サービス（{label}）の接続先 URL が未設定です。"
+            "「運用設定 › サービス管理」でサービスの URL を確認してから再実行してください。"
         )
     if reason == "adapter_source_unsupported":
-        # 外部 API のエンジン(MinerU / Dots.OCR)も呼び出し前の形式判定で止まるため、
-        # 接続エラーの文言にせず対応形式を案内する。
         formats = supported_formats_label(backend)
         formats_suffix = f"（対応形式: {formats}）" if formats else ""
-        noun = "文書解析エンジン" if external else "文書解析サービス"
         # 既定の Docling は PDF と画像だけを解析する(#286)。取込前の判定(parser_source_guard)と
         # 同じ対処を案内する(ファイル準備で形式を変えた場合などは、ここで止まる)。
         remedy = (
@@ -645,37 +454,8 @@ def _service_unavailable_message(
             else "別の解析エンジンを選ぶか、対応形式に変換してから再実行してください。"
         )
         return (
-            f"選択した{noun}（{label}）はこのファイル形式を処理できません"
+            f"選択した文書解析サービス（{label}）はこのファイル形式を処理できません"
             f"{formats_suffix}。{remedy}{warning_suffix}"
-        )
-    if external:
-        suffix = f" 接続先: {service_url}" if service_url else ""
-        if reason == "adapter_invalid_input":
-            return (
-                f"選択した文書解析エンジン（{label}）でファイルを読み取れませんでした。"
-                "原本が正しく開けるか確認し、別の解析エンジンも試してください。"
-            )
-        if reason == "timeout":
-            return (
-                f"選択した文書解析エンジン（{label}）の応答がタイムアウトしました。"
-                f"{retry_suffix}外部エンジンの状態を確認して接続テストを再実行してください。"
-                f"{suffix}"
-            )
-        if reason in {"invalid_response", "adapter_empty_result"}:
-            return (
-                f"選択した文書解析エンジン（{label}）から有効な解析結果を取得できませんでした。"
-                "モデル ID と外部 API の互換性を確認して接続テストを再実行してください。"
-            )
-        if reason == "http_error":
-            status_text = f"HTTP {status_code}" if status_code is not None else "HTTP error"
-            return (
-                f"選択した文書解析エンジン（{label}）が {status_text} を返しました。"
-                f"{retry_suffix}外部エンジンのログと設定を確認してください。{suffix}"
-            )
-        return (
-            f"選択した文書解析エンジン（{label}）に接続できません。"
-            "外部接続の URL と認証情報を確認し、接続テストを再実行してください。"
-            f"{suffix}"
         )
     if reason == "adapter_package_missing":
         return (
