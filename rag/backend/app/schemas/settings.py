@@ -18,9 +18,9 @@ from pr_system_settings.database import DatabaseSettingsUpdate as DatabaseSettin
 from pr_system_settings.model import (
     EnterpriseAiModelEntrySettings as EnterpriseAiModelEntrySettings,
 )
+from pr_system_settings.model import EnterpriseAiModelKind as EnterpriseAiModelKind
 from pr_system_settings.model import EnterpriseAiModelSettings as EnterpriseAiModelSettings
 from pr_system_settings.model import EnterpriseAiVlmInputMode as EnterpriseAiVlmInputMode
-from pr_system_settings.model import GenerativeAiModelSettings as GenerativeAiModelSettings
 from pr_system_settings.model import ModelSettingsData as ModelSettingsData
 from pr_system_settings.model import ModelSettingsPayload as ModelSettingsPayload
 from pr_system_settings.model import ModelSettingsSecretSource as ModelSettingsSecretSource

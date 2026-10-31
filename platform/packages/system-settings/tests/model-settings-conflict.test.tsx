@@ -34,7 +34,7 @@ afterEach(() => {
 
 const pending = () => new Promise<never>(() => undefined);
 
-function data(revision: string, rerankModel = "qwen3-rerank"): ModelSettingsData {
+function data(revision: string, displayName = "標準"): ModelSettingsData {
   return {
     settings: {
       enterprise_ai: {
@@ -49,7 +49,7 @@ function data(revision: string, rerankModel = "qwen3-rerank"): ModelSettingsData
           },
         ],
         models: [
-          { model_id: "vlm", display_name: "", vision_enabled: true, connection_id: "primary" },
+          { model_id: "vlm", display_name: displayName, vision_enabled: true, connection_id: "primary" },
         ],
         default_text_model_id: "vlm",
         default_vision_model_id: "vlm",
@@ -61,11 +61,6 @@ function data(revision: string, rerankModel = "qwen3-rerank"): ModelSettingsData
         vision_response_path: "",
         timeout_seconds: 600,
         max_retries: 3,
-      },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        rerank_model: rerankModel,
       },
     },
     model_settings_file: "model-settings.json",
@@ -120,9 +115,9 @@ async function setInputValue(id: string, value: string) {
   });
 }
 
-async function submitGenerativeAi() {
-  const form = input("genai-rerank-model")?.closest("form");
-  if (!form) throw new Error("generative ai form not found");
+async function submitModels() {
+  const form = input("enterprise-model-0-display-name")?.closest("form");
+  if (!form) throw new Error("models form not found");
   await act(async () => {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
@@ -136,7 +131,7 @@ describe("ModelSettingsPage の保存の競合（#1037）", () => {
       if (payload.base_revision !== server.revision) {
         throw Object.assign(new Error("conflict"), { status: 409 });
       }
-      server = { ...data("rev-3", payload.generative_ai.rerank_model) };
+      server = { ...data("rev-3", payload.enterprise_ai.models[0]?.display_name ?? "") };
       return server;
     });
     await renderPage({
@@ -145,10 +140,10 @@ describe("ModelSettingsPage の保存の競合（#1037）", () => {
       testModelSettings: pending,
     });
     // 画面を開いた後に、ほかの画面（別の製品）が保存した。
-    server = data("rev-2", "rerank-from-other-product");
+    server = data("rev-2", "他の製品の表示名");
 
-    await setInputValue("genai-rerank-model", "rerank-mine");
-    await submitGenerativeAi();
+    await setInputValue("enterprise-model-0-display-name", "自分の表示名");
+    await submitModels();
 
     expect(updateModelSettings).toHaveBeenCalledTimes(1);
     expect(updateModelSettings.mock.calls[0]?.[0].base_revision).toBe("rev-1");
@@ -156,10 +151,10 @@ describe("ModelSettingsPage の保存の競合（#1037）", () => {
       "モデル設定は、この画面を開いた後にほかの画面（別の製品を含む）で更新されました。",
     );
     // 入力は残す。
-    expect(input("genai-rerank-model")?.value).toBe("rerank-mine");
+    expect(input("enterprise-model-0-display-name")?.value).toBe("自分の表示名");
     const reload = buttonByText("最新の設定を読み込む");
     expect(reload).toBeDefined();
-    // 競合した節（Generative AI）の操作の行にだけ出す。
+    // 競合した節（登録モデル）の操作の行にだけ出す。
     expect(
       [...host.querySelectorAll("button")].filter(
         (button) => button.textContent?.trim() === "最新の設定を読み込む",
@@ -174,16 +169,16 @@ describe("ModelSettingsPage の保存の競合（#1037）", () => {
     await act(async () => buttonByText("読み込む", dialog!)!.click());
     await flush();
 
-    expect(input("genai-rerank-model")?.value).toBe("rerank-from-other-product");
+    expect(input("enterprise-model-0-display-name")?.value).toBe("他の製品の表示名");
     expect(buttonByText("最新の設定を読み込む")).toBeUndefined();
     expect(host.textContent).not.toContain("この画面を開いた後にほかの画面");
 
     // 読み直した版で保存し直せる。
-    await setInputValue("genai-rerank-model", "rerank-mine");
-    await submitGenerativeAi();
+    await setInputValue("enterprise-model-0-display-name", "自分の表示名");
+    await submitModels();
     expect(updateModelSettings).toHaveBeenCalledTimes(2);
     expect(updateModelSettings.mock.calls[1]?.[0].base_revision).toBe("rev-2");
-    expect(input("genai-rerank-model")?.value).toBe("rerank-mine");
+    expect(input("enterprise-model-0-display-name")?.value).toBe("自分の表示名");
   });
 
   it("版を返さない backend には base_revision を送らない", async () => {
@@ -196,7 +191,7 @@ describe("ModelSettingsPage の保存の競合（#1037）", () => {
       testModelSettings: pending,
     });
 
-    await submitGenerativeAi();
+    await submitModels();
 
     expect(updateModelSettings).toHaveBeenCalledTimes(1);
     expect(updateModelSettings.mock.calls[0]?.[0]).not.toHaveProperty("base_revision");

@@ -68,8 +68,9 @@ PAYLOAD: dict[str, Any] = {
         ],
         "default_text_model_id": "llm-a",
         "default_vision_model_id": "vlm-b",
+        "default_embedding_model_id": "cohere.embed-v4.0",
+        "default_rerank_model_id": "rr",
     },
-    "generative_ai": {"embedding_model": "cohere.embed-v4.0", "rerank_model": "rr"},
 }
 
 
@@ -120,11 +121,11 @@ def test_patch_saves_key_only_in_env(tmp_path: Path) -> None:
     assert data["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is True
     assert data["secret_source"] == "environment"
     document = json.loads((tmp_path / "model-settings.json").read_text(encoding="utf-8"))
-    assert document["version"] == 6
+    assert document["version"] == 7
     assert "api_key" not in document["enterprise_ai"]
     assert "sk-new" not in json.dumps(document)
     # 製品固有の設定は model-settings.json に書かない（#1701）。
-    assert set(document) == {"version", "enterprise_ai", "generative_ai"}
+    assert set(document) == {"version", "enterprise_ai"}
     assert stat.S_IMODE((tmp_path / "model-settings.json").stat().st_mode) == 0o600
     assert dotenv_values(tmp_path / ".env")[ENTERPRISE_AI_API_KEY_ENV] == "sk-new"
     assert settings.oci_enterprise_ai_api_key == "sk-new"
@@ -228,6 +229,7 @@ def test_get_without_models_returns_one_blank_row(tmp_path: Path) -> None:
             "model_id": "",
             "display_name": "",
             "vision_enabled": False,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -642,11 +644,11 @@ def test_saving_other_sections_is_not_blocked_by_saved_duplicate_model_ids(
     client = make_client(settings, store)
     current = client.get("/api/settings/model").json()["data"]["settings"]
 
-    current["generative_ai"]["rerank_model"] = "rr-changed"
+    current["enterprise_ai"]["timeout_seconds"] = 30.0
     response = client.patch("/api/settings/model", json=current)
 
     assert response.status_code == 200
-    assert settings.oci_genai_rerank_model == "rr-changed"
+    assert settings.oci_enterprise_ai_timeout_seconds == 30.0
 
 
 def test_saving_other_sections_is_not_blocked_by_saved_invalid_defaults(tmp_path: Path) -> None:

@@ -351,6 +351,8 @@ export function normalizeModelSettings(
           model.max_input_tokens ?? DEFAULT_ENTERPRISE_AI_MAX_INPUT_TOKENS;
         return {
           ...model,
+          // 値の無いモデル（#45 より前の応答）は LLM。
+          kind: model.kind ?? "text",
           connection_id: modelConnectionId(model),
           // 値の無いモデルは既定の推論の量（#1425）。空（送らない）はそのまま。
           reasoning_effort:
@@ -362,7 +364,8 @@ export function normalizeModelSettings(
             Math.min(DEFAULT_ENTERPRISE_AI_MAX_OUTPUT_TOKENS, maxInputTokens),
         };
       }),
+      default_embedding_model_id: enterprise.default_embedding_model_id ?? "",
+      default_rerank_model_id: enterprise.default_rerank_model_id ?? "",
     },
-    generative_ai: { ...settings.generative_ai },
   };
 }

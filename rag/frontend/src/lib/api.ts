@@ -52,7 +52,7 @@ export type {
   EnterpriseAiConfiguredModel,
   EnterpriseAiModelSettings,
   EnterpriseAiVlmInputMode,
-  GenerativeAiModelSettings,
+  EnterpriseAiModelKind,
   ModelSettingsData,
   ModelSettingsPayload,
   ModelSettingsSecretSource,

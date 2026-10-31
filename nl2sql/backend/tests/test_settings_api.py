@@ -1742,11 +1742,6 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
                 "timeout_seconds": 600.0,
                 "max_retries": 3,
             },
-            "generative_ai": {
-                "embedding_model": "cohere.embed-v4.0",
-                "embedding_dim": 1536,
-                "rerank_model": "cohere.rerank-v4.0-fast",
-            },
         },
     )
 
@@ -1759,12 +1754,12 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
     ]
     assert models[1]["vision_enabled"] is True
     document = json.loads(model_settings_file.read_text(encoding="utf-8"))
-    assert document["version"] == 6
+    assert document["version"] == 7
     assert "api_key" not in document["enterprise_ai"]
     assert document["enterprise_ai"]["models"][1]["model_id"] == "mistral.vision-model"
     assert document["enterprise_ai"]["default_text_model_id"] == "cohere.command-r-plus"
     assert document["enterprise_ai"]["default_vision_model_id"] == "mistral.vision-model"
-    assert document["generative_ai"]["embedding_dim"] == 1536
+    assert "generative_ai" not in document
     assert (
         env_file.read_text(encoding="utf-8") == "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-secret\n"
     )
@@ -1853,9 +1848,11 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
     assert settings.legacy_model_secret_detected is True
     assert settings.oci_enterprise_ai_default_text_model == "cohere.command-r-plus"
     assert settings.oci_enterprise_ai_default_vision_model == "mistral.vision-model"
-    assert [model.model_id for model in settings.oci_enterprise_ai_models] == [
-        "cohere.command-r-plus",
-        "mistral.vision-model",
+    # #45 より前の `generative_ai` の節の旧 OCI Generative AI（Cohere）のモデルは、OpenAI 互換の
+    # 経路で呼べないので登録モデルへ移さない（画面で選び直す）。
+    assert [(model.model_id, model.kind) for model in settings.oci_enterprise_ai_models] == [
+        ("cohere.command-r-plus", "text"),
+        ("mistral.vision-model", "text"),
     ]
     assert settings.oci_enterprise_ai_vlm_input_mode == "inline_image"
     assert settings.oci_enterprise_ai_max_retries == 4
@@ -2035,11 +2032,6 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
                     "timeout_seconds": 10,
                     "max_retries": 0,
                 },
-                "generative_ai": {
-                    "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
-                    "rerank_model": "cohere.rerank-v4.0-fast",
-                },
             },
         },
     )
@@ -2117,11 +2109,6 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
                     "vlm_input_mode": "auto",
                     "timeout_seconds": 10,
                     "max_retries": 0,
-                },
-                "generative_ai": {
-                    "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
-                    "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             },
         },

@@ -118,7 +118,7 @@ def test_limit_is_saved_per_model_and_reloaded(tmp_path: Path) -> None:
     # 値を渡さなかった 2 つ目のモデルは既定。
     assert [model["max_input_tokens"] for model in models] == [200_000, 128_000]
     document = json.loads((tmp_path / "model-settings.json").read_text(encoding="utf-8"))
-    assert document["version"] == MODEL_SETTINGS_DOCUMENT_VERSION == 6
+    assert document["version"] == MODEL_SETTINGS_DOCUMENT_VERSION == 7
     assert [model["max_input_tokens"] for model in document["enterprise_ai"]["models"]] == [
         200_000,
         128_000,

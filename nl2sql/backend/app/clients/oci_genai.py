@@ -2,8 +2,9 @@
 
 接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の `text-embedding-v4`
 （Oracle の `VECTOR(1536, FLOAT32)` に合わせ `dimensions=1536` を必ず送る）と `qwen3-rerank`。
-Base URL が空なら Enterprise AI のプライマリ接続の endpoint を使い、再ランクは
-`/compatible-mode/` を `/compatible-api/` に読み替える。LLM/VLM には使わない。
+既定の埋め込み / 再ランクのモデル（登録モデルの種類 embedding / rerank。#45）の接続の endpoint と
+API key で呼び、再ランクは `/compatible-mode/` を `/compatible-api/` に読み替える。
+LLM/VLM には使わない。
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ import urllib.request
 from collections.abc import Awaitable, Callable, Sequence
 from numbers import Real
 from typing import Any, Literal, Protocol
+
+from pr_system_settings.model import embedding_api_base_url, embedding_model_connection
 
 from app.settings import Settings, get_settings
 
@@ -65,7 +68,7 @@ class OciGenAiClient:
             "input": texts,
             "dimensions": self._settings.oci_genai_embedding_dim,
         }
-        payload = await self._sdk_call_runner(lambda: self._post(url, body))
+        payload = await self._sdk_call_runner(lambda: self._post(url, body, rerank=False))
         rows = payload.get("data")
         if not isinstance(rows, list):
             raise ValueError("embedding の応答に data がありません。")
@@ -88,7 +91,7 @@ class OciGenAiClient:
             "documents": documents,
             "top_n": top_n,
         }
-        payload = await self._sdk_call_runner(lambda: self._post(url, body))
+        payload = await self._sdk_call_runner(lambda: self._post(url, body, rerank=True))
         results = payload.get("results")
         if not isinstance(results, list):
             raise ValueError("rerank の応答に results がありません。")
@@ -100,37 +103,31 @@ class OciGenAiClient:
         return _validate_rerank_results(ranks, document_count=len(documents), top_n=top_n)
 
     def _base_url(self, *, rerank: bool) -> str:
-        """埋め込み / 再ランクの OpenAI 互換 Base URL（#8）。
+        """埋め込み / 再ランクの OpenAI 互換 Base URL（#8 / #45。`embedding_api_base_url`）。
 
-        空のときは Enterprise AI の接続の endpoint を使う。再ランクは
+        既定の埋め込み / 再ランクのモデルの接続の endpoint を使う。再ランクは
         `/compatible-mode/` を `/compatible-api/` に読み替える（百煉は再ランクだけ
         `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
         """
-        base = str(self._settings.rerank_base_url or "").strip() if rerank else ""
-        if not base:
-            base = str(self._settings.embedding_base_url or "").strip()
-            if not base:
-                base = str(self._settings.oci_enterprise_ai_endpoint or "").strip()
-            if rerank:
-                base = base.replace("/compatible-mode/", "/compatible-api/")
+        base = embedding_api_base_url(self._settings, rerank=rerank)
         if not base:
             raise ValueError(
                 "埋め込み / 再ランクの Base URL が未設定です。"
-                "モデル設定の Base URL か、Enterprise AI の接続の Endpoint URL を入力してください。"
+                "埋め込み / 再ランクのモデルの接続の Endpoint URL を入力してください。"
             )
-        return base.rstrip("/")
+        return base
 
-    def _api_key(self) -> str:
-        """API key（#8。Enterprise AI の接続のものを使う）。"""
-        key = str(self._settings.oci_enterprise_ai_api_key or "").strip()
+    def _api_key(self, *, rerank: bool) -> str:
+        """API key（#45。既定の埋め込み / 再ランクのモデルの接続のものを使う）。"""
+        key = embedding_model_connection(self._settings, rerank=rerank).api_key
         if not key:
             raise ValueError(
                 "埋め込み / 再ランクの API key がありません"
-                "（Enterprise AI の接続の API key を使います）。"
+                "（埋め込み / 再ランクのモデルの接続の API key を使います）。"
             )
         return key
 
-    def _post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+    def _post(self, url: str, body: dict[str, Any], *, rerank: bool) -> dict[str, Any]:
         """OpenAI 互換の API を 1 回呼ぶ（#8）。**HTTP を叩くのはここだけ。**"""
         if self._post_json is not None:
             return self._post_json(url, body)
@@ -140,7 +137,7 @@ class OciGenAiClient:
             data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self._api_key()}",
+                "Authorization": f"Bearer {self._api_key(rerank=rerank)}",
             },
         )
         timeout = max(1, int(self._settings.oci_enterprise_ai_timeout_seconds or 60))

@@ -10,11 +10,30 @@ const SECONDARY_CONNECTION = {
   clear_api_key: false,
 };
 
-type ModelSettingsOptions = { secondary?: boolean; textModel?: string };
+/** `embedding`: 埋め込み / 再ランクのモデル（種類 embedding / rerank。#45）を登録モデルの末尾に足す。 */
+type ModelSettingsOptions = { secondary?: boolean; textModel?: string; embedding?: boolean };
+
+const EMBEDDING_MODELS = [
+  {
+    model_id: "text-embedding-v4",
+    display_name: "",
+    vision_enabled: false,
+    kind: "embedding",
+    connection_id: "primary",
+  },
+  {
+    model_id: "qwen3-rerank",
+    display_name: "",
+    vision_enabled: false,
+    kind: "rerank",
+    connection_id: "primary",
+  },
+];
 
 function createModelSettings({
   secondary = false,
   textModel = "enterprise-llm",
+  embedding = false,
 }: ModelSettingsOptions = {}) {
   return {
     settings: {
@@ -45,7 +64,11 @@ function createModelSettings({
             connection_id: secondary ? "secondary" : "primary",
             max_output_tokens: 32768,
           },
+          ...(embedding ? EMBEDDING_MODELS : []),
         ],
+        ...(embedding
+          ? { default_embedding_model_id: "text-embedding-v4", default_rerank_model_id: "qwen3-rerank" }
+          : {}),
         default_text_model_id: textModel,
         default_vision_model_id: "enterprise-vision",
         // 既定の判定モデル（#3574）。空 = 既定のテキストモデル。
@@ -58,13 +81,6 @@ function createModelSettings({
         vision_response_path: "",
         timeout_seconds: 60,
         max_retries: 3,
-      },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
       },
     },
     model_settings_file: "model-settings.json",
@@ -93,7 +109,7 @@ for (const viewport of [
       });
     }
 
-    await mockModelSettings(page);
+    await mockModelSettings(page, undefined, { embedding: true });
     await page.goto("/settings/model");
 
     await expect(page.getByPlaceholder("https://…oraclecloud.com/openai/v1")).toBeVisible();
@@ -163,7 +179,6 @@ for (const viewport of [
     );
     const enterpriseSave = page.getByRole("button", { name: "OCI Enterprise AI: 保存" });
     const modelsSave = page.getByRole("button", { name: "登録モデル: 保存" });
-    const genaiSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
     const enterpriseTestButton = page.getByRole("button", { name: "enterprise-llm をテスト" });
     const embeddingTestButton = page.getByRole("button", {
       name: "text-embedding-v4 をテスト",
@@ -174,14 +189,20 @@ for (const viewport of [
     await expectActionInsideCard(page, "OCI Enterprise AI", enterpriseSave);
     await expectActionInsideCard(page, "登録モデル", modelsSave);
     await expectActionInsideCard(page, "登録モデル", enterpriseTestButton);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", genaiSave);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", embeddingTestButton);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", rerankTestButton);
+    // 埋め込み / 再ランクも登録モデルの行でテストする（#45。独立したカードは無い）。
+    await expectActionInsideCard(page, "登録モデル", embeddingTestButton);
+    await expectActionInsideCard(page, "登録モデル", rerankTestButton);
+    await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "既定の埋め込みモデル" })).toContainText(
+      "text-embedding-v4"
+    );
+    await expect(page.getByRole("combobox", { name: "既定の再ランクモデル" })).toContainText(
+      "qwen3-rerank"
+    );
 
     for (const button of [
       enterpriseSave,
       modelsSave,
-      genaiSave,
       enterpriseTestButton,
       embeddingTestButton,
       rerankTestButton,
@@ -257,23 +278,23 @@ for (const viewport of [
       await route.fulfill({ json: { data: current, error_messages: [], warning_messages: [] } });
     });
     await page.goto("/settings/model");
-    const rerank = page.getByRole("textbox", { name: "リランクモデル ID" });
-    await expect(rerank).toHaveValue("qwen3-rerank");
+    const displayName = page.getByLabel("表示名 1");
+    await expect(displayName).toHaveValue("標準 LLM");
 
-    // ほかの製品がセカンダリ接続とリランクモデルを保存した。
+    // ほかの製品がセカンダリ接続と表示名を保存した。
     const other = createModelSettings({ secondary: true });
-    other.settings.generative_ai.rerank_model = "rerank-from-nl2sql";
+    other.settings.enterprise_ai.models[0]!.display_name = "NL2SQL の表示名";
     current = { ...other, revision: "rev-2" };
 
-    await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
+    await displayName.fill("自分の表示名");
+    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
 
     await expect(page.getByText("この画面を開いた後にほかの画面（別の製品を含む）で更新されました。")).toBeVisible();
     expect(patches).toEqual([{ base_revision: "rev-1" }]);
-    await expect(rerank).toHaveValue("rerank-mine");
+    await expect(displayName).toHaveValue("自分の表示名");
     const reload = page.getByRole("button", { name: "最新の設定を読み込む" });
     await expect(reload).toHaveCount(1);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", reload);
+    await expectActionInsideCard(page, "登録モデル", reload);
     await expectNoPageOverflow(page);
     await page.screenshot({
       path: test.info().outputPath(`model-settings-conflict-${viewport.name}.png`),
@@ -284,13 +305,13 @@ for (const viewport of [
     const dialog = page.getByRole("alertdialog", { name: "最新の設定を読み込みますか？" });
     await dialog.getByRole("button", { name: "読み込む" }).click();
 
-    await expect(rerank).toHaveValue("rerank-from-nl2sql");
+    await expect(displayName).toHaveValue("NL2SQL の表示名");
     await expect(page.getByRole("tab", { name: /セカンダリ接続/ })).toBeVisible();
     await expect(reload).toHaveCount(0);
 
-    await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
-    await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。").first()).toBeVisible();
+    await displayName.fill("自分の表示名");
+    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+    await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
     expect(patches.at(-1)).toEqual({ base_revision: "rev-2" });
   });
 }
@@ -712,7 +733,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
 });
 
 test("モデル設定はモデルごとのテスト成功と失敗を行内に表示する", async ({ page }, testInfo) => {
-  await mockModelSettings(page);
+  await mockModelSettings(page, undefined, { embedding: true });
   await page.goto("/settings/model");
 
   await page.getByRole("button", { name: "enterprise-llm をテスト" }).click();
@@ -727,7 +748,7 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
 
   await page.getByRole("button", { name: "text-embedding-v4 をテスト" }).click();
   await expect(
-    page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。")
+    page.getByText("埋め込みモデル「text-embedding-v4」のテストに失敗しました。")
   ).toBeVisible();
   await expect(page.getByText("確認ポイント")).toBeVisible();
   await expect(page.getByText("OCI config、設定名、region")).toBeVisible();
@@ -737,11 +758,11 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
   await expect(page.getByText("401 Unauthorized: invalid model")).toBeVisible();
   await expectNoPageOverflow(page);
   await page.screenshot({path: testInfo.outputPath("model-test-error-detail.png"), fullPage: true});
-  // 結果は操作した欄の行のすぐ下に出す: Embedding の結果は Rerank の欄より上（messaging.md §10）。
-  const embeddingResult = page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。");
+  // 結果は操作した行のすぐ下に出す: 埋め込みの行の結果は、次の再ランクの行より上（messaging.md §10・#45）。
+  const embeddingResult = page.getByText("埋め込みモデル「text-embedding-v4」のテストに失敗しました。");
   const embeddingBox = await embeddingResult.boundingBox();
-  const embeddingFieldBox = await page.locator("#genai-embedding-model").boundingBox();
-  const rerankFieldBox = await page.locator("#genai-rerank-model").boundingBox();
+  const embeddingFieldBox = await page.getByLabel("モデル ID 3").boundingBox();
+  const rerankFieldBox = await page.getByLabel("モデル ID 4").boundingBox();
   expect(embeddingBox && embeddingFieldBox && rerankFieldBox).toBeTruthy();
   expect(embeddingBox!.y).toBeGreaterThan(embeddingFieldBox!.y);
   expect(embeddingBox!.y).toBeLessThan(rerankFieldBox!.y);
@@ -958,7 +979,7 @@ async function mockModelSettings(
           target_type: payload.target_type,
           model_id: payload.model_id,
           message: failed
-            ? `Embedding モデル「${payload.model_id}」のテストに失敗しました。`
+            ? `埋め込みモデル「${payload.model_id}」のテストに失敗しました。`
             : `Enterprise AI の回答生成モデル「${payload.model_id}」から応答を取得しました。`,
           troubleshooting: failed
             ? [

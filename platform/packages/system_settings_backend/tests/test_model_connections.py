@@ -70,8 +70,9 @@ def two_connection_payload(**secondary: Any) -> dict[str, Any]:
             ],
             "default_text_model_id": "llm-a",
             "default_vision_model_id": "vlm-b",
+            "default_embedding_model_id": "cohere.embed-v4.0",
+            "default_rerank_model_id": "rr",
         },
-        "generative_ai": {"embedding_model": "cohere.embed-v4.0", "rerank_model": "rr"},
     }
 
 
@@ -727,9 +728,9 @@ def test_stale_save_from_other_product_is_rejected_and_keeps_secondary_connectio
     # 製品 B がセカンダリ接続を設定して保存する。
     assert client_b.patch("/api/settings/model", json=two_connection_payload()).status_code == 200
 
-    # 製品 A の画面は、開いた時点の値に Generative AI の変更を重ねて保存する。
+    # 製品 A の画面は、開いた時点の値に既定の再ランクモデルの変更を重ねて保存する。
     stale = opened["settings"]
-    stale["generative_ai"]["rerank_model"] = "rr-a"
+    stale["enterprise_ai"]["default_rerank_model_id"] = "rr-a"
     response = client_a.patch(
         "/api/settings/model", json={**stale, "base_revision": opened["revision"]}
     )
@@ -747,7 +748,7 @@ def test_stale_save_from_other_product_is_rejected_and_keeps_secondary_connectio
     # 最新の設定を読み直せば、その版で保存できる（セカンダリ接続は残る）。
     latest = client_a.get("/api/settings/model").json()["data"]
     assert latest["revision"] != opened["revision"]
-    latest["settings"]["generative_ai"]["rerank_model"] = "rr-a"
+    latest["settings"]["enterprise_ai"]["default_rerank_model_id"] = "rr-a"
     saved = client_a.patch(
         "/api/settings/model",
         json={**latest["settings"], "base_revision": latest["revision"]},

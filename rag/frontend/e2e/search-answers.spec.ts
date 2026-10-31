@@ -510,13 +510,6 @@ async function mockModelSettingsWithAnswerModels(page: Page) {
         timeout_seconds: 600,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
-      },
     },
     model_settings_file: "model-settings.json",
     source: "runtime",

@@ -1969,7 +1969,7 @@ export const ja = {
   "settings.uploadStorage.backend.oci": "OCI Object Storage",
 
   "settings.model.subtitle":
-    "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
+    "LLM・埋め込み・再ランクのモデルと、呼び出しに使う接続（Endpoint URL と API key）を設定します。",
   "settings.model.displayNamePlaceholder": "業務 RAG 標準",
 
   "settings.huggingface.subtitle":

@@ -44,11 +44,6 @@ V4_SHARED_DOCUMENT: dict[str, Any] = {
         "models": [{"model_id": "shared-llm", "display_name": "共有 LLM"}],
         "default_text_model_id": "shared-llm",
     },
-    "generative_ai": {
-        "embedding_model": "cohere.embed-v4.0",
-        "embedding_dim": 1536,
-        "rerank_model": "cohere.rerank-v4.0-fast",
-    },
 }
 
 
@@ -72,11 +67,6 @@ def _nl2sql_payload() -> ModelSettingsPayload:
                 "project_ocid": "ocid1.generativeaiproject.oc1..nl2sql",
                 "models": [{"model_id": "nl2sql-llm", "display_name": "NL2SQL LLM"}],
                 "default_text_model_id": "nl2sql-llm",
-            },
-            "generative_ai": {
-                "embedding_model": "cohere.embed-v4.0",
-                "embedding_dim": 1536,
-                "rerank_model": "cohere.rerank-v4.0-fast",
             },
         }
     )
@@ -130,7 +120,7 @@ def test_rag_parser_save_then_nl2sql_save_then_rag_reads() -> None:
 
     reloaded = get_settings()
     shared = json.loads(model_file.read_text(encoding="utf-8"))
-    assert set(shared) == {"version", "enterprise_ai", "generative_ai"}
+    assert set(shared) == {"version", "enterprise_ai"}
     assert reloaded.oci_enterprise_ai_endpoint == "https://nl2sql-saved.example.com"
     assert reloaded.rag_parser_adapter_backend == "mineru"
     assert reloaded.rag_parser_mineru_enabled is True

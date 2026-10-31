@@ -81,9 +81,10 @@ from pr_system_settings.model import (
     DEFAULT_ENTERPRISE_AI_REASONING_EFFORT,
     EnterpriseAiConnection,
     EnterpriseAiModelSettings,
-    GenerativeAiModelSettings,
     ModelSettingsTestRequest,
     build_model_router,
+    embedding_api_base_url,
+    embedding_model_connection,
     enterprise_ai_connection_for_model,
     model_payload,
     output_token_budget,
@@ -95,8 +96,10 @@ from pr_system_settings.model_test_input import (
     MODEL_TEST_RERANK_QUERY,
     MODEL_TEST_TEXT_PROMPT,
     MODEL_TEST_VISION_PROMPT,
+    embedding_test_details,
     model_test_image_data_url,
     model_test_text_context,
+    rerank_test_details,
 )
 from pr_system_settings.oci import build_oci_router
 from pr_system_settings.trace_recording import build_trace_recording_router
@@ -861,18 +864,23 @@ async def _run_model_settings_test(
     payload = model_payload(settings)
     enterprise_ai = payload.enterprise_ai
     if request.target_type in {"enterprise_text", "enterprise_vision"}:
-        # 接続は Enterprise AI のモデルだけで引く（埋め込み・リランクの ID は登録モデルに無い）。
+        # LLM のモデル（種類 text）の接続で呼ぶ。埋め込み / 再ランクは下で、
+        # そのモデルの接続で呼ぶ（#45）。
         connection = enterprise_ai_connection_for_model(settings, request.model_id)
         if request.target_type == "enterprise_text":
             text = await _run_enterprise_text_model_test(enterprise_ai, connection)
             return {"response_chars": len(text), "surface": "llm"}
         text = await _run_enterprise_vision_model_test(enterprise_ai, connection)
         return {"response_chars": len(text), "surface": "vision"}
+    # 埋め込み / 再ランクは、テストするモデルの接続（Endpoint・API key）で呼ぶ（#45。
+    # `settings` は対象モデルを既定の埋め込み / 再ランクのモデルにした一時 Settings）。
     if request.target_type == "embedding":
-        vector_dim = await _run_embedding_model_test(settings, payload.generative_ai)
-        return {"vector_dim": vector_dim, "input_count": 1}
-    ranked_count, top_score = await _run_rerank_model_test(settings, payload.generative_ai)
-    return {"ranked_count": ranked_count, "top_score": top_score}
+        return dict(
+            embedding_test_details(
+                await _run_embedding_model_test(settings), expected_dim=_embedding_dim(settings)
+            )
+        )
+    return dict(rerank_test_details(await _run_rerank_model_test(settings)))
 
 
 async def _run_enterprise_text_model_test(
@@ -1140,22 +1148,19 @@ def _json_pointer_value(document: Mapping[str, object], pointer: str) -> object:
     return current
 
 
-async def _run_embedding_model_test(
-    settings: object,
-    model_settings: GenerativeAiModelSettings,
-) -> int:
-    """OpenAI 互換の `POST {base_url}/embeddings` で 1 件埋め込み、次元を返す（#8）。
+async def _run_embedding_model_test(settings: object) -> list[list[float]]:
+    """OpenAI 互換の `POST {base_url}/embeddings` で 1 件埋め込み、ベクトルを返す（#8 / #45）。
 
-    Oracle の `VECTOR(1536, FLOAT32)` に合わせるため `dimensions` を必ず送り、返った次元を検証する
-    （Aliyun の `text-embedding-v4` は既定 1024 次元）。
+    Oracle の VECTOR 列に合わせるため `dimensions`（`oci_genai_embedding_dim`）を必ず送る
+    （次元の検証は `embedding_test_details`）。
     """
-    url = f"{_embedding_base_url(settings, model_settings, rerank=False)}/embeddings"
+    url = f"{_embedding_base_url(settings, rerank=False)}/embeddings"
     body: dict[str, object] = {
-        "model": model_settings.embedding_model,
+        "model": _settings_str_from(settings, "oci_genai_embedding_model"),
         "input": [MODEL_TEST_EMBEDDING_INPUT],
-        "dimensions": model_settings.embedding_dim,
+        "dimensions": _embedding_dim(settings),
     }
-    api_key = _embedding_api_key(settings)
+    api_key = _embedding_api_key(settings, rerank=False)
     timeout = _embedding_timeout(settings)
     payload = await anyio_to_thread.run_sync(
         lambda: _post_openai_compatible(url, body, api_key, timeout)
@@ -1166,27 +1171,22 @@ async def _run_embedding_model_test(
     vector = rows[0].get("embedding") if isinstance(rows[0], Mapping) else None
     if not isinstance(vector, list):
         raise ValueError("embedding の応答の vector が不正です。")
-    if len(vector) != model_settings.embedding_dim:
-        raise ValueError(
-            "embedding の次元数が不正です。"
-            f"expected={model_settings.embedding_dim}, actual={len(vector)}"
-        )
-    return len(vector)
+    return [[float(value) for value in vector]]
 
 
-async def _run_rerank_model_test(
-    settings: object,
-    model_settings: GenerativeAiModelSettings,
-) -> tuple[int, float | None]:
-    """OpenAI 互換の `POST {base_url}/reranks` を呼ぶ（#8。複数形。`/rerank` は 404）。"""
-    url = f"{_embedding_base_url(settings, model_settings, rerank=True)}/reranks"
+async def _run_rerank_model_test(settings: object) -> list[tuple[int, float]]:
+    """OpenAI 互換の `POST {base_url}/reranks` を呼ぶ（#8 / #45。複数形。`/rerank` は 404）。
+
+    固定の query と 2 文書を渡し、(index, relevance_score) を順位の順に返す。
+    """
+    url = f"{_embedding_base_url(settings, rerank=True)}/reranks"
     body: dict[str, object] = {
-        "model": model_settings.rerank_model,
+        "model": _settings_str_from(settings, "oci_genai_rerank_model"),
         "query": MODEL_TEST_RERANK_QUERY,
         "documents": list(MODEL_TEST_RERANK_DOCUMENTS),
-        "top_n": 1,
+        "top_n": len(MODEL_TEST_RERANK_DOCUMENTS),
     }
-    api_key = _embedding_api_key(settings)
+    api_key = _embedding_api_key(settings, rerank=True)
     timeout = _embedding_timeout(settings)
     payload = await anyio_to_thread.run_sync(
         lambda: _post_openai_compatible(url, body, api_key, timeout)
@@ -1194,41 +1194,40 @@ async def _run_rerank_model_test(
     results = payload.get("results")
     if not isinstance(results, list):
         raise ValueError("rerank の応答に results がありません。")
-    top_score = None
-    if results and isinstance(results[0], Mapping):
-        raw_score = results[0].get("relevance_score")
-        top_score = float(raw_score) if raw_score is not None else None
-    return len(results), top_score
+    ranks: list[tuple[int, float]] = []
+    for item in results:
+        if not isinstance(item, Mapping):
+            raise ValueError("rerank の応答の results が不正です。")
+        index, score = item.get("index"), item.get("relevance_score")
+        if not isinstance(index, int) or not isinstance(score, int | float):
+            raise ValueError("rerank の応答に index と relevance_score がありません。")
+        ranks.append((index, float(score)))
+    return ranks
 
 
-def _embedding_base_url(
-    settings: object, model_settings: GenerativeAiModelSettings, *, rerank: bool
-) -> str:
-    """埋め込み / 再ランクの OpenAI 互換 Base URL（#8）。
+def _embedding_base_url(settings: object, *, rerank: bool) -> str:
+    """埋め込み / 再ランクの OpenAI 互換 base URL（#8 / #45。`embedding_api_base_url`）。
 
-    空のときは Enterprise AI のプライマリ接続の endpoint を使う。再ランクは
-    `/compatible-mode/` を `/compatible-api/` に読み替える（百煉は再ランクだけ
-    `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
+    テストするモデルの接続の Endpoint URL。再ランクは `/compatible-mode/` を `/compatible-api/` に
+    読み替える（百煉は再ランクだけ `/compatible-api/v1` 配下で、`/compatible-mode/v1` は 404）。
     """
-    base = model_settings.rerank_base_url.strip() if rerank else ""
-    if not base:
-        base = (
-            model_settings.embedding_base_url.strip()
-            or _settings_str_from(settings, "oci_enterprise_ai_endpoint").strip()
-        )
-        if rerank:
-            base = base.replace("/compatible-mode/", "/compatible-api/")
     return _require_non_empty(
-        base, "埋め込み / 再ランクの Base URL（または Enterprise AI の Endpoint URL）"
-    ).rstrip("/")
-
-
-def _embedding_api_key(settings: object) -> str:
-    """API key（#8。Enterprise AI のプライマリ接続のものを使う）。"""
-    return _require_non_empty(
-        _settings_str_from(settings, "oci_enterprise_ai_api_key"),
-        "Enterprise AI の接続の API key",
+        embedding_api_base_url(settings, rerank=rerank),
+        "埋め込み / 再ランクのモデルの接続の Endpoint URL",
     )
+
+
+def _embedding_api_key(settings: object, *, rerank: bool) -> str:
+    """API key（#45。テストするモデルの接続のものを使う）。"""
+    return _require_non_empty(
+        embedding_model_connection(settings, rerank=rerank).api_key,
+        "埋め込み / 再ランクのモデルの接続の API key",
+    )
+
+
+def _embedding_dim(settings: object) -> int:
+    """埋め込みの次元（`oci_genai_embedding_dim`。Oracle の VECTOR 列に合わせた値）。"""
+    return int(_settings_float_from(settings, "oci_genai_embedding_dim", 0.0))
 
 
 def _embedding_timeout(settings: object) -> int:

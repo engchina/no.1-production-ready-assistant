@@ -116,10 +116,6 @@ async def test_model_test_reports_dropped_parameter(bodies: list[dict[str, Any]]
                     "default_text_model_id": REASONING_MODEL,
                     "max_retries": 0,
                 },
-                "generative_ai": {
-                    "embedding_model": "cohere.embed-v4.0",
-                    "rerank_model": "cohere.rerank-v4.0-fast",
-                },
             },
         }
     )

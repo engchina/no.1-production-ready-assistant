@@ -106,13 +106,6 @@ function modelSettingsFixture(overrides: Record<string, unknown> = {}) {
         timeout_seconds: 120,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
-      },
     },
     model_settings_file: "runtime-settings",
     source: "runtime",
@@ -521,7 +514,6 @@ async function expectModelSaveButtonsUsePrimaryStyle(page: Page) {
   const buttons = [
     page.getByRole("button", { name: "OCI Enterprise AI: 保存" }),
     page.getByRole("button", { name: "登録モデル: 保存" }),
-    page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }),
   ];
   await page.mouse.move(0, 0);
   await Promise.all(buttons.map((button) => button.evaluate(async (element) => {
@@ -786,12 +778,12 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
     page.getByRole("heading", { name: "OCI Enterprise AI", exact: true })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "登録モデル", exact: true })).toBeVisible();
+  // 埋め込み / 再ランクは登録モデルの種類で登録する（#45）。独立したカードは無い。
   await expect(
     page.getByRole("heading", { name: "埋め込み / 再ランク", exact: true })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
   await expect(page.locator("#enterprise-api-path")).toHaveCount(0);
   await expect(page.locator("#enterprise-vlm-input-mode")).toHaveCount(0);
@@ -1728,7 +1720,6 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
 
   await page.locator("#enterprise-endpoint").fill("https://changed.example.com");
   await page.getByRole("textbox", { name: "モデル ID 1" }).fill("enterprise-unsaved-model");
-  await page.locator("#genai-embedding-model").fill("cohere.unsaved-embed");
 
   await expectLargeActionButton(page.getByRole("button", { name: "OCI Enterprise AI: 保存" }));
   await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
@@ -1738,7 +1729,8 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expect(enterpriseSaving).toHaveAttribute("aria-busy", "true");
   await expectLargeActionButton(enterpriseSaving);
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeDisabled();
+  // 埋め込み / 再ランクの独立したカード（と保存）は無い（#45。登録モデルの種類で登録する）。
+  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
   firstSaveGate.release();
   await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。")).toBeVisible();
 
@@ -1756,13 +1748,10 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   expect(
     ((connectionEnterprise.models as Array<Record<string, unknown>>)[0]).model_id
   ).toBe("enterprise-nl2sql-llm");
-  expect(
-    (connectionRequest.generative_ai as Record<string, unknown>).embedding_model
-  ).toBe("text-embedding-v4");
+  expect(connectionRequest).not.toHaveProperty("generative_ai");
   await expect(page.getByRole("textbox", { name: "モデル ID 1" })).toHaveValue(
     "enterprise-unsaved-model"
   );
-  await expect(page.locator("#genai-embedding-model")).toHaveValue("cohere.unsaved-embed");
 
   await page.getByRole("button", { name: "登録モデル: 保存" }).click();
   await expect(page.getByText("登録モデルを保存しました。")).toBeVisible();
@@ -1779,30 +1768,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   expect(((modelsEnterprise.models as Array<Record<string, unknown>>)[0]).model_id).toBe(
     "enterprise-unsaved-model"
   );
-  expect((modelsRequest.generative_ai as Record<string, unknown>).embedding_model).toBe(
-    "text-embedding-v4"
-  );
-  await expect(page.locator("#genai-embedding-model")).toHaveValue("cohere.unsaved-embed");
-
-  const generativeSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
-  await generativeSave.focus();
-  await expect(generativeSave).toBeFocused();
-  await generativeSave.press("Enter");
-  await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。")).toBeVisible();
-  const generativeRequest = requests[2];
-  expect(
-    (generativeRequest.generative_ai as Record<string, unknown>).embedding_model
-  ).toBe("cohere.unsaved-embed");
-  expect(
-    ((generativeRequest.enterprise_ai as Record<string, unknown>).models as Array<
-      Record<string, unknown>
-    >)[0].model_id
-  ).toBe("enterprise-unsaved-model");
-  expect(
-    ((generativeRequest.enterprise_ai as Record<string, unknown>).models as Array<
-      Record<string, unknown>
-    >)[0].max_output_tokens
-  ).toBe(65536);
+  expect(modelsRequest).not.toHaveProperty("generative_ai");
 
   rejectNextSave = true;
   await page.getByRole("textbox", { name: "モデル ID 1" }).fill("enterprise-failed-model");
@@ -1821,7 +1787,6 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expectNoHorizontalOverflow(page);
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
 });
 
@@ -3314,6 +3279,8 @@ test("レビュー補完: モデル追加・既定のモデル 2 つ・Vision・
     model_id: "review-model",
     display_name: "レビュー用",
     vision_enabled: true,
+    // 追加したモデルの種類は既定のテキスト（#45）。
+    kind: "text",
     connection_id: "primary",
     // 追加したモデルの推論の量は既定の low（#1425・#3004）。
     reasoning_effort: "low",
