@@ -13,16 +13,10 @@
 #   scripts/rag-services.sh run <service>     # systemd を使わず前面で起動する（systemd の無い環境向け。Ctrl+C で停止）
 #
 # 対象（省略時は --cpu）:
-#   --cpu   前処理 4 つと既定の CPU parser（parser-docling。PDF と画像）と parser-structured-records-jsonl
-#           （前処理の構造化レコードの JSONL。文書解析の使用エンジンに構造化レコード JSONL を選んだときに使う）と
-#           parser-xml-tree-json（XML ツリー JSON の .json。文書解析の使用エンジンに XML ツリー JSON を選んだときに
-#           使う。install は登録だけして起動しない）
+#   --cpu   前処理 4 つと既定の CPU parser（parser-docling。PDF と画像と、前処理の構造化レコードの JSONL）
 #   --unstructured  parser-unstructured（Docling が扱えないテキスト・Office・メール などを取り込む場合）
-#   --all   すべて（準備中〔ロードマップ〕のサービスは入れない）
+#   --all   すべて
 #   <service_id>  個別に指定（例: parser-docling）
-#
-# 準備中（ロードマップ）のサービス（rag-systemd.sh の RAG_ROADMAP_SERVICES。OCI Document Understanding の
-# parser-oci-document-understanding。#3374）は選べない（実装は repo に残すが、登録・起動しない）。
 #
 # torch を使うサービス（parser-docling・parser-unstructured）の lock は、PyTorch の CPU 版の index の torch を
 # 持ち、CUDA の wheel（triton・nvidia-* / cuda-*）を入れない（各 pyproject.toml の [[tool.uv.index]]。#1650）。
@@ -33,8 +27,7 @@
 #
 # unit は現在のユーザー（sudo で実行したときは SUDO_USER）で動き、backend と同じユーザーの
 # ~/.cache にモデルを置く。起動 / 停止の状態は systemd の enable / disable で保ち、install を
-# 再実行しても最後に操作した状態に戻す（初めて登録する unit は起動する。ただし parser-xml-tree-json など
-# 既定は停止のサービス（rag-systemd.sh の RAG_DEFAULT_STOPPED_SERVICES）は登録だけして、画面の「起動」で起動する）。
+# 再実行しても最後に操作した状態に戻す（初めて登録する unit は起動する）。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,8 +54,6 @@ CPU_SERVICES=(
   preprocess-excel-to-jsonl
   preprocess-word-to-jsonl
   parser-docling
-  parser-structured-records-jsonl
-  parser-xml-tree-json
 )
 UNSTRUCTURED_SERVICES=(parser-unstructured)
 SELECTED=()
@@ -80,10 +71,6 @@ add_selected() {
   for service in "$@"; do
     if ! rag_service_definition "${service}" >/dev/null; then
       log "未知のサービスです: ${service}"
-      return 1
-    fi
-    if rag_service_roadmap "${service}"; then
-      log "${service} は準備中（ロードマップ）のため、まだ登録・起動できません。"
       return 1
     fi
     if [[ " ${SELECTED[*]} " != *" ${service} "* ]]; then
@@ -104,10 +91,6 @@ parse_targets() {
       --cpu) add_selected "${CPU_SERVICES[@]}" ;;
       --unstructured) add_selected "${UNSTRUCTURED_SERVICES[@]}" ;;
       --all) add_selected "${CPU_SERVICES[@]}" "${UNSTRUCTURED_SERVICES[@]}" ;;
-      --oci)
-        log "OCI の parser（parser-oci-document-understanding）は準備中（ロードマップ）のため、まだ登録・起動できません。"
-        return 1
-        ;;
       *) add_selected "${arg}" ;;
     esac
   done
@@ -217,9 +200,7 @@ install_services() {
   sudo systemctl daemon-reload
   for service in "${SELECTED[@]}"; do
     unit="$(rag_unit_name "${service}")"
-    if [[ " ${new_units[*]} " == *" ${unit} "* ]] && rag_service_default_stopped "${service}"; then
-      log "${unit}: 既定は停止のサービスなので、登録だけします（サービス管理画面の「起動」で起動します）。"
-    elif [[ " ${new_units[*]} " == *" ${unit} "* ]]; then
+    if [[ " ${new_units[*]} " == *" ${unit} "* ]]; then
       log "${unit}: 初めて登録したので起動します。"
       sudo systemctl enable --now "${unit}"
     elif systemctl is-enabled --quiet "${unit}"; then

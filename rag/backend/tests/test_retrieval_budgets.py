@@ -69,12 +69,8 @@ def test_default_total_budget_includes_enabled_reference_expansion(tmp_path: Pat
     assert limits["fusion"] == 150
     assert limits["diversity"] == 100
     assert limits["reference"] == 4
-    assert limits["article"] == (16 + 2) * (8 + 6)
-    assert sum(limits.values()) == 506
-    no_catalog = build_engine_settings(
-        Settings(rag_article_catalog_enabled=False), output_dir=tmp_path
-    )
-    assert sum(stage_limits(no_catalog, []).values()) == 254
+    assert "article" not in limits
+    assert sum(limits.values()) == 254
     disabled = build_engine_settings(
         Settings(rag_reference_expansion_enabled=False), output_dir=tmp_path
     )

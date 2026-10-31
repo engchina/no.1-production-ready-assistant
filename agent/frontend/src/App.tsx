@@ -66,9 +66,6 @@ const UploadStorageSettingsClient = lazy(() =>
 const FeedbackPage = lazy(() =>
   import("@/pages/FeedbackPage").then((module) => ({ default: module.FeedbackPage }))
 );
-const AutomationsPage = lazy(() =>
-  import("@/pages/AutomationsPage").then((module) => ({ default: module.AutomationsPage }))
-);
 const EvaluationPage = lazy(() =>
   import("@/pages/EvaluationPage").then((module) => ({ default: module.EvaluationPage }))
 );
@@ -174,7 +171,6 @@ export function App() {
           }
         />
         <Route path={APP_ROUTES.feedback} element={<FeedbackPage />} />
-        <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
         <Route path={APP_ROUTES.evaluation} element={<EvaluationPage />} />
         <Route path={APP_ROUTES.usage} element={<UsagePage />} />
         <Route path={APP_ROUTES.settingsSystemTables} element={<SettingsSystemTablesRoute />} />

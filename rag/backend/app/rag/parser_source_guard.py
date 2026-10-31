@@ -8,9 +8,8 @@ worker が parser サービスを呼んだ後で失敗する。アップロー�
 
 判定しない(取込時の判定に任せる)もの:
 - 形式を変えるファイル準備(passthrough 以外): 変換後の形式が解析エンジンに渡る
-  (例: Office→PDF)。ただし構造化レコードの JSONL を作るファイル準備
-  (CSV→JSONL・Excel→JSONL・Word→JSONL)は、構造化レコード JSONL 以外の解析エンジンでは読めないため、
-  ここで止める(#2457)。
+  (例: Office→PDF)。構造化レコードの JSONL を作るファイル準備(CSV→JSONL・Excel→JSONL・
+  Word→JSONL)の成果物は、Docling・Unstructured のサービスが共通の契約で読む(#2457・#21)。
 - ``source_profile.unsupported_reason`` がある形式(TIFF・Outlook .msg など): 既存の
   「非対応形式」として別に止まる。ただし旧形式の Office(.doc / .xls / .ppt)とマクロ付きの Office
   (.docm / .xlsm / .pptm)、ODT・RTF(.odt / .rtf。#3351)は、原本のままでは解析しないが、
@@ -26,15 +25,8 @@ from dataclasses import dataclass
 from pathlib import PurePath
 
 from rag_parser_core.capabilities import ADAPTER_CAPABILITIES, adapter_supports_source
-from rag_parser_core.structured_records import (
-    STRUCTURED_RECORDS_JSONL_BACKEND,
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
-)
 
-from app.clients.parser_service import (
-    structured_records_requires_jsonl_backend_message,
-    supported_formats_label,
-)
+from app.clients.parser_service import supported_formats_label
 from app.config import DEFAULT_PARSER_ADAPTER_BACKEND, Settings
 from app.rag.preprocess_strategy import resolve_preprocess_profile
 from app.schemas.document import SourceModality, SourceProfile
@@ -42,8 +34,6 @@ from app.schemas.document import SourceModality, SourceProfile
 PARSER_SOURCE_UNSUPPORTED_CODE = "parser_source_unsupported"
 # 形式を変えないファイル準備(原本と同じ形式が解析エンジンに渡る)。
 _FORMAT_PRESERVING_PREPROCESS = frozenset({"passthrough"})
-# 構造化レコードの JSONL を作るファイル準備(解析エンジンは構造化レコード JSONL だけ。#2457)。
-STRUCTURED_RECORDS_PREPROCESS = frozenset({"csv_to_jsonl", "excel_to_jsonl", "word_to_jsonl"})
 # 原本のままでは解析しない Office(旧形式のバイナリ・マクロ付き・ODT / RTF。source_profile の
 # unsupported_reason)と、それを変換できるファイル準備の対応(#2470・#3351)。マクロは実行しない。
 CONVERSION_REQUIRED_OFFICE_REASONS = frozenset(
@@ -97,11 +87,6 @@ UNSTRUCTURED_SERVICE_ID = "parser-unstructured"
 _BACKEND_LABELS = {
     "docling": "Docling",
     "unstructured": "Unstructured",
-    "structured_records_jsonl": "構造化レコード JSONL",
-    "xml_tree_json": "XML ツリー JSON",
-    "mineru": "MinerU",
-    "dots_ocr": "Dots.OCR",
-    "oci_document_understanding": "OCI Document Understanding",
 }
 # サービス管理の状態(app.services.status)のうち、Unstructured を使える状態。
 _SERVICE_AVAILABLE_STATUSES = frozenset({"running", "degraded", "starting"})
@@ -270,19 +255,6 @@ def parser_source_block(
             )
     elif source_profile.unsupported_reason:
         return None
-    if preprocess_profile in STRUCTURED_RECORDS_PREPROCESS:
-        backend = effective_parser_backend(settings)
-        if backend == STRUCTURED_RECORDS_JSONL_BACKEND:
-            return None
-        return ParserSourceBlock(
-            code=STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
-            backend=backend,
-            file_format=_file_format(source_profile),
-            suggested_backend=STRUCTURED_RECORDS_JSONL_BACKEND,
-            message=structured_records_requires_jsonl_backend_message(
-                parser_backend_label(backend)
-            ),
-        )
     if preprocess_profile not in _FORMAT_PRESERVING_PREPROCESS:
         return None
     backend = effective_parser_backend(settings)
@@ -345,7 +317,7 @@ def parser_source_block_message(
         # Office→PDF は Excel を変換しない(#2470)。
         parts.append(
             "Excel は「処理レシピ」の「ファイル準備」で Excel→JSONL を選ぶと、"
-            "表の行を記録にして構造化レコード JSONL で解析できます。"
+            "表の行を記録にして解析できます。"
         )
     elif office and backend == "docling":
         parts.append(

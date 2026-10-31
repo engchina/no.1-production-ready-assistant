@@ -38,7 +38,6 @@ REPORT_PERIOD_DAYS: tuple[int, ...] = (7, 30, 90, 180, 365)
 
 # Run の起点（`metadata` から決める）。
 RUN_SOURCE_EVALUATION = "evaluation"
-RUN_SOURCE_AUTOMATION = "automation"
 RUN_SOURCE_MCP = "mcp"
 RUN_SOURCE_REPLAY = "replay"
 RUN_SOURCE_USER = "user"
@@ -115,11 +114,9 @@ class RunFact(BaseModel):
 
 
 def run_source(metadata: Mapping[str, Any]) -> str:
-    """Run の起点（品質評価・自動実行・MCP・再実行・利用者の操作）。"""
+    """Run の起点（品質評価・MCP・再実行・利用者の操作）。"""
     if metadata.get("evaluation_job_id"):
         return RUN_SOURCE_EVALUATION
-    if metadata.get("automation_id"):
-        return RUN_SOURCE_AUTOMATION
     if metadata.get("source") == RUN_SOURCE_MCP:
         return RUN_SOURCE_MCP
     if metadata.get("replayed_from_run_id"):
@@ -248,7 +245,6 @@ def fact_from_run(run: RunState, *, agent_name: str = "") -> RunFact:
 
 __all__ = [
     "REPORT_PERIOD_DAYS",
-    "RUN_SOURCE_AUTOMATION",
     "RUN_SOURCE_EVALUATION",
     "RUN_SOURCE_MCP",
     "RUN_SOURCE_REPLAY",

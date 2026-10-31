@@ -20,9 +20,8 @@
    案内しない）
 5. `ok`
 
-`unreachable` のときは、ADB OCID が設定されていれば ADB のライフサイクル状態（`STOPPED` /
-`STARTING` など）を上限付きで取得して `adb_lifecycle_state` に入れる（#820。画面が「停止しています」
-「起動中です」を出し分ける）。取得できなくても状態の判定は変えない。
+`unreachable` のときも OCI の制御 API へ DB の状態を問い合わせない（#10。DB は ADB Free コンテナで、
+起動・停止は docker 側の責務）。画面は接続設定と Wallet の確認を案内する。
 
 `ok` の結果だけを、接続先と資格情報の指紋ごとに短時間（既定 30 秒）サーバー側で cache する（#793）。
 画面の cache（15 秒）は全画面の再読み込みで消えるため、そのたびに接続確認とシステムテーブルの確認を
@@ -37,7 +36,6 @@ cache しない（直したらすぐ通す）。システムテーブルの操�
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -55,7 +53,6 @@ from pr_backend_core.schemas import ApiResponse
 from pydantic import BaseModel
 
 from .database import ExtraReadiness, TestConnection, database_readiness
-from .oci_database import OciDatabaseClient
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +77,6 @@ class DatabaseStatusData(BaseModel):
     context_id: str = ""
     # 製品のシステムテーブルの状態（RAG の `missing` / `partial` / `outdated` / `ready`）。
     schema_status: str | None = None
-    # ADB のライフサイクル状態（`unreachable` のときだけ。ADB OCID が未設定・取得できなければ None。
-    # #820）。
-    adb_lifecycle_state: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,7 +91,6 @@ class DatabaseSchemaProbeResult:
 
 
 SchemaProbe = Callable[[Any], Awaitable[DatabaseSchemaProbeResult]]
-AdbLifecycleProbe = Callable[[Any], Awaitable[str | None]]
 ShortCircuit = Callable[[Any], DatabaseStatusData | None]
 ContextFields = Callable[[Any], Sequence[object]]
 
@@ -198,30 +191,6 @@ def clear_database_status_cache() -> None:
         cache.clear()
 
 
-# ADB の状態の取得（OCI の API）を待つ上限（秒）。DB ゲートの応答を長く止めない。
-ADB_LIFECYCLE_TIMEOUT_SECONDS = 5.0
-
-
-async def adb_lifecycle_state(settings: Any) -> str | None:
-    """ADB のライフサイクル状態（`STOPPED` 等）。ADB OCID が未設定・取得できなければ None。"""
-    adb_ocid = str(getattr(settings, "oracle_adb_ocid", "") or "").strip()
-    if not adb_ocid:
-        return None
-    try:
-        info = await asyncio.wait_for(
-            OciDatabaseClient(settings=settings).get_autonomous_database(adb_ocid),
-            timeout=ADB_LIFECYCLE_TIMEOUT_SECONDS,
-        )
-    except Exception as exc:  # noqa: BLE001 - 補足の情報なので、取れなくても判定は変えない
-        logger.info(
-            "database_status_adb_lifecycle_unavailable",
-            extra={"exception_type": type(exc).__name__},
-        )
-        return None
-    state = str(info.lifecycle_state or "").strip().upper()
-    return state or None
-
-
 def _is_timeout(exc: BaseException) -> bool:
     # 製品の OracleConnectionTimeoutError は TimeoutError 派生とは限らない（Agent）。
     return isinstance(exc, TimeoutError) or "timeout" in type(exc).__name__.lower()
@@ -264,7 +233,6 @@ async def database_status(
     context_fields: ContextFields | None = None,
     connection_failure_log_extra: Callable[[Exception], Mapping[str, Any]] | None = None,
     cache: DatabaseStatusCache | None = None,
-    adb_lifecycle: AdbLifecycleProbe | None = None,
 ) -> DatabaseStatusData:
     """DB の状態を判定する（判定の順はモジュールの docstring を参照）。"""
     context_id = database_context_id((context_fields or default_context_fields)(settings))
@@ -294,8 +262,6 @@ async def database_status(
         schema_probe=schema_probe,
         connection_failure_log_extra=connection_failure_log_extra,
     )
-    if result.status == "unreachable" and adb_lifecycle is not None:
-        result = result.model_copy(update={"adb_lifecycle_state": await adb_lifecycle(settings)})
     if cache is not None:
         cache.put(cache_key, result)
     return result
@@ -379,7 +345,6 @@ def build_database_status_router(
     context_fields: ContextFields | None = None,
     connection_failure_log_extra: Callable[[Exception], Mapping[str, Any]] | None = None,
     ok_cache_seconds: float = DEFAULT_OK_CACHE_SECONDS,
-    adb_lifecycle: AdbLifecycleProbe | None = adb_lifecycle_state,
 ) -> APIRouter:
     """`GET /ready/database` の router を作る。製品側で `/api` 配下に include する。
 
@@ -393,8 +358,6 @@ def build_database_status_router(
     - `context_fields(settings)`：`context_id` の元にする接続先の値（既定は DSN・ユーザー・Wallet）
     - `connection_failure_log_extra(exc)`：接続確認の失敗をログに出すときの追加項目
     - `ok_cache_seconds`：`ok` の結果を cache する秒数（0 で cache しない。#793）
-    - `adb_lifecycle(settings)`：`unreachable` のときの ADB のライフサイクル状態（既定は OCI の
-      API。None で取得しない。#820）
 
     ログイン不要の path にするため、製品の公開 path の一覧に `/ready/database` を入れる。
     """
@@ -414,7 +377,6 @@ def build_database_status_router(
                 context_fields=context_fields,
                 connection_failure_log_extra=connection_failure_log_extra,
                 cache=cache,
-                adb_lifecycle=adb_lifecycle,
             )
         )
 

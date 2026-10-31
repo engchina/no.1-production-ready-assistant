@@ -73,10 +73,10 @@ const TOOL_STEP = "選ばれたツールを呼び出しました";
 test("一覧の種類で MCP の Run とキーの名前が分かる", { tag: "@responsive" }, async ({ page, mockApi }) => {
   seedRun(mockApi);
   seedRun(mockApi, "run-mcp", "completed", { source: "mcp", api_key_id: "0123456789abcdef", api_key_name: "経理の連携" });
-  seedRun(mockApi, "run-auto", "completed", { automation_id: "auto-1" });
+  seedRun(mockApi, "run-replay", "completed", { replayed_from_run_id: "run-layout" });
   await page.goto("/runs");
   await expect(page.getByTestId("run-row-run-mcp")).toContainText("MCP（経理の連携）");
-  await expect(page.getByTestId("run-row-run-auto")).toContainText("自動実行");
+  await expect(page.getByTestId("run-row-run-replay")).toContainText("再実行");
   await expect(page.getByTestId("run-row-run-layout")).toContainText("画面");
 });
 
@@ -156,8 +156,8 @@ test("狭い画面では題名の下に状態・日時・所要時間をまと�
 test("状態・種類・期間で絞り込み、条件で 0 件なら条件をクリアできる", { tag: "@responsive" }, async ({ page, mockApi }) => {
   seedRun(mockApi);
   seedRun(mockApi, "run-waiting", "waiting_approval");
-  seedRun(mockApi, "run-auto", "completed", { automation_id: "auto-1" });
-  // 3 日前の自動実行（既定の過去 7 日には入り、過去 24 時間には入らない）。
+  seedRun(mockApi, "run-replay", "completed", { replayed_from_run_id: "run-layout" });
+  // 3 日前の再実行（既定の過去 7 日には入り、過去 24 時間には入らない）。
   ageLastRun(mockApi, 3);
   await page.goto("/runs");
   const toolbar = page.getByTestId("run-list-toolbar");
@@ -169,12 +169,12 @@ test("状態・種類・期間で絞り込み、条件で 0 件なら条件を�
   await expect(page.locator('a[data-run-id="run-waiting"]')).toBeVisible();
   await withListFilters(toolbar, async (scope) => {
     await chooseSelectFieldOption(scope.getByTestId("run-list-toolbar-status"), "all");
-    await chooseSelectFieldOption(scope.getByTestId("run-list-toolbar-kind"), "automation");
+    await chooseSelectFieldOption(scope.getByTestId("run-list-toolbar-kind"), "replay");
     await chooseSelectFieldOption(scope.getByTestId("run-list-toolbar-period"), "24h");
   });
-  await expect.poll(() => mockApi.lastRequest("GET", "/api/runs")?.searchParams.get("kind")).toBe("automation");
+  await expect.poll(() => mockApi.lastRequest("GET", "/api/runs")?.searchParams.get("kind")).toBe("replay");
   expect(mockApi.lastRequest("GET", "/api/runs")?.searchParams.get("since")).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-  // 自動実行は 3 日前なので、過去 24 時間には入らない（条件で 0 件）。
+  // 再実行は 3 日前なので、過去 24 時間には入らない（条件で 0 件）。
   await expect(page.getByText("条件に一致する実行がありません")).toBeVisible();
   await page.getByRole("button", { name: "条件をクリア", exact: true }).first().click();
   await expect(page.locator("a[data-run-id]")).toHaveCount(3);
@@ -235,7 +235,7 @@ test("過去 7 日に Run が無く、それより前にはあるときは、期
 // 件数（「全 N 件」）と「条件をクリア」は既定（品質評価以外）を基準にする。
 test("品質評価の Run は既定で隠し、種類で品質評価・すべてを選ぶと出る", { tag: "@responsive" }, async ({ page, mockApi }) => {
   seedRun(mockApi);
-  seedRun(mockApi, "run-auto", "completed", { automation_id: "auto-1" });
+  seedRun(mockApi, "run-replay", "completed", { replayed_from_run_id: "run-layout" });
   seedRun(mockApi, "run-eval-1", "completed", { evaluation_job_id: "job-1", evaluation_case_id: "case-1" });
   seedRun(mockApi, "run-eval-2", "failed", { evaluation_job_id: "job-1", evaluation_case_id: "case-2" });
   await page.goto("/runs");

@@ -17,7 +17,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from dotenv import dotenv_values
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
-from pr_system_settings import database as shared_database
 from pr_system_settings import oci_connectivity
 from pr_system_settings.model import ModelSettingsTestRequest
 from pr_system_settings.model_test_input import MODEL_TEST_IMAGE_BYTES
@@ -25,7 +24,6 @@ from pytest import MonkeyPatch
 
 from app import config as app_config
 from app.api.routes import settings as settings_routes
-from app.clients.external_parser import ExternalParserClient
 from app.clients.oracle import (
     OracleClient,
     OracleConnectionTimeoutError,
@@ -50,11 +48,6 @@ from tests.support import AsgiTestClient
 client = AsgiTestClient(app)
 LLM_TEMPLATE = '{"input":"${user_message}"}'
 VLM_TEMPLATE = '{"input":"${data_base64}"}'
-
-
-async def _run_inline(operation: Any) -> Any:
-    """テスト用 fake SDK 呼び出しをスレッドへ逃がさず同期実行する。"""
-    return operation()
 
 
 def _saved_env_value(settings: Settings, name: str) -> str | None:
@@ -89,8 +82,6 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     monkeypatch.setattr(settings, "rag_parser_adapter_backend", "auto")
     monkeypatch.setattr(settings, "rag_parser_docling_enabled", True)
     monkeypatch.setattr(settings, "rag_parser_unstructured_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_mineru_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_dots_ocr_enabled", False)
 
     def package_info(
         import_name: str,
@@ -120,29 +111,11 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert by_backend["docling"]["warning_code"] == "adapter_flag_ignored_by_backend"
     assert by_backend["unstructured"]["install_package"] == "unstructured[all-docs]==0.23.1"
     assert by_backend["unstructured"]["status"] == "disabled"
-    # dots_ocr はローカル package/image ではなく外部 API で配信する。
-    assert by_backend["dots_ocr"]["install_package"] == "外部 Dots.OCR API"
-    connections = {item["backend"]: item for item in body["connections"]}
-    assert set(connections) == {"mineru", "dots_ocr"}
-    assert connections["dots_ocr"]["endpoint"] == ""
-    assert connections["dots_ocr"]["api_key_configured"] is False
-    assert "api_key" not in connections["dots_ocr"]
-    assert by_backend["mineru"]["install_package"] == "外部 MinerU API"
-    assert by_backend["mineru"]["status"] == "disabled"
-    assert by_backend["dots_ocr"]["status"] == "disabled"
-    # XML ツリー JSON は Docling・Unstructured と同じ使用エンジン(#2042)。
-    assert by_backend["xml_tree_json"]["status"] == "disabled"
-    assert by_backend["structured_records_jsonl"]["status"] == "disabled"
-    # 削除したエンジン(#270・#2042)は画面の選択肢・接続・対応形式に出さない。構造化レコード JSONL は
-    # Unstructured の後、XML ツリー JSON の前(#2457)。
-    assert list(by_backend) == [
-        "docling",
-        "unstructured",
-        "structured_records_jsonl",
-        "xml_tree_json",
-        "mineru",
-        "dots_ocr",
-    ]
+    # 外部の解析エンジンの接続（connections）は削除した（#22）。
+    assert "connections" not in body
+    assert "service_backends" not in body
+    # 削除したエンジン(#270・#2042・#22・#21)は画面の選択肢・対応形式に出さない。
+    assert list(by_backend) == ["docling", "unstructured"]
     assert "source_format_parsers" not in body
     assert body["scorecard"]["selected_backend"] == "local"
     assert body["scorecard"]["recommended_backend"] == "local"
@@ -151,7 +124,7 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert score_by_backend["docling"]["warning_codes"] == ["adapter_flag_ignored_by_backend"]
     assert set(score_by_backend) == {"local", "docling", "unstructured"}
     route_by_kind = {route["source_kind"]: route for route in body["source_routes"]}
-    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured", "mineru"]
+    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured"]
     assert route_by_kind["pdf"]["attempted_order"] == []
     assert route_by_kind["pdf"]["selected_backend"] == "local"
     assert route_by_kind["email"]["selected_backend"] == "local"
@@ -164,79 +137,36 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert matrix["missing_source_kinds"] == []
     assert "raw_text" not in str(matrix)
     capability_by_backend = {item["backend"]: item for item in body["capabilities"]}
-    assert capability_by_backend["dots_ocr"]["modalities"] == ["pdf", "image"]
-    assert ".pdf" in capability_by_backend["dots_ocr"]["extensions"]
-    for removed in ("marker", "unlimited_ocr", "glm_ocr", "oci_genai_vision", "enterprise_ai_vlm"):
+    assert capability_by_backend["docling"]["modalities"] == ["pdf", "image"]
+    assert ".pdf" in capability_by_backend["docling"]["extensions"]
+    for removed in (
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ):
         assert removed not in capability_by_backend
-    assert capability_by_backend["xml_tree_json"]["extensions"] == [".json"]
-    assert capability_by_backend["structured_records_jsonl"]["extensions"] == [".jsonl"]
-    assert capability_by_backend["oci_document_understanding"]["modalities"] == [
-        "pdf",
-        "image",
-    ]
 
 
-def test_parser_adapter_settings_reports_roadmap_service_backend(
-    monkeypatch: MonkeyPatch,
+@pytest.mark.parametrize(
+    "removed", ["oci_document_understanding", "structured_records_jsonl", "xml_tree_json"]
+)
+def test_persisted_removed_parser_backend_falls_back_to_default(
+    tmp_path: Path, removed: str
 ) -> None:
-    """OCI Document Understanding は準備中(ロードマップ。#3374)。
+    """以前の版が parser-settings.json に保存した削除済みのエンジンは既定へ寄せる(#22・#21)。
 
-    選択中・未設定の警告にせず roadmap を返す。
-    """
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_adapter_backend", "docling")
-    monkeypatch.setattr(settings, "oci_compartment_id", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_compartment_id", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_namespace", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_input_bucket", "")
-    monkeypatch.setattr(settings, "object_storage_namespace", "")
-    monkeypatch.setattr(settings, "object_storage_bucket", "")
-
-    resp = client.get("/api/settings/parser-adapters")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    service = {item["backend"]: item for item in body["service_backends"]}
-    # OCI Generative AI (Vision) は削除した(#2042)。
-    assert set(service) == {"oci_document_understanding"}
-    assert service["oci_document_understanding"]["availability"] == "roadmap"
-    assert service["oci_document_understanding"]["selected"] is False
-    # 準備中はエラーではないため、未設定の警告を出さない。
-    assert service["oci_document_understanding"]["warning_code"] is None
-
-
-def test_update_parser_adapter_settings_rejects_roadmap_backend_without_saving(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """準備中(ロードマップ)の解析エンジンは選べない(#3374)。
-
-    理由の分かる 422 にし、設定を変えない。
-    """
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_adapter_backend", "docling")
-    parser_file = PARSER_SETTINGS_STORE.path(settings)
-    before = parser_file.read_text(encoding="utf-8") if parser_file.exists() else None
-
-    resp = client.patch(
-        "/api/settings/parser-adapters",
-        json={"adapter_backend": "oci_document_understanding"},
-    )
-
-    assert resp.status_code == 422
-    assert "準備中（ロードマップ）" in json.dumps(resp.json(), ensure_ascii=False)
-    assert settings.rag_parser_adapter_backend == "docling"
-    after = parser_file.read_text(encoding="utf-8") if parser_file.exists() else None
-    assert after == before
-
-
-def test_persisted_roadmap_parser_backend_falls_back_to_default(tmp_path: Path) -> None:
-    """以前の版が parser-settings.json に保存した準備中のエンジンは既定へ寄せる(#3374)。
-
-    起動を止めない。
+    起動を止めない。削除したエンジンの有効化の項目も読み捨てる。
     """
     parser_file = tmp_path / "parser-settings.json"
     parser_file.write_text(
-        json.dumps({"adapter_backend": "oci_document_understanding"}), encoding="utf-8"
+        json.dumps({"adapter_backend": removed, f"{removed}_enabled": True}), encoding="utf-8"
     )
     worker_settings = Settings(
         _env_file=None,
@@ -251,13 +181,11 @@ def test_persisted_roadmap_parser_backend_falls_back_to_default(tmp_path: Path) 
     assert worker_settings.rag_parser_adapter_backend == "docling"
 
 
-def test_env_roadmap_parser_backend_is_rejected_with_reason() -> None:
-    """RAG_PARSER_ADAPTER_BACKEND でも準備中のエンジンは選べない(#3374)。
+def test_env_removed_parser_backend_falls_back_to_default() -> None:
+    """RAG_PARSER_ADAPTER_BACKEND の削除済みのエンジンも既定へ寄せる(#22)。"""
+    settings = Settings(_env_file=None, rag_parser_adapter_backend="oci_document_understanding")
 
-    理由の分かる検証のエラーにする。
-    """
-    with pytest.raises(ValueError, match="準備中（ロードマップ）"):
-        Settings(_env_file=None, rag_parser_adapter_backend="oci_document_understanding")
+    assert settings.rag_parser_adapter_backend == "docling"
 
 
 def test_parser_adapter_contract_endpoint_is_removed() -> None:
@@ -352,17 +280,14 @@ def test_parser_adapter_settings_no_longer_handle_docling_vision(
     )
 
 
-@pytest.mark.usefixtures("mineru_selectable")
-def test_update_parser_adapter_settings_persists_shared_gpu_flags_and_preserves_omitted_flags(
+def test_update_parser_adapter_settings_persists_flags_and_preserves_omitted_flags(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """GPU parser flags も保存し、省略された既存 flag は維持する。"""
+    """parser flags を保存し、省略された既存 flag は維持する。"""
     settings = get_settings()
     monkeypatch.setattr(settings, "rag_parser_adapter_backend", "local")
     monkeypatch.setattr(settings, "rag_parser_docling_enabled", True)
     monkeypatch.setattr(settings, "rag_parser_unstructured_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_mineru_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_dots_ocr_enabled", True)
     monkeypatch.setattr(
         parser_adapter_readiness,
         "_package_info",
@@ -371,88 +296,31 @@ def test_update_parser_adapter_settings_persists_shared_gpu_flags_and_preserves_
     resp = client.patch(
         "/api/settings/parser-adapters",
         json={
-            "adapter_backend": "mineru",
-            "mineru_enabled": True,
-            "mineru_license_acknowledged": True,
-            "dots_ocr_enabled": False,
+            "adapter_backend": "unstructured",
+            "unstructured_enabled": True,
         },
     )
 
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["adapter_backend"] == "mineru"
-    assert body["effective_order"] == ["mineru"]
+    assert body["adapter_backend"] == "unstructured"
+    assert body["effective_order"] == ["unstructured"]
     by_backend = {adapter["backend"]: adapter for adapter in body["adapters"]}
     assert by_backend["docling"]["enabled"] is True
-    assert by_backend["mineru"]["enabled"] is True
-    assert by_backend["dots_ocr"]["enabled"] is False
-    assert settings.rag_parser_adapter_backend == "mineru"
+    assert by_backend["unstructured"]["enabled"] is True
+    assert settings.rag_parser_adapter_backend == "unstructured"
     assert settings.rag_parser_docling_enabled is True
-    assert settings.rag_parser_mineru_enabled is True
-    assert settings.rag_parser_dots_ocr_enabled is False
+    assert settings.rag_parser_unstructured_enabled is True
     parser = _persisted_parser(settings)
-    assert parser["adapter_backend"] == "mineru"
+    assert parser["adapter_backend"] == "unstructured"
     assert parser["docling_enabled"] is True
-    assert parser["mineru_enabled"] is True
-    assert parser["dots_ocr_enabled"] is False
-    # 削除したエンジン(#270)の項目は保存しない。
-    assert not [key for key in parser if "marker" in key or "unlimited" in key or "glm" in key]
-
-
-@pytest.mark.usefixtures("mineru_selectable")
-def test_update_external_parser_connection_retains_and_clears_secret(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_mineru_api_host", "https://old.example.com")
-    monkeypatch.setattr(settings, "rag_parser_mineru_api_key", "top-secret")
-    retained = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "mineru",
-            "mineru_license_acknowledged": True,
-            "connections": [
-                {
-                    "backend": "mineru",
-                    "endpoint": "https://mineru.example.com/",
-                    "api_key": "",
-                }
-            ],
-        },
-    )
-
-    assert retained.status_code == 200
-    connection = next(
-        item for item in retained.json()["data"]["connections"] if item["backend"] == "mineru"
-    )
-    assert connection == {
-        "backend": "mineru",
-        "protocol": "mineru_v1",
-        "endpoint": "https://mineru.example.com",
-        "model": None,
-        "api_key_configured": True,
-        "configured": True,
-    }
-    assert "top-secret" not in retained.text
-    assert settings.rag_parser_mineru_api_key == "top-secret"
-    parser = _persisted_parser(settings)
-    assert parser["mineru_api_host"] == "https://mineru.example.com"
-    # parser の API key も JSON ではなく .env に保存する（#106）。
-    assert "mineru_api_key" not in parser
-    assert "top-secret" not in PARSER_SETTINGS_STORE.path(settings).read_text(encoding="utf-8")
-    assert _saved_env_value(settings, "RAG_PARSER_MINERU_API_KEY") == "top-secret"
-
-    cleared = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "mineru",
-            "connections": [{"backend": "mineru", "clear_api_key": True}],
-        },
-    )
-
-    assert cleared.status_code == 200
-    assert settings.rag_parser_mineru_api_key == ""
-    assert "top-secret" not in cleared.text
+    assert parser["unstructured_enabled"] is True
+    # 削除したエンジン(#270・#22・#21)の項目は保存しない。
+    assert not [
+        key
+        for key in parser
+        if any(name in key for name in ("marker", "unlimited", "mineru", "xml_tree", "records"))
+    ]
 
 
 def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it(
@@ -468,7 +336,6 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
         _env_file=None,
         rag_parser_settings_file=str(parser_file),
         rag_parser_adapter_backend="local",
-        rag_parser_dots_ocr_api_host="",
     )
     # 別 worker は別プロセスなので、読込状態を持つ store も別になる。
     worker_store = copy.copy(PARSER_SETTINGS_STORE)
@@ -477,18 +344,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
 
     response = client.patch(
         "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "dots_ocr",
-            "dots_ocr_enabled": True,
-            "connections": [
-                {
-                    "backend": "dots_ocr",
-                    "endpoint": "https://dots.example.com/v1",
-                    "model": "dots-production",
-                    "api_key": "parser-secret",
-                }
-            ],
-        },
+        json={"adapter_backend": "unstructured", "unstructured_enabled": True},
     )
 
     assert response.status_code == 200
@@ -496,13 +352,9 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     assert stat.S_IMODE(parser_file.stat().st_mode) == 0o600
     lock_file = parser_file.with_name(f"{parser_file.name}.lock")
     assert stat.S_IMODE(lock_file.stat().st_mode) == 0o600
-    assert "parser-secret" not in parser_file.read_text(encoding="utf-8")
-    assert _saved_env_value(settings, "RAG_PARSER_DOTS_OCR_API_KEY") == "parser-secret"
-    assert settings.rag_parser_dots_ocr_api_key == "parser-secret"
     worker_store.reload_if_changed(worker_settings)
-    assert worker_settings.rag_parser_adapter_backend == "dots_ocr"
-    assert worker_settings.rag_parser_dots_ocr_api_host == "https://dots.example.com/v1"
-    assert worker_settings.rag_parser_dots_ocr_model == "dots-production"
+    assert worker_settings.rag_parser_adapter_backend == "unstructured"
+    assert worker_settings.rag_parser_unstructured_enabled is True
 
     parser_before = parser_file.read_text(encoding="utf-8")
     model_response = client.patch("/api/settings/model", json=_payload())
@@ -512,8 +364,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     assert "parser_adapters" not in persisted
     assert _saved_enterprise_ai_api_key(settings) == "sk-update-secret"
     assert parser_file.read_text(encoding="utf-8") == parser_before
-    assert _saved_env_value(settings, "RAG_PARSER_DOTS_OCR_API_KEY") == "parser-secret"
-    assert get_settings().rag_parser_adapter_backend == "dots_ocr"
+    assert get_settings().rag_parser_adapter_backend == "unstructured"
 
 
 def test_update_parser_adapter_settings_does_not_mutate_runtime_when_write_fails(
@@ -555,66 +406,28 @@ def test_update_parser_adapter_settings_rejects_unknown_backend() -> None:
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("removed", ["marker", "unlimited_ocr", "glm_ocr"])
+@pytest.mark.parametrize(
+    "removed",
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
+)
 def test_update_parser_adapter_settings_rejects_removed_engine(removed: str) -> None:
-    """削除したエンジン(#270)は新たに選択・接続設定できない。"""
+    """削除したエンジン(#270・#22・#21)は新たに選択できない。"""
     settings = get_settings()
     before = settings.rag_parser_adapter_backend
+
     resp = client.patch("/api/settings/parser-adapters", json={"adapter_backend": removed})
-    assert resp.status_code == 422
-    resp = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "unstructured",
-            "connections": [{"backend": removed, "endpoint": "https://example.com"}],
-        },
-    )
+
     assert resp.status_code == 422
     assert settings.rag_parser_adapter_backend == before
-
-
-def test_external_parser_status_endpoint_and_unknown_backend(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    async def run_inline(function: Any, *args: Any) -> Any:
-        return function(*args)
-
-    monkeypatch.setattr(asyncio, "to_thread", run_inline)
-    monkeypatch.setattr(
-        ExternalParserClient,
-        "status",
-        lambda _self, backend: SimpleNamespace(
-            backend=backend,
-            status="available",
-            version="served-model",
-            warning_code=None,
-        ),
-    )
-
-    response = client.get("/api/settings/parser-adapters/dots_ocr/status")
-
-    assert response.status_code == 200
-    assert response.json()["data"] == {
-        "backend": "dots_ocr",
-        "status": "available",
-        "version": "served-model",
-        "warning_code": None,
-    }
-    assert client.get("/api/settings/parser-adapters/removed_engine/status").status_code == 422
-    for removed in ("marker", "unlimited_ocr", "glm_ocr"):
-        assert client.get(f"/api/settings/parser-adapters/{removed}/status").status_code == 422
-
-
-def test_update_parser_connection_rejects_unknown_engine() -> None:
-    response = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "unstructured",
-            "connections": [{"backend": "removed_engine", "endpoint": "https://example.com"}],
-        },
-    )
-
-    assert response.status_code == 422
 
 
 def test_preprocess_settings_reports_runtime_profile(monkeypatch: MonkeyPatch) -> None:
@@ -2905,52 +2718,6 @@ def test_upload_database_wallet_zip_rejects_unsafe_member_path(
     assert not (wallet_dir / "tnsnames.ora").exists()
 
 
-class _FakeAdbInfo:
-    """OCI SDK の AutonomousDatabase model 代替。"""
-
-    def __init__(
-        self,
-        lifecycle_state: str,
-        *,
-        display_name: str = "RAG ADB",
-        adb_id: str = "ocid1.autonomousdatabase.oc1..fake",
-    ) -> None:
-        self.id = adb_id
-        self.display_name = display_name
-        self.lifecycle_state = lifecycle_state
-        self.db_name = "ragdb"
-        self.cpu_core_count = 2
-        self.data_storage_size_in_tbs = 1.0
-
-
-class _FakeAdbResponse:
-    def __init__(self, data: _FakeAdbInfo) -> None:
-        self.data = data
-
-
-def _make_fake_database_client(
-    lifecycle_state: str,
-    calls: list[str],
-) -> type:
-    """指定 lifecycle を返し、start/stop 呼び出しを記録する Fake DatabaseClient。"""
-
-    class _FakeDatabaseClient:
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            calls.append("init")
-
-        def get_autonomous_database(self, autonomous_database_id: str) -> _FakeAdbResponse:
-            calls.append(f"get:{autonomous_database_id}")
-            return _FakeAdbResponse(_FakeAdbInfo(lifecycle_state))
-
-        def start_autonomous_database(self, autonomous_database_id: str) -> None:
-            calls.append(f"start:{autonomous_database_id}")
-
-        def stop_autonomous_database(self, autonomous_database_id: str) -> None:
-            calls.append(f"stop:{autonomous_database_id}")
-
-    return _FakeDatabaseClient
-
-
 def _write_thick_wallet(wallet_dir: Path, services: Sequence[str] = ("ragdb_high",)) -> None:
     """RAG の既定（Thick mode）で必要な Wallet ファイルを置く。
 
@@ -2967,148 +2734,20 @@ def _write_thick_wallet(wallet_dir: Path, services: Sequence[str] = ("ragdb_high
     (wallet_dir / "cwallet.sso").write_bytes(b"sso")
 
 
-def _patch_adb_client(
-    monkeypatch: MonkeyPatch,
-    lifecycle_state: str,
-    calls: list[str],
-) -> None:
-    from pr_system_settings.oci_database import OciDatabaseClient
-
-    fake_client = _make_fake_database_client(lifecycle_state, calls)()
-
-    def _factory(settings: Settings | None = None) -> OciDatabaseClient:
-        return OciDatabaseClient(
-            settings=settings,
-            database_client=fake_client,
-            sdk_call_runner=_run_inline,
-        )
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", _factory)
-
-
-def test_get_adb_info_returns_not_configured_without_ocid(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(get_settings(), "oracle_adb_ocid", "")
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "not_configured"
-    assert data["lifecycle_state"] is None
-
-
-def test_get_adb_info_returns_lifecycle_from_oci(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "success"
-    assert data["lifecycle_state"] == "AVAILABLE"
-    assert data["display_name"] == "RAG ADB"
-    assert any(call.startswith("get:") for call in calls)
-
-
-def test_update_adb_settings_persists_ocid_and_region(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "")
-    env_file = _database_env_file(monkeypatch, tmp_path)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post(
-        "/api/settings/database/adb/settings",
-        json={
-            "adb_ocid": "ocid1.autonomousdatabase.oc1..saved",
-            "region": "ap-tokyo-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["region"] == "ap-tokyo-1"
-    assert settings.oracle_adb_ocid == "ocid1.autonomousdatabase.oc1..saved"
-    assert settings.oracle_adb_region == "ap-tokyo-1"
-    persisted = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_ORACLE_ADB_OCID=ocid1.autonomousdatabase.oc1..saved" in persisted
-    assert "PLATFORM_ORACLE_ADB_REGION=ap-tokyo-1" in persisted
-
-
-def test_start_adb_sends_start_when_stopped(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    ocid = "ocid1.autonomousdatabase.oc1..fake"
-    monkeypatch.setattr(settings, "oracle_adb_ocid", ocid)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "accepted"
-    assert data["lifecycle_state"] == "STARTING"
-    assert f"start:{ocid}" in calls
-
-
-def test_start_adb_reports_already_available(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "already_available"
-    assert not any(call.startswith("start:") for call in calls)
-
-
-def test_stop_adb_sends_stop_when_available(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    ocid = "ocid1.autonomousdatabase.oc1..fake"
-    monkeypatch.setattr(settings, "oracle_adb_ocid", ocid)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.post("/api/settings/database/adb/stop")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "accepted"
-    assert data["lifecycle_state"] == "STOPPING"
-    assert f"stop:{ocid}" in calls
-
-
-def test_stop_adb_reports_already_stopped(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post("/api/settings/database/adb/stop")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "already_stopped"
-    assert not any(call.startswith("stop:") for call in calls)
-
-
-def test_start_adb_without_ocid_returns_not_configured(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(get_settings(), "oracle_adb_ocid", "")
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "not_configured"
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/settings/database/adb"),
+        *(
+            ("POST", f"/api/settings/database/adb/{action}")
+            for action in ("settings", "start", "stop")
+        ),
+    ],
+)
+def test_adb_control_routes_are_removed(method: str, path: str) -> None:
+    """ADB の情報取得・起動・停止の API は持たない（#10。起動・停止は docker 側の責務）。"""
+    response = client.get(path) if method == "GET" else client.post(path)
+    assert response.status_code in {404, 405}
 
 
 def test_get_upload_storage_settings_returns_runtime_values(

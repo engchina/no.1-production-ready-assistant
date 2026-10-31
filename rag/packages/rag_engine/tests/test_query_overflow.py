@@ -158,7 +158,6 @@ def test_answer_flow_keeps_scope_existing_evidence_and_overflow_trace(monkeypatc
     assert "ID-123" in calls[1][0]
     assert calls[1][2]["retrieval_scope"] == RETRIEVAL_SCOPE_KNOWLEDGE_BASE
     assert calls[1][1][2].document_selection_enabled is False
-    assert calls[1][1][2].article_catalog_enabled is False
     trace = result.generation_trace["query_overflow"]
     assert [row["status"] for row in trace["requests"]] == ["candidate_found", "unsearched_budget"]
     assert trace["added_chunk_ids"] == ["run:new"]

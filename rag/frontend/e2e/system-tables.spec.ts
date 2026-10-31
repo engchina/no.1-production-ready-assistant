@@ -196,26 +196,6 @@ async function mockSettings(
       });
       return;
     }
-    if (url.pathname === "/api/settings/database/adb") {
-      await route.fulfill({
-        json: {
-          data: {
-            status: "not_configured",
-            message: "ADB OCID が未設定です。",
-            id: null,
-            display_name: null,
-            lifecycle_state: null,
-            db_name: null,
-            cpu_core_count: null,
-            data_storage_size_in_tbs: null,
-            region: null,
-          },
-          error_messages: [],
-          warning_messages: [],
-        },
-      });
-      return;
-    }
     await route.fulfill({
       json: {
         data: databaseSettings,

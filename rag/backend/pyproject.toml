@@ -33,7 +33,7 @@ dependencies = [
     "production-ready-evaluation-scoring",
 ]
 
-# 重い parser 依存(docling/unstructured/mineru/dots_ocr)は backend に載せない。
+# 重い parser 依存(docling/unstructured)は backend に載せない。
 # 各 parser は services/parsers/<name> の独立イメージで動き、backend は HTTP で委譲する
 # (app.clients.parser_service)。各 parser は独立して upgrade でき、相互に非干渉。
 #

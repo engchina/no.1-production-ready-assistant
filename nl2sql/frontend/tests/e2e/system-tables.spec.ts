@@ -46,18 +46,6 @@ const databaseSettings = {
   config_source: "runtime",
 };
 
-const adbInfo = {
-  status: "success",
-  message: "ADB OCID が設定されています。",
-  id: databaseSettings.adb_ocid,
-  display_name: "nl2sqldb",
-  lifecycle_state: "AVAILABLE",
-  db_name: "NL2SQLDB",
-  cpu_core_count: 2,
-  data_storage_size_in_tbs: 1,
-  region: "ap-osaka-1",
-};
-
 type SchemaStatus = "missing" | "partial" | "outdated" | "ready";
 type SystemObjectType = "TABLE" | "INDEX" | "SEQUENCE" | "PACKAGE" | "PACKAGE BODY";
 
@@ -219,7 +207,6 @@ async function mockDatabasePage(page: Page, user = systemAdminMe) {
     fulfill(route, { status: "ok", check: "ok", detail: null })
   );
   await page.route("**/api/settings/database", (route) => fulfill(route, databaseSettings));
-  await page.route("**/api/settings/database/adb", (route) => fulfill(route, adbInfo));
   await page.route("**/api/schema/owners", (route) =>
     fulfill(route, {
       current_owner: "NL2SQL_APP",
@@ -728,7 +715,7 @@ test("接続・操作失敗を操作領域で通知し、復旧方法を提示�
   await expect(card.getByText("データベースに接続できません", { exact: true })).toBeVisible();
   await expect(
     card.getByText(
-      "データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。",
+      "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。",
       { exact: true }
     )
   ).toHaveCount(0);

@@ -407,20 +407,22 @@ def test_content_type_detection_ignores_parameters() -> None:
     assert not is_structured_records_content_type(None)
 
 
-def test_docling_and_unstructured_stop_on_jsonl_with_diagnostic() -> None:
-    """Docling / Unstructured は構造化レコードの JSONL を黙って変換せず、診断で止める（#2457）。"""
+def test_docling_and_unstructured_read_jsonl_with_the_shared_contract() -> None:
+    """Docling / Unstructured のサービスは構造化レコードの JSONL を共通の契約で読む（#2457・#21）。
+
+    外部の parser には渡さない（package が無くても読める）。
+    """
     data = dump_structured_records(_csv_lines())
-    for backend in ("docling", "unstructured", "dots_ocr", "xml_tree_json"):
-        assert not adapter_supports_source(
+    for backend in ("docling", "unstructured"):
+        assert adapter_supports_source(
             backend, source_profile=None, content_type=STRUCTURED_RECORDS_CONTENT_TYPE
         )
-    assert adapter_supports_source(
-        "structured_records_jsonl",
-        source_profile=None,
-        content_type=STRUCTURED_RECORDS_CONTENT_TYPE,
-    )
-    for backend in ("docling", "unstructured"):
         result = run_external_adapter(backend, data, None, STRUCTURED_RECORDS_CONTENT_TYPE)
-        assert result.extraction is None
-        assert result.fallback_used is True
-        assert result.warnings == ("structured_records_requires_structured_records_jsonl",)
+        assert result.extraction is not None
+        assert result.fallback_used is False
+        assert result.parser_backend == backend
+        assert result.parser_version == "structured_records_v1"
+    for removed in ("structured_records_jsonl", "xml_tree_json"):
+        assert not adapter_supports_source(
+            removed, source_profile=None, content_type=STRUCTURED_RECORDS_CONTENT_TYPE
+        )

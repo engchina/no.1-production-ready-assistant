@@ -169,9 +169,8 @@ def _patch_search(monkeypatch: pytest.MonkeyPatch, results: dict[str, AnswerCont
     calls: list[tuple[str, list[dict[str, Any]]]] = []
 
     def fake_build(question: str, run_id: Any, engines: Any, settings: Any, **kwargs: Any) -> AnswerContext:
-        # 文書の選択・画面目録・条の目録（LLM）は使わない。
+        # 文書の選択・画面目録（LLM）は使わない。
         assert settings.document_selection_enabled is False and settings.screen_linking_enabled is False
-        assert settings.article_catalog_enabled is False
         page_ranges = list(kwargs.get("page_ranges") or [])
         calls.append((question, page_ranges))
         key = "reference" if page_ranges else question

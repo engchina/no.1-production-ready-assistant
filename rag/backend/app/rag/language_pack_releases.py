@@ -6,6 +6,7 @@ from contextvars import ContextVar
 
 from rag_parser_core.language import (
     FIELD_SPECS,
+    REMOVED_FIELDS,
     LanguagePack,
     bind_pack,
     build_pack,
@@ -23,7 +24,7 @@ _ACTIVE_RELEASE: ContextVar[LanguagePackRelease | None] = ContextVar(
     "rag_language_pack_release", default=None
 )
 
-# 読み取り元: parser_core の text/markers/xml_tree_json、抽出項目の型変換、
+# 読み取り元: parser_core の text/markers、抽出項目の型変換、
 # chunk の問い合わせ情報、索引保存後の entity_index。前工程からの再実行は後工程も更新する。
 _STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     **dict.fromkeys(
@@ -104,7 +105,8 @@ def compare_releases(
         old = before.effective.get(section, {})
         new = after.effective.get(section, {})
         for key in sorted(set(old) | set(new)):
-            if old.get(key) == new.get(key):
+            # 削除した項目（#42）は読み捨てる（旧版に残っていても差にしない）。
+            if old.get(key) == new.get(key) or (section, key) in REMOVED_FIELDS:
                 continue
             spec = specs.get((section, key))
             unknown = unknown or spec is None

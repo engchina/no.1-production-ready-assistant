@@ -44,14 +44,11 @@ ItemKind = Literal[
     "tool_policy",
     "evaluation_set",
     "evaluation_job",
-    "automation",
 ]
 ITEM_KINDS: tuple[ItemKind, ...] = (
     "mcp_connection",
     "tool_policy",
     "skill",
-    # 業務 Agent の自動実行（#784。スケジュールで実行する）。
-    "automation",
     # 品質評価の評価セットと評価の job（#776）。
     "evaluation_set",
     "evaluation_job",
@@ -370,14 +367,6 @@ def save_tool_policy(policy: Any) -> None:
     )
 
 
-def save_automation(automation_id: str, document: JsonObject) -> None:
-    _put("automation", automation_id, document)
-
-
-def delete_automation(automation_id: str) -> None:
-    _delete("automation", automation_id)
-
-
 def save_evaluation_item(kind: str, item_id: str, document: JsonObject) -> None:
     """品質評価の評価セット・job を保存する（#776）。"""
     if kind not in _EVALUATION_KINDS:
@@ -438,7 +427,6 @@ def _reseal_plaintext_secrets(kind: ItemKind, item_id: str, document: JsonObject
 
 def _restore_item(kind: ItemKind, document: JsonObject) -> None:
     # 登録先は遅延 import（このモジュールは config / skills から import されない）。
-    from app.features.agent.automations import automation_store
     from app.features.agent.config import runtime_config_store
     from app.features.agent.evaluation import evaluation_set_store, evaluation_store
     from app.features.agent.skills import skill_registry
@@ -455,8 +443,6 @@ def _restore_item(kind: ItemKind, document: JsonObject) -> None:
         )
     elif kind == "skill":
         skill_registry.upsert_custom(item)
-    elif kind == "automation":
-        automation_store.restore(item)
     elif kind == "evaluation_set":
         evaluation_set_store.restore(item)
     elif kind == "evaluation_job":
@@ -489,10 +475,6 @@ def _parse_item(kind: ItemKind, document: JsonObject) -> Any:
         )
     if kind == "skill":
         return AgentSkillDefinition.model_validate(document)
-    if kind == "automation":
-        from app.features.agent.automations import Automation
-
-        return Automation.model_validate(document)
     if kind == "evaluation_set":
         from app.features.agent.evaluation import EvaluationSet
 
@@ -512,7 +494,6 @@ def reload_control_plane() -> dict[str, int] | None:
     宣言の接続・ツール権限は宣言の値に戻る。保存しない構成（`memory`）は何もしない（None）。
     読めない項目は飛ばして記録する（起動時の復元と同じ）。
     """
-    from app.features.agent.automations import automation_store
     from app.features.agent.config import runtime_config_store
     from app.features.agent.evaluation import evaluation_set_store, evaluation_store
     from app.features.agent.skills import skill_registry
@@ -540,7 +521,6 @@ def reload_control_plane() -> dict[str, int] | None:
             "agent_control_plane_reload_failed",
             extra={"kind": "skill", "item_id": skill_id, "reason": "builtin_id"},
         )
-    automation_store.replace_all(parsed["automation"])
     evaluation_set_store.replace_all(parsed["evaluation_set"])
     evaluation_store.replace_all(parsed["evaluation_job"])
     return {kind: len(values) for kind, values in parsed.items()}

@@ -3,9 +3,6 @@
 from typing import Literal
 
 # データベース設定の schema は3製品共通（pr_system_settings。#108）。互換のため re-export する。
-from pr_system_settings.database import AdbInfoData as AdbInfoData
-from pr_system_settings.database import AdbOperationStatus as AdbOperationStatus
-from pr_system_settings.database import AdbSettingsUpdate as AdbSettingsUpdate
 from pr_system_settings.database import DatabaseConnectionSecurity as DatabaseConnectionSecurity
 from pr_system_settings.database import DatabaseConnectionTestResult as DatabaseConnectionTestResult
 from pr_system_settings.database import DatabaseConnectionTestStatus as DatabaseConnectionTestStatus

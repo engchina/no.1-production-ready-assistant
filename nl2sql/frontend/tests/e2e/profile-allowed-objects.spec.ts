@@ -1956,19 +1956,6 @@ test("Credential 不足からデータベース設定で作成し、履歴 job �
       config_source: "runtime",
     })
   );
-  await page.route("**/api/settings/database/adb", (route) =>
-    fulfillJson(route, {
-      status: "success",
-      message: "ADB を取得しました。",
-      id: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-      display_name: "nl2sqldb",
-      lifecycle_state: "AVAILABLE",
-      db_name: "NL2SQLDB",
-      cpu_core_count: 2,
-      data_storage_size_in_tbs: 1,
-      region: "ap-osaka-1",
-    })
-  );
 
   await page.goto("/profiles");
   await page.getByRole("row").filter({ hasText: "既定プロファイル" }).locator("td").nth(1).click();

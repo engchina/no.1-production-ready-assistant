@@ -120,13 +120,12 @@ function mockChunking(strategy: string) {
 // ---- 文書解析（外部の解析の接続・章節の抽出規則・抽出する項目） ----
 
 function parserAdapter(backend: string, selected: boolean) {
-  const external = backend === "mineru" || backend === "dots_ocr";
   return {
     backend,
-    package_name: external ? "external_api" : backend,
-    import_name: external ? "external_api" : backend,
+    package_name: backend,
+    import_name: backend,
     distribution_name: null,
-    install_package: external ? `外部 ${backend} API` : backend,
+    install_package: backend,
     enabled: selected,
     selected,
     installed: selected,
@@ -149,29 +148,8 @@ async function mockParserAdapters(page: Page) {
         adapters: [
           parserAdapter("docling", true),
           parserAdapter("unstructured", false),
-          parserAdapter("mineru", false),
-          parserAdapter("dots_ocr", false),
         ],
         source_routes: [],
-        connections: [
-          {
-            backend: "mineru",
-            protocol: "mineru_v1",
-            endpoint: "",
-            model: null,
-            api_key_configured: false,
-            configured: false,
-          },
-          {
-            backend: "dots_ocr",
-            protocol: "openai_chat_completions",
-            endpoint: "https://dots.example.com/v1",
-            model: "rednote-hilab/dots.mocr",
-            api_key_configured: true,
-            configured: true,
-          },
-        ],
-        service_backends: [],
         backend_source_kind_matrix: {
           evidence_source: "runtime_routes",
           required_source_kinds: [],
@@ -220,7 +198,6 @@ async function mockParserAdapters(page: Page) {
 }
 
 async function openParserAdapters(page: Page) {
-  await expect(page.getByRole("textbox", { name: "Endpoint" }).first()).toBeVisible();
   await page.locator("summary", { hasText: "抽出する項目の定義" }).click();
   await expect(page.getByRole("textbox", { name: /項目名/ }).first()).toBeVisible();
   await page.locator("#post-parse-section-rules").scrollIntoViewIfNeeded();
@@ -370,8 +347,6 @@ const PROCESSING_NULLS = {
   parser_adapter_backend: null,
   parser_docling_enabled: null,
   parser_unstructured_enabled: null,
-  parser_mineru_enabled: null,
-  parser_dots_ocr_enabled: null,
   chunking_strategy: null,
   chunk_size: null,
   chunk_overlap: null,

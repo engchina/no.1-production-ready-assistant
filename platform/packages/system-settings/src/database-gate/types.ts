@@ -14,11 +14,6 @@ export interface DatabaseStatusData {
   context_id?: string;
   /** 製品のシステムテーブルの状態（RAG の `missing` / `partial` / `outdated` / `ready`）。 */
   schema_status?: string | null;
-  /**
-   * ADB のライフサイクル状態（`STOPPED` / `STARTING` / `AVAILABLE` など）。`unreachable` のときだけ、
-   * ADB OCID が設定されていて取得できた場合に入る（#820）。
-   */
-  adb_lifecycle_state?: string | null;
 }
 
 export interface DatabaseStatusApi {
@@ -42,13 +37,9 @@ export type DatabaseUnavailableEventDetail =
 /** ゲートの案内の種類。`check_failed` は状態 API 自体が失敗したとき。 */
 export type DatabaseNoticeStatus = "not_configured" | "setup_required" | "unreachable" | "check_failed";
 
-/** データベース設定の画面の ADB 管理のカードの id（ADB が停止中などのときの案内先。#820）。 */
-export const ADB_MANAGEMENT_ANCHOR_ID = "adb-management";
-
 export interface DatabaseGateRoutes {
   /**
-   * データベース設定（例: `/settings/database`）。hash は付けなくてよい。ADB が停止中・起動中などの
-   * ときは案内が ADB 管理のカード（`#adb-management`）を付ける（#820）。
+   * データベース設定（例: `/settings/database`）。hash は付けなくてよい（付けても案内のリンクでは外す）。
    */
   databaseSettings: string;
   /**

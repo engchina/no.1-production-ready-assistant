@@ -1,8 +1,8 @@
 {
   "name": "production-ready-skills",
   "displayName": "Production Ready Skills",
-  "version": "0.1.7",
-  "description": "業務 RAG 調査・構造化データ照会・資料とデータの横断調査・条の目録から根拠を探すの 4 つのスキル。MCP サーバー rag（Production Ready RAG）と nl2sql（Production Ready NL2SQL）に接続して使う。",
+  "version": "0.1.8",
+  "description": "業務 RAG 調査・構造化データ照会・資料とデータの横断調査の 3 つのスキル。MCP サーバー rag（Production Ready RAG）と nl2sql（Production Ready NL2SQL）に接続して使う。",
   "author": {
     "name": "engchina"
   },

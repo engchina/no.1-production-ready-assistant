@@ -128,7 +128,7 @@ for (const viewport of [
         .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
     expect(await linkHrefs("use")).toEqual(["/chat", "/approvals", "/runs"]);
     // Agent 構築は管理者が業務 Agent を作る画面（RAG のナレッジ構築・NL2SQL のデータ準備に当たる）。
-    expect(await linkHrefs("build")).toEqual(["/agents", "/skills", "/automations"]);
+    expect(await linkHrefs("build")).toEqual(["/agents", "/skills"]);
     // 改善・運用は RAG / NL2SQL と同じ品質評価・フィードバックの後に、Agent の利用状況（#772）と監査ログ（#791）。
     expect(await linkHrefs("improve")).toEqual(["/evaluation", "/feedback", "/usage", "/audit"]);
     // セキュリティ設定は権限管理、運用設定はシステムテーブル（先頭。#751）と Agent 固有の2項目

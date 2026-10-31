@@ -7,7 +7,6 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 | [`business-rag-research`](./business-rag-research/SKILL.md)（業務 RAG 調査） | `rag` | 社内の規程・手順書・台帳を検索し、根拠（文書名と節・頁）を示して答える |
 | [`structured-data-query`](./structured-data-query/SKILL.md)（構造化データ照会） | `nl2sql` | 業務データの件数・金額・一覧を SQL で照会する |
 | [`rag-and-structured-data`](./rag-and-structured-data/SKILL.md)（資料とデータの横断調査） | `rag`・`nl2sql` | 資料と業務データの両方が要る調査 |
-| [`article-catalog-lookup`](./article-catalog-lookup/SKILL.md)（条の目録から根拠を探す） | `rag` | 条で構成された文書（法令・規程の XML ツリー JSON など）の根拠の条が検索で当たらないとき、条の目録から選んで読む（`business-rag-research` と一緒に使う） |
 
 このディレクトリは Claude Code の plugin `production-ready-skills`（[`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)）でもあり、repo 直下の [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)（marketplace `production-ready-suite`）が配る。
 

@@ -1,6 +1,6 @@
 """親子階層（small-to-big）を Docling のレイアウト以外の抽出の構造から作る検証（#3377）。
 
-Markdown・見出しの無い本文・外部の解析器（Unstructured など）の要素・表・構造化レコード JSONL の
+Markdown・見出しの無い本文・外部の解析器（Unstructured など）の要素・表・構造化レコードの JSONL の
 どれでも親子に分割し、回答の文脈で親の本文を復元できることを確かめる。データはすべて合成。
 """
 
@@ -11,6 +11,7 @@ from typing import Any, cast
 from rag_parser_core.extraction import infer_document_elements
 from rag_parser_core.registry import run_external_adapter
 from rag_parser_core.structured_records import (
+    STRUCTURED_RECORDS_CONTENT_TYPE,
     DocumentLine,
     RecordField,
     RecordLocation,
@@ -210,14 +211,14 @@ def _csv_extraction(count: int) -> StructuredExtraction:
             )
         )
     result = run_external_adapter(
-        "structured_records_jsonl", dump_structured_records(lines), None, ""
+        "docling", dump_structured_records(lines), None, STRUCTURED_RECORDS_CONTENT_TYPE
     )
     assert result.extraction is not None
     return StructuredExtraction.model_validate(result.extraction.model_dump())
 
 
 def test_structured_records_keep_one_record_per_child() -> None:
-    """構造化レコード JSONL(CSV)は 1 記録 = 1 子、親は続く記録のまとまり(#2457・#3377)。"""
+    """構造化レコードの JSONL(CSV)は 1 記録 = 1 子、親は続く記録のまとまり(#2457・#3377)。"""
     extraction = _csv_extraction(7)
 
     chunks = build_parent_child_chunks(extraction, params=SmallToBigParams(parent_max_children=3))

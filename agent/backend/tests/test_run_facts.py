@@ -19,8 +19,8 @@ from security_support import ProductionAuth, client, enable_production_auth, log
 
 from app.features.agent import run_facts_store
 from app.features.agent.run_facts import (
-    RUN_SOURCE_AUTOMATION,
     RUN_SOURCE_EVALUATION,
+    RUN_SOURCE_MCP,
     RUN_SOURCE_USER,
     RunFact,
     fact_from_run,
@@ -87,9 +87,7 @@ def _fact(
 def test_fact_is_taken_from_the_run_snapshot() -> None:
     repository = AgentRuntimeRepository()
     run = repository.create_builtin_run(
-        RunCreateRequest(
-            agent_id="default", goal="今月の売上は？", metadata={"automation_id": "a1"}
-        ),
+        RunCreateRequest(agent_id="default", goal="今月の売上は？", metadata={"source": "mcp"}),
         created_by_user_uuid=ALICE,
     )
     repository.record_builtin_usage(
@@ -105,7 +103,7 @@ def test_fact_is_taken_from_the_run_snapshot() -> None:
         "資料・データ横断アシスタント",
         "1",
     )
-    assert (fact.status, fact.source, fact.user_uuid) == ("completed", RUN_SOURCE_AUTOMATION, ALICE)
+    assert (fact.status, fact.source, fact.user_uuid) == ("completed", RUN_SOURCE_MCP, ALICE)
     assert (fact.model, fact.requests, fact.total_tokens) == ("m", 2, 15)
     assert (fact.question, fact.answer) == ("今月の売上は？", "300 万円です。")
     assert fact.finished_at is not None and fact.finished_at >= fact.created_at
