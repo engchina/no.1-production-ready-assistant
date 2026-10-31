@@ -170,11 +170,7 @@ export { DatabaseSettingsPage, type DatabaseSettingsPageProps } from "./database
 export { DATABASE_MESSAGES, type DatabaseMessageKey } from "./database/messages";
 export type { DatabaseChangedHandler } from "./database/hooks";
 export {
-  ADB_INFO_QUERY_KEY,
   DATABASE_SETTINGS_QUERY_KEY,
-  type AdbInfoData,
-  type AdbOperationStatus,
-  type AdbSettingsUpdate,
   type DatabaseConnectionSecurity,
   type DatabaseConnectionTestResult,
   type DatabaseConnectionTestStatus,
@@ -201,12 +197,9 @@ export {
 export {
   DATABASE_UNAVAILABLE_TITLE_ID,
   DatabaseUnavailableNotice,
-  adbLifecycleGroup,
-  adbLifecycleLabel,
   databaseNoticeContent,
   databaseReasonCode,
   databaseSettingsHref,
-  type AdbLifecycleGroup,
   type DatabaseNoticeAction,
   type DatabaseNoticeContent,
   type DatabaseNoticeContentInput,
@@ -226,7 +219,6 @@ export {
   type UseDatabaseStatusOptions,
 } from "./database-gate/useDatabaseStatus";
 export {
-  ADB_MANAGEMENT_ANCHOR_ID,
   DATABASE_STATUS_QUERY_KEY,
   DATABASE_UNAVAILABLE_EVENT,
   type DatabaseAvailability,

@@ -229,7 +229,9 @@ def test_manifest_key_assignments() -> None:
         "menu.settings_upload_storage",
     }
     assert _perm("PATCH", "/settings/model") == {"menu.settings_model"}
-    assert _perm("POST", "/settings/database/adb/start") == {"menu.settings_database"}
+    assert _perm("POST", "/settings/database/wallet") == {"menu.settings_database"}
+    # ADB の起動・停止・情報取得の API は持たない（#10）。
+    assert not any(path.startswith("/settings/database/adb") for _method, path in ROUTE_PERMISSIONS)
     assert _perm("PATCH", "/settings/mcp-connections/{server_id}") == {"agent.admin"}
     assert _perm("PATCH", "/settings/tool-policy") == {"agent.admin"}
     assert _perm("POST", "/runs") == {"agent.runs.operate", "agent.admin"}

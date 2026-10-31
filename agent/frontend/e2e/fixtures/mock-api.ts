@@ -836,7 +836,6 @@ function createState() {
     mcpConnectionErrors: {} as Record<string, string>,
     modelSettings: d.modelSettings as Json,
     databaseSettings: d.databaseSettings as Json,
-    adbInfo: d.adbInfo as Json,
     uploadStorage: d.uploadStorage as Json,
     // 回答の注意書き（設定は製品ごと。#2405・#2449）。既定は未設定（既定の文）。
     answerNotice: { enabled: true, text: null } as { enabled: boolean; text: string | null },
@@ -857,7 +856,6 @@ function createState() {
       detail: null,
       context_id: "e2e-context",
       schema_status: null,
-      adb_lifecycle_state: null,
     } as Json,
     // 認証（#215）。既定はローカルの全権限の利用者（ログインなし）。null は未ログイン（me が 401）。
     auth: {
@@ -2994,23 +2992,8 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
       }
     }
     if (method === "POST" && at("settings", "database", "wallet", "download")) {
-      // 共有画面（#108）は ADB の保存後に OCI から Wallet の取得を試みる。
+      // 共有画面（#108）は Wallet が無く ADB OCID があれば OCI から Wallet の取得を試みる。
       return { status: "already_configured", settings: state.databaseSettings };
-    }
-    if (method === "GET" && at("settings", "database", "adb")) return state.adbInfo;
-    if (method === "POST" && at("settings", "database", "adb", "settings")) {
-      const adbOcid = String(body.adb_ocid ?? "").trim();
-      state.databaseSettings.adb_ocid = adbOcid;
-      state.databaseSettings.region = String(body.region ?? "").trim();
-      state.adbInfo = {
-        ...state.adbInfo,
-        status: adbOcid ? "success" : "not_configured",
-        message: adbOcid ? "ADB OCID を保存しました。" : "ADB OCID が未設定です。",
-        id: adbOcid || null,
-        lifecycle_state: adbOcid ? "AVAILABLE" : null,
-        region: state.databaseSettings.region || null,
-      };
-      return state.adbInfo;
     }
     if (at("settings", "answer-notice")) {
       if (method === "PUT") {

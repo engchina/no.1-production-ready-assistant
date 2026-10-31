@@ -18,10 +18,6 @@ const api: DatabaseSettingsApi = {
   uploadDatabaseWallet: pending,
   downloadDatabaseWallet: pending,
   testDatabaseSettings: pending,
-  getAdbInfo: pending,
-  updateAdbSettings: pending,
-  startAdb: pending,
-  stopAdb: pending,
 };
 
 function render(node: React.ReactNode, client = new QueryClient()) {
@@ -87,19 +83,16 @@ describe("DatabaseSettingsPage", () => {
     expect(html).not.toContain("保存済み Wallet パスワードを削除する");
     // 操作行は FormActionBar。保存は form の submit のまま。
     expect(html).toContain('aria-label="データベース設定の操作"');
-    expect(html).toContain('aria-label="Autonomous Database の操作"');
     const save = (html.match(/<button\b[^>]*data-form-action-id="save"[^>]*>/g) ?? []).find((tag) =>
       tag.includes('type="submit"'),
     );
     expect(save).toBeDefined();
     expect(html).not.toContain("保存中");
-    // サポートするリージョンの保存値では案内を出さない（#660）。
-    expect(html).not.toContain("はサポートしていません");
     // Wallet の状態は色の文字ではなく StatusBadge（アイコン付き）で出す（#722）。
     expect(html).toMatch(/Wallet状態:<\/span><span data-status-variant="success"[^>]*><span class="pr-icon-line"><svg[\s\S]*?<\/svg><\/span>設定済み<\/span>/);
   });
 
-  it("ADB のリージョンの保存値が候補に無い us-chicago-1 のときは、値をそのまま出して選び直しを案内する（#660）", () => {
+  it("ADB の起動・停止・状態の表示は出さず、Wallet が未設定のときは warning の StatusBadge を出す（#10・#722）", () => {
     const settings: DatabaseSettingsData = {
       user: "app",
       dsn: "db_high",
@@ -114,18 +107,20 @@ describe("DatabaseSettingsPage", () => {
       readiness: "ok",
       embedding_dimension: 1536,
       vector_column: "EMBEDDING",
-      adb_ocid: "ocid1.autonomousdatabase.oc1.us-chicago-1.example",
-      region: "us-chicago-1",
+      adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
+      region: "ap-osaka-1",
       config_source: "runtime",
     };
     const client = new QueryClient();
     client.setQueryData(DATABASE_SETTINGS_QUERY_KEY, settings);
     const html = render(<DatabaseSettingsPage api={api} />, client);
 
-    expect(html).toMatch(/<button\b[^>]*id="adb-region"[^>]*>[\s\S]*?us-chicago-1/);
-    expect(html).toContain(
-      "保存済みのリージョン us-chicago-1 はサポートしていません。ap-tokyo-1 または ap-osaka-1 を選んで保存してください。",
-    );
+    // DB の起動・停止は docker 側の責務（#10）。運用パネル・リージョン・ADB OCID の欄を出さない。
+    expect(html).not.toContain('id="adb-management"');
+    expect(html).not.toContain('id="adb-region"');
+    expect(html).not.toContain('id="adb-ocid"');
+    expect(html).not.toContain("Autonomous Database 管理");
+    expect(html).not.toMatch(/<button\b[^>]*>[\s\S]*?(起動|停止)<\/button>/);
     // Wallet が未設定のときは warning の StatusBadge（#722）。
     const missingWallet = new QueryClient();
     missingWallet.setQueryData(DATABASE_SETTINGS_QUERY_KEY, { ...settings, wallet_uploaded: false });
@@ -133,7 +128,7 @@ describe("DatabaseSettingsPage", () => {
       /Wallet状態:<\/span><span data-status-variant="warning"[^>]*>[\s\S]*?未設定<\/span>/,
     );
   });
-  it("欄は FormGrid に置き、値の種類の段の幅にする。OCID は全幅、placeholder は欄に収まる短い例（#1891）", () => {
+  it("欄は FormGrid に置き、値の種類の段の幅にする。placeholder は欄に収まる短い例（#1891）", () => {
     const settings: DatabaseSettingsData = {
       user: "app",
       dsn: "",
@@ -156,14 +151,11 @@ describe("DatabaseSettingsPage", () => {
     client.setQueryData(DATABASE_SETTINGS_QUERY_KEY, settings);
     const html = render(<DatabaseSettingsPage api={api} />, client);
 
-    // 接続カードと ADB カードの欄の並びはどちらも FormGrid。
-    expect(html.match(/data-form-grid="2"/g)?.length).toBeGreaterThanOrEqual(2);
+    // 接続カードの欄の並びは FormGrid。
+    expect(html).toContain('data-form-grid="2"');
     // DB ユーザーは名前の段（md）。
     expect(html).toMatch(/<div class="[^"]*field-width-md[^"]*"><input[^>]*id="oracle-user"/);
     // Wallet のサービス名（候補が無いときの入力欄）は名前の段（md）。
     expect(html).toMatch(/<div class="[^"]*field-width-md[^"]*"><input[^>]*id="oracle-wallet-service"/);
-    // ADB OCID は長い値なので全幅（2 列にまたがる）。
-    expect(html).toMatch(/<div class="[^"]*col-span-full[^"]*"[^>]*><label[^>]*for="adb-ocid"/);
-    expect(html).toContain('placeholder="未設定（platform/.env で設定）"');
   });
 });

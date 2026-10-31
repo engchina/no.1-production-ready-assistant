@@ -301,7 +301,6 @@ def test_password_reveal_only_when_enabled(tmp_path: Path) -> None:
 class FakeOciDatabaseClient:
     state = "STOPPED"
     fail = False
-    started: list[str] = []
 
     def __init__(self, settings: Any) -> None:
         self.settings = settings
@@ -318,42 +317,21 @@ class FakeOciDatabaseClient:
             data_storage_size_in_tbs=1.0,
         )
 
-    async def start_autonomous_database(self, adb_ocid: str) -> None:
-        self.started.append(adb_ocid)
 
-    async def stop_autonomous_database(self, adb_ocid: str) -> None:
-        self.started.append("stop:" + adb_ocid)
-
-
-def test_adb_settings_start_stop_and_hidden_errors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(shared_db, "OciDatabaseClient", FakeOciDatabaseClient)
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/settings/database/adb"),
+        *(
+            ("POST", f"/api/settings/database/adb/{action}")
+            for action in ("settings", "start", "stop")
+        ),
+    ],
+)
+def test_adb_control_routes_are_removed(tmp_path: Path, method: str, path: str) -> None:
+    """ADB の情報取得・起動・停止の API は持たない（#10。起動・停止は docker 側の責務）。"""
     h = Harness(tmp_path)
-    assert h.client.get("/api/settings/database/adb").json()["data"]["error_code"] == (
-        "ADB_NOT_CONFIGURED"
-    )
-
-    saved = h.client.post(
-        "/api/settings/database/adb/settings",
-        json={"adb_ocid": "ocid1.autonomousdatabase.oc1..x", "region": "ap-osaka-1"},
-    ).json()["data"]
-    assert saved["lifecycle_state"] == "STOPPED"
-    assert dotenv_values(h.env_file)["PLATFORM_ORACLE_ADB_REGION"] == "ap-osaka-1"
-
-    started = h.client.post("/api/settings/database/adb/start").json()["data"]
-    assert started["status"] == "accepted"
-    assert started["lifecycle_state"] == "STARTING"
-    stop = h.client.post("/api/settings/database/adb/stop").json()["data"]
-    assert stop["status"] == "already_stopped"
-
-    FakeOciDatabaseClient.fail = True
-    try:
-        failed = h.client.get("/api/settings/database/adb").json()["data"]
-    finally:
-        FakeOciDatabaseClient.fail = False
-    assert failed["error_code"] == "ADB_INFO_UNAVAILABLE"
-    assert "secret-looking" not in failed["message"]
+    assert h.client.request(method, path).status_code in {404, 405}
 
 
 class FakeOciServiceError(Exception):
@@ -434,26 +412,3 @@ def test_wallet_download_invalid_zip_is_logged(
     assert len(records) == 1
     assert _log_extra(records[0], "status_code") == 400
     assert "Wallet ZIP" in _log_extra(records[0], "reason")
-
-
-def test_adb_failure_log_has_oci_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """ADB の情報取得・起動・停止の失敗のログに OCI の status / code / request id を入れる。"""
-
-    class FailingInfoClient(FakeOciDatabaseClient):
-        async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-            raise FakeOciServiceError()
-
-    monkeypatch.setattr(shared_db, "OciDatabaseClient", FailingInfoClient)
-    h = Harness(tmp_path)
-    h.settings.oracle_adb_ocid = "ocid1.autonomousdatabase.oc1..x"
-
-    with caplog.at_level("WARNING", logger=shared_db.logger.name):
-        data = h.client.get("/api/settings/database/adb").json()["data"]
-
-    assert data["error_code"] == "ADB_INFO_UNAVAILABLE"
-    record = next(r for r in caplog.records if r.getMessage() == "adb_operation_failed")
-    assert _log_extra(record, "oci_status") == 404
-    assert _log_extra(record, "oci_code") == "NotAuthorizedOrNotFound"
-    assert _log_extra(record, "opc_request_id") == "req-123"

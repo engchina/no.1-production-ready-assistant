@@ -22,14 +22,12 @@ type DbStatus = "ok" | "not_configured" | "unreachable" | "setup_required";
 function setDatabaseStatus(
   mockApi: MockApi,
   status: DbStatus,
-  check?: string,
-  adbLifecycleState: string | null = null
+  check?: string
 ) {
   Object.assign(mockApi.state.databaseStatus, {
     status,
     check: check ?? (status === "not_configured" ? "missing" : "ok"),
     detail: status === "unreachable" ? "Oracle connection probe failed (ORA-12514)." : null,
-    adb_lifecycle_state: adbLifecycleState,
   });
 }
 
@@ -42,7 +40,7 @@ const VIEWER = dbUser({
 });
 
 const CONTACT_ADMIN_FOOTER =
-  "データベースの起動・接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。";
+  "データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。";
 
 /** `src/lib/ui-store.ts` の永続化キー（テーマの選好を起動前に入れる）。 */
 const UI_STORAGE_KEY = "production-ready-agent.ui";
@@ -78,7 +76,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 async function expectGate(page: Page, title: string, href = "/settings/database") {
   const card = gateCard(page);
   await expect(card.getByRole("heading", { level: 1, name: title })).toBeVisible();
-  // 未設定・接続できないときはデータベース設定へ（ADB が停止中などは ADB 管理のカード）。
+  // 未設定・接続できないときはデータベース設定へ（接続設定と Wallet を確かめる。#10）。
   const link = card.getByRole("link", { name: "データベース設定を開く" });
   await expect(link).toHaveAttribute("href", href);
   await expect(card.getByRole("link", { name: "システムテーブルを開く" })).toHaveCount(0);
@@ -126,7 +124,7 @@ for (const viewport of VIEWPORTS) {
 
       await page.goto("/agents");
 
-      const link = await expectGate(page, "データベースに接続できません", "/settings/database#adb-management");
+      const link = await expectGate(page, "データベースに接続できません", "/settings/database");
       await expect(page.getByText(/ORA-12514/)).toHaveCount(0);
       // 設定を開くリンク → 再試行の順に Tab で移る。
       await link.focus();
@@ -161,7 +159,7 @@ for (const viewport of VIEWPORTS) {
       setDatabaseStatus(mockApi, "unreachable");
 
       await page.goto("/runs");
-      await expectGate(page, "データベースに接続できません", "/settings/database#adb-management");
+      await expectGate(page, "データベースに接続できません", "/settings/database");
 
       setDatabaseStatus(mockApi, "ok");
       await gateCard(page).getByRole("button", { name: "再試行" }).click();
@@ -199,18 +197,18 @@ for (const viewport of VIEWPORTS) {
     });
 
     for (const theme of ["light", "dark"] as const) {
-      test(`ADB が停止中なら停止の案内と ADB 管理への導線を出す（${theme}）`, async ({ page, mockApi }) => {
+      test(`接続できなければ接続設定と Wallet の確認を案内し、ADB の状態は出さない（${theme}）`, async ({ page, mockApi }) => {
         await useTheme(page, theme);
-        setDatabaseStatus(mockApi, "unreachable", "ok", "STOPPED");
+        setDatabaseStatus(mockApi, "unreachable", "ok");
 
         await page.goto("/runs");
 
-        await expectGate(page, "Autonomous Database が停止しています", "/settings/database#adb-management");
+        await expectGate(page, "データベースに接続できません", "/settings/database");
         const card = gateCard(page);
-        await expect(card.getByText(/^データベース設定の「Autonomous Database 管理」で起動してください。/)).toBeVisible();
-        await expect(card.getByText("Autonomous Database: 停止済み", { exact: true })).toBeVisible();
+        await expect(card.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
+        await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
         expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(theme === "dark");
-        await saveScreenshot(page, `agent-${viewport.name}-${theme}-adb-stopped-admin`);
+        await saveScreenshot(page, `agent-${viewport.name}-${theme}-db-unreachable-admin`);
         expect(businessRequests(mockApi)).toEqual([]);
       });
 
@@ -246,27 +244,19 @@ for (const viewport of VIEWPORTS) {
         await useTheme(page, theme);
         mockApi.setCurrentUser(VIEWER);
 
-        for (const { status, adb, title, message } of [
+        for (const { status, title, message } of [
           {
             status: "unreachable" as const,
-            adb: null,
             title: "データベースに接続できません",
-            message: /システム管理者に連絡して、データベースの起動と接続の確認を依頼してください。$/,
-          },
-          {
-            status: "unreachable" as const,
-            adb: "STOPPED",
-            title: "Autonomous Database が停止しています",
-            message: /^システム管理者に連絡して、Autonomous Database の起動を依頼してください。/,
+            message: /システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/,
           },
           {
             status: "setup_required" as const,
-            adb: null,
             title: "システムテーブルの作成・更新が必要です",
             message: /システム管理者に連絡して、システムテーブルの作成・更新を依頼してください。$/,
           },
         ]) {
-          setDatabaseStatus(mockApi, status, "ok", adb);
+          setDatabaseStatus(mockApi, status, "ok");
           await page.goto("/runs");
 
           const card = gateCard(page);
@@ -277,7 +267,7 @@ for (const viewport of VIEWPORTS) {
           await expect(card.getByText(CONTACT_ADMIN_FOOTER, { exact: true })).toBeVisible();
           await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
           await expectNoHorizontalOverflow(page);
-          await saveScreenshot(page, `agent-${viewport.name}-${theme}-${status}-${adb ?? "none"}-viewer`);
+          await saveScreenshot(page, `agent-${viewport.name}-${theme}-${status}-viewer`);
         }
         expect(businessRequests(mockApi)).toEqual([]);
       });

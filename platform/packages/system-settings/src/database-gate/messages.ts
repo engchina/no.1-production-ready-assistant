@@ -11,31 +11,12 @@ export const DATABASE_GATE_MESSAGES = {
     "この画面を利用するには、まずデータベースの接続情報を設定してください。設定が完了すると、この画面は自動的に利用できるようになります。",
   "dbGate.notConfigured.contactAdmin":
     "この画面を利用するには、データベースの接続情報の設定が必要です。システム管理者に連絡して、設定を依頼してください。",
-  // 接続できない（unreachable）。ADB の状態が分かるときは、停止中・起動中・利用できない・起動済みを分ける（#820）。
+  // 接続できない（unreachable）。DB の起動・停止は画面では扱わないため、接続設定と Wallet の確認へ案内する（#10）。
   "dbGate.unreachable.title": "データベースに接続できません",
   "dbGate.unreachable.message":
-    "データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。",
+    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。",
   "dbGate.unreachable.contactAdmin":
-    "データベースが停止しているか、ネットワーク経由で到達できません。システム管理者に連絡して、データベースの起動と接続の確認を依頼してください。",
-  "dbGate.adbStopped.title": "Autonomous Database が停止しています",
-  "dbGate.adbStopped.message":
-    "データベース設定の「Autonomous Database 管理」で起動してください。起動の完了には数分かかります。完了してから再試行してください。",
-  "dbGate.adbStopped.contactAdmin":
-    "システム管理者に連絡して、Autonomous Database の起動を依頼してください。起動が完了したら再試行してください。",
-  "dbGate.adbStarting.title": "Autonomous Database を起動しています",
-  "dbGate.adbStarting.message": "起動の完了には数分かかります。状態が「起動済み」になってから再試行してください。",
-  "dbGate.adbStarting.contactAdmin":
-    "起動の完了には数分かかります。しばらく待ってから再試行してください。解消しない場合は、システム管理者に連絡してください。",
-  "dbGate.adbUnavailable.title": "Autonomous Database を利用できない状態です",
-  "dbGate.adbUnavailable.message":
-    "Autonomous Database の状態が「起動済み」に戻ってから再試行してください。状態はデータベース設定で確認できます。",
-  "dbGate.adbUnavailable.contactAdmin":
-    "Autonomous Database の状態が戻るまで利用できません。解消しない場合は、システム管理者に連絡してください。",
-  "dbGate.adbAvailable.message":
-    "Autonomous Database は起動していますが、接続できません。データベース設定で接続情報（サービス名・Wallet）とネットワークを確認してから、再試行してください。",
-  "dbGate.adbAvailable.contactAdmin":
-    "Autonomous Database は起動していますが、接続できません。システム管理者に連絡して、接続情報とネットワークの確認を依頼してください。",
-  "dbGate.adbState": "Autonomous Database: {state}",
+    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。",
   // 初期化が必要（setup_required）
   "dbGate.setupRequired.title": "システムテーブルの作成・更新が必要です",
   "dbGate.setupRequired.message":
@@ -54,7 +35,7 @@ export const DATABASE_GATE_MESSAGES = {
   "dbGate.setupRequired.settingsHint":
     "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。",
   "dbGate.contactAdmin.footer":
-    "データベースの起動・接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。",
+    "データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。",
   "dbGate.reasonCode": "診断コード: {code}",
   // 診断コード（`check`）ごとの補足。無いコードは診断コードだけを出す。
   "dbGate.check.missing": "接続ユーザーまたはサービス名（DSN）が設定されていません。",
