@@ -12,7 +12,7 @@
 | Web | FastAPI（本番: Gunicorn + `uvicorn.workers.UvicornWorker` / 開発: `uvicorn --reload`） |
 | Validation / Config | Pydantic v2 + pydantic-settings（`.env` + 任意 JSON 設定） |
 | HTTP client | httpx |
-| DB / Vector | Oracle AI Database + python-oracledb（Oracle AI Vector Search / Oracle Text）。対応バージョンは [terraform/README.md](../../terraform/README.md) |
+| DB / Vector | Oracle AI Database + python-oracledb（Oracle AI Vector Search / Oracle Text）。対応バージョンは [deployment.md](./deployment.md) |
 | LLM・VLM | OCI Enterprise AI |
 | Embedding・Rerank | OCI Generative AI（Cohere） |
 | Observability | Prometheus metrics + JSON logging + request-id |
@@ -297,7 +297,7 @@ API・worker・RAG の独立微サービス・browser の共通 schema、JST 時
 - **「今日」と既定の時間帯は共通の設定 `PLATFORM_TIMEZONE`（属性 `timezone`。既定 `UTC`）から決める**（`pr_backend_core.timezones.local_today(settings)` / `configured_timezone(settings)`）。`date.today()`・`datetime.now()`（時間帯なし）・時間帯の名前の定数を使わない。
 - **画面の日時はこの時間帯で表示する（#3265）。** `GET /api/auth/me` とログインの応答の `timezone`（`pr_system_settings.auth.router.DisplayTimezoneData`。製品の `CurrentUserData` が継承する）を `AuthProvider` が `@production-ready/ui` の `setDisplayTimeZone` に渡し、日時は `formatDisplayDateTime` / `displayDateTimeFormat` / `formatRunDateTime` などで書く（ブラウザの時間帯・`timeZone` の直書きを使わない）。
 - **業務データの SQL の「今」はこの時間帯（#3265）。** 業務データの SELECT を実行する間だけ `local_session_time_zone(connection, session_time_zone_offset(settings))` で session の時間帯を offset にし、抜けると `'+00:00'` に戻す（pool に返す接続とアプリの表は UTC のまま）。`CURRENT_DATE` / `CURRENT_TIMESTAMP` が設定の時間帯の今を返す（NL2SQL は生成した SQL の `SYSDATE` / `SYSTIMESTAMP` をこれに置き換える）。
-- ADB の `SYSDATE` / `SYSTIMESTAMP` は UTC を返す。`SYSDATE_AT_DBTIMEZONE` を `TRUE` にしない（手順と理由は [terraform/README.md](../../terraform/README.md)「Autonomous AI Database（全製品で共有）」）。
+- ADB の `SYSDATE` / `SYSTIMESTAMP` は UTC を返す。`SYSDATE_AT_DBTIMEZONE` を `TRUE` にしない（手順と理由は [deployment.md](./deployment.md)「Autonomous AI Database（全製品で共有）」）。
 
 ### 別の製品・別の worker が保存した共通の設定の反映（#465・#2092・#2102）
 
@@ -364,7 +364,7 @@ Agent の既存の終了イベントは実行 span とは別の log として扱
 3. 古いコードが `.env` を再読込して免ログインに切り替わらないよう、旧変数の削除はコード更新とサービスの停止・再起動を一体で行う。秘密の値は表示・commit しない。
 4. HTTPS と3製品のログイン、`/api/ready`、サービス管理の環境表示を確認する。
 
-Terraform の環境入力は3製品共通の `platform_environment`（既定 `staging`）を使う。staging / production で HTTPS を無効にした構成は配備前に拒否する。
+配備の環境は3製品共通の `PLATFORM_ENVIRONMENT` を使う。
 
 チャット添付の初期配備は 3 製品とも無効です。製品ごとに設定 API で有効化した保存値は再配備でも維持します。`.env` に有効化の既定値は置きません。
 

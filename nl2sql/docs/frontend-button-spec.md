@@ -59,7 +59,7 @@ Issue #435 のユーザー指定により、`OntologyGraphCanvas` の操作部�
 
 適用: PageHeader / ObjectActions / FormActionBar / ContentActionBar / BulkSelectionActions、確認ダイアログ、入力横、ログイン、各設定、質問・生成 SQL・結果、データ/テーブル/ビュー、Profile、学習・履歴・評価、権限、グラフ操作、ページング、エラー再試行、通知内操作。共有パッケージの状態 hook/store はそのまま使い、アクションを含む Pagination / ErrorState / Toaster の表示はアプリ共通 Button を使う。
 
-`tests/e2e/button-standards.spec.ts` は実 React 部品を使って light/dark × desktop/mobile-375 の寸法・状態・操作・focus・danger 確認・overflow・ページング・再試行を検証する。各機能の既存 Playwright spec はユーザーフローの回帰を担当する。
+`tests/e2e/button-standards.spec.ts` は実 React 部品を使って desktop/mobile-375 の寸法・状態・操作・focus・danger 確認・overflow・ページング・再試行を検証する。各機能の既存 Playwright spec はユーザーフローの回帰を担当する。
 
 ### Markdown オントロジーの構築と公開（Issue #491）
 

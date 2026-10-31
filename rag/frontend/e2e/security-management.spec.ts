@@ -273,7 +273,7 @@ test("権限管理で検索・回答プロファイルと KB を選んで保存�
 });
 
 // #521: 検索・回答プロファイル・KB の候補の行は名前と説明を出し、内部の ID は出さない。長い説明は 1 行で省略し
-// （共通の ListPicker の行。#600）、行の高さをそろえて重ねない（375px でも）。ライト / ダークの両方で確かめる。
+// （共通の ListPicker の行。#600）、行の高さをそろえて重ねない（375px でも）。
 const LONG_DESCRIPTION =
   "人事規程・就業規則・勤怠管理・福利厚生・評価制度・出張旅費・経費精算・情報セキュリティに関する社内の問い合わせにまとめて回答するための検索・回答プロファイルです。" +
   "説明が長い場合は 2 行で省略し、全文は title で確かめられることを確かめます。";
@@ -296,83 +296,67 @@ const MANY_TARGETS: AccessTargetsFixture = {
   })),
 };
 
-async function setTheme(page: Page, theme: "light" | "dark") {
-  // 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れておく。
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
-}
+test(`権限管理の検索・回答プロファイル・KB の候補は名前と説明を出し、ID を出さず、行が重ならない`, async ({
+  page,
+}) => {
+  await mockSecurityApi(page);
+  await page.route("**/api/security/access-targets/**", (route) => fulfillAccessTargets(route, MANY_TARGETS));
 
-for (const theme of ["light", "dark"] as const) {
-  test(`権限管理の検索・回答プロファイル・KB の候補は名前と説明を出し、ID を出さず、行が重ならない (${theme})`, async ({
-    page,
-  }) => {
-    await setTheme(page, theme);
-    await mockSecurityApi(page);
-    await page.route("**/api/security/access-targets/**", (route) => fulfillAccessTargets(route, MANY_TARGETS));
+  await page.goto("/settings/security/permissions?role=role-hr");
+  await page
+    .getByTestId("security-permissions-detail-actions")
+    .getByRole("button", { name: "権限を編集" })
+    .click();
 
-    await page.goto("/settings/security/permissions?role=role-hr");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    await page
-      .getByTestId("security-permissions-detail-actions")
-      .getByRole("button", { name: "権限を編集" })
-      .click();
+  for (const [key, targets] of [
+    ["search-answer-profile-access", MANY_TARGETS.search_answer_profiles],
+    ["knowledge-base-access", MANY_TARGETS.knowledge_bases],
+  ] as const) {
+    const list = page.getByTestId(`security-roles-${key}-list`);
+    await expect(list).toBeVisible();
+    // 内部の ID（32 桁）は出さない。名前・説明・アーカイブ済みは出す。
+    for (const target of targets) await expect(list).not.toContainText(target.id);
+    const longDescription = list.getByText(LONG_DESCRIPTION).first();
+    await expect(longDescription).toBeVisible();
+    await expect(list.getByText("アーカイブ済み")).toBeVisible();
+    // 省略した全文は title で確かめられ、選択肢の名前は全文のまま。
+    await expect(longDescription).toHaveAttribute("title", LONG_DESCRIPTION);
+    await expect(list.getByRole("option", { name: new RegExp(targets[1].name) })).toHaveCount(1);
 
-    for (const [key, targets] of [
-      ["search-answer-profile-access", MANY_TARGETS.search_answer_profiles],
-      ["knowledge-base-access", MANY_TARGETS.knowledge_bases],
-    ] as const) {
-      const list = page.getByTestId(`security-roles-${key}-list`);
-      await expect(list).toBeVisible();
-      // 内部の ID（32 桁）は出さない。名前・説明・アーカイブ済みは出す。
-      for (const target of targets) await expect(list).not.toContainText(target.id);
-      const longDescription = list.getByText(LONG_DESCRIPTION).first();
-      await expect(longDescription).toBeVisible();
-      await expect(list.getByText("アーカイブ済み")).toBeVisible();
-      // 省略した全文は title で確かめられ、選択肢の名前は全文のまま。
-      await expect(longDescription).toHaveAttribute("title", LONG_DESCRIPTION);
-      await expect(list.getByRole("option", { name: new RegExp(targets[1].name) })).toHaveCount(1);
-
-      const boxes = await list
-        .getByRole("option")
-        .evaluateAll((rows) =>
-          rows.map((row) => {
-            const { top, bottom, left, right, height } = row.getBoundingClientRect();
-            return { top, bottom, left, right, height };
-          })
-        );
-      expect(boxes).toHaveLength(targets.length);
-      // 行の高さはそろい（説明の有無・長さによらない）、どの 2 行も重ならない。
-      const heights = boxes.map((box) => Math.round(box.height));
-      expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
-      for (const [index, a] of boxes.entries()) {
-        for (const b of boxes.slice(index + 1)) {
-          const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
-          const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-          expect(overlapX > 0.5 && overlapY > 0.5).toBe(false);
-        }
+    const boxes = await list
+      .getByRole("option")
+      .evaluateAll((rows) =>
+        rows.map((row) => {
+          const { top, bottom, left, right, height } = row.getBoundingClientRect();
+          return { top, bottom, left, right, height };
+        })
+      );
+    expect(boxes).toHaveLength(targets.length);
+    // 行の高さはそろい（説明の有無・長さによらない）、どの 2 行も重ならない。
+    const heights = boxes.map((box) => Math.round(box.height));
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+    for (const [index, a] of boxes.entries()) {
+      for (const b of boxes.slice(index + 1)) {
+        const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        expect(overlapX > 0.5 && overlapY > 0.5).toBe(false);
       }
-      // 長い説明は 1 行で省略する。
-      const clamped = await longDescription.evaluate((element) => ({
-        scroll: element.scrollHeight,
-        client: element.clientHeight,
-        lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
-      }));
-      const truncated = await longDescription.evaluate((element) => ({
-        scroll: element.scrollWidth,
-        client: element.clientWidth,
-      }));
-      expect(clamped.client).toBeLessThanOrEqual(Math.ceil(clamped.lineHeight) + 1);
-      expect(truncated.scroll).toBeGreaterThan(truncated.client);
     }
-    await expectNoPageOverflow(page);
-  });
-}
+    // 長い説明は 1 行で省略する。
+    const clamped = await longDescription.evaluate((element) => ({
+      scroll: element.scrollHeight,
+      client: element.clientHeight,
+      lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+    }));
+    const truncated = await longDescription.evaluate((element) => ({
+      scroll: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(clamped.client).toBeLessThanOrEqual(Math.ceil(clamped.lineHeight) + 1);
+    expect(truncated.scroll).toBeGreaterThan(truncated.client);
+  }
+  await expectNoPageOverflow(page);
+});
 
 // #608: 候補が大量（数千件）でも全件を読まない。検索はサーバーの q で絞り、続きは「さらに読み込む」で 50 件ずつ足す。
 // 保存済みの対象の名前は ids で読み、一覧の詳細と「選択中だけ表示」に出す。

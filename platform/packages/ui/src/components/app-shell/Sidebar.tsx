@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { LogOut, type LucideIcon, Moon, PanelLeftClose, PanelLeftOpen, Sun, UserRound, X } from "lucide-react";
+import { LogOut, type LucideIcon, PanelLeftClose, PanelLeftOpen, UserRound, X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { NavLinkComponent, NavSection, SidebarLabels } from "../../navigation/types";
@@ -300,10 +300,9 @@ export interface SidebarAccountLink {
 }
 
 /**
- * サイドバー下部のアカウント領域。上から「ユーザー（name があるとき）→ notice → actions → ログアウト / テーマ切替」。
+ * サイドバー下部のアカウント領域。上から「ユーザー（name があるとき）→ notice → actions → ログアウト」（テーマ切替は #17 で廃止）。
  * `account` を渡すと、ユーザーの欄（名前・ロール）の行全体がアカウントの画面へのリンクになる（#1873）。
  * Sidebar の `footer` スロットに渡す。ラベルは翻訳済み文字列で上書きする。
- * - 認証の無いアプリ（Agent 等）は `name` を省き、テーマ切替だけを置ける。
  * - `notice` はモード表示（ローカル DEBUG など）。ログアウトを出さない場合は `onLogout` を省く。
  *   折りたたみ時の表示はアプリ側で `useSidebarCollapsed(collapsed)` の値を見て切り替える（ドロワーの中では展開）。
  */
@@ -312,13 +311,11 @@ export function SidebarAccountFooter({
   roles,
   rolesLabel,
   collapsed: collapsedPreference,
-  theme = "light",
-  onToggleTheme,
   onLogout,
   actions = [],
   notice,
   account,
-  labels = { logout: "ログアウト", switchToLight: "ライトテーマに切り替え", switchToDark: "ダークテーマに切り替え" },
+  labels = { logout: "ログアウト" },
 }: {
   name?: string;
   /** 2 行目に出すロール（翻訳済みの表示名）。 */
@@ -326,18 +323,14 @@ export function SidebarAccountFooter({
   /** ロールの行の全文（「ロール: …」など）。title と読み上げに使い、見える行は `roles` のまま。 */
   rolesLabel?: string;
   collapsed: boolean;
-  /** 現在適用中のテーマ（system 設定の場合は解決後の値）。`onToggleTheme` と一緒に渡す。 */
-  theme?: "light" | "dark";
-  onToggleTheme?: () => void;
   onLogout?: () => void;
   actions?: SidebarFooterAction[];
   notice?: ReactNode;
   account?: SidebarAccountLink;
-  labels?: { logout: string; switchToLight: string; switchToDark: string };
+  labels?: { logout: string };
 }) {
   // ドロワーの中（md 未満）では常に展開して描く。
   const collapsed = useSidebarCollapsed(collapsedPreference);
-  const themeLabel = theme === "dark" ? labels.switchToLight : labels.switchToDark;
   return (
     // grid の列は minmax(0, 1fr)（grid-cols-1）。暗黙の auto の列は項目の最小幅（nowrap の名前の全幅）まで広がり、
     // 名前の行がサイドバーの右端からはみ出して省略記号の出ないまま切り取られていた（#1644）。
@@ -395,7 +388,7 @@ export function SidebarAccountFooter({
           </button>
         </SidebarTooltip>
       ))}
-      {onLogout || onToggleTheme ? (
+      {onLogout ? (
         <div className={cn("flex gap-1", collapsed && "flex-col")}>
           {onLogout ? (
             <SidebarTooltip label={labels.logout} enabled={collapsed}>
@@ -407,33 +400,6 @@ export function SidebarAccountFooter({
               >
                 <NavRowContent icon={LogOut} label={labels.logout} collapsed={collapsed} active={false} />
               </button>
-            </SidebarTooltip>
-          ) : null}
-          {onToggleTheme ? (
-            <SidebarTooltip label={themeLabel} enabled={collapsed}>
-              {onLogout && !collapsed ? (
-                // 見える名前は共有の Tooltip（#372。HTML の title は使わない）。
-                <Tooltip content={themeLabel}>
-                  <button
-                    type="button"
-                    onClick={onToggleTheme}
-                    aria-label={themeLabel}
-                    className="flex h-11 min-h-11 w-11 cursor-pointer items-center justify-center rounded-md border border-border transition-colors hover:bg-surface-hover hover:text-fg forced-colors:hover:bg-[Highlight] forced-colors:hover:text-[HighlightText]"
-                  >
-                    {theme === "dark" ? <Sun size={20} aria-hidden /> : <Moon size={20} aria-hidden />}
-                  </button>
-                </Tooltip>
-              ) : (
-                // ログアウトと並ばない（テーマ切替だけ・折りたたみ時）ときはナビ行と同じ形にし、展開時はラベルも出す
-                <button
-                  type="button"
-                  onClick={onToggleTheme}
-                  aria-label={collapsed ? themeLabel : undefined}
-                  className={navRowClass(collapsed, false)}
-                >
-                  <NavRowContent icon={theme === "dark" ? Sun : Moon} label={themeLabel} collapsed={collapsed} active={false} />
-                </button>
-              )}
             </SidebarTooltip>
           ) : null}
         </div>

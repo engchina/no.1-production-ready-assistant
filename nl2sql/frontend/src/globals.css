@@ -2,7 +2,7 @@
 
 /*
  * Production Ready NL2SQL — グローバルスタイル
- * 色・型・余白・角丸・影・テーマは共有 UI パッケージ（platform の docs/design-system/）が正本。
+ * 色・型・余白・角丸・影は共有 UI パッケージ（platform の docs/design-system/）が正本。
  * ここには NL2SQL 固有の書体と画面固有のレイアウトだけを書く。
  */
 @import "@production-ready/ui/styles.css";

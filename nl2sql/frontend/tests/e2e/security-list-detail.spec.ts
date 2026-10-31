@@ -132,10 +132,9 @@ test.describe("ユーザー・ロール・権限管理の一覧 + 詳細（ListD
     await expect(page.getByTestId("list-detail-security-users-list")).toBeVisible();
   });
 
-  test("1920px でも一覧は狭い列のままで、タイトルと本文の左端がそろい、横にあふれない（ダーク）", async ({ page }, testInfo) => {
+  test("1920px でも一覧は狭い列のままで、タイトルと本文の左端がそろい、横にあふれない", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "1920px は desktop で確かめる");
     await page.setViewportSize({ width: 1920, height: 1000 });
-    await page.emulateMedia({ colorScheme: "dark" });
     await mockSecurity(page);
     await page.goto("/settings/security/roles?role=role-viewer");
     await expect(page.getByRole("heading", { name: "一覧閲覧", level: 2 })).toBeVisible();

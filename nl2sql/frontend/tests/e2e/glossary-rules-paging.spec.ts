@@ -91,24 +91,21 @@ for (const list of LISTS) {
   });
 }
 
-test("用語・同義語 / 共通ルールの一覧は 1280 / 1920 / 375px・ライト / ダークで崩れない", { tag: "@responsive" }, async ({ page }) => {
-  // 2 画面 × 幅 × 配色を 1 つの test で見る（画面の移動が多いので時間を延ばす）。
+test("用語・同義語 / 共通ルールの一覧は 1280 / 1920 / 375pxで崩れない", { tag: "@responsive" }, async ({ page }) => {
+  // 2 画面 × 幅を 1 つの test で見る（画面の移動が多いので時間を延ばす）。
   test.slow();
   await mockMaterial(page);
   const widths = test.info().project.name === "mobile-375" ? [375] : [1280, 1920];
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      for (const list of LISTS) {
-        await page.goto(list.path);
-        await expect(page.getByTestId(list.toolbar).getByRole("status")).toHaveText(`全 ${list.total} 件`);
-        await expect(page.getByTestId(list.pagination)).toBeVisible();
-        const label = `${list.path} ${width}px ${colorScheme}`;
-        expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
-        expect(await findClippedPlaceholders(page), label).toEqual([]);
-        if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
-      }
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const list of LISTS) {
+      await page.goto(list.path);
+      await expect(page.getByTestId(list.toolbar).getByRole("status")).toHaveText(`全 ${list.total} 件`);
+      await expect(page.getByTestId(list.pagination)).toBeVisible();
+      const label = `${list.path} ${width}px`;
+      expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
+      expect(await findClippedPlaceholders(page), label).toEqual([]);
+      if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
     }
   }
 });

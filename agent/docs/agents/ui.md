@@ -17,6 +17,6 @@
 - 業務 Agent の編集画面は指示・スキル・モデル・データの範囲を選ぶ（範囲の強制は組み込み Runtime の tool handler。モデルの指示に頼らない。docs/agent-control-plane-design.md §2）。実行（Run）は業務 Agent と目標だけで作る（実行先の選択は無い）。
 - 空、読込、エラー、モデル未設定（組み込み Runtime が実行できない）、承認待ちを明示する。
 - 各ページの型（A〜D）の割り当て、離脱ガードの対象画面、作業状態として残す field は [docs/frontend-page-archetypes-spec.md](../../docs/frontend-page-archetypes-spec.md) に書く。
-- サイドバーのアカウント領域（ユーザー・ロール・ログアウト・テーマ切替）は `SidebarAccountFooter` を `Sidebar` の `footer` に渡す。ダークテーマ（`data-theme="dark"`）に追従するため、色の直書きを残さない。
+- サイドバーのアカウント領域（ユーザー・ロール・ログアウト）は `SidebarAccountFooter` を `Sidebar` の `footer` に渡す。テーマはライトだけ（#17）だが、サイドバーは暗い面（`data-surface="inverted"`）なので、色の直書きを残さずトークンを使う。
 - lint は `frontend/eslint.config.js` が `../../platform/docs/design-system/adherence.oxlintrc.json` を import する。
 - Playwright は `desktop` と `mobile-375`（Pixel 5、375×812、タッチ）の 2 project。spec の中で viewport を回しているテストと、画面幅に関係しない spec は `mobile-375` では実行しない（`playwright.config.ts`）。PR の CI の `mobile-375` は、さらに `@responsive` の tag の test だけ（全件は nightly。root の [docs/agents/ui.md](../../../docs/agents/ui.md)「UI 変更の検証」）。

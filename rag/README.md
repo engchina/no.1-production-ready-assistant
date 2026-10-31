@@ -66,7 +66,7 @@ MinerU・Dots.OCR・OCI Document Understanding への対応も削除した(#22�
 - 起動 = `systemctl enable --now`、停止 = `systemctl disable --now`。利用者が最後に操作した状態が再起動・再配備後も保たれる。
 - backend は、sudoers で許可した unit の `systemctl` / `journalctl` だけを `sudo -n` で実行する。unit 名は
   `app/services/catalog.py` の allowlist で検証し、argv は固定(任意のコマンドは実行できない)。
-- 本番は `RAG_SERVICE_CONTROL_ENABLED=true`(Terraform の stack の既定)のときだけ操作でき、開発(`PLATFORM_ENVIRONMENT=local`)は自動で有効。
+- 本番は `RAG_SERVICE_CONTROL_ENABLED=true`(配備の props の `rag.backend.env` の既定)のときだけ操作でき、開発(`PLATFORM_ENVIRONMENT=local`)は自動で有効。
 - 開発環境の unit と sudoers は `scripts/rag-services.sh install` で登録する(systemd の無い環境は
   `scripts/rag-services.sh run <service>` で前面に起動)。手順は [docs/deployment.md](./docs/deployment.md)。
 
@@ -84,12 +84,12 @@ MinerU・Dots.OCR・OCI Document Understanding への対応も削除した(#22�
 
 Backend は常に OCI Enterprise AI、OCI Generative AI、Oracle AI Database を前提に動作します。開発・staging・本番のいずれも OCI / Oracle 接続情報を共通 `.env`（リポジトリの `platform/.env`、`PLATFORM_*`）または設定画面から注入してください。RAG 固有の設定は `backend/.env`（`RAG_*`）に置きます（#211。詳細と既存環境の移行は [docs/deployment.md](docs/deployment.md)）。
 
-## OCI への配備（Resource Manager）
+## 配備
 
-3製品共通の Terraform stack（monorepo root の `terraform/stack/`）で配備します。Oracle Autonomous AI Database は NL2SQL / Agent と共有し、
-RAG は専用の Compute 1 台に NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）を作ります
-（CPU の parser だけを配備する）。以前の Docker Compose で配備した環境の移行は [docs/deployment.md](./docs/deployment.md) を参照してください。
-「配備する製品」で RAG を選び、入力・配備方式・instance 上の構成・制約は [terraform/README.md](../terraform/README.md) を参照してください。
+OCI Resource Manager の Terraform stack による配備は廃止しました（#12）。RAG は NL2SQL / Agent と同じ 1 台の Compute に、
+ネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）で入れます（`platform/deploy/` の配備のスクリプト。
+仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。以前の Docker Compose で配備した環境の移行は
+[docs/deployment.md](./docs/deployment.md) を参照してください。
 
 ## 外部の MCP クライアントから使う（Claude Code など）
 

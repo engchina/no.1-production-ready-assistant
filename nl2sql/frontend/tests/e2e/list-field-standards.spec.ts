@@ -12,7 +12,7 @@ import {
 
 /**
  * 全画面の一覧・入力欄の共通の検査（#1891 段 3）。API は未モック（404）で、データに依存しない欄（検索・絞り込み・
- * 条件のフォーム）と読み込みの失敗の表示を、1280 / 1920px（desktop）・375px（mobile-375）× ライト / ダークで回す。
+ * 条件のフォーム）と読み込みの失敗の表示を、1280 / 1920px（desktop）・375px（mobile-375）で回す。
  * データのある一覧（ページ送り・件数・多い行）は各画面の spec が確かめる。
  *
  * - 横あふれが無い（`measureHorizontalOverflow`）
@@ -94,28 +94,18 @@ test.describe("一覧・入力欄の共通の検査（#1891）", { tag: "@respon
     await mockDatabaseGateReady(page);
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    for (const width of [1280, 1920]) {
-      test(`${width}px・${theme}: 全画面で横あふれ・placeholder の切れ・段の外の幅が無い`, async ({ page, isMobile }) => {
-        test.skip(isMobile, "desktop の幅");
-        test.setTimeout(240_000);
-        await page.emulateMedia({ colorScheme: theme });
-        await page.addInitScript((value) => {
-          localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-        }, theme);
-        await page.setViewportSize({ width, height: 1000 });
-        await scanAllPages(page, { width, checkWidthScale: true });
-      });
-    }
-
-    test(`375px・${theme}: 全画面で横あふれ・placeholder の切れが無い`, async ({ page, isMobile }) => {
-      test.skip(!isMobile, "モバイル幅");
+  for (const width of [1280, 1920]) {
+    test(`${width}px: 全画面で横あふれ・placeholder の切れ・段の外の幅が無い`, async ({ page, isMobile }) => {
+      test.skip(isMobile, "desktop の幅");
       test.setTimeout(240_000);
-      await page.emulateMedia({ colorScheme: theme });
-      await page.addInitScript((value) => {
-        localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-      }, theme);
-      await scanAllPages(page, { width: 375, checkWidthScale: false });
+      await page.setViewportSize({ width, height: 1000 });
+      await scanAllPages(page, { width, checkWidthScale: true });
     });
   }
+
+  test(`375px: 全画面で横あふれ・placeholder の切れが無い`, async ({ page, isMobile }) => {
+    test.skip(!isMobile, "モバイル幅");
+    test.setTimeout(240_000);
+    await scanAllPages(page, { width: 375, checkWidthScale: false });
+  });
 });

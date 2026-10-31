@@ -112,8 +112,6 @@ jobs:
       deploy: ${{ steps.filter.outputs.deploy == 'true' || steps.filter.outputs.ci == 'true' }}
       # Compute の OS（Oracle Linux 9）に依存する配備のスクリプト（#1611）。
       deploy_os: ${{ steps.filter.outputs.deploy_os == 'true' || steps.filter.outputs.ci == 'true' }}
-      # Terraform の stack の IaC の検査（Suite / Terraform IaC。trivy config。#1595）を動かす変更。
-      terraform: ${{ steps.filter.outputs.terraform }}
       scripts: ${{ steps.filter.outputs.scripts == 'true' || steps.filter.outputs.ci == 'true' }}
       platform_frontend: >-
         ${{ steps.filter.outputs.platform_frontend == 'true' || steps.filter.outputs.ci == 'true'
@@ -121,7 +119,7 @@ jobs:
       platform_backend: >-
         ${{ steps.filter.outputs.platform_backend == 'true' || steps.filter.outputs.ci == 'true'
         || steps.filter.outputs.platform_other == 'true' }}
-      # platform のどこか（Markdown だけの変更を除く）。配備スクリプト・Terraform の検証が使う。
+      # platform のどこか（Markdown だけの変更を除く）。配備スクリプトの検証が使う。
       platform: >-
         ${{ steps.filter.outputs.platform_frontend == 'true' || steps.filter.outputs.platform_backend == 'true'
         || steps.filter.outputs.ci == 'true' || steps.filter.outputs.platform_other == 'true' }}
@@ -324,15 +322,12 @@ jobs:
               - "agent/frontend/**"
               - "agent/backend/app/features/agent/router.py"
               - "agent/backend/app/security/permissions.py"
-            terraform:
-              - "terraform/**"
             # 配備の検証（suite-deploy.yml）が読むもの。製品の frontend（init_script.sh の検証は build を fake にする）・
             # 共有 UI・Markdown は読まない（#1592）。
             deploy:
               - "rag/**"
               - "nl2sql/**"
               - "agent/**"
-              - "terraform/**"
               - "platform/**"
               - ".github/workflows/suite-deploy.yml"
               - "!rag/frontend/**"
@@ -346,7 +341,6 @@ jobs:
               - "!**/*.md"
             # Compute の OS（Oracle Linux 9）の上で動く配備のスクリプトと、それが使う設定の雛形（#1611）。
             deploy_os:
-              - "terraform/**"
               - "platform/deploy/**"
               - "platform/templates/nginx/**"
               - "*/init_script.sh"
@@ -1798,10 +1792,10 @@ jobs:
           path: agent/frontend/test-results
           retention-days: 7
 
-  # ---------------------------------------------------------------- 配備（init_script.sh・Terraform・platform/deploy）
+  # ---------------------------------------------------------------- 配備（init_script.sh・platform/deploy）
 
-  # 1 台の Compute の配備の検証（#1592）。RAG / NL2SQL / Agent の init_script.sh と配備のスクリプト・Terraform の
-  # stack・platform/deploy を 1 つの job で検査する（以前の 4 つの job。中身は suite-deploy.yml。release も再利用する）。
+  # 1 台の Compute の配備の検証（#1592）。RAG / NL2SQL / Agent の init_script.sh と配備のスクリプト・
+  # platform/deploy を 1 つの job で検査する（以前の 4 つの job。中身は suite-deploy.yml）。
   # 製品横断の評価（suite/evaluation。#3240）。製品は公開の MCP の台本（MockTransport）で再生し、実サービスは呼ばない。
   suite-evaluation:
     name: Suite / Evaluation
@@ -1890,35 +1884,6 @@ jobs:
           for test_script in suite-tls suite-init suite-nginx; do
             runuser -u pr-ci -- env NGINX_BIN=/usr/sbin/nginx bash "platform/deploy/tests/${test_script}.test.sh"
           done
-
-  # Terraform の stack の IaC の検査（trivy config。#1595）。terraform/ が変わったときだけ実行する
-  # （製品・platform の変更では stack は変わらない）。HIGH / CRITICAL の misconfiguration で失敗する。
-  # 版を固定し、release の checksum で確かめてから使う（actionlint と同じ。third-party の action は使わない）。
-  suite-terraform-iac:
-    name: Suite / Terraform IaC (trivy config)
-    needs: changes
-    if: needs.changes.outputs.terraform == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Trivy config
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TRIVY_VERSION: "0.74.0"
-        run: |
-          dir="${RUNNER_TEMP}/trivy"
-          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          gh release download "v${TRIVY_VERSION}" --repo aquasecurity/trivy --dir "${dir}" \
-            --pattern "${archive}" --pattern "trivy_${TRIVY_VERSION}_checksums.txt"
-          (cd "${dir}" && sha256sum --check --ignore-missing "trivy_${TRIVY_VERSION}_checksums.txt" \
-            && tar -xzf "${archive}" trivy)
-          "${dir}/trivy" config --skip-version-check --cache-dir "${RUNNER_TEMP}/trivy-cache" \
-            --severity HIGH,CRITICAL --exit-code 1 terraform/stack
 
   # ---------------------------------------------------------------- root の scripts/
 
@@ -2058,7 +2023,6 @@ jobs:
       - agent-e2e-impact
       - suite-deploy
       - suite-oracle-linux
-      - suite-terraform-iac
       - suite-scripts
       - suite-evaluation
       - rag-oracle

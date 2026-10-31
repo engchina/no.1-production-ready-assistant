@@ -20,7 +20,7 @@ GitHub 運用・PR 規約・CI は monorepo 共通の [../AGENTS.md](../AGENTS.m
 ## 2. 変更時の確認範囲
 
 - `platform/` を変更した PR では、統合 CI（suite root の `.github/workflows/ci.yml`）が `Platform / UI`・`Platform / backend_core` に加えて **3製品すべての job** を実行する。必須 check `CI OK` が成功するまで merge しない。
-- 見た目に関わる `packages/ui` の変更は、CI に加えて3製品の画面をローカルで起動して確認する（light / dark、1280px / 1920px）。結果は PR の `検証結果` に書く。
+- 見た目に関わる `packages/ui` の変更は、CI に加えて3製品の画面をローカルで起動して確認する（ライト、1280px / 1920px）。結果は PR の `検証結果` に書く。
 
 ## 3. 共有 UI（`@production-ready/ui`）
 

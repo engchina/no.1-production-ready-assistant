@@ -3724,10 +3724,6 @@ test("ロール・権限管理はオントロジー提案取得が遅延して�
   }
 });
 
-// #608: 対象 table/view は 1 つを選ぶので、検索できる選択欄（SearchableSelectField）。候補は数千件になりうるので、
-// サーバー側で検索し、続きは 50 件ずつ読む。desktop / 375px（projects）とライト / ダークで確かめる。
-// #1708: 1 ページ目の候補が一覧の高さに満たず続きがあるとき（以前の backend は共通基盤・他製品のシステムテーブルを
-// 取った後に落とし、1 ページ目が表 3 件だけになった）、スクロールを待たずに続きを読み、後ろに並ぶ view まで出す。
 async function mockReviewedUsers(page: Page, locked = false) {
   await mockDatabaseGateReady(page);
   const role = { ...systemRole, role_id: "review-role", role_code: "REVIEW", display_name: "レビュー", is_built_in: false };
@@ -3923,7 +3919,7 @@ test.afterEach(async ({ page }, testInfo) => {
   await expectLocalUiFonts(page);
 });
 
-test("ユーザー / ロール一覧の選択行はライト / ダークで文字が 4.5:1 以上になり、左バーでも選択を示す (#571)", async ({ page }) => {
+test("ユーザー / ロール一覧の選択行は文字が 4.5:1 以上になり、左バーでも選択を示す (#571)", async ({ page }) => {
   await mockDatabaseGateReady(page);
   const customRole = { ...systemRole, role_id: "role-contrast", role_code: "CONTRAST_VIEWER", display_name: "コントラスト確認", description: "表示のみ", is_built_in: false };
   const users = ["contrast.first", "contrast.second"].map((login, index) => ({
@@ -3943,80 +3939,64 @@ test("ユーザー / ロール一覧の選択行はライト / ダークで文�
   // 選択行と一覧を並べて見る 2 ペイン（xl 以上）で測る（xl 未満は選ぶと一覧が隠れる。#2282）。
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  for (const theme of ["light", "dark"] as const) {
-    // theme.ts は ui-store のテーマ選好から html.dark を決めるため、永続化された選好として描画前に与える
-    // （addInitScript は登録順に実行されるので、後の周回のテーマが勝つ）。
-    await page.addInitScript((value) => {
-      const key = "production-ready-nl2sql.ui";
-      const stored = JSON.parse(window.localStorage.getItem(key) ?? "null") ?? { state: {}, version: 0 };
-      stored.state = { ...stored.state, theme: value };
-      window.localStorage.setItem(key, JSON.stringify(stored));
-    }, theme);
+  for (const prefix of ["security-users", "security-roles"] as const) {
+    // 選択は URL が持ち、先頭の行を自動で選ばない（#2282）。
+    await page.goto(
+      prefix === "security-users"
+        ? "/settings/security/users?user=contrast-user-0"
+        : "/settings/security/roles?role=role-contrast"
+    );
+    const grid = page.getByTestId(`${prefix}-grid`);
+    const selected = grid.locator('tbody tr[data-selected="true"]');
+    await expect(selected).toHaveCount(1);
+    const unselected = grid.locator('tbody tr[data-selected="false"]').first();
+    await unselected.hover();
 
-    for (const prefix of ["security-users", "security-roles"] as const) {
-      // 選択は URL が持ち、先頭の行を自動で選ばない（#2282）。
-      await page.goto(
-        prefix === "security-users"
-          ? "/settings/security/users?user=contrast-user-0"
-          : "/settings/security/roles?role=role-contrast"
-      );
-      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-      else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
-      const grid = page.getByTestId(`${prefix}-grid`);
-      const selected = grid.locator('tbody tr[data-selected="true"]');
-      await expect(selected).toHaveCount(1);
-      const unselected = grid.locator('tbody tr[data-selected="false"]').first();
-      await unselected.hover();
-
-      const measured = await selected.evaluate((row) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = 1;
-        const context = canvas.getContext("2d", { willReadFrequently: true })!;
-        const rgb = (color: string) => {
-          context.clearRect(0, 0, 1, 1);
-          context.fillStyle = color;
-          context.fillRect(0, 0, 1, 1);
-          return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
-        };
-        const luminance = (color: number[]) => {
-          const [r, g, b] = color.map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        };
-        const contrast = (a: number[], b: number[]) => {
-          const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-          return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
-        };
-        const rowBg = rgb(getComputedStyle(row).backgroundColor);
-        const button = row.querySelector("button")!;
-        const firstCellShadow = getComputedStyle(row.firstElementChild!).boxShadow;
-        const bar = firstCellShadow.match(/(rgba?\([^)]*\)) [\d.]+px 0px 0px 0px inset/);
-        const subtitle = button.querySelector(":scope > span:nth-of-type(2)");
-        const code = button.querySelector("span.font-mono");
-        return {
-          // ユーザーは表示名（ログイン ID・UUID を出さない。#1696）、ロールはロール名（コード・ID は出さない。#1682）。
-          // 2 行目の補足は割り当てロール・説明（狭い一覧の列。#2282）。
-          firstLineIsCode: button.firstElementChild?.querySelector(".font-mono") != null,
-          hasSubtitle: subtitle != null,
-          title: contrast(rgb(getComputedStyle(button.firstElementChild!).color), rowBg),
-          name: subtitle ? contrast(rgb(getComputedStyle(subtitle).color), rowBg) : 0,
-          code: code ? contrast(rgb(getComputedStyle(code).color), rowBg) : 0,
-          body: contrast(rgb(getComputedStyle(row).color), rowBg),
-          bar: bar ? contrast(rgb(bar[1]), rowBg) : 0,
-          rowBgLuminance: luminance(rowBg),
-        };
-      });
-      // ダークの選択行は暗い地のまま（明るい地に文字を載せない）。
-      if (theme === "dark") expect(measured.rowBgLuminance).toBeLessThan(0.05);
-      expect(measured.title, `${prefix} ${theme} 題名`).toBeGreaterThanOrEqual(4.5);
-      // ユーザーの行は表示名（#1696）、ロールの行はロール名（#1682）。ID・コードの mono は出さない。
-      // 補足の行（割り当てロール・説明。#2282）も 4.5:1 以上。
-      expect(measured.firstLineIsCode, `${prefix} ${theme} ID・コードを出さない`).toBe(false);
-      expect(measured.hasSubtitle, `${prefix} ${theme} 補足あり`).toBe(true);
-      expect(measured.name, `${prefix} ${theme} 補足`).toBeGreaterThanOrEqual(4.5);
-      expect(measured.body, `${prefix} ${theme} 本文`).toBeGreaterThanOrEqual(4.5);
-      // 選択を背景色の差だけで示さない（WCAG 1.4.1）。左バーは非テキストの 3:1 以上。
-      expect(measured.bar, `${prefix} ${theme} 左バー`).toBeGreaterThanOrEqual(3);
-      await expect(unselected).not.toHaveAttribute("data-surface-tint");
-    }
+    const measured = await selected.evaluate((row) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      const rgb = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
+      };
+      const luminance = (color: number[]) => {
+        const [r, g, b] = color.map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const contrast = (a: number[], b: number[]) => {
+        const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+      };
+      const rowBg = rgb(getComputedStyle(row).backgroundColor);
+      const button = row.querySelector("button")!;
+      const firstCellShadow = getComputedStyle(row.firstElementChild!).boxShadow;
+      const bar = firstCellShadow.match(/(rgba?\([^)]*\)) [\d.]+px 0px 0px 0px inset/);
+      const subtitle = button.querySelector(":scope > span:nth-of-type(2)");
+      const code = button.querySelector("span.font-mono");
+      return {
+        // ユーザーは表示名（ログイン ID・UUID を出さない。#1696）、ロールはロール名（コード・ID は出さない。#1682）。
+        // 2 行目の補足は割り当てロール・説明（狭い一覧の列。#2282）。
+        firstLineIsCode: button.firstElementChild?.querySelector(".font-mono") != null,
+        hasSubtitle: subtitle != null,
+        title: contrast(rgb(getComputedStyle(button.firstElementChild!).color), rowBg),
+        name: subtitle ? contrast(rgb(getComputedStyle(subtitle).color), rowBg) : 0,
+        code: code ? contrast(rgb(getComputedStyle(code).color), rowBg) : 0,
+        body: contrast(rgb(getComputedStyle(row).color), rowBg),
+        bar: bar ? contrast(rgb(bar[1]), rowBg) : 0,
+      };
+    });
+    expect(measured.title, `${prefix} 題名`).toBeGreaterThanOrEqual(4.5);
+    // ユーザーの行は表示名（#1696）、ロールの行はロール名（#1682）。ID・コードの mono は出さない。
+    // 補足の行（割り当てロール・説明。#2282）も 4.5:1 以上。
+    expect(measured.firstLineIsCode, `${prefix} ID・コードを出さない`).toBe(false);
+    expect(measured.hasSubtitle, `${prefix} 補足あり`).toBe(true);
+    expect(measured.name, `${prefix} 補足`).toBeGreaterThanOrEqual(4.5);
+    expect(measured.body, `${prefix} 本文`).toBeGreaterThanOrEqual(4.5);
+    // 選択を背景色の差だけで示さない（WCAG 1.4.1）。左バーは非テキストの 3:1 以上。
+    expect(measured.bar, `${prefix} 左バー`).toBeGreaterThanOrEqual(3);
+    await expect(unselected).not.toHaveAttribute("data-surface-tint");
   }
 });

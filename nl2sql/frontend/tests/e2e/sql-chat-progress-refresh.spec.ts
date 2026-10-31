@@ -175,79 +175,73 @@ async function openSecondQuestion(page: Page) {
   return turn;
 }
 
-for (const colorScheme of ["light", "dark"] as const) {
-  test.describe(`処理の経過の自動の更新（${colorScheme}）`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme });
-    });
-
-    test("2 回目の質問で段階が進み、完了したら読み込み直さずに結果に置き換わる", async ({ page }) => {
-      const state = await setup(page);
-      const turn = await openSecondQuestion(page);
-      state.phase = "generate";
-      await expect(turn.getByTestId("sql-chat-progress-current")).toContainText("SQL を生成しています");
-      await expect(turn.getByTestId("sql-chat-progress-running")).toContainText("処理中（2 ステップ完了）");
-      state.phase = "done";
-      await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC");
-      await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
-      // 実行中は開いていた一覧を、完了したら閉じる（3 製品で同じ。#2265）。
-      await expect(turn.getByTestId("sql-chat-progress").locator("details").first()).not.toHaveAttribute("open", "");
-      // 処理の詳細に trace id を出す（「トレースの詳細」の 2 つ目の表示は無い。#3226）。
-      await expect(turn.getByTestId("sql-chat-progress").locator("[data-trace-id-row]")).toHaveCount(1);
-      await expect(turn.getByText("トレースの詳細")).toHaveCount(0);
-      await expect(page.getByTestId("sql-chat-send")).toHaveAccessibleName("送信");
-    });
-
-    test("取得が 5xx を返し DB の状態の確認が応答しなくても、取り直しを続けて完了が出る", async ({ page }) => {
-      test.setTimeout(90_000);
-      const state = await setup(page);
-      const turn = await openSecondQuestion(page);
-      // backend が詰まった（#1155）: 会話の取得が 5xx を返し、DB の状態の確認は応答しない。
-      state.hangReadiness = true;
-      state.failChats = 1;
-      await expect.poll(() => state.failChats).toBe(0);
-      // その間にジョブは完了する。読み込み直さずに結果が出ること（修正前は確認の応答を待ったまま止まった）。
-      state.phase = "done";
-      await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC", { timeout: 30_000 });
-      await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
-      await expect(turn.getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
-    });
-
-    test("取得が応答しなくなったら「接続を確認しています」を出して取り直し、完了が出る", async ({ page }) => {
-      test.setTimeout(90_000);
-      const state = await setup(page);
-      const turn = await openSecondQuestion(page);
-      // 応答を止める（2 回）。取り直しが応答しない取得を打ち切り、新しく取り直す。
-      state.hangChats = 2;
-      const reconnecting = turn.getByTestId("sql-chat-progress-reconnecting");
-      await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 20_000 });
-      // 案内は見出し「処理中（N ステップ完了）」の直下（左の見出しの側の 2 行目）に出す。今の段階の行の下・右の経過時間の
-      // 列には出さない（#2426）。
-      const timerBox = await turn.getByTestId("sql-chat-progress-timer").boundingBox();
-      const noticeBox = await reconnecting.boundingBox();
-      expect(timerBox && noticeBox && noticeBox.y >= timerBox.y + timerBox.height - 1).toBeTruthy();
-      expect(timerBox && noticeBox && noticeBox.x < timerBox.x).toBeTruthy();
-      await expect(turn.getByTestId("sql-chat-progress-current").getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
-      await expect(turn.getByTestId("sql-chat-progress-running").getByTestId("sql-chat-progress-reconnecting")).toHaveCount(1);
-      // 今の段階の行は残したまま、遅延の案内の代わりに出す（行を動かさない）。
-      await expect(turn.getByTestId("sql-chat-progress-current")).toContainText("質問と参照できる表を整理しています");
-      await expect(turn.getByTestId("sql-chat-progress-current")).toHaveAttribute("data-reconnecting", "true");
-      state.phase = "done";
-      await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC", { timeout: 40_000 });
-      await expect(reconnecting).toHaveCount(0);
-      await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
-    });
-
-    test("取得の失敗が続いても backoff して再開し、失敗の終端が出る", async ({ page }) => {
-      test.setTimeout(90_000);
-      const state = await setup(page);
-      const turn = await openSecondQuestion(page);
-      state.failChats = 8;
-      await expect.poll(() => state.failChats, { timeout: 60_000 }).toBe(0);
-      state.phase = "error";
-      await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過", { timeout: 30_000 });
-      await expect(turn.getByText("SQL を生成できませんでした。")).toBeVisible();
-      await expect(turn.getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
-    });
+test.describe("処理の経過の自動の更新", () => {
+  test("2 回目の質問で段階が進み、完了したら読み込み直さずに結果に置き換わる", async ({ page }) => {
+    const state = await setup(page);
+    const turn = await openSecondQuestion(page);
+    state.phase = "generate";
+    await expect(turn.getByTestId("sql-chat-progress-current")).toContainText("SQL を生成しています");
+    await expect(turn.getByTestId("sql-chat-progress-running")).toContainText("処理中（2 ステップ完了）");
+    state.phase = "done";
+    await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC");
+    await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
+    // 実行中は開いていた一覧を、完了したら閉じる（3 製品で同じ。#2265）。
+    await expect(turn.getByTestId("sql-chat-progress").locator("details").first()).not.toHaveAttribute("open", "");
+    // 処理の詳細に trace id を出す（「トレースの詳細」の 2 つ目の表示は無い。#3226）。
+    await expect(turn.getByTestId("sql-chat-progress").locator("[data-trace-id-row]")).toHaveCount(1);
+    await expect(turn.getByText("トレースの詳細")).toHaveCount(0);
+    await expect(page.getByTestId("sql-chat-send")).toHaveAccessibleName("送信");
   });
-}
+
+  test("取得が 5xx を返し DB の状態の確認が応答しなくても、取り直しを続けて完了が出る", async ({ page }) => {
+    test.setTimeout(90_000);
+    const state = await setup(page);
+    const turn = await openSecondQuestion(page);
+    // backend が詰まった（#1155）: 会話の取得が 5xx を返し、DB の状態の確認は応答しない。
+    state.hangReadiness = true;
+    state.failChats = 1;
+    await expect.poll(() => state.failChats).toBe(0);
+    // その間にジョブは完了する。読み込み直さずに結果が出ること（修正前は確認の応答を待ったまま止まった）。
+    state.phase = "done";
+    await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC", { timeout: 30_000 });
+    await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
+    await expect(turn.getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
+  });
+
+  test("取得が応答しなくなったら「接続を確認しています」を出して取り直し、完了が出る", async ({ page }) => {
+    test.setTimeout(90_000);
+    const state = await setup(page);
+    const turn = await openSecondQuestion(page);
+    // 応答を止める（2 回）。取り直しが応答しない取得を打ち切り、新しく取り直す。
+    state.hangChats = 2;
+    const reconnecting = turn.getByTestId("sql-chat-progress-reconnecting");
+    await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 20_000 });
+    // 案内は見出し「処理中（N ステップ完了）」の直下（左の見出しの側の 2 行目）に出す。今の段階の行の下・右の経過時間の
+    // 列には出さない（#2426）。
+    const timerBox = await turn.getByTestId("sql-chat-progress-timer").boundingBox();
+    const noticeBox = await reconnecting.boundingBox();
+    expect(timerBox && noticeBox && noticeBox.y >= timerBox.y + timerBox.height - 1).toBeTruthy();
+    expect(timerBox && noticeBox && noticeBox.x < timerBox.x).toBeTruthy();
+    await expect(turn.getByTestId("sql-chat-progress-current").getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
+    await expect(turn.getByTestId("sql-chat-progress-running").getByTestId("sql-chat-progress-reconnecting")).toHaveCount(1);
+    // 今の段階の行は残したまま、遅延の案内の代わりに出す（行を動かさない）。
+    await expect(turn.getByTestId("sql-chat-progress-current")).toContainText("質問と参照できる表を整理しています");
+    await expect(turn.getByTestId("sql-chat-progress-current")).toHaveAttribute("data-reconnecting", "true");
+    state.phase = "done";
+    await expect(turn.locator("pre")).toContainText("ORDER BY 2 DESC", { timeout: 40_000 });
+    await expect(reconnecting).toHaveCount(0);
+    await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過");
+  });
+
+  test("取得の失敗が続いても backoff して再開し、失敗の終端が出る", async ({ page }) => {
+    test.setTimeout(90_000);
+    const state = await setup(page);
+    const turn = await openSecondQuestion(page);
+    state.failChats = 8;
+    await expect.poll(() => state.failChats, { timeout: 60_000 }).toBe(0);
+    state.phase = "error";
+    await expect(turn.getByTestId("sql-chat-progress-summary")).toContainText("処理の経過", { timeout: 30_000 });
+    await expect(turn.getByText("SQL を生成できませんでした。")).toBeVisible();
+    await expect(turn.getByTestId("sql-chat-progress-reconnecting")).toHaveCount(0);
+  });
+});

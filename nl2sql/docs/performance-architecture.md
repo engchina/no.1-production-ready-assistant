@@ -35,7 +35,7 @@ HTTP request を延長せず durable job へ移す。静かな polling、prefetc
 - publish: worker が manifest 差分を取得し、成功時だけ active catalog を切り替える。失敗時は旧版を維持する。
 - concurrency: read path は Schema refresh のプロセス内実行 lock を取得しない。
 
-本番（Resource Manager の stack の systemd 配備）は、Schema refresh を `NL2SQL_SCHEMA_REFRESH_WORKER_MODE=external` と
+本番（Compute の systemd 配備）は、Schema refresh を `NL2SQL_SCHEMA_REFRESH_WORKER_MODE=external` と
 `production-ready-nl2sql-schema-refresh-worker.service` で処理する。通常の SQL 生成 job は既定の `inprocess` で、
 別プロセスにする場合は `NL2SQL_JOB_WORKER_MODE=external` にして `uv run python -m app.cli.nl2sql_job_worker` を
 起動する（stack はこの unit を作らない）。ローカル実行はどちらも `inprocess` を既定とする。

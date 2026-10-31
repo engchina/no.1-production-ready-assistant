@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -129,57 +128,14 @@ def test_audit_detects_legacy_json_without_disclosing_secret(tmp_path: Path) -> 
     assert "do-not-disclose" not in output
 
 
-def test_terraform_cloud_init_keeps_thin_mtls_without_instant_client() -> None:
+def test_init_script_keeps_thin_mtls_without_instant_client() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    locals_tf = (repo_root.parent / "terraform" / "stack" / "locals.tf").read_text(encoding="utf-8")
     init_script = (repo_root / "init_script.sh").read_text(encoding="utf-8").lower()
 
-    platform_env = _terraform_env_body("platform_env")
-    assert "PLATFORM_ORACLE_DRIVER_MODE=thin" in platform_env
-    assert "PLATFORM_ORACLE_CLIENT_LIB_DIR=" in platform_env
-    # terraform fmt の桁そろえに左右されないよう、空白は問わない（#239 で書き方が変わった）。
-    # 1 台の Compute（#1316）では platform/.env は 3 製品で 1 つ。
-    assert re.search(r"platform_env\s+=\s+base64gzip\(local\.platform_env\)", locals_tf)
-    assert "PLATFORM_AUTH_COOKIE_SECURE=${var.https_enabled}" in platform_env
     assert '"${app_root}/props/platform.env" "${platform_repo_dir}/.env"' in init_script
     assert "instantclient" not in init_script
     # 自前のコードは Docker イメージを作らない（#356）。配備は init_script.sh の unit だけ。
     assert not (repo_root / "backend" / "Dockerfile").exists()
-
-
-def _terraform_env_body(name: str) -> str:
-    """統合 stack（#217）の locals.tf から `<name> = <<-EOT` heredoc 本文だけを取り出す。"""
-    repo_root = Path(__file__).resolve().parents[2]
-    locals_tf = (repo_root.parent / "terraform" / "stack" / "locals.tf").read_text(encoding="utf-8")
-    _, _, after = locals_tf.partition(f" {name} = <<-EOT\n")
-    assert after, f"locals.tf に {name} heredoc が見つかりません。"
-    body, _, _ = after.partition("\nEOT")
-    return body
-
-
-def _rendered_keys(body: str) -> set[str]:
-    return {
-        match.group("key")
-        for line in body.splitlines()
-        if (match := ENV_ASSIGNMENT_RE.match(line)) is not None
-    }
-
-
-def test_terraform_env_keys_are_known_settings_in_the_right_file() -> None:
-    """Terraform が撒くキーは Settings に存在し、共通キーは platform.env、製品キーは backend.env。
-
-    未知キーや置き場所の誤りは audit の error になる（#211）。
-    """
-    platform_keys, product_keys = settings_env_keys()
-    backend_keys = _rendered_keys(_terraform_env_body("nl2sql_backend_env"))
-    # 1 台の Compute（#1316）では 3 製品で 1 つの platform.env。
-    platform_env_keys = _rendered_keys(_terraform_env_body("platform_env"))
-
-    assert backend_keys, "backend_env から key を抽出できませんでした。"
-    assert platform_env_keys, "platform_env から key を抽出できませんでした。"
-    assert backend_keys <= product_keys
-    assert platform_env_keys <= platform_keys
-    assert "PLATFORM_ADMIN_LOGIN_USER_PASSWORD" in platform_env_keys
 
 
 def test_platform_and_product_env_examples_load(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -18,7 +18,7 @@ function base(overrides: Partial<SidebarAccount>): SidebarAccount {
     rolesLabel: "ロール: 営業",
     account: { href: "/rag/account", label: "アカウント設定を開く（営業ユーザー）", active: false },
     onLogout: () => undefined,
-    labels: { logout: "ログアウト", switchToLight: "", switchToDark: "" },
+    labels: { logout: "ログアウト" },
     debugMode: false,
     ...overrides,
   };

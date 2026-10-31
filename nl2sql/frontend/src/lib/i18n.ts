@@ -538,12 +538,6 @@ const nl2sqlJa = {
   "profiles.access.none": "この業務プロファイルを利用できるロールはまだ設定されていません。",
   // 狭い列（22rem まで）の検索欄に収める（#1891）。ロールコード・データリソースでも絞り込める。
 
-  "appearance.subtitle": "配色テーマ（ライト / ダーク）を切り替えます。既定はライトです。",
-  "appearance.theme.label": "配色テーマ",
-  "appearance.theme.hint": "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  "appearance.theme.light": "ライト",
-  "appearance.theme.dark": "ダーク",
-  "appearance.theme.system": "自動（OS 設定）",
 
   "page.query.subtitle": "業務プロファイルのデータに質問し、SQL を生成して実行する",
   "page.settings.subtitle": "接続・モデル・データベースの設定",

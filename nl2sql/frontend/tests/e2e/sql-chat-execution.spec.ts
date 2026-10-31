@@ -299,11 +299,7 @@ test("送信のジョブが実行まで行い、結果の行を 1 回だけ受�
   await expect(longCell).toHaveAttribute("title", /とても長い説明の文字列です。/);
   await expectNoPageOverflow(page);
 
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await turn.screenshot({ path: testInfo.outputPath(`chat-execution-${colorScheme}.png`) });
-  }
+  await turn.screenshot({ path: testInfo.outputPath(`chat-execution-light.png`) });
 
   // 「もう一度実行」は明示の操作。実行中はラベルを変えず、アイコンがスピナーになる（スピナーは 1 つ）。
   // 処理の経過（送信のジョブの段）は変えない（段の数・合計時間。実行は SQL の下の実行結果に出す）。

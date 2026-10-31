@@ -316,46 +316,43 @@ for (const screen of PANEL_SCREENS) {
   });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`置き換えた画面で開いた選択が崩れない（${theme}）`, async ({ page }, testInfo) => {
-    await useTheme(page, theme);
-    await mockKnowledgeBases(page, MANY);
-    await mockDocuments(page);
-    await mockUploadPage(page);
-    await mockSearchAnswerProfiles(page);
+test("置き換えた画面で開いた選択が崩れない", async ({ page }, testInfo) => {
+  await mockKnowledgeBases(page, MANY);
+  await mockDocuments(page);
+  await mockUploadPage(page);
+  await mockSearchAnswerProfiles(page);
 
-    const shoot = async (name: string) => {
-      await expectNoPageOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`${name}-${theme}.png`) });
-    };
+  const shoot = async (name: string) => {
+    await expectNoPageOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`${name}.png`) });
+  };
 
-    // 文書インデックスの絞り込み（単一選択）
-    await page.goto("/file-list");
-    await openFileListFilters(page);
-    await page.getByRole("button", { name: /^ナレッジベース/ }).click();
-    await expect(page.getByRole("dialog", { name: "ナレッジベース" })).toBeVisible();
-    await shoot("file-list");
-    await page.keyboard.press("Escape");
+  // 文書インデックスの絞り込み（単一選択）
+  await page.goto("/file-list");
+  await openFileListFilters(page);
+  await page.getByRole("button", { name: /^ナレッジベース/ }).click();
+  await expect(page.getByRole("dialog", { name: "ナレッジベース" })).toBeVisible();
+  await shoot("file-list");
+  await page.keyboard.press("Escape");
 
-    // アップロードの登録先
-    await page.goto("/upload");
-    const uploadCombo = page.getByRole("combobox", { name: "所属させるナレッジベース" });
-    await uploadCombo.click();
-    await uploadCombo.fill("-120");
-    await page.getByRole("option", { name: /ナレッジベース-120/ }).click();
-    await expect(page.getByText("1 件のナレッジベースへ登録します。")).toBeVisible();
-    await shoot("upload");
+  // アップロードの登録先
+  await page.goto("/upload");
+  const uploadCombo = page.getByRole("combobox", { name: "所属させるナレッジベース" });
+  await uploadCombo.click();
+  await uploadCombo.fill("-120");
+  await page.getByRole("option", { name: /ナレッジベース-120/ }).click();
+  await expect(page.getByText("1 件のナレッジベースへ登録します。")).toBeVisible();
+  await shoot("upload");
 
-    // 検索・回答プロファイルの参照 KB
-    await page.goto("/search-answer-profiles?id=new");
-    const searchAnswerProfileCombo = page.getByRole("combobox", { name: "参照するナレッジベース" });
-    await searchAnswerProfileCombo.click();
-    await searchAnswerProfileCombo.fill("-042");
-    await page.getByRole("option", { name: /ナレッジベース-042/ }).click();
-    await expect(page.getByLabel("ナレッジベース-042 を選択から外す")).toBeVisible();
-    await shoot("search-answer-profile");
-  });
-}
+  // 検索・回答プロファイルの参照 KB
+  await page.goto("/search-answer-profiles?id=new");
+  const searchAnswerProfileCombo = page.getByRole("combobox", { name: "参照するナレッジベース" });
+  await searchAnswerProfileCombo.click();
+  await searchAnswerProfileCombo.fill("-042");
+  await page.getByRole("option", { name: /ナレッジベース-042/ }).click();
+  await expect(page.getByLabel("ナレッジベース-042 を選択から外す")).toBeVisible();
+  await shoot("search-answer-profile");
+});
 
 /** 一覧を開いたまま Tab を押し、対象にフォーカスが来るまで進める（途中で閉じないことも確かめる）。 */
 async function tabUntilFocused(page: Page, target: Locator, listbox: Locator) {
@@ -368,16 +365,6 @@ async function tabUntilFocused(page: Page, target: Locator, listbox: Locator) {
     await expect(listbox).toBeVisible();
   }
   await expect(target).toBeFocused();
-}
-
-/** アプリの外観の設定（localStorage）でテーマを切り替える。 */
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
 }
 
 const LONG_NAME =

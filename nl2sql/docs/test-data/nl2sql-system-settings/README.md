@@ -12,7 +12,7 @@
 | `model/` | モデル設定の正常 / 異常 payload |
 | `database/` | wallet ZIP、tnsnames、DB 設定関連ファイル |
 | `system-tables/` | システムテーブル説明用 SQL / migration メモ |
-| `appearance/` | `production-ready-nl2sql.ui` localStorage fixture |
+| `appearance/` | `production-ready-nl2sql.ui` localStorage fixture（旧い `theme` を含む保存値。読み捨てを確かめる。#17） |
 
 ## 注意
 

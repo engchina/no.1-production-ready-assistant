@@ -599,64 +599,57 @@ async function expectEntireGraphInCanvas(playground: Locator) {
   })).toBe(true);
 }
 
-for (const theme of ["light", "dark"]) {
-  for (const width of [1280, 1920]) {
-    test(`概念の種類を先頭にして操作枠を整列する ${theme} ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
-      if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
-      await page.addInitScript((theme) => {
-        localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({
-          state: { sidebarCollapsed: false, collapsedSections: {}, theme }, version: 0,
-        }));
-      }, theme);
-      await mockApi(page, { ontologyGraph: erDetailOntologyGraph });
-      await page.goto("/ontology-build?profile=default");
-      await expect(page.getByTestId("ontology-view-fetch")).toBeVisible();
-      await page.keyboard.press("Tab");
-      await expect(page.getByRole("link", { name: "本文へスキップ" })).toBeFocused();
-      const heading = page.getByRole("heading", { level: 1 });
-      const bodyStart = page.locator("main header + div > :first-child");
-      const headingBox = await heading.boundingBox();
-      const bodyBox = await bodyStart.boundingBox();
-      expect(headingBox).not.toBeNull();
-      expect(bodyBox).not.toBeNull();
-      expect(Math.abs(headingBox!.x - bodyBox!.x)).toBeLessThanOrEqual(1);
-      await page.getByTestId("ontology-view-fetch").click();
-      const playground = page.getByRole("region", { name: "質問のオントロジー接地確認用グラフ" });
-      await openGraphIfCollapsed(page, playground);
-      await expectGraphSearchFieldLayout(page, playground);
-      const toolbar = playground.getByTestId("ontology-graph-toolbar");
-      const filter = toolbar.getByRole("combobox", { name: "概念の種類", exact: true });
-      await expect(toolbar.locator("select, button, input").first()).toHaveAttribute("aria-label", "概念の種類");
-      const controls = [filter, ...["ontology-graph-view-mode", "ontology-graph-search-field", "ontology-graph-details-toggle-field"].map(id => toolbar.getByTestId(id))];
-      const boxes = await Promise.all(controls.map(control => control.boundingBox()));
-      for (const box of boxes) {
-        expect(box).not.toBeNull();
-        expect(Math.abs(box!.height - boxes[0]!.height)).toBeLessThanOrEqual(1);
-        if (testInfo.project.name === "desktop" && width === 1920) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThanOrEqual(1);
-      }
-      if (testInfo.project.name === "desktop" && width === 1280) {
-        // 右側の詳細パネルを含む狭いグラフでは2行。各行で上下端を揃える。
-        expect(Math.abs(boxes[0]!.y - boxes[1]!.y)).toBeLessThanOrEqual(1);
-        expect(Math.abs(boxes[2]!.y - boxes[3]!.y)).toBeLessThanOrEqual(1);
-        expect(boxes[2]!.y).toBeGreaterThanOrEqual(boxes[0]!.y + boxes[0]!.height);
-      }
-      const canvas = playground.getByTestId("ontology-graph-canvas");
-      expect(await canvas.evaluate(el => el.getBoundingClientRect().height / parseFloat(getComputedStyle(document.documentElement).fontSize))).toBeCloseTo(56, 0);
-      await expectEntireGraphInCanvas(playground);
-      await playground.getByRole("button", { name: "グラフを拡大", exact: true }).click();
-      const fit = playground.getByRole("button", { name: "グラフ全体を表示", exact: true });
-      await fit.focus();
-      await page.keyboard.press("Enter");
-      await expectEntireGraphInCanvas(playground);
-      await canvas.screenshot({ path: testInfo.outputPath(`fit-labels-${theme}-${width}.png`) });
-      await filter.selectOption("object_type");
-      await expect(filter).toHaveValue("object_type");
-      await filter.selectOption("");
-      await expectNoHorizontalScroll(page);
-      await toolbar.screenshot({ path: testInfo.outputPath(`toolbar-${theme}-${width}.png`) });
-    });
-  }
+for (const width of [1280, 1920]) {
+  test(`概念の種類を先頭にして操作枠を整列する ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
+    if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, { ontologyGraph: erDetailOntologyGraph });
+    await page.goto("/ontology-build?profile=default");
+    await expect(page.getByTestId("ontology-view-fetch")).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "本文へスキップ" })).toBeFocused();
+    const heading = page.getByRole("heading", { level: 1 });
+    const bodyStart = page.locator("main header + div > :first-child");
+    const headingBox = await heading.boundingBox();
+    const bodyBox = await bodyStart.boundingBox();
+    expect(headingBox).not.toBeNull();
+    expect(bodyBox).not.toBeNull();
+    expect(Math.abs(headingBox!.x - bodyBox!.x)).toBeLessThanOrEqual(1);
+    await page.getByTestId("ontology-view-fetch").click();
+    const playground = page.getByRole("region", { name: "質問のオントロジー接地確認用グラフ" });
+    await openGraphIfCollapsed(page, playground);
+    await expectGraphSearchFieldLayout(page, playground);
+    const toolbar = playground.getByTestId("ontology-graph-toolbar");
+    const filter = toolbar.getByRole("combobox", { name: "概念の種類", exact: true });
+    await expect(toolbar.locator("select, button, input").first()).toHaveAttribute("aria-label", "概念の種類");
+    const controls = [filter, ...["ontology-graph-view-mode", "ontology-graph-search-field", "ontology-graph-details-toggle-field"].map(id => toolbar.getByTestId(id))];
+    const boxes = await Promise.all(controls.map(control => control.boundingBox()));
+    for (const box of boxes) {
+      expect(box).not.toBeNull();
+      expect(Math.abs(box!.height - boxes[0]!.height)).toBeLessThanOrEqual(1);
+      if (testInfo.project.name === "desktop" && width === 1920) expect(Math.abs(box!.y - boxes[0]!.y)).toBeLessThanOrEqual(1);
+    }
+    if (testInfo.project.name === "desktop" && width === 1280) {
+      // 右側の詳細パネルを含む狭いグラフでは2行。各行で上下端を揃える。
+      expect(Math.abs(boxes[0]!.y - boxes[1]!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(boxes[2]!.y - boxes[3]!.y)).toBeLessThanOrEqual(1);
+      expect(boxes[2]!.y).toBeGreaterThanOrEqual(boxes[0]!.y + boxes[0]!.height);
+    }
+    const canvas = playground.getByTestId("ontology-graph-canvas");
+    expect(await canvas.evaluate(el => el.getBoundingClientRect().height / parseFloat(getComputedStyle(document.documentElement).fontSize))).toBeCloseTo(56, 0);
+    await expectEntireGraphInCanvas(playground);
+    await playground.getByRole("button", { name: "グラフを拡大", exact: true }).click();
+    const fit = playground.getByRole("button", { name: "グラフ全体を表示", exact: true });
+    await fit.focus();
+    await page.keyboard.press("Enter");
+    await expectEntireGraphInCanvas(playground);
+    await canvas.screenshot({ path: testInfo.outputPath(`fit-labels-light-${width}.png`) });
+    await filter.selectOption("object_type");
+    await expect(filter).toHaveValue("object_type");
+    await filter.selectOption("");
+    await expectNoHorizontalScroll(page);
+    await toolbar.screenshot({ path: testInfo.outputPath(`toolbar-light-${width}.png`) });
+  });
 }
 
 for (const version of [1, 2]) {
@@ -723,19 +716,10 @@ test("グラフはカード表示 + 検索 + 詳細ノードの折畳ができ�
   if (testInfo.project.name === "desktop") {
     await page.setViewportSize({ width: 1440, height: 900 });
   }
-  await page.addInitScript(() => {
-    window.localStorage.setItem(
-      "production-ready-nl2sql.ui",
-      JSON.stringify({
-        state: { sidebarCollapsed: false, collapsedSections: {}, theme: "dark" },
-        version: 0,
-      })
-    );
-  });
   await mockApi(page);
   await page.goto("/ontology-build?profile=default");
   await page.getByRole("button", { name: "情報を取得", exact: true }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
 
   const playground = page.getByRole("region", { name: "質問のオントロジー接地確認用グラフ" });
   await playground.scrollIntoViewIfNeeded();
@@ -758,21 +742,21 @@ test("グラフはカード表示 + 検索 + 詳細ノードの折畳ができ�
   await expectGraphSearchFieldLayout(page, playground);
   await expectNoHorizontalScroll(page);
 
-  // カードノード: 業務名 + 技術名の 2 段表示
+  // カードノード: 業務名 + 技術名の 2 段表示。塗りは種別（--color-graph-*。ライトの値だけ）。
   const customer = playground.locator(".react-flow__node", { hasText: "顧客" }).first();
   await expect(customer).toBeVisible();
   await expect(customer).toContainText("APP.CUSTOMERS");
   await expect(playground.getByTestId("ontology-node-card-e1")).toHaveCSS(
     "background-color",
-    "rgb(23, 58, 94)"
+    "rgb(219, 234, 254)"
   );
   await expect(playground.getByTestId("ontology-node-card-e1")).toHaveCSS(
     "color",
-    "rgb(239, 243, 247)"
+    "rgb(15, 23, 42)"
   );
   await expect(playground.getByTestId("ontology-node-card-m1")).toHaveCSS(
     "background-color",
-    "rgb(54, 42, 89)"
+    "rgb(237, 233, 254)"
   );
 
   // 既定では列・列挙値ノード(2 件)は畳まれる
@@ -783,7 +767,7 @@ test("グラフはカード表示 + 検索 + 詳細ノードの折畳ができ�
   await expect(playground.getByTestId("ontology-graph-lane-detail")).toContainText("物理列・列挙値");
   await expect(playground.getByTestId("ontology-node-card-c1")).toHaveCSS(
     "background-color",
-    "rgb(36, 43, 53)"
+    "rgb(248, 250, 252)"
   );
   await playground.getByTestId("ontology-graph-details-toggle").uncheck();
 
@@ -807,7 +791,7 @@ test("グラフはカード表示 + 検索 + 詳細ノードの折畳ができ�
     expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
     expect(geometry.clipped).toBe(false);
   }
-  await page.screenshot({ path: testInfo.outputPath(`ontology-graph-dark-${testInfo.project.name}.png`) });
+  await page.screenshot({ path: testInfo.outputPath(`ontology-graph-${testInfo.project.name}.png`) });
 });
 
 test("同じ物理名の業務概念と物理表をカード上で区別できる", async ({ page }) => {
@@ -1482,38 +1466,33 @@ const typedSemanticGraph = {
   ],
 };
 
-for (const theme of ["light", "dark"]) {
-  for (const width of [1280, 1920]) {
-    test(`型付き意味グラフの列挙展開とキーボード選択 ${theme} ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
-      if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
-      await page.addInitScript((theme) => {
-        localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({ state: { sidebarCollapsed: false, collapsedSections: {}, theme }, version: 0 }));
-      }, theme);
-      await mockApi(page, { ontologyGraph: typedSemanticGraph });
-      await page.goto("/ontology-build?profile=default");
-      await expect(page.getByTestId("ontology-view-fetch")).toBeVisible();
-      await page.keyboard.press("Tab");
-      await expect(page.getByRole("link", { name: "本文へスキップ" })).toBeFocused();
-      await page.getByTestId("ontology-view-fetch").click();
-      const playground = page.getByRole("region", { name: "質問のオントロジー接地確認用グラフ" });
-      await openGraphIfCollapsed(page, playground);
-      await expect(playground.locator('.react-flow__edge[data-id="domain"]')).toHaveCount(1);
-      await expect(playground.locator('.react-flow__edge[data-id="range"]')).toHaveCount(1);
-      await playground.getByTestId("ontology-graph-details-toggle").check();
-      const filter = playground.getByRole("combobox", { name: "概念の種類", exact: true });
-      await filter.selectOption("enumeration");
-      await expect(playground.locator(".react-flow__node")).toHaveCount(2);
-      await expect(playground.locator('.react-flow__edge[data-id="membership"]')).toHaveCount(1);
-      const member = playground.locator('.react-flow__node[data-id="member"]');
-      await member.focus();
-      await page.keyboard.press("Enter");
-      await expect(member).toBeFocused();
-      await expect(playground.getByTestId("ontology-node-card-member")).toContainText("受付済");
-      await expectNoHorizontalScroll(page);
-      await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`typed-graph-${theme}-${width}.png`) });
-    });
-  }
+for (const width of [1280, 1920]) {
+  test(`型付き意味グラフの列挙展開とキーボード選択 ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
+    if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, { ontologyGraph: typedSemanticGraph });
+    await page.goto("/ontology-build?profile=default");
+    await expect(page.getByTestId("ontology-view-fetch")).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "本文へスキップ" })).toBeFocused();
+    await page.getByTestId("ontology-view-fetch").click();
+    const playground = page.getByRole("region", { name: "質問のオントロジー接地確認用グラフ" });
+    await openGraphIfCollapsed(page, playground);
+    await expect(playground.locator('.react-flow__edge[data-id="domain"]')).toHaveCount(1);
+    await expect(playground.locator('.react-flow__edge[data-id="range"]')).toHaveCount(1);
+    await playground.getByTestId("ontology-graph-details-toggle").check();
+    const filter = playground.getByRole("combobox", { name: "概念の種類", exact: true });
+    await filter.selectOption("enumeration");
+    await expect(playground.locator(".react-flow__node")).toHaveCount(2);
+    await expect(playground.locator('.react-flow__edge[data-id="membership"]')).toHaveCount(1);
+    const member = playground.locator('.react-flow__node[data-id="member"]');
+    await member.focus();
+    await page.keyboard.press("Enter");
+    await expect(member).toBeFocused();
+    await expect(playground.getByTestId("ontology-node-card-member")).toContainText("受付済");
+    await expectNoHorizontalScroll(page);
+    await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`typed-graph-light-${width}.png`) });
+  });
 }
 
 // 各主要導線の最終状態で全テキスト・入力欄の字体継承を確認する。
@@ -1522,47 +1501,44 @@ test.afterEach(async ({ page }, testInfo) => {
   await expectLocalUiFonts(page);
 });
 
-for (const theme of ["light", "dark"]) {
-  for (const width of [1280, 1920]) {
-    test(`公開版のない Profile に物理 graph を表示しない ${theme} ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
-      if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
-      await page.addInitScript(theme => localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({state:{theme},version:0})), theme);
-      await mockApi(page, { ontologyGraph: employeeOntologyGraph });
-      let published = false;
-      let wrongRevision = false;
-      let fail = false;
-      await page.route("**/api/nl2sql/profiles/*/ontology-markdown", async route => {
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if (fail) { await route.fulfill({status:500,contentType:"application/json",body:'{"detail":"Markdown unavailable"}'}); return; }
-        await fulfillJson(route, {draft_markdown:"# 下書き",draft_revision:null,draft_etag:"draft",published_markdown:published ? "# 公開済み" : "",published_revision:published ? {id:wrongRevision ? "different" : "rev1",version:1,status:"published",etag:"re",schema_fingerprint:"fp"} : null});
-      });
-      const panel = page.locator("#ontology-query-playground-panel");
-      await page.goto("/ontology-build?profile=default");
-      await page.getByTestId("ontology-view-fetch").click();
-      await expect(panel.getByText("公開済みオントロジーがまだありません", {exact:true})).toBeVisible();
-      await expect(panel.locator(".react-flow")).toHaveCount(0);
-      await expect(panel.getByTestId("ontology-playground-question")).toHaveCount(0);
-      await expect(panel.getByTestId("ontology-playground-server-search")).toHaveCount(0);
-      await panel.screenshot({path:testInfo.outputPath(`unpublished-${theme}-${width}.png`)});
-      // API が公開版を返して初めて表示する。物理 graph 単体の取得では公開判定しない。
-      published = true;
-      await page.reload(); await page.getByTestId("ontology-view-fetch").click();
-      await expect(panel.getByTestId("ontology-playground-question")).toBeVisible();
-      wrongRevision = true;
-      await page.reload(); await page.getByTestId("ontology-view-fetch").click();
-      await expect(panel.getByText("公開版に対応するグラフを取得できませんでした。再試行してください。", {exact:true})).toBeVisible();
-      await expect(panel.locator(".react-flow")).toHaveCount(0);
-      wrongRevision = false;
-      await panel.getByRole("button", {name:"再試行",exact:true}).click();
-      await expect(panel.getByTestId("ontology-playground-question")).toBeVisible();
-      fail = true;
-      await page.reload(); await page.getByTestId("ontology-view-fetch").click();
-      await expect(page.getByText("Markdown オントロジーを読み込めませんでした。", {exact:true})).toBeVisible();
-      await expect(panel.locator(".react-flow")).toHaveCount(0);
-      await expect(panel.getByTestId("ontology-playground-question")).toHaveCount(0);
+for (const width of [1280, 1920]) {
+  test(`公開版のない Profile に物理 graph を表示しない ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop" && width !== 1280, "モバイルは375幅で確認");
+    if (testInfo.project.name === "desktop") await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, { ontologyGraph: employeeOntologyGraph });
+    let published = false;
+    let wrongRevision = false;
+    let fail = false;
+    await page.route("**/api/nl2sql/profiles/*/ontology-markdown", async route => {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      if (fail) { await route.fulfill({status:500,contentType:"application/json",body:'{"detail":"Markdown unavailable"}'}); return; }
+      await fulfillJson(route, {draft_markdown:"# 下書き",draft_revision:null,draft_etag:"draft",published_markdown:published ? "# 公開済み" : "",published_revision:published ? {id:wrongRevision ? "different" : "rev1",version:1,status:"published",etag:"re",schema_fingerprint:"fp"} : null});
     });
-  }
+    const panel = page.locator("#ontology-query-playground-panel");
+    await page.goto("/ontology-build?profile=default");
+    await page.getByTestId("ontology-view-fetch").click();
+    await expect(panel.getByText("公開済みオントロジーがまだありません", {exact:true})).toBeVisible();
+    await expect(panel.locator(".react-flow")).toHaveCount(0);
+    await expect(panel.getByTestId("ontology-playground-question")).toHaveCount(0);
+    await expect(panel.getByTestId("ontology-playground-server-search")).toHaveCount(0);
+    await panel.screenshot({path:testInfo.outputPath(`unpublished-light-${width}.png`)});
+    // API が公開版を返して初めて表示する。物理 graph 単体の取得では公開判定しない。
+    published = true;
+    await page.reload(); await page.getByTestId("ontology-view-fetch").click();
+    await expect(panel.getByTestId("ontology-playground-question")).toBeVisible();
+    wrongRevision = true;
+    await page.reload(); await page.getByTestId("ontology-view-fetch").click();
+    await expect(panel.getByText("公開版に対応するグラフを取得できませんでした。再試行してください。", {exact:true})).toBeVisible();
+    await expect(panel.locator(".react-flow")).toHaveCount(0);
+    wrongRevision = false;
+    await panel.getByRole("button", {name:"再試行",exact:true}).click();
+    await expect(panel.getByTestId("ontology-playground-question")).toBeVisible();
+    fail = true;
+    await page.reload(); await page.getByTestId("ontology-view-fetch").click();
+    await expect(page.getByText("Markdown オントロジーを読み込めませんでした。", {exact:true})).toBeVisible();
+    await expect(panel.locator(".react-flow")).toHaveCount(0);
+    await expect(panel.getByTestId("ontology-playground-question")).toHaveCount(0);
+  });
 }
 
 test("公開済み Profile から未公開 Profile へ切り替えると graph と質問を残さない", async ({ page }) => {
@@ -1593,33 +1569,30 @@ test("ノード種別は共有バッジで長い日本語名を欠けずに表�
   await openGraphIfCollapsed(page, playground);
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      for (const [id, label] of [["object", "オブジェクト型（Object Type）"], ["property", "プロパティ（Property）"]]) {
-        await playground.getByRole("combobox", { name: "概念の種類", exact: true }).selectOption(id === "object" ? "object_type" : "property");
-        const card = playground.getByTestId(`ontology-node-card-${id}`);
-        const badge = card.getByTestId("ontology-node-kind-label").locator("[data-status-variant]");
-        await expect(badge).toHaveText(label);
-        await expect(badge).toHaveAttribute("data-status-variant", "info");
-        const geometry = await badge.evaluate(element => {
-          const box = element.getBoundingClientRect();
-          const card = element.closest("[data-ontology-node-kind]")!.getBoundingClientRect();
-          const range = document.createRange();
-          range.selectNodeContents(element);
-          const text = range.getBoundingClientRect();
-          return {
-            clipped: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-            fits: text.left >= box.left && text.right <= box.right && text.top >= box.top && text.bottom <= box.bottom,
-            inside: box.left >= card.left && box.right <= card.right && box.top >= card.top && box.bottom <= card.bottom,
-            opacity: getComputedStyle(element.parentElement!).opacity,
-          };
-        });
-        expect(geometry).toEqual({ clipped: false, fits: true, inside: true, opacity: "1" });
-        await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`node-kind-${id}-${width}-${theme}.png`) });
-      }
-      await expectNoHorizontalScroll(page);
-      await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`node-kind-badges-${width}-${theme}.png`) });
+    for (const [id, label] of [["object", "オブジェクト型（Object Type）"], ["property", "プロパティ（Property）"]]) {
+      await playground.getByRole("combobox", { name: "概念の種類", exact: true }).selectOption(id === "object" ? "object_type" : "property");
+      const card = playground.getByTestId(`ontology-node-card-${id}`);
+      const badge = card.getByTestId("ontology-node-kind-label").locator("[data-status-variant]");
+      await expect(badge).toHaveText(label);
+      await expect(badge).toHaveAttribute("data-status-variant", "info");
+      const geometry = await badge.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        const card = element.closest("[data-ontology-node-kind]")!.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const text = range.getBoundingClientRect();
+        return {
+          clipped: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
+          fits: text.left >= box.left && text.right <= box.right && text.top >= box.top && text.bottom <= box.bottom,
+          inside: box.left >= card.left && box.right <= card.right && box.top >= card.top && box.bottom <= card.bottom,
+          opacity: getComputedStyle(element.parentElement!).opacity,
+        };
+      });
+      expect(geometry).toEqual({ clipped: false, fits: true, inside: true, opacity: "1" });
+      await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`node-kind-${id}-${width}-light.png`) });
     }
+    await expectNoHorizontalScroll(page);
+    await playground.getByTestId("ontology-playground-graph-region").screenshot({ path: testInfo.outputPath(`node-kind-badges-${width}-light.png`) });
   }
   await playground.getByRole("combobox", { name: "概念の種類", exact: true }).selectOption("object_type");
   const object = playground.locator('.react-flow__node[data-id="object"]');

@@ -1026,7 +1026,6 @@ test("JSON の取り込みは確認で各ガイドの可否を示し、すべて
   await expectNoPageOverflow(page);
 });
 
-/** アプリの外観の設定（localStorage）でテーマを切り替える（`emulateMedia` では切り替わらない）。 */
 test(
   "回答の過程の Excel から列を選んで AI で下書きを作り、選んだ行とルールの候補だけを下書きにする（#2397）",
   { tag: "@responsive" },
@@ -1107,12 +1106,6 @@ test("貼り付けた回答の過程のテキストからも下書きを作れ�
   });
 });
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 /** 公開の版 2 と、利用者に確かめる条件を足した下書き（版 3）を持つガイド。 */
 function guideWithConditionDraft(): Guide {
   const guide = publishedGuide();
@@ -1134,90 +1127,87 @@ function guideWithConditionDraft(): Guide {
   return guide;
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`下書きで試すと、公開の版を変えずに下書きで答えた回答を示す（${theme}）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await useTheme(page, theme);
-    const api = await openSupportGuides(page, [guideWithConditionDraft()]);
-    api.tryDelayMs = 400;
-    await page.getByRole("button", { name: "パスワードの再設定（改訂） を編集" }).click();
-    const editor = page.getByTestId("support-guide-editor");
-    const panel = editor.getByTestId("support-guide-try");
-    await expect(panel.getByRole("heading", { name: "下書きで試す" })).toBeVisible();
-    await expect(panel).toContainText("保存した下書き（版 3）で回答を作り");
+test("下書きで試すと、公開の版を変えずに下書きで答えた回答を示す", { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const api = await openSupportGuides(page, [guideWithConditionDraft()]);
+  api.tryDelayMs = 400;
+  await page.getByRole("button", { name: "パスワードの再設定（改訂） を編集" }).click();
+  const editor = page.getByTestId("support-guide-editor");
+  const panel = editor.getByTestId("support-guide-try");
+  await expect(panel.getByRole("heading", { name: "下書きで試す" })).toBeVisible();
+  await expect(panel).toContainText("保存した下書き（版 3）で回答を作り");
 
-    // 質問が空なら送らずに欄の直下で知らせる。
-    await panel.getByRole("button", { name: "試す", exact: true }).click();
-    await expect(panel.getByText("質問を入れてください。")).toBeVisible();
-    expect(api.requests.filter((item) => item.path.endsWith("/try"))).toHaveLength(0);
+  // 質問が空なら送らずに欄の直下で知らせる。
+  await panel.getByRole("button", { name: "試す", exact: true }).click();
+  await expect(panel.getByText("質問を入れてください。")).toBeVisible();
+  expect(api.requests.filter((item) => item.path.endsWith("/try"))).toHaveLength(0);
 
-    // 分かっている条件を選んで試す。
-    await panel.getByRole("combobox", { name: /^アカウントの種類/ }).click();
-    await page.getByRole("option", { name: "社員" }).click();
-    await panel.getByRole("textbox", { name: /^質問/ }).fill("パスワードを忘れた");
-    await panel.getByRole("button", { name: "試す", exact: true }).click();
-    await expect(panel.getByTestId("support-guide-try-processing")).toBeVisible();
-    const result = panel.getByTestId("support-guide-try-answer");
-    await expect(result.getByText("下書き（版 3）の業務ガイドで答えました。")).toBeVisible();
-    await expect(result).toContainText("利用者の回答の履歴・フィードバック・評価には入りません。");
-    await expect(result).toContainText("所要時間: 4.2 秒");
-    await expect(result.getByText("手順どおりに答えた")).toBeVisible();
-    await expect(result.getByTestId("support-guide-try-known")).toHaveText("アカウントの種類: 社員");
-    // 手順ごとの充足（#2686）。説明できていない必須の手順の数と、手順ごとの状態を文言で示す。
-    const steps = result.getByTestId("support-guide-try-steps");
-    await expect(steps.getByTestId("support-guide-try-steps-missing")).toHaveText(
-      "必須の手順のうち 1 件を、回答で説明できていません。",
-    );
-    await expect(steps.getByTestId("support-guide-try-steps-unknown")).toHaveText(
-      "必須の手順のうち 2 件は、充足を確認できていません。",
-    );
-    await expect(steps.getByTestId("support-guide-try-steps-partial")).toHaveText(
-      "必須の手順のうち 1 件は、一部のみ説明を確認しました。",
-    );
-    const stepRows = steps.getByTestId("support-guide-try-step");
-    await expect(stepRows).toHaveCount(6);
-    await expect(stepRows.nth(0)).toContainText("本人であることを確かめる");
-    await expect(stepRows.nth(0)).toContainText("説明した");
-    await expect(stepRows.nth(1)).toContainText("資料の原文だけ");
-    await expect(stepRows.nth(2)).toContainText("説明していない");
-    await expect(stepRows.nth(2)).toContainText("分岐の手順（必須ではない）");
-    await expect(stepRows.nth(3)).toContainText("検索を打ち切った");
-    await expect(stepRows.nth(4)).toContainText("未検証");
-    await expect(stepRows.nth(5)).toContainText("一部のみ確認済み");
-    await expect(steps).toBeVisible();
-    await steps.screenshot({ path: testInfo.outputPath(`support-guide-coverage-${theme}.png`) });
-    await expect(result).toContainText("ポータルの「パスワードを忘れた」から再設定します。");
-    const notice = result.getByRole("status").filter({ hasText: "回答の注意書き" });
-    await notice.scrollIntoViewIfNeeded();
-    await expect(notice).toBeVisible();
-    await expect(notice).toContainText("変更前に管理窓口へ確認してください。");
-    await notice.screenshot({ path: testInfo.outputPath(`support-guide-notice-${theme}.png`) });
-    // AI に渡した件数と内訳は検索・チャットと同じ表示（#2040）。
-    await expect(result.getByRole("heading", { name: /^AI に渡した 1 件/ })).toBeVisible();
-    expect(api.requests.find((item) => item.path.endsWith("/try"))?.body).toEqual({
-      query: "パスワードを忘れた",
-      draft_revision: 3,
-      conditions: { account: "社員" },
-    });
-    // 公開の版は 2 のまま（試しは保存しない）。
-    await expect(page.getByRole("rowheader", { name: "版 2 公開中" })).toBeVisible();
-    expect(api.requests.some((item) => /\/(publish|rollback)$/.test(item.path))).toBe(false);
-    await expectNoPageOverflow(page);
-    await panel.screenshot({ path: testInfo.outputPath(`support-guide-try-${theme}.png`) });
-
-    // この下書きのガイドが使われなかったときは、見直す点を出す。
-    api.tryUsesDraft = false;
-    api.tryDelayMs = 0;
-    await panel.getByRole("button", { name: "試す", exact: true }).click();
-    await expect(result.getByText("この質問では、業務ガイドを使わずに答えました。")).toBeVisible();
-    await expect(result).toContainText("質問の例・照合の語・適用範囲");
-    await expect(result.getByTestId("support-guide-try-steps")).toHaveCount(0);
-
-    // 保存していない変更があるうちは、保存した下書きでしか試せないので押せない。
-    await editor.getByLabel("タイトル").fill("手元で直したタイトル");
-    await expect(panel.getByRole("button", { name: "試す", exact: true })).toBeDisabled();
-    await expect(panel.getByTestId("support-guide-try-save-first")).toBeVisible();
+  // 分かっている条件を選んで試す。
+  await panel.getByRole("combobox", { name: /^アカウントの種類/ }).click();
+  await page.getByRole("option", { name: "社員" }).click();
+  await panel.getByRole("textbox", { name: /^質問/ }).fill("パスワードを忘れた");
+  await panel.getByRole("button", { name: "試す", exact: true }).click();
+  await expect(panel.getByTestId("support-guide-try-processing")).toBeVisible();
+  const result = panel.getByTestId("support-guide-try-answer");
+  await expect(result.getByText("下書き（版 3）の業務ガイドで答えました。")).toBeVisible();
+  await expect(result).toContainText("利用者の回答の履歴・フィードバック・評価には入りません。");
+  await expect(result).toContainText("所要時間: 4.2 秒");
+  await expect(result.getByText("手順どおりに答えた")).toBeVisible();
+  await expect(result.getByTestId("support-guide-try-known")).toHaveText("アカウントの種類: 社員");
+  // 手順ごとの充足（#2686）。説明できていない必須の手順の数と、手順ごとの状態を文言で示す。
+  const steps = result.getByTestId("support-guide-try-steps");
+  await expect(steps.getByTestId("support-guide-try-steps-missing")).toHaveText(
+    "必須の手順のうち 1 件を、回答で説明できていません。",
+  );
+  await expect(steps.getByTestId("support-guide-try-steps-unknown")).toHaveText(
+    "必須の手順のうち 2 件は、充足を確認できていません。",
+  );
+  await expect(steps.getByTestId("support-guide-try-steps-partial")).toHaveText(
+    "必須の手順のうち 1 件は、一部のみ説明を確認しました。",
+  );
+  const stepRows = steps.getByTestId("support-guide-try-step");
+  await expect(stepRows).toHaveCount(6);
+  await expect(stepRows.nth(0)).toContainText("本人であることを確かめる");
+  await expect(stepRows.nth(0)).toContainText("説明した");
+  await expect(stepRows.nth(1)).toContainText("資料の原文だけ");
+  await expect(stepRows.nth(2)).toContainText("説明していない");
+  await expect(stepRows.nth(2)).toContainText("分岐の手順（必須ではない）");
+  await expect(stepRows.nth(3)).toContainText("検索を打ち切った");
+  await expect(stepRows.nth(4)).toContainText("未検証");
+  await expect(stepRows.nth(5)).toContainText("一部のみ確認済み");
+  await expect(steps).toBeVisible();
+  await steps.screenshot({ path: testInfo.outputPath("support-guide-coverage.png") });
+  await expect(result).toContainText("ポータルの「パスワードを忘れた」から再設定します。");
+  const notice = result.getByRole("status").filter({ hasText: "回答の注意書き" });
+  await notice.scrollIntoViewIfNeeded();
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("変更前に管理窓口へ確認してください。");
+  await notice.screenshot({ path: testInfo.outputPath("support-guide-notice.png") });
+  // AI に渡した件数と内訳は検索・チャットと同じ表示（#2040）。
+  await expect(result.getByRole("heading", { name: /^AI に渡した 1 件/ })).toBeVisible();
+  expect(api.requests.find((item) => item.path.endsWith("/try"))?.body).toEqual({
+    query: "パスワードを忘れた",
+    draft_revision: 3,
+    conditions: { account: "社員" },
   });
-}
+  // 公開の版は 2 のまま（試しは保存しない）。
+  await expect(page.getByRole("rowheader", { name: "版 2 公開中" })).toBeVisible();
+  expect(api.requests.some((item) => /\/(publish|rollback)$/.test(item.path))).toBe(false);
+  await expectNoPageOverflow(page);
+  await panel.screenshot({ path: testInfo.outputPath("support-guide-try.png") });
+
+  // この下書きのガイドが使われなかったときは、見直す点を出す。
+  api.tryUsesDraft = false;
+  api.tryDelayMs = 0;
+  await panel.getByRole("button", { name: "試す", exact: true }).click();
+  await expect(result.getByText("この質問では、業務ガイドを使わずに答えました。")).toBeVisible();
+  await expect(result).toContainText("質問の例・照合の語・適用範囲");
+  await expect(result.getByTestId("support-guide-try-steps")).toHaveCount(0);
+
+  // 保存していない変更があるうちは、保存した下書きでしか試せないので押せない。
+  await editor.getByLabel("タイトル").fill("手元で直したタイトル");
+  await expect(panel.getByRole("button", { name: "試す", exact: true })).toBeDisabled();
+  await expect(panel.getByTestId("support-guide-try-save-first")).toBeVisible();
+});
 
 test("取り込みの確認で、同じ名前の既存のガイドとの違いを節ごとに示す", async ({ page }, testInfo) => {
   await openSupportGuides(page, [publishedGuide()]);

@@ -1053,16 +1053,10 @@ test("回答前の確認の方針と確認の上限（往復）を業務プロ�
   await expectSelectFieldValue(policy, "confirm");
   await expectSelectFieldValue(maxRounds, "0");
   await chooseSelectFieldOption(maxRounds, "2");
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await testInfo.attach(`clarification-settings-${colorScheme}`, {
-      body: await section.screenshot(),
-      contentType: "image/png",
-    });
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  await testInfo.attach(`clarification-settings-light`, {
+    body: await section.screenshot(),
+    contentType: "image/png",
+  });
   await chooseSelectFieldOption(policy, "assume");
   // 前提を示すときは確認しないので、上限は選べない。
   await expect(maxRounds).toBeDisabled();
@@ -2413,28 +2407,25 @@ test("プロファイル詳細取得失敗は選択 URL を保持し再試行で
   await expect(page).toHaveURL(/profile=missing/);
 });
 
-test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 / 375px・ライト / ダークで欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
+test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 / 375px で欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
   // 一覧の件数はツールバーの ListCount、編集のフォームは FormGrid と値の種類の幅（#1891）。
   test.slow();
   await mockProfileApi(page);
   const widths = test.info().project.name === "mobile-375" ? [375] : [1280, 1920];
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      for (const path of ["/profiles", "/profiles?profile=default"]) {
-        await page.goto(path);
-        if (path === "/profiles") {
-          await expect(page.getByTestId("profile-list-toolbar").getByRole("status")).toHaveText(/^全 \d+ 件$/u);
-        } else {
-          await expect(page.locator("#profile-sql-rules-input")).toBeVisible();
-          await expect(page.getByTestId("profile-allowed-table-list")).toBeVisible();
-        }
-        const label = `${path} ${width}px ${colorScheme}`;
-        expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
-        expect(await findClippedPlaceholders(page), label).toEqual([]);
-        if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ["/profiles", "/profiles?profile=default"]) {
+      await page.goto(path);
+      if (path === "/profiles") {
+        await expect(page.getByTestId("profile-list-toolbar").getByRole("status")).toHaveText(/^全 \d+ 件$/u);
+      } else {
+        await expect(page.locator("#profile-sql-rules-input")).toBeVisible();
+        await expect(page.getByTestId("profile-allowed-table-list")).toBeVisible();
       }
+      const label = `${path} ${width}px`;
+      expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
+      expect(await findClippedPlaceholders(page), label).toEqual([]);
+      if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
     }
   }
 });

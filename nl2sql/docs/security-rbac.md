@@ -297,7 +297,7 @@ PLATFORM_AUTH_LOGIN_ATTEMPT_WINDOW_MINUTES=15
 プロセス内だけで数える）。テーブルが無い・DB に接続できないときは、プロセス内の記録に自動で切り替えて
 制限を続け（ログ `auth_login_throttle_shared_store_unavailable`）、30 秒ごとに DB を試し直す。テーブルは
 `app_security_migrate --apply` が作る。既存環境の更新手順と Nginx のログインの API の上限は
-[terraform/README.md](../../terraform/README.md) の「ログインの試行の回数の共有（#1173）」を参照する。
+[platform/docs/deployment.md](../../platform/docs/deployment.md) の「ログインの試行の回数の共有（#1173）」を参照する。
 
 既定では、通常ユーザーの無操作 timeout は 60 分、session の絶対有効期限は 12 時間とする。
 業務端末が管理下にあり、無人端末リスクを組織として受容できる低リスク環境でだけ、

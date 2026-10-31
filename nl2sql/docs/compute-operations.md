@@ -1,23 +1,21 @@
 # NL2SQL on OCI Compute — runtime and operations
 
-The Compute instance for NL2SQL is created by the suite-wide OCI Resource
-Manager stack. For the stack itself (product selection, the shared Autonomous
-AI Database, form inputs, packaging, and releases), see
-[`terraform/README.md`](../../terraform/README.md) (#217).
+NL2SQL is installed on the suite's single Compute instance by the deployment
+scripts in `platform/deploy/` (the OCI Resource Manager Terraform stack was
+removed in #12). For the shared Autonomous AI Database, the app DB user, Nginx,
+HTTPS, updates, and the deployment check, see
+[`platform/docs/deployment.md`](../../platform/docs/deployment.md).
 
 This page covers what runs on the NL2SQL Compute instance and how to operate it.
-The Resource Manager inputs for NL2SQL are prefixed with `nl2sql_`
-(for example `nl2sql_application_url`). The configuration administrator
-password `app_admin_login_user_password` (login user ID `system_admin`) is shared
-with RAG.
+The configuration administrator (login user ID `system_admin`) is shared with
+RAG and the Agent Control Plane.
 
 ## Runtime Notes
 
 The bootstrap script writes `/u01/aipoc/no.1-production-ready-suite/nl2sql/backend/.env`
 and `/u01/aipoc/no.1-production-ready-suite/platform/.env` (both `0600`)
-on the instance and starts in the background from cloud-init, matching the
-proven No.1-SQL-Assist Terraform bootstrap pattern. Track progress in
-`/var/log/cloud-init-custom.log` and `/var/log/nl2sql-init.log` until the
+on the instance from the deployment inputs in `/u01/aipoc/props/`. Track
+progress in `/var/log/suite-init.log` and `/var/log/nl2sql-init.log` until the
 application services are ready.
 The bootstrap starts:
 
@@ -27,14 +25,15 @@ The bootstrap starts:
 - the single Nginx site of the suite (`platform/deploy/suite-init.sh`), on
   `https_port` (HTTPS, default `443`) or `http_port` (default `80`)
 
-The stack puts every selected product on one Compute (#1316). Nginx serves the
+The suite puts every selected product on one Compute (#1316). Nginx serves the
 NL2SQL `frontend/dist` (built with `FRONTEND_BASE_PATH=/nl2sql/`) at `/nl2sql/`
 and reverse proxies `/nl2sql/api/` to the backend with the `/nl2sql` prefix
 removed. NL2SQL is not deployed on its own: the three products are deployed
 together by the suite, and `nl2sql/init_script.sh` does not write an Nginx site.
 Open TCP `https_port` (or `http_port` when HTTPS is off) publicly in the
 security list or NSG. When HTTPS is on, `http_port` is neither opened nor
-listened on, and HTTP is not redirected to HTTPS (#1638); see `terraform/README.md` for the ports and the HTTPS
+listened on, and HTTP is not redirected to HTTPS (#1638); see
+[`platform/docs/deployment.md`](../../platform/docs/deployment.md) for the ports and the HTTPS
 certificate. If ADB uses a
 private endpoint, the selected network must still allow Compute to reach ADB on
 TCP `1522`.
@@ -56,7 +55,7 @@ sudo systemctl enable --now production-ready-nl2sql-ontology-worker
 ```
 
 The configured `SYSTEM_ADMIN` login comes from the application administrator
-values supplied in Resource Manager, written to `platform/.env`:
+values in `platform/.env`:
 
 - `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin`
 - `PLATFORM_ADMIN_LOGIN_USER_PASSWORD`
@@ -67,10 +66,9 @@ to exist. Application-local users are checked from `PLATFORM_USERS`. The
 configured administrator password can be changed from the application password
 change screen; the backend writes the new value back to `platform/.env`.
 
-When `adb_deployment_mode` selects an existing ADB (`既存の Autonomous AI
-Database を選択`, or legacy `USE_EXISTING`), the stack does not create any ADB
-resource. It generates a wallet from the selected existing ADB OCID and writes the
-database values into `platform/.env`:
+The deployment does not create any ADB resource. The wallet of the existing ADB
+and the database values come from the deployment inputs and are written into
+`platform/.env`:
 
 - `PLATFORM_ORACLE_USER`
 - `PLATFORM_ORACLE_PASSWORD`
@@ -82,10 +80,10 @@ database values into `platform/.env`:
 - `PLATFORM_ORACLE_ADB_OCID`
 - `PLATFORM_ORACLE_ADB_REGION`
 
-Resource Manager の実行環境は3製品共通の `platform_environment`（既定 `staging`）です。
+実行環境は3製品共通の `PLATFORM_ENVIRONMENT` です。
 共通 `.env` に `PLATFORM_ENVIRONMENT` と `PLATFORM_AUTH_MODE=authenticated` を設定します。
-`staging` / `production` は `https_enabled=true` と Secure Cookie を必須にします。
-HTTP を使うローカルの構成では `platform_environment=local` を明示します。
+`staging` / `production` では HTTPS と Secure Cookie を使います。
+HTTP を使うローカルの構成では `PLATFORM_ENVIRONMENT=local` を明示します。
 
 ## Updating an Existing Compute Deployment
 
@@ -207,7 +205,7 @@ when journald is not readable as the current user; if that fails, rerun with
 The equivalent manual commands, and everything the script does not cover:
 
 ```bash
-sudo tail -f /var/log/cloud-init-custom.log
+sudo tail -f /var/log/suite-init.log
 sudo tail -f /var/log/nl2sql-init.log
 cd /u01/aipoc/no.1-production-ready-suite/nl2sql
 sudo systemctl status production-ready-nl2sql-backend
@@ -243,14 +241,11 @@ Then confirm Wallet refresh, application user management, and completion of any
 previously pending schema refresh job from the UI. Docker is not part of this recovery path, and OCI SDK circuit-breaker INFO
 messages are not failures.
 
-For the permanent Resource Manager rollout, publish the fixed application with
-an immutable `application_git_ref` and create a replacement Compute instance.
-Updating `user_data` metadata on an already booted instance does not rerun
-cloud-init. Keep the repaired old instance until the replacement passes the same
-health/UI checks, and migrate `/u01/data/production-ready-nl2sql` before cutover
+For a permanent rollout to a replacement Compute instance, keep the repaired old
+instance until the replacement passes the same health/UI checks, and migrate `/u01/data/production-ready-nl2sql` before cutover
 when it contains local documents or settings.
 
-The cloud-init bootstrap:
+The deployment (`platform/deploy/suite-init.sh` and `nl2sql/init_script.sh`):
 
 1. Installs Node.js 24, uv, and build dependencies with `dnf` (the Compute OS is
    Oracle Linux 9; Nginx, firewalld, and SELinux are configured by
@@ -270,7 +265,7 @@ The cloud-init bootstrap:
 10. Leaves Nginx to `platform/deploy/suite-init.sh`, which serves the SPA at
     `/nl2sql/` and proxies `/nl2sql/api/` to the backend (#1316).
 
-This Resource Manager deployment is a direct systemd + Nginx installation.
+This deployment is a direct systemd + Nginx installation.
 Docker is not installed or required on the Compute instance.
 
 Node.js installation uses the Oracle Linux AppStream module `nodejs:24` first. If
@@ -289,7 +284,7 @@ the end of `suite-init.sh` then reports `check: nl2sql schema NG` (from
 tables) and exits non-zero (#1648). Check `/var/log/nl2sql-init.log` for
 `WARNING: Continuing in degraded mode` and the ORA code (for example `ORA-01031`
 or `ORA-01950` when the database user lacks a privilege or tablespace quota; see
-`terraform/README.md`), then run:
+[`platform/docs/deployment.md`](../../platform/docs/deployment.md)), then run:
 
 ```bash
 cd /u01/aipoc/no.1-production-ready-suite/nl2sql/backend

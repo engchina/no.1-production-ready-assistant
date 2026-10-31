@@ -20,7 +20,7 @@ import { apiEnvelope, mockLocalAuth, selectSearchAnswerProfile } from "./_helper
  *   セルからはみ出さない（`findFieldsOffWidthScale`。段の幅は sm 以上だけで効くので 375px では見ない）
  * - 欄の補足・エラーの文が min(20rem, 置き場所の幅) より狭く折り返さない（`findNarrowFieldTexts`。#1891 段 5）
  * - 1280px で `FormGrid` の置き場所を 42〜58rem に狭めても、上のすべてが成り立つ（2 列の境 57.5rem の前後。#1891 段 5）
- * ライト・ダークの両方で開く。desktop の project は 1280px と 1920px、mobile の project は 375px。
+ * desktop の project は 1280px と 1920px、mobile の project は 375px で開く。
  * `RAG_E2E_SCREENSHOT_DIR` を渡すと、代表の画面の画像を残す（PR の説明用）。
  */
 
@@ -30,7 +30,6 @@ const DESKTOP_WIDTHS = [
   { width: 1920, height: 1080 },
 ] as const;
 
-type Theme = "light" | "dark";
 
 interface FormScreen {
   /** 画面の名前（テスト名・画像の名前）。 */
@@ -748,16 +747,6 @@ const SCREENS: FormScreen[] = [
   },
 ];
 
-/**
- * 外観の設定（localStorage）でテーマを決める。`emulateMedia` では切り替わらない。画面が離れるときに保存する
- * 作業状態で上書きされないよう、読み込みの前（init script）に入れる（後から足した script が後に動く）。
- */
-async function useTheme(page: Page, theme: Theme) {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectLayout(page: Page, screen: FormScreen, label: string, checkWidthScale: boolean) {
   await expect
     .poll(() => measureHorizontalOverflow(page), { message: `${label}: ページの横あふれ`, timeout: 3000 })
@@ -799,32 +788,26 @@ test.describe("フォームの欄の幅と placeholder（#1891）", { tag: "@res
     test(`${screen.name} の欄が段の幅で、placeholder が収まり、横にあふれない`, async ({ page }, testInfo) => {
       const mobile = testInfo.project.name === "mobile";
       await screen.mock(page);
-      for (const theme of ["light", "dark"] as const) {
-        await useTheme(page, theme);
-        await page.goto(screen.path);
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-          .toBe(theme === "dark");
-        if (mobile) {
-          await screen.open(page);
-          await expectLayout(page, screen, `375px ${theme}`, false);
-          await screenshot(page, screen, `375-${theme}`);
-          continue;
-        }
-        for (const size of DESKTOP_WIDTHS) {
-          await page.setViewportSize(size);
-          if (size === DESKTOP_WIDTHS[0]) await screen.open(page);
-          await expectLayout(page, screen, `${size.width}px ${theme}`, true);
-          if (size !== DESKTOP_WIDTHS[0] || theme !== "light") continue;
-          // FormGrid の置き場所が 42〜58rem（2 列の境 57.5rem の前後）でも、欄が段の幅のままでセルからはみ出さない。
-          for (const rem of FORM_GRID_PROBE_WIDTHS_REM) {
-            await setFormGridMaxWidth(page, rem);
-            await expectLayout(page, screen, `${size.width}px ${theme} FormGrid ${rem}rem`, true);
-          }
-          await setFormGridMaxWidth(page, null);
-        }
-        await screenshot(page, screen, `1920-${theme}`);
+      await page.goto(screen.path);
+      if (mobile) {
+        await screen.open(page);
+        await expectLayout(page, screen, "375px", false);
+        await screenshot(page, screen, "375");
+        return;
       }
+      for (const size of DESKTOP_WIDTHS) {
+        await page.setViewportSize(size);
+        if (size === DESKTOP_WIDTHS[0]) await screen.open(page);
+        await expectLayout(page, screen, `${size.width}px`, true);
+        if (size !== DESKTOP_WIDTHS[0]) continue;
+        // FormGrid の置き場所が 42〜58rem（2 列の境 57.5rem の前後）でも、欄が段の幅のままでセルからはみ出さない。
+        for (const rem of FORM_GRID_PROBE_WIDTHS_REM) {
+          await setFormGridMaxWidth(page, rem);
+          await expectLayout(page, screen, `${size.width}px FormGrid ${rem}rem`, true);
+        }
+        await setFormGridMaxWidth(page, null);
+      }
+      await screenshot(page, screen, "1920");
     });
   }
 });

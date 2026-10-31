@@ -159,7 +159,7 @@ uv run python -m app.rag.oracle_schema \
   --manifest-output ../artifacts/oracle-schema.manifest.json
 ```
 
-manifest は artifact 全体と section ごとの SHA-256、statement 数、`VECTOR(1536, FLOAT32)`、HNSW index (`COSINE`, target accuracy `95`, neighbors `32`, efconstruction `500`) の契約を含みます。staging / production では生成物をレビューし、SQLcl や OCI Resource Manager の安全な適用手順で実行してから smoke test へ進みます。
+manifest は artifact 全体と section ごとの SHA-256、statement 数、`VECTOR(1536, FLOAT32)`、HNSW index (`COSINE`, target accuracy `95`, neighbors `32`, efconstruction `500`) の契約を含みます。staging / production では生成物をレビューし、SQLcl などの安全な適用手順で実行してから smoke test へ進みます。
 
 既存 Oracle schema を現行 DDL 契約へ寄せる場合は migration artifact を生成します。現在の migration は `rag_ingestion_jobs.attempt_count NUMBER(5) DEFAULT 0 NOT NULL`、`rag_ingestion_jobs.max_attempts NUMBER(5) DEFAULT 3 NOT NULL`、`rag_ingestion_jobs_attempts_ck` を追加/補正します。
 

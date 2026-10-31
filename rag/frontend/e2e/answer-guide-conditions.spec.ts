@@ -11,7 +11,7 @@ import {
 /**
  * 回答の詳細に業務ガイドの条件の状態（確かめた / 分からない / 質問から複数の候補が読み取れた）・
  * 適用範囲・読み込めなかったことを出し、引用に資料に印刷されたページ番号を物理頁と並べる（#1287）。
- * desktop / 375px は playwright の project、light / dark はテストごとに切り替える。
+ * desktop / 375px は playwright の project で切り替える。
  */
 
 const envelope = (data: unknown) => ({ data, error_messages: [], warning_messages: [] });
@@ -67,16 +67,6 @@ const citation = (chunkId: string, metadata: Record<string, unknown>) => ({
   category_name: null,
   metadata: { context_role: "evidence", content_kind: "text", ...metadata },
 });
-
-async function setTheme(page: Page, theme: "light" | "dark") {
-  // 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れておく。
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
-}
 
 async function mockApi(page: Page, answer: Record<string, unknown>, citations: unknown[]) {
   await mockDatabaseReady(page);
@@ -138,37 +128,31 @@ async function screenshot(target: Locator, name: string, projectName: string) {
   await target.screenshot({ path: `${process.env.RAG_E2E_SCREENSHOT_DIR}/${name}-${projectName}.png` });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`回答の詳細に業務ガイドの条件の状態を、引用に資料の表記のページ番号を出す (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    await setTheme(page, theme);
-    await mockApi(page, { outcome: "conditional", guide: GUIDE }, [
-      citation("doc-1:cs_1:0", { page_start: 12, page_label_start: "3-4", page_label_end: "3-4" }),
-      citation("doc-1:cs_1:1", { page_start: 5 }),
-    ]);
-    const panel = await ask(page);
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
+test(`回答の詳細に業務ガイドの条件の状態を、引用に資料の表記のページ番号を出す`, async ({
+  page,
+}, testInfo) => {
+  await mockApi(page, { outcome: "conditional", guide: GUIDE }, [
+    citation("doc-1:cs_1:0", { page_start: 12, page_label_start: "3-4", page_label_end: "3-4" }),
+    citation("doc-1:cs_1:1", { page_start: 5 }),
+  ]);
+  const panel = await ask(page);
 
-    await expect(panel.getByTestId("answer-outcome-badge")).toHaveCount(0);
-    await expect(panel.getByTestId("answer-guide-badge")).toHaveCount(0);
-    await expect(panel.getByRole("region", { name: "業務ガイドの条件" })).toHaveCount(0);
-    await expect(panel.locator("[data-run-used-models]")).toBeVisible();
+  await expect(panel.getByTestId("answer-outcome-badge")).toHaveCount(0);
+  await expect(panel.getByTestId("answer-guide-badge")).toHaveCount(0);
+  await expect(panel.getByRole("region", { name: "業務ガイドの条件" })).toHaveCount(0);
+  await expect(panel.locator("[data-run-used-models]")).toBeVisible();
 
-    // 印刷のページ番号があれば物理頁と並べ、無ければ物理頁だけ。
-    const pages = page.locator("[data-testid=citation-main] dd").filter({ hasText: /^p\./ });
-    await expect(pages).toHaveText(["p.12（資料の表記: 3-4）", "p.5"]);
-    await expectNoPageOverflow(page);
-    await screenshot(panel, `answer-guide-conditions-${theme}`, testInfo.project.name);
-    await screenshot(
-      page.locator("li").filter({ has: page.getByTestId("citation-main") }).first(),
-      `citation-page-label-${theme}`,
-      testInfo.project.name
-    );
-  });
-}
+  // 印刷のページ番号があれば物理頁と並べ、無ければ物理頁だけ。
+  const pages = page.locator("[data-testid=citation-main] dd").filter({ hasText: /^p\./ });
+  await expect(pages).toHaveText(["p.12（資料の表記: 3-4）", "p.5"]);
+  await expectNoPageOverflow(page);
+  await screenshot(panel, `answer-guide-conditions`, testInfo.project.name);
+  await screenshot(
+    page.locator("li").filter({ has: page.getByTestId("citation-main") }).first(),
+    `citation-page-label`,
+    testInfo.project.name
+  );
+});
 
 test("条件を持たない業務ガイドは名前と版だけを出し、条件の欄を出さない", async ({ page }) => {
   await mockApi(
@@ -185,30 +169,27 @@ test("条件を持たない業務ガイドは名前と版だけを出し、条�
   await expectNoPageOverflow(page);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  test(`業務ガイドを読み込めずに回答したことを、ガイドが無いときと区別して出す (${theme})`, async ({
-    page,
-  }, testInfo) => {
-    await setTheme(page, theme);
-    await mockApi(page, { outcome: "answered", guide_load_failed: true }, [
-      citation("doc-1:cs_1:0", { page_start: 2, page_end: 3, page_label_start: "ii", page_label_end: "iii" }),
-    ]);
-    const panel = await ask(page);
-    // 回答を読むときに要る案内は「詳細」に畳まず、回答の本文の直下に出す（#2096）。
-    const failed = page.getByTestId("answer-guide-load-failed");
-    await expect(failed).toHaveCount(1);
-    await expect(panel.getByTestId("answer-guide-load-failed")).toHaveCount(0);
-    await expect(failed).toContainText("業務ガイドを読み込めませんでした");
-    await expect(failed).toContainText("業務ガイドの条件を確かめずに、資料だけで回答しました。");
-    await expect(panel.getByTestId("answer-guide-badge")).toHaveCount(0);
-    await expect(panel.getByRole("region", { name: "業務ガイドの条件" })).toHaveCount(0);
-    await expect(page.locator("[data-testid=citation-main] dd").filter({ hasText: /^p\./ })).toHaveText([
-      "p.2-3（資料の表記: ii〜iii）",
-    ]);
-    await expectNoPageOverflow(page);
-    await screenshot(panel, `answer-guide-load-failed-${theme}`, testInfo.project.name);
-  });
-}
+test(`業務ガイドを読み込めずに回答したことを、ガイドが無いときと区別して出す`, async ({
+  page,
+}, testInfo) => {
+  await mockApi(page, { outcome: "answered", guide_load_failed: true }, [
+    citation("doc-1:cs_1:0", { page_start: 2, page_end: 3, page_label_start: "ii", page_label_end: "iii" }),
+  ]);
+  const panel = await ask(page);
+  // 回答を読むときに要る案内は「詳細」に畳まず、回答の本文の直下に出す（#2096）。
+  const failed = page.getByTestId("answer-guide-load-failed");
+  await expect(failed).toHaveCount(1);
+  await expect(panel.getByTestId("answer-guide-load-failed")).toHaveCount(0);
+  await expect(failed).toContainText("業務ガイドを読み込めませんでした");
+  await expect(failed).toContainText("業務ガイドの条件を確かめずに、資料だけで回答しました。");
+  await expect(panel.getByTestId("answer-guide-badge")).toHaveCount(0);
+  await expect(panel.getByRole("region", { name: "業務ガイドの条件" })).toHaveCount(0);
+  await expect(page.locator("[data-testid=citation-main] dd").filter({ hasText: /^p\./ })).toHaveText([
+    "p.2-3（資料の表記: ii〜iii）",
+  ]);
+  await expectNoPageOverflow(page);
+  await screenshot(panel, `answer-guide-load-failed`, testInfo.project.name);
+});
 
 test("診断の照合・CRAG の情報は処理の詳細に出さず、識別子とモデルに統一する", { tag: "@responsive" }, async ({ page }) => {
   await mockApi(page, { answer_validation: { status: "completed", valid: false }, crag_attempts: [{ sufficient: true, grade_execution: "not_run" }] }, []);

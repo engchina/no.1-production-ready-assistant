@@ -567,11 +567,6 @@ const agentJa = {
   "chat.attachments.warning.rows_truncated": "行が多いため途中までを読み取りました。",
   "chat.attachments.warning.columns_truncated": "列が多いため一部の列を読み取りました。",
   "chat.attachments.warning.pages_truncated": "ページが多いため途中までを読み取りました。",
-  "appearance.theme.label": "配色テーマ",
-  "appearance.theme.hint": "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  "appearance.theme.light": "ライト",
-  "appearance.theme.dark": "ダーク",
-  "appearance.theme.system": "自動（OS 設定）",
 
   "nav.chat": "チャット",
   "chat.title": "チャット",

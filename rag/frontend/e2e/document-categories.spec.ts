@@ -299,21 +299,17 @@ test("検索から開いた小分類は、その行を選択中にしてフォ�
   await expectNoPageOverflow(page);
 });
 
-test("ダークテーマでも選択中の行と列の見出しを読める", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: "dark" }, version: 0 }));
-  });
+test("URL で開いた選択中の行と列の見出しを読める", { tag: "@responsive" }, async ({ page }, testInfo) => {
   await mockCategories(page);
   await page.goto("/document-categories?large=l1&middle=m1");
 
-  await expect(page.locator("html")).toHaveClass(/dark/);
   if (testInfo.project.name !== "mobile") {
     await expect(rowButton(page, "l1")).toHaveAttribute("aria-current", "true");
     await expect(rowButton(page, "m1")).toHaveAttribute("aria-current", "true");
   }
   await expect(column(page, 3)).toContainText("種別X の小分類");
   await expectNoPageOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("document-categories-dark.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("document-categories-selected.png"), fullPage: true });
 });
 
 test("分類がまだ無いときは作り方を案内する", async ({ page }) => {

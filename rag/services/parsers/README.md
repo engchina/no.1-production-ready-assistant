@@ -6,7 +6,7 @@
 | サービス | 実行 | 既定で配備 | 備考 |
 |---|---|---|---|
 | `docling` | CPU | ✅ | 既定の解析エンジン。**PDF と画像だけ**(親子階層（small-to-big）の分割に使うレイアウト解析) |
-| `unstructured` | CPU | — | 多形式 partition(テキスト・HTML・Office・メール など)。stack の `rag_enable_parser_unstructured` / `rag-services.sh --unstructured` |
+| `unstructured` | CPU | — | 多形式 partition(テキスト・HTML・Office・メール など)。配備の props の `rag_services.txt` / `rag-services.sh --unstructured` |
 
 音声・動画は取り込まない（アップロードで止める。#3369）。XML / JSON の木と構造化レコードの JSONL の専用の
 解析エンジンは削除した（#21）。前処理（CSV→JSONL・Excel→JSONL・Word→JSONL）の成果物の構造化レコードの JSONL は、
