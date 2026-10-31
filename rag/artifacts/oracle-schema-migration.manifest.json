@@ -575,10 +575,17 @@
       "sha256": "d3e80d6a5f85c9622b8c55e317876d5260d5bfbb893160b1252dadfedf62980b",
       "statement_count": 1,
       "table_name": "rag_query_history"
+    },
+    {
+      "destructive": true,
+      "name": "20261031_001_retire_appearance_permission",
+      "sha256": "7f76b8c5d8ce50105def99ad8f5a61aac1c5569efe4606ba08acee8208124717",
+      "statement_count": 1,
+      "table_name": "rag_role_permissions"
     }
   ],
   "schema_name": "production-ready-rag-oracle-26ai",
   "schema_version": "3",
-  "sha256": "c3f68e2d5f01d88d5b5d83922db0c7874e329c3f356671c58ae7a538fdf6362e",
-  "statement_count": 124
+  "sha256": "1cd33cd2a73694c263d4425719a4595564fe57813d0735a54b9736921342c382",
+  "statement_count": 125
 }

@@ -22,7 +22,7 @@ test("本文へスキップは URL と履歴を変えずに本文へフォーカ
     if (message.type() === "warning" || message.type() === "error") warnings.push(message.text());
   });
   await mockApi(page);
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const url = page.url();
   const historyLength = await page.evaluate(() => window.history.length);

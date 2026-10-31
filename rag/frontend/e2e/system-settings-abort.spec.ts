@@ -8,11 +8,22 @@ import { mockLocalAuth } from "./_helpers";
 // `alsoHold` は同じ画面が同時に取得する API。応答を返さずに取得中のままにする。未モックの 404 で先に失敗すると、
 // 画面は取得中ではなく失敗の表示になり、移っても止める要求が残らない（dev server の StrictMode の
 // マウントのやり直しだけで中断が起きて通っていた。PR の CI は build の成果物で実行する。#1583）。
-const CASES: ReadonlyArray<{ path: string; api: string; alsoHold?: readonly string[] }> = [
-  { path: "/settings/upload-storage", api: "/api/settings/upload-storage" },
-  { path: "/settings/oci", api: "/api/settings/oci", alsoHold: ["/api/settings/upload-storage"] },
-  { path: "/settings/model", api: "/api/settings/model" },
-  { path: "/settings/database", api: "/api/settings/database" },
+// `to` は移り先のサイドナビの項目（同じシステム設定の別の画面）。
+const CASES: ReadonlyArray<{
+  path: string;
+  api: string;
+  alsoHold?: readonly string[];
+  to: { link: string; url: RegExp };
+}> = [
+  { path: "/settings/upload-storage", api: "/api/settings/upload-storage", to: { link: "データベース設定", url: /\/settings\/database$/ } },
+  {
+    path: "/settings/oci",
+    api: "/api/settings/oci",
+    alsoHold: ["/api/settings/upload-storage"],
+    to: { link: "データベース設定", url: /\/settings\/database$/ },
+  },
+  { path: "/settings/model", api: "/api/settings/model", to: { link: "データベース設定", url: /\/settings\/database$/ } },
+  { path: "/settings/database", api: "/api/settings/database", to: { link: "モデル設定", url: /\/settings\/model$/ } },
 ];
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -21,7 +32,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   await mockLocalAuth(page);
 });
 
-for (const { path, api, alsoHold = [] } of CASES) {
+for (const { path, api, alsoHold = [], to } of CASES) {
   test(`${path} の取得中に別の画面へ移ると、設定の取得を止める`, async ({ page }) => {
     // 応答を返さず、取得中のまま止めておく。
     for (const held of [api, ...alsoHold]) await page.route(`**${held}`, () => undefined);
@@ -33,8 +44,8 @@ for (const { path, api, alsoHold = [] } of CASES) {
 
     await page.goto(path);
     await requested;
-    await page.getByRole("link", { name: "外観と証明書" }).click();
-    await expect(page).toHaveURL(/\/settings\/appearance$/);
+    await page.getByRole("link", { name: to.link, exact: true }).click();
+    await expect(page).toHaveURL(to.url);
 
     const failed = await aborted;
     expect(failed.failure()?.errorText ?? "").toMatch(/abort|cancel/i);

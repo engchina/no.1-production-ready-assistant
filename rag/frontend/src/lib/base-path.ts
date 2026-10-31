@@ -1,7 +1,7 @@
 /**
  * 画面の配信の基点（base path。#1316）。
  *
- * 1 台の Compute に 3 製品を置く配備では、Nginx が RAG を `/rag/` の下で配信し、frontend は
+ * 1 台の Compute に 3 製品を置く配備では、前段の reverse proxy（利用者が置く。#19）が RAG を `/rag/` の下で配信し、frontend は
  * `FRONTEND_BASE_PATH=/rag/ npm run build` で build する（Vite の `base` → `import.meta.env.BASE_URL`）。
  * ローカルの開発（`npm run dev`）・e2e・製品ごとの Compute の配備は `/` のままで、何も変わらない。
  *

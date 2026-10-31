@@ -14,7 +14,7 @@ for (const width of [1280, 1920, 375]) {
     await mockDatabaseReady(page);
     await mockLocalAuth(page);
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ["/search-answer-profiles", "/knowledge-bases", "/settings/appearance"]) {
+    for (const route of ["/search-answer-profiles", "/knowledge-bases", "/settings/database"]) {
       await page.goto(route);
       await expect(page.locator("main h1")).toBeVisible();
       await page.evaluate(() => document.fonts.ready);

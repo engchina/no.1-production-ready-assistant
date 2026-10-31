@@ -3,7 +3,7 @@ import { API_KEY_PRODUCTS, type ApiKeyProduct, type McpEndpoint, type McpEndpoin
 /**
  * 今開いている画面から見た MCP の接続先（#1805）。
  *
- * 1 台の Compute に配備した Suite は `/<製品>/` の prefix で同じ origin に並ぶ（`suite-nginx.sh`）。
+ * 前段の reverse proxy で 3 製品を `/<製品>/` の prefix で同じ origin に並べた配備（reverse proxy は利用者が置く。#19）。
  * 開いている製品の base が `/<製品>/` なら、3 製品（RAG・NL2SQL・Agent。#1874）の URL を出す。それ以外
  * （開発の dev server など、製品ごとに origin が違う）は開いている製品の URL だけを出す。
  */
@@ -34,20 +34,9 @@ export function mcpEndpointRows(endpoints: McpEndpoint[], publicBaseUrl?: string
   }));
 }
 
-/** 自作の CA の証明書の場所（Nginx が配る `/platform/ca.crt`）。https の URL のときだけ。 */
-export function caCertificateUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" ? `${parsed.origin}/platform/ca.crt` : null;
-  } catch {
-    return null;
-  }
-}
-
 export interface McpRegistrationExampleLabels {
   keyComment: string;
   timeoutComment: string;
-  caComment: string;
 }
 
 /**
@@ -55,7 +44,7 @@ export interface McpRegistrationExampleLabels {
  *
  * - サーバー名は `rag` / `nl2sql`（スキルがこの名前を前提にする）。
  * - `--header` は単一引用符で `${PR_API_KEY}` のまま保存させる（キーの値を `~/.claude.json` に書かない）。
- * - `rag_search` は既定の 60 秒を超えることがあるので `MCP_TOOL_TIMEOUT`、自作の CA の HTTPS は `NODE_EXTRA_CA_CERTS`。
+ * - `rag_search` は既定の 60 秒を超えることがあるので `MCP_TOOL_TIMEOUT`。
  * - URL は公開の URL を優先する（無ければこの画面の URL）。
  */
 export function mcpRegistrationExample(rows: McpEndpointRow[], labels: McpRegistrationExampleLabels): string {
@@ -64,7 +53,6 @@ export function mcpRegistrationExample(rows: McpEndpointRow[], labels: McpRegist
     return url ? [{ product: row.product, url }] : [];
   });
   if (targets.length === 0) return "";
-  const caUrl = targets.map((target) => caCertificateUrl(target.url)).find((value) => value !== null) ?? null;
   const lines = [`export PR_API_KEY='prak_...'   # ${labels.keyComment}`];
   for (const target of targets) {
     lines.push(
@@ -73,9 +61,6 @@ export function mcpRegistrationExample(rows: McpEndpointRow[], labels: McpRegist
     );
   }
   lines.push(`export MCP_TOOL_TIMEOUT=600000   # ${labels.timeoutComment}`);
-  if (caUrl) {
-    lines.push(`export NODE_EXTRA_CA_CERTS=~/production-ready-ca.crt   # ${labels.caComment.replace("{url}", caUrl)}`);
-  }
   lines.push("claude");
   return lines.join("\n");
 }

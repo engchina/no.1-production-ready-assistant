@@ -1111,7 +1111,7 @@ export declare const toast: {
       <Button variant="secondary" icon={RefreshCw} onClick={retry}>再試行</Button>
     </>
   }
-  footer="OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。"
+  footer="OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。"
 />
 ```
 

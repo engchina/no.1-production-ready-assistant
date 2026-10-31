@@ -2,8 +2,8 @@
 
 NL2SQL is installed on the suite's single Compute instance by the deployment
 scripts in `platform/deploy/` (the OCI Resource Manager Terraform stack was
-removed in #12). For the shared Autonomous AI Database, the app DB user, Nginx,
-HTTPS, updates, and the deployment check, see
+removed in #12). For the shared Autonomous AI Database, the app DB user,
+updates, and the deployment check, see
 [`platform/docs/deployment.md`](../../platform/docs/deployment.md).
 
 This page covers what runs on the NL2SQL Compute instance and how to operate it.
@@ -22,26 +22,24 @@ The bootstrap starts:
 - `production-ready-nl2sql-backend` on private upstream `127.0.0.1:8010`
   (changed from `8000` in #1316 so that RAG
   can use `8000` on the same Compute; local development uses `8110` instead, #25)
-- the single Nginx site of the suite (`platform/deploy/suite-init.sh`), on
-  `https_port` (HTTPS, default `443`) or `http_port` (default `80`)
 
-The suite puts every selected product on one Compute (#1316). Nginx serves the
-NL2SQL `frontend/dist` (built with `FRONTEND_BASE_PATH=/nl2sql/`) at `/nl2sql/`
-and reverse proxies `/nl2sql/api/` to the backend with the `/nl2sql` prefix
-removed. NL2SQL is not deployed on its own: the three products are deployed
-together by the suite, and `nl2sql/init_script.sh` does not write an Nginx site.
-Open TCP `https_port` (or `http_port` when HTTPS is off) publicly in the
-security list or NSG. When HTTPS is on, `http_port` is neither opened nor
-listened on, and HTTP is not redirected to HTTPS (#1638); see
-[`platform/docs/deployment.md`](../../platform/docs/deployment.md) for the ports and the HTTPS
-certificate. If ADB uses a
+The suite puts every selected product on one Compute (#1316). The suite builds
+the NL2SQL `frontend/dist` with `FRONTEND_BASE_PATH=/nl2sql/`. The deployment
+does not install a reverse proxy (Nginx etc.) or TLS certificates (#19):
+whether to put a reverse proxy in front, which serves `/nl2sql/` from
+`frontend/dist` and proxies `/nl2sql/api/` to the backend with the `/nl2sql`
+prefix removed, is the operator's choice (see the repository `README.md`,
+"各製品の公開", and
+[`platform/docs/deployment.md`](../../platform/docs/deployment.md)). NL2SQL is
+not deployed on its own: the three products are deployed together by the
+suite. If ADB uses a
 private endpoint, the selected network must still allow Compute to reach ADB on
 TCP `1522`.
 
 The bootstrap applies the core system schema and application security/RBAC
 migrations idempotently. When both commands succeed, it enables and starts the
 schema refresh, quality evaluation, and ontology workers. If either command
-still fails after retries, the backend and Nginx remain available in degraded
+still fails after retries, the backend remains available in degraded
 mode and all three workers stay stopped. The affected settings/security page
 shows a recoverable initialization error instead of an unhandled Oracle error.
 
@@ -161,8 +159,7 @@ existing root-capable path with `sudo ./scripts/update-after-pull.sh`. In root
 mode, dependency synchronization, frontend builds, and database CLIs are still
 executed as `opc`; only systemd, snapshots, logging, and permission repair
 retain root privileges. The script does not run Git commands and does not
-rewrite `backend/.env`, `platform/.env`, the Wallet contents, systemd units, or the Nginx
-configuration.
+rewrite `backend/.env`, `platform/.env`, the Wallet contents, or systemd units.
 
 ```bash
 cd /u01/aipoc/no.1-production-ready-suite/nl2sql
@@ -203,13 +200,12 @@ If a migration, backend health check, or worker restart fails, all external
 workers are disabled and the script makes a best-effort attempt to restore the
 backend. The existing `frontend/dist` remains active. In a full update, the new
 frontend is promoted only after the backend is healthy and every service is
-active. If the final public/Nginx health check fails, the previous frontend is
-restored while the successfully initialized backend and workers remain running.
+active.
 The command log is appended to `/var/log/nl2sql-update.log`.
 
 The shared platform defaults to `platform/` in the same suite checkout
 (`/u01/aipoc/no.1-production-ready-suite/platform`). For a nonstandard installation,
-override `PLATFORM_REPO_DIR`. `BACKEND_HEALTH_URL`, `PUBLIC_HEALTH_URL`,
+override `PLATFORM_REPO_DIR`. `BACKEND_HEALTH_URL`,
 `HEALTHCHECK_TIMEOUT_SECONDS`, and `HEALTHCHECK_INTERVAL_SECONDS` are also
 available for nondefault ports or health-check timing.
 
@@ -224,14 +220,14 @@ or otherwise mutates a service. Run it on the Compute instance:
 
 ```bash
 cd /u01/aipoc/no.1-production-ready-suite/nl2sql
-./scripts/tail-logs.sh --status          # unit state + backend/public health check
+./scripts/tail-logs.sh --status          # unit state + backend health check
 ./scripts/tail-logs.sh                   # follow the four application units
 ./scripts/tail-logs.sh --backend         # backend only
-./scripts/tail-logs.sh --all             # units + Nginx + init/update logs
+./scripts/tail-logs.sh --all             # units + init/update logs
 ./scripts/tail-logs.sh --level ERROR --since "-15 min" --no-follow
 ```
 
-`--help` lists every option (`--workers`, `--unit`, `--nginx`, `--init`,
+`--help` lists every option (`--workers`, `--unit`, `--init`,
 `--update`, `--lines`, `--grep`, `--raw`). It falls back to `sudo` automatically
 when journald is not readable as the current user; if that fails, rerun with
 `sudo ./scripts/tail-logs.sh`.
@@ -247,11 +243,7 @@ sudo journalctl -u production-ready-nl2sql-backend -f
 sudo journalctl -u production-ready-nl2sql-schema-refresh-worker -f
 sudo journalctl -u production-ready-nl2sql-quality-evaluation-worker -f
 sudo journalctl -u production-ready-nl2sql-ontology-worker -f
-sudo nginx -t
-sudo tail -f /var/log/nginx/production-ready-nl2sql-error.log /var/log/nginx/production-ready-suite-error.log
 curl -i http://127.0.0.1:8010/api/health
-curl -ik https://127.0.0.1:443/nl2sql/api/health   # https_port を変えた環境はその port。HTTPS が off なら http://127.0.0.1:<http_port>/nl2sql/api/health
-curl -ik https://127.0.0.1:443/nl2sql/health
 ```
 
 ### Validate an updated or repaired Compute instance
@@ -283,7 +275,7 @@ when it contains local documents or settings.
 The deployment (`platform/deploy/suite-init.sh` and `nl2sql/init_script.sh`):
 
 1. Installs Node.js 24, uv, and build dependencies with `dnf` (the Compute OS is
-   Oracle Linux 9; Nginx, firewalld, and SELinux are configured by
+   Oracle Linux 9; SELinux is configured by
    `platform/deploy/suite-init.sh`. #1611).
 2. Clones the suite monorepo (NL2SQL and the shared platform) once.
 3. Extracts the ADB wallet to `/u01/aipoc/wallet`.
@@ -297,10 +289,10 @@ The deployment (`platform/deploy/suite-init.sh` and `nl2sql/init_script.sh`):
 8. Builds the shared UI package and `frontend/dist`.
 9. Starts the backend service with systemd and starts external workers only
    when both schema commands succeeded.
-10. Leaves Nginx to `platform/deploy/suite-init.sh`, which serves the SPA at
-    `/nl2sql/` and proxies `/nl2sql/api/` to the backend (#1316).
+10. Does not install a reverse proxy; serving the SPA at `/nl2sql/` and
+    proxying `/nl2sql/api/` is left to the operator (#1316, #19).
 
-This deployment is a direct systemd + Nginx installation.
+This deployment is a direct systemd installation.
 Docker is not installed or required on the Compute instance.
 
 Node.js installation uses the Oracle Linux AppStream module `nodejs:24` first. If

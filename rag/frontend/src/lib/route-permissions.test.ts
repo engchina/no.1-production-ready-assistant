@@ -213,8 +213,8 @@ describe("ルートの権限", () => {
     expect(firstAllowedRoute(allow(MENU_PERMISSIONS.upload, MENU_PERMISSIONS.chat))).toBe(
       APP_ROUTES.chat
     );
-    expect(firstAllowedRoute(allow(MENU_PERMISSIONS.settingsAppearance))).toBe(
-      APP_ROUTES.settingsAppearance
+    expect(firstAllowedRoute(allow(MENU_PERMISSIONS.settingsDatabase))).toBe(
+      APP_ROUTES.settingsDatabase
     );
     expect(firstAllowedRoute(() => false)).toBe(APP_ROUTES.forbidden);
   });

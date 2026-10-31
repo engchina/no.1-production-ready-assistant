@@ -56,7 +56,7 @@ export interface ApiKeysList {
 /** 自分のキーの一覧。画面の接続先に出す公開の基底の URL も返す（#1870）。 */
 export interface MyApiKeysList extends ApiKeysList {
   /**
-   * 配備が書く `PLATFORM_PUBLIC_BASE_URL`（例 `https://203.0.113.10`。末尾の `/` なし）。
+   * 利用者が `platform/.env` に書く `PLATFORM_PUBLIC_BASE_URL`（前段の reverse proxy の URL。#19）（例 `https://203.0.113.10`。末尾の `/` なし）。
    * 未設定なら空（画面は今開いている URL だけを出す）。
    */
   public_base_url?: string;

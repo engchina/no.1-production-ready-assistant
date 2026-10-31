@@ -595,7 +595,35 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261031_001_retire_appearance_permission",
+            table_name="rag_role_permissions",
+            sql=retire_appearance_permission_sql(),
+            destructive_note=(
+                "ロールに付いた、廃止済みのメニュー権限 menu.settings_appearance"
+                "（「外観と証明書」の画面。#19 で削除）の行を削除します。"
+                "ロールのほかの権限と対象範囲は削除しません。"
+            ),
+        )
+    )
     return sections
+
+
+def retire_appearance_permission_sql() -> str:
+    """「外観と証明書」の画面（#19 で削除）のメニュー権限の行だけを消す。表が無くても適用する。"""
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions WHERE permission_code = ''menu.settings_appearance''';
+    END IF;
+END;
+/
+""".strip()
 
 
 def retire_query_history_sql() -> str:

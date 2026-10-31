@@ -9,7 +9,7 @@ export const PERSISTENCE_STATUS_PATH = "/api/nl2sql/persistence";
 export const PERSISTENCE_RECOVERY_PATH = "/api/nl2sql/persistence/recover";
 /**
  * DB の状態の確認（readiness → persistence）全体の待ち時間の上限（#1160）。
- * backend が詰まっている間は確認も返らず（Nginx の上限は 600 秒）、確認を待つ API 呼び出し（チャットの
+ * backend が詰まっている間は確認も返らず（長い要求の上限は 600 秒）、確認を待つ API 呼び出し（チャットの
  * ジョブの取り直しなど）が止まったままになっていた。超えたら確認できなかったものとして元の失敗を返す。
  */
 export const DATABASE_PROBE_TIMEOUT_MS = 10_000;

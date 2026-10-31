@@ -35,8 +35,8 @@ name: CI
 # PR の e2e の 375px の project は、画面幅に依存するテスト（@responsive）だけを実行する（workflow の env の
 # E2E_MOBILE_SCOPE。全件は e2e-nightly.yml。#1582）。
 # runner は ubuntu-24.04 に固定する（#1587）。本番の Compute の OS は Oracle Linux 9 だが（#1611）、GitHub に
-# Oracle Linux の runner は無いため、テストの実行には ubuntu-24.04 を使う。OS の差（dnf の package の名前・
-# Nginx の配置）は `Suite / Oracle Linux 9`（container: oraclelinux:9）が配備のスクリプトの変更時に確かめる。
+# Oracle Linux の runner は無いため、テストの実行には ubuntu-24.04 を使う。OS の差（dnf の package の名前）は
+# `Suite / Oracle Linux 9`（container: oraclelinux:9）が配備のスクリプトの変更時に確かめる。
 # 実 Oracle の結合テスト（Oracle AI Database Free。oracle-integration.yml）は、その製品の DB の層（changes の
 # <製品>_oracle）が変わったときだけ実行する。3 製品は integration-nightly.yml が毎晩確かめる（#1595）。
 
@@ -83,7 +83,7 @@ env:
   NL2SQL_E2E_SMOKE_DESKTOP: tests/e2e/sql-chat.spec.ts tests/e2e/database-gate.spec.ts
   AGENT_E2E_SMOKE: >-
     e2e/auth-login.spec.ts e2e/run-stream-auth.spec.ts e2e/agent-runtime-flow.spec.ts
-    e2e/security-management.spec.ts e2e/appearance.spec.ts e2e/self-hosted-fonts.spec.ts
+    e2e/security-management.spec.ts e2e/sidebar-nav-order.spec.ts e2e/self-hosted-fonts.spec.ts
     e2e/permission-catalog.spec.ts e2e/vite-config.spec.ts e2e/scrollbar-stability.spec.ts
   # PR / main の push の e2e（smoke・impact）は、3 製品の playwright.config.ts の webServer が vite build の成果物を
   # vite preview で配信する（dev server より約 25〜30% 速い。build は job ごとに 1〜2 秒。#1583）。
@@ -342,7 +342,6 @@ jobs:
             # Compute の OS（Oracle Linux 9）の上で動く配備のスクリプトと、それが使う設定の雛形（#1611）。
             deploy_os:
               - "platform/deploy/**"
-              - "platform/templates/nginx/**"
               - "*/init_script.sh"
               - "rag/scripts/rag-systemd.sh"
               - "rag/scripts/rag-services.sh"
@@ -1553,7 +1552,7 @@ jobs:
           working-directory: agent/frontend
 
       # PR では約 1 分の smoke と、差分に影響を受ける spec（e2e-impact。#885）を実行する（RAG / NL2SQL の #184 と同じ。#339）。
-      # ログイン・認証・Run の stream・Runtime の主導線・セキュリティ管理・外観・フォント・設定の契約。
+      # ログイン・認証・Run の stream・Runtime の主導線・セキュリティ管理・フォント・設定の契約。
       # 全件（約 100 件）は e2e-nightly.yml が毎晩実行する。retries は workflow の env の E2E_RETRIES（PR は 1。#1593）、worker 数は
       # playwright.config.ts の CI の値（2。spec のファイル単位で並べる。#1489）。
       # spec は workflow の env の AGENT_E2E_SMOKE。
@@ -1855,10 +1854,9 @@ jobs:
     uses: ./.github/workflows/suite-deploy.yml
 
   # 本番の Compute の OS（Oracle Linux 9。#1611）で、配備のスクリプトが dnf で入れる package の名前（依存まで
-  # 解決し、入れない）・前提の command・bash -n と、本番と同じ配置（/etc/nginx/nginx.conf・conf.d）の Nginx を
-  # 確かめ、platform/deploy のテストも Oracle Linux の bash・openssl・Nginx で実行する。GitHub に Oracle Linux の
-  # runner は無いため、ubuntu-24.04 の上の container で動かす。SELinux・firewalld・systemd は container で
-  # 動かないため、実機（OCI）の確認は手動で行う（PR の手順）。
+  # 解決し、入れない）・前提の command・bash -n を確かめ、platform/deploy のテストも Oracle Linux の bash で実行する。
+  # GitHub に Oracle Linux の runner は無いため、ubuntu-24.04 の上の container で動かす。SELinux・systemd は
+  # container で動かないため、実機の確認は手動で行う（PR の手順）。reverse proxy（Nginx）と TLS は配備しない（#19）。
   suite-oracle-linux:
     name: Suite / Oracle Linux 9
     needs: changes
@@ -1872,19 +1870,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check packages, commands and Nginx on Oracle Linux 9
+      - name: Check packages and commands on Oracle Linux 9
         run: bash platform/deploy/tests/oracle-linux.test.sh
 
-      # oracle-linux.test.sh が nginx（module の 1.24）・openssl・python3 を入れている。Nginx の worker を
-      # root から切り替えないよう、テストは root 以外のユーザーで実行する（runner の Ubuntu と同じ条件）。
+      # テストは root 以外のユーザーで実行する（runner の Ubuntu と同じ条件）。
       - name: Test single-Compute deployment on Oracle Linux 9 (platform/deploy)
         run: |
           dnf -y -q install util-linux procps-ng diffutils findutils
           useradd --create-home pr-ci
           chmod -R a+rX "${GITHUB_WORKSPACE}"
-          for test_script in suite-tls suite-init suite-nginx; do
-            runuser -u pr-ci -- env NGINX_BIN=/usr/sbin/nginx bash "platform/deploy/tests/${test_script}.test.sh"
-          done
+          runuser -u pr-ci -- bash platform/deploy/tests/suite-init.test.sh
 
   # ---------------------------------------------------------------- root の scripts/
 

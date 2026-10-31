@@ -117,8 +117,9 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
     icons.map((icon) => icon.innerHTML.replace(/\s+/g, " ").trim())
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
-  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足して 36 項目。
-  expect(menuIconSignatures).toHaveLength(36);
+  // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足し、
+  // システム設定の外観と証明書（#19）を削除して 35 項目。
+  expect(menuIconSignatures).toHaveLength(35);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -440,19 +441,19 @@ test("SQL 生成権限がない既定入口は root から最初の許可画面�
   await page.unroute("**/api/**");
   await mockApi(page, {
     ...SYSTEM_ADMIN_USER,
-    user_uuid: "appearance-user",
-    login_user_id: "appearance.user",
-    display_name: "外観閲覧ユーザー",
-    role_codes: ["APPEARANCE_VIEWER"],
+    user_uuid: "oci-settings-user",
+    login_user_id: "oci.settings.user",
+    display_name: "OCI 認証担当ユーザー",
+    role_codes: ["OCI_SETTINGS_VIEWER"],
     is_system_admin: false,
-    permissions: ["menu.settings_appearance"],
+    permissions: ["menu.settings_oci"],
   });
 
   await page.goto("/");
 
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/oci$/);
   const sidebar = await openSidebarNav(page);
-  await expect(sidebar.getByRole("link", { name: "外観と証明書" })).toHaveAttribute(
+  await expect(sidebar.getByRole("link", { name: "OCI 認証" })).toHaveAttribute(
     "aria-current",
     "page"
   );

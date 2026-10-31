@@ -6,7 +6,7 @@ monorepo `no.1-production-ready-suite` の `platform/`。No.1 Production Ready �
 ```
 packages/
   ui/             @production-ready/ui    — 共有フロント UI/UX（Vite library / React 19 / Tailwind v4）
-  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（外観と証明書ほか。#70）とユーザー管理・ロール管理画面（#206）
+  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（OCI 認証・アップロード保存先・モデル・データベース。#70。外観と証明書は #19 で削除）とユーザー管理・ロール管理画面（#206）
   backend_core/   production-ready-backend-core    — 共有 FastAPI インフラ（Python 3.12 / pydantic v2 / uv）
   system_settings_backend/ production-ready-system-settings-backend — 3製品共通のシステム設定 API と、共通認証基盤（ユーザー・ロール・セッション・ログイン。PLATFORM_* テーブル。pr_system_settings。#70 / #206 / #212）
 templates/
@@ -286,7 +286,7 @@ API は 422 で「既定のテキストモデルを選択してください。�
 - `max_output_tokens` は思考の token も含むので、推論の量を減らすと出力上限での未完了（#987）も減る。
 - 推論型のモデルの 1 回の呼び出しが数十秒になるため、RAG の回答の上限 `RAG_ANSWER_TIMEOUT_SECONDS` の既定を 600 秒（上限と同じ）にし、
   Agent の接続 `rag` の待ち時間 `AGENT_EXTERNAL_RAG_TIMEOUT_SECONDS` の既定を 630 秒（MCP のタイムアウト秒の上限は 900 秒）にした。
-  画面（630 秒）と Nginx（660 秒）は前から回答の上限より長い。
+  画面（630 秒）は前から回答の上限より長い（前段に reverse proxy を置くときは、その待ち時間も回答の上限より長くする。#19）。
 
 ## LLM / VLM の呼び出しの seed は送らない（#3529）
 

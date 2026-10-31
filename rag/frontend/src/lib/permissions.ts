@@ -37,7 +37,6 @@ export const MENU_PERMISSIONS = {
   settingsUploadStorage: "menu.settings_upload_storage",
   settingsModel: "menu.settings_model",
   settingsDatabase: "menu.settings_database",
-  settingsAppearance: "menu.settings_appearance",
   settingsAnswerNotice: "menu.settings_answer_notice",
   settingsTraceRecording: "menu.settings_trace_recording",
   settingsChatAttachments: "menu.settings_chat_attachments",

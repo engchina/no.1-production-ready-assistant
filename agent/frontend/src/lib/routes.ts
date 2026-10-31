@@ -14,7 +14,6 @@ export const APP_ROUTES = {
   login: "/login",
   passwordChange: "/password/change",
   forbidden: "/forbidden",
-  settingsAppearance: SYSTEM_SETTINGS_PATHS.appearance,
   // 回答の注意書き（設定は製品ごと。#2405・#2449）
   settingsAnswerNotice: ANSWER_NOTICE_PATH,
   // チャットの添付（設定は製品ごと。#2517）

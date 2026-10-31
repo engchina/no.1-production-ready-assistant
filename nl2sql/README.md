@@ -12,8 +12,12 @@ Deployment through the OCI Resource Manager Terraform stack ("Deploy to Oracle
 Cloud" button) was removed in #12. NL2SQL is deployed together with RAG and the
 Agent Control Plane on one Compute instance by the suite scripts in
 `platform/deploy/` (see
-[platform/docs/deployment.md](../platform/docs/deployment.md)). For what runs on
-the NL2SQL Compute instance, updates, and troubleshooting, see
+[platform/docs/deployment.md](../platform/docs/deployment.md)). The Compute
+deployment builds the frontend (`frontend/dist`, base `/nl2sql/`) and runs the
+backend on `127.0.0.1:8010`. It does not install a reverse proxy or TLS
+certificates (#19); putting one in front is the operator's choice (see the
+repository `README.md`). For what runs on the NL2SQL Compute instance, updates,
+and troubleshooting, see
 [docs/compute-operations.md](docs/compute-operations.md).
 
 ## OCI Compute のソース更新後の再デプロイ
@@ -94,4 +98,4 @@ This deployment keeps the approved architecture:
 
 ## 共通ログ（JST）
 
-API / worker の stderr、Nginx JSON access、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。既存 Compute の Nginx は共有 template の反映と `nginx -t` が必要。実ホストの保持値は変更前に確認する。
+API / worker の stderr、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。実ホストの保持値は変更前に確認する。

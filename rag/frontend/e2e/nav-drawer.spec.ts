@@ -21,7 +21,7 @@ test.describe("md 未満のナビのドロワー", { tag: "@responsive" }, () =>
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
   });
 
   test("閉じている間はサイドバーを出さず、本文が画面の全幅を使う", async ({ page }) => {
@@ -57,7 +57,7 @@ test.describe("md 未満のナビのドロワー", { tag: "@responsive" }, () =>
     // Tab の回数で止まる位置はナビの項目数で変わる（#412 で「改善・運用」が増え、40 回でちょうど閉じるボタンへ戻るようになった）。
     // 閉じるボタンはアイコンだけのボタンで、キーボードのフォーカスで Tooltip が出て、1 回目の Escape は吹き出しだけを閉じる（#372）。
     // ここではナビのリンク（Tooltip なし）から Escape で閉じることを確かめる。閉じるボタンの場合は下のテストで確かめる。
-    await page.getByRole("complementary", { name: "サイドナビゲーション" }).getByRole("link", { name: "外観と証明書" }).focus();
+    await page.getByRole("complementary", { name: "サイドナビゲーション" }).getByRole("link", { name: "データベース" }).focus();
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -117,9 +117,9 @@ test.describe("md 未満のナビのドロワー", { tag: "@responsive" }, () =>
   test("今のページのリンクを選んでも閉じ、メニューボタンへフォーカスを戻す", async ({ page }) => {
     const trigger = page.getByRole("button", { name: "メニュー", exact: true });
     await trigger.click();
-    await page.getByRole("complementary", { name: "サイドナビゲーション" }).getByRole("link", { name: "外観と証明書" }).click();
+    await page.getByRole("complementary", { name: "サイドナビゲーション" }).getByRole("link", { name: "データベース" }).click();
     await expect(page.getByRole("dialog", { name: "メニュー" })).toBeHidden();
-    await expect(page).toHaveURL(/\/settings\/appearance$/);
+    await expect(page).toHaveURL(/\/settings\/database$/);
     await expect(trigger).toBeFocused();
   });
 
@@ -136,7 +136,7 @@ test.describe("md 未満のナビのドロワー", { tag: "@responsive" }, () =>
 test("desktop（1280px）は従来どおりサイドバーを本文の左に置き、メニューボタンを出さない", { tag: "@responsive" }, async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockApi(page);
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/database");
   const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
   await expect(sidebar).toBeVisible();
   await expect(page.getByTestId("nav-drawer-trigger")).toHaveCount(0);
