@@ -325,7 +325,7 @@ def test_check_parser_source_adds_unstructured_service_state(
     block = asyncio.run(check_parser_source(get_settings(), _profile("mail.eml", "message/rfc822")))
     assert block is not None
     assert "parser-unstructured）は配備されていません" in block.message
-    assert "rag_enable_parser_unstructured" in block.message
+    assert "rag_services.txt" in block.message
 
 
 def test_check_parser_source_does_not_probe_for_supported_formats(

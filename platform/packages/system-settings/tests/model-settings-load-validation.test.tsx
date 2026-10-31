@@ -65,11 +65,6 @@ function data(modelIds: string[] = ["llm"]): ModelSettingsData {
         timeout_seconds: 600,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
-        embedding_dim: 1536,
-        rerank_model: "cohere.rerank-v4.0-fast",
-      },
     },
     model_settings_file: "model-settings.json",
     source: "runtime",
@@ -200,7 +195,8 @@ describe("ModelSettingsPage の読み込み（#1036）", () => {
     const loading = host.querySelector('[data-testid="settings-model-loading"]');
     expect(loading?.getAttribute("aria-busy")).toBe("true");
     expect(loading?.textContent).toContain("モデル設定を読み込んでいます。");
-    expect(loading?.querySelectorAll('[data-skeleton="form"]')).toHaveLength(3);
+    // 2 枚のカード（接続 / 登録モデル）。埋め込み / 再ランクの独立したカードは無い（#45）。
+    expect(loading?.querySelectorAll('[data-skeleton="form"]')).toHaveLength(2);
   });
 
   it("初回の取得の失敗は取得失敗の表示を出す", async () => {

@@ -41,7 +41,7 @@ async def test_connection_check_purpose_reaches_actual_client(
 
         async def embed(self, *_args: Any, **_kwargs: Any) -> list[list[float]]:
             calls.append(model_purpose_attributes())
-            return [[0.1]]
+            return [[0.1] * Settings().oci_genai_embedding_dim]
 
         async def rerank(self, *_args: Any, **_kwargs: Any) -> list[tuple[int, float]]:
             calls.append(model_purpose_attributes())

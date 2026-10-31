@@ -4,7 +4,7 @@
  * - 一覧の件数はツールバーの右の `ListCount` 1 か所（「全 N 件」「N 件（全 M 件）」）。
  * - ページ送りは advanced（表示件数 10 / 25 / 50 / 100・ページ番号の入力）。ページと表示件数は作業状態に残る。
  * - 画面ごとに、横あふれ・placeholder の切れ・幅の段に当たらない欄が無いこと（共通の layout-checks）を、
- *   1280px / 1920px / 375px とライト / ダークで確かめる。欄の補足・エラーが min(20rem, 置き場所の幅) より狭く折り返さない
+ *   1280px / 1920px / 375px で確かめる。欄の補足・エラーが min(20rem, 置き場所の幅) より狭く折り返さない
  *   こと、1280px で `FormGrid` の置き場所を 42〜58rem に狭めても欄が段の幅のままでセルからはみ出さないことも見る（#1891 段 5）。
  * - 一覧のツールバーの部品が同じ高さで縦の中心がそろい、狭い置き場所で積んだ欄の幅がそろうこと（#1933 段 4）。
  */
@@ -23,12 +23,6 @@ import {
   measureHorizontalOverflow,
   setFormGridMaxWidth,
 } from "../../../platform/packages/ui/e2e/layout-checks";
-
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
 
 function seedAgents(mockApi: MockApi, count: number) {
   const base = mockApi.state.agents[0];
@@ -113,16 +107,14 @@ const SCREENS: ReadonlyArray<{ name: string; path: string; ready: (page: Page) =
   { name: "system-tables", path: "/settings/system-tables", ready: (page) => page.getByRole("heading", { level: 1 }) },
   { name: "oci", path: "/settings/oci", ready: (page) => page.locator("#oci-config-profile") },
   { name: "upload-storage", path: "/settings/upload-storage", ready: (page) => page.locator("#upload-storage-local") },
-  { name: "model", path: "/settings/model", ready: (page) => page.locator("#genai-embedding-model") },
+  { name: "model", path: "/settings/model", ready: (page) => page.locator("#enterprise-model-catalog") },
   { name: "database", path: "/settings/database", ready: (page) => page.locator("#oracle-user") },
 ];
 
 const LAYOUTS = [
-  { name: "desktop 1280px light", width: 1280, height: 800, theme: "light" },
-  { name: "desktop 1920px dark", width: 1920, height: 1080, theme: "dark" },
-  { name: "desktop 1920px light", width: 1920, height: 1080, theme: "light" },
-  { name: "mobile 375px light", width: 375, height: 812, theme: "light" },
-  { name: "mobile 375px dark", width: 375, height: 812, theme: "dark" },
+  { name: "desktop 1280px", width: 1280, height: 800 },
+  { name: "desktop 1920px", width: 1920, height: 1080 },
+  { name: "mobile 375px", width: 375, height: 812 },
 ] as const;
 
 for (const layout of LAYOUTS) {
@@ -132,7 +124,6 @@ for (const layout of LAYOUTS) {
     seedAgents(mockApi, 52);
     seedRuns(mockApi, 53);
     seedAuditRecords(mockApi, 54);
-    await useTheme(page, layout.theme);
     await page.setViewportSize({ width: layout.width, height: layout.height });
     const problems: string[] = [];
     for (const screen of SCREENS) {
@@ -174,9 +165,7 @@ for (const layout of LAYOUTS) {
         }
         await setFormGridMaxWidth(page, null);
       }
-      if (layout.width !== 1920 || layout.theme === "light") {
-        await page.screenshot({ path: testInfo.outputPath(`${screen.name}-${layout.name.replaceAll(" ", "-")}.png`), fullPage: true });
-      }
+      await page.screenshot({ path: testInfo.outputPath(`${screen.name}-${layout.name.replaceAll(" ", "-")}.png`), fullPage: true });
     }
     expect(problems).toEqual([]);
   });

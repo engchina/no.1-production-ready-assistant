@@ -1,5 +1,7 @@
 """埋め込み / 再ランクの adapter の境界のテスト（#8。OpenAI 互換の API）。"""
 
+import json
+import urllib.request
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,6 +10,7 @@ from typing import Any
 
 import pytest
 from pr_backend_core.observability.model_purpose import model_call_purpose
+from pr_system_settings.model import EnterpriseAiConfiguredModel
 
 from app.clients.oci_genai import (
     EMBEDDING_INPUT_MAX_CHARS,
@@ -23,9 +26,7 @@ def test_embed_requires_base_url(tmp_path: Path) -> None:
     """Base URL が無いときは、利用者が直せる設定エラーとして返す（#8）。"""
     _ = tmp_path
     client = OciGenAiClient(
-        settings=_oci_settings().model_copy(
-            update={"embedding_base_url": "", "oci_enterprise_ai_endpoint": ""}
-        )
+        settings=_oci_settings().model_copy(update={"oci_enterprise_ai_endpoint": ""})
     )
 
     with pytest.raises(OciGenAiConfigError, match="Base URL が未設定です"):
@@ -39,7 +40,7 @@ def test_embed_requires_api_key() -> None:
     )
 
     with pytest.raises(OciGenAiConfigError, match="API key がありません"):
-        client._api_key()
+        client._api_key(rerank=False)
 
 
 def test_rerank_base_url_falls_back_to_compatible_api() -> None:
@@ -50,14 +51,84 @@ def test_rerank_base_url_falls_back_to_compatible_api() -> None:
     client = OciGenAiClient(
         settings=_oci_settings().model_copy(
             update={
-                "embedding_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                "rerank_base_url": "",
+                "oci_enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             }
         )
     )
 
     assert client._base_url(rerank=False) == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert client._base_url(rerank=True) == "https://dashscope.aliyuncs.com/compatible-api/v1"
+
+
+BAILIAN = "https://llm-xxxx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+
+
+class _FakeHttpResponse:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._body = json.dumps(payload).encode("utf-8")
+
+    def __enter__(self) -> "_FakeHttpResponse":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+@pytest.mark.parametrize("connection_id", ["secondary", "tertiary"])
+async def test_embedding_and_rerank_use_model_connection_over_http(
+    monkeypatch: pytest.MonkeyPatch, connection_id: str
+) -> None:
+    """埋め込み / 再ランクは、そのモデルの接続の endpoint と key で HTTP を送る（#45）。
+
+    プライマリ接続 = DeepSeek（LLM）、セカンダリ / ターシャリ接続 = 百煉（埋め込み / 再ランク）。
+    再ランクは `/compatible-mode/` を `/compatible-api/` に読み替える。
+    """
+    sent: list[tuple[str, str | None]] = []
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int) -> _FakeHttpResponse:
+        sent.append((request.full_url, request.get_header("Authorization")))
+        if request.full_url.endswith("/reranks"):
+            return _FakeHttpResponse({"results": [{"index": 0, "relevance_score": 0.7}]})
+        return _FakeHttpResponse({"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]})
+
+    async def inline(operation: Callable[[], Any]) -> Any:
+        return operation()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    settings = _oci_settings().model_copy(
+        update={
+            "oci_enterprise_ai_endpoint": "https://api.deepseek.com",
+            "oci_enterprise_ai_api_key": "sk-deepseek",
+            f"oci_enterprise_ai_{connection_id}_endpoint": BAILIAN,
+            f"oci_enterprise_ai_{connection_id}_api_key": f"sk-{connection_id}",
+            "oci_enterprise_ai_models": [
+                EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
+                EnterpriseAiConfiguredModel(
+                    model_id="text-embedding-v4", kind="embedding", connection_id=connection_id
+                ),
+                EnterpriseAiConfiguredModel(
+                    model_id="qwen3-rerank", kind="rerank", connection_id=connection_id
+                ),
+            ],
+            "rag_embedding_cache_enabled": False,
+            "rag_rerank_cache_enabled": False,
+        }
+    )
+    client = OciGenAiClient(settings=settings, sdk_call_runner=inline)
+
+    await client.embed(["a"])
+    await client.rerank("q", ["d0", "d1"], top_n=2)
+
+    assert sent == [
+        (f"{BAILIAN}/embeddings", f"Bearer sk-{connection_id}"),
+        (
+            BAILIAN.replace("/compatible-mode/", "/compatible-api/") + "/reranks",
+            f"Bearer sk-{connection_id}",
+        ),
+    ]
 
 
 async def test_embed_validates_oci_embedding_count() -> None:
@@ -448,8 +519,6 @@ def _oci_settings() -> Settings:
         oci_genai_embedding_model="text-embedding-v4",
         oci_genai_embedding_dim=3,
         oci_genai_rerank_model="qwen3-rerank",
-        embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        rerank_base_url="",
         oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
         oci_enterprise_ai_api_key="sk-test",
         oci_enterprise_ai_timeout_seconds=60,

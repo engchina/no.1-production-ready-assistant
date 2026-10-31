@@ -350,188 +350,162 @@ async function resumeRequests(page: Page) {
   );
 }
 
-async function applyTheme(page: Page, colorScheme: "light" | "dark") {
-  // 外観の既定はライトなので、ダークは画面の属性でも切り替える（answer-progress.spec.ts と同じ）。
-  await page.evaluate((value) => {
-    document.documentElement.dataset.theme = value;
-  }, colorScheme);
-}
-
-for (const colorScheme of ["light", "dark"] as const) {
-  {
-    // desktop / 375px は playwright.config の project（desktop・mobile）で確かめる。
-    test.describe(`チャットの回答の再接続（${colorScheme}）`, () => {
-      test.beforeEach(async ({ page }) => {
-        await page.emulateMedia({ colorScheme });
-      });
-
-      test("all_done の前に接続が切れたら、続きから購読し直して回答が出る（#1175）", async ({ page }, testInfo) => {
-        const state = await mockChatPage(
-          page,
-          {
-            post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" },
-            resume: { chunks: restChunks },
-          },
-          { reply: "streaming" }
-        );
-        await send(page);
-        await applyTheme(page, colorScheme);
-        // 回答は購読し直した配信で届く（保存済みの会話はまだ作成中）。
-        await expect(page.getByTestId("chat-live-turn").getByText(ANSWER)).toBeVisible({ timeout: 10_000 });
-        await page.screenshot({ path: testInfo.outputPath(`chat-resumed-${colorScheme}.png`) });
-        state.reply = "complete";
-        await expect(page.getByTestId("chat-live-turn")).toHaveCount(0, { timeout: 10_000 });
-        await expect(page.getByText(ANSWER).first()).toBeVisible();
-        // 最後に受け取った event（連番 3）の次から、送った質問の id で購読し直す。
-        const requests = await resumeRequests(page);
-        const clientId = await page.evaluate(() => (window as unknown as { __clientMessageId: string }).__clientMessageId);
-        expect(clientId).toMatch(/^[0-9a-f]{32}$/);
-        expect(requests[0]).toEqual({
-          path: `/api/chat/conversations/conv-1/messages/${clientId}/stream`,
-          lastEventId: STARTED_LAST_EVENT_ID,
-        });
-        await expect(page.getByTestId("chat-send-failure")).toHaveCount(0);
-        await expect(page.getByTestId("chat-answer-progress-current")).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "送信" })).toBeVisible();
-        await expectNoPageOverflow(page);
-      });
-
-      test("続きを購読できないときは、保存済みの作成中の回答に引き継ぎ、完了したら回答に置き換わる（#1175）", async ({
-        page,
-      }, testInfo) => {
-        const state = await mockChatPage(
-          page,
-          { post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" }, resume: null },
-          { reply: "streaming" }
-        );
-        await send(page);
-        // 保存済みの作成中の回答（今の段階）が出て、送信のボタンは「停止」のまま。
-        const saved = page.getByTestId("chat-saved-streaming-turn");
-        await expect(saved).toBeVisible({ timeout: 10_000 });
-        await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("検索文から根拠の候補を集める");
-        await expect(page.getByTestId("chat-live-turn")).toHaveCount(0);
-        await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("停止");
-        await applyTheme(page, colorScheme);
-        await saved.scrollIntoViewIfNeeded();
-        await page.screenshot({ path: testInfo.outputPath(`chat-saved-streaming-${colorScheme}.png`) });
-        await expectNoPageOverflow(page);
-        // 作成が終わると、会話の取り直し（polling）で回答に置き換わる。
-        const before = state.conversationRequests;
-        state.reply = "complete";
-        await expect(page.getByText(ANSWER).first()).toBeVisible({ timeout: 10_000 });
-        expect(state.conversationRequests).toBeGreaterThan(before);
-        await expect(saved).toHaveCount(0);
-        await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
-        await expect(page.getByTestId("chat-send-failure")).toHaveCount(0);
-      });
-
-      test("ページを読み込み直すと、作成中の回答は作成中で出て、完了したら回答に変わる（#1175）", async ({ page }) => {
-        const state = await mockChatPage(page, null, { reply: "streaming", existingUserId: "u-saved" });
-        await page.goto("/chat?search_answer_profile_id=bv-1&conversation_id=conv-1");
-        const saved = page.getByTestId("chat-saved-streaming-turn");
-        await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("検索文から根拠の候補を集める", {
-          timeout: 10_000,
-        });
-        // 回答の trace の API は表の span を読み直して届ける（別の worker が書いた span。#3226）。会話の取得が
-        // まだ前の段階でも、新しい段階を出し、会話の取り直しで前の段階に戻さない。
-        await expect.poll(() => state.progressRequests.some((item) => item.path.endsWith("/messages/a1/trace"))).toBe(true);
-        state.streamAhead = reranking;
-        await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("質問との関連度で候補を並べ替える", {
-          timeout: 10_000,
-        });
-        await expect(saved.getByTestId("chat-answer-progress-running")).toContainText("処理中（2 ステップ完了）");
-        const conversationReads = state.conversationRequests;
-        await expect.poll(() => state.conversationRequests, { timeout: 10_000 }).toBeGreaterThan(conversationReads);
-        await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("質問との関連度で候補を並べ替える");
-        await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("停止");
-        await applyTheme(page, colorScheme);
-        await expectNoPageOverflow(page);
-        state.reply = "complete";
-        await expect(page.getByText(ANSWER).first()).toBeVisible({ timeout: 10_000 });
-        await expect(saved).toHaveCount(0);
-        // 保存した処理の経過は、回答の上に 1 行で残る。
-        await expect(page.getByTestId("chat-answer-progress")).toBeVisible();
-        await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
-      });
-    });
-  }
-
-  test.describe(`チャットの回答の停止と途絶え（${colorScheme}）`, () => {
-    test.beforeEach(async ({ page }) => {
-      await page.emulateMedia({ colorScheme });
-    });
-
-    test("作成中に停止すると、送った質問の id で取消の API を呼ぶ（#1175）", async ({ page }) => {
-      const state = await mockChatPage(page, { post: { chunks: startedChunks, end: "hang" }, resume: null });
-      await send(page);
-      await page.getByTestId("chat-run-stop").click();
-      await expect(page.getByTestId("chat-stopped")).toBeVisible();
-      const clientId = await page.evaluate(() => (window as unknown as { __clientMessageId: string }).__clientMessageId);
-      await expect.poll(() => state.cancelRequests).toEqual([`/api/chat/conversations/conv-1/messages/${clientId}/cancel`]);
-      // 接続を切っただけでは続きを購読し直さない（停止は取消）。
-      expect(await resumeRequests(page)).toEqual([]);
-      await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
-      await applyTheme(page, colorScheme);
-      await expectNoPageOverflow(page);
-    });
-
-    test("読み込み直した後の作成中の回答も「停止」で止められ、停止した回答が出る（#1175）", async ({ page }) => {
-      const state = await mockChatPage(page, null, { reply: "streaming", existingUserId: "u-saved" });
-      await page.goto("/chat?search_answer_profile_id=bv-1&conversation_id=conv-1");
-      const button = page.getByTestId("chat-run-stop");
-      await expect(button).toHaveAccessibleName("停止", { timeout: 10_000 });
-      await button.click();
-      await expect.poll(() => state.cancelRequests).toEqual(["/api/chat/conversations/conv-1/messages/u-saved/cancel"]);
-      await expect(page.getByTestId("chat-answer-stopped")).toHaveText("回答の作成を停止しました。");
-      await expect(button).toHaveAccessibleName("送信");
-      await applyTheme(page, colorScheme);
-      await expectNoPageOverflow(page);
-    });
-
-    test("続きを購読できず会話も取り直せなければ、理由と「再送信」を出す", async ({ page }) => {
-      const state = await mockChatPage(page, {
-        post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" },
-        resume: null,
-      });
-      state.conversationFails = true;
-      await send(page);
-      const failure = page.getByTestId("chat-send-failure");
-      await expect(failure).toContainText("回答を受け取る途中で接続が切れ", { timeout: 20_000 });
-      await expect(failure.getByRole("button", { name: "再送信" })).toBeVisible();
-      await expect(page.getByTestId("chat-answer-progress-current")).toHaveCount(0);
-      await applyTheme(page, colorScheme);
-      await expectNoPageOverflow(page);
-    });
-
-    test("配信が途絶えたら「接続を確認しています」を出して接続を張り直し、続きを受け取る", async ({
+// desktop / 375px は playwright.config の project（desktop・mobile）で確かめる。
+test.describe("チャットの回答の再接続", () => {
+  test("all_done の前に接続が切れたら、続きから購読し直して回答が出る（#1175）", async ({ page }, testInfo) => {
+    const state = await mockChatPage(
       page,
-    }, testInfo) => {
-      test.setTimeout(90_000);
-      const state = await mockChatPage(
-        page,
-        { post: { chunks: startedChunks, end: "hang" }, resume: { chunks: restChunks } },
-        { reply: "streaming" }
-      );
-      const current = await send(page);
-      const reconnecting = page.getByTestId("chat-answer-progress-reconnecting");
-      await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 40_000 });
-      // 今の段階の行は残したまま、遅延の案内の代わりに出す。
-      await expect(current).toContainText("検索文から根拠の候補を集める");
-      await expect(current).toHaveAttribute("data-reconnecting", "true");
-      // 案内は見出し「処理中（N ステップ完了）」の直下に出す（今の段階の行の下には出さない。#2426）。
-      await expect(page.getByTestId("chat-answer-progress-running").getByTestId("chat-answer-progress-reconnecting")).toHaveCount(1);
-      await expect(current.getByTestId("chat-answer-progress-reconnecting")).toHaveCount(0);
-      await current.scrollIntoViewIfNeeded();
-      await applyTheme(page, colorScheme);
-      await page.screenshot({ path: testInfo.outputPath(`chat-reconnecting-${colorScheme}.png`) });
-      await expectNoPageOverflow(page);
-      // 回答の作成は続いていた。張り直した接続で続き（連番 4〜）を受け取り、回答が出る。
-      await expect(page.getByTestId("chat-live-turn").getByText(ANSWER)).toBeVisible({ timeout: 20_000 });
-      expect((await resumeRequests(page))[0]?.lastEventId).toBe(STARTED_LAST_EVENT_ID);
-      state.reply = "complete";
-      await expect(page.getByTestId("chat-live-turn")).toHaveCount(0, { timeout: 10_000 });
-      await expect(reconnecting).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "送信" })).toBeVisible();
+      {
+        post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" },
+        resume: { chunks: restChunks },
+      },
+      { reply: "streaming" }
+    );
+    await send(page);
+    // 回答は購読し直した配信で届く（保存済みの会話はまだ作成中）。
+    await expect(page.getByTestId("chat-live-turn").getByText(ANSWER)).toBeVisible({ timeout: 10_000 });
+    await page.screenshot({ path: testInfo.outputPath("chat-resumed.png") });
+    state.reply = "complete";
+    await expect(page.getByTestId("chat-live-turn")).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByText(ANSWER).first()).toBeVisible();
+    // 最後に受け取った event（連番 3）の次から、送った質問の id で購読し直す。
+    const requests = await resumeRequests(page);
+    const clientId = await page.evaluate(() => (window as unknown as { __clientMessageId: string }).__clientMessageId);
+    expect(clientId).toMatch(/^[0-9a-f]{32}$/);
+    expect(requests[0]).toEqual({
+      path: `/api/chat/conversations/conv-1/messages/${clientId}/stream`,
+      lastEventId: STARTED_LAST_EVENT_ID,
     });
+    await expect(page.getByTestId("chat-send-failure")).toHaveCount(0);
+    await expect(page.getByTestId("chat-answer-progress-current")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "送信" })).toBeVisible();
+    await expectNoPageOverflow(page);
   });
-}
+
+  test("続きを購読できないときは、保存済みの作成中の回答に引き継ぎ、完了したら回答に置き換わる（#1175）", async ({
+    page,
+  }, testInfo) => {
+    const state = await mockChatPage(
+      page,
+      { post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" }, resume: null },
+      { reply: "streaming" }
+    );
+    await send(page);
+    // 保存済みの作成中の回答（今の段階）が出て、送信のボタンは「停止」のまま。
+    const saved = page.getByTestId("chat-saved-streaming-turn");
+    await expect(saved).toBeVisible({ timeout: 10_000 });
+    await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("検索文から根拠の候補を集める");
+    await expect(page.getByTestId("chat-live-turn")).toHaveCount(0);
+    await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("停止");
+    await saved.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("chat-saved-streaming.png") });
+    await expectNoPageOverflow(page);
+    // 作成が終わると、会話の取り直し（polling）で回答に置き換わる。
+    const before = state.conversationRequests;
+    state.reply = "complete";
+    await expect(page.getByText(ANSWER).first()).toBeVisible({ timeout: 10_000 });
+    expect(state.conversationRequests).toBeGreaterThan(before);
+    await expect(saved).toHaveCount(0);
+    await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
+    await expect(page.getByTestId("chat-send-failure")).toHaveCount(0);
+  });
+
+  test("ページを読み込み直すと、作成中の回答は作成中で出て、完了したら回答に変わる（#1175）", async ({ page }) => {
+    const state = await mockChatPage(page, null, { reply: "streaming", existingUserId: "u-saved" });
+    await page.goto("/chat?search_answer_profile_id=bv-1&conversation_id=conv-1");
+    const saved = page.getByTestId("chat-saved-streaming-turn");
+    await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("検索文から根拠の候補を集める", {
+      timeout: 10_000,
+    });
+    // 回答の trace の API は表の span を読み直して届ける（別の worker が書いた span。#3226）。会話の取得が
+    // まだ前の段階でも、新しい段階を出し、会話の取り直しで前の段階に戻さない。
+    await expect.poll(() => state.progressRequests.some((item) => item.path.endsWith("/messages/a1/trace"))).toBe(true);
+    state.streamAhead = reranking;
+    await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("質問との関連度で候補を並べ替える", {
+      timeout: 10_000,
+    });
+    await expect(saved.getByTestId("chat-answer-progress-running")).toContainText("処理中（2 ステップ完了）");
+    const conversationReads = state.conversationRequests;
+    await expect.poll(() => state.conversationRequests, { timeout: 10_000 }).toBeGreaterThan(conversationReads);
+    await expect(saved.getByTestId("chat-answer-progress-current")).toContainText("質問との関連度で候補を並べ替える");
+    await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("停止");
+    await expectNoPageOverflow(page);
+    state.reply = "complete";
+    await expect(page.getByText(ANSWER).first()).toBeVisible({ timeout: 10_000 });
+    await expect(saved).toHaveCount(0);
+    // 保存した処理の経過は、回答の上に 1 行で残る。
+    await expect(page.getByTestId("chat-answer-progress")).toBeVisible();
+    await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
+  });
+});
+
+test.describe("チャットの回答の停止と途絶え", () => {
+  test("作成中に停止すると、送った質問の id で取消の API を呼ぶ（#1175）", async ({ page }) => {
+    const state = await mockChatPage(page, { post: { chunks: startedChunks, end: "hang" }, resume: null });
+    await send(page);
+    await page.getByTestId("chat-run-stop").click();
+    await expect(page.getByTestId("chat-stopped")).toBeVisible();
+    const clientId = await page.evaluate(() => (window as unknown as { __clientMessageId: string }).__clientMessageId);
+    await expect.poll(() => state.cancelRequests).toEqual([`/api/chat/conversations/conv-1/messages/${clientId}/cancel`]);
+    // 接続を切っただけでは続きを購読し直さない（停止は取消）。
+    expect(await resumeRequests(page)).toEqual([]);
+    await expect(page.getByTestId("chat-run-stop")).toHaveAccessibleName("送信");
+    await expectNoPageOverflow(page);
+  });
+
+  test("読み込み直した後の作成中の回答も「停止」で止められ、停止した回答が出る（#1175）", async ({ page }) => {
+    const state = await mockChatPage(page, null, { reply: "streaming", existingUserId: "u-saved" });
+    await page.goto("/chat?search_answer_profile_id=bv-1&conversation_id=conv-1");
+    const button = page.getByTestId("chat-run-stop");
+    await expect(button).toHaveAccessibleName("停止", { timeout: 10_000 });
+    await button.click();
+    await expect.poll(() => state.cancelRequests).toEqual(["/api/chat/conversations/conv-1/messages/u-saved/cancel"]);
+    await expect(page.getByTestId("chat-answer-stopped")).toHaveText("回答の作成を停止しました。");
+    await expect(button).toHaveAccessibleName("送信");
+    await expectNoPageOverflow(page);
+  });
+
+  test("続きを購読できず会話も取り直せなければ、理由と「再送信」を出す", async ({ page }) => {
+    const state = await mockChatPage(page, {
+      post: { chunks: [...startedChunks, { afterMs: 400, text: "" }], end: "close" },
+      resume: null,
+    });
+    state.conversationFails = true;
+    await send(page);
+    const failure = page.getByTestId("chat-send-failure");
+    await expect(failure).toContainText("回答を受け取る途中で接続が切れ", { timeout: 20_000 });
+    await expect(failure.getByRole("button", { name: "再送信" })).toBeVisible();
+    await expect(page.getByTestId("chat-answer-progress-current")).toHaveCount(0);
+    await expectNoPageOverflow(page);
+  });
+
+  test("配信が途絶えたら「接続を確認しています」を出して接続を張り直し、続きを受け取る", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    const state = await mockChatPage(
+      page,
+      { post: { chunks: startedChunks, end: "hang" }, resume: { chunks: restChunks } },
+      { reply: "streaming" }
+    );
+    const current = await send(page);
+    const reconnecting = page.getByTestId("chat-answer-progress-reconnecting");
+    await expect(reconnecting).toHaveText("接続を確認しています。", { timeout: 40_000 });
+    // 今の段階の行は残したまま、遅延の案内の代わりに出す。
+    await expect(current).toContainText("検索文から根拠の候補を集める");
+    await expect(current).toHaveAttribute("data-reconnecting", "true");
+    // 案内は見出し「処理中（N ステップ完了）」の直下に出す（今の段階の行の下には出さない。#2426）。
+    await expect(page.getByTestId("chat-answer-progress-running").getByTestId("chat-answer-progress-reconnecting")).toHaveCount(1);
+    await expect(current.getByTestId("chat-answer-progress-reconnecting")).toHaveCount(0);
+    await current.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("chat-reconnecting.png") });
+    await expectNoPageOverflow(page);
+    // 回答の作成は続いていた。張り直した接続で続き（連番 4〜）を受け取り、回答が出る。
+    await expect(page.getByTestId("chat-live-turn").getByText(ANSWER)).toBeVisible({ timeout: 20_000 });
+    expect((await resumeRequests(page))[0]?.lastEventId).toBe(STARTED_LAST_EVENT_ID);
+    state.reply = "complete";
+    await expect(page.getByTestId("chat-live-turn")).toHaveCount(0, { timeout: 10_000 });
+    await expect(reconnecting).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "送信" })).toBeVisible();
+  });
+});

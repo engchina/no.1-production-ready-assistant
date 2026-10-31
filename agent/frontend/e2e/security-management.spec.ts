@@ -182,8 +182,6 @@ test("API キーの管理は専用権限で開け、削除を確定できる", {
   await expectNoPageOverflow(page);
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {}))));
   await page.screenshot({ path: testInfo.outputPath("api-keys-admin.png"), fullPage: true });
-  await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-  await page.screenshot({ path: testInfo.outputPath("api-keys-admin-dark.png"), fullPage: true });
   await page.getByTestId("api-key-row-actions-key-a-trigger").click();
   await page.getByRole("menuitem", { name: "削除", exact: true }).click();
   const dialog = page.getByRole("alertdialog");

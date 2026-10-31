@@ -369,9 +369,12 @@ export function DocumentWorkspace({
   const chunkSetsQuery = useDocumentChunkSets(documentId);
   const documentJobsQuery = useDocumentIngestionJobs(documentId);
   const segmentsQuery = useDocumentIngestionSegments(documentId);
-  // embedding は global 単一固定。診断の付帯情報のため、取得失敗時はチップを出さないだけにする。
+  // embedding は global 単一固定（既定の埋め込みモデル。#45）。診断の付帯情報のため、取得失敗時・
+  // 未選択のときはチップを出さないだけにする。次元は backend の設定（Oracle の VECTOR 列）の値。
   const modelSettingsQuery = useModelSettings();
-  const embeddingSettings = modelSettingsQuery.data?.settings.generative_ai ?? null;
+  const embeddingModel =
+    modelSettingsQuery.data?.settings.enterprise_ai.default_embedding_model_id?.trim() || null;
+  const embeddingDim = modelSettingsQuery.data?.embedding_dim ?? null;
   // 抽出結果は JSON で 1 回だけ取得し、構造化要素・parser の表示・抽出エクスポートの状態に使う。
   // Markdown / HTML は、抽出エクスポートでコピー・ダウンロードするときだけ取得する（#561）。
   const extractionJsonQuery = useDocumentRecipeExtractionExport(
@@ -1853,10 +1856,10 @@ export function DocumentWorkspace({
               }
               vectorCount={latestChunkSet ? selectedRecipe?.vector_count ?? null : null}
               embeddingLabel={
-                embeddingSettings
+                embeddingModel && embeddingDim
                   ? t("flow.jobs.embedding", {
-                      model: embeddingSettings.embedding_model,
-                      dim: embeddingSettings.embedding_dim,
+                      model: embeddingModel,
+                      dim: embeddingDim,
                     })
                   : null
               }

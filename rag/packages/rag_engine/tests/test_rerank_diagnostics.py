@@ -22,7 +22,7 @@ def test_direct_sdk_retry_keeps_request_and_actual_attempts(monkeypatch):
         return {"results": [{"index": 0, "relevance_score": 0.9}]}
 
     monkeypatch.setattr(oci, "_rerank_request", rerank_request)
-    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings: "synthetic-key")
+    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings, **_: "synthetic-key")
     monkeypatch.setattr(oci, "_is_retryable_error", lambda exc: True)
     monkeypatch.setattr(oci.time, "sleep", lambda seconds: None)
     settings = SimpleNamespace(

@@ -17,12 +17,6 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 function totals(runs: number, input: number, output: number, recorded = runs) {
   return {
     runs,
@@ -57,53 +51,50 @@ function seedReport(mockApi: MockApi) {
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`期間の合計と前の期間との差、内訳を出す (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      seedReport(mockApi);
-      await page.goto("/usage");
+  test(`期間の合計と前の期間との差、内訳を出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    seedReport(mockApi);
+    await page.goto("/usage");
 
-      await expect(page.getByRole("heading", { name: "利用状況", level: 1 })).toBeVisible();
-      const summary = page.getByTestId("usage-summary");
-      await expect(summary).toContainText("合計 token");
-      await expect(summary).toContainText("100,000");
-      await expect(summary).toContainText("前の期間から +35,000");
-      // Run あたりの token は、利用量を記録した Run（11 件）で割る（100,000 / 11 ≒ 9,091。前は 65,000 / 8 ≒ 8,125）。
-      await expect(summary).toContainText("9,091");
-      await expect(summary).toContainText("前の期間から +966");
-      await expect(page.getByTestId("usage-unrecorded")).toContainText("利用量が未記録の実行が 1 件あります");
-      await expect(page.getByTestId("usage-unrecorded")).toContainText("未記録は利用量がゼロであることを意味しません");
+    await expect(page.getByRole("heading", { name: "利用状況", level: 1 })).toBeVisible();
+    const summary = page.getByTestId("usage-summary");
+    await expect(summary).toContainText("合計 token");
+    await expect(summary).toContainText("100,000");
+    await expect(summary).toContainText("前の期間から +35,000");
+    // Run あたりの token は、利用量を記録した Run（11 件）で割る（100,000 / 11 ≒ 9,091。前は 65,000 / 8 ≒ 8,125）。
+    await expect(summary).toContainText("9,091");
+    await expect(summary).toContainText("前の期間から +966");
+    await expect(page.getByTestId("usage-unrecorded")).toContainText("利用量が未記録の実行が 1 件あります");
+    await expect(page.getByTestId("usage-unrecorded")).toContainText("未記録は利用量がゼロであることを意味しません");
 
-      // 業務 Agent ごと（既定のタブ）。token の割合を数字でも出す。
-      const agents = page.getByRole("table", { name: "業務 Agent ごとの利用量" });
-      const sales = agents.getByRole("row", { name: /営業の Agent/ });
-      await expect(sales).toContainText("75,000");
-      await expect(sales).toContainText("75%");
-      await expect(agents.getByRole("row", { name: /removed-agent/ })).toContainText("削除した業務 Agent");
+    // 業務 Agent ごと（既定のタブ）。token の割合を数字でも出す。
+    const agents = page.getByRole("table", { name: "業務 Agent ごとの利用量" });
+    const sales = agents.getByRole("row", { name: /営業の Agent/ });
+    await expect(sales).toContainText("75,000");
+    await expect(sales).toContainText("75%");
+    await expect(agents.getByRole("row", { name: /removed-agent/ })).toContainText("削除した業務 Agent");
 
-      // 利用者ごと・モデルごとはタブで切り替える（← → でも移れる）。
-      await page.getByRole("tab", { name: /利用者ごと/ }).click();
-      const users = page.getByRole("table", { name: "利用者ごとの利用量" });
-      await expect(users.getByRole("row", { name: /山田 太郎/ })).toContainText("88,000");
-      await expect(users).toContainText("作成者の記録なし");
-      await page.getByRole("tab", { name: /利用者ごと/ }).press("ArrowRight");
-      const models = page.getByRole("table", { name: "モデルごとの利用量" });
-      await expect(models).toContainText("xai.grok-4");
-      await expect(models).not.toContainText("記録なし");
-      await expect(models.getByRole("row")).toHaveCount(2);
-      await expect(page.getByRole("tab", { name: /モデルごと/ })).toContainText("1");
+    // 利用者ごと・モデルごとはタブで切り替える（← → でも移れる）。
+    await page.getByRole("tab", { name: /利用者ごと/ }).click();
+    const users = page.getByRole("table", { name: "利用者ごとの利用量" });
+    await expect(users.getByRole("row", { name: /山田 太郎/ })).toContainText("88,000");
+    await expect(users).toContainText("作成者の記録なし");
+    await page.getByRole("tab", { name: /利用者ごと/ }).press("ArrowRight");
+    const models = page.getByRole("table", { name: "モデルごとの利用量" });
+    await expect(models).toContainText("xai.grok-4");
+    await expect(models).not.toContainText("記録なし");
+    await expect(models.getByRole("row")).toHaveCount(2);
+    await expect(page.getByRole("tab", { name: /モデルごと/ })).toContainText("1");
 
-      // 日ごとは新しい日から。期間の 30 日をページングする。
-      await page.getByRole("tab", { name: "日ごと" }).click();
-      const days = page.getByRole("table", { name: "日ごとの利用量" });
-      await expect(days.getByRole("row").nth(1)).toContainText("44,000");
-      await expect(page.getByText("1–25 / 30 件")).toBeVisible();
+    // 日ごとは新しい日から。期間の 30 日をページングする。
+    await page.getByRole("tab", { name: "日ごと" }).click();
+    const days = page.getByRole("table", { name: "日ごとの利用量" });
+    await expect(days.getByRole("row").nth(1)).toContainText("44,000");
+    await expect(page.getByText("1–25 / 30 件")).toBeVisible();
 
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`usage-${viewport.name}-${theme}.png`), fullPage: true });
-    });
-  }
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`usage-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test("利用量が記録済みならモデル名なし・0 token の実行もモデル内訳に残す", async ({ page, mockApi }) => {

@@ -1306,28 +1306,23 @@ test.describe("実行履歴の詳細の権限の無い根拠（#3252）", { tag:
   });
 });
 
-test.describe("実行履歴の詳細の幅とテーマ", () => {
-  for (const theme of ["light", "dark"] as const) {
-    test(`1280 / 1920px で横あふれが無く、見出しと本文の左端がそろう (${theme})`, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "desktop", "幅を指定して確かめる（desktop だけ）");
-      await page.addInitScript((value) => {
-        window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-      }, theme);
-      await mockLocalAuth(page);
-      await mockRuns(page, [run(1)]);
-      for (const width of [1280, 1920]) {
-        await page.setViewportSize({ width, height: 900 });
-        await page.goto("/history/run-1");
-        await expect(page.getByTestId("run-history-summary")).toBeVisible();
-        expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-        const titleLeft = await page.getByRole("heading", { level: 1, name: "実行の詳細" }).evaluate(
-          (element) => element.getBoundingClientRect().left
-        );
-        const bodyLeft = await page.getByTestId("run-history-summary").evaluate((element) => element.getBoundingClientRect().left);
-        expect(Math.abs(titleLeft - bodyLeft)).toBeLessThanOrEqual(1);
-      }
-    });
-  }
+test.describe("実行履歴の詳細の幅", () => {
+  test("1280 / 1920px で横あふれが無く、見出しと本文の左端がそろう", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "幅を指定して確かめる（desktop だけ）");
+    await mockLocalAuth(page);
+    await mockRuns(page, [run(1)]);
+    for (const width of [1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/history/run-1");
+      await expect(page.getByTestId("run-history-summary")).toBeVisible();
+      expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+      const titleLeft = await page.getByRole("heading", { level: 1, name: "実行の詳細" }).evaluate(
+        (element) => element.getBoundingClientRect().left
+      );
+      const bodyLeft = await page.getByTestId("run-history-summary").evaluate((element) => element.getBoundingClientRect().left);
+      expect(Math.abs(titleLeft - bodyLeft)).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 // #3422: 章節の階層（section_path）がとても長い根拠でも、根拠のカードの一覧（run-history-citations）が横に

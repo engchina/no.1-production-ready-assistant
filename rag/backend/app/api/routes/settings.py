@@ -25,7 +25,9 @@ from pr_system_settings.model_test_input import (
     MODEL_TEST_RERANK_QUERY,
     MODEL_TEST_TEXT_PROMPT,
     MODEL_TEST_VISION_PROMPT,
+    embedding_test_details,
     model_test_text_context,
+    rerank_test_details,
 )
 from pr_system_settings.oci import build_oci_router
 from pr_system_settings.oci import test_oci_config as _test_oci_config
@@ -929,17 +931,19 @@ async def _run_model_settings_test(
             [MODEL_TEST_EMBEDDING_INPUT],
             input_type="SEARCH_QUERY",
         )
-        vector = vectors[0] if vectors else []
-        return {"vector_dim": len(vector), "input_count": len(vectors)}
+        # 次元が設定の値（Oracle の VECTOR 列）と同じかを確かめる（#45）。
+        return dict(
+            embedding_test_details(vectors, expected_dim=int(settings.oci_genai_embedding_dim))
+        )
+    # 固定の query と 2 文書を並べ、index と relevance_score が返るかを確かめる（#45）。
     ranks = await async_call_with_model_purpose(
         "connection.check",
         OciGenAiClient(settings=settings).rerank,
         MODEL_TEST_RERANK_QUERY,
         list(MODEL_TEST_RERANK_DOCUMENTS),
-        top_n=1,
+        top_n=len(MODEL_TEST_RERANK_DOCUMENTS),
     )
-    top_score = ranks[0][1] if ranks else None
-    return {"ranked_count": len(ranks), "top_score": top_score}
+    return dict(rerank_test_details(ranks))
 
 
 def _huggingface_settings_data(settings: Settings) -> HuggingFaceSettingsData:

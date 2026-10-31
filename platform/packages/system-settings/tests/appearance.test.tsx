@@ -4,20 +4,17 @@ import { describe, expect, it } from "vitest";
 import { AppearanceSettingsPage } from "../src/appearance/AppearanceSettingsPage";
 
 describe("AppearanceSettingsPage", () => {
-  it("3択を aria-pressed で表示し、現在の選好だけを押下状態にする", () => {
-    const html = renderToStaticMarkup(<AppearanceSettingsPage theme="dark" onThemeChange={() => undefined} />);
-    expect(html).toContain('data-testid="appearance-theme-toggle"');
-    expect(html).toContain('aria-label="配色テーマ"');
-    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
-    expect(html).toMatch(/aria-pressed="true"[^>]*>ダーク</);
-    expect(html).toContain("自動（OS 設定）");
+  it("配色テーマの選択を出さない（#17。配色はライトの 1 種類だけ）", () => {
+    const html = renderToStaticMarkup(<AppearanceSettingsPage />);
+    expect(html).not.toContain('data-testid="appearance-theme-toggle"');
+    expect(html).not.toContain("配色テーマ");
+    expect(html).not.toContain("ダーク");
+    expect(html).not.toContain("aria-pressed");
+    expect(html).toContain("HTTPS の証明書");
   });
 
   it("文言は messages で部分的に上書きできる", () => {
-    const html = renderToStaticMarkup(
-      <AppearanceSettingsPage theme="light" onThemeChange={() => undefined} messages={{ title: "Appearance" }} />,
-    );
+    const html = renderToStaticMarkup(<AppearanceSettingsPage messages={{ title: "Appearance" }} />);
     expect(html).toContain("Appearance");
-    expect(html).toContain("配色テーマ");
   });
 });

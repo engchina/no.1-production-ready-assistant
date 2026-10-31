@@ -4,7 +4,7 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConfirmProvider, Toaster } from "@production-ready/ui";
 import { TraceDetailsLabelsProvider } from "@production-ready/ui";
-import { initTheme, loadStylesAfterFirstRender } from "@production-ready/ui";
+import { loadStylesAfterFirstRender } from "@production-ready/ui";
 import {
   UnsavedChangesBlocker,
   useConfirmNavigationKey,
@@ -14,7 +14,6 @@ import { App } from "./App";
 import { ROUTER_BASENAME } from "@/lib/base-path";
 import { installBrowserErrorGuards } from "@/lib/browser-error-guards";
 import { t } from "@/lib/i18n";
-import { useUiStore } from "@/lib/ui-store";
 import { AuthProvider } from "@/features/security/AuthProvider";
 import { NL2SQL_TRACE_DETAILS_LABELS } from "@/features/nl2sql/chatProgress";
 // フォント実体をビルドへ同梱し、Google Fonts / CDN に依存せず同一 origin から配信する。
@@ -35,7 +34,6 @@ import "./globals.css";
 
 // 永続化テーマを描画前に適用（FOUC 回避）＋ store/OS 変更を購読。
 installBrowserErrorGuards();
-initTheme(useUiStore);
 
 const root = document.getElementById("root");
 if (!root) {

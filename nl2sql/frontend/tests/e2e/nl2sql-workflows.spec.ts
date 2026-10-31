@@ -8,7 +8,7 @@ import { draftKey, WORKSPACE_DRAFT_PREFIX } from "../../src/lib/workspace-drafts
 import { expectLocalUiFonts } from "./_helpers/local-fonts";
 import { pollWithClock } from "./_helpers/clock";
 import { expect, test, type Locator, type Page, type Route, type TestInfo } from "./_helpers/test";
-import { closeSidebarNav, openSidebarNav } from "./_helpers/sidebar-nav";
+import { openSidebarNav } from "./_helpers/sidebar-nav";
 import { measuredVisibleRowsHeight } from "./_helpers/data-table";
 import { mockDatabaseGateReady, systemAdminMe } from "./_helpers/database-gate";
 import {
@@ -466,7 +466,7 @@ export async function expectNeutralDangerConfirmationSurface(surface: Locator) {
 }
 
 // デザインシステム移行後の確認ダイアログ検証(#529)。
-// 暗幕は共有トークン --scrim(packages/ui/src/styles/tokens/elevation.css: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7)))。
+// 暗幕は共有トークン --scrim(packages/ui/src/styles/tokens/elevation.css。html は常に color-scheme: light なので rgb(0 0 0 / 0.5))。
 // 確認語フィールドは旧 bg-card / bg-background から bg-surface-sunken へ移行し、左アクセントは border-l-danger-fg。
 async function expectSharedScrimOverlayCoversViewport(page: Page) {
   const overlay = page.getByTestId("app-dialog-overlay");
@@ -475,12 +475,11 @@ async function expectSharedScrimOverlayCoversViewport(page: Page) {
     const rect = node.getBoundingClientRect();
     return {
       rect: [rect.left, rect.top, window.innerWidth - rect.right, window.innerHeight - rect.bottom],
-      dark: document.documentElement.classList.contains("dark"),
       backgroundColor: window.getComputedStyle(node).backgroundColor,
     };
   });
   for (const edge of metrics.rect) expect(Math.abs(edge)).toBeLessThanOrEqual(1);
-  const alpha = metrics.dark ? "0\\.7" : "0\\.5";
+  const alpha = "0\\.5";
   expect(metrics.backgroundColor).toMatch(new RegExp(`^(rgba\\(0, 0, 0, ${alpha}\\)|oklab\\(0 0 0 \\/ ${alpha}\\))$`, "u"));
 }
 
@@ -3489,7 +3488,7 @@ test("SQL 系の必須入力欄は共有の必須バッジと required 属性で
 });
 
 test("SQL のツールの画面の欄は値の種類の幅で、placeholder が欄に収まる（#1891）", { tag: "@responsive" }, async ({ page }) => {
-  // 5 画面 × 2 つの幅 × ライト / ダークを 1 つの test で回る。
+  // 5 画面 × 2 つの幅を 1 つの test で回る。
   test.setTimeout(180_000);
   await mockNl2SqlApi(page);
   const projectWidth = page.viewportSize()?.width ?? 1280;
@@ -3529,26 +3528,23 @@ test("SQL のツールの画面の欄は値の種類の幅で、placeholder が�
   ];
   for (const width of widths) {
     await page.setViewportSize({ width, height });
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      for (const screen of screens) {
-        const where = `${screen.path} ${width}px ${colorScheme}`;
-        await page.goto(screen.path);
-        await expect(page.locator(screen.ready)).toBeVisible();
-        await screen.open?.(page);
-        expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
-        expect(await findClippedPlaceholders(page), where).toEqual([]);
-        if (width < 640) continue;
-        expect(await findFieldsOffWidthScale(page), where).toEqual([]);
-        for (const [selector, expected] of screen.fields) {
-          const box = await page.locator(selector).boundingBox();
-          expect(box, `${where} ${selector}`).not.toBeNull();
-          if (expected === "form") {
-            // SQL の欄は full でも FormGrid の読みやすい幅（60rem）まで（1920px でカードの幅に伸びない）。
-            expect(box!.width, `${where} ${selector}`).toBeLessThanOrEqual(60 * rootFont + 1);
-          } else {
-            expect(Math.abs(box!.width - expected * rootFont), `${where} ${selector}`).toBeLessThanOrEqual(1);
-          }
+    for (const screen of screens) {
+      const where = `${screen.path} ${width}px`;
+      await page.goto(screen.path);
+      await expect(page.locator(screen.ready)).toBeVisible();
+      await screen.open?.(page);
+      expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
+      expect(await findClippedPlaceholders(page), where).toEqual([]);
+      if (width < 640) continue;
+      expect(await findFieldsOffWidthScale(page), where).toEqual([]);
+      for (const [selector, expected] of screen.fields) {
+        const box = await page.locator(selector).boundingBox();
+        expect(box, `${where} ${selector}`).not.toBeNull();
+        if (expected === "form") {
+          // SQL の欄は full でも FormGrid の読みやすい幅（60rem）まで（1920px でカードの幅に伸びない）。
+          expect(box!.width, `${where} ${selector}`).toBeLessThanOrEqual(60 * rootFont + 1);
+        } else {
+          expect(Math.abs(box!.width - expected * rootFont), `${where} ${selector}`).toBeLessThanOrEqual(1);
         }
       }
     }
@@ -3640,86 +3636,81 @@ test("スキーマ参照は続きがあっても業務プロファイルで絞�
   await expectNoHorizontalScroll(page);
 });
 
-for (const theme of ["light", "dark"]) {
-  for (const wide of [false, true]) {
-    test(`クエリのテンプレートは全置換し、自由入力で空に戻す: ${theme} ${wide ? "1920px" : "標準幅"}`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
-      test.skip(wide && isMobile, "1920px は desktop project で検証する");
-      if (wide) await page.setViewportSize({ width: 1920, height: 1000 });
-      await page.addInitScript(value => {
-        localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-      }, theme);
-      await mockNl2SqlApi(page);
-      let jobs = 0;
-      page.on("request", (request) => {
-        if (request.method() === "POST" && new URL(request.url()).pathname === "/api/nl2sql/jobs") jobs += 1;
-      });
-      await page.goto("/query");
-      await expect(page.locator("html")).toHaveCSS("color-scheme", theme);
-      const question = nl2sqlQuestionInput(page);
-      const freeInput = page.getByRole("button", { name: "自由入力", exact: true });
-      await expect(page.getByText("テンプレート:", { exact: true })).toBeVisible();
-      await freeInput.click();
-      await expect(question).toHaveValue("");
-
-      const original = "請求金額を一覧で見たい\n  2025年の請求を対象にする  ";
-      const templates = [
-        ["項目抽出", "対象テーブル：\n抽出項目：\n抽出条件："],
-        ["集計・グループ化", "対象テーブル：\n集計内容（件数・合計・平均など）：\n集計単位（グループ化）：\n抽出条件："],
-        ["上位N件・並び替え", "対象テーブル：\n抽出項目：\n並び替え（項目と昇順／降順）：\n表示件数（上位N件）：\n抽出条件："],
-        ["複数テーブル結合", "対象テーブル（複数可）：\nテーブル間の関連：\n抽出項目：\n抽出条件："],
-      ];
-      for (const [label, body] of templates) {
-        await question.fill(original);
-        // 選択範囲の有無によらず、質問の全体をテンプレートで置き換える。
-        await question.focus();
-        await question.press("ControlOrMeta+A");
-        await page.getByRole("button", { name: label, exact: true }).click();
-        await expect(question).toHaveValue(body);
-        await expect(question).toBeFocused();
-        const caret = await question.evaluate((el) => (el as HTMLTextAreaElement).selectionStart);
-        expect(caret).toBe(body.indexOf("\n"));
-        await freeInput.click();
-        await expect(question).toHaveValue("");
-        await expect(question).toBeFocused();
-      }
-
-      // キーボードでも全置換し、スキーマ挿入は先頭の空欄に入る。
-      await question.fill(`${original}\n`);
-      const basic = page.getByRole("button", { name: "項目抽出", exact: true });
-      await basic.focus();
-      await page.keyboard.press("Enter");
-      const basicText = templates[0][1];
-      await expect(question).toHaveValue(basicText);
-      await openSchemaPicker(page);
-      await page.getByRole("button", { name: "請求 を開閉" }).click();
-      await page.getByRole("button", { name: /^請求金額 TOTAL_AMOUNT/ }).click();
-      const filled = `対象テーブル："請求"."請求金額"\n抽出項目：\n抽出条件：`;
-      await expect(question).toHaveValue(filled);
-      await basic.click();
-      await expect(question).toHaveValue(basicText);
-      await page.getByRole("button", { name: "集計・グループ化", exact: true }).click();
-      await expect(question).toHaveValue(templates[1][1]);
-      await page.reload();
-      await expect(question).toHaveValue(templates[1][1]);
-      await freeInput.click();
-      await expect(question).toHaveValue("");
-      await page.reload();
-      await expect(question).toHaveValue("");
-
-      // 空欄と長い入力のどちらからでもテンプレートだけに置き換える。
-      await question.fill("");
-      await basic.click();
-      await expect(question).toHaveValue(basicText);
-      const longQuestion = Array.from({ length: 25 }, (_, index) => `確認したい内容 ${index + 1}`).join("\n");
-      await question.fill(longQuestion);
-      await basic.click();
-      await expect(question).toHaveValue(basicText);
-      await expect.poll(() => question.evaluate((el) => el.scrollTop)).toBe(0);
-      await question.screenshot({ path: testInfo.outputPath("replaced-question-template.png") });
-      await expectNoHorizontalScroll(page);
-      expect(jobs).toBe(0);
+for (const wide of [false, true]) {
+  test(`クエリのテンプレートは全置換し、自由入力で空に戻す: ${wide ? "1920px" : "標準幅"}`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
+    test.skip(wide && isMobile, "1920px は desktop project で検証する");
+    if (wide) await page.setViewportSize({ width: 1920, height: 1000 });
+    await mockNl2SqlApi(page);
+    let jobs = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/nl2sql/jobs") jobs += 1;
     });
-  }
+    await page.goto("/query");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    const question = nl2sqlQuestionInput(page);
+    const freeInput = page.getByRole("button", { name: "自由入力", exact: true });
+    await expect(page.getByText("テンプレート:", { exact: true })).toBeVisible();
+    await freeInput.click();
+    await expect(question).toHaveValue("");
+
+    const original = "請求金額を一覧で見たい\n  2025年の請求を対象にする  ";
+    const templates = [
+      ["項目抽出", "対象テーブル：\n抽出項目：\n抽出条件："],
+      ["集計・グループ化", "対象テーブル：\n集計内容（件数・合計・平均など）：\n集計単位（グループ化）：\n抽出条件："],
+      ["上位N件・並び替え", "対象テーブル：\n抽出項目：\n並び替え（項目と昇順／降順）：\n表示件数（上位N件）：\n抽出条件："],
+      ["複数テーブル結合", "対象テーブル（複数可）：\nテーブル間の関連：\n抽出項目：\n抽出条件："],
+    ];
+    for (const [label, body] of templates) {
+      await question.fill(original);
+      // 選択範囲の有無によらず、質問の全体をテンプレートで置き換える。
+      await question.focus();
+      await question.press("ControlOrMeta+A");
+      await page.getByRole("button", { name: label, exact: true }).click();
+      await expect(question).toHaveValue(body);
+      await expect(question).toBeFocused();
+      const caret = await question.evaluate((el) => (el as HTMLTextAreaElement).selectionStart);
+      expect(caret).toBe(body.indexOf("\n"));
+      await freeInput.click();
+      await expect(question).toHaveValue("");
+      await expect(question).toBeFocused();
+    }
+
+    // キーボードでも全置換し、スキーマ挿入は先頭の空欄に入る。
+    await question.fill(`${original}\n`);
+    const basic = page.getByRole("button", { name: "項目抽出", exact: true });
+    await basic.focus();
+    await page.keyboard.press("Enter");
+    const basicText = templates[0][1];
+    await expect(question).toHaveValue(basicText);
+    await openSchemaPicker(page);
+    await page.getByRole("button", { name: "請求 を開閉" }).click();
+    await page.getByRole("button", { name: /^請求金額 TOTAL_AMOUNT/ }).click();
+    const filled = `対象テーブル："請求"."請求金額"\n抽出項目：\n抽出条件：`;
+    await expect(question).toHaveValue(filled);
+    await basic.click();
+    await expect(question).toHaveValue(basicText);
+    await page.getByRole("button", { name: "集計・グループ化", exact: true }).click();
+    await expect(question).toHaveValue(templates[1][1]);
+    await page.reload();
+    await expect(question).toHaveValue(templates[1][1]);
+    await freeInput.click();
+    await expect(question).toHaveValue("");
+    await page.reload();
+    await expect(question).toHaveValue("");
+
+    // 空欄と長い入力のどちらからでもテンプレートだけに置き換える。
+    await question.fill("");
+    await basic.click();
+    await expect(question).toHaveValue(basicText);
+    const longQuestion = Array.from({ length: 25 }, (_, index) => `確認したい内容 ${index + 1}`).join("\n");
+    await question.fill(longQuestion);
+    await basic.click();
+    await expect(question).toHaveValue(basicText);
+    await expect.poll(() => question.evaluate((el) => el.scrollTop)).toBe(0);
+    await question.screenshot({ path: testInfo.outputPath("replaced-question-template.png") });
+    await expectNoHorizontalScroll(page);
+    expect(jobs).toBe(0);
+  });
 }
 
 test("スキーマピッカーは compact（checkbox なし・挿入でページがスクロールしない）", async ({ page }) => {
@@ -7356,13 +7347,6 @@ test("公開されたオントロジーが無い業務プロファイルでは�
   await expect(panel.getByText("公開版なし")).toBeVisible();
   await expectNoHorizontalScroll(page);
   await panel.screenshot({ path: testInfo.outputPath("sql-grounding-not-published-375.png") });
-
-  // ダークテーマでも情報の面とバッジが読める（色だけに頼らずアイコンと文言で示す）。
-  await page.emulateMedia({ colorScheme: "dark" });
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect(panel.getByText("公開版なし")).toBeVisible();
-  await panel.screenshot({ path: testInfo.outputPath("sql-grounding-not-published-dark.png") });
 });
 
 test("未修飾列の単一表 SELECT は FROM 句の表だけを接地する", async ({ page }, testInfo) => {
@@ -9547,14 +9531,6 @@ test("SQL ファイル入力は入力欄と同じ高さのまま選択とドラ�
   expect(mobileBox!.height).toBe(await expectedControlHeight(page));
   await expect(dropzone.getByText(".SQL / .TXT", { exact: true })).toBeHidden();
   await expectNoHorizontalScroll(page);
-
-  const lightBackground = await dropzone.evaluate(
-    (element) => getComputedStyle(element).backgroundColor
-  );
-  await page.locator("html").evaluate((element) => element.classList.add("dark"));
-  await expect
-    .poll(() => dropzone.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .not.toBe(lightBackground);
 });
 
 test("AI 活用の 4 画面はナビ切替で入力を保持し、リセットで消える", { tag: "@responsive" }, async ({ page }, testInfo) => {
@@ -9802,56 +9778,6 @@ test("root route opens SQL generation and sidebar exposes feature surfaces", asy
   await expect(page.getByRole("link", { name: /NL2SQL 接続診断/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /モデル学習/ })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
-});
-
-test("dark theme keeps the SQL workbench text, controls and active states legible", async ({ page }, testInfo) => {
-  await mockNl2SqlApi(page);
-  // theme.ts は ui-store の変更ごとに html.dark を toggle し直すため、classList を直接触ると
-  // store 更新(サイドバー状態等)で light へ戻る。永続化されたテーマ選好として dark を与える。
-  await page.addInitScript(() => {
-    const key = "production-ready-nl2sql.ui";
-    const stored = JSON.parse(window.localStorage.getItem(key) ?? "null") ?? { state: {}, version: 0 };
-    stored.state = { ...stored.state, theme: "dark" };
-    window.localStorage.setItem(key, JSON.stringify(stored));
-  });
-  await page.goto("/query");
-  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-
-  const heading = page.getByRole("heading", { name: "質問から SQL を生成して実行", exact: true });
-  const question = nl2sqlQuestionInput(page);
-  const selectedEngine = page.getByRole("button", {
-    name: /^Select AI 質問に表や項目/u,
-  });
-  const executeButton = page.getByRole("button", { name: "SQL を生成して実行" });
-  const activeQueryLink = page
-    .getByRole("complementary", { name: "サイドナビゲーション" })
-    .getByRole("link", { name: "SQL 生成" });
-
-  // 期待値は packages/ui tokens/colors.css + palette.css の dark 側:
-  // --color-fg = neutral-100 #f2f4f7 / 入力の輪郭 --color-border-control = neutral-650 #5d6878 (3:1, WCAG 1.4.11)
-  await expect(heading).toHaveCSS("color", "rgb(242, 244, 247)");
-  await expect(question).toHaveCSS("border-color", "rgb(93, 104, 120)");
-  // エンジン選択は primary 塗りではなく「primary 枠線 + 前景色維持」の選択スタイル
-  // (1 画面 primary 1 つ: button spec §0.2)。dark でも枠線が primary 色で判別できる。
-  await expect(selectedEngine).toHaveAttribute("aria-pressed", "true");
-  await expect(selectedEngine).toHaveCSS("border-color", "rgb(105, 173, 255)");
-  await expect(selectedEngine).toHaveCSS("color", "rgb(242, 244, 247)");
-  // 375px ではナビがドロワー（#367）。開いて現在地の色を確かめ、閉じてから本文を操作する。
-  await openSidebarNav(page);
-  await expect(activeQueryLink).toHaveCSS("background-color", "rgb(40, 106, 189)");
-  await expect(activeQueryLink).toHaveCSS("color", "rgb(255, 255, 255)");
-  await closeSidebarNav(page);
-  await expect(executeButton).toBeDisabled();
-  await expect(executeButton).toHaveCSS("background-color", "rgb(37, 43, 52)");
-  await expect(executeButton).toHaveCSS("color", "rgb(116, 127, 142)");
-
-  await question.focus();
-  await expect(question).toHaveCSS("border-color", "rgb(124, 187, 255)");
-  await expectNoHorizontalScroll(page);
-  await page.screenshot({
-    path: testInfo.outputPath(`nl2sql-dark-workbench-${testInfo.project.name}.png`),
-    fullPage: true,
-  });
 });
 
 test("SQL 確認・修復 surface is removed and legacy URL falls back", async ({ page }) => {
@@ -11170,8 +11096,7 @@ test("app feedback keeps the history list narrow beside the editor and switches 
   await resizer.press("Home");
   await expect(resizer).toHaveAttribute("aria-valuenow", "20");
 
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await expectNoHorizontalScroll(page);
 
   // 375px: 1 ペイン。選んだ履歴の詳細だけを出し、確定の行の操作は全幅。
@@ -11938,8 +11863,7 @@ test("learning candidates use the shared responsive list, filters, paging, and r
   await expect(mobileCandidate.getByRole("link", { name: "フィードバック管理で確認" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(candidateList).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
@@ -13305,12 +13229,9 @@ for (const uuidAvailable of [false, true]) {
     const widths = testInfo.project.name === "desktop" ? [1280, 1920] : [375];
     for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
-      for (const theme of ["light", "dark"]) {
-        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-        await panel.scrollIntoViewIfNeeded();
-        await expectNoHorizontalScroll(page);
-        await page.screenshot({ path: testInfo.outputPath(`synthetic-http-${width}-${theme}.png`) });
-      }
+      await panel.scrollIntoViewIfNeeded();
+      await expectNoHorizontalScroll(page);
+      await page.screenshot({ path: testInfo.outputPath(`synthetic-http-${width}-light.png`) });
     }
   });
 }
@@ -19136,69 +19057,62 @@ test("classifier training save locks edits and retains draft after failure", asy
   await expect(input).toHaveCount(0);
 });
 
-for (const theme of ["light", "dark"] as const) {
-  // #535: 一覧の絞り込みは入力に合わせて適用し、「絞り込み」ボタンを置かない。IME の変換中は問い合わせない。
-  test(`learning candidate search applies as you type without a filter button and waits for IME commit (${theme})`, async ({ page }, testInfo) => {
-    await page.addInitScript((value) => {
-      localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({
-        state: { sidebarCollapsed: false, collapsedSections: {}, theme: value }, version: 0,
-      }));
-    }, theme);
-    await mockNl2SqlApi(page);
-    const queries: string[] = [];
-    await page.route("**/api/nl2sql/classifier/training-candidates*", (route) => {
-      const url = new URL(route.request().url());
-      const q = url.searchParams.get("q") ?? "";
-      queries.push(q);
-      const all = [
-        { history_id: "history-1", question: "請求金額を確認" },
-        { history_id: "history-2", question: "人事の申請件数" },
-      ].filter((item) => !q || item.question.includes(q));
-      return fulfillJson(route, {
-        items: all.map((item) => ({ ...item,
-          profile_id: "default", profile_name: "既定プロファイル", profile_category: "請求",
-          feedback_rating: "good", feedback_comment: "", created_at: historyItem.created_at,
-          status: "pending", training_example_id: "", conflict_profile_ids: [] })),
-        total: all.length, next_cursor: "", pending_count: all.length, added_count: 0, attention_count: 0,
-      });
+// #535: 一覧の絞り込みは入力に合わせて適用し、「絞り込み」ボタンを置かない。IME の変換中は問い合わせない。
+test(`learning candidate search applies as you type without a filter button and waits for IME commit`, async ({ page }, testInfo) => {
+  await mockNl2SqlApi(page);
+  const queries: string[] = [];
+  await page.route("**/api/nl2sql/classifier/training-candidates*", (route) => {
+    const url = new URL(route.request().url());
+    const q = url.searchParams.get("q") ?? "";
+    queries.push(q);
+    const all = [
+      { history_id: "history-1", question: "請求金額を確認" },
+      { history_id: "history-2", question: "人事の申請件数" },
+    ].filter((item) => !q || item.question.includes(q));
+    return fulfillJson(route, {
+      items: all.map((item) => ({ ...item,
+        profile_id: "default", profile_name: "既定プロファイル", profile_category: "請求",
+        feedback_rating: "good", feedback_comment: "", created_at: historyItem.created_at,
+        status: "pending", training_example_id: "", conflict_profile_ids: [] })),
+      total: all.length, next_cursor: "", pending_count: all.length, added_count: 0, attention_count: 0,
     });
-    await page.goto("/question-classifier-models?tab=candidates");
-    const filters = page.getByTestId("qcm-candidate-filters");
-    const search = filters.getByRole("searchbox", { name: "候補検索" });
-    const candidates = page.getByTestId("qcm-training-candidate");
-    await expect(candidates).toHaveCount(2);
-    await expect(filters.locator("button:not([aria-haspopup=dialog])").filter({ hasText: /^絞り込み$/ })).toHaveCount(0); // 狭い画面のシートを開くボタン（#1933）は除く
-
-    // 変換中の読みでは問い合わせず、確定した値で問い合わせる。
-    await page.evaluate(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-testid="qcm-candidate-filters"] input[type="search"]')!;
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      input.focus();
-      input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" }));
-      for (const step of ["j", "じ", "じん", "じんじ", "人事"]) {
-        setter.call(input, step);
-        input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true, data: step }));
-      }
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }));
-    });
-    await page.waitForTimeout(700);
-    expect(queries.filter((q) => q !== "")).toEqual([]);
-    await page.evaluate(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-testid="qcm-candidate-filters"] input[type="search"]')!;
-      input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "人事" }));
-    });
-    await expect(candidates).toHaveCount(1);
-    await expect(candidates).toContainText("人事の申請件数");
-    expect(queries.filter((q) => q !== "")).toEqual(["人事"]);
-
-    // 入力に合わせて絞り込む（Enter もボタンも押さない）。
-    await search.fill("請求");
-    await expect(candidates).toHaveCount(1);
-    await expect(candidates).toContainText("請求金額を確認");
-    await expectNoHorizontalScroll(page);
-    await page.screenshot({ path: testInfo.outputPath(`qcm-candidate-search-${theme}.png`), fullPage: true });
   });
-}
+  await page.goto("/question-classifier-models?tab=candidates");
+  const filters = page.getByTestId("qcm-candidate-filters");
+  const search = filters.getByRole("searchbox", { name: "候補検索" });
+  const candidates = page.getByTestId("qcm-training-candidate");
+  await expect(candidates).toHaveCount(2);
+  await expect(filters.locator("button:not([aria-haspopup=dialog])").filter({ hasText: /^絞り込み$/ })).toHaveCount(0); // 狭い画面のシートを開くボタン（#1933）は除く
+
+  // 変換中の読みでは問い合わせず、確定した値で問い合わせる。
+  await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-testid="qcm-candidate-filters"] input[type="search"]')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    input.focus();
+    input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" }));
+    for (const step of ["j", "じ", "じん", "じんじ", "人事"]) {
+      setter.call(input, step);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true, data: step }));
+    }
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }));
+  });
+  await page.waitForTimeout(700);
+  expect(queries.filter((q) => q !== "")).toEqual([]);
+  await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-testid="qcm-candidate-filters"] input[type="search"]')!;
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "人事" }));
+  });
+  await expect(candidates).toHaveCount(1);
+  await expect(candidates).toContainText("人事の申請件数");
+  expect(queries.filter((q) => q !== "")).toEqual(["人事"]);
+
+  // 入力に合わせて絞り込む（Enter もボタンも押さない）。
+  await search.fill("請求");
+  await expect(candidates).toHaveCount(1);
+  await expect(candidates).toContainText("請求金額を確認");
+  await expectNoHorizontalScroll(page);
+  await page.screenshot({ path: testInfo.outputPath(`qcm-candidate-search-light.png`), fullPage: true });
+});
 
 test("classifier refresh retains the applied candidate filter and current page", async ({ page }, testInfo) => {
   await mockNl2SqlApi(page);
@@ -20132,97 +20046,90 @@ for (const outcome of ["discard", "apply-error", "partial"] as const) {
 }
 
 
-for (const theme of ["light", "dark"]) {
-  test(`header utility outline matches import across management pages: ${theme}`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
-    await mockNl2SqlApi(page);
-    for (const path of ["/table-management", "/view-management", "/data-management"]) {
-      await page.goto(path);
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      const header = page.locator("main header").first();
-      const inMenu = isMobile && path !== "/data-management";
-      await expect(header.getByRole("heading", { level: 1 })).toBeVisible();
-      if (inMenu) await header.getByRole("button", { name: "その他の操作" }).click();
-      // 「その他の操作」メニューは body へ Portal で描くため、ヘッダーの外から探す（#363）。
-      const refresh = inMenu
-        ? page.getByRole("menu", { name: "その他の操作" }).getByRole("menuitem", { name: "最新情報を取得", exact: true })
-        : header.getByRole("button", { name: "最新情報を取得", exact: true });
-      await expect(refresh).toBeEnabled();
-      if (!isMobile) {
-        for (const label of ["最新情報を取得", "DB 構造を再取得"]) {
-          const button = header.getByRole("button", { name: label, exact: true });
-          await expect(button).toHaveCSS("border-top-width", "1px");
-          await expect(button).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
-          if (path === "/table-management") {
-            const importButton = header.getByRole("button", { name: "Excel/CSV 取込(新規テーブル)" });
-            await expect(button).toHaveCSS("border-top-color", await importButton.evaluate(el => getComputedStyle(el).borderTopColor));
-            await expect(button).toHaveCSS("background-color", await importButton.evaluate(el => getComputedStyle(el).backgroundColor));
-          }
+test(`header utility outline matches import across management pages`, { tag: "@responsive" }, async ({ page, isMobile }, testInfo) => {
+  await mockNl2SqlApi(page);
+  for (const path of ["/table-management", "/view-management", "/data-management"]) {
+    await page.goto(path);
+    const header = page.locator("main header").first();
+    const inMenu = isMobile && path !== "/data-management";
+    await expect(header.getByRole("heading", { level: 1 })).toBeVisible();
+    if (inMenu) await header.getByRole("button", { name: "その他の操作" }).click();
+    // 「その他の操作」メニューは body へ Portal で描くため、ヘッダーの外から探す（#363）。
+    const refresh = inMenu
+      ? page.getByRole("menu", { name: "その他の操作" }).getByRole("menuitem", { name: "最新情報を取得", exact: true })
+      : header.getByRole("button", { name: "最新情報を取得", exact: true });
+    await expect(refresh).toBeEnabled();
+    if (!isMobile) {
+      for (const label of ["最新情報を取得", "DB 構造を再取得"]) {
+        const button = header.getByRole("button", { name: label, exact: true });
+        await expect(button).toHaveCSS("border-top-width", "1px");
+        await expect(button).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+        if (path === "/table-management") {
+          const importButton = header.getByRole("button", { name: "Excel/CSV 取込(新規テーブル)" });
+          await expect(button).toHaveCSS("border-top-color", await importButton.evaluate(el => getComputedStyle(el).borderTopColor));
+          await expect(button).toHaveCSS("background-color", await importButton.evaluate(el => getComputedStyle(el).backgroundColor));
         }
       }
-      await refresh.click();
-      if (inMenu) await header.getByRole("button", { name: "その他の操作" }).click();
-      await expect(refresh).toBeEnabled();
-      if (inMenu) await page.keyboard.press("Escape");
-      await expectNoHorizontalScroll(page);
-      await page.screenshot({ path: testInfo.outputPath(`${path.slice(1)}-${theme}.png`), fullPage: true });
     }
-  });
-}
+    await refresh.click();
+    if (inMenu) await header.getByRole("button", { name: "その他の操作" }).click();
+    await expect(refresh).toBeEnabled();
+    if (inMenu) await page.keyboard.press("Escape");
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: testInfo.outputPath(`${path.slice(1)}-light.png`), fullPage: true });
+  }
+});
 
-for (const theme of ["light", "dark"] as const) {
-  test(`action roles and placement remain consistent in metadata and synthetic workflows ${theme}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await mockNl2SqlApi(page);
-    await page.addInitScript(() => sessionStorage.clear());
-    const mobile = testInfo.project.name === "mobile-375";
-    for (const width of mobile ? [375] : [1280, 1920]) {
-      await page.setViewportSize({ width, height: 1000 });
-      for (const path of ["comment-management", "annotation-management"]) {
-        await page.goto(`/${path}`);
-        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-        await page.getByRole("tab", { name: "対象選択", exact: true }).click();
-        const checkbox = page.getByRole("option", { name: /INVOICES/ });
-        await checkbox.setChecked(false);
-        const fetch = page.getByRole("button", { name: "情報を取得", exact: true });
-        await expect(fetch).toBeDisabled();
-        await expect(fetch.locator("svg")).toHaveCount(1);
-        await expect(fetch.locator("svg")).toHaveAttribute("width", "16");
-        await expect(fetch).toHaveCSS("height", mobile ? "44px" : "40px");
-        const before = await fetch.boundingBox();
-        await checkbox.check();
-        await expect(fetch).toBeEnabled();
-        await expect(fetch).toHaveClass(/bg-accent-emphasis/);
-        await expect(fetch.locator("svg")).toHaveCount(1);
-        expect((await fetch.boundingBox())?.width).toBe(before?.width);
-        if (!mobile) {
-          const refresh = page.getByRole("button", { name: "最新情報を取得", exact: true });
-          await expect(refresh).toHaveCSS("height", "36px");
-          await expect(refresh).toHaveClass(/border-border-control/);
-          await expect(refresh.locator("svg")).toHaveAttribute("width", "16");
-        }
-        await fetch.scrollIntoViewIfNeeded();
-        await expectNoHorizontalScroll(page);
-        await page.screenshot({ path: testInfo.outputPath(`${path}-${width}-${theme}-actions.png`) });
-        await page.keyboard.press("Tab");
-        await fetch.focus();
-        await expect(fetch).toHaveCSS("outline-style", "solid");
-        await page.keyboard.press("Enter");
-        await expect(page.getByLabel("構造情報")).toHaveValue(/INVOICES/);
+test(`action roles and placement remain consistent in metadata and synthetic workflows`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  await mockNl2SqlApi(page);
+  await page.addInitScript(() => sessionStorage.clear());
+  const mobile = testInfo.project.name === "mobile-375";
+  for (const width of mobile ? [375] : [1280, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const path of ["comment-management", "annotation-management"]) {
+      await page.goto(`/${path}`);
+      await page.getByRole("tab", { name: "対象選択", exact: true }).click();
+      const checkbox = page.getByRole("option", { name: /INVOICES/ });
+      await checkbox.setChecked(false);
+      const fetch = page.getByRole("button", { name: "情報を取得", exact: true });
+      await expect(fetch).toBeDisabled();
+      await expect(fetch.locator("svg")).toHaveCount(1);
+      await expect(fetch.locator("svg")).toHaveAttribute("width", "16");
+      await expect(fetch).toHaveCSS("height", mobile ? "44px" : "40px");
+      const before = await fetch.boundingBox();
+      await checkbox.check();
+      await expect(fetch).toBeEnabled();
+      await expect(fetch).toHaveClass(/bg-accent-emphasis/);
+      await expect(fetch.locator("svg")).toHaveCount(1);
+      expect((await fetch.boundingBox())?.width).toBe(before?.width);
+      if (!mobile) {
+        const refresh = page.getByRole("button", { name: "最新情報を取得", exact: true });
+        await expect(refresh).toHaveCSS("height", "36px");
+        await expect(refresh).toHaveClass(/border-border-control/);
+        await expect(refresh.locator("svg")).toHaveAttribute("width", "16");
       }
-      await page.goto("/data-management");
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await page.getByRole("tab", { name: "合成データ生成" }).click();
-      const fetchTables = page.getByTestId("data-synthetic-refresh-tables-actions").getByRole("button");
-      await expect(fetchTables).toHaveClass(/bg-accent-emphasis/);
-      await expect(fetchTables).toHaveCSS("height", mobile ? "44px" : "40px");
-      await expect(fetchTables.locator("svg")).toHaveCount(1);
-      await fetchTables.click();
-      await expect(page.getByTestId("data-synthetic-table").getByRole("option", { name: "APP.INVOICES", exact: true })).toBeVisible();
-      await fetchTables.scrollIntoViewIfNeeded();
+      await fetch.scrollIntoViewIfNeeded();
       await expectNoHorizontalScroll(page);
-      await page.screenshot({ path: testInfo.outputPath(`synthetic-${width}-${theme}-actions.png`) });
+      await page.screenshot({ path: testInfo.outputPath(`${path}-${width}-light-actions.png`) });
+      await page.keyboard.press("Tab");
+      await fetch.focus();
+      await expect(fetch).toHaveCSS("outline-style", "solid");
+      await page.keyboard.press("Enter");
+      await expect(page.getByLabel("構造情報")).toHaveValue(/INVOICES/);
     }
-  });
-}
+    await page.goto("/data-management");
+    await page.getByRole("tab", { name: "合成データ生成" }).click();
+    const fetchTables = page.getByTestId("data-synthetic-refresh-tables-actions").getByRole("button");
+    await expect(fetchTables).toHaveClass(/bg-accent-emphasis/);
+    await expect(fetchTables).toHaveCSS("height", mobile ? "44px" : "40px");
+    await expect(fetchTables.locator("svg")).toHaveCount(1);
+    await fetchTables.click();
+    await expect(page.getByTestId("data-synthetic-table").getByRole("option", { name: "APP.INVOICES", exact: true })).toBeVisible();
+    await fetchTables.scrollIntoViewIfNeeded();
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: testInfo.outputPath(`synthetic-${width}-light-actions.png`) });
+  }
+});
 
 // desktop と mobile-375 の project で確かめる。
 test("Select AI の SQL は安全性の確認の工程を「省略」と出す（#1523）", async ({ page }) => {

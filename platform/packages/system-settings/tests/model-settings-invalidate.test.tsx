@@ -34,7 +34,7 @@ afterEach(() => {
 
 const pending = () => new Promise<never>(() => undefined);
 
-function data(rerankModel: string): ModelSettingsData {
+function data(displayName: string): ModelSettingsData {
   return {
     settings: {
       enterprise_ai: {
@@ -49,7 +49,7 @@ function data(rerankModel: string): ModelSettingsData {
           },
         ],
         models: [
-          { model_id: "vlm", display_name: "", vision_enabled: true, connection_id: "primary" },
+          { model_id: "vlm", display_name: displayName, vision_enabled: true, connection_id: "primary" },
         ],
         default_text_model_id: "vlm",
         default_vision_model_id: "vlm",
@@ -61,11 +61,6 @@ function data(rerankModel: string): ModelSettingsData {
         vision_response_path: "",
         timeout_seconds: 600,
         max_retries: 3,
-      },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        rerank_model: rerankModel,
       },
     },
     model_settings_file: "model-settings.json",
@@ -94,9 +89,9 @@ async function setInputValue(id: string, value: string) {
   });
 }
 
-async function submitGenerativeAi() {
-  const form = host.querySelector("#genai-rerank-model")?.closest("form");
-  if (!form) throw new Error("generative ai form not found");
+async function submitModels() {
+  const form = host.querySelector("#enterprise-model-0-display-name")?.closest("form");
+  if (!form) throw new Error("models form not found");
   await act(async () => {
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
@@ -110,10 +105,10 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
     client.setQueryData(["search", "models"], [{ model_id: "old-llm" }]);
     client.setQueryData(["unrelated"], "keep");
     const updateModelSettings = vi.fn(async (payload: ModelSettingsUpdatePayload) =>
-      data(payload.generative_ai.rerank_model),
+      data(payload.enterprise_ai.models[0]?.display_name ?? ""),
     );
     const api: ModelSettingsApi = {
-      getModelSettings: async () => data("qwen3-rerank"),
+      getModelSettings: async () => data("標準"),
       updateModelSettings,
       testModelSettings: pending,
     };
@@ -134,8 +129,8 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
     await flush();
     expect(client.getQueryState(["chat", "models"])?.isInvalidated).toBe(false);
 
-    await setInputValue("genai-rerank-model", "cohere.rerank-v4.0");
-    await submitGenerativeAi();
+    await setInputValue("enterprise-model-0-display-name", "新しい表示名");
+    await submitModels();
 
     expect(updateModelSettings).toHaveBeenCalledTimes(1);
     expect(client.getQueryState(["chat", "models"])?.isInvalidated).toBe(true);
@@ -147,7 +142,7 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(["chat", "models"], [{ model_id: "old-llm" }]);
     const api: ModelSettingsApi = {
-      getModelSettings: async () => data("qwen3-rerank"),
+      getModelSettings: async () => data("標準"),
       updateModelSettings: vi.fn(async () => {
         throw new Error("failed");
       }),
@@ -166,8 +161,8 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
     });
     await flush();
 
-    await setInputValue("genai-rerank-model", "cohere.rerank-v4.0");
-    await submitGenerativeAi();
+    await setInputValue("enterprise-model-0-display-name", "新しい表示名");
+    await submitModels();
 
     expect(client.getQueryState(["chat", "models"])?.isInvalidated).toBe(false);
   });

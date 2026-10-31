@@ -991,25 +991,17 @@ test("プレビューの回転・拡大の後も強調が同じ位置に重な�
 });
 
 // 文書詳細のプレビューは、幅に合わせたときに 1 ページ全体が縦スクロールなしで入る高さにする（#559）。
-// desktop（1280 / 1920）と 375px、light / dark で、開いた直後の状態・拡大・ページ送りを確かめる。
+// desktop（1280 / 1920）と 375px で、開いた直後の状態・拡大・ページ送りを確かめる。
 for (const viewportCase of [
-  { name: "1280 light", width: 1280, height: 800, theme: "light" },
-  { name: "1920 dark", width: 1920, height: 1080, theme: "dark" },
-  { name: "1920 light", width: 1920, height: 1080, theme: "light" },
-  { name: "375 dark", width: 375, height: 812, theme: "dark" },
-  { name: "375 light", width: 375, height: 812, theme: "light" },
+  { name: "1280", width: 1280, height: 800 },
+  { name: "1920", width: 1920, height: 1080 },
+  { name: "375", width: 375, height: 812 },
 ] as const) {
   test(`プレビューは開いた直後に 1 ページ全体を縦スクロールなしで表示する (${viewportCase.name})`, async ({
     page,
   }, testInfo) => {
     // 幅は setViewportSize で決めるので、desktop のプロジェクトだけで実行する（mobile と同じ内容を 2 回走らせない）。
     test.skip(testInfo.project.name !== "desktop", "viewport は各ケースで指定する");
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 })
-      );
-    }, viewportCase.theme);
     await page.setViewportSize({ width: viewportCase.width, height: viewportCase.height });
     await mockDocumentWorkspace(page, { pdfPreview: true, pdfPages: true, layoutRegions: true });
 
@@ -1065,7 +1057,7 @@ for (const viewportCase of [
     // 目視の記録: ペインの下端（ページの下端とビューアの枠）が見える位置までスクロールして撮る。
     await pane.evaluate((element) => element.scrollIntoView({ block: "end" }));
     await page.screenshot({
-      path: testInfo.outputPath(`preview-pane-${viewportCase.width}-${viewportCase.theme}.png`),
+      path: testInfo.outputPath(`preview-pane-${viewportCase.width}.png`),
     });
 
     // 拡大してもペインの高さは変わらず、ページはビューアの中でスクロールする。
@@ -2583,16 +2575,10 @@ async function mockDocumentWorkspace(
       json: {
         data: {
           settings: {
-            enterprise_ai: {},
-            generative_ai: {
-              embedding_model: "text-embedding-v4",
-              embedding_dim: 1536,
-              embedding_base_url: "",
-              rerank_model: "qwen3-rerank",
-              rerank_base_url: "",
-            },
+            enterprise_ai: { default_embedding_model_id: "text-embedding-v4" },
           },
           checks: {},
+          embedding_dim: 1536,
           model_settings_file: "models.json",
           source: "runtime",
         },

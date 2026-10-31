@@ -2,7 +2,7 @@
 
 対象: `engchina/no.1-production-ready-assistant#71`（4 repo を monorepo に統合）の切替後に、
 **既に稼働している** NL2SQL の OCI Compute を新しい配置へ1回だけ移す手順。
-新規に作る Compute は Terraform stack（`nl2sql-v0.1.32` 以降）が最初から新しい配置で作るため、この手順は不要。
+新規に作る Compute は最初から新しい配置で配備するため、この手順は不要。
 
 ## 1. 何が変わるか
 
@@ -166,21 +166,3 @@ cd "${OLD_APP}" && sudo ./scripts/update-after-pull.sh --repair-only
 
 - DB migration は冪等で、旧バージョンのコードでも動作する範囲に限られる（`update-after-pull.sh` はスキーマを作り直さない）。
 - ロールバック後も `${SUITE}` は残してよい。原因を解消してから 5-5 以降をやり直す。
-
-## 9. OCI Resource Manager の stack を更新する場合
-
-既存の Compute は cloud-init を作成時にしか実行しないため、**稼働中の Compute に対してこの節の作業は不要**。
-stack を新しい zip（`nl2sql-v0.1.32` 以降）へ更新して Compute を作り直す場合だけ、次に注意する。
-（2026-09 以降は3製品共通の統合 stack（`suite-v*`、[terraform/README.md](../../terraform/README.md)）に移行した。新しく作る場合は統合 stack を使い、製品ごとの stack からの移行は同 README の「製品ごとの stack からの移行」を参照する。）
-
-- 新しい stack には `platform_git_url` / `platform_git_ref` 変数がない（suite を1回 clone するため）。
-- stack に保存済みの `application_git_url` が旧 URL（`https://github.com/engchina/no.1-production-ready-nl2sql.git`）のままだと、
-  archive 済みの NL2SQL 単独 repository を suite の位置に clone してしまい、起動に失敗する。
-  `application_git_url` を `https://github.com/engchina/no.1-production-ready-assistant.git` に変更してから apply する。
-  この変数は Resource Manager の画面では非表示なので、OCI CLI で更新する。
-
-```bash
-oci resource-manager stack get --stack-id <stack OCID> --query 'data.variables' > variables.json
-# variables.json の application_git_url を suite の URL に変更し、platform_git_url / platform_git_ref を削除する
-oci resource-manager stack update --stack-id <stack OCID> --variables file://variables.json
-```

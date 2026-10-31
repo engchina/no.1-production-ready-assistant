@@ -61,8 +61,7 @@ def client(sdk: Any, *, enabled: bool = True, runner: Any = None) -> OciGenAiCli
     return OciGenAiClient(
         settings=Settings.model_construct(
             oci_genai_rerank_model="synthetic-rerank",
-            embedding_base_url="https://synthetic.invalid/compatible-mode/v1",
-            rerank_base_url="",
+            oci_enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
             oci_enterprise_ai_api_key="sk-synthetic",
             oci_enterprise_ai_timeout_seconds=60,
             rag_rerank_cache_enabled=enabled,

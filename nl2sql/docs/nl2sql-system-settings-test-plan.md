@@ -10,10 +10,10 @@
 | --- | --- | --- |
 | OCI 認証 | `/settings/oci` | OCI config 読込、秘密鍵アップロード、認証保存、接続確認、Object Storage namespace 取得 |
 | アップロード保存先 | `/settings/upload-storage` | local / OCI Object Storage 保存先切替、保存、入力検証 |
-| モデル | `/settings/model` | OCI Enterprise AI / OCI Generative AI 設定、モデル一覧、接続テスト、テンプレート検証 |
+| モデル | `/settings/model` | 接続（プライマリ / セカンダリ / ターシャリ）、登録モデル（種類: テキスト / 埋め込み / 再ランク）、既定のモデル、接続テスト、テンプレート検証 |
 | データベース | `/settings/database` | Oracle 接続設定、wallet upload / 自動取得、ADB start / stop、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
-| 外観と証明書 | `/settings/appearance` | light / dark / system theme 切替、localStorage 永続化 |
+| 外観と証明書 | `/settings/appearance` | HTTPS の CA 証明書の取得。テーマの選択は無い（配色はライトだけ。#17） |
 
 テストデータ配置先:
 
@@ -94,7 +94,7 @@
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| MOD-001 | 初期表示 | モデル設定ページを開く | Enterprise AI endpoint / project / model list / default model / Generative AI embedding & rerank が表示される | `mock-responses/model-settings.success.json` |
+| MOD-001 | 初期表示 | モデル設定ページを開く | 接続 / 登録モデル（種類の列を含む）/ 既定のモデル（埋め込み・再ランクを含む）が表示され、独立した埋め込み / 再ランクのカードは無い | `mock-responses/model-settings.success.json` |
 | MOD-002 | Enterprise AI 保存 | endpoint、project、モデル一覧、既定の Vision モデル・既定のテキストモデルを変更して保存 | PATCH payload が送信され、保存成功 toast が出る | `api/model-settings.patch.json` |
 | MOD-003 | API key 更新 | 新しい API key を入力して保存 | API key 本文は応答や画面に出ず、has_api_key が true になる | `model/model-settings.valid.json` |
 | MOD-004 | API key clear | clear_api_key を有効にして保存 | 保存後 has_api_key が false になる | `api/model-settings-clear-api-key.patch.json` |
@@ -104,11 +104,11 @@
 | MOD-008 | JSON テンプレート検証 | 不正 JSON template で保存 | 保存が失敗し、JSON object が必要と表示される | `model/model-settings.invalid-payload-template.json` |
 | MOD-009 | response path 検証 | `/` で始まらない path で保存 | 保存が失敗し、JSON pointer 形式の修正が求められる | `model/model-settings.invalid-response-path.json` |
 | MOD-010 | timeout / retry 境界 | timeout 0 / 601、max_retries 6 で保存 | バリデーションエラーになる | `model/model-settings.invalid-timeout-retries.json` |
-| MOD-011 | embedding 次元固定 | embedding_dim を 1536 以外にする | 保存が失敗し、`1536` 固定であることが分かる | `model/model-settings.invalid-embedding-dim.json` |
+| MOD-011 | 既定の埋め込みモデルの種類 | 既定の埋め込みモデルに種類がテキストのモデルを指定する | 保存が失敗し、種類が「埋め込み」の登録モデルから選び直すよう案内される | `model/model-settings.invalid-default-embedding-kind.json` |
 | MOD-012 | Enterprise text test | text model のテストを実行 | success / failed が結果領域に表示される | `api/model-test-enterprise-text.request.json` |
 | MOD-013 | Enterprise vision test | vision model のテストを実行 | vision_enabled に応じた target test が実行される | `api/model-test-enterprise-vision.request.json` |
-| MOD-014 | Embedding test | embedding model のテストを実行 | 次元 `1536` が確認できる | `api/model-test-embedding.request.json` |
-| MOD-015 | Rerank test | rerank model のテストを実行 | rerank success / failed の結果が表示される | `api/model-test-rerank.request.json` |
+| MOD-014 | Embedding test | 種類が埋め込みの登録モデルの行でテストを実行 | 設定の次元（`oci_genai_embedding_dim`）のベクトルが返ることを確認できる | `api/model-test-embedding.request.json` |
+| MOD-015 | Rerank test | 種類が再ランクの登録モデルの行でテストを実行 | 2 文書の並び順と最上位のスコア（success / failed）が表示される | `api/model-test-rerank.request.json` |
 
 ## 7. データベース
 
@@ -157,15 +157,13 @@
 
 ## 9. 外観と証明書
 
-外観と証明書の画面の配色テーマは backend API を呼ばず、`localStorage` の `production-ready-nl2sql.ui` に保存される。
+配色はライトの 1 種類だけで、テーマの選択は無い（#17）。共有 UI の CSS は `html` を常に `color-scheme: light` にし、class・属性・OS の配色設定に反応しない。サイドバーの暗いスラブ（`[data-surface="inverted"]`）とコードの面（`[data-surface="code"]`）はテーマではなく、常に暗い面である。
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| APP-001 | 初期表示 | 外観と証明書のページを開く | ライト / ダーク / システムの toggle が表示され、既定はライト | `appearance/theme-light.localstorage.json` |
-| APP-002 | ダーク切替 | ダークを選択し reload | `html.dark` 相当のテーマが適用され、localStorage に `theme: "dark"` が残る | `appearance/theme-dark.localstorage.json` |
-| APP-003 | システム切替 | system を選択し OS preference を mock | prefers-color-scheme に応じて light/dark が適用される | `appearance/theme-system.localstorage.json` |
-| APP-004 | API 非依存 | Network tab を監視しながら切替 | theme 切替で settings API が呼ばれない | - |
-| APP-005 | サイドバー状態との共存 | sidebarCollapsed / collapsedSections を含む保存値で開く | theme と sidebar 状態が同じ storage key 内で維持される | `appearance/theme-system.localstorage.json` |
+| APP-001 | 初期表示 | 外観と証明書のページを開く | HTTPS の証明書のカードだけを表示する。テーマの選択（`appearance-theme-toggle`、「ライト」「ダーク」「自動（OS 設定）」）は無く、`html` の `color-scheme` は `light` | - |
+| APP-002 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
+| APP-003 | 旧い保存値の読み捨て | 旧い `theme` を含む保存値（`production-ready-nl2sql.ui`）で開く | 配色はライトのまま。sidebarCollapsed / collapsedSections は維持し、`theme` は読み捨てる | `appearance/legacy-theme.localstorage.json` |
 
 ## 10. 推奨 Playwright fixture 利用例
 

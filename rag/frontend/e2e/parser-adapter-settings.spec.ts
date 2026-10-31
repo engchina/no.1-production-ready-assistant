@@ -111,21 +111,6 @@ for (const viewport of [
 
 const SCREENSHOT_DIR = process.env.RAG_E2E_SCREENSHOT_DIR;
 
-async function useTheme(page: Page, scheme: "light" | "dark") {
-  await page.addInitScript((theme) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme }, version: 0 })
-    );
-  }, scheme);
-}
-
-async function expectTheme(page: Page, scheme: "light" | "dark") {
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-    .toBe(scheme === "dark");
-}
-
 /** 文書解析の GET / PATCH。PATCH の payload を記録し、保存後の値を返す。 */
 async function mockParserAdaptersWithPostParse(
   page: Page,
@@ -205,85 +190,81 @@ async function mockStandardExtractionFields(page: Page) {
   return calls;
 }
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`解析後の処理は Vision・見出しの階層・項目抽出・章節木を処理順に並べ、全体の既定を保存する (${scheme})`, async ({
-    page,
-  }, testInfo) => {
-    // #528: Vision は解析エンジンに関係なく使えるので、全体の既定の入口をこの画面に置く。
-    await useTheme(page, scheme);
-    const patches = await mockParserAdaptersWithPostParse(page, {
-      vision_enabled: false,
-      field_extraction_enabled: false,
-      navigation_summary_enabled: false,
-    });
-    await mockExtractionFields(page);
-
-    await page.goto("/settings/parser-adapters");
-    await expectTheme(page, scheme);
-
-    const card = page.getByRole("heading", { name: "解析後の処理", exact: true }).locator("xpath=ancestor::*[.//ol][1]");
-    await expect(card.getByRole("heading", { level: 3 })).toHaveText([
-      "1. 図・画像を AI で読み取る",
-      "2. 見出しの階層の推定（AI）",
-      "3. メタデータ/項目抽出",
-      "4. 章節の抽出規則",
-      "5. 章節の要約",
-    "6. RAPTOR の階層の要約",
-    ]);
-    await expect(card).toContainText("Docling の解析結果のうち、PDF のしおりの階層を使えず");
-    await expect(card).toContainText("番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす文書が対象です。");
-    await expect(card).toContainText("見出しの文字列だけ（長さの上限あり）");
-    await expect(card).toContainText("通常は対象の文書ごとに 1 回呼び出しますが");
-    await expect(card).toContainText("一時的な通信障害や流量制限などで再試行する場合があります。");
-    await expect(card).toContainText("今の階層のまま取り込みます。");
-    await expect(card).not.toContainText("PDF のしおりも見出しの番号も無い");
-    // 見出しの階層の推定は既定で無効（#2277）。
-    await expect(page.getByRole("switch", { name: "見出しの階層の推定（AI）" })).toHaveAttribute(
-      "aria-checked",
-      "false"
-    );
-    await expect(card).toContainText("解析エンジンに関係なく");
-    await expect(card).toContainText("既定の画像対応モデル");
-    await expect(card.getByRole("link", { name: "モデル設定を開く" })).toHaveAttribute("href", "/settings/model");
-
-    const vision = page.getByRole("switch", { name: "図・画像を AI で読み取る" });
-    const fieldExtraction = page.getByRole("switch", { name: "メタデータ/項目抽出" });
-    await expect(card).toContainText("解析した本文全体から");
-    await expect(card).toContainText("長い本文は分けて送り、部分ごとにモデルを呼び出します。");
-    await expect(card).toContainText("本文が長いほど入力トークンの総量と処理時間が増えます。");
-    await expect(card).not.toContainText("有効にすると、文書ごとにモデルの呼び出しが 1 回増えます。");
-    const navigation = page.getByRole("switch", { name: "章節の要約" });
-    await expect(vision).toHaveAttribute("aria-checked", "false");
-    await vision.click();
-    await fieldExtraction.click();
-    await expect(vision).toHaveAttribute("aria-checked", "true");
-    // 項目の定義を 0 件で保存した環境で有効にすると、何も抽出しないことを知らせる（#556）。
-    await expect(card.getByText(/項目の定義が 0 件で保存されているため/)).toBeVisible();
-    await expect(card.getByText("未保存の変更があります。")).toBeVisible();
-
-    if (SCREENSHOT_DIR) {
-      await card.screenshot({ path: `${SCREENSHOT_DIR}/parser-post-parse-${testInfo.project.name}-${scheme}.png` });
-    }
-
-    await card.getByRole("button", { name: "解析後の処理を保存" }).click();
-    await expect(page.getByText("解析後の処理を保存しました。")).toBeVisible();
-    // 解析エンジンの設定は送らない（「解析後の処理」だけを保存する）。
-    expect(patches).toEqual([
-      {
-        vision_enabled: true,
-        heading_level_inference_enabled: false,
-        field_extraction_enabled: true,
-        navigation_summary_enabled: false,
-        raptor_enabled: false,
-        vision_concurrency: 4,
-      },
-    ]);
-    await expect(navigation).toHaveAttribute("aria-checked", "false");
-    // 解析エンジンの側は未保存にならない。
-    await expect(page.getByText("未保存の変更があります。")).toHaveCount(0);
-    await expectNoHorizontalOverflow(page);
+test(`解析後の処理は Vision・見出しの階層・項目抽出・章節木を処理順に並べ、全体の既定を保存する`, async ({
+  page,
+}, testInfo) => {
+  // #528: Vision は解析エンジンに関係なく使えるので、全体の既定の入口をこの画面に置く。
+  const patches = await mockParserAdaptersWithPostParse(page, {
+    vision_enabled: false,
+    field_extraction_enabled: false,
+    navigation_summary_enabled: false,
   });
-}
+  await mockExtractionFields(page);
+
+  await page.goto("/settings/parser-adapters");
+
+  const card = page.getByRole("heading", { name: "解析後の処理", exact: true }).locator("xpath=ancestor::*[.//ol][1]");
+  await expect(card.getByRole("heading", { level: 3 })).toHaveText([
+    "1. 図・画像を AI で読み取る",
+    "2. 見出しの階層の推定（AI）",
+    "3. メタデータ/項目抽出",
+    "4. 章節の抽出規則",
+    "5. 章節の要約",
+  "6. RAPTOR の階層の要約",
+  ]);
+  await expect(card).toContainText("Docling の解析結果のうち、PDF のしおりの階層を使えず");
+  await expect(card).toContainText("番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす文書が対象です。");
+  await expect(card).toContainText("見出しの文字列だけ（長さの上限あり）");
+  await expect(card).toContainText("通常は対象の文書ごとに 1 回呼び出しますが");
+  await expect(card).toContainText("一時的な通信障害や流量制限などで再試行する場合があります。");
+  await expect(card).toContainText("今の階層のまま取り込みます。");
+  await expect(card).not.toContainText("PDF のしおりも見出しの番号も無い");
+  // 見出しの階層の推定は既定で無効（#2277）。
+  await expect(page.getByRole("switch", { name: "見出しの階層の推定（AI）" })).toHaveAttribute(
+    "aria-checked",
+    "false"
+  );
+  await expect(card).toContainText("解析エンジンに関係なく");
+  await expect(card).toContainText("既定の画像対応モデル");
+  await expect(card.getByRole("link", { name: "モデル設定を開く" })).toHaveAttribute("href", "/settings/model");
+
+  const vision = page.getByRole("switch", { name: "図・画像を AI で読み取る" });
+  const fieldExtraction = page.getByRole("switch", { name: "メタデータ/項目抽出" });
+  await expect(card).toContainText("解析した本文全体から");
+  await expect(card).toContainText("長い本文は分けて送り、部分ごとにモデルを呼び出します。");
+  await expect(card).toContainText("本文が長いほど入力トークンの総量と処理時間が増えます。");
+  await expect(card).not.toContainText("有効にすると、文書ごとにモデルの呼び出しが 1 回増えます。");
+  const navigation = page.getByRole("switch", { name: "章節の要約" });
+  await expect(vision).toHaveAttribute("aria-checked", "false");
+  await vision.click();
+  await fieldExtraction.click();
+  await expect(vision).toHaveAttribute("aria-checked", "true");
+  // 項目の定義を 0 件で保存した環境で有効にすると、何も抽出しないことを知らせる（#556）。
+  await expect(card.getByText(/項目の定義が 0 件で保存されているため/)).toBeVisible();
+  await expect(card.getByText("未保存の変更があります。")).toBeVisible();
+
+  if (SCREENSHOT_DIR) {
+    await card.screenshot({ path: `${SCREENSHOT_DIR}/parser-post-parse-${testInfo.project.name}.png` });
+  }
+
+  await card.getByRole("button", { name: "解析後の処理を保存" }).click();
+  await expect(page.getByText("解析後の処理を保存しました。")).toBeVisible();
+  // 解析エンジンの設定は送らない（「解析後の処理」だけを保存する）。
+  expect(patches).toEqual([
+    {
+      vision_enabled: true,
+      heading_level_inference_enabled: false,
+      field_extraction_enabled: true,
+      navigation_summary_enabled: false,
+      raptor_enabled: false,
+      vision_concurrency: 4,
+    },
+  ]);
+  await expect(navigation).toHaveAttribute("aria-checked", "false");
+  // 解析エンジンの側は未保存にならない。
+  await expect(page.getByText("未保存の変更があります。")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
 
 test("図・表の説明を同時に呼ぶ数を検証して保存する（#2002）", async ({ page }) => {
   const patches = await mockParserAdaptersWithPostParse(page, {
@@ -392,87 +373,84 @@ test("項目抽出の項目の定義を追加・検証・保存できる", { tag
   await expectNoHorizontalOverflow(page);
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`未保存の環境は標準の項目を使い、保存した定義を「標準の項目に戻す」で戻せる (${scheme})`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    // #556: 一度も保存していない環境は標準の 4 項目。375px ではナビを畳んで本文の幅で確かめる。
-    const mobile = testInfo.project.name === "mobile";
-    await page.addInitScript(
-      ({ theme, collapsed }) => {
-        window.localStorage.setItem(
-          "production-ready-rag.ui",
-          JSON.stringify({ state: { theme, sidebarCollapsed: collapsed }, version: 0 })
-        );
-      },
-      { theme: scheme, collapsed: mobile }
-    );
-    await mockParserAdaptersWithPostParse(page, {
-      vision_enabled: false,
-      field_extraction_enabled: true,
-      navigation_summary_enabled: false,
-    });
-    const calls = await mockStandardExtractionFields(page);
-
-    await page.goto("/settings/parser-adapters");
-    await expectTheme(page, scheme);
-
-    const item = page.locator("#post-parse-field-extraction");
-    // 長い本文は部分ごとにモデルを呼び出すことを明記する。
-    await expect(item).toContainText("長い本文は分けて送り、部分ごとにモデルを呼び出します。");
-    await expect(item.getByText("標準の項目", { exact: true })).toBeVisible();
-    await expect(item.getByText("4 件", { exact: true })).toBeVisible();
-    // 標準の項目は 0 件ではないので、何も抽出しない警告は出さない。
-    await expect(item.getByText(/0 件で保存されているため/)).toHaveCount(0);
-
-    await item.getByText("抽出する項目の定義", { exact: true }).click();
-    const editor = page.getByTestId("extraction-fields-editor");
-    await expect(editor.getByText(/標準の項目を使っています/)).toBeVisible();
-    await expect(editor.getByLabel("項目名")).toHaveCount(4);
-    await expect(editor.getByLabel("項目名").nth(2)).toHaveValue("発行日・作成日");
-    const resetButton = editor.getByRole("button", { name: "標準の項目に戻す" });
-    await expect(resetButton).toBeDisabled();
-    if (SCREENSHOT_DIR) {
-      await item.screenshot({
-        path: `${SCREENSHOT_DIR}/extraction-fields-standard-${testInfo.project.name}-${scheme}.png`,
-      });
-    }
-    await expectNoHorizontalOverflow(page);
-
-    // 標準の項目を編集して保存すると、保存した定義を使う（標準の印が消え、戻せるようになる）。
-    await editor.getByRole("button", { name: "項目 4 を削除" }).click();
-    await editor.getByRole("button", { name: "項目の定義を保存" }).click();
-    await expect(editor.getByText("項目の定義を保存しました。")).toBeVisible();
-    await expect(item.getByText("3 件", { exact: true })).toBeVisible();
-    await expect(item.getByText("標準の項目", { exact: true })).toHaveCount(0);
-    await expect(editor.getByText(/標準の項目を使っています/)).toHaveCount(0);
-    await expect(resetButton).toBeEnabled();
-
-    // 編集中でも戻せる。確認ダイアログを取り消すと何もしない。
-    await editor.getByLabel("項目名").first().fill("文書種別");
-    await resetButton.click();
-    const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toContainText("標準の項目に戻しますか？");
-    await expect(dialog).toContainText("編集中の変更も破棄します");
-    await dialog.getByRole("button", { name: "キャンセル" }).click();
-    await expect(dialog).toHaveCount(0);
-    expect(calls).toEqual(["PATCH"]);
-    await expect(editor.getByLabel("項目名").first()).toHaveValue("文書種別");
-
-    await resetButton.click();
-    await page.getByRole("alertdialog").getByRole("button", { name: "標準の項目に戻す" }).click();
-    await expect(page.getByText("標準の項目に戻しました。")).toBeVisible();
-    expect(calls).toEqual(["PATCH", "DELETE"]);
-    // 編集中の変更も捨て、標準の 4 項目に戻る。
-    await expect(editor.getByLabel("項目名")).toHaveCount(4);
-    await expect(editor.getByLabel("項目名").first()).toHaveValue("文書の種類");
-    await expect(editor.getByText(/標準の項目を使っています/)).toBeVisible();
-    await expect(item.getByText("標準の項目", { exact: true })).toBeVisible();
-    await expect(resetButton).toBeDisabled();
-    await expect(page.getByText("未保存の変更があります。")).toHaveCount(0);
-    await expectNoHorizontalOverflow(page);
+test(`未保存の環境は標準の項目を使い、保存した定義を「標準の項目に戻す」で戻せる`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  // #556: 一度も保存していない環境は標準の 4 項目。375px ではナビを畳んで本文の幅で確かめる。
+  const mobile = testInfo.project.name === "mobile";
+  await page.addInitScript(
+    (collapsed) => {
+      window.localStorage.setItem(
+        "production-ready-rag.ui",
+        JSON.stringify({ state: { sidebarCollapsed: collapsed }, version: 0 })
+      );
+    },
+    mobile
+  );
+  await mockParserAdaptersWithPostParse(page, {
+    vision_enabled: false,
+    field_extraction_enabled: true,
+    navigation_summary_enabled: false,
   });
-}
+  const calls = await mockStandardExtractionFields(page);
+
+  await page.goto("/settings/parser-adapters");
+
+  const item = page.locator("#post-parse-field-extraction");
+  // 長い本文は部分ごとにモデルを呼び出すことを明記する。
+  await expect(item).toContainText("長い本文は分けて送り、部分ごとにモデルを呼び出します。");
+  await expect(item.getByText("標準の項目", { exact: true })).toBeVisible();
+  await expect(item.getByText("4 件", { exact: true })).toBeVisible();
+  // 標準の項目は 0 件ではないので、何も抽出しない警告は出さない。
+  await expect(item.getByText(/0 件で保存されているため/)).toHaveCount(0);
+
+  await item.getByText("抽出する項目の定義", { exact: true }).click();
+  const editor = page.getByTestId("extraction-fields-editor");
+  await expect(editor.getByText(/標準の項目を使っています/)).toBeVisible();
+  await expect(editor.getByLabel("項目名")).toHaveCount(4);
+  await expect(editor.getByLabel("項目名").nth(2)).toHaveValue("発行日・作成日");
+  const resetButton = editor.getByRole("button", { name: "標準の項目に戻す" });
+  await expect(resetButton).toBeDisabled();
+  if (SCREENSHOT_DIR) {
+    await item.screenshot({
+      path: `${SCREENSHOT_DIR}/extraction-fields-standard-${testInfo.project.name}.png`,
+    });
+  }
+  await expectNoHorizontalOverflow(page);
+
+  // 標準の項目を編集して保存すると、保存した定義を使う（標準の印が消え、戻せるようになる）。
+  await editor.getByRole("button", { name: "項目 4 を削除" }).click();
+  await editor.getByRole("button", { name: "項目の定義を保存" }).click();
+  await expect(editor.getByText("項目の定義を保存しました。")).toBeVisible();
+  await expect(item.getByText("3 件", { exact: true })).toBeVisible();
+  await expect(item.getByText("標準の項目", { exact: true })).toHaveCount(0);
+  await expect(editor.getByText(/標準の項目を使っています/)).toHaveCount(0);
+  await expect(resetButton).toBeEnabled();
+
+  // 編集中でも戻せる。確認ダイアログを取り消すと何もしない。
+  await editor.getByLabel("項目名").first().fill("文書種別");
+  await resetButton.click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("標準の項目に戻しますか？");
+  await expect(dialog).toContainText("編集中の変更も破棄します");
+  await dialog.getByRole("button", { name: "キャンセル" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(calls).toEqual(["PATCH"]);
+  await expect(editor.getByLabel("項目名").first()).toHaveValue("文書種別");
+
+  await resetButton.click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "標準の項目に戻す" }).click();
+  await expect(page.getByText("標準の項目に戻しました。")).toBeVisible();
+  expect(calls).toEqual(["PATCH", "DELETE"]);
+  // 編集中の変更も捨て、標準の 4 項目に戻る。
+  await expect(editor.getByLabel("項目名")).toHaveCount(4);
+  await expect(editor.getByLabel("項目名").first()).toHaveValue("文書の種類");
+  await expect(editor.getByText(/標準の項目を使っています/)).toBeVisible();
+  await expect(item.getByText("標準の項目", { exact: true })).toBeVisible();
+  await expect(resetButton).toBeDisabled();
+  await expect(page.getByText("未保存の変更があります。")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
 
 // #715: 章節の抽出規則（方式・独自の規則）。見本の文書でのプレビューは削除した（#2042）。
 async function mockSectionRules(page: Page) {

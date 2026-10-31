@@ -24,6 +24,20 @@
             "display_name": "OCR / Vision",
             "vision_enabled": true,
             "connection_id": "primary"
+          },
+          {
+            "model_id": "text-embedding-v4",
+            "display_name": "",
+            "vision_enabled": false,
+            "kind": "embedding",
+            "connection_id": "primary"
+          },
+          {
+            "model_id": "qwen3-rerank",
+            "display_name": "",
+            "vision_enabled": false,
+            "kind": "rerank",
+            "connection_id": "primary"
           }
         ],
         "default_text_model_id": "enterprise-nl2sql-llm",
@@ -35,12 +49,9 @@
         "text_response_path": "",
         "vision_response_path": "",
         "timeout_seconds": 120,
-        "max_retries": 3
-      },
-      "generative_ai": {
-        "embedding_model": "cohere.embed-v4.0",
-        "embedding_dim": 1536,
-        "rerank_model": "cohere.rerank-v4.0-fast"
+        "max_retries": 3,
+        "default_embedding_model_id": "text-embedding-v4",
+        "default_rerank_model_id": "qwen3-rerank"
       }
     },
     "model_settings_file": "runtime-settings",

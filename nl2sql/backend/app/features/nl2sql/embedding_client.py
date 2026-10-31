@@ -4,9 +4,8 @@ LLM/VLM は Enterprise AI、埋め込みは専用の接続という AGENTS.md �
 埋め込みの呼び出しはここに閉じ込める。接続先は OpenAI 互換の API で、既定は Aliyun
 百煉（DashScope）の `text-embedding-v4`（#8）。HTTP を叩くのはこのファイルだけ。
 
-Base URL と API key を空にしたときは Enterprise AI の接続のものを使う（百煉は chat・
-埋め込みが同じ `/compatible-mode/v1` 配下で、key も共通）。CI / local は設定が無ければ
-`is_configured()` が False を返し、deterministic に動く。
+endpoint と API key は既定の埋め込みモデル（登録モデルの種類 embedding）の接続のもの（#45）。
+CI / local は設定が無ければ `is_configured()` が False を返し、deterministic に動く。
 """
 
 from __future__ import annotations
@@ -16,6 +15,7 @@ import urllib.request
 from typing import Any, Protocol
 
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
+from pr_system_settings.model import embedding_api_base_url, embedding_model_connection
 
 from app.settings import Settings
 
@@ -51,15 +51,12 @@ class OpenAiCompatibleEmbeddingClient:
         self.settings = settings
 
     def base_url(self) -> str:
-        """埋め込みの Base URL。空なら Enterprise AI の接続の endpoint。"""
-        base = str(getattr(self.settings, "embedding_base_url", "") or "").strip()
-        if not base:
-            base = str(self.settings.oci_enterprise_ai_endpoint or "").strip()
-        return base.rstrip("/")
+        """埋め込みの Base URL（既定の埋め込みモデルの接続の endpoint。#45）。"""
+        return embedding_api_base_url(self.settings)
 
     def api_key(self) -> str:
-        """埋め込みの API key。Enterprise AI の接続のものを使う。"""
-        return str(self.settings.oci_enterprise_ai_api_key or "").strip()
+        """埋め込みの API key（既定の埋め込みモデルの接続のもの。#45）。"""
+        return embedding_model_connection(self.settings).api_key
 
     def is_configured(self) -> bool:
         return bool(

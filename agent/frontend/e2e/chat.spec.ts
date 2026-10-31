@@ -16,66 +16,57 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 const THREAD_ID = `thread_${"a".repeat(32)}`;
 
 for (const viewport of [...VIEWPORTS, { name: "desktop-wide", width: 1920, height: 1080 }, { name: "desktop-short", width: 1280, height: 480 }, { name: "desktop-zoomed", width: 1280, height: 400 }]) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`長い会話でもページ外へスクロールせず入力欄へ到達できる (${viewport.width === 375 ? "375px" : viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedThread(mockApi, {
-        status: "running",
-        artifacts: [{ id: "answer-long", kind: "answer", name: "回答", content: { text: "回答の本文。".repeat(1000) } }],
-      });
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await openSeedThread(page);
-      const conversation = page.getByTestId("chat-conversation");
-      await expect.poll(() => conversation.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
-      const dimensions = () => page.evaluate(() => {
-        const main = document.getElementById("pr-main")!;
-        const conversation = document.querySelector('[data-testid="chat-conversation"]')!;
-        return {
-          mainTop: main.scrollTop, mainOverflow: main.scrollHeight - main.clientHeight,
-          documentOverflow: document.documentElement.scrollHeight - window.innerHeight,
-          conversationHeight: conversation.clientHeight,
-        };
-      });
-      let measured = await dimensions();
-      expect(measured.documentOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
-      expect(measured.conversationHeight).toBeLessThan(viewport.height);
-      if (viewport.width >= 1024 && viewport.height >= 600) {
-        expect(measured.mainTop, JSON.stringify(measured)).toBe(0);
-        expect(measured.mainOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
-      }
-      if (viewport.width >= 1024 && viewport.height < 600) {
-        // 拡大や低いウィンドウでは、会話を潰さず main の中でページもスクロールする。
-        expect(measured.mainOverflow).toBeGreaterThan(0);
-        expect(measured.conversationHeight).toBeGreaterThan(150);
-      }
-      // 内側の末尾で wheel を続けても document の下に空白を作らない。
-      await conversation.hover();
-      await page.mouse.wheel(0, 10000);
-      const composer = page.getByRole("textbox", { name: "質問" });
-      await composer.focus();
-      await composer.fill("複数行の質問\n追加の条件");
-      await expect(composer).toBeInViewport();
-      await expect(page.getByTestId("chat-send")).toBeInViewport();
-      measured = await dimensions();
-      expect(measured.documentOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
-      if (viewport.width >= 1024 && viewport.height >= 600) expect(measured.mainTop).toBe(0);
-      // polling で完了へ変わっても外側を動かさない。
-      mockApi.state.runs[0].status = "completed";
-      await expect(page.getByTestId("chat-send")).toHaveAccessibleName("送信");
-      expect((await dimensions()).documentOverflow).toBeLessThanOrEqual(1);
-      await page.screenshot({ path: testInfo.outputPath(`scroll-${viewport.name}-${theme}.png`), fullPage: true });
+  test(`長い会話でもページ外へスクロールせず入力欄へ到達できる (${viewport.width === 375 ? "375px" : viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedThread(mockApi, {
+      status: "running",
+      artifacts: [{ id: "answer-long", kind: "answer", name: "回答", content: { text: "回答の本文。".repeat(1000) } }],
     });
-  }
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await openSeedThread(page);
+    const conversation = page.getByTestId("chat-conversation");
+    await expect.poll(() => conversation.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+    const dimensions = () => page.evaluate(() => {
+      const main = document.getElementById("pr-main")!;
+      const conversation = document.querySelector('[data-testid="chat-conversation"]')!;
+      return {
+        mainTop: main.scrollTop, mainOverflow: main.scrollHeight - main.clientHeight,
+        documentOverflow: document.documentElement.scrollHeight - window.innerHeight,
+        conversationHeight: conversation.clientHeight,
+      };
+    });
+    let measured = await dimensions();
+    expect(measured.documentOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
+    expect(measured.conversationHeight).toBeLessThan(viewport.height);
+    if (viewport.width >= 1024 && viewport.height >= 600) {
+      expect(measured.mainTop, JSON.stringify(measured)).toBe(0);
+      expect(measured.mainOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
+    }
+    if (viewport.width >= 1024 && viewport.height < 600) {
+      // 拡大や低いウィンドウでは、会話を潰さず main の中でページもスクロールする。
+      expect(measured.mainOverflow).toBeGreaterThan(0);
+      expect(measured.conversationHeight).toBeGreaterThan(150);
+    }
+    // 内側の末尾で wheel を続けても document の下に空白を作らない。
+    await conversation.hover();
+    await page.mouse.wheel(0, 10000);
+    const composer = page.getByRole("textbox", { name: "質問" });
+    await composer.focus();
+    await composer.fill("複数行の質問\n追加の条件");
+    await expect(composer).toBeInViewport();
+    await expect(page.getByTestId("chat-send")).toBeInViewport();
+    measured = await dimensions();
+    expect(measured.documentOverflow, JSON.stringify(measured)).toBeLessThanOrEqual(1);
+    if (viewport.width >= 1024 && viewport.height >= 600) expect(measured.mainTop).toBe(0);
+    // polling で完了へ変わっても外側を動かさない。
+    mockApi.state.runs[0].status = "completed";
+    await expect(page.getByTestId("chat-send")).toHaveAccessibleName("送信");
+    expect((await dimensions()).documentOverflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`scroll-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 function seedThread(mockApi: MockApi, run: Record<string, unknown>) {
@@ -100,53 +91,50 @@ function seedThread(mockApi: MockApi, run: Record<string, unknown>) {
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`質問を送ると回答が出て、同じ会話で続けられる (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
+  test(`質問を送ると回答が出て、同じ会話で続けられる (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
 
-      await expect(page.getByRole("heading", { name: "チャット", level: 1 })).toBeVisible();
-      await expect(page.locator("#chat-agent")).toContainText("資料・データ横断アシスタント");
-      await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "チャット", level: 1 })).toBeVisible();
+    await expect(page.locator("#chat-agent")).toContainText("資料・データ横断アシスタント");
+    await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
 
-      const composer = page.getByRole("textbox", { name: "質問" });
-      await composer.fill("今月の売上は？");
-      await composer.press("Enter");
-      const conversation = page.getByTestId("chat-conversation");
-      await expect(conversation.getByText("「今月の売上は？」への回答です。")).toBeVisible();
-      await expect(composer).toHaveValue("");
-      const first = mockApi.lastRequest("POST", "/api/runs");
-      expect(first?.body).toEqual({ goal: "今月の売上は？", agent_id: "default" });
+    const composer = page.getByRole("textbox", { name: "質問" });
+    await composer.fill("今月の売上は？");
+    await composer.press("Enter");
+    const conversation = page.getByTestId("chat-conversation");
+    await expect(conversation.getByText("「今月の売上は？」への回答です。")).toBeVisible();
+    await expect(composer).toHaveValue("");
+    const first = mockApi.lastRequest("POST", "/api/runs");
+    expect(first?.body).toEqual({ goal: "今月の売上は？", agent_id: "default" });
 
-      // 2 回目は同じ会話（thread_id）で送る。
-      await composer.fill("先月と比べると？");
-      await page.getByTestId("chat-send").click();
-      await expect(conversation.getByText("「先月と比べると？」への回答です。")).toBeVisible();
-      const second = mockApi.lastRequest("POST", "/api/runs");
-      expect((second?.body as { thread_id?: string }).thread_id).toMatch(/^thread_/);
+    // 2 回目は同じ会話（thread_id）で送る。
+    await composer.fill("先月と比べると？");
+    await page.getByTestId("chat-send").click();
+    await expect(conversation.getByText("「先月と比べると？」への回答です。")).toBeVisible();
+    const second = mockApi.lastRequest("POST", "/api/runs");
+    expect((second?.body as { thread_id?: string }).thread_id).toMatch(/^thread_/);
 
-      // 会話の履歴（desktop は左、375px は side sheet）。
-      if (viewport.width >= 1024) {
-        await page.getByTestId("chat-history-toggle").click();
-        await expect(page.getByTestId("chat-history").getByText("今月の売上は？")).toBeVisible();
-      } else {
-        await page.getByTestId("chat-history-toggle").click();
-        const sheet = page.getByRole("dialog", { name: "会話の履歴" });
-        await expect(sheet.getByText("今月の売上は？")).toBeVisible();
-        await expect(sheet.getByText("2 往復")).toBeVisible();
-        await page.keyboard.press("Escape");
-      }
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}-${theme}.png`), fullPage: true });
+    // 会話の履歴（desktop は左、375px は side sheet）。
+    if (viewport.width >= 1024) {
+      await page.getByTestId("chat-history-toggle").click();
+      await expect(page.getByTestId("chat-history").getByText("今月の売上は？")).toBeVisible();
+    } else {
+      await page.getByTestId("chat-history-toggle").click();
+      const sheet = page.getByRole("dialog", { name: "会話の履歴" });
+      await expect(sheet.getByText("今月の売上は？")).toBeVisible();
+      await expect(sheet.getByText("2 往復")).toBeVisible();
+      await page.keyboard.press("Escape");
+    }
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}.png`), fullPage: true });
 
-      // 新しい会話は上端の行の 1 か所だけ（#889）。押すと会話を外し、すぐ書けるよう入力欄へフォーカスする。
-      await page.getByRole("button", { name: "新しい会話", exact: true }).click();
-      await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
-      await expect(page.getByTestId("chat-conversation-title")).toHaveCount(0);
-      await expect(composer).toBeFocused();
-    });
-  }
+    // 新しい会話は上端の行の 1 か所だけ（#889）。押すと会話を外し、すぐ書けるよう入力欄へフォーカスする。
+    await page.getByRole("button", { name: "新しい会話", exact: true }).click();
+    await expect(page.getByText("質問を入力して会話を始めます")).toBeVisible();
+    await expect(page.getByTestId("chat-conversation-title")).toHaveCount(0);
+    await expect(composer).toBeFocused();
+  });
 }
 
 test("使ったツールは処理の経過の段で見て、承認待ちはその場で判断できる（根拠の塊は回答ができてから）", async ({ page, mockApi }) => {
@@ -242,114 +230,108 @@ test("使ったツールは処理の経過の段で見て、承認待ちはそ�
 
 // #805: 回答の作成中は、送信のボタンが同じ位置で「停止」になり、押すと Run を止めて「送信」に戻る（RAG と同じ。buttons.md §3.1）。
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`回答の作成中は送信が停止になり、押すと Run を止める (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedThread(mockApi, { status: "running" });
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      if (viewport.width >= 1024) {
-        await page.getByTestId("chat-history-toggle").click();
-        await page.getByTestId("chat-history").getByRole("button", { name: /^契約の更新条件は？/ }).click();
-      } else {
-        await page.getByTestId("chat-history-toggle").click();
-        await page.getByRole("dialog", { name: "会話の履歴" }).getByText("契約の更新条件は？").click();
-      }
+  test(`回答の作成中は送信が停止になり、押すと Run を止める (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedThread(mockApi, { status: "running" });
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    if (viewport.width >= 1024) {
+      await page.getByTestId("chat-history-toggle").click();
+      await page.getByTestId("chat-history").getByRole("button", { name: /^契約の更新条件は？/ }).click();
+    } else {
+      await page.getByTestId("chat-history-toggle").click();
+      await page.getByRole("dialog", { name: "会話の履歴" }).getByText("契約の更新条件は？").click();
+    }
 
-      const turn = page.getByTestId("chat-turn-run-chat-seed");
-      await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "running");
-      const button = page.getByTestId("chat-send");
-      await expect(button).toHaveAccessibleName("停止");
-      await expect(button).toHaveAttribute("data-state", "running");
-      await expect(button).not.toHaveAttribute("aria-disabled", "true");
-      await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
-      const runningComposerHeight = await page.getByTestId("chat-composer-region").evaluate((element) => element.getBoundingClientRect().height);
+    const turn = page.getByTestId("chat-turn-run-chat-seed");
+    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "running");
+    const button = page.getByTestId("chat-send");
+    await expect(button).toHaveAccessibleName("停止");
+    await expect(button).toHaveAttribute("data-state", "running");
+    await expect(button).not.toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
+    const runningComposerHeight = await page.getByTestId("chat-composer-region").evaluate((element) => element.getBoundingClientRect().height);
 
-      // 作成中も次の質問を書ける。入力欄の Enter では送らず、停止もしない。
-      const composer = page.getByRole("textbox", { name: "質問" });
-      await composer.fill("次の質問");
-      await composer.press("Enter");
-      await expect(composer).toHaveValue("次の質問");
-      expect(mockApi.lastRequest("POST", "/api/runs")).toBeUndefined();
-      expect(mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeUndefined();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`chat-running-${viewport.name}-${theme}.png`) });
+    // 作成中も次の質問を書ける。入力欄の Enter では送らず、停止もしない。
+    const composer = page.getByRole("textbox", { name: "質問" });
+    await composer.fill("次の質問");
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("次の質問");
+    expect(mockApi.lastRequest("POST", "/api/runs")).toBeUndefined();
+    expect(mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeUndefined();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`chat-running-${viewport.name}.png`) });
 
-      await button.click();
-      await expect.poll(() => mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeTruthy();
-      // 同じボタンが「送信」に戻り、フォーカスはボタンに残る。会話には止めた状態が出る。
-      await expect(button).toHaveAccessibleName("送信");
-      await expect(button).toHaveAttribute("data-state", "idle");
-      await expect(button).toBeFocused();
-      await expect(turn.getByTestId("chat-cancelled")).toHaveText(
-        "回答の作成を停止しました。もう一度送ると、新しく回答を作成します。"
-      );
-      // 処理の段階は止めた時点で終わり、「処理の経過」の一覧になる（#1147 / #2096）。
-      await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "cancelled");
-      await expect(turn.getByTestId("chat-progress-current")).toHaveCount(0);
-      await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
-      await expect(composer).toHaveValue("次の質問");
-      expect(await page.getByTestId("chat-composer-region").evaluate((element) => element.getBoundingClientRect().height)).toBe(runningComposerHeight);
-      await page.screenshot({ path: testInfo.outputPath(`chat-stopped-${viewport.name}-${theme}.png`) });
-    });
-  }
+    await button.click();
+    await expect.poll(() => mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeTruthy();
+    // 同じボタンが「送信」に戻り、フォーカスはボタンに残る。会話には止めた状態が出る。
+    await expect(button).toHaveAccessibleName("送信");
+    await expect(button).toHaveAttribute("data-state", "idle");
+    await expect(button).toBeFocused();
+    await expect(turn.getByTestId("chat-cancelled")).toHaveText(
+      "回答の作成を停止しました。もう一度送ると、新しく回答を作成します。"
+    );
+    // 処理の段階は止めた時点で終わり、「処理の経過」の一覧になる（#1147 / #2096）。
+    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "cancelled");
+    await expect(turn.getByTestId("chat-progress-current")).toHaveCount(0);
+    await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
+    await expect(composer).toHaveValue("次の質問");
+    expect(await page.getByTestId("chat-composer-region").evaluate((element) => element.getBoundingClientRect().height)).toBe(runningComposerHeight);
+    await page.screenshot({ path: testInfo.outputPath(`chat-stopped-${viewport.name}.png`) });
+  });
 }
 
 // Issue 865: 入力欄の下へ実行中の補足文を追加せず、状態が変わっても入力領域の高さを保つ。
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`送信要求・回答作成・承認待ち・完了で入力領域の高さが変わらない (${viewport.name}, ${theme})`, async ({ page, mockApi }) => {
-      let createCalls = 0;
-      let releaseCreate!: () => void;
-      const pendingCreate = new Promise<void>((resolve) => { releaseCreate = resolve; });
-      await page.route("**/api/runs", async (route) => {
-        if (route.request().method() !== "POST") return route.fallback();
-        createCalls += 1;
-        await pendingCreate;
-        seedThread(mockApi, { status: "running", goal: "経費の上限は？" });
-        await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: mockApi.state.runs[0] }) });
-      });
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      const composer = page.getByRole("textbox", { name: "質問" });
-      const region = page.getByTestId("chat-composer-region");
-      const button = page.getByTestId("chat-send");
-      await composer.fill("経費の上限は？");
-      const height = await region.evaluate((element) => element.getBoundingClientRect().height);
-      const expectStableComposer = async () => {
-        await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
-        expect(await region.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
-        await expect(composer).toBeInViewport();
-        await expect(button).toBeInViewport();
-      };
-      await composer.press("Enter");
-      await expect(button).toHaveAccessibleName("停止");
-      await expectStableComposer();
-      releaseCreate();
-      const turn = page.getByTestId("chat-turn-run-chat-seed");
-      await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "running");
-      await expectStableComposer();
-      mockApi.state.runs[0].status = "waiting_approval";
-      mockApi.state.runs[0].approvals = [{
-        id: "approval-stable", run_id: "run-chat-seed", step_id: "step-stable",
-        tool_call: { name: "nl2sql__nl2sql_query", arguments: { question: "経費の上限は？" } },
-        status: "pending", reason: "承認が必要です。", created_at: MOCK_NOW,
-      }];
-      await expect(turn.getByRole("button", { name: "承認して実行" })).toBeVisible();
-      await expectStableComposer();
-      await composer.fill("次の質問");
-      await composer.press("Enter");
-      await expect(composer).toHaveValue("次の質問");
-      expect(mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeUndefined();
-      expect(createCalls).toBe(1);
-      // 承認の応答で完了へ進む状態を再現し、承認後の再取得で画面へ反映する。
-      mockApi.state.runs[0].status = "completed";
-      await turn.getByRole("button", { name: "承認して実行" }).click();
-      await expect(button).toHaveAccessibleName("送信");
-      await expectStableComposer();
+  test(`送信要求・回答作成・承認待ち・完了で入力領域の高さが変わらない (${viewport.name})`, async ({ page, mockApi }) => {
+    let createCalls = 0;
+    let releaseCreate!: () => void;
+    const pendingCreate = new Promise<void>((resolve) => { releaseCreate = resolve; });
+    await page.route("**/api/runs", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      createCalls += 1;
+      await pendingCreate;
+      seedThread(mockApi, { status: "running", goal: "経費の上限は？" });
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: mockApi.state.runs[0] }) });
     });
-  }
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    const composer = page.getByRole("textbox", { name: "質問" });
+    const region = page.getByTestId("chat-composer-region");
+    const button = page.getByTestId("chat-send");
+    await composer.fill("経費の上限は？");
+    const height = await region.evaluate((element) => element.getBoundingClientRect().height);
+    const expectStableComposer = async () => {
+      await expect(page.getByTestId("chat-composer-hint")).toHaveCount(0);
+      expect(await region.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
+      await expect(composer).toBeInViewport();
+      await expect(button).toBeInViewport();
+    };
+    await composer.press("Enter");
+    await expect(button).toHaveAccessibleName("停止");
+    await expectStableComposer();
+    releaseCreate();
+    const turn = page.getByTestId("chat-turn-run-chat-seed");
+    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "running");
+    await expectStableComposer();
+    mockApi.state.runs[0].status = "waiting_approval";
+    mockApi.state.runs[0].approvals = [{
+      id: "approval-stable", run_id: "run-chat-seed", step_id: "step-stable",
+      tool_call: { name: "nl2sql__nl2sql_query", arguments: { question: "経費の上限は？" } },
+      status: "pending", reason: "承認が必要です。", created_at: MOCK_NOW,
+    }];
+    await expect(turn.getByRole("button", { name: "承認して実行" })).toBeVisible();
+    await expectStableComposer();
+    await composer.fill("次の質問");
+    await composer.press("Enter");
+    await expect(composer).toHaveValue("次の質問");
+    expect(mockApi.lastRequest("POST", "/api/runs/run-chat-seed/cancel")).toBeUndefined();
+    expect(createCalls).toBe(1);
+    // 承認の応答で完了へ進む状態を再現し、承認後の再取得で画面へ反映する。
+    mockApi.state.runs[0].status = "completed";
+    await turn.getByRole("button", { name: "承認して実行" }).click();
+    await expect(button).toHaveAccessibleName("送信");
+    await expectStableComposer();
+  });
 }
 
 test("送信の要求中に停止を押すと、作られた Run をすぐ止める（#805）", async ({ page, mockApi }) => {
@@ -408,13 +390,7 @@ for (const viewport of VIEWPORTS) {
     await expect(pendingTurn.getByTestId("chat-progress")).toHaveCount(0);
     expect(mockApi.lastRequest("POST", "/api/runs/run-chat-1/cancel")).toBeUndefined();
     await expectNoHorizontalOverflow(page);
-    for (const theme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: theme });
-      await page.evaluate((value) => {
-        document.documentElement.dataset.theme = value;
-      }, theme);
-      await pendingTurn.screenshot({ path: testInfo.outputPath(`chat-failed-${viewport.name}-${theme}.png`) });
-    }
+    await pendingTurn.screenshot({ path: testInfo.outputPath(`chat-failed-${viewport.name}.png`) });
 
     await failure.getByRole("button", { name: "再送信" }).click();
     const conversation = page.getByTestId("chat-conversation");
@@ -682,15 +658,9 @@ for (const viewport of VIEWPORTS) {
     await expect(page.locator("svg.animate-spin:visible")).toHaveCount(1);
     await expectConversationScrolledToEnd(page);
     await expectNoHorizontalOverflow(page);
-    for (const theme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme: theme });
-      await page.evaluate((value) => {
-        document.documentElement.dataset.theme = value;
-      }, theme);
-      await page.getByRole("region", { name: "会話" }).screenshot({
-        path: testInfo.outputPath(`chat-sending-${viewport.name}-${theme}.png`),
-      });
-    }
+    await page.getByRole("region", { name: "会話" }).screenshot({
+      path: testInfo.outputPath(`chat-sending-${viewport.name}.png`),
+    });
 
     // Run ができたら同じ位置の回答に置き換え、質問を二重に出さない。
     release();

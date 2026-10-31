@@ -89,7 +89,6 @@ def _payload(effort: str) -> dict[str, Any]:
             "text_response_path": "/output_text",
             "vision_response_path": "/output_text",
         },
-        "generative_ai": {},
     }
 
 

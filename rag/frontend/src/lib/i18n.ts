@@ -123,17 +123,12 @@ export const ja = {
   "nav.section.improve": "改善・運用",
   "nav.section.operations": "運用設定",
   "nav.section.settings": "システム設定",
-  // 「外観と証明書」は配色テーマと HTTPS の証明書を扱う（#1316）。副題・カードの文言は platform の既定を使う。
+  // 「外観と証明書」は HTTPS の証明書を扱う（#1316。配色テーマの選択は #17 で廃止）。副題・カードの文言は platform の既定を使う。
   "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",
   "nav.settingsChatAttachments": "チャットの添付",
-  "appearance.theme.label": "配色テーマ",
-  "appearance.theme.hint": "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  "appearance.theme.light": "ライト",
-  "appearance.theme.dark": "ダーク",
-  "appearance.theme.system": "自動（OS 設定）",
   "nav.upload": "文書アップロード",
   "nav.upload.sidebar": "文書アップロード",
   "nav.fileList": "文書インデックス",
@@ -1692,7 +1687,7 @@ export const ja = {
   "settings.services.statusLoadingHint": "状態確認中です。",
   "settings.services.statusLoadErrorHint": "状態を取得できませんでした。更新してください。",
   "settings.services.notInstalledHint":
-    "systemd の unit が登録されていません。本番は Terraform の stack で配備を選び、開発は rag/scripts/rag-services.sh install で登録します。",
+    "systemd の unit が登録されていません。本番は配備の props の rag_services.txt に足して再配備し、開発は rag/scripts/rag-services.sh install で登録します。",
   "settings.services.failedHint":
     "起動に失敗しました。ログで原因を確認してから起動し直してください。",
   "settings.services.executionPolicy.defaultAdapter": "既定で使用",
@@ -1888,7 +1883,7 @@ export const ja = {
   "settings.uploadStorage.backend.oci": "OCI Object Storage",
 
   "settings.model.subtitle":
-    "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
+    "LLM・埋め込み・再ランクのモデルと、呼び出しに使う接続（Endpoint URL と API key）を設定します。",
   "settings.model.displayNamePlaceholder": "業務 RAG 標準",
 
   "settings.huggingface.subtitle":
