@@ -290,11 +290,6 @@ def _two_connection_payload() -> dict[str, Any]:
             "api_path": "/responses",
             "vlm_input_mode": "files_api",
         },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
-            "rerank_model": "cohere.rerank-v4.0-fast",
-        },
     }
 
 

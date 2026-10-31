@@ -1433,11 +1433,6 @@ def test_model_settings_save_persists_json_and_env_secret(
             "timeout_seconds": 30.0,
             "max_retries": 1,
         },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
-            "rerank_model": "cohere.rerank-v4.0-fast",
-        },
     }
 
     resp = client.patch("/api/settings/model", json=payload)
@@ -1453,7 +1448,7 @@ def test_model_settings_save_persists_json_and_env_secret(
     assert saved["enterprise_ai"]["default_vision_model_id"] == "enterprise-model"
     assert saved["enterprise_ai"]["default_text_model_id"] == "enterprise-model"
     assert "default_model_id" not in saved["enterprise_ai"]
-    assert saved["generative_ai"]["embedding_dim"] == 1536
+    assert "generative_ai" not in saved
     assert stat.S_IMODE(settings_file.stat().st_mode) == 0o600
     data = resp.json()["data"]
     assert data["settings"]["enterprise_ai"]["connections"][0]["api_key"] == ""
@@ -1499,11 +1494,6 @@ def test_model_settings_test_uses_saved_secret_for_blank_key(
             "vision_response_path": "/output_text",
             "timeout_seconds": 30.0,
             "max_retries": 1,
-        },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
-            "rerank_model": "cohere.rerank-v4.0-fast",
         },
     }
 

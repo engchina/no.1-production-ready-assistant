@@ -115,6 +115,8 @@ describe("followModelChange", () => {
     default_text_model_id: "llm-a",
     default_vision_model_id: "vlm-b",
     default_judge_model_id: "",
+    default_embedding_model_id: "",
+    default_rerank_model_id: "",
   };
 
   it("既定に選んだモデルの ID を書き換えたら追従する（消し切ったときは追従しない）", () => {
@@ -150,6 +152,8 @@ describe("followModelChange", () => {
       default_text_model_id: "",
       default_vision_model_id: "",
       default_judge_model_id: "",
+      default_embedding_model_id: "",
+      default_rerank_model_id: "",
     };
     expect(
       followModelChange(empty, models[0], { ...models[0]!, vision_enabled: true }),
@@ -207,6 +211,8 @@ describe("既定の判定モデル（#3574）", () => {
       default_text_model_id: "llm-c",
       default_vision_model_id: "vlm-b",
       default_judge_model_id: "llm-c",
+      default_embedding_model_id: "",
+      default_rerank_model_id: "",
     });
     const same = { ...judged, default_judge_model_id: JUDGE_SAME_AS_ANSWER };
     expect(
@@ -228,5 +234,53 @@ describe("validateModelIds（#1035。backend の validate_model_ids と同じ規
     ).toEqual({
       3: "モデル ID「llm-a」はすでに登録されています。同じモデルは 1 行にまとめてください。",
     });
+  });
+});
+
+describe("埋め込み / 再ランクの既定のモデル（#45）", () => {
+  const kinds: EnterpriseAiConfiguredModel[] = [
+    { model_id: "llm-a", display_name: "", vision_enabled: true, kind: "text" },
+    { model_id: "emb", display_name: "", vision_enabled: false, kind: "embedding" },
+    { model_id: "rr", display_name: "", vision_enabled: false, kind: "rerank" },
+  ];
+  const valid = {
+    models: kinds,
+    default_text_model_id: "llm-a",
+    default_vision_model_id: "llm-a",
+    default_embedding_model_id: "emb",
+    default_rerank_model_id: "rr",
+  };
+
+  it("種類が合うモデルだけを選択肢・既定にでき、その種類を登録したら必須", () => {
+    expect(validateDefaultModels(valid)).toEqual({});
+    expect(textModelOptions(kinds).map((option) => option.value)).toEqual(["llm-a"]);
+    expect(validateDefaultModels({ ...valid, default_text_model_id: "emb" })).toHaveProperty(
+      "default_text_model_id",
+    );
+    expect(validateDefaultModels({ ...valid, default_embedding_model_id: "rr" })).toEqual({
+      default_embedding_model_id:
+        "「rr」は種類が「埋め込み」の登録モデルにありません。登録モデルから選び直してください。",
+    });
+    expect(validateDefaultModels({ ...valid, default_rerank_model_id: "" })).toEqual({
+      default_rerank_model_id: "既定の再ランクモデルを選択してください。",
+    });
+    // その種類を登録しないときは検証しない（backend の .env の値のまま）。
+    expect(
+      validateDefaultModels({
+        ...valid,
+        models: [kinds[0]!],
+        default_embedding_model_id: "text-embedding-v4",
+        default_rerank_model_id: "",
+      }),
+    ).toEqual({});
+  });
+
+  it("種類を埋め込みにした行は、既定の埋め込みモデルが未選択なら選ぶ", () => {
+    const next = followModelChange(
+      { ...valid, default_embedding_model_id: "" },
+      { model_id: "emb-2", display_name: "", vision_enabled: false, kind: "text" },
+      { model_id: "emb-2", display_name: "", vision_enabled: false, kind: "embedding" },
+    );
+    expect(next.default_embedding_model_id).toBe("emb-2");
   });
 });

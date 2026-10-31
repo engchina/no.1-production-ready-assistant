@@ -37,7 +37,6 @@ import {
 } from "@tanstack/react-query";
 import {
   Cpu,
-  Database,
   ListChecks,
   Plus,
   RefreshCw,
@@ -51,7 +50,6 @@ import {
   useSettingsDraftGuard,
   type DraftGuardMessages,
 } from "../guards/useSettingsDraftGuard";
-import { InputActionField } from "../oci/InputActionField";
 import { useFocusAfterCommit } from "../users-roles/shared";
 import {
   SettingsTestResultPanel,
@@ -84,6 +82,8 @@ import {
   DEFAULT_MODEL_FIELD_ORDER,
   followModelChange,
   judgeModelOptions,
+  kindModelOptions,
+  modelKind,
   textModelOptions,
   validateDefaultModels,
   validateModelIds,
@@ -102,14 +102,15 @@ import {
   ENTERPRISE_AI_MAX_INPUT_TOKENS_MIN,
   ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MAX,
   ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MIN,
+  ENTERPRISE_AI_MODEL_KINDS,
   ENTERPRISE_AI_REASONING_EFFORTS,
   MODEL_SETTINGS_QUERY_KEY,
   type EnterpriseAiConfiguredModel,
   type EnterpriseAiConnectionId,
   type EnterpriseAiConnectionSettings,
+  type EnterpriseAiModelKind,
   type EnterpriseAiModelSettings,
   type EnterpriseAiReasoningEffort,
-  type GenerativeAiModelSettings,
   type ModelSettingsApi,
   type ModelSettingsData,
   type ModelSettingsPayload,
@@ -119,9 +120,8 @@ import {
   type ModelSettingsUpdatePayload,
 } from "./types";
 
-type ModelTestKey = `enterprise:${number}` | "embedding" | "rerank";
-type ModelSaveSection =
-  "enterprise_connection" | "enterprise_models" | "generative_ai";
+type ModelTestKey = `enterprise:${number}`;
+type ModelSaveSection = "enterprise_connection" | "enterprise_models";
 
 export interface ModelSettingsPageProps {
   /** 製品の API 関数（GET / PATCH /api/settings/model、POST /api/settings/model/test）。 */
@@ -143,7 +143,8 @@ export interface ModelSettingsPageProps {
 /**
  * モデル設定（3製品共通。NL2SQL の画面を基準に移設。#103）。PageHeader は製品の route が描く。
  *
- * - 3節（Enterprise AI 接続 / 登録モデル / Generative AI）をそれぞれ保存する。
+ * - 2節（Enterprise AI 接続 / 登録モデル）をそれぞれ保存する。埋め込み / 再ランクのモデルも登録モデルに
+ *   種類（テキスト / 埋め込み / 再ランク）と接続を選んで登録し、既定のモデルで選ぶ（#45。独立したカードは無い）。
  *   画面にない項目（API path・VLM 入力方式・timeout など）は保存済みの値をそのまま送る
  * - Enterprise AI の接続はプライマリ接続とセカンダリ接続（#533）。カードの中の Tabs で切り替えて入力し、
  *   登録モデルの行で使う接続を選ぶ（#542）。セカンダリ接続は「設定」したときだけあり、削除は、
@@ -284,30 +285,11 @@ export function ModelSettingsPage({
     const isDefaultModel =
       key === "default_text_model_id" ||
       key === "default_vision_model_id" ||
-      key === "default_judge_model_id";
+      key === "default_judge_model_id" ||
+      key === "default_embedding_model_id" ||
+      key === "default_rerank_model_id";
     if (isDefaultModel) setShowDefaultErrors(true);
     clearSaveError(isDefaultModel ? "enterprise_models" : "enterprise_connection");
-  };
-
-  const updateGenerative = <K extends keyof GenerativeAiModelSettings>(
-    key: K,
-    value: GenerativeAiModelSettings[K],
-  ) => {
-    setDraft((current) =>
-      current
-        ? {
-            ...current,
-            generative_ai: { ...current.generative_ai, [key]: value },
-          }
-        : current,
-    );
-    setCheckData(baselineData);
-    setTestResults((current) => ({
-      ...current,
-      embedding: undefined,
-      rerank: undefined,
-    }));
-    clearSaveError("generative_ai");
   };
 
   const updateConnection = (
@@ -436,7 +418,9 @@ export function ModelSettingsPage({
         },
       };
     });
-    if (patch.vision_enabled !== undefined) setShowDefaultErrors(true);
+    if (patch.vision_enabled !== undefined || patch.kind !== undefined) {
+      setShowDefaultErrors(true);
+    }
     if (patch.connection_id !== undefined) setShowModelConnectionErrors(true);
     setCheckData(baselineData);
     setTestResults((current) => ({
@@ -459,6 +443,7 @@ export function ModelSettingsPage({
                   model_id: "",
                   display_name: "",
                   vision_enabled: false,
+                  kind: "text",
                   connection_id: PRIMARY_CONNECTION_ID,
                   reasoning_effort: DEFAULT_ENTERPRISE_AI_REASONING_EFFORT,
                   max_input_tokens: DEFAULT_ENTERPRISE_AI_MAX_INPUT_TOKENS,
@@ -729,7 +714,7 @@ export function ModelSettingsPage({
   if (query.isPending || !draft) {
     return (
       <PageBody wide>
-        {/* 読み込み中は経過時間と、3 枚のカード（接続 / 登録モデル / Generative AI）の形の Skeleton
+        {/* 読み込み中は経過時間と、2 枚のカード（接続 / 登録モデル）の形の Skeleton
             （UX 契約 messaging.md §3.6。#1036）。 */}
         <TimedLoadingState
           label={t("settings.model.loading")}
@@ -739,7 +724,6 @@ export function ModelSettingsPage({
         >
           <FormSkeleton fields={3} />
           <FormSkeleton fields={4} />
-          <FormSkeleton fields={3} />
         </TimedLoadingState>
       </PageBody>
     );
@@ -895,125 +879,6 @@ export function ModelSettingsPage({
           </Card>
         </form>
 
-        <form onSubmit={(event) => void handleSubmit(event, "generative_ai")}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database size={16} className="text-accent-fg" aria-hidden />
-                {t("settings.model.genai.title")}
-              </CardTitle>
-              <CardDescription>
-                {t("settings.model.genai.description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {/* 値の長さの段（モデル ID は md、次元数は xs）で FormGrid に並べる（#1891）。テストの結果は、操作した欄の
-                  行のすぐ下にカードの全幅で出す（messaging.md §10。#705）。Embedding の結果を Rerank の欄の下に出さない。 */}
-              <FormGrid>
-                <TestableTextField
-                  id="genai-embedding-model"
-                  label={t("settings.model.genai.embeddingModel")}
-                  value={draft.generative_ai.embedding_model}
-                  placeholder={t("settings.model.placeholder.embeddingModel")}
-                  width="md"
-                  onChange={(value) =>
-                    updateGenerative("embedding_model", value)
-                  }
-                  testing={testingKey === "embedding"}
-                  onTest={() =>
-                    void handleTestModel("embedding", {
-                      target_type: "embedding",
-                      model_id: draft.generative_ai.embedding_model,
-                      vision_enabled: false,
-                    })
-                  }
-                />
-                <NumberField
-                  id="genai-embedding-dim"
-                  label={t("settings.model.genai.embeddingDim")}
-                  value={draft.generative_ai.embedding_dim}
-                  min={1536}
-                  max={1536}
-                  step={1}
-                  readOnly
-                  helper={t("settings.model.genai.embeddingDimHelp")}
-                  onChange={(value) => updateGenerative("embedding_dim", value)}
-                />
-                <TextField
-                  id="genai-embedding-base-url"
-                  label={t("settings.model.genai.embeddingBaseUrl")}
-                  value={draft.generative_ai.embedding_base_url}
-                  placeholder={t("settings.model.placeholder.embeddingBaseUrl")}
-                  helper={t("settings.model.genai.embeddingBaseUrlHelp")}
-                  onValueChange={(value) =>
-                    updateGenerative("embedding_base_url", value)
-                  }
-                  width="full"
-                  className="col-span-full"
-                />
-              </FormGrid>
-              <ModelTestResultPanel
-                result={testResults.embedding}
-                testing={testingKey === "embedding"}
-                model={
-                  draft.generative_ai.embedding_model.trim() ||
-                  t("settings.model.genai.embeddingModel")
-                }
-              />
-              <FormGrid>
-                <TestableTextField
-                  id="genai-rerank-model"
-                  label={t("settings.model.genai.rerankModel")}
-                  value={draft.generative_ai.rerank_model}
-                  placeholder={t("settings.model.placeholder.rerankModel")}
-                  width="md"
-                  onChange={(value) => updateGenerative("rerank_model", value)}
-                  testing={testingKey === "rerank"}
-                  onTest={() =>
-                    void handleTestModel("rerank", {
-                      target_type: "rerank",
-                      model_id: draft.generative_ai.rerank_model,
-                      vision_enabled: false,
-                    })
-                  }
-                />
-                <TextField
-                  id="genai-rerank-base-url"
-                  label={t("settings.model.genai.rerankBaseUrl")}
-                  value={draft.generative_ai.rerank_base_url}
-                  placeholder={t("settings.model.placeholder.rerankBaseUrl")}
-                  helper={t("settings.model.genai.rerankBaseUrlHelp")}
-                  onValueChange={(value) =>
-                    updateGenerative("rerank_base_url", value)
-                  }
-                  width="full"
-                  className="col-span-full"
-                />
-              </FormGrid>
-              <ModelTestResultPanel
-                result={testResults.rerank}
-                testing={testingKey === "rerank"}
-                model={
-                  draft.generative_ai.rerank_model.trim() ||
-                  t("settings.model.genai.rerankModel")
-                }
-              />
-              <ModelFormActions
-                sectionLabel={t("settings.model.genai.title")}
-                canSubmit={canSubmit}
-                saving={activeSaveSection === "generative_ai"}
-                disabled={saveInProgress}
-                errorText={saveErrors.generative_ai}
-                onReload={
-                  conflictSection === "generative_ai"
-                    ? () => void reloadLatest("generative_ai")
-                    : undefined
-                }
-                reloading={reloading}
-              />
-            </CardContent>
-          </Card>
-        </form>
       </fieldset>
     </PageBody>
   );
@@ -1318,7 +1183,8 @@ function ModelCatalogEditor({
           {t("settings.model.enterprise.models")}
           {/* oxlint-disable-next-line design-system/restricted-syntax -- 上のコメントの理由で RequiredBadge を直接置く（#531） */}
           <RequiredBadge
-            label={t("settings.model.requiredInOci")}
+            // OCI に依存しない構成（DeepSeek・百煉など）でも必須なので「必須」（#45）。
+            label={t("settings.model.required")}
             className="ml-2 align-middle"
           />
         </span>
@@ -1348,6 +1214,7 @@ function ModelCatalogEditor({
         >
           <span>{t("settings.model.enterprise.modelId")}</span>
           <span>{t("settings.model.enterprise.displayName")}</span>
+          <span>{t("settings.model.enterprise.kind")}</span>
           <span>{t("settings.model.enterprise.connection")}</span>
           <span>{t("settings.model.enterprise.reasoningEffort")}</span>
           <span>{t("settings.model.enterprise.maxInputTokens")}</span>
@@ -1360,9 +1227,9 @@ function ModelCatalogEditor({
           const modelNumber = index + 1;
           const trimmedModelId = model.model_id.trim();
           const testKey: ModelTestKey = `enterprise:${index}`;
-          const targetType: ModelSettingsTestTargetType = model.vision_enabled
-            ? "enterprise_vision"
-            : "enterprise_text";
+          const kind = modelKind(model);
+          const isText = kind === "text";
+          const targetType = modelTestTargetType(model);
           return (
             <div
               key={index}
@@ -1390,6 +1257,24 @@ function ModelCatalogEditor({
                   onModelChange(index, { display_name: value })
                 }
               />
+              {/* 種類（#45）。埋め込み / 再ランクのモデルも同じ一覧に、接続を選んで登録する。 */}
+              <SelectField
+                id={modelKindFieldId(index)}
+                label={t("settings.model.enterprise.kindOfModel", {
+                  number: modelNumber,
+                })}
+                value={kind}
+                options={MODEL_KIND_OPTIONS}
+                width="sm"
+                onValueChange={(value) =>
+                  onModelChange(index, {
+                    kind: value,
+                    // 画像対応はテキストのモデルだけの属性（backend も false にする）。
+                    ...(value === "text" ? {} : { vision_enabled: false }),
+                  })
+                }
+                className="min-w-0 max-2xl:[&>label]:text-xs max-2xl:[&>label]:text-fg-muted 2xl:[&>label]:sr-only"
+              />
               <SelectField
                 id={modelConnectionFieldId(index)}
                 // 行の番号は接続の名前と紛れないよう「モデル N の接続」と読ませる。
@@ -1407,6 +1292,8 @@ function ModelCatalogEditor({
                 // ラベルは同じ行の他の欄（CompactTextInput）と同じ小さい文字にそろえる。
                 className="min-w-0 max-2xl:[&>label]:text-xs max-2xl:[&>label]:text-fg-muted 2xl:[&>label]:sr-only"
               />
+              {/* 推論の量・入力と出力の上限・画像入力はテキストのモデル（LLM）だけの設定（#45）。
+                  埋め込み / 再ランクの行は無効表示にする（列はそろえたまま。値は既定のまま送る）。 */}
               <SelectField
                 id={modelReasoningEffortFieldId(index)}
                 label={t("settings.model.enterprise.reasoningEffortOfModel", {
@@ -1417,6 +1304,7 @@ function ModelCatalogEditor({
                 }
                 options={REASONING_EFFORT_OPTIONS}
                 width="sm"
+                disabled={!isText}
                 describedBy={REASONING_EFFORT_HELP_ID}
                 onValueChange={(value) =>
                   onModelChange(index, { reasoning_effort: value })
@@ -1436,6 +1324,7 @@ function ModelCatalogEditor({
                 step={1}
                 value={maxInputTokensInputValue(model)}
                 width="xs"
+                disabled={!isText}
                 aria-describedby={MAX_INPUT_TOKENS_HELP_ID}
                 error={maxInputTokensErrors[index]}
                 onValueChange={(next) =>
@@ -1461,6 +1350,7 @@ function ModelCatalogEditor({
                 step={1}
                 value={maxOutputTokensInputValue(model)}
                 width="xs"
+                disabled={!isText}
                 aria-describedby={MAX_OUTPUT_TOKENS_HELP_ID}
                 error={maxOutputTokensErrors[index]}
                 onValueChange={(next) =>
@@ -1479,6 +1369,7 @@ function ModelCatalogEditor({
                 </span>
                 <Switch
                   checked={model.vision_enabled}
+                  disabled={!isText}
                   aria-label={`${t("settings.model.enterprise.vision")} ${modelNumber}`}
                   onCheckedChange={(checked) =>
                     onModelChange(index, { vision_enabled: checked })
@@ -1518,7 +1409,7 @@ function ModelCatalogEditor({
                 result={testResults[testKey]}
                 testing={testingKey === testKey}
                 model={trimmedModelId || `${t("settings.model.enterprise.modelId")} ${modelNumber}`}
-                className="md:col-span-2 2xl:col-span-9"
+                className="md:col-span-2 2xl:col-span-10"
               />
             </div>
           );
@@ -1651,21 +1542,54 @@ const REASONING_EFFORT_OPTIONS: readonly SelectFieldOption<EnterpriseAiReasoning
   }));
 
 /**
- * 登録モデルの一覧の列（モデル ID / 表示名 / 接続 / 推論の量 / 入力の上限 / 画像入力（Vision）に対応 / テスト /
- * 削除）。8 列はサイドバーを引いた xl（1280px）の本文幅ではモデル ID・接続が読めないほど狭いため、2xl（1536px）から
+ * 登録モデルの一覧の列（モデル ID / 表示名 / 種類（#45）/ 接続 / 推論の量 / 入力の上限 / 出力の上限 /
+ * 画像入力（Vision）に対応 / テスト / 削除）。8 列はサイドバーを引いた xl（1280px）の本文幅ではモデル ID・接続が読めないほど狭いため、2xl（1536px）から
  * 表の形にし、md〜2xl は 1 行のモデルの欄を 2 列に並べる（#533 / #1425 / #1437。7 列の #1425 までは xl から表）。
  * 推論の量は「none（送らない）」が読める固定の幅、入力の上限は 7 桁が読める固定の幅にし、残りをモデル ID・表示名・
  * 接続に回す。
  */
 const CATALOG_COLUMNS =
-  "2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_13.5rem_8.5rem_8.5rem_6.5rem_7rem_3.25rem]";
+  "2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_9.5rem_minmax(0,1fr)_13.5rem_8.5rem_8.5rem_6.5rem_7rem_3.25rem]";
+
+/** 登録モデルの行の「種類」の選択欄の id（#45）。 */
+function modelKindFieldId(index: number): string {
+  return `enterprise-model-kind-${index}`;
+}
+
+const MODEL_KIND_LABEL_KEYS = {
+  text: "settings.model.enterprise.kind.text",
+  embedding: "settings.model.enterprise.kind.embedding",
+  rerank: "settings.model.enterprise.kind.rerank",
+} as const satisfies Record<EnterpriseAiModelKind, Parameters<typeof t>[0]>;
+
+/** 種類の選択肢（#45。テキスト（LLM）/ 埋め込み / 再ランク）。 */
+const MODEL_KIND_OPTIONS: readonly SelectFieldOption<EnterpriseAiModelKind>[] =
+  ENTERPRISE_AI_MODEL_KINDS.map((kind) => ({
+    value: kind,
+    label: t(MODEL_KIND_LABEL_KEYS[kind]),
+  }));
+
+/**
+ * 登録モデルの行の「テスト」の対象（#45）。テキストは画像対応ならチャットの画像の呼び出し、それ以外は
+ * テキストの呼び出し。埋め込みは `/embeddings`（次元 1536 の確認）、再ランクは `/reranks`（並び順とスコア）。
+ */
+function modelTestTargetType(
+  model: EnterpriseAiConfiguredModel,
+): ModelSettingsTestTargetType {
+  const kind = modelKind(model);
+  if (kind === "embedding" || kind === "rerank") return kind;
+  return model.vision_enabled ? "enterprise_vision" : "enterprise_text";
+}
+
 
 /**
  * 既定のモデル（#499）。登録モデルの一覧の下に置き、登録モデルの節と一緒に保存する。
- * 並びはテキスト → Vision → 判定（desktop の 2 列でも 375px の縦積みでも同じ順。#566・#3574）。
+ * 並びはテキスト → Vision → 埋め込み → 再ランク → 判定（desktop の 2 列では 1 行目がテキスト・Vision、
+ * 2 行目が埋め込み・再ランク、3 行目が判定。375px の縦積みでも同じ順。#566・#3574・#45）。
  * - 既定のテキストモデル: 必須。選択肢は登録モデルすべて
  * - 既定の Vision モデル: 必須。選択肢は画像入力（Vision）に対応した登録モデルだけ
  * - 既定の判定モデル: 任意。先頭が既定の「既定のテキストモデル」（空）、次が「回答と同じモデル」、続けて登録モデルすべて
+ * - 既定の埋め込み / 再ランクモデル: 種類 embedding / rerank の登録モデルだけ。その種類を登録したら必須（#45）
  * 一覧から消えた・Vision 対応でなくなったモデルが選ばれたままなら、その ID を出したままエラーにする。
  */
 function DefaultModelFields({
@@ -1678,6 +1602,8 @@ function DefaultModelFields({
   onChange: (field: DefaultModelField, value: string) => void;
 }) {
   const headingId = "enterprise-default-models-title";
+  const embeddingOptions = kindModelOptions(enterprise.models, "embedding");
+  const rerankOptions = kindModelOptions(enterprise.models, "rerank");
   return (
     <section
       aria-labelledby={headingId}
@@ -1715,6 +1641,40 @@ function DefaultModelFields({
           width="lg"
           error={errors.default_vision_model_id}
           onValueChange={(value) => onChange("default_vision_model_id", value)}
+        />
+        {/* 埋め込み / 再ランク（#45）。テキスト / 画像対応の次の行に並べる。選択肢は種類が合う登録モデルだけで、
+            その種類を登録したら必須。 */}
+        <SelectField
+          id={DEFAULT_MODEL_FIELD_IDS.default_embedding_model_id}
+          label={t("settings.model.defaults.embedding")}
+          required={embeddingOptions.length > 0}
+          value={enterprise.default_embedding_model_id ?? ""}
+          options={embeddingOptions}
+          placeholder={t("settings.model.defaults.placeholder")}
+          helper={t(
+            embeddingOptions.length > 0
+              ? "settings.model.defaults.embeddingHelp"
+              : "settings.model.defaults.embeddingEmpty",
+          )}
+          width="lg"
+          error={errors.default_embedding_model_id}
+          onValueChange={(value) => onChange("default_embedding_model_id", value)}
+        />
+        <SelectField
+          id={DEFAULT_MODEL_FIELD_IDS.default_rerank_model_id}
+          label={t("settings.model.defaults.rerank")}
+          required={rerankOptions.length > 0}
+          value={enterprise.default_rerank_model_id ?? ""}
+          options={rerankOptions}
+          placeholder={t("settings.model.defaults.placeholder")}
+          helper={t(
+            rerankOptions.length > 0
+              ? "settings.model.defaults.rerankHelp"
+              : "settings.model.defaults.rerankEmpty",
+          )}
+          width="lg"
+          error={errors.default_rerank_model_id}
+          onValueChange={(value) => onChange("default_rerank_model_id", value)}
         />
         <SelectField
           id={DEFAULT_MODEL_FIELD_IDS.default_judge_model_id}
@@ -1761,55 +1721,6 @@ function CompactTextInput({
       // 同じ行の選択欄（接続）と同じ小さい文字にする（#631 でネイティブの input から置き換えた）。
       className="min-w-0 max-2xl:[&>label]:text-xs max-2xl:[&>label]:text-fg-muted 2xl:[&>label]:sr-only"
     />
-  );
-}
-
-function TestableTextField({
-  id,
-  label,
-  value,
-  placeholder,
-  helper,
-  width,
-  className,
-  testing,
-  onChange,
-  onTest,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  placeholder?: string;
-  helper?: string;
-  width?: FieldWidth;
-  className?: string;
-  testing: boolean;
-  onChange: (value: string) => void;
-  onTest: () => void;
-}) {
-  // 結果はこの欄（grid の 1 列）の中ではなく、grid の下に全幅で出す（messaging.md §10。#705）。
-  return (
-    <div className={cn("space-y-1.5", className)}>
-      <InputActionField
-        id={id}
-        label={label}
-        value={value}
-        placeholder={placeholder}
-        helper={helper}
-        width={width}
-        onChange={onChange}
-        action={{
-          label: t("settings.model.test.action"),
-          ariaLabel: t("settings.model.test.aria", {
-            model: value.trim() || label,
-          }),
-          icon: TestTube2,
-          loading: testing,
-          disabled: !value.trim(),
-          onClick: onTest,
-        }}
-      />
-    </div>
   );
 }
 
@@ -1886,51 +1797,6 @@ function ModelTestResultPanel({
   );
 }
 
-function NumberField({
-  id,
-  label,
-  value,
-  min,
-  max,
-  step,
-  helper,
-  readOnly,
-  width = "xs",
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  helper?: string;
-  readOnly?: boolean;
-  /** 幅（既定 xs。数値の欄。#1891）。 */
-  width?: FieldWidth;
-  onChange: (value: number) => void;
-}) {
-  return (
-    // 読み取り専用の固定値。「固定」は必須と同じタグで出さず、補足（helper）で伝える（#531）。
-    // 見た目・高さは TextField のまま（read-only は地が沈む。#613）。#631 でネイティブの input から置き換えた。
-    <TextField
-      id={id}
-      label={label}
-      type="number"
-      inputMode="decimal"
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      readOnly={readOnly}
-      helper={helper}
-      width={width}
-      onValueChange={(next) => onChange(Number(next))}
-      inputClassName={cn("tnum", readOnly && "text-fg-muted")}
-    />
-  );
-}
-
 /** 保存の競合（409）か。製品の ApiError はどれも HTTP の状態を `status` に持つ。 */
 function isConflictError(error: unknown): boolean {
   return (
@@ -1977,7 +1843,6 @@ function cloneConnections(
 const MODEL_SAVE_SUCCESS_KEYS = {
   enterprise_connection: "settings.model.enterprise.saved",
   enterprise_models: "settings.model.enterprise.modelsSaved",
-  generative_ai: "settings.model.genai.saved",
 } as const satisfies Record<ModelSaveSection, Parameters<typeof t>[0]>;
 
 export function buildSectionSavePayload(
@@ -2004,8 +1869,10 @@ export function buildSectionSavePayload(
       draft.enterprise_ai.default_vision_model_id;
     payload.enterprise_ai.default_judge_model_id =
       draft.enterprise_ai.default_judge_model_id ?? "";
-  } else {
-    payload.generative_ai = { ...draft.generative_ai };
+    payload.enterprise_ai.default_embedding_model_id =
+      draft.enterprise_ai.default_embedding_model_id ?? "";
+    payload.enterprise_ai.default_rerank_model_id =
+      draft.enterprise_ai.default_rerank_model_id ?? "";
   }
   return payload;
 }
@@ -2025,25 +1892,15 @@ function mergeSavedSectionIntoDraft(
         default_text_model_id: draft.enterprise_ai.default_text_model_id,
         default_vision_model_id: draft.enterprise_ai.default_vision_model_id,
         default_judge_model_id: draft.enterprise_ai.default_judge_model_id,
+        default_embedding_model_id: draft.enterprise_ai.default_embedding_model_id,
+        default_rerank_model_id: draft.enterprise_ai.default_rerank_model_id,
       },
-      generative_ai: { ...draft.generative_ai },
-    };
-  }
-  if (section === "enterprise_models") {
-    return {
-      enterprise_ai: {
-        ...saved.enterprise_ai,
-        connections: cloneConnections(draft.enterprise_ai.connections),
-      },
-      generative_ai: { ...draft.generative_ai },
     };
   }
   return {
     enterprise_ai: {
-      ...draft.enterprise_ai,
+      ...saved.enterprise_ai,
       connections: cloneConnections(draft.enterprise_ai.connections),
-      models: draft.enterprise_ai.models.map((model) => ({ ...model })),
     },
-    generative_ai: { ...saved.generative_ai },
   };
 }

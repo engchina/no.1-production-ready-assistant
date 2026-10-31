@@ -736,7 +736,7 @@ async def test_rerank_failure_does_not_show_the_rerank_model(
 
     monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
     settings = Settings(
-        embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
         rag_query_strategy="simple_retrieval",
         rag_answer_flow="standard_rag",
         rag_rerank_enabled=True,
@@ -764,6 +764,6 @@ async def test_rerank_failure_does_not_show_the_rerank_model(
 
 def test_unconfigured_rerank_does_not_show_the_rerank_model() -> None:
     """Base URL が無いと rag_engine は rerank しないので、models.rerank にモデル名を出さない。"""
-    engine = _engine(FakeOracle(), embedding_base_url="", rag_rerank_enabled=True)
+    engine = _engine(FakeOracle(), oci_enterprise_ai_endpoint="", rag_rerank_enabled=True)
 
     assert engine._models_used()["rerank"] == ""

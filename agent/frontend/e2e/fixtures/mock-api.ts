@@ -2877,7 +2877,6 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
           ...state.modelSettings,
           settings: {
             enterprise_ai: { ...enterpriseAi, connections },
-            generative_ai: body.generative_ai,
           },
         };
         return state.modelSettings;

@@ -1130,6 +1130,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
             "model_id": "enterprise-llm",
             "display_name": "enterprise-llm",
             "vision_enabled": False,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1139,6 +1140,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
             "model_id": "enterprise-vlm",
             "display_name": "enterprise-vlm",
             "vision_enabled": True,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1153,7 +1155,8 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     assert body["settings"]["enterprise_ai"]["vision_payload_template"] == VLM_TEMPLATE
     assert body["settings"]["enterprise_ai"]["text_response_path"] == "/data/text"
     assert body["settings"]["enterprise_ai"]["vision_response_path"] == "/data/document"
-    assert body["settings"]["generative_ai"]["embedding_dim"] == 1536
+    assert "generative_ai" not in body["settings"]
+    assert body["embedding_dim"] == settings.oci_genai_embedding_dim
     assert "sk-runtime-secret" not in resp.text
 
 
@@ -1206,7 +1209,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
     assert stat.S_IMODE(settings_file.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(settings_file.stat().st_mode) == 0o600
     persisted = json.loads(settings_file.read_text(encoding="utf-8"))
-    assert persisted["version"] == 6
+    assert persisted["version"] == 7
     # API key は JSON ではなく共通 .env に保存する（#103 / #211）。
     assert "api_key" not in persisted["enterprise_ai"]
     assert _saved_enterprise_ai_api_key(settings) == "sk-update-secret"
@@ -1215,6 +1218,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
             "model_id": "enterprise-llm",
             "display_name": "標準 LLM",
             "vision_enabled": False,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1224,6 +1228,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
             "model_id": "enterprise-vlm",
             "display_name": "Vision LLM",
             "vision_enabled": True,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1236,7 +1241,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
     assert persisted["enterprise_ai"]["vlm_input_mode"] == "files_api"
     # 共通の LLM / VLM の出力の上限は書かない（#1719。モデルごとの max_output_tokens）。
     assert not [key for key in persisted["enterprise_ai"] if key.endswith("_max_output_tokens")]
-    assert persisted["generative_ai"]["embedding_dim"] == 1536
+    assert "generative_ai" not in persisted
     # 文書解析の設定は共有の model-settings.json に書かない（#1701）。
     assert "parser_adapters" not in persisted
     assert "sk-update-secret" not in resp.text
@@ -1275,11 +1280,6 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
                     "vision_response_path": "/payload/document",
                     "timeout_seconds": 42,
                     "max_retries": 1,
-                },
-                "generative_ai": {
-                    "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
-                    "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             }
         ),
@@ -1427,11 +1427,14 @@ def test_model_settings_test_embedding_uses_candidate_model(
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
             assert texts == ["モデル接続テスト"]
             assert input_type == "SEARCH_QUERY"
-            return [[0.0] * 1536]
+            return [[0.0] * get_settings().oci_genai_embedding_dim]
 
     monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
     payload = _payload()
-    payload["generative_ai"]["embedding_model"] = "cohere.embed-custom"
+    payload["enterprise_ai"]["models"].append(
+        {"model_id": "cohere.embed-custom", "display_name": "", "kind": "embedding"}
+    )
+    payload["enterprise_ai"]["default_embedding_model_id"] = "cohere.embed-custom"
 
     resp = client.post(
         "/api/settings/model/test",
@@ -1446,7 +1449,7 @@ def test_model_settings_test_embedding_uses_candidate_model(
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["status"] == "success"
-    assert body["details"]["vector_dim"] == 1536
+    assert body["details"]["vector_dim"] == get_settings().oci_genai_embedding_dim
     assert observed_settings[0].oci_genai_embedding_model == "cohere.embed-custom"
 
 
@@ -1565,9 +1568,13 @@ def test_model_settings_clears_existing_api_key(monkeypatch: MonkeyPatch) -> Non
     assert "sk-existing-secret" not in resp.text
 
 
-def test_model_settings_rejects_non_1536_embedding_dim() -> None:
+def test_model_settings_rejects_default_embedding_of_other_kind() -> None:
+    """既定の埋め込みモデルは、種類が embedding の登録モデルに限る（#45）。"""
     payload = _payload()
-    payload["generative_ai"]["embedding_dim"] = 1024
+    payload["enterprise_ai"]["models"].append(
+        {"model_id": "text-embedding-v4", "display_name": "", "kind": "embedding"}
+    )
+    payload["enterprise_ai"]["default_embedding_model_id"] = "enterprise-llm"
 
     resp = client.patch("/api/settings/model", json=payload)
 
@@ -3005,11 +3012,6 @@ def _payload() -> dict[str, Any]:
             "timeout_seconds": 60.0,
             "max_retries": 2,
         },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
-            "rerank_model": "cohere.rerank-v4.0-fast",
-        },
     }
 
 
@@ -3462,8 +3464,8 @@ def test_model_settings_rerank_probe_has_explicit_purpose(monkeypatch: MonkeyPat
             self, query: str, documents: list[str], *, top_n: int
         ) -> list[tuple[int, float]]:
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
-            assert query and documents and top_n == 1
-            return [(0, 0.9)]
+            assert query and len(documents) == 2 and top_n == 2
+            return [(0, 0.9), (1, 0.1)]
 
     monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
     response = asyncio.run(
@@ -3474,7 +3476,7 @@ def test_model_settings_rerank_probe_has_explicit_purpose(monkeypatch: MonkeyPat
             ),
         )
     )
-    assert response == {"ranked_count": 1, "top_score": 0.9}
+    assert response == {"ranked_count": 2, "ranked_order": "文書 1 → 文書 2", "top_score": 0.9}
     assert model_purpose_attributes() == {}
 
 

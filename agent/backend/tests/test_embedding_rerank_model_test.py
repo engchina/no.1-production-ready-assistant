@@ -1,7 +1,9 @@
-"""設定画面の埋め込み / 再ランクのモデルのテストが OpenAI 互換の HTTP を呼ぶ（#8）。
+"""設定画面の埋め込み / 再ランクのモデルのテストが OpenAI 互換の HTTP を呼ぶ（#8 / #45）。
 
-`_post_openai_compatible` を fake に差し替え、URL・body（`dimensions=1536`）・次元の検証を確かめる。
-外部 API へは接続しない。
+`_post_openai_compatible` を fake に差し替え、URL・body（`dimensions` = 設定の次元）・API key・
+次元の検証を確かめる。埋め込み / 再ランクのモデルは登録モデル（種類 embedding / rerank）で、
+そのモデルの接続（ここではセカンダリ接続 = 百煉）の Endpoint URL と key で呼ぶ。外部 API へは
+接続しない。
 """
 
 from __future__ import annotations
@@ -21,30 +23,34 @@ from pr_system_settings.model_test_input import (
 import app.features.agent.router as agent_router
 from app.settings import Settings
 
-ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+BAILIAN = "https://llm-xxxx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+# 埋め込みの次元は製品の設定（Oracle の VECTOR 列に合わせた値）から作る（直書きしない）。
+DIM = Settings(_env_file=None).oci_genai_embedding_dim
 
 
-def _request(target: str, model_id: str, **generative: str) -> ModelSettingsTestRequest:
+def _request(
+    target: str, model_id: str, *, endpoint: str = BAILIAN, connection: str = "secondary"
+) -> ModelSettingsTestRequest:
     payload = {
         "enterprise_ai": {
             "connections": [
                 {
                     "connection_id": "primary",
-                    "endpoint": ENDPOINT,
-                    "project_ocid": "",
-                    "api_key": "sk-test",
-                }
+                    "endpoint": "https://api.deepseek.com",
+                    "api_key": "sk-deepseek",
+                },
+                {"connection_id": "secondary", "endpoint": endpoint, "api_key": "sk-aliyun"},
             ],
-            "models": [{"model_id": "text-a"}],
-            "default_text_model_id": "text-a",
+            "models": [
+                {"model_id": "deepseek-flash"},
+                {"model_id": "text-embedding-v4", "kind": "embedding", "connection_id": connection},
+                {"model_id": "qwen3-rerank", "kind": "rerank", "connection_id": connection},
+            ],
+            "default_text_model_id": "deepseek-flash",
             "default_vision_model_id": "",
+            "default_embedding_model_id": "text-embedding-v4",
+            "default_rerank_model_id": "qwen3-rerank",
             "text_response_path": "/output_text",
-        },
-        "generative_ai": {
-            "embedding_model": "text-embedding-v4",
-            "embedding_dim": 1536,
-            "rerank_model": "qwen3-rerank",
-            **generative,
         },
     }
     return ModelSettingsTestRequest.model_validate(
@@ -69,77 +75,94 @@ def _run(
     return calls, details
 
 
-def test_embedding_test_sends_dimensions(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedding_test_uses_model_connection_and_sends_dimensions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls, details = _run(
         monkeypatch,
         _request("embedding", "text-embedding-v4"),
-        {"data": [{"index": 0, "embedding": [0.1] * 1536}]},
+        {"data": [{"index": 0, "embedding": [0.1] * DIM}]},
     )
 
     assert calls == [
         (
-            f"{ENDPOINT}/embeddings",
+            f"{BAILIAN}/embeddings",
             {
                 "model": "text-embedding-v4",
                 "input": [MODEL_TEST_EMBEDDING_INPUT],
-                "dimensions": 1536,
+                "dimensions": DIM,
             },
-            "sk-test",
+            "sk-aliyun",
         )
     ]
-    assert details == {"vector_dim": 1536, "input_count": 1}
+    assert details == {"vector_dim": DIM, "input_count": 1}
 
 
 def test_embedding_test_rejects_wrong_dimension(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(
-        ValueError, match=r"embedding の次元数が不正です。expected=1536, actual=1024"
+        ValueError, match=rf"埋め込みの次元が {DIM} ではありません（返った次元: {DIM - 1}）"
     ):
         _run(
             monkeypatch,
             _request("embedding", "text-embedding-v4"),
-            {"data": [{"index": 0, "embedding": [0.1] * 1024}]},
+            {"data": [{"index": 0, "embedding": [0.1] * (DIM - 1)}]},
         )
 
 
-def test_embedding_test_uses_embedding_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedding_on_primary_connection_uses_primary_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls, _ = _run(
         monkeypatch,
-        _request("embedding", "text-embedding-v4", embedding_base_url="https://e.example.test/v1"),
-        {"data": [{"index": 0, "embedding": [0.1] * 1536}]},
+        _request("embedding", "text-embedding-v4", connection="primary"),
+        {"data": [{"index": 0, "embedding": [0.1] * DIM}]},
     )
 
-    assert calls[0][0] == "https://e.example.test/v1/embeddings"
+    assert calls[0][0] == "https://api.deepseek.com/embeddings"
+    assert calls[0][2] == "sk-deepseek"
 
 
-def test_rerank_test_rewrites_compatible_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rerank_test_rewrites_compatible_mode_and_returns_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls, details = _run(
         monkeypatch,
         _request("rerank", "qwen3-rerank"),
-        {"results": [{"index": 1, "relevance_score": 0.8}]},
+        {
+            "results": [
+                {"index": 0, "relevance_score": 0.8},
+                {"index": 1, "relevance_score": 0.1},
+            ]
+        },
     )
 
     assert calls == [
         (
-            "https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
+            BAILIAN.replace("/compatible-mode/", "/compatible-api/") + "/reranks",
             {
                 "model": "qwen3-rerank",
                 "query": MODEL_TEST_RERANK_QUERY,
                 "documents": list(MODEL_TEST_RERANK_DOCUMENTS),
-                "top_n": 1,
+                "top_n": 2,
             },
-            "sk-test",
+            "sk-aliyun",
         )
     ]
-    assert details == {"ranked_count": 1, "top_score": 0.8}
+    assert details == {"ranked_count": 2, "ranked_order": "文書 1 → 文書 2", "top_score": 0.8}
 
 
-def test_rerank_test_uses_rerank_base_url_as_is(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rerank_endpoint_without_compatible_mode_is_used_as_is(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls, _ = _run(
         monkeypatch,
-        _request(
-            "rerank", "qwen3-rerank", rerank_base_url="https://r.example.test/compatible-mode/v1"
-        ),
-        {"results": []},
+        _request("rerank", "qwen3-rerank", endpoint="https://r.example.test/v1"),
+        {"results": [{"index": 1, "relevance_score": 0.5}]},
     )
 
-    assert calls[0][0] == "https://r.example.test/compatible-mode/v1/reranks"
+    assert calls[0][0] == "https://r.example.test/v1/reranks"
+
+
+def test_rerank_test_requires_index_and_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="index と relevance_score"):
+        _run(monkeypatch, _request("rerank", "qwen3-rerank"), {"results": []})

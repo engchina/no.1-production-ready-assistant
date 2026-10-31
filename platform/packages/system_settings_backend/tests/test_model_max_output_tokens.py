@@ -158,7 +158,7 @@ def test_limit_is_saved_per_model_and_old_common_keys_are_dropped(tmp_path: Path
     assert "llm_max_output_tokens" not in enterprise
     assert "vlm_max_output_tokens" not in enterprise
     document = json.loads((tmp_path / "model-settings.json").read_text(encoding="utf-8"))
-    assert document["version"] == 6
+    assert document["version"] == 7
     assert "llm_max_output_tokens" not in document["enterprise_ai"]
     assert [model["max_output_tokens"] for model in document["enterprise_ai"]["models"]] == [
         65_536,

@@ -27,13 +27,6 @@ function createModelSettings() {
         timeout_seconds: 60,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
-      },
     },
     checks: { enterprise_ai: "ok", generative_ai: "ok", embedding_dim: "ok" },
     source: "runtime",

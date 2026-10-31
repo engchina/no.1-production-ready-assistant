@@ -24,6 +24,7 @@ const baseline: ModelSettingsPayload = {
         model_id: "saved-llm",
         display_name: "Saved",
         vision_enabled: false,
+        kind: "text",
         connection_id: "primary",
         reasoning_effort: "medium",
         max_input_tokens: 128000,
@@ -43,7 +44,6 @@ const baseline: ModelSettingsPayload = {
     llm_max_output_tokens: 1600,
     vlm_max_output_tokens: 64000,
   },
-  generative_ai: { embedding_model: "embed", embedding_dim: 1536, rerank_model: "rerank" },
 };
 
 describe("buildSectionSavePayload", () => {
@@ -67,8 +67,9 @@ describe("buildSectionSavePayload", () => {
       ],
       default_text_model_id: "",
       default_vision_model_id: "draft-llm",
+      default_embedding_model_id: "draft-embed",
+      default_rerank_model_id: "draft-rerank",
     },
-    generative_ai: { ...baseline.generative_ai, rerank_model: "draft-rerank" },
   };
 
   it("保存する節の入力だけを送り、他の節と画面にない項目は保存済みの値を保つ", () => {
@@ -76,7 +77,7 @@ describe("buildSectionSavePayload", () => {
     expect(connection.enterprise_ai.connections[0]?.endpoint).toBe("https://draft.example");
     expect(connection.enterprise_ai.connections[0]?.api_key).toBe("sk-draft");
     expect(connection.enterprise_ai.models).toEqual(baseline.enterprise_ai.models);
-    expect(connection.generative_ai.rerank_model).toBe("rerank");
+    expect(connection.enterprise_ai.default_rerank_model_id).toBe("");
     expect(connection.enterprise_ai.api_path).toBe("/custom");
     expect(connection.enterprise_ai.vlm_input_mode).toBe("files_api");
 
@@ -85,10 +86,10 @@ describe("buildSectionSavePayload", () => {
     expect(models.enterprise_ai.default_text_model_id).toBe("");
     expect(models.enterprise_ai.default_vision_model_id).toBe("draft-llm");
     expect(connection.enterprise_ai.default_vision_model_id).toBe("");
-
-    const genai = buildSectionSavePayload(baseline, draft, "generative_ai");
-    expect(genai.generative_ai.rerank_model).toBe("draft-rerank");
-    expect(genai.enterprise_ai.connections[0]?.api_key).toBe("");
+    // 既定の埋め込み / 再ランクのモデル（#45）は登録モデルの節で送る。
+    expect(models.enterprise_ai.default_embedding_model_id).toBe("draft-embed");
+    expect(models.enterprise_ai.default_rerank_model_id).toBe("draft-rerank");
+    expect(models).not.toHaveProperty("generative_ai");
   });
 });
 

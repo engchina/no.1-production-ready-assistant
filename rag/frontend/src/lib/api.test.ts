@@ -583,13 +583,6 @@ describe("api.request envelope", () => {
         timeout_seconds: 60,
         max_retries: 2,
       },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
-      },
     };
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({
@@ -643,13 +636,6 @@ describe("api.request envelope", () => {
           vision_response_path: "",
           timeout_seconds: 60,
           max_retries: 2,
-        },
-        generative_ai: {
-          embedding_model: "text-embedding-v4",
-          embedding_dim: 1536,
-          embedding_base_url: "",
-          rerank_model: "qwen3-rerank",
-          rerank_base_url: "",
         },
       },
       target_type: "enterprise_text" as const,
