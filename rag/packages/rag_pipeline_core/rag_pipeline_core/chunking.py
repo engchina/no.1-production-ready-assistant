@@ -1104,8 +1104,8 @@ def _raw_text_with_table_vision(extraction: StructuredExtraction) -> str:
     要素の直前の要素の後ろに補足だけを入れる。Docling 以外は Vision の段が表の本文と raw_text へ
     補足を足しているので、raw_text に説明文がある表は入れない。保存する抽出結果は変えない。
     """
-    # 構造化レコードの JSONL を読んだ抽出の境界のマーカー(#2457)は、raw_text を分割する方法の chunk に
-    # 残さない(エスケープを戻した原文を記録ごとに改行でつなぐ)。
+    # 構造化レコードの JSONL を読んだ抽出の境界のマーカー(#2457)は、raw_text を分割する方法の
+    # chunk に残さない(エスケープを戻した原文を記録ごとに改行でつなぐ)。
     raw_text = record_boundary_plain_text(extraction)
     if not any(_pending_table_vision_supplement(element) for element in extraction.elements):
         return raw_text
