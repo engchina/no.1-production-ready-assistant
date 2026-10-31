@@ -233,9 +233,6 @@ def test_answer_after_the_retry_with_a_tool_is_kept(
     "metadata",
     [
         pytest.param({}, id="chat"),
-        pytest.param(
-            {"automation_id": "auto_1835", "automation_trigger": "schedule"}, id="automation"
-        ),
         pytest.param({EVALUATION_DRY_RUN_KEY: True}, id="evaluation"),
     ],
 )
@@ -376,14 +373,13 @@ def test_text_clarification_after_the_retry_is_kept_and_recorded(
 @pytest.mark.parametrize(
     "metadata",
     [
-        pytest.param({"automation_id": "auto_1881", "automation_trigger": "schedule"}, id="auto"),
         pytest.param({EVALUATION_DRY_RUN_KEY: True}, id="evaluation"),
     ],
 )
 def test_unattended_run_sends_back_text_clarification_with_the_assume_message(
     monkeypatch: MonkeyPatch, mcp: FakeProductMcp, metadata: dict[str, Any]
 ) -> None:
-    """無人の Run（品質評価・自動実行）の本文の聞き返し（#1959）。
+    """無人の Run（品質評価）の本文の聞き返し（#1959）。
 
     利用者に聞けないので、確認の質問だけの回答も「前提を示して回答」の文で差し戻す（推薦が null の
     ときも候補・一覧から選ばせる）。差し戻しの後も聞き返しなら、拒答にせず経過に残して出す。

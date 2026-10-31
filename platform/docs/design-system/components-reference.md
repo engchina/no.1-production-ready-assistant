@@ -2516,7 +2516,7 @@ type SaveErrorBannerProps = {
 | Toast・フォームの下の `FormStatus` と併用しない | 同じ失敗が 2 か所に出ていた（検索・回答プロファイルなど） |
 
 - 単体テストは `packages/ui/tests/save-error-banner.test.tsx`（空のときは描かない・`role="alert"`・失敗と再試行のときだけ画面に入れる）。
-- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット・自動実行）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
+- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
 
 ---
 

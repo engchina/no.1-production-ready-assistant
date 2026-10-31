@@ -6,7 +6,6 @@ import { expect, test } from "./fixtures/mock-api";
 // e2e の mock は backend の権限 manifest（app/security/permissions.py）で 403 を返す。
 
 const SCREENS = [
-  { path: "/automations", permissions: ["menu.automations"], heading: "自動実行" },
   { path: "/evaluation", permissions: ["menu.evaluation"], heading: "品質評価" },
   { path: "/feedback", permissions: ["menu.feedback"], heading: "フィードバック" },
   { path: "/runs", permissions: ["agent.runs.view"], heading: "実行履歴" },

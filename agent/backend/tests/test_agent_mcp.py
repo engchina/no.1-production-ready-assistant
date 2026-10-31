@@ -517,7 +517,7 @@ def test_audit_shows_mcp_runs_with_the_key_name(agents: None) -> None:
         extra_metadata={"source": "mcp", "api_key_id": "0123456789abcdef", "api_key_name": "経理"},
     )
     runtime_repository.record_builtin_unattended_skips(
-        run.id, [ToolCall(name="nl2sql__nl2sql_cancel_requirement", arguments={})], mcp=True
+        run.id, [ToolCall(name="nl2sql__nl2sql_cancel_requirement", arguments={})]
     )
     audit = client.get(f"/api/audit/tool-calls?run_id={run.id}")
     assert audit.status_code == 200, audit.text

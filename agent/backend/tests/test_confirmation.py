@@ -899,7 +899,7 @@ def test_tool_clarification_is_skipped_only_when_not_asking() -> None:
     assert ConfirmationBudget(policy="assume").skips_tool_clarification
     assert ConfirmationBudget(skipped=True).skips_tool_clarification
     assert ConfirmationBudget(max_rounds=1, used=1).skips_tool_clarification
-    # 自動実行は誰も答えない。品質評価は評価ケースの答えで答える（#1861）。
+    # 品質評価は評価ケースの答えで答える（#1861）。
     assert ConfirmationBudget(unattended=True).skips_tool_clarification
     assert not ConfirmationBudget(unattended=True, evaluation=True).skips_tool_clarification
     assert ConfirmationBudget(
