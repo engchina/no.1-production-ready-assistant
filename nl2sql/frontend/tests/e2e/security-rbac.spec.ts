@@ -1706,7 +1706,7 @@ test("SQL 生成だけのユーザーは空 schema 失敗時にサンプルデ�
 
 test("管理者がユーザーを作成して単一ロールを割り当て、一時パスワードを一度だけ確認する", async ({ page, context }) => {
   await mockDatabaseGateReady(page);
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-token", url: "http://127.0.0.1:3101" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-token", url: "http://127.0.0.1:3201" }]);
   await page.addInitScript(() => {
     const state = globalThis as typeof globalThis & {
       __copiedOneTimePassword?: string;

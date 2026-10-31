@@ -30,8 +30,8 @@ from app.clients.http_retry import HttpRetryConfig, async_request_with_retry
 from app.schemas.search import SEARCH_TOP_K_MAX, SearchRequest
 from app.search_defaults import search_top_k_default, search_top_k_schema
 
-DEFAULT_SEARCH_LOAD_API_URL = "http://localhost:8000/api/search"
-DEFAULT_SEARCH_LOAD_API_BASE_URL = "http://localhost:8000"
+DEFAULT_SEARCH_LOAD_API_URL = "http://localhost:8100/api/search"
+DEFAULT_SEARCH_LOAD_API_BASE_URL = "http://localhost:8100"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 logger = logging.getLogger(__name__)
 

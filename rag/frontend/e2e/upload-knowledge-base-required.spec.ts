@@ -79,7 +79,7 @@ test("KB が制限された利用者は、KB を選ばずにアップロード�
     permissions: ["menu.upload"],
     allowed_knowledge_base_ids: ["kb-1"],
   });
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-upload", url: baseURL ?? "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-upload", url: baseURL ?? "http://127.0.0.1:3200" }]);
 
   await page.goto("/upload");
   const picker = page.getByTestId("upload-knowledge-base-picker");

@@ -24,8 +24,8 @@ from app.schemas.evaluation import (
 )
 
 # 評価は job の API（投入 → 状態のポーリング → 結果。#390）で実行する。
-DEFAULT_EVALUATION_API_URL = "http://localhost:8000/api/evaluation/jobs/run"
-DEFAULT_EVALUATION_API_BASE_URL = "http://localhost:8000"
+DEFAULT_EVALUATION_API_URL = "http://localhost:8100/api/evaluation/jobs/run"
+DEFAULT_EVALUATION_API_BASE_URL = "http://localhost:8100"
 # job の終わりを待つ時間（秒）。`--timeout` を指定しなければ、投入した job の全体の上限
 # （`time_limit_seconds`。回答の回数に比例する。#1430）にこの余裕を足して待ち、backend が上限で
 # 打ち切った結果を受け取る。超えたら job を取り消す。

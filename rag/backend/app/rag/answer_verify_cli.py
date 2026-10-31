@@ -35,7 +35,7 @@ from rag_engine.generation.answer_labels import answer_labels
 
 from app.rag.evaluation_cli import _request_headers
 
-DEFAULT_API_BASE_URL = "http://localhost:8000"
+DEFAULT_API_BASE_URL = "http://localhost:8100"
 DEFAULT_TIMEOUT_SECONDS = 600.0
 
 

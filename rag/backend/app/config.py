@@ -505,7 +505,7 @@ class Settings(
     huggingface_endpoint: str = Field(default="")
 
     # CORS 許可オリジン（フロントエンド）
-    cors_origins: list[str] = Field(default=["http://localhost:3000"])
+    cors_origins: list[str] = Field(default=["http://localhost:3100"])
 
     # --- OCI 共通 ---
     oci_config_file: str = Field(default="~/.oci/config")

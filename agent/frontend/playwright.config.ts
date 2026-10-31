@@ -5,7 +5,7 @@ import { ciRetries, ciWorkers } from "../../platform/scripts/e2e-impact/ci-run";
 import { mobileProjectScope } from "../../platform/scripts/e2e-impact/mobile-scope";
 import { nightlyOnlyIgnore } from "../../platform/scripts/e2e-impact/nightly-only";
 
-const frontendPort = process.env.PLAYWRIGHT_PORT ?? "3042";
+const frontendPort = process.env.PLAYWRIGHT_PORT ?? "3142";
 const frontendUrl = `http://127.0.0.1:${frontendPort}`;
 const frontendCwd = fileURLToPath(new URL(".", import.meta.url));
 // PLAYWRIGHT_WEB_SERVER=preview なら、vite build の成果物を vite preview で配信する（PR の CI。#1583）。
