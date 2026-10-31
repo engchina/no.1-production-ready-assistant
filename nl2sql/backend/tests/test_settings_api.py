@@ -1744,7 +1744,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
             },
             "generative_ai": {
                 "embedding_model": "cohere.embed-v4.0",
-                "embedding_dim": 1536,
+                "embedding_dim": 1024,
                 "rerank_model": "cohere.rerank-v4.0-fast",
             },
         },
@@ -1764,7 +1764,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
     assert document["enterprise_ai"]["models"][1]["model_id"] == "mistral.vision-model"
     assert document["enterprise_ai"]["default_text_model_id"] == "cohere.command-r-plus"
     assert document["enterprise_ai"]["default_vision_model_id"] == "mistral.vision-model"
-    assert document["generative_ai"]["embedding_dim"] == 1536
+    assert document["generative_ai"]["embedding_dim"] == 1024
     assert (
         env_file.read_text(encoding="utf-8") == "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-secret\n"
     )
@@ -1836,7 +1836,7 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
           },
           "generative_ai": {
             "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
+            "embedding_dim": 1024,
             "rerank_model": "cohere.rerank-v4.0-fast"
           }
         }
@@ -2037,7 +2037,7 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
                 },
                 "generative_ai": {
                     "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
+                    "embedding_dim": 1024,
                     "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             },
@@ -2120,7 +2120,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
                 },
                 "generative_ai": {
                     "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
+                    "embedding_dim": 1024,
                     "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             },

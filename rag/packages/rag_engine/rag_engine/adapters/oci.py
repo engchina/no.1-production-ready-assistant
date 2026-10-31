@@ -98,7 +98,7 @@ VISION_SYSTEM_PROMPT = (
 EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT = "SEARCH_DOCUMENT"
 EMBEDDING_INPUT_TYPE_SEARCH_QUERY = "SEARCH_QUERY"
 EMBEDDING_INPUT_TYPE_IMAGE = "IMAGE"
-# text-embedding-v4 が返せる次元。Oracle の VECTOR 列に合わせる既定は 1536。
+# text-embedding-v4 が返せる次元。Oracle の VECTOR 列に合わせる既定は DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS。
 SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS = {64, 128, 256, 512, 768, 1024, 1536, 2048}
 # tokenizer 未設定時の保守的な batch 分割目安。実 token 上限は API 側が検証する。
 EMBEDDING_BATCH_MAX_UTF8_BYTES = 64000
@@ -2015,7 +2015,8 @@ def _embedding_purpose(input_type: str) -> str | None:
 def _embedding_output_dimensions(settings: Settings) -> int:
     dimensions = int(settings.embedding_output_dimensions or DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS)
     if dimensions not in SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS:
-        raise RuntimeError("EMBEDDING_OUTPUT_DIMENSIONS は 256 / 512 / 1024 / 1536 のいずれかで指定してください。")
+        supported = " / ".join(str(value) for value in sorted(SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS))
+        raise RuntimeError(f"EMBEDDING_OUTPUT_DIMENSIONS は {supported} のいずれかで指定してください。")
     return dimensions
 
 

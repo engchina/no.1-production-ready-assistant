@@ -354,7 +354,7 @@ class FailingIfCalledVlm(OciEnterpriseAiClient):
 
 
 class FakeEmbeddingClient(OciGenAiClient):
-    """チャンク数分の 1536 次元ベクトルを返す。"""
+    """チャンク数分の 1024 次元ベクトルを返す。"""
 
     async def embed(
         self,

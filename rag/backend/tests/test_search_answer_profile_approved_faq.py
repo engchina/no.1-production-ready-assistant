@@ -4,6 +4,7 @@ import io
 
 import pytest
 from openpyxl import Workbook  # type: ignore[import-untyped]
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 
 from app.api.routes import search_answer_profile_knowledge as knowledge_route
 from app.main import app
@@ -29,7 +30,10 @@ class StubGenAi:
         pass
 
     async def embed(self, texts: list[str], *, input_type: str = "") -> list[list[float]]:
-        return [[1.0 if "取り消" in text else 0.0, 1.0] + [0.0] * 1534 for text in texts]
+        return [
+            [1.0 if "取り消" in text else 0.0, 1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 2)
+            for text in texts
+        ]
 
 
 def _excel(rows: list[tuple[str, str]]) -> bytes:

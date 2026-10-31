@@ -104,10 +104,10 @@
 | MOD-008 | JSON テンプレート検証 | 不正 JSON template で保存 | 保存が失敗し、JSON object が必要と表示される | `model/model-settings.invalid-payload-template.json` |
 | MOD-009 | response path 検証 | `/` で始まらない path で保存 | 保存が失敗し、JSON pointer 形式の修正が求められる | `model/model-settings.invalid-response-path.json` |
 | MOD-010 | timeout / retry 境界 | timeout 0 / 601、max_retries 6 で保存 | バリデーションエラーになる | `model/model-settings.invalid-timeout-retries.json` |
-| MOD-011 | embedding 次元固定 | embedding_dim を 1536 以外にする | 保存が失敗し、`1536` 固定であることが分かる | `model/model-settings.invalid-embedding-dim.json` |
+| MOD-011 | embedding 次元固定 | embedding_dim を 1024 以外にする | 保存が失敗し、`1024` 固定であることが分かる | `model/model-settings.invalid-embedding-dim.json` |
 | MOD-012 | Enterprise text test | text model のテストを実行 | success / failed が結果領域に表示される | `api/model-test-enterprise-text.request.json` |
 | MOD-013 | Enterprise vision test | vision model のテストを実行 | vision_enabled に応じた target test が実行される | `api/model-test-enterprise-vision.request.json` |
-| MOD-014 | Embedding test | embedding model のテストを実行 | 次元 `1536` が確認できる | `api/model-test-embedding.request.json` |
+| MOD-014 | Embedding test | embedding model のテストを実行 | 次元 `1024` が確認できる | `api/model-test-embedding.request.json` |
 | MOD-015 | Rerank test | rerank model のテストを実行 | rerank success / failed の結果が表示される | `api/model-test-rerank.request.json` |
 
 ## 7. データベース
@@ -132,7 +132,7 @@
 | DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
 | DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
 | DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `mock-responses/database-settings.success.json` |
-| DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1536, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
+| DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1024, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
 
 ## 8. システムテーブル

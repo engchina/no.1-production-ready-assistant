@@ -22,6 +22,7 @@ from pr_backend_core.observability.model_usage import (
     parse_run_usage,
 )
 from pr_system_settings.chat_attachments import ChatAttachmentReference
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -2294,7 +2295,7 @@ class FeedbackIndexData(BaseModel):
     source_history_count: int = 0
     indexable_count: int = 0
     indexed_count: int = 0
-    vector_dimension: int = 1536
+    vector_dimension: int = EMBEDDING_DIMENSIONS
     vector_backend: str = "oracle_26ai"
     embedding_provider: str = "oci_genai"
     embedding_model: str = ""
@@ -2554,7 +2555,7 @@ class ClassifierStatusData(BaseModel):
     category_count: int = 0
     categories: list[str] = Field(default_factory=list)
     embedding_model: str = ""
-    vector_dimension: int = 1536
+    vector_dimension: int = EMBEDDING_DIMENSIONS
     persistence_mode: str = "memory"
     recommendation_source: str = "deterministic"
     metrics: dict[str, float | int | str] = Field(default_factory=dict)
@@ -2572,7 +2573,7 @@ class ClassifierModelInfo(BaseModel):
     category_count: int = 0
     categories: list[str] = Field(default_factory=list)
     embedding_model: str = ""
-    vector_dimension: int = 1536
+    vector_dimension: int = EMBEDDING_DIMENSIONS
     metrics: dict[str, float | int | str] = Field(default_factory=dict)
     source: str = "oracle_state"
 

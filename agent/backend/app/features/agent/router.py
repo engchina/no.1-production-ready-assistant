@@ -1131,8 +1131,8 @@ async def _run_embedding_model_test(
 ) -> int:
     """OpenAI 互換の `POST {base_url}/embeddings` で 1 件埋め込み、次元を返す（#8）。
 
-    Oracle の `VECTOR(1536, FLOAT32)` に合わせるため `dimensions` を必ず送り、返った次元を検証する
-    （Aliyun の `text-embedding-v4` は既定 1024 次元）。
+    Oracle のベクトル列（`EMBEDDING_DIMENSIONS`。Aliyun の `text-embedding-v4` の既定の 1024 次元。
+    #46）に合わせるため `dimensions` を必ず送り、返った次元を検証する。
     """
     url = f"{_embedding_base_url(settings, model_settings, rerank=False)}/embeddings"
     body: dict[str, object] = {

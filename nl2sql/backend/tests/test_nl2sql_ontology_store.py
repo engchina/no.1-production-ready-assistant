@@ -515,7 +515,7 @@ def test_memory_store_rejects_partial_identity_and_unknown_filters() -> None:
 def test_oracle_ddl_covers_all_documents_and_vector_dimension() -> None:
     assert tuple(ONTOLOGY_TABLE_DDL) == ONTOLOGY_COLLECTIONS
     assert len(ONTOLOGY_DDL_STATEMENTS) > len(ONTOLOGY_COLLECTIONS)
-    assert "VECTOR(1536, FLOAT32)" in ONTOLOGY_TABLE_DDL["nodes"]
+    assert "VECTOR(1024, FLOAT32)" in ONTOLOGY_TABLE_DDL["nodes"]
     assert all("PAYLOAD_JSON CLOB" in ddl for ddl in ONTOLOGY_TABLE_DDL.values())
     assert all("VERSION_NO" in ddl and "ETAG" in ddl for ddl in ONTOLOGY_TABLE_DDL.values())
 

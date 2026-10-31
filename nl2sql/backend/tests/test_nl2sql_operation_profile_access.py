@@ -202,13 +202,13 @@ class _ProfileSyncService:
 
 
 def _classifier_artifact(*classes: str) -> bytes:
-    vector = [0.0] * 1536
+    vector = [0.0] * 1024
     payload = {
         "classes": list(classes),
         "coef": [vector],
         "intercept": [5.0],
-        "feature_dim": 1536,
-        "embedding_model": "deterministic-hash-1536",
+        "feature_dim": 1024,
+        "embedding_model": "deterministic-hash-1024",
     }
     return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 

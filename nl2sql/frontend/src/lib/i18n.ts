@@ -2647,7 +2647,7 @@ const nl2sqlJa = {
   "qcm.training.pagination.label": "訓練データ一覧のページ切替",
   "qcm.train.workspace": "分類モデル学習作業領域",
   "qcm.train.title": "モデル学習",
-  "qcm.train.hint": "OCI GenAI embedding で質問文を 1536 次元に変換し、LogisticRegression 分類器を学習します。",
+  "qcm.train.hint": "OCI GenAI embedding で質問文をベクトルに変換し、LogisticRegression 分類器を学習します。",
   "qcm.train.progress": "質問の embedding を作成し、分類モデルを学習しています",
   "qcm.train.steps": "分類モデル学習ステップ",
   "qcm.train.stepData": "訓練データ確認",

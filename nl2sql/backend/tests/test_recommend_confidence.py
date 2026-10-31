@@ -41,13 +41,13 @@ def _single_sheet_workbook_bytes(title: str, rows: list[list[Any]]) -> bytes:
 
 
 def _classifier_artifact_bytes(*classes: str) -> bytes:
-    vector = [0.0] * 1536
+    vector = [0.0] * 1024
     payload = {
         "classes": list(classes),
         "coef": [vector],
         "intercept": [5.0],
-        "feature_dim": 1536,
-        "embedding_model": "deterministic-hash-1536",
+        "feature_dim": 1024,
+        "embedding_model": "deterministic-hash-1024",
     }
     return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
@@ -61,7 +61,7 @@ class _FakeEmbeddingClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
         for text in texts:
-            vector = [0.0] * 1536
+            vector = [0.0] * 1024
             vector[1 if ("入金" in text or "支払" in text) else 2] = 1.0
             vectors.append(vector)
         return vectors

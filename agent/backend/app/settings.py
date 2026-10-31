@@ -39,6 +39,7 @@ from pr_system_settings.chat_attachments.limits import (
     CHAT_ATTACHMENT_TTL_HOURS_MAX,
     CHAT_ATTACHMENT_TTL_HOURS_MIN,
 )
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pr_system_settings.model import (
     EnterpriseAiConfiguredModel,
     ModelSecretStateMixin,
@@ -170,7 +171,11 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         le=CHAT_ATTACHMENT_MAX_FILES_MAX,
     )
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
-    oci_genai_embedding_dim: int = 1536
+    # 3 製品の Oracle のベクトル列の次元（`EMBEDDING_DIMENSIONS`）に固定する。旧い既定（1536）は
+    # 起動で拒否する（#46）。
+    oci_genai_embedding_dim: int = Field(
+        default=EMBEDDING_DIMENSIONS, ge=EMBEDDING_DIMENSIONS, le=EMBEDDING_DIMENSIONS
+    )
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
     # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の接続から）。
     embedding_base_url: str = ""

@@ -91,7 +91,7 @@ uv run python -m app.rag.enterprise_ai_probe --surface llm
 uv run python -m app.rag.enterprise_ai_probe --surface vlm --mime-type text/plain
 ```
 
-Embedding は Cohere Embed v4 / Oracle `VECTOR(1536, FLOAT32)` に合わせて 1536 次元を固定契約にしています。`OciGenAiClient` は OCI Generative AI Inference SDK の `embed_text` / `rerank_text` を使い、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`OciGenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`OciGenAiClient.rerank()` は Cohere Rerank v4 fast の返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
+Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text-embedding-v4` の既定。正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46）を固定契約にしています。`OciGenAiClient` は OCI Generative AI Inference SDK の `embed_text` / `rerank_text` を使い、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`OciGenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`OciGenAiClient.rerank()` は Cohere Rerank v4 fast の返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
 
 Oracle は共有 connection pool を遅延初期化し、アプリ終了時に閉じます。document/chunk の永続化、HNSW vector index + `FETCH APPROX ... WITH TARGET ACCURACY` による vector search、Oracle Text `CONTAINS` による keyword search を同じ tenant filter 付きで実行します。query 側の approximate search 精度は `RAG_ORACLE_VECTOR_TARGET_ACCURACY` で調整できます。
 
@@ -151,7 +151,7 @@ checks は `oci_common`、`enterprise_ai`、`genai`、`oracle`、`object_storage
 
 ## Oracle AI Database schema
 
-`app.rag.oracle_schema` は production 初期化用の DDL artifact と監査 manifest を生成します。`oracle_document_schema_sql()` は文書メタデータ、`oracle_vector_schema_sql()` は `VECTOR(1536, FLOAT32)` の chunk/vector table、`oracle_search_audit_schema_sql()` / `oracle_ingestion_audit_schema_sql()` は検索・取込の監査 table を生成します。
+`app.rag.oracle_schema` は production 初期化用の DDL artifact と監査 manifest を生成します。`oracle_document_schema_sql()` は文書メタデータ、`oracle_vector_schema_sql()` は `VECTOR(1024, FLOAT32)` の chunk/vector table、`oracle_search_audit_schema_sql()` / `oracle_ingestion_audit_schema_sql()` は検索・取込の監査 table を生成します。
 
 ```bash
 uv run python -m app.rag.oracle_schema \
@@ -159,7 +159,7 @@ uv run python -m app.rag.oracle_schema \
   --manifest-output ../artifacts/oracle-schema.manifest.json
 ```
 
-manifest は artifact 全体と section ごとの SHA-256、statement 数、`VECTOR(1536, FLOAT32)`、HNSW index (`COSINE`, target accuracy `95`, neighbors `32`, efconstruction `500`) の契約を含みます。staging / production では生成物をレビューし、SQLcl や OCI Resource Manager の安全な適用手順で実行してから smoke test へ進みます。
+manifest は artifact 全体と section ごとの SHA-256、statement 数、`VECTOR(1024, FLOAT32)`、HNSW index (`COSINE`, target accuracy `95`, neighbors `32`, efconstruction `500`) の契約を含みます。staging / production では生成物をレビューし、SQLcl や OCI Resource Manager の安全な適用手順で実行してから smoke test へ進みます。
 
 既存 Oracle schema を現行 DDL 契約へ寄せる場合は migration artifact を生成します。現在の migration は `rag_ingestion_jobs.attempt_count NUMBER(5) DEFAULT 0 NOT NULL`、`rag_ingestion_jobs.max_attempts NUMBER(5) DEFAULT 3 NOT NULL`、`rag_ingestion_jobs_attempts_ck` を追加/補正します。
 

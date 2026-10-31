@@ -402,6 +402,7 @@ def initialize_system_tables(
         data = system_schema_manager.initialize(
             recreate=payload.recreate,
             confirmation=payload.confirmation,
+            allow_destructive=payload.allow_destructive,
         )
     except SystemSchemaError as exc:
         return api_problem_response(

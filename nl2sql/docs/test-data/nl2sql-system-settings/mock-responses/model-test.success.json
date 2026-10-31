@@ -11,7 +11,7 @@
     "checked_at": "2026-08-12T00:00:00.000Z",
     "details": {
       "network_call": false,
-      "embedding_dim": 1536
+      "embedding_dim": 1024
     }
   },
   "error_messages": [],

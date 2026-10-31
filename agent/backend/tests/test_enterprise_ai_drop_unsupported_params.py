@@ -128,7 +128,7 @@ def test_model_test_reports_dropped_parameter(monkeypatch: pytest.MonkeyPatch) -
         },
         "generative_ai": {
             "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
+            "embedding_dim": 1024,
             "rerank_model": "cohere.rerank-v4.0-fast",
         },
     }

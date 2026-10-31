@@ -43,7 +43,7 @@ const baseline: ModelSettingsPayload = {
     llm_max_output_tokens: 1600,
     vlm_max_output_tokens: 64000,
   },
-  generative_ai: { embedding_model: "embed", embedding_dim: 1536, rerank_model: "rerank" },
+  generative_ai: { embedding_model: "embed", embedding_dim: 1024, rerank_model: "rerank" },
 };
 
 describe("buildSectionSavePayload", () => {

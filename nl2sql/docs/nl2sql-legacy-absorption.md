@@ -5,7 +5,7 @@
 主要な旧版吸収 API は `/api/nl2sql` 配下に集約する。
 
 - `POST /classifier/training-data/import`: CSV/XLSX の `CATEGORY,TEXT` または `CATEGORY,QUESTION` を取り込む。
-- `POST /classifier/train`: 取り込み済みデータを OCI GenAI embedding 1536 次元に変換し、LogisticRegression を学習する。
+- `POST /classifier/train`: 取り込み済みデータを OCI GenAI embedding 1024 次元に変換し、LogisticRegression を学習する。
 - `POST /classifier/predict`: 学習済み分類器で profile category を予測する。
 - `GET /classifier`: training data と classifier artifact の状態を確認する。
 - `POST /classifier/model/import`: joblib / JSON artifact で唯一の classifier model を置き換える。旧 `/classifier/models/import` は互換 alias として `activate=true` の場合だけ受理する。

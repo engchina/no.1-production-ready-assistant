@@ -468,7 +468,7 @@ class _FakeEmbeddingClient:
         return True
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        return [[0.01 for _ in range(1536)] for _text in texts]
+        return [[0.01 for _ in range(1024)] for _text in texts]
 
 
 def _similar_history_sample_catalog() -> SchemaCatalog:

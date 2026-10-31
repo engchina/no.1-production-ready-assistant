@@ -27,6 +27,8 @@ from importlib import import_module
 from typing import Any, Literal, Protocol, cast
 from uuid import UUID
 
+from pr_system_settings.embedding import EMBEDDING_VECTOR_COLUMN_TYPE
+
 from app.settings import get_settings
 
 from .oracle_lob import configure_clob_fetch_as_text
@@ -422,7 +424,7 @@ ONTOLOGY_TABLE_DDL: dict[OntologyCollection, str] = {
             UPDATED_AT TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL
         )
     """,
-    "nodes": """
+    "nodes": f"""
         CREATE TABLE NL2SQL_ONTOLOGY_NODES (
             REVISION_ID VARCHAR2(128) NOT NULL,
             NODE_ID VARCHAR2(128) NOT NULL,
@@ -432,7 +434,7 @@ ONTOLOGY_TABLE_DDL: dict[OntologyCollection, str] = {
             VERSION_NO NUMBER(19) NOT NULL,
             ETAG VARCHAR2(64) NOT NULL,
             PAYLOAD_JSON CLOB CHECK (PAYLOAD_JSON IS JSON) NOT NULL,
-            EMBEDDING VECTOR(1536, FLOAT32),
+            EMBEDDING {EMBEDDING_VECTOR_COLUMN_TYPE},
             CREATED_AT TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
             UPDATED_AT TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
             CONSTRAINT PK_NL2SQL_ONT_NODES PRIMARY KEY (REVISION_ID, NODE_ID)

@@ -3864,3 +3864,35 @@ EXCEPTION
         END IF;
 END;
 /
+
+-- migration: 20261031_001_embedding_dimensions_1024
+DECLARE
+    v_vector_info VARCHAR2(256);
+    v_count NUMBER;
+BEGIN
+    SELECT MAX(vector_info) INTO v_vector_info
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_CHUNKS' AND column_name = 'EMBEDDING';
+    IF v_vector_info IS NOT NULL
+        AND REPLACE(v_vector_info, ' ', '') NOT LIKE 'VECTOR(1024,FLOAT32%' THEN
+        SELECT COUNT(*) INTO v_count FROM user_indexes
+        WHERE index_name = 'RAG_CHUNKS_EMBEDDING_HNSW_IDX';
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE 'DROP INDEX rag_chunks_embedding_hnsw_idx';
+        END IF;
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_chunks DROP COLUMN embedding';
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_chunks ADD (embedding VECTOR(1024, FLOAT32))';
+        EXECUTE IMMEDIATE
+            'CREATE VECTOR INDEX rag_chunks_embedding_hnsw_idx '
+            || 'ON rag_chunks (embedding) '
+            || 'ORGANIZATION INMEMORY NEIGHBOR GRAPH '
+            || 'DISTANCE COSINE '
+            || 'WITH TARGET ACCURACY 98 '
+            || 'PARAMETERS ( '
+            || 'TYPE HNSW, '
+            || 'NEIGHBORS 48, '
+            || 'EFCONSTRUCTION 800 '
+            || ')';
+    END IF;
+END;
+/

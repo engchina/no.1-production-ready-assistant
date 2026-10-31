@@ -638,7 +638,7 @@ def test_prompt_injection_query_is_blocked(
 
 
 class StubEmbeddingClient(OciGenAiClient):
-    """入力件数分の 1536 次元 embedding を返すテスト用 client。"""
+    """入力件数分の 1024 次元 embedding を返すテスト用 client。"""
 
     async def embed(
         self,

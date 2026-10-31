@@ -16,6 +16,7 @@ import urllib.request
 from typing import Any, Protocol
 
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 
 from app.settings import Settings
 
@@ -23,8 +24,8 @@ from .ai_calls import sync_ai_caller
 
 # 百煉の OpenAI 互換 API は 1 要求 10 件まで。超えると 400 が返る。
 EMBED_BATCH_SIZE = 10
-# Oracle の VECTOR(1536, FLOAT32) と互換にするため 1536 固定。
-EMBED_DIMENSIONS = 1536
+# Oracle のベクトル列と互換にするため `EMBEDDING_DIMENSIONS` に固定（#46）。
+EMBED_DIMENSIONS = EMBEDDING_DIMENSIONS
 
 
 class EmbeddingClientError(RuntimeError):
@@ -41,7 +42,7 @@ class FeedbackEmbeddingClient(Protocol):
         """Return whether the provider SDK can be imported."""
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts into 1536-dimensional vectors."""
+        """Embed texts into `EMBED_DIMENSIONS`-dimensional vectors."""
 
 
 class OpenAiCompatibleEmbeddingClient:

@@ -1289,7 +1289,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     monkeypatch.setattr(settings, "oci_enterprise_ai_llm_response_path", "/data/text")
     monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_response_path", "/data/document")
     monkeypatch.setattr(settings, "oci_genai_embedding_model", "cohere.embed-v4.0")
-    monkeypatch.setattr(settings, "oci_genai_embedding_dim", 1536)
+    monkeypatch.setattr(settings, "oci_genai_embedding_dim", 1024)
     monkeypatch.setattr(settings, "oci_genai_rerank_model", "cohere.rerank-v4.0-fast")
 
     resp = client.get("/api/settings/model")
@@ -1334,7 +1334,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     assert body["settings"]["enterprise_ai"]["vision_payload_template"] == VLM_TEMPLATE
     assert body["settings"]["enterprise_ai"]["text_response_path"] == "/data/text"
     assert body["settings"]["enterprise_ai"]["vision_response_path"] == "/data/document"
-    assert body["settings"]["generative_ai"]["embedding_dim"] == 1536
+    assert body["settings"]["generative_ai"]["embedding_dim"] == 1024
     assert "sk-runtime-secret" not in resp.text
 
 
@@ -1369,7 +1369,7 @@ def test_update_model_settings_mutates_runtime_settings() -> None:
         64000,
     ]
     assert settings.oci_genai_embedding_model == "cohere.embed-v4.0"
-    assert settings.oci_genai_embedding_dim == 1536
+    assert settings.oci_genai_embedding_dim == 1024
     assert settings.oci_genai_rerank_model == "cohere.rerank-v4.0-fast"
     assert "sk-update-secret" not in resp.text
 
@@ -1417,7 +1417,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
     assert persisted["enterprise_ai"]["vlm_input_mode"] == "files_api"
     # 共通の LLM / VLM の出力の上限は書かない（#1719。モデルごとの max_output_tokens）。
     assert not [key for key in persisted["enterprise_ai"] if key.endswith("_max_output_tokens")]
-    assert persisted["generative_ai"]["embedding_dim"] == 1536
+    assert persisted["generative_ai"]["embedding_dim"] == 1024
     # 文書解析の設定は共有の model-settings.json に書かない（#1701）。
     assert "parser_adapters" not in persisted
     assert "sk-update-secret" not in resp.text
@@ -1459,7 +1459,7 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
                 },
                 "generative_ai": {
                     "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
+                    "embedding_dim": 1024,
                     "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             }
@@ -1608,7 +1608,7 @@ def test_model_settings_test_embedding_uses_candidate_model(
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
             assert texts == ["モデル接続テスト"]
             assert input_type == "SEARCH_QUERY"
-            return [[0.0] * 1536]
+            return [[0.0] * 1024]
 
     monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
     payload = _payload()
@@ -1627,7 +1627,7 @@ def test_model_settings_test_embedding_uses_candidate_model(
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["status"] == "success"
-    assert body["details"]["vector_dim"] == 1536
+    assert body["details"]["vector_dim"] == 1024
     assert observed_settings[0].oci_genai_embedding_model == "cohere.embed-custom"
 
 
@@ -1746,9 +1746,9 @@ def test_model_settings_clears_existing_api_key(monkeypatch: MonkeyPatch) -> Non
     assert "sk-existing-secret" not in resp.text
 
 
-def test_model_settings_rejects_non_1536_embedding_dim() -> None:
+def test_model_settings_rejects_embedding_dim_other_than_the_oracle_column() -> None:
     payload = _payload()
-    payload["generative_ai"]["embedding_dim"] = 1024
+    payload["generative_ai"]["embedding_dim"] = 1536
 
     resp = client.patch("/api/settings/model", json=payload)
 
@@ -2452,7 +2452,7 @@ def test_get_database_settings_masks_secrets(monkeypatch: MonkeyPatch) -> None:
     assert body["available_services"] == []
     # #108 から readiness は NL2SQL と同じく Wallet のファイルも確認する。
     assert body["readiness"] == "wallet_not_found"
-    assert body["vector_column"] == "VECTOR(1536, FLOAT32)"
+    assert body["vector_column"] == "VECTOR(1024, FLOAT32)"
     assert "super-secret-password" not in resp.text
     assert "wallet-secret" not in resp.text
 
@@ -3188,7 +3188,7 @@ def _payload() -> dict[str, Any]:
         },
         "generative_ai": {
             "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1536,
+            "embedding_dim": 1024,
             "rerank_model": "cohere.rerank-v4.0-fast",
         },
     }

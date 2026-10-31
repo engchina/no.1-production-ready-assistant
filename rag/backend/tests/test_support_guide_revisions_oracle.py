@@ -87,25 +87,25 @@ async def test_intent_embeddings_follow_the_published_revision_on_real_oracle() 
         first = await store.publish(
             profile.id, guide_id, _content("ガイド B の版 1"), base_revision=1, user=None
         )
-        vectors = [[0.25] * 1536]
+        vectors = [[0.25] * 1024]
         await store.save_intent_embeddings(
             guide_id,
             first,
             model_id="model-a",
-            dimension=1536,
+            dimension=1024,
             examples_sha256="a" * 64,
             vectors=vectors,
         )
         stored = (await store.published_intent_embeddings(profile.id))[guide_id]
-        assert (stored.revision, stored.model_id, stored.dimension) == (first, "model-a", 1536)
-        assert stored.vectors == ((0.25,) * 1536,)
+        assert (stored.revision, stored.model_id, stored.dimension) == (first, "model-a", 1024)
+        assert stored.vectors == ((0.25,) * 1024,)
 
         # 同じ版に保存し直すと置き換える。
         await store.save_intent_embeddings(
             guide_id,
             first,
             model_id="model-b",
-            dimension=1536,
+            dimension=1024,
             examples_sha256="b" * 64,
             vectors=vectors,
         )

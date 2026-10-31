@@ -260,7 +260,7 @@
       },
       "generative_ai": {
         "embedding_model": "text-embedding-v4",
-        "embedding_dim": 1536,
+        "embedding_dim": 1024,
         "embedding_base_url": "",
         "rerank_model": "qwen3-rerank",
         "rerank_base_url": ""
@@ -280,8 +280,8 @@
     "has_password": false,
     "has_wallet_password": false,
     "readiness": "missing",
-    "embedding_dimension": 1536,
-    "vector_column": "VECTOR(1536, FLOAT32)",
+    "embedding_dimension": 1024,
+    "vector_column": "VECTOR(1024, FLOAT32)",
     "adb_ocid": "",
     "region": "",
     "config_source": "runtime"

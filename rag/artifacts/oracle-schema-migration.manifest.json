@@ -1,6 +1,6 @@
 {
   "artifact_type": "migration",
-  "migration_artifact_version": "20261009_001",
+  "migration_artifact_version": "20261031_001",
   "migrations": [
     {
       "destructive": false,
@@ -575,10 +575,17 @@
       "sha256": "d3e80d6a5f85c9622b8c55e317876d5260d5bfbb893160b1252dadfedf62980b",
       "statement_count": 1,
       "table_name": "rag_query_history"
+    },
+    {
+      "destructive": true,
+      "name": "20261031_001_embedding_dimensions_1024",
+      "sha256": "44b201fac8067786920741d3efefcb4b3c500ccc78e0b6aac3a942a21a3778f4",
+      "statement_count": 1,
+      "table_name": "rag_chunks"
     }
   ],
   "schema_name": "production-ready-rag-oracle-26ai",
   "schema_version": "3",
-  "sha256": "c3f68e2d5f01d88d5b5d83922db0c7874e329c3f356671c58ae7a538fdf6362e",
-  "statement_count": 124
+  "sha256": "6c9ac3b01875196913f656cf68d69d75e89d1fb28293cd0a41022d22fd4aeb51",
+  "statement_count": 125
 }

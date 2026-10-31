@@ -105,7 +105,7 @@ class _FakeEmbeddingClient:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self.texts.extend(texts)
-        return [[1.0 if index == 0 else 0.0 for index in range(1536)] for _text in texts]
+        return [[1.0 if index == 0 else 0.0 for index in range(1024)] for _text in texts]
 
 
 class _RecordingOracleAdapter:

@@ -87,7 +87,7 @@ class FakeEmbeddingClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
         for text in texts:
-            vector = [0.0] * 1536
+            vector = [0.0] * 1024
             vector[1 if "入金" in text or "支払" in text else 2] = 1.0
             vectors.append(vector)
         return vectors
@@ -178,8 +178,8 @@ class _MaliciousClassifierArtifact:
 
 def _classifier_model_artifact_bytes(
     *categories: str,
-    embedding_model: str = "deterministic-hash-1536",
-    feature_dim: int = 1536,
+    embedding_model: str = "deterministic-hash-1024",
+    feature_dim: int = 1024,
     include_intercept: bool = True,
     include_embedding_model: bool = True,
 ) -> bytes:
@@ -416,7 +416,7 @@ def test_classifier_model_import_defaults_to_runtime_embedding_model_when_missin
     )
 
     assert imported.model is not None
-    assert imported.model.embedding_model == "deterministic-hash-1536"
+    assert imported.model.embedding_model == "deterministic-hash-1024"
     assert any("deterministic fallback" in warning for warning in imported.warnings)
     assert prediction.recommendation_source == "classifier"
     assert prediction.classifier_version == imported.active_version

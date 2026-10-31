@@ -19,7 +19,7 @@ from app.schemas.document import FileStatus
 from app.schemas.extraction import StructuredExtraction
 from app.schemas.search import RetrievedChunk
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 _SECTION = "手順書 > 第 2 章 作業の準備"
 
 

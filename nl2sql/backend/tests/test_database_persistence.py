@@ -515,8 +515,8 @@ def test_legacy_classifier_registry_migration_keeps_only_the_active_model() -> N
         "updated_at": "2026-07-19T08:00:00+00:00",
         "model_base64": "YWN0aXZl",
         "categories": ["監査", "標準業務プロファイル"],
-        "embedding_model": "deterministic-hash-1536",
-        "vector_dimension": 1536,
+        "embedding_model": "deterministic-hash-1024",
+        "vector_dimension": 1024,
         "metrics": {},
     }
     store = _ControllableStore(

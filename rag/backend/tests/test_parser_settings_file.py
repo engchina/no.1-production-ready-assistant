@@ -46,7 +46,7 @@ V4_SHARED_DOCUMENT: dict[str, Any] = {
     },
     "generative_ai": {
         "embedding_model": "cohere.embed-v4.0",
-        "embedding_dim": 1536,
+        "embedding_dim": 1024,
         "rerank_model": "cohere.rerank-v4.0-fast",
     },
 }
@@ -75,7 +75,7 @@ def _nl2sql_payload() -> ModelSettingsPayload:
             },
             "generative_ai": {
                 "embedding_model": "cohere.embed-v4.0",
-                "embedding_dim": 1536,
+                "embedding_dim": 1024,
                 "rerank_model": "cohere.rerank-v4.0-fast",
             },
         }

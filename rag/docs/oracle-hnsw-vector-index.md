@@ -7,8 +7,8 @@
 ## 適用前提
 
 - データベース: Oracle AI Database（対応バージョンは [terraform/README.md](../../terraform/README.md) の「Autonomous AI Database（全製品で共有）」）。
-- ベクトル列: `VECTOR(1536, FLOAT32)`。
-- 埋め込み: OCI Generative AI Cohere Embed v4、1536 次元。
+- ベクトル列: `VECTOR(1024, FLOAT32)`。
+- 埋め込み: 既定は `text-embedding-v4`、1024 次元（正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46 で 1536 から変えた）。
 - RAG 検索の優先度: まず根拠チャンクの召回率と回答の根拠性を重視し、その後にリランク、フィルタ、キャッシュでレイテンシを最適化する。
 - 距離関数: テキスト意味検索では既定で `COSINE` を使い、索引定義と検索 SQL の距離指標を必ず一致させる。
 
@@ -107,7 +107,7 @@ Oracle では、HNSW は In-Memory Neighbor Graph ベクトル索引に分類さ
 
 ### `DISTANCE COSINE`
 
-テキスト埋め込みの意味検索では、余弦距離を既定にする。本プロジェクトの問い合わせ用埋め込みと文書チャンク用埋め込みは同じ Cohere Embed v4 の 1536 次元ベクトル空間にあるため、`COSINE` を標準の距離関数とする。
+テキスト埋め込みの意味検索では、余弦距離を既定にする。本プロジェクトの問い合わせ用埋め込みと文書チャンク用埋め込みは同じ埋め込みモデルの 1024 次元ベクトル空間にあるため、`COSINE` を標準の距離関数とする。
 
 Oracle 公式ドキュメントでは、索引定義の距離指標と `VECTOR_DISTANCE()` で使う距離指標が一致しない場合、オプティマイザがベクトル索引を使わない可能性があると説明されている。そのため、DDL と検索 SQL の両方で `COSINE` を明示する。
 
@@ -147,7 +147,7 @@ RAG の主な失敗は、検索が少し遅いことよりも、重要な根拠�
 `32` は「バランス」の値で、#1990 より前の作成の DDL の値。次の理由で採用した。既定の「高精度」はより密な `48` にし、メモリと索引作成時間を払って召回率を優先する:
 
 - 小さすぎる値よりグラフが疎または分断されにくい。
-- 1536 次元のテキスト埋め込みに対して、召回率を重視した出発点になる。
+- 1024 次元のテキスト埋め込みに対して、召回率を重視した出発点になる。
 - メモリコストを極端に増やさず、後続の精度レポートに基づく調整がしやすい。
 
 ### `EFCONSTRUCTION 800`(高精度) / `500`(バランス)
@@ -168,16 +168,16 @@ HNSW 索引は SGA の Vector Pool に保持される。Oracle 公式ドキュ�
 1.3 * number_of_vectors * number_of_dimensions * size_of_dimension_type
 ```
 
-本プロジェクトでは `VECTOR(1536, FLOAT32)` を使う。`FLOAT32` は 1 次元あたり 4 bytes のため:
+本プロジェクトでは `VECTOR(1024, FLOAT32)` を使う。`FLOAT32` は 1 次元あたり 4 bytes のため:
 
 ```text
-1.3 * N * 1536 * 4
+1.3 * N * 1024 * 4
 ```
 
 100 万ベクトルあたりの概算:
 
 ```text
-約 7.99 GB、約 7.44 GiB
+約 5.32 GB、約 4.96 GiB
 ```
 
 本番では式だけに頼らず、`DBMS_VECTOR.INDEX_VECTOR_MEMORY_ADVISOR` で見積もる。
@@ -190,7 +190,7 @@ VARIABLE response_json CLOB;
 EXEC DBMS_VECTOR.INDEX_VECTOR_MEMORY_ADVISOR(
   'HNSW',
   1000000,
-  1536,
+  1024,
   'FLOAT32',
   '{"neighbors":48}',
   :response_json
@@ -272,7 +272,7 @@ ORDER BY task_time DESC;
 
 - HNSW 索引はメモリ専用構造であり、Vector Pool の設計が必須。
 - Vector Pool が不足すると、索引作成失敗や HNSW 索引の eviction の原因になる。
-- ベクトル列内の非 NULL ベクトルは、次元数と要素型を統一する。本プロジェクトでは `VECTOR(1536, FLOAT32)` に固定する。
+- ベクトル列内の非 NULL ベクトルは、次元数と要素型を統一する。本プロジェクトでは `VECTOR(1024, FLOAT32)` に固定する。
 - 同じベクトル列には 1 種類のベクトル索引だけを作成する。HNSW を選ぶ場合、同じ列に IVF を重ねて作らない。
 - HNSW は parallel DML をサポートしない。HNSW 索引付きテーブルへの parallel DML は Oracle によりシリアル DML に変換される。
 - ベース表の DML が多い場合、Oracle は journal、snapshot、refresh などの仕組みで整合性を保つ。ただし、未反映変更が増えると検索性能に影響する可能性があるため、精度レポートと実行計画を継続的に確認する。

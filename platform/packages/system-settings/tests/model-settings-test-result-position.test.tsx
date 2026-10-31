@@ -64,7 +64,7 @@ function data(revision: string, rerankModel = "cohere.rerank-v4.0-fast"): ModelS
       },
       generative_ai: {
         embedding_model: "cohere.embed-v4.0",
-        embedding_dim: 1536,
+        embedding_dim: 1024,
         rerank_model: rerankModel,
       },
     },

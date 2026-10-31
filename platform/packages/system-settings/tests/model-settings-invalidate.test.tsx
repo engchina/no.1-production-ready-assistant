@@ -64,7 +64,7 @@ function data(rerankModel: string): ModelSettingsData {
       },
       generative_ai: {
         embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
+        embedding_dim: 1024,
         rerank_model: rerankModel,
       },
     },

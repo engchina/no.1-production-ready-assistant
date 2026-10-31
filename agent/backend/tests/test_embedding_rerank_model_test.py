@@ -1,6 +1,6 @@
 """設定画面の埋め込み / 再ランクのモデルのテストが OpenAI 互換の HTTP を呼ぶ（#8）。
 
-`_post_openai_compatible` を fake に差し替え、URL・body（`dimensions=1536`）・次元の検証を確かめる。
+`_post_openai_compatible` を fake に差し替え、URL・body（`dimensions=1024`）・次元の検証を確かめる。
 外部 API へは接続しない。
 """
 
@@ -42,7 +42,7 @@ def _request(target: str, model_id: str, **generative: str) -> ModelSettingsTest
         },
         "generative_ai": {
             "embedding_model": "text-embedding-v4",
-            "embedding_dim": 1536,
+            "embedding_dim": 1024,
             "rerank_model": "qwen3-rerank",
             **generative,
         },
@@ -73,7 +73,7 @@ def test_embedding_test_sends_dimensions(monkeypatch: pytest.MonkeyPatch) -> Non
     calls, details = _run(
         monkeypatch,
         _request("embedding", "text-embedding-v4"),
-        {"data": [{"index": 0, "embedding": [0.1] * 1536}]},
+        {"data": [{"index": 0, "embedding": [0.1] * 1024}]},
     )
 
     assert calls == [
@@ -82,22 +82,22 @@ def test_embedding_test_sends_dimensions(monkeypatch: pytest.MonkeyPatch) -> Non
             {
                 "model": "text-embedding-v4",
                 "input": [MODEL_TEST_EMBEDDING_INPUT],
-                "dimensions": 1536,
+                "dimensions": 1024,
             },
             "sk-test",
         )
     ]
-    assert details == {"vector_dim": 1536, "input_count": 1}
+    assert details == {"vector_dim": 1024, "input_count": 1}
 
 
 def test_embedding_test_rejects_wrong_dimension(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(
-        ValueError, match=r"embedding の次元数が不正です。expected=1536, actual=1024"
+        ValueError, match=r"embedding の次元数が不正です。expected=1024, actual=1536"
     ):
         _run(
             monkeypatch,
             _request("embedding", "text-embedding-v4"),
-            {"data": [{"index": 0, "embedding": [0.1] * 1024}]},
+            {"data": [{"index": 0, "embedding": [0.1] * 1536}]},
         )
 
 
@@ -105,7 +105,7 @@ def test_embedding_test_uses_embedding_base_url(monkeypatch: pytest.MonkeyPatch)
     calls, _ = _run(
         monkeypatch,
         _request("embedding", "text-embedding-v4", embedding_base_url="https://e.example.test/v1"),
-        {"data": [{"index": 0, "embedding": [0.1] * 1536}]},
+        {"data": [{"index": 0, "embedding": [0.1] * 1024}]},
     )
 
     assert calls[0][0] == "https://e.example.test/v1/embeddings"
@@ -143,3 +143,15 @@ def test_rerank_test_uses_rerank_base_url_as_is(monkeypatch: pytest.MonkeyPatch)
     )
 
     assert calls[0][0] == "https://r.example.test/compatible-mode/v1/reranks"
+
+
+def test_embedding_dim_is_the_platform_constant() -> None:
+    """Agent の設定の次元は 3 製品の正本（#46）。旧い既定（1536）は起動で拒否する。"""
+    from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
+    from pydantic import ValidationError
+
+    from app.settings import Settings
+
+    assert Settings().oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
+    with pytest.raises(ValidationError):
+        Settings(oci_genai_embedding_dim=1536)

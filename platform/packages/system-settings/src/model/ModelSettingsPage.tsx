@@ -932,8 +932,8 @@ export function ModelSettingsPage({
                   id="genai-embedding-dim"
                   label={t("settings.model.genai.embeddingDim")}
                   value={draft.generative_ai.embedding_dim}
-                  min={1536}
-                  max={1536}
+                  min={draft.generative_ai.embedding_dim}
+                  max={draft.generative_ai.embedding_dim}
                   step={1}
                   readOnly
                   helper={t("settings.model.genai.embeddingDimHelp")}

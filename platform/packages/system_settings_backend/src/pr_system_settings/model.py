@@ -67,6 +67,7 @@ from pr_enterprise_ai.urls import enterprise_ai_base_url as enterprise_ai_base_u
 from pr_enterprise_ai.urls import enterprise_ai_request_url as enterprise_ai_request_url
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
+from .embedding import EMBEDDING_DIMENSIONS
 from .env_file import write_env_values
 
 logger = logging.getLogger(__name__)
@@ -420,10 +421,10 @@ class GenerativeAiModelSettings(BaseModel):
 
     embedding_model: str = Field(default="text-embedding-v4", max_length=256)
     embedding_dim: int = Field(
-        default=1536,
-        ge=1536,
-        le=1536,
-        description="Oracle VECTOR(1536, FLOAT32) と互換にするため 1536 固定。",
+        default=EMBEDDING_DIMENSIONS,
+        ge=EMBEDDING_DIMENSIONS,
+        le=EMBEDDING_DIMENSIONS,
+        description="Oracle のベクトル列と互換にするため `EMBEDDING_DIMENSIONS` に固定（#46）。",
     )
     embedding_base_url: str = Field(
         default="",
@@ -1480,6 +1481,18 @@ class _PersistedModelSettings(BaseModel):
     )
     generative_ai: GenerativeAiModelSettings = Field(default_factory=GenerativeAiModelSettings)
 
+    @field_validator("generative_ai", mode="before")
+    @classmethod
+    def drop_saved_embedding_dim(cls, value: Any) -> Any:
+        """保存済みの次元は読まず、コードの `EMBEDDING_DIMENSIONS` を使う（#46）。
+
+        次元は画面で変えられない固定の値で、保存の値は保存した時点の既定（#46 より前は 1536）に
+        すぎない。旧い値のファイルを読み込みの失敗にしない。
+        """
+        if isinstance(value, Mapping) and "embedding_dim" in value:
+            return {key: item for key, item in value.items() if key != "embedding_dim"}
+        return value
+
 
 class ModelSettingsStore:
     """model-settings.json と `.env` の API key の読み書き。製品ごとに 1 つ作る。
@@ -1804,7 +1817,9 @@ def _model_test_success_message(target_type: ModelSettingsTestTargetType, model_
             f"Enterprise AI の画像対応モデル「{model_id}」から構造化抽出レスポンスを取得しました。"
         )
     if target_type == "embedding":
-        return f"Embedding モデル「{model_id}」で 1536 次元ベクトルを取得しました。"
+        return (
+            f"Embedding モデル「{model_id}」で {EMBEDDING_DIMENSIONS} 次元ベクトルを取得しました。"
+        )
     return f"Rerank モデル「{model_id}」から順位スコアを取得しました。"
 
 

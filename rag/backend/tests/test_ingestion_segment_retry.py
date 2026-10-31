@@ -200,7 +200,7 @@ class _RetrySegmentVlm(OciEnterpriseAiClient):
 
 
 class _EmbeddingClient(OciGenAiClient):
-    """入力件数分の 1536 次元 embedding を返す fake。"""
+    """入力件数分の 1024 次元 embedding を返す fake。"""
 
     async def embed(
         self,

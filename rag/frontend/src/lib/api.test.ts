@@ -585,7 +585,7 @@ describe("api.request envelope", () => {
       },
       generative_ai: {
         embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
+        embedding_dim: 1024,
         embedding_base_url: "",
         rerank_model: "qwen3-rerank",
         rerank_base_url: "",
@@ -646,7 +646,7 @@ describe("api.request envelope", () => {
         },
         generative_ai: {
           embedding_model: "text-embedding-v4",
-          embedding_dim: 1536,
+          embedding_dim: 1024,
           embedding_base_url: "",
           rerank_model: "qwen3-rerank",
           rerank_base_url: "",

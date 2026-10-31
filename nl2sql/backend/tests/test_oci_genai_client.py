@@ -41,8 +41,8 @@ async def test_embed_sends_dimensions_and_orders_by_index() -> None:
     post = _FakePost(
         {
             "data": [
-                {"index": 1, "embedding": [0.2] * 1536},
-                {"index": 0, "embedding": [0.1] * 1536},
+                {"index": 1, "embedding": [0.2] * 1024},
+                {"index": 0, "embedding": [0.1] * 1024},
             ]
         }
     )
@@ -53,24 +53,24 @@ async def test_embed_sends_dimensions_and_orders_by_index() -> None:
     assert post.calls == [
         (
             f"{ENDPOINT}/embeddings",
-            {"model": "text-embedding-v4", "input": ["a", "b"], "dimensions": 1536},
+            {"model": "text-embedding-v4", "input": ["a", "b"], "dimensions": 1024},
         )
     ]
     assert [vector[0] for vector in vectors] == [0.1, 0.2]
 
 
 async def test_embed_rejects_wrong_dimension() -> None:
-    post = _FakePost({"data": [{"index": 0, "embedding": [0.1] * 1024}]})
+    post = _FakePost({"data": [{"index": 0, "embedding": [0.1] * 1536}]})
     client = OciGenAiClient(settings=_settings(), post=post)
 
     with pytest.raises(
-        ValueError, match=r"embedding の次元数が不正です。expected=1536, actual=1024"
+        ValueError, match=r"embedding の次元数が不正です。expected=1024, actual=1536"
     ):
         await client.embed(["a"])
 
 
 async def test_embed_uses_embedding_base_url_when_set() -> None:
-    post = _FakePost({"data": [{"index": 0, "embedding": [0.1] * 1536}]})
+    post = _FakePost({"data": [{"index": 0, "embedding": [0.1] * 1024}]})
     client = OciGenAiClient(
         settings=_settings(embedding_base_url="https://embed.example.test/v1/"), post=post
     )
