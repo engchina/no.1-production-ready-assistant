@@ -33,7 +33,6 @@ describe("isDatabaseGateExempt", () => {
       APP_ROUTES.settingsUploadStorage,
       APP_ROUTES.settingsModel,
       APP_ROUTES.settingsDatabase,
-      APP_ROUTES.settingsAppearance,
     ]) {
       expect(isDatabaseGateExempt(route)).toBe(true);
     }

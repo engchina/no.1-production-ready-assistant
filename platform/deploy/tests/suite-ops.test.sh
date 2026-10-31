@@ -59,8 +59,8 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   [ "$(git -C "${SUITE_REPO_DIR}" rev-parse --is-shallow-repository)" = "false" ] || fail "履歴をすべて持つ clone を shallow にした"
 )
 
-# 2. suite-restart.sh --no-build: 有効な production-ready-* の service（証明書の更新の oneshot を除く）と Nginx を
-#    再起動し、配備全体（service・backend と Nginx を通した health・Nginx）を確かめる。
+# 2. suite-restart.sh --no-build: 有効な production-ready-* の service を再起動し、配備全体（service・backend の
+#    health）を確かめる。reverse proxy（Nginx）は配備しないので再起動しない（#19）。
 (
   export PROPS_DIR="${task_dir}/restart-props"
   mkdir -p "${PROPS_DIR}"
@@ -73,7 +73,6 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
       printf '%s\n' \
         "production-ready-rag-backend.service enabled enabled" \
         "production-ready-rag-parser-docling.service enabled enabled" \
-        "production-ready-suite-tls-renew.service enabled enabled" \
         "production-ready-agent-backend.service enabled enabled"
       return 0
     fi
@@ -83,13 +82,10 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   suite_restart_services >/dev/null
   grep -qxF "systemctl restart production-ready-rag-backend.service production-ready-rag-parser-docling.service production-ready-agent-backend.service" "${calls}" \
     || fail "再起動の対象: $(cat "${calls}")"
-  if grep -q "tls-renew" "${calls}"; then fail "証明書の更新の oneshot を再起動した"; fi
-  grep -qxF "nginx -t" "${calls}" || fail "Nginx の設定を確かめない"
-  grep -qxF "systemctl restart nginx" "${calls}" || fail "Nginx を再起動しない"
+  if grep -q "nginx" "${calls}"; then fail "Nginx を扱った（#19）: $(cat "${calls}")"; fi
 
   [ "$(suite_deployed_products | tr '\n' ' ')" = "rag agent " ] || fail "配備した製品: $(suite_deployed_products | tr '\n' ' ')"
   # 再起動の後の確認は suite-init.sh の最後と同じ suite_check_deployment（#1642。suite-health.test.sh が詳しく確かめる）。
-  # 配備した製品と、props の HTTPS の設定から Nginx を通す URL を決める。
   SUITE_HEALTH_TIMEOUT_SECONDS=0
   SUITE_CHECK_SETTLE_SECONDS=0
   systemctl() {
@@ -102,18 +98,15 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   journalctl() { :; }
   # system schema の確認（#1648）は DB に繋がないよう差し替える（suite-health.test.sh が詳しく確かめる）。
   suite_run_schema_check() { printf 'status=ready\n'; }
-  curl() { case "$*" in *":8000/api/health"* | *"127.0.0.1:443/rag/api/health"*) return 0 ;; *) return 7 ;; esac; }
+  curl() { case "$*" in *":8000/api/health"*) return 0 ;; *) return 7 ;; esac; }
   if suite_check_deployed >/dev/null; then fail "Agent が応答しないのに成功した"; fi
   curl() { printf '%s\n' "$*" >> "${calls}"; }
   : > "${calls}"
   check_out="$(suite_check_deployed)" || fail "すべて応答するのに失敗した"
-  printf '%s\n' "${check_out}" | grep -qxF '[suite-restart] check: agent backend OK / services 1/1 active / nginx OK' \
+  printf '%s\n' "${check_out}" | grep -qxF '[suite-restart] check: agent backend OK / services 1/1 active' \
     || fail "確認の要約: ${check_out}"
-  grep -qF "https://127.0.0.1:443/agent/api/health" "${calls}" || fail "Nginx を通した health を確かめない: $(cat "${calls}")"
-  printf 'false\n' > "${PROPS_DIR}/https_enabled.txt"
-  : > "${calls}"
-  suite_check_deployed >/dev/null || fail "HTTPS が off の確認に失敗した"
-  grep -qF "http://127.0.0.1:80/rag/api/health" "${calls}" || fail "HTTPS が off のときに http で確かめない: $(cat "${calls}")"
+  grep -qF "http://127.0.0.1:8020/api/health" "${calls}" || fail "backend の health を確かめない: $(cat "${calls}")"
+  if grep -qE "127\.0\.0\.1:(80|443)/" "${calls}"; then fail "reverse proxy を通した health を確かめた: $(cat "${calls}")"; fi
 )
 
 # 3. suite-restart.sh（既定）: 今のコードから build する。再配備の前に今の backend/.env を props へ写し

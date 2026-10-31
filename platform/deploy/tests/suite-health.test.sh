@@ -108,10 +108,10 @@ fake_sleep() {
   grep -q "起動に失敗し、再起動を繰り返しています" "${out}" || fail "回数が戻った後の log: $(cat "${out}")"
 )
 
-# 2. suite_check_deployment: 製品ごとの 1 行の要約・証明書の更新の oneshot を除く・NG の journal・非 0。
+# 2. suite_check_deployment: 製品ごとの 1 行の要約・NG の journal・非 0。reverse proxy は確かめない（#19）。
 (
-  # shellcheck source=../suite-nginx.sh
-  source "${repo}/platform/deploy/suite-nginx.sh"
+  # shellcheck source=../suite-products.sh
+  source "${repo}/platform/deploy/suite-products.sh"
   # shellcheck source=../suite-health.sh
   source "${repo}/platform/deploy/suite-health.sh"
   out="${task_dir}/check.log"
@@ -133,8 +133,7 @@ fake_sleep() {
           "production-ready-rag-ingestion-worker.service enabled enabled" \
           "production-ready-nl2sql-backend.service enabled enabled" \
           "production-ready-nl2sql-ontology-worker.service enabled enabled" \
-          "production-ready-agent-backend.service enabled enabled" \
-          "production-ready-suite-tls-renew.service enabled enabled"
+          "production-ready-agent-backend.service enabled enabled"
         ;;
       is-active)
         local state
@@ -162,25 +161,24 @@ fake_sleep() {
   : > "${states_file}"
   : > "${out}"
   start="${SECONDS}"
-  suite_check_deployment https://127.0.0.1:443 rag nl2sql agent || fail "すべて OK なのに失敗した: $(cat "${out}")"
+  suite_check_deployment rag nl2sql agent || fail "すべて OK なのに失敗した: $(cat "${out}")"
   [ $((SECONDS - start)) -ge 10 ] || fail "service が続くことを確かめずに終わった"
   for expected in \
-    '[suite-init] check: rag backend OK / services 2/2 active / nginx OK' \
-    '[suite-init] check: nl2sql backend OK / services 2/2 active / nginx OK' \
-    '[suite-init] check: agent backend OK / services 1/1 active / nginx OK' \
-    '[suite-init] check: nginx.service active（https://127.0.0.1:443）' \
+    '[suite-init] check: rag backend OK / services 2/2 active' \
+    '[suite-init] check: nl2sql backend OK / services 2/2 active' \
+    '[suite-init] check: agent backend OK / services 1/1 active' \
     '[suite-init] check: rag schema OK（status=ready）' \
     '[suite-init] check: nl2sql schema OK（status=ready）' \
     '[suite-init] check: agent schema OK（status=ready）'; do
     grep -qxF "${expected}" "${out}" || fail "OK の要約（${expected}）: $(cat "${out}")"
   done
-  if grep -q "tls-renew" "${out}"; then fail "証明書の更新の oneshot を確かめた"; fi
+  if grep -qi "nginx" "${out}"; then fail "reverse proxy を確かめた: $(cat "${out}")"; fi
   [ ! -e "${journal}" ] || fail "OK なのに journal を出した"
 
   # NL2SQL の backend が起動しない（203/EXEC の再起動の繰り返し）・Agent が active に見えても再起動を繰り返す。
   curl() {
     case "$*" in
-      *":8010/api/health"* | *"/nl2sql/api/health"*) return 22 ;;
+      *":8010/api/health"*) return 22 ;;
       *) return 0 ;;
     esac
   }
@@ -188,10 +186,10 @@ fake_sleep() {
   printf '0\n' > "${restarts_dir}/production-ready-agent-backend.service"
   : > "${out}"
   start="${SECONDS}"
-  if suite_check_deployment https://127.0.0.1:443 rag nl2sql agent; then fail "NG があるのに成功した"; fi
+  if suite_check_deployment rag nl2sql agent; then fail "NG があるのに成功した"; fi
   [ $((SECONDS - start)) -ge 30 ] || fail "上限まで待たずに NG にした"
-  grep -qxF '[suite-init] check: rag backend OK / services 2/2 active / nginx OK' "${out}" || fail "RAG の要約: $(cat "${out}")"
-  grep -qF '[suite-init] check: nl2sql backend NG / services 1/2 active（NG: production-ready-nl2sql-backend.service activating（再起動 0 回）） / nginx NG' "${out}" \
+  grep -qxF '[suite-init] check: rag backend OK / services 2/2 active' "${out}" || fail "RAG の要約: $(cat "${out}")"
+  grep -qF '[suite-init] check: nl2sql backend NG / services 1/2 active（NG: production-ready-nl2sql-backend.service activating（再起動 0 回））' "${out}" \
     || fail "NL2SQL の要約: $(cat "${out}")"
   grep -qF '[suite-init] check: agent backend OK / services 0/1 active（NG: production-ready-agent-backend.service active（再起動' "${out}" \
     || fail "再起動を繰り返す Agent を NG にしない: $(cat "${out}")"
@@ -200,28 +198,14 @@ fake_sleep() {
   if grep -q "rag-backend" "${journal}"; then fail "OK の service の journal を出した"; fi
   tail -n 1 "${out}" | grep -q "check: NG" || fail "最後の行が NG ではない: $(tail -n 1 "${out}")"
   rm -f "${restarts_dir}/production-ready-agent-backend.service"
-
-  # Nginx が止まっている・Nginx を通した health だけが NG。--status と同じ 1 回だけの確認（待たない）。
-  curl() { case "$*" in *"127.0.0.1:443/"*) return 7 ;; *) return 0 ;; esac; }
-  printf 'nginx.service inactive\n' > "${states_file}"
-  : > "${out}"
-  : > "${journal}"
-  start="${SECONDS}"
-  if SUITE_CHECK_TIMEOUT_SECONDS=0 SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag; then
-    fail "Nginx が止まっているのに成功した"
-  fi
-  [ $((SECONDS - start)) -le 1 ] || fail "1 回だけの確認で待った（$((SECONDS - start)) 秒）"
-  grep -qxF '[suite-init] check: rag backend OK / services 2/2 active / nginx NG' "${out}" || fail "Nginx の NG: $(cat "${out}")"
-  grep -qxF '[suite-init] check: nginx.service NG（inactive）' "${out}" || fail "Nginx の状態: $(cat "${out}")"
-  grep -qxF "journalctl -u nginx.service -n 80 --no-pager" "${journal}" || fail "Nginx の journal: $(cat "${journal}")"
 )
 
 # 2b. system schema の確認（#1648）: init_script.sh は表の初期化に失敗しても backend を起動する（health は OK）。
 #     schema の CLI の check が ready でなければ check を NG にし、要約・初期化の log の最後の ORA・権限の手がかりを出して
 #     非 0 で終わる。schema の確認は待たずに 1 回だけ。CLI は製品のユーザーで backend の .venv の python で実行する。
 (
-  # shellcheck source=../suite-nginx.sh
-  source "${repo}/platform/deploy/suite-nginx.sh"
+  # shellcheck source=../suite-products.sh
+  source "${repo}/platform/deploy/suite-products.sh"
   # shellcheck source=../suite-health.sh
   source "${repo}/platform/deploy/suite-health.sh"
   out="${task_dir}/schema.log"
@@ -258,20 +242,20 @@ fake_sleep() {
   : > "${out}"
   : > "${calls}"
   start="${SECONDS}"
-  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag nl2sql; then
+  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment rag nl2sql; then
     fail "schema が NG なのに成功した: $(cat "${out}")"
   fi
   [ $((SECONDS - start)) -le 1 ] || fail "service が OK なのに schema の NG で待った（$((SECONDS - start)) 秒）"
   [ "$(cat "${calls}")" = "$(printf 'schema-check rag\nschema-check nl2sql')" ] || fail "schema の確認は製品ごとに 1 回: $(cat "${calls}")"
   for expected in \
-    '[suite-init] check: rag backend OK / services 1/1 active / nginx OK' \
-    '[suite-init] check: nl2sql backend OK / services 1/1 active / nginx OK' \
+    '[suite-init] check: rag backend OK / services 1/1 active' \
+    '[suite-init] check: nl2sql backend OK / services 1/1 active' \
     '[suite-init] check: rag schema OK（status=ready）' \
     '[suite-init] check: nl2sql schema NG（status=missing・操作 failed・前回の操作の失敗 ORA-01031）' \
     "[suite-init] check: nl2sql の初期化の log（${SUITE_PRODUCT_LOG_DIR}/nl2sql-init.log）の最後のエラー: ORA-01031"; do
     grep -qxF "${expected}" "${out}" || fail "schema の NG の行（${expected}）: $(cat "${out}")"
   done
-  grep -qF 'check: nl2sql の DB ユーザー（PLATFORM_ORACLE_USER）の権限が足りない可能性があります。terraform/README.md' "${out}" \
+  grep -qF 'check: nl2sql の DB ユーザー（PLATFORM_ORACLE_USER）の権限が足りない可能性があります。README.md「ローカルで動かす」' "${out}" \
     || fail "権限の不足の手がかり: $(cat "${out}")"
   if grep -qF 'check: rag の DB ユーザー' "${out}"; then fail "OK の製品に手がかりを出した"; fi
   tail -n 1 "${out}" | grep -q "check: NG" || fail "最後の行が NG ではない: $(tail -n 1 "${out}")"
@@ -279,11 +263,11 @@ fake_sleep() {
   # 時間切れ（timeout の 124）と、要約を出さない失敗。
   suite_run_schema_check() { return 124; }
   : > "${out}"
-  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag; then fail "時間切れで成功した"; fi
+  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment rag; then fail "時間切れで成功した"; fi
   grep -qxF '[suite-init] check: rag schema NG（確認が 120 秒以内に終わりません）' "${out}" || fail "時間切れの行: $(cat "${out}")"
   suite_run_schema_check() { return 1; }
   : > "${out}"
-  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag; then fail "要約の無い失敗で成功した"; fi
+  if SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment rag; then fail "要約の無い失敗で成功した"; fi
   grep -qF '[suite-init] check: rag schema NG（確認の CLI が要約を出さずに終わりました（終了コード 1。' "${out}" \
     || fail "要約の無い失敗の行: $(cat "${out}")"
 
@@ -291,7 +275,7 @@ fake_sleep() {
   suite_run_schema_check() { printf 'schema-check %s\n' "$1" >> "${calls}"; return 1; }
   : > "${out}"
   : > "${calls}"
-  SUITE_CHECK_SCHEMA=skip SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag nl2sql \
+  SUITE_CHECK_SCHEMA=skip SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment rag nl2sql \
     || fail "schema の確認を飛ばしたのに失敗した: $(cat "${out}")"
   [ ! -s "${calls}" ] || fail "skip なのに schema の CLI を呼んだ: $(cat "${calls}")"
   for expected in \
@@ -305,7 +289,7 @@ fake_sleep() {
   # skip 以外の値と既定（未設定）は確かめる（本番の既定は変えない）。
   : > "${out}"
   : > "${calls}"
-  if SUITE_CHECK_SCHEMA=check SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment https://127.0.0.1:443 rag; then
+  if SUITE_CHECK_SCHEMA=check SUITE_CHECK_SETTLE_SECONDS=0 suite_check_deployment rag; then
     fail "skip 以外の値で schema の NG を飛ばした"
   fi
   [ "$(cat "${calls}")" = "schema-check rag" ] || fail "skip 以外の値で schema の CLI を呼ばない: $(cat "${calls}")"
@@ -337,20 +321,6 @@ fake_sleep() {
   rm -rf "${SUITE_REPO_DIR}/agent/backend/.venv"
   if output="$(suite_run_schema_check agent)"; then fail "venv が無いのに成功した"; fi
   [ "${output}" = "backend の venv がありません（${SUITE_REPO_DIR}/agent/backend/.venv）" ] || fail "venv が無いときの要約: ${output}"
-)
-
-# 3. suite_local_nginx_base_url: props の HTTPS と port（無ければ HTTPS on・443）。
-(
-  # shellcheck source=../suite-health.sh
-  source "${repo}/platform/deploy/suite-health.sh"
-  props="${task_dir}/props"
-  mkdir -p "${props}"
-  [ "$(suite_local_nginx_base_url "${props}")" = "https://127.0.0.1:443" ] || fail "既定の URL: $(suite_local_nginx_base_url "${props}")"
-  printf '8443\n' > "${props}/https_port.txt"
-  [ "$(suite_local_nginx_base_url "${props}")" = "https://127.0.0.1:8443" ] || fail "https_port の URL"
-  printf 'false\n' > "${props}/https_enabled.txt"
-  printf '8080\n' > "${props}/http_port.txt"
-  [ "$(suite_local_nginx_base_url "${props}")" = "http://127.0.0.1:8080" ] || fail "HTTPS が off の URL"
 )
 
 # 4. 各製品の init_script.sh: install_uv は新規・既存のどちらでも、SELinux が有効なら uv / uvx の context を戻す。

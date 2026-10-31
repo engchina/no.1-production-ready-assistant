@@ -765,22 +765,26 @@ def test_security_ddl_is_the_final_shape_without_legacy_migrations() -> None:
         assert not (migration_dir / removed).exists()
 
 
-def test_dashboard_permission_is_retired_for_appearance_settings() -> None:
-    assert "dashboard.view" not in ALL_PERMISSION_CODES
-    assert "menu.settings_appearance" in ALL_PERMISSION_CODES
+@pytest.mark.parametrize(
+    "retired_code", ["menu.settings_appearance", "dashboard.view", "settings.appearance.view"]
+)
+def test_retired_appearance_permissions_are_accepted_and_dropped(retired_code: str) -> None:
+    """「外観と証明書」の画面ごと廃止した権限（#19）は、未知のコードとして拒否せずに落とす。"""
+
+    assert retired_code not in ALL_PERMISSION_CODES
 
     service = _service()
     actor, _, _ = _login(service)
 
     role = service.create_role(
-        role_code="LEGACY_DASHBOARD",
-        display_name="旧ダッシュボード",
+        role_code="LEGACY_APPEARANCE",
+        display_name="旧外観",
         description="",
-        permissions={"dashboard.view"},
+        permissions={retired_code, "menu.query"},
         entitlements=[],
         actor=actor,
     )
-    assert role.permissions == {"menu.settings_appearance"}
+    assert role.permissions == {"menu.query"}
 
 
 def test_stale_permission_codes_are_hidden_from_role_api_and_principals() -> None:
@@ -810,11 +814,14 @@ def test_stale_permission_codes_are_hidden_from_role_api_and_principals() -> Non
 
     stale_role = store.get_role("role-stale")
     assert stale_role is not None
-    assert "dashboard.view" not in RoleData.from_record(stale_role).permissions
+    stale_permissions = RoleData.from_record(stale_role).permissions
+    assert "dashboard.view" not in stale_permissions
+    assert "menu.settings_appearance" not in stale_permissions
 
     principal, _, _ = service.login("stale.user", "IndependentPass!456")
     assert "dashboard.view" not in principal.permissions
-    assert {"menu.settings_appearance", "menu.query", "menu.direct_sql"} <= principal.permissions
+    assert "menu.settings_appearance" not in principal.permissions
+    assert {"menu.query", "menu.direct_sql"} <= principal.permissions
 
 
 def test_data_entitlement_capability_is_structured() -> None:
@@ -6078,7 +6085,7 @@ def test_role_restore_validates_access_before_store_write(
 
 
 @pytest.mark.parametrize(
-    "permission, expected_read", [("menu.settings_oci", 200), ("menu.settings_appearance", 403)]
+    "permission, expected_read", [("menu.settings_oci", 200), ("menu.settings_model", 403)]
 )
 def test_oci_settings_can_read_shared_storage_without_write_permission(
     monkeypatch: pytest.MonkeyPatch, permission: str, expected_read: int

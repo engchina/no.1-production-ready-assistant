@@ -536,7 +536,6 @@ const agentJa = {
   "settings.database.systemTables.confirm.description":
     "管理対象の Agent のテーブルを削除して再作成します。実行履歴、保存済みの定義（業務 Agent・スキル・MCP 接続など）、利用状況の集計データ、ロールの権限と利用できる業務 Agent の割り当ては復元できません。3 製品共通のユーザー・ロール（PLATFORM_*）と、RAG / NL2SQL のテーブルは削除しません。",
   "nav.section.settings": "システム設定",
-  "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "settings.answerNotice.subtitle":
     "AI の回答の末尾に毎回出す注意書き（誤りの可能性・確かめ方・連絡先）を設定します。Agent の回答だけに使い、RAG・NL2SQL はそれぞれの画面で設定します。",

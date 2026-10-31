@@ -26,26 +26,11 @@ esac
 BACKEND_SERVICE="production-ready-${TAIL_LOGS_PRODUCT}-backend.service"
 ALL_SERVICES=("${BACKEND_SERVICE}" "${WORKER_SERVICES[@]}")
 
-NGINX_ACCESS_LOG="${NGINX_ACCESS_LOG:-/var/log/nginx/production-ready-${TAIL_LOGS_PRODUCT}-access.log}"
-NGINX_ERROR_LOG="${NGINX_ERROR_LOG:-/var/log/nginx/production-ready-${TAIL_LOGS_PRODUCT}-error.log}"
 INIT_LOG_PATH="${INIT_LOG_PATH:-/var/log/${TAIL_LOGS_PRODUCT}-init.log}"
 UPDATE_LOG_PATH="${UPDATE_LOG_PATH:-/var/log/${TAIL_LOGS_PRODUCT}-update.log}"
 
-# Nginx 経由の health は /<製品>/health。scheme と port は cloud-init の props（https_enabled.txt / https_port.txt /
-# http_port.txt。#1316）から決める（HTTPS が on なら https_port、off なら http_port。on のとき http_port は使わない。#1638）。
-SUITE_PROPS_DIR="${SUITE_PROPS_DIR:-/u01/aipoc/props}"
-suite_prop() {
-  tr -d '[:space:]' 2>/dev/null < "${SUITE_PROPS_DIR}/$1" || true
-}
-if [ "$(suite_prop https_enabled.txt)" = "false" ]; then
-  PUBLIC_HEALTH_PORT="$(suite_prop http_port.txt)"
-  PUBLIC_HEALTH_ORIGIN="http://127.0.0.1:${PUBLIC_HEALTH_PORT:-80}"
-else
-  PUBLIC_HEALTH_PORT="$(suite_prop https_port.txt)"
-  PUBLIC_HEALTH_ORIGIN="https://127.0.0.1:${PUBLIC_HEALTH_PORT:-443}"
-fi
+# health は backend を直接確かめる（reverse proxy は配備しない。#19）。
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:${BACKEND_PORT}/api/health}"
-PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-${PUBLIC_HEALTH_ORIGIN}/${TAIL_LOGS_PRODUCT}/health}"
 HEALTHCHECK_TIMEOUT_SECONDS="${HEALTHCHECK_TIMEOUT_SECONDS:-5}"
 
 ACTION="tail"
@@ -96,12 +81,11 @@ OCI Compute 上のアプリログをリアルタイム表示します(読み取�
   --unit <name>     unit を個別指定します(複数回指定可)。
                     backend / schema-refresh / quality-evaluation / ontology の
                     短縮名と完全な unit 名の双方を受理します。
-  --nginx           Nginx の access / error ログを対象にします。
   --init            /var/log/${TAIL_LOGS_PRODUCT}-init.log を対象にします。
   --update          /var/log/${TAIL_LOGS_PRODUCT}-update.log を対象にします。
-  --all             製品の unit + Nginx + init + update をすべて対象にします。
+  --all             製品の unit + init + update をすべて対象にします。
 
-  --nginx / --init / --update を単独指定した場合は、そのファイルだけを表示します。
+  --init / --update を単独指定した場合は、そのファイルだけを表示します。
   unit も同時に見るときは --all または --backend などと併用してください。
 
 表示の調整:
@@ -125,9 +109,8 @@ journald は権限不足のとき自動的に sudo へフォールバックし�
 JSON ログの整形には python3 を使用します(未導入の場合は生出力へ縮退)。
 
 Environment overrides:
-  NGINX_ACCESS_LOG / NGINX_ERROR_LOG   Nginx ログのパス
   INIT_LOG_PATH / UPDATE_LOG_PATH      init / update ログのパス
-  BACKEND_HEALTH_URL / PUBLIC_HEALTH_URL --status のヘルスチェック URL
+  BACKEND_HEALTH_URL                   --status のヘルスチェック URL
 EOF
 }
 
@@ -189,12 +172,6 @@ select_all_units() {
   done
 }
 
-select_nginx_files() {
-  FILE_SELECTION_MADE=true
-  add_file "nginx-access" "${NGINX_ACCESS_LOG}"
-  add_file "nginx-error" "${NGINX_ERROR_LOG}"
-}
-
 require_value() {
   [ "$#" -ge 2 ] || usage_error "$1 には値が必要です。"
 }
@@ -216,9 +193,6 @@ parse_args() {
         add_unit "${unit}"
         shift
         ;;
-      --nginx)
-        select_nginx_files
-        ;;
       --init)
         FILE_SELECTION_MADE=true
         add_file "init" "${INIT_LOG_PATH}"
@@ -229,7 +203,7 @@ parse_args() {
         ;;
       --all)
         select_all_units
-        select_nginx_files
+        FILE_SELECTION_MADE=true
         add_file "init" "${INIT_LOG_PATH}"
         add_file "update" "${UPDATE_LOG_PATH}"
         ;;
@@ -467,7 +441,6 @@ run_status() {
   done
   log "ヘルスチェック:"
   print_health "${BACKEND_HEALTH_URL}"
-  print_health "${PUBLIC_HEALTH_URL}"
   log "ログを追尾するには ./scripts/tail-logs.sh を引数なしで実行してください。"
 }
 

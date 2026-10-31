@@ -1,7 +1,7 @@
 /**
  * 画面の配信の基点（base path）の扱い（#1316）。
  *
- * 1 台の Compute に 3 製品を置く配備では、Nginx が製品を path の prefix（`/rag/` `/nl2sql/` `/agent/`）で分け、
+ * 1 台の Compute に 3 製品を置く配備では、前段の reverse proxy（利用者が置く。#19）が製品を path の prefix（`/rag/` `/nl2sql/` `/agent/`）で分け、
  * 各製品の frontend はその prefix を base に build する（Vite の `base` → `import.meta.env.BASE_URL`）。
  * ローカルの開発（`npm run dev`）と e2e は今までどおり `/` で動く（base が `/` のときは何も変えない）。
  *

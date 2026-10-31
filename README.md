@@ -159,8 +159,8 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 
 OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン）による配備は廃止しました（#12）。
 ローカルで動かす手順は、上の「ローカルで動かす（Oracle Autonomous Database Free コンテナ）」を参照してください。
-1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・Nginx・HTTPS・更新・確認の仕組みは
-[platform/docs/deployment.md](./platform/docs/deployment.md) にあります。
+1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・更新・確認の仕組みは
+[platform/docs/deployment.md](./platform/docs/deployment.md) にあります。配備は reverse proxy（Nginx など）と TLS の証明書を作りません（#19。[各製品の公開](#各製品の公開reverse-proxy-は利用者の選択)）。
 
 ### 配備の前に: Object Storage の bucket
 
@@ -185,7 +185,7 @@ OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン
 | `APP_ADMIN` | アプリ管理者 | 3 製品の「システム設定」**以外**のすべての権限 |
 | `APP_USER` | 一般利用者 | 3 製品の「AI 活用」の権限だけ |
 
-- 「システム設定」（OCI 認証・アップロード保存先・モデル・データベース・外観と証明書）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
+- 「システム設定」（OCI 認証・アップロード保存先・モデル・データベース）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
 
 動作確認用のユーザー（配備の後に、ロールと権限が意図どおりかを確かめるためのもの）:
 
@@ -218,12 +218,26 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-update.sh
 sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 ```
 
-- build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd・Nginx まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
+- build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
 - 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [platform/docs/deployment.md](./platform/docs/deployment.md#adb-の自動の起動1745) を参照してください。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
-- 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）、Wallet、HTTPS の CA は保たれます。
+- 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）と Wallet は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
-- OS を再起動すると、各製品のサービスと Nginx は自動で起動します。
+- OS を再起動すると、各製品のサービスは自動で起動します。
+
+## 各製品の公開（reverse proxy は利用者の選択）
+
+配備は reverse proxy（Nginx など）と TLS の証明書を作りません（#19）。各製品は直接の port で動きます。前段に reverse proxy を置くか、HTTPS の証明書をどう用意するかは、利用者が環境に合わせて決めます。
+
+| 製品 | backend（`uvicorn`） | frontend（開発 / preview） | frontend の base |
+|---|---|---|---|
+| RAG | 配備は `127.0.0.1:8000`（開発の `rag/scripts/start-backend.sh` は `8100`） | `3100`（`rag/scripts/start-frontend.sh`） | `/rag/` |
+| NL2SQL | 配備は `127.0.0.1:8010`（開発の `nl2sql/scripts/start-backend.sh` は `8110`） | `3101` | `/nl2sql/` |
+| Agent | 配備は `127.0.0.1:8020`（開発の `agent/scripts/start-backend.sh` は `8120`） | `3102` | `/agent/` |
+
+- 開発: 各製品の `scripts/start-all.sh`（または `start-backend.sh` と `start-frontend.sh`）で、backend は `uv run uvicorn app.main:app --host <host> --port <port>`、frontend は Vite の dev server で動きます。frontend の `/api` は `BACKEND_URL=http://127.0.0.1:<backend の port>` を渡したときだけ backend へ proxy します。
+- build した画面を出す: `cd <製品>/frontend && npm run build`（base を変えるときは `FRONTEND_BASE_PATH=/<製品>/`）の後、`BACKEND_URL=http://127.0.0.1:<backend の port> npx vite preview --host 0.0.0.0 --port <port>` で `dist/` を配信します。配備（`platform/deploy/suite-init.sh`）は `dist/` を `/<製品>/` の base で build し、backend を systemd で `127.0.0.1` に起動するところまでを行います。
+- reverse proxy を置くときは、`/<製品>/` を各製品の `frontend/dist/`（SPA なので見つからない path は `index.html`）に、`/<製品>/api/` を prefix を外して各製品の backend に渡します。SSE（`text/event-stream`）は buffering を切り、回答の生成・評価・MCP の長い要求（最大 600 秒程度）に合わせて待ち時間を延ばし、アップロードの上限（`<製品>_MAX_UPLOAD_BYTES`）より本文の上限を大きくします。公開の URL は `platform/.env` の `PLATFORM_PUBLIC_BASE_URL` に書くと、API キーの画面の接続先に出ます。
 
 ## 構成
 
@@ -242,7 +256,7 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 
 ## Claude Code から RAG / NL2SQL / Agent を使う（MCP とスキル）
 
-配備した Suite の 3 製品は MCP（`POST /<製品>/api/mcp`）を公開しています。Claude Code などの外部の Agent は、利用者が自分で発行した API キーで接続し、`skills/` の 3 つのスキル（業務 RAG 調査・構造化データ照会・資料とデータの横断調査）と組み合わせて使います。以下の `<host>` は配備した Compute のアドレス（例 `203.0.113.10`。公開の port が 443 以外なら `203.0.113.10:8443`）です。Claude Code を動かす端末から公開の port に届くよう、subnet の security list か NSG で許可しておきます。
+配備した Suite の 3 製品は MCP（`POST /<製品>/api/mcp`。backend を直接呼ぶときは `POST /api/mcp`）を公開しています。Claude Code などの外部の Agent は、利用者が自分で発行した API キーで接続し、`skills/` の 3 つのスキル（業務 RAG 調査・構造化データ照会・資料とデータの横断調査）と組み合わせて使います。以下の `https://<host>/<製品>/api/mcp` は、利用者が前段に置いた reverse proxy の URL です（[各製品の公開](#各製品の公開reverse-proxy-は利用者の選択)。reverse proxy を置かないときは `http://<host>:<backend の port>/api/mcp`）。Claude Code を動かす端末からその port に届くようにしておきます。
 
 ### 1. API キーを発行する
 
@@ -254,12 +268,10 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 
 ### 2. キーと接続の設定をファイルに置く
 
-キーは repo・共有の設定に書かず、自分だけが読めるファイルに置きます。Claude Code にはシェルの環境変数（`~/.bashrc`）ではなく、Claude Code 自身の設定（`~/.claude/settings.json` の `env` と MCP の `headersHelper`）で渡します。Claude デスクトップ版（Code タブ）は `~/.bashrc` を読まずに起動するので、環境変数に頼るとターミナル版でしか動きません（デスクトップ版で `Missing environment variables: PR_API_KEY`・`UNABLE_TO_VERIFY_LEAF_SIGNATURE` になる）。
+キーは repo・共有の設定に書かず、自分だけが読めるファイルに置きます。Claude Code にはシェルの環境変数（`~/.bashrc`）ではなく、Claude Code 自身の設定（`~/.claude/settings.json` の `env` と MCP の `headersHelper`）で渡します。Claude デスクトップ版（Code タブ）は `~/.bashrc` を読まずに起動するので、環境変数に頼るとターミナル版でしか動きません（デスクトップ版で `Missing environment variables: PR_API_KEY` になる）。
 
 ```bash
 mkdir -p ~/.config/production-ready && chmod 700 ~/.config/production-ready
-# 自作の CA の証明書（配備の既定の HTTPS。正規の証明書に替えた環境では不要）
-curl -sk https://<host>/platform/ca.crt -o ~/.config/production-ready/ca.crt
 # キー（prak_... を発行したキーに置き換える）
 cat > ~/.config/production-ready/env <<'EOF'
 PR_API_KEY='prak_...'
@@ -274,7 +286,7 @@ EOF
 chmod 700 ~/.config/production-ready/mcp-headers.sh
 ```
 
-CA とツールの待ち時間を `~/.claude/settings.json` の `env` に足します（ほかの設定は残します）。
+ツールの待ち時間を `~/.claude/settings.json` の `env` に足します（ほかの設定は残します）。reverse proxy の HTTPS の証明書を自分の CA で署名したときは、`NODE_EXTRA_CA_CERTS` にその CA の証明書のパスも足します。
 
 ```bash
 python3 - <<'EOF'
@@ -283,7 +295,6 @@ home = pathlib.Path.home()
 path = home / ".claude" / "settings.json"
 settings = json.loads(path.read_text()) if path.exists() else {}
 settings.setdefault("env", {}).update({
-    "NODE_EXTRA_CA_CERTS": str(home / ".config/production-ready/ca.crt"),  # 自作の CA を信頼させる（正規の証明書なら不要）
     "MCP_TOOL_TIMEOUT": "660000",  # rag_search は 20 秒〜2 分かかる（既定の 60 秒では切れる）
 })
 path.parent.mkdir(exist_ok=True)
@@ -296,7 +307,6 @@ EOF
 ```json
 {
   "env": {
-    "NODE_EXTRA_CA_CERTS": "<ホームの絶対パス>/.config/production-ready/ca.crt",
     "MCP_TOOL_TIMEOUT": "660000"
   }
 }
@@ -330,13 +340,13 @@ repo を clone 済みの環境（配備した Compute など）では、`claude 
 # 環境変数を空にして、デスクトップ版と同じ条件で確かめる（rag・nl2sql・agent が ✔ Connected）
 env -i HOME="$HOME" PATH="$PATH" claude mcp list
 claude plugin list   # production-ready-skills@production-ready-assistant が ✔ enabled
-# ツールの一覧（キー・CA・URL の切り分け）
+# ツールの一覧（キー・URL の切り分け）
 ( . ~/.config/production-ready/env
-  curl -sS --cacert ~/.config/production-ready/ca.crt -H "Authorization: Bearer $PR_API_KEY" -H 'Content-Type: application/json' \
+  curl -sS -H "Authorization: Bearer $PR_API_KEY" -H 'Content-Type: application/json' \
     https://<host>/rag/api/mcp -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' )
 ```
 
-設定を変えたら、Claude Code のセッションを新しく始めます（CA は起動のときにだけ読まれ、開いているセッションには効きません。デスクトップ版も新しいセッションを開きます）。新しいセッションでは、`/mcp` で 3 つのサーバーが connected か、`/plugin` でスキルが入っているかを見たうえで、読み取りだけのツールを呼ぶ質問で確かめます（例「rag と nl2sql の MCP で、私が使える検索・回答プロファイルと業務プロファイルを一覧にしてください」「agent の MCP で、使える業務 Agent を一覧にしてください」）。
+設定を変えたら、Claude Code のセッションを新しく始めます（`env` は起動のときにだけ読まれ、開いているセッションには効きません。デスクトップ版も新しいセッションを開きます）。新しいセッションでは、`/mcp` で 3 つのサーバーが connected か、`/plugin` でスキルが入っているかを見たうえで、読み取りだけのツールを呼ぶ質問で確かめます（例「rag と nl2sql の MCP で、私が使える検索・回答プロファイルと業務プロファイルを一覧にしてください」「agent の MCP で、使える業務 Agent を一覧にしてください」）。
 
 その後は普段の質問で使えます（質問に合うスキルを Claude Code が選び、RAG は `mcp__rag__rag_search`、NL2SQL は `mcp__nl2sql__nl2sql_query`、業務 Agent は `mcp__agent__agent_chat` などを呼びます）。非対話の `claude -p` では `--allowedTools "Skill,mcp__rag,mcp__nl2sql,mcp__agent"` を渡します。業務 Agent が使うスキルは `agent_skill_export` で Agent Skills の形で取り出し、`~/.claude/skills/<name>/` に置けます。
 
@@ -358,7 +368,7 @@ claude plugin list   # production-ready-skills@production-ready-assistant が �
 | Agent | `3102` | `8120` | `3142` |
 
 - 起動 script は `PORT` / `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_URL` で上書きできます。
-- OCI Compute への配備（`init_script.sh` の systemd・Nginx・Terraform）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
+- OCI Compute への配備（`platform/deploy/` と各製品の `init_script.sh` の systemd）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
 - 文書の解析・前処理のサービス（`127.0.0.1:18010`〜`18023`）は変えていません。
 
 ## 開発ルール

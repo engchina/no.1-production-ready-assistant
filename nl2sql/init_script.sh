@@ -30,7 +30,7 @@ BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="8010"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${APP_ROOT}/props/backend.env}"
-# frontend の base（Vite の base・React Router の basename）。Nginx の /nl2sql/ の下で配信する（#1316）。
+# frontend の base（Vite の base・React Router の basename）。reverse proxy の /nl2sql/ の下で配信する前提（#1316）。
 FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/nl2sql/}"
 # true なら共有 UI（platform）を build し直さない（suite で先の製品が build したとき）。
 PR_SUITE_SKIP_PLATFORM_UI_BUILD="${PR_SUITE_SKIP_PLATFORM_UI_BUILD:-false}"
@@ -85,7 +85,7 @@ run_as_app_user_in_dir() {
   run_as_app_user bash -lc "cd '${workdir}' && $*"
 }
 
-# NL2SQL が使う OS の package（Nginx・firewalld は platform/deploy/suite-init.sh が入れる）。
+# NL2SQL が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。
 # gcc・make は wheel の無い Python の依存を build するため。curl は image にある。
 SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make tar unzip)
 

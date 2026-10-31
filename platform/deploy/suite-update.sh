@@ -20,7 +20,7 @@ Usage: sudo platform/deploy/suite-update.sh
 
 origin の main を取得し（suite-pull.sh）、取得した新しい suite-restart.sh で build して全サービスを再起動します。
 DB（ADB Free コンテナ）の起動・停止はしません（止まっていれば docker start で起動してから実行してください）。
-画面で保存した値（各製品の backend/.env・platform/.env）、Wallet、HTTPS の CA は保ちます。
+画面で保存した値（各製品の backend/.env・platform/.env）と Wallet は保ちます。
 log は /var/log/suite-ops.log（再配備の詳細は /var/log/suite-init.log）。
 EOF
 }

@@ -24,7 +24,7 @@ export const ja = {
   "dbGate.setupRequired.message":
     "データベースには接続できています。RAG に必要なテーブル・索引が不足しているか、未適用の更新があります。運用設定の「システムテーブル」で「作成・更新」を実行してから、再試行してください。",
   "dbGate.setupRequired.settingsHint":
-    "OCI 認証・アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
+    "OCI 認証・アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
   "common.delete": "削除",
   "common.retry": "再試行",
   "common.skipToMain": "本文へスキップ",
@@ -123,8 +123,6 @@ export const ja = {
   "nav.section.improve": "改善・運用",
   "nav.section.operations": "運用設定",
   "nav.section.settings": "システム設定",
-  // 「外観と証明書」は HTTPS の証明書を扱う（#1316。配色テーマの選択は #17 で廃止）。副題・カードの文言は platform の既定を使う。
-  "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",

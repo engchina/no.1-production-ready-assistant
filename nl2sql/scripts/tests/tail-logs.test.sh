@@ -102,7 +102,6 @@ set -euo pipefail
 for arg in "$@"; do
   case "${arg}" in
     *127.0.0.1:8010*) printf '200'; exit 0 ;;
-    https://127.0.0.1:443/nl2sql/health) printf '000'; exit 7 ;;
   esac
 done
 printf '000'
@@ -138,21 +137,24 @@ assert_contains "${result}" "units=${ONTOLOGY_UNIT} ${BACKEND_UNIT} ${SCHEMA_UNI
 result="$(parse_case --unit backend --unit backend --backend)"
 assert_contains "${result}" "units=${BACKEND_UNIT}" "重複指定した unit が排除されていない"
 
-result="$(NGINX_ACCESS_LOG=/tmp/a.log NGINX_ERROR_LOG=/tmp/e.log \
-  INIT_LOG_PATH=/tmp/i.log UPDATE_LOG_PATH=/tmp/u.log parse_case --all)"
+result="$(INIT_LOG_PATH=/tmp/i.log UPDATE_LOG_PATH=/tmp/u.log parse_case --all)"
 assert_contains "${result}" "units=${BACKEND_UNIT} ${SCHEMA_UNIT} ${SYNTHETIC_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
   "--all にアプリ 5 unit が含まれない"
-assert_contains "${result}" "files=nginx-access=/tmp/a.log nginx-error=/tmp/e.log init=/tmp/i.log update=/tmp/u.log" \
-  "--all に Nginx / init / update ログが含まれない"
+assert_contains "${result}" "files=init=/tmp/i.log update=/tmp/u.log" \
+  "--all に init / update ログが含まれない"
 
 result="$(INIT_LOG_PATH=/tmp/i.log parse_case --init)"
 assert_contains "${result}" "units=" "--init 単独指定なのに unit が追尾対象に入っている"
 assert_contains "${result}" "files=init=/tmp/i.log" "--init でファイルが対象にならない"
 
-result="$(NGINX_ACCESS_LOG=/tmp/a.log NGINX_ERROR_LOG=/tmp/e.log parse_case --nginx --backend)"
-assert_contains "${result}" "units=${BACKEND_UNIT}" "--nginx と --backend の併用で unit が失われる"
-assert_contains "${result}" "files=nginx-access=/tmp/a.log nginx-error=/tmp/e.log" \
-  "--nginx と --backend の併用でファイルが失われる"
+result="$(INIT_LOG_PATH=/tmp/i.log parse_case --init --backend)"
+assert_contains "${result}" "units=${BACKEND_UNIT}" "--init と --backend の併用で unit が失われる"
+assert_contains "${result}" "files=init=/tmp/i.log" "--init と --backend の併用でファイルが失われる"
+
+# reverse proxy（Nginx）は配備しない（#19）。--nginx は受け付けない。
+if parse_case --nginx >/dev/null 2>&1; then
+  fail_test "--nginx を受け付けた"
+fi
 
 # --- journalctl 引数の組み立て -------------------------------------------------
 
@@ -218,7 +220,9 @@ assert_contains "${result}" "active" "--status に稼働状態が出ない"
 assert_contains "${result}" "failed" "--status に停止中 unit の状態が出ない"
 assert_contains "${result}" "http://127.0.0.1:8010/api/health" "--status に backend ヘルス URL が出ない"
 assert_contains "${result}" "200" "--status にヘルスチェックの HTTP status が出ない"
-assert_contains "${result}" "unreachable" "--status で到達不可の URL が表示されない"
+if printf '%s\n' "${result}" | grep -q "/nl2sql/health"; then
+  fail_test "--status が reverse proxy を通した health を確かめた"
+fi
 
 # --- 存在しないログファイル ----------------------------------------------------
 

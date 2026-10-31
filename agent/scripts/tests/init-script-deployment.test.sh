@@ -21,7 +21,6 @@ prepare_case() {
   export APP_ROOT="${case_dir}/app"
   export AGENT_INIT_TEST_MODE=true
   export SYSTEMD_UNIT_DIR="${case_dir}/units"
-  export NGINX_LOGGING_CONF_DIR="${case_dir}/conf.d"
 }
 
 run_initialization_case() (
@@ -149,7 +148,7 @@ if grep -q 'dispatcher' "${unit}"; then
   fail "stack は外部 dispatcher を起動しない"
 fi
 
-# --- Nginx: Agent は単独では配備しない（#1316）。site は platform/deploy/suite-nginx.sh の 1 つだけ ---
+# --- reverse proxy: Agent は単独では配備せず（#1316）、suite も reverse proxy（Nginx）を配備しない（#19） ---
 for unexpected in configure_nginx sites-available proxy_pass APPLICATION_PORT; do
   if grep -Fq "${unexpected}" "${REPO_DIR}/init_script.sh"; then
     fail "単独の配備の Nginx の設定（${unexpected}）が残っている"

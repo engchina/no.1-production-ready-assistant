@@ -6,7 +6,7 @@ Python の診断は `pr_backend_core.configure_logging` が所有する stderr h
 
 `schema_version=1`、`timestamp`、`level`、`name`、`event`、`message`、`service_name`、`service_version`、`environment`、`component`、`process_id` を基本とする。`timestamp` は `Asia/Tokyo` の RFC3339 millisecond、必ず `+09:00` を付ける。OS / process timezone や epoch は変更しない。
 
-Nginx access は `escape=json`、同じ identity / HTTP 語彙と `timestamp_epoch`（秒）を記録する。Nginx の local-time 文字列から推測せず、共通 viewer / JSON export が同じ瞬間の JST へ変換する。native error log は原形式を維持する。旧 naive アプリ時刻は journald epoch があればそれを正本にし、なければ UTC として変換する。元の timezone が不明な native text を JST と断定しない。raw は原時刻を保持する。
+配備は reverse proxy（Nginx など）を作らない（#19）。前段に reverse proxy を置くときは、その access log も同じ identity / HTTP 語彙と `timestamp_epoch`（秒）で JSON に記録し、local-time 文字列から推測せず、共通 viewer / JSON export が同じ瞬間の JST へ変換する。native error log は原形式を維持する。旧 naive アプリ時刻は journald epoch があればそれを正本にし、なければ UTC として変換する。元の timezone が不明な native text を JST と断定しない。raw は原時刻を保持する。
 
 OpenTelemetry への対応は `timestamp`→Timestamp、`level`→SeverityText、`message`→Body、service identity→Resource、event / domain fields→Attributes。有効な W3C `traceparent` の trace は `trace_id`、受信 span は `parent_span_id` に残す。ローカル span を開始していないため `span_id` は捏造しない。既存の業務 `trace_id` は `domain_trace_id` に分ける。独自 JSON は OTLP wire protocol ではない。
 
@@ -28,7 +28,7 @@ OpenTelemetry への対応は `timestamp`→Timestamp、`level`→SeverityText�
 
 HTTP の相関は ASGI 境界で bind し、body / SSE 終了・例外・取消後に reset。sync threadpool と WebSocket も同じ context を使う。応答の `X-Request-ID` は検証済みの値。不正な ID は新規発行する。MCP / parser / preprocess / pipeline の outbound に request / W3C trace と安全な Run / job の診断 ID を伝播する。`X-Correlation-Run-ID` / `X-Correlation-Job-ID` は診断専用で、認証 claim や scope として信用しない。process 境界は永続 job の ID を claim / 子プロセスで bind する。
 
-HTTP summary は hop ごとに `http_access` を1件。route template、status、body 終了までの `duration_ms`、header 到達までの `headers_duration_ms`、outcome を残す。MCP の HTTP 200 内の tool error は既存の tool execution event が正本。成功 GET `/api/services/{service_id}/status` のみ抑制し、401 / 403 / 5xx / stream 中断は保持する。未解決 route は `/unmatched`、Nginx は `/api/*` 等に粗粒度化し、入力値を route に入れない。
+HTTP summary は hop ごとに `http_access` を1件。route template、status、body 終了までの `duration_ms`、header 到達までの `headers_duration_ms`、outcome を残す。MCP の HTTP 200 内の tool error は既存の tool execution event が正本。成功 GET `/api/services/{service_id}/status` のみ抑制し、401 / 403 / 5xx / stream 中断は保持する。未解決 route は `/unmatched`、reverse proxy は `/api/*` 等に粗粒度化し、入力値を route に入れない。
 
 ## Event / level
 
@@ -68,4 +68,4 @@ bash agent/scripts/tail-logs.sh --all --run-id run-1 --json --no-follow
 
 JSON/native text の混在、UTF-8、journald byte array、破損行で後続を失わない。`--json` は安全な scalar field のみで JST を明示し、旧自由本文 / native text は export しない。`--raw` は原文を含む管理者の明示的な閲覧であり、そのまま Issue / public artifact に貼らない。ID filter は JSON の完全一致。raw と ID / JSON filter は併用できない。
 
-journald / `/var/log/nginx` の既存権限・rotate を使う。デプロイ前に `journalctl --disk-usage`、`systemd-analyze cat-config systemd/journald.conf`、`logrotate --debug /etc/logrotate.conf` で容量 / 保持 / rotate を確認し、運用責任者が `SystemMaxUse` / `MaxRetentionSec` と Nginx の世代・日数を決める。本変更は既存データを vacuum しない。ログ閲覧は運用グループ、diagnostic export は `umask 077` で保存し、共有前に secret / 個人情報の有無を確認する。audit の保持は診断ファイルと別に管理する。初期化 scripts の共有 Nginx format は再配備で入る。既存 Compute は変更差分と `nginx -t` を確認してから反映する。実 OCI の保持値・Gunicorn fork / journald 配備は CI のスタブ確認と分けて記録する。
+journald の既存権限・rotate を使う。デプロイ前に `journalctl --disk-usage`、`systemd-analyze cat-config systemd/journald.conf`、`logrotate --debug /etc/logrotate.conf` で容量 / 保持 / rotate を確認し、運用責任者が `SystemMaxUse` / `MaxRetentionSec`（reverse proxy を置くならそのログの世代・日数も）を決める。本変更は既存データを vacuum しない。ログ閲覧は運用グループ、diagnostic export は `umask 077` で保存し、共有前に secret / 個人情報の有無を確認する。audit の保持は診断ファイルと別に管理する。実 OCI の保持値・Gunicorn fork / journald 配備は CI のスタブ確認と分けて記録する。

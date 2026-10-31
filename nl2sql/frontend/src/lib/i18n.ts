@@ -314,7 +314,6 @@ const nl2sqlJa = {
   "nav.settingsConnection": "接続設定",
   "nav.settingsModel": "モデル",
   "nav.settingsDatabase": "データベース",
-  "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",
@@ -766,7 +765,6 @@ const nl2sqlJa = {
   "security.deepsec.entitlements.failed": "失敗",
   "security.deepsec.entitlements.running": "適用中",
   "security.deepsec.entitlements.pending": "未適用",
-
 
   "page.query.subtitle": "業務プロファイルのデータに質問し、SQL を生成して実行する",
   "page.settings.subtitle": "接続・モデル・データベースの設定",

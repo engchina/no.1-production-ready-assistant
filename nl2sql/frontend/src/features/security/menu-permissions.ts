@@ -35,7 +35,6 @@ export const MENU_PERMISSIONS = {
   settingsDatabase: "menu.settings_database",
   settingsSystemTables: "menu.settings_system_tables",
   settingsSelectAiCredential: "menu.settings_select_ai_credential",
-  settingsAppearance: "menu.settings_appearance",
   settingsAnswerNotice: "menu.settings_answer_notice",
   settingsTraceRecording: "menu.settings_trace_recording",
   settingsChatAttachments: "menu.settings_chat_attachments",
@@ -188,7 +187,9 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
 };
 
 const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
-  "dashboard.view": [MENU_PERMISSIONS.settingsAppearance],
+  // 廃止して置き換え先の無い権限（#19 で「外観と証明書」の画面ごと削除）。正規化で落とす。
+  "menu.settings_appearance": [],
+  "dashboard.view": [],
   "documents.view": [
     MENU_PERMISSIONS.tableManagement,
     MENU_PERMISSIONS.viewManagement,
@@ -267,7 +268,7 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
     MENU_PERMISSIONS.adminSql,
     MENU_PERMISSIONS.settingsSystemTables,
   ],
-  "settings.appearance.view": [MENU_PERMISSIONS.settingsAppearance],
+  "settings.appearance.view": [],
   "security.users.view": [MENU_PERMISSIONS.securityUsers],
   "security.users.manage": [MENU_PERMISSIONS.securityUsers],
   "security.roles.view": [MENU_PERMISSIONS.securityRoles],
