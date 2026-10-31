@@ -12,8 +12,8 @@ fail() {
 
 prepare_case() {
   local case_dir="$1"
-  mkdir -p "${case_dir}/app/props" "${case_dir}/app/no.1-production-ready-suite" "${case_dir}/units"
-  ln -s "${repo}/platform" "${case_dir}/app/no.1-production-ready-suite/platform"
+  mkdir -p "${case_dir}/app/props" "${case_dir}/app/no.1-production-ready-assistant" "${case_dir}/units"
+  ln -s "${repo}/platform" "${case_dir}/app/no.1-production-ready-assistant/platform"
   export SUITE_INIT_TEST_MODE=true
   export APP_ROOT="${case_dir}/app"
   export SYSTEMD_UNIT_DIR="${case_dir}/units"
@@ -157,8 +157,8 @@ prepare_case() {
   prepare_case "${case_dir}"
   # shellcheck source=../suite-init.sh
   source "${repo}/platform/deploy/suite-init.sh"
-  rm -f -- "${case_dir}/app/no.1-production-ready-suite/platform"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform" "${case_dir}/bin" "${case_dir}/zoneinfo/Asia" \
+  rm -f -- "${case_dir}/app/no.1-production-ready-assistant/platform"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/platform" "${case_dir}/bin" "${case_dir}/zoneinfo/Asia" \
     "${case_dir}/zoneinfo/Etc"
   : > "${case_dir}/zoneinfo/Asia/Tokyo"
   : > "${case_dir}/zoneinfo/UTC"

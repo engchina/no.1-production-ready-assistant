@@ -199,7 +199,7 @@ ADMIN で Deep Data Security を適用していた ADB では、先に ADMIN の
 
 SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 
-- `semanage fcontext -a -t usr_t '/u01/aipoc/no.1-production-ready-suite(/.*)?'` と `restorecon -R`: systemd（`init_t`）は `/u01` の既定の
+- `semanage fcontext -a -t usr_t '/u01/aipoc/no.1-production-ready-assistant(/.*)?'` と `restorecon -R`: systemd（`init_t`）は `/u01` の既定の
   `default_t` のファイルを実行も読みもできないため、repository を `usr_t` にする（RAG の unit の `.venv/bin/gunicorn` と `EnvironmentFile`）。
   新しく作るファイル（venv・`node_modules`・`git pull` の分）は親の `usr_t` を受け継ぐ。
 - `restorecon -v /usr/local/bin/uv /usr/local/bin/uvx`（各製品の `init_script.sh` の `install_uv`。#1642）: uv の installer は一時の場所から
@@ -227,7 +227,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
   dispatcher・読み直せなかった backend）を再起動する（backend は `suite-restart.sh --no-build`）。CLI で適用したときは、
   動いている backend を再起動する（`suite-restart.sh` は再起動まで行う）。
 - **配備が途中で失敗したときのやり直し**（#1994）: 先に `sudo tail -n 50 /var/log/suite-init.log` で止まった所を確かめ、
-  原因（`/` の空き〔`df -h /`。#1984〕・ネットワーク・ADB など）を直してから、repo（`/u01/aipoc/no.1-production-ready-suite`）があれば
+  原因（`/` の空き〔`df -h /`。#1984〕・ネットワーク・ADB など）を直してから、repo（`/u01/aipoc/no.1-production-ready-assistant`）があれば
   `sudo .../platform/deploy/suite-update.sh`（最新の main を取得して再配備）か `suite-restart.sh`（今のコードで再配備）を実行する。
 - 2 つのスクリプトは lock を共有し、同時の実行を防ぐ。log は `/var/log/suite-ops.log`（再配備の詳細は `/var/log/suite-init.log`）。
 - 製品の `init_script.sh` は backend の `/api/health` を 3 秒ごとに最大 300 秒待ち（`SUITE_BACKEND_HEALTH_TIMEOUT_SECONDS`）、15 秒ごとに経過・状態・
@@ -265,7 +265,7 @@ RAG `-m app.rag.system_schema_cli check`・NL2SQL `-m app.cli.nl2sql_system_sche
 Agent `-m app.cli.agent_system_schema --check`。
 
 - 配備の直後は `sudo tail -n 20 /var/log/suite-init.log` の最後の `check:` の行を見る。
-- 後から確かめるときは `sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh --status`（再起動しない）。
+- 後から確かめるときは `sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh --status`（再起動しない）。
 
 ## ログインの試行の回数の共有（#1173）
 
@@ -296,13 +296,13 @@ Agent `-m app.cli.agent_system_schema --check`。
 
    ```bash
    # RAG
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u opc .venv/bin/python -m app.rag.system_schema_cli initialize
    # NL2SQL
-   cd /u01/aipoc/no.1-production-ready-suite/nl2sql/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/nl2sql/backend
    sudo -u opc /usr/local/bin/uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
    # Agent
-   cd /u01/aipoc/no.1-production-ready-suite/agent/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/agent/backend
    sudo -u opc /usr/local/bin/uv run python -m app.cli.agent_system_schema --initialize
    ```
 

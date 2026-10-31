@@ -1,9 +1,9 @@
 {
-  "name": "production-ready-suite",
-  "description": "No.1 Production Ready Suite の Agent Skills（業務 RAG・NL2SQL の MCP を使う調査のスキル）",
+  "name": "production-ready-assistant",
+  "description": "No.1 Production Ready Assistant の Agent Skills（業務 RAG・NL2SQL の MCP を使う調査のスキル）",
   "owner": {
     "name": "engchina",
-    "url": "https://github.com/engchina/no.1-production-ready-suite"
+    "url": "https://github.com/engchina/no.1-production-ready-assistant"
   },
   "plugins": [
     {

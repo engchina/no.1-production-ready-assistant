@@ -8,7 +8,7 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 | [`structured-data-query`](./structured-data-query/SKILL.md)（構造化データ照会） | `nl2sql` | 業務データの件数・金額・一覧を SQL で照会する |
 | [`rag-and-structured-data`](./rag-and-structured-data/SKILL.md)（資料とデータの横断調査） | `rag`・`nl2sql` | 資料と業務データの両方が要る調査 |
 
-このディレクトリは Claude Code の plugin `production-ready-skills`（[`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)）でもあり、repo 直下の [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)（marketplace `production-ready-suite`）が配る。
+このディレクトリは Claude Code の plugin `production-ready-skills`（[`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)）でもあり、repo 直下の [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)（marketplace `production-ready-assistant`）が配る。
 
 ## 外部の Agent（Claude Code）で使う
 
@@ -21,16 +21,16 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 ### 1. スキルを入れる
 
 ```bash
-claude plugin marketplace add https://github.com/engchina/no.1-production-ready-suite.git --sparse .claude-plugin skills
-claude plugin install production-ready-skills@production-ready-suite
-claude plugin list   # production-ready-skills@production-ready-suite が enabled
+claude plugin marketplace add https://github.com/engchina/no.1-production-ready-assistant.git --sparse .claude-plugin skills
+claude plugin install production-ready-skills@production-ready-assistant
+claude plugin list   # production-ready-skills@production-ready-assistant が enabled
 ```
 
-- Claude Code の中では `/plugin marketplace add …` と `/plugin install production-ready-skills@production-ready-suite`。入れた後に始めたセッションから使える（今のセッションは `/reload-plugins`）。
+- Claude Code の中では `/plugin marketplace add …` と `/plugin install production-ready-skills@production-ready-assistant`。入れた後に始めたセッションから使える（今のセッションは `/reload-plugins`）。
 - `--sparse .claude-plugin skills` で clone を 2 つのディレクトリに絞る（1 MB 未満）。付けないと monorepo 全体（約 72 MB）を clone する。
-- 1 行の `claude plugin install production-ready-skills --marketplace engchina/no.1-production-ready-suite` でも入る（monorepo 全体を clone する。`owner/repo` の形は SSH（`git@github.com:…`）で clone したので、SSH の鍵が無い環境では上の https の URL を使う）。
+- 1 行の `claude plugin install production-ready-skills --marketplace engchina/no.1-production-ready-assistant` でも入る（monorepo 全体を clone する。`owner/repo` の形は SSH（`git@github.com:…`）で clone したので、SSH の鍵が無い環境では上の https の URL を使う）。
 - スキルの名前には plugin の名前が前に付く（`production-ready-skills:business-rag-research`）。質問に合うスキルは Claude Code が `description` から選ぶので、名前を書かなくてよい。
-- 更新は `claude plugin marketplace update production-ready-suite` の後に `claude plugin update production-ready-skills@production-ready-suite`。
+- 更新は `claude plugin marketplace update production-ready-assistant` の後に `claude plugin update production-ready-skills@production-ready-assistant`。
 
 ### 2. MCP を設定する
 

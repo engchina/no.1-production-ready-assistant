@@ -18,8 +18,8 @@ prepare_case() {
   local case_dir="$1"
   mkdir -p \
     "${case_dir}/app/props" \
-    "${case_dir}/app/no.1-production-ready-suite/rag/backend" \
-    "${case_dir}/app/no.1-production-ready-suite/platform" \
+    "${case_dir}/app/no.1-production-ready-assistant/rag/backend" \
+    "${case_dir}/app/no.1-production-ready-assistant/platform" \
     "${case_dir}/units" \
     "${case_dir}/sudoers.d" \
     "${case_dir}/bin" \
@@ -344,7 +344,7 @@ grep -Fq 'Adding required RAG service missing from' "${TEST_TMP_DIR}/services-mi
 # --- DB 初期化（アプリの system schema CLI を SERVICE_USER で実行する） ---
 run_initialization_case success ""
 test "$(cat "${TEST_TMP_DIR}/success/ready")" = "true" || fail "schema 初期化成功時に ready にならない"
-grep -Fq "run_as_service_user_in_dir ${TEST_TMP_DIR}/success/app/no.1-production-ready-suite/rag/backend .venv/bin/python -m app.rag.system_schema_cli initialize | attempts=5" \
+grep -Fq "run_as_service_user_in_dir ${TEST_TMP_DIR}/success/app/no.1-production-ready-assistant/rag/backend .venv/bin/python -m app.rag.system_schema_cli initialize | attempts=5" \
   "${TEST_TMP_DIR}/success/commands.log" || fail "system schema CLI が SERVICE_USER・retry 付きで実行されていない"
 if grep -q 'docker\|compose' "${TEST_TMP_DIR}/success/commands.log"; then
   fail "system schema CLI を docker で実行している"
@@ -355,7 +355,7 @@ test "$(cat "${TEST_TMP_DIR}/degraded/ready")" = "false" || fail "schema 初期�
 # --- サービスごとの uv の venv（Python 3.12・lock どおり） ---
 run_venv_case
 venv_commands="${TEST_TMP_DIR}/venvs/commands.log"
-rag_dir="${TEST_TMP_DIR}/venvs/app/no.1-production-ready-suite/rag"
+rag_dir="${TEST_TMP_DIR}/venvs/app/no.1-production-ready-assistant/rag"
 grep -Fq "run_as_app_user_in_dir ${rag_dir}/backend uv sync --locked --no-dev --python 3.12 | attempts=3" "${venv_commands}" \
   || fail "backend の venv を uv sync --locked --no-dev --python 3.12 で作っていない"
 grep -Fq "run_as_app_user_in_dir ${rag_dir}/services/parsers/docling uv sync --locked --no-dev --python 3.12 | attempts=3" "${venv_commands}" \
@@ -378,7 +378,7 @@ second="${TEST_TMP_DIR}/runtime-env/second.env"
 grep -Eq '^RAG_AUDIT_CONTEXT_HASH_SALT=[0-9a-f]{64}$' "${first}" || fail "RAG_AUDIT_CONTEXT_HASH_SALT が生成されていない"
 cmp -s "${first}" "${second}" || fail "再実行で生成済みの secret が変わった"
 grep -Fqx "RAG_PARSER_ADAPTER_BACKEND='unst\$ructured'" "${first}" || fail "入力の値が変更された"
-test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/no.1-production-ready-suite/rag/backend/.env")" = "600" \
+test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/no.1-production-ready-assistant/rag/backend/.env")" = "600" \
   || fail "backend/.env の permission が 0600 ではない"
 test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/props/audit_context_hash_salt")" = "600" \
   || fail "生成した secret の permission が 0600 ではない"
@@ -389,7 +389,7 @@ grep -Fqx "PLATFORM_ORACLE_PASSWORD='Db\$Pass#123'" "${TEST_TMP_DIR}/runtime-env
 if grep -q '^PLATFORM_' "${first}"; then
   fail "backend/.env に共通の設定（PLATFORM_*）が入っている"
 fi
-test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/no.1-production-ready-suite/platform/.env")" = "600" \
+test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/no.1-production-ready-assistant/platform/.env")" = "600" \
   || fail "platform/.env の permission が 0600 ではない"
 grep -Fqx 'PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-on-screen' "${TEST_TMP_DIR}/runtime-env/second-platform.env" \
   || fail "再実行で画面から保存した共通 .env の値が消えた"
@@ -397,7 +397,7 @@ grep -Fqx 'PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-on-screen' "${TEST_TMP_DIR}/
 # --- systemd の unit・状態の保持・sudoers ---
 run_systemd_case
 units="${TEST_TMP_DIR}/systemd/units"
-rag_dir="${TEST_TMP_DIR}/systemd/app/no.1-production-ready-suite/rag"
+rag_dir="${TEST_TMP_DIR}/systemd/app/no.1-production-ready-assistant/rag"
 service_user="$(id -un)"
 backend_unit="${units}/production-ready-rag-backend.service"
 worker_unit="${units}/production-ready-rag-ingestion-worker.service"

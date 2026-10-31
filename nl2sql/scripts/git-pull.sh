@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# monorepo（no.1-production-ready-suite）の main を取得し、成功後にだけ再デプロイへ進める。
+# monorepo（no.1-production-ready-assistant）の main を取得し、成功後にだけ再デプロイへ進める。
 # NL2SQL（nl2sql/）と共有 platform（platform/）は同じ repository に含まれるため、pull は1回だけ行う。
 set -euo pipefail
 
@@ -81,7 +81,7 @@ main() {
   local dir
   for dir in nl2sql platform; do
     [ -d "${SUITE_REPO_DIR}/${dir}" ] || {
-      fail "suite: ${dir}/ がありません。no.1-production-ready-suite の root を指定してください: ${SUITE_REPO_DIR}"
+      fail "suite: ${dir}/ がありません。no.1-production-ready-assistant の root を指定してください: ${SUITE_REPO_DIR}"
       return 1
     }
   done

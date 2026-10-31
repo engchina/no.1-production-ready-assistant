@@ -171,7 +171,7 @@ suite_run_schema_check() {
   local product="$1"
   local user="${APP_USER:-opc}"
   local home="${APP_HOME:-/home/${user}}"
-  local backend_dir="${SUITE_REPO_DIR:-/u01/aipoc/no.1-production-ready-suite}/${product}/backend"
+  local backend_dir="${SUITE_REPO_DIR:-/u01/aipoc/no.1-production-ready-assistant}/${product}/backend"
   local args
   if ! args="$(suite_schema_check_args "${product}")"; then
     printf '確認の方法がありません（%s）\n' "${product}"

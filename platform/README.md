@@ -1,6 +1,6 @@
 # platform — No.1 Production Ready 共通基盤
 
-monorepo `no.1-production-ready-suite` の `platform/`。No.1 Production Ready 製品群（**RAG / NL2SQL / Agent**）が共有する **前後端の single source of truth**。
+monorepo `no.1-production-ready-assistant` の `platform/`。No.1 Production Ready 製品群（**RAG / NL2SQL / Agent**）が共有する **前後端の single source of truth**。
 1 回の変更（トークン・コンポーネント / ログ・metrics・エラー envelope・app factory）で 3 プロジェクトを同時に底上げする。
 
 ```

@@ -47,7 +47,7 @@ OTHER_PACKAGE_NAMES = frozenset(
     {
         "production-ready-rag-backend",
         "production-ready-nl2sql-backend",
-        "production-ready-suite-evaluation",
+        "production-ready-assistant-evaluation",
         "rag-engine",
         "rag-parser-core",
         "rag-pipeline-core",

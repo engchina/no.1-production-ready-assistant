@@ -10,7 +10,7 @@ SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 DEFAULT_REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 APP_REPO_DIR="${APP_REPO_DIR:-${DEFAULT_REPO_DIR}}"
-# APP_REPO_DIR は suite repository（no.1-production-ready-suite）の nl2sql/。APP_ROOT はその suite の親。
+# APP_REPO_DIR は suite repository（no.1-production-ready-assistant）の nl2sql/。APP_ROOT はその suite の親。
 SUITE_REPO_DIR="$(dirname "${APP_REPO_DIR}")"
 APP_ROOT="${APP_ROOT:-$(cd "${SUITE_REPO_DIR}/.." && pwd)}"
 BACKEND_DIR="${APP_REPO_DIR}/backend"
@@ -86,7 +86,7 @@ test_mode_enabled() {
     /tmp/*) ;;
     *) return 1 ;;
   esac
-  [ "${APP_REPO_DIR}" = "${APP_ROOT}/no.1-production-ready-suite/nl2sql" ] && \
+  [ "${APP_REPO_DIR}" = "${APP_ROOT}/no.1-production-ready-assistant/nl2sql" ] && \
     [ "${WALLET_DIR}" = "${APP_ROOT}/wallet" ] && \
     [ "${RECOVERY_ROOT}" = "${APP_ROOT}/recovery" ] && \
     [ "${UPDATE_LOG_PATH}" = "${APP_ROOT}/update.log" ] && \
@@ -243,11 +243,11 @@ validate_fixed_oci_layout() {
     [ "${APP_USER}" = "opc" ] || fail "実行ユーザー設定は opc である必要があります。"
     [ "${APP_GROUP}" = "opc" ] || fail "実行グループ設定は opc である必要があります。"
     [ "${APP_ROOT}" = "/u01/aipoc" ] || fail "APP_ROOT は /u01/aipoc 固定です。"
-    [ "${APP_REPO_DIR}" = "/u01/aipoc/no.1-production-ready-suite/nl2sql" ] || \
+    [ "${APP_REPO_DIR}" = "/u01/aipoc/no.1-production-ready-assistant/nl2sql" ] || \
       fail "アプリケーションパスが OCI の固定パスではありません。"
-    [ "${BACKEND_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-suite/nl2sql/backend/.env" ] || \
+    [ "${BACKEND_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-assistant/nl2sql/backend/.env" ] || \
       fail "backend/.env が OCI の固定パスではありません。"
-    [ "${PLATFORM_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-suite/platform/.env" ] || \
+    [ "${PLATFORM_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-assistant/platform/.env" ] || \
       fail "platform/.env が OCI の固定パスではありません。"
     [ "${WALLET_DIR}" = "/u01/aipoc/wallet" ] || fail "Wallet path は /u01/aipoc/wallet 固定です。"
     [ "${RECOVERY_ROOT}" = "/u01/aipoc/recovery" ] || fail "recovery path は /u01/aipoc/recovery 固定です。"

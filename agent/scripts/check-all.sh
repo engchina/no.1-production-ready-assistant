@@ -58,7 +58,7 @@ run_backend_tool() {
 ensure_platform_sibling() {
   if [ ! -d "${PLATFORM_DIR}" ]; then
     echo "[check-all] 共有 platform repo が見つかりません: ${PLATFORM_DIR}" >&2
-    echo "[check-all] monorepo(no.1-production-ready-suite)の agent/ と platform/ がそろっていることを確認してください。" >&2
+    echo "[check-all] monorepo(no.1-production-ready-assistant)の agent/ と platform/ がそろっていることを確認してください。" >&2
     exit 1
   fi
 }
