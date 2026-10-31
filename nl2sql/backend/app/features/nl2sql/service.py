@@ -95,7 +95,6 @@ from app.features.nl2sql.db_admin_chat_corrections import (
 from app.security.request_actor import (
     actor_scope,
     current_actor_context,
-    current_actor_is_system_admin,
 )
 from app.settings import connection_label, enterprise_ai_connection_for_model, get_settings
 
@@ -4816,7 +4815,6 @@ class Nl2SqlService:
 
     def __init__(self, store: Nl2SqlStore | None = None) -> None:
         settings = get_settings()
-        self._deepsec_enabled = settings.oracle_deepsec_enabled
         self._lock = threading.RLock()
         self._catalog = self._build_default_catalog()
         self._oracle_adapter = OracleNl2SqlAdapter(settings)
@@ -8923,8 +8921,6 @@ class Nl2SqlService:
             )
         elif request.attachments or request.attachment_ids:
             raise ValueError("添付ファイルはチャットの質問にだけ付けられます。")
-        if self._deepsec_enabled and not actor_user_uuid:
-            raise ValueError("DeepSec 有効時のジョブには認証済み actor が必要です。")
         # オントロジーの公開版（business_release_id）は worker の prepare_context で確定する。
         # 確定にはオントロジーの runtime の lock と DB の読み取りが要り、その lock は別の処理
         # （オントロジーの同期・前のジョブの結果の整形など）が DB I/O の間も持つことがある。投入の
@@ -10028,7 +10024,7 @@ class Nl2SqlService:
         → 安全検査（`analyze_sql`。SELECT だけ。生成の後に範囲が変わっていれば拒否する）→
         `execute_sql`
         （`OracleNl2SqlAdapter.user_data_connection(read_only=True)`。system_admin と
-        非 system_admin で別の接続、DeepSec 有効時の非 system_admin は DATA USER の pool。#904）
+        非 system_admin で別の接続。#904）
         → 実行履歴（監査）。actor は要求の利用者を `actor_scope` で明示する（ジョブの worker の
         `_run_job_safely` と同じ）。
 
@@ -10227,7 +10223,6 @@ class Nl2SqlService:
                 "has_more": bool(data.results.has_more or data.results.truncated),
                 "cells_truncated": data.cells_truncated,
                 "execution_context": data.results.execution_context,
-                "vpd_context_enforced": data.results.vpd_context_enforced,
                 "elapsed_ms": data.elapsed_ms,
                 # ジョブの中の実行（送信）か、明示の実行（もう一度実行）か（#1176）。
                 "in_job": in_job,
@@ -19323,17 +19318,9 @@ class Nl2SqlService:
         runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
         # DB 管理チャットの SELECT は system_admin と同じアプリのユーザーの管理の接続で実行する
         # （#2264）。
-        select_vpd_context_enforced = (
-            not chat
-            and self._use_oracle_runtime()
-            and self._deepsec_enabled
-            and not current_actor_is_system_admin()
-        )
         select_execution_context = (
             "admin_control_plane"
             if chat and self._use_oracle_runtime()
-            else "deepsec_data_plane"
-            if select_vpd_context_enforced
             else "oracle_data_plane"
             if self._use_oracle_runtime()
             else "deterministic"
@@ -19474,7 +19461,6 @@ class Nl2SqlService:
                     executed=False,
                     runtime="oracle",
                     execution_context=select_execution_context,
-                    vpd_context_enforced=select_vpd_context_enforced,
                     statements=[
                         DbAdminStatementResult(
                             index=1,
@@ -19491,7 +19477,6 @@ class Nl2SqlService:
                 executed=True,
                 runtime=runtime,
                 execution_context=results.execution_context,
-                vpd_context_enforced=results.vpd_context_enforced,
                 select_result=results,
                 statements=[
                     DbAdminStatementResult(

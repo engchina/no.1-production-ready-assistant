@@ -5,7 +5,7 @@
 | ファイル | 雛形（設定カタログ） | 置くもの | 変数名 |
 |---|---|---|---|
 | 共通 `.env`（`platform/.env`） | `platform/.env.example` | 3製品共通の設定。OCI 認証・データベース接続・モデル・アップロード保存先・構成管理者・認証ポリシー | `PLATFORM_*` |
-| 製品 `.env`（`nl2sql/backend/.env`） | `nl2sql/backend/.env.example` | NL2SQL だけが使う設定。アプリ・認証の有効 / 無効・Deep Data Security・NL2SQL runtime・Select AI など | `NL2SQL_*` |
+| 製品 `.env`（`nl2sql/backend/.env`） | `nl2sql/backend/.env.example` | NL2SQL だけが使う設定。アプリ・認証の有効 / 無効・NL2SQL runtime・Select AI など | `NL2SQL_*` |
 
 - backend は共通 `.env` → 製品 `.env` の順に読む。同じ変数が環境変数にあれば環境変数が優先される。
 - 共通 `.env` の場所は環境変数 `PLATFORM_ENV_FILE` で変えられる（既定は monorepo の `platform/.env`）。
@@ -22,7 +22,6 @@
 | システム設定（OCI 認証・アップロード保存先・データベース・ADB・モデルの API key） | 共通 `.env`（`PLATFORM_*`） |
 | モデルの非 secret 設定 | `PLATFORM_MODEL_SETTINGS_FILE`（既定 `model-settings.json`。相対パスは共通 `.env` の場所から解決し、3製品で共有する） |
 | 構成管理者のパスワード変更 | 共通 `.env` の `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` |
-| Deep Data Security の DATA USER パスワード | 製品 `.env` の `NL2SQL_ORACLE_DEEPSEC_*` |
 | Select AI Credential の作成 | 製品 `.env` の `NL2SQL_SELECT_AI_CREDENTIAL_NAME` / `NL2SQL_SELECT_AI_REGION` |
 
 ## 優先順位と secret

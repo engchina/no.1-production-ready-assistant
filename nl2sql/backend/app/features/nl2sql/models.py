@@ -712,10 +712,8 @@ class QueryResults(BaseModel):
     execution_context: Literal[
         "deterministic",
         "oracle_data_plane",
-        "deepsec_data_plane",
         "admin_control_plane",
     ] = "deterministic"
-    vpd_context_enforced: bool = False
 
     @field_serializer("rows", when_used="json")
     def serialize_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -878,10 +876,8 @@ class DbAdminExecuteData(BaseModel):
     execution_context: Literal[
         "deterministic",
         "oracle_data_plane",
-        "deepsec_data_plane",
         "admin_control_plane",
     ] = "deterministic"
-    vpd_context_enforced: bool = False
     select_result: QueryResults | None = None
     statements: list[DbAdminStatementResult] = Field(default_factory=list)
     committed: bool = False

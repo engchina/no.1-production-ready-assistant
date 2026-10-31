@@ -78,11 +78,7 @@ export function QueryResultTable({
               />
             ) : null}
             {contextKey ? (
-              <StatusBadge
-                icon={false}
-                variant={results.vpd_context_enforced ? "info" : "neutral"}
-                label={t(contextKey)}
-              />
+              <StatusBadge icon={false} variant="neutral" label={t(contextKey)} />
             ) : null}
           </span>
         ) : null

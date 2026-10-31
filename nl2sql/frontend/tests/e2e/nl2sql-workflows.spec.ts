@@ -8847,9 +8847,6 @@ test("データ準備の管理 SQL 画面は SELECT と確認済み更新 SQL �
   await expect(rowLimitInput).toHaveValue("100");
   await expectRowLimitActionRow(rowLimitInput, adminSql.getByRole("button", { name: "SQL 実行" }));
   await sqlInput.fill("SELECT CUSTOMER_NAME, TOTAL_AMOUNT FROM INVOICES");
-  await expect(
-    adminSql.getByText("単一 SELECT/WITH は、ログインユーザーの DeepSec context を設定した data plane で実行します。")
-  ).toHaveCount(0);
   await adminSql.getByRole("button", { name: "SQL 実行" }).click();
   await expect(adminSql.getByTestId("query-results-table")).toBeVisible();
   await expect(adminSql.getByTestId("query-results-summary")).toContainText("1 行・");

@@ -354,7 +354,6 @@ def _principal_with_permissions(permissions: set[str]) -> Principal:
         force_password_change=False,
         role_codes=["ANALYST"],
         permissions=permissions,
-        data_entitlements=[],
         allowed_profile_ids={"sales"},
         session_id="session-1",
         csrf_token_hash="csrf",

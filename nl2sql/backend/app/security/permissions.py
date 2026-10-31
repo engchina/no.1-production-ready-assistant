@@ -228,10 +228,9 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
         "SQL生成評価",
         implies=(PROFILE_READ_PERMISSION, QUERY_GENERATE_PERMISSION),
     ),
-    # 権限管理と DeepSec は NL2SQL 固有。ユーザー管理・ロール管理は3製品共通の画面（#206）。
+    # 権限管理は NL2SQL 固有。ユーザー管理・ロール管理は3製品共通の画面（#206）。
     # セクション名「セキュリティ設定」は 3 製品で同じ（#658）。
     _menu_permission("menu.security_permissions", "セキュリティ設定", "権限管理"),
-    _menu_permission("menu.security_deepsec", "セキュリティ設定", "Deep Data Security"),
     # 並びはサイドナビと同じ
     # （セキュリティ設定 → ユーザーとロール → 運用設定 → システム設定。#658）。
     _menu_permission("menu.security_users", "ユーザーとロール", "ユーザー管理"),
@@ -511,9 +510,6 @@ LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
     "security.users.manage": ("menu.security_users",),
     "security.roles.view": ("menu.security_roles",),
     "security.roles.manage": ("menu.security_roles", "menu.security_permissions"),
-    "security.deepsec.view": ("menu.security_deepsec",),
-    "security.deepsec.apply": ("menu.security_deepsec",),
-    "security.deepsec.verify": ("menu.security_deepsec",),
 }
 
 for _adapter in (
@@ -670,7 +666,6 @@ _QUERY_GENERATE = _allowed(QUERY_GENERATE_PERMISSION)
 _QUESTION_CLASSIFIER_MODELS = _allowed("menu.question_classifier_models")
 _SAMPLE_DATA_MANAGE = _allowed(SAMPLE_DATA_MANAGE_PERMISSION)
 _SCHEMA_READ = _allowed(SCHEMA_READ_PERMISSION)
-_SECURITY_DEEPSEC = _allowed("menu.security_deepsec")
 _SELECT_AI_ASSETS_MANAGE = _allowed(SELECT_AI_ASSETS_MANAGE_PERMISSION)
 _SELECT_AI_ASSETS_READ = _allowed(SELECT_AI_ASSETS_READ_PERMISSION)
 _SELECT_AI_ASSETS_REFRESH = _allowed(SELECT_AI_ASSETS_REFRESH_PERMISSION)
@@ -738,22 +733,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # ---- セキュリティ設定: 権限管理・業務プロファイル利用権限 ----
     ("GET", "/security/permissions"): _SECURITY_PERMISSIONS,
     ("GET", "/security/profile-access/profiles"): _SECURITY_PERMISSIONS,
-    # ---- セキュリティ設定: Deep Data Security ----
-    ("PATCH", "/security/deepsec/config"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/config/sync-password"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/data-entitlements"): _SECURITY_DEEPSEC,
-    ("PATCH", "/security/deepsec/data-entitlements/{role_id}"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/data-entitlements/{role_id}/apply"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/data-entitlements/{role_id}/preview"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/plan"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/plan/{version}/reset"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/plan/{version}/steps/{step_no}/apply"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/relations"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/scope-profiles"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/status"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/target-objects"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/target-objects/{owner}/{object_name}"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/verify"): _SECURITY_DEEPSEC,
     # ---- システム設定: OCI 認証（Object Storage の設定はアップロード保存先の画面も使う） ----
     ("GET", "/settings/oci"): _SETTINGS_OCI,
     ("PATCH", "/settings/oci"): _SETTINGS_OCI,

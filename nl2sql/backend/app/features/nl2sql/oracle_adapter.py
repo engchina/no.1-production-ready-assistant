@@ -150,10 +150,6 @@ WALLET_PASSWORD_REQUIRED_ERROR = (
     "Oracle Wallet がパスワードを必要としています。"  # nosec B105
     "PLATFORM_ORACLE_WALLET_PASSWORD または PLATFORM_ORACLE_PASSWORD を設定してください。"
 )
-DEEPSEC_THIN_ONLY_ERROR = (
-    "Oracle Deep Data Security は python-oracledb Thin mode のみ対応です。"
-    "NL2SQL_ORACLE_DEEPSEC_ENABLED=true の場合は PLATFORM_ORACLE_DRIVER_MODE=thin にしてください。"
-)
 THIN_WALLET_MTLS_REQUIRED_FILES = frozenset({"tnsnames.ora", "ewallet.pem"})
 THICK_WALLET_MTLS_REQUIRED_FILES = frozenset({"tnsnames.ora", "sqlnet.ora", "cwallet.sso"})
 WALLET_MTLS_REQUIRED_FILES = THIN_WALLET_MTLS_REQUIRED_FILES
@@ -162,15 +158,6 @@ FEEDBACK_VECTOR_DB_LOCK_ID = (
 ) + 1
 FEEDBACK_VECTOR_DB_LOCK_TIMEOUT_SECONDS = 60
 SELECT_FETCH_BATCH_SIZE = 1000
-
-
-def ensure_deepsec_thin_mode(settings: Settings) -> None:
-    """DeepSec 利用時は python-oracledb Thin mode だけを許可する。"""
-    if (
-        getattr(settings, "oracle_deepsec_enabled", False)
-        and getattr(settings, "oracle_driver_mode", "thin").strip().lower() != "thin"
-    ):
-        raise OracleAdapterError(DEEPSEC_THIN_ONLY_ERROR)
 
 
 def wallet_mtls_required_files(settings: Settings) -> frozenset[str]:
@@ -540,7 +527,6 @@ def oracle_connect_kwargs(
     password: str | None = None,
 ) -> dict[str, object]:
     """python-oracledb connect に渡す共通 kwargs を作る。"""
-    ensure_deepsec_thin_mode(settings)
     kwargs: dict[str, object] = {
         "user": user if user is not None else settings.oracle_user,
         "dsn": _oracle_connection_test_dsn(settings),
@@ -658,8 +644,8 @@ def close_auth_connection_pool() -> None:
 
 # NL2SQL の状態の保存先（業務プロファイル・ジョブ・履歴・オントロジー・評価。`NL2SQL_*` の表）が使う
 # 接続 pool（#830）。1 回の問い合わせのジョブは状態を数十回読み書きするため、そのたびに
-# Wallet / mTLS の handshake と認証をやり直さない。業務データの SQL・Select AI（`DBMS_CLOUD_AI`）・
-# DeepSec の接続はこの pool に混ぜない（業務データの読み取りと Select AI の生成は下の
+# Wallet / mTLS の handshake と認証をやり直さない。業務データの SQL・Select AI（`DBMS_CLOUD_AI`）の
+# 接続はこの pool に混ぜない（業務データの読み取りと Select AI の生成は下の
 # `nl2sql-runtime-admin` / `nl2sql-runtime-user` の pool、それ以外は単発の接続 `connection()`）。
 _STATE_CONNECTION_POOL = SharedOraclePool(name="nl2sql-state")
 # アプリの接続（DB の利用者は `PLATFORM_ORACLE_USER`）で業務データを読む（SELECT の実行）・
@@ -669,8 +655,6 @@ _STATE_CONNECTION_POOL = SharedOraclePool(name="nl2sql-state")
 # 使うのは session の状態を変えない処理だけ（`OracleNl2SqlAdapter.runtime_connection`）。
 # - system_admin 用と非 system_admin 用で pool を分け、同じ pool・同じ接続を共有しない
 #   （資格情報は同じアプリの利用者でも、actor の種類の境界を接続で保つ。利用者の要件）
-# - DeepSec の DATA USER の接続（利用者の context を設定する。`OraclePoolManager`）とは別の pool
-#   （DeepSec 有効の非 system_admin はそちらを使い、ここの user 用の pool は使わない）
 # - 状態の保存先の pool（`nl2sql-state`）とも分け、業務データの SQL と状態の読み書きを混ぜない
 # - ALTER SESSION・`DBMS_CLOUD_AI.SET_PROFILE`・DDL / DML・Select AI Agent・オントロジーの操作の
 #   トランザクションは今までどおり単発の接続（`connection()`）
@@ -872,7 +856,7 @@ class OracleNl2SqlAdapter:
         """共通認証の store 用に、pool から接続を借りる（#793）。
 
         `connection()` と同じく、未コミットの変更を持たない（例外時は rollback して返す）。
-        呼び出しの timeout は借りるたびに `connection()` と同じ値を設定する。業務データ・DeepSec の
+        呼び出しの timeout は借りるたびに `connection()` と同じ値を設定する。業務データの
         接続には使わない。
         """
         oracledb = self._load_oracledb()
@@ -921,7 +905,7 @@ class OracleNl2SqlAdapter:
         呼び出しの timeout は借りるたびに `connection()` と同じ値を設定し、result cache の無効化
         （`init_oracle_session`）は pool の session callback が新しい接続ごとに当てる。
         同じスレッドが借りたまま入れ子で借りるときは、pool の上限で自分を待たないよう単発の接続に
-        する。業務データ・Select AI・DeepSec の接続には使わない（session の状態を持ち得る）。
+        する。業務データ・Select AI の接続には使わない（session の状態を持ち得る）。
         CLOB 列は文字列で fetch する（`configure_connection_clob_fetch_as_text`。#904）。
         """
         depth = int(getattr(_STATE_CONNECTION_DEPTH, "value", 0))
@@ -981,8 +965,7 @@ class OracleNl2SqlAdapter:
 
         DB の利用者は `connection()` と同じアプリの利用者（`PLATFORM_ORACLE_USER`）。使うのは
         session の状態を変えない処理（SELECT の実行・`DBMS_CLOUD_AI.GENERATE`・類似履歴の
-        ベクトル検索）だけで、DeepSec の DATA USER の接続（利用者の context を設定する）・
-        状態の保存先の pool とは混ぜない。
+        ベクトル検索）だけで、状態の保存先の pool とは混ぜない。
         `connection()` と同じく、呼び出しの timeout は借りるたびに設定し、result cache の無効化は
         pool の session callback が新しい接続ごとに当てる。例外のときと、未確定のトランザクションが
         残っているときは rollback してから返す。
@@ -1054,36 +1037,13 @@ class OracleNl2SqlAdapter:
 
     @contextmanager
     def user_data_connection(self, *, read_only: bool = False) -> Iterator[Any]:
-        """認証済み actor のデータ処理にだけ共有 DeepSec DATA USER を使う。
+        """認証済み actor の業務データの処理が使うアプリの接続。
 
-        - DeepSec 無効: 全員がアプリの接続
-        - DeepSec 有効で system_admin: アプリの接続（DeepSec の制限を受けない）
-        - DeepSec 有効で非 system_admin: DeepSec の DATA USER の pool（借りるたびに利用者の
-          context を設定し、返すときに消す。消せなければ捨てる。
-          `OraclePoolManager.data_connection`）
-
-        `read_only=True`（SELECT だけを実行し、トランザクションを残さない）なら、アプリの接続は
+        `read_only=True`（SELECT だけを実行し、トランザクションを残さない）なら
         `runtime_connection()`（system_admin 用・非 system_admin 用で別の pool）から借りる（#904）。
-        DeepSec の
-        DATA USER の接続は `read_only` にかかわらず今までどおり（アプリの接続の pool と
-        共有しない）。
         """
         app_connection = self.runtime_connection if read_only else self.connection
-        if not self.settings.oracle_deepsec_enabled:
-            with app_connection() as connection:
-                yield connection
-            return
-        from app.clients.oracle_runtime import get_oracle_pool_manager
-        from app.security.request_actor import current_actor_context
-
-        actor = current_actor_context()
-        if actor.is_system_admin:
-            with app_connection() as connection:
-                yield connection
-            return
-        if not actor.user_uuid:
-            raise OracleAdapterError("DeepSec データ接続には認証済み application user が必要です。")
-        with get_oracle_pool_manager().data_connection(actor.user_uuid) as connection:
+        with app_connection() as connection:
             yield connection
 
     def fetch_catalog(
@@ -1817,7 +1777,7 @@ class OracleNl2SqlAdapter:
     ) -> QueryResults:
         """SELECT を実行する。`admin_control_plane=True` は DB 管理チャット（#2264）の SELECT で、
         利用者に関係なくアプリのユーザーの管理の接続（`connection()`。管理 SQL の更新系と同じ、
-        pool を使わない単発の接続）で読む。DeepSec の DATA USER・業務の実行の pool は使わない。
+        pool を使わない単発の接続）で読む。業務の実行の pool は使わない。
         `binds` はチャットの添付の表（#2517）の行の JSON（CLOB で渡す。SQL は呼ぶ側が WITH 句を
         付けたもの）。
         """
@@ -1837,15 +1797,6 @@ class OracleNl2SqlAdapter:
                 else:
                     cursor.execute(sql)
                 columns, rows, has_more = self._fetch_query_rows(cursor, max_rows)
-            from app.security.request_actor import current_actor_context
-
-            actor = current_actor_context()
-            vpd_context_enforced = (
-                not admin_control_plane
-                and self.settings.oracle_deepsec_enabled
-                and bool(actor.user_uuid)
-                and not actor.is_system_admin
-            )
             return QueryResults(
                 columns=columns,
                 rows=rows,
@@ -1854,13 +1805,8 @@ class OracleNl2SqlAdapter:
                 has_more=has_more,
                 truncated=has_more,
                 execution_context=(
-                    "admin_control_plane"
-                    if admin_control_plane
-                    else "deepsec_data_plane"
-                    if vpd_context_enforced
-                    else "oracle_data_plane"
+                    "admin_control_plane" if admin_control_plane else "oracle_data_plane"
                 ),
-                vpd_context_enforced=vpd_context_enforced,
             )
         except OracleAdapterError:
             raise
@@ -1874,8 +1820,8 @@ class OracleNl2SqlAdapter:
 
         `CURRENT_DATE` / `CURRENT_TIMESTAMP` が設定の時間帯の今を返す（生成した SQL の
         `SYSDATE` / `SYSTIMESTAMP` は `use_session_current_datetime` で置き換えてある）。抜けると
-        `'+00:00'` に戻すため、pool（system_admin 用・非 system_admin 用・DeepSec の DATA USER）
-        に返した接続とアプリの表の接続は UTC のまま。DB 管理チャット（`admin_control_plane`）は
+        `'+00:00'` に戻すため、pool（system_admin 用・非 system_admin 用）に返した接続と
+        アプリの表の接続は UTC のまま。DB 管理チャット（`admin_control_plane`）は
         更新系の文と同じ session（UTC）のまま読む（読む文と書く文で「今」をそろえる）。
         """
         if admin_control_plane:
@@ -4696,7 +4642,6 @@ class OracleNl2SqlAdapter:
         return self._oracledb
 
     def _init_client(self, oracledb: Any) -> None:
-        ensure_deepsec_thin_mode(self.settings)
         if self._client_initialized or self.settings.oracle_driver_mode == "thin":
             return
         if not self.settings.oracle_client_lib_dir:

@@ -162,7 +162,6 @@ class _FakeAdminSqlAdapter(_FakeStatementsAdapter):
             rows=[{"ID": 1}],
             total=1,
             execution_context="oracle_data_plane",
-            vpd_context_enforced=False,
         )
         self.select_error = select_error
         self.select_calls: list[tuple[str, int | None]] = []
@@ -1512,67 +1511,7 @@ def test_admin_sql_single_select_uses_data_plane_without_statement_executor() ->
     assert result.committed is False
     assert result.runtime == "oracle"
     assert result.execution_context == "oracle_data_plane"
-    assert result.vpd_context_enforced is False
     assert result.statements[0].status == "executed"
-
-
-def test_admin_sql_system_admin_select_uses_oracle_plane_when_deepsec_enabled() -> None:
-    adapter = _FakeAdminSqlAdapter()
-    service = _OracleRuntimeService(adapter)
-    service._deepsec_enabled = True
-
-    with actor_scope("system-admin-id", is_system_admin=True):
-        result = service.execute_db_admin_sql(DbAdminExecuteRequest(sql="SELECT ID FROM T1"))
-
-    assert len(adapter.select_calls) == 1
-    assert result.executed is True
-    assert result.execution_context == "oracle_data_plane"
-    assert result.vpd_context_enforced is False
-
-
-def test_admin_sql_non_admin_select_surfaces_deepsec_data_plane() -> None:
-    adapter = _FakeAdminSqlAdapter(
-        select_result=QueryResults(
-            columns=["ID"],
-            rows=[{"ID": 1}],
-            total=1,
-            execution_context="deepsec_data_plane",
-            vpd_context_enforced=True,
-        )
-    )
-    service = _OracleRuntimeService(adapter)
-    service._deepsec_enabled = True
-
-    with actor_scope("business-user-id", is_system_admin=False):
-        result = service.execute_db_admin_sql(DbAdminExecuteRequest(sql="SELECT ID FROM T1"))
-
-    assert len(adapter.select_calls) == 1
-    assert result.executed is True
-    assert result.execution_context == "deepsec_data_plane"
-    assert result.vpd_context_enforced is True
-
-
-def test_admin_sql_deepsec_select_error_fails_closed_without_control_fallback() -> None:
-    adapter = _FakeAdminSqlAdapter(
-        select_error=OracleAdapterError(
-            "DeepSec データ接続には認証済み application user が必要です。"
-        )
-    )
-    service = _OracleRuntimeService(adapter)
-    service._deepsec_enabled = True
-
-    result = service.execute_db_admin_sql(DbAdminExecuteRequest(sql="SELECT ID FROM T1"))
-
-    assert len(adapter.select_calls) == 1
-    assert adapter.calls == []
-    assert result.executed is False
-    assert result.committed is False
-    assert result.rolled_back is False
-    assert result.runtime == "oracle"
-    assert result.execution_context == "deepsec_data_plane"
-    assert result.vpd_context_enforced is True
-    assert result.statements[0].status == "error"
-    assert "認証済み application user" in result.statements[0].error_message
 
 
 def test_admin_sql_mixed_select_and_dml_stays_blocked_control_plane() -> None:
@@ -1590,7 +1529,6 @@ def test_admin_sql_mixed_select_and_dml_stays_blocked_control_plane() -> None:
     assert adapter.calls == []
     assert result.executed is False
     assert result.execution_context == "admin_control_plane"
-    assert result.vpd_context_enforced is False
     assert {item.status for item in result.statements} == {"blocked"}
 
 
@@ -1608,12 +1546,11 @@ def test_admin_sql_unverifiable_select_without_confirmation_reports_reason(sql: 
 
     adapter = _FakeAdminSqlAdapter()
     service = _OracleRuntimeService(adapter)
-    service._deepsec_enabled = True
 
     with actor_scope("business-user-id", is_system_admin=False):
         result = service.execute_db_admin_sql(DbAdminExecuteRequest(sql=sql, row_limit=10))
 
-    # data plane（DeepSec の DATA USER）にも control plane にも流さない。
+    # data plane にも control plane にも流さない。
     assert adapter.select_calls == []
     assert adapter.calls == []
     assert result.executed is False
@@ -1638,7 +1575,6 @@ def test_admin_sql_flashback_query_runs_as_read_only_select() -> None:
 
     adapter = _FakeAdminSqlAdapter()
     service = _OracleRuntimeService(adapter)
-    service._deepsec_enabled = True
     sql = "SELECT * FROM T1 AS OF TIMESTAMP SYSTIMESTAMP"
 
     with actor_scope("business-user-id", is_system_admin=False):
@@ -1876,7 +1812,6 @@ def test_admin_sql_delegates_data_dml_batch_to_partial_commit_policy() -> None:
     assert result.committed is True
     assert result.rolled_back is False
     assert result.execution_context == "admin_control_plane"
-    assert result.vpd_context_enforced is False
     assert any("部分的に成功しました(1/2 件)" in warning for warning in result.warnings)
     # 管理 SQL を実行からの委譲は、管理 SQL の 1 行だけを残す（二重に残さない。#2264）。
     audits = service._admin_audit_store.list_recent()
@@ -3233,7 +3168,7 @@ def test_oracle_adapter_system_admin_select_uses_normal_connection(
     def normal_connection() -> Iterator[_Connection]:
         yield _Connection()
 
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
 
@@ -3242,7 +3177,6 @@ def test_oracle_adapter_system_admin_select_uses_normal_connection(
 
     assert result.rows == [{"ID": 1}]
     assert result.execution_context == "oracle_data_plane"
-    assert result.vpd_context_enforced is False
 
 
 def test_oracle_adapter_unbounded_select_fetches_all_rows_in_batches(
@@ -3344,55 +3278,7 @@ def test_oracle_adapter_explicit_select_limit_reports_truncation(
     assert result.truncated is True
 
 
-def test_oracle_adapter_non_admin_select_uses_deepsec_data_connection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _Cursor:
-        description = [("ID",)]
-
-        def __enter__(self) -> _Cursor:
-            return self
-
-        def __exit__(self, *_exc: object) -> None:
-            return None
-
-        def execute(self, _sql: str) -> None:
-            return None
-
-        def fetchmany(self, _max_rows: int) -> list[tuple[int]]:
-            return [(2,)]
-
-    class _Connection:
-        def cursor(self) -> _Cursor:
-            return _Cursor()
-
-    class _PoolManager:
-        def __init__(self) -> None:
-            self.actor_ids: list[str] = []
-
-        @contextmanager
-        def data_connection(self, actor_user_uuid: str) -> Iterator[_Connection]:
-            self.actor_ids.append(actor_user_uuid)
-            yield _Connection()
-
-    manager = _PoolManager()
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: manager,
-    )
-
-    with actor_scope("business-user", is_system_admin=False):
-        result = adapter.execute_select("SELECT ID FROM T1", 100)
-
-    assert manager.actor_ids == ["business-user"]
-    assert result.rows == [{"ID": 2}]
-    assert result.execution_context == "deepsec_data_plane"
-    assert result.vpd_context_enforced is True
-
-
-def test_oracle_adapter_non_admin_select_uses_normal_connection_when_deepsec_disabled(
+def test_oracle_adapter_non_admin_select_uses_runtime_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -3420,17 +3306,9 @@ def test_oracle_adapter_non_admin_select_uses_normal_connection_when_deepsec_dis
     def normal_connection() -> Iterator[_Connection]:
         yield _Connection()
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_Connection]:
-            raise AssertionError("DeepSec data connection must not be used")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": False})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("business-user", is_system_admin=False):
         result = adapter.execute_select("SELECT ID FROM T1", 100)
@@ -3443,15 +3321,6 @@ def test_oracle_adapter_non_admin_select_uses_normal_connection_when_deepsec_dis
     ]
     assert result.rows == [{"ID": 3}]
     assert result.execution_context == "oracle_data_plane"
-    assert result.vpd_context_enforced is False
-
-
-def test_oracle_adapter_deepsec_select_without_actor_fails_closed() -> None:
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
-    adapter = OracleNl2SqlAdapter(settings)
-
-    with pytest.raises(OracleAdapterError, match="認証済み application user"):
-        adapter.execute_select("SELECT ID FROM T1", 100)
 
 
 class _SelectAiCursor:
@@ -3484,7 +3353,7 @@ class _SelectAiConnection:
         return _SelectAiCursor(self.calls)
 
 
-def test_oracle_adapter_non_admin_select_ai_generation_uses_normal_connection_when_deepsec_enabled(
+def test_oracle_adapter_non_admin_select_ai_generation_uses_normal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -3493,45 +3362,9 @@ def test_oracle_adapter_non_admin_select_ai_generation_uses_normal_connection_wh
     def normal_connection() -> Iterator[_SelectAiConnection]:
         yield _SelectAiConnection(calls)
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("Select AI generation must use normal Oracle connection")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
-
-    with actor_scope("business-user", is_system_admin=False):
-        sql = adapter.generate_select_ai_sql(profile_name="NL2SQL_PROFILE", question="一覧")
-
-    assert sql == "SELECT ID FROM T1"
-    assert any("DBMS_CLOUD_AI.GENERATE" in call for call in calls)
-
-
-def test_oracle_adapter_non_admin_select_ai_generation_uses_normal_connection_when_deepsec_disabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(calls)
-
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("DeepSec data connection must not be used")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": False})
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("business-user", is_system_admin=False):
         sql = adapter.generate_select_ai_sql(profile_name="NL2SQL_PROFILE", question="一覧")
@@ -3549,17 +3382,9 @@ def test_oracle_adapter_system_admin_select_ai_generation_uses_normal_connection
     def normal_connection() -> Iterator[_SelectAiConnection]:
         yield _SelectAiConnection(calls)
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("system_admin Select AI generation must not use data connection")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "runtime_connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("system-admin", is_system_admin=True):
         sql = adapter.generate_select_ai_sql(profile_name="NL2SQL_PROFILE", question="一覧")
@@ -3577,17 +3402,9 @@ def test_oracle_adapter_non_admin_select_ai_agent_team_uses_normal_connection(
     def normal_connection() -> Iterator[_SelectAiConnection]:
         yield _SelectAiConnection(calls)
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("Select AI Agent generation must use normal Oracle connection")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("business-user", is_system_admin=False):
         sql, conversation_id = adapter.run_select_ai_agent_team(
@@ -3611,17 +3428,9 @@ def test_oracle_adapter_non_admin_select_ai_agent_tool_uses_normal_connection(
     def normal_connection() -> Iterator[_SelectAiConnection]:
         yield _SelectAiConnection(calls)
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("Select AI Agent tool must use normal Oracle connection")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("business-user", is_system_admin=False):
         sql, conversation_id = adapter.run_select_ai_agent_tool(
@@ -3643,17 +3452,9 @@ def test_oracle_adapter_non_admin_select_ai_agent_conversation_uses_normal_conne
     def normal_connection() -> Iterator[_SelectAiConnection]:
         yield _SelectAiConnection(calls)
 
-    class _PoolManager:
-        def data_connection(self, _actor_user_uuid: str) -> Iterator[_SelectAiConnection]:
-            raise AssertionError("Select AI Agent conversation must use normal Oracle connection")
-
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "connection", normal_connection)
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.get_oracle_pool_manager",
-        lambda: _PoolManager(),
-    )
 
     with actor_scope("business-user", is_system_admin=False):
         conversation_id = adapter.create_agent_conversation()
@@ -3662,73 +3463,7 @@ def test_oracle_adapter_non_admin_select_ai_agent_conversation_uses_normal_conne
     assert any("CREATE_CONVERSATION" in call for call in calls)
 
 
-def test_select_ai_agent_generation_then_select_execution_keeps_deepsec_data_plane(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    generation_calls: list[str] = []
-    data_calls: list[str] = []
-
-    @contextmanager
-    def normal_connection() -> Iterator[_SelectAiConnection]:
-        yield _SelectAiConnection(generation_calls)
-
-    class _DataCursor:
-        description = [("ID",)]
-
-        def __enter__(self) -> _DataCursor:
-            return self
-
-        def __exit__(self, *_exc: object) -> None:
-            return None
-
-        def execute(self, sql: str) -> None:
-            data_calls.append(sql)
-
-        def fetchmany(self, _max_rows: int) -> list[tuple[int]]:
-            return [(1,)]
-
-    class _DataConnection:
-        def cursor(self) -> _DataCursor:
-            return _DataCursor()
-
-    class _PoolManager:
-        def __init__(self) -> None:
-            self.actor_ids: list[str] = []
-
-        @contextmanager
-        def data_connection(self, actor_user_uuid: str) -> Iterator[_DataConnection]:
-            self.actor_ids.append(actor_user_uuid)
-            yield _DataConnection()
-
-    manager = _PoolManager()
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
-    adapter = OracleNl2SqlAdapter(settings)
-    monkeypatch.setattr(adapter, "connection", normal_connection)
-    monkeypatch.setattr("app.clients.oracle_runtime.get_oracle_pool_manager", lambda: manager)
-
-    with actor_scope("business-user", is_system_admin=False):
-        sql, conversation_id = adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_TEAM",
-            question="一覧",
-            tool_name="NL2SQL_TOOL",
-        )
-        result = adapter.execute_select(sql, 100)
-
-    assert conversation_id == "conversation-1"
-    assert sql == "SELECT ID FROM T1"
-    assert any("CREATE_CONVERSATION" in call for call in generation_calls)
-    assert any("RUN_TEAM" in call for call in generation_calls)
-    assert data_calls == [
-        "ALTER SESSION SET TIME_ZONE = '+09:00'",
-        "SELECT ID FROM T1",
-        "ALTER SESSION SET TIME_ZONE = '+00:00'",
-    ]
-    assert manager.actor_ids == ["business-user"]
-    assert result.execution_context == "deepsec_data_plane"
-    assert result.vpd_context_enforced is True
-
-
-def test_oracle_adapter_explain_uses_normal_connection_when_deepsec_enabled(
+def test_oracle_adapter_explain_uses_normal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -3758,9 +3493,9 @@ def test_oracle_adapter_explain_uses_normal_connection_when_deepsec_enabled(
         yield _Connection()
 
     def forbidden_data_connection() -> Iterator[_Connection]:
-        raise AssertionError("EXPLAIN must not use DeepSec data connection")
+        raise AssertionError("EXPLAIN must not use the business data connection")
 
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "connection", normal_connection)
     monkeypatch.setattr(adapter, "user_data_connection", forbidden_data_connection)
@@ -3773,7 +3508,7 @@ def test_oracle_adapter_explain_uses_normal_connection_when_deepsec_enabled(
     assert calls[-1] == "COMMIT"
 
 
-def test_oracle_adapter_generation_samples_use_normal_connection_when_deepsec_enabled(
+def test_oracle_adapter_generation_samples_use_normal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
@@ -3810,9 +3545,9 @@ def test_oracle_adapter_generation_samples_use_normal_connection_when_deepsec_en
         yield _Connection()
 
     def forbidden_data_connection() -> Iterator[_Connection]:
-        raise AssertionError("generation samples must not use DeepSec data connection")
+        raise AssertionError("generation samples must not use the business data connection")
 
-    settings = get_settings().model_copy(update={"oracle_deepsec_enabled": True})
+    settings = get_settings()
     adapter = OracleNl2SqlAdapter(settings)
     monkeypatch.setattr(adapter, "connection", normal_connection)
     monkeypatch.setattr(adapter, "user_data_connection", forbidden_data_connection)
@@ -3858,7 +3593,6 @@ def test_preview_data_normalizes_special_values_for_api_and_xlsx() -> None:
             ],
             total=1,
             execution_context="oracle_data_plane",
-            vpd_context_enforced=False,
         )
     )
     service = _OracleRuntimeService(adapter)

@@ -176,7 +176,7 @@ Usage: ./scripts/update-after-pull.sh [--check | --repair-only]
 --check        固定パス、Wallet 権限、systemd、system schema を読み取り専用で確認します。
 --repair-only  build と frontend 公開を省略し、OCI 修復、migration、再起動だけを行います。
 
-このスクリプト自身は Git 操作、schema --recreate、DeepSec foundation 適用を行いません。
+このスクリプト自身は Git 操作と schema --recreate を行いません。
 opc 実行時は sudo -n のみを使用し、パスワード入力を要求しません。
 update / --repair-only は passwordless sudo があれば自動的に root で再実行します。
 passwordless sudo がない環境では sudo ./scripts/update-after-pull.sh で起動してください。

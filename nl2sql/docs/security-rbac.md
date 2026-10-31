@@ -1,4 +1,4 @@
-# アプリケーション認証・RBAC・Deep Data Security 運用ガイド
+# アプリケーション認証・RBAC 運用ガイド
 
 ## 適用範囲
 
@@ -33,24 +33,6 @@ Ontology query-session 系も同じ境界に従う。`/api/nl2sql/query-sessions
 `nl2sql.sql.execute` を要求する。
 ただし `GET /api/nl2sql/persistence` は業務画面起動時の readiness gate が利用する粗粒度状態であり、
 ログイン済みユーザーなら capability なしで参照できる。
-
-Deep Data Security は共有 DATA USER と classic application context を使用する。これは本システムの
-非 IAM 構成向け custom integration であり、Oracle 公式の IAM/database access token を含む local END
-USER 認証フローとは区別する。
-通常ユーザーの SELECT SQL 実行は DeepSec data plane を通り、Oracle / DeepSec runtime failure は
-HTTP 502 の実行エラーとして画面に表示する。これはアプリケーションのメニュー権限不足ではない。
-`NL2SQL_DEEPSEC_CTX_PKG` の context クリアロジックを更新した後は、Deep Data Security 画面で
-V001.2「アプリケーションコンテキスト」を再適用する。古い package を DB に残したままでは通常ユーザーの
-SELECT 実行で `DeepSec context を消去できないため接続を破棄しました。` が継続する。
-`CLEAR_APP_USER` は `DBMS_SESSION.CLEAR_CONTEXT` ではなく、trusted package 内で
-`DBMS_SESSION.SET_CONTEXT(..., NULL)` により `LOGIN_USER_ID` と legacy `APP_USER_ID` を空に戻す。
-`PLS-00905: object ... NL2SQL_DEEPSEC_CTX_PKG is invalid` が出る場合も V001.2 を再適用し、適用結果が
-失敗になったときは画面の compile error を修正してから再実行する。
-V001 step の Oracle 実行・compile エラーは HTTP 409 として返し、DeepSec plan には `FAILED` と
-安全化した error message を保存する。これは再適用・DB 権限修正で解消する運用エラーであり、API の
-未処理 500 ではない。
-`oracle_data_connection_close_failed` の `DPY-1001` は破棄済み接続を close した副作用であり、
-実際の context クリア失敗は backend の `oracle_deepsec_context_clear_failed` warning を確認する。
 
 ## 初期 migration と構成管理者
 
@@ -91,8 +73,10 @@ platform の `pr_system_settings.auth` にあり、NL2SQL はその上に NL2SQL
 | `NL2SQL_APP_USER_ROLES` | `PLATFORM_USER_ROLES` |
 | `NL2SQL_AUTH_SESSIONS` | `PLATFORM_AUTH_SESSIONS` |
 
-NL2SQL 固有の `NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES` / `NL2SQL_APP_DATA_ENTITLEMENTS` /
-`NL2SQL_DEEPSEC_MIGRATIONS` は名前を変えない。旧名との互換は持たない（旧名のテーブルは読まない）。
+NL2SQL 固有の `NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES` は名前を変えない。旧名との
+互換は持たない（旧名のテーブルは読まない）。Deep Data Security の削除（#23）で読まなくなった
+`NL2SQL_APP_DATA_ENTITLEMENTS` / `NL2SQL_DEEPSEC_MIGRATIONS` は、既存の環境では表をそのまま残す
+（migration で落とさない。アプリは読まない）。新しい配備では作らない。
 
 `app_security_migrate --apply` は `PLATFORM_*`（platform の DDL）と migration 004 の表を作るだけで、既存の表は変えない。
 旧名・旧形からの移行（`RAG_APP_*` → `NL2SQL_APP_*` → `PLATFORM_*` の改名、旧監査ログの表の削除、権限の行の
@@ -102,7 +86,7 @@ NL2SQL 固有の `NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES` / `N
 
 なお、NL2SQL の業務プロファイルの対象一覧・管理 SQL は、`NL2SQL_` に加えて `PLATFORM_` / `RAG_` / `AGENT_`
 で始まるオブジェクトをシステムオブジェクトとして扱い、表示・操作の対象にしない（3 製品が同じ schema を
-共有するため）。DeepSec の Data Grant の対象からも `PLATFORM_` を外す。
+共有するため）。
 
 ## ユーザー管理・ロール管理・権限管理の分担（#206）
 
@@ -111,10 +95,9 @@ NL2SQL 固有の `NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES` / `N
 | ユーザー管理 | `/settings/security/users` | `menu.security_users` | ユーザー、割り当てロール、ロック、一時パスワード | 3製品共通（`@production-ready/system-settings`） |
 | ロール管理 | `/settings/security/roles` | `menu.security_roles` | ロールコード・名称・説明、アーカイブ・復元・削除 | 3製品共通（同上） |
 | 権限管理 | `/settings/security/permissions` | `menu.security_permissions` | ロールごとの機能権限（`menu.*` / capability）と業務プロファイル利用権限 | NL2SQL 固有 |
-| Deep Data Security | `/settings/security/deepsec` | `menu.security_deepsec` | ロールごとの Data Grant | NL2SQL 固有 |
 
 - サイドナビは、3製品共通の「ユーザーとロール」（ユーザー管理・ロール管理）と、NL2SQL 固有の
-  「セキュリティ設定」（権限管理・Deep Data Security。セクション名は 3 製品で同じ。#658）に分ける。
+  「セキュリティ設定」（権限管理。セクション名は 3 製品で同じ。#658）に分ける。
 - API も同じ境界で分ける。`POST /api/security/roles` と `PATCH /api/security/roles/{role_id}` は
   基本情報（`role_code` / `display_name` / `description`）だけを受け取り、権限は変更しない
   （旧 client が `permissions` を送っても無視する）。権限の更新は
@@ -198,8 +181,8 @@ platform の `docs/backend-standard.md`「製品間の連携（MCP とサービ�
   期限切れ・audience 違いは 401、無効・初回パスワード変更待ちの利用者は 403。CSRF は照合しない。
 - route manifest は `/mcp` を「認証済みなら通す」（`permission_for_route` が None）にし、権限はツールごとに
   判定する（`tools/list` は利用者が使えるツールだけを返す）。
-- 利用者: ツールは Run の利用者として実行する。DeepSec の actor も同じ認可経路（`enter_actor`）で入り、
-  ジョブの `actor_user_uuid` に残るので、SELECT の行はその利用者の Data Grant で絞られる。
+- 利用者: ツールは Run の利用者として実行する。actor は同じ認可経路（`enter_actor`）で入り、
+  ジョブの `actor_user_uuid` に残る。
 - `PLATFORM_AUTH_MODE=local` かつ `PLATFORM_ENVIRONMENT=local` のローカル実行モードは、token なしで全権限の
   ローカル DEBUG 管理者として通す（他の API と同じ）。
 
@@ -247,8 +230,7 @@ NL2SQL は Agent の Runtime の強制とは別に、呼び先でも同じ範囲
     変えた後の別の Run が、前の範囲で作ったジョブを読めなくなるのは、この決定の意図した振る舞い（新しい範囲の外の結果を
     返さない）で、続きは新しい範囲で `nl2sql_query` を呼び直す。claim の無い呼び出し（範囲を設定していない Agent・API キー）は
     利用者の権限だけで判定する。
-- claim の無い呼び出し（範囲を設定していない Agent・画面の API）の判定は変えない。DeepSec・Data Grant の判定も
-  変えない。
+- claim の無い呼び出し（範囲を設定していない Agent・画面の API）の判定は変えない。
 - claim の形（1〜50 件の 128 文字以内の ID の一覧）が違う token は 401（壊れた範囲を「範囲なし」として通さない）。
   名前・形の正本は `pr_system_settings.auth.service_token`（`PROFILE_SCOPE_CLAIM`）。
 
@@ -267,7 +249,7 @@ MCP の入口（`nl2sql_query` が作るジョブ）は、呼び出し元の認�
 - 実行履歴（`GET /nl2sql/history`）の `kind` は `all` / `not_evaluation`（画面の既定）/ `chat` / `query` / `mcp` /
   `evaluation`。`not_evaluation` と品質評価を含まない種類は、「全 M 件」（`unfiltered_total`）も品質評価の行を除いて
   数える。既定で見える行が 0 件のときだけ、隠している品質評価の行の数（`hidden_evaluation_total`）を返す。
-- 値は見え方（種類）だけに使い、権限・業務プロファイル・DeepSec・利用量の判定には使わない。きっかけはジョブの作成の
+- 値は見え方（種類）だけに使い、権限・業務プロファイル・利用量の判定には使わない。きっかけはジョブの作成の
   API（`JobCreateRequest`）の項目にせず、MCP のツールの引数からも決めない（画面・API キーの利用者が品質評価と偽れない）。
 - 既存の行（#1986 より前）は移行で埋めない（`run_source` は空のまま。種類は会話の持ち主の有無で決まる）。JSON の
   payload の項目なので DB の列・migration は足さない。
@@ -279,11 +261,9 @@ MCP の入口（`nl2sql_query` が作るジョブ）は、呼び出し元の認�
 システム管理者でもない場合に限り、セッション、ロール割り当て、ユーザー本体を物理削除する。
 履歴や実行ジョブに保存済みの `actor_user_uuid` は監査識別子として保持する。
 
-カスタムロールは、割り当てユーザーがなく、アーカイブ済みで、保存済み Data Grant policy が空の
-場合に限り物理削除する。Data Grant が残る場合は、ロールを復元し、Deep Data Security の
-`データ権限` で空の Data Grant をプレビュー・適用して Oracle 側の managed grant を清掃した後、
-再度アーカイブして削除する。ロール削除 API 自体は Oracle DDL を実行せず、機能権限と業務
-プロファイル関連を削除してからロール本体を削除する。組み込みロールは削除できない。
+カスタムロールは、割り当てユーザーがなく、アーカイブ済みの場合に限り物理削除する。ロール削除 API は
+Oracle DDL を実行せず、機能権限と業務プロファイル関連を削除してからロール本体を削除する。
+組み込みロールは削除できない。
 
 旧版で作成された 8 個の `RAG_*` security table が存在する場合、migration 005 がデータを保持したまま
 `NL2SQL_*` へ table、constraint、index を rename し、entitlement resource code も移行する。新規環境は
@@ -329,170 +309,11 @@ timeout に拡張できる。これは production 既定値ではない。
 `PLATFORM_AUTH_SESSIONS` を使わない署名 token として絶対有効期限のみを持つ。通常運用は DB に
 永続化した application user を使い、`system_admin` は初期設定と復旧用途に限定する。
 
-## DeepSec V001 の前提
-
-DeepSec は既定で無効（`NL2SQL_ORACLE_DEEPSEC_ENABLED` の未指定・`backend/.env.example`・Terraform の
-`nl2sql_oracle_deepsec_enabled` の既定は `false`。#1707）で、使う環境だけが有効にする。Deep Data Security 画面で
-DATA USER password を保存すると、`backend/.env` に `NL2SQL_ORACLE_DEEPSEC_ENABLED=true` を書いて有効にする。
-
-DeepSec は python-oracledb Thin mode のみ対応する。`NL2SQL_ORACLE_DEEPSEC_ENABLED=true` の場合、
-`PLATFORM_ORACLE_DRIVER_MODE=thick` は起動時の設定 validation、Oracle 接続検証、DeepSec status / V001 適用で
-fail-fast する。DATA USER password は Deep Data Security 画面から保存でき、保存後は API を再起動せずに
-次の適用・検証・data-plane query から使用される。保存した worker 以外の worker（gunicorn は 2 workers）も、
-次のリクエストで `backend/.env` の更新を検知して `NL2SQL_ORACLE_DEEPSEC_*` の 3 項目を読み直し、
-DATA USER の接続 pool を作り直す（#1022）。環境変数で与えた項目は読み直さない（環境変数が `.env` より優先）。`DATA USER 認証` の保存 / `Oracle へ同期` は
-`DEEPSEC_DATA_USER` が未作成なら `CREATE END USER IF NOT EXISTS ...`、作成済みなら
-`ALTER END USER IF EXISTS ... IDENTIFIED BY ...` で DB 側の password / account unlock / schema association
-も同期する。同期に失敗した場合、`backend/.env`（`NL2SQL_ORACLE_DEEPSEC_*`）と runtime 設定は保存前へ戻す。
-
-DeepSec V001 と `DATA USER 認証` の同期を実行する `PLATFORM_ORACLE_USER` には少なくとも `CREATE ROLE`、
-`CREATE END USER`、`ALTER END USER`、`CREATE DATA ROLE`、`GRANT ANY ROLE`、`CREATE ANY CONTEXT`、
-`CREATE PROCEDURE`、対象 object への `GRANT SELECT`（別の schema なら `GRANT ANY OBJECT PRIVILEGE`）、DeepSec metadata view 参照権限と、
-Data Grant の `GRANT ANY DATA ROLE`（DATA ROLE を END USER に付ける）・`ADMINISTER ANY DATA GRANT`（Data Grant の作成・削除）・
-`SET USE DATA GRANTS ONLY` が必要。Autonomous AI Database の `PDB_DBA` は最後の 3 つを含まない（無いと `ORA-01031`）。
-統合 stack の配備は、アプリ用の DB ユーザーに `PDB_DBA` とこの 3 つを付ける（[terraform/README.md「アプリ用の DB ユーザー」](../../terraform/README.md#アプリ用の-db-ユーザー16681675)。#1668・#1675）。
-`ORA-01017` が通常ユーザーの SELECT 実行時だけ発生する場合は、application RBAC ではなく
-DATA USER password の漂移を疑い、Deep Data Security 画面で password を保存し直すか、
-`Oracle へ同期` を再実行する。
-
-共通設定:
-
-```dotenv
-NL2SQL_ORACLE_DEEPSEC_ENABLED=true
-NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER
-NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=<strong-random-secret>
-PLATFORM_ORACLE_DRIVER_MODE=thin
-PLATFORM_ORACLE_CLIENT_LIB_DIR=
-PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls
-PLATFORM_ORACLE_WALLET_DIR=<thin-mode-wallet-or-config-directory>
-PLATFORM_ORACLE_WALLET_PASSWORD=<wallet-password-if-required>
-```
-
-Thin mTLS の Wallet / config directory には `tnsnames.ora` と `ewallet.pem` を配置する。
-`sqlnet.ora` と `cwallet.sso` は Thick 互換の Oracle Net 構成向けであり、DeepSec 有効時の必須条件にはしない。
-DeepSec 無効の運用で Thick 専用機能が必要な場合のみ、別 service/process として設計し直す。
-
-本システムは database access token や python-oracledb の `set_end_user_security_context()` を使わず、
-共有 `DEEPSEC_DATA_USER` の direct logon と application context / `CLIENT_IDENTIFIER` で実行時 user を
-伝播する。ただし DeepSec 全体の driver mode は Thin に統一する。
-
-管理画面の `システム設定 > Deep Data Security` で以下を行う。
-
-1. status の driver mode、前提権限、既存 object 名を確認する。
-2. `DATA USER 認証` tab で DATA USER password を保存し、必要に応じて `Oracle へ同期` で DB 側へ反映する。
-3. V001 の SQL preview と SHA-256 checksum を確認する。V001.1 は DATA ROLE を付ける前に、保存済みの DATA USER password で
-   `CREATE END USER IF NOT EXISTS ...` を実行する（新しい配備で END USER が無いと `GRANT DATA ROLE` が `ORA-52516` になるため。#1676）。
-   既に END USER があれば作り直さず、password の変更・同期は `DATA USER 認証` の `Oracle へ同期` が行う。preview と checksum の
-   password は placeholder のままで、DATA USER password が未保存なら適用は 409 で止まる。
-4. 各 step は `ADMIN_EXECUTE` 実行確認語を入力して順番に適用する。API は version、step、checksum、confirmation だけを
-   受け付け、SQL 本文は受け付けない。
-5. 失敗した場合は ledger の完了 step を保持し、原因を解消して失敗 step から再開する。
-6. `データ権限` tab で実 table/view/materialized view、許可列、必要な row scope を role ごとに設定し、SQL preview と checksum を確認してから `ADMIN_EXECUTE` で Data Grant を適用する。適用は現在保存済みの role policy への同期であり、新規作成・更新・削除・全削除を反映する。
-
-Oracle DDL は暗黙 commit を含むため、V001 全体を一括 rollback したようには表示しない。既存の無関係な
-END USER、DATA ROLE、context、Data Grant は DROP/上書きしない。
-
-## Data Grant ポリシーの判定
-
-`データ権限` は fake/probe table を作成せず、既存の Oracle table/view/materialized view に対する role-based policy を
-`NL2SQL_APP_DATA_ENTITLEMENTS` に保存する。新規 app table は作成しない。UI は対象 object と column を
-既存 schema catalog / live metadata から選ばせ、任意 SQL や raw predicate は受け付けない。
-
-Data Grant SQL は backend が固定生成する。`NL2SQL_DEEPSEC_CTX_PKG.SET_APP_USER_UUID` は現在の
-内部 application user UUID を検証し、DDS policy evaluator から参照できる `CLIENT_IDENTIFIER` へ設定する。
-同時に、ユーザー管理で登録したログインユーザーIDを `NL2SQL_APP_USER_CTX.LOGIN_USER_ID` へ設定する。predicate は
-`ORA_END_USER_CONTEXT.CLIENT_IDENTIFIER` で現在の内部 application user UUID を取得し、
-`PLATFORM_USER_ROLES` / `PLATFORM_ROLES` /
-`NL2SQL_APP_DATA_ENTITLEMENTS` から、その user に割り当てられた active role の policy を解決する。
-権限設定そのものは user id 単位ではなく `ROLE_ID` 単位であり、複数 role の policy は加法的に合成される。
-行 scope で値ソース「ログインユーザーID」を選んだ場合は、
-`SYS_CONTEXT('NL2SQL_APP_USER_CTX', 'LOGIN_USER_ID')` を業務列と比較する。
-
-capability は SELECT Data Grant のみを対象にする。行 scope の UI は `ALL` と条件ツリー
-(`EXPRESSION`) で指定する。従来の structured filter (`FILTERS`) は互換読み取りする。旧 UI の文字列系 column 値一致 (`COLUMN_EQUALS`) は互換入力として backend に
-残すが、画面では AND グループ内の `EQ + 固定値` 条件へ統合する。`FILTERS` は UI/API から列・operator・
-値ソース・値を JSON として受け付け、backend が AND predicate へ固定生成する。`EQ` の文字列列と
-NUMBER 列では、値ソースとして固定値またはログインユーザーIDを選べる。ログインユーザーIDは
-`ORA_END_USER_CONTEXT.CLIENT_IDENTIFIER` を使い、現在の application user id と対象列を比較する。
-NUMBER 列の `EQ` 値は正整数のみ許可し、ログインユーザーIDが正整数へ変換できない場合は
-一致なしになる。対応列型は文字列、数値、日付/時刻の主要型と NULL 判定に限定し、任意 SQL や raw predicate
-は受け付けない。列 scope は選択した column list から生成する。適用時は対象 object に
-`SET USE DATA GRANTS ONLY ... ENABLED` を設定するため、対象 object は管理対象であることを UI と preview
-で明示する。この enforcement は Deep Sec users に対する強制であり、通常 DB user / DB role への汎用
-VPD ではない。
-
-`Data Grant を適用` は UI の現在 draft をアプリ DB へ保存してから Oracle 側を同期する。backend は
-`NL2SQL_DG_%` prefix かつ `NL2SQL_APP_DATA_ROLE` grantee の managed Data Grant を Oracle metadata から
-照合し、アプリ DB の現在 policy に存在しない stale grant は DROP する。stale grant の対象 object に
-現在 policy が 1 件も残らない場合は、DB role の SELECT を REVOKE してから DROP し、最後に
-`SET USE DATA GRANTS ONLY ... DISABLED` を実行する。
-
-### 付け外しの順序と途中の失敗（fail-closed、#1022）
-
-DATA USER は `NL2SQL_APP_DATA_ROLE` 経由で `NL2SQL_APP_DB_ROLE` の SELECT（object privilege）を持つ。
-`USE DATA GRANTS ONLY` が無効な表では、この SELECT だけで行の制限なしに読める。DDL は暗黙 commit で
-rollback できないため、どの文で止まっても「SELECT があり、DATA GRANTS ONLY が無効」にならない順序にし、
-失敗した文の後ろは実行しない（`oracle_statement_executor.execute(..., stop_on_error=True)`）。
-
-| 操作 | 順序 |
-|---|---|
-| Data Grant の作成・更新 | `SET USE DATA GRANTS ONLY ... ENABLED` → `DROP DATA GRANT IF EXISTS` → `CREATE OR REPLACE DATA GRANT` → `GRANT SELECT ... TO NL2SQL_APP_DB_ROLE` |
-| 対象を使う最後の Data Grant の削除 | SELECT の REVOKE（REVOKE 後も `DBA_TAB_PRIVS` に残っていたら ORA-20003 で止める）→ `DROP DATA GRANT` → `SET USE DATA GRANTS ONLY ... DISABLED` |
-| DeepSec 構成の解除（`ADMIN_RESET`） | 管理対象の SELECT の REVOKE → DATA GRANTS ONLY の無効化 → Data Grant の DROP → …… → `DROP ROLE NL2SQL_APP_DB_ROLE` |
-
-Data Grant の適用が Oracle の文の途中で止まった場合は、そのロールの保存済み Data Grant を
-`APPLY_STATUS = 'FAILED'`（`APPLY_ERROR_MESSAGE` に失敗の文）にする。predicate は
-`APPLY_STATUS = 'APPLIED'` を条件にしているため、再適用が成功するまで、このロールの Data Grant は行を許可しない。
-応答は 409 で、1 文目は利用者向けの日本語、括弧の中に何番目の文で失敗したかと Oracle の応答（ORA）を入れる。
-Oracle の文を実行する前の検証エラー（400 など）では FAILED にしない。
-
-#1022 より前の版で対象の最後の Data Grant を削除した環境では、`NL2SQL_APP_DB_ROLE` に SELECT が残り、
-DATA GRANTS ONLY が無効のままの表がありうる（DATA USER が全行を読める）。管理者は Data Grant owner で次の SQL
-（参考例。実 Oracle では未検証）を実行し、管理対象の Data Grant が無いのに SELECT が残る表を確認して、
-該当する表の SELECT を REVOKE する（または同じ表に Data Grant を作り直して適用する）。
-
-```sql
--- NL2SQL_APP_DB_ROLE に SELECT が残り、NL2SQL の管理する Data Grant が無い表
-SELECT p.OWNER, p.TABLE_NAME
-  FROM DBA_TAB_PRIVS p
- WHERE p.GRANTEE = 'NL2SQL_APP_DB_ROLE'
-   AND p.PRIVILEGE = 'SELECT'
-   AND NOT (p.OWNER = USER
-            AND p.TABLE_NAME IN ('PLATFORM_USER_ROLES', 'PLATFORM_ROLES',
-                                 'NL2SQL_APP_DATA_ENTITLEMENTS'))
-   AND NOT EXISTS (
-         SELECT 1 FROM DBA_DATA_GRANTS g
-          WHERE g.OWNER = USER
-            AND g.GRANT_NAME LIKE 'NL2SQL_DG\_%' ESCAPE '\'
-            AND g.OBJECT_OWNER = p.OWNER
-            AND g.OBJECT_NAME = p.TABLE_NAME);
-
--- 該当した表ごとに実行する
-REVOKE SELECT ON <OWNER>.<TABLE_NAME> FROM NL2SQL_APP_DB_ROLE;
-```
-
-Data Grant の grantee は標準 DB role ではなく DeepSec の DATA ROLE / END USER を使う。本システムでは
-共有 connection pool END USER の `DEEPSEC_DATA_USER` が direct logon し、Data Grant の grantee は
-`NL2SQL_APP_DATA_ROLE` とする。V001 で `NL2SQL_APP_DB_ROLE` を `NL2SQL_APP_DATA_ROLE` へ付与し、
-さらに `DEEPSEC_DATA_USER` へ `GRANT DATA ROLE NL2SQL_APP_DATA_ROLE` を行うことで、共有 END USER の
-direct logon と対象 object 参照に必要な DB role を有効化する。生成 predicate は Oracle 仕様に合わせて
-4000 文字以内で検証し、超過時は SQL 実行前に validation error とする。
-
-`Data Grant を検証` は fake row count ではなく、適用済み role policy について metadata を照合する。
-具体的には foundation object、保存済み Data Grant 名、対象 owner/object、grantee、Data Grants Only の状態、
-対象 object 上の enabled VPD/RLS policy を確認し、不一致は運用エラーとして表示する。DeepSec が正しく
-許可していても、旧 VPD/RLS policy が同じ object に残っていると Oracle は追加で行を絞り込むため、
-`SQL_ASSIST_VPD_%` のような legacy policy は無効化または削除してから DeepSec を適用する。
-
-`SYSTEM_ADMIN` の SQL 実行はアプリ用の接続を使い、Deep Data Security の DATA USER を通らない。
-Data Grant は非 system_admin の利用者に適用される。非 system_admin の実データへのアクセス範囲は、`データ権限` workflow で明示的に
-設定・適用する。
-
 ## 対象識別子の引用規則（Issue #560）
 
-DeepSec のデータ権限は、対象の owner / object と列（`column_names`、行条件の列、関連キー、関連テーブル）を
-`app/features/nl2sql/object_identity.py` の `canonical_object_part` と同じ規則の **canonical token** で
-検証・保存・照合する。frontend の `formatDbObjectName` / `formatEntitlementTargetName` も同じ規則である。
+業務プロファイルの対象・スキーマカタログ・オントロジー・管理 SQL は、対象の owner / object と列を
+`app/features/nl2sql/object_identity.py` の `canonical_object_part` の規則の **canonical token** で
+検証・保存・照合する。frontend の `formatDbObjectName` / `normalizeDbObjectKey` も同じ規則である。
 
 | 入力 | 保存値（token） | 意味 |
 |---|---|---|
@@ -501,58 +322,10 @@ DeepSec のデータ権限は、対象の owner / object と列（`column_names`
 | `Mixed_Case`（引用なし） | `MIXED_CASE` | Oracle と同じく大文字として解釈する |
 | `DEPT@REMOTE`、`my table`（引用なし） | 拒否 | 非引用識別子にならない名前は推測で引用しない |
 
-- `resource_code` は `target_owner` と `target_object` の token を `.` で単純連結した値に揃える
-  （例: `SALES."Mixed_Case"`）。引用が不要な名前では従来の大文字の `OWNER.OBJECT` と同じになる。
 - 二重引用符・NUL・制御文字を含む名前、前後に空白がある引用名、引用符を含めて 128 バイトを超える token は拒否する。
-  `TARGET_OWNER` / `TARGET_OBJECT` / `SCOPE_COLUMN` 列が `VARCHAR2(128)` のため、引用が必要な名前は
-  126 バイトまでとなる。
-- Data Grant / GRANT / `SET USE DATA GRANTS ONLY` の SQL には token をそのまま識別子として埋め込む
-  （token は内部に `"` を含まない）。PL/SQL の文字列リテラル内（`ALL_OBJECTS` の照合、`EXECUTE IMMEDIATE`）
-  では `'` を `''` に escape する。辞書ビュー（`ALL_OBJECTS` / `ALL_TAB_COLUMNS` / `DBA_DATA_GRANTS` /
-  `DBA_POLICIES` / `ALL_CONSTRAINTS` / `ALL_DEPENDENCIES`）の照合は、token から引用符を外したカタログ上の名前を
-  bind 変数で渡す。
-- `GET /api/security/deepsec/target-objects` と詳細 API は、`owner` / `name` をカタログ上の値のまま
-  （大文字化せず）返し、`qualified_name` を canonical な修飾名で返す。詳細 API の path は token で指定し
-  （`/target-objects/SALES/%22Mixed_Case%22`）、`columns[].column_name` は token で返す。
-- 関連条件の候補（外部キー、Ontology edge、既存 Data Grant predicate 内の表参照）も同じ規則で修飾名にする。
-  predicate 内の引用されていない表名は大文字、引用された表名は大文字小文字を保つ。
-  関連テーブル条件の候補範囲になる業務プロファイルの対象表も、#561 から同じ規則で保存する（次節）。
-
-### 既存データの互換と移行
-
-引用が不要な名前の保存値・`resource_code`・Data Grant 名（`NL2SQL_DG_...` の hash 入力）・checksum は変わらないため、
-自動移行はしない。
-
-#560 より前は、対象一覧が owner / object を大文字化して返し、入力チェックも引用符を外して大文字化していた。
-そのため `"Mixed_Case"` を選ぶと、同じ owner に大文字の `MIXED_CASE` がある場合だけ詳細取得・適用が成功し、
-**大文字の同名表（または同名列）へ権限が付与されていた可能性がある**（同名表が無い場合は適用時に拒否され、誤付与は起きない）。
-保存値から利用者の意図は判別できず、別の object へ自動で付け替えると公開範囲が変わるため、自動移行はしない。
-次の SQL（Data Grant owner で実行する参考例。実 Oracle では未検証）で大文字小文字だけが異なる object / 列が並存する
-ルールを洗い出し、該当ルールは画面で対象を選び直して適用し直すこと。
-
-```sql
--- 保存済みの対象と、大文字小文字だけが異なる object が並存するルール
-SELECT e.ROLE_ID, e.ENTITLEMENT_ID, e.TARGET_OWNER, e.TARGET_OBJECT,
-       o.OWNER AS CATALOG_OWNER, o.OBJECT_NAME AS CATALOG_OBJECT, o.OBJECT_TYPE
-  FROM NL2SQL_APP_DATA_ENTITLEMENTS e
-  JOIN ALL_OBJECTS o
-    ON UPPER(o.OWNER) = e.TARGET_OWNER
-   AND UPPER(o.OBJECT_NAME) = e.TARGET_OBJECT
- WHERE e.TARGET_OBJECT NOT LIKE '"%'
-   AND (o.OWNER <> e.TARGET_OWNER OR o.OBJECT_NAME <> e.TARGET_OBJECT)
-   AND o.OBJECT_TYPE IN ('TABLE', 'VIEW', 'MATERIALIZED VIEW');
-
--- 保存済みの許可列と、大文字小文字だけが異なる列が並存するルール
-SELECT e.ROLE_ID, e.ENTITLEMENT_ID, e.TARGET_OWNER, e.TARGET_OBJECT,
-       j.COLUMN_NAME, c.COLUMN_NAME AS CATALOG_COLUMN
-  FROM NL2SQL_APP_DATA_ENTITLEMENTS e
- CROSS APPLY JSON_TABLE(e.COLUMN_NAMES, '$[*]' COLUMNS (COLUMN_NAME VARCHAR2(130) PATH '$')) j
-  JOIN ALL_TAB_COLUMNS c
-    ON c.OWNER = e.TARGET_OWNER
-   AND c.TABLE_NAME = e.TARGET_OBJECT
-   AND UPPER(c.COLUMN_NAME) = j.COLUMN_NAME
-   AND c.COLUMN_NAME <> j.COLUMN_NAME;
-```
+- 辞書ビュー（`ALL_OBJECTS` / `ALL_TAB_COLUMNS` / `ALL_CONSTRAINTS` / `ALL_DEPENDENCIES`）の照合は、
+  token から引用符を外したカタログ上の名前を bind 変数で渡す。
+- 業務プロファイルの対象表も同じ規則で保存する（次節。#561）。
 
 ### 業務プロファイルの対象表（Issue #561）
 
@@ -568,7 +341,6 @@ SELECT e.ROLE_ID, e.ENTITLEMENT_ID, e.TARGET_OWNER, e.TARGET_OBJECT,
 | SQL 生成の schema context | Profile の対象から schema catalog の詳細を読むとき、大文字小文字だけが異なる表の定義は使わない（#563 で schema catalog の詳細取得自体が大文字小文字を区別するようになった） |
 | Select AI の `object_list` | #564 で実 Oracle の挙動を確認し、引用が必要な owner / 表名は `{"owner": "SALES", "name": "\"Mixed_Case\""}` の token で反映する（下記「確認結果」）。#561 の時点では確認前のため `PROFILE_OBJECT_LIST_UNSUPPORTED` で同期を止めていたが、#564 で解除した。引用が不要な名前の `object_list` は従来と同じ |
 | オントロジー | 質問補完の代表値も引用規則どおりに Profile の対象へ絞る。node の識別と Profile の view は #563、AI 構築・業務定義・SQL 接地は #573 で引用名に対応した（次節） |
-| DeepSec の関連テーブル候補（`GET /api/security/deepsec/relations`） | Profile の object が canonical な修飾名になるため、引用名の表を対象・関連テーブルとして選べる |
 | 画面（業務プロファイル・スキーマ参照） | 対象の選択・件数・一括選択・未保存判定のキーを `normalizeDbObjectKey`（`dbObjectIdentity.ts`）にそろえ、引用名を大文字化しない |
 
 #### 確認結果: Select AI の `object_list`・合成データ生成と引用名（Issue #564）
@@ -632,7 +404,7 @@ SELECT p.PROFILE_ID, p.NAME, j.OBJECT_KIND, j.OBJECT_KEY,
 ```
 
 該当 Profile では、対象に残っている `SALES.MIXED_CASE` が意図した表か確認し、引用名の表を使う場合は
-`SALES."Mixed_Case"` を選び直す。DeepSec のデータ権限の検出は前節の SQL を使う。
+`SALES."Mixed_Case"` を選び直す。
 
 ### schema catalog・オントロジー・列単位の許可チェック（Issue #563）
 
@@ -689,92 +461,23 @@ SELECT p.PROFILE_ID, p.NAME, j.OBJECT_KIND, j.OBJECT_KEY,
 入力規則に反する識別子の API エラーは「… は有効な Oracle identifier で指定してください。大文字小文字の混在や
 記号を含む名前は "Mixed_Case" のように二重引用符で囲みます。」と返す。
 
-## 条件グループと関連テーブル条件（Issue #447）
-
-行条件は `すべて満たす（AND）` / `いずれかを満たす（OR）` のグループで編集する。
-各グループが括弧に相当し、文字要約と読み取り専用 SQL preview で確認できる。
-根を含む 3 階層、ルール全体で 20 フィールド条件・3 関連カード、関連キーは 8 組を製品上限とする。
-関連カード内の条件グループも階層数に含める。空グループ、空値、未完了の関連は保存・preview・apply
-できず、最後の条件を削除しても `ALL` に切り替わらない。既存の型別 operator とログインユーザーIDを継続する。
-
-関連カードは同じ DB の Profile、関連テーブル、等値キー、関連レコードの条件を指定する。
-確認済み外部キー（enabled / validated）と公開 revision / view の承認済み Ontology edge を候補にし、
-管理者による実在列の手動指定も可能。複合キーを保持し、一つのカードは一つの相関 `EXISTS` に変換する。
-同一カードの条件は同一の関連レコードで満たす必要があり、別レコードの部分一致を合成しない。
-自関連、多段関連、関連カード内の関連、DB link、任意 SQL、NOT グループ、NOT EXISTS、集約・関数編集、
-`WHEN … GRANTED ON` による権限継承、書込み権限は対象外。
-
-Profile は設定候補の範囲のみを定める。Data Grant は物理オブジェクトに対して全 Profile で有効となる。
-Profile の変更・削除で既存の DB grant を自動削除しない。保存した Profile 範囲 version と関係の ID/version、
-実在列・型・参照権限・既存 grant/view の依存を preview/apply 時に再検証する。変更や検証不能はエラーで止め、
-別オブジェクトへの置換、利用者権限の自動拡大、長い条件の複数 grant への自動分割は行わない。
-
-Oracle の predicate は最大 4,000 文字で、参照権限は Data Grant owner、循環は query runtime でも確認される。
-アプリ側は認可のガードを含む完全な predicate で文字数を検証する。
-[Oracle CREATE DATA GRANT](https://docs.oracle.com/en/database/oracle/oracle-database/26/sqlrf/create-data-grant.html)
-に従い、固定のユーザー・active role・適用済み entitlement の条件の内側に括弧付きユーザー条件を置く。
-OR はこのガードを迂回できない。複数 Data Grant の実効権限は和集合なので、追加した「制限ルール」で
-既存許可を狭めることはできない。AND が必要な条件は同じルールへまとめる。
-[Oracle About Data Grants](https://docs.oracle.com/en/database/oracle/oracle-database/26/ddscg/data-grants.html)
-
-関連条件は関連テーブルへの読み取り権限を自動付与しない。関連テーブル自身の DeepSec/VPD 設定によって
-照合できる行が制限される可能性がある。2026-09-11 の隔離 Oracle 実機検証では、関連表を
-`USE DATA GRANTS ONLY` で保護すると、関連表の grant が D3 のみの時は本人分（ID=3）のみ、
-D1/D3 に変更すると関連条件に一致する ID=1 も返った。これは検証環境で観測した結果であり、
-任意の権限構成の最終可視行を継承する機能としては提供しない。
-
-### API・移行・状態保持
-
-`scope_mode: EXPRESSION` / `scope_expression: {version: 1, root: ...}` を entitlement API に追加した。
-ノードは `group`、`condition`、`related_exists` の discriminated union で、SQL 断片は受け付けない。
-`GET /api/security/deepsec/scope-profiles` と `GET /api/security/deepsec/relations` が設定候補を返す。
-対象一覧の `profile_id` は候補を絞る任意パラメーターで、runtime 認可には追加しない。
-
-nullable の `SCOPE_EXPRESSION` CLOB と mode 制約（`EXPRESSION`）は、`app_security_migrate --apply` が migration 004 で
-作る（旧形の表に列を足す migration 020 は #1648 で削除した）。
-旧 `FILTERS` / `COLUMN_EQUALS` はそのまま読み、編集・保存したルールのみ新形式にする。
-既存 entitlement ID / Data Grant 名 / checksum / apply 状態は未変更時に保持する。
-複雑ルールへの旧形式上書きは拒否する。新 UI が明示的に全行へ変更する場合のみ
-`scope_expression_version: 1` で対応クライアントであることを示す。
-
-草稿は既存 WorkspaceState により同一ユーザー・DB の同一タブ sessionStorage に期限付きで保持する。
-確認語・SQL preview は復元せず、ルール変更や画面復帰で実行同意を解除する。
-再取得は草稿を上書きせず、保存時に元の role version を用いて競合を検出する。
-
-### 回帰検証
-
-`test_deepsec_scope_expression.py` は括弧の違い、OR の認可ガード、同一関連行、重複、NULL、複合キー、
-旧形式互換・所有フィールド・CLOB 契約、範囲/型/権限/循環/長さの拒否を検証する。
-`security-rbac.spec.ts` は desktop と mobile-375 で編集・preview・草稿復元・確認解除・空条件・レイアウトを検証する。
-実機の opt-in `test_deepsec_expression_only_isolated_objects` は新規隔離テーブルと grant のみを作り、
-実 SELECT の結果、保護された関連表、4KB 超 CLOB、runtime `ORA-52561` を確認し、finally で削除する。
-
-```bash
-NL2SQL_RUN_DEEPSEC_INTEGRATION=1 \
-NL2SQL_DEEPSEC_INTEGRATION_CONFIRM=I_UNDERSTAND_DEEPSEC_DB_MUTATION \
-uv run pytest tests/test_deepsec_real_oracle_integration.py -k expression_only
-```
-
-70–80% は常用シナリオの設計目標であり、計測済み業務カバレッジではない。
-
 ## SQL 実行画面の安全境界
 
 AI 活用の `/direct-sql`（SELECT SQL を実行）は `search.view` で表示し、実行には `search.execute` を
 要求する。`/api/nl2sql/execute` だけを使用し、SELECT/WITH 以外と複数 statement はサーバー側の
-SELECT-only guard で拒否する。許可された SQL は、ログイン中 application user UUID を DeepSec
-context へ設定した data pool で実行する。
+SELECT-only guard で拒否する。許可された SQL は、アプリの DB ユーザーの接続（system_admin 用・
+非 system_admin 用に分けた pool。#904）で実行する。
 
 データ準備の `/admin-sql`（管理 SQL を実行）は `settings.database.sql_execute` permission を持つ
 管理者向け機能である。単一の SELECT/WITH は `/api/nl2sql/db-admin/execute` から同じ data pool の
 `execute_select()` に収束する。非 SELECT または複数 statement は管理 SQL として扱い、
-`ADMIN_EXECUTE` 確認語、RBAC、監査を通した上で application DB user の control pool から実行する。
-この経路は業務データ参照用の DeepSec data plane ではないため、通常の SELECT 実行と混同しない。
+`ADMIN_EXECUTE` 確認語、RBAC、監査を通した上で application DB user の管理の接続から実行する。
 確認不要の判定には通常の SELECT-only guard を再利用し、WITH で始まる更新文も管理 SQL として扱う。
 管理 SQL の実行（SELECT を含む）と止めた文は、表 `NL2SQL_ADMIN_AUDIT_LOG` に件数の上限なく残す（#2264）。
 
 データ準備の `/db-admin-chat`（DB 管理チャット。#2264）は `menu.db_admin_chat` を持つ利用者（既定は
 system_admin だけ）の画面で、OCI Enterprise AI Direct で生成した SQL を、SELECT を含めて application DB
-user の管理の接続（DeepSec の data plane ではない）で実行する。SELECT 以外は `ADMIN_EXECUTE`（1 つの対象の
+user の管理の接続で実行する。SELECT 以外は `ADMIN_EXECUTE`（1 つの対象の
 DROP / TRUNCATE は対象の名前）の確認語を要し、方針で止める文（`ALTER SYSTEM`・`DROP USER`・動的 SQL・
 外部への通信のパッケージなど）はコードの規則で止める。API は画面だけで、MCP・API キーからは使えない。
 会話の履歴（#2319。表 `NL2SQL_DB_ADMIN_CHATS` / `NL2SQL_DB_ADMIN_CHAT_TURNS`）は「AI 活用」と同じ見え方で、
@@ -784,16 +487,14 @@ system_admin は全員の会話、それ以外は自分の会話だけ（他人�
 
 Select AI `DBMS_CLOUD_AI.GENERATE` と Select AI Agent の
 `DBMS_CLOUD_AI_AGENT.RUN_TEAM` / `RUN_TOOL` と会話の `DBMS_CLOUD_AI.CREATE_CONVERSATION` は、非
-`system_admin` の SQL 生成でも `system_admin` と同じ Thin + mTLS の通常 Oracle user 接続で実行し、
-DeepSec context は付けない。NL2SQL job の生成済み SELECT 実行は、非 `system_admin` では DeepSec
-context 付き data connection を使用する。`system_admin`、migration、DeepSec V001 適用、schema
-refresh、profile/credential/asset 管理は通常 Oracle user 接続で実行し、DeepSec context は付けない。
+`system_admin` の SQL 生成でも `system_admin` と同じ Thin + mTLS の通常 Oracle user 接続で実行する。
+NL2SQL job の生成済み SELECT 実行は、actor の種類で pool を分けたアプリの接続を使う（#904）。
 
 Select AI / Select AI Agent が生成した SQL には、アプリの安全確認（SELECT-only guard・危険な関数・
 bind の placeholder・未承認の関数・他製品のシステムの表・業務プロファイルの表と列の範囲）を掛けない
 （#1523。ユーザーの決定。生成する SQL は既定で SELECT 文）。業務プロファイルの列の制限は、Select AI の
 profile の `object_list` が表の単位のため、この 2 方式では効かない。実行は上の読み取り専用の data
-connection のままなので、非 `system_admin` の行・列は DeepSec の Data Grant で守る。OCI Enterprise AI で
+connection のままなので、行・列の制限は業務プロファイルの表の範囲までとなる。OCI Enterprise AI で
 生成した SQL と、利用者が入力・編集した SQL は従来どおりすべてを確かめる（[sql-chat.md](./sql-chat.md)
 「生成の方式ごとの安全確認」）。
 
@@ -803,6 +504,5 @@ connection のままなので、非 `system_admin` の行・列は DeepSec の D
 - session cookie は HttpOnly、CSRF は cookie/header/server digest の三者一致を要求する。
 - session / CSRF の cookie（`pr_session` / `pr_csrf`。共通 `.env` の `PLATFORM_AUTH_*_COOKIE_NAME`）は 3 製品で共有し、1 回のログインで全製品を使える。ログアウトは共有の session を失効させ、ログインのときはブラウザが持っていた古い session を失効させる。権限は製品ごと（#1565）。
 - password は Argon2id で保存し、平文 password、hash、session token、Oracle secret を応答・監査へ出さない。
-- Data pool connection は貸出時に application user UUID を context へ設定し、返却前に必ず clear する。
-- context 設定・clear に失敗した connection は再利用せず、data operation は control pool へ fallback しない。
+- 業務データの接続は actor の種類（system_admin / 非 system_admin）で pool を分け、同じ接続を共有しない（#904）。
 - background job は actor UUID を保存し、worker 実行時に user が active であることを再確認する。

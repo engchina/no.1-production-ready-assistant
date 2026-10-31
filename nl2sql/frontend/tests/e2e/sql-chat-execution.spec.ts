@@ -62,7 +62,6 @@ function execution(rowCount: number, overrides: Record<string, unknown> = {}) {
       has_more: false,
       truncated: false,
       execution_context: "oracle_data_plane",
-      vpd_context_enforced: false,
     },
     row_limit: 1000,
     max_cell_chars: 2000,

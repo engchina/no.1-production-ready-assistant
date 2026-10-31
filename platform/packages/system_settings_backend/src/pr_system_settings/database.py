@@ -361,9 +361,8 @@ def _database_wallet_service_exists(wallet_path: Path, dsn: str) -> bool:
 def database_readiness_message(readiness: str) -> str:
     if readiness == "invalid_configuration":
         return (
-            "Oracle Deep Data Security は python-oracledb Thin mode のみ対応しています。"
-            "NL2SQL_ORACLE_DEEPSEC_ENABLED=true の場合は "
-            "PLATFORM_ORACLE_DRIVER_MODE=thin にしてください。"
+            "接続設定の組み合わせがこの製品で使えません。"
+            "PLATFORM_ORACLE_DRIVER_MODE と Wallet の設定を確認してください。"
         )
     if readiness == "invalid":
         return (
@@ -428,7 +427,7 @@ def database_connection_error_message(exc: Exception, error_codes: list[str]) ->
     if code_set & {"DPI-1047", "DPI-1072"}:
         return (
             prefix + "標準の Thin mode では Oracle Instant Client は不要です。"
-            "Thick 互換設定を DeepSec 無効で使う場合のみ、"
+            "Thick 互換設定を使う場合のみ、"
             "Oracle Instant Client の配置と PLATFORM_ORACLE_CLIENT_LIB_DIR を確認してください。"
         )
     if error_codes:
@@ -462,7 +461,7 @@ def database_connection_troubleshooting(
         )
     if readiness == "invalid_configuration":
         tips.append(
-            "DeepSec を有効にする場合は PLATFORM_ORACLE_DRIVER_MODE=thin とし、"
+            "PLATFORM_ORACLE_DRIVER_MODE=thin とし、"
             "Thin mTLS 用の tnsnames.ora と ewallet.pem を "
             "PLATFORM_ORACLE_WALLET_DIR に配置してください。"
         )
@@ -502,7 +501,7 @@ def database_connection_troubleshooting(
     if "dpi-1047" in combined or "dpi-1072" in combined:
         tips.append(
             "PLATFORM_ORACLE_DRIVER_MODE=thin の標準構成へ戻してください。"
-            "Thick 互換設定を DeepSec 無効で使う場合のみ、"
+            "Thick 互換設定を使う場合のみ、"
             "Oracle Instant Client と PLATFORM_ORACLE_CLIENT_LIB_DIR を確認してください。"
         )
     if "operationalerror" in combined and not tips:
@@ -1333,7 +1332,7 @@ def build_database_router(
 
     - `test_connection(candidate)`：保存前の値で Oracle に接続し、失敗なら例外を送出する
     - `on_saved(settings)`：接続設定・Wallet を変えたあとに呼ぶ（接続 pool を閉じる等）
-    - `extra_readiness(settings)`：製品固有の readiness（NL2SQL の DeepSec）。問題がなければ None
+    - `extra_readiness(settings)`：製品固有の readiness。問題がなければ None
     - `connection_security_enabled`：Walletless TLS を選べるか（接続処理が対応している製品だけ）
     - `password_reveal_enabled`：保存済み DB パスワードの表示（`write_dependencies` を付ける）
     - `write_dependencies`：設定を書き換える操作（保存・Wallet・ADB の保存/起動/停止）

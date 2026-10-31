@@ -29,12 +29,9 @@ from app.security.dependencies import authorize_api_request, local_debug_princip
 from app.security.domain import (
     SYSTEM_ADMIN_ROLE_CODE,
     SYSTEM_ADMIN_ROLE_ID,
-    DataEntitlementRecord,
-    DataEntitlementScopeFilter,
     Principal,
     RoleRecord,
     UserRecord,
-    scope_filters_scope_code,
 )
 from app.security.passwords import PasswordPolicyError, hash_password, validate_password
 from app.security.permissions import (
@@ -66,7 +63,6 @@ from app.security.permissions import (
 from app.security.router import auth_router as security_router
 from app.security.schemas import (
     CurrentUserData,
-    DataEntitlementInput,
     PasswordChangeRequest,
     RoleData,
     UserCreateRequest,
@@ -335,7 +331,6 @@ def test_oracle_store_maps_bare_ora_00942_to_operation_security_object(
         (store.list_users, "PLATFORM_USERS"),
         (store.list_roles, "PLATFORM_ROLES"),
         (lambda: store.get_session_by_token_hash("missing"), "PLATFORM_AUTH_SESSIONS"),
-        (store.get_deepsec_states, "NL2SQL_DEEPSEC_MIGRATIONS"),
     ]
 
     for operation, expected_object in operations:
@@ -395,7 +390,6 @@ def test_local_debug_me_and_logout_need_no_session_or_csrf(
             "role_display_names": ["システム管理者"],
             "is_system_admin": True,
             "permissions": sorted(ALL_PERMISSION_CODES),
-            "data_entitlements": [],
             "allowed_profile_ids": [],
             "debug_mode": True,
             "password_change_allowed": False,
@@ -744,11 +738,7 @@ def test_security_ddl_is_the_final_shape_without_legacy_migrations() -> None:
     migration_dir = Path(__file__).resolve().parents[1] / "migrations"
     base_sql = (migration_dir / "004_app_security_rbac.sql").read_text(encoding="utf-8")
 
-    assert "TARGET_TYPE VARCHAR2(32)" in base_sql
-    assert "COLUMN_NAMES VARCHAR2(4000)" in base_sql
-    assert "SCOPE_FILTERS VARCHAR2(4000)" in base_sql
-    assert "SCOPE_EXPRESSION CLOB" in base_sql
-    assert "'EXPRESSION'" in base_sql
+    assert "CREATE TABLE NL2SQL_APP_ROLE_PERMISSIONS" in base_sql
     assert "CREATE TABLE NL2SQL_APP_ROLE_PROFILES" in base_sql
     assert "PRIMARY KEY (ROLE_ID, PROFILE_ID)" in base_sql
     assert base_sql.count("ON DELETE CASCADE") == 2
@@ -777,7 +767,6 @@ def test_dashboard_permission_is_retired_for_appearance_settings() -> None:
         display_name="旧ダッシュボード",
         description="",
         permissions={"dashboard.view"},
-        entitlements=[],
         actor=actor,
     )
     assert role.permissions == {"menu.settings_appearance"}
@@ -817,442 +806,7 @@ def test_stale_permission_codes_are_hidden_from_role_api_and_principals() -> Non
     assert {"menu.settings_appearance", "menu.query", "menu.direct_sql"} <= principal.permissions
 
 
-def test_data_entitlement_capability_is_structured() -> None:
-    with pytest.raises(ValueError, match="capability"):
-        DataEntitlementInput(
-            resource_code="HR.EMPLOYEES",
-            scope_code="SALES",
-            capability="ARBITRARY_SQL",
-        )
-
-
-@pytest.mark.parametrize("resource_code", ["SALES.ORDER$HIST", "APP#DATA.T#1"])
-def test_data_entitlement_input_accepts_oracle_identifier_special_chars(
-    resource_code: str,
-) -> None:
-    """DeepSec は resource_code に OWNER.OBJECT を入れるため $ # を含む Oracle 名も受理する。"""
-    record = DataEntitlementInput(resource_code=resource_code.lower(), capability="select")
-    assert record.resource_code == resource_code
-
-
-def test_data_entitlement_input_generates_scope_filter_code() -> None:
-    record = DataEntitlementInput(
-        resource_code="HR.ORDERS",
-        capability="SELECT",
-        target_owner="HR",
-        target_object="ORDERS",
-        column_names=["REGION_CODE"],
-        scope_mode="FILTERS",
-        scope_filters=[
-            {
-                "column_name": "REGION_CODE",
-                "operator": "EQ",
-                "value_type": "TEXT",
-                "value": "SALES",
-            }
-        ],
-    ).to_record("role-sales")
-
-    assert record.scope_code == scope_filters_scope_code(record.scope_filters)
-    assert record.scope_code.startswith("FILTERS:")
-    assert record.scope_filters[0].column_name == "REGION_CODE"
-
-
-def test_data_entitlement_input_accepts_number_app_user_id_scope_filter() -> None:
-    record = DataEntitlementInput(
-        resource_code="HR.ORDERS",
-        capability="SELECT",
-        target_owner="HR",
-        target_object="ORDERS",
-        column_names=["APP_OWNER_USER_ID"],
-        scope_mode="FILTERS",
-        scope_filters=[
-            {
-                "column_name": "APP_OWNER_USER_ID",
-                "operator": "EQ",
-                "value_type": "NUMBER",
-                "value_source": "LOGIN_USER_ID",
-                "value": "123",
-            }
-        ],
-    ).to_record("role-sales")
-
-    assert record.scope_filters[0].value_source == "LOGIN_USER_ID"
-    assert record.scope_filters[0].value == ""
-    assert record.scope_filters[0].value_type == "NUMBER"
-
-
-@pytest.mark.parametrize("value", ["1.5", "-1", "0", ""])
-def test_data_entitlement_input_rejects_number_eq_non_positive_integer(
-    value: str,
-) -> None:
-    with pytest.raises(ValueError, match="正整数"):
-        DataEntitlementInput(
-            resource_code="HR.ORDERS",
-            capability="SELECT",
-            target_owner="HR",
-            target_object="ORDERS",
-            column_names=["APP_OWNER_USER_ID"],
-            scope_mode="FILTERS",
-            scope_filters=[
-                {
-                    "column_name": "APP_OWNER_USER_ID",
-                    "operator": "EQ",
-                    "value_type": "NUMBER",
-                    "value": value,
-                }
-            ],
-        )
-
-
-def test_deepsec_entitlement_update_preserves_role_metadata_and_permissions() -> None:
-    service = _service()
-    actor, _, _ = _login(service)
-    role = service.create_role(
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="メニュー権限は DeepSec 画面から変更しない",
-        permissions={"menu.query"},
-        entitlements=[("HR.EMPLOYEES", "SALES", "SELECT")],
-        actor=actor,
-    )
-
-    updated = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[
-            ("HR.EMPLOYEES", "SALES", "SELECT"),
-            ("HR.EMPLOYEES", "HR", "SELECT"),
-        ],
-        actor=actor,
-    )
-
-    assert updated.version == role.version + 1
-    assert updated.role_code == role.role_code
-    assert updated.display_name == role.display_name
-    assert updated.description == role.description
-    assert updated.permissions == role.permissions
-    assert {(item.scope_code, item.capability) for item in updated.entitlements} == {
-        ("SALES", "SELECT"),
-        ("HR", "SELECT"),
-    }
-    with pytest.raises(SecurityApiError, match="更新"):
-        service.update_role_data_entitlements(
-            role.role_id,
-            expected_version=role.version,
-            entitlements=[],
-            actor=actor,
-        )
-    with pytest.raises(SecurityApiError, match="SYSTEM_ADMIN"):
-        service.update_role_data_entitlements(
-            SYSTEM_ADMIN_ROLE_ID,
-            expected_version=1,
-            entitlements=[],
-            actor=actor,
-        )
-
-
-def test_deepsec_entitlement_update_preserves_applied_state_when_policy_unchanged() -> None:
-    service = _service()
-    store = cast(InMemorySecurityStore, service.store)
-    actor, _, _ = _login(service)
-    role = service.create_role(
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[],
-        actor=actor,
-    )
-    applied_at = datetime(2026, 8, 23, 1, 0, tzinfo=UTC)
-    entitlement = DataEntitlementRecord(
-        entitlement_id="entitlement-1",
-        role_id=role.role_id,
-        resource_code="HR.EMPLOYEES",
-        scope_code="*",
-        capability="SELECT",
-        target_owner="HR",
-        target_object="EMPLOYEES",
-        target_type="TABLE",
-        column_names=["EMPLOYEE_ID", "DISPLAY_NAME"],
-        scope_mode="ALL",
-        data_grant_name="NL2SQL_DG_APPLIED",
-        sql_checksum="abc123",
-        apply_status="APPLIED",
-        applied_at=applied_at,
-    )
-    store.roles[role.role_id] = RoleRecord(
-        role_id=role.role_id,
-        role_code=role.role_code,
-        display_name=role.display_name,
-        description=role.description,
-        is_built_in=role.is_built_in,
-        archived=role.archived,
-        version=role.version,
-        permissions=set(role.permissions),
-        entitlements=[entitlement],
-    )
-
-    updated = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[replace(entitlement)],
-        actor=actor,
-    )
-
-    stored = updated.entitlements[0]
-    assert stored.apply_status == "APPLIED"
-    assert stored.apply_error_message == ""
-    assert stored.data_grant_name == "NL2SQL_DG_APPLIED"
-    assert stored.sql_checksum == "abc123"
-    assert stored.applied_at == applied_at
-
-
-def test_deepsec_entitlement_update_resets_apply_state_when_policy_changes() -> None:
-    service = _service()
-    store = cast(InMemorySecurityStore, service.store)
-    actor, _, _ = _login(service)
-    role = service.create_role(
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[],
-        actor=actor,
-    )
-    applied_at = datetime(2026, 8, 23, 1, 0, tzinfo=UTC)
-    entitlement = DataEntitlementRecord(
-        entitlement_id="entitlement-1",
-        role_id=role.role_id,
-        resource_code="HR.EMPLOYEES",
-        scope_code="*",
-        capability="SELECT",
-        target_owner="HR",
-        target_object="EMPLOYEES",
-        target_type="TABLE",
-        column_names=["EMPLOYEE_ID", "DISPLAY_NAME"],
-        scope_mode="ALL",
-        data_grant_name="NL2SQL_DG_APPLIED",
-        sql_checksum="abc123",
-        apply_status="APPLIED",
-        applied_at=applied_at,
-    )
-    store.roles[role.role_id] = RoleRecord(
-        role_id=role.role_id,
-        role_code=role.role_code,
-        display_name=role.display_name,
-        description=role.description,
-        is_built_in=role.is_built_in,
-        archived=role.archived,
-        version=role.version,
-        permissions=set(role.permissions),
-        entitlements=[entitlement],
-    )
-    changed = replace(
-        entitlement,
-        column_names=["EMPLOYEE_ID"],
-        apply_error_message="client supplied stale error",
-    )
-
-    updated = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[changed],
-        actor=actor,
-    )
-
-    stored = updated.entitlements[0]
-    assert stored.apply_status == "PENDING"
-    assert stored.apply_error_message == ""
-    assert stored.data_grant_name == "NL2SQL_DG_APPLIED"
-    assert stored.sql_checksum == ""
-    assert stored.applied_at is None
-
-
-def test_deepsec_entitlement_update_resets_apply_state_when_scope_filters_change() -> None:
-    service = _service()
-    store = cast(InMemorySecurityStore, service.store)
-    actor, _, _ = _login(service)
-    role = service.create_role(
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[],
-        actor=actor,
-    )
-    filters = [
-        DataEntitlementScopeFilter(
-            column_name="REGION_CODE",
-            operator="EQ",
-            value_type="TEXT",
-            value="SALES",
-        )
-    ]
-    entitlement = DataEntitlementRecord(
-        entitlement_id="entitlement-1",
-        role_id=role.role_id,
-        resource_code="HR.ORDERS",
-        scope_code=scope_filters_scope_code(filters),
-        capability="SELECT",
-        target_owner="HR",
-        target_object="ORDERS",
-        target_type="TABLE",
-        column_names=["REGION_CODE"],
-        scope_mode="FILTERS",
-        scope_filters=filters,
-        data_grant_name="NL2SQL_DG_APPLIED",
-        sql_checksum="abc123",
-        apply_status="APPLIED",
-        applied_at=datetime(2026, 8, 23, 1, 0, tzinfo=UTC),
-    )
-    store.roles[role.role_id] = RoleRecord(
-        role_id=role.role_id,
-        role_code=role.role_code,
-        display_name=role.display_name,
-        description=role.description,
-        is_built_in=role.is_built_in,
-        archived=role.archived,
-        version=role.version,
-        permissions=set(role.permissions),
-        entitlements=[entitlement],
-    )
-    changed_filters = [replace(filters[0], value="HR")]
-
-    updated = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[
-            replace(
-                entitlement,
-                scope_code=scope_filters_scope_code(changed_filters),
-                scope_filters=changed_filters,
-            )
-        ],
-        actor=actor,
-    )
-
-    stored = updated.entitlements[0]
-    assert stored.scope_code == scope_filters_scope_code(changed_filters)
-    assert stored.apply_status == "PENDING"
-    assert stored.sql_checksum == ""
-    assert stored.applied_at is None
-
-
-def test_deepsec_entitlement_update_rejects_client_supplied_applied_state_for_new_policy() -> None:
-    service = _service()
-    actor, _, _ = _login(service)
-    role = service.create_role(
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[],
-        actor=actor,
-    )
-    forged = DataEntitlementRecord(
-        entitlement_id="entitlement-forged",
-        role_id=role.role_id,
-        resource_code="HR.EMPLOYEES",
-        scope_code="*",
-        capability="SELECT",
-        target_owner="HR",
-        target_object="EMPLOYEES",
-        target_type="TABLE",
-        column_names=["EMPLOYEE_ID"],
-        scope_mode="ALL",
-        data_grant_name="NL2SQL_DG_FORGED",
-        sql_checksum="forged",
-        apply_status="APPLIED",
-        applied_at=datetime(2026, 8, 23, 1, 0, tzinfo=UTC),
-    )
-
-    updated = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[forged],
-        actor=actor,
-    )
-
-    stored = updated.entitlements[0]
-    assert stored.apply_status == "PENDING"
-    assert stored.sql_checksum == ""
-    assert stored.applied_at is None
-
-
-def test_oracle_role_access_uses_safe_data_entitlement_bind_names() -> None:
-    cursor = _RecordingCursor()
-    role = RoleRecord(
-        role_id="role-1",
-        role_code="QUERY_VIEWER",
-        display_name="検索閲覧",
-        description="",
-        is_built_in=False,
-        archived=False,
-        version=1,
-        permissions={"search.execute", "search.view"},
-        entitlements=[
-            DataEntitlementRecord(
-                entitlement_id="entitlement-1",
-                role_id="role-1",
-                resource_code="HR.EMPLOYEES",
-                scope_code="SALES",
-                capability="SELECT",
-                target_owner="HR",
-                target_object="EMPLOYEES",
-                target_type="TABLE",
-                column_names=["EMPLOYEE_ID", "DISPLAY_NAME"],
-                scope_mode="COLUMN_EQUALS",
-                scope_column="DEPARTMENT_CODE",
-            )
-        ],
-    )
-
-    OracleSecurityStore._replace_role_access(cursor, role)
-
-    permission_inserts = [
-        item for item in cursor.executed if "INSERT INTO NL2SQL_APP_ROLE_PERMISSIONS" in item[0]
-    ]
-    assert len(permission_inserts) == 2
-    data_inserts = [
-        item for item in cursor.executed if "INSERT INTO NL2SQL_APP_DATA_ENTITLEMENTS" in item[0]
-    ]
-    assert len(data_inserts) == 1
-    sql, params = data_inserts[0]
-    assert re.search(r":(?:id|resource|scope|capability)\b", sql) is None
-    assert params == {
-        "entitlement_id": "entitlement-1",
-        "role_id": "role-1",
-        "resource_code": "HR.EMPLOYEES",
-        "scope_code": "SALES",
-        "capability_code": "SELECT",
-        "target_owner": "HR",
-        "target_object": "EMPLOYEES",
-        "target_type": "TABLE",
-        "column_names": '["EMPLOYEE_ID","DISPLAY_NAME"]',
-        "scope_mode": "COLUMN_EQUALS",
-        "scope_column": "DEPARTMENT_CODE",
-        "scope_filters": "[]",
-        "scope_expression": None,
-        "data_grant_name": None,
-        "sql_checksum": None,
-        "apply_status": "PENDING",
-        "apply_error_message": "-",
-        "applied_at": None,
-    }
-
-
-def test_bootstrap_system_admin_has_no_fake_probe_entitlement() -> None:
-    service = _service()
-    service.bootstrap()
-
-    system_admin = service.store.get_role(SYSTEM_ADMIN_ROLE_ID)
-
-    assert system_admin is not None
-    assert system_admin.entitlements == []
-
-
-def test_multiple_roles_union_permissions_and_data_entitlements() -> None:
+def test_multiple_roles_union_permissions_and_profile_access() -> None:
     service = _service()
     actor, _, _ = _login(service)
     role_a = service.create_role(
@@ -1260,7 +814,6 @@ def test_multiple_roles_union_permissions_and_data_entitlements() -> None:
         display_name="検索閲覧",
         description="",
         permissions={"search.view"},
-        entitlements=[("HR.EMPLOYEES", "SALES", "SELECT")],
         allowed_profile_ids={"sales-profile"},
         actor=actor,
     )
@@ -1269,7 +822,6 @@ def test_multiple_roles_union_permissions_and_data_entitlements() -> None:
         display_name="検索実行",
         description="",
         permissions={"search.execute"},
-        entitlements=[("FIN.INVOICES", "APPROVED", "SELECT")],
         allowed_profile_ids={"finance-profile"},
         actor=actor,
     )
@@ -1288,10 +840,6 @@ def test_multiple_roles_union_permissions_and_data_entitlements() -> None:
         "menu.sql_to_question",
         "menu.history",
     }
-    assert {(item.scope_code, item.capability) for item in principal.data_entitlements} == {
-        ("SALES", "SELECT"),
-        ("APPROVED", "SELECT"),
-    }
     assert principal.allowed_profile_ids == {"sales-profile", "finance-profile"}
 
 
@@ -1303,7 +851,6 @@ def test_role_profile_access_is_exposed_on_role_and_current_user_data() -> None:
         display_name="業務 profile 制限",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"finance", "sales"},
         actor=actor,
     )
@@ -1332,7 +879,6 @@ def test_profile_manage_role_grants_all_profile_access_without_stored_ids() -> N
         display_name="業務 profile 管理",
         description="",
         permissions={"menu.profiles"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=actor,
     )
@@ -1360,7 +906,6 @@ def test_non_system_admin_cannot_change_role_profile_access() -> None:
         display_name="ロール管理",
         description="",
         permissions={"menu.security_roles"},
-        entitlements=[],
         actor=actor,
     )
     target = service.create_role(
@@ -1368,7 +913,6 @@ def test_non_system_admin_cannot_change_role_profile_access() -> None:
         display_name="業務 profile 対象",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=actor,
     )
@@ -1417,7 +961,6 @@ def test_reserved_system_admin_role_code_cannot_be_created(role_code: str) -> No
             display_name="追加システム管理者",
             description="",
             permissions={"menu.security_roles"},
-            entitlements=[],
             actor=actor,
         )
 
@@ -1481,7 +1024,6 @@ def test_disabled_user_can_be_deleted_with_sessions_and_login_id_reused() -> Non
         display_name="削除対象ユーザー用",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
     user, password = service.create_user(
@@ -1529,7 +1071,6 @@ def test_user_delete_rejects_active_self_bootstrap_and_stale_version() -> None:
         display_name="削除ガード",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
     user, _ = service.create_user(
@@ -1577,7 +1118,7 @@ def test_user_delete_rejects_active_self_bootstrap_and_stale_version() -> None:
     assert service.store.get_user(user.user_uuid) is not None
 
 
-def test_archived_unassigned_role_without_entitlements_can_be_deleted() -> None:
+def test_archived_unassigned_role_can_be_deleted() -> None:
     service = _service()
     actor, _, _ = _login(service)
     role = service.create_role(
@@ -1585,7 +1126,6 @@ def test_archived_unassigned_role_without_entitlements_can_be_deleted() -> None:
         display_name="削除対象ロール",
         description="削除対象",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=actor,
     )
@@ -1605,7 +1145,7 @@ def test_archived_unassigned_role_without_entitlements_can_be_deleted() -> None:
     assert service.store.get_role(role.role_id) is None
 
 
-def test_role_delete_rejects_active_built_in_assigned_entitled_and_stale_targets() -> None:
+def test_role_delete_rejects_active_built_in_assigned_and_stale_targets() -> None:
     service = _service()
     actor, _, _ = _login(service)
     active = service.create_role(
@@ -1613,7 +1153,6 @@ def test_role_delete_rejects_active_built_in_assigned_entitled_and_stale_targets
         display_name="有効ロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
     with pytest.raises(SecurityApiError) as active_error:
@@ -1635,7 +1174,6 @@ def test_role_delete_rejects_active_built_in_assigned_entitled_and_stale_targets
         display_name="割当済みロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
     service.create_user(
@@ -1658,33 +1196,11 @@ def test_role_delete_rejects_active_built_in_assigned_entitled_and_stale_targets
         )
     assert assigned_error.value.code == "SECURITY_ROLE_DELETE_ASSIGNED"
 
-    entitled = service.create_role(
-        role_code="DELETE_ROLE_ENTITLED",
-        display_name="データ権限あり",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[("HR.EMPLOYEES", "*", "SELECT")],
-        actor=actor,
-    )
-    entitled_archived = service.archive_role(
-        entitled.role_id,
-        expected_version=entitled.version,
-        actor=actor,
-    )
-    with pytest.raises(SecurityApiError) as entitlement_error:
-        service.delete_role(
-            entitled.role_id,
-            expected_version=entitled_archived.version,
-            actor=actor,
-        )
-    assert entitlement_error.value.code == "SECURITY_ROLE_DELETE_ENTITLEMENTS_PRESENT"
-
     stale = service.create_role(
         role_code="DELETE_ROLE_STALE",
         display_name="競合ロール",
         description="",
         permissions=set(),
-        entitlements=[],
         actor=actor,
     )
     stale_archived = service.archive_role(
@@ -1727,7 +1243,6 @@ def test_reserved_system_admin_login_user_id_cannot_be_created(login_user_id: st
         display_name="検索閲覧",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
 
@@ -1778,7 +1293,6 @@ def test_short_login_user_ids_can_be_created_and_login(login_user_id: str) -> No
         display_name="検索閲覧",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=actor,
     )
     password = "ShortLoginPass!789"
@@ -2091,15 +1605,6 @@ def test_every_api_route_is_classified_by_manifest() -> None:
     assert permission_for_route("GET", "/security/profile-access/profiles") == frozenset(
         {"menu.security_permissions"}
     )
-    assert permission_for_route("GET", "/security/deepsec/target-objects") == frozenset(
-        {"menu.security_deepsec"}
-    )
-    assert permission_for_route(
-        "GET", "/security/deepsec/target-objects/{owner}/{object_name}"
-    ) == frozenset({"menu.security_deepsec"})
-    assert permission_for_route("POST", "/security/deepsec/config/sync-password") == frozenset(
-        {"menu.security_deepsec"}
-    )
 
 
 @pytest.mark.parametrize(
@@ -2121,7 +1626,6 @@ def test_glossary_and_global_rules_menus_only_open_their_own_material(
         display_name="学習素材のメニューだけ",
         description="",
         permissions={menu},
-        entitlements=[],
         actor=admin,
     )
     assert not grants_all_profile_access(role.permissions)
@@ -2169,74 +1673,6 @@ def test_glossary_and_global_rules_menus_only_open_their_own_material(
         asyncio.run(exercise())
     finally:
         reset_security_service()
-
-
-@pytest.mark.parametrize(
-    ("permissions", "expected_status"),
-    [({"menu.security_deepsec"}, 200), ({"menu.security_permissions"}, 403)],
-    ids=["deepsec", "other-menu"],
-)
-def test_deepsec_target_object_detail_route_uses_registered_permission(
-    monkeypatch: pytest.MonkeyPatch,
-    permissions: set[str],
-    expected_status: int,
-) -> None:
-    """`{object_name:path}` の route も、登録した権限で判定する（常に 403 にしない）。"""
-    service = _configure_memory_api_auth(monkeypatch)
-    admin, _, _ = service.login("ADMIN", "BootstrapPass!123")
-    role = service.create_role(
-        role_code="DEEPSEC_DETAIL_READER",
-        display_name="DeepSec の対象の詳細",
-        description="",
-        permissions=permissions,
-        entitlements=[],
-        actor=admin,
-    )
-    _create_active_user(
-        service,
-        admin,
-        login_user_id="deepsec.detail",
-        display_name="DeepSec 担当",
-        role_ids=[role.role_id],
-        password="DeepSecDetail!8642",
-    )
-    calls: list[tuple[str, str, str]] = []
-
-    class _DeepSecStub:
-        def target_object_detail(
-            self, *, owner: str, object_name: str, object_type: str
-        ) -> dict[str, object]:
-            calls.append((owner, object_name, object_type))
-            return {"name": object_name, "owner": owner, "object_type": "TABLE", "columns": []}
-
-    monkeypatch.setattr("app.security.router.get_deepsec_service", lambda: _DeepSecStub())
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            await _login_api(client, "deepsec.detail", "DeepSecDetail!8642")
-            response = await client.get(
-                "/api/security/deepsec/target-objects/HR/EMPLOYEES",
-                params={"object_type": "TABLE"},
-            )
-            assert response.status_code == expected_status, response.text
-            if expected_status == 200:
-                assert response.json()["data"]["qualified_name"] == "HR.EMPLOYEES"
-                # "/" を含む表名も 1 つの object_name として受ける（`:path`）。
-                slashed = await client.get(
-                    "/api/security/deepsec/target-objects/HR/%22A%2FB%22",
-                )
-                assert slashed.status_code == 200, slashed.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-    if expected_status == 200:
-        assert calls == [("HR", "EMPLOYEES", "TABLE"), ("HR", '"A/B"', "")]
-    else:
-        assert calls == []
 
 
 def test_security_audit_permission_and_api_are_removed() -> None:
@@ -2374,8 +1810,8 @@ def test_route_permissions_cover_every_mounted_route() -> None:
     # 失敗の分析と会話の履歴（#2319）は menu.db_admin_chat だけ。回答の注意書きの取得・保存
     # （#2405）は menu.settings_answer_notice。チャットの添付（#2517）は生成の権限、使うかの設定は
     # menu.settings_chat_attachments。軌跡の本文記録は menu.settings_trace_recording。
-    assert len(mounted) == 308
-    assert len(ROUTE_PERMISSIONS) == 296
+    assert len(mounted) == 293
+    assert len(ROUTE_PERMISSIONS) == 281
     assert ROUTE_PERMISSIONS[("GET", "/nl2sql/select-ai/credential-readiness")] == frozenset(
         {
             "nl2sql.profiles.manage",
@@ -2414,7 +1850,6 @@ def test_route_permissions_cover_every_mounted_route() -> None:
 _LEGACY_PREFIX_RULE_RESULTS: tuple[tuple[str, str, set[str]], ...] = (
     ("GET", "/security/permissions", {"menu.security_permissions"}),
     ("GET", "/security/profile-access/profiles", {"menu.security_permissions"}),
-    ("PATCH", "/security/deepsec/config", {"menu.security_deepsec"}),
     (
         "PATCH",
         "/settings/oci/object-storage",
@@ -2672,7 +2107,6 @@ def test_select_ai_credential_uses_its_own_menu_permission(method: str) -> None:
         ("GET", "/schema/new-listing"),
         ("POST", "/settings/oci/new-operation"),
         ("DELETE", "/settings/database"),
-        ("GET", "/security/deepsec/new-listing"),
         ("POST", "/security/profile-access/profiles"),
     ],
 )
@@ -2743,7 +2177,6 @@ def test_sql_use_roles_can_read_profile_usage_context_without_profile_management
         display_name="SQL 生成のみ",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -2752,7 +2185,6 @@ def test_sql_use_roles_can_read_profile_usage_context_without_profile_management
         display_name="SQL から質問生成のみ",
         description="",
         permissions={"menu.sql_to_question"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -2761,7 +2193,6 @@ def test_sql_use_roles_can_read_profile_usage_context_without_profile_management
         display_name="業務プロファイル管理",
         description="",
         permissions={"menu.profiles"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -2877,7 +2308,6 @@ def test_nl2sql_profiles_are_filtered_and_profile_managers_use_all_profiles(
         display_name="標準 profile SQL 生成",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -2886,7 +2316,6 @@ def test_nl2sql_profiles_are_filtered_and_profile_managers_use_all_profiles(
         display_name="標準 profile 管理",
         description="",
         permissions={"menu.profiles"},
-        entitlements=[],
         actor=admin,
     )
     blocked_role = service.create_role(
@@ -2894,7 +2323,6 @@ def test_nl2sql_profiles_are_filtered_and_profile_managers_use_all_profiles(
         display_name="profile 未付与 SQL 生成",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     _create_active_user(
@@ -3026,7 +2454,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         display_name="SQL 生成のみ",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     direct_role = service.create_role(
@@ -3034,7 +2461,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         display_name="SELECT SQL 実行のみ",
         description="",
         permissions={"menu.direct_sql"},
-        entitlements=[],
         actor=admin,
     )
     feedback_role = service.create_role(
@@ -3042,7 +2468,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         display_name="フィードバック管理",
         description="",
         permissions={"menu.feedback_management"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -3052,7 +2477,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         display_name="SQL 生成評価のみ",
         description="",
         permissions={"menu.evaluation"},
-        entitlements=[],
         actor=admin,
     )
     data_role = service.create_role(
@@ -3060,7 +2484,6 @@ def test_nl2sql_capability_boundaries_and_feedback_ownership(
         display_name="データ管理",
         description="",
         permissions={"menu.data_management"},
-        entitlements=[],
         actor=admin,
     )
     query_user = _create_active_user(
@@ -3250,7 +2673,7 @@ def test_security_migration_preview_lists_platform_and_nl2sql_ddl(
 
     output = capsys.readouterr().out
     assert "migration=platform-auth" in output
-    assert "migration=004 statements=4" in output
+    assert "migration=004 statements=2" in output
     assert "mode=preview" in output
     # 配備が retry する CLI。DB の停止中に TNS の再試行で長く待たない（#1779）。
     from pr_backend_core.oracle_dsn import cli_connect_mode_enabled
@@ -3427,375 +2850,6 @@ def test_auth_api_sets_http_only_session_and_requires_csrf(
         reset_security_service()
 
 
-def test_deepsec_config_patch_updates_runtime_without_restart(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _patch_security_threadpools(monkeypatch)
-    env_file = tmp_path / ".env"
-    env_file.write_text(
-        "NL2SQL_LOG_LEVEL=INFO\n"
-        "NL2SQL_ORACLE_DEEPSEC_ENABLED=false\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=OldSecret123\n"
-        "NL2SQL_RUNTIME_MODE=oracle\n",
-        encoding="utf-8",
-    )
-    env_file.chmod(0o600)
-    closed: list[bool] = []
-    monkeypatch.setattr("app.security.deepsec._BACKEND_ENV_FILE", env_file)
-    monkeypatch.setattr("app.security.deepsec.close_oracle_pools", lambda: closed.append(True))
-    settings = get_settings()
-    monkeypatch.setattr(settings, "environment", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user_password", "")
-    monkeypatch.setattr(settings, "nl2sql_persistence_mode", "memory")
-    reset_security_service()
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            invalid = await client.patch(
-                "/api/security/deepsec/config",
-                json={"data_user_password": "short"},
-            )
-            assert invalid.status_code == 422
-            assert settings.oracle_deepsec_enabled is False
-            assert settings.oracle_deepsec_data_user_password == ""
-            assert closed == []
-
-            # 「${...}」は .env を読み直すと展開されて別の値になるので保存しない。
-            interpolated = await client.patch(
-                "/api/security/deepsec/config",
-                json={"data_user_password": "Abc${HOME}defghij"},
-            )
-            assert interpolated.status_code == 422
-            assert "${HOME}" not in interpolated.text
-            assert settings.oracle_deepsec_data_user_password == ""
-            assert closed == []
-
-            response = await client.patch(
-                "/api/security/deepsec/config",
-                json={"data_user_password": "DeepSecret!456"},
-            )
-            assert response.status_code == 200
-            data = response.json()["data"]
-            assert data["deepsec_enabled"] is True
-            assert data["data_user"] == "DEEPSEC_DATA_USER"
-            assert data["has_data_user_password"] is True
-            assert "DeepSecret!456" not in response.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-    assert settings.oracle_deepsec_enabled is True
-    assert settings.oracle_deepsec_data_user == "DEEPSEC_DATA_USER"
-    assert settings.oracle_deepsec_data_user_password == "DeepSecret!456"
-    assert closed == [True]
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "NL2SQL_ORACLE_DEEPSEC_ENABLED=true" in env_text
-    assert "NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER" in env_text
-    assert "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=DeepSecret!456" in env_text
-    # 既存の DeepSec key の位置で置き換え、他の製品設定は残す（#211）。
-    assert env_text == (
-        "NL2SQL_LOG_LEVEL=INFO\n"
-        "NL2SQL_ORACLE_DEEPSEC_ENABLED=true\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=DeepSecret!456\n"
-        "NL2SQL_RUNTIME_MODE=oracle\n"
-    )
-
-
-def test_deepsec_config_sync_password_endpoint_uses_saved_secret_without_payload(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_security_threadpools(monkeypatch)
-    calls: list[str] = []
-
-    def sync_saved(_service: object) -> dict[str, object]:
-        settings = get_settings()
-        calls.append(settings.oracle_deepsec_data_user_password)
-        return {
-            "configured": True,
-            "driver_mode": "thin",
-            "connection_security": "walletless_tls",
-            "deepsec_enabled": True,
-            "data_user": "DEEPSEC_DATA_USER",
-            "has_data_user_password": True,
-            "objects": {},
-            "message": "同期しました。",
-        }
-
-    monkeypatch.setattr(
-        "app.security.deepsec.DeepSecService.sync_saved_data_user_password",
-        sync_saved,
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "environment", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_dsn", "test")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thin")
-    monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", True)
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user", "DEEPSEC_DATA_USER")
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user_password", "DeepSecret!Stored")
-    monkeypatch.setattr(settings, "nl2sql_persistence_mode", "memory")
-    reset_security_service()
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/api/security/deepsec/config/sync-password")
-            assert response.status_code == 200
-            assert response.json()["data"]["has_data_user_password"] is True
-            assert "DeepSecret!Stored" not in response.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-    assert calls == ["DeepSecret!Stored"]
-    operation = app.openapi()["paths"]["/api/security/deepsec/config/sync-password"]["post"]
-    assert "requestBody" not in operation
-
-
-def test_deepsec_config_sync_password_endpoint_treats_ora28007_as_success_when_login_works(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_security_threadpools(monkeypatch)
-    login_probes: list[str] = []
-
-    class SyncCursor:
-        def __enter__(self) -> SyncCursor:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def execute(self, sql: str, _params: object | None = None) -> None:
-            if "ALTER END USER" in sql:
-                raise RuntimeError("ORA-28007: The password cannot be reused.")
-
-        def fetchone(self) -> tuple[int]:
-            return (1,)
-
-    class SyncConnection:
-        def __enter__(self) -> SyncConnection:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def cursor(self) -> SyncCursor:
-            return SyncCursor()
-
-    def control_connection(_manager: object) -> SyncConnection:
-        return SyncConnection()
-
-    def validate_data_user_login(manager) -> None:  # type: ignore[no-untyped-def]
-        login_probes.append(manager.settings.oracle_deepsec_data_user_password)
-
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.OraclePoolManager.control_connection",
-        control_connection,
-    )
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.OraclePoolManager.validate_data_user_login",
-        validate_data_user_login,
-    )
-    monkeypatch.setattr(
-        "app.security.deepsec.DeepSecService.status",
-        lambda _service: {
-            "configured": True,
-            "driver_mode": "thin",
-            "connection_security": "walletless_tls",
-            "deepsec_enabled": True,
-            "data_user": "DEEPSEC_DATA_USER",
-            "has_data_user_password": True,
-            "objects": {},
-            "message": "同期しました。",
-        },
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "environment", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_dsn", "test")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thin")
-    monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", True)
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user", "DEEPSEC_DATA_USER")
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user_password", "DeepSecret!Stored")
-    monkeypatch.setattr(settings, "nl2sql_persistence_mode", "memory")
-    reset_security_service()
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/api/security/deepsec/config/sync-password")
-            assert response.status_code == 200
-            assert response.json()["data"]["has_data_user_password"] is True
-            assert "DeepSecret!Stored" not in response.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-    assert login_probes == ["DeepSecret!Stored"]
-
-
-def test_deepsec_config_sync_password_endpoint_keeps_409_when_ora28007_probe_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_security_threadpools(monkeypatch)
-
-    class SyncCursor:
-        def __enter__(self) -> SyncCursor:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def execute(self, sql: str, _params: object | None = None) -> None:
-            if "ALTER END USER" in sql:
-                raise RuntimeError("ORA-28007: password=DeepSecret!Stored cannot be reused")
-
-        def fetchone(self) -> tuple[int]:
-            return (1,)
-
-    class SyncConnection:
-        def __enter__(self) -> SyncConnection:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def cursor(self) -> SyncCursor:
-            return SyncCursor()
-
-    def control_connection(_manager: object) -> SyncConnection:
-        return SyncConnection()
-
-    def fail_data_user_login(_manager: object) -> None:
-        raise RuntimeError("ORA-01017: invalid credential password=DeepSecret!Stored")
-
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.OraclePoolManager.control_connection",
-        control_connection,
-    )
-    monkeypatch.setattr(
-        "app.clients.oracle_runtime.OraclePoolManager.validate_data_user_login",
-        fail_data_user_login,
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "environment", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_dsn", "test")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thin")
-    monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", True)
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user", "DEEPSEC_DATA_USER")
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user_password", "DeepSecret!Stored")
-    monkeypatch.setattr(settings, "nl2sql_persistence_mode", "memory")
-    reset_security_service()
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/api/security/deepsec/config/sync-password")
-            assert response.status_code == 409
-            body = response.json()
-            assert "新しい DATA USER パスワード" in body["problem"]["detail"]
-            assert "DeepSecret!Stored" not in response.text
-            assert "[REDACTED]" in response.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-
-def test_deepsec_config_patch_sync_failure_returns_409_without_secret(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _patch_security_threadpools(monkeypatch)
-    env_file = tmp_path / ".env"
-    original_env = (
-        "NL2SQL_ORACLE_DEEPSEC_ENABLED=false\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=OldSecret!123\n"
-    )
-    env_file.write_text(original_env, encoding="utf-8")
-    env_file.chmod(0o600)
-    closed: list[bool] = []
-    monkeypatch.setattr("app.security.deepsec._BACKEND_ENV_FILE", env_file)
-    monkeypatch.setattr("app.security.deepsec.close_oracle_pools", lambda: closed.append(True))
-
-    def fail_sync(_service: object) -> bool:
-        raise SecurityApiError(
-            409,
-            "DeepSec DATA USER パスワードを Oracle END USER へ同期できませんでした: "
-            "ORA-01031 [REDACTED]",
-        )
-
-    monkeypatch.setattr(
-        "app.security.deepsec.DeepSecService._sync_existing_data_user_password",
-        fail_sync,
-    )
-    settings = get_settings()
-    monkeypatch.setattr(settings, "environment", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "auth_mode", "local")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_dsn", "test")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thin")
-    monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user", "DEEPSEC_DATA_USER")
-    monkeypatch.setattr(settings, "oracle_deepsec_data_user_password", "OldSecret!123")
-    monkeypatch.setattr(settings, "nl2sql_persistence_mode", "memory")
-    reset_security_service()
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.patch(
-                "/api/security/deepsec/config",
-                json={"data_user_password": "DeepSecret!456"},
-            )
-            assert response.status_code == 409
-            body = response.json()
-            assert (
-                "DeepSec DATA USER パスワードを Oracle END USER へ同期" in body["problem"]["detail"]
-            )
-            assert "DeepSecret!456" not in response.text
-            assert "[REDACTED]" in response.text
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-    assert settings.oracle_deepsec_enabled is False
-    assert settings.oracle_deepsec_data_user_password == "OldSecret!123"
-    assert env_file.read_text(encoding="utf-8") == original_env
-    assert closed == [True]
-
-
 def test_api_enforces_menu_permissions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3852,12 +2906,12 @@ def test_api_enforces_menu_permissions(
                 display_name="履歴閲覧",
                 permissions=["menu.history"],
             )
-            deepsec_role_id = await _create_role_api(
+            permission_role_id = await _create_role_api(
                 client,
                 csrf,
-                role_code="DEEPSEC_MANAGER",
-                display_name="DeepSec 管理",
-                permissions=["menu.security_deepsec"],
+                role_code="PERMISSION_MANAGER",
+                display_name="権限管理",
+                permissions=["menu.security_permissions"],
             )
             user_response = await client.post(
                 "/api/security/users",
@@ -3870,17 +2924,17 @@ def test_api_enforces_menu_permissions(
                 },
             )
             assert user_response.status_code == 200
-            deepsec_user_response = await client.post(
+            permission_user_response = await client.post(
                 "/api/security/users",
                 headers={"X-CSRF-Token": csrf},
                 json={
-                    "login_user_id": "deepsec.user",
-                    "display_name": "DeepSec 管理ユーザー",
-                    "temporary_password": "DeepSecStart!123",
-                    "role_ids": [deepsec_role_id],
+                    "login_user_id": "permission.user",
+                    "display_name": "権限管理ユーザー",
+                    "temporary_password": "PermissionStart!123",
+                    "role_ids": [permission_role_id],
                 },
             )
-            assert deepsec_user_response.status_code == 200
+            assert permission_user_response.status_code == 200
             await client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf})
 
             await client.post(
@@ -3911,12 +2965,12 @@ def test_api_enforces_menu_permissions(
             )
             assert denied_execute.status_code == 403
             assert (await client.get("/api/security/users")).status_code == 403
-            assert (await client.get("/api/security/deepsec/data-entitlements")).status_code == 403
+            assert (await client.get("/api/security/permissions")).status_code == 403
 
             await client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf})
             await client.post(
                 "/api/auth/login",
-                json={"login_user_id": "deepsec.user", "password": "DeepSecStart!123"},
+                json={"login_user_id": "permission.user", "password": "PermissionStart!123"},
             )
             csrf = client.cookies.get("pr_csrf")
             assert csrf
@@ -3924,54 +2978,22 @@ def test_api_enforces_menu_permissions(
                 "/api/auth/password/change",
                 headers={"X-CSRF-Token": csrf},
                 json={
-                    "current_password": "DeepSecStart!123",
-                    "new_password": "DeepSecActive!456",
+                    "current_password": "PermissionStart!123",
+                    "new_password": "PermissionActive!456",
                 },
             )
             await client.post(
                 "/api/auth/login",
-                json={"login_user_id": "deepsec.user", "password": "DeepSecActive!456"},
+                json={"login_user_id": "permission.user", "password": "PermissionActive!456"},
             )
             csrf = client.cookies.get("pr_csrf")
             assert csrf
-            assert (await client.get("/api/security/roles")).status_code == 403
-            entitlement_response = await client.get("/api/security/deepsec/data-entitlements")
-            assert entitlement_response.status_code == 200
-            assert any(
-                item["role_code"] == "DEEPSEC_MANAGER"
-                for item in entitlement_response.json()["data"]
-            )
-            deepsec_role_version = next(
-                item["version"]
-                for item in entitlement_response.json()["data"]
-                if item["role_id"] == deepsec_role_id
-            )
-            patch_response = await client.patch(
-                f"/api/security/deepsec/data-entitlements/{deepsec_role_id}",
-                headers={"X-CSRF-Token": csrf},
-                json={
-                    "version": deepsec_role_version,
-                    "data_entitlements": [
-                        {
-                            "resource_code": "HR.EMPLOYEES",
-                            "scope_code": "SALES",
-                            "capability": "SELECT",
-                            "target_owner": "HR",
-                            "target_object": "EMPLOYEES",
-                            "target_type": "TABLE",
-                            "column_names": ["EMPLOYEE_ID", "DISPLAY_NAME"],
-                            "scope_mode": "COLUMN_EQUALS",
-                            "scope_column": "DEPARTMENT_CODE",
-                        }
-                    ],
-                },
-            )
-            assert patch_response.status_code == 200
-            assert patch_response.json()["data"]["data_entitlements"][0]["scope_code"] == "SALES"
-            stored_role = service.store.get_role(deepsec_role_id)
+            assert (await client.get("/api/security/users")).status_code == 403
+            assert (await client.get("/api/security/permissions")).status_code == 200
+            stored_role = service.store.get_role(permission_role_id)
             assert stored_role is not None
-            assert stored_role.display_name == "DeepSec 管理"
-            assert stored_role.permissions == {"menu.security_deepsec"}
+            assert stored_role.display_name == "権限管理"
+            assert stored_role.permissions == {"menu.security_permissions"}
 
     try:
         asyncio.run(exercise())
@@ -3989,7 +3011,6 @@ def test_user_manager_can_load_role_options_but_not_manage_roles(
         display_name="ユーザー管理",
         description="",
         permissions={"menu.security_users"},
-        entitlements=[],
         actor=admin,
     )
     role_manager_role = service.create_role(
@@ -3997,7 +3018,6 @@ def test_user_manager_can_load_role_options_but_not_manage_roles(
         display_name="ロール管理",
         description="",
         permissions={"menu.security_roles"},
-        entitlements=[],
         actor=admin,
     )
     query_role = service.create_role(
@@ -4005,7 +3025,6 @@ def test_user_manager_can_load_role_options_but_not_manage_roles(
         display_name="SQL 生成",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     archived_role = service.create_role(
@@ -4013,7 +3032,6 @@ def test_user_manager_can_load_role_options_but_not_manage_roles(
         display_name="廃止ユーザー管理",
         description="",
         permissions={"menu.security_users"},
-        entitlements=[],
         actor=admin,
     )
     service.archive_role(
@@ -4062,7 +3080,6 @@ def test_user_manager_can_load_role_options_but_not_manage_roles(
                     "display_name": "変更不可",
                     "description": "",
                     "permissions": ["menu.security_users"],
-                    "data_entitlements": [],
                 },
             )
             assert update_role.status_code == 403
@@ -4109,7 +3126,6 @@ def test_security_delete_api_requires_csrf_and_if_match_and_deletes_targets(
         display_name="削除 API ロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     user, _ = service.create_user(
@@ -4398,7 +3414,6 @@ def test_role_manager_cannot_manage_users(monkeypatch: pytest.MonkeyPatch) -> No
         display_name="ロール管理のみ",
         description="",
         permissions={"menu.security_roles"},
-        entitlements=[],
         actor=admin,
     )
     query_role = service.create_role(
@@ -4406,7 +3421,6 @@ def test_role_manager_cannot_manage_users(monkeypatch: pytest.MonkeyPatch) -> No
         display_name="SQL 生成",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     target = _create_active_user(
@@ -4499,7 +3513,6 @@ def test_user_manager_cannot_assign_role_outside_own_permissions(
         display_name="限定ユーザー管理",
         description="",
         permissions={"menu.security_users"},
-        entitlements=[],
         actor=admin,
     )
     role_manager_role = service.create_role(
@@ -4507,7 +3520,6 @@ def test_user_manager_cannot_assign_role_outside_own_permissions(
         display_name="ロール管理",
         description="",
         permissions={"menu.security_roles"},
-        entitlements=[],
         actor=admin,
     )
     admin_sql_role = service.create_role(
@@ -4515,7 +3527,6 @@ def test_user_manager_cannot_assign_role_outside_own_permissions(
         display_name="管理 SQL",
         description="",
         permissions={"menu.admin_sql"},
-        entitlements=[],
         actor=admin,
     )
     target = _create_active_user(
@@ -4607,7 +3618,6 @@ def test_user_manager_can_assign_subset_role_and_runtime_access_matches(
         display_name="ユーザー管理と SQL 生成",
         description="",
         permissions={"menu.security_users", "menu.query"},
-        entitlements=[],
         actor=admin,
     )
     query_role = service.create_role(
@@ -4615,7 +3625,6 @@ def test_user_manager_can_assign_subset_role_and_runtime_access_matches(
         display_name="SQL 生成のみ",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     direct_sql_role = service.create_role(
@@ -4623,7 +3632,6 @@ def test_user_manager_can_assign_subset_role_and_runtime_access_matches(
         display_name="SELECT SQL 実行",
         description="",
         permissions={"menu.direct_sql"},
-        entitlements=[],
         actor=admin,
     )
     _create_active_user(
@@ -4703,7 +3711,6 @@ def test_role_manager_can_add_profile_manage_to_role_with_explicit_profiles(
         display_name="ロール管理 + 業務プロファイル",
         description="",
         permissions={"menu.security_roles", "menu.security_permissions", "menu.profiles"},
-        entitlements=[],
         actor=admin,
     )
     target = service.create_role(
@@ -4711,7 +3718,6 @@ def test_role_manager_can_add_profile_manage_to_role_with_explicit_profiles(
         display_name="個別プロファイル",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         allowed_profile_ids={"default"},
         actor=admin,
     )
@@ -4772,7 +3778,6 @@ def test_role_manager_cannot_add_permissions_beyond_own(monkeypatch: pytest.Monk
         display_name="ロール管理 + 実行履歴",
         description="",
         permissions={"menu.security_roles", "menu.security_permissions", "menu.history"},
-        entitlements=[],
         actor=admin,
     )
     other_role = service.create_role(
@@ -4780,7 +3785,6 @@ def test_role_manager_cannot_add_permissions_beyond_own(monkeypatch: pytest.Monk
         display_name="管理 SQL",
         description="",
         permissions={"menu.admin_sql"},
-        entitlements=[],
         actor=admin,
     )
     _create_active_user(
@@ -4827,7 +3831,7 @@ def test_role_manager_cannot_add_permissions_beyond_own(monkeypatch: pytest.Monk
 
             # 他人のロールへ未保持の権限を追加 → 403
             other_escalation = await patch_permissions(
-                client, csrf, other_role.role_id, ["menu.admin_sql", "menu.security_deepsec"]
+                client, csrf, other_role.role_id, ["menu.admin_sql", "menu.security_users"]
             )
             assert other_escalation.status_code == 403
 
@@ -4862,7 +3866,6 @@ def test_archived_role_cannot_be_updated(monkeypatch: pytest.MonkeyPatch) -> Non
         display_name="旧ロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     role = service.archive_role(role.role_id, expected_version=role.version, actor=admin)
@@ -4898,114 +3901,6 @@ def test_archived_role_cannot_be_updated(monkeypatch: pytest.MonkeyPatch) -> Non
     assert unchanged.version == role.version
 
 
-def test_role_patch_preserves_deepsec_entitlements(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ロール管理の PATCH と権限管理の PUT は DeepSec の Data Grant 定義を一切変更しない。"""
-    service = _configure_memory_api_auth(monkeypatch)
-    admin, _, _ = service.login("ADMIN", "BootstrapPass!123")
-    service.store.set_password(
-        admin.user_uuid, hash_password("BootstrapPass!123"), force_change=False
-    )
-    role = service.create_role(
-        role_code="SALES_VIEWER",
-        display_name="営業閲覧",
-        description="",
-        permissions={"menu.query"},
-        entitlements=[],
-        actor=admin,
-    )
-    role = service.update_role_data_entitlements(
-        role.role_id,
-        expected_version=role.version,
-        entitlements=[
-            DataEntitlementRecord(
-                entitlement_id="",
-                role_id=role.role_id,
-                resource_code="SALES.ORDERS",
-                scope_code="",
-                capability="SELECT",
-                target_owner="SALES",
-                target_object="ORDERS",
-                column_names=["ORDER_ID", "REGION"],
-                scope_mode="FILTERS",
-                scope_filters=[
-                    DataEntitlementScopeFilter(column_name="REGION", operator="EQ", value="JP")
-                ],
-                data_grant_name="NL2SQL_DG_TEST",
-                apply_status="APPLIED",
-            )
-        ],
-        actor=admin,
-    )
-    # DeepSec apply 完了後の状態(APPLIED + grant 名 + checksum)を再現する
-    service.store.set_deepsec_entitlement_apply_state(
-        role.entitlements[0].entitlement_id,
-        status="APPLIED",
-        data_grant_name="NL2SQL_DG_TEST",
-        sql_checksum="checksum-test",
-    )
-    applied_role = service.get_role(role.role_id)
-    assert applied_role is not None
-    before = applied_role.entitlements[0]
-    assert before.apply_status == "APPLIED"
-
-    async def exercise() -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            _, csrf = await _login_api(client, "ADMIN", "BootstrapPass!123")
-            response = await client.patch(
-                f"/api/security/roles/{role.role_id}",
-                headers={"X-CSRF-Token": csrf},
-                json={
-                    "version": applied_role.version,
-                    "display_name": "営業閲覧(改名)",
-                    "description": "",
-                    "permissions": ["menu.query", "menu.history"],
-                    # 旧 frontend が送っていた項目は無視される
-                    "data_entitlements": [
-                        {"resource_code": "SALES.ORDERS", "scope_code": "*", "capability": "SELECT"}
-                    ],
-                    "allowed_profile_ids": [],
-                },
-            )
-            assert response.status_code == 200, response.text
-            data = response.json()["data"]
-            assert data["display_name"] == "営業閲覧(改名)"
-            # ロール管理の PATCH は基本情報だけを更新し、権限は変えない（#206）。
-            assert data["permissions"] == ["menu.query"]
-            assert_entitlement_preserved(data)
-
-            # 権限管理の PUT も権限だけを更新し、名称と Data Grant を保つ。
-            granted = await client.put(
-                f"/api/security/roles/{role.role_id}/permissions",
-                headers={"X-CSRF-Token": csrf},
-                json={"version": data["version"], "permissions": ["menu.query", "menu.history"]},
-            )
-            assert granted.status_code == 200, granted.text
-            granted_data = granted.json()["data"]
-            assert granted_data["display_name"] == "営業閲覧(改名)"
-            assert granted_data["permissions"] == ["menu.history", "menu.query"]
-            assert_entitlement_preserved(granted_data)
-
-    def assert_entitlement_preserved(data: dict[str, Any]) -> None:
-        assert len(data["data_entitlements"]) == 1
-        after = data["data_entitlements"][0]
-        assert after["entitlement_id"] == before.entitlement_id
-        assert after["target_owner"] == "SALES"
-        assert after["target_object"] == "ORDERS"
-        assert after["column_names"] == ["ORDER_ID", "REGION"]
-        assert after["scope_mode"] == "FILTERS"
-        assert after["scope_code"] == before.scope_code
-        assert [item["column_name"] for item in after["scope_filters"]] == ["REGION"]
-        assert after["data_grant_name"] == "NL2SQL_DG_TEST"
-        assert after["sql_checksum"] == "checksum-test"
-        assert after["apply_status"] == "APPLIED"
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        reset_security_service()
-
-
 def test_role_permission_change_reflects_on_existing_session_next_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -5016,7 +3911,6 @@ def test_role_permission_change_reflects_on_existing_session_next_request(
         display_name="動的反映ロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     _create_active_user(
@@ -5063,7 +3957,6 @@ def test_archived_or_unassigned_role_removes_runtime_access(
         display_name="アーカイブ反映",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     unassigned_runtime_role = service.create_role(
@@ -5071,7 +3964,6 @@ def test_archived_or_unassigned_role_removes_runtime_access(
         display_name="解除反映",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     archived_user = _create_active_user(
@@ -5144,7 +4036,6 @@ def test_restore_role_reactivates_existing_session_and_assigned_role_metadata(
         display_name="復元反映",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     assigned_user = _create_active_user(
@@ -5244,7 +4135,6 @@ def test_restore_role_api_rejects_invalid_targets(
         display_name="復元不要",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     archived_role = service.create_role(
@@ -5252,7 +4142,6 @@ def test_restore_role_api_rejects_invalid_targets(
         display_name="復元競合",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     archived = service.archive_role(
@@ -5319,7 +4208,6 @@ def test_user_api_includes_archived_assigned_role_metadata_without_runtime_permi
         display_name="アーカイブ表示ロール",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     assigned_user = _create_active_user(
@@ -5617,7 +4505,6 @@ def test_nested_synthetic_routes_use_authenticated_effective_path(
             permissions=(
                 {"menu.data_management"} if actor_kind == "data_operator" else {"menu.query"}
             ),
-            entitlements=[],
             actor=admin,
         )
         login_id, password = "synthetic-reader", "SyntheticReaderPass!123"
@@ -5708,7 +4595,6 @@ def test_db_admin_chat_requires_its_own_menu_permission(
                 display_name=f"DB 管理チャットのテスト {index}",
                 description="操作権限テスト",
                 permissions=permissions,
-                entitlements=[],
                 actor=admin,
             )
             user = _create_active_user(
@@ -5826,7 +4712,6 @@ def test_data_preparation_actions_enforce_policy_and_revalidate_roles(
                 display_name=menu,
                 description="操作権限テスト",
                 permissions={f"menu.{menu}"},
-                entitlements=[],
                 actor=admin,
             )
             user = _create_active_user(
@@ -5962,7 +4847,6 @@ def test_role_restore_api_rejects_permission_escalation(
         display_name="ロール管理",
         description="",
         permissions={"menu.security_roles"},
-        entitlements=[],
         actor=admin,
     )
     target = service.create_role(
@@ -5970,7 +4854,6 @@ def test_role_restore_api_rejects_permission_escalation(
         display_name="検索権限",
         description="",
         permissions={"menu.query"},
-        entitlements=[],
         actor=admin,
     )
     actor_user = _create_active_user(
@@ -6031,7 +4914,6 @@ def test_role_restore_validates_access_before_store_write(
         display_name="管理",
         description="",
         permissions={"menu.security_roles", "menu.query"},
-        entitlements=[],
         actor=admin,
     )
     user = _create_active_user(
@@ -6090,7 +4972,6 @@ def test_oci_settings_can_read_shared_storage_without_write_permission(
         display_name="設定レビュー",
         description="",
         permissions={permission},
-        entitlements=[],
         actor=admin,
     )
     _create_active_user(
@@ -6224,10 +5105,10 @@ def test_metadata_menus_imply_schema_read_and_refresh(menu: str) -> None:
     assert "menu.admin_sql" not in effective
 
 
-def test_user_manager_cannot_assign_role_with_profiles_or_data_grants_outside_own_scope(
+def test_user_manager_cannot_assign_role_with_profiles_outside_own_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """権限が収まっても、自分が使えない業務プロファイル・Data Grant を含むロールは割り当てられない。
+    """権限が収まっても、自分が使えない業務プロファイルを含むロールは割り当てられない。
 
     #1090。
     """
@@ -6236,10 +5117,9 @@ def test_user_manager_cannot_assign_role_with_profiles_or_data_grants_outside_ow
         admin, _, _ = service.login("ADMIN", "BootstrapPass!123")
         manager_role = service.create_role(
             role_code="SCOPED_USER_MANAGER",
-            display_name="ユーザー管理（P1 と SALES）",
+            display_name="ユーザー管理（P1）",
             description="",
             permissions={"menu.security_users", "menu.query"},
-            entitlements=[("HR.EMPLOYEES", "SALES", "SELECT")],
             allowed_profile_ids={"P1"},
             actor=admin,
         )
@@ -6248,24 +5128,14 @@ def test_user_manager_cannot_assign_role_with_profiles_or_data_grants_outside_ow
             display_name="P2 の SQL 生成",
             description="",
             permissions={"menu.query"},
-            entitlements=[],
             allowed_profile_ids={"P2"},
             actor=admin,
         )
-        other_grant_role = service.create_role(
-            role_code="QUERY_HR_GRANT",
-            display_name="HR の Data Grant",
-            description="",
-            permissions={"menu.query"},
-            entitlements=[("HR.EMPLOYEES", "HR", "SELECT")],
-            actor=admin,
-        )
         subset_role = service.create_role(
-            role_code="QUERY_P1_SALES",
-            display_name="P1 と SALES の SQL 生成",
+            role_code="QUERY_P1",
+            display_name="P1 の SQL 生成",
             description="",
             permissions={"menu.query"},
-            entitlements=[("HR.EMPLOYEES", "SALES", "SELECT")],
             allowed_profile_ids={"P1"},
             actor=admin,
         )
@@ -6281,7 +5151,7 @@ def test_user_manager_cannot_assign_role_with_profiles_or_data_grants_outside_ow
         assert manager.allowed_profile_ids == {"P1"}
 
         # 自分自身への割り当て（権限の昇格）を拒否する。新しいユーザーへの割り当ても同じ。
-        for role in (other_profile_role, other_grant_role):
+        for role in (other_profile_role,):
             with pytest.raises(SecurityApiError, match="割り当てる権限がありません") as error:
                 service.update_user(
                     manager_user.user_uuid,
@@ -6302,13 +5172,11 @@ def test_user_manager_cannot_assign_role_with_profiles_or_data_grants_outside_ow
                 )
         again, _, _ = service.login("scoped.manager", "ScopedManagerPass!123")
         assert again.allowed_profile_ids == {"P1"}
-        assert {item.scope_code for item in again.data_entitlements} == {"SALES"}
 
         # 範囲外のロールは割り当ての候補にも出さない。範囲内のロールは今までどおり割り当てられる。
         candidate_codes = {role.role_code for role in service.list_roles_for_actor(manager)}
         assert "QUERY_P2" not in candidate_codes
-        assert "QUERY_HR_GRANT" not in candidate_codes
-        assert "QUERY_P1_SALES" in candidate_codes
+        assert "QUERY_P1" in candidate_codes
         created, _ = service.create_user(
             login_user_id="subset.user",
             display_name="範囲内の利用者",

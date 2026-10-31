@@ -12,14 +12,13 @@ import { currentUserHasPermission, normalizeMenuPermissions } from "./menu-permi
 import type { CurrentUser } from "./types";
 
 /**
- * 利用者と認可が変わったと判断する key。NL2SQL は権限に加えて Data Grant と業務プロファイル利用権限も含め、
+ * 利用者と認可が変わったと判断する key。NL2SQL は権限に加えて業務プロファイル利用権限も含め、
  * どれかが変わったら React Query の cache を破棄する（#220 で共通の AuthProvider に渡す形にした）。
  */
 export function nl2sqlIdentityKey(user: CurrentUser): string {
   return JSON.stringify([
     user.user_uuid,
     [...user.permissions].sort(),
-    user.data_entitlements,
     user.allowed_profile_ids,
   ]);
 }

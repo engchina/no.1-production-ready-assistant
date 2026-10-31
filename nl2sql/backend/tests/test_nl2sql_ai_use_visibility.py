@@ -58,7 +58,6 @@ def _principal(user_uuid: str, *, admin: bool = False, permissions: set[str] | N
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={QUERY_GENERATE_PERMISSION, SQL_EXECUTE_PERMISSION, *(permissions or set())},
-        data_entitlements=[],
         allowed_profile_ids={_PROFILE_ID},
         session_id=f"session-{user_uuid}",
         csrf_token_hash="csrf",  # nosec B106 - テスト用

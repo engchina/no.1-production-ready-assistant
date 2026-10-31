@@ -59,7 +59,6 @@ export const APP_ROUTES = {
   // メニュー権限を問わない。
   account: ACCOUNT_PATH,
   securityPermissions: "/settings/security/permissions",
-  securityDeepSec: "/settings/security/deepsec",
   /** 旧「NL2SQL モデル学習」URL。業務プロファイルの Select AI 設定へ転送する。 */
   legacyNl2sqlModelLearning: "/settings/nl2sql-model",
 } as const;

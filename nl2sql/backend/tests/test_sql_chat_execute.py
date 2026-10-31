@@ -2,7 +2,7 @@
 
 SQL 生成のジョブの実行の段階と同じ経路（業務プロファイルの範囲・安全検査・`execute_sql`・
 失敗の扱い・実行履歴）で実行すること、本人・権限・業務プロファイルの境界、上限、結果の行を保存しないことを確かめる。
-接続の種類（system_admin / 非 system_admin・DeepSec）は `test_nl2sql_db_roundtrips.py` の
+接続の種類（system_admin / 非 system_admin）は `test_nl2sql_db_roundtrips.py` の
 `test_chat_execution_connection_follows_requesting_actor` が確かめる。
 """
 

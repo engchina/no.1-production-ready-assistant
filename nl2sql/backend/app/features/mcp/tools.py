@@ -1,7 +1,7 @@
 """NL2SQL が MCP で公開するツール（#231）。
 
 Agent は Run の利用者のサービストークンで `POST /api/mcp` を呼ぶ。認証と利用者の特定は
-`authorize_api_request`（`service_token_paths={"/mcp"}`）が行い、DeepSec の actor も同じ経路で
+`authorize_api_request`（`service_token_paths={"/mcp"}`）が行い、actor も同じ経路で
 入る。ここでは画面の route と同じ service 層・業務プロファイルの範囲・ジョブの所有者の判定を使う。
 
 - `nl2sql_list_profiles`: `GET /nl2sql/profiles/search` と同じ範囲の業務プロファイル一覧

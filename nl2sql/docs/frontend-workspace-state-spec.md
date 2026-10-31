@@ -34,7 +34,6 @@
 | SQL生成評価 | 最近の job と結果明細のページ番号・表示件数（`recentJobsPaging` / `resultsPaging`。結果明細は開いている job（`resultsJobId`）が変わったら 1 ページ目。#1891） |
 | 用語・同義語 / 共通ルール | 一覧のページ番号と表示件数（#1891） |
 | 業務プロファイル | 一覧の検索（`profileSearch`。#1933） |
-| Deep Data Security | 対象ロールの一覧の検索（`entitlementSearch`。#1933） |
 
 その他の編集画面は既存の保存・未保存変更 guard を継続する。新たに保存する field は `useWorkspaceState` 呼び出しとして明示登録し、機密性・所有 context・再検証方法を確認する。画面 component 全体の state serialization は行わない。
 

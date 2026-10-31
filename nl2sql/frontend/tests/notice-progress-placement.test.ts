@@ -148,8 +148,6 @@ test("案内の中のボタンの進行は同じ案内の中に出し、ペー�
   assert.match(feedback, /if \(origin === "header"\) setMessage\(""\)/u);
   const learning = source("../src/features/nl2sql/pages/QuestionLearningPage.tsx");
   assert.match(learning, /if \(origin === "header"\) setMessage\(""\)/u);
-  const deepSec = source("../src/features/security/SecurityDeepSecPage.tsx");
-  assert.match(deepSec, /loadStatus\(\{ keepError: true \}\)/u);
 
   // サンプルデータの取込の失敗は押した案内の中だけに出す（Toast とページの先頭に重ねない）。
   const workbench = source("../src/features/nl2sql/Nl2SqlWorkbench.tsx");

@@ -7,7 +7,7 @@ AI Database, form inputs, packaging, and releases), see
 
 This page covers what runs on the NL2SQL Compute instance and how to operate it.
 The Resource Manager inputs for NL2SQL are prefixed with `nl2sql_`
-(for example `nl2sql_oracle_deepsec_enabled`). The configuration administrator
+(for example `nl2sql_select_ai_region`). The configuration administrator
 password `app_admin_login_user_password` (login user ID `system_admin`) is shared
 with RAG.
 
@@ -60,20 +60,6 @@ values supplied in Resource Manager, written to `platform/.env`:
 
 - `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin`
 - `PLATFORM_ADMIN_LOGIN_USER_PASSWORD`
-
-Deep Data Security is disabled by default in Terraform deployments; turn it on
-only where it is used (#1707). With the default `nl2sql_oracle_deepsec_enabled=false`,
-`NL2SQL_ORACLE_DEEPSEC_ENABLED=false` is written and the DATA USER password is written
-empty. With `nl2sql_oracle_deepsec_enabled=true`, the DATA USER password
-(`nl2sql_oracle_deepsec_data_user_password`) is required:
-
-- `NL2SQL_ORACLE_DEEPSEC_ENABLED` (`false` by default)
-- `NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER`
-- `NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD`
-
-To use it, open `セキュリティ設定 > Deep Data Security` after deployment (saving the
-DATA USER password there also writes `NL2SQL_ORACLE_DEEPSEC_ENABLED=true` to
-`backend/.env`), apply the V001 steps in order, then run the Data Grant verification.
 
 The stack reserves a fixed Oracle Select AI credential name and the default
 Select AI region:
@@ -199,8 +185,7 @@ Before stopping services, mutating modes create a root-only snapshot below
 `platform/.env` remains fixed at `/u01/aipoc/wallet`; the `.env` file is parsed
 without sourcing secret values.
 System and security migrations are idempotent. The script never deletes
-`.wallet.tmp-*` or `.wallet.backup-*`, never recreates the schema, and never
-applies the administrator-confirmed DeepSec foundation plan.
+`.wallet.tmp-*` or `.wallet.backup-*` and never recreates the schema.
 
 If a migration, backend health check, or worker restart fails, all external
 workers are disabled and the script makes a best-effort attempt to restore the
@@ -274,9 +259,8 @@ sudo journalctl \
   --since "-15 min" --no-pager -o short-iso
 ```
 
-Then confirm Wallet refresh, application user management, the pending DeepSec
-V001 plan, and completion of any previously pending schema refresh job from the
-UI. Docker is not part of this recovery path, and OCI SDK circuit-breaker INFO
+Then confirm Wallet refresh, application user management, and completion of any
+previously pending schema refresh job from the UI. Docker is not part of this recovery path, and OCI SDK circuit-breaker INFO
 messages are not failures.
 
 For the permanent Resource Manager rollout, publish the fixed application with
@@ -336,7 +320,3 @@ sudo systemctl enable --now production-ready-nl2sql-schema-refresh-worker
 sudo systemctl enable --now production-ready-nl2sql-quality-evaluation-worker
 sudo systemctl enable --now production-ready-nl2sql-ontology-worker
 ```
-
-The security migration creates `NL2SQL_DEEPSEC_MIGRATIONS`, allowing the Deep
-Data Security page to show the pending V001 foundation plan. The bootstrap does
-not apply those administrator-confirmed DeepSec foundation steps automatically.

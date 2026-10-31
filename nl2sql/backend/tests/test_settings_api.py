@@ -730,7 +730,6 @@ def test_upload_database_wallet_extracts_to_thick_resolved_wallet_dir(
     monkeypatch.setattr(settings, "oracle_connection_security", "wallet_mtls")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", str(client_lib_dir))
     monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     wallet_zip = _wallet_zip_bytes()
     resp = client.post(
@@ -1429,7 +1428,6 @@ def test_update_database_settings_preserves_client_lib_dir_in_env(
     monkeypatch.setattr(settings, "oracle_wallet_dir", "")
     monkeypatch.setattr(settings, "oracle_password", "old-password")
     monkeypatch.setattr(settings, "oracle_wallet_password", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     resp = client.patch(
         "/api/settings/database",
@@ -1529,45 +1527,6 @@ def test_database_connection_test_rejects_dsn_missing_from_wallet(
     assert data["readiness"] == "invalid"
     assert "tnsnames.ora" in data["message"]
     assert any("tnsnames.ora" in tip for tip in data["troubleshooting"])
-
-
-def test_database_connection_test_rejects_deepsec_thick_driver_mode(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("mydb_high = (...)\n", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text(
-        "WALLET_LOCATION=(SOURCE=(METHOD=file))\n",
-        encoding="utf-8",
-    )
-    (wallet_dir / "cwallet.sso").write_text("dummy", encoding="utf-8")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thick")
-    monkeypatch.setattr(settings, "oracle_client_lib_dir", str(tmp_path / "instantclient"))
-    monkeypatch.setattr(settings, "oracle_wallet_dir", str(wallet_dir))
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_password", "database-secret")
-    monkeypatch.setattr(settings, "oracle_dsn", "mydb_high")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", True)
-
-    async def fail_if_called(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("DeepSec+thick must not reach python-oracledb")
-
-    monkeypatch.setattr(settings_router, "test_oracle_connection", fail_if_called)
-
-    resp = client.post(
-        "/api/settings/database/test",
-        json={"user": "ADMIN", "dsn": "mydb_high", "wallet_dir": str(wallet_dir)},
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "failed"
-    assert data["readiness"] == "invalid_configuration"
-    assert "Thin mode" in data["message"]
-    assert any("PLATFORM_ORACLE_DRIVER_MODE=thin" in tip for tip in data["troubleshooting"])
 
 
 def test_database_connection_test_rejects_walletless_tls_wallet_alias(
@@ -1916,9 +1875,7 @@ def test_settings_read_platform_env_then_product_env(tmp_path: Path) -> None:
     )
     backend_env = tmp_path / "backend.env"
     backend_env.write_text(
-        "NL2SQL_LOG_LEVEL=WARNING\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER=PRODUCT_DATA_USER\n"
-        "NL2SQL_SELECT_AI_REGION=ap-osaka-1\n",
+        "NL2SQL_LOG_LEVEL=WARNING\nNL2SQL_SELECT_AI_REGION=ap-osaka-1\n",
         encoding="utf-8",
     )
 
@@ -1927,7 +1884,6 @@ def test_settings_read_platform_env_then_product_env(tmp_path: Path) -> None:
     assert settings.oracle_dsn == "shared_high"
     assert settings.oci_config_profile == "SHARED"
     assert settings.log_level == "WARNING"
-    assert settings.oracle_deepsec_data_user == "PRODUCT_DATA_USER"
     assert settings.nl2sql_select_ai_region == "ap-osaka-1"
 
 
@@ -1939,7 +1895,7 @@ def test_settings_ignore_legacy_env_names(
     platform_env = tmp_path / "platform.env"
     platform_env.write_text("OCI_REGION=legacy-region\n", encoding="utf-8")
     backend_env = tmp_path / "backend.env"
-    backend_env.write_text("LOG_LEVEL=WARN\nORACLE_DEEPSEC_DATA_USER=LEGACY\n", encoding="utf-8")
+    backend_env.write_text("LOG_LEVEL=WARN\nSELECT_AI_REGION=legacy-region\n", encoding="utf-8")
     monkeypatch.delenv("PLATFORM_ORACLE_DSN", raising=False)
     monkeypatch.setenv("ORACLE_DSN", "legacy_high")
     monkeypatch.setenv("OCI_COMPARTMENT_ID", "legacy-compartment")
@@ -1950,7 +1906,7 @@ def test_settings_ignore_legacy_env_names(
     assert settings.oci_compartment_id == ""
     assert settings.oci_region == ""
     assert settings.log_level == "INFO"
-    assert settings.oracle_deepsec_data_user == "DEEPSEC_DATA_USER"
+    assert settings.nl2sql_select_ai_region == "us-chicago-1"
     # 属性名での生成（テストや内部の Settings(oracle_dsn=...)）は引き続き使える。
     assert Settings(_env_file=None, oracle_dsn="named_high").oracle_dsn == "named_high"
 

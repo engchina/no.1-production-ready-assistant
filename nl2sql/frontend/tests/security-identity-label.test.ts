@@ -7,8 +7,6 @@ import {
   identitySecondaryName,
 } from "@production-ready/system-settings";
 
-const source = (path: string) =>
-  readFileSync(new URL(`../src/features/security/${path}`, import.meta.url), "utf8");
 // ユーザー管理・ロール管理の画面は platform の共有パッケージにある（#206）。
 const sharedSource = (path: string) =>
   readFileSync(
@@ -34,7 +32,6 @@ test("併記するときは ID を先に書く", () => {
 test("ユーザーは表示名だけを出して表示名で並べ、ロールはロール名だけを出してロール名で並べる", () => {
   const users = sharedSource("UserManagementPage.tsx");
   const roles = sharedSource("RoleManagementPage.tsx");
-  const deepsec = source("SecurityDeepSecPage.tsx");
 
   // 一覧の行の題名はユーザーの表示名（空ならログイン ID）だけ。ログイン ID は「ログインユーザーID」の項目にだけ出す（#1696）。
   assert.match(users, /<RowTitleButton\s+title=\{userDisplayName\(user\)\}/u);
@@ -48,8 +45,4 @@ test("ユーザーは表示名だけを出して表示名で並べ、ロール�
   assert.match(roles, /<RoleNameRowTitleButton\s+securityRole=\{role\}/u);
   assert.match(roles, /compareText\(roleDisplayName\(left\), roleDisplayName\(right\), sort\.direction\)/u);
   assert.doesNotMatch(roles, /id=\{role\.role_code\}/u);
-
-  assert.match(deepsec, /\{roleDisplayName\(role\)\}/u);
-  assert.match(deepsec, /\.sort\(compareRoleDisplayNames\)/u);
-  assert.doesNotMatch(deepsec, /id=\{role\.role_code\}/u);
 });

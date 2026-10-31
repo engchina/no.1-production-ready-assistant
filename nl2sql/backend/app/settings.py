@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
-import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -58,10 +56,10 @@ from pr_system_settings.model import (
     enterprise_ai_reasoning as enterprise_ai_reasoning,
 )
 from pr_system_settings.model import enterprise_ai_vision_model_id as enterprise_ai_vision_model_id
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-# 製品固有の設定（NL2SQL_*）。DeepSec・Select AI Credential など製品固有の writer が書く。
+# 製品固有の設定（NL2SQL_*）。Select AI Credential など製品固有の writer が書く。
 BACKEND_ENV_FILE = product_env_file("NL2SQL_", BACKEND_DIR)
 # 3製品共通の設定（PLATFORM_*）。システム設定画面と構成管理者のパスワード変更が書く（#211）。
 PLATFORM_ENV_FILE = platform_env_file(BACKEND_DIR)
@@ -84,16 +82,11 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_user: str = ""
     oracle_password: str = ""
     oracle_dsn: str = ""
-    # Deep Data Security は python-oracledb Thin mode のみ対応する。
-    # Thick は DeepSec 無効時の互換用途に限る。
     oracle_driver_mode: str = "thin"
     oracle_connection_security: str = "wallet_mtls"
     oracle_client_lib_dir: str = ""
     oracle_wallet_dir: str = "/u01/aipoc/wallet"
     oracle_wallet_password: str = ""
-    oracle_deepsec_enabled: bool = False
-    oracle_deepsec_data_user: str = "DEEPSEC_DATA_USER"
-    oracle_deepsec_data_user_password: str = ""
     oracle_adb_ocid: str = ""
     oracle_adb_region: str = ""
     oci_region: str = ""
@@ -290,7 +283,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     nl2sql_oracle_state_pool_max: int = Field(default=8, ge=1, le=64)
     # アプリの接続で業務データを読む（SELECT の実行）・Select AI で生成するときの接続 pool の上限
     # （#904）。system_admin 用と非 system_admin 用の 2 つの pool に、それぞれこの上限を使う。
-    # DeepSec の DATA USER の接続・状態の保存先の接続は含まない。
+    # 状態の保存先の接続は含まない。
     nl2sql_oracle_runtime_pool_max: int = Field(default=8, ge=1, le=64)
     nl2sql_csv_import_max_rows: int = 5000
     # 新規取込の文字列列は、追記の余地を持たせる。
@@ -368,16 +361,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 外部の MCP クライアントの API キーの 1 分あたりの呼び出しの回数（#1874。0 は上限なし）。
     app_api_key_calls_per_minute: int = Field(default=60, ge=0, le=100_000)
 
-    @model_validator(mode="after")
-    def validate_security_boundaries(self) -> Settings:
-        """製品固有の DB 接続の条件を検証する。"""
-        if self.oracle_deepsec_enabled and self.oracle_driver_mode.strip().lower() != "thin":
-            raise ValueError(
-                "NL2SQL_ORACLE_DEEPSEC_ENABLED=true の場合は "
-                "PLATFORM_ORACLE_DRIVER_MODE=thin が必要です。"
-            )
-        return self
-
     @property
     def resolved_oci_config_profile(self) -> str:
         """PLATFORM_OCI_CONFIG_PROFILE。空なら DEFAULT。"""
@@ -435,7 +418,6 @@ def _settings_singleton() -> Settings:
     # `.env` は module の値から読む（読み直しの部品と同じ場所。テストが差し替えられる）。
     settings = Settings(_env_file=(PLATFORM_ENV_FILE, BACKEND_ENV_FILE))
     load_persisted_model_settings(settings)
-    _DEEPSEC_ENV_RELOADER.mark_loaded()
     _PLATFORM_ENV_RELOADER.mark_loaded(settings)
     return settings
 
@@ -445,7 +427,6 @@ def get_settings() -> Settings:
     settings = _settings_singleton()
     reload_platform_settings_if_changed(settings)
     reload_persisted_model_settings_if_changed(settings)
-    reload_deepsec_settings_if_changed(settings)
     return settings
 
 
@@ -467,65 +448,8 @@ def reset_settings_cache() -> None:
     """テストや明示的な再初期化のため Settings singleton を破棄する。"""
     _settings_singleton.cache_clear()
     MODEL_SETTINGS_STORE.reset()
-    _DEEPSEC_ENV_RELOADER.reset()
     _PLATFORM_ENV_RELOADER.reset()
 
-
-# Deep Data Security の画面が backend/.env に書く設定（#1022）。gunicorn の別の worker が
-# 保存した値を、再起動なしで次のリクエストから使う（モデル設定の再読込と同じ考え方）。
-_DEEPSEC_RELOADED_FIELDS = (
-    ("oracle_deepsec_enabled", "NL2SQL_ORACLE_DEEPSEC_ENABLED"),
-    ("oracle_deepsec_data_user", "NL2SQL_ORACLE_DEEPSEC_DATA_USER"),
-    ("oracle_deepsec_data_user_password", "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD"),
-)
-
-
-class _DeepSecEnvReloader:
-    """backend/.env の更新（mtime・size）を見て、DeepSec の 3 項目だけを読み直す。"""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._loaded: tuple[str, int, int] | None = None
-
-    @staticmethod
-    def _signature() -> tuple[str, int, int] | None:
-        # テストが差し替えられるよう、呼び出しのたびに module の値を引く。
-        path = BACKEND_ENV_FILE
-        try:
-            stat = path.stat()
-        except OSError:
-            return None
-        return (str(path), stat.st_mtime_ns, stat.st_size)
-
-    def mark_loaded(self) -> None:
-        with self._lock:
-            self._loaded = self._signature()
-
-    def reset(self) -> None:
-        with self._lock:
-            self._loaded = None
-
-    def reload_if_changed(self, settings: Settings) -> None:
-        signature = self._signature()
-        with self._lock:
-            if signature == self._loaded:
-                return
-            self._loaded = signature
-            try:
-                # 環境変数は .env より優先されるため、環境変数で与えた項目は読み直さない。
-                fresh = Settings(_env_file=(PLATFORM_ENV_FILE, BACKEND_ENV_FILE))
-            except Exception:
-                logger.warning("deepsec_settings_reload_failed", exc_info=True)
-                return
-            for attribute, env_name in _DEEPSEC_RELOADED_FIELDS:
-                if env_name in os.environ:
-                    continue
-                value = getattr(fresh, attribute)
-                if getattr(settings, attribute) != value:
-                    setattr(settings, attribute, value)
-
-
-_DEEPSEC_ENV_RELOADER = _DeepSecEnvReloader()
 
 # 3 製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース・認証ポリシーなど）は
 # `platform/.env`。別の製品・別の worker の画面で保存した値を、再起動なしで次のリクエストから
@@ -535,11 +459,6 @@ _PLATFORM_ENV_RELOADER = EnvFieldReloader(
     env_files=lambda: (PLATFORM_ENV_FILE, BACKEND_ENV_FILE),
     fields=PLATFORM_SETTING_FIELDS,
 )
-
-
-def reload_deepsec_settings_if_changed(settings: Settings) -> None:
-    """別 worker が Deep Data Security 画面で保存した設定を次回リクエストで取り込む。"""
-    _DEEPSEC_ENV_RELOADER.reload_if_changed(settings)
 
 
 def resolve_model_settings_file(path_value: str) -> Path:

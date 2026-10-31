@@ -63,7 +63,6 @@ from app.features.nl2sql.oracle_adapter import (
 )
 from app.features.settings.system_schema import SystemSchemaError, system_schema_manager
 from app.features.settings.system_schema_runtime import reset_system_schema_runtime
-from app.readiness import deepsec_readiness
 from app.schemas.settings import (
     ModelSettingsTestRequest,
     SelectAiCredentialCreateRequest,
@@ -108,14 +107,13 @@ router.include_router(
 
 
 # データベース設定も3製品共通の実装（pr_system_settings.database。#108）。
-# 接続そのもの（Thin / DeepSec 対応の adapter）と接続 pool の後始末は NL2SQL のものを渡す。
+# 接続そのもの（adapter）と接続 pool の後始末は NL2SQL のものを渡す。
 router.include_router(
     build_database_router(
         get_settings=lambda: get_settings(),
         env_file=lambda: app_settings.PLATFORM_ENV_FILE,
         test_connection=lambda candidate: test_oracle_connection(candidate),
         on_saved=lambda _settings: close_oracle_pool(),
-        extra_readiness=deepsec_readiness,
         connection_failure_log_extra=lambda exc: oracle_connection_diagnostics(exc),
         connection_security_enabled=True,
         password_reveal_enabled=True,

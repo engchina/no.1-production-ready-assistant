@@ -12,7 +12,6 @@ const SYSTEM_ADMIN_USER: CurrentUser = {
   role_display_names: ["システム管理者"],
   is_system_admin: true,
   permissions: [],
-  data_entitlements: [],
   allowed_profile_ids: [],
   debug_mode: false,
   password_change_allowed: true,
@@ -213,7 +212,7 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
 
   // 「API キー」（全員のキーの管理。RAG / NL2SQL だけ。#1805）はユーザーとロールの末尾。アカウント欄の
   // 「API キー」（自分のキー。ボタン）と区別するため、ナビのリンクで探す。
-  const securityLabels = ["権限管理", "Deep Data Security", "ユーザー管理", "ロール管理", "API キー"];
+  const securityLabels = ["権限管理", "ユーザー管理", "ロール管理", "API キー"];
   const securityItemBoxes = await Promise.all(
     securityLabels.map(async (label) => {
       const item = sidebar.getByRole("link", { name: label, exact: true });
@@ -366,7 +365,6 @@ test("セクション折りたたみで所属項目だけを隠し、他セク�
 
   await sidebar.getByRole("button", { name: "セキュリティ設定 を展開" }).click();
   await expect(sidebar.getByText("権限管理", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Deep Data Security", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
@@ -534,7 +532,6 @@ test("375px 幅ではナビがドロワーになり、開くと主要リンク�
   await expect(sidebar.getByRole("link", { name: "ユーザー管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "ロール管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "権限管理" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Deep Data Security" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "監査ログ" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "データベース設定" })).toBeVisible();
   expect(

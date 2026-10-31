@@ -30,7 +30,7 @@ backend/                  FastAPI アプリ（uv の venv。pyproject.toml に r
     features/settings/    システム設定の API（platform の pr_system_settings の共通 API ＋
                           Select AI の資格情報・システムテーブル管理）
     features/mcp/         他製品（Agent）から呼ぶ MCP（POST /api/mcp）
-    security/             権限管理・Deep Data Security・認可の判定
+    security/             権限管理・認可の判定
     clients/              oci_enterprise_ai（LLM/VLM）/ oci_genai（embed・rerank）/ oracle
     cli/                  migration・system schema・各 worker のエントリ
     schemas/              設定 API のスキーマ
@@ -40,7 +40,7 @@ backend/                  FastAPI アプリ（uv の venv。pyproject.toml に r
 frontend/                 Vite + React Router + Tailwind v4 + 共有 UI
   src/App.tsx             ルート定義
   src/features/nl2sql/    NL2SQL の画面・状態・ロジック（ontology/ はオントロジーの画面）
-  src/features/security/  ログイン・権限管理・Deep Data Security の画面
+  src/features/security/  ログイン・権限管理の画面
   src/components/         layout（AppSidebar・nav-config.ts）/ settings / system（DatabaseGate）
   src/lib/                api / routes / i18n / 作業状態・未保存変更のガード
   lint/                   NL2SQL 固有の oxlint プラグイン

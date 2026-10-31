@@ -4,7 +4,7 @@
 - 上限はチャットの上限（#1154）。結果の行は会話（ジョブの文書）に残さず、画面が 1 回だけ受け取る。
 - 実行の権限が無い利用者は生成だけ。DML は安全検査で遮断し、実行しない（SQL 生成のジョブと同じ）。
 
-接続の種類（system_admin / 非 system_admin・DeepSec）は `test_nl2sql_db_roundtrips.py` の
+接続の種類（system_admin / 非 system_admin）は `test_nl2sql_db_roundtrips.py` の
 `test_business_sql_connection_follows_job_actor`（チャットのターンを含む）が確かめる。
 """
 

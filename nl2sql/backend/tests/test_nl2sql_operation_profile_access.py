@@ -71,7 +71,6 @@ def _principal(
         force_password_change=False,
         role_codes=["GENERAL"],
         permissions=set(permissions or ()),
-        data_entitlements=[],
         allowed_profile_ids=allowed_profile_ids,
         session_id="session-1",
         csrf_token_hash="hash",

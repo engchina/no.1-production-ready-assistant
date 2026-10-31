@@ -17,7 +17,6 @@ from typing import Any, cast
 
 import pytest
 
-from app.clients.oracle_runtime import OraclePoolManager
 from app.features.nl2sql.incremental_store import OracleIncrementalNl2SqlRepository
 from app.features.nl2sql.object_visibility import (
     is_user_visible_schema_object,
@@ -26,10 +25,7 @@ from app.features.nl2sql.object_visibility import (
 from app.features.nl2sql.oracle_adapter import OracleNl2SqlAdapter
 from app.features.nl2sql.service import Nl2SqlService
 from app.features.nl2sql.store import MemoryNl2SqlStore
-from app.security.deepsec import DeepSecService
-from app.security.service import SecurityService
-from app.security.store import InMemorySecurityStore
-from app.settings import Settings, get_settings
+from app.settings import get_settings
 
 OWNER = "APP"
 
@@ -187,9 +183,6 @@ class _Database:
     @contextmanager
     def connect(self, **_kwargs: object) -> Iterator[_SqliteConnection]:
         yield _SqliteConnection(self.connection, self.executed, self.fetched)
-
-    # DeepSecService の pool の代わり。
-    control_connection = connect
 
 
 def _business_names() -> list[str]:
@@ -364,29 +357,3 @@ def test_schema_manifest_selects_only_business_objects(monkeypatch: pytest.Monke
     _assert_system_filters_in(
         database.executed[-1], object_column="o.object_name", owner_column="o.owner"
     )
-
-
-def test_deepsec_target_objects_fill_first_page_and_count_only_business_objects() -> None:
-    """`GET /api/security/deepsec/target-objects`（Data Grant の対象。#1708 と同じ helper）。"""
-
-    database = _Database()
-    settings = Settings.model_construct(
-        oracle_user=OWNER,
-        nl2sql_schema_owner_allowlist=[],
-        nl2sql_oracle_deepsec_enabled=True,
-    )
-    security = SecurityService(InMemorySecurityStore(), settings)
-    service = DeepSecService(settings, security, cast(OraclePoolManager, database))
-
-    def fetch(cursor: str | None) -> tuple[list[str], str | None, dict[str, object]]:
-        page = service.target_objects(
-            cursor=cursor, limit=PAGE_LIMIT, include_counts=cursor is None
-        )
-        items = cast(list[dict[str, object]], page["items"])
-        return [str(item["name"]) for item in items], cast(str | None, page["next_cursor"]), page
-
-    pages, first = _collect_pages(fetch)
-
-    assert pages[0] == _business_names()[:PAGE_LIMIT]
-    assert [name for page in pages for name in page] == _business_names()
-    assert first[2]["total"] == len(BUSINESS_OBJECTS)

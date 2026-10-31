@@ -30,7 +30,6 @@ def _principal(user_uuid: str, *, admin: bool = False) -> Principal:
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={"nl2sql.query.generate", "nl2sql.feedback.write"},
-        data_entitlements=[],
         allowed_profile_ids={"default"},
         session_id=f"session-{user_uuid}",
         csrf_token_hash="csrf",

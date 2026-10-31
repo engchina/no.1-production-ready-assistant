@@ -599,8 +599,5 @@ fi
 if grep -Eq 'app\.cli\.nl2sql_system_schema[[:space:]]+--recreate' "${UPDATE_SCRIPT}"; then
   fail_test "update script invokes destructive schema recreation"
 fi
-if grep -Ei 'app\.cli\..*deepsec|sql[^[:space:]]*[[:space:]].*foundation' "${UPDATE_SCRIPT}"; then
-  fail_test "update script invokes a DeepSec foundation command"
-fi
 
 echo "unified update and deployed OCI repair behavior verified."

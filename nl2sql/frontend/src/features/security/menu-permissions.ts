@@ -28,7 +28,6 @@ export const MENU_PERMISSIONS = {
   // 全員の API キー（管理の画面）。自分のキーはメニュー権限なしで使える（#1805）。
   securityApiKeys: "menu.security_api_keys",
   securityPermissions: "menu.security_permissions",
-  securityDeepSec: "menu.security_deepsec",
   settingsOci: "menu.settings_oci",
   settingsUploadStorage: "menu.settings_upload_storage",
   settingsModel: "menu.settings_model",
@@ -272,9 +271,6 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
   "security.users.manage": [MENU_PERMISSIONS.securityUsers],
   "security.roles.view": [MENU_PERMISSIONS.securityRoles],
   "security.roles.manage": [MENU_PERMISSIONS.securityRoles, MENU_PERMISSIONS.securityPermissions],
-  "security.deepsec.view": [MENU_PERMISSIONS.securityDeepSec],
-  "security.deepsec.apply": [MENU_PERMISSIONS.securityDeepSec],
-  "security.deepsec.verify": [MENU_PERMISSIONS.securityDeepSec],
 };
 
 export function normalizePermissionCodes(permissions: string[]): Set<string> {

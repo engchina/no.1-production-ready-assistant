@@ -1,8 +1,8 @@
 """Application auth/RBAC security tables を idempotent に作成する。
 
 3 製品で共有する `PLATFORM_*`（platform の DDL）を作ってから、NL2SQL 固有の
-`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES` / `NL2SQL_APP_DATA_ENTITLEMENTS` /
-`NL2SQL_DEEPSEC_MIGRATIONS`（migration 004）を作る。既存の表は変えない（ORA-00955 を読み飛ばす）。
+`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`（migration 004）を作る。既存の表は
+変えない（ORA-00955 を読み飛ばす）。
 
 旧名・旧形からの移行（`RAG_APP_*` → `NL2SQL_APP_*` → `PLATFORM_*` の改名、旧監査ログの表の
 削除、権限の行の削除・追加、列の追加など）は、初めての release の前に削除した（#1648。後方互換を
@@ -30,8 +30,6 @@ SECURITY_MIGRATION_FILE = "004_app_security_rbac.sql"
 # NL2SQL 固有のセキュリティの表（migration 004 が作る）。
 NL2SQL_SECURITY_TABLES: tuple[str, ...] = (
     "NL2SQL_APP_ROLE_PERMISSIONS",
-    "NL2SQL_APP_DATA_ENTITLEMENTS",
-    "NL2SQL_DEEPSEC_MIGRATIONS",
     "NL2SQL_APP_ROLE_PROFILES",
 )
 # `--apply` の後にそろっているべき表（配備の確認 `nl2sql_system_schema --check` が使う。#1648）。
@@ -43,10 +41,8 @@ LEGACY_SECURITY_TABLES: tuple[str, ...] = (
     "RAG_APP_ROLES",
     "RAG_APP_USER_ROLES",
     "RAG_APP_ROLE_PERMISSIONS",
-    "RAG_APP_DATA_ENTITLEMENTS",
     "RAG_AUTH_SESSIONS",
     "RAG_AUTH_AUDIT_LOG",
-    "RAG_DEEPSEC_MIGRATIONS",
     "NL2SQL_APP_USERS",
     "NL2SQL_APP_ROLES",
     "NL2SQL_APP_USER_ROLES",

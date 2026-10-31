@@ -1,4 +1,4 @@
-"""認証・ユーザー・ロール（platform の共通 router）と、NL2SQL の権限・DeepSec API。"""
+"""認証・ユーザー・ロール（platform の共通 router）と、NL2SQL の権限 API。"""
 
 from __future__ import annotations
 
@@ -8,9 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pr_backend_core import ApiResponse, Page
 from pr_backend_core.api import (
     ACCESS_TARGET_PAGE_LIMIT_MAX,
-    CursorParams,
     OffsetParams,
-    cursor_params,
     offset_params,
     paginate_slice,
 )
@@ -21,23 +19,11 @@ from pr_system_settings.auth.router import build_auth_router
 from app.api.concurrency import run_sync_io
 from app.settings import get_settings
 
-from .deepsec import get_deepsec_service
 from .dependencies import current_principal, local_debug_principal, request_context
 from .domain import SYSTEM_ADMIN_ROLE_CODE, as_principal, as_role
 from .permissions import PERMISSION_CATALOG, grants_all_profile_access
 from .schemas import (
     CurrentUserData,
-    DeepSecApplyRequest,
-    DeepSecConfigUpdate,
-    DeepSecDataEntitlementApplyData,
-    DeepSecDataEntitlementApplyRequest,
-    DeepSecDataEntitlementPreviewData,
-    DeepSecDataEntitlementPreviewRequest,
-    DeepSecDataEntitlementUpdateRequest,
-    DeepSecResetRequest,
-    DeepSecRoleEntitlementsData,
-    DeepSecTargetObjectDetailData,
-    DeepSecTargetObjectPageData,
     PermissionData,
     ProfileAccessProfileData,
     ProfileAccessRoleData,
@@ -190,213 +176,3 @@ def list_profile_access_profiles(
 @router.get("/security/permissions", response_model=ApiResponse[list[PermissionData]])
 def permission_catalog() -> ApiResponse[list[PermissionData]]:
     return ApiResponse(data=[PermissionData.from_definition(item) for item in PERMISSION_CATALOG])
-
-
-@router.get(
-    "/security/deepsec/data-entitlements",
-    response_model=ApiResponse[list[DeepSecRoleEntitlementsData]],
-)
-def list_deepsec_data_entitlements() -> ApiResponse[list[DeepSecRoleEntitlementsData]]:
-    return ApiResponse(data=get_deepsec_service().data_entitlements())
-
-
-@router.get("/security/deepsec/scope-profiles")
-def list_deepsec_scope_profiles() -> ApiResponse[list[dict[str, object]]]:
-    from .scope_relations import scope_profiles
-
-    return ApiResponse(data=scope_profiles())
-
-
-@router.get("/security/deepsec/relations")
-def list_deepsec_relations(
-    profile_id: str, owner: str, object_name: str
-) -> ApiResponse[dict[str, object]]:
-    from .deepsec import _qualified
-    from .scope_relations import relation_catalog
-
-    return ApiResponse(
-        data=relation_catalog(get_deepsec_service(), profile_id, _qualified(owner, object_name))
-    )
-
-
-@router.get(
-    "/security/deepsec/target-objects",
-    response_model=ApiResponse[DeepSecTargetObjectPageData],
-)
-def list_deepsec_target_objects(
-    paging: Annotated[CursorParams, Depends(cursor_params(default=50, max_limit=100))],
-    q: Annotated[str, Query(max_length=128)] = "",
-    owner_prefix: Annotated[str, Query(max_length=128)] = "",
-    include_counts: bool = False,
-    profile_id: str | None = None,
-) -> ApiResponse[DeepSecTargetObjectPageData]:
-    return ApiResponse(
-        data=get_deepsec_service().target_objects(
-            cursor=paging.cursor,
-            limit=paging.limit,
-            q=q,
-            owner_prefix=owner_prefix,
-            include_counts=include_counts,
-            **({"profile_id": profile_id} if profile_id else {}),
-        )
-    )
-
-
-@router.get(
-    # object_name は canonical token（引用名は "..."）。"/" を含む表名も受けるため path 変換。
-    "/security/deepsec/target-objects/{owner}/{object_name:path}",
-    response_model=ApiResponse[DeepSecTargetObjectDetailData],
-)
-def get_deepsec_target_object(
-    owner: str,
-    object_name: str,
-    object_type: Annotated[str, Query(max_length=32)] = "",
-) -> ApiResponse[DeepSecTargetObjectDetailData]:
-    return ApiResponse(
-        data=get_deepsec_service().target_object_detail(
-            owner=owner,
-            object_name=object_name,
-            object_type=object_type,
-        )
-    )
-
-
-@router.patch(
-    "/security/deepsec/data-entitlements/{role_id}",
-    response_model=ApiResponse[DeepSecRoleEntitlementsData],
-)
-def update_deepsec_data_entitlements(
-    role_id: str,
-    payload: DeepSecDataEntitlementUpdateRequest,
-    request: Request,
-    response: Response,
-) -> ApiResponse[DeepSecRoleEntitlementsData]:
-    actor = current_principal(request)
-    request_id, client_ip = request_context(request)
-    role = get_security_service().update_role_data_entitlements(
-        role_id,
-        expected_version=payload.version,
-        entitlements=[item.to_record(role_id) for item in payload.data_entitlements],
-        actor=actor,
-        request_id=request_id,
-        client_ip=client_ip,
-    )
-    response.headers["ETag"] = f'"{role.version}"'
-    return ApiResponse(data=get_deepsec_service().role_entitlements(role))
-
-
-@router.post(
-    "/security/deepsec/data-entitlements/{role_id}/preview",
-    response_model=ApiResponse[DeepSecDataEntitlementPreviewData],
-)
-def preview_deepsec_data_entitlements(
-    role_id: str,
-    payload: DeepSecDataEntitlementPreviewRequest,
-    request: Request,
-) -> ApiResponse[DeepSecDataEntitlementPreviewData]:
-    return ApiResponse(
-        data=get_deepsec_service().preview_data_entitlements(
-            role_id,
-            expected_version=payload.version,
-            entitlements=[item.to_record(role_id) for item in payload.data_entitlements],
-            actor=current_principal(request),
-        )
-    )
-
-
-@router.post(
-    "/security/deepsec/data-entitlements/{role_id}/apply",
-    response_model=ApiResponse[DeepSecDataEntitlementApplyData],
-)
-def apply_deepsec_data_entitlements(
-    role_id: str,
-    payload: DeepSecDataEntitlementApplyRequest,
-    request: Request,
-) -> ApiResponse[dict[str, object]]:
-    return ApiResponse(
-        data=get_deepsec_service().apply_data_entitlements(
-            role_id,
-            expected_version=payload.version,
-            confirmation=payload.confirmation,
-            entitlements=[item.to_record(role_id) for item in payload.data_entitlements],
-            actor=current_principal(request),
-        )
-    )
-
-
-@router.get("/security/deepsec/status", response_model=ApiResponse[dict[str, object]])
-def deepsec_status() -> ApiResponse[dict[str, object]]:
-    return ApiResponse(data=get_deepsec_service().status())
-
-
-@router.get("/security/deepsec/plan", response_model=ApiResponse[dict[str, object]])
-def deepsec_plan() -> ApiResponse[dict[str, object]]:
-    return ApiResponse(data=get_deepsec_service().plan())
-
-
-@router.patch("/security/deepsec/config", response_model=ApiResponse[dict[str, object]])
-def update_deepsec_config(
-    payload: DeepSecConfigUpdate,
-    request: Request,
-) -> ApiResponse[dict[str, object]]:
-    current_principal(request)
-    return ApiResponse(data=get_deepsec_service().update_config(payload.data_user_password))
-
-
-@router.post(
-    "/security/deepsec/config/sync-password",
-    response_model=ApiResponse[dict[str, object]],
-)
-def sync_deepsec_config_password(request: Request) -> ApiResponse[dict[str, object]]:
-    current_principal(request)
-    return ApiResponse(data=get_deepsec_service().sync_saved_data_user_password())
-
-
-@router.post(
-    "/security/deepsec/plan/{version}/steps/{step_no}/apply",
-    response_model=ApiResponse[dict[str, object]],
-)
-def apply_deepsec_step(
-    version: str,
-    step_no: int,
-    payload: DeepSecApplyRequest,
-    request: Request,
-) -> ApiResponse[dict[str, object]]:
-    if version != "V001":
-        from .service import SecurityApiError
-
-        raise SecurityApiError(404, "DeepSec plan version が見つかりません。")
-    result = get_deepsec_service().apply_step(
-        step_no,
-        payload.checksum,
-        payload.confirmation,
-        current_principal(request),
-    )
-    return ApiResponse(data=result)
-
-
-@router.post(
-    "/security/deepsec/plan/{version}/reset",
-    response_model=ApiResponse[dict[str, object]],
-)
-def reset_deepsec_plan(
-    version: str,
-    payload: DeepSecResetRequest,
-    request: Request,
-) -> ApiResponse[dict[str, object]]:
-    return ApiResponse(
-        data=get_deepsec_service().reset(
-            version,
-            payload.confirmation,
-            current_principal(request),
-        )
-    )
-
-
-@router.post("/security/deepsec/verify", response_model=ApiResponse[dict[str, object]])
-def verify_deepsec(request: Request) -> ApiResponse[dict[str, object]]:
-    return ApiResponse(
-        data=get_deepsec_service().verify(
-            current_principal(request),
-        )
-    )

@@ -64,7 +64,7 @@ variable "adb_deployment_mode" {
 # アプリの不具合・管理 SQL の誤りを DB 全体の管理者の権限で実行させず、ADMIN のパスワードを各製品の .env に置かない）。
 # Compute の platform/deploy/suite-init.sh が、製品の配備の前に ADMIN で接続してこのユーザーを作り、権限を付ける。
 variable "adb_app_user_enabled" {
-  description = "Create an application database user (not ADMIN) on the Compute instance and connect every product with it. The Compute instance connects as ADMIN once per deployment to create the user and grant PDB_DBA plus the Deep Data Security privileges."
+  description = "Create an application database user (not ADMIN) on the Compute instance and connect every product with it. The Compute instance connects as ADMIN once per deployment to create the user and grant PDB_DBA."
   type        = bool
   default     = true
 }
@@ -383,10 +383,10 @@ variable "adb_app_user_name" {
   validation {
     condition = (
       can(regex("^[A-Za-z][A-Za-z0-9_]{0,29}$", var.adb_app_user_name))
-      && !contains(["ADMIN", "SYS", "SYSTEM", "PUBLIC", "DEEPSEC_DATA_USER", "GGADMIN", "ADBSNMP"], upper(var.adb_app_user_name))
+      && !contains(["ADMIN", "SYS", "SYSTEM", "PUBLIC", "GGADMIN", "ADBSNMP"], upper(var.adb_app_user_name))
       && !can(regex("^(?i)(ORA_|SYS)", var.adb_app_user_name))
     )
-    error_message = "adb_app_user_name must start with a letter, contain only letters, digits and underscores (up to 30 characters), and must not be an Oracle-maintained name such as ADMIN, SYS, SYSTEM or DEEPSEC_DATA_USER."
+    error_message = "adb_app_user_name must start with a letter, contain only letters, digits and underscores (up to 30 characters), and must not be an Oracle-maintained name such as ADMIN, SYS or SYSTEM."
   }
 }
 
@@ -771,32 +771,6 @@ variable "app_admin_login_user_password" {
       )
     )
     error_message = "app_admin_login_user_password must be 12-30 characters, include uppercase, lowercase, and digits, not include admin or double quotes, and not contain line breaks."
-  }
-}
-
-variable "nl2sql_oracle_deepsec_enabled" {
-  description = "Enable Deep Data Security in the NL2SQL backend/.env. Disabled by default; enable it only where it is used."
-  type        = bool
-  default     = false
-}
-
-variable "nl2sql_oracle_deepsec_data_user_password" {
-  description = "Password for the shared DEEPSEC_DATA_USER Deep Data Security DATA USER."
-  type        = string
-  sensitive   = true
-  default     = ""
-
-  validation {
-    condition = (
-      trimspace(var.nl2sql_oracle_deepsec_data_user_password) == ""
-      || (
-        length(var.nl2sql_oracle_deepsec_data_user_password) >= 12
-        && length(var.nl2sql_oracle_deepsec_data_user_password) <= 256
-        && !can(regex("[\r\n]", var.nl2sql_oracle_deepsec_data_user_password))
-        && !can(regex("\"", var.nl2sql_oracle_deepsec_data_user_password))
-      )
-    )
-    error_message = "nl2sql_oracle_deepsec_data_user_password must be empty or 12-256 characters without double quotes or line breaks."
   }
 }
 

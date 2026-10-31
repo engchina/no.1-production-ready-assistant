@@ -138,12 +138,6 @@ variableGroups:
       - rag_enable_parser_unstructured
       - rag_enable_oci_cloud_parsers
 
-  - title: "NL2SQL Deep Data Security"
-    visible: deploy_nl2sql
-    variables:
-      - nl2sql_oracle_deepsec_enabled
-      - nl2sql_oracle_deepsec_data_user_password
-
   - title: "配備する製品"
     visible: false
     variables:
@@ -268,7 +262,7 @@ variables:
     required: false
     visible: true
     title: "アプリ用の DB ユーザーを使う"
-    description: "既定で有効（推奨）。Compute が配備のときに ADMIN で ADB に接続し、アプリ用のユーザー（ADMIN ではないユーザー）を作って権限（PDB_DBA と Deep Data Security の権限）を付けます（既定の名前は ADB_APP_USER）。3 製品はこのユーザーで接続し、システムの表もこのユーザーの schema に作ります。ADMIN のパスワードは platform/.env に書きません。無効にすると、新規の ADB は ADMIN、既存の ADB は「Existing DB username」で接続します。"
+    description: "既定で有効（推奨）。Compute が配備のときに ADMIN で ADB に接続し、アプリ用のユーザー（ADMIN ではないユーザー）を作って権限（PDB_DBA）を付けます（既定の名前は ADB_APP_USER）。3 製品はこのユーザーで接続し、システムの表もこのユーザーの schema に作ります。ADMIN のパスワードは platform/.env に書きません。無効にすると、新規の ADB は ADMIN、既存の ADB は「Existing DB username」で接続します。"
     default: true
 
   existing_adb_ocid:
@@ -912,29 +906,6 @@ variables:
 
 
 
-
-
-  nl2sql_oracle_deepsec_enabled:
-    type: boolean
-    required: true
-    visible: deploy_nl2sql
-    title: "NL2SQL_ORACLE_DEEPSEC_ENABLED"
-    description: "Deep Data Securityを有効にする場合はオンにします（既定はオフ）。オンの場合のみDeepSec DATA USER passwordが必要です。"
-    default: false
-
-  nl2sql_oracle_deepsec_data_user_password:
-    type: password
-    required: false
-    visible:
-      and:
-        - deploy_nl2sql
-        - eq:
-            - nl2sql_oracle_deepsec_enabled
-            - true
-    title: "DeepSec DATA USER password"
-    description: "Value written to NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD for the shared DEEPSEC_DATA_USER Deep Data Security data connection."
-    confirmation: true
-    pattern: '^[^"\r\n]{12,256}$'
 
 
   agent_runtime_repository_backend:

@@ -365,7 +365,6 @@ class _Users:
             display_name=login_user_id,
             description="",
             permissions=permissions,
-            entitlements=[],
             allowed_profile_ids=allowed_profile_ids or set(),
             actor=self.admin,
         )

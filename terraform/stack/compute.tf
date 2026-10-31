@@ -68,9 +68,5 @@ resource "oci_core_instance" "suite" {
       condition     = var.platform_environment == "local" || var.https_enabled
       error_message = "https_enabled must be true when platform_environment is staging or production (all products require Secure cookies)."
     }
-    precondition {
-      condition     = !var.deploy_nl2sql || !var.nl2sql_oracle_deepsec_enabled || trimspace(var.nl2sql_oracle_deepsec_data_user_password) != ""
-      error_message = "nl2sql_oracle_deepsec_data_user_password must be configured when nl2sql_oracle_deepsec_enabled=true."
-    }
   }
 }

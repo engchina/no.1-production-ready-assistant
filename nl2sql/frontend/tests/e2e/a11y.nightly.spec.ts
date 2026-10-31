@@ -169,7 +169,6 @@ const SCREENS: Screen[] = [
   { path: "/question-classifier-models" },
   { path: "/evaluation" },
   { path: "/settings/security/permissions" },
-  { path: "/settings/security/deepsec" },
   { path: "/settings/security/users" },
   { path: "/settings/security/roles" },
   { path: "/settings/security/api-keys" },

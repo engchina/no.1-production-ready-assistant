@@ -1182,7 +1182,7 @@ function ProfileEditor({
       </section>
 
       {/* 保存（Oracle 反映）の事前条件。保存の操作の直前に出し、満たすまで「保存」を無効にする
-          （DeepSec の事前条件と同じ出し方。messaging.md §10。#1683）。 */}
+          （事前条件の出し方は messaging.md §10。#1683）。 */}
       {selectAiCredentialMissing ? (
         <SelectAiCredentialPrecondition
           id={PROFILE_SAVE_CREDENTIAL_PRECONDITION_ID}

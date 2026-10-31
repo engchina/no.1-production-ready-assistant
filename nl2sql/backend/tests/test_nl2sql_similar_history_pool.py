@@ -82,7 +82,6 @@ def _principal(allowed_profile_ids: set[str]) -> Principal:
         force_password_change=False,
         role_codes=["ANALYST"],
         permissions={QUERY_GENERATE_PERMISSION},
-        data_entitlements=[],
         allowed_profile_ids=allowed_profile_ids,
         session_id="session-1",
         csrf_token_hash="csrf",

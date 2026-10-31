@@ -369,7 +369,6 @@ def test_action_permission_and_profile_ownership_cannot_be_bypassed(
         force_password_change=False,
         role_codes=[],
         permissions={CAPABILITY_MANAGE},
-        data_entitlements=[],
         allowed_profile_ids={"sales"},
         session_id="session",
         csrf_token_hash="hash",

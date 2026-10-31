@@ -92,7 +92,6 @@ def _principal(allowed_profile_ids: set[str], *, admin: bool = False) -> Princip
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={"menu.sql_to_question"},
-        data_entitlements=[],
         allowed_profile_ids=set(allowed_profile_ids),
         session_id="session-1",
         csrf_token_hash="csrf",

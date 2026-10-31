@@ -3,7 +3,6 @@
 判定の順と応答の形は `pr_system_settings.database_status` が持つ。NL2SQL が注入するのは次だけ。
 
 - memory モード（deterministic + memory）の short circuit（DB を使わない）
-- DeepSec の設定の判定（システム設定画面と同じ `deepsec_readiness`）
 - incremental store の確認（migration の要否）と system schema の epoch の観測
 - `context_id` の元にする値（実行モード・保存モード・接続先）
 """
@@ -29,7 +28,7 @@ from app.clients.oracle_diagnostics import oracle_connection_diagnostics
 from app.features.nl2sql.incremental_observability import record_ready_once
 from app.features.nl2sql.service import nl2sql_service
 from app.features.settings.system_schema_runtime import observe_system_schema_epoch
-from app.readiness import READINESS_OK, deepsec_readiness, uses_oracle
+from app.readiness import READINESS_OK, uses_oracle
 from app.settings import Settings, get_settings
 
 router = APIRouter(tags=["health"])
@@ -104,7 +103,6 @@ router.include_router(
     build_database_status_router(
         get_settings=lambda: get_settings(),
         test_connection=lambda settings: test_oracle_connection(settings),
-        extra_readiness=deepsec_readiness,
         schema_probe=lambda settings: _incremental_store_probe(settings),
         short_circuit=lambda settings: _memory_short_circuit(settings),
         context_fields=_context_fields,

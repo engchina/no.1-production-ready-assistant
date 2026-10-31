@@ -1813,7 +1813,6 @@ async def test_similar_history_lob_read_does_not_block_following_job(
     # similar-history 経路の glossary 読込が追加接続を消費しないようキャッシュを温める
     service._legacy_learning_material_loaded = True  # noqa: SLF001
     service._legacy_learning_material_checked_at = time.monotonic()  # noqa: SLF001
-    service._deepsec_enabled = False  # noqa: SLF001
     monkeypatch.setattr(service._embedding_client, "is_configured", lambda: False)
     monkeypatch.setattr(service, "list_profiles", lambda include_archived=False: [profile])
     monkeypatch.setattr(service, "_persist_job", lambda _job_id: None)

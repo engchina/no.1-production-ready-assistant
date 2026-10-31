@@ -23,8 +23,6 @@ export const ja = {
   "dbGate.persistenceFailed.title": "保存済みの業務データを復元できません",
   "dbGate.persistenceFailed.message":
     "データベース接続は正常ですが、NL2SQL の保存領域を利用できません。再試行しても解消しない場合は、システムテーブルとバックエンドログを確認してください。",
-  "dbGate.check.invalid_configuration":
-    "Oracle Deep Data Security は python-oracledb の Thin mode でだけ使えます。NL2SQL_ORACLE_DEEPSEC_ENABLED=true の場合は PLATFORM_ORACLE_DRIVER_MODE=thin にしてください。",
   "persistence.memoryWarning.title": "非永続モードで実行中です",
   "persistence.memoryWarning.message":
     "業務プロファイル、タスク、履歴、フィードバック、評価はメモリだけに保存され、バックエンドの再起動で失われます。",

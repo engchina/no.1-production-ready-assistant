@@ -5,7 +5,7 @@ name: Oracle integration
 # 呼ぶ（それ以外の PR では実行しない。対象のファイルは ci.yml の changes の <製品>_oracle）。
 #   - Oracle AI Database Free の container に、system schema の migration（配備の init_script.sh と同じ CLI）を
 #     2 回当てる（2 回目で冪等を確かめる）。
-#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（Select AI・DBMS_CLOUD・Wallet・DeepSec）は Free に無いので、
+#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（Select AI・DBMS_CLOUD・Wallet）は Free に無いので、
 #     それを使うテストは実行しない（下の各 step）。
 #   - skip の監視: 実 Oracle のテストは DB に届かないと skip するので、skip のまま成功にしない（RAG は
 #     RAG_TEST_REQUIRE_ORACLE=1 で fixture が失敗にし、どの製品も .github/scripts/pytest-skip-gate.py が許可の一覧に
@@ -104,8 +104,7 @@ jobs:
           python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml"
 
       # NL2SQL: Oracle の明示 opt-in のテスト。Free に無い ADB の機能を使うもの（Select AI の
-      # test_select_ai_quoted_object_list_oracle_live.py・DeepSec の test_deepsec_real_oracle_integration.py）は
-      # 実行しない。LLM の Select AI の test_select_ai_generates_into_staging_only（NL2SQL_SYNTHETIC_LLM_LIVE_TEST）と、
+      # test_select_ai_quoted_object_list_oracle_live.py）は実行しない。LLM の Select AI の test_select_ai_generates_into_staging_only（NL2SQL_SYNTHETIC_LLM_LIVE_TEST）と、
       # DBMS_CLOUD の DBA_LOAD_OPERATIONS を読む test_capture_session_reads_adb_load_operations
       # （NL2SQL_SYNTHETIC_ADB_LIVE_TEST）は skip を許す。
       # 3 製品のテストは手元の .env を読まない（#1972）ので、接続の設定を環境変数で渡す（PLATFORM_ORACLE_USER は

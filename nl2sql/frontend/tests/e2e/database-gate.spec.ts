@@ -25,7 +25,6 @@ test.beforeEach(async ({ page }) => {
       role_display_names: ["システム管理者"],
       is_system_admin: true,
       permissions: [],
-      data_entitlements: [],
       debug_mode: false,
       password_change_allowed: true,
     })
@@ -563,11 +562,11 @@ test("接続設定の不備は診断コードと補足を示し、ok の診断�
     )
   ).toBeVisible();
 
-  // DeepSec の設定の不備は NL2SQL の文言で補足する。
+  // 製品で使えない接続設定の組み合わせは、3 製品共通の文言で補足する。
   check = "invalid_configuration";
   await page.getByRole("button", { name: "再試行" }).click();
   await expect(page.getByText("診断コード: invalid_configuration", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Oracle Deep Data Security は python-oracledb の Thin mode でだけ使えます/)).toBeVisible();
+  await expect(page.getByText(/接続設定の組み合わせがこの製品で使えません/)).toBeVisible();
 
   // 設定は揃っていて接続できないだけのとき（check=ok）は、診断コードも ORA コードも出さない。
   check = "ok";
@@ -681,7 +680,6 @@ test("設定を開けない利用者には導線を出さず、システム管�
       role_codes: ["NL2SQL_USER"],
       is_system_admin: false,
       permissions: ["menu.profiles"],
-      data_entitlements: [],
       debug_mode: false,
       password_change_allowed: true,
     })

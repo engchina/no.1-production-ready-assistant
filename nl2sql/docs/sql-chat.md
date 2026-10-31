@@ -14,7 +14,7 @@
 
 利用者の方針「NL2SQL のチャットの本質は SQL の生成と SQL の実行で、SQL 生成の画面と同じ」に合わせ、送信のジョブは SQL 生成の画面と同じく、生成 → 安全性の確認 → **実行** → 結果の整形を 1 つのジョブで行う（#1154 では送信は生成だけで、実行は「実行」を押したときだけだった）。
 
-- 実行の規則は SQL 生成の画面の自動実行と同じ: 安全検査（SELECT だけ。DML・DDL などは `SQL_BLOCKED` で遮断し、ジョブは失敗。実行しない。SQL 生成の画面にも DML の確認の流れは無い。Select AI / Select AI Agent の SQL は省略する。下の「生成の方式ごとの安全確認」）、業務プロファイルの範囲、権限（`nl2sql.sql.execute`）、DeepSec・接続の分離（#904。worker の `actor_scope`）、上限、監査（実行履歴）。SELECT だけを実行するので確認語は使わない（確認語は管理 SQL の書き込み・削除だけ）。
+- 実行の規則は SQL 生成の画面の自動実行と同じ: 安全検査（SELECT だけ。DML・DDL などは `SQL_BLOCKED` で遮断し、ジョブは失敗。実行しない。SQL 生成の画面にも DML の確認の流れは無い。Select AI / Select AI Agent の SQL は省略する。下の「生成の方式ごとの安全確認」）、業務プロファイルの範囲、権限（`nl2sql.sql.execute`）、接続の分離（#904。worker の `actor_scope`）、上限、監査（実行履歴）。SELECT だけを実行するので確認語は使わない（確認語は管理 SQL の書き込み・削除だけ）。
 - 実行の権限が無い利用者（`menu.chat` だけ）の送信は、拒否せず生成だけにする（route が `generation_only` にする）。バッジは「安全検査済み・未実行」、吹き出しに理由（「SQL を実行するには…」）。
 - 実行の失敗（Oracle のエラー）はジョブを失敗にしない。生成した SQL を残し、実行の段階を失敗、吹き出しに失敗の `Banner`（1 文目は SQL 生成のジョブと同じ利用者向けの文、ORA は「詳細」）と「もう一度実行」を出す。
 - 処理の経過（`ChatProgress`）は実行の trace（span の木）の投影（#3226。3 製品共通。`platform/docs/ux-contracts/run-history.md`「実測 trace と処理の経過」）。チャット・SQL 生成（`OperationStatusStrip`）・実行履歴の詳細（`HistoryRunDetail`）・DB 管理チャットが同じ記録・同じ工程の定義で出し、「トレースの詳細」の 2 つ目の表示は置かない（Trace ID は「処理の詳細」に出す）。経過時間は送信から数え続ける。
@@ -39,9 +39,9 @@
 - 送信のジョブ（`POST /api/nl2sql/jobs` の `chat: true`）の実行の段階は、SQL 生成のジョブと同じ `_run_job` の中で、チャットの上限で実行する（`Nl2SqlService._run_chat_sql`。「もう一度実行」と同じ関数）。
 - 結果の行の受け渡し（#1176）: 行はターンのジョブ（会話）に残さず、`NL2SQL_STATE_DOCUMENTS` の `chat_results`（ジョブ ID ごと。ジョブの結果と同じトランザクションで保存）に、画面が受け取るまでの間だけ置く。画面は `POST /api/nl2sql/jobs/{job_id}/execution-result`（権限 `nl2sql.sql.execute`・本人の会話・業務プロファイルの利用権限）で 1 回だけ受け取り、backend は受け取ったら消す。期限（`NL2SQL_CHAT_RESULT_RETENTION_SECONDS`、既定 600 秒）を過ぎた・受け取り済みの結果は 404（画面は要約と「もう一度実行」）。受け取られなかった行は、次のチャットの実行のときに期限を過ぎたものをまとめて消す。「もう一度実行」は応答で行を返し、受け取られていない行を消す。
 - `POST /api/nl2sql/jobs/{job_id}/execute`（権限 `nl2sql.sql.execute`。「もう一度実行」）。SQL は画面から受け取らず、ターンのジョブに保存した生成 SQL を使う。本人の会話のターン（管理の権限でも他の利用者の会話は不可。system_admin は見えるので 403。#3244）、ターンの業務プロファイルの利用権限を確かめる。
-- 実行は SQL 生成のジョブの実行の段階と同じ経路（`Nl2SqlService._execute_generated_sql`）: 業務プロファイルの範囲（`_resolve_allowed_objects`）→ 安全検査（`analyze_sql`。生成の後に範囲が変わっていれば `SQL_BLOCKED`）→ `execute_sql`（`OracleNl2SqlAdapter.user_data_connection(read_only=True)`）。actor は要求の利用者を `actor_scope` で明示し、system_admin と非 system_admin で別の接続 pool、DeepSec 有効時の非 system_admin は DATA USER の pool（借りるたびに利用者の context を設定・消去。#904）。
+- 実行は SQL 生成のジョブの実行の段階と同じ経路（`Nl2SqlService._execute_generated_sql`）: 業務プロファイルの範囲（`_resolve_allowed_objects`）→ 安全検査（`analyze_sql`。生成の後に範囲が変わっていれば `SQL_BLOCKED`）→ `execute_sql`（`OracleNl2SqlAdapter.user_data_connection(read_only=True)`）。actor は要求の利用者を `actor_scope` で明示し、system_admin と非 system_admin で別の接続 pool を使う（#904）。
 - 監査: 実行ごとに実行履歴（`HistoryItem`。`generation_only=false`・`session_id` は会話 ID・件数と列）を残し、構造化ログ `nl2sql_chat_sql_executed`（SQL の本文・行の値は出さない）を出す。
-- 結果の行は会話に保存しない。ターンのジョブに要約（`last_execution`: 状態・時刻・行数・列数・打ち切り・実行履歴の ID・受け取りの期限）だけを残し、会話を開き直したら「前回の実行（…）: 12 行・5 列。…」と「もう一度実行」を出す。理由: SQL 生成のジョブの永続の記録である実行履歴も件数と列だけで、会話は長く残るため業務データの行を会話に残さない（後で DeepSec・業務プロファイルの権限が変わっても古い行を見せない）。画面の中では結果をメモリ（TanStack Query のキャッシュ）にだけ持つ。
+- 結果の行は会話に保存しない。ターンのジョブに要約（`last_execution`: 状態・時刻・行数・列数・打ち切り・実行履歴の ID・受け取りの期限）だけを残し、会話を開き直したら「前回の実行（…）: 12 行・5 列。…」と「もう一度実行」を出す。理由: SQL 生成のジョブの永続の記録である実行履歴も件数と列だけで、会話は長く残るため業務データの行を会話に残さない（後で業務プロファイルの権限が変わっても古い行を見せない）。画面の中では結果をメモリ（TanStack Query のキャッシュ）にだけ持つ。
 
 生成方法は SQL 生成画面の実行エンジンと同じ Select AI / Select AI Agent / OCI Enterprise AI（#890）。Select AI Agent は業務プロファイルの Agent の資産（SQL ツール・Agent・Task・Team）を使い、SQL ツールは `SHOWSQL` で SQL を作るだけで実行しない（`enable_human_tool` も無効）。返った SQL は Select AI と同じく安全検査を省略し（#1523。下の「生成の方式ごとの安全確認」）、SQL 生成の画面と同じ backend の経路で実行する（#1176）。Agent の資産が未同期・Oracle の接続が無いなど前提が整っていないときは、SQL 生成画面と同じくそのターンが失敗し、理由を会話の中に出す。従来の SQL 生成画面と MCP のジョブは既定の生成・実行を維持する。
 
@@ -55,7 +55,7 @@
 | OCI Enterprise AI（`enterprise_ai_direct`） | 従来どおりすべて | 完了 / 失敗 |
 | 生成の方式が無い経路（利用者が編集・入力した SQL の実行、SQL の解析の画面、SQL の論理構造からの再生成） | 従来どおりすべて（画面から受け取った SQL は、誰が作ったかを信頼できない） | — |
 
-- **制約: 業務プロファイルの列の制限（許可した列）は、Select AI / Select AI Agent では効かない。** Select AI の profile の `object_list` は表の単位で、列の制限を表せない。業務プロファイルの表の範囲も、Select AI に渡す `object_list` で生成の対象を絞るだけで、生成した SQL を照合しない。列・行の単位で業務データを守るときは、DeepSec の Data Grant（非 system_admin の実行は DeepSec の context 付きの接続）か、OCI Enterprise AI の生成方法を使う。
+- **制約: 業務プロファイルの列の制限（許可した列）は、Select AI / Select AI Agent では効かない。** Select AI の profile の `object_list` は表の単位で、列の制限を表せない。業務プロファイルの表の範囲も、Select AI に渡す `object_list` で生成の対象を絞るだけで、生成した SQL を照合しない。列・行の単位で業務データを守るときは、OCI Enterprise AI の生成方法を使う。
 - 変えないもの: 実行の接続（読み取り専用。system_admin と非 system_admin で別の接続。#904）、行数の制限、空の条件の質問の遮断（`_apply_empty_filter_generation_guard`。質問の側の確認）、実行履歴の監査。
 - チャットの「もう一度実行」は、ターンのジョブに保存した生成の方式で判定する（画面から方式を受け取らない）。
 - MCP（`nl2sql_query`）の応答の `safety_check` は `checked` / `skipped`。SQL 生成評価の Excel の「SELECTのみ」は、省略したとき「省略」。

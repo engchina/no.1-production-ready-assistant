@@ -84,7 +84,6 @@ def _principal(*, admin: bool, user_uuid: str = "user-1") -> Principal:
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={"menu.history"},
-        data_entitlements=[],
         allowed_profile_ids={"default"},
         session_id="session-1",
         csrf_token_hash="csrf",

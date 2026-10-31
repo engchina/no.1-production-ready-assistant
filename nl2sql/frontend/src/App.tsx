@@ -221,11 +221,6 @@ const SecurityPermissionsPage = lazy(() =>
     default: module.SecurityPermissionsPage,
   }))
 );
-const SecurityDeepSecPage = lazy(() =>
-  import("@/features/security/SecurityDeepSecPage").then((module) => ({
-    default: module.SecurityDeepSecPage,
-  }))
-);
 
 /**
  * ナビ切替で作業中 state を破棄したくない画面。常時マウントし表示のみ切替する。
@@ -308,7 +303,7 @@ function AuthorizedApplication() {
   const auth = useAuth();
 
   return (
-    <AppLayout key={JSON.stringify([auth.user?.user_uuid, auth.user?.permissions, auth.user?.data_entitlements, auth.user?.allowed_profile_ids])}>
+    <AppLayout key={JSON.stringify([auth.user?.user_uuid, auth.user?.permissions, auth.user?.allowed_profile_ids])}>
       <DatabaseGate>
         <SchemaRefreshCoordinator
           discoveryEnabled={auth.hasPermission("nl2sql.schema.read")}
@@ -365,7 +360,6 @@ function AuthorizedApplication() {
             <Route path={APP_ROUTES.securityApiKeys} element={<SecurityApiKeysPage />} />
             <Route path={APP_ROUTES.account} element={<AccountRoute />} />
             <Route path={APP_ROUTES.securityPermissions} element={<SecurityPermissionsPage />} />
-            <Route path={APP_ROUTES.securityDeepSec} element={<SecurityDeepSecPage />} />
             <Route
               path={APP_ROUTES.legacyNl2sqlModelLearning}
               element={<Navigate to={`${APP_ROUTES.profiles}#profile-select-ai`} replace />}

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
@@ -26,17 +25,7 @@ from pr_system_settings.auth.service import AuthService
 from app import settings as settings_module
 from app.settings import Settings, get_settings
 
-from .domain import (
-    DataEntitlementRecord,
-    Principal,
-    RoleRecord,
-    as_principal,
-    as_role,
-    scope_expression_canonical_json,
-    scope_expression_scope_code,
-    scope_filters_canonical_json,
-    scope_filters_scope_code,
-)
+from .domain import Principal, RoleRecord, as_principal, as_role
 from .passwords import hash_password, verify_password
 from .permissions import (
     ALL_PERMISSION_CODES,
@@ -54,7 +43,6 @@ from .store import (
     SecurityStore,
 )
 
-DataEntitlementDraft = tuple[str, str, str] | DataEntitlementRecord
 logger = logging.getLogger(__name__)
 
 
@@ -95,29 +83,20 @@ class SecurityService(AuthService):
         session: PlatformSessionRecord,
         active_roles: list[PlatformRoleRecord],
     ) -> Principal:
-        entitlements: dict[tuple[str, str, str], DataEntitlementRecord] = {}
         allowed_profile_ids: set[str] = set()
         for role in active_roles:
-            role = as_role(role)
-            allowed_profile_ids.update(role.allowed_profile_ids)
-            for entitlement in role.entitlements:
-                key = (
-                    entitlement.entitlement_id or entitlement.resource_code,
-                    entitlement.scope_code,
-                    entitlement.capability,
-                )
-                entitlements[key] = entitlement
+            allowed_profile_ids.update(as_role(role).allowed_profile_ids)
         return Principal(
             **self._principal_kwargs(user, session, active_roles),
-            data_entitlements=list(entitlements.values()),
             allowed_profile_ids=allowed_profile_ids,
         )
 
     def _role_within_actor(self, actor: Principal, role: PlatformRoleRecord) -> bool:  # type: ignore[override]
-        """ロールの権限・業務プロファイル利用権限・Data Grant が、操作者の範囲に収まるか（#1090）。
+        """ロールの権限・業務プロファイル利用権限が、操作者の範囲に収まるか（#1090）。
 
-        ロールの割り当て・ユーザーの管理の判定に使う。権限だけを比べると、自分が使えない業務プロファイルや
-        データを含むロールを自分や他人に割り当てられてしまう（RAG / Agent は対象範囲も比べている）。
+        ロールの割り当て・ユーザーの管理の判定に使う。権限だけを比べると、自分が使えない業務
+        プロファイルを含むロールを自分や他人に割り当てられてしまう（RAG / Agent は対象範囲も
+        比べている）。
         """
         if not expand_permissions(set(getattr(role, "permissions", set()))).issubset(
             actor.permissions
@@ -125,19 +104,10 @@ class SecurityService(AuthService):
             return False
         if not isinstance(role, RoleRecord) or not isinstance(actor, Principal):
             return False
-        if (
+        return not (
             role.allowed_profile_ids
             and not grants_all_profile_access(actor.permissions)
             and not set(role.allowed_profile_ids).issubset(actor.allowed_profile_ids)
-        ):
-            return False
-        actor_grants = {
-            self._data_entitlement_policy_signature(entitlement)
-            for entitlement in actor.data_entitlements
-        }
-        return all(
-            self._data_entitlement_policy_signature(entitlement) in actor_grants
-            for entitlement in role.entitlements
         )
 
     def _assert_actor_can_restore_role(  # type: ignore[override]
@@ -151,15 +121,6 @@ class SecurityService(AuthService):
             raise SecurityApiError(403, "自分が持たない権限を含むロールは復元できません。")
         if role.allowed_profile_ids:
             self._assert_actor_can_manage_profile_access(actor)
-
-    def _assert_role_deletable(self, role: PlatformRoleRecord) -> None:
-        if isinstance(role, RoleRecord) and role.entitlements:
-            raise SecurityApiError(
-                409,
-                "このロールにはデータ権限が残っています。"
-                "Deep Data Security で空の Data Grant を適用してから削除してください。",
-                code="SECURITY_ROLE_DELETE_ENTITLEMENTS_PRESENT",
-            )
 
     def principal_for_worker(self, user_uuid: str) -> Principal:
         """受理後の非対話実行でも現在の user/role 権限を再計算する。"""
@@ -255,7 +216,7 @@ class SecurityService(AuthService):
         """構成管理者の資格情報を置く共通 `.env`。テストが差し替えられるよう呼出時に参照する。"""
         return settings_module.PLATFORM_ENV_FILE
 
-    # ---- NL2SQL のロール編集（権限・業務プロファイル・Data Grant） ----
+    # ---- NL2SQL のロール編集（権限・業務プロファイル利用権限） ----
 
     def create_role(  # type: ignore[override]
         self,
@@ -264,7 +225,6 @@ class SecurityService(AuthService):
         display_name: str,
         description: str,
         permissions: set[str] | None = None,
-        entitlements: list[DataEntitlementDraft] | None = None,
         allowed_profile_ids: set[str] | None = None,
         actor: Principal,
         request_id: str = "",
@@ -277,7 +237,6 @@ class SecurityService(AuthService):
             display_name=display_name,
             description=description,
             permissions=permissions or set(),
-            entitlements=entitlements or [],
             allowed_profile_ids=allowed_profile_ids or set(),
             version=1,
         )
@@ -326,8 +285,6 @@ class SecurityService(AuthService):
             display_name=current.display_name if display_name is None else display_name,
             description=current.description if description is None else description,
             permissions=set(current.permissions) if permissions is None else permissions,
-            # Data Grant は DeepSec 画面のみが管理するため、ロール編集では現在値を保持する。
-            entitlements=list(current.entitlements),
             allowed_profile_ids=requested_profile_ids,
             version=current.version,
         )
@@ -346,89 +303,6 @@ class SecurityService(AuthService):
             raise self._store_error(exc) from exc
         return updated
 
-    def update_role_data_entitlements(
-        self,
-        role_id: str,
-        *,
-        expected_version: int,
-        entitlements: list[DataEntitlementDraft],
-        actor: Principal,
-        request_id: str = "",
-        client_ip: str = "",
-    ) -> RoleRecord:
-        current = self.get_role(role_id)
-        if current is None:
-            raise SecurityApiError(404, "ロールが見つかりません。")
-        if current.is_built_in:
-            raise SecurityApiError(409, "組み込み SYSTEM_ADMIN ロールは変更できません。")
-        if current.archived:
-            raise SecurityApiError(409, "アーカイブ済みロールは変更できません。")
-        data_records = self._data_entitlement_records(
-            role_id,
-            entitlements,
-            current_entitlements=current.entitlements,
-        )
-        role = RoleRecord(
-            role_id=current.role_id,
-            role_code=current.role_code,
-            display_name=current.display_name,
-            description=current.description,
-            is_built_in=current.is_built_in,
-            archived=current.archived,
-            version=current.version,
-            permissions=set(current.permissions),
-            entitlements=data_records,
-            allowed_profile_ids=set(current.allowed_profile_ids),
-        )
-        try:
-            updated = self._nl2sql_role(
-                self.store.update_role(role, expected_version=expected_version)
-            )
-        except (SecurityConflict, SecurityNotFound) as exc:
-            raise self._store_error(exc) from exc
-        return updated
-
-    def commit_role_data_entitlement_sync(
-        self,
-        role_id: str,
-        *,
-        expected_version: int,
-        entitlements: list[DataEntitlementRecord],
-        actor: Principal,
-    ) -> RoleRecord:
-        """Oracle 同期成功後のロール全体 Data Grant snapshot を確定する。"""
-        _ = actor
-        current = self.get_role(role_id)
-        if current is None:
-            raise SecurityApiError(404, "ロールが見つかりません。")
-        if current.is_built_in:
-            raise SecurityApiError(409, "組み込み SYSTEM_ADMIN ロールは変更できません。")
-        if current.archived:
-            raise SecurityApiError(409, "アーカイブ済みロールは変更できません。")
-        if current.version != expected_version:
-            raise SecurityApiError(
-                409,
-                "ロールが別の操作で更新されています。表示を更新して再試行してください。",
-            )
-        role = RoleRecord(
-            role_id=current.role_id,
-            role_code=current.role_code,
-            display_name=current.display_name,
-            description=current.description,
-            is_built_in=current.is_built_in,
-            archived=current.archived,
-            version=current.version,
-            permissions=set(current.permissions),
-            entitlements=list(entitlements),
-            allowed_profile_ids=set(current.allowed_profile_ids),
-        )
-        try:
-            return self._nl2sql_role(
-                self.store.update_role(role, expected_version=expected_version)
-            )
-        except (SecurityConflict, SecurityNotFound) as exc:
-            raise self._store_error(exc) from exc
-
     def _build_role(
         self,
         *,
@@ -437,7 +311,6 @@ class SecurityService(AuthService):
         display_name: str,
         description: str,
         permissions: set[str],
-        entitlements: list[DataEntitlementDraft],
         allowed_profile_ids: set[str],
         version: int,
     ) -> RoleRecord:
@@ -445,7 +318,6 @@ class SecurityService(AuthService):
         if unknown:
             raise SecurityApiError(400, f"未登録の権限コードです: {', '.join(sorted(unknown))}")
         normalized = normalize_permission_codes(permissions)
-        data_records = self._data_entitlement_records(role_id, entitlements)
         normalized_allowed_profile_ids = (
             set()
             if grants_all_profile_access(normalized)
@@ -460,7 +332,6 @@ class SecurityService(AuthService):
             archived=False,
             version=version,
             permissions=normalized,
-            entitlements=data_records,
             allowed_profile_ids=normalized_allowed_profile_ids,
         )
 
@@ -489,144 +360,6 @@ class SecurityService(AuthService):
                 403,
                 "業務プロファイル利用権限を変更できるのは SYSTEM_ADMIN のみです。",
             )
-
-    @staticmethod
-    def _data_entitlement_policy_signature(
-        entitlement: DataEntitlementRecord,
-    ) -> tuple[object, ...]:
-        return (
-            # 識別子は canonical token（引用名は大文字小文字を保持）なので大文字化せずに比べる。
-            # 大文字化すると "Mixed" と "MIXED" 等の別 object を同じ適用状態として引き継いでしまう。
-            entitlement.resource_code.strip(),
-            entitlement.scope_code.strip(),
-            entitlement.capability.strip().upper(),
-            entitlement.target_owner.strip(),
-            entitlement.target_object.strip(),
-            entitlement.target_type.strip().upper(),
-            tuple(column.strip() for column in entitlement.column_names),
-            entitlement.scope_mode.strip().upper(),
-            entitlement.scope_column.strip(),
-            scope_filters_canonical_json(entitlement.scope_filters),
-            scope_expression_canonical_json(entitlement.scope_expression),
-        )
-
-    @classmethod
-    def _data_entitlement_records(
-        cls,
-        role_id: str,
-        entitlements: Sequence[DataEntitlementDraft],
-        *,
-        current_entitlements: list[DataEntitlementRecord] | None = None,
-    ) -> list[DataEntitlementRecord]:
-        records: list[DataEntitlementRecord] = []
-        seen: set[tuple[str, str, str, str, str, str, str, str, str]] = set()
-        current_by_id = {
-            entitlement.entitlement_id: entitlement
-            for entitlement in current_entitlements or []
-            if entitlement.entitlement_id
-        }
-        for entitlement in entitlements:
-            if isinstance(entitlement, DataEntitlementRecord):
-                record = DataEntitlementRecord(
-                    entitlement_id=entitlement.entitlement_id or str(uuid4()),
-                    role_id=role_id,
-                    resource_code=entitlement.resource_code,
-                    scope_code=(
-                        "*"
-                        if entitlement.scope_mode.strip().upper() == "ALL"
-                        else (
-                            scope_filters_scope_code(entitlement.scope_filters)
-                            if entitlement.scope_mode.strip().upper() == "FILTERS"
-                            else entitlement.scope_code
-                        )
-                    ),
-                    capability=entitlement.capability,
-                    target_owner=entitlement.target_owner,
-                    target_object=entitlement.target_object,
-                    target_type=entitlement.target_type,
-                    column_names=list(entitlement.column_names),
-                    scope_mode=entitlement.scope_mode,
-                    scope_column=entitlement.scope_column,
-                    scope_filters=list(entitlement.scope_filters),
-                    scope_expression=deepcopy(entitlement.scope_expression),
-                    scope_expression_version=entitlement.scope_expression_version,
-                    data_grant_name=entitlement.data_grant_name,
-                    sql_checksum=entitlement.sql_checksum,
-                    apply_status=entitlement.apply_status,
-                    apply_error_message=entitlement.apply_error_message,
-                    applied_at=entitlement.applied_at,
-                )
-                if record.scope_mode == "EXPRESSION":
-                    from .schemas import DataEntitlementInput
-
-                    validated = DataEntitlementInput.model_validate(
-                        {
-                            "capability": record.capability,
-                            "scope_mode": record.scope_mode,
-                            "scope_expression": record.scope_expression,
-                            "scope_filters": record.scope_filters,
-                            "scope_column": record.scope_column,
-                        }
-                    )
-                    if validated.scope_expression is None:
-                        raise SecurityApiError(400, "条件ツリーを指定してください。")
-                    record.scope_expression = validated.scope_expression.model_dump()
-                    record.scope_code = scope_expression_scope_code(record.scope_expression)
-                current = current_by_id.get(record.entitlement_id)
-                if (
-                    current is not None
-                    and current.scope_mode == "EXPRESSION"
-                    and record.scope_mode != "EXPRESSION"
-                    and not (record.scope_mode == "ALL" and record.scope_expression_version == 1)
-                ):
-                    raise SecurityApiError(
-                        409, "条件ツリーを旧形式で上書きできません。最新画面で編集してください。"
-                    )
-                if current is not None:
-                    if cls._data_entitlement_policy_signature(
-                        record
-                    ) == cls._data_entitlement_policy_signature(current):
-                        record.apply_status = current.apply_status
-                        record.apply_error_message = current.apply_error_message
-                        record.data_grant_name = current.data_grant_name
-                        record.sql_checksum = current.sql_checksum
-                        record.applied_at = current.applied_at
-                    else:
-                        record.apply_status = "PENDING"
-                        record.apply_error_message = ""
-                        record.data_grant_name = current.data_grant_name
-                        record.sql_checksum = ""
-                        record.applied_at = None
-                elif current_entitlements is not None:
-                    record.apply_status = "PENDING"
-                    record.apply_error_message = ""
-                    record.sql_checksum = ""
-                    record.applied_at = None
-            else:
-                resource, scope, capability = entitlement
-                record = DataEntitlementRecord(
-                    entitlement_id=str(uuid4()),
-                    role_id=role_id,
-                    resource_code=resource,
-                    scope_code=scope,
-                    capability=capability,
-                )
-            key = (
-                record.resource_code,
-                record.scope_code,
-                record.capability,
-                record.target_owner,
-                record.target_object,
-                ",".join(record.column_names),
-                record.scope_mode,
-                record.scope_column,
-                scope_filters_canonical_json(record.scope_filters),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            records.append(record)
-        return records
 
 
 @lru_cache

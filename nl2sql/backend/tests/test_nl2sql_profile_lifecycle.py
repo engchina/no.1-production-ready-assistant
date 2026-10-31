@@ -53,7 +53,6 @@ def _profile_user_request(allowed_profile_ids: set[str]) -> Request:
         force_password_change=False,
         role_codes=["ANALYST"],
         permissions=set(),
-        data_entitlements=[],
         allowed_profile_ids=set(allowed_profile_ids),
         session_id="session-1",
         csrf_token_hash="csrf",
