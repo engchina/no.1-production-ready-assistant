@@ -50,8 +50,6 @@ export type DatabaseGateView =
       kind: "notice";
       status: DatabaseNoticeStatus;
       reasonCode: string | null;
-      /** ADB のライフサイクル状態（`unreachable` のときだけ。#820）。 */
-      adbLifecycleState: string | null;
     }
   | { kind: "secondary" };
 
@@ -73,17 +71,11 @@ export function databaseGateView({
 }): DatabaseGateView {
   if (exempt) return { kind: "children" };
   if (isPending) return { kind: "checking" };
-  if (isError) return { kind: "notice", status: "check_failed", reasonCode: null, adbLifecycleState: null };
+  if (isError) return { kind: "notice", status: "check_failed", reasonCode: null };
   const status = data?.status;
   const allowed = status === "ok" || (onSystemTables && status === "setup_required");
   if (!allowed) {
-    const noticeStatus = databaseNoticeStatus(status);
-    return {
-      kind: "notice",
-      status: noticeStatus,
-      reasonCode: data?.check ?? null,
-      adbLifecycleState: noticeStatus === "unreachable" ? (data?.adb_lifecycle_state ?? null) : null,
-    };
+    return { kind: "notice", status: databaseNoticeStatus(status), reasonCode: data?.check ?? null };
   }
   // システムテーブルの管理は製品の追加の確認（保存領域など）より前に開ける。
   if (onSystemTables || !hasSecondaryGate) return { kind: "children" };
@@ -93,7 +85,6 @@ export function databaseGateView({
 export interface DatabaseGateNoticeOptions {
   status?: DatabaseNoticeStatus;
   reasonCode?: string | null;
-  adbLifecycleState?: string | null;
   onRetry: () => void;
   isRetrying?: boolean;
   title?: string;
@@ -201,7 +192,6 @@ export function DatabaseGate({
     return renderNotice({
       status: view.status,
       reasonCode: view.reasonCode,
-      adbLifecycleState: view.adbLifecycleState,
       onRetry: () => {
         onBeforeRetry?.();
         void database.refetch();

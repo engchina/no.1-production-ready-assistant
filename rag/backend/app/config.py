@@ -719,7 +719,8 @@ class Settings(
     oracle_adb_region: str = Field(
         default="",
         description=(
-            "Autonomous Database 管理専用の OCI region。未設定なら PLATFORM_OCI_REGION を使う。"
+            "OCI から ADB の Wallet を取得するときの OCI region。"
+            "未設定なら PLATFORM_OCI_REGION を使う。"
         ),
     )
     oracle_tcp_connect_timeout_seconds: float = Field(

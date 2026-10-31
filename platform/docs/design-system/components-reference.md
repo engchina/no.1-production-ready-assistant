@@ -1106,11 +1106,11 @@ export declare const toast: {
   title="データベースに接続できません"
   titleId="database-unavailable-title"
   icon={Unplug}
-  message="データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。"
+  message="データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。"
   details={<p role="status">診断コード: wallet_not_found</p>}
   actions={
     <>
-      <ButtonLink to="/settings/database#adb-management" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
+      <ButtonLink to="/settings/database" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
       <Button variant="secondary" icon={RefreshCw} onClick={retry}>再試行</Button>
     </>
   }

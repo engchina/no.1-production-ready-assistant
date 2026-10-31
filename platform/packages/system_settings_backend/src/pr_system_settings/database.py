@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field, field_validator
 from .env_file import write_env_values
 from .oci import oci_config_file, oci_profile, read_runtime_oci_config
 from .oci_auth import pem_file_is_encrypted, resolve_oci_key_file
-from .oci_database import AutonomousDatabaseInfo, OciDatabaseClient, WalletDownloadTooLargeError
+from .oci_database import OciDatabaseClient, WalletDownloadTooLargeError
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +56,6 @@ SECRET_REVEAL_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 DatabaseConnectionTestStatus = Literal["success", "failed"]
 DatabaseConnectionSecurity = Literal["wallet_mtls", "walletless_tls"]
 DatabaseWalletDownloadStatus = Literal["downloaded", "already_configured"]
-AdbOperationStatus = Literal[
-    "success",
-    "not_configured",
-    "error",
-    "accepted",
-    "already_available",
-    "already_stopped",
-    "cannot_start",
-    "cannot_stop",
-]
 
 
 # --------------------------------------------------------------------------- schemas
@@ -103,34 +93,6 @@ class DatabaseWalletDownloadData(BaseModel):
 
     status: DatabaseWalletDownloadStatus
     settings: DatabaseSettingsData
-
-
-class AdbSettingsUpdate(BaseModel):
-    """Autonomous Database 操作対象の OCID と region の更新 payload。"""
-
-    adb_ocid: str = Field(default="", max_length=512)
-    region: str = Field(default="", max_length=128)
-
-    @field_validator("adb_ocid", "region")
-    @classmethod
-    def strip_text(cls, value: str) -> str:
-        """前後空白を設定値へ混入させない。"""
-        return value.strip()
-
-
-class AdbInfoData(BaseModel):
-    """Autonomous Database の情報 / 操作結果の表示用データ。"""
-
-    status: AdbOperationStatus
-    message: str
-    error_code: str | None = None
-    id: str | None = None
-    display_name: str | None = None
-    lifecycle_state: str | None = None
-    db_name: str | None = None
-    cpu_core_count: int | None = None
-    data_storage_size_in_tbs: float | None = None
-    region: str | None = None
 
 
 class DatabaseSettingsUpdate(BaseModel):
@@ -640,18 +602,6 @@ def _persist_database_settings(settings: Any, env_file: Path) -> None:
     )
 
 
-def _persist_adb_settings(settings: Any, env_file: Path) -> None:
-    _write_env(
-        env_file,
-        {
-            "PLATFORM_ORACLE_ADB_OCID": _s(settings, "oracle_adb_ocid"),
-            "PLATFORM_ORACLE_ADB_REGION": _s(settings, "oracle_adb_region"),
-        },
-        section_comment="# Oracle Autonomous Database 管理",
-        error_detail="ADB 設定を platform/.env へ保存できませんでした。",
-    )
-
-
 def _write_env(
     env_file: Path,
     values: Mapping[str, str | None],
@@ -1127,26 +1077,7 @@ def install_downloaded_database_wallet(
     return database_settings_data(settings, extra_readiness)
 
 
-# --------------------------------------------------------------------------- ADB
-
-AdbFailureOperation = Literal["info", "start", "stop"]
-_ADB_FAILURE_RESPONSES: dict[AdbFailureOperation, tuple[str, str]] = {
-    "info": (
-        "ADB_INFO_UNAVAILABLE",
-        "ADB 情報を取得できませんでした。"
-        "OCI 認証、リージョン、ADB OCID を確認して再試行してください。",
-    ),
-    "start": (
-        "ADB_START_FAILED",
-        "ADB の起動を開始できませんでした。"
-        "OCI 権限、リージョン、ADB OCID を確認して再試行してください。",
-    ),
-    "stop": (
-        "ADB_STOP_FAILED",
-        "ADB の停止を開始できませんでした。"
-        "OCI 権限、リージョン、ADB OCID を確認して再試行してください。",
-    ),
-}
+# --------------------------------------------------------------------------- OCI
 
 
 def oci_failure_log_extra(exc: BaseException) -> dict[str, Any]:
@@ -1169,146 +1100,6 @@ def oci_failure_log_extra(exc: BaseException) -> dict[str, Any]:
         if isinstance(request_id, str) and request_id:
             extra["opc_request_id"] = request_id
     return extra
-
-
-def _adb_not_configured(settings: Any) -> AdbInfoData:
-    region = _s(settings, "resolved_oracle_adb_region")
-    return AdbInfoData(
-        status="not_configured",
-        message="ADB OCID が設定されていません。",
-        error_code="ADB_NOT_CONFIGURED",
-        region=region or None,
-    )
-
-
-def _apply_adb_settings(settings: Any, payload: AdbSettingsUpdate) -> None:
-    """ADB 操作対象 OCID と region を反映する。"""
-    settings.oracle_adb_ocid = payload.adb_ocid.strip()
-    settings.oracle_adb_region = payload.region.strip()
-
-
-def _adb_info_data(
-    status: AdbOperationStatus,
-    message: str,
-    info: AutonomousDatabaseInfo,
-    region: str | None,
-    *,
-    lifecycle_override: str | None = None,
-    error_code: str | None = None,
-) -> AdbInfoData:
-    """ADB 情報スナップショットを表示用データへ変換する。"""
-    return AdbInfoData(
-        status=status,
-        message=message,
-        error_code=error_code,
-        id=info.id,
-        display_name=info.display_name,
-        lifecycle_state=lifecycle_override or info.lifecycle_state,
-        db_name=info.db_name,
-        cpu_core_count=info.cpu_core_count,
-        data_storage_size_in_tbs=info.data_storage_size_in_tbs,
-        region=region,
-    )
-
-
-def _adb_failure_data(
-    operation: AdbFailureOperation,
-    exc: Exception,
-    *,
-    adb_ocid: str,
-    region: str | None,
-    info: AutonomousDatabaseInfo | None = None,
-) -> AdbInfoData:
-    """OCI SDK の詳細をレスポンスへ出さず ADB 操作失敗を正規化する。"""
-    error_code, message = _ADB_FAILURE_RESPONSES[operation]
-    logger.warning(
-        "adb_operation_failed",
-        extra={
-            **oci_failure_log_extra(exc),
-            "operation": operation,
-            "error_code": error_code,
-            "region": region,
-            "adb_ocid_configured": bool(adb_ocid),
-        },
-    )
-    if info is not None:
-        return _adb_info_data("error", message, info, region, error_code=error_code)
-    return AdbInfoData(
-        status="error", message=message, error_code=error_code, id=adb_ocid, region=region
-    )
-
-
-async def load_adb_info(settings: Any) -> AdbInfoData:
-    """ADB の情報を取得する。設定不足や OCI エラーは status へ載せて返す。"""
-    region = _s(settings, "resolved_oracle_adb_region") or None
-    adb_ocid = _s(settings, "oracle_adb_ocid").strip()
-    if not adb_ocid:
-        return _adb_not_configured(settings)
-    try:
-        info = await OciDatabaseClient(settings=settings).get_autonomous_database(adb_ocid)
-    except Exception as exc:  # noqa: BLE001 - OCI SDK の多様な例外を表示用に正規化する
-        return _adb_failure_data("info", exc, adb_ocid=adb_ocid, region=region)
-    return _adb_info_data("success", "データベース情報を取得しました。", info, region)
-
-
-async def control_adb(settings: Any, *, action: Literal["start", "stop"]) -> AdbInfoData:
-    """ADB の起動/停止を OCI Database API 経由で行う。"""
-    region = _s(settings, "resolved_oracle_adb_region") or None
-    adb_ocid = _s(settings, "oracle_adb_ocid").strip()
-    if not adb_ocid:
-        return _adb_not_configured(settings)
-
-    client = OciDatabaseClient(settings=settings)
-    try:
-        info = await client.get_autonomous_database(adb_ocid)
-    except Exception as exc:  # noqa: BLE001
-        return _adb_failure_data("info", exc, adb_ocid=adb_ocid, region=region)
-
-    state = info.lifecycle_state
-    if action == "start":
-        if state == "AVAILABLE":
-            return _adb_info_data(
-                "already_available", "データベースは既に起動しています。", info, region
-            )
-        if state not in ("STOPPED", "UNAVAILABLE"):
-            return _adb_info_data(
-                "cannot_start",
-                f"データベースの現在の状態 ({state}) では起動できません。",
-                info,
-                region,
-            )
-        try:
-            await client.start_autonomous_database(adb_ocid)
-        except Exception as exc:  # noqa: BLE001
-            return _adb_failure_data("start", exc, adb_ocid=adb_ocid, region=region, info=info)
-        return _adb_info_data(
-            "accepted",
-            f"データベース '{info.display_name}' の起動を開始しました。",
-            info,
-            region,
-            lifecycle_override="STARTING",
-        )
-
-    if state == "STOPPED":
-        return _adb_info_data("already_stopped", "データベースは既に停止しています。", info, region)
-    if state != "AVAILABLE":
-        return _adb_info_data(
-            "cannot_stop",
-            f"データベースの現在の状態 ({state}) では停止できません。",
-            info,
-            region,
-        )
-    try:
-        await client.stop_autonomous_database(adb_ocid)
-    except Exception as exc:  # noqa: BLE001
-        return _adb_failure_data("stop", exc, adb_ocid=adb_ocid, region=region, info=info)
-    return _adb_info_data(
-        "accepted",
-        f"データベース '{info.display_name}' の停止を開始しました。",
-        info,
-        region,
-        lifecycle_override="STOPPING",
-    )
 
 
 # --------------------------------------------------------------------------- router
@@ -1336,7 +1127,7 @@ def build_database_router(
     - `extra_readiness(settings)`：製品固有の readiness（NL2SQL の DeepSec）。問題がなければ None
     - `connection_security_enabled`：Walletless TLS を選べるか（接続処理が対応している製品だけ）
     - `password_reveal_enabled`：保存済み DB パスワードの表示（`write_dependencies` を付ける）
-    - `write_dependencies`：設定を書き換える操作（保存・Wallet・ADB の保存/起動/停止）
+    - `write_dependencies`：設定を書き換える操作（保存・Wallet）
     - `action_dependencies`：接続テスト
     """
     router = APIRouter()
@@ -1565,28 +1356,5 @@ def build_database_router(
                 details=_timeout_details(candidate),
             )
         )
-
-    @router.get("/database/adb", response_model=ApiResponse[AdbInfoData])
-    async def get_adb_info() -> ApiResponse[AdbInfoData]:
-        return ApiResponse(data=await load_adb_info(get_settings()))
-
-    @router.post(
-        "/database/adb/settings", response_model=ApiResponse[AdbInfoData], dependencies=write
-    )
-    async def update_adb_settings(payload: AdbSettingsUpdate) -> ApiResponse[AdbInfoData]:
-        settings = get_settings()
-        candidate = settings.model_copy(deep=True)
-        _apply_adb_settings(candidate, payload)
-        await run_in_threadpool(_persist_adb_settings, candidate, env_file())
-        _apply_adb_settings(settings, payload)
-        return ApiResponse(data=await load_adb_info(settings))
-
-    @router.post("/database/adb/start", response_model=ApiResponse[AdbInfoData], dependencies=write)
-    async def start_adb() -> ApiResponse[AdbInfoData]:
-        return ApiResponse(data=await control_adb(get_settings(), action="start"))
-
-    @router.post("/database/adb/stop", response_model=ApiResponse[AdbInfoData], dependencies=write)
-    async def stop_adb() -> ApiResponse[AdbInfoData]:
-        return ApiResponse(data=await control_adb(get_settings(), action="stop"))
 
     return router

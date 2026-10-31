@@ -119,15 +119,11 @@
 - `POST /api/settings/database/test`
 - `POST /api/settings/database/wallet`
 - `POST /api/settings/database/wallet/download`
-- `GET /api/settings/database/adb`
-- `POST /api/settings/database/adb/settings`
-- `POST /api/settings/database/adb/start`
-- `POST /api/settings/database/adb/stop`
 - `GET /api/schema/owners`
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、wallet_dir、wallet 状態、接続状態、ADB 情報が表示される | `mock-responses/database-settings.success.json`、`mock-responses/adb-available.json` |
+| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、wallet_dir、wallet 状態、接続状態が表示され、ADB の起動・停止・状態は表示されない（#10） | `mock-responses/database-settings.success.json` |
 | DB-002 | 必須入力 | user / dsn を空にして保存 | 保存されず必須エラーが表示される | `api/database-settings.patch.json` |
 | DB-003 | password 保存 | password を入力して保存 | password 本文は応答に出ず、has_password が true になる | `api/database-settings.patch.json` |
 | DB-004 | password clear | clear_password を有効にして保存 | 保存後 has_password が false になる | `api/database-settings-clear-password.patch.json` |
@@ -135,12 +131,9 @@
 | DB-006 | wallet upload 成功 | ZIP wallet を選択する | wallet_dir / wallet_uploaded / service list が更新される | `database/wallet-valid.zip` |
 | DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
 | DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
-| DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `api/adb-settings.request.json` |
+| DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `mock-responses/database-settings.success.json` |
 | DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1536, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
-| DB-012 | ADB 情報更新 | ADB 情報を再取得する | lifecycle_state、display_name、region、ocid のマスク表示が更新される | `mock-responses/adb-available.json` |
-| DB-013 | ADB start | stopped 状態で start を実行 | start 中はボタン disabled、完了後 available 表示へ変わる | `mock-responses/adb-stopped.json` |
-| DB-014 | ADB stop | available 状態で stop を実行 | 確認後に stop API が呼ばれ、状態更新が行われる | `mock-responses/adb-available.json` |
 
 ## 8. システムテーブル
 

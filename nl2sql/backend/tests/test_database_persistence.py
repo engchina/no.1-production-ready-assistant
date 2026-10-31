@@ -67,7 +67,7 @@ def _settings(**updates: Any) -> Any:
 def _status_fields(data: dict[str, Any]) -> dict[str, Any]:
     """3製品共通の応答（#325）のうち、NL2SQL が値を返す項目だけを取り出す。"""
     assert data["schema_status"] is None
-    assert data["adb_lifecycle_state"] is None
+    assert set(data) == {"status", "check", "detail", "context_id", "schema_status"}
     return {key: data[key] for key in ("status", "check", "detail")}
 
 

@@ -189,24 +189,6 @@ async function mockMissingOciRuntimeSettings(page: Page) {
       }),
     });
   });
-  await page.route("**/api/settings/database/adb/settings", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: {
-          status: "success",
-          message: "ADB OCID を保存しました。",
-          id: "ocid1.autonomousdatabase.oc1.ap-osaka-1.agent",
-          display_name: null,
-          lifecycle_state: "AVAILABLE",
-          db_name: null,
-          cpu_core_count: null,
-          data_storage_size_in_tbs: null,
-          region: "ap-osaka-1",
-        },
-      }),
-    });
-  });
 }
 
 test.describe("Agent Runtime settings", () => {
@@ -330,9 +312,9 @@ test.describe("Agent Runtime settings", () => {
     await page.getByLabel("データベースパスワード").fill("secret-password");
     await page.getByRole("button", { name: /DB設定を保存/ }).click();
     await expect(page.getByText("保存しました")).toBeVisible();
-    await page.getByRole("button", { name: "保存", exact: true }).click();
-    await expect(page.getByText("操作履歴")).toBeVisible();
-    await expect(page.getByText("ADB OCID を保存しました。")).toBeVisible();
+    // DB の起動・停止は docker 側の責務（#10）。ADB の運用パネルは出さない。
+    await expect(page.getByText("Autonomous Database 管理")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "起動", exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 375, height: 812 });
