@@ -63,7 +63,7 @@ function data(rerankModel: string): ModelSettingsData {
         max_retries: 3,
       },
       generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
+        embedding_model: "text-embedding-v4",
         embedding_dim: 1536,
         rerank_model: rerankModel,
       },
@@ -113,7 +113,7 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
       data(payload.generative_ai.rerank_model),
     );
     const api: ModelSettingsApi = {
-      getModelSettings: async () => data("cohere.rerank-v4.0-fast"),
+      getModelSettings: async () => data("qwen3-rerank"),
       updateModelSettings,
       testModelSettings: pending,
     };
@@ -147,7 +147,7 @@ describe("ModelSettingsPage の保存で製品の cache を捨てる（#1416）"
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(["chat", "models"], [{ model_id: "old-llm" }]);
     const api: ModelSettingsApi = {
-      getModelSettings: async () => data("cohere.rerank-v4.0-fast"),
+      getModelSettings: async () => data("qwen3-rerank"),
       updateModelSettings: vi.fn(async () => {
         throw new Error("failed");
       }),

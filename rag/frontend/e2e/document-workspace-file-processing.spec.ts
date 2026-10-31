@@ -404,7 +404,7 @@ test("Chunk 作成と Embedding/索引の工程行に chunk 数・ベクトル�
   // recipes mock は INDEXED で chunk_count/vector_count = 2。
   await expect(jobsPanel.getByText("chunk 2 件")).toBeVisible();
   await expect(jobsPanel.getByText("ベクトル 2 件")).toBeVisible();
-  await expect(jobsPanel.getByText("cohere.embed-v4.0 · 1536 次元")).toBeVisible();
+  await expect(jobsPanel.getByText("text-embedding-v4 · 1536 次元")).toBeVisible();
   // active chunk_set の作成日時(TZ 非依存で書式のみ検証)。
   await expect(jobsPanel.getByText(/chunk_set 作成: \d{2}\/\d{2} \d{2}:\d{2}/)).toBeVisible();
   // 未実行行は無い(4工程すべて成功ジョブあり)。
@@ -2585,9 +2585,11 @@ async function mockDocumentWorkspace(
           settings: {
             enterprise_ai: {},
             generative_ai: {
-              embedding_model: "cohere.embed-v4.0",
+              embedding_model: "text-embedding-v4",
               embedding_dim: 1536,
-              rerank_model: "cohere.rerank-v4.0-fast",
+              embedding_base_url: "",
+              rerank_model: "qwen3-rerank",
+              rerank_base_url: "",
             },
           },
           checks: {},
