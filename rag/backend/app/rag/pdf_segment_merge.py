@@ -16,7 +16,7 @@
 
 まとめた後に :func:`consolidate_document_extraction` で文書全体を整える（PDF のしおりに当たる
 見出しの深さ・ページの境目で切れた段落・リスト・表の続き。原本全体を 1 回で解析した結果にも
-同じ規則で当てる。MinerU の結果は MinerU の続きの印を使う。#2266）。
+同じ規則で当てる。#2266）。
 章節の木（ナビゲーション）・Vision・項目抽出・chunk は、まとめた結果から作る（呼び出し側）。
 """
 
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from io import BytesIO
@@ -51,7 +51,6 @@ from app.schemas.extraction import (
 
 LAYOUT_ARTIFACT = "layout_records"
 DOCLING_LAYOUT_ENGINE = "docling"
-MINERU_LAYOUT_ENGINE = "mineru"
 # 段の結果を足し合わせる件数の parser_artifacts(解析サービスが段ごとに数えた値)。
 _SUMMED_ARTIFACT_KEYS = (
     "source_page_count",
@@ -333,7 +332,7 @@ def elements_with_layout_section_paths(
     Docling サービスは段の中の record だけで見出しの階層（番号の体系から決める深さ）を作るため、
     段の境目で前の段の見出しを失い、番号の体系の判定も段ごとに変わりうる。解析サービスと同じ規則
     （``layout_section_paths``）を原本全体の record に当て、原本全体の解析と同じ ``section_path``
-    にする。Docling 以外の engine の record（MinerU など）は要素の作り方が違うため変えない。
+    にする。Docling 以外の engine の record は要素の作り方が違うため変えない。
     """
     dict_records = [record for record in records if isinstance(record, Mapping)]
     if not dict_records or any(
@@ -393,14 +392,10 @@ def _dedupe(values: Sequence[str]) -> list[str]:
 #    ページの境目で別の chunk に割れない)。表の続きには前の表の列見出しの行を付ける
 #    (raw.table_enhanced_html。続きの行だけの chunk でも列の意味が分かる)。record はページごとに
 #    残すため、ページ番号・座標(引用・プレビューの位置)は変わらない。
-# 3. MinerU(#2266): MinerU は自分で続きを判定して raw.continues_prev(mineru_layout が残す)を付ける
-#    (ページ・段・図をまたぐ本文・リスト、ページをまたぐ表)。この印を raw.continues_record_id に
-#    写す。段ごとの解析の段の境目は MinerU が両方のページを見ていないため、2. の規則で判定する。
-#    MinerU の要素は作り方が違うため、しおりの深さ・要素の section_path の作り直しは当てない。
-# 4. 段落の続きの元・続きは、図・表・caption・脚注・ページの定型を読み飛ばして探し(ページ下端の
+# 3. 段落の続きの元・続きは、図・表・caption・脚注・ページの定型を読み飛ばして探し(ページ下端の
 #    図の後ろの続き。#2273)、文の終わりの規則に加えて PDF の文字の層の行の位置(前の段落の最後の行が
-#    右端まで届く・次の段落の最初の行に字下げが無い・幅が近い)で確かめる(MinerU の段落の続きの規則と
-#    同じ考え方。閾値は設定。行の取れないページは文の終わりの規則だけで判定する)。
+#    右端まで届く・次の段落の最初の行に字下げが無い・幅が近い)で確かめる(閾値は設定。行の取れない
+#    ページは文の終わりの規則だけで判定する)。
 
 CONSOLIDATION_ARTIFACT = "document_consolidation"
 OUTLINE_HEADING_SOURCE = "pdf_outline"
@@ -497,9 +492,9 @@ def consolidate_document_extraction(
     source_bytes: bytes,
     geometry: ContinuationGeometry | None = None,
 ) -> StructuredExtraction:
-    """Docling・MinerU の解析結果を文書全体で整える(しおりの見出しの深さ・ページの境目の続き)。
+    """Docling の解析結果を文書全体で整える(しおりの見出しの深さ・ページの境目の続き)。
 
-    record の解析エンジンが Docling か MinerU にそろった layout_records が無い解析結果は変えない。
+    record の解析エンジンが Docling にそろった layout_records が無い解析結果は変えない。
     ``geometry`` は段落の続きの幾何の条件(省略は既定値)。何度当てても同じ結果になる。
     """
     layout = extraction.parser_artifacts.get(LAYOUT_ARTIFACT)
@@ -507,43 +502,26 @@ def consolidate_document_extraction(
         return extraction
     raw_records = [record for record in _list(layout.get("records")) if isinstance(record, Mapping)]
     engines = {str(record.get("engine") or "").strip().casefold() for record in raw_records}
-    if len(engines) != 1 or not engines <= {DOCLING_LAYOUT_ENGINE, MINERU_LAYOUT_ENGINE}:
+    if engines != {DOCLING_LAYOUT_ENGINE}:
         return extraction
     records = [_copy_record(record) for record in raw_records]
-    corrected_text = (
-        correct_docling_pdf_text(records, source_bytes)
-        if engines == {DOCLING_LAYOUT_ENGINE}
-        else set()
-    )
+    corrected_text = correct_docling_pdf_text(records, source_bytes)
     # 原文で裏付けて戻した後に、残る書式の飾りの結合の線を除く(#3354)。record の text は章節の
     # 道・見出しの深さ・親子分割の入力になる。record の raw は診断のため解析の出力のまま残す。
     for layout_record in records:
         if isinstance(layout_record.get("text"), str):
             layout_record["text"] = strip_formatting_marks(layout_record["text"])
-    outline: list[tuple[int, str, int]] = []
-    outline_headings = 0
-    mineru_paragraphs = mineru_tables = mineru_headers = 0
-    boundary_pages: set[int] | None = None
-    if engines == {DOCLING_LAYOUT_ENGINE}:
-        outline = pdf_outline_entries(source_bytes)
-        outline_headings = _apply_outline_levels(records, outline)
-    else:
-        mineru_paragraphs, mineru_tables, mineru_headers = _link_mineru_continuations(records)
-        boundary_pages = _mineru_unseen_boundary_pages(records)
+    outline = pdf_outline_entries(source_bytes)
+    outline_headings = _apply_outline_levels(records, outline)
     resolved_geometry = geometry or ContinuationGeometry()
     lines = _PdfTextLines(source_bytes) if resolved_geometry.enabled else None
     try:
-        continuations = _link_page_continuations(
-            records, boundary_pages=boundary_pages, geometry=resolved_geometry, lines=lines
-        )
+        continuations = _link_page_continuations(records, geometry=resolved_geometry, lines=lines)
     finally:
         if lines is not None:
             lines.close()
     continued_paragraphs, continued_tables, carried_headers = continuations[:3]
     geometry_rejected = continuations[3]
-    continued_paragraphs += mineru_paragraphs
-    continued_tables += mineru_tables
-    carried_headers += mineru_headers
 
     by_id = {str(record.get("id") or ""): record for record in records}
     elements: list[DocumentElement] = []
@@ -728,13 +706,11 @@ def _outline_title_score(text_key: str, title_key: str, *, exact: bool) -> float
 def _link_page_continuations(
     records: list[dict[str, Any]],
     *,
-    boundary_pages: Collection[int] | None = None,
     geometry: ContinuationGeometry | None = None,
     lines: _PdfTextLines | None = None,
 ) -> tuple[int, int, int, int]:
     """ページの境目で切れた段落・リスト・表の続きに印を付ける。
 
-    ``boundary_pages`` があれば、そのページと次のページの境目だけを判定する(MinerU の段の境目)。
     表の続きはページの端の表どうし、段落の続きは図・表・定型を読み飛ばした端の本文どうしで判定する。
     ``lines`` があれば段落の続きを行の位置(``geometry``)でも確かめる。
     返り値は (つないだ段落, つないだ表, 列見出しの行を付けた表, 行の位置で続きにしなかった段落)
@@ -748,8 +724,6 @@ def _link_page_continuations(
     resolved_geometry = geometry or ContinuationGeometry()
     paragraphs = tables = headers = rejected = 0
     for page in sorted(by_page):
-        if boundary_pages is not None and page not in boundary_pages:
-            continue
         following = by_page.get(page + 1)
         if not following:
             continue
@@ -998,9 +972,8 @@ def _table_continuation(
     """表の続きなら印を付け、列見出しの行を付けたかを返す。続きでなければ None。
 
     列の数が同じで、前の表に列見出しの行があり、続きの表の先頭が列見出しでない(または前の表と
-    同じ列見出しを繰り返している)ときに続きとみなす。``known`` は解析エンジンが続きと判定した表
-    (MinerU の ``continues_prev``)で、形が合わなくても印を付け、列見出しの行は形が合うときだけ
-    付ける。
+    同じ列見出しを繰り返している)ときに続きとみなす。``known`` は解析エンジンが続きと判定した表で、
+    形が合わなくても印を付け、列見出しの行は形が合うときだけ付ける。
     """
     from rag_engine.parsing.table_structure import parse_html_table_structure
 
@@ -1037,115 +1010,6 @@ def _table_continuation(
             carried = True
     current["raw"] = raw
     return carried
-
-
-# MinerU の block の種類(raw.mineru_type)のうち、続きの元を探すときに読み飛ばすもの。ページの定型・
-# 脚注・欄外の本文(MinerU の merge transparent)と、本文の続きでは図・表・グラフ・コードも読み飛ばす
-# (MinerU の段落の続きの規則と同じ)。
-_MINERU_AUXILIARY_TYPES = frozenset(
-    {"header", "footer", "page_number", "page_footnote", "aside_text"}
-)
-_MINERU_TEXT_TRANSPARENT_TYPES = _MINERU_AUXILIARY_TYPES | {"image", "table", "chart", "code"}
-# 続きの block の種類 → (読み飛ばす種類, 続きの元にできる種類)。本文はリストの最後の項目の
-# 続きにもなる。
-_MINERU_CONTINUATION_SOURCES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
-    "text": (_MINERU_TEXT_TRANSPARENT_TYPES, frozenset({"text", "list"})),
-    "ref_text": (_MINERU_AUXILIARY_TYPES, frozenset({"ref_text"})),
-    "list": (_MINERU_AUXILIARY_TYPES, frozenset({"list"})),
-}
-
-
-def _link_mineru_continuations(records: list[dict[str, Any]]) -> tuple[int, int, int]:
-    """MinerU の続きの印(raw.continues_prev)を raw.continues_record_id に写す(#2266)。
-
-    続きの元は MinerU と同じ規則で探す: 本文・リストは読み順で前の本文・リスト(定型・脚注・図・
-    表を読み飛ばし、見出しなどほかの block で止める。同じページか前のページまで)、表は前のページの
-    最後の表。
-    返り値は (つないだ段落, つないだ表, 列見出しの行を付けた表) の数。
-    """
-    blocks = [record for record in sorted(records, key=_record_order) if _is_mineru_block(record)]
-    paragraphs = tables = headers = 0
-    for index, record in enumerate(blocks):
-        raw = _raw(record)
-        if raw.get("continues_prev") is not True:
-            continue
-        is_table = str(record.get("category") or "") == "Table"
-        if raw.get("continues_record_id"):
-            # 前に当てた整理(cache から再開した抽出など)。数だけ数える。
-            tables += int(is_table)
-            headers += int(is_table and bool(raw.get("table_header_carried")))
-            paragraphs += int(not is_table)
-            continue
-        source = _mineru_continuation_source(blocks, index)
-        if source is None or not str(source.get("id") or ""):
-            continue
-        if is_table:
-            carried = _table_continuation(source, record, known=True)
-            tables += 1
-            headers += int(bool(carried))
-            continue
-        record["raw"] = {**raw, "continues_record_id": str(source.get("id"))}
-        paragraphs += 1
-    return paragraphs, tables, headers
-
-
-def _is_mineru_block(record: Mapping[str, Any]) -> bool:
-    """MinerU の top level の block の record か(caption・脚注・図の中の文字の record は除く)。"""
-    raw = _raw(record)
-    return bool(raw.get("mineru_type")) and not (
-        raw.get("mineru_parent_record_id") or raw.get("source_picture_ref")
-    )
-
-
-def _mineru_continuation_source(
-    blocks: Sequence[dict[str, Any]], index: int
-) -> dict[str, Any] | None:
-    current = blocks[index]
-    page = int(current.get("page") or 0)
-    block_type = str(_raw(current).get("mineru_type") or "")
-    earlier: list[dict[str, Any]] = list(reversed(blocks[:index]))
-    if block_type == "table":
-        for previous in earlier:
-            previous_page = int(previous.get("page") or 0)
-            if previous_page < page - 1:
-                return None
-            if previous_page == page - 1 and _raw(previous).get("mineru_type") == "table":
-                return previous
-        return None
-    rule = _MINERU_CONTINUATION_SOURCES.get(block_type)
-    if rule is None:
-        return None
-    transparent, sources = rule
-    for previous in earlier:
-        if int(previous.get("page") or 0) < page - 1:
-            return None
-        previous_type = str(_raw(previous).get("mineru_type") or "")
-        if previous_type in transparent:
-            continue
-        if previous_type in sources:
-            return previous
-        return None
-    return None
-
-
-def _mineru_unseen_boundary_pages(records: Sequence[Mapping[str, Any]]) -> set[int]:
-    """MinerU が両方のページを見ていないページの境目(前のページの番号の集まり)。
-
-    段ごとの解析では、段の先頭のページの ``raw.mineru_page_idx``(MinerU に渡した PDF の中のページ。
-    0 始まり)が前のページから続かない。そこは MinerU の続きの印が付かないため、Docling と同じ規則で
-    判定する。ページの番号が分からないページは MinerU が見たものとして扱う。
-    """
-    local_pages: dict[int, int] = {}
-    for record in records:
-        page = int(record.get("page") or 0)
-        local = _raw(record).get("mineru_page_idx")
-        if page >= 1 and isinstance(local, int) and not isinstance(local, bool):
-            local_pages.setdefault(page, local)
-    return {
-        page
-        for page, local in local_pages.items()
-        if page + 1 in local_pages and local_pages[page + 1] != local + 1
-    }
 
 
 def _heading_key(text: str) -> str:

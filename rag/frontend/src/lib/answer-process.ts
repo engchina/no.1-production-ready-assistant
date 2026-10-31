@@ -62,7 +62,6 @@ const ANSWER_STEP_NAME: Readonly<Record<string, I18nKey>> = {
   "是正": "answer.step.revise",
   "是正の打ち切り": "answer.step.stopRevising",
   "文書ごとの起点の上限": "answer.step.deferDocumentCandidates",
-  "条の選択": "answer.step.selectArticles",
   "未回答の要求の探し直し": "answer.step.retrieveUnanswered",
   "ベクトル検索": "answer.step.vectorSearch",
   "全文検索": "answer.step.textSearch",
@@ -74,7 +73,6 @@ const ANSWER_STEP_NAME: Readonly<Record<string, I18nKey>> = {
   "文書構造による検索拡張": "answer.step.expandStructure",
   "根拠の図の切り出し": "answer.step.prepareFigures",
   "文書の分類と背景の読み込み": "answer.step.loadDocumentInfo",
-  "元の質問の検索": "answer.step.searchOriginalQuestion",
 };
 
 const STEP_ATTEMPT = /（(\d+)回目）$/;

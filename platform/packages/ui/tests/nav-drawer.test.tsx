@@ -44,7 +44,7 @@ function Shell({ path = "/documents", collapsed = true }: { path?: string; colla
         <Sidebar
           sections={sections}
           currentPath={path}
-          title={{ line1: "Production Ready", line2: "RAG", full: "Production Ready RAG" }}
+          title={{ line1: "Private", line2: "RAG", full: "Private RAG" }}
           collapsed={collapsed}
           onToggleCollapsed={() => undefined}
           collapsedSections={{}}

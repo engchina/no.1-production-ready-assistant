@@ -1,4 +1,4 @@
-"""解析エンジン「構造化レコード JSONL」の検索用テキストと記録の境界の検証（#2457）。
+"""構造化レコードの JSONL を読んだ抽出の検索用テキストと記録の境界の検証（#2457・#21）。
 
 データはすべて合成。
 """
@@ -41,7 +41,8 @@ from rag_parser_core.structured_records import (
     unescape_record_boundary,
 )
 
-BACKEND = "structured_records_jsonl"
+# 前処理の JSONL は選んだ解析エンジンのサービスが共通の契約で読む（#21）。
+BACKEND = "docling"
 
 
 def _csv(*values: str) -> bytes:
@@ -157,11 +158,16 @@ def test_split_rejects_broken_boundaries(raw: str, code: str) -> None:
 
 
 def test_csv_extraction_separates_records_with_boundaries() -> None:
-    result = run_external_adapter(BACKEND, _csv("一行目\n二行目", JSONL_RECORD_BOUNDARY), None, "")
+    result = run_external_adapter(
+        BACKEND,
+        _csv("一行目\n二行目", JSONL_RECORD_BOUNDARY),
+        None,
+        STRUCTURED_RECORDS_CONTENT_TYPE,
+    )
     extraction = result.extraction
     assert extraction is not None
     assert result.parser_backend == BACKEND
-    assert result.parser_version == "structured_records_jsonl_v1"
+    assert result.parser_version == "structured_records_v1"
     assert has_record_boundaries(extraction)
     assert extraction.parser_artifacts[STRUCTURED_RECORDS_BOUNDARY_ARTIFACT_KEY] == (
         JSONL_RECORD_BOUNDARY
@@ -185,14 +191,18 @@ def test_csv_extraction_separates_records_with_boundaries() -> None:
 
 
 def test_single_record_has_no_boundary() -> None:
-    extraction = run_external_adapter(BACKEND, _csv("一件"), None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, _csv("一件"), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     assert JSONL_RECORD_BOUNDARY not in extraction.raw_text
     assert extraction.parser_artifacts[STRUCTURED_RECORDS_BOUNDARY_COUNT_ARTIFACT_KEY] == 0
 
 
 def test_excel_extraction_keeps_record_metadata() -> None:
-    extraction = run_external_adapter(BACKEND, _sheet(), None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, _sheet(), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     assert [element.element_id for element in extraction.elements] == [
         "sheet-000-r1",
@@ -208,24 +218,31 @@ def test_excel_extraction_keeps_record_metadata() -> None:
 
 
 def test_oversized_record_is_rejected_without_truncation() -> None:
-    result = run_external_adapter(BACKEND, _csv("短い", "長" * 9000), None, "")
+    result = run_external_adapter(
+        BACKEND, _csv("短い", "長" * 9000), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is None
     assert result.warnings == ("structured_records_invalid:record_too_large@line3",)
 
 
 def test_invalid_jsonl_is_rejected() -> None:
-    result = run_external_adapter(BACKEND, b'{"items": [1]}\n', None, "application/json")
+    result = run_external_adapter(
+        BACKEND, b'{"items": [1]}\n', None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is None
     assert result.warnings == ("structured_records_invalid:unknown_schema@line1",)
 
 
-def test_capability_accepts_preprocessed_jsonl_and_is_ordered_before_xml_tree() -> None:
-    assert adapter_supports_source(
-        BACKEND, source_profile=None, content_type=STRUCTURED_RECORDS_CONTENT_TYPE
+def test_capability_accepts_preprocessed_jsonl_for_every_engine() -> None:
+    for backend in ADAPTER_CAPABILITIES:
+        assert adapter_supports_source(
+            backend, source_profile=None, content_type=STRUCTURED_RECORDS_CONTENT_TYPE
+        )
+    assert list(ADAPTER_CAPABILITIES) == ["docling", "unstructured"]
+    # 一般の JSONL は構造化レコードとみなさない。
+    assert not adapter_supports_source(
+        BACKEND, source_profile=None, content_type="application/jsonl"
     )
-    assert not adapter_supports_source(BACKEND, source_profile=None, content_type="application/pdf")
-    order = list(ADAPTER_CAPABILITIES)
-    assert order.index("unstructured") < order.index(BACKEND) < order.index("xml_tree_json")
 
 
 def _form_sheet(value: str = "値 A") -> bytes:
@@ -286,7 +303,9 @@ def test_form_fields_round_trip_as_records_with_cells() -> None:
         ("sheet-000-r3-B", "項目 A", "D3:F3"),
         ("sheet-000-r3-H", "項目 B", "J3:N3"),
     ]
-    extraction = run_external_adapter(BACKEND, _form_sheet(), None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, _form_sheet(), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     assert [element.text for element in extraction.elements] == ["項目 A: 値 A", "項目 B: 値 B"]
     first = extraction.elements[0]
@@ -306,7 +325,9 @@ def test_form_fields_round_trip_as_records_with_cells() -> None:
 
 
 def test_oversized_form_field_is_rejected_and_csv_cannot_have_form_fields() -> None:
-    result = run_external_adapter(BACKEND, _form_sheet("長" * 9000), None, "")
+    result = run_external_adapter(
+        BACKEND, _form_sheet("長" * 9000), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is None
     assert result.warnings == ("structured_records_invalid:record_too_large@line3",)
     lines: list[DocumentLine | FormFieldLine] = [

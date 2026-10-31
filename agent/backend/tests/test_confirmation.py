@@ -899,7 +899,7 @@ def test_tool_clarification_is_skipped_only_when_not_asking() -> None:
     assert ConfirmationBudget(policy="assume").skips_tool_clarification
     assert ConfirmationBudget(skipped=True).skips_tool_clarification
     assert ConfirmationBudget(max_rounds=1, used=1).skips_tool_clarification
-    # 自動実行は誰も答えない。品質評価は評価ケースの答えで答える（#1861）。
+    # 品質評価は評価ケースの答えで答える（#1861）。
     assert ConfirmationBudget(unattended=True).skips_tool_clarification
     assert not ConfirmationBudget(unattended=True, evaluation=True).skips_tool_clarification
     assert ConfirmationBudget(
@@ -1595,7 +1595,7 @@ def test_rag_evidence_tools_get_the_run_goal_as_original_question(
 ) -> None:
     """Control Plane が RAG の根拠を集めるツールに利用者の元の質問を付ける（#2261）。
 
-    モデルが検索文を短く言い換えても、RAG が条で構成された文書の根拠の条を選ぶ手がかりを失わない。
+    モデルが検索文を短く言い換えても、RAG が元の質問の要求の単位を失わない。
     モデルが付けた値はそのまま送る。
     """
     _script(

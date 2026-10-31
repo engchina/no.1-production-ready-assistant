@@ -39,18 +39,6 @@ class AnswerDependencies:
     inquiry_conditions・settings を keyword で受け取り、続く search が同じ検索文の結果を読めるよう呼び出し元の
     cache に入れる（戻り値は使わない）。結果を変えない（search の結果は並行にしないときと同じ）実装だけを渡す。
     省略時は先に読まない。
-    article_catalogs / article_chunks は条の目録から条を選ぶ段（#2254）の入力。章節と chunk の対応を持つ呼び出し元が
-    渡す。article_catalogs は document_ids（候補の文書の id。順位の順）・limit・settings を受け取り、そのうち条で
-    構成された文書の章節の目録（`article_catalog.ArticleCatalog`）を順位の順に limit 件まで返す。article_chunks は
-    articles（選んだ条の `article_catalog.SelectedArticle` の列）・settings を受け取り、選んだ条の章節の最初の child と
-    その親の StoredChunk を返す。省略時は条を選ばない。article_documents は settings を受け取り、検索の範囲の
-    条で構成された文書の (document_id, 文書名) の列を返す（候補に出ない文書も目録で読むため）。省略時は候補の
-    文書だけを読む。article_question は利用者の元の質問（呼び出し元が検索文を短く言い換えたとき。無ければ None）を
-    返す。条の目録から文書・条を選ぶ段だけが検索文と合わせて使う（#2261）。article_leads は document_id・chunk_set_id・
-    sections（{section_id: 章節の名前}）・settings を受け取り、その章節の本文の書き出し（名前を除く。
-    {section_id: 文}）を返す。条の選択の 2 段目（選んだ条と同じ章の条と、選んだ条を名指しする別の章の条を書き出し
-    つきで見せて足させる）が使う。
-    省略時は 2 段目を行わない。
     embedder は業務ガイドの手順の充足で、根拠を共有する手順のどれを item が説明したかを語で決められないときに、
     意味の近さで決める embedding（`ports.Embedder`。索引と同じ OCI Generative AI の Cohere Embed。#2649）。省略時は
     語の判定だけで決める。
@@ -69,11 +57,6 @@ class AnswerDependencies:
     section_outline: Callable[..., Any] | None = None
     section_chunks: Callable[..., Sequence[Any]] | None = None
     prefetch_search: Callable[..., Any] | None = None
-    article_catalogs: Callable[..., Sequence[Any]] | None = None
-    article_chunks: Callable[..., Sequence[Any]] | None = None
-    article_documents: Callable[..., Sequence[tuple[str, str]]] | None = None
-    article_question: Callable[[], str | None] | None = None
-    article_leads: Callable[..., Mapping[str, str]] | None = None
     embedder: "Embedder | None" = None
     report_degraded: Callable[[str, BaseException], None] | None = None
     # 精排・起点選択の後に親/近傍を読む。未指定の SDK は取得済みの原文だけで構築する。
@@ -141,35 +124,6 @@ def section_dependencies() -> tuple[Callable[..., Any], Callable[..., Sequence[A
     if current is None or current.section_outline is None or current.section_chunks is None:
         return None
     return current.section_outline, current.section_chunks
-
-
-def article_catalog_dependencies() -> tuple[Callable[..., Sequence[Any]], Callable[..., Sequence[Any]]] | None:
-    """注入された条の目録の読み込み（目録, 選んだ条の chunk）。注入が無ければ None（条を選ばない。#2254）。"""
-    current = _active.get()
-    if current is None or current.article_catalogs is None or current.article_chunks is None:
-        return None
-    return current.article_catalogs, current.article_chunks
-
-
-def injected_article_documents() -> Callable[..., Sequence[tuple[str, str]]] | None:
-    """注入された検索の範囲の条で構成された文書の一覧（#2254）。注入が無ければ None（候補の文書だけを読む）。"""
-    current = _active.get()
-    return None if current is None else current.article_documents
-
-
-def injected_article_leads() -> Callable[..., Mapping[str, str]] | None:
-    """注入された章節の本文の書き出しの読み込み。注入が無ければ None（条の選択の 2 段目を行わない）。"""
-    current = _active.get()
-    return None if current is None else current.article_leads
-
-
-def injected_article_question() -> str | None:
-    """注入された利用者の元の質問（#2261）。注入が無い・空なら None。"""
-    current = _active.get()
-    if current is None or current.article_question is None:
-        return None
-    value = current.article_question()
-    return value.strip() or None if isinstance(value, str) else None
 
 
 def injected_embedder() -> "Embedder | None":

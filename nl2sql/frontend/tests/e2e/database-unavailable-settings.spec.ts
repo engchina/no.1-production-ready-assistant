@@ -5,7 +5,7 @@ import { systemAdminMe } from "./_helpers/database-gate";
 
 const NOTICE_TITLE = "データベースに接続できません";
 const NOTICE_MESSAGE =
-  "データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。";
+  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
 const NOTICE_HINT =
   "OCI 認証・アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
 const RAW_DATABASE_ERROR = "Oracle に接続できませんでした (ORA-12514)。";
@@ -75,7 +75,7 @@ async function expectFullPageGate(page: Page) {
 
   const settingsLink = page.getByRole("link", { name: "データベース設定を開く" });
   const retry = page.getByRole("button", { name: "再試行" });
-  await expect(settingsLink).toHaveAttribute("href", "/settings/database#adb-management");
+  await expect(settingsLink).toHaveAttribute("href", "/settings/database");
   await settingsLink.focus();
   await expect(settingsLink).toBeFocused();
   await page.keyboard.press("Tab");

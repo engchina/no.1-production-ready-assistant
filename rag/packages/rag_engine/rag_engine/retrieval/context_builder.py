@@ -16,7 +16,6 @@ from rag_engine.parsing.decorative_pictures import (
     visual_role_from_ref,
 )
 from rag_engine.parsing.picture_text import fold_picture_ocr_entries
-from rag_engine.retrieval.article_catalog import is_added_catalog_article, is_catalog_article
 from rag_engine.retrieval.attachment_evidence import is_attachment_evidence
 from rag_engine.retrieval.entity_expansion import is_reserved_entity_expansion
 from rag_engine.retrieval.evidence_cues import evidence_cues
@@ -214,10 +213,6 @@ class ContextBuildRequest:
     # 検索上位から起点（retrieved_anchor）に採る child の、同じ親あたりの上限 (#669)。
     # Settings.max_anchors_per_parent（RAG_ENGINE_MAX_ANCHORS_PER_PARENT）から渡す (#889)。1 未満は 1。
     max_anchors_per_parent: int = MAX_ANCHORS_PER_PARENT
-    # 条の目録で選んだ条（#2254）の起点と親を、上の起点の数（top_k）と親の数（max_records）の外に足す数。
-    # 選んだ条は起点に数えず、検索の根拠の親を減らさない。0 は足さない（選んだ条も他の候補と同じに扱う）。
-    # 会話の添付の箇所（#3212）も同じく起点・親の数の外にすべて足す（数の上限は backend が選ぶ箇所の数）。
-    catalog_records: int = 0
     # 原文の遅延取得のための起点選択専用。返した本文は回答に使わず、親参照で起点をまとめる。
     select_anchors_only: bool = False
 
@@ -337,25 +332,14 @@ def build_chunk_context_bundle(request: ContextBuildRequest) -> ContextBundle:
     max_anchors_per_parent = max(1, int(request.max_anchors_per_parent or 1))
     anchors_by_parent: dict[str, int] = {}
     anchor_count = 0
-    catalog_limit = max(0, int(request.catalog_records or 0))
-    # 目録で選んだ条（#2254）は、検索の根拠の起点と親を決めた後に足す（検索の根拠の選び方を変えない）。
-    catalog_children: list[tuple[int, Any]] = []
     # 会話の添付の箇所（#3212）は、rerank の順位に関わらず起点・親を決めた後に足す。利用者が明示した入力だが、
     # 質問の文と表の行の rerank の関連度は低く出やすく、順位で起点を取ると `top_k` の外に落ちる。
     attachment_children = [(rank, child) for rank, child in enumerate(ranked_children, start=1) if is_attachment_evidence(child)]
     for retrieval_rank, child in enumerate(ranked_children, start=1):
         if is_attachment_evidence(child):
             continue
-        catalog = catalog_limit > 0 and is_catalog_article(child)
-        # 加えた条は検索の根拠の起点に数えない。検索の候補にあった条は今までどおり起点になり、枠の外に出たときだけ足す。
-        if catalog and (is_added_catalog_article(child) or anchor_count >= top_k):
-            if len(catalog_children) < catalog_limit:
-                catalog_children.append((retrieval_rank, child))
-            continue
         if anchor_count >= top_k:
-            if len(catalog_children) >= catalog_limit:
-                break
-            continue
+            break
         group = group_for_child(child)
         if group is None:
             continue
@@ -381,10 +365,7 @@ def build_chunk_context_bundle(request: ContextBuildRequest) -> ContextBundle:
     primary = _reserve_entity_expansion_groups(sorted(groups, key=_parent_group_sort_key), request.max_records)
     selected = list(primary)
     selected_groups = {id(group) for group in selected}
-    added_children = [
-        *((rank, child, "catalog_article") for rank, child in catalog_children),
-        *((rank, child, "conversation_attachment") for rank, child in attachment_children),
-    ]
+    added_children = [(rank, child, "conversation_attachment") for rank, child in attachment_children]
     for retrieval_rank, child, reason in added_children:
         group = group_for_child(child)
         if group is None:

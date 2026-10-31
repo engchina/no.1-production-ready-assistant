@@ -34,7 +34,6 @@ test("保存先がメモリなら、各画面に案内を出し、実行環境�
     "/agents",
     "/runs",
     "/skills",
-    "/automations",
     "/evaluation",
     "/settings/mcp-connections",
     "/settings/system-tables",

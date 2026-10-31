@@ -217,7 +217,7 @@ def test_parser_axis_splits_extraction_recipes() -> None:
         SRC,
         {
             "kb-1": _settings(rag_parser_adapter_backend="docling"),
-            "kb-2": _settings(rag_parser_adapter_backend="dots_ocr"),
+            "kb-2": _settings(rag_parser_adapter_backend="unstructured"),
         },
     )
     assert len(plan.extraction_recipes) == 2
@@ -241,12 +241,16 @@ def test_extraction_limit_truncates_owning_kept() -> None:
     """抽出が上限を超えると owning 優先で打ち切り、超過分が truncated。"""
     owning = _settings(rag_parser_adapter_backend="docling")
     owning_id = compute_extraction_recipe_id(SRC, owning)
-    dots_id = compute_extraction_recipe_id(SRC, _settings(rag_parser_adapter_backend="dots_ocr"))
+    shared_id = compute_extraction_recipe_id(
+        SRC, _settings(rag_parser_adapter_backend="unstructured")
+    )
     consumers = {
         "kb-own": owning,
-        "kb-dots-1": _settings(rag_parser_adapter_backend="dots_ocr"),
-        "kb-dots-2": _settings(rag_parser_adapter_backend="dots_ocr"),
-        "kb-unstr": _settings(rag_parser_adapter_backend="unstructured"),
+        "kb-shared-1": _settings(rag_parser_adapter_backend="unstructured"),
+        "kb-shared-2": _settings(rag_parser_adapter_backend="unstructured"),
+        "kb-vision-off": _settings(
+            rag_parser_adapter_backend="unstructured", rag_vision_enabled=False
+        ),
     }
     plan = plan_materializations(
         SRC,
@@ -258,7 +262,7 @@ def test_extraction_limit_truncates_owning_kept() -> None:
     assert len(plan.extraction_recipes) == 2
     assert len(plan.truncated_extractions) == 1
     assert owning_id in plan.extraction_recipes
-    assert dots_id in plan.extraction_recipes
+    assert shared_id in plan.extraction_recipes
     assert owning_id not in plan.truncated_extractions
     assert all(parent in plan.extraction_recipes for parent in plan.chunk_set_recipes.values())
 

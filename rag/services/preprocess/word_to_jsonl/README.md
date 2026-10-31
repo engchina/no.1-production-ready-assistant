@@ -2,8 +2,8 @@
 
 parse の **前** に Word(`.doc` / `.docx` / マクロ付きの `.docm`)の本文を見出しの階層で読み、見出しの下の段落・リスト・表と
 表の前後の説明を **意味のまとまりの記録** にした構造化レコード JSONL(`rag_parser_core.structured_records`)へ変換する
-前処理マイクロサービス(#2457)。表示の行ごとには分けない。解析エンジン「構造化レコード JSONL」(parser-structured-records-jsonl)
-が記録を 1 つずつ要素にし、文書レシピの分割「固定分割」(既定の分割符 `<<<JSONL_RECORD_BOUNDARY>>>`)で 1 記録 1 chunk になる。
+前処理マイクロサービス(#2457)。表示の行ごとには分けない。文書解析のエンジン(Docling・Unstructured)のサービスが共通の契約で
+記録を 1 つずつ要素にし(#21)、文書レシピの分割「固定分割」(既定の分割符 `<<<JSONL_RECORD_BOUNDARY>>>`)で 1 記録 1 chunk になる。
 
 - 出力契約: `rag_parser_core` の `ConvertResponse`(`POST /convert`)。派生物の content type は
   `application/vnd.production-ready.structured-records+jsonl`。JSONL は `document`(変換器・位置の基準・原本と派生物の対応・診断)→

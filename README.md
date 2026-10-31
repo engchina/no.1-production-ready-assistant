@@ -2,10 +2,163 @@
 
 Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
 
+## ローカルで動かす（Oracle Autonomous Database Free コンテナ）
+
+DB は docker の **Oracle Autonomous Database Free**（ADB Free）コンテナを使います。OCI のアカウントは要りません。
+
+### 1. コンテナを起動する
+
+イメージは Oracle Container Registry から**ログインなしで** pull できます（約 5 GB）。
+
+```bash
+docker pull container-registry.oracle.com/database/adb-free:latest-23ai
+```
+
+データを残す volume を作り、コンテナの中の `oracle` ユーザー（uid 1001）が書けるようにしておきます。所有者が root のままだと、起動時に `PermissionError: [Errno 13] Permission denied: '/u01/data/MYATP.pdb.partial'` で止まります。
+
+```bash
+docker volume create adb-free-data
+docker run --rm -u 0 -v adb-free-data:/u01/data --entrypoint chown \
+  container-registry.oracle.com/database/adb-free:latest-23ai -R 1001:1001 /u01/data
+```
+
+```bash
+docker run -d --name adb-free \
+  -p 1525:1522 -p 8543:8443 \
+  -e WORKLOAD_TYPE=ATP \
+  -e ADMIN_PASSWORD='<ADMIN のパスワード>' \
+  -e WALLET_PASSWORD='<Wallet のパスワード>' \
+  --cap-add SYS_ADMIN --device /dev/fuse \
+  -v adb-free-data:/u01/data \
+  container-registry.oracle.com/database/adb-free:latest-23ai
+```
+
+| host の port | コンテナの port | 用途 |
+|---|---|---|
+| `1525` | `1522` | SQL*Net（mTLS。Wallet で接続） |
+| `8543` | `8443` | ORDS / Database Actions（`https://localhost:8543/ords/`） |
+
+- 初回は PDB の展開で 2〜3 分かかります。`docker ps` の STATUS が `(healthy)` になったら使えます。
+- `ADMIN_PASSWORD` と `WALLET_PASSWORD` は **12〜30 文字で、大文字・小文字・数字を含め、`admin` と二重引用符を含めない**必要があります（ADB の mandatory profile が強制し、満たさないと `ORA-28219` になります）。
+- 起動・停止・状態は docker で行います（画面からは操作しません）。
+
+```bash
+docker start adb-free     # 起動
+docker stop adb-free      # 停止
+docker ps -a --filter name=adb-free   # 状態
+docker logs --tail 50 adb-free        # ログ
+```
+
+### 2. Wallet を取り出す
+
+Wallet はコンテナの中で作られます。host に取り出し、`tnsnames.ora` の port をコンテナの `1522` から host の `1525` に書き換えます。repository の外に置いてください。
+
+```bash
+docker cp adb-free:/u01/app/oracle/wallets/tls_wallet /u01/workspace/adb-free-wallet
+sed -i 's/(port=1522)/(port=1525)/g' /u01/workspace/adb-free-wallet/tnsnames.ora
+chmod 700 /u01/workspace/adb-free-wallet
+```
+
+サービス名は `myatp_low` / `myatp_medium` / `myatp_high` / `myatp_tp` / `myatp_tpurgent` です（mTLS。末尾が `_tls` のものは host に公開していない port を使うので使えません）。
+
+### 3. アプリ用の DB ユーザーを作る
+
+3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。
+
+```sql
+CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>"
+  DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
+GRANT PDB_DBA TO ASSISTANT;
+```
+
+- パスワードの規則は ADMIN と同じです（ADB の mandatory profile。`PASSWORD_VERIFY_FUNCTION NULL` の profile を作っても回避できません）。
+- `PDB_DBA` に `CTXAPP`（Oracle Text）・`DB_DEVELOPER_ROLE`（表・sequence・view・procedure・job の作成）が含まれます。
+
+```bash
+cd rag/backend && uv run python - <<'PY'
+import oracledb
+W = "/u01/workspace/adb-free-wallet"
+c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>", dsn="myatp_low",
+                     config_dir=W, wallet_location=W, wallet_password="<Wallet のパスワード>")
+cur = c.cursor()
+cur.execute('CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>" '
+            'DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE')
+cur.execute("GRANT PDB_DBA TO ASSISTANT")
+PY
+```
+
+### 4. `.env` を置く
+
+```bash
+cp platform/.env.example platform/.env
+cp rag/backend/.env.example rag/backend/.env
+cp nl2sql/backend/.env.example nl2sql/backend/.env
+cp agent/backend/.env.example agent/backend/.env
+```
+
+`platform/.env`（3 製品共通。git には入りません）の次の値を書き換えます。
+
+```dotenv
+PLATFORM_ENVIRONMENT=local
+PLATFORM_AUTH_COOKIE_SECURE=false            # http://localhost で動かすため
+PLATFORM_ADMIN_LOGIN_USER_PASSWORD=<system_admin のパスワード>
+PLATFORM_ORACLE_USER=ASSISTANT
+PLATFORM_ORACLE_PASSWORD=<アプリのパスワード>
+PLATFORM_ORACLE_DSN=myatp_low
+PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls
+PLATFORM_ORACLE_WALLET_DIR=/u01/workspace/adb-free-wallet
+PLATFORM_ORACLE_WALLET_PASSWORD=<Wallet のパスワード>
+```
+
+`system_admin` のパスワードにも同じ規則（12〜30 文字・大文字/小文字/数字・`admin` を含まない）があり、満たさないと「構成管理者の認証情報が設定されていません」（503）になります。
+
+### 5. システムの表を作る（初期化）
+
+どれも冪等で、何度実行してもかまいません。
+
+```bash
+cd rag/backend    && uv sync --locked --dev && uv run python -m app.rag.system_schema_cli initialize
+cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize \
+                  && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
+cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize
+```
+
+できているかの確認（ready なら 0 で終わります）:
+
+```bash
+cd rag/backend    && uv run python -m app.rag.system_schema_cli check
+cd nl2sql/backend && uv run python -m app.cli.nl2sql_system_schema --check
+cd agent/backend  && uv run python -m app.cli.agent_system_schema --check
+```
+
+### 6. 起動する
+
+先に共有の UI を build します（各製品の frontend は `file:` で参照します）。
+
+```bash
+cd platform && npm ci && npm run build
+```
+
+製品ごとに backend と frontend をまとめて起動します（Ctrl+C で両方止まります）。
+
+```bash
+cd rag    && (cd frontend && npm ci) && bash scripts/start-all.sh
+cd nl2sql && (cd frontend && npm ci) && bash scripts/start-all.sh
+cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
+```
+
+| 製品 | 画面 | backend |
+|---|---|---|
+| RAG | http://localhost:3000 | http://localhost:8000/api/health |
+| NL2SQL | http://localhost:3001 | http://localhost:8010/api/health |
+| Agent | http://localhost:3002 | http://localhost:8020/api/health |
+
+`system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
+
 ## 配備
 
 OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン）による配備は廃止しました（#12）。
-ローカル / コンテナで動かす手順は、その手順の節（別の PR で追加します）を参照してください。
+ローカルで動かす手順は、上の「ローカルで動かす（Oracle Autonomous Database Free コンテナ）」を参照してください。
 1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・Nginx・HTTPS・更新・確認の仕組みは
 [platform/docs/deployment.md](./platform/docs/deployment.md) にあります。
 

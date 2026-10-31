@@ -37,33 +37,21 @@ npm ci
 BACKEND_URL=http://localhost:8000 npm run dev   # http://localhost:3000（BACKEND_URL 未指定なら /api は 404）
 
 # 前処理 / CPU parser(サービスごとの uv の venv + systemd の unit。rag/ で実行。#286)
-scripts/rag-services.sh install            # 前処理と既定の parser(docling・structured-records-jsonl・xml-tree-json。xml-tree-json は登録だけで起動しない)。--unstructured で足す
+scripts/rag-services.sh install            # 前処理と既定の parser(docling)。--unstructured で足す
 ```
 
-CPU の parser(docling / unstructured / structured_records_jsonl / xml_tree_json)は **独立した FastAPI マイクロサービス**(`services/parsers/<name>`)で
+CPU の parser(docling / unstructured)は **独立した FastAPI マイクロサービス**(`services/parsers/<name>`)で
 動き、backend は取込時に HTTP 委譲する。各 parser は独自依存で個別に upgrade できる。
-構造化レコードの JSONL(前処理 CSV→JSONL・Excel→JSONL・Word→JSONL の成果物)は、使用エンジンで選んだときだけ `structured_records_jsonl` で
-記録の単位に解析し、固定分割で 1 記録 1 chunk にする(#2457)。
-XML ツリー JSON(`.json`)は、文書解析の既定か処理レシピの使用エンジンで選んだときだけ `xml_tree_json` で解析する(#2042)。
+構造化レコードの JSONL(前処理 CSV→JSONL・Excel→JSONL・Word→JSONL の成果物)は、選んだ解析エンジン(Docling・Unstructured)の
+サービスが外部の parser に渡さず共通の契約(`rag_parser_core.structured_records`)で記録の単位に読み、固定分割で 1 記録 1 chunk にする
+(#2457・#21)。XML / JSON の木と構造化レコードの JSONL の専用の解析エンジンは削除した(#21。一般の `.json` / `.jsonl` は Unstructured で読む)。
 音声・動画は取り込まない(アップロードの画面と API の 415 で止める。#3369)。
 既定の解析エンジンは **Docling**(#286)。Docling は **PDF と画像だけ**を解析し、それ以外(テキスト・HTML・Office・メール など)は
 取込を始める前に止めて、処理レシピで Unstructured(または Office→PDF)を選ぶよう案内する(自動では振り分けない)。
 Unstructured の解析サービスは既定では配備しない。形式ごとの取り込み方は [docs/deployment.md](./docs/deployment.md) の
 「既定の解析エンジン（Docling）で扱える形式と、それ以外の形式の取り込み方」を参照。
-GPU の OCR(dots_ocr)は外部で運用する API を「取込・検索・回答設定 › 文書解析」で指定する。MinerU(mineru)は準備中(ロードマップ。下の「ロードマップ」)。
-
-**MinerU のライセンス(#3359)**: MinerU は「MinerU Open Source License」(Apache-2.0 に追加の条件)で提供される。主な条件は次のとおり。
-**利用の前に、ライセンスの全文([LICENSE.md](https://github.com/opendatalab/MinerU/blob/master/LICENSE.md)。公式のリポジトリは
-[opendatalab/MinerU](https://github.com/opendatalab/MinerU))を確認すること**(ここは主な条件の抜粋で、法的な助言ではない)。
-
-1. 利用者とその関連会社の合算で、月間アクティブユーザーが 1 億を超えるか月の売上が 2,000 万米ドルを超えると、MinerU のチームの別途の商用ライセンスが要る。
-2. MinerU を使って第三者にオンラインサービスを提供するときは、サービスの画面か公開の文書の目立つ所に MinerU を使っていることを明示する。
-3. 1・2 を満たさないと、ライセンスは通知なしに自動で終わる。旧モデルの `MinerU2.5-2509-1.2B` は AGPL-3.0 なので、`MinerU2.5-Pro-2605-1.2B`(Apache-2.0)を使う。
-
-MinerU が準備中でなくなったら、システム管理者(system_admin)が「文書解析」の画面で「MinerU のライセンスの条件を確認した」を確かめて保存するまで、
-MinerU は使用エンジンにも処理レシピにも選べない(backend も拒否する。仕組みは実装済み)。確認・取り消しは system_admin だけができ、環境変数・`.env` では書けない。公式の remote 解析(mineru.net)は使わず、自前の API サーバーでは `mineru telemetry disable` で利用状況の送信を止める
-(詳細は [docs/deployment.md](./docs/deployment.md) の「許可（ライセンス）の確認」)。
 Marker / Unlimited-OCR / GLM-OCR への対応は削除した(#270)。
+MinerU・Dots.OCR・OCI Document Understanding への対応も削除した(#22。OCI に依存しない構成へ移すため)。
 詳細は [services/parsers/README.md](./services/parsers/README.md) と
 [AGENTS.md](./AGENTS.md) の「Parser マイクロサービス」節を参照。
 
@@ -103,15 +91,6 @@ OCI Resource Manager の Terraform stack による配備は廃止しました（
 仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。以前の Docker Compose で配備した環境の移行は
 [docs/deployment.md](./docs/deployment.md) を参照してください。
 
-## ロードマップ
-
-準備中の機能は、画面に灰色の「準備中（ロードマップ）」で出し、選択・起動・配備はできません（#3374・#3359）。
-
-| 機能 | 状態 | 今の扱い |
-|---|---|---|
-| OCI Document Understanding の解析（`oci_document_understanding`・サービス `parser-oci-document-understanding`） | 準備中（ロードマップ） | 「取込・検索・回答設定 › 文書解析」の使用エンジンと処理レシピの「文書解析」では選べず、API・`RAG_PARSER_ADAPTER_BACKEND` で選ぶと検証のエラーになります。「運用設定 › サービス管理」では起動できず、`rag/init_script.sh`・`scripts/rag-services.sh` も配備しません（既存の Compute の unit は再配備で止めて消します）。実装（`services/parsers/oci_document_understanding`・client）は今後の版のために残しています |
-| MinerU の解析（`mineru`。外部で運用する MinerU 4.x の V1 API） | 準備中（ロードマップ） | 「取込・検索・回答設定 › 文書解析」の使用エンジン（Dots.OCR の次、OCI Document Understanding の前）と処理レシピの「文書解析」では選べず、API・`RAG_PARSER_ADAPTER_BACKEND`・処理レシピの保存で選ぶと検証のエラーになります。保存済みの値は既定（全体は Docling、レシピは全体の継承）に寄せ、取込では呼びません。外部接続の欄も出しません。ライセンスは「MinerU Open Source License」（Apache-2.0 に追加の条件。企業の規模による別途の商用ライセンス・オンラインサービスでの利用の明示・満たさないと自動で終わる。旧モデル `MinerU2.5-2509-1.2B` は AGPL-3.0）で、画面のカードの下にも短い案内と [公式のリポジトリ](https://github.com/opendatalab/MinerU)・[LICENSE.md](https://github.com/opendatalab/MinerU/blob/master/LICENSE.md) へのリンクを出します（主な条件は上の「MinerU のライセンス」）。実装（`app/clients/external_parser.py` の HTTP の client、system_admin だけが確認できるライセンスの確認）は今後の版のために残しています |
-
 ## 外部の MCP クライアントから使う（Claude Code など）
 
 RAG の検索・根拠の読み出しは MCP（`POST /rag/api/mcp`。開発は `http://localhost:8000/api/mcp`）で公開しています。
@@ -138,14 +117,6 @@ MCP サーバーの名前は `rag` にします（組み込みのスキル（[sk
 - [検索・回答の能力の一覧（必須 / 任意と縮退）](./docs/answer-capability-inventory.md)
 - [デプロイメント](./docs/deployment.md)
 - [参考 RAG プロジェクト](./docs/reference-rag-projects.md)
-
-## TODO
-
-- [ ] **実際の MinerU 4.x の API サーバーでの確認（未実施）**: #1329 の V1 API（`/v1/uploads` → `/v1/parse/jobs` → `/v1/files`）と
-  #1334 の Middle JSON からの親子階層（small-to-big）の分割は、記録した応答のスタブでだけ確かめている。GPU の MinerU 4.x
-  （`mineru-kit api-server`）を用意できたら、tier ごと（`flash` / `basic` / `standard` / `advanced`）に PDF・画像・Office の文書を
-  取り込み、解析の待ち・取り消し・結果の取得（302 の転送）・見出しの階層・頁と bbox・要素の定位子を確かめる
-  （手順は [docs/deployment.md](./docs/deployment.md)「既存環境の更新手順（#1329 MinerU 4.0 の V1 API）」）。
 
 ## シークレット混入防止(gitleaks)
 

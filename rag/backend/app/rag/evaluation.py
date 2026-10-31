@@ -35,7 +35,6 @@ from pr_evaluation_scoring import (
 )
 from pydantic import ValidationError
 from rag_engine.evaluation.answer_eval import standard_scope_cache
-from rag_engine.resources.shared_cache import bypass_shared_cache
 
 from app.clients.ai_calls import make_ai_caller
 from app.clients.oracle import OracleClient
@@ -321,12 +320,10 @@ class EvaluationRunner:
         `search_answer_profile_id` を渡すと、ケースごとに検索・回答と同じ解決（参照 KB・回答の
         設定・用語・同義語・回答ルール・業務ガイド）をしてから回答する（#1249）。渡さなければ全体の既定（#301）。
 
-        条の選択の process をまたぐ記録（#3507）は読みも書きもしない（同じ質問の再実行でも
-        実際の費用を測る。process の中の記録は回答と同じに使う）。標準回答の比較範囲は、
-        同じ評価の中（比較の pass を含む）で質問・標準回答・判定のモデルごとに 1 回だけ
-        固定する（#3570）。
+        標準回答の比較範囲は、同じ評価の中（比較の pass を含む）で質問・標準回答・判定のモデルごとに
+        1 回だけ固定する（#3570）。
         """
-        with bypass_shared_cache(), standard_scope_cache():
+        with standard_scope_cache():
             return await self._run(
                 cases,
                 top_k,

@@ -26,22 +26,6 @@ const databaseSettings = {
   config_source: "runtime" as const,
 };
 
-const adbInfo = {
-  data: {
-    status: "success",
-    message: "データベース情報を取得しました。",
-    id: "ocid1.autonomousdatabase.oc1..rag",
-    display_name: "RAG ADB",
-    lifecycle_state: "STOPPED",
-    db_name: "ragdb",
-    cpu_core_count: 2,
-    data_storage_size_in_tbs: 1,
-    region: "ap-osaka-1",
-  },
-  error_messages: [],
-  warning_messages: [],
-};
-
 /**
  * 型ガード(#63)は通過するが、詳細表示で throw する payload。
  *
@@ -65,10 +49,6 @@ test("データベース設定の画面にはシステムテーブルのカー�
   await mockLocalAuth(page);
   await page.route("**/api/settings/database**", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname.startsWith("/api/settings/database/adb")) {
-      await route.fulfill({ json: adbInfo });
-      return;
-    }
     await route.fulfill({
       json: { data: databaseSettings, error_messages: [], warning_messages: [] },
     });
@@ -76,7 +56,7 @@ test("データベース設定の画面にはシステムテーブルのカー�
 
   await page.goto("/settings/database");
 
-  await expect(page.getByRole("heading", { name: "Autonomous Database 管理" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
   await expect(page.locator("#system-tables")).toHaveCount(0);
 });
 

@@ -110,10 +110,10 @@ def test_plan_sends_only_heading_texts_in_reading_order() -> None:
             ),
             "outline_levels",
         ),
-        (_extraction(_records(HEADINGS, engine="mineru")), "engine_not_supported"),
+        (_extraction(_records(HEADINGS, engine="other_engine")), "engine_not_supported"),
         (StructuredExtraction(elements=[DocumentElement(text="本文")]), "no_layout_records"),
     ],
-    ids=["numbered", "too-few", "outline", "mineru", "no-layout"],
+    ids=["numbered", "too-few", "outline", "other-engine", "no-layout"],
 )
 def test_plan_skips_documents_that_do_not_need_inference(
     extraction: StructuredExtraction, reason: str

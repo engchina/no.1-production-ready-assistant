@@ -2,7 +2,7 @@ import { expect, type Page } from "./fixtures/test";
 import { expectNoPageOverflow } from "./_helpers";
 
 export async function mockFeaturePrompts(page: Page) {
-  const keys = ["external_ocr", "heading_levels", "field_extraction", "navigation_summary", "raptor_summary_system"];
+  const keys = ["heading_levels", "field_extraction", "navigation_summary", "raptor_summary_system"];
   const values = new Map<string, string>();
   const requests: { key: string; method: string }[] = [];
   await page.route("**/api/settings/answer-prompts**", async (route) => {

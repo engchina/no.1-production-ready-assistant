@@ -1,4 +1,7 @@
-"""OCI Autonomous Database 管理クライアント（NL2SQL から移設。#108）。"""
+"""OCI Autonomous Database の Wallet 取得クライアント（NL2SQL から移設。#108）。
+
+ADB の起動・停止は扱わない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。
+"""
 
 from __future__ import annotations
 
@@ -42,12 +45,6 @@ class DatabaseSdkClientProtocol(Protocol):
     def get_autonomous_database(self, autonomous_database_id: str) -> Any:
         """ADB 情報を取得する。"""
 
-    def start_autonomous_database(self, autonomous_database_id: str) -> Any:
-        """ADB を起動する。"""
-
-    def stop_autonomous_database(self, autonomous_database_id: str) -> Any:
-        """ADB を停止する。"""
-
     def generate_autonomous_database_wallet(
         self,
         autonomous_database_id: str,
@@ -57,7 +54,7 @@ class DatabaseSdkClientProtocol(Protocol):
 
 
 class OciDatabaseClient:
-    """OCI Autonomous Database の制御プレーン操作クライアント。"""
+    """OCI Autonomous Database の情報取得と Wallet 取得のクライアント。"""
 
     def __init__(
         self,
@@ -77,14 +74,6 @@ class OciDatabaseClient:
             lambda: self._client().get_autonomous_database(adb_ocid)
         )
         return _to_info(getattr(response, "data", response))
-
-    async def start_autonomous_database(self, adb_ocid: str) -> None:
-        """ADB の起動をリクエストする。"""
-        await self._sdk_call_runner(lambda: self._client().start_autonomous_database(adb_ocid))
-
-    async def stop_autonomous_database(self, adb_ocid: str) -> None:
-        """ADB の停止をリクエストする。"""
-        await self._sdk_call_runner(lambda: self._client().stop_autonomous_database(adb_ocid))
 
     async def download_autonomous_database_wallet(
         self,

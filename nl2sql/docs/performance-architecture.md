@@ -49,7 +49,7 @@ frontend は mutation response の `schema_refresh_job_id` を追跡し、同じ
 
 ## 可用性と repository circuit
 
-可用性は OCI ADB lifecycle、Oracle SQL connection、NL2SQL persistence/read model を別々に扱う。
+可用性は Oracle SQL connection と NL2SQL persistence/read model を別々に扱う（DB の起動・停止と lifecycle の取得は扱わない。#10）。
 `/api/ready/database` は polling 互換のため常に HTTP 200 とし、接続状態は response body で判定する。判定の順と応答の形は 3 製品共通の `pr_system_settings.database_status`（#325）が持ち、設定の判定はシステム設定画面と同じ `database_readiness`（DeepSec の判定を含む）を使う。NL2SQL は memory モードの short circuit、incremental store の確認、`context_id` の元にする値を注入する。
 業務 API の 503 は persistence status と安定 `error_code` を併せて確認する。
 

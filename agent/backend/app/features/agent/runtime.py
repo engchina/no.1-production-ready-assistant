@@ -454,7 +454,7 @@ AGENT_UNPUBLISHED_MESSAGE = (
 
 
 def agent_unavailable_reason(agent: AgentProfile | None) -> str | None:
-    """利用者の Run（チャット・MCP・自動実行）で使えない理由。使えるなら None（#792）。
+    """利用者の Run（チャット・MCP）で使えない理由。使えるなら None（#792）。
 
     利用者の Run は公開中の版で実行する（#770）ため、無効・公開した版が無い
     業務 Agent は使えない。品質評価と管理者の「下書きで実行」はこの判定を使わない。
@@ -605,27 +605,6 @@ EVALUATION_DRY_RUN_MESSAGE = (
 )
 # 評価の Run の印（`metadata`）。組み込み Runtime は承認が要るツールを実行せずに続ける。
 EVALUATION_DRY_RUN_KEY = "evaluation_dry_run"
-# 自動実行から作った Run の印（`metadata`。#784）。無人の実行なので、組み込み Runtime は承認が
-# 要るツールを呼ばずに続ける（#1813。承認待ちで止めない）。
-AUTOMATION_ID_KEY = "automation_id"
-# 自動実行の Run で、承認が要るため使わなかったツールの step の error_code（#1813）。
-AUTOMATION_APPROVAL_SKIPPED_CODE = "automation.approval_required"
-
-
-def automation_approval_message(tool_name: str) -> str:
-    """自動実行の Run で承認が要るツールを呼んだときにモデルへ返す文（#1813）。"""
-    return (
-        f"自動実行では承認の要るツール（{tool_name}）を使えません。"
-        "管理者がツールのポリシーで許可すると使えます。"
-        "このツールで確かめる予定だったことは、回答の「確かめられなかった点」に書き、"
-        "ここまでの情報で回答を完成させてください。"
-    )
-
-
-def is_automation_run(metadata: Mapping[str, Any]) -> bool:
-    """自動実行（スケジュール・今すぐ実行）から作った Run か（#1813）。"""
-    return bool(metadata.get(AUTOMATION_ID_KEY))
-
 
 # 外部の MCP クライアント（API キー）から作った Run の印（`metadata`。#1874）。キーの ID と名前は
 # 実行履歴・監査の「MCP（キーの名前）」と、キーごとの Run の数の上限に使う。
@@ -649,7 +628,7 @@ def is_mcp_run(metadata: Mapping[str, Any]) -> bool:
 
 
 def mcp_approval_message(tool_name: str) -> str:
-    """MCP の Run で承認が要るツールを呼んだときにモデルへ返す文（#1874。#1813 と同じ扱い）。"""
+    """MCP の Run で承認が要るツールを呼んだときにモデルへ返す文（#1874）。"""
     return (
         f"外部の MCP クライアントからの実行では、承認の要るツール（{tool_name}）を使えません。"
         "管理者がツールのポリシーで許可すると使えます。"
@@ -659,8 +638,8 @@ def mcp_approval_message(tool_name: str) -> str:
 
 
 # Control Plane が Run の `metadata` に付ける予約の key（#1130）。利用者が `POST /api/runs` で
-# 付けると、再開の状態（`_builtin_sdk_state`）・評価の dry-run・自動実行や MCP の出所を偽れる
-# ため、API の入口で拒否する。`_` で始まる key もすべて予約とする。品質評価・自動実行・MCP・
+# 付けると、再開の状態（`_builtin_sdk_state`）・評価の dry-run・MCP の出所を偽れる
+# ため、API の入口で拒否する。`_` で始まる key もすべて予約とする。品質評価・MCP・
 # 再実行は `create_builtin_run` を直接呼ぶので付けられる。
 RESERVED_RUN_METADATA_KEYS = frozenset(
     {
@@ -668,8 +647,6 @@ RESERVED_RUN_METADATA_KEYS = frozenset(
         EVALUATION_DRY_RUN_KEY,
         "evaluation_job_id",
         "evaluation_case_id",
-        AUTOMATION_ID_KEY,
-        "automation_trigger",
         RUN_SOURCE_KEY,
         "mcp_session",
         MCP_API_KEY_ID_KEY,
@@ -1486,9 +1463,7 @@ class AgentRuntimeRepositoryContract(Protocol):
         self, thread_id: str, *, user_uuid: str | None, all_users: bool = False
     ) -> None: ...
     def record_builtin_dry_run_steps(self, run_id: str, calls: Sequence[ToolCall]) -> None: ...
-    def record_builtin_unattended_skips(
-        self, run_id: str, calls: Sequence[ToolCall], *, mcp: bool = False
-    ) -> None: ...
+    def record_builtin_unattended_skips(self, run_id: str, calls: Sequence[ToolCall]) -> None: ...
     def run_statuses(self, run_ids: Collection[str]) -> dict[str, RunStatus]: ...
     def record_builtin_usage(self, run_id: str, usage: RunUsage) -> None: ...
     def list_runs(self) -> list[RunState]: ...
@@ -3261,24 +3236,21 @@ class AgentRuntimeRepository:
             ),
         )
 
-    def record_builtin_unattended_skips(
-        self, run_id: str, calls: Sequence[ToolCall], *, mcp: bool = False
-    ) -> None:
+    def record_builtin_unattended_skips(self, run_id: str, calls: Sequence[ToolCall]) -> None:
         """無人の Run で、承認が要るため使わなかったツールの呼び出しを残す。
 
-        自動実行（#1813）と外部の MCP クライアントの Run（`mcp`。#1874）。step（監査ログの
-        ツールの呼び出し）と Run の経過のイベントに、呼ばなかったことを残す。
+        外部の MCP クライアントの Run（#1874）。step（監査ログのツールの呼び出し）と Run の
+        経過のイベントに、呼ばなかったことを残す。
         """
-        code = MCP_APPROVAL_SKIPPED_CODE if mcp else AUTOMATION_APPROVAL_SKIPPED_CODE
-        message = mcp_approval_message if mcp else automation_approval_message
-        reason = "外部の MCP クライアントからの実行" if mcp else "自動実行"
+        code = MCP_APPROVAL_SKIPPED_CODE
         self._record_unexecuted_steps(
             run_id,
             calls,
-            error=lambda call: message(call.name),
+            error=lambda call: mcp_approval_message(call.name),
             error_code=code,
             event=lambda call: (
-                f"{reason}のため、承認が要るツール {call.name} を使いませんでした。",
+                f"外部の MCP クライアントからの実行のため、"
+                f"承認が要るツール {call.name} を使いませんでした。",
                 {"tool_name": call.name, "severity": "warning", "error_code": code},
             ),
         )
@@ -3322,7 +3294,7 @@ class AgentRuntimeRepository:
             self._persist_locked()
 
     def run_statuses(self, run_ids: Collection[str]) -> dict[str, RunStatus]:
-        """Run の状態をまとめて引く（自動実行の一覧の「前回」。#1812）。
+        """Run の状態をまとめて引く（一覧の「前回」。#1812）。
 
         Run を 1 件ずつ複製せずに、ロックを 1 回だけ取って状態だけを返す。無い Run は含めない。
         """

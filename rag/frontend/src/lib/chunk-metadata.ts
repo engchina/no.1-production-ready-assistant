@@ -3,7 +3,6 @@ import { evidenceCountLabel } from "@production-ready/ui";
 import type { RetrievedChunk } from "./api";
 
 export type CitationMetadataChipId =
-  | "citation_label"
   | "page"
   | "content_kind"
   | "section_title"
@@ -27,9 +26,6 @@ export function citationMetadataChips(
   metadata: RetrievedChunk["metadata"]
 ): CitationMetadataChip[] {
   const chips: CitationMetadataChip[] = [];
-  // XML ツリー JSON の段落の引用ラベル（#2024）。ページの無い原本なので頁より先に出す。
-  const citationLabel = stringMetadata(metadata, "xml_tree_citation_label_arabic");
-  if (citationLabel) chips.push({ id: "citation_label", value: citationLabel });
   const page = pageRange(metadata);
   if (page) {
     const printed = printedPageRange(metadata, page);
@@ -44,12 +40,6 @@ export function citationMetadataChips(
   const enabled = metadata.context_header_enabled;
   chips.push({ id: "context_header_enabled", value: typeof enabled === "boolean" ? String(enabled) : header ? "true" : "unknown" });
   return chips;
-}
-
-/** 原典の URL（XML ツリー JSON の文書。#2024）。https の URL のときだけ返す。 */
-export function citationSourceUrl(metadata: RetrievedChunk["metadata"]): string | null {
-  const url = stringMetadata(metadata, "xml_tree_source_url");
-  return url.startsWith("https://") ? url : null;
 }
 
 function pageRange(metadata: RetrievedChunk["metadata"]): string {
