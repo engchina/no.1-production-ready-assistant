@@ -130,7 +130,10 @@ def _post_json(url: str, body: dict[str, Any], api_key: str, timeout: int) -> di
     )
     # HTTPError はそのまま伝播させる。`status` を持つので共通の分類器が種類（429 の
     # 絞り・403 の権限など）を決め、再試行の可否を判断できる。
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+    # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+    if request.type not in ("http", "https"):
+        raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise EmbeddingClientError("埋め込みの応答が object ではありません。")

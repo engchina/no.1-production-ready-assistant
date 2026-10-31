@@ -1246,7 +1246,10 @@ def _post_openai_compatible(
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
     )
     # HTTPError はそのまま伝播させる（`status` を持つので共有 router が失敗を表示できる）。
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+    # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+    if request.type not in ("http", "https"):
+        raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"{url} の応答が object ではありません。")
