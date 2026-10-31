@@ -33,13 +33,6 @@ UNSTRUCTURED_TEXT_CONTRACT = "html_structural_roles_v3"
 EXTERNAL_ADAPTER_PACKAGES = {
     "docling": "docling",
     "unstructured": "unstructured",
-    # XML ツリー JSON を要素の階層のまま段落の単位にする解析(#2024)。標準ライブラリだけで動き、
-    # 実体は rag_parser_core.xml_tree_json(parser-xml-tree-json のサービスが実行する)。
-    # 構造化レコードの JSONL を記録の境界で区切る解析(#2457)。外部の parser の package は使わず、
-    # 実体は rag_parser_core.structured_records(parser-structured-records-jsonl のサービスが
-    # 実行する)。
-    "structured_records_jsonl": "rag_parser_core.structured_records",
-    "xml_tree_json": "rag_parser_core.xml_tree_json",
 }
 
 # 外部 adapter 実行の注入点。backend は HTTP runner を、service/test は in-process を渡す。

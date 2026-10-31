@@ -101,7 +101,7 @@ def test_extraction_recipe_id_changes_with_parser_axis() -> None:
     ("backend", "field", "value"),
     [
         ("docling", "rag_parser_docling_enabled", True),
-        ("xml_tree_json", "rag_parser_xml_tree_json_enabled", True),
+        ("unstructured", "rag_parser_unstructured_enabled", True),
     ],
 )
 def test_extraction_recipe_id_changes_with_output_affecting_parser_setting(
@@ -124,10 +124,7 @@ def test_extraction_recipe_id_changes_with_output_affecting_parser_setting(
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [
-        ("rag_parser_xml_tree_json_enabled", True),
-        ("rag_parser_structured_records_jsonl_enabled", True),
-    ],
+    [("rag_parser_docling_enabled", False)],
 )
 def test_extraction_recipe_id_ignores_unselected_parser_setting(
     field: str,
@@ -159,14 +156,14 @@ def test_extraction_recipe_id_ignores_parser_deployment_setting(
 def test_extraction_recipe_diagnostics_match_hashed_non_secret_settings() -> None:
     settings = get_settings().model_copy(
         update={
-            "rag_parser_adapter_backend": "xml_tree_json",
-            "rag_parser_xml_tree_json_enabled": True,
+            "rag_parser_adapter_backend": "unstructured",
+            "rag_parser_unstructured_enabled": True,
         }
     )
 
     subset = extraction_recipe_subset(settings)
 
-    assert subset["rag_parser_xml_tree_json_enabled"] is True
+    assert subset["rag_parser_unstructured_enabled"] is True
     assert "rag_parser_docling_service_url" not in subset
     assert "rag_parser_service_timeout_seconds" not in subset
 

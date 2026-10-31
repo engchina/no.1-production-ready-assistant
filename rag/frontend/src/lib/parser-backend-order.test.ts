@@ -6,13 +6,8 @@ import { SERVICE_PROFILE_ORDER } from "@/components/settings/ServicesManagementC
 import { PARSER_BACKEND_ORDER, sortParserBackends } from "./parser-backend-order";
 
 describe("文書解析エンジンの並び", () => {
-  it("Docling → Unstructured → 構造化レコード JSONL → XML ツリー JSON の順", () => {
-    expect([...PARSER_BACKEND_ORDER]).toEqual([
-      "docling",
-      "unstructured",
-      "structured_records_jsonl",
-      "xml_tree_json",
-    ]);
+  it("Docling → Unstructured の順", () => {
+    expect([...PARSER_BACKEND_ORDER]).toEqual(["docling", "unstructured"]);
   });
 
   it("処理レシピの選択肢も同じ正本の順", () => {
@@ -24,19 +19,9 @@ describe("文書解析エンジンの並び", () => {
   });
 
   it("画面のカードの並びを正本の順にそろえ、知らないエンジンは後ろに残す", () => {
-    expect(
-      sortParserBackends([
-        "local",
-        "docling",
-        "xml_tree_json",
-        "unstructured",
-        "structured_records_jsonl",
-      ])
-    ).toEqual([
+    expect(sortParserBackends(["local", "unstructured", "docling"])).toEqual([
       "docling",
       "unstructured",
-      "structured_records_jsonl",
-      "xml_tree_json",
       "local",
     ]);
   });

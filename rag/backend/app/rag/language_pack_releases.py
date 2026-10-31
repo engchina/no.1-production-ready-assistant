@@ -23,7 +23,7 @@ _ACTIVE_RELEASE: ContextVar[LanguagePackRelease | None] = ContextVar(
     "rag_language_pack_release", default=None
 )
 
-# 読み取り元: parser_core の text/markers/xml_tree_json、抽出項目の型変換、
+# 読み取り元: parser_core の text/markers、抽出項目の型変換、
 # chunk の問い合わせ情報、索引保存後の entity_index。前工程からの再実行は後工程も更新する。
 _STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     **dict.fromkeys(

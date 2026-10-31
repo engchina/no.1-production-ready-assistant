@@ -53,7 +53,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | 全文検索（Oracle Text） | 必須（hybrid の方式で検索するとき） | SQL の失敗は例外を送出 → **エラー**。質問から検索語が作れないとき（`_oracle_text_query` が `None`）は全文検索を飛ばす（失敗ではない） | `SP` | 見せない | `rag/backend/app/clients/oracle.py::_read_keyword_branch`・`_oracle_text_query` |
 | 全文検索の語の分割（Sudachi） | 任意 | Sudachi・辞書が使えない・分割に失敗 → 文字種の区切りだけで検索語を作る | `DS`（`text_search_tokenizer`。使えないときは回答ごとに 1 回、分割の失敗は 1 回ごと）。使えるかの確認は process ごとに 1 回（例外を cache する） | 見せない（縮退は `DS` で分かる） | `rag/packages/rag_engine/rag_engine/retrieval/text_search_tokenizer.py::_sudachi_failure`・`sudachi_unavailable`・`_content_terms`・`rag/packages/rag_engine/rag_engine/generation/answering.py::answer_question_result` |
 | 全文検索の語の trace（工程の詳細） | 任意 | 作れない → 工程の詳細に「抽出に失敗（型の名前）」 | `ST` | 見せない（表示だけの trace。実際の検索語は backend が作る） | `rag/packages/rag_engine/rag_engine/generation/answering.py::build_question_text_search_info` |
-| 引用ラベルの検索（#2024） | 必須（ラベルのある質問だけ SQL を実行） | 例外を送出 → **エラー** | `SP` | 見せない | `rag/backend/app/clients/oracle.py::citation_label_search` |
 | 前後の文脈・分類・1 頁目の本文 | 必須 | 例外を送出 → **エラー** | `SP` | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._load_classifications`・`_load_first_page_contexts` |
 | 派生の chunk の原文への置き換え（#2641） | 必須（派生の chunk が当たったとき） | 読み込みの例外は**エラー**。原文が無いときは根拠に渡さない | `DX`（`derived_evidence.unresolved_count`） | 見せない（要約の文を確かめた記載にしない） | `rag/backend/app/rag/answer_engine.py::AnswerEngine._original_anchors` |
 | 自動の検索条件の緩和（#2401） | 任意（設定 `RAG_FILTER_RELAXATION_MAX_STEPS`） | 0 件のとき自動で足した条件を段ごとに外す（失敗ではない） | `DX`（`filter_relaxation`）・`ZE`（`relaxed`・`automatic_filters`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._relax_filters` |
@@ -181,7 +180,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 ## 一覧から分かったこと
 
-- **必須の能力**（失敗すると回答がエラー・拒否になる）: 有効なときの安全チェック（入力・出力。fail-closed）、質問の embedding、vector 検索、全文検索の SQL、引用ラベルの検索、前後の文脈・分類・1 頁目の読み込み、派生の chunk の原文の読み込み、質問の理解（規則）、回答の生成の 1 組目、生成の監査（期限の打ち切りを除く）、承認済み FAQ からの回答。主の検索の失敗は 0 件にせずエラーにする（#3259 のテスト）。
+- **必須の能力**（失敗すると回答がエラー・拒否になる）: 有効なときの安全チェック（入力・出力。fail-closed）、質問の embedding、vector 検索、全文検索の SQL、前後の文脈・分類・1 頁目の読み込み、派生の chunk の原文の読み込み、質問の理解（規則）、回答の生成の 1 組目、生成の監査（期限の打ち切りを除く）、承認済み FAQ からの回答。主の検索の失敗は 0 件にせずエラーにする（#3259 のテスト）。
 - **任意の能力**は、上の表のとおり縮退して回答を続ける。縮退した結果を「確かめた」「精密な位置」として見せる経路は、静的確認の範囲では見当たらない。`models.rerank` は rerank が失敗したとき空にした（#3286）。
 - **記録が足りない縮退**: #3286 の表の処理（rerank・追加の検索文の rerank・CRAG の判定・会話の書き換え・抽出項目の条件の読み取り・会話の添付・Sudachi・章節の子の並べ替え・条の目録の元の質問の検索）は `DS` に入れた。条の目録の範囲の文書の選択と 2 段目の失敗は `DS` に数え、cache しない（#3285。#3278 と同じ種類）。例外ではない縮退（書き換えの安全チェックの拒否・抽出項目の条件の読めない出力・呼び出し元の検索文の拒否）は `DS` に入れない。
 - **診断に例外の文が残る経路**: 要求ごとの根拠の探し直しと、用語・同義語と回答ルールの読み込みは、例外の型の名前だけにした（#3284）。

@@ -27,8 +27,6 @@ const PARSER_BACKEND_ALIASES: Record<string, string> = {
 const PARSER_BACKEND_LABELS: Record<string, string> = {
   docling: "Docling",
   unstructured: "Unstructured",
-  structured_records_jsonl: "構造化レコード JSONL",
-  xml_tree_json: "XML ツリー JSON",
   enterprise_ai: "OCI Enterprise AI",
   local: t("sourceProfile.backend.local"),
   local_partition: t("sourceProfile.backend.local"),

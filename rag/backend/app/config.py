@@ -110,15 +110,10 @@ ParserAdapterBackend = Literal[
     "local",
     "docling",
     "unstructured",
-    # 前処理の構造化レコードの JSONL を記録の単位で解析し、検索用テキストを記録の境界で区切る
-    # (#2457)。使用エンジンで選んだときだけ使う。
-    "structured_records_jsonl",
-    # XML ツリー JSON(tag / attr / children の木の JSON)を要素の階層のまま解析する(#2024)。
-    # Docling・Unstructured と同じく、使用エンジンで選んだときだけ使う(#2042)。
-    "xml_tree_json",
 ]
 # 削除した文書解析エンジン(#270: Marker / Unlimited-OCR / GLM-OCR、#2042: OCI Generative AI
-# (Vision)、#22: MinerU / Dots.OCR / OCI Document Understanding)。保存済みの設定
+# (Vision)、#22: MinerU / Dots.OCR / OCI Document Understanding、#21: 構造化レコード JSONL /
+# XML ツリー JSON)。保存済みの設定
 # (parser-settings.json・文書レシピ・KB 構築設定・取込ジョブ)に残っていても取込・画面を
 # 壊さないよう、読み込み時に既定エンジンへ寄せる(旧 ``auto`` と同じ扱い)。
 # 旧値は再保存時に消えるため、既存データを書き換える migration は持たない。
@@ -132,6 +127,9 @@ REMOVED_PARSER_ADAPTER_BACKENDS = frozenset(
         "mineru",
         "dots_ocr",
         "oci_document_understanding",
+        # 前処理の構造化レコードの JSONL は Docling・Unstructured のサービスが読む(#21)。
+        "structured_records_jsonl",
+        "xml_tree_json",
     }
 )
 # 既定の文書解析エンジン(#286: Unstructured から Docling へ変更)。Unstructured は明示選択で使える。
@@ -340,8 +338,6 @@ class _PersistedParserAdapterSettings(BaseModel):
     adapter_backend: ParserAdapterBackend = DEFAULT_PARSER_ADAPTER_BACKEND
     docling_enabled: bool = True
     unstructured_enabled: bool = False
-    structured_records_jsonl_enabled: bool = False
-    xml_tree_json_enabled: bool = False
 
     # 削除済みエンジンの項目(marker_enabled・mineru_enabled 等)と、画面から外した
     # docling_vision_enabled(#497。Vision の既定は backend/.env の RAG_VISION_ENABLED で
@@ -917,7 +913,7 @@ class Settings(
         ),
     )
     rag_chunk_delimiter: str = Field(
-        # 既定は構造化レコード JSONL の記録の境界のマーカー(#2457)。
+        # 既定は構造化レコードの JSONL を読んだ抽出の記録の境界のマーカー(#2457)。
         default=JSONL_RECORD_BOUNDARY,
         min_length=1,
         max_length=256,
@@ -2201,7 +2197,7 @@ class Settings(
     rag_preprocess_word_to_jsonl_service_url: str = Field(
         default="http://127.0.0.1:18017",
         description=(
-            "Word(.doc/.docx/.docm)→構造化レコード JSONL 前処理マイクロサービスの base URL(#2457)。"
+            "Word(.doc/.docx/.docm)→構造化レコードの JSONL の前処理サービスの base URL(#2457)。"
         ),
     )
     rag_preprocess_service_timeout_seconds: float = Field(
@@ -2221,8 +2217,8 @@ class Settings(
         default=DEFAULT_PARSER_ADAPTER_BACKEND,
         description=(
             "文書解析 backend の明示選択。既定は Docling(#286)。Unstructured は明示選択で使う。"
-            "Docling/Unstructured/構造化レコード JSONL/XML ツリー JSON は"
-            "対応 parser マイクロサービスへ HTTP 委譲する。"
+            "Docling/Unstructured は対応 parser マイクロサービスへ HTTP 委譲する"
+            "(前処理の構造化レコードの JSONL も同じサービスが読む。#21)。"
             "in-process 解析・local fallback は持たない。"
         ),
     )
@@ -2250,41 +2246,9 @@ class Settings(
             "(画面で Unstructured を選ぶと有効になる)。選択時は parser-unstructured の起動が前提。"
         ),
     )
-    rag_parser_structured_records_jsonl_enabled: bool = Field(
-        default=False,
-        description=(
-            "構造化レコード JSONL adapter を有効化する(#2457)。既定 backend ではないため既定で"
-            " False(画面で構造化レコード JSONL を選ぶと有効になる)。選択時は"
-            " parser-structured-records-jsonl の起動が前提。"
-        ),
-    )
-    rag_parser_xml_tree_json_enabled: bool = Field(
-        default=False,
-        description=(
-            "XML ツリー JSON adapter を有効化する(#2024・#2042)。既定 backend ではないため既定で"
-            " False(画面で XML ツリー JSON を選ぶと有効になる)。選択時は parser-xml-tree-json の"
-            "起動が前提。"
-        ),
-    )
     rag_parser_docling_service_url: str = Field(
         default="http://127.0.0.1:18020",
         description="Docling parser マイクロサービスの base URL。",
-    )
-    rag_xml_tree_json_source_url_template: str = Field(
-        default="",
-        description=(
-            "XML ツリー JSON の文書の原典の URL のひな形(#2024)。``{document_id}`` を文書 ID に"
-            "置き換え、引用カードの「原典を開く」と根拠の metadata(xml_tree_source_url)に使う。"
-            "空なら原典の URL を付けない。"
-        ),
-    )
-    rag_parser_structured_records_jsonl_service_url: str = Field(
-        default="http://127.0.0.1:18023",
-        description="構造化レコード JSONL の parser マイクロサービスの base URL(#2457)。",
-    )
-    rag_parser_xml_tree_json_service_url: str = Field(
-        default="http://127.0.0.1:18021",
-        description="XML ツリー JSON の parser マイクロサービスの base URL(#2024)。",
     )
     rag_parser_unstructured_service_url: str = Field(
         default="http://127.0.0.1:18022",

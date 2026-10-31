@@ -81,8 +81,6 @@ _INGESTION_FIELD_MAP: dict[str, str] = {
     "parser_adapter_backend": "rag_parser_adapter_backend",
     "parser_docling_enabled": "rag_parser_docling_enabled",
     "parser_unstructured_enabled": "rag_parser_unstructured_enabled",
-    "parser_structured_records_jsonl_enabled": "rag_parser_structured_records_jsonl_enabled",
-    "parser_xml_tree_json_enabled": "rag_parser_xml_tree_json_enabled",
     # 図・画像を AI で読み取る(Vision)。解析エンジンに関係なく効く(#497)。
     "vision_enabled": "rag_vision_enabled",
     # 見出しの階層の推定(#2277)。原本全体の整理の後に抽出結果の見出しの階層を変える。
@@ -152,8 +150,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
 _EXTERNAL_PARSER_BACKEND_FLAGS: dict[str, str] = {
     "docling": "rag_parser_docling_enabled",
     "unstructured": "rag_parser_unstructured_enabled",
-    "structured_records_jsonl": "rag_parser_structured_records_jsonl_enabled",
-    "xml_tree_json": "rag_parser_xml_tree_json_enabled",
 }
 
 
@@ -161,7 +157,7 @@ class KbAdapterConfigError(ValueError):
     """KB 構築設定がグローバル設定と整合しないときに送出する。"""
 
 
-# 削除した文書解析エンジン(#270・#22)の有効化フラグ。保存済みの KB 構築設定・文書レシピ・
+# 削除した文書解析エンジン(#270・#22・#21)の有効化フラグ。保存済みの KB 構築設定・文書レシピ・
 # 取込ジョブの snapshot に残っていても読めるよう、検証前に取り除く。
 _REMOVED_PARSER_FLAG_FIELDS = frozenset(
     f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS
@@ -189,7 +185,7 @@ def _migrate_legacy_vision_fields(data: dict[object, object]) -> dict[object, ob
 def _clean_persisted_ingestion_config(data: object) -> object:
     """保存値・入力の取込設定から削除済みの項目を除き、旧値を読み替える(KnowledgeBaseIngestionConfig)。
 
-    削除済みエンジン(#270・#22)は「global 既定の文書解析エンジンを継承」(None)へ寄せる。
+    削除済みエンジン(#270・#22・#21)は「global 既定の文書解析エンジンを継承」(None)へ寄せる。
     """
     if not isinstance(data, dict):
         return data
@@ -234,8 +230,6 @@ class KnowledgeBaseIngestionConfig(BaseModel):
     parser_adapter_backend: ParserAdapterBackend | None = None
     parser_docling_enabled: bool | None = None
     parser_unstructured_enabled: bool | None = None
-    parser_structured_records_jsonl_enabled: bool | None = None
-    parser_xml_tree_json_enabled: bool | None = None
     vision_enabled: bool | None = None
     chunking_strategy: ChunkingStrategy | None = None
     chunk_size: int | None = Field(

@@ -361,13 +361,8 @@ test("文書処理設定を保存し、手動再処理を案内する", async ({
   await panel.getByRole("group", { name: "文書解析" }).getByText("上書き").click();
   await panel.getByRole("combobox", { name: "文書解析" }).click();
   // 解析エンジンの選択肢は文書解析の画面のカードと同じ並び（PARSER_BACKEND_ORDER）。
-  // 構造化レコード JSONL は Unstructured の後、XML ツリー JSON の前（#2457）。
-  await expect(page.getByRole("option")).toHaveText([
-    "Docling",
-    "Unstructured",
-    "構造化レコード JSONL",
-    "XML ツリー JSON",
-  ]);
+  // 構造化レコード JSONL・XML ツリー JSON の専用のエンジンは削除した（#21）。
+  await expect(page.getByRole("option")).toHaveText(["Docling", "Unstructured"]);
   await page.getByRole("option", { name: "Unstructured" }).click();
   // Vision は解析エンジンに関係なくレシピで選べる。「図表 VLM 要約」は Vision に統合した(#497)。
   await expect(panel.getByText("図表 VLM 要約")).toHaveCount(0);
@@ -403,11 +398,11 @@ test("Excel の読み方を上書きして保存する", async ({ page }) => {
   await panel.getByRole("group", { name: "ファイル準備", exact: true }).getByText("上書き").click();
   await panel.getByRole("combobox", { name: "ファイル準備", exact: true }).click();
   await page.getByRole("option", { name: "Excel→JSONL" }).click();
-  // JSONL のファイル準備は、解析エンジン・分割（固定分割符・記録の境界）も見える上書きにする（#2457）。
-  await expect(panel.getByText(/文書解析と分割（固定分割符・記録の境界）を合わせて上書きしました/)).toBeVisible();
-  await expect(panel.getByRole("combobox", { name: "文書解析", exact: true })).toContainText(
-    "構造化レコード JSONL"
-  );
+  // JSONL のファイル準備は、分割（固定分割符・記録の境界）も見える上書きにする（#2457）。解析エンジンは
+  // 変えない（成果物の JSONL は Docling・Unstructured のサービスが読む。#21）。
+  await expect(panel.getByText(/分割（固定分割符・記録の境界）を合わせて上書きしました/)).toBeVisible();
+  // 文書解析は全体の既定を継承したまま（上書きの選択欄を出さない）。
+  await expect(panel.getByRole("combobox", { name: "文書解析", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("combobox", { name: "文書分割", exact: true })).toContainText(
     "固定分割符"
   );
@@ -470,7 +465,6 @@ test("Excel の読み方を上書きして保存する", async ({ page }) => {
   await expect(page.getByText(/この文書の処理設定を保存しました/)).toBeVisible();
   expect(state.saved()).toMatchObject({
     preprocess_profile: "excel_to_jsonl",
-    parser_adapter_backend: "structured_records_jsonl",
     chunking_strategy: "fixed_delimiter",
     chunk_delimiter: "<<<JSONL_RECORD_BOUNDARY>>>",
     excel_options: {

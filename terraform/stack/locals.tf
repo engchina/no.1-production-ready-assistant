@@ -35,13 +35,9 @@ locals {
 
   # RAG の Compute に配備する前処理 / parser（サービスごとの uv の venv と systemd の unit。#286）。
   # backend と ingestion-worker は常に配備するため、この一覧には含めない。
-  # CPU の parser と、OCI を呼ぶ parser（入力で選んだとき）だけを配備する。parser-docling（既定の解析エンジン）と
-  # parser-structured-records-jsonl（使用エンジンに選べる構造化レコード JSONL の解析。軽い。#2457）と
-  # parser-xml-tree-json（使用エンジンに選べる XML ツリー JSON の解析。軽い）と、前処理の CSV→JSONL・Excel→JSONL・Word→JSONL は
-  # 常に配備する（rag/init_script.sh の REQUIRED_RAG_SERVICES。以前の stack の一覧に無くても再配備で足す。#2042・#2486）。
-  # parser-structured-records-jsonl は CSV / Excel の前処理と同じく、初めて配備したときに起動する。
-  # parser-xml-tree-json は既定は停止で、初めて配備しても起動しない（サービス管理画面で起動する。
-  # rag/scripts/rag-systemd.sh の RAG_DEFAULT_STOPPED_SERVICES。#2453）。
+  # CPU の parser だけを配備する。parser-docling（既定の解析エンジン。前処理の構造化レコードの JSONL も読む。#21）と、
+  # 前処理の CSV→JSONL・Excel→JSONL・Word→JSONL は常に配備する（rag/init_script.sh の REQUIRED_RAG_SERVICES。
+  # 以前の stack の一覧に無くても再配備で足す。#2042・#2486）。
   # parser-unstructured は Docling が扱えない形式を取り込むための parser で、入力で外せる（既定は配備する）。
   # 並びはサービス管理画面と同じ（rag/scripts/rag-systemd.sh の RAG_MICROSERVICES。port は変えない）。
   rag_services = concat(
@@ -53,7 +49,6 @@ locals {
       "parser-docling",
     ],
     var.rag_enable_parser_unstructured ? ["parser-unstructured"] : [],
-    ["parser-structured-records-jsonl", "parser-xml-tree-json"],
   )
 
   # rag/backend/.env（RAG_*）。backend が python-dotenv で読み、OCI parser の unit も EnvironmentFile で読む。

@@ -64,9 +64,7 @@ from rag_parser_core.source import (
     template_for_source_profile,
 )
 from rag_parser_core.structured_records import (
-    STRUCTURED_RECORDS_JSONL_BACKEND,
-    STRUCTURED_RECORDS_JSONL_PARSER_VERSION,
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
+    STRUCTURED_RECORDS_PARSER_VERSION,
     StructuredRecordsError,
     is_structured_records_content_type,
     oversized_record_line,
@@ -906,15 +904,12 @@ def _external_adapter_result(
     content_type: str,
 ) -> ParserRegistryResult:
     """任意 parser adapter を呼び出し、失敗時は fallback 用 warning だけ返す。"""
-    if backend == STRUCTURED_RECORDS_JSONL_BACKEND:
-        # 構造化レコード JSONL の解析（#2457）。content type に関係なく JSONL の契約で読む
-        # （契約に合わない入力は診断で止める。任意の JSONL を構造化レコードとみなさない）。
-        return _structured_records_jsonl_result(source_bytes)
     if is_structured_records_content_type(content_type):
         # 前処理（csv_to_jsonl / excel_to_jsonl / word_to_jsonl）が作った構造化レコードの JSONL は、
-        # 構造化レコード JSONL の解析エンジンだけが読む。ほかの adapter は黙って変換せず診断で
-        # 止める（#2457）。
-        return _adapter_fallback_result(backend, STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING)
+        # 選んだ解析エンジン（Docling・Unstructured）のサービスが外部の parser に渡さず共通の契約で
+        # 読む（#2457。専用の解析エンジンは #21 で削除）。契約に合わない入力は診断で止める
+        # （任意の JSONL を構造化レコードとみなさない。content type は前処理だけが付ける）。
+        return _structured_records_result(backend, source_bytes)
     if not _external_adapter_package_available(backend):
         return _adapter_fallback_result(backend, f"{backend}_adapter_package_missing")
     try:
@@ -930,8 +925,6 @@ def _external_adapter_result(
                 source_profile=source_profile,
                 content_type=content_type,
             )
-        if backend == "xml_tree_json":
-            return _xml_tree_json_adapter_result(source_bytes)
     except Exception as exc:
         invalid_input = _is_invalid_input_error(exc)
         logger.exception(
@@ -1084,15 +1077,15 @@ def _docling_adapter_result(
     )
 
 
-def _structured_records_jsonl_result(source_bytes: bytes) -> ParserRegistryResult:
-    """構造化レコード JSONL を、記録を 1 要素にし境界で区切った抽出にする（#2457）。
+def _structured_records_result(backend: str, source_bytes: bytes) -> ParserRegistryResult:
+    """構造化レコードの JSONL を、記録を 1 要素にし境界で区切った抽出にする（#2457）。
 
     要素は記録ごとの共通の形（`structured_records_extraction`）。raw_text は
     記録の本文を境界のマーカーで区切った検索用テキストにする（`with_record_boundaries`）。
     契約に合わない・本文が 1 要素の上限を超える記録があれば、黙って切らずに
     ``structured_records_invalid:<理由>@line<n>`` の fallback を返す（backend は取込を止める）。
+    ``backend`` は読んだサービスの解析エンジン（抽出の parser_backend に残す）。
     """
-    backend = STRUCTURED_RECORDS_JSONL_BACKEND
     document = parse_structured_records(source_bytes)
     if isinstance(document, StructuredRecordsError):
         return _adapter_fallback_result(backend, document.warning())
@@ -1106,33 +1099,14 @@ def _structured_records_jsonl_result(source_bytes: bytes) -> ParserRegistryResul
             document,
             source_parser=backend,
             parser_backend=backend,
-            parser_version=STRUCTURED_RECORDS_JSONL_PARSER_VERSION,
+            parser_version=STRUCTURED_RECORDS_PARSER_VERSION,
         )
     )
     return ParserRegistryResult(
         extraction=extraction,
         parser_backend=backend,
-        parser_version=STRUCTURED_RECORDS_JSONL_PARSER_VERSION,
-        template=backend,
-    )
-
-
-def _xml_tree_json_adapter_result(source_bytes: bytes) -> ParserRegistryResult:
-    """XML ツリー JSON を、段落を 1 要素にした抽出にする(#2024)。
-
-    対応するスキーマでなければ、外部の parser に渡さず ``xml_tree_json_unsupported_tree`` の
-    fallback を返す(backend は取込を止める)。
-    """
-    from rag_parser_core.xml_tree_json import XML_TREE_JSON_PARSER_VERSION, xml_tree_json_extraction
-
-    extraction = xml_tree_json_extraction(source_bytes)
-    if extraction is None:
-        return _adapter_fallback_result("xml_tree_json", "xml_tree_json_unsupported_tree")
-    return ParserRegistryResult(
-        extraction=extraction,
-        parser_backend="xml_tree_json",
-        parser_version=XML_TREE_JSON_PARSER_VERSION,
-        template="xml_tree_json",
+        parser_version=STRUCTURED_RECORDS_PARSER_VERSION,
+        template="structured_records",
     )
 
 

@@ -152,10 +152,6 @@ RAG_BASE_SERVICES = [
     "preprocess-excel-to-jsonl",
     "preprocess-word-to-jsonl",
     "parser-docling",
-    # 構造化レコード JSONL・XML ツリー JSON は使用エンジンに選べる解析エンジン。常に配備する
-    # (#2457・#2042)。
-    "parser-structured-records-jsonl",
-    "parser-xml-tree-json",
 ]
 # parser-unstructured は Docling が扱えない形式(テキスト・Office・メール など)を取り込むための parser(#286)。
 RAG_OPTIONAL_SERVICES = [
@@ -261,7 +257,7 @@ INIT_SCRIPT_CONTRACTS = {
         'BACKEND_PORT="8000"',
         # 必ず配備する parser と前処理 Word→JSONL（stack の RAG_BASE_SERVICES にもある）。以前の stack の一覧に
         # 無くても足す（#2042・#2457）。
-        "REQUIRED_RAG_SERVICES=(parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)",
+        "REQUIRED_RAG_SERVICES=(parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)",
         'source "${INIT_SCRIPT_DIR}/scripts/rag-systemd.sh"',
         'find "${WALLET_DIR}" -type f -exec chmod 0600 {} \\;',
         "python -m app.rag.system_schema_cli initialize",

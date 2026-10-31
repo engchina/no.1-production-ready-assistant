@@ -41,10 +41,7 @@ from rag_parser_core.source import template_for_source_profile
 from rag_parser_core.structured_records import (
     STRUCTURED_RECORDS_CONTENT_TYPE,
     STRUCTURED_RECORDS_FILE_EXTENSION,
-    STRUCTURED_RECORDS_JSONL_BACKEND,
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
     RecordBoundaryError,
-    is_structured_records_content_type,
     record_boundary_plain_text,
 )
 from rag_pipeline_core.raptor import build_raptor_summaries
@@ -60,11 +57,9 @@ from app.clients.oci_enterprise_ai import (
 from app.clients.oci_genai import OciGenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.parser_service import (
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON,
     ParserServiceClient,
     ParserServiceUnavailableError,
     parse_progress_id,
-    structured_records_requires_jsonl_backend_message,
     supported_formats_label,
 )
 from app.clients.preprocess_service import PreprocessServiceClient
@@ -84,7 +79,7 @@ from app.rag.chunking_small_to_big import (
     small_to_big_parent_source,
 )
 from app.rag.chunking_strategy import resolve_chunking_params
-from app.rag.cross_references import annotate_cross_references, apply_reference_search_context
+from app.rag.cross_references import annotate_cross_references
 from app.rag.entity_index import EntityIndex, EntityIndexOptions, build_entity_index
 from app.rag.extraction_field_adapter import (
     FIELD_EXTRACTION_OUTCOME_ARTIFACT_KEY,
@@ -176,7 +171,6 @@ from app.rag.vision import (
     read_figures_with_vision,
     vision_failure,
 )
-from app.rag.xml_tree_source_urls import apply_xml_tree_source_urls
 from app.schemas.document import (
     DocumentChunkView,
     DocumentDetail,
@@ -661,18 +655,6 @@ class IngestionPipeline:
                 backend,
                 "engine_removed",
                 warning_code="parser_engine_removed",
-            )
-        # 構造化レコードの JSONL(CSV→JSONL・Excel→JSONL・Word→JSONL)は構造化レコード JSONL の
-        # 解析エンジンだけが読む。ほかのエンジンでは黙って変換せず、選び直すよう案内して
-        # 止める(#2457)。
-        if (
-            is_structured_records_content_type(content_type)
-            and backend != STRUCTURED_RECORDS_JSONL_BACKEND
-        ):
-            raise ParserServiceUnavailableError(
-                backend,
-                STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON,
-                warning_code=STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
             )
         # pre-flight: 宣言 matrix で非対応形式なら microservice/OCI を呼ぶ前に停止する
         # (preprocess 変換後の content_type で判定するため、office_to_pdf 済み等は通る)。
@@ -2070,7 +2052,7 @@ class IngestionPipeline:
         await _raise_if_cancelled(cancel_checker)
         chunking_params = resolve_chunking_params(self._settings)
         # 親子階層（small-to-big）は、どの解析の結果でも親子に分割する(#3377)。親子を作った入力
-        # (Docling のレイアウト・行の記録・XML ツリー JSON・抽出の構造)は trace に残す。
+        # (Docling のレイアウト・行の記録・抽出の構造)は trace に残す。
         is_small_to_big = chunking_params.strategy == SMALL_TO_BIG_STRATEGY
 
         def _run_chunking() -> list[Chunk]:
@@ -2157,10 +2139,6 @@ class IngestionPipeline:
         apply_page_labels(chunks, labels_from_artifacts(extraction.parser_artifacts))
         # 本文の交差参照(「第3章を参照」など)を同じ文書の節に解決して metadata に残す(#1280)。
         annotate_cross_references(chunks, document_title=source_name)
-        # XML ツリー JSON の段落の検索の文に、参照先の条の内容を足す(読替え規定。#2148)。
-        apply_reference_search_context(chunks)
-        # XML ツリー JSON の文書の原典の URL(設定のひな形がある時だけ。#2024)。
-        apply_xml_tree_source_urls(chunks, self._settings)
         # 分割に使った言語資源の取込の項目の hash(#2181)。言語資源を変えたあと、分割し直しが
         # 要る文書を数える。
         language_hash = current_pack().ingest_hash
@@ -3974,19 +3952,10 @@ def _selected_parser_failure_message(
     label = _parser_backend_label(selected_backend)
     warning = result.warnings[0] if result.warnings else None
     warning_suffix = f" エラーコード: {warning}" if warning else ""
-    if warning == "xml_tree_json_unsupported_tree":
-        return (
-            f"選択した文書解析エンジン（{label}）は、XML の要素の木（tag / attr / children）の"
-            "形の JSON だけを解析できます。この JSON はその形ではないため、別の解析エンジンには"
-            "切り替えずに取込を停止しました。この文書の「処理レシピ」で「文書解析」を"
-            f"Unstructured などに変えてから再実行してください。{warning_suffix}"
-        )
-    if warning == STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING:
-        return structured_records_requires_jsonl_backend_message(label) + warning_suffix
     if warning and warning.startswith("structured_records_invalid:"):
         return (
-            f"選択した文書解析エンジン（{label}）は、ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が"
-            "作る構造化レコードの JSONL だけを解析できます。このファイルはその形式に合わないか、"
+            f"文書解析エンジン（{label}）は、ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が"
+            "作った構造化レコードの JSONL を読めませんでした。このファイルはその形式に合わないか、"
             "1 件の記録が大きすぎるため、別の解析エンジンには切り替えずに取込を停止しました。"
             "この文書の「処理レシピ」でファイル準備と文書解析の組み合わせを確認してから"
             f"再実行してください。{warning_suffix}"
@@ -4047,7 +4016,7 @@ def _selected_parser_failure_message(
 
 
 def record_boundary_failure_message(error: RecordBoundaryError) -> str:
-    """構造化レコード JSONL の記録の境界で分割できなかった理由を利用者向け文言へ寄せる(#2457)。"""
+    """構造化レコードの記録の境界で分割できなかった理由を利用者向け文言へ寄せる(#2457)。"""
     if error.code == "record_too_large":
         reason = "1 件の記録が chunk の上限を超えています"
     elif error.code == "boundary_count_mismatch":
@@ -4055,7 +4024,7 @@ def record_boundary_failure_message(error: RecordBoundaryError) -> str:
     else:
         reason = "検索用テキストの記録の境界が壊れています"
     return (
-        f"構造化レコード JSONL の抽出を記録の単位で分割できませんでした（{reason}）。"
+        f"構造化レコードの抽出を記録の単位で分割できませんでした（{reason}）。"
         "記録を結合・切り捨てずに取込を停止しました。抽出結果の確認で本文を編集した場合は、"
         "記録の境界の行を消さずに保存し直すか、文書を再処理してください。"
         f" エラーコード: structured_records_boundary_invalid:{error.code}"
@@ -4066,8 +4035,6 @@ def _parser_backend_label(backend: str) -> str:
     labels = {
         "docling": "Docling",
         "unstructured": "Unstructured",
-        "structured_records_jsonl": "構造化レコード JSONL",
-        "xml_tree_json": "XML ツリー JSON",
     }
     return labels.get(backend, backend)
 
@@ -4129,12 +4096,7 @@ def _uses_external_adapter_extraction(parser_result: ParserRegistryResult) -> bo
 
 
 def _is_external_adapter_backend(parser_backend: str) -> bool:
-    return parser_backend in {
-        "docling",
-        "unstructured",
-        "structured_records_jsonl",
-        "xml_tree_json",
-    }
+    return parser_backend in {"docling", "unstructured"}
 
 
 def _extraction_with_parser_context(
@@ -4400,7 +4362,7 @@ def _source_parser_name(
 
 
 def _text_for_chunking(extraction: StructuredExtraction) -> str:
-    """抽出結果から索引用テキストを作る(構造化レコード JSONL の境界のマーカーは除く。#2457)。"""
+    """抽出結果から索引用テキストを作る(構造化レコードの記録の境界のマーカーは除く。#2457)。"""
     return record_boundary_plain_text(extraction).strip()
 
 

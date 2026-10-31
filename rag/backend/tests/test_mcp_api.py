@@ -2489,15 +2489,6 @@ class _DocumentOracle:
     async def accessible_chunk_exists(self, document_id: str, chunk_id: str) -> bool:
         return document_id == "d1" and chunk_id.startswith("d1:cs-old:")
 
-    async def retrievable_citation_chunk(
-        self, document_id: str, citation_key: str
-    ) -> RetrievedChunk | None:
-        for chunk in self.chunks:
-            keys = str(chunk.metadata.get("xml_tree_lookup_keys") or "").splitlines()
-            if document_id == "d1" and citation_key in keys:
-                return chunk
-        return None
-
     async def retrievable_element_chunk(
         self, document_id: str, extraction_recipe_id: str, element_id: str
     ) -> RetrievedChunk | None:
@@ -2989,28 +2980,17 @@ def test_read_section_continues_with_cursor_without_gaps(
     assert read.replace("\n", "") == "".join(texts)
 
 
-def test_read_section_by_citation_label_in_either_numeral_form(
+def test_read_section_no_longer_takes_citation_label(
     auth: ProductionAuth, document_oracle: type[_DocumentOracle]
 ) -> None:
-    """XML ツリー JSON の段落を引用ラベルで読む（漢数字・算用数字・空白の違いは同じ。#2024）。"""
-    from rag_parser_core.xml_tree_json import xml_tree_citation_key
-
-    keys = "\n".join(
-        xml_tree_citation_key(label) for label in ("第三条第二項", "規程 第三条第二項")
-    )
-    document_oracle.chunks[3] = _doc_chunk(
-        3, "承認の本文。", "規程 > 第3章 承認", 3, xml_tree_lookup_keys=keys
-    )
+    """引用ラベル（citation）で読む引数は、XML ツリー JSON の解析とともに削除した（#21）。"""
+    del document_oracle
     user = auth.user_with_permissions("searcher", ["menu.search"])
     headers = _token(user.user_uuid)
 
-    for citation in ("第3条第2項", "第三条第二項", "規程 第３条 第２項"):
-        body = _read_section({"citation": citation}, headers)
-        assert body["section"]["section_id"] == "s22", citation
-        assert body["text"] == "--- p.3 ---\n承認の本文。"
-    missing = _call("rag_read_section", {"document_id": "d1", "citation": "第9条"}, headers)
-    assert missing["isError"] is True
-    assert missing["structuredContent"]["error_code"] == mcp_tools.SECTION_NOT_FOUND_CODE
+    result = _call("rag_read_section", {"document_id": "d1", "citation": "第3条"}, headers)
+
+    assert result["isError"] is True
 
 
 def test_read_section_errors(auth: ProductionAuth, document_oracle: type[_DocumentOracle]) -> None:

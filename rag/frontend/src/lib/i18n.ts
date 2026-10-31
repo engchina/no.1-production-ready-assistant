@@ -214,12 +214,6 @@ export const ja = {
   "settings.parserAdapters.capabilities": "対応形式",
   "settings.parserAdapters.legacyBackendNotice":
     "旧『local』設定です。未選択時は既定の Docling で解析します(内蔵フォールバックは廃止)。下から解析方式を選ぶと上書きされます。",
-  "settings.parserAdapters.backend.structured_records_jsonl": "構造化レコード JSONL",
-  "settings.parserAdapters.backend.structured_records_jsonl.description":
-    "ファイル準備の CSV→JSONL・Excel→JSONL・Word→JSONL が作る構造化レコードの JSONL を、記録の単位で解析。一般の JSONL ではなく、この構造化レコード形式が対象。解析後の分割は「文書分割」の設定で決まります",
-  "settings.parserAdapters.backend.xml_tree_json": "XML ツリー JSON",
-  "settings.parserAdapters.backend.xml_tree_json.description":
-    "XML の要素の木（tag / attr / children）を JSON にした文書を、要素の階層のまま解析。選んだ場合だけ使用",
   "settings.parserAdapters.effectiveOrder": "実行順",
   "settings.parserAdapters.noEffectiveOrder": "外部解析方式なし",
   "settings.parserAdapters.source": "設定元",
@@ -1548,7 +1542,7 @@ export const ja = {
   "settings.chunking.params.active": "有効パラメータ",
   "settings.chunking.params.delimiter": "固定分割符文字列",
   "settings.chunking.params.delimiterHint":
-    "\\n, \\t, \\\\ の escape 表現を使用できます。分割符は chunk には残しません。既定の <<<JSONL_RECORD_BOUNDARY>>> は、構造化レコード JSONL の記録の境界です。",
+    "\\n, \\t, \\\\ の escape 表現を使用できます。分割符は chunk には残しません。既定の <<<JSONL_RECORD_BOUNDARY>>> は、構造化レコードの JSONL を読んだ抽出の記録の境界です。",
   "settings.chunking.params.chunkSize": "chunk サイズ(文字)",
   "settings.chunking.params.overlap": "overlap(文字)",
   "settings.chunking.params.headingSplitLimit": "見出し内の再分割上限(文字)",
@@ -1624,13 +1618,13 @@ export const ja = {
     "Word・PowerPoint の文書(旧形式の .doc・.ppt、マクロ付きの .docm・.pptm を含む)を PDF にしてから解析します。マクロは実行しません。PDF にした文書はブラウザーでプレビューできます。Excel は「Excel→JSONL」を使います。",
   "settings.preprocess.profile.csv_to_jsonl": "CSV→JSONL",
   "settings.preprocess.profile.csv_to_jsonl.description":
-    "CSV の表頭を除くデータの 1 記録を、列名と値の組の JSONL に変換します。空行は除き、元の行の位置を保ちます。文書解析は「構造化レコード JSONL」を使います。",
+    "CSV の表頭を除くデータの 1 記録を、列名と値の組の JSONL に変換します。空行は除き、元の行の位置を保ちます。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.profile.excel_to_jsonl": "Excel→JSONL",
   "settings.preprocess.profile.excel_to_jsonl.description":
-    "Excel ファイル(.xls・.xlsx・マクロ付きの .xlsm)の表の 1 行(手順は 1 手順)を、見出しの列名と値の組の 1 件の記録(JSONL)にしてから解析します。マクロは実行しません。シート・行・セル範囲を保ちます。既定では表示シート・表示セルを読み、数式は保存済みの計算結果を使います。計算結果がないセルは数式の文字列と警告を残します。文書解析は「構造化レコード JSONL」を使います。",
+    "Excel ファイル(.xls・.xlsx・マクロ付きの .xlsm)の表の 1 行(手順は 1 手順)を、見出しの列名と値の組の 1 件の記録(JSONL)にしてから解析します。マクロは実行しません。シート・行・セル範囲を保ちます。既定では表示シート・表示セルを読み、数式は保存済みの計算結果を使います。計算結果がないセルは数式の文字列と警告を残します。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.profile.word_to_jsonl": "Word→JSONL",
   "settings.preprocess.profile.word_to_jsonl.description":
-    "Word ファイル(.doc・.docx・マクロ付きの .docm)を、見出しの下の段落・リスト・表のまとまりを 1 件の記録(JSONL)にしてから解析します。見出しの階層と本文の順序を保ち、長い節は分割します。画像・ヘッダー・フッターは読み取らず、ページ番号は付けません。.doc は .docx にしてから読み、マクロは実行しません。文書解析は「構造化レコード JSONL」を使います。",
+    "Word ファイル(.doc・.docx・マクロ付きの .docm)を、見出しの下の段落・リスト・表のまとまりを 1 件の記録(JSONL)にしてから解析します。見出しの階層と本文の順序を保ち、長い節は分割します。画像・ヘッダー・フッターは読み取らず、ページ番号は付けません。.doc は .docx にしてから読み、マクロは実行しません。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.actions.save": "保存",
   "settings.preprocess.actions.label": "ファイル準備の設定の操作",
   "settings.preprocess.actions.saved": "ファイル準備の設定を保存しました。",
@@ -1750,8 +1744,6 @@ export const ja = {
   "settings.services.item.preprocessWordToJsonl": "Word→JSONL",
   "settings.services.item.parserDocling": "Docling",
   "settings.services.item.parserUnstructured": "Unstructured",
-  "settings.services.item.parserStructuredRecordsJsonl": "構造化レコード JSONL",
-  "settings.services.item.parserXmlTreeJson": "XML ツリー JSON",
   "settings.services.loadError": "サービス一覧を取得できませんでした。",
   "settings.retrieval.subtitle":
     "回答の検索方法と生成方式の全体設定、および検索に使うプロンプトを設定します。",
@@ -3265,7 +3257,7 @@ export const ja = {
     "処理設定を保存できませんでした。値と文書状態を確認して再試行してください。",
   "documents.processingConfig.parserFormats": "対応形式: {formats}",
   "documents.processingConfig.structuredRecordsHint":
-    "構造化レコードの JSONL は「構造化レコード JSONL」だけが解析できます。文書解析と分割（固定分割符・記録の境界）を合わせて上書きしました。",
+    "構造化レコードの JSONL は、選んだ文書解析エンジン（Docling・Unstructured）が記録の単位で読みます。分割（固定分割符・記録の境界）を合わせて上書きしました。",
   "documents.processingConfig.parserUnsupported":
     "この解析エンジンは {modality} 形式の文書に対応していません（対応: {formats}）。取込は開始前に失敗します。",
   "documents.processingConfig.parserRemoved": "解析エンジンは削除されました（{engine}）",

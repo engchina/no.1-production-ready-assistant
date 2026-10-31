@@ -95,8 +95,8 @@ KB（ナレッジベース）は検索対象の範囲を決めるだけで、上
 1. **解析**：文書解析を Docling にする。図や画面キャプチャが多い文書では、文書のレシピで Vision（図・画像を AI で読み取る）を有効にする（Docling 以外の解析エンジンでも使える）。有効にすると、画像 1 枚ごとに Vision モデルの呼び出しと時間がかかる。
 2. **分割**：文書分割は既定で親子階層（`small_to_big`。#594 で既定にした）。親は回答の文脈に渡す大きい単位、子は検索に当てる小さい単位（LangChain の ParentDocumentRetriever・LlamaIndex の階層の分割と同じ考え方）で、**どの解析の結果でも親子に分割する**（#3377。解析エンジンの名前では選ばず、抽出の形で親子の作り方を選ぶ。取込の trace の `chunk_parent_source`）。
    - 解析の結果がレイアウトの記録（`parser_artifacts.layout_records`。Docling の PDF・画像）を持つ文書は、その記録から親子を作る（`layout_records`。見出し・表・図の領域と根拠の元の要素を保つ）。
-   - Excel の行の記録は行を子・表の一部を親（`sheet_records`。#1349）、XML ツリー JSON は段落を子・番号つきの単位を親にする（`xml_tree_units`。#2024）。
-   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured・OCI などの解析の結果、構造化レコード JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
+   - Excel の行の記録は行を子・表の一部を親（`sheet_records`。#1349）。
+   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured・OCI などの解析の結果、構造化レコードの JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
    - 以前（#300〜#3377）は、レイアウトの記録が無い文書を「構造認識」（`structure_aware`）へ縮退し、chunk に `chunk_strategy_fallback_reason=layout_missing` を残していた。その chunk は文書詳細の Chunk タブに「親子階層で分割されていない Chunk です」と表示し、Chunk を作り直すと親子階層で分割する（再解析は要らない）。
    子・親の大きさは同じ画面の「戦略別パラメータ」で変えられる（下の設定一覧）。
 3. **確認**：文書詳細の抽出タブで、次を確認できる。

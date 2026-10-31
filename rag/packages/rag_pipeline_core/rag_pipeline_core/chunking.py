@@ -33,12 +33,6 @@ from rag_parser_core.structured_records import (
     record_boundary_plain_text,
     split_record_boundary_text,
 )
-from rag_parser_core.xml_tree_json import (
-    XML_TREE_LOOKUP_KEYS_KEY,
-    XML_TREE_METADATA_PREFIX,
-    xml_tree_lookup_keys,
-    xml_tree_search_text,
-)
 
 # 終端句読点 + 後続の閉じ記号列(」』)】等)の直後を文境界とする。
 # 閉じ記号を次文の先頭へ送らないため、lookbehind ではなく境界そのものを match する。
@@ -135,21 +129,12 @@ class _ElementSpan:
     sheet_table_index: int | None = None
     # 図の本文を Vision（VLM）が書いたか（解析の OCR・キャプションのままなら False。#1282）。
     vision_described: bool = False
-    # XML ツリー JSON の解析の要素の引用ラベルなどの metadata（``xml_tree_`` で始まる key。#2024）。
-    xml_tree_metadata: tuple[tuple[str, str | int | float | bool | None], ...] = ()
     # 要素の由来の metadata（``ELEMENT_PROVENANCE_METADATA_KEYS``。#2590）。
     provenance_metadata: tuple[tuple[str, str | int | float | bool], ...] = ()
     # 表の 1 行の記録のセルの座標（``TABLE_LOCATOR_METADATA_KEYS``。#3262）。
     table_locator_metadata: tuple[tuple[str, str | int], ...] = ()
     # 解析の表の格子と要素の本文の行の対応（``row_basis=parsed_table``。#3429）。
     parsed_table: ParsedTableBinding | None = None
-
-    @property
-    def xml_tree_citation_label(self) -> str | None:
-        for key, value in self.xml_tree_metadata:
-            if key == "xml_tree_citation_label" and isinstance(value, str):
-                return value
-        return None
 
 
 @dataclass(frozen=True)
@@ -316,15 +301,6 @@ def chunk_extraction(
             flush_buffer()
             chunks.extend(_chunk_table_span(span, chunk_size=table_size, start_index=len(chunks)))
             continue
-        if span.xml_tree_metadata:
-            # XML ツリー JSON の段落（#2024）は段落ごとに chunk にする。長い段落は
-            # 行（細目・表の行）の境目で分け、各部分の先頭に引用ラベルの行（表の途中なら列見出し）
-            # を繰り返す。
-            flush_buffer()
-            chunks.extend(
-                _chunk_xml_tree_span(span, chunk_size=chunk_size, start_index=len(chunks))
-            )
-            continue
         if span.content_kind == SHEET_RECORD_CONTENT_KIND:
             # 表計算の 1 行（1 記録）は単独の chunk にする。列名つきの値を 1 つの chunk に保ち、
             # 1 行の実体で検索したときに他の行と混ざって埋もれないようにする（#1349）。
@@ -341,15 +317,13 @@ def chunk_extraction(
         buffer = [span]
 
     flush_buffer()
-    return with_xml_tree_search_text(
-        _with_chunk_size_compliance_metadata(
-            _with_table_row_tree_metadata(
-                _with_table_continuity_metadata([_with_chunk_metadata(chunk) for chunk in chunks])
-            ),
-            chunk_size=chunk_size,
-            overlap=overlap,
-            table_chunk_size=table_size,
-        )
+    return _with_chunk_size_compliance_metadata(
+        _with_table_row_tree_metadata(
+            _with_table_continuity_metadata([_with_chunk_metadata(chunk) for chunk in chunks])
+        ),
+        chunk_size=chunk_size,
+        overlap=overlap,
+        table_chunk_size=table_size,
     )
 
 
@@ -362,7 +336,7 @@ CHUNKING_STRATEGIES: tuple[str, ...] = (
     "fixed_delimiter",
 )
 _DEFAULT_CHUNKING_STRATEGY = "structure_aware"
-# 固定分割符の既定は構造化レコード JSONL の記録の境界のマーカー(#2457)。
+# 固定分割符の既定は構造化レコードの JSONL の記録の境界のマーカー(#2457)。
 _DEFAULT_FIXED_DELIMITER = JSONL_RECORD_BOUNDARY
 # 撤去済み戦略の既存設定を後継戦略へ読み替える(sentence_window は小 chunk 化のみで
 # recursive_character + 検索時 neighbor expansion で代替)
@@ -432,7 +406,7 @@ def chunk_extraction_with_strategy(
     if normalized_strategy in {"fixed_delimiter", "fixed_size"}:
         return _with_chunk_strategy_metadata(chunks, normalized_strategy)
     absorbed = _absorb_small_chunks(chunks, min_chars=min_chars, chunk_size=chunk_size)
-    return with_xml_tree_search_text(_with_chunk_strategy_metadata(absorbed, normalized_strategy))
+    return _with_chunk_strategy_metadata(absorbed, normalized_strategy)
 
 
 def decode_fixed_delimiter(value: str) -> str:
@@ -526,7 +500,7 @@ def _chunk_fixed_delimiter(
 ) -> list[Chunk]:
     """指定された固定分割符で全文を機械的に分割する。分割符自体は chunk に残さない。
 
-    構造化レコード JSONL の解析の抽出(raw_text が記録の境界で区切られている。#2457)は、
+    構造化レコードの JSONL を読んだ抽出(raw_text が記録の境界で区切られている。#2457)は、
     分割符の設定に関係なく記録の境界で 1 記録 1 chunk にする(`_chunk_structured_records`)。
     """
     if has_record_boundaries(extraction):
@@ -1046,11 +1020,6 @@ def _element_spans(
                 sheet_table_index=_metadata_positive_int(element.metadata.get("sheet_table_index")),
                 vision_described=element.kind == "figure"
                 and str(element.metadata.get("vision_status") or "") == "succeeded",
-                xml_tree_metadata=tuple(
-                    (key, value)
-                    for key, value in element.metadata.items()
-                    if key.startswith(XML_TREE_METADATA_PREFIX)
-                ),
                 provenance_metadata=_provenance_metadata(element),
                 table_locator_metadata=tuple(
                     (key, value)
@@ -1135,7 +1104,7 @@ def _raw_text_with_table_vision(extraction: StructuredExtraction) -> str:
     要素の直前の要素の後ろに補足だけを入れる。Docling 以外は Vision の段が表の本文と raw_text へ
     補足を足しているので、raw_text に説明文がある表は入れない。保存する抽出結果は変えない。
     """
-    # 構造化レコード JSONL の解析の境界のマーカー(#2457)は、raw_text を分割する方法の chunk に
+    # 構造化レコードの JSONL を読んだ抽出の境界のマーカー(#2457)は、raw_text を分割する方法の chunk に
     # 残さない(エスケープを戻した原文を記録ごとに改行でつなぐ)。
     raw_text = record_boundary_plain_text(extraction)
     if not any(_pending_table_vision_supplement(element) for element in extraction.elements):
@@ -1362,9 +1331,6 @@ def _can_merge_spans(group: list[_ElementSpan], span: _ElementSpan, chunk_size: 
     # 派生の要素（章節の要約など）と原文の要素、別の章節の派生の要素を結合しない(#2590)。
     if first.provenance_metadata != span.provenance_metadata:
         return False
-    # XML ツリー JSON の段落(#2024)は段落ごとに 1 chunk にする（同じ単位の別の段落と結合しない）。
-    if first.xml_tree_citation_label != span.xml_tree_citation_label:
-        return False
     return len(_join_span_text([*group, span])) <= chunk_size
 
 
@@ -1460,81 +1426,6 @@ def _chunk_table_span(
         group_kind="table",
         group_text=span.text,
     )
-
-
-XML_TREE_GROUP_KIND = "xml_tree_part"
-
-
-def _xml_tree_line_pieces(lines: list[str], budget: int) -> list[str]:
-    """行を ``budget`` 以内の部分にする（長い行は文の境目、それでも長ければ文字数で分ける）。"""
-    pieces: list[str] = []
-    for line in lines:
-        if len(line) <= budget:
-            pieces.append(line)
-            continue
-        current = ""
-        for sentence in _split_sentences(line) or [line]:
-            if current and len(current) + len(sentence) > budget:
-                pieces.append(current)
-                current = ""
-            while len(sentence) > budget:
-                pieces.append(sentence[:budget])
-                sentence = sentence[budget:]
-            current += sentence
-        if current:
-            pieces.append(current)
-    return pieces
-
-
-def _xml_tree_text_parts(text: str, chunk_size: int) -> list[str]:
-    """段落の本文を行の境目で ``chunk_size`` 以内に分ける（先頭の行のラベルを繰り返す）。
-
-    表の途中で分けたときは、表の列見出し（1 行目と区切りの行）を次の部分の先頭にも入れる。
-    """
-    lines = text.split("\n")
-    if len(text) <= chunk_size or len(lines) < 2:
-        return [text]
-    heading = lines[0]
-    budget = max(chunk_size - len(heading) - 1, 80)
-    pieces = _xml_tree_line_pieces(lines[1:], budget)
-    parts: list[str] = []
-    current: list[str] = []
-    table_header: list[str] = []
-    previous_is_table = False
-    for piece in pieces:
-        is_table_row = bool(TABLE_LINE.match(piece))
-        if is_table_row and not previous_is_table:
-            table_header = [piece]
-        elif is_table_row and len(table_header) == 1 and _is_markdown_table_separator(piece):
-            table_header.append(piece)
-        elif not is_table_row:
-            table_header = []
-        previous_is_table = is_table_row
-        if current and len("\n".join([*current, piece])) > budget:
-            parts.append("\n".join([heading, *current]))
-            current = []
-            if is_table_row and len(table_header) == 2 and piece not in table_header:
-                current.extend(table_header)
-        current.append(piece)
-    if current:
-        parts.append("\n".join([heading, *current]))
-    return parts
-
-
-def _chunk_xml_tree_span(span: _ElementSpan, *, chunk_size: int, start_index: int) -> list[Chunk]:
-    """XML ツリー JSON の段落（#2024）を 1 つ（長ければ行の境目で複数）の chunk にする。"""
-    metadata = _span_group_metadata([span])
-    chunks = [
-        Chunk(
-            text=part,
-            index=start_index + offset,
-            start_offset=span.start_offset,
-            end_offset=span.end_offset,
-            metadata=dict(metadata),
-        )
-        for offset, part in enumerate(_xml_tree_text_parts(span.text, chunk_size))
-    ]
-    return _with_chunk_group_metadata(chunks, group_kind=XML_TREE_GROUP_KIND, group_text=span.text)
 
 
 def _chunk_record_span(span: _ElementSpan, *, start_index: int) -> Chunk:
@@ -2331,35 +2222,7 @@ def _span_group_metadata(group: list[_ElementSpan]) -> ChunkMetadata:
     # 由来の metadata は結合の条件でそろえているので、先頭の要素の値をそのまま引き継ぐ(#2590)。
     if all(span.provenance_metadata == first.provenance_metadata for span in group):
         metadata.update(dict(first.provenance_metadata))
-    if first.xml_tree_metadata and all(
-        span.xml_tree_citation_label == first.xml_tree_citation_label for span in group
-    ):
-        metadata.update(dict(first.xml_tree_metadata))
     return metadata
-
-
-# 検索・embedding の文を載せる chunk の metadata の key（backend の ``ENGINE_SEARCH_TEXT_KEY``）。
-ENGINE_SEARCH_TEXT_KEY = "engine_search_text"
-
-
-def with_xml_tree_search_text(chunks: list[Chunk]) -> list[Chunk]:
-    """XML ツリー JSON の段落の chunk（#2024）に、引用ラベルを含む検索の文を付ける。
-
-    全文検索と embedding は ``engine_search_text`` を本文より先に使う。本文が変わった後
-    （小さい chunk の吸収の後）にも呼べるよう、毎回 chunk の本文から作り直す。
-    """
-    for chunk in chunks:
-        if not chunk.metadata.get("xml_tree_citation_label"):
-            continue
-        section_path = [
-            part for part in str(chunk.metadata.get("section_path") or "").split(" > ") if part
-        ]
-        chunk.metadata[ENGINE_SEARCH_TEXT_KEY] = xml_tree_search_text(
-            chunk.metadata, chunk.text, section_path=section_path
-        )
-        # 引用ラベルで段落を読む道具(rag_read_section の citation)が照合する key。
-        chunk.metadata[XML_TREE_LOOKUP_KEYS_KEY] = "\n".join(xml_tree_lookup_keys(chunk.metadata))
-    return chunks
 
 
 def _span_dependency_edges(group: list[_ElementSpan]) -> list[dict[str, str]]:

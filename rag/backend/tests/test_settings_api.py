@@ -120,17 +120,8 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     # 外部の解析エンジンの接続（connections）は削除した（#22）。
     assert "connections" not in body
     assert "service_backends" not in body
-    # XML ツリー JSON は Docling・Unstructured と同じ使用エンジン(#2042)。
-    assert by_backend["xml_tree_json"]["status"] == "disabled"
-    assert by_backend["structured_records_jsonl"]["status"] == "disabled"
-    # 削除したエンジン(#270・#2042・#22)は画面の選択肢・対応形式に出さない。構造化レコード JSONL は
-    # Unstructured の後、XML ツリー JSON の前(#2457)。
-    assert list(by_backend) == [
-        "docling",
-        "unstructured",
-        "structured_records_jsonl",
-        "xml_tree_json",
-    ]
+    # 削除したエンジン(#270・#2042・#22・#21)は画面の選択肢・対応形式に出さない。
+    assert list(by_backend) == ["docling", "unstructured"]
     assert "source_format_parsers" not in body
     assert body["scorecard"]["selected_backend"] == "local"
     assert body["scorecard"]["recommended_backend"] == "local"
@@ -163,20 +154,25 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
         "mineru",
         "dots_ocr",
         "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
     ):
         assert removed not in capability_by_backend
-    assert capability_by_backend["xml_tree_json"]["extensions"] == [".json"]
-    assert capability_by_backend["structured_records_jsonl"]["extensions"] == [".jsonl"]
 
 
-def test_persisted_removed_parser_backend_falls_back_to_default(tmp_path: Path) -> None:
-    """以前の版が parser-settings.json に保存した削除済みのエンジンは既定へ寄せる(#22)。
+@pytest.mark.parametrize(
+    "removed", ["oci_document_understanding", "structured_records_jsonl", "xml_tree_json"]
+)
+def test_persisted_removed_parser_backend_falls_back_to_default(
+    tmp_path: Path, removed: str
+) -> None:
+    """以前の版が parser-settings.json に保存した削除済みのエンジンは既定へ寄せる(#22・#21)。
 
-    起動を止めない。
+    起動を止めない。削除したエンジンの有効化の項目も読み捨てる。
     """
     parser_file = tmp_path / "parser-settings.json"
     parser_file.write_text(
-        json.dumps({"adapter_backend": "oci_document_understanding"}), encoding="utf-8"
+        json.dumps({"adapter_backend": removed, f"{removed}_enabled": True}), encoding="utf-8"
     )
     worker_settings = Settings(
         _env_file=None,
@@ -298,7 +294,6 @@ def test_update_parser_adapter_settings_persists_flags_and_preserves_omitted_fla
     monkeypatch.setattr(settings, "rag_parser_adapter_backend", "local")
     monkeypatch.setattr(settings, "rag_parser_docling_enabled", True)
     monkeypatch.setattr(settings, "rag_parser_unstructured_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_xml_tree_json_enabled", True)
     monkeypatch.setattr(
         parser_adapter_readiness,
         "_package_info",
@@ -309,7 +304,6 @@ def test_update_parser_adapter_settings_persists_flags_and_preserves_omitted_fla
         json={
             "adapter_backend": "unstructured",
             "unstructured_enabled": True,
-            "xml_tree_json_enabled": False,
         },
     )
 
@@ -320,18 +314,19 @@ def test_update_parser_adapter_settings_persists_flags_and_preserves_omitted_fla
     by_backend = {adapter["backend"]: adapter for adapter in body["adapters"]}
     assert by_backend["docling"]["enabled"] is True
     assert by_backend["unstructured"]["enabled"] is True
-    assert by_backend["xml_tree_json"]["enabled"] is False
     assert settings.rag_parser_adapter_backend == "unstructured"
     assert settings.rag_parser_docling_enabled is True
     assert settings.rag_parser_unstructured_enabled is True
-    assert settings.rag_parser_xml_tree_json_enabled is False
     parser = _persisted_parser(settings)
     assert parser["adapter_backend"] == "unstructured"
     assert parser["docling_enabled"] is True
     assert parser["unstructured_enabled"] is True
-    assert parser["xml_tree_json_enabled"] is False
-    # 削除したエンジン(#270・#22)の項目は保存しない。
-    assert not [key for key in parser if "marker" in key or "unlimited" in key or "mineru" in key]
+    # 削除したエンジン(#270・#22・#21)の項目は保存しない。
+    assert not [
+        key
+        for key in parser
+        if any(name in key for name in ("marker", "unlimited", "mineru", "xml_tree", "records"))
+    ]
 
 
 def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it(
@@ -355,7 +350,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
 
     response = client.patch(
         "/api/settings/parser-adapters",
-        json={"adapter_backend": "xml_tree_json", "xml_tree_json_enabled": True},
+        json={"adapter_backend": "unstructured", "unstructured_enabled": True},
     )
 
     assert response.status_code == 200
@@ -364,8 +359,8 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     lock_file = parser_file.with_name(f"{parser_file.name}.lock")
     assert stat.S_IMODE(lock_file.stat().st_mode) == 0o600
     worker_store.reload_if_changed(worker_settings)
-    assert worker_settings.rag_parser_adapter_backend == "xml_tree_json"
-    assert worker_settings.rag_parser_xml_tree_json_enabled is True
+    assert worker_settings.rag_parser_adapter_backend == "unstructured"
+    assert worker_settings.rag_parser_unstructured_enabled is True
 
     parser_before = parser_file.read_text(encoding="utf-8")
     model_response = client.patch("/api/settings/model", json=_payload())
@@ -375,7 +370,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     assert "parser_adapters" not in persisted
     assert _saved_enterprise_ai_api_key(settings) == "sk-update-secret"
     assert parser_file.read_text(encoding="utf-8") == parser_before
-    assert get_settings().rag_parser_adapter_backend == "xml_tree_json"
+    assert get_settings().rag_parser_adapter_backend == "unstructured"
 
 
 def test_update_parser_adapter_settings_does_not_mutate_runtime_when_write_fails(
@@ -419,10 +414,19 @@ def test_update_parser_adapter_settings_rejects_unknown_backend() -> None:
 
 @pytest.mark.parametrize(
     "removed",
-    ["marker", "unlimited_ocr", "glm_ocr", "mineru", "dots_ocr", "oci_document_understanding"],
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
 )
 def test_update_parser_adapter_settings_rejects_removed_engine(removed: str) -> None:
-    """削除したエンジン(#270・#22)は新たに選択できない。"""
+    """削除したエンジン(#270・#22・#21)は新たに選択できない。"""
     settings = get_settings()
     before = settings.rag_parser_adapter_backend
 

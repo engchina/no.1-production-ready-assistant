@@ -149,15 +149,9 @@ def test_model_cache_path_set_only_for_model_downloading_parsers() -> None:
 
 
 def test_parser_catalog_order_lists_cpu_parsers() -> None:
-    """サービス管理の文書解析の並び(#2042・#2457): Docling → Unstructured → 構造化レコード JSONL
-    → XML ツリー JSON。"""
+    """サービス管理の文書解析の並び(#2042・#21): Docling → Unstructured。"""
     parsers = [entry.service_id for entry in SERVICE_CATALOG if entry.category == "parser"]
-    assert parsers == [
-        "parser-docling",
-        "parser-unstructured",
-        "parser-structured-records-jsonl",
-        "parser-xml-tree-json",
-    ]
+    assert parsers == ["parser-docling", "parser-unstructured"]
 
 
 def test_catalog_ports_are_unique_and_high() -> None:
@@ -798,14 +792,14 @@ def _probe_statuses(settings: Any, service_ids: list[str]) -> dict[str, str]:
 def test_probe_without_systemd_uses_health_only(fake_http: type[_FakeAsyncClient]) -> None:
     fake_http.routes = {
         _url("parser-docling"): _FakeResponse({"status": "ok"}),
-        _url("parser-xml-tree-json"): _FakeResponse({"status": "degraded"}),
+        _url("preprocess-office-to-pdf"): _FakeResponse({"status": "degraded"}),
     }
     fake_http.raise_on_connect = {_url("parser-unstructured")}
     statuses = _probe_statuses(
-        get_settings(), ["parser-docling", "parser-xml-tree-json", "parser-unstructured"]
+        get_settings(), ["parser-docling", "preprocess-office-to-pdf", "parser-unstructured"]
     )
     assert statuses["parser-docling"] == "running"
-    assert statuses["parser-xml-tree-json"] == "degraded"
+    assert statuses["preprocess-office-to-pdf"] == "degraded"
     assert statuses["parser-unstructured"] == "stopped"
 
 
@@ -927,10 +921,10 @@ def test_get_service_status_probes_only_target(monkeypatch: MonkeyPatch) -> None
         return "starting"
 
     monkeypatch.setattr("app.api.routes.services.probe_service_status", fake_probe)
-    resp = client.get("/api/services/parser-xml-tree-json/status")
+    resp = client.get("/api/services/parser-unstructured/status")
     assert resp.status_code == 200
     assert resp.json()["data"]["status"] == "starting"
-    assert seen == ["parser-xml-tree-json"]
+    assert seen == ["parser-unstructured"]
 
 
 def test_get_service_logs_returns_journal_tail(monkeypatch: MonkeyPatch) -> None:
@@ -1136,7 +1130,6 @@ def test_preprocess_service_url_uses_resolved_setting(monkeypatch: MonkeyPatch) 
     [
         ("docling", "parser-docling"),
         ("unstructured", "parser-unstructured"),
-        ("xml_tree_json", "parser-xml-tree-json"),
     ],
 )
 def test_catalog_marks_the_current_global_parser_as_default(

@@ -115,23 +115,23 @@ def test_rag_parser_save_then_nl2sql_save_then_rag_reads() -> None:
     saved = client.patch(
         "/api/settings/parser-adapters",
         json={
-            "adapter_backend": "xml_tree_json",
-            "xml_tree_json_enabled": True,
+            "adapter_backend": "unstructured",
+            "unstructured_enabled": True,
         },
     )
     assert saved.status_code == 200
     assert not model_file.exists()
 
     _nl2sql_save(model_file)
-    settings.rag_parser_adapter_backend = "unstructured"  # 別 worker の古い値を模す
+    settings.rag_parser_adapter_backend = "docling"  # 別 worker の古い値を模す
     PARSER_SETTINGS_STORE.reset()
 
     reloaded = get_settings()
     shared = json.loads(model_file.read_text(encoding="utf-8"))
     assert set(shared) == {"version", "enterprise_ai", "generative_ai"}
     assert reloaded.oci_enterprise_ai_endpoint == "https://nl2sql-saved.example.com"
-    assert reloaded.rag_parser_adapter_backend == "xml_tree_json"
-    assert reloaded.rag_parser_xml_tree_json_enabled is True
+    assert reloaded.rag_parser_adapter_backend == "unstructured"
+    assert reloaded.rag_parser_unstructured_enabled is True
 
 
 def test_parser_section_in_shared_file_is_not_read() -> None:
@@ -140,7 +140,7 @@ def test_parser_section_in_shared_file_is_not_read() -> None:
     before = settings.rag_parser_adapter_backend
     _write(
         Path(settings.model_settings_file),
-        {**V4_SHARED_DOCUMENT, "parser_adapters": {"adapter_backend": "xml_tree_json"}},
+        {**V4_SHARED_DOCUMENT, "parser_adapters": {"adapter_backend": "unstructured"}},
     )
 
     assert get_settings().rag_parser_adapter_backend == before

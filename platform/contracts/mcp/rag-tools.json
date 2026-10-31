@@ -730,7 +730,7 @@
           },
           "format": {
             "default": "sections",
-            "description": "sections は章節ごとの構造（section_id・頁・文字数）。compact は章節を 1 行ずつの目録（階層で字下げ。見出しの語の無い章節は本文の書き出しを添える）の lines で返す。条の多い文書から読む条を選ぶときは compact（条は rag_read_section の citation で読む）。",
+            "description": "sections は章節ごとの構造（section_id・頁・文字数）。compact は章節を 1 行ずつの目録（階層で字下げ。見出しの語の無い章節は本文の書き出しを添える）の lines で返す。条の多い文書から読む条を選ぶときは compact。",
             "enum": [
               "sections",
               "compact"
@@ -1385,21 +1385,6 @@
             "default": null,
             "description": "根拠の chunk の id（evidence_id）。その chunk が属する章節を読む。",
             "title": "Chunk Id"
-          },
-          "citation": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "引用ラベル（XML ツリー JSON の解析で取り込んだ文書。rag_search の根拠の xml_tree_citation_label の形）。番号は漢数字でも算用数字でもよく、文書名は付けても付けなくてもよい。その段落を含む単位を読む（up で上の章節）。",
-            "title": "Citation"
           },
           "up": {
             "default": 0,

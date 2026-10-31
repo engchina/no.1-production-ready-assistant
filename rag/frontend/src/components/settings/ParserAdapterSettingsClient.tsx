@@ -54,23 +54,17 @@ type ParserAdapterForm = {
   adapter_backend: ParserAdapterBackend;
   docling_enabled: boolean;
   unstructured_enabled: boolean;
-  structured_records_jsonl_enabled: boolean;
-  xml_tree_json_enabled: boolean;
 };
 type ParserAdapterFlagField = Exclude<keyof ParserAdapterForm, "adapter_backend">;
 
 const ADAPTER_FLAG_FIELDS: Record<ParserAdapterBackendName, ParserAdapterFlagField> = {
   docling: "docling_enabled",
   unstructured: "unstructured_enabled",
-  structured_records_jsonl: "structured_records_jsonl_enabled",
-  xml_tree_json: "xml_tree_json_enabled",
 };
 
 const PARSER_BACKEND_SERVICE_IDS: Partial<Record<ParserAdapterBackendName, string>> = {
   docling: "parser-docling",
   unstructured: "parser-unstructured",
-  structured_records_jsonl: "parser-structured-records-jsonl",
-  xml_tree_json: "parser-xml-tree-json",
 };
 
 function isAdapterBackend(backend: ParserAdapterBackend): backend is ParserAdapterBackendName {
@@ -201,7 +195,7 @@ function OverviewCard({
     [settings]
   );
   // 正本（PARSER_BACKEND_ORDER）の順。1 つの 2 列の grid に並べ、375px の 1 列でも同じ順にする
-  // （Docling・Unstructured / 構造化レコード JSONL・XML ツリー JSON）。処理レシピの選択肢も同じ順。
+  // （Docling・Unstructured）。処理レシピの選択肢も同じ順。
   const orderedBackends = useMemo(() => sortParserBackends(backendOptions), [backendOptions]);
   const serviceIds = useMemo(
     () => [
@@ -379,10 +373,7 @@ function RuntimeFact({ label, value }: { label: string; value: string }) {
 
 function adapterLabel(adapter: ParserAdapterBackendName) {
   if (adapter === "docling") return "Docling";
-  if (adapter === "unstructured") return "Unstructured";
-  if (adapter === "structured_records_jsonl")
-    return t("settings.parserAdapters.backend.structured_records_jsonl");
-  return t("settings.parserAdapters.backend.xml_tree_json");
+  return "Unstructured";
 }
 
 function backendLabel(backend: ParserAdapterBackend) {
@@ -427,8 +418,6 @@ function formFromSettings(settings: ParserAdapterSettingsData): ParserAdapterFor
     adapter_backend: settings.adapter_backend,
     docling_enabled: enabledByBackend.get("docling") ?? false,
     unstructured_enabled: enabledByBackend.get("unstructured") ?? false,
-    structured_records_jsonl_enabled: enabledByBackend.get("structured_records_jsonl") ?? false,
-    xml_tree_json_enabled: enabledByBackend.get("xml_tree_json") ?? false,
   };
 }
 
@@ -452,8 +441,6 @@ function serializeForm(form: ParserAdapterForm) {
     adapter_backend: form.adapter_backend,
     docling_enabled: form.docling_enabled,
     unstructured_enabled: form.unstructured_enabled,
-    structured_records_jsonl_enabled: form.structured_records_jsonl_enabled,
-    xml_tree_json_enabled: form.xml_tree_json_enabled,
   });
 }
 
@@ -462,7 +449,5 @@ function parserSettingsUpdate(form: ParserAdapterForm): ParserAdapterSettingsUpd
     adapter_backend: form.adapter_backend,
     docling_enabled: form.docling_enabled,
     unstructured_enabled: form.unstructured_enabled,
-    structured_records_jsonl_enabled: form.structured_records_jsonl_enabled,
-    xml_tree_json_enabled: form.xml_tree_json_enabled,
   };
 }

@@ -107,30 +107,26 @@ def _document() -> SheetRecordsDocument:
     )
 
 
-def test_only_structured_records_jsonl_reads_sheet_records() -> None:
-    """行の記録は構造化レコード JSONL だけが要素にする（Docling・Unstructured は診断で止める）。"""
+def test_docling_and_unstructured_read_sheet_records() -> None:
+    """前処理の行の記録の JSONL は Docling・Unstructured のサービスが共通の契約で読む（#21）。"""
     profile = _xlsx_profile()
     assert adapter_supports_source("docling", source_profile=profile, content_type="") is False
-    for backend in ("docling", "unstructured", "xml_tree_json"):
-        assert not adapter_supports_source(
+    for backend in ("docling", "unstructured"):
+        assert adapter_supports_source(
             backend, source_profile=profile, content_type=f"{STRUCTURED_RECORDS_CONTENT_TYPE}; x=1"
         )
-        stopped = run_external_adapter(
+        read = run_external_adapter(
             backend, _jsonl(_document()), profile, STRUCTURED_RECORDS_CONTENT_TYPE
         )
-        assert stopped.extraction is None
-    assert adapter_supports_source(
-        "structured_records_jsonl",
-        source_profile=profile,
-        content_type=f"{STRUCTURED_RECORDS_CONTENT_TYPE}; x=1",
-    )
+        assert read.extraction is not None
+        assert read.parser_backend == backend
 
     result = run_external_adapter(
-        "structured_records_jsonl", _jsonl(_document()), profile, STRUCTURED_RECORDS_CONTENT_TYPE
+        "docling", _jsonl(_document()), profile, STRUCTURED_RECORDS_CONTENT_TYPE
     )
 
     assert result.extraction is not None
-    assert result.parser_version == "structured_records_jsonl_v1"
+    assert result.parser_version == "structured_records_v1"
     elements = result.extraction.elements
     # シート名だけの見出しの要素は作らない（節と文脈の見出しに入る）。
     assert all(element.kind == "text" for element in elements)
@@ -150,16 +146,14 @@ def test_only_structured_records_jsonl_reads_sheet_records() -> None:
     assert step.text.splitlines()[0] == "セクション: 事前準備"
     assert (step.metadata["row_start"], step.metadata["row_end"]) == (3, 4)
 
-    broken = run_external_adapter(
-        "structured_records_jsonl", b"{}", profile, STRUCTURED_RECORDS_CONTENT_TYPE
-    )
+    broken = run_external_adapter("docling", b"{}", profile, STRUCTURED_RECORDS_CONTENT_TYPE)
     assert broken.extraction is None
     assert "structured_records_invalid:unknown_schema@line1" in broken.warnings
 
 
 def _extraction(document: SheetRecordsDocument | None = None) -> StructuredExtraction:
     result = run_external_adapter(
-        "structured_records_jsonl",
+        "docling",
         _jsonl(document or _document()),
         _xlsx_profile(),
         STRUCTURED_RECORDS_CONTENT_TYPE,
@@ -865,7 +859,7 @@ def test_low_confidence_header_becomes_extraction_warning_and_ranges_are_validat
     )
     document.sheets[0].diagnostics = [SheetDiagnostic(code="header_low_confidence", detail="0.40")]
     result = run_external_adapter(
-        "structured_records_jsonl",
+        "docling",
         _jsonl(document),
         _xlsx_profile(),
         STRUCTURED_RECORDS_CONTENT_TYPE,
@@ -921,7 +915,7 @@ def test_column_roles_label_values_in_chunks_and_match_the_answer_prompt() -> No
         ],
     )
     result = run_external_adapter(
-        "structured_records_jsonl",
+        "docling",
         _jsonl(document),
         _xlsx_profile(),
         STRUCTURED_RECORDS_CONTENT_TYPE,

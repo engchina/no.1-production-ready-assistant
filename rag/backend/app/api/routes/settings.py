@@ -1190,14 +1190,6 @@ def _parser_adapter_settings_candidate(
             payload.unstructured_enabled,
             base.rag_parser_unstructured_enabled,
         ),
-        "rag_parser_structured_records_jsonl_enabled": _optional_bool(
-            payload.structured_records_jsonl_enabled,
-            base.rag_parser_structured_records_jsonl_enabled,
-        ),
-        "rag_parser_xml_tree_json_enabled": _optional_bool(
-            payload.xml_tree_json_enabled,
-            base.rag_parser_xml_tree_json_enabled,
-        ),
     }
     return base.model_copy(update=updates)
 

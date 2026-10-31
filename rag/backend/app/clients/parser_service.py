@@ -19,10 +19,9 @@ import httpx
 from pr_backend_core.internal_http import http_client_options
 from pr_backend_core.logging import safe_exception_fields, safe_url
 from pr_backend_core.observability.request_context import outbound_correlation_headers
-from rag_parser_core.capabilities import ADAPTER_CAPABILITIES, supported_modalities
+from rag_parser_core.capabilities import supported_modalities
 from rag_parser_core.language import overrides_payload
 from rag_parser_core.result import ParseResponse, ParserRegistryResult
-from rag_parser_core.structured_records import STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING
 
 from app.clients.http_retry import request_with_retry, retry_config_from_settings
 from app.config import Settings
@@ -33,8 +32,6 @@ logger = logging.getLogger(__name__)
 
 # 解析中のページの進捗を読む timeout(秒)。進捗は補助なので短くし、再試行しない(#1999)。
 _PROGRESS_TIMEOUT_SECONDS = 3.0
-# 構造化レコードの JSONL を構造化レコード JSONL 以外の解析エンジンに渡したときの理由(#2457)。
-STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON = "structured_records_requires_jsonl_backend"
 # 解析サービスへ送る進捗の id(#1999)。``asyncio.to_thread`` の thread も context を引き継ぐ。
 _PARSE_PROGRESS_ID: ContextVar[str | None] = ContextVar("rag_parse_progress_id", default=None)
 
@@ -53,18 +50,12 @@ def parse_progress_id(progress_id: str | None) -> Iterator[None]:
 _SERVICE_URL_FIELDS: dict[str, str] = {
     "docling": "rag_parser_docling_service_url",
     "unstructured": "rag_parser_unstructured_service_url",
-    # 構造化レコード JSONL(#2457)。前処理の構造化レコードの JSONL だけを解析する。
-    "structured_records_jsonl": "rag_parser_structured_records_jsonl_service_url",
-    # XML ツリー JSON(#2024)。tag / attr / children の木の JSON だけを解析する。
-    "xml_tree_json": "rag_parser_xml_tree_json_service_url",
 }
 
 
 _SERVICE_LABELS: dict[str, str] = {
     "docling": "Docling",
     "unstructured": "Unstructured",
-    "structured_records_jsonl": "構造化レコード JSONL",
-    "xml_tree_json": "XML ツリー JSON",
 }
 
 _MODALITY_LABELS: dict[str, str] = {
@@ -78,15 +69,8 @@ _MODALITY_LABELS: dict[str, str] = {
 
 
 def supported_formats_label(backend: str) -> str:
-    """backend の対応形式を「PDF・画像」形式の日本語ラベルにする(未宣言は空文字)。
-
-    modality を持たない backend(XML ツリー JSON)は拡張子の名前(「JSON」)にする。
-    """
+    """backend の対応形式を「PDF・画像」形式の日本語ラベルにする(未宣言は空文字)。"""
     modalities = supported_modalities(backend)
-    if not modalities:
-        capability = ADAPTER_CAPABILITIES.get(backend)
-        extensions = sorted(capability.extensions) if capability is not None else []
-        return "・".join(extension.lstrip(".").upper() for extension in extensions)
     return "・".join(
         _MODALITY_LABELS.get(modality.value, modality.value) for modality in modalities
     )
@@ -407,8 +391,6 @@ def split_parser_warning(warning: str) -> tuple[str, str | None]:
 def _parser_result_failure_reason(result: ParserRegistryResult) -> str:
     """HTTP 200 でも parser が extraction を返せない理由を user-facing reason へ寄せる。"""
     warnings = tuple(split_parser_warning(warning)[0] for warning in result.warnings)
-    if STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING in warnings:
-        return STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON
     if any(warning.endswith("_adapter_package_missing") for warning in warnings):
         return "adapter_package_missing"
     if any(warning.endswith("_adapter_source_unsupported") for warning in warnings):
@@ -433,16 +415,6 @@ def _parser_result_failure_reason(result: ParserRegistryResult) -> str:
     return "adapter_empty_result"
 
 
-def structured_records_requires_jsonl_backend_message(label: str) -> str:
-    """構造化レコードの JSONL を、構造化レコード JSONL 以外の解析エンジンに渡したときの案内。"""
-    return (
-        "ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が作る構造化レコードの JSONL は、"
-        f"文書解析の「構造化レコード JSONL」だけが解析できます。選択中の解析エンジン（{label}）では"
-        "変換せずに取込を停止しました。この文書の「処理レシピ」で「文書解析」を"
-        "「構造化レコード JSONL」に変えてから再実行してください。"
-    )
-
-
 def _service_unavailable_message(
     backend: str,
     reason: str,
@@ -465,8 +437,6 @@ def _service_unavailable_message(
             "旧結果は保持されていますが、新しい処理は開始できません。"
             "文書レシピで利用可能な解析エンジンを選び直してください。"
         )
-    if reason == STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON:
-        return structured_records_requires_jsonl_backend_message(label) + warning_suffix
     if reason == "unconfigured":
         return (
             f"選択した文書解析サービス（{label}）の接続先 URL が未設定です。"

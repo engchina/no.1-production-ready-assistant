@@ -92,14 +92,12 @@ ALLOWED_RAG_SERVICES=(
   preprocess-word-to-jsonl
   parser-docling
   parser-unstructured
-  parser-structured-records-jsonl
-  parser-xml-tree-json
 )
-# 必ず配備する parser（既定の解析エンジンの Docling と、使用エンジンに選べる構造化レコード JSONL・XML ツリー JSON）と、
+# 必ず配備する parser（既定の解析エンジンの Docling。前処理の構造化レコードの JSONL も読む。#21）と、
 # Terraform の stack が常に配備する前処理 CSV→JSONL・Excel→JSONL・Word→JSONL（#2457。terraform/stack/locals.tf の rag_services）。
 # rag_services.txt に無ければ足す（以前の stack が書いた一覧や、#2484 の前の再配備で CSV / Excel が消えた一覧でも、再配備で unit が入る。
-# #2486）。初めて配備したときは起動する。XML ツリー JSON は既定は停止のサービスで、初回は起動しない（#2453）。
-REQUIRED_RAG_SERVICES=(parser-docling parser-structured-records-jsonl parser-xml-tree-json preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)
+# #2486）。初めて配備したときは起動する。
+REQUIRED_RAG_SERVICES=(parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)
 # 改名したサービス（旧名|新名。#2457 の CSV→JSONL・Excel→JSONL）。以前の stack が書いた rag_services.txt の旧名は新名として読み、
 # 旧名の unit の起動 / 停止の状態を新名の unit に引き継ぐ（configure_systemd。旧名の unit は配備しなくなった unit として消す）。
 RENAMED_RAG_SERVICES=(
@@ -664,7 +662,7 @@ install_service_venvs() {
   done
 }
 
-# 画面から保存した global の設定（backend/.env・parser-settings.json）の旧い名前・値を移す（冪等）。
+# 画面から保存した global の設定（backend/.env）の旧い名前・値を移す（冪等）。
 # ファイル準備 csv_to_json / excel_to_json の改名と、固定分割符の既定の変更（#2457）。DB の保存値は
 # system schema の migration が移す。
 migrate_saved_settings() {
@@ -749,7 +747,6 @@ EOF
 
 # 前処理 / parser の unit の起動 / 停止は、利用者が最後に操作した状態（systemd の enable / disable）を保つ。
 #   - 初めて配備する unit（unit ファイルが無かった）: enable --now（既定のサービスを起動する）。
-#     既定は停止のサービス（rag-systemd.sh の RAG_DEFAULT_STOPPED_SERVICES）は enable も起動もしない
 #     改名したサービス（RENAMED_RAG_SERVICES）で旧名の unit が有れば、旧名の unit の enable / disable を引き継ぐ
 #   - 以前から有る unit で enable（最後に「起動」した）: 新しいコードで restart
 #   - 以前から有る unit で disable（最後に「停止」した）: 停止のまま
@@ -832,8 +829,6 @@ RestartSec=5
     elif contains_value "${unit}" "${renamed_started_units[@]}"; then
       log "Starting ${unit} (renamed; last operation on the old unit: start)."
       systemctl enable --now "${unit}"
-    elif contains_value "${unit}" "${new_units[@]}" && rag_service_default_stopped "${service}"; then
-      log "Leaving ${unit} stopped (first deployment; stopped by default)."
     elif contains_value "${unit}" "${new_units[@]}"; then
       log "Starting ${unit} (first deployment)."
       systemctl enable --now "${unit}"
