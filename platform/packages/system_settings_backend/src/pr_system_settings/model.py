@@ -406,18 +406,38 @@ class EnterpriseAiModelSettings(BaseModel):
 
 
 class GenerativeAiModelSettings(BaseModel):
-    """OCI Generative AI（embedding/rerank）モデル設定。"""
+    """埋め込み / 再ランクのモデル設定（#8）。
 
-    embedding_model: str = Field(default="cohere.embed-v4.0", max_length=256)
+    接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の
+    `text-embedding-v4` と `qwen3-rerank`。
+
+    Base URL を空にしたときは、Enterprise AI のプライマリ接続の Endpoint URL から
+    組み立てる（API key も Enterprise AI のものを使う。百煉は LLM・埋め込み・再ランクで
+    同じ key）。**再ランクだけ `/compatible-api/v1` 配下**で、chat / 埋め込みの
+    `/compatible-mode/v1` に投げると 404 になるため、埋め込みの Base URL の
+    `/compatible-mode/` を `/compatible-api/` に読み替える。
+    """
+
+    embedding_model: str = Field(default="text-embedding-v4", max_length=256)
     embedding_dim: int = Field(
         default=1536,
         ge=1536,
         le=1536,
         description="Oracle VECTOR(1536, FLOAT32) と互換にするため 1536 固定。",
     )
-    rerank_model: str = Field(default="cohere.rerank-v4.0-fast", max_length=256)
+    embedding_base_url: str = Field(
+        default="",
+        max_length=512,
+        description="埋め込みの OpenAI 互換 Base URL。空なら Enterprise AI のプライマリ接続から。",
+    )
+    rerank_model: str = Field(default="qwen3-rerank", max_length=256)
+    rerank_base_url: str = Field(
+        default="",
+        max_length=512,
+        description="再ランクの Base URL。空なら埋め込みの Base URL から読み替える。",
+    )
 
-    @field_validator("embedding_model", "rerank_model")
+    @field_validator("embedding_model", "rerank_model", "embedding_base_url", "rerank_base_url")
     @classmethod
     def strip_text(cls, value: str) -> str:
         """前後空白を設定値へ混入させない。"""
@@ -1232,7 +1252,9 @@ def model_payload(settings: Any) -> ModelSettingsPayload:
         generative_ai=GenerativeAiModelSettings(
             embedding_model=settings.oci_genai_embedding_model,
             embedding_dim=settings.oci_genai_embedding_dim,
+            embedding_base_url=_setting_text(settings, "embedding_base_url"),
             rerank_model=settings.oci_genai_rerank_model,
+            rerank_base_url=_setting_text(settings, "rerank_base_url"),
         ),
     )
 
@@ -1263,6 +1285,8 @@ def apply_model_settings(settings: Any, payload: ModelSettingsPayload) -> None:
     settings.oci_genai_embedding_model = generative.embedding_model
     settings.oci_genai_embedding_dim = generative.embedding_dim
     settings.oci_genai_rerank_model = generative.rerank_model
+    _set_if_field(settings, "embedding_base_url", generative.embedding_base_url)
+    _set_if_field(settings, "rerank_base_url", generative.rerank_base_url)
     # NL2SQL は旧名の model ID も読んでいる。
     _set_if_field(settings, "oci_genai_embed_model_id", generative.embedding_model)
     _set_if_field(settings, "oci_genai_rerank_model_id", generative.rerank_model)

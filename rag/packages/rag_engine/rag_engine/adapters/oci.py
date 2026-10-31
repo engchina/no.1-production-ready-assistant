@@ -1,4 +1,8 @@
-"""OCI/OpenAI 互換 LLM、rerank、embedding の呼び出しを抽象化する。"""
+"""OpenAI 互換の LLM、埋め込み、再ランクの呼び出しを抽象化する。
+
+埋め込みと再ランクは OpenAI 互換の HTTP API を呼ぶ（#8。既定は Aliyun 百煉の
+`text-embedding-v4` と `qwen3-rerank`）。OCI SDK は使わない。
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,8 @@ import mimetypes
 import re
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
@@ -89,16 +95,17 @@ VISION_SYSTEM_PROMPT = (
 API_SIGNING_KEY_FIELDS = ("user", "tenancy", "fingerprint", "key_file", "region")
 
 
+# 埋め込みの用途。OpenAI 互換の `/embeddings` には query / document の区別が無いので
+# API へは送らず、観測の purpose にだけ使う（#8）。
 EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT = "SEARCH_DOCUMENT"
 EMBEDDING_INPUT_TYPE_SEARCH_QUERY = "SEARCH_QUERY"
 EMBEDDING_INPUT_TYPE_IMAGE = "IMAGE"
-SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS = {256, 512, 1024, 1536}
-# tokenizer 未設定時の保守的な batch 分割目安。実 token 上限は OCI が NONE で検証する。
+# text-embedding-v4 が返せる次元。Oracle の VECTOR 列に合わせる既定は 1536。
+SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS = {64, 128, 256, 512, 768, 1024, 1536, 2048}
+# tokenizer 未設定時の保守的な batch 分割目安。実 token 上限は API 側が検証する。
 EMBEDDING_BATCH_MAX_UTF8_BYTES = 64000
-# Cohere Rerank v4 の 1 document あたりの入力目安（UTF-8 byte。token 実測値ではない保守的な値）。
-RERANK_V4_DOCUMENT_BUDGET_UTF8_BYTES = 32000
-# 1 request で送れる document × 内部 chunk 数の上限。
-RERANK_MAX_DOCUMENT_CHUNKS_PER_REQUEST = 10000
+# 再ランクの endpoint は `/reranks`（複数形）。`/rerank` は 404 が返る。
+RERANK_PATH = "/reranks"
 
 
 @dataclass(frozen=True)
@@ -1902,7 +1909,7 @@ def embed_query(text: str, settings: Settings) -> list[float]:
         input_type=EMBEDDING_INPUT_TYPE_SEARCH_QUERY,
     )
     if not embeddings:
-        raise RuntimeError("OCI embedding query response was empty.")
+        raise RuntimeError("embedding の応答が空でした。")
     return embeddings[0]
 
 
@@ -1938,7 +1945,7 @@ def _embed_text_batch_with_retry(
 ) -> list[list[float]]:
     return _parse_with_retry(
         lambda: _embed_text_batch_once(texts, settings, input_type=input_type),
-        "OCI embedding",
+        "embedding",
         settings,
     )
 
@@ -1949,50 +1956,33 @@ def _embed_text_batch_once(
     *,
     input_type: str,
 ) -> list[list[float]]:
+    """OpenAI 互換の `POST {base_url}/embeddings` を 1 回呼ぶ（#8）。
+
+    `input_type` は観測の purpose にだけ使う。OpenAI 互換の `/embeddings` に query /
+    document の区別は無く、百煉の `text_type` も互換経路では送れないため、チャンクと
+    質問は同じ条件で埋め込まれる（モデルを変えたら全件やり直し）。
+    """
     if not settings.embedding_model:
         raise RuntimeError("EMBEDDING_MODEL が未設定です。")
-    if not settings.oci_compartment_id:
-        raise RuntimeError("OCI_COMPARTMENT_ID が未設定です。")
 
-    runtime = _runtime(
-        settings.oci_config_file,
-        settings.oci_profile,
-        settings.oci_compartment_id,
-        _embedding_endpoint(settings),
-        settings.llm_request_timeout_seconds,
-    )
-    models = runtime.models
-    input_type_value = _embedding_input_type(models, input_type)
     dimensions = _embedding_output_dimensions(settings)
-    request = models.EmbedTextDetails(
-        inputs=texts,
-        serving_mode=_serving_mode(models, settings.embedding_model),
-        compartment_id=runtime.compartment_id,
-        is_echo=False,
-        embedding_types=[models.EmbedTextDetails.EMBEDDING_TYPES_FLOAT],
-        output_dimensions=dimensions,
-        truncate=models.EmbedTextDetails.TRUNCATE_NONE,
-        input_type=input_type_value,
+    client = _openai_client(
+        "embedding",
+        _embedding_base_url(settings),
+        _embedding_api_key(settings),
+        "",  # project は送らない（OCI の OpenAI 互換 API 専用の設定）
+        settings.llm_request_timeout_seconds,
+        0,  # 再試行は `_parse_with_retry` が受け持つ
     )
+    request = {"model": settings.embedding_model, "input": texts, "dimensions": dimensions}
     with (
-        model_call_purpose(
-            model_purpose_attributes(
-                default={
-                    models.EmbedTextDetails.INPUT_TYPE_SEARCH_QUERY: "query.embed",
-                    models.EmbedTextDetails.INPUT_TYPE_SEARCH_DOCUMENT: "document.embed",
-                }.get(input_type_value)
-            ).get("pr.gen_ai.purpose")
-        ),
+        model_call_purpose(model_purpose_attributes(default=_embedding_purpose(input_type)).get("pr.gen_ai.purpose")),
         observe_call("embeddings", settings.embedding_model) as observation,
     ):
         observation.request(request)
-        response = runtime.client.embed_text(
-            embed_text_details=request,
-            retry_strategy=runtime.oci.retry.NoneRetryStrategy(),
-        )
-        observation.response(response.data)
-    embeddings = _embedding_vectors(response.data, expected_count=len(texts), expected_dimensions=dimensions)
-    return embeddings
+        response = client.embeddings.create(**request)
+        observation.response(response)
+    return _embedding_vectors(response, expected_count=len(texts), expected_dimensions=dimensions)
 
 
 def _embed_image_with_retry(
@@ -2004,7 +1994,7 @@ def _embed_image_with_retry(
 ) -> list[float]:
     return _parse_with_retry(
         lambda: _embed_image_once(image_path, text, settings, input_type=input_type),
-        "OCI image embedding",
+        "image embedding",
         settings,
     )
 
@@ -2016,87 +2006,66 @@ def _embed_image_once(
     *,
     input_type: str,
 ) -> list[float]:
-    if not settings.embedding_model:
-        raise RuntimeError("EMBEDDING_MODEL が未設定です。")
-    if not settings.oci_compartment_id:
-        raise RuntimeError("OCI_COMPARTMENT_ID が未設定です。")
-    if not image_path.is_file():
-        raise RuntimeError(f"Image embedding asset was not found: {image_path}")
+    """画像の埋め込みは未対応（#8）。
 
-    runtime = _runtime(
-        settings.oci_config_file,
-        settings.oci_profile,
-        settings.oci_compartment_id,
-        _embedding_endpoint(settings),
-        settings.llm_request_timeout_seconds,
+    OCI の multimodal embedding 専用の機能だった。OpenAI 互換の `/embeddings` は画像を
+    受け取らないため、`IMAGE_EMBEDDING_ENABLED` を on にしてもここで失敗する。
+    画像は Vision のモデルで説明文にしてから、その文をテキストとして埋め込む経路を使う。
+    """
+    raise RuntimeError(
+        "画像の埋め込みは未対応です（#8。OpenAI 互換の API は画像を受け取りません）。"
+        "IMAGE_EMBEDDING_ENABLED は off にし、画像は Vision の説明文として埋め込んでください。"
     )
-    models = runtime.models
-    if not hasattr(models, "EmbedImageContent") or not hasattr(models, "EmbedTextContent"):
-        raise RuntimeError("OCI SDK does not support EmbedTextDetails.embed_contents image embeddings.")
-    input_type_value = _embedding_input_type(models, input_type)
-    dimensions = _embedding_output_dimensions(settings)
-    contents = []
-    normalized_text = str(text or "").strip()
-    if normalized_text:
-        contents.append(models.EmbedTextContent(text=normalized_text))
-    contents.append(models.EmbedImageContent(image_url=models.ImageUrl(url=_image_data_url(image_path), detail="AUTO")))
-    request = models.EmbedTextDetails(
-        embed_contents=contents,
-        serving_mode=_serving_mode(models, settings.embedding_model),
-        compartment_id=runtime.compartment_id,
-        is_echo=False,
-        embedding_types=[models.EmbedTextDetails.EMBEDDING_TYPES_FLOAT],
-        output_dimensions=dimensions,
-        truncate=models.EmbedTextDetails.TRUNCATE_NONE,
-        input_type=input_type_value,
-    )
-    with (
-        model_call_purpose(
-            model_purpose_attributes(
-                default={
-                    models.EmbedTextDetails.INPUT_TYPE_SEARCH_QUERY: "query.embed",
-                    models.EmbedTextDetails.INPUT_TYPE_SEARCH_DOCUMENT: "document.embed",
-                }.get(input_type_value)
-            ).get("pr.gen_ai.purpose")
-        ),
-        observe_call("embeddings", settings.embedding_model) as observation,
-    ):
-        observation.request(request)
-        response = runtime.client.embed_text(
-            embed_text_details=request,
-            retry_strategy=runtime.oci.retry.NoneRetryStrategy(),
-        )
-        observation.response(response.data)
-    embeddings = _embedding_vectors(response.data, expected_count=1, expected_dimensions=dimensions)
-    return embeddings[0]
 
 
-def _embedding_endpoint(settings: Settings) -> str:
-    if settings.embedding_endpoint:
-        return settings.embedding_endpoint
-    region = settings.embedding_region.strip()
-    if not region:
-        raise RuntimeError("EMBEDDING_REGION が未設定です。")
-    return oci_inference_endpoint(region)
+def _embedding_base_url(settings: Settings) -> str:
+    """埋め込みの OpenAI 互換 Base URL（#8）。
+
+    空のときは LLM の既定の接続の endpoint を使う。百煉は chat・埋め込みが同じ
+    `/compatible-mode/v1` 配下で、API key も共通なので設定を 1 つに保てる。
+    """
+    base = str(settings.embedding_base_url or "").strip().rstrip("/")
+    if base:
+        return base
+    base = get_llm_provider(settings, None).base_url
+    if not base:
+        raise RuntimeError("EMBEDDING_BASE_URL が未設定です（LLM の接続の endpoint も空です）。")
+    return base
 
 
-def _embedding_input_type(models: Any, input_type: str) -> str:
+def _embedding_api_key(settings: Settings) -> str:
+    """埋め込みの API key（#8。LLM の既定の接続のものを使う）。"""
+    key = get_llm_provider(settings, None).api_key
+    if not key:
+        raise RuntimeError("埋め込みの API key がありません（LLM の接続の API key を使います）。")
+    return key
+
+
+def _rerank_base_url(settings: Settings) -> str:
+    """再ランクの Base URL（#8）。
+
+    空のときは埋め込みの Base URL の `/compatible-mode/` を `/compatible-api/` に
+    読み替える。百煉は**再ランクだけ** `/compatible-api/v1` 配下にあり、chat・埋め込みの
+    `/compatible-mode/v1` に投げると 404 が返る。
+    """
+    base = str(settings.rerank_base_url or "").strip().rstrip("/")
+    if base:
+        return base
+    return _embedding_base_url(settings).replace("/compatible-mode/", "/compatible-api/")
+
+
+def _embedding_purpose(input_type: str) -> str | None:
+    """観測に載せる用途。API へは送らない（#8）。"""
     normalized = str(input_type or "").strip().upper()
     aliases = {
         "DOCUMENT": EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT,
-        "SEARCH_DOCUMENT": EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT,
         "QUERY": EMBEDDING_INPUT_TYPE_SEARCH_QUERY,
-        "SEARCH_QUERY": EMBEDDING_INPUT_TYPE_SEARCH_QUERY,
-        "IMAGE": EMBEDDING_INPUT_TYPE_IMAGE,
     }
     normalized = aliases.get(normalized, normalized)
-    if normalized == EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT:
-        return models.EmbedTextDetails.INPUT_TYPE_SEARCH_DOCUMENT
-    if normalized == EMBEDDING_INPUT_TYPE_SEARCH_QUERY:
-        return models.EmbedTextDetails.INPUT_TYPE_SEARCH_QUERY
-    if normalized == EMBEDDING_INPUT_TYPE_IMAGE:
-        return models.EmbedTextDetails.INPUT_TYPE_IMAGE
-    raise RuntimeError(f"Unsupported embedding input type: {input_type}")
+    return {
+        EMBEDDING_INPUT_TYPE_SEARCH_QUERY: "query.embed",
+        EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT: "document.embed",
+    }.get(normalized)
 
 
 def _embedding_output_dimensions(settings: Settings) -> int:
@@ -2107,29 +2076,56 @@ def _embedding_output_dimensions(settings: Settings) -> int:
 
 
 def _embedding_vectors(data: Any, *, expected_count: int, expected_dimensions: int) -> list[list[float]]:
-    raw_embeddings = _value(data, "embeddings")
-    if not raw_embeddings:
-        by_type = _value(data, "embeddings_by_type")
-        if isinstance(by_type, dict):
-            raw_embeddings = by_type.get("float") or by_type.get("FLOAT")
-        else:
-            raw_embeddings = _value(by_type, "float") or _value(by_type, "FLOAT")
-    if not isinstance(raw_embeddings, list):
-        raise RuntimeError("OCI embedding response に embeddings がありません。")
-    if len(raw_embeddings) != expected_count:
-        raise RuntimeError(f"OCI embedding response count mismatch: expected {expected_count}, got {len(raw_embeddings)}")
+    """OpenAI 互換の `/embeddings` の応答から、入力の順でベクトルを取り出す（#8）。
+
+    応答の `data[].index` は入力の位置。順不同で返る実装もあるため index で並べ直す。
+    """
+    rows = _value(data, "data")
+    if not isinstance(rows, list):
+        raise RuntimeError("embedding の応答に data がありません。")
+    if len(rows) != expected_count:
+        raise RuntimeError(f"embedding の応答の件数が入力と違います: expected {expected_count}, got {len(rows)}")
+
+    ordered: list[Any] = [None] * expected_count
+    for position, row in enumerate(rows):
+        raw_index = _value(row, "index")
+        try:
+            index = int(raw_index) if raw_index is not None else position
+        except (TypeError, ValueError):
+            index = position
+        if not 0 <= index < expected_count or ordered[index] is not None:
+            index = position
+        ordered[index] = row
 
     embeddings: list[list[float]] = []
-    for index, raw_vector in enumerate(raw_embeddings):
+    for index, row in enumerate(ordered):
+        raw_vector = _value(row, "embedding") if row is not None else None
         if not isinstance(raw_vector, list):
-            raise RuntimeError(f"OCI embedding response vector #{index + 1} が配列ではありません。")
+            raise RuntimeError(f"embedding の応答の #{index + 1} に embedding がありません。")
         vector = [float(value) for value in raw_vector]
         if len(vector) != expected_dimensions:
-            raise RuntimeError(
-                f"OCI embedding dimension mismatch: expected {expected_dimensions}, got {len(vector)} for vector #{index + 1}"
-            )
+            raise RuntimeError(f"embedding の次元が違います: expected {expected_dimensions}, got {len(vector)} for vector #{index + 1}")
         embeddings.append(vector)
     return embeddings
+
+
+def _rerank_request(url: str, body: dict[str, Any], api_key: str, timeout_seconds: int) -> dict[str, Any]:
+    """`POST {base_url}/reranks` を 1 回送る（#8）。**HTTP を叩くのはここだけ。**"""
+    request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
+        url,
+        method="POST",
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=max(1, int(timeout_seconds))) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:500]
+        raise RuntimeError(f"rerank が {exc.code} を返しました: {detail}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("rerank の応答が object ではありません。")
+    return payload
 
 
 def _rerank_text_once(
@@ -2138,45 +2134,28 @@ def _rerank_text_once(
     settings: Settings,
     top_n: int | None = None,
 ) -> list[RerankTextRank]:
+    """候補をまとめて 1 回で精読し、index と relevance score を返す（#8）。
+
+    不変条件: 候補は 1 要求にまとめる（1 件ずつ呼ぶと候補の数だけ課金される）。候補を
+    増やさない。順位ではなく score を持って帰る（拒答の判定が score の絶対値を見る）。
+    """
     model = settings.rerank_model
     if not model:
         raise RuntimeError("RERANK_MODEL が未設定です。")
-    runtime = _runtime(
-        settings.oci_config_file,
-        settings.oci_profile,
-        settings.oci_compartment_id,
-        settings.oci_rerank_endpoint,
-        settings.rerank_request_timeout_seconds,
-    )
-    models = runtime.models
-    # v4 の長文を default の 1 chunk で取りこぼさないよう、内部 chunk 数を確保する。
-    # UTF-8 byte 数は token 実測値ではない。余裕を取った分割目安としてのみ使用する。
-    chunk_options = {}
-    if model.startswith("cohere.rerank-v4.0"):
-        document_budget = RERANK_V4_DOCUMENT_BUDGET_UTF8_BYTES - len(str(query).encode("utf-8")) - 4
-        if document_budget <= 0:
-            raise ValueError("Rerank query exceeds the conservative input budget.")
-        max_bytes = max((len(str(document).encode("utf-8")) for document in documents), default=0)
-        chunks = max(1, (max_bytes + document_budget - 1) // document_budget)
-        if chunks * len(documents) > RERANK_MAX_DOCUMENT_CHUNKS_PER_REQUEST:
-            raise ValueError("Rerank input exceeds the document/chunk request budget.")
-        chunk_options["max_chunks_per_document"] = chunks
-    request = models.RerankTextDetails(
-        input=str(query or ""),
-        compartment_id=runtime.compartment_id,
-        serving_mode=_serving_mode(models, model),
-        documents=[str(document or "") for document in documents],
-        top_n=top_n if top_n is not None else len(documents),
-        **chunk_options,
-    )
+    body: dict[str, Any] = {
+        "model": model,
+        "query": str(query or ""),
+        "documents": [str(document or "") for document in documents],
+        "top_n": top_n if top_n is not None else len(documents),
+    }
+    url = f"{_rerank_base_url(settings)}{RERANK_PATH}"
     receipt = current_rerank_receipt()
-    with observe_call("rerank", settings.rerank_model) as observation:
-        observation.request(request)
-        strategy = runtime.oci.retry.NoneRetryStrategy()
+    with observe_call("rerank", model) as observation:
+        observation.request({"url": url, **body})
         attempt = receipt.begin_sdk(current_rerank_attempt()) if receipt is not None else None
         try:
-            response = runtime.client.rerank_text(request, retry_strategy=strategy)
-            observation.response(response.data)
+            payload = _rerank_request(url, body, _embedding_api_key(settings), settings.rerank_request_timeout_seconds)
+            observation.response(payload)
         except BaseException as exc:
             if receipt is not None and attempt is not None:
                 receipt.finish_sdk(attempt, "cancelled" if type(exc).__name__ == "CancelledError" else "error", exc)
@@ -2194,15 +2173,20 @@ def _rerank_text_once(
                 observation.display(
                     details={"code": [{"label": "rerank", "text": json.dumps(snapshot, ensure_ascii=False), "language": "json"}]}
                 )
-    ranks = getattr(response.data, "document_ranks", None) or []
+    results = payload.get("results")
+    if not isinstance(results, list):
+        raise RuntimeError("rerank の応答に results がありません。")
     ranks_with_scores: list[RerankTextRank] = []
-    for rank in ranks:
-        try:
-            index = int(rank.index)
-        except (TypeError, ValueError):
+    for result in results:
+        if not isinstance(result, dict):
             continue
-        relevance_score = _optional_float(getattr(rank, "relevance_score", None))
-        ranks_with_scores.append(RerankTextRank(index=index, relevance_score=relevance_score))
+        try:
+            index = int(result["index"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not 0 <= index < len(documents):
+            continue
+        ranks_with_scores.append(RerankTextRank(index=index, relevance_score=_optional_float(result.get("relevance_score"))))
     return ranks_with_scores
 
 
@@ -2227,7 +2211,7 @@ def _rerank_text_with_retry(
         try:
             result = _parse_with_retry(
                 operation,
-                "OCI rerank",
+                "rerank",
                 settings,
                 retries=settings.rerank_retries,
                 initial_wait_seconds=settings.rerank_retry_initial_wait_seconds,

@@ -1,16 +1,16 @@
-"""OCI Generative AI クライアント（埋め込み / リランク）。
+"""埋め込み / 再ランクのクライアント（#8）。
 
-埋め込み: Cohere Embed v4（1536 次元）。
-リランク: Cohere Rerank v4 fast。
+接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の `text-embedding-v4`
+（1536 次元）と `qwen3-rerank`。LLM/VLM には使わない。
 """
 
 import asyncio
 import hashlib
-import importlib
 import json
 import logging
 import math
 import re
+import urllib.request
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Sequence
 from numbers import Real
@@ -30,8 +30,6 @@ from rag_engine.resources.rerank_diagnostics import (
 from rag_engine.retrieval.query_identity import normalized_query_key
 
 from app.clients.ai_calls import embedding_rejection_reason, ingestion_ai_calls
-from app.clients.oci_auth import load_oci_config_without_prompt
-from app.clients.oci_snapshot import oci_call_snapshot
 from app.config import Settings, get_settings
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9_]+|[ぁ-んァ-ン一-龯々ー]+", re.IGNORECASE)
@@ -50,6 +48,12 @@ EMBEDDING_INPUT_MAX_TOKENS = 128_000
 # 再試行でバッチを分けるときの最大の分割数(1 回の呼び出しの中で順に送る)。
 EMBEDDING_RETRY_MAX_SPLITS = 8
 type SdkCallRunner = Callable[[Callable[[], Any]], Awaitable[Any]]
+
+
+class PostJson(Protocol):
+    """`POST {url}` に JSON を送り、JSON を返す（テストの差し替え口。#8）。"""
+
+    def __call__(self, url: str, body: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class GenerativeAiInferenceClientProtocol(Protocol):
@@ -85,16 +89,17 @@ class OciEmbeddingRequestError(RuntimeError):
 
 
 class OciGenAiClient:
-    """OCI Generative AI による埋め込み / リランククライアント。"""
+    """OpenAI 互換の API による埋め込み / 再ランクのクライアント（#8）。"""
 
     def __init__(
         self,
         settings: Settings | None = None,
-        inference_client: GenerativeAiInferenceClientProtocol | None = None,
+        post: PostJson | None = None,
         sdk_call_runner: SdkCallRunner | None = None,
     ) -> None:
         self._settings = settings or get_settings()
-        self._inference_client = inference_client
+        # `post` はテストの差し替え口（本番は `_post`。HTTP を叩くのはそこだけ）。
+        self._post_json = post
         self._sdk_call_runner = sdk_call_runner or _run_sdk_call_in_thread
         self._embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
         self._rerank_cache: OrderedDict[str, list[tuple[int, float]]] = OrderedDict()
@@ -290,33 +295,86 @@ class OciGenAiClient:
                     )
                 )
 
+    def _base_url(self, *, rerank: bool) -> str:
+        """埋め込み / 再ランクの OpenAI 互換 Base URL（#8）。
+
+        空のときは Enterprise AI の接続の endpoint を使う。再ランクは
+        `/compatible-mode/` を `/compatible-api/` に読み替える（百煉は再ランクだけ
+        `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
+        """
+        base = str(getattr(self._settings, "rerank_base_url", "") or "").strip() if rerank else ""
+        if not base:
+            base = str(getattr(self._settings, "embedding_base_url", "") or "").strip()
+            if rerank and base:
+                base = base.replace("/compatible-mode/", "/compatible-api/")
+        if not base:
+            base = str(self._settings.oci_enterprise_ai_endpoint or "").strip()
+            if rerank and base:
+                base = base.replace("/compatible-mode/", "/compatible-api/")
+        if not base:
+            raise OciGenAiConfigError(
+                "埋め込み / 再ランクの Base URL が未設定です。"
+                "モデル設定の Base URL か、Enterprise AI の接続の Endpoint URL を入力してください。"
+            )
+        return base.rstrip("/")
+
+    def _api_key(self) -> str:
+        """API key（#8。Enterprise AI の接続のものを使う）。"""
+        key = str(self._settings.oci_enterprise_ai_api_key or "").strip()
+        if not key:
+            raise OciGenAiConfigError(
+                "埋め込み / 再ランクの API key がありません"
+                "（Enterprise AI の接続の API key を使います）。"
+            )
+        return key
+
+    def _post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+        """OpenAI 互換の API を 1 回呼ぶ（#8）。**HTTP を叩くのはここだけ。**"""
+        if self._post_json is not None:
+            return self._post_json(url, body)
+        request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
+            url,
+            method="POST",
+            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key()}",
+            },
+        )
+        timeout = max(1, int(self._settings.oci_enterprise_ai_timeout_seconds or 60))
+        # HTTPError はそのまま伝播させる。`status` を持つので共通の分類器が種類
+        # （429 の絞り・403 の権限など）を決め、再試行の可否を判断できる。
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"{url} の応答が object ではありません。")
+        return payload
+
     async def _embed_with_oci(
         self,
         texts: list[str],
         *,
         input_type: EmbeddingInputType,
     ) -> list[list[float]]:
-        """OCI Generative AI Embedding 呼び出し。
+        """OpenAI 互換の `POST {base_url}/embeddings` を呼ぶ（#8）。
 
-        本番接続の実装ポイント。LLM/VLM には使わず、embedding 専用に限定する。
+        `input_type` は観測の purpose にだけ使う（OpenAI 互換の `/embeddings` に
+        query / document の区別は無い）。LLM/VLM には使わず、埋め込み専用に限定する。
         """
-        models = importlib.import_module("oci.generative_ai_inference.models")
-        details = models.EmbedTextDetails(
-            inputs=texts,
-            serving_mode=models.OnDemandServingMode(
-                model_id=self._settings.oci_genai_embedding_model
-            ),
-            compartment_id=self._settings.oci_compartment_id,
-            input_type=input_type,
-            output_dimensions=self._settings.oci_genai_embedding_dim,
-        )
+        model = self._settings.oci_genai_embedding_model
+        url = f"{self._base_url(rerank=False)}/embeddings"
+        body: dict[str, Any] = {
+            "model": model,
+            "input": texts,
+            "dimensions": self._settings.oci_genai_embedding_dim,
+        }
         with observed_span(
             "gen_ai.embeddings",
             kind="client",
             attributes={
                 "gen_ai.operation.name": "embeddings",
-                "gen_ai.provider.name": "oracle",
-                "gen_ai.request.model": self._settings.oci_genai_embedding_model,
+                "gen_ai.provider.name": "openai_compatible",
+                "gen_ai.request.model": model,
                 **model_purpose_attributes(
                     default={
                         "SEARCH_QUERY": "query.embed",
@@ -325,36 +383,35 @@ class OciGenAiClient:
                 ),
             },
         ) as span:
-            span.set_call_input(lambda: oci_call_snapshot(details), restricted=True)
-            response = await self._sdk_call_runner(lambda: self._client().embed_text(details))
-            span.set_call_output(lambda: oci_call_snapshot(response.data))
-        embeddings = getattr(response.data, "embeddings", None)
-        if not isinstance(embeddings, list):
-            raise ValueError("OCI embedding response に embeddings がありません。")
-        return embeddings
+            span.set_call_input(lambda: {"url": url, **body}, restricted=True)
+            payload = await self._sdk_call_runner(lambda: self._post(url, body))
+            span.set_call_output(lambda: payload)
+        rows = payload.get("data")
+        if not isinstance(rows, list):
+            raise ValueError("embedding の応答に data がありません。")
+        return _embedding_vectors_in_input_order(rows, expected_count=len(texts))
 
     async def _rerank_with_oci(
         self, query: str, documents: list[str], top_n: int
     ) -> Sequence[tuple[object, object]]:
-        """OCI Generative AI Rerank 呼び出し。"""
-        models = importlib.import_module("oci.generative_ai_inference.models")
-        details = models.RerankTextDetails(
-            input=query,
-            documents=documents,
-            serving_mode=models.OnDemandServingMode(model_id=self._settings.oci_genai_rerank_model),
-            compartment_id=self._settings.oci_compartment_id,
-            top_n=top_n,
-        )
+        """OpenAI 互換の `POST {base_url}/reranks` を呼ぶ（#8。複数形。`/rerank` は 404）。"""
+        model = self._settings.oci_genai_rerank_model
+        url = f"{self._base_url(rerank=True)}/reranks"
+        body: dict[str, Any] = {
+            "model": model,
+            "query": query,
+            "documents": documents,
+            "top_n": top_n,
+        }
         receipt = current_rerank_receipt()
         attempt_number = current_rerank_attempt()
         attempt: dict[str, Any] | None = None
 
-        def invoke_sdk() -> Any:
+        def invoke() -> dict[str, Any]:
             nonlocal attempt
-            client = self._client()
             attempt = receipt.begin_sdk(attempt_number) if receipt is not None else None
             try:
-                response = client.rerank_text(details)
+                payload = self._post(url, body)
             except BaseException as exc:
                 if receipt is not None and attempt is not None:
                     receipt.finish_sdk(
@@ -365,25 +422,25 @@ class OciGenAiClient:
                 raise
             if receipt is not None and attempt is not None:
                 receipt.finish_sdk(attempt, "completed")
-            return response
+            return payload
 
         with observed_span(
             "gen_ai.rerank",
             kind="client",
             attributes={
                 "gen_ai.operation.name": "rerank",
-                "gen_ai.provider.name": "oracle",
-                "gen_ai.request.model": self._settings.oci_genai_rerank_model,
+                "gen_ai.provider.name": "openai_compatible",
+                "gen_ai.request.model": model,
                 "rerank.attempt_number": attempt_number,
                 "rerank.retry_number": max(0, attempt_number - 1),
                 **(receipt.attributes() if receipt is not None else {}),
                 **model_purpose_attributes(),
             },
         ) as span:
-            span.set_call_input(lambda: oci_call_snapshot(details), restricted=True)
+            span.set_call_input(lambda: {"url": url, **body}, restricted=True)
             try:
-                response = await self._sdk_call_runner(invoke_sdk)
-                span.set_call_output(lambda: oci_call_snapshot(response.data))
+                payload = await self._sdk_call_runner(invoke)
+                span.set_call_output(lambda: payload)
             finally:
                 if receipt is not None:
                     span.set_attributes(receipt.attributes())
@@ -395,43 +452,14 @@ class OciGenAiClient:
                             else "not_run",
                         }
                     )
-        document_ranks = getattr(response.data, "document_ranks", None)
-        if not isinstance(document_ranks, list):
-            raise ValueError("OCI rerank response に document_ranks がありません。")
+        results = payload.get("results")
+        if not isinstance(results, list):
+            raise ValueError("rerank の応答に results がありません。")
         return [
-            (getattr(rank, "index", None), getattr(rank, "relevance_score", None))
-            for rank in document_ranks
+            (result.get("index"), result.get("relevance_score"))
+            for result in results
+            if isinstance(result, dict)
         ]
-
-    def _client(self) -> GenerativeAiInferenceClientProtocol:
-        """OCI Generative AI Inference client を遅延初期化する。"""
-        if self._inference_client is not None:
-            return self._inference_client
-
-        oci_config = importlib.import_module("oci.config")
-        genai = importlib.import_module("oci.generative_ai_inference")
-        config = load_oci_config_without_prompt(
-            oci_config,
-            self._settings.oci_config_file,
-            self._settings.oci_config_profile,
-        )
-        # 再試行は共通の上限つきの並行の実行器が受け持つ(#2002)。SDK の既定の再試行
-        # (DEFAULT_RETRY_STRATEGY)を残すと、全体の待ち・並行の数の調整・予算を通らずに再試行する。
-        # SDK の既定の circuit breaker も切る。429 が 10 回続くと先に開き、実行器の知らない
-        # CircuitBreakerError で件・job が失敗する(#2211)。
-        oci_retry = importlib.import_module("oci.retry")
-        oci_breaker = importlib.import_module("oci.circuit_breaker")
-        try:
-            self._inference_client = genai.GenerativeAiInferenceClient(
-                config,
-                retry_strategy=oci_retry.NoneRetryStrategy(),
-                circuit_breaker_strategy=oci_breaker.NoCircuitBreakerStrategy(),
-            )
-        except Exception as exc:
-            if type(exc).__name__ == "InvalidConfig":
-                raise OciGenAiConfigError(_oci_invalid_config_message(exc)) from exc
-            raise
-        return self._inference_client
 
     def _embedding_cache_disabled(self) -> bool:
         return not getattr(self._settings, "rag_embedding_cache_enabled", True) or (
@@ -493,6 +521,32 @@ async def _unwrapped_item_failure[T](awaitable: Awaitable[T]) -> T:
 async def _run_sdk_call_in_thread(operation: Callable[[], Any]) -> Any:
     """同期 OCI SDK 呼び出しを event loop 外で実行する。"""
     return await asyncio.to_thread(operation)
+
+
+def _embedding_vectors_in_input_order(rows: list[Any], *, expected_count: int) -> list[list[float]]:
+    """`/embeddings` の応答を入力の順に並べ直す（#8。`data[].index` が入力の位置）。"""
+    if len(rows) != expected_count:
+        raise ValueError(
+            f"embedding の応答の件数が入力と違います: expected {expected_count}, got {len(rows)}"
+        )
+    ordered: list[Any] = [None] * expected_count
+    for position, row in enumerate(rows):
+        index = position
+        if isinstance(row, dict):
+            try:
+                index = int(row["index"])
+            except (KeyError, TypeError, ValueError):
+                index = position
+        if not 0 <= index < expected_count or ordered[index] is not None:
+            index = position
+        ordered[index] = row
+    vectors: list[list[float]] = []
+    for position, row in enumerate(ordered):
+        raw = row.get("embedding") if isinstance(row, dict) else None
+        if not isinstance(raw, list):
+            raise ValueError(f"embedding の応答の #{position + 1} に embedding がありません。")
+        vectors.append([float(value) for value in raw])
+    return vectors
 
 
 def _embedding_cache_key(

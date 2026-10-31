@@ -642,12 +642,15 @@ def build_engine_settings(
         "OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, vision_model)
         ),
-        # rag_engine は rerank_model と oci_compartment_id が両方あるときだけ rerank を実行する
-        # (answer_records._rerank_configured)。rerank 自体は backend の Cohere client を注入して
-        # 呼ぶが、この 2 値を渡さないと RAG_RERANK_ENABLED=true でも
-        # 常に「未実行」になる(#275)。
-        "OCI_COMPARTMENT_ID": settings.oci_compartment_id,
+        # 埋め込みと再ランクは OpenAI 互換の API を呼ぶ(#8)。Base URL を空にすると
+        # rag_engine が LLM の既定の接続の endpoint から組み立てる(百煉は chat・埋め込みが
+        # 同じ /compatible-mode/v1 で、再ランクだけ /compatible-api/v1)。model を渡さないと
+        # RAG_RERANK_ENABLED=true でも常に「未実行」になる(#275)。
+        "EMBEDDING_MODEL": settings.oci_genai_embedding_model,
+        "EMBEDDING_OUTPUT_DIMENSIONS": str(int(settings.oci_genai_embedding_dim)),
+        "EMBEDDING_BASE_URL": settings.embedding_base_url,
         "RERANK_MODEL": settings.oci_genai_rerank_model,
+        "RERANK_BASE_URL": settings.rerank_base_url,
         "RAG_ENGINE_OUTPUT_DIR": str(output_dir),
         "RAG_ENGINE_RETRIEVAL_CANDIDATE_LIMIT": str(settings.rag_retrieval_candidate_limit),
         "RAG_ENGINE_RERANK_CANDIDATE_LIMIT": str(settings.rag_rerank_candidate_limit),

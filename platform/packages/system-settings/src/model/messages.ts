@@ -134,14 +134,20 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.title": "OCI Enterprise AI",
   "settings.model.enterprise.vision": "画像入力に対応",
   "settings.model.genai.description":
-    "埋め込みとリランクのみ Generative AI の Cohere モデルを使います。",
+    "埋め込みと再ランクに使う OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の text-embedding-v4 と qwen3-rerank。",
+  "settings.model.genai.embeddingBaseUrl": "埋め込みの Base URL",
+  "settings.model.genai.embeddingBaseUrlHelp":
+    "空にすると Enterprise AI のプライマリ接続の Endpoint URL を使います（API key も同じもの）。",
   "settings.model.genai.embeddingDim": "Embedding 次元",
   "settings.model.genai.embeddingDimHelp":
-    "固定値です。Cohere Embed v4 と Oracle AI Database のベクトル列に合わせます。",
+    "固定値です。埋め込みモデルの出力次元と Oracle AI Database のベクトル列に合わせます。",
   "settings.model.genai.embeddingModel": "埋め込みモデル ID",
+  "settings.model.genai.rerankBaseUrl": "再ランクの Base URL",
+  "settings.model.genai.rerankBaseUrlHelp":
+    "空にすると埋め込みの Base URL から読み替えます。百煉は再ランクだけ /compatible-api/v1 配下で、/compatible-mode/v1 に投げると 404 になります。",
   "settings.model.genai.rerankModel": "リランクモデル ID",
-  "settings.model.genai.saved": "OCI Generative AI 設定を保存しました。",
-  "settings.model.genai.title": "OCI Generative AI",
+  "settings.model.genai.saved": "埋め込み / 再ランクの設定を保存しました。",
+  "settings.model.genai.title": "埋め込み / 再ランク",
   "settings.model.legacySecret.description":
     "原因: 旧形式の model-settings.json に API Key が保存されています。復旧方法: この画面で保存すると API Key を .env へ移し、JSON から secret を削除します。移行後は接続テストを実行してください。",
   "settings.model.legacySecret.title": "旧 JSON に API Key が残っています",
@@ -149,13 +155,17 @@ export const MODEL_MESSAGES = {
   "settings.model.loading": "モデル設定を読み込んでいます。",
   "settings.model.placeholder.apiKey": "sk-xxxxxxxxxxxxxxxx",
   "settings.model.placeholder.displayName": "業務 NL2SQL 標準",
-  "settings.model.placeholder.embeddingModel": "cohere.embed-v4.0",
+  "settings.model.placeholder.embeddingBaseUrl":
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "settings.model.placeholder.embeddingModel": "text-embedding-v4",
   // placeholder は 375px の欄にも収まる短い例（形は補足の endpointHelp。#1891）。
   "settings.model.placeholder.endpoint": "https://…oraclecloud.com/openai/v1",
   "settings.model.placeholder.endpointTertiary": "https://api.openai.com/v1",
   "settings.model.placeholder.modelId": "enterprise-llm",
   "settings.model.placeholder.project": "ocid1.generativeaiproject.oc1.…",
-  "settings.model.placeholder.rerankModel": "cohere.rerank-v4.0-fast",
+  "settings.model.placeholder.rerankBaseUrl":
+    "https://dashscope.aliyuncs.com/compatible-api/v1",
+  "settings.model.placeholder.rerankModel": "qwen3-rerank",
   "settings.model.requiredInOci": "OCI 運用時必須",
   "settings.model.save": "保存",
   "settings.model.conflict.message":
