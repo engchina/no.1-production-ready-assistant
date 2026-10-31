@@ -235,16 +235,6 @@ async def test_database_ready_wallet_mtls_missing_files_skips_probe(
             {"oracle_connection_security": "walletless_tls", "oracle_dsn": "service_high"},
             "walletless_tls_dsn_required",
         ),
-        # DeepSec は Thin mode だけ対応する（NL2SQL 固有の判定を注入している）。
-        (
-            {
-                "oracle_connection_security": "walletless_tls",
-                "oracle_dsn": WALLETLESS_DSN,
-                "oracle_deepsec_enabled": True,
-                "oracle_driver_mode": "thick",
-            },
-            "invalid_configuration",
-        ),
     ],
 )
 async def test_database_ready_uses_system_settings_readiness(

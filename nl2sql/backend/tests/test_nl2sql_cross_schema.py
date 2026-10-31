@@ -8,14 +8,12 @@ import pytest
 
 from app.features.nl2sql.models import (
     AllowedObjects,
-    AssetRefreshData,
-    Nl2SqlEngine,
     Nl2SqlProfile,
     SampleDataStep,
     SchemaCatalog,
     SchemaTable,
 )
-from app.features.nl2sql.oracle_adapter import OracleAdapterError, OracleNl2SqlAdapter
+from app.features.nl2sql.oracle_adapter import OracleNl2SqlAdapter
 from app.features.nl2sql.service import Nl2SqlService
 from app.features.nl2sql.store import MemoryNl2SqlStore
 from app.settings import get_settings
@@ -144,10 +142,6 @@ def test_legacy_bare_name_prefers_current_owner_and_keeps_duplicate_external_obj
 
     assert profile.allowed_tables == ["APP.ORDERS", "SH.ORDERS"]
     assert profile.object_scope_version == 2
-    assert service.build_select_ai_profile_attributes(profile)["object_list"] == [
-        {"owner": "APP", "name": "ORDERS"},
-        {"owner": "SH", "name": "ORDERS"},
-    ]
 
 
 def test_legacy_bare_name_uses_unique_external_match_and_blocks_ambiguous_match() -> None:
@@ -283,58 +277,3 @@ def test_owner_qualified_column_restriction_does_not_confuse_duplicate_tables() 
     assert blocked.safety.is_safe is False
     assert blocked.safety.blocked_reason == "許可されていない列を参照しています。"
     assert accepted.safety.is_safe is True
-
-
-def test_unsynchronized_select_ai_scope_blocks_agent_use() -> None:
-    service = _service(_table("SH", "ORDERS"))
-    profile = Nl2SqlProfile(
-        id="sales",
-        name="売上",
-        allowed_tables=["SH.ORDERS"],
-        object_scope_version=2,
-    )
-    profile_name = service._select_ai_profile_name(profile)  # noqa: SLF001
-    service._asset_meta[Nl2SqlEngine.SELECT_AI] = AssetRefreshData(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI,
-        refreshed=False,
-        status="error",
-        profile_name=profile_name,
-        warning="scope mismatch",
-    )
-
-    with pytest.raises(OracleAdapterError, match="object scope が未同期"):
-        service._assert_select_ai_scope_ready(profile)  # noqa: SLF001
-
-
-def test_select_ai_scope_failure_remains_profile_specific_after_other_sync() -> None:
-    service = _service(_table("SH", "ORDERS"), _table("SSB", "CUSTOMERS"))
-    failed = Nl2SqlProfile(
-        id="sales",
-        name="売上",
-        allowed_tables=["SH.ORDERS"],
-        object_scope_version=2,
-    )
-    ready = Nl2SqlProfile(
-        id="customers",
-        name="顧客",
-        allowed_tables=["SSB.CUSTOMERS"],
-        object_scope_version=2,
-    )
-    failed_name = service._select_ai_profile_name(failed)  # noqa: SLF001
-    ready_name = service._select_ai_profile_name(ready)  # noqa: SLF001
-
-    service._record_select_ai_scope_state(  # noqa: SLF001
-        profile_name=failed_name,
-        expected_scope={"SH.ORDERS"},
-        actual_scope=set(),
-        warning="scope mismatch",
-    )
-    service._record_select_ai_scope_state(  # noqa: SLF001
-        profile_name=ready_name,
-        expected_scope={"SSB.CUSTOMERS"},
-        actual_scope={"SSB.CUSTOMERS"},
-    )
-
-    with pytest.raises(OracleAdapterError, match="object scope が未同期"):
-        service._assert_select_ai_scope_ready(failed)  # noqa: SLF001
-    service._assert_select_ai_scope_ready(ready)  # noqa: SLF001

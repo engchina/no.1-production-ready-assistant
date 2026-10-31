@@ -64,19 +64,17 @@ const EXPECTED_ICON_NAMES_BY_LABEL_KEY = new Map<string, string>([
   ["nav.evaluation", "FlaskConical"],
   // セキュリティ設定（固有。#206。セクション名は 3 製品で同じ。#658）
   ["nav.securityPermissions", "LockKeyhole"],
-  ["nav.securityDeepSec", "ShieldCheck"],
   // ユーザーとロール（3製品共通。#206）
   ["nav.securityUsers", "Users"],
   ["nav.securityRoles", "Shield"],
   // 全員の API キー（RAG / NL2SQL だけ。#1805）
   ["nav.securityApiKeys", "KeySquare"],
-  // 運用設定（#81。Select AI Credential はデータベース設定から分けた。#658。回答の注意書きは #2449、
+  // 運用設定（#81。回答の注意書きは #2449、
   // チャットの添付は #2517・#2546）
   ["nav.settingsSystemTables", "TableProperties"],
   ["nav.settingsTraceRecording", "Waypoints"],
   ["nav.settingsChatAttachments", "Paperclip"],
   ["nav.settingsAnswerNotice", "MessageSquareWarning"],
-  ["nav.settingsSelectAiCredential", "FileKey"],
   // システム設定（3製品共通）
   ["nav.settingsUploadStorage", "HardDrive"],
   ["nav.settingsModel", "BrainCog"],
@@ -126,8 +124,6 @@ test("既定入口は SQL 生成権限がなければ root に戻し、root が�
   const modelOnly = (permission: string) => permission === "menu.settings_model";
   const databaseOnly = (permission: string) => permission === "menu.settings_database";
   const systemTablesOnly = (permission: string) => permission === "menu.settings_system_tables";
-  const selectAiCredentialOnly = (permission: string) =>
-    permission === "menu.settings_select_ai_credential";
   const adminSqlOnly = (permission: string) => permission === "menu.admin_sql";
   const noPermissions = () => false;
 
@@ -137,7 +133,6 @@ test("既定入口は SQL 生成権限がなければ root に戻し、root が�
   assert.equal(firstAllowedRoute(modelOnly), "/settings/model");
   assert.equal(firstAllowedRoute(databaseOnly), "/settings/database");
   assert.equal(firstAllowedRoute(systemTablesOnly), "/settings/system-tables");
-  assert.equal(firstAllowedRoute(selectAiCredentialOnly), "/settings/select-ai-credential");
   assert.equal(firstAllowedRoute(appearanceOnly), "/settings/appearance");
   assert.equal(defaultEntryRoute(adminSqlOnly), "/");
   assert.equal(firstAllowedRoute(adminSqlOnly), "/admin-sql");

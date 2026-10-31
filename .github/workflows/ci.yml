@@ -446,7 +446,6 @@ jobs:
               - "nl2sql/backend/app/features/settings/system_schema*.py"
               - "nl2sql/backend/app/features/nl2sql/oracle_*.py"
               - "nl2sql/backend/app/features/nl2sql/*store.py"
-              - "nl2sql/backend/app/features/nl2sql/synthetic_oracle.py"
               - "nl2sql/backend/tests/conftest.py"
               - "nl2sql/backend/tests/*oracle_live*.py"
               - "nl2sql/backend/app/features/nl2sql/db_admin_chat_columns.py"

@@ -10,11 +10,8 @@ const source = readFileSync(
 const migratedPages = [
   "../src/features/nl2sql/pages/ProfileManagementPage.tsx",
   "../src/features/nl2sql/pages/QuestionLearningPage.tsx",
-  "../src/features/nl2sql/pages/DataManagementPage.tsx",
   "../src/features/nl2sql/pages/MetadataSqlManagementPage.tsx",
-  "../src/features/nl2sql/pages/EvaluationPage.tsx",
   "../../../platform/packages/system-settings/src/permissions/RolePermissionsPage.tsx",
-  "../src/features/security/SecurityDeepSecPage.tsx",
 ].map((path) => readFileSync(new URL(path, import.meta.url), "utf8"));
 
 test("BulkSelectionActions uses shared Button variants for select and clear", () => {

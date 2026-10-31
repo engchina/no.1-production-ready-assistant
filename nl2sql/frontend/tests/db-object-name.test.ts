@@ -6,7 +6,6 @@ import {
   dbObjectKeyTokens,
   formatDbObjectName,
   formatDbObjectPart,
-  formatEntitlementTargetName,
   normalizeDbIdentifierToken,
   normalizeDbObjectKey,
   splitDbObjectName,
@@ -70,47 +69,6 @@ test("formatDbObjectName は backend の qualified_object_name と同じ規則�
   }
 });
 
-test("DeepSec のデータ権限キーは保存済みの大文字キーと一致し、引用名を大文字化で壊さない", () => {
-  // 保存済みのデータ権限（backend が大文字化して保存）と一覧のカタログ値が同じキーになる
-  assert.equal(
-    formatEntitlementTargetName({ target_owner: "ADMIN", target_object: "DENPYO_ACTIVITY_LOG", resource_code: "" }),
-    formatDbObjectName({ owner: "ADMIN", name: "DENPYO_ACTIVITY_LOG", qualified_name: "ADMIN.DENPYO_ACTIVITY_LOG" })
-  );
-  assert.equal(
-    formatEntitlementTargetName({ target_owner: "admin", target_object: "orders", resource_code: "" }),
-    "ADMIN.ORDERS"
-  );
-  // target_owner / target_object が無い旧データは resource_code から作る（従来の `.toUpperCase()` と同じ結果）
-  assert.equal(formatEntitlementTargetName({ resource_code: "admin.orders" }), "ADMIN.ORDERS");
-  assert.equal(formatEntitlementTargetName({ resource_code: "" }), "");
-  // カタログの引用名は大文字化しないので、別の表（APP.MIXEDCASE）の権限と取り違えない
-  assert.notEqual(
-    formatDbObjectName({ owner: "APP", name: "MixedCase", qualified_name: "APP.MixedCase" }),
-    formatEntitlementTargetName({ target_owner: "APP", target_object: "MIXEDCASE" })
-  );
-});
-
-test("DeepSec のデータ権限キーは引用名を保ち、大文字の同名表と別のキーになる (#560)", () => {
-  // backend canonical_object_part と同じ token
-  assert.equal(formatEntitlementTargetName({ target_owner: "SALES", target_object: '"Mixed_Case"' }), 'SALES."Mixed_Case"');
-  assert.equal(formatEntitlementTargetName({ target_owner: "SALES", target_object: "MIXED_CASE" }), "SALES.MIXED_CASE");
-  assert.notEqual(
-    formatEntitlementTargetName({ target_owner: "SALES", target_object: '"Mixed_Case"' }),
-    formatEntitlementTargetName({ target_owner: "SALES", target_object: "MIXED_CASE" })
-  );
-  // 一覧のカタログ値から作ったキーと、保存済み token から作ったキーが一致する
-  assert.equal(
-    formatDbObjectName({ owner: "SALES", name: "Mixed_Case" }),
-    formatEntitlementTargetName({
-      target_owner: formatDbObjectPart("SALES"),
-      target_object: formatDbObjectPart("Mixed_Case"),
-    })
-  );
-  // resource_code しか無い場合も引用規則どおりに分解する（dot を含む引用名を壊さない）
-  assert.equal(formatEntitlementTargetName({ resource_code: 'SALES."a.b"' }), 'SALES."a.b"');
-  assert.equal(formatEntitlementTargetName({ resource_code: "nl2sql_deepsec_probe" }), "NL2SQL_DEEPSEC_PROBE");
-});
-
 test("formatDbObjectPart はカタログ値を token にし、token には冪等", () => {
   assert.equal(formatDbObjectPart("Mixed_Case"), '"Mixed_Case"');
   assert.equal(formatDbObjectPart('"Mixed_Case"'), '"Mixed_Case"');
@@ -166,7 +124,6 @@ test("別実装だった修飾名の組み立てが formatDbObjectName に委ね
     "src/features/nl2sql/metadataSql.ts",
     "src/features/nl2sql/ontology/physicalIdentity.ts",
     "src/features/nl2sql/ontology/nodeDisplay.ts",
-    "src/features/security/SecurityDeepSecPage.tsx",
   ];
   for (const path of sources) {
     const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");

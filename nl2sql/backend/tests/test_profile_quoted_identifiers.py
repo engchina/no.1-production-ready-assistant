@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from app.features.nl2sql.models import (
@@ -20,15 +18,9 @@ from app.features.nl2sql.ontology_catalog import (
 )
 from app.features.nl2sql.ontology_models import PhysicalObjectRef, ProfileOntologyView
 from app.features.nl2sql.ontology_router import OntologyApiRuntime
-from app.features.nl2sql.oracle_adapter import (
-    OracleAdapterError,
-    OracleNl2SqlAdapter,
-)
-from app.features.nl2sql.profile_sync import _profile_sync_public_error
 from app.features.nl2sql.service import Nl2SqlService, _graph_with_resolved_table_owners
 from app.features.nl2sql.sql_semantics import parse_oracle_sql
 from app.features.nl2sql.store import MemoryNl2SqlStore
-from app.settings import get_settings
 
 UPPER = "SALES.MIXED_CASE"
 QUOTED = 'SALES."Mixed_Case"'
@@ -118,10 +110,6 @@ def test_existing_unquoted_profile_values_are_unchanged() -> None:
     )
 
     assert profile.allowed_tables == ["APP.ORDERS", "SH.ORDERS"]
-    assert service.build_select_ai_profile_attributes(profile)["object_list"] == [
-        {"owner": "APP", "name": "ORDERS"},
-        {"owner": "SH", "name": "ORDERS"},
-    ]
 
 
 def test_bare_unquoted_name_does_not_match_quoted_catalog_table() -> None:
@@ -244,120 +232,6 @@ def test_generation_catalog_does_not_use_upper_table_detail_for_quoted_profile_o
     assert [c.column_name for c in generated.tables[0].columns] == ["Amount"]
 
 
-# --- Select AI の object_list（#564 で実 Oracle を確認し、引用名を token で渡す） ----------
-
-
-def test_select_ai_object_list_passes_quoted_names_as_sql_identifier_tokens() -> None:
-    service = _both_tables_service()
-    profile = service.create_profile(
-        Nl2SqlProfile(id="both", name="両方", allowed_tables=[UPPER, QUOTED, 'SALES."売上"'])
-    )
-
-    # DBMS_CLOUD_AI は owner / name を SQL 識別子として解釈する（引用なしは大文字化）。
-    assert service.build_select_ai_profile_attributes(profile)["object_list"] == [
-        {"owner": "SALES", "name": "MIXED_CASE"},
-        {"owner": "SALES", "name": '"Mixed_Case"'},
-        {"owner": "SALES", "name": '"売上"'},
-    ]
-
-
-def test_select_ai_refresh_synchronizes_quoted_profile_scope() -> None:
-    service = _both_tables_service()
-    profile = service.create_profile(
-        Nl2SqlProfile(id="quoted", name="引用名", allowed_tables=[QUOTED])
-    )
-
-    refreshed = service.refresh_select_ai_profile("quoted")
-
-    assert refreshed.status == "ready"
-    assert refreshed.warning == ""
-    assert "unsupported_object_list_names" not in refreshed.engine_meta
-    service._assert_select_ai_scope_ready(profile)  # noqa: SLF001
-
-
-def test_select_ai_scope_reread_distinguishes_quoted_and_upper_entries() -> None:
-    service = _both_tables_service()
-
-    # Oracle の再読込結果（USER_CLOUD_AI_PROFILE_ATTRIBUTES）は渡した表記のまま返る。
-    assert service._select_ai_object_scope_set(  # noqa: SLF001
-        [{"owner": "SALES", "name": '"Mixed_Case"'}, {"owner": "sales", "name": "mixed_case"}]
-    ) == {QUOTED, UPPER}
-    assert service._select_ai_object_scope_set(  # noqa: SLF001
-        [{"owner": "SALES", "name": "Mixed_Case"}]
-    ) == {UPPER}
-
-
-def test_adapter_object_list_uses_quoting_rules() -> None:
-    settings = get_settings().model_copy(update={"oracle_user": "APP"})
-    adapter = OracleNl2SqlAdapter(settings)
-
-    assert adapter._object_list(  # noqa: SLF001
-        ["ORDERS", "sh.orders", '"SALES"."MIXED_CASE"', QUOTED, '"Sales"."Orders"']
-    ) == [
-        {"owner": "APP", "name": "ORDERS"},
-        {"owner": "SH", "name": "ORDERS"},
-        {"owner": "SALES", "name": "MIXED_CASE"},
-        {"owner": "SALES", "name": '"Mixed_Case"'},
-        {"owner": '"Sales"', "name": '"Orders"'},
-    ]
-
-
-def test_adapter_normalized_object_list_keeps_quoted_and_upper_same_name_entries() -> None:
-    from app.features.nl2sql.oracle_adapter import _normalize_select_ai_object_list
-
-    entries = [
-        {"owner": "SALES", "name": "MIXED_CASE"},
-        {"owner": "SALES", "name": '"Mixed_Case"'},
-        {"owner": "sales", "name": "mixed_case"},
-        {"owner": "SALES", "name": '"NL2SQL_HIDDEN"'},
-    ]
-
-    assert _normalize_select_ai_object_list(entries) == entries[:2]
-
-
-@pytest.mark.parametrize("multiple", [False, True])
-def test_synthetic_data_passes_quoted_table_names_as_sql_identifier_tokens(
-    monkeypatch: pytest.MonkeyPatch, multiple: bool
-) -> None:
-    import json
-    from collections.abc import Iterator
-    from contextlib import contextmanager
-    from unittest.mock import MagicMock
-
-    adapter = OracleNl2SqlAdapter(get_settings().model_copy(update={"oracle_user": "APP"}))
-    conn = MagicMock()
-    cursor = conn.cursor.return_value.__enter__.return_value
-
-    @contextmanager
-    def connection() -> Iterator[Any]:
-        yield conn
-
-    monkeypatch.setattr(adapter, "connection", connection)
-    result = adapter.generate_synthetic_data(
-        table_name="" if multiple else QUOTED,
-        object_list=[QUOTED, UPPER] if multiple else [],
-        row_count=1,
-        profile_name="P",
-    )
-    _sql, binds = cursor.execute.call_args.args
-
-    # 引用しない `Mixed_Case` を渡すと Oracle は大文字の同名表 `MIXED_CASE` に生成する（#564）。
-    if multiple:
-        assert [(item["owner"], item["name"]) for item in json.loads(binds["object_list"])] == [
-            ("SALES", '"Mixed_Case"'),
-            ("SALES", "MIXED_CASE"),
-        ]
-    else:
-        assert (binds["owner_name"], binds["object_name"]) == ("SALES", '"Mixed_Case"')
-    assert result["table_name"] == QUOTED
-
-
-def test_profile_sync_no_longer_maps_object_list_errors_to_unsupported() -> None:
-    code, _message = _profile_sync_public_error(OracleAdapterError("ORA-20047: object"))
-
-    assert code == "PROFILE_SYNC_FAILED"
-
-
 # --- オントロジー --------------------------------------------------------------
 
 
@@ -422,42 +296,3 @@ def test_profile_view_warning_reports_unresolved_quoted_profile_object() -> None
 
     assert len(warnings) == 1
     assert QUOTED in warnings[0]
-
-
-# --- DeepSec の関連テーブル候補 ---------------------------------------------------
-
-
-def test_deepsec_relation_catalog_accepts_quoted_profile_object(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.features.nl2sql import service as service_module
-    from app.security import scope_relations
-
-    service = _service(
-        _table("SALES", "MIXED_CASE"), _table("SALES", "Mixed_Case"), _table("SALES", "Regions")
-    )
-    service.create_profile(
-        Nl2SqlProfile(id="quoted", name="引用名", allowed_tables=[QUOTED, 'SALES."Regions"', UPPER])
-    )
-    monkeypatch.setattr(service_module, "nl2sql_service", service)
-    monkeypatch.setattr(scope_relations, "_ontology_relations", lambda *args: [])
-
-    class Cursor:
-        def __init__(self) -> None:
-            self.executed: list[tuple[str, dict[str, Any]]] = []
-
-        def execute(self, sql: str, binds: dict[str, Any] | None = None) -> None:
-            self.executed.append((sql, binds or {}))
-
-        def fetchall(self) -> list[tuple[Any, ...]]:
-            if "ALL_CONSTRAINTS" in self.executed[-1][0]:
-                return [("SALES", "FK_Region", "Mixed_Case", "SALES", "Regions", "Region", "Id", 1)]
-            return []
-
-    profiles = scope_relations.scope_profiles()
-    cursor = Cursor()
-    catalog = scope_relations.relation_catalog(object(), "quoted", QUOTED, cursor=cursor)
-
-    assert profiles[0]["objects"] == [QUOTED, 'SALES."Regions"', UPPER]
-    assert cursor.executed[0][1] == {"owner": "SALES", "object_name": "Mixed_Case"}
-    assert [relation["target"] for relation in catalog["relations"]] == ['SALES."Regions"']

@@ -28,12 +28,10 @@ export const MENU_PERMISSIONS = {
   // 全員の API キー（管理の画面）。自分のキーはメニュー権限なしで使える（#1805）。
   securityApiKeys: "menu.security_api_keys",
   securityPermissions: "menu.security_permissions",
-  securityDeepSec: "menu.security_deepsec",
   settingsUploadStorage: "menu.settings_upload_storage",
   settingsModel: "menu.settings_model",
   settingsDatabase: "menu.settings_database",
   settingsSystemTables: "menu.settings_system_tables",
-  settingsSelectAiCredential: "menu.settings_select_ai_credential",
   settingsAppearance: "menu.settings_appearance",
   settingsAnswerNotice: "menu.settings_answer_notice",
   settingsTraceRecording: "menu.settings_trace_recording",
@@ -49,9 +47,6 @@ export const CAPABILITY_PERMISSIONS = {
   sqlExecute: "nl2sql.sql.execute",
   feedbackWrite: "nl2sql.feedback.write",
   feedbackManage: "nl2sql.feedback.manage",
-  selectAiAssetsRead: "nl2sql.select_ai_assets.read",
-  selectAiAssetsRefresh: "nl2sql.select_ai_assets.refresh",
-  selectAiAssetsManage: "nl2sql.select_ai_assets.manage",
   sampleDataManage: "nl2sql.sample_data.manage",
   learningMaterialManage: "nl2sql.learning_material.manage",
   systemStatusRead: "nl2sql.system_status.read",
@@ -104,8 +99,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
   [MENU_PERMISSIONS.dataManagement]: [
     CAPABILITY_PERMISSIONS.schemaRead,
     CAPABILITY_PERMISSIONS.schemaRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
   ],
   // コメント・アノテーション・ドメインの管理も DDL を実行し、「スキーマを更新」と実行後の job の追跡を使う（#972）。
   [MENU_PERMISSIONS.commentManagement]: [
@@ -131,9 +124,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
     CAPABILITY_PERMISSIONS.profilesManage,
     CAPABILITY_PERMISSIONS.schemaRead,
     CAPABILITY_PERMISSIONS.schemaRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
-    CAPABILITY_PERMISSIONS.selectAiAssetsManage,
     CAPABILITY_PERMISSIONS.learningMaterialManage,
   ],
   [MENU_PERMISSIONS.ontologyBuild]: [
@@ -146,8 +136,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
     CAPABILITY_PERMISSIONS.profilesRead,
     CAPABILITY_PERMISSIONS.feedbackWrite,
     CAPABILITY_PERMISSIONS.feedbackManage,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsManage,
   ],
   [MENU_PERMISSIONS.questionClassifierModels]: [
     CAPABILITY_PERMISSIONS.profilesRead,
@@ -173,13 +161,6 @@ const PERMISSION_IMPLIES: Record<string, string[]> = {
   [CAPABILITY_PERMISSIONS.feedbackManage]: [
     CAPABILITY_PERMISSIONS.feedbackWrite,
     CAPABILITY_PERMISSIONS.profilesRead,
-  ],
-  [CAPABILITY_PERMISSIONS.selectAiAssetsRefresh]: [
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-  ],
-  [CAPABILITY_PERMISSIONS.selectAiAssetsManage]: [
-    CAPABILITY_PERMISSIONS.selectAiAssetsRead,
-    CAPABILITY_PERMISSIONS.selectAiAssetsRefresh,
   ],
   [CAPABILITY_PERMISSIONS.persistenceRecover]: [
     CAPABILITY_PERMISSIONS.systemStatusRead,
@@ -258,7 +239,6 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
   ],
   "settings.database.manage": [
     MENU_PERMISSIONS.settingsDatabase,
-    MENU_PERMISSIONS.settingsSelectAiCredential,
   ],
   "settings.database.sql_execute": [
     MENU_PERMISSIONS.adminSql,
@@ -269,9 +249,6 @@ const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
   "security.users.manage": [MENU_PERMISSIONS.securityUsers],
   "security.roles.view": [MENU_PERMISSIONS.securityRoles],
   "security.roles.manage": [MENU_PERMISSIONS.securityRoles, MENU_PERMISSIONS.securityPermissions],
-  "security.deepsec.view": [MENU_PERMISSIONS.securityDeepSec],
-  "security.deepsec.apply": [MENU_PERMISSIONS.securityDeepSec],
-  "security.deepsec.verify": [MENU_PERMISSIONS.securityDeepSec],
 };
 
 export function normalizePermissionCodes(permissions: string[]): Set<string> {

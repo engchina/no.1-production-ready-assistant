@@ -45,7 +45,7 @@ export function previewToJob(preview: PreviewData, question: string): JobData {
     steps: [
       { stage: "prepare_context", status: "done" },
       { stage: "generate_sql", status: "done" },
-      // Select AI / Select AI Agent の SQL は安全性の確認を省略する（#1523）。
+      // 安全性の確認をしていない結果（`safety_checked: false`）は省略として出す。
       { stage: "safety_check", status: result.safety.safety_checked === false ? "skipped" : "done" },
       { stage: "execute_sql", status: "skipped" },
       { stage: "format_results", status: "skipped" },

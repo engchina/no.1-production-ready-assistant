@@ -9,7 +9,7 @@ import {
   Trash2,
   UserCog,
 } from "lucide-react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import {
   compareNames,
@@ -26,14 +26,12 @@ import {
   apiErrorMessage,
   SelectField,
   TextField,
-  type SelectFieldOption,
-  ClearActionButton,
   ProcessingIndicator,
   ObjectActionBar,
   TimedLoadingState,
   TableSkeleton,
   FormSkeleton,
-  ExecutionConfirmationField,
+  FormActionBar,
   INFORMATION_TABLE_ROW_CLASS,
   INFORMATION_TABLE_VISIBLE_ROWS,
   RowTitleButton,
@@ -47,9 +45,8 @@ import { RoleNameBadges } from "@production-ready/system-settings";
 import { ErrorState } from "@/components/StateViews";
 import { IdentifierText } from "@/components/IdentifierText";
 
-import { PageHeaderStatusBadge } from "@/components/PageHeaderStatusBadge";
 import { PageNotice } from "@/components/page-notice";
-import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { ApiError, apiDelete, apiPatch, apiPost } from "@/lib/api";
 import { useValuesChanged } from "@/lib/render-sync";
 import { t } from "@/lib/i18n";
 import { appPath } from "@/lib/base-path";
@@ -71,14 +68,6 @@ import {
   SchemaRefreshHeaderStatus,
   SchemaRefreshProcessing,
 } from "../components/SchemaRefreshFeedback";
-import { ProfileSaveProgress } from "../components/ProfileSaveProgress";
-import {
-  DbProfileListSyncNotice,
-  DbProfileListSyncProcessing,
-} from "../components/DbProfileListSyncNotice";
-import { useDbProfileListSync, type DbProfileListSync } from "../useDbProfileListSync";
-import { SelectAiCredentialPrecondition } from "../components/SelectAiCredentialPrecondition";
-import { useSelectAiCredentialReadiness } from "../useSelectAiCredentialReadiness";
 import { useSchemaRefreshCoordinator } from "../SchemaRefreshCoordinator";
 import {
   nl2sqlIncrementalKeys,
@@ -98,63 +87,36 @@ import {
   toggleObjectSelection,
 } from "../profileObjectSelection";
 import type { ProfileListSortKey, ProfileListSortState } from "../profileListState";
-import { BUSINESS_SELECT_AI_DB_PROFILES_URL } from "../selectAiProfileUrls";
 import { schemaTableQualifiedName } from "../workbenchState";
 import { DbObjectName } from "../components/DbObjectName";
 import { formatDbObjectName, formatDbObjectPart } from "../dbObjectIdentity";
-import { NL2SQL_ENGINES_URL, defaultEngineOptions } from "../profileEngineOptions";
 import { isProfileSaveTargetCurrent } from "../profileSaveTarget";
 import type {
   ClarificationPolicy,
-  Nl2SqlEngine,
-  Nl2SqlEnginesData,
   Nl2SqlProfile,
   ProfileDeleteData,
   ProfileSummary,
-  ProfileSelectAiConfig,
-  ProfileSyncJobData,
   ProfileUpsertPayload,
   SchemaObjectSummary,
   SchemaTable,
-  SelectAiDbProfilesData,
 } from "../types";
 
 type ActiveView = "list" | "editor";
 type ProfileNameError = "required" | "format" | "duplicate" | null;
-type ProfileRequiredField =
-  | "category"
-  | "region"
-  | "model"
-  | "maxTokens"
-  | "embeddingModel";
+type ProfileRequiredField = "category";
 type ProfileRequiredErrors = Partial<Record<ProfileRequiredField, true>>;
 
-const SELECT_AI_MAX_TOKENS_MIN = 4096;
-const SELECT_AI_MAX_TOKENS_MAX = 32000;
-const SELECT_AI_DEFAULT_REGION = "us-chicago-1";
-const SELECT_AI_REGION_OPTIONS = [
-  { value: "us-chicago-1", label: "us-chicago-1" },
-  { value: "ap-osaka-1", label: "ap-osaka-1" },
-] as const satisfies readonly SelectFieldOption<string>[];
 const PROFILE_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
 /** ヘッダーの「スキーマを更新」の起点（SchemaRefreshCoordinator の start(origin)。#821）。 */
 const PROFILE_SCHEMA_REFRESH_HEADER = "profile-management-header";
-/** 「保存」の aria-describedby が指す、Select AI の Credential の事前条件の案内（#1683）。 */
-const PROFILE_SAVE_CREDENTIAL_PRECONDITION_ID = "profile-save-credential-precondition";
 
 interface ProfileFormState {
   name: string;
   category: string;
   allowedTables: string[];
   allowedViews: string[];
-  selectAiConfig: ProfileSelectAiConfig;
-  /** 既定の生成方式（#1524）。 */
-  defaultEngine: Nl2SqlEngine;
-  /**
-   * 保存（Oracle 反映）のたびに Select AI Agent アセットも再構築するか（#1690）。業務プロファイルに
-   * 保存する設定で、開き直しても保つ（「実行設定・同期表示をリセット」の対象ではない）。
-   */
-  rebuildAgentAssetsOnSave: boolean;
+  /** SQL 生成に渡す業務プロファイルのルール（1 行 1 件。保存の payload の `sql_rules`）。 */
+  sqlRules: string;
   /** 回答前の確認の方針（#1839）。 */
   clarificationPolicy: ClarificationPolicy;
   /** 確認の上限（往復）。0 はシステムの既定。 */
@@ -165,29 +127,12 @@ interface ProfileFormState {
 const CLARIFICATION_MAX_ROUNDS_OPTIONS = [0, 2, 3, 4, 5, 6] as const;
 
 
-const DEFAULT_SELECT_AI_CONFIG: ProfileSelectAiConfig = {
-  profile_name: "",
-  region: SELECT_AI_DEFAULT_REGION,
-  model: "xai.grok-4.6",
-  embedding_model: "cohere.embed-v4.0",
-  max_tokens: SELECT_AI_MAX_TOKENS_MAX,
-  enforce_object_list: true,
-  comments: true,
-  // ANNOTATIONS / ドメイン継承 annotation を Select AI の prompt へ渡す(既定 false だと効かない)。
-  annotations: true,
-  constraints: true,
-  role: "",
-  additional_instructions: "",
-};
-
 const EMPTY_FORM: ProfileFormState = {
   name: "",
   category: "",
   allowedTables: [],
   allowedViews: [],
-  selectAiConfig: DEFAULT_SELECT_AI_CONFIG,
-  defaultEngine: "select_ai",
-  rebuildAgentAssetsOnSave: false,
+  sqlRules: "",
   clarificationPolicy: "confirm",
   clarificationMaxRounds: 0,
 };
@@ -197,39 +142,19 @@ function emptyProfileForm(): ProfileFormState {
     ...EMPTY_FORM,
     allowedTables: [],
     allowedViews: [],
-    selectAiConfig: { ...DEFAULT_SELECT_AI_CONFIG },
   };
 }
 
-function mergeAdditionalInstructions(instructions: string, rules: string[]) {
-  const base = instructions.trim();
-  const seen = new Set(base.split("\n").map((line) => line.trim()).filter(Boolean));
-  const additions = rules
-    .map((rule) => rule.trim())
-    .filter((rule) => {
-      if (!rule || seen.has(rule)) return false;
-      seen.add(rule);
+function sqlRulesFromText(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line || seen.has(line)) return false;
+      seen.add(line);
       return true;
     });
-  return [base, ...additions].filter(Boolean).join("\n");
-}
-
-function normalizeSelectAiMaxTokens(value: unknown) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return SELECT_AI_MAX_TOKENS_MAX;
-  return Math.min(SELECT_AI_MAX_TOKENS_MAX, Math.max(SELECT_AI_MAX_TOKENS_MIN, Math.trunc(numeric)));
-}
-
-function normalizeSelectAiRegion(value: unknown) {
-  const region = typeof value === "string" ? value.trim() : "";
-  return SELECT_AI_REGION_OPTIONS.some((option) => option.value === region)
-    ? region
-    : SELECT_AI_DEFAULT_REGION;
-}
-
-function parseMaxTokensInput(value: string) {
-  const numeric = Number(value);
-  return value.trim() && Number.isFinite(numeric) ? numeric : SELECT_AI_MAX_TOKENS_MAX;
 }
 
 function normalizeProfileName(value: string) {
@@ -260,10 +185,6 @@ function isProfileNameConflictError(error: unknown) {
 function profileRequiredErrors(form: ProfileFormState): ProfileRequiredErrors {
   const errors: ProfileRequiredErrors = {};
   if (!form.category.trim()) errors.category = true;
-  if (!form.selectAiConfig.region.trim()) errors.region = true;
-  if (!form.selectAiConfig.model.trim()) errors.model = true;
-  if (!Number.isFinite(Number(form.selectAiConfig.max_tokens))) errors.maxTokens = true;
-  if (!form.selectAiConfig.embedding_model.trim()) errors.embeddingModel = true;
   return errors;
 }
 
@@ -280,40 +201,21 @@ function schemaObjectQueryTotal(
 }
 
 function normalizeProfile(profile: Nl2SqlProfile): Nl2SqlProfile {
-  const selectAiConfig = { ...DEFAULT_SELECT_AI_CONFIG, ...profile.select_ai_config };
   return {
     ...profile,
     allowed_tables: (profile.allowed_tables ?? []).filter(isUserVisibleObjectName),
     allowed_views: (profile.allowed_views ?? []).filter(isUserVisibleObjectName),
-    select_ai_config: {
-      ...selectAiConfig,
-      region: normalizeSelectAiRegion(selectAiConfig.region),
-      max_tokens: normalizeSelectAiMaxTokens(selectAiConfig.max_tokens),
-    },
   };
 }
 
 function profileToForm(profile: Nl2SqlProfile): ProfileFormState {
   const normalized = normalizeProfile(profile);
-  const selectAiConfig: ProfileSelectAiConfig = {
-    ...normalized.select_ai_config,
-    additional_instructions: mergeAdditionalInstructions(
-      normalized.select_ai_config.additional_instructions,
-      normalized.sql_rules
-    ),
-  };
-  // 旧名の印（previous_profile_name）は名称の変更の Oracle 反映のために backend が付け外しする値で、
-  // 利用者は編集しない（PATCH も受け付けない）。フォームに持つと、反映の job が印を消した後の
-  // 最新版と比べて「未保存の変更」に見えるため、フォームと未保存の判定から外す。
-  delete selectAiConfig.previous_profile_name;
   return {
     name: normalized.name,
     category: normalized.category ?? "",
     allowedTables: normalized.allowed_tables,
     allowedViews: normalized.allowed_views,
-    selectAiConfig,
-    defaultEngine: normalized.default_engine ?? "select_ai",
-    rebuildAgentAssetsOnSave: normalized.rebuild_agent_assets_on_save ?? false,
+    sqlRules: (normalized.sql_rules ?? []).join("\n"),
     clarificationPolicy: normalized.clarification_policy ?? "confirm",
     clarificationMaxRounds: normalized.clarification_max_rounds ?? 0,
   };
@@ -326,22 +228,10 @@ function formToPayload(form: ProfileFormState): ProfileUpsertPayload {
     category: form.category.trim(),
     allowed_tables: form.allowedTables,
     allowed_views: form.allowedViews,
-    sql_rules: [],
+    sql_rules: sqlRulesFromText(form.sqlRules),
     safety_policy: "select_only",
-    default_engine: form.defaultEngine,
-    rebuild_agent_assets_on_save: form.rebuildAgentAssetsOnSave,
     clarification_policy: form.clarificationPolicy,
     clarification_max_rounds: form.clarificationMaxRounds,
-    select_ai_config: {
-      ...form.selectAiConfig,
-      profile_name: profileName,
-      region: normalizeSelectAiRegion(form.selectAiConfig.region),
-      model: form.selectAiConfig.model.trim(),
-      embedding_model: form.selectAiConfig.embedding_model.trim() || "cohere.embed-v4.0",
-      max_tokens: normalizeSelectAiMaxTokens(form.selectAiConfig.max_tokens),
-      role: form.selectAiConfig.role.trim(),
-      additional_instructions: form.selectAiConfig.additional_instructions.trim(),
-    },
   };
 }
 
@@ -357,16 +247,6 @@ function schemaSummaryToTable(object: SchemaObjectSummary): SchemaTable {
     columns: [],
     constraints: [],
   };
-}
-
-function updateSelectAiConfig(
-  setForm: (updater: (current: ProfileFormState) => ProfileFormState) => void,
-  patch: Partial<ProfileSelectAiConfig>
-) {
-  setForm((current) => ({
-    ...current,
-    selectAiConfig: { ...current.selectAiConfig, ...patch },
-  }));
 }
 
 function ProfileList({
@@ -536,138 +416,35 @@ function ProfileList({
   );
 }
 
-function SelectAiConfigFields({
+function ProfileRulesFields({
   form,
   setForm,
-  requiredErrors,
-  onRequiredErrorClear,
 }: {
   form: ProfileFormState;
   setForm: (updater: (current: ProfileFormState) => ProfileFormState) => void;
-  requiredErrors: ProfileRequiredErrors;
-  onRequiredErrorClear: (field: ProfileRequiredField) => void;
 }) {
   return (
     <section
-      id="profile-select-ai"
-      className="grid scroll-mt-4 gap-3 rounded-md border border-border bg-surface-sunken p-3"
-      aria-label={t("profiles.editor.selectAi")}
-      tabIndex={-1}
+      id="profile-sql-rules"
+      className="grid gap-3 rounded-md border border-border bg-surface-sunken p-3"
+      aria-labelledby="profile-sql-rules-heading"
     >
-      {/* 共通のモデル設定のうち Select AI に効くもの・効かないものの違い（#1434）。保存の影響なので常設する
-          （messaging.md §3.8）。推論の量は AI profile に属性がなく効かない。 */}
-      <p className="text-xs leading-relaxed text-fg-muted" data-testid="profile-select-ai-reasoning-note">
-        {t("profiles.selectAi.reasoningNote")}
-      </p>
-      {/* 欄は値の種類の幅（リージョン sm・モデル lg・数値 xs。#1891）で、FormGrid（最大 60rem）に並べる。 */}
-      <FormGrid>
-        <SelectField
-          id="profile-select-ai-region"
-          label={t("profiles.field.region")}
-          width="sm"
-          value={form.selectAiConfig.region}
-          options={SELECT_AI_REGION_OPTIONS}
-          required
-          error={requiredErrors.region ? t("profiles.error.regionRequired") : undefined}
-          onValueChange={(value) => {
-            updateSelectAiConfig(setForm, { region: value });
-            if (requiredErrors.region) onRequiredErrorClear("region");
-          }}
-          className="min-w-0"
-        />
-        <TextField
-          id="profile-select-ai-model"
-          label={t("profiles.field.model")}
-          width="lg"
-          required
-          value={form.selectAiConfig.model}
-          error={requiredErrors.model ? t("profiles.error.modelRequired") : undefined}
-          onValueChange={(value) => {
-            updateSelectAiConfig(setForm, { model: value });
-            if (requiredErrors.model) onRequiredErrorClear("model");
-          }}
-          className="min-w-0"
-        />
-        <TextField
-          id="profile-select-ai-max-tokens"
-          label={t("profiles.field.maxTokens")}
-          width="xs"
-          required
-          type="number"
-          min={SELECT_AI_MAX_TOKENS_MIN}
-          max={SELECT_AI_MAX_TOKENS_MAX}
-          step={1}
-          value={form.selectAiConfig.max_tokens}
-          error={requiredErrors.maxTokens ? t("profiles.error.maxTokensRequired") : undefined}
-          onValueChange={(value) => {
-            updateSelectAiConfig(setForm, { max_tokens: parseMaxTokensInput(value) });
-            if (requiredErrors.maxTokens) onRequiredErrorClear("maxTokens");
-          }}
-          onBlur={(event) =>
-            updateSelectAiConfig(setForm, {
-              max_tokens: normalizeSelectAiMaxTokens(event.currentTarget.value),
-            })
-          }
-          className="min-w-0"
-        />
-        <TextField
-          id="profile-select-ai-embedding-model"
-          label={t("profiles.field.embeddingModel")}
-          width="lg"
-          required
-          value={form.selectAiConfig.embedding_model}
-          error={
-            requiredErrors.embeddingModel ? t("profiles.error.embeddingModelRequired") : undefined
-          }
-          onValueChange={(value) => {
-            updateSelectAiConfig(setForm, { embedding_model: value });
-            if (requiredErrors.embeddingModel) onRequiredErrorClear("embeddingModel");
-          }}
-          className="min-w-0"
-        />
-      </FormGrid>
-      <div className="grid gap-2 md:grid-cols-4">
-        {([
-          ["enforce_object_list", "profiles.field.enforceObjectList"],
-          ["comments", "profiles.field.comments"],
-          ["annotations", "profiles.field.annotations"],
-          ["constraints", "profiles.field.constraints"],
-        ] as const).map(([key, labelKey]) => (
-          <label key={key} className="flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface p-3 text-sm text-fg">
-            <input
-              type="checkbox"
-              checked={Boolean(form.selectAiConfig[key])}
-              onChange={(event) => updateSelectAiConfig(setForm, { [key]: event.currentTarget.checked })}
-              className="h-4 w-4 rounded border-border text-accent-fg"
-            />
-            <span>{t(labelKey)}</span>
-          </label>
-        ))}
-      </div>
+      <h3 id="profile-sql-rules-heading" className="text-sm font-semibold text-fg">
+        {t("profiles.editor.sqlRules")}
+      </h3>
       {/* 文章の欄は full（FormGrid の 60rem まで）で 1 列に積む。 */}
       <FormGrid columns={1}>
         <TextareaField
-          id="profile-select-ai-role"
-          label={t("profiles.field.role")}
-          width="full"
-          helper={t("profiles.field.roleHint")}
-          value={form.selectAiConfig.role}
-          rows={6}
-          onChange={(event) => updateSelectAiConfig(setForm, { role: event.currentTarget.value })}
-          placeholder={t("profiles.placeholder.role")}
-        />
-        <TextareaField
-          id="profile-select-ai-additional-instructions"
+          id="profile-sql-rules-input"
           label={t("profiles.field.additionalInstructions")}
           width="full"
           helper={t("profiles.field.additionalInstructionsHint")}
-          value={form.selectAiConfig.additional_instructions}
+          value={form.sqlRules}
           rows={6}
-          onChange={(event) =>
-            updateSelectAiConfig(setForm, {
-              additional_instructions: event.currentTarget.value,
-            })
-          }
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            setForm((current) => ({ ...current, sqlRules: value }));
+          }}
           placeholder={t("profiles.placeholder.additionalInstructions")}
         />
       </FormGrid>
@@ -831,23 +608,11 @@ function ProfileEditor({
   busy,
   nameError,
   requiredErrors,
-  engineOptions,
-  oracleConfirmation,
-  rebuildAgentAssets,
-  canClearOracleExecution,
-  oracleSyncJob,
-  oracleSyncSubmissionError,
-  oracleSyncSubmissionErrorCode,
-  selectAiCredentialMissing,
-  selectAiCredentialName,
-  canOpenSelectAiCredential,
-  recheckingSelectAiCredential,
-  onRecheckSelectAiCredential,
+  dirty,
   saveError,
   saveConflict,
   reloadingLatest,
   onReloadLatest,
-  retryingOracleSync,
   deleting,
   onObjectFilterChange,
   onFormChange,
@@ -863,11 +628,7 @@ function ProfileEditor({
   onRetryLoadMoreViews,
   onSave,
   onDelete,
-  onOracleConfirmationChange,
-  onOracleExecutionClear,
-  onRebuildAgentAssetsChange,
-  onRetryOracleSync,
-  dbProfileListSync,
+  onDiscard,
 }: {
   selectedProfile: Nl2SqlProfile | null;
   profileAccessProfile: ProfileAccessProfile | null;
@@ -891,28 +652,14 @@ function ProfileEditor({
   busy: boolean;
   nameError: ProfileNameError;
   requiredErrors: ProfileRequiredErrors;
-  /** 既定の生成方式の選択肢（この環境で使える方式。#1524）。 */
-  engineOptions: readonly SelectFieldOption<Nl2SqlEngine>[];
-  oracleConfirmation: string;
-  rebuildAgentAssets: boolean;
-  canClearOracleExecution: boolean;
-  oracleSyncJob: ProfileSyncJobData | null;
-  oracleSyncSubmissionError: string;
-  oracleSyncSubmissionErrorCode: string;
-  /** 保存（Oracle 反映）の事前条件の Select AI の Credential が無いと分かった（#1683）。 */
-  selectAiCredentialMissing: boolean;
-  selectAiCredentialName: string;
-  /** 運用設定の Select AI Credential 管理を開けるか（無ければリンクの代わりに管理者への依頼を案内する）。 */
-  canOpenSelectAiCredential: boolean;
-  recheckingSelectAiCredential: boolean;
-  onRecheckSelectAiCredential: () => void;
+  /** 最後に保存した内容から変わったか（「変更を破棄」の可否）。 */
+  dirty: boolean;
   /** プロファイルの保存（PATCH / POST）の失敗。保存ボタンの直下だけに出す（messaging.md §3.3.1。#585）。 */
   saveError: string;
   /** 保存の失敗がほかの更新との競合（409）。失敗の文の下に「最新の内容を読み込む」を出す（#1111）。 */
   saveConflict: boolean;
   reloadingLatest: boolean;
   onReloadLatest: () => void;
-  retryingOracleSync: boolean;
   deleting: boolean;
   onObjectFilterChange: (value: string) => void;
   onFormChange: (updater: (current: ProfileFormState) => ProfileFormState) => void;
@@ -928,14 +675,8 @@ function ProfileEditor({
   onRetryLoadMoreViews: () => void;
   onSave: () => void;
   onDelete: () => void;
-  onOracleConfirmationChange: (value: string) => void;
-  onOracleExecutionClear: () => void;
-  onRebuildAgentAssetsChange: (value: boolean) => void;
-  onRetryOracleSync: () => void;
-  /** 反映の後の DB Profile 一覧の同期（案内・進行は保存の結果の直下に出す。#2034）。 */
-  dbProfileListSync: DbProfileListSync;
+  onDiscard: () => void;
 }) {
-  const oracleConfirmed = oracleConfirmation.trim() === "ADMIN_EXECUTE";
   return (
     <fieldset disabled={busy} className="grid min-w-0 content-start gap-4" aria-labelledby="profile-editor-heading">
       <DbObjectPanelHeader
@@ -1013,17 +754,6 @@ function ProfileEditor({
           >
             {t("profiles.field.nameHint")}
           </p>
-          {/* 既定の生成方式（#1524）。SQL 生成・チャットの初期の選択と、方式を指定しない問い合わせ（Agent の MCP）が使う。 */}
-          <SelectField
-            id="profile-default-engine"
-            label={t("profiles.field.defaultEngine")}
-            value={form.defaultEngine}
-            options={engineOptions}
-            width="md"
-            helper={t("profiles.field.defaultEngineHint")}
-            onValueChange={(value) => onFormChange((current) => ({ ...current, defaultEngine: value }))}
-            className="order-4 mt-2 min-w-0 @2xl:order-none"
-          />
         </FormGrid>
       </section>
 
@@ -1156,79 +886,9 @@ function ProfileEditor({
         </div>
       </section>
 
-      <SelectAiConfigFields
-        form={form}
-        setForm={onFormChange}
-        requiredErrors={requiredErrors}
-        onRequiredErrorClear={onRequiredErrorClear}
-      />
+      <ProfileRulesFields form={form} setForm={onFormChange} />
 
-      <section className="grid gap-3 rounded-md border border-border bg-surface p-3" aria-labelledby="profile-engine-assets-heading">
-        <div>
-          <h3 id="profile-engine-assets-heading" className="text-sm font-semibold text-fg">
-            {t("profiles.oracle.assets.title")}
-          </h3>
-          <p className="mt-1 text-sm text-fg-muted">{t("profiles.oracle.assets.hint")}</p>
-        </div>
-        <label className="flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface-sunken p-3 text-sm text-fg">
-          <input
-            type="checkbox"
-            checked={rebuildAgentAssets}
-            onChange={(event) => onRebuildAgentAssetsChange(event.currentTarget.checked)}
-            className="h-4 w-4 rounded border-border text-accent-fg"
-          />
-          <span>{t("profiles.oracle.assets.refreshAgent")}</span>
-        </label>
-      </section>
-
-      {/* 保存（Oracle 反映）の事前条件。保存の操作の直前に出し、満たすまで「保存」を無効にする
-          （DeepSec の事前条件と同じ出し方。messaging.md §10。#1683）。 */}
-      {selectAiCredentialMissing ? (
-        <SelectAiCredentialPrecondition
-          id={PROFILE_SAVE_CREDENTIAL_PRECONDITION_ID}
-          testId="profile-save-credential-precondition"
-          operation={t("profiles.oracle.precondition.operation")}
-          action={t("profiles.action.save")}
-          credentialName={selectAiCredentialName}
-          canOpenSettings={canOpenSelectAiCredential}
-          rechecking={recheckingSelectAiCredential}
-          onRecheck={onRecheckSelectAiCredential}
-        />
-      ) : null}
-      <ExecutionConfirmationField
-        value={oracleConfirmation}
-        onChange={onOracleConfirmationChange}
-        confirmed={oracleConfirmed}
-        placeholder="ADMIN_EXECUTE"
-        expectedLabel="ADMIN_EXECUTE"
-        helper={t("profiles.oracle.executeHint")}
-        actions={
-          <>
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              loading={saving}
-              disabled={!oracleConfirmed || saving || selectAiCredentialMissing}
-              aria-describedby={
-                selectAiCredentialMissing ? PROFILE_SAVE_CREDENTIAL_PRECONDITION_ID : undefined
-              }
-              onClick={onSave} icon={Save}>
-              <span>{t("profiles.action.save")}</span>
-            </Button>
-            <ClearActionButton
-              label={t("profiles.oracle.actions.clear")}
-              size="lg"
-              className="w-full sm:w-auto"
-              disabled={!canClearOracleExecution || saving}
-              onClick={onOracleExecutionClear}
-            />
-          </>
-        }
-      />
-
-      {/* 保存ボタンはフォームの中（確認語と並ぶ）なので、欄に結び付かない保存の失敗はボタンの直下の
-          FormStatus の 1 か所だけに出す（Toast に重ねない。messaging.md §3.3.1。#585）。 */}
+      {/* 保存の失敗は確定の行の直上の 1 か所だけに出す（Toast に重ねない。messaging.md §3.3.1。#585 / #1786）。 */}
       {saveError ? (
         <div data-testid="profile-save-error" className="grid justify-items-start gap-2">
           <FormStatus tone="danger" message={saveError} />
@@ -1245,66 +905,37 @@ function ProfileEditor({
           ) : null}
         </div>
       ) : null}
-      <ProfileSaveResultRegion
-        rebuildAgentAssets={rebuildAgentAssets}
-        oracleSyncJob={oracleSyncJob}
-        oracleSyncSubmissionError={oracleSyncSubmissionError}
-        oracleSyncSubmissionErrorCode={oracleSyncSubmissionErrorCode}
-        retryingOracleSync={retryingOracleSync}
-        onRetryOracleSync={onRetryOracleSync}
-        dbProfileListSync={dbProfileListSync}
+      {/* 確定はフォームの末尾の左（design-system README §4「詳細・作成・編集の画面の操作」。#1786）。 */}
+      <FormActionBar
+        ariaLabel={t("profiles.editor.saveActions")}
+        testId="profile-save-actions"
+        primaryActions={[
+          {
+            id: "save",
+            label: t("profiles.action.save"),
+            icon: Save,
+            loading: saving,
+            disabled: saving,
+            onClick: onSave,
+            testId: "profile-save",
+          },
+        ]}
+        secondaryActions={[
+          {
+            id: "discard",
+            label: t("profiles.action.discard"),
+            disabled: !dirty || saving,
+            onClick: onDiscard,
+            testId: "profile-discard",
+          },
+        ]}
       />
     </fieldset>
   );
 }
 
-function ProfileSaveResultRegion({
-  rebuildAgentAssets,
-  oracleSyncJob,
-  oracleSyncSubmissionError,
-  oracleSyncSubmissionErrorCode,
-  retryingOracleSync,
-  onRetryOracleSync,
-  dbProfileListSync,
-}: {
-  rebuildAgentAssets: boolean;
-  oracleSyncJob: ProfileSyncJobData | null;
-  oracleSyncSubmissionError: string;
-  oracleSyncSubmissionErrorCode: string;
-  retryingOracleSync: boolean;
-  onRetryOracleSync: () => void;
-  dbProfileListSync: DbProfileListSync;
-}) {
-  if (!oracleSyncJob && !oracleSyncSubmissionError) {
-    return null;
-  }
-  return (
-    <section className="min-w-0" data-testid="profile-save-result-region">
-      <ProfileSaveProgress
-        job={oracleSyncJob}
-        submissionError={oracleSyncSubmissionError}
-        submissionErrorCode={oracleSyncSubmissionErrorCode}
-        // 工程の表示は、実行したジョブが再構築を含むかで決める（保存の後にチェックを変えても変えない）。
-        rebuildAgentAssets={oracleSyncJob?.rebuild_agent_assets ?? rebuildAgentAssets}
-        retrying={retryingOracleSync}
-        onRetry={onRetryOracleSync}
-      />
-      {/* 反映の後の DB Profile 一覧の同期（差分同期の進行・再取得の案内）は、反映の結果の直下に 1 か所だけ出す。
-          案内の「DB Profile 一覧を再取得」の進行は、そのボタンの直下に出す（messaging §10.2、#2034）。 */}
-      <DbProfileListSyncNotice
-        sync={dbProfileListSync}
-        className="mt-3"
-        testId="profile-db-profile-sync-notice"
-        actionTestId="profile-db-profile-sync-refresh"
-        processingTestId="profile-db-profile-sync-processing"
-      />
-    </section>
-  );
-}
-
 export function ProfileManagementPage() {
   const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
@@ -1317,28 +948,7 @@ export function ProfileManagementPage() {
     key: "name",
     direction: "asc",
   });
-  const [oracleConfirmation, setOracleConfirmation] = useState("");
-  // 「保存時に Select AI Agent アセットも再構築する」は業務プロファイルの属性（#1690）。フォームに持ち、
-  // 保存の payload と未保存の判定に入れる。
-  const rebuildAgentAssets = form.rebuildAgentAssetsOnSave;
-  const setRebuildAgentAssets = (value: boolean) =>
-    setForm((current) => ({ ...current, rebuildAgentAssetsOnSave: value }));
-  const [oracleSyncJobId, setOracleSyncJobId] = useState("");
-  const [oracleSyncProfileId, setOracleSyncProfileId] = useState("");
-  const [oracleSyncSubmissionError, setOracleSyncSubmissionError] = useState("");
-  // Oracle 反映の開始の失敗の code（Credential が無い 409 なら、ジョブの失敗と同じ案内とリンクを出す。#1683）。
-  const [oracleSyncSubmissionErrorCode, setOracleSyncSubmissionErrorCode] = useState("");
   const [profileSaveError, setProfileSaveError] = useState("");
-  // 完了を通知済みの Oracle 同期 job ID。render 中に比べるため state で持つ。
-  const [reportedOracleSyncJobId, setReportedOracleSyncJobId] = useState("");
-  // 終了した Oracle 同期 job（成功の通知と再取得は effect で行う）。
-  const [finishedOracleSyncJob, setFinishedOracleSyncJob] = useState<{
-    jobId: string;
-    profileId: string;
-    succeeded: boolean;
-    invalidateSelectAi: boolean;
-  } | null>(null);
-  const lastOracleConfirmationRef = useRef("");
   const [loading, setLoading] = useState("");
   // 「最新情報を取得」をどこで押したか（ヘッダー / 失敗の案内）。スピナーは押したボタンだけが出す（#819）。
   const [loadOrigin, setLoadOrigin] = useState<"header" | "notice">("header");
@@ -1370,7 +980,6 @@ export function ProfileManagementPage() {
   const mutationBusyRef = useRef(mutationBusy);
   // 最新の実行中状態を commit 時に入れる（render 中に ref を書かない）。handler は直前に true を先に入れる。
   useLayoutEffect(() => { mutationBusyRef.current = mutationBusy; });
-  const syncJobParam = searchParams.get("syncJobId") ?? "";
   const activeView: ActiveView = profileParam ? "editor" : "list";
   const selectedProfileId = profileParam && profileParam !== "new" ? profileParam : "";
   // 1 打鍵ごとに一覧 / オブジェクト検索 API を叩かないよう、query key へはデバウンス値を渡す。
@@ -1386,25 +995,6 @@ export function ProfileManagementPage() {
   const schemaOwnersQuery = useSchemaOwners();
   const schemaHeadQuery = useSchemaCatalogHead();
   const sharedSchemaRefresh = useSchemaRefreshCoordinator();
-  // DB Profile 一覧の再取得・差分同期。反映・削除の後の案内と進行は起点の結果の直下（編集の画面は保存の結果の
-  // 直下、一覧の削除とヘッダーの再取得の失敗はページの先頭）に 1 か所だけ出す（messaging §10.2、#2034）。
-  const dbProfileListSync = useDbProfileListSync();
-  const dbProfileRefreshing = dbProfileListSync.jobActive;
-  // 既定の生成方式の選択肢（この環境で使える方式。#1524）。
-  const enginesQuery = useQuery({
-    queryKey: ["nl2sql", "engines"],
-    queryFn: ({ signal }) => apiGet<Nl2SqlEnginesData>(NL2SQL_ENGINES_URL, { signal }),
-    staleTime: 60_000,
-  });
-  const engineOptions = useMemo(
-    () => defaultEngineOptions(form.defaultEngine, enginesQuery.data),
-    [form.defaultEngine, enginesQuery.data]
-  );
-  const dbProfilesQuery = useQuery({
-    queryKey: ["nl2sql", "select-ai", "business-profiles"],
-    queryFn: () => apiGet<SelectAiDbProfilesData>(BUSINESS_SELECT_AI_DB_PROFILES_URL),
-    staleTime: 5_000,
-  });
   // 利用可能ロールの一覧 API は権限管理（menu.security_permissions）の担当（#206）。
   const canViewProfileAccess = auth.hasPermission(MENU_PERMISSIONS.securityPermissions);
   // 候補は全件を読まない（#608）。選択中の業務プロファイルだけを ids で読み、利用できるロールを出す。
@@ -1419,24 +1009,6 @@ export function ProfileManagementPage() {
     staleTime: 10_000,
     retry: false,
   });
-  // 保存（Oracle 反映）の事前条件: Select AI の Credential が作成済みか（#1683 / #1688）。
-  const selectAiCredential = useSelectAiCredentialReadiness();
-  const selectAiCredentialMissing = selectAiCredential.missing;
-  const oracleSyncJobQuery = useQuery({
-    queryKey: ["nl2sql", "oracle-sync-job", oracleSyncJobId],
-    queryFn: () => apiGet<ProfileSyncJobData>(`/api/nl2sql/oracle-sync-jobs/${oracleSyncJobId}`),
-    enabled: Boolean(oracleSyncJobId),
-    refetchInterval: (query) => {
-      const status = (query.state.data as ProfileSyncJobData | undefined)?.status;
-      return status && ["succeeded", "failed", "cancelled"].includes(status) ? false : 1_000;
-    },
-  });
-
-  // URL の syncJobId を追跡対象へ render 中に反映する。
-  if (useValuesChanged([selectedProfileId, syncJobParam]) && syncJobParam) {
-    setOracleSyncJobId(syncJobParam);
-    if (selectedProfileId) setOracleSyncProfileId(selectedProfileId);
-  }
   const profiles = useMemo(
     () => profilesQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [profilesQuery.data]
@@ -1449,7 +1021,6 @@ export function ProfileManagementPage() {
     : [];
   const selectedProfileAccessProfile =
     profileAccessProfiles.find((profile) => profile.id === selectedProfile?.id) ?? null;
-  const oracleSyncJob = oracleSyncJobQuery.data ?? null;
 
   const tableObjects = useMemo(
     () =>
@@ -1504,13 +1075,7 @@ export function ProfileManagementPage() {
   const selectProfile = (profile: ProfileSummary) => {
     setMessage("");
     setRefreshError("");
-    setOracleSyncJobId("");
-    setOracleSyncProfileId("");
-    setOracleSyncSubmissionError("");
-    setOracleSyncSubmissionErrorCode("");
     setProfileSaveError("");
-    lastOracleConfirmationRef.current = "";
-    setReportedOracleSyncJobId("");
     setSearchParams({ profile: profile.id });
   };
 
@@ -1524,7 +1089,6 @@ export function ProfileManagementPage() {
       viewObjectsQuery.refetch(),
       schemaHeadQuery.refetch(),
       schemaOwnersQuery.refetch(),
-      dbProfilesQuery.refetch(),
     ]);
     const succeeded = results.every(
       (result) => result.status === "fulfilled" && !result.value.isError
@@ -1545,8 +1109,6 @@ export function ProfileManagementPage() {
     }
   };
 
-  const trackDbProfileRefreshSignal = dbProfileListSync.track;
-
   // 編集対象の切替時にフォームと編集付帯 state を同期する(deep link 初回ロード後も含む)
   const editTargetKey = selectedProfile?.id ?? (profileParam === "new" ? "new" : "");
   const formInitializationKey = editTargetKey;
@@ -1556,45 +1118,10 @@ export function ProfileManagementPage() {
         ? profileToForm(selectedProfile)
         : emptyProfileForm()
     );
-    setOracleConfirmation("");
     setNameError(null);
     setRequiredErrors({});
   }
 
-  // 終了した Oracle 同期 job を render 中に一度だけ state へ反映し、通知と再取得は effect で行う。
-  if (useValuesChanged([oracleSyncJobQuery.data, queryClient, trackDbProfileRefreshSignal])) {
-    const job = oracleSyncJobQuery.data;
-    if (
-      job &&
-      ["succeeded", "failed", "cancelled"].includes(job.status) &&
-      reportedOracleSyncJobId !== job.job_id
-    ) {
-      setReportedOracleSyncJobId(job.job_id);
-      const succeeded = job.status === "succeeded";
-      // 反映が失敗しても（DBMS_CLOUD_AI Profile の範囲の不一致など）、DB Profile 一覧の同期を求める結果は
-      // 反映の結果の直下に出す（#2034）。
-      const trackingRefresh = trackDbProfileRefreshSignal(job.oracle_result);
-      setFinishedOracleSyncJob({
-        jobId: job.job_id,
-        profileId: job.profile_id,
-        succeeded,
-        invalidateSelectAi: succeeded && !trackingRefresh,
-      });
-    }
-  }
-  useEffect(() => {
-    if (!finishedOracleSyncJob) return;
-    // 反映の job は名称の変更の後始末で業務プロファイルを更新し、ETag を進める（旧名の印の消去）。
-    // 成功・失敗のどちらでも最新版を取り直し、次の保存の If-Match が古い ETag で 409 にならないようにする。
-    void queryClient.invalidateQueries({
-      queryKey: nl2sqlIncrementalKeys.profile(finishedOracleSyncJob.profileId),
-    });
-    if (!finishedOracleSyncJob.succeeded) return;
-    if (finishedOracleSyncJob.invalidateSelectAi) {
-      void queryClient.invalidateQueries({ queryKey: ["nl2sql", "select-ai"] });
-    }
-    toast.success(t("profiles.oracle.sync.succeeded"));
-  }, [finishedOracleSyncJob, queryClient]);
 
 
 
@@ -1619,59 +1146,12 @@ export function ProfileManagementPage() {
     setMessage(error instanceof Error ? error.message : "");
   }
 
-  // legacy hash 導線: 旧 #profile-learning は Select AI 設定へ正規化する
-  useEffect(() => {
-    if (location.hash !== "#profile-learning") return;
-    if (!profileParam && !profilesLoaded) return;
-    const target = profiles.find((profile) => !profile.archived)?.id ?? "new";
-    navigate(
-      {
-        pathname: location.pathname,
-        search: profileParam ? location.search : `?profile=${target}`,
-        hash: "#profile-select-ai",
-      },
-      { replace: true }
-    );
-  }, [
-    location.hash,
-    location.pathname,
-    location.search,
-    navigate,
-    profileParam,
-    profiles,
-    profilesLoaded,
-  ]);
-
-  useEffect(() => {
-    if (location.hash !== "#profile-select-ai" || profileParam || !profilesLoaded) return;
-    const target = profiles.find((profile) => !profile.archived)?.id ?? "new";
-    navigate(
-      { pathname: location.pathname, search: `?profile=${target}`, hash: location.hash },
-      { replace: true }
-    );
-  }, [location.hash, location.pathname, navigate, profileParam, profiles, profilesLoaded]);
-
-  useEffect(() => {
-    if (location.hash !== "#profile-select-ai" || activeView !== "editor") return;
-    const frame = window.requestAnimationFrame(() => {
-      const target = document.getElementById("profile-select-ai");
-      target?.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
-      target?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeView, location.hash, selectedProfile?.id]);
 
   const startNew = () => {
     setMessage("");
     setRefreshError("");
-    setOracleSyncJobId("");
-    setOracleSyncProfileId("");
-    setOracleSyncSubmissionError("");
-    setOracleSyncSubmissionErrorCode("");
     setProfileSaveError("");
     setProfileSaveConflict(false);
-    lastOracleConfirmationRef.current = "";
-    setReportedOracleSyncJobId("");
     setSearchParams({ profile: "new" });
   };
 
@@ -1760,21 +1240,15 @@ export function ProfileManagementPage() {
     if (nextNameError || hasProfileRequiredErrors(nextRequiredErrors)) {
       return;
     }
-    if (selectAiCredentialMissing) return;
     setNameError(null);
     setRequiredErrors({});
-    setOracleSyncJobId("");
-    setOracleSyncSubmissionError("");
-    setOracleSyncSubmissionErrorCode("");
     setProfileSaveError("");
     setProfileSaveConflict(false);
-    setReportedOracleSyncJobId("");
     mutationBusyRef.current = true;
     setLoading("save");
-    let saved: Nl2SqlProfile;
     try {
       const payload = formToPayload(form);
-      saved = selectedProfile
+      const saved = selectedProfile
         ? await apiPatch<Nl2SqlProfile>(
             `/api/nl2sql/profiles/${selectedProfile.id}`,
             payload,
@@ -1786,13 +1260,10 @@ export function ProfileManagementPage() {
         etag: saved.etag ?? "",
       });
       void queryClient.invalidateQueries({ queryKey: ["nl2sql", "profiles", "search"] });
+      toast.success(t("profiles.message.saved"));
       if (isProfileSaveTargetCurrent(editTargetRef.current, target, saved.id)) {
         setForm(profileToForm(normalizeProfile(saved)));
-        setOracleSyncProfileId(saved.id);
         setRequiredErrors({});
-        // 破壊的操作のゲートなので、保存が通ったら必ず再入力を求める
-        // (既存 profile の保存では編集対象が変わらず初期化 effect が走らない)。
-        setOracleConfirmation("");
         if (!selectedProfile) {
           setSearchParams({ profile: saved.id }, { replace: true });
         }
@@ -1801,7 +1272,6 @@ export function ProfileManagementPage() {
       if (isProfileNameConflictError(err)) {
         setNameError("duplicate");
         setNameFocusRequest((current) => current + 1);
-        setLoading("");
         return;
       }
       if (editTargetRef.current === target) {
@@ -1816,54 +1286,19 @@ export function ProfileManagementPage() {
               : t("profiles.error.save")
         );
       }
-      setLoading("");
-      return;
-    }
-
-    try {
-      setOracleSyncSubmissionError("");
-      setOracleSyncSubmissionErrorCode("");
-      const submittedOracleConfirmation = oracleConfirmation.trim();
-      lastOracleConfirmationRef.current = submittedOracleConfirmation;
-      const job = await apiPost<ProfileSyncJobData>(
-        `/api/nl2sql/profiles/${saved.id}/oracle-sync-jobs`,
-        {
-          confirmation: submittedOracleConfirmation,
-          reason: "ui-profile-management-save",
-          rebuild_agent_assets: rebuildAgentAssets,
-        },
-        {
-          headers: {
-            "Idempotency-Key": `profile-save-${saved.id}-${saved.etag || "new"}`,
-          },
-        }
-      );
-      setReportedOracleSyncJobId("");
-      // 新規作成では、ジョブの開始の応答を待つ間に URL が作成した ID（?profile=<id>）へ変わる。
-      // 作成した業務プロファイルを開いている間は、同じ保存の続きとして経過を追跡する（#1784）。
-      if (isProfileSaveTargetCurrent(editTargetRef.current, target, saved.id)) {
-        setOracleSyncJobId(job.job_id);
-        setOracleSyncProfileId(job.profile_id);
-      }
-      queryClient.setQueryData(["nl2sql", "oracle-sync-job", job.job_id], job);
-      // 1 文目は何が起きたかだけにし、Oracle Profile の反映の続きは description に分ける（#899）。
-      // 反映を始められなかったとき（Credential が無い 409 など）は「バックグラウンドで続きます」と
-      // 言えないので出さず、保存したことと失敗は結果の領域の 1 か所で示す（messaging.md §10.1。#1683）。
-      toast.success(t("profiles.message.saved"), {
-        description: t("profiles.message.savedOracleSyncing"),
-      });
-    } catch (err) {
-      // 開始できなかった理由は、保存した業務プロファイルの結果の領域に出す（新規作成でも。#1784）。
-      if (isProfileSaveTargetCurrent(editTargetRef.current, target, saved.id)) {
-        setOracleSyncSubmissionError(
-          err instanceof Error ? err.message : t("profiles.oracle.sync.failed")
-        );
-        setOracleSyncSubmissionErrorCode(err instanceof ApiError ? (err.errorCode ?? "") : "");
-      }
-      selectAiCredential.refreshAfterError(err);
     } finally {
       setLoading("");
     }
+  };
+
+  // 「変更を破棄」: 最後に保存した内容（新規作成は空のフォーム）へ戻す。
+  const discardChanges = () => {
+    if (mutationBusyRef.current) return;
+    setForm(selectedProfile ? profileToForm(selectedProfile) : emptyProfileForm());
+    setNameError(null);
+    setRequiredErrors({});
+    setProfileSaveError("");
+    setProfileSaveConflict(false);
   };
 
   // 競合した保存の後に、最新の版を読み直して編集の内容を置き換える（未保存の変更は確認の後に破棄する）。
@@ -1888,50 +1323,10 @@ export function ProfileManagementPage() {
         return;
       }
       setForm(profileToForm(latest.data.profile));
-      setOracleConfirmation("");
       setNameError(null);
       setRequiredErrors({});
       setProfileSaveError("");
       setProfileSaveConflict(false);
-    } finally {
-      setLoading("");
-    }
-  };
-
-  const retryOracleSync = async () => {
-    if (mutationBusyRef.current) return;
-    const profileId = oracleSyncJob?.profile_id || oracleSyncProfileId || selectedProfile?.id;
-    if (!profileId) return;
-    setLoading("retry-oracle-sync");
-    try {
-      const retryConfirmation =
-        oracleConfirmation.trim() || lastOracleConfirmationRef.current.trim();
-      const job = oracleSyncJob?.status === "failed"
-        ? await apiPost<ProfileSyncJobData>(
-            `/api/nl2sql/oracle-sync-jobs/${oracleSyncJob.job_id}/retry`
-          )
-        : await apiPost<ProfileSyncJobData>(
-            `/api/nl2sql/profiles/${profileId}/oracle-sync-jobs`,
-            {
-              confirmation: retryConfirmation,
-              reason: "ui-profile-management-retry",
-              rebuild_agent_assets: rebuildAgentAssets,
-            },
-            { headers: { "Idempotency-Key": `profile-retry-${profileId}-${Date.now()}` } }
-          );
-      lastOracleConfirmationRef.current = retryConfirmation;
-      setOracleSyncSubmissionError("");
-      setOracleSyncSubmissionErrorCode("");
-      setReportedOracleSyncJobId("");
-      setOracleSyncJobId(job.job_id);
-      setOracleSyncProfileId(job.profile_id);
-      queryClient.setQueryData(["nl2sql", "oracle-sync-job", job.job_id], job);
-    } catch (err) {
-      setOracleSyncSubmissionError(
-        err instanceof Error ? err.message : t("profiles.oracle.sync.failed")
-      );
-      setOracleSyncSubmissionErrorCode(err instanceof ApiError ? (err.errorCode ?? "") : "");
-      selectAiCredential.refreshAfterError(err);
     } finally {
       setLoading("");
     }
@@ -1957,37 +1352,12 @@ export function ProfileManagementPage() {
       const deletedProfile = deleted.profile;
       queryClient.removeQueries({ queryKey: nl2sqlIncrementalKeys.profile(deletedProfile.id) });
       await queryClient.invalidateQueries({ queryKey: ["nl2sql", "profiles", "search"] });
-      // 削除の後は一覧の画面に戻るので、DB Profile 一覧の同期の案内はページの先頭に出す。
-      const trackingRefresh = deleted.oracle_cleanup.some((item) =>
-        trackDbProfileRefreshSignal(item, { scope: "page" })
-      );
-      if (!trackingRefresh) {
-        await queryClient.invalidateQueries({ queryKey: ["nl2sql", "select-ai"] });
-      }
       if (editTargetRef.current === profile.id) {
         setSearchParams({}, { replace: true });
       }
-      const cleanupWarnings = deleted.oracle_cleanup.filter((item) => item.warning.trim());
-      const cleanupExecuted = deleted.oracle_cleanup.some((item) => item.executed);
-      toast.success(
-        t(
-          cleanupExecuted && cleanupWarnings.length === 0
-            ? "profiles.message.deletedWithOracleCleanup"
-            : "profiles.message.deleted",
-          { name: deletedProfile.name }
-        )
-      );
-      if (cleanupWarnings.length > 0) {
-        toast.warning(
-          t("profiles.message.oracleCleanupWarning", { count: cleanupWarnings.length })
-        );
-      }
+      toast.success(t("profiles.message.deleted", { name: deletedProfile.name }));
     } catch (err) {
-      const fallback =
-        err instanceof ApiError && err.status === 502
-          ? t("profiles.error.deleteOracleCleanup")
-          : t("profiles.error.delete");
-      toast.error(err instanceof Error && err.message ? err.message : fallback);
+      toast.error(err instanceof Error && err.message ? err.message : t("profiles.error.delete"));
     } finally {
       setLoading("");
     }
@@ -2007,35 +1377,10 @@ export function ProfileManagementPage() {
       return next;
     });
   }, []);
-  const canClearOracleExecution = Boolean(
-    oracleConfirmation ||
-      oracleSyncJobId ||
-      oracleSyncProfileId ||
-      oracleSyncJob ||
-      oracleSyncSubmissionError ||
-      syncJobParam
-  );
-
-  const clearOracleExecution = () => {
-    setOracleConfirmation("");
-    setOracleSyncJobId("");
-    setOracleSyncProfileId("");
-    setOracleSyncSubmissionError("");
-    setOracleSyncSubmissionErrorCode("");
-    setProfileSaveError("");
-    lastOracleConfirmationRef.current = "";
-    setReportedOracleSyncJobId("");
-    if (syncJobParam) {
-      const nextParams = new URLSearchParams(searchParams);
-      nextParams.delete("syncJobId");
-      setSearchParams(nextParams, { replace: true });
-    }
-  };
 
   const editor = (
     <ProfileEditor
       selectedProfile={selectedProfile}
-      engineOptions={engineOptions}
       profileAccessProfile={selectedProfileAccessProfile}
       form={form}
       tableObjects={tableObjects}
@@ -2057,22 +1402,11 @@ export function ProfileManagementPage() {
       busy={mutationBusy}
       nameError={nameError}
       requiredErrors={requiredErrors}
-      oracleConfirmation={oracleConfirmation}
-      rebuildAgentAssets={rebuildAgentAssets}
-      canClearOracleExecution={canClearOracleExecution}
-      oracleSyncJob={oracleSyncJob}
-      oracleSyncSubmissionError={oracleSyncSubmissionError}
-      oracleSyncSubmissionErrorCode={oracleSyncSubmissionErrorCode}
-      selectAiCredentialMissing={selectAiCredentialMissing}
-      selectAiCredentialName={selectAiCredential.credentialName}
-      canOpenSelectAiCredential={selectAiCredential.canOpenSettings}
-      recheckingSelectAiCredential={selectAiCredential.rechecking}
-      onRecheckSelectAiCredential={() => void selectAiCredential.recheck()}
+      dirty={isDirty}
       saveError={profileSaveError}
       saveConflict={profileSaveConflict}
       reloadingLatest={loading === "reload-latest"}
       onReloadLatest={() => void reloadLatestProfile()}
-      retryingOracleSync={loading === "retry-oracle-sync"}
       deleting={selectedProfile ? loading === `delete-profile-${selectedProfile.id}` : false}
       onObjectFilterChange={setObjectFilter}
       onFormChange={setForm}
@@ -2094,29 +1428,16 @@ export function ProfileManagementPage() {
       onDelete={() => {
         if (selectedProfile) void deleteProfile(selectedProfile);
       }}
-      onOracleConfirmationChange={setOracleConfirmation}
-      onOracleExecutionClear={clearOracleExecution}
-      onRebuildAgentAssetsChange={setRebuildAgentAssets}
-      onRetryOracleSync={() => void retryOracleSync()}
-      dbProfileListSync={dbProfileListSync}
+      onDiscard={discardChanges}
     />
   );
   const schemaRefreshing = sharedSchemaRefresh.isRefreshing;
   // スキーマの更新・業務プロファイルの再取得は durable job。開始のボタンは押した側だけを送信の間 loading にし、
   // job の間は無効にするだけ。job の間のスピナーは一覧の上の進行の表示が 1 つだけ出す（messaging §3.7、#821）。
   const headerSchemaRefreshStarting = sharedSchemaRefresh.startingOrigin === PROFILE_SCHEMA_REFRESH_HEADER;
-  const dbProfileRefreshBusy = dbProfileListSync.busy;
-  const headerDbProfileRefreshStarting = dbProfileListSync.externalStarting;
-  // 案内（保存の結果の直下）が進行を出しているときは、作業領域の先頭に同じ進行を重ねない（messaging §3.7）。
-  const workspaceDbProfileRefreshing = dbProfileRefreshing && !dbProfileListSync.ownsProgress;
   const profileListRefreshing = profilesQuery.isFetching && !profilesQuery.isFetchingNextPage;
   const profileWorkspaceProcessing = schemaRefreshing ? (
       <SchemaRefreshProcessing testId="profile-management-workspace-processing" />
-    ) : workspaceDbProfileRefreshing ? (
-      <DbProfileListSyncProcessing
-        sync={dbProfileListSync}
-        testId="profile-management-workspace-processing"
-      />
     ) : loading === "load" || profileListRefreshing ? (
       <ProcessingIndicator
         active
@@ -2132,14 +1453,11 @@ export function ProfileManagementPage() {
     ) : undefined;
   const showProfileWorkspaceProcessing =
     Boolean(profileWorkspaceProcessing) &&
-    (profiles.length > 0 || loading === "load" || schemaRefreshing || workspaceDbProfileRefreshing);
+    (profiles.length > 0 || loading === "load" || schemaRefreshing);
   const profileListLoading = !profilesLoaded || (loading === "load" && profiles.length === 0);
   // 初回の読込は一覧の読込表示がスピナーを出す。ヘッダーの「最新情報を取得」は回さない（狭い画面では「その他の操作」の
   // 中で見えない。同じ処理のスピナーは 1 つ。messaging §3.7、#416）。
   const profileListShowsSpinner = profileListLoading && !showProfileWorkspaceProcessing;
-  // 失敗はページの先頭か保存の結果の直下の案内が出すので、見出しのバッジは実行中だけにする（同じ失敗を 2 か所に
-  // 出さない。#2034）。
-  const headerRefreshStatus = dbProfileRefreshing ? (dbProfileListSync.job?.status ?? "pending") : "";
   const workspaceNotice = sharedSchemaRefresh.error
       ? { tone: "danger" as const, message: sharedSchemaRefresh.error }
     : refreshError
@@ -2170,11 +1488,6 @@ export function ProfileManagementPage() {
         status={
           activeView === "list" && (schemaRefreshing || sharedSchemaRefresh.error) ? (
             <SchemaRefreshHeaderStatus testId="profile-management-schema-refresh-status" />
-          ) : activeView === "list" && headerRefreshStatus ? (
-            <PageHeaderStatusBadge
-              variant={headerRefreshStatus === "error" ? "danger" : "info"}
-              label={t(`profiles.dbProfileRefresh.status.${headerRefreshStatus}`)}
-            />
           ) : undefined
         }
         actions={
@@ -2207,21 +1520,11 @@ export function ProfileManagementPage() {
                   loading: headerSchemaRefreshStarting,
                   disabled: schemaRefreshing && !headerSchemaRefreshStarting,
                 },
-                {
-                  id: "db-profile-refresh",
-                  kind: "utility",
-                  label: t("profiles.action.dbProfileRefresh"),
-                  icon: RefreshCw,
-                  onClick: () => dbProfileListSync.refreshFrom(),
-                  loading: headerDbProfileRefreshStarting,
-                  disabled: dbProfileRefreshBusy && !headerDbProfileRefreshStarting,
-                },
               ]
             : []
         }
         actionsTestId="profile-management-actions"
-        // 編集の画面の「一覧へ戻る」はページの左上（#618）。保存は Oracle への反映を伴うため、確認語欄の操作行に置く
-        // （確認語が要る保存の例外。design-system README §4「詳細・作成・編集の画面の操作」）。
+        // 編集の画面の「一覧へ戻る」はページの左上（#618）。保存はフォームの末尾の FormActionBar（#1786）。
         back={
           activeView === "list"
             ? undefined
@@ -2238,14 +1541,6 @@ export function ProfileManagementPage() {
         <PageNotice
           notice={workspaceNotice}
           action={workspaceNoticeAction}
-        />
-        {/* ヘッダーの「DB Profile 一覧を再取得」の失敗と、一覧の削除の後の同期の案内（#2034）。 */}
-        <DbProfileListSyncNotice
-          sync={dbProfileListSync}
-          scope="page"
-          testId="profile-management-db-profile-sync-notice"
-          actionTestId="profile-management-db-profile-sync-refresh"
-          processingTestId="profile-management-db-profile-sync-processing"
         />
 
         {activeView === "list" ? (

@@ -32,7 +32,6 @@ def _principal(
         force_password_change=False,
         role_codes=["SYSTEM_ADMIN"] if system_admin else ["GENERAL"],
         permissions={PROFILE_MANAGE_PERMISSION} if profile_manager else set(),
-        data_entitlements=[],
         allowed_profile_ids=allowed_profile_ids,
         session_id="session-1",
         csrf_token_hash="hash",

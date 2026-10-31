@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "./_helpers/test";
 import { mockDatabaseGateReady } from "./_helpers/database-gate";
 import { confirmChatRequirement, mockChatRequirement } from "./_helpers/chat-requirement";
-import { chooseSelectFieldOption } from "./_helpers/select-field";
 
 // #2517: チャットの添付（会話の期間だけ使う作業ファイル）。運用設定で有効なら SQL チャットで表を添付し、
 // 生成方法「Enterprise AI」で業務データと照合する SQL を作る。送った質問の下に添付の名前を出す。
@@ -106,12 +105,8 @@ test.describe("SQL チャットの添付", { tag: "@responsive" }, () => {
     await page.goto("/chat");
     await page.getByTestId("chat-attachments-input").setInputFiles(csv);
     await expect(page.locator("[data-chat-attachment]").first()).toHaveAttribute("data-status", "ready");
-    const engine = page.getByRole("combobox", { name: "生成方法", exact: true });
-    await chooseSelectFieldOption(engine, "select_ai");
-    // 添付は Enterprise AI だけが使えるので、ほかの方式では送れない理由を出す。
-    await expect(page.getByTestId("sql-chat-attachment-engine")).toBeVisible();
-    await expect(page.getByTestId("sql-chat-send")).toBeDisabled();
-    await chooseSelectFieldOption(engine, "enterprise_ai_direct");
+    // 生成方法は 1 つだけなので、選ぶ欄と方式の不一致の案内は出さない。
+    await expect(page.getByRole("combobox", { name: "生成方法", exact: true })).toHaveCount(0);
     await expect(page.getByTestId("sql-chat-attachment-engine")).toHaveCount(0);
 
     await page.getByRole("textbox", { name: "質問", exact: true }).fill("添付の注文が売上にあるか照合して");

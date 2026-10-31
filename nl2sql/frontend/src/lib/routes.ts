@@ -41,7 +41,6 @@ export const APP_ROUTES = {
   settingsModel: SYSTEM_SETTINGS_PATHS.model,
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,
   settingsSystemTables: "/settings/system-tables",
-  settingsSelectAiCredential: "/settings/select-ai-credential",
   settingsAppearance: SYSTEM_SETTINGS_PATHS.appearance,
   // 回答の注意書き（設定は製品ごと。#2405・#2449）
   settingsAnswerNotice: ANSWER_NOTICE_PATH,
@@ -58,8 +57,7 @@ export const APP_ROUTES = {
   // メニュー権限を問わない。
   account: ACCOUNT_PATH,
   securityPermissions: "/settings/security/permissions",
-  securityDeepSec: "/settings/security/deepsec",
-  /** 旧「NL2SQL モデル学習」URL。業務プロファイルの Select AI 設定へ転送する。 */
+  /** 旧「NL2SQL モデル学習」URL。業務プロファイル管理へ転送する。 */
   legacyNl2sqlModelLearning: "/settings/nl2sql-model",
 } as const;
 

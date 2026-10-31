@@ -11,8 +11,7 @@ platform/deploy/suite-init.sh が、製品の配備（各製品の system schema
   パスワードを合わせて lock を外す。grant は毎回付け直す（付いていれば何も変わらない）。
 - 付ける権限は APP_USER_GRANTS（理由は terraform/README.md「アプリ用の DB ユーザー」と #1668 の調査）。
   Autonomous AI Database では ADMIN が DBA を持たず、GRANT DBA は PDB_DBA に読み替えられるため、PDB_DBA を付ける。
-  PDB_DBA に無い Deep Data Security の 3 つの system privilege（Data Grant の作成・DATA ROLE の付与・
-  USE DATA GRANTS ONLY）を足す。表領域は QUOTA UNLIMITED ON DATA。
+  表領域は QUOTA UNLIMITED ON DATA。
 - パスワードは環境変数・引数で受け取らず、root だけが読める props のファイルから読む（process の一覧に出さない）。
   SQL の log・失敗の表示にはパスワードを出さない。
 - 失敗したら ORA の番号と手がかりを出して 1 で終わる（suite-init.sh が配備を失敗にする）。
@@ -30,9 +29,9 @@ from typing import Any
 LOG_PREFIX = "[suite-db-user]"
 # アプリ用のユーザーの名前（Oracle の引用符なしの識別子。terraform/stack/variables.tf の adb_app_user_name と同じ規則）。
 APP_USER_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,29}$")
-# アプリ用に使えない名前（Oracle の管理のユーザー・ADMIN・NL2SQL の Deep Data Security の END USER）。
+# アプリ用に使えない名前（Oracle の管理のユーザー・ADMIN）。
 RESERVED_APP_USERS = frozenset(
-    {"ADMIN", "SYS", "SYSTEM", "PUBLIC", "DEEPSEC_DATA_USER", "GGADMIN", "ADBSNMP", "C##CLOUD$SERVICE"}
+    {"ADMIN", "SYS", "SYSTEM", "PUBLIC", "GGADMIN", "ADBSNMP", "C##CLOUD$SERVICE"}
 )
 APP_TABLESPACE = "DATA"
 # Autonomous AI Database のアプリ用の profile（PASSWORD_LIFE_TIME UNLIMITED・FAILED_LOGIN_ATTEMPTS UNLIMITED）。
@@ -40,22 +39,11 @@ APP_TABLESPACE = "DATA"
 APP_PROFILE = "ORA_APP_PROFILE"
 APP_USER_GRANTS = (
     # ADB の DBA 相当。表・索引・sequence・view・package・SQL ドメイン・Oracle Text（CTXAPP）・Vector の索引・
-    # DBA_* / V$ の参照（SELECT ANY DICTIONARY）・Select AI（DBMS_CLOUD / DBMS_CLOUD_AI）・role / END USER /
-    # DATA ROLE / CONTEXT の作成（Deep Data Security）を含む。
+    # DBA_* / V$ の参照（SELECT ANY DICTIONARY）・DBMS_CLOUD・role の作成を含む。
     "GRANT PDB_DBA TO {user}",
-    # Deep Data Security（NL2SQL）: PDB_DBA に無い。無いと ORA-01031。
-    "GRANT GRANT ANY DATA ROLE TO {user}",  # GRANT DATA ROLE … TO <END USER>
-    "GRANT ADMINISTER ANY DATA GRANT TO {user}",  # CREATE / DROP DATA GRANT
-    "GRANT SET USE DATA GRANTS ONLY TO {user}",  # SET USE DATA GRANTS ONLY ON <表> ENABLED / DISABLED
 )
-# 付けた後に、アプリのユーザーの session で効いていることを確かめる権限（PDB_DBA の代表と、足した 3 つ）。
-REQUIRED_SESSION_PRIVS = (
-    "CREATE TABLE",
-    "CREATE END USER",
-    "GRANT ANY DATA ROLE",
-    "ADMINISTER ANY DATA GRANT",
-    "SET USE DATA GRANTS ONLY",
-)
+# 付けた後に、アプリのユーザーの session で効いていることを確かめる権限（PDB_DBA の代表）。
+REQUIRED_SESSION_PRIVS = ("CREATE TABLE",)
 # 1 回の接続の TCP の接続の上限（秒）。DB の停止中・届かないときに長く待たない（#1779）。待てば直りうる失敗は
 # connect_admin が connect_wait_seconds の間隔で試し直す。
 CONNECT_TCP_TIMEOUT_SECONDS = 10.0

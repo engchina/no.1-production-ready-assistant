@@ -7,7 +7,7 @@
     "finished_at": "2026-08-12T00:00:02Z",
     "elapsed_ms": 980,
     "result": {
-      "engine": "select_ai",
+      "engine": "enterprise_ai_direct",
       "engine_meta": {
         "runtime": "deterministic",
         "profile_id": "default",
@@ -125,4 +125,3 @@
   "error_messages": [],
   "warning_messages": []
 }
-

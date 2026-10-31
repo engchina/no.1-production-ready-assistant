@@ -12,7 +12,6 @@ const SYSTEM_ADMIN_USER: CurrentUser = {
   role_display_names: ["システム管理者"],
   is_system_admin: true,
   permissions: [],
-  data_entitlements: [],
   allowed_profile_ids: [],
   debug_mode: false,
   password_change_allowed: true,
@@ -114,8 +113,8 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
   // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足し、
-  // システム設定の OCI 認証を削除して（#11）35 項目。
-  expect(menuIconSignatures).toHaveLength(35);
+  // #7 で運用設定の Select AI Credential とセキュリティ設定の Deep Data Security を、#11 でシステム設定の OCI 認証を削除して 33 項目。
+  expect(menuIconSignatures).toHaveLength(33);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -194,23 +193,21 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   for (const label of ["アップロード保存先", "モデル", "データベース"]) {
     await expect(sidebar.getByText(label, { exact: true })).toBeVisible();
   }
-  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き → Select AI Credential」（#658・#2449・#2517・#2546）。
+  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き」（#2449・#2517・#2546）。
   const systemTablesBox = await sidebar.getByText("システムテーブル", { exact: true }).boundingBox();
   const traceRecordingBox = await sidebar.getByText("軌跡の記録", { exact: true }).boundingBox();
   const answerNoticeBox = await sidebar.getByText("回答の注意書き", { exact: true }).boundingBox();
   const attachmentsBox = await sidebar.getByText("チャットの添付", { exact: true }).boundingBox();
-  const credentialBox = await sidebar.getByText("Select AI Credential", { exact: true }).boundingBox();
-  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox || !credentialBox) {
+  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox) {
     throw new Error("運用設定のメニュー位置を取得できませんでした。");
   }
   expect(systemTablesBox.y).toBeLessThan(traceRecordingBox.y);
   expect(traceRecordingBox.y).toBeLessThan(attachmentsBox.y);
   expect(attachmentsBox.y).toBeLessThan(answerNoticeBox.y);
-  expect(answerNoticeBox.y).toBeLessThan(credentialBox.y);
 
   // 「API キー」（全員のキーの管理。RAG / NL2SQL だけ。#1805）はユーザーとロールの末尾。アカウント欄の
   // 「API キー」（自分のキー。ボタン）と区別するため、ナビのリンクで探す。
-  const securityLabels = ["権限管理", "Deep Data Security", "ユーザー管理", "ロール管理", "API キー"];
+  const securityLabels = ["権限管理", "ユーザー管理", "ロール管理", "API キー"];
   const securityItemBoxes = await Promise.all(
     securityLabels.map(async (label) => {
       const item = sidebar.getByRole("link", { name: label, exact: true });
@@ -363,7 +360,6 @@ test("セクション折りたたみで所属項目だけを隠し、他セク�
 
   await sidebar.getByRole("button", { name: "セキュリティ設定 を展開" }).click();
   await expect(sidebar.getByText("権限管理", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Deep Data Security", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
@@ -531,7 +527,6 @@ test("375px 幅ではナビがドロワーになり、開くと主要リンク�
   await expect(sidebar.getByRole("link", { name: "ユーザー管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "ロール管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "権限管理" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Deep Data Security" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "監査ログ" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "データベース設定" })).toBeVisible();
   expect(

@@ -68,7 +68,6 @@ export const TRACE_DETAILS_JA = {
   "trace.span.executeTool": "ツールの実行",
   "trace.span.genAi": "AI の呼び出し",
   "trace.span.mcpRequest": "MCP の呼び出し",
-  "trace.span.selectAi": "Select AI の呼び出し",
   "trace.span.attachments": "会話の添付から根拠を選ぶ",
   "trace.span.other": "処理を実行する",
   "trace.span.httpRequest": "HTTP の要求",
@@ -152,10 +151,10 @@ export type TraceSpanStatus = "done" | "failed" | "cancelled" | "skipped";
  * 知らない段は返さない（部品が `pr.stage` の値を出す）。
  */
 export type TraceStageName = (stage: string, status: TraceSpanStatus) => string | null | undefined;
-/** 技術の span の名前（root と、`gen_ai.*`・MCP・Select AI・HTTP の呼び出し）。 */
+/** 技術の span の名前（root と、`gen_ai.*`・MCP・HTTP の呼び出し）。 */
 export interface TraceSpanNames {
   attachments: string; other: string; root: string; chat: string; embeddings: string; rerank: string; rerankRequest: string; executeTool: string; genAi: string;
-  mcpRequest: string; selectAi: string; httpRequest: string;
+  mcpRequest: string; httpRequest: string;
   attempt: (name: string, count: number) => string;
 }
 /**
@@ -225,7 +224,7 @@ export function createTraceDetailsLabels(t: (key: TraceLabelKey) => string, opti
     spanNames: {
       attachments: t("trace.span.attachments"), other: t("trace.span.other"), root: t("trace.span.root"), chat: t("trace.span.chat"), embeddings: t("trace.span.embeddings"), rerank: t("trace.span.rerank"), rerankRequest: t("trace.span.rerankRequest"),
       executeTool: t("trace.span.executeTool"), genAi: t("trace.span.genAi"), mcpRequest: t("trace.span.mcpRequest"),
-      selectAi: t("trace.span.selectAi"), httpRequest: t("trace.span.httpRequest"),
+      httpRequest: t("trace.span.httpRequest"),
       attempt: (name, count) => t("trace.span.attempt").replace("{name}", name).replace("{count}", String(count)),
     },
     stageName: options.stageName,

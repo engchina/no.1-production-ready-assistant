@@ -15,7 +15,6 @@ test("required labels use the shared FieldLabel / FieldLegend instead of an app-
   for (const path of [
     "../src/components/ui/file-dropzone.tsx",
     "../src/features/nl2sql/pages/DataManagementPage.tsx",
-    "../src/features/security/SecurityDeepSecPage.tsx",
   ]) {
     const page = source(path);
     assert.doesNotMatch(page, /required-field"/u, path);
@@ -41,7 +40,6 @@ test("app source has no legacy asterisk required indicator or legend note", () =
     "../src/features/security/AuthPages.tsx",
     // ログイン・パスワード変更の画面の実体は platform の共通部品（#220）。
     "../../../platform/packages/system-settings/src/auth/AuthPages.tsx",
-    "../src/features/security/SecurityDeepSecPage.tsx",
   ]) {
     assert.doesNotMatch(source(path), /RequiredIndicator|RequiredFieldsNote/u, path);
   }

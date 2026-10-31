@@ -27,10 +27,6 @@ def current_actor_user_uuid() -> str:
     return current_actor_context().user_uuid
 
 
-def current_actor_is_system_admin() -> bool:
-    return current_actor_context().is_system_admin
-
-
 def set_actor_context(
     user_uuid: str,
     *,

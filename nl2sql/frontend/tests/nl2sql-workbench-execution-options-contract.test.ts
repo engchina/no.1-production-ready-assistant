@@ -32,7 +32,7 @@ test("NL2SQL workbench keeps one execution action and removes preview/session bu
   assert.match(workbenchSource, /<span>\{t\("nl2sql\.action\.run"\)\}<\/span>/);
 });
 
-test("execution options default to showing interpretation and show prompt artifacts", () => {
+test("execution options default to showing interpretation artifacts", () => {
   // 用語・同義語は既定 off(明示 ON のときだけ質問を書き換える)。
   assert.match(
     workbenchSource,
@@ -48,16 +48,13 @@ test("execution options default to showing interpretation and show prompt artifa
   );
   assert.match(
     workbenchSource,
-    /const \[includeShowPrompt, setIncludeShowPrompt\] = useWorkspaceState\("includeShowPrompt", false\);/
-  );
-  assert.match(
-    workbenchSource,
     /const \[executionOptionsOpen, setExecutionOptionsOpen\] = useWorkspaceState\("executionOptionsOpen", false\);/
   );
   assert.match(workbenchSource, /use_ontology_context: useOntologyContext/);
   assert.match(workbenchSource, /use_glossary: rewriteUseGlossary/);
   assert.match(workbenchSource, /include_interpretation: includeInterpretation/);
-  assert.match(workbenchSource, /include_show_prompt: includeShowPrompt/);
+  // Show Prompt は生成の方式と一緒に削除した（#7）。
+  assert.doesNotMatch(workbenchSource, /include_show_prompt|includeShowPrompt/);
   assert.doesNotMatch(workbenchSource, /rewriteExtraPrompt|setRewriteExtraPrompt|extra_prompt/);
 });
 
@@ -67,17 +64,14 @@ test("execution options panel keeps glossary rewrite and removes schema rewrite"
   assert.doesNotMatch(workbenchSource, /use_schema|rewriteUseSchema/);
   assert.match(optionsPanelSource, /nl2sql\.executionOptions\.useOntology/);
   assert.match(optionsPanelSource, /nl2sql\.executionOptions\.includeInterpretation/);
-  assert.match(optionsPanelSource, /nl2sql\.executionOptions\.includeShowPrompt/);
-  assert.match(optionsPanelSource, /nl2sql\.executionOptions\.selectAiOverridesUnsupported/);
   assert.match(optionsPanelSource, /aria-expanded=\{open\}/);
   assert.match(optionsPanelSource, /aria-controls="nl2sql-execution-options-body"/);
-  assert.match(optionsPanelSource, /engine !== "select_ai"/);
 });
 
-test("generated SQL summary renders ontology grounding and show prompt artifact panels", () => {
+test("generated SQL summary renders ontology grounding and logical steps panels", () => {
   assert.match(generatedSqlPanelSource, /data-testid="nl2sql-interpretation-panel"/);
   assert.match(generatedSqlPanelSource, /data-testid="nl2sql-sql-grounding-panel"/);
-  // 処理手順パネルは接地確認の下・Show Prompt の上に独立表示する。
+  // 処理手順パネルは接地確認の下に独立表示する。
   assert.match(generatedSqlPanelSource, /data-testid="nl2sql-logical-steps-panel"/);
   assert.match(generatedSqlPanelSource, /nl2sql\.logicalSteps\.title/);
   // 「Ontology を使う」OFF のとき接地確認を出さない(backend echo で判定)。
@@ -87,15 +81,13 @@ test("generated SQL summary renders ontology grounding and show prompt artifact 
   assert.match(generatedSqlPanelSource, /nl2sql\.interpretation\.graphNotPublished/);
   assert.match(
     generatedSqlPanelSource,
-    /<InterpretationArtifactPanel[\s\S]*?\/>\s*<SqlLogicalStepsPanel[\s\S]*?\/>\s*<ShowPromptArtifactPanel/
+    /<InterpretationArtifactPanel[\s\S]*?\/>\s*<SqlLogicalStepsPanel[\s\S]*?\/>/
   );
   assert.doesNotMatch(generatedSqlPanelSource, /useProfileOntologyView/);
   assert.match(generatedSqlPanelSource, /artifact\.ontology_graph/);
   assert.doesNotMatch(generatedSqlPanelSource, /nl2sql\.interpretation\.inputTitle/);
   assert.doesNotMatch(generatedSqlPanelSource, /nl2sql\.interpretation\.sqlTitle/);
-  assert.match(generatedSqlPanelSource, /data-testid="nl2sql-show-prompt-panel"/);
-  assert.match(generatedSqlPanelSource, /artifact\.prompt/);
-  assert.match(generatedSqlPanelSource, /whitespace-pre-wrap/);
+  assert.doesNotMatch(generatedSqlPanelSource, /nl2sql-show-prompt-panel|ShowPromptArtifactPanel/);
 });
 
 test("処理手順は業務者向け説明と技術詳細を併記し、旧文字列手順へ縮退できる", () => {

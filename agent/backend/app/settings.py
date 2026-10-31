@@ -201,7 +201,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # `agent_nl2sql_job_wait_seconds` まで続きを取って待つ（#848 / #1430）。
     agent_external_nl2sql_timeout_seconds: float = 600.0
     # NL2SQL のジョブが pending / running のまま返ったとき、ツールの中で完了を待つ合計の上限
-    # （秒。#848）。既定の SQL の生成（Select AI の 1 回）と実行は、それぞれ NL2SQL の DB の
+    # （秒。#848）。SQL の生成（LLM の 1 回）と実行は、それぞれ NL2SQL の DB の
     # 呼び出しの上限（`NL2SQL_ORACLE_CALL_TIMEOUT_SECONDS`、既定 120 秒）で打ち切られるため、
     # 300 秒で足りる。
     # nl2sql_get_job を wait_seconds 付きで繰り返し呼ぶ。0 なら待たずにそのまま返す。

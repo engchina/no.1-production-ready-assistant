@@ -66,8 +66,7 @@ _SAFE_ATTRIBUTES = frozenset(
         "gen_ai.usage.output_tokens",
         "gen_ai.usage.cache_read.input_tokens",
         "gen_ai.usage.reasoning.output_tokens",
-        # アプリが利用量を受け取れないモデルの呼び出しの出どころ（Select AI など。`model_usage`。
-        # #3543）。
+        # アプリが利用量を受け取れないモデルの呼び出しの出どころ（`model_usage`。#3543）。
         "pr.gen_ai.unmeasured_source",
         "pr.gen_ai.purpose",
         "mcp.method.name",
@@ -599,7 +598,7 @@ def observed_span(
         {
             **(
                 model_purpose_attributes()
-                if name in {"gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank", "oracle.select_ai"}
+                if name in {"gen_ai.chat", "gen_ai.embeddings", "gen_ai.rerank"}
                 else {}
             ),
             **(attributes or {}),

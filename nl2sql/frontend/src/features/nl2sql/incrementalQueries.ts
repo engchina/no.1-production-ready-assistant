@@ -16,7 +16,6 @@ import type {
   SchemaTable,
   SchemaRefreshActiveJobData,
   SchemaRefreshJob,
-  SelectAiDbProfileRefreshJobData,
 } from "./types";
 import {
   filterUserVisibleCatalog,
@@ -86,8 +85,6 @@ export const nl2sqlIncrementalKeys = {
     ] as const,
   schemaRefreshJob: (jobId: string) => ["schema", "refresh-job", jobId] as const,
   activeSchemaRefreshJob: ["schema", "refresh-job-discovery", "active"] as const,
-  selectAiDbProfileRefreshJob: (jobId: string) =>
-    ["nl2sql", "select-ai", "db-profile-refresh-job", jobId] as const,
 };
 
 /**
@@ -193,7 +190,6 @@ export function useProfileUsageContext(profileId: string) {
             description: profile.description,
             allowed_tables: profile.allowed_tables,
             allowed_views: profile.allowed_views,
-            default_engine: profile.default_engine ?? "select_ai",
             clarification_policy: profile.clarification_policy ?? "confirm",
             archived: profile.archived,
             object_scope_version: profile.object_scope_version ?? 1,
@@ -498,39 +494,6 @@ export function useActiveSchemaRefreshJob(enabled = true) {
     refetchOnMount: "always",
     refetchOnReconnect: "always",
     refetchOnWindowFocus: "always",
-    retry: false,
-  });
-}
-
-export function useStartSelectAiDbProfileRefresh() {
-  return useMutation({
-    mutationFn: () =>
-      apiPost<SelectAiDbProfileRefreshJobData>(
-        "/api/nl2sql/select-ai/db-profiles/refresh-jobs",
-        undefined,
-        {
-          timeoutMs: API_TIMEOUT_MS.jobControl,
-        }
-      ),
-  });
-}
-
-export function useSelectAiDbProfileRefreshJob(jobId: string) {
-  return useQuery({
-    queryKey: nl2sqlIncrementalKeys.selectAiDbProfileRefreshJob(jobId),
-    queryFn: ({ signal }) =>
-      apiGet<SelectAiDbProfileRefreshJobData>(
-        `/api/nl2sql/select-ai/db-profile-refresh-jobs/${jobId}`,
-        {
-          signal,
-          timeoutMs: API_TIMEOUT_MS.jobControl,
-        }
-      ),
-    enabled: Boolean(jobId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "pending" || status === "running" ? 1_000 : false;
-    },
     retry: false,
   });
 }

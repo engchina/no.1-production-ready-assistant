@@ -170,55 +170,6 @@ const databaseDependentScenarios: Scenario[] = [
   );
     },
   },
-  {
-    name: "Deep Data Security",
-    path: "/settings/security/deepsec",
-    heading: "Deep Data Security",
-    setup: async (page, countRequest) => {
-      await page.route("**/api/security/deepsec/status", (route) => {
-        countRequest();
-        return fulfill(route, {
-          configured: false,
-          driver_mode: "thin",
-          connection_security: "wallet_mtls",
-          deepsec_enabled: false,
-          data_user: "DEEPSEC_DATA_USER",
-          has_data_user_password: false,
-          objects: {},
-          message: "未適用です。",
-        });
-      });
-      await page.route("**/api/security/deepsec/plan", (route) =>
-        fulfill(route, {
-          version: "V001",
-          driver_mode: "thin",
-          connection_security: "wallet_mtls",
-          deepsec_enabled: false,
-          data_user: "DEEPSEC_DATA_USER",
-          has_data_user_password: false,
-          steps: [],
-        })
-      );
-      await page.route("**/api/security/deepsec/data-entitlements", (route) =>
-        fulfill(route, [])
-      );
-      await page.route("**/api/nl2sql/db-admin/objects**", (route) =>
-        fulfill(route, {
-          runtime: "oracle",
-          owner: "",
-          items: [],
-          total: 0,
-          table_count: 0,
-          view_count: 0,
-          counts_included: false,
-          next_cursor: null,
-          refreshed_at: "2026-07-19T00:00:00Z",
-          catalog_version: 0,
-          warnings: [],
-        })
-      );
-    },
-  },
 ];
 
 for (const scenario of databaseIndependentScenarios) {

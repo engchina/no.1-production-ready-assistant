@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pr_backend_core import Page
 from pydantic import BaseModel, Field, field_validator
 
-from .models import Nl2SqlEngine
+from .models import StoredNl2SqlEngine
 
 
 class QualityEvaluationStatus(StrEnum):
@@ -83,7 +83,7 @@ class QualityEvaluationJudge(BaseModel):
 class QualityEvaluationDeterministicAnalysis(BaseModel):
     is_safe: bool = False
     is_select_only: bool = False
-    # 安全確認をしたか。Select AI / Select AI Agent の SQL は省略する（#1523）。
+    # 安全確認をしたか（#1523）。
     safety_checked: bool = True
     referenced_objects: list[str] = Field(default_factory=list)
     structure_summary: str = ""
@@ -98,7 +98,7 @@ class QualityEvaluationResult(BaseModel):
     excel_row: int = Field(ge=2)
     question: str
     expected_sql: str
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     repetition_no: int = Field(ge=1, le=10)
     generated_sql: str = ""
     normalized_sql: str = ""
@@ -120,7 +120,7 @@ class QualityEvaluationResult(BaseModel):
 
 
 class QualityEvaluationEngineSummary(BaseModel):
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     total_attempts: int = 0
     generation_successes: int = 0
     generation_success_rate: float = 0.0
@@ -141,7 +141,7 @@ class QualityEvaluationRunningAttempt(BaseModel):
 
     case_no: int = Field(ge=1)
     case_id: str
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     repetition_no: int = Field(ge=1, le=10)
     started_at: str
 
@@ -160,7 +160,7 @@ class QualityEvaluationJobRecord(BaseModel):
     profile_id: str
     profile_name: str
     profile_category: str = ""
-    engines: list[Nl2SqlEngine]
+    engines: list[StoredNl2SqlEngine]
     repeat_count: int = Field(ge=1, le=10)
     cases: list[QualityEvaluationCase]
     status: QualityEvaluationStatus = QualityEvaluationStatus.PENDING
@@ -191,7 +191,7 @@ class QualityEvaluationJobSummary(BaseModel):
     profile_id: str
     profile_name: str
     profile_category: str = ""
-    engines: list[Nl2SqlEngine]
+    engines: list[StoredNl2SqlEngine]
     repeat_count: int
     case_count: int
     total_attempts: int
@@ -201,7 +201,7 @@ class QualityEvaluationJobSummary(BaseModel):
     status: QualityEvaluationStatus
     # 実行中の試行のうち最も前に始めたもの（時間切れに最も近い試行。#2059）。
     current_case_id: str = ""
-    current_engine: Nl2SqlEngine | None = None
+    current_engine: StoredNl2SqlEngine | None = None
     current_repetition: int = 0
     current_attempt_started_at: str | None = None
     current_attempt_deadline_at: str | None = None
@@ -229,7 +229,7 @@ class QualityEvaluationResultPage(Page[QualityEvaluationResult]):
 
 
 class QualityEvaluationEngineCapability(BaseModel):
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     label: str
     available: bool
     reason: str = ""

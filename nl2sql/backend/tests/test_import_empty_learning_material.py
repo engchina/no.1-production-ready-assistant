@@ -41,14 +41,10 @@ def test_missing_header_is_rejected(kind: str) -> None:
         getattr(service, f"import_legacy_{kind}")(filename="bad.xlsx", content=workbook("OTHER"))
 
 
-def test_select_ai_uses_current_rules_without_profile_resync() -> None:
+def test_generation_uses_current_rules_without_profile_resync() -> None:
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     profile = Nl2SqlProfile(id="synthetic", name="プロファイル A")
     service.import_legacy_rules(filename="rules.xlsx", content=workbook("RULE", ["合成の規則"]))
-    attributes = service._select_ai_generate_attributes(profile, None)
-    assert attributes is not None
-    assert "合成の規則" in attributes["additional_instructions"]
+    assert "合成の規則" in service._effective_sql_rules(profile)
     service.import_legacy_rules(filename="empty.xlsx", content=workbook("RULE"))
-    attributes = service._select_ai_generate_attributes(profile, None)
-    assert attributes is not None
-    assert attributes["additional_instructions"] == ""
+    assert service._effective_sql_rules(profile) == []

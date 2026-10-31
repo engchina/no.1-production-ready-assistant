@@ -34,7 +34,6 @@ SYNC_SERVICE_ROOTS = {
 }
 SYNC_FACTORY_ROOTS = {
     "get_security_service",
-    "get_deepsec_service",
 }
 SYNC_MODULE_ROOTS = {
     "oracledb",
@@ -301,7 +300,6 @@ def test_blocked_database_ready_route_does_not_block_security_api(
     monkeypatch.setattr(settings, "oracle_password", "secret")
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.oraclecloud.com:1522/service_high")
     monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     async def async_oracle_probe(_settings: object) -> None:
         return None

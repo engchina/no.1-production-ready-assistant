@@ -21,7 +21,7 @@ class OracleConnectionTimeoutError(TimeoutError):
 
 
 def close_oracle_pool() -> None:
-    """共有 Oracle pool を閉じる。DeepSec control/data pool も同時に破棄する。"""
+    """共有 Oracle pool を閉じる。control pool も同時に破棄する。"""
     from app.clients.oracle_runtime import close_oracle_pools
 
     close_oracle_pools()

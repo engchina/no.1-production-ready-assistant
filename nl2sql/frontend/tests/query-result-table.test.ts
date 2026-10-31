@@ -33,7 +33,7 @@ test("NL2SQL の結果（列名をキーにした行）を共通の結果の表�
   assert.equal(isIncompleteResult({}), false);
 });
 
-test("実行の接続は既定（deterministic）で VPD が無いときだけ出さない", () => {
+test("実行の接続は既定（deterministic）のときだけ出さない", () => {
   assert.equal(queryResultExecutionContextKey({}), null);
   assert.equal(queryResultExecutionContextKey({ execution_context: "deterministic" }), null);
   assert.equal(
@@ -41,8 +41,8 @@ test("実行の接続は既定（deterministic）で VPD が無いときだけ�
     "queryResults.executionContext.admin_control_plane",
   );
   assert.equal(
-    queryResultExecutionContextKey({ execution_context: "deterministic", vpd_context_enforced: true }),
-    "queryResults.executionContext.deterministic",
+    queryResultExecutionContextKey({ execution_context: "oracle_data_plane" }),
+    "queryResults.executionContext.oracle_data_plane",
   );
 });
 

@@ -6,7 +6,6 @@ import {
   BriefcaseBusiness,
   Eye,
   FileCode2,
-  FileKey,
   FileSpreadsheet,
   FlaskConical,
   History,
@@ -17,7 +16,6 @@ import {
   Network,
   ScrollText,
   Shapes,
-  ShieldCheck,
   Sparkles,
   SquareTerminal,
   Table2,
@@ -135,12 +133,11 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    // NL2SQL 固有のセキュリティ（ロールへの権限付与と DeepSec。#206）。
+    // NL2SQL 固有のセキュリティ（ロールへの権限付与。#206）。
     titleKey: "nav.section.security",
     defaultCollapsed: true,
     items: [
       { href: APP_ROUTES.securityPermissions, labelKey: "nav.securityPermissions", icon: LockKeyhole, permission: MENU_PERMISSIONS.securityPermissions },
-      { href: APP_ROUTES.securityDeepSec, labelKey: "nav.securityDeepSec", icon: ShieldCheck, permission: MENU_PERMISSIONS.securityDeepSec },
     ],
   },
   {
@@ -193,14 +190,6 @@ export const NAV_SECTIONS: NavSection[] = [
         labelKey: "nav.settingsAnswerNotice",
         icon: ANSWER_NOTICE_NAV_ITEM.icon,
         permission: MENU_PERMISSIONS.settingsAnswerNotice,
-      },
-      // Select AI Credential はデータベース設定から分けた運用の操作（#658）。
-      {
-        href: APP_ROUTES.settingsSelectAiCredential,
-        labelKey: "nav.settingsSelectAiCredential",
-        sidebarLabelKey: "nav.settingsSelectAiCredential.sidebar",
-        icon: FileKey,
-        permission: MENU_PERMISSIONS.settingsSelectAiCredential,
       },
     ],
   },

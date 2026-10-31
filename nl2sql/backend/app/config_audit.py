@@ -34,8 +34,6 @@ EXAMPLE_EMPTY_KEYS = frozenset(
         "PLATFORM_ADMIN_LOGIN_USER_PASSWORD",
         "PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
         "PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID",
-        "NL2SQL_OCI_COMPARTMENT_ID",
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD",
         "PLATFORM_ORACLE_DSN",
         "PLATFORM_ORACLE_PASSWORD",
         "PLATFORM_ORACLE_WALLET_PASSWORD",
@@ -253,16 +251,6 @@ def _audit_security_combinations(
                 "error",
                 "INVALID_RUNTIME_SETTINGS",
                 ("PLATFORM_ENVIRONMENT", "PLATFORM_AUTH_MODE", "PLATFORM_AUTH_COOKIE_SECURE"),
-            )
-        )
-    deepsec_enabled = _as_bool(effective.get("NL2SQL_ORACLE_DEEPSEC_ENABLED", "false"))
-    oracle_driver_mode = _unquote(effective.get("PLATFORM_ORACLE_DRIVER_MODE", "thin")).lower()
-    if deepsec_enabled and oracle_driver_mode != "thin":
-        result.findings.append(
-            AuditFinding(
-                "error",
-                "DEEPSEC_REQUIRES_THIN_DRIVER",
-                ("NL2SQL_ORACLE_DEEPSEC_ENABLED", "PLATFORM_ORACLE_DRIVER_MODE"),
             )
         )
 

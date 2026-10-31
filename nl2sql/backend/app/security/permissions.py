@@ -51,9 +51,6 @@ QUERY_GENERATE_PERMISSION = "nl2sql.query.generate"
 SQL_EXECUTE_PERMISSION = "nl2sql.sql.execute"
 FEEDBACK_WRITE_PERMISSION = "nl2sql.feedback.write"
 FEEDBACK_MANAGE_PERMISSION = "nl2sql.feedback.manage"
-SELECT_AI_ASSETS_READ_PERMISSION = "nl2sql.select_ai_assets.read"
-SELECT_AI_ASSETS_REFRESH_PERMISSION = "nl2sql.select_ai_assets.refresh"
-SELECT_AI_ASSETS_MANAGE_PERMISSION = "nl2sql.select_ai_assets.manage"
 SAMPLE_DATA_MANAGE_PERMISSION = "nl2sql.sample_data.manage"
 LEARNING_MATERIAL_MANAGE_PERMISSION = "nl2sql.learning_material.manage"
 SYSTEM_STATUS_READ_PERMISSION = "nl2sql.system_status.read"
@@ -131,12 +128,7 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
         "menu.data_management",
         "データ準備",
         "データの管理",
-        implies=(
-            SCHEMA_READ_PERMISSION,
-            SCHEMA_REFRESH_PERMISSION,
-            SELECT_AI_ASSETS_READ_PERMISSION,
-            SELECT_AI_ASSETS_REFRESH_PERMISSION,
-        ),
+        implies=(SCHEMA_READ_PERMISSION, SCHEMA_REFRESH_PERMISSION),
     ),
     # コメント・アノテーション・ドメインの管理も DDL を実行し、画面の「スキーマを更新」と実行後の
     # job の追跡を使うので、テーブルの管理と同じくスキーマの参照・更新を含める（#972）。
@@ -187,9 +179,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
             PROFILE_MANAGE_PERMISSION,
             SCHEMA_READ_PERMISSION,
             SCHEMA_REFRESH_PERMISSION,
-            SELECT_AI_ASSETS_READ_PERMISSION,
-            SELECT_AI_ASSETS_REFRESH_PERMISSION,
-            SELECT_AI_ASSETS_MANAGE_PERMISSION,
             LEARNING_MATERIAL_MANAGE_PERMISSION,
         ),
     ),
@@ -212,8 +201,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
             PROFILE_READ_PERMISSION,
             FEEDBACK_WRITE_PERMISSION,
             FEEDBACK_MANAGE_PERMISSION,
-            SELECT_AI_ASSETS_READ_PERMISSION,
-            SELECT_AI_ASSETS_MANAGE_PERMISSION,
         ),
     ),
     _menu_permission(
@@ -228,10 +215,9 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
         "SQL生成評価",
         implies=(PROFILE_READ_PERMISSION, QUERY_GENERATE_PERMISSION),
     ),
-    # 権限管理と DeepSec は NL2SQL 固有。ユーザー管理・ロール管理は3製品共通の画面（#206）。
+    # 権限管理は NL2SQL 固有。ユーザー管理・ロール管理は3製品共通の画面（#206）。
     # セクション名「セキュリティ設定」は 3 製品で同じ（#658）。
     _menu_permission("menu.security_permissions", "セキュリティ設定", "権限管理"),
-    _menu_permission("menu.security_deepsec", "セキュリティ設定", "Deep Data Security"),
     # 並びはサイドナビと同じ
     # （セキュリティ設定 → ユーザーとロール → 運用設定 → システム設定。#658）。
     _menu_permission("menu.security_users", "ユーザーとロール", "ユーザー管理"),
@@ -261,8 +247,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission("menu.settings_chat_attachments", "運用設定", "チャットの添付"),
     # 回答の注意書き（設定は製品ごと。運用設定のチャットの添付の下。#2405・#2449・#2546）。
     _menu_permission("menu.settings_answer_notice", "運用設定", "回答の注意書き"),
-    # データベース設定から分けた運用の操作（#658）。
-    _menu_permission("menu.settings_select_ai_credential", "運用設定", "Select AI Credential"),
     _menu_permission("menu.settings_upload_storage", "システム設定", "アップロード保存先"),
     _menu_permission("menu.settings_model", "システム設定", "モデル"),
     _menu_permission(
@@ -341,26 +325,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
         "フィードバック管理",
         "全利用者のフィードバック一覧、管理者レビュー、学習 index 設定を管理できます。",
         implies=(FEEDBACK_WRITE_PERMISSION, PROFILE_READ_PERMISSION),
-    ),
-    _permission(
-        SELECT_AI_ASSETS_READ_PERMISSION,
-        "参照権限",
-        "Select AI 資産参照",
-        "Oracle Select AI / Agent の profile・資産状態を参照できます。",
-    ),
-    _permission(
-        SELECT_AI_ASSETS_REFRESH_PERMISSION,
-        "管理権限",
-        "Select AI 資産更新",
-        "Oracle Select AI / Agent の資産情報を再取得・反映できます。",
-        implies=(SELECT_AI_ASSETS_READ_PERMISSION,),
-    ),
-    _permission(
-        SELECT_AI_ASSETS_MANAGE_PERMISSION,
-        "管理権限",
-        "Select AI 資産管理",
-        "Oracle Select AI / Agent の低レベル profile・feedback・資産を作成、更新、削除できます。",
-        implies=(SELECT_AI_ASSETS_READ_PERMISSION, SELECT_AI_ASSETS_REFRESH_PERMISSION),
     ),
     _permission(
         SAMPLE_DATA_MANAGE_PERMISSION,
@@ -495,10 +459,7 @@ LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
         "menu.settings_database",
         "menu.settings_system_tables",
     ),
-    "settings.database.manage": (
-        "menu.settings_database",
-        "menu.settings_select_ai_credential",
-    ),
+    "settings.database.manage": ("menu.settings_database",),
     "settings.database.sql_execute": (
         "menu.admin_sql",
         "menu.settings_system_tables",
@@ -508,9 +469,6 @@ LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
     "security.users.manage": ("menu.security_users",),
     "security.roles.view": ("menu.security_roles",),
     "security.roles.manage": ("menu.security_roles", "menu.security_permissions"),
-    "security.deepsec.view": ("menu.security_deepsec",),
-    "security.deepsec.apply": ("menu.security_deepsec",),
-    "security.deepsec.verify": ("menu.security_deepsec",),
 }
 
 for _adapter in (
@@ -667,12 +625,7 @@ _QUERY_GENERATE = _allowed(QUERY_GENERATE_PERMISSION)
 _QUESTION_CLASSIFIER_MODELS = _allowed("menu.question_classifier_models")
 _SAMPLE_DATA_MANAGE = _allowed(SAMPLE_DATA_MANAGE_PERMISSION)
 _SCHEMA_READ = _allowed(SCHEMA_READ_PERMISSION)
-_SECURITY_DEEPSEC = _allowed("menu.security_deepsec")
-_SELECT_AI_ASSETS_MANAGE = _allowed(SELECT_AI_ASSETS_MANAGE_PERMISSION)
-_SELECT_AI_ASSETS_READ = _allowed(SELECT_AI_ASSETS_READ_PERMISSION)
-_SELECT_AI_ASSETS_REFRESH = _allowed(SELECT_AI_ASSETS_REFRESH_PERMISSION)
 _SETTINGS_DATABASE = _allowed("menu.settings_database")
-_SETTINGS_SELECT_AI_CREDENTIAL = _allowed("menu.settings_select_ai_credential")
 _SETTINGS_MODEL = _allowed("menu.settings_model")
 _SQL_EXECUTE = _allowed(SQL_EXECUTE_PERMISSION)
 _SQL_TO_QUESTION = _allowed("menu.sql_to_question")
@@ -701,7 +654,6 @@ _DB_ADMIN_PREVIEW = _allowed(
     "menu.annotation_management",
     "menu.domain_management",
 )
-_SYNTHETIC_DATA = _allowed("menu.sample_data", "menu.data_management")
 _PROFILE_LEARNING_MATERIAL = _allowed(
     PROFILE_MANAGE_PERMISSION, LEARNING_MATERIAL_MANAGE_PERMISSION
 )
@@ -713,11 +665,6 @@ _ONTOLOGY_CAPABILITY_READ = _allowed(
 )
 _ONTOLOGY_READ = _allowed("menu.ontology_build", PROFILE_READ_PERMISSION, QUERY_GENERATE_PERMISSION)
 _ONTOLOGY_WRITE = _allowed("menu.ontology_build", PROFILE_MANAGE_PERMISSION)
-_ORACLE_SYNC = _allowed(PROFILE_MANAGE_PERMISSION, SELECT_AI_ASSETS_REFRESH_PERMISSION)
-_SELECT_AI_FEEDBACK = _allowed(FEEDBACK_MANAGE_PERMISSION, SELECT_AI_ASSETS_MANAGE_PERMISSION)
-_SELECT_AI_CREDENTIAL_READINESS = (
-    _ORACLE_SYNC | _QUERY_GENERATE | _SYNTHETIC_DATA | _EVALUATION | _SELECT_AI_ASSETS_MANAGE
-)
 
 # (METHOD, route template) → 許可する権限（いずれか）。`/api` は付けない。
 # 前方一致では割り当てない。登録のない route は `UNCLASSIFIED_PERMISSION` になり、
@@ -733,22 +680,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # ---- セキュリティ設定: 権限管理・業務プロファイル利用権限 ----
     ("GET", "/security/permissions"): _SECURITY_PERMISSIONS,
     ("GET", "/security/profile-access/profiles"): _SECURITY_PERMISSIONS,
-    # ---- セキュリティ設定: Deep Data Security ----
-    ("PATCH", "/security/deepsec/config"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/config/sync-password"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/data-entitlements"): _SECURITY_DEEPSEC,
-    ("PATCH", "/security/deepsec/data-entitlements/{role_id}"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/data-entitlements/{role_id}/apply"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/data-entitlements/{role_id}/preview"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/plan"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/plan/{version}/reset"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/plan/{version}/steps/{step_no}/apply"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/relations"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/scope-profiles"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/status"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/target-objects"): _SECURITY_DEEPSEC,
-    ("GET", "/security/deepsec/target-objects/{owner}/{object_name}"): _SECURITY_DEEPSEC,
-    ("POST", "/security/deepsec/verify"): _SECURITY_DEEPSEC,
     # ---- システム設定: アップロード保存先 ----
     ("GET", "/settings/upload-storage"): _allowed("menu.settings_upload_storage"),
     ("PATCH", "/settings/upload-storage"): _allowed("menu.settings_upload_storage"),
@@ -773,9 +704,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/settings/chat-attachments"): _allowed("menu.settings_chat_attachments"),
     ("PUT", "/settings/chat-attachments"): _allowed("menu.settings_chat_attachments"),
     ("POST", "/settings/database/password/reveal"): _SETTINGS_DATABASE,
-    # Select AI Credential は運用設定の専用の画面（#658）。
-    ("GET", "/settings/database/select-ai-credential"): _SETTINGS_SELECT_AI_CREDENTIAL,
-    ("POST", "/settings/database/select-ai-credential"): _SETTINGS_SELECT_AI_CREDENTIAL,
     ("POST", "/settings/database/test"): _SETTINGS_DATABASE,
     ("POST", "/settings/database/wallet"): _SETTINGS_DATABASE,
     # ---- DB 構造（schema catalog） ----
@@ -793,8 +721,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # ---- SQL 生成・実行 ----
     ("POST", "/nl2sql/preview"): _QUERY_GENERATE,
     ("POST", "/nl2sql/jobs"): _QUERY_GENERATE,
-    # この環境で使える生成の方式（業務プロファイルの既定の生成方式の選択肢。#1524）。
-    ("GET", "/nl2sql/engines"): _allowed(PROFILE_MANAGE_PERMISSION, QUERY_GENERATE_PERMISSION),
     ("GET", "/nl2sql/chats"): _QUERY_GENERATE,
     # チャットの添付（#2517）。会話の権限（持ち主・system_admin）は API が判定する。
     ("POST", "/chat-attachments"): _QUERY_GENERATE,
@@ -908,14 +834,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/nl2sql/sample-data"): _SAMPLE_DATA_MANAGE,
     ("POST", "/nl2sql/sample-data/delete"): _SAMPLE_DATA_MANAGE,
     ("POST", "/nl2sql/sample-data/import"): _SAMPLE_DATA_MANAGE,
-    ("POST", "/nl2sql/synthetic-data/generate"): _SYNTHETIC_DATA,
-    ("GET", "/nl2sql/synthetic-data/results"): _SYNTHETIC_DATA,
-    ("GET", "/nl2sql/synthetic-data/runs"): _SYNTHETIC_DATA,
-    ("POST", "/nl2sql/synthetic-data/runs"): _SYNTHETIC_DATA,
-    ("GET", "/nl2sql/synthetic-data/runs/{run_id}"): _SYNTHETIC_DATA,
-    ("POST", "/nl2sql/synthetic-data/runs/{run_id}/apply"): _SYNTHETIC_DATA,
-    ("POST", "/nl2sql/synthetic-data/runs/{run_id}/discard"): _SYNTHETIC_DATA,
-    ("GET", "/nl2sql/synthetic-data/runs/{run_id}/results"): _SYNTHETIC_DATA,
     # ---- 業務プロファイル ----
     ("GET", "/nl2sql/profiles"): _PROFILE_MANAGE,
     ("POST", "/nl2sql/profiles"): _PROFILE_MANAGE,
@@ -1015,9 +933,7 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("PATCH", "/nl2sql/profiles/{profile_id}/ontology-view"): _PROFILE_MANAGE,
     ("POST", "/nl2sql/profiles/{profile_id}/ontology-view/materialize"): _PROFILE_MANAGE,
     ("GET", "/nl2sql/profiles/{profile_id}/ontology-view/mermaid"): _PROFILE_MANAGE,
-    ("POST", "/nl2sql/profiles/{profile_id}/oracle-sync-jobs"): _PROFILE_MANAGE,
     ("POST", "/nl2sql/profiles/{profile_id}/restore"): _PROFILE_MANAGE,
-    ("POST", "/nl2sql/profiles/{profile_id}/select-ai-profile"): _PROFILE_MANAGE,
     ("GET", "/nl2sql/profiles/{profile_id}/usage-context"): _allowed(PROFILE_READ_PERMISSION),
     # ---- 学習素材（旧形式。全体の用語集・共通ルール）・デモ学習 ----
     # 用語・同義語は用語集だけ、共通ルールはルールだけを取り込める（#1006）。
@@ -1048,36 +964,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/nl2sql/ontology/revisions/{revision_id}"): _ONTOLOGY_BUILD,
     ("POST", "/nl2sql/ontology/revisions/{revision_id}/drafts"): _ONTOLOGY_BUILD,
     ("POST", "/nl2sql/ontology/revisions/{revision_id}/publish"): _ONTOLOGY_BUILD,
-    # ---- Oracle への同期 ----
-    # Select AI の Credential が作成済みか（#1683 / #1688）。業務プロファイルの保存（Oracle 反映）・
-    # SQL 生成とチャット・合成データ・SQL 生成評価・Select AI の資産の画面が、操作の前に読む。
-    ("GET", "/nl2sql/select-ai/credential-readiness"): _SELECT_AI_CREDENTIAL_READINESS,
-    ("GET", "/nl2sql/oracle-sync-jobs/{job_id}"): _ORACLE_SYNC,
-    ("POST", "/nl2sql/oracle-sync-jobs/{job_id}/retry"): _ORACLE_SYNC,
-    # ---- Select AI / Select AI Agent の資産 ----
-    ("GET", "/nl2sql/select-ai-agent/assets"): _SELECT_AI_ASSETS_READ,
-    ("POST", "/nl2sql/select-ai-agent/assets/cleanup"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai-agent/assets/refresh"): _SELECT_AI_ASSETS_REFRESH,
-    ("GET", "/nl2sql/select-ai-agent/conversations"): _SELECT_AI_ASSETS_READ,
-    ("POST", "/nl2sql/select-ai-agent/conversations/create"): _SELECT_AI_ASSETS_MANAGE,
-    ("GET", "/nl2sql/select-ai-agent/privileges/check"): _SELECT_AI_ASSETS_READ,
-    ("POST", "/nl2sql/select-ai-agent/run-team"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai-agent/run-tool"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai/assets/cleanup"): _SELECT_AI_ASSETS_MANAGE,
-    ("GET", "/nl2sql/select-ai/db-profile-refresh-jobs/{job_id}"): _SELECT_AI_ASSETS_READ,
-    ("GET", "/nl2sql/select-ai/db-profiles"): _SELECT_AI_ASSETS_READ,
-    ("POST", "/nl2sql/select-ai/db-profiles"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai/db-profiles/refresh-jobs"): _SELECT_AI_ASSETS_REFRESH,
-    ("GET", "/nl2sql/select-ai/db-profiles/{profile_name}"): _SELECT_AI_ASSETS_READ,
-    ("PATCH", "/nl2sql/select-ai/db-profiles/{profile_name}"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai/db-profiles/{profile_name}/drop"): _SELECT_AI_ASSETS_MANAGE,
-    ("GET", "/nl2sql/select-ai/feedback"): _SELECT_AI_FEEDBACK,
-    ("POST", "/nl2sql/select-ai/feedback/add"): _SELECT_AI_FEEDBACK,
-    ("POST", "/nl2sql/select-ai/feedback/delete"): _SELECT_AI_FEEDBACK,
-    ("POST", "/nl2sql/select-ai/feedback/vector-index"): _SELECT_AI_FEEDBACK,
-    ("GET", "/nl2sql/select-ai/profiles/export.json"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai/profiles/import-json"): _SELECT_AI_ASSETS_MANAGE,
-    ("POST", "/nl2sql/select-ai/profiles/refresh"): _SELECT_AI_ASSETS_REFRESH,
     # ---- 質問分類モデル ----
     ("GET", "/nl2sql/classifier"): _QUESTION_CLASSIFIER_MODELS,
     ("POST", "/nl2sql/classifier/model/import"): _QUESTION_CLASSIFIER_MODELS,

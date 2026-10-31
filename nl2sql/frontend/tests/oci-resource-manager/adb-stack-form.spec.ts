@@ -70,27 +70,27 @@ test.describe("OCI Resource Manager ADB作成フォーム", () => {
     expect(compartmentBox!.y).toBeLessThan(deploymentModeBox!.y);
 
     const networkSection = page.getByText("ネットワーク・アクセス", { exact: true });
-    // 統合 stack（#217）では NL2SQL の入力グループは NL2SQL を配備するときだけ表示される（既定は配備する）。
-    const deepsecSection = page.getByText("NL2SQL Deep Data Security", { exact: true });
+    // 統合 stack（#217）では製品の入力グループはその製品を配備するときだけ表示される（既定は配備する）。
+    const productSection = page.getByText("RAG", { exact: true });
     const computeSection = page.getByText("Compute", { exact: true });
     await expect(networkSection).toBeVisible();
-    await expect(deepsecSection).toBeVisible();
+    await expect(productSection).toBeVisible();
     await expect(computeSection).toBeVisible();
     await expect(page.getByText(SSH_KEY_TITLE, { exact: true })).toBeVisible();
     await expect(page.getByText(SSH_KEY_AUTO_GENERATE, { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: DOWNLOAD_PRIVATE_KEY })).toBeVisible();
     await expect(page.getByRole("button", { name: DOWNLOAD_PUBLIC_KEY })).toBeVisible();
 
-    const [networkSectionBox, deepsecSectionBox, computeSectionBox] = await Promise.all([
+    const [networkSectionBox, productSectionBox, computeSectionBox] = await Promise.all([
       networkSection.boundingBox(),
-      deepsecSection.boundingBox(),
+      productSection.boundingBox(),
       computeSection.boundingBox(),
     ]);
     expect(networkSectionBox).not.toBeNull();
-    expect(deepsecSectionBox).not.toBeNull();
+    expect(productSectionBox).not.toBeNull();
     expect(computeSectionBox).not.toBeNull();
-    expect(networkSectionBox!.y).toBeLessThan(deepsecSectionBox!.y);
-    expect(deepsecSectionBox!.y).toBeLessThan(computeSectionBox!.y);
+    expect(networkSectionBox!.y).toBeLessThan(productSectionBox!.y);
+    expect(productSectionBox!.y).toBeLessThan(computeSectionBox!.y);
 
     // ADB は3製品で共有するため、既定の workload は OLTP。
     const workload = page.getByLabel("Workload type", { exact: true });

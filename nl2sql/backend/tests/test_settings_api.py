@@ -10,8 +10,6 @@ from zipfile import ZipFile, ZipInfo
 
 import httpx
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from pr_system_settings import database as shared_database
 from pr_system_settings.model import ModelSettingsStore, sanitize_model_test_error
 from pr_system_settings.model_test_input import MODEL_TEST_IMAGE_BYTES
@@ -20,12 +18,10 @@ from pytest import MonkeyPatch
 import app.settings as app_settings
 from app.features.nl2sql.oracle_adapter import (
     OracleNl2SqlAdapter,
-    SelectAiCredentialExistsError,
     oracle_connect_kwargs,
 )
 from app.features.settings import router as settings_router
 from app.main import app
-from app.schemas.settings import SelectAiCredentialCreateRequest
 from app.settings import Settings, get_settings, load_persisted_model_settings
 
 
@@ -57,384 +53,6 @@ class _AsgiTestClient:
 client = _AsgiTestClient()
 
 
-def _write_oci_signing_config(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    *,
-    key_content: bytes | None = None,
-    key_exists: bool = True,
-) -> tuple[Settings, Path, bytes]:
-    settings = get_settings()
-    config_file = tmp_path / "config"
-    key_file = tmp_path / "oci_api_key.pem"
-    if key_content is None:
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        key_content = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-    if key_exists:
-        key_file.write_bytes(key_content)
-        key_file.chmod(0o600)
-    config_file.write_text(
-        "[DEFAULT]\n"
-        "user=ocid1.user.oc1..example\n"
-        "tenancy=ocid1.tenancy.oc1..example\n"
-        f"fingerprint={'aa:' * 15}aa\n"
-        "region=ap-osaka-1\n"
-        f"key_file={key_file}\n",
-        encoding="utf-8",
-    )
-    config_file.chmod(0o600)
-    monkeypatch.setattr(settings, "oci_config_file", str(config_file))
-    monkeypatch.setattr(settings, "oci_config_profile", "DEFAULT")
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    return settings, key_file, key_content
-
-
-class _FakeSelectAiCredentialAdapter:
-    def __init__(self, *, exists: bool = False) -> None:
-        self.exists = exists
-        self.calls: list[dict[str, Any]] = []
-
-    def get_select_ai_credential_status(self, credential_name: str) -> tuple[str, bool]:
-        assert credential_name == "NL2SQL_OCI_CRED"
-        return "ADMIN", self.exists
-
-    def create_select_ai_credential(self, **kwargs: Any) -> str:
-        self.calls.append(kwargs)
-        if self.exists and not kwargs["recreate"]:
-            raise SelectAiCredentialExistsError("exists")
-        operation = "recreated" if self.exists else "created"
-        self.exists = True
-        return operation
-
-
-@pytest.mark.parametrize(
-    ("initial_exists", "recreate", "expected_operation"),
-    [(False, False, "created"), (True, True, "recreated")],
-)
-def test_select_ai_credential_create_and_recreate_persist_safe_settings(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-    initial_exists: bool,
-    recreate: bool,
-    expected_operation: str,
-) -> None:
-    settings, _key_file, key_content = _write_oci_signing_config(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        settings,
-        "nl2sql_select_ai_credential_name",
-        settings.nl2sql_select_ai_credential_name,
-    )
-    monkeypatch.setattr(
-        settings,
-        "nl2sql_select_ai_region",
-        settings.nl2sql_select_ai_region,
-    )
-    env_file = tmp_path / ".env"
-    env_file.write_text("KEEP_ME=1\n", encoding="utf-8")
-    fake_adapter = _FakeSelectAiCredentialAdapter(exists=initial_exists)
-    monkeypatch.setattr(app_settings, "BACKEND_ENV_FILE", env_file)
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: fake_adapter,
-    )
-
-    response = client.post(
-        "/api/settings/database/select-ai-credential",
-        json={
-            "region": "us-chicago-1",
-            "confirmation": "ADMIN_EXECUTE",
-            "recreate": recreate,
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.json()["data"]["operation"] == expected_operation
-    assert response.json()["data"]["exists"] is True
-    assert fake_adapter.calls[0]["credential_name"] == "NL2SQL_OCI_CRED"
-    assert fake_adapter.calls[0]["recreate"] is recreate
-    normalized_private_key = fake_adapter.calls[0]["private_key"]
-    assert "BEGIN PRIVATE KEY" not in normalized_private_key
-    assert "\n" not in normalized_private_key
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "KEEP_ME=1" in env_text
-    assert "NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED" in env_text
-    assert "NL2SQL_SELECT_AI_REGION=us-chicago-1" in env_text
-    assert settings.nl2sql_select_ai_credential_name == "NL2SQL_OCI_CRED"
-    assert settings.nl2sql_select_ai_region == "us-chicago-1"
-    secret_body = b"".join(
-        line for line in key_content.splitlines() if not line.startswith(b"-----")
-    ).decode("ascii")
-    assert secret_body not in response.text
-    assert secret_body not in env_text
-    assert secret_body not in caplog.text
-
-
-def test_select_ai_credential_create_succeeds_when_final_status_read_fails(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """作成後の状態の読み直しが失敗しても、作成済みとして 200 を返す（失敗として見せない）。"""
-    settings, _key_file, _key_content = _write_oci_signing_config(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        settings, "nl2sql_select_ai_credential_name", settings.nl2sql_select_ai_credential_name
-    )
-    monkeypatch.setattr(settings, "nl2sql_select_ai_region", settings.nl2sql_select_ai_region)
-    env_file = tmp_path / ".env"
-    env_file.write_text("", encoding="utf-8")
-
-    class _FlakyStatusAdapter(_FakeSelectAiCredentialAdapter):
-        def get_select_ai_credential_status(self, credential_name: str) -> tuple[str, bool]:
-            if self.calls:
-                raise RuntimeError("ORA-03113: end-of-file on communication channel")
-            return super().get_select_ai_credential_status(credential_name)
-
-    fake_adapter = _FlakyStatusAdapter(exists=False)
-    monkeypatch.setattr(app_settings, "BACKEND_ENV_FILE", env_file)
-    monkeypatch.setattr(settings_router, "OracleNl2SqlAdapter", lambda settings: fake_adapter)
-
-    response = client.post(
-        "/api/settings/database/select-ai-credential",
-        json={"region": "ap-osaka-1", "confirmation": "ADMIN_EXECUTE", "recreate": False},
-    )
-
-    assert response.status_code == 200, response.text
-    data = response.json()["data"]
-    assert data["operation"] == "created"
-    assert data["exists"] is True
-    assert data["schema_name"] == "ADMIN"
-    assert data["region"] == "ap-osaka-1"
-    assert "ORA-03113" not in response.text
-
-
-def test_select_ai_credential_status_failure_returns_problem_contract(
-    monkeypatch: MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    class FailingAdapter(_FakeSelectAiCredentialAdapter):
-        def get_select_ai_credential_status(self, credential_name: str) -> tuple[str, bool]:
-            raise RuntimeError("raw Oracle target=ADMIN.NL2SQL_OCI_CRED ocid1.tenancy.oc1..leaked")
-
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: FailingAdapter(),
-    )
-
-    response = client.get(
-        "/api/settings/database/select-ai-credential",
-        headers={"X-Request-ID": "select-ai-status-request"},
-    )
-
-    assert response.status_code == 503
-    body = response.json()
-    assert body["error_code"] == "SELECT_AI_CREDENTIAL_STATUS_UNAVAILABLE"
-    assert body["problem"]["code"] == "SELECT_AI_CREDENTIAL_STATUS_UNAVAILABLE"
-    assert body["problem"]["request_id"] == "select-ai-status-request"
-    assert body["problem"]["retryable"] is True
-    assert response.headers["X-Request-ID"] == "select-ai-status-request"
-    assert "raw Oracle target" not in response.text
-    assert "ocid1.tenancy.oc1..leaked" not in response.text
-    record = next(r for r in caplog.records if r.message == "select_ai_credential_status_failed")
-    assert record.__dict__["diagnostic_category"] == "unknown"
-    assert record.__dict__["suggested_action"]
-    assert "ocid1.tenancy" not in record.__dict__["summary"]
-
-
-def test_select_ai_credential_existing_requires_explicit_recreate(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _write_oci_signing_config(tmp_path, monkeypatch)
-    fake_adapter = _FakeSelectAiCredentialAdapter(exists=True)
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: fake_adapter,
-    )
-
-    response = client.post(
-        "/api/settings/database/select-ai-credential",
-        headers={"X-Request-ID": "select-ai-exists-request"},
-        json={
-            "region": "ap-osaka-1",
-            "confirmation": "ADMIN_EXECUTE",
-            "recreate": False,
-        },
-    )
-
-    assert response.status_code == 409
-    body = response.json()
-    assert body["error_code"] == "SELECT_AI_CREDENTIAL_EXISTS"
-    assert body["problem"]["code"] == "SELECT_AI_CREDENTIAL_EXISTS"
-    assert body["problem"]["request_id"] == "select-ai-exists-request"
-    assert response.headers["X-Request-ID"] == "select-ai-exists-request"
-    assert "private_key" not in response.text.lower()
-
-
-def test_select_ai_credential_rejects_wrong_confirmation_before_reading_key(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    called = False
-
-    def unexpected_adapter(settings: Settings) -> object:
-        nonlocal called
-        called = True
-        return object()
-
-    monkeypatch.setattr(settings_router, "OracleNl2SqlAdapter", unexpected_adapter)
-    response = client.post(
-        "/api/settings/database/select-ai-credential",
-        headers={"X-Request-ID": "select-ai-confirmation-request"},
-        json={
-            "region": "ap-osaka-1",
-            "confirmation": "WRONG",
-            "recreate": False,
-        },
-    )
-
-    assert response.status_code == 422
-    body = response.json()
-    assert body["error_code"] == "SELECT_AI_CONFIRMATION_REQUIRED"
-    assert body["problem"]["code"] == "SELECT_AI_CONFIRMATION_REQUIRED"
-    assert body["problem"]["request_id"] == "select-ai-confirmation-request"
-    assert body["problem"]["retryable"] is False
-    assert called is False
-
-
-@pytest.mark.parametrize(
-    ("key_content", "key_exists", "expected_field"),
-    [
-        (b"", False, "key_file"),
-        (
-            b"-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-            True,
-            "private_key_encrypted",
-        ),
-        (
-            b"-----BEGIN PRIVATE KEY-----\ndamaged\n-----END PRIVATE KEY-----\n",
-            True,
-            "private_key",
-        ),
-    ],
-)
-def test_select_ai_credential_status_reports_missing_or_invalid_key_without_secret(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-    key_content: bytes,
-    key_exists: bool,
-    expected_field: str,
-) -> None:
-    _write_oci_signing_config(
-        tmp_path,
-        monkeypatch,
-        key_content=key_content,
-        key_exists=key_exists,
-    )
-    fake_adapter = _FakeSelectAiCredentialAdapter(exists=False)
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: fake_adapter,
-    )
-
-    response = client.get("/api/settings/database/select-ai-credential")
-
-    assert response.status_code == 200
-    data = response.json()["data"]
-    assert data["credential_name"] == "NL2SQL_OCI_CRED"
-    assert data["schema_name"] == "ADMIN"
-    assert data["exists"] is False
-    assert data["oci_auth_ready"] is False
-    assert expected_field in data["missing_fields"]
-    if key_content:
-        assert key_content.decode("ascii", errors="ignore") not in response.text
-
-    create_response = client.post(
-        "/api/settings/database/select-ai-credential",
-        headers={"X-Request-ID": f"select-ai-key-{expected_field}"},
-        json={
-            "region": "ap-osaka-1",
-            "confirmation": "ADMIN_EXECUTE",
-            "recreate": False,
-        },
-    )
-    assert create_response.status_code == 422
-    body = create_response.json()
-    assert body["error_code"] == "SELECT_AI_PRIVATE_KEY_INVALID"
-    assert body["problem"]["code"] == "SELECT_AI_PRIVATE_KEY_INVALID"
-    assert body["problem"]["request_id"] == f"select-ai-key-{expected_field}"
-    assert fake_adapter.calls == []
-
-
-def test_select_ai_credential_rejects_private_key_with_broad_permissions(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _settings, key_file, _key_content = _write_oci_signing_config(tmp_path, monkeypatch)
-    key_file.chmod(0o644)
-    fake_adapter = _FakeSelectAiCredentialAdapter()
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: fake_adapter,
-    )
-
-    response = client.get("/api/settings/database/select-ai-credential")
-
-    assert response.status_code == 200
-    assert response.json()["data"]["missing_fields"] == ["key_file_permissions"]
-    assert fake_adapter.calls == []
-
-
-def test_select_ai_credential_create_reports_incomplete_oci_config(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oci_config_file", str(tmp_path / "missing"))
-    fake_adapter = _FakeSelectAiCredentialAdapter(exists=False)
-    monkeypatch.setattr(
-        settings_router,
-        "OracleNl2SqlAdapter",
-        lambda settings: fake_adapter,
-    )
-    response = client.post(
-        "/api/settings/database/select-ai-credential",
-        headers={"X-Request-ID": "select-ai-oci-config-request"},
-        json={
-            "region": "ap-osaka-1",
-            "confirmation": "ADMIN_EXECUTE",
-            "recreate": False,
-        },
-    )
-
-    assert response.status_code == 422
-    body = response.json()
-    assert body["error_code"] == "SELECT_AI_OCI_CONFIG_INCOMPLETE"
-    assert body["problem"]["code"] == "SELECT_AI_OCI_CONFIG_INCOMPLETE"
-    assert body["problem"]["request_id"] == "select-ai-oci-config-request"
-
-
-def test_select_ai_credential_routes_keep_sync_oracle_io_off_asgi_event_loop() -> None:
-    assert asyncio.iscoroutinefunction(settings_router.get_select_ai_credential) is False
-    assert asyncio.iscoroutinefunction(settings_router.create_select_ai_credential) is False
-
-
-def test_select_ai_credential_defaults_to_chicago_when_unconfigured(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "nl2sql_select_ai_region", "")
-    monkeypatch.setattr(settings, "oci_region", "")
-
-    assert settings_router._select_ai_region(settings) == "us-chicago-1"
-    assert SelectAiCredentialCreateRequest().region == "us-chicago-1"
 
 
 def test_upload_database_wallet_extracts_to_thick_resolved_wallet_dir(
@@ -447,7 +65,6 @@ def test_upload_database_wallet_extracts_to_thick_resolved_wallet_dir(
     monkeypatch.setattr(settings, "oracle_connection_security", "wallet_mtls")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", str(client_lib_dir))
     monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     wallet_zip = _wallet_zip_bytes()
     resp = client.post(
@@ -679,7 +296,6 @@ def test_update_database_settings_preserves_client_lib_dir_in_env(
     monkeypatch.setattr(settings, "oracle_wallet_dir", "")
     monkeypatch.setattr(settings, "oracle_password", "old-password")
     monkeypatch.setattr(settings, "oracle_wallet_password", "")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     resp = client.patch(
         "/api/settings/database",
@@ -779,45 +395,6 @@ def test_database_connection_test_rejects_dsn_missing_from_wallet(
     assert data["readiness"] == "invalid"
     assert "tnsnames.ora" in data["message"]
     assert any("tnsnames.ora" in tip for tip in data["troubleshooting"])
-
-
-def test_database_connection_test_rejects_deepsec_thick_driver_mode(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("mydb_high = (...)\n", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text(
-        "WALLET_LOCATION=(SOURCE=(METHOD=file))\n",
-        encoding="utf-8",
-    )
-    (wallet_dir / "cwallet.sso").write_text("dummy", encoding="utf-8")
-    monkeypatch.setattr(settings, "oracle_driver_mode", "thick")
-    monkeypatch.setattr(settings, "oracle_client_lib_dir", str(tmp_path / "instantclient"))
-    monkeypatch.setattr(settings, "oracle_wallet_dir", str(wallet_dir))
-    monkeypatch.setattr(settings, "oracle_user", "ADMIN")
-    monkeypatch.setattr(settings, "oracle_password", "database-secret")
-    monkeypatch.setattr(settings, "oracle_dsn", "mydb_high")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", True)
-
-    async def fail_if_called(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("DeepSec+thick must not reach python-oracledb")
-
-    monkeypatch.setattr(settings_router, "test_oracle_connection", fail_if_called)
-
-    resp = client.post(
-        "/api/settings/database/test",
-        json={"user": "ADMIN", "dsn": "mydb_high", "wallet_dir": str(wallet_dir)},
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "failed"
-    assert data["readiness"] == "invalid_configuration"
-    assert "Thin mode" in data["message"]
-    assert any("PLATFORM_ORACLE_DRIVER_MODE=thin" in tip for tip in data["troubleshooting"])
 
 
 def test_database_connection_test_rejects_walletless_tls_wallet_alias(
@@ -1115,21 +692,15 @@ def test_settings_read_platform_env_then_product_env(tmp_path: Path) -> None:
     )
     backend_env = tmp_path / "backend.env"
     backend_env.write_text(
-        "NL2SQL_LOG_LEVEL=WARNING\n"
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER=PRODUCT_DATA_USER\n"
-        "NL2SQL_SELECT_AI_REGION=ap-osaka-1\n"
-        "NL2SQL_OCI_CONFIG_PROFILE=PRODUCT\n",
+        "NL2SQL_LOG_LEVEL=WARNING\nNL2SQL_DEFAULT_ROW_LIMIT=250\n",
         encoding="utf-8",
     )
 
     settings = Settings(_env_file=(platform_env, backend_env))
 
     assert settings.oracle_dsn == "shared_high"
-    # Select AI だけが読む OCI config の profile は製品の設定（#11）。
-    assert settings.oci_config_profile == "PRODUCT"
     assert settings.log_level == "WARNING"
-    assert settings.oracle_deepsec_data_user == "PRODUCT_DATA_USER"
-    assert settings.nl2sql_select_ai_region == "ap-osaka-1"
+    assert settings.nl2sql_default_row_limit == 250
 
 
 def test_settings_ignore_legacy_env_names(
@@ -1140,7 +711,7 @@ def test_settings_ignore_legacy_env_names(
     platform_env = tmp_path / "platform.env"
     platform_env.write_text("OCI_REGION=legacy-region\n", encoding="utf-8")
     backend_env = tmp_path / "backend.env"
-    backend_env.write_text("LOG_LEVEL=WARN\nORACLE_DEEPSEC_DATA_USER=LEGACY\n", encoding="utf-8")
+    backend_env.write_text("LOG_LEVEL=WARN\nDEFAULT_ROW_LIMIT=999\n", encoding="utf-8")
     monkeypatch.delenv("PLATFORM_ORACLE_DSN", raising=False)
     monkeypatch.setenv("ORACLE_DSN", "legacy_high")
     monkeypatch.setenv("OCI_COMPARTMENT_ID", "legacy-compartment")
@@ -1151,7 +722,7 @@ def test_settings_ignore_legacy_env_names(
     assert settings.oci_compartment_id == ""
     assert settings.oci_region == ""
     assert settings.log_level == "INFO"
-    assert settings.oracle_deepsec_data_user == "DEEPSEC_DATA_USER"
+    assert settings.nl2sql_default_row_limit == 100
     # 属性名での生成（テストや内部の Settings(oracle_dsn=...)）は引き続き使える。
     assert Settings(_env_file=None, oracle_dsn="named_high").oracle_dsn == "named_high"
 

@@ -5,22 +5,11 @@ from typing import Any
 
 import pytest
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
-from pr_backend_core.observability.tracing import operation_trace
 from pr_system_settings.chat_attachments import IMAGE_READING_PROMPT
-from test_health import _FakeOracleDb, _FakeRuntimeOracleAdapter
 
 from app.features.nl2sql import chat_attachments
 from app.features.settings import router as settings_router
 from app.settings import Settings
-
-
-def test_select_ai_generate_records_fixed_purpose() -> None:
-    adapter = _FakeRuntimeOracleAdapter(_FakeOracleDb())
-    with operation_trace("nl2sql.execute", operation_id="purpose-select") as summary:
-        result = adapter.generate_select_ai_sql(profile_name="PROFILE_A", question="合成の質問")
-    assert result.startswith("SELECT")
-    [call] = [span for span in summary.spans if span.operation_name == "oracle.select_ai"]
-    assert call.attributes["pr.gen_ai.purpose"] == "sql.generate"
 
 
 @pytest.mark.parametrize("target", ["enterprise_text", "enterprise_vision", "embedding", "rerank"])

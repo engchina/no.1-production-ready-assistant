@@ -120,7 +120,7 @@ export interface DatabaseSettingsPageProps {
   loadingFallback?: ReactNode;
   /** 離脱確認ダイアログの文言の上書き。 */
   draftGuardMessages?: Partial<DraftGuardMessages>;
-  /** 接続設定の下に置く製品固有のカード（NL2SQL の Select AI、RAG のシステムテーブル）。 */
+  /** 接続設定の下に置く製品固有のカード（RAG のシステムテーブルなど）。 */
   children?: ReactNode;
 }
 

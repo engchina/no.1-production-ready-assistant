@@ -44,7 +44,7 @@ const HISTORY = [
   {
     id: "history-1",
     question: "今月の売上を確認",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     generated_sql: "SELECT SUM(AMOUNT) FROM APP.SALES",
     executable_sql: "SELECT SUM(AMOUNT) FROM APP.SALES",
     created_at: "2026-06-22T10:00:00.000Z",
@@ -61,7 +61,7 @@ const HISTORY = [
   {
     id: "history-2",
     question: "顧客を削除",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     generated_sql: "DELETE FROM APP.CUSTOMERS",
     executable_sql: "",
     created_at: "2026-06-21T10:00:00.000Z",
@@ -169,7 +169,6 @@ const SCREENS: Screen[] = [
   { path: "/question-classifier-models" },
   { path: "/evaluation" },
   { path: "/settings/security/permissions" },
-  { path: "/settings/security/deepsec" },
   { path: "/settings/security/users" },
   { path: "/settings/security/roles" },
   { path: "/settings/security/api-keys" },
@@ -177,7 +176,6 @@ const SCREENS: Screen[] = [
   // 運用設定のシステムテーブルの下（#2449・#2517。3 製品の共通のサイドナビの順）。
   { path: "/settings/chat-attachments" },
   { path: "/settings/answer-notice" },
-  { path: "/settings/select-ai-credential" },
   { path: "/settings/upload-storage" },
   { path: "/settings/model" },
   { path: "/settings/database" },

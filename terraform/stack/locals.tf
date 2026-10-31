@@ -93,18 +93,12 @@ NL2SQL_CORS_ORIGINS=["http://localhost","http://127.0.0.1"]
 NL2SQL_ENABLE_METRICS=true
 
 
-NL2SQL_ORACLE_DEEPSEC_ENABLED=${var.nl2sql_oracle_deepsec_enabled}
-NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER
-NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=${var.nl2sql_oracle_deepsec_enabled ? var.nl2sql_oracle_deepsec_data_user_password : ""}
-
 NL2SQL_RUNTIME_MODE=oracle
 NL2SQL_PERSISTENCE_MODE=oracle
 NL2SQL_SCHEMA_REFRESH_WORKER_ENABLED=true
 NL2SQL_SCHEMA_REFRESH_WORKER_MODE=external
 NL2SQL_QUALITY_EVALUATION_WORKER_MODE=external
 NL2SQL_ONTOLOGY_WORKER_MODE=external
-NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED
-NL2SQL_SELECT_AI_REGION=us-chicago-1
 EOT
 
   # ---------------------------------------------------------------- Agent

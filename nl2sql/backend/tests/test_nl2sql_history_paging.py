@@ -42,7 +42,7 @@ def _history(index: int, actor: str) -> HistoryItem:
     return HistoryItem(
         id=f"hist-{index:03d}",
         question=f"質問 {index}",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql=f"SELECT {index} FROM DUAL",
         created_at=f"2026-09-02T00:00:{index:02d}+00:00",
         profile_id="default",
@@ -84,7 +84,6 @@ def _principal(*, admin: bool, user_uuid: str = "user-1") -> Principal:
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={"menu.history"},
-        data_entitlements=[],
         allowed_profile_ids={"default"},
         session_id="session-1",
         csrf_token_hash="csrf",
@@ -509,7 +508,6 @@ def test_history_route_rejects_invalid_sort(sort: str, direction: str) -> None:
         "/api/nl2sql/quality-evaluations",
         "/api/nl2sql/quality-evaluations/missing-job/results",
         "/api/nl2sql/chats",
-        "/api/nl2sql/select-ai/feedback?profile_name=DEFAULT",
     ],
     ids=[
         "history",
@@ -518,7 +516,6 @@ def test_history_route_rejects_invalid_sort(sort: str, direction: str) -> None:
         "quality-jobs",
         "quality-results",
         "chats",
-        "select-ai-feedback",
     ],
 )
 @pytest.mark.parametrize(
@@ -534,20 +531,6 @@ async def test_offset_list_routes_reject_out_of_range_paging(path: str, query: s
         separator = "&" if "?" in path else "?"
         response = await client.get(f"{path}{separator}{query}")
     assert response.status_code == 422, response.text
-
-
-async def test_select_ai_feedback_route_returns_the_offset_page_with_default_limit() -> None:
-    """Select AI feedback も共通の `Page` と `unfiltered_total`。既定の limit は 25（#1891）。"""
-    from app.main import app
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/api/nl2sql/select-ai/feedback?profile_name=DEFAULT")
-    assert response.status_code == 200, response.text
-    data = response.json()["data"]
-    assert {"items", "total", "limit", "offset", "has_next", "unfiltered_total"} <= set(data)
-    assert (data["limit"], data["offset"]) == (25, 0)
 
 
 async def test_history_route_returns_the_offset_page_shape() -> None:

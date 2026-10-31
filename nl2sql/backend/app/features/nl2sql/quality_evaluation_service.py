@@ -59,8 +59,6 @@ from .structured_outputs import response_format
 logger = logging.getLogger(__name__)
 
 _ENGINE_LABELS = {
-    Nl2SqlEngine.SELECT_AI: "Select AI",
-    Nl2SqlEngine.SELECT_AI_AGENT: "Select AI Agent",
     Nl2SqlEngine.ENTERPRISE_AI_DIRECT: "Enterprise AI Direct",
 }
 _ALLOWED_ENGINES = frozenset(_ENGINE_LABELS)
@@ -111,7 +109,7 @@ def _quality_evaluation_limits() -> QualityEvaluationLimits:
 
 
 def _select_only_label(analysis: QualityEvaluationDeterministicAnalysis) -> str:
-    """Excel の「SELECTのみ」の欄。Select AI / Agent で確かめなかったときは「省略」（#1523）。"""
+    """Excel の「SELECTのみ」の欄。確かめなかったときは「省略」（#1523）。"""
 
     if not analysis.safety_checked:
         return "省略"
@@ -1427,8 +1425,6 @@ class QualityEvaluationService:
                     allowed,
                     self._nl2sql.get_profile(job.profile_id).default_row_limit,
                     use_llm=False,
-                    # 生成の方式ごとの安全確認（Select AI / Agent は安全確認をしない。#1523）。
-                    engine=engine,
                 )
                 analysis = QualityEvaluationDeterministicAnalysis(
                     is_safe=local.safety.is_safe,

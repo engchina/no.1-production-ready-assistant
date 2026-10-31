@@ -144,10 +144,8 @@ _CALL_FAILURE_KINDS_BY_CODE: dict[str, EnterpriseAiCallFailureKind] = {
 
 # アプリが直接呼ぶ OCI Enterprise AI のモデルの決め方（#1684）。失敗の案内に添える。
 ENTERPRISE_AI_DIRECT_MODEL_NOTE = (
-    "NL2SQL がアプリから呼ぶ OCI Enterprise AI（生成方法の Enterprise AI Direct・"
-    "回答前の確認など）は、システム設定 › モデル の既定のテキストモデルと、"
-    "そのモデルを登録した接続を使います。業務プロファイルの Region・LLM Model は "
-    "Select AI・Select AI Agent 用で、この呼び出しには使いません。"
+    "NL2SQL がアプリから呼ぶ OCI Enterprise AI（SQL の生成・回答前の確認など）は、"
+    "システム設定 › モデル の既定のテキストモデルと、そのモデルを登録した接続を使います。"
 )
 
 
@@ -244,8 +242,7 @@ class OciEnterpriseAiDirectClient:
         """
         if not self.is_configured():
             raise EnterpriseAiDirectError("OCI Enterprise AI Direct が未設定です。")
-        # 既定のテキストモデル（システム設定の「モデル」）とその接続で呼ぶ。業務プロファイルの
-        # LLM Model・Region は Select AI の AI profile 用で、ここでは使わない（#1684）。
+        # 既定のテキストモデル（システム設定の「モデル」）とその接続で呼ぶ（#1684）。
         model_id = self.model_id()
         # 出力の上限はモデルの出力の上限と、入力の上限から prompt の見積もりを引いた残りの小さい方
         # （#1719）。機能が渡す `max_output_tokens` は要る量で、既定（32768）を下回らない

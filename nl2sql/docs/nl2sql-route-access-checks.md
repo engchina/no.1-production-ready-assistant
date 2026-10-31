@@ -21,10 +21,6 @@ NL2SQL の運用系 API は、ルート認可だけでなく profile 単位の�
 | Classifier | `GET /api/nl2sql/classifier/training-data/export.xlsx` | 許可 profile の training example だけを出力する。 |
 | Classifier | `POST /api/nl2sql/classifier/train` | 許可 profile の training example だけで学習する。 |
 | Classifier | `GET /api/nl2sql/classifier/training-candidates` | 許可 profile の feedback history だけから候補を導出する。 |
-| Select AI assets | `POST /api/nl2sql/select-ai/profiles/refresh` | `profile_id` 省略時も default profile として確認する。 |
-| Select AI assets | `POST /api/nl2sql/select-ai-agent/assets/refresh` | `profile_id` 省略時も default profile として確認する。 |
-| Select AI assets | `POST /api/nl2sql/select-ai/assets/cleanup` | `profile_id` 省略時も default profile として確認する。 |
-| Select AI assets | `POST /api/nl2sql/select-ai-agent/assets/cleanup` | `profile_id` 省略時も default profile として確認する。 |
 | Quality evaluation | `GET /api/nl2sql/quality-evaluations` | 許可 profile の job だけを返し、許可後にのみ in-process worker を wake する。 |
 | Quality evaluation | `GET /api/nl2sql/quality-evaluations/{job_id}*` | job record を wake せず peek して profile 確認後、必要な read のみ wake する。 |
 | Quality evaluation | `POST/DELETE /api/nl2sql/quality-evaluations/{job_id}*` | profile 確認に加え、profile 管理者以外は `actor_user_uuid` の所有者一致を要求する。 |

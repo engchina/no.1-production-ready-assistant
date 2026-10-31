@@ -248,16 +248,14 @@ function historyUsageLabels(): RunUsageLabels {
   };
 }
 
-/** 利用量を計測できない呼び出しの出どころの表示名（DB の中でモデルを呼ぶ Select AI。知らない値は ID のまま）。 */
+/** 利用量を計測できない呼び出しの出どころの表示名（知らない値は ID のまま）。 */
 function historyUsageSourceLabel(source: string): string {
-  if (source === "select_ai") return t("history.usage.source.selectAi");
-  if (source === "select_ai_agent") return t("history.usage.source.selectAiAgent");
   return source;
 }
 
 /**
  * 詳細の概要の「モデル」「token」「モデルの呼び出し」と「未計測の呼び出し」（RAG と同じ形。#3543）。記録の無い行は
- * 「未計測」（0 にしない）、Select AI だけの実行は数を作らず「未計測」、Enterprise AI の呼び出しと混ざれば「一部計測」。
+ * 「未計測」（0 にしない）、計測できない呼び出しと混ざれば「一部計測」。
  */
 export function historyUsageView(item: Pick<HistoryItem, "usage">): RunUsageView {
   return runUsageView(item.usage, { labels: historyUsageLabels(), sourceLabel: historyUsageSourceLabel });

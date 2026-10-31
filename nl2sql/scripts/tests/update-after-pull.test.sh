@@ -29,7 +29,6 @@ assert_degraded() {
   local command_log="$1" service
   for service in \
     production-ready-nl2sql-schema-refresh-worker.service \
-    production-ready-nl2sql-synthetic-worker.service \
     production-ready-nl2sql-quality-evaluation-worker.service \
     production-ready-nl2sql-ontology-worker.service; do
     grep -Fq "systemctl|disable --now ${service}" "${command_log}" || \
@@ -527,7 +526,7 @@ success_log="${success_case}/commands.log"
 grep -Fq 'new frontend' "${success_case}/no.1-production-ready-suite/nl2sql/frontend/dist/index.html"
 grep -Fq 'systemctl|enable production-ready-nl2sql-backend.service' "${success_log}"
 grep -Fq 'systemctl|restart production-ready-nl2sql-backend.service' "${success_log}"
-grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' "${success_log}"
+grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' "${success_log}"
 grep -Fq 'curl|-fsS --max-time 5 http://backend.test/api/health' "${success_log}"
 grep -Fq 'curl|-fsS --max-time 5 http://public.test/api/health' "${success_log}"
 assert_before '^uv\|.*sync --locked --no-dev' '^uv\|.*compileall -q app' "${success_log}"
@@ -569,7 +568,7 @@ assert_old_frontend "${public_health_case}"
 if grep -Fq 'systemctl|disable --now' "${public_health_case}/commands.log"; then
   fail_test "public health failure disabled healthy workers"
 fi
-grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' \
+grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' \
   "${public_health_case}/commands.log"
 
 wallet_override_case="$(make_case wallet-override)"
@@ -598,9 +597,6 @@ if grep -Eq '(^|[[:space:]])git([[:space:]]|$)' "${UPDATE_SCRIPT}"; then
 fi
 if grep -Eq 'app\.cli\.nl2sql_system_schema[[:space:]]+--recreate' "${UPDATE_SCRIPT}"; then
   fail_test "update script invokes destructive schema recreation"
-fi
-if grep -Ei 'app\.cli\..*deepsec|sql[^[:space:]]*[[:space:]].*foundation' "${UPDATE_SCRIPT}"; then
-  fail_test "update script invokes a DeepSec foundation command"
 fi
 
 echo "unified update and deployed OCI repair behavior verified."

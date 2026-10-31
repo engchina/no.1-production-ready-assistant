@@ -68,7 +68,7 @@ ONTOLOGY_CLARIFICATION_TURNS = Histogram(
     buckets=(0, 1, 2, 3, 4, 5, 8, 12),
 )
 
-_JOB_TYPES = frozenset({"build", "publish", "profile_sync"})
+_JOB_TYPES = frozenset({"build", "publish"})
 _JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 _SOURCE_FORMATS = frozenset({"pdf", "docx", "txt", "md", "csv", "xlsx", "xls", "xlsm"})
 _SOURCE_STATUSES = frozenset({"extracted", "failed", "duplicate"})

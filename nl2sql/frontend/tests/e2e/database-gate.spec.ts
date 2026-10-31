@@ -25,7 +25,6 @@ test.beforeEach(async ({ page }) => {
       role_display_names: ["システム管理者"],
       is_system_admin: true,
       permissions: [],
-      data_entitlements: [],
       debug_mode: false,
       password_change_allowed: true,
     })
@@ -94,19 +93,6 @@ async function mockProfilePage(page: Page, persistenceMode: "memory" | "oracle" 
       default_row_limit: 100,
       safety_policy: "select_only",
       few_shot_examples: [],
-      select_ai_config: {
-        profile_name: "NL2SQL_PERSISTED_PROFILE",
-        region: "ap-osaka-1",
-        model: "",
-        embedding_model: "cohere.embed-v4.0",
-        max_tokens: 32000,
-        enforce_object_list: true,
-        comments: true,
-        annotations: false,
-        constraints: false,
-        role: "",
-        additional_instructions: "",
-      },
       archived: false,
     },
   ];
@@ -154,9 +140,6 @@ async function mockProfilePage(page: Page, persistenceMode: "memory" | "oracle" 
   );
   await page.route("**/api/nl2sql/db-admin/views", (route) =>
     fulfill(route, { runtime: "deterministic", items: [], warnings: [] })
-  );
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfill(route, { runtime: "deterministic", profiles: [], warnings: [] })
   );
   await page.route("**/api/nl2sql/profiles", (route) => fulfill(route, profiles));
   await page.route("**/api/nl2sql/profiles/search?*", (route) =>
@@ -518,11 +501,11 @@ test("接続設定の不備は診断コードと補足を示し、ok の診断�
     )
   ).toBeVisible();
 
-  // DeepSec の設定の不備は NL2SQL の文言で補足する。
+  // 製品で使えない接続設定の組み合わせは、3 製品共通の文言で補足する。
   check = "invalid_configuration";
   await page.getByRole("button", { name: "再試行" }).click();
   await expect(page.getByText("診断コード: invalid_configuration", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Oracle Deep Data Security は python-oracledb の Thin mode でだけ使えます/)).toBeVisible();
+  await expect(page.getByText(/接続設定の組み合わせがこの製品で使えません/)).toBeVisible();
 
   // 設定は揃っていて接続できないだけのとき（check=ok）は、診断コードも ORA コードも出さない。
   check = "ok";
@@ -610,7 +593,6 @@ test("Profile 保存が 503 のとき成功通知を出さず失敗を通知す�
   // 名称は識別子規則(英字開始・英数字/アンダースコア)、カテゴリは必須のクライアント検証あり。
   await page.getByLabel("名称").fill("SAVE_FAIL_PROFILE");
   await page.getByLabel("カテゴリ").fill("保存失敗検証");
-  await page.getByLabel("実行確認語").fill("ADMIN_EXECUTE");
   await page.getByRole("button", { name: "保存", exact: true }).click();
 
   await expect(
@@ -636,7 +618,6 @@ test("設定を開けない利用者には導線を出さず、システム管�
       role_codes: ["NL2SQL_USER"],
       is_system_admin: false,
       permissions: ["menu.profiles"],
-      data_entitlements: [],
       debug_mode: false,
       password_change_allowed: true,
     })

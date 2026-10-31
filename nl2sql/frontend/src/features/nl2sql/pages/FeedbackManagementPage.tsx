@@ -1,7 +1,6 @@
 import {
   type ChangeEvent,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -9,7 +8,6 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import {
-  Code2,
   Copy,
   DatabaseZap,
   Link2,
@@ -27,9 +25,7 @@ import {
   EmptyState,
   FormSkeleton,
   Skeleton,
-  TableSkeleton,
   toast,
-  type DataTableColumn,
   StatusBadge,
   PageHeader,
   PageBody,
@@ -37,9 +33,6 @@ import {
   SelectField,
   ProcessingIndicator,
   TimedLoadingState,
-  ObjectActionBar,
-  type EntityAction,
-  FixedSplitPane,
   ListDetailLayout,
   ListDetailPager,
   adjacentListItems,
@@ -47,7 +40,6 @@ import {
   FormGrid,
   DataTable,
   INFORMATION_TABLE_ROW_CLASS,
-  INFORMATION_TABLE_VISIBLE_ROWS,
   lastPageOffset,
   ListToolbar,
   FilterSelect,
@@ -62,7 +54,7 @@ import {
   TextField,
 } from "@production-ready/ui";
 
-import { FIXED_SPLIT_STORAGE_PREFIX, LIST_DETAIL_STORAGE_PREFIX } from "@/lib/ui-store";
+import { LIST_DETAIL_STORAGE_PREFIX } from "@/lib/ui-store";
 
 import { DbManagementSearchField } from "@/components/DbObjectFilterFields";
 import { PageNotice } from "@/components/page-notice";
@@ -83,13 +75,10 @@ import {
   DbObjectPanelHeader,
   type DbObjectTab,
 } from "../components/DbObjectManagementShared";
-import { DbObjectName } from "../components/DbObjectName";
-import type { DbObjectNameSource } from "../dbObjectIdentity";
 import { HistoryRowListSkeleton } from "../components/HistoryRowList";
 import { QuestionText } from "../components/QuestionText";
 import { engineLabel } from "../labels";
 import { profileDisplayLabel, profileRecordDisplayLabel } from "../profileDisplay";
-import { BUSINESS_SELECT_AI_DB_PROFILES_URL } from "../selectAiProfileUrls";
 import { feedbackSearchConfigOrDefault } from "../feedbackSearchConfig";
 import {
   adminFeedbackReviewBadgeLabel,
@@ -105,15 +94,10 @@ import type {
   FeedbackSearchConfigData,
   ProfileSummary,
   ProfileSummaryPage,
-  SelectAiDbProfile,
-  SelectAiDbProfilesData,
-  SelectAiFeedbackEntriesData,
-  SelectAiFeedbackEntry,
-  SelectAiFeedbackMutationData,
 } from "../types";
 import { formatElapsedDuration as formatElapsed } from "@/lib/operationTiming";
 
-type FeedbackManagementView = "entries" | "vectorIndex" | "appFeedback" | "similarityIndex";
+type FeedbackManagementView = "appFeedback" | "similarityIndex";
 type AppFeedbackFilter = "all" | FeedbackRating | "unrated";
 type AppFeedbackFilters = {
   rating?: AppFeedbackFilter;
@@ -122,19 +106,15 @@ type AppFeedbackFilters = {
 };
 /** 取り直しの契機。reset: 絞り込みの変更（先頭のページへ）、page: ページ送り、current: 同じページを取り直す。 */
 type AppFeedbackRefreshDirection = "reset" | "page" | "current";
-/** 一覧（フィードバック履歴・Select AI feedback）の取得の位置（offset 型のページング。#1891）。 */
+/** フィードバック履歴の取得の位置（offset 型のページング。#1891）。 */
 type ListPosition = { offset: number; limit: number };
 /**
  * 操作の結果（失敗・未実行・警告）を出す位置。起点の操作の直下に出し、ページ先頭へ送らない
  * （messaging.md §10.1、#724）。ページ先頭の PageNotice は画面全体の読み込みの失敗だけにする。
- * entries = Select AI feedback の「再読み込み」の下、entryDetail = 選んだ SQL の操作の下、
- * vectorIndex / appFeedback / similarityIndex = 各タブの操作の行（FormActionBar の status）、
+ * appFeedback / similarityIndex = 各タブの操作の行（FormActionBar の status）、
  * appFeedbackList = 履歴の絞り込みの下。
  */
 type ActionResultOrigin =
-  | "entries"
-  | "entryDetail"
-  | "vectorIndex"
   | "appFeedbackList"
   | "appFeedback"
   | "similarityIndex";
@@ -143,34 +123,18 @@ type ActionResult = { origin: ActionResultOrigin; tone: FeedbackTone; message: s
 const DEFAULT_FEEDBACK_MANAGEMENT_VIEW: FeedbackManagementView = "appFeedback";
 /** フィードバック履歴の一覧 + 詳細（ListDetailLayout）の識別子（幅の保存 key と data-testid。#2283）。 */
 const APP_FEEDBACK_LIST_DETAIL_ID = "feedback-management";
-/** Select AI feedback の既定の表示件数（一覧の既定は 25 件。選択肢は 10 / 25 / 50 / 100。#1891）。 */
-const SELECT_AI_FEEDBACK_PAGE_SIZE = 25;
 
 const FEEDBACK_MANAGEMENT_TABS: Array<DbObjectTab<FeedbackManagementView>> = [
   { id: "appFeedback", label: t("feedbackManagement.tabs.appFeedback"), icon: MessageSquareText },
-  { id: "entries", label: t("feedbackManagement.tabs.entries"), icon: MessageSquareText },
-  { id: "vectorIndex", label: t("feedbackManagement.tabs.vectorIndex"), icon: DatabaseZap },
   { id: "similarityIndex", label: t("feedbackManagement.tabs.similarityIndex"), icon: DatabaseZap },
 ];
-
-function profileOptionLabel(profile: SelectAiDbProfile) {
-  return profile.owner ? `${profile.name} (${profile.owner})` : profile.name;
-}
-
-function defaultSelectAiResponse(item: FeedbackRecord) {
-  return item.executable_sql || item.generated_sql;
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function roundThreshold(value: number) {
-  return Number(clamp(value, 0.1, 0.95).toFixed(2));
-}
-
 function resolveFeedbackManagementView(tab: string | null): FeedbackManagementView {
-  if (tab === "appFeedback" || tab === "entries" || tab === "vectorIndex" || tab === "similarityIndex") {
+  if (tab === "appFeedback" || tab === "similarityIndex") {
     return tab;
   }
   return DEFAULT_FEEDBACK_MANAGEMENT_VIEW;
@@ -181,12 +145,6 @@ export function FeedbackManagementPage() {
   const [searchParams] = useSearchParams();
   const requestedView = resolveFeedbackManagementView(searchParams.get("tab"));
   const [activeView, setActiveView] = useState<FeedbackManagementView>(requestedView);
-  const [dbProfiles, setDbProfiles] = useState<SelectAiDbProfilesData | null>(null);
-  const [profileName, setProfileName] = useState("");
-  const [feedback, setFeedback] = useState<SelectAiFeedbackEntriesData | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [similarityThreshold, setSimilarityThreshold] = useState(0.9);
-  const [matchLimit, setMatchLimit] = useState(3);
   const [history, setHistory] = useState<FeedbackRecord[]>([]);
   const [appProfiles, setAppProfiles] = useState<ProfileSummary[]>([]);
   // フィードバック履歴で選んだ履歴は URL の `?feedback=` が唯一の情報源（共有 ListDetailLayout。#2283）。
@@ -195,10 +153,8 @@ export function FeedbackManagementPage() {
   const selectedFeedbackId = selection.selectedId ?? "";
   const [adminFeedbackRating, setAdminFeedbackRating] = useState<FeedbackRating>("good");
   const [adminFeedbackContent, setAdminFeedbackContent] = useState("");
-  const [registerSelectAiFeedback, setRegisterSelectAiFeedback] = useState(false);
-  const [selectAiResponse, setSelectAiResponse] = useState("");
   // 管理者レビューの欄のエラー（欄の直下に出す。#541）。
-  const [reviewErrors, setReviewErrors] = useState<{ adminContent?: string; selectAiResponse?: string }>({});
+  const [reviewErrors, setReviewErrors] = useState<{ adminContent?: string }>({});
   // 絞り込みとページの位置は作業状態に残し、再読込・画面の移動のあとも同じ一覧に戻る（#1764）。
   const [feedbackFilter, setFeedbackFilter] = useWorkspaceState<AppFeedbackFilter>("appFeedbackRating", "all");
   const [feedbackSearch, setFeedbackSearch] = useWorkspaceState("appFeedbackSearch", "");
@@ -209,8 +165,6 @@ export function FeedbackManagementPage() {
   const [feedbackUnfilteredTotal, setFeedbackUnfilteredTotal] = useState(0);
   // ページ番号と表示件数（offset 型。作業状態に残す。#1764 / #1891）。
   const feedbackPaging = useWorkspacePaging("appFeedbackPaging");
-  // Select AI feedback のページ番号と表示件数（サーバー側の offset 型。作業状態に残す。#1891）。
-  const entriesPaging = useWorkspacePaging("selectAiFeedbackEntriesPaging", SELECT_AI_FEEDBACK_PAGE_SIZE);
   const [feedbackConfig, setFeedbackConfig] = useState<FeedbackSearchConfigData | null>(null);
   const [savedFeedbackConfig, setSavedFeedbackConfig] = useState<FeedbackSearchConfigData | null>(null);
   const [savedReview, setSavedReview] = useState("");
@@ -219,7 +173,7 @@ export function FeedbackManagementPage() {
   const [loading, setLoading] = useState("load");
   // どのボタンが始めた読込か。スピナーは押したボタンだけが出す（#819）。初回の読込は §3.7 のとおり
   // ヘッダーの「最新情報を取得」が出す。業務プロファイルの切り替え・保存の後の取り直しは null（領域の表示だけ）。
-  const [refreshOrigin, setRefreshOrigin] = useState<"header" | "notice" | "entries" | null>("header");
+  const [refreshOrigin, setRefreshOrigin] = useState<"header" | "notice" | null>("header");
   // 一覧を 1 度でも取得できたか。最初の読み込みだけ一覧の領域を Skeleton で覆い、「最新情報を取得」は前の内容を
   // 出したままヘッダーのボタンの loading で示す（実行履歴と同じ。messaging.md §3.6・§3.7、#1777）。
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -236,13 +190,6 @@ export function FeedbackManagementPage() {
   const adminFeedbackContentRef = useRef<HTMLTextAreaElement | null>(null);
   const { abortAll, run: runScopedRequest } = useRequestScope();
 
-  const profiles = dbProfiles?.profiles ?? [];
-  // feedback が変わったときだけ新しい配列になるよう、空配列の既定値も useMemo で持つ。
-  const selectAiFeedbackItems = useMemo(() => feedback?.items ?? [], [feedback]);
-  const selectedSelectAiFeedback = useMemo(
-    () => selectAiFeedbackItems[selectedIndex] ?? selectAiFeedbackItems[0] ?? null,
-    [selectAiFeedbackItems, selectedIndex]
-  );
   const appFeedbackItems = history;
   const feedbackConfigDirty = Boolean(
     feedbackConfig &&
@@ -262,7 +209,7 @@ export function FeedbackManagementPage() {
     (item) => item.id
   );
   const reviewSignature = JSON.stringify([selectedAppFeedback?.id, adminFeedbackRating,
-    adminFeedbackContent, registerSelectAiFeedback, selectAiResponse]);
+    adminFeedbackContent]);
   const reviewDirty = Boolean(selectedAppFeedback && savedReview && reviewSignature !== savedReview);
   // 最新の未保存状態を commit 時に入れる（render 中に ref を書かない）。
   useLayoutEffect(() => { reviewDirtyRef.current = reviewDirty; });
@@ -298,51 +245,6 @@ export function FeedbackManagementPage() {
   const initialLoading = loading === "load" && !loadedOnce;
   // 「最新情報を取得」の取り直し。前の内容を出したまま、作業領域の先頭に処理中を出す。
   const refreshing = loading === "load" && loadedOnce;
-  // Select AI feedback のエントリがまだ無い間（最初の読み込みと、profile を切り替えた直後。#265）。
-  const initialEntriesLoading =
-    feedback === null && (loading === "feedback" || initialLoading);
-
-  const currentEntriesPosition = (): ListPosition => ({
-    offset: entriesPaging.offset,
-    limit: entriesPaging.pageSize,
-  });
-
-  const fetchSelectAiFeedbackPage = (name: string, position: ListPosition, signal?: AbortSignal) => {
-    const params = new URLSearchParams({
-      profile_name: name,
-      limit: String(position.limit),
-      offset: String(position.offset),
-    });
-    return apiGet<SelectAiFeedbackEntriesData>(`/api/nl2sql/select-ai/feedback?${params.toString()}`, {
-      signal,
-    });
-  };
-
-  // Select AI feedback の 1 ページ（サーバー側の offset 型。#1891）。取得したページが範囲の外（削除・profile の
-  // 切り替えで減った）なら、最後のページを取り直す（空のページを出さない）。
-  const fetchSelectAiFeedback = async (
-    name: string,
-    position: ListPosition = currentEntriesPosition(),
-    signal?: AbortSignal
-  ): Promise<SelectAiFeedbackEntriesData> => {
-    const data = await fetchSelectAiFeedbackPage(name, position, signal);
-    if (data.items.length > 0 || position.offset === 0 || data.total === 0) return data;
-    return fetchSelectAiFeedbackPage(
-      name,
-      { offset: lastPageOffset(data.total, position.limit), limit: position.limit },
-      signal
-    );
-  };
-
-  // 表示した Select AI feedback のページを作業状態に残し、そのページの先頭の行を選ぶ（取得に成功したときだけ）。
-  const showSelectAiFeedback = (data: SelectAiFeedbackEntriesData | null) => {
-    setFeedback(data);
-    setSelectedIndex(0);
-    if (!data) return;
-    const limit = data.limit || entriesPaging.pageSize;
-    if (limit !== entriesPaging.pageSize) entriesPaging.setPageSize(limit);
-    entriesPaging.setPage(Math.floor((data.offset ?? 0) / Math.max(1, limit)) + 1);
-  };
 
   const fetchAppFeedback = (
     position: ListPosition,
@@ -460,35 +362,17 @@ export function FeedbackManagementPage() {
     try {
       await runScopedRequest(async (signal) => {
         const [
-          dbProfileData,
           appProfileData,
           appFeedbackData,
           configData,
         ] = await Promise.all([
-          apiGet<SelectAiDbProfilesData>(BUSINESS_SELECT_AI_DB_PROFILES_URL, {
-            signal,
-          }),
           apiGet<ProfileSummaryPage>("/api/nl2sql/profiles/search?limit=100", {
             signal,
           }),
           fetchCurrentAppFeedback(signal),
           apiGet<FeedbackSearchConfigData>("/api/nl2sql/feedback-config", { signal }),
         ]);
-        const hasCurrentProfile = dbProfileData.profiles.some(
-          (profile) => profile.name === profileName
-        );
-        const nextProfile = !profileName
-          ? dbProfileData.profiles[0]?.name || ""
-          : hasCurrentProfile
-            ? profileName
-            : "";
-        const feedbackData = nextProfile
-          ? await fetchSelectAiFeedback(nextProfile, currentEntriesPosition(), signal)
-          : null;
         if (signal.aborted || sequence !== loadSequence.current) return;
-        setDbProfiles(dbProfileData);
-        setProfileName(nextProfile);
-        showSelectAiFeedback(feedbackData);
         setAppProfiles(appProfileData.items);
         if (reviewDirtyRef.current && selectedAppFeedback &&
             !appFeedbackData.items.some((item) => item.id === selectedAppFeedback.id)) {
@@ -516,31 +400,6 @@ export function FeedbackManagementPage() {
     }
   };
 
-  /**
-   * Select AI feedback を取り直す。position の既定は今のページ（「再読み込み」・登録の後）。ページ送り・表示件数の
-   * 変更はその位置、業務プロファイルの切り替えは先頭のページを渡す。失敗したら表示していたページに留まる。
-   */
-  const refreshSelectAiFeedback = async (
-    name = profileName,
-    announce = false,
-    origin: "entries" | null = null,
-    position: ListPosition = currentEntriesPosition()
-  ) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setLoading("feedback");
-    setRefreshOrigin(origin);
-    setActionResult(null);
-    try {
-      showSelectAiFeedback(await fetchSelectAiFeedback(trimmed, position));
-      if (announce) toast.success(t("common.action.refreshed"));
-    } catch (err) {
-      showActionError("entries", err, t("feedbackManagement.error.load"));
-    } finally {
-      setLoading("");
-    }
-  };
-
   // ページ送り・表示件数の変更。編集中のレビューがあれば先に破棄の確認をしてから取り直し、取得できたら位置を残す
   // （失敗したら表示していたページに留まり、同じ操作でやり直せる）。
   const goToAppFeedbackPage = async (offset: number) => {
@@ -553,64 +412,6 @@ export function FeedbackManagementPage() {
     await refreshAppFeedback({ offset: 0, limit }, "page");
   };
 
-  const changeProfile = (nextProfile: string) => {
-    setProfileName(nextProfile);
-    // 前の profile のエントリを、切り替えた profile の見出しの下に出したままにしない。
-    setFeedback(null);
-    void refreshSelectAiFeedback(nextProfile, false, null, { offset: 0, limit: entriesPaging.pageSize });
-  };
-
-  const deleteSelectedFeedback = async () => {
-    if (loading) return;
-    if (!selectedSelectAiFeedback || !profileName.trim()) return;
-    const ok = await confirm({
-      title: t("feedbackManagement.deleteConfirmTitle"),
-      description: t("feedbackManagement.deleteConfirmDescription"),
-      confirmLabel: t("feedbackManagement.delete"),
-      tone: "danger",
-      dismissOnOverlay: false,
-    });
-    if (!ok) return;
-    setLoading("delete");
-    setActionResult(null);
-    try {
-      const data = await apiPost<SelectAiFeedbackMutationData>("/api/nl2sql/select-ai/feedback/delete", {
-        profile_name: profileName,
-        sql_text: selectedSelectAiFeedback.sql_text,
-      });
-      const resultMessage = data.warnings.join(" ") || t("feedbackManagement.deleted");
-      if (data.executed) toast.success(resultMessage);
-      else setActionResult({ origin: "entryDetail", tone: "danger", message: resultMessage });
-      showSelectAiFeedback(await fetchSelectAiFeedback(profileName));
-    } catch (err) {
-      showActionError("entryDetail", err, t("feedbackManagement.error.delete"));
-    } finally {
-      setLoading("");
-    }
-  };
-
-  const updateVectorIndex = async () => {
-    if (loading) return;
-    if (!profileName.trim()) return;
-    setLoading("vector-index");
-    setActionResult(null);
-    try {
-      const data = await apiPost<SelectAiFeedbackMutationData>("/api/nl2sql/select-ai/feedback/vector-index", {
-        profile_name: profileName,
-        similarity_threshold: similarityThreshold,
-        match_limit: matchLimit,
-      });
-      const resultMessage = data.warnings.join(" ") || t("feedbackManagement.index.updated");
-      if (data.executed) toast.success(resultMessage);
-      else setActionResult({ origin: "vectorIndex", tone: "danger", message: resultMessage });
-      showSelectAiFeedback(await fetchSelectAiFeedback(profileName));
-    } catch (err) {
-      showActionError("vectorIndex", err, t("feedbackManagement.error.update"));
-    } finally {
-      setLoading("");
-    }
-  };
-
   const saveAppFeedback = async () => {
     if (loading) return;
     if (!selectedAppFeedback) return;
@@ -621,17 +422,11 @@ export function FeedbackManagementPage() {
         adminFeedbackRating === "bad" && !trimmedAdminFeedbackContent
           ? t("feedbackManagement.appFeedback.adminFeedbackRequired")
           : undefined,
-      selectAiResponse:
-        registerSelectAiFeedback && !selectAiResponse.trim()
-          ? t("feedbackManagement.appFeedback.selectAiResponseRequired")
-          : undefined,
     };
     setReviewErrors(nextErrors);
-    if (nextErrors.adminContent || nextErrors.selectAiResponse) {
+    if (nextErrors.adminContent) {
       setActionResult(null);
-      const target = nextErrors.adminContent
-        ? adminFeedbackContentRef.current
-        : document.getElementById("app-feedback-select-ai-response");
+      const target = adminFeedbackContentRef.current;
       window.requestAnimationFrame(() => target?.focus());
       return;
     }
@@ -642,11 +437,6 @@ export function FeedbackManagementPage() {
         history_id: selectedAppFeedback.id,
         rating: adminFeedbackRating,
         feedback_content: trimmedAdminFeedbackContent,
-        register_select_ai_feedback: registerSelectAiFeedback,
-        select_ai_response: selectAiResponse.trim(),
-        // 登録先は対象の履歴の業務プロファイルの Select AI profile（空なら backend が履歴から決める）。
-        // 「Select AI feedback」タブの profile の選択は、このタブに表示も選択欄も無いので使わない（#968）。
-        select_ai_profile_name: "",
       });
       reviewDirtyRef.current = false;
       setSavedReview(reviewSignature);
@@ -659,25 +449,11 @@ export function FeedbackManagementPage() {
       const publishStatus = data.similar_history_publish?.status ?? "published";
       const publishedToSimilarHistory =
         data.rating === "good" && publishStatus !== "skipped" && publishStatus !== "unpublished";
-      if (data.select_ai_feedback) {
-        const selectAiMessage = data.select_ai_feedback.warnings.join(" ");
-        if (data.select_ai_feedback.executed) {
-          toast.success(t("feedbackManagement.appFeedback.adminSavedAndRegistered"));
-          await refreshSelectAiFeedback(profileName);
-        } else {
-          setActionResult({
-            origin: "appFeedback",
-            tone: "danger",
-            message: selectAiMessage || t("feedbackManagement.appFeedback.selectAiRegistrationFailed"),
-          });
-        }
-      } else {
-        toast.success(
-          publishedToSimilarHistory
-            ? t("feedbackManagement.appFeedback.adminSavedAndPublished")
-            : t("feedbackManagement.appFeedback.adminSaved")
-        );
-      }
+      toast.success(
+        publishedToSimilarHistory
+          ? t("feedbackManagement.appFeedback.adminSavedAndPublished")
+          : t("feedbackManagement.appFeedback.adminSaved")
+      );
     } catch (err) {
       showActionError("appFeedback", err, t("feedbackManagement.error.appFeedback"));
     } finally {
@@ -755,8 +531,6 @@ export function FeedbackManagementPage() {
       setSavedReview("");
       setAdminFeedbackRating("good");
       setAdminFeedbackContent("");
-      setRegisterSelectAiFeedback(false);
-      setSelectAiResponse("");
       setReviewErrors({});
     } else {
       const switchedFeedback = syncedAppFeedbackId !== selectedAppFeedback.id;
@@ -765,35 +539,13 @@ export function FeedbackManagementPage() {
         setSyncedAppFeedbackId(selectedAppFeedback.id);
         setSavedReview(JSON.stringify([selectedAppFeedback.id,
           selectedAppFeedback.admin_feedback_rating ?? "good",
-          selectedAppFeedback.admin_feedback_content ?? "",
-          switchedFeedback ? false : registerSelectAiFeedback,
-          switchedFeedback ? defaultSelectAiResponse(selectedAppFeedback) : selectAiResponse]));
+          selectedAppFeedback.admin_feedback_content ?? ""]));
         setAdminFeedbackRating(selectedAppFeedback.admin_feedback_rating ?? "good");
         setAdminFeedbackContent(selectedAppFeedback.admin_feedback_content ?? "");
-        if (switchedFeedback) {
-          setRegisterSelectAiFeedback(false);
-          setSelectAiResponse(defaultSelectAiResponse(selectedAppFeedback));
-        }
       }
     }
   }
 
-  const profileSelect = (
-    <ProfileSelect
-      profiles={profiles}
-      value={profileName}
-      disabled={loading !== ""}
-      onChange={changeProfile}
-    />
-  );
-  const entriesProfileSelect = (
-    <ProfileSelect
-      profiles={profiles}
-      value={profileName}
-      disabled={loading !== ""}
-      onChange={changeProfile}
-    />
-  );
 
   // 「最新情報を取得」の間は前の内容を出したまま、作業領域の先頭に経過時間を 1 か所だけ出す。スピナーは押した
   // ボタン（ヘッダーの「最新情報を取得」・エラーの通知の「再試行」）が出す（messaging.md §3.7、#416・#1777）。
@@ -850,7 +602,7 @@ export function FeedbackManagementPage() {
         <PageNotice
           notice={message ? { tone: "danger", message } : null}
           action={
-            message && activeView === "entries" ? (
+            message ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -883,234 +635,6 @@ export function FeedbackManagementPage() {
           ariaLabel={t("feedbackManagement.tabs.label")}
           onViewChange={setActiveView}
         />
-
-        {activeView === "entries" && (
-          <DbObjectManagementPanelShell
-            id="feedback-management-panel-entries"
-            labelledBy="feedback-management-tab-entries"
-            ariaLabel={t("feedbackManagement.workspace.entries")}
-            idPrefix="feedback-management-entries"
-            processing={refreshProcessing}
-          >
-            <section className="grid min-w-0 gap-4" data-testid="feedback-management-entries-workspace">
-              <DbObjectPanelHeader
-                title={t("feedbackManagement.entries.title")}
-                description={t("feedbackManagement.entries.hint")}
-                icon={MessageSquareText}
-              />
-
-              {/* profile の選択（1）と実行環境の情報（2）を、広い画面では同じ行に置く。 */}
-              <section
-                className="grid min-w-0 gap-3 rounded-md border border-border bg-surface-sunken p-3 2xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] 2xl:items-end 2xl:gap-x-6"
-                aria-label={t("feedbackManagement.entries.context")}
-                data-testid="feedback-management-entries-toolbar"
-              >
-                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                  {entriesProfileSelect}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    // 隣の業務プロファイルの選択（md）と同じ高さ（#613）。
-                    size="md"
-                    className="w-full whitespace-nowrap sm:w-auto"
-                    // 押したときの取り直しだけ回す。業務プロファイルの切り替え・保存の後は下の領域の表示だけ（#819）。
-                    loading={loading === "feedback" && refreshOrigin === "entries"}
-                    disabled={
-                      !profileName.trim() ||
-                      (Boolean(loading) && !(loading === "feedback" && refreshOrigin === "entries"))
-                    }
-                    onClick={() => void refreshSelectAiFeedback(profileName, false, "entries")} icon={RefreshCw}>
-                    <span>{t("feedbackManagement.action.refresh")}</span>
-                  </Button>
-                </div>
-
-                <dl
-                  className="grid min-w-0 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]"
-                  aria-label={t("feedbackManagement.entries.runtimeInfo")}
-                  data-testid="feedback-management-entries-runtime-info"
-                >
-                  <div className="min-w-0 self-start">
-                    <dt className="sr-only">{t("feedbackManagement.entries.runtime")}</dt>
-                    <dd>
-                      <StatusBadge
-                        icon={false}
-                        variant={feedback?.runtime === "oracle" ? "success" : "neutral"}
-                        label={t("feedbackManagement.entries.runtimeBadge", {
-                          value: feedback?.runtime || dbProfiles?.runtime || "-",
-                        })}
-                      />
-                    </dd>
-                  </div>
-                  <TechnicalRuntimeFact
-                    label={t("feedbackManagement.entries.vectorIndex")}
-                    value={feedback?.index_name || "-"}
-                  />
-                  <TechnicalRuntimeFact
-                    label={t("feedbackManagement.entries.vectorTable")}
-                    value={feedback?.table_name || "-"}
-                    objectName={
-                      feedback?.table_name
-                        ? {
-                            owner: feedback.table_owner,
-                            name: feedback.table_name,
-                            qualified_name: feedback.table_qualified_name,
-                          }
-                        : undefined
-                    }
-                  />
-                </dl>
-              </section>
-
-              <ActionResultBanner result={actionResultFor("entries")} />
-              <FeedbackWarnings warnings={feedback?.warnings ?? dbProfiles?.warnings ?? []} />
-              {loading === "feedback" ? (
-                <ProcessingIndicator
-                  active
-                  label={t(feedback ? "feedbackManagement.entries.refreshing" : "feedbackManagement.entries.loading")}
-                  operationKey={profileName}
-                  placement="workspace"
-                  className="rounded-md border border-border bg-surface-sunken px-3 py-2"
-                  testId="feedback-management-entries-processing"
-                  // ボタンが回っていないとき（業務プロファイルの切り替えなど）は、この表示がスピナーを出す（#819）。
-                  activityIcon={refreshOrigin === "entries" ? "none" : "spinner"}
-                />
-              ) : null}
-
-              <FixedSplitPane
-                storagePrefix={FIXED_SPLIT_STORAGE_PREFIX}
-                splitId="feedback-management-entries-split"
-                minLeftPaneWidthPx={560}
-                minRightPaneWidthPx={400}
-                left={
-                  initialEntriesLoading ? (
-                    <FeedbackEntriesListSkeleton timed={initialLoading} />
-                  ) : (
-                    <FeedbackEntriesList
-                      entries={selectAiFeedbackItems}
-                      total={feedback?.total ?? selectAiFeedbackItems.length}
-                      offset={feedback?.offset ?? entriesPaging.offset}
-                      limit={feedback?.limit || entriesPaging.pageSize}
-                      // 取り直しの間（ページ送り・削除の後など）は、ページ送りを押せない。
-                      pagingDisabled={Boolean(loading)}
-                      onPageChange={(offset) =>
-                        void refreshSelectAiFeedback(profileName, false, null, {
-                          offset,
-                          limit: feedback?.limit || entriesPaging.pageSize,
-                        })
-                      }
-                      onPageSizeChange={(limit) =>
-                        void refreshSelectAiFeedback(profileName, false, null, { offset: 0, limit })
-                      }
-                      selectedIndex={selectedSelectAiFeedback ? selectedIndex : null}
-                      onSelect={setSelectedIndex}
-                    />
-                  )
-                }
-                right={
-                  initialEntriesLoading ? (
-                    <FeedbackEntryDetailSkeleton />
-                  ) : (
-                    <FeedbackEntryDetail
-                      entry={selectedSelectAiFeedback}
-                      profileName={feedback?.profile_name || profileName}
-                      deleting={loading === "delete"}
-                      result={actionResultFor("entryDetail")}
-                      onDelete={() => void deleteSelectedFeedback()}
-                    />
-                  )
-                }
-              />
-            </section>
-          </DbObjectManagementPanelShell>
-        )}
-
-        {activeView === "vectorIndex" && (
-          <DbObjectManagementPanelShell
-            id="feedback-management-panel-vectorIndex"
-            labelledBy="feedback-management-tab-vectorIndex"
-            ariaLabel={t("feedbackManagement.workspace.vectorIndex")}
-            idPrefix="feedback-management-vector-index"
-            processing={refreshProcessing}
-          >
-            <DbObjectPanelHeader
-              title={t("feedbackManagement.index.title")}
-              description={t("feedbackManagement.index.hint")}
-              icon={DatabaseZap}
-              action={profileSelect}
-            />
-            {initialLoading ? (
-              <SettingsFormSkeleton
-                label={t("feedbackManagement.index.loading")}
-                testId="feedback-vector-index-loading"
-              />
-            ) : (
-            <>
-            <FeedbackWarnings warnings={feedback?.warnings ?? dbProfiles?.warnings ?? []} />
-            {/* 設定の欄の並びは共通の FormGrid（最大 60rem・2 列。#1891）。 */}
-            <FormGrid>
-              <SliderNumberField
-                label={t("feedbackManagement.index.threshold")}
-                min={0.1}
-                max={0.95}
-                step={0.05}
-                value={similarityThreshold}
-                onChange={(value) => setSimilarityThreshold(roundThreshold(value))}
-              />
-              <SliderNumberField
-                label={t("feedbackManagement.index.matchLimit")}
-                min={1}
-                max={5}
-                step={1}
-                value={matchLimit}
-                onChange={(value) => setMatchLimit(Math.round(clamp(value, 1, 5)))}
-              />
-            </FormGrid>
-            <div className="flex flex-wrap gap-2">
-              <StatusBadge icon={false} variant="neutral" label={feedback?.runtime ?? dbProfiles?.runtime ?? "-"} />
-              {feedback?.index_name && <StatusBadge icon={false} variant="info" label={feedback.index_name} />}
-              {feedback?.table_name && (
-                <DbObjectName
-                  object={{
-                    owner: feedback.table_owner,
-                    name: feedback.table_name,
-                    qualified_name: feedback.table_qualified_name,
-                  }}
-                  size="xs"
-                  className="self-center"
-                  data-testid="feedback-vector-index-table-name"
-                />
-              )}
-            </div>
-            <FormActionBar
-              ariaLabel={t("feedbackManagement.index.actions")}
-              testId="feedback-vector-index-actions"
-              status={<ActionResultStatus result={actionResultFor("vectorIndex")} />}
-              primaryActions={[
-                {
-                  id: "update",
-                  label: t("feedbackManagement.index.update"),
-                  icon: Save,
-                  loading: loading === "vector-index",
-                  disabled: !profileName.trim(),
-                  onClick: () => void updateVectorIndex(),
-                },
-              ]}
-            />
-            {loading === "vector-index" ? (
-              // ベクトル索引の再作成は件数に比例して数十秒かかる（messaging.md §3.7）。
-              <ProcessingIndicator
-                active
-                label={t("feedbackManagement.index.progress")}
-                operationKey="feedback-vector-index"
-                placement="action"
-                activityIcon="none"
-                testId="feedback-vector-index-processing"
-              />
-            ) : null}
-            </>
-            )}
-          </DbObjectManagementPanelShell>
-        )}
 
         {activeView === "appFeedback" && (
           <DbObjectManagementPanelShell
@@ -1415,44 +939,6 @@ export function FeedbackManagementPage() {
                     />
                     <FieldError id="app-feedback-admin-content-error" message={reviewErrors.adminContent} />
                   </div>
-                  <label className="flex min-h-11 min-w-0 items-center gap-3 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-fg">
-                    <input
-                      type="checkbox"
-                      checked={registerSelectAiFeedback}
-                      onChange={(event) => setRegisterSelectAiFeedback(event.currentTarget.checked)}
-                      aria-describedby="app-feedback-register-select-ai-hint"
-                      className="h-4 w-4 shrink-0 accent-accent-emphasis"
-                    />
-                    <span className="grid min-w-0 gap-0.5">
-                      <span>{t("feedbackManagement.appFeedback.registerSelectAi")}</span>
-                      {/* 登録先を明示する（「Select AI feedback」タブの profile の選択とは関係しない。#968）。 */}
-                      <span
-                        id="app-feedback-register-select-ai-hint"
-                        className="text-xs font-normal leading-5 text-fg-muted"
-                      >
-                        {t("feedbackManagement.appFeedback.registerSelectAiHint")}
-                      </span>
-                    </span>
-                  </label>
-                  {registerSelectAiFeedback && (
-                    // Select AI feedback に登録するときは response SQL が必須（saveAppFeedback のガード）。
-                    <TextareaField
-                      id="app-feedback-select-ai-response"
-                      label={t("feedbackManagement.appFeedback.selectAiResponse")}
-                      required
-                      error={reviewErrors.selectAiResponse}
-                      surface="code"
-                      width="full"
-                      value={selectAiResponse}
-                      onChange={(event) => {
-                        setSelectAiResponse(event.currentTarget.value);
-                        setReviewErrors((current) => ({ ...current, selectAiResponse: undefined }));
-                      }}
-                      rows={5}
-                      textareaClassName="min-w-0 max-w-full"
-                      placeholder={t("feedbackManagement.appFeedback.selectAiResponsePlaceholder")}
-                    />
-                  )}
                   </FormGrid>
                   <FormActionBar
                     ariaLabel={t("feedbackManagement.appFeedback.actions")}
@@ -1609,32 +1095,6 @@ export function FeedbackManagementPage() {
   );
 }
 
-function ProfileSelect({
-  profiles,
-  value,
-  disabled,
-  onChange,
-}: {
-  profiles: SelectAiDbProfile[];
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const id = useId();
-  return (
-    <SelectField
-      id={`feedback-db-profile-${id}`}
-      label={t("feedbackManagement.profile")}
-      value={value}
-      options={profiles.map((profile) => ({ value: profile.name, label: profileOptionLabel(profile) }))}
-      disabled={disabled || profiles.length === 0}
-      onValueChange={onChange}
-      // Select AI のプロファイル（対象の選択）は lg（#613 / #1891 の幅の段）。
-      width="lg"
-    />
-  );
-}
-
 /** 一覧・詳細の操作の結果（失敗）。起点の操作の直下に Banner で出す（messaging.md §10.1 / §10.2）。 */
 function ActionResultBanner({ result }: { result: ActionResult }) {
   if (!result) return null;
@@ -1645,263 +1105,6 @@ function ActionResultBanner({ result }: { result: ActionResult }) {
 function ActionResultStatus({ result }: { result: ActionResult }) {
   if (!result) return null;
   return <FormStatus tone={result.tone} message={result.message} />;
-}
-
-function FeedbackWarnings({ warnings }: { warnings: string[] }) {
-  if (warnings.length === 0) return null;
-  return (
-    <div className="grid gap-2">
-      {warnings.map((warning) => (
-        <Banner key={warning} severity="warning">
-          {warning}
-        </Banner>
-      ))}
-    </div>
-  );
-}
-
-function feedbackEntryRowKey(entry: SelectAiFeedbackEntry, index: number) {
-  return `${entry.sql_id || entry.sql_text || "feedback"}-${index}`;
-}
-
-function FeedbackEntriesList({
-  entries,
-  total,
-  offset,
-  limit,
-  pagingDisabled,
-  onPageChange,
-  onPageSizeChange,
-  selectedIndex,
-  onSelect,
-}: {
-  /** 今のページの行（サーバー側の offset 型のページング。#1891）。 */
-  entries: SelectAiFeedbackEntry[];
-  /** Select AI の feedback の全件（API の total）。 */
-  total: number;
-  offset: number;
-  limit: number;
-  pagingDisabled: boolean;
-  onPageChange: (offset: number) => void;
-  onPageSizeChange: (limit: number) => void;
-  selectedIndex: number | null;
-  onSelect: (index: number) => void;
-}) {
-  const columns: Array<DataTableColumn<SelectAiFeedbackEntry>> = [
-    {
-      key: "content",
-      header: t("feedbackManagement.entries.content"),
-      className: "align-top",
-      headerClassName: "w-[42%] uppercase",
-      render: (entry) => (
-        <RowTitleButton
-          title={entry.content || "-"}
-          // 長い質問は 3 行で切り詰め、全文はホバー・フォーカスの Tooltip と右の詳細で見せる。
-          maxLines={3}
-          current={entries.indexOf(entry) === selectedIndex}
-          aria-label={t("feedbackManagement.entries.select", {
-            content: entry.content || entry.sql_text || "-",
-          })}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect(entries.indexOf(entry));
-          }}
-        />
-      ),
-    },
-    {
-      key: "sql_text",
-      header: t("feedbackManagement.entries.sqlText"),
-      className: "align-top",
-      headerClassName: "w-[58%] uppercase",
-      render: (entry) => (
-        <p className="line-clamp-3 break-words font-mono text-xs leading-5 text-fg">
-          {entry.sql_text || "-"}
-        </p>
-      ),
-    },
-  ];
-
-  return (
-    <section className="grid min-w-0 content-start gap-3" aria-labelledby="feedback-entries-list-heading">
-      <DbObjectPanelHeader
-        headingId="feedback-entries-list-heading"
-        title={t("feedbackManagement.entries.listTitle")}
-        description={t("feedbackManagement.entries.listHint")}
-        icon={MessageSquareText}
-      />
-      {/* 件数は一覧の上の 1 か所（ListCount。#1891）。総数は API の total（サーバー側のページング）。 */}
-      {total > 0 ? (
-        <ListToolbar
-          count={{ total: Math.max(total, offset + entries.length), labels: listCountLabels(), testId: "feedback-management-entry-count" }}
-        />
-      ) : null}
-      <div className="grid min-w-0 gap-2">
-      <DataTable<SelectAiFeedbackEntry>
-        columns={columns}
-        rows={entries}
-        getRowKey={(entry) => feedbackEntryRowKey(entry, entries.indexOf(entry))}
-        selectedRowKey={
-          selectedIndex == null || !entries[selectedIndex]
-            ? null
-            : feedbackEntryRowKey(entries[selectedIndex], selectedIndex)
-        }
-        onRowClick={(entry) => {
-          const index = entries.indexOf(entry);
-          if (index >= 0) onSelect(index);
-        }}
-        rowProps={(entry) => ({
-          className: INFORMATION_TABLE_ROW_CLASS,
-          "aria-label": t("feedbackManagement.entries.select", {
-            content: entry.content || entry.sql_text || "-",
-          }),
-        })}
-        dense
-        empty={
-          <EmptyState
-            title={t("feedbackManagement.entries.emptyTitle")}
-            hint={t("feedbackManagement.entries.emptyHint")}
-          />
-        }
-        ariaLabel={t("feedbackManagement.entries.listAria")}
-        testId="feedback-management-entries-table"
-        scrollTestId="feedback-management-entries-scroll-region"
-        tableClassName="w-full min-w-[640px] table-fixed"
-        stickyHeader
-        visibleRows={INFORMATION_TABLE_VISIBLE_ROWS}
-      />
-      {/* サーバー側のページング（advanced。表示件数・ページ番号の入力。#1891）。 */}
-      <OffsetPagination
-        offset={offset}
-        limit={limit}
-        total={total}
-        count={entries.length}
-        onPageChange={(_page, nextOffset) => onPageChange(nextOffset)}
-        onPageSizeChange={onPageSizeChange}
-        labels={paginationLabels()}
-        disabled={pagingDisabled}
-        ariaLabel={t("feedbackManagement.entries.pagination")}
-        testId="feedback-management-entries-pagination"
-      />
-      </div>
-    </section>
-  );
-}
-
-function FeedbackEntryDetail({
-  entry,
-  profileName,
-  deleting,
-  result,
-  onDelete,
-}: {
-  entry: SelectAiFeedbackEntry | null;
-  profileName: string;
-  deleting: boolean;
-  result: ActionResult;
-  onDelete: () => void;
-}) {
-  const actions: EntityAction[] = entry
-    ? [
-        {
-          id: "delete",
-          label: t("feedbackManagement.delete"),
-          icon: Trash2,
-          tone: "danger",
-          loading: deleting,
-          onSelect: onDelete,
-        },
-      ]
-    : [];
-
-  return (
-    <section
-      className="grid min-w-0 content-start gap-3 rounded-md border border-border bg-surface-sunken p-4"
-      aria-labelledby="feedback-entry-detail-heading"
-      data-testid="feedback-management-entry-detail"
-    >
-      <DbObjectPanelHeader
-        headingId="feedback-entry-detail-heading"
-        title={t("feedbackManagement.entries.selectedSql")}
-        description={entry ? t("feedbackManagement.entries.detailHint") : undefined}
-        icon={Code2}
-        action={
-          actions.length > 0 ? (
-            <ObjectActionBar
-              ariaLabel={t("feedbackManagement.entries.selectedSqlActions")}
-              testId="feedback-selected-sql-actions"
-              actions={actions}
-            />
-          ) : undefined
-        }
-      />
-      <ActionResultBanner result={result} />
-
-      {entry ? (
-        <>
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <CompactFact label={t("feedbackManagement.entries.sqlId")} value={entry.sql_id || "-"} />
-            <CompactFact label={t("feedbackManagement.profile")} value={profileName || "-"} />
-          </div>
-          <section className="rounded-md border border-border bg-surface p-3">
-            <p className="text-xs font-medium text-fg-muted">{t("feedbackManagement.entries.content")}</p>
-            <p className="mt-1 break-words text-sm leading-6 text-fg">{entry.content || "-"}</p>
-          </section>
-          <section className="grid min-w-0 gap-2">
-            <p className="text-xs font-medium text-fg-muted">{t("feedbackManagement.entries.sqlText")}</p>
-            <pre data-surface="code"
-              aria-label={t("feedbackManagement.entries.selectedSql")}
-              data-testid="feedback-management-entry-sql"
-              className="max-h-[30.5rem] min-h-44 overflow-auto rounded-md border border-border bg-surface p-3 font-mono text-sm leading-6 text-fg"
-            >
-              <code>{entry.sql_text || "-"}</code>
-            </pre>
-          </section>
-        </>
-      ) : (
-        <div
-          className="grid min-h-52 place-items-center rounded-md border border-border bg-surface p-4"
-          data-testid="feedback-management-entry-detail-empty"
-        >
-          <EmptyState
-            title={t("feedbackManagement.entries.detailEmptyTitle")}
-            hint={t("feedbackManagement.entries.detailEmptyHint")}
-          />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function FeedbackEntriesListSkeleton({ timed = false }: { timed?: boolean }) {
-  const skeleton = (
-    <section
-      className="grid min-w-0 content-start gap-3"
-      aria-label={t("feedbackManagement.entries.loading")}
-      aria-busy="true"
-      data-testid="feedback-management-entries-list-skeleton"
-    >
-      {/* profile の切り替えでは、読み込み中の文言と経過時間は分割の上の ProcessingIndicator が 1 か所だけ出す。 */}
-      <Skeleton className="h-6 w-44" />
-      <Skeleton className="h-5 w-72 max-w-full" />
-      <TableSkeleton columns={2} />
-    </section>
-  );
-  if (!timed) return skeleton;
-  // 最初の読み込みは一覧の領域の先頭に経過時間を 1 か所だけ出す（スピナーはヘッダーの「最新情報を取得」。#1777）。
-  return (
-    <TimedLoadingState
-      label={t("feedbackManagement.entries.loading")}
-      operationKey="feedback-management-initial-load"
-      placement="panel"
-      className="content-start"
-      testId="feedback-management-entries-loading"
-      framed={false}
-      activityIcon="none"
-    >
-      {skeleton}
-    </TimedLoadingState>
-  );
 }
 
 /** フィードバック履歴の編集欄の Skeleton（最初の読み込み）。経過時間は一覧の領域が 1 か所だけ出す。 */
@@ -1939,46 +1142,6 @@ function SettingsFormSkeleton({ label, testId }: { label: string; testId: string
     >
       <FormSkeleton fields={2} title={false} />
     </TimedLoadingState>
-  );
-}
-
-function TechnicalRuntimeFact({
-  label,
-  value,
-  objectName,
-}: {
-  label: string;
-  value: string;
-  /** 表名の場合は所有者付きの修飾名を等幅で示す。 */
-  objectName?: DbObjectNameSource;
-}) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 rounded-md border border-border bg-surface px-2 py-1 text-xs leading-5">
-      <dt className="shrink-0 font-medium text-fg-muted">{label}:</dt>
-      <dd className="min-w-0 break-all font-medium text-fg">
-        {objectName ? <DbObjectName object={objectName} size="xs" /> : value}
-      </dd>
-    </div>
-  );
-}
-
-function FeedbackEntryDetailSkeleton() {
-  return (
-    <section
-      className="grid min-w-0 content-start gap-3 rounded-md border border-border bg-surface-sunken p-4"
-      aria-label={t("feedbackManagement.entries.loading")}
-      aria-busy="true"
-      data-testid="feedback-management-entry-detail-skeleton"
-    >
-      <Skeleton className="h-6 w-52 max-w-full" />
-      <Skeleton className="h-5 w-64 max-w-full" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16" />
-      </div>
-      <Skeleton className="h-24" />
-      <Skeleton className="h-56" />
-    </section>
   );
 }
 
@@ -2125,62 +1288,5 @@ function SimilarityConfigField({
         {hint}
       </span>
     </fieldset>
-  );
-}
-
-function SliderNumberField({
-  label,
-  min,
-  max,
-  step,
-  value,
-  onChange,
-}: {
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  const id = useId();
-  const numberDraft = useNumberDraft(value, min, max, onChange);
-  return (
-    <fieldset className="grid gap-3 rounded-md border border-border bg-surface-sunken p-4 text-sm font-medium text-fg">
-      <legend className="px-1">{label}</legend>
-      <input
-        type="range"
-        aria-label={`${label} slider`}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-        className="w-full accent-accent-emphasis"
-      />
-      {/* 見出しは fieldset の legend が持つので、数値欄のラベルは読み上げだけにする（#631）。 */}
-      <TextField
-        id={id}
-        label={label}
-        labelHidden
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        // 数値の欄（#1891 の幅の段）。
-        width="xs"
-        {...numberDraft}
-      />
-    </fieldset>
-  );
-}
-
-function CompactFact({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="min-w-0 rounded-md border border-border bg-surface p-3">
-      <p className="text-xs font-medium text-fg-muted">{label}</p>
-      <p className="mt-1 break-words text-sm font-semibold text-fg">{value}</p>
-      {hint ? <p className="mt-1 text-xs leading-5 text-fg-muted">{hint}</p> : null}
-    </div>
   );
 }

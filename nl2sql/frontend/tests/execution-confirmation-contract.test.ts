@@ -23,12 +23,8 @@ test("ExecutionConfirmationField is the shared packages/ui component, not a prod
     "../src/features/nl2sql/components/DbObjectManagementShared.tsx",
     "../src/features/nl2sql/pages/AdminSqlPage.tsx",
     "../src/features/nl2sql/pages/DataManagementPage.tsx",
-    "../src/features/nl2sql/pages/ProfileManagementPage.tsx",
     "../src/features/nl2sql/pages/SampleDataPage.tsx",
     "../src/features/nl2sql/pages/TableManagementPage.tsx",
-    "../src/features/nl2sql/SyntheticReview.tsx",
-    "../src/features/security/SecurityDeepSecPage.tsx",
-    "../src/components/settings/SelectAiCredentialCard.tsx",
   ];
   for (const path of usages) {
     const text = source(path);

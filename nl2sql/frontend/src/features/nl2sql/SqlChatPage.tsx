@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -15,7 +15,6 @@ import {
   Banner,
   Button,
   ChatAnswer,
-  ChatComposerOption,
   AnswerNotice,
   ChatProgress,
   RunUsedModels,
@@ -31,7 +30,6 @@ import {
   MessageText,
   ProcessFailureNotice,
   SearchableSelectField,
-  SelectField,
   Skeleton,
   SqlSafetyBadge,
   TimedLoadingState,
@@ -105,10 +103,6 @@ import {
 import { ProgressLegacyNotice } from "./components/ProgressLegacyNotice";
 import { useNl2SqlTraceProgress } from "./useTraceProgress";
 import type { ChatHistoryOffsetPage, JobCreateData, JobData, Nl2SqlEngine } from "./types";
-import { useProfileEngine } from "./useProfileEngine";
-import { SelectAiCredentialPrecondition } from "./components/SelectAiCredentialPrecondition";
-import { engineUsesSelectAiCredential } from "./selectAiCredentialReadiness";
-import { useSelectAiCredentialReadiness } from "./useSelectAiCredentialReadiness";
 
 interface Conversation {
   id: string;
@@ -182,32 +176,8 @@ async function submitChatJob(
   }
 }
 
-/**
- * チャットの生成方法（#890）。SQL 生成画面の実行エンジン（`EngineSelector`）と同じ 3 つ。どれも SQL の
- * 生成だけを生成方法が行い（Select AI Agent の SQL ツールは SHOWSQL）、安全検査と実行は SQL 生成の画面と
- * 同じ backend の経路が行う（#1176）。
- */
-const CHAT_ENGINES: ReadonlyArray<{
-  value: Nl2SqlEngine;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "select_ai",
-    label: t("chat.engine.selectAi"),
-    description: t("chat.engine.selectAi.desc"),
-  },
-  {
-    value: "select_ai_agent",
-    label: t("chat.engine.selectAiAgent"),
-    description: t("chat.engine.selectAiAgent.desc"),
-  },
-  {
-    value: "enterprise_ai_direct",
-    label: t("chat.engine.enterprise"),
-    description: t("chat.engine.enterprise.desc"),
-  },
-];
+/** SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+const CHAT_ENGINE: Nl2SqlEngine = "enterprise_ai_direct";
 
 /**
  * 1 往復を永続ジョブにし、前文はサーバーで復元する。SQL 生成の画面と同じく、送信のジョブが生成・安全性の
@@ -307,19 +277,6 @@ export function SqlChatPage() {
   const selectedProfile =
     detail.data?.profile ??
     profileOptions.find((profile) => profile.id === selectedProfileId);
-  // 生成の方式は業務プロファイルごとに残し、選んでいなければ業務プロファイルの既定の生成方式にする（#1524）。
-  const [engine, setEngine] = useProfileEngine(
-    selectedProfileId,
-    detail.data?.profile.default_engine,
-  );
-  const engineDescriptionId = useId();
-  // Select AI / Select AI Agent の生成は Select AI の Credential が前提（#1688）。無いと分かったら
-  // 入力欄の下に事前条件を示し、送信を止める（OCI Enterprise AI の生成は止めない）。
-  const selectAiCredential = useSelectAiCredentialReadiness();
-  const selectAiCredentialBlocked =
-    engineUsesSelectAiCredential(engine) && selectAiCredential.missing;
-  const engineOption =
-    CHAT_ENGINES.find((option) => option.value === engine) ?? CHAT_ENGINES[0];
   const chatKey = [
     "nl2sql",
     "chats",
@@ -417,8 +374,7 @@ export function SqlChatPage() {
       );
       await queryClient.invalidateQueries({ queryKey: chatKey });
     },
-    onError: (error) => {
-      selectAiCredential.refreshAfterError(error);
+    onError: () => {
       // 送った質問は残し、理由と「再送信」を出す（入力を失わない。#907）。
       setPendingSend((current) =>
         current
@@ -507,11 +463,9 @@ export function SqlChatPage() {
   const conversationLoading =
     Boolean(conversationId) && conversation.isPending && !pending;
   // 画面の前提（業務プロファイルの一覧・開いている会話の内容）が揃うまでは、会話の欄に空の状態を出さず
-  // 会話の形の Skeleton で覆い、送信を止める（`blocked`。#1153）。入力欄・生成方法・新しい会話・履歴の開閉を
+  // 会話の形の Skeleton で覆い、送信を止める（`blocked`。#1153）。入力欄・新しい会話・履歴の開閉を
   // 無効にするのは業務プロファイルの一覧の読み込み中だけ。会話の内容の読み込み中は入力欄に書ける
   // （書いている途中で無効にしてフォーカスと入力を失わせない。messaging.md §11.7、#1188）。
-  const attachmentsReady = Boolean(chatAttachments.composer?.items.some((item) => item.status === "ready"));
-  const attachmentEngineMismatch = attachmentsReady && engine !== "enterprise_ai_direct";
   const blocked =
     busy ||
     generating ||
@@ -523,8 +477,6 @@ export function SqlChatPage() {
     // 要件の確認の間は次の質問を送らない（確認に答えるか、中止してから送る。#1442）。
     Boolean(requirementCheck) ||
     turns.length >= 50 ||
-    selectAiCredentialBlocked ||
-    attachmentEngineMismatch ||
     chatAttachments.uploading;
   function submit() {
     const question = draft.trim();
@@ -535,7 +487,7 @@ export function SqlChatPage() {
     const request: ChatJobRequest = {
       question,
       profile_id: selectedProfileId,
-      engine,
+      engine: CHAT_ENGINE,
       previous_job_id: latest?.job_id ?? null,
       client_job_id: randomUuid(),
       ...(sentAttachments.ids.length ? { attachment_ids: sentAttachments.ids } : {}),
@@ -816,60 +768,10 @@ export function SqlChatPage() {
                   submitBlocked={blocked}
                   disabled={profilesLoading}
                   sendTestId="sql-chat-send"
-                  options={
-                    // 生成方法（#890）。RAG のチャットの「回答するモデル」と同じく、入力欄の直上の行に
-                    // 「ラベル・説明のアイコン・選択」を並べる。ラベルは隣の文言で読めるので欄のラベルは読み上げだけにする。
-                    // 選んだ生成方法の説明は常設せず、ラベルの横の info アイコンから出し、選択欄にも説明として結び付ける（#901）。
-                    <ChatComposerOption
-                      label={t("chat.engine")}
-                      labelDecorative
-                      info={{
-                        label: t("chat.engine.infoLabel"),
-                        content: engineOption.description,
-                        contentId: engineDescriptionId,
-                        contentTestId: "sql-chat-engine-description",
-                        testId: "sql-chat-engine-info",
-                      }}
-                      testId="sql-chat-engine-row"
-                    >
-                      <SelectField
-                        id="sql-chat-engine"
-                        label={t("chat.engine")}
-                        labelHidden
-                        value={engine}
-                        size="sm"
-                        width="sm"
-                        disabled={busy || generating || profilesLoading}
-                        onValueChange={setEngine}
-                        describedBy={engineDescriptionId}
-                        options={CHAT_ENGINES.map(({ value, label }) => ({
-                          value,
-                          label,
-                        }))}
-                      />
-                    </ChatComposerOption>
-                  }
                   // 会話の添付（#2517。運用設定で有効なときだけ）。
                   attachments={chatAttachments.composer}
                   footer={
                     <>
-                      {attachmentEngineMismatch ? (
-                        <p className="text-sm text-fg-muted" data-testid="sql-chat-attachment-engine">
-                          {t("chat.attachments.engineNotice")}
-                        </p>
-                      ) : null}
-                      {selectAiCredentialBlocked ? (
-                        <SelectAiCredentialPrecondition
-                          id="sql-chat-credential-precondition"
-                          testId="sql-chat-credential-precondition"
-                          operation={t("selectAiCredential.precondition.operation.generate")}
-          action={t("chat.send")}
-          credentialName={selectAiCredential.credentialName}
-                          canOpenSettings={selectAiCredential.canOpenSettings}
-                          rechecking={selectAiCredential.rechecking}
-                          onRecheck={() => void selectAiCredential.recheck()}
-                        />
-                      ) : null}
                       {stop.isError ? (
                         <ApiErrorBanner
                           error={stop.error}

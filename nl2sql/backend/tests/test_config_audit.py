@@ -108,23 +108,6 @@ def test_audit_reports_unknown_duplicate_malformed_and_security_combinations(
     assert "INVALID_RUNTIME_SETTINGS" in codes
 
 
-def test_audit_rejects_deepsec_with_thick_driver(tmp_path: Path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("NL2SQL_ORACLE_DEEPSEC_ENABLED=true\n", encoding="utf-8")
-    env_file.chmod(0o600)
-    platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_ORACLE_DRIVER_MODE=thick\n", encoding="utf-8")
-    platform_env.chmod(0o600)
-
-    result = audit_configuration(
-        _paths(tmp_path, env_path=env_file, platform_env_path=platform_env)
-    )
-    codes = {item.code for item in result.findings}
-
-    assert result.ok is False
-    assert "DEEPSEC_REQUIRES_THIN_DRIVER" in codes
-
-
 def test_audit_detects_legacy_json_without_disclosing_secret(tmp_path: Path) -> None:
     model_settings = tmp_path / "model-settings.json"
     model_settings.write_text(
@@ -151,9 +134,7 @@ def test_terraform_cloud_init_keeps_thin_mtls_without_instant_client() -> None:
     locals_tf = (repo_root.parent / "terraform" / "stack" / "locals.tf").read_text(encoding="utf-8")
     init_script = (repo_root / "init_script.sh").read_text(encoding="utf-8").lower()
 
-    backend_env = _terraform_env_body("nl2sql_backend_env")
     platform_env = _terraform_env_body("platform_env")
-    assert "NL2SQL_ORACLE_DEEPSEC_ENABLED=${var.nl2sql_oracle_deepsec_enabled}" in backend_env
     assert "PLATFORM_ORACLE_DRIVER_MODE=thin" in platform_env
     assert "PLATFORM_ORACLE_CLIENT_LIB_DIR=" in platform_env
     # terraform fmt の桁そろえに左右されないよう、空白は問わない（#239 で書き方が変わった）。
@@ -182,14 +163,6 @@ def _rendered_keys(body: str) -> set[str]:
         for line in body.splitlines()
         if (match := ENV_ASSIGNMENT_RE.match(line)) is not None
     }
-
-
-def test_terraform_backend_env_renders_select_ai_credential_name() -> None:
-    """Select AI credential 名は env 専用キーのため Terraform が書き込む必要がある。"""
-    assert "NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED" in _terraform_env_body(
-        "nl2sql_backend_env"
-    )
-    assert "NL2SQL_SELECT_AI_REGION=us-chicago-1" in _terraform_env_body("nl2sql_backend_env")
 
 
 def test_terraform_env_keys_are_known_settings_in_the_right_file() -> None:

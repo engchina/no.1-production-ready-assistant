@@ -96,7 +96,6 @@ test("data management refresh uses the paged read model and shared durable schem
     "previewLoadingObject",
     "exportLoading",
     "csvUploading",
-    "syntheticLoading",
   ]) {
     assert.match(source, new RegExp(String.raw`const \[${state},`, "u"));
   }

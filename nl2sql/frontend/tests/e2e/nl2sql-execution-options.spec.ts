@@ -44,19 +44,6 @@ const profile = {
   default_row_limit: 100,
   safety_policy: "select_only",
   few_shot_examples: [],
-  select_ai_config: {
-    profile_name: "NL2SQL_DEFAULT_PROFILE",
-    region: "ap-osaka-1",
-    model: "cohere.command-r-plus",
-    embedding_model: "cohere.embed-v4.0",
-    max_tokens: 32000,
-    enforce_object_list: true,
-    comments: true,
-    annotations: false,
-    constraints: false,
-    role: "",
-    additional_instructions: "",
-  },
   archived: false,
   version: 1,
   etag: "profile-etag",
@@ -226,8 +213,8 @@ async function mockNl2SqlWorkbenchApi(page: Page) {
         elapsed_ms: item.elapsed_ms,
       })),
       result: {
-        engine: "select_ai",
-        engine_meta: { runtime: "oracle", select_ai_profile: "NL2SQL_DEFAULT_PROFILE" },
+        engine: "enterprise_ai_direct",
+        engine_meta: {},
         fallback_reason: "",
         original_question: "請求金額を確認したい",
         rewritten_question: "書き換え後の請求金額",
@@ -290,14 +277,6 @@ async function mockNl2SqlWorkbenchApi(page: Page) {
             semantic_graph: {},
             warnings: [],
           },
-          warnings: [],
-        },
-        show_prompt: {
-          available: true,
-          engine: "select_ai",
-          action: "showprompt",
-          prompt: "Select AI prompt body\nUse APP.INVOICES only.",
-          unavailable_reason: "",
           warnings: [],
         },
       },
@@ -369,17 +348,14 @@ test("unified execute button runs SQL and renders execution artifacts", async ({
   await expect(page.getByLabel("Schema を使う")).toHaveCount(0);
   await expect(page.getByLabel("公開版オントロジーを使う")).toBeChecked();
   await expect(page.getByLabel("処理手順を表示")).toBeChecked();
-  // Show Prompt は追加の Select AI 呼び出しを伴うため既定 off。
-  const showPromptOption = page.getByLabel("Show Prompt を表示");
-  await expect(showPromptOption).not.toBeChecked();
+  await expect(page.getByLabel("Show Prompt を表示")).toHaveCount(0);
   await expect(executionOptionsDisclosure).not.toContainText("条件あり");
   await glossaryOption.check();
   await expect(executionOptionsDisclosure).toContainText("条件あり");
   await glossaryOption.uncheck();
   await expect(executionOptionsDisclosure).not.toContainText("条件あり");
-  // 以降の rewrite / Show Prompt 呼び出し検証のため ON にする。
+  // 以降の rewrite 呼び出し検証のため ON にする。
   await glossaryOption.check();
-  await showPromptOption.check();
   await expect(page.getByTestId("nl2sql-execution-options")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -398,10 +374,10 @@ test("unified execute button runs SQL and renders execution artifacts", async ({
     use_glossary: true,
     use_ontology_context: true,
     include_interpretation: true,
-    include_show_prompt: true,
   });
-  await expect(page.getByRole("textbox", { name: "生成 SQL" })).toHaveValue(
-    /SELECT TOTAL_AMOUNT FROM INVOICES/
+  expect(api.jobPayload).not.toHaveProperty("include_show_prompt");
+  await expect(page.getByRole("region", { name: "生成 SQL コード" })).toContainText(
+    "SELECT TOTAL_AMOUNT FROM INVOICES"
   );
   await expect(page.getByTestId("nl2sql-interpretation-panel")).toHaveCount(0);
   // 処理手順パネルは semantic graph が無くても logical_steps だけで表示できる。
@@ -423,37 +399,7 @@ test("unified execute button runs SQL and renders execution artifacts", async ({
   await expect(page.getByText("APP.INVOICES を参照し、SELECT 操作を行います。")).toHaveCount(1);
   await expect(page.getByText("1200000")).toBeVisible();
 
-  const showPromptPanel = page.getByTestId("nl2sql-show-prompt-panel");
-  const showPromptSummary = showPromptPanel.locator("summary");
-  // 共有の Disclosure（#397）の Chevron。開閉の状態は data-state と回転で示す。
-  const showPromptChevron = showPromptSummary.locator("svg[data-state]");
-  const showPromptBody = showPromptPanel.getByText("Select AI prompt body");
-  await expect(showPromptPanel).toBeVisible();
-  await expect(showPromptBody).toBeHidden();
-  await expect(showPromptChevron).toHaveAttribute("data-state", "collapsed");
-  await expect(showPromptChevron).toHaveClass(/rotate-90/);
-
-  await showPromptSummary.click();
-  await expect(showPromptBody).toBeVisible();
-  await expect(showPromptChevron).toHaveAttribute("data-state", "expanded");
-  await expect(showPromptChevron).toHaveClass(/rotate-0/);
-
-  await showPromptSummary.click();
-  await expect(showPromptBody).toBeHidden();
-  await expect(showPromptChevron).toHaveAttribute("data-state", "collapsed");
-  await expect(showPromptChevron).toHaveClass(/rotate-90/);
-
-  await showPromptSummary.focus();
-  await page.keyboard.press("Enter");
-  await expect(showPromptBody).toBeVisible();
-  await expect(showPromptChevron).toHaveAttribute("data-state", "expanded");
-  await expect(showPromptChevron).toHaveClass(/rotate-0/);
-
-  await showPromptSummary.focus();
-  await page.keyboard.press("Space");
-  await expect(showPromptBody).toBeHidden();
-  await expect(showPromptChevron).toHaveAttribute("data-state", "collapsed");
-  await expect(showPromptChevron).toHaveClass(/rotate-90/);
+  await expect(page.getByTestId("nl2sql-show-prompt-panel")).toHaveCount(0);
 
   const ontologyOption = page.getByLabel("公開版オントロジーを使う");
   await ontologyOption.focus();
@@ -479,7 +425,6 @@ test("unified execute button runs SQL and renders execution artifacts", async ({
   await expect(page.getByLabel("用語・同義語を使う")).not.toBeChecked();
   await expect(page.getByLabel("Schema を使う")).toHaveCount(0);
   await expect(page.getByLabel("処理手順を表示")).toBeChecked();
-  await expect(page.getByLabel("Show Prompt を表示")).not.toBeChecked();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -564,7 +509,7 @@ test("回答前の確認は「この内容で SQL を生成して実行」で、
   expect(calls.createPayload).toMatchObject({
     question: REQUIREMENT_QUESTION,
     profile_id: "default",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     profile_confirmation_token: "profile-confirmation-token",
     clarification_mode: "guided",
   });
@@ -613,81 +558,6 @@ test("editing the question clears the previous rewrite card", async ({ page }) =
   await expect(page.getByTestId("nl2sql-rewrite-card")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "適用" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
-});
-
-test("select ai overrides show inactive notice for other engines and role can collapse", async ({
-  page,
-}) => {
-  const api = await mockNl2SqlWorkbenchApi(page);
-  await page.goto("/query");
-
-  const overridesDisclosure = page.getByRole("button", { name: /今回だけの生成条件/ });
-  await overridesDisclosure.click();
-  await page.getByLabel("今回の追加条件").fill("最新月だけを対象にする。");
-  const roleDisclosure = page.getByRole("button", { name: /ロールを上書き/ });
-  await roleDisclosure.click();
-  await page.getByLabel("アシスタントロール").fill("財務 SQL アシスタントとして回答する。");
-  await expect(roleDisclosure).toHaveAttribute("aria-expanded", "true");
-
-  await roleDisclosure.click();
-  await expect(roleDisclosure).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByLabel("アシスタントロール")).toBeHidden();
-
-  await page.getByRole("button", { name: /Enterprise AI Direct/ }).click();
-  const executionOptionsDisclosure = page.getByRole("button", { name: /実行オプション/ });
-  await expect(executionOptionsDisclosure).toContainText("条件あり");
-  await executionOptionsDisclosure.click();
-  await expect(page.getByText("今回だけの生成条件は Select AI 実行時のみ適用されます。")).toBeVisible();
-  await page.locator("#nl2sql-question-input").fill("請求金額を確認したい");
-  await page.getByRole("button", { name: "SQL を生成して実行" }).click();
-  await expect.poll(() => api.jobPayload).not.toBeNull();
-  expect(api.jobPayload).toMatchObject({
-    engine: "enterprise_ai_direct",
-    select_ai_overrides: null,
-  });
-
-  api.jobPayload = null;
-  await page.getByRole("button", { name: /^Select AI 質問に表や項目/ }).click();
-  await page.getByRole("button", { name: "SQL を生成して実行" }).click();
-  await expect.poll(() => api.jobPayload).not.toBeNull();
-  expect(api.jobPayload).toMatchObject({
-    engine: "select_ai",
-    select_ai_overrides: {
-      role: "財務 SQL アシスタントとして回答する。",
-      additional_instructions: "最新月だけを対象にする。",
-    },
-  });
-  await expectNoHorizontalOverflow(page);
-});
-
-test("実行エンジンの初期の選択は業務プロファイルの既定の生成方式 (#1524)", async ({ page }) => {
-  const api = await mockNl2SqlWorkbenchApi(page);
-  // 後から登録した route が先に当たる。
-  await page.route("**/api/nl2sql/profiles/default/usage-context", (route) =>
-    fulfillJson(route, {
-      id: profile.id,
-      name: profile.name,
-      category: profile.category,
-      description: profile.description,
-      allowed_tables: profile.allowed_tables,
-      allowed_views: profile.allowed_views,
-      default_engine: "select_ai_agent",
-      archived: profile.archived,
-      object_scope_version: 1,
-      version: profile.version,
-      etag: profile.etag,
-      updated_at: profile.updated_at,
-    })
-  );
-  await page.goto("/query");
-  await expect(page.getByRole("button", { name: /^Select AI Agent/ })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  );
-  await page.locator("#nl2sql-question-input").fill("請求金額を確認したい");
-  await page.getByRole("button", { name: "SQL を生成して実行" }).click();
-  await expect.poll(() => api.jobPayload).not.toBeNull();
-  expect(api.jobPayload).toMatchObject({ engine: "select_ai_agent" });
 });
 
 test("execution options keep ontology toggle usable at mobile width", async ({ page }) => {
@@ -742,54 +612,4 @@ test("用語置換が起きないときは書き換えカードを表示せず�
   expect(api.jobPayload).toMatchObject({ question, use_glossary: true });
   await expect(page.getByText("生成に使用される質問")).toHaveCount(0);
   await expect(page.getByText("変更前の質問")).toHaveCount(0);
-});
-
-test("Select AI Credential が無いと Select AI の生成の前に事前条件を示して実行を止め、Enterprise AI は止めない (#1688)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  const api = await mockNl2SqlWorkbenchApi(page);
-  const readiness = { exists: false };
-  await page.route("**/api/nl2sql/select-ai/credential-readiness", (route) =>
-    fulfillJson(route, {
-      credential_required: true,
-      credential_name: "NL2SQL_OCI_CRED",
-      credential_exists: readiness.exists,
-    })
-  );
-  await page.goto("/query");
-  await page.locator("#nl2sql-question-input").fill("請求金額を確認したい");
-  await page.getByRole("button", { name: /^Select AI(?! Agent)/ }).click();
-
-  const precondition = page.getByTestId("nl2sql-credential-precondition");
-  const run = page.getByRole("button", { name: "SQL を生成して実行" });
-  await expect(precondition).toContainText("Select AI Credential が作成されていません");
-  await expect(precondition).toContainText(
-    "Select AI・Select AI Agent での SQL の生成には Select AI Credential（NL2SQL_OCI_CRED）が必要です。作成するまでSQL を生成して実行できません。"
-  );
-  await expect(precondition.getByRole("link", { name: "Select AI Credential を開く" })).toHaveAttribute(
-    "href",
-    /\/settings\/select-ai-credential$/u
-  );
-  await expect(run).toBeDisabled();
-  await expect(run).toHaveAttribute("aria-describedby", "nl2sql-credential-precondition");
-  // 案内は実行の操作の行の直前に、同じ幅で出す。
-  const [noticeBox, runBox] = await Promise.all([precondition.boundingBox(), run.boundingBox()]);
-  expect(noticeBox!.y + noticeBox!.height).toBeLessThanOrEqual(runBox!.y);
-  await expectNoHorizontalOverflow(page);
-  await precondition.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("query-credential-missing.png") });
-
-  // Select AI Agent も止める。OCI Enterprise AI の直接の生成は Credential を使わないので止めない。
-  await page.getByRole("button", { name: /^Select AI Agent/ }).click();
-  await expect(precondition).toBeVisible();
-  await page.getByRole("button", { name: /^Enterprise AI Direct/ }).click();
-  await expect(precondition).toHaveCount(0);
-  await expect(run).toBeEnabled();
-
-  // Credential を作った後に「再試行」すると、Select AI でも実行できる。
-  await page.getByRole("button", { name: /^Select AI(?! Agent)/ }).click();
-  readiness.exists = true;
-  await precondition.getByRole("button", { name: "再試行" }).click();
-  await expect(precondition).toHaveCount(0);
-  await run.click();
-  await expect.poll(() => api.jobPayload).not.toBeNull();
-  expect(api.jobPayload).toMatchObject({ engine: "select_ai" });
 });

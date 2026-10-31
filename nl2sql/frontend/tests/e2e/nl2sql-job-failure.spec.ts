@@ -23,7 +23,7 @@ const now = "2026-10-02T22:00:00Z";
 const failureMessage =
   "SQL の生成に失敗しました。時間をおいてもう一度実行してください。繰り返し失敗するときは、「詳細」の内容を管理者に伝えてください。";
 const failureDetail =
-  "Select AI の生成に失敗しました: ORA-04027: self-deadlock during automatic validation for object DBMS_CLOUD_AI";
+  "OCI Enterprise AI の呼び出しに失敗しました: ORA-04027: self-deadlock during automatic validation";
 
 // 公開の後に業務プロファイル・Schema が変わった業務定義（#1827）。時間をおいても直らないので
 // 「もう一度」と案内せず、管理者が再検証・公開する所を 1 文目に出す。

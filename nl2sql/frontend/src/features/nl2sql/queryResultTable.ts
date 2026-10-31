@@ -28,14 +28,14 @@ export function isIncompleteResult(results: Pick<QueryResults, "has_more" | "tru
 }
 
 /**
- * 実行した接続の表示の辞書のキー。既定（deterministic）で VPD を掛けていないときは出さない（null）。
+ * 実行した接続の表示の辞書のキー。既定（deterministic）では出さない（null）。
  * 行数・取得の上限・打ち切りは共通の要約が出すので、ここでは接続だけを補足する。
  */
 export function queryResultExecutionContextKey(
-  results: Pick<QueryResults, "execution_context" | "vpd_context_enforced">,
+  results: Pick<QueryResults, "execution_context">,
 ): I18nKey | null {
   const context = results.execution_context ?? "deterministic";
-  if (context === "deterministic" && !results.vpd_context_enforced) return null;
+  if (context === "deterministic") return null;
   return `queryResults.executionContext.${context}` as I18nKey;
 }
 

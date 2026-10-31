@@ -65,7 +65,6 @@ SECRET_VARIABLES = [
     "existing_oracle_password",
     "existing_oracle_wallet_password",
     "app_admin_login_user_password",
-    "nl2sql_oracle_deepsec_data_user_password",
     "bastion_vnc_password",
 ]
 # 任意の bastion の Compute（#2670）の入力と既定値（利用者の決定。2026-10-20）。
@@ -79,7 +78,6 @@ BASTION_VNC_PORT = "5901"
 # 製品ごとの入力は、その製品を選んだときだけフォームに出す（group の visible と、group 内の変数の接頭辞）。
 PRODUCT_GROUPS = {
     "RAG": "rag",
-    "NL2SQL Deep Data Security": "nl2sql",
 }
 # 1 台の Compute（#1316）で廃止した入力・resource。製品ごとの Compute の大きさ、公開 port（80 / 443 に固定）、
 # 製品ごとの Secure Cookie（https_enabled から決める）。stack に残さない。
@@ -184,11 +182,7 @@ REQUIRED_BACKEND_ENV_LINES = {
         "RAG_SERVICE_CONTROL_ENABLED=true\n",
     ],
     "nl2sql": [
-        "NL2SQL_ORACLE_DEEPSEC_ENABLED=${var.nl2sql_oracle_deepsec_enabled}\n",
-        "NL2SQL_ORACLE_DEEPSEC_DATA_USER=DEEPSEC_DATA_USER\n",
-        'NL2SQL_ORACLE_DEEPSEC_DATA_USER_PASSWORD=${var.nl2sql_oracle_deepsec_enabled ? '
-        'var.nl2sql_oracle_deepsec_data_user_password : ""}\n',
-        "NL2SQL_SELECT_AI_CREDENTIAL_NAME=NL2SQL_OCI_CRED\n",
+        "NL2SQL_ONTOLOGY_WORKER_MODE=external\n",
     ],
     "agent": [
         "AGENT_RUNTIME_REPOSITORY_BACKEND=${var.agent_runtime_repository_backend}\n",
@@ -531,22 +525,6 @@ def _verify_schema(schema: str, variables: str) -> None:
          "confirmation: true", "pattern: '^$|"],
         context=f"{ADMIN_PASSWORD_VARIABLE} schema",
     )
-    _require_all(
-        _schema_variable(schema, "nl2sql_oracle_deepsec_data_user_password"),
-        ["- deploy_nl2sql", "- nl2sql_oracle_deepsec_enabled", "confirmation: true"],
-        context="DeepSec password conditional schema",
-    )
-    # Deep Data Security は使う環境だけが有効にする（既定は無効。#1707）。
-    _require_all(
-        _schema_variable(schema, "nl2sql_oracle_deepsec_enabled"),
-        ["type: boolean", "required: true", "visible: deploy_nl2sql", "default: false"],
-        context="nl2sql_oracle_deepsec_enabled schema default",
-    )
-    _require_all(
-        _terraform_variable(variables, "nl2sql_oracle_deepsec_enabled"),
-        ["type        = bool", "default     = false"],
-        context="nl2sql_oracle_deepsec_enabled Terraform default",
-    )
     compute_visible, compute = groups.get("主 Compute の構成", ("", []))
     if compute_visible != "true" or any(name.startswith(PRODUCTS) for name in compute):
         raise AssertionError(f"shared Compute group must hold only shared inputs: {compute}")
@@ -556,7 +534,7 @@ def _verify_schema(schema: str, variables: str) -> None:
         "New Autonomous AI Database", "ADB のネットワーク", "アプリ用の DB ユーザー",
         "主 Compute の構成", "主 Compute のネットワークと SSH", "HTTPS", "Bastion", "bastion の構成",
         "bastion のネットワークと接続", "アプリケーション管理者", "RAG",
-        "NL2SQL Deep Data Security", "配備する製品", "Hidden",
+        "配備する製品", "Hidden",
     ]
     if list(groups) != expected_groups:
         raise AssertionError(f"Resource Manager groups must follow the deployment flow: {list(groups)}")
@@ -752,7 +730,6 @@ def _verify_terraform(variables: str, adb: str, compute: str, locals_source: str
             # 公開の port に SSH・よく使われる service・Compute の中で使う port を使わせない（#1316）。
             "condition     = length(local.public_ports_reserved) == 0",
             'var.platform_environment == "local" || var.https_enabled',
-            "!var.deploy_nl2sql || !var.nl2sql_oracle_deepsec_enabled",
             # 3製品で同じサービス間 token の署名鍵。
             'resource "random_password" "service_token_secret" {',
             "special = false",

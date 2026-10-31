@@ -15,7 +15,6 @@ import {
   FormStatus,
   PageBody,
   useConfirm,
-  BulkSelectionActions,
   ProcessingIndicator,
   RowActionMenu,
   ListSkeleton,
@@ -23,7 +22,6 @@ import {
   OffsetPagination,
   TableSkeleton,
   TimedLoadingState,
-  FieldLegend,
   SelectField,
   TextField,
   formatDisplayDateTime,
@@ -42,9 +40,6 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import { SelectAiCredentialPrecondition } from "../components/SelectAiCredentialPrecondition";
-import { enginesUseSelectAiCredential } from "../selectAiCredentialReadiness";
-import { useSelectAiCredentialReadiness } from "../useSelectAiCredentialReadiness";
 
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { FileDropzone } from "@/components/ui/file-dropzone";
@@ -63,7 +58,6 @@ import {
   qualityEvaluationLastHeartbeatMs,
   qualityEvaluationLeaseExpired,
   qualityEvaluationPollingInterval,
-  toggleQualityEvaluationEngine,
   validateQualityEvaluationInput,
   type QualityEvaluationValidationCode,
 } from "../qualityEvaluationLogic";
@@ -89,8 +83,8 @@ const TERMINAL_STATUSES = new Set<QualityEvaluationStatus>([
 const ACTIVE_STATUSES = new Set<QualityEvaluationStatus>(["pending", "running"]);
 const sectionClass = "grid min-w-0 gap-5 rounded-lg border border-border bg-surface p-4 shadow-sm lg:p-5";
 
-/** 「評価を開始」の aria-describedby が指す、Select AI の Credential の事前条件（#1688）。 */
-const EVALUATION_CREDENTIAL_PRECONDITION_ID = "quality-evaluation-credential-precondition";
+/** 評価する SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+const ENGINES: readonly QualityEvaluationEngine[] = ["enterprise_ai_direct"];
 
 type FormErrors = Partial<Record<"profile" | "file" | "engines" | "repeat", string>>;
 /**
@@ -121,7 +115,7 @@ export function EvaluationPage() {
   const [downloadError, setDownloadError] = useState<{ origin: "template" | "results"; message: string } | null>(null);
   const [profileId, setProfileId] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [engines, setEngines] = useState<QualityEvaluationEngine[]>([]);
+  const engines = ENGINES;
   const [repeatCount, setRepeatCount] = useState(1);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [startError, setStartError] = useState("");
@@ -241,7 +235,6 @@ export function EvaluationPage() {
     },
     onError: (cause) => {
       setStartError(qualityEvaluationStartErrorMessage(cause));
-      selectAiCredential.refreshAfterError(cause);
     },
   });
 
@@ -286,16 +279,6 @@ export function EvaluationPage() {
       capabilities?.engines.filter((item) => engines.includes(item.engine)) ?? [],
     [capabilities?.engines, engines]
   );
-  const availableEngineIds = useMemo(
-    () =>
-      (capabilities?.engines ?? [])
-        .filter((capability) => capability.available)
-        .map((capability) => capability.engine),
-    [capabilities?.engines]
-  );
-  const selectedAvailableEngineCount = availableEngineIds.filter((engine) =>
-    engines.includes(engine)
-  ).length;
   const selectedUnavailable = selectedCapabilities.some((item) => !item.available);
   const running = Boolean(currentJob && ACTIVE_STATUSES.has(currentJob.status));
   const conditionsLocked = running || startMutation.isPending;
@@ -308,7 +291,7 @@ export function EvaluationPage() {
     const codes = validateQualityEvaluationInput({
       profileId,
       file,
-      engines,
+      engines: [...engines],
       repeatCount,
       maxFileBytes: capabilities?.limits.max_file_bytes ?? 10 * 1024 * 1024,
       capabilities: capabilities?.engines ?? [],
@@ -323,32 +306,14 @@ export function EvaluationPage() {
     return Object.keys(next).length === 0;
   };
 
-  // Select AI / Select AI Agent の評価は Select AI の Credential が前提（#1688）。選んだ方式に含まれ、
-  // Credential が無いと分かったら「評価を開始」の直前に事前条件を示し、開始を止める。
-  const selectAiCredential = useSelectAiCredentialReadiness();
-  const selectAiCredentialBlocked =
-    enginesUseSelectAiCredential(engines) && selectAiCredential.missing;
 
   const startEvaluation = () => {
-    if (conditionsLocked || selectAiCredentialBlocked) return;
+    if (conditionsLocked) return;
     setDownloadError(null);
     setStartError("");
     if (validate()) startMutation.mutate();
   };
 
-  const toggleEngine = (engine: QualityEvaluationEngine) => {
-    setEngines((current) => toggleQualityEvaluationEngine(current, engine));
-    setFormErrors((current) => ({ ...current, engines: undefined }));
-  };
-  const selectAllEngines = () => {
-    setEngines((current) => [...new Set([...current, ...availableEngineIds])]);
-    setFormErrors((current) => ({ ...current, engines: undefined }));
-  };
-  const clearAllEngines = () => {
-    const availableEngineSet = new Set(availableEngineIds);
-    setEngines((current) => current.filter((engine) => !availableEngineSet.has(engine)));
-    setFormErrors((current) => ({ ...current, engines: undefined }));
-  };
 
   const openJob = (jobId: string) => {
     const next = new URLSearchParams(searchParams);
@@ -540,87 +505,18 @@ export function EvaluationPage() {
                 </div>
               </FormGrid>
 
-              {/* 区切り線は外側に置く。fieldset に border-t を付けると、見える legend が線の上に重なるため（#531）。 */}
-              <div className="min-w-0 border-t border-border pt-4">
-              <fieldset
-                className="grid min-w-0 gap-3"
-                disabled={conditionsLocked}
-                aria-describedby="quality-engines-hint quality-engines-error"
-                data-testid="quality-evaluation-engine-fieldset"
-              >
-                {/* 実行エンジンは 1 つ以上の選択が必要（engine_required）。 */}
-                <FieldLegend required>{t("qualityEvaluation.engines.label")}</FieldLegend>
-                <p id="quality-engines-hint" className="mt-1 text-xs leading-5 text-fg-muted">
-                  {t("qualityEvaluation.engines.hint")}
-                </p>
-                {availableEngineIds.length > 0 ? (
-                  <BulkSelectionActions
-                    selectLabel={t("common.selection.selectAll")}
-                    clearLabel={t("common.selection.clearAll")}
-                    selectDisabled={
-                      conditionsLocked || selectedAvailableEngineCount === availableEngineIds.length
-                    }
-                    clearDisabled={conditionsLocked || selectedAvailableEngineCount === 0}
-                    dataTestId="quality-evaluation-engine-selection-actions"
-                    onSelectAll={selectAllEngines}
-                    onClearAll={clearAllEngines}
-                  />
-                ) : null}
-                <div
-                  className="grid min-w-0 gap-3 md:grid-cols-3"
-                  data-testid="quality-evaluation-engine-grid"
-                >
-                  {(capabilities?.engines ?? []).map((capability) => {
-                    const selected = engines.includes(capability.engine);
-                    return (
-                      <label
-                        key={capability.engine}
-                        data-surface-tint={!capability.available ? "neutral" : selected ? "accent" : undefined}
-                        className={`grid min-h-[6.75rem] min-w-0 content-start gap-2 rounded-md border p-4 transition ${
-                          capability.available
-                            ? selected
-                              ? "border-accent-emphasis bg-accent-subtle"
-                              : "border-border bg-surface-sunken hover:border-accent-emphasis"
-                            : "cursor-not-allowed border-border bg-surface-hover opacity-70"
-                        }`}
-                      >
-                        <span className="flex min-w-0 items-start gap-3">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 size-4 accent-accent-emphasis"
-                            checked={selected}
-                            disabled={!capability.available || conditionsLocked}
-                            onChange={() => toggleEngine(capability.engine)}
-                          />
-                          <span className="min-w-0">
-                            <span className="block font-semibold text-fg">
-                              {capability.label}
-                            </span>
-                            {!capability.available ? (
-                              <span className="mt-1 block text-xs leading-5 text-fg-muted">
-                                {capability.reason}
-                              </span>
-                            ) : (
-                              <span className="mt-1 block text-xs text-fg-muted">
-                                {t("qualityEvaluation.engines.strict")}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                        {!capability.available ? (
-                          <StatusBadge
-                            variant="warning"
-                            label={t("qualityEvaluation.engines.unavailable")}
-                            className="justify-self-start"
-                          />
-                        ) : null}
-                      </label>
-                    );
-                  })}
+              {/* SQL の生成の方式（OCI Enterprise AI）がこの環境で使えないときは、理由を開始の前に示す。 */}
+              {selectedUnavailable ? (
+                <div data-testid="quality-evaluation-engine-unavailable">
+                  <Banner severity="warning" title={t("qualityEvaluation.engines.unavailable")}>
+                    {selectedCapabilities
+                      .filter((item) => !item.available)
+                      .map((item) => item.reason)
+                      .join(" ")}
+                  </Banner>
                 </div>
-                <FieldError id="quality-engines-error" message={formErrors.engines} />
-              </fieldset>
-              </div>
+              ) : null}
+              <FieldError id="quality-engines-error" message={formErrors.engines} />
 
               <div
                 className="grid min-w-0 gap-3 border-t border-border pt-4 lg:grid-cols-[minmax(13rem,20rem)_minmax(0,1fr)] lg:items-start"
@@ -677,19 +573,6 @@ export function EvaluationPage() {
               <div data-testid="quality-evaluation-judge-note">
                 <Banner severity="info">{t("qualityEvaluation.judge.note")}</Banner>
               </div>
-              {/* Select AI の Credential の事前条件（#1688）。開始の操作の直前に全幅で出す。 */}
-              {selectAiCredentialBlocked ? (
-                <SelectAiCredentialPrecondition
-                  id={EVALUATION_CREDENTIAL_PRECONDITION_ID}
-                  testId="quality-evaluation-credential-precondition"
-                  operation={t("selectAiCredential.precondition.operation.evaluation")}
-          action={t("selectAiCredential.precondition.action.evaluationStart")}
-          credentialName={selectAiCredential.credentialName}
-                  canOpenSettings={selectAiCredential.canOpenSettings}
-                  rechecking={selectAiCredential.rechecking}
-                  onRecheck={() => void selectAiCredential.recheck()}
-                />
-              ) : null}
               <div
                 className="grid min-w-0 justify-items-end gap-2 border-t border-border pt-4"
                 data-testid="quality-evaluation-action-footer"
@@ -704,11 +587,7 @@ export function EvaluationPage() {
                     startMutation.isPending ||
                     capabilitiesRefreshing ||
                     !capabilities?.judge.available ||
-                    selectedUnavailable ||
-                    selectAiCredentialBlocked
-                  }
-                  aria-describedby={
-                    selectAiCredentialBlocked ? EVALUATION_CREDENTIAL_PRECONDITION_ID : undefined
+                    selectedUnavailable
                   }
                   icon={Play}>
                   {t("qualityEvaluation.action.start")}

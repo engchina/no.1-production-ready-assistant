@@ -107,7 +107,7 @@ def _history(
     return HistoryItem(
         id=history_id,
         question=question,
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT 1 FROM DUAL",
         created_at="2026-07-19T00:00:00+00:00",
         profile_id=profile_id,

@@ -43,7 +43,7 @@ function withBrowserStorage(owner: string, context: string, action: (storage: Ac
 }
 
 /** 復元直後に表示する in-flight プレースホルダ。実データは次のポーリングで上書きされる。 */
-function syntheticInFlightJob(jobId: string, startedAtMs: number): JobData {
+function placeholderInFlightJob(jobId: string, startedAtMs: number): JobData {
   return {
     job_id: jobId,
     status: "running",
@@ -175,7 +175,7 @@ export function useNl2SqlJobPolling({
       if (!snapshot) return;
       trackedJobIdRef.current = snapshot.jobId;
       setJobStartedAt(snapshot.startedAtMs);
-      setJob(syntheticInFlightJob(snapshot.jobId, snapshot.startedAtMs));
+      setJob(placeholderInFlightJob(snapshot.jobId, snapshot.startedAtMs));
     });
   }, [withStorage]);
 

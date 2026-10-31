@@ -281,8 +281,6 @@ API は 422 で「既定のテキストモデルを選択してください。�
     「サービス管理」から parser を再起動する）。env・config で渡す値は「送る値」（`none` は空）。
   - NL2SQL: `enterprise_ai_client`（SQL 生成・評価・オントロジーの VLM など、テキストと画像のすべての呼び出しと接続テスト）。
   - Agent: 組み込み Runtime の SDK の `ModelSettings(reasoning=…)`（Run と品質評価の判定）とモデルの接続テスト。
-- NL2SQL の Select AI・Select AI Agent には効かない（AI profile（`DBMS_CLOUD_AI`）に推論の量の属性が無い。画面の推論の量の説明と、
-  業務プロファイルの Select AI 設定に書いている）。
 - `max_output_tokens` は思考の token も含むので、推論の量を減らすと出力上限での未完了（#987）も減る。
 - 推論型のモデルの 1 回の呼び出しが数十秒になるため、RAG の回答の上限 `RAG_ANSWER_TIMEOUT_SECONDS` の既定を 600 秒（上限と同じ）にし、
   Agent の接続 `rag` の待ち時間 `AGENT_EXTERNAL_RAG_TIMEOUT_SECONDS` の既定を 630 秒（MCP のタイムアウト秒の上限は 900 秒）にした。
@@ -290,8 +288,7 @@ API は 422 で「既定のテキストモデルを選択してください。�
 
 ## LLM / VLM の呼び出しの seed は送らない（#3529）
 
-3 製品の Enterprise AI の呼び出し（Responses API の top-level の `seed`）にも、NL2SQL の Select AI の AI profile（`DBMS_CLOUD_AI`）の
-`seed` 属性にも、seed を入れない。設定・画面の欄も持たない。seed を受け付けないモデル（未知の引数を拒む endpoint）では、すべての
+3 製品の Enterprise AI の呼び出し（Responses API の top-level の `seed`）に seed を入れない。設定・画面の欄も持たない。seed を受け付けないモデル（未知の引数を拒む endpoint）では、すべての
 呼び出しが HTTP 400（`Unknown parameter: 'seed'`）になるため。受け付けるモデルでも出力の再現性はモデル側の対応次第だった。
 保存済みの `model-settings.json` の `enterprise_ai.seed` は読み込みで読み捨てる。
 

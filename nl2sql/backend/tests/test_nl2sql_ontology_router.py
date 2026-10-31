@@ -178,7 +178,7 @@ class _FakeLegacyNl2SqlService:
                 "generation_elapsed_ms": 42,
                 "engine_timings": [
                     {
-                        "engine": "select_ai_agent",
+                        "engine": "enterprise_ai_direct",
                         "elapsed_ms": 42,
                         "status": "success",
                         "error": "",
@@ -354,7 +354,6 @@ def _principal_with_permissions(permissions: set[str]) -> Principal:
         force_password_change=False,
         role_codes=["ANALYST"],
         permissions=permissions,
-        data_entitlements=[],
         allowed_profile_ids={"sales"},
         session_id="session-1",
         csrf_token_hash="csrf",
@@ -926,7 +925,7 @@ def test_runtime_executes_two_confirmation_flow_and_persists_every_artifact(
     assert legacy.recorded_history[0]["actor_user_uuid"] == "user-1"
     assert legacy.recorded_history[0]["ontology_trace_summary"]["validation_hash"]
     assert legacy.recorded_history[0]["generation_elapsed_ms"] == 42
-    assert legacy.recorded_history[0]["engine_timings"][0]["engine"] == "select_ai_agent"
+    assert legacy.recorded_history[0]["engine_timings"][0]["engine"] == "enterprise_ai_direct"
     assert legacy.recorded_history[0]["stage_timings"][0].stage == "generate"
 
     assert len(store.list_revisions()) == 1

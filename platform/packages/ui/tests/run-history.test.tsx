@@ -140,12 +140,12 @@ describe("書式と絞り込みの値", () => {
       unmeasuredCalls: null,
     });
     const mixed = runUsageView(
-      { ...usage, measurement: "partial", measured_requests: 2, unmeasured_sources: ["select_ai"] },
+      { ...usage, measurement: "partial", measured_requests: 2, unmeasured_sources: ["db_model"] },
       { sourceLabel: (source) => `出どころ ${source}` }
     );
     expect(mixed.usage).toEqual({ tokens: 12345, note: "一部計測" });
     expect(mixed.modelCalls).toBe("3 回（うち 2 回を計測。入力 12,000 / 出力 345 token）");
-    expect(mixed.unmeasuredCalls).toBe("出どころ select_ai");
+    expect(mixed.unmeasuredCalls).toBe("出どころ db_model");
     // 計測できない呼び出しだけ: 数を作らない。
     const unmeasured = runUsageView({
       models: [],
@@ -155,13 +155,13 @@ describe("書式と絞り込みの値", () => {
       total_tokens: 0,
       measurement: "unmeasured",
       measured_requests: 0,
-      unmeasured_sources: ["select_ai"],
+      unmeasured_sources: ["db_model"],
     });
     expect(unmeasured).toEqual({
       model: null,
       usage: { tokens: null, note: "未計測" },
       modelCalls: "未計測",
-      unmeasuredCalls: "select_ai",
+      unmeasuredCalls: "db_model",
     });
     // 記録の無い実行は未計測（0 にしない）。記録の列のモデルは出す。
     expect(runUsageView(null, { fallbackModel: "model-x" })).toEqual({

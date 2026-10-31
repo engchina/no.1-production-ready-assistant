@@ -49,7 +49,6 @@ export const systemAdminMe = {
   role_display_names: ["システム管理者"],
   is_system_admin: true,
   permissions: [],
-  data_entitlements: [],
   allowed_profile_ids: [],
   debug_mode: false,
   password_change_allowed: true,

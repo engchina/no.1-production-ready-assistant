@@ -19,10 +19,9 @@ from pr_backend_core.api import CursorParams
 
 from app import settings as app_settings_module
 from app.features.nl2sql import router as nl2sql_router
+from app.features.nl2sql.enterprise_ai_client import EnterpriseAiDirectError
 from app.features.nl2sql.models import (
     AdminFeedbackReviewRequest,
-    AgentConversationCreateRequest,
-    AgentTeamRunRequest,
     AllowedObjects,
     ExecuteRequest,
     FeedbackIndexRequest,
@@ -43,18 +42,11 @@ from app.features.nl2sql.models import (
     SchemaCatalog,
     SchemaColumn,
     SchemaTable,
-    SelectAiFeedbackAddRequest,
-    SelectAiFeedbackDeleteRequest,
-    SelectAiFeedbackVectorIndexRequest,
     SimilarHistoryRequest,
     SqlRequirementSpec,
     SqlRequirementSpecItem,
 )
-from app.features.nl2sql.oracle_adapter import (
-    OracleAdapterError,
-    OracleNl2SqlAdapter,
-    _extract_select_statement,
-)
+from app.features.nl2sql.oracle_adapter import OracleAdapterError, OracleNl2SqlAdapter
 from app.features.nl2sql.router import is_select_only
 from app.features.nl2sql.service import (
     GeneratedSql,
@@ -94,21 +86,6 @@ class _FakeOracleDb:
         self.constraint_rows: list[tuple[object, ...]] = []
         self.sample_values: dict[tuple[str, str], list[object]] = {}
         self.feedback_vector_rows: list[tuple[object, ...]] = []
-        self.select_ai_feedback_rows: list[tuple[object, ...]] = []
-        self.select_ai_feedback_missing = False
-        self.select_ai_feedback_error = ""
-        self.unsupported_agent_runtime = False
-        self.run_team_signature_failures = 0
-        self.run_team_calls = 0
-        self.run_team_profile_loss = False
-        self.agent_conversation_id = "conversation-001"
-        self.create_conversation_error = ""
-        self.run_tool_error = ""
-        self.create_team_profile_exists_failures = 0
-        self.create_team_calls = 0
-        self.synthetic_function_signature_failures = 0
-        self.synthetic_procedure_calls = 0
-        self.show_prompt_text = "PROMPT: Select AI will generate SQL for the question."
         self.call_timeouts: list[int] = []
 
     def connection(self) -> "_FakeOracleConnection":
@@ -154,12 +131,6 @@ class _FakeOracleCursor:
         self.db.executed_params.append(dict(params) if params is not None else None)
         self._row = None
         self._rows = []
-        if self.db.unsupported_agent_runtime and "DBMS_CLOUD_AI_AGENT" in normalized_sql:
-            raise RuntimeError("ORA-00904: invalid identifier")
-        if "DBMS_CLOUD_AI_AGENT.CREATE_TEAM" in normalized_sql:
-            self.db.create_team_calls += 1
-            if self.db.create_team_calls <= self.db.create_team_profile_exists_failures:
-                raise RuntimeError("ORA-20046: Profile AGENT$NL2SQL_DEFAULT_TEAM already exists.")
         if normalized_sql.startswith("MERGE INTO"):
             if params is not None and "state_json" in params:
                 self.db.state_json = str(params["state_json"])
@@ -181,58 +152,6 @@ class _FakeOracleCursor:
             self._rows = [(_FakeLob("long text"),)]
         elif "VECTOR_DISTANCE" in normalized_sql:
             self._rows = self.db.feedback_vector_rows
-        elif "FEEDBACK_VECINDEX$VECTAB" in normalized_sql:
-            if self.db.select_ai_feedback_missing:
-                raise RuntimeError("ORA-00942: table or view does not exist")
-            if normalized_sql.startswith("SELECT COUNT(*)"):
-                self._row = (len(self.db.select_ai_feedback_rows),)
-            else:
-                self.description = [("CONTENT",), ("SQL_ID",), ("SQL_TEXT",), ("ATTRIBUTES",)]
-                offset = int(str((params or {}).get("offset") or 0))
-                limit = int(
-                    str((params or {}).get("limit") or len(self.db.select_ai_feedback_rows))
-                )
-                self._rows = self.db.select_ai_feedback_rows[offset : offset + limit]
-        elif (
-            "DBMS_CLOUD_AI.FEEDBACK" in normalized_sql
-            or "DBMS_CLOUD_AI.UPDATE_VECTOR_INDEX" in normalized_sql
-        ):
-            if self.db.select_ai_feedback_missing:
-                raise RuntimeError("ORA-00942: table or view does not exist")
-            if self.db.select_ai_feedback_error and "DBMS_CLOUD_AI.FEEDBACK" in normalized_sql:
-                raise RuntimeError(self.db.select_ai_feedback_error)
-        elif "DBMS_CLOUD_AI.CREATE_CONVERSATION" in normalized_sql:
-            if self.db.create_conversation_error:
-                raise RuntimeError(self.db.create_conversation_error)
-            self._row = (self.db.agent_conversation_id,)
-        elif "DBMS_CLOUD_AI.GENERATE(" in normalized_sql:
-            if str((params or {}).get("action") or "").lower() == "showprompt":
-                self._row = (self.db.show_prompt_text,)
-            else:
-                self._row = ("SELECT TOTAL_AMOUNT FROM INVOICES",)
-        elif "DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA" in normalized_sql:
-            if normalized_sql.startswith("SELECT"):
-                if self.db.synthetic_function_signature_failures > 0:
-                    self.db.synthetic_function_signature_failures -= 1
-                    raise RuntimeError(
-                        'ORA-00904: "DBMS_CLOUD_AI"."GENERATE_SYNTHETIC_DATA": invalid identifier'
-                    )
-                self._row = ("operation-001",)
-            else:
-                self.db.synthetic_procedure_calls += 1
-        elif "DBMS_CLOUD_AI_AGENT.RUN_TEAM" in normalized_sql:
-            self.db.run_team_calls += 1
-            if self.db.run_team_profile_loss:
-                raise RuntimeError("ORA-20046: Invalid profile")
-            if self.db.run_team_calls <= self.db.run_team_signature_failures:
-                raise RuntimeError(
-                    "ORA-06553: PLS-306: wrong number or types of arguments in call to 'RUN_TEAM'"
-                )
-            self._row = ('{"sql":"SELECT TOTAL_AMOUNT FROM INVOICES"}',)
-        elif "DBMS_CLOUD_AI_AGENT.RUN_TOOL" in normalized_sql:
-            if self.db.run_tool_error:
-                raise RuntimeError(self.db.run_tool_error)
-            self._row = ("SELECT TOTAL_AMOUNT FROM INVOICES",)
 
     def setinputsizes(self, **kwargs: object) -> None:
         self.db.input_sizes.append(kwargs)
@@ -275,36 +194,6 @@ class _FakeRuntimeOracleAdapter(OracleNl2SqlAdapter):
     def is_configured(self) -> bool:
         return True
 
-    def upsert_select_ai_profile_low_level(
-        self,
-        *,
-        profile_name: str,
-        attributes: dict[str, Any],
-        description: str = "",
-        original_name: str = "",
-    ) -> dict[str, Any]:
-        result = super().upsert_select_ai_profile_low_level(
-            profile_name=profile_name,
-            attributes=attributes,
-            description=description,
-            original_name=original_name,
-        )
-        self.profile_details[profile_name.upper()] = {
-            "name": profile_name,
-            "status": "ready",
-            "owner": "APP",
-            "description": description,
-            "attributes": dict(attributes),
-            "object_list": list(attributes.get("object_list") or []),
-        }
-        return result
-
-    def get_select_ai_profile_detail(self, *, profile_name: str) -> dict[str, Any]:
-        detail = self.profile_details.get(profile_name.upper())
-        if detail is not None:
-            return dict(detail)
-        return super().get_select_ai_profile_detail(profile_name=profile_name)
-
     @contextmanager
     def connection(self, *, call_timeout_seconds: float | None = None) -> Iterator[Any]:
         with self.db.connection() as conn:
@@ -315,77 +204,20 @@ class _FakeRuntimeOracleAdapter(OracleNl2SqlAdapter):
 
     @contextmanager
     def runtime_connection(self, *, call_timeout_seconds: float | None = None) -> Iterator[Any]:
-        # 業務データの読み取り・Select AI の生成の pool（#904）も同じ fake の DB にする。
+        # 業務データの読み取りの pool（#904）も同じ fake の DB にする。
         with self.connection(call_timeout_seconds=call_timeout_seconds) as conn:
             yield conn
 
 
 class _QuestionCaptureOracleAdapter(_FakeRuntimeOracleAdapter):
+    """生成が返す SQL と、生成に渡した質問を持つ fake（`_CaptureEnterpriseAiClient` が使う）。"""
+
     def __init__(
         self, db: _FakeOracleDb, generated_sql: str = "SELECT TOTAL_AMOUNT FROM INVOICES"
     ) -> None:
         super().__init__(db)
         self.generated_sql = generated_sql
         self.questions: list[str] = []
-        self.attributes: list[dict[str, str] | None] = []
-        self.actions: list[str] = []
-
-    def generate_select_ai_sql(
-        self,
-        *,
-        profile_name: str,
-        question: str,
-        action: str = "showsql",
-        attributes: dict[str, str] | None = None,
-        call_timeout_seconds: float | None = None,
-    ) -> str:
-        del profile_name, call_timeout_seconds
-        self.questions.append(question)
-        self.attributes.append(attributes)
-        self.actions.append(action)
-        return self.generated_sql
-
-    def generate_select_ai_prompt(
-        self,
-        *,
-        profile_name: str,
-        question: str,
-        attributes: dict[str, str] | None = None,
-        call_timeout_seconds: float | None = None,
-    ) -> str:
-        del profile_name, call_timeout_seconds
-        self.questions.append(question)
-        self.attributes.append(attributes)
-        self.actions.append("showprompt")
-        return "PROMPT: Select AI will generate SQL for the question."
-
-    def run_select_ai_agent_team(
-        self,
-        *,
-        team_name: str,
-        question: str,
-        tool_name: str | None = None,
-        conversation_id: str | None = None,
-        call_timeout_seconds: float | None = None,
-    ) -> tuple[str, str]:
-        del team_name, tool_name, conversation_id, call_timeout_seconds
-        self.questions.append(question)
-        return "SELECT TOTAL_AMOUNT FROM INVOICES", "conversation-001"
-
-
-class _FailingSelectAiOracleAdapter(_QuestionCaptureOracleAdapter):
-    def generate_select_ai_sql(
-        self,
-        *,
-        profile_name: str,
-        question: str,
-        action: str = "showsql",
-        attributes: dict[str, str] | None = None,
-        call_timeout_seconds: float | None = None,
-    ) -> str:
-        del profile_name, action, attributes, call_timeout_seconds
-        self.questions.append(question)
-        raise RuntimeError('ORA-00904: "DBMS_CLOUD_AI"."GENERATE": invalid identifier')
 
 
 class _SampleAdminOracleAdapter(_FakeRuntimeOracleAdapter):
@@ -471,6 +303,38 @@ class _FakeEmbeddingClient:
         return [[0.01 for _ in range(1536)] for _text in texts]
 
 
+def _oracle_runtime_catalog() -> SchemaCatalog:
+    """fake の Oracle runtime の SQL の生成に渡す schema（合成の表）。"""
+
+    def column(name: str, data_type: str = "VARCHAR2") -> SchemaColumn:
+        return SchemaColumn(column_name=name, logical_name=name, data_type=data_type)
+
+    return SchemaCatalog(
+        refreshed_at="2026-08-17T00:00:00+00:00",
+        current_owner="APP",
+        tables=[
+            SchemaTable(
+                table_name="INVOICES",
+                logical_name="請求",
+                owner="APP",
+                columns=[
+                    column("INVOICE_ID", "NUMBER"),
+                    column("CUSTOMER_NAME"),
+                    column("TOTAL_AMOUNT", "NUMBER"),
+                    column("INVOICE_DATE", "DATE"),
+                ],
+            ),
+            SchemaTable(
+                table_name="DEPARTMENT",
+                logical_name="部署",
+                owner="APP",
+                comment="部署情報を管理するテーブル",
+                columns=[column("DEPARTMENT_ID", "NUMBER"), column("DEPARTMENT_NAME")],
+            ),
+        ],
+    )
+
+
 def _similar_history_sample_catalog() -> SchemaCatalog:
     return SchemaCatalog(
         refreshed_at="2026-08-17T00:00:00+00:00",
@@ -521,6 +385,10 @@ class _OracleRuntimeNl2SqlService(Nl2SqlService):
         super().__init__(store=MemoryNl2SqlStore())
         self._oracle_adapter = adapter
         self._embedding_client = _FakeEmbeddingClient()
+        # SQL の生成（OCI Enterprise AI）は決定論の fake。adapter が SQL を持てばそれを返す。
+        self._enterprise_ai_client = _CaptureEnterpriseAiClient(adapter)
+        # SQL の生成は schema を文脈に渡すため、fake の DB の表を catalog に置く。
+        self._catalog = _oracle_runtime_catalog()
 
     def _use_oracle_runtime(self) -> bool:
         return True
@@ -551,6 +419,32 @@ class _FakeEnterpriseAiClient:
         del timeout_seconds, max_retries
         self.calls.append({"prompt": prompt, "context": context, "system_prompt": system_prompt})
         return self.text
+
+
+class _CaptureEnterpriseAiClient(_FakeEnterpriseAiClient):
+    """生成した SQL を adapter から取り、生成に渡した質問を adapter に残す fake。"""
+
+    def __init__(self, adapter: OracleNl2SqlAdapter) -> None:
+        super().__init__("")
+        self.adapter = adapter
+
+    def generate(
+        self,
+        *,
+        prompt: str,
+        context: str,
+        system_prompt: str,
+        timeout_seconds: float | None = None,
+        max_output_tokens: int | None = None,
+        max_retries: int | None = None,
+        response_format: object | None = None,
+    ) -> str:
+        self.calls.append({"prompt": prompt, "context": context, "system_prompt": system_prompt})
+        questions = getattr(self.adapter, "questions", None)
+        if isinstance(questions, list):
+            questions.append(prompt)
+        sql = getattr(self.adapter, "generated_sql", "SELECT TOTAL_AMOUNT FROM INVOICES")
+        return json.dumps({"sql": sql, "explanation": "合成の説明"}, ensure_ascii=False)
 
 
 def _import_sample(service: Nl2SqlService) -> None:
@@ -685,7 +579,7 @@ async def test_sample_import_enables_preview_and_delete() -> None:
     data = resp.json()["data"]
     assert data["is_safe"] is True
     assert data["sql"].lower().startswith("select")
-    assert data["engine"] == "select_ai"
+    assert data["engine"] == "enterprise_ai_direct"
     assert data["timing"]["elapsed_ms"] >= 0
     assert delete_resp.status_code == 200
     assert delete_resp.json()["data"]["executed"] is True
@@ -763,48 +657,20 @@ def test_enterprise_ai_direct_preview_respects_use_glossary_flag() -> None:
     assert "- 社員: EMPLOYEE.EMPLOYEE_NAME" in fake_client.calls[1]["context"]
 
 
-def test_oracle_runtime_question_does_not_include_custom_learning_examples() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="oracle_fixture_profile",
-            name="Oracle fixture",
-            few_shot_examples=[
-                {
-                    "question": "請求金額を一覧したい",
-                    "sql": "SELECT CUSTOMER_NAME, TOTAL_AMOUNT FROM INVOICES",
-                }
-            ],
-        )
-    )
-
-    preview = service.preview(
-        PreviewRequest(
-            question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-        )
-    )
-
-    assert preview.sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert adapter.questions
-    assert adapter.questions[0] == "請求金額を確認したい"
-    assert "learning_examples:" not in adapter.questions[0]
-    assert "SELECT CUSTOMER_NAME, TOTAL_AMOUNT FROM INVOICES" not in adapter.questions[0]
-    assert "今回の質問:" not in adapter.questions[0]
-    assert "learning_examples" not in preview.engine_meta
+class _FailingEnterpriseAiClient(_FakeEnterpriseAiClient):
+    def generate(self, **_kwargs: Any) -> str:
+        raise EnterpriseAiDirectError("合成の失敗: upstream_unavailable")
 
 
-def test_select_ai_job_failure_is_logged_with_stage_metadata(
+def test_generation_job_failure_is_logged_with_stage_metadata(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    adapter = _FailingSelectAiOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
+    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(_FakeOracleDb()))
+    service._enterprise_ai_client = _FailingEnterpriseAiClient("")  # noqa: SLF001
     profile = service.create_profile(
         Nl2SqlProfile(
-            id="select_ai_error_profile",
-            name="Select AI error profile",
+            id="generation_error_profile",
+            name="生成の失敗のプロファイル",
             allowed_tables=["INVOICES"],
         )
     )
@@ -813,7 +679,7 @@ def test_select_ai_job_failure_is_logged_with_stage_metadata(
         created = service.start_job(
             JobCreateRequest(
                 question="請求を確認したい",
-                engine=Nl2SqlEngine.SELECT_AI,
+                engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                 profile_id=profile.id,
             )
         )
@@ -832,20 +698,20 @@ def test_select_ai_job_failure_is_logged_with_stage_metadata(
     assert job.error_message is not None
     assert job.warning_message is None
     # 例外の文は 1 文目に出さず、詳細に分ける（#1072）。
-    assert '"DBMS_CLOUD_AI"."GENERATE"' not in job.error_message
+    assert "upstream_unavailable" not in job.error_message
     assert job.error_detail is not None
-    assert '"DBMS_CLOUD_AI"."GENERATE"' in job.error_detail
+    assert "upstream_unavailable" in job.error_detail
     assert matching_records
     record = matching_records[-1]
     assert record.exc_info is not None
     assert record.job_id == created.job_id  # type: ignore[attr-defined]
     assert record.failure_stage == "generate_sql"  # type: ignore[attr-defined]
-    assert record.engine == "select_ai"  # type: ignore[attr-defined]
+    assert record.engine == "enterprise_ai_direct"  # type: ignore[attr-defined]
     assert record.profile_id == profile.id  # type: ignore[attr-defined]
     assert record.exception_type == "RuntimeError"  # type: ignore[attr-defined]
 
 
-def test_select_ai_job_blocks_where_when_filter_slot_is_empty() -> None:
+def test_job_blocks_where_when_filter_slot_is_empty() -> None:
     adapter = _QuestionCaptureOracleAdapter(
         _FakeOracleDb(),
         generated_sql=(
@@ -866,7 +732,7 @@ def test_select_ai_job_blocks_where_when_filter_slot_is_empty() -> None:
     created = service.start_job(
         JobCreateRequest(
             question=question,
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         )
     )
@@ -882,7 +748,7 @@ def test_select_ai_job_blocks_where_when_filter_slot_is_empty() -> None:
     assert "WHERE 句" in adapter.questions[0]
 
 
-def test_select_ai_allows_where_when_filter_slot_has_value() -> None:
+def test_preview_allows_where_when_filter_slot_has_value() -> None:
     adapter = _QuestionCaptureOracleAdapter(
         _FakeOracleDb(),
         generated_sql=(
@@ -902,7 +768,7 @@ def test_select_ai_allows_where_when_filter_slot_has_value() -> None:
     preview = service.preview(
         PreviewRequest(
             question="対象テーブル：部署\n抽出項目：\n抽出条件：部署名 = '管理部門'",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         )
     )
@@ -928,7 +794,7 @@ def test_interpretation_separates_empty_input_filter_from_sql_filter() -> None:
     artifact = cast(Any, service)._build_interpretation_artifact(
         request=JobCreateRequest(
             question=question,
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         ),
         profile=profile,
@@ -961,7 +827,7 @@ def test_interpretation_uses_only_explicit_template_filter_for_question_filters(
     artifact = cast(Any, service)._build_interpretation_artifact(
         request=JobCreateRequest(
             question=question,
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         ),
         profile=profile,
@@ -990,7 +856,7 @@ def test_interpretation_does_not_infer_question_filters_from_free_text() -> None
     artifact = cast(Any, service)._build_interpretation_artifact(
         request=JobCreateRequest(
             question="管理部門の部署を検索したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         ),
         profile=profile,
@@ -1006,109 +872,7 @@ def test_interpretation_does_not_infer_question_filters_from_free_text() -> None
     assert artifact.sql.filters == ["UPPER(\"DEPARTMENT_NAME\") LIKE '%管理部門%'"]
 
 
-def test_select_ai_request_overrides_use_effective_profile_context() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="finance_context",
-            name="財務分析",
-            description="請求と入金を分析します。",
-            glossary={"四半期": "4 月開始の会計四半期", "売上": "INVOICES.TOTAL_AMOUNT"},
-            sql_rules=["SELECT/WITH のみ", "日付は DATE 型で返す"],
-            select_ai_config={
-                "role": "既定の財務 SQL アシスタント",
-                "additional_instructions": "金額は円単位で表示する。",
-            },
-        )
-    )
-
-    preview = service.preview(
-        PreviewRequest(
-            question="前四半期の売上を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-            select_ai_overrides={
-                "role": "今回だけ CFO 向けに説明するアシスタント",
-                "additional_instructions": "現在日付を基準にしてください。",
-            },
-        )
-    )
-
-    assert adapter.attributes
-    attributes = adapter.attributes[0] or {}
-    assert attributes["role"] == "今回だけ CFO 向けに説明するアシスタント"
-    instructions = attributes["additional_instructions"]
-    assert "## 業務説明" not in instructions
-    assert "## 業務用語集" not in instructions
-    assert "- 四半期:" not in instructions
-    assert "- 売上:" not in instructions
-    assert "## SQL 生成ルール" not in instructions
-    assert "## プロファイル追加指示" in instructions
-    assert "SELECT/WITH のみ" in instructions
-    assert "日付は DATE 型で返す" in instructions
-    assert instructions.endswith("## 今回の追加指示\n現在日付を基準にしてください。")
-    assert preview.engine_meta["select_ai_role_applied"] is True
-    assert preview.engine_meta["select_ai_additional_instructions_applied"] is True
-    assert preview.engine_meta["select_ai_additional_instructions_length"] == len(
-        "現在日付を基準にしてください。"
-    )
-    assert "現在日付を基準にしてください。" not in str(preview.engine_meta)
-
-
-def test_select_ai_job_passes_request_overrides_to_oracle() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="job_context",
-            name="ジョブ文脈",
-            allowed_tables=["INVOICES"],
-            select_ai_config={"role": "既定ロール"},
-        )
-    )
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="請求を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-            select_ai_overrides={
-                "role": "ジョブ専用ロール",
-                "additional_instructions": "最新月だけを対象にする。",
-            },
-        )
-    )
-    job = service.get_job(created.job_id)
-    for _ in range(100):
-        if job is not None and job.status not in {JobStatus.PENDING, JobStatus.RUNNING}:
-            break
-        time.sleep(0.01)
-        job = service.get_job(created.job_id)
-
-    assert job is not None
-    assert job.status == JobStatus.DONE
-    assert [step.stage for step in job.steps] == EXPECTED_NL2SQL_JOB_STAGES
-    # Select AI の SQL は安全性の確認を省略する（#1523）。
-    assert [step.status.value for step in job.steps] == [
-        "done",
-        "done",
-        "skipped",
-        "done",
-        "done",
-    ]
-    assert all(step.elapsed_ms is not None and step.elapsed_ms >= 0 for step in job.steps)
-    assert job.timing is not None
-    assert [item.stage for item in job.timing.stage_timings] == EXPECTED_NL2SQL_JOB_STAGES
-    assert adapter.attributes[0] is not None
-    assert adapter.attributes[0]["role"] == "ジョブ専用ロール"
-    assert (
-        "## 今回の追加指示\n最新月だけを対象にする。"
-        in adapter.attributes[0]["additional_instructions"]
-    )
-
-
-def test_select_ai_job_respects_use_glossary_false() -> None:
+def test_job_respects_use_glossary_false() -> None:
     adapter = _QuestionCaptureOracleAdapter(
         _FakeOracleDb(),
         generated_sql="SELECT TOTAL_AMOUNT FROM INVOICES",
@@ -1126,7 +890,7 @@ def test_select_ai_job_respects_use_glossary_false() -> None:
     created = service.start_job(
         JobCreateRequest(
             question="社員の一覧",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             use_glossary=False,
         )
@@ -1140,7 +904,7 @@ def test_select_ai_job_respects_use_glossary_false() -> None:
     assert job.result.rewritten_question == "社員の一覧"
 
 
-def test_select_ai_job_applies_chained_glossary_once() -> None:
+def test_job_applies_chained_glossary_once() -> None:
     adapter = _QuestionCaptureOracleAdapter(
         _FakeOracleDb(),
         generated_sql="SELECT TOTAL_AMOUNT FROM INVOICES",
@@ -1161,7 +925,7 @@ def test_select_ai_job_applies_chained_glossary_once() -> None:
     created = service.start_job(
         JobCreateRequest(
             question="社員の一覧",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             use_glossary=True,
         )
@@ -1183,7 +947,6 @@ def test_job_create_request_artifact_flags_default_false() -> None:
     assert request.use_glossary is False
     assert request.use_ontology_context is True
     assert request.include_interpretation is False
-    assert request.include_show_prompt is False
 
 
 def test_job_published_ontology_disabled_passes_none_to_generation(
@@ -1196,7 +959,7 @@ def test_job_published_ontology_disabled_passes_none_to_generation(
     def fake_generate_selected_engine(*_args: Any, **kwargs: Any) -> GeneratedSql:
         captured_contexts.append(kwargs.get("ontology_context"))
         return GeneratedSql(
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
             explanation="deterministic",
             engine_meta={"runtime": "deterministic"},
@@ -1309,7 +1072,7 @@ def test_job_empty_published_ontology_passes_none_to_generation(
     def fake_generate_selected_engine(*_args: Any, **kwargs: Any) -> GeneratedSql:
         captured_contexts.append(kwargs.get("ontology_context"))
         return GeneratedSql(
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
             explanation="deterministic",
             engine_meta={"runtime": "deterministic"},
@@ -1376,128 +1139,6 @@ def test_job_applies_ontology_context_when_available(
     assert job.result is not None
     assert job.result.engine_meta["ontology_context_applied"] is True
     assert job.result.engine_meta["ontology_context_instruction_length"] == len(published_markdown)
-
-
-def test_select_ai_showprompt_uses_ontology_attributes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    published_markdown = "# 請求オントロジー\n\n- 請求金額は INVOICES.TOTAL_AMOUNT。"
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="ontology_showprompt_profile",
-            name="Ontology ShowPrompt profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-    monkeypatch.setattr(
-        service, "_job_published_ontology_markdown", lambda **_kwargs: published_markdown
-    )
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-            use_ontology_context=True,
-            include_show_prompt=True,
-        )
-    )
-    job = _wait_for_job(service, created.job_id)
-
-    assert job is not None
-    assert job.status == JobStatus.DONE
-    assert job.result is not None
-    assert adapter.actions == ["showsql", "showprompt"]
-    assert len(adapter.attributes) == 2
-    assert adapter.attributes[0] == adapter.attributes[1]
-    for attributes in adapter.attributes:
-        assert attributes is not None
-        instructions = attributes["additional_instructions"]
-        assert "## 今回の追加指示" not in instructions
-        assert "確認済み Ontology コンテキスト" in instructions
-        assert published_markdown in instructions
-        assert "question_effective:" not in instructions
-    assert job.result.engine_meta["select_ai_additional_instructions_applied"] is False
-    assert job.result.engine_meta["select_ai_additional_instructions_length"] == 0
-
-
-def test_select_ai_request_and_ontology_instructions_are_separate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    published_markdown = "# 請求オントロジー\n\n- 請求金額は INVOICES.TOTAL_AMOUNT。"
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="ontology_request_profile",
-            name="Ontology request profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-    monkeypatch.setattr(
-        service, "_job_published_ontology_markdown", lambda **_kwargs: published_markdown
-    )
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-            select_ai_overrides={"additional_instructions": "最新月だけを対象にする。"},
-            use_ontology_context=True,
-            include_show_prompt=True,
-        )
-    )
-    job = _wait_for_job(service, created.job_id)
-
-    assert job is not None
-    assert job.status == JobStatus.DONE
-    assert job.result is not None
-    assert adapter.attributes[0] == adapter.attributes[1]
-    select_ai_attributes = adapter.attributes[0]
-    assert select_ai_attributes is not None
-    instructions = select_ai_attributes["additional_instructions"]
-    assert "## 今回の追加指示\n最新月だけを対象にする。" in instructions
-    assert "## 確認済み Ontology コンテキスト\n" in instructions
-    assert instructions.index("## 今回の追加指示") < instructions.index(
-        "## 確認済み Ontology コンテキスト"
-    )
-    assert published_markdown in instructions
-    assert job.result.engine_meta["select_ai_additional_instructions_applied"] is True
-    assert job.result.engine_meta["select_ai_additional_instructions_length"] == len(
-        "最新月だけを対象にする。"
-    )
-
-
-def test_select_ai_agent_receives_published_markdown_in_user_prompt() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="agent_markdown_profile",
-            name="Agent Markdown profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-    published_markdown = "# 請求オントロジー\n\n- 請求金額は INVOICES.TOTAL_AMOUNT。"
-
-    generated = service._generate_oracle_sql(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI_AGENT,
-        question="請求金額を確認したい",
-        profile=profile,
-        fallback_messages=[],
-        meta={},
-        learning_examples=[],
-        ontology_context=published_markdown,
-    )
-
-    assert generated.engine == Nl2SqlEngine.SELECT_AI_AGENT
-    assert adapter.questions == [
-        "請求金額を確認したい\n\n確認済み Ontology コンテキスト:\n\n" + published_markdown
-    ]
-    assert "question_effective:" not in adapter.questions[0]
 
 
 def test_enterprise_ai_direct_receives_published_markdown_in_context() -> None:
@@ -1589,66 +1230,6 @@ def test_enterprise_ai_direct_receives_requirement_as_mandatory_conditions() -> 
     assert "2026-04-01〜2027-03-31" in context
 
 
-def test_select_ai_receives_clear_question_and_narrowed_object_list() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="requirement_select_ai_profile",
-            name="Requirement Select AI profile",
-            allowed_tables=["INVOICES", "CUSTOMERS"],
-        )
-    )
-    table = service.profile_allowed_object_names(profile)[0]
-
-    service._generate_oracle_sql(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI,
-        question="請求金額を確認したい",
-        profile=profile,
-        fallback_messages=[],
-        meta={},
-        learning_examples=[],
-        sql_requirement=_invoice_requirement([table]),
-    )
-
-    assert adapter.questions[0].startswith("請求金額を確認したい\n\n必ず守る条件:")
-    assert "使う表は " + table + " だけ" in adapter.questions[0]
-    attributes: dict[str, Any] | None = adapter.attributes[0]
-    assert attributes is not None
-    object_list = attributes["object_list"]
-    assert len(object_list) == 1
-    assert object_list[0]["name"] == table.split(".")[-1]
-    assert "必ず守る条件" in attributes["additional_instructions"]
-
-
-def test_select_ai_agent_receives_requirement_in_question() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="requirement_agent_profile",
-            name="Requirement Agent profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-    table = service.profile_allowed_object_names(profile)[0]
-
-    service._generate_oracle_sql(  # noqa: SLF001
-        engine=Nl2SqlEngine.SELECT_AI_AGENT,
-        question="請求金額を確認したい",
-        profile=profile,
-        fallback_messages=[],
-        meta={},
-        learning_examples=[],
-        sql_requirement=_invoice_requirement([table]),
-    )
-
-    question = adapter.questions[0]
-    assert "必ず守る条件:" in question
-    assert "回答前の確認で利用者と確かめた SQL の要件（必ず守る条件）" in question
-    assert "SUM(INVOICES.TOTAL_AMOUNT)" in question
-
-
 def test_ontology_generation_context_prompt_includes_qa_sql_examples() -> None:
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     context = _simple_ontology_context()
@@ -1701,76 +1282,6 @@ def _pin_published_ontology_release(
     monkeypatch.setattr(service, "_job_published_ontology_markdown", lambda **_kwargs: None)
 
 
-def test_select_ai_job_returns_interpretation_and_showprompt_artifacts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="artifact_profile",
-            name="Artifact profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-    ontology_graph = Nl2SqlOntologyGraphSnapshot(
-        revision_id="revision-artifact",
-        revision={"id": "revision-artifact", "version": 1, "status": "published"},
-        nodes=[
-            {
-                "id": "node-invoices",
-                "kind": "table",
-                "business_name_ja": "請求",
-                "technical_name": "INVOICES",
-            }
-        ],
-        edges=[],
-    )
-    monkeypatch.setattr(
-        service,
-        "_build_interpretation_ontology_graph_snapshot",
-        lambda **_kwargs: (ontology_graph, []),
-    )
-    _pin_published_ontology_release(monkeypatch, service, "revision-artifact")
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
-            profile_id=profile.id,
-            include_interpretation=True,
-            include_show_prompt=True,
-        )
-    )
-    job = _wait_for_job(service, created.job_id)
-
-    assert job is not None
-    assert job.status == JobStatus.DONE
-    assert job.result is not None
-    assert job.result.explanation == "SQL を生成しました。"
-    assert job.result.interpretation is not None
-    assert job.result.interpretation.available is True
-    assert job.result.interpretation.question.rewritten_question == "請求金額を確認したい"
-    assert any(table.endswith(".INVOICES") for table in job.result.interpretation.sql.tables)
-    # 処理手順(logical_steps)は include_interpretation=True のとき決定論で同梱する。
-    assert job.result.interpretation.sql.logical_steps
-    assert job.result.interpretation.sql.logical_steps[0] == job.result.interpretation.sql.summary
-    # 業務者向け/技術者向けの併記版も同梱し、technical は従来文字列と一致させる。
-    details = job.result.interpretation.sql.logical_step_details
-    assert [detail.technical for detail in details] == job.result.interpretation.sql.logical_steps
-    assert details[0].kind == "summary"
-    assert details[0].business.endswith("を行います。")
-    assert all(detail.business for detail in details)
-    assert job.result.interpretation.ontology_grounding_enabled is True
-    assert job.result.interpretation.ontology_graph is not None
-    assert job.result.interpretation.ontology_graph.revision_id == "revision-artifact"
-    assert job.result.interpretation.ontology_graph.nodes[0]["id"] == "node-invoices"
-    assert job.result.show_prompt is not None
-    assert job.result.show_prompt.available is True
-    assert "Select AI" in job.result.show_prompt.prompt
-    assert adapter.actions == ["showsql", "showprompt"]
-
-
 def test_interpretation_flags_split_logical_steps_and_ontology_grounding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1802,7 +1313,7 @@ def test_interpretation_flags_split_logical_steps_and_ontology_grounding(
     created = service.start_job(
         JobCreateRequest(
             question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             use_ontology_context=False,
             include_interpretation=True,
@@ -1821,7 +1332,7 @@ def test_interpretation_flags_split_logical_steps_and_ontology_grounding(
     created = service.start_job(
         JobCreateRequest(
             question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             use_ontology_context=True,
             include_interpretation=False,
@@ -1840,7 +1351,7 @@ def test_interpretation_flags_split_logical_steps_and_ontology_grounding(
     created = service.start_job(
         JobCreateRequest(
             question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             use_ontology_context=False,
             include_interpretation=False,
@@ -1873,7 +1384,7 @@ def test_interpretation_ontology_graph_failure_keeps_job_done(
     created = service.start_job(
         JobCreateRequest(
             question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
             include_interpretation=True,
         )
@@ -1914,36 +1425,6 @@ def test_interpretation_failure_keeps_job_done(monkeypatch: pytest.MonkeyPatch) 
     assert "artifact boom" in " ".join(job.result.interpretation.warnings)
 
 
-def test_showprompt_is_unavailable_without_select_ai_engine() -> None:
-    adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
-    service = _OracleRuntimeNl2SqlService(adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="agent_artifact_profile",
-            name="Agent artifact profile",
-            allowed_tables=["INVOICES"],
-        )
-    )
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI_AGENT,
-            profile_id=profile.id,
-            include_show_prompt=True,
-        )
-    )
-    job = _wait_for_job(service, created.job_id)
-
-    assert job is not None
-    assert job.status == JobStatus.DONE
-    assert job.result is not None
-    assert job.result.show_prompt is not None
-    assert job.result.show_prompt.available is False
-    assert "Select AI" in job.result.show_prompt.unavailable_reason
-    assert "showprompt" not in adapter.actions
-
-
 def test_job_marks_execution_skipped_when_safety_check_blocks_sql() -> None:
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     _import_sample_with_profile(service)
@@ -1954,7 +1435,7 @@ def test_job_marks_execution_skipped_when_safety_check_blocks_sql() -> None:
             allowed_tables=["EMPLOYEE"],
         )
     )
-    # 安全性の確認は LLM（enterprise_ai_direct）の SQL に掛ける（Select AI は省略する。#1523）。
+    # 安全性の確認は LLM（enterprise_ai_direct）の SQL に掛ける（#1523）。
     service._generate_selected_engine = lambda **_kwargs: GeneratedSql(  # type: ignore[method-assign]
         engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT PROJECT_ID FROM PROJECT",
@@ -2023,78 +1504,6 @@ def test_legacy_job_snapshot_is_normalized_to_current_steps() -> None:
     assert restored.steps[3].elapsed_ms == 5
 
 
-def test_oracle_adapter_generate_select_ai_sql_binds_unicode_attributes() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql = adapter.generate_select_ai_sql(
-        profile_name="FINANCE_PROFILE",
-        question="前四半期の売上は?",
-        attributes={
-            "role": "財務 SQL アシスタント",
-            "additional_instructions": "日付は DATE 型で返す。",
-        },
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert "attributes => :attributes" in fake_db.executed[-1]
-    params = fake_db.executed_params[-1] or {}
-    assert '"role": "財務 SQL アシスタント"' in str(params["attributes"])
-
-
-def test_oracle_adapter_generate_select_ai_sql_applies_call_timeout_override() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql = adapter.generate_select_ai_sql(
-        profile_name="FINANCE_PROFILE",
-        question="前四半期の売上は?",
-        call_timeout_seconds=300.0,
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert fake_db.call_timeouts == [300000]
-
-
-def test_oracle_adapter_generate_select_ai_prompt_uses_showprompt_action() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    prompt = adapter.generate_select_ai_prompt(
-        profile_name="FINANCE_PROFILE",
-        question="前四半期の売上は?",
-        attributes={"role": "財務 SQL アシスタント"},
-    )
-
-    assert prompt == fake_db.show_prompt_text
-    params = fake_db.executed_params[-1] or {}
-    assert params["action"] == "showprompt"
-    assert "attributes => :attributes" in fake_db.executed[-1]
-
-
-async def test_select_ai_overrides_require_select_ai_engine() -> None:
-    async with httpx.AsyncClient(transport=_transport(), base_url="http://test") as client:
-        preview_resp = await client.post(
-            "/api/nl2sql/preview",
-            json={
-                "question": "売上を確認したい",
-                "engine": "select_ai_agent",
-                "select_ai_overrides": {"role": "財務アシスタント"},
-            },
-        )
-        job_resp = await client.post(
-            "/api/nl2sql/jobs",
-            json={
-                "question": "売上を確認したい",
-                "engine": "enterprise_ai_direct",
-                "select_ai_overrides": {"additional_instructions": "円で表示"},
-            },
-        )
-
-    assert preview_resp.status_code == 422
-    assert job_resp.status_code == 422
-
-
 async def test_auto_engine_is_not_accepted_by_preview_or_job_api() -> None:
     async with httpx.AsyncClient(transport=_transport(), base_url="http://test") as client:
         preview_resp = await client.post(
@@ -2108,92 +1517,6 @@ async def test_auto_engine_is_not_accepted_by_preview_or_job_api() -> None:
 
     assert preview_resp.status_code == 422
     assert job_resp.status_code == 422
-
-
-def test_oracle_select_ai_extracts_sql_from_error_wrapped_response() -> None:
-    raw = (
-        "Sorry, unfortunately a valid SELECT statement could not be generated. "
-        'SELECT t1."name", SUM(t2."amount") FROM "owner"."trading_partners" t1 '
-        'JOIN "owner"."bills" t2 ON t1."id" = t2."trading_partner_id" '
-        "Exception encountered: ORA-00942: table or view does not exist"
-    )
-
-    sql = _extract_select_statement(raw)
-
-    assert sql == (
-        'SELECT t1."name", SUM(t2."amount") FROM "owner"."trading_partners" t1 '
-        'JOIN "owner"."bills" t2 ON t1."id" = t2."trading_partner_id"'
-    )
-
-
-def test_extract_select_statement_preserves_subquery() -> None:
-    sql = 'SELECT a FROM (SELECT b FROM "owner"."t") x'
-
-    assert _extract_select_statement(sql) == sql
-
-
-def test_extract_select_statement_preserves_cte() -> None:
-    sql = "WITH c AS (SELECT 1 FROM dual) SELECT * FROM c"
-
-    assert _extract_select_statement(sql) == sql
-
-
-def test_extract_select_statement_preserves_scalar_subquery_in_select_list() -> None:
-    sql = "SELECT (SELECT MAX(id) FROM t2), name FROM t1"
-
-    assert _extract_select_statement(sql) == sql
-
-
-def test_extract_select_statement_skips_prose_prefix_before_nested_sql() -> None:
-    raw = (
-        "Sorry, unfortunately a valid SELECT statement could not be generated. "
-        'SELECT a FROM (SELECT b FROM "owner"."t") x'
-    )
-
-    assert _extract_select_statement(raw) == 'SELECT a FROM (SELECT b FROM "owner"."t") x'
-
-
-def test_extract_select_statement_truncates_trailing_exception_with_subquery() -> None:
-    raw = (
-        "SELECT a FROM (SELECT b FROM t) x "
-        "Exception encountered: ORA-00942: table or view does not exist"
-    )
-
-    assert _extract_select_statement(raw) == "SELECT a FROM (SELECT b FROM t) x"
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        (
-            "SELECT ID FROM APP.ORDERS WHERE NAME = 'a;b'; DELETE FROM APP.ORDERS",
-            "SELECT ID FROM APP.ORDERS WHERE NAME = 'a;b'",
-        ),
-        (
-            "SELECT ID FROM APP.ORDERS WHERE NAME LIKE '%;%'",
-            "SELECT ID FROM APP.ORDERS WHERE NAME LIKE '%;%'",
-        ),
-        (
-            "SELECT ID -- x; y\nFROM APP.ORDERS;\n補足説明",
-            "SELECT ID -- x; y\nFROM APP.ORDERS",
-        ),
-        (
-            'SELECT "A;B" FROM APP.ORDERS /* ; */ WHERE ID = 1;',
-            'SELECT "A;B" FROM APP.ORDERS /* ; */ WHERE ID = 1',
-        ),
-    ],
-)
-def test_extract_select_statement_ignores_semicolon_in_literals_and_comments(
-    raw: str, expected: str
-) -> None:
-    # 文字列リテラル・引用識別子・コメント内の `;` で SQL を切らない。
-    assert _extract_select_statement(raw) == expected
-
-
-def test_extract_select_statement_from_json_payload_with_subquery() -> None:
-    raw = '{"sql": "WITH c AS (SELECT 1 FROM dual) SELECT * FROM c"}'
-
-    assert _extract_select_statement(raw) == "WITH c AS (SELECT 1 FROM dual) SELECT * FROM c"
 
 
 def test_referenced_tables_include_quoted_schema_qualified_names() -> None:
@@ -2238,13 +1561,13 @@ def test_fail_trigger_words_in_question_are_ignored_on_oracle_runtime() -> None:
     adapter = _QuestionCaptureOracleAdapter(_FakeOracleDb())
     service = _OracleRuntimeNl2SqlService(adapter)
     profile = service.create_profile(
-        Nl2SqlProfile(id="fail_trigger_profile", name="失敗トリガ検証")
+        Nl2SqlProfile(id="fail_trigger_profile", name="失敗トリガ検証", allowed_tables=["INVOICES"])
     )
 
     preview = service.preview(
         PreviewRequest(
-            question="select_ai_fail を含む請求金額を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            question="enterprise_ai_direct_fail を含む請求金額を確認したい",
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         )
     )
@@ -2423,7 +1746,7 @@ def test_history_pruning_caps_in_memory_entries() -> None:
             HistoryItem(
                 id=f"hist-{index:04d}",
                 question="q",
-                engine=Nl2SqlEngine.SELECT_AI,
+                engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                 generated_sql="SELECT 1 FROM DUAL",
                 executable_sql="SELECT 1 FROM DUAL",
                 created_at="2026-08-30T00:00:00+00:00",
@@ -2612,14 +1935,14 @@ def test_sample_data_import_does_not_create_profile_in_deterministic_runtime() -
     assert service.sample_data_info().profile_id == ""
 
 
-def test_explicit_select_ai_job_tracks_timing() -> None:
+def test_explicit_engine_job_tracks_timing() -> None:
     service = Nl2SqlService()
     _import_sample(service)
 
     created = service.start_job(
         JobCreateRequest(
             question="社員一覧を見たい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             allowed_objects={
                 "table_names": ["EMPLOYEE"],
                 "columns": {"EMPLOYEE": ["EMPLOYEE_ID"]},
@@ -2631,17 +1954,10 @@ def test_explicit_select_ai_job_tracks_timing() -> None:
     assert data is not None
     assert data.status == JobStatus.DONE
     assert [step.stage for step in data.steps] == EXPECTED_NL2SQL_JOB_STAGES
-    # Select AI の SQL は安全性の確認を省略する（#1523）。
-    assert [step.status for step in data.steps] == [
-        JobStepStatus.DONE,
-        JobStepStatus.DONE,
-        JobStepStatus.SKIPPED,
-        JobStepStatus.DONE,
-        JobStepStatus.DONE,
-    ]
+    assert [step.status for step in data.steps] == [JobStepStatus.DONE] * 5
     assert all(step.elapsed_ms is not None for step in data.steps)
     assert data.result is not None
-    assert data.result.engine == Nl2SqlEngine.SELECT_AI
+    assert data.result.engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     assert data.result.engine_meta["engine_timings"][0]["engine"] == "deterministic"
     assert data.result.engine_meta["engine_timings"][0]["status"] == "success"
     assert data.result.engine_meta["generation_elapsed_ms"] >= 0
@@ -2661,14 +1977,6 @@ def test_schema_objects_invalid_profile_returns_400() -> None:
         )
     assert exc.value.status_code == 400
     assert "業務プロファイル" in str(exc.value.detail)
-
-
-def test_explicit_select_ai_agent_without_oracle_runtime_returns_error() -> None:
-    service = Nl2SqlService()
-    _import_sample(service)
-
-    with pytest.raises(RuntimeError, match="Oracle runtime"):
-        service.preview(PreviewRequest(question="社員一覧", engine=Nl2SqlEngine.SELECT_AI_AGENT))
 
 
 async def test_execute_rejects_unsafe_sql() -> None:
@@ -2880,17 +2188,6 @@ async def test_analyze_repairs_first_select_from_multi_statement() -> None:
     assert "修復候補" in " ".join(data["recommendations"])
 
 
-async def test_asset_refresh() -> None:
-    async with httpx.AsyncClient(transport=_transport(), base_url="http://test") as client:
-        await _api_import_sample(client)
-        profile_resp = await client.post("/api/nl2sql/select-ai-agent/assets/refresh")
-        assert profile_resp.status_code == 200
-        asset_data = profile_resp.json()["data"]
-        assert asset_data["team_name"]
-        assert asset_data["status"] == "ready"
-        assert {"profile", "tool", "agent", "task", "team"} <= set(asset_data["asset_names"])
-
-
 def test_feedback_rating_has_no_needs_review() -> None:
     assert {member.value for member in FeedbackRating} == {"good", "bad"}
 
@@ -2901,7 +2198,7 @@ def test_history_item_drops_legacy_needs_review_rating() -> None:
         {
             "id": "h1",
             "question": "社員一覧",
-            "engine": Nl2SqlEngine.SELECT_AI,
+            "engine": Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             "generated_sql": "SELECT 1 FROM DUAL",
             "created_at": "2026-07-14T00:00:00Z",
             "feedback_rating": "needs_review",
@@ -2922,7 +2219,6 @@ async def test_profile_crud_create_update_archive_delete() -> None:
         "default_row_limit": 25,
         "safety_policy": "select_only",
         "few_shot_examples": [{"question": "請求一覧", "sql": "SELECT INVOICE_ID FROM INVOICES"}],
-        "select_ai_config": {"profile_name": "LEGACY_PROFILE"},
     }
     async with httpx.AsyncClient(transport=_transport(), base_url="http://test") as client:
         invalid_resp = await client.post(
@@ -2935,10 +2231,8 @@ async def test_profile_crud_create_update_archive_delete() -> None:
         created = create_resp.json()["data"]
         profile_id = created["id"]
         assert created["name"] == "INVOICE_PROFILE"
-        assert created["select_ai_config"]["profile_name"] == "INVOICE_PROFILE"
         assert created["allowed_tables"] == ["APP.INVOICES"]
-        assert created["sql_rules"] == []
-        assert "SELECT/WITH のみ" in created["select_ai_config"]["additional_instructions"]
+        assert created["sql_rules"] == ["SELECT/WITH のみ"]
 
         update_resp = await client.patch(
             f"/api/nl2sql/profiles/{profile_id}",
@@ -2946,11 +2240,8 @@ async def test_profile_crud_create_update_archive_delete() -> None:
         )
         assert update_resp.status_code == 200
         assert update_resp.json()["data"]["name"] == "INVOICE_PROFILE_V2"
-        assert (
-            update_resp.json()["data"]["select_ai_config"]["profile_name"] == "INVOICE_PROFILE_V2"
-        )
         assert update_resp.json()["data"]["default_row_limit"] == 50
-        assert update_resp.json()["data"]["sql_rules"] == []
+        assert update_resp.json()["data"]["sql_rules"] == ["SELECT/WITH のみ"]
 
         archive_resp = await client.post(f"/api/nl2sql/profiles/{profile_id}/archive")
         assert archive_resp.status_code == 200
@@ -3023,7 +2314,7 @@ async def test_profile_training_examples_update() -> None:
         assert update_resp.status_code == 200
         updated = update_resp.json()["data"]
         assert updated["few_shot_examples"] == training_examples
-        assert updated["sql_rules"] == []
+        assert updated["sql_rules"] == ["SELECT/WITH のみ"]
 
         partial_update_resp = await client.patch(
             f"/api/nl2sql/profiles/{profile_id}",
@@ -3085,7 +2376,7 @@ async def test_feedback_history_is_retrieved_as_similar_few_shot() -> None:
         assert config_resp.status_code == 200
         job_resp = await client.post(
             "/api/nl2sql/jobs",
-            json={"question": "社員一覧を確認したい", "engine": "select_ai"},
+            json={"question": "社員一覧を確認したい", "engine": "enterprise_ai_direct"},
         )
         assert job_resp.status_code == 200
         job_id = job_resp.json()["data"]["job_id"]
@@ -3129,7 +2420,6 @@ async def test_feedback_history_is_retrieved_as_similar_few_shot() -> None:
                 "history_id": history_item["id"],
                 "rating": "good",
                 "feedback_content": "管理者確認済み",
-                "register_select_ai_feedback": False,
             },
         )
         assert admin_feedback_resp.status_code == 200
@@ -3284,35 +2574,28 @@ async def test_reverse_comments_and_diagnostics() -> None:
             "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
             "PLATFORM_OCI_GENAI_ENDPOINT",
             "PLATFORM_OCI_GENAI_EMBED_MODEL_ID",
-            "NL2SQL_SELECT_AI_PROFILE_REFRESHED",
-            "NL2SQL_SELECT_AI_AGENT_ASSETS_REFRESHED",
         } <= check_names
         readiness = diagnostics_data["readiness"]
         assert readiness
         readiness_areas = {item["area"] for item in readiness}
         assert {
             "oracle_adb",
-            "select_ai",
-            "select_ai_agent",
             "enterprise_ai_direct",
             "feedback_embedding",
             "persistence",
-        } <= readiness_areas
+        } == readiness_areas
         smoke_checks = diagnostics_data["smoke_checks"]
         assert smoke_checks
         smoke_ids = {item["id"] for item in smoke_checks}
         assert {
-            "refresh_select_ai_profile",
-            "refresh_select_ai_agent_assets",
-            "preview_select_ai",
-            "preview_select_ai_agent",
             "preview_enterprise_ai_direct",
             "feedback_vector_rebuild",
             "manual_integration_script",
-        } <= smoke_ids
-        agent_smoke = next(item for item in smoke_checks if item["id"] == "preview_select_ai_agent")
-        assert agent_smoke["endpoint"] == "/api/nl2sql/preview"
-        assert "conversation_id" in agent_smoke["expected"]
+        } == smoke_ids
+        direct_smoke = next(
+            item for item in smoke_checks if item["id"] == "preview_enterprise_ai_direct"
+        )
+        assert direct_smoke["endpoint"] == "/api/nl2sql/preview"
         config_guides = diagnostics_data["config_guides"]
         guide_ids = {item["id"] for item in config_guides}
         assert {
@@ -3380,7 +2663,7 @@ async def test_nl2sql_store_persists_profiles_jobs_history_and_feedback() -> Non
     job_info = service.start_job(
         JobCreateRequest(
             question="社員一覧を確認したい",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             profile_id=profile.id,
         )
     )
@@ -3394,14 +2677,7 @@ async def test_nl2sql_store_persists_profiles_jobs_history_and_feedback() -> Non
     assert job is not None
     assert job.status == JobStatus.DONE
     assert [step.stage for step in job.steps] == EXPECTED_NL2SQL_JOB_STAGES
-    # Select AI の SQL は安全性の確認を省略する（#1523）。
-    assert [step.status.value for step in job.steps] == [
-        "done",
-        "done",
-        "skipped",
-        "done",
-        "done",
-    ]
+    assert [step.status.value for step in job.steps] == ["done"] * 5
     assert job.timing is not None
     assert [item.stage for item in job.timing.stage_timings] == EXPECTED_NL2SQL_JOB_STAGES
     history_item = service.list_history().items[0]
@@ -3447,29 +2723,6 @@ def test_nl2sql_store_deletes_default_profile_without_reseeding() -> None:
     assert reloaded.list_profiles(include_archived=True) == []
     with pytest.raises(ValueError, match="見つからないか、利用できません"):
         reloaded.get_profile("default")
-
-
-def test_oracle_adapter_refresh_select_ai_profile_executes_dbms_cloud_ai() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    meta = adapter.refresh_select_ai_profile(
-        profile_name="NL2SQL_DEFAULT_PROFILE",
-        allowed_tables=["INVOICES", "APP.CUSTOMERS"],
-        row_limit=50,
-        description="請求 profile",
-    )
-
-    assert meta["package"] == "DBMS_CLOUD_AI"
-    assert meta["runtime"] == "oracle"
-    assert meta["profile_name"] == "NL2SQL_DEFAULT_PROFILE"
-    assert "max_rows" not in meta["profile_attributes"]
-    assert "description" not in meta["profile_attributes"]
-    assert meta["profile_attributes"]["enforce_object_list"] is True
-    assert meta["profile_attributes"]["annotations"] is True
-    assert {"owner": "APP", "name": "CUSTOMERS"} in meta["profile_attributes"]["object_list"]
-    assert any("DBMS_CLOUD_AI.DROP_PROFILE" in sql for sql in fake_db.executed)
-    assert any("DBMS_CLOUD_AI.CREATE_PROFILE" in sql for sql in fake_db.executed)
 
 
 def test_oracle_adapter_fetch_catalog_includes_constraints_row_counts_and_samples() -> None:
@@ -3924,303 +3177,6 @@ def test_admin_good_feedback_publish_warning_keeps_deterministic_similar_history
     assert [item.history_id for item in similar.items] == ["hist-warning-001"]
 
 
-def test_service_select_ai_feedback_management_uses_dbms_cloud_ai() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_rows = [
-        (
-            "select ai showsql 請求金額を確認したい",
-            "sql-001",
-            "SELECT TOTAL_AMOUNT FROM INVOICES",
-            '{"sql_id":"sql-001","sql_text":"SELECT TOTAL_AMOUNT FROM INVOICES"}',
-        )
-    ]
-    service = _OracleRuntimeNl2SqlService(_QuestionCaptureOracleAdapter(fake_db))
-
-    entries = service.list_select_ai_feedback_entries("default")
-
-    assert entries.runtime == "oracle"
-    assert entries.profile_name == "DEFAULT"
-    assert entries.table_name == "DEFAULT_FEEDBACK_VECINDEX$VECTAB"
-    # vector table は current schema に作られるため、所有者付きの名前も返す（#556）。
-    assert entries.table_owner == service._current_schema_owner()
-    assert entries.table_owner
-    assert entries.table_qualified_name == (
-        f"{entries.table_owner}.DEFAULT_FEEDBACK_VECINDEX$VECTAB"
-    )
-    assert entries.items[0].sql_id == "sql-001"
-    assert entries.items[0].sql_text == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert any('FROM "DEFAULT_FEEDBACK_VECINDEX$VECTAB"' in sql for sql in fake_db.executed)
-
-    added = service.add_select_ai_feedback(
-        SelectAiFeedbackAddRequest(
-            profile_id="default",
-            question="請求金額を確認したい;",
-            feedback_type="positive",
-            generated_sql="SELECT TOTAL_AMOUNT FROM INVOICES",
-            feedback_content="正しい SQL",
-        )
-    )
-
-    assert added.executed is True
-    assert added.status == "added"
-    assert added.profile_name == "NL2SQL_DEFAULT_PROFILE"
-    assert added.sql_text == "select ai showsql 請求金額を確認したい"
-    assert added.stored_feedback_type == "NEGATIVE"
-    assert "operation => 'ADD'" in added.plsql_preview
-    assert any(
-        (params or {}).get("feedback_type") == "NEGATIVE"
-        and (params or {}).get("response") == "SELECT TOTAL_AMOUNT FROM INVOICES"
-        and (params or {}).get("feedback_content") == "正しい SQL"
-        for params in fake_db.executed_params
-    )
-
-    corrected = service.add_select_ai_feedback(
-        SelectAiFeedbackAddRequest(
-            profile_id="default",
-            profile_name="CUSTOM_PROFILE",
-            question="請求金額を確認したい",
-            feedback_type="negative",
-            response="SELECT INVOICE_ID, TOTAL_AMOUNT FROM INVOICES",
-        )
-    )
-
-    assert corrected.executed is True
-    assert corrected.profile_name == "CUSTOM_PROFILE"
-    assert any(
-        (params or {}).get("profile_name") == "CUSTOM_PROFILE"
-        and (params or {}).get("response") == "SELECT INVOICE_ID, TOTAL_AMOUNT FROM INVOICES"
-        for params in fake_db.executed_params
-    )
-
-    deleted = service.delete_select_ai_feedback(
-        SelectAiFeedbackDeleteRequest(
-            profile_name="default",
-            sql_text="select ai showsql 請求金額を確認したい",
-        )
-    )
-
-    assert deleted.executed is True
-    assert deleted.status == "deleted"
-    assert any("DBMS_CLOUD_AI.FEEDBACK" in sql for sql in fake_db.executed)
-    assert any(
-        (params or {}).get("sql_text") == "select ai showsql 請求金額を確認したい"
-        for params in fake_db.executed_params
-    )
-
-    updated = service.update_select_ai_feedback_vector_index(
-        SelectAiFeedbackVectorIndexRequest(
-            profile_name="default",
-            similarity_threshold=0.85,
-            match_limit=4,
-        )
-    )
-
-    assert updated.executed is True
-    assert updated.status == "updated"
-    assert any("DBMS_CLOUD_AI.UPDATE_VECTOR_INDEX" in sql for sql in fake_db.executed)
-    assert any(
-        (params or {}).get("index_name") == "DEFAULT_FEEDBACK_VECINDEX"
-        and '"match_limit": 4' in str((params or {}).get("attributes"))
-        for params in fake_db.executed_params
-    )
-    assert fake_db.commits >= 2
-
-
-def test_service_delete_select_ai_feedback_reports_missing_entry() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_error = "ORA-20000: No matching feedback record for deletion."
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    deleted = service.delete_select_ai_feedback(
-        SelectAiFeedbackDeleteRequest(
-            profile_name="default",
-            sql_text="select ai showsql 登録していない質問",
-        )
-    )
-
-    assert deleted.executed is False
-    assert deleted.status == "not_found"
-    assert "すでに削除されています" in deleted.warnings[0]
-
-
-def test_service_add_select_ai_feedback_explains_unmatched_sql() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_error = (
-        "ORA-20000: No matching SQL statement found for the SQL_ID or SQL text."
-    )
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    added = service.add_select_ai_feedback(
-        SelectAiFeedbackAddRequest(
-            profile_id="default",
-            question="請求金額を確認したい",
-            feedback_type="negative",
-            response="SELECT TOTAL_AMOUNT FROM INVOICES",
-        )
-    )
-
-    assert added.executed is False
-    assert added.status == "error"
-    assert "V$MAPPED_SQL" in added.warnings[0]
-
-
-def test_oracle_adapter_list_agent_conversations_reads_prompt_response_and_team() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    assert adapter.list_agent_conversations(team_name="NL2SQL_DEFAULT_TEAM", limit=5) == []
-
-    # USER_CLOUD_AI_CONVERSATION_PROMPTS には RESPONSE・TEAM_NAME の列が無い（#1681）。
-    sql = next(sql for sql in fake_db.executed if "USER_CLOUD_AI_CONVERSATION_PROMPTS" in sql)
-    assert "p.PROMPT_RESPONSE" in sql
-    assert "p.PROMPT_ACTION = 'AGENT'" in sql
-    assert "USER_AI_AGENT_TEAM_HISTORY" in sql
-    assert " RESPONSE," not in sql
-    assert fake_db.executed_params[-1] == {"limit": 5, "team_name": "NL2SQL_DEFAULT_TEAM"}
-
-
-def test_oracle_adapter_agent_privilege_check_includes_create_conversation() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    checks = adapter.check_select_ai_agent_privileges()
-
-    assert "dbms_cloud_ai_create_conversation" in [check["name"] for check in checks]
-    assert any("PROCEDURE_NAME = 'CREATE_CONVERSATION'" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_materializes_select_ai_feedback_lobs_before_disconnect() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_rows = [
-        (
-            _FakeLob("select ai showsql 請求金額を確認したい", fake_db),
-            "sql-001",
-            _FakeLob("SELECT TOTAL_AMOUNT FROM INVOICES", fake_db),
-            _FakeLob(
-                '{"sql_id":"sql-001","sql_text":"SELECT TOTAL_AMOUNT FROM INVOICES"}',
-                fake_db,
-            ),
-        )
-    ]
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    result = adapter.list_select_ai_feedback_entries(profile_name="default")
-
-    assert fake_db.connection_open is False
-    assert result["items"] == [
-        {
-            "content": "select ai showsql 請求金額を確認したい",
-            "sql_id": "sql-001",
-            "sql_text": "SELECT TOTAL_AMOUNT FROM INVOICES",
-            "attributes": {
-                "sql_id": "sql-001",
-                "sql_text": "SELECT TOTAL_AMOUNT FROM INVOICES",
-            },
-            "raw_attributes": (
-                '{"sql_id":"sql-001","sql_text":"SELECT TOTAL_AMOUNT FROM INVOICES"}'
-            ),
-        }
-    ]
-
-
-def test_service_select_ai_feedback_entries_are_offset_paged() -> None:
-    """Select AI feedback は COUNT(*) の総数と ROWID 順の OFFSET / FETCH の 1 ページ（#1891）。"""
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_rows = [
-        (
-            f"select ai showsql 質問 {index}",
-            f"sql-{index:03d}",
-            f"SELECT {index} FROM DUAL",
-            f'{{"sql_id":"sql-{index:03d}"}}',
-        )
-        for index in range(1, 26)
-    ]
-    service = _OracleRuntimeNl2SqlService(_QuestionCaptureOracleAdapter(fake_db))
-
-    first = service.list_select_ai_feedback_entries("default", limit=10, offset=0)
-    last = service.list_select_ai_feedback_entries("default", limit=10, offset=20)
-
-    assert (first.total, first.unfiltered_total, first.limit, first.offset) == (25, 25, 10, 0)
-    assert [item.sql_id for item in first.items] == [f"sql-{i:03d}" for i in range(1, 11)]
-    assert first.has_next is True
-    assert [item.sql_id for item in last.items] == [f"sql-{i:03d}" for i in range(21, 26)]
-    assert last.has_next is False
-    # 範囲の外の offset は空のページで、総数は変えない（画面が最後のページを取り直す）。
-    beyond = service.list_select_ai_feedback_entries("default", limit=10, offset=40)
-    assert (beyond.items, beyond.total, beyond.has_next) == ([], 25, False)
-    page_sql = [sql for sql in fake_db.executed if "FEEDBACK_VECINDEX$VECTAB" in sql]
-    assert any(
-        sql.startswith('SELECT COUNT(*) FROM "DEFAULT_FEEDBACK_VECINDEX$VECTAB"')
-        for sql in page_sql
-    )
-    assert any(
-        "ORDER BY ROWID OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY" in sql for sql in page_sql
-    )
-    assert {"offset": 20, "limit": 10} in fake_db.executed_params
-
-
-def test_service_select_ai_feedback_missing_table_returns_warning() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.select_ai_feedback_missing = True
-    service = _OracleRuntimeNl2SqlService(_QuestionCaptureOracleAdapter(fake_db))
-
-    entries = service.list_select_ai_feedback_entries("default")
-
-    assert entries.runtime == "oracle"
-    assert entries.items == []
-    assert entries.warnings == [
-        "Select AI feedback vector table が未作成です。feedback vector index を再構築してください。"
-    ]
-    assert "DEFAULT_FEEDBACK_VECINDEX$VECTAB" not in " ".join(entries.warnings)
-
-    deleted = service.delete_select_ai_feedback(
-        SelectAiFeedbackDeleteRequest(profile_name="default", sql_text="select ai showsql x")
-    )
-    updated = service.update_select_ai_feedback_vector_index(
-        SelectAiFeedbackVectorIndexRequest(profile_name="default")
-    )
-
-    assert deleted.status == "error"
-    assert updated.status == "error"
-
-
-def test_service_select_ai_feedback_management_requires_oracle_runtime() -> None:
-    service = Nl2SqlService()
-
-    entries = service.list_select_ai_feedback_entries("default")
-    added = service.add_select_ai_feedback(
-        SelectAiFeedbackAddRequest(
-            profile_id="default",
-            question="請求金額を確認したい",
-            feedback_type="positive",
-            generated_sql="SELECT TOTAL_AMOUNT FROM INVOICES",
-        )
-    )
-    deleted = service.delete_select_ai_feedback(
-        SelectAiFeedbackDeleteRequest(profile_name="default", sql_text="select ai showsql x")
-    )
-    updated = service.update_select_ai_feedback_vector_index(
-        SelectAiFeedbackVectorIndexRequest(profile_name="default")
-    )
-
-    assert entries.items == []
-    assert "NL2SQL_RUNTIME_MODE=oracle" in " ".join(entries.warnings)
-    assert added.status == "requires_oracle"
-    assert added.executed is False
-    assert deleted.status == "requires_oracle"
-    assert updated.status == "requires_oracle"
-
-
-def test_select_ai_feedback_add_negative_requires_response() -> None:
-    with pytest.raises(ValueError):
-        SelectAiFeedbackAddRequest(
-            profile_id="default",
-            question="請求金額を確認したい",
-            feedback_type="negative",
-            response="",
-        )
-
-
 def test_service_similar_history_uses_oracle_vector_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4366,585 +3322,6 @@ def test_service_preview_marks_oracle_vector_few_shot_source(
     assert preview.engine_meta["similar_history_examples"][0]["history_id"] == "hist-vector-001"
 
 
-def test_oracle_adapter_refresh_select_ai_agent_assets_executes_dbms_cloud_ai_agent() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    meta = adapter.refresh_select_ai_agent_assets(
-        profile_name="NL2SQL_DEFAULT_PROFILE",
-        tool_name="NL2SQL_DEFAULT_TOOL",
-        agent_name="NL2SQL_DEFAULT_AGENT",
-        task_name="NL2SQL_DEFAULT_TASK",
-        team_name="NL2SQL_DEFAULT_TEAM",
-        allowed_tables=["SH.INVOICES"],
-        row_limit=100,
-        description="請求 agent",
-    )
-
-    assert meta["package"] == "DBMS_CLOUD_AI_AGENT"
-    assert meta["runtime"] == "oracle"
-    assert meta["select_ai_profile_meta"]["package"] == "DBMS_CLOUD_AI"
-    assert meta["profile_attributes"]["object_list"] == [{"owner": "SH", "name": "INVOICES"}]
-    assert meta["tool_attributes"]["tool_type"] == "SQL"
-    assert meta["tool_attributes"]["tool_params"] == {"profile_name": "NL2SQL_DEFAULT_PROFILE"}
-    assert meta["agent_attributes"]["tools"] == ["NL2SQL_DEFAULT_TOOL"]
-    assert meta["agent_attributes"]["profile_name"] == "NL2SQL_DEFAULT_PROFILE"
-    assert meta["agent_attributes"]["role"]
-    assert meta["task_attributes"]["tools"] == ["NL2SQL_DEFAULT_TOOL"]
-    assert meta["task_attributes"]["enable_human_tool"] is False
-    assert meta["team_attributes"] == {
-        "agents": [{"name": "NL2SQL_DEFAULT_AGENT", "task": "NL2SQL_DEFAULT_TASK"}],
-        "process": "sequential",
-    }
-    for procedure in [
-        "CREATE_TOOL",
-        "CREATE_AGENT",
-        "CREATE_TASK",
-        "CREATE_TEAM",
-    ]:
-        assert any(f"DBMS_CLOUD_AI_AGENT.{procedure}" in sql for sql in fake_db.executed)
-    assert any("DBMS_CLOUD_AI.CREATE_PROFILE" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_drop_select_ai_agent_assets_executes_best_effort_drops() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    meta = adapter.drop_select_ai_agent_assets(
-        profile_name="NL2SQL_DEFAULT_PROFILE",
-        tool_name="NL2SQL_DEFAULT_TOOL",
-        agent_name="NL2SQL_DEFAULT_AGENT",
-        task_name="NL2SQL_DEFAULT_TASK",
-        team_name="NL2SQL_DEFAULT_TEAM",
-    )
-
-    assert meta["package"] == "DBMS_CLOUD_AI_AGENT"
-    assert meta["runtime"] == "oracle"
-    assert fake_db.commits == 1
-    for procedure in [
-        "DROP_TEAM",
-        "DROP_TASK",
-        "DROP_AGENT",
-        "DROP_TOOL",
-    ]:
-        assert any(f"DBMS_CLOUD_AI_AGENT.{procedure}" in sql for sql in fake_db.executed)
-    assert sum("DBMS_CLOUD_AI.DROP_PROFILE" in sql for sql in fake_db.executed) >= 2
-    assert any("DBMS_SQL_TRANSLATOR.DROP_PROFILE" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_create_agent_conversation_uses_dbms_cloud_ai() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    conversation_id = adapter.create_agent_conversation()
-
-    # 会話の API は DBMS_CLOUD_AI にあり、DBMS_CLOUD_AI_AGENT には無い（#1681）。
-    assert conversation_id == "conversation-001"
-    assert fake_db.executed == ["SELECT DBMS_CLOUD_AI.CREATE_CONVERSATION() FROM DUAL"]
-
-
-def test_oracle_adapter_wraps_missing_create_conversation() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_conversation_error = (
-        'ORA-00904: "DBMS_CLOUD_AI"."CREATE_CONVERSATION": invalid identifier'
-    )
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    with pytest.raises(OracleAdapterError, match="DBMS_CLOUD_AI.CREATE_CONVERSATION を使えません"):
-        adapter.create_agent_conversation()
-
-
-def test_oracle_adapter_run_select_ai_agent_team_uses_conversation() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql, conversation_id = adapter.run_select_ai_agent_team(
-        team_name="NL2SQL_DEFAULT_TEAM",
-        question="請求金額を確認したい",
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert conversation_id == "conversation-001"
-    assert "SELECT DBMS_CLOUD_AI.CREATE_CONVERSATION() FROM DUAL" in fake_db.executed
-    run_team = [
-        (sql, params)
-        for sql, params in zip(fake_db.executed, fake_db.executed_params, strict=True)
-        if "DBMS_CLOUD_AI_AGENT.RUN_TEAM" in sql
-    ]
-    # 公式の文書の引数 (team_name, user_prompt, params) で 1 回だけ呼び、
-    # conversation_id は params の JSON に入れる。
-    assert len(run_team) == 1
-    run_team_sql, run_team_params = run_team[0]
-    assert "conversation_id =>" not in run_team_sql
-    assert "params => :params" in run_team_sql
-    assert run_team_params is not None
-    assert run_team_params["params"] == '{"conversation_id":"conversation-001"}'
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_run_select_ai_agent_team_continues_given_conversation() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql, conversation_id = adapter.run_select_ai_agent_team(
-        team_name="NL2SQL_DEFAULT_TEAM",
-        question="そのうち東日本だけにして",
-        conversation_id="5DB53170-76E5-8A91-E063-EE17000AACE1",
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert conversation_id == "5DB53170-76E5-8A91-E063-EE17000AACE1"
-    assert not any("CREATE_CONVERSATION" in sql for sql in fake_db.executed)
-    assert any(
-        (params or {}).get("params") == '{"conversation_id":"5DB53170-76E5-8A91-E063-EE17000AACE1"}'
-        for params in fake_db.executed_params
-    )
-
-
-def test_oracle_adapter_run_select_ai_agent_team_applies_call_timeout_override() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql, conversation_id = adapter.run_select_ai_agent_team(
-        team_name="NL2SQL_DEFAULT_TEAM",
-        question="請求金額を確認したい",
-        call_timeout_seconds=300.0,
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert conversation_id == "conversation-001"
-    assert fake_db.call_timeouts == [300000, 300000]
-
-
-def test_oracle_adapter_run_select_ai_agent_team_reports_signature_error_without_retry() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.run_team_signature_failures = 1
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    with pytest.raises(OracleAdapterError, match="Select AI Agent runtime API"):
-        adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_DEFAULT_TEAM",
-            tool_name="NL2SQL_DEFAULT_TOOL",
-            question="請求金額を確認したい",
-        )
-
-    assert fake_db.run_team_calls == 1
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_run_select_ai_agent_team_uses_explicit_tool_on_profile_loss() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.run_team_profile_loss = True
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    sql, conversation_id = adapter.run_select_ai_agent_team(
-        team_name="NL2SQL_DEFAULT_TEAM_VABC12345",
-        tool_name="NL2SQL_DEFAULT_TOOL",
-        question="請求金額を確認したい",
-    )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert conversation_id == "run_tool:NL2SQL_DEFAULT_TOOL"
-    assert any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_run_select_ai_agent_team_fails_when_conversation_unavailable() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_conversation_error = "ORA-01031: insufficient privileges"
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    # 会話を作れないとき、黙って RUN_TOOL に切り替えない（#1681）。
-    with pytest.raises(OracleAdapterError, match="会話（conversation_id）を作成できませんでした"):
-        adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_DEFAULT_TEAM",
-            tool_name="NL2SQL_DEFAULT_TOOL",
-            question="請求金額を確認したい",
-        )
-
-    assert any("DBMS_CLOUD_AI.CREATE_CONVERSATION" in sql for sql in fake_db.executed)
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TEAM" in sql for sql in fake_db.executed)
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_oracle_adapter_run_select_ai_agent_team_rejects_empty_conversation_without_tool() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.agent_conversation_id = ""
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    with pytest.raises(OracleAdapterError, match="conversation_id"):
-        adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_DEFAULT_TEAM",
-            question="請求金額を確認したい",
-        )
-
-    assert any("DBMS_CLOUD_AI.CREATE_CONVERSATION" in sql for sql in fake_db.executed)
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TEAM" in sql for sql in fake_db.executed)
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_service_run_select_ai_agent_team_does_not_fallback_when_conversation_fails() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_conversation_error = "ORA-01031: insufficient privileges"
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    with pytest.raises(OracleAdapterError, match="insufficient privileges"):
-        service.run_select_ai_agent_team(
-            AgentTeamRunRequest(
-                profile_id="default",
-                team_name="NL2SQL_DEFAULT_TEAM",
-                prompt="請求金額を確認したい",
-            )
-        )
-
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_service_run_select_ai_agent_team_passes_request_conversation_id() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    result = service.run_select_ai_agent_team(
-        AgentTeamRunRequest(
-            prompt="請求金額を確認したい",
-            conversation_id=" conversation-777 ",
-        )
-    )
-
-    assert result.conversation_id == "conversation-777"
-    assert result.engine_meta["agent_run_mode"] == "run_team"
-    assert result.warnings == []
-    assert not any("CREATE_CONVERSATION" in sql for sql in fake_db.executed)
-
-
-def test_service_run_select_ai_agent_team_records_run_tool_fallback() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.run_team_profile_loss = True
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    result = service.run_select_ai_agent_team(AgentTeamRunRequest(prompt="請求金額を確認したい"))
-
-    assert result.conversation_id == "run_tool:NL2SQL_DEFAULT_TOOL"
-    assert result.engine_meta["agent_run_mode"] == "run_tool"
-    assert any("RUN_TOOL" in warning for warning in result.warnings)
-
-
-def test_service_create_select_ai_agent_conversation_does_not_return_fake_id_on_oracle() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    created = service.create_select_ai_agent_conversation(AgentConversationCreateRequest())
-
-    assert created.conversation_id == "conversation-001"
-    assert created.runtime == "oracle"
-
-    fake_db.create_conversation_error = (
-        'ORA-00904: "DBMS_CLOUD_AI"."CREATE_CONVERSATION": invalid identifier'
-    )
-    # RUN_TEAM は CREATE_CONVERSATION で作っていない id を受け付けないため、偽の id を返さない。
-    with pytest.raises(OracleAdapterError, match="CREATE_CONVERSATION"):
-        service.create_select_ai_agent_conversation(AgentConversationCreateRequest())
-
-
-def test_service_preview_select_ai_agent_returns_oracle_conversation_meta() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    preview = service.preview(
-        PreviewRequest(question="請求金額を確認したい", engine=Nl2SqlEngine.SELECT_AI_AGENT)
-    )
-
-    assert preview.engine == Nl2SqlEngine.SELECT_AI_AGENT
-    assert preview.sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert preview.engine_meta["runtime"] == "oracle"
-    assert preview.engine_meta["conversation_id"] == "conversation-001"
-    assert preview.engine_meta["agent_run_mode"] == "run_team"
-    assert preview.fallback_reason == ""
-
-
-def test_service_preview_select_ai_agent_fails_when_conversation_unavailable() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_conversation_error = "ORA-01031: insufficient privileges"
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    with pytest.raises(RuntimeError, match="会話（conversation_id）を作成できませんでした"):
-        service.preview(
-            PreviewRequest(question="請求金額を確認したい", engine=Nl2SqlEngine.SELECT_AI_AGENT)
-        )
-
-    assert not any("DBMS_CLOUD_AI_AGENT.RUN_TOOL" in sql for sql in fake_db.executed)
-
-
-def test_service_preview_select_ai_agent_records_run_tool_fallback() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.run_team_profile_loss = True
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    preview = service.preview(
-        PreviewRequest(question="請求金額を確認したい", engine=Nl2SqlEngine.SELECT_AI_AGENT)
-    )
-
-    assert preview.sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert preview.engine_meta["agent_run_mode"] == "run_tool"
-    assert "RUN_TOOL" in preview.fallback_reason
-
-
-def test_service_preview_explicit_select_ai_agent_does_not_deterministic_fallback() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.unsupported_agent_runtime = True
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    with pytest.raises(RuntimeError, match="Select AI Agent runtime API"):
-        service.preview(
-            PreviewRequest(question="請求金額を確認したい", engine=Nl2SqlEngine.SELECT_AI_AGENT)
-        )
-
-
-def test_service_refresh_uses_oracle_adapter_when_runtime_is_oracle() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    select_ai = service.refresh_select_ai_profile(None)
-    agent = service.refresh_select_ai_agent_assets(None)
-
-    assert select_ai.status == "ready"
-    assert select_ai.engine_meta["runtime"] == "oracle"
-    assert select_ai.warning == ""
-    profile_attributes = select_ai.engine_meta["profile_attributes"]
-    assert "role" not in profile_attributes
-    assert "additional_instructions" not in profile_attributes
-    assert profile_attributes["additional_instructions_applied"] is False
-    assert profile_attributes["additional_instructions_length"] == 0
-    oracle_attributes = select_ai.engine_meta["attributes"]
-    assert "additional_instructions" not in oracle_attributes
-    assert oracle_attributes["additional_instructions_applied"] is False
-    assert agent.status == "ready"
-    assert agent.engine_meta["runtime"] == "oracle"
-    assert agent.asset_names == {
-        "profile": "NL2SQL_DEFAULT_PROFILE",
-        "tool": "NL2SQL_DEFAULT_TOOL",
-        "agent": "NL2SQL_DEFAULT_AGENT",
-        "task": "NL2SQL_DEFAULT_TASK",
-        "team": "NL2SQL_DEFAULT_TEAM",
-    }
-    assert agent.asset_names["team"].endswith("_TEAM")
-    assert any("DBMS_CLOUD_AI.CREATE_PROFILE" in sql for sql in fake_db.executed)
-    assert any("DBMS_CLOUD_AI_AGENT.CREATE_TEAM" in sql for sql in fake_db.executed)
-
-
-def test_service_refresh_agent_sanitizes_uuid_profile_id_for_oracle_assets() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="65e2dacb-a70b-4754-a9ce-c1ca9e7b06bb",
-            name="HR_PROFILE",
-            allowed_tables=["INVOICES"],
-            select_ai_config={"profile_name": "HR_PROFILE"},
-        )
-    )
-
-    agent = service.refresh_select_ai_agent_assets(profile.id)
-
-    expected_stem = "NL2SQL_65E2DACB_A70B_4754_A9CE_C1CA9E7B06BB"
-    assert agent.status == "ready"
-    assert agent.asset_names == {
-        "profile": "HR_PROFILE",
-        "tool": f"{expected_stem}_TOOL",
-        "agent": f"{expected_stem}_AGENT",
-        "task": f"{expected_stem}_TASK",
-        "team": f"{expected_stem}_TEAM",
-    }
-    for name in agent.asset_names.values():
-        assert "-" not in name
-        assert re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", name)
-
-    created_asset_names = {
-        str(params.get("name"))
-        for sql, params in zip(fake_db.executed, fake_db.executed_params, strict=True)
-        if params is not None and "DBMS_CLOUD_AI_AGENT.CREATE_" in sql
-    }
-    assert {
-        f"{expected_stem}_TOOL",
-        f"{expected_stem}_AGENT",
-        f"{expected_stem}_TASK",
-        f"{expected_stem}_TEAM",
-    } <= created_asset_names
-
-
-def test_service_refresh_agent_uses_versioned_team_when_generated_profile_remains() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_team_profile_exists_failures = 2
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    data = service.refresh_select_ai_agent_assets(None)
-    preview = service.preview(
-        PreviewRequest(question="請求金額を確認したい", engine=Nl2SqlEngine.SELECT_AI_AGENT)
-    )
-
-    assert data.status == "ready"
-    assert data.team_name.startswith("NL2SQL_DEFAULT_TEAM_V")
-    assert "versioned team" in data.warning
-    assert preview.engine_meta["team_name"] == data.team_name
-
-
-def test_service_run_agent_team_uses_runtime_team_name() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_team_profile_exists_failures = 2
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    assets = service.refresh_select_ai_agent_assets(None)
-    result = service.run_select_ai_agent_team(AgentTeamRunRequest(prompt="請求金額を確認したい"))
-
-    assert assets.team_name.startswith("NL2SQL_DEFAULT_TEAM_V")
-    assert result.runtime == "oracle"
-    assert result.team_name == assets.team_name
-    assert any(
-        params and params.get("team_name") == assets.team_name for params in fake_db.executed_params
-    )
-
-
-def test_oracle_adapter_generate_synthetic_data_blocks_nl2sql_system_namespace() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    with pytest.raises(OracleAdapterError, match="システムテーブル管理"):
-        adapter.generate_synthetic_data(
-            table_name="NL2SQL_SMOKE_TABLE",
-            row_count=1,
-            profile_name="NL2SQL_SMOKE_PROFILE",
-        )
-    assert fake_db.synthetic_procedure_calls == 0
-
-
-def test_oracle_adapter_generate_synthetic_data_uses_object_list_payload() -> None:
-    fake_db = _FakeOracleDb()
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    result = adapter.generate_synthetic_data(
-        table_name="",
-        object_list=["APP.INVOICES", "APP.CUSTOMERS"],
-        row_count=3,
-        profile_name="NL2SQL_SAMPLE_PROFILE",
-        user_prompt="日本語の顧客名を含める",
-    )
-
-    assert result["mode"] == "procedure"
-    assert result["table_name"] == "APP.INVOICES"
-    assert result["object_list"] == ["APP.INVOICES", "APP.CUSTOMERS"]
-    assert fake_db.synthetic_procedure_calls == 1
-    assert not any(
-        sql.startswith("SELECT DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA") for sql in fake_db.executed
-    )
-    object_list_params = [
-        params
-        for sql, params in zip(fake_db.executed, fake_db.executed_params, strict=True)
-        if params is not None and "object_list => :object_list" in sql
-    ]
-    assert object_list_params
-    payload = json.loads(str(object_list_params[0]["object_list"]))
-    assert payload == [
-        {
-            "owner": "APP",
-            "name": "INVOICES",
-            "record_count": 3,
-            "user_prompt": "日本語の顧客名を含める",
-        },
-        {
-            "owner": "APP",
-            "name": "CUSTOMERS",
-            "record_count": 3,
-            "user_prompt": "日本語の顧客名を含める",
-        },
-    ]
-
-
-def test_oracle_adapter_generate_synthetic_data_requires_profile_name() -> None:
-    adapter = _FakeRuntimeOracleAdapter(_FakeOracleDb())
-
-    with pytest.raises(OracleAdapterError, match="profile_name"):
-        adapter.generate_synthetic_data(
-            table_name="APP.INVOICES",
-            row_count=1,
-            profile_name="",
-        )
-
-
-def test_oracle_adapter_signature_detection_does_not_mask_ora_06550_only() -> None:
-    adapter = _FakeRuntimeOracleAdapter(_FakeOracleDb())
-
-    assert adapter._looks_like_signature_error("ORA-06550: insufficient privileges") is False
-    assert adapter._looks_like_signature_error("ORA-06550: PLS-00306: wrong number") is True
-
-
-def test_service_refresh_agent_cleans_previous_versioned_team() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_team_profile_exists_failures = 2
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    first = service.refresh_select_ai_agent_assets(None)
-    second = service.refresh_select_ai_agent_assets(None)
-
-    assert first.team_name.startswith("NL2SQL_DEFAULT_TEAM_V")
-    assert second.status == "ready"
-    assert any(
-        params and params.get("name") == first.team_name for params in fake_db.executed_params
-    )
-    assert "cleanup" in second.warning
-
-
-def test_oracle_adapter_refresh_agent_retries_when_generated_profile_exists() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.create_team_profile_exists_failures = 1
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    meta = adapter.refresh_select_ai_agent_assets(
-        profile_name="NL2SQL_DEFAULT_PROFILE",
-        tool_name="NL2SQL_DEFAULT_TOOL",
-        agent_name="NL2SQL_DEFAULT_AGENT",
-        task_name="NL2SQL_DEFAULT_TASK",
-        team_name="NL2SQL_DEFAULT_TEAM",
-        allowed_tables=["INVOICES"],
-        row_limit=20,
-    )
-
-    assert meta["runtime"] == "oracle"
-    assert fake_db.create_team_calls == 2
-    assert sum("DBMS_CLOUD_AI.DROP_PROFILE" in sql for sql in fake_db.executed) >= 2
-    assert any("DBMS_SQL_TRANSLATOR.DROP_PROFILE" in sql for sql in fake_db.executed)
-
-
-def test_service_cleanup_assets_requires_confirmation_without_oracle_calls() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    cleanup = service.cleanup_select_ai_assets(
-        profile_id=None,
-        engines=[Nl2SqlEngine.SELECT_AI_AGENT],
-    )
-
-    assert len(cleanup) == 1
-    assert cleanup[0].status == "confirmation_required"
-    assert cleanup[0].executed is False
-    assert cleanup[0].asset_names == {}
-    assert fake_db.executed == []
-
-
-def test_service_cleanup_assets_executes_oracle_drops_when_confirmed() -> None:
-    fake_db = _FakeOracleDb()
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(fake_db))
-
-    cleanup = service.cleanup_select_ai_assets(
-        profile_id=None,
-        engines=[Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT],
-        confirmation="ADMIN_EXECUTE",
-    )
-
-    assert [item.status for item in cleanup] == ["cleaned", "cleaned"]
-    assert all(item.executed for item in cleanup)
-    assert any("DBMS_CLOUD_AI_AGENT.DROP_TEAM" in sql for sql in fake_db.executed)
-    assert any("DBMS_CLOUD_AI.DROP_PROFILE" in sql for sql in fake_db.executed)
-
-
 async def test_schema_import_csv_route_was_removed() -> None:
     async with httpx.AsyncClient(transport=_transport(), base_url="http://test") as client:
         resp = await client.post(
@@ -4966,25 +3343,3 @@ async def test_schema_refresh_sync_route_was_removed_from_runtime_and_openapi() 
     assert resp.status_code == 404
     assert "/api/schema/refresh" not in app.openapi()["paths"]
     assert "/api/schema/refresh-jobs" in app.openapi()["paths"]
-
-
-@pytest.mark.usefixtures("trace_body_enabled")
-def test_select_ai_call_snapshot_records_database_boundary_only() -> None:
-    from pr_backend_core.observability.tracing import operation_trace
-
-    adapter = _FakeRuntimeOracleAdapter(_FakeOracleDb())
-    with operation_trace("synthetic", operation_id="a") as trace:
-        adapter.run_select_ai_agent_team(team_name="SYNTHETIC_TEAM", question="synthetic-input")
-    span = next(s for s in trace.spans if s.operation_name == "oracle.select_ai")
-    assert span.display and span.display.details and span.display.details.call
-    assert "synthetic-input" in span.display.details.call.input.text
-    assert span.display.details.call.output.status == "recorded"
-    assert span.display.details.call.schema_.status == "not_recorded"
-
-
-@pytest.fixture
-def trace_body_enabled() -> Iterator[None]:
-    from pr_backend_core.observability.call_policy import call_content_policy
-
-    with call_content_policy(lambda: True):
-        yield

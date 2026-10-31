@@ -912,10 +912,10 @@ for (const viewport of [
 
     await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
     await expect(page.getByRole("spinbutton", { name: "seed" })).toHaveCount(0);
-    // 推論の量が Select AI に効かない注記は読める。
+    // 推論の量の注記（none は指定を送らない）は読める。
     await expect(
       page.getByRole("combobox", { name: "モデル 1 の推論の量" })
-    ).toHaveAccessibleDescription(/Select AI・Select AI Agent には、この画面の推論の量は送信しません/);
+    ).toHaveAccessibleDescription(/このシステムの none は指定を送らず/);
 
     await page.getByRole("button", { name: "登録モデル: 保存" }).click();
     await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();

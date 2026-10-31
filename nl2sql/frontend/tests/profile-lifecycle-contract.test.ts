@@ -6,14 +6,6 @@ const profilePage = readFileSync(
   new URL("../src/features/nl2sql/pages/ProfileManagementPage.tsx", import.meta.url),
   "utf8",
 );
-const profileSaveProgress = readFileSync(
-  new URL("../src/features/nl2sql/components/ProfileSaveProgress.tsx", import.meta.url),
-  "utf8",
-);
-const profileSyncPresentation = readFileSync(
-  new URL("../src/features/nl2sql/profileSyncPresentation.ts", import.meta.url),
-  "utf8",
-);
 const ontologyPage = readFileSync(
   new URL("../src/features/nl2sql/pages/OntologyBuildPage.tsx", import.meta.url),
   "utf8",
@@ -36,31 +28,11 @@ const clearActionButton = readFileSync(
 );
 const messages = readFileSync(new URL("../src/lib/i18n.ts", import.meta.url), "utf8");
 
-test("profile save queues Oracle sync without touching Ontology or detail refresh", () => {
-  assert.match(profilePage, /\/oracle-sync-jobs/u);
-  assert.match(profilePage, /"Idempotency-Key"/u);
-  assert.match(profilePage, /BUSINESS_SELECT_AI_DB_PROFILES_URL/u);
-  assert.doesNotMatch(profilePage, /BUSINESS_SELECT_AI_DB_PROFILES_DETAIL_URL/u);
+test("profile save stores the business profile only, without Oracle sync or Ontology refresh", () => {
+  assert.match(profilePage, /apiPatch<Nl2SqlProfile>\(/u);
+  assert.match(profilePage, /apiPost<Nl2SqlProfile>\("\/api\/nl2sql\/profiles", payload\)/u);
+  assert.doesNotMatch(profilePage, /oracle-sync-jobs|ProfileSaveProgress/u);
   assert.doesNotMatch(profilePage, /\/ontology-view/u);
-  assert.doesNotMatch(profilePage, /\/select-ai-profile/u);
-  assert.doesNotMatch(profilePage, /select-ai-agent\/assets\/refresh/u);
-});
-
-test("profile Oracle sync exposes progress, failure recovery and retry", () => {
-  assert.match(profilePage, /refetchInterval/u);
-  assert.match(profilePage, /<ProfileSaveProgress/u);
-  assert.match(profileSaveProgress, /<WorkflowProgressStrip/u);
-  assert.match(profileSaveProgress, /role=\{presentation\.active \? "status" : undefined\}/u);
-  assert.match(profileSaveProgress, /severity="danger"/u);
-  assert.match(profileSaveProgress, /testId: `profile-save-step-\$\{step\.id\}`/u);
-  assert.match(profileSyncPresentation, /submission_failed/u);
-  assert.match(profileSyncPresentation, /job\.oracle_result/u);
-  assert.match(profileSyncPresentation, /job\.agent_result/u);
-  assert.match(profilePage, /\/oracle-sync-jobs\/\$\{oracleSyncJob\.job_id\}\/retry/u);
-  assert.match(messages, /業務プロファイルは保存されましたが、Oracle 反映に失敗しました/u);
-  assert.doesNotMatch(profilePage, /function OracleMutationResult/u);
-  assert.doesNotMatch(profilePage, /profile-oracle-result/u);
-  assert.doesNotMatch(messages, /Oracle Profile 反映結果/u);
 });
 
 test("Ontology page uses AI build as the only user-facing build action", () => {
@@ -141,7 +113,7 @@ test("Grounding graph remains the single user-facing ontology graph", () => {
 test("all profiles share the physical delete flow and retained-state confirmation", () => {
   assert.match(
     messages,
-    /そのすべてのオントロジー範囲設定、Oracle DBMS_CLOUD_AI Profile、Select AI Agent 関連アセットを完全に削除/u
+    /そのすべてのオントロジー範囲設定を完全に削除/u
   );
   assert.match(messages, /監査履歴は削除されません/u);
   assert.doesNotMatch(profilePage, /profile\.id !== "default"/u);

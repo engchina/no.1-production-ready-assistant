@@ -1,7 +1,7 @@
 """共通認証の store の接続と SQL の往復（#793）。
 
 - 接続は要求ごとに張らず、共通認証用の pool から借りる
-- ロールの権限・業務プロファイル・Data Grant は、ロールの数によらず表ごとに 1 回で読む
+- ロールの権限・業務プロファイルは、ロールの数によらず表ごとに 1 回で読む
 """
 
 from __future__ import annotations
@@ -63,29 +63,6 @@ def _role(index: int) -> RoleRecord:
     )
 
 
-def _entitlement_row(role_id: str, entitlement_id: str) -> tuple[Any, ...]:
-    return (
-        role_id,
-        entitlement_id,
-        "SALES",
-        "ALL",
-        "READ",
-        "APP",
-        "ORDERS",
-        "TABLE",
-        '["ID"]',
-        "ALL",
-        None,
-        None,
-        None,
-        None,
-        "APPLIED",
-        None,
-        None,
-        None,
-    )
-
-
 def test_role_details_are_read_once_per_table() -> None:
     store = OracleSecurityStore(_settings())
     roles = [_role(index) for index in range(40)]
@@ -93,27 +70,18 @@ def test_role_details_are_read_once_per_table() -> None:
         {
             "NL2SQL_APP_ROLE_PERMISSIONS": [("role-1", "menu.query"), ("role-1", "menu.history")],
             "NL2SQL_APP_ROLE_PROFILES": [("role-2", "profile-a")],
-            "NL2SQL_APP_DATA_ENTITLEMENTS": [
-                _entitlement_row("role-3", "e-1"),
-                _entitlement_row("role-3", "e-2"),
-                _entitlement_row("role-4", "e-3"),
-            ],
         }
     )
 
     loaded = store._roles_details(cursor, roles)  # noqa: SLF001
 
-    assert len(cursor.executed) == 3
+    assert len(cursor.executed) == 2
     assert [role.role_id for role in loaded] == [role.role_id for role in roles]
     by_id = {role.role_id: role for role in loaded if isinstance(role, RoleRecord)}
     assert by_id["role-1"].permissions == {"menu.query", "menu.history"}
     assert by_id["role-2"].allowed_profile_ids == {"profile-a"}
-    assert [item.entitlement_id for item in by_id["role-3"].entitlements] == ["e-1", "e-2"]
-    assert by_id["role-3"].entitlements[0].role_id == "role-3"
-    assert by_id["role-3"].entitlements[0].column_names == ["ID"]
-    assert [item.entitlement_id for item in by_id["role-4"].entitlements] == ["e-3"]
     assert by_id["role-0"].permissions == set()
-    assert by_id["role-0"].entitlements == []
+    assert by_id["role-0"].allowed_profile_ids == set()
 
 
 def test_single_role_details_use_the_same_queries() -> None:
