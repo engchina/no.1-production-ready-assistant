@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compute の OS（Oracle Linux 9。#1611）で、配備のスクリプトが使う package・command を確かめる。
 # CI の `Suite / Oracle Linux 9`（container: oraclelinux:9、root）が実行する。Oracle Linux 以外では何もしない。
-#   1. 配備のスクリプト（cloud-init・suite-init.sh・3 製品の init_script.sh）が dnf で入れる package の名前が、
+#   1. 配備のスクリプト（配備の前提の package・suite-init.sh・3 製品の init_script.sh）が dnf で入れる package の名前が、
 #      Oracle Linux 9 の repository（BaseOS・AppStream。EPEL・CodeReady Builder は使わない）と module
 #      （nodejs:24）で解決できる（`dnf install --assumeno` で依存まで解決し、入れない）
 #   2. 配備のスクリプトが前提にする command が image にある・bash -n
@@ -23,12 +23,8 @@ grep -q '^VERSION_ID="9\.' /etc/os-release || fail "Oracle Linux 9 ではない:
 
 # ---------------------------------------------------------------- 1. package の名前
 
-# cloud-init の packages（terraform/stack/cloud_init/bootstrap.template.yaml）。
-mapfile -t cloud_init_packages < <(
-  awk '/^packages:$/ {in_list = 1; next} in_list && /^  - / {print $2; next} in_list {exit}' \
-    "${repo}/terraform/stack/cloud_init/bootstrap.template.yaml"
-)
-[ "${#cloud_init_packages[@]}" -gt 0 ] || fail "cloud-init の packages が読めない"
+# 配備の前に Compute に入れておく package（以前の Terraform stack の cloud-init が入れていたもの。#12）。
+base_packages=(ca-certificates dos2unix firewalld git openssl policycoreutils-python-utils tar tmux unzip)
 
 # 各スクリプトの package の一覧（test mode で source して変数・関数から取る。実行はしない）。
 mapfile -t suite_packages < <(
@@ -47,7 +43,7 @@ mapfile -t rag_packages < <(
 
 modules=()
 packages=(nodejs npm)
-for name in "${cloud_init_packages[@]}" "${suite_packages[@]}" "${nl2sql_packages[@]}" "${agent_packages[@]}" "${rag_packages[@]}"; do
+for name in "${base_packages[@]}" "${suite_packages[@]}" "${nl2sql_packages[@]}" "${agent_packages[@]}" "${rag_packages[@]}"; do
   case "${name}" in
     "MODULE "*) modules+=("${name#MODULE }") ;;
     "") ;;

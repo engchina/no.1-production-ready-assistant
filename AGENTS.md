@@ -12,7 +12,7 @@
 | CI の job・workflow・テストの書き方・ローカルの検証の範囲 | [docs/agents/ci.md](./docs/agents/ci.md) |
 | UI（画面・部品・lint・e2e） | [docs/agents/ui.md](./docs/agents/ui.md) と [ARCHITECTURE.md](./platform/docs/design-system/ARCHITECTURE.md) |
 | LLM への指示・`skills/`・MCP の instructions とツールの説明・Runtime の指示 | [docs/agents/prompts.md](./docs/agents/prompts.md) |
-| 配備（Terraform・Compute・DB ユーザー・release） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
+| 配備（Compute・DB ユーザー） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
 | 3 製品で同じ機能（システム設定・ナビ・API キー・アカウント・データの見え方・権限管理） | [docs/agents/shared-features.md](./docs/agents/shared-features.md) |
 | `.env` の変数・DB の object の名前 | [docs/agents/naming.md](./docs/agents/naming.md) |
 | backend の実装の標準 | [platform/docs/backend-standard.md](./platform/docs/backend-standard.md) |
@@ -27,7 +27,6 @@
 | `agent/` | Production Control Plane for AI Agents |
 | `suite/` | 製品をまたぐスイートのアプリケーション（独立の uv project。常駐のサービスは持たない）。`evaluation/`（`pr_suite_evaluation`）は製品横断の評価の CLI で、製品を公開の MCP と API キーだけで呼ぶ（[README](./suite/evaluation/README.md)。#3240） |
 | `skills/` | 組み込みのスキル（Agent Skills の形式 `skills/<name>/SKILL.md`）。Agent が読み、Claude Code・Codex などの外部の Agent にも配る（`.claude-plugin/` の plugin marketplace。#1816。[設計](./agent/docs/agent-control-plane-design.md)） |
-| `terraform/` | OCI Resource Manager の統合 stack（ADB 1 つ＋選んだ製品をすべて入れる 1 台の Compute。[README](./terraform/README.md)） |
 
 - **依存の向きは `platform/` → 各製品・`suite/` の一方向。** platform は製品・suite を、製品は suite を import しない。suite は platform の公開の package だけに依存し、製品の module・DB・保存ファイルを読まない（`suite/evaluation/tests/test_boundaries.py`）。製品同士はコードで依存せず、HTTP API で連携する（rag は `rag/backend/tests/test_product_boundaries.py`）。Agent → RAG / NL2SQL は呼び先の `POST /api/mcp` を、Run の利用者を `sub` にした短命のサービストークン（署名鍵は `PLATFORM_SERVICE_TOKEN_SECRET`）で呼び、画面用の Cookie / CSRF の API を機械から呼ばない。呼び先は画面と同じ権限・対象範囲で判定する（[backend-standard.md](./platform/docs/backend-standard.md)「製品間の連携（MCP とサービストークン）」）。
 - **外部の MCP クライアント（Claude Code など）は 3 製品の `POST /api/mcp` を、利用者が自分で発行した API キー（`Authorization: Bearer prak_…`）で呼ぶ**（RAG / NL2SQL は調べるツール、Agent は業務 Agent へのチャットのツール。[手順](./platform/docs/mcp-api-keys.md)。#1805・#1874）。RAG / NL2SQL は Agent を呼ばない（向きは外部のクライアント → Agent → RAG / NL2SQL）。
@@ -82,7 +81,7 @@
 ## 共通の技術方針
 
 - **AI / DB は OCI / Oracle に集約する**: LLM / VLM = **OCI Enterprise AI**、embedding / rerank = **OCI Generative AI**（Cohere Embed v4 / Rerank v4 fast）、ベクトル検索 = **Oracle AI Vector Search**、データの正本 = **Oracle AI Database**。この分担を取り違えない。外部ベクトル DB・別 LLM provider・別 SaaS は入れず、逸脱するなら理由を添えてユーザーに確認する。
-- **Oracle の製品名は公式名で、バージョン（`26ai` 等）を入れない**（「Oracle AI Database」「Oracle AI Vector Search」「Oracle Autonomous AI Database」）。対応バージョンは [terraform/README.md](./terraform/README.md)「Autonomous AI Database（全製品で共有）」だけに書く（`adb_db_version`・`oracle_26ai` などの値・識別子は変えない）。
+- **Oracle の製品名は公式名で、バージョン（`26ai` 等）を入れない**（「Oracle AI Database」「Oracle AI Vector Search」「Oracle Autonomous AI Database」）。対応バージョンは [platform/docs/deployment.md](./platform/docs/deployment.md)「Autonomous AI Database（全製品で共有）」だけに書く（`adb_db_version`・`oracle_26ai` などの値・識別子は変えない）。
 - Backend は Python 3.12 + FastAPI + Pydantic v2 + uv と `pr_backend_core`。Frontend は Vite + React Router + TypeScript + Tailwind + 共有 UI + TanStack Query + Zustand。
 - **Python は 3.12 に固定する**（全 `pyproject.toml` の `requires-python = ">=3.12,<3.13"`、直下の `.python-version` は `3.12`。uv は project の中で直下の `.python-version` を読まないため、上限は `requires-python` で掛ける）。版を変えるときは `pyproject.toml`・`uv.lock`・CI の `python-version`・各製品の `init_script.sh` の `uv python install` / `--python` を同じ PR でそろえる。
 - シークレットは `.env` / secret store 経由（ハードコード・commit・API 応答への展開をしない）。LLM の出力は Pydantic で検証してから使う。
@@ -100,8 +99,8 @@
 
 - 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd。Dockerfile・compose は持たない）。reverse proxy（Nginx など）と TLS の証明書は配備しない（置くかは利用者の選択。#19）。
 - **再配備は repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。**
-- Terraform stack は `terraform/stack/` に 1 つだけ。選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。
-- 3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない）で接続する。DB の新しい機能を使うときは付ける権限で足りるかを確かめる。release tag は `suite-v*` だけ。
+- 選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。OCI Resource Manager の Terraform stack は持たない（#12）。
+- 3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない）で接続する。DB の新しい機能を使うときは付ける権限で足りるかを確かめる。
 
 ## 共通の仕組みと設定・命名
 

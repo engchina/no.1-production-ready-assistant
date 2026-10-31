@@ -11,7 +11,6 @@
     "test:startup": "bash ../scripts/tests/start-frontend.test.sh && bash ../scripts/tests/init-script-nodejs.test.sh",
     "test:logic": "tsc -p tsconfig.test.json && node --test scripts/run-unit-tests.test.mjs && node scripts/run-unit-tests.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:oci-resource-manager": "playwright test --config playwright.oci-resource-manager.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --deny-warnings"
   },

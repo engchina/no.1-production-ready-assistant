@@ -98,7 +98,7 @@
 
 ## アプリ用の DB ユーザーの権限
 
-データ辞書・動的性能ビューは `PDB_DBA` の範囲で読む（[../../terraform/README.md](../../terraform/README.md)「アプリ用の DB ユーザー」）。開発の ADB（ADMIN の接続）では `V$VERSION`・`PRODUCT_COMPONENT_VERSION`・`DBA_TABLESPACE_USAGE_METRICS`・`DBA_DATA_FILES`・`DBA_FREE_SPACE`・`V$SESSION`・`DBA_OBJECTS`・`DBA_ROLE_PRIVS`・`DBA_USERS`・`V$LOCKED_OBJECT`・`DBA_SEGMENTS`・`V$PARAMETER` が読めた。アプリ用の DB ユーザー（`ADB_APP_USER`）での確認は検証環境で行う（読めないビューは実行の失敗として分析が代わりのビューを示す）。監査の表（migration 023）と会話の履歴の表（migration 024）は製品の migration が作るので、追加の grant は要らない。
+データ辞書・動的性能ビューは `PDB_DBA` の範囲で読む（[platform/docs/deployment.md](../../platform/docs/deployment.md)「アプリ用の DB ユーザー」）。開発の ADB（ADMIN の接続）では `V$VERSION`・`PRODUCT_COMPONENT_VERSION`・`DBA_TABLESPACE_USAGE_METRICS`・`DBA_DATA_FILES`・`DBA_FREE_SPACE`・`V$SESSION`・`DBA_OBJECTS`・`DBA_ROLE_PRIVS`・`DBA_USERS`・`V$LOCKED_OBJECT`・`DBA_SEGMENTS`・`V$PARAMETER` が読めた。アプリ用の DB ユーザー（`ADB_APP_USER`）での確認は検証環境で行う（読めないビューは実行の失敗として分析が代わりのビューを示す）。監査の表（migration 023）と会話の履歴の表（migration 024）は製品の migration が作るので、追加の grant は要らない。
 
 
 ## 修正を繰り返す場合（#2950）

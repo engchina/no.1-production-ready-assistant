@@ -155,50 +155,25 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 
 `system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
 
-## OCI へのデプロイ
+## 配備
 
-ボタンを押すと、大阪リージョン（`ap-osaka-1`）を選んだ状態で OCI Resource Manager の stack の作成画面が開きます。1 つの Autonomous AI Database と、3 製品（RAG / NL2SQL / Agent）をまとめて入れる 1 台の Compute を作ります。
-
-- **latest**: 東京（`ap-tokyo-1`）/ 大阪（`ap-osaka-1`）リージョンだけをサポートします（既定は大阪）。
-
-  [![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?region=ap-osaka-1&zipUrl=https://github.com/engchina/no.1-production-ready-suite/releases/latest/download/production-ready-suite-terraform-stack.zip)
-
-ボタンは[最新の release](https://github.com/engchina/no.1-production-ready-suite/releases/latest) の `production-ready-suite-terraform-stack.zip` を読み込みます。
-
-入力の変数・手動でのアップロード・配備後の確認・トラブルシューティングは [terraform/README.md](./terraform/README.md) を参照してください。
-
-### 配備の前に: VCN の security list
-
-stack は VCN・subnet・security list・NSG を作らず、フォームで選んだ既存の subnet をそのまま使います（ingress の規則も足しません。#259）。配備の前に、OCI のコンソールの「ネットワーキング › 仮想クラウド・ネットワーク › 〈VCN〉 › セキュリティ・リスト」で、次の ingress の規則（ステートフル・TCP）を足してください（subnet を NSG で管理しているなら、同じ規則を NSG に足します）。足さないと、画面・MCP にも DB にも届きません。
-
-| 足す security list | 送信元 CIDR | 宛先の port（TCP） | 用途 |
-|---|---|---|---|
-| Compute の subnet | 利用者の端末の CIDR（社内の出口の範囲など。どこからでも使わせるなら `0.0.0.0/0`） | 利用者が前段に置く reverse proxy の port（配備は reverse proxy を作りません。#19） | 3 製品の画面と MCP |
-| Compute の subnet | 管理者の端末の CIDR | `22` | SSH（`ssh opc@<IP>`。[配備した後の運用](#配備した後の運用)） |
-| ADB のプライベート・エンドポイントの subnet | **Compute の subnet の CIDR**（例 `10.0.1.0/24`） | `1522` | Compute（3 製品と配備の `suite-init.sh`）から ADB への接続 |
-| bastion の subnet（`bastion_enabled` のときだけ） | 管理者の端末の CIDR（`0.0.0.0/0` にしない） | `22`・`5901` | bastion への SSH と VNC（[terraform/README.md「bastion の Compute」](./terraform/README.md#bastion-の-compute任意2670)） |
-| Compute の subnet（`bastion_enabled` のときだけ） | **bastion の subnet の CIDR** | reverse proxy の port・`22` | bastion の Chrome から 3 製品の画面、bastion から Compute への SSH |
-| ADB のプライベート・エンドポイントの subnet（`bastion_enabled` のときだけ） | **bastion の subnet の CIDR** | `1522` | bastion（SQL の道具など）から ADB への接続 |
-
-- 配備は reverse proxy・TLS の証明書を作らず、OS の firewall（firewalld）の port も開けません（#19）。reverse proxy を置くときは、その port を security list と OS の firewall で開けます（[各製品の公開](#各製品の公開reverse-proxy-は利用者の選択)）。
-- ADB の 1522 は、ADB のアクセス・タイプが「プライベート・エンドポイント・アクセスのみ」（既定）のときの規則です。Compute と ADB のプライベート・エンドポイントが同じ subnet でも、その subnet の security list に「送信元 = その subnet 自身の CIDR、port `1522`」を足します（同じ subnet の中の通信にも security list の規則が要ります）。
-  - 「許可された IP および VCN 限定のセキュア・アクセス」（ACL）なら、security list ではなく ADB の ACL で Compute の subnet（または VCN）を許可します。「すべての場所からのセキュア・アクセス」なら足すものはありません。
-- egress: Compute は配備と実行で外部（GitHub・dnf・uv / npm の取得、OCI Generative AI・OCI Enterprise AI・Object Storage）へ HTTPS で出ます。Compute の subnet の security list の egress（既定は `0.0.0.0/0` のすべて）を絞っているなら TCP `443` の egress を残し、private subnet なら NAT gateway（と Service gateway）の経路を用意します。
-- 製品間の通信（Agent → RAG / NL2SQL の MCP）は同じ Compute の `127.0.0.1` なので、security list は要りません。
-- bastion を Compute と同じ subnet に置く（`bastion_subnet_id` を空にする）ときも、上の bastion の規則は「送信元 = その subnet 自身の CIDR」で足します。ADB が ACL（許可された IP および VCN）なら、ADB の ACL で bastion の subnet（または VCN）も許可します。
+OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン）による配備は廃止しました（#12）。
+ローカルで動かす手順は、上の「ローカルで動かす（Oracle Autonomous Database Free コンテナ）」を参照してください。
+1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・更新・確認の仕組みは
+[platform/docs/deployment.md](./platform/docs/deployment.md) にあります。配備は reverse proxy（Nginx など）と TLS の証明書を作りません（#19。[各製品の公開](#各製品の公開reverse-proxy-は利用者の選択)）。
 
 ### 配備の前に: Object Storage の bucket
 
-アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（stack が `platform/.env` に `PLATFORM_UPLOAD_STORAGE_BACKEND=local` を書きます）。保存先を OCI Object Storage にするときは、stack が bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
+アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（`platform/.env` の `PLATFORM_UPLOAD_STORAGE_BACKEND=local`）。保存先を OCI Object Storage にするときは、配備は bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
 
 | 用意するもの | 内容 |
 |---|---|
-| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは既定では stack と同じ（stack が `PLATFORM_OBJECT_STORAGE_REGION` に stack の `region` を書きます）。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
+| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは `platform/.env` の `PLATFORM_OBJECT_STORAGE_REGION` です。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
 | IAM の policy | 「システム設定 › OCI 認証」で設定する API キーのユーザーのグループに、bucket の参照と object の読み書き・削除を許します: `Allow group <group> to read buckets in compartment <bucket の compartment>` と `Allow group <group> to manage objects in compartment <bucket の compartment>` |
 
 - 配備の後に `system_admin` でログインし、「システム設定 › OCI 認証」の「Object Storage」で、namespace を「取得」ボタンで取得して（手入力はできません）リージョンとともに保存します。続けて「システム設定 › アップロード保存先」で「OCI Object Storage」を選び、bucket を指定して「接続を確認」を押します。設定は 3 製品で共通です。
 - 「接続を確認」と保存のときは、bucket の参照（`read buckets`）と、確認用の小さな object の書き込み・読み取り・削除（`manage objects`）を試します。bucket が無い・権限が足りないときは保存しません（#2101）。
-- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します（上の egress）。
+- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します。
 
 ## 配備した後の初期設定（推奨のロールとユーザー）
 
@@ -229,7 +204,7 @@ stack は VCN・subnet・security list・NSG を作らず、フォームで選�
 
 ## 配備した後の運用
 
-Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。output の `ssh_to_instance`。repository は `/u01/aipoc/no.1-production-ready-suite`）。
+Compute（Oracle Linux 9）に `opc` で SSH して実行します（`ssh opc@<IP>`。repository は `/u01/aipoc/no.1-production-ready-suite`）。
 
 最新のコード（main）を取得して反映する（取得 → build → 全サービスの再起動）:
 
@@ -244,7 +219,7 @@ sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh
 ```
 
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
-- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [terraform/README.md](./terraform/README.md#adb-の自動の起動1745) を参照してください。
+- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [platform/docs/deployment.md](./platform/docs/deployment.md#adb-の自動の起動1745) を参照してください。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
 - 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）と Wallet は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
@@ -256,9 +231,9 @@ sudo /u01/aipoc/no.1-production-ready-suite/platform/deploy/suite-restart.sh
 
 | 製品 | backend（`uvicorn`） | frontend（開発 / preview） | frontend の base |
 |---|---|---|---|
-| RAG | `127.0.0.1:8000`（`rag/scripts/start-backend.sh`） | `3000`（`rag/scripts/start-frontend.sh`） | `/rag/` |
-| NL2SQL | `127.0.0.1:8010`（`nl2sql/scripts/start-backend.sh`） | `3001` | `/nl2sql/` |
-| Agent | `127.0.0.1:8020`（`agent/scripts/start-backend.sh`） | `3002` | `/agent/` |
+| RAG | 配備は `127.0.0.1:8000`（開発の `rag/scripts/start-backend.sh` は `8100`） | `3100`（`rag/scripts/start-frontend.sh`） | `/rag/` |
+| NL2SQL | 配備は `127.0.0.1:8010`（開発の `nl2sql/scripts/start-backend.sh` は `8110`） | `3101` | `/nl2sql/` |
+| Agent | 配備は `127.0.0.1:8020`（開発の `agent/scripts/start-backend.sh` は `8120`） | `3102` | `/agent/` |
 
 - 開発: 各製品の `scripts/start-all.sh`（または `start-backend.sh` と `start-frontend.sh`）で、backend は `uv run uvicorn app.main:app --host <host> --port <port>`、frontend は Vite の dev server で動きます。frontend の `/api` は `BACKEND_URL=http://127.0.0.1:<backend の port>` を渡したときだけ backend へ proxy します。
 - build した画面を出す: `cd <製品>/frontend && npm run build`（base を変えるときは `FRONTEND_BASE_PATH=/<製品>/`）の後、`BACKEND_URL=http://127.0.0.1:<backend の port> npx vite preview --host 0.0.0.0 --port <port>` で `dist/` を配信します。配備（`platform/deploy/suite-init.sh`）は `dist/` を `/<製品>/` の base で build し、backend を systemd で `127.0.0.1` に起動するところまでを行います。
@@ -393,7 +368,7 @@ claude plugin list   # production-ready-skills@production-ready-suite が ✔ en
 | Agent | `3102` | `8120` | `3142` |
 
 - 起動 script は `PORT` / `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_URL` で上書きできます。
-- OCI Compute への配備（`init_script.sh` の systemd・Nginx・Terraform）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
+- OCI Compute への配備（`platform/deploy/` と各製品の `init_script.sh` の systemd）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
 - 文書の解析・前処理のサービス（`127.0.0.1:18010`〜`18023`）は変えていません。
 
 ## 開発ルール

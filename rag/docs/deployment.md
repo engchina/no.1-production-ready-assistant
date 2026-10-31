@@ -159,7 +159,7 @@ backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_
   Unstructured へ振り分けない。判定は backend の `app/rag/parser_source_guard.py` の 1 か所で、ファイル準備が
   passthrough 以外（Office→PDF など形式が変わる）のときは変換後の形式で取込時に判定する。
 - 処理レシピで Unstructured を選んだ文書は止めない。Unstructured の解析サービス（`parser-unstructured`）は**既定では配備しない**。
-  - 本番: Terraform の stack で入力 `rag_enable_parser_unstructured` を有効にして再配備し、「運用設定 › サービス管理」で起動する。
+  - 本番: 配備の props の `rag_services.txt` に `parser-unstructured` を足して再配備し、「運用設定 › サービス管理」で起動する。
   - 開発: `scripts/rag-services.sh install parser-unstructured`（または `--unstructured`）で登録する。
   - サービスが未配備・停止中のときは、止めたときの案内にその旨を添える。
 - 全体の既定を Unstructured にする場合は「取込・検索・回答設定 › 文書解析」で選んで保存する（`RAG_PARSER_ADAPTER_BACKEND=unstructured`）。
@@ -812,7 +812,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
    sudo systemctl stop 'production-ready-rag-*'
    ```
 
-2. `backend/.env` の旧名の行を改名し、値の旧名（`RAG_CHUNKING_STRATEGY=docrag_small_to_big`）も書き換える（バックアップを取ってから編集する。値が旧名のままだと backend が起動時の検証で止まる。#624）。Compute では、`init_script.sh` が Resource Manager の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
+2. `backend/.env` の旧名の行を改名し、値の旧名（`RAG_CHUNKING_STRATEGY=docrag_small_to_big`）も書き換える（バックアップを取ってから編集する。値が旧名のままだと backend が起動時の検証で止まる。#624）。Compute では、`init_script.sh` が配備の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
 
    ```bash
    for env_file in /u01/aipoc/no.1-production-ready-suite/rag/backend/.env /u01/aipoc/props/backend.env; do
@@ -887,7 +887,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
    sudo systemctl stop 'production-ready-rag-*'
    ```
 
-2. `backend/.env` に `RAG_GRAPH_PROFILE=full` があれば `RAG_GRAPH_PROFILE=entities` に書き換える（構築しない場合は `off`。`full` のままだと起動時の検証で止まる）。`RAG_GRAPH_ENABLED` の行があれば消す（残っても読まないが、`true` だった環境は、以前は `full` で構築していた。同じものを作り続けるなら `RAG_GRAPH_PROFILE=entities` にする）。Compute では、`init_script.sh` が Resource Manager の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
+2. `backend/.env` に `RAG_GRAPH_PROFILE=full` があれば `RAG_GRAPH_PROFILE=entities` に書き換える（構築しない場合は `off`。`full` のままだと起動時の検証で止まる）。`RAG_GRAPH_ENABLED` の行があれば消す（残っても読まないが、`true` だった環境は、以前は `full` で構築していた。同じものを作り続けるなら `RAG_GRAPH_PROFILE=entities` にする）。Compute では、`init_script.sh` が配備の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
 3. backend の venv を新しい版に合わせる（リポジトリの所有者で実行する。`init_script.sh` は、システムテーブルの更新の後の手順 5 で再実行する）。
 
    ```bash
@@ -1235,7 +1235,7 @@ RAG のログインは、`.env` の単一アカウント（`RAG_AUTH_USERNAME` /
    - 会話と回答履歴の持ち主は、ログインしたユーザー（`user_uuid`）になる。旧方式で作った会話（持ち主は共通の `admin-user-id`）は、新しいユーザーからは見えない（移行はしない）。
    - 保存済みの回答（`rag_answer_records`）は #304 から持ち主（`user_id_hash`）で分ける。システムテーブルの初期化（migration `20260928_002_answer_record_owner`）で列を足し、既存の行はチャットの回答・検索の監査から利用者が 1 人に決まるものだけ持ち主を補う。補えなかった行は SYSTEM_ADMIN と `rag.feedback.manage` を持つ利用者だけが一覧・詳細・評価・削除できる（不要なら管理者が削除する。保存期間を設定していれば、その経過でも消える）。
    - 利用者フィードバック（`rag_citation_feedback`）は #408 から送った利用者（`user_id_hash`）で分ける。一覧・件数・集計・詳細（評価ケースの作成・承認済み FAQ への反映を含む）は、SYSTEM_ADMIN（構成管理者・local の利用者を含む）だけがすべての利用者の分を扱い、ほかのロールは自分が送った分だけを扱う（`rag.feedback.manage` を持っていても同じ。NL2SQL の実行履歴と同じ規則）。他人のフィードバックの ID を指定すると 403 になる。列は以前から保存しているので schema の変更はない。送信者の記録がない古い行は SYSTEM_ADMIN だけに見える。
-   - Cookie 名が `production_ready_rag_session` から `rag_session` / `rag_csrf` に変わるため、利用者は一度ログインし直す（その後 #1565 で 3 製品共通の `pr_session` / `pr_csrf` になった。[terraform/README.md](../../terraform/README.md)「ログインのセッションの共有（#1565）」）。
+   - Cookie 名が `production_ready_rag_session` から `rag_session` / `rag_csrf` に変わるため、利用者は一度ログインし直す（その後 #1565 で 3 製品共通の `pr_session` / `pr_csrf` になった。[platform/docs/deployment.md](../../platform/docs/deployment.md)「ログインのセッションの共有（#1565）」）。
    - 評価・負荷試験の CLI（`app.rag.evaluation_cli` など）が `PLATFORM_AUTH_MODE=authenticated` の API を呼ぶ場合は、ログインしたセッションが必要になる。
 
 ## 既存環境の更新手順（#1701 文書解析の設定を parser-settings.json へ分ける）
@@ -1682,17 +1682,18 @@ cv2 の headless 版は各サービスの `uv.lock` に固定されている（v
 
 ## 本番構成
 
-OCI Resource Manager の統合 Terraform stack（monorepo root の [`terraform/stack/`](../../terraform/README.md)、#217）は、選んだ製品を 1 台の Compute に入れ
+配備（`platform/deploy/`。仕組みは [platform/docs/deployment.md](../../platform/docs/deployment.md)）は、選んだ製品を 1 台の Compute に入れ
 （#1316）、NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd。#286）を作る。Docker は使わない。reverse proxy（Nginx など）と TLS の証明書は作らない（#19。前段に置くかは利用者の選択。[README](../../README.md#各製品の公開reverse-proxy-は利用者の選択)）。
+OCI Resource Manager の Terraform stack（以前の `terraform/`）による配備は #12 で削除した。
 
 3 製品は 1 台の Compute にセットで配備する（`platform/deploy/suite-init.sh` が `rag/init_script.sh` を呼ぶ。#1316。単独では配備しない）。下の表と次の点が違う。
 
-- Compute の OS は Oracle Linux 9（#1611）。OS の package は dnf、SELinux は enforcing のまま（repository は `usr_t`。`platform/deploy/suite-init.sh` の `configure_selinux`。[terraform/README.md](../../terraform/README.md)）。
+- Compute の OS は Oracle Linux 9（#1611）。OS の package は dnf、SELinux は enforcing のまま（repository は `usr_t`。`platform/deploy/suite-init.sh` の `configure_selinux`。[platform/docs/deployment.md](../../platform/docs/deployment.md)）。
 - 実行ユーザーは NL2SQL / Agent と同じ `opc`（共通の `platform/.env`・Wallet・`~/.oci/config` を 3 製品で読み書きするため）。`ragsvc` は作らない
   （下の表と手順の `sudo -u ragsvc HOME=/var/lib/production-ready-rag` は `sudo -u opc` に読み替える）。sudoers は `opc` に同じ unit の操作を許可する。
 - frontend は `FRONTEND_BASE_PATH=/rag/` で build する。配信と `/rag/api/` の proxy（prefix を外して backend へ）は、利用者が前段に置く reverse proxy が行う
   （SSE の buffering を切る・回答と MCP の長い待ち時間・upload の上限を backend に合わせる）。RAG の `init_script.sh` は reverse proxy の site を書かない。
-ADB（Oracle Autonomous AI Database）と Wallet も stack が用意し（NL2SQL / Agent と共有する）、RAG の system schema はアプリの CLI（`app.rag.system_schema_cli initialize`）で適用する。
+ADB（Oracle Autonomous AI Database）と Wallet は配備の外で用意し（NL2SQL / Agent と共有する）、RAG の system schema はアプリの CLI（`app.rag.system_schema_cli initialize`）で適用する。
 
 | 構成要素 | 内容 |
 |---|---|
@@ -1743,7 +1744,7 @@ sudo systemctl status production-ready-rag-backend.service
 - Frontend / Backend: 同じネイティブ配備（uv の venv + systemd）の Compute を増やし、OCI Load Balancer で振り分ける
   （自前のコードの Docker イメージは作らない。#286 / #356）。取込 worker は row lock で二重実行しないので、別の Compute に並べてよい。
 - Storage: OCI Object Storage。
-- DB: Oracle AI Database（対応バージョンは [terraform/README.md](../../terraform/README.md) の「Autonomous AI Database（全製品で共有）」）。RAG チャンクは `VECTOR(1536, FLOAT32)`。
+- DB: Oracle AI Database（対応バージョンは [platform/docs/deployment.md](../../platform/docs/deployment.md) の「Autonomous AI Database（全製品で共有）」）。RAG チャンクは `VECTOR(1536, FLOAT32)`。
 - LLM/VLM: OCI Enterprise AI。
 - Embedding/Rerank: OCI Generative AI。
 - Observability: Prometheus、OpenTelemetry、Langfuse gateway。`RAG_TRACE_EXPORT_HTTP_ENDPOINT` を設定すると、脱機密化済み RAG span event を非同期 HTTP JSON で転送する。
@@ -1860,7 +1861,7 @@ uv run python -m app.rag.file_processing_staging_cli \
 - `RAG_RRF_K`: hybrid retrieval の Reciprocal Rank Fusion 定数。小さいほど上位 rank を強く優先する。golden set で keyword/vector の寄与と citation 安定性を確認して調整する。
 - `RAG_EMBEDDING_CACHE_ENABLED` / `RAG_EMBEDDING_CACHE_MAX_ENTRIES` / `RAG_EMBEDDING_BATCH_SIZE`: backend process 内で OCI Generative AI embedding 結果を LRU cache する。cache key は本文そのものではなく、model id、input type、dimension、本文 SHA-256 から作る。batch 内や連続検索で同じ query/chunk が出た場合は miss だけを OCI へ送る。miss は最大 96 件かつ合計 100,000 文字の先に達した単位で OCI embedding request に分割し、返却順を元入力順へ戻す。単一入力は 100,000 文字を超えると拒否し、本文を暗黙に切り詰めない。[Cohere Embed 4](https://docs.oracle.com/en-us/iaas/Content/generative-ai/cohere-embed-4.htm) の 128k token は、実 API の応答では入力 1 件ごとの上限として検証される（超えると HTTP 400 の `inputs[i] is too long`。#2467）。文字数の予算はこれとは別の保守的な保護値である。OCI はサービスの高負荷を HTTP 400（`high load`）でも返すため、embedding はこれを一時的な不可用として再試行し、再試行ではバッチを最大 8 分割して小さい要求で送る。空の入力（OCI は HTTP 400 で拒否する）は送る前に止める。再試行しても失敗したら、応答本文・入力本文を残さずに、HTTP status・サービスのエラーコード・理由・バッチの位置・件数・文字数・UTF-8 の byte 数（token 数の上限の見積もり）を job のエラーと構造化ログ `embedding_request_failed` に残す。worker 間共有はしないため、容量と batch size は worker 数、メモリ、OCI payload limit、p95 latency を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
 - `RAG_RERANK_CACHE_ENABLED` / `RAG_RERANK_CACHE_MAX_ENTRIES`: backend process 内で OCI Generative AI rerank 結果を LRU cache する。cache key は query/document 原文ではなく SHA-256、model id、top_n、document 順序から作る。候補順や top_n が変わると別 cache entry になる。頻出 FAQ / 評価実行 / 再検索の p95 latency と OCI 呼び出し数を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
-- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、Nginx（`platform/deploy/suite-nginx.sh` が生成する回答生成・評価・MCP・業務ガイドを試すの `location`。#1597）は 660 秒待つ（backend の 504 と理由が画面に届くよう、外側ほど長くする）。
+- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、前段に reverse proxy を置くときは回答生成・評価・MCP・業務ガイドを試すの path を 660 秒以上待たせる（配備は reverse proxy を作らない。#19。backend の 504 と理由が画面に届くよう、外側ほど長くする）。
 - 品質評価（golden set）は job（`/api/evaluation/jobs/run`。#390）で動く。1 ケースを `RAG_ANSWER_TIMEOUT_SECONDS` で打ち切り、時間切れになった工程をケースの結果（`error_stage` と `error_message`）に残して次のケースへ進む。job 全体は、投入時の回答の回数（ケース × 往復）× `RAG_ANSWER_TIMEOUT_SECONDS` と `RAG_EVALUATION_JOB_TIMEOUT_SECONDS`（最小値。既定 3600 秒、60〜86400）の大きいほうで打ち切り（86400 秒を超えない。#1430。推論型のモデルでは 1 回の回答が数分かかるため、固定の上限では問の数に応じて打ち切られる）、残りのケースは実行せずに失敗（`error_type=EvaluationTimeBudgetExceeded`）として結果を返す。job の上限は job の `time_limit_seconds` で返し、画面は「全体の上限 N 分」として出す。画面は job の状態を 2 秒ごとに取得して進捗（終わったケースの数 / 全体・実行中のケース・経過時間）を出し、取り消しもできる。評価 CLI は job の終わりを `RAG_EVALUATION_TIMEOUT_SECONDS`（未指定なら job の上限 + 300 秒）まで待ち、超えたら job を取り消す。
   - job は投入を受けた backend のプロセスの中で動き、状態は `rag_evaluation_jobs` に保存する（Gunicorn の別の worker に状態の取得・取り消しが届いても同じ結果になる）。backend の停止・再起動では実行中の job を失敗にし（別のプロセスは引き継がない）、プロセスが落ちて heartbeat が 120 秒途絶えた job も、次の状態の取得で失敗にする。同時に実行できる job は 2 件まで（全プロセスの合計）。終わった job は自動では消さない（#3235。以前は 7 日で消していた。結果は評価 artifact の `rag_evaluation_runs` にも残る）。
   - 以前の同期の `/api/evaluation/run` は、外部から直接呼ぶ利用のために残している。評価全体を 600 秒で打ち切る（#383。前段の reverse proxy の待ち時間はこれより長くする）。
@@ -1998,7 +1999,7 @@ placeholder を置き換えます。旧名を実行時に展開する互換処�
 
 `rag/backend/.env` の `RAG_SEARCH_TOP_K_DEFAULT=50` は、検索・チャット・公開 MCP・品質評価・負荷確認で `top_k` を省略したときの基準件数です（1〜100）。明示した `top_k` が優先されます。DB の取得深度、Rerank の候補総数、最終引用数は別の制約です。既定の候補多様化の深さ 600 は変更していません。
 
-検索画面は件数を送信せず、旧 URL と作業状態の件数も使いません。実行履歴から開く場合も、質問・プロファイル・絞り込みを引き継ぎ、件数は現在の backend の設定を使います。Terraform の新規配備と再配備の生成元にも 50 を明示しています。既存環境へ追加する場合は他の設定を保って同変数を追記してください。
+検索画面は件数を送信せず、旧 URL と作業状態の件数も使いません。実行履歴から開く場合も、質問・プロファイル・絞り込みを引き継ぎ、件数は現在の backend の設定を使います。新規配備では配備の props の `rag.backend.env` に同変数を書きます。既存環境へ追加する場合は他の設定を保って同変数を追記してください。
 
 公開する API / MCP の省略時の値は現在の設定から生成し、静的な契約ファイルは標準の設定 50 で照合します。別製品や外部クライアントが件数を明示して呼ぶ場合、その値を変更しません。不正な環境値は Settings の検証エラーです。稼働中の `.env` 再読込に失敗したときは、既存の設定更新の規則どおり警告を記録し、最後に成功した設定を保ちます。
 

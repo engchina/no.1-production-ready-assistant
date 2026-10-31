@@ -6,7 +6,7 @@ monorepo `no.1-production-ready-suite` の `platform/`。No.1 Production Ready �
 ```
 packages/
   ui/             @production-ready/ui    — 共有フロント UI/UX（Vite library / React 19 / Tailwind v4）
-  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（外観と証明書ほか。#70）とユーザー管理・ロール管理画面（#206）
+  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（OCI 認証・アップロード保存先・モデル・データベース。#70。外観と証明書は #19 で削除）とユーザー管理・ロール管理画面（#206）
   backend_core/   production-ready-backend-core    — 共有 FastAPI インフラ（Python 3.12 / pydantic v2 / uv）
   system_settings_backend/ production-ready-system-settings-backend — 3製品共通のシステム設定 API と、共通認証基盤（ユーザー・ロール・セッション・ログイン。PLATFORM_* テーブル。pr_system_settings。#70 / #206 / #212）
 templates/

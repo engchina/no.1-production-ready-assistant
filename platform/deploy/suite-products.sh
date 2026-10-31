@@ -4,7 +4,7 @@
 # （前段に reverse proxy を置くかは利用者が決める）。
 
 # 各製品の backend の port（127.0.0.1 だけで listen する）。ローカルの開発の port と同じ（#1316 で NL2SQL を 8000 → 8010）。
-# 各製品の init_script.sh の BACKEND_PORT と同じ値にする（verify_stack_contract.py が照合する）。
+# 各製品の init_script.sh の BACKEND_PORT と同じ値にする。
 # 環境変数での上書きは test が隔離した port を使うためのもので、本番では変えない。
 SUITE_RAG_BACKEND_PORT="${SUITE_RAG_BACKEND_PORT:-8000}"
 SUITE_NL2SQL_BACKEND_PORT="${SUITE_NL2SQL_BACKEND_PORT:-8010}"

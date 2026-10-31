@@ -10,7 +10,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 | 値 | 画面と API | ユーザー・ロール | 用途 |
 |---|---|---|---|
 | `local`（既定） | ログインを省略し、全権限のローカル利用者として使う（DB セッションを作らない） | Oracle の `PLATFORM_*` / `AGENT_ROLE_*`（RAG / NL2SQL と同じ） | 開発 |
-| `production` | 共通認証のログインが必要（Cookie のセッション）。Cookie のないリクエストは **401**（`X-Agent-Roles` などの header は使わない） | 同上 | 本番（Resource Manager の stack は常にこちら） |
+| `production` | 共通認証のログインが必要（Cookie のセッション）。Cookie のないリクエストは **401**（`X-Agent-Roles` などの header は使わない） | 同上 | 本番（Compute の配備は常にこちら） |
 
 - local でもユーザー管理・ロール管理・権限管理は共通 DB を読み書きします。共通 `.env` の `PLATFORM_ORACLE_*` が必要です
   （RAG / NL2SQL と同じ。旧版は local だけ InMemory で、画面が 0 件になり再起動で消えていました）。
@@ -21,7 +21,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 - 認証ポリシー（セッションの有効期限・ロック・ログインの試行の回数の制限・パスワード長・Argon2 のコスト・`PLATFORM_AUTH_COOKIE_SECURE`）は共通 `.env` の `PLATFORM_AUTH_*`。
   ログインの失敗が多すぎる送信元（ログイン ID と送信元 IP の組・送信元 IP ごと）には、構成管理者を含めて `429 SECURITY_RATE_LIMITED` を返します（#1087。`PLATFORM_AUTH_LOGIN_ATTEMPT_*`）。
   失敗の回数は共通のテーブル `PLATFORM_LOGIN_ATTEMPTS` で 3 製品・全 worker が共有して数えます（#1173。ログイン ID・送信元 IP は HMAC だけを保存。
-  テーブルが無い・DB の停止中はプロセス内で数える）。詳細と既存環境の更新手順は [terraform/README.md](../../terraform/README.md) の「ログインの試行の回数の共有（#1173）」。
+  テーブルが無い・DB の停止中はプロセス内で数える）。詳細と既存環境の更新手順は [platform/docs/deployment.md](../../platform/docs/deployment.md) の「ログインの試行の回数の共有（#1173）」。
 - ログインのセッションは 3 製品で共通です（#1565）。Cookie 名は共通 `.env` の `PLATFORM_AUTH_SESSION_COOKIE_NAME`（既定 `pr_session`）/
   `PLATFORM_AUTH_CSRF_COOKIE_NAME`（既定 `pr_csrf`）で、1 台に配備した `/rag/`・`/nl2sql/`・`/agent/` は同じ Cookie を読むため、
   1 つの製品でログインすればほかの製品でもログイン済みになります（構成管理者 `system_admin` の token も 3 製品で共通）。
@@ -84,7 +84,7 @@ Run の一覧・詳細は `agent.runs.view`（または operate / decide / audit
 ダッシュボード（`menu.dashboard`・グループ「概要」）は廃止しました（#262）。`/` は画面を持たず、ナビの並び順で最初に開ける画面へ移します
 （未知の URL・ログイン後はチャットを開ければチャット。#791）。既存ロールに残る `menu.dashboard` はシステムテーブルの作成・更新（migration）が削除します（§8）。
 削除前でも、カタログにないコードは実効権限・権限管理の表示から除かれ、権限管理で保存すると消えます。
-システム設定の「外観と証明書」（`menu.settings_appearance`）も廃止しました（#19。Nginx と自作 CA の TLS 証明書を配備から外したため）。既存ロールに残る行は migration 018 が削除します。
+システム設定の「外観と証明書」（`menu.settings_appearance`）も廃止しました（#19。Nginx と自作 CA の TLS 証明書を配備から外したため）。既存ロールに残る行は migration 019（`20261031_019_remove_appearance_menu`）が削除します。
 
 ### manifest（抜粋。正本は `backend/app/security/permissions.py`）
 
@@ -209,7 +209,7 @@ Run は RAG から受け取った根拠（ツールの結果・`tool.completed` 
    HTTPS で配信している場合は `PLATFORM_AUTH_COOKIE_SECURE=true`。
 2. `agent/backend/.env` に `PLATFORM_AUTH_MODE=authenticated` を書く。
 3. テーブルを作る: `cd agent/backend && uv sync --locked --no-dev && uv run python -m app.cli.agent_system_schema --initialize`（画面の 運用設定 > システムテーブル でもよい）。
-4. Nginx の Basic 認証を廃止する（Resource Manager の stack で配備した instance）。`/etc/nginx/sites-available/production-ready-agent` から
+4. Nginx の Basic 認証を廃止する（以前の stack で配備した instance）。`/etc/nginx/sites-available/production-ready-agent` から
    `auth_basic` / `auth_basic_user_file` を削除し、`location /api/` の `proxy_set_header Host` を `$http_host` にして
    `sudo nginx -t && sudo systemctl reload nginx`。`/etc/nginx/production-ready-agent.htpasswd` と
    `/u01/aipoc/props/basic_auth_*` は削除してよい（`init_script.sh` を再実行しても同じ設定になる）。

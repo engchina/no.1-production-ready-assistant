@@ -182,7 +182,7 @@ def test_legacy_graph_enabled_flag_is_not_read(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_oracle_defaults_to_thin_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """既定は Thin mode で、Wallet は PLATFORM_ORACLE_WALLET_DIR（NL2SQL / terraform と同じ）。"""
+    """既定は Thin mode で、Wallet は PLATFORM_ORACLE_WALLET_DIR（NL2SQL と同じ）。"""
     monkeypatch.delenv("PLATFORM_ORACLE_CLIENT_LIB_DIR", raising=False)
     monkeypatch.delenv("PLATFORM_ORACLE_WALLET_DIR", raising=False)
     settings = Settings(_env_file=None)
