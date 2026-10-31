@@ -40,23 +40,9 @@ export function useUploadDatabaseWallet(
     mutationFn: (file: File) => api.uploadDatabaseWallet(file),
     onSuccess: () => {
       // Wallet を置き換えると接続の可否が変わる。DB ゲートの状態（製品の query）も確かめ直す
-      // （OCI からの取得・接続設定の保存と同じ。戻った画面で古い「未設定」の案内を出さない）。
+      // （接続設定の保存と同じ。戻った画面で古い「未設定」の案内を出さない）。
       void onChanged?.();
       void qc.invalidateQueries({ queryKey: DATABASE_SETTINGS_QUERY_KEY });
-    },
-  });
-}
-
-export function useDownloadDatabaseWallet(
-  api: DatabaseSettingsApi,
-  onChanged?: DatabaseChangedHandler,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.downloadDatabaseWallet(),
-    onSuccess: (data) => {
-      qc.setQueryData(DATABASE_SETTINGS_QUERY_KEY, data.settings);
-      void onChanged?.();
     },
   });
 }

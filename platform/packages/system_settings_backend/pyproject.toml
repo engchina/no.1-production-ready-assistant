@@ -1,7 +1,7 @@
 [project]
 name = "production-ready-system-settings-backend"
 version = "0.1.0"
-description = "Shared system settings APIs (upload storage, OCI, model, database) for the No.1 Production Ready product family (RAG / NL2SQL / Agent)."
+description = "Shared system settings APIs (upload storage, model, database) for the No.1 Production Ready product family (RAG / NL2SQL / Agent)."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
@@ -23,17 +23,12 @@ dependencies = [
   "charset-normalizer>=3.4",
 ]
 
-[project.optional-dependencies]
-# OCI SDK は接続テスト / namespace 取得 / 設定読込で遅延 import する（3製品は既に依存している）。
-oci = ["oci>=2.168"]
-
 [tool.uv.sources]
 production-ready-backend-core = { path = "../backend_core", editable = true }
 production-ready-enterprise-ai = { path = "../enterprise_ai", editable = true }
 
 [dependency-groups]
 dev = [
-  "oci>=2.168",
   "httpx==0.28.1",
   "pytest>=8.3",
   "pytest-cov>=6.0",

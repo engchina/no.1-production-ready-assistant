@@ -58,7 +58,7 @@ function renderGate(path: string, client: QueryClient, node: ReactNode = <p>業�
 }
 
 describe("ゲートを通さない画面", () => {
-  it("システム設定の 5 画面と /settings だけを通し、ユーザー / ロール管理や製品固有の設定は通さない", () => {
+  it("システム設定の 4 画面と /settings だけを通し、ユーザー / ロール管理や製品固有の設定は通さない", () => {
     for (const path of Object.values(SYSTEM_SETTINGS_PATHS)) {
       expect(isDatabaseGateExemptPath(path)).toBe(true);
       expect(isDatabaseGateExemptPath(`${path}/detail`)).toBe(true);

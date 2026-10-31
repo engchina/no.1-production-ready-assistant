@@ -16,8 +16,6 @@ export interface DatabaseSettingsData {
   readiness: string;
   embedding_dimension: number;
   vector_column: string;
-  adb_ocid: string;
-  region: string;
   config_source: "runtime";
 }
 
@@ -34,11 +32,6 @@ export interface DatabaseSettingsUpdate {
 
 export interface DatabasePasswordRevealData {
   password: string;
-}
-
-export interface DatabaseWalletDownloadData {
-  status: "downloaded" | "already_configured";
-  settings: DatabaseSettingsData;
 }
 
 export interface DatabaseConnectionTestResult {
@@ -61,7 +54,6 @@ export interface DatabaseSettingsApi {
     payload: DatabaseSettingsUpdate,
   ) => Promise<DatabaseSettingsData>;
   uploadDatabaseWallet: (file: File) => Promise<DatabaseSettingsData>;
-  downloadDatabaseWallet: () => Promise<DatabaseWalletDownloadData>;
   /** 保存済み DB パスワードの表示（backend で有効な製品だけ渡す）。 */
   revealDatabasePassword?: () => Promise<DatabasePasswordRevealData>;
   testDatabaseSettings: (

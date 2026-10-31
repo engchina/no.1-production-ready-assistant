@@ -1,6 +1,5 @@
 import {
   displayDateTimeFormat,
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -22,7 +21,6 @@ import {
   type SelectFieldOption,
 } from "@production-ready/ui";
 import {
-  CloudDownload,
   Database,
   PlugZap,
   Save,
@@ -40,14 +38,13 @@ import {
   useSettingsDraftGuard,
   type DraftGuardMessages,
 } from "../guards/useSettingsDraftGuard";
-import { FileDropzone } from "../oci/FileDropzone";
+import { FileDropzone } from "../shared/FileDropzone";
 import {
   SettingsTestResultPanel,
   toSettingsTestResultDetails,
-} from "../oci/SettingsTestResultPanel";
+} from "../shared/SettingsTestResultPanel";
 import {
   useDatabaseSettings,
-  useDownloadDatabaseWallet,
   useRevealDatabasePassword,
   useTestDatabaseSettings,
   useUpdateDatabaseSettings,
@@ -80,8 +77,6 @@ interface DatabaseSettingsFormErrors {
   walletPassword?: string;
   wallet?: string;
 }
-
-type WalletDownloadSource = "auto" | "wallet-field";
 
 const EMPTY_FORM: DatabaseSettingsForm = {
   user: "",
@@ -132,7 +127,7 @@ export interface DatabaseSettingsPageProps {
 /**
  * データベース設定（3製品共通。NL2SQL の画面を基準に移設。#108）。PageHeader は製品の route が描く。
  *
- * - Oracle AI Database の接続設定、Wallet（アップロード / OCI から自動取得）、接続テスト
+ * - Oracle AI Database の接続設定、Wallet（ZIP のアップロード。OCI からの自動取得は持たない。#11）、接続テスト
  * - DB の起動・停止はこの画面では扱わない（ADB Free コンテナは `docker start` / `docker stop`。#10）
  * - 保存中・テスト中は入力を止め、未保存のまま離れようとすると確認する
  * - 背景の再取得では、利用者が編集していない項目だけを更新する
@@ -149,7 +144,6 @@ export function DatabaseSettingsPage({
   const query = useDatabaseSettings(api);
   const save = useUpdateDatabaseSettings(api, onDatabaseChanged);
   const walletUpload = useUploadDatabaseWallet(api, onDatabaseChanged);
-  const walletDownload = useDownloadDatabaseWallet(api, onDatabaseChanged);
   const passwordReveal = useRevealDatabasePassword(api);
   const test = useTestDatabaseSettings(api);
   const canRevealPassword = Boolean(api.revealDatabasePassword);
@@ -161,13 +155,10 @@ export function DatabaseSettingsPage({
   const [walletPasswordVisible, setWalletPasswordVisible] = useState(false);
   const [optimisticSettings, setOptimisticSettings] =
     useState<DatabaseSettingsData | null>(null);
-  const [walletDownloadSource, setWalletDownloadSource] =
-    useState<WalletDownloadSource | null>(null);
 
   const userRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const walletPasswordRef = useRef<HTMLInputElement>(null);
-  const autoWalletAttemptedRef = useRef<Set<string>>(new Set());
   const resetPasswordReveal = passwordReveal.reset;
 
   const baseline = useRef(EMPTY_FORM);
@@ -175,7 +166,6 @@ export function DatabaseSettingsPage({
     save.isPending ||
     test.isPending ||
     walletUpload.isPending ||
-    walletDownload.isPending ||
     passwordReveal.isPending;
   useSettingsDraftGuard(
     JSON.stringify(form) !== JSON.stringify(baseline.current),
@@ -212,35 +202,6 @@ export function DatabaseSettingsPage({
       setOptimisticSettings(null);
     }
   }, [acceptSettings, query.data]);
-
-  const downloadWallet = walletDownload.mutate;
-  const resetWalletDownload = walletDownload.reset;
-
-  useEffect(() => {
-    const settings = query.data;
-    const adbOcid = settings?.adb_ocid.trim() ?? "";
-    const usesWalletMtlS = settings?.connection_security !== "walletless_tls";
-    if (!settings || settings.wallet_uploaded || !adbOcid) return;
-    if (!usesWalletMtlS) return;
-    if (autoWalletAttemptedRef.current.has(adbOcid)) return;
-
-    autoWalletAttemptedRef.current.add(adbOcid);
-    setWalletDownloadSource("auto");
-    resetWalletDownload();
-    downloadWallet();
-  }, [downloadWallet, query.data, resetWalletDownload]);
-
-  useEffect(() => {
-    const result = walletDownload.data;
-    if (!result) return;
-    acceptSettings(result.settings);
-    setOptimisticSettings(result.settings);
-    resetTest();
-    if (result.status === "downloaded") {
-      toast.success(t("settings.database.wallet.autoDownload.success"));
-    }
-    setWalletDownloadSource(null);
-  }, [acceptSettings, resetTest, walletDownload.data]);
 
   function updateForm(update: Partial<DatabaseSettingsForm>) {
     if ("password" in update || "clearPassword" in update)
@@ -345,8 +306,6 @@ export function DatabaseSettingsPage({
     }
 
     setErrors((current) => ({ ...current, wallet: undefined }));
-    setWalletDownloadSource(null);
-    resetWalletDownload();
     resetTest();
     walletUpload.mutate(file, {
       onSuccess: (data) => {
@@ -368,14 +327,10 @@ export function DatabaseSettingsPage({
   const walletUploadError =
     errorMessage?.(walletUpload.error) ??
     t("settings.database.walletUploadError");
-  const walletDownloadError =
-    errorMessage?.(walletDownload.error) ??
-    t("settings.database.wallet.autoDownload.error");
   const passwordRevealError =
     errorMessage?.(passwordReveal.error) ??
     t("settings.database.secrets.revealError");
   const testResult = test.data;
-  const walletFieldDownloadActive = walletDownloadSource !== null;
 
   if (query.isPending) {
     return (
@@ -527,25 +482,11 @@ export function DatabaseSettingsPage({
                         disabled={operationBusy && !walletUpload.isPending}
                         settings={settings}
                         uploadPending={walletUpload.isPending}
-                        autoDownloadPending={
-                          walletDownload.isPending && walletFieldDownloadActive
-                        }
-                        autoDownloadError={
-                          walletDownload.isError && walletFieldDownloadActive
-                            ? walletDownloadError
-                            : null
-                        }
-                        canAutoDownload={Boolean(settings.adb_ocid.trim())}
                         uploadError={
                           walletUpload.isError ? walletUploadError : null
                         }
                         validationError={errors.wallet}
                         onUpload={uploadWallet}
-                        onRetryDownload={() => {
-                          setWalletDownloadSource("wallet-field");
-                          resetWalletDownload();
-                          downloadWallet();
-                        }}
                       />
                     </div>
 
@@ -761,24 +702,16 @@ function WalletUploadField({
   disabled,
   settings,
   uploadPending,
-  autoDownloadPending,
-  autoDownloadError,
-  canAutoDownload,
   uploadError,
   validationError,
   onUpload,
-  onRetryDownload,
 }: {
   disabled?: boolean;
   settings: DatabaseSettingsData;
   uploadPending: boolean;
-  autoDownloadPending: boolean;
-  autoDownloadError: string | null;
-  canAutoDownload: boolean;
   uploadError: string | null;
   validationError?: string;
   onUpload: (file: File) => void;
-  onRetryDownload: () => void;
 }) {
   return (
     <div className="space-y-2">
@@ -796,45 +729,10 @@ function WalletUploadField({
         errorText={validationError}
         loading={uploadPending}
         loadingText={t("settings.database.actions.uploadingWallet")}
-        disabled={disabled || autoDownloadPending}
+        disabled={disabled}
         dataTestId="oracle-wallet-upload"
         onFiles={([file]) => onUpload(file)}
       />
-
-      {autoDownloadPending ? (
-        <FormStatus
-          tone="info"
-          className="text-xs"
-          message={t("settings.database.wallet.autoDownload.pending")}
-        />
-      ) : null}
-      {!settings.wallet_uploaded && !canAutoDownload ? (
-        <FormStatus
-          tone="info"
-          className="text-xs"
-          message={t("settings.database.wallet.autoDownload.missingOcid")}
-        />
-      ) : null}
-      {autoDownloadError ? (
-        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-          <FormStatus
-            tone="danger"
-            className="min-w-0 flex-1 text-xs"
-            message={autoDownloadError}
-          />
-          <Button
-            type="button"
-            size="md"
-            variant="secondary"
-            className="w-full shrink-0 sm:w-auto"
-            aria-label={t("settings.database.wallet.autoDownload.retryAria")}
-            onClick={onRetryDownload}
-            icon={CloudDownload}
-          >
-            {t("settings.database.wallet.autoDownload.retry")}
-          </Button>
-        </div>
-      ) : null}
 
       {uploadError ? (
         <FormStatus tone="danger" className="text-xs" message={uploadError} />

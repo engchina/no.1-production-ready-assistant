@@ -52,7 +52,7 @@ import {
 } from "@production-ready/ui";
 
 import { useUnsavedChangesGuard } from "../guards/useUnsavedChangesGuard";
-import { useRequestScope } from "../oci/useRequestScope";
+import { useRequestScope } from "../shared/useRequestScope";
 import { t } from "./messages";
 import { RoleNameRowTitleButton, roleDisplayName } from "./RoleNameBadges";
 import {

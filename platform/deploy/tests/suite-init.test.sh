@@ -316,7 +316,7 @@ prepare_case() {
   rm -f -- "${case_dir}/app/no.1-production-ready-suite/platform"
   mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform"
   printf 'PLATFORM_ORACLE_USER=APP\n' > "${PROPS_DIR}/platform.env"
-  printf 'PLATFORM_ORACLE_USER=APP\nPLATFORM_PUBLIC_BASE_URL=https://198.51.100.1\nPLATFORM_OCI_REGION=ap-tokyo-1\n' \
+  printf 'PLATFORM_ORACLE_USER=APP\nPLATFORM_PUBLIC_BASE_URL=https://198.51.100.1\nPLATFORM_TIMEZONE=Asia/Tokyo\n' \
     > "${SUITE_REPO_DIR}/platform/.env"
   chmod 0600 "${SUITE_REPO_DIR}/platform/.env"
   export SUITE_TLS_PUBLIC_IP=203.0.113.5
@@ -326,7 +326,7 @@ prepare_case() {
     || fail "props の platform.env に公開の URL を書かない: $(cat "${PROPS_DIR}/platform.env")"
   [ "$(grep -c '^PLATFORM_PUBLIC_BASE_URL=' "${SUITE_REPO_DIR}/platform/.env")" = "1" ] || fail "既存の値を置き換えない"
   grep -qx 'PLATFORM_PUBLIC_BASE_URL=https://203.0.113.5:8443' "${SUITE_REPO_DIR}/platform/.env" || fail "platform/.env の公開の URL"
-  grep -qx 'PLATFORM_OCI_REGION=ap-tokyo-1' "${SUITE_REPO_DIR}/platform/.env" || fail "ほかの行を消した"
+  grep -qx 'PLATFORM_TIMEZONE=Asia/Tokyo' "${SUITE_REPO_DIR}/platform/.env" || fail "ほかの行を消した"
   [ "$(stat -c '%a' "${SUITE_REPO_DIR}/platform/.env")" = "600" ] || fail "platform/.env の mode を変えた"
   [ "$(cat "${PROPS_DIR}/public_ip.txt")" = "203.0.113.5" ] || fail "公開 IP を props に残さない"
   # 公開 IP が無い（assign_public_ip=false）なら private IP。HTTPS が off なら http と http_port。

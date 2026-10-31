@@ -51,12 +51,12 @@ import {
   useSettingsDraftGuard,
   type DraftGuardMessages,
 } from "../guards/useSettingsDraftGuard";
-import { InputActionField } from "../oci/InputActionField";
+import { InputActionField } from "../shared/InputActionField";
 import { useFocusAfterCommit } from "../users-roles/shared";
 import {
   SettingsTestResultPanel,
   toSettingsTestResultDetails,
-} from "../oci/SettingsTestResultPanel";
+} from "../shared/SettingsTestResultPanel";
 import {
   PRIMARY_CONNECTION_ID,
   TERTIARY_CONNECTION_ID,

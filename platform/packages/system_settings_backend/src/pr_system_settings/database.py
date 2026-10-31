@@ -3,7 +3,6 @@
 - Oracle AI Database の接続設定（`.env` へ保存。secret はレスポンスに返さない）
 - Wallet ZIP の安全な展開と差し替え（権限 0700 / 0600、失敗時は元に戻す、同時実行は 409）
 - readiness（Wallet のファイル・Wallet パスワード・DSN の別名）と接続テストの結果
-- Autonomous Database の情報取得・起動・停止と、OCI からの Wallet 取得
 
 実際の DB 接続（python-oracledb の使い方）と保存後の後始末（接続 pool を閉じる等）は
 製品ごとに違うため、`build_database_router` の hook で受け取る。共有パッケージは
@@ -35,9 +34,6 @@ from pr_backend_core.schemas import ApiResponse
 from pydantic import BaseModel, Field, field_validator
 
 from .env_file import write_env_values
-from .oci import oci_config_file, oci_profile, read_runtime_oci_config
-from .oci_auth import pem_file_is_encrypted, resolve_oci_key_file
-from .oci_database import OciDatabaseClient, WalletDownloadTooLargeError
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +51,6 @@ SECRET_REVEAL_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 DatabaseConnectionTestStatus = Literal["success", "failed"]
 DatabaseConnectionSecurity = Literal["wallet_mtls", "walletless_tls"]
-DatabaseWalletDownloadStatus = Literal["downloaded", "already_configured"]
 
 
 # --------------------------------------------------------------------------- schemas
@@ -77,8 +72,6 @@ class DatabaseSettingsData(BaseModel):
     readiness: str
     embedding_dimension: int
     vector_column: str
-    adb_ocid: str
-    region: str
     config_source: Literal["runtime"]
 
 
@@ -86,13 +79,6 @@ class DatabasePasswordRevealData(BaseModel):
     """明示操作でのみ返す Oracle DB password。通常の設定取得には含めない。"""
 
     password: str = Field(default="", max_length=4096)
-
-
-class DatabaseWalletDownloadData(BaseModel):
-    """OCI からの Wallet 取得結果。ZIP や生成 password は含めない。"""
-
-    status: DatabaseWalletDownloadStatus
-    settings: DatabaseSettingsData
 
 
 class DatabaseSettingsUpdate(BaseModel):
@@ -219,8 +205,6 @@ def database_settings_data(
         readiness=database_readiness(settings, extra_readiness),
         embedding_dimension=embedding_dim,
         vector_column=f"VECTOR({embedding_dim}, FLOAT32)",
-        adb_ocid=_s(settings, "oracle_adb_ocid"),
-        region=_s(settings, "resolved_oracle_adb_region"),
         config_source="runtime",
     )
 
@@ -250,6 +234,16 @@ def _database_wallet_is_configured(wallet_path: Path, *, driver_mode: str = "thi
     return wallet_path.is_dir() and all(
         (wallet_path / file_name).is_file() for file_name in required_files
     )
+
+
+def pem_file_is_encrypted(path: Path) -> bool:
+    """PEM の代表的な暗号化 marker を少量だけ読んで検出する。"""
+    try:
+        head = path.read_bytes()[:4096]
+    except OSError:
+        return False
+    text = head.decode("utf-8", errors="ignore").upper()
+    return "BEGIN ENCRYPTED PRIVATE KEY" in text or "PROC-TYPE: 4,ENCRYPTED" in text
 
 
 def _database_wallet_password_is_usable(
@@ -419,7 +413,7 @@ def database_connection_troubleshooting(
         tips.append("ADB からダウンロードした Wallet ZIP をアップロードし直してください。")
     if readiness == "wallet_password_invalid":
         tips.append(
-            "Wallet パスワードが一致していません。OCI から Wallet を再取得するか、"
+            "Wallet パスワードが一致していません。"
             "現在の Wallet ZIP 作成時に指定した Wallet パスワードを保存してください。"
         )
     if readiness == "invalid_configuration":
@@ -519,7 +513,7 @@ def _same_path(requested: str, configured: str) -> bool:
 def _requested_wallet_dir(base: Any, payload: DatabaseSettingsUpdate) -> str:
     """payload の Wallet の保存先は、今の保存先と同じときだけ受け取る。
 
-    Wallet の設置（アップロード・OCI からの取得）は保存先の既存のディレクトリを置き換えて削除する
+    Wallet の設置（アップロード）は保存先の既存のディレクトリを置き換えて削除する
     ため、API から任意の path を保存させない（画面は今の保存先を送るだけで、変更する欄は無い）。
     保存先は platform/.env の PLATFORM_ORACLE_WALLET_DIR（Thick は CLIENT_LIB_DIR）で決める。
     """
@@ -930,65 +924,6 @@ async def _read_upload_file(file: UploadFile, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-def _require_wallet_download_configuration(settings: Any) -> None:
-    """Wallet 取得前に不足を 422 として説明可能な範囲で検出する。"""
-    if not _s(settings, "oracle_adb_ocid").strip():
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "ADB OCID が未設定のため Wallet を自動取得できません。"
-                "データベース設定で ADB OCID を保存するか、"
-                "Wallet ZIP を手動アップロードしてください。"
-            ),
-        )
-    config_file = oci_config_file(settings)
-    parsed = read_runtime_oci_config(config_file, oci_profile(settings))
-    required_values = (
-        parsed.user if parsed is not None else "",
-        parsed.fingerprint if parsed is not None else "",
-        parsed.tenancy if parsed is not None else "",
-        parsed.key_file if parsed is not None else "",
-    )
-    region = _s(settings, "resolved_oracle_adb_region") or (
-        parsed.region if parsed is not None else ""
-    )
-    key_path = (
-        resolve_oci_key_file(parsed.key_file, config_file)
-        if parsed is not None and parsed.key_file
-        else None
-    )
-    if (
-        not all(value.strip() for value in required_values)
-        or not region.strip()
-        or not (key_path and key_path.is_file())
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "OCI 認証設定または region が不足しているため Wallet を自動取得できません。"
-                "OCI 認証設定を完了するか、Wallet ZIP を手動アップロードしてください。"
-            ),
-        )
-
-
-def wallet_download_password(settings: Any) -> str:
-    """OCI Wallet 生成 password は明示 Wallet password、未設定なら DB password を使う。"""
-    password = (
-        _s(settings, "oracle_wallet_password").strip() or _s(settings, "oracle_password").strip()
-    )
-    if not password:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Wallet を自動取得するには DB パスワードが必要です。"
-                "PLATFORM_ORACLE_WALLET_PASSWORD が空の場合は PLATFORM_ORACLE_PASSWORD を "
-                "Wallet password として使用し、"
-                "PLATFORM_ORACLE_WALLET_PASSWORD にも保存します。"
-            ),
-        )
-    return password
-
-
 def install_uploaded_database_wallet(
     settings: Any,
     content: bytes,
@@ -1003,103 +938,6 @@ def install_uploaded_database_wallet(
     settings.oracle_wallet_dir = str(wallet_dir)
     on_saved(settings)
     return database_settings_data(settings, extra_readiness)
-
-
-def prepare_database_wallet_download(
-    settings: Any, *, extra_readiness: ExtraReadiness | None = None
-) -> DatabaseWalletDownloadData | None:
-    """使える Wallet が既にあれば返す。取得に必要な設定が足りなければ 422。"""
-    with database_wallet_install_lock(settings):
-        target = _wallet_storage_root(settings)
-        mode = driver_mode(settings)
-        password = (
-            _s(settings, "oracle_wallet_password").strip()
-            or _s(settings, "oracle_password").strip()
-        )
-        if _database_wallet_is_configured(
-            target, driver_mode=mode
-        ) and _database_wallet_password_is_usable(target, password, driver_mode=mode):
-            return DatabaseWalletDownloadData(
-                status="already_configured",
-                settings=database_settings_data(settings, extra_readiness),
-            )
-        _require_wallet_download_configuration(settings)
-    return None
-
-
-def install_downloaded_database_wallet(
-    settings: Any,
-    wallet_zip: bytes,
-    password: str,
-    *,
-    env_file: Path,
-    on_saved: Callable[[Any], None],
-    extra_readiness: ExtraReadiness | None = None,
-) -> DatabaseSettingsData:
-    """OCI から取得した Wallet を設置し、Wallet の保存先と password を `.env` に保存する。"""
-    candidate = settings.model_copy(
-        update={
-            "oracle_wallet_dir": str(_wallet_storage_root(settings)),
-            "oracle_wallet_password": password,
-        }
-    )
-
-    def persist_settings(_wallet_dir: Path) -> None:
-        try:
-            _persist_database_settings(candidate, env_file)
-        except HTTPException as exc:
-            if exc.status_code != 500:
-                raise
-            logger.exception(
-                "database_wallet_install_stage_failed",
-                extra={
-                    "wallet_stage": "configuration_persist",
-                    "wallet_error_code": "WALLET_INSTALL_FAILED",
-                },
-            )
-            raise DatabaseWalletOperationError(
-                code="WALLET_INSTALL_FAILED",
-                public_message=(
-                    "Wallet の設定を安全に保存できませんでした。"
-                    "Wallet は変更前の状態に戻されています。"
-                    "管理者に設定保存領域の権限を確認するよう依頼してから再試行してください。"
-                ),
-                stage="configuration_persist",
-            ) from exc
-
-    with database_wallet_install_lock(settings):
-        wallet_dir = install_database_wallet(
-            settings, wallet_zip, "wallet.zip", post_install=persist_settings
-        )
-    settings.oracle_wallet_dir = str(wallet_dir)
-    settings.oracle_wallet_password = password
-    on_saved(settings)
-    return database_settings_data(settings, extra_readiness)
-
-
-# --------------------------------------------------------------------------- OCI
-
-
-def oci_failure_log_extra(exc: BaseException) -> dict[str, Any]:
-    """OCI の API の失敗を切り分ける項目（例外の種類・HTTP status・OCI の code・request id）。
-
-    OCI SDK の `ServiceError` の属性だけを読み、メッセージ本文や request の内容（Wallet の
-    password 等）は含めない。
-    """
-    extra: dict[str, Any] = {"exception_type": type(exc).__name__}
-    status = getattr(exc, "status", None)
-    if isinstance(status, int):
-        extra["oci_status"] = status
-    for key, attr in (("oci_code", "code"), ("oci_operation", "operation_name")):
-        value = getattr(exc, attr, None)
-        if isinstance(value, str) and value:
-            extra[key] = value
-    headers = getattr(exc, "headers", None)
-    if isinstance(headers, Mapping):
-        request_id = headers.get("opc-request-id")
-        if isinstance(request_id, str) and request_id:
-            extra["opc_request_id"] = request_id
-    return extra
 
 
 # --------------------------------------------------------------------------- router
@@ -1203,91 +1041,6 @@ def build_database_router(
                 on_saved=saved,
                 extra_readiness=extra_readiness,
             )
-        )
-
-    @router.post(
-        "/database/wallet/download",
-        response_model=ApiResponse[DatabaseWalletDownloadData],
-        dependencies=write,
-    )
-    async def download_database_wallet() -> ApiResponse[DatabaseWalletDownloadData]:
-        """OCI から Wallet を取得し、ブラウザへ ZIP を返さずサーバーへ設置する。"""
-        settings = get_settings()
-        precheck = await run_in_threadpool(
-            prepare_database_wallet_download, settings, extra_readiness=extra_readiness
-        )
-        if precheck is not None:
-            return ApiResponse(data=precheck)
-
-        adb_ocid = _s(settings, "oracle_adb_ocid").strip()
-        client = OciDatabaseClient(settings=settings)
-        password = wallet_download_password(settings)
-        try:
-            info = await client.get_autonomous_database(adb_ocid)
-            generate_type = None if info.is_dedicated is True else "SINGLE"
-            wallet_zip = await client.download_autonomous_database_wallet(
-                adb_ocid, password, generate_type, ORACLE_WALLET_MAX_BYTES
-            )
-        except WalletDownloadTooLargeError as exc:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    "OCI から取得した Wallet ZIP が 20 MB の上限を超えました。"
-                    "OCI 側の Wallet を確認するか、Wallet ZIP を手動アップロードしてください。"
-                ),
-            ) from exc
-        except Exception as exc:
-            # 画面には OCI の応答をそのまま返さないため、切り分けの手がかりはログに残す。
-            logger.warning(
-                "database_wallet_download_failed",
-                extra={
-                    **oci_failure_log_extra(exc),
-                    "wallet_error_code": "WALLET_DOWNLOAD_FAILED",
-                    "region": _s(settings, "resolved_oracle_adb_region") or None,
-                },
-            )
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    "OCI から Wallet を取得できませんでした。OCI 認証、region、ADB OCID、"
-                    "IAM 権限を確認して再試行するか、Wallet ZIP を手動アップロードしてください。"
-                ),
-            ) from exc
-
-        try:
-            settings_data = await run_in_threadpool(
-                install_downloaded_database_wallet,
-                settings,
-                wallet_zip,
-                password,
-                env_file=env_file(),
-                on_saved=saved,
-                extra_readiness=extra_readiness,
-            )
-        except DatabaseWalletOperationError:
-            raise
-        except HTTPException as exc:
-            if exc.status_code in {400, 415}:
-                # 検証で落ちた理由（必須ファイルの不足など。自前の文言）をログに残す。
-                logger.warning(
-                    "database_wallet_download_invalid",
-                    extra={
-                        "wallet_error_code": "WALLET_DOWNLOAD_INVALID",
-                        "status_code": exc.status_code,
-                        "reason": exc.detail,
-                    },
-                )
-                raise HTTPException(
-                    status_code=502,
-                    detail=(
-                        "OCI から取得した Wallet の内容を検証できませんでした。"
-                        "OCI 側で Wallet を再生成して再試行するか、"
-                        "Wallet ZIP を手動アップロードしてください。"
-                    ),
-                ) from exc
-            raise
-        return ApiResponse(
-            data=DatabaseWalletDownloadData(status="downloaded", settings=settings_data)
         )
 
     @router.post(

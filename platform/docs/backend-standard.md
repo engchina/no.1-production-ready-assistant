@@ -76,7 +76,7 @@ FastAPI の API ドキュメント（Swagger UI `/docs`・ReDoc `/redoc`・`/ope
 - CLI の接続（#1779）: 配備（`init_script.sh` の `retry_command`）が呼ぶ 1 回で終わる CLI（3 製品の system schema の CLI・NL2SQL の `app_security_migrate`）は、最初に `pr_backend_core.oracle_dsn.enable_cli_connect_mode()` を呼ぶ。製品の接続 pool は作る前に接続引数を `apply_cli_connect_mode` に通し、CLI のプロセスだけ、Wallet の別名と接続記述子の TNS の再試行（`(retry_count=20)(retry_delay=3)`）を外し（`dsn_without_retry`）、`retry_count=0`・`tcp_connect_timeout` を `CLI_TCP_CONNECT_TIMEOUT_SECONDS`（5 秒）以下にする。DB の停止中・届かないときも数秒〜20 秒ほどで #1744 の理由つきで終わる（試し直しは配備の `retry_command` が持つ）。常駐の server・worker は呼ばない（RAG の共有 pool は Wallet の別名の再試行を持ったまま、一時の切断に強い）。テストは各製品の conftest がテストごとに `disable_cli_connect_mode()` で戻す。配備の `suite-db-user.py` も同じ規則で TNS の再試行を外し、試し直しは自分の間隔（20 秒）に任せる。
 - Wallet / mTLS の ADB では 1 回の接続に handshake と認証の往復がかかるため、要求ごとに新しい接続を張らないようにする。Agent の接続確認・準備状態の確認は `pr_backend_core.oracle_pool.SharedOraclePool` の pool から借りる（#793）。RAG / NL2SQL の `test_connection` は単発の接続（Wallet の retry を外した DSN）のままで、上の cache で回数を減らす。システム設定の「接続テスト」は保存前の候補を試すため、3 製品とも単発の接続のまま。NL2SQL の状態の保存先（業務プロファイル・ジョブ・履歴・オントロジー・評価の `NL2SQL_*` の表）は `nl2sql-state` の pool から借りる（`OracleNl2SqlAdapter.state_connection`、上限は `NL2SQL_ORACLE_STATE_POOL_MAX`。#830）。状態の保存先の接続は JSON CLOB を文字列で fetch し（行ごとの LOB の read の往復を無くす）、書き込みの commit は最後の文の実行に載せる（`autocommit`。#904）。NL2SQL の業務データの読み取り（SELECT の実行）と Select AI の生成（`DBMS_CLOUD_AI.GENERATE`。profile は引数で渡し session の profile を変えない）は、アプリの接続（system_admin と DeepSec 無効のとき）なら pool から借りる（`OracleNl2SqlAdapter.runtime_connection`、上限は pool ごとに `NL2SQL_ORACLE_RUNTIME_POOL_MAX`。#904）。pool は system_admin 用（`nl2sql-runtime-admin`）と非 system_admin 用（`nl2sql-runtime-user`）に分け、同じ pool・同じ接続を共有しない。actor の無い処理は単発の接続（`connection()`）。DeepSec 有効の非 system_admin は今までどおり DeepSec の DATA USER の pool（借りるたびに利用者の context を設定し、返すときに消す。消せなければ捨てる）で、アプリの接続の pool・状態の保存先の pool と共有しない。session の状態を変え得る処理（ALTER SESSION・`DBMS_CLOUD_AI.SET_PROFILE`・DDL / DML・Select AI Agent・オントロジーの操作のトランザクション）は単発の接続（`connection()`）のまま。
 - 各製品の `/api/ready` の `oracle` check も同じ `database_readiness` を使う。
-- 画面側は `@production-ready/system-settings` の `DatabaseGate` / `useDatabaseStatus` / `DatabaseUnavailableNotice` を使う（製品は API・導線・製品名の入る文言と、利用者がデータベース設定・システムテーブルを開けるか（`canManageDatabase` / `canManageSystemTables`。#820）だけを渡す。状態ごとの案内は UX 契約 messaging §3.4.1）。ゲートを通さない画面は3製品ともシステム設定の 5 画面（OCI 認証・アップロード保存先・モデル・データベース・外観と証明書）だけ。NL2SQL の保存領域の確認のような製品固有の確認は `secondaryGate` で差し込む。
+- 画面側は `@production-ready/system-settings` の `DatabaseGate` / `useDatabaseStatus` / `DatabaseUnavailableNotice` を使う（製品は API・導線・製品名の入る文言と、利用者がデータベース設定・システムテーブルを開けるか（`canManageDatabase` / `canManageSystemTables`。#820）だけを渡す。状態ごとの案内は UX 契約 messaging §3.4.1）。ゲートを通さない画面は3製品ともシステム設定の 4 画面（アップロード保存先・モデル・データベース・外観と証明書）だけ。NL2SQL の保存領域の確認のような製品固有の確認は `secondaryGate` で差し込む。
 
 ### システムテーブルの管理（`/api/settings/database/system-tables`、#325）
 
@@ -308,14 +308,11 @@ API・worker・RAG の独立微サービス・browser の共通 schema、JST 時
 
 | 画面 | 項目 | ほかのプロセスでの反映 |
 |---|---|---|
-| OCI 認証 | config file・profile・region（`PLATFORM_OCI_*`）、OCI config のファイルと鍵 | 次の要求から。OCI の client は要求・job ごとに作る。NL2SQL のフィードバックの埋め込みの client（長く持つ）は、設定と OCI config のファイルの状態（mtime・size）で作り直す |
-| OCI 認証 › Object Storage | region・namespace（`PLATFORM_OBJECT_STORAGE_*`） | 次の要求から |
-| アップロード保存先 | 保存先・ローカルのディレクトリ・bucket | 次の要求から（#2092） |
+| アップロード保存先 | ローカルのディレクトリ | 次の要求から（#2092） |
 | モデル | `model-settings.json`・API key（`PLATFORM_OCI_ENTERPRISE_AI_*_API_KEY`） | 次の要求から（JSON の mtime） |
 | データベース | user・password・DSN・Wallet・接続のセキュリティ（NL2SQL） | 次に接続を借りるときに pool を作り直す: `SharedOraclePool`（接続引数の指紋）、RAG の共有 pool（`_shared_pool_settings_key`）、NL2SQL の DeepSec の管理・DATA USER の pool（`OraclePoolManager._pool_identity`）。古い pool は閉じる |
 | データベース | Instant Client の場所（`PLATFORM_ORACLE_CLIENT_LIB_DIR`）・driver mode（NL2SQL） | **再起動が要る**（python-oracledb の Thick mode の初期化はプロセスで 1 回だけ） |
 | データベース（Agent） | 起動時に DB が未設定で、後から設定した | **再起動が要る**（`AGENT_RUNTIME_REPOSITORY_BACKEND=auto` の判定と、メモリに読んだ保存データは起動時のまま） |
-| ADB 管理 | ADB の OCID・region | 次の要求から |
 | （画面から変えない） | 認証ポリシー（`PLATFORM_AUTH_*`）・`PLATFORM_SERVICE_TOKEN_SECRET`・`PLATFORM_PUBLIC_BASE_URL` など | `.env` を書き換えれば次の要求から。ただしログインの試行の回数の鍵（`PLATFORM_SERVICE_TOKEN_SECRET` から作る）は起動時のまま（変えたら 3 製品を再起動する） |
 
 ## テストの並列実行（pytest-xdist、#344）
