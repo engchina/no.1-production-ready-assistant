@@ -8,8 +8,8 @@ FastAPI + OCI Enterprise AI（LLM/VLM）+ OCI Generative AI（埋め込み/リ�
 uv sync                       # 依存解決（共有 package rag-parser-core を path 依存で取り込む）
 cp ../../platform/.env.example ../../platform/.env   # 3製品共通の設定（PLATFORM_*。初回だけ）
 cp .env.example .env          # RAG 固有の設定（RAG_*）
-uv run uvicorn app.main:app --reload
-# -> http://localhost:8000/api/health（API ドキュメント /docs は公開しない。#748）
+uv run uvicorn app.main:app --reload --port 8100
+# -> http://localhost:8100/api/health（API ドキュメント /docs は公開しない。#748）
 ```
 
 本番は `rag/init_script.sh` が作る systemd の unit（`production-ready-rag-backend.service`）で、

@@ -29,12 +29,12 @@ cd backend
 uv sync
 cp ../../platform/.env.example ../../platform/.env   # 3製品共通の設定（OCI / Oracle 接続など。PLATFORM_*）
 cp .env.example .env        # RAG 固有の設定（RAG_*）
-uv run uvicorn app.main:app --reload    # http://localhost:8000/api/health
+uv run uvicorn app.main:app --reload --port 8100   # http://localhost:8100/api/health
 
 # フロントエンド（別ターミナル）
 cd frontend
 npm ci
-BACKEND_URL=http://localhost:8000 npm run dev   # http://localhost:3000（BACKEND_URL 未指定なら /api は 404）
+BACKEND_URL=http://localhost:8100 npm run dev   # http://localhost:3100（BACKEND_URL 未指定なら /api は 404）
 
 # 前処理 / CPU parser(サービスごとの uv の venv + systemd の unit。rag/ で実行。#286)
 scripts/rag-services.sh install            # 前処理と既定の parser(docling)。--unstructured で足す
@@ -93,7 +93,7 @@ OCI Resource Manager の Terraform stack による配備は廃止しました（
 
 ## 外部の MCP クライアントから使う（Claude Code など）
 
-RAG の検索・根拠の読み出しは MCP（`POST /rag/api/mcp`。開発は `http://localhost:8000/api/mcp`）で公開しています。
+RAG の検索・根拠の読み出しは MCP（`POST /rag/api/mcp`。開発は `http://localhost:8100/api/mcp`）で公開しています。
 画面の左下のアカウントのメニュー →「API キー」で自分のキーを発行し、`Authorization: Bearer <API キー>` を付けて接続します。
 キーは発行した利用者として動き、その利用者のロールの権限と検索・回答プロファイル / ナレッジベースの範囲で答えます。
 検索・回答プロファイルが決まっていないときは、`rag_recommend_search_answer_profile` に質問を渡すと、使えるプロファイルの資料を 1 回検索して合うものを推薦します（LLM は呼びません。候補が違う資料に割れたら `recommended_profile_id` が `null` で、候補の一覧を返します）。

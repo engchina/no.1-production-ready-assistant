@@ -20,8 +20,8 @@ application services are ready.
 The bootstrap starts:
 
 - `production-ready-nl2sql-backend` on private upstream `127.0.0.1:8010`
-  (the same port as local development; changed from `8000` in #1316 so that RAG
-  can use `8000` on the same Compute)
+  (changed from `8000` in #1316 so that RAG
+  can use `8000` on the same Compute; local development uses `8110` instead, #25)
 - the single Nginx site of the suite (`platform/deploy/suite-init.sh`), on
   `https_port` (HTTPS, default `443`) or `http_port` (default `80`)
 

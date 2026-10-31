@@ -9,9 +9,9 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 
 | 製品 | URL（1 台の Compute に配備した Suite） | 開発の dev server |
 |---|---|---|
-| RAG | `https://<host>[:<https_port>]/rag/api/mcp` | `http://localhost:8000/api/mcp` |
-| NL2SQL | `https://<host>[:<https_port>]/nl2sql/api/mcp` | `http://localhost:8010/api/mcp` |
-| Agent | `https://<host>[:<https_port>]/agent/api/mcp` | `http://localhost:8020/api/mcp` |
+| RAG | `https://<host>[:<https_port>]/rag/api/mcp` | `http://localhost:8100/api/mcp` |
+| NL2SQL | `https://<host>[:<https_port>]/nl2sql/api/mcp` | `http://localhost:8110/api/mcp` |
+| Agent | `https://<host>[:<https_port>]/agent/api/mcp` | `http://localhost:8120/api/mcp` |
 
 - 配備では Nginx の `/<製品>/api/` の location が backend へ転送する（`platform/deploy/suite-nginx.sh`。`Authorization` ヘッダーはそのまま渡る）。RAG の `mcp` は LLM を待つため長い待ち時間の location に入っている。
 - HTTPS は既定で Suite の自作の CA で署名している。クライアントの OS / ランタイムに CA 証明書（`https://<host>/platform/ca.crt`）を信頼させるか、正規の証明書に替える（[deployment.md](./deployment.md)「Compute・Nginx・HTTPS」）。

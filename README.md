@@ -347,6 +347,20 @@ claude plugin list   # production-ready-skills@production-ready-suite が ✔ en
 
 応答の一覧（401 / 403 / 429）・呼び出しの上限・Agent のツールは [platform/docs/mcp-api-keys.md](./platform/docs/mcp-api-keys.md)、つまずく所・設定の JSON・長くかかるツール・Codex は [skills/README.md](./skills/README.md) を参照してください。
 
+## ローカル開発の port
+
+ローカルの開発（`<製品>/scripts/start-*.sh`・`npm run dev` / `npm run start`・`uvicorn --port`）の既定の port は、元の `no.1-production-ready-suite`（frontend `3000`〜`3002`・backend `8000` / `8010` / `8020`）と重ならない帯にしています。同じマシンで suite と併走できます（#25）。
+
+| 製品 | frontend（dev / preview） | backend | e2e（Playwright の既定） |
+|---|---|---|---|
+| RAG | `3100` | `8100` | `3200` |
+| NL2SQL | `3101` | `8110` | `3201`（preview の CI は fixture 用に `3202` も） |
+| Agent | `3102` | `8120` | `3142` |
+
+- 起動 script は `PORT` / `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_URL` で上書きできます。
+- OCI Compute への配備（`init_script.sh` の systemd・Nginx・Terraform）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
+- 文書の解析・前処理のサービス（`127.0.0.1:18010`〜`18023`）は変えていません。
+
 ## 開発ルール
 
 - 共通ルール（GitHub 運用・Issue / PR 規約・CI・デザインシステム）: [AGENTS.md](./AGENTS.md)。詳細は作業ごとに [docs/agents/](./docs/agents/) の文書を読む
