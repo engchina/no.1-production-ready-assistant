@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from pathlib import Path
@@ -97,7 +96,6 @@ def test_ok_runs_readiness_connection_and_probe_in_order() -> None:
         "detail",
         "context_id",
         "schema_status",
-        "adb_lifecycle_state",
     }
 
 
@@ -122,7 +120,6 @@ def test_not_configured_skips_connection() -> None:
         "detail": None,
         "context_id": data["context_id"],
         "schema_status": None,
-        "adb_lifecycle_state": None,
     }
     assert harness.calls == []
 
@@ -293,63 +290,15 @@ def test_wrapped_pool_timeout_from_schema_probe_is_unreachable() -> None:
     assert data["detail"] == "Oracle connection probe failed (DPY-4005)."
 
 
-def test_adb_lifecycle_is_added_only_when_unreachable() -> None:
-    """接続できないときだけ ADB の状態を返す（画面が停止中・起動中を出し分ける。#820）。"""
-    calls: list[str] = []
-
-    async def lifecycle(_settings: Any) -> str | None:
-        calls.append("adb")
-        return "STOPPED"
-
-    harness = Harness(adb_lifecycle=lifecycle, ok_cache_seconds=0)
-    assert harness.get()["adb_lifecycle_state"] is None
-    harness.probe_result = DatabaseSchemaProbeResult(status="setup_required")
-    assert harness.get()["adb_lifecycle_state"] is None
-    assert calls == []
-
+def test_unreachable_does_not_query_oci_lifecycle() -> None:
+    """接続できないときも OCI へ DB の状態を問い合わせず、応答に ADB の状態を載せない（#10）。"""
+    harness = Harness(ok_cache_seconds=0)
     harness.connect_error = RuntimeError("DPY-6005: cannot connect to database")
+
     data = harness.get()
 
     assert data["status"] == "unreachable"
-    assert data["adb_lifecycle_state"] == "STOPPED"
-    assert calls == ["adb"]
-
-    harness.connect_error = None
-    harness.probe_error = RuntimeError("DPY-4005: timed out waiting for the connection pool")
-    assert harness.get()["adb_lifecycle_state"] == "STOPPED"
-
-
-def test_default_adb_lifecycle_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ADB OCID が無ければ OCI を呼ばない。取得の失敗は None（判定は変えない）。"""
-    from types import SimpleNamespace
-
-    from pr_system_settings import database_status as module
-
-    requested: list[str] = []
-    outcome: dict[str, Any] = {"state": "starting"}
-
-    class FakeClient:
-        def __init__(self, settings: Any) -> None:
-            self.settings = settings
-
-        async def get_autonomous_database(self, adb_ocid: str) -> Any:
-            requested.append(adb_ocid)
-            if isinstance(outcome["state"], Exception):
-                raise outcome["state"]
-            return SimpleNamespace(lifecycle_state=outcome["state"])
-
-    monkeypatch.setattr(module, "OciDatabaseClient", FakeClient)
-
-    def run(settings: Any) -> str | None:
-        return asyncio.run(module.adb_lifecycle_state(settings))
-
-    assert run(SimpleNamespace(oracle_adb_ocid="")) is None
-    assert requested == []
-    settings = SimpleNamespace(oracle_adb_ocid=" ocid1.autonomousdatabase.oc1..x ")
-    assert run(settings) == "STARTING"
-    assert requested == ["ocid1.autonomousdatabase.oc1..x"]
-    outcome["state"] = RuntimeError("NotAuthorizedOrNotFound")
-    assert run(settings) is None
+    assert set(data) == {"status", "check", "detail", "context_id", "schema_status"}
 
 
 def test_short_circuit_skips_every_check() -> None:

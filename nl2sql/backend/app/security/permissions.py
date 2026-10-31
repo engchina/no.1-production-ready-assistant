@@ -779,10 +779,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # ---- システム設定: データベース ----
     ("GET", "/settings/database"): _SETTINGS_DATABASE,
     ("PATCH", "/settings/database"): _SETTINGS_DATABASE,
-    ("GET", "/settings/database/adb"): _SETTINGS_DATABASE,
-    ("POST", "/settings/database/adb/settings"): _SETTINGS_DATABASE,
-    ("POST", "/settings/database/adb/start"): _SETTINGS_DATABASE,
-    ("POST", "/settings/database/adb/stop"): _SETTINGS_DATABASE,
     # ---- 運用設定: 回答の注意書き（設定は製品ごと。#2449） ----
     ("GET", "/settings/answer-notice"): _allowed("menu.settings_answer_notice"),
     ("PUT", "/settings/answer-notice"): _allowed("menu.settings_answer_notice"),

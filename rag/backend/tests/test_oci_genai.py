@@ -1,4 +1,4 @@
-"""OCI Generative AI adapter 境界のテスト。"""
+"""埋め込み / 再ランクの adapter の境界のテスト（#8。OpenAI 互換の API）。"""
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 from pr_backend_core.observability.model_purpose import model_call_purpose
 
-from app.clients.oci_auth import OciPrivateKeyPassPhraseRequiredError
 from app.clients.oci_genai import (
     EMBEDDING_INPUT_MAX_CHARS,
     EMBEDDING_REQUEST_MAX_CHARS,
@@ -20,96 +19,45 @@ from app.clients.oci_genai import (
 from app.config import Settings
 
 
-def test_oci_genai_client_refuses_encrypted_private_key_without_prompt(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """OCI SDK client 作成前に暗号化 PEM の pass phrase 要求を止める。"""
-    key_file = tmp_path / "encrypted.pem"
-    key_file.write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
-    initialized = False
-
-    class FakeGenerativeAiInferenceClient:
-        def __init__(self, config: dict[str, object]) -> None:
-            nonlocal initialized
-            initialized = True
-
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return SimpleNamespace(
-                from_file=lambda path, profile: {"key_file": str(key_file), "region": "ap-osaka-1"}
-            )
-        if name == "oci.generative_ai_inference":
-            return SimpleNamespace(GenerativeAiInferenceClient=FakeGenerativeAiInferenceClient)
-        raise AssertionError(f"unexpected module import: {name}")
-
-    monkeypatch.setattr("app.clients.oci_genai.importlib.import_module", fake_import_module)
+def test_embed_requires_base_url(tmp_path: Path) -> None:
+    """Base URL が無いときは、利用者が直せる設定エラーとして返す（#8）。"""
+    _ = tmp_path
     client = OciGenAiClient(
-        settings=_oci_settings().model_copy(update={"oci_config_file": str(tmp_path / "config")})
+        settings=_oci_settings().model_copy(
+            update={"embedding_base_url": "", "oci_enterprise_ai_endpoint": ""}
+        )
     )
 
-    with pytest.raises(OciPrivateKeyPassPhraseRequiredError, match="pass_phrase"):
-        client._client()
-
-    assert initialized is False
+    with pytest.raises(OciGenAiConfigError, match="Base URL が未設定です"):
+        client._base_url(rerank=False)
 
 
-def test_oci_genai_client_reports_malformed_fingerprint(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """OCI SDK の fingerprint 不正は利用者が直せる設定エラーとして返す。"""
-
-    class InvalidConfig(Exception):
-        pass
-
-    class NoneRetryStrategy:
-        pass
-
-    class NoCircuitBreakerStrategy:
-        pass
-
-    retry_strategies: list[object] = []
-    breaker_strategies: list[object] = []
-
-    class FakeGenerativeAiInferenceClient:
-        def __init__(self, config: dict[str, object], **kwargs: object) -> None:
-            _ = config
-            retry_strategies.append(kwargs.get("retry_strategy"))
-            breaker_strategies.append(kwargs.get("circuit_breaker_strategy"))
-            raise InvalidConfig({"fingerprint": "malformed"})
-
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return SimpleNamespace(
-                from_file=lambda path, profile: {
-                    "fingerprint": "bad",
-                    "key_file": "",
-                    "region": "ap-osaka-1",
-                }
-            )
-        if name == "oci.generative_ai_inference":
-            return SimpleNamespace(GenerativeAiInferenceClient=FakeGenerativeAiInferenceClient)
-        if name == "oci.retry":
-            return SimpleNamespace(NoneRetryStrategy=NoneRetryStrategy)
-        if name == "oci.circuit_breaker":
-            return SimpleNamespace(NoCircuitBreakerStrategy=NoCircuitBreakerStrategy)
-        raise AssertionError(f"unexpected module import: {name}")
-
-    monkeypatch.setattr("app.clients.oci_genai.importlib.import_module", fake_import_module)
+def test_embed_requires_api_key() -> None:
+    """API key が無いときは、利用者が直せる設定エラーとして返す（#8）。"""
     client = OciGenAiClient(
-        settings=_oci_settings().model_copy(update={"oci_config_file": str(tmp_path / "config")})
+        settings=_oci_settings().model_copy(update={"oci_enterprise_ai_api_key": ""})
     )
 
-    with pytest.raises(OciGenAiConfigError, match="fingerprint が不正です"):
-        client._client()
-    # 再試行は共通の実行器が受け持つため、SDK の再試行は切る(#2002)。
-    assert [type(strategy) for strategy in retry_strategies] == [NoneRetryStrategy]
-    # SDK の circuit breaker も切る。429 が続くと先に開き、実行器の再試行を通らずに失敗する(#2211)。
-    assert [type(strategy) for strategy in breaker_strategies] == [NoCircuitBreakerStrategy]
+    with pytest.raises(OciGenAiConfigError, match="API key がありません"):
+        client._api_key()
+
+
+def test_rerank_base_url_falls_back_to_compatible_api() -> None:
+    """再ランクの Base URL は `/compatible-mode/` を `/compatible-api/` に読み替える（#8）。
+
+    百煉は再ランクだけ `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404。
+    """
+    client = OciGenAiClient(
+        settings=_oci_settings().model_copy(
+            update={
+                "embedding_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "rerank_base_url": "",
+            }
+        )
+    )
+
+    assert client._base_url(rerank=False) == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    assert client._base_url(rerank=True) == "https://dashscope.aliyuncs.com/compatible-api/v1"
 
 
 async def test_embed_validates_oci_embedding_count() -> None:
@@ -242,35 +190,34 @@ async def test_embed_batches_oci_calls_when_cache_is_disabled() -> None:
     assert vectors == [_vector_for_text("a"), _vector_for_text("bb"), _vector_for_text("ccc")]
 
 
-async def test_oci_embed_uses_generative_ai_embedding_request() -> None:
-    """OCI embedding は Generative AI embed_text API に Cohere Embed v4 設定を渡す。"""
-    sdk = FakeGenAiInferenceClient(
-        embed_response=SimpleNamespace(data=SimpleNamespace(embeddings=[[1.0, 0.0, 0.0]]))
-    )
+async def test_embed_uses_openai_compatible_embeddings_request() -> None:
+    """埋め込みは `POST {base_url}/embeddings` に model・input・dimensions を渡す（#8）。
+
+    `input_type` は観測の purpose にだけ使い、API へは送らない。
+    """
+    post = FakePostJson(embed_response={"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]})
     client = OciGenAiClient(
         settings=_oci_settings(),
-        inference_client=sdk,
+        post=post,
         sdk_call_runner=_run_inline,
     )
 
     vectors = await client.embed(["検索 query"], input_type="SEARCH_QUERY")
 
     assert vectors == [[1.0, 0.0, 0.0]]
-    assert sdk.embed_calls == 1
-    request = sdk.last_embed_request
-    assert request is not None
-    assert request.inputs == ["検索 query"]
-    assert request.compartment_id == "ocid1.compartment.oc1..example"
-    assert request.serving_mode.model_id == "cohere.embed-v4.0"
-    assert request.input_type == "SEARCH_QUERY"
-    assert request.output_dimensions == 3
+    assert post.urls("/embeddings") == [
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+    ]
+    assert post.requests("/embeddings") == [
+        {"model": "text-embedding-v4", "input": ["検索 query"], "dimensions": 3}
+    ]
 
 
 async def test_embed_rejects_invalid_input_type() -> None:
     """OCI/local 共通で embedding input_type の誤指定を fail fast する。"""
     client = OciGenAiClient(
         settings=_oci_settings(),
-        inference_client=FakeGenAiInferenceClient(),
+        post=FakePostJson(),
         sdk_call_runner=_run_inline,
     )
 
@@ -318,35 +265,38 @@ async def test_rerank_cache_can_be_disabled() -> None:
     assert client.calls == 2
 
 
-async def test_oci_rerank_uses_generative_ai_rerank_request() -> None:
-    """OCI rerank は Generative AI rerank_text API に Cohere Rerank v4 fast 設定を渡す。"""
-    sdk = FakeGenAiInferenceClient(
-        rerank_response=SimpleNamespace(
-            data=SimpleNamespace(
-                document_ranks=[
-                    SimpleNamespace(index=1, relevance_score=0.25),
-                    SimpleNamespace(index=0, relevance_score=0.75),
-                ]
-            )
-        )
+async def test_rerank_uses_openai_compatible_reranks_request() -> None:
+    """再ランクは `POST {base_url}/reranks`（複数形）に候補をまとめて渡す（#8）。
+
+    Base URL は埋め込みの `/compatible-mode/` を `/compatible-api/` に読み替える
+    （百煉は再ランクだけそちらの配下で、`/compatible-mode/v1` に投げると 404）。
+    """
+    post = FakePostJson(
+        rerank_response={
+            "results": [
+                {"index": 1, "relevance_score": 0.25},
+                {"index": 0, "relevance_score": 0.75},
+            ]
+        }
     )
     client = OciGenAiClient(
         settings=_oci_settings(),
-        inference_client=sdk,
+        post=post,
         sdk_call_runner=_run_inline,
     )
 
     results = await client.rerank("承認条件", ["本文 A", "本文 B"], top_n=2)
 
     assert results == [(0, 0.75), (1, 0.25)]
-    assert sdk.rerank_calls == 1
-    request = sdk.last_rerank_request
-    assert request is not None
-    assert request.input == "承認条件"
-    assert request.documents == ["本文 A", "本文 B"]
-    assert request.compartment_id == "ocid1.compartment.oc1..example"
-    assert request.serving_mode.model_id == "cohere.rerank-v4.0-fast"
-    assert request.top_n == 2
+    assert post.urls("/reranks") == ["https://dashscope.aliyuncs.com/compatible-api/v1/reranks"]
+    assert post.requests("/reranks") == [
+        {
+            "model": "qwen3-rerank",
+            "query": "承認条件",
+            "documents": ["本文 A", "本文 B"],
+            "top_n": 2,
+        }
+    ]
 
 
 async def test_rerank_returns_empty_without_oci_call_when_documents_are_empty() -> None:
@@ -470,43 +420,39 @@ class CountingRerankClient(OciGenAiClient):
         return [(index, 0.9 - (index * 0.1)) for index in range(min(len(documents), top_n))]
 
 
-class FakeGenAiInferenceClient:
-    """OCI SDK client の最小 fake。"""
+class FakePostJson:
+    """OpenAI 互換の API の最小 fake（#8。HTTP は送らない）。"""
 
     def __init__(
         self,
-        embed_response: object | None = None,
-        rerank_response: object | None = None,
+        embed_response: dict[str, Any] | None = None,
+        rerank_response: dict[str, Any] | None = None,
     ) -> None:
-        self._embed_response = embed_response or SimpleNamespace(
-            data=SimpleNamespace(embeddings=[])
-        )
-        self._rerank_response = rerank_response or SimpleNamespace(
-            data=SimpleNamespace(document_ranks=[])
-        )
-        self.last_embed_request: Any | None = None
-        self.last_rerank_request: Any | None = None
-        self.embed_calls = 0
-        self.rerank_calls = 0
+        self._embed_response = embed_response or {"data": []}
+        self._rerank_response = rerank_response or {"results": []}
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    def embed_text(self, embed_text_details: object) -> object:
-        self.embed_calls += 1
-        self.last_embed_request = embed_text_details
-        return self._embed_response
+    def __call__(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append((url, body))
+        return self._rerank_response if url.endswith("/reranks") else self._embed_response
 
-    def rerank_text(self, rerank_text_details: object) -> object:
-        self.rerank_calls += 1
-        self.last_rerank_request = rerank_text_details
-        return self._rerank_response
+    def requests(self, suffix: str) -> list[dict[str, Any]]:
+        return [body for url, body in self.calls if url.endswith(suffix)]
+
+    def urls(self, suffix: str) -> list[str]:
+        return [url for url, _ in self.calls if url.endswith(suffix)]
 
 
 def _oci_settings() -> Settings:
     return Settings.model_construct(
-        oci_region="ap-osaka-1",
-        oci_compartment_id="ocid1.compartment.oc1..example",
-        oci_genai_embedding_model="cohere.embed-v4.0",
+        oci_genai_embedding_model="text-embedding-v4",
         oci_genai_embedding_dim=3,
-        oci_genai_rerank_model="cohere.rerank-v4.0-fast",
+        oci_genai_rerank_model="qwen3-rerank",
+        embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        rerank_base_url="",
+        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        oci_enterprise_ai_api_key="sk-test",
+        oci_enterprise_ai_timeout_seconds=60,
     )
 
 
@@ -551,20 +497,17 @@ async def test_embedding_purpose_uses_declared_input_type_and_preserves_probe(
         )
 
     monkeypatch.setattr(oci_genai, "observed_span", capture)
-    sdk = FakeGenAiInferenceClient(
-        embed_response=SimpleNamespace(data=SimpleNamespace(embeddings=[[1.0, 0.0, 0.0]]))
-    )
-    client = OciGenAiClient(
-        settings=_oci_settings(), inference_client=sdk, sdk_call_runner=_run_inline
-    )
+    post = FakePostJson(embed_response={"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]})
+    client = OciGenAiClient(settings=_oci_settings(), post=post, sdk_call_runner=_run_inline)
     with model_call_purpose("connection.check" if probe else None):
         result = await client.embed(["合成の入力"], input_type=input_type)  # type: ignore[arg-type]
     assert result == [[1.0, 0.0, 0.0]]
     assert captured[0].get("pr.gen_ai.purpose") == ("connection.check" if probe else purpose)
-    assert captured[0]["gen_ai.request.model"] == "cohere.embed-v4.0"
-    assert sdk.last_embed_request is not None
-    assert sdk.last_embed_request.input_type == input_type
-    assert sdk.embed_calls == 1
+    assert captured[0]["gen_ai.request.model"] == "text-embedding-v4"
+    # input_type は purpose にだけ使い、API へは送らない（#8）。
+    assert post.requests("/embeddings") == [
+        {"model": "text-embedding-v4", "input": ["合成の入力"], "dimensions": 3}
+    ]
 
 
 async def test_rerank_cache_normalizes_only_query_presentation() -> None:

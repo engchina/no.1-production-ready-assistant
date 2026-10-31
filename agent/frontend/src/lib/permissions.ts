@@ -16,7 +16,6 @@ export const MENU_PERMISSIONS = {
   skills: "menu.skills",
   runtimes: "menu.runtimes",
   runs: "menu.runs",
-  automations: "menu.automations",
   approvals: "menu.approvals",
   audit: "menu.audit",
   evaluation: "menu.evaluation",

@@ -352,10 +352,9 @@ def test_operator_run_creation_is_scoped(auth: ProductionAuth, scope_data: Scope
         {"_builtin_sdk_state": "{}"},
         {"_runtime_dispatch_lease": {"owner": "x"}},
         {"evaluation_dry_run": True},
-        {"automation_id": "automation-of-another-user"},
         {"source": "mcp", "search_answer_profile_id": "bv-a"},
     ],
-    ids=["sdk-state", "dispatch-lease", "evaluation-dry-run", "automation-id", "source"],
+    ids=["sdk-state", "dispatch-lease", "evaluation-dry-run", "source"],
 )
 def test_run_creation_rejects_reserved_metadata(
     auth: ProductionAuth,

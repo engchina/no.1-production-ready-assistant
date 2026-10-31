@@ -618,14 +618,17 @@ class Settings(
     )
 
     # --- OCI Generative AI（埋め込み / リランク）---
-    oci_genai_embedding_model: str = Field(default="cohere.embed-v4.0")
+    oci_genai_embedding_model: str = Field(default="text-embedding-v4")
     oci_genai_embedding_dim: int = Field(
         default=1536,
         ge=1536,
         le=1536,
         description="Cohere Embed v4 と Oracle VECTOR(1536, FLOAT32) に合わせる。",
     )
-    oci_genai_rerank_model: str = Field(default="cohere.rerank-v4.0-fast")
+    oci_genai_rerank_model: str = Field(default="qwen3-rerank")
+    # 埋め込み / 再ランクの OpenAI 互換 Base URL(#8。空なら Enterprise AI の接続から)。
+    embedding_base_url: str = Field(default="")
+    rerank_base_url: str = Field(default="")
 
     # --- Oracle AI Database ---
     oracle_user: str = Field(default="")
@@ -655,7 +658,8 @@ class Settings(
     oracle_adb_region: str = Field(
         default="",
         description=(
-            "Autonomous Database 管理専用の OCI region。未設定なら PLATFORM_OCI_REGION を使う。"
+            "OCI から ADB の Wallet を取得するときの OCI region。"
+            "未設定なら PLATFORM_OCI_REGION を使う。"
         ),
     )
     oracle_tcp_connect_timeout_seconds: float = Field(

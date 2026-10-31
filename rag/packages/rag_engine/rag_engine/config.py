@@ -32,10 +32,11 @@ OCI_INFERENCE_ENDPOINT_TEMPLATE = "https://inference.generativeai.{region}.oci.o
 DEFAULT_OCI_VISION_ENDPOINT = OCI_INFERENCE_ENDPOINT_TEMPLATE.format(region=DEFAULT_CHICAGO_REGION)
 OPENAI_RESPONSES_LLM_API_MODE = "openai_responses"
 DEFAULT_LLM_API_MODE = OPENAI_RESPONSES_LLM_API_MODE
-DEFAULT_EMBEDDING_REGION = DEFAULT_OSAKA_REGION
-DEFAULT_EMBEDDING_MODEL = "cohere.embed-v4.0"
+DEFAULT_EMBEDDING_MODEL = "text-embedding-v4"
 DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS = 1536
-DEFAULT_EMBEDDING_BATCH_SIZE = 32
+# 百煉（DashScope）の OpenAI 互換 API は 1 要求 10 件まで。超えると 400 が返る（#8）。
+DEFAULT_EMBEDDING_BATCH_SIZE = 10
+DEFAULT_RERANK_MODEL = "qwen3-rerank"
 DEFAULT_IMAGE_EMBEDDING_RRF_WEIGHT = 0.75
 DEFAULT_MAX_ANCHORS_PER_PARENT = 2
 # rerank の後、起点（上位 top_k）に採る同じ文書の child の上限（#2167）。0 は上限なし（SDK の既定）。
@@ -213,7 +214,9 @@ class Settings:
     answer_max_tokens: int
     default_rerank_enabled: bool
     rerank_model: str
-    oci_rerank_endpoint: str
+    # 再ランクの OpenAI 互換 Base URL。空なら埋め込みの Base URL から読み替える（#8。百煉は
+    # 再ランクだけ `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
+    rerank_base_url: str
     rerank_request_timeout_seconds: int
     rerank_retries: int
     rerank_retry_initial_wait_seconds: float
@@ -229,8 +232,8 @@ class Settings:
     # 1 以上なら、選んだ画面ごとの最上位の child を rerank 後の順位 N 位（2 つ目は N+1 位…）より下に置かない。
     # 0（既定）は候補に加えるだけで順位は rerank に任せる。比較実験用 (#1108)。
     screen_linking_reserve_rank: int
-    embedding_region: str
-    embedding_endpoint: str
+    # 埋め込みの OpenAI 互換 Base URL。空なら LLM のプライマリ接続の endpoint を使う（#8）。
+    embedding_base_url: str
     embedding_model: str
     embedding_output_dimensions: int
     embedding_batch_size: int
@@ -503,8 +506,8 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         default_rerank_enabled=_env_bool(env, "RAG_ENGINE_DEFAULT_RERANK_ENABLED", True),
         approved_faq_semantic_matching_enabled=_env_bool(env, "APPROVED_FAQ_SEMANTIC_MATCHING_ENABLED", True),
         approved_faq_semantic_suggestions_enabled=_env_bool(env, "APPROVED_FAQ_SEMANTIC_SUGGESTIONS_ENABLED", False),
-        rerank_model=env.get("RERANK_MODEL", "cohere.rerank-v4.0-fast").strip(),
-        oci_rerank_endpoint=env.get("OCI_RERANK_ENDPOINT", "").strip(),
+        rerank_model=env.get("RERANK_MODEL", DEFAULT_RERANK_MODEL).strip() or DEFAULT_RERANK_MODEL,
+        rerank_base_url=env.get("RERANK_BASE_URL", "").strip(),
         rerank_request_timeout_seconds=_env_int(env, "RERANK_REQUEST_TIMEOUT_SECONDS", 90),
         rerank_retries=_env_int(env, "RERANK_RETRIES", 3),
         rerank_retry_initial_wait_seconds=_env_float(env, "RERANK_RETRY_INITIAL_WAIT_SECONDS", 2.0),
@@ -517,8 +520,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         document_selection_score_ratio=max(0.0, min(1.0, _env_float(env, "RAG_ENGINE_DOCUMENT_SELECTION_SCORE_RATIO", 0.5))),
         screen_linking_enabled=_env_bool(env, "RAG_ENGINE_SCREEN_LINKING", False),
         screen_linking_reserve_rank=max(0, _env_int(env, "RAG_ENGINE_SCREEN_LINKING_RESERVE_RANK", 0)),
-        embedding_region=env.get("EMBEDDING_REGION", DEFAULT_EMBEDDING_REGION).strip() or DEFAULT_EMBEDDING_REGION,
-        embedding_endpoint=env.get("EMBEDDING_ENDPOINT", "").strip(),
+        embedding_base_url=env.get("EMBEDDING_BASE_URL", "").strip(),
         embedding_model=env.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL,
         embedding_output_dimensions=_env_int(
             env,

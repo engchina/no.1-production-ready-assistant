@@ -33,7 +33,7 @@ from app.features.agent.builtin_runtime import (
 )
 from app.features.agent.config import runtime_config_store
 from app.features.agent.runtime import (
-    AUTOMATION_APPROVAL_SKIPPED_CODE,
+    MCP_APPROVAL_SKIPPED_CODE,
     AgentProfile,
     AgentRuntimeOracleCheckpointRepository,
     ApprovalDecisionRequest,
@@ -464,14 +464,14 @@ def test_policy_changed_to_ask_after_build_waits_for_approval(
 def test_policy_changed_to_ask_is_rejected_in_unattended_runs(
     monkeypatch: MonkeyPatch, calls: _Calls
 ) -> None:
-    """無人の実行（自動実行）は承認を待たず、承認が要るツールを呼ばない（既存の拒否の方針）。"""
+    """無人の実行（MCP）は承認を待たず、承認が要るツールを呼ばない（既存の拒否の方針）。"""
     _ask_after_build(monkeypatch)
     _script(
         monkeypatch,
         [function_call(WRITE, {"count": 3}, call_id="call-auto")],
         [assistant_message("書けませんでした。")],
     )
-    run_id = _create_run(automation_id="auto_2630", automation_trigger="schedule")
+    run_id = _create_run(source="mcp", api_key_id="0123456789abcdef")
 
     anyio.run(builtin_runtime.execute_run, run_id)
 
@@ -481,7 +481,7 @@ def test_policy_changed_to_ask_is_rejected_in_unattended_runs(
     assert calls.of(WRITE) == []
     [step] = run.steps
     assert step.tool_result is not None
-    assert step.tool_result.error_code == AUTOMATION_APPROVAL_SKIPPED_CODE
+    assert step.tool_result.error_code == MCP_APPROVAL_SKIPPED_CODE
 
 
 def test_parallel_calls_each_wait_for_approval(monkeypatch: MonkeyPatch, calls: _Calls) -> None:

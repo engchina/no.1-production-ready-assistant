@@ -15,7 +15,7 @@ Control Plane の中で業務 Agent を実行する。外部の Runtime・Bindin
   ポリシーが「拒否」のツールは渡さない。「承認」のツールは SDK の `needs_approval` で中断する
   （MCP のツールは readOnlyHint が無ければ既定で承認が必要）。
 - 承認: 中断した Run は SDK の状態を Run に保存して `waiting_approval` にする。すべての承認が
-  決まったら状態を復元し、承認・却下を反映して再開する。無人の Run（品質評価・自動実行）は
+  決まったら状態を復元し、承認・却下を反映して再開する。無人の Run（品質評価・MCP）は
   承認待ちにせず、承認が要るツールを却下してモデルへ理由を返し、回答まで続ける（#776・#1813）。
 - 入力の上限: モデルの呼び出しの直前に、入力（指示・ツールの定義・会話・ツールの結果）を登録モデルの
   入力の上限から出力の上限と余白を引いた予算に収める（#2383。古いツールの結果から縮める。縮め方は
@@ -1095,38 +1095,6 @@ def discover_mcp_tools(
                 continue
             tools.append((mcp_tool_definition(config, tool), mcp_tool_handler(config, tool)))
     return tools, warnings
-
-
-def approval_required_tools(
-    skill_ids: list[str], *, context: ToolInvocationContext
-) -> tuple[list[str], list[str]]:
-    """スキルが使うツールのうち、ツールのポリシーで承認が要るもの（#1813）。
-
-    自動実行の編集画面の警告に使う（自動実行の Run はこれらのツールを呼ばない）。判定は Run の
-    `build_function_tools` と同じ `ToolPolicy.decide`（拒否のツールはモデルに渡さないので
-    含めない）。
-    MCP 接続のツールは `tools/list` で取る。取れない接続は理由を 2 つ目の値で返す。
-    """
-    from app.features.agent.skill_references import reference_tool, skill_reference_keys
-
-    policy = _active_policy()
-    mcp_tools, warnings = discover_mcp_tools(skill_ids, context=context)
-    definitions: list[ToolDefinition] = [
-        definition
-        for name in agent_tool_names(skill_ids)
-        if (definition := tool_registry.get(name)) is not None
-    ]
-    definitions.extend(definition for definition, _handler in mcp_tools)
-    keys = skill_reference_keys(skill_ids)
-    if keys:
-        definitions.append(reference_tool(keys)[0])
-    names: list[str] = []
-    for definition in definitions:
-        if definition.name in names:
-            continue
-        if policy.decide(definition) == ToolPolicyDecision.ASK:
-            names.append(definition.name)
-    return names, warnings
 
 
 # 指示の中のツールの名前の前後に来ない文字（function tool の名前に使える文字。#1303）。
@@ -3428,7 +3396,7 @@ class _SupportTaskRun:
 
 def confirmation_budget(run: Any, agent: Any) -> ConfirmationBudget:
     """この Run の回答前の確認の往復（業務 Agent の方針・上限、無人の Run、確認せずに回答）。"""
-    from app.features.agent.runtime import EVALUATION_DRY_RUN_KEY, is_automation_run
+    from app.features.agent.runtime import EVALUATION_DRY_RUN_KEY
 
     metadata = run.metadata if isinstance(run.metadata, dict) else {}
     response = metadata.get(RESPONSE_METADATA_KEY)
@@ -3443,7 +3411,7 @@ def confirmation_budget(run: Any, agent: Any) -> ConfirmationBudget:
         policy=str(getattr(agent, "clarification_policy", "confirm")),
         max_rounds=int(getattr(agent, "clarification_max_rounds", 0) or 0),
         used=used_rounds(metadata, confirmations),
-        unattended=bool(metadata.get(EVALUATION_DRY_RUN_KEY)) or is_automation_run(metadata),
+        unattended=bool(metadata.get(EVALUATION_DRY_RUN_KEY)),
         skipped=skipped,
         evaluation=bool(metadata.get(EVALUATION_DRY_RUN_KEY)),
     )
@@ -4097,22 +4065,17 @@ async def _unattended_approvals(
 
     - 品質評価の Run（#776。dry-run）: 呼ぼうとしたツールは step に残し（ツールの選択の判定に
       使う）、モデルへは「評価中のため実行していない」と返して回答を完成させる。
-    - 自動実行の Run（#1813。`metadata.automation_id`。スケジュールも今すぐ実行も）: 誰も承認
-      しないため、承認が要るツールは呼ばない（無人の実行は事前に許可したツールだけを使う）。
-      モデルへは「自動実行では使えない」と返し、確かめられなかった点として回答を完成させる。
-      step（監査）と Run の経過に、承認が要るため使わなかったことを残す。
     - 外部の MCP クライアントの Run（#1874。`metadata.source=mcp`）: 承認する人が画面に
-      いるとは限らないため、自動実行と同じく承認が要るツールを呼ばない。
+      いるとは限らないため、承認が要るツールは呼ばない（モデルへは「使えない」と返し、
+      確かめられなかった点として回答を完成させる）。step（監査）と Run の経過に、承認が
+      要るため使わなかったことを残す。
 
     それ以外の Run（画面のチャット・実行）はそのまま返す（承認待ちにする）。
     """
     from app.features.agent.runtime import (
-        AUTOMATION_APPROVAL_SKIPPED_CODE,
         EVALUATION_DRY_RUN_KEY,
         EVALUATION_DRY_RUN_MESSAGE,
         MCP_APPROVAL_SKIPPED_CODE,
-        automation_approval_message,
-        is_automation_run,
         is_mcp_run,
         mcp_approval_message,
         runtime_repository,
@@ -4120,7 +4083,7 @@ async def _unattended_approvals(
 
     evaluation = bool(run.metadata.get(EVALUATION_DRY_RUN_KEY))
     mcp = not evaluation and is_mcp_run(run.metadata)
-    if not evaluation and not mcp and not is_automation_run(run.metadata):
+    if not evaluation and not mcp:
         return result
     for _ in range(_max_turns()):
         interruptions = list(getattr(result, "interruptions", []) or [])
@@ -4137,7 +4100,7 @@ async def _unattended_approvals(
         if evaluation:
             runtime_repository.record_builtin_dry_run_steps(run.id, calls)
         else:
-            runtime_repository.record_builtin_unattended_skips(run.id, calls, mcp=mcp)
+            runtime_repository.record_builtin_unattended_skips(run.id, calls)
         # 実行しなかったツールとして処理の経過に残す（#3226）。
         skipped_steps = {
             step.tool_call.trace_id: step
@@ -4159,9 +4122,7 @@ async def _unattended_approvals(
                 extra={
                     "run_id": run.id,
                     "tool_names": [call.name for call in calls],
-                    "error_code": (
-                        MCP_APPROVAL_SKIPPED_CODE if mcp else AUTOMATION_APPROVAL_SKIPPED_CODE
-                    ),
+                    "error_code": MCP_APPROVAL_SKIPPED_CODE,
                 },
             )
         state = result.to_state()
@@ -4169,11 +4130,7 @@ async def _unattended_approvals(
             state.reject(
                 item,
                 rejection_message=(
-                    EVALUATION_DRY_RUN_MESSAGE
-                    if evaluation
-                    else mcp_approval_message(call.name)
-                    if mcp
-                    else automation_approval_message(call.name)
+                    EVALUATION_DRY_RUN_MESSAGE if evaluation else mcp_approval_message(call.name)
                 ),
             )
         result = await _run_sdk(run.id, sdk_agent, state)
@@ -4189,7 +4146,7 @@ def _answer_text(output: object) -> str:
 def _assumes(budget: ConfirmationBudget | None) -> bool:
     """利用者に確認しない Run か（方針「前提を示して回答」・「確認せずに回答」を選んだ。#1903）。
 
-    無人の Run（品質評価・自動実行）も含める（#1959）。利用者に聞けないので、本文の聞き返し
+    無人の Run（品質評価）も含める（#1959）。利用者に聞けないので、本文の聞き返し
     （「どの業務プロファイルを使いますか？」）も差し戻し、前提を示して答えさせる（#1839）。
     """
     return budget is not None and (budget.policy == POLICY_ASSUME or budget.unattended)

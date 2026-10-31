@@ -17,7 +17,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from dotenv import dotenv_values
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
-from pr_system_settings import database as shared_database
 from pr_system_settings import oci_connectivity
 from pr_system_settings.model import ModelSettingsTestRequest
 from pr_system_settings.model_test_input import MODEL_TEST_IMAGE_BYTES
@@ -49,11 +48,6 @@ from tests.support import AsgiTestClient
 client = AsgiTestClient(app)
 LLM_TEMPLATE = '{"input":"${user_message}"}'
 VLM_TEMPLATE = '{"input":"${data_base64}"}'
-
-
-async def _run_inline(operation: Any) -> Any:
-    """テスト用 fake SDK 呼び出しをスレッドへ逃がさず同期実行する。"""
-    return operation()
 
 
 def _saved_env_value(settings: Settings, name: str) -> str | None:
@@ -2724,52 +2718,6 @@ def test_upload_database_wallet_zip_rejects_unsafe_member_path(
     assert not (wallet_dir / "tnsnames.ora").exists()
 
 
-class _FakeAdbInfo:
-    """OCI SDK の AutonomousDatabase model 代替。"""
-
-    def __init__(
-        self,
-        lifecycle_state: str,
-        *,
-        display_name: str = "RAG ADB",
-        adb_id: str = "ocid1.autonomousdatabase.oc1..fake",
-    ) -> None:
-        self.id = adb_id
-        self.display_name = display_name
-        self.lifecycle_state = lifecycle_state
-        self.db_name = "ragdb"
-        self.cpu_core_count = 2
-        self.data_storage_size_in_tbs = 1.0
-
-
-class _FakeAdbResponse:
-    def __init__(self, data: _FakeAdbInfo) -> None:
-        self.data = data
-
-
-def _make_fake_database_client(
-    lifecycle_state: str,
-    calls: list[str],
-) -> type:
-    """指定 lifecycle を返し、start/stop 呼び出しを記録する Fake DatabaseClient。"""
-
-    class _FakeDatabaseClient:
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            calls.append("init")
-
-        def get_autonomous_database(self, autonomous_database_id: str) -> _FakeAdbResponse:
-            calls.append(f"get:{autonomous_database_id}")
-            return _FakeAdbResponse(_FakeAdbInfo(lifecycle_state))
-
-        def start_autonomous_database(self, autonomous_database_id: str) -> None:
-            calls.append(f"start:{autonomous_database_id}")
-
-        def stop_autonomous_database(self, autonomous_database_id: str) -> None:
-            calls.append(f"stop:{autonomous_database_id}")
-
-    return _FakeDatabaseClient
-
-
 def _write_thick_wallet(wallet_dir: Path, services: Sequence[str] = ("ragdb_high",)) -> None:
     """RAG の既定（Thick mode）で必要な Wallet ファイルを置く。
 
@@ -2786,148 +2734,20 @@ def _write_thick_wallet(wallet_dir: Path, services: Sequence[str] = ("ragdb_high
     (wallet_dir / "cwallet.sso").write_bytes(b"sso")
 
 
-def _patch_adb_client(
-    monkeypatch: MonkeyPatch,
-    lifecycle_state: str,
-    calls: list[str],
-) -> None:
-    from pr_system_settings.oci_database import OciDatabaseClient
-
-    fake_client = _make_fake_database_client(lifecycle_state, calls)()
-
-    def _factory(settings: Settings | None = None) -> OciDatabaseClient:
-        return OciDatabaseClient(
-            settings=settings,
-            database_client=fake_client,
-            sdk_call_runner=_run_inline,
-        )
-
-    monkeypatch.setattr(shared_database, "OciDatabaseClient", _factory)
-
-
-def test_get_adb_info_returns_not_configured_without_ocid(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(get_settings(), "oracle_adb_ocid", "")
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "not_configured"
-    assert data["lifecycle_state"] is None
-
-
-def test_get_adb_info_returns_lifecycle_from_oci(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.get("/api/settings/database/adb")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "success"
-    assert data["lifecycle_state"] == "AVAILABLE"
-    assert data["display_name"] == "RAG ADB"
-    assert any(call.startswith("get:") for call in calls)
-
-
-def test_update_adb_settings_persists_ocid_and_region(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "")
-    env_file = _database_env_file(monkeypatch, tmp_path)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post(
-        "/api/settings/database/adb/settings",
-        json={
-            "adb_ocid": "ocid1.autonomousdatabase.oc1..saved",
-            "region": "ap-tokyo-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["region"] == "ap-tokyo-1"
-    assert settings.oracle_adb_ocid == "ocid1.autonomousdatabase.oc1..saved"
-    assert settings.oracle_adb_region == "ap-tokyo-1"
-    persisted = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_ORACLE_ADB_OCID=ocid1.autonomousdatabase.oc1..saved" in persisted
-    assert "PLATFORM_ORACLE_ADB_REGION=ap-tokyo-1" in persisted
-
-
-def test_start_adb_sends_start_when_stopped(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    ocid = "ocid1.autonomousdatabase.oc1..fake"
-    monkeypatch.setattr(settings, "oracle_adb_ocid", ocid)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "accepted"
-    assert data["lifecycle_state"] == "STARTING"
-    assert f"start:{ocid}" in calls
-
-
-def test_start_adb_reports_already_available(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "already_available"
-    assert not any(call.startswith("start:") for call in calls)
-
-
-def test_stop_adb_sends_stop_when_available(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    ocid = "ocid1.autonomousdatabase.oc1..fake"
-    monkeypatch.setattr(settings, "oracle_adb_ocid", ocid)
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "AVAILABLE", calls)
-
-    resp = client.post("/api/settings/database/adb/stop")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "accepted"
-    assert data["lifecycle_state"] == "STOPPING"
-    assert f"stop:{ocid}" in calls
-
-
-def test_stop_adb_reports_already_stopped(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_adb_ocid", "ocid1.autonomousdatabase.oc1..fake")
-    calls: list[str] = []
-    _patch_adb_client(monkeypatch, "STOPPED", calls)
-
-    resp = client.post("/api/settings/database/adb/stop")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "already_stopped"
-    assert not any(call.startswith("stop:") for call in calls)
-
-
-def test_start_adb_without_ocid_returns_not_configured(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(get_settings(), "oracle_adb_ocid", "")
-
-    resp = client.post("/api/settings/database/adb/start")
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "not_configured"
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/settings/database/adb"),
+        *(
+            ("POST", f"/api/settings/database/adb/{action}")
+            for action in ("settings", "start", "stop")
+        ),
+    ],
+)
+def test_adb_control_routes_are_removed(method: str, path: str) -> None:
+    """ADB の情報取得・起動・停止の API は持たない（#10。起動・停止は docker 側の責務）。"""
+    response = client.get(path) if method == "GET" else client.post(path)
+    assert response.status_code in {404, 405}
 
 
 def test_get_upload_storage_settings_returns_runtime_values(

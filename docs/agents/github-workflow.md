@@ -16,8 +16,7 @@
 - 並行する別のセッションの未コミット変更・stash・worktree を、確認なしに破棄・上書きしない。
 - **使わなくなった worktree は消す（#2032）。** PR の merge・作業の中止の後、その作業の worktree を `git worktree remove <path>` で消し（各 worktree が `.venv`・`node_modules` を持ち、1 つで 1〜3GB を使う）、merge 済みのローカルのブランチを `git branch -d` で消す。未 commit の変更か push していない commit がある worktree は消さない。他の session・実行中の agent の worktree（`git worktree list` の locked）は、使われていないことを確かめてから消す。
 - **開発の ADB が停止していたら、利用者に聞かずに起動する**（夜間に自動で停止することがある。#1825）。対象は `platform/.env` の `PLATFORM_ORACLE_ADB_OCID` の DB。実サービスの確認・長い評価の前と、DB に接続できない（`DPY-6005`・`ORA-12541`・画面の「データベースに接続できません」など）ときに状態を確かめ、`STOPPED` なら起動して `AVAILABLE` になるまで待ってから続ける（数分かかる。止まっていた間の評価・確認はやり直す）。
-  - backend が動いていれば: `GET /api/settings/database/adb` で状態、`POST /api/settings/database/adb/start` で起動（どの製品の backend でもよい。local の認証なら認証なしで呼べる）。
-  - 動いていなければ: `agent/backend` で `uv run python -c "import asyncio; from app.settings import get_settings; from pr_system_settings.database import control_adb; print(asyncio.run(control_adb(get_settings(), action='start')).lifecycle_state)"`（状態は同じ module の `load_adb_info`）。
+  - 画面・backend の API と配備のスクリプトは DB の起動・停止・状態の取得を持たない（#10）。OCI の ADB は OCI のコンソールか OCI CLI（`oci db autonomous-database get` / `oci db autonomous-database start --autonomous-database-id <PLATFORM_ORACLE_ADB_OCID>`）、ADB Free コンテナは `docker ps -a` / `docker start <コンテナ名>` で確かめて起動する。
   - 停止（`stop`）は利用者の指示が無い限りしない。起動したことは作業の報告に書く。
 - **一時ファイルは `/tmp` に置かず、repo の直下の `./tmp/` に置く**（開発環境の WSL がよく再起動し、`/tmp` が消えるため。#1616）。作業用の worktree は `.claude/worktrees/`、PR / Issue の本文・測定の結果・展開した binary などは `./tmp/<作業の名前>/`。`./tmp/` は `.gitignore` で無視し、commit しない。
 

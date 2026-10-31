@@ -42,7 +42,7 @@ test("文書インデックスは DB 停止時も空状態 + 縮退バナーで�
   // 復旧導線: 再試行 + データベース設定リンク
   await expect(page.getByRole("button", { name: "再試行" }).first()).toBeVisible();
   const settingsLink = page.getByRole("link", { name: /データベース設定を開く/ });
-  await expect(settingsLink).toHaveAttribute("href", "/settings/database#adb-management");
+  await expect(settingsLink).toHaveAttribute("href", "/settings/database");
 });
 
 test("ナレッジベース管理は DB 停止時も作成の入口 + 縮退バナーで開ける", async ({ page }) => {
@@ -53,5 +53,5 @@ test("ナレッジベース管理は DB 停止時も作成の入口 + 縮退バ�
   // 作成の入口（PageHeader の「新規作成」）は利用可能(ページが死んでいない。#555)
   await expect(page.getByRole("button", { name: "新規作成" })).toBeVisible();
   const settingsLink = page.getByRole("link", { name: /データベース設定を開く/ });
-  await expect(settingsLink).toHaveAttribute("href", "/settings/database#adb-management");
+  await expect(settingsLink).toHaveAttribute("href", "/settings/database");
 });

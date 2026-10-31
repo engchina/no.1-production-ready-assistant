@@ -599,10 +599,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/settings/database/wallet"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/wallet/download"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/test"): _any(MENU_SETTINGS_DATABASE),
-    ("GET", "/settings/database/adb"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/adb/settings"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/adb/start"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/adb/stop"): _any(MENU_SETTINGS_DATABASE),
     # 回答の注意書き（設定は製品ごと。#2449）。
     ("GET", "/settings/answer-notice"): _any(MENU_SETTINGS_ANSWER_NOTICE),
     ("PUT", "/settings/answer-notice"): _any(MENU_SETTINGS_ANSWER_NOTICE),

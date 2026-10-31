@@ -7,13 +7,11 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  ADB_INFO_QUERY_KEY,
   DATABASE_SETTINGS_QUERY_KEY,
   DatabaseSettingsPage,
   OciSettingsPage,
   RoleManagementPage,
   UserManagementPage,
-  type AdbInfoData,
   type DatabaseSettingsApi,
   type DatabaseSettingsData,
   type OciSettingsApi,
@@ -107,12 +105,6 @@ const DB_SETTINGS: DatabaseSettingsData = {
   config_source: "runtime",
 };
 
-const ADB_AVAILABLE: AdbInfoData = {
-  status: "success",
-  message: "Autonomous Database の情報を取得しました。",
-  lifecycle_state: "AVAILABLE",
-};
-
 function databaseApi(overrides: Partial<DatabaseSettingsApi> = {}): DatabaseSettingsApi {
   return {
     getDatabaseSettings: () => Promise.resolve(DB_SETTINGS),
@@ -120,10 +112,6 @@ function databaseApi(overrides: Partial<DatabaseSettingsApi> = {}): DatabaseSett
     uploadDatabaseWallet: never,
     downloadDatabaseWallet: never,
     testDatabaseSettings: never,
-    getAdbInfo: () => Promise.resolve(ADB_AVAILABLE),
-    updateAdbSettings: () => Promise.resolve(ADB_AVAILABLE),
-    startAdb: never,
-    stopAdb: never,
     ...overrides,
   };
 }
@@ -131,7 +119,6 @@ function databaseApi(overrides: Partial<DatabaseSettingsApi> = {}): DatabaseSett
 async function renderDatabasePage(api: DatabaseSettingsApi) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(DATABASE_SETTINGS_QUERY_KEY, DB_SETTINGS);
-  client.setQueryData(ADB_INFO_QUERY_KEY, ADB_AVAILABLE);
   await render(<DatabaseSettingsPage api={api} />, client);
 }
 
@@ -153,8 +140,6 @@ describe("データベース設定: 押したボタンがフォーカスを保�
     expectDisabledOnly(databaseFormButton("test"));
     expect(host.querySelector<HTMLInputElement>("#oracle-user")?.matches(":disabled")).toBe(true);
     expect(host.querySelector<HTMLInputElement>("#oracle-password")?.matches(":disabled")).toBe(true);
-    // ADB のカードの操作も無効にするだけ。
-    expectDisabledOnly(buttonByText("情報を再取得"));
     expect(host.querySelectorAll('button[aria-busy="true"]')).toHaveLength(1);
   });
 
@@ -166,19 +151,6 @@ describe("データベース設定: 押したボタンがフォーカスを保�
     expectPressedKeepsFocus(databaseFormButton("test"));
     expectDisabledOnly(databaseFormButton("save"));
     expect(host.querySelector<HTMLInputElement>("#oracle-user")?.matches(":disabled")).toBe(true);
-  });
-
-  it("ADB の「情報を再取得」の Wallet の取得中も、押したボタンにフォーカスが残る（ページの fieldset で無効にしない）", async () => {
-    await renderDatabasePage(databaseApi());
-
-    await press(buttonByText("情報を再取得"));
-    // ADB の設定の保存は解決済み。Wallet の取得（downloadDatabaseWallet）が続いている。
-
-    expectPressedKeepsFocus(buttonByText("情報を再取得"));
-    expectDisabledOnly(databaseFormButton("save"));
-    expectDisabledOnly(databaseFormButton("test"));
-    expect(host.querySelector<HTMLInputElement>("#oracle-user")?.matches(":disabled")).toBe(true);
-    expect(host.querySelectorAll('button[aria-busy="true"]')).toHaveLength(1);
   });
 
   it("保存済みのパスワードの取得中は、表示の切り替えボタンにフォーカスが残る", async () => {
