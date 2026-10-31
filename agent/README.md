@@ -58,12 +58,12 @@ cp backend/.env.example backend/.env
 # backend
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload --port 8020
+uv run uvicorn app.main:app --reload --port 8120
 
 # frontend
 cd frontend
 npm install
-BACKEND_URL=http://127.0.0.1:8020 npm run dev
+BACKEND_URL=http://127.0.0.1:8120 npm run dev
 ```
 
 frontend の Vite は `BACKEND_URL` を明示したときだけ `/api` を backend へ proxy します（既定の接続先は持ちません）。

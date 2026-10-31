@@ -19,11 +19,11 @@ cd backend
 cp .env.example .env
 uv sync   # 外部 parser は services/parsers/<name> の独立サービスで動く(backend には載せない)。
           # 単一 adapter をローカルで試す場合のみ per-adapter extra(例: `uv sync --extra docling`)。
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload --port 8100
 
 cd ../frontend
 npm ci
-BACKEND_URL=http://localhost:8000 npm run dev   # BACKEND_URL 未指定なら /api は proxy せず 404（hermetic）
+BACKEND_URL=http://localhost:8100 npm run dev   # BACKEND_URL 未指定なら /api は proxy せず 404（hermetic）
 ```
 
 一括起動はリポジトリ root で `./rag/scripts/start-all.sh` を実行する。最初に backend の

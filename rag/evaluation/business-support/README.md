@@ -34,9 +34,9 @@ uv run --project rag/backend python rag/scripts/generate_evaluation_corpus.py ra
 ```bash
 cd rag/backend
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/business-support/business-support.json \
-  --api-base-url http://127.0.0.1:8000 --output /tmp/business-support.resolved.json
+  --api-base-url http://127.0.0.1:8100 --output /tmp/business-support.resolved.json
 uv run python -m app.rag.evaluation_cli /tmp/business-support.resolved.json \
-  --api-base-url http://127.0.0.1:8000 --output /tmp/business-support.result.json
+  --api-base-url http://127.0.0.1:8100 --output /tmp/business-support.result.json
 ```
 
 同じナレッジベースへ取り込み直すときは `--knowledge-base-id` を渡します。質問ごとに回答（モデルの呼び出し 3〜5 回）を
@@ -61,7 +61,7 @@ A・C・D は製品横断の評価（`suite/evaluation`。[README](../../../suit
 ```bash
 cd rag/backend
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/business-support/business-support.json \
-  --api-base-url http://127.0.0.1:8000 --output ../../tmp/eval/bs.resolved.json \
+  --api-base-url http://127.0.0.1:8100 --output ../../tmp/eval/bs.resolved.json \
   --document-map-output ../../tmp/eval/document-map.json \
   --guides ../evaluation/business-support/support-guides.json --guided-output ../../tmp/eval/bs.guided.json
 cd ../../suite/evaluation
@@ -70,13 +70,13 @@ SET=../../rag/evaluation/business-support/business-support.json
 MAP=../../tmp/eval/document-map.json
 # A / C（RAG の公開の MCP の rag_search）
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target rag-mcp \
-  --mcp-url http://127.0.0.1:8000/api/mcp --knowledge-base-id <ナレッジベース> --output ../../tmp/eval/a.json
+  --mcp-url http://127.0.0.1:8100/api/mcp --knowledge-base-id <ナレッジベース> --output ../../tmp/eval/a.json
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target rag-mcp \
-  --mcp-url http://127.0.0.1:8000/api/mcp --search-answer-profile-id <検索・回答プロファイル> --output ../../tmp/eval/c.json
+  --mcp-url http://127.0.0.1:8100/api/mcp --search-answer-profile-id <検索・回答プロファイル> --output ../../tmp/eval/c.json
 # D（業務 Agent の Run。公開済みの業務 Agent を ID で指定する。業務 Agent は画面で、C と同じ検索・回答プロファイルを
 # データの範囲にしてスキル business-rag-research を付けて作り、公開しておく）
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target agent-mcp \
-  --mcp-url http://127.0.0.1:8020/api/mcp --agent-id <公開済みの業務 Agent> \
+  --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> \
   --guides ../../rag/evaluation/business-support/support-guides.json --output ../../tmp/eval/d.json
 # 比べる表（docs/answer-baseline-2026-10.md に貼る）
 uv run suite-evaluation compare A=../../tmp/eval/a.json C=../../tmp/eval/c.json D=../../tmp/eval/d.json

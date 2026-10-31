@@ -17,7 +17,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
-os.environ["AGENT_CORS_ORIGINS"] = '["http://localhost:3002"]'
+os.environ["AGENT_CORS_ORIGINS"] = '["http://localhost:3102"]'
 
 import anyio
 import httpx
