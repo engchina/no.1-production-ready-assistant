@@ -523,16 +523,17 @@ for (const scheme of ["light", "dark"] as const) {
       path: testInfo.outputPath(`connection-secondary-empty-${scheme}-${testInfo.project.name}.png`),
     });
 
-    // 設定すると入力欄を出し、Endpoint URL・Project OCID・API key はすべて必須。
+    // 設定すると入力欄を出し、Endpoint URL と API key は必須（Project OCID は任意。#9）。
     await page.getByRole("button", { name: "セカンダリ接続を設定" }).click();
     const secondary = page.getByTestId("enterprise-connection-secondary");
     const secondaryEndpoint = page.locator("#enterprise-secondary-endpoint");
     const secondaryProject = page.locator("#enterprise-secondary-project-ocid");
     const secondaryApiKey = page.locator("#enterprise-secondary-api-key");
     await expect(secondaryEndpoint).toBeFocused();
-    for (const field of [secondaryEndpoint, secondaryProject, secondaryApiKey]) {
+    for (const field of [secondaryEndpoint, secondaryApiKey]) {
       await expect(field).toHaveAttribute("aria-required", "true");
     }
+    await expect(secondaryProject).not.toHaveAttribute("aria-required", "true");
     await expect(page.getByTestId("enterprise-connection-tab-secondary-unsaved")).toHaveText("未保存");
 
     // プライマリ接続のタブから保存しても、エラーのあるセカンダリ接続のタブへ移り、最初の欄へフォーカスする。
@@ -543,7 +544,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(secondaryEndpoint).toBeFocused();
     await expect(secondaryEndpoint).toHaveAttribute("aria-invalid", "true");
     await expect(secondary.getByText("Endpoint URL を入力してください。")).toBeVisible();
-    await expect(secondary.getByText("Project OCID を入力してください。")).toBeVisible();
+    await expect(secondary.getByText("Project OCID を入力してください。")).toHaveCount(0);
     await expect(secondary.getByText("API key を入力してください。")).toBeVisible();
     expect(patches).toHaveLength(0);
     await page.screenshot({

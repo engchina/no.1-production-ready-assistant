@@ -66,7 +66,6 @@ import {
   connectionOptions,
   firstConnectionError,
   hasConnection,
-  isProjectOcidOptional,
   modelConnectionFieldId,
   modelConnectionId,
   modelsUsingConnection,
@@ -1024,13 +1023,12 @@ const OPTIONAL_CONNECTION_MESSAGES = {
 
 /**
  * 接続のタブの中身（#542 / #786）。
- * - プライマリ接続: 入力欄。OCI で運用するときだけ必須なので、3 つの欄とも「OCI 運用時必須」（保存は止めない）
+ * - プライマリ接続: 入力欄。OCI で運用するときだけ必須なので、Endpoint URL と API key は「OCI 運用時必須」（保存は止めない）
  * - セカンダリ接続・ターシャリ接続（未設定）: 空の状態と「◯◯接続を設定」
- * - セカンダリ接続（設定済み）: 入力欄（3 つとも「必須」）と「セカンダリ接続を削除」。削除は説明の行の右端に置く
- *   （主操作の保存と隣に並べない。README「カード内の操作行」）。API key だけを消す指定は出さない
- *   （必須の欄を空にするため。消すときは接続ごと削除する）
- * - ターシャリ接続（設定済み）: OpenAI / OpenAI 互換 API 向け。Endpoint URL と API key は「必須」、
- *   Project OCID は任意（OCI Enterprise AI を使うときだけ入れる）。Endpoint URL の例は OpenAI の base URL
+ * - セカンダリ接続・ターシャリ接続（設定済み）: 入力欄（Endpoint URL と API key は「必須」）と「◯◯接続を削除」。
+ *   削除は説明の行の右端に置く（主操作の保存と隣に並べない。README「カード内の操作行」）。
+ *   API key だけを消す指定は出さない（必須の欄を空にするため。消すときは接続ごと削除する）
+ * - Project OCID はどの接続でも任意（OCI Enterprise AI を使うときだけ入れる。#9）
  */
 function ConnectionTabContent({
   connectionId,
@@ -1080,7 +1078,7 @@ function ConnectionTabContent({
     );
   }
   // プライマリ接続は条件付きの必須（文言で区別。README §4「必須の表示」）。セカンダリ接続・ターシャリ接続は
-  // 既定の「必須」。ターシャリ接続の Project OCID は任意なので印を出さない（#786）。
+  // 既定の「必須」。Project OCID はどの接続でも任意なので印を出さない（#786 / #9）。
   const requiredLabel = primary ? t("settings.model.requiredInOci") : undefined;
   return (
     <div
@@ -1147,15 +1145,9 @@ function ConnectionTabContent({
         <TextField
           id={connectionFieldId(connectionId, "project_ocid")}
           label={t("settings.model.enterprise.project")}
-          required={!isProjectOcidOptional(connectionId)}
-          requiredLabel={requiredLabel}
           value={connection.project_ocid}
           placeholder={t("settings.model.placeholder.project")}
-          helper={
-            tertiary
-              ? t("settings.model.enterprise.projectHelpTertiary")
-              : t("settings.model.enterprise.projectHelp")
-          }
+          helper={t("settings.model.enterprise.projectHelp")}
           error={errors?.project_ocid}
           onValueChange={(value) => onChange({ project_ocid: value })}
           width="full"

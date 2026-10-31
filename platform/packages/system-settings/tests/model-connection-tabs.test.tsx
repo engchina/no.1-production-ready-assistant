@@ -192,9 +192,10 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(tab("セカンダリ接続").getAttribute("aria-selected")).toBe("false");
     expect(host.querySelector("#enterprise-connection-name")).toBeNull();
     expect(host.textContent).not.toContain("表示名を");
-    // プライマリ接続の 3 つの欄は、同じ条件付きの必須（OCI 運用時必須）。
+    // プライマリ接続の Endpoint URL と API key は、同じ条件付きの必須（OCI 運用時必須）。
+    // Project OCID はどの接続でも任意なので印を出さない（#9）。
     expect(labelText("enterprise-endpoint")).toBe("Endpoint URLOCI 運用時必須");
-    expect(labelText("enterprise-project-ocid")).toBe("Project OCIDOCI 運用時必須");
+    expect(labelText("enterprise-project-ocid")).toBe("Project OCID");
     expect(labelText("enterprise-api-key")).toBe("API keyOCI 運用時必須");
     expect(host.textContent).toContain("登録モデルで接続を選ばなければ、プライマリ接続を使います。");
 
@@ -235,7 +236,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     await click(buttonByText("セカンダリ接続を設定"));
     expect(document.activeElement?.id).toBe("enterprise-secondary-endpoint");
     expect(labelText("enterprise-secondary-endpoint")).toBe("Endpoint URL必須");
-    expect(labelText("enterprise-secondary-project-ocid")).toBe("Project OCID必須");
+    expect(labelText("enterprise-secondary-project-ocid")).toBe("Project OCID");
     expect(labelText("enterprise-secondary-api-key")).toBe("API key必須");
     // API key だけを消す指定は出さない（消すときはセカンダリ接続ごと削除する）。
     expect(host.querySelector("#enterprise-secondary-api-key-clear")).toBeNull();
@@ -252,9 +253,8 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(fieldError("enterprise-secondary-endpoint")).toBe(
       "Endpoint URL を入力してください。",
     );
-    expect(fieldError("enterprise-secondary-project-ocid")).toBe(
-      "Project OCID を入力してください。",
-    );
+    // Project OCID は任意なのでエラーを出さない（#9）。
+    expect(fieldError("enterprise-secondary-project-ocid")).toBeUndefined();
     expect(fieldError("enterprise-secondary-api-key")).toBe(
       "API key を入力してください。",
     );

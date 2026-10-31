@@ -94,9 +94,7 @@ ENTERPRISE_AI_JUDGE_SAME_AS_ANSWER: Final = "same_as_answer"
 _OPTIONAL_CONNECTION_IDS = ENTERPRISE_AI_CONNECTION_IDS[1:]
 # Project OCID を任意にする接続（#786）。ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、
 # Project OCID（`OpenAI-Project` ヘッダー）は OCI Enterprise AI に使うときだけ要る。
-ENTERPRISE_AI_PROJECT_OCID_OPTIONAL_CONNECTION_IDS: Final = frozenset(
-    {ENTERPRISE_AI_TERTIARY_CONNECTION_ID}
-)
+
 # 4: 登録モデルの `reasoning_effort`（#1425）。3 の JSON はそのまま読める
 # （項目が無い = 既定の low）。
 # 5: 登録モデルの `max_input_tokens`（#1437）。4 の JSON はそのまま読める
@@ -1065,9 +1063,10 @@ def validate_enterprise_ai_connections(
 ) -> list[ModelFieldError]:
     """接続と、登録モデルが指す接続を確かめる（#533 / #542）。
 
-    - セカンダリ接続を設定したら、Endpoint URL・Project OCID・API key はすべて必須。
-      ターシャリ接続（OpenAI / OpenAI 互換 API 向け。#786）は Endpoint URL・API key が必須で、
-      Project OCID は任意（OCI Enterprise AI に使うときだけ入れる）。
+    - セカンダリ接続・ターシャリ接続を設定したら、Endpoint URL・API key は必須。
+      Project OCID はどの接続でも任意（#786 / #9。OCI Enterprise AI に使うときだけ入れる。
+      入力したときだけ `OpenAI-Project` header で送るので、OCI 以外の
+      OpenAI 互換 API では空で足りる）。
       API key は保存後の値（`resolve_api_keys` の結果。空欄は保存済みの値を保持）で確かめるので、
       `api_keys` を渡したときだけ確かめる
     - プライマリ接続は OCI で運用するときだけ必須（画面は「OCI 運用時必須」）なので、
@@ -1080,8 +1079,6 @@ def validate_enterprise_ai_connections(
             continue
         label = connection_label(connection.connection_id)
         required = [("endpoint", "Endpoint URL", bool(connection.endpoint))]
-        if connection.connection_id not in ENTERPRISE_AI_PROJECT_OCID_OPTIONAL_CONNECTION_IDS:
-            required.append(("project_ocid", "Project OCID", bool(connection.project_ocid)))
         if api_keys is not None:
             required.append(
                 ("api_key", "API key", bool(api_keys.get(connection.connection_id, "")))
