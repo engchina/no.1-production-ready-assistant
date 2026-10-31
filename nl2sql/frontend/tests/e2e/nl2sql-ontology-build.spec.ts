@@ -870,7 +870,7 @@ async function mockProfileScopedApi(page: Page) {
 
 test("AI オントロジー構築の実行 → 進捗 → Markdown 下書き編集 → 公開の導線が機能する", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   await page.goto("/ontology-build?profile=default");
@@ -3847,7 +3847,7 @@ test("公開前の確認は graph の構成と、初回は差分の 1 行だけ�
 
 test("公開を止める問題があるときは、業務説明に追記する改善案をコピーし、押したときだけ追記する (#1729)", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   state.jobPolls = 2;
@@ -3910,7 +3910,7 @@ test("公開を止める問題があるときは、業務説明に追記する�
 
 test("一意でない列でつなぐリンク型の警告は具体の結合のキーを示し、改善案は押したときだけ業務説明に追記する (#1760)", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   state.jobPolls = 2;

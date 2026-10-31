@@ -78,6 +78,8 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     model_config = product_settings_config(prefix="NL2SQL_", backend_dir=BACKEND_DIR)
 
     service_name: str = "production-ready-nl2sql"
+    # CORS 許可オリジンの既定は製品の dev server（suite と衝突しない port。#25）。
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3101"])
     enable_metrics: bool = True
     oracle_user: str = ""
     oracle_password: str = ""

@@ -15,8 +15,8 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 用意するもの:
 
 - RAG・NL2SQL・Agent の画面の左下のアカウントの欄から開くアカウントの画面の「API キー」のタブで発行した自分のキー（使える製品に RAG と NL2SQL を選ぶ）。キーの扱い・応答は [platform/docs/mcp-api-keys.md](../platform/docs/mcp-api-keys.md)。
-- 接続先: `https://<host>/rag/api/mcp` と `https://<host>/nl2sql/api/mcp`（開発の dev server は `http://localhost:8000/api/mcp` と `http://localhost:8010/api/mcp`）。
-- 業務 Agent に質問するなら Agent の `https://<host>/agent/api/mcp`（開発は `http://localhost:8020/api/mcp`。キーの使える製品に Agent を選ぶ）。下の「業務 Agent を専門家として呼ぶ」。
+- 接続先: `https://<host>/rag/api/mcp` と `https://<host>/nl2sql/api/mcp`（開発の dev server は `http://localhost:8100/api/mcp` と `http://localhost:8110/api/mcp`）。
+- 業務 Agent に質問するなら Agent の `https://<host>/agent/api/mcp`（開発は `http://localhost:8120/api/mcp`。キーの使える製品に Agent を選ぶ）。下の「業務 Agent を専門家として呼ぶ」。
 
 ### 1. スキルを入れる
 

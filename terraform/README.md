@@ -310,7 +310,7 @@ sudo systemctl restart production-ready-rag-backend.service
 ### NL2SQL（`deploy_nl2sql`）
 
 - ログイン: 構成管理者 `SYSTEM_ADMIN`（ユーザー ID は `system_admin` 固定、RAG と共通）。`app_admin_login_user_password`（12〜30 文字、`admin` と `"` を含まない）。
-- Nginx + systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（ローカルの開発と同じ。#1316 で 8000 から変えた）。
+- Nginx + systemd に直接配備します（Docker は使いません）。backend は `127.0.0.1:8010`（#1316 で 8000 から変えた。ローカルの開発の port は 8110 で別。#25）。
 - instance 上の構成・更新手順・障害対応は [nl2sql/docs/compute-operations.md](../nl2sql/docs/compute-operations.md) を参照してください。
 
 ### Agent Control Plane（`deploy_agent`）

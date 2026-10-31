@@ -504,7 +504,7 @@ class Settings(
     huggingface_endpoint: str = Field(default="")
 
     # CORS 許可オリジン（フロントエンド）
-    cors_origins: list[str] = Field(default=["http://localhost:3000"])
+    cors_origins: list[str] = Field(default=["http://localhost:3100"])
 
     # --- OCI Enterprise AI（LLM / Vision-capable LLM）---
     # 注意: OCI Generative AI の chat 推論 API ではなく Enterprise AI を使う

@@ -66,7 +66,7 @@
 cd backend && uv sync
 uv run pytest tests/test_<対象>.py   # 関係するテスト（全件・mypy . ・pip-audit は CI）
 uv run ruff format --check . && uv run ruff check . && uv run mypy .
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:app --reload --port 8100   # または ../scripts/start-backend.sh
 
 # frontend
 cd frontend && npm install

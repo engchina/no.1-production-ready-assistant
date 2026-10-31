@@ -3,11 +3,11 @@
     export SUITE_EVALUATION_API_KEY=prak_...   # 使える製品に rag と agent を含む API キー
     # A: RAG（ナレッジベースを指定）・C: RAG（検索・回答プロファイルを指定）・D: 業務 Agent
     uv run suite-evaluation run <評価セット> --document-map <対応表> --target rag-mcp \\
-        --mcp-url http://127.0.0.1:8000/api/mcp --knowledge-base-id <ID> --output a.json
+        --mcp-url http://127.0.0.1:8100/api/mcp --knowledge-base-id <ID> --output a.json
     uv run suite-evaluation run <評価セット> --document-map <対応表> --target rag-mcp \\
-        --mcp-url http://127.0.0.1:8000/api/mcp --search-answer-profile-id <ID> --output c.json
+        --mcp-url http://127.0.0.1:8100/api/mcp --search-answer-profile-id <ID> --output c.json
     uv run suite-evaluation run <評価セット> --document-map <対応表> --target agent-mcp \\
-        --mcp-url http://127.0.0.1:8020/api/mcp --agent-id <公開済みの業務 Agent> --output d.json
+        --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> --output d.json
     uv run suite-evaluation score d.json --dataset <評価セット> --document-map <対応表> \\
         --output d.rescored.json
     uv run suite-evaluation compare A=a.json C=c.json D=d.json
@@ -95,8 +95,8 @@ from pr_suite_evaluation.targets import agent_mcp, rag_mcp
 
 TARGETS = {"agent-mcp": agent_mcp.TARGET_KIND, "rag-mcp": rag_mcp.TARGET_KIND}
 DEFAULT_MCP_URLS = {
-    agent_mcp.TARGET_KIND: "http://localhost:8020/api/mcp",
-    rag_mcp.TARGET_KIND: "http://localhost:8000/api/mcp",
+    agent_mcp.TARGET_KIND: "http://localhost:8120/api/mcp",
+    rag_mcp.TARGET_KIND: "http://localhost:8100/api/mcp",
 }
 # API キーを読む環境変数（キーを引数に書かない。シェルの履歴・プロセスの一覧に残さない）。
 DEFAULT_API_KEY_ENV = "SUITE_EVALUATION_API_KEY"
