@@ -22,15 +22,6 @@ export const PRIMARY_CONNECTION_ID: EnterpriseAiConnectionId = "primary";
 export const SECONDARY_CONNECTION_ID: EnterpriseAiConnectionId = "secondary";
 export const TERTIARY_CONNECTION_ID: EnterpriseAiConnectionId = "tertiary";
 
-/**
- * Project OCID を任意にする接続（#786）。ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、
- * Project OCID（`OpenAI-Project` ヘッダー）は OCI Enterprise AI に使うときだけ要る。
- * backend の ENTERPRISE_AI_PROJECT_OCID_OPTIONAL_CONNECTION_IDS と同じ。
- */
-export function isProjectOcidOptional(connectionId: EnterpriseAiConnectionId): boolean {
-  return connectionId === TERTIARY_CONNECTION_ID;
-}
-
 /** 接続の入力欄（検証とフォーカスの順）。 */
 export type ConnectionField = "endpoint" | "project_ocid" | "api_key";
 export const CONNECTION_FIELD_ORDER: readonly ConnectionField[] = [
@@ -191,11 +182,22 @@ export type ConnectionErrors = Partial<
   Record<EnterpriseAiConnectionId, Partial<Record<ConnectionField, string>>>
 >;
 
+/**
+ * 保存を止める欄。Project OCID はどの接続でも任意（#786 / #9）——`OpenAI-Project` ヘッダーは
+ * 入力したときだけ送るので、OCI 以外の OpenAI 互換 API では空のままで足りる。
+ * backend の `validate_enterprise_ai_connections` と同じ。
+ */
+const REQUIRED_CONNECTION_FIELDS = [
+  "endpoint",
+  "api_key",
+] as const satisfies readonly ConnectionField[];
+
+type RequiredConnectionField = (typeof REQUIRED_CONNECTION_FIELDS)[number];
+
 const CONNECTION_REQUIRED_MESSAGES = {
   endpoint: "settings.model.connection.error.endpointRequired",
-  project_ocid: "settings.model.connection.error.projectRequired",
   api_key: "settings.model.connection.error.apiKeyRequired",
-} as const satisfies Record<ConnectionField, Parameters<typeof t>[0]>;
+} as const satisfies Record<RequiredConnectionField, Parameters<typeof t>[0]>;
 
 /** 保存後に API key があるか（新しい key の入力、または保存済みの key を削除しない）。 */
 export function connectionHasApiKey(connection: EnterpriseAiConnectionSettings): boolean {
@@ -205,9 +207,9 @@ export function connectionHasApiKey(connection: EnterpriseAiConnectionSettings):
 }
 
 /**
- * 接続の入力のエラー（#542 / #786）。
- * - セカンダリ接続を設定したら、Endpoint URL・Project OCID・API key はすべて必須
- * - ターシャリ接続を設定したら、Endpoint URL・API key は必須（Project OCID は任意）
+ * 接続の入力のエラー（#542 / #786 / #9）。
+ * - セカンダリ接続・ターシャリ接続を設定したら、Endpoint URL・API key は必須
+ * - Project OCID はどの接続でも任意（OCI Enterprise AI を使うときだけ入れる）
  * - プライマリ接続は OCI で運用するときだけ必須（「OCI 運用時必須」の表示だけで、保存は止めない）
  */
 export function validateConnections(
@@ -216,15 +218,12 @@ export function validateConnections(
   const errors: ConnectionErrors = {};
   for (const connection of connections) {
     if (connection.connection_id === PRIMARY_CONNECTION_ID) continue;
-    const present: Record<ConnectionField, boolean> = {
+    const present: Record<RequiredConnectionField, boolean> = {
       endpoint: Boolean(connection.endpoint.trim()),
-      project_ocid:
-        isProjectOcidOptional(connection.connection_id) ||
-        Boolean(connection.project_ocid.trim()),
       api_key: connectionHasApiKey(connection),
     };
     const fieldErrors: Partial<Record<ConnectionField, string>> = {};
-    for (const field of CONNECTION_FIELD_ORDER) {
+    for (const field of REQUIRED_CONNECTION_FIELDS) {
       if (!present[field]) fieldErrors[field] = t(CONNECTION_REQUIRED_MESSAGES[field]);
     }
     if (Object.keys(fieldErrors).length) errors[connection.connection_id] = fieldErrors;

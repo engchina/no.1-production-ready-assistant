@@ -351,10 +351,7 @@ def test_connection_labels_are_tab_names() -> None:
     assert connection_label("unknown") == "プライマリ接続"
 
 
-@pytest.mark.parametrize(
-    ("field", "label"),
-    [("endpoint", "Endpoint URL"), ("project_ocid", "Project OCID")],
-)
+@pytest.mark.parametrize(("field", "label"), [("endpoint", "Endpoint URL")])
 def test_secondary_connection_requires_each_field(field: str, label: str) -> None:
     payload = two_connection_payload(**{field: ""})
     enterprise = EnterpriseAiModelSettings.model_validate(payload["enterprise_ai"])
@@ -362,6 +359,15 @@ def test_secondary_connection_requires_each_field(field: str, label: str) -> Non
     assert [(e.field, e.message) for e in errors] == [
         (f"connections.1.{field}", f"セカンダリ接続の {label} を入力してください。")
     ]
+
+
+def test_secondary_connection_does_not_require_project_ocid() -> None:
+    """Project OCID はどの接続でも任意（#9）。OCI 以外の OpenAI 互換 API では空で足りる。"""
+    enterprise = EnterpriseAiModelSettings.model_validate(
+        two_connection_payload(project_ocid="")["enterprise_ai"]
+    )
+    keys = {"primary": "sk-primary", "secondary": "sk-secondary"}
+    assert validate_enterprise_ai_connections(enterprise, api_keys=keys) == []
 
 
 def test_primary_connection_fields_stay_optional() -> None:
@@ -548,7 +554,7 @@ def three_connection_payload(**tertiary: Any) -> dict[str, Any]:
 
 
 def test_tertiary_connection_does_not_require_project_ocid() -> None:
-    """ターシャリ接続は Endpoint URL と API key が必須で、Project OCID は任意（#786）。"""
+    """ターシャリ接続は Endpoint URL と API key が必須で、Project OCID は任意（#786 / #9）。"""
     enterprise = EnterpriseAiModelSettings.model_validate(
         three_connection_payload()["enterprise_ai"]
     )
