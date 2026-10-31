@@ -18,7 +18,7 @@ from app.settings import get_settings
 McpAuthMode = Literal["none", "api_key", "oauth_client_credentials", "service_token"]
 
 # RAG / NL2SQL の MCP 接続（#757）。各製品の `POST /api/mcp` を、Run の利用者を `sub` にした
-# サービストークン（aud は製品名）で呼ぶ（#233）。URL は terraform・init_script が書く
+# サービストークン（aud は製品名）で呼ぶ（#233）。URL は配備の props・init_script が書く
 # `AGENT_EXTERNAL_RAG_MCP_URL` / `AGENT_EXTERNAL_NL2SQL_MCP_URL` を初期値にする。
 # 接続 ID はツール名の接頭辞（`rag__` / `nl2sql__`）と評価・記録が使うため変えない。
 PRODUCT_MCP_CONNECTION_IDS: tuple[str, ...] = ("rag", "nl2sql")

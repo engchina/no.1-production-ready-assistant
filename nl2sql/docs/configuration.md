@@ -76,7 +76,7 @@ stable JSON を返す。設定値は出力しない。終了コードが 0 以�
 ## 既存環境の更新手順（#211）
 
 旧名は読まないため、#211 を含む版へ更新するときは `backend/.env` の共通設定を共通 `.env` へ移す。
-OCI Compute（Terraform で配備した環境）での手順を示す。パスは `<suite>` = `/u01/aipoc/no.1-production-ready-suite`。
+OCI Compute（`platform/deploy` で配備した環境）での手順を示す。パスは `<suite>` = `/u01/aipoc/no.1-production-ready-suite`。
 
 1. backend と worker を停止する。
 
@@ -120,7 +120,7 @@ OCI Compute（Terraform で配備した環境）での手順を示す。パス�
    `PLATFORM_ORACLE_WALLET_DIR` を確認し、recovery snapshot に `platform.env` も保存する）。
 6. `cd <suite>/nl2sql/backend && .venv/bin/python -m app.cli.config_audit` が `"ok":true` になることを確認する。
 
-- 新規の Resource Manager 適用では、cloud-init が `/u01/aipoc/props/platform.env` を `platform/.env`
+- 新規の配備では、`init_script.sh` が `/u01/aipoc/props/platform.env` を `platform/.env`
   （`0600`）へ、`/u01/aipoc/props/backend.env` を `nl2sql/backend/.env` へ配置するため、この手順は不要。
 - ローカル開発では手順 2〜3 のあと backend（`uv run`）と worker を起動し直す。共通 `.env` の場所は
   `PLATFORM_ENV_FILE`（既定はリポジトリの `platform/.env`）。Docker Compose は #356 で削除した。

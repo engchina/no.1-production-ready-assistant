@@ -40,7 +40,7 @@ export const APPEARANCE_MESSAGES = {
     "取り込んだ後は、ブラウザを開き直してください。取り込むのは、この環境の管理者から受け取った証明書であることを確かめてからにしてください。",
   caCertificateUnavailable: "この環境では HTTPS の自己署名の証明書を使っていません。",
   caCertificateUnavailableHint:
-    "HTTPS を有効にして配備した環境（OCI Resource Manager の stack）では、ここから CA の証明書をダウンロードできます。",
+    "HTTPS を有効にして配備した環境（`platform/deploy` の配備）では、ここから CA の証明書をダウンロードできます。",
 };
 
 export type AppearanceMessages = typeof APPEARANCE_MESSAGES;
