@@ -28,12 +28,6 @@ function iso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -226,179 +220,175 @@ for (const viewport of VIEWPORTS) {
     await expect(details).toBeHidden();
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    test(`回答の作成中は実行中の span を今の行で出し、ツール・承認待ち・完了へ進む (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      const { run, progress: log } = seedRunningRun(mockApi);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      // #1176: 段階が進む間、右上の経過時間（Run の作成からの通算）が減らないことを記録する。
-      await startProgressTimerSampler(page, "chat-progress");
-      await openThread(page);
+  test(`回答の作成中は実行中の span を今の行で出し、ツール・承認待ち・完了へ進む (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    const { run, progress: log } = seedRunningRun(mockApi);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    // #1176: 段階が進む間、右上の経過時間（Run の作成からの通算）が減らないことを記録する。
+    await startProgressTimerSampler(page, "chat-progress");
+    await openThread(page);
 
-      const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
-      const progress = turn.getByTestId("chat-progress");
-      const current = turn.getByTestId("chat-progress-current");
-      // 1. モデルを呼び出している（実行中の span）。
-      await expect(progress).toHaveAttribute("data-chat-progress-state", "running");
-      await expect(current).toHaveAttribute("data-step-id", "chat-1");
-      await expect(current).toContainText(MODEL_CALL);
-      await expect(turn.getByTestId("chat-progress-timer")).toBeVisible();
-      // 動くスピナーは今の段階の 1 つだけ。回転しても見た目の重心も箱・行も動かない（#1180）。
-      await expect(turn.locator("svg.animate-spin:visible")).toHaveCount(1);
-      await expectSpinnerStable(current.locator(".pr-spinner"));
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`progress-plan-${viewport.name}-${theme}.png`) });
+    const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
+    const progress = turn.getByTestId("chat-progress");
+    const current = turn.getByTestId("chat-progress-current");
+    // 1. モデルを呼び出している（実行中の span）。
+    await expect(progress).toHaveAttribute("data-chat-progress-state", "running");
+    await expect(current).toHaveAttribute("data-step-id", "chat-1");
+    await expect(current).toContainText(MODEL_CALL);
+    await expect(turn.getByTestId("chat-progress-timer")).toBeVisible();
+    // 動くスピナーは今の段階の 1 つだけ。回転しても見た目の重心も箱・行も動かない（#1180）。
+    await expect(turn.locator("svg.animate-spin:visible")).toHaveCount(1);
+    await expectSpinnerStable(current.locator(".pr-spinner"));
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`progress-plan-${viewport.name}.png`) });
 
-      // 2. ツールを呼んでいる（読み直しで span が増える）。終わったモデルの呼び出しは「質問に応じた次の操作を選びました」。
-      run.steps = [toolStep("step-search", "rag__rag_search", "running", { completed_at: null })];
-      log
-        .step("chat-1", "done", { kind: "plan" })
-        .step("tool:rag__rag_search", "running", { params: { tool: "rag__rag_search", run_step: "step-search" } });
-      await expect(current).toHaveAttribute("data-step-id", "tool:rag__rag_search");
-      await expect(current).toContainText("選ばれたツールを呼び出しています");
-      await expect(turn.getByTestId("chat-progress-running")).toContainText("処理中（1 ステップ完了）");
-      await page.screenshot({ path: testInfo.outputPath(`progress-tool-${viewport.name}-${theme}.png`) });
+    // 2. ツールを呼んでいる（読み直しで span が増える）。終わったモデルの呼び出しは「質問に応じた次の操作を選びました」。
+    run.steps = [toolStep("step-search", "rag__rag_search", "running", { completed_at: null })];
+    log
+      .step("chat-1", "done", { kind: "plan" })
+      .step("tool:rag__rag_search", "running", { params: { tool: "rag__rag_search", run_step: "step-search" } });
+    await expect(current).toHaveAttribute("data-step-id", "tool:rag__rag_search");
+    await expect(current).toContainText("選ばれたツールを呼び出しています");
+    await expect(turn.getByTestId("chat-progress-running")).toContainText("処理中（1 ステップ完了）");
+    await page.screenshot({ path: testInfo.outputPath(`progress-tool-${viewport.name}.png`) });
 
-      // 3. 承認待ち。実行の区間は閉じ、待ちの行は出さない（今の行の名前と承認の Banner で示す）。
-      run.status = "waiting_approval";
-      run.steps = [
-        toolStep("step-search", "rag__rag_search", "completed"),
-        toolStep("step-exec", "nl2sql__execute", "waiting_approval", { approval_id: "approval-progress" }),
-      ];
-      const requestedAt = iso(-500);
-      run.approvals = [
-        {
-          id: "approval-progress",
-          run_id: RUN_ID,
-          step_id: "step-exec",
-          tool_call: { name: "nl2sql__execute", arguments: { sql: "select 1" } },
-          status: "pending",
-          reason: "承認が必要です。",
-          created_at: requestedAt,
-        },
-      ];
-      log
-        .step("tool:rag__rag_search", "done")
-        .step("chat-2", "running")
-        .step("chat-2", "done", { kind: "plan" })
-        .pause();
-      await expect(current).toHaveAttribute("data-step-id", "");
-      await expect(current).toContainText("承認を待っています");
-      await expect(turn.getByRole("button", { name: "承認して実行" })).toBeVisible();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`progress-approval-${viewport.name}-${theme}.png`) });
-      // 考えている・ツール・承認待ちを通る間、経過時間は減らない（段階ごとに 0 に戻さない）。承認待ちの今の行は
-      // span ではない（id が空）。記録（100ms ごと）が承認待ちを 1 回は拾うまで待ってから確かめる。
-      await expect
-        .poll(() =>
-          page.evaluate(() =>
-            ((window as unknown as { __progressTimerSamples?: string[] }).__progressTimerSamples ?? []).some((sample) =>
-              sample.startsWith("|")
-            )
+    // 3. 承認待ち。実行の区間は閉じ、待ちの行は出さない（今の行の名前と承認の Banner で示す）。
+    run.status = "waiting_approval";
+    run.steps = [
+      toolStep("step-search", "rag__rag_search", "completed"),
+      toolStep("step-exec", "nl2sql__execute", "waiting_approval", { approval_id: "approval-progress" }),
+    ];
+    const requestedAt = iso(-500);
+    run.approvals = [
+      {
+        id: "approval-progress",
+        run_id: RUN_ID,
+        step_id: "step-exec",
+        tool_call: { name: "nl2sql__execute", arguments: { sql: "select 1" } },
+        status: "pending",
+        reason: "承認が必要です。",
+        created_at: requestedAt,
+      },
+    ];
+    log
+      .step("tool:rag__rag_search", "done")
+      .step("chat-2", "running")
+      .step("chat-2", "done", { kind: "plan" })
+      .pause();
+    await expect(current).toHaveAttribute("data-step-id", "");
+    await expect(current).toContainText("承認を待っています");
+    await expect(turn.getByRole("button", { name: "承認して実行" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`progress-approval-${viewport.name}.png`) });
+    // 考えている・ツール・承認待ちを通る間、経過時間は減らない（段階ごとに 0 に戻さない）。承認待ちの今の行は
+    // span ではない（id が空）。記録（100ms ごと）が承認待ちを 1 回は拾うまで待ってから確かめる。
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ((window as unknown as { __progressTimerSamples?: string[] }).__progressTimerSamples ?? []).some((sample) =>
+            sample.startsWith("|")
           )
         )
-        .toBe(true);
-      await expectProgressTimerMonotonic(page, 3);
+      )
+      .toBe(true);
+    await expectProgressTimerMonotonic(page, 3);
 
-      // 4. 承認後に再開して完了。待った区間は再開の区間の span で残る（#3226）。回答の上に「処理の経過」を閉じて
-      // 出す（実行中は開く。#2096 / #2121）。承認待ちの間も読み直しは続くので、開き直さなくても終端が届き、会話を
-      // 取り直して回答を出す（#1359）。
-      run.status = "completed";
-      run.steps = [
-        toolStep("step-search", "rag__rag_search", "completed"),
-        toolStep("step-exec", "nl2sql__execute", "completed", { approval_id: "approval-progress" }),
-      ];
-      const decidedAt = iso(-200);
-      run.approvals = [{ ...(run.approvals as Record<string, unknown>[])[0], status: "approved", decided_at: decidedAt }];
-      run.artifacts = [{ id: "answer-progress", kind: "answer", name: "回答", content: { text: "契約は 1 年ごとに更新します。" } }];
-      log
-        .resume()
-        .step("approval_wait", "done", {
-          params: { tools: "nl2sql__execute", round: 1 },
-          startedAt: requestedAt,
-          finishedAt: decidedAt,
-        })
-        .step("tool:nl2sql__execute", "running", { params: { tool: "nl2sql__execute", run_step: "step-exec" } })
-        .step("tool:nl2sql__execute", "done")
-        .step("chat-3", "running")
-        .step("chat-3", "done", { kind: "respond" })
-        .terminal("done");
-      run.events = [
-        ...(run.events as Record<string, unknown>[]),
-        { id: "ev-done", run_id: RUN_ID, type: "run.completed", message: "実行を完了しました。", payload: {}, created_at: iso(0) },
-      ];
-      await expect(progress).toHaveAttribute("data-chat-progress-state", "done");
-      await expect(current).toHaveCount(0);
-      const summary = turn.getByTestId("chat-progress-summary");
-      await expect(summary).toContainText("処理の経過（6 ステップ・");
-      // 完了したら一覧を閉じ（#2121。RAG と同じ）、押すと開く。
-      await expect(turn.getByTestId("chat-progress-step-chat-3")).toBeHidden();
-      await expect(turn.getByText("契約は 1 年ごとに更新します。")).toBeVisible();
-      // 処理の経過は回答の本文より上。使ったツールは処理の経過のツールの段で見る（一覧を重ねて出さない。#2324）。
-      await expect(turn.getByText(/使ったツール/)).toHaveCount(0);
-      const [summaryBox, answerBox] = await Promise.all([
-        summary.boundingBox(),
-        turn.getByText("契約は 1 年ごとに更新します。").boundingBox(),
-      ]);
-      expect(summaryBox!.y).toBeLessThan(answerBox!.y);
-      await summary.click();
-      await expect(turn.getByTestId("chat-progress-step-chat-3")).toBeVisible();
-      // 開いた一覧は実行の詳細と同じ RunTimeline（時間の線つき。狭い置き場所は線を隠し、所要時間の文字だけ。#2265）。
-      const bars = progress.locator("[data-run-timeline-bar]");
-      await expect(bars).toHaveCount(6);
-      if (viewport.width >= 1280) await expect(bars.first()).toBeVisible();
-      else await expect(bars.first()).toBeHidden();
-      // 承認の待ちは、待ったツールの名前と一緒に、承認の後のツールの前に出る（入れ子にしない）。
-      const approval = turn.getByTestId("chat-progress-step-approval_wait");
-      await expect(approval).toContainText("承認の判断を受け取りました");
-      await expect(approval).toContainText("nl2sql__execute");
-      expect((await approval.getAttribute("data-level")) ?? "0").toBe("0");
-      await expect(turn.getByTestId("chat-progress-step-tool:nl2sql__execute")).toContainText("選ばれたツールを呼び出しました");
-      await expect(turn.getByTestId("chat-progress-step-chat-3")).toHaveAttribute("data-status", "done");
-      await expect(turn.getByTestId("chat-progress-step-chat-3")).toContainText("回答を作りました");
-      // ツールを求めたモデルの呼び出しは、質問に応じた次の操作を選ぶとして残る。
-      await expect(turn.getByTestId("chat-progress-step-chat-2")).toContainText("質問に応じた次の操作を選びました");
-      // 終端が届いたら、承認待ちの後も会話を取り直して回答を出す（開き直さない）。
-      expect(mockApi.requests.some((request) => request.path === `/api/runs/${RUN_ID}/trace`)).toBe(true);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`progress-done-${viewport.name}-${theme}.png`) });
-    });
+    // 4. 承認後に再開して完了。待った区間は再開の区間の span で残る（#3226）。回答の上に「処理の経過」を閉じて
+    // 出す（実行中は開く。#2096 / #2121）。承認待ちの間も読み直しは続くので、開き直さなくても終端が届き、会話を
+    // 取り直して回答を出す（#1359）。
+    run.status = "completed";
+    run.steps = [
+      toolStep("step-search", "rag__rag_search", "completed"),
+      toolStep("step-exec", "nl2sql__execute", "completed", { approval_id: "approval-progress" }),
+    ];
+    const decidedAt = iso(-200);
+    run.approvals = [{ ...(run.approvals as Record<string, unknown>[])[0], status: "approved", decided_at: decidedAt }];
+    run.artifacts = [{ id: "answer-progress", kind: "answer", name: "回答", content: { text: "契約は 1 年ごとに更新します。" } }];
+    log
+      .resume()
+      .step("approval_wait", "done", {
+        params: { tools: "nl2sql__execute", round: 1 },
+        startedAt: requestedAt,
+        finishedAt: decidedAt,
+      })
+      .step("tool:nl2sql__execute", "running", { params: { tool: "nl2sql__execute", run_step: "step-exec" } })
+      .step("tool:nl2sql__execute", "done")
+      .step("chat-3", "running")
+      .step("chat-3", "done", { kind: "respond" })
+      .terminal("done");
+    run.events = [
+      ...(run.events as Record<string, unknown>[]),
+      { id: "ev-done", run_id: RUN_ID, type: "run.completed", message: "実行を完了しました。", payload: {}, created_at: iso(0) },
+    ];
+    await expect(progress).toHaveAttribute("data-chat-progress-state", "done");
+    await expect(current).toHaveCount(0);
+    const summary = turn.getByTestId("chat-progress-summary");
+    await expect(summary).toContainText("処理の経過（6 ステップ・");
+    // 完了したら一覧を閉じ（#2121。RAG と同じ）、押すと開く。
+    await expect(turn.getByTestId("chat-progress-step-chat-3")).toBeHidden();
+    await expect(turn.getByText("契約は 1 年ごとに更新します。")).toBeVisible();
+    // 処理の経過は回答の本文より上。使ったツールは処理の経過のツールの段で見る（一覧を重ねて出さない。#2324）。
+    await expect(turn.getByText(/使ったツール/)).toHaveCount(0);
+    const [summaryBox, answerBox] = await Promise.all([
+      summary.boundingBox(),
+      turn.getByText("契約は 1 年ごとに更新します。").boundingBox(),
+    ]);
+    expect(summaryBox!.y).toBeLessThan(answerBox!.y);
+    await summary.click();
+    await expect(turn.getByTestId("chat-progress-step-chat-3")).toBeVisible();
+    // 開いた一覧は実行の詳細と同じ RunTimeline（時間の線つき。狭い置き場所は線を隠し、所要時間の文字だけ。#2265）。
+    const bars = progress.locator("[data-run-timeline-bar]");
+    await expect(bars).toHaveCount(6);
+    if (viewport.width >= 1280) await expect(bars.first()).toBeVisible();
+    else await expect(bars.first()).toBeHidden();
+    // 承認の待ちは、待ったツールの名前と一緒に、承認の後のツールの前に出る（入れ子にしない）。
+    const approval = turn.getByTestId("chat-progress-step-approval_wait");
+    await expect(approval).toContainText("承認の判断を受け取りました");
+    await expect(approval).toContainText("nl2sql__execute");
+    expect((await approval.getAttribute("data-level")) ?? "0").toBe("0");
+    await expect(turn.getByTestId("chat-progress-step-tool:nl2sql__execute")).toContainText("選ばれたツールを呼び出しました");
+    await expect(turn.getByTestId("chat-progress-step-chat-3")).toHaveAttribute("data-status", "done");
+    await expect(turn.getByTestId("chat-progress-step-chat-3")).toContainText("回答を作りました");
+    // ツールを求めたモデルの呼び出しは、質問に応じた次の操作を選ぶとして残る。
+    await expect(turn.getByTestId("chat-progress-step-chat-2")).toContainText("質問に応じた次の操作を選びました");
+    // 終端が届いたら、承認待ちの後も会話を取り直して回答を出す（開き直さない）。
+    expect(mockApi.requests.some((request) => request.path === `/api/runs/${RUN_ID}/trace`)).toBe(true);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`progress-done-${viewport.name}.png`) });
+  });
 
-    test(`失敗した回答は止まった段階を開いて出す (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      const { run, progress: log } = seedRunningRun(mockApi);
-      run.status = "failed";
-      run.steps = [toolStep("step-search", "rag__rag_search", "completed")];
-      log
-        .step("chat-1", "done", { kind: "plan" })
-        .step("tool:rag__rag_search", "running", { params: { tool: "rag__rag_search", run_step: "step-search" } })
-        .step("tool:rag__rag_search", "done")
-        .step("chat-2", "running")
-        .step("chat-2", "failed")
-        .terminal("failed");
-      run.events = [
-        ...(run.events as Record<string, unknown>[]),
-        { id: "ev-failed", run_id: RUN_ID, type: "runtime.failed", message: "モデルの呼び出しに失敗しました（APIError）。", payload: {}, created_at: iso(0) },
-      ];
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await openThread(page);
+  test(`失敗した回答は止まった段階を開いて出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    const { run, progress: log } = seedRunningRun(mockApi);
+    run.status = "failed";
+    run.steps = [toolStep("step-search", "rag__rag_search", "completed")];
+    log
+      .step("chat-1", "done", { kind: "plan" })
+      .step("tool:rag__rag_search", "running", { params: { tool: "rag__rag_search", run_step: "step-search" } })
+      .step("tool:rag__rag_search", "done")
+      .step("chat-2", "running")
+      .step("chat-2", "failed")
+      .terminal("failed");
+    run.events = [
+      ...(run.events as Record<string, unknown>[]),
+      { id: "ev-failed", run_id: RUN_ID, type: "runtime.failed", message: "モデルの呼び出しに失敗しました（APIError）。", payload: {}, created_at: iso(0) },
+    ];
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await openThread(page);
 
-      const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
-      await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "failed");
-      // 失敗があれば最初から開いて出す。
-      const failed = turn.getByTestId("chat-progress-step-chat-2");
-      await expect(failed).toBeVisible();
-      await expect(failed).toHaveAttribute("data-status", "failed");
-      await expect(failed).toContainText(MODEL_CALL);
-      await expect(failed).toContainText("失敗");
-      // 原因は段階ではなく、回答の場所の失敗のカードに出す。
-      await expect(turn.getByText("モデルの呼び出しに失敗しました（APIError）。")).toBeVisible();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`progress-failed-${viewport.name}-${theme}.png`) });
-    });
-  }
+    const turn = page.getByTestId(`chat-turn-${RUN_ID}`);
+    await expect(turn.getByTestId("chat-progress")).toHaveAttribute("data-chat-progress-state", "failed");
+    // 失敗があれば最初から開いて出す。
+    const failed = turn.getByTestId("chat-progress-step-chat-2");
+    await expect(failed).toBeVisible();
+    await expect(failed).toHaveAttribute("data-status", "failed");
+    await expect(failed).toContainText(MODEL_CALL);
+    await expect(failed).toContainText("失敗");
+    // 原因は段階ではなく、回答の場所の失敗のカードに出す。
+    await expect(turn.getByText("モデルの呼び出しに失敗しました（APIError）。")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`progress-failed-${viewport.name}.png`) });
+  });
 }
 
 // #3445: 実行中の Run の詳細は、処理の経過を開いても動くスピナーが 1 つ（開いた一覧の今の段）。概要の進行表示は今の段の

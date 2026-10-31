@@ -4608,109 +4608,98 @@ test("DeepSec は保存済み DATA USER password を変更なしで Oracle へ�
 });
 
 // #608: 対象 table/view は 1 つを選ぶので、検索できる選択欄（SearchableSelectField）。候補は数千件になりうるので、
-// サーバー側で検索し、続きは 50 件ずつ読む。desktop / 375px（projects）とライト / ダークで確かめる。
-for (const theme of ["light", "dark"] as const) {
-  test(`DeepSec の対象 table/view は大量でも検索できる選択欄で選べる (${theme})`, async ({ page }, testInfo) => {
-    await page.addInitScript((value) => {
-      localStorage.setItem(
-        "production-ready-nl2sql.ui",
-        JSON.stringify({ state: { sidebarCollapsed: false, collapsedSections: {}, theme: value }, version: 0 })
-      );
-    }, theme);
-    await mockDatabaseGateReady(page);
-    const role = {
-      ...systemRole,
-      role_id: "role-many",
-      role_code: "MANY_DATA_ROLE",
-      display_name: "大量対象ロール",
-      is_built_in: false,
-      permissions: ["menu.security_deepsec"],
-      data_entitlements: [],
-    };
-    const objects = Array.from({ length: 3000 }, (_, index) => ({
-      ...deepSecTargetObject,
-      owner: index % 2 === 0 ? "SALES" : "HR",
-      name: `TABLE_${String(index + 1).padStart(4, "0")}`,
-      qualified_name: `${index % 2 === 0 ? "SALES" : "HR"}.TABLE_${String(index + 1).padStart(4, "0")}`,
-      comment: `対象 ${index + 1}`,
-    }));
-    const requests: URL[] = [];
-    await page.route("**/api/security/deepsec/status", (route) =>
-      fulfill(route, {
-        configured: true,
-        driver_mode: "thin",
-        connection_security: "wallet_mtls",
-        deepsec_enabled: true,
-        data_user: "DEEPSEC_DATA_USER",
-        has_data_user_password: true,
-        objects: { data_grants: 0 },
-        message: "構成済みです。",
-      })
-    );
-    await page.route("**/api/security/deepsec/plan", (route) => fulfill(route, deepSecPlan(true)));
-    await page.route("**/api/security/deepsec/data-entitlements", (route) => fulfill(route, [role]));
-    await page.route("**/api/security/deepsec/target-objects?*", (route) => {
-      const url = new URL(route.request().url());
-      requests.push(url);
-      // backend と同じく `OWNER.OBJECT` とコメントを照合し、カーソルで 50 件ずつ返す（件数は返さない）。
-      const q = (url.searchParams.get("q") ?? "").toUpperCase();
-      const matched = objects.filter((item) => !q || `${item.qualified_name} ${item.comment}`.toUpperCase().includes(q));
-      const offset = Number(url.searchParams.get("cursor") ?? "0");
-      const limit = Number(url.searchParams.get("limit") ?? "50");
-      return fulfill(route, {
-        runtime: "oracle",
-        owner: "",
-        items: matched.slice(offset, offset + limit),
-        total: null,
-        counts_included: false,
-        next_cursor: offset + limit < matched.length ? String(offset + limit) : null,
-        warnings: [],
-      });
+// サーバー側で検索し、続きは 50 件ずつ読む。desktop / 375px（projects）で確かめる。
+test(`DeepSec の対象 table/view は大量でも検索できる選択欄で選べる`, async ({ page }, testInfo) => {
+  await mockDatabaseGateReady(page);
+  const role = {
+    ...systemRole,
+    role_id: "role-many",
+    role_code: "MANY_DATA_ROLE",
+    display_name: "大量対象ロール",
+    is_built_in: false,
+    permissions: ["menu.security_deepsec"],
+    data_entitlements: [],
+  };
+  const objects = Array.from({ length: 3000 }, (_, index) => ({
+    ...deepSecTargetObject,
+    owner: index % 2 === 0 ? "SALES" : "HR",
+    name: `TABLE_${String(index + 1).padStart(4, "0")}`,
+    qualified_name: `${index % 2 === 0 ? "SALES" : "HR"}.TABLE_${String(index + 1).padStart(4, "0")}`,
+    comment: `対象 ${index + 1}`,
+  }));
+  const requests: URL[] = [];
+  await page.route("**/api/security/deepsec/status", (route) =>
+    fulfill(route, {
+      configured: true,
+      driver_mode: "thin",
+      connection_security: "wallet_mtls",
+      deepsec_enabled: true,
+      data_user: "DEEPSEC_DATA_USER",
+      has_data_user_password: true,
+      objects: { data_grants: 0 },
+      message: "構成済みです。",
+    })
+  );
+  await page.route("**/api/security/deepsec/plan", (route) => fulfill(route, deepSecPlan(true)));
+  await page.route("**/api/security/deepsec/data-entitlements", (route) => fulfill(route, [role]));
+  await page.route("**/api/security/deepsec/target-objects?*", (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url);
+    // backend と同じく `OWNER.OBJECT` とコメントを照合し、カーソルで 50 件ずつ返す（件数は返さない）。
+    const q = (url.searchParams.get("q") ?? "").toUpperCase();
+    const matched = objects.filter((item) => !q || `${item.qualified_name} ${item.comment}`.toUpperCase().includes(q));
+    const offset = Number(url.searchParams.get("cursor") ?? "0");
+    const limit = Number(url.searchParams.get("limit") ?? "50");
+    return fulfill(route, {
+      runtime: "oracle",
+      owner: "",
+      items: matched.slice(offset, offset + limit),
+      total: null,
+      counts_included: false,
+      next_cursor: offset + limit < matched.length ? String(offset + limit) : null,
+      warnings: [],
     });
-
-    await page.goto("/settings/security/deepsec");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    await page.getByRole("tab", { name: "データ権限" }).click();
-    const entitlementForm = page.getByTestId("security-deepsec-entitlement-form");
-    await entitlementForm.getByRole("button", { name: "データ権限を追加" }).click();
-    const objectButton = entitlementForm.locator("#deepsec-entitlement-resource-0");
-    await expect(objectButton).toContainText("対象 object を選択");
-    await objectButton.click();
-    const popover = page.getByRole("dialog", { name: "対象 table/view" });
-    const search = popover.getByRole("combobox");
-    await expect(search).toBeFocused();
-    await expect(popover.getByRole("option")).toHaveCount(50);
-    await expect(popover.getByText("50 件", { exact: true })).toBeVisible();
-
-    // 一覧の下端までスクロールすると続きの 50 件を読む（「さらに読み込む」のボタンは置かない）。
-    await popover.getByRole("listbox").evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
-    await expect(popover.getByRole("option")).toHaveCount(100);
-    expect(requests.at(-1)?.searchParams.get("cursor")).toBe("50");
-
-    // スキーマ名を付けた名前でもサーバー側で検索する。↓ と Enter で選び、選択欄へ戻る。
-    await search.fill("hr.table_2999");
-    await expect(popover.getByRole("option")).toHaveCount(0);
-    await search.fill("hr.table_300");
-    await expect(popover.getByRole("option")).toHaveCount(1);
-    expect(requests.at(-1)?.searchParams.get("q")).toBe("hr.table_300");
-    expect(requests.at(-1)?.searchParams.has("owner_prefix")).toBe(false);
-    await search.press("Enter");
-    await expect(popover).toHaveCount(0);
-    await expect(objectButton).toBeFocused();
-    await expect(objectButton).toContainText("HR.TABLE_3000");
-    await expect(entitlementForm.getByTestId("security-deepsec-entitlement-editor-title-0")).toHaveText("HR.TABLE_3000");
-
-    // 閉じると検索語を消し、開き直すと 1 ページ目の候補に戻る。
-    await objectButton.click();
-    await expect(search).toHaveValue("");
-    await expect(popover.getByRole("option")).toHaveCount(50);
-    await page.screenshot({ path: testInfo.outputPath(`deepsec-object-select-${theme}.png`) });
-    await search.press("Escape");
-    await expectNoPageHorizontalScroll(page);
   });
-}
+
+  await page.goto("/settings/security/deepsec");
+  await page.getByRole("tab", { name: "データ権限" }).click();
+  const entitlementForm = page.getByTestId("security-deepsec-entitlement-form");
+  await entitlementForm.getByRole("button", { name: "データ権限を追加" }).click();
+  const objectButton = entitlementForm.locator("#deepsec-entitlement-resource-0");
+  await expect(objectButton).toContainText("対象 object を選択");
+  await objectButton.click();
+  const popover = page.getByRole("dialog", { name: "対象 table/view" });
+  const search = popover.getByRole("combobox");
+  await expect(search).toBeFocused();
+  await expect(popover.getByRole("option")).toHaveCount(50);
+  await expect(popover.getByText("50 件", { exact: true })).toBeVisible();
+
+  // 一覧の下端までスクロールすると続きの 50 件を読む（「さらに読み込む」のボタンは置かない）。
+  await popover.getByRole("listbox").evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+  await expect(popover.getByRole("option")).toHaveCount(100);
+  expect(requests.at(-1)?.searchParams.get("cursor")).toBe("50");
+
+  // スキーマ名を付けた名前でもサーバー側で検索する。↓ と Enter で選び、選択欄へ戻る。
+  await search.fill("hr.table_2999");
+  await expect(popover.getByRole("option")).toHaveCount(0);
+  await search.fill("hr.table_300");
+  await expect(popover.getByRole("option")).toHaveCount(1);
+  expect(requests.at(-1)?.searchParams.get("q")).toBe("hr.table_300");
+  expect(requests.at(-1)?.searchParams.has("owner_prefix")).toBe(false);
+  await search.press("Enter");
+  await expect(popover).toHaveCount(0);
+  await expect(objectButton).toBeFocused();
+  await expect(objectButton).toContainText("HR.TABLE_3000");
+  await expect(entitlementForm.getByTestId("security-deepsec-entitlement-editor-title-0")).toHaveText("HR.TABLE_3000");
+
+  // 閉じると検索語を消し、開き直すと 1 ページ目の候補に戻る。
+  await objectButton.click();
+  await expect(search).toHaveValue("");
+  await expect(popover.getByRole("option")).toHaveCount(50);
+  await page.screenshot({ path: testInfo.outputPath(`deepsec-object-select-light.png`) });
+  await search.press("Escape");
+  await expectNoPageHorizontalScroll(page);
+});
 
 test("DeepSec Data Grant picker は live metadata 0 件時に総件数を誤表示しない", async ({ page }) => {
   await mockDatabaseGateReady(page);
@@ -7414,7 +7403,7 @@ test("DeepSec 関連テーブル条件は引用名の表を Profile の候補か
   await expectNoPageHorizontalScroll(page);
 });
 
-test("ユーザー / ロール一覧の選択行はライト / ダークで文字が 4.5:1 以上になり、左バーでも選択を示す (#571)", async ({ page }) => {
+test("ユーザー / ロール一覧の選択行は文字が 4.5:1 以上になり、左バーでも選択を示す (#571)", async ({ page }) => {
   await mockDatabaseGateReady(page);
   const customRole = { ...systemRole, role_id: "role-contrast", role_code: "CONTRAST_VIEWER", display_name: "コントラスト確認", description: "表示のみ", is_built_in: false };
   const users = ["contrast.first", "contrast.second"].map((login, index) => ({
@@ -7434,85 +7423,69 @@ test("ユーザー / ロール一覧の選択行はライト / ダークで文�
   // 選択行と一覧を並べて見る 2 ペイン（xl 以上）で測る（xl 未満は選ぶと一覧が隠れる。#2282）。
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  for (const theme of ["light", "dark"] as const) {
-    // theme.ts は ui-store のテーマ選好から html.dark を決めるため、永続化された選好として描画前に与える
-    // （addInitScript は登録順に実行されるので、後の周回のテーマが勝つ）。
-    await page.addInitScript((value) => {
-      const key = "production-ready-nl2sql.ui";
-      const stored = JSON.parse(window.localStorage.getItem(key) ?? "null") ?? { state: {}, version: 0 };
-      stored.state = { ...stored.state, theme: value };
-      window.localStorage.setItem(key, JSON.stringify(stored));
-    }, theme);
+  for (const prefix of ["security-users", "security-roles"] as const) {
+    // 選択は URL が持ち、先頭の行を自動で選ばない（#2282）。
+    await page.goto(
+      prefix === "security-users"
+        ? "/settings/security/users?user=contrast-user-0"
+        : "/settings/security/roles?role=role-contrast"
+    );
+    const grid = page.getByTestId(`${prefix}-grid`);
+    const selected = grid.locator('tbody tr[data-selected="true"]');
+    await expect(selected).toHaveCount(1);
+    const unselected = grid.locator('tbody tr[data-selected="false"]').first();
+    await unselected.hover();
 
-    for (const prefix of ["security-users", "security-roles"] as const) {
-      // 選択は URL が持ち、先頭の行を自動で選ばない（#2282）。
-      await page.goto(
-        prefix === "security-users"
-          ? "/settings/security/users?user=contrast-user-0"
-          : "/settings/security/roles?role=role-contrast"
-      );
-      if (theme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
-      else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
-      const grid = page.getByTestId(`${prefix}-grid`);
-      const selected = grid.locator('tbody tr[data-selected="true"]');
-      await expect(selected).toHaveCount(1);
-      const unselected = grid.locator('tbody tr[data-selected="false"]').first();
-      await unselected.hover();
-
-      const measured = await selected.evaluate((row) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = 1;
-        const context = canvas.getContext("2d", { willReadFrequently: true })!;
-        const rgb = (color: string) => {
-          context.clearRect(0, 0, 1, 1);
-          context.fillStyle = color;
-          context.fillRect(0, 0, 1, 1);
-          return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
-        };
-        const luminance = (color: number[]) => {
-          const [r, g, b] = color.map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        };
-        const contrast = (a: number[], b: number[]) => {
-          const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-          return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
-        };
-        const rowBg = rgb(getComputedStyle(row).backgroundColor);
-        const button = row.querySelector("button")!;
-        const firstCellShadow = getComputedStyle(row.firstElementChild!).boxShadow;
-        const bar = firstCellShadow.match(/(rgba?\([^)]*\)) [\d.]+px 0px 0px 0px inset/);
-        const subtitle = button.querySelector(":scope > span:nth-of-type(2)");
-        const code = button.querySelector("span.font-mono");
-        return {
-          // ユーザーは表示名（ログイン ID・UUID を出さない。#1696）、ロールはロール名（コード・ID は出さない。#1682）。
-          // 2 行目の補足は割り当てロール・説明（狭い一覧の列。#2282）。
-          firstLineIsCode: button.firstElementChild?.querySelector(".font-mono") != null,
-          hasSubtitle: subtitle != null,
-          title: contrast(rgb(getComputedStyle(button.firstElementChild!).color), rowBg),
-          name: subtitle ? contrast(rgb(getComputedStyle(subtitle).color), rowBg) : 0,
-          code: code ? contrast(rgb(getComputedStyle(code).color), rowBg) : 0,
-          body: contrast(rgb(getComputedStyle(row).color), rowBg),
-          bar: bar ? contrast(rgb(bar[1]), rowBg) : 0,
-          rowBgLuminance: luminance(rowBg),
-        };
-      });
-      // ダークの選択行は暗い地のまま（明るい地に文字を載せない）。
-      if (theme === "dark") expect(measured.rowBgLuminance).toBeLessThan(0.05);
-      expect(measured.title, `${prefix} ${theme} 題名`).toBeGreaterThanOrEqual(4.5);
-      // ユーザーの行は表示名（#1696）、ロールの行はロール名（#1682）。ID・コードの mono は出さない。
-      // 補足の行（割り当てロール・説明。#2282）も 4.5:1 以上。
-      expect(measured.firstLineIsCode, `${prefix} ${theme} ID・コードを出さない`).toBe(false);
-      expect(measured.hasSubtitle, `${prefix} ${theme} 補足あり`).toBe(true);
-      expect(measured.name, `${prefix} ${theme} 補足`).toBeGreaterThanOrEqual(4.5);
-      expect(measured.body, `${prefix} ${theme} 本文`).toBeGreaterThanOrEqual(4.5);
-      // 選択を背景色の差だけで示さない（WCAG 1.4.1）。左バーは非テキストの 3:1 以上。
-      expect(measured.bar, `${prefix} ${theme} 左バー`).toBeGreaterThanOrEqual(3);
-      await expect(unselected).not.toHaveAttribute("data-surface-tint");
-    }
+    const measured = await selected.evaluate((row) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true })!;
+      const rgb = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
+      };
+      const luminance = (color: number[]) => {
+        const [r, g, b] = color.map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const contrast = (a: number[], b: number[]) => {
+        const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+      };
+      const rowBg = rgb(getComputedStyle(row).backgroundColor);
+      const button = row.querySelector("button")!;
+      const firstCellShadow = getComputedStyle(row.firstElementChild!).boxShadow;
+      const bar = firstCellShadow.match(/(rgba?\([^)]*\)) [\d.]+px 0px 0px 0px inset/);
+      const subtitle = button.querySelector(":scope > span:nth-of-type(2)");
+      const code = button.querySelector("span.font-mono");
+      return {
+        // ユーザーは表示名（ログイン ID・UUID を出さない。#1696）、ロールはロール名（コード・ID は出さない。#1682）。
+        // 2 行目の補足は割り当てロール・説明（狭い一覧の列。#2282）。
+        firstLineIsCode: button.firstElementChild?.querySelector(".font-mono") != null,
+        hasSubtitle: subtitle != null,
+        title: contrast(rgb(getComputedStyle(button.firstElementChild!).color), rowBg),
+        name: subtitle ? contrast(rgb(getComputedStyle(subtitle).color), rowBg) : 0,
+        code: code ? contrast(rgb(getComputedStyle(code).color), rowBg) : 0,
+        body: contrast(rgb(getComputedStyle(row).color), rowBg),
+        bar: bar ? contrast(rgb(bar[1]), rowBg) : 0,
+      };
+    });
+    expect(measured.title, `${prefix} 題名`).toBeGreaterThanOrEqual(4.5);
+    // ユーザーの行は表示名（#1696）、ロールの行はロール名（#1682）。ID・コードの mono は出さない。
+    // 補足の行（割り当てロール・説明。#2282）も 4.5:1 以上。
+    expect(measured.firstLineIsCode, `${prefix} ID・コードを出さない`).toBe(false);
+    expect(measured.hasSubtitle, `${prefix} 補足あり`).toBe(true);
+    expect(measured.name, `${prefix} 補足`).toBeGreaterThanOrEqual(4.5);
+    expect(measured.body, `${prefix} 本文`).toBeGreaterThanOrEqual(4.5);
+    // 選択を背景色の差だけで示さない（WCAG 1.4.1）。左バーは非テキストの 3:1 以上。
+    expect(measured.bar, `${prefix} 左バー`).toBeGreaterThanOrEqual(3);
+    await expect(unselected).not.toHaveAttribute("data-surface-tint");
   }
 });
 
-test("DeepSec と権限管理は 1280 / 1920 / 375px・ライト / ダークで欄の幅・placeholder・件数が崩れない", { tag: "@responsive" }, async ({ page }) => {
+test("DeepSec と権限管理は 1280 / 1920 / 375px で欄の幅・placeholder・件数が崩れない", { tag: "@responsive" }, async ({ page }) => {
   // ロールの一覧の件数はツールバーの ListCount、欄は値の種類の幅・FormGrid（#1891）。
   test.slow();
   await mockReviewedDeepSec(page);
@@ -7531,28 +7504,25 @@ test("DeepSec と権限管理は 1280 / 1920 / 375px・ライト / ダークで�
       expect(offScale, label).toEqual([]);
     }
   };
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      const suffix = `${width}px ${colorScheme}`;
-      await page.goto("/settings/security/deepsec");
-      await page.getByRole("tab", { name: "データ権限", exact: true }).click();
-      const toolbar = page.getByTestId("security-deepsec-entitlement-toolbar");
-      await expect(toolbar.getByRole("status")).toHaveText("全 2 件");
-      await check(`deepsec data permissions ${suffix}`);
-      const entitlementSearch = page.getByTestId("security-deepsec-entitlement-search");
-      await entitlementSearch.fill("B レビュー");
-      await expect(toolbar.getByRole("status")).toHaveText("1 件（全 2 件）");
-      // 検索語は作業状態に残る（#1933）。次の幅で開き直す前に消す。
-      await entitlementSearch.fill("");
-      await expect(toolbar.getByRole("status")).toHaveText("全 2 件");
-      await page.getByRole("tab", { name: "DATA USER 認証", exact: true }).click();
-      await expect(page.locator("#deepsec-data-user-password")).toBeVisible();
-      await check(`deepsec data user ${suffix}`);
-      await page.goto("/settings/security/permissions");
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await check(`permissions ${suffix}`);
-    }
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const suffix = `${width}px`;
+    await page.goto("/settings/security/deepsec");
+    await page.getByRole("tab", { name: "データ権限", exact: true }).click();
+    const toolbar = page.getByTestId("security-deepsec-entitlement-toolbar");
+    await expect(toolbar.getByRole("status")).toHaveText("全 2 件");
+    await check(`deepsec data permissions ${suffix}`);
+    const entitlementSearch = page.getByTestId("security-deepsec-entitlement-search");
+    await entitlementSearch.fill("B レビュー");
+    await expect(toolbar.getByRole("status")).toHaveText("1 件（全 2 件）");
+    // 検索語は作業状態に残る（#1933）。次の幅で開き直す前に消す。
+    await entitlementSearch.fill("");
+    await expect(toolbar.getByRole("status")).toHaveText("全 2 件");
+    await page.getByRole("tab", { name: "DATA USER 認証", exact: true }).click();
+    await expect(page.locator("#deepsec-data-user-password")).toBeVisible();
+    await check(`deepsec data user ${suffix}`);
+    await page.goto("/settings/security/permissions");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await check(`permissions ${suffix}`);
   }
 });

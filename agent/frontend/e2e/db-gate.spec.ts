@@ -42,21 +42,6 @@ const VIEWER = dbUser({
 const CONTACT_ADMIN_FOOTER =
   "データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。";
 
-/** `src/lib/ui-store.ts` の永続化キー（テーマの選好を起動前に入れる）。 */
-const UI_STORAGE_KEY = "production-ready-agent.ui";
-
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript(
-    ([key, value]) => {
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({ state: { theme: value, sidebarCollapsed: false, collapsedSections: {} }, version: 0 })
-      );
-    },
-    [UI_STORAGE_KEY, theme] as const
-  );
-}
-
 /** 目視の確認用（`DB_GATE_SCREENSHOT_DIR` を渡したときだけ保存する）。 */
 async function saveScreenshot(page: Page, name: string) {
   const dir = process.env.DB_GATE_SCREENSHOT_DIR;
@@ -196,81 +181,75 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("heading", { level: 1, name: "データベース設定" })).toBeVisible();
     });
 
-    for (const theme of ["light", "dark"] as const) {
-      test(`接続できなければ接続設定と Wallet の確認を案内し、ADB の状態は出さない（${theme}）`, async ({ page, mockApi }) => {
-        await useTheme(page, theme);
-        setDatabaseStatus(mockApi, "unreachable", "ok");
+    test(`接続できなければ接続設定と Wallet の確認を案内し、ADB の状態は出さない`, async ({ page, mockApi }) => {
+      setDatabaseStatus(mockApi, "unreachable", "ok");
 
+      await page.goto("/runs");
+
+      await expectGate(page, "データベースに接続できません", "/settings/database");
+      const card = gateCard(page);
+      await expect(card.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
+      await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
+      await saveScreenshot(page, `agent-${viewport.name}-db-unreachable-admin`);
+      expect(businessRequests(mockApi)).toEqual([]);
+    });
+
+    test(`初期化が必要ならシステムテーブルへの導線だけを出す`, async ({ page, mockApi }) => {
+      setDatabaseStatus(mockApi, "setup_required", "ok");
+
+      await page.goto("/runs");
+
+      const card = gateCard(page);
+      await expect(
+        card.getByRole("heading", { level: 1, name: "システムテーブルの作成・更新が必要です" })
+      ).toBeVisible();
+      await expect(card.getByText(/^データベースには接続できています。/)).toBeVisible();
+      await expect(card.getByRole("link", { name: "システムテーブルを開く" })).toHaveAttribute(
+        "href",
+        "/settings/system-tables"
+      );
+      await expect(card.getByRole("link", { name: "データベース設定を開く" })).toHaveCount(0);
+      await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      await saveScreenshot(page, `agent-${viewport.name}-setup-required-admin`);
+
+      await card.getByRole("link", { name: "システムテーブルを開く" }).click();
+      await expect(page).toHaveURL(/\/settings\/system-tables$/);
+      await expect(gateCard(page)).toHaveCount(0);
+    });
+
+    test(`設定を開けない利用者には導線を出さず、管理者への連絡を案内する`, async ({
+      page,
+      mockApi,
+    }) => {
+      mockApi.setCurrentUser(VIEWER);
+
+      for (const { status, title, message } of [
+        {
+          status: "unreachable" as const,
+          title: "データベースに接続できません",
+          message: /システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/,
+        },
+        {
+          status: "setup_required" as const,
+          title: "システムテーブルの作成・更新が必要です",
+          message: /システム管理者に連絡して、システムテーブルの作成・更新を依頼してください。$/,
+        },
+      ]) {
+        setDatabaseStatus(mockApi, status, "ok");
         await page.goto("/runs");
 
-        await expectGate(page, "データベースに接続できません", "/settings/database");
         const card = gateCard(page);
-        await expect(card.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
-        await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
-        expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(theme === "dark");
-        await saveScreenshot(page, `agent-${viewport.name}-${theme}-db-unreachable-admin`);
-        expect(businessRequests(mockApi)).toEqual([]);
-      });
-
-      test(`初期化が必要ならシステムテーブルへの導線だけを出す（${theme}）`, async ({ page, mockApi }) => {
-        await useTheme(page, theme);
-        setDatabaseStatus(mockApi, "setup_required", "ok");
-
-        await page.goto("/runs");
-
-        const card = gateCard(page);
-        await expect(
-          card.getByRole("heading", { level: 1, name: "システムテーブルの作成・更新が必要です" })
-        ).toBeVisible();
-        await expect(card.getByText(/^データベースには接続できています。/)).toBeVisible();
-        await expect(card.getByRole("link", { name: "システムテーブルを開く" })).toHaveAttribute(
-          "href",
-          "/settings/system-tables"
-        );
-        await expect(card.getByRole("link", { name: "データベース設定を開く" })).toHaveCount(0);
+        await expect(card.getByRole("heading", { level: 1, name: title })).toBeVisible();
+        await expect(card.getByText(message)).toBeVisible();
+        await expect(card.getByRole("link")).toHaveCount(0);
+        await expect(card.getByText(SETTINGS_HINT, { exact: true })).toHaveCount(0);
+        await expect(card.getByText(CONTACT_ADMIN_FOOTER, { exact: true })).toBeVisible();
         await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
         await expectNoHorizontalOverflow(page);
-        await saveScreenshot(page, `agent-${viewport.name}-${theme}-setup-required-admin`);
-
-        await card.getByRole("link", { name: "システムテーブルを開く" }).click();
-        await expect(page).toHaveURL(/\/settings\/system-tables$/);
-        await expect(gateCard(page)).toHaveCount(0);
-      });
-
-      test(`設定を開けない利用者には導線を出さず、管理者への連絡を案内する（${theme}）`, async ({
-        page,
-        mockApi,
-      }) => {
-        await useTheme(page, theme);
-        mockApi.setCurrentUser(VIEWER);
-
-        for (const { status, title, message } of [
-          {
-            status: "unreachable" as const,
-            title: "データベースに接続できません",
-            message: /システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/,
-          },
-          {
-            status: "setup_required" as const,
-            title: "システムテーブルの作成・更新が必要です",
-            message: /システム管理者に連絡して、システムテーブルの作成・更新を依頼してください。$/,
-          },
-        ]) {
-          setDatabaseStatus(mockApi, status, "ok");
-          await page.goto("/runs");
-
-          const card = gateCard(page);
-          await expect(card.getByRole("heading", { level: 1, name: title })).toBeVisible();
-          await expect(card.getByText(message)).toBeVisible();
-          await expect(card.getByRole("link")).toHaveCount(0);
-          await expect(card.getByText(SETTINGS_HINT, { exact: true })).toHaveCount(0);
-          await expect(card.getByText(CONTACT_ADMIN_FOOTER, { exact: true })).toBeVisible();
-          await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
-          await expectNoHorizontalOverflow(page);
-          await saveScreenshot(page, `agent-${viewport.name}-${theme}-${status}-viewer`);
-        }
-        expect(businessRequests(mockApi)).toEqual([]);
-      });
-    }
+        await saveScreenshot(page, `agent-${viewport.name}-${status}-viewer`);
+      }
+      expect(businessRequests(mockApi)).toEqual([]);
+    });
   });
 }

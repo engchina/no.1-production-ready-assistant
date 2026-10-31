@@ -48,70 +48,59 @@ async function holdProfiles(page: Page) {
   return () => release();
 }
 
-async function applyColorScheme(page: Page, colorScheme: "light" | "dark") {
-  await page.emulateMedia({ colorScheme });
-  await page.evaluate(
-    (dark) => document.documentElement.classList.toggle("dark", dark),
-    colorScheme === "dark",
+test(`業務プロファイルの読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す`, async ({
+  page,
+}, testInfo) => {
+  await setup(page);
+  const release = await holdProfiles(page);
+  await page.goto("/chat");
+
+  // ツールバーの対象の欄に文言と経過時間を出す（同じ取得の経過時間はここだけ）。
+  const profilesLoading = page.getByTestId("sql-chat-profiles-loading");
+  await expect(profilesLoading).toContainText(
+    "業務プロファイルを読み込んでいます",
   );
-}
-
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`業務プロファイルの読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す (${colorScheme})`, async ({
-    page,
-  }, testInfo) => {
-    await setup(page);
-    const release = await holdProfiles(page);
-    await page.goto("/chat");
-    await applyColorScheme(page, colorScheme);
-
-    // ツールバーの対象の欄に文言と経過時間を出す（同じ取得の経過時間はここだけ）。
-    const profilesLoading = page.getByTestId("sql-chat-profiles-loading");
-    await expect(profilesLoading).toContainText(
-      "業務プロファイルを読み込んでいます",
-    );
-    // 会話の欄は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
-    const panel = page.getByTestId("sql-chat-panel");
-    await expect(panel).toBeVisible();
-    await expect(page.getByTestId("sql-chat-conversation-skeleton")).toBeVisible();
-    await expect(
-      page.getByText("質問を入力して会話を始めます", { exact: true }),
-    ).toHaveCount(0);
-    await expect(panel.getByRole("log").getByRole("timer")).toHaveCount(0);
-    await expect(page.getByRole("timer")).toHaveCount(1);
-    // 入力欄・生成方法・送信・新しい会話・履歴の開閉は無効。
-    await expect(
-      page.getByRole("textbox", { name: "質問", exact: true }),
-    ).toBeDisabled();
-    await expect(page.locator("#sql-chat-engine")).toBeDisabled();
-    await expect(page.getByTestId("sql-chat-send")).toBeDisabled();
-    await expect(
-      page.getByRole("button", { name: "新しい会話", exact: true }),
-    ).toBeDisabled();
-    await expect(page.getByTestId("sql-chat-history-toggle")).toBeDisabled();
-    await page.screenshot({
-      path: testInfo.outputPath(`chat-loading-${colorScheme}.png`),
-    });
-
-    // 読み込み後: 空の状態と、使える入力欄。
-    release();
-    await expect(page.getByTestId("sql-chat-profiles-loading")).toHaveCount(0);
-    await expect(page.locator("[data-chat-toolbar] #sql-chat-profile")).toBeVisible();
-    await expect(page.getByTestId("sql-chat-conversation-skeleton")).toHaveCount(0);
-    await expect(
-      page.getByText("質問を入力して会話を始めます", { exact: true }),
-    ).toBeVisible();
-    const composer = page.getByRole("textbox", { name: "質問", exact: true });
-    await expect(composer).toBeEnabled();
-    await expect(page.locator("#sql-chat-engine")).toBeEnabled();
-    await expect(
-      page.getByRole("button", { name: "新しい会話", exact: true }),
-    ).toBeEnabled();
-    await expect(page.getByTestId("sql-chat-history-toggle")).toBeEnabled();
-    await composer.fill("カテゴリ別売上");
-    await expect(page.getByTestId("sql-chat-send")).toBeEnabled();
+  // 会話の欄は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
+  const panel = page.getByTestId("sql-chat-panel");
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId("sql-chat-conversation-skeleton")).toBeVisible();
+  await expect(
+    page.getByText("質問を入力して会話を始めます", { exact: true }),
+  ).toHaveCount(0);
+  await expect(panel.getByRole("log").getByRole("timer")).toHaveCount(0);
+  await expect(page.getByRole("timer")).toHaveCount(1);
+  // 入力欄・生成方法・送信・新しい会話・履歴の開閉は無効。
+  await expect(
+    page.getByRole("textbox", { name: "質問", exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator("#sql-chat-engine")).toBeDisabled();
+  await expect(page.getByTestId("sql-chat-send")).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "新しい会話", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByTestId("sql-chat-history-toggle")).toBeDisabled();
+  await page.screenshot({
+    path: testInfo.outputPath(`chat-loading-light.png`),
   });
-}
+
+  // 読み込み後: 空の状態と、使える入力欄。
+  release();
+  await expect(page.getByTestId("sql-chat-profiles-loading")).toHaveCount(0);
+  await expect(page.locator("[data-chat-toolbar] #sql-chat-profile")).toBeVisible();
+  await expect(page.getByTestId("sql-chat-conversation-skeleton")).toHaveCount(0);
+  await expect(
+    page.getByText("質問を入力して会話を始めます", { exact: true }),
+  ).toBeVisible();
+  const composer = page.getByRole("textbox", { name: "質問", exact: true });
+  await expect(composer).toBeEnabled();
+  await expect(page.locator("#sql-chat-engine")).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "新しい会話", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByTestId("sql-chat-history-toggle")).toBeEnabled();
+  await composer.fill("カテゴリ別売上");
+  await expect(page.getByTestId("sql-chat-send")).toBeEnabled();
+});
 
 test("読み込み中も入力欄に書いた文字は残す（作業状態）", async ({ page }) => {
   await setup(page);

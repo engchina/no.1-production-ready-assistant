@@ -1466,13 +1466,10 @@ test("Oracle 反映の再起動・期限切れを表示して明示的に再試�
   const retry = status.getByRole("button", { name: "Oracle 反映を再試行" });
   for (const width of (testInfo.project.name === "desktop" ? [1280, 1920] : [375])) {
     await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await retry.focus();
-      await expect(retry).toBeFocused();
-      await page.screenshot({ path: testInfo.outputPath(`profile-sync-recovery-${width}-${theme}.png`) });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    }
+    await retry.focus();
+    await expect(retry).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath(`profile-sync-recovery-${width}-light.png`) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   expect(retryCalls).toBe(0);
   await retry.focus();
@@ -1789,17 +1786,11 @@ test("既定の生成方式はこの環境で使える方式だけから選ん�
     page.locator("#profile-category").boundingBox(),
   ]);
   expect(Math.abs((engineBox?.height ?? 0) - (categoryBox?.height ?? 0))).toBeLessThanOrEqual(1);
-  // ライト / ダークの見た目を確かめるための画像（失敗の判定には使わない）。
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await testInfo.attach(`default-engine-${colorScheme}`, {
-      body: await engine.locator("xpath=ancestor::section[1]").screenshot(),
-      contentType: "image/png",
-    });
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  // 見た目を確かめるための画像（失敗の判定には使わない）。
+  await testInfo.attach(`default-engine-light`, {
+    body: await engine.locator("xpath=ancestor::section[1]").screenshot(),
+    contentType: "image/png",
+  });
 
   await engine.click();
   const listbox = page.locator(`[id="${await engine.getAttribute("aria-controls")}"]`);
@@ -1837,16 +1828,10 @@ test("回答前の確認の方針と確認の上限（往復）を業務プロ�
   await expectSelectFieldValue(policy, "confirm");
   await expectSelectFieldValue(maxRounds, "0");
   await chooseSelectFieldOption(maxRounds, "2");
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
-    await testInfo.attach(`clarification-settings-${colorScheme}`, {
-      body: await section.screenshot(),
-      contentType: "image/png",
-    });
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  await testInfo.attach(`clarification-settings-light`, {
+    body: await section.screenshot(),
+    contentType: "image/png",
+  });
   await chooseSelectFieldOption(policy, "assume");
   // 前提を示すときは確認しないので、上限は選べない。
   await expect(maxRounds).toBeDisabled();
@@ -3898,28 +3883,25 @@ test("Select AI Agent アセットの再構築のチェックは保存して開�
   await expect(rebuild).not.toBeChecked();
 });
 
-test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 / 375px・ライト / ダークで欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
+test("業務プロファイルの一覧と編集のフォームは 1280 / 1920 / 375px で欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
   // 一覧の件数はツールバーの ListCount、編集のフォームは FormGrid と値の種類の幅（#1891）。
   test.slow();
   await mockProfileApi(page);
   const widths = test.info().project.name === "mobile-375" ? [375] : [1280, 1920];
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      for (const path of ["/profiles", "/profiles?profile=default"]) {
-        await page.goto(path);
-        if (path === "/profiles") {
-          await expect(page.getByTestId("profile-list-toolbar").getByRole("status")).toHaveText(/^全 \d+ 件$/u);
-        } else {
-          await expect(page.locator("#profile-select-ai-embedding-model")).toBeVisible();
-          await expect(page.getByTestId("profile-allowed-table-list")).toBeVisible();
-        }
-        const label = `${path} ${width}px ${colorScheme}`;
-        expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
-        expect(await findClippedPlaceholders(page), label).toEqual([]);
-        if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ["/profiles", "/profiles?profile=default"]) {
+      await page.goto(path);
+      if (path === "/profiles") {
+        await expect(page.getByTestId("profile-list-toolbar").getByRole("status")).toHaveText(/^全 \d+ 件$/u);
+      } else {
+        await expect(page.locator("#profile-select-ai-embedding-model")).toBeVisible();
+        await expect(page.getByTestId("profile-allowed-table-list")).toBeVisible();
       }
+      const label = `${path} ${width}px`;
+      expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
+      expect(await findClippedPlaceholders(page), label).toEqual([]);
+      if (width >= 640) expect(await findFieldsOffWidthScale(page), label).toEqual([]);
     }
   }
 });

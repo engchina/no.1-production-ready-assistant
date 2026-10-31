@@ -192,81 +192,70 @@ for (const viewport of [
 }
 
 // React Flow の Controls・帰属表示・辺のラベルは、テーマの面の色で描く（#1137）。
-// React Flow の既定の配色は colorMode="dark" のときだけダークになり、ダークテーマでも白い地のまま出ていた。
+// React Flow の既定の配色（固定の白い地）ではなく、共有のトークンの色で描く。
 // platform/packages/ui の integrations/react-flow.css が React Flow の変数をトークンに結び付ける。
-for (const theme of ["light", "dark"] as const) {
-  test(`文書構造グラフの操作・帰属表示はテーマの面の色で描く (${theme})`, async ({
-    page,
-  }) => {
-    await page.addInitScript((value) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme: value }, version: 0 })
-      );
-    }, theme);
-    await mockKb(page, {
-      status: "ok",
-      nodes: [
-        { id: "e1", name: "就業規則", type: "concept", confidence: 0.9 },
-        { id: "e2", name: "有給休暇", type: "concept", confidence: 0.8 },
-      ],
-      edges: [{ id: "r1", source: "e1", target: "e2", type: "relates_to", confidence: 0.7 }],
-      truncated: false,
-    });
-
-    await page.goto("/knowledge-bases/kb-1");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(theme === "dark");
-    await disclosureSummary(page, "文書構造グラフを表示").click();
-
-    const region = page.getByRole("region", { name: "文書構造グラフ" });
-    await expect(region.getByText("就業規則")).toBeVisible();
-
-    // トークンの色を同じ場所（図の中）で解決して、React Flow の部品の色と比べる。
-    const colors = await region.evaluate((element) => {
-      const probe = document.createElement("div");
-      element.append(probe);
-      const token = (name: string) => {
-        probe.style.backgroundColor = `var(${name})`;
-        return getComputedStyle(probe).backgroundColor;
-      };
-      const tokens = {
-        surface: token("--color-surface"),
-        raised: token("--color-surface-raised"),
-        fg: token("--color-fg"),
-        fgMuted: token("--color-fg-muted"),
-      };
-      probe.remove();
-      const style = (selector: string) => {
-        const target = element.querySelector(selector);
-        return target ? getComputedStyle(target) : null;
-      };
-      const buttons = [...element.querySelectorAll(".react-flow__controls-button")];
-      return {
-        tokens,
-        buttonCount: buttons.length,
-        buttonBackgrounds: buttons.map((button) => getComputedStyle(button).backgroundColor),
-        buttonColors: buttons.map((button) => getComputedStyle(button).color),
-        attributionBackground: style(".react-flow__attribution")?.backgroundColor,
-        attributionLink: style(".react-flow__attribution a")?.color,
-        edgeLabelBackground: style(".react-flow__edge-textbg")?.fill ?? null,
-      };
-    });
-    expect(colors.buttonCount).toBe(3);
-    expect(new Set(colors.buttonBackgrounds)).toEqual(new Set([colors.tokens.raised]));
-    expect(new Set(colors.buttonColors)).toEqual(new Set([colors.tokens.fg]));
-    // 帰属表示（React Flow のリンク）は消さず、色だけ合わせる。
-    expect(colors.attributionBackground).toBe(colors.tokens.raised);
-    expect(colors.attributionLink).toBe(colors.tokens.fgMuted);
-    if (colors.edgeLabelBackground !== null) {
-      expect(colors.edgeLabelBackground).toBe(colors.tokens.surface);
-    }
-    // 文書構造グラフには辺のラベル（relates_to）がある。
-    await expect(region.locator(".react-flow__edge-textbg")).toHaveCount(1);
-    await expectNoPageOverflow(page);
+test(`文書構造グラフの操作・帰属表示はテーマの面の色で描く`, async ({
+  page,
+}) => {
+  await mockKb(page, {
+    status: "ok",
+    nodes: [
+      { id: "e1", name: "就業規則", type: "concept", confidence: 0.9 },
+      { id: "e2", name: "有給休暇", type: "concept", confidence: 0.8 },
+    ],
+    edges: [{ id: "r1", source: "e1", target: "e2", type: "relates_to", confidence: 0.7 }],
+    truncated: false,
   });
-}
+
+  await page.goto("/knowledge-bases/kb-1");
+  await disclosureSummary(page, "文書構造グラフを表示").click();
+
+  const region = page.getByRole("region", { name: "文書構造グラフ" });
+  await expect(region.getByText("就業規則")).toBeVisible();
+
+  // トークンの色を同じ場所（図の中）で解決して、React Flow の部品の色と比べる。
+  const colors = await region.evaluate((element) => {
+    const probe = document.createElement("div");
+    element.append(probe);
+    const token = (name: string) => {
+      probe.style.backgroundColor = `var(${name})`;
+      return getComputedStyle(probe).backgroundColor;
+    };
+    const tokens = {
+      surface: token("--color-surface"),
+      raised: token("--color-surface-raised"),
+      fg: token("--color-fg"),
+      fgMuted: token("--color-fg-muted"),
+    };
+    probe.remove();
+    const style = (selector: string) => {
+      const target = element.querySelector(selector);
+      return target ? getComputedStyle(target) : null;
+    };
+    const buttons = [...element.querySelectorAll(".react-flow__controls-button")];
+    return {
+      tokens,
+      buttonCount: buttons.length,
+      buttonBackgrounds: buttons.map((button) => getComputedStyle(button).backgroundColor),
+      buttonColors: buttons.map((button) => getComputedStyle(button).color),
+      attributionBackground: style(".react-flow__attribution")?.backgroundColor,
+      attributionLink: style(".react-flow__attribution a")?.color,
+      edgeLabelBackground: style(".react-flow__edge-textbg")?.fill ?? null,
+    };
+  });
+  expect(colors.buttonCount).toBe(3);
+  expect(new Set(colors.buttonBackgrounds)).toEqual(new Set([colors.tokens.raised]));
+  expect(new Set(colors.buttonColors)).toEqual(new Set([colors.tokens.fg]));
+  // 帰属表示（React Flow のリンク）は消さず、色だけ合わせる。
+  expect(colors.attributionBackground).toBe(colors.tokens.raised);
+  expect(colors.attributionLink).toBe(colors.tokens.fgMuted);
+  if (colors.edgeLabelBackground !== null) {
+    expect(colors.edgeLabelBackground).toBe(colors.tokens.surface);
+  }
+  // 文書構造グラフには辺のラベル（relates_to）がある。
+  await expect(region.locator(".react-flow__edge-textbg")).toHaveCount(1);
+  await expectNoPageOverflow(page);
+});
 
 
 for (const count of [30, 80]) {

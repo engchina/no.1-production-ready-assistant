@@ -1,13 +1,8 @@
 /** 外観と証明書の画面の既定の文言（日本語）。製品側は `messages` prop で一部だけ上書きできる。 */
 export const APPEARANCE_MESSAGES = {
-  // 画面は配色テーマと、HTTPS の接続に使う証明書を扱う（#1316 で「外観」から改名）。
+  // 画面は HTTPS の接続に使う証明書を扱う（#1316 で「外観」から改名）。配色テーマの選択は #17 で廃止した。
   title: "外観と証明書",
-  subtitle: "配色テーマ（ライト / ダーク）を切り替え、HTTPS の接続に使う証明書を取得します。既定の配色はライトです。",
-  themeLabel: "配色テーマ",
-  themeHint: "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  themeLight: "ライト",
-  themeDark: "ダーク",
-  themeSystem: "自動（OS 設定）",
+  subtitle: "HTTPS の接続に使う証明書を取得します。配色はライトの 1 種類で、切り替えはありません。",
   caCertificateTitle: "HTTPS の証明書",
   caCertificateDescription:
     "この環境の HTTPS は、配備したサーバーの中で作った認証局（ルート CA）が発行した証明書を使います。CA の証明書を端末に「信頼されたルート証明機関」として取り込むと、ブラウザの警告が出なくなります。",

@@ -1670,112 +1670,92 @@ test("データ管理の対象 picker は NL2SQL_ システム object を表示�
   await expect(csvList.getByText("APP.NL2SQL_SCHEMA_OBJECTS", { exact: true })).toHaveCount(0);
 });
 
-/** 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れる。 */
-async function setUiTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    localStorage.setItem(
-      "production-ready-nl2sql.ui",
-      JSON.stringify({ state: { sidebarCollapsed: false, collapsedSections: {}, theme: value }, version: 0 })
-    );
-  }, theme);
-}
-
 // #608: 大量の候補から複数を選ぶ画面は共通の ListPicker。151 件（100 件ずつの追加読み込み）で、
-// 選択の行・「選択中だけ表示」・キーボード操作・追加読み込みをライト / ダークで確かめる（desktop / 375px は projects）。
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`コメント管理の対象は大量でも ListPicker で追加読み込みし、選択中だけ表示できる (${colorScheme})`, async ({
-    page,
-  }, testInfo) => {
-    await setUiTheme(page, colorScheme);
-    await mockPagedDbAdminObjectsApi(page);
-    await page.goto("/comment-management");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(colorScheme === "dark");
+// 選択の行・「選択中だけ表示」・キーボード操作・追加読み込みを確かめる（desktop / 375px は projects）。
+test(`コメント管理の対象は大量でも ListPicker で追加読み込みし、選択中だけ表示できる`, async ({
+  page,
+}, testInfo) => {
+  await mockPagedDbAdminObjectsApi(page);
+  await page.goto("/comment-management");
 
-    const picker = page.getByTestId("comment-management-target");
-    const footer = page.getByTestId("comment-management-target-footer");
-    await expect(picker.getByRole("listbox")).toHaveAttribute("aria-multiselectable", "true");
-    await expect(footer).toContainText("100 / 151 件を表示、選択 0 件");
+  const picker = page.getByTestId("comment-management-target");
+  const footer = page.getByTestId("comment-management-target-footer");
+  await expect(picker.getByRole("listbox")).toHaveAttribute("aria-multiselectable", "true");
+  await expect(footer).toContainText("100 / 151 件を表示、選択 0 件");
 
-    // キーボード: Tab で一覧に入り、↓ で移って Space で選ぶ。
-    const listbox = picker.getByRole("listbox");
-    await listbox.focus();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Space");
-    await expect(footer).toContainText("選択 1 件");
-    await expect(picker.getByRole("option", { name: "APP.PAGED_TABLE_002", exact: true })).toHaveAttribute(
-      "aria-checked",
-      "true"
-    );
+  // キーボード: Tab で一覧に入り、↓ で移って Space で選ぶ。
+  const listbox = picker.getByRole("listbox");
+  await listbox.focus();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  await expect(footer).toContainText("選択 1 件");
+  await expect(picker.getByRole("option", { name: "APP.PAGED_TABLE_002", exact: true })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  );
 
-    // 続きは「さらに読み込む」で足す（ページを移らないので、選んだ候補は残る）。
-    await footer.getByRole("button", { name: "さらに読み込む" }).click();
-    await expect(footer).toContainText("151 / 151 件を表示、選択 1 件");
-    await expect(footer.getByRole("button", { name: "さらに読み込む" })).toHaveCount(0);
+  // 続きは「さらに読み込む」で足す（ページを移らないので、選んだ候補は残る）。
+  await footer.getByRole("button", { name: "さらに読み込む" }).click();
+  await expect(footer).toContainText("151 / 151 件を表示、選択 1 件");
+  await expect(footer.getByRole("button", { name: "さらに読み込む" })).toHaveCount(0);
 
-    // 検索で選んだ候補が見えなくなっても、「選択中だけ表示」で確かめられる。
-    await page.getByTestId("comment-management-target-toolbar").getByRole("searchbox", { name: "検索" }).fill("PAGED_VIEW");
-    await expect(picker.getByRole("option")).toHaveCount(2);
-    await picker.getByTestId("comment-management-target-show-selected").click();
-    await expect(picker.getByRole("option")).toHaveCount(1);
-    await expect(picker.getByRole("option", { name: "APP.PAGED_TABLE_002", exact: true })).toBeVisible();
+  // 検索で選んだ候補が見えなくなっても、「選択中だけ表示」で確かめられる。
+  await page.getByTestId("comment-management-target-toolbar").getByRole("searchbox", { name: "検索" }).fill("PAGED_VIEW");
+  await expect(picker.getByRole("option")).toHaveCount(2);
+  await picker.getByTestId("comment-management-target-show-selected").click();
+  await expect(picker.getByRole("option")).toHaveCount(1);
+  await expect(picker.getByRole("option", { name: "APP.PAGED_TABLE_002", exact: true })).toBeVisible();
 
-    const colors = await picker.evaluate((node) => {
-      const style = getComputedStyle(node);
-      return { background: style.backgroundColor, color: style.color };
-    });
-    expect(colors.background).not.toBe(colors.color);
-    await picker.screenshot({ path: testInfo.outputPath(`comment-target-picker-${colorScheme}.png`) });
-    await expectNoHorizontalScroll(page);
+  const colors = await picker.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { background: style.backgroundColor, color: style.color };
+  });
+  expect(colors.background).not.toBe(colors.color);
+  await picker.screenshot({ path: testInfo.outputPath(`comment-target-picker-light.png`) });
+  await expectNoHorizontalScroll(page);
+});
+
+test(`合成データの対象の表は大量でも ListPicker で検索して選べる`, async ({ page }, testInfo) => {
+  const syntheticTables = Array.from(
+    { length: 240 },
+    (_, index) => `APP.SYNTHETIC_TABLE_${String(index + 1).padStart(3, "0")}`
+  );
+  await mockDataManagementApi(page);
+  await page.unroute("**/api/nl2sql/select-ai/db-profiles**");
+  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.endsWith("/NL2SQL_DEFAULT_PROFILE")) {
+      return fulfillJson(route, {
+        runtime: "deterministic",
+        profile: {
+          ...selectAiProfile,
+          object_list: syntheticTables,
+          attributes: { profile_attributes: { object_list: syntheticTables } },
+        },
+        warnings: [],
+      });
+    }
+    return fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] });
   });
 
-  test(`合成データの対象の表は大量でも ListPicker で検索して選べる (${colorScheme})`, async ({ page }, testInfo) => {
-    await setUiTheme(page, colorScheme);
-    const syntheticTables = Array.from(
-      { length: 240 },
-      (_, index) => `APP.SYNTHETIC_TABLE_${String(index + 1).padStart(3, "0")}`
-    );
-    await mockDataManagementApi(page);
-    await page.unroute("**/api/nl2sql/select-ai/db-profiles**");
-    await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname.endsWith("/NL2SQL_DEFAULT_PROFILE")) {
-        return fulfillJson(route, {
-          runtime: "deterministic",
-          profile: {
-            ...selectAiProfile,
-            object_list: syntheticTables,
-            attributes: { profile_attributes: { object_list: syntheticTables } },
-          },
-          warnings: [],
-        });
-      }
-      return fulfillJson(route, { runtime: "deterministic", profiles: [selectAiProfile], warnings: [] });
-    });
+  await page.goto("/data-management");
+  await page.getByRole("tab", { name: "合成データ生成" }).click();
+  const syntheticPanel = page.locator("#data-management-panel-synthetic");
+  await syntheticPanel.getByRole("button", { name: "テーブル一覧を取得" }).click();
 
-    await page.goto("/data-management");
-    await page.getByRole("tab", { name: "合成データ生成" }).click();
-    const syntheticPanel = page.locator("#data-management-panel-synthetic");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(colorScheme === "dark");
-    await syntheticPanel.getByRole("button", { name: "テーブル一覧を取得" }).click();
-
-    const picker = page.getByTestId("data-synthetic-table");
-    await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("240 / 240 件を表示、選択 0 件");
-    // 100 行を超えると見えている行だけを描く（仮想スクロール）。
-    expect(await picker.getByRole("option").count()).toBeLessThan(60);
-    // 検索は ListPicker の左端の検索欄（入力に合わせて絞る。候補は全件を読んでいるので画面側で絞る）。
-    await picker.getByRole("searchbox").fill("TABLE_23");
-    await expect(picker.getByRole("option")).toHaveCount(10);
-    await picker.getByTestId("data-synthetic-table-bulk-actions").getByRole("button", { name: "表示中をすべて選択" }).click();
-    await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("10 / 240 件を表示、選択 10 件");
-    await expect(syntheticPanel.getByText("選択 10 件", { exact: true })).toBeVisible();
-    await picker.screenshot({ path: testInfo.outputPath(`synthetic-table-picker-${colorScheme}.png`) });
-    await expectNoHorizontalScroll(page);
-  });
-}
+  const picker = page.getByTestId("data-synthetic-table");
+  await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("240 / 240 件を表示、選択 0 件");
+  // 100 行を超えると見えている行だけを描く（仮想スクロール）。
+  expect(await picker.getByRole("option").count()).toBeLessThan(60);
+  // 検索は ListPicker の左端の検索欄（入力に合わせて絞る。候補は全件を読んでいるので画面側で絞る）。
+  await picker.getByRole("searchbox").fill("TABLE_23");
+  await expect(picker.getByRole("option")).toHaveCount(10);
+  await picker.getByTestId("data-synthetic-table-bulk-actions").getByRole("button", { name: "表示中をすべて選択" }).click();
+  await expect(page.getByTestId("data-synthetic-table-footer")).toContainText("10 / 240 件を表示、選択 10 件");
+  await expect(syntheticPanel.getByText("選択 10 件", { exact: true })).toBeVisible();
+  await picker.screenshot({ path: testInfo.outputPath(`synthetic-table-picker-light.png`) });
+  await expectNoHorizontalScroll(page);
+});
 
 test("コメント管理の対象件数 badge は footer と同じ API 総数を表示する", async ({ page }) => {
   await mockPagedDbAdminObjectsApi(page);
@@ -2236,7 +2216,7 @@ for (const scenario of scenarios) {
 test("明示的な一覧再取得はヘッダーではなくテーブル作業領域の先頭に表示する", async ({
   page,
 }) => {
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const refreshGate = createRequestGate();
   let objectRequestCount = 0;
   let holdNextRefresh = false;
@@ -3254,7 +3234,7 @@ test("Excel/CSV 取込の実行確認語は ADMIN_EXECUTE 固定で判定する"
 
 // #1891: DB オブジェクトの一覧（追加読み込みの例外）の件数は ListToolbar の ListCount 1 か所。
 // 絞り込みなし「全 N 件」、絞り込み中「N 件（全 M 件）」（M は絞り込みの無い同じ問い合わせの total）。
-// 横あふれ・placeholder の切れ・欄の幅の段を 1280 / 1920px（desktop）と 375px（mobile-375）、ライト / ダークで確かめる。
+// 横あふれ・placeholder の切れ・欄の幅の段を 1280 / 1920px（desktop）と 375px（mobile-375）で確かめる。
 const dbObjectListScreens = [
   {
     title: "テーブル管理",
@@ -3298,26 +3278,22 @@ async function expectDbObjectLayoutChecks(page: Page) {
 
 for (const screen of dbObjectListScreens) {
   test(`${screen.title}の一覧は件数を ListToolbar の ListCount に出し、幅・placeholder が崩れない`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    // 2 つの配色 × 画面幅ごとに開き直して測るので、既定の 30 秒より長く取る。
+    // 画面幅ごとに開き直して測るので、既定の 30 秒より長く取る。
     test.setTimeout(120_000);
     await mockPagedDbAdminObjectsApi(page);
     const widths = testInfo.project.name === "mobile-375" ? [375] : [1280, 1920];
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      for (const width of widths) {
-        await page.setViewportSize({ width, height: 900 });
-        await page.goto(screen.path);
-        const toolbar = page.getByTestId(screen.toolbar);
-        const count = toolbar.locator("[data-list-count]");
-        await expect(count).toHaveText(screen.total);
-        // 件数は 1 か所（見出しのバッジに「N 件」を出さない）。
-        await expect(page.getByText(/^全?\s?\d+\s?件$/u)).toHaveCount(1);
-        await expectDbObjectLayoutChecks(page);
-        await page.screenshot({ path: testInfo.outputPath(`${screen.toolbar}-${width}-${colorScheme}.png`) });
-      }
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(screen.path);
+      const toolbar = page.getByTestId(screen.toolbar);
+      const count = toolbar.locator("[data-list-count]");
+      await expect(count).toHaveText(screen.total);
+      // 件数は 1 か所（見出しのバッジに「N 件」を出さない）。
+      await expect(page.getByText(/^全?\s?\d+\s?件$/u)).toHaveCount(1);
+      await expectDbObjectLayoutChecks(page);
+      await page.screenshot({ path: testInfo.outputPath(`${screen.toolbar}-${width}-light.png`) });
     }
 
-    await page.emulateMedia({ colorScheme: "light" });
     const toolbar = page.getByTestId(screen.toolbar);
     await toolbar.getByRole("searchbox", { name: "検索" }).fill(screen.query);
     await expect(toolbar.locator("[data-list-count]")).toHaveText(screen.filtered);
@@ -3345,15 +3321,12 @@ test("DB オブジェクトの一覧は読み込み中に件数を出さず、�
 test("データ管理の CSV アップロードは件数を ListCount に出し、欄の幅の段と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
   test.setTimeout(90_000);
   await mockPagedDbAdminObjectsApi(page);
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await page.goto("/data-management");
-    await page.getByRole("tab", { name: "Excel/CSV アップロード(既存テーブル)" }).click();
-    const toolbar = page.getByTestId("data-csv-table-toolbar");
-    await expect(toolbar.locator("[data-list-count]")).toHaveText("全 149 件");
-    await expect(page.getByTestId("data-csv-mode-field").getByRole("combobox")).toBeVisible();
-    await expectDbObjectLayoutChecks(page);
-  }
+  await page.goto("/data-management");
+  await page.getByRole("tab", { name: "Excel/CSV アップロード(既存テーブル)" }).click();
+  const toolbar = page.getByTestId("data-csv-table-toolbar");
+  await expect(toolbar.locator("[data-list-count]")).toHaveText("全 149 件");
+  await expect(page.getByTestId("data-csv-mode-field").getByRole("combobox")).toBeVisible();
+  await expectDbObjectLayoutChecks(page);
   // 検索中は「N 件（全 M 件）」（M は表の全件。検索語の無いオブジェクトの一覧の table_count）。
   await page.getByTestId("data-csv-table-toolbar").getByRole("searchbox").fill("PAGED_TABLE_00");
   await expect(page.getByTestId("data-csv-table-toolbar").locator("[data-list-count]")).toHaveText("9 件（全 149 件）");
@@ -3371,9 +3344,5 @@ test("テーブル取込のフォームは FormGrid の欄の幅の段と placeh
   if (expectedWidth) {
     expect(Math.abs((await tableName.boundingBox())!.width - expectedWidth)).toBeLessThanOrEqual(2);
   }
-  // 作業状態が取込の画面を覚えるので、配色は開き直さずに切り替えて測る。
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await expectDbObjectLayoutChecks(page);
-  }
+  await expectDbObjectLayoutChecks(page);
 });

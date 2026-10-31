@@ -2216,7 +2216,7 @@ test("Select AI Credential を明示確認で作成し、成功状態だけを�
 });
 
 test("Select AI Credential のリージョンは短い選択の幅で、placeholder が欄に収まる（#1891）", { tag: "@responsive" }, async ({ page }) => {
-  // 2 つの幅 × ライト / ダークを 1 つの test で回る。
+  // 2 つの幅を 1 つの test で回る。
   test.setTimeout(90_000);
   await page.unroute("**/api/settings/database/select-ai-credential");
   await page.route("**/api/settings/database/select-ai-credential", (route) =>
@@ -2236,19 +2236,16 @@ test("Select AI Credential のリージョンは短い選択の幅で、placehol
   const widths = projectWidth < 640 ? [projectWidth] : [1280, 1920];
   for (const width of widths) {
     await page.setViewportSize({ width, height });
-    for (const colorScheme of ["light", "dark"] as const) {
-      await page.emulateMedia({ colorScheme });
-      const where = `${width}px ${colorScheme}`;
-      await page.goto("/settings/select-ai-credential");
-      const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
-      await expect(region).toBeVisible();
-      expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
-      expect(await findClippedPlaceholders(page), where).toEqual([]);
-      if (width < 640) continue;
-      expect(await findFieldsOffWidthScale(page), where).toEqual([]);
-      // リージョンは短い選択（sm 12rem = 168px）。
-      expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
-    }
+    const where = `${width}px`;
+    await page.goto("/settings/select-ai-credential");
+    const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
+    await expect(region).toBeVisible();
+    expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
+    expect(await findClippedPlaceholders(page), where).toEqual([]);
+    if (width < 640) continue;
+    expect(await findFieldsOffWidthScale(page), where).toEqual([]);
+    // リージョンは短い選択（sm 12rem = 168px）。
+    expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
   }
 });
 
@@ -2495,20 +2492,23 @@ test("Select AI Credential API 失敗は固定 alert だけに表示し Toast �
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
 });
 
-test("外観設定でダーク/ライト/自動テーマを切り替えられる", async ({ page }) => {
+test("外観と証明書にテーマの選択は無く、配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
   await page.goto("/settings/appearance");
   await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+  await expect(page.getByText("HTTPS の接続に使う証明書を取得します。配色はライトの 1 種類で、切り替えはありません。")).toBeVisible();
+  await expect(page.getByTestId("appearance-theme-toggle")).toHaveCount(0);
+  for (const name of ["ライト", "ダーク", "自動（OS 設定）"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
   const html = page.locator("html");
-  // dev サーバでは getPropertyValue が "light-dark(a, b)" 文字列を返すため、変数の文字列ではなく
-  // 実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
-  // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / blue スケール由来。
+  // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
+  // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
   const hexToRgb = (hex: string) => {
     const value = Number.parseInt(hex.slice(1), 16);
     return `rgb(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255})`;
   };
-  // body { background: var(--color-canvas) }（旧 --background 相当）
-  const bgVar = () =>
-    page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  // body { background: var(--color-canvas) }
+  const bgVar = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const tokenVar = (name: string) =>
     page.evaluate((tokenName) => {
       const probe = document.createElement("div");
@@ -2518,80 +2518,19 @@ test("外観設定でダーク/ライト/自動テーマを切り替えられる
       probe.remove();
       return color;
     }, name);
-  const sidebarBgVar = () => tokenVar("--color-sidebar");
-
-  // 既定はライト。
-  await expect(html).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-
-  const toggle = page.getByTestId("appearance-theme-toggle");
-  await toggle.getByRole("button", { name: "ダーク" }).click();
-  await expect(html).toHaveClass(/dark/);
-  // 冷調 blue-gray の semantic token。純黒・大面積の純白は使わない。
-  // canvas = neutral-950 / sidebar = neutral-1000 / fg = neutral-100 / fg-muted = neutral-350 /
-  // border-control = neutral-650 / accent-emphasis = blue-600（いずれもダーク側の値）
-  await expect.poll(bgVar).toBe(hexToRgb("#101318"));
-  expect(await sidebarBgVar()).toBe(hexToRgb("#0b0e13"));
-  expect(await tokenVar("--color-fg")).toBe(hexToRgb("#f2f4f7"));
-  expect(await tokenVar("--color-fg-muted")).toBe(hexToRgb("#b2bac5"));
-  expect(await tokenVar("--color-border-control")).toBe(hexToRgb("#5d6878"));
-  expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#286abd"));
-  await expect(toggle.getByRole("button", { name: "ダーク" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toHaveCSS(
-    "color",
-    "rgb(242, 244, 247)"
-  );
-
-  // 再読込しても永続化される。
-  await page.reload();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-
-  // 自動テーマは実行中の OS 設定変更にも追従する。
-  await page.emulateMedia({ colorScheme: "dark" });
-  await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "自動（OS 設定）" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#101318"));
-  await page.emulateMedia({ colorScheme: "light" });
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-
-  await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: "ライト" }).click();
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
-});
-
-test("テーマ切替は transition で旧テーマの色から補間せず、一度で切り替える (#571)", async ({ page }) => {
-  await page.goto("/settings/appearance");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
-
-  for (const label of ["ダーク", "ライト"]) {
-    // クリックと同じタスク内で次のフレームまで待ち、実行中の CSS transition を集める。
-    // 押したトグル自身の aria-pressed の変化は操作へのフィードバックなので対象外にする。
-    const running = await page.evaluate(async (name) => {
-      const group = document.querySelector('[data-testid="appearance-theme-toggle"]')!;
-      const button = Array.from(group.querySelectorAll("button")).find((node) => node.textContent?.trim() === name)!;
-      button.click();
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      return document
-        .getAnimations()
-        .filter((animation): animation is CSSTransition => animation instanceof CSSTransition)
-        .filter((animation) => {
-          const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
-          return !(target instanceof Node && group.contains(target));
-        })
-        .map((animation) => {
-          const target = (animation.effect as KeyframeEffect).target as Element;
-          return `${target.tagName.toLowerCase()}.${String(target.className).slice(0, 40)} ${animation.transitionProperty}`;
-        });
-    }, label);
-    expect(running, `${label} へ切り替えた直後の transition`).toEqual([]);
+  // OS が dark でも、html は class・data-theme を持たず color-scheme: light のまま。
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+    await expect(html).toHaveCSS("color-scheme", "light");
+    await expect(html).not.toHaveAttribute("data-theme");
+    expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
+    await expect.poll(bgVar).toBe(hexToRgb("#f7f8fa"));
+    // canvas = neutral-50 / accent-emphasis = teal-500 / sidebar = teal-850
+    expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#0d7469"));
+    expect(await tokenVar("--color-sidebar")).toBe(hexToRgb("#0f2c2a"));
   }
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-
-  // 切替後は通常どおり transition が効く（止めたままにしない）。
-  await expect
-    .poll(() => page.locator('aside a[aria-current="page"]').evaluate((node) => getComputedStyle(node).transitionDuration))
-    .not.toBe("0s");
 });
 
 test("OCI 初期取得失敗は編集を許可せず、再試行後の遅延保存中も入力と重複操作を防ぐ", async ({ page }) => {
@@ -2907,6 +2846,10 @@ test("未保存の変更があるときはブラウザの戻る操作でも破�
 });
 
 test("レビュー補完: システム設定6画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
+  // 外観と証明書はテーマの選択が無い（#17）ので、CA の証明書を配る状態にしてダウンロードのリンクへフォーカスする。
+  await page.route("**/platform/ca.crt", (route) =>
+    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
+  );
   for (const slug of ["oci", "upload-storage", "model", "database", "system-tables", "appearance"]) {
     await page.goto(`/settings/${slug}`);
     await expect(page.locator("main")).toBeVisible();
@@ -2915,7 +2858,7 @@ test("レビュー補完: システム設定6画面の表示とキーボード�
       : slug === "model" ? page.locator("#enterprise-endpoint")
       : slug === "database" ? page.locator("#oracle-user")
       : slug === "system-tables" ? page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" })
-      : page.getByRole("button", { name: "ライト", exact: true });
+      : page.getByRole("link", { name: "CA の証明書をダウンロード" });
     await expect(ready).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await ready.focus();
@@ -2932,37 +2875,33 @@ test.afterEach(async ({ page }, testInfo) => {
 
 // HTTPS の証明書（#1316）: 1 台の Compute の Nginx が /platform/ca.crt で CA の証明書を配る。製品は /<製品>/ の下でも
 // サイトの root の /platform/ca.crt を見る。ローカルの開発（Vite）は配っていないので説明だけを出す。
-for (const theme of ["ライト", "ダーク"] as const) {
-  test(`外観と証明書の HTTPS の証明書（${theme}）`, async ({ page }) => {
-    await page.goto("/settings/appearance");
-    await page.getByTestId("appearance-theme-toggle").getByRole("button", { name: theme }).click();
-    await expect(page.locator("html")).toHaveClass(theme === "ダーク" ? /dark/ : /^(?!.*\bdark\b).*$/);
+test("外観と証明書の HTTPS の証明書", async ({ page }) => {
+  await page.goto("/settings/appearance");
 
-    const card = page.getByTestId("appearance-ca-certificate");
-    await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
-    await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
-    await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
+  const card = page.getByTestId("appearance-ca-certificate");
+  await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
+  await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
+  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
 
-    await page.route("**/platform/ca.crt", (route) =>
-      route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-    );
-    await page.reload();
-    await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
-    await card.getByText("端末への取り込み方").click();
-    // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
-    await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
-      "Windows（Edge・Chrome）",
-      "macOS（Safari・Chrome・Edge）",
-      "iPhone / iPad（すべてのブラウザ）",
-      "Android（Chrome）",
-      "Edge",
-      "Chrome",
-      "Firefox",
-    ]);
-    await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
-  });
-}
+  await page.route("**/platform/ca.crt", (route) =>
+    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
+  );
+  await page.reload();
+  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
+  await card.getByText("端末への取り込み方").click();
+  // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
+  await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
+    "Windows（Edge・Chrome）",
+    "macOS（Safari・Chrome・Edge）",
+    "iPhone / iPad（すべてのブラウザ）",
+    "Android（Chrome）",
+    "Edge",
+    "Chrome",
+    "Firefox",
+  ]);
+  await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

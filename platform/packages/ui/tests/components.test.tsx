@@ -390,9 +390,9 @@ describe("SidebarAccountFooter", () => {
     expect(html).not.toMatch(/lucide-user-round/);
   });
 
-  it("テーマ切替だけのときはラベル付きの行にする（アイコンだけの幅広ボタンにしない）", () => {
-    const html = renderToStaticMarkup(<SidebarAccountFooter collapsed={false} theme="light" onToggleTheme={() => {}} />);
-    expect(html).toContain("ダークテーマに切り替え");
-    expect(html).not.toMatch(/w-11/);
+  it("テーマ切替を出さない（#17。配色はライトの 1 種類だけ）", () => {
+    const html = renderToStaticMarkup(<SidebarAccountFooter collapsed={false} onLogout={() => {}} />);
+    expect(html).toContain("ログアウト");
+    expect(html).not.toMatch(/テーマに切り替え|lucide-moon|lucide-sun/);
   });
 });

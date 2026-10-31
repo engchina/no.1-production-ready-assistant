@@ -136,111 +136,106 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 900, collapse: false },
   { name: "mobile", width: 375, height: 900, collapse: true },
 ]) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`検索方法の画面で回答の検索と生成の既定を変えて保存できる (#593, ${viewport.name}, ${theme})`, { tag: "@responsive" }, async ({
-      page,
-    }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      // 外観（テーマ）とサイドバーの折りたたみは共有 UI の ui-store の保存値で決まる。
-      await page.addInitScript(
-        (state) => window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state, version: 0 })),
-        { theme, sidebarCollapsed: viewport.collapse }
-      );
-      await mockRetrievalCards(page);
-      const saved: unknown[] = [];
-      await mockAnsweringSettings(page, saved);
+  test(`検索方法の画面で回答の検索と生成の既定を変えて保存できる (#593, ${viewport.name})`, { tag: "@responsive" }, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    // サイドバーの折りたたみは共有 UI の ui-store の保存値で決まる。
+    await page.addInitScript(
+      (state) => window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state, version: 0 })),
+      { sidebarCollapsed: viewport.collapse }
+    );
+    await mockRetrievalCards(page);
+    const saved: unknown[] = [];
+    await mockAnsweringSettings(page, saved);
 
-      await page.goto("/settings/retrieval");
-      await expect
-        .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-        .toBe(theme === "dark");
+    await page.goto("/settings/retrieval");
 
-      await expect(page.getByText("回答の検索と生成", { exact: true })).toBeVisible();
-      // 画面の文言に移植元の呼び名（DocRAG）を出さない（#593）。
-      const card = page.getByTestId("answering-settings-card");
-      await expect(card).not.toContainText("DocRAG");
-      await expect(card.getByRole("switch")).toHaveCount(7);
-      expect(await card.getByRole("switch").evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))))
-        .toEqual(["質問から項目の条件を読み取る", "実体・別名による検索拡張", "文書構造による検索拡張", "画面目録で操作画面を探す", "Rerank で検索候補を並べ替える", "章節で広げる根拠", "根拠の無い要求を探し直す"]);
-      const strategy = page.getByRole("combobox", { name: "質問の拡張", exact: true });
-      await expect(strategy).toContainText("自動ルーティング");
-      // 回答の生成方式の既定は標準 RAG。先頭に「（既定）」付きで並べ、CRAG は任意で AI の呼び出しが増えると説明する（#3509）。
-      const answerFlow = page.getByRole("combobox", { name: "回答の生成方式", exact: true });
-      await expect(answerFlow).toContainText("標準 RAG（既定）");
-      await expect(answerFlow).toHaveAccessibleDescription(/CRAG は必要なときだけ選ぶ方式.*回答生成前.*AI の呼び出しが増え/);
-      await expect(answerFlow).toHaveAccessibleDescription(/生成後の再検索・監査とは別の設定.*自動では有効にしません/);
-      await expect(page.getByRole("switch", { name: "Rerank で検索候補を並べ替える" })).toBeChecked();
-      await page.getByRole("switch", { name: "質問から項目の条件を読み取る" }).scrollIntoViewIfNeeded();
-      await page.screenshot({ path: test.info().outputPath("retrieval-option-order.png") });
-      const screenLinking = page.getByRole("switch", { name: "画面目録で操作画面を探す" });
-      await expect(screenLinking).not.toBeChecked();
-      // 根拠の無い要求を探し直す（#1279）は既定で無効。
-      const requestCoverage = page.getByRole("switch", { name: "根拠の無い要求を探し直す" });
-      await expect(requestCoverage).not.toBeChecked();
-      await expect(requestCoverage).toHaveAccessibleDescription(/回答生成が明示した根拠不足.*回数・時間の予算内/);
-      await expect(requestCoverage).toHaveAccessibleDescription(/既にある根拠で説明が抜けた場合.*材料不足として検索し直す設定ではありません/);
-      await expect(requestCoverage).toHaveAccessibleDescription(/未校正の意味監査の結果だけでは、追加検索や再生成を行いません/);
-      await requestCoverage.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath(`settings-${viewport.name}-${theme}.png`) });
-      await expect(answerFlow).toHaveAccessibleDescription(/初回を含め最大 3 段.*書き換えは最大 2 回/);
-      await expect(screenLinking).toHaveAccessibleDescription(/目録がない場合.*省略/);
-      const autoFieldFilter = page.getByRole("switch", { name: "質問から項目の条件を読み取る" });
-      await expect(autoFieldFilter).not.toBeChecked();
-      // 文書構造による検索拡張（#2055）は既定で無効。AI の呼び出しが増えないことを説明に出す。
-      const graphExpansion = page.getByRole("switch", { name: "文書構造による検索拡張" });
-      await expect(graphExpansion).not.toBeChecked();
-      await graphExpansion.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: test.info().outputPath("entity-structure-expansion.png") });
-      await expect(graphExpansion).toHaveAccessibleDescription(/AI の呼び出しは増えません/);
-      await expect(graphExpansion).toHaveAccessibleDescription(/文書構造索引.*併用でき.*重複して加えません/);
-      await expect(page.getByRole("switch", { name: "実体・別名による検索拡張" })).toHaveAccessibleDescription(/名称・ID・別名.*1 段.*文書構造による検索拡張と併用/);
-      const save = page.getByRole("button", { name: "回答の設定を保存", exact: true });
-      await expect(save).toBeDisabled();
+    await expect(page.getByText("回答の検索と生成", { exact: true })).toBeVisible();
+    // 画面の文言に移植元の呼び名（DocRAG）を出さない（#593）。
+    const card = page.getByTestId("answering-settings-card");
+    await expect(card).not.toContainText("DocRAG");
+    await expect(card.getByRole("switch")).toHaveCount(7);
+    expect(await card.getByRole("switch").evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))))
+      .toEqual(["質問から項目の条件を読み取る", "実体・別名による検索拡張", "文書構造による検索拡張", "画面目録で操作画面を探す", "Rerank で検索候補を並べ替える", "章節で広げる根拠", "根拠の無い要求を探し直す"]);
+    const strategy = page.getByRole("combobox", { name: "質問の拡張", exact: true });
+    await expect(strategy).toContainText("自動ルーティング");
+    // 回答の生成方式の既定は標準 RAG。先頭に「（既定）」付きで並べ、CRAG は任意で AI の呼び出しが増えると説明する（#3509）。
+    const answerFlow = page.getByRole("combobox", { name: "回答の生成方式", exact: true });
+    await expect(answerFlow).toContainText("標準 RAG（既定）");
+    await expect(answerFlow).toHaveAccessibleDescription(/CRAG は必要なときだけ選ぶ方式.*回答生成前.*AI の呼び出しが増え/);
+    await expect(answerFlow).toHaveAccessibleDescription(/生成後の再検索・監査とは別の設定.*自動では有効にしません/);
+    await expect(page.getByRole("switch", { name: "Rerank で検索候補を並べ替える" })).toBeChecked();
+    await page.getByRole("switch", { name: "質問から項目の条件を読み取る" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath("retrieval-option-order.png") });
+    const screenLinking = page.getByRole("switch", { name: "画面目録で操作画面を探す" });
+    await expect(screenLinking).not.toBeChecked();
+    // 根拠の無い要求を探し直す（#1279）は既定で無効。
+    const requestCoverage = page.getByRole("switch", { name: "根拠の無い要求を探し直す" });
+    await expect(requestCoverage).not.toBeChecked();
+    await expect(requestCoverage).toHaveAccessibleDescription(/回答生成が明示した根拠不足.*回数・時間の予算内/);
+    await expect(requestCoverage).toHaveAccessibleDescription(/既にある根拠で説明が抜けた場合.*材料不足として検索し直す設定ではありません/);
+    await expect(requestCoverage).toHaveAccessibleDescription(/未校正の意味監査の結果だけでは、追加検索や再生成を行いません/);
+    await requestCoverage.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`settings-${viewport.name}.png`) });
+    await expect(answerFlow).toHaveAccessibleDescription(/初回を含め最大 3 段.*書き換えは最大 2 回/);
+    await expect(screenLinking).toHaveAccessibleDescription(/目録がない場合.*省略/);
+    const autoFieldFilter = page.getByRole("switch", { name: "質問から項目の条件を読み取る" });
+    await expect(autoFieldFilter).not.toBeChecked();
+    // 文書構造による検索拡張（#2055）は既定で無効。AI の呼び出しが増えないことを説明に出す。
+    const graphExpansion = page.getByRole("switch", { name: "文書構造による検索拡張" });
+    await expect(graphExpansion).not.toBeChecked();
+    await graphExpansion.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath("entity-structure-expansion.png") });
+    await expect(graphExpansion).toHaveAccessibleDescription(/AI の呼び出しは増えません/);
+    await expect(graphExpansion).toHaveAccessibleDescription(/文書構造索引.*併用でき.*重複して加えません/);
+    await expect(page.getByRole("switch", { name: "実体・別名による検索拡張" })).toHaveAccessibleDescription(/名称・ID・別名.*1 段.*文書構造による検索拡張と併用/);
+    const save = page.getByRole("button", { name: "回答の設定を保存", exact: true });
+    await expect(save).toBeDisabled();
 
-      await strategy.click();
-      await page.getByRole("option", { name: /RAG フュージョン/ }).click();
-      await answerFlow.click();
-      await expect(page.getByRole("option")).toHaveText(["標準 RAG（既定）", "CRAG（根拠を評価し、必要なら補正検索）"]);
-      await page.getByRole("option", { name: /^CRAG/ }).click();
-      await expect(answerFlow).toContainText("CRAG");
-      await page.getByRole("combobox", { name: "根拠の前後から加える数", exact: true }).click();
-      await page.getByRole("option", { name: "5", exact: true }).click();
-      await screenLinking.click();
-      await autoFieldFilter.click();
-      await requestCoverage.click();
-      const auditMode = page.getByRole("combobox", { name: "AIによる確認", exact: true });
-      await expect(auditMode).toContainText("実行しない");
-      await auditMode.click();
-      await page.getByRole("option", { name: "詳細", exact: true }).click();
-      await graphExpansion.click();
-      await expect(save).toBeEnabled();
-      await save.click();
+    await strategy.click();
+    await page.getByRole("option", { name: /RAG フュージョン/ }).click();
+    await answerFlow.click();
+    await expect(page.getByRole("option")).toHaveText(["標準 RAG（既定）", "CRAG（根拠を評価し、必要なら補正検索）"]);
+    await page.getByRole("option", { name: /^CRAG/ }).click();
+    await expect(answerFlow).toContainText("CRAG");
+    await page.getByRole("combobox", { name: "根拠の前後から加える数", exact: true }).click();
+    await page.getByRole("option", { name: "5", exact: true }).click();
+    await screenLinking.click();
+    await autoFieldFilter.click();
+    await requestCoverage.click();
+    const auditMode = page.getByRole("combobox", { name: "AIによる確認", exact: true });
+    await expect(auditMode).toContainText("実行しない");
+    await auditMode.click();
+    await page.getByRole("option", { name: "詳細", exact: true }).click();
+    await graphExpansion.click();
+    await expect(save).toBeEnabled();
+    await save.click();
 
-      await expect(page.getByText("回答の検索と生成の設定を保存しました。")).toBeVisible();
-      expect(saved).toEqual([
-        {
-          query_strategy: "rag_fusion",
-          answer_flow: "crag",
-          answer_audit_mode: "detailed",
-          answer_evidence_refinement_mode: "legacy",
-          neighbor_child_count: 5,
-          rerank_enabled: true,
-          screen_linking_enabled: true,
-          request_coverage_retrieval_enabled: true,
-          auto_field_filter_enabled: true,
-          graph_expansion_enabled: true,
-          entity_expansion_enabled: true,
-          entity_expansion_max_chunks: 6,
-          section_expansion_enabled: true,
-          section_expansion_max_levels: 4,
-          section_expansion_input_token_percent: 50,
-        },
-      ]);
-      await expect(save).toBeDisabled();
-      await expect(screenLinking).toBeChecked();
-      await expectNoPageOverflow(page);
-    });
-  }
+    await expect(page.getByText("回答の検索と生成の設定を保存しました。")).toBeVisible();
+    expect(saved).toEqual([
+      {
+        query_strategy: "rag_fusion",
+        answer_flow: "crag",
+        answer_audit_mode: "detailed",
+        answer_evidence_refinement_mode: "legacy",
+        neighbor_child_count: 5,
+        rerank_enabled: true,
+        screen_linking_enabled: true,
+        request_coverage_retrieval_enabled: true,
+        auto_field_filter_enabled: true,
+        graph_expansion_enabled: true,
+        entity_expansion_enabled: true,
+        entity_expansion_max_chunks: 6,
+        section_expansion_enabled: true,
+        section_expansion_max_levels: 4,
+        section_expansion_input_token_percent: 50,
+      },
+    ]);
+    await expect(save).toBeDisabled();
+    await expect(screenLinking).toBeChecked();
+    await expectNoPageOverflow(page);
+  });
 }
 
 for (const viewport of [

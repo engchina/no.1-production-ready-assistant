@@ -1190,172 +1190,169 @@ async function screenshotWhole(page: Page, locator: Locator, path: string) {
   await locator.screenshot({ path });
 }
 
-async function applyRequirementColorScheme(page: Page, colorScheme: "light" | "dark") {
-  await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-  await page.evaluate((dark) => document.documentElement.classList.toggle("dark", dark), colorScheme === "dark");
+async function reduceMotion(page: Page) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
 }
 
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`回答前の確認は select * の要件を 2 行と「指定なし」の 1 行で示し、畳んだ要約にする (${colorScheme})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    const viewport = testInfo.project.name;
-    const payloads = await mockApi(page, {
-      createStage: "select_all_table",
-      answerStages: ["select_all", "select_all_ordered"],
-    });
-    await page.goto("/query");
-    await applyRequirementColorScheme(page, colorScheme);
-    // `select * from employee` 相当の質問（SQL の文そのものは回答前の確認を飛ばすので、自然文で聞く。#1715）。
-    const panel = await startRequirementCheck(page, "社員をすべて表示");
-    // 確認が要らなければ聞かずに反映する（#1715）。ここでは表が 2 つあるので、表だけを聞く。
-    const tableQuestion = panel.getByTestId("nl2sql-clarification-question");
-    await tableQuestion.getByRole("radio", { name: /ADMIN\.EMPLOYEE（社員）/ }).check();
-    await tableQuestion.getByRole("button", { name: "この内容で回答" }).click();
-
-    const requirements = panel.getByTestId("nl2sql-clarification-requirements");
-    await expect(requirements).toHaveAttribute("data-needs-answer", "false");
-    const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
-    await expect(toggle).toContainText("確認の必要なし");
-    await expect(toggle).toContainText("使用テーブル ADMIN.EMPLOYEE ／ 表示列 ADMIN.EMPLOYEE.*");
-    await expect(requirements.getByTestId("nl2sql-requirement-item").first()).toBeHidden();
-    await expectNoPageOverflow(page);
-    await screenshotWhole(page, panel, testInfo.outputPath(`select-all-collapsed-${viewport}-${colorScheme}.png`));
-
-    await toggle.click();
-    const rows = requirements.getByTestId("nl2sql-requirement-item");
-    await expect(rows).toHaveCount(2);
-    await expect(rows.nth(0)).toContainText("使用テーブル");
-    await expect(rows.nth(0)).toContainText("ADMIN.EMPLOYEE");
-    await expect(rows.nth(1)).toContainText("表示列");
-    await expect(rows.nth(1)).toContainText("ADMIN.EMPLOYEE.*");
-    await expect(rows.getByText("確定", { exact: true })).toHaveCount(2);
-    await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
-      "指定なし: 結合・期間・絞り込み・集計・並び順・サブクエリ・その他"
-    );
-    // 値の無い部分に「AI の推測」「未確認」を出さない。期間の列（HIRE_DATE）も値のように出さない。
-    await expect(requirements.getByText("AI の推測", { exact: true })).toHaveCount(0);
-    await expect(requirements.getByText("未確認")).toHaveCount(0);
-    await expect(requirements.getByText(/HIRE_DATE/)).toHaveCount(0);
-    await expectNoPageOverflow(page);
-    await screenshotWhole(page, panel, testInfo.outputPath(`select-all-open-${viewport}-${colorScheme}.png`));
-
-    // 「条件を追加」で、値の無い部分（並び順）に条件を足す。
-    const addToggle = requirements.getByTestId("nl2sql-requirement-add-toggle");
-    await expect(addToggle).toHaveAttribute("aria-expanded", "false");
-    await addToggle.click();
-    await expect(addToggle).toHaveAttribute("aria-expanded", "true");
-    const addGroup = requirements.getByRole("group", { name: "追加する部分" });
-    await expect(addGroup.getByRole("button")).toHaveText([
-      "結合",
-      "期間",
-      "絞り込み",
-      "集計",
-      "並び順",
-      "件数上限",
-      "サブクエリ",
-      "その他",
-    ]);
-    await addGroup.getByRole("button", { name: "並び順の条件を追加" }).click();
-    const question = panel.getByTestId("nl2sql-clarification-question");
-    await expect(question.getByText("追加する条件: 並び順")).toBeVisible();
-    await expect(question.getByRole("heading", { name: "並び順の条件を入力してください。" })).toBeFocused();
-    // 条件を足す欄は「追加する条件」（「その他」と言わない。#3366）。
-    await question.getByRole("textbox", { name: "追加する条件", exact: true }).fill("EMPLOYEE.HIRE_DATE の新しい順");
-    await question.getByRole("button", { name: "この条件を追加" }).click();
-    expect(payloads.clarificationAnswer).toEqual({
-      base_version: 2,
-      item_id: "add:order_by",
-      selected_candidate_ids: [],
-      free_text: "EMPLOYEE.HIRE_DATE の新しい順",
-    });
-    await expect(panel.getByTestId("nl2sql-clarification-question")).toHaveCount(0);
-    // 開いた一覧はそのまま。足した部分は確定（あなたの回答）の行になり、「指定なし」から外れる。
-    const added = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="order_none"]');
-    await expect(added).toContainText("EMPLOYEE.HIRE_DATE の新しい順");
-    await expect(added).toHaveAttribute("data-item-status", "answered");
-    await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
-      "指定なし: 結合・期間・絞り込み・集計・サブクエリ・その他"
-    );
-    await screenshotWhole(page, panel, testInfo.outputPath(`select-all-added-${viewport}-${colorScheme}.png`));
+test(`回答前の確認は select * の要件を 2 行と「指定なし」の 1 行で示し、畳んだ要約にする`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const viewport = testInfo.project.name;
+  const payloads = await mockApi(page, {
+    createStage: "select_all_table",
+    answerStages: ["select_all", "select_all_ordered"],
   });
+  await page.goto("/query");
+  await reduceMotion(page);
+  // `select * from employee` 相当の質問（SQL の文そのものは回答前の確認を飛ばすので、自然文で聞く。#1715）。
+  const panel = await startRequirementCheck(page, "社員をすべて表示");
+  // 確認が要らなければ聞かずに反映する（#1715）。ここでは表が 2 つあるので、表だけを聞く。
+  const tableQuestion = panel.getByTestId("nl2sql-clarification-question");
+  await tableQuestion.getByRole("radio", { name: /ADMIN\.EMPLOYEE（社員）/ }).check();
+  await tableQuestion.getByRole("button", { name: "この内容で回答" }).click();
 
-  test(`回答前の確認の要確認の行は質問と候補を出し、候補を押して答えられる (${colorScheme})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    const viewport = testInfo.project.name;
-    const payloads = await mockApi(page, {
-      createStage: "date_column",
-      answerStages: ["date_column_basis_answered", "date_column_answered"],
-    });
-    await page.goto("/query");
-    await applyRequirementColorScheme(page, colorScheme);
-    const panel = await startRequirementCheck(page, "直近 1 年の社員");
+  const requirements = panel.getByTestId("nl2sql-clarification-requirements");
+  await expect(requirements).toHaveAttribute("data-needs-answer", "false");
+  const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
+  await expect(toggle).toContainText("確認の必要なし");
+  await expect(toggle).toContainText("使用テーブル ADMIN.EMPLOYEE ／ 表示列 ADMIN.EMPLOYEE.*");
+  await expect(requirements.getByTestId("nl2sql-requirement-item").first()).toBeHidden();
+  await expectNoPageOverflow(page);
+  await screenshotWhole(page, panel, testInfo.outputPath(`select-all-collapsed-${viewport}-light.png`));
 
-    const requirements = panel.getByTestId("nl2sql-clarification-requirements");
-    await expect(requirements).toHaveAttribute("data-needs-answer", "true");
-    await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 2 件");
-    // 今の質問（日付の列）は回答欄で答える。一覧の行には質問だけを出し、候補を 2 か所に出さない。
-    const question = panel.getByTestId("nl2sql-clarification-question");
-    await expect(question).toHaveAttribute("data-item-key", "period_date_column");
-    const columnRow = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_date_column"]');
-    await expect(columnRow).toHaveAttribute("data-current", "true");
-    await expect(columnRow.getByText("「直近 1 年」は、どの日付の列で絞りますか？")).toBeVisible();
-    await expect(columnRow.getByText("この質問は、いま回答欄で確認しています。")).toBeVisible();
-    await expect(columnRow.getByRole("button")).toHaveCount(0);
-    // ほかの要確認の行は、質問と候補を出し、候補を押して答えられる。
-    const basisRow = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_reference_basis"]');
-    await expect(basisRow).toHaveAttribute("data-item-kind", "needs_answer");
-    await expect(basisRow.getByText("「直近 1 年」は、いつから数えますか？")).toBeVisible();
-    await expect(basisRow.getByText("要確認", { exact: true })).toBeVisible();
-    const candidates = basisRow.getByRole("group", { name: "期間の基準日の候補" });
-    await expect(candidates.getByRole("button")).toHaveText(["実行日（2026-10-11）から", "データの最新日から"]);
-    await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
-      "指定なし: 結合・絞り込み・集計・並び順・サブクエリ・その他"
-    );
-    await expectNoPageOverflow(page);
-    await screenshotWhole(page, panel, testInfo.outputPath(`date-column-needs-answer-${viewport}-${colorScheme}.png`));
+  await toggle.click();
+  const rows = requirements.getByTestId("nl2sql-requirement-item");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("使用テーブル");
+  await expect(rows.nth(0)).toContainText("ADMIN.EMPLOYEE");
+  await expect(rows.nth(1)).toContainText("表示列");
+  await expect(rows.nth(1)).toContainText("ADMIN.EMPLOYEE.*");
+  await expect(rows.getByText("確定", { exact: true })).toHaveCount(2);
+  await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
+    "指定なし: 結合・期間・絞り込み・集計・並び順・サブクエリ・その他"
+  );
+  // 値の無い部分に「AI の推測」「未確認」を出さない。期間の列（HIRE_DATE）も値のように出さない。
+  await expect(requirements.getByText("AI の推測", { exact: true })).toHaveCount(0);
+  await expect(requirements.getByText("未確認")).toHaveCount(0);
+  await expect(requirements.getByText(/HIRE_DATE/)).toHaveCount(0);
+  await expectNoPageOverflow(page);
+  await screenshotWhole(page, panel, testInfo.outputPath(`select-all-open-${viewport}-light.png`));
 
-    await candidates.getByRole("button", { name: "「実行日（2026-10-11）から」と答える" }).click();
-    expect(payloads.clarificationAnswer).toEqual({
-      base_version: 1,
-      item_id: "item-e-basis",
-      selected_candidate_ids: ["candidate-basis-execution"],
-      free_text: "",
-    });
-    await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 1 件");
-    await expect(basisRow).toHaveAttribute("data-item-status", "answered");
-
-    await question.getByRole("radio", { name: /EMPLOYEE\.HIRE_DATE/ }).check();
-    await question.getByRole("button", { name: "この内容で回答" }).click();
-    // 答えたら要確認が無くなり、畳んで要約の 1 行にする。
-    await expect(requirements).toHaveAttribute("data-needs-answer", "false");
-    await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText(
-      "期間 EMPLOYEE.HIRE_DATE（入社日）"
-    );
-    await expect(panel.getByRole("button", { name: "この内容で SQL を生成して実行" })).toBeVisible();
-    await expectNoPageOverflow(page);
-    await screenshotWhole(page, panel, testInfo.outputPath(`date-column-answered-${viewport}-${colorScheme}.png`));
+  // 「条件を追加」で、値の無い部分（並び順）に条件を足す。
+  const addToggle = requirements.getByTestId("nl2sql-requirement-add-toggle");
+  await expect(addToggle).toHaveAttribute("aria-expanded", "false");
+  await addToggle.click();
+  await expect(addToggle).toHaveAttribute("aria-expanded", "true");
+  const addGroup = requirements.getByRole("group", { name: "追加する部分" });
+  await expect(addGroup.getByRole("button")).toHaveText([
+    "結合",
+    "期間",
+    "絞り込み",
+    "集計",
+    "並び順",
+    "件数上限",
+    "サブクエリ",
+    "その他",
+  ]);
+  await addGroup.getByRole("button", { name: "並び順の条件を追加" }).click();
+  const question = panel.getByTestId("nl2sql-clarification-question");
+  await expect(question.getByText("追加する条件: 並び順")).toBeVisible();
+  await expect(question.getByRole("heading", { name: "並び順の条件を入力してください。" })).toBeFocused();
+  // 条件を足す欄は「追加する条件」（「その他」と言わない。#3366）。
+  await question.getByRole("textbox", { name: "追加する条件", exact: true }).fill("EMPLOYEE.HIRE_DATE の新しい順");
+  await question.getByRole("button", { name: "この条件を追加" }).click();
+  expect(payloads.clarificationAnswer).toEqual({
+    base_version: 2,
+    item_id: "add:order_by",
+    selected_candidate_ids: [],
+    free_text: "EMPLOYEE.HIRE_DATE の新しい順",
   });
+  await expect(panel.getByTestId("nl2sql-clarification-question")).toHaveCount(0);
+  // 開いた一覧はそのまま。足した部分は確定（あなたの回答）の行になり、「指定なし」から外れる。
+  const added = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="order_none"]');
+  await expect(added).toContainText("EMPLOYEE.HIRE_DATE の新しい順");
+  await expect(added).toHaveAttribute("data-item-status", "answered");
+  await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
+    "指定なし: 結合・期間・絞り込み・集計・サブクエリ・その他"
+  );
+  await screenshotWhole(page, panel, testInfo.outputPath(`select-all-added-${viewport}-light.png`));
+});
 
-  test(`回答前の確認はすべて確定した要件を畳み、開くと確定の一覧を見せる (${colorScheme})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    const viewport = testInfo.project.name;
-    await mockApi(page, { createStage: "all_confirmed" });
-    await page.goto("/query");
-    await applyRequirementColorScheme(page, colorScheme);
-    const panel = await startRequirementCheck(page);
-
-    const requirements = panel.getByTestId("nl2sql-clarification-requirements");
-    const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
-    await expect(toggle).toContainText("確認の必要なし");
-    await screenshotWhole(page, panel, testInfo.outputPath(`all-confirmed-collapsed-${viewport}-${colorScheme}.png`));
-    await toggle.click();
-    const rows = requirements.getByTestId("nl2sql-requirement-item");
-    await expect(rows).toHaveCount(6);
-    await expect(rows.getByText("確定", { exact: true })).toHaveCount(6);
-    await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
-      "指定なし: 絞り込み・サブクエリ・その他"
-    );
-    await expectNoPageOverflow(page);
-    await screenshotWhole(page, panel, testInfo.outputPath(`all-confirmed-open-${viewport}-${colorScheme}.png`));
+test(`回答前の確認の要確認の行は質問と候補を出し、候補を押して答えられる`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const viewport = testInfo.project.name;
+  const payloads = await mockApi(page, {
+    createStage: "date_column",
+    answerStages: ["date_column_basis_answered", "date_column_answered"],
   });
-}
+  await page.goto("/query");
+  await reduceMotion(page);
+  const panel = await startRequirementCheck(page, "直近 1 年の社員");
+
+  const requirements = panel.getByTestId("nl2sql-clarification-requirements");
+  await expect(requirements).toHaveAttribute("data-needs-answer", "true");
+  await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 2 件");
+  // 今の質問（日付の列）は回答欄で答える。一覧の行には質問だけを出し、候補を 2 か所に出さない。
+  const question = panel.getByTestId("nl2sql-clarification-question");
+  await expect(question).toHaveAttribute("data-item-key", "period_date_column");
+  const columnRow = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_date_column"]');
+  await expect(columnRow).toHaveAttribute("data-current", "true");
+  await expect(columnRow.getByText("「直近 1 年」は、どの日付の列で絞りますか？")).toBeVisible();
+  await expect(columnRow.getByText("この質問は、いま回答欄で確認しています。")).toBeVisible();
+  await expect(columnRow.getByRole("button")).toHaveCount(0);
+  // ほかの要確認の行は、質問と候補を出し、候補を押して答えられる。
+  const basisRow = requirements.locator('[data-testid="nl2sql-requirement-item"][data-item-key="period_reference_basis"]');
+  await expect(basisRow).toHaveAttribute("data-item-kind", "needs_answer");
+  await expect(basisRow.getByText("「直近 1 年」は、いつから数えますか？")).toBeVisible();
+  await expect(basisRow.getByText("要確認", { exact: true })).toBeVisible();
+  const candidates = basisRow.getByRole("group", { name: "期間の基準日の候補" });
+  await expect(candidates.getByRole("button")).toHaveText(["実行日（2026-10-11）から", "データの最新日から"]);
+  await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
+    "指定なし: 結合・絞り込み・集計・並び順・サブクエリ・その他"
+  );
+  await expectNoPageOverflow(page);
+  await screenshotWhole(page, panel, testInfo.outputPath(`date-column-needs-answer-${viewport}-light.png`));
+
+  await candidates.getByRole("button", { name: "「実行日（2026-10-11）から」と答える" }).click();
+  expect(payloads.clarificationAnswer).toEqual({
+    base_version: 1,
+    item_id: "item-e-basis",
+    selected_candidate_ids: ["candidate-basis-execution"],
+    free_text: "",
+  });
+  await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText("要確認 1 件");
+  await expect(basisRow).toHaveAttribute("data-item-status", "answered");
+
+  await question.getByRole("radio", { name: /EMPLOYEE\.HIRE_DATE/ }).check();
+  await question.getByRole("button", { name: "この内容で回答" }).click();
+  // 答えたら要確認が無くなり、畳んで要約の 1 行にする。
+  await expect(requirements).toHaveAttribute("data-needs-answer", "false");
+  await expect(requirements.getByTestId("nl2sql-clarification-requirements-toggle")).toContainText(
+    "期間 EMPLOYEE.HIRE_DATE（入社日）"
+  );
+  await expect(panel.getByRole("button", { name: "この内容で SQL を生成して実行" })).toBeVisible();
+  await expectNoPageOverflow(page);
+  await screenshotWhole(page, panel, testInfo.outputPath(`date-column-answered-${viewport}-light.png`));
+});
+
+test(`回答前の確認はすべて確定した要件を畳み、開くと確定の一覧を見せる`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const viewport = testInfo.project.name;
+  await mockApi(page, { createStage: "all_confirmed" });
+  await page.goto("/query");
+  await reduceMotion(page);
+  const panel = await startRequirementCheck(page);
+
+  const requirements = panel.getByTestId("nl2sql-clarification-requirements");
+  const toggle = requirements.getByTestId("nl2sql-clarification-requirements-toggle");
+  await expect(toggle).toContainText("確認の必要なし");
+  await screenshotWhole(page, panel, testInfo.outputPath(`all-confirmed-collapsed-${viewport}-light.png`));
+  await toggle.click();
+  const rows = requirements.getByTestId("nl2sql-requirement-item");
+  await expect(rows).toHaveCount(6);
+  await expect(rows.getByText("確定", { exact: true })).toHaveCount(6);
+  await expect(requirements.getByTestId("nl2sql-requirement-unspecified")).toContainText(
+    "指定なし: 絞り込み・サブクエリ・その他"
+  );
+  await expectNoPageOverflow(page);
+  await screenshotWhole(page, panel, testInfo.outputPath(`all-confirmed-open-${viewport}-light.png`));
+});
 
 // 375px ではサイドナビが畳まれるため、ナビのリンクと同じ client-side の遷移を history で起こす。
 async function navigateInApp(page: Page, path: string) {
@@ -1650,15 +1647,12 @@ test.describe("回答前の確認の確認のカード (#1761)", { tag: "@respon
     expect(hintBox!.y).toBeGreaterThanOrEqual(textBox!.y + textBox!.height);
     expect(hintBox!.y).toBeGreaterThanOrEqual(buttonBox!.y + buttonBox!.height);
     await expectNoPageOverflow(page);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyRequirementColorScheme(page, colorScheme);
-      await screenshotWhole(
-        page,
-        confirm,
-        testInfo.outputPath(`sql-confirm-pending-hint-${testInfo.project.name}-${colorScheme}.png`)
-      );
-    }
-    await applyRequirementColorScheme(page, "light");
+    await reduceMotion(page);
+    await screenshotWhole(
+      page,
+      confirm,
+      testInfo.outputPath(`sql-confirm-pending-hint-${testInfo.project.name}-light.png`)
+    );
 
     // 空白だけは直しにならないので説明を出さず、空にすると消えて押せる。
     await freeText.fill("   ");
@@ -1707,15 +1701,12 @@ test.describe("回答前の確認の確認のカード (#1761)", { tag: "@respon
     expect(hintBox!.y).toBeGreaterThanOrEqual(textBox!.y + textBox!.height);
     expect(hintBox!.y).toBeGreaterThanOrEqual(buttonBox!.y + buttonBox!.height);
     await expectNoPageOverflow(page);
-    for (const colorScheme of ["light", "dark"] as const) {
-      await applyRequirementColorScheme(page, colorScheme);
-      await screenshotWhole(
-        page,
-        confirm,
-        testInfo.outputPath(`sql-confirm-target-hint-${testInfo.project.name}-${colorScheme}.png`)
-      );
-    }
-    await applyRequirementColorScheme(page, "light");
+    await reduceMotion(page);
+    await screenshotWhole(
+      page,
+      confirm,
+      testInfo.outputPath(`sql-confirm-target-hint-${testInfo.project.name}-light.png`)
+    );
 
     // 元の表に戻すと直しは無くなり、説明は消えて押せる。
     await original.check();

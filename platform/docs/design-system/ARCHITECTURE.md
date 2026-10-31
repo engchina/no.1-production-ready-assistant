@@ -52,23 +52,16 @@ RAG / NL2SQL / Agent
 アプリの `globals.css` に残してよいのは、そのアプリ固有のレイアウト（業務画面特有の
 グリッドなど）だけです。**色・型・余白・角丸・影を書いてはいけません。**
 
-### 2-2. テーマ切替
+### 2-2. テーマ（ライトだけ）
 
-`<html>` の属性だけで切り替わります。CSS の `color-scheme` が全トークンを解決します。
+テーマは**ライトの 1 種類**です（#17）。ダークテーマ・OS 設定への追従・外観の設定のテーマの選択は持ちません。
+`<html>` は常に `color-scheme: light` で、テーマを切り替える属性・class（`data-theme` / `.dark`）を CSS も JS も読みません。
+アプリはテーマを適用する処理を持たず（`initTheme` は削除）、`globals.css` に色やテーマの上書きを書きません。
 
-```ts
-document.documentElement.dataset.theme = "dark";   // "light" | "dark" | "auto"
-```
-
-| 指定 | 挙動 |
-|---|---|
-| 属性なし | ライト（既定） |
-| `data-theme="light"` | ライト |
-| `data-theme="dark"` | ダーク |
-| `data-theme="auto"` | **OS 設定に追従** |
-| `class="light"` / `class="dark"` | 旧 API。既存3アプリの実装のまま動く |
-
-新規コードは `data-theme` を使ってください。`.light` / `.dark` は移行期間のための互換です。
+1 テーマにした理由（配色を 1 つに固定して製品の見た目を一意にする・検収とテストを 1 テーマにする・業務アプリとして
+1 つの配色のコントラストを確実に満たす）は `README.md` §2「テーマはライトだけ」にあります。
+サイドバー・コードの暗い面は「テーマ」ではなく常時暗いスラブ（`[data-surface="inverted"]` / `[data-surface="code"]`）で、
+内側の部品は `light-dark()` の暗い値で自動的に暗い面の見た目になります。
 
 ### 2-3. アイコン
 
@@ -138,7 +131,7 @@ export function DocumentIndexScreen() {
 | 色・型・余白・角丸・影・モーションの全トークン | `nav-config.ts` — ナビ構造 |
 | すべてのコンポーネントと状態（hover / focus / active / disabled） | `i18n.ts` — 業務コピー |
 | ARIA・キーボード操作・スキップリンク・強制カラーモード | データ取得・状態管理・権限 |
-| テーマ（light / dark / auto）と面スコープ | ドメイン enum → `StatusBadge` variant の対応表 |
+| テーマ（ライトだけ。#17）と面スコープ | ドメイン enum → `StatusBadge` variant の対応表 |
 | 日本語の行組版（禁則処理） | 画面固有の業務レイアウト |
 
 ### ドメイン enum のマッピングはアプリの責任
@@ -216,7 +209,7 @@ prop の妥当性（`Button` に存在しない prop を渡す等）は lint で
 | `components/ui/button.css` | ボタン仕様が `packages/ui` に昇格（32/36/40px、6px radius） |
 | `ui/status-badge.tsx` | `StatusBadge` に昇格（トークン + 1px border + アイコン） |
 | 独自 `PageHeader.tsx` | `PageHeader` に昇格（breadcrumbs / status / データ駆動 actions） |
-| `globals.css` の `.dark` 上書き | ダークテーマが `packages/ui` に昇格 |
+| `globals.css` の `.dark` 上書き | テーマは `packages/ui` が持つ（現在はライトだけ。#17） |
 | 独自 `TextField` | `TextField` に昇格 |
 | サイドバーフッターの独自実装 | `SidebarAccountFooter` に昇格 |
 
@@ -227,9 +220,9 @@ prop の妥当性（`Button` に存在しない prop を渡す等）は lint で
 
 ### RAG / Agent — 受け取るだけ
 
-今ライト専用なので、**ダークテーマが無償で付いてきます**（`data-theme="dark"` を付けるだけ）。
+テーマはライトだけです（§2-2。#17）。
 
-- **Agent** はサイドバーにフッターが無いので `SidebarAccountFooter`（ユーザー・ロール・ログアウト・テーマ切替）が入ります
+- **Agent** はサイドバーにフッターが無いので `SidebarAccountFooter`（ユーザー・ロール・ログアウト）が入ります
 - **RAG** は `--font-mono` が無かったので、ID とログが Google Sans Code になります
 
 ### 3アプリ共通
@@ -269,7 +262,7 @@ prop の妥当性（`Button` に存在しない prop を渡す等）は lint で
 この構成では **`packages/ui` を壊すと3アプリが同時に壊れます。** そのため:
 
 - `platform/` を変更した PR では、統合 CI が3アプリすべての job を実行します。必須 check `CI OK` が通るまで merge しません
-- 見た目に関わる変更は、CI に加えて3アプリをローカルで起動して確認します（light / dark、1280px / 1920px）
+- 見た目に関わる変更は、CI に加えて3アプリをローカルで起動して確認します（ライト、1280px / 1920px）
 - 破壊的変更は、同じ PR で3アプリの利用箇所も直せます。大きな変更で段階移行したい場合だけ、`compat.css` のような
   エイリアス層を用意して `packages/ui` の変更とアプリの変更を別の PR に分けます
 - 将来アプリのリリースサイクルが分かれるなら、`file:` からバージョン付きのレジストリ配布に移す判断が必要です
