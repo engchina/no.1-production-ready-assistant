@@ -1,0 +1,822 @@
+{
+  "backends": [
+    "docling",
+    "unstructured"
+  ],
+  "blocking_failure_count": 0,
+  "case_count": 26,
+  "cases": [
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "d47ddaf4d550a048",
+      "content_type": "application/pdf",
+      "element_count": 1,
+      "fixture_name": "pdf_fixture:8c1175899daecb5d",
+      "fixture_name_hash": "8c1175899daecb5d",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "scanned_pdf_ocr",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "c61ef0a5851a6c52",
+      "content_type": "application/pdf",
+      "element_count": 1,
+      "fixture_name": "pdf_fixture:3d01d7ff09e12d36",
+      "fixture_name_hash": "3d01d7ff09e12d36",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "two_column_pdf_reading_order",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "33c7f94071115d43",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "element_count": 1,
+      "fixture_name": "office_fixture:0e37333407da77fb",
+      "fixture_name_hash": "0e37333407da77fb",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "long_table_row_groups",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 124,
+      "table_count": 1,
+      "template": "office_sheet",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "a7117efb4ea685a6",
+      "content_type": "text/tab-separated-values",
+      "element_count": 0,
+      "fixture_name": "text_fixture:83a9bfd8009eb4fa",
+      "fixture_name_hash": "83a9bfd8009eb4fa",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "long_table_row_groups",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "88691a3adef95ccc",
+      "content_type": "text/markdown",
+      "element_count": 0,
+      "fixture_name": "text_fixture:c105269eb121c495",
+      "fixture_name_hash": "c105269eb121c495",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "cross_page_table_continuity",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "cdcea17e6e24e1d9",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "element_count": 3,
+      "fixture_name": "office_fixture:80d4ca6aeffa6001",
+      "fixture_name_hash": "80d4ca6aeffa6001",
+      "page_count": 0,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_docx_layout",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "office_document",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "f7fa7a3d4b295c63",
+      "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "element_count": 2,
+      "fixture_name": "office_fixture:9d4552e0d5a6c3c5",
+      "fixture_name_hash": "9d4552e0d5a6c3c5",
+      "page_count": 2,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_pptx_slides",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "office_slide",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "7c52a25eb7fa909c",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "element_count": 1,
+      "fixture_name": "office_fixture:cd51dfe404432f71",
+      "fixture_name_hash": "cd51dfe404432f71",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_xlsx_sheets",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 20,
+      "table_count": 1,
+      "template": "office_sheet",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "dc309cba55ecc8a9",
+      "content_type": "text/html",
+      "element_count": 6,
+      "fixture_name": "html_fixture:d7751a86014d25bd",
+      "fixture_name_hash": "d7751a86014d25bd",
+      "page_count": 0,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "html_semantic_blocks",
+      "source_kind": "html",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "html_semantic",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "a3cd260971100287",
+      "content_type": "text/markdown",
+      "element_count": 0,
+      "fixture_name": "text_fixture:de8a68b7d63b1a74",
+      "fixture_name_hash": "de8a68b7d63b1a74",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "markdown_code_formula_blocks",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "c4a91f4c1ffe11ad",
+      "content_type": "message/rfc822",
+      "element_count": 0,
+      "fixture_name": "email_fixture:04f05f69a83cbf43",
+      "fixture_name_hash": "04f05f69a83cbf43",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "email_thread_headers",
+      "source_kind": "email",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 1,
+      "backend": "docling",
+      "bbox_count": 1,
+      "blocking": true,
+      "case_ref_hash": "4bd54f7f924932de",
+      "content_type": "image/png",
+      "element_count": 1,
+      "fixture_name": "image_fixture:90f27be97823ff7f",
+      "fixture_name_hash": "90f27be97823ff7f",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "image_ocr_bbox",
+      "source_kind": "image",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "ocr_page",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "docling",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "059d265fa42284c7",
+      "content_type": "application/pdf",
+      "element_count": 1,
+      "fixture_name": "pdf_fixture:67189769ed9a4c16",
+      "fixture_name_hash": "67189769ed9a4c16",
+      "page_count": 1,
+      "parser_backend": "docling",
+      "parser_version": "docling_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "duplicate_file_canonical_kb",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 1,
+      "blocking": true,
+      "case_ref_hash": "d47ddaf4d550a048",
+      "content_type": "application/pdf",
+      "element_count": 1,
+      "fixture_name": "pdf_fixture:8c1175899daecb5d",
+      "fixture_name_hash": "8c1175899daecb5d",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "scanned_pdf_ocr",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 2,
+      "blocking": true,
+      "case_ref_hash": "c61ef0a5851a6c52",
+      "content_type": "application/pdf",
+      "element_count": 2,
+      "fixture_name": "pdf_fixture:3d01d7ff09e12d36",
+      "fixture_name_hash": "3d01d7ff09e12d36",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "two_column_pdf_reading_order",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "33c7f94071115d43",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "element_count": 1,
+      "fixture_name": "office_fixture:0e37333407da77fb",
+      "fixture_name_hash": "0e37333407da77fb",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "long_table_row_groups",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 124,
+      "table_count": 1,
+      "template": "office_sheet",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "a7117efb4ea685a6",
+      "content_type": "text/tab-separated-values",
+      "element_count": 0,
+      "fixture_name": "text_fixture:83a9bfd8009eb4fa",
+      "fixture_name_hash": "83a9bfd8009eb4fa",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "long_table_row_groups",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "88691a3adef95ccc",
+      "content_type": "text/markdown",
+      "element_count": 0,
+      "fixture_name": "text_fixture:c105269eb121c495",
+      "fixture_name_hash": "c105269eb121c495",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "cross_page_table_continuity",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "cdcea17e6e24e1d9",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "element_count": 3,
+      "fixture_name": "office_fixture:80d4ca6aeffa6001",
+      "fixture_name_hash": "80d4ca6aeffa6001",
+      "page_count": 0,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_docx_layout",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "office_document",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "f7fa7a3d4b295c63",
+      "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "element_count": 2,
+      "fixture_name": "office_fixture:9d4552e0d5a6c3c5",
+      "fixture_name_hash": "9d4552e0d5a6c3c5",
+      "page_count": 2,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_pptx_slides",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "office_slide",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "7c52a25eb7fa909c",
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "element_count": 1,
+      "fixture_name": "office_fixture:cd51dfe404432f71",
+      "fixture_name_hash": "cd51dfe404432f71",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "japanese_xlsx_sheets",
+      "source_kind": "office",
+      "status": "passed",
+      "table_cell_count": 20,
+      "table_count": 1,
+      "template": "office_sheet",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "dc309cba55ecc8a9",
+      "content_type": "text/html",
+      "element_count": 5,
+      "fixture_name": "html_fixture:d7751a86014d25bd",
+      "fixture_name_hash": "d7751a86014d25bd",
+      "page_count": 0,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "html_semantic_blocks",
+      "source_kind": "html",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "html_semantic",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": false,
+      "case_ref_hash": "a3cd260971100287",
+      "content_type": "text/markdown",
+      "element_count": 0,
+      "fixture_name": "text_fixture:de8a68b7d63b1a74",
+      "fixture_name_hash": "de8a68b7d63b1a74",
+      "page_count": 0,
+      "reason_codes": [
+        "adapter_not_routed_for_source"
+      ],
+      "scenario": "markdown_code_formula_blocks",
+      "source_kind": "text",
+      "status": "unsupported",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 0,
+      "blocking": true,
+      "case_ref_hash": "c4a91f4c1ffe11ad",
+      "content_type": "message/rfc822",
+      "element_count": 5,
+      "fixture_name": "email_fixture:04f05f69a83cbf43",
+      "fixture_name_hash": "04f05f69a83cbf43",
+      "page_count": 0,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "email_thread_headers",
+      "source_kind": "email",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "email_thread",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 1,
+      "backend": "unstructured",
+      "bbox_count": 4,
+      "blocking": true,
+      "case_ref_hash": "4bd54f7f924932de",
+      "content_type": "image/png",
+      "element_count": 3,
+      "fixture_name": "image_fixture:90f27be97823ff7f",
+      "fixture_name_hash": "90f27be97823ff7f",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "image_ocr_bbox",
+      "source_kind": "image",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "ocr_page",
+      "warning_codes": []
+    },
+    {
+      "asset_count": 0,
+      "backend": "unstructured",
+      "bbox_count": 1,
+      "blocking": true,
+      "case_ref_hash": "059d265fa42284c7",
+      "content_type": "application/pdf",
+      "element_count": 1,
+      "fixture_name": "pdf_fixture:67189769ed9a4c16",
+      "fixture_name_hash": "67189769ed9a4c16",
+      "page_count": 1,
+      "parser_backend": "unstructured",
+      "parser_version": "unstructured_adapter_v1",
+      "reason_codes": [
+        "schema_remap_contract_ok"
+      ],
+      "scenario": "duplicate_file_canonical_kb",
+      "source_kind": "pdf",
+      "status": "passed",
+      "table_cell_count": 0,
+      "table_count": 0,
+      "template": "pdf_layout",
+      "warning_codes": []
+    }
+  ],
+  "fixture_root": "fixture_root:7443aaa7bd844937",
+  "fixture_root_hash": "7443aaa7bd844937",
+  "passed": true,
+  "source_kinds": [
+    "pdf",
+    "office",
+    "text",
+    "html",
+    "email",
+    "image"
+  ],
+  "summary": {
+    "backend_passed_scenarios": {
+      "docling": [
+        "duplicate_file_canonical_kb",
+        "html_semantic_blocks",
+        "image_ocr_bbox",
+        "japanese_docx_layout",
+        "japanese_pptx_slides",
+        "japanese_xlsx_sheets",
+        "long_table_row_groups",
+        "scanned_pdf_ocr",
+        "two_column_pdf_reading_order"
+      ],
+      "unstructured": [
+        "duplicate_file_canonical_kb",
+        "email_thread_headers",
+        "html_semantic_blocks",
+        "image_ocr_bbox",
+        "japanese_docx_layout",
+        "japanese_pptx_slides",
+        "japanese_xlsx_sheets",
+        "long_table_row_groups",
+        "scanned_pdf_ocr",
+        "two_column_pdf_reading_order"
+      ]
+    },
+    "backend_passed_source_kinds": {
+      "docling": [
+        "html",
+        "image",
+        "office",
+        "pdf"
+      ],
+      "unstructured": [
+        "email",
+        "html",
+        "image",
+        "office",
+        "pdf"
+      ]
+    },
+    "backend_source_status": {
+      "docling": {
+        "email": "unsupported",
+        "html": "passed",
+        "image": "passed",
+        "office": "passed",
+        "pdf": "passed",
+        "text": "unsupported"
+      },
+      "unstructured": {
+        "email": "passed",
+        "html": "passed",
+        "image": "passed",
+        "office": "passed",
+        "pdf": "passed",
+        "text": "unsupported"
+      }
+    },
+    "backend_source_status_counts": {
+      "docling": {
+        "email": {
+          "unsupported": 1
+        },
+        "html": {
+          "passed": 1
+        },
+        "image": {
+          "passed": 1
+        },
+        "office": {
+          "passed": 4
+        },
+        "pdf": {
+          "passed": 3
+        },
+        "text": {
+          "unsupported": 3
+        }
+      },
+      "unstructured": {
+        "email": {
+          "passed": 1
+        },
+        "html": {
+          "passed": 1
+        },
+        "image": {
+          "passed": 1
+        },
+        "office": {
+          "passed": 4
+        },
+        "pdf": {
+          "passed": 3
+        },
+        "text": {
+          "unsupported": 3
+        }
+      }
+    },
+    "backend_status_counts": {
+      "docling": {
+        "passed": 9,
+        "unsupported": 4
+      },
+      "unstructured": {
+        "passed": 10,
+        "unsupported": 3
+      }
+    },
+    "backends": [
+      "docling",
+      "unstructured"
+    ],
+    "blocking_failure_backends": [],
+    "blocking_failure_count": 0,
+    "blocking_failure_reason_counts": {},
+    "blocking_failure_scenarios": [],
+    "blocking_failure_source_kinds": [],
+    "blocking_failures": [],
+    "case_count": 26,
+    "missing_scenarios": [
+      "cross_page_table_continuity",
+      "markdown_code_formula_blocks"
+    ],
+    "missing_source_kinds": [
+      "text"
+    ],
+    "passed": true,
+    "passed_scenarios": [
+      "duplicate_file_canonical_kb",
+      "email_thread_headers",
+      "html_semantic_blocks",
+      "image_ocr_bbox",
+      "japanese_docx_layout",
+      "japanese_pptx_slides",
+      "japanese_xlsx_sheets",
+      "long_table_row_groups",
+      "scanned_pdf_ocr",
+      "two_column_pdf_reading_order"
+    ],
+    "passed_source_kinds": [
+      "email",
+      "html",
+      "image",
+      "office",
+      "pdf"
+    ],
+    "reason_code_counts": {
+      "adapter_not_routed_for_source": 7,
+      "schema_remap_contract_ok": 19
+    },
+    "scenarios": [
+      "cross_page_table_continuity",
+      "duplicate_file_canonical_kb",
+      "email_thread_headers",
+      "html_semantic_blocks",
+      "image_ocr_bbox",
+      "japanese_docx_layout",
+      "japanese_pptx_slides",
+      "japanese_xlsx_sheets",
+      "long_table_row_groups",
+      "markdown_code_formula_blocks",
+      "scanned_pdf_ocr",
+      "two_column_pdf_reading_order"
+    ],
+    "source_kind_status_counts": {
+      "email": {
+        "passed": 1,
+        "unsupported": 1
+      },
+      "html": {
+        "passed": 2
+      },
+      "image": {
+        "passed": 2
+      },
+      "office": {
+        "passed": 8
+      },
+      "pdf": {
+        "passed": 6
+      },
+      "text": {
+        "unsupported": 6
+      }
+    },
+    "source_kinds": [
+      "pdf",
+      "office",
+      "text",
+      "html",
+      "email",
+      "image"
+    ],
+    "warning_code_counts": {}
+  }
+}

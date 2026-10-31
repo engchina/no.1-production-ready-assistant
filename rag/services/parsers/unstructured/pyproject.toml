@@ -1,0 +1,58 @@
+[project]
+name = "parser-unstructured"
+version = "0.1.0"
+description = "Unstructured parser microservice (independent dependency boundary)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "production-ready-backend-core",
+    "rag-parser-core[service]",
+    # 残す形式の extra だけを入れる（all-docs にしない。#3351）。pi-heif（pdf / image の extra）と pypandoc-binary は
+    # 下の exclude-dependencies で入れない。
+    "unstructured[pdf,image,docx,pptx,xlsx,csv,tsv,md]==0.27.8",
+    # unstructured-inference が import する cv2 は、GUI 版ではなく headless 版で入れる(#310)。
+    # GUI 版は libxcb / libGL / glib を要し、slim の base image では import が失敗する。
+    "opencv-python-headless>=4.10,<5.0",
+    # unstructured-inference（hi_res の layout の推論）が使う torch / torchvision を、CPU 版の index から入れるために
+    # 直接の依存に書く（uv の [tool.uv.sources] は直接の依存にだけ効く。index は下の [[tool.uv.index]]。#1650）。
+    "torch>=2.13,<3",
+    "torchvision>=0.28,<1",
+]
+
+[tool.uv]
+# FileLock の context manager と timeout は維持し、既知の脆弱性の修正版を使う。
+override-dependencies = ["filelock>=4.2.1"]
+# unstructured-inference が要求する GUI 版の opencv-python を入れない(cv2 は上の headless 版が
+# 提供する)。両方を入れると同じ cv2 パッケージを上書きし合うため、依存の解決から外す。
+# pi-heif（同梱の libheif / libde265 が LGPL-3.0。HEIC / HEIF の画像）と pypandoc-binary（同梱の pandoc が GPL-2.0+。
+# EPUB / ODT / Org / RST / RTF）は、ライセンスの理由で入れない（#3351）。HEIC / HEIF・EPUB はアップロードで止め、ODT / RTF は
+# ファイル準備の Office→PDF で PDF にしてから、RST / Org はテキストとして読む。unstructured の PDF・画像の解析が import する
+# pi_heif は rag_parser_core.unstructured_compat が何もしない stub で満たす。
+exclude-dependencies = ["opencv-python", "pi-heif", "pypandoc-binary"]
+
+[tool.uv.sources]
+production-ready-backend-core = { path = "../../../../platform/packages/backend_core", editable = true }
+rag-parser-core = { path = "../../../packages/rag_parser_core", editable = true }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+# torch / torchvision は PyTorch の CPU 版の index から入れる（#1650）。PyPI の Linux の wheel は CUDA 版で、
+# triton・nvidia-* / cuda-* の wheel（数 GB）を依存に持つが、配備先の Compute は GPU を持たない。
+# explicit = true で、この index は上の sources で指定した package にだけ使う（ほかの依存は PyPI から入れる）。
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

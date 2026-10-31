@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "${PWD}|$*" >> "${NPM_CALL_LOG}"
+
+case "$*" in
+  ci)
+    mkdir -p "${PWD}/node_modules"
+    ;;
+  install)
+    mkdir -p "${PWD}/node_modules"
+    touch "${PWD}/node_modules/.package-lock.json"
+    ;;
+  "run build")
+    mkdir -p "${SHARED_UI_DIR}/dist"
+    : > "${SHARED_UI_DIR}/dist/index.js"
+    : > "${SHARED_UI_DIR}/dist/index.d.ts"
+    : > "${SHARED_UI_DIR}/dist/tokens.css"
+    ;;
+  "run dev -- --host 0.0.0.0 --port 3997")
+    ;;
+  *)
+    echo "unexpected npm invocation: $*" >&2
+    exit 1
+    ;;
+esac

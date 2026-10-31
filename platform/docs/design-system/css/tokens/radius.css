@@ -1,0 +1,18 @@
+/* Tailwind radii on a 14px root. */
+:root {
+  --radius-sm: 0.25rem;   /* rounded      3.5px  kbd, tiny chips */
+  --radius-md: 0.375rem;  /* rounded-md   5.25px tables, nav items, popovers */
+  --radius-lg: 0.5rem;    /* rounded-lg   7px    cards, banners, toasts */
+  --radius-xl: 0.75rem;   /* rounded-xl   10.5px dialog, command palette */
+  --radius-pill: 9999px;  /* badges, toggle chips, switch */
+
+  /* 操作部品（入力欄・SelectField・Button）の角丸。高さと同じくルート非依存の px（#384）。
+     並べたときに角の形がそろうよう 3 つとも同じ値にする（入力欄は 5.25px → 6px）。
+     入力欄の中の後置のボタン（クリア・表示の切り替え）は、外側の角だけこの値から枠線の 1px を引く。 */
+  --radius-control: 6px;  /* rounded-control */
+
+  --button-radius: var(--radius-control);
+  --card-radius: var(--radius-lg);
+  --input-radius: var(--radius-control);
+  --dialog-radius: var(--radius-xl);
+}

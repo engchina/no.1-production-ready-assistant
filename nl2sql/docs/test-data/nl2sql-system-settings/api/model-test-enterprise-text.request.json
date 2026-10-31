@@ -1,0 +1,42 @@
+{
+  "settings": {
+    "enterprise_ai": {
+      "endpoint": "https://enterprise-ai.example.com",
+      "project_ocid": "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
+      "api_key": "dummy-enterprise-ai-api-key",
+      "has_api_key": true,
+      "clear_api_key": false,
+      "models": [
+        {
+          "model_id": "enterprise-nl2sql-llm",
+          "display_name": "Enterprise NL2SQL LLM",
+          "vision_enabled": false
+        },
+        {
+          "model_id": "enterprise-nl2sql-vlm",
+          "display_name": "Enterprise NL2SQL VLM",
+          "vision_enabled": true
+        }
+      ],
+      "default_text_model_id": "enterprise-nl2sql-llm",
+      "default_vision_model_id": "enterprise-nl2sql-vlm",
+      "api_path": "/responses",
+      "vlm_input_mode": "auto",
+      "text_payload_template": "{\"input\":\"{{prompt}}\",\"model\":\"{{model_id}}\"}",
+      "vision_payload_template": "{\"input\":[{\"type\":\"text\",\"text\":\"{{prompt}}\"},{\"type\":\"image\",\"image\":\"{{image}}\"}],\"model\":\"{{model_id}}\"}",
+      "text_response_path": "/output/0/content/0/text",
+      "vision_response_path": "/output/0/content/0/text",
+      "timeout_seconds": 120,
+      "max_retries": 3
+    },
+    "generative_ai": {
+      "embedding_model": "cohere.embed-v4.0",
+      "embedding_dim": 1536,
+      "rerank_model": "cohere.rerank-v4.0-fast"
+    }
+  },
+  "target_type": "enterprise_text",
+  "model_id": "enterprise-nl2sql-llm",
+  "vision_enabled": false
+}
+

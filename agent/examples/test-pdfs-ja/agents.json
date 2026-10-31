@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "agents": {
+    "A": {
+      "name": "テスト_A_運用資料Agent",
+      "description": "テスト_A_検索回答を使い、日本語の合成テスト資料について質問できる Agent。",
+      "instructions": "日本語のテスト資料について、質問に対応する条件・手順・数値を調べて日本語で回答してください。",
+      "skill_ids": [
+        "business-rag-research"
+      ],
+      "enabled": true,
+      "model_id": "",
+      "clarification_policy": "confirm",
+      "skill_policy": "pinned",
+      "output_fields": []
+    },
+    "B": {
+      "name": "テスト_B_文書検索資料Agent",
+      "description": "テスト_B_検索回答を使い、日本語の合成テスト資料について質問できる Agent。",
+      "instructions": "日本語のテスト資料について、質問に対応する条件・手順・数値を調べて日本語で回答してください。",
+      "skill_ids": [
+        "business-rag-research"
+      ],
+      "enabled": true,
+      "model_id": "",
+      "clarification_policy": "confirm",
+      "skill_policy": "pinned",
+      "output_fields": []
+    }
+  }
+}

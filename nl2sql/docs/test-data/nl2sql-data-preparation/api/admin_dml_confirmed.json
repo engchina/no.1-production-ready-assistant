@@ -1,0 +1,6 @@
+{
+  "sql": "UPDATE TD_NL2SQL_ORDERS SET STATUS = 'REVIEW', UPDATED_AT = DATE '2026-05-01' WHERE ORDER_ID = 5001",
+  "row_limit": 100,
+  "confirmation": "ADMIN_EXECUTE",
+  "reason": "manual-test-admin-dml"
+}

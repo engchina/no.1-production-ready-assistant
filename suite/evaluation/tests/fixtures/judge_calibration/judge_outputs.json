@@ -1,0 +1,196 @@
+{
+  "description": "合成の判定のモデルの応答（録画の代わり。構造化出力の JSON）。人手の判定と 4 か所を違えてある（誤合格 2・誤不合格 1・判定できない 1）。",
+  "model": "synthetic-judge",
+  "outputs": {
+    "d01-paraphrase": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "d02-missing-step": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h01-correct": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h02-unsupported-claim": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h03-attribute-confusion": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h04-general-rule-over-applied": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h05-step-order": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h06-correct-refusal": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h07-stage-extension": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "fail",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    },
+    "h08-partial": {
+      "aspects": [
+        {
+          "aspect_id": "requirement_coverage",
+          "label": "cannot_judge",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "answer_correctness",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        },
+        {
+          "aspect_id": "claim_support",
+          "label": "pass",
+          "reason": "合成の判定の理由。"
+        }
+      ]
+    }
+  }
+}

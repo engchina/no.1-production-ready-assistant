@@ -1,0 +1,28 @@
+{
+  "question": "今月の受注金額上位5件を表示してください",
+  "engine": "select_ai",
+  "profile_id": "default",
+  "allowed_objects": {
+    "table_names": [
+      "APP.ORDERS",
+      "APP.CUSTOMERS"
+    ],
+    "columns": {
+      "APP.ORDERS": [
+        "ORDER_ID",
+        "CUSTOMER_ID",
+        "ORDER_DATE",
+        "STATUS",
+        "TOTAL_AMOUNT"
+      ],
+      "APP.CUSTOMERS": [
+        "CUSTOMER_ID",
+        "CUSTOMER_NAME"
+      ]
+    },
+    "enforce_table_scope": true
+  },
+  "row_limit": 100,
+  "select_ai_overrides": null
+}
+

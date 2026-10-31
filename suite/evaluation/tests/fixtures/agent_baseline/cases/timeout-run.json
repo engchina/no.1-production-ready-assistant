@@ -1,0 +1,133 @@
+{
+  "id": "timeout-run",
+  "description": "時間内に終わらない Run は取り消し、ケースの失敗（AgentRunTimeout）にする。",
+  "covers": [
+    "status:timeout",
+    "case_error"
+  ],
+  "case": {
+    "id": "timeout-run",
+    "split": "holdout",
+    "category": "document_answerable",
+    "query": "合成の質問: timeout-run",
+    "relevant_document_ids": [
+      "doc-a"
+    ],
+    "expected_outcomes": [
+      "answered"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "timeout",
+      "elapsed_ms": 2000.0,
+      "run_id": "run-timeout-run-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "error",
+      "category": "document_answerable",
+      "split": "holdout",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [
+        "doc-a"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": null,
+      "outcome_source": null,
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "case_error"
+      ],
+      "elapsed_ms": 2000.0,
+      "error_type": "AgentRunTimeout",
+      "error_stage": "turn_0"
+    },
+    "cli": {
+      "trace_id": "run-timeout-run-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": null,
+      "error_message": "Agent の Run が 2 秒以内に終わりませんでした。 run_id で Agent の実行履歴を確認してください。",
+      "runs": [
+        {
+          "case_id": "timeout-run",
+          "turn": 0,
+          "run_id": "run-timeout-run-0",
+          "thread_id": "thread_f0fe8e2b136544171316a3787537bebc",
+          "status": "timeout",
+          "elapsed_ms": 2000.0,
+          "outcome": null,
+          "outcome_source": null,
+          "validation_status": null,
+          "model_requests": null,
+          "tool_calls": {},
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": "cancelled"
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問: timeout-run"
+        }
+      ],
+      "cancelled_run_ids": [
+        "run-timeout-run-0"
+      ]
+    },
+    "v3": {
+      "scores": {
+        "status": "error",
+        "category": "document_answerable",
+        "split": "holdout",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [
+          "doc-a"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "case_error"
+        ],
+        "elapsed_ms": 2000.0,
+        "error_type": "AgentRunTimeout",
+        "error_stage": "turn_0",
+        "undetermined_evidence": [],
+        "metric_status": {}
+      }
+    }
+  }
+}

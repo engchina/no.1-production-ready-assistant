@@ -1,0 +1,80 @@
+[project]
+name = "production-ready-system-settings-backend"
+version = "0.1.0"
+description = "Shared system settings APIs (upload storage, OCI, model, database) for the No.1 Production Ready product family (RAG / NL2SQL / Agent)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.121,<1.0",
+  "pydantic>=2.11",
+  "python-multipart>=0.0.20",
+  "cryptography>=50.0.0",
+  "python-dotenv>=1.0",
+  # 共通認証のパスワード hash（Argon2id。#212）
+  "pwdlib[argon2]>=0.3,<1.0",
+  "production-ready-backend-core",
+  # OCI Enterprise AI の URL の規則と失敗の分類（suite と共有する標準 library だけの package。#3418）
+  "production-ready-enterprise-ai",
+  # 会話の添付の解析（#2517）。PDF の文字・Excel の行・Office の XML（zip bomb・XXE を防ぐ）・文字コード。
+  "pypdf>=6.4,<7",
+  "openpyxl>=3.1",
+  "defusedxml>=0.7",
+  "charset-normalizer>=3.4",
+]
+
+[project.optional-dependencies]
+# OCI SDK は接続テスト / namespace 取得 / 設定読込で遅延 import する（3製品は既に依存している）。
+oci = ["oci>=2.168"]
+
+[tool.uv.sources]
+production-ready-backend-core = { path = "../backend_core", editable = true }
+production-ready-enterprise-ai = { path = "../enterprise_ai", editable = true }
+
+[dependency-groups]
+dev = [
+  "oci>=2.168",
+  "httpx==0.28.1",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "pytest-xdist>=3.8",
+  "pytest-timeout>=2.3",
+  "ruff>=0.9",
+  "mypy>=1.14",
+  "bandit>=1.8",
+  "pip-audit>=2.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pr_system_settings"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# 整形（#345）。black と同じ既定（二重引用符・空白の字下げ・magic trailing comma を尊重）にそろえる。
+# 行の長さは [tool.ruff] の line-length を共有する。
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# 1 つのテストが止まったら 120 秒で失敗にし、stack を出す（pytest-timeout。#1591）。job の上限（15 分）まで
+# 待たない。遅いテストは `@pytest.mark.timeout(<秒>)` で個別に延ばす。
+timeout = 120

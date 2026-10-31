@@ -1,0 +1,178 @@
+{
+  "id": "legacy-inferred-question",
+  "description": "成果物の outcome も rag_search も無い旧形式（公開の outcome は null）。最終の検証が足した定型の注記を除いた最後の行が問いなので needs_clarification と推定する（outcome_source=inferred）。期待（answered）と違い、正解の文書も引用に無い。",
+  "covers": [
+    "legacy:no_answer_outcome",
+    "outcome:inferred_question",
+    "agent_notice_ignored",
+    "retrieval_miss",
+    "unexpected_handling"
+  ],
+  "case": {
+    "id": "legacy-inferred-question",
+    "category": "document_answerable",
+    "split": "holdout",
+    "query": "合成の質問 4: 処理 V の方法は？",
+    "relevant_document_ids": [
+      "doc-f"
+    ],
+    "expected_outcomes": [
+      "answered"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 1250.0,
+      "run_id": "run-legacy-inferred-question-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": "document_answerable",
+      "split": "holdout",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [
+        "doc-e"
+      ],
+      "relevant_document_ids": [
+        "doc-f"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": 0.0,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": 0.0,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": "needs_clarification",
+      "outcome_source": "inferred",
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "retrieval_miss",
+        "unexpected_handling"
+      ],
+      "elapsed_ms": 1250.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-legacy-inferred-question-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "outcome": "needs_clarification",
+        "agent": {
+          "run_id": "run-legacy-inferred-question-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "inferred",
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "legacy-inferred-question",
+          "turn": 0,
+          "run_id": "run-legacy-inferred-question-0",
+          "thread_id": "thread_dc16e6d5d33bb78719d0dbdfe06bfe2b",
+          "status": "completed",
+          "elapsed_ms": 1250.0,
+          "outcome": "needs_clarification",
+          "outcome_source": "inferred",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 4: 処理 V の方法は？"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": "document_answerable",
+        "split": "holdout",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [
+          "doc-e"
+        ],
+        "relevant_document_ids": [
+          "doc-f"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": 0.0,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "retrieval_miss"
+        ],
+        "elapsed_ms": 1250.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "mrr": {
+            "status": "scored",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "unevaluable",
+            "reason": "outcome_missing"
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

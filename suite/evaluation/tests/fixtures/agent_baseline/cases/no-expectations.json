@@ -1,0 +1,155 @@
+{
+  "id": "no-expectations",
+  "description": "正解の文書・必要な根拠・期待する対応の無いケース。成功しても六指標はどれも測れない（None）。区分・分類の無いケースは unassigned / uncategorized に入る。",
+  "covers": [
+    "not_evaluable:all",
+    "split:unassigned",
+    "category:uncategorized"
+  ],
+  "case": {
+    "id": "no-expectations",
+    "query": "合成の質問 13"
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 250.0,
+      "run_id": "run-no-expectations-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": null,
+      "split": null,
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [
+        "doc-h"
+      ],
+      "relevant_document_ids": [],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [],
+      "observed_outcome": "answered",
+      "outcome_source": "agent_answer",
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [],
+      "elapsed_ms": 250.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-no-expectations-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "outcome": "answered",
+        "agent": {
+          "run_id": "run-no-expectations-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "agent_answer",
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "no-expectations",
+          "turn": 0,
+          "run_id": "run-no-expectations-0",
+          "thread_id": "thread_8c59a57531b93554924d360de5704f64",
+          "status": "completed",
+          "elapsed_ms": 250.0,
+          "outcome": "answered",
+          "outcome_source": "agent_answer",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 13"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": null,
+        "split": null,
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [
+          "doc-h"
+        ],
+        "relevant_document_ids": [],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [],
+        "observed_outcome": "answered",
+        "outcome_source": "agent_answer",
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [],
+        "elapsed_ms": 250.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "mrr": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

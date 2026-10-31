@@ -1,0 +1,31 @@
+{
+  "settings": {
+    "enterprise_ai": {
+      "endpoint": "https://enterprise-ai.example.com",
+      "project_ocid": "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
+      "api_key": "",
+      "has_api_key": true,
+      "clear_api_key": false,
+      "models": [],
+      "default_text_model_id": "",
+      "default_vision_model_id": "",
+      "api_path": "/responses",
+      "vlm_input_mode": "auto",
+      "text_payload_template": "",
+      "vision_payload_template": "",
+      "text_response_path": "",
+      "vision_response_path": "",
+      "timeout_seconds": 120,
+      "max_retries": 3
+    },
+    "generative_ai": {
+      "embedding_model": "cohere.embed-v4.0",
+      "embedding_dim": 1536,
+      "rerank_model": "cohere.rerank-v4.0-fast"
+    }
+  },
+  "target_type": "embedding",
+  "model_id": "cohere.embed-v4.0",
+  "vision_enabled": false
+}
+

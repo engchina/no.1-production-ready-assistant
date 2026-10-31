@@ -1,0 +1,119 @@
+name: Suite / Deploy
+
+# 1 台の Compute の配備の検証（#1592）。ci.yml の `suite-deploy` job と terraform-release.yml の release の前に
+# 再利用する（workflow_call）。以前は RAG / Compute init script・NL2SQL / Deployment scripts・
+# Agent / Compute init script・Suite / Terraform の 4 つの小さな job に分かれ、それぞれ runner の枠を使い、
+# 2 つの job がそれぞれ nginx を apt で入れていた。
+#   - 各製品の init_script.sh と配備・更新のスクリプト（systemctl 等は fake。生成した sudoers は visudo で検査）
+#   - Nginx のログの契約・frontend の起動スクリプト（隔離した Nginx）
+#   - OCI Resource Manager の統合 stack（terraform/stack。fmt・validate・zip・契約の検証。#217）
+#   - 1 台の Compute の配備（platform/deploy。suite-init・自作の CA と IP の証明書・Nginx の site。#1316）と、
+#     起動の待ち方・配備全体の確認（suite-health。#1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）・
+#     ADB の自動の起動（suite-adb。#1745）
+# 実テナンシーへの配備確認は手動で行う。
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Scripts and Terraform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # suite-adb.py のテスト（#1745）が、pr_system_settings を lock どおりに入れた一時の venv を作る。release でも
+      # 再利用する workflow のため、cache は使わない（cache の汚染を避ける。no-dev の依存だけで十数秒）。
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.5.7"
+
+      # NL2SQL の Nginx のログの契約と platform/deploy の Nginx の site の検証が使う（1 回だけ入れる）。
+      - name: Install nginx and openssl
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nginx openssl
+
+      # ネイティブ配備（uv の venv + systemd + Nginx。#286）。
+      - name: RAG init script
+        working-directory: rag
+        run: |
+          bash -n init_script.sh scripts/rag-systemd.sh scripts/rag-services.sh scripts/tests/init-script-deployment.test.sh
+          bash scripts/tests/init-script-deployment.test.sh
+
+      - name: NL2SQL deployment, update and recovery scripts
+        working-directory: nl2sql
+        run: |
+          bash -n init_script.sh scripts/git-pull.sh scripts/update-after-pull.sh scripts/tail-logs.sh scripts/start-frontend.sh ../rag/scripts/start-frontend.sh ../agent/scripts/start-frontend.sh
+          bash scripts/tests/git-pull.test.sh
+          bash scripts/tests/init-script-deployment.test.sh
+          # Node.js 24 の入れ方（NodeSource → 公式 tarball・checksum）とデータの場所の移行（#1525）。
+          bash scripts/tests/init-script-nodejs.test.sh
+          bash scripts/tests/update-after-pull.test.sh
+          bash scripts/tests/tail-logs.test.sh
+          bash ../platform/scripts/tests/log-viewer.test.sh
+
+      # ログインの上限（#1173）の実 HTTP の確認は、下の platform/deploy/tests/suite-nginx.test.sh（#1316）。
+      - name: Nginx logging contract and frontend start scripts
+        working-directory: nl2sql
+        run: |
+          bash ../platform/scripts/tests/nginx-logging.test.sh
+          bash scripts/tests/start-frontend.test.sh
+          bash scripts/tests/start-frontend.test.sh ../rag/scripts/start-frontend.sh
+          bash scripts/tests/start-frontend.test.sh ../agent/scripts/start-frontend.sh
+
+      - name: Agent init script
+        working-directory: agent
+        run: |
+          bash -n init_script.sh scripts/tests/init-script-deployment.test.sh
+          bash scripts/tests/init-script-deployment.test.sh
+
+      # 契約の検証は各製品の init_script.sh・Settings と、自前の Dockerfile・compose が無いこと（#356）も確かめる。
+      - name: Terraform stack
+        working-directory: terraform
+        run: |
+          bash -n stack/extract_wallet.sh
+          terraform fmt -check -recursive stack
+          (cd stack && terraform init -backend=false && terraform validate)
+          python -m unittest discover -s scripts/tests -v
+          python scripts/package_stack.py --output "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
+          python scripts/verify_stack_contract.py "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
+
+      # 1 台の Compute の配備（platform/deploy。#1316）: suite-init の振る舞い、自作の CA と IP の証明書（openssl）、
+      # Nginx の site（prefix・SSE・MCP・login の上限・/ → /agent/・HTTPS on / off）を隔離した Nginx で検証する。
+      - name: Single-Compute deployment (platform/deploy)
+        run: |
+          bash -n platform/deploy/suite-init.sh platform/deploy/suite-nginx.sh platform/deploy/suite-tls.sh \
+            platform/deploy/suite-pull.sh platform/deploy/suite-restart.sh platform/deploy/suite-update.sh \
+            platform/deploy/suite-health.sh platform/deploy/tests/suite-adb.test.sh \
+            platform/deploy/tests/deploy-run-through.test.sh .github/scripts/deploy-run-through.sh
+          bash platform/deploy/tests/suite-tls.test.sh
+          bash platform/deploy/tests/suite-init.test.sh
+          # backend の起動の待ち方・配備全体の確認・各製品の install_uv の SELinux の context（#1642）。
+          bash platform/deploy/tests/suite-health.test.sh
+          bash platform/deploy/tests/suite-nginx.test.sh
+          bash platform/deploy/tests/suite-ops.test.sh
+          # 配備で ADMIN からアプリ用の DB ユーザーを作る script（python-oracledb は stub。#1668）。
+          bash platform/deploy/tests/suite-db-user.test.sh
+          # ADB が止まっていれば起動して AVAILABLE を待つ script（OCI SDK は stub。本物の pr_system_settings を通す。#1745）。
+          bash platform/deploy/tests/suite-adb.test.sh
+          # 配備の通し（Deploy Nightly）の schema の確認の CLI の判定と、本物の pr_system_settings の要約の形（#1768）。
+          bash platform/deploy/tests/deploy-run-through.test.sh

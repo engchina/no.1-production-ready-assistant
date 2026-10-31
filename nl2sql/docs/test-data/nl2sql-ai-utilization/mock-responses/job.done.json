@@ -1,0 +1,128 @@
+{
+  "data": {
+    "job_id": "job-001",
+    "status": "done",
+    "created_at": "2026-08-12T00:00:00Z",
+    "started_at": "2026-08-12T00:00:01Z",
+    "finished_at": "2026-08-12T00:00:02Z",
+    "elapsed_ms": 980,
+    "result": {
+      "engine": "select_ai",
+      "engine_meta": {
+        "runtime": "deterministic",
+        "profile_id": "default",
+        "model": "cohere.command-r-plus"
+      },
+      "fallback_reason": "",
+      "original_question": "今月の受注金額上位5件を表示してください",
+      "rewritten_question": "今月の受注金額上位5件を表示",
+      "generated_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+      "executable_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+      "explanation": "今月の受注から金額が大きい順に5件取得します。",
+      "safety": {
+        "is_safe": true,
+        "is_select_only": true,
+        "row_limit_applied": 100,
+        "blocked_reason": "",
+        "warnings": [],
+        "referenced_tables": [
+          "APP.ORDERS"
+        ],
+        "referenced_columns": [
+          "ORDER_ID",
+          "CUSTOMER_ID",
+          "TOTAL_AMOUNT",
+          "ORDER_DATE"
+        ]
+      },
+      "recommendations": [
+        "顧客名が必要な場合は CUSTOMERS を JOIN してください。"
+      ],
+      "repaired_sql": "",
+      "optimization_hints": [
+        "ORDER_DATE と TOTAL_AMOUNT の index を確認してください。"
+      ],
+      "results": {
+        "columns": [
+          "ORDER_ID",
+          "CUSTOMER_ID",
+          "TOTAL_AMOUNT"
+        ],
+        "rows": [
+          {
+            "ORDER_ID": 1001,
+            "CUSTOMER_ID": 10,
+            "TOTAL_AMOUNT": 120000
+          },
+          {
+            "ORDER_ID": 1002,
+            "CUSTOMER_ID": 20,
+            "TOTAL_AMOUNT": 85000
+          }
+        ],
+        "total": 2
+      },
+      "timing": {
+        "created_at": "2026-08-12T00:00:00Z",
+        "started_at": "2026-08-12T00:00:01Z",
+        "finished_at": "2026-08-12T00:00:02Z",
+        "elapsed_ms": 980,
+        "stage_timings": [
+          {
+            "stage": "rewrite_question",
+            "elapsed_ms": 80
+          },
+          {
+            "stage": "generate_sql",
+            "elapsed_ms": 520
+          },
+          {
+            "stage": "execute_sql",
+            "elapsed_ms": 380
+          }
+        ]
+      }
+    },
+    "error_message": null,
+    "timing": {
+      "created_at": "2026-08-12T00:00:00Z",
+      "started_at": "2026-08-12T00:00:01Z",
+      "finished_at": "2026-08-12T00:00:02Z",
+      "elapsed_ms": 980,
+      "stage_timings": [
+        {
+          "stage": "rewrite_question",
+          "elapsed_ms": 80
+        },
+        {
+          "stage": "generate_sql",
+          "elapsed_ms": 520
+        },
+        {
+          "stage": "execute_sql",
+          "elapsed_ms": 380
+        }
+      ]
+    },
+    "steps": [
+      {
+        "stage": "rewrite_question",
+        "status": "done",
+        "elapsed_ms": 80
+      },
+      {
+        "stage": "generate_sql",
+        "status": "done",
+        "elapsed_ms": 520
+      },
+      {
+        "stage": "execute_sql",
+        "status": "done",
+        "elapsed_ms": 380
+      }
+    ]
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

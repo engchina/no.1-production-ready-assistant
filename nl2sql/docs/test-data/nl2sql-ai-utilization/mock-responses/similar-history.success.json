@@ -1,0 +1,37 @@
+{
+  "data": {
+    "items": [
+      {
+        "item": {
+          "id": "hist-001",
+          "question": "今月の受注金額上位5件を表示してください",
+          "engine": "select_ai",
+          "generated_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+          "created_at": "2026-08-12T00:00:00Z",
+          "elapsed_ms": 420,
+          "feedback_rating": "good",
+          "profile_id": "default",
+          "profile_name": "標準業務プロファイル",
+          "rewritten_question": "今月の受注金額上位5件を表示",
+          "executable_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+          "safety_is_safe": true,
+          "result_row_count": 2,
+          "result_columns": [
+            "ORDER_ID",
+            "CUSTOMER_ID",
+            "TOTAL_AMOUNT"
+          ],
+          "feedback_comment": "期待どおりの SQL です。",
+          "feedback_updated_at": "2026-08-12T00:02:00Z",
+          "session_id": "",
+          "ontology_trace_summary": {}
+        },
+        "score": 0.87,
+        "reason": "質問語「今月」「受注金額」「上位」が一致しました。"
+      }
+    ]
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

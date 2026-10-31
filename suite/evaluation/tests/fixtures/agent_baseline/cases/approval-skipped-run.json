@@ -1,0 +1,143 @@
+{
+  "id": "approval-skipped-run",
+  "description": "公開の MCP の Run が承認の要るツールを呼ばずに答えた 1 往復（#3240 の Q7）。回答と根拠はあるが、必要な操作をしていないのでケースの失敗にする。",
+  "covers": [
+    "status:approval_skipped",
+    "case_error"
+  ],
+  "case": {
+    "id": "approval-skipped-run",
+    "category": "document_answerable",
+    "split": "dev",
+    "query": "合成の質問 9: 項目 R の値を記録して。",
+    "relevant_document_ids": [
+      "doc-r"
+    ],
+    "expected_outcomes": [
+      "answered"
+    ],
+    "required_evidence": [
+      {
+        "id": "ev-record",
+        "document_id": "doc-r",
+        "text": "項目 R の記録の手順"
+      }
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 1200.0,
+      "run_id": "run-approval-skipped-run-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "error",
+      "category": "document_answerable",
+      "split": "dev",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [
+        "doc-r"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": null,
+      "outcome_source": null,
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "case_error"
+      ],
+      "elapsed_ms": 1200.0,
+      "error_type": "AgentRunApprovalSkipped",
+      "error_stage": "turn_0"
+    },
+    "cli": {
+      "trace_id": "run-approval-skipped-run-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": null,
+      "error_message": "Agent の Run が承認の要るツール（ext__record_write）を呼ばずに終わりました。 run_id で Agent の実行履歴を確認してください。",
+      "runs": [
+        {
+          "case_id": "approval-skipped-run",
+          "turn": 0,
+          "run_id": "run-approval-skipped-run-0",
+          "thread_id": "thread_83bf7f626d94207e4a1cf75e366a4c7d",
+          "status": "completed",
+          "elapsed_ms": 1200.0,
+          "outcome": null,
+          "outcome_source": null,
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_retrieve_evidence": 1,
+            "record_write": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [
+            "ext__record_write"
+          ],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 9: 項目 R の値を記録して。"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "error",
+        "category": "document_answerable",
+        "split": "dev",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [
+          "doc-r"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "case_error"
+        ],
+        "elapsed_ms": 1200.0,
+        "error_type": "AgentRunApprovalSkipped",
+        "error_stage": "turn_0",
+        "undetermined_evidence": [],
+        "metric_status": {}
+      }
+    }
+  }
+}

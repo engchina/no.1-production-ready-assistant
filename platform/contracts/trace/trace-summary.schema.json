@@ -1,0 +1,441 @@
+{
+  "$defs": {
+    "CallContent": {
+      "additionalProperties": false,
+      "description": "呼び出し時点の内容。未記録と空の応答を区別する。",
+      "properties": {
+        "status": {
+          "default": "not_recorded",
+          "enum": [
+            "recorded",
+            "truncated",
+            "not_recorded",
+            "withheld"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "maxLength": 64001,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "title": "CallContent",
+      "type": "object"
+    },
+    "CallDetails": {
+      "additionalProperties": false,
+      "description": "入力・結果・Schema の snapshot。外部の telemetry には送らない。",
+      "properties": {
+        "capture_enabled": {
+          "default": true,
+          "title": "Capture Enabled",
+          "type": "boolean"
+        },
+        "visibility": {
+          "default": "owner",
+          "enum": [
+            "owner",
+            "system_admin"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/CallContent"
+        },
+        "output": {
+          "$ref": "#/$defs/CallContent"
+        },
+        "schema": {
+          "$ref": "#/$defs/CallContent"
+        }
+      },
+      "title": "CallDetails",
+      "type": "object"
+    },
+    "ChatProgressDetailCode": {
+      "additionalProperties": false,
+      "description": "詳細の長い値（SQL・ツールの引数と結果の JSON）。画面は箱の中でスクロールして出す。",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 81,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "enum": [
+                "json",
+                "sql",
+                "text"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "text": {
+          "maxLength": 4001,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ChatProgressDetailCode",
+      "type": "object"
+    },
+    "ChatProgressDetailField": {
+      "additionalProperties": false,
+      "description": "詳細の見出しと値（エンジン・行数・選んだ条件など）。",
+      "properties": {
+        "label": {
+          "maxLength": 81,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 1001,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "mono": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "識別子・SQL の断片などを等幅で出す。",
+          "title": "Mono"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "title": "ChatProgressDetailField",
+      "type": "object"
+    },
+    "ChatProgressParamValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "ChatProgressStepDetails": {
+      "additionalProperties": false,
+      "description": "段を開いて見る詳細（3 製品共通。画面の `RunStepDetails` と同じ形。#2294）。\n\n検証の前に、上限を超えた値・要素を切り（`truncated` を付ける）、秘密らしい値を伏せる。保存済みの\n記録も同じ規則で読み直すので、長すぎる記録でイベントが捨てられることはない。",
+      "properties": {
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/ChatProgressDetailField"
+          },
+          "maxItems": 20,
+          "title": "Fields",
+          "type": "array"
+        },
+        "lines": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Lines",
+          "type": "array"
+        },
+        "code": {
+          "items": {
+            "$ref": "#/$defs/ChatProgressDetailCode"
+          },
+          "maxItems": 3,
+          "title": "Code",
+          "type": "array"
+        },
+        "call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CallDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "truncated": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "送る側で長さを切った。",
+          "title": "Truncated"
+        }
+      },
+      "title": "ChatProgressStepDetails",
+      "type": "object"
+    },
+    "SafeValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "SpanDisplay": {
+      "description": "span の表示用のデータ（画面の記録だけ。OTel へ export しない。#3226）。\n\n`kind` は製品の工程の定義の種類（画面の名前の key）、`params` は名前・補足を組み立てる値\n（件数・回数・ツール名など）、`details` は開いて見る詳細（処理の経過の段の詳細と同じ形・上限）。",
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/ChatProgressParamValue"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChatProgressStepDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "SpanDisplay",
+      "type": "object"
+    },
+    "SpanSummary": {
+      "properties": {
+        "span_id": {
+          "pattern": "^[0-9a-f]{16}$",
+          "title": "Span Id",
+          "type": "string"
+        },
+        "parent_span_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Span Id"
+        },
+        "trace_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Trace Id",
+          "type": "string"
+        },
+        "operation_name": {
+          "maxLength": 128,
+          "title": "Operation Name",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "done",
+            "failed",
+            "cancelled",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "finished_at": {
+          "format": "date-time",
+          "title": "Finished At",
+          "type": "string"
+        },
+        "duration_ms": {
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "number"
+        },
+        "timing_source": {
+          "const": "measured",
+          "default": "measured",
+          "title": "Timing Source",
+          "type": "string"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SafeValue"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "display": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpanDisplay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "span_id",
+        "trace_id",
+        "operation_name",
+        "kind",
+        "status",
+        "started_at",
+        "finished_at",
+        "duration_ms"
+      ],
+      "title": "SpanSummary",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "operation_id": {
+      "default": "",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "root_span_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Root Span Id"
+    },
+    "telemetry_trace_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Telemetry Trace Id"
+    },
+    "completeness": {
+      "default": "unavailable",
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ],
+      "title": "Completeness",
+      "type": "string"
+    },
+    "spans": {
+      "items": {
+        "$ref": "#/$defs/SpanSummary"
+      },
+      "title": "Spans",
+      "type": "array"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "sampled": {
+      "default": false,
+      "title": "Sampled",
+      "type": "boolean"
+    }
+  },
+  "title": "TraceSummary",
+  "type": "object"
+}

@@ -1,0 +1,316 @@
+# 依存の定期更新（#69）。
+#
+# 目的は「advisory 公開から取り込みまでの遅延をなくす」こと。backend は CI の
+# `pip-audit` が必須 step のため、更新を放置すると無関係な PR の CI まで red になる
+# （実例: #57 が #58 / #59 / #61 に巻き込まれた）。frontend の `npm audit` は #74 で PR の CI から外し、
+# dependency-audit-nightly.yml が 4 つの package-lock.json を毎晩検査する（#1588）。
+#
+# ノイズ抑制の方針:
+#   - uv・actions は weekly、npm は monthly（#1588。lock の変更は e2e の全件になるため、回数を減らす）。
+#     patch/minor は ecosystem・ディレクトリごとに 1 本へまとめる（grouping）。
+#   - open-pull-requests-limit で同時に開く PR 数を絞る。
+#   - cooldown: 公開から 5 日たった版だけを version updates で上げる（#1588。公開直後の版に混入した
+#     悪意のあるコード（供給網の攻撃）を、取り下げられる前に自動 merge しないため）。security updates には効かない。
+#   - security updates（repo の設定で有効。#1588）は、entry ごとの `*-security` の group で 1 本にまとめる
+#     （applies-to: security-updates。schedule を待たずに作られる）。auto-merge は version updates と同じ扱い。
+#   - 確定スタックの中核（oci / oracledb / fastapi / react / react-router / vite）は
+#     major を無視する。破壊的変更の取り込みは Issue を立てて個別に判断する。
+#   - patch/minor は required checks 成功後に自動 merge する（#76、
+#     .github/workflows/dependabot-auto-merge.yml）。major は手動レビューで判断する。
+#   - 互いに peer dependency を持つ一式（eslint と @eslint/js など）は major も 1 本の PR にまとめる。
+#     別々の PR にすると、片方だけ上げた lock が `npm ci` の peer 解決で失敗し続ける（実例: #88 / #89、#339）。
+#   - 失敗し続ける major（コードの追従が要るもの）は ignore に理由付きで書き、追従は Issue を立てて行う。
+#
+# group PR（patch/minor）が CI で失敗したときの扱い（#339）:
+#   - group 全体が止まるため放置しない。失敗の原因になった依存を特定し、直せるならその PR に修正 commit を足す。
+#   - すぐ直せない依存は、その版を `ignore`（`versions: [...]`）に理由と Issue 番号付きで足し、
+#     PR に `@dependabot recreate` とコメントして残りの更新だけで作り直させる。
+#
+# rebase-strategy は auto（既定。競合したときだけ rebase する）を明示する。ruleset の up-to-date 要求（strict）を
+# やめたため（#339）、main が進んだだけでは rebase も CI の再実行も起きず、auto-merge は CI OK の成功だけを待つ。
+#
+# 対象範囲（#1588 で nl2sql / agent / platform の npm と uv を足した）:
+#   - 3 製品の backend（uv）・frontend（npm）、platform の backend の package（uv）と frontend の workspace（npm）。
+#   - platform の package は versioning-strategy: lockfile-only（lock だけを上げる）。製品の uv.lock / package-lock.json は
+#     path / file: で入れる platform の package の pyproject.toml / package.json の依存を書き写しているため、
+#     platform の manifest を変えると 3 製品の lock がずれて `uv sync --locked` / `npm ci` が失敗する。
+#     manifest の範囲を超える更新は Issue を立て、3 製品の lock と同じ PR で上げる。
+#   - services/*（10 個の pyproject.toml。自前の Dockerfile は #356 で削除し、docker ecosystem は対象にしない）は、CI がテストする
+#     外部 parser（rag/services/parsers/docling。ci.yml の RAG / Parser docling。#1512。#1513）と、テストのある
+#     前処理・パイプラインのサービス（ci.yml の Lint / services & scripts がテストする。#1525・#1534）を対象にする。
+#     テストの無いサービスと rag/packages/* は含めない（理由は該当の entry の注記）。テストを足してから対象に加える。
+#   - root の GitHub Actions と .github/actions/* の composite action。
+version: 2
+updates:
+  # 3 製品の backend と製品横断の評価（suite/evaluation。#3240）: uv ecosystem は pyproject.toml と uv.lock を
+  # 直接扱う（PR はディレクトリごと）。
+  # 注意: pyproject.toml に version 制約が無い依存は lock 更新の PR が作られない。
+  - package-ecosystem: uv
+    directories:
+      - /rag/backend
+      - /nl2sql/backend
+      - /agent/backend
+      - /suite/evaluation
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 8
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      backend-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      backend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      # 確定スタックの中核。major は挙動と接続互換に直結するため個別判断する。
+      - dependency-name: oci
+        update-types: ["version-update:semver-major"]
+      - dependency-name: oracledb
+        update-types: ["version-update:semver-major"]
+      - dependency-name: fastapi
+        update-types: ["version-update:semver-major"]
+      # （以下は rag/backend の依存。ほかの backend には無い）
+      # 外部 parser の extra は rag/services/parsers/* のサービスと同じ版に固定している
+      # （tests/test_config.py が一致を確認する）。解析結果が変わるため、サービスと同時に上げる。
+      - dependency-name: docling
+      - dependency-name: unstructured
+      # 本番の ASGI サーバーの起動（3 製品とも <24）。major は rag の tests/test_deployment_contract.py が版の範囲を固定しており、
+      # 起動設定（26 系では control socket の無効化）の追従も要るため、26 系の PR は CI が失敗し続けた（#92、#339）。
+      # major は Issue を立て、起動の契約を更新する PR で個別に上げる。
+      - dependency-name: gunicorn
+        update-types: ["version-update:semver-major"]
+
+  # platform の backend の package（#1588）。3 製品の uv.lock が path で入れて依存を書き写しているので、
+  # lock だけを上げる（lockfile-only。冒頭の「対象範囲」）。版の範囲を超える更新は Issue を立てて 3 製品の lock と上げる。
+  - package-ecosystem: uv
+    directories:
+      - /platform/packages/backend_core
+      - /platform/packages/system_settings_backend
+      - /platform/packages/evaluation_scoring
+      - /platform/packages/enterprise_ai
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    versioning-strategy: lockfile-only
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      platform-backend-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      platform-backend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # RAG の外部 parser のサービス（#1513）。lock は parser ごとに独立している。
+  # docling は解析の結果が変わり、rag/backend の docling の extra（tests/test_config.py が版を確認する）と同時に
+  # 上げるため、Dependabot では上げない（Issue を立て、評価の PDF の解析を確かめる PR で上げる）。
+  - package-ecosystem: uv
+    directories:
+      - /rag/services/parsers/docling
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      parser-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      parser-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: docling
+      - dependency-name: docling-slim
+      # torch / torchvision は pyproject.toml の [[tool.uv.index]]（pytorch-cpu。explicit）の CPU 版を lock に持つ（#1650）。
+      # Dependabot の uv の更新は pyproject.toml の index の指定のまま uv lock で lock を作り直す。PyPI の CUDA 版に戻った
+      # lock（triton・nvidia-* / cuda-* を持つ、torch の source が CPU の index でない）は、
+      # rag/scripts/tests/init-script-deployment.test.sh（Suite / Deploy）が失敗にする。
+      # major は個別に判断する。
+      - dependency-name: torch
+        update-types: ["version-update:semver-major"]
+      - dependency-name: torchvision
+        update-types: ["version-update:semver-major"]
+
+  # RAG の前処理・パイプラインのサービス（#1534）と、テストのある軽い parser（parsers/structured_records_jsonl・xml_tree_json。#2457・#2024）。CI の Lint / services & scripts がサービスごとの lock で
+  # テスト（tests/）と uv lock --check を実行する。lock はサービスごとに独立している。
+  # テストの無いサービス（parsers/unstructured・oci_document_understanding）と、他の lock が
+  # path で読む package（rag/packages/*。pyproject.toml を変えると rag/backend・各サービスの lock がずれる）は含めない。
+  # これらの脆弱性は dependency-audit-nightly.yml が毎晩検査し、修正は Issue を立てて lock を上げる。
+  - package-ecosystem: uv
+    directories:
+      - /rag/services/parsers/structured_records_jsonl
+      - /rag/services/parsers/xml_tree_json
+      - /rag/services/preprocess/csv_to_jsonl
+      - /rag/services/preprocess/excel_to_jsonl
+      - /rag/services/preprocess/word_to_jsonl
+      - /rag/services/preprocess/office_to_pdf
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      services-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      services-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      # 確定スタックの中核（rag/backend と同じ）。major は個別に判断する。
+      - dependency-name: oci
+        update-types: ["version-update:semver-major"]
+      - dependency-name: oracledb
+        update-types: ["version-update:semver-major"]
+      - dependency-name: fastapi
+        update-types: ["version-update:semver-major"]
+      # 版の範囲は rag_parser_core / rag_pipeline_core の service の extra が決める（<24）。
+      - dependency-name: gunicorn
+        update-types: ["version-update:semver-major"]
+
+  # 3 製品の frontend（PR はディレクトリごと）。monthly（#1588）: lock の変更は e2e の全件になる
+  # （platform/scripts/e2e_impact.py が package-lock.json を全体に効くファイルとして扱う）ため、月 1 回にまとめる。
+  - package-ecosystem: npm
+    directories:
+      - /rag/frontend
+      - /nl2sql/frontend
+      - /agent/frontend
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      frontend-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      frontend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      # eslint 本体・@eslint/*・プラグイン・typescript-eslint は peer dependency で結び付くため、major も 1 本にまとめる。
+      eslint-major:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "eslint-plugin-*"
+          - "@typescript-eslint/*"
+          - "typescript-eslint"
+        update-types:
+          - major
+    ignore:
+      # UI/routing/ビルドの中核。major は画面全体へ影響するため個別判断する。
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-router-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+
+  # platform の frontend の workspace（packages/ui・packages/system-settings。#1588）。3 製品の package-lock.json が
+  # file: で入れて依存を書き写しているので、lock だけを上げる（lockfile-only。冒頭の「対象範囲」）。monthly の理由は上と同じで、
+  # platform の lock の変更は 3 製品の frontend の job と e2e を動かす。
+  - package-ecosystem: npm
+    directory: /platform
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    versioning-strategy: lockfile-only
+    commit-message:
+      prefix: "chore(deps)"
+    rebase-strategy: auto
+    cooldown:
+      default-days: 5
+    groups:
+      platform-frontend-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      platform-frontend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # GitHub Actions。actions/checkout@v4 などが Node 20 非推奨の警告を出しているため、
+  # actions 自体の更新も追随する。
+  # .github/actions/* の composite action（#339）の中の action も対象にする。
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    cooldown:
+      default-days: 5
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"

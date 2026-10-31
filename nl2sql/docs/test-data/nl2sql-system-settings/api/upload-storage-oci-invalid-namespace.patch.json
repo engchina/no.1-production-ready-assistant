@@ -1,0 +1,7 @@
+{
+  "backend": "oci",
+  "local_storage_dir": "/u01/data/production-ready-nl2sql/uploads",
+  "object_storage_namespace": "example tenancy!",
+  "object_storage_bucket": "nl2sql-originals"
+}
+

@@ -1,0 +1,22 @@
+{
+  "profile_id": "default",
+  "profile_name": "標準業務プロファイル",
+  "allowed_tables": [
+    "APP.ORDERS",
+    "APP.CUSTOMERS",
+    "APP.INVOICES"
+  ],
+  "default_row_limit": 100,
+  "schema_objects": [
+    "APP.ORDERS",
+    "APP.CUSTOMERS",
+    "APP.INVOICES"
+  ],
+  "glossary_terms": [
+    "売上",
+    "受注",
+    "顧客",
+    "未入金"
+  ]
+}
+

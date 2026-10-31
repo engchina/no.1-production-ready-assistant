@@ -1,0 +1,10 @@
+/* Functional motion only: transform / opacity / colour. All disabled under reduced motion
+   (tokens.css の prefers-reduced-motion で一括無効化)。 */
+:root {
+  --duration-reveal: 120ms;   /* sidebar label reveal (delay 90ms on expand) */
+  --duration-control: 150ms;  /* colour crossfades, overlay fade */
+  --duration-enter: 200ms;    /* toast, dialog, sidebar width, chevron, section grid */
+  /* ponytail: handoff の --ease-out: ease-out は Tailwind の同名テーマ変数を上書きし
+     ease-out ユーティリティの曲線を変えるため定義しない。 */
+  --transition-control: background-color var(--duration-control) ease, border-color var(--duration-control) ease, color var(--duration-control) ease;
+}

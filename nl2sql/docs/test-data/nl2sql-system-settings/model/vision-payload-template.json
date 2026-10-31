@@ -1,0 +1,14 @@
+{
+  "input": [
+    {
+      "type": "text",
+      "text": "{{prompt}}"
+    },
+    {
+      "type": "image",
+      "image": "{{image}}"
+    }
+  ],
+  "model": "{{model_id}}"
+}
+

@@ -1,0 +1,55 @@
+name: Restore mypy cache
+description: >-
+  backend の .mypy_cache を復元する。保存は main の push だけ（job の型検査の後の actions/cache/save）で、
+  PR は main の cache を復元するだけにする（#1589）。
+
+# key は `mypy-<name>-<uv.lock の hash>-<UTC の日付>`。main の push が 1 日に 1 回だけ保存し（同じ日の 2 回目からは
+# key が一致して保存を飛ばす）、PR は同じ lock → 別の lock の順に、最も新しい main の cache を復元する。
+# 以前は key に PR のブランチを含め、PR の run が毎回保存していた（PR の範囲だけで 474 個・約 2 GB。repo の
+# 上限 10 GB の中で main の uv / npm / Playwright の cache を追い出していた）。
+# 保存は型検査の後に job で行う（composite action は job の終わりの post の step を持てない）:
+#   - name: Save mypy cache
+#     if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+#     uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#     with:
+#       path: <backend>/.mypy_cache
+#       key: ${{ steps.mypy-cache.outputs.key }}
+
+inputs:
+  name:
+    description: "cache の key の名前（例: rag-backend）"
+    required: true
+  path:
+    description: ".mypy_cache の場所（例: rag/backend/.mypy_cache）"
+    required: true
+  lockfile:
+    description: "key に含める uv.lock（例: rag/backend/uv.lock）"
+    required: true
+
+outputs:
+  key:
+    description: "保存に使う key"
+    value: ${{ steps.key.outputs.key }}
+  cache-hit:
+    description: "key が完全に一致したら true（保存しなくてよい）"
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve mypy cache key
+      id: key
+      shell: bash
+      env:
+        PREFIX: mypy-${{ inputs.name }}-${{ hashFiles(inputs.lockfile) }}-
+      run: echo "key=${PREFIX}$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore mypy cache
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: |
+          mypy-${{ inputs.name }}-${{ hashFiles(inputs.lockfile) }}-
+          mypy-${{ inputs.name }}-

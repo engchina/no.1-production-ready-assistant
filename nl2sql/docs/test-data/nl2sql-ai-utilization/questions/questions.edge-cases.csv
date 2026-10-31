@@ -1,0 +1,6 @@
+case_id,question,expected
+Q-EMPTY,"",client_validation
+Q-DML,"古い受注を削除してください",preview_blocked
+Q-AMBIGUOUS,"売上を見たい",profile_recommendation_or_rewrite
+Q-LONG,"今月の受注金額、請求状態、顧客名、ステータス、受注日、請求期限を全部まとめて確認し、金額順で並べたい",safe_with_row_limit
+

@@ -1,0 +1,175 @@
+{
+  "id": "clarification-skips-retrieval",
+  "description": "公開の outcome が needs_clarification で引用が無い回答は、検索の指標（MRR・必要な根拠）の対象外（None）。対応の判断だけを測る。",
+  "covers": [
+    "outcome:agent_answer",
+    "skips_retrieval",
+    "not_evaluable:mrr",
+    "not_evaluable:required_evidence_recall"
+  ],
+  "case": {
+    "id": "clarification-skips-retrieval",
+    "category": "clarification_required",
+    "split": "holdout",
+    "query": "合成の質問 14: 設定 R はどう変える？",
+    "relevant_document_ids": [
+      "doc-i"
+    ],
+    "expected_outcomes": [
+      "needs_clarification"
+    ],
+    "required_evidence": [
+      {
+        "id": "ev-r",
+        "document_id": "doc-i",
+        "text": "設定 R"
+      }
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 1000.0,
+      "run_id": "run-clarification-skips-retrieval-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": "clarification_required",
+      "split": "holdout",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [
+        "doc-i"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": 1.0,
+      "expected_decisions": [
+        "clarify"
+      ],
+      "observed_outcome": "needs_clarification",
+      "outcome_source": "agent_answer",
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [],
+      "elapsed_ms": 1000.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-clarification-skips-retrieval-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "outcome": "needs_clarification",
+        "agent": {
+          "run_id": "run-clarification-skips-retrieval-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "agent_answer",
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "clarification-skips-retrieval",
+          "turn": 0,
+          "run_id": "run-clarification-skips-retrieval-0",
+          "thread_id": "thread_3c6fcc7db02aaf5ebb3665728385506d",
+          "status": "completed",
+          "elapsed_ms": 1000.0,
+          "outcome": "needs_clarification",
+          "outcome_source": "agent_answer",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_retrieve_evidence": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 14: 設定 R はどう変える？"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": "clarification_required",
+        "split": "holdout",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [
+          "doc-i"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": 1.0,
+        "expected_decisions": [
+          "clarify"
+        ],
+        "observed_outcome": "needs_clarification",
+        "outcome_source": "agent_answer",
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [],
+        "elapsed_ms": 1000.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "mrr": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "scored",
+            "reason": null
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

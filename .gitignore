@@ -1,0 +1,23 @@
+# 製品ごとの .gitignore は各ディレクトリ(platform/ rag/ nl2sql/ agent/)に置く。
+node_modules/
+.venv/
+__pycache__/
+.DS_Store
+.claude/worktrees/
+
+# pr_system_settings が .env・モデル設定の保存時に作る排他用の lock ファイル
+..env.lock
+model-settings.json.lock
+
+# 統合 Terraform stack（terraform/stack）の作業ファイルと package 出力
+terraform/dist/
+terraform/stack/.terraform/
+terraform/stack/.terraform.lock.hcl
+terraform/stack/*.tfstate
+terraform/stack/*.tfstate.*
+terraform/stack/*.tfvars
+terraform/stack/wallet*.zip
+terraform/stack/wallet_extracted/
+
+# 一時ファイルの置き場（/tmp は WSL の再起動で消える。commit しない。#1616）
+/tmp/

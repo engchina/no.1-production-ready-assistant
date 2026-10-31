@@ -1,0 +1,128 @@
+{
+ "km-license-fee": {
+  "source": "A bs.on.all km-license-fee",
+  "expected": "insufficient_evidence",
+  "recorded": "needs_environment_data",
+  "requests": [
+   {
+    "id": "Q1",
+    "text": "サンプル業務ポータルの年間ライセンス費用はいくらですか？",
+    "status": "missing"
+   }
+  ],
+  "items": [],
+  "gaps": [
+   "サンプル業務ポータルの年間ライセンス費用は、提示された根拠（パラメータ一覧、運用手順書 第3版、地域別集計表 出力手順 第1版・第2版）のいずれにも金額・契約条件の記載がなく、確認できません。"
+  ],
+  "confirmations": [
+   "実データ: サンプル業務ポータルのライセンス契約における年間費用の請求額・契約条件（実際の費用を確定するため）",
+   "資料: サンプル業務ポータルの年間ライセンス費用が記載された料金表または契約資料（提示された根拠に費用の記載が無いため、金額を確認するため）"
+  ],
+  "reference_materials": [
+   "サンプル業務ポータルの年間ライセンス費用が記載された料金表または契約資料（提示された根拠に費用の記載が無いため、金額を確認するため）"
+  ],
+  "external_data_required": true
+ },
+ "tl-it-department-system": {
+  "source": "A mh.on.holdout tl-it-department-system",
+  "expected": "conditional",
+  "recorded": "conditional",
+  "requests": [
+   {
+    "id": "Q1",
+    "text": "情報システム部が担当するシステムの正式名と機密区分を教えてください。",
+    "status": "addressed"
+   }
+  ],
+  "items": [
+   {
+    "kind": "rule",
+    "text": "システム台帳の「担当部署」列は部署の略号（漢字1文字）で書かれ、略号と部署の正式名は組織規程の第2章を参照する決まりです。",
+    "applies": "matched",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "組織規程では、略号「情」は情報システム部を指します。",
+    "applies": "matched",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "システム台帳で担当部署が「情」（情報システム部）のシステムは SYS-107 で、正式名は「資産管理システム」、機密区分は「社外秘」です。",
+    "applies": "matched",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "サンプル物流社のシステム台帳では、担当部署はサンプル物流社の部署の略号で書かれており、その略号の意味はサンプル物流社の組織規程を参照する決まりです。",
+    "applies": "matched",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "サンプル物流社のシステム台帳で担当部署が「情」の SL-214 は、正式名「ハンディ端末管理システム」、機密区分「社内限り」です。",
+    "applies": "unverified",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "サンプル物流社のシステム台帳で担当部署が「情」の SL-209 は、正式名「荷主ポータル」、機密区分「社外秘」です。",
+    "applies": "unverified",
+    "condition": ""
+   }
+  ],
+  "gaps": [
+   "サンプル物流社のシステム台帳の担当部署「情」が情報システム部を指すかどうかは、提示された根拠では確認できません。同社の組織規程で部署の略号を確認する必要があります。"
+  ],
+  "confirmations": [
+   "資料: 「サンプル物流社の組織規程」－ サンプル物流社のシステム台帳の担当部署「情」が情報システム部を指すかを確認し、SL-209・SL-214 を情報システム部担当として扱えるか確定するため。"
+  ],
+  "reference_materials": [
+   "「サンプル物流社の組織規程」－ サンプル物流社のシステム台帳の担当部署「情」が情報システム部を指すかを確認し、SL-209・SL-214 を情報システム部担当として扱えるか確定するため。"
+  ],
+  "external_data_required": false
+ },
+ "km-auto-disable": {
+  "source": "D bs.on.all km-auto-disable（rag_search）",
+  "expected": "insufficient_evidence",
+  "recorded": "needs_environment_data",
+  "requests": [
+   {
+    "id": "Q1",
+    "text": "退職者のアカウントを自動で無効にする設定はどこでできますか",
+    "status": "missing"
+   }
+  ],
+  "items": [
+   {
+    "kind": "rule",
+    "text": "本書の操作ができるのは「ポータル管理者」ロールを持つ利用者だけです。",
+    "applies": "quote_only",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "削除したアカウントは 30 日後に完全に消去され、復元できません。",
+    "applies": "quote_only",
+    "condition": ""
+   },
+   {
+    "kind": "rule",
+    "text": "削除の前に、所属部署の部門長の 承認を得てください。承認の無い削除は行いません。",
+    "applies": "quote_only",
+    "condition": ""
+   }
+  ],
+  "gaps": [
+   "退職者のアカウントを自動で無効にする設定の場所（どの画面・メニュー・パラメータで設定するか）は、提示された運用手順書と「パラメータ一覧」には記載が確認できません。"
+  ],
+  "confirmations": [
+   "資料: 退職者アカウントの無効化・停止の設定を扱う別の管理マニュアルまたは設定資料（自動無効化が可能か、設定場所がどこかを確認するため）"
+  ],
+  "reference_materials": [
+   "退職者アカウントの無効化・停止の設定を扱う別の管理マニュアルまたは設定資料（自動無効化が可能か、設定場所がどこかを確認するため）"
+  ],
+  "external_data_required": false
+ }
+}

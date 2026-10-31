@@ -1,0 +1,5 @@
+# 整形だけの commit。`git config blame.ignoreRevsFile .git-blame-ignore-revs` で git blame から除く。
+# #345: black から ruff format への移行の整形
+cbe60636444d1a24faaaf5d651561a45954357de
+# #1590: rag/packages を ruff format の対象にしたときの整形
+756fd4940c3d1ba8d2283f7deb98af4fa6ced6b3

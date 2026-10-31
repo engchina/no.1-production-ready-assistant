@@ -1,0 +1,159 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   FONT STACKS（書体の並び）と、寸法を合わせた代わりの書体（#3292・#3328・#3335）
+
+   本文の書体（--font-sans）は、日本語の字形を優先して Noto Sans JP を先頭に置き、JP に無い簡体字・繁体字・
+   香港の字だけを Noto Sans SC → Noto Sans TC → Noto Sans HK で補う（3 製品とも @fontsource で自前ホストする）。
+   4 書体とも可変書体（@fontsource-variable。書体名に Variable が付く）で、@font-face を slice の数に抑える（#3333）。
+
+   内容の言語（lang）で漢字の字形を切り替える（Han unification。#3335）:
+     画面の文言は <html lang="ja"> のまま JP の字形。利用者の内容（回答・根拠の抜粋・質問・文書のプレビュー）は
+     共有の部品が lang を付け（`resolveContentLang`）、lang="zh-Hans" は SC、"zh-Hant" は TC、"zh-HK" は HK を
+     先頭にした並びにする。--font-han（漢字の書体の並び）だけを言語で替え、--font-sans / --font-mono は lang を
+     付けた要素で組み直す（var() は宣言した要素で解決されるため）。
+
+   寸法を合わせた代わりの書体（Noto Sans JP Fallback / Google Sans Code Fallback）:
+     Web の書体が届くまで（font-display: swap）は端末の書体で描き、届いたら差し替える。差し替えで行の高さ・字幅が
+     変わって配置が動かない（CLS）よう、端末の書体を local() で参照し、size-adjust・ascent-override・
+     descent-override・line-gap-override で Web の書体の寸法に合わせる（Next.js の next/font・Fontaine と同じ）。
+     値は実際の書体のファイルから求める（`scripts/font-fallback-metrics.py`。求め方は README §2「書体」）。
+     - かな・漢字: 日本語の端末の書体（Hiragino Sans・Hiragino Kaku Gothic ProN・Yu Gothic・Meiryo）。全角の字幅
+       （1em）は Web の書体と同じなので size-adjust は 100% のまま、縦の寸法だけを Noto Sans JP（hhea の
+       ascent 1.16 / descent 0.288 / line-gap 0）に合わせる。
+     - ラテン文字（unicode-range で分ける）: Arial（Liberation Sans は字幅が同じ）。太さごとの平均の字幅を合わせる。
+     - 等幅: Courier New（Liberation Mono は字幅が同じ）。
+     system-ui などの総称の書体は local() で参照できないので、並びの後ろのまま。
+     @font-face は 8 つだけ（local() は通信しない）。主の CSS の @font-face の数をほとんど増やさない（#3328）。
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* 漢字（とかな）の書体の並び。既定（日本語）は JP → 代わりの書体 → SC → TC → HK。 */
+  --font-han: "Noto Sans JP Variable", "Noto Sans JP Fallback", "Noto Sans SC Variable", "Noto Sans TC Variable", "Noto Sans HK Variable";
+  /* 漢字の並びの後ろ（ラテン文字の予備と総称の書体）。 */
+  --font-sans-tail: "Roboto", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-han), var(--font-sans-tail);
+  /* 等幅書体。3製品とも Google Sans Code を @fontsource で自前ホストする（#75）。無い字は本文と同じ漢字の並びで補う。 */
+  --font-mono: "Google Sans Code", "Google Sans Code Fallback", var(--font-han), "Roboto", monospace;
+}
+
+/* 内容の言語ごとの漢字の並び。lang を付けた要素だけに当て（:where で詳細度 0）、子は継承する。
+   入れ子の lang="ja" は JP に戻す。 */
+:where([lang]:lang(ja)) {
+  --font-han: "Noto Sans JP Variable", "Noto Sans JP Fallback", "Noto Sans SC Variable", "Noto Sans TC Variable", "Noto Sans HK Variable";
+}
+:where([lang]:lang(zh-Hans)) {
+  --font-han: "Noto Sans SC Variable", "Noto Sans JP Variable", "Noto Sans JP Fallback", "Noto Sans TC Variable", "Noto Sans HK Variable";
+}
+:where([lang]:lang(zh-Hant)) {
+  --font-han: "Noto Sans TC Variable", "Noto Sans HK Variable", "Noto Sans JP Variable", "Noto Sans JP Fallback", "Noto Sans SC Variable";
+}
+:where([lang]:lang(zh-HK)) {
+  --font-han: "Noto Sans HK Variable", "Noto Sans TC Variable", "Noto Sans JP Variable", "Noto Sans JP Fallback", "Noto Sans SC Variable";
+}
+:where([lang]) {
+  --font-sans: var(--font-han), var(--font-sans-tail);
+  --font-mono: "Google Sans Code", "Google Sans Code Fallback", var(--font-han), "Roboto", monospace;
+  /* Tailwind の preflight が html / code / pre の書体に使う変数も、lang を付けた要素で組み直す。 */
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+}
+
+/* lang を付けた要素の書体を、その要素で組み直した並びにする（body で解決した並びを継承したままにしない）。
+   Tailwind の base の層に置き、preflight の code / pre（等幅）と utility（font-mono など）を上書きしない。 */
+@layer base {
+  :where([lang]) {
+    font-family: var(--font-sans);
+  }
+}
+
+/* ── Noto Sans JP Fallback: かな・漢字（unicode-range なし。ラテン文字は下の face が先に当たる） ── */
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 100 500;
+  src: local("Hiragino Sans W3"), local("HiraginoSans-W3"), local("Hiragino Kaku Gothic ProN W3"), local("HiraKakuProN-W3"),
+    local("Yu Gothic Medium"), local("YuGothic-Medium"), local("Meiryo");
+  ascent-override: 116%;
+  descent-override: 28.8%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 600 900;
+  src: local("Hiragino Sans W6"), local("HiraginoSans-W6"), local("Hiragino Kaku Gothic ProN W6"), local("HiraKakuProN-W6"),
+    local("Yu Gothic Bold"), local("YuGothic-Bold"), local("Meiryo Bold"), local("Meiryo-Bold");
+  ascent-override: 116%;
+  descent-override: 28.8%;
+  line-gap-override: 0%;
+}
+
+/* ── Noto Sans JP Fallback: ラテン文字（太さごとに Noto Sans JP の平均の字幅に合わせる） ──
+   同じ family で unicode-range が重なる face は後に書いたものが先に当たる（CSS Fonts 4）。 */
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 100 400;
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  unicode-range: U+0000-024F;
+  size-adjust: 104.66%;
+  ascent-override: 110.84%;
+  descent-override: 27.52%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 500;
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  unicode-range: U+0000-024F;
+  size-adjust: 107.41%;
+  ascent-override: 108%;
+  descent-override: 26.81%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 600;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  unicode-range: U+0000-024F;
+  size-adjust: 101.42%;
+  ascent-override: 114.38%;
+  descent-override: 28.4%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Noto Sans JP Fallback";
+  font-style: normal;
+  font-weight: 700 900;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  unicode-range: U+0000-024F;
+  size-adjust: 103.11%;
+  ascent-override: 112.5%;
+  descent-override: 27.93%;
+  line-gap-override: 0%;
+}
+
+/* ── Google Sans Code Fallback（Google Sans Code の字幅 0.6em は Courier New と同じ。縦の寸法だけを合わせる） ── */
+@font-face {
+  font-family: "Google Sans Code Fallback";
+  font-style: normal;
+  font-weight: 100 500;
+  src: local("Courier New"), local("CourierNewPSMT"), local("Liberation Mono"), local("LiberationMono");
+  unicode-range: U+0000-024F;
+  size-adjust: 99.98%;
+  ascent-override: 96.62%;
+  descent-override: 28.6%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Google Sans Code Fallback";
+  font-style: normal;
+  font-weight: 600 900;
+  src: local("Courier New Bold"), local("CourierNewPS-BoldMT"), local("Liberation Mono Bold"), local("LiberationMono-Bold");
+  unicode-range: U+0000-024F;
+  size-adjust: 99.98%;
+  ascent-override: 96.62%;
+  descent-override: 28.6%;
+  line-gap-override: 0%;
+}

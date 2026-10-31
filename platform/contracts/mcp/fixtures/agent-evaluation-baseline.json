@@ -1,0 +1,2436 @@
+{
+  "description": "製品横断の評価の基線（#3240）の合成の Run と、その Run を公開の Agent MCP で読んだ出力。source は段 1 の合成の Run の記録（Agent の内部の形。Agent のテストの入力で、suite は読まない）。agent_get_run・agent_get_run_observation・agent_cancel_run（終わっていない Run だけ）は agent/backend/tests/test_evaluation_baseline_observation.py が本物の MCP の入口で作り、契約（agent-tools.json の outputSchema）に合うことを確かめる。suite/evaluation/tests/test_baseline.py は公開の出力だけで製品横断の評価の採点を再生する。書き直しは UPDATE_AGENT_EVALUATION_BASELINE=1（agent/backend）。内容はすべて合成。",
+  "runs": [
+    {
+      "run_id": "run-answered-agent-outcome-0",
+      "source": {
+        "id": "run-answered-agent-outcome-0",
+        "status": "completed",
+        "thread_id": "thread_2bcc392a542c1d40310e2ad992adad96",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_retrieve_evidence",
+              "arguments": {
+                "query": "項目 X 上限"
+              }
+            },
+            "tool_result": {
+              "name": "rag_retrieve_evidence",
+              "success": true,
+              "output": {
+                "evidence": [
+                  {
+                    "evidence_id": "c-z1",
+                    "document_id": "doc-z",
+                    "chunk_id": "c-z1",
+                    "file_name": "doc-z.pdf",
+                    "excerpt": "合成の無関係の記載。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 9,
+                      "page_end": 9
+                    }
+                  },
+                  {
+                    "evidence_id": "c-a1",
+                    "document_id": "doc-a-copy",
+                    "chunk_id": "c-a1",
+                    "file_name": "doc-a-copy.pdf",
+                    "excerpt": "項目 X の上限は 30 日です。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_read_source",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_read_source",
+              "success": true,
+              "output": {
+                "document_id": "doc-b",
+                "chunk_id": "c-b1",
+                "text": "承認者は管理者 B です。",
+                "file_name": "doc-b.pdf",
+                "locator": {
+                  "page_start": 2,
+                  "page_end": 2
+                }
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "項目 X の上限は 30 日です。承認者は管理者 B です。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "answered",
+                "basis": "answer_passages",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-answered-agent-outcome-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_2bcc392a542c1d40310e2ad992adad96",
+        "status": "completed",
+        "outcome": "answered",
+        "in_progress": false,
+        "answer": "項目 X の上限は 30 日です。承認者は管理者 B です。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-z.pdf",
+            "location": "p.9",
+            "excerpt": "合成の無関係の記載。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 10,
+            "excerpt_range": {
+              "start": 0,
+              "end": 10
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-z",
+            "chunk_id": "c-z1",
+            "cited": false
+          },
+          {
+            "title": "doc-a-copy.pdf",
+            "location": "p.1",
+            "excerpt": "項目 X の上限は 30 日です。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 17,
+            "excerpt_range": {
+              "start": 0,
+              "end": 17
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-a-copy",
+            "chunk_id": "c-a1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_retrieve_evidence",
+          "rag__rag_read_source"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-answered-agent-outcome-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_2bcc392a542c1d40310e2ad992adad96",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "answered",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-answered-agent-outcome-0-step-0",
+            "name": "rag__rag_retrieve_evidence",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 2,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          },
+          {
+            "index": 1,
+            "call_id": "run-answered-agent-outcome-0-step-1",
+            "name": "rag__rag_read_source",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": null,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": null,
+            "guardrail_degraded": null,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 2,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-z",
+            "chunk_id": "c-z1",
+            "file_name": "doc-z.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 9,
+              "page_end": 9,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "合成の無関係の記載。",
+            "text_length": 10,
+            "text_omitted": false,
+            "truncated": false
+          },
+          {
+            "rank": 2,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-a-copy",
+            "chunk_id": "c-a1",
+            "file_name": "doc-a-copy.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "項目 X の上限は 30 日です。",
+            "text_length": 17,
+            "text_omitted": false,
+            "truncated": false
+          },
+          {
+            "rank": 3,
+            "tool_call_index": 1,
+            "source": "read",
+            "document_id": "doc-b",
+            "chunk_id": "c-b1",
+            "file_name": "doc-b.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 2,
+              "page_end": 2,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "承認者は管理者 B です。",
+            "text_length": 13,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 3,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-approval-skipped-run-0",
+      "source": {
+        "id": "run-approval-skipped-run-0",
+        "status": "completed",
+        "thread_id": "thread_83bf7f626d94207e4a1cf75e366a4c7d",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_retrieve_evidence",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_retrieve_evidence",
+              "success": true,
+              "output": {
+                "evidence": [
+                  {
+                    "evidence_id": "c-r1",
+                    "document_id": "doc-r",
+                    "chunk_id": "c-r1",
+                    "file_name": "doc-r.pdf",
+                    "excerpt": "項目 R の記録の手順: 画面 3 で値を入れる。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "ext__record_write",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "ext__record_write",
+              "success": false,
+              "output": null,
+              "error_code": "mcp.approval_required"
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "項目 R は画面 3 で値を入れて記録します。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "answered",
+                "basis": "answer_passages",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-approval-skipped-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_83bf7f626d94207e4a1cf75e366a4c7d",
+        "status": "completed",
+        "outcome": "answered",
+        "in_progress": false,
+        "answer": "項目 R は画面 3 で値を入れて記録します。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-r.pdf",
+            "location": "p.1",
+            "excerpt": "項目 R の記録の手順: 画面 3 で値を入れる。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 25,
+            "excerpt_range": {
+              "start": 0,
+              "end": 25
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-r",
+            "chunk_id": "c-r1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_retrieve_evidence"
+        ],
+        "skipped_approval_tools": [
+          "ext__record_write"
+        ],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-approval-skipped-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_83bf7f626d94207e4a1cf75e366a4c7d",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "answered",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-approval-skipped-run-0-step-0",
+            "name": "rag__rag_retrieve_evidence",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          },
+          {
+            "index": 1,
+            "call_id": "run-approval-skipped-run-0-step-1",
+            "name": "ext__record_write",
+            "status": "approval_skipped",
+            "error_code": "mcp.approval_required",
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": null,
+            "include_superseded": null,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": null,
+            "guardrail_degraded": null,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 2,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-r",
+            "chunk_id": "c-r1",
+            "file_name": "doc-r.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "項目 R の記録の手順: 画面 3 で値を入れる。",
+            "text_length": 25,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 1,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-cancelled-run-0",
+      "source": {
+        "id": "run-cancelled-run-0",
+        "status": "cancelled",
+        "thread_id": "thread_d5b2344f70113ba52cc9d56fedc06955",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": ""
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-cancelled-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_d5b2344f70113ba52cc9d56fedc06955",
+        "status": "cancelled",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "実行は取り消されました。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-cancelled-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_d5b2344f70113ba52cc9d56fedc06955",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "cancelled",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-clarification-skips-retrieval-0",
+      "source": {
+        "id": "run-clarification-skips-retrieval-0",
+        "status": "completed",
+        "thread_id": "thread_3c6fcc7db02aaf5ebb3665728385506d",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_retrieve_evidence",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_retrieve_evidence",
+              "success": true,
+              "output": {
+                "evidence": []
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "確認したい点があります。対象の区分を選んでください。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "needs_clarification",
+                "basis": "clarification_question",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-clarification-skips-retrieval-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_3c6fcc7db02aaf5ebb3665728385506d",
+        "status": "completed",
+        "outcome": "needs_clarification",
+        "in_progress": false,
+        "answer": "確認したい点があります。対象の区分を選んでください。",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_retrieve_evidence"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-clarification-skips-retrieval-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_3c6fcc7db02aaf5ebb3665728385506d",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "needs_clarification",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-clarification-skips-retrieval-0-step-0",
+            "name": "rag__rag_retrieve_evidence",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 0,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 1,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-failed-run-0",
+      "source": {
+        "id": "run-failed-run-0",
+        "status": "failed",
+        "thread_id": "thread_f6203978c7d52d0c1209354e9e59905b",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": ""
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-failed-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_f6203978c7d52d0c1209354e9e59905b",
+        "status": "failed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "業務 Agent の実行に失敗しました。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-failed-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_f6203978c7d52d0c1209354e9e59905b",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "failed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-failed-second-turn-0",
+      "source": {
+        "id": "run-failed-second-turn-0",
+        "status": "completed",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "対象の区分はどれですか？",
+              "outcome": {
+                "schema_version": 1,
+                "value": "needs_clarification",
+                "basis": "clarification_question",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-failed-second-turn-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "status": "completed",
+        "outcome": "needs_clarification",
+        "in_progress": false,
+        "answer": "対象の区分はどれですか？",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-failed-second-turn-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "needs_clarification",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-failed-second-turn-1",
+      "source": {
+        "id": "run-failed-second-turn-1",
+        "status": "failed",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": ""
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-failed-second-turn-1",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "status": "failed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "業務 Agent の実行に失敗しました。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-failed-second-turn-1",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_69538a51893803f39c04b43521089184",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "failed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-legacy-inferred-abstained-0",
+      "source": {
+        "id": "run-legacy-inferred-abstained-0",
+        "status": "completed",
+        "thread_id": "thread_4230d9441156be20c8b4e1d2b79b79cb",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "資料からは答えられません。"
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 1
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-legacy-inferred-abstained-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_4230d9441156be20c8b4e1d2b79b79cb",
+        "status": "completed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "資料からは答えられません。",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-legacy-inferred-abstained-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_4230d9441156be20c8b4e1d2b79b79cb",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 1,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-legacy-inferred-question-0",
+      "source": {
+        "id": "run-legacy-inferred-question-0",
+        "status": "completed",
+        "thread_id": "thread_dc16e6d5d33bb78719d0dbdfe06bfe2b",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_retrieve_evidence",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_retrieve_evidence",
+              "success": true,
+              "output": {
+                "evidence": [
+                  {
+                    "evidence_id": "c-e1",
+                    "document_id": "doc-e",
+                    "chunk_id": "c-e1",
+                    "file_name": "doc-e.pdf",
+                    "excerpt": "方法 1 と方法 2 がある。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 2,
+                      "page_end": 2
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "資料には 2 つの方法があります。\nどちらの方法を使いますか？\n\nこの回答は資料との照合を終えられず、本質問の条件への該当は確認できていません。"
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-legacy-inferred-question-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_dc16e6d5d33bb78719d0dbdfe06bfe2b",
+        "status": "completed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "資料には 2 つの方法があります。\nどちらの方法を使いますか？\n\nこの回答は資料との照合を終えられず、本質問の条件への該当は確認できていません。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-e.pdf",
+            "location": "p.2",
+            "excerpt": "方法 1 と方法 2 がある。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 15,
+            "excerpt_range": {
+              "start": 0,
+              "end": 15
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-e",
+            "chunk_id": "c-e1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_retrieve_evidence"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-legacy-inferred-question-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_dc16e6d5d33bb78719d0dbdfe06bfe2b",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-legacy-inferred-question-0-step-0",
+            "name": "rag__rag_retrieve_evidence",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 1,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-e",
+            "chunk_id": "c-e1",
+            "file_name": "doc-e.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 2,
+              "page_end": 2,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "方法 1 と方法 2 がある。",
+            "text_length": 15,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 1,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-legacy-rag-search-outcome-0",
+      "source": {
+        "id": "run-legacy-rag-search-outcome-0",
+        "status": "completed",
+        "thread_id": "thread_c614321f6e08aa846369039c13777b4e",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_search",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_search",
+              "success": true,
+              "output": {
+                "outcome": "conditional",
+                "insufficient_reason": "今の値は資料に無い。",
+                "clarifications": [],
+                "evidence": [
+                  {
+                    "evidence_id": "c-d1",
+                    "document_id": "doc-d",
+                    "chunk_id": "c-d1",
+                    "file_name": "doc-d.pdf",
+                    "excerpt": "<p>設定の一覧</p><table><tr><td>項目 Z</td><td>既定値 15</td></tr><tr><td>項目 W</td><td>既定値 20</td></tr></table>",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "項目 Z の既定値は 15 です。今の値は環境で確かめてください。"
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-legacy-rag-search-outcome-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_c614321f6e08aa846369039c13777b4e",
+        "status": "completed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "項目 Z の既定値は 15 です。今の値は環境で確かめてください。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-d.pdf",
+            "location": "p.1",
+            "excerpt": "<p>設定の一覧</p><table><tr><td>項目 Z</td><td>既定値 15</td></tr><tr><td>項目 W</td><td>既定値 20</td></tr></table>",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 101,
+            "excerpt_range": {
+              "start": 0,
+              "end": 101
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-d",
+            "chunk_id": "c-d1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_search"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-legacy-rag-search-outcome-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_c614321f6e08aa846369039c13777b4e",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-legacy-rag-search-outcome-0-step-0",
+            "name": "rag__rag_search",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 1,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-d",
+            "chunk_id": "c-d1",
+            "file_name": "doc-d.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "<p>設定の一覧</p><table><tr><td>項目 Z</td><td>既定値 15</td></tr><tr><td>項目 W</td><td>既定値 20</td></tr></table>",
+            "text_length": 101,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 1,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-multi-turn-clarify-then-answer-0",
+      "source": {
+        "id": "run-multi-turn-clarify-then-answer-0",
+        "status": "completed",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_search",
+              "arguments": {
+                "query": "設定 Y 手順"
+              }
+            },
+            "tool_result": {
+              "name": "rag_search",
+              "success": true,
+              "output": {
+                "outcome": "needs_clarification",
+                "clarifications": [
+                  {
+                    "condition_id": "scope",
+                    "question": "対象の区分は？"
+                  }
+                ],
+                "evidence": []
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "対象の区分を確かめます。\n区分 P と区分 Q のどちらですか？"
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-multi-turn-clarify-then-answer-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "status": "completed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "対象の区分を確かめます。\n区分 P と区分 Q のどちらですか？",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_search"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-multi-turn-clarify-then-answer-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-multi-turn-clarify-then-answer-0-step-0",
+            "name": "rag__rag_search",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 0,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 1,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-multi-turn-clarify-then-answer-1",
+      "source": {
+        "id": "run-multi-turn-clarify-then-answer-1",
+        "status": "completed",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_search",
+              "arguments": {
+                "query": "設定 Y 手順",
+                "conditions": {
+                  "scope": "P"
+                }
+              }
+            },
+            "tool_result": {
+              "name": "rag_search",
+              "success": true,
+              "output": {
+                "outcome": "answered",
+                "clarifications": [],
+                "evidence": [
+                  {
+                    "evidence_id": "c-c1",
+                    "document_id": "doc-c",
+                    "chunk_id": "c-c1",
+                    "file_name": "doc-c.pdf",
+                    "excerpt": "区分 P の手順: 画面 1 で値を変える。",
+                    "score": 0.8,
+                    "locator": {
+                      "section_path": [
+                        "2. 手順"
+                      ],
+                      "page_start": 4,
+                      "page_end": 4
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_read_document",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_read_document",
+              "success": true,
+              "output": {
+                "document_id": "doc-c",
+                "file_name": "doc-c.pdf",
+                "text": "区分 P の手順: 画面 1 で値を変える。保存して終える。",
+                "chunks": [
+                  {
+                    "chunk_id": "c-c1",
+                    "section_path": [
+                      "2. 手順"
+                    ],
+                    "page_start": 4,
+                    "page_end": 4,
+                    "start": 0,
+                    "end": 22
+                  },
+                  {
+                    "chunk_id": "c-c2",
+                    "section_path": [
+                      "2. 手順"
+                    ],
+                    "page_start": 5,
+                    "page_end": 5,
+                    "start": 22,
+                    "end": 30
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "区分 P の手順は、画面 1 で値を変えて保存します。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "answered",
+                "basis": "answer_passages",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 4
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-multi-turn-clarify-then-answer-1",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "status": "completed",
+        "outcome": "answered",
+        "in_progress": false,
+        "answer": "区分 P の手順は、画面 1 で値を変えて保存します。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-c.pdf",
+            "location": "p.4 · 2. 手順",
+            "excerpt": "区分 P の手順: 画面 1 で値を変える。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 22,
+            "excerpt_range": {
+              "start": 0,
+              "end": 22
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-c",
+            "chunk_id": "c-c1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_search",
+          "rag__rag_read_document"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-multi-turn-clarify-then-answer-1",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_94207fc60be625afbb5e518975e8e332",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "answered",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 4,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-multi-turn-clarify-then-answer-1-step-0",
+            "name": "rag__rag_search",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          },
+          {
+            "index": 1,
+            "call_id": "run-multi-turn-clarify-then-answer-1-step-1",
+            "name": "rag__rag_read_document",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 2,
+            "include_superseded": null,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": null,
+            "guardrail_degraded": null,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 2,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-c",
+            "chunk_id": "c-c1",
+            "file_name": "doc-c.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [
+                "2. 手順"
+              ],
+              "page_start": 4,
+              "page_end": 4,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "区分 P の手順: 画面 1 で値を変える。",
+            "text_length": 22,
+            "text_omitted": false,
+            "truncated": false
+          },
+          {
+            "rank": 2,
+            "tool_call_index": 1,
+            "source": "read",
+            "document_id": "doc-c",
+            "chunk_id": "c-c2",
+            "file_name": "doc-c.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [
+                "2. 手順"
+              ],
+              "page_start": 5,
+              "page_end": 5,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "保存して終える。",
+            "text_length": 8,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 2,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-no-expectations-0",
+      "source": {
+        "id": "run-no-expectations-0",
+        "status": "completed",
+        "thread_id": "thread_8c59a57531b93554924d360de5704f64",
+        "steps": [
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_retrieve_evidence",
+              "arguments": {}
+            },
+            "tool_result": {
+              "name": "rag_retrieve_evidence",
+              "success": true,
+              "output": {
+                "evidence": [
+                  {
+                    "evidence_id": "c-h1",
+                    "document_id": "doc-h",
+                    "chunk_id": "c-h1",
+                    "file_name": "doc-h.pdf",
+                    "excerpt": "合成の記載。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "合成の回答です。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "answered",
+                "basis": "answer_passages",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-no-expectations-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_8c59a57531b93554924d360de5704f64",
+        "status": "completed",
+        "outcome": "answered",
+        "in_progress": false,
+        "answer": "合成の回答です。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-h.pdf",
+            "location": "p.1",
+            "excerpt": "合成の記載。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 6,
+            "excerpt_range": {
+              "start": 0,
+              "end": 6
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-h",
+            "chunk_id": "c-h1",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_retrieve_evidence"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-no-expectations-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_8c59a57531b93554924d360de5704f64",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": "answered",
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-no-expectations-0-step-0",
+            "name": "rag__rag_retrieve_evidence",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 1,
+            "include_superseded": false,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 1,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 0,
+            "source": "search",
+            "document_id": "doc-h",
+            "chunk_id": "c-h1",
+            "file_name": "doc-h.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "合成の記載。",
+            "text_length": 6,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 1,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-timeout-run-0",
+      "source": {
+        "id": "run-timeout-run-0",
+        "status": "running",
+        "thread_id": "thread_f0fe8e2b136544171316a3787537bebc",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": ""
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-timeout-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_f0fe8e2b136544171316a3787537bebc",
+        "status": "running",
+        "outcome": null,
+        "in_progress": true,
+        "answer": "",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "実行しています。agent_get_run（wait_seconds）で続きを読んでください。止めるときは agent_cancel_run を使います。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-timeout-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_f0fe8e2b136544171316a3787537bebc",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "running",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": null,
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      },
+      "agent_cancel_run": {
+        "schema_version": 1,
+        "run_id": "run-timeout-run-0",
+        "status": "cancelled",
+        "result": "cancelled",
+        "message": "実行を取り消しました。"
+      }
+    },
+    {
+      "run_id": "run-unknown-outcome-vocabulary-0",
+      "source": {
+        "id": "run-unknown-outcome-vocabulary-0",
+        "status": "completed",
+        "thread_id": "thread_3a3e477b6eddca6fb65c5244c490b255",
+        "steps": [
+          {
+            "status": "failed",
+            "tool_call": {
+              "name": "rag__rag_search",
+              "arguments": {
+                "query": "項目 T",
+                "include_superseded": true
+              }
+            },
+            "tool_result": {
+              "name": "rag_search",
+              "success": false,
+              "output": null
+            }
+          },
+          {
+            "status": "completed",
+            "tool_call": {
+              "name": "rag__rag_search",
+              "arguments": {
+                "query": "項目 T",
+                "include_superseded": true
+              }
+            },
+            "tool_result": {
+              "name": "rag_search",
+              "success": true,
+              "output": {
+                "outcome": "answered",
+                "clarifications": [],
+                "evidence": [
+                  {
+                    "evidence_id": "c-g1",
+                    "document_id": "doc-g",
+                    "chunk_id": "c-g1",
+                    "file_name": "doc-g.pdf",
+                    "excerpt": "旧版: 5 日。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  },
+                  {
+                    "evidence_id": "c-g2",
+                    "document_id": "doc-g2",
+                    "chunk_id": "c-g2",
+                    "file_name": "doc-g2.pdf",
+                    "excerpt": "今の版: 3 日。",
+                    "score": 0.8,
+                    "locator": {
+                      "page_start": 1,
+                      "page_end": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": "旧版は 5 日、今の版は 3 日です。",
+              "outcome": {
+                "schema_version": 1,
+                "value": "unknown_value",
+                "basis": "answer_passages",
+                "rag_outcome": null,
+                "signals": []
+              }
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-unknown-outcome-vocabulary-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_3a3e477b6eddca6fb65c5244c490b255",
+        "status": "completed",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "旧版は 5 日、今の版は 3 日です。",
+        "confirmation": null,
+        "sources": [
+          {
+            "title": "doc-g.pdf",
+            "location": "p.1",
+            "excerpt": "旧版: 5 日。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 8,
+            "excerpt_range": {
+              "start": 0,
+              "end": 8
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-g",
+            "chunk_id": "c-g1",
+            "cited": false
+          },
+          {
+            "title": "doc-g2.pdf",
+            "location": "p.1",
+            "excerpt": "今の版: 3 日。",
+            "truncated": false,
+            "text_omitted": false,
+            "text_length": 9,
+            "excerpt_range": {
+              "start": 0,
+              "end": 9
+            },
+            "header_range": null,
+            "next_offset": null,
+            "document_id": "doc-g2",
+            "chunk_id": "c-g2",
+            "cited": false
+          }
+        ],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [
+          "rag__rag_search"
+        ],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "回答しました。続きの質問は thread_id を agent_chat に渡してください。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-unknown-outcome-vocabulary-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_3a3e477b6eddca6fb65c5244c490b255",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "completed",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": "2026-10-25T01:01:00Z",
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [
+          {
+            "index": 0,
+            "call_id": "run-unknown-outcome-vocabulary-0-step-0",
+            "name": "rag__rag_search",
+            "status": "failed",
+            "error_code": "tool_error",
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 0,
+            "include_superseded": true,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": null,
+            "guardrail_degraded": null,
+            "zero_evidence_stage": null
+          },
+          {
+            "index": 1,
+            "call_id": "run-unknown-outcome-vocabulary-0-step-1",
+            "name": "rag__rag_search",
+            "status": "completed",
+            "error_code": null,
+            "started_at": null,
+            "completed_at": null,
+            "evidence_count": 2,
+            "include_superseded": true,
+            "job_status": null,
+            "row_count": null,
+            "rows_truncated": null,
+            "degraded_steps": [],
+            "guardrail_degraded": false,
+            "zero_evidence_stage": null
+          }
+        ],
+        "tool_call_total": 2,
+        "evidence": [
+          {
+            "rank": 1,
+            "tool_call_index": 1,
+            "source": "search",
+            "document_id": "doc-g",
+            "chunk_id": "c-g1",
+            "file_name": "doc-g.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "旧版: 5 日。",
+            "text_length": 8,
+            "text_omitted": false,
+            "truncated": false
+          },
+          {
+            "rank": 2,
+            "tool_call_index": 1,
+            "source": "search",
+            "document_id": "doc-g2",
+            "chunk_id": "c-g2",
+            "file_name": "doc-g2.pdf",
+            "chunk_set_id": null,
+            "evidence_type": null,
+            "origin": null,
+            "superseded": false,
+            "retrieval_rank": null,
+            "cited": false,
+            "answer_use": null,
+            "locator": {
+              "section_path": [],
+              "page_start": 1,
+              "page_end": 1,
+              "page_label_start": null,
+              "page_label_end": null,
+              "sheet_name": null,
+              "row_basis": null,
+              "table_index": null,
+              "row_start": null,
+              "row_end": null,
+              "source_line_start": null,
+              "source_line_end": null,
+              "cell_range": null,
+              "element_locator": null,
+              "table_row": null,
+              "table_cells": []
+            },
+            "table_binding": null,
+            "text": "今の版: 3 日。",
+            "text_length": 9,
+            "text_omitted": false,
+            "truncated": false
+          }
+        ],
+        "evidence_total": 2,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    },
+    {
+      "run_id": "run-waiting-approval-run-0",
+      "source": {
+        "id": "run-waiting-approval-run-0",
+        "status": "waiting_approval",
+        "thread_id": "thread_a8ae0fc16c603e12f9e9be7df489b972",
+        "steps": [],
+        "artifacts": [
+          {
+            "kind": "answer",
+            "content": {
+              "text": ""
+            }
+          },
+          {
+            "kind": "answer_validation",
+            "content": {
+              "status": "completed"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 2
+        }
+      },
+      "agent_get_run": {
+        "schema_version": 4,
+        "run_id": "run-waiting-approval-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_a8ae0fc16c603e12f9e9be7df489b972",
+        "status": "waiting_approval",
+        "outcome": null,
+        "in_progress": false,
+        "answer": "",
+        "confirmation": null,
+        "sources": [],
+        "sources_text_omitted": 0,
+        "withheld_evidence_count": 0,
+        "passage_marks": [],
+        "removed_passages": [],
+        "answer_warnings": [],
+        "tools_used": [],
+        "skipped_approval_tools": [],
+        "pending_approvals": 0,
+        "message": "承認が必要な操作があります。Agent の画面の「承認」で判断されると続きを実行します。agent_get_run で後から読めます。",
+        "notice": null
+      },
+      "agent_get_run_observation": {
+        "schema_version": 5,
+        "run_id": "run-waiting-approval-run-0",
+        "agent_id": "agent-baseline",
+        "thread_id": "thread_a8ae0fc16c603e12f9e9be7df489b972",
+        "agent_version": null,
+        "trace_id": null,
+        "status": "waiting_approval",
+        "outcome": null,
+        "validation_status": "completed",
+        "created_at": "2026-10-25T01:00:00Z",
+        "finished_at": null,
+        "usage": {
+          "model": null,
+          "requests": 2,
+          "input_tokens": 0,
+          "output_tokens": 0
+        },
+        "tool_calls": [],
+        "tool_call_total": 0,
+        "evidence": [],
+        "evidence_total": 0,
+        "withheld_evidence_count": 0,
+        "next_cursor": null
+      }
+    }
+  ]
+}

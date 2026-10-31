@@ -1,0 +1,103 @@
+{
+  "id": "run-create-error",
+  "description": "Run の作成（agent_chat）が HTTP 503。ケースの失敗（AgentEvaluationError）として記録して次へ進む（trace_id は空、時間は 0、Run の記録なし）。",
+  "covers": [
+    "status:api_error",
+    "case_error"
+  ],
+  "case": {
+    "id": "run-create-error",
+    "split": "holdout",
+    "query": "合成の質問 12",
+    "expected_outcomes": [
+      "answered"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "api_error",
+      "elapsed_ms": 0.0,
+      "http_status": 503
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "error",
+      "category": null,
+      "split": "holdout",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": null,
+      "outcome_source": null,
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "case_error"
+      ],
+      "elapsed_ms": 0.0,
+      "error_type": "AgentEvaluationError",
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "",
+      "turn_trace_ids": [],
+      "diagnostics_answer": null,
+      "error_message": "Agent の MCP（tools/call）が失敗しました（HTTP 503）: synthetic failure",
+      "runs": [],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 12"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "error",
+        "category": null,
+        "split": "holdout",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "case_error"
+        ],
+        "elapsed_ms": 0.0,
+        "error_type": "AgentEvaluationError",
+        "error_stage": "turn_0",
+        "undetermined_evidence": [],
+        "metric_status": {}
+      }
+    }
+  }
+}

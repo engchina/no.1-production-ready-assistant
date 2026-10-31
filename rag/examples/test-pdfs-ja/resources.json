@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "recipe": {
+    "preprocess_profile": "passthrough",
+    "parser_adapter_backend": "docling",
+    "vision_enabled": true,
+    "chunking_strategy": "small_to_big",
+    "entity_index_enabled": true,
+    "graph_profile": "off",
+    "heading_level_inference_enabled": false,
+    "field_extraction_enabled": false,
+    "navigation_summary_enabled": false,
+    "auto_parse_after_preprocess_enabled": true,
+    "auto_chunk_after_extract_enabled": true,
+    "auto_index_after_chunk_enabled": true,
+    "chunk_size": 800,
+    "chunk_overlap": 120,
+    "chunk_min_chars": 120,
+    "chunk_child_target_chars": 1000,
+    "chunk_table_child_target_chars": 3000,
+    "chunk_parent_target_chars": 6000,
+    "chunk_parent_max_pages": 3,
+    "chunk_parent_max_children": 12,
+    "chunk_context_header_enabled": true
+  },
+  "groups": {
+    "A": {
+      "knowledge_base": {
+        "name": "テスト_A_運用資料",
+        "description": "日本語の合成テスト資料 5 件を管理するナレッジベース。グループ A の検索範囲と引用を検証する。"
+      },
+      "profile": {
+        "name": "テスト_A_検索回答",
+        "description": "テストグループ A のナレッジベース 1 件だけを参照する検索・回答プロファイル。",
+        "config": {}
+      }
+    },
+    "B": {
+      "knowledge_base": {
+        "name": "テスト_B_文書検索資料",
+        "description": "日本語の合成テスト資料 5 件を管理するナレッジベース。グループ B の検索範囲と引用を検証する。"
+      },
+      "profile": {
+        "name": "テスト_B_検索回答",
+        "description": "テストグループ B のナレッジベース 1 件だけを参照する検索・回答プロファイル。",
+        "config": {}
+      }
+    }
+  }
+}

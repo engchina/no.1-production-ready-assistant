@@ -1,0 +1,50 @@
+{
+  "cases": [
+    {
+      "id": "policy-approval-flow-basic",
+      "query": "経費申請の承認フローを教えてください。",
+      "relevant_document_ids": [
+        "doc-expense-policy"
+      ],
+      "standard_answer": "経費申請は申請者が申請書を提出し、部門長が内容を確認して承認します。10 万円を超える申請は経理部長の承認も必要です。",
+      "required_answer_points": [
+        "部門長",
+        "承認"
+      ]
+    },
+    {
+      "id": "manual-troubleshooting-basic",
+      "query": "検索結果が表示されない場合の確認項目は何ですか。",
+      "relevant_document_ids": [
+        "doc-search-troubleshooting"
+      ],
+      "required_answer_points": [
+        "インデックス",
+        "再実行"
+      ]
+    },
+    {
+      "id": "out-of-scope-refusal",
+      "query": "社員食堂の来月の献立を教えてください。",
+      "answerable": false
+    }
+  ],
+  "top_k": 20,
+  "filters": {
+    "status": "INDEXED"
+  },
+  "rag_overrides": {
+    "query_strategy": "auto_routing",
+    "answer_flow": "crag",
+    "rrf_k": 60,
+    "oracle_vector_target_accuracy": 95
+  },
+  "thresholds": {
+    "required_evidence_recall": 0.9,
+    "mrr": 0.6,
+    "answer_correctness": 0.9,
+    "requirement_coverage": 0.9,
+    "claim_support_rate": 0.95,
+    "response_decision_accuracy": 0.9
+  }
+}

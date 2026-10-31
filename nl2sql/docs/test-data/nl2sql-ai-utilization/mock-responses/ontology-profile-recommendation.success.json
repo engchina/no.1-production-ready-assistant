@@ -1,0 +1,36 @@
+{
+  "data": {
+    "recommendation": {
+      "id": "opr-001",
+      "question_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "ontology_revision_id": "ont-rev-001",
+      "candidates": [
+        {
+          "profile_id": "default",
+          "profile_name": "標準業務プロファイル",
+          "ontology_revision_id": "ont-rev-001",
+          "score": 0.89,
+          "matched_scenarios_ja": [
+            "受注金額分析"
+          ],
+          "matched_terms": [
+            "受注",
+            "金額",
+            "上位"
+          ],
+          "reasons_ja": [
+            "質問が受注分析 ontology のシナリオと一致しました。"
+          ]
+        }
+      ],
+      "selected_profile_id": "",
+      "selected_revision_id": "",
+      "confirmed_at": null,
+      "expires_at": "2026-08-12T00:15:00Z",
+      "created_at": "2026-08-12T00:00:00Z"
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

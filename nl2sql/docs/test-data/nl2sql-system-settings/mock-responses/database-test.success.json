@@ -1,0 +1,20 @@
+{
+  "data": {
+    "status": "success",
+    "readiness": "ok",
+    "message": "Oracle AI Database への接続を確認しました。",
+    "elapsed_ms": 43,
+    "troubleshooting": [],
+    "details": {
+      "service": "nl2sqldb_high",
+      "current_schema": "NL2SQL_APP",
+      "embedding_dimension": 1536,
+      "vector_column": "VECTOR(1536, FLOAT32)"
+    },
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "error_type": null
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

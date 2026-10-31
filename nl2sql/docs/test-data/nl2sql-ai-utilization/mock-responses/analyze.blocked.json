@@ -1,0 +1,59 @@
+{
+  "data": {
+    "safety": {
+      "is_safe": false,
+      "is_select_only": false,
+      "row_limit_applied": 0,
+      "blocked_reason": "SELECT/WITH 以外の SQL は実行できません。",
+      "warnings": [
+        "DELETE 文が含まれています。"
+      ],
+      "referenced_tables": [
+        "APP.ORDERS"
+      ],
+      "referenced_columns": [
+        "ORDER_DATE"
+      ]
+    },
+    "explanation": "DELETE 文のため通常実行境界では実行できません。",
+    "recommendations": [
+      "削除対象を確認する SELECT に変更してください。"
+    ],
+    "executable_sql": "",
+    "repaired_sql": "SELECT * FROM APP.ORDERS WHERE ORDER_DATE < DATE '2020-01-01' FETCH FIRST 100 ROWS ONLY",
+    "optimization_hints": [],
+    "structure_summary": "APP.ORDERS の古い行を削除しようとしています。",
+    "risk_level": "high",
+    "statement_type": "DELETE",
+    "object_names": [
+      "APP.ORDERS"
+    ],
+    "column_names": [
+      "ORDER_DATE"
+    ],
+    "conditions": [
+      "ORDER_DATE < DATE '2020-01-01'"
+    ],
+    "group_by": [],
+    "order_by": [],
+    "risk_findings": [
+      "データを変更する SQL です。"
+    ],
+    "repair_candidates": [
+      "SELECT * FROM APP.ORDERS WHERE ORDER_DATE < DATE '2020-01-01'"
+    ],
+    "operations": [
+      "DELETE"
+    ],
+    "filters": [
+      "ORDER_DATE < DATE '2020-01-01'"
+    ],
+    "joins": [],
+    "aggregations": [],
+    "llm_enhanced": false,
+    "llm_warnings": []
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

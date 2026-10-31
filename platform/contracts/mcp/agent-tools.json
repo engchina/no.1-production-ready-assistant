@@ -1,0 +1,2762 @@
+{
+  "server": "production-ready-agent",
+  "tools": [
+    {
+      "name": "agent_answer_confirmation",
+      "title": "回答前の確認への回答",
+      "description": "回答前の確認（agent_chat / agent_get_run の confirmation）に答える。action=answer はすべての確認事項に、選択肢の ID（option_ids）か自由入力（other_text）で答える。action=skip は確認せずに前提を示して回答させる（can_skip のときだけ）。答えた後の回答を返す。",
+      "inputSchema": {
+        "$defs": {
+          "ConfirmationAnswerInput": {
+            "properties": {
+              "item_id": {
+                "description": "確認事項の ID",
+                "maxLength": 128,
+                "minLength": 1,
+                "title": "Item Id",
+                "type": "string"
+              },
+              "option_ids": {
+                "description": "選んだ選択肢の ID",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "title": "Option Ids",
+                "type": "array"
+              },
+              "other_text": {
+                "default": "",
+                "description": "選択肢に無いときの自由入力の答え",
+                "maxLength": 2000,
+                "title": "Other Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ],
+            "title": "ConfirmationAnswerInput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "run_id": {
+            "description": "確認を出した Run の ID",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "confirmation_id": {
+            "description": "確認の ID（confirmation.id）",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Confirmation Id",
+            "type": "string"
+          },
+          "action": {
+            "default": "answer",
+            "description": "answer は確認事項に答える。skip は確認せずに（前提を示して）回答させる。",
+            "enum": [
+              "answer",
+              "skip"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "answers": {
+            "description": "answer のとき、すべての確認事項への答え（選択肢か自由入力）。",
+            "items": {
+              "$ref": "#/$defs/ConfirmationAnswerInput"
+            },
+            "maxItems": 5,
+            "title": "Answers",
+            "type": "array"
+          },
+          "wait_seconds": {
+            "default": 50,
+            "description": "答えた後の回答を待つ秒数。",
+            "maximum": 300,
+            "minimum": 0,
+            "title": "Wait Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "confirmation_id"
+        ],
+        "title": "AgentAnswerConfirmationInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "outputSchema": {
+        "$defs": {
+          "ConfirmationItemOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "prompt": {
+                "title": "Prompt",
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "title": "Reason",
+                "type": "string"
+              },
+              "selection": {
+                "default": "single",
+                "title": "Selection",
+                "type": "string"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationOptionOutput"
+                },
+                "title": "Options",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "prompt"
+            ],
+            "title": "ConfirmationItemOutput",
+            "type": "object"
+          },
+          "ConfirmationOptionOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "title": "ConfirmationOptionOutput",
+            "type": "object"
+          },
+          "ConfirmationOutput": {
+            "description": "回答前の確認（#1839）。agent_answer_confirmation で答える。",
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "source": {
+                "title": "Source",
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationItemOutput"
+                },
+                "title": "Items",
+                "type": "array"
+              },
+              "round": {
+                "title": "Round",
+                "type": "integer"
+              },
+              "max_rounds": {
+                "title": "Max Rounds",
+                "type": "integer"
+              },
+              "can_skip": {
+                "title": "Can Skip",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "source",
+              "items",
+              "round",
+              "max_rounds",
+              "can_skip"
+            ],
+            "title": "ConfirmationOutput",
+            "type": "object"
+          },
+          "PassageMarkOutput": {
+            "description": "回答の本文に残した段落の印（unverified=根拠で確かめられていない / warning=注意が必要）。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "unverified",
+                  "warning"
+                ],
+                "title": "State",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text",
+              "state"
+            ],
+            "title": "PassageMarkOutput",
+            "type": "object"
+          },
+          "ReasonOutput": {
+            "description": "印・外した段落・回答の警告の理由。",
+            "properties": {
+              "code": {
+                "title": "Code",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "detail": {
+                "default": "",
+                "title": "Detail",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "label"
+            ],
+            "title": "ReasonOutput",
+            "type": "object"
+          },
+          "RemovedPassageOutput": {
+            "description": "根拠と矛盾するため回答の本文から除いた段落。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "title": "RemovedPassageOutput",
+            "type": "object"
+          },
+          "SourceOutput": {
+            "description": "回答の根拠（RAG の資料。回答に使ったもの）。",
+            "properties": {
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "title": "Location",
+                "type": "string"
+              },
+              "excerpt": {
+                "default": "",
+                "description": "根拠の本文（既定は全文）。応答の合計の予算（token の見積もり 24000）に根拠の順で入れ、入らない根拠は空（text_omitted）。1 件で 4000 を超える根拠は、質問に当たる部分を中心に文・段落（表は行）の境界で切った一部（truncated）。",
+                "title": "Excerpt",
+                "type": "string"
+              },
+              "truncated": {
+                "default": false,
+                "description": "excerpt が本文の一部だけか（範囲は excerpt_range）。",
+                "title": "Truncated",
+                "type": "boolean"
+              },
+              "text_omitted": {
+                "default": false,
+                "description": "応答の予算に入らず excerpt を空にしたか（本文は RAG の rag_read_source に document_id と chunk_id を渡して読む）。",
+                "title": "Text Omitted",
+                "type": "boolean"
+              },
+              "text_length": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "根拠の本文の文字数（分からなければ null）。",
+                "title": "Text Length"
+              },
+              "excerpt_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の本文の位置（文字の [start, end)）。text_omitted・不明なら null。"
+              },
+              "header_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "切った表で excerpt の先頭に付けた見出しの行の位置（excerpt_range と続かないときだけ）。無ければ null。"
+              },
+              "next_offset": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の後ろの続きを RAG の rag_read_source で読むときの offset（続きが無ければ null）。",
+                "title": "Next Offset"
+              },
+              "document_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の文書の ID（会話の添付の根拠は null）。",
+                "title": "Document Id"
+              },
+              "chunk_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の chunk の ID（rag_read_source に渡せる。添付は null）。",
+                "title": "Chunk Id"
+              },
+              "cited": {
+                "default": false,
+                "description": "回答で引用した根拠か（引用の無い回答は、AI に渡した根拠をすべて false で出す）。",
+                "title": "Cited",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "title": "SourceOutput",
+            "type": "object"
+          },
+          "TextRangeOutput": {
+            "description": "本文の中の範囲（文字の位置。[start, end)。RAG の根拠の excerpt_range と同じ）。",
+            "properties": {
+              "start": {
+                "title": "Start",
+                "type": "integer"
+              },
+              "end": {
+                "title": "End",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "TextRangeOutput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "schema_version": {
+            "default": 4,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thread Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "answered",
+                  "conditional",
+                  "needs_clarification",
+                  "needs_environment_data",
+                  "needs_human",
+                  "insufficient_evidence"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "回答の対応。answered=資料で答えた / conditional=条件・不足を示して答えた / needs_clarification=利用者への確認 / needs_environment_data=現場の値・記録の確認が要る / needs_human=人への引き継ぎ / insufficient_evidence=資料から答えられない。completed でなければ null。",
+            "title": "Outcome"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConfirmationOutput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/SourceOutput"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "sources_text_omitted": {
+            "default": 0,
+            "description": "応答の予算に入らず本文を省いた根拠（text_omitted）の数。",
+            "minimum": 0,
+            "title": "Sources Text Omitted",
+            "type": "integer"
+          },
+          "withheld_evidence_count": {
+            "default": 0,
+            "description": "今の権限で見られないため sources に出さない根拠の数。",
+            "minimum": 0,
+            "title": "Withheld Evidence Count",
+            "type": "integer"
+          },
+          "passage_marks": {
+            "description": "answer の本文の段落（text）のうち、確かめが要る段落と理由。",
+            "items": {
+              "$ref": "#/$defs/PassageMarkOutput"
+            },
+            "title": "Passage Marks",
+            "type": "array"
+          },
+          "removed_passages": {
+            "description": "根拠と矛盾するため answer の本文から除いた段落と理由。",
+            "items": {
+              "$ref": "#/$defs/RemovedPassageOutput"
+            },
+            "title": "Removed Passages",
+            "type": "array"
+          },
+          "answer_warnings": {
+            "description": "回答全体についての警告。",
+            "items": {
+              "$ref": "#/$defs/ReasonOutput"
+            },
+            "title": "Answer Warnings",
+            "type": "array"
+          },
+          "tools_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools Used",
+            "type": "array"
+          },
+          "skipped_approval_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped Approval Tools",
+            "type": "array"
+          },
+          "pending_approvals": {
+            "default": 0,
+            "title": "Pending Approvals",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "利用者に回答を示すときは、末尾にこの文をそのまま添える。",
+            "title": "Notice"
+          }
+        },
+        "required": [
+          "run_id",
+          "agent_id",
+          "status",
+          "in_progress",
+          "message"
+        ],
+        "title": "RunOutput",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_cancel_run",
+      "title": "実行の取り消し",
+      "description": "agent_chat の run_id の実行を止める（回答前の確認の待ちも閉じる）。利用者が止めると言ったとき、回答を待たないと決めたときに使う。",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "description": "agent_chat の run_id",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "AgentCancelRunInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "outputSchema": {
+        "properties": {
+          "schema_version": {
+            "default": 1,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "description": "取消の後の Run の状態。",
+            "title": "Status",
+            "type": "string"
+          },
+          "result": {
+            "description": "cancelled=取り消した / already_cancelled=すでに取り消されていた / already_finished=終わっていたため変えていない（status が completed / failed）。",
+            "enum": [
+              "cancelled",
+              "already_cancelled",
+              "already_finished"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "result",
+          "message"
+        ],
+        "title": "CancelRunOutput",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_chat",
+      "title": "業務 Agent への質問",
+      "description": "業務 Agent に質問し、回答（根拠つき）を返す。業務 Agent は社内の資料（RAG）・業務データ（NL2SQL）などを調べて答える。thread_id を渡すと同じ会話の続きとして答える。回答の前に確認が要るときは confirmation を返す。wait_seconds までに終わらなければ in_progress=true と run_id を返す（agent_get_run で読む）。承認の要る操作は行わない。",
+      "inputSchema": {
+        "properties": {
+          "agent_id": {
+            "description": "業務 Agent の ID（agent_list の id）",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "question": {
+            "description": "質問",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "pattern": "^thread_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "続ける会話の ID（前の agent_chat / agent_get_run の thread_id）。省略すると新しい会話を始める。前の質問と回答を踏まえて答える。",
+            "title": "Thread Id"
+          },
+          "wait_seconds": {
+            "default": 50,
+            "description": "回答を待つ秒数。終わらなければ途中の状態と run_id を返すので、agent_get_run で読む。",
+            "maximum": 300,
+            "minimum": 0,
+            "title": "Wait Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agent_id",
+          "question"
+        ],
+        "title": "AgentChatInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "outputSchema": {
+        "$defs": {
+          "ConfirmationItemOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "prompt": {
+                "title": "Prompt",
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "title": "Reason",
+                "type": "string"
+              },
+              "selection": {
+                "default": "single",
+                "title": "Selection",
+                "type": "string"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationOptionOutput"
+                },
+                "title": "Options",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "prompt"
+            ],
+            "title": "ConfirmationItemOutput",
+            "type": "object"
+          },
+          "ConfirmationOptionOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "title": "ConfirmationOptionOutput",
+            "type": "object"
+          },
+          "ConfirmationOutput": {
+            "description": "回答前の確認（#1839）。agent_answer_confirmation で答える。",
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "source": {
+                "title": "Source",
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationItemOutput"
+                },
+                "title": "Items",
+                "type": "array"
+              },
+              "round": {
+                "title": "Round",
+                "type": "integer"
+              },
+              "max_rounds": {
+                "title": "Max Rounds",
+                "type": "integer"
+              },
+              "can_skip": {
+                "title": "Can Skip",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "source",
+              "items",
+              "round",
+              "max_rounds",
+              "can_skip"
+            ],
+            "title": "ConfirmationOutput",
+            "type": "object"
+          },
+          "PassageMarkOutput": {
+            "description": "回答の本文に残した段落の印（unverified=根拠で確かめられていない / warning=注意が必要）。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "unverified",
+                  "warning"
+                ],
+                "title": "State",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text",
+              "state"
+            ],
+            "title": "PassageMarkOutput",
+            "type": "object"
+          },
+          "ReasonOutput": {
+            "description": "印・外した段落・回答の警告の理由。",
+            "properties": {
+              "code": {
+                "title": "Code",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "detail": {
+                "default": "",
+                "title": "Detail",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "label"
+            ],
+            "title": "ReasonOutput",
+            "type": "object"
+          },
+          "RemovedPassageOutput": {
+            "description": "根拠と矛盾するため回答の本文から除いた段落。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "title": "RemovedPassageOutput",
+            "type": "object"
+          },
+          "SourceOutput": {
+            "description": "回答の根拠（RAG の資料。回答に使ったもの）。",
+            "properties": {
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "title": "Location",
+                "type": "string"
+              },
+              "excerpt": {
+                "default": "",
+                "description": "根拠の本文（既定は全文）。応答の合計の予算（token の見積もり 24000）に根拠の順で入れ、入らない根拠は空（text_omitted）。1 件で 4000 を超える根拠は、質問に当たる部分を中心に文・段落（表は行）の境界で切った一部（truncated）。",
+                "title": "Excerpt",
+                "type": "string"
+              },
+              "truncated": {
+                "default": false,
+                "description": "excerpt が本文の一部だけか（範囲は excerpt_range）。",
+                "title": "Truncated",
+                "type": "boolean"
+              },
+              "text_omitted": {
+                "default": false,
+                "description": "応答の予算に入らず excerpt を空にしたか（本文は RAG の rag_read_source に document_id と chunk_id を渡して読む）。",
+                "title": "Text Omitted",
+                "type": "boolean"
+              },
+              "text_length": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "根拠の本文の文字数（分からなければ null）。",
+                "title": "Text Length"
+              },
+              "excerpt_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の本文の位置（文字の [start, end)）。text_omitted・不明なら null。"
+              },
+              "header_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "切った表で excerpt の先頭に付けた見出しの行の位置（excerpt_range と続かないときだけ）。無ければ null。"
+              },
+              "next_offset": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の後ろの続きを RAG の rag_read_source で読むときの offset（続きが無ければ null）。",
+                "title": "Next Offset"
+              },
+              "document_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の文書の ID（会話の添付の根拠は null）。",
+                "title": "Document Id"
+              },
+              "chunk_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の chunk の ID（rag_read_source に渡せる。添付は null）。",
+                "title": "Chunk Id"
+              },
+              "cited": {
+                "default": false,
+                "description": "回答で引用した根拠か（引用の無い回答は、AI に渡した根拠をすべて false で出す）。",
+                "title": "Cited",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "title": "SourceOutput",
+            "type": "object"
+          },
+          "TextRangeOutput": {
+            "description": "本文の中の範囲（文字の位置。[start, end)。RAG の根拠の excerpt_range と同じ）。",
+            "properties": {
+              "start": {
+                "title": "Start",
+                "type": "integer"
+              },
+              "end": {
+                "title": "End",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "TextRangeOutput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "schema_version": {
+            "default": 4,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thread Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "answered",
+                  "conditional",
+                  "needs_clarification",
+                  "needs_environment_data",
+                  "needs_human",
+                  "insufficient_evidence"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "回答の対応。answered=資料で答えた / conditional=条件・不足を示して答えた / needs_clarification=利用者への確認 / needs_environment_data=現場の値・記録の確認が要る / needs_human=人への引き継ぎ / insufficient_evidence=資料から答えられない。completed でなければ null。",
+            "title": "Outcome"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConfirmationOutput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/SourceOutput"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "sources_text_omitted": {
+            "default": 0,
+            "description": "応答の予算に入らず本文を省いた根拠（text_omitted）の数。",
+            "minimum": 0,
+            "title": "Sources Text Omitted",
+            "type": "integer"
+          },
+          "withheld_evidence_count": {
+            "default": 0,
+            "description": "今の権限で見られないため sources に出さない根拠の数。",
+            "minimum": 0,
+            "title": "Withheld Evidence Count",
+            "type": "integer"
+          },
+          "passage_marks": {
+            "description": "answer の本文の段落（text）のうち、確かめが要る段落と理由。",
+            "items": {
+              "$ref": "#/$defs/PassageMarkOutput"
+            },
+            "title": "Passage Marks",
+            "type": "array"
+          },
+          "removed_passages": {
+            "description": "根拠と矛盾するため answer の本文から除いた段落と理由。",
+            "items": {
+              "$ref": "#/$defs/RemovedPassageOutput"
+            },
+            "title": "Removed Passages",
+            "type": "array"
+          },
+          "answer_warnings": {
+            "description": "回答全体についての警告。",
+            "items": {
+              "$ref": "#/$defs/ReasonOutput"
+            },
+            "title": "Answer Warnings",
+            "type": "array"
+          },
+          "tools_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools Used",
+            "type": "array"
+          },
+          "skipped_approval_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped Approval Tools",
+            "type": "array"
+          },
+          "pending_approvals": {
+            "default": 0,
+            "title": "Pending Approvals",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "利用者に回答を示すときは、末尾にこの文をそのまま添える。",
+            "title": "Notice"
+          }
+        },
+        "required": [
+          "run_id",
+          "agent_id",
+          "status",
+          "in_progress",
+          "message"
+        ],
+        "title": "RunOutput",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_get_run",
+      "title": "実行の結果の取得",
+      "description": "agent_chat の run_id で、状態・回答・根拠・回答前の確認を返す。まだ終わっていなければ wait_seconds まで待つ。",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "description": "agent_chat の run_id",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "wait_seconds": {
+            "default": 30,
+            "description": "まだ終わっていなければ、終わるまで待つ秒数（0 は今の状態をすぐ返す）。",
+            "maximum": 300,
+            "minimum": 0,
+            "title": "Wait Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "AgentGetRunInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "outputSchema": {
+        "$defs": {
+          "ConfirmationItemOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "prompt": {
+                "title": "Prompt",
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "title": "Reason",
+                "type": "string"
+              },
+              "selection": {
+                "default": "single",
+                "title": "Selection",
+                "type": "string"
+              },
+              "options": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationOptionOutput"
+                },
+                "title": "Options",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "prompt"
+            ],
+            "title": "ConfirmationItemOutput",
+            "type": "object"
+          },
+          "ConfirmationOptionOutput": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "title": "ConfirmationOptionOutput",
+            "type": "object"
+          },
+          "ConfirmationOutput": {
+            "description": "回答前の確認（#1839）。agent_answer_confirmation で答える。",
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "source": {
+                "title": "Source",
+                "type": "string"
+              },
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/ConfirmationItemOutput"
+                },
+                "title": "Items",
+                "type": "array"
+              },
+              "round": {
+                "title": "Round",
+                "type": "integer"
+              },
+              "max_rounds": {
+                "title": "Max Rounds",
+                "type": "integer"
+              },
+              "can_skip": {
+                "title": "Can Skip",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "source",
+              "items",
+              "round",
+              "max_rounds",
+              "can_skip"
+            ],
+            "title": "ConfirmationOutput",
+            "type": "object"
+          },
+          "PassageMarkOutput": {
+            "description": "回答の本文に残した段落の印（unverified=根拠で確かめられていない / warning=注意が必要）。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "unverified",
+                  "warning"
+                ],
+                "title": "State",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text",
+              "state"
+            ],
+            "title": "PassageMarkOutput",
+            "type": "object"
+          },
+          "ReasonOutput": {
+            "description": "印・外した段落・回答の警告の理由。",
+            "properties": {
+              "code": {
+                "title": "Code",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "detail": {
+                "default": "",
+                "title": "Detail",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "label"
+            ],
+            "title": "ReasonOutput",
+            "type": "object"
+          },
+          "RemovedPassageOutput": {
+            "description": "根拠と矛盾するため回答の本文から除いた段落。",
+            "properties": {
+              "text": {
+                "title": "Text",
+                "type": "string"
+              },
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReasonOutput"
+                },
+                "title": "Reasons",
+                "type": "array"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "title": "RemovedPassageOutput",
+            "type": "object"
+          },
+          "SourceOutput": {
+            "description": "回答の根拠（RAG の資料。回答に使ったもの）。",
+            "properties": {
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "location": {
+                "default": "",
+                "title": "Location",
+                "type": "string"
+              },
+              "excerpt": {
+                "default": "",
+                "description": "根拠の本文（既定は全文）。応答の合計の予算（token の見積もり 24000）に根拠の順で入れ、入らない根拠は空（text_omitted）。1 件で 4000 を超える根拠は、質問に当たる部分を中心に文・段落（表は行）の境界で切った一部（truncated）。",
+                "title": "Excerpt",
+                "type": "string"
+              },
+              "truncated": {
+                "default": false,
+                "description": "excerpt が本文の一部だけか（範囲は excerpt_range）。",
+                "title": "Truncated",
+                "type": "boolean"
+              },
+              "text_omitted": {
+                "default": false,
+                "description": "応答の予算に入らず excerpt を空にしたか（本文は RAG の rag_read_source に document_id と chunk_id を渡して読む）。",
+                "title": "Text Omitted",
+                "type": "boolean"
+              },
+              "text_length": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "根拠の本文の文字数（分からなければ null）。",
+                "title": "Text Length"
+              },
+              "excerpt_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の本文の位置（文字の [start, end)）。text_omitted・不明なら null。"
+              },
+              "header_range": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TextRangeOutput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "切った表で excerpt の先頭に付けた見出しの行の位置（excerpt_range と続かないときだけ）。無ければ null。"
+              },
+              "next_offset": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "excerpt の後ろの続きを RAG の rag_read_source で読むときの offset（続きが無ければ null）。",
+                "title": "Next Offset"
+              },
+              "document_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の文書の ID（会話の添付の根拠は null）。",
+                "title": "Document Id"
+              },
+              "chunk_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の chunk の ID（rag_read_source に渡せる。添付は null）。",
+                "title": "Chunk Id"
+              },
+              "cited": {
+                "default": false,
+                "description": "回答で引用した根拠か（引用の無い回答は、AI に渡した根拠をすべて false で出す）。",
+                "title": "Cited",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "title": "SourceOutput",
+            "type": "object"
+          },
+          "TextRangeOutput": {
+            "description": "本文の中の範囲（文字の位置。[start, end)。RAG の根拠の excerpt_range と同じ）。",
+            "properties": {
+              "start": {
+                "title": "Start",
+                "type": "integer"
+              },
+              "end": {
+                "title": "End",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "TextRangeOutput",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "schema_version": {
+            "default": 4,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thread Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "answered",
+                  "conditional",
+                  "needs_clarification",
+                  "needs_environment_data",
+                  "needs_human",
+                  "insufficient_evidence"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "回答の対応。answered=資料で答えた / conditional=条件・不足を示して答えた / needs_clarification=利用者への確認 / needs_environment_data=現場の値・記録の確認が要る / needs_human=人への引き継ぎ / insufficient_evidence=資料から答えられない。completed でなければ null。",
+            "title": "Outcome"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "boolean"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Answer"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ConfirmationOutput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/$defs/SourceOutput"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "sources_text_omitted": {
+            "default": 0,
+            "description": "応答の予算に入らず本文を省いた根拠（text_omitted）の数。",
+            "minimum": 0,
+            "title": "Sources Text Omitted",
+            "type": "integer"
+          },
+          "withheld_evidence_count": {
+            "default": 0,
+            "description": "今の権限で見られないため sources に出さない根拠の数。",
+            "minimum": 0,
+            "title": "Withheld Evidence Count",
+            "type": "integer"
+          },
+          "passage_marks": {
+            "description": "answer の本文の段落（text）のうち、確かめが要る段落と理由。",
+            "items": {
+              "$ref": "#/$defs/PassageMarkOutput"
+            },
+            "title": "Passage Marks",
+            "type": "array"
+          },
+          "removed_passages": {
+            "description": "根拠と矛盾するため answer の本文から除いた段落と理由。",
+            "items": {
+              "$ref": "#/$defs/RemovedPassageOutput"
+            },
+            "title": "Removed Passages",
+            "type": "array"
+          },
+          "answer_warnings": {
+            "description": "回答全体についての警告。",
+            "items": {
+              "$ref": "#/$defs/ReasonOutput"
+            },
+            "title": "Answer Warnings",
+            "type": "array"
+          },
+          "tools_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools Used",
+            "type": "array"
+          },
+          "skipped_approval_tools": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped Approval Tools",
+            "type": "array"
+          },
+          "pending_approvals": {
+            "default": 0,
+            "title": "Pending Approvals",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "利用者に回答を示すときは、末尾にこの文をそのまま添える。",
+            "title": "Notice"
+          }
+        },
+        "required": [
+          "run_id",
+          "agent_id",
+          "status",
+          "in_progress",
+          "message"
+        ],
+        "title": "RunOutput",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_get_run_observation",
+      "title": "実行の観測の取得",
+      "description": "実行（run_id）の評価・監査に使う観測（調べた根拠の全件と場所・ツールの呼び出しの経過・利用量）を返す。利用者への回答には agent_get_run を使う。",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "description": "agent_chat の run_id",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "前の応答の next_cursor（続きの根拠を読む）。省略すると先頭から。",
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 20,
+            "description": "1 回に返す根拠の件数の上限。",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "AgentGetRunObservationInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "outputSchema": {
+        "$defs": {
+          "ObservedDegradedStep": {
+            "description": "縮退した任意の補助の処理（RAG の DegradedStep と同じ名前）。",
+            "properties": {
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "count": {
+                "minimum": 1,
+                "title": "Count",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "ObservedDegradedStep",
+            "type": "object"
+          },
+          "ObservedEvidence": {
+            "description": "Run が調べた RAG の根拠（根拠のツールの evidence と、読み取りのツールで読んだ chunk）。",
+            "properties": {
+              "rank": {
+                "description": "Run の中で初めて現れた順（document_id・chunk_id で重複を除く）。",
+                "minimum": 1,
+                "title": "Rank",
+                "type": "integer"
+              },
+              "tool_call_index": {
+                "description": "初めて返した呼び出しの index。",
+                "minimum": 0,
+                "title": "Tool Call Index",
+                "type": "integer"
+              },
+              "source": {
+                "description": "search=根拠のツール / read=読み取りのツール。",
+                "enum": [
+                  "search",
+                  "read"
+                ],
+                "title": "Source",
+                "type": "string"
+              },
+              "document_id": {
+                "title": "Document Id",
+                "type": "string"
+              },
+              "chunk_id": {
+                "title": "Chunk Id",
+                "type": "string"
+              },
+              "file_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "File Name"
+              },
+              "chunk_set_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Chunk Set Id"
+              },
+              "evidence_type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の evidence_type（読み取りの chunk は分からなければ null）。",
+                "title": "Evidence Type"
+              },
+              "origin": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の origin（読み取りの chunk は null）。",
+                "title": "Origin"
+              },
+              "superseded": {
+                "default": false,
+                "title": "Superseded",
+                "type": "boolean"
+              },
+              "retrieval_rank": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の検索の順位（読み取りの chunk・前後の文脈は null）。",
+                "title": "Retrieval Rank"
+              },
+              "cited": {
+                "default": false,
+                "description": "回答で引用した根拠か。",
+                "title": "Cited",
+                "type": "boolean"
+              },
+              "answer_use": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "confirmed",
+                      "reference"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "回答での使われ方（RAG の answer_use と同じ。引用でなければ null）。",
+                "title": "Answer Use"
+              },
+              "locator": {
+                "$ref": "#/$defs/ObservedLocator"
+              },
+              "table_binding": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "checkable",
+                      "not_checkable"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の table_binding（表の行・列の対応の検査がこの根拠の本文を読めるか。null は表の無い根拠・読み取りのツールの chunk）。",
+                "title": "Table Binding"
+              },
+              "text": {
+                "default": "",
+                "description": "生成に渡した本文そのもの（切らない。同じ chunk を別の呼び出しが渡した本文は改行でつなぐ）。text_omitted なら空。",
+                "title": "Text",
+                "type": "string"
+              },
+              "text_length": {
+                "description": "生成に渡した本文の文字数。",
+                "minimum": 0,
+                "title": "Text Length",
+                "type": "integer"
+              },
+              "text_omitted": {
+                "default": false,
+                "description": "1 件でページの予算（token の見積もり 24000）を超えるため本文を省いたか（RAG の rag_read_source で読む）。",
+                "title": "Text Omitted",
+                "type": "boolean"
+              },
+              "truncated": {
+                "default": false,
+                "description": "生成に渡した本文が chunk の一部だけだったか（RAG が切った・途中まで読んだ）。",
+                "title": "Truncated",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "rank",
+              "tool_call_index",
+              "source",
+              "document_id",
+              "chunk_id",
+              "text_length"
+            ],
+            "title": "ObservedEvidence",
+            "type": "object"
+          },
+          "ObservedLocator": {
+            "description": "根拠の場所（RAG の根拠の locator と同じ名前。一致はテストで確かめる）。",
+            "properties": {
+              "section_path": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Section Path",
+                "type": "array"
+              },
+              "page_start": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Page Start"
+              },
+              "page_end": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Page End"
+              },
+              "page_label_start": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Page Label Start"
+              },
+              "page_label_end": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Page Label End"
+              },
+              "sheet_name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Sheet Name"
+              },
+              "row_basis": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "sheet",
+                      "csv",
+                      "word_table",
+                      "parsed_table"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Row Basis"
+              },
+              "table_index": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Table Index"
+              },
+              "row_start": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Row Start"
+              },
+              "row_end": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Row End"
+              },
+              "source_line_start": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source Line Start"
+              },
+              "source_line_end": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source Line End"
+              },
+              "cell_range": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Cell Range"
+              },
+              "element_locator": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Element Locator"
+              },
+              "table_row": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Table Row"
+              },
+              "table_cells": {
+                "items": {
+                  "$ref": "#/$defs/ObservedTableCell"
+                },
+                "title": "Table Cells",
+                "type": "array"
+              }
+            },
+            "title": "ObservedLocator",
+            "type": "object"
+          },
+          "ObservedTableCell": {
+            "description": "表の 1 行の根拠の値のあるセル（RAG の EvidenceTableCell と同じ名前）。",
+            "properties": {
+              "table_col": {
+                "title": "Table Col",
+                "type": "string"
+              },
+              "header_path": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Header Path",
+                "type": "array"
+              }
+            },
+            "required": [
+              "table_col",
+              "header_path"
+            ],
+            "title": "ObservedTableCell",
+            "type": "object"
+          },
+          "ObservedToolCall": {
+            "description": "ツールの呼び出し（Run の順）。",
+            "properties": {
+              "index": {
+                "description": "Run の中の呼び出しの順（0 始まり）。",
+                "minimum": 0,
+                "title": "Index",
+                "type": "integer"
+              },
+              "call_id": {
+                "description": "呼び出しの ID（gen_ai.tool.call.id）。",
+                "title": "Call Id",
+                "type": "string"
+              },
+              "name": {
+                "description": "ツールの名前（<接続>__<ツール>。tools_used と同じ）。",
+                "title": "Name",
+                "type": "string"
+              },
+              "status": {
+                "description": "approval_skipped=承認が要るため呼ばなかった。ほかは呼び出しの状態。",
+                "enum": [
+                  "pending",
+                  "running",
+                  "waiting_approval",
+                  "completed",
+                  "failed",
+                  "cancelled",
+                  "approval_skipped"
+                ],
+                "title": "Status",
+                "type": "string"
+              },
+              "error_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "失敗の分類（error.type）。",
+                "title": "Error Code"
+              },
+              "started_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Started At"
+              },
+              "completed_at": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Completed At"
+              },
+              "evidence_count": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の根拠・読み取りのツールが返した根拠の数（今の権限で見られない根拠を除く）。ほかのツールは null。",
+                "title": "Evidence Count"
+              },
+              "include_superseded": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の根拠のツールで旧版も検索したか。ほかのツールは null。",
+                "title": "Include Superseded"
+              },
+              "job_status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "NL2SQL の nl2sql_query / nl2sql_get_job の status。",
+                "title": "Job Status"
+              },
+              "row_count": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "NL2SQL の returned_count。",
+                "title": "Row Count"
+              },
+              "rows_truncated": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "NL2SQL の truncated。",
+                "title": "Rows Truncated"
+              },
+              "degraded_steps": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "$ref": "#/$defs/ObservedDegradedStep"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の根拠のツールの degraded_steps（失敗して縮退した任意の補助の処理の種類と回数。空なら縮退していない）。ほかのツール・失敗した呼び出しは null。",
+                "title": "Degraded Steps"
+              },
+              "guardrail_degraded": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の根拠のツールの guardrail_degraded（安全チェックを完了できず止めた）。ほかのツール・失敗した呼び出しは null。",
+                "title": "Guardrail Degraded"
+              },
+              "zero_evidence_stage": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "retrieval",
+                      "filter",
+                      "evidence_check",
+                      "context"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "RAG の根拠のツールが根拠 0 件のとき、0 件になった段（zero_evidence.stage）。",
+                "title": "Zero Evidence Stage"
+              }
+            },
+            "required": [
+              "index",
+              "call_id",
+              "name",
+              "status"
+            ],
+            "title": "ObservedToolCall",
+            "type": "object"
+          },
+          "ObservedUsage": {
+            "description": "モデルの利用量（承認の後の再開を含む累計。名前は OpenTelemetry の gen_ai.usage.*）。",
+            "properties": {
+              "model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "モデルの ID（gen_ai.request.model）。",
+                "title": "Model"
+              },
+              "requests": {
+                "default": 0,
+                "description": "モデルの呼び出しの回数。",
+                "minimum": 0,
+                "title": "Requests",
+                "type": "integer"
+              },
+              "input_tokens": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Input Tokens",
+                "type": "integer"
+              },
+              "output_tokens": {
+                "default": 0,
+                "minimum": 0,
+                "title": "Output Tokens",
+                "type": "integer"
+              }
+            },
+            "title": "ObservedUsage",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "schema_version": {
+            "default": 5,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "description": "業務 Agent の ID（gen_ai.agent.id）。",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "会話の ID（gen_ai.conversation.id）。",
+            "title": "Thread Id"
+          },
+          "agent_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Run に使った業務 Agent の公開の版（下書きの実行は null）。",
+            "title": "Agent Version"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Run の trace id（W3C Trace Context。始まっていなければ null）。",
+            "title": "Trace Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "answered",
+                  "conditional",
+                  "needs_clarification",
+                  "needs_environment_data",
+                  "needs_human",
+                  "insufficient_evidence"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "agent_get_run の outcome と同じ。completed でなければ null。",
+            "title": "Outcome"
+          },
+          "validation_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "completed",
+                  "skipped",
+                  "unvalidated"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "回答の最終の検証の状態（無ければ null）。",
+            "title": "Validation Status"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "終わっていなければ null。",
+            "title": "Finished At"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ObservedUsage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "tool_calls": {
+            "description": "ツールの呼び出し（Run の順。tool_call_total 件まで）。",
+            "items": {
+              "$ref": "#/$defs/ObservedToolCall"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          },
+          "tool_call_total": {
+            "default": 0,
+            "description": "ツールの呼び出しの全件の数。",
+            "minimum": 0,
+            "title": "Tool Call Total",
+            "type": "integer"
+          },
+          "evidence": {
+            "description": "cursor からの根拠（rank の順。limit 件と、本文の合計の予算 24000 まで）。",
+            "items": {
+              "$ref": "#/$defs/ObservedEvidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidence_total": {
+            "default": 0,
+            "description": "今の権限で見られる根拠の全件の数。",
+            "minimum": 0,
+            "title": "Evidence Total",
+            "type": "integer"
+          },
+          "withheld_evidence_count": {
+            "default": 0,
+            "description": "今の権限で見られないため除いた根拠の数。",
+            "minimum": 0,
+            "title": "Withheld Evidence Count",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "続きの根拠があれば、次の呼び出しの cursor。",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "run_id",
+          "agent_id",
+          "status",
+          "created_at"
+        ],
+        "title": "RunObservation",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_list",
+      "title": "業務 Agent の一覧",
+      "description": "使える業務 Agent（ID・名前・説明・使うスキル）の一覧を返す。質問の内容に合う業務 Agent を選ぶのに使う。",
+      "inputSchema": {
+        "properties": {},
+        "title": "AgentListInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "outputSchema": {
+        "$defs": {
+          "AgentSummary": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "skills": {
+                "items": {
+                  "$ref": "#/$defs/SkillSummary"
+                },
+                "title": "Skills",
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "title": "AgentSummary",
+            "type": "object"
+          },
+          "SkillSummary": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "title": "SkillSummary",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "schema_version": {
+            "default": 1,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/$defs/AgentSummary"
+            },
+            "title": "Agents",
+            "type": "array"
+          }
+        },
+        "required": [
+          "agents"
+        ],
+        "title": "AgentListOutput",
+        "type": "object"
+      }
+    },
+    {
+      "name": "agent_skill_export",
+      "title": "スキルの書き出し",
+      "description": "業務 Agent が使うスキルを Agent Skills の形（SKILL.md と references/ のファイル）で返す。name のフォルダにファイルを置くと、外部の Agent でも同じ手順で RAG・NL2SQL の MCP を使える。",
+      "inputSchema": {
+        "properties": {
+          "skill_id": {
+            "description": "スキルの ID（agent_list の skills の id）",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Skill Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_id"
+        ],
+        "title": "SkillExportInput",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "outputSchema": {
+        "$defs": {
+          "SkillFileOutput": {
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "content": {
+                "title": "Content",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ],
+            "title": "SkillFileOutput",
+            "type": "object"
+          }
+        },
+        "description": "Agent Skills の形のスキル。`<name>/` のフォルダに files を置くと外部の Agent で使える。",
+        "properties": {
+          "schema_version": {
+            "default": 1,
+            "description": "出力の形の版（変わったら上がる）。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/$defs/SkillFileOutput"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "files"
+        ],
+        "title": "SkillExportOutput",
+        "type": "object"
+      }
+    }
+  ]
+}

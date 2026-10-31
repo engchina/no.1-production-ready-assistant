@@ -1,0 +1,7 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  // 共通のシステム設定・ユーザー / ロール管理の画面にも、3 製品と同じデザインシステム遵守ルールを掛ける（#1891）。
+  // ルールと JS プラグインの正本は platform の docs/design-system/adherence.oxlintrc.json / design-system-plugin.mjs。
+  // コピーせず相対パスで参照する（platform AGENTS.md「lint」節）。
+  "extends": ["../../docs/design-system/adherence.oxlintrc.json"]
+}

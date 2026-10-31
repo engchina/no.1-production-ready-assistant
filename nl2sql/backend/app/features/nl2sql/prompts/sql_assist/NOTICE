@@ -1,0 +1,5 @@
+Prompt text from engchina/No.1-SQL-Assist, utils/selectai_util.py
+Revision cacd0959a5fa2a279cb1147de2d04e5a9b01815f (Apache-2.0).
+Static prompt text preserved; runtime SQL/schema/structure interpolation is supplied separately.
+Question interpolation renamed to {logical_structure}. Runtime adapters add Japanese output, JSON validation and semantic preservation corrections.
+Glossary interpolation retains {terms_text} and {question_text}; normalization rules are combined with question generation.

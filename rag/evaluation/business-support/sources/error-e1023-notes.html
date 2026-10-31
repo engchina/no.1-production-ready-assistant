@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>障害対応メモ エラー E-1023</title>
+<style>body{font-family:"Noto Sans CJK JP","Noto Sans JP",sans-serif;font-size:11pt;line-height:1.6}h1{font-size:18pt}h2{font-size:14pt;margin-top:1.4em}</style></head>
+<body>
+<h1>障害対応メモ: エラー E-1023「処理を続行できません」</h1>
+<p>対象: サンプル業務ポータル（架空のシステム。評価用の合成資料）</p>
+
+<h2>1. 考えられる原因</h2>
+<p>E-1023 の原因は次の 2 つのどちらかです。画面の表示だけではどちらかを判断できません。</p>
+<ul>
+<li>原因 A: 認証トークンの期限切れ</li>
+<li>原因 B: 操作の対象に対する権限の不足</li>
+</ul>
+
+<h2>2. 原因の見分け方</h2>
+<p>サーバーの認証ログ（auth.log）で、エラーが出た時刻の行を確かめます。「token expired」とあれば原因 A、「permission denied」とあれば原因 B です。認証ログを読めるのはポータル管理者だけです。</p>
+
+<h2>3. 対処</h2>
+<ul>
+<li>原因 A の場合: いったんログアウトし、ログインし直します。</li>
+<li>原因 B の場合: ポータル管理者に、対象への権限の付与を依頼します（運用手順書の「アクセス権限の付与」）。</li>
+</ul>
+</body></html>

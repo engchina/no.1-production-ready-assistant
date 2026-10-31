@@ -1,0 +1,18 @@
+/* Functional motion only: transform / opacity / colour. All disabled under reduced motion. */
+:root {
+  --duration-reveal: 120ms; /* @kind other */   /* sidebar label reveal (delay 90ms on expand) */
+  --duration-control: 150ms; /* @kind other */  /* colour crossfades, overlay fade */
+  --duration-enter: 200ms; /* @kind other */    /* toast, dialog, sidebar width, chevron, section grid */
+  --ease-out: ease-out; /* @kind other */
+  --transition-control: background-color var(--duration-control) ease, border-color var(--duration-control) ease, color var(--duration-control) ease;
+}
+
+@keyframes pr-toast-in { from { opacity: 0; transform: translateY(0.5rem); } to { opacity: 1; transform: none; } }
+@keyframes pr-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pr-dialog-in { from { opacity: 0; transform: translateY(0.5rem) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes pr-spin { to { transform: rotate(360deg); } }
+@keyframes pr-pulse { 50% { opacity: 0.5; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

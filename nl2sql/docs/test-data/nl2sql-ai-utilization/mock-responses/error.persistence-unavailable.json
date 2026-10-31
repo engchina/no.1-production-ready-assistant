@@ -1,0 +1,9 @@
+{
+  "detail": "NL2SQL persistence store を利用できません。",
+  "error_code": "NL2SQL_PERSISTENCE_UNAVAILABLE",
+  "error_messages": [
+    "NL2SQL persistence store を利用できません。"
+  ],
+  "warning_messages": []
+}
+

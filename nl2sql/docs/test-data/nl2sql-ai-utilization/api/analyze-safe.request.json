@@ -1,0 +1,19 @@
+{
+  "sql": "SELECT CUSTOMER_ID, SUM(TOTAL_AMOUNT) AS TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' GROUP BY CUSTOMER_ID ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 10 ROWS ONLY",
+  "allowed_objects": {
+    "table_names": [
+      "APP.ORDERS"
+    ],
+    "columns": {
+      "APP.ORDERS": [
+        "CUSTOMER_ID",
+        "TOTAL_AMOUNT",
+        "ORDER_DATE"
+      ]
+    },
+    "enforce_table_scope": true
+  },
+  "row_limit": 100,
+  "use_llm": false
+}
+

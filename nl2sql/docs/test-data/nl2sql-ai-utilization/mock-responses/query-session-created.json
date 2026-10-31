@@ -1,0 +1,66 @@
+{
+  "data": {
+    "session": {
+      "id": "qs-001",
+      "profile_id": "default",
+      "profile_view_id": "pv-001",
+      "ontology_revision_id": "ont-rev-001",
+      "status": "awaiting_intent_confirmation",
+      "original_question": "今月の受注金額上位5件を表示してください",
+      "current_intent_version": 1,
+      "intents": [
+        {
+          "version": 1,
+          "question_original": "今月の受注金額上位5件を表示してください",
+          "question_effective": "今月の受注金額上位5件",
+          "entities": [],
+          "metrics": [],
+          "filters": [],
+          "grouping": [],
+          "sorting": [],
+          "limit": 5,
+          "confidence": 0.86,
+          "created_at": "2026-08-12T00:00:00Z"
+        }
+      ],
+      "sql_artifacts": [],
+      "current_sql_artifact_id": null,
+      "intent_confirmed_version": null,
+      "sql_confirmation": null,
+      "execution": null,
+      "proposal_ids": [],
+      "created_at": "2026-08-12T00:00:00Z",
+      "updated_at": "2026-08-12T00:00:00Z",
+      "error_code": "",
+      "error_message_ja": ""
+    },
+    "profile_ontology_view": {
+      "id": "pv-001",
+      "profile_id": "default",
+      "ontology_revision_id": "ont-rev-001",
+      "node_ids": [],
+      "edge_ids": [],
+      "created_at": "2026-08-12T00:00:00Z",
+      "updated_at": "2026-08-12T00:00:00Z"
+    },
+    "ontology_graph": {
+      "revision": {
+        "id": "ont-rev-001",
+        "status": "published",
+        "version": 1,
+        "etag": "ont-rev-001-etag",
+        "created_at": "2026-08-12T00:00:00Z",
+        "updated_at": "2026-08-12T00:00:00Z"
+      },
+      "nodes": [],
+      "edges": []
+    },
+    "preview": null,
+    "result": null,
+    "performance_check": null,
+    "ontology_trace_summary": {}
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/*
+ * Production Ready Agent — グローバルスタイル
+ * 色・型・余白・角丸・影・テーマは共有 UI パッケージ（platform の docs/design-system/）が正本。
+ * ここには画面固有のレイアウトだけを書く。
+ */
+@import "@production-ready/ui/styles.css";
+
+/* 共有コンポーネントの utility クラスを Tailwind v4 のスキャン対象に含める。 */
+@source "../node_modules/@production-ready/ui/dist";
+@source "../node_modules/@production-ready/system-settings/dist";

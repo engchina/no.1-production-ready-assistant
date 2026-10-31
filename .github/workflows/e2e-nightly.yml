@@ -1,0 +1,122 @@
+name: E2E Nightly
+
+# RAG / NL2SQL / Agent の Playwright E2E を毎晩 main で全件実行する（#133、Agent は #339）。
+# PR の CI（ci.yml の rag-e2e / nl2sql-e2e / agent-e2e）は約 1 分の smoke と、差分に影響を受ける spec だけを
+# 実行する（#184 / #339 / #885）ので、全件の回帰や、遅い環境でだけ出る flaky はここで拾う。失敗は
+# ci-failure-issue.yml が Issue にする。
+# 全件の実行で spec ごとの実行範囲（coverage）を記録し、artifact `e2e-impact-<製品>-<shard>` にする（#885）。
+# PR の CI の e2e-impact job が、これを使って差分に影響を受ける spec を選ぶ（platform/scripts/e2e_impact.py）。
+# PR の CI は 375px（mobile）の project で画面幅に依存するテスト（@responsive）だけを実行する（ci.yml の
+# E2E_MOBILE_SCOPE。#1582）。ここでは E2E_MOBILE_SCOPE を付けず、両方の project で全件を実行して mobile の退行を拾う。
+
+on:
+  schedule:
+    - cron: "7 18 * * *" # 03:07 JST（整点は遅れやすいのでずらす。#1595）
+  workflow_dispatch:
+    inputs:
+      workers:
+        # worker の数の測定に使う（#1593。platform/scripts/e2e-impact/ci-run.ts の E2E_WORKERS）。空なら CI_WORKERS。
+        # 測定は main 以外の branch でも実行できる（PR の e2e-impact は main の run の記録だけを使う）。
+        description: "Playwright の worker の数（空なら playwright.config.ts の CI の値）"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: ${{ matrix.product }} / E2E nightly (${{ matrix.shard }}/${{ matrix.total }})
+    runs-on: ubuntu-24.04
+    # 2 worker の実測（2026-10-12 の main。実行範囲の記録を含む）: RAG 1 shard 17〜18.5 分、NL2SQL 1 shard 11〜17.5 分、
+    # Agent 1 shard 12.5 分（2 shard。#1525）。1 worker・Agent 1 shard の頃は Agent が約 40 分かかり、40 分の上限で
+    # 止まった（#1599）。直近の RAG は片側だけで 26 分、もう片側は 40 分を超え、Agent も 25 分を超えたため、
+    # RAG は 60 分、Agent は 50 分を上限とする（#3095・#3096）。shard の数を変えたら、
+    # platform/scripts/e2e_impact.py の PRODUCTS の nightly_shards も合わせる（記録がそろった run だけを PR が使う）。
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { product: rag, node: "24", timeout: 60, shard: 1, total: 2 }
+          - { product: rag, node: "24", timeout: 60, shard: 2, total: 2 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 1, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 2, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 3, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 4, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 5, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 6, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 7, total: 8 }
+          - { product: nl2sql, node: "24", timeout: 35, shard: 8, total: 8 }
+          - { product: agent, node: "24", timeout: 50, shard: 1, total: 2 }
+          - { product: agent, node: "24", timeout: 50, shard: 2, total: 2 }
+    defaults:
+      run:
+        working-directory: ${{ matrix.product }}/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: ${{ matrix.product }}/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: ${{ matrix.product }}/frontend
+
+      # worker 数は各製品の playwright.config.ts の CI の値（2。4 vCPU の runner。#1489）。手動の実行は inputs.workers で変えられる（#1593）。retry で通ったテスト（flaky）は、
+      # 次の step が step summary に一覧にする（#1591）。増えたら、そのテストの待ちを直す（#175）。
+      - name: Playwright E2E
+        run: npx playwright test --shard=${{ matrix.shard }}/${{ matrix.total }}
+        env:
+          # テストごとの実行範囲の記録（platform/scripts/e2e-impact/fixture.ts。#885）。
+          E2E_IMPACT_DIR: ${{ runner.temp }}/e2e-impact-records
+          # 手動の実行で worker の数を変えて測る（#1593）。schedule では空で、CI_WORKERS になる。
+          E2E_WORKERS: ${{ inputs.workers }}
+
+      # flaky と失敗のテストの一覧（playwright.config.ts の CI の json reporter の結果。#1591）。
+      - name: Summarize flaky tests
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: >-
+          python3 platform/scripts/playwright_report_summary.py
+          "${{ matrix.product }}/frontend/playwright-report/results.json"
+          --title "${{ matrix.product }} (${{ matrix.shard }}/${{ matrix.total }})"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # 失敗したテストも記録は有効なので、結果に関わらず集計して保存する。
+      - name: Aggregate impact records
+        if: ${{ !cancelled() }}
+        working-directory: .
+        run: >-
+          python3 platform/scripts/e2e_impact.py aggregate --product ${{ matrix.product }}
+          --records "${{ runner.temp }}/e2e-impact-records" --commit "${{ github.sha }}"
+          --out "${{ runner.temp }}/e2e-impact/${{ matrix.product }}-${{ matrix.shard }}.json"
+
+      - name: Upload impact map
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-impact-${{ matrix.product }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/e2e-impact/${{ matrix.product }}-${{ matrix.shard }}.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-${{ matrix.product }}-playwright-${{ matrix.shard }}
+          path: ${{ matrix.product }}/frontend/test-results
+          retention-days: 7

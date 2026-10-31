@@ -1,0 +1,3463 @@
+{
+  "version": 1,
+  "locale": "ja",
+  "numbers": {
+    "number_prefixes": [
+      "第"
+    ],
+    "part_units": [
+      "編",
+      "部"
+    ],
+    "chapter_units": [
+      "章"
+    ],
+    "section_units": [
+      "節"
+    ],
+    "subsection_units": [
+      "款"
+    ],
+    "division_units": [
+      "目"
+    ],
+    "article_units": [
+      "条"
+    ],
+    "paragraph_units": [
+      "項"
+    ],
+    "item_units": [
+      "号"
+    ],
+    "item_patterns": [
+      "第N項",
+      "第N号",
+      "各号"
+    ],
+    "kanji_digits": [
+      "〇=0",
+      "零=0",
+      "一=1",
+      "二=2",
+      "三=3",
+      "四=4",
+      "五=5",
+      "六=6",
+      "七=7",
+      "八=8",
+      "九=9"
+    ],
+    "kanji_multipliers": [
+      "十=10",
+      "百=100",
+      "千=1000",
+      "万=10000"
+    ],
+    "roman_digits": [
+      "i=1",
+      "v=5",
+      "x=10",
+      "l=50",
+      "c=100",
+      "d=500",
+      "m=1000"
+    ],
+    "branch_connectors": [
+      "の"
+    ],
+    "branch_stop_chars": [
+      "部",
+      "環",
+      "種",
+      "つ"
+    ],
+    "era_names": [
+      "明治",
+      "大正",
+      "昭和",
+      "平成",
+      "令和"
+    ],
+    "first_year_words": [
+      "元"
+    ],
+    "listing_kana": [
+      "ア-ン"
+    ],
+    "counters": [
+      "時間",
+      "歳",
+      "年",
+      "月",
+      "日",
+      "回",
+      "円",
+      "割",
+      "人",
+      "件",
+      "箇",
+      "倍",
+      "週"
+    ],
+    "number_term_chars": [
+      "々",
+      "一-鿿"
+    ],
+    "term_stop_chars": [
+      "又",
+      "若",
+      "及",
+      "並",
+      "各",
+      "同",
+      "前",
+      "次",
+      "中"
+    ],
+    "era_letters": [
+      "M=明治",
+      "T=大正",
+      "S=昭和",
+      "H=平成",
+      "R=令和"
+    ],
+    "calendar_words": [
+      "西暦"
+    ],
+    "date_units": [
+      "年度",
+      "年",
+      "月",
+      "日"
+    ],
+    "fiscal_year_units": [
+      "年度"
+    ],
+    "count_counters": [
+      "つ",
+      "件",
+      "個",
+      "項目",
+      "種類",
+      "か所",
+      "箇所",
+      "ヶ所",
+      "カ所"
+    ],
+    "range_connectors": [
+      "から",
+      "より",
+      "〜",
+      "～",
+      "~",
+      "－",
+      "-"
+    ]
+  },
+  "symbols": {
+    "normalization": "NFKC",
+    "title_ignored_chars": [
+      "_",
+      "-",
+      "・",
+      ":",
+      "、",
+      "。",
+      ",",
+      ".",
+      "(",
+      ")",
+      "[",
+      "]",
+      "「",
+      "」",
+      "『",
+      "』",
+      "【",
+      "】"
+    ],
+    "sentence_end_chars": [
+      "。",
+      "!",
+      "?",
+      "！",
+      "？"
+    ],
+    "heading_terminal_chars": [
+      "。",
+      "．",
+      "!",
+      "?",
+      "！",
+      "？"
+    ],
+    "paragraph_terminal_chars": [
+      "。",
+      "．",
+      ".",
+      "!",
+      "?",
+      "！",
+      "？",
+      "」",
+      "』",
+      "）",
+      ")",
+      "】",
+      ":",
+      "："
+    ],
+    "sentence_closers": [
+      "」",
+      "』",
+      "）",
+      ")",
+      "]",
+      "】",
+      "\"",
+      "'"
+    ],
+    "sentence_like_endings": [
+      "。",
+      "ます",
+      "ません",
+      "です",
+      "ください",
+      "下さい"
+    ],
+    "sentence_ending_followers": [
+      "。",
+      "）",
+      ")"
+    ],
+    "clause_separator_chars": [
+      "、",
+      ",",
+      ":"
+    ],
+    "bracket_pairs": [
+      "()",
+      "[]",
+      "【】"
+    ],
+    "quote_brackets": [
+      "「」",
+      "『』"
+    ],
+    "document_title_brackets": [
+      "『』"
+    ],
+    "name_chars": [
+      "々",
+      "〆",
+      "ヶ",
+      "一-鿿",
+      "ァ-ヺ",
+      "ー",
+      "・",
+      "A-Z",
+      "a-z",
+      "0-9"
+    ]
+  },
+  "references": {
+    "cue_words": [
+      "参照",
+      "を参照",
+      "に参照",
+      "も参照",
+      "ご参照",
+      "をご参照",
+      "にご参照",
+      "もご参照",
+      "参考",
+      "を参考",
+      "をご覧",
+      "を見て",
+      "に記載",
+      "に定め",
+      "に規定",
+      "に示",
+      "に従",
+      "に基づ",
+      "に準じ",
+      "に準拠",
+      "で定め",
+      "で規定",
+      "で説明",
+      "で述べ",
+      "のとおり",
+      "の通り",
+      "による",
+      "を準用"
+    ],
+    "connector_words": [
+      "、",
+      ",",
+      "・",
+      "/",
+      "及び",
+      "および",
+      "並びに",
+      "ならびに",
+      "又は",
+      "または",
+      "もしくは",
+      "中の",
+      "内の",
+      "における",
+      "に記載の",
+      "項目",
+      "内容",
+      "記載",
+      "説明",
+      "手順",
+      "規定",
+      "条件",
+      "部分",
+      "箇所",
+      "等",
+      "など",
+      "と",
+      "や",
+      "の",
+      "も"
+    ],
+    "document_suffixes": [
+      "マニュアル",
+      "規程",
+      "規則",
+      "規定",
+      "細則",
+      "要領",
+      "要綱",
+      "手順書",
+      "ガイドライン",
+      "ガイド",
+      "仕様書",
+      "説明書",
+      "設計書",
+      "ハンドブック",
+      "基準書",
+      "基準",
+      "取扱説明書"
+    ],
+    "numbered_document_suffixes": [
+      "法律",
+      "法",
+      "政令",
+      "省令",
+      "令"
+    ],
+    "excluded_name_endings": [
+      "方法",
+      "手法",
+      "用法",
+      "文法",
+      "寸法",
+      "作法",
+      "技法",
+      "療法",
+      "製法",
+      "工法",
+      "説法",
+      "話法",
+      "語法",
+      "算法",
+      "筆法",
+      "論法",
+      "加法",
+      "減法",
+      "乗法",
+      "除法",
+      "命法",
+      "指法",
+      "司法"
+    ],
+    "generic_names": [
+      "システム",
+      "ドキュメント",
+      "ポータル",
+      "社内ポータル",
+      "ホームページ",
+      "ウェブサイト",
+      "Webサイト",
+      "管理画面",
+      "設定画面",
+      "画面",
+      "一覧",
+      "資料",
+      "文書",
+      "書類",
+      "手順",
+      "手順書",
+      "計画",
+      "計画書",
+      "台帳",
+      "申請書",
+      "様式",
+      "目的",
+      "概要",
+      "適用範囲",
+      "対象範囲",
+      "お知らせ",
+      "メール",
+      "チャット",
+      "ログ",
+      "エラーメッセージ",
+      "メッセージ",
+      "ヘルプ",
+      "FAQ",
+      "利用者",
+      "担当者",
+      "承認者",
+      "担当部署",
+      "管理者",
+      "責任者",
+      "上長",
+      "本文",
+      "原本",
+      "添付",
+      "添付ファイル",
+      "ファイル",
+      "データ",
+      "データベース",
+      "テーブル",
+      "マスタ",
+      "マスター"
+    ],
+    "demonstrative_words": [
+      "本",
+      "当",
+      "同",
+      "上記",
+      "下記",
+      "前記",
+      "後記",
+      "各",
+      "別"
+    ],
+    "self_words": [
+      "本",
+      "当",
+      "この"
+    ],
+    "document_nouns": [
+      "書",
+      "文書",
+      "資料",
+      "規程",
+      "計画書",
+      "計画",
+      "台帳",
+      "表"
+    ],
+    "name_prefix_particles": [
+      "は",
+      "が",
+      "を",
+      "に",
+      "で",
+      "も",
+      "へ"
+    ],
+    "possessive_particles": [
+      "の"
+    ],
+    "name_label_connectors": [
+      "の",
+      "における",
+      "内の",
+      "中の"
+    ],
+    "part_prefixes": [
+      "附則"
+    ],
+    "separate_part_patterns": [
+      "第N号"
+    ],
+    "previous_words": [
+      "前"
+    ],
+    "next_words": [
+      "次"
+    ],
+    "same_words": [
+      "同"
+    ],
+    "appendix_words": [
+      "別紙=別紙",
+      "別添=別紙",
+      "添付資料=別紙",
+      "別表=別表",
+      "付表=別表",
+      "付録=付録",
+      "附録=付録",
+      "様式=様式",
+      "appendix=付録",
+      "annex=付録"
+    ],
+    "document_name_predicates": [
+      "で確かめ",
+      "で確認",
+      "で調べ",
+      "で定め",
+      "で規定",
+      "を確かめ",
+      "を確認",
+      "を調べ",
+      "を参照",
+      "参照",
+      "を参考",
+      "を見て",
+      "を見る",
+      "を見ます",
+      "を見れば",
+      "をご覧",
+      "に従",
+      "に基づ",
+      "に記載",
+      "に定め",
+      "に規定",
+      "による",
+      "により",
+      "に準じ",
+      "に準拠",
+      "のとおり",
+      "の通り"
+    ],
+    "coordination_particles": [
+      "で"
+    ],
+    "derived_document_suffixes": [
+      "施行令",
+      "施行規則"
+    ],
+    "abbreviation_targets": [
+      "法=*",
+      "令=*施行令"
+    ]
+  },
+  "titles": {
+    "edition_patterns": [
+      "YYYY年度",
+      "YYYY年",
+      "YYYY",
+      "GN年度",
+      "GN年",
+      "G元年度",
+      "G元年",
+      "第N版",
+      "N版",
+      "vN",
+      "v.N",
+      "verN",
+      "ver.N",
+      "YYYY-MM-DD",
+      "YYYY/MM/DD",
+      "YYYY.MM.DD",
+      "YYYY-MM",
+      "YYYY/MM",
+      "YYYY.MM",
+      "YYYYMMDD",
+      "YYYYMM"
+    ],
+    "edition_words": [
+      "改訂版",
+      "改定版",
+      "最新版",
+      "初版",
+      "新版",
+      "旧版"
+    ],
+    "company_suffixes": [
+      "社"
+    ]
+  },
+  "english": {
+    "en_cue_words": [
+      "see",
+      "see also",
+      "refer to",
+      "refer back to",
+      "referring to",
+      "described in",
+      "defined in",
+      "specified in",
+      "set out in",
+      "according to",
+      "in accordance with",
+      "as per",
+      "pursuant to"
+    ],
+    "en_section_words": [
+      "chapter=chapter",
+      "section=section",
+      "sec.=section",
+      "§=section",
+      "clause=section",
+      "article=article",
+      "appendix=appendix",
+      "annex=appendix"
+    ],
+    "en_document_suffixes": [
+      "Manual",
+      "Guide",
+      "Guidelines",
+      "Guideline",
+      "Handbook",
+      "Policy",
+      "Standard",
+      "Specification",
+      "Procedures",
+      "Procedure",
+      "Regulations",
+      "Regulation"
+    ],
+    "en_quote_brackets": [
+      "\"\"",
+      "“”"
+    ],
+    "en_document_connectors": [
+      "of",
+      "in"
+    ],
+    "en_articles": [
+      "the"
+    ]
+  },
+  "markers": {
+    "bullet_chars": [
+      "・",
+      "●",
+      "○",
+      "■",
+      "□",
+      "◆",
+      "◇",
+      "▪",
+      "▶",
+      "►",
+      "※",
+      "-",
+      "*",
+      "•"
+    ],
+    "circled_numbers": [
+      "①-⑳",
+      "⑴-⒇",
+      "⒈-⒛"
+    ],
+    "number_closers": [
+      ".",
+      ")",
+      "．",
+      "、",
+      "）"
+    ],
+    "number_brackets": [
+      "()",
+      "（）"
+    ],
+    "route_brackets": [
+      "[]",
+      "［］",
+      "〔〕",
+      "【】"
+    ],
+    "route_arrows": [
+      "⇒",
+      "→",
+      "＞",
+      ">"
+    ],
+    "series_openers": [
+      "【",
+      "[",
+      "〔"
+    ],
+    "heading_form_openers": [
+      "【",
+      "〔",
+      "[",
+      "［",
+      "「",
+      "『"
+    ],
+    "page_words": [
+      "page",
+      "ページ",
+      "頁"
+    ],
+    "header_words": [
+      "header",
+      "ヘッダー"
+    ],
+    "footer_words": [
+      "footer",
+      "フッター"
+    ],
+    "range_dashes": [
+      "-",
+      "〜",
+      "~",
+      "‐",
+      "‑",
+      "–",
+      "—",
+      "−",
+      "ー"
+    ],
+    "all_pages_words": [
+      "すべて",
+      "全部"
+    ],
+    "instruction_endings": [
+      "。",
+      "ます",
+      "ください",
+      "下さい"
+    ],
+    "element_kind_words": [
+      "タイトル=title",
+      "見出し=title",
+      "本文=text",
+      "表=table",
+      "箇条書き=list"
+    ],
+    "form_checked_values": [
+      "選択",
+      "選択済み"
+    ],
+    "form_unchecked_values": [
+      "未選択"
+    ]
+  },
+  "boilerplate": {
+    "company_words": [
+      "株式会社",
+      "有限会社",
+      "合同会社",
+      "corporation",
+      "inc",
+      "ltd",
+      "co",
+      "©",
+      "(c)"
+    ],
+    "boilerplate_words": [
+      "copyright",
+      "all rights reserved",
+      "confidential",
+      "do not distribute",
+      "著作権",
+      "無断転載",
+      "禁無断転載",
+      "社外秘",
+      "部外秘"
+    ],
+    "logo_words": [
+      "logo",
+      "copyright",
+      "all rights reserved",
+      "watermark",
+      "ロゴ",
+      "著作権",
+      "無断転載",
+      "禁無断転載",
+      "透かし",
+      "水印"
+    ],
+    "decorative_type_words": [
+      "logo",
+      "watermark",
+      "background",
+      "decorative",
+      "decoration",
+      "ornament",
+      "letterhead",
+      "ロゴ",
+      "透かし",
+      "背景",
+      "装飾",
+      "飾り枠",
+      "水印",
+      "装饰",
+      "裝飾"
+    ],
+    "operation_words": [
+      "クリック",
+      "押",
+      "ボタン",
+      "アイコン",
+      "選択",
+      "チェック",
+      "入力",
+      "更新",
+      "登録",
+      "表示",
+      "参照",
+      "照会",
+      "出力",
+      "実行",
+      "タップ",
+      "click",
+      "press",
+      "button",
+      "icon",
+      "select",
+      "check",
+      "input",
+      "update",
+      "register",
+      "display",
+      "execute"
+    ],
+    "business_words": [
+      "処理",
+      "業務",
+      "情報",
+      "管理",
+      "連動"
+    ],
+    "compare_ignored_chars": [
+      "-",
+      "－",
+      "–",
+      "—",
+      "_",
+      "(",
+      ")",
+      "（",
+      "）",
+      "[",
+      "]",
+      "【",
+      "】",
+      ".",
+      "．",
+      ",",
+      "、",
+      ":",
+      "：",
+      ";",
+      "；"
+    ]
+  },
+  "labels": {
+    "default_document_type": "ドキュメント",
+    "whole_document": "文書全体",
+    "graph_contains": "{whole}は {target} を含みます。",
+    "graph_document": "{document_type} 全体を表す entity。",
+    "graph_section": "{name} に関する {kind} chunk。",
+    "main_part": "本則",
+    "original_supplement": "制定時",
+    "remarks": "備考",
+    "appendix": "別表",
+    "preamble": "前文",
+    "excerpt": "（抜粋）",
+    "range_start": "から",
+    "range_end": "まで",
+    "year": "年",
+    "month": "月",
+    "day": "日",
+    "xml_tree_document_type": "XML ツリー",
+    "field_title": "文書名",
+    "field_number": "文書番号",
+    "field_id": "文書ID",
+    "field_type": "文書の種類",
+    "field_abbrev": "略称",
+    "field_category": "分類",
+    "field_revision_date": "版の日付",
+    "label_brackets": [
+      "（）"
+    ]
+  },
+  "content_labels": {
+    "related_headings": "関連見出し",
+    "table_title": "表タイトル",
+    "column_headers": "列見出し",
+    "column_number": "列",
+    "column_range": "～",
+    "table": "表",
+    "table_caption": "見出し",
+    "row_range": "{start}〜{end} 行目（{count} 行）",
+    "table_pictures": "表内画像",
+    "table_picture_supplement": "表内画像の補足",
+    "table_vision_supplement": "表内画像（Vision 補足）",
+    "table_unassigned": "表の補足（セルに割り当てられなかった原文）",
+    "picture_description": "画像説明",
+    "picture_ocr": "OCR抽出テキスト",
+    "vision_group_prefix": "■",
+    "row_number": "{n}行目",
+    "condition_evidence": "根拠",
+    "screen_example_cues": [
+      "画面例では",
+      "画面例:",
+      "入力例として",
+      "表の数値例:",
+      "input example",
+      "display example"
+    ],
+    "vision_groups": [
+      "要点=summary",
+      "可視情報=visible",
+      "構造=structure",
+      "関係=relation",
+      "補足=supplement",
+      "検索=search"
+    ],
+    "vision_fields": [
+      "回答用本文=retrieval_text",
+      "主題=main_topic",
+      "視覚種別=visual_kind",
+      "画面/メニュー=menu_route",
+      "画面名=visible_screen_names",
+      "ボタン=visible_buttons",
+      "項目=visible_fields",
+      "値=visible_values",
+      "コード・エラー=codes_and_errors",
+      "図のタイトル=diagram_title",
+      "図のノード=diagram_nodes",
+      "図の接続=diagram_edges",
+      "図の要約=diagram_summary",
+      "グラフのタイトル=chart_title",
+      "グラフの種別=chart_type",
+      "グラフの軸=chart_axes",
+      "グラフの凡例=chart_legends",
+      "グラフの系列=chart_series",
+      "グラフの要約=chart_summary",
+      "表の見出し=table_headers",
+      "表の行=table_rows",
+      "表の要約=table_summary",
+      "フォームの項目=form_fields",
+      "フォームの配置=form_layout",
+      "操作=operation_steps",
+      "条件と結果=condition_result_pairs",
+      "注意=exception_or_cautions",
+      "周辺コンテキスト=surrounding_context",
+      "修正・補足=correction_notes",
+      "検索語=search_keywords",
+      "言い換え=query_rewrites",
+      "想定質問=answerable_questions"
+    ],
+    "form_field_kinds": [
+      "選択=select",
+      "プルダウン=select",
+      "自由入力=text",
+      "チェックボックス=checkbox",
+      "ラジオボタン=radio",
+      "日付=date",
+      "ボタン=button"
+    ]
+  },
+  "search_labels": {
+    "document": "文書",
+    "abbrev": "略称",
+    "citation": "引用",
+    "items": "細目",
+    "part": "区分",
+    "caption": "見出し",
+    "path": "章節",
+    "numbers": "数",
+    "body": "本文",
+    "references": "参照先"
+  },
+  "search_terms": {
+    "stopwords": [
+      "こと",
+      "もの",
+      "ため",
+      "とき",
+      "わけ",
+      "はず",
+      "うち",
+      "する",
+      "ある",
+      "いる",
+      "なる",
+      "できる",
+      "行う",
+      "使う",
+      "つく",
+      "よう",
+      "教える",
+      "知る",
+      "何",
+      "どう",
+      "どこ",
+      "いつ",
+      "可能",
+      "必要",
+      "the",
+      "a",
+      "an",
+      "is",
+      "are",
+      "was",
+      "were",
+      "be",
+      "been",
+      "being",
+      "do",
+      "does",
+      "did",
+      "have",
+      "has",
+      "had",
+      "i",
+      "you",
+      "we",
+      "they",
+      "he",
+      "she",
+      "my",
+      "your",
+      "our",
+      "their",
+      "this",
+      "that",
+      "these",
+      "those",
+      "to",
+      "of",
+      "in",
+      "on",
+      "at",
+      "for",
+      "with",
+      "from",
+      "by",
+      "about",
+      "and",
+      "or",
+      "but",
+      "not",
+      "no",
+      "how",
+      "what",
+      "when",
+      "where",
+      "why",
+      "which",
+      "who",
+      "can",
+      "could",
+      "will",
+      "would",
+      "should",
+      "may",
+      "might",
+      "must",
+      "please",
+      "me",
+      "there",
+      "any",
+      "some"
+    ],
+    "generic_terms": [
+      "表示",
+      "確認",
+      "画面",
+      "情報",
+      "方法",
+      "項目",
+      "操作",
+      "処理",
+      "データ",
+      "一覧",
+      "内容",
+      "説明",
+      "対象",
+      "登録",
+      "変更",
+      "検索",
+      "入力",
+      "出力",
+      "選択",
+      "場合",
+      "手順",
+      "見る",
+      "見"
+    ],
+    "single_char_terms": [
+      "図",
+      "表",
+      "鍵",
+      "税",
+      "熱",
+      "軸",
+      "型",
+      "列",
+      "行"
+    ],
+    "excluded_terms": [],
+    "particle_edge_chars": [
+      "が",
+      "を",
+      "に",
+      "は",
+      "へ",
+      "と",
+      "で",
+      "も",
+      "の"
+    ],
+    "polite_suffixes": [
+      "してください",
+      "下さい",
+      "ください",
+      "します",
+      "したい",
+      "です",
+      "ます"
+    ],
+    "kept_pos": [
+      "名詞",
+      "動詞",
+      "形容詞",
+      "形状詞",
+      "副詞"
+    ],
+    "dropped_pos_details": [
+      "非自立可能",
+      "助動詞語幹"
+    ],
+    "split_boundary_chars": [
+      "、",
+      "。",
+      "！",
+      "？",
+      "，",
+      "．",
+      "・",
+      "；",
+      "：",
+      "「",
+      "」",
+      "『",
+      "』",
+      "（",
+      "）",
+      "【",
+      "】"
+    ],
+    "feedback_split_words": [
+      "です",
+      "ます",
+      "ください",
+      "する",
+      "した",
+      "して",
+      "し",
+      "で",
+      "を",
+      "に",
+      "へ",
+      "と",
+      "が",
+      "は"
+    ],
+    "feedback_strip_suffixes": [
+      "画面",
+      "欄",
+      "ボタン"
+    ],
+    "kanji_chars": [
+      "一-龯",
+      "々"
+    ],
+    "katakana_chars": [
+      "ァ-ヶ",
+      "ー"
+    ],
+    "hiragana_chars": [
+      "ぁ-ゖ",
+      "ー"
+    ],
+    "en_irregular_forms": [
+      "ran=run",
+      "went=go",
+      "gone=go",
+      "broke=break",
+      "broken=break",
+      "sent=send",
+      "built=build",
+      "wrote=write",
+      "written=write",
+      "found=find",
+      "lost=lose",
+      "made=make",
+      "took=take",
+      "taken=take",
+      "got=get",
+      "gotten=get",
+      "saw=see",
+      "seen=see"
+    ]
+  },
+  "question_cues": {
+    "object_suffixes": [
+      "画面",
+      "台帳",
+      "名簿",
+      "帳票",
+      "情報",
+      "サービス",
+      "一覧表",
+      "集計表",
+      "一覧",
+      "リスト"
+    ],
+    "document_kind_chars": [
+      "書",
+      "表",
+      "票",
+      "証",
+      "券"
+    ],
+    "existential_locatives": [
+      "には",
+      "に"
+    ],
+    "existential_particles": [
+      "が",
+      "も"
+    ],
+    "existential_predicates": [
+      "ある",
+      "あり",
+      "ござ",
+      "表示",
+      "出て",
+      "入っ"
+    ],
+    "requester_terms": [
+      "顧客",
+      "利用者",
+      "担当者",
+      "取引先"
+    ],
+    "requester_sides": [
+      "側",
+      "方"
+    ],
+    "requester_particles": [
+      "から",
+      "より",
+      "で"
+    ],
+    "requester_verbs": [
+      "依頼",
+      "要求",
+      "希望",
+      "要望",
+      "確認",
+      "問い合わせ",
+      "照会",
+      "連絡",
+      "相談"
+    ],
+    "past_markers": [
+      "以前",
+      "過去に",
+      "前回"
+    ],
+    "contrast_particles": [
+      "が"
+    ],
+    "change_words": [
+      "変更"
+    ],
+    "changed_field_particles": [
+      "が",
+      "の"
+    ],
+    "changed_field_endings": [
+      "時",
+      "の場合",
+      "にな",
+      "された"
+    ],
+    "clause_split_chars": [
+      "。",
+      "、",
+      "，",
+      ",",
+      "！",
+      "？",
+      "?"
+    ],
+    "contrast_clause_endings": [
+      "した",
+      "った",
+      "いた",
+      "たい"
+    ],
+    "sentence_split_chars": [
+      "。"
+    ],
+    "unit_split_chars": [
+      "。",
+      "！",
+      "？",
+      "?"
+    ],
+    "comma_chars": [
+      "、"
+    ],
+    "hypothesis_cues": [
+      "と思",
+      "ではないか",
+      "かもしれ",
+      "可能性"
+    ],
+    "means_cues": [
+      "しかない"
+    ],
+    "wish_endings": [
+      "したい",
+      "したかった",
+      "させたい",
+      "させたかった",
+      "変えたい",
+      "増やしたい",
+      "減らしたい"
+    ],
+    "withdrawn_cues": [
+      "不要",
+      "必要ない",
+      "やめた",
+      "諦め"
+    ],
+    "tried_action_cues": [
+      "試した",
+      "行った",
+      "おこなった",
+      "押した",
+      "押下した",
+      "取り消した"
+    ],
+    "done_state_verbs": [
+      "取消",
+      "実行"
+    ],
+    "done_marks": [
+      "済み",
+      "済"
+    ],
+    "observed_state_cues": [
+      "*がある",
+      "＊がある",
+      "有効な",
+      "有効で",
+      "有効です",
+      "残っていた",
+      "存在しない",
+      "一致しない",
+      "変わらなかった",
+      "増えなかった",
+      "できなかった",
+      "登録済"
+    ],
+    "passive_state_endings": [
+      "されていた",
+      "されている",
+      "されています",
+      "されており"
+    ],
+    "condition_cues": [
+      "場合",
+      "なら",
+      "とき"
+    ],
+    "uncertainty_cues": [
+      "かどうか"
+    ],
+    "recipient_subject_words": [
+      "対象者"
+    ],
+    "recipient_action_words": [
+      "確認",
+      "出力",
+      "抽出",
+      "一覧"
+    ],
+    "recipient_list_words": [
+      "名簿",
+      "送付先",
+      "対象者リスト"
+    ],
+    "list_words": [
+      "一覧"
+    ],
+    "list_output_words": [
+      "出力",
+      "抽出"
+    ],
+    "choice_words": [
+      "該当",
+      "選択肢",
+      "候補"
+    ],
+    "absence_words": [
+      "ない",
+      "無い",
+      "なし",
+      "無く"
+    ],
+    "count_cues": [
+      "何人",
+      "何件",
+      "人数を知",
+      "人数を確認",
+      "件数を知",
+      "件数を確認",
+      "数を教"
+    ],
+    "member_cues": [
+      "誰が",
+      "どの人",
+      "どの対象者",
+      "計上されている対象者",
+      "計上されている明細",
+      "集計されている対象者",
+      "集計されている明細",
+      "構成明細",
+      "取引明細",
+      "個人別",
+      "個人明細"
+    ],
+    "basis_cues": [
+      "算定根拠",
+      "計算根拠",
+      "集計条件",
+      "計算方法"
+    ],
+    "change_verbs": [
+      "変更",
+      "修正",
+      "訂正",
+      "編集",
+      "追加",
+      "削除",
+      "延長",
+      "取消"
+    ],
+    "change_verb_endings": [
+      "し",
+      "する",
+      "でき",
+      "の方法",
+      "の手順"
+    ],
+    "change_wish_cues": [
+      "変えたい",
+      "直したい",
+      "直すたい",
+      "置き換えたい",
+      "表示させたい"
+    ],
+    "method_cues": [
+      "方法",
+      "手順",
+      "どうしたら"
+    ],
+    "procedure_cues": [
+      "できない",
+      "登録",
+      "入力",
+      "印字"
+    ],
+    "requested_action_words": [
+      "確認",
+      "出力",
+      "抽出",
+      "入力",
+      "登録",
+      "更新",
+      "印字",
+      "切替",
+      "変更",
+      "修正",
+      "訂正",
+      "編集",
+      "追加",
+      "削除",
+      "延長",
+      "取消"
+    ],
+    "output_format_words": [
+      "csv",
+      "excel",
+      "pdf"
+    ],
+    "explicit_condition_cues": [
+      "関係なく",
+      "含む",
+      "除外",
+      "場合",
+      "のみ",
+      "以外",
+      "期限",
+      "されている",
+      "されていた",
+      "されており"
+    ],
+    "aggregation_words": [
+      "集計",
+      "計上",
+      "算入"
+    ],
+    "member_subject_words": [
+      "対象者",
+      "誰",
+      "構成員",
+      "個人",
+      "明細",
+      "取引"
+    ],
+    "cause_cues": [
+      "どうして",
+      "なぜ",
+      "何故",
+      "どういう場合",
+      "どういうとき",
+      "どういう時"
+    ],
+    "cause_nouns": [
+      "原因",
+      "理由"
+    ],
+    "cause_noun_question_endings": [
+      "は何です",
+      "は何でしょう",
+      "は何か",
+      "は何なの",
+      "は何が",
+      "はなんです",
+      "はなんでしょう",
+      "はなに",
+      "は？",
+      "は?",
+      "はどこ",
+      "を教え",
+      "を知りたい",
+      "が知りたい",
+      "を説明",
+      "を特定",
+      "について教え",
+      "について知りたい",
+      "について説明",
+      "として考えられ",
+      "が考えられ",
+      "は考えられ",
+      "が分から",
+      "がわから"
+    ],
+    "cause_noun_question_leads": [
+      "何が",
+      "なにが",
+      "どんな",
+      "どのような",
+      "どういう",
+      "どういった"
+    ],
+    "generic_target_words": [
+      "データ",
+      "情報",
+      "内容",
+      "項目",
+      "対象",
+      "もの",
+      "これ",
+      "それ",
+      "レコード",
+      "行",
+      "件",
+      "分"
+    ],
+    "object_particles": [
+      "を"
+    ],
+    "manner_words": [
+      "一括で",
+      "個別に",
+      "一括",
+      "個別"
+    ],
+    "action_target_verbs": [
+      "追加",
+      "登録",
+      "変更",
+      "修正",
+      "訂正",
+      "削除",
+      "消去",
+      "出力",
+      "設定",
+      "入力",
+      "再発行",
+      "発行",
+      "印刷",
+      "付与",
+      "取込",
+      "取り込",
+      "更新",
+      "取消",
+      "切替"
+    ],
+    "action_request_endings": [
+      "する",
+      "したい",
+      "します",
+      "でき",
+      "の方法",
+      "の手順",
+      "方法",
+      "手順",
+      "は"
+    ],
+    "error_words": [
+      "エラー"
+    ],
+    "error_connectors": [
+      "の",
+      "という",
+      "と",
+      "といった"
+    ],
+    "error_clause_particles": [
+      "で"
+    ],
+    "error_clause_particle_exceptions": [
+      "は",
+      "も",
+      "き"
+    ],
+    "question_final_particles": [
+      "か"
+    ],
+    "request_cues": [
+      "？",
+      "?",
+      "たい",
+      "ほしい",
+      "欲しい",
+      "教え",
+      "ください",
+      "下さい",
+      "どう",
+      "どこ",
+      "何",
+      "なぜ",
+      "いつ",
+      "でしょう",
+      "可能",
+      "でき",
+      "よい",
+      "良い",
+      "方法",
+      "手順",
+      "必要",
+      "お願い"
+    ],
+    "facet_method_cues": [
+      "方法",
+      "手順"
+    ],
+    "facet_impact_cues": [
+      "影響",
+      "副作用"
+    ],
+    "facet_output_cues": [
+      "出力でき",
+      "再発行でき",
+      "出力可能",
+      "再発行可能"
+    ],
+    "facet_necessity_cues": [
+      "必要か",
+      "必要ですか",
+      "要否"
+    ],
+    "facet_withdrawal_objects": [
+      "の説明",
+      "の確認"
+    ],
+    "facet_withdrawal_words": [
+      "不要",
+      "必要ない"
+    ],
+    "topic_particles": [
+      "は"
+    ],
+    "parallel_connectors": [
+      "と",
+      "、",
+      "や",
+      "及び",
+      "および"
+    ],
+    "target_particles": [
+      "を",
+      "の"
+    ],
+    "split_operation_words": [
+      "追加",
+      "登録",
+      "変更",
+      "修正",
+      "訂正",
+      "削除",
+      "出力",
+      "設定",
+      "入力",
+      "再発行",
+      "発行",
+      "印刷"
+    ],
+    "chain_connectors": [
+      "して",
+      "し、",
+      "した後に",
+      "した後",
+      "後に",
+      "後"
+    ],
+    "count_query_words": [
+      "人数",
+      "者数",
+      "件数"
+    ],
+    "list_query_words": [
+      "対象者",
+      "名簿",
+      "一覧",
+      "リスト",
+      "送付先"
+    ],
+    "hidden_field_words": [
+      "項目",
+      "欄",
+      "フィールド"
+    ],
+    "hidden_field_states": [
+      "表示されない",
+      "見えない"
+    ],
+    "fetch_failure_cues": [
+      "データが取得できない"
+    ],
+    "grouping_extra_words": [
+      "地域"
+    ],
+    "grouping_suffixes": [
+      "別",
+      "ごと"
+    ],
+    "filter_words": [
+      "絞",
+      "フィルタ"
+    ],
+    "update_words": [
+      "更新"
+    ],
+    "software_version_words": [
+      "バージョン",
+      "リリース",
+      "旧版",
+      "新版"
+    ],
+    "subquestion_circled_numbers": [
+      "①-⑳",
+      "⑴-⒇",
+      "⒈-⒛",
+      "❶-❿"
+    ],
+    "subquestion_number_patterns": [
+      "(N)",
+      "（N）",
+      "N)",
+      "N）",
+      "問N"
+    ],
+    "subquestion_reference_followers": [
+      "の",
+      "と",
+      "や",
+      "を",
+      "に",
+      "で",
+      "は",
+      "が",
+      "も",
+      "から",
+      "まで",
+      "及び",
+      "又は",
+      "、",
+      "・",
+      "～",
+      "〜",
+      "~",
+      "-",
+      "－",
+      "→"
+    ],
+    "answer_instruction_cues": [
+      "と明記",
+      "と表記",
+      "と記述",
+      "と記載",
+      "と書いて",
+      "として明記",
+      "ように回答",
+      "表記で答えて",
+      "表記で回答",
+      "形式で答えて",
+      "形式で回答",
+      "書式で答えて",
+      "書式で回答",
+      "箇条書きで答えて",
+      "箇条書きで回答",
+      "表にして",
+      "簡潔に回答",
+      "短く答えて",
+      "を読んで回答",
+      "を読み取って回答",
+      "を読んで",
+      "を読み取って",
+      "に記録",
+      "数字で答えて",
+      "数字で回答"
+    ],
+    "answer_instruction_endings": [
+      "ください",
+      "下さい",
+      "ほしい",
+      "欲しい",
+      "お願いします",
+      "すること",
+      "してください",
+      "して下さい",
+      "してほしい",
+      "して欲しい"
+    ],
+    "mixed_number_notation_cues": [
+      "混在",
+      "混ざ",
+      "混ぜ",
+      "組み合",
+      "交じり"
+    ]
+  },
+  "inquiry_cues": {
+    "document_kind_words": [
+      "操作説明書=操作説明書",
+      "操作手順=操作説明書",
+      "手順書=操作説明書",
+      "運用説明書=運用説明書",
+      "運用資料=運用説明書",
+      "Q&A=Q&A",
+      "Ｑ＆Ａ=Q&A",
+      "問答=Q&A",
+      "問い合わせデータ=Q&A",
+      "問合せ=Q&A",
+      "リリース通知=リリース通知",
+      "別紙=リリース通知",
+      "機能追加=リリース通知",
+      "改修=リリース通知",
+      "エラー一覧=エラー一覧",
+      "エラーリスト=エラー一覧",
+      "警告メッセージ=エラー一覧",
+      "帳票=帳票説明",
+      "明細書=帳票説明",
+      "一覧表=帳票説明",
+      "通知書=帳票説明",
+      "証明書=帳票説明",
+      "CSV=外部データ",
+      "Excel=外部データ",
+      "xlsx=外部データ",
+      "xls=外部データ",
+      "連携=外部データ",
+      "取込=外部データ",
+      "外部端末=外部データ"
+    ],
+    "file_data_kind": "外部データ",
+    "operation_trigger_terms": [
+      "画面",
+      "タブ",
+      "メニュー",
+      "操作",
+      "手順",
+      "実行",
+      "変更",
+      "登録",
+      "ボタン"
+    ],
+    "condition_trigger_terms": [
+      "条件",
+      "場合",
+      "不要",
+      "不可",
+      "できない",
+      "可能",
+      "問題ない",
+      "注意",
+      "対象外",
+      "例外"
+    ],
+    "condition_terms": [
+      "場合",
+      "条件",
+      "注意",
+      "対象外",
+      "不要",
+      "できない",
+      "問題ない",
+      "可能"
+    ],
+    "file_data_terms": [
+      "CSV",
+      "Excel",
+      "xlsx",
+      "ファイル",
+      "データ",
+      "取込",
+      "出力",
+      "連携",
+      "連携結果",
+      "端末",
+      "エラーリスト",
+      "チェックリスト",
+      "列"
+    ],
+    "decision_words": [
+      "どこから=procedure",
+      "どのよう=procedure",
+      "どうすれば=procedure",
+      "手順=procedure",
+      "操作=procedure",
+      "変更する方法=procedure",
+      "登録する方法=procedure",
+      "必要=necessity",
+      "不要=necessity",
+      "しないでください=necessity",
+      "行う必要=necessity",
+      "可能=permission",
+      "できる=permission",
+      "できない=permission",
+      "問題ない=permission",
+      "可否=permission",
+      "対象外=permission",
+      "なぜ=reason",
+      "どうして=reason",
+      "取得できていない=reason",
+      "何件=count",
+      "何通り=count",
+      "件数=count",
+      "行数=count",
+      "合計=count",
+      "一覧=count",
+      "影響=output_impact",
+      "出力される=output_impact",
+      "表示される=output_impact",
+      "帳票=output_impact"
+    ],
+    "visual_terms": [
+      "画面",
+      "ボタン",
+      "欄",
+      "タブ",
+      "赤枠",
+      "表示",
+      "画像",
+      "帳票"
+    ],
+    "external_context_terms": [
+      "外部端末",
+      "外部システム",
+      "連携先"
+    ],
+    "screen_suffixes": [
+      "画面",
+      "タブ",
+      "メニュー",
+      "処理",
+      "登録",
+      "設定"
+    ],
+    "screen_name_bracket_chars": [
+      "（",
+      "）",
+      "(",
+      ")"
+    ],
+    "route_arrow_chars": [
+      "＞",
+      ">",
+      "⇒"
+    ],
+    "interrogative_words": [
+      "どこ",
+      "どの",
+      "どう",
+      "なぜ",
+      "いつ",
+      "いくつ",
+      "何"
+    ],
+    "term_joiner_chars": [
+      "・"
+    ],
+    "page_ordinal_suffixes": [
+      "目"
+    ],
+    "column_words": [
+      "列"
+    ]
+  },
+  "enumeration_cues": {
+    "exhaustive_quantifiers": [
+      "すべて",
+      "全て",
+      "全部"
+    ],
+    "quantifier_modifier_particles": [
+      "の"
+    ],
+    "exhaustive_words": [
+      "漏れなく",
+      "もれなく",
+      "洩れなく",
+      "残らず",
+      "網羅",
+      "余さず",
+      "列挙",
+      "洗い出"
+    ],
+    "per_unit_words": [
+      "章ごとに",
+      "節ごとに",
+      "各章",
+      "各節"
+    ],
+    "listing_words": [
+      "挙げ",
+      "あげて",
+      "教え",
+      "示し",
+      "示して",
+      "列挙",
+      "書き出",
+      "洗い出",
+      "答え",
+      "まとめ",
+      "知りたい",
+      "一覧",
+      "ありますか",
+      "どれ",
+      "どのような",
+      "何を"
+    ],
+    "each_words": [
+      "各",
+      "ごと",
+      "それぞれ"
+    ],
+    "document_wide_words": [
+      "全体を通して",
+      "全体で",
+      "全体から",
+      "全体の中で",
+      "文書全体",
+      "資料全体",
+      "全章",
+      "すべての章",
+      "全ての章",
+      "各章",
+      "章ごと"
+    ],
+    "document_name_words": [
+      "要領",
+      "規程",
+      "規則",
+      "規定",
+      "手順書",
+      "マニュアル",
+      "ガイド",
+      "要綱",
+      "計画",
+      "台帳",
+      "資料",
+      "文書"
+    ],
+    "document_inside_words": [
+      "の中"
+    ],
+    "document_scope_particles": [
+      "で",
+      "では",
+      "には"
+    ]
+  },
+  "definition_cues": {
+    "definition_label_brackets": [
+      "「」",
+      "『』",
+      "【】"
+    ],
+    "definition_question_cues": [
+      "意味",
+      "定義",
+      "とは",
+      "何を示",
+      "何を表",
+      "何です",
+      "どのような",
+      "どういう",
+      "どういった",
+      "どんな",
+      "どのような条件",
+      "どんな条件"
+    ],
+    "label_separators": [
+      "、",
+      ",",
+      "/",
+      "・"
+    ],
+    "field_words": [
+      "項目",
+      "列",
+      "欄"
+    ],
+    "label_particles": [
+      "の"
+    ],
+    "label_preceders": [
+      "で",
+      "の"
+    ],
+    "label_followers": [
+      "に",
+      "は",
+      "が",
+      "の"
+    ],
+    "definition_suffixes": [
+      "の意味",
+      "のマーク",
+      "列の",
+      "列は",
+      "欄の",
+      "欄は",
+      "とは"
+    ],
+    "definition_bullets": [
+      "-",
+      "・"
+    ],
+    "definition_ellipsis_chars": [
+      "…",
+      "⋯"
+    ],
+    "definition_delimiters": [
+      ":",
+      "：",
+      "とは",
+      "は"
+    ],
+    "stop_heading_words": [
+      "ポイント"
+    ],
+    "stop_bullet_chars": [
+      "●",
+      "■",
+      "◆"
+    ],
+    "definition_body_cues": [
+      "表示",
+      "意味",
+      "示",
+      "対象",
+      "状態",
+      "場合",
+      "記録",
+      "です",
+      "指す",
+      "表す"
+    ],
+    "definition_topic_words": [
+      "について"
+    ]
+  },
+  "evidence_cues": {
+    "aggregate_value_words": [
+      "人数",
+      "人員",
+      "件数",
+      "合計",
+      "集計値"
+    ],
+    "detail_words": [
+      "明細",
+      "名簿",
+      "氏名",
+      "取引番号",
+      "個人",
+      "対象者"
+    ],
+    "link_verbs": [
+      "遷移",
+      "移動",
+      "参照",
+      "共通",
+      "連携",
+      "引き継",
+      "開き",
+      "開く"
+    ],
+    "link_negations": [
+      "不可",
+      "できません",
+      "しない",
+      "異なる",
+      "別の"
+    ],
+    "navigation_words": [
+      "開",
+      "選択",
+      "移動",
+      "進み",
+      "クリック"
+    ],
+    "navigation_evidence_words": [
+      "開",
+      "選択",
+      "移動",
+      "クリック",
+      "押"
+    ],
+    "screen_place_words": [
+      "画面",
+      "タブ",
+      "メニュー"
+    ],
+    "place_particles": [
+      "から",
+      "で"
+    ],
+    "entry_action_words": [
+      "出力",
+      "検索",
+      "登録"
+    ],
+    "function_number_dashes": [
+      "-",
+      "－",
+      "—",
+      "―",
+      "ー"
+    ],
+    "heading_label_openers": [
+      "【",
+      "〔",
+      "「",
+      "("
+    ],
+    "operation_section_words": [
+      "操作説明",
+      "操作手順",
+      "操作方法"
+    ],
+    "alternative_query_words": [
+      "操作方法",
+      "適用条件"
+    ],
+    "focus_particles": [
+      "の"
+    ],
+    "target_stop_terms": [
+      "変更",
+      "修正",
+      "訂正",
+      "編集",
+      "使用",
+      "確認",
+      "入力",
+      "表示",
+      "設定",
+      "方法",
+      "手順",
+      "内容",
+      "場合"
+    ],
+    "heading_bullet_chars": [
+      "●",
+      "■",
+      "◆"
+    ],
+    "item_bullet_chars": [
+      "・"
+    ],
+    "note_mark_chars": [
+      "※"
+    ],
+    "label_colon_chars": [
+      ":",
+      "："
+    ],
+    "step_number_closers": [
+      ".",
+      "．",
+      "、"
+    ],
+    "relevance_stop_terms": [
+      "確認",
+      "情報",
+      "場合",
+      "対象",
+      "方法",
+      "表示"
+    ],
+    "operation_text_cues": [
+      "直接入力",
+      "パラメータ",
+      "手順"
+    ],
+    "default_question_cues": [
+      "いつ",
+      "初期",
+      "デフォルト",
+      "切替",
+      "default"
+    ],
+    "default_text_cues": [
+      "初期表示",
+      "パラメータ",
+      "設定",
+      "切替",
+      "既定"
+    ],
+    "list_text_cues": [
+      "一覧",
+      "名簿",
+      "個人",
+      "対象者",
+      "抽出",
+      "ファイル出力",
+      "csv"
+    ],
+    "list_action_words": [
+      "選択",
+      "入力",
+      "出力"
+    ],
+    "list_execute_words": [
+      "実行",
+      "ボタン"
+    ],
+    "step_condition_cues": [
+      "新規追加",
+      "の場合"
+    ],
+    "step_action_words": [
+      "入力",
+      "選択",
+      "押",
+      "実行",
+      "登録",
+      "完了",
+      "クリック",
+      "ボタン"
+    ],
+    "section_label_brackets": [
+      "【】"
+    ],
+    "step_circled_numbers": [
+      "①-⑳",
+      "㉑-㉟"
+    ]
+  },
+  "answer_labels": {
+    "answer_evidence_budget_limited": "回答への入力の上限により、取得した根拠のうち {count} 件を回答の材料から省略しました。",
+    "rules_section": "資料により確認できた事項",
+    "quote_only_section": "参考情報",
+    "quote_only_note": "以下は資料の原文です。本質問の条件への該当は確認できていません。",
+    "gaps_section": "資料から確認できなかった事項",
+    "unverified_section": "回答に未反映の関連章節",
+    "deadline_section": "回答時間の上限により省略した処理",
+    "confirmations_section": "回答を確定するために確認すること",
+    "confirmation_only_summary": "資料だけでは回答を確定できません。次を確認してください。",
+    "neutral_summary": "資料の記載を以下に示します。",
+    "insufficient_evidence_summary": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。",
+    "empty_search_guidance": "質問の対象・条件や検索範囲を見直し、対象業務の操作説明書で操作方法と適用条件を確認してください。",
+    "abstention_guidance": "対象業務の操作説明書で操作方法と適用条件を確認し、質問の対象・条件や検索範囲を見直してください。",
+    "citation_prefix": "根拠：",
+    "deadline_summary": "回答の時間の上限までに回答文を作れなかったため、質問に関係する資料の記載だけを示します。",
+    "off_goal_gap": "取得した資料の手順が質問の対象・変更項目に適用できるとは確認できませんでした。",
+    "cause_gap": "原因は取得した資料に記載がありません。",
+    "crag_refusal_summary": "検索した資料には、原質問の操作・規則・確認方法を直接裏付ける根拠を確認できていません。",
+    "crag_missing_aspect_template": "{label}については、検索評価で直接の根拠を確認できていません。",
+    "crag_unknown_aspect_template": "{label}については、質問との対応または確認結果が未確認です。",
+    "crag_quote_only_note": "検索評価で許可した部分の直接原文。言い換えの意味は未検証。",
+    "crag_definition_aspect_template": "{label}の意味・条件",
+    "operation_steps_heading": "操作手順",
+    "confirmation_steps_heading": "確認手順",
+    "page_location": "p.{page}",
+    "sheet_location": "シート「{sheet}」{cell_range}",
+    "item_bullet": "・",
+    "steps_heading_template": "{heading}（{title}）",
+    "quote_template": "「{quote}」",
+    "condition_template": "（{condition}）",
+    "condition_suffix": "場合",
+    "condition_link": "の",
+    "subquestion_heading_template": "質問{label}：{text}",
+    "missing_request_template": "『{text}』については、根拠付きの説明を十分に示せていません。",
+    "removed_section": "根拠と矛盾し除いた内容",
+    "removed_section_note": "次の内容は根拠と矛盾するため、回答から除きました。",
+    "marked_section": "確認が必要な点",
+    "marked_section_note": "次の点は根拠で確かめきれていないか、注意が必要です（内容は回答に載せています）。",
+    "unsourced_section": "資料の出典を確かめられない説明",
+    "unsourced_section_note": "次の説明は検索した資料の原文と照合できないため、資料の記載としては示していません。",
+    "marked_rules_section": "根拠で確かめきれていない事項",
+    "marked_rules_section_note": "次の説明は根拠で確かめきれていないか、注意が必要です。理由は「確認が必要な点」に示します。",
+    "guide_notes_section": "業務ガイドの案内",
+    "guide_notes_note_template": "次は業務ガイド「{title}」の案内で、資料の記載ではありません。",
+    "guide_handoff_template": "次の場合は{contact}へお問い合わせください: {conditions}",
+    "guide_approval_template": "実施の前に承認が必要です。{note}",
+    "guide_acquisition_incomplete_template": "必須の参照範囲について、取得または回答材料への保持を確認できていません（手順: {steps}）。資料に記載がないことや、回答の誤りを意味しません。",
+    "passage_note_template": "{reasons}: 「{text}」",
+    "answer_warning_template": "{reasons}",
+    "predicate_endings": [
+      "た",
+      "だ",
+      "ない",
+      "る",
+      "う",
+      "く",
+      "す",
+      "つ",
+      "ぬ",
+      "ぶ",
+      "む",
+      "ぐ",
+      "い"
+    ],
+    "aspect_labels": [
+      "対象の業務・画面=business_object",
+      "求める結果=requested_result",
+      "適用条件=applicability",
+      "操作手順=procedure",
+      "構成明細=member_details",
+      "集計対象の一致=population_membership",
+      "列挙の網羅（件数・範囲）=enumeration_coverage"
+    ],
+    "passage_reason_labels": [
+      "根拠で確かめられない=unsupported",
+      "出典を確かめられない=citation_error",
+      "引用の原文が根拠に見当たらない=quote_unmatched",
+      "引用先の根拠 ID が無効=citation_id_invalid",
+      "引用先の根拠 ID が複数ある=citation_id_ambiguous",
+      "引用する行の範囲が未指定=citation_range_missing",
+      "引用する行の範囲が無効=citation_range_invalid",
+      "引用行が根拠の範囲外=citation_range_out_of_bounds",
+      "引用原文を抽出できない=citation_extraction_failed",
+      "引用した範囲が見出しだけ=citation_heading_only",
+      "引用が区切り線・書式のみ=citation_content_unusable",
+      "ガイドIDは資料根拠でない=citation_id_namespace",
+      "引用元の版を確認できない=citation_version_mismatch",
+      "確かめが終わっていない=unassessed",
+      "図の画像を読めておらず確かめられない=figure_not_read",
+      "根拠は別の対象についての記載=target_mismatch",
+      "根拠の表の対応と違う可能性=value_unbound",
+      "根拠の表の値に直した=table_corrected",
+      "システムの検査で注意が必要=item_check",
+      "旧版・廃止の資料に基づく=superseded",
+      "前の手順が根拠と矛盾=after_contradicted_step",
+      "前提の手順が未確認=after_unverified_step",
+      "要約を根拠で確かめていない=summary_unaudited",
+      "条件への当てはめを確かめていない=application_unaudited",
+      "資料に無い業務ガイドの文=guide_text",
+      "根拠と矛盾=contradicted",
+      "業務ガイドの手順の確認で問題が見つかった=guide_check",
+      "根拠を読めず、すべての段落が未確認=no_evidence",
+      "質問からずれている可能性=off_goal",
+      "質問の要求の一部に答えていない=requests",
+      "回答の作り直しに失敗し、前の回答を示している=correction_failed"
+    ]
+  },
+  "answer_check_cues": {
+    "completion_verbs": [
+      "実行",
+      "保存",
+      "確定",
+      "登録",
+      "更新"
+    ],
+    "closing_quote_chars": [
+      "」",
+      "』",
+      "”",
+      "\"",
+      "'"
+    ],
+    "button_words": [
+      "ボタン"
+    ],
+    "press_words": [
+      "押す",
+      "押し",
+      "押下"
+    ],
+    "completion_connectors": [
+      "で",
+      "して"
+    ],
+    "completion_words": [
+      "確定",
+      "完了"
+    ],
+    "completion_negations": [
+      "しない",
+      "しません",
+      "されない",
+      "不要"
+    ],
+    "constraint_words": [
+      "のみ",
+      "に限る",
+      "に限り",
+      "対象外",
+      "不可",
+      "できません",
+      "しないでください"
+    ],
+    "condition_preceders": [
+      "の",
+      "た",
+      "る",
+      "い"
+    ],
+    "condition_nouns": [
+      "場合"
+    ],
+    "condition_followers": [
+      "は",
+      "に",
+      "のみ"
+    ],
+    "heading_screen_words": [
+      "画面"
+    ],
+    "field_label_followers": [
+      "欄",
+      "項目",
+      "ボタン",
+      "タブ",
+      "チェック",
+      "一覧",
+      "リスト"
+    ],
+    "unexplained_words": [
+      "説明していません",
+      "記載がありません",
+      "記載はありません",
+      "記載していません",
+      "未確認"
+    ],
+    "guarantee_verbs": [
+      "確認",
+      "取得",
+      "特定",
+      "把握",
+      "判断"
+    ],
+    "guarantee_endings": [
+      "できます",
+      "できる"
+    ],
+    "guarantee_exceptions": [
+      "とは限",
+      "かは",
+      "かどうか",
+      "わけでは"
+    ],
+    "match_claims": [
+      "と一致します",
+      "に一致します"
+    ],
+    "speculation_words": [
+      "考えられ",
+      "可能性",
+      "かもしれ",
+      "いずれか",
+      "恐れ",
+      "おそれ",
+      "と思われ",
+      "推測"
+    ],
+    "ignored_quote_chars": [
+      "|",
+      "｜",
+      "、",
+      "，",
+      ",",
+      "。",
+      "．",
+      ".",
+      "：",
+      ":",
+      "・",
+      "･",
+      "⇒",
+      "→",
+      "⇨",
+      "(",
+      ")",
+      "（",
+      "）",
+      "[",
+      "]",
+      "［",
+      "］",
+      "「",
+      "」",
+      "『",
+      "』",
+      "【",
+      "】",
+      "〔",
+      "〕",
+      "〈",
+      "〉",
+      "《",
+      "》",
+      "\"",
+      "'",
+      "“",
+      "”",
+      "‘",
+      "’"
+    ],
+    "quote_sentence_end_chars": [
+      "。",
+      "．"
+    ],
+    "step_split_closers": [
+      ".",
+      "．"
+    ],
+    "ellipsis_chars": [
+      "…",
+      "‥"
+    ],
+    "repeated_ellipsis_chars": [
+      ".",
+      "。"
+    ],
+    "report_suffixes": [
+      "表",
+      "書",
+      "票",
+      "証",
+      "券",
+      "名簿",
+      "帳票"
+    ],
+    "screen_object_suffixes": [
+      "画面",
+      "タブ",
+      "メニュー"
+    ],
+    "condition_sentence_endings": [
+      "ください",
+      "ます",
+      "ません",
+      "です"
+    ],
+    "condition_clause_nouns": [
+      "場合",
+      "とき"
+    ],
+    "condition_time_nouns": [
+      "時",
+      "際"
+    ],
+    "condition_time_followers": [
+      "は",
+      "に",
+      "の",
+      "も",
+      "、",
+      ","
+    ],
+    "condition_strip_particles": [
+      "のみ",
+      "は",
+      "に"
+    ],
+    "condition_trailing_particles": [
+      "には",
+      "では",
+      "へは",
+      "は",
+      "に",
+      "で",
+      "へ"
+    ],
+    "condition_range_particles": [
+      "まで",
+      "から"
+    ],
+    "condition_topic_particles": [
+      "は"
+    ],
+    "condition_adverb_kanji": [
+      "既",
+      "特",
+      "更",
+      "共",
+      "順",
+      "別",
+      "主",
+      "常",
+      "直",
+      "実",
+      "現",
+      "仮",
+      "逆",
+      "急",
+      "単",
+      "先",
+      "稀"
+    ],
+    "condition_adverb_particles": [
+      "に"
+    ],
+    "proviso_words": [
+      "なお",
+      "ただし",
+      "但し",
+      "※",
+      "（＊",
+      "(*"
+    ],
+    "bare_label_chars": [
+      "・",
+      "／",
+      "/",
+      "－",
+      "-"
+    ],
+    "sentence_line_endings": [
+      "。",
+      "ます",
+      "ません",
+      "ください",
+      "下さい",
+      "です"
+    ],
+    "sentence_line_closers": [
+      "。",
+      "）",
+      ")"
+    ],
+    "navigation_residue_words": [
+      "（",
+      "(",
+      "）",
+      ")",
+      "「",
+      "」",
+      "『",
+      "』",
+      "の",
+      "画面",
+      "タブ",
+      "を",
+      "へ",
+      "に",
+      "で",
+      "開く",
+      "開き",
+      "開きます",
+      "選択",
+      "表示",
+      "します",
+      "する",
+      "移動",
+      "遷移",
+      "。",
+      "、"
+    ],
+    "related_stopwords": [
+      "変更",
+      "修正",
+      "訂正",
+      "編集",
+      "使用",
+      "確認",
+      "入力",
+      "表示",
+      "設定",
+      "方法",
+      "手順",
+      "内容",
+      "場合",
+      "操作",
+      "登録",
+      "出力",
+      "画面",
+      "資料",
+      "処理",
+      "対象",
+      "情報",
+      "データ",
+      "可能",
+      "必要"
+    ],
+    "version_units": [
+      "版"
+    ],
+    "abolish_words": [
+      "廃止"
+    ],
+    "abolish_particles": [
+      "は",
+      "を",
+      "が",
+      "も"
+    ],
+    "abolished_forms": [
+      "廃止された",
+      "廃止した"
+    ],
+    "version_question_cues": [
+      "どう変わ",
+      "何が変わ",
+      "どこが変わ",
+      "変わりました",
+      "変わった",
+      "違い",
+      "差分",
+      "比較",
+      "比べ",
+      "変更点",
+      "変更前",
+      "改訂前",
+      "旧版",
+      "前の版",
+      "以前の版",
+      "新旧"
+    ],
+    "quote_operation_words": [
+      "選択",
+      "押",
+      "クリック",
+      "入力",
+      "抽出",
+      "検索",
+      "実行",
+      "登録",
+      "保存",
+      "更新",
+      "削除",
+      "出力",
+      "印刷",
+      "追加",
+      "設定",
+      "確認",
+      "チェック",
+      "表示",
+      "遷移",
+      "変更",
+      "修正",
+      "訂正"
+    ],
+    "process_mode_words": [
+      "処理区分"
+    ],
+    "mode_topic_particles": [
+      "では"
+    ],
+    "mode_condition_words": [
+      "場合",
+      "登録済",
+      "条件",
+      "任意入力"
+    ],
+    "deletion_words": [
+      "削除",
+      "消去"
+    ],
+    "bare_title_marks": [
+      "。",
+      "＞",
+      ">",
+      "→",
+      "⇒",
+      ":",
+      "：",
+      "とは",
+      "場合"
+    ],
+    "evidence_id_labels": [
+      "証拠",
+      "根拠",
+      "原文"
+    ],
+    "output_artifact_words": [
+      "CSV",
+      "ファイル",
+      "出力データ",
+      "出力結果"
+    ],
+    "output_field_words": [
+      "列",
+      "カラム",
+      "フィールド",
+      "項目"
+    ],
+    "heading_bracket_pairs": [
+      "〔〕",
+      "[]",
+      "［］",
+      "【】",
+      "（）",
+      "()"
+    ]
+  },
+  "operation_audit_cues": {
+    "instruction_stems": [
+      "開き",
+      "押し",
+      "選び",
+      "選択し",
+      "入力し",
+      "変更し",
+      "修正し",
+      "登録し",
+      "保存し",
+      "実行し",
+      "実施し",
+      "クリックし"
+    ],
+    "operation_instruction_endings": [
+      "ます",
+      "てください",
+      "て頂",
+      "ていただ",
+      "、",
+      "て"
+    ],
+    "instruction_phrases": [
+      "を開く",
+      "を押す",
+      "を選択する",
+      "を入力する",
+      "を保存する",
+      "に遷移する",
+      "に遷移します"
+    ],
+    "conditional_operation_verbs": [
+      "登録",
+      "選択",
+      "入力",
+      "変更",
+      "修正",
+      "保存",
+      "実行"
+    ],
+    "conditional_operation_endings": [
+      "すれば",
+      "すると",
+      "することで",
+      "できます",
+      "可能"
+    ],
+    "action_verbs": [
+      "押下",
+      "クリック",
+      "印刷",
+      "再発行"
+    ],
+    "action_endings": [
+      "する",
+      "すれば",
+      "すると",
+      "し",
+      "できます",
+      "可能"
+    ],
+    "control_words": [
+      "ボタン",
+      "画面",
+      "タブ"
+    ],
+    "control_actions": [
+      "を開く",
+      "を押す",
+      "を選択する"
+    ],
+    "deletion_endings": [
+      "し",
+      "する",
+      "すれば",
+      "すると",
+      "できます",
+      "可能"
+    ],
+    "english_instruction_words": [
+      "click",
+      "press",
+      "navigate to",
+      "save changes",
+      "delete",
+      "erase"
+    ],
+    "deletion_manner_words": [
+      "個別",
+      "一括"
+    ],
+    "operation_families": [
+      "再発行=再発行",
+      "再交付=再発行",
+      "印刷=印刷",
+      "プリント=印刷",
+      "印字=印刷",
+      "修正=修正",
+      "編集=修正",
+      "訂正=修正",
+      "書き換え=修正",
+      "書換=修正",
+      "変更=修正",
+      "削除=削除",
+      "消去=削除",
+      "保存=保存",
+      "登録=保存",
+      "更新=保存"
+    ]
+  },
+  "grounding_cues": {
+    "numeric_rule_words": [
+      "許容範囲",
+      "入力範囲",
+      "入力可能範囲",
+      "上限",
+      "下限",
+      "最大",
+      "最小",
+      "必須値",
+      "初期値",
+      "既定値",
+      "デフォルト"
+    ],
+    "digit_count_units": [
+      "桁"
+    ],
+    "denial_verbs": [
+      "確認",
+      "判断",
+      "断定",
+      "特定"
+    ],
+    "denial_endings": [
+      "できません"
+    ],
+    "denial_words": [
+      "不明",
+      "未確認",
+      "とは限りません"
+    ],
+    "digit_range_labels": [
+      "半角数字"
+    ],
+    "current_subject_words": [
+      "今回",
+      "現在",
+      "対象",
+      "あなた",
+      "利用者"
+    ],
+    "attribute_words": [
+      "所属",
+      "グループ",
+      "担当者",
+      "氏名",
+      "区分",
+      "状態"
+    ],
+    "attribute_particles": [
+      "は",
+      "が",
+      "=",
+      ":"
+    ],
+    "hedge_words": [
+      "場合",
+      "なら",
+      "未確認",
+      "不明",
+      "とは限"
+    ],
+    "example_words": [
+      "例",
+      "図",
+      "スクリーンショット"
+    ],
+    "rule_denial_prefixes": [
+      "かどうかは",
+      "かどうか",
+      "かは",
+      "か",
+      "とは"
+    ],
+    "source_qualifiers": [
+      "資料からは",
+      "資料から"
+    ],
+    "user_subject_words": [
+      "あなた",
+      "利用者",
+      "今回",
+      "現在"
+    ],
+    "user_subject_particles": [
+      "の",
+      "は",
+      "が"
+    ],
+    "rule_condition_words": [
+      "場合",
+      "なら"
+    ],
+    "alternative_connectors": [
+      "または",
+      "又は",
+      "か",
+      "もしくは",
+      "や"
+    ],
+    "key_words": [
+      "キー"
+    ],
+    "alias_followers": [
+      "ボタン",
+      "欄",
+      "項目"
+    ],
+    "alias_words": [
+      "同じ",
+      "同一",
+      "別名",
+      "とも呼",
+      "を指す"
+    ],
+    "alias_negations": [
+      "異なる",
+      "別の",
+      "ではない"
+    ],
+    "internal_label_words": [
+      "規則"
+    ],
+    "amount_units": [
+      "万円",
+      "億円",
+      "円",
+      "万",
+      "億",
+      "か月",
+      "ヶ月",
+      "ケ月",
+      "カ月",
+      "月",
+      "日",
+      "年",
+      "歳",
+      "%",
+      "人",
+      "件",
+      "回"
+    ],
+    "fact_counters": [
+      "歳",
+      "年",
+      "月",
+      "日",
+      "円",
+      "割",
+      "か月",
+      "ヶ月",
+      "人",
+      "件",
+      "回"
+    ],
+    "native_operation_words": [
+      "入力",
+      "押",
+      "選択",
+      "クリック",
+      "追加",
+      "削除",
+      "登録"
+    ],
+    "grounding_stopwords": [
+      "検索",
+      "根拠",
+      "質問",
+      "関連",
+      "内容",
+      "要約",
+      "です",
+      "ます",
+      "ください"
+    ],
+    "amount_scale_units": [
+      "万=10000",
+      "億=100000000"
+    ]
+  },
+  "entity_cues": {
+    "id_column_words": [
+      "ID",
+      "番号",
+      "コード",
+      "No.",
+      "No",
+      "code"
+    ],
+    "alias_column_words": [
+      "略称",
+      "略号",
+      "別表記",
+      "別名",
+      "通称",
+      "愛称",
+      "英字名",
+      "英語名"
+    ],
+    "name_column_words": [
+      "正式名",
+      "名称",
+      "名前",
+      "氏名",
+      "件名",
+      "名"
+    ],
+    "skip_column_words": [
+      "説明",
+      "備考",
+      "内容",
+      "メモ",
+      "概要",
+      "注意",
+      "理由",
+      "手順",
+      "URL",
+      "日付",
+      "日時",
+      "期限",
+      "期間",
+      "金額",
+      "件数",
+      "数量",
+      "時刻",
+      "時間帯",
+      "連絡先"
+    ],
+    "value_separators": [
+      "、",
+      ",",
+      "，",
+      ";",
+      "；",
+      "／"
+    ],
+    "numeric_value_chars": [
+      "年",
+      "月",
+      "日",
+      "時",
+      "分",
+      "秒",
+      "%",
+      "％",
+      "円"
+    ],
+    "code_definition_words": [
+      "略号",
+      "略称",
+      "通称",
+      "コード",
+      "記号"
+    ],
+    "definition_separators": [
+      ":",
+      "は"
+    ],
+    "paren_alias_words": [
+      "略称",
+      "略号",
+      "通称",
+      "以下"
+    ],
+    "nickname_words": [
+      "通称"
+    ],
+    "organization_suffixes": [
+      "システム",
+      "ポータル",
+      "本部",
+      "部",
+      "課",
+      "室",
+      "センター"
+    ],
+    "company_scope_suffixes": [
+      "社"
+    ],
+    "generic_company_words": [
+      "会社",
+      "子会社",
+      "親会社",
+      "本社",
+      "当社",
+      "弊社",
+      "自社",
+      "他社",
+      "各社",
+      "全社",
+      "貴社",
+      "御社"
+    ],
+    "subject_link_particles": [
+      "の"
+    ],
+    "subject_topic_particles": [
+      "は"
+    ],
+    "sentence_marks": [
+      "。"
+    ],
+    "clause_marks": [
+      "、"
+    ],
+    "entity_script_chars": [
+      "぀-ヿ",
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ",
+      "ー"
+    ],
+    "entity_kana_kanji_chars": [
+      "゠-ヿ",
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ",
+      "ー"
+    ],
+    "entity_kanji_chars": [
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ"
+    ]
+  },
+  "guide_check_cues": {
+    "impact_group_terms": [
+      "グループ"
+    ],
+    "impact_all_terms": [
+      "全体",
+      "全員",
+      "すべての",
+      "全ての"
+    ],
+    "approval_terms": [
+      "承認"
+    ],
+    "premise_met_markers": [
+      "満たしています",
+      "満たしている",
+      "満たされています",
+      "満たされている",
+      "済み",
+      "済んでいます",
+      "済んでいる",
+      "完了しています",
+      "完了している"
+    ],
+    "guide_list_marks": [
+      "-",
+      "*",
+      "・",
+      "•"
+    ],
+    "guide_number_closers": [
+      ".",
+      ")",
+      "．",
+      "、",
+      "）"
+    ],
+    "boolean_aliases": [
+      "true=はい",
+      "yes=はい",
+      "false=いいえ",
+      "no=いいえ"
+    ]
+  },
+  "guide_import_cues": {
+    "process_headings": [
+      "回答の手順=steps",
+      "回答手順=steps",
+      "手順=steps",
+      "必要な確認事項=conditions",
+      "確認事項=conditions",
+      "確認すること=conditions",
+      "検索する資料=references",
+      "参照する資料=references",
+      "根拠の頁=references",
+      "根拠のページ=references",
+      "資料=references",
+      "検索の語=search_terms",
+      "検索キーワード=search_terms",
+      "キーワード=search_terms",
+      "補足=notes",
+      "備考=notes",
+      "注意=notes"
+    ]
+  },
+  "field_value_cues": {
+    "true_values": [
+      "true",
+      "yes",
+      "y",
+      "1",
+      "はい",
+      "有",
+      "あり",
+      "真"
+    ],
+    "false_values": [
+      "false",
+      "no",
+      "n",
+      "0",
+      "いいえ",
+      "無",
+      "なし",
+      "偽"
+    ]
+  }
+}

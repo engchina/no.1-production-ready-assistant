@@ -1,0 +1,33 @@
+{
+  "description": "Agent の回答の節（Agent の最終の検証が回答の末尾に足す節と、#2738 より前に保存した Agent の回答の「資料で確認できず除いた内容」の節）を除いた回答の本文（pr_suite_evaluation.targets.agent_legacy.answer_body）の基線。#3240 で rag の answer_sections.json の legacy_agent_sections から移した（今の Agent の見出しは公開の契約 platform/contracts/answer-passages/unverified-section.json の headings）。body_lines は本文の空でない行。内容はすべて合成。",
+  "sections": [
+    {
+      "id": "pre-2738-bold-heading",
+      "note": "#2738 より前に保存した Agent の回答の太字の見出し「資料で確認できず除いた内容」の節を数えない（#1456）。",
+      "answer": "承認の記録は 5 年間保管します。\n\n## 資料からは確認できない点\n- 保管の場所は記載が無い。\n\n**資料で確認できず除いた内容**\n\n- 根拠で確かめられない: 「延長は 90 日まで」",
+      "body_lines": [
+        "承認の記録は 5 年間保管します。",
+        "## 資料からは確認できない点",
+        "- 保管の場所は記載が無い。"
+      ]
+    },
+    {
+      "id": "pre-2738-markdown-heading-ends-at-next-heading",
+      "note": "Markdown の見出しの「資料で確認できず除いた内容」の節は、次の見出しの前までを外す。",
+      "answer": "合成の本文 A です。\n\n## 資料で確認できず除いた内容\n- 根拠で確かめられない: 「合成の段落 B」\n\n## 補足\n- 合成の補足 C です。",
+      "body_lines": [
+        "合成の本文 A です。",
+        "## 補足",
+        "- 合成の補足 C です。"
+      ]
+    },
+    {
+      "id": "current-agent-bold-sections",
+      "note": "今の Agent が足す太字・Markdown の見出しの節（RAG の回答と同じ見出し）を数えない（#2738）。",
+      "answer": "登録後は自動で通知されます。\n\n**根拠と矛盾し除いた内容**\n\n- 「翌月から反映」（根拠と矛盾）\n\n## 確認が必要な点\n- 「登録後は自動で通知されます。」：根拠で確かめられない",
+      "body_lines": [
+        "登録後は自動で通知されます。"
+      ]
+    }
+  ]
+}

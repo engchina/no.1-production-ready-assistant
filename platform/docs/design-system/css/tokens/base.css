@@ -1,0 +1,49 @@
+/* Base layer。14px ルートは load-bearing:
+   このシステムの rem トークンはすべてこれに対して解決されます。 */
+html { font-size: 14px; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+code, kbd, samp, pre { font-family: var(--font-mono); }
+
+/* 日本語の行組版。禁則処理を効かせ、任意の文字での分断を禁止します。
+   ID / パス / SQL だけは .pr-break-anywhere で明示的に折り返す。 */
+body { line-break: strict; word-break: normal; overflow-wrap: normal; }
+:lang(ja) { font-feature-settings: "palt" 0; }
+.pr-break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
+
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+.bounded-scroll-area, .bounded-scroll-area-lg { overflow-y: auto; scrollbar-gutter: stable; }
+.bounded-scroll-area { max-height: min(22rem, 56vh); }
+.bounded-scroll-area-lg { max-height: min(34rem, 68vh); }
+
+/* フォーカスの表示は outline に一本化。部品が形（offset・内側）を変えられるよう、既定は @layer base に置く（README §4）。 */
+@layer base {
+  :focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+}
+:is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):focus-visible {
+  outline: none;
+  border-color: var(--color-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--color-focus-ring);
+}
+
+/* 本文へスキップ。サイドバーが 20 項目を超えるため必須。 */
+.pr-skip-link {
+  position: absolute; left: var(--space-2); top: var(--space-2);
+  z-index: var(--z-sticky);
+  transform: translateY(-200%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-lg);
+  font: var(--text-label);
+  text-decoration: none;
+}
+.pr-skip-link:focus-visible { transform: none; }

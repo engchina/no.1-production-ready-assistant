@@ -1,0 +1,7 @@
+{
+  "user": "ocid1.user.oc1..exampleuniqueid",
+  "fingerprint": "12:34:56:78:90:ab:cd:ef",
+  "tenancy": "ocid1.tenancy.oc1..exampletenancy",
+  "region": "ap-osaka-1"
+}
+

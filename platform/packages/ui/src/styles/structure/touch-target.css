@@ -1,0 +1,33 @@
+/* タッチ端末（coarse pointer）での当たり判定の拡張（#364）。
+   ToggleChip / Switch は見た目の大きさを変えずに、当たり判定だけを 44px（--control-height-touch）以上にする。
+   Button と同じく、画面幅ではなく入力方式で判定する（マウス環境は変えない。WCAG 2.5.8 の 24px は満たしている）。
+
+   - ::before … 当たり判定。見た目の中心から縦横それぞれ 44px 以上に広げる（小さい辺だけが広がる）。
+     inset の % は、縦（top / bottom）は要素の高さ、横（left / right）は幅に対する割合になるため、
+     min(0px, (100% - 44px) / 2) で「足りない分の半分」だけ外へ出す。
+   - ::after  … 自分の見た目の範囲（枠線を含む）。z-index: 1 で、隣の部品が広げた当たり判定より上に置く。
+     折り返したチップの行や隣り合うスイッチで当たり判定が重なっても、見た目の上のタップは必ずその部品に届く
+     （後ろの要素の ::before が前の要素の見た目を覆わない）。部品自体は重なり順の文脈を作らない（z-index: auto）ので、
+     ::after はスティッキーな表頭（z-10）やメニュー（--z-dropdown 以上）より下にある。
+   - 部品には position: relative が要る（ToggleChip / Switch の class に付けてある）。
+   - 背景・枠・影を持たない透明な箱なので、強制カラーモードでも何も描かない。 */
+@layer components {
+  @media (pointer: coarse) {
+    .pr-touch-target::before,
+    .pr-touch-target::after {
+      content: "";
+      position: absolute;
+    }
+
+    .pr-touch-target::before {
+      inset-block: min(0px, calc((100% - var(--control-height-touch)) / 2));
+      inset-inline: min(0px, calc((100% - var(--control-height-touch)) / 2));
+    }
+
+    .pr-touch-target::after {
+      /* 包含ブロックは padding box なので、枠線（1px）の分だけ外へ出して見た目の外形に合わせる。 */
+      inset: -1px;
+      z-index: 1;
+    }
+  }
+}

@@ -1,0 +1,854 @@
+{
+ "attached_files_info": null,
+ "law_info": {
+  "law_type": "Rule",
+  "law_id": "SAMPLE0000000001",
+  "law_num": "令和元年規程第一号",
+  "promulgation_date": "2019-05-01"
+ },
+ "revision_info": {
+  "law_revision_id": "SAMPLE0000000001_20200304",
+  "law_title": "サンプル規程",
+  "abbrev": "サ規",
+  "category": "試験",
+  "amendment_enforcement_date": "2020-03-04",
+  "updated": "2020-03-05T00:00:00+09:00"
+ },
+ "law_full_text": {
+  "tag": "Law",
+  "attr": {
+   "LawType": "Rule"
+  },
+  "children": [
+   {
+    "tag": "LawNum",
+    "attr": {},
+    "children": [
+     "令和元年規程第一号"
+    ]
+   },
+   {
+    "tag": "LawBody",
+    "attr": {},
+    "children": [
+     {
+      "tag": "LawTitle",
+      "attr": {
+       "Abbrev": "サ規"
+      },
+      "children": [
+       "サンプル規程"
+      ]
+     },
+     {
+      "tag": "EnactStatement",
+      "attr": {},
+      "children": [
+       "旧サンプル規程の全部を改める。"
+      ]
+     },
+     {
+      "tag": "TOC",
+      "attr": {},
+      "children": [
+       {
+        "tag": "TOCLabel",
+        "attr": {},
+        "children": [
+         "目次"
+        ]
+       },
+       {
+        "tag": "TOCChapter",
+        "attr": {},
+        "children": [
+         {
+          "tag": "ChapterTitle",
+          "attr": {},
+          "children": [
+           "第一章　総則"
+          ]
+         },
+         {
+          "tag": "ArticleRange",
+          "attr": {},
+          "children": [
+           "（第一条）"
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "tag": "MainProvision",
+      "attr": {},
+      "children": [
+       {
+        "tag": "Chapter",
+        "attr": {
+         "Num": "1"
+        },
+        "children": [
+         {
+          "tag": "ChapterTitle",
+          "attr": {},
+          "children": [
+           "第一章　総則"
+          ]
+         },
+         {
+          "tag": "Article",
+          "attr": {
+           "Num": "1"
+          },
+          "children": [
+           {
+            "tag": "ArticleCaption",
+            "attr": {},
+            "children": [
+             "（目的）"
+            ]
+           },
+           {
+            "tag": "ArticleTitle",
+            "attr": {},
+            "children": [
+             "第一条"
+            ]
+           },
+           {
+            "tag": "Paragraph",
+            "attr": {
+             "Num": "1"
+            },
+            "children": [
+             {
+              "tag": "ParagraphNum",
+              "attr": {},
+              "children": []
+             },
+             {
+              "tag": "ParagraphSentence",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "この文書は、試験の目的とする。"
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "tag": "Chapter",
+        "attr": {
+         "Num": "2"
+        },
+        "children": [
+         {
+          "tag": "ChapterTitle",
+          "attr": {},
+          "children": [
+           "第二章　対象"
+          ]
+         },
+         {
+          "tag": "Section",
+          "attr": {
+           "Num": "1"
+          },
+          "children": [
+           {
+            "tag": "SectionTitle",
+            "attr": {},
+            "children": [
+             "第一節　範囲"
+            ]
+           },
+           {
+            "tag": "Article",
+            "attr": {
+             "Num": "7"
+            },
+            "children": [
+             {
+              "tag": "ArticleCaption",
+              "attr": {},
+              "children": [
+               "（対象の範囲）"
+              ]
+             },
+             {
+              "tag": "ArticleTitle",
+              "attr": {},
+              "children": [
+               "第七条"
+              ]
+             },
+             {
+              "tag": "Paragraph",
+              "attr": {
+               "Num": "1"
+              },
+              "children": [
+               {
+                "tag": "ParagraphNum",
+                "attr": {},
+                "children": []
+               },
+               {
+                "tag": "ParagraphSentence",
+                "attr": {},
+                "children": [
+                 {
+                  "tag": "Sentence",
+                  "attr": {},
+                  "children": [
+                   "次の各号のいずれかに当たるものを対象とする。"
+                  ]
+                 }
+                ]
+               },
+               {
+                "tag": "Item",
+                "attr": {
+                 "Num": "1"
+                },
+                "children": [
+                 {
+                  "tag": "ItemTitle",
+                  "attr": {},
+                  "children": [
+                   "一"
+                  ]
+                 },
+                 {
+                  "tag": "ItemSentence",
+                  "attr": {},
+                  "children": [
+                   {
+                    "tag": "Sentence",
+                    "attr": {},
+                    "children": [
+                     "第一の区分に当たるもの"
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "tag": "Item",
+                "attr": {
+                 "Num": "2"
+                },
+                "children": [
+                 {
+                  "tag": "ItemTitle",
+                  "attr": {},
+                  "children": [
+                   "二"
+                  ]
+                 },
+                 {
+                  "tag": "ItemSentence",
+                  "attr": {},
+                  "children": [
+                   {
+                    "tag": "Sentence",
+                    "attr": {},
+                    "children": [
+                     "第二の区分に当たるもの"
+                    ]
+                   }
+                  ]
+                 },
+                 {
+                  "tag": "Subitem1",
+                  "attr": {
+                   "Num": "1"
+                  },
+                  "children": [
+                   {
+                    "tag": "Subitem1Title",
+                    "attr": {},
+                    "children": [
+                     "イ"
+                    ]
+                   },
+                   {
+                    "tag": "Subitem1Sentence",
+                    "attr": {},
+                    "children": [
+                     {
+                      "tag": "Sentence",
+                      "attr": {},
+                      "children": [
+                       "さらに細かい区分"
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               },
+               {
+                "tag": "Item",
+                "attr": {
+                 "Num": "3"
+                },
+                "children": [
+                 {
+                  "tag": "ItemTitle",
+                  "attr": {},
+                  "children": [
+                   "三"
+                  ]
+                 },
+                 {
+                  "tag": "ItemSentence",
+                  "attr": {},
+                  "children": [
+                   {
+                    "tag": "Sentence",
+                    "attr": {},
+                    "children": [
+                     "第三の区分に当たるもの"
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             },
+             {
+              "tag": "Paragraph",
+              "attr": {
+               "Num": "2"
+              },
+              "children": [
+               {
+                "tag": "ParagraphNum",
+                "attr": {},
+                "children": [
+                 "２"
+                ]
+               },
+               {
+                "tag": "ParagraphSentence",
+                "attr": {},
+                "children": [
+                 {
+                  "tag": "Sentence",
+                  "attr": {},
+                  "children": [
+                   "前段の定めにかかわらず、",
+                   {
+                    "tag": "Ruby",
+                    "attr": {},
+                    "children": [
+                     "例",
+                     {
+                      "tag": "Rt",
+                      "attr": {},
+                      "children": [
+                       "れい"
+                      ]
+                     }
+                    ]
+                   },
+                   "外とする。"
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "tag": "Article",
+            "attr": {
+             "Num": "7_2"
+            },
+            "children": [
+             {
+              "tag": "ArticleCaption",
+              "attr": {},
+              "children": [
+               "（値の表）"
+              ]
+             },
+             {
+              "tag": "ArticleTitle",
+              "attr": {},
+              "children": [
+               "第七条の二"
+              ]
+             },
+             {
+              "tag": "Paragraph",
+              "attr": {
+               "Num": "1"
+              },
+              "children": [
+               {
+                "tag": "ParagraphNum",
+                "attr": {},
+                "children": []
+               },
+               {
+                "tag": "ParagraphSentence",
+                "attr": {},
+                "children": [
+                 {
+                  "tag": "Sentence",
+                  "attr": {},
+                  "children": [
+                   "値は、次の表のとおりとする。"
+                  ]
+                 }
+                ]
+               },
+               {
+                "tag": "TableStruct",
+                "attr": {},
+                "children": [
+                 {
+                  "tag": "Table",
+                  "attr": {},
+                  "children": [
+                   {
+                    "tag": "TableRow",
+                    "attr": {},
+                    "children": [
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "区分"
+                        ]
+                       }
+                      ]
+                     },
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "値"
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   },
+                   {
+                    "tag": "TableRow",
+                    "attr": {},
+                    "children": [
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "第一区分"
+                        ]
+                       }
+                      ]
+                     },
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "十"
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   },
+                   {
+                    "tag": "TableRow",
+                    "attr": {},
+                    "children": [
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "第二区分"
+                        ]
+                       }
+                      ]
+                     },
+                     {
+                      "tag": "TableColumn",
+                      "attr": {},
+                      "children": [
+                       {
+                        "tag": "Sentence",
+                        "attr": {},
+                        "children": [
+                         "二十"
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 },
+                 {
+                  "tag": "Remarks",
+                  "attr": {},
+                  "children": [
+                   {
+                    "tag": "RemarksLabel",
+                    "attr": {},
+                    "children": [
+                     "備考"
+                    ]
+                   },
+                   {
+                    "tag": "Sentence",
+                    "attr": {},
+                    "children": [
+                     "値は別に定める。"
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "tag": "SupplProvision",
+      "attr": {
+       "Extract": "true"
+      },
+      "children": [
+       {
+        "tag": "SupplProvisionLabel",
+        "attr": {},
+        "children": [
+         "附　則"
+        ]
+       },
+       {
+        "tag": "Article",
+        "attr": {
+         "Num": "3"
+        },
+        "children": [
+         {
+          "tag": "ArticleCaption",
+          "attr": {},
+          "children": [
+           "（範囲の特例）"
+          ]
+         },
+         {
+          "tag": "ArticleTitle",
+          "attr": {},
+          "children": [
+           "第三条"
+          ]
+         },
+         {
+          "tag": "Paragraph",
+          "attr": {
+           "Num": "1"
+          },
+          "children": [
+           {
+            "tag": "ParagraphNum",
+            "attr": {},
+            "children": []
+           },
+           {
+            "tag": "ParagraphSentence",
+            "attr": {},
+            "children": [
+             {
+              "tag": "Sentence",
+              "attr": {},
+              "children": [
+               "第七条第一項第二号の定めは、当分の間、読み替えて用いる。"
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "tag": "SupplProvision",
+      "attr": {
+       "AmendLawNum": "令和二年三月四日規程第一〇四号"
+      },
+      "children": [
+       {
+        "tag": "SupplProvisionLabel",
+        "attr": {},
+        "children": [
+         "附　則"
+        ]
+       },
+       {
+        "tag": "Paragraph",
+        "attr": {
+         "Num": "1"
+        },
+        "children": [
+         {
+          "tag": "ParagraphNum",
+          "attr": {},
+          "children": [
+           "１"
+          ]
+         },
+         {
+          "tag": "ParagraphCaption",
+          "attr": {},
+          "children": [
+           "（適用の日）"
+          ]
+         },
+         {
+          "tag": "ParagraphSentence",
+          "attr": {},
+          "children": [
+           {
+            "tag": "Sentence",
+            "attr": {},
+            "children": [
+             "この版は、定めた日から用いる。"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "tag": "Paragraph",
+        "attr": {
+         "Num": "2"
+        },
+        "children": [
+         {
+          "tag": "ParagraphNum",
+          "attr": {},
+          "children": [
+           "２"
+          ]
+         },
+         {
+          "tag": "ParagraphSentence",
+          "attr": {},
+          "children": [
+           {
+            "tag": "Sentence",
+            "attr": {},
+            "children": [
+             "前段の定めは、別に定める。"
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "tag": "AppdxTable",
+      "attr": {},
+      "children": [
+       {
+        "tag": "AppdxTableTitle",
+        "attr": {},
+        "children": [
+         "別表第一"
+        ]
+       },
+       {
+        "tag": "RelatedArticleNum",
+        "attr": {},
+        "children": [
+         "（第七条の二関係）"
+        ]
+       },
+       {
+        "tag": "TableStruct",
+        "attr": {},
+        "children": [
+         {
+          "tag": "Table",
+          "attr": {},
+          "children": [
+           {
+            "tag": "TableRow",
+            "attr": {},
+            "children": [
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "区分"
+                ]
+               }
+              ]
+             },
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "値"
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "tag": "TableRow",
+            "attr": {},
+            "children": [
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "第一区分"
+                ]
+               }
+              ]
+             },
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "十"
+                ]
+               }
+              ]
+             }
+            ]
+           },
+           {
+            "tag": "TableRow",
+            "attr": {},
+            "children": [
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "第二区分"
+                ]
+               }
+              ]
+             },
+             {
+              "tag": "TableColumn",
+              "attr": {},
+              "children": [
+               {
+                "tag": "Sentence",
+                "attr": {},
+                "children": [
+                 "二十"
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "tag": "Remarks",
+          "attr": {},
+          "children": [
+           {
+            "tag": "RemarksLabel",
+            "attr": {},
+            "children": [
+             "備考"
+            ]
+           },
+           {
+            "tag": "Sentence",
+            "attr": {},
+            "children": [
+             "値は別に定める。"
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

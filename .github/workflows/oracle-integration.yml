@@ -1,0 +1,175 @@
+name: Oracle integration
+
+# 1 つの製品の実 Oracle の結合テスト（#1595）。integration-nightly.yml が毎晩 3 製品を、ci.yml が PR と main の
+# push で DB の層（migration・system schema・Oracle の adapter / store・実 Oracle の fixture）が変わった製品だけを
+# 呼ぶ（それ以外の PR では実行しない。対象のファイルは ci.yml の changes の <製品>_oracle）。
+#   - Oracle AI Database Free の container に、system schema の migration（配備の init_script.sh と同じ CLI）を
+#     2 回当てる（2 回目で冪等を確かめる）。
+#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（Select AI・DBMS_CLOUD・Wallet・DeepSec）は Free に無いので、
+#     それを使うテストは実行しない（下の各 step）。
+#   - skip の監視: 実 Oracle のテストは DB に届かないと skip するので、skip のまま成功にしない（RAG は
+#     RAG_TEST_REQUIRE_ORACLE=1 で fixture が失敗にし、どの製品も .github/scripts/pytest-skip-gate.py が許可の一覧に
+#     無い skip と 0 件を失敗にする）。DB の準備が壊れても「全部 skip で成功」にならない。
+
+on:
+  workflow_call:
+    inputs:
+      product:
+        description: "rag / nl2sql / agent"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # Oracle AI Database Free の image（版を固定する。Oracle の公式の registry で、login は要らない）。
+  ORACLE_FREE_IMAGE: container-registry.oracle.com/database/free:23.26.3.0-lite
+
+jobs:
+  oracle:
+    name: Oracle integration
+    runs-on: ubuntu-24.04
+    # Oracle Free の起動は runner で約 1〜2 分、migration とテストは数分（実測 約 5 分）。
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.product }}/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: ${{ inputs.product }}/backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # DB の起動を待つ間に依存を入れる。password は run ごとに作り、log に出さない。
+      - name: Start Oracle AI Database Free
+        working-directory: .
+        run: |
+          password="Ci$(openssl rand -hex 12)_Aa1"
+          echo "::add-mask::${password}"
+          echo "ORACLE_CI_PASSWORD=${password}" >> "${GITHUB_ENV}"
+          docker run -d --name oracle -p 1521:1521 -e ORACLE_PWD="${password}" "${ORACLE_FREE_IMAGE}"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Wait for Oracle and create the test user
+        working-directory: .
+        run: bash .github/scripts/oracle-free-ci.sh
+
+      - name: Apply system schema migrations (twice)
+        env:
+          PRODUCT: ${{ inputs.product }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2; do
+            echo "migration ${attempt} 回目"
+            case "${PRODUCT}" in
+              rag) uv run python -m app.rag.system_schema_cli initialize ;;
+              nl2sql)
+                uv run python -m app.cli.nl2sql_system_schema --initialize
+                uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
+                ;;
+              agent) uv run python -m app.cli.agent_system_schema --initialize ;;
+              *) echo "::error::未知の product: ${PRODUCT}"; exit 1 ;;
+            esac
+          done
+
+      # RAG: 実の Oracle に依存するテスト（fixture `oracle_db`・tests/_oracle_test_db.py）。
+      # 3 製品のテストは手元の .env を読まない（#1972）ので、接続の設定を環境変数で渡す。
+      - name: Oracle integration tests (RAG)
+        if: inputs.product == 'rag'
+        env:
+          RAG_TEST_REQUIRE_ORACLE: "1"
+        run: |
+          set -a
+          # shellcheck source=/dev/null
+          . ../../platform/.env
+          set +a
+          mapfile -t files < <(grep -rlE --include='test_*.py' 'oracle_db|_oracle_test_db' tests | sort)
+          printf '%s\n' "${files[@]}"
+          uv run pytest -n auto -rs --junitxml="${RUNNER_TEMP}/junit.xml" "${files[@]}"
+          python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml"
+
+      # NL2SQL: Oracle の明示 opt-in のテスト。Free に無い ADB の機能を使うもの（Select AI の
+      # test_select_ai_quoted_object_list_oracle_live.py・DeepSec の test_deepsec_real_oracle_integration.py）は
+      # 実行しない。LLM の Select AI の test_select_ai_generates_into_staging_only（NL2SQL_SYNTHETIC_LLM_LIVE_TEST）と、
+      # DBMS_CLOUD の DBA_LOAD_OPERATIONS を読む test_capture_session_reads_adb_load_operations
+      # （NL2SQL_SYNTHETIC_ADB_LIVE_TEST）は skip を許す。
+      # 3 製品のテストは手元の .env を読まない（#1972）ので、接続の設定を環境変数で渡す（PLATFORM_ORACLE_USER は
+      # conftest が APP に固定する）。
+      - name: Oracle integration tests (NL2SQL)
+        if: inputs.product == 'nl2sql'
+        env:
+          NL2SQL_RUN_ORACLE_INTEGRATION: "1"
+          NL2SQL_SYNTHETIC_LIVE_TEST: "1"
+        run: |
+          set -a
+          # shellcheck source=/dev/null
+          . ../../platform/.env
+          set +a
+          uv run pytest -rs --junitxml="${RUNNER_TEMP}/junit.xml" \
+            tests/test_domain_management_oracle_live.py \
+            tests/test_nl2sql_admin_audit_oracle_live.py \
+            tests/test_nl2sql_db_admin_chat_history_oracle_live.py \
+            tests/test_nl2sql_history_sort_oracle_live.py \
+            tests/test_nl2sql_profile_delete_oracle_live.py \
+            tests/test_nl2sql_synthetic_oracle_live.py \
+            tests/test_nl2sql_synthetic_preview_oracle_live.py \
+            tests/test_system_schema_columns_oracle_live.py
+          python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml" \
+            --allow "test_nl2sql_synthetic_preview_oracle_live::test_select_ai_generates_into_staging_only" \
+            --allow "test_nl2sql_synthetic_oracle_live::test_capture_session_reads_adb_load_operations"
+
+      # Agent: migration の後の状態を読み、ready（管理対象がそろっている）を確かめる
+      # （--status は ready でなくても 0 で終わる）。
+      - name: System schema status (Agent)
+        if: inputs.product == 'agent'
+        run: |
+          uv run python -m app.cli.agent_system_schema --status > "${RUNNER_TEMP}/status.json"
+          python3 -c 'import json, sys; s = json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["data"]["status"]; print("status:", s); sys.exit(0 if s == "ready" else 1)' "${RUNNER_TEMP}/status.json"
+
+      # Agent: Run の事実（AGENT_RUN_FACTS）の MERGE と集計の SQL（#1822）と、Run・業務 Agent の
+      # 1 件 = 1 行の保存（2 つのプロセスが書いても更新を消さない。#1916）・以前の全体の snapshot を
+      # 行に移す migration 016・Run が 1,000 件での小さな変更の時間（#1939）・Run の span の共通の span の表への
+      # 書き込みと読み出し（#3226）を実の Oracle で実行する
+      # （接続は platform/.env の PLATFORM_ORACLE_* を環境変数に読み込む。テストは .env を読まない。#1972）。
+      # skip のまま成功にしない。
+      - name: Oracle integration tests (Agent)
+        if: inputs.product == 'agent'
+        env:
+          AGENT_RUN_ORACLE_INTEGRATION: "1"
+        run: |
+          set -a
+          # shellcheck source=/dev/null
+          . ../../platform/.env
+          set +a
+          uv run pytest -rs --junitxml="${RUNNER_TEMP}/junit.xml" \
+            tests/test_run_facts_oracle_live.py \
+            tests/test_runtime_checkpoint_oracle_live.py \
+            tests/test_system_schema_columns_oracle_live.py \
+            tests/test_trace_spans_oracle_live.py
+          python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml"
+
+      - name: Stop Oracle
+        if: always()
+        working-directory: .
+        run: |
+          docker logs oracle > "${RUNNER_TEMP}/oracle.log" 2>&1 || true
+          tail -n 50 "${RUNNER_TEMP}/oracle.log" || true
+          # SQL・bind 値・環境識別子は出さず、許可した資源 ID とロックの列だけを記録する。
+          docker exec oracle sh -c 'cat /opt/oracle/diag/rdbms/free/FREE/trace/*.trc' 2>/dev/null |
+            python3 .github/scripts/oracle-deadlock-summary.py || true
+          docker rm -f oracle || true

@@ -1,0 +1,50 @@
+{
+  "_comment": "回答の過程から業務ガイドの下書きを作る LLM の応答の録画（合成の内容。#2397）。入力は test_support_guide_process_import.py の PROCESS_TEXT。",
+  "title": "画面Aの通知を表示する",
+  "expected_result": "画面Aに通知が表示される",
+  "match_terms": ["設定画面A", "通知"],
+  "steps": [
+    {
+      "id": "s1",
+      "title": "設定画面Aを開く",
+      "purpose": "通知の設定の画面を開く",
+      "depends_on": [],
+      "retrieval_hints": ["設定画面A"],
+      "note": ""
+    },
+    {
+      "id": "s2",
+      "title": "通知の設定を有効にする",
+      "purpose": "",
+      "depends_on": ["s1"],
+      "retrieval_hints": ["通知の設定"],
+      "note": "保存を押すまで反映されない"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "c1",
+      "label": "利用者が管理者か",
+      "type": "boolean",
+      "allowed_values": [],
+      "question": "",
+      "handling": "handoff"
+    }
+  ],
+  "branches": [
+    {"condition_id": "c1", "values": ["はい"], "goto_step": "s1", "note": ""}
+  ],
+  "references": [
+    {"document_name": "01_操作手順書A.pdf", "pages": "12-14", "section": ""},
+    {"document_name": "未登録の資料B.pdf", "pages": "3", "section": ""}
+  ],
+  "handoff_contact": "窓口",
+  "handoff_conditions": ["利用者が管理者でない"],
+  "rule_candidates": [
+    {
+      "title": "通知の質問は設定画面Aを案内する",
+      "triggers": ["通知"],
+      "content": "通知が表示されない質問には、設定画面Aの手順を案内する。原因は言い切らず、可能性にとどめる。"
+    }
+  ]
+}

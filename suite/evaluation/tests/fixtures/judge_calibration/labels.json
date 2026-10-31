@@ -1,0 +1,111 @@
+{
+  "rubric_id": "answer_quality",
+  "description": "LLM による回答の判定の校正の合成の人手の判定（#3418・#2577）。内容はすべて合成で、業務の内容を含まない。#2577 で挙がった判定器の誤り（属性の取り違え・一般の規則の個別の範囲への当てはめ・手順の前後関係・処理の段階の拡張・根拠に無い主張・一部の不足）と、正しい言い換え・正しい拒答の対照を持つ。",
+  "items": [
+    {
+      "id": "d01-paraphrase",
+      "split": "dev",
+      "question": "合成の設定 S の上限は？",
+      "answer": "設定 S は 30 までにできます。",
+      "standard_answer": "設定 S の上限は 30。",
+      "evidence": [{"id": "e1", "text": "設定 S に指定できる値の上限は 30 とする。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "pass", "claim_support": "pass"},
+      "labeler": "synthetic"
+    },
+    {
+      "id": "d02-missing-step",
+      "split": "dev",
+      "question": "合成の手続き P の手順は？",
+      "answer": "申請書を作り、担当者に送ります。",
+      "standard_answer": "申請書を作り、上長の確認を受けてから担当者に送る。",
+      "evidence": [{"id": "e1", "text": "手続き P は、申請書を作成し、上長の確認を受けた後に担当者へ送付する。"}],
+      "labels": {"requirement_coverage": "fail", "answer_correctness": "pass", "claim_support": "pass"},
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h01-correct",
+      "split": "holdout",
+      "question": "合成の記録 R の保管の期間は？",
+      "answer": "記録 R は 5 年間保管します。",
+      "standard_answer": "5 年間。",
+      "evidence": [{"id": "e1", "text": "記録 R は作成の日から 5 年間保管する。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "pass", "claim_support": "pass"},
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h02-unsupported-claim",
+      "split": "holdout",
+      "question": "合成の記録 R の保管の期間は？",
+      "answer": "記録 R は 5 年間保管し、期間の後は自動で消えます。",
+      "standard_answer": "5 年間。",
+      "evidence": [{"id": "e1", "text": "記録 R は作成の日から 5 年間保管する。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "pass", "claim_support": "fail"},
+      "note": "期間の後の扱いは根拠に無い。",
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h03-attribute-confusion",
+      "split": "holdout",
+      "question": "対象 A の値 X は 12、対象 B の値 Y は 8 です。条件 C を満たしますか？ B の値 X は分かりません。",
+      "answer": "12 は 8 未満ではないため条件 C を満たしません。したがって A の値 X は B の値 X より大きいです。",
+      "standard_answer": "A の値 X（12）が B の値 Y（8）未満ではないので、条件 C を満たさない。",
+      "evidence": [{"id": "e1", "text": "A の値 X が B の値 Y 未満の場合に条件 C を満たす。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "fail", "claim_support": "fail"},
+      "note": "後半の B の値 X との比較は入力と根拠から導けない。",
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h04-general-rule-over-applied",
+      "split": "holdout",
+      "question": "対象期間が 3 日のとき、合成の手当 T は何日分ですか？",
+      "answer": "手当 T は最大 10 日分です。",
+      "standard_answer": "対象期間の 3 日分。",
+      "evidence": [{"id": "e1", "text": "手当 T は対象期間の日数分を支給する。ただし 10 日を上限とする。"}],
+      "labels": {"requirement_coverage": "fail", "answer_correctness": "fail", "claim_support": "pass"},
+      "note": "一般の上限を個別の結果にしている。",
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h05-step-order",
+      "split": "holdout",
+      "question": "合成の変更 M の進め方は？",
+      "answer": "設定を訂正し、前提を確かめてから、結果をまとめます。",
+      "standard_answer": "前提を確かめ、設定を訂正し、結果をまとめる。",
+      "evidence": [{"id": "e1", "text": "変更 M は、前提の確認、設定の訂正、結果の統合の順に行う。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "fail", "claim_support": "pass"},
+      "note": "個々の手順は根拠にあるが、前後関係が違う。",
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h06-correct-refusal",
+      "split": "holdout",
+      "question": "合成の設定 S の既定値は？",
+      "answer": "資料からは設定 S の既定値を確認できません。",
+      "standard_answer": "資料に記載が無い（答えられない）。",
+      "evidence": [{"id": "e1", "text": "設定 S に指定できる値の上限は 30 とする。"}],
+      "labels": {"requirement_coverage": "pass", "answer_correctness": "pass", "claim_support": "pass"},
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h07-stage-extension",
+      "split": "holdout",
+      "question": "条件 Q のとき、合成の書類 D は受け付けられますか？",
+      "answer": "条件 Q のときは書類 D の受付も登録もできません。",
+      "standard_answer": "受付はできるが、登録は保留する。",
+      "evidence": [{"id": "e1", "text": "条件 Q に当たる書類 D は、登録を保留する。"}],
+      "labels": {"requirement_coverage": "fail", "answer_correctness": "fail", "claim_support": "fail"},
+      "note": "登録の保留を受付の不可へ広げている。",
+      "labeler": "synthetic"
+    },
+    {
+      "id": "h08-partial",
+      "split": "holdout",
+      "question": "合成の手続き P の期限と提出先は？",
+      "answer": "提出先は担当窓口です。",
+      "standard_answer": "期限は 10 日以内、提出先は担当窓口。",
+      "evidence": [{"id": "e1", "text": "手続き P は 10 日以内に担当窓口へ提出する。"}],
+      "labels": {"requirement_coverage": "fail", "answer_correctness": "pass", "claim_support": "pass"},
+      "labeler": "synthetic"
+    }
+  ]
+}

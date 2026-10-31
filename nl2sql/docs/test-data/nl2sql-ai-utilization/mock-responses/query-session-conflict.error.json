@@ -1,0 +1,32 @@
+{
+  "detail": {
+    "code": "ONTOLOGY_VERSION_CONFLICT",
+    "message_ja": "現在の intent version が更新されています。再読込してください。",
+    "current_version": 2,
+    "session": {
+      "id": "qs-001",
+      "profile_id": "default",
+      "profile_view_id": "pv-001",
+      "ontology_revision_id": "ont-rev-001",
+      "status": "awaiting_intent_confirmation",
+      "original_question": "今月の受注金額上位5件を表示してください",
+      "current_intent_version": 2,
+      "intents": [],
+      "sql_artifacts": [],
+      "current_sql_artifact_id": null,
+      "intent_confirmed_version": null,
+      "sql_confirmation": null,
+      "execution": null,
+      "proposal_ids": [],
+      "created_at": "2026-08-12T00:00:00Z",
+      "updated_at": "2026-08-12T00:02:00Z",
+      "error_code": "",
+      "error_message_ja": ""
+    }
+  },
+  "error_messages": [
+    "現在の intent version が更新されています。再読込してください。"
+  ],
+  "warning_messages": []
+}
+

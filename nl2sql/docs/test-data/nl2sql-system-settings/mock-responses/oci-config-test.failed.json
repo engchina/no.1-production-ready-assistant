@@ -1,0 +1,25 @@
+{
+  "data": {
+    "status": "failed",
+    "profile": "DEFAULT",
+    "config_file": "~/.oci/config",
+    "key_file": "~/.oci/oci_api_key.pem",
+    "config_file_exists": true,
+    "key_file_exists": true,
+    "missing_fields": [
+      "tenancy"
+    ],
+    "permission_issues": [
+      "~/.oci/oci_api_key.pem の権限は 600 にしてください。"
+    ],
+    "oci_directory_mode": "755",
+    "config_file_mode": "644",
+    "key_file_mode": "644",
+    "message": "OCI config の検証に失敗しました。",
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "error_type": "config_validation"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

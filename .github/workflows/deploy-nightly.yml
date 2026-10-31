@@ -1,0 +1,68 @@
+name: Deploy Nightly
+
+# 配備の通し（#1595）。本番の Compute と同じ Oracle Linux 9 の container（systemd を PID 1 にした privileged の
+# container）で、cloud-init と同じ props を置いて platform/deploy/suite-init.sh を実際に実行し、3 製品の配備
+# （dnf・Node.js・uv の venv・RAG の前処理 / parser・frontend の build・systemd・自作 CA の HTTPS・Nginx・firewalld）と、
+# Nginx を通した /rag/ /nl2sql/ /agent/ の画面と API の health を確かめる（中身は .github/scripts/deploy-run-through.sh）。
+# PR の CI（Suite / Deploy・Suite / Oracle Linux 9）は fake の command と package の名前の解決までを確かめ、実際の
+# 配備はここで毎晩確かめる（数十分かかるため、PR ではこの workflow と script を変えたときだけ実行する）。
+# 対象外（script の冒頭に理由）: Oracle（DB は無く、system schema の初期化は degraded で進む。suite-init.sh の最後の
+# schema の確認は SUITE_CHECK_SCHEMA=skip で飛ばし、verify で CLI が「DB に繋がらない」を返すことだけを確かめる（#1656）。
+# DB の結合は Integration Nightly）・SELinux（container では無効。enforcing の context は実機で確かめる）・OCI の network と公開 IP・
+# git の更新の経路。
+# 失敗（job の時間切れを含む）は ci-failure-issue.yml が Issue にする（workflow 名は同じファイルの workflows と
+# そろえる）。job 名の " / " の前は Issue の製品の label になる（Suite は platform）。
+
+on:
+  schedule:
+    - cron: "47 15 * * *" # 00:47 JST（整点を避け、ほかの nightly と重ならない時間）
+  workflow_dispatch:
+  # この workflow と script を変えた PR でも実行して確かめる（必須の check ではない。ほかの PR では動かない）。
+  pull_request:
+    paths:
+      - .github/workflows/deploy-nightly.yml
+      - .github/scripts/deploy-run-through.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nightly-${{ github.ref }}
+  # PR だけ古い run を取り消す（main の nightly は取り消さない）。
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  run-through:
+    name: Suite / Deploy run-through (Oracle Linux 9)
+    runs-on: ubuntu-24.04
+    # 実測（2026-10-13・PR #1647: job 15m43s、suite-init.sh 618 秒）の倍程度。
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # RAG の parser（docling の CPU 版の torch。#1650）・LibreOffice・3 製品の node_modules と venv で数 GB を使う。runner の
+      # 使わない SDK を消して空きを作る。
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Start Oracle Linux 9 (systemd) and place the repository and props
+        run: bash .github/scripts/deploy-run-through.sh up
+
+      - name: Run suite-init.sh
+        run: bash .github/scripts/deploy-run-through.sh deploy
+
+      - name: Verify through Nginx
+        run: bash .github/scripts/deploy-run-through.sh verify
+
+      - name: Diagnostics
+        if: always()
+        run: bash .github/scripts/deploy-run-through.sh logs
+
+      - name: Stop the container
+        if: always()
+        run: bash .github/scripts/deploy-run-through.sh down

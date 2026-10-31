@@ -1,0 +1,10 @@
+# zizmor（workflow の安全の検査。ci.yml の Suite / Scripts が .github/ の変更で実行する。#1594）の設定。
+# 規則を緩めるときは理由を書く。個別の箇所の除外は、その行の `# zizmor: ignore[<rule>]` と理由のコメントで行う。
+rules:
+  # Dependabot の cooldown は 5 日（#1588。.github/dependabot.yml の冒頭）。zizmor の既定（7 日）より短くしている。
+  dependabot-cooldown:
+    config:
+      days: 5
+  # composite action の参照は `./.github/actions/<name>` のまま書く（`$/` の書き方は actionlint が扱えない）。
+  self-repository:
+    disable: true

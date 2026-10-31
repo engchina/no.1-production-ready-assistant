@@ -1,0 +1,123 @@
+{
+  "description": "回答の段落の分け方（1 行を文に分ける規則）の事例（#1455）。RAG（rag_engine.generation.operation_audit.answer_passages / sentence_ranges）と Agent（app.features.agent.answer_passages.passage_spans / sentence_ranges）の両方のテストがこのファイルを読み、同じ規則で分けることを確かめる。line は回答の 1 行（原文）、passages はその行の段落（前後の空白を除いた原文）。括弧（「」『』（）()【】）の中の「。」では分けず、閉じない括弧は行の終わりまで続く。太字の印・閉じ括弧だけの断片は前の文に付ける。事例の多くは #1362 の deepseek-flash の評価（main ee2da375）の D の Run の回答そのもの。",
+  "cases": [
+    {
+      "id": "quoted-two-sentences-pms-severity",
+      "note": "dev cmp-pms-severity（run_aeda6990aad14955bb88d957deb2b6e2）。かぎ括弧の中の 2 つの文を分けない。",
+      "line": "  - 行1〜3（表頭の説明）: 「重要度は A・B・C の 3 段階です。A が最も高く、B、C の順に低くなります。」",
+      "passages": [
+        "- 行1〜3（表頭の説明）: 「重要度は A・B・C の 3 段階です。A が最も高く、B、C の順に低くなります。」"
+      ]
+    },
+    {
+      "id": "parenthesized-note-label",
+      "note": "業務支援 da-parameter-default（run_a96b17e4a37e4f1bbd195802a1247112）。丸括弧の中の「。」で分けない。",
+      "line": "補足（資料の注記。同シート A1:A2）：",
+      "passages": [
+        "補足（資料の注記。同シート A1:A2）："
+      ]
+    },
+    {
+      "id": "quote-with-bold-close-audit-record-proxy",
+      "note": "dev br-audit-record-proxy。引用の終わりの「**」」だけの断片を作らない。",
+      "line": "   - 組織規程 第 4 章 承認者の代理:「承認者が 3 営業日以上不在のときは、その部署が属する本部の本部長が代理で承認します。本部長が不在のときは、担当役員が代理で承認します。**本部に属さない部署の承認者が不在のときと、承認者が担当役員のときは、代表取締役が代理で承認します。**」",
+      "passages": [
+        "- 組織規程 第 4 章 承認者の代理:「承認者が 3 営業日以上不在のときは、その部署が属する本部の本部長が代理で承認します。本部長が不在のときは、担当役員が代理で承認します。**本部に属さない部署の承認者が不在のときと、承認者が担当役員のときは、代表取締役が代理で承認します。**」"
+      ]
+    },
+    {
+      "id": "nested-quote-with-bold-first-tuesday",
+      "note": "dev tl-first-tuesday-department。入れ子のかぎ括弧と太字の中の「。」で分けず、「**」と記載。」の断片を作らない。",
+      "line": "- 『組織規程（システムの担当と承認者）』（organization-rules.pdf）第 2 章 部署と略号（1 頁）に「**略号「物」: 物流部。生産本部に属します。**」と記載。",
+      "passages": [
+        "- 『組織規程（システムの担当と承認者）』（organization-rules.pdf）第 2 章 部署と略号（1 頁）に「**略号「物」: 物流部。生産本部に属します。**」と記載。"
+      ]
+    },
+    {
+      "id": "quoted-bold-order-approver",
+      "note": "holdout br-order-approver-deadline。",
+      "line": "- 組織規程（`organization-rules.pdf` 第 2 章 部署と略号、1 頁）: 「略号「**営**」: **営業企画部**。**営業本部**に属します。」",
+      "passages": [
+        "- 組織規程（`organization-rules.pdf` 第 2 章 部署と略号、1 頁）: 「略号「**営**」: **営業企画部**。**営業本部**に属します。」"
+      ]
+    },
+    {
+      "id": "bold-sentence-close-mark",
+      "note": "太字の文の後ろの「**」だけの断片を作らない（前の文に付ける）。",
+      "line": "**承認の期限は受付から 5 営業日以内です。**",
+      "passages": [
+        "**承認の期限は受付から 5 営業日以内です。**"
+      ]
+    },
+    {
+      "id": "bold-sentence-at-line-end",
+      "note": "行の終わりの太字の文（「。**」で終わる）。",
+      "line": "結論です。**重要度は A が最も高い。**",
+      "passages": [
+        "結論です。",
+        "**重要度は A が最も高い。**"
+      ]
+    },
+    {
+      "id": "sentences-outside-brackets",
+      "note": "括弧の外の「。」では今までどおり分ける。",
+      "line": "承認者は部長です（組織規程）。期限は 5 営業日です。",
+      "passages": [
+        "承認者は部長です（組織規程）。",
+        "期限は 5 営業日です。"
+      ]
+    },
+    {
+      "id": "closing-bracket-after-period",
+      "note": "文の区切りの「。」の直後の閉じ括弧（開いていないもの）は前の文に含める。",
+      "line": "注意。」次の文です。",
+      "passages": [
+        "注意。」",
+        "次の文です。"
+      ]
+    },
+    {
+      "id": "quote-then-sentence",
+      "note": "引用の後ろに続く文の述語までを 1 つの文にする。",
+      "line": "規程には「承認は部長が行う。代理は本部長。」とあります。期限は別の規程です。",
+      "passages": [
+        "規程には「承認は部長が行う。代理は本部長。」とあります。",
+        "期限は別の規程です。"
+      ]
+    },
+    {
+      "id": "unclosed-bracket-runs-to-line-end",
+      "note": "閉じない括弧は行の終わりまで続くとみなし、行の終わりで切る。",
+      "line": "補足（資料の注記。続きは次の行にあります。",
+      "passages": [
+        "補足（資料の注記。続きは次の行にあります。"
+      ]
+    },
+    {
+      "id": "unopened-closing-bracket",
+      "note": "開いていない閉じ括弧（番号の「1)」など）は数えない。",
+      "line": "1) 申請します。2) 承認します。",
+      "passages": [
+        "1) 申請します。",
+        "2) 承認します。"
+      ]
+    },
+    {
+      "id": "half-width-parentheses",
+      "note": "半角の丸括弧の中の「。」でも分けない。",
+      "line": "期限は 5 営業日です(土日を除く。祝日も除く)。延長はできません。",
+      "passages": [
+        "期限は 5 営業日です(土日を除く。祝日も除く)。",
+        "延長はできません。"
+      ]
+    },
+    {
+      "id": "lenticular-brackets",
+      "note": "隅付き括弧の中の「。」でも分けない。",
+      "line": "【注意。必ず読む】承認は部長です。",
+      "passages": [
+        "【注意。必ず読む】承認は部長です。"
+      ]
+    }
+  ]
+}

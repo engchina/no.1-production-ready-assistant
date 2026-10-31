@@ -1,0 +1,22 @@
+{
+  "data": {
+    "status": "failed",
+    "target_type": "enterprise_text",
+    "model_id": "enterprise-nl2sql-llm",
+    "message": "Enterprise AI endpoint に接続できませんでした。",
+    "troubleshooting": [
+      "endpoint が https:// で始まることを確認してください。",
+      "API key と project OCID が検証環境の値であることを確認してください。"
+    ],
+    "raw_error": "connect ETIMEDOUT enterprise-ai.example.com",
+    "error_type": "network_timeout",
+    "elapsed_ms": 5000,
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "details": {
+      "network_call": true
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

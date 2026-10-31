@@ -1,0 +1,320 @@
+{
+ "da-trial-account-expiry": {
+  "goal": "検証用アカウントの有効期限は最長で何日ですか？",
+  "answer": "検証用アカウントの有効期限は**最長 30 日**です。\n\n- 根拠: 『サンプル業務ポータル 運用手順書 第3版』「2. 検証用アカウントの登録」（1 頁）\n  - 「利用者種別で『検証用』を選び、有効期限を入力して保存します。検証用アカウントの有効期限は最長 30 日です。」\n\n補足（同手順書の関連箇所）:\n- 「3. アクセス権限の付与」（1 頁）: 検証用アカウントには権限を個別に付与し、グループへの付与は行いません。\n- 「6. アカウントの削除」（2 頁）: 削除したアカウントは 30 日後に完全に消去され、復元できません。\n\nなお、有効期限の日数について 30 日以外の値を定めた資料は見当たりませんでした。",
+  "steps": [
+   {
+    "name": "rag__rag_search",
+    "success": true,
+    "output": {
+     "outcome": "answered",
+     "requests": [
+      {
+       "id": "Q1",
+       "text": "検証用アカウントの有効期限は最長で何日ですか？",
+       "status": "addressed"
+      }
+     ],
+     "confirmations": []
+    }
+   },
+   {
+    "name": "rag__rag_validate_answer",
+    "success": true,
+    "output": {}
+   }
+  ],
+  "validation": {
+   "status": "completed",
+   "withheld": {
+    "claims": 1,
+    "findings": 0,
+    "all": false
+   },
+   "result": {
+    "valid": false,
+    "status": "completed",
+    "claims": [
+     {
+      "answer_quote": "検証用アカウントの有効期限は**最長 30 日**です。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 「利用者種別で『検証用』を選び、有効期限を入力して保存します。検証用アカウントの有効期限は最長 30 日です。」",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "補足（同手順書の関連箇所）:",
+      "status": "unassessed",
+      "non_claim": "heading"
+     },
+     {
+      "answer_quote": "- 「3. アクセス権限の付与」（1 頁）: 検証用アカウントには権限を個別に付与し、グループへの付与は行いません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 「6. アカウントの削除」（2 頁）: 削除したアカウントは 30 日後に完全に消去され、復元できません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "なお、有効期限の日数について 30 日以外の値を定めた資料は見当たりませんでした。",
+      "status": "unsupported",
+      "non_claim": null
+     }
+    ],
+    "findings": [],
+    "missing_evidence": [],
+    "stale_evidence": []
+   }
+  }
+ },
+ "km-auto-disable": {
+  "goal": "退職者のアカウントを自動で無効にする設定はどこでできますか？",
+  "answer": "ご質問の「退職者のアカウントを自動で無効にする設定」の場所は、お示しできる資料からは確認できませんでした。\n\n**資料で確認できない点**\n- 退職者アカウントを自動で無効化（停止）する設定の有無・設定場所（画面・メニュー・パラメータ）は、「サンプル業務ポータル 運用手順書 第3版」および「パラメータ一覧」に見当たりません。「パラメータ一覧」に載っているのは、session_timeout_minutes（操作が無いときにログインが切れるまでの分数）・max_upload_mb（1ファイルのアップロード上限）・notification_retry（通知の再送回数）・report_retention_days（集計表の保管日数）で、アカウントの自動無効化に関する項目はありません。\n  - 出所: パラメータ一覧（シート「パラメータ一覧」1行目・4〜7行目）、サンプル業務ポータル 運用手順書 第3版 p.1〜2\n\n**関連して確認できる内容（自動無効化の設定場所ではありません）**\n- アカウントの削除は手動の操作として扱われており、「削除したアカウントは 30 日後に完全に消去され、復元できません。削除の前に、所属部署の部門長の承認を得てください。承認の無い削除は行いません。」\n  - 出所: サンプル業務ポータル 運用手順書 第3版「6. アカウントの削除」（p.2）\n- これらの操作ができるのは「ポータル管理者」ロールを持つ利用者だけで、ロールが無い場合は所属部署のポータル管理者に依頼します。\n  - 出所: 同「1. 前提」（p.1）\n\n**ご確認いただきたい点**\n- 退職者アカウントの無効化・停止の設定を扱う別の管理マニュアルまたは設定資料があるか（自動無効化が可能か、どの画面・メニュー・パラメータで設定するか）。当方の資料では確認できないため、推測で設定場所を断定はできません。",
+  "steps": [
+   {
+    "name": "rag__rag_lookup_guides",
+    "success": true,
+    "output": {
+     "guides": []
+    }
+   },
+   {
+    "name": "rag__rag_search",
+    "success": true,
+    "output": {
+     "outcome": "needs_environment_data",
+     "requests": [
+      {
+       "id": "Q1",
+       "text": "退職者のアカウントを自動で無効にする設定はどこでできますか",
+       "status": "missing"
+      }
+     ],
+     "confirmations": [
+      "資料: 退職者アカウントの無効化・停止の設定を扱う別の管理マニュアルまたは設定資料（自動無効化が可能か、設定場所がどこかを確認するため）"
+     ]
+    }
+   },
+   {
+    "name": "rag__rag_retrieve_evidence",
+    "success": true,
+    "output": {}
+   },
+   {
+    "name": "rag__rag_validate_answer",
+    "success": true,
+    "output": {}
+   }
+  ],
+  "validation": {
+   "status": "completed",
+   "withheld": {
+    "claims": 0,
+    "findings": 1,
+    "all": false
+   },
+   "result": {
+    "valid": false,
+    "status": "completed",
+    "claims": [
+     {
+      "answer_quote": "ご質問の「退職者のアカウントを自動で無効にする設定」の場所は、お示しできる資料からは確認できませんでした。",
+      "status": "supported",
+      "non_claim": "absence"
+     },
+     {
+      "answer_quote": "- 退職者アカウントを自動で無効化（停止）する設定の有無・設定場所（画面・メニュー・パラメータ）は、「サンプル業務ポータル 運用手順書 第3版」および「パラメータ一覧」に見当たりません。",
+      "status": "supported",
+      "non_claim": "unverified_section"
+     },
+     {
+      "answer_quote": "「パラメータ一覧」に載っているのは、session_timeout_minutes（操作が無いときにログインが切れるまでの分数）・max_upload_mb（1ファイルのアップロード上限）・notification_retry（通知の再送回数）・report_retention_days（集計表の保管日数）で、アカウントの自動無効化に関する項目はありません。",
+      "status": "supported",
+      "non_claim": "unverified_section"
+     },
+     {
+      "answer_quote": "- アカウントの削除は手動の操作として扱われており、「削除したアカウントは 30 日後に完全に消去され、復元できません。削除の前に、所属部署の部門長の承認を得てください。承認の無い削除は行いません。」",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- これらの操作ができるのは「ポータル管理者」ロールを持つ利用者だけで、ロールが無い場合は所属部署のポータル管理者に依頼します。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 退職者アカウントの無効化・停止の設定を扱う別の管理マニュアルまたは設定資料があるか（自動無効化が可能か、どの画面・メニュー・パラメータで設定するか）。",
+      "status": "data_confirmation",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "当方の資料では確認できないため、推測で設定場所を断定はできません。",
+      "status": "supported",
+      "non_claim": "absence"
+     }
+    ],
+    "findings": [
+     {
+      "check": "requests",
+      "code": "request_missing",
+      "severity": "error"
+     }
+    ],
+    "missing_evidence": [],
+    "stale_evidence": []
+   }
+  }
+ },
+ "mt-delete-account-approved": {
+  "goal": "所属部署の部門長の承認はもらっています。",
+  "answer": "ご回答ありがとうございます。部門長の承認は得ている、という前提で、資料に沿ってお示しします。\n\n**削除の前提（満たしている条件）**\n- 削除の前に、所属部署の部門長の承認を得る必要があり、承認の無い削除は行いません。→ 承認は得ているとのことなので、この前提は満たしています。\n- 出所：portal-operations-manual.pdf「6. アカウントの削除」（2 頁）\n- 削除したアカウントは 30 日後に完全に消去され、復元できません。同じ箇所（2 頁）\n- この操作ができるのは「ポータル管理者」ロールを持つ利用者だけです。ロールを持たない利用者は、所属部署のポータル管理者に依頼します。出所：portal-operations-manual.pdf「1. 前提」（1 頁）\n\n**資料で確かめられなかった点**\n- 実際にアカウントを削除する操作そのもの（削除を行う画面・削除対象の選び方・確定操作）の手順は、資料には記載が見当たらず、確認できません。手順の記載があるのは「検証用アカウントの登録」「アクセス権限の付与」「通知の設定」などで、削除の操作手順は示されていません。\n\n**お手元で確かめていただきたい点**\n1. 削除対象のアカウントが所属する部署と、その部門長による削除の承認（削除の前に承認が得られているか）。\n2. ご自身が「ポータル管理者」ロールを持っているか（ご自身で操作するか、所属部署のポータル管理者に依頼するかの判断のため）。\n\nロールをお持ちでない場合は、所属部署のポータル管理者に依頼してください。削除操作の具体的な手順は資料からは示せないため、操作画面については所属部署のポータル管理者またはサポート窓口にご確認ください。",
+  "steps": [
+   {
+    "name": "rag__rag_search",
+    "success": true,
+    "output": {
+     "outcome": "needs_environment_data",
+     "requests": [
+      {
+       "id": "Q1",
+       "text": "使わなくなった利用者アカウントを削除したい",
+       "status": "partial"
+      }
+     ],
+     "confirmations": [
+      "実データ: 削除対象のアカウントが所属する部署と、その部門長による削除の承認の有無（削除の前に承認が得られているかを確かめるため）",
+      "実データ: 依頼者自身が「ポータル管理者」ロールを持っているか（自分で操作するか、所属部署のポータル管理者に依頼するかの判断のため）"
+     ]
+    }
+   },
+   {
+    "name": "rag__rag_read_section",
+    "success": false,
+    "output": {}
+   },
+   {
+    "name": "rag__rag_outline",
+    "success": false,
+    "output": {}
+   },
+   {
+    "name": "rag__rag_read_source",
+    "success": true,
+    "output": {}
+   },
+   {
+    "name": "rag__rag_validate_answer",
+    "success": true,
+    "output": {}
+   }
+  ],
+  "validation": {
+   "status": "completed",
+   "withheld": {
+    "claims": 3,
+    "findings": 2,
+    "all": true
+   },
+   "result": {
+    "valid": false,
+    "status": "completed",
+    "claims": [
+     {
+      "answer_quote": "ご回答ありがとうございます。",
+      "status": "unassessed",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "部門長の承認は得ている、という前提で、資料に沿ってお示しします。",
+      "status": "unassessed",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 削除の前に、所属部署の部門長の承認を得る必要があり、承認の無い削除は行いません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "→ 承認は得ているとのことなので、この前提は満たしています。",
+      "status": "data_confirmation",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 削除したアカウントは 30 日後に完全に消去され、復元できません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "同じ箇所（2 頁）",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- この操作ができるのは「ポータル管理者」ロールを持つ利用者だけです。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "ロールを持たない利用者は、所属部署のポータル管理者に依頼します。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "- 実際にアカウントを削除する操作そのもの（削除を行う画面・削除対象の選び方・確定操作）の手順は、資料には記載が見当たらず、確認できません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "手順の記載があるのは「検証用アカウントの登録」「アクセス権限の付与」「通知の設定」などで、削除の操作手順は示されていません。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "1. 削除対象のアカウントが所属する部署と、その部門長による削除の承認（削除の前に承認が得られているか）。",
+      "status": "data_confirmation",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "2. ご自身が「ポータル管理者」ロールを持っているか（ご自身で操作するか、所属部署のポータル管理者に依頼するかの判断のため）。",
+      "status": "data_confirmation",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "ロールをお持ちでない場合は、所属部署のポータル管理者に依頼してください。",
+      "status": "supported",
+      "non_claim": null
+     },
+     {
+      "answer_quote": "削除操作の具体的な手順は資料からは示せないため、操作画面については所属部署のポータル管理者またはサポート窓口にご確認ください。",
+      "status": "unsupported",
+      "non_claim": null
+     }
+    ],
+    "findings": [
+     {
+      "check": "requests",
+      "code": "request_partial",
+      "severity": "error"
+     },
+     {
+      "check": "guide_steps",
+      "code": "step_wrong_branch",
+      "severity": "error"
+     },
+     {
+      "check": "guide_steps",
+      "code": "step_following_missing",
+      "severity": "warning"
+     }
+    ],
+    "missing_evidence": [],
+    "stale_evidence": []
+   }
+  }
+ }
+}

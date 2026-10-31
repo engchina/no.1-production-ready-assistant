@@ -1,0 +1,51 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   TYPE SCALE
+
+   ★ 単位の境界（このシステムの規約）
+       文字サイズ・コントロール高さ = px（ルート非依存）
+       余白・レイアウト寸法         = rem（14px ルートに対して解決）
+
+   以前は文字も rem で、14px ルートのため本文が 12.25px / 表が 10.5px に
+   なっていました。業界下限（本文 14px、補助 12px）を割っており、日本語は
+   同 px でもラテン文字より小さく見える（字面率が高く画数が多い）ため、
+   実際の可読性が最も低い箇所でした。px に切り替えて目標値に固定します。
+
+   ルート 14px は余白の互換性のために維持しています（3 アプリが Tailwind の
+   rem ユーティリティを直接使っているため）。将来 html の font-size 上書きを
+   外せれば、利用者のブラウザ設定を尊重できます（別タスク）。
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --font-size-xs:   12px; /* メタ・表・バッジ・パンくず（補助テキストの下限） */
+  --line-height-xs: 16px;
+  --font-size-sm:   14px; /* 本文・ナビ・ラベル・カード見出し */
+  --line-height-sm: 20px;
+  --font-size-base: 16px; /* セクション見出し・ダイアログ見出し */
+  --line-height-base: 24px;
+  --font-size-xl:   20px; /* ページタイトル */
+  --line-height-xl: 28px;
+  --font-size-2xl:  24px; /* KPI 数値、空状態の見出し */
+  --line-height-2xl: 32px;
+
+  --font-size-code: 13px;
+  --line-height-code: 1.6;
+  --line-height-relaxed: 1.6; /* 文章（Banner, Toast, 状態ビュー） */
+
+  --font-size-button: var(--font-size-sm);
+  --line-height-button: var(--line-height-sm);
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* 見出しの階層は 4 段。旧構成はページ副題とカード見出しが同サイズで
+     実質 2 段しかありませんでした。 */
+  --text-display:       var(--font-weight-bold) var(--font-size-2xl) / var(--line-height-2xl) var(--font-sans);
+  --text-page-title:    var(--font-weight-bold) var(--font-size-xl) / var(--line-height-xl) var(--font-sans);
+  --text-section-title: var(--font-weight-semibold) var(--font-size-base) / var(--line-height-base) var(--font-sans);
+  --text-card-title:    var(--font-weight-semibold) var(--font-size-sm) / var(--line-height-sm) var(--font-sans);
+  --text-body:          var(--font-weight-regular) var(--font-size-sm) / var(--line-height-sm) var(--font-sans);
+  --text-label:         var(--font-weight-medium) var(--font-size-sm) / var(--line-height-sm) var(--font-sans);
+  --text-meta:          var(--font-weight-regular) var(--font-size-xs) / var(--line-height-xs) var(--font-sans);
+  --text-code:          var(--font-weight-regular) var(--font-size-code) / var(--line-height-code) var(--font-mono);
+}

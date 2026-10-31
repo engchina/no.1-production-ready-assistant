@@ -1,0 +1,591 @@
+"""OCI Generative AI adapter 境界のテスト。"""
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from pr_backend_core.observability.model_purpose import model_call_purpose
+
+from app.clients.oci_auth import OciPrivateKeyPassPhraseRequiredError
+from app.clients.oci_genai import (
+    EMBEDDING_INPUT_MAX_CHARS,
+    EMBEDDING_REQUEST_MAX_CHARS,
+    EMBEDDING_REQUEST_MAX_INPUTS,
+    OciGenAiClient,
+    OciGenAiConfigError,
+)
+from app.config import Settings
+
+
+def test_oci_genai_client_refuses_encrypted_private_key_without_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OCI SDK client 作成前に暗号化 PEM の pass phrase 要求を止める。"""
+    key_file = tmp_path / "encrypted.pem"
+    key_file.write_text(
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
+        encoding="utf-8",
+    )
+    initialized = False
+
+    class FakeGenerativeAiInferenceClient:
+        def __init__(self, config: dict[str, object]) -> None:
+            nonlocal initialized
+            initialized = True
+
+    def fake_import_module(name: str) -> object:
+        if name == "oci.config":
+            return SimpleNamespace(
+                from_file=lambda path, profile: {"key_file": str(key_file), "region": "ap-osaka-1"}
+            )
+        if name == "oci.generative_ai_inference":
+            return SimpleNamespace(GenerativeAiInferenceClient=FakeGenerativeAiInferenceClient)
+        raise AssertionError(f"unexpected module import: {name}")
+
+    monkeypatch.setattr("app.clients.oci_genai.importlib.import_module", fake_import_module)
+    client = OciGenAiClient(
+        settings=_oci_settings().model_copy(update={"oci_config_file": str(tmp_path / "config")})
+    )
+
+    with pytest.raises(OciPrivateKeyPassPhraseRequiredError, match="pass_phrase"):
+        client._client()
+
+    assert initialized is False
+
+
+def test_oci_genai_client_reports_malformed_fingerprint(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OCI SDK の fingerprint 不正は利用者が直せる設定エラーとして返す。"""
+
+    class InvalidConfig(Exception):
+        pass
+
+    class NoneRetryStrategy:
+        pass
+
+    class NoCircuitBreakerStrategy:
+        pass
+
+    retry_strategies: list[object] = []
+    breaker_strategies: list[object] = []
+
+    class FakeGenerativeAiInferenceClient:
+        def __init__(self, config: dict[str, object], **kwargs: object) -> None:
+            _ = config
+            retry_strategies.append(kwargs.get("retry_strategy"))
+            breaker_strategies.append(kwargs.get("circuit_breaker_strategy"))
+            raise InvalidConfig({"fingerprint": "malformed"})
+
+    def fake_import_module(name: str) -> object:
+        if name == "oci.config":
+            return SimpleNamespace(
+                from_file=lambda path, profile: {
+                    "fingerprint": "bad",
+                    "key_file": "",
+                    "region": "ap-osaka-1",
+                }
+            )
+        if name == "oci.generative_ai_inference":
+            return SimpleNamespace(GenerativeAiInferenceClient=FakeGenerativeAiInferenceClient)
+        if name == "oci.retry":
+            return SimpleNamespace(NoneRetryStrategy=NoneRetryStrategy)
+        if name == "oci.circuit_breaker":
+            return SimpleNamespace(NoCircuitBreakerStrategy=NoCircuitBreakerStrategy)
+        raise AssertionError(f"unexpected module import: {name}")
+
+    monkeypatch.setattr("app.clients.oci_genai.importlib.import_module", fake_import_module)
+    client = OciGenAiClient(
+        settings=_oci_settings().model_copy(update={"oci_config_file": str(tmp_path / "config")})
+    )
+
+    with pytest.raises(OciGenAiConfigError, match="fingerprint が不正です"):
+        client._client()
+    # 再試行は共通の実行器が受け持つため、SDK の再試行は切る(#2002)。
+    assert [type(strategy) for strategy in retry_strategies] == [NoneRetryStrategy]
+    # SDK の circuit breaker も切る。429 が続くと先に開き、実行器の再試行を通らずに失敗する(#2211)。
+    assert [type(strategy) for strategy in breaker_strategies] == [NoCircuitBreakerStrategy]
+
+
+async def test_embed_validates_oci_embedding_count() -> None:
+    """OCI embedding adapter の返却件数が入力件数と違う場合は拒否する。"""
+    client = StubEmbeddingClient(vectors=[[1.0, 0.0, 0.0]])
+
+    with pytest.raises(ValueError, match="embedding の件数が一致しません"):
+        await client.embed(["a", "b"])
+
+
+async def test_embed_validates_oci_embedding_dimension() -> None:
+    """OCI embedding adapter の次元数が Oracle VECTOR 幅と違う場合は拒否する。"""
+    client = StubEmbeddingClient(vectors=[[1.0, 0.0]])
+
+    with pytest.raises(ValueError, match=r"embedding\[0\] の次元数が不正です"):
+        await client.embed(["a"])
+
+
+async def test_embed_accepts_expected_dimension() -> None:
+    """期待次元の embedding はそのまま返す。"""
+    client = StubEmbeddingClient(vectors=[[1.0, 0.0, 0.0]])
+
+    assert await client.embed(["a"]) == [[1.0, 0.0, 0.0]]
+
+
+async def test_embed_rejects_too_long_input_before_oci_call() -> None:
+    """異常長 input は OCI embedding 呼び出し前に拒否する。"""
+    client = CountingEmbeddingClient()
+    long_text = "あ" * (EMBEDDING_INPUT_MAX_CHARS + 1)
+
+    with pytest.raises(
+        ValueError,
+        match=(rf"index=1, chars={len(long_text)}, max_chars={EMBEDDING_INPUT_MAX_CHARS}"),
+    ):
+        await client.embed(["短い本文", long_text])
+
+    assert client.calls == 0
+
+
+async def test_embed_cache_reuses_hits_and_batches_only_misses() -> None:
+    """embedding cache は hit を再利用し、miss だけ OCI へまとめて送る。"""
+    client = CountingEmbeddingClient()
+
+    first = await client.embed(["承認", "監査"])
+    second = await client.embed(["監査", "証跡", "監査"])
+
+    assert client.calls == 2
+    assert client.batches == [["承認", "監査"], ["証跡"]]
+    assert second[0] == first[1]
+    assert second[2] == first[1]
+    assert second[1] == _vector_for_text("証跡")
+
+
+async def test_embed_cache_batches_misses_with_configured_batch_size() -> None:
+    """cache miss の embedding は設定した batch size で分割する。"""
+    client = CountingEmbeddingClient(
+        settings=_oci_settings().model_copy(update={"rag_embedding_batch_size": 2})
+    )
+
+    vectors = await client.embed(["承認", "監査", "証跡", "監査", "規程"])
+
+    assert client.calls == 2
+    assert client.batches == [["承認", "監査"], ["証跡", "規程"]]
+    assert vectors == [
+        _vector_for_text("承認"),
+        _vector_for_text("監査"),
+        _vector_for_text("証跡"),
+        _vector_for_text("監査"),
+        _vector_for_text("規程"),
+    ]
+
+
+async def test_embed_batches_by_total_character_budget() -> None:
+    """件数上限内でも 1 request の総文字数上限を超える前に分割する。"""
+    client = CountingEmbeddingClient()
+    texts = [
+        "a" * 40_000,
+        "b" * 40_000,
+        "c" * 40_000,
+    ]
+
+    vectors = await client.embed(texts)
+
+    assert client.batches == [texts[:2], texts[2:]]
+    assert all(sum(map(len, batch)) <= EMBEDDING_REQUEST_MAX_CHARS for batch in client.batches)
+    assert vectors == [_vector_for_text(text) for text in texts]
+
+
+async def test_embed_batches_by_maximum_input_count() -> None:
+    """設定 object が検証を迂回しても OCI request は 96 入力を超えない。"""
+    client = CountingEmbeddingClient(
+        settings=_oci_settings().model_copy(update={"rag_embedding_batch_size": 1024})
+    )
+    texts = [f"text-{index}" for index in range(EMBEDDING_REQUEST_MAX_INPUTS + 1)]
+
+    vectors = await client.embed(texts)
+
+    assert [len(batch) for batch in client.batches] == [EMBEDDING_REQUEST_MAX_INPUTS, 1]
+    assert vectors == [_vector_for_text(text) for text in texts]
+
+
+async def test_embed_cache_can_be_disabled() -> None:
+    """設定で embedding cache を無効化できる。"""
+    client = CountingEmbeddingClient(
+        settings=_oci_settings().model_copy(update={"rag_embedding_cache_enabled": False})
+    )
+
+    await client.embed(["承認"])
+    await client.embed(["承認"])
+
+    assert client.calls == 2
+    assert client.batches == [["承認"], ["承認"]]
+
+
+async def test_embed_batches_oci_calls_when_cache_is_disabled() -> None:
+    """cache 無効時も OCI embedding request は batch size で分割する。"""
+    client = CountingEmbeddingClient(
+        settings=_oci_settings().model_copy(
+            update={
+                "rag_embedding_cache_enabled": False,
+                "rag_embedding_batch_size": 2,
+            }
+        )
+    )
+
+    vectors = await client.embed(["a", "bb", "ccc"])
+
+    assert client.calls == 2
+    assert client.batches == [["a", "bb"], ["ccc"]]
+    assert vectors == [_vector_for_text("a"), _vector_for_text("bb"), _vector_for_text("ccc")]
+
+
+async def test_oci_embed_uses_generative_ai_embedding_request() -> None:
+    """OCI embedding は Generative AI embed_text API に Cohere Embed v4 設定を渡す。"""
+    sdk = FakeGenAiInferenceClient(
+        embed_response=SimpleNamespace(data=SimpleNamespace(embeddings=[[1.0, 0.0, 0.0]]))
+    )
+    client = OciGenAiClient(
+        settings=_oci_settings(),
+        inference_client=sdk,
+        sdk_call_runner=_run_inline,
+    )
+
+    vectors = await client.embed(["検索 query"], input_type="SEARCH_QUERY")
+
+    assert vectors == [[1.0, 0.0, 0.0]]
+    assert sdk.embed_calls == 1
+    request = sdk.last_embed_request
+    assert request is not None
+    assert request.inputs == ["検索 query"]
+    assert request.compartment_id == "ocid1.compartment.oc1..example"
+    assert request.serving_mode.model_id == "cohere.embed-v4.0"
+    assert request.input_type == "SEARCH_QUERY"
+    assert request.output_dimensions == 3
+
+
+async def test_embed_rejects_invalid_input_type() -> None:
+    """OCI/local 共通で embedding input_type の誤指定を fail fast する。"""
+    client = OciGenAiClient(
+        settings=_oci_settings(),
+        inference_client=FakeGenAiInferenceClient(),
+        sdk_call_runner=_run_inline,
+    )
+
+    with pytest.raises(ValueError, match="embedding input_type が不正です"):
+        await client.embed(["a"], input_type="BAD_TYPE")  # type: ignore[arg-type]
+
+
+async def test_rerank_accepts_and_sorts_valid_oci_results() -> None:
+    """OCI rerank adapter の正しい結果は score 降順に正規化する。"""
+    client = StubRerankClient(results=[(1, 0.25), (0, 0.75)])
+
+    assert await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=2) == [
+        (0, 0.75),
+        (1, 0.25),
+    ]
+
+
+async def test_rerank_cache_reuses_same_query_documents_and_top_n() -> None:
+    """rerank cache は query/document/top_n が同一のときだけ結果を再利用する。"""
+    client = CountingRerankClient()
+
+    first = await client.rerank("承認条件", ["本文 A", "本文 B"], top_n=2)
+    second = await client.rerank("承認条件", ["本文 A", "本文 B"], top_n=2)
+    third = await client.rerank("承認条件", ["本文 A", "本文 B"], top_n=1)
+
+    assert first == [(0, 0.9), (1, 0.8)]
+    assert second == first
+    assert third == [(0, 0.9)]
+    assert client.calls == 2
+    assert client.calls_args == [
+        ("承認条件", ["本文 A", "本文 B"], 2),
+        ("承認条件", ["本文 A", "本文 B"], 1),
+    ]
+
+
+async def test_rerank_cache_can_be_disabled() -> None:
+    """設定で rerank cache を無効化できる。"""
+    client = CountingRerankClient(
+        settings=_oci_settings().model_copy(update={"rag_rerank_cache_enabled": False})
+    )
+
+    await client.rerank("承認条件", ["本文 A"], top_n=1)
+    await client.rerank("承認条件", ["本文 A"], top_n=1)
+
+    assert client.calls == 2
+
+
+async def test_oci_rerank_uses_generative_ai_rerank_request() -> None:
+    """OCI rerank は Generative AI rerank_text API に Cohere Rerank v4 fast 設定を渡す。"""
+    sdk = FakeGenAiInferenceClient(
+        rerank_response=SimpleNamespace(
+            data=SimpleNamespace(
+                document_ranks=[
+                    SimpleNamespace(index=1, relevance_score=0.25),
+                    SimpleNamespace(index=0, relevance_score=0.75),
+                ]
+            )
+        )
+    )
+    client = OciGenAiClient(
+        settings=_oci_settings(),
+        inference_client=sdk,
+        sdk_call_runner=_run_inline,
+    )
+
+    results = await client.rerank("承認条件", ["本文 A", "本文 B"], top_n=2)
+
+    assert results == [(0, 0.75), (1, 0.25)]
+    assert sdk.rerank_calls == 1
+    request = sdk.last_rerank_request
+    assert request is not None
+    assert request.input == "承認条件"
+    assert request.documents == ["本文 A", "本文 B"]
+    assert request.compartment_id == "ocid1.compartment.oc1..example"
+    assert request.serving_mode.model_id == "cohere.rerank-v4.0-fast"
+    assert request.top_n == 2
+
+
+async def test_rerank_returns_empty_without_oci_call_when_documents_are_empty() -> None:
+    """候補文書が空なら OCI rerank 呼び出しを行わない。"""
+    client = StubRerankClient(results=[(0, 0.75)])
+
+    assert await client.rerank("社内規程", [], top_n=1) == []
+    assert client.calls == 0
+
+
+async def test_rerank_rejects_invalid_top_n() -> None:
+    """top_n は 1 以上に制限する。"""
+    client = StubRerankClient(results=[])
+
+    with pytest.raises(ValueError, match="rerank top_n は 1 以上"):
+        await client.rerank("社内規程", ["本文"], top_n=0)
+
+
+async def test_rerank_rejects_too_many_results() -> None:
+    """OCI rerank adapter が top_n を超える件数を返した場合は拒否する。"""
+    client = StubRerankClient(results=[(0, 0.75), (1, 0.25)])
+
+    with pytest.raises(ValueError, match="rerank の返却件数が不正です"):
+        await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=1)
+
+
+async def test_rerank_rejects_duplicate_index() -> None:
+    """OCI rerank adapter が同じ候補 index を重複返却した場合は拒否する。"""
+    client = StubRerankClient(results=[(0, 0.75), (0, 0.25)])
+
+    with pytest.raises(ValueError, match="rerank index が重複しています"):
+        await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=2)
+
+
+async def test_rerank_rejects_out_of_range_index() -> None:
+    """OCI rerank adapter が候補数外の index を返した場合は拒否する。"""
+    client = StubRerankClient(results=[(2, 0.75)])
+
+    with pytest.raises(ValueError, match="rerank index が範囲外です"):
+        await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=2)
+
+
+async def test_rerank_rejects_non_finite_score() -> None:
+    """OCI rerank adapter が NaN/Infinity score を返した場合は拒否する。"""
+    client = StubRerankClient(results=[(0, float("nan"))])
+
+    with pytest.raises(ValueError, match="rerank score が不正です"):
+        await client.rerank("社内規程", ["本文"], top_n=1)
+
+
+class StubEmbeddingClient(OciGenAiClient):
+    """OCI embedding の戻り値だけを差し替えるテスト用 client。"""
+
+    def __init__(self, vectors: list[list[float]]) -> None:
+        settings = Settings.model_construct(
+            oci_genai_embedding_dim=3,
+        )
+        super().__init__(settings=settings)
+        self._vectors = vectors
+
+    async def _embed_with_oci(
+        self,
+        texts: list[str],
+        *,
+        input_type: str,
+    ) -> list[list[float]]:
+        return self._vectors
+
+
+class StubRerankClient(OciGenAiClient):
+    """OCI rerank の戻り値だけを差し替えるテスト用 client。"""
+
+    def __init__(self, results: list[tuple[int, float]]) -> None:
+        settings = Settings.model_construct(
+            oci_genai_embedding_dim=3,
+        )
+        super().__init__(settings=settings)
+        self._results = results
+        self.calls = 0
+
+    async def _rerank_with_oci(
+        self, query: str, documents: list[str], top_n: int
+    ) -> list[tuple[int, float]]:
+        self.calls += 1
+        return self._results
+
+
+class CountingEmbeddingClient(OciGenAiClient):
+    """cache 挙動確認用の deterministic embedding client。"""
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        super().__init__(settings=settings or _oci_settings())
+        self.calls = 0
+        self.batches: list[list[str]] = []
+
+    async def _embed_with_oci(
+        self,
+        texts: list[str],
+        *,
+        input_type: str,
+    ) -> list[list[float]]:
+        _ = input_type
+        self.calls += 1
+        self.batches.append(list(texts))
+        return [_vector_for_text(text) for text in texts]
+
+
+class CountingRerankClient(OciGenAiClient):
+    """cache 挙動確認用の deterministic rerank client。"""
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        super().__init__(settings=settings or _oci_settings())
+        self.calls = 0
+        self.calls_args: list[tuple[str, list[str], int]] = []
+
+    async def _rerank_with_oci(
+        self, query: str, documents: list[str], top_n: int
+    ) -> list[tuple[int, float]]:
+        self.calls += 1
+        self.calls_args.append((query, list(documents), top_n))
+        return [(index, 0.9 - (index * 0.1)) for index in range(min(len(documents), top_n))]
+
+
+class FakeGenAiInferenceClient:
+    """OCI SDK client の最小 fake。"""
+
+    def __init__(
+        self,
+        embed_response: object | None = None,
+        rerank_response: object | None = None,
+    ) -> None:
+        self._embed_response = embed_response or SimpleNamespace(
+            data=SimpleNamespace(embeddings=[])
+        )
+        self._rerank_response = rerank_response or SimpleNamespace(
+            data=SimpleNamespace(document_ranks=[])
+        )
+        self.last_embed_request: Any | None = None
+        self.last_rerank_request: Any | None = None
+        self.embed_calls = 0
+        self.rerank_calls = 0
+
+    def embed_text(self, embed_text_details: object) -> object:
+        self.embed_calls += 1
+        self.last_embed_request = embed_text_details
+        return self._embed_response
+
+    def rerank_text(self, rerank_text_details: object) -> object:
+        self.rerank_calls += 1
+        self.last_rerank_request = rerank_text_details
+        return self._rerank_response
+
+
+def _oci_settings() -> Settings:
+    return Settings.model_construct(
+        oci_region="ap-osaka-1",
+        oci_compartment_id="ocid1.compartment.oc1..example",
+        oci_genai_embedding_model="cohere.embed-v4.0",
+        oci_genai_embedding_dim=3,
+        oci_genai_rerank_model="cohere.rerank-v4.0-fast",
+    )
+
+
+def _vector_for_text(text: str) -> list[float]:
+    return [float(len(text.encode("utf-8"))), 0.0, 0.0]
+
+
+async def _run_inline(operation: Callable[[], Any]) -> Any:
+    """テストでは同期 fake を同一 thread で実行する。"""
+    return operation()
+
+
+@pytest.mark.parametrize(
+    "input_type,purpose",
+    [
+        ("SEARCH_QUERY", "query.embed"),
+        ("SEARCH_DOCUMENT", "document.embed"),
+        ("CLASSIFICATION", None),
+        ("CLUSTERING", None),
+    ],
+)
+@pytest.mark.parametrize("probe", [False, True])
+async def test_embedding_purpose_uses_declared_input_type_and_preserves_probe(
+    monkeypatch: pytest.MonkeyPatch,
+    input_type: str,
+    purpose: str | None,
+    probe: bool,
+) -> None:
+    from app.clients import oci_genai
+
+    captured: list[dict[str, object]] = []
+
+    @contextmanager
+    def capture(
+        name: str, *, kind: str, attributes: dict[str, object]
+    ) -> Iterator[SimpleNamespace]:
+        assert name == "gen_ai.embeddings" and kind == "client"
+        captured.append(attributes)
+        yield SimpleNamespace(
+            set_call_input=lambda *args, **kwargs: None,
+            set_call_output=lambda *args, **kwargs: None,
+        )
+
+    monkeypatch.setattr(oci_genai, "observed_span", capture)
+    sdk = FakeGenAiInferenceClient(
+        embed_response=SimpleNamespace(data=SimpleNamespace(embeddings=[[1.0, 0.0, 0.0]]))
+    )
+    client = OciGenAiClient(
+        settings=_oci_settings(), inference_client=sdk, sdk_call_runner=_run_inline
+    )
+    with model_call_purpose("connection.check" if probe else None):
+        result = await client.embed(["合成の入力"], input_type=input_type)  # type: ignore[arg-type]
+    assert result == [[1.0, 0.0, 0.0]]
+    assert captured[0].get("pr.gen_ai.purpose") == ("connection.check" if probe else purpose)
+    assert captured[0]["gen_ai.request.model"] == "cohere.embed-v4.0"
+    assert sdk.last_embed_request is not None
+    assert sdk.last_embed_request.input_type == input_type
+    assert sdk.embed_calls == 1
+
+
+async def test_rerank_cache_normalizes_only_query_presentation() -> None:
+    """原文送信を保持し、同じ質問の表記差だけをキャッシュで吸収する。"""
+    client = CountingRerankClient()
+    original = "ＡＢＣ  設定"
+    first = await client.rerank(original, ["本文 A", "本文 B"], top_n=2)
+    assert await client.rerank("ABC\t設定", ["本文 A", "本文 B"], top_n=2) == first
+    assert client.calls_args == [(original, ["本文 A", "本文 B"], 2)]
+
+    for query in ["ABC 設定 追加条件", "ABC設定", "abc 設定"]:
+        await client.rerank(query, ["本文 A", "本文 B"], top_n=2)
+    await client.rerank(original, ["本文 B", "本文 A"], top_n=2)
+    await client.rerank(original, ["本文 A", "本文 C"], top_n=2)
+    await client.rerank(original, ["本文 A", "本文 B"], top_n=1)
+    assert client.calls == 7
+
+
+def test_rerank_cache_key_keeps_model_boundary() -> None:
+    from app.clients.oci_genai import _rerank_cache_key
+
+    assert _rerank_cache_key(
+        query="ABC 設定", documents=["本文 A"], top_n=1, model_id="model-a"
+    ) != _rerank_cache_key(query="ABC 設定", documents=["本文 A"], top_n=1, model_id="model-b")

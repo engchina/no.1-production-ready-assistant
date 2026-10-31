@@ -1,0 +1,77 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   ACCESSIBILITY MODES
+
+   利用者の OS / ブラウザ設定に応答する層。TIER 2 のトークンを上書きするだけで、
+   コンポーネント側の変更は不要です。
+
+   1. forced-colors（Windows ハイコントラストモード）
+      官公庁・金融の調達要件になりがちです。強制カラーモードではブラウザが
+      background / border-color / box-shadow を無効化し、システム色に置換します。
+      ★ 塗りだけで区別している要素は「消える」ので、必ず境界線を持たせること。
+
+   2. prefers-contrast: more
+      利用者が「コントラストを上げる」を選んだ場合。罫線と副次テキストを強めます。
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* セレクタが :root だけでないのは colors.css と同じ理由（スコープ内で宣言し直すトークンに負けないため）。 */
+@media (forced-colors: active) {
+  :root, [data-theme], [data-surface], [data-surface-tint] {
+    --color-canvas:  Canvas;
+    --color-surface: Canvas;
+    --color-surface-raised:  Canvas;
+    --color-surface-overlay: Canvas;
+    --color-surface-sunken:  Canvas;
+    --color-surface-hover:   Canvas;
+    --color-surface-disabled: Canvas;
+
+    --color-fg:          CanvasText;
+    --color-fg-muted:    CanvasText;
+    --color-fg-subtle:   CanvasText;
+    --color-fg-disabled: GrayText;
+    --color-fg-on-accent:   HighlightText;
+    --color-fg-on-emphasis: HighlightText;
+
+    --color-border:         CanvasText;
+    --color-border-strong:  CanvasText;
+    --color-border-control: CanvasText;
+
+    --color-accent-fg:        LinkText;
+    --color-accent-fg-strong: LinkText;
+    --color-accent-emphasis:  Highlight;
+    --color-accent-muted:     Canvas;
+    --color-accent-subtle:    Canvas;
+
+    --color-focus-ring: CanvasText;
+    --scrim: Canvas;
+    /* 透過色は使えない。アーク（CanvasText / LinkText）と区別できるシステム色にする。 */
+    --color-spinner-track: GrayText;
+  }
+  /* 状態色は強制カラーモードでは表現できません。語とアイコンが意味を運びます
+     （だから StatusBadge / Banner / Toast はアイコンを必須にしてあります）。 */
+  :root, [data-theme], [data-surface], [data-surface-tint] {
+    --color-success-fg: CanvasText; --color-success-emphasis: Canvas; --color-success-subtle: Canvas; --color-success-border: CanvasText;
+    --color-warning-fg: CanvasText; --color-warning-emphasis: Canvas; --color-warning-subtle: Canvas; --color-warning-border: CanvasText;
+    --color-danger-fg:  CanvasText; --color-danger-emphasis:  Canvas; --color-danger-subtle:  Canvas; --color-danger-border:  CanvasText;
+    --color-info-fg:    CanvasText; --color-info-emphasis:    Canvas; --color-info-subtle:    Canvas; --color-info-border:    CanvasText;
+    /* [data-surface-tint] の内側で success / warning の文字が参照する深い値（colors.css。#1671） */
+    --color-success-fg-strong: CanvasText; --color-warning-fg-strong: CanvasText;
+  }
+  /* ponytail: .pr-* クラス向けの境界線・Highlight 規則は、TIER 3 を cva / Tailwind で
+     実装する PR 4 で各コンポーネントの forced-colors: バリアントとして入れる。 */
+}
+
+@media (prefers-contrast: more) {
+  /* [data-surface] は含めない: 暗い面は自前の罫線（白の透過）を持つ。
+     [data-surface-tint] は含める: 淡い色の面が文字を 1 段深くした値（colors.css）を、ここでさらに強める。 */
+  :root, [data-theme], [data-surface-tint] {
+    --color-fg-muted:       light-dark(var(--neutral-700), var(--neutral-100));
+    --color-fg-subtle:      light-dark(var(--neutral-600), var(--neutral-350));
+    --color-fg-disabled:    light-dark(var(--neutral-600), var(--neutral-400));
+    --color-border:         light-dark(var(--neutral-400), var(--neutral-600));
+    --color-border-strong:  light-dark(var(--neutral-600), var(--neutral-400));
+    --color-border-control: light-dark(var(--neutral-700), var(--neutral-350));
+    --color-accent-fg:      light-dark(var(--blue-650), var(--blue-300));
+    --color-focus-ring:     light-dark(var(--blue-650), var(--blue-300));
+  }
+  :focus-visible { outline-width: 3px; }
+}

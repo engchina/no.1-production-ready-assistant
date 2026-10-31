@@ -1,0 +1,8 @@
+{
+  "detail": "SELECT/WITH 以外の SQL は実行できません。",
+  "error_messages": [
+    "SELECT/WITH 以外の SQL は実行できません。"
+  ],
+  "warning_messages": []
+}
+

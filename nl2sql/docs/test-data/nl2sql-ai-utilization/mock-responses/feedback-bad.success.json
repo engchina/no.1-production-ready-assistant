@@ -1,0 +1,11 @@
+{
+  "data": {
+    "history_id": "hist-002",
+    "rating": "bad",
+    "saved": true,
+    "comment": "顧客名を JOIN する必要があります。"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

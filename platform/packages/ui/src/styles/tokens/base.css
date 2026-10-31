@@ -1,0 +1,276 @@
+/* Base layer。14px ルートは load-bearing: rem の余白トークンはすべてこれに対して解決される。 */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 日本語の行組版。禁則処理を効かせ、任意の文字での分断を禁止する。
+   ID / パス / SQL だけは .pr-break-anywhere で明示的に折り返す。 */
+body {
+  line-break: strict;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.pr-break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/*
+ * メッセージの本文（Toast・Banner・FormStatus・FieldError・結果パネル・処理中の表示・状態ビュー・確認ダイアログ。#899）。
+ * - word-break: auto-phrase: 日本語を文節（「完了しました。」の前など）で折り返し、語の途中で切らない
+ *   （Chrome / Edge 119+。<html lang="ja"> のときだけ効く）。未対応のブラウザ（Firefox・Safari）は宣言を捨て、
+ *   直前の normal（body と同じ、禁則処理つきの任意の文字での折り返し）のまま。
+ * - text-wrap: pretty: 最後の行に 1〜2 文字だけ残す折り返し（「した。」だけの行）を避ける。未対応なら通常の折り返し。
+ * - overflow-wrap: anywhere: 文節や URL・ID が 1 行に入らないときだけ、その中で折り返して横にはみ出さない。
+ *   auto-phrase は文節を分けない単位にするため、これが無いと狭い面で文節が枠の外へ出る。
+ * 本文（body）全体には入れない: 表のセル・チップ・バッジ・ナビなどの狭い面で文節の幅が最小幅になり、列が広がる・
+ * はみ出す（body は overflow-wrap: normal）。pretty は長い文章で描画が遅くなる。短い文章のメッセージだけに使う。
+ */
+.pr-message-text {
+  word-break: normal;
+  word-break: auto-phrase;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.sidebar-shell {
+  contain: paint;
+}
+
+.sidebar-reveal {
+  --sidebar-reveal-opacity: 1;
+  opacity: 0;
+  transform: translateX(-0.25rem);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+}
+
+.sidebar-shell[data-state="expanded"] .sidebar-reveal {
+  opacity: var(--sidebar-reveal-opacity);
+  transform: translateX(0);
+  transition-delay: 90ms;
+}
+
+.sidebar-shell[data-state="collapsed"] .sidebar-reveal {
+  pointer-events: none;
+  transition-delay: 0ms;
+}
+
+/* 数値（メトリクス・金額）は等幅数字でガタつきを防ぐ */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 一覧が増えてもページ全体を押し下げない、業務画面向けの内部スクロール領域。
+ * overscroll-behavior: contain は付けない — スクロール余地がない(中身が少ない)ときも
+ * wheel の scroll chaining を遮断し、カード上でページが動かなくなるため。
+ * position: relative: 中の absolute の要素（読み上げ専用の sr-only のラベルなど）の包含ブロックをこの領域にする。
+ * 無いと要素がこの領域で切り取られず、外側（main）のスクロールの範囲を伸ばして本文の末尾に空白ができる（#2064。#1116 と同じ型）。 */
+.bounded-scroll-area,
+.bounded-scroll-area-lg {
+  position: relative;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.bounded-scroll-area {
+  max-height: min(22rem, 56vh);
+}
+
+.bounded-scroll-area-lg {
+  max-height: min(34rem, 68vh);
+}
+
+@media (max-width: 640px) {
+  .bounded-scroll-area {
+    max-height: min(20rem, 52vh);
+  }
+
+  .bounded-scroll-area-lg {
+    max-height: min(28rem, 60vh);
+  }
+}
+
+/* メッセージ機構のアニメーション。transform/opacity のみ・enter 150–200ms。
+ * prefers-reduced-motion は下部で一括無効化。 */
+/* 通知は置き場所の側から現れる（#1728）。md 以上の右下は下から、md 未満の上端は上から。
+ * 向きは Toaster が領域に `--toast-enter-y` で渡す（未指定は上から）。 */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--toast-enter-y, -0.5rem));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 200ms ease-out;
+}
+
+.animate-overlay-in {
+  animation: overlay-in 150ms ease-out;
+}
+
+.animate-dialog-in {
+  animation: dialog-in 200ms ease-out;
+}
+
+/*
+ * キーボードフォーカスを明瞭に（アクセシビリティ）。フォーカスの表示は outline に一本化する（README §4「フォーカスの表示」）。
+ * `@layer base` に置く: レイヤーの外に置くと Tailwind のユーティリティ（utilities レイヤー）に常に勝ち、
+ * 部品の `focus-visible:-outline-offset-2` 等の調整が効かず、`focus-visible:outline-none` + `ring` と二重に表示されていた（#355）。
+ * ring（box-shadow）をフォーカスの表示に使わない（adherence の lint が検出する）。
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * フォーム入力は枠線の色 + 内側 1px の影にして、label や隣接要素への重なりを防ぐ。
+ * 入力欄の見た目は部品で変えないため、こちらはレイヤーの外に置いて常に優先する。
+ */
+:is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):focus-visible {
+  outline: none;
+  outline-offset: 0;
+  border-color: var(--color-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--color-focus-ring);
+}
+
+@media (forced-colors: active) {
+  :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+    box-shadow: none;
+  }
+}
+
+/*
+ * Spinner の箱（#1180）。回転しない固定の正方形（寸法は Spinner が inline style で渡す）で、中の svg だけが回る。
+ * - contain: strict（size / layout / paint / style）: 回転した正方形の外接矩形（最大 1.41 倍）を箱の外へ出さず、
+ *   周りの行の位置・高さ・スクロールの領域に回転を入れない（描画は箱で切られるが、円は内接円の中に収まる）。
+ * - inline-block + vertical-align: middle + line-height: 0: 文の中に置いてもベースライン・行の高さに乗らない。
+ *   flex / grid の中では flex: none で縮まない・伸びない。
+ */
+.pr-spinner {
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+  vertical-align: middle;
+  contain: strict;
+}
+
+.pr-spinner > svg {
+  display: block;
+}
+
+/*
+ * 回転アイコン（animate-spin。共有の Spinner の内側の svg だけ）は原点を viewBox 中心（= 図形中心）へ固定し、
+ * 継続回転する要素として独立レイヤーで合成させる（毎フレームの再ラスタライズを避ける）。
+ * 「回転が中心からずれて見える」現象の主因は図形側（欠けた円弧・1 本のアークはインクの重心が
+ * 角度ごとに動く）なので、スピナーには 180 度対称のアークを持つ Spinner を使うこと（#1180）。
+ */
+svg.animate-spin {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+/*
+ * Spinner（#395）。トラックはアークと同じ色を透かしたトークン（colors.css）。
+ * 回転は等速（linear 1s）の transform だけ: 合成スレッドで回るので、メインスレッドが詰まっても止まらない。
+ * 弧長の伸縮（stroke-dasharray）や加減速は使わない（README §4「Spinner」）。
+ */
+.pr-spinner-track {
+  stroke: var(--color-spinner-track);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /*
+   * Spinner の回転は止めない（#440）。その場で回るだけの小さな動きで処理中を伝える本質的な表示で、
+   * 止めると処理が固まったように見える（OS 標準の処理中表示も Reduce Motion で止まらない）。
+   * 上の一括無効化（* の 0.01ms）より詳細度を高くして、animate-spin の 1s に戻す。
+   */
+  svg.animate-spin {
+    animation-duration: 1s !important;
+  }
+
+  .sidebar-reveal {
+    transform: none;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* 本文へスキップ（AppShell が出力）。サイドバーの項目数が多いため、キーボード利用者が nav を飛ばせるようにする。 */
+.pr-skip-link {
+  position: absolute;
+  left: var(--space-2);
+  top: var(--space-2);
+  z-index: var(--z-sticky);
+  transform: translateY(-200%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-lg);
+  font: var(--text-label);
+  text-decoration: none;
+}
+
+.pr-skip-link:focus-visible {
+  transform: none;
+}
+
+/* 確認事項の見出しは読み上げの移動先。操作部品ではないので自動フォーカスに外枠を付けない。 */
+.pr-clarification-heading:focus-visible {
+  outline: none;
+}

@@ -1,0 +1,131 @@
+{
+  "id": "failed-run",
+  "description": "Run が failed で終わったケースはケースの失敗（AgentRunFailed）。指標の分母に入れない。",
+  "covers": [
+    "status:failed",
+    "case_error"
+  ],
+  "case": {
+    "id": "failed-run",
+    "split": "dev",
+    "category": "document_answerable",
+    "query": "合成の質問: failed-run",
+    "relevant_document_ids": [
+      "doc-a"
+    ],
+    "expected_outcomes": [
+      "answered"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "failed",
+      "elapsed_ms": 750.0,
+      "run_id": "run-failed-run-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "error",
+      "category": "document_answerable",
+      "split": "dev",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [
+        "doc-a"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": null,
+      "outcome_source": null,
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "case_error"
+      ],
+      "elapsed_ms": 750.0,
+      "error_type": "AgentRunFailed",
+      "error_stage": "turn_0"
+    },
+    "cli": {
+      "trace_id": "run-failed-run-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": null,
+      "error_message": "Agent の Run が failed で終わりました。 run_id で Agent の実行履歴を確認してください。",
+      "runs": [
+        {
+          "case_id": "failed-run",
+          "turn": 0,
+          "run_id": "run-failed-run-0",
+          "thread_id": "thread_f6203978c7d52d0c1209354e9e59905b",
+          "status": "failed",
+          "elapsed_ms": 750.0,
+          "outcome": null,
+          "outcome_source": null,
+          "validation_status": null,
+          "model_requests": null,
+          "tool_calls": {},
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問: failed-run"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "error",
+        "category": "document_answerable",
+        "split": "dev",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [
+          "doc-a"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "case_error"
+        ],
+        "elapsed_ms": 750.0,
+        "error_type": "AgentRunFailed",
+        "error_stage": "turn_0",
+        "undetermined_evidence": [],
+        "metric_status": {}
+      }
+    }
+  }
+}

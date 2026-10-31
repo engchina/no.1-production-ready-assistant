@@ -1,0 +1,36 @@
+/*
+ * 自前ホスト Web フォント(オフライン / ネットワーク非依存)
+ *
+ * - 実体は @fontsource パッケージ内の woff2 を Vite がバンドルする。
+ *   実行時に Google Fonts などの外部 CDN へはアクセスしない。
+ * - unicode-range によるサブセット分割のため、ブラウザは描画に必要な
+ *   サブセットのみ取得する(日本語第一 UI なので japanese サブセットが主)。
+ *   Noto Sans SC / TC / HK は fonts-cjk.css（最初の描画の後に読む別の chunk。#3305）。
+ * - Noto Sans JP は可変書体（@fontsource-variable の wght.css。1 つの face が太さ 100〜900 を持ち、書体名は
+ *   Noto Sans JP Variable）。共有 tokens の太さ（400 / 500 / 600 / 700）を合成の太字にせず本物の字形で出し、
+ *   @font-face を slice の数（124）に抑える（#3333。静的な書体の slice × 太さの @font-face は描画を止めた。#3328）。
+ *   unicode-range の slice のうち、画面に出た字を含む分の woff2 だけを読む（preload しない）。
+ * - font-display: swap は @fontsource 側で設定済み(FOIT 回避)。
+ *
+ * フォントスタック（--font-sans / --font-mono）の定義は platform の共有 tokens を正本とする。
+ */
+
+/* Noto Sans JP — 日本語第一フォント(日本語 + ラテン を本フォントで描画) */
+@import "@fontsource-variable/noto-sans-jp/wght.css";
+
+/* Noto Sans SC / TC / HK は主の CSS に入れず、fonts-cjk.css を最初の描画の後に読む（main.tsx。#3305）。 */
+
+/* Roboto — ラテン用 fallback(--font-sans の JP・SC・TC・HK の後ろ。これも自前ホスト) */
+@import "@fontsource/roboto/latin-400.css";
+@import "@fontsource/roboto/latin-500.css";
+@import "@fontsource/roboto/latin-700.css";
+
+/* Google Sans Code — ID・ログ・SQL の等幅書体（--font-mono。定義は platform の tokens） */
+@import "@fontsource/google-sans-code/latin-400.css";
+@import "@fontsource/google-sans-code/latin-500.css";
+@import "@fontsource/google-sans-code/latin-600.css";
+@import "@fontsource/google-sans-code/latin-700.css";
+@import "@fontsource/google-sans-code/latin-ext-400.css";
+@import "@fontsource/google-sans-code/latin-ext-500.css";
+@import "@fontsource/google-sans-code/latin-ext-600.css";
+@import "@fontsource/google-sans-code/latin-ext-700.css";

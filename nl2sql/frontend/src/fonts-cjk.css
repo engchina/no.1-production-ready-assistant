@@ -1,0 +1,14 @@
+/*
+ * Noto Sans SC / TC / HK — Noto Sans JP に無い簡体字・繁体字・香港の字だけを SC → TC → HK の順で補う
+ * （--font-sans / --font-mono の JP の後ろ。#3292）。太さは Noto Sans JP と同じものを可変書体の字形で出す。
+ *
+ * - 主の CSS（main.tsx の静的な import）に入れず、main.tsx が最初の描画の後に import() で読む（共有の loadStylesAfterFirstRender。#3305）。
+ *   Vite はこのファイルを別の CSS の chunk にし、index.html からは読まない（描画を止めない）。
+ * - 読み込む前の中国語の字は JP・端末の書体で出て、読み込んだ後に置き換わる（font-display: swap。字は欠けない）。
+ * - wght.css は unicode-range で分けた face の集まりで、画面に出た字を含む分の woff2 だけを読み込む（preload しない）。
+ * - 可変書体（1 つの face が太さ 100〜900 を持つ）にして、@font-face を slice の数（3 書体で 318）に抑える。
+ *   静的な書体の <weight>.css は slice × 太さの @font-face になり、ページを読み込むたびに描画が数秒止まった（#3328）。
+ */
+@import "@fontsource-variable/noto-sans-sc/wght.css";
+@import "@fontsource-variable/noto-sans-tc/wght.css";
+@import "@fontsource-variable/noto-sans-hk/wght.css";

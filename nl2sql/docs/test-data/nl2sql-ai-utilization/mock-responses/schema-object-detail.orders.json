@@ -1,0 +1,97 @@
+{
+  "data": {
+    "table": {
+      "table_name": "ORDERS",
+      "logical_name": "受注",
+      "owner": "APP",
+      "table_type": "TABLE",
+      "comment": "顧客からの受注ヘッダー",
+      "row_count": 1280,
+      "columns": [
+        {
+          "column_name": "ORDER_ID",
+          "logical_name": "受注ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "comment": "受注の一意識別子",
+          "sample_values": [
+            "1001",
+            "1002"
+          ]
+        },
+        {
+          "column_name": "CUSTOMER_ID",
+          "logical_name": "顧客ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "comment": "顧客マスタへの参照",
+          "sample_values": [
+            "10",
+            "20"
+          ]
+        },
+        {
+          "column_name": "ORDER_DATE",
+          "logical_name": "受注日",
+          "data_type": "DATE",
+          "nullable": false,
+          "comment": "受注日",
+          "sample_values": [
+            "2026-08-01",
+            "2026-08-02"
+          ]
+        },
+        {
+          "column_name": "STATUS",
+          "logical_name": "受注状態",
+          "data_type": "VARCHAR2(20)",
+          "nullable": false,
+          "comment": "OPEN / CLOSED / CANCELLED",
+          "sample_values": [
+            "OPEN",
+            "CLOSED"
+          ]
+        },
+        {
+          "column_name": "TOTAL_AMOUNT",
+          "logical_name": "受注金額",
+          "data_type": "NUMBER(12,2)",
+          "nullable": false,
+          "comment": "税込受注金額",
+          "sample_values": [
+            "120000",
+            "85000"
+          ]
+        }
+      ],
+      "constraints": [
+        "PK_ORDERS",
+        "FK_ORDERS_CUSTOMERS"
+      ],
+      "constraint_details": [
+        {
+          "constraint_name": "PK_ORDERS",
+          "constraint_type": "P",
+          "owner": "APP",
+          "table_name": "ORDERS",
+          "columns": [
+            "ORDER_ID"
+          ],
+          "referenced_owner": null,
+          "referenced_table": null,
+          "referenced_columns": [],
+          "delete_rule": "NO ACTION",
+          "status": "ENABLED",
+          "deferrable": "NOT DEFERRABLE"
+        }
+      ],
+      "qualified_name": "APP.ORDERS"
+    },
+    "dependencies": [],
+    "catalog_version": 7,
+    "etag": "schema-object-orders-v7"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

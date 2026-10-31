@@ -1,0 +1,68 @@
+name: Build shared platform UI
+description: >-
+  platform と製品の frontend の npm ci と、共有 UI（@production-ready/ui / production-ready-system-settings）の dist を用意する。
+  dist は platform の frontend のソースと lock の hash でキャッシュし、hit したら build を飛ばす（#339）。
+  npm の cache（~/.npm）は main だけが保存し、PR は復元だけにする（#1589）。
+
+# 製品の frontend は file:../../platform/packages/{ui,system-settings} に依存する。dist が hit しても
+# platform の npm ci は省けない（ui の dependencies（clsx 等）を製品の build が platform/node_modules から解決するため）。
+# Node の版は key に含めない（CI は 3 製品とも Node 24。#1591）。
+# dist の cache は PR でも保存する（数 MB。PR が共有 UI を変えたら、同じ PR の後の push・re-run が使う）。
+# setup-node には `cache: npm` を渡さない（PR でも保存するため。npm の cache は ../npm-cache が扱う）。
+
+inputs:
+  frontend:
+    description: "製品の frontend のディレクトリ（例: rag/frontend）。platform の後に、その npm ci も行う"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve product name
+      id: product
+      shell: bash
+      env:
+        FRONTEND: ${{ inputs.frontend }}
+      run: echo "name=${FRONTEND%%/*}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore npm cache
+      id: npm-cache
+      uses: ./.github/actions/npm-cache
+      with:
+        name: ${{ steps.product.outputs.name }}
+        lockfile: ${{ inputs.frontend }}/package-lock.json
+
+    - name: Restore platform dist
+      id: dist
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          platform/packages/ui/dist
+          platform/packages/system-settings/dist
+        key: >-
+          platform-dist-${{ runner.os }}-${{ hashFiles('platform/package.json', 'platform/package-lock.json',
+          'platform/packages/ui/**', 'platform/packages/system-settings/**',
+          '!platform/packages/*/dist/**', '!platform/**/node_modules/**') }}
+
+    - name: Install platform dependencies
+      shell: bash
+      working-directory: platform
+      run: npm ci --no-audit --no-fund
+
+    - name: Build platform packages
+      if: steps.dist.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: platform
+      run: npm run build
+
+    - name: Install frontend dependencies
+      shell: bash
+      working-directory: ${{ inputs.frontend }}
+      run: npm ci --no-audit --no-fund
+
+    - name: Save npm cache
+      if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: ${{ steps.npm-cache.outputs.key }}

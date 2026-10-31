@@ -1,0 +1,3 @@
+# Preserve checksum-pinned upstream whitespace in the original prompt text.
+structure_analysis.txt whitespace=-blank-at-eol
+logical_structure.txt whitespace=-blank-at-eof

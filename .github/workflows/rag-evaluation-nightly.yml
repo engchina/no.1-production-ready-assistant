@@ -1,0 +1,409 @@
+name: RAG Evaluation Nightly
+
+# 評価の本体（evaluation_cli・search_load_cli）は RAG_EVALUATION_API_BASE_URL（repo の variable か手動の入力）が
+# あるときだけ動く。未設定の定期の実行は fixture / contract の gate（parser adapter の契約・file-processing の
+# golden set。決定論で約 1 分）だけで、manifest の構造は PR の RAG / Backend の pytest
+# （test_file_processing_evaluation.py・test_parser_adapter_contract.py）も確かめるため、定期の実行は
+# 毎晩ではなく毎週にする（#1595）。URL を設定して毎晩の評価にするときは cron を戻す。
+# workflow 名は ci-failure-issue.yml の workflows と同じにする（変えると失敗が Issue にならない）。
+on:
+  schedule:
+    - cron: "17 18 * * 6" # 日曜 03:17 JST
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "評価対象 API base URL。未指定時は repo variable RAG_EVALUATION_API_BASE_URL を使います。"
+        required: false
+        type: string
+      golden_set_path:
+        description: "評価 JSON path。未指定時は evaluation/golden-set.example.json を使います。"
+        required: false
+        default: "evaluation/golden-set.example.json"
+        type: string
+      search_load_path:
+        description: "検索 load JSON path。空文字なら search load gate を skip します。"
+        required: false
+        default: "evaluation/search-load.example.json"
+        type: string
+      file_processing_manifest_path:
+        description: "file-processing golden manifest path。空文字なら file-processing gate を skip します。"
+        required: false
+        default: "docs/evaluation/file-processing-golden-set.json"
+        type: string
+      file_processing_trend_baseline_path:
+        description: "file-processing trend baseline path。空文字なら trend regression gate を skip します。"
+        required: false
+        default: ""
+        type: string
+      file_processing_staging_trend_baseline_path:
+        description: "file-processing staging trend baseline path。空文字なら staging trend regression gate を skip します。"
+        required: false
+        default: ""
+        type: string
+      fail_on_file_processing_pending:
+        description: "file-processing の staging pending check を失敗扱いにします。"
+        required: false
+        default: false
+        type: boolean
+      run_file_processing_staging:
+        description: "OCI/Oracle staging 実環境で file-processing pending checks を検証します。"
+        required: false
+        default: false
+        type: boolean
+      require_real_world_file_processing_manifest:
+        description: "staging 実行時に staging_dataset_policy 付き real-world manifest を必須にします。"
+        required: false
+        default: true
+        type: boolean
+      run_parser_adapter_contract:
+        description: "parser adapter schema remap contract artifact を出力します。"
+        required: false
+        default: true
+        type: boolean
+      parser_adapter_contract_strict:
+        description: "外部 adapter feature flags を有効化し、parser サービス未達と contract failure を gate 失敗にします。real-world staging では自動有効化されます。"
+        required: false
+        default: false
+        type: boolean
+      parser_adapter_contract_source_kinds:
+        description: "contract 対象 source kind のカンマ区切り。空なら CLI 既定を使います。"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-evaluation-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluation:
+    # job 名の "RAG / " は ci-failure-issue.yml が Issue の製品 label を決めるのに使う。
+    name: RAG / Golden set and search load
+    runs-on: ubuntu-24.04
+    # 通常実行は 1 分未満。strict は Docling の parser サービスの準備(ローカルの実測: 空のキャッシュからの sync と
+    # モデルの取得で約 60 秒、run の再 sync と起動で約 11 秒)と gate(約 30〜40 秒)が加わる。負荷の高いマシンでは
+    # それぞれ約 160 秒・45 秒・180 秒だった。runner の速度差と real-world staging の分を見込んで、以前の 30 分に
+    # 10 分を足している(#366)。
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: rag/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          # strict では Docling の parser サービスの venv も作る(#366)。setup-uv は保存前に
+          # `uv cache prune --ci` で PyPI から取れる wheel を落とし、source から build したものだけを残す。
+          cache-dependency-glob: |
+            rag/backend/uv.lock
+            rag/services/parsers/docling/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        # 外部 parser(Docling / Unstructured)は services/parsers/<name> の独立サービスで動き、
+        # backend は HTTP で委譲する(#286)。backend の venv に parser の extra を入れても
+        # contract / staging の判定は変わらないため入れない(#343)。
+        run: uv sync --locked --dev
+
+      - name: Resolve parser adapter contract mode
+        id: mode
+        env:
+          INPUT_PARSER_ADAPTER_CONTRACT_STRICT: ${{ github.event.inputs.parser_adapter_contract_strict }}
+          INPUT_RUN_FILE_PROCESSING_STAGING: ${{ github.event.inputs.run_file_processing_staging }}
+          INPUT_REQUIRE_REAL_WORLD_FILE_PROCESSING_MANIFEST: ${{ github.event.inputs.require_real_world_file_processing_manifest }}
+        run: |
+          set -euo pipefail
+          adapter_contract_strict_enabled=false
+          if [ "${INPUT_PARSER_ADAPTER_CONTRACT_STRICT:-false}" = "true" ]; then
+            adapter_contract_strict_enabled=true
+          fi
+          if [ "${INPUT_RUN_FILE_PROCESSING_STAGING:-false}" = "true" ] && \
+             [ "${INPUT_REQUIRE_REAL_WORLD_FILE_PROCESSING_MANIFEST:-true}" != "false" ]; then
+            adapter_contract_strict_enabled=true
+          fi
+          echo "adapter_contract_strict=${adapter_contract_strict_enabled}" >> "$GITHUB_OUTPUT"
+
+      # strict(real-world staging を含む)は、選んだ adapter(Docling)の parser サービスへ runner から
+      # 届く必要がある(#343 / #366)。本番と同じ services/parsers/docling を job の中で前面起動する。
+      # Unstructured は strict でも選択されない(status は ignored で blocking にならない)ため起動しない。
+      - name: Restore Docling models
+        id: docling-models
+        if: steps.mode.outputs.adapter_contract_strict == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # docling-tools models download の置き場(~/.cache/docling/models)と HF の metadata。
+          # モデルの版は docling の版(uv.lock)で決まる。取り直すときは v1 を上げる。
+          path: |
+            ~/.cache/docling
+            ~/.cache/huggingface
+          key: rag-docling-models-v1-${{ hashFiles('rag/services/parsers/docling/uv.lock') }}
+
+      - name: Start Docling parser service
+        if: steps.mode.outputs.adapter_contract_strict == 'true'
+        working-directory: rag
+        timeout-minutes: 15
+        # docling の lock は CPU 版の torch を持ち、CUDA の wheel を入れない(#1650)。
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          started=$SECONDS
+          scripts/rag-services.sh sync parser-docling
+          echo "parser-docling の sync: $((SECONDS - started)) 秒"
+          # run は sync(差分だけ)の後に gunicorn を exec する。ログは artifact に残す。
+          nohup scripts/rag-services.sh run parser-docling > artifacts/parser-docling-service.log 2>&1 &
+          pid=$!
+          echo "RAG_PARSER_DOCLING_PID=${pid}" >> "$GITHUB_ENV"
+          started=$SECONDS
+          until curl -fs --max-time 2 http://127.0.0.1:18020/health; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "::error::parser-docling が起動中に終了しました。"
+              tail -n 50 artifacts/parser-docling-service.log || true
+              exit 1
+            fi
+            if [ $((SECONDS - started)) -ge 300 ]; then
+              echo "::error::parser-docling の /health が 300 秒以内に ok になりませんでした。"
+              tail -n 50 artifacts/parser-docling-service.log || true
+              exit 1
+            fi
+            sleep 2
+          done
+          echo
+          echo "parser-docling の起動(/health まで): $((SECONDS - started)) 秒"
+
+      - name: Run evaluation and search load gates
+        env:
+          INPUT_API_BASE_URL: ${{ github.event.inputs.api_base_url }}
+          DEFAULT_API_BASE_URL: ${{ vars.RAG_EVALUATION_API_BASE_URL }}
+          INPUT_GOLDEN_SET_PATH: ${{ github.event.inputs.golden_set_path }}
+          INPUT_SEARCH_LOAD_PATH: ${{ github.event.inputs.search_load_path }}
+          INPUT_FILE_PROCESSING_MANIFEST_PATH: ${{ github.event.inputs.file_processing_manifest_path }}
+          INPUT_FILE_PROCESSING_TREND_BASELINE_PATH: ${{ github.event.inputs.file_processing_trend_baseline_path }}
+          INPUT_FILE_PROCESSING_STAGING_TREND_BASELINE_PATH: ${{ github.event.inputs.file_processing_staging_trend_baseline_path }}
+          INPUT_FAIL_ON_FILE_PROCESSING_PENDING: ${{ github.event.inputs.fail_on_file_processing_pending }}
+          INPUT_RUN_FILE_PROCESSING_STAGING: ${{ github.event.inputs.run_file_processing_staging }}
+          INPUT_REQUIRE_REAL_WORLD_FILE_PROCESSING_MANIFEST: ${{ github.event.inputs.require_real_world_file_processing_manifest }}
+          INPUT_RUN_PARSER_ADAPTER_CONTRACT: ${{ github.event.inputs.run_parser_adapter_contract }}
+          ADAPTER_CONTRACT_STRICT: ${{ steps.mode.outputs.adapter_contract_strict }}
+          INPUT_PARSER_ADAPTER_CONTRACT_SOURCE_KINDS: ${{ github.event.inputs.parser_adapter_contract_source_kinds }}
+          # adapter の可用性は parser サービスの /health で判定する(本番の systemd の unit と同じ。#343)。
+          # 通常実行は parser サービスを起動しないため、選択済み adapter の missing は記録だけになる。
+          # strict(real-world staging を含む)では、前の step で起動した Docling のサービスで判定する(#366)。
+          RAG_PARSER_READINESS_PROBE_ENABLED: "true"
+          # 評価 CLI は評価 job を投入して終わるまで待つ(#390)。job の既定の上限(1 時間)ではこの job の
+          # timeout-minutes(40 分)を超えるため、15 分で待つのをやめて job を取り消し、gate を失敗にする。
+          RAG_EVALUATION_TIMEOUT_SECONDS: "900"
+          RAG_EVALUATION_TENANT_ID: ${{ vars.RAG_EVALUATION_TENANT_ID }}
+          RAG_EVALUATION_USER_ID: ${{ vars.RAG_EVALUATION_USER_ID }}
+          RAG_SEARCH_LOAD_TENANT_ID: ${{ vars.RAG_SEARCH_LOAD_TENANT_ID }}
+          RAG_SEARCH_LOAD_USER_ID: ${{ vars.RAG_SEARCH_LOAD_USER_ID }}
+        run: |
+          set -euo pipefail
+          api_base_url="${INPUT_API_BASE_URL:-${DEFAULT_API_BASE_URL:-}}"
+          golden_set_path="${INPUT_GOLDEN_SET_PATH:-evaluation/golden-set.example.json}"
+          search_load_path="${INPUT_SEARCH_LOAD_PATH:-evaluation/search-load.example.json}"
+          file_processing_manifest_path="${INPUT_FILE_PROCESSING_MANIFEST_PATH:-docs/evaluation/file-processing-golden-set.json}"
+          file_processing_trend_baseline_path="${INPUT_FILE_PROCESSING_TREND_BASELINE_PATH:-}"
+          file_processing_staging_trend_baseline_path="${INPUT_FILE_PROCESSING_STAGING_TREND_BASELINE_PATH:-}"
+          adapter_contract_strict_enabled="${ADAPTER_CONTRACT_STRICT:-false}"
+          mkdir -p ../artifacts
+
+          parser_adapter_contract_status=0
+          if [ "${INPUT_RUN_PARSER_ADAPTER_CONTRACT:-true}" != "false" ]; then
+            parser_adapter_contract_args=(--output ../artifacts/parser-adapter-compatibility.json)
+            if [ -n "$file_processing_manifest_path" ]; then
+              parser_adapter_contract_args+=(--manifest "../${file_processing_manifest_path}")
+            fi
+            if [ -n "${INPUT_PARSER_ADAPTER_CONTRACT_SOURCE_KINDS:-}" ]; then
+              IFS=',' read -ra source_kinds <<< "${INPUT_PARSER_ADAPTER_CONTRACT_SOURCE_KINDS}"
+              for source_kind in "${source_kinds[@]}"; do
+                source_kind="$(echo "$source_kind" | xargs)"
+                if [ -n "$source_kind" ]; then
+                  parser_adapter_contract_args+=(--source-kind "$source_kind")
+                fi
+              done
+            fi
+            if [ "$adapter_contract_strict_enabled" = "true" ]; then
+              parser_adapter_contract_args+=(--strict)
+            fi
+            uv run python -m app.rag.parser_adapter_contract_cli \
+              "${parser_adapter_contract_args[@]}" || parser_adapter_contract_status=$?
+          else
+            echo "run_parser_adapter_contract=false のため parser adapter contract gate を skip します。"
+          fi
+
+          file_processing_status=0
+          file_processing_staging_status=0
+          file_processing_trend_status=0
+          file_processing_staging_trend_status=0
+          if [ -n "$file_processing_manifest_path" ]; then
+            file_processing_args=(
+              "../${file_processing_manifest_path}"
+              --output ../artifacts/file-processing-report.json
+              --trend-output ../artifacts/file-processing-trend.json
+              --github-annotations
+            )
+            if [ "${INPUT_FAIL_ON_FILE_PROCESSING_PENDING:-false}" = "true" ]; then
+              file_processing_args+=(--fail-on-pending)
+            fi
+            uv run python -m app.rag.file_processing_golden_cli \
+              "${file_processing_args[@]}" || file_processing_status=$?
+            if [ -n "$file_processing_trend_baseline_path" ]; then
+              if [ -f "../${file_processing_trend_baseline_path}" ]; then
+                uv run python -m app.rag.file_processing_trend_cli \
+                  ../artifacts/file-processing-trend.json \
+                  --baseline "../${file_processing_trend_baseline_path}" \
+                  --output ../artifacts/file-processing-trend-regression.json \
+                  || file_processing_trend_status=$?
+              else
+                echo "::error::file-processing trend baseline not found: ${file_processing_trend_baseline_path}"
+                file_processing_trend_status=2
+              fi
+            fi
+            if [ "${INPUT_RUN_FILE_PROCESSING_STAGING:-false}" = "true" ]; then
+              staging_args=(
+                "../${file_processing_manifest_path}"
+                --output ../artifacts/file-processing-staging-report.json
+                --trend-output ../artifacts/file-processing-staging-trend.json
+                --cleanup
+              )
+              if [ "$adapter_contract_strict_enabled" = "true" ]; then
+                staging_args+=(--parser-adapter-contract-strict)
+              fi
+              if [ "${INPUT_REQUIRE_REAL_WORLD_FILE_PROCESSING_MANIFEST:-true}" != "false" ]; then
+                staging_args+=(--require-real-world-policy)
+              fi
+              uv run python -m app.rag.file_processing_staging_cli \
+                "${staging_args[@]}" || file_processing_staging_status=$?
+              if [ -n "$file_processing_staging_trend_baseline_path" ]; then
+                if [ -f "../${file_processing_staging_trend_baseline_path}" ]; then
+                  uv run python -m app.rag.file_processing_trend_cli \
+                    ../artifacts/file-processing-staging-trend.json \
+                    --baseline "../${file_processing_staging_trend_baseline_path}" \
+                    --output ../artifacts/file-processing-staging-trend-regression.json \
+                    --require-promotion-ready \
+                    || file_processing_staging_trend_status=$?
+                else
+                  echo "::error::file-processing staging trend baseline not found: ${file_processing_staging_trend_baseline_path}"
+                  file_processing_staging_trend_status=2
+                fi
+              fi
+            fi
+          else
+            echo "file_processing_manifest_path が空のため file-processing gate を skip します。"
+          fi
+
+          if [ -z "$api_base_url" ]; then
+            echo "RAG_EVALUATION_API_BASE_URL が未設定のため nightly evaluation を skip します。"
+            if [ "$parser_adapter_contract_status" -ne 0 ]; then
+              echo "::error::parser adapter contract gate failed with exit code ${parser_adapter_contract_status}"
+              exit "$parser_adapter_contract_status"
+            fi
+            if [ "$file_processing_status" -ne 0 ]; then
+              echo "::error::file-processing gate failed with exit code ${file_processing_status}"
+              exit "$file_processing_status"
+            fi
+            if [ "$file_processing_trend_status" -ne 0 ]; then
+              echo "::error::file-processing trend regression gate failed with exit code ${file_processing_trend_status}"
+              exit "$file_processing_trend_status"
+            fi
+            if [ "$file_processing_staging_status" -ne 0 ]; then
+              echo "::error::file-processing staging gate failed with exit code ${file_processing_staging_status}"
+              exit "$file_processing_staging_status"
+            fi
+            if [ "$file_processing_staging_trend_status" -ne 0 ]; then
+              echo "::error::file-processing staging trend regression gate failed with exit code ${file_processing_staging_trend_status}"
+              exit "$file_processing_staging_trend_status"
+            fi
+            exit 0
+          fi
+          export RAG_SEARCH_LOAD_TENANT_ID="${RAG_SEARCH_LOAD_TENANT_ID:-${RAG_EVALUATION_TENANT_ID:-}}"
+          export RAG_SEARCH_LOAD_USER_ID="${RAG_SEARCH_LOAD_USER_ID:-${RAG_EVALUATION_USER_ID:-}}"
+
+          evaluation_status=0
+          uv run python -m app.rag.evaluation_cli \
+            "../${golden_set_path}" \
+            --api-base-url "$api_base_url" \
+            --output ../artifacts/evaluation-result.json \
+            --trend-output ../artifacts/evaluation-trend.json || evaluation_status=$?
+
+          search_load_status=0
+          if [ -n "$search_load_path" ]; then
+            uv run python -m app.rag.search_load_cli \
+              "../${search_load_path}" \
+              --api-base-url "$api_base_url" \
+              --output ../artifacts/search-load-result.json \
+              --trend-output ../artifacts/search-load-trend.json || search_load_status=$?
+          else
+            echo "search_load_path が空のため search load gate を skip します。"
+          fi
+
+          if [ "$file_processing_status" -ne 0 ]; then
+            echo "::error::file-processing gate failed with exit code ${file_processing_status}"
+            exit "$file_processing_status"
+          fi
+          if [ "$file_processing_trend_status" -ne 0 ]; then
+            echo "::error::file-processing trend regression gate failed with exit code ${file_processing_trend_status}"
+            exit "$file_processing_trend_status"
+          fi
+          if [ "$file_processing_staging_status" -ne 0 ]; then
+            echo "::error::file-processing staging gate failed with exit code ${file_processing_staging_status}"
+            exit "$file_processing_staging_status"
+          fi
+          if [ "$file_processing_staging_trend_status" -ne 0 ]; then
+            echo "::error::file-processing staging trend regression gate failed with exit code ${file_processing_staging_trend_status}"
+            exit "$file_processing_staging_trend_status"
+          fi
+          if [ "$parser_adapter_contract_status" -ne 0 ]; then
+            echo "::error::parser adapter contract gate failed with exit code ${parser_adapter_contract_status}"
+            exit "$parser_adapter_contract_status"
+          fi
+          if [ "$evaluation_status" -ne 0 ]; then
+            echo "::error::evaluation gate failed with exit code ${evaluation_status}"
+            exit "$evaluation_status"
+          fi
+          if [ "$search_load_status" -ne 0 ]; then
+            echo "::error::search load gate failed with exit code ${search_load_status}"
+            exit "$search_load_status"
+          fi
+
+      - name: Stop Docling parser service
+        if: always() && env.RAG_PARSER_DOCLING_PID != ''
+        run: |
+          kill "${RAG_PARSER_DOCLING_PID}" 2>/dev/null || true
+          for _ in $(seq 1 30); do
+            kill -0 "${RAG_PARSER_DOCLING_PID}" 2>/dev/null || exit 0
+            sleep 1
+          done
+          kill -9 "${RAG_PARSER_DOCLING_PID}" 2>/dev/null || true
+
+      - name: Save Docling models
+        # gate が失敗しても、取得したモデルは次の strict で使えるように保存する。
+        if: always() && steps.docling-models.outcome == 'success' && steps.docling-models.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/docling
+            ~/.cache/huggingface
+          key: ${{ steps.docling-models.outputs.cache-primary-key }}
+
+      - name: Upload RAG gate artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rag-evaluation-nightly
+          path: rag/artifacts/
+          if-no-files-found: ignore

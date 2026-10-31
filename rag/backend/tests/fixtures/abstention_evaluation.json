@@ -1,0 +1,40 @@
+[
+  {
+    "id": "pure-abstention",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。",
+    "support": null,
+    "unsupported": false
+  },
+  {
+    "id": "abstention-with-gap",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。\n\n資料から確認できなかった事項\n\n・項目 A の設定方法は資料から確認できません。",
+    "support": null,
+    "unsupported": false
+  },
+  {
+    "id": "empty-search-guidance",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。質問の対象・条件や検索範囲を見直し、対象業務の操作説明書で操作方法と適用条件を確認してください。",
+    "support": null,
+    "unsupported": false
+  },
+  {
+    "id": "normalized-abstention-guidance",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。対象業務の操作説明書で操作方法と適用条件を確認し、質問の対象・条件や検索範囲を見直してください。",
+    "support": null,
+    "unsupported": false
+  },
+  {
+    "id": "abstention-with-fabricated-step",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、回答できません。設定画面で項目 A を削除してください。",
+    "support": null,
+    "unsupported": false,
+    "unassessed": true
+  },
+  {
+    "id": "modified-refusal-is-not-boilerplate",
+    "answer": "検索された資料に回答を裏付ける十分な根拠がないため、項目 A を削除してください。",
+    "support": null,
+    "unsupported": false,
+    "unassessed": true
+  }
+]

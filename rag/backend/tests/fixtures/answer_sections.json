@@ -1,0 +1,29 @@
+{
+  "description": "回答の本文のうち、主張として数える部分（app.rag.answer_metrics.grounding_text）の基線（RAG 自身の回答の節）。answer の {name} は言語資源の answer_labels() の項目に置き換える（文言を変えても同じ結果になる）。grounding は置き換えた後の grounding_text の値。Agent の回答の節（旧形式を含む）は suite/evaluation/tests/fixtures/agent_baseline/answer_sections.json（#3240）。",
+  "rag_sections": [
+    {
+      "id": "generated-headings-and-citation-line",
+      "note": "回答生成が付けた前置き・見出し・出典行は主張から外す。",
+      "answer": "{neutral_summary}\n\n{rules_section}\n\n・合成の記載 A です。\n{citation_prefix}合成.pdf p.1",
+      "grounding": "・合成の記載 A です。"
+    },
+    {
+      "id": "quote-only-section",
+      "note": "「参考情報」の節の見出しと直下の説明は主張から外す（#2040）。",
+      "answer": "{rules_section}\n\n・合成の記載 A です。\n\n{quote_only_section}\n\n{quote_only_note}",
+      "grounding": "・合成の記載 A です。"
+    },
+    {
+      "id": "unverified-chapter-lines",
+      "note": "読めなかった章節の行はシステムの案内なので数えない（#2040）。",
+      "answer": "{rules_section}\n\n・合成の記載 A です。\n\n{unverified_section}\n\n・「a.pdf」の「第2章」は、読み込み量の上限に達したため未反映です。",
+      "grounding": "・合成の記載 A です。"
+    },
+    {
+      "id": "removed-and-marked-sections",
+      "note": "印の段落は本文の主張として数え、外した段落・確認が必要な点の節（見出し・説明・引用）は数えない（#2738）。",
+      "answer": "設定は 2 段階で変更します。\n\n{rules_section}\n\n・区分Ⅱの選択肢の値は 01 です。\n{citation_prefix}設定.pdf p.1\n\n{removed_section}\n\n{removed_section_note}\n・「変更は翌月から反映されます。」：根拠と矛盾（当月から反映）\n\n{marked_section}\n\n{marked_section_note}\n・「区分Ⅱの選択肢の値は 01 です。」：根拠の表の対応と違う可能性",
+      "grounding": "設定は 2 段階で変更します。\n・区分Ⅱの選択肢の値は 01 です。"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "data": {
+    "safety": {
+      "is_safe": true,
+      "is_select_only": true,
+      "row_limit_applied": 100,
+      "blocked_reason": "",
+      "warnings": [],
+      "referenced_tables": [
+        "APP.ORDERS"
+      ],
+      "referenced_columns": [
+        "CUSTOMER_ID",
+        "TOTAL_AMOUNT",
+        "ORDER_DATE"
+      ]
+    },
+    "explanation": "受注を顧客別に集計し、金額降順で並べる SELECT です。",
+    "recommendations": [
+      "顧客名が必要な場合は CUSTOMERS を JOIN してください。"
+    ],
+    "executable_sql": "SELECT CUSTOMER_ID, SUM(TOTAL_AMOUNT) AS TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' GROUP BY CUSTOMER_ID ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 10 ROWS ONLY",
+    "repaired_sql": "",
+    "optimization_hints": [
+      "ORDER_DATE の絞り込みに index があると有利です。"
+    ],
+    "structure_summary": "APP.ORDERS を日付で絞り、顧客別に TOTAL_AMOUNT を集計します。",
+    "risk_level": "low",
+    "statement_type": "SELECT",
+    "object_names": [
+      "APP.ORDERS"
+    ],
+    "column_names": [
+      "CUSTOMER_ID",
+      "TOTAL_AMOUNT",
+      "ORDER_DATE"
+    ],
+    "conditions": [
+      "ORDER_DATE >= DATE '2026-08-01'"
+    ],
+    "group_by": [
+      "CUSTOMER_ID"
+    ],
+    "order_by": [
+      "TOTAL_AMOUNT DESC"
+    ],
+    "risk_findings": [],
+    "repair_candidates": [],
+    "operations": [
+      "FILTER",
+      "GROUP",
+      "SORT"
+    ],
+    "filters": [
+      "ORDER_DATE >= DATE '2026-08-01'"
+    ],
+    "joins": [],
+    "aggregations": [
+      "SUM(TOTAL_AMOUNT)"
+    ],
+    "llm_enhanced": false,
+    "llm_warnings": []
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

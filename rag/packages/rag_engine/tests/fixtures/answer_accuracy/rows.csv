@@ -1,0 +1,4 @@
+id,update_required,value
+row-a,true,10
+row-b,false,20
+row-c,true,30

@@ -1,0 +1,56 @@
+{
+  "data": {
+    "id": "default",
+    "name": "標準業務プロファイル",
+    "category": "sales",
+    "description": "受注・顧客・請求を対象にした標準プロファイル",
+    "allowed_tables": [
+      "APP.ORDERS",
+      "APP.CUSTOMERS",
+      "APP.INVOICES"
+    ],
+    "allowed_views": [
+      "APP.V_MONTHLY_SALES"
+    ],
+    "glossary": {
+      "売上": "TOTAL_AMOUNT",
+      "受注": "ORDERS",
+      "顧客": "CUSTOMERS",
+      "未入金": "INVOICES.STATUS = 'UNPAID'"
+    },
+    "sql_rules": [
+      "SELECT または WITH のみ生成する",
+      "大量取得を避けるため FETCH FIRST 句を付ける",
+      "日付条件が曖昧な場合は今月を既定にする"
+    ],
+    "default_row_limit": 100,
+    "safety_policy": "select_only",
+    "few_shot_examples": [
+      {
+        "question": "今月の受注金額上位5件",
+        "sql": "SELECT ORDER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= TRUNC(SYSDATE, 'MM') ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY"
+      }
+    ],
+    "select_ai_config": {
+      "profile_name": "NL2SQL_DEFAULT",
+      "region": "ap-osaka-1",
+      "model": "cohere.command-r-plus",
+      "embedding_model": "cohere.embed-v4.0",
+      "max_tokens": 32000,
+      "enforce_object_list": true,
+      "comments": true,
+      "annotations": false,
+      "constraints": true,
+      "role": "業務利用者向けに安全な SELECT SQL を生成する",
+      "additional_instructions": "日本語の業務用語を物理列に正しく対応付ける"
+    },
+    "archived": false,
+    "version": 4,
+    "etag": "profile-default-v4",
+    "updated_at": "2026-08-12T00:00:00Z",
+    "object_scope_version": 3
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,60 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}.lab{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin:14px 0 6px}.lab:first-child{margin-top:0}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.note{margin:14px 0 0;font:var(--text-meta);color:var(--color-fg-muted)}.bad{color:var(--color-danger-fg)}.good{color:var(--color-success-fg)}</style>
+</head><body>
+<div id="root"></div>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="./_ds_bundle.js"></script>
+<script type="text/babel" data-presets="react">
+const { Button, Tabs, ToggleChip } = window.ProductionReadyPlatformDesignSystem_6437ce;
+function Demo() {
+  const [view, setView] = React.useState("all");
+  const [filter, setFilter] = React.useState("all");
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <div>
+      <span className="lab">Button · icon は role で決まる（同じグループ内で有無を混在させない）</span>
+      <div className="row">
+        <Button icon="Upload"><span>文書アップロード</span></Button>
+        <Button variant="secondary" icon="RefreshCw"><span>最新情報を取得</span></Button>
+        <Button variant="ghost" icon="Download"><span>CSV 出力</span></Button>
+        <Button variant="danger" icon="Trash2"><span>削除する</span></Button>
+        <Button variant="ghost" iconOnly icon="Ellipsis" aria-label="その他の操作" />
+      </div>
+
+      <span className="lab">loading · 先頭アイコンがスピナーに置き換わる（幅不変・ラベル不変）</span>
+      <div className="row">
+        <Button icon="Save" loading={busy} onClick={() => { setBusy(true); setTimeout(() => setBusy(false), 2500); }}><span>保存</span></Button>
+        <Button variant="secondary" icon="Play" loading><span>実行</span></Button>
+        <Button variant="secondary" icon="RefreshCw" disabled><span>最新情報を取得</span></Button>
+      </div>
+
+      <span className="lab">Tabs（下線）= ビュー切替　／　ToggleChip（pill）= 絞り込み　※流用しない</span>
+      <Tabs value={view} onChange={setView} items={[
+        { id: "all", label: "すべて", count: 124 },
+        { id: "indexed", label: "索引済み", count: 118 },
+        { id: "failed", label: "失敗", count: 6 },
+        { id: "archived", label: "アーカイブ", disabled: true },
+      ]} />
+      <div className="row" style={{ marginTop: 12 }} role="group" aria-label="状態で絞り込み">
+        {[["all", "すべて"], ["run", "処理中"], ["ng", "失敗"]].map(([k, l]) => (
+          <ToggleChip key={k} selected={filter === k} onClick={() => setFilter(k)}>{l}</ToggleChip>
+        ))}
+      </div>
+
+      <p className="note">
+        <b>ローディングのラベルは変えません。</b>「実行中…」に差し替えると 3 アプリで訳が分岐し、幅も跳ねます。
+        1 秒を超えて領域全体が待ちになる処理は、ボタンではなく領域側で <code>LoadingState</code> を出します。<br />
+        <b>非同期操作のボタンは必ず <code>icon</code> を持たせる</b> — アイコンが無いとスピナーの分だけ幅が広がります。<br />
+        <b>PageHeader の並びは <code>danger → utility → secondary → primary</code></b>。右端（最も押しやすい位置）が primary です。
+      </p>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body></html>

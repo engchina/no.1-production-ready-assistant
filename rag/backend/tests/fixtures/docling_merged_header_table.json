@@ -1,0 +1,1680 @@
+{
+ "raw_text": "Synthetic quarterly table\n\nThe values in this table are synthetic.",
+ "document_type": "ドキュメント",
+ "confidence": 0.9,
+ "warnings": [],
+ "elements": [
+  {
+   "kind": "title",
+   "text": "Synthetic quarterly table",
+   "order": 0,
+   "element_id": "docling-p1-1",
+   "parent_id": null,
+   "content_kind": "text",
+   "source_parser": "docling_layout",
+   "page_number": 1,
+   "bbox": [
+    325.10924369747903,
+    341.5148836104512,
+    1006.0880672268909,
+    395.4834703087887
+   ],
+   "section_path": [
+    "Synthetic quarterly table"
+   ],
+   "confidence": null,
+   "metadata": {
+    "category": "Section-header",
+    "raw_type": "section_header",
+    "page_width": 2480.0,
+    "page_height": 3509.0,
+    "bbox_unit": "absolute",
+    "bbox_mode": "xyxy",
+    "seq_no": 1
+   }
+  },
+  {
+   "kind": "table",
+   "text": "<table><tbody><tr><th rowspan=\"2\">Group</th><th rowspan=\"2\">Item</th><th colspan=\"2\">H1</th><th colspan=\"2\">H2</th></tr><tr><th>Plan</th><th>Actual</th><th>Plan</th><th>Actual</th></tr><tr><th rowspan=\"2\">G1</th><th>Alpha</th><td>110</td><td>105</td><td>120</td><td>118</td></tr><tr><th>Beta</th><td>210</td><td>198</td><td>220</td><td>231</td></tr><tr><th rowspan=\"2\">G2</th><th>Gamma</th><td>310</td><td>322</td><td>330</td><td>301</td></tr><tr><th>Delta</th><td>410</td><td>407</td><td>420</td><td>415</td></tr></tbody></table>",
+   "order": 1,
+   "element_id": "docling-p1-2",
+   "parent_id": null,
+   "content_kind": "table",
+   "source_parser": "docling_layout",
+   "page_number": 1,
+   "bbox": [
+    336.4082636472558,
+    472.15893603617104,
+    2142.2255202862398,
+    1079.2236955873757
+   ],
+   "section_path": [
+    "Synthetic quarterly table"
+   ],
+   "confidence": null,
+   "metadata": {
+    "category": "Table",
+    "raw_type": "table",
+    "page_width": 2480.0,
+    "page_height": 3509.0,
+    "bbox_unit": "absolute",
+    "bbox_mode": "xyxy",
+    "seq_no": 2
+   }
+  },
+  {
+   "kind": "text",
+   "text": "The values in this table are synthetic.",
+   "order": 2,
+   "element_id": "docling-p1-3",
+   "parent_id": null,
+   "content_kind": "text",
+   "source_parser": "docling_layout",
+   "page_number": 1,
+   "bbox": [
+    325.10924369747903,
+    1161.970760095012,
+    1010.8396638655464,
+    1200.5197505938245
+   ],
+   "section_path": [
+    "Synthetic quarterly table"
+   ],
+   "confidence": null,
+   "metadata": {
+    "category": "Text",
+    "raw_type": "text",
+    "page_width": 2480.0,
+    "page_height": 3509.0,
+    "bbox_unit": "absolute",
+    "bbox_mode": "xyxy",
+    "seq_no": 3
+   }
+  }
+ ],
+ "pages": [
+  {
+   "page_number": 1,
+   "label": null,
+   "width": 2480.0,
+   "height": 3509.0,
+   "rotation": null,
+   "element_ids": [
+    "docling-p1-1",
+    "docling-p1-2",
+    "docling-p1-3"
+   ],
+   "metadata": {
+    "pdf_width": 595.0,
+    "pdf_height": 842.0
+   }
+  }
+ ],
+ "tables": [
+  {
+   "table_id": "table-docling-p1-2",
+   "element_id": "docling-p1-2",
+   "page_number": 1,
+   "caption": null,
+   "cells": [
+    {
+     "row": 0,
+     "col": 0,
+     "text": "Group",
+     "row_span": 2,
+     "col_span": 1,
+     "bbox": [
+      420.97,
+      563.03,
+      558.52,
+      605.44
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 0,
+     "col": 1,
+     "text": "Item",
+     "row_span": 2,
+     "col_span": 1,
+     "bbox": [
+      742.72,
+      563.03,
+      836.98,
+      605.44
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 0,
+     "col": 2,
+     "text": "H1",
+     "row_span": 1,
+     "col_span": 2,
+     "bbox": [
+      1210.7,
+      513.02,
+      1269.3,
+      555.43
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 0,
+     "col": 4,
+     "text": "H2",
+     "row_span": 1,
+     "col_span": 2,
+     "bbox": [
+      1810.9,
+      513.02,
+      1869.5,
+      555.43
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 1,
+     "col": 2,
+     "text": "Plan",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1041.53,
+      613.04,
+      1138.37,
+      655.45
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 1,
+     "col": 3,
+     "text": "Actual",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1319.99,
+      613.04,
+      1460.11,
+      655.45
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 1,
+     "col": 4,
+     "text": "Plan",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1641.73,
+      613.04,
+      1738.57,
+      655.45
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 1,
+     "col": 5,
+     "text": "Actual",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1920.2,
+      613.04,
+      2060.31,
+      655.45
+     ],
+     "confidence": null,
+     "metadata": {
+      "column_header": true
+     }
+    },
+    {
+     "row": 2,
+     "col": 0,
+     "text": "G1",
+     "row_span": 2,
+     "col_span": 1,
+     "bbox": [
+      459.17,
+      763.07,
+      520.33,
+      805.47
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 2,
+     "col": 1,
+     "text": "Alpha",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      731.23,
+      713.06,
+      848.47,
+      755.46
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 2,
+     "col": 2,
+     "text": "110",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1051.71,
+      713.06,
+      1128.19,
+      755.46
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 2,
+     "col": 3,
+     "text": "105",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1351.81,
+      713.06,
+      1428.29,
+      755.46
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 2,
+     "col": 4,
+     "text": "120",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1651.91,
+      713.06,
+      1728.39,
+      755.46
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 2,
+     "col": 5,
+     "text": "118",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1952.01,
+      713.06,
+      2028.49,
+      755.46
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 3,
+     "col": 1,
+     "text": "Beta",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      742.69,
+      813.08,
+      837.0,
+      855.48
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 3,
+     "col": 2,
+     "text": "210",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1051.71,
+      813.08,
+      1128.19,
+      855.48
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 3,
+     "col": 3,
+     "text": "198",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1351.81,
+      813.08,
+      1428.29,
+      855.48
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 3,
+     "col": 4,
+     "text": "220",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1651.91,
+      813.08,
+      1728.39,
+      855.48
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 3,
+     "col": 5,
+     "text": "231",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1952.01,
+      813.08,
+      2028.49,
+      855.48
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 4,
+     "col": 0,
+     "text": "G2",
+     "row_span": 2,
+     "col_span": 1,
+     "bbox": [
+      459.17,
+      963.11,
+      520.33,
+      1005.51
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 4,
+     "col": 1,
+     "text": "Gamma",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      708.33,
+      913.1,
+      871.37,
+      955.5
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 4,
+     "col": 2,
+     "text": "310",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1051.71,
+      913.1,
+      1128.19,
+      955.5
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 4,
+     "col": 3,
+     "text": "322",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1351.81,
+      913.1,
+      1428.29,
+      955.5
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 4,
+     "col": 4,
+     "text": "330",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1651.91,
+      913.1,
+      1728.39,
+      955.5
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 4,
+     "col": 5,
+     "text": "301",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1952.01,
+      913.1,
+      2028.49,
+      955.5
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 5,
+     "col": 1,
+     "text": "Delta",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      736.34,
+      1013.12,
+      843.35,
+      1055.52
+     ],
+     "confidence": null,
+     "metadata": {
+      "row_header": true
+     }
+    },
+    {
+     "row": 5,
+     "col": 2,
+     "text": "410",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1051.71,
+      1013.12,
+      1128.19,
+      1055.52
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 5,
+     "col": 3,
+     "text": "407",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1351.81,
+      1013.12,
+      1428.29,
+      1055.52
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 5,
+     "col": 4,
+     "text": "420",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1651.91,
+      1013.12,
+      1728.39,
+      1055.52
+     ],
+     "confidence": null,
+     "metadata": {}
+    },
+    {
+     "row": 5,
+     "col": 5,
+     "text": "415",
+     "row_span": 1,
+     "col_span": 1,
+     "bbox": [
+      1952.01,
+      1013.12,
+      2028.49,
+      1055.52
+     ],
+     "confidence": null,
+     "metadata": {}
+    }
+   ],
+   "metadata": {
+    "html": "<table><tbody><tr><th rowspan=\"2\">Group</th><th rowspan=\"2\">Item</th><th colspan=\"2\">H1</th><th colspan=\"2\">H2</th></tr><tr><th>Plan</th><th>Actual</th><th>Plan</th><th>Actual</th></tr><tr><th rowspan=\"2\">G1</th><th>Alpha</th><td>110</td><td>105</td><td>120</td><td>118</td></tr><tr><th>Beta</th><td>210</td><td>198</td><td>220</td><td>231</td></tr><tr><th rowspan=\"2\">G2</th><th>Gamma</th><td>310</td><td>322</td><td>330</td><td>301</td></tr><tr><th>Delta</th><td>410</td><td>407</td><td>420</td><td>415</td></tr></tbody></table>",
+    "parsed_table_grid": 1
+   }
+  }
+ ],
+ "assets": [],
+ "navigation": [],
+ "fields": [],
+ "parser_artifacts": {
+  "external_adapter": "docling",
+  "adapter_export": "layout_records",
+  "source_page_count": 1,
+  "table_count": 1,
+  "picture_count": 0,
+  "layout_records": {
+   "version": 1,
+   "pages": [
+    {
+     "page": 1,
+     "width": 2480,
+     "height": 3509,
+     "pdf_width": 595.0,
+     "pdf_height": 842.0
+    }
+   ],
+   "records": [
+    {
+     "id": "docling-p1-1",
+     "engine": "docling",
+     "page": 1,
+     "seq_no": 1,
+     "bbox": [
+      325.10924369747903,
+      341.5148836104512,
+      1006.0880672268909,
+      395.4834703087887
+     ],
+     "coord_system": "image_top_left",
+     "page_width": 2480,
+     "page_height": 3509,
+     "category": "Section-header",
+     "text": "Synthetic quarterly table",
+     "confidence": null,
+     "raw_type": "section_header",
+     "raw": {
+      "self_ref": "#/texts/0",
+      "parent": {
+       "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "section_header",
+      "prov": [
+       {
+        "page_no": 1,
+        "bbox": {
+         "l": 78.0,
+         "t": 760.052,
+         "r": 241.38000000000002,
+         "b": 747.102,
+         "coord_origin": "BOTTOMLEFT"
+        },
+        "charspan": [
+         0,
+         25
+        ]
+       }
+      ],
+      "orig": "Synthetic quarterly table",
+      "text": "Synthetic quarterly table",
+      "level": 1
+     }
+    },
+    {
+     "id": "docling-p1-2",
+     "engine": "docling",
+     "page": 1,
+     "seq_no": 2,
+     "bbox": [
+      336.4082636472558,
+      472.15893603617104,
+      2142.2255202862398,
+      1079.2236955873757
+     ],
+     "coord_system": "image_top_left",
+     "page_width": 2480,
+     "page_height": 3509,
+     "category": "Table",
+     "text": "<table><tbody><tr><th rowspan=\"2\">Group</th><th rowspan=\"2\">Item</th><th colspan=\"2\">H1</th><th colspan=\"2\">H2</th></tr><tr><th>Plan</th><th>Actual</th><th>Plan</th><th>Actual</th></tr><tr><th rowspan=\"2\">G1</th><th>Alpha</th><td>110</td><td>105</td><td>120</td><td>118</td></tr><tr><th>Beta</th><td>210</td><td>198</td><td>220</td><td>231</td></tr><tr><th rowspan=\"2\">G2</th><th>Gamma</th><td>310</td><td>322</td><td>330</td><td>301</td></tr><tr><th>Delta</th><td>410</td><td>407</td><td>420</td><td>415</td></tr></tbody></table>",
+     "confidence": null,
+     "raw_type": "table",
+     "raw": {
+      "self_ref": "#/tables/0",
+      "parent": {
+       "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "table",
+      "prov": [
+       {
+        "page_no": 1,
+        "bbox": {
+         "l": 80.71085357666016,
+         "t": 728.7033843994141,
+         "r": 513.9613647460938,
+         "b": 583.0355224609375,
+         "coord_origin": "BOTTOMLEFT"
+        },
+        "charspan": [
+         0,
+         0
+        ]
+       }
+      ],
+      "captions": [],
+      "references": [],
+      "footnotes": [],
+      "data": {
+       "table_cells": [
+        {
+         "bbox": {
+          "l": 101.0,
+          "t": 135.10199999999998,
+          "r": 134.0,
+          "b": 145.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 2,
+         "col_span": 1,
+         "start_row_offset_idx": 0,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 0,
+         "end_col_offset_idx": 1,
+         "text": "Group",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 178.192,
+          "t": 135.10199999999998,
+          "r": 200.808,
+          "b": 145.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 2,
+         "col_span": 1,
+         "start_row_offset_idx": 0,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 1,
+         "end_col_offset_idx": 2,
+         "text": "Item",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 290.471,
+          "t": 123.10199999999998,
+          "r": 304.529,
+          "b": 133.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 2,
+         "start_row_offset_idx": 0,
+         "end_row_offset_idx": 1,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 4,
+         "text": "H1",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 434.471,
+          "t": 123.10199999999998,
+          "r": 448.529,
+          "b": 133.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 2,
+         "start_row_offset_idx": 0,
+         "end_row_offset_idx": 1,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 6,
+         "text": "H2",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 249.884,
+          "t": 147.10199999999998,
+          "r": 273.116,
+          "b": 157.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 1,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 3,
+         "text": "Plan",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 316.692,
+          "t": 147.10199999999998,
+          "r": 350.308,
+          "b": 157.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 1,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 3,
+         "end_col_offset_idx": 4,
+         "text": "Actual",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 393.884,
+          "t": 147.10199999999998,
+          "r": 417.116,
+          "b": 157.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 1,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 5,
+         "text": "Plan",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 460.692,
+          "t": 147.10199999999998,
+          "r": 494.308,
+          "b": 157.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 1,
+         "end_row_offset_idx": 2,
+         "start_col_offset_idx": 5,
+         "end_col_offset_idx": 6,
+         "text": "Actual",
+         "column_header": true,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 110.163,
+          "t": 183.10199999999998,
+          "r": 124.837,
+          "b": 193.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 2,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 0,
+         "end_col_offset_idx": 1,
+         "text": "G1",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 175.4365,
+          "t": 171.10199999999998,
+          "r": 203.56349999999998,
+          "b": 181.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 3,
+         "start_col_offset_idx": 1,
+         "end_col_offset_idx": 2,
+         "text": "Alpha",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 252.326,
+          "t": 171.10199999999998,
+          "r": 270.67400000000004,
+          "b": 181.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 3,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 3,
+         "text": "110",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 324.326,
+          "t": 171.10199999999998,
+          "r": 342.67400000000004,
+          "b": 181.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 3,
+         "start_col_offset_idx": 3,
+         "end_col_offset_idx": 4,
+         "text": "105",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 396.326,
+          "t": 171.10199999999998,
+          "r": 414.674,
+          "b": 181.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 3,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 5,
+         "text": "120",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 468.326,
+          "t": 171.10199999999998,
+          "r": 486.674,
+          "b": 181.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 2,
+         "end_row_offset_idx": 3,
+         "start_col_offset_idx": 5,
+         "end_col_offset_idx": 6,
+         "text": "118",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 178.1865,
+          "t": 195.10199999999998,
+          "r": 200.8135,
+          "b": 205.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 3,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 1,
+         "end_col_offset_idx": 2,
+         "text": "Beta",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 252.326,
+          "t": 195.10199999999998,
+          "r": 270.67400000000004,
+          "b": 205.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 3,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 3,
+         "text": "210",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 324.326,
+          "t": 195.10199999999998,
+          "r": 342.67400000000004,
+          "b": 205.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 3,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 3,
+         "end_col_offset_idx": 4,
+         "text": "198",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 396.326,
+          "t": 195.10199999999998,
+          "r": 414.674,
+          "b": 205.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 3,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 5,
+         "text": "220",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 468.326,
+          "t": 195.10199999999998,
+          "r": 486.674,
+          "b": 205.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 3,
+         "end_row_offset_idx": 4,
+         "start_col_offset_idx": 5,
+         "end_col_offset_idx": 6,
+         "text": "231",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 110.163,
+          "t": 231.10199999999998,
+          "r": 124.837,
+          "b": 241.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 2,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 0,
+         "end_col_offset_idx": 1,
+         "text": "G2",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 169.942,
+          "t": 219.10199999999998,
+          "r": 209.058,
+          "b": 229.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 5,
+         "start_col_offset_idx": 1,
+         "end_col_offset_idx": 2,
+         "text": "Gamma",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 252.326,
+          "t": 219.10199999999998,
+          "r": 270.67400000000004,
+          "b": 229.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 5,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 3,
+         "text": "310",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 324.326,
+          "t": 219.10199999999998,
+          "r": 342.67400000000004,
+          "b": 229.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 5,
+         "start_col_offset_idx": 3,
+         "end_col_offset_idx": 4,
+         "text": "322",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 396.326,
+          "t": 219.10199999999998,
+          "r": 414.674,
+          "b": 229.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 5,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 5,
+         "text": "330",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 468.326,
+          "t": 219.10199999999998,
+          "r": 486.674,
+          "b": 229.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 4,
+         "end_row_offset_idx": 5,
+         "start_col_offset_idx": 5,
+         "end_col_offset_idx": 6,
+         "text": "301",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 176.663,
+          "t": 243.10199999999998,
+          "r": 202.337,
+          "b": 253.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 5,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 1,
+         "end_col_offset_idx": 2,
+         "text": "Delta",
+         "column_header": false,
+         "row_header": true,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 252.326,
+          "t": 243.10199999999998,
+          "r": 270.67400000000004,
+          "b": 253.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 5,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 2,
+         "end_col_offset_idx": 3,
+         "text": "410",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 324.326,
+          "t": 243.10199999999998,
+          "r": 342.67400000000004,
+          "b": 253.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 5,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 3,
+         "end_col_offset_idx": 4,
+         "text": "407",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 396.326,
+          "t": 243.10199999999998,
+          "r": 414.674,
+          "b": 253.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 5,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 4,
+         "end_col_offset_idx": 5,
+         "text": "420",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        },
+        {
+         "bbox": {
+          "l": 468.326,
+          "t": 243.10199999999998,
+          "r": 486.674,
+          "b": 253.27700000000004,
+          "coord_origin": "TOPLEFT"
+         },
+         "row_span": 1,
+         "col_span": 1,
+         "start_row_offset_idx": 5,
+         "end_row_offset_idx": 6,
+         "start_col_offset_idx": 5,
+         "end_col_offset_idx": 6,
+         "text": "415",
+         "column_header": false,
+         "row_header": false,
+         "row_section": false,
+         "fillable": false
+        }
+       ],
+       "num_rows": 6,
+       "num_cols": 6,
+       "orientation": "rot_0"
+      },
+      "annotations": [],
+      "table_cell_bboxes": [
+       {
+        "row": 0,
+        "col": 0,
+        "bbox": [
+         420.97,
+         563.03,
+         558.52,
+         605.44
+        ]
+       },
+       {
+        "row": 0,
+        "col": 1,
+        "bbox": [
+         742.72,
+         563.03,
+         836.98,
+         605.44
+        ]
+       },
+       {
+        "row": 0,
+        "col": 2,
+        "bbox": [
+         1210.7,
+         513.02,
+         1269.3,
+         555.43
+        ]
+       },
+       {
+        "row": 0,
+        "col": 4,
+        "bbox": [
+         1810.9,
+         513.02,
+         1869.5,
+         555.43
+        ]
+       },
+       {
+        "row": 1,
+        "col": 2,
+        "bbox": [
+         1041.53,
+         613.04,
+         1138.37,
+         655.45
+        ]
+       },
+       {
+        "row": 1,
+        "col": 3,
+        "bbox": [
+         1319.99,
+         613.04,
+         1460.11,
+         655.45
+        ]
+       },
+       {
+        "row": 1,
+        "col": 4,
+        "bbox": [
+         1641.73,
+         613.04,
+         1738.57,
+         655.45
+        ]
+       },
+       {
+        "row": 1,
+        "col": 5,
+        "bbox": [
+         1920.2,
+         613.04,
+         2060.31,
+         655.45
+        ]
+       },
+       {
+        "row": 2,
+        "col": 0,
+        "bbox": [
+         459.17,
+         763.07,
+         520.33,
+         805.47
+        ]
+       },
+       {
+        "row": 2,
+        "col": 1,
+        "bbox": [
+         731.23,
+         713.06,
+         848.47,
+         755.46
+        ]
+       },
+       {
+        "row": 2,
+        "col": 2,
+        "bbox": [
+         1051.71,
+         713.06,
+         1128.19,
+         755.46
+        ]
+       },
+       {
+        "row": 2,
+        "col": 3,
+        "bbox": [
+         1351.81,
+         713.06,
+         1428.29,
+         755.46
+        ]
+       },
+       {
+        "row": 2,
+        "col": 4,
+        "bbox": [
+         1651.91,
+         713.06,
+         1728.39,
+         755.46
+        ]
+       },
+       {
+        "row": 2,
+        "col": 5,
+        "bbox": [
+         1952.01,
+         713.06,
+         2028.49,
+         755.46
+        ]
+       },
+       {
+        "row": 3,
+        "col": 1,
+        "bbox": [
+         742.69,
+         813.08,
+         837.0,
+         855.48
+        ]
+       },
+       {
+        "row": 3,
+        "col": 2,
+        "bbox": [
+         1051.71,
+         813.08,
+         1128.19,
+         855.48
+        ]
+       },
+       {
+        "row": 3,
+        "col": 3,
+        "bbox": [
+         1351.81,
+         813.08,
+         1428.29,
+         855.48
+        ]
+       },
+       {
+        "row": 3,
+        "col": 4,
+        "bbox": [
+         1651.91,
+         813.08,
+         1728.39,
+         855.48
+        ]
+       },
+       {
+        "row": 3,
+        "col": 5,
+        "bbox": [
+         1952.01,
+         813.08,
+         2028.49,
+         855.48
+        ]
+       },
+       {
+        "row": 4,
+        "col": 0,
+        "bbox": [
+         459.17,
+         963.11,
+         520.33,
+         1005.51
+        ]
+       },
+       {
+        "row": 4,
+        "col": 1,
+        "bbox": [
+         708.33,
+         913.1,
+         871.37,
+         955.5
+        ]
+       },
+       {
+        "row": 4,
+        "col": 2,
+        "bbox": [
+         1051.71,
+         913.1,
+         1128.19,
+         955.5
+        ]
+       },
+       {
+        "row": 4,
+        "col": 3,
+        "bbox": [
+         1351.81,
+         913.1,
+         1428.29,
+         955.5
+        ]
+       },
+       {
+        "row": 4,
+        "col": 4,
+        "bbox": [
+         1651.91,
+         913.1,
+         1728.39,
+         955.5
+        ]
+       },
+       {
+        "row": 4,
+        "col": 5,
+        "bbox": [
+         1952.01,
+         913.1,
+         2028.49,
+         955.5
+        ]
+       },
+       {
+        "row": 5,
+        "col": 1,
+        "bbox": [
+         736.34,
+         1013.12,
+         843.35,
+         1055.52
+        ]
+       },
+       {
+        "row": 5,
+        "col": 2,
+        "bbox": [
+         1051.71,
+         1013.12,
+         1128.19,
+         1055.52
+        ]
+       },
+       {
+        "row": 5,
+        "col": 3,
+        "bbox": [
+         1351.81,
+         1013.12,
+         1428.29,
+         1055.52
+        ]
+       },
+       {
+        "row": 5,
+        "col": 4,
+        "bbox": [
+         1651.91,
+         1013.12,
+         1728.39,
+         1055.52
+        ]
+       },
+       {
+        "row": 5,
+        "col": 5,
+        "bbox": [
+         1952.01,
+         1013.12,
+         2028.49,
+         1055.52
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "id": "docling-p1-3",
+     "engine": "docling",
+     "page": 1,
+     "seq_no": 3,
+     "bbox": [
+      325.10924369747903,
+      1161.970760095012,
+      1010.8396638655464,
+      1200.5197505938245
+     ],
+     "coord_system": "image_top_left",
+     "page_width": 2480,
+     "page_height": 3509,
+     "category": "Text",
+     "text": "The values in this table are synthetic.",
+     "confidence": null,
+     "raw_type": "text",
+     "raw": {
+      "self_ref": "#/texts/1",
+      "parent": {
+       "$ref": "#/body"
+      },
+      "children": [],
+      "content_layer": "body",
+      "label": "text",
+      "prov": [
+       {
+        "page_no": 1,
+        "bbox": {
+         "l": 78.0,
+         "t": 563.18,
+         "r": 242.52000000000004,
+         "b": 553.93,
+         "coord_origin": "BOTTOMLEFT"
+        },
+        "charspan": [
+         0,
+         39
+        ]
+       }
+      ],
+      "orig": "The values in this table are synthetic.",
+      "text": "The values in this table are synthetic."
+     }
+    }
+   ]
+  }
+ },
+ "quality_report": null
+}

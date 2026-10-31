@@ -1,0 +1,21 @@
+{
+  "data": {
+    "status": "failed",
+    "readiness": "error",
+    "message": "Oracle AI Database への接続に失敗しました。",
+    "elapsed_ms": 1200,
+    "troubleshooting": [
+      "DSN が tnsnames.ora の service 名と一致していることを確認してください。",
+      "wallet_dir に tnsnames.ora と cwallet.sso が存在することを確認してください。"
+    ],
+    "details": {
+      "service": "nl2sqldb_high",
+      "current_schema": null
+    },
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "error_type": "oracle_connection"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

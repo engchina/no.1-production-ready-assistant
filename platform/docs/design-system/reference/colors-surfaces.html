@@ -1,0 +1,24 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
+.ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
+.grid{display:grid;gap:8px}
+.sw{height:40px;border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.n{display:block;margin-top:5px;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg)}
+.v{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted)}
+table{border-collapse:collapse;width:100%;font:var(--text-meta)}
+td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--color-border);vertical-align:top}
+th{color:var(--color-fg-muted);font-weight:600}
+code{font-family:var(--font-mono);font-size:0.95em}
+</style></head><body>
+<div class="pair">
+<div class="pane" data-theme="light"><span class="ph">light</span><div class="grid" style="grid-template-columns:repeat(5,1fr)">
+<div><div class="sw" style="background:var(--color-canvas)"></div><span class="n">--canvas</span><span class="v">#f7f8fa</span></div><div><div class="sw" style="background:var(--color-surface)"></div><span class="n">--surface</span><span class="v">#ffffff</span></div><div><div class="sw" style="background:var(--color-surface-raised)"></div><span class="n">--surface-raised</span><span class="v">#ffffff</span></div><div><div class="sw" style="background:var(--color-surface-overlay)"></div><span class="n">--surface-overlay</span><span class="v">#ffffff</span></div><div><div class="sw" style="background:var(--color-surface-sunken)"></div><span class="n">--surface-sunken</span><span class="v">#f7f8fa</span></div></div></div>
+<div class="pane" data-theme="dark"><span class="ph">dark</span><div class="grid" style="grid-template-columns:repeat(5,1fr)">
+<div><div class="sw" style="background:var(--color-canvas)"></div><span class="n">--canvas</span><span class="v">#101318</span></div><div><div class="sw" style="background:var(--color-surface)"></div><span class="n">--surface</span><span class="v">#181c23</span></div><div><div class="sw" style="background:var(--color-surface-raised)"></div><span class="n">--surface-raised</span><span class="v">#20252e</span></div><div><div class="sw" style="background:var(--color-surface-overlay)"></div><span class="n">--surface-overlay</span><span class="v">#272d38</span></div><div><div class="sw" style="background:var(--color-surface-sunken)"></div><span class="n">--surface-sunken</span><span class="v">#101318</span></div></div></div>
+</div>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0">ダークでは影がほぼ見えないため、段は<b>面の明度</b>が担います。<code>canvas → surface → raised → overlay</code> の順で必ず明るくなること。raised = popover / dropdown / toast、overlay = dialog / command palette。</p>
+</body></html>

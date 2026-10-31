@@ -1,0 +1,140 @@
+Convert the SQL structure analysis from physical names to business terms (COMMENT).
+GOAL: Output must contain 100% of SQL information using business terms to enable exact SQL reconstruction.
+Output ONLY the markdown text below (no code blocks, no explanations):
+
+## 📋 SQL論理構造
+
+### 📋 SELECT句
+- [DISTINCT] (if present)
+- [テーブル業務用語](alias).[列業務用語] [AS alias]
+- aggregate_function([テーブル業務用語](alias).[列業務用語]) [AS alias]
+- expression [AS alias]
+- (サブクエリ-N) AS alias
+- * (if SELECT *)
+
+### 📁 FROM句
+- [テーブル業務用語] alias
+- (サブクエリ-N) alias (if inline view)
+
+### 🔗 JOIN句
+- **[JOIN_TYPE]**: [テーブルA業務用語](aliasA) JOIN [テーブルB業務用語](aliasB)
+  - ON: [テーブルA業務用語](aliasA).[列A業務用語] = [テーブルB業務用語](aliasB).[列B業務用語]
+  - ON: condition2 (if multiple conditions)
+  - USING: ([列業務用語]) (if USING clause)
+
+### 🔍 WHERE句
+- [テーブル業務用語](alias).[列業務用語] operator value
+- AND/OR [テーブル業務用語](alias).[列業務用語] operator value
+- AND/OR [テーブル業務用語](alias).[列業務用語] IN (サブクエリ-N)
+- AND/OR [テーブル業務用語](alias).[列業務用語] = (サブクエリ-N)
+- AND/OR EXISTS (サブクエリ-N)
+- AND/OR [テーブル業務用語](alias).[列業務用語] BETWEEN value1 AND value2
+- AND/OR [テーブル業務用語](alias).[列業務用語] LIKE 'pattern'
+- AND/OR [テーブル業務用語](alias).[列業務用語] IS [NOT] NULL
+
+### 📦 GROUP BY句
+- [テーブル業務用語](alias).[列業務用語1]
+- [テーブル業務用語](alias).[列業務用語2]
+
+### 🎯 HAVING句
+- aggregate_function([テーブル業務用語](alias).[列業務用語]) operator value
+- AND/OR aggregate_function([列業務用語]) operator (サブクエリ-N)
+
+### 📊 ORDER BY句
+- [テーブル業務用語](alias).[列業務用語1] ASC/DESC [NULLS FIRST/LAST]
+- [テーブル業務用語](alias).[列業務用語2] ASC/DESC
+
+### 📏 LIMIT/OFFSET句
+- LIMIT: n / FETCH FIRST n ROWS ONLY
+- OFFSET: m / OFFSET m ROWS
+
+### 📝 WITH句(CTE)
+- **cte_name**:
+  - SELECT: [DISTINCT] [列業務用語1], [列業務用語2], aggregate_func([列業務用語]) AS alias, (サブクエリ-N) AS alias
+  - FROM: [テーブル業務用語](alias)
+  - JOIN: **[JOIN_TYPE]** [テーブル業務用語](alias) ON condition
+  - WHERE: condition1 AND/OR condition2
+  - GROUP BY: [列業務用語1], [列業務用語2]
+  - HAVING: aggregate_condition
+  - ORDER BY: [列業務用語] ASC/DESC
+
+### 🔎 サブクエリ
+- **サブクエリ-N** [Location: SELECT/FROM/WHERE/HAVING in main/CTE]:
+  - SELECT: [DISTINCT] columns/expressions
+  - FROM: [テーブル業務用語](alias)
+  - JOIN: **[JOIN_TYPE]** [テーブル業務用語](alias) ON condition
+  - WHERE: conditions
+  - **NESTED-N-M**: (nested subquery with same structure)
+
+### 🔀 SET演算
+- **[UNION/UNION ALL/INTERSECT/MINUS/EXCEPT]**:
+  - Query1: (expand structure)
+  - Query2: (expand structure)
+
+---
+
+CRITICAL RULES for 100% SQL Reconstruction:
+- Replace physical table/column names with business terms from COMMENT
+- Preserve alias exactly as in original SQL
+- Format: [テーブル業務用語](alias).[列業務用語]
+- MUST preserve ALL literal values exactly: strings with quotes, numbers, date literals
+- MUST preserve ALL operators exactly: =, >, <, >=, <=, <>, !=, LIKE, IN, BETWEEN, IS NULL
+- MUST preserve function calls with EXACT parameters: SUBSTR(col,4,6) ≠ SUBSTR(col,1,6)
+- MUST preserve CASE expression structure completely with WHEN/THEN/ELSE
+- MUST preserve nested function structure: TO_NUMBER(TO_CHAR(TO_DATE(...)))
+- MUST preserve AND/OR/NOT logical structure exactly
+- For implicit JOIN (FROM t1, t2 WHERE t1.id=t2.id): list in FROM, show condition in WHERE
+- サブクエリ: Number sequentially (サブクエリ-1, サブクエリ-2...) and expand completely
+- For nested subqueries: label as NESTED-X-Y and expand
+- If section is empty/not present, omit that section entirely
+
+Example 1 (Simple):
+SQL: SELECT * FROM ADMIN.USERS u INNER JOIN ADMIN.ORDERS o ON u.id = o.user_id WHERE u.status = 'ACTIVE' ORDER BY u.created_at DESC
+
+Output:
+## 📋 SQL論理構造
+
+### 📋 SELECT句
+- *
+
+### 📁 FROM句
+- [ユーザマスタ] u
+
+### 🔗 JOIN句
+- **INNER JOIN**: [ユーザマスタ](u) JOIN [注文明細](o)
+  - ON: [ユーザマスタ](u).[ユーザID] = [注文明細](o).[ユーザID]
+
+### 🔍 WHERE句
+- [ユーザマスタ](u).[ステータス] = 'ACTIVE'
+
+### 📊 ORDER BY句
+- [ユーザマスタ](u).[作成日時] DESC
+
+Example 2 (Complex with implicit JOIN and correlated subquery):
+SQL: SELECT u.id, u.name, o.total FROM USERS u, ORDERS o WHERE u.id = o.user_id AND o.order_date = (SELECT MAX(o2.order_date) FROM ORDERS o2 WHERE o2.user_id = u.id) ORDER BY u.id
+
+Output:
+## 📋 SQL論理構造
+
+### 📋 SELECT句
+- [ユーザマスタ](u).[ユーザID]
+- [ユーザマスタ](u).[氏名]
+- [注文明細](o).[合計金額]
+
+### 📁 FROM句
+- [ユーザマスタ] u
+- [注文明細] o
+
+### 🔍 WHERE句
+- [ユーザマスタ](u).[ユーザID] = [注文明細](o).[ユーザID]
+- AND [注文明細](o).[注文日] = (サブクエリ-1)
+
+### 📊 ORDER BY句
+- [ユーザマスタ](u).[ユーザID] ASC
+
+### 🔎 サブクエリ
+- **サブクエリ-1** [Location: WHERE in main query]:
+  - SELECT: MAX([注文明細](o2).[注文日])
+  - FROM: [注文明細] o2
+  - WHERE: [注文明細](o2).[ユーザID] = [ユーザマスタ](u).[ユーザID]
+

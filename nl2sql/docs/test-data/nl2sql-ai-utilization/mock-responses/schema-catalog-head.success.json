@@ -1,0 +1,14 @@
+{
+  "data": {
+    "catalog_version": 7,
+    "schema_fingerprint": "schema-fp-ai-001",
+    "refreshed_at": "2026-08-12T00:00:00Z",
+    "object_count": 4,
+    "column_count": 24,
+    "change_token": 33,
+    "etag": "schema-head-v7"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

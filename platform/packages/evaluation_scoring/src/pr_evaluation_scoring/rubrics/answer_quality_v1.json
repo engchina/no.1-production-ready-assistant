@@ -1,0 +1,23 @@
+{
+  "id": "answer_quality",
+  "version": "1",
+  "labels": ["pass", "fail", "cannot_judge"],
+  "instructions": "回答を採点する。渡した質問・標準回答・根拠と照らして、指定した観点ごとに label を pass・fail・cannot_judge のどれかに決め、reason に判断の理由を 1〜2 文で書く。\n\n- 判断は渡した入力だけにもとづく。入力に無い一般の知識で回答を補わない。\n- 言い換え・順序の違う書き方は、意味が同じなら pass にする。\n- 観点ごとに独立に決める。ある観点の誤りを、ほかの観点の label に持ち込まない。\n- 入力が足りず決められないときだけ cannot_judge にする（迷ったら pass にしない）。\n\n観点:\n\n- requirement_coverage: 標準回答が求める論点（結論・手順・条件・例外・数量・期間）を、回答がすべて扱っているか。1 つでも欠ければ fail。\n- answer_correctness: 回答の結論と途中の説明が標準回答と根拠に矛盾せず、質問に書かれた対象・属性・比較の相手・数量・期間・条件を保ったまま適用しているか。対象や属性の取り違え、一般の規則を質問の個別の範囲を超えて当てはめること、手順の前後関係の誤り、処理の段階や時間の単位を根拠なく広げることは fail。\n- claim_support: 回答の事実の主張が、すべて渡した根拠で裏付けられるか。根拠に無い主張・根拠と矛盾する主張が 1 つでもあれば fail。主張を含まない回答（答えられない旨・利用者への確認）は pass。",
+  "aspects": [
+    {
+      "id": "requirement_coverage",
+      "metric": "requirement_coverage",
+      "requires": ["standard_answer"]
+    },
+    {
+      "id": "answer_correctness",
+      "metric": "answer_correctness",
+      "requires": ["standard_answer"]
+    },
+    {
+      "id": "claim_support",
+      "metric": "claim_support_rate",
+      "requires": []
+    }
+  ]
+}

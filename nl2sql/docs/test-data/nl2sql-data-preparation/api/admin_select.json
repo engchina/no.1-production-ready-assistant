@@ -1,0 +1,6 @@
+{
+  "sql": "SELECT ORDER_ID, CUSTOMER_NAME, STATUS, TOTAL_AMOUNT FROM V_TD_NL2SQL_ORDER_SUMMARY ORDER BY ORDER_ID",
+  "row_limit": 100,
+  "confirmation": "",
+  "reason": "manual-test-admin-select"
+}

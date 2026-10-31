@@ -1,0 +1,12 @@
+{
+  "table_name": "TD_NL2SQL_ORDERS",
+  "object_list": [],
+  "row_count": 2,
+  "rows_per_table": 2,
+  "profile_name": "REPLACE_WITH_SELECT_AI_PROFILE",
+  "user_prompt": "2026 年 6 月の未完了受注を、既存顧客と部門に紐づけて生成する。",
+  "sample_rows": 3,
+  "use_comments": true,
+  "confirmation": "TD_NL2SQL_ORDERS",
+  "reason": "manual-test-synthetic-single-table"
+}

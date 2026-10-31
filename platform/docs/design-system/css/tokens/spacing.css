@@ -1,0 +1,53 @@
+/* Spacing = Tailwind's 0.25rem step on a 14px root (1 step = 3.5px).
+   Layout dimensions below are the literal utilities used by packages/ui. */
+:root {
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2: 0.5rem;
+  --space-2-5: 0.625rem;
+  --space-3: 0.75rem;
+  --space-3-5: 0.875rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  --gap-action: var(--space-2);      /* gap-2 between buttons */
+  --gap-field: var(--space-1-5);     /* label → control */
+  --gap-stack: var(--space-6);       /* between cards / page sections */
+  --page-gutter-x: var(--space-8);   /* PageHeader px-8, content px-8 */
+  --page-gutter-y: var(--space-6);
+  --page-header-py: var(--space-5);  /* PageHeader py-5 */
+  --card-padding: var(--space-5);    /* CardHeader p-5 pb-3 / CardContent p-5 pt-0 */
+
+  /* app shell */
+  --sidebar-width: 15rem;            /* w-60 → 210px */
+  --sidebar-width-collapsed: 4rem;   /* w-16 → 56px */
+  --sidebar-header-height: 3.5rem;   /* h-14 */
+  --nav-item-height: 2.75rem;        /* h-11 */
+  --command-button-height: 2.25rem;
+  --tab-height: 2.75rem;             /* ページタブ。ナビ行と同じ高さに揃える */  /* h-9 */
+
+  /* PROPOSED — root-independent control heights (NL2SQL button spec) */
+  --button-height-sm: 32px;
+  --button-height-md: 36px;
+  --button-height-lg: 40px;
+  --control-height-touch: 44px;
+  --button-padding-sm: 12px;
+  --button-padding-md: 16px;
+  --button-padding-lg: 20px;
+  --button-gap: 8px;
+  --field-height: 36px;
+
+  /* アイコン寸法。13/15/16/18/22/24 の 6 値混在を 4 段に統合。
+     Lucide は 2px ストロークなので偶数 px 以外はサブピクセルでボケます。 */
+  --icon-sm: 14px;    /* 密なセル・パンくず */
+  --icon-md: 16px;    /* ボタン・トースト・インライン */
+  --icon-lg: 20px;    /* ナビ行・カード見出し */
+  --icon-state: 24px; /* 空/エラー状態の大アイコン */
+
+  /* 本文の最大計測幅。--main が無制限に伸びると 10.5px の表は読めません。 */
+  --content-max-width: 1440px;
+}

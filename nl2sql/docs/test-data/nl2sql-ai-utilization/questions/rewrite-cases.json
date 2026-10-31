@@ -1,0 +1,12 @@
+[
+  {
+    "input": "今月の売上トップ5",
+    "expected_rewritten": "今月の受注金額上位5件を表示してください",
+    "use_glossary": true
+  },
+  {
+    "input": "未入金はいくら?",
+    "expected_rewritten": "未入金の請求金額を集計してください",
+    "use_glossary": true
+  }
+]

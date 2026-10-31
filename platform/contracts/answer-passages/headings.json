@@ -1,0 +1,674 @@
+{
+  "description": "回答の検証で主張として数えない見出しの名詞句・導入の文と、見出しに見えても主張として残す行の事例（#1469）。RAG（rag_engine.generation.operation_audit.is_heading / is_non_claim_passage / list_heading_lines）と Agent（app.features.agent.answer_passages.is_heading / passage_kind / non_claim_passages / list_heading_lines）の両方のテストがこのファイルを読み、同じ規則で判定することを確かめる。passage は段落（句点・改行で分けて前後の空白を除いた原文）。見出しの名詞句は、句点で終わらない短い名詞句で、項目・区分・資料の名前か分岐・問いの形（「…とき」「…か」）で終わり、述語・操作・数量・言い切りの「は」を含まないもの（強調・後ろの注記の括弧は除いて確かめる）。heading_passages は段落だけで見出しになる、番号・箇条書きの印の無い行。番号つきの行は段落だけでは決めず、終わりの語が一覧にあるか、一覧に無くても「…の…」の名詞句か、印の後が太字のラベルだけの行（「1. **実施権限**」。#1898）で、次の（空でない）行がその下の内容（字下げした行か箇条書き・「→」の行）のときだけ見出し（RAG と Agent の list_heading_lines。#1481 / #1482）。番号の行が続く一覧の項目（「申請書に書く 4 項目」の「1. 変更の内容と理由」）と、下に内容の無い行は、終わりの語が一覧にあっても主張のまま（#1482）。人・組織・役職の名前で終わる「…の…」の行も主張のまま。numbered_heading_passages はその行（passage の次に下の内容の行を置くと見出し、単独・一覧の中では主張）。箇条書きの行（「- 」「* 」「+ 」「・」「•」。強調の「**」は印ではない）も段落だけでは決めず、同じ語の行で、次の（空でない）行がより深く字下げした行（下位の箇条書き）か「→」の行のときだけ見出し（#1486）。同じ字下げの箇条書きの行は同じ一覧の次の項目なので、その前の行は主張のまま（「ご確認いただきたい点」の「- 組織規程（ご担当部署の承認者）」）。bullet_heading_passages はその行（passage の次に下位の行を置くと見出し、単独・同じ字下げの箇条書きの前では主張）。claim_passages は、次に下の内容の行を置いても主張のまま。導入の文は「…は次のとおりです。」「以下に示します。」のように以降の箇条書きを導くだけの文（先頭の接続の語「そのため、」「なお、」の後の「、」は許す。#1481）と、礼・締めくくりの定型の文（「以上、資料に基づく回答です。」。#1833）と、前の内容をまとめて指すだけの結びの文（「以上が、締め日を過ぎた場合の取扱いです。」。指す対象に言い切りの「は」・数量・操作・引用を含むものは主張）・結びのあいさつ（「ご参考になれば幸いです。」。#1879）。heading_passages・numbered_heading_passages・bullet_heading_passages の多くは #1362 の deepseek-flash の評価（e1467、main f83ebbda）の D の Run の回答の段落そのもの。#1481 の事例は e1481 の評価（main 05b35c37、deepseek-flash）の D の Run の回答の段落。",
+  "heading_passages": [
+    {
+      "id": "bold-case-with-location",
+      "note": "多段 holdout sh-severity-c-report。",
+      "passage": "**重要度 C のシステムで障害が起きたとき（障害連絡規程 第 1 章「最初の連絡」／p.1）**"
+    },
+    {
+      "id": "note-label-material",
+      "note": "業務支援 da-parameter-default（run_c91bafebe4794ecfb266ee6be336968b）。",
+      "passage": "補足（資料の記載）"
+    },
+    {
+      "id": "note-label-condition",
+      "note": "多段 dev ir-room-booking-maintenance（run_a3b9045cdcc347d49a6c70a1656cfdf5）。",
+      "passage": "補足（参照できる場合）"
+    },
+    {
+      "id": "note-label-location",
+      "passage": "補足（同じ規程 p.1）"
+    },
+    {
+      "id": "evidence-label-with-note",
+      "passage": "根拠（段ごとに確認した内容）"
+    },
+    {
+      "id": "evidence-label",
+      "note": "多段 holdout cmp-hrm-maintenance-versions。",
+      "passage": "根拠"
+    },
+    {
+      "id": "materials-used",
+      "note": "多段 dev ir-room-booking-maintenance。",
+      "passage": "回答に使った資料"
+    },
+    {
+      "id": "lead-in-accumulation",
+      "passage": "根拠の積み上げは次のとおりです。"
+    },
+    {
+      "id": "lead-in-evidence",
+      "passage": "根拠は次のとおりです。"
+    },
+    {
+      "id": "lead-in-chain",
+      "passage": "根拠の連鎖は次のとおりです。"
+    },
+    {
+      "id": "lead-in-links",
+      "passage": "根拠のつながりは次のとおりです。"
+    },
+    {
+      "id": "lead-in-answer-with-comma",
+      "note": "多段 holdout tl-it-department-system。",
+      "passage": "ご質問の答えは、次のとおりです。"
+    },
+    {
+      "id": "lead-in-after-connective",
+      "note": "多段 holdout（e1481、run_53b94b2154094737a81ec7a406d54fe5）。接続の語の後の「、」（#1481）。",
+      "passage": "そのため、作業できる時間帯は次のとおりです。"
+    },
+    {
+      "id": "lead-in-after-connective-note",
+      "passage": "なお、関係する定めは以下のとおりです。"
+    },
+    {
+      "id": "lead-in-show",
+      "passage": "以下に示します。"
+    },
+    {
+      "id": "courtesy",
+      "note": "業務支援 mt-delete-account-approved。",
+      "passage": "ご回答ありがとうございます。"
+    },
+    {
+      "id": "closing-based-on-materials",
+      "note": "#1833 の実機の回答（run_88b48d52b6d741439a4293b40e2788e6）。締めくくりの定型の文が unassessed で外されていた。",
+      "passage": "以上、資料に基づく回答です。"
+    },
+    {
+      "id": "closing-plain",
+      "passage": "以上です。"
+    },
+    {
+      "id": "closing-searched-materials",
+      "passage": "以上が検索した資料に基づく回答です。"
+    },
+    {
+      "id": "closing-summary-topic",
+      "note": "#1879（#1863 の実機の回答 run_6e6aaf7a68994d41a07db330278bf3d9）。前の内容をまとめて指すだけの結びの文が unassessed で外されていた。",
+      "passage": "以上が、締め日を過ぎた場合の取扱いです。"
+    },
+    {
+      "id": "closing-summary-plain",
+      "passage": "以上が回答です。"
+    },
+    {
+      "id": "closing-wish",
+      "passage": "ご参考になれば幸いです。"
+    },
+    {
+      "id": "closing-wish-helpful",
+      "passage": "お役に立てれば幸いです。"
+    },
+    {
+      "id": "markdown-heading-fiscal-year",
+      "note": "年度・章節の番号は数量に数えない（#2625）。",
+      "passage": "## 2026年度の申請の流れ"
+    },
+    {
+      "id": "table-name-lead-in",
+      "passage": "- 表「合成の集計」では、"
+    },
+    {
+      "id": "italic-source-label",
+      "passage": "*根拠*"
+    },
+    {
+      "id": "italic-reference-label",
+      "passage": "*参考資料*"
+    },
+    {
+      "id": "excerpt-label-colon",
+      "passage": "- 抜粋："
+    },
+    {
+      "id": "quoted-particle-heading",
+      "passage": "**「は」の意味**"
+    }
+  ],
+  "numbered_heading_passages": [
+    {
+      "id": "numbered-attribute",
+      "note": "多段 dev br-hr-evaluation-change-window（run_e42807013c3041d09185daae0bee0baf）。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "1. 人事評価システムの重要度"
+    },
+    {
+      "id": "numbered-rule",
+      "passage": "2. 重要度 A の変更時間帯の規則",
+      "note": "終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。"
+    },
+    {
+      "id": "numbered-slot",
+      "passage": "3. 定期保守計画の個別の保守枠",
+      "note": "終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。"
+    },
+    {
+      "id": "numbered-with-document-note",
+      "note": "多段 dev cmp-expense-vs-attendance-deadline。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "1. 担当部署（システム台帳）"
+    },
+    {
+      "id": "numbered-with-location-note",
+      "passage": "2. 略号の意味（組織規程 第 2 章 部署と略号／1 頁）",
+      "note": "終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。"
+    },
+    {
+      "id": "numbered-document-with-row-note",
+      "note": "多段 dev br-mes-approver-deadline。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "1. システム台帳（シート「システム台帳」28 行目）"
+    },
+    {
+      "id": "numbered-bold",
+      "note": "多段 dev br-idm-incident-contact。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "2. **重要度 A の連絡先と期限**"
+    },
+    {
+      "id": "numbered-bold-short",
+      "passage": "5. **連絡の手段**",
+      "note": "終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。"
+    },
+    {
+      "id": "numbered-question-form",
+      "note": "多段 dev br-contract-access-approver。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "1. 承認者がどう決まるか"
+    },
+    {
+      "id": "numbered-case",
+      "note": "多段 dev br-audit-record-proxy。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "3. 承認者が不在のときの代理"
+    },
+    {
+      "id": "numbered-quoted-terms",
+      "passage": "3. 「法」と「情セキ」の正式名と承認者",
+      "note": "終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。"
+    },
+    {
+      "id": "numbered-quoted-abbreviation",
+      "note": "多段 holdout br-logistics-oms-approver。 終わりの語が一覧にある番号つきの行（#1469）。段落だけでは決めない（#1482）。",
+      "passage": "2. 略号「運」の意味"
+    },
+    {
+      "id": "numbered-phrase-unlisted-end",
+      "note": "多段 holdout（e1481、run_54f6039b7301498a8acc2ca9b6670347）。終わりの語「目標」は一覧に無い（#1481）。",
+      "passage": "2. 重要度 B の復旧目標"
+    },
+    {
+      "id": "numbered-phrase-system",
+      "note": "多段 holdout（e1481、run_440e0b3cb50246b0a2e9c1b70a0bd872）。終わりの語「システム」は一覧に無い（#1481）。",
+      "passage": "1. 連携元のシステム"
+    },
+    {
+      "id": "numbered-bold-phrase-unlisted-end",
+      "passage": "3. **連携先のシステムの保守枠の変更の申し出先**"
+    },
+    {
+      "id": "numbered-bold-label-authority",
+      "note": "業務 Agent の確認 #1863（run_db9847f005de491eba252d9fc66fd45e）。終わりの語が一覧に無く「…の…」でもないが、印の後が太字のラベルだけの番号つきの行（#1898）。最終の検証で unassessed になり、回答から外れていた。",
+      "passage": "1. **実施権限**"
+    },
+    {
+      "id": "numbered-bold-label-operation-noun",
+      "note": "同じ回答の「3. **アカウント削除**」（#1898）。操作の語を含むが、名詞だけの太字のラベル。",
+      "passage": "3. **アカウント削除**"
+    }
+  ],
+  "bullet_heading_passages": [
+    {
+      "id": "bullet-document-with-note",
+      "note": "多段 dev（e1467、run_ee5468f82cf34acab3f9727cf79940d3）の「回答を確定するためにご確認いただきたい点」の項目。#1469 の段落だけの判定では見出しになり、主張として監査されなかった（#1486）。",
+      "passage": "- 組織規程（ご担当部署の承認者）"
+    },
+    {
+      "id": "bullet-document-with-row-note",
+      "note": "多段 dev（e1467、run_150c989d38484122b8e860addced37cf）の「確かめた資料と場所:」の項目（#1486）。",
+      "passage": "- システム台帳（システム台帳シート 41 行目: SYS-137）"
+    },
+    {
+      "id": "bullet-middle-dot-phrase",
+      "note": "「・」の箇条書きの、終わりの語が一覧に無い「…の…」の名詞句（#1486）。",
+      "passage": "・重要度 B の復旧目標"
+    },
+    {
+      "id": "bullet-asterisk-attribute",
+      "note": "「* 」の箇条書きの、終わりの語が一覧にある行（#1486）。",
+      "passage": "* 人事評価システムの重要度"
+    },
+    {
+      "id": "bullet-bold-label",
+      "note": "箇条書きの印の後が太字のラベルだけの行（#1898）。",
+      "passage": "- **実施権限**"
+    },
+    {
+      "id": "nested-item-label",
+      "passage": "- 照合すべき項目"
+    },
+    {
+      "id": "count-label-parent",
+      "passage": "- テーブルに記載された件数"
+    }
+  ],
+  "claim_passages": [
+    {
+      "id": "short-statement-with-predicate",
+      "passage": "重要度は A です。"
+    },
+    {
+      "id": "short-statement-without-predicate",
+      "passage": "承認者は管理本部長"
+    },
+    {
+      "id": "numbered-bold-statement",
+      "note": "多段 dev br-idm-incident-contact の「1. **ID 管理システムの重要度は A**」。番号と太字でも「は」の言い切りは主張。",
+      "passage": "1. **ID 管理システムの重要度は A**"
+    },
+    {
+      "id": "numbered-value",
+      "passage": "1. 運行管理課長"
+    },
+    {
+      "id": "numbered-value-with-location",
+      "passage": "2. 運行管理課長（組織規程 第 3 章）"
+    },
+    {
+      "id": "numbered-role-value-with-no",
+      "note": "番号つきの「…の…」でも、役職・組織の名前で終わる行は値の主張（#1481）。",
+      "passage": "1. 情報システム部の課長"
+    },
+    {
+      "id": "numbered-organization-value-with-no",
+      "passage": "2. 生産本部の製造部"
+    },
+    {
+      "id": "numbered-phrase-with-quantity",
+      "passage": "2. 重要度 B の復旧目標の 1 営業日以内"
+    },
+    {
+      "id": "numbered-phrase-statement",
+      "note": "番号つきの「…の…」の名詞句でも、言い切りの「は」は主張（#1481）。",
+      "passage": "2. 重要度 B の復旧目標は 1 営業日以内"
+    },
+    {
+      "id": "numbered-phrase-assertion-value",
+      "passage": "1. 連携元のシステムは生産計画システム"
+    },
+    {
+      "id": "numbered-phrase-operation",
+      "passage": "3. 連携元のシステムの設定を変更する"
+    },
+    {
+      "id": "numbered-phrase-predicate",
+      "passage": "1. 連携元のシステムの保守枠です"
+    },
+    {
+      "id": "numbered-quantity",
+      "passage": "2. 検知から 30 分以内"
+    },
+    {
+      "id": "numbered-count",
+      "passage": "3. 確認する 3 点"
+    },
+    {
+      "id": "note-with-statement",
+      "passage": "補足（担当部署は人事部）"
+    },
+    {
+      "id": "note-with-quantity",
+      "passage": "補足（保管は 10 年）"
+    },
+    {
+      "id": "numbered-operation",
+      "passage": "3. 申請画面を開く"
+    },
+    {
+      "id": "subject-statement-noun",
+      "passage": "承認者が人事部長"
+    },
+    {
+      "id": "lead-in-with-statement",
+      "passage": "保管期間は 10 年で、内訳は次のとおりです。"
+    },
+    {
+      "id": "lead-in-with-quantity-subject",
+      "passage": "30 日以内に必要な手順は次のとおりです。"
+    },
+    {
+      "id": "lead-in-with-following-claim",
+      "passage": "根拠は次のとおりで、承認者は人事部長です。"
+    },
+    {
+      "id": "lead-in-connective-with-statement",
+      "note": "接続の語の後でも、主語に言い切り・数量を含む文は主張（#1481）。",
+      "passage": "そのため、保管期間は 10 年で、内訳は次のとおりです。"
+    },
+    {
+      "id": "lead-in-connective-with-quantity-subject",
+      "passage": "なお、30 日以内に必要な手順は次のとおりです。"
+    },
+    {
+      "id": "conclusion-with-connective",
+      "passage": "そのため、作業できる時間帯は毎月第 1 日曜日の 0:00〜4:00 です。"
+    },
+    {
+      "id": "closing-with-fact",
+      "note": "締めくくりの形でも事実を述べる文は主張（#1833）。",
+      "passage": "以上、締め日は毎月 25 日です。"
+    },
+    {
+      "id": "closing-with-following-claim",
+      "passage": "以上、資料に基づく回答ですが、締め日は 25 日です。"
+    },
+    {
+      "id": "closing-summary-with-fact",
+      "note": "まとめて指す形でも、言い切りの「は」・数量・操作を含む文は主張（#1879）。",
+      "passage": "以上が、締め日は毎月末という取扱いです。"
+    },
+    {
+      "id": "closing-summary-with-quantity",
+      "passage": "以上が、30 日以内に申請する手順です。"
+    },
+    {
+      "id": "closing-summary-with-operation",
+      "passage": "以上が、管理画面で削除ボタンを押す手順です。"
+    },
+    {
+      "id": "numbered-bold-role-value",
+      "note": "番号つきの太字のラベルだけの行でも、役職・組織の名前で終わる行は値の主張（#1898）。",
+      "passage": "1. **人事部長**"
+    },
+    {
+      "id": "numbered-bold-quantity",
+      "note": "番号つきの太字だけの行でも、数量は値の主張（#1898）。",
+      "passage": "2. **30 日以内**"
+    },
+    {
+      "id": "markdown-heading-with-quantity",
+      "note": "見出しの記法でも、語に数量を含む行は主張（#2625。本文を見出しに書き換えて監査から外さない）。",
+      "passage": "## 申請は 30 日前まで"
+    },
+    {
+      "id": "bold-line-with-quantity",
+      "passage": "**上限は最長 90 日**"
+    },
+    {
+      "id": "bracket-label-with-quantity",
+      "passage": "【所要 10 分】"
+    },
+    {
+      "id": "item-label-with-value",
+      "passage": "- 必須項目は 3 件"
+    },
+    {
+      "id": "item-label-with-instruction",
+      "passage": "- 項目を保存してください。"
+    },
+    {
+      "id": "table-intro-with-fact",
+      "passage": "- 表「合成の集計」では、値は 42 です。"
+    },
+    {
+      "id": "table-intro-with-instruction",
+      "passage": "- 表「合成の集計」では、登録してください。"
+    },
+    {
+      "id": "count-label-with-value",
+      "passage": "- テーブルに記載された件数は 42 件"
+    },
+    {
+      "id": "count-label-with-instruction",
+      "passage": "- 件数を変更してください"
+    },
+    {
+      "id": "italic-numeric-claim",
+      "passage": "*上限は 30 件*"
+    },
+    {
+      "id": "italic-operation-claim",
+      "passage": "*登録してください*"
+    },
+    {
+      "id": "italic-assertion-claim",
+      "passage": "*承認者は担当者です*"
+    },
+    {
+      "id": "excerpt-label-with-claim",
+      "passage": "- 抜粋：上限は 30 件です。"
+    },
+    {
+      "id": "excerpt-label-with-numeric-value",
+      "passage": "- 抜粋 30 件："
+    },
+    {
+      "id": "bold-nonnumeric-assertion",
+      "passage": "**上限は無制限**"
+    },
+    {
+      "id": "markdown-nonnumeric-assertion",
+      "passage": "## 上限は無制限"
+    },
+    {
+      "id": "bracket-nonnumeric-assertion",
+      "passage": "【上限は無制限】"
+    },
+    {
+      "id": "bold-predicate-assertion",
+      "passage": "**受付は不要です**"
+    },
+    {
+      "id": "markdown-operation-instruction",
+      "passage": "## 登録してください"
+    },
+    {
+      "id": "colon-nonnumeric-assertion",
+      "passage": "上限は無制限："
+    }
+  ],
+  "answers": [
+    {
+      "id": "da-parameter-default",
+      "note": "業務支援 da-parameter-default（run_c91bafebe4794ecfb266ee6be336968b）の最終の回答（最終の検証に渡した原文）。「補足（資料の記載）」が unassessed で外され conditional になっていた。",
+      "answer": "session_timeout_minutes の既定値は **30**（分）です。説明は「操作が無いときにログインが切れるまでの分数」とされています。\n\n出典：portal-parameters.xlsx シート「パラメータ一覧」の当該行（A4:D4、パラメータ名 session_timeout_minutes）\n\n補足（資料の記載）\n- 同表には設定例として 60 も示されていますが、これは既定値ではなく設定の書き方の例です（同シート A6:D6 など並びの行も同じ構成）。\n- 同シートの注記（A1:A2）に「既定値は出荷時の値、設定例は設定の書き方の例で、どちらも各環境の現在の設定値ではありません」とあり、この 30 は現在の環境の設定値ではありません。現在の各環境の設定値は資料からは分かりません。",
+      "heading_passages": [
+        "補足（資料の記載）"
+      ],
+      "claim_passages": [
+        "session_timeout_minutes の既定値は **30**（分）です。",
+        "説明は「操作が無いときにログインが切れるまでの分数」とされています。",
+        "- 同表には設定例として 60 も示されていますが、これは既定値ではなく設定の書き方の例です（同シート A6:D6 など並びの行も同じ構成）。"
+      ]
+    },
+    {
+      "id": "br-hr-evaluation-change-window",
+      "note": "多段 dev br-hr-evaluation-change-window（run_e42807013c3041d09185daae0bee0baf）の回答の一部。番号つきの見出しが unassessed で外され conditional になっていた。",
+      "answer": "人事評価システムの本番変更は、**毎月第 2 土曜日の 22:00〜翌 2:00** に作業できます。\n\n根拠（段ごとに確認）：\n\n1. 人事評価システムの重要度\n- 「システム台帳」（システム台帳シート、システムID: SYS-103 の行）で、正式名「人事評価システム」、略称・別表記「HRM」、重要度は **A** です。\n\n2. 重要度 A の変更時間帯の規則\n- 「システム変更手順書」第 4 章 作業の時間帯：**重要度 A のシステムの変更は、定期保守の時間帯にだけ作業**します。\n\n3. 定期保守計画の個別の保守枠\n- 「定期保守計画 2026年度」第 1 章 個別の保守枠：**ＨＲＭ（＝人事評価システム）は毎月第 2 土曜日の 22:00〜翌 2:00** です（この章に無いシステムは第 2 章の共通の保守枠）。",
+      "heading_passages": [
+        "根拠（段ごとに確認）：",
+        "1. 人事評価システムの重要度",
+        "2. 重要度 A の変更時間帯の規則",
+        "3. 定期保守計画の個別の保守枠"
+      ],
+      "claim_passages": [
+        "人事評価システムの本番変更は、**毎月第 2 土曜日の 22:00〜翌 2:00** に作業できます。",
+        "- 「システム台帳」（システム台帳シート、システムID: SYS-103 の行）で、正式名「人事評価システム」、略称・別表記「HRM」、重要度は **A** です。",
+        "- 「システム変更手順書」第 4 章 作業の時間帯：**重要度 A のシステムの変更は、定期保守の時間帯にだけ作業**します。",
+        "- 「定期保守計画 2026年度」第 1 章 個別の保守枠：**ＨＲＭ（＝人事評価システム）は毎月第 2 土曜日の 22:00〜翌 2:00** です（この章に無いシステムは第 2 章の共通の保守枠）。"
+      ]
+    },
+    {
+      "id": "ir-room-booking-maintenance",
+      "note": "多段 dev ir-room-booking-maintenance（run_a3b9045cdcc347d49a6c70a1656cfdf5）の回答の一部。「補足（参照できる場合）」「回答に使った資料」が unassessed で外され conditional になっていた。",
+      "answer": "会議室予約システム（システムID: SYS-106）は、定期保守計画の「個別の保守枠」に挙げられていないため、「共通の保守枠」で保守されます。その時間帯は **毎月最終金曜日の 20:00〜24:00** です。\n\n補足（参照できる場合）\n\n- 保守枠を変えたいときは、変えたい月の 1 か月前までに情シスへ申し出る、とされています（定期保守計画 2026年度 第 3 章「保守枠の変更」、maintenance-plan.pdf p.1）。\n\n回答に使った資料\n\n- 定期保守計画 2026年度（maintenance-plan.pdf）p.1 第 1 章・第 2 章",
+      "heading_passages": [
+        "補足（参照できる場合）",
+        "回答に使った資料"
+      ],
+      "claim_passages": [
+        "会議室予約システム（システムID: SYS-106）は、定期保守計画の「個別の保守枠」に挙げられていないため、「共通の保守枠」で保守されます。",
+        "その時間帯は **毎月最終金曜日の 20:00〜24:00** です。",
+        "- 保守枠を変えたいときは、変えたい月の 1 か月前までに情シスへ申し出る、とされています（定期保守計画 2026年度 第 3 章「保守枠の変更」、maintenance-plan.pdf p.1）。"
+      ]
+    },
+    {
+      "id": "mes-planning-source-department",
+      "note": "多段 holdout（e1481、run_440e0b3cb50246b0a2e9c1b70a0bd872）の最終の回答。「1. 連携元のシステム」が unassessed で外れていた（#1481）。",
+      "answer": "**製造部**（生産本部に属する）です。\n\n根拠と段ごとの確認:\n\n1. 連携元のシステム\n   - 『システム運用要領』第 25 章 製造実行システム（4 頁）: 「製造実行システム（SYS-124）…生産計画システムから生産計画を受け取ります。」\n   → 生産計画を送る連携元は**生産計画システム**。\n\n2. その担当部署（略号）\n   - 『システム台帳』（システム台帳シート 27 行目・SYS-123）: 「正式名: 生産計画システム / 略称・別表記: 生産計画 / **担当部署: 製**」\n   → 担当部署は略号「製」。台帳の担当部署は部署の略号（漢字 1 文字）で書く旨は台帳の冒頭と『組織規程』第 1 章（1 頁）に示されています。\n\n3. 略号の正式名\n   - 『組織規程』第 2 章 部署と略号（1 頁）: 「略号「製」: **製造部**。生産本部に属します。」\n\n以上から、製造実行システムに生産計画を送る連携元（生産計画システム、SYS-123）を担当する部署の正式名は**製造部**です。",
+      "heading_passages": [
+        "1. 連携元のシステム",
+        "2. その担当部署（略号）",
+        "3. 略号の正式名"
+      ],
+      "claim_passages": [
+        "**製造部**（生産本部に属する）です。",
+        "→ 生産計画を送る連携元は**生産計画システム**。",
+        "→ 担当部署は略号「製」。"
+      ]
+    },
+    {
+      "id": "asset-recovery-target",
+      "note": "多段 holdout（e1481、run_54f6039b7301498a8acc2ca9b6670347）の最終の回答。「2. 重要度 B の復旧目標」が unassessed で外れていた（#1481）。",
+      "answer": "資産管理システムの障害時の復旧目標は **1 営業日以内** です。\n\n根拠（段ごとに確認した内容）:\n1. 資産管理システムの重要度\n   - システム台帳（system-ledger.xlsx「システム台帳」シート、SYS-107 の行：セル A11:F11）に「システムID: SYS-107 / 正式名: 資産管理システム / 担当部署: 情 / **重要度: B**」と記載。\n2. 重要度 B の復旧目標\n   - 障害連絡規程（incident-contact-rules.pdf）第 2 章「復旧の目標」（1 頁）に「重要度 A のシステムは 4 時間以内に復旧します。**重要度 B のシステムは 1 営業日以内に復旧します。**重要度 C のシステムは 3 営業日以内に復旧します。」と記載。\n\n以上から、資産管理システム（SYS-107、重要度 B）は、障害時に 1 営業日以内に復旧する目標です。",
+      "heading_passages": [
+        "根拠（段ごとに確認した内容）:",
+        "1. 資産管理システムの重要度",
+        "2. 重要度 B の復旧目標"
+      ],
+      "claim_passages": [
+        "資産管理システムの障害時の復旧目標は **1 営業日以内** です。",
+        "以上から、資産管理システム（SYS-107、重要度 B）は、障害時に 1 営業日以内に復旧する目標です。"
+      ]
+    },
+    {
+      "id": "change-request-items",
+      "note": "多段 dev（e1467、run_ee5468f82cf34acab3f9727cf79940d3）の最終の回答。「申請書に書く 4 項目」の番号の行が続く一覧の項目は、番号つきの「…の…」の名詞句（「4. 作業の日時」。#1481）でも、終わりの語が一覧にある行（「1. 変更の内容と理由」「3. 切り戻しの手順」。#1482）でも、一覧の内容なので主張のまま。「回答を確定するためにご確認いただきたい点」の箇条書きの項目（「- 組織規程（ご担当部署の承認者）」）も、同じ字下げの箇条書きの行が続く一覧の項目なので主張のまま（#1486）。",
+      "answer": "本番環境のシステムの設定変更の申請書は、「システム変更手順書」の第 3 章「申請書の項目」に定められています（change-procedure.pdf p.1）。\n\n**申請書に書く 4 項目**\n1. 変更の内容と理由\n2. 影響を受けるシステムと利用者\n3. 切り戻しの手順\n4. 作業の日時\n\n**条件によって加わる項目**\n- 経費 Portal の変更では、上の 4 項目に加えて「月次の締め処理への影響」を書きます（同 第 3 章）。\n\n**申請先**\n- 変更の申請は、変更するシステムを担当する部署の承認者に出します。担当部署はシステム台帳で、承認者は組織規程で確かめます（同 第 2 章「申請」）。\n- なお、この手順書の対象は本番環境のシステムのうち、システム台帳に載っているものに限ります（同 第 1 章「対象」）。\n\n**回答を確定するためにご確認いただきたい点**\n- 変更対象のシステム名またはシステム ID（変更対象が経費 Portal に当たるか、「月次の締め処理への影響」を加える必要があるかを決めるため）\n- システム台帳（変更対象システムが台帳に載っているか、担当部署がどこか）\n- 組織規程（ご担当部署の承認者）\n\n変更対象のシステムが分かれば、担当部署と承認者まで具体的にお示しできます。",
+      "heading_passages": [
+        "**申請書に書く 4 項目**",
+        "**条件によって加わる項目**",
+        "**申請先**"
+      ],
+      "claim_passages": [
+        "1. 変更の内容と理由",
+        "2. 影響を受けるシステムと利用者",
+        "3. 切り戻しの手順",
+        "4. 作業の日時",
+        "- 組織規程（ご担当部署の承認者）"
+      ]
+    },
+    {
+      "id": "numbered-list-items-before-paragraph",
+      "note": "番号の行が続く一覧の最後の項目の次が、字下げしない本文の段落（#1482）。終わりの語が一覧にある項目（「期限」「連絡先」「手順」）も主張のまま。導入の文は見出し。",
+      "answer": "申請の前に確かめる点は次のとおりです。\n\n1. 申請の期限\n2. 承認者の連絡先\n3. 切り戻しの手順\n\n以上の 3 点は、システム変更手順書の第 3 章に定められています。",
+      "heading_passages": [
+        "申請の前に確かめる点は次のとおりです。"
+      ],
+      "claim_passages": [
+        "1. 申請の期限",
+        "2. 承認者の連絡先",
+        "3. 切り戻しの手順"
+      ]
+    },
+    {
+      "id": "numbered-heading-with-numbered-steps",
+      "note": "番号つきの見出しの下に、字下げした番号の行が続く回答（#1482）。見出しの行は見出しで、字下げした番号の一覧の項目は終わりの語が一覧にあっても主張のまま。",
+      "answer": "**変更の申請の流れ**\n\n1. 申請の手順\n   1. 変更の内容と理由\n   2. 切り戻しの手順\n2. 承認の流れ\n   - 担当部署の承認者が承認します。",
+      "heading_passages": [
+        "**変更の申請の流れ**",
+        "1. 申請の手順",
+        "2. 承認の流れ"
+      ],
+      "claim_passages": [
+        "1. 変更の内容と理由",
+        "2. 切り戻しの手順",
+        "- 担当部署の承認者が承認します。"
+      ]
+    },
+    {
+      "id": "recovery-target-bullet-sources",
+      "note": "多段 holdout（e1467、run_93a965a47d0140abad00ba8dd83d15b1）の最終の回答。「根拠」の下の箇条書きの行のうち、下に字下げした行が続く行の下の、字下げした行は主張（#1486）。下に字下げした行が続く「- システム台帳（system-ledger.xlsx・シート「システム台帳」）」は、RAG では見出し、Agent では出典の行（citation）としてどちらも主張にしないため、この契約には入れず両方のテストで個別に確かめる。",
+      "answer": "**結論: ドキュメントポータルのほうが復旧の目標が短いです。**\n\n| システム | 重要度（システム台帳） | 復旧の目標 |\n|---|---|---|\n| ドキュメントポータル（SYS-105） | B | 1 営業日以内 |\n| 会議室予約システム（SYS-106） | C | 3 営業日以内 |\n\n**根拠**\n- システム台帳（system-ledger.xlsx・シート「システム台帳」）\n  - SYS-105 正式名: ドキュメントポータル / 重要度: B\n  - SYS-106 正式名: 会議室予約システム / 重要度: C\n- 障害連絡規程（incident-contact-rules.pdf）第 2 章「復旧の目標」\n  - 重要度 A のシステムは 4 時間以内に復旧\n  - 重要度 B のシステムは 1 営業日以内に復旧\n  - 重要度 C のシステムは 3 営業日以内に復旧\n\nドキュメントポータルは重要度 B（1 営業日以内）、会議室予約システムは重要度 C（3 営業日以内）なので、ドキュメントポータルのほうが短くなります。",
+      "heading_passages": [
+        "**根拠**"
+      ],
+      "claim_passages": [
+        "- SYS-105 正式名: ドキュメントポータル / 重要度: B",
+        "- 重要度 B のシステムは 1 営業日以内に復旧"
+      ]
+    },
+    {
+      "id": "bullet-list-items-before-paragraph",
+      "note": "箇条書きの行が続く一覧（同じ字下げ）の項目は、終わりの語が一覧にあっても主張のまま。最後の項目の次が字下げしない本文の段落でも主張（#1486）。「→」の行が続く箇条書きの行は見出し。",
+      "answer": "申請の前に確かめる点は次のとおりです。\n\n- 申請の期限\n- 承認者の連絡先\n・切り戻しの手順\n\n以上の 3 点は、システム変更手順書の第 3 章に定められています。\n\n- 連絡の手段\n→ 担当部署の承認者にメールで連絡します。",
+      "heading_passages": [
+        "申請の前に確かめる点は次のとおりです。",
+        "- 連絡の手段"
+      ],
+      "claim_passages": [
+        "- 申請の期限",
+        "- 承認者の連絡先",
+        "・切り戻しの手順",
+        "→ 担当部署の承認者にメールで連絡します。"
+      ]
+    },
+    {
+      "id": "agent-account-deletion-steps",
+      "note": "業務 Agent の確認 #1863（run_db9847f005de491eba252d9fc66fd45e）の形。番号つきの太字のラベルの行（「1. **実施権限**」「3. **アカウント削除**」）が見出しにならず unassessed で外れ、「2. **部門長の承認取得**」だけが見出しとして残っていた（#1898）。",
+      "answer": "削除の手順は次のとおりです。\n\n1. **実施権限**\n   - 削除は所属部署のポータル管理者が行います。\n\n2. **部門長の承認取得**\n   - 削除の前に、所属部署の部門長の承認を得てください。\n\n3. **アカウント削除**\n   - 削除したアカウントは 30 日後に完全に消去され、復元できません。",
+      "heading_passages": [
+        "削除の手順は次のとおりです。",
+        "1. **実施権限**",
+        "2. **部門長の承認取得**",
+        "3. **アカウント削除**"
+      ],
+      "claim_passages": [
+        "- 削除は所属部署のポータル管理者が行います。",
+        "- 削除の前に、所属部署の部門長の承認を得てください。",
+        "- 削除したアカウントは 30 日後に完全に消去され、復元できません。"
+      ]
+    }
+  ],
+  "table_header_cases": [
+    {
+      "id": "empty-corner",
+      "answer": "| | 項目 A | 項目 B |\n|---|---|---|\n| 値 | 10 | 20 |",
+      "headers": [
+        "| | 項目 A | 項目 B |"
+      ]
+    },
+    {
+      "id": "empty-middle",
+      "answer": "| 項目 A | | 項目 B |\n|---|---|---|",
+      "headers": [
+        "| 項目 A | | 項目 B |"
+      ]
+    },
+    {
+      "id": "empty-last",
+      "answer": "| 項目 A | |\n|---|---|",
+      "headers": [
+        "| 項目 A | |"
+      ]
+    },
+    {
+      "id": "only-empty-cells",
+      "answer": "| | |\n|---|---|",
+      "headers": []
+    },
+    {
+      "id": "instruction-cell",
+      "answer": "| | 値を変更してください |\n|---|---|",
+      "headers": []
+    },
+    {
+      "id": "assertion-cell",
+      "answer": "| | 値は一致します |\n|---|---|",
+      "headers": []
+    },
+    {
+      "id": "missing-separator",
+      "answer": "| | 項目 A |\n| 値 | 10 |",
+      "headers": []
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "jsPlugins": [
+    "./design-system-plugin.mjs"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@production-ready/ui/**",
+                  "!@production-ready/ui/styles.css",
+                  "!@production-ready/ui/tokens.css"
+                ],
+                "message": "共有 UI パッケージはルート（@production-ready/ui）から import する。内部パス（dist/** 等）に依存しない。"
+              }
+            ]
+          }
+        ],
+        "design-system/restricted-syntax": [
+          "error",
+          {
+            "selector": "Literal[value=/#[0-9a-fA-F]{3,8}(?![\\w-])/]",
+            "message": "生の hex 色は使わない。色トークン（bg-surface / text-fg-muted / var(--color-*)）を使う。"
+          },
+          {
+            "selector": "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}(?![\\w-])/]",
+            "message": "生の hex 色は使わない。色トークン（bg-surface / text-fg-muted / var(--color-*)）を使う。"
+          },
+          {
+            "selector": "JSXAttribute[name.name='style'] Literal[value=/\\b\\d+px\\b/]",
+            "message": "inline style に生の px を書かない。余白・寸法トークン（var(--space-*) / var(--button-height-*) 等）か Tailwind のユーティリティを使う。"
+          },
+          {
+            "selector": "JSXAttribute[name.name='style'] TemplateElement[value.raw=/\\b\\d+px\\b/]",
+            "message": "inline style に生の px を書かない。余白・寸法トークン（var(--space-*) / var(--button-height-*) 等）か Tailwind のユーティリティを使う。"
+          },
+          {
+            "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Noto Sans JP|Roboto|Google Sans Code|var\\())/i]",
+            "message": "デザインシステムに無い書体。Noto Sans JP / Roboto / Google Sans Code（var(--font-sans) / var(--font-mono)）を使う。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?:^|[\\s:!])(?:text|leading|tracking|rounded(?:-[trblse]{1,2})?)-\\[-?[\\d.]+(?:px|rem|em)?\\]/], TemplateElement[value.raw=/(?:^|[\\s:!])(?:text|leading|tracking|rounded(?:-[trblse]{1,2})?)-\\[-?[\\d.]+(?:px|rem|em)?\\]/])",
+            "message": "文字サイズ・行間・字間・角丸を任意値（text-[10px] / rounded-[3px] 等）で書かない。text-xs / text-sm / rounded-sm / rounded-md 等のトークンを使う。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?:^|[\\s:!])-?(?:bg|text|border(?:-[xytrblse])?|ring(?:-offset)?|outline|fill|stroke|divide|placeholder|caret|accent|decoration)-(?:background|foreground|card|muted(?:-foreground)?|primary(?:-foreground|-fill(?:-foreground)?)?|ring|success(?:-bg|-fill)?|warning(?:-bg)?|danger(?:-bg|-fill)?|info(?:-bg)?|code(?:-fg)?|control-border|button-border|disabled(?:-bg)?|sidebar-(?:foreground|active))(?:\\/\\d+)?(?![\\w-])/], TemplateElement[value.raw=/(?:^|[\\s:!])-?(?:bg|text|border(?:-[xytrblse])?|ring(?:-offset)?|outline|fill|stroke|divide|placeholder|caret|accent|decoration)-(?:background|foreground|card|muted(?:-foreground)?|primary(?:-foreground|-fill(?:-foreground)?)?|ring|success(?:-bg|-fill)?|warning(?:-bg)?|danger(?:-bg|-fill)?|info(?:-bg)?|code(?:-fg)?|control-border|button-border|disabled(?:-bg)?|sidebar-(?:foreground|active))(?:\\/\\d+)?(?![\\w-])/])",
+            "message": "旧トークン名のユーティリティ（bg-card / text-muted / bg-primary-fill 等）は削除済みで色が付かない。bg-surface / text-fg-muted / bg-accent-emphasis 等の新名を使う（docs/design-system/README.md §5）。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?:var\\(\\s*|^)--(?:background|foreground|card|border|muted|primary(?:-foreground|-fill(?:-foreground)?)?|ring|sidebar(?:-foreground|-active)?|success(?:-bg|-fill)?|warning(?:-bg)?|danger(?:-bg|-fill)?|info(?:-bg)?|code(?:-fg)?|control-border|button-border|disabled(?:-bg)?|graph-[a-z]+|color-(?:background|foreground|card|primary(?:-foreground)?|muted|ring|code(?:-fg)?|(?:success|warning|danger|info)(?:-bg)?|sidebar-(?:foreground|active)))(?![\\w-])/], TemplateElement[value.raw=/var\\(\\s*--(?:background|foreground|card|border|muted|primary(?:-foreground|-fill(?:-foreground)?)?|ring|sidebar(?:-foreground|-active)?|success(?:-bg|-fill)?|warning(?:-bg)?|danger(?:-bg|-fill)?|info(?:-bg)?|code(?:-fg)?|control-border|button-border|disabled(?:-bg)?|graph-[a-z]+|color-(?:background|foreground|card|primary(?:-foreground)?|muted|ring|code(?:-fg)?|(?:success|warning|danger|info)(?:-bg)?|sidebar-(?:foreground|active)))(?![\\w-])/])",
+            "message": "旧トークン名の CSS 変数（--card / --primary / --graph-line 等）は削除済みで未定義になる。--color-surface / --color-accent-fg / --color-graph-line 等の新名を使う（docs/design-system/README.md §5）。"
+          },
+          {
+            "selector": "JSXElement[openingElement.name.name='Button']:has(JSXAttribute[name.name='loading']) JSXExpressionContainer > ConditionalExpression:matches([test.name=/loading|pending|saving|submitting|running|busy/i], [test.property.name=/loading|pending|saving|submitting|running|busy/i], [test.left.name=/loading|pending|saving|submitting|running|busy/i], [test.left.property.name=/loading|pending|saving|submitting|running|busy/i]):matches([consequent.type='Literal'][consequent.value=/./], [consequent.type='TemplateLiteral'], [consequent.callee.name='t'], [alternate.type='Literal'][alternate.value=/./], [alternate.type='TemplateLiteral'], [alternate.callee.name='t'])",
+            "message": "loading 中に Button のラベルを「保存中…」等へ差し替えない。ラベルは固定し、loading プロップで先頭アイコンをスピナーに置き換える。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='Button']:has(> JSXAttribute[name.name='loading']):not(:has(> JSXAttribute[name.name='icon'])):not(:has(> JSXSpreadAttribute))",
+            "message": "loading を渡す Button には icon を渡す（loading 中は先頭アイコンがスピナーに置き換わる。icon が無いとスピナーの分だけ幅が変わる）。docs/design-system/README.md §4 Button。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*(?:(?:peer|group)-)?focus(?:-visible|-within)?:(?:ring(?:-[\\w\\[\\]-]+)?|outline-none)(?![\\w-])/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*(?:(?:peer|group)-)?focus(?:-visible|-within)?:(?:ring(?:-[\\w\\[\\]-]+)?|outline-none)(?![\\w-])/])",
+            "message": "フォーカスの表示を ring（box-shadow）で作らず、focus / focus-visible で outline を消さない。表示はグローバルの :focus-visible（outline）に任せ、形の調整は focus-visible:outline-* / focus-visible:-outline-offset-* で行う（docs/design-system/README.md §4「フォーカスの表示」）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='input'] > JSXAttribute[name.name='className'] :matches(Literal[value=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*(?:pl|ps)-(?:7|8|9|10|11|12|\\[)/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*(?:pl|ps)-(?:7|8|9|10|11|12|\\[)/])",
+            "message": "アイコン付きの入力欄（検索欄）を手書きしない（絶対配置のアイコン + input の pl-*）。TextField の leadingIcon / trailing / onClear を使う（docs/design-system/README.md §4「TextField」）。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*animate-(?:spin(?![\\w-])|\\[spin)/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w\\[\\]-]+:)*animate-(?:spin(?![\\w-])|\\[spin)/])",
+            "message": "回転するアイコンを手書きしない（lucide の Loader2 / RefreshCw 等に animate-spin / animate-[spin_…] を付けない）。共有の Spinner（固定の正方形の箱の中で 180 度対称のアークだけが回り、回転で周りの行の位置・高さを変えない）を使い、ボタンは loading を使う（docs/design-system/README.md §4「Spinner」、#1180）。"
+          },
+          {
+            "selector": "ImportDeclaration[source.value='lucide-react'] > ImportSpecifier[imported.name=/^(?:Lucide)?Loader(?:2|Circle|Pinwheel)?(?:Icon)?$/]",
+            "message": "回転用の lucide のアイコン（Loader / Loader2 / LoaderCircle / LoaderPinwheel）を使わない。欠けた円弧は回すと重心が動いて上下に揺れて見える。処理中の表示は共有の Spinner、ボタンは loading、領域は ProcessingIndicator / TimedLoadingState を使う（docs/design-system/README.md §4「Spinner」、#1180）。"
+          },
+          {
+            "selector": "Property[key.name=/^animation(?:Name)?$/] :matches(Literal[value=/(?:^|[\\s,])spin(?![\\w-])/], TemplateElement[value.raw=/(?:^|[\\s,])spin(?![\\w-])/])",
+            "message": "inline style の animation で回転（spin）を書かない。処理中の表示は共有の Spinner、ボタンは loading を使う（docs/design-system/README.md §4「Spinner」、#1180）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name=/^(?:TextField|input)$/]:has(> JSXAttribute[name.name='type'][value.value='search'])",
+            "message": "一覧の絞り込みの検索欄は SearchField（@production-ready/ui）で作る。入力に合わせて絞り込み（debounce 300ms・Enter はすぐ）、IME の変換中は絞り込まず、消去と件数の読み上げを持つ。検索ボタンは置かない（UX 契約 page-archetypes.md「一覧の絞り込みの検索」、#535）。LLM・ベクトル検索などの重い検索は type=\"search\" にせず、TextField と明示的な実行（ボタンと isSubmitEnter の Enter）で作る。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='SearchableSelectField'] > JSXAttribute[name.name='leadingIcon'] Identifier[name=/^(?:Search|[A-Z]\\w*Search)/]",
+            "message": "検索して選ぶ選択欄（SearchableSelectField）の閉じたボタンに虫眼鏡（Search 系のアイコン）を付けない。ボタンは選んだ値と開閉の印（chevron）だけを出し、虫眼鏡は開いたパネルの中の検索欄（SearchField）だけが持つ（shadcn/ui の Combobox・Radix・MUI の Select と同じ。付けると開いたときに虫眼鏡が 2 つ縦に並び、ボタンが文字を打てる欄に見える）。leadingIcon は対象の種類を表すアイコン（Database・Bot 等）にだけ使う（docs/design-system/README.md §4「SearchableSelectField の閉じたボタン」、#1771）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='textarea']",
+            "message": "複数行の入力欄は <textarea> を手書きせず TextareaField（@production-ready/ui）を使う。ラベル・必須・エラー・補足・文字数・枠線・フォーカスの表示を TextField と同じ 1 つの実装にそろえる（#584）。元の文書の表を再現して編集するグリッドのセルなど TextareaField で表せない所だけ、理由を添えて局所的に除外する。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='select']",
+            "message": "選択欄はネイティブの <select> を手書きせず SelectField（@production-ready/ui。候補が数十件を超えるなら SearchableSelectField）を使う。開いた一覧の見た目・キーボード操作・typeahead・ダークテーマの一覧の面・ラベル・補足・エラーの関連付け・無効（disabled）を 1 つの実装にそろえる（#631）。<optgroup> や選べない選択肢（<option disabled>）が要るなど SelectField で表せない所だけ、理由を添えて局所的に除外し、fieldControlClassName({ size, width }) で見た目をそろえる。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='details']",
+            "message": "開閉できる領域は <details> / <summary> を手書きせず Disclosure（@production-ready/ui）を使う。手書きすると開閉の Chevron・見出し全体の押せる領域・フォーカスの表示が漏れる（#397）。Disclosure で表せない所（展開できる表の行など）だけ理由を添えて局所的に除外し、状態は DisclosureChevron で示す。"
+          },
+          {
+            "selector": ":matches(JSXAttribute[name.name='placeholder'] Literal[value=/任意/], JSXAttribute[name.name='placeholder'] TemplateElement[value.raw=/任意/], Property[key.value=/[Pp]laceholder/] > Literal[value=/任意/], Property[key.name=/[Pp]laceholder/] > Literal[value=/任意/], Literal[value=/[(（]\\s*任意\\s*[)）・、,，]/], TemplateElement[value.raw=/[(（]\\s*任意\\s*[)）・、,，]/], JSXText[value=/[(（]\\s*任意\\s*[)）・、,，]/])",
+            "message": "任意の欄を「(任意)」や placeholder で示さない。任意の欄には何も付けず、必須の欄だけに required で「必須」のタグを出す（placeholder は入力を始めると消え、ラベルの代わりにならない。WCAG 3.3.2。docs/design-system/README.md §4「必須の表示」、#531）。"
+          },
+          {
+            "selector": ":matches(JSXText[value=/^\\s*[*＊※]\\s*$/], JSXText[value=/\\S\\s*[*＊]\\s*$/], JSXElement > JSXExpressionContainer > Literal[value=/^\\s*[*＊※]\\s*$/], JSXText[value=/^\\s*※?必須\\s*$/], JSXElement > JSXExpressionContainer > Literal[value=/^\\s*※?必須\\s*$/], JSXOpeningElement[name.name!='RequiredBadge'] > JSXAttribute[name.name!='requiredLabel'] Literal[value=/^\\s*※?必須\\s*$/], JSXOpeningElement[name.name='RequiredBadge'], JSXElement > JSXExpressionContainer > CallExpression[callee.name='t'][arguments.0.value=/^common\\.required$|\\.required(?:Mark|Badge|Tag)$/], JSXOpeningElement[name.name!='RequiredBadge'] > JSXAttribute[name.name!='requiredLabel'] > JSXExpressionContainer > CallExpression[callee.name='t'][arguments.0.value=/^common\\.required$|\\.required(?:Mark|Badge|Tag)$/])",
+            "message": "必須の表示を手書きしない（「*」・「必須」の span / Badge / RequiredBadge を直接ラベルに並べない）。TextField / SelectField / SecretField の required、それ以外の入力は FieldLabel / FieldLegend / Fieldset の required を使う（docs/design-system/README.md §4「必須の表示」、#531）。"
+          },
+          {
+            "selector": "JSXAttribute[name.name='touchTarget']",
+            "message": "製品で touchTarget を使わない。タッチ端末（pointer: coarse）では入力欄・選択欄・ボタンが sm / md / lg とも 44px になる。マウス環境の高さは、同じ行の部品に同じ size（既定 md）を渡してそろえる（docs/design-system/README.md §4「操作部品の高さと幅」、#613）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name=/^(?:Button|TextField|SearchField|SecretField|SelectField|SearchableSelectField|ClearActionButton|RunStopButton)$/] > JSXAttribute[name.name=/^(?:className|inputClassName|buttonClassName)$/] :matches(Literal[value=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-(?!0(?![\\w.]))/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-(?!0(?![\\w.]))/])",
+            "message": "共有の操作部品（Button / TextField / SearchField / SecretField / SelectField / SearchableSelectField）の高さを h-* / min-h-* で上書きしない。size（sm 32px / md 36px / lg 40px、タッチ端末は 44px）を渡し、同じ行の部品は同じ size にする（docs/design-system/README.md §4「操作部品の高さと幅」、#613）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name=/^(?:TextField|SearchField|SecretField|SelectField|SearchableSelectField)$/] > JSXAttribute[name.name=/^(?:className|inputClassName|buttonClassName)$/] :matches(Literal[value=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:w|max-w)-(?!full(?![\\w-])|0(?![\\w.]))/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:w|max-w)-(?!full(?![\\w-])|0(?![\\w.]))/])",
+            "message": "入力欄・選択欄の幅を w-* / max-w-* で書かない。値の長さで width（xs 8rem / sm 12rem / md 20rem / lg 28rem / full）を選ぶ。sm 未満は全幅になる。フォームの grid のセルに置く欄は width を渡さない（docs/design-system/README.md §4「操作部品の高さと幅」、#613）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name=/^(?:input|select)$/]:not(:has(> JSXAttribute[name.name='type'][value.value=/^(?:checkbox|radio|file|range|color|hidden)$/])) > JSXAttribute[name.name='className'] :matches(Literal[value=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-(?:8|9|10|11|12|14|\\[)/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-(?:8|9|10|11|12|14|\\[)/])",
+            "message": "ネイティブの <input> / <select> の高さを h-* / min-h-* で書かない。TextField / SelectField を使うか、ネイティブの要素を残すときは fieldControlClassName({ size, width })（@production-ready/ui）で同じ見た目・高さ・幅にする（docs/design-system/README.md §4「操作部品の高さと幅」、#613）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='PageHeader'] > JSXAttribute[name.name='actions'] Property[key.name='id'][value.value='back']",
+            "message": "「一覧へ戻る」を PageHeader の actions（右の操作の列）に入れない。PageHeader の back（タイトルの上の左端）で渡す。確定（作成・保存）と変更を破棄はフォームの末尾の FormActionBar（docs/design-system/README.md §4「詳細・作成・編集の画面の操作」、#618 / #1786）。"
+          },
+          {
+            "selector": ":matches(JSXOpeningElement[name.name='PageHeader'] > JSXAttribute[name.name='actions'] Property[key.name='id'][value.value=/^(?:save|discard)$/], JSXOpeningElement[name.name='PageHeader']:has(> JSXAttribute[name.name='back']) > JSXAttribute[name.name='actions'] Property[key.name='id'][value.value='create'])",
+            "message": "詳細・作成・編集の画面の確定（作成・保存）と「変更を破棄」を PageHeader の actions に入れない。フォームの末尾の FormActionBar（primaryActions に作成・保存、secondaryActions に変更を破棄。長いフォームは sticky）に置き、入力欄の左端にそろえる。一覧の「新規作成」（作成の画面を開く）は PageHeader のまま（docs/design-system/README.md §4「詳細・作成・編集の画面の操作」、#1786）。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name=/^(?:table|thead|tbody|tfoot|tr|th|td|colgroup)$/]",
+            "message": "<table> を手書きしない。@production-ready/ui の DataTable（stickyHeader / visibleRows / selectedRowKey 等）を使う。固定表頭・表示行数・行の選択状態・aria-sort は DataTable が持つ（#129 / #530）。例外は元の文書の表を再現して編集するグリッド（見出し行がなく列数が表ごとに変わるもの）だけで、理由を添えて局所的に除外する。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='PageHeader'] > JSXAttribute[name.name='actions'] :matches(JSXElement, JSXFragment)",
+            "message": "PageHeader の actions に JSX（Button 等）を渡さない。{ id, kind, label, icon, onClick } の配列で渡す。配列なら danger → utility → secondary → primary の順に並び、狭い画面では primary 以外が「その他の操作」にまとまる（docs/design-system/README.md §4「PageHeader」、#800）。"
+          },
+          {
+            "selector": ":matches(Literal[value=/(?<![a-zA-Z])(?:rgba?|hsla?|hwb|oklch|oklab)\\(/], TemplateElement[value.raw=/(?<![a-zA-Z])(?:rgba?|hsla?|hwb|oklch|oklab)\\(/])",
+            "message": "rgba() / rgb() / hsl() などの生の色を書かない。色トークン（bg-surface / ring-surface / var(--color-*)）を使い、透過は bg-accent-emphasis/15 のような不透明度の修飾か color-mix(in srgb, var(--color-*) …) で作る。生の色はダークテーマで切り替わらない（#800）。"
+          },
+          {
+            "selector": "Property[key.name=/^(?:fontSize|lineHeight|letterSpacing)$/] > Literal[raw=/^[\\d.]+$/]",
+            "message": "文字サイズ・行間・字間を数値（fontSize: 11 等。React は px として扱う）で書かない。型のトークン（var(--font-size-xs) / var(--line-height-xs) 等）か text-xs / text-sm のユーティリティを使う。11px のような型のスケールの外の値を作らない（docs/design-system/README.md §3、#800）。"
+          },
+          {
+            "selector": "JSXAttribute[name.name='style'] Property[key.name=/^(?:margin|padding|gap|rowGap|columnGap|borderRadius)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?$/] > Literal[raw=/^(?:[1-9][\\d.]*|0?\\.\\d*[1-9]\\d*)$/]",
+            "message": "inline style の余白・角丸を数値（marginTop: 2 等。React は px として扱う）で書かない。余白・角丸のトークン（var(--space-*) / var(--radius-*)）か Tailwind のユーティリティ（mt-0.5 / rounded-md 等）を使う（#800）。"
+          },
+          {
+            "selector": "JSXAttribute[name.name='textareaClassName'] :matches(Literal[value=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-/], TemplateElement[value.raw=/(?:^|\\s)(?:[\\w@\\[\\]&_\\/.-]+:)*(?:h|min-h)-/])",
+            "message": "複数行の入力欄（TextareaField）の高さを textareaClassName の h-* / min-h-* で決めない。rows で行数を渡す（高さは行数と行の高さで決まり、文字の大きさ・等幅の設定に追従する。docs/design-system/README.md §4「操作部品の高さと幅」、#613 / #800）。伸びすぎを止める max-h-* は使ってよい。"
+          },
+          {
+            "selector": "JSXOpeningElement:not(:has(> JSXAttribute[name.name='data-surface-tint'])):not(:has(> JSXSpreadAttribute)) > JSXAttribute[name.name='className'] :matches(Literal[value=/(?:^|\\s)(?:(?:sm|md|lg|xl|2xl|max-(?:sm|md|lg|xl|2xl)|has-\\[[^\\]\\s]*\\]|(?:group-|peer-)?aria-[\\w-]+|(?:group-|peer-)?data-\\[[^\\]\\s]*\\]|(?:group-|peer-)?data-[\\w-]+):)*!?bg-(?:accent-(?:subtle|muted)|(?:info|success|warning|danger)-subtle|surface-hover)(?![\\w-])/], TemplateElement[value.raw=/(?:^|\\s)(?:(?:sm|md|lg|xl|2xl|max-(?:sm|md|lg|xl|2xl)|has-\\[[^\\]\\s]*\\]|(?:group-|peer-)?aria-[\\w-]+|(?:group-|peer-)?data-\\[[^\\]\\s]*\\]|(?:group-|peer-)?data-[\\w-]+):)*!?bg-(?:accent-(?:subtle|muted)|(?:info|success|warning|danger)-subtle|surface-hover)(?![\\w-])/])",
+            "message": "淡い色の面（bg-accent-subtle / bg-accent-muted / bg-info-subtle / bg-success-subtle / bg-warning-subtle / bg-danger-subtle / bg-surface-hover）を className に持つ要素には、同じ要素に data-surface-tint=\"accent|info|success|warning|danger|neutral\"（塗る面の系統。bg-surface-hover は neutral。条件で塗るなら同じ条件の式）を付ける。付けないと内側の text-fg-muted・text-accent-fg がライトで 4.5:1 を下回る（tokens/colors.css、docs/design-system/README.md §6「淡い色の面の上の文字」、#1671）。StatusBadge / Banner / Disclosure の tone などの部品で表せるなら部品を使う（部品は自分で付ける）。hover: / focus: だけで塗る面は対象外。"
+          },
+          {
+            "selector": "JSXOpeningElement[name.name='ListToolbar'] > JSXAttribute[name.name='filters'] :matches(JSXOpeningElement[name.name=/^(?:SelectField|ToggleChip)$/], JSXOpeningElement[name.name='SearchableSelectField']:not(:has(> JSXAttribute[name.name='labelPlacement'][value.value='inline'])))",
+            "message": "一覧のツールバーの絞り込み（ListToolbar の filters）に、上にラベルの付く SelectField / SearchableSelectField や ToggleChip を置かない。選択は FilterSelect（「種類: すべて」。ラベルは欄の中）、数百件から選ぶ対象は SearchableSelectField の labelPlacement=\"inline\"、5 つまでの排他の状態は FilterChipGroup を使う（部品が同じ高さで縦の中心がそろう。docs/ux-contracts/page-archetypes.md「一覧の絞り込みの部品」、#1933）。"
+          },
+          {
+            "selector": "MemberExpression[property.name='clipboard']:matches([object.name='navigator'], [object.property.name='navigator'])",
+            "message": "クリップボードへ直接書かない（navigator.clipboard）。コピーのボタンは共有の CopyButton（アイコン Copy → 成功で Check と読み上げ、失敗は Toast か onCopyError で同じ場所。http の配備の execCommand と Safari の ClipboardItem にも対応）を使う（docs/design-system/components-reference.md「CopyButton」、#2099）。"
+          }
+        ]
+      }
+    }
+  ]
+}

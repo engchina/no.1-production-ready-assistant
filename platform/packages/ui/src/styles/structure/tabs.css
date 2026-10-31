@@ -1,0 +1,51 @@
+/* Tabs の横スクロールの続きの手がかり（#364）。
+   タブが入りきらずに横へスクロールするとき、スクロールできる方向の端だけを透明へフェードさせる。
+   どちらの方向に続きがあるかは Tabs がスクロール位置とサイズから判定し、data-scroll-start / data-scroll-end で渡す。
+
+   - 色を重ねるのではなく mask で内容を透かすため、PageHeader・カード・面スコープのどの背景でも同じに見える
+     （背景色をトークンで指定し直す必要がない）。
+   - スクロールできないとき（desktop で入りきるとき）は mask を付けない（見た目は変わらない）。
+   - 動きは持たない（出し分けは即時）。prefers-reduced-motion でも同じ。
+   - scroll-padding-inline をフェードの幅にし、キーボードで選んだタブをフェードの外まで見せる（Tabs が同じ値で scrollLeft を決める）。
+   - スクロールバーは隠す（タブの下線と二重の線にしない）。強制カラーモードでは文字を透かさない（mask を外す）代わりに、
+     細いスクロールバーを出して続きがあることを示す（Windows のハイコントラストを持つ Chromium / Firefox は
+     scrollbar-width を解釈し、指定があると ::-webkit-scrollbar の指定を無視する）。
+   - スクロールバーの指定を utility（[scrollbar-width:none]）にしないのは、utilities レイヤーが components レイヤーの
+     強制カラーモードの上書きに勝つため。 */
+@layer components {
+  .pr-tabs-scroll {
+    scroll-padding-inline: var(--tab-fade-width);
+    scrollbar-width: none;
+  }
+
+  .pr-tabs-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pr-tabs-scroll:is([data-scroll-start], [data-scroll-end]) {
+    --pr-tabs-fade-start: 0px;
+    --pr-tabs-fade-end: 0px;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--pr-tabs-fade-start),
+      black calc(100% - var(--pr-tabs-fade-end)),
+      transparent
+    );
+  }
+
+  .pr-tabs-scroll[data-scroll-start] {
+    --pr-tabs-fade-start: var(--tab-fade-width);
+  }
+
+  .pr-tabs-scroll[data-scroll-end] {
+    --pr-tabs-fade-end: var(--tab-fade-width);
+  }
+
+  @media (forced-colors: active) {
+    .pr-tabs-scroll:is([data-scroll-start], [data-scroll-end]) {
+      mask-image: none;
+      scrollbar-width: thin;
+    }
+  }
+}

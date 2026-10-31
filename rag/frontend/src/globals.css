@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/*
+ * production-ready RAG - グローバルスタイル
+ *
+ * 色・型・余白・角丸・影・テーマは共有 UI パッケージ（platform の docs/design-system/）が正本。
+ * ここには画面固有のレイアウトだけを書く。
+ */
+@import "@production-ready/ui/styles.css";
+
+/* shared UI の現行配布版に残る contain を上書きし、内部スクロール端から
+ * 親ページへ wheel / touch scroll を引き継ぐ。共有 token 更新後も同値で無害。 */
+.bounded-scroll-area,
+.bounded-scroll-area-lg {
+  overscroll-behavior-y: auto;
+}
+
+/*
+ * 共有 UI パッケージの dist を Tailwind v4 のスキャン対象に含め、
+ * 共有コンポーネントが使う utility クラスを確実に生成する（node_modules は既定で非走査のため）。
+ */
+@source "../node_modules/@production-ready/ui/dist";
+@source "../node_modules/@production-ready/system-settings/dist";

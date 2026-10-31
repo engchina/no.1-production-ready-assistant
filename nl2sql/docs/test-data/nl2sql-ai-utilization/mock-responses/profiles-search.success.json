@@ -1,0 +1,40 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "default",
+        "name": "標準業務プロファイル",
+        "category": "sales",
+        "description": "受注・顧客・請求を対象にした標準プロファイル",
+        "archived": false,
+        "allowed_table_count": 3,
+        "allowed_view_count": 1,
+        "glossary_count": 4,
+        "few_shot_count": 2,
+        "version": 4,
+        "etag": "profile-default-v4",
+        "updated_at": "2026-08-12T00:00:00Z"
+      },
+      {
+        "id": "finance",
+        "name": "経理分析プロファイル",
+        "category": "finance",
+        "description": "請求・入金・未収分析を対象にしたプロファイル",
+        "archived": false,
+        "allowed_table_count": 2,
+        "allowed_view_count": 0,
+        "glossary_count": 5,
+        "few_shot_count": 1,
+        "version": 2,
+        "etag": "profile-finance-v2",
+        "updated_at": "2026-08-12T00:00:00Z"
+      }
+    ],
+    "next_cursor": null,
+    "total": 2,
+    "change_token": 12
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

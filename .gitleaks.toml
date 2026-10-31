@@ -1,0 +1,44 @@
+# gitleaks 設定 — シークレット混入検出(pre-commit hook / CI 共用、monorepo 全体)
+# パスは suite root からの相対パス(rag/ nl2sql/ agent/ platform/)で書く。
+#
+# 既定ルールセットを継承し、誤検知だけを rule・regex・fingerprint の単位で除外する(#1594)。
+# テスト・fixture・e2e のディレクトリを丸ごと除外しない(そこに置かれた実シークレットも検出させる)。
+#   - テストの意図的なダミー値が検出されたら、.gitleaksignore に fingerprint と理由を書く
+#     (fingerprint は `<commit>:<path>:<rule>:<line>`。CI の job の log か `gitleaks git --report-path` で分かる)。
+#   - 同じ形の誤検知が多いときだけ、下の rule ごとの allowlist に regex(と path)を足す。
+# ローカル実行用の gitignore 済みファイル(rag/backend/model-settings.json 等)は
+# pre-commit の staged 走査対象外なので、ここでは扱わない。
+
+title = "Production Ready suite - gitleaks"
+
+[extend]
+useDefault = true
+
+# --- プロジェクト全体の allowlist(誤検知のみを限定的に除外)---
+# CI の gitleaks-action は gitleaks 8.24 系を使うため、8.25 以降の全体の [[allowlists]] ではなく
+# 単一の [allowlist] で書く(regexes / stopwords のいずれかに一致すれば除外)。
+
+[allowlist]
+description = "明確なダミー値のみを限定的に除外する(実シークレットは検出させる)"
+regexes = [
+  # `\nabc\n` を本体とする例示専用のダミー PRIVATE KEY ブロック(広い stopword は実鍵を隠すため使わない)
+  '''-----BEGIN (ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY-----\\?n?abc\\?n?-----END''',
+]
+stopwords = [
+  "my-private-bucket",
+]
+
+# --- rule ごとの allowlist(既定の rule に追加される)---
+
+# sourcegraph-access-token は接頭辞の無い 40 桁の hex も token とみなすため、Agent の marketplace の fixture
+# (GitHub の API の応答の写し)にある git の commit の SHA("sha": "<40 桁>")を検出する。
+# その fixture の、40 桁の hex だけの値に限って除く(sgp_ の接頭辞の付いた token は検出する)。
+# fixture は機能の削除(#1798)で消したが、main の schedule の CI は履歴の全体を走査するため残す。
+[[rules]]
+id = "sourcegraph-access-token"
+[[rules.allowlists]]
+description = "marketplace の fixture の git の commit の SHA"
+condition = "AND"
+paths = ['''^agent/backend/tests/fixtures/marketplaces/[^/]+\.json$''']
+regexTarget = "secret"
+regexes = ['''^[0-9a-f]{40}$''']

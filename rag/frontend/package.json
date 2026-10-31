@@ -1,0 +1,57 @@
+{
+  "name": "production-ready-rag-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "start": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-hk": "^5.3.1",
+    "@fontsource-variable/noto-sans-sc": "^5.3.1",
+    "@fontsource-variable/noto-sans-tc": "^5.3.1",
+    "@fontsource/google-sans-code": "^5.3.2",
+    "@production-ready/system-settings": "file:../../platform/packages/system-settings",
+    "@production-ready/ui": "file:../../platform/packages/ui",
+    "@tanstack/react-query": "^5.103.2",
+    "@xyflow/react": "^12.12.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^7.18.4",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.1",
+    "@fontsource-variable/noto-sans-jp": "^5.3.1",
+    "@fontsource/roboto": "^5.3.0",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.72.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "postcss": "8.5.31",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "postcss": "8.5.31"
+  }
+}

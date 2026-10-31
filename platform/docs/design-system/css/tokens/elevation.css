@@ -1,0 +1,32 @@
+/* 段(elevation)。ライトは影で、ダークは面の明度で浮きを作ります。
+   ダークで同じ影を使うと何も見えないので、影は濃くしたうえで
+   --color-surface-raised / -overlay と必ずセットで使うこと。 */
+:root {
+  --shadow-sm: 0 1px 3px 0 light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.45)),
+               0 1px 2px -1px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.40));
+  --shadow-lg: 0 10px 15px -3px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.55)),
+               0 4px 6px -4px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.45));
+  --shadow-xl: 0 20px 25px -5px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.60)),
+               0 8px 10px -6px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.50));
+  --shadow-2xl: 0 25px 50px -12px light-dark(rgb(0 0 0 / 0.25), rgb(0 0 0 / 0.70));
+
+  --shadow-card:    var(--shadow-sm);
+  --shadow-popover: var(--shadow-lg);  /* SelectField list, tooltip */
+  --shadow-toast:   var(--shadow-lg);
+  --shadow-dialog:  var(--shadow-xl);
+  --shadow-palette: var(--shadow-2xl); /* command palette */
+  --scrim: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7)); /* @kind color */
+
+  /* 重なり順。1 段しかなく SelectField が zIndex:50 直書きだった問題の解。
+     通知はモーダルの下（toast < scrim < dialog）。モーダル中はモーダル外を操作できないため、
+     上に重ねても押せず、確認ダイアログのボタンを覆うだけになる。
+     開いたメニュー・SelectField の一覧は通知の上（toast < dropdown）。いま操作しているメニューを
+     狭い画面の上端の通知が塞がないようにする（#431。Material でも menu 8dp > snackbar 6dp）。 */
+  --z-popover:  200;  /* @kind other */
+  --z-sticky:   300;  /* @kind other */
+  --z-toast:    800;  /* @kind other */
+  --z-dropdown: 850;  /* @kind other */
+  --z-scrim:    900;  /* @kind other */
+  --z-dialog:  1000;  /* @kind other */
+  --z-palette: 1200;  /* @kind other */
+}

@@ -1,0 +1,60 @@
+name: Dependabot auto-merge
+
+# Dependabot の patch / minor 更新を、required checks の成功後に自動 merge する(#76)。
+# major は auto-merge せず手動レビューで判断する(実例: #73 の actions/checkout 4→7、
+# gitleaks-action 2→3)。grouped PR では group 内で最大の semver 変更が update-type に
+# なるため、major を 1 件でも含む group は自動 merge されない。
+#
+# 前提となる repo 設定（この workflow だけでは有効にならない）:
+#   - Settings > General > Allow auto-merge が有効であること。
+#   - main の ruleset の必須 check が統合 CI（ci.yml）の `CI OK` であること（#71）。`CI OK` は
+#     変更のあった製品の job の結果を集約するため、Dependabot の PR もその製品の job が通るまで merge されない。
+#   - ruleset の up-to-date 要求（strict）はやめた（#339）。main が進んでも rebase を待たずに merge される。
+#     main で壊れた場合は ci-failure-issue.yml が Issue を作る。
+#
+# checks が失敗した PR は merge されず open のまま残る（扱いは .github/dependabot.yml の冒頭を参照）。
+
+on: pull_request
+
+# 書き込みの権限は merge する job だけに渡す（#1594）。
+permissions: {}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Auto merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # 人間の PR では実行しない。
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch / minor updates
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --merge "$PR_URL"
+
+      - name: Report skipped update
+        if: >-
+          steps.metadata.outputs.update-type != 'version-update:semver-patch' &&
+          steps.metadata.outputs.update-type != 'version-update:semver-minor'
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+        run: |
+          echo "::notice::auto-merge しません (update-type=${UPDATE_TYPE:-unknown}, dependencies=${DEPENDENCY_NAMES:-unknown})。手動レビューで判断してください。"

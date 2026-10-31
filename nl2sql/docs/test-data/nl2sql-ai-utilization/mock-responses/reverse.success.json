@@ -1,0 +1,21 @@
+{
+  "data": {
+    "question": "顧客別の受注金額合計上位5件を表示してください",
+    "explanation": "ORDERS の TOTAL_AMOUNT を CUSTOMER_ID ごとに合計し、金額の大きい順に5件表示します。",
+    "referenced_tables": [
+      "APP.ORDERS"
+    ],
+    "logical_structure": "SQL 論理構造\n- APP.ORDERS を参照\n- CUSTOMER_ID で GROUP BY\n- SUM(TOTAL_AMOUNT) を降順ソート\n- 上位5件に制限",
+    "logical_steps": [
+      "受注テーブルを参照する",
+      "顧客IDで集計する",
+      "受注金額合計で降順に並べる",
+      "上位5件を返す"
+    ],
+    "source": "deterministic",
+    "warnings": []
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

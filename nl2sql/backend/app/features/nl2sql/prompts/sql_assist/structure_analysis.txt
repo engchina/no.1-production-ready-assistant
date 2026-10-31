@@ -1,0 +1,175 @@
+Analyze the SQL query and extract its COMPLETE structure in Markdown format.
+GOAL: Output must contain 100% of SQL information to enable exact SQL reconstruction.
+Output ONLY the markdown text below (no code blocks, no explanations):
+
+## 📊 SQL構造分析
+
+### 📋 SELECT句
+- [DISTINCT] (if present)
+- schema.table(alias).column1 [AS alias1]
+- schema.table(alias).column2 [AS alias2]
+- aggregate_function(schema.table(alias).column) [AS alias]
+- expression [AS alias]
+- (サブクエリ-N) AS alias
+- * (if SELECT *)
+
+### 📁 FROM句
+- schema.table_name [alias]
+- (サブクエリ-N) AS alias (if inline view)
+
+### 🔗 JOIN句
+- **[JOIN_TYPE]**: schema.table1(alias1) JOIN schema.table2(alias2)
+  - ON: condition1
+  - ON: condition2 (if multiple conditions)
+  - USING: (column_name) (if USING clause)
+
+### 🔍 WHERE句
+- schema.table(alias).column operator value
+- AND/OR schema.table(alias).column operator value
+- AND/OR schema.table(alias).column IN (サブクエリ-N)
+- AND/OR EXISTS (サブクエリ-N)
+- AND/OR schema.table(alias).column BETWEEN value1 AND value2
+- AND/OR schema.table(alias).column LIKE 'pattern'
+- AND/OR schema.table(alias).column IS [NOT] NULL
+
+### 📦 GROUP BY句
+- schema.table(alias).column1
+- schema.table(alias).column2
+
+### 🎯 HAVING句
+- aggregate_function(schema.table(alias).column) operator value
+- AND/OR aggregate_function(column) operator (サブクエリ-N)
+
+### 📊 ORDER BY句
+- schema.table(alias).column1 ASC/DESC [NULLS FIRST/LAST]
+- schema.table(alias).column2 ASC/DESC
+
+### 📏 LIMIT/OFFSET句
+- LIMIT: n / FETCH FIRST n ROWS ONLY
+- OFFSET: m / OFFSET m ROWS
+
+### 📝 WITH句(CTE)
+- **cte_name1**:
+  - SELECT: [DISTINCT] col1, col2, aggregate_func(col) AS alias, (サブクエリ-N) AS alias
+  - FROM: schema.table_name(alias)
+  - JOIN: **[JOIN_TYPE]** schema.table(alias) ON condition
+  - WHERE: condition1 AND/OR condition2
+  - GROUP BY: col1, col2
+  - HAVING: aggregate_condition
+  - ORDER BY: col ASC/DESC
+- **cte_name2**: (same structure)
+
+### 🔎 サブクエリ
+- **サブクエリ-1** [Location: SELECT/FROM/WHERE/HAVING in main/CTE]:
+  - SELECT: [DISTINCT] columns/expressions
+  - FROM: schema.table_name(alias)
+  - JOIN: **[JOIN_TYPE]** schema.table(alias) ON condition
+  - WHERE: conditions
+  - GROUP BY: columns
+  - HAVING: conditions
+  - ORDER BY: columns
+  - **NESTED-1-1**: (nested subquery with same structure)
+- **サブクエリ-2**: (same structure)
+
+### 🔀 SET演算
+- **[UNION/UNION ALL/INTERSECT/MINUS/EXCEPT]**:
+  - Query1: (expand structure or reference)
+  - Query2: (expand structure or reference)
+
+---
+
+Rules for 100% SQL Reconstruction:
+- MUST output ALL columns in SELECT with exact order, aliases, and expressions
+- MUST preserve ALL literal values, operators, and functions exactly as written
+- MUST include schema prefix when present in original SQL
+- Format: schema.table_name(alias).column when alias exists
+- JOIN_TYPE: INNER JOIN, LEFT [OUTER] JOIN, RIGHT [OUTER] JOIN, FULL [OUTER] JOIN, CROSS JOIN, NATURAL JOIN
+- For implicit JOIN (FROM t1, t2 WHERE t1.id=t2.id), list in FROM and show condition in WHERE
+- For compound JOIN conditions, list each ON condition separately
+- Preserve ALL operators: =, >, <, >=, <=, <>, !=, LIKE, NOT LIKE, IN, NOT IN, BETWEEN, IS NULL, IS NOT NULL, EXISTS, NOT EXISTS
+- Preserve ALL string literals with quotes, numeric values, date literals
+- Preserve AND/OR/NOT logical structure exactly
+- Do NOT merge JOIN ON conditions into WHERE
+- WITH句(CTE): Expand EACH CTE completely
+- サブクエリ: Number sequentially (サブクエリ-1, サブクエリ-2...) and expand completely
+- For nested subqueries, label as NESTED-X-Y and expand
+- If section is empty/not present, omit that section entirely
+- Output content in English (except section headers in Japanese)
+
+Example 1 (Simple):
+SQL: SELECT * FROM ADMIN.USERS u INNER JOIN ADMIN.ROLES r ON u.role_id = r.id WHERE u.status = 'ACTIVE' ORDER BY u.created_at DESC
+
+Output:
+## 📊 SQL構造分析
+
+### 📋 SELECT句
+- *
+
+### 📁 FROM句
+- ADMIN.USERS u
+
+### 🔗 JOIN句
+- **INNER JOIN**: ADMIN.USERS(u) JOIN ADMIN.ROLES(r)
+  - ON: ADMIN.USERS(u).role_id = ADMIN.ROLES(r).id
+
+### 🔍 WHERE句
+- ADMIN.USERS(u).status = 'ACTIVE'
+
+### 📊 ORDER BY句
+- ADMIN.USERS(u).created_at DESC
+
+Example 2 (Complex with nested subqueries in WHERE, SELECT, and CTE):
+SQL: WITH active_users AS (SELECT user_id, status, (SELECT dept_name FROM DEPARTMENTS d WHERE d.id=u.dept_id) as dept FROM USERS u WHERE status='ACTIVE' AND dept_id IN (SELECT id FROM DEPARTMENTS WHERE budget > 10000)) SELECT u.*, (SELECT COUNT(*) FROM ORDERS o WHERE o.user_id=u.user_id AND o.status IN (SELECT code FROM ORDER_STATUS WHERE active=1)) as order_count FROM active_users u WHERE EXISTS (SELECT 1 FROM PAYMENTS p WHERE p.user_id=u.user_id AND p.amount > (SELECT AVG(amount) FROM PAYMENTS)) ORDER BY u.user_id
+
+Output:
+## 📊 SQL構造分析
+
+### 📝 WITH句(CTE)
+- **active_users**:
+  - SELECT: USERS(u).user_id, USERS(u).status, (サブクエリ-1) AS dept
+  - FROM: USERS(u)
+  - WHERE: 
+    - USERS(u).status = 'ACTIVE'
+    - AND USERS(u).dept_id IN (サブクエリ-2)
+
+### 📋 SELECT句
+- active_users(u).*
+- (サブクエリ-4) AS order_count
+
+### 📁 FROM句
+- active_users u
+
+### 🔍 WHERE句
+- EXISTS (サブクエリ-3)
+
+### 📊 ORDER BY句
+- active_users(u).user_id ASC
+
+### 🔎 サブクエリ
+- **サブクエリ-1** [Location: SELECT in CTE active_users]:
+  - SELECT: DEPARTMENTS(d).dept_name
+  - FROM: DEPARTMENTS(d)
+  - WHERE: DEPARTMENTS(d).id = USERS(u).dept_id
+- **サブクエリ-2** [Location: WHERE in CTE active_users]:
+  - SELECT: DEPARTMENTS.id
+  - FROM: DEPARTMENTS
+  - WHERE: DEPARTMENTS.budget > 10000
+- **サブクエリ-3** [Location: WHERE in main query]:
+  - SELECT: 1
+  - FROM: PAYMENTS(p)
+  - WHERE: 
+    - PAYMENTS(p).user_id = active_users(u).user_id
+    - AND PAYMENTS(p).amount > (NESTED-3-1)
+  - **NESTED-3-1**:
+    - SELECT: AVG(PAYMENTS.amount)
+    - FROM: PAYMENTS
+- **サブクエリ-4** [Location: SELECT in main query]:
+  - SELECT: COUNT(*)
+  - FROM: ORDERS(o)
+  - WHERE: 
+    - ORDERS(o).user_id = active_users(u).user_id
+    - AND ORDERS(o).status IN (NESTED-4-1)
+  - **NESTED-4-1**:
+    - SELECT: ORDER_STATUS.code
+    - FROM: ORDER_STATUS
+    - WHERE: ORDER_STATUS.active = 1

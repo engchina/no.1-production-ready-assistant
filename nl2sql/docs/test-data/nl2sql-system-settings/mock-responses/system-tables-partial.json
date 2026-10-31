@@ -1,0 +1,72 @@
+{
+  "data": {
+    "status": "partial",
+    "schema_head": 17,
+    "applied_versions": [
+      0,
+      1,
+      2,
+      3,
+      5,
+      6,
+      7
+    ],
+    "pending_versions": [
+      8,
+      9,
+      15,
+      17
+    ],
+    "expected_object_count": 51,
+    "existing_object_count": 49,
+    "expected_table_count": 27,
+    "existing_table_count": 26,
+    "missing_objects": [
+      {
+        "name": "NL2SQL_EVALUATION_JOBS",
+        "object_type": "TABLE"
+      },
+      {
+        "name": "IX_NL2SQL_EVAL_JOB_STATE",
+        "object_type": "INDEX"
+      }
+    ],
+    "tables": [
+      {
+        "name": "NL2SQL_EVALUATION_JOBS",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      }
+    ],
+    "objects": [
+      {
+        "name": "NL2SQL_EVALUATION_JOBS",
+        "object_type": "TABLE",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      },
+      {
+        "name": "IX_NL2SQL_EVAL_JOB_STATE",
+        "object_type": "INDEX",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      }
+    ],
+    "operation_state": {
+      "status": "idle",
+      "operation_kind": null,
+      "lease_expires_at": null,
+      "last_error_code": null,
+      "schema_epoch": 1,
+      "updated_at": "2026-08-12T00:00:00Z"
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}

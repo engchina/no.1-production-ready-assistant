@@ -1,0 +1,24 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
+.ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
+.grid{display:grid;gap:8px}
+.sw{height:40px;border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.n{display:block;margin-top:5px;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg)}
+.v{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted)}
+table{border-collapse:collapse;width:100%;font:var(--text-meta)}
+td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--color-border);vertical-align:top}
+th{color:var(--color-fg-muted);font-weight:600}
+code{font-family:var(--font-mono);font-size:0.95em}
+</style></head><body>
+<div class="pair">
+<div class="pane" data-theme="light"><span class="ph">light</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-accent-fg)"></div><span class="n">--accent-fg</span><span class="v">#1a73c1 · 文字 4.9:1</span></div><div><div class="sw" style="background:var(--color-accent-emphasis)"></div><span class="n">--accent-emphasis</span><span class="v">#1a73c1 · 塗り</span></div><div><div class="sw" style="background:var(--color-accent-muted)"></div><span class="n">--accent-muted</span><span class="v">12% · 選択中</span></div><div><div class="sw" style="background:var(--color-accent-subtle)"></div><span class="n">--accent-subtle</span><span class="v">8% · hover</span></div></div></div>
+<div class="pane" data-theme="dark"><span class="ph">dark</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-accent-fg)"></div><span class="n">--accent-fg</span><span class="v">#69adff · 7.4:1</span></div><div><div class="sw" style="background:var(--color-accent-emphasis)"></div><span class="n">--accent-emphasis</span><span class="v">#286abd · 塗り</span></div><div><div class="sw" style="background:var(--color-accent-muted)"></div><span class="n">--accent-muted</span><span class="v">22%</span></div><div><div class="sw" style="background:var(--color-accent-subtle)"></div><span class="n">--accent-subtle</span><span class="v">16%</span></div></div></div>
+</div>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0">暗い面ではトーンが沈むため、<code>-muted</code> / <code>-subtle</code> の混合率はダークで上げてあります（12/8% → 22/16%）。塗りの上の文字は常に <code>--color-fg-on-accent</code>（白・両テーマ 4.9:1 以上）。<b>製品ごとのアクセント色は作らない。</b></p>
+</body></html>

@@ -1,0 +1,9 @@
+{
+  "input": "{{prompt}}",
+  "model": "{{model_id}}",
+  "metadata": {
+    "app": "production-ready-nl2sql",
+    "purpose": "settings-test"
+  }
+}
+

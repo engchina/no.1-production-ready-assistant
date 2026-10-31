@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/engchina/No.1-SQL-Assist",
+  "revision": "cacd0959a5fa2a279cb1147de2d04e5a9b01815f",
+  "source": "utils/selectai_util.py",
+  "license": "Apache-2.0",
+  "files": {
+    "structure_analysis.txt": "bfc92572006aca085458c1cb46c546622f4395f32bd4590c6255b6a06cc1997c",
+    "logical_structure.txt": "25e5f774326e4162cbd3c3dacba938bd66391a54918bac47118c2d72bb3a7e56",
+    "business_question.txt": "6110a84692d54555647ce90f0cd58cf1fc86e4fb720d62e9117a27bcd9413353",
+    "glossary_question.txt": "113443caf67e4c7e63898eb5a36ea1f6cec956d69009bc0ead134538163c3a83"
+  }
+}

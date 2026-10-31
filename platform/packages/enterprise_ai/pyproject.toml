@@ -1,0 +1,51 @@
+[project]
+name = "production-ready-enterprise-ai"
+version = "0.1.0"
+description = "Shared rules for calling OCI Enterprise AI (request URL, HTTP failure classification) for the No.1 Production Ready products and suite (stdlib only)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+# 標準 library だけで書く（suite の評価が FastAPI なしで使う。#3418）。
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-xdist>=3.8",
+  "pytest-timeout>=2.3",
+  "ruff>=0.9",
+  "mypy>=1.14",
+  "bandit>=1.8",
+  "pip-audit>=2.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pr_enterprise_ai"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# 整形（#345）。black と同じ既定にそろえる。
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# 1 つのテストが止まったら 120 秒で失敗にする（pytest-timeout。#1591）。
+timeout = 120

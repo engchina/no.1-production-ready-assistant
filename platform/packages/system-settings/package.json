@@ -1,0 +1,49 @@
+{
+  "name": "@production-ready/system-settings",
+  "version": "0.1.0",
+  "description": "Shared system settings pages (appearance / OCI / upload storage / model / database) for the No.1 Production Ready product family (RAG / NL2SQL / Agent).",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "lint": "oxlint --deny-warnings src",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@production-ready/ui": "*",
+    "@tanstack/react-query": ">=5.0.0",
+    "lucide-react": ">=0.460.0",
+    "react": ">=19.0.0",
+    "react-router-dom": ">=7.0.0"
+  },
+  "devDependencies": {
+    "@production-ready/ui": "*",
+    "@tanstack/react-query": "^5.104.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "lucide-react": "^0.468.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^7.17.0",
+    "typescript": "^5.7.2",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
+  }
+}

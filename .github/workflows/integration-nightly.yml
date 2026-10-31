@@ -1,0 +1,142 @@
+name: Integration Nightly
+
+# PR の CI（ci.yml）では毎回は確かめない結合の検査を、毎晩 main で実行する（#1595。PR の時間は増やさない）。
+#   - oracle: 3 製品の実 Oracle の結合テスト（Oracle AI Database Free。中身は oracle-integration.yml）。PR と main の
+#     push では、ci.yml が DB の層を変えた製品だけを同じ workflow で実行する。
+#   - coverage: backend の pytest と RAG の frontend の vitest の coverage を step summary に出す（閾値はまだ
+#     決めていない。失敗にはしない。PR の CI は coverage を計測しない）。
+# 失敗（job の時間切れを含む）は ci-failure-issue.yml が Issue にする（workflow 名は同じファイルの workflows と
+# そろえる）。job 名の " / " の前は Issue の製品の label になる（.github/scripts/report-workflow-failure.sh）。
+
+on:
+  schedule:
+    - cron: "53 17 * * *" # 02:53 JST（整点を避ける。E2E Nightly の前）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  oracle:
+    name: ${{ matrix.label }} / Oracle
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { product: rag, label: RAG }
+          - { product: nl2sql, label: NL2SQL }
+          - { product: agent, label: Agent }
+    uses: ./.github/workflows/oracle-integration.yml
+    with:
+      product: ${{ matrix.product }}
+
+  backend-coverage:
+    name: ${{ matrix.label }} / Coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { dir: platform/packages/backend_core, cov: pr_backend_core, label: Platform backend_core }
+          - { dir: platform/packages/system_settings_backend, cov: pr_system_settings, label: Platform system_settings }
+          - { dir: rag/backend, cov: app, label: RAG }
+          - { dir: nl2sql/backend, cov: app, label: NL2SQL }
+          - { dir: agent/backend, cov: app, label: Agent }
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: ${{ matrix.dir }}/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Test with coverage
+        run: uv run pytest -n auto --cov=${{ matrix.cov }} --cov-report=
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "### ${{ matrix.label }} の coverage（${{ matrix.cov }}）"
+            echo
+            uv run coverage report --format=total | sed 's/^/合計: /; s/$/%/'
+            echo
+            echo "<details><summary>ファイルごと</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered --sort=cover
+            echo
+            echo "</details>"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  rag-frontend-coverage:
+    name: RAG / Frontend coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rag/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: rag/frontend
+
+      # coverage の provider は vitest と同じ版でなければならない。package.json に足さず（PR の install を
+      # 増やさない）、ここで入っている vitest の版のものを一時的に入れる。lock の外の install だが、版は lock の
+      # vitest と同じに固定し、nightly だけで実行するので zizmor の adhoc-packages を除く（#1594）。
+      - name: Install coverage provider
+        run: | # zizmor: ignore[adhoc-packages]
+          version="$(node -p "require('vitest/package.json').version")"
+          npm install --no-save --no-audit --no-fund "@vitest/coverage-v8@${version}"
+
+      - name: Unit test with coverage
+        run: >-
+          npx vitest run --coverage.enabled --coverage.provider=v8
+          --coverage.reporter=text-summary --coverage.reporter=json-summary
+          --coverage.reportsDirectory="${RUNNER_TEMP}/rag-frontend-coverage"
+
+      - name: Coverage summary
+        if: always()
+        # node の script の `${…}` は JavaScript の template literal（shell で展開しない）。
+        run: |
+          summary="${RUNNER_TEMP}/rag-frontend-coverage/coverage-summary.json"
+          [ -f "${summary}" ] || exit 0
+          # shellcheck disable=SC2016
+          node -e '
+            const t = require(process.argv[1]).total;
+            const row = (k, n) => `| ${n} | ${t[k].pct}% | ${t[k].covered} / ${t[k].total} |`;
+            console.log("### RAG の frontend の coverage（vitest）\n");
+            console.log("| 指標 | 割合 | 件数 |\n|---|---|---|");
+            for (const [k, n] of [["lines","行"],["statements","文"],["functions","関数"],["branches","分岐"]]) console.log(row(k, n));
+          ' "${summary}" >> "${GITHUB_STEP_SUMMARY}"

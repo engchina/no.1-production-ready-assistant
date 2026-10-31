@@ -1,0 +1,24 @@
+{
+  "state": {
+    "question": "処理 A はまだ実行していません。選択を解除する方法を教えてください。",
+    "wrong_answer": "訂正画面で設定値を 5 に変更します。",
+    "evidence": "処理 B の確定後、エラー E10 が出た場合は、訂正画面で設定値を 5 に変更します。"
+  },
+  "coverage": {
+    "question": "対象選択の設定を開いています。入力方法を教えてください。",
+    "initial_evidence": "項目を入力して実行します。詳細は第4節を参照してください。",
+    "additional_evidence": "対象選択の設定では、対象を一覧から選び、設定タブで名称を入力して登録します。"
+  },
+  "summary": {
+    "question": "CSV を更新する方法を教えてください。",
+    "wrong_summary": "対象行を削除して取り込みます。",
+    "correct_summary": "更新不要な行を削除します。",
+    "evidence": "更新不要な行を削除します。更新する行は残し、値を編集して取り込みます。",
+    "retained_ids": [
+      "row-a",
+      "row-c"
+    ],
+    "missing_qualifier": "行を削除します。",
+    "reversed_target": "更新する行を削除します。"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "description": "回答の検証で主張として数えない作業の経過の文（業務ガイドが見つからなかったことだけを述べる文）と、似ていても主張として残す文の事例（#1452）。RAG（rag_engine.generation.operation_audit.is_guide_not_found / is_non_claim_passage）と Agent（app.features.agent.answer_passages.is_guide_not_found / passage_kind / non_claim_passages）の両方のテストがこのファイルを読み、同じ規則で判定することを確かめる。passage は段落（句点・改行で分けて前後の空白を除いた原文）。作業の経過の文は、業務ガイドが見つからない・登録されていないことだけを述べる文で、強調・箇条書きの印・文末のツールの名前を挙げた括弧（「（`rag_lookup_guides` の結果は0件）」）は除いて確かめる。業務ガイドの前置きに主張（は・が・を・数字・引用「」『』）を含む文、操作の指示を含む文、検索の状態（rag_search の outcome など）を述べる文は主張として残す。形は headings.json と同じで、各事例は id・note（任意。事例の出どころの評価の問と Run か、主張として残す理由）・passage。",
+  "process_passages": [
+    {
+      "id": "guide-not-found-with-tool-note",
+      "note": "#1362 の deepseek-flash の評価の業務支援 da-regional-report-export（run_d24bd72a9a854a798d22624bcaa3c5f2）の回答の段落そのもの。業務ガイドの検索の結果は検証の根拠に無いため unsupported で外れ、回答が conditional になっていた。",
+      "passage": "補足：この内容に当たる公開の業務ガイドは見つかりませんでした（`rag_lookup_guides` の結果は0件）。"
+    },
+    {
+      "id": "guide-not-found",
+      "passage": "業務ガイドは見つかりませんでした。"
+    },
+    {
+      "id": "guide-not-registered-bullet",
+      "passage": "- この手順の業務ガイドは登録されていません。"
+    },
+    {
+      "id": "guide-not-found-emphasis",
+      "passage": "**公開の業務ガイドは見当たりませんでした**。"
+    }
+  ],
+  "claim_passages": [
+    {
+      "id": "guide-content",
+      "note": "業務ガイドの内容を述べる文。",
+      "passage": "業務ガイド『アクセス権限の付与』では部門長の承認が要る。"
+    },
+    {
+      "id": "guide-with-condition",
+      "note": "前置きに主張（「が」）を含む文。",
+      "passage": "部門長の承認が要る業務ガイドはありません。"
+    },
+    {
+      "id": "guide-with-quantity",
+      "note": "前置きに数字を含む文。",
+      "passage": "30 日以内に使える業務ガイドはありません。"
+    },
+    {
+      "id": "guide-with-quoted-title",
+      "note": "前置きに引用「」を含む文。",
+      "passage": "「アカウントの削除」の業務ガイドはありません。"
+    },
+    {
+      "id": "guide-not-found-with-operation",
+      "note": "操作の指示を含む文。",
+      "passage": "業務ガイドが見つからないため、画面で「追加」を押してください。"
+    },
+    {
+      "id": "search-status",
+      "note": "検索の状態を述べる文（スキルの指示〔#1459〕で書かないようにした。この型は主張から外さない）。",
+      "passage": "- 検索（`rag_search`）の結果は `insufficient_evidence` で、回答に使える根拠が取得できませんでした。"
+    }
+  ]
+}

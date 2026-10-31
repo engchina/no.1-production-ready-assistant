@@ -1,0 +1,95 @@
+/* Spacing = Tailwind's 0.25rem step on a 14px root (1 step = 3.5px).
+   Layout dimensions below are the literal utilities used by packages/ui. */
+:root {
+  --space-0-5: 0.125rem;
+  --space-1: 0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2: 0.5rem;
+  --space-2-5: 0.625rem;
+  --space-3: 0.75rem;
+  --space-3-5: 0.875rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  --gap-action: var(--space-2);      /* gap-2 between buttons */
+  --gap-field: var(--space-1-5);     /* label → control */
+  --gap-stack: var(--space-6);       /* between cards / page sections */
+  --page-gutter-x: var(--space-8);   /* PageHeader px-8, content px-8 */
+  --page-gutter-y: var(--space-6);
+  --page-header-py: var(--space-5);  /* PageHeader py-5 */
+  --card-padding: var(--space-5);    /* CardHeader p-5 pb-3 / CardContent p-5 pt-0 */
+
+  /* app shell */
+  --sidebar-width: 18rem;            /* 252px。日本語のナビ項目名（8〜10 文字）を省略せずに収める */
+  --sidebar-width-collapsed: 4rem;   /* 56px */
+  --sidebar-header-height: 3.5rem;   /* h-14 */
+  --nav-item-height: 2.75rem;        /* h-11 */
+  --command-button-height: 2.25rem;
+  --tab-height: 2.75rem;             /* ページタブ。ナビ行と同じ高さに揃える */  /* h-9 */
+  --tab-fade-width: 2rem;            /* タブが横にスクロールするときの端のフェードの幅（#364） */
+
+  /* 操作部品の高さ（ルート非依存の px。#613）。入力欄・選択欄・ボタンで同じ 3 段を使い、同じ行は同じ段にする。
+     sm = 表・密な行、md = 既定、lg = 工程を進める主操作の行・主な問い合わせの入力の行。
+     --button-height-* / --field-height は同じ値の別名（既存の参照のため残す）。 */
+  --control-height-sm: 32px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --control-height-touch: 44px;
+  --button-height-sm: var(--control-height-sm);
+  --button-height-md: var(--control-height-md);
+  --button-height-lg: var(--control-height-lg);
+  --field-height: var(--control-height-md);
+  --button-padding-sm: 12px;
+  --button-padding-md: 16px;
+  --button-padding-lg: 20px;
+  --button-gap: 8px;
+
+  /* 入力欄・選択欄の幅（#613 / #1891）。入る値の種類で選ぶ。sm（640px）未満は全幅。
+     xs = 数値・短いコード・表示件数、sm = 日付・期間・短い選択、md = 名前・ID・一般の選択、
+     lg = 長い名前・対象の選択・一覧の検索欄。URL・OCID・文章・SQL は全幅（フォームでは --form-max-width まで）。 */
+  --field-width-xs: 8rem;
+  --field-width-sm: 12rem;
+  --field-width-md: 20rem;
+  --field-width-lg: 28rem;
+  /* フォームの本文（欄の並び）の読みやすい最大幅（#1891）。840px。2 列の grid のセル（約 29rem）に lg の欄が入り、
+     1920px の画面でも 1 つの欄が 1,500px を超えて伸びない（GOV.UK の 2/3 の列・Baymard の欄の幅の研究）。
+     カード・Section などのコンテナには付けない（FormGrid だけが使う）。 */
+  --form-max-width: 60rem;
+
+  /* 通知（Toast）の幅（#899）。md 以上は内容に合わせてこの間で広がり、上限までは折り返さない
+     （固定の 22rem では短い 1 文でも語の途中で 2 行になった）。上限は Atlassian の Flag（400px）・
+     Material の Snackbar（344〜672px）の間で、PageHeader のタイトルを覆いすぎない幅。md 未満は画面の幅。 */
+  --toast-width-min: 22rem;          /* 308px。従来の固定幅。短い通知の見た目は変えない */
+  --toast-width-max: 32rem;          /* 448px。本文の 1 行が約 25 字（14px） */
+  /* md 以上の通知（画面の右下）の下端からの距離（#1728）。3 製品の全画面で共通の定数で、製品・画面では変えない。
+     スクロールしきったページの末尾の操作（下端から約 7rem まで）の上に出す。下端に固定されたチャットの入力欄
+     （3.5 行で下端から約 10rem）がある画面は、入力欄の上端から 1rem 上に出す（`--toast-clear-bottom`。#2103）。 */
+  --toast-max-height-narrow: 40dvh;
+  --toast-offset-bottom: 8rem;       /* 112px */
+
+  /* アイコン寸法。13/15/16/18/22/24 の 6 値混在を 4 段に統合。
+     Lucide は 2px ストロークなので偶数 px 以外はサブピクセルでボケます。 */
+  --icon-sm: 14px;    /* 密なセル・パンくず */
+  --icon-md: 16px;    /* ボタン・トースト・インライン */
+  --icon-lg: 20px;    /* ナビ行・カード見出し */
+  --icon-state: 24px; /* 空/エラー状態の大アイコン */
+
+  /* 本文の最大計測幅。--main が無制限に伸びると 10.5px の表は読めません。 */
+  --content-max-width: 1440px;
+}
+
+/* タッチ端末（coarse pointer）では操作部品の高さを 3 段とも 44px にする（WCAG 2.2 SC 2.5.5 / Apple HIG 44pt）。
+   ボタンだけでなく入力欄・選択欄も 44px にする（#613。以前は入力欄が 36px のままで、同じ行のボタンとずれた）。
+   画面幅ではなく入力方式で判定する（マウスで狭いウィンドウを使う場合は密度を保つ）。
+   ToggleChip / Switch は見た目の大きさを変えず、同じ --control-height-touch で当たり判定だけを広げる
+   （structure/touch-target.css、#364）。 */
+@media (pointer: coarse) {
+  :root {
+    --control-height-sm: var(--control-height-touch);
+    --control-height-md: var(--control-height-touch);
+    --control-height-lg: var(--control-height-touch);
+  }
+}

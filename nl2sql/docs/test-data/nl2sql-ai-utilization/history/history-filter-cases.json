@@ -1,0 +1,33 @@
+[
+  {
+    "filter": {
+      "search": "未入金",
+      "feedback": "all",
+      "safety": "all"
+    },
+    "expected_history_ids": [
+      "hist-002"
+    ]
+  },
+  {
+    "filter": {
+      "search": "",
+      "feedback": "good",
+      "safety": "safe"
+    },
+    "expected_history_ids": [
+      "hist-001"
+    ]
+  },
+  {
+    "filter": {
+      "search": "",
+      "feedback": "unrated",
+      "safety": "blocked"
+    },
+    "expected_history_ids": [
+      "hist-003"
+    ]
+  }
+]
+

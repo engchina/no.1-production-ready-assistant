@@ -1,0 +1,13 @@
+RULE
+SQL 生成では SELECT または WITH のみを生成し、INSERT/UPDATE/DELETE/DDL は生成しない。
+期間条件が曖昧な場合は TD_NL2SQL_ORDERS.ORDER_DATE を基準にする。
+売上集計ではキャンセル済み受注 STATUS = 'CANCELLED' を除外する。
+顧客名は TD_NL2SQL_CUSTOMERS.CUSTOMER_NAME を使用する。
+部門条件は TD_NL2SQL_DEPARTMENTS.DEPARTMENT_CODE を優先して使う。
+金額は円として扱い、小数が不要な表示では整数表示に丸める。
+注文数を数える場合は TD_NL2SQL_ORDERS.ORDER_ID の重複を避ける。
+明細数量を集計する場合は TD_NL2SQL_ORDER_LINES.QUANTITY を使う。
+未完了受注の問い合わせでは V_TD_NL2SQL_OPEN_ORDERS を優先して参照する。
+顧客別売上では V_TD_NL2SQL_CUSTOMER_SALES を優先して参照する。
+リスクランク C は高リスク顧客として説明する。
+不明なセグメント条件は SEGMENT 列に対する完全一致ではなく候補提示に留める。

@@ -1,0 +1,30 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
+.ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
+.grid{display:grid;gap:8px}
+.sw{height:40px;border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.n{display:block;margin-top:5px;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg)}
+.v{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted)}
+table{border-collapse:collapse;width:100%;font:var(--text-meta)}
+td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--color-border);vertical-align:top}
+th{color:var(--color-fg-muted);font-weight:600}
+code{font-family:var(--font-mono);font-size:0.95em}
+</style></head><body>
+<div class="pair">
+<div class="pane" data-theme="light"><span class="ph">light</span><div class="grid" style="grid-template-columns:repeat(3,1fr)">
+<div><div class="sw" style="background:var(--color-border)"></div><span class="n">--border</span><span class="v">#e3e6ea · 1.25:1</span></div><div><div class="sw" style="background:var(--color-border-strong)"></div><span class="n">--border-strong</span><span class="v">#cfd5dd</span></div><div><div class="sw" style="background:var(--color-border-control)"></div><span class="n">--border-control</span><span class="v">#8893a3 · 3.10:1</span></div></div></div>
+<div class="pane" data-theme="dark"><span class="ph">dark</span><div class="grid" style="grid-template-columns:repeat(3,1fr)">
+<div><div class="sw" style="background:var(--color-border)"></div><span class="n">--border</span><span class="v">#343b46</span></div><div><div class="sw" style="background:var(--color-border-strong)"></div><span class="n">--border-strong</span><span class="v">#4a5260</span></div><div><div class="sw" style="background:var(--color-border-control)"></div><span class="n">--border-control</span><span class="v">#5d6878 · 3.04:1</span></div></div></div>
+</div>
+<table style="margin-top:10px">
+<tr><th style="width:210px">トークン</th><th style="width:120px">要件</th><th>使う場所</th></tr>
+<tr><td><code>--color-border</code></td><td>なし（装飾）</td><td>カード縁・表の罫線・ヘッダー下線・区切り</td></tr>
+<tr><td><code>--color-border-strong</code></td><td>なし</td><td>読ませたい区切り、入れ子の境界</td></tr>
+<tr><td><code>--color-border-control</code></td><td><b>3:1 必須</b><br>WCAG 1.4.11</td><td>入力欄・セレクト・secondary ボタン・チップ<br>＝<b>「押せる／入力できる」ものの輪郭</b></td></tr>
+</table>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:8px 0 0">旧構成は <code>--control-border: var(--border)</code> のエイリアスで <b>入力欄の枠線が 1.25:1 ＝ 1.4.11 不適合</b>、一方 secondary ボタンだけ別値 <code>--button-border</code> で 2.5 倍濃い線になっていた。1 トークンに統合して両方解決。</p>
+</body></html>

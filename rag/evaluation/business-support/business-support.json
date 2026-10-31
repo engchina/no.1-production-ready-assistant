@@ -1,0 +1,460 @@
+{
+  "top_k": 20,
+  "cases": [
+    {
+      "id": "da-trial-account-expiry",
+      "category": "document_answerable",
+      "split": "dev",
+      "query": "検証用アカウントの有効期限は最長で何日ですか？",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "answered"
+      ],
+      "required_evidence": [
+        {
+          "id": "trial-max-days",
+          "document_id": "file:portal-operations-manual.pdf",
+          "text": "有効期限は最長 30 日"
+        }
+      ],
+      "required_answer_points": [
+        "30"
+      ]
+    },
+    {
+      "id": "da-trial-account-setup",
+      "category": "document_answerable",
+      "split": "dev",
+      "query": "検証用アカウントを登録し、アクセス権限を付けて、通知まで設定する手順を順番に教えてください。",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_answer_points": [
+        "検証用",
+        "有効期限",
+        "権限",
+        "通知",
+        "テスト送信",
+        "次の内容を勧めない: グループに付与してください",
+        "次の内容を勧めない: グループに権限を付与します"
+      ]
+    },
+    {
+      "id": "da-regional-report-export",
+      "category": "document_answerable",
+      "split": "dev",
+      "query": "地域別集計表を出力する手順を教えてください。",
+      "relevant_document_ids": [
+        "file:regional-report-guide-v2.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_evidence": [
+        {
+          "id": "export-check-total",
+          "document_id": "file:regional-report-guide-v2.pdf",
+          "text": "計上明細の合計"
+        }
+      ],
+      "required_answer_points": [
+        "集計",
+        "地域別",
+        "対象月",
+        "出力",
+        "計上明細"
+      ]
+    },
+    {
+      "id": "da-parameter-default",
+      "category": "document_answerable",
+      "split": "holdout",
+      "query": "session_timeout_minutes の既定値はいくつですか？",
+      "relevant_document_ids": [
+        "file:portal-parameters.xlsx"
+      ],
+      "expected_outcomes": [
+        "answered"
+      ],
+      "required_answer_points": [
+        "30"
+      ]
+    },
+    {
+      "id": "da-permission-not-applied",
+      "category": "document_answerable",
+      "split": "dev",
+      "query": "付与した権限が反映されません。どうすればよいですか？",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_evidence": [
+        {
+          "id": "apply-wait",
+          "document_id": "file:portal-operations-manual.pdf",
+          "text": "反映には最大 15 分"
+        }
+      ],
+      "required_answer_points": [
+        "15",
+        "サポート窓口"
+      ]
+    },
+    {
+      "id": "cr-grant-permission",
+      "category": "clarification_required",
+      "split": "dev",
+      "query": "アクセス権限を付与したいです。どうすればよいですか？",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_clarification",
+        "conditional"
+      ],
+      "required_conditions": [
+        "個別",
+        "グループ"
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: グループに付与してください"
+      ]
+    },
+    {
+      "id": "cr-delete-account",
+      "category": "clarification_required",
+      "split": "holdout",
+      "query": "不要になったアカウントを削除してもよいですか？",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_clarification",
+        "conditional",
+        "needs_human"
+      ],
+      "required_conditions": [
+        "承認",
+        "復元"
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: すぐに削除してください",
+        "次の内容を勧めない: 承認は不要"
+      ]
+    },
+    {
+      "id": "ed-error-e1023-cause",
+      "category": "environment_data_required",
+      "split": "dev",
+      "query": "エラー E-1023 が出ました。原因は何ですか？",
+      "relevant_document_ids": [
+        "file:error-e1023-notes.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_environment_data",
+        "conditional"
+      ],
+      "required_conditions": [
+        "auth.log",
+        "トークン",
+        "権限"
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: 原因は権限の不足です",
+        "次の内容を勧めない: 原因はトークンの期限切れです"
+      ]
+    },
+    {
+      "id": "ed-current-session-timeout",
+      "category": "environment_data_required",
+      "split": "holdout",
+      "query": "この環境の session_timeout_minutes は今何分に設定されていますか？",
+      "relevant_document_ids": [
+        "file:portal-parameters.xlsx"
+      ],
+      "expected_outcomes": [
+        "needs_environment_data",
+        "conditional",
+        "insufficient_evidence"
+      ],
+      "required_conditions": [
+        "既定値"
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: 現在の設定値は30分です",
+        "次の内容を勧めない: 60分に設定されています"
+      ]
+    },
+    {
+      "id": "ed-last-month-total",
+      "category": "environment_data_required",
+      "split": "dev",
+      "query": "先月の地域別集計表の合計は正しいですか？",
+      "relevant_document_ids": [
+        "file:regional-report-guide-v2.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_environment_data",
+        "conditional",
+        "insufficient_evidence"
+      ],
+      "required_conditions": [
+        "計上明細"
+      ]
+    },
+    {
+      "id": "km-license-fee",
+      "category": "knowledge_missing",
+      "split": "dev",
+      "query": "サンプル業務ポータルの年間ライセンス費用はいくらですか？",
+      "answerable": false,
+      "expected_outcomes": [
+        "insufficient_evidence",
+        "needs_human"
+      ]
+    },
+    {
+      "id": "km-password-policy",
+      "category": "knowledge_missing",
+      "split": "dev",
+      "query": "パスワードは何文字以上にする必要がありますか？",
+      "answerable": false,
+      "expected_outcomes": [
+        "insufficient_evidence",
+        "needs_human"
+      ]
+    },
+    {
+      "id": "km-auto-disable",
+      "category": "knowledge_missing",
+      "split": "holdout",
+      "query": "退職者のアカウントを自動で無効にする設定はどこでできますか？",
+      "answerable": false,
+      "expected_outcomes": [
+        "insufficient_evidence",
+        "needs_human"
+      ]
+    },
+    {
+      "id": "cs-closing-day",
+      "category": "conflicting_sources",
+      "split": "holdout",
+      "query": "地域別集計表の締め日は毎月何日ですか？",
+      "relevant_document_ids": [
+        "file:regional-report-guide-v2.pdf",
+        "file:regional-report-guide-v1.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_conditions": [
+        "第2版"
+      ],
+      "required_evidence": [
+        {
+          "id": "closing-day-v2",
+          "document_id": "file:regional-report-guide-v2.pdf",
+          "text": "締め日は毎月 10 日"
+        }
+      ],
+      "required_answer_points": [
+        "10",
+        "次の内容を勧めない: 現在の締め日は毎月5日",
+        "次の内容を勧めない: 締め日は毎月5日のままです"
+      ]
+    },
+    {
+      "id": "cs-version-diff",
+      "category": "conflicting_sources",
+      "split": "holdout",
+      "query": "地域別集計表の出力手順は、第1版と第2版で何が変わりましたか？",
+      "relevant_document_ids": [
+        "file:regional-report-guide-v2.pdf",
+        "file:regional-report-guide-v1.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_answer_points": [
+        "5",
+        "10"
+      ]
+    },
+    {
+      "id": "cr-grant-permission-known-target",
+      "category": "clarification_required",
+      "split": "dev",
+      "query": "アクセス権限を付与したいです。どの画面で操作しますか？",
+      "conditions": {
+        "target": "グループ"
+      },
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "answered",
+        "conditional"
+      ],
+      "required_conditions": [
+        "承認"
+      ],
+      "required_evidence": [
+        {
+          "id": "group-approval",
+          "document_id": "file:portal-operations-manual.pdf",
+          "text": "部門長の承認を得てください"
+        }
+      ]
+    },
+    {
+      "id": "mt-grant-permission-individual",
+      "category": "clarification_required",
+      "split": "dev",
+      "query": "アクセス権限を付けたいのですが、手順を教えてください。",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_clarification",
+        "conditional"
+      ],
+      "required_conditions": [
+        "個別",
+        "グループ"
+      ],
+      "turns": [
+        {
+          "reply": "個別の利用者に付けます。",
+          "conditions": {
+            "target": "個別"
+          },
+          "expected_outcomes": [
+            "answered",
+            "conditional"
+          ],
+          "required_conditions": [
+            "詳細画面"
+          ],
+          "required_answer_points": [
+            "次の内容を勧めない: グループに付与してください"
+          ]
+        }
+      ],
+      "required_evidence": [
+        {
+          "id": "grant-individual",
+          "document_id": "file:portal-operations-manual.pdf",
+          "text": "個別の利用者に付与する場合"
+        }
+      ],
+      "required_answer_points": [
+        "詳細画面",
+        "次の内容を勧めない: グループに付与してください"
+      ]
+    },
+    {
+      "id": "mt-delete-account-approved",
+      "category": "clarification_required",
+      "split": "holdout",
+      "query": "使わなくなった利用者アカウントを削除したいです。",
+      "relevant_document_ids": [
+        "file:portal-operations-manual.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_clarification",
+        "conditional",
+        "needs_human"
+      ],
+      "required_conditions": [
+        "承認"
+      ],
+      "turns": [
+        {
+          "reply": "所属部署の部門長の承認はもらっています。",
+          "conditions": {
+            "approved": "はい"
+          },
+          "expected_outcomes": [
+            "answered",
+            "conditional"
+          ],
+          "required_conditions": [
+            "30日",
+            "復元"
+          ],
+          "required_answer_points": [
+            "次の内容を勧めない: 承認は不要"
+          ]
+        }
+      ],
+      "required_evidence": [
+        {
+          "id": "delete-unrecoverable",
+          "document_id": "file:portal-operations-manual.pdf",
+          "text": "復元できません"
+        }
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: すぐに削除してください",
+        "次の内容を勧めない: 承認は不要"
+      ]
+    },
+    {
+      "id": "mt-e1023-token-expired",
+      "category": "environment_data_required",
+      "split": "dev",
+      "query": "エラー E-1023 が出て処理を続けられません。どうすればよいですか？",
+      "relevant_document_ids": [
+        "file:error-e1023-notes.pdf"
+      ],
+      "expected_outcomes": [
+        "needs_environment_data",
+        "conditional"
+      ],
+      "required_conditions": [
+        "auth.log"
+      ],
+      "turns": [
+        {
+          "reply": "auth.log のエラーが出た時刻の行に「token expired」とありました。",
+          "expected_outcomes": [
+            "answered",
+            "conditional"
+          ],
+          "required_answer_points": [
+            "ログアウト → ログインし直 → 次の内容を勧めない: 原因は権限の不足です / 再ログイン / ログインし直"
+          ]
+        }
+      ],
+      "required_evidence": [
+        {
+          "id": "cause-a-log",
+          "document_id": "file:error-e1023-notes.pdf",
+          "text": "token expired"
+        },
+        {
+          "id": "cause-a-fix",
+          "document_id": "file:error-e1023-notes.pdf",
+          "text": "ログインし直します"
+        }
+      ],
+      "required_answer_points": [
+        "次の内容を勧めない: 原因は権限の不足です",
+        "次の内容を勧めない: 原因はトークンの期限切れです"
+      ]
+    }
+  ]
+}

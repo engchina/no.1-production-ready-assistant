@@ -1,0 +1,10 @@
+{
+  "user": "NL2SQL_APP",
+  "dsn": "nl2sqldb_high",
+  "connection_security": "wallet_mtls",
+  "wallet_dir": "/u01/aipoc/wallet",
+  "password": "dummy-db-password",
+  "wallet_password": "dummy-wallet-password",
+  "clear_password": false,
+  "clear_wallet_password": false
+}

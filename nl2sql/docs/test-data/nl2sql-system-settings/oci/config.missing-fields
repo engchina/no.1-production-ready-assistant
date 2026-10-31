@@ -1,0 +1,5 @@
+[DEFAULT]
+user=ocid1.user.oc1..exampleuniqueid
+fingerprint=12:34:56:78:90:ab:cd:ef
+key_file=~/.oci/oci_api_key.pem
+

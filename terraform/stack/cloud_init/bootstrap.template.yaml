@@ -1,0 +1,173 @@
+#cloud-config
+output: {all: '| tee -a /var/log/cloud-init-custom.log'}
+bootcmd:
+  # boot volume を大きくしても、Oracle Linux 9 の image の root（LVM の ocivolume-root）は image の大きさ（約 30 GB）の
+  # ままなので、package と配備の前に boot volume いっぱいに広げる（#1984）。oci-growfs が無ければ oci-utils を入れる。
+  # bootcmd は起動のたびに動くが、広げる余地が無ければ何もしない。失敗しても起動を止めない（suite-init.sh も広げ直す）。
+  - [ bash, -c, 'g=/usr/libexec/oci-growfs; [ -x "$g" ] || dnf -y install oci-utils || true; if [ -x "$g" ]; then "$g" -y || true; fi; lsblk || true; df -hT / || true' ]
+  - mkdir -p /u01/aipoc/props ${wallet_dir_host}
+# OS の時間帯（#3255・#3274。IANA の地域名。既定 UTC）。platform/deploy/suite-init.sh も platform/.env の
+# PLATFORM_TIMEZONE で合わせ直す（再配備でも効く）。
+timezone: "${timezone}"
+# Compute の OS は Oracle Linux 9（cloud-init は dnf で入れる。#1611）。curl は image にある（curl-minimal と
+# 衝突しないよう名前を書かない）。firewalld と SELinux の道具（semanage）は platform/deploy/suite-init.sh が使う。
+package_update: true
+package_upgrade: false
+packages:
+  - ca-certificates
+  - dos2unix
+  - firewalld
+  - git
+  - openssl
+  - policycoreutils-python-utils
+  - tar
+  - tmux
+  - unzip
+write_files:
+%{ for product, env in backend_envs ~}
+  - path: "/u01/aipoc/props/${product}.backend.env"
+    permissions: "0600"
+    owner: "root:root"
+    encoding: "gzip+base64"
+    content: |
+      ${env}
+%{ endfor ~}
+  - path: "/u01/aipoc/props/platform.env"
+    permissions: "0600"
+    owner: "root:root"
+    encoding: "gzip+base64"
+    content: |
+      ${platform_env}
+%{ if adb_admin_env != "" ~}
+  # アプリ用の DB ユーザー（#1668）: ADMIN のパスワードとアプリ用のユーザーの名前。root だけが読める。
+  - path: "/u01/aipoc/props/adb_admin.env"
+    permissions: "0600"
+    owner: "root:root"
+    encoding: "gzip+base64"
+    content: |
+      ${adb_admin_env}
+%{ endif ~}
+  - path: "/u01/aipoc/props/wallet.zip"
+    permissions: "0600"
+    owner: "root:root"
+    encoding: "base64"
+    content: |
+      ${wallet_content}
+  - path: "/u01/aipoc/props/products.txt"
+    permissions: "0644"
+    content: |
+      ${products}
+  - path: "/u01/aipoc/props/https_enabled.txt"
+    permissions: "0644"
+    content: |
+      ${https_enabled}
+  - path: "/u01/aipoc/props/http_port.txt"
+    permissions: "0644"
+    content: |
+      ${http_port}
+  - path: "/u01/aipoc/props/https_port.txt"
+    permissions: "0644"
+    content: |
+      ${https_port}
+  - path: "/u01/aipoc/props/assign_public_ip.txt"
+    permissions: "0644"
+    content: |
+      ${assign_public_ip}
+%{ if rag_services != "" ~}
+  - path: "/u01/aipoc/props/rag_services.txt"
+    permissions: "0644"
+    content: |
+      ${rag_services}
+%{ endif ~}
+  - path: "/u01/aipoc/props/adb_name.txt"
+    permissions: "0644"
+    content: |
+      ${adb_name}
+  - path: "/u01/aipoc/props/adb_dsn.txt"
+    permissions: "0644"
+    content: |
+      ${db_dsn}
+  - path: "/u01/aipoc/props/adb_ocid.txt"
+    permissions: "0644"
+    content: |
+      ${adb_ocid}
+  - path: "/u01/aipoc/props/compartment_ocid.txt"
+    permissions: "0644"
+    content: |
+      ${compartment_ocid}
+  - path: "/u01/aipoc/props/region.txt"
+    permissions: "0644"
+    content: |
+      ${region}
+  - path: "/u01/aipoc/bootstrap-suite.sh"
+    permissions: "0755"
+    owner: "root:root"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      APP_ROOT="/u01/aipoc"
+      # 3 製品（rag/ nl2sql/ agent/）と共有 platform（platform/）は同じ monorepo にあるため、clone は1回だけ行う。
+      SUITE_REPO_DIR="$${APP_ROOT}/no.1-production-ready-suite"
+
+      log() {
+        printf '[suite-bootstrap] %s\n' "$*"
+      }
+
+      trap 'status=$?; log "Bootstrap failed at line $${LINENO} with status $${status}: $${BASH_COMMAND}"; exit "$${status}"' ERR
+
+      run_with_retries() {
+        local attempts="$1"
+        shift
+        local attempt status
+        status=0
+        for attempt in $(seq 1 "$${attempts}"); do
+          # `if` の後の `$?` は 0 になるので、失敗の status は else の中で読む（#1994）。
+          if "$@"; then
+            return 0
+          else
+            status="$?"
+          fi
+          log "Command failed with status $${status} on attempt $${attempt}/$${attempts}: $*"
+          sleep $((attempt * 5))
+        done
+        return "$${status}"
+      }
+
+      clone_or_update_repo() {
+        local url="$1"
+        local ref="$2"
+        local dest="$3"
+        if [ -d "$${dest}/.git" ]; then
+          # 再実行（#1994）: 最初の配備で suite-init.sh が repo の所有者を opc にするので、root の git は
+          # 「dubious ownership」で拒まれる。repo の所有者で git を実行する（safe.directory で例外にすると、
+          # root の所有のファイルが .git に残り、後の suite-pull.sh〔opc〕が失敗する）。
+          local owner
+          owner="$(stat -c %U "$${dest}")"
+          log "Updating $${dest} to $${ref} as $${owner}."
+          run_with_retries 5 runuser -u "$${owner}" -- git -C "$${dest}" fetch --depth 1 origin "$${ref}"
+          runuser -u "$${owner}" -- git -C "$${dest}" checkout -f FETCH_HEAD
+        else
+          log "Cloning $${url} ($${ref}) to $${dest}."
+          run_with_retries 5 git clone --branch "$${ref}" --depth 1 --single-branch "$${url}" "$${dest}"
+        fi
+      }
+
+      # 選んだ製品を 1 台に配備する（#1316）。各製品の init_script.sh は suite-init.sh が順に呼び、
+      # Nginx の site（/rag/ /nl2sql/ /agent/、HTTPS）・firewalld（公開の port）・SELinux は suite-init.sh が 1 か所で設定する。
+      run_suite_init() {
+        local init_script="$${SUITE_REPO_DIR}/platform/deploy/suite-init.sh"
+        if [ ! -f "$${init_script}" ]; then
+          log "Missing suite init script: $${init_script}"
+          return 1
+        fi
+        dos2unix "$${init_script}" || true
+        log "Starting Compute initialization via $${init_script}."
+        APP_ROOT="$${APP_ROOT}" bash "$${init_script}"
+      }
+
+      clone_or_update_repo "${application_git_url}" "${application_git_ref}" "$${SUITE_REPO_DIR}"
+      run_suite_init
+      log "Deployment finished. See /var/log/suite-init.log."
+runcmd:
+  - "nohup bash /u01/aipoc/bootstrap-suite.sh >> /var/log/cloud-init-custom.log 2>&1 &"

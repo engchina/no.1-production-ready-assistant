@@ -1,0 +1,765 @@
+"""OCI Generative AI クライアント（埋め込み / リランク）。
+
+埋め込み: Cohere Embed v4（1536 次元）。
+リランク: Cohere Rerank v4 fast。
+"""
+
+import asyncio
+import hashlib
+import importlib
+import json
+import logging
+import math
+import re
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable, Sequence
+from numbers import Real
+from typing import Any, Literal, Protocol
+
+from pr_backend_core.bounded_calls import KIND_LABELS, Attempt, BoundedCallFailed, ErrorKind
+from pr_backend_core.chat_progress import chat_progress_details
+from pr_backend_core.observability.model_purpose import model_purpose_attributes
+from pr_backend_core.observability.tracing import observed_span
+from rag_engine.resources.rerank_diagnostics import (
+    RerankCallReceipt,
+    bind_rerank_attempt,
+    current_rerank_attempt,
+    current_rerank_receipt,
+    use_rerank_receipt,
+)
+from rag_engine.retrieval.query_identity import normalized_query_key
+
+from app.clients.ai_calls import embedding_rejection_reason, ingestion_ai_calls
+from app.clients.oci_auth import load_oci_config_without_prompt
+from app.clients.oci_snapshot import oci_call_snapshot
+from app.config import Settings, get_settings
+
+TOKEN_PATTERN = re.compile(r"[a-z0-9_]+|[ぁ-んァ-ン一-龯々ー]+", re.IGNORECASE)
+EmbeddingInputType = Literal["SEARCH_DOCUMENT", "SEARCH_QUERY", "CLASSIFICATION", "CLUSTERING"]
+EMBEDDING_INPUT_TYPES = frozenset(
+    {"SEARCH_DOCUMENT", "SEARCH_QUERY", "CLASSIFICATION", "CLUSTERING"}
+)
+# ponytail: Cohere Embed v4 128k tokens への保守的な文字数ガード。
+# tokenizer は実際に必要になるまで入れない。
+EMBEDDING_INPUT_MAX_CHARS = 100_000
+# OCI Embed 4 は 1 request 内の全入力で 128k token。tokenizer 依存を増やさず保守的に抑える。
+EMBEDDING_REQUEST_MAX_CHARS = 100_000
+EMBEDDING_REQUEST_MAX_INPUTS = 96
+# 1 件の入力の上限(Embed 4 が inputs[i] ごとに検証する。#2467 で実 API の応答から確認)。
+EMBEDDING_INPUT_MAX_TOKENS = 128_000
+# 再試行でバッチを分けるときの最大の分割数(1 回の呼び出しの中で順に送る)。
+EMBEDDING_RETRY_MAX_SPLITS = 8
+type SdkCallRunner = Callable[[Callable[[], Any]], Awaitable[Any]]
+
+
+class GenerativeAiInferenceClientProtocol(Protocol):
+    """OCI Generative AI Inference client の最小インターフェース。"""
+
+    def embed_text(self, embed_text_details: object) -> Any:
+        """OCI Generative AI embed_text を呼び出す。"""
+
+    def rerank_text(self, rerank_text_details: object) -> Any:
+        """OCI Generative AI rerank_text を呼び出す。"""
+
+
+logger = logging.getLogger(__name__)
+
+
+class OciGenAiConfigError(ValueError):
+    """利用者が OCI 認証設定を直せる Generative AI 設定エラー。"""
+
+    safe_for_user = True
+
+
+class OciEmbeddingRequestError(RuntimeError):
+    """Embedding の要求の失敗を、理由とバッチの位置・大きさで示す(#2467)。
+
+    サービスの応答本文・入力の本文・認証情報は含めない。``diagnostics`` は構造化ログと同じ値。
+    """
+
+    safe_for_user = True
+
+    def __init__(self, message: str, *, diagnostics: dict[str, object]) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
+
+
+class OciGenAiClient:
+    """OCI Generative AI による埋め込み / リランククライアント。"""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        inference_client: GenerativeAiInferenceClientProtocol | None = None,
+        sdk_call_runner: SdkCallRunner | None = None,
+    ) -> None:
+        self._settings = settings or get_settings()
+        self._inference_client = inference_client
+        self._sdk_call_runner = sdk_call_runner or _run_sdk_call_in_thread
+        self._embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._rerank_cache: OrderedDict[str, list[tuple[int, float]]] = OrderedDict()
+
+    async def embed(
+        self,
+        texts: list[str],
+        *,
+        input_type: EmbeddingInputType = "SEARCH_DOCUMENT",
+    ) -> list[list[float]]:
+        """テキストを 1536 次元ベクトルに埋め込む（Cohere Embed v4）。"""
+        if input_type not in EMBEDDING_INPUT_TYPES:
+            raise ValueError(f"embedding input_type が不正です。input_type={input_type}")
+        if not texts:
+            return []
+        _validate_embedding_input_lengths(texts)
+        _raise_if_empty_embedding_input(texts, model_id=self._settings.oci_genai_embedding_model)
+        if self._embedding_cache_disabled():
+            vectors = await self._embed_with_oci_batches(texts, input_type=input_type)
+            _validate_embedding_batch(
+                vectors,
+                expected_count=len(texts),
+                expected_dim=self._settings.oci_genai_embedding_dim,
+            )
+            return vectors
+
+        vectors = await self._embed_with_cache(texts, input_type=input_type)
+        _validate_embedding_batch(
+            vectors,
+            expected_count=len(texts),
+            expected_dim=self._settings.oci_genai_embedding_dim,
+        )
+        return vectors
+
+    async def _embed_with_cache(
+        self,
+        texts: list[str],
+        *,
+        input_type: EmbeddingInputType,
+    ) -> list[list[float]]:
+        """cache hit を再利用し、miss だけをまとめて OCI embedding に出す。"""
+        vectors: list[list[float] | None] = [None] * len(texts)
+        miss_texts: list[str] = []
+        miss_keys: list[str] = []
+        miss_positions: dict[str, list[int]] = {}
+        for position, text in enumerate(texts):
+            key = _embedding_cache_key(
+                text=text,
+                input_type=input_type,
+                model_id=self._settings.oci_genai_embedding_model,
+                dimension=self._settings.oci_genai_embedding_dim,
+            )
+            cached = self._get_cached_embedding(key)
+            if cached is not None:
+                vectors[position] = cached
+                continue
+            positions = miss_positions.setdefault(key, [])
+            positions.append(position)
+            if len(positions) == 1:
+                miss_keys.append(key)
+                miss_texts.append(text)
+
+        if miss_texts:
+            missing_vectors = await self._embed_with_oci_batches(
+                miss_texts,
+                input_type=input_type,
+            )
+            _validate_embedding_batch(
+                missing_vectors,
+                expected_count=len(miss_texts),
+                expected_dim=self._settings.oci_genai_embedding_dim,
+            )
+            for key, vector in zip(miss_keys, missing_vectors, strict=True):
+                self._store_embedding(key, vector)
+                for position in miss_positions[key]:
+                    vectors[position] = list(vector)
+
+        return [_require_cached_vector(vector, index) for index, vector in enumerate(vectors)]
+
+    async def _embed_with_oci_batches(
+        self,
+        texts: list[str],
+        *,
+        input_type: EmbeddingInputType,
+    ) -> list[list[float]]:
+        """OCI embedding request を設定値で分割し、入力順に結合して返す。
+
+        batch は上限つきの並行で送る(#2002。上限は ``rag_embedding_concurrency``)。429・5xx・
+        接続・timeout の再試行と全体の待ちは共通の実行器が受け持つ(OCI SDK の再試行は切っている)。
+        結果は入力の順に結合する。最後の再試行でも失敗した batch があれば、その失敗を出す。
+        """
+        batch_size = min(
+            EMBEDDING_REQUEST_MAX_INPUTS,
+            max(1, getattr(self._settings, "rag_embedding_batch_size", 96)),
+        )
+        batches = _embedding_request_batches(texts, max_count=batch_size)
+        if not batches:
+            return []
+
+        async def embed_batch(batch: list[str], attempt: Attempt) -> list[list[float]]:
+            # サービスの高負荷(HTTP 400 でも返る。#2467)のあとは、バッチを分けて小さい要求で送る。
+            batch_vectors: list[list[float]] = []
+            for part in _split_batch(batch, _retry_split_count(attempt, len(batch))):
+                batch_vectors.extend(await self._embed_with_oci(part, input_type=input_type))
+            _validate_embedding_batch(
+                batch_vectors,
+                expected_count=len(batch),
+                expected_dim=self._settings.oci_genai_embedding_dim,
+            )
+            return batch_vectors
+
+        with ingestion_ai_calls(self._settings, "embedding", total=len(batches)) as caller:
+            outcomes = await _unwrapped_item_failure(caller.map(batches, embed_batch))
+        vectors: list[list[float]] = []
+        for index, outcome in enumerate(outcomes):
+            if outcome.error is not None:
+                cause = outcome.error.__cause__
+                if outcome.error.status is None:
+                    # 応答の検証の失敗など、サービスの HTTP の拒否でないものは元の例外で出す。
+                    raise cause or outcome.error
+                raise _embedding_request_error(
+                    outcome.error,
+                    cause if isinstance(cause, BaseException) else None,
+                    batch=batches[index],
+                    batch_index=index,
+                    batch_total=len(batches),
+                    total_inputs=len(texts),
+                    model_id=self._settings.oci_genai_embedding_model,
+                ) from (cause or outcome.error)
+            vectors.extend(outcome.value or [])
+        return vectors
+
+    async def rerank(self, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
+        """Cohere Rerank v4 fast で再ランク付けし、(index, score) を返す。"""
+        receipt = current_rerank_receipt() or RerankCallReceipt()
+        receipt.request(query, documents, model=self._settings.oci_genai_rerank_model, top_n=top_n)
+        with (
+            use_rerank_receipt(receipt),
+            observed_span(
+                "rerank.request", kind="internal", attributes=receipt.attributes()
+            ) as span,
+        ):
+            try:
+                if top_n < 1:
+                    raise ValueError(f"rerank top_n は 1 以上である必要があります。actual={top_n}")
+                if not documents:
+                    receipt.status = "skipped"
+                    return []
+                cache_key: str | None = None
+                receipt.cache_state = "disabled" if self._rerank_cache_disabled() else "miss"
+                if receipt.cache_state != "disabled":
+                    cache_key = _rerank_cache_key(
+                        query=query,
+                        documents=documents,
+                        top_n=top_n,
+                        model_id=self._settings.oci_genai_rerank_model,
+                    )
+                    cached = self._get_cached_rerank(cache_key)
+                    if cached is not None:
+                        receipt.cache_state = "hit"
+                        receipt.status = "completed"
+                        return cached
+
+                async def rerank_once(attempt: Attempt) -> Sequence[tuple[object, object]]:
+                    with bind_rerank_attempt(attempt.number):
+                        return await self._rerank_with_oci(query, documents, top_n)
+
+                # OCI SDK の再試行は切り、既存の共通実行器だけで再試行する。
+                with ingestion_ai_calls(self._settings, "rerank", total=1) as caller:
+                    results = await _unwrapped_item_failure(
+                        caller.call(rerank_once, label="rerank")
+                    )
+                validated = _validate_rerank_results(
+                    results, document_count=len(documents), top_n=top_n
+                )
+                if cache_key is not None:
+                    self._store_rerank(cache_key, validated)
+                receipt.status = "completed"
+                return validated
+            except asyncio.CancelledError:
+                receipt.status = "cancelled"
+                span.set_status("cancelled")
+                raise
+            except Exception as exc:
+                receipt.status, receipt.error_type = "error", type(exc).__name__
+                span.set_status("failed")
+                raise
+            finally:
+                span.set_attributes(receipt.attributes())
+                span.set_display(
+                    details=chat_progress_details(
+                        code=[("rerank", json.dumps(receipt.to_dict(), ensure_ascii=False), "json")]
+                    )
+                )
+
+    async def _embed_with_oci(
+        self,
+        texts: list[str],
+        *,
+        input_type: EmbeddingInputType,
+    ) -> list[list[float]]:
+        """OCI Generative AI Embedding 呼び出し。
+
+        本番接続の実装ポイント。LLM/VLM には使わず、embedding 専用に限定する。
+        """
+        models = importlib.import_module("oci.generative_ai_inference.models")
+        details = models.EmbedTextDetails(
+            inputs=texts,
+            serving_mode=models.OnDemandServingMode(
+                model_id=self._settings.oci_genai_embedding_model
+            ),
+            compartment_id=self._settings.oci_compartment_id,
+            input_type=input_type,
+            output_dimensions=self._settings.oci_genai_embedding_dim,
+        )
+        with observed_span(
+            "gen_ai.embeddings",
+            kind="client",
+            attributes={
+                "gen_ai.operation.name": "embeddings",
+                "gen_ai.provider.name": "oracle",
+                "gen_ai.request.model": self._settings.oci_genai_embedding_model,
+                **model_purpose_attributes(
+                    default={
+                        "SEARCH_QUERY": "query.embed",
+                        "SEARCH_DOCUMENT": "document.embed",
+                    }.get(input_type)
+                ),
+            },
+        ) as span:
+            span.set_call_input(lambda: oci_call_snapshot(details), restricted=True)
+            response = await self._sdk_call_runner(lambda: self._client().embed_text(details))
+            span.set_call_output(lambda: oci_call_snapshot(response.data))
+        embeddings = getattr(response.data, "embeddings", None)
+        if not isinstance(embeddings, list):
+            raise ValueError("OCI embedding response に embeddings がありません。")
+        return embeddings
+
+    async def _rerank_with_oci(
+        self, query: str, documents: list[str], top_n: int
+    ) -> Sequence[tuple[object, object]]:
+        """OCI Generative AI Rerank 呼び出し。"""
+        models = importlib.import_module("oci.generative_ai_inference.models")
+        details = models.RerankTextDetails(
+            input=query,
+            documents=documents,
+            serving_mode=models.OnDemandServingMode(model_id=self._settings.oci_genai_rerank_model),
+            compartment_id=self._settings.oci_compartment_id,
+            top_n=top_n,
+        )
+        receipt = current_rerank_receipt()
+        attempt_number = current_rerank_attempt()
+        attempt: dict[str, Any] | None = None
+
+        def invoke_sdk() -> Any:
+            nonlocal attempt
+            client = self._client()
+            attempt = receipt.begin_sdk(attempt_number) if receipt is not None else None
+            try:
+                response = client.rerank_text(details)
+            except BaseException as exc:
+                if receipt is not None and attempt is not None:
+                    receipt.finish_sdk(
+                        attempt,
+                        "cancelled" if isinstance(exc, asyncio.CancelledError) else "error",
+                        exc,
+                    )
+                raise
+            if receipt is not None and attempt is not None:
+                receipt.finish_sdk(attempt, "completed")
+            return response
+
+        with observed_span(
+            "gen_ai.rerank",
+            kind="client",
+            attributes={
+                "gen_ai.operation.name": "rerank",
+                "gen_ai.provider.name": "oracle",
+                "gen_ai.request.model": self._settings.oci_genai_rerank_model,
+                "rerank.attempt_number": attempt_number,
+                "rerank.retry_number": max(0, attempt_number - 1),
+                **(receipt.attributes() if receipt is not None else {}),
+                **model_purpose_attributes(),
+            },
+        ) as span:
+            span.set_call_input(lambda: oci_call_snapshot(details), restricted=True)
+            try:
+                response = await self._sdk_call_runner(invoke_sdk)
+                span.set_call_output(lambda: oci_call_snapshot(response.data))
+            finally:
+                if receipt is not None:
+                    span.set_attributes(receipt.attributes())
+                    span.set_attributes(
+                        {
+                            "rerank.status_scope": "sdk_attempt",
+                            "rerank.status": str(attempt["status"])
+                            if attempt is not None
+                            else "not_run",
+                        }
+                    )
+        document_ranks = getattr(response.data, "document_ranks", None)
+        if not isinstance(document_ranks, list):
+            raise ValueError("OCI rerank response に document_ranks がありません。")
+        return [
+            (getattr(rank, "index", None), getattr(rank, "relevance_score", None))
+            for rank in document_ranks
+        ]
+
+    def _client(self) -> GenerativeAiInferenceClientProtocol:
+        """OCI Generative AI Inference client を遅延初期化する。"""
+        if self._inference_client is not None:
+            return self._inference_client
+
+        oci_config = importlib.import_module("oci.config")
+        genai = importlib.import_module("oci.generative_ai_inference")
+        config = load_oci_config_without_prompt(
+            oci_config,
+            self._settings.oci_config_file,
+            self._settings.oci_config_profile,
+        )
+        # 再試行は共通の上限つきの並行の実行器が受け持つ(#2002)。SDK の既定の再試行
+        # (DEFAULT_RETRY_STRATEGY)を残すと、全体の待ち・並行の数の調整・予算を通らずに再試行する。
+        # SDK の既定の circuit breaker も切る。429 が 10 回続くと先に開き、実行器の知らない
+        # CircuitBreakerError で件・job が失敗する(#2211)。
+        oci_retry = importlib.import_module("oci.retry")
+        oci_breaker = importlib.import_module("oci.circuit_breaker")
+        try:
+            self._inference_client = genai.GenerativeAiInferenceClient(
+                config,
+                retry_strategy=oci_retry.NoneRetryStrategy(),
+                circuit_breaker_strategy=oci_breaker.NoCircuitBreakerStrategy(),
+            )
+        except Exception as exc:
+            if type(exc).__name__ == "InvalidConfig":
+                raise OciGenAiConfigError(_oci_invalid_config_message(exc)) from exc
+            raise
+        return self._inference_client
+
+    def _embedding_cache_disabled(self) -> bool:
+        return not getattr(self._settings, "rag_embedding_cache_enabled", True) or (
+            getattr(self._settings, "rag_embedding_cache_max_entries", 4096) <= 0
+        )
+
+    def _rerank_cache_disabled(self) -> bool:
+        return not getattr(self._settings, "rag_rerank_cache_enabled", True) or (
+            getattr(self._settings, "rag_rerank_cache_max_entries", 1024) <= 0
+        )
+
+    def _get_cached_embedding(self, key: str) -> list[float] | None:
+        cached = self._embedding_cache.pop(key, None)
+        if cached is None:
+            return None
+        self._embedding_cache[key] = cached
+        return list(cached)
+
+    def _store_embedding(self, key: str, vector: Sequence[float]) -> None:
+        self._embedding_cache[key] = [float(value) for value in vector]
+        self._trim_embedding_cache()
+
+    def _trim_embedding_cache(self) -> None:
+        max_entries = getattr(self._settings, "rag_embedding_cache_max_entries", 4096)
+        while len(self._embedding_cache) > max_entries:
+            self._embedding_cache.popitem(last=False)
+
+    def _get_cached_rerank(self, key: str) -> list[tuple[int, float]] | None:
+        cached = self._rerank_cache.pop(key, None)
+        if cached is None:
+            return None
+        self._rerank_cache[key] = cached
+        return list(cached)
+
+    def _store_rerank(self, key: str, results: Sequence[tuple[int, float]]) -> None:
+        self._rerank_cache[key] = [(int(index), float(score)) for index, score in results]
+        self._trim_rerank_cache()
+
+    def _trim_rerank_cache(self) -> None:
+        max_entries = getattr(self._settings, "rag_rerank_cache_max_entries", 1024)
+        while len(self._rerank_cache) > max_entries:
+            self._rerank_cache.popitem(last=False)
+
+
+async def _unwrapped_item_failure[T](awaitable: Awaitable[T]) -> T:
+    """件の失敗は元の例外(SDK の例外・検証の失敗)で出す(呼び出し側の扱いを変えない)。
+
+    job を止める失敗(``BoundedCallAborted``。権限・設定の誤りなど)は、直す所の案内の文のまま出す。
+    """
+    try:
+        return await awaitable
+    except BoundedCallFailed as exc:
+        cause = exc.__cause__
+        if isinstance(cause, Exception):
+            raise cause from None
+        raise
+
+
+async def _run_sdk_call_in_thread(operation: Callable[[], Any]) -> Any:
+    """同期 OCI SDK 呼び出しを event loop 外で実行する。"""
+    return await asyncio.to_thread(operation)
+
+
+def _embedding_cache_key(
+    *,
+    text: str,
+    input_type: EmbeddingInputType,
+    model_id: str,
+    dimension: int,
+) -> str:
+    """embedding cache key を原文なしの安定 hash で作る。"""
+    return _cache_key(
+        {
+            "kind": "embedding",
+            "model_id": model_id,
+            "dimension": dimension,
+            "input_type": input_type,
+            "text_sha256": _sha256_text(text),
+        }
+    )
+
+
+def _rerank_cache_key(
+    *,
+    query: str,
+    documents: list[str],
+    top_n: int,
+    model_id: str,
+) -> str:
+    """rerank cache key を query/document 原文なしの安定 hash で作る。"""
+    return _cache_key(
+        {
+            "kind": "rerank",
+            "model_id": model_id,
+            "top_n": top_n,
+            "query_sha256": _sha256_text(normalized_query_key(query)),
+            "document_sha256": [_sha256_text(document) for document in documents],
+        }
+    )
+
+
+def _cache_key(payload: dict[str, object]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _oci_invalid_config_message(error: Exception) -> str:
+    text = str(error).lower()
+    if "fingerprint" in text:
+        return (
+            "OCI 認証設定の fingerprint が不正です。"
+            "システム設定 > OCI 認証で API key fingerprint を"
+            "16 進数のコロン区切り形式に修正してください。"
+        )
+    return "OCI 認証設定が不正です。システム設定 > OCI 認証で設定を確認してください。"
+
+
+def _require_cached_vector(vector: list[float] | None, index: int) -> list[float]:
+    if vector is None:
+        raise ValueError(f"embedding[{index}] の cache 復元に失敗しました。")
+    return list(vector)
+
+
+def _validate_embedding_input_lengths(texts: Sequence[str]) -> None:
+    for index, text in enumerate(texts):
+        chars = len(text)
+        if chars > EMBEDDING_INPUT_MAX_CHARS:
+            raise ValueError(
+                "embedding input が長すぎます。"
+                f"index={index}, chars={chars}, max_chars={EMBEDDING_INPUT_MAX_CHARS}"
+            )
+
+
+def _raise_if_empty_embedding_input(texts: Sequence[str], *, model_id: str) -> None:
+    """空の入力はサービスが HTTP 400 で拒否するため、送る前に止める(#2467)。"""
+    empty = [index for index, text in enumerate(texts) if text == ""]
+    if not empty:
+        return
+    diagnostics: dict[str, object] = {
+        "reason": "input_empty",
+        "total_inputs": len(texts),
+        "empty_inputs": len(empty),
+        "first_empty_index": empty[0],
+        "model": model_id,
+    }
+    logger.warning("embedding_request_failed", extra=diagnostics)
+    raise OciEmbeddingRequestError(
+        f"Embedding の入力に空の Chunk が {len(empty)} 件あります（最初は {empty[0] + 1} 件目）。"
+        "Chunk 作成から再実行してください。",
+        diagnostics=diagnostics,
+    )
+
+
+def _retry_split_count(attempt: Attempt, size: int) -> int:
+    """再試行のときにバッチを何個に分けて送るか(一時的な不可用・大きすぎるの後だけ分ける)。"""
+    if size <= 1:
+        return 1
+    if attempt.final:
+        return min(size, EMBEDDING_RETRY_MAX_SPLITS)
+    if attempt.last_error not in {ErrorKind.UNAVAILABLE, ErrorKind.TOO_LARGE}:
+        return 1
+    splits: int = 2 ** max(0, attempt.number - 1)
+    return min(size, EMBEDDING_RETRY_MAX_SPLITS, splits)
+
+
+def _split_batch(batch: list[str], parts: int) -> list[list[str]]:
+    """入力の順を保ったまま、件数がほぼ等しい ``parts`` 個に分ける。"""
+    if parts <= 1:
+        return [batch]
+    size, extra = divmod(len(batch), parts)
+    result: list[list[str]] = []
+    start = 0
+    for index in range(parts):
+        end = start + size + (1 if index < extra else 0)
+        if end > start:
+            result.append(batch[start:end])
+        start = end
+    return result
+
+
+_EMBEDDING_REASON_LABELS: dict[str, str] = {
+    "service_overloaded": "サービスの高負荷",
+    "input_too_long": "1 件の入力がトークンの上限を超えた",
+    "too_many_inputs": "入力の件数が上限を超えた",
+    "input_empty": "空の入力",
+    "invalid_request": "要求の誤り",
+}
+_EMBEDDING_REASON_HINTS: dict[str, str] = {
+    "service_overloaded": (
+        "再試行しても回復しませんでした。時間をおいて、保存済みの Chunk から "
+        "Embedding / 索引を再実行してください。"
+    ),
+    "input_too_long": (
+        f"1 件の Chunk が Embedding の上限（{EMBEDDING_INPUT_MAX_TOKENS:,} トークン）を"
+        "超えています。Chunk のサイズの設定を小さくして、Chunk 作成から再実行してください。"
+    ),
+    "too_many_inputs": "Embedding のバッチの件数の設定（96 件以下）を確かめてください。",
+    "input_empty": "Chunk 作成から再実行してください。",
+}
+_DEFAULT_EMBEDDING_HINT = (
+    "時間をおいて、保存済みの Chunk から Embedding / 索引を再実行してください。"
+)
+
+
+def _embedding_request_error(
+    failure: BoundedCallFailed,
+    cause: BaseException | None,
+    *,
+    batch: Sequence[str],
+    batch_index: int,
+    batch_total: int,
+    total_inputs: int,
+    model_id: str,
+) -> OciEmbeddingRequestError:
+    """失敗したバッチの診断(本文・入力を含めない)を構造化ログに出し、利用者向けの例外にする。"""
+    status = failure.status
+    service_code = getattr(cause, "code", None) if cause is not None else None
+    reason = (embedding_rejection_reason(cause) if cause is not None else None) or (
+        failure.kind.value
+    )
+    batch_chars = sum(len(text) for text in batch)
+    # byte 単位の BPE の token は 1 byte 以上なので、UTF-8 の byte 数は token 数の上限になる
+    # (tokenizer は持たない)。
+    batch_utf8_bytes = sum(len(text.encode("utf-8")) for text in batch)
+    diagnostics: dict[str, object] = {
+        "reason": reason,
+        "kind": failure.kind.value,
+        "status": status,
+        "service_code": str(service_code) if service_code is not None else None,
+        "opc_request_id": getattr(cause, "request_id", None) if cause is not None else None,
+        "attempts": failure.attempts,
+        "batch_index": batch_index + 1,
+        "batch_total": batch_total,
+        "batch_inputs": len(batch),
+        "batch_chars": batch_chars,
+        "batch_max_input_chars": max((len(text) for text in batch), default=0),
+        "batch_token_upper_bound": batch_utf8_bytes,
+        "total_inputs": total_inputs,
+        "model": model_id,
+    }
+    logger.warning("embedding_request_failed", extra=diagnostics)
+    label = _EMBEDDING_REASON_LABELS.get(reason) or KIND_LABELS.get(failure.kind, "失敗")
+    status_text = f"HTTP {status}・" if status is not None else ""
+    hint = _EMBEDDING_REASON_HINTS.get(reason, _DEFAULT_EMBEDDING_HINT)
+    return OciEmbeddingRequestError(
+        f"Embedding の要求が失敗しました（{status_text}{label}）。"
+        f"バッチ {batch_index + 1}/{batch_total}（{len(batch)} 件・{batch_chars:,} 文字）。{hint}",
+        diagnostics=diagnostics,
+    )
+
+
+def _embedding_request_batches(texts: Sequence[str], *, max_count: int) -> list[list[str]]:
+    """入力順を保ったまま件数と保守的な総文字数の両方で request を分割する。"""
+    batches: list[list[str]] = []
+    batch: list[str] = []
+    batch_chars = 0
+    for text in texts:
+        if batch and (
+            len(batch) >= max_count or batch_chars + len(text) > EMBEDDING_REQUEST_MAX_CHARS
+        ):
+            batches.append(batch)
+            batch = []
+            batch_chars = 0
+        batch.append(text)
+        batch_chars += len(text)
+    if batch:
+        batches.append(batch)
+    return batches
+
+
+def _validate_embedding_batch(
+    vectors: list[list[float]],
+    expected_count: int,
+    expected_dim: int,
+) -> None:
+    """Embedding adapter の返却件数と次元数を検証する。"""
+    if len(vectors) != expected_count:
+        raise ValueError(
+            f"embedding の件数が一致しません。expected={expected_count}, actual={len(vectors)}"
+        )
+    for index, vector in enumerate(vectors):
+        if len(vector) != expected_dim:
+            raise ValueError(
+                f"embedding[{index}] の次元数が不正です。"
+                f"expected={expected_dim}, actual={len(vector)}"
+            )
+
+
+def _validate_rerank_results(
+    results: Sequence[tuple[object, object]],
+    *,
+    document_count: int,
+    top_n: int,
+) -> list[tuple[int, float]]:
+    """Rerank adapter の index/score 契約を検証し、score 降順に正規化する。"""
+    expected_max = min(document_count, top_n)
+    if len(results) > expected_max:
+        message = f"rerank の返却件数が不正です。expected_max={expected_max}, actual={len(results)}"
+        raise ValueError(message)
+
+    seen_indexes: set[int] = set()
+    validated: list[tuple[int, float]] = []
+    for position, (index, score) in enumerate(results):
+        if not isinstance(index, int) or isinstance(index, bool):
+            raise ValueError(f"rerank index の型が不正です。position={position}, index={index!r}")
+        if index in seen_indexes:
+            raise ValueError(f"rerank index が重複しています。index={index}")
+        if index < 0 or index >= document_count:
+            raise ValueError(
+                f"rerank index が範囲外です。index={index}, document_count={document_count}"
+            )
+        if not isinstance(score, Real) or isinstance(score, bool):
+            message = f"rerank score が不正です。index={index}, score={score!r}"
+            raise ValueError(message)
+        normalized_score = float(score)
+        if not math.isfinite(normalized_score):
+            message = f"rerank score が不正です。index={index}, score={score!r}"
+            raise ValueError(message)
+        seen_indexes.add(index)
+        validated.append((index, normalized_score))
+
+    return sorted(validated, key=lambda item: item[1], reverse=True)
+
+
+def _tokens(text: str) -> list[str]:
+    """日本語・英数字の簡易トークン化。"""
+    return [match.group(0).lower() for match in TOKEN_PATTERN.finditer(text)]

@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "language": "ja",
+  "synthetic": true,
+  "documents": [
+    {
+      "group": "A",
+      "name": "テスト_01_運用手順書",
+      "file": "テスト_01_運用手順書.pdf",
+      "pages": 5,
+      "sha256": "cbb4a41fd90859bd1b15a9ad42f6ef314dc6af4106faef2c5a11416d47c3e777",
+      "layout": "manual"
+    },
+    {
+      "group": "A",
+      "name": "テスト_02_操作FAQ",
+      "file": "テスト_02_操作FAQ.pdf",
+      "pages": 8,
+      "sha256": "31114476ecce586d6cf1eabd497d28dd962285eac3d75a620e6ce1a90202080c",
+      "layout": "faq"
+    },
+    {
+      "group": "A",
+      "name": "テスト_03_月次稼働報告",
+      "file": "テスト_03_月次稼働報告.pdf",
+      "pages": 10,
+      "sha256": "607d0aa6e40941087b9054365561c45f53899833454a591940b8d0b5d2e7b5e5",
+      "layout": "report"
+    },
+    {
+      "group": "A",
+      "name": "テスト_04_障害対応フロー",
+      "file": "テスト_04_障害対応フロー.pdf",
+      "pages": 12,
+      "sha256": "8a245fd079ca33f02af7889472c753df5c5604561be43957e6e22b1736816dd5",
+      "layout": "flow"
+    },
+    {
+      "group": "A",
+      "name": "テスト_05_設備保守台帳",
+      "file": "テスト_05_設備保守台帳.pdf",
+      "pages": 20,
+      "sha256": "b7c98351ff5efa5c0c608e06914b29cfbebda280cbd447eab45dba1891e28140",
+      "layout": "catalog"
+    },
+    {
+      "group": "B",
+      "name": "テスト_06_文書登録ガイド",
+      "file": "テスト_06_文書登録ガイド.pdf",
+      "pages": 5,
+      "sha256": "44c0c4687eb9c6940fc741f3f573ca7e8d151005ad1e2dd0dfe53edce3db558a",
+      "layout": "manual"
+    },
+    {
+      "group": "B",
+      "name": "テスト_07_検索FAQ",
+      "file": "テスト_07_検索FAQ.pdf",
+      "pages": 8,
+      "sha256": "06c3e0215560fa6bd07b8686e35eed2f1c0842e1c7352170f8f9d0c4aabd65a9",
+      "layout": "faq"
+    },
+    {
+      "group": "B",
+      "name": "テスト_08_品質評価報告",
+      "file": "テスト_08_品質評価報告.pdf",
+      "pages": 10,
+      "sha256": "755238d417d0442b2e526fdae4d6fb3160faa930ee999066d3df675cc2e2dd7a",
+      "layout": "report"
+    },
+    {
+      "group": "B",
+      "name": "テスト_09_公開承認フロー",
+      "file": "テスト_09_公開承認フロー.pdf",
+      "pages": 12,
+      "sha256": "6c76df487db2b6b6a31ac9699df52b782730b0823a9bc4fb50f8d7a14e36ffd1",
+      "layout": "flow"
+    },
+    {
+      "group": "B",
+      "name": "テスト_10_資料仕様一覧",
+      "file": "テスト_10_資料仕様一覧.pdf",
+      "pages": 20,
+      "sha256": "1ce67f55c086fcb40c45acdaf2b05dcaa8a0d6029a5ce214f5a37a48462b93c7",
+      "layout": "catalog"
+    }
+  ]
+}

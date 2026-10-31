@@ -1,0 +1,539 @@
+{
+  "description": "RAG の MCP のツールの出力の合成の例（ツールごとに 1 つ。#3240）。契約（rag-tools.json）の outputSchema の項目だけを持ち、内容は合成。Agent の fake の RAG（agent/backend/tests/mcp_support.py）が既定の出力に使い、Agent のテストが契約の outputSchema に合う（契約に無い項目を持たない）ことを、RAG のテストが RAG の出力の型で読めることを確かめる。契約を変えたら同じ PR で直す。",
+  "schema_version": 38,
+  "outputs": {
+    "rag_list_search_answer_profiles": {
+      "schema_version": 38,
+      "search_answer_profiles": [
+        {
+          "id": "bv-sales",
+          "name": "営業の検索・回答プロファイル",
+          "description": "営業部門の文書",
+          "status": "ACTIVE",
+          "knowledge_base_count": 2
+        }
+      ],
+      "query_matched": true,
+      "next_step": null
+    },
+    "rag_lookup_guides": {
+      "schema_version": 38,
+      "guides": [
+        {
+          "guide_id": "guide-1",
+          "revision": 1,
+          "title": "契約の更新",
+          "decision": "clarify",
+          "known_conditions": [],
+          "unknown_conditions": [
+            {
+              "id": "kind",
+              "label": "契約の種類",
+              "state": "unknown",
+              "value": null,
+              "source": null,
+              "handling": "ask",
+              "candidates": []
+            }
+          ],
+          "applicability": {},
+          "expected_result": "契約を更新できる",
+          "score": 2,
+          "clarifications": [
+            {
+              "condition_id": "kind",
+              "label": "契約の種類",
+              "question": "契約の種類は何ですか？",
+              "options": [
+                "年間",
+                "月額"
+              ],
+              "multiple": false
+            }
+          ],
+          "steps": [
+            {
+              "id": "s1",
+              "title": "契約を開く",
+              "purpose": "",
+              "depends_on": [],
+              "allowed_tools": [],
+              "retrieval_hints": [],
+              "references": [],
+              "evidence_requirements": [],
+              "done_when": ""
+            }
+          ],
+          "branches": [],
+          "references": [],
+          "completion": [],
+          "impact_scope": "individual",
+          "approval_required": false,
+          "impact_steps": [],
+          "impact_applies": true,
+          "handoff_contact": ""
+        }
+      ]
+    },
+    "rag_outline": {
+      "schema_version": 38,
+      "document_id": "doc-1",
+      "file_name": "契約書.pdf",
+      "chunk_set_id": "cs-1",
+      "root_section_id": "document",
+      "chunk_count": 2,
+      "chars": 3400,
+      "page_start": 1,
+      "page_end": 4,
+      "sections": [
+        {
+          "section_id": "sec-ch2",
+          "title": "第2章 契約の期間",
+          "level": 1,
+          "parent_section_id": "document",
+          "path": [
+            "第2章 契約の期間"
+          ],
+          "page_start": 1,
+          "page_end": 4,
+          "chunk_count": 2,
+          "chars": 3400
+        },
+        {
+          "section_id": "sec-5",
+          "title": "第5条（更新）",
+          "level": 2,
+          "parent_section_id": "sec-ch2",
+          "path": [
+            "第2章 契約の期間",
+            "第5条（更新）"
+          ],
+          "page_start": 3,
+          "page_end": 4,
+          "chunk_count": 2,
+          "chars": 1200
+        }
+      ],
+      "sections_omitted": 0,
+      "superseded": false,
+      "lines": []
+    },
+    "rag_read_document": {
+      "schema_version": 38,
+      "document_id": "doc-1",
+      "file_name": "契約書.pdf",
+      "chunk_set_id": "cs-1",
+      "text": "--- p.3 ---\n契約条項の全文\n更新の条件",
+      "chunks": [
+        {
+          "chunk_id": "chunk-3",
+          "element_locator": null,
+          "section_path": [
+            "契約書",
+            "第5条（更新）"
+          ],
+          "page_start": 3,
+          "page_end": 3,
+          "sheet_name": null,
+          "row_basis": null,
+          "table_index": null,
+          "row_start": null,
+          "row_end": null,
+          "source_line_start": null,
+          "source_line_end": null,
+          "cell_range": null,
+          "start": 12,
+          "end": 19,
+          "header_range": null
+        },
+        {
+          "chunk_id": "chunk-4",
+          "element_locator": null,
+          "section_path": [
+            "契約書",
+            "第5条（更新）"
+          ],
+          "page_start": 3,
+          "page_end": 3,
+          "sheet_name": null,
+          "row_basis": null,
+          "table_index": null,
+          "row_start": null,
+          "row_end": null,
+          "source_line_start": null,
+          "source_line_end": null,
+          "cell_range": null,
+          "start": 20,
+          "end": 25,
+          "header_range": null
+        }
+      ],
+      "next_cursor": null,
+      "superseded": false
+    },
+    "rag_read_section": {
+      "schema_version": 38,
+      "document_id": "doc-1",
+      "file_name": "契約書.pdf",
+      "chunk_set_id": "cs-1",
+      "section": {
+        "section_id": "sec-5",
+        "title": "第5条（更新）",
+        "level": 2,
+        "parent_section_id": "sec-ch2",
+        "path": [
+          "第2章 契約の期間",
+          "第5条（更新）"
+        ],
+        "page_start": 3,
+        "page_end": 4,
+        "chunk_count": 2,
+        "chars": 1200
+      },
+      "child_sections": [],
+      "text": "--- p.3 ---\n契約条項の全文\n\n--- p.4 ---\n更新の条件",
+      "chunks": [
+        {
+          "chunk_id": "chunk-3",
+          "element_locator": null,
+          "section_path": [
+            "契約書",
+            "第5条（更新）"
+          ],
+          "page_start": 3,
+          "page_end": 3,
+          "sheet_name": null,
+          "row_basis": null,
+          "table_index": null,
+          "row_start": null,
+          "row_end": null,
+          "source_line_start": null,
+          "source_line_end": null,
+          "cell_range": null,
+          "start": 12,
+          "end": 19,
+          "header_range": null
+        },
+        {
+          "chunk_id": "chunk-4",
+          "element_locator": null,
+          "section_path": [
+            "契約書",
+            "第5条（更新）"
+          ],
+          "page_start": 4,
+          "page_end": 4,
+          "sheet_name": null,
+          "row_basis": null,
+          "table_index": null,
+          "row_start": null,
+          "row_end": null,
+          "source_line_start": null,
+          "source_line_end": null,
+          "cell_range": null,
+          "start": 33,
+          "end": 38,
+          "header_range": null
+        }
+      ],
+      "section_complete": true,
+      "next_cursor": null,
+      "superseded": false
+    },
+    "rag_read_source": {
+      "schema_version": 38,
+      "evidence_id": "chunk-1",
+      "document_id": "doc-1",
+      "chunk_id": "chunk-1",
+      "file_name": "契約書.pdf",
+      "chunk_set_id": "cs-1",
+      "recipe_id": "recipe-1",
+      "content_kind": "text",
+      "evidence_type": "text",
+      "image_ref": null,
+      "image": null,
+      "image_url": null,
+      "preview": null,
+      "locator": {
+        "section_path": [
+          "契約書",
+          "第5条（更新）"
+        ],
+        "page_start": 3,
+        "page_end": 3,
+        "sheet_name": null,
+        "row_basis": null,
+        "table_index": null,
+        "row_start": null,
+        "row_end": null,
+        "source_line_start": null,
+        "source_line_end": null,
+        "cell_range": null,
+        "page_label_start": null,
+        "page_label_end": null,
+        "bbox": null,
+        "bbox_unit": null,
+        "element_locator": null,
+        "table_row": null,
+        "table_cells": []
+      },
+      "text": "契約条項の全文",
+      "offset": 0,
+      "text_length": 7,
+      "truncated": false,
+      "next_offset": null,
+      "header_range": null,
+      "parent_text": null,
+      "parent_truncated": false,
+      "superseded": false,
+      "references": []
+    },
+    "rag_readable_documents": {
+      "schema_version": 38,
+      "readable_document_ids": [
+        "doc-1"
+      ]
+    },
+    "rag_recommend_search_answer_profile": {
+      "schema_version": 38,
+      "recommended_profile_id": "bv-sales",
+      "candidates": [
+        {
+          "id": "bv-sales",
+          "name": "営業の検索・回答プロファイル",
+          "description": "営業部門の文書",
+          "reason": "当たった資料: 契約書.pdf",
+          "score": 1.0,
+          "documents": [
+            "契約書.pdf"
+          ]
+        }
+      ]
+    },
+    "rag_retrieve_evidence": {
+      "schema_version": 38,
+      "trace_id": "rag-trace-2",
+      "guardrail_warnings": [],
+      "guardrail_degraded": false,
+      "degraded_steps": [],
+      "zero_evidence": null,
+      "evidence": [
+        {
+          "evidence_id": "chunk-1",
+          "document_id": "doc-1",
+          "chunk_id": "chunk-1",
+          "file_name": "契約書.pdf",
+          "chunk_set_id": "cs-1",
+          "recipe_id": "recipe-1",
+          "content_kind": "text",
+          "evidence_type": "text",
+          "image_ref": null,
+          "locator": {
+            "section_path": [
+              "契約書",
+              "第5条（更新）"
+            ],
+            "page_start": 3,
+            "page_end": 3,
+            "sheet_name": null,
+            "row_basis": null,
+            "table_index": null,
+            "row_start": null,
+            "row_end": null,
+            "source_line_start": null,
+            "source_line_end": null,
+            "cell_range": null,
+            "page_label_start": null,
+            "page_label_end": null,
+            "bbox": null,
+            "bbox_unit": null,
+            "element_locator": null,
+            "table_row": null,
+            "table_cells": []
+          },
+          "excerpt": "契約条項",
+          "truncated": false,
+          "text_omitted": false,
+          "text_length": 4,
+          "excerpt_range": {
+            "start": 0,
+            "end": 4
+          },
+          "header_range": null,
+          "next_offset": null,
+          "used_in_answer": false,
+          "answer_use": null,
+          "role": "retrieved_anchor",
+          "score": 0.9,
+          "rerank_score": null,
+          "retrieval_rank": 1,
+          "origin": "source",
+          "table_binding": null,
+          "superseded": false,
+          "references": [],
+          "reference_from": null,
+          "reference_label": null,
+          "section": {
+            "section_id": "sec-5",
+            "title": "第5条（更新）",
+            "level": 2,
+            "page_start": 3,
+            "page_end": 4,
+            "chars": 1200,
+            "chunk_count": 2,
+            "parent_section_id": "sec-ch2",
+            "parent_title": "第2章 契約の期間",
+            "parent_chars": 3400
+          }
+        }
+      ],
+      "evidence_omitted": 0,
+      "evidence_text_omitted": 0,
+      "older_versions": [],
+      "auto_selected_search_answer_profile": null,
+      "planning": "caller",
+      "request_id": null,
+      "clarifications": [],
+      "profile_knowledge": null
+    },
+    "rag_search": {
+      "schema_version": 38,
+      "answer": "根拠付き回答",
+      "trace_id": "rag-trace-1",
+      "guardrail_warnings": [],
+      "guardrail_degraded": false,
+      "outcome": "answered",
+      "requests": [
+        {
+          "id": "Q1",
+          "text": "契約条項",
+          "status": "addressed"
+        }
+      ],
+      "conditions": [],
+      "gaps": [],
+      "confirmations": [],
+      "clarifications": [],
+      "guide": null,
+      "insufficient_reason": null,
+      "needs_human_review": false,
+      "passage_marks": [],
+      "removed_passages": [],
+      "answer_warnings": [],
+      "degraded_steps": [],
+      "zero_evidence": null,
+      "evidence": [
+        {
+          "evidence_id": "chunk-1",
+          "document_id": "doc-1",
+          "chunk_id": "chunk-1",
+          "file_name": "契約書.pdf",
+          "chunk_set_id": "cs-1",
+          "recipe_id": "recipe-1",
+          "content_kind": "text",
+          "evidence_type": "text",
+          "image_ref": null,
+          "locator": {
+            "section_path": [
+              "契約書",
+              "第5条（更新）"
+            ],
+            "page_start": 3,
+            "page_end": 3,
+            "sheet_name": null,
+            "row_basis": null,
+            "table_index": null,
+            "row_start": null,
+            "row_end": null,
+            "source_line_start": null,
+            "source_line_end": null,
+            "cell_range": null,
+            "page_label_start": null,
+            "page_label_end": null,
+            "bbox": null,
+            "bbox_unit": null,
+            "element_locator": null,
+            "table_row": null,
+            "table_cells": []
+          },
+          "excerpt": "契約条項",
+          "truncated": false,
+          "text_omitted": false,
+          "text_length": 4,
+          "excerpt_range": {
+            "start": 0,
+            "end": 4
+          },
+          "header_range": null,
+          "next_offset": null,
+          "used_in_answer": true,
+          "answer_use": null,
+          "role": "retrieved_anchor",
+          "score": 0.9,
+          "rerank_score": null,
+          "retrieval_rank": 1,
+          "origin": "source",
+          "table_binding": null,
+          "superseded": false,
+          "references": [],
+          "reference_from": null,
+          "reference_label": null,
+          "section": {
+            "section_id": "sec-5",
+            "title": "第5条（更新）",
+            "level": 2,
+            "page_start": 3,
+            "page_end": 4,
+            "chars": 1200,
+            "chunk_count": 2,
+            "parent_section_id": "sec-ch2",
+            "parent_title": "第2章 契約の期間",
+            "parent_chars": 3400
+          }
+        }
+      ],
+      "evidence_omitted": 0,
+      "evidence_text_omitted": 0,
+      "older_versions": [],
+      "provenance": null,
+      "auto_selected_search_answer_profile": null,
+      "notice": null
+    },
+    "rag_validate_answer": {
+      "schema_version": 38,
+      "valid": true,
+      "status": "completed",
+      "counts": {
+        "supported": 1,
+        "unsupported": 0,
+        "contradicted": 0
+      },
+      "claims": [
+        {
+          "answer_quote": "根拠付き回答",
+          "answer_range": {
+            "start": 0,
+            "end": 6
+          },
+          "status": "supported",
+          "chunk_id": "chunk-1",
+          "reason": "根拠の契約条項に書かれている。",
+          "audit_status": null,
+          "reference_check": null,
+          "classification_check": null,
+          "support_check": null,
+          "revised_text": null
+        }
+      ],
+      "missing_evidence": [],
+      "stale_evidence": [],
+      "evidence_truncated": false,
+      "checks": [],
+      "findings": [],
+      "guide_revision": null,
+      "guide_steps": [],
+      "reused_claims": 0,
+      "premise_checks": []
+    }
+  }
+}

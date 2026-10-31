@@ -1,0 +1,59 @@
+{
+  "data": {
+    "sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+    "is_safe": true,
+    "row_limit": 100,
+    "note": "SELECT-only として実行可能です。",
+    "engine": "select_ai",
+    "engine_meta": {
+      "runtime": "deterministic",
+      "profile_id": "default",
+      "model": "cohere.command-r-plus"
+    },
+    "fallback_reason": "",
+    "rewritten_question": "今月の受注金額上位5件を表示",
+    "executable_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+    "safety": {
+      "is_safe": true,
+      "is_select_only": true,
+      "row_limit_applied": 100,
+      "blocked_reason": "",
+      "warnings": [],
+      "referenced_tables": [
+        "APP.ORDERS"
+      ],
+      "referenced_columns": [
+        "ORDER_ID",
+        "CUSTOMER_ID",
+        "TOTAL_AMOUNT",
+        "ORDER_DATE"
+      ]
+    },
+    "recommendations": [
+      "必要に応じて顧客名を JOIN してください。"
+    ],
+    "repaired_sql": "",
+    "optimization_hints": [
+      "ORDER_DATE と TOTAL_AMOUNT の index を確認してください。"
+    ],
+    "timing": {
+      "created_at": "2026-08-12T00:00:00Z",
+      "started_at": "2026-08-12T00:00:00Z",
+      "finished_at": "2026-08-12T00:00:00Z",
+      "elapsed_ms": 180,
+      "stage_timings": [
+        {
+          "stage": "generate_sql",
+          "elapsed_ms": 120
+        },
+        {
+          "stage": "analyze_sql",
+          "elapsed_ms": 60
+        }
+      ]
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

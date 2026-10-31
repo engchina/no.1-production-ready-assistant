@@ -1,0 +1,78 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "hist-001",
+        "question": "今月の受注金額上位5件を表示してください",
+        "engine": "select_ai",
+        "generated_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+        "created_at": "2026-08-12T00:00:00Z",
+        "elapsed_ms": 420,
+        "feedback_rating": "good",
+        "profile_id": "default",
+        "profile_name": "標準業務プロファイル",
+        "rewritten_question": "今月の受注金額上位5件を表示",
+        "executable_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+        "safety_is_safe": true,
+        "result_row_count": 2,
+        "result_columns": [
+          "ORDER_ID",
+          "CUSTOMER_ID",
+          "TOTAL_AMOUNT"
+        ],
+        "feedback_comment": "期待どおりの SQL です。",
+        "feedback_updated_at": "2026-08-12T00:02:00Z",
+        "session_id": "",
+        "ontology_trace_summary": {}
+      },
+      {
+        "id": "hist-002",
+        "question": "未入金の請求金額を顧客別に集計してください",
+        "engine": "enterprise_ai_direct",
+        "generated_sql": "SELECT CUSTOMER_ID, SUM(TOTAL_AMOUNT) AS TOTAL_AMOUNT FROM APP.INVOICES WHERE STATUS = 'UNPAID' GROUP BY CUSTOMER_ID",
+        "created_at": "2026-08-11T23:30:00Z",
+        "elapsed_ms": 510,
+        "feedback_rating": "bad",
+        "profile_id": "finance",
+        "profile_name": "経理分析プロファイル",
+        "rewritten_question": "未入金請求を顧客別に集計",
+        "executable_sql": "SELECT CUSTOMER_ID, SUM(TOTAL_AMOUNT) AS TOTAL_AMOUNT FROM APP.INVOICES WHERE STATUS = 'UNPAID' GROUP BY CUSTOMER_ID FETCH FIRST 100 ROWS ONLY",
+        "safety_is_safe": true,
+        "result_row_count": 3,
+        "result_columns": [
+          "CUSTOMER_ID",
+          "TOTAL_AMOUNT"
+        ],
+        "feedback_comment": "顧客名を JOIN する必要があります。",
+        "feedback_updated_at": "2026-08-11T23:35:00Z",
+        "session_id": "",
+        "ontology_trace_summary": {}
+      },
+      {
+        "id": "hist-003",
+        "question": "古い受注を削除してください",
+        "engine": "select_ai",
+        "generated_sql": "DELETE FROM APP.ORDERS WHERE ORDER_DATE < DATE '2020-01-01'",
+        "created_at": "2026-08-11T20:00:00Z",
+        "elapsed_ms": 80,
+        "feedback_rating": null,
+        "profile_id": "default",
+        "profile_name": "標準業務プロファイル",
+        "rewritten_question": "古い受注を削除",
+        "executable_sql": "",
+        "safety_is_safe": false,
+        "result_row_count": 0,
+        "result_columns": [],
+        "feedback_comment": "",
+        "feedback_updated_at": "",
+        "session_id": "",
+        "ontology_trace_summary": {
+          "blocked_reason": "SELECT/WITH 以外の SQL は実行できません。"
+        }
+      }
+    ]
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,178 @@
+{
+  "id": "unknown-outcome-vocabulary",
+  "description": "成果物の outcome が語彙に無い値なら公開の MCP の outcome は null で、回答の文から推定する（#3240 の段 2 の前は最後の rag_search の outcome に戻った）。旧版も含めた検索（include_superseded: true）の成功した呼び出しだけを数え、失敗した呼び出しは数えない。",
+  "covers": [
+    "outcome:unknown_value_fallback",
+    "outcome:inferred_answered",
+    "include_superseded",
+    "failed_tool_call_ignored"
+  ],
+  "case": {
+    "id": "unknown-outcome-vocabulary",
+    "category": "conflicting_sources",
+    "split": "dev",
+    "include_superseded": true,
+    "query": "合成の質問 6: 項目 T は旧版から変わった？",
+    "relevant_document_ids": [
+      "doc-g"
+    ],
+    "expected_outcomes": [
+      "conditional"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 1750.0,
+      "run_id": "run-unknown-outcome-vocabulary-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": "conflicting_sources",
+      "split": "dev",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [
+        "doc-g",
+        "doc-g2"
+      ],
+      "relevant_document_ids": [
+        "doc-g"
+      ],
+      "hit_document_ids": [
+        "doc-g"
+      ],
+      "required_evidence_recall": null,
+      "mrr": 1.0,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": 1.0,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": "answered",
+      "outcome_source": "inferred",
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [],
+      "elapsed_ms": 1750.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-unknown-outcome-vocabulary-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "agent": {
+          "run_id": "run-unknown-outcome-vocabulary-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "inferred",
+          "tool_calls": {
+            "rag_search": 2
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "unknown-outcome-vocabulary",
+          "turn": 0,
+          "run_id": "run-unknown-outcome-vocabulary-0",
+          "thread_id": "thread_3a3e477b6eddca6fb65c5244c490b255",
+          "status": "completed",
+          "elapsed_ms": 1750.0,
+          "outcome": null,
+          "outcome_source": "inferred",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_search": 2
+          },
+          "superseded_searches": 1,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 6: 項目 T は旧版から変わった？"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": "conflicting_sources",
+        "split": "dev",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [
+          "doc-g",
+          "doc-g2"
+        ],
+        "relevant_document_ids": [
+          "doc-g"
+        ],
+        "hit_document_ids": [
+          "doc-g"
+        ],
+        "required_evidence_recall": null,
+        "mrr": 1.0,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [],
+        "elapsed_ms": 1750.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "mrr": {
+            "status": "scored",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "unevaluable",
+            "reason": "outcome_missing"
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

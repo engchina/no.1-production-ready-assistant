@@ -1,0 +1,37 @@
+# gitleaks の誤検知を fingerprint 単位で除外する（#71 の monorepo 取り込み時に確認済み）。
+# nl2sql のサイドナビ設定にある i18n キー（nav.section の値）を generic-api-key と誤検知したもの。
+8b9a0b9e330650cda08aadef9ca2e178d1393d5a:nl2sql/frontend/src/components/layout/nav-config.ts:generic-api-key:39
+# pr_system_settings.model の resolve_api_key（payload の api_key を引数に渡す行）を誤検知したもの（#103）。
+8cb12f5a5bc52ebbed7566c7d9b6f29e6607bdfb:platform/packages/system_settings_backend/src/pr_system_settings/model.py:generic-api-key:414
+
+# #858: 隔離 Nginx の脱機密化検証で使う合成 sentinel。実 credential は含まない。
+7166487cbf3749b1983702feea1fda8107be027d:platform/scripts/tests/nginx-logging.test.sh:curl-auth-header:36
+
+# #1594: tests / test-data のディレクトリの丸ごとの除外をやめたときに検出された、テストの意図的なダミー値。
+# login の失敗のテストの誤ったパスワード（"WrongPass12345"）。
+33c6c24e667e29efb456993cf408428d1966a8ba:rag/backend/tests/test_security_api.py:generic-api-key:372
+4a6a7282f8b5fad32b0705a36bd5ad2e378f295b:agent/backend/tests/test_security_api.py:generic-api-key:407
+4a6a7282f8b5fad32b0705a36bd5ad2e378f295b:nl2sql/backend/tests/test_security.py:generic-api-key:1935
+4a6a7282f8b5fad32b0705a36bd5ad2e378f295b:rag/backend/tests/test_security_api.py:generic-api-key:459
+# MCP のテストのサービストークンの署名鍵（"rag-mcp-test-secret-…" / "rag-mcp-scope-test-secret-…"）。
+3fc5afec16a95b22e3542170bdf704d985a974c1:rag/backend/tests/test_mcp_api.py:generic-api-key:34
+9ff60614d06a173fb37c67debe5bc5378bf456c2:rag/backend/tests/test_mcp_profile_scope.py:generic-api-key:36
+# #1850: 推薦のテストの最初の commit のダミーの署名鍵（"rag-mcp-recommend-test-secret-…"。次の commit で test_mcp_api の鍵の import に置き換えた）。
+57ad83a4df3882bbc100bad2ea31721eb8c803f7:rag/backend/tests/test_mcp_profile_recommendation.py:generic-api-key:34
+# #3260: MCP の入口の条件のテストの最初の commit のダミーの署名鍵（"rag-mcp-relaxation-test-secret-…"。次の commit で test_mcp_profile_scope の鍵の import に置き換えた）。
+c2dc0b103e361d9874c61170af4b44113025e725:rag/backend/tests/test_mcp_scope_after_relaxation.py:generic-api-key:64
+# 秘密鍵の upload のテストの、中身の無い PEM の枠（"MIIB" / "abc"。後者は行をまたぐため [allowlist] の regex に一致しない）。
+50568dc565db6f9fd2795dac8f6bbfa598b36044:platform/packages/system_settings_backend/tests/test_oci.py:private-key:117
+3b4a5f2ebb72c018bf641f8097f5bdc891bd9981:nl2sql/backend/tests/test_settings_api.py:private-key:244
+# NL2SQL のシステム設定のテストのデータのダミーの鍵（本文が "DUMMYTESTKEYONLY NOTAREALPRIVATEKEY…"）。
+be1c804a37d246e1f2ac72bc0cc8f32e50ec8745:nl2sql/docs/test-data/nl2sql-system-settings/oci/oci_api_key.pem:private-key:1
+# Enterprise AI の失敗の応答の理由から秘密の値を伏せるテストの、実在しない key の形（"sk-abcdefghijklmnop1234"。#1715）。
+4b00a4055eb15a5611a1ecaa60e5ba8bcef54d9b:platform/packages/system_settings_backend/tests/test_enterprise_ai_errors.py:generic-api-key:148
+# #1719 の出力の上限のテストの、応答・失敗の文に出ないことを確かめるための合成の API key（"synthetic-secret-api-key-1719"）。
+232563bce207f88b6b19c13e68808312708fc25e:nl2sql/backend/tests/test_enterprise_ai_output_budget.py:generic-api-key:30
+# #1805 の API キーの画面のテストの、実在しない合成のキー（"prak_0123456789abcdef_SSSS…"。秘密の部分は "S" の繰り返し）。
+cbf9af2d191ec936e0175520d335fc6b390dc4dc:platform/packages/system-settings/tests/api-keys.test.tsx:generic-api-key:22
+cbf9af2d191ec936e0175520d335fc6b390dc4dc:rag/frontend/e2e/api-keys.spec.ts:generic-api-key:15
+cbf9af2d191ec936e0175520d335fc6b390dc4dc:rag/frontend/e2e/api-keys.spec.ts:generic-api-key:34
+cbf9af2d191ec936e0175520d335fc6b390dc4dc:nl2sql/frontend/tests/e2e/api-keys.spec.ts:generic-api-key:8
+cbf9af2d191ec936e0175520d335fc6b390dc4dc:nl2sql/frontend/tests/e2e/api-keys.spec.ts:generic-api-key:22

@@ -1,0 +1,165 @@
+/* TIER 3 — インラインスタイルで表現できない状態（hover / focus / disabled / media）。
+   参照するのは TIER 2 の意味トークンのみ。原色（--neutral-* 等）は参照しないこと。 */
+
+/* ── Button ──────────────────────────────────────────────────────────────
+   枠線の方針:
+     primary/danger  border: 1px solid transparent（secondary と並べた時の 1px ズレ防止）
+     secondary       --color-border-control（3:1 必須。入力欄と同じ線）
+     ghost           枠なし
+   旧 --button-border(#8893a3) と --control-border(#e3e6ea) の二重運用を廃止し、
+   「操作できるものの輪郭」は 1 トークンに統合しました。 */
+.pr-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--button-gap);
+  height: var(--button-height-md);
+  min-height: var(--button-height-md);
+  min-width: 32px;
+  max-width: 100%;
+  padding: 0 var(--button-padding-md);
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-button);
+  font-weight: 500;
+  line-height: var(--line-height-button);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.pr-button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pr-button > svg { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; }
+.pr-button--sm { height: var(--button-height-sm); min-height: var(--button-height-sm); padding: 0 var(--button-padding-sm); }
+.pr-button--lg { height: var(--button-height-lg); min-height: var(--button-height-lg); padding: 0 var(--button-padding-lg); }
+.pr-button--touch { height: var(--control-height-touch); min-height: var(--control-height-touch); }
+.pr-button--icon { width: auto; min-width: 0; aspect-ratio: 1; padding: 0; }
+.pr-button--primary { background: var(--color-accent-emphasis); color: var(--color-fg-on-accent); }
+.pr-button--secondary { border-color: var(--color-border-control); background: var(--color-surface); color: var(--color-fg); }
+.pr-button--ghost { background: transparent; color: var(--color-fg); }
+.pr-button--danger { background: var(--color-danger-emphasis); color: var(--color-fg-on-emphasis); }
+.pr-button--danger-tone { color: var(--color-danger-fg); }
+.pr-button--secondary.pr-button--danger-tone { border-color: var(--color-danger-fg); }
+@media (hover: hover) {
+  .pr-button--primary:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-accent-emphasis-hover); }
+  .pr-button--danger:hover:not(:disabled):not([aria-disabled="true"]) { background: color-mix(in srgb, var(--color-danger-emphasis) 88%, #000); }
+  .pr-button--secondary:hover:not(:disabled):not([aria-disabled="true"]),
+  .pr-button--ghost:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-surface-hover); }
+  .pr-button--danger-tone:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-danger-subtle); color: var(--color-danger-fg); }
+}
+.pr-button:active:not(:disabled):not([aria-disabled="true"]) { background: color-mix(in srgb, var(--color-fg) 12%, var(--color-surface)); }
+.pr-button--primary:active:not(:disabled):not([aria-disabled="true"]) { background: var(--color-accent-emphasis-active); }
+.pr-button--danger:active:not(:disabled):not([aria-disabled="true"]) { background: color-mix(in srgb, var(--color-danger-emphasis) 76%, #000); }
+.pr-button[aria-pressed="true"] {
+  border-color: var(--color-accent-fg);
+  background: var(--color-accent-muted);
+  color: var(--color-fg);
+  box-shadow: inset 0 0 0 1px var(--color-accent-fg);
+}
+.pr-button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+/* PageHeader の操作のグループ（作業開始 / ページツール / 危険操作）の境界（buttons.md §5）。 */
+.pr-page-header__separator { align-self: center; width: 1px; height: 1.25rem; margin-inline: var(--space-1); background: var(--color-border); }
+/* loading 中は disabled ではなく aria-disabled（フォーカスを保つ。#355）。見た目は disabled と同じ。 */
+.pr-button:disabled,
+.pr-button[aria-disabled="true"] {
+  border-color: var(--color-border);
+  background: var(--color-surface-disabled);
+  color: var(--color-fg-disabled);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+@media (max-width: 639px), (pointer: coarse) {
+  .pr-button { height: var(--control-height-touch); min-height: var(--control-height-touch); padding: 0 12px; min-width: 44px; }
+  .pr-button--icon { min-width: 0; padding: 0; }
+}
+
+/* ── ToggleChip（絞り込み。ビュー切替＝タブとは別物） */
+.pr-chip {
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font: var(--font-weight-medium) var(--font-size-xs) / var(--line-height-xs) var(--font-sans);
+  border: 1px solid var(--color-border-control);
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+  transition: var(--transition-control);
+}
+.pr-chip:hover { background: var(--color-surface-hover); color: var(--color-fg); }
+.pr-chip[aria-pressed="true"] { border-color: transparent; background: var(--color-accent-emphasis); color: var(--color-fg-on-accent); }
+
+/* ── Tabs（ビュー切替）────────────────────────────────────────────────────
+   タブは「同じ対象の別の見方に切り替える」もの。チップ（.pr-chip）は「データを
+   絞り込む」もの。両者は意味が違うので、下線（タブ）と pill（チップ）で
+   見た目を明確に分けてあります。流用しないこと。 */
+.pr-tablist { display: flex; align-items: stretch; gap: var(--space-5); overflow-x: auto; scrollbar-width: none; box-shadow: inset 0 -1px 0 var(--color-border); }
+.pr-tablist::-webkit-scrollbar { display: none; }
+/* PageHeader 内では <header> の full-bleed な罫線が境界になるので自前の線は出さない
+   （計測幅 1440px の線と画面幅の線が二重になるのを避ける）。 */
+header .pr-tablist { box-shadow: none; }
+.pr-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  height: var(--tab-height);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-fg-muted);
+  font: var(--text-label);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.pr-tab > svg { width: var(--icon-md); height: var(--icon-md); flex-shrink: 0; }
+.pr-tab:hover:not(:disabled):not([aria-disabled="true"]) { color: var(--color-fg); border-bottom-color: var(--color-border-strong); }
+.pr-tab[aria-selected="true"] { color: var(--color-accent-fg-strong); border-bottom-color: var(--color-accent-emphasis); font-weight: var(--font-weight-semibold); }
+.pr-tab:disabled { color: var(--color-fg-disabled); cursor: not-allowed; }
+.pr-tab:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; border-radius: var(--radius-sm); }
+.pr-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem; padding: 0 var(--space-1-5); border-radius: var(--radius-pill); background: var(--color-surface-hover); color: var(--color-fg-muted); font: var(--text-meta); font-variant-numeric: tabular-nums; }
+.pr-tab[aria-selected="true"] .pr-tab-count { background: var(--color-accent-muted); color: var(--color-accent-fg-strong); }
+
+/* ── 入力 / セレクトトリガ。枠線は secondary ボタンと同一トークン。 */
+.pr-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--field-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--input-radius);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font: var(--text-body);
+}
+textarea.pr-input { padding: var(--space-2-5) var(--space-3); line-height: var(--line-height-relaxed); resize: vertical; }
+/* プレースホルダも「文字」。透過で薄めると 3:1 を割るので --color-fg-muted のまま使う。 */
+.pr-input::placeholder { color: var(--color-fg-muted); opacity: 1; }
+.pr-input[aria-invalid="true"] { border-color: var(--color-danger-fg); }
+.pr-input:disabled { background: var(--color-surface-disabled); color: var(--color-fg-disabled); cursor: not-allowed; }
+
+/* ── サイドバー行。色は [data-surface="inverted"] スコープが供給します。 */
+.pr-nav-row { transition: var(--transition-control); }
+.pr-nav-row:hover { background: var(--color-surface-hover); color: var(--color-fg); }
+.pr-nav-row[aria-current="page"], .pr-nav-row[aria-current="page"]:hover { background: var(--color-accent-emphasis); color: var(--color-fg-on-accent); }
+
+/* ── 表の行 / 候補行 / メニュー行 */
+.pr-row-hover:hover { background: var(--color-surface-hover); }
+.pr-option:hover { background: var(--color-accent-subtle); }
+.pr-option[aria-selected="true"] { background: var(--color-accent-muted); }
+
+/* 表ヘッダのソート。<th> 全体を当たり判定にして 24px 未満のタップ領域を解消。 */
+.pr-sort-header { display: flex; align-items: center; gap: var(--space-1); width: 100%; margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1); padding: var(--space-2) var(--space-3); border: 0; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; transition: var(--transition-control); }
+.pr-sort-header:hover { background: var(--color-surface-hover); color: var(--color-fg); }
+.pr-sort-header[data-align="right"] { justify-content: flex-end; }
+
+/* アイコンボタンは <Button variant="ghost" iconOnly> に一本化したため
+   旧 .pr-icon-button は廃止。 */
+
+.pr-spin { animation: pr-spin 1s linear infinite; transform-box: view-box; transform-origin: 50% 50%; }
+.pr-pulse { animation: pr-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.pr-anim-toast { animation: pr-toast-in var(--duration-enter) var(--ease-out); }
+.pr-anim-overlay { animation: pr-overlay-in var(--duration-control) var(--ease-out); }
+.pr-anim-dialog { animation: pr-dialog-in var(--duration-enter) var(--ease-out); }

@@ -1,0 +1,170 @@
+name: Terraform Release Package
+
+# OCI Resource Manager の統合 stack（terraform/stack、#217）の release。tag は suite-v*（例: suite-v0.1.0）。
+# ADB 1つと、選んだ製品（RAG / NL2SQL / Agent）ごとの Compute を1つの zip で配る。
+# 製品ごとの release（<製品>-v*、#94）は作らない（既存の release は残す）。
+#   terraform/scripts/package_stack.py              → terraform/dist/production-ready-suite-terraform-stack.zip
+#   terraform/scripts/verify_stack_contract.py <zip> → stack の契約検証
+#
+# 公開の前に確かめること（#1594）:
+#   - release する commit が main にある（手動の実行は main の branch から。tag はその commit が main の祖先）。
+#   - その commit で main の CI（ci.yml。push・schedule・手動）が成功している。Dependabot の自動 merge の commit は
+#     push の CI が動かないので、毎日の schedule か `gh workflow run ci.yml --ref main` の成功を待ってから release する。
+#   - 配備の検証（suite-deploy.yml。PR の CI の Suite / Deploy と同じ）が通る。
+# zip には provenance（actions/attest-build-provenance）を付ける。利用者は
+# `gh attestation verify <zip> --repo engchina/no.1-production-ready-suite` で、この workflow が作ったことを確かめられる。
+# workflow を変えたら `gh workflow run terraform-release.yml --ref main -f version=v0.0.0 -f dry_run=true` で、
+# 公開せずに確かめられる（tag の push の経路は dry run できない）。
+
+on:
+  push:
+    tags:
+      - "suite-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "version（例: v0.1.0）。suite-<version> の tag と release を作る"
+        required: true
+        type: string
+      dry_run:
+        description: "true なら release・provenance を作らず、確認（main・CI の成功・配備の検証・zip の契約）だけを行う"
+        required: false
+        default: false
+        type: boolean
+
+# 権限は job に渡す（#1594）。
+permissions: {}
+
+jobs:
+  # release する commit が main にあり、その commit で main の CI が成功していることを確かめる（#1594）。
+  guard:
+    name: Check release commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # main の CI の成功の確認
+      actions: read
+    steps:
+      - name: Check the ref of a manual run
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::手動の release は main の branch から実行する（実行した ref: $REF）"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # commit が main の祖先かを確かめるため、履歴を取る。
+          fetch-depth: 0
+
+      - name: Check the commit is on main and its CI succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          if ! git merge-base --is-ancestor "$TARGET_SHA" origin/main; then
+            echo "::error::$TARGET_SHA は main にない。main に merge した commit だけを release する"
+            exit 1
+          fi
+          runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${TARGET_SHA}&status=success&per_page=20" \
+            -q '[.workflow_runs[] | select(.event != "pull_request" and .head_branch == "main")] | length')"
+          if [ "${runs:-0}" -eq 0 ]; then
+            echo "::error::$TARGET_SHA で main の CI（ci.yml）の成功が無い。CI の成功を待ってから release する（Dependabot の自動 merge の commit は gh workflow run ci.yml --ref main）"
+            exit 1
+          fi
+          echo "main の CI の成功を確かめた（$TARGET_SHA。成功した run: $runs）"
+
+  # PR の CI と同じ配備の検証（各製品の init_script.sh・Terraform の fmt / validate / 契約・platform/deploy。#1592）。
+  verify:
+    name: Suite / Deploy
+    needs: guard
+    permissions:
+      contents: read
+    uses: ./.github/workflows/suite-deploy.yml
+
+  package:
+    name: Package and publish
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      # release の作成と asset の upload
+      contents: write
+      # provenance（Sigstore の署名と attestation の保存）
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      PACKAGE_NAME: production-ready-suite-terraform-stack.zip
+    steps:
+      - name: Resolve release tag
+        working-directory: .
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            tag="$REF_NAME"
+          else
+            tag="suite-$(printf '%s' "$INPUT_VERSION" | tr -d '[:space:]')"
+          fi
+          if ! printf '%s' "$tag" | grep -Eq '^suite-v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::invalid release tag: $tag (expected suite-vX.Y.Z)"
+            exit 1
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # init_script.sh・fmt・validate の検証は verify（suite-deploy.yml）が行う。ここは公開する zip を作って確かめる。
+      - name: Build Terraform stack package
+        run: python scripts/package_stack.py
+
+      - name: Verify stack contract
+        run: python scripts/verify_stack_contract.py "dist/$PACKAGE_NAME"
+
+      - name: Write checksum
+        run: |
+          cd dist
+          sha256sum "$PACKAGE_NAME" > "$PACKAGE_NAME.sha256"
+
+      - name: Attest build provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: terraform/dist/${{ env.PACKAGE_NAME }}
+
+      # workflow_dispatch では tag がまだ無いので、実行した commit に作る。push（tag）ではその tag を使う。
+      - name: Create or update GitHub Release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "$TARGET_SHA" \
+              --title "$RELEASE_TAG" \
+              --notes "OCI Resource Manager Terraform stack package for the Production Ready Suite (RAG / NL2SQL / Agent Control Plane on one shared Autonomous AI Database)."
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "dist/$PACKAGE_NAME" \
+            "dist/$PACKAGE_NAME.sha256" \
+            --clobber

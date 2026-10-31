@@ -1,0 +1,18 @@
+/* TIER 1 — primitives（コンポーネントから参照禁止） */
+@import "./tokens/palette.css";
+/* TIER 2 — semantic tokens + surface scopes（参照してよいのはここ） */
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/colors-graph.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/radius.css";
+@import "./tokens/elevation.css";
+@import "./tokens/motion.css";
+@import "./tokens/base.css";
+/* TIER 3 — component states */
+@import "./components/components.css";
+/* アクセシビリティモード（トークンとコンポーネント規則の両方を上書きするので最後） */
+@import "./tokens/a11y.css";
+/* 移行用。3 アプリの旧名参照が消えたら削除する。 */
+@import "./tokens/compat.css";

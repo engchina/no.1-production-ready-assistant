@@ -1,0 +1,584 @@
+{
+  "artifact_type": "migration",
+  "migration_artifact_version": "20261009_001",
+  "migrations": [
+    {
+      "destructive": false,
+      "name": "20260615_001_ingestion_jobs_attempt_counters",
+      "sha256": "2181a551912d88f91f5a3b92d3cb0edcd877dffb33f02934c7d0e4cbc872e36e",
+      "statement_count": 3,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_001_search_audit_search_mode",
+      "sha256": "1f0461c4c9fc7605bc99e4a3314c2e305329865e8baed243d6accdcb94466531",
+      "statement_count": 1,
+      "table_name": "rag_search_audit"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_002_evaluation_runs_result_sha256",
+      "sha256": "92469500bf7980c67251f0b57d9b2e54451f2062db1b684b1722813da9981d4a",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_runs"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_003_ingestion_jobs_cancelled_status",
+      "sha256": "d252c821b23fec9abea5863e53738af632a90431b63241dcf34d6330a7576b75",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_004_ingestion_segments",
+      "sha256": "bb341b6be4cf4a655c367fe5c29da0f4c6a52ed483c9920b10e19a57a00d5a58",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_segments"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_005_search_audit_memory_engineering",
+      "sha256": "a7ed824e9e5b8c3f34134dfaa6eb2dc463e8faaaa37be783d7f1354064532ea5",
+      "statement_count": 1,
+      "table_name": "rag_search_audit"
+    },
+    {
+      "destructive": false,
+      "name": "20260616_006_agent_memories",
+      "sha256": "49128f4e163e25082e91ad296257e5995fe4decd19f2f4cf29d348c830e8dfa9",
+      "statement_count": 1,
+      "table_name": "rag_agent_memories"
+    },
+    {
+      "destructive": false,
+      "name": "20260617_001_ingestion_audit_file_processing_metrics",
+      "sha256": "6e24d8b1519736cfb59e242c2222835a3d983a78fb9fbf46f8095d13bbd05398",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_audit"
+    },
+    {
+      "destructive": false,
+      "name": "20260617_002_search_audit_adaptive_context",
+      "sha256": "eaa94314b3eccd1dc12b8d680916e953784b9f1fd08d9b1db4a4c0a4da3c9276",
+      "statement_count": 1,
+      "table_name": "rag_search_audit"
+    },
+    {
+      "destructive": false,
+      "name": "20260617_003_search_audit_dependency_context",
+      "sha256": "f364b0fa0b5100f1d55b4fea73f766e51c4e2f702e9a6fe27286184bf99aa06f",
+      "statement_count": 1,
+      "table_name": "rag_search_audit"
+    },
+    {
+      "destructive": false,
+      "name": "20260618_001_documents_review_status",
+      "sha256": "1387227d2ceb8da573799705de13d1c62acccc608f157952cc201f86831eaa0a",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20260618_002_ingestion_jobs_phase",
+      "sha256": "5d919f78ccac3093ee62c3f3f2137953efc1ae5c3c8b1e7d47b953a3462c6df9",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260619_001_business_views",
+      "sha256": "844c09f3e598f772aa867bdff215f95e8786b4c8678203f86b63df1fa4abed0d",
+      "statement_count": 1,
+      "table_name": "rag_business_views"
+    },
+    {
+      "destructive": false,
+      "name": "20260621_001_chunk_sets",
+      "sha256": "b63dfd79c6028967260f3a6a181ebf48c2a32aa4149108cbdb91ec7a4eaaa186",
+      "statement_count": 1,
+      "table_name": "rag_chunk_sets"
+    },
+    {
+      "destructive": false,
+      "name": "20260621_002_document_extractions",
+      "sha256": "be854e57214518432354f29f48021950d876b5b2966f5ec08880bc0ec3ad97c5",
+      "statement_count": 1,
+      "table_name": "rag_document_extractions"
+    },
+    {
+      "destructive": false,
+      "name": "20260623_001_nullable_chunk_embeddings",
+      "sha256": "43df865f631243b11dd6ab252d9e6e9e9c3cc9ab1c90989722cb3a8bf60d9b5c",
+      "statement_count": 1,
+      "table_name": "rag_chunks"
+    },
+    {
+      "destructive": false,
+      "name": "20260625_001_chunks_text_world_lexer",
+      "sha256": "24ca9cb2790e1cc1f358a2c654ab61831758cbfebfcad2407fbe7a0e8240dc50",
+      "statement_count": 3,
+      "table_name": "rag_chunks"
+    },
+    {
+      "destructive": false,
+      "name": "20260625_002_preprocess_artifact",
+      "sha256": "270d4b71588908ab1f1e873cb67a64e610f3a4dd32377c377a1b073752371afa",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20260627_001_documents_preprocessed_status",
+      "sha256": "34102748f55a54288411679bb36f085dabce745abca8f29459cadc2de4b2c584",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20260629_001_chunk_sets_serving",
+      "sha256": "4504f21975efa1faebbebe7cfd36c1e3bf8c64c8f8447aa3475108456521ee2c",
+      "statement_count": 1,
+      "table_name": "rag_chunk_sets"
+    },
+    {
+      "destructive": true,
+      "name": "20260629_002_drop_kb_chunk_set_bindings",
+      "sha256": "39f1e55074285253556118491134df25a9a28f764f37874f4c49fc0b632c1fb1",
+      "statement_count": 1,
+      "table_name": "rag_kb_chunk_set_bindings"
+    },
+    {
+      "destructive": false,
+      "name": "20260629_003_ingestion_jobs_settings_overrides",
+      "sha256": "06c15782499442dab2925bdb459d001f06d8d134bafb61a0ef2be2c2dc0ea4fb",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260629_004_documents_processing_config",
+      "sha256": "4ef324e2bc2bb9efaf16168003a4cd194c2ad1e24955f2aaf3dcdf3c499e5848",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20260630_001_default_knowledge_base_name",
+      "sha256": "bfdc46351934c2ffb5af8712d93c628aee783109389d65462c03d1e04679906a",
+      "statement_count": 2,
+      "table_name": "rag_knowledge_bases"
+    },
+    {
+      "destructive": false,
+      "name": "20260630_002_default_business_view",
+      "sha256": "e4f94e38bea44e33f1f323838f209d5289d6e025a11c9f56ce57b35c522f90cb",
+      "statement_count": 3,
+      "table_name": "rag_business_views"
+    },
+    {
+      "destructive": false,
+      "name": "20260630_003_document_recipes",
+      "sha256": "457d14b65991c0685f0dc6424cb26cbb78d62fd0167da36883d7fad02eeb6547",
+      "statement_count": 13,
+      "table_name": "rag_document_recipes"
+    },
+    {
+      "destructive": false,
+      "name": "20260701_001_general_feedback",
+      "sha256": "339f73fd3ef93b88cafbdddee964aa12ba398ab2ee01ad674e7f9354e1953ce9",
+      "statement_count": 1,
+      "table_name": "rag_citation_feedback"
+    },
+    {
+      "destructive": false,
+      "name": "20260701_002_conversation_titles",
+      "sha256": "d6f133a991c256cc7c94e696167942514558caeb50f76862f3bea6f0eaad3d60",
+      "statement_count": 2,
+      "table_name": "rag_conversations"
+    },
+    {
+      "destructive": false,
+      "name": "20260702_001_chunk_search_text",
+      "sha256": "636aca99b7851a457e7b9ea3c76f0113a9f5cb9c6092da04ea82044f2d3855d8",
+      "statement_count": 3,
+      "table_name": "rag_chunks"
+    },
+    {
+      "destructive": false,
+      "name": "20260703_001_generation_settings",
+      "sha256": "74cc88c864545b97e37e2afedac10129e966398d17b18084141e88399902f468",
+      "statement_count": 1,
+      "table_name": "rag_generation_settings"
+    },
+    {
+      "destructive": false,
+      "name": "20260703_002_feedback_details",
+      "sha256": "f702eb3fccc0e9cf7df9d7a253bc7351b564000cd85aea574d006ab8c127c24b",
+      "statement_count": 3,
+      "table_name": "rag_feedback_details"
+    },
+    {
+      "destructive": false,
+      "name": "20260925_001_business_view_knowledge",
+      "sha256": "9e706059df605370c079dffa2eab97b4b06f75cfc8e6e56cdc5920e03725917c",
+      "statement_count": 1,
+      "table_name": "rag_business_view_knowledge"
+    },
+    {
+      "destructive": false,
+      "name": "20260925_002_answer_records",
+      "sha256": "50bf6a53942c74decdd9ee06a731a03dd516e4adbb1ac0357bdc77ff9e72da60",
+      "statement_count": 1,
+      "table_name": "rag_answer_records"
+    },
+    {
+      "destructive": false,
+      "name": "20260926_001_documents_classification",
+      "sha256": "392e1717bd16171a54e2110063b2c9525cf8a31ec08ca1fd7367840b0c183ace",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20260926_002_answer_record_evaluation",
+      "sha256": "f1b5c59504c0955ca552fbc344da2b705de822dc86424567e021358c83d4e72b",
+      "statement_count": 1,
+      "table_name": "rag_answer_records"
+    },
+    {
+      "destructive": false,
+      "name": "20260926_003_feedback_reasons_corrected_answer",
+      "sha256": "7ca243f0652a18791feb71120cb248d9a18bc88aa74120f12763d7d735d64aa5",
+      "statement_count": 1,
+      "table_name": "rag_citation_feedback"
+    },
+    {
+      "destructive": false,
+      "name": "20260926_004_docrag_prompts",
+      "sha256": "682cbde33863fba718e44f1e61f13cb90a12da99840a8e8d1c6cd0d1ec1b7932",
+      "statement_count": 1,
+      "table_name": "rag_docrag_prompts"
+    },
+    {
+      "destructive": false,
+      "name": "20260926_005_query_history",
+      "sha256": "c882ba63c997fc7310b6864bccc668842e33aff49dcedbc65ab3f2a69a799c1e",
+      "statement_count": 1,
+      "table_name": "rag_query_history"
+    },
+    {
+      "destructive": false,
+      "name": "20260927_001_role_access",
+      "sha256": "93056a4d3fc8db22bc658ae49d360e24423db45836dd6a234bffbbd396f01d6c",
+      "statement_count": 1,
+      "table_name": "rag_role_permissions"
+    },
+    {
+      "destructive": true,
+      "name": "20260928_001_retire_dashboard_permission",
+      "sha256": "c445a5ea0f675f8fd4d85f64f232d2e19edbb6bbb22f50fd08e021d6025ddbc2",
+      "statement_count": 1,
+      "table_name": "rag_role_permissions"
+    },
+    {
+      "destructive": false,
+      "name": "20260928_002_answer_record_owner",
+      "sha256": "41147cf9b922dd68c9a957812ded556ea29e27767d9c8fb1c99c96e67ae57e93",
+      "statement_count": 1,
+      "table_name": "rag_answer_records"
+    },
+    {
+      "destructive": false,
+      "name": "20260928_003_default_document_recipes",
+      "sha256": "6793346ab3494095f66aee7a2bce973d9fb295867fbd74f5023a9190d6ccdc8d",
+      "statement_count": 1,
+      "table_name": "rag_document_recipes"
+    },
+    {
+      "destructive": false,
+      "name": "20260928_004_ingestion_jobs_lease",
+      "sha256": "d3ebf9471036b61b3bae360160c18a0dec12480bac2b82a5d96a97ce3afc6043",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260928_005_evaluation_jobs",
+      "sha256": "c3d26f6d785d066aef6359dddaf397e411bf536f4838ed8eaeecf91f8ee4d83c",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_001_default_descriptions",
+      "sha256": "a47455d4ca1c3f603a235d21d6c68a4674a7178d544360662f7b29a052845dbb",
+      "statement_count": 3,
+      "table_name": "rag_business_views"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_002_artifact_layers_input_fingerprint",
+      "sha256": "67779e452e646aff545ebab74163958ef650225828bf7e314622c90f5e531879",
+      "statement_count": 1,
+      "table_name": "rag_artifact_layers"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_003_chunk_sets_first_page_context",
+      "sha256": "22fdeaafa458f6313f2ded11ba80a316b0bd1bb30ada1c932600eb5f41f57ee6",
+      "statement_count": 1,
+      "table_name": "rag_chunk_sets"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_004_knowledge_base_extraction_fields",
+      "sha256": "1185c1080def819ecd5ed032ec654815c1625d6c61e3cba119b10e4aa056c658",
+      "statement_count": 1,
+      "table_name": "rag_knowledge_bases"
+    },
+    {
+      "destructive": true,
+      "name": "20260930_005_retire_standard_engine_objects",
+      "sha256": "6feed9b2add8a28ca8d6c46b3ee82a933037ff1f594ee021b072db55a3e9b2dc",
+      "statement_count": 1,
+      "table_name": "rag_agent_memories"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_006_graph_profile_entities",
+      "sha256": "2acb98faaa3560724858775c87fde0e26fa4cb4d6e1a44a32701478d695ca0cf",
+      "statement_count": 7,
+      "table_name": "rag_document_recipes"
+    },
+    {
+      "destructive": true,
+      "name": "20260930_007_retire_graph_claims_community",
+      "sha256": "030d6f3beffb128629efa77850a889fa97fb5c8dff84e4bbb9a6f826df875c8c",
+      "statement_count": 1,
+      "table_name": "rag_graph_entities"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_008_answer_prompts_table",
+      "sha256": "b8e54cdd503cd709a69f026792b1ca6bf89a1f58db6e51a813c2163d0ab9f116",
+      "statement_count": 1,
+      "table_name": "rag_answer_prompts"
+    },
+    {
+      "destructive": false,
+      "name": "20260930_009_stored_engine_names",
+      "sha256": "dd56583aeb9f1ecaa23a37430337f89a790282742a5709a66a4e86deae08f4d6",
+      "statement_count": 1,
+      "table_name": "rag_chunks"
+    },
+    {
+      "destructive": false,
+      "name": "20261001_001_document_sections",
+      "sha256": "ba35944e2b800a82b2c5295d5305c99cec60a570e22a303e48c2575690647e4a",
+      "statement_count": 1,
+      "table_name": "rag_document_sections"
+    },
+    {
+      "destructive": true,
+      "name": "20261003_001_search_answer_profiles",
+      "sha256": "6ae5a9292aae7c250cd594ec3dd1dbca83fb3ded6b75010b00d73556ececff3a",
+      "statement_count": 1,
+      "table_name": "rag_search_answer_profiles"
+    },
+    {
+      "destructive": false,
+      "name": "20261005_001_message_answer_runs",
+      "sha256": "3e89166267c85fbcc8e5f604790a6f4616155eb8738b98b7fc707c60f188e7d1",
+      "statement_count": 1,
+      "table_name": "rag_messages"
+    },
+    {
+      "destructive": false,
+      "name": "20261007_001_document_superseded",
+      "sha256": "17aa156ee1660c45c458d1074c3468a881cca4f2f0c9ddec84dd64215b9ebacc",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20261009_001_entity_layer",
+      "sha256": "99b2fae849046f5c1cd5fc8a40d773574a1cf6686156ff1a0454904f29fa0ccb",
+      "statement_count": 1,
+      "table_name": "rag_entities"
+    },
+    {
+      "destructive": false,
+      "name": "20261011_001_section_chunk_map",
+      "sha256": "83108266d487a200165e46321e1a58040a3c8f006ede69c4a31865cf665fba34",
+      "statement_count": 1,
+      "table_name": "rag_chunk_set_sections"
+    },
+    {
+      "destructive": false,
+      "name": "20261015_001_message_clarification",
+      "sha256": "da784b5db0e85ed865e68c96b9290e20837fb26765309afedeed74d5db8aa565",
+      "statement_count": 1,
+      "table_name": "rag_messages"
+    },
+    {
+      "destructive": false,
+      "name": "20261015_002_run_history",
+      "sha256": "76af9c35a0acd4f4462159d41bab232fd8f99db27c66a3a4b726ce18406b0426",
+      "statement_count": 1,
+      "table_name": "rag_run_history"
+    },
+    {
+      "destructive": false,
+      "name": "20261015_003_run_history_conversation_idx",
+      "sha256": "c3c1f492efc1f5b6ffbab4b23c288f5f282b4181a9150d486a6d1e1203cca757",
+      "statement_count": 1,
+      "table_name": "rag_run_history"
+    },
+    {
+      "destructive": false,
+      "name": "20261015_004_ingestion_job_progress",
+      "sha256": "01a382d45ac48164eb10f810a6050c3bee44d48bb43d7a20576ff5104660985d",
+      "statement_count": 1,
+      "table_name": "rag_ingestion_jobs"
+    },
+    {
+      "destructive": true,
+      "name": "20261016_001_retire_evaluation_compare",
+      "sha256": "b75d16b88319273a7950d5595eb0657354a6cb12da950c522db8a92e41c96388",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20261016_003_document_categories",
+      "sha256": "5bc9e65735aed424fa04b22ee320bd8a3f4231aeed827e40c8dd94808a7fc92f",
+      "statement_count": 1,
+      "table_name": "rag_document_categories"
+    },
+    {
+      "destructive": false,
+      "name": "20261018_001_support_guide_embeddings",
+      "sha256": "655e59f204571bfad92e2b23eaf5e608d88b3003dc829e6d78f00330b561b1f6",
+      "statement_count": 1,
+      "table_name": "rag_support_guide_embeddings"
+    },
+    {
+      "destructive": false,
+      "name": "20261018_002_message_answer_notice",
+      "sha256": "c93cbd8fd15160d2e2316560acd2b086ed4f88801b9986a6b0ee4bb468c18fb0",
+      "statement_count": 1,
+      "table_name": "rag_messages"
+    },
+    {
+      "destructive": false,
+      "name": "20261018_003_answer_record_notice",
+      "sha256": "00c0a955219d3e5dc2415e070be250beef86debdc8f5abeeecbf4b83b4004a0c",
+      "statement_count": 1,
+      "table_name": "rag_answer_records"
+    },
+    {
+      "destructive": false,
+      "name": "20261018_004_support_guide_schema_v2",
+      "sha256": "043e7304e0cb965acbfe529cd738b438609af2b1de98ad551f5c36794c2fca86",
+      "statement_count": 1,
+      "table_name": "rag_support_guides"
+    },
+    {
+      "destructive": false,
+      "name": "20261019_001_restore_document_classification",
+      "sha256": "14195714670bd4e9ab4639a52ec0dd39b571e43a426bd0019767bcf8277424e2",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20261019_002_document_cleanups",
+      "sha256": "c3acb61ae4e92cfca02ef864da0529f9f48f9147fbeef50cca06a9d64c189b5d",
+      "statement_count": 1,
+      "table_name": "rag_document_cleanups"
+    },
+    {
+      "destructive": false,
+      "name": "20261019_003_structured_records_jsonl_profiles",
+      "sha256": "8a4c16a914c24bbeb3207bc6320d5277502be92f2edba0f2aee96f2c595bdf67",
+      "statement_count": 1,
+      "table_name": "rag_document_recipes"
+    },
+    {
+      "destructive": false,
+      "name": "20261019_010_message_attachments",
+      "sha256": "5b52bdfc08be481502299fad9da65ad0b7b845076bbfaaf737e222f11de1da38",
+      "statement_count": 1,
+      "table_name": "rag_messages"
+    },
+    {
+      "destructive": false,
+      "name": "20261021_001_answer_prompt_placeholders",
+      "sha256": "f5d5f67730151c03716f07ba00be67bd22a143a46a5cd46fbd8d8a7b28008157",
+      "statement_count": 1,
+      "table_name": "rag_answer_prompts"
+    },
+    {
+      "destructive": false,
+      "name": "20261021_002_document_delete_fk_indexes",
+      "sha256": "f2a022d87a58f2b8d094cf144a4e78db5d5d41b84f3d4d32aac09506a93879dd",
+      "statement_count": 1,
+      "table_name": "rag_documents"
+    },
+    {
+      "destructive": false,
+      "name": "20261022_001_cited_evidence",
+      "sha256": "55b40a98922272add71b0ba2d2a83c0a996e8b068c77ed6f91aacd8b89a0dfd4",
+      "statement_count": 1,
+      "table_name": "rag_answer_records"
+    },
+    {
+      "destructive": false,
+      "name": "20261026_001_evaluation_calibration",
+      "sha256": "d7e64a9fa6dff654e76a85c2205a9dab1b2aecb16eebfae12c986de7be7b389d",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_label_sets"
+    },
+    {
+      "destructive": false,
+      "name": "20261026_002_evaluation_job_calibration_kind",
+      "sha256": "84f9d16a11369d45caf734c59d24a1a7af4652ca4e759de4acc1713ce70057a3",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_jobs"
+    },
+    {
+      "destructive": false,
+      "name": "20261027_001_raptor_prompt_consolidation",
+      "sha256": "5f48c5f8ba061ec3d3364356d3613f978618f826b5fabd28de51e17a05fd23ca",
+      "statement_count": 2,
+      "table_name": "rag_answer_prompts"
+    },
+    {
+      "destructive": false,
+      "name": "20261028_001_language_pack_releases",
+      "sha256": "e0905d83fd99c2240c5a8a32a485bed2d99faa9c6d8a732f7546d5c80cb987df",
+      "statement_count": 5,
+      "table_name": "rag_language_pack_releases"
+    },
+    {
+      "destructive": false,
+      "name": "20261028_002_language_pack_artifacts",
+      "sha256": "bfd2fdc79a3647b97736eedbbc7fc16c211922b1392b100de66d811d89a3708c",
+      "statement_count": 7,
+      "table_name": "rag_chunk_sets"
+    },
+    {
+      "destructive": true,
+      "name": "20261029_001_retire_query_history",
+      "sha256": "d3e80d6a5f85c9622b8c55e317876d5260d5bfbb893160b1252dadfedf62980b",
+      "statement_count": 1,
+      "table_name": "rag_query_history"
+    }
+  ],
+  "schema_name": "production-ready-rag-oracle-26ai",
+  "schema_version": "3",
+  "sha256": "c3f68e2d5f01d88d5b5d83922db0c7874e329c3f356671c58ae7a538fdf6362e",
+  "statement_count": 124
+}

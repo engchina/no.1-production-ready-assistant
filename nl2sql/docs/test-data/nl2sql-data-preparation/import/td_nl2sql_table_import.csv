@@ -1,0 +1,5 @@
+QUOTE_ID,CUSTOMER_NAME,QUOTE_DATE,AMOUNT,CONFIDENCE,NOTE
+7001,さくら食品株式会社,2026-05-10,1450000,0.92,table import create test
+7002,みなと小売合同会社,2026-05-12,320000,0.81,small customer quote
+7003,関西モーター株式会社,2026-05-20,2500000,0.74,requires manager review
+7004,北海道クリニック,2026-05-22,680000,0.63,public segment quote

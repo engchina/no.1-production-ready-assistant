@@ -1,0 +1,45 @@
+{
+  "data": {
+    "items": [
+      {
+        "owner": "APP",
+        "object_name": "ORDERS",
+        "object_type": "TABLE",
+        "logical_name": "受注",
+        "comment": "顧客からの受注ヘッダー",
+        "row_count": 1280,
+        "column_count": 5,
+        "last_ddl_at": "2026-08-01T00:00:00Z"
+      },
+      {
+        "owner": "APP",
+        "object_name": "CUSTOMERS",
+        "object_type": "TABLE",
+        "logical_name": "顧客",
+        "comment": "顧客マスタ",
+        "row_count": 320,
+        "column_count": 3,
+        "last_ddl_at": "2026-08-01T00:00:00Z"
+      },
+      {
+        "owner": "APP",
+        "object_name": "INVOICES",
+        "object_type": "TABLE",
+        "logical_name": "請求",
+        "comment": "請求・入金状態",
+        "row_count": 980,
+        "column_count": 6,
+        "last_ddl_at": "2026-08-01T00:00:00Z"
+      }
+    ],
+    "next_cursor": null,
+    "total": 3,
+    "table_count": 3,
+    "view_count": 0,
+    "refreshed_at": "2026-08-12T00:00:00Z",
+    "catalog_version": 7
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,149 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   TIER 2 — SEMANTIC TOKENS（意味トークン）
+
+   コンポーネントが参照してよいのはこの層だけ。名前は「役割」であって色ではない。
+   命名規約:  --color-<category>-<role>[-<state>]
+              category = canvas|surface|fg|border|accent|success|warning|danger|info|focus
+
+   テーマ切替は `color-scheme` 一本。light-dark() が各トークンを一度の宣言で
+   両テーマ分解決します（= .dark の全値手書き複製を廃止）。
+
+       <html>                       → ライト（既定）
+       <html class="light">         → ライト（明示。既定と同じ）
+       <html data-theme="dark">     → ダーク
+       <html data-theme="auto">     → OS 設定に追従
+       <html class="dark">          → 旧 API（互換のため維持）
+
+   .light / .dark は既存 3 アプリが使っている旧 API です。新規コードは data-theme を使うこと。
+
+   面のスコープ（TIER 2.5）は下部の [data-surface] を参照。
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root { color-scheme: light; }
+[data-theme="light"], .light { color-scheme: light; }
+[data-theme="dark"], .dark { color-scheme: dark; }
+[data-theme="auto"]  { color-scheme: light dark; }
+
+:root {
+  --font-sans: "Noto Sans JP", "Noto Sans SC", "Noto Sans TC", "Noto Sans HK", "Roboto", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  /* 本文の書体（--font-sans）は、日本語の字形を優先して Noto Sans JP を先頭に置き、JP に無い簡体字・繁体字・
+     香港の字だけを Noto Sans SC → Noto Sans TC → Noto Sans HK で補う（3 製品とも @fontsource で自前ホストする。#3292）。
+     アプリ（packages/ui の tokens）の JP・SC・TC・HK は可変書体の書体名（"Noto Sans JP Variable" など。#3328・#3333）。
+     モックは Google Fonts の書体名（fonts.css）のまま。 */
+  --font-mono: "Google Sans Code", "Noto Sans JP", "Noto Sans SC", "Noto Sans TC", "Noto Sans HK", "Roboto", monospace;
+
+  /* ── 面 (surface) ──────────────────────────────────────────────────────
+     ライトでは「浮き」を影で、ダークでは「浮き」を明るさで表現します。
+     ダークで影が見えないのは物理的事実なので、面の明度を段に持たせるのが標準解。
+        canvas 950 → surface 900 → raised 850 → overlay 800
+     この順序を崩さないこと。 */
+  --color-canvas:           light-dark(var(--neutral-50),  var(--neutral-950));
+  --color-surface:          light-dark(var(--neutral-0),   var(--neutral-900));
+  --color-surface-raised:   light-dark(var(--neutral-0),   var(--neutral-850));  /* popover, dropdown, toast */
+  --color-surface-overlay:  light-dark(var(--neutral-0),   var(--neutral-800));  /* dialog, command palette */
+  --color-surface-sunken:   light-dark(var(--neutral-50),  var(--neutral-950));  /* 表ヘッダ, 入力の窪み */
+  --color-surface-hover:    light-dark(var(--neutral-100), var(--neutral-850));
+  --color-surface-disabled: light-dark(var(--neutral-100), var(--neutral-825));
+
+  /* ── 文字 (foreground) ────────────────────────────────────────────────
+     旧 --muted は「面」に見える名前で文字色だった。fg- 接頭辞で解消。 */
+  --color-fg:          light-dark(var(--neutral-875), var(--neutral-100));
+  --color-fg-muted:    light-dark(var(--neutral-600), var(--neutral-350)); /* 副次テキスト・プレースホルダ。4.5:1 以上 */
+  --color-fg-subtle:   light-dark(var(--neutral-400), var(--neutral-550)); /* 装飾グリフのみ。文章に使わない */
+  --color-fg-disabled: light-dark(var(--neutral-500), var(--neutral-550)); /* 3:1 以上を維持（旧 #9ca3af は 2.5:1 で不可） */
+  --color-fg-on-accent:   var(--neutral-0);
+  --color-fg-on-emphasis: var(--neutral-0);
+
+  /* ── 罫線 (border) ────────────────────────────────────────────────────
+     ★ 最重要の分離: 装飾線と操作要素の輪郭は別物。
+        --color-border          コントラスト要件なし（カード縁・表の罫線）
+        --color-border-control  WCAG 1.4.11 で 3:1 必須（入力・secondary ボタン）
+     旧 --control-border は --border のエイリアスで 1.25:1 ＝不適合だった。 */
+  --color-border:         light-dark(var(--neutral-200), var(--neutral-750));
+  --color-border-strong:  light-dark(var(--neutral-300), var(--neutral-700));
+  --color-border-control: light-dark(var(--neutral-500), var(--neutral-650)); /* 3.10:1 / 3.04:1 */
+
+  /* ── アクセント ───────────────────────────────────────────────────────
+        -fg        canvas 上の文字・アイコン
+        -emphasis  塗り背景
+        -muted     12/20% トーン（押下・選択中）
+        -subtle    8/14% トーン（hover・候補行） */
+  /* アクセントの文字を淡青面に載せるときは -fg-strong（深い同系色）を使う。 */
+  --color-accent-fg:             light-dark(var(--blue-500), var(--blue-400));
+  --color-accent-fg-strong:      light-dark(var(--blue-650), var(--blue-300));
+  --color-accent-emphasis:       light-dark(var(--blue-500), var(--blue-600));
+  --color-accent-emphasis-hover: color-mix(in srgb, var(--color-accent-emphasis) 88%, #000);
+  --color-accent-emphasis-active:color-mix(in srgb, var(--color-accent-emphasis) 76%, #000);
+  --color-accent-muted:  color-mix(in srgb, var(--color-accent-emphasis) light-dark(12%, 22%), var(--color-surface));
+  --color-accent-subtle: color-mix(in srgb, var(--color-accent-emphasis) light-dark(8%, 16%),  var(--color-surface));
+
+  /* ── 状態色 — 4 系統すべてが同じ 4 役割を持つ（今まで役割が系統ごとに欠けていた） */
+  --color-success-fg:       light-dark(var(--green-700), var(--green-300));
+  --color-success-emphasis: light-dark(var(--green-700), var(--green-600));
+  --color-success-subtle:   light-dark(var(--green-200), var(--green-900));
+  --color-success-border:   color-mix(in srgb, var(--color-success-fg) 30%, transparent);
+
+  --color-warning-fg:       light-dark(var(--amber-700), var(--amber-300));
+  --color-warning-emphasis: light-dark(var(--amber-700), var(--amber-700));
+  --color-warning-subtle:   light-dark(var(--amber-200), var(--amber-900));
+  --color-warning-border:   color-mix(in srgb, var(--color-warning-fg) 30%, transparent);
+
+  --color-danger-fg:        light-dark(var(--red-700), var(--red-300));
+  --color-danger-emphasis:  light-dark(var(--red-700), var(--red-600));
+  --color-danger-subtle:    light-dark(var(--red-200), var(--red-900));
+  --color-danger-border:    color-mix(in srgb, var(--color-danger-fg) 30%, transparent);
+
+  /* info はアクセントと同一色相。管理コンソールで「情報」と「主要操作」は
+     同じ中立的シグナルなので、別の青を使うとユーザーには単なるブレに見えます。
+     文字は淡青面上で 4.5:1 を満たす深い同系色（--blue-650）を使います。 */
+  --color-info-fg:          light-dark(var(--blue-650), var(--blue-450));
+  --color-info-emphasis:    light-dark(var(--blue-500), var(--blue-600));
+  --color-info-subtle:      light-dark(var(--blue-100), var(--blue-800));
+  --color-info-border:      color-mix(in srgb, var(--color-info-fg) 30%, transparent);
+
+  /* ── フォーカス ───────────────────────────────────────────────────────
+     暗い面の上では [data-surface] 側で明るいリングに差し替わります。 */
+  --color-focus-ring: light-dark(var(--blue-500), var(--blue-300));
+
+  /* ── 常時暗いスラブの地の色（テーマで濃さだけ変わる） */
+  --color-sidebar:      light-dark(var(--blue-850), var(--neutral-1000));
+  --color-code-canvas:  var(--blue-900);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TIER 2.5 — SURFACE SCOPES（面コンテキスト）
+
+   この design system には色文脈が 3 つある（ライト面・ダーク面・常時暗いスラブ）
+   のに、テーマスコープは 2 つしかなかった。だからサイドバーが #ffffff 直書きに
+   なっていた。スコープを宣言すれば、同じコンポーネントが文脈を跨いで動きます:
+
+       <aside data-surface="inverted"> の中の <Button variant="secondary"> は
+       追加コード 0 行で暗い面用の見た目になる。
+
+   color-scheme: dark を併せて指定しているので、この内側では light-dark() が
+   すべてダーク値を返します（＝未上書きのトークンも自動的に正しくなる）。
+   ───────────────────────────────────────────────────────────────────────── */
+[data-surface="inverted"] {
+  color-scheme: dark;
+  --color-canvas:  var(--color-sidebar);
+  --color-surface: var(--color-sidebar);
+  --color-surface-hover: rgb(255 255 255 / 0.10);
+  --color-fg:        var(--slab-fg);
+  --color-fg-muted:  var(--slab-fg-muted);
+  --color-fg-subtle: color-mix(in srgb, var(--slab-fg-muted) 70%, transparent);
+  --color-border:         rgb(255 255 255 / 0.12);
+  --color-border-strong:  rgb(255 255 255 / 0.20);
+  --color-border-control: rgb(255 255 255 / 0.28);
+  --color-accent-emphasis: light-dark(var(--blue-500), var(--blue-600));
+  --color-focus-ring: var(--blue-300); /* 暗紺地の上で #1a73c1 は 1.9:1 ＝不可視だった */
+}
+
+[data-surface="code"] {
+  color-scheme: dark;
+  --color-canvas:  var(--color-code-canvas);
+  --color-surface: var(--color-code-canvas);
+  --color-fg:       var(--slab-code-fg);
+  --color-fg-muted: color-mix(in srgb, var(--slab-code-fg) 65%, transparent);
+  --color-border:   rgb(255 255 255 / 0.10);
+  --color-focus-ring: var(--blue-300);
+}

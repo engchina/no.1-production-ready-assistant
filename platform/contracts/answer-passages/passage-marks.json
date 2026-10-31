@@ -1,0 +1,76 @@
+{
+  "description": "回答の段落の印の契約（#2738）。回答の検証で、根拠と矛盾する段落（contradicted）だけを本文から外し、確かめられない段落は本文に残して印（unverified）を、決定的な規則の検査は警告（warning）を付ける。RAG（rag_engine・rag/backend・MCP rag_search）と Agent（answer_validation・MCP agent_chat）が回答ごとに passage_marks・removed_passages・answer_warnings を返し、共有 UI と 2 つの frontend が描く。3 者のテストがこのファイルを読む。正本は構造化した記録で、本文の文字列に印の記号を埋め込まない。text は回答の本文の段落の原文（段落の照合に使う）。1 段落に理由が複数あれば reasons に並べ、state は unverified を warning より優先する。label は利用者に見せる短い日本語で、backend が返す文をそのまま出す。",
+  "states": ["unverified", "warning"],
+  "reason_codes": {
+    "unsupported": {"kind": "passage", "state": "unverified", "label": "根拠で確かめられない"},
+    "citation_error": {"kind": "passage", "state": "unverified", "label": "出典を確かめられない"},
+    "quote_unmatched": {"kind": "passage", "state": "unverified", "label": "引用の原文が根拠に見当たらない"},
+    "citation_id_invalid": {"kind": "passage", "state": "unverified", "label": "引用先の根拠 ID が無効"},
+    "citation_id_ambiguous": {"kind": "passage", "state": "unverified", "label": "引用先の根拠 ID が複数ある"},
+    "citation_range_missing": {"kind": "passage", "state": "unverified", "label": "引用する行の範囲が未指定"},
+    "citation_range_invalid": {"kind": "passage", "state": "unverified", "label": "引用する行の範囲が無効"},
+    "citation_range_out_of_bounds": {"kind": "passage", "state": "unverified", "label": "引用行が根拠の範囲外"},
+    "citation_extraction_failed": {"kind": "passage", "state": "unverified", "label": "引用原文を抽出できない"},
+    "citation_heading_only": {"kind": "passage", "state": "unverified", "label": "引用した範囲が見出しだけ"},
+    "citation_id_namespace": {"kind": "passage", "state": "unverified", "label": "ガイドIDは資料根拠でない"},
+    "citation_content_unusable": {"kind": "passage", "state": "unverified", "label": "引用が区切り線・書式のみ"},
+    "citation_version_mismatch": {"kind": "passage", "state": "unverified", "label": "引用元の版を確認できない"},
+    "unassessed": {"kind": "passage", "state": "unverified", "label": "確かめが終わっていない"},
+    "figure_not_read": {"kind": "passage", "state": "unverified", "label": "図の画像を読めておらず確かめられない"},
+    "target_mismatch": {"kind": "passage", "state": "warning", "label": "根拠は別の対象についての記載"},
+    "value_unbound": {"kind": "passage", "state": "warning", "label": "根拠の表の対応と違う可能性"},
+    "table_corrected": {"kind": "passage", "state": "warning", "label": "根拠の表の値に直した"},
+    "item_check": {"kind": "passage", "state": "warning", "label": "システムの検査で注意が必要"},
+    "superseded": {"kind": "passage", "state": "warning", "label": "旧版・廃止の資料に基づく"},
+    "after_contradicted_step": {"kind": "passage", "state": "warning", "label": "前の手順が根拠と矛盾"},
+    "after_unverified_step": {"kind": "passage", "state": "warning", "label": "前提の手順が未確認"},
+    "summary_unaudited": {"kind": "passage", "state": "warning", "label": "要約を根拠で確かめていない"},
+    "application_unaudited": {"kind": "passage", "state": "warning", "label": "条件への当てはめを確かめていない"},
+    "guide_text": {"kind": "passage", "state": "unverified", "label": "資料に無い業務ガイドの文"},
+    "contradicted": {"kind": "removed", "label": "根拠と矛盾"},
+    "guide_check": {"kind": "answer", "label": "業務ガイドの手順の確認で問題が見つかった"},
+    "no_evidence": {"kind": "answer", "label": "根拠を読めず、すべての段落が未確認"},
+    "off_goal": {"kind": "answer", "label": "質問からずれている可能性"},
+    "requests": {"kind": "answer", "label": "質問の要求の一部に答えていない"},
+    "correction_failed": {"kind": "answer", "label": "回答の作り直しに失敗し、前の回答を示している"}
+  },
+  "examples": [
+    {
+      "id": "keep-unverified-remove-contradicted",
+      "note": "合成の回答。矛盾の段落だけを外し、根拠に無い段落は残して印を付ける。監査の理由だけが根拠の表と違う対応を述べた段落は警告にする（段落が表の対応を取り違えたら、矛盾として外し理由に表の正しい対応を書く）。",
+      "answer": "設定は 2 段階で変更します。\n\n1. 対象の行の終了日を入力します【証拠 1】。\n2. 新しい開始日の行を追加します【証拠 2】。\n\n変更は翌月から反映されます。\n\n単価は 254・253・300 のいずれかです【証拠 3】。",
+      "published": "設定は 2 段階で変更します。\n\n1. 対象の行の終了日を入力します【証拠 1】。\n2. 新しい開始日の行を追加します【証拠 2】。\n\n単価は 254・253・300 のいずれかです【証拠 3】。",
+      "passage_marks": [
+        {
+          "text": "単価は 254・253・300 のいずれかです【証拠 3】。",
+          "state": "warning",
+          "reasons": [{"code": "value_unbound", "label": "根拠の表の対応と違う可能性", "detail": "監査の理由が、根拠の表と違う対応（値『253』を『項目甲』の値としています）を述べています。"}]
+        }
+      ],
+      "removed_passages": [
+        {
+          "text": "変更は翌月から反映されます。",
+          "reasons": [{"code": "contradicted", "label": "根拠と矛盾", "detail": "根拠では当月から反映されると記載されています。"}]
+        }
+      ],
+      "answer_warnings": []
+    },
+    {
+      "id": "guide-error-keeps-body",
+      "note": "合成の回答。業務ガイドの手順の error でも本文を残し、回答全体の警告を出す。根拠に無い段落は残して印を付ける。",
+      "answer": "画面で対象を開き、値を上書きして登録します【証拠 1】。\n\n登録後は自動で通知されます。",
+      "published": "画面で対象を開き、値を上書きして登録します【証拠 1】。\n\n登録後は自動で通知されます。",
+      "passage_marks": [
+        {
+          "text": "登録後は自動で通知されます。",
+          "state": "unverified",
+          "reasons": [{"code": "unsupported", "label": "根拠で確かめられない", "detail": ""}]
+        }
+      ],
+      "removed_passages": [],
+      "answer_warnings": [
+        {"code": "guide_check", "label": "業務ガイドの手順の確認で問題が見つかった", "detail": "必須の手順『終了日の入力』の説明がありません。"}
+      ]
+    }
+  ]
+}

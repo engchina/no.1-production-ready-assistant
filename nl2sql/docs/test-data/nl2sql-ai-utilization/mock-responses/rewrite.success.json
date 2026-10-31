@@ -1,0 +1,11 @@
+{
+  "data": {
+    "original_question": "今月の売上を確認したい",
+    "rewritten_question": "今月の売上を確認したい（売上=SALES_AMOUNT）",
+    "source": "deterministic",
+    "model": "",
+    "warnings": []
+  },
+  "error_messages": [],
+  "warning_messages": []
+}

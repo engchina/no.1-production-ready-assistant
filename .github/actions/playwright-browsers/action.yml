@@ -1,0 +1,83 @@
+name: Install Playwright browsers
+description: >-
+  Playwright の chromium（headless shell）を ~/.cache/ms-playwright にキャッシュする。key は Playwright の版。
+  hit したら OS の依存だけを入れる（#339）。保存は main だけで、PR は復元だけにする（#1589）。
+  OS の依存は入っていない package だけを、時間の上限と retry を付けた apt で入れ、取得した .deb もキャッシュする（#3489）。
+
+inputs:
+  working-directory:
+    description: "@playwright/test を npm ci 済みの frontend のディレクトリ（例: rag/frontend）"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # image: runner の image（ImageOS・ImageVersion。GitHub の runner が設定する）。.deb の cache の key に使う。
+    - name: Resolve Playwright version
+      id: version
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        echo "image-os=${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
+        echo "image-version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Playwright browsers
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.version.outputs.version }}-chromium-shell
+
+    # OS の依存の .deb（約 20 MB）。apt の mirror が遅いと数 MB の取得に数分かかり、E2E smoke が時間切れで
+    # 取り消された（#3474・#3484・#3486）。image が変わったら、前の image の .deb を復元して版が合うものだけを使う。
+    - name: Restore OS dependency packages
+      id: apt-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/playwright-apt
+        key: >-
+          playwright-apt-${{ runner.os }}-${{ steps.version.outputs.image-os }}-${{ steps.version.outputs.image-version }}-${{ steps.version.outputs.version }}
+        restore-keys: |
+          playwright-apt-${{ runner.os }}-${{ steps.version.outputs.image-os }}-
+
+    # headless の実行は chromium-headless-shell だけを使う（headed / channel 指定の spec は無い）。
+    # OS の依存は次の step で入れる（cache の hit と同じ手順。install.sh の冒頭）。
+    - name: Install browsers
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh" browsers
+
+    # PR（Playwright の版を上げる Dependabot 等）が保存すると、cache が PR の範囲に残って main の cache を追い出す
+    # （PR の範囲の Playwright の cache が約 540 MB あった。#1589）。PR は main の cache が無ければ取得し直す。
+    - name: Save Playwright browsers
+      if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.version.outputs.version }}-chromium-shell
+
+    # Playwright が求める package のうち、入っていないものだけを入れる（入っているものは upgrade しない）。
+    # 全体で 300 秒を超えたら、遅い mirror であることを示して失敗する（job の時間切れまで待たない）。
+    - name: Install OS dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh" os-deps
+
+    # 保存は main だけ（#1589 と同じ）。key が一致して復元できたときは保存しない。
+    - name: Collect OS dependency packages
+      id: apt-collect
+      if: github.ref == 'refs/heads/main' && steps.apt-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/install.sh" collect-debs
+
+    - name: Save OS dependency packages
+      if: >-
+        github.ref == 'refs/heads/main' && steps.apt-cache.outputs.cache-hit != 'true'
+        && steps.apt-collect.outputs.count != '0'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/playwright-apt
+        key: >-
+          playwright-apt-${{ runner.os }}-${{ steps.version.outputs.image-os }}-${{ steps.version.outputs.image-version }}-${{ steps.version.outputs.version }}

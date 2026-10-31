@@ -1,0 +1,53 @@
+name: CodeQL
+
+# コードの静的解析（CodeQL の advanced setup。#1594）。PR の時間を増やさないため、PR では実行せず、
+# 毎週の schedule と手動だけで main を解析する。結果は Security > Code scanning に出る（PR の check にはしない）。
+# 対象は monorepo の全体の python・javascript-typescript（3 製品と platform の backend / frontend）と actions（workflow）。
+# build は要らない（build-mode: none）。default setup（repo の設定）とは併用できないので、有効にしない。
+# 失敗（解析の失敗。指摘の有無ではない）は ci-failure-issue.yml が Issue にする。
+
+on:
+  schedule:
+    - cron: "41 19 * * 0" # 月曜 04:41 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    # job 名の "Suite / " は ci-failure-issue.yml が Issue の label（platform）を決めるのに使う。
+    name: Suite / CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # 解析の結果（SARIF）の upload
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - python
+          - javascript-typescript
+          - actions
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}

@@ -1,0 +1,27 @@
+[project]
+name = "rag-pipeline-core"
+version = "0.1.0"
+description = "Deterministic pipeline-stage logic shared by the RAG backend"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.11",
+    "rag-parser-core",
+]
+
+[tool.uv.sources]
+rag-parser-core = { path = "../rag_parser_core", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rag_pipeline_core"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -1,0 +1,356 @@
+{
+  "health": {
+    "status": "ok",
+    "version": "0.1.0",
+    "message": null,
+    "checks": {}
+  },
+  "agents": [
+    {
+      "id": "default",
+      "name": "資料・データ横断アシスタント",
+      "description": "社内の資料（業務 RAG）と業務データ（NL2SQL）を、問いに合わせて使い分けて調べる既定の業務 Agent。",
+      "instructions": "問いと途中の結果から、資料の根拠と業務データの値のどちらが要るかを判断してツールを呼ぶ。根拠と監査情報を残す。",
+      "skill_ids": [
+        "rag-and-structured-data",
+        "business-rag-research",
+        "structured-data-query"
+      ],
+      "model_id": "",
+      "enabled": true,
+      "source": "builtin",
+      "versioned": true,
+      "versions": [
+        {
+          "version": 1,
+          "name": "資料・データ横断アシスタント",
+          "description": "社内の資料（業務 RAG）と業務データ（NL2SQL）を、問いに合わせて使い分けて調べる既定の業務 Agent。",
+          "instructions": "問いと途中の結果から、資料の根拠と業務データの値のどちらが要るかを判断してツールを呼ぶ。根拠と監査情報を残す。",
+          "skill_ids": [
+            "rag-and-structured-data",
+            "business-rag-research",
+            "structured-data-query"
+          ],
+          "model_id": "",
+          "note": "版の導入（#770）の前の内容",
+          "published_at": "2026-06-28T00:00:00Z",
+          "published_by": null
+        }
+      ],
+      "published_version": 1,
+      "created_at": "2026-06-28T00:00:00Z",
+      "updated_at": "2026-06-28T00:00:00Z",
+      "unpublished_changes": false
+    },
+    {
+      "id": "rag-research",
+      "name": "資料調査アシスタント",
+      "description": "社内の資料（業務 RAG）を調べ、根拠の文書と場所を示して答える業務 Agent。",
+      "instructions": "資料の根拠に基づいて答え、根拠の文書名と場所を示す。",
+      "skill_ids": [
+        "business-rag-research"
+      ],
+      "model_id": "",
+      "enabled": true,
+      "source": "builtin",
+      "versioned": true,
+      "versions": [
+        {
+          "version": 1,
+          "name": "資料調査アシスタント",
+          "description": "社内の資料（業務 RAG）を調べ、根拠の文書と場所を示して答える業務 Agent。",
+          "instructions": "資料の根拠に基づいて答え、根拠の文書名と場所を示す。",
+          "skill_ids": [
+            "business-rag-research"
+          ],
+          "model_id": "",
+          "note": "版の導入（#770）の前の内容",
+          "published_at": "2026-06-28T00:00:01Z",
+          "published_by": null
+        }
+      ],
+      "published_version": 1,
+      "created_at": "2026-06-28T00:00:01Z",
+      "updated_at": "2026-06-28T00:00:01Z",
+      "unpublished_changes": false
+    },
+    {
+      "id": "data-query",
+      "name": "データ照会アシスタント",
+      "description": "業務データ（NL2SQL）を照会し、集計の条件と結果を示して答える業務 Agent。",
+      "instructions": "業務データの照会の結果に基づいて答え、集計の条件（期間・対象）を示す。",
+      "skill_ids": [
+        "structured-data-query"
+      ],
+      "model_id": "",
+      "enabled": true,
+      "source": "builtin",
+      "versioned": true,
+      "versions": [
+        {
+          "version": 1,
+          "name": "データ照会アシスタント",
+          "description": "業務データ（NL2SQL）を照会し、集計の条件と結果を示して答える業務 Agent。",
+          "instructions": "業務データの照会の結果に基づいて答え、集計の条件（期間・対象）を示す。",
+          "skill_ids": [
+            "structured-data-query"
+          ],
+          "model_id": "",
+          "note": "版の導入（#770）の前の内容",
+          "published_at": "2026-06-28T00:00:02Z",
+          "published_by": null
+        }
+      ],
+      "published_version": 1,
+      "created_at": "2026-06-28T00:00:02Z",
+      "updated_at": "2026-06-28T00:00:02Z",
+      "unpublished_changes": false
+    }
+  ],
+  "skills": [
+    {
+      "id": "business-rag-research",
+      "name": "業務 RAG 調査",
+      "description": "業務 RAG（MCP 接続 rag）を使って根拠付き情報を検索する。",
+      "instructions": "利用者の目的を `rag_search` の `query` として扱い、根拠（evidence）に基づいて答える。\n\n## 使う MCP ツール\n\n- MCP サーバー `rag`: `rag_search`・`rag_list_search_answer_profiles`\n\n## 手順\n\n### Step 1: 検索の前に確かめる\n\n- 対象の検索・回答プロファイルが分からなければ `rag_list_search_answer_profiles` で確かめる。\n- 次へ進む:\n  - 複数の根拠をつないで初めて答えられる質問（多段の質問）→ Step 2\n  - それ以外 → Step 3\n\n### Step 2: 多段の質問を段に分ける\n\n答えに要る事実を段に分け、前の段の答えが次の段の検索の語になる順に並べる。\n\n### Step 3: `rag_search` で答えを得る\n\n`rag_search` を呼び、`outcome` で答え方を決める（「結果ごとの対応」）。\n\n## 結果ごとの対応\n\n`rag_search` の `outcome`:\n\n- `answered`: 根拠に沿って答える。\n- `needs_clarification`: `clarifications` の問いを利用者にそのまま確かめ、推測で選ばない。\n  1. 答えを得たら `conditions`（条件の id → 値）に入れる。\n  2. `rag_search` を呼び直す。",
+      "mcp_requirements": [
+        {
+          "server_id": "rag",
+          "tool_names": [
+            "rag_search",
+            "rag_list_search_answer_profiles"
+          ]
+        }
+      ],
+      "enabled": true,
+      "tags": [
+        "rag",
+        "research",
+        "business-data"
+      ],
+      "source": "builtin",
+      "created_at": "2026-06-28T00:00:00Z",
+      "updated_at": "2026-06-28T00:00:00Z",
+      "references": []
+    },
+    {
+      "id": "structured-data-query",
+      "name": "構造化データ照会",
+      "description": "NL2SQL（MCP 接続 nl2sql）へ質問を渡して表形式の結果を取得する。",
+      "instructions": "SQL は監査・説明用途として受け取り、この Runtime 内では実行しない。業務プロファイルが分からなければ nl2sql_recommend_profile で選ぶ。結果の status が pending / running なら nl2sql_get_job で続きを取る。",
+      "mcp_requirements": [
+        {
+          "server_id": "nl2sql",
+          "tool_names": [
+            "nl2sql_query",
+            "nl2sql_get_job",
+            "nl2sql_list_profiles",
+            "nl2sql_recommend_profile"
+          ]
+        }
+      ],
+      "enabled": true,
+      "tags": [
+        "nl2sql",
+        "structured-data",
+        "audit-sql"
+      ],
+      "source": "builtin",
+      "created_at": "2026-06-28T00:00:00Z",
+      "updated_at": "2026-06-28T00:00:00Z",
+      "references": []
+    },
+    {
+      "id": "rag-and-structured-data",
+      "name": "資料とデータの横断調査",
+      "description": "業務 RAG（資料）と NL2SQL（業務データ）のどちらを使うかをその都度判断し、順序を決めずに繰り返し使って調べる。",
+      "instructions": "ツールを呼ぶ順序は決めない。資料の根拠が要るなら rag_search を、業務データの値が要るなら nl2sql_query を呼び、答えに要る根拠がそろったら答える。",
+      "mcp_requirements": [
+        {
+          "server_id": "rag",
+          "tool_names": [
+            "rag_search"
+          ]
+        },
+        {
+          "server_id": "nl2sql",
+          "tool_names": [
+            "nl2sql_query",
+            "nl2sql_get_job"
+          ]
+        }
+      ],
+      "enabled": true,
+      "tags": [
+        "rag",
+        "nl2sql",
+        "business-data"
+      ],
+      "source": "builtin",
+      "created_at": "2026-06-28T00:00:00Z",
+      "updated_at": "2026-06-28T00:00:00Z",
+      "references": []
+    }
+  ],
+  "tools": [
+    {
+      "name": "echo",
+      "description": "入力をそのまま返す疎通確認用ツール。",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "permission_level": "read",
+      "side_effects": false,
+      "timeout_seconds": 10.0,
+      "max_retries": 0,
+      "audit_tags": [
+        "debug"
+      ]
+    }
+  ],
+  "tracePolicy": {
+    "trace_events_enabled": true,
+    "trace_events_buffer_size": 500,
+    "trace_events_retention_seconds": 86400,
+    "trace_sample_rate": 1.0
+  },
+  "toolPolicy": {
+    "default_mode": "approval",
+    "allow": [],
+    "ask": [],
+    "deny": []
+  },
+  "modelSettings": {
+    "settings": {
+      "enterprise_ai": {
+        "connections": [
+          {
+            "connection_id": "primary",
+            "endpoint": "",
+            "project_ocid": "",
+            "api_key": "",
+            "has_api_key": false,
+            "clear_api_key": false
+          }
+        ],
+        "models": [
+          {
+            "model_id": "enterprise-llm",
+            "display_name": "業務 RAG 標準",
+            "vision_enabled": true,
+            "connection_id": "primary",
+            "max_output_tokens": 32768
+          }
+        ],
+        "default_text_model_id": "enterprise-llm",
+        "default_vision_model_id": "enterprise-llm",
+        "api_path": "/responses",
+        "vlm_input_mode": "auto",
+        "text_payload_template": "",
+        "vision_payload_template": "",
+        "text_response_path": "",
+        "vision_response_path": "",
+        "timeout_seconds": 600.0,
+        "max_retries": 3
+      },
+      "generative_ai": {
+        "embedding_model": "cohere.embed-v4.0",
+        "embedding_dim": 1536,
+        "rerank_model": "cohere.rerank-v4.0-fast"
+      }
+    },
+    "model_settings_file": "model-settings.json",
+    "source": "runtime",
+    "secret_source": "missing",
+    "legacy_secret_detected": false
+  },
+  "databaseSettings": {
+    "user": "",
+    "dsn": "",
+    "wallet_dir": "/u01/aipoc/instantclient_23_26/network/admin",
+    "wallet_uploaded": false,
+    "available_services": [],
+    "has_password": false,
+    "has_wallet_password": false,
+    "readiness": "missing",
+    "embedding_dimension": 1536,
+    "vector_column": "VECTOR(1536, FLOAT32)",
+    "adb_ocid": "",
+    "region": "",
+    "config_source": "runtime"
+  },
+  "adbInfo": {
+    "status": "not_configured",
+    "message": "ADB OCID が未設定です。",
+    "id": null,
+    "display_name": null,
+    "lifecycle_state": null,
+    "db_name": null,
+    "cpu_core_count": null,
+    "data_storage_size_in_tbs": null,
+    "region": null
+  },
+  "uploadStorage": {
+    "backend": "local",
+    "local_storage_dir": "/u01/data/production-ready-agent",
+    "object_storage_region": "",
+    "object_storage_namespace": "",
+    "object_storage_bucket": "",
+    "readiness": "ok",
+    "max_upload_bytes": 104857600,
+    "config_source": "runtime"
+  },
+  "ociSettings": {
+    "config_file": "~/.oci/config",
+    "profile": "DEFAULT",
+    "user": "",
+    "fingerprint": "",
+    "tenancy": "",
+    "region": "",
+    "key_file": "~/.oci/oci_api_key.pem",
+    "key_file_exists": false,
+    "config_file_exists": false,
+    "config_source": "runtime"
+  },
+  "mcpConnections": {
+    "connections": [
+      {
+        "server_id": "nl2sql",
+        "label": "データ問い合わせ（NL2SQL）",
+        "base_url": null,
+        "auth_mode": "service_token",
+        "service_audience": "nl2sql",
+        "timeout_seconds": 60.0,
+        "source": "builtin",
+        "removable": false,
+        "base_url_locked": false,
+        "configured": false,
+        "api_key_configured": false,
+        "oauth_configured": false,
+        "session_configured": false,
+        "service_token_configured": false
+      },
+      {
+        "server_id": "rag",
+        "label": "ナレッジ検索（RAG）",
+        "base_url": null,
+        "auth_mode": "service_token",
+        "service_audience": "rag",
+        "timeout_seconds": 60.0,
+        "source": "builtin",
+        "removable": false,
+        "base_url_locked": false,
+        "configured": false,
+        "api_key_configured": false,
+        "oauth_configured": false,
+        "session_configured": false,
+        "service_token_configured": false
+      }
+    ]
+  }
+}

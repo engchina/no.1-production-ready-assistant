@@ -1,0 +1,45 @@
+# --- frontend ---
+node_modules
+frontend/node_modules
+frontend/dist/
+frontend/.deploy-update-*/
+frontend/.dist-backup-*/
+frontend/.dist-failed-*/
+
+# --- backend (Python/uv) ---
+backend/.venv
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# --- local secrets / environment ---
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# --- test artifacts ---
+backend/reports/
+frontend/test-results/
+/test-results/
+frontend/playwright-report/
+playwright-report/
+/dist/
+
+# --- local runtime settings ---
+backend/model-settings.json
+
+*.log
+.DS_Store
+
+# --- local agent worktrees ---
+.claude/worktrees/
+.learnings/
+
+# --- local reference sources / internal source material ---
+/DataClaw-main/
+/docs/Oracle AI Database 26ai for AgenticApps_v3_internal_deep_data_security.pptx

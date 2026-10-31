@@ -1,0 +1,20 @@
+{
+  "data": {
+    "status": "success",
+    "target_type": "enterprise_text",
+    "model_id": "enterprise-nl2sql-llm",
+    "message": "enterprise-nl2sql-llm の設定を確認しました。",
+    "troubleshooting": [],
+    "raw_error": null,
+    "error_type": null,
+    "elapsed_ms": 12,
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "details": {
+      "network_call": false,
+      "embedding_dim": 1536
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

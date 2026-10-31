@@ -1,0 +1,79 @@
+{
+  "data": {
+    "status": "missing",
+    "schema_head": 17,
+    "applied_versions": [],
+    "pending_versions": [
+      0,
+      1,
+      2,
+      3,
+      5,
+      6,
+      7,
+      8,
+      9,
+      15,
+      17
+    ],
+    "expected_object_count": 51,
+    "existing_object_count": 0,
+    "expected_table_count": 27,
+    "existing_table_count": 0,
+    "missing_objects": [
+      {
+        "name": "NL2SQL_PROFILES",
+        "object_type": "TABLE"
+      },
+      {
+        "name": "IX_NL2SQL_PROFILES_LIST",
+        "object_type": "INDEX"
+      }
+    ],
+    "objects": [
+      {
+        "name": "NL2SQL_PROFILES",
+        "object_type": "TABLE",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      },
+      {
+        "name": "IX_NL2SQL_PROFILES_LIST",
+        "object_type": "INDEX",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      },
+      {
+        "name": "NL2SQL_MIGRATION_SNAPSHOT_SEQ",
+        "object_type": "SEQUENCE",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      }
+    ],
+    "tables": [
+      {
+        "name": "NL2SQL_PROFILES",
+        "exists": false,
+        "estimated_rows": null,
+        "created_at": null,
+        "last_analyzed_at": null
+      }
+    ],
+    "operation_state": {
+      "status": "idle",
+      "operation_kind": null,
+      "lease_expires_at": null,
+      "last_error_code": null,
+      "schema_epoch": 0,
+      "updated_at": null
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}

@@ -1,0 +1,30 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
+.ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
+.grid{display:grid;gap:8px}
+.sw{height:40px;border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.n{display:block;margin-top:5px;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg)}
+.v{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted)}
+table{border-collapse:collapse;width:100%;font:var(--text-meta)}
+td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--color-border);vertical-align:top}
+th{color:var(--color-fg-muted);font-weight:600}
+code{font-family:var(--font-mono);font-size:0.95em}
+</style></head><body>
+<div class="pair">
+<div class="pane" data-theme="light"><span class="ph">light</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-success-subtle);color:var(--color-success-fg);border-color:var(--color-success-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">成功</div><span class="n">success</span><span class="v">4.9:1</span></div>
+<div><div class="sw" style="background:var(--color-warning-subtle);color:var(--color-warning-fg);border-color:var(--color-warning-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">警告</div><span class="n">warning</span><span class="v">4.5:1</span></div>
+<div><div class="sw" style="background:var(--color-danger-subtle);color:var(--color-danger-fg);border-color:var(--color-danger-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">エラー</div><span class="n">danger</span><span class="v">5.4:1</span></div>
+<div><div class="sw" style="background:var(--color-info-subtle);color:var(--color-info-fg);border-color:var(--color-info-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">情報</div><span class="n">info</span><span class="v">5.4:1</span></div></div></div>
+<div class="pane" data-theme="dark"><span class="ph">dark</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-success-subtle);color:var(--color-success-fg);border-color:var(--color-success-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">成功</div><span class="n">success</span><span class="v">7.3:1</span></div>
+<div><div class="sw" style="background:var(--color-warning-subtle);color:var(--color-warning-fg);border-color:var(--color-warning-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">警告</div><span class="n">warning</span><span class="v">8.4:1</span></div>
+<div><div class="sw" style="background:var(--color-danger-subtle);color:var(--color-danger-fg);border-color:var(--color-danger-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">エラー</div><span class="n">danger</span><span class="v">5.9:1</span></div>
+<div><div class="sw" style="background:var(--color-info-subtle);color:var(--color-info-fg);border-color:var(--color-info-border);display:flex;align-items:center;justify-content:center;font:var(--text-label)">情報</div><span class="n">info</span><span class="v">6.3:1</span></div></div></div>
+</div>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0">4 系統すべてが同じ 4 役割を持ちます：<code>-fg</code>（文字・アイコン）<code>-emphasis</code>（塗り）<code>-subtle</code>（淡い面）<code>-border</code>（輪郭）。状態色は<b>語やアイコンに添える</b>もので、面を塗り分けるためのものではありません。色だけで状態を表さないこと。</p>
+</body></html>

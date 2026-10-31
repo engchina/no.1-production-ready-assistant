@@ -1,0 +1,89 @@
+[project]
+name = "production-ready-agent-backend"
+version = "0.1.0"
+description = "FastAPI backend service built on production-ready-backend-core."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.121,<1.0",
+  "starlette>=1.0.1,<2.0",
+  "uvicorn[standard]>=0.37",
+  "gunicorn>=23,<24",
+  "pydantic>=2.11",
+  "pydantic-settings>=2.7",
+  "python-dotenv>=1.1",
+  "httpx==0.28.1",
+  "python-json-logger>=4.0",
+  "prometheus-client>=0.24",
+  "oci>=2.168",
+  "oracledb>=3.4",
+  "pyyaml>=6.0",
+  "production-ready-backend-core",
+  "production-ready-system-settings-backend",
+  "openai-agents==0.24.0",
+  # 品質評価の評価セットの Excel の取り込み・書き出し（NL2SQL と同じ。#776）。
+  "openpyxl>=3.1",
+  # ツールの引数を input schema で検証する（#2630）。openai-agents → mcp が既に使う版を直接の依存に
+  # する（新しい package は入れない）。
+  "jsonschema>=4.26,<5",
+  "referencing>=0.37",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.25",
+  "pytest-cov>=6.0",
+  "pytest-xdist>=3.8",
+  "pytest-timeout>=2.3",
+  "ruff>=0.9",
+  "mypy>=1.14",
+  "bandit>=1.8",
+  "pip-audit>=2.9",
+  "types-PyYAML>=6.0",
+  "skills-ref>=0.1.1",
+]
+
+[tool.uv.sources]
+# テンプレを <app>/backend へ展開したときの相対パス。
+production-ready-backend-core = { path = "../../platform/packages/backend_core", editable = true }
+production-ready-system-settings-backend = { path = "../../platform/packages/system_settings_backend", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# 整形（#345）。black と同じ既定（二重引用符・空白の字下げ・magic trailing comma を尊重）にそろえる。
+# 行の長さは [tool.ruff] の line-length を共有する。
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# jsonschema は型の stub を同梱しない（stub の package は入れない。#2630）。
+module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+# 1 つのテストが止まったら 120 秒で失敗にし、stack を出す（pytest-timeout。#1591）。job の上限（15 分）まで
+# 待たない。遅いテストは `@pytest.mark.timeout(<秒>)` で個別に延ばす。
+timeout = 120

@@ -1,0 +1,117 @@
+/*
+ * @production-ready/ui — 共有デザイントークン（エントリ）
+ *
+ * No.1 Production Ready 製品群（RAG / NL2SQL / Agent）で共通の
+ * 日本語第一タイポグラフィ・semantic 状態色・shadcn/ui テーマトークン。
+ *
+ * 使い方（各アプリの globals.css）:
+ *   @import "tailwindcss";
+ *   @import "@production-ready/ui/tokens.css";
+ *   @source "../node_modules/@production-ready/ui/dist";
+ *
+ * `@import "tailwindcss"` はアプリ側が持つ（このファイルには含めない）。
+ * `@source` でこのパッケージの dist を Tailwind v4 のスキャン対象に加え、
+ * 共有コンポーネントが使う utility クラスを確実に生成させる。
+ *
+ * 層（tokens/ 配下）:
+ *   TIER 1   palette.css   原色。コンポーネントから参照禁止
+ *   TIER 2   colors.css    意味トークン（--color-*）+ [data-surface] スコープ
+ *   a11y.css               forced-colors / prefers-contrast。base の規則も上書きするので後ろ
+ *
+ * テーマ: <html class="dark"> / data-theme="dark" | "light" | "auto"（color-scheme + light-dark()）。
+ */
+
+@import "./tokens/palette.css";
+@import "./tokens/colors.css";
+@import "./tokens/colors-graph.css";
+@import "./tokens/fonts.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/radius.css";
+@import "./tokens/elevation.css";
+@import "./tokens/motion.css";
+@import "./tokens/base.css";
+@import "./tokens/a11y.css";
+
+/* 共有コンポーネントの構造 CSS（utility で表せない grid 配置・::before 等）。 */
+@import "./structure/fixed-split-pane.css";
+@import "./structure/touch-target.css";
+@import "./structure/tabs.css";
+@import "./structure/icon-line.css";
+
+/* 外部ライブラリの配色を意味トークンに結び付ける（React Flow の Controls・帰属表示など）。 */
+@import "./integrations/react-flow.css";
+
+@theme inline {
+  /* TIER 2 — 意味トークン（bg-surface / text-fg-muted / border-border-control …）。
+     TIER 1（--neutral-* 等の原色）はユーティリティに露出させないため登録しない。 */
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-overlay: var(--color-surface-overlay);
+  --color-surface-sunken: var(--color-surface-sunken);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-surface-disabled: var(--color-surface-disabled);
+  --color-fg: var(--color-fg);
+  --color-fg-muted: var(--color-fg-muted);
+  --color-fg-subtle: var(--color-fg-subtle);
+  --color-fg-disabled: var(--color-fg-disabled);
+  --color-fg-on-accent: var(--color-fg-on-accent);
+  --color-fg-on-emphasis: var(--color-fg-on-emphasis);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-control: var(--color-border-control);
+  --color-accent-fg: var(--color-accent-fg);
+  --color-accent-fg-strong: var(--color-accent-fg-strong);
+  --color-accent-emphasis: var(--color-accent-emphasis);
+  --color-accent-emphasis-hover: var(--color-accent-emphasis-hover);
+  --color-accent-emphasis-active: var(--color-accent-emphasis-active);
+  --color-accent-muted: var(--color-accent-muted);
+  --color-accent-subtle: var(--color-accent-subtle);
+  --color-success-fg: var(--color-success-fg);
+  --color-success-emphasis: var(--color-success-emphasis);
+  --color-success-subtle: var(--color-success-subtle);
+  --color-success-border: var(--color-success-border);
+  --color-warning-fg: var(--color-warning-fg);
+  --color-warning-emphasis: var(--color-warning-emphasis);
+  --color-warning-subtle: var(--color-warning-subtle);
+  --color-warning-border: var(--color-warning-border);
+  --color-danger-fg: var(--color-danger-fg);
+  --color-danger-emphasis: var(--color-danger-emphasis);
+  --color-danger-subtle: var(--color-danger-subtle);
+  --color-danger-border: var(--color-danger-border);
+  --color-info-fg: var(--color-info-fg);
+  --color-info-emphasis: var(--color-info-emphasis);
+  --color-info-subtle: var(--color-info-subtle);
+  --color-info-border: var(--color-info-border);
+  --color-focus-ring: var(--color-focus-ring);
+  --color-sidebar: var(--color-sidebar);
+  --color-code-canvas: var(--color-code-canvas);
+  --color-graph-entity: var(--color-graph-entity);
+  --color-graph-metric: var(--color-graph-metric);
+  --color-graph-sql: var(--color-graph-sql);
+  --color-graph-term: var(--color-graph-term);
+  --color-graph-default: var(--color-graph-default);
+  --color-graph-fg: var(--color-graph-fg);
+  --color-graph-line: var(--color-graph-line);
+  --font-sans: var(--font-sans);
+
+  /* 操作部品（入力欄・SelectField・Button）の角丸（rounded-control、radius.css。#384）。 */
+  --radius-control: var(--radius-control);
+
+  /* 文字サイズは px（ルート非依存）。14px ルートのままだと rem の text-sm が 12.25px になるため、
+     Tailwind の --text-* を typography.css の px トークンに向ける。余白（rem）は動かさない。 */
+  --text-xs: var(--font-size-xs);
+  --text-xs--line-height: var(--line-height-xs);
+  --text-sm: var(--font-size-sm);
+  --text-sm--line-height: var(--line-height-sm);
+  --text-base: var(--font-size-base);
+  --text-base--line-height: var(--line-height-base);
+  /* 仕様外。既定の 1.125rem（15.75px）だと text-base（16px）より小さく逆転するため、Tailwind 標準の px 値にする。 */
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: var(--font-size-xl);
+  --text-xl--line-height: var(--line-height-xl);
+  --text-2xl: var(--font-size-2xl);
+  --text-2xl--line-height: var(--line-height-2xl);
+}

@@ -1,0 +1,17 @@
+{
+  "sql": "DELETE FROM APP.ORDERS WHERE ORDER_DATE < DATE '2020-01-01'",
+  "allowed_objects": {
+    "table_names": [
+      "APP.ORDERS"
+    ],
+    "columns": {
+      "APP.ORDERS": [
+        "ORDER_DATE"
+      ]
+    },
+    "enforce_table_scope": true
+  },
+  "row_limit": 100,
+  "use_llm": false
+}
+

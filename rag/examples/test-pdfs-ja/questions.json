@@ -1,0 +1,809 @@
+{
+  "version": 1,
+  "language": "ja",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "test-a-01",
+      "group": "A",
+      "primary_document": "テスト_01_運用手順書.pdf",
+      "type": "条件検索",
+      "question": "運用手順書に定められた通常の受付時間と定期保守の曜日・時間帯を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "通常の受付時間は平日 09:00～17:00、定期保守は毎週水曜日 18:00～19:00です。",
+      "required_answer_points": [
+        "平日",
+        "09:00～17:00",
+        "水曜日",
+        "18:00～19:00"
+      ],
+      "sources": [
+        {
+          "file": "テスト_01_運用手順書.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "平日 09:00～17:00",
+            "毎週水曜日 18:00～19:00"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-02",
+      "group": "A",
+      "primary_document": "テスト_01_運用手順書.pdf",
+      "type": "条件検索",
+      "question": "運用手順書では、バックアップを何日保存し、復元確認をいつ実施しますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "バックアップは 35 日保存し、復元確認は毎月第 2 火曜日に実施します。",
+      "required_answer_points": [
+        "35 日",
+        "毎月第 2 火曜日"
+      ],
+      "sources": [
+        {
+          "file": "テスト_01_運用手順書.pdf",
+          "pages": [
+            3,
+            4
+          ],
+          "evidence_quotes": [
+            "保存期間は 35 日",
+            "毎月第 2 火曜日"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-03",
+      "group": "A",
+      "primary_document": "テスト_01_運用手順書.pdf",
+      "type": "完了判定",
+      "question": "運用手順書の第5章「変更と終了」で、操作だけを済ませた状態は完了ですか。完了条件と確認番号を示してください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "操作しただけで記録がなければ未完了です。「確認済み」の状態で、確認番号 A-01-05 の記録が残っていれば完了です。",
+      "required_answer_points": [
+        "未完了",
+        "確認済み",
+        "A-01-05",
+        "記録"
+      ],
+      "sources": [
+        {
+          "file": "テスト_01_運用手順書.pdf",
+          "pages": [
+            5
+          ],
+          "evidence_quotes": [
+            "変更と終了の状態が「確認済み」",
+            "確認番号 A-01-05",
+            "記録が残っていない場合は未完了"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-04",
+      "group": "A",
+      "primary_document": "テスト_02_操作FAQ.pdf",
+      "type": "手順検索",
+      "question": "操作FAQのログインを確認するとき、最初に照合する項目と記録に残す確認番号は何ですか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "対象の管理番号、状態、更新日を照合し、確認番号 A-02-01 を記録に残します。",
+      "required_answer_points": [
+        "管理番号",
+        "状態",
+        "更新日",
+        "A-02-01"
+      ],
+      "sources": [
+        {
+          "file": "テスト_02_操作FAQ.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "対象の管理番号、状態、更新日",
+            "A-02-01"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-05",
+      "group": "A",
+      "primary_document": "テスト_02_操作FAQ.pdf",
+      "type": "例外条件",
+      "question": "操作FAQの第6章「検索」で、必要な情報が不足している間と、情報がそろった後の確認期限はどうなりますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "不足している間は期限の計測を保留し、保留理由と不足項目を記録します。情報がそろった時点から 118 分以内に確認します。",
+      "required_answer_points": [
+        "計測を保留",
+        "保留理由",
+        "不足項目",
+        "118 分以内"
+      ],
+      "sources": [
+        {
+          "file": "テスト_02_操作FAQ.pdf",
+          "pages": [
+            6
+          ],
+          "evidence_quotes": [
+            "期限の計測を保留",
+            "保留理由と不足項目",
+            "118 分以内"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-06",
+      "group": "A",
+      "primary_document": "テスト_02_操作FAQ.pdf",
+      "type": "否定条件",
+      "question": "操作FAQの期限に関する例外を使えば、承認も省略できますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "省略できません。確認期限を保留する例外であり、承認そのものを省略できる例外ではありません。",
+      "required_answer_points": [
+        "省略できません",
+        "承認"
+      ],
+      "sources": [
+        {
+          "file": "テスト_02_操作FAQ.pdf",
+          "pages": [
+            8
+          ],
+          "evidence_quotes": [
+            "承認そのものを省略できる例外ではありません"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-07",
+      "group": "A",
+      "primary_document": "テスト_03_月次稼働報告.pdf",
+      "type": "表の数値",
+      "question": "月次稼働報告の第1章「集計条件」で、第6期の総件数、成功件数、成功率、平均時間を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "第6期は総件数 140 件、成功件数 140 件、成功率 100.0%、平均時間 1.4 秒です。",
+      "required_answer_points": [
+        "総件数 140 件",
+        "成功件数 140 件",
+        "100.0%",
+        "1.4 秒"
+      ],
+      "sources": [
+        {
+          "file": "テスト_03_月次稼働報告.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "第6期 140 140 100.0% 1.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-08",
+      "group": "A",
+      "primary_document": "テスト_03_月次稼働報告.pdf",
+      "type": "表の計算",
+      "question": "月次稼働報告の第4章「応答時間」で、第1期から第6期に総件数と成功件数はそれぞれ何件増えましたか。計算も示してください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "総件数は 170 − 145 = 25 件、成功件数は 167 − 140 = 27 件増えました。",
+      "required_answer_points": [
+        "170 − 145 = 25",
+        "167 − 140 = 27"
+      ],
+      "sources": [
+        {
+          "file": "テスト_03_月次稼働報告.pdf",
+          "pages": [
+            4
+          ],
+          "evidence_quotes": [
+            "第1期 145 140",
+            "第6期 170 167"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-09",
+      "group": "A",
+      "primary_document": "テスト_03_月次稼働報告.pdf",
+      "type": "表の数値",
+      "question": "月次稼働報告の第10章「総合評価」で、第6期の成功件数、成功率、平均時間を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "成功件数は 228 件、成功率は 99.1%、平均時間は 2.3 秒です。",
+      "required_answer_points": [
+        "228 件",
+        "99.1%",
+        "2.3 秒"
+      ],
+      "sources": [
+        {
+          "file": "テスト_03_月次稼働報告.pdf",
+          "pages": [
+            10
+          ],
+          "evidence_quotes": [
+            "第6期 230 228 99.1% 2.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-10",
+      "group": "A",
+      "primary_document": "テスト_04_障害対応フロー.pdf",
+      "type": "フロー分岐",
+      "question": "障害対応フローの第2章「分類」で、判断手順の順序と、対象外と判定した場合の戻り先を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "受付 → 対象確認 → 条件照合 → 実施 → 結果記録の順です。対象外なら実施せず、受付へ戻して対象を修正します。",
+      "required_answer_points": [
+        "受付 → 対象確認 → 条件照合 → 実施 → 結果記録",
+        "実施せず",
+        "受付へ戻"
+      ],
+      "sources": [
+        {
+          "file": "テスト_04_障害対応フロー.pdf",
+          "pages": [
+            2
+          ],
+          "evidence_quotes": [
+            "受付 → 対象確認 → 条件照合 → 実施 → 結果記録",
+            "対象外と判定した場合は実施せず"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-11",
+      "group": "A",
+      "primary_document": "テスト_04_障害対応フロー.pdf",
+      "type": "条件検索",
+      "question": "障害対応フローの第8章「復旧」の確認番号と、受付からの標準確認期限は何ですか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "確認番号は A-04-08、標準の確認期限は受付から 124 分以内です。",
+      "required_answer_points": [
+        "A-04-08",
+        "124 分以内"
+      ],
+      "sources": [
+        {
+          "file": "テスト_04_障害対応フロー.pdf",
+          "pages": [
+            8
+          ],
+          "evidence_quotes": [
+            "A-04-08",
+            "124 分以内"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-12",
+      "group": "A",
+      "primary_document": "テスト_04_障害対応フロー.pdf",
+      "type": "完了判定",
+      "question": "障害対応フローの第12章「再発防止」では、操作が成功しただけで終了できますか。再実行時にはどの受付番号を参照しますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "操作の成功だけで完了とはせず、対象の状態が期待値に一致することを確認します。再実行時は前回の記録との重複を避け、同一の受付番号を参照します。",
+      "required_answer_points": [
+        "期待値に一致",
+        "重複",
+        "同一の受付番号"
+      ],
+      "sources": [
+        {
+          "file": "テスト_04_障害対応フロー.pdf",
+          "pages": [
+            12
+          ],
+          "evidence_quotes": [
+            "操作の成功だけで完了とせず",
+            "同一の受付番号"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-13",
+      "group": "A",
+      "primary_document": "テスト_05_設備保守台帳.pdf",
+      "type": "表の行検索",
+      "question": "設備保守台帳の第3章「管理番号」にある管理番号項目1の設定値と確認方法を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "設定値は A-05-03-1／110 分です。記録1と画面を照合します。",
+      "required_answer_points": [
+        "A-05-03-1",
+        "110 分",
+        "記録1と画面を照合"
+      ],
+      "sources": [
+        {
+          "file": "テスト_05_設備保守台帳.pdf",
+          "pages": [
+            3
+          ],
+          "evidence_quotes": [
+            "管理番号項目1 A-05-03-1／110 分 記録1と画面を照合"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-14",
+      "group": "A",
+      "primary_document": "テスト_05_設備保守台帳.pdf",
+      "type": "表の行検索",
+      "question": "設備保守台帳の第20章「総括」にある総括項目5の設定値と確認方法を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "設定値は A-05-20-5／165 分です。記録5と画面を照合します。",
+      "required_answer_points": [
+        "A-05-20-5",
+        "165 分",
+        "記録5と画面を照合"
+      ],
+      "sources": [
+        {
+          "file": "テスト_05_設備保守台帳.pdf",
+          "pages": [
+            20
+          ],
+          "evidence_quotes": [
+            "総括項目5 A-05-20-5／165 分 記録5と画面を照合"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-a-15",
+      "group": "A",
+      "primary_document": "テスト_05_設備保守台帳.pdf",
+      "type": "資料不足",
+      "question": "設備保守台帳の第7章「担当」に基づき、点検担当者の個人名とメールアドレスを教えてください。",
+      "answerable": false,
+      "expected_response_decision": "hold",
+      "expected_answer": "資料には点検担当者の個人名とメールアドレスの記載がないため、確認できません。氏名や連絡先を推測して補いません。",
+      "required_answer_points": [
+        "記載がない",
+        "確認できません"
+      ],
+      "sources": []
+    },
+    {
+      "id": "test-b-01",
+      "group": "B",
+      "primary_document": "テスト_06_文書登録ガイド.pdf",
+      "type": "条件検索",
+      "question": "文書登録ガイドの通常の受付時間と、公開作業の曜日・時間帯を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "通常の受付時間は平日 10:00～16:00、公開作業は毎週木曜日 15:00～16:00です。",
+      "required_answer_points": [
+        "平日",
+        "10:00～16:00",
+        "木曜日",
+        "15:00～16:00"
+      ],
+      "sources": [
+        {
+          "file": "テスト_06_文書登録ガイド.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "平日 10:00～16:00",
+            "毎週木曜日 15:00～16:00"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-02",
+      "group": "B",
+      "primary_document": "テスト_06_文書登録ガイド.pdf",
+      "type": "条件検索",
+      "question": "文書登録ガイドの第5章「検索確認」の確認番号と標準確認期限を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "確認番号は B-06-05、標準の確認期限は受付から 215 分以内です。",
+      "required_answer_points": [
+        "B-06-05",
+        "215 分以内"
+      ],
+      "sources": [
+        {
+          "file": "テスト_06_文書登録ガイド.pdf",
+          "pages": [
+            5
+          ],
+          "evidence_quotes": [
+            "B-06-05",
+            "215 分以内"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-03",
+      "group": "B",
+      "primary_document": "テスト_06_文書登録ガイド.pdf",
+      "type": "状況判断",
+      "question": "文書登録ガイドの第2章「形式確認」で、処理結果がまだ表示されていないときは同じ操作を繰り返してよいですか。失敗した場合はどうしますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "処理中は同じ操作を繰り返さず、結果が表示されるまで待ちます。失敗時は時刻と確認番号を記録し、原因が分かってから再実行します。",
+      "required_answer_points": [
+        "繰り返さず",
+        "待ちます",
+        "時刻と確認番号",
+        "原因"
+      ],
+      "sources": [
+        {
+          "file": "テスト_06_文書登録ガイド.pdf",
+          "pages": [
+            2
+          ],
+          "evidence_quotes": [
+            "処理中に同じ操作を繰り返さない",
+            "時刻と確認番号を記録"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-04",
+      "group": "B",
+      "primary_document": "テスト_07_検索FAQ.pdf",
+      "type": "手順検索",
+      "question": "検索FAQの第1章「対象範囲」で、最初に照合する項目と、対象範囲が異なった場合の対応を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "管理番号、状態、更新日を照合します。対象範囲が異なれば結果を混ぜず、正しい範囲を選び直してから確認します。",
+      "required_answer_points": [
+        "管理番号",
+        "状態",
+        "更新日",
+        "結果を混ぜず",
+        "範囲を選び直"
+      ],
+      "sources": [
+        {
+          "file": "テスト_07_検索FAQ.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "対象の管理番号、状態、更新日",
+            "結果を混ぜず"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-05",
+      "group": "B",
+      "primary_document": "テスト_07_検索FAQ.pdf",
+      "type": "例外条件",
+      "question": "検索FAQの第6章「表の数値」で、必要な情報が不足している場合、確認期限をどう扱いますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "不足している間は期限の計測を保留し、保留理由と不足項目を記録します。情報がそろった時点から 218 分以内に確認します。",
+      "required_answer_points": [
+        "計測を保留",
+        "保留理由",
+        "不足項目",
+        "218 分以内"
+      ],
+      "sources": [
+        {
+          "file": "テスト_07_検索FAQ.pdf",
+          "pages": [
+            6
+          ],
+          "evidence_quotes": [
+            "期限の計測を保留",
+            "218 分以内"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-06",
+      "group": "B",
+      "primary_document": "テスト_07_検索FAQ.pdf",
+      "type": "回答方針",
+      "question": "検索FAQの第8章「回答不能」で、質問と同じ語が見つからないときと、条件が資料に記載されていないときの確認方針は何ですか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "同じ語がなくても手順・状態・対象の意味を照合します。記載のない条件は推測せず、「この資料では確認できない」と回答します。",
+      "required_answer_points": [
+        "手順・状態・対象",
+        "推測せず",
+        "この資料では確認できない"
+      ],
+      "sources": [
+        {
+          "file": "テスト_07_検索FAQ.pdf",
+          "pages": [
+            8
+          ],
+          "evidence_quotes": [
+            "手順・状態・対象の意味",
+            "この資料では確認できない"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-07",
+      "group": "B",
+      "primary_document": "テスト_08_品質評価報告.pdf",
+      "type": "表の数値",
+      "question": "品質評価報告の第1章「評価設計」で、第6期の総件数と成功率を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "総件数は 140 件、成功率は 100.0%です。",
+      "required_answer_points": [
+        "140 件",
+        "100.0%"
+      ],
+      "sources": [
+        {
+          "file": "テスト_08_品質評価報告.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "第6期 140 140 100.0%"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-08",
+      "group": "B",
+      "primary_document": "テスト_08_品質評価報告.pdf",
+      "type": "表の計算",
+      "question": "品質評価報告の第4章「引用正確性」で、第1期から第6期に成功件数は何件増加しましたか。元の件数と計算を示してください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "第1期は 140 件、第6期は 167 件なので、167 − 140 = 27 件増加しました。",
+      "required_answer_points": [
+        "第1期は 140 件",
+        "第6期は 167 件",
+        "167 − 140 = 27"
+      ],
+      "sources": [
+        {
+          "file": "テスト_08_品質評価報告.pdf",
+          "pages": [
+            4
+          ],
+          "evidence_quotes": [
+            "第1期 145 140",
+            "第6期 170 167"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-09",
+      "group": "B",
+      "primary_document": "テスト_08_品質評価報告.pdf",
+      "type": "表の計算",
+      "question": "品質評価報告の第8章「図表」で、第3期の成功率を件数から計算してください。資料に記載された平均時間も教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "成功件数 191 件÷総件数 195 件×100を小数第1位まで表示すると 97.9%です。平均時間は 1.95 秒です。",
+      "required_answer_points": [
+        "191",
+        "195",
+        "97.9%",
+        "1.95 秒"
+      ],
+      "sources": [
+        {
+          "file": "テスト_08_品質評価報告.pdf",
+          "pages": [
+            8
+          ],
+          "evidence_quotes": [
+            "第3期 195 191 97.9% 1.95"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-10",
+      "group": "B",
+      "primary_document": "テスト_09_公開承認フロー.pdf",
+      "type": "フロー分岐",
+      "question": "公開承認フローの第7章「権限確認」で、「正常」「保留」「差戻し」はそれぞれどの条件に対応しますか。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "正常は条件をすべて満たした場合、保留は必要な項目が欠けた場合、差戻しは対象番号が違う場合です。",
+      "required_answer_points": [
+        "正常",
+        "すべて満た",
+        "保留",
+        "項目が欠け",
+        "差戻し",
+        "対象番号が違"
+      ],
+      "sources": [
+        {
+          "file": "テスト_09_公開承認フロー.pdf",
+          "pages": [
+            7
+          ],
+          "evidence_quotes": [
+            "正常：条件をすべて満たせば",
+            "保留：必要な項目が欠けていれば",
+            "差戻し：対象番号が違う場合"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-11",
+      "group": "B",
+      "primary_document": "テスト_09_公開承認フロー.pdf",
+      "type": "記録要件",
+      "question": "公開承認フローの第8章「承認」で、完了記録に含める項目と確認番号を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "確認番号 B-09-08、実施時刻、結果、確認担当を完了記録に含めます。",
+      "required_answer_points": [
+        "B-09-08",
+        "実施時刻",
+        "結果",
+        "確認担当"
+      ],
+      "sources": [
+        {
+          "file": "テスト_09_公開承認フロー.pdf",
+          "pages": [
+            8
+          ],
+          "evidence_quotes": [
+            "B-09-08",
+            "実施時刻、結果、確認担当"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-12",
+      "group": "B",
+      "primary_document": "テスト_09_公開承認フロー.pdf",
+      "type": "完了判定",
+      "question": "公開承認フローの第12章「監査」で、終了前に確認する状態と、再実行時の記録重複を避ける方法を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "対象の状態が期待値に一致することを確認します。再実行時は前回の記録と重複しないように同一の受付番号を参照します。",
+      "required_answer_points": [
+        "期待値に一致",
+        "重複",
+        "同一の受付番号"
+      ],
+      "sources": [
+        {
+          "file": "テスト_09_公開承認フロー.pdf",
+          "pages": [
+            12
+          ],
+          "evidence_quotes": [
+            "期待値に一致",
+            "同一の受付番号"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-13",
+      "group": "B",
+      "primary_document": "テスト_10_資料仕様一覧.pdf",
+      "type": "表の行検索",
+      "question": "資料仕様一覧の第11章「単位」にある単位項目4の設定値と確認方法を教えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "設定値は B-10-11-4／237 分です。記録4と画面を照合します。",
+      "required_answer_points": [
+        "B-10-11-4",
+        "237 分",
+        "記録4と画面を照合"
+      ],
+      "sources": [
+        {
+          "file": "テスト_10_資料仕様一覧.pdf",
+          "pages": [
+            11
+          ],
+          "evidence_quotes": [
+            "単位項目4 B-10-11-4／237 分 記録4と画面を照合"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-14",
+      "group": "B",
+      "primary_document": "テスト_10_資料仕様一覧.pdf",
+      "type": "文書間の照合",
+      "question": "文書登録ガイドと資料仕様一覧では、旧版の参照可能期間と品質確認日が一致していますか。両方の資料を根拠に答えてください。",
+      "answerable": true,
+      "expected_response_decision": "answer",
+      "expected_answer": "両方とも旧版の参照可能期間は 90 日、品質確認日は毎月第 3 金曜日で一致しています。",
+      "required_answer_points": [
+        "両方",
+        "90 日",
+        "毎月第 3 金曜日",
+        "一致"
+      ],
+      "sources": [
+        {
+          "file": "テスト_06_文書登録ガイド.pdf",
+          "pages": [
+            1
+          ],
+          "evidence_quotes": [
+            "参照可能期間は 90 日",
+            "毎月第 3 金曜日"
+          ]
+        },
+        {
+          "file": "テスト_10_資料仕様一覧.pdf",
+          "pages": [
+            10
+          ],
+          "evidence_quotes": [
+            "参照可能期間は 90 日",
+            "毎月第 3 金曜日"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "test-b-15",
+      "group": "B",
+      "primary_document": "テスト_10_資料仕様一覧.pdf",
+      "type": "検索範囲の分離",
+      "question": "資料グループ B の資料だけを根拠に、運用グループ A のバックアップ保存期間を日数で答えてください。",
+      "answerable": false,
+      "expected_response_decision": "hold",
+      "expected_answer": "資料グループ B の資料だけでは運用グループ A のバックアップ保存期間を確認できません。別グループの資料を引用したり、日数を推測したりせず回答を保留します。",
+      "required_answer_points": [
+        "確認できません",
+        "回答を保留"
+      ],
+      "sources": []
+    }
+  ]
+}

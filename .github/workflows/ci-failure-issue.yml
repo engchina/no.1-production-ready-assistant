@@ -1,0 +1,61 @@
+name: CI failure issue
+
+# main の CI（push）と nightly が失敗したら Issue を作る（同じ workflow・製品の open な Issue があれば comment で更新する。#339）。
+# ruleset の up-to-date 要求（strict）をやめたため、PR の CI が通っても main で壊れることがある。main の赤は最優先で直す。
+# PR の CI（pull_request）の失敗は対象外（PR の画面で分かるため）。取り消し（cancelled）は、job の時間切れ（timeout-minutes）の
+# ときだけ対象にする（時間切れは run も cancelled になる。#1586。手で取り消した run は report-workflow-failure.sh が除く）。
+#
+# 通知の中身と Issue の探し方は .github/scripts/report-workflow-failure.sh。
+# 動作確認: `gh workflow run ci-failure-issue.yml -f run_id=<失敗した run の ID>`（main 以外の run も対象にできる）。
+
+on:
+  # workflow_run は main の文脈で動き、PR の code を checkout・実行しない（.github/scripts を main から読み、
+  # run の metadata だけを使う。PR の run は if で除く）。zizmor の dangerous-triggers はこの理由で除く（#1594）。
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows:
+      - CI
+      - E2E Nightly
+      - RAG Evaluation Nightly
+      - Dependency Audit Nightly
+      - CodeQL
+      - Integration Nightly
+      - Deploy Nightly
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "通知する workflow run の ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Report failure
+    if: >-
+      github.event_name == 'workflow_dispatch' || (
+        (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled')
+        && github.event.workflow_run.head_branch == 'main'
+        && github.event.workflow_run.event != 'pull_request'
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Create or update issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.inputs.run_id || github.event.workflow_run.id }}
+        run: bash .github/scripts/report-workflow-failure.sh

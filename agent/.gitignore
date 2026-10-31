@@ -1,0 +1,45 @@
+# --- frontend ---
+node_modules
+frontend/node_modules
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# --- backend (Python/uv) ---
+backend/.venv
+backend/.env
+backend/model-settings.json
+backend/.model-settings.json.tmp-*
+backend/.oci/
+backend/.oracle/
+**/oci_api_key.pem
+backend/validation-evidence.*.json
+backend/validation-evidence.*.md
+backend/validation-runner-readiness.*.json
+backend/validation-runner-readiness.*.md
+backend/validation-preflight.*.json
+backend/validation-preflight.*.md
+backend/validation-review.*.json
+backend/validation-bundle.*.json
+backend/validation-bundle.*.md
+backend/validation-archive.*.json
+backend/validation-archive.*.md
+backend/validation-archive-dir.*.json
+backend/validation-archive-dir.*.md
+backend/validation-upload.*.json
+backend/validation-upload.*.md
+backend/validation-chain.*.json
+backend/validation-chain.*.md
+.env
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+*.log
+.DS_Store
+
+# --- local agent worktrees ---
+.claude/worktrees/
+.learnings/

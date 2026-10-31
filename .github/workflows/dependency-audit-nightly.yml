@@ -1,0 +1,135 @@
+name: Dependency Audit Nightly
+
+# backend の依存の脆弱性（pip-audit）と frontend の依存の脆弱性（npm audit。#1588）を毎晩 main で全件検査する（#339）。
+# PR / main push の CI（ci.yml）は、その backend の uv.lock / pyproject.toml が変わったときだけ pip-audit を実行する
+# （advisory の公開で無関係な PR が赤になるのを避けるため。bandit は PR でも毎回実行する）。
+# npm audit は PR の CI では実行しない（#74。advisory の公開で無関係な PR が赤になるため）。lock / manifest が変わった PR は
+# ci.yml の Dependency review が、追加・更新した依存の脆弱性を確かめる（#1588）。
+# 失敗は ci-failure-issue.yml が Issue にする。ignore する advisory は ci.yml と同じにし、理由をここと ci.yml に書く。
+
+on:
+  schedule:
+    - cron: "41 18 * * *" # 03:41 JST（整点・30 分は遅れやすいのでずらす。#1595）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: ${{ matrix.name }} (pip-audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Platform / backend_core", dir: platform/packages/backend_core, args: "" }
+          - { name: "Platform / system_settings_backend", dir: platform/packages/system_settings_backend, args: "" }
+          - { name: "Platform / evaluation_scoring", dir: platform/packages/evaluation_scoring, args: "" }
+          - { name: "Platform / enterprise_ai", dir: platform/packages/enterprise_ai, args: "" }
+          - { name: "Suite / Evaluation", dir: suite/evaluation, args: "" }
+          - { name: "RAG / Backend", dir: rag/backend, args: "" }
+          # OCI SDK が cryptography を <47.0.0 に制約し、GHSA-537c-gmf6-5ccf の修正版は 48.0.1（ci.yml と同じ）。
+          - { name: "NL2SQL / Backend", dir: nl2sql/backend, args: "--ignore-vuln GHSA-537c-gmf6-5ccf" }
+          - { name: "Agent / Backend", dir: agent/backend, args: "" }
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: ${{ matrix.dir }}/uv.lock
+          save-cache: "false"
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Dependency audit
+        run: uv run pip-audit --skip-editable ${{ matrix.args }}
+
+  # RAG の package とサービス（rag/packages/<name>・rag/services/<種類>/<name>。配備は rag-services.sh が各 lock から
+  # venv を作る）。venv に pip-audit が無いので、ci.yml の RAG / Parser docling・Lint / services & scripts と同じく、
+  # lock から書き出した requirements（hash 付き）を検査する（#1513。docling 以外は #1534 で足した）。
+  # 自分たちの package（path 依存）は PyPI に無いので書き出さない（--no-emit-local）。package の extra（rag_engine の
+  # docling 等）も配備で入るので --all-extras を付ける。lock は glob で集めるので、サービスを足しても対象に入る。
+  # torch の CPU 版（2.13.0+cpu。#1650）は PyPI に無い版で pip-audit が飛ばすので、+cpu を外して同じ版の PyPI の
+  # torch として検査する（脆弱性は CPU 版と CUDA 版で同じ）。
+  rag-services-pip-audit:
+    name: RAG / packages & services (pip-audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          # 既定（auto）で cache が有効になるため、ほかの job と同じく保存前に prune する（#1664）。
+          prune-cache: true
+
+      - name: Dependency audit
+        run: |
+          version="$(sed -n '/^name = "pip-audit"$/{n;s/^version = "\(.*\)"$/\1/p;}' rag/backend/uv.lock)"
+          test -n "${version}"
+          status=0
+          for lock in rag/packages/*/uv.lock rag/services/*/*/uv.lock; do
+            dir="$(dirname "${lock}")"
+            echo "::group::${dir}"
+            (cd "${dir}" && uv export --locked --no-dev --all-extras --no-emit-local --format requirements.txt \
+              -o "${RUNNER_TEMP}/requirements.txt" -q \
+              && sed -i -E 's/^(torch[a-z]*)==([^ ;+]+)\+cpu /\1==\2 /' "${RUNNER_TEMP}/requirements.txt" \
+              && uvx "pip-audit@${version}" --disable-pip -r "${RUNNER_TEMP}/requirements.txt") \
+              || { status=1; echo "::error file=${lock}::pip-audit が既知の脆弱性を検出しました（uv lock --upgrade-package で修正版へ上げる）。"; }
+            echo "::endgroup::"
+          done
+          exit "${status}"
+
+  # frontend の 4 つの package-lock.json（#1588。以前は rag/frontend だけを Dependabot が見て、nl2sql / agent / platform の
+  # npm の依存はどこでも検査していなかった）。npm audit は lock だけを読むので npm ci は要らない。
+  # --omit=dev: dependencies（画面の bundle に入る依存）だけ。build・テストの道具（devDependencies）は対象外。
+  # --audit-level=high: high / critical で失敗する（moderate 以下はログに出すだけ）。
+  npm-audit:
+    name: ${{ matrix.name }} (npm audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Platform / frontend", dir: platform }
+          - { name: "RAG / Frontend", dir: rag/frontend }
+          - { name: "NL2SQL / Frontend", dir: nl2sql/frontend }
+          - { name: "Agent / Frontend", dir: agent/frontend }
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high

@@ -1,0 +1,5 @@
+{
+  "object_name": "TD_NL2SQL_ORDERS",
+  "limit": 5,
+  "where_clause": "STATUS = 'NEW'"
+}

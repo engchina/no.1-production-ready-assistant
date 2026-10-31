@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "guides": [
+    {
+      "schema_version": 2,
+      "title": "アクセス権限の付与",
+      "description": "サンプル業務ポータルの運用手順書「3. アクセス権限の付与」から作った業務ガイド（評価用の合成。#1289）。付与先（個別の利用者 / グループ）で操作する画面と承認の要否が変わる。",
+      "goal": {
+        "expected_result": "付与先に合った画面で権限を付与し、反映を確かめる。グループに付与する場合は、付与の前に部門長の承認を得る。",
+        "intent_examples": [
+          "利用者に権限を付与する方法",
+          "グループに権限を付与する方法"
+        ],
+        "match_terms": ["アクセス権限", "権限を付与", "権限を付け"]
+      },
+      "conditions": [
+        {
+          "id": "target",
+          "label": "付与先",
+          "type": "enum",
+          "allowed_values": ["個別", "グループ"],
+          "required": true,
+          "source": "user",
+          "unknown_handling": "ask",
+          "question": "権限の付与先は、個別の利用者ですか、グループですか？",
+          "value_aliases": {
+            "個別": ["個別の利用者", "検証用アカウント"]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "individual",
+          "title": "利用者の詳細画面の「権限」タブで、付与する権限を選んで「付与」を押す",
+          "purpose": "個別の利用者に権限を付与する。",
+          "retrieval_hints": ["個別の利用者に付与する場合", "利用者の詳細画面 権限タブ"],
+          "evidence_requirements": ["個別の利用者に付与する場合の操作"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "利用者の詳細画面で権限を付与した。"
+        },
+        {
+          "id": "group-approval",
+          "title": "付与の前に部門長の承認を得る",
+          "purpose": "グループに付与した権限はグループの全員に付き、影響範囲が広い。",
+          "retrieval_hints": ["グループに付与する場合 部門長の承認"],
+          "evidence_requirements": ["グループへの付与の前に部門長の承認を得ること"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "部門長の承認を得た。"
+        },
+        {
+          "id": "group",
+          "title": "グループの詳細画面の「権限」タブで付与する",
+          "purpose": "グループに権限を付与する。",
+          "depends_on": ["group-approval"],
+          "retrieval_hints": ["グループの詳細画面 権限タブ"],
+          "evidence_requirements": ["グループに付与する場合の操作"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "グループの詳細画面で権限を付与した。"
+        },
+        {
+          "id": "verify",
+          "title": "反映を確かめる（反映には最大 15 分かかる）",
+          "purpose": "付与した権限が反映されたことを確かめる。",
+          "retrieval_hints": ["権限が反映されない場合 15 分"],
+          "evidence_requirements": ["反映に最大 15 分かかること"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "付与した権限が使えることを確かめた。"
+        }
+      ],
+      "branches": [
+        {
+          "id": "to-individual",
+          "when": {"condition_id": "target", "operator": "equals", "values": ["個別"]},
+          "goto_step": "individual",
+          "note": "検証用アカウントには個別に付与する。"
+        },
+        {
+          "id": "to-group",
+          "when": {"condition_id": "target", "operator": "equals", "values": ["グループ"]},
+          "goto_step": "group-approval",
+          "note": "グループへの付与は部門長の承認を得てから行う。"
+        }
+      ],
+      "references": [
+        {
+          "document_id": "file:portal-operations-manual.pdf",
+          "title": "サンプル業務ポータル 運用手順書",
+          "section_path": ["3. アクセス権限の付与"],
+          "version": "第3版"
+        }
+      ],
+      "completion": [
+        {
+          "id": "applied",
+          "description": "付与した権限が反映されている。",
+          "check_method": "15 分以内に反映されたことを確かめる。"
+        }
+      ],
+      "impact": {
+        "scope": "group",
+        "approval_required": true,
+        "approval_note": "グループに付与する場合は、付与の前に部門長の承認を得る。",
+        "steps": ["group-approval", "group"]
+      },
+      "handoff": {
+        "conditions": ["15 分を過ぎても権限が反映されない"],
+        "contact": "サポート窓口（利用者 ID と付与した時刻を書いてチケットを起票）"
+      }
+    },
+    {
+      "schema_version": 2,
+      "title": "アカウントの削除",
+      "description": "サンプル業務ポータルの運用手順書「6. アカウントの削除」から作った業務ガイド（評価用の合成。#1289）。削除の前に所属部署の部門長の承認が要り、削除したアカウントは 30 日後に完全に消去されて復元できない。",
+      "goal": {
+        "expected_result": "所属部署の部門長の承認を得たうえで、アカウントを削除する。承認が無ければ削除しない。",
+        "intent_examples": ["アカウントを削除する方法"],
+        "match_terms": ["アカウントの削除", "アカウントを削除"]
+      },
+      "conditions": [
+        {
+          "id": "approved",
+          "label": "部門長の承認",
+          "type": "enum",
+          "allowed_values": ["はい", "いいえ"],
+          "required": true,
+          "source": "user",
+          "unknown_handling": "ask",
+          "question": "所属部署の部門長の承認は得ていますか？",
+          "value_aliases": {
+            "はい": ["承認はもらっています", "承認を得ています", "承認済み"],
+            "いいえ": ["承認はまだ", "承認を得ていません"]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "approval",
+          "title": "所属部署の部門長の承認を得る",
+          "purpose": "承認の無い削除は行わない。",
+          "retrieval_hints": ["アカウントの削除 部門長の承認"],
+          "evidence_requirements": ["削除の前に部門長の承認を得ること"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "部門長の承認を得た。"
+        },
+        {
+          "id": "delete",
+          "title": "アカウントを削除する（30 日後に完全に消去され、復元できない）",
+          "purpose": "削除が取り消せないことを示したうえで削除する。",
+          "depends_on": ["approval"],
+          "retrieval_hints": ["削除したアカウント 30 日後 復元できません"],
+          "evidence_requirements": ["削除したアカウントは 30 日後に完全に消去され、復元できないこと"],
+          "allowed_tools": ["rag_search", "rag_read_source", "rag_retrieve_evidence"],
+          "done_when": "アカウントを削除した。"
+        }
+      ],
+      "branches": [
+        {
+          "id": "approved",
+          "when": {"condition_id": "approved", "operator": "equals", "values": ["はい"]},
+          "goto_step": "delete",
+          "note": "承認を得ていれば削除に進む。"
+        },
+        {
+          "id": "not-approved",
+          "when": {"condition_id": "approved", "operator": "equals", "values": ["いいえ"]},
+          "goto_step": "approval",
+          "note": "承認が無ければ、先に承認を得る（承認の無い削除は行わない）。"
+        }
+      ],
+      "references": [
+        {
+          "document_id": "file:portal-operations-manual.pdf",
+          "title": "サンプル業務ポータル 運用手順書",
+          "section_path": ["6. アカウントの削除"],
+          "version": "第3版"
+        }
+      ],
+      "completion": [
+        {
+          "id": "deleted",
+          "description": "部門長の承認を得たうえでアカウントを削除した。",
+          "check_method": "承認の記録があることを確かめる。"
+        }
+      ],
+      "impact": {
+        "scope": "individual",
+        "approval_required": true,
+        "approval_note": "削除の前に所属部署の部門長の承認を得る。削除は 30 日後に取り消せなくなる。"
+      },
+      "handoff": {
+        "conditions": ["部門長の承認を得られない", "ポータル管理者のロールを持っていない"],
+        "contact": "所属部署のポータル管理者"
+      }
+    }
+  ]
+}

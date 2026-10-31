@@ -1,0 +1,60 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   COMPAT — 非推奨エイリアス
+
+   出荷中の 3 アプリ（RAG / NL2SQL / Agent）が旧名を参照しているため、
+   移行期間だけ旧 → 新のマッピングを提供します。
+
+   ★ この design system 自身のコンポーネントは一切ここを参照していません。
+   ★ 新規コードで旧名を使わないこと。
+   ★ 3 アプリの移行完了後、このファイルと styles.css の @import を削除する。
+
+   注意が要る 3 件（機械置換できない）:
+     --muted        文字色。--color-fg-muted へ。面の意味で使っていた箇所は
+                    --color-surface-sunken / --color-surface-hover に振り分ける。
+     --background   「ページ地」と「hover 面」の両方に使われていた。用途で分ける。
+     --control-border  旧値は 1.25:1 で WCAG 1.4.11 不適合。新値は 3.1:1 に変わる
+                    ＝入力欄の枠線が意図的に濃くなります（回帰ではありません）。
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --background:        var(--color-canvas);          /* @deprecated */
+  --foreground:        var(--color-fg);              /* @deprecated */
+  --card:              var(--color-surface);         /* @deprecated */
+  --border:            var(--color-border);          /* @deprecated */
+  --muted:             var(--color-fg-muted);        /* @deprecated */
+  --primary:           var(--color-accent-fg);       /* @deprecated */
+  --primary-foreground:var(--color-fg-on-accent);    /* @deprecated */
+  --ring:              var(--color-focus-ring);      /* @deprecated */
+
+  --sidebar:            var(--color-sidebar);        /* @deprecated */
+  --sidebar-foreground: var(--slab-fg-muted);        /* @deprecated */
+  --sidebar-active:     var(--color-accent-emphasis);/* @deprecated */
+
+  --success:    var(--color-success-fg);             /* @deprecated */
+  --success-bg: var(--color-success-subtle);         /* @deprecated */
+  --warning:    var(--color-warning-fg);             /* @deprecated */
+  --warning-bg: var(--color-warning-subtle);         /* @deprecated */
+  --danger:     var(--color-danger-fg);              /* @deprecated */
+  --danger-bg:  var(--color-danger-subtle);          /* @deprecated */
+  --info:       var(--color-info-fg);                /* @deprecated */
+  --info-bg:    var(--color-info-subtle);            /* @deprecated */
+
+  --code:    var(--color-code-canvas);               /* @deprecated */
+  --code-fg: var(--slab-code-fg);                    /* @deprecated */
+
+  --control-border: var(--color-border-control);     /* @deprecated */
+  --button-border:  var(--color-border-control);     /* @deprecated */
+  --disabled:       var(--color-fg-disabled);        /* @deprecated */
+  --disabled-bg:    var(--color-surface-disabled);   /* @deprecated */
+  --primary-fill:            var(--color-accent-emphasis);   /* @deprecated */
+  --primary-fill-foreground: var(--color-fg-on-accent);      /* @deprecated */
+  --success-fill:            var(--color-success-emphasis);  /* @deprecated */
+  --danger-fill:             var(--color-danger-emphasis);   /* @deprecated */
+
+  --graph-entity:  var(--color-graph-entity);        /* @deprecated */
+  --graph-metric:  var(--color-graph-metric);        /* @deprecated */
+  --graph-sql:     var(--color-graph-sql);           /* @deprecated */
+  --graph-term:    var(--color-graph-term);          /* @deprecated */
+  --graph-default: var(--color-graph-default);       /* @deprecated */
+  --graph-fg:      var(--color-graph-fg);            /* @deprecated */
+  --graph-line:    var(--color-graph-line);          /* @deprecated */
+}

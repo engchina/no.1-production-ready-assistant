@@ -1,0 +1,52 @@
+name: Restore npm cache
+description: >-
+  npm の cache（~/.npm）を復元する。保存は main だけ（npm ci の後の actions/cache/save）で、
+  PR は main の cache を復元するだけにする（#1589）。
+
+# actions/setup-node の `cache: npm` は、key が一致しなければ PR の run でも job の終わりに保存する（保存を止める
+# 入力が無い）。lock を変える PR（Dependabot 等）ごとに数百 MB の cache が PR の範囲に残り、repo の上限 10 GB の中で
+# main の cache を追い出していた（PR の範囲の npm の cache が約 1 GB）。
+# key は `npm-<OS>-<name>-<lock の hash>`。lock が変わったら、同じ name の最も新しい cache から復元する
+# （~/.npm は内容で引く cache なので、古い cache が混ざっても npm ci の結果は変わらない）。
+# 保存は npm ci の後に行う（composite action は job の終わりの post の step を持てない）:
+#   - name: Save npm cache
+#     if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+#     uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+#     with:
+#       path: ~/.npm
+#       key: ${{ steps.npm-cache.outputs.key }}
+
+inputs:
+  name:
+    description: "cache の key の名前（platform / rag / nl2sql / agent）"
+    required: true
+  lockfile:
+    description: "platform/package-lock.json と合わせて key に含める package-lock.json"
+    required: false
+    default: platform/package-lock.json
+
+outputs:
+  key:
+    description: "保存に使う key"
+    value: ${{ steps.key.outputs.key }}
+  cache-hit:
+    description: "key が完全に一致したら true（保存しなくてよい）"
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve npm cache key
+      id: key
+      shell: bash
+      env:
+        KEY: npm-${{ runner.os }}-${{ inputs.name }}-${{ hashFiles('platform/package-lock.json', inputs.lockfile) }}
+      run: echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore npm cache
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: npm-${{ runner.os }}-${{ inputs.name }}-

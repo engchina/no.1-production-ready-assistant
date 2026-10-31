@@ -1,0 +1,15 @@
+{
+  "name": "production-ready-suite",
+  "description": "No.1 Production Ready Suite の Agent Skills（業務 RAG・NL2SQL の MCP を使う調査のスキル）",
+  "owner": {
+    "name": "engchina",
+    "url": "https://github.com/engchina/no.1-production-ready-suite"
+  },
+  "plugins": [
+    {
+      "name": "production-ready-skills",
+      "source": "./skills",
+      "description": "業務 RAG 調査・構造化データ照会・資料とデータの横断調査・条の目録から根拠を探すの 4 つのスキル。MCP サーバー rag（Production Ready RAG）と nl2sql（Production Ready NL2SQL）に接続して使う。"
+    }
+  ]
+}

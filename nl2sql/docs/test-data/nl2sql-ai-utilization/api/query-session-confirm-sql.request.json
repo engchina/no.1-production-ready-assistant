@@ -1,0 +1,11 @@
+{
+  "session_id": "qs-001",
+  "artifact_id": "sql-art-001",
+  "ontology_revision_id": "ont-rev-001",
+  "intent_version": 1,
+  "sql_hash": "sha256:sql-001",
+  "validation_hash": "sha256:validation-001",
+  "generation_context_hash": "sha256:generation-001",
+  "confirm_sql": true
+}
+

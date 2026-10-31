@@ -1,0 +1,216 @@
+{
+  "id": "answered-agent-outcome",
+  "description": "公開の outcome（agent_answer）で採点する 1 往復。同じ文書とみなす文書の引用を正解の文書にそろえ、ページの合わない根拠は取れなかった根拠に数える。",
+  "covers": [
+    "outcome:agent_answer",
+    "citations:evidence+read_source",
+    "equivalent_document_ids",
+    "required_evidence:page_mismatch",
+    "mrr:rank_2"
+  ],
+  "case": {
+    "id": "answered-agent-outcome",
+    "category": "document_answerable",
+    "split": "dev",
+    "reasoning_type": "bridge",
+    "hops": 2,
+    "query": "合成の質問 1: 項目 X の上限と、その承認者は？",
+    "relevant_document_ids": [
+      "doc-a",
+      "doc-b"
+    ],
+    "equivalent_document_ids": {
+      "doc-a": [
+        "doc-a-copy"
+      ]
+    },
+    "expected_outcomes": [
+      "answered"
+    ],
+    "required_evidence": [
+      {
+        "id": "ev-limit",
+        "document_id": "doc-a",
+        "text": "上限は 30 日"
+      },
+      {
+        "id": "ev-approver",
+        "document_id": "doc-b",
+        "page_start": 3,
+        "text": "承認者は管理者 B"
+      }
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 1500.0,
+      "run_id": "run-answered-agent-outcome-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": "document_answerable",
+      "split": "dev",
+      "reasoning_type": "bridge",
+      "hops": 2,
+      "retrieved_document_ids": [
+        "doc-z",
+        "doc-a",
+        "doc-b"
+      ],
+      "relevant_document_ids": [
+        "doc-a",
+        "doc-b"
+      ],
+      "hit_document_ids": [
+        "doc-a",
+        "doc-b"
+      ],
+      "required_evidence_recall": 0.5,
+      "mrr": 0.5,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": 1.0,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": "answered",
+      "outcome_source": "agent_answer",
+      "missing_evidence": [
+        "ev-approver"
+      ],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "evidence_miss"
+      ],
+      "elapsed_ms": 1500.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-answered-agent-outcome-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "outcome": "answered",
+        "agent": {
+          "run_id": "run-answered-agent-outcome-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "agent_answer",
+          "tool_calls": {
+            "rag_retrieve_evidence": 1,
+            "rag_read_source": 1
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "answered-agent-outcome",
+          "turn": 0,
+          "run_id": "run-answered-agent-outcome-0",
+          "thread_id": "thread_2bcc392a542c1d40310e2ad992adad96",
+          "status": "completed",
+          "elapsed_ms": 1500.0,
+          "outcome": "answered",
+          "outcome_source": "agent_answer",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_retrieve_evidence": 1,
+            "rag_read_source": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 1: 項目 X の上限と、その承認者は？"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": "document_answerable",
+        "split": "dev",
+        "reasoning_type": "bridge",
+        "hops": 2,
+        "retrieved_document_ids": [
+          "doc-z",
+          "doc-a",
+          "doc-b"
+        ],
+        "relevant_document_ids": [
+          "doc-a",
+          "doc-b"
+        ],
+        "hit_document_ids": [
+          "doc-a",
+          "doc-b"
+        ],
+        "required_evidence_recall": 0.5,
+        "mrr": 0.5,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": 1.0,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": "answered",
+        "outcome_source": "agent_answer",
+        "missing_evidence": [
+          "ev-approver"
+        ],
+        "turn_results": [],
+        "failure_reasons": [
+          "evidence_miss"
+        ],
+        "elapsed_ms": 1500.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "scored",
+            "reason": null
+          },
+          "mrr": {
+            "status": "scored",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "scored",
+            "reason": null
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

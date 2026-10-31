@@ -1,0 +1,1197 @@
+{
+  "name": "chat-progress",
+  "schema_version": 1,
+  "statuses": [
+    "pending",
+    "running",
+    "done",
+    "failed",
+    "skipped"
+  ],
+  "terminal_statuses": [
+    "done",
+    "failed",
+    "cancelled"
+  ],
+  "sse": {
+    "event": "chat_progress",
+    "heartbeat_event": "heartbeat",
+    "id": "seq",
+    "resume": [
+      "Last-Event-ID",
+      "since"
+    ],
+    "finished_status": 204
+  },
+  "polling": {
+    "query": "since"
+  },
+  "absent_fields": "omitted",
+  "event": {
+    "$defs": {
+      "CallContent": {
+        "additionalProperties": false,
+        "description": "呼び出し時点の内容。未記録と空の応答を区別する。",
+        "properties": {
+          "status": {
+            "default": "not_recorded",
+            "enum": [
+              "recorded",
+              "truncated",
+              "not_recorded",
+              "withheld"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 64001,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "CallContent",
+        "type": "object"
+      },
+      "CallDetails": {
+        "additionalProperties": false,
+        "description": "入力・結果・Schema の snapshot。外部の telemetry には送らない。",
+        "properties": {
+          "capture_enabled": {
+            "default": true,
+            "title": "Capture Enabled",
+            "type": "boolean"
+          },
+          "visibility": {
+            "default": "owner",
+            "enum": [
+              "owner",
+              "system_admin"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/$defs/CallContent"
+          },
+          "output": {
+            "$ref": "#/$defs/CallContent"
+          },
+          "schema": {
+            "$ref": "#/$defs/CallContent"
+          }
+        },
+        "title": "CallDetails",
+        "type": "object"
+      },
+      "ChatProgressDetailCode": {
+        "additionalProperties": false,
+        "description": "詳細の長い値（SQL・ツールの引数と結果の JSON）。画面は箱の中でスクロールして出す。",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 81,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "json",
+                  "sql",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Language"
+          },
+          "text": {
+            "maxLength": 4001,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ChatProgressDetailCode",
+        "type": "object"
+      },
+      "ChatProgressDetailField": {
+        "additionalProperties": false,
+        "description": "詳細の見出しと値（エンジン・行数・選んだ条件など）。",
+        "properties": {
+          "label": {
+            "maxLength": 81,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 1001,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          },
+          "mono": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "識別子・SQL の断片などを等幅で出す。",
+            "title": "Mono"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ChatProgressDetailField",
+        "type": "object"
+      },
+      "ChatProgressParamValue": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "ChatProgressStepDetails": {
+        "additionalProperties": false,
+        "description": "段を開いて見る詳細（3 製品共通。画面の `RunStepDetails` と同じ形。#2294）。\n\n検証の前に、上限を超えた値・要素を切り（`truncated` を付ける）、秘密らしい値を伏せる。保存済みの\n記録も同じ規則で読み直すので、長すぎる記録でイベントが捨てられることはない。",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/$defs/ChatProgressDetailField"
+            },
+            "maxItems": 20,
+            "title": "Fields",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Lines",
+            "type": "array"
+          },
+          "code": {
+            "items": {
+              "$ref": "#/$defs/ChatProgressDetailCode"
+            },
+            "maxItems": 3,
+            "title": "Code",
+            "type": "array"
+          },
+          "call": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CallDetails"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "truncated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "送る側で長さを切った。",
+            "title": "Truncated"
+          }
+        },
+        "title": "ChatProgressStepDetails",
+        "type": "object"
+      },
+      "ChatProgressStepEvent": {
+        "additionalProperties": false,
+        "description": "1 つの段階の今の状態（状態・時刻・補足の全体）。",
+        "properties": {
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "description": "イベントの形の版。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "seq": {
+            "description": "対象ごとに 1 から連続して増える番号（SSE の `id:`）。",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "target_id": {
+            "description": "対象（RAG の回答のメッセージ・NL2SQL のジョブ・Agent の Run）の id。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          },
+          "attempt": {
+            "default": 0,
+            "description": "試行。引き継いだ実行で増え、増えたら段階の一覧を作り直す。",
+            "minimum": 0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "emitted_at": {
+            "description": "記録した時刻（ISO 8601）。",
+            "format": "date-time",
+            "title": "Emitted At",
+            "type": "string"
+          },
+          "type": {
+            "const": "step",
+            "default": "step",
+            "title": "Type",
+            "type": "string"
+          },
+          "step_id": {
+            "description": "段階の id（対象の中で一意）。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Step Id",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "段階の定義の種類（画面の名前の key）。省略時は step_id。",
+            "title": "Kind"
+          },
+          "status": {
+            "$ref": "#/$defs/ChatProgressStepStatus"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "短い補足（件数・回数など）。",
+            "title": "Detail"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChatProgressParamValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "画面が名前・補足を組み立てる値（ツール名・件数など）。",
+            "title": "Params"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ChatProgressStepDetails"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "段を開いて見る詳細（見出しと値・行・SQL や JSON。上限で切り、秘密を伏せる）。"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の名前（段が span のとき。#3226）。",
+            "title": "Name"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "親の span の id（入れ子を作る）。",
+            "title": "Parent Id"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "実行の全体の span。",
+            "title": "Root"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の trace id。",
+            "title": "Trace Id"
+          },
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChatProgressParamValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の安全な属性（モデル・ツール・利用量・試行）。",
+            "title": "Attributes"
+          },
+          "cancelled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "停止で終わった span（状態は skipped）。",
+            "title": "Cancelled"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span を書いた製品（rag / nl2sql / agent。#3272）。",
+            "title": "Product"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span を書いた製品が付けた工程の名前（名詞。別の製品の画面が出す。#3272）。",
+            "title": "Display Name"
+          }
+        },
+        "required": [
+          "seq",
+          "target_id",
+          "emitted_at",
+          "step_id",
+          "status"
+        ],
+        "title": "ChatProgressStepEvent",
+        "type": "object"
+      },
+      "ChatProgressStepStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed",
+          "skipped"
+        ],
+        "type": "string"
+      },
+      "ChatProgressTerminalEvent": {
+        "additionalProperties": false,
+        "description": "対象の処理の終わり（完了・失敗・停止）。この後、同じ試行の段階のイベントは来ない。",
+        "properties": {
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "description": "イベントの形の版。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "seq": {
+            "description": "対象ごとに 1 から連続して増える番号（SSE の `id:`）。",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "target_id": {
+            "description": "対象（RAG の回答のメッセージ・NL2SQL のジョブ・Agent の Run）の id。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          },
+          "attempt": {
+            "default": 0,
+            "description": "試行。引き継いだ実行で増え、増えたら段階の一覧を作り直す。",
+            "minimum": 0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "emitted_at": {
+            "description": "記録した時刻（ISO 8601）。",
+            "format": "date-time",
+            "title": "Emitted At",
+            "type": "string"
+          },
+          "type": {
+            "const": "terminal",
+            "default": "terminal",
+            "title": "Type",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/ChatProgressTerminalStatus"
+          }
+        },
+        "required": [
+          "seq",
+          "target_id",
+          "emitted_at",
+          "status"
+        ],
+        "title": "ChatProgressTerminalEvent",
+        "type": "object"
+      },
+      "ChatProgressTerminalStatus": {
+        "enum": [
+          "done",
+          "failed",
+          "cancelled"
+        ],
+        "type": "string"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "step": "#/$defs/ChatProgressStepEvent",
+        "terminal": "#/$defs/ChatProgressTerminalEvent"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/ChatProgressStepEvent"
+      },
+      {
+        "$ref": "#/$defs/ChatProgressTerminalEvent"
+      }
+    ]
+  },
+  "page": {
+    "$defs": {
+      "CallContent": {
+        "additionalProperties": false,
+        "description": "呼び出し時点の内容。未記録と空の応答を区別する。",
+        "properties": {
+          "status": {
+            "default": "not_recorded",
+            "enum": [
+              "recorded",
+              "truncated",
+              "not_recorded",
+              "withheld"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 64001,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "CallContent",
+        "type": "object"
+      },
+      "CallDetails": {
+        "additionalProperties": false,
+        "description": "入力・結果・Schema の snapshot。外部の telemetry には送らない。",
+        "properties": {
+          "capture_enabled": {
+            "default": true,
+            "title": "Capture Enabled",
+            "type": "boolean"
+          },
+          "visibility": {
+            "default": "owner",
+            "enum": [
+              "owner",
+              "system_admin"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/$defs/CallContent"
+          },
+          "output": {
+            "$ref": "#/$defs/CallContent"
+          },
+          "schema": {
+            "$ref": "#/$defs/CallContent"
+          }
+        },
+        "title": "CallDetails",
+        "type": "object"
+      },
+      "ChatProgressDetailCode": {
+        "additionalProperties": false,
+        "description": "詳細の長い値（SQL・ツールの引数と結果の JSON）。画面は箱の中でスクロールして出す。",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 81,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "json",
+                  "sql",
+                  "text"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Language"
+          },
+          "text": {
+            "maxLength": 4001,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ChatProgressDetailCode",
+        "type": "object"
+      },
+      "ChatProgressDetailField": {
+        "additionalProperties": false,
+        "description": "詳細の見出しと値（エンジン・行数・選んだ条件など）。",
+        "properties": {
+          "label": {
+            "maxLength": 81,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 1001,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          },
+          "mono": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "識別子・SQL の断片などを等幅で出す。",
+            "title": "Mono"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ChatProgressDetailField",
+        "type": "object"
+      },
+      "ChatProgressParamValue": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "ChatProgressStepDetails": {
+        "additionalProperties": false,
+        "description": "段を開いて見る詳細（3 製品共通。画面の `RunStepDetails` と同じ形。#2294）。\n\n検証の前に、上限を超えた値・要素を切り（`truncated` を付ける）、秘密らしい値を伏せる。保存済みの\n記録も同じ規則で読み直すので、長すぎる記録でイベントが捨てられることはない。",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/$defs/ChatProgressDetailField"
+            },
+            "maxItems": 20,
+            "title": "Fields",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Lines",
+            "type": "array"
+          },
+          "code": {
+            "items": {
+              "$ref": "#/$defs/ChatProgressDetailCode"
+            },
+            "maxItems": 3,
+            "title": "Code",
+            "type": "array"
+          },
+          "call": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CallDetails"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "truncated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "送る側で長さを切った。",
+            "title": "Truncated"
+          }
+        },
+        "title": "ChatProgressStepDetails",
+        "type": "object"
+      },
+      "ChatProgressStepEvent": {
+        "additionalProperties": false,
+        "description": "1 つの段階の今の状態（状態・時刻・補足の全体）。",
+        "properties": {
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "description": "イベントの形の版。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "seq": {
+            "description": "対象ごとに 1 から連続して増える番号（SSE の `id:`）。",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "target_id": {
+            "description": "対象（RAG の回答のメッセージ・NL2SQL のジョブ・Agent の Run）の id。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          },
+          "attempt": {
+            "default": 0,
+            "description": "試行。引き継いだ実行で増え、増えたら段階の一覧を作り直す。",
+            "minimum": 0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "emitted_at": {
+            "description": "記録した時刻（ISO 8601）。",
+            "format": "date-time",
+            "title": "Emitted At",
+            "type": "string"
+          },
+          "type": {
+            "const": "step",
+            "default": "step",
+            "title": "Type",
+            "type": "string"
+          },
+          "step_id": {
+            "description": "段階の id（対象の中で一意）。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Step Id",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "段階の定義の種類（画面の名前の key）。省略時は step_id。",
+            "title": "Kind"
+          },
+          "status": {
+            "$ref": "#/$defs/ChatProgressStepStatus"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Finished At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "短い補足（件数・回数など）。",
+            "title": "Detail"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChatProgressParamValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "画面が名前・補足を組み立てる値（ツール名・件数など）。",
+            "title": "Params"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ChatProgressStepDetails"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "段を開いて見る詳細（見出しと値・行・SQL や JSON。上限で切り、秘密を伏せる）。"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の名前（段が span のとき。#3226）。",
+            "title": "Name"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "親の span の id（入れ子を作る）。",
+            "title": "Parent Id"
+          },
+          "root": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "実行の全体の span。",
+            "title": "Root"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の trace id。",
+            "title": "Trace Id"
+          },
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ChatProgressParamValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span の安全な属性（モデル・ツール・利用量・試行）。",
+            "title": "Attributes"
+          },
+          "cancelled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "停止で終わった span（状態は skipped）。",
+            "title": "Cancelled"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[a-z0-9_]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span を書いた製品（rag / nl2sql / agent。#3272）。",
+            "title": "Product"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "span を書いた製品が付けた工程の名前（名詞。別の製品の画面が出す。#3272）。",
+            "title": "Display Name"
+          }
+        },
+        "required": [
+          "seq",
+          "target_id",
+          "emitted_at",
+          "step_id",
+          "status"
+        ],
+        "title": "ChatProgressStepEvent",
+        "type": "object"
+      },
+      "ChatProgressStepStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed",
+          "skipped"
+        ],
+        "type": "string"
+      },
+      "ChatProgressTerminalEvent": {
+        "additionalProperties": false,
+        "description": "対象の処理の終わり（完了・失敗・停止）。この後、同じ試行の段階のイベントは来ない。",
+        "properties": {
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "description": "イベントの形の版。",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "seq": {
+            "description": "対象ごとに 1 から連続して増える番号（SSE の `id:`）。",
+            "minimum": 1,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "target_id": {
+            "description": "対象（RAG の回答のメッセージ・NL2SQL のジョブ・Agent の Run）の id。",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          },
+          "attempt": {
+            "default": 0,
+            "description": "試行。引き継いだ実行で増え、増えたら段階の一覧を作り直す。",
+            "minimum": 0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "emitted_at": {
+            "description": "記録した時刻（ISO 8601）。",
+            "format": "date-time",
+            "title": "Emitted At",
+            "type": "string"
+          },
+          "type": {
+            "const": "terminal",
+            "default": "terminal",
+            "title": "Type",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/ChatProgressTerminalStatus"
+          }
+        },
+        "required": [
+          "seq",
+          "target_id",
+          "emitted_at",
+          "status"
+        ],
+        "title": "ChatProgressTerminalEvent",
+        "type": "object"
+      },
+      "ChatProgressTerminalStatus": {
+        "enum": [
+          "done",
+          "failed",
+          "cancelled"
+        ],
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "description": "polling の応答（`since` より後のイベント）。",
+    "properties": {
+      "target_id": {
+        "title": "Target Id",
+        "type": "string"
+      },
+      "attempt": {
+        "description": "今の試行。",
+        "minimum": 0,
+        "title": "Attempt",
+        "type": "integer"
+      },
+      "events": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "step": "#/$defs/ChatProgressStepEvent",
+              "terminal": "#/$defs/ChatProgressTerminalEvent"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ChatProgressStepEvent"
+            },
+            {
+              "$ref": "#/$defs/ChatProgressTerminalEvent"
+            }
+          ]
+        },
+        "title": "Events",
+        "type": "array"
+      },
+      "last_seq": {
+        "description": "記録の最後の番号（次の `since` に使う）。",
+        "minimum": 0,
+        "title": "Last Seq",
+        "type": "integer"
+      },
+      "terminal": {
+        "description": "今の試行が終わったか。",
+        "title": "Terminal",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "target_id",
+      "attempt",
+      "last_seq",
+      "terminal"
+    ],
+    "title": "ChatProgressPage",
+    "type": "object"
+  }
+}

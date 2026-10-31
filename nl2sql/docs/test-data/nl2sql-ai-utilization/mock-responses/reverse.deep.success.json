@@ -1,0 +1,23 @@
+{
+  "data": {
+    "question": "売上貢献が大きい顧客上位5件を確認してください",
+    "explanation": "SQL は顧客単位の受注金額を合計し、売上貢献度の高い顧客を抽出する分析です。",
+    "referenced_tables": [
+      "APP.ORDERS"
+    ],
+    "logical_structure": "SQL 論理構造\n- 事実表: APP.ORDERS\n- 粒度: CUSTOMER_ID\n- 指標: SUM(TOTAL_AMOUNT)\n- 並び順: 金額降順\n- 件数: 5件",
+    "logical_steps": [
+      "受注を顧客別に集約する",
+      "受注金額を売上指標として合計する",
+      "売上貢献度の高い順に並べる",
+      "上位5件だけを表示する"
+    ],
+    "source": "enterprise_ai_direct",
+    "warnings": [
+      "顧客名を表示するには CUSTOMERS との JOIN が必要です。"
+    ]
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/*
+ * Production Ready NL2SQL — グローバルスタイル
+ * 色・型・余白・角丸・影・テーマは共有 UI パッケージ（platform の docs/design-system/）が正本。
+ * ここには NL2SQL 固有の書体と画面固有のレイアウトだけを書く。
+ */
+@import "@production-ready/ui/styles.css";
+
+/* 共有コンポーネントの utility クラスを Tailwind v4 のスキャン対象に含める。 */
+@source "../node_modules/@production-ready/ui/dist";
+@source "../node_modules/@production-ready/system-settings/dist";
+
+@layer base {
+  /* Tailwind の既定等幅スタックをローカル配信のコード用フォントへ揃える。 */
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  pre {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  pre code {
+    white-space: inherit;
+    overflow-wrap: inherit;
+  }
+}
+

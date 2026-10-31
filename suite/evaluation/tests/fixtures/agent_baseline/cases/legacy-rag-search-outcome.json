@@ -1,0 +1,184 @@
+{
+  "id": "legacy-rag-search-outcome",
+  "description": "成果物に outcome の無い旧形式（#1305 より前）。公開の MCP の outcome は null で、rag_search の outcome（conditional）・insufficient_reason は公開しないため、回答の文から推定する（answered。#3240 の段 2 で conditional から変わった）。根拠は HTML の表の同じ行の中で照合する。",
+  "covers": [
+    "legacy:no_answer_outcome",
+    "outcome:inferred_answered",
+    "required_evidence:table_row"
+  ],
+  "case": {
+    "id": "legacy-rag-search-outcome",
+    "category": "environment_data_required",
+    "split": "holdout",
+    "query": "合成の質問 3: 項目 Z の今の値は？",
+    "relevant_document_ids": [
+      "doc-d"
+    ],
+    "expected_outcomes": [
+      "needs_environment_data",
+      "conditional"
+    ],
+    "required_evidence": [
+      {
+        "id": "ev-default",
+        "document_id": "doc-d",
+        "text": "項目 Z 既定値 15"
+      }
+    ]
+  },
+  "turns": [
+    {
+      "observation": "completed",
+      "elapsed_ms": 750.0,
+      "run_id": "run-legacy-rag-search-outcome-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "success",
+      "category": "environment_data_required",
+      "split": "holdout",
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [
+        "doc-d"
+      ],
+      "relevant_document_ids": [
+        "doc-d"
+      ],
+      "hit_document_ids": [
+        "doc-d"
+      ],
+      "required_evidence_recall": 1.0,
+      "mrr": 1.0,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": 1.0,
+      "expected_decisions": [
+        "answer",
+        "hold"
+      ],
+      "observed_outcome": "answered",
+      "outcome_source": "inferred",
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [],
+      "elapsed_ms": 750.0,
+      "error_type": null,
+      "error_stage": null
+    },
+    "cli": {
+      "trace_id": "run-legacy-rag-search-outcome-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": {
+        "agent": {
+          "run_id": "run-legacy-rag-search-outcome-0",
+          "status": "completed",
+          "validation_status": "completed",
+          "outcome_source": "inferred",
+          "tool_calls": {
+            "rag_search": 1
+          },
+          "model_requests": 2
+        }
+      },
+      "error_message": null,
+      "runs": [
+        {
+          "case_id": "legacy-rag-search-outcome",
+          "turn": 0,
+          "run_id": "run-legacy-rag-search-outcome-0",
+          "thread_id": "thread_c614321f6e08aa846369039c13777b4e",
+          "status": "completed",
+          "elapsed_ms": 750.0,
+          "outcome": null,
+          "outcome_source": "inferred",
+          "validation_status": "completed",
+          "model_requests": 2,
+          "tool_calls": {
+            "rag_search": 1
+          },
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問 3: 項目 Z の今の値は？"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "success",
+        "category": "environment_data_required",
+        "split": "holdout",
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [
+          "doc-d"
+        ],
+        "relevant_document_ids": [
+          "doc-d"
+        ],
+        "hit_document_ids": [
+          "doc-d"
+        ],
+        "required_evidence_recall": 1.0,
+        "mrr": 1.0,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer",
+          "hold"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [],
+        "elapsed_ms": 750.0,
+        "error_type": null,
+        "error_stage": null,
+        "undetermined_evidence": [],
+        "metric_status": {
+          "required_evidence_recall": {
+            "status": "scored",
+            "reason": null
+          },
+          "mrr": {
+            "status": "scored",
+            "reason": null
+          },
+          "response_decision_accuracy": {
+            "status": "unevaluable",
+            "reason": "outcome_missing"
+          },
+          "answer_correctness": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "requirement_coverage": {
+            "status": "not_applicable",
+            "reason": null
+          },
+          "claim_support_rate": {
+            "status": "not_applicable",
+            "reason": null
+          }
+        }
+      }
+    }
+  }
+}

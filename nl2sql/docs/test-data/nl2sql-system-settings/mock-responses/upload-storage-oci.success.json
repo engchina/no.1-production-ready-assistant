@@ -1,0 +1,15 @@
+{
+  "data": {
+    "backend": "oci",
+    "local_storage_dir": "/u01/data/production-ready-nl2sql",
+    "object_storage_region": "ap-osaka-1",
+    "object_storage_namespace": "exampletenancy",
+    "object_storage_bucket": "nl2sql-originals",
+    "readiness": "ok",
+    "max_upload_bytes": 104857600,
+    "config_source": "runtime"
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

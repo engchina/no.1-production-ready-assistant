@@ -1,0 +1,92 @@
+[project]
+name = "rag-engine"
+version = "0.2.0"
+description = "rag_poc 由来の解析・Small-to-Big 分割・根拠付き回答・FAQ/ドメインキーワード実装(Gradio 非依存)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.0",
+    "openai>=1.99,<2",
+    # 言語資源（数・単位・記号などの書き方。#2181）は共有の契約のパッケージにある。
+    "rag-parser-core",
+]
+
+[project.optional-dependencies]
+# docling サービスだけが使う(backend には入れない)。
+# docling-parse 7.21 以前は、1 バイトの埋め込みフォントで文字コード 0x20 に割り当てた字（LibreOffice の
+# PDF で起きる。例「記」「架」）を空白にして落とす。7.22.2 で直っているため下限にする（#1505）。
+# torch / torchvision は CPU 版の index から入れるため、extra に直接書く（uv の sources は直接の依存にだけ効く。#1650）。
+docling = [
+    "docling>=2.0",
+    "docling-parse>=7.22.2,<8.0",
+    "pypdfium2>=5.0,<6.0",
+    "pillow>=10.0",
+    "torch>=2.13,<3",
+    "torchvision>=0.28,<1",
+]
+pdf = ["pypdfium2>=5.0,<6.0", "pillow>=10.0"]
+japanese = ["PyStemmer==3.1.0", "sudachidict_full==20260723", "sudachipy==0.6.11"]
+oracle = ["oci>=2.185.0", "oracledb>=2.5.0"]
+excel = ["openpyxl>=3.1", "xlrd>=2.0", "pandas>=2.0"]
+
+[tool.uv.sources]
+rag-parser-core = { path = "../rag_parser_core", editable = true }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+# torch / torchvision は PyTorch の CPU 版の index から入れる（#1650）。PyPI の Linux の wheel は CUDA 版で、
+# triton・nvidia-* / cuda-* の wheel（数 GB）を依存に持つが、配備先・CI に GPU は無い。
+# explicit = true で、この index は sources で指定した package にだけ使う（ほかの依存は PyPI から入れる）。
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+# CI（`RAG / Engine`）は `uv sync --locked` で入れる。lock から取るので PyPI の索引に頼らない（#387）。
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rag_engine"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+# lint の規則は rag/backend・rag/services と同じ（#1590）。指定しないと ruff の既定の規則の集合になり、版で変わる。
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# F401: 実装を submodule に分けたあとも、公開 API と兄弟モジュール・テストが使う名前を
+# ここから再 export している（chunking は #891）。未使用の import ではない（#1590）。
+"rag_engine/chunking/__init__.py" = ["F401"]
+"rag_engine/generation/answering.py" = ["F401"]
+# E501: LLM への指示（prompt）と、structured output の Field の description を書く場所。
+# 指示の文を行の幅で切ると読みにくく、prompt の差分も追いにくいため、行の長さを検査しない。
+"rag_engine/generation/grounded.py" = ["E501"]
+"rag_engine/generation/crag_support.py" = ["E501"]
+"rag_engine/generation/answer_policy.py" = ["E501"]
+"rag_engine/generation/query_prompts.py" = ["E501"]
+"rag_engine/generation/section_extraction.py" = ["E501"]
+"rag_engine/parsing/vision_prompt_rules.py" = ["E501"]
+"rag_engine/evaluation/answer_eval.py" = ["E501"]
+"rag_engine/evaluation/answer_validation.py" = ["E501"]
+"rag_engine/evaluation/crag_eval.py" = ["E501"]
+"rag_engine/knowledge/prompt_files.py" = ["E501"]
+"rag_engine/models/llm.py" = ["E501"]
+
+# 整形（#345）。black と同じ既定（二重引用符・空白の字下げ・magic trailing comma を尊重）にそろえる。
+# 行の長さは [tool.ruff] の line-length を共有する。
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.uv]
+# docling-slim（最新 2.141.0）が pillow を <13 に制約するが、取り込む文書の画像の解析の脆弱性（GHSA-462x-pgg6-55fp ほか 8 件）の修正版は 13.0.0。13.0.0 の非互換は削除された API だけで docling・本リポジトリは使わないため、制約を上書きする（#2790）。docling が 13 を許したら外す。
+override-dependencies = ["pillow>=13.0.0"]

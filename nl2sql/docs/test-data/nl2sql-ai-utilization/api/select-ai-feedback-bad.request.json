@@ -1,0 +1,10 @@
+{
+  "profile_id": "default",
+  "profile_name": "NL2SQL_DEFAULT",
+  "question": "今月の受注金額上位5件を表示してください",
+  "feedback_type": "negative",
+  "response": "SELECT c.CUSTOMER_NAME, o.ORDER_ID, o.TOTAL_AMOUNT FROM APP.ORDERS o JOIN APP.CUSTOMERS c ON c.CUSTOMER_ID = o.CUSTOMER_ID WHERE o.ORDER_DATE >= DATE '2026-08-01' ORDER BY o.TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY",
+  "feedback_content": "顧客名を JOIN してください。",
+  "generated_sql": "SELECT ORDER_ID, CUSTOMER_ID, TOTAL_AMOUNT FROM APP.ORDERS WHERE ORDER_DATE >= DATE '2026-08-01' ORDER BY TOTAL_AMOUNT DESC FETCH FIRST 5 ROWS ONLY"
+}
+

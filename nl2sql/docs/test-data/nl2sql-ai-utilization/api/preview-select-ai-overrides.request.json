@@ -1,0 +1,31 @@
+{
+  "question": "未入金の請求金額を顧客別に集計してください",
+  "engine": "select_ai",
+  "profile_id": "finance",
+  "allowed_objects": {
+    "table_names": [
+      "APP.INVOICES",
+      "APP.CUSTOMERS"
+    ],
+    "columns": {
+      "APP.INVOICES": [
+        "INVOICE_ID",
+        "CUSTOMER_ID",
+        "STATUS",
+        "TOTAL_AMOUNT",
+        "DUE_DATE"
+      ],
+      "APP.CUSTOMERS": [
+        "CUSTOMER_ID",
+        "CUSTOMER_NAME"
+      ]
+    },
+    "enforce_table_scope": true
+  },
+  "row_limit": 100,
+  "select_ai_overrides": {
+    "role": "あなたは経理部門向けに安全な SELECT SQL だけを生成するアシスタントです。",
+    "additional_instructions": "金額列は TOTAL_AMOUNT を使用し、顧客名を含めてください。"
+  }
+}
+

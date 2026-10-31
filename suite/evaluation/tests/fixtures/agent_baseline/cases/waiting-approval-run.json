@@ -1,0 +1,130 @@
+{
+  "id": "waiting-approval-run",
+  "description": "承認待ちで止まった Run はケースの失敗（AgentRunWaitingApproval）。",
+  "covers": [
+    "status:waiting_approval",
+    "case_error"
+  ],
+  "case": {
+    "id": "waiting-approval-run",
+    "category": "clarification_required",
+    "query": "合成の質問: waiting-approval-run",
+    "relevant_document_ids": [
+      "doc-a"
+    ],
+    "expected_outcomes": [
+      "answered"
+    ]
+  },
+  "turns": [
+    {
+      "observation": "waiting_approval",
+      "elapsed_ms": 1250.0,
+      "run_id": "run-waiting-approval-run-0"
+    }
+  ],
+  "expected": {
+    "scores": {
+      "status": "error",
+      "category": "clarification_required",
+      "split": null,
+      "reasoning_type": null,
+      "hops": null,
+      "retrieved_document_ids": [],
+      "relevant_document_ids": [
+        "doc-a"
+      ],
+      "hit_document_ids": [],
+      "required_evidence_recall": null,
+      "mrr": null,
+      "answer_correctness": null,
+      "requirement_coverage": null,
+      "claim_support_rate": null,
+      "response_decision_accuracy": null,
+      "expected_decisions": [
+        "answer"
+      ],
+      "observed_outcome": null,
+      "outcome_source": null,
+      "missing_evidence": [],
+      "turn_results": [],
+      "answer_evaluation": null,
+      "guardrail_warnings": [],
+      "failure_reasons": [
+        "case_error"
+      ],
+      "elapsed_ms": 1250.0,
+      "error_type": "AgentRunWaitingApproval",
+      "error_stage": "turn_0"
+    },
+    "cli": {
+      "trace_id": "run-waiting-approval-run-0",
+      "turn_trace_ids": [],
+      "diagnostics_answer": null,
+      "error_message": "Agent の Run が承認待ちで止まりました。 run_id で Agent の実行履歴を確認してください。",
+      "runs": [
+        {
+          "case_id": "waiting-approval-run",
+          "turn": 0,
+          "run_id": "run-waiting-approval-run-0",
+          "thread_id": "thread_a8ae0fc16c603e12f9e9be7df489b972",
+          "status": "waiting_approval",
+          "elapsed_ms": 1250.0,
+          "outcome": null,
+          "outcome_source": null,
+          "validation_status": null,
+          "model_requests": null,
+          "tool_calls": {},
+          "superseded_searches": 0,
+          "agent_version": null,
+          "skipped_approval_tools": [],
+          "withheld_evidence_count": 0,
+          "evidence_text_omitted": 0,
+          "cancel_result": null
+        }
+      ],
+      "chat_requests": [
+        {
+          "agent_id": "agent-baseline",
+          "question": "合成の質問: waiting-approval-run"
+        }
+      ],
+      "cancelled_run_ids": []
+    },
+    "v3": {
+      "scores": {
+        "status": "error",
+        "category": "clarification_required",
+        "split": null,
+        "reasoning_type": null,
+        "hops": null,
+        "retrieved_document_ids": [],
+        "relevant_document_ids": [
+          "doc-a"
+        ],
+        "hit_document_ids": [],
+        "required_evidence_recall": null,
+        "mrr": null,
+        "answer_correctness": null,
+        "requirement_coverage": null,
+        "claim_support_rate": null,
+        "response_decision_accuracy": null,
+        "expected_decisions": [
+          "answer"
+        ],
+        "observed_outcome": null,
+        "outcome_source": null,
+        "missing_evidence": [],
+        "turn_results": [],
+        "failure_reasons": [
+          "case_error"
+        ],
+        "elapsed_ms": 1250.0,
+        "error_type": "AgentRunWaitingApproval",
+        "error_stage": "turn_0",
+        "undetermined_evidence": [],
+        "metric_status": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "status": "success",
+    "profile": "DEFAULT",
+    "config_file": "~/.oci/config",
+    "key_file": "~/.oci/oci_api_key.pem",
+    "config_file_exists": true,
+    "key_file_exists": true,
+    "missing_fields": [],
+    "permission_issues": [],
+    "oci_directory_mode": "700",
+    "config_file_mode": "600",
+    "key_file_mode": "600",
+    "message": "OCI config を確認しました。",
+    "checked_at": "2026-08-12T00:00:00.000Z",
+    "error_type": null
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

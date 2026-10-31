@@ -1,0 +1,55 @@
+{
+  "name": "production-ready-agent-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3002",
+    "lint": "eslint . --max-warnings 0",
+    "build": "tsc --noEmit && vite build",
+    "start": "vite preview --host 0.0.0.0 --port 3002",
+    "typecheck": "tsc --noEmit",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
+    "check": "npm run lint && npm run build && npm run test && npm run test:e2e",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-hk": "^5.3.1",
+    "@fontsource-variable/noto-sans-jp": "^5.3.1",
+    "@fontsource-variable/noto-sans-sc": "^5.3.1",
+    "@fontsource-variable/noto-sans-tc": "^5.3.1",
+    "@fontsource/google-sans-code": "^5.3.2",
+    "@fontsource/roboto": "^5.3.0",
+    "@production-ready/system-settings": "file:../../platform/packages/system-settings",
+    "@production-ready/ui": "file:../../platform/packages/ui",
+    "@tanstack/react-query": "^5.62.0",
+    "lucide-react": "^0.468.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^7.17.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "postcss": "8.5.31",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.72.0",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "postcss": "8.5.31"
+  }
+}

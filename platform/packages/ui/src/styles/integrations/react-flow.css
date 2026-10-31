@@ -1,0 +1,63 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   外部ライブラリの配色 — React Flow（@xyflow/react）
+
+   React Flow の既定の配色（@xyflow/react/dist/style.css）は生の色で、ダークは `.react-flow.dark`
+   （`colorMode="dark"`）のときだけ切り替わる。製品は colorMode を渡していないため、ダークテーマでも
+   Controls（＋ − 全体表示）・帰属表示・辺のラベルの地が白いまま出ていた（#1137）。
+
+   React Flow の各色は `var(--xy-<名前>, var(--xy-<名前>-default))` で読まれる。ここでは `-default`
+   ではない方の変数を意味トークンに結び付ける。トークンは light-dark() で解決済みなので、
+   light / dark / auto のどれでも `<html>` のテーマに追従し、製品は colorMode を渡さなくてよい
+   （colorMode="system" は OS の設定に従い、画面の外観の設定と食い違う）。
+   製品が props で渡した色（`<Background color>`・`<MiniMap bgColor>` など。`--xy-*-props`）は
+   これより優先される。
+
+   製品の CSS にこの対応をコピーしないこと。React Flow を使う製品（RAG・NL2SQL）は共通でここを使う。
+   帰属表示（React Flow のリンク）は消さない（`proOptions.hideAttribution` は React Flow の
+   ライセンスの条件に従う）。色だけ合わせる。
+   ───────────────────────────────────────────────────────────────────────── */
+.react-flow {
+  /* 地は置き場所（製品の枠の bg-surface-sunken など）に任せる。 */
+  --xy-background-color: transparent;
+  /* 背景の点・線（dots / lines / cross で同じ変数）。装飾なのでコントラストの要件は無い。 */
+  --xy-background-pattern-color: var(--color-border-strong);
+
+  /* 辺は図形の情報なので 3:1（WCAG 1.4.11）の --color-border-control。 */
+  --xy-edge-stroke: var(--color-border-control);
+  --xy-edge-stroke-selected: var(--color-fg-muted);
+  --xy-connectionline-stroke: var(--color-border-control);
+  --xy-edge-label-background-color: var(--color-surface);
+  --xy-edge-label-color: var(--color-fg-muted);
+
+  --xy-node-color: var(--color-fg);
+  --xy-node-border: 1px solid var(--color-border-strong);
+  --xy-node-background-color: var(--color-surface);
+  --xy-node-group-background-color: var(--color-surface-sunken);
+  --xy-node-boxshadow-hover: var(--shadow-sm);
+  --xy-node-boxshadow-selected: 0 0 0 1px var(--color-accent-fg);
+  --xy-handle-background-color: var(--color-fg-muted);
+  --xy-handle-border-color: var(--color-surface);
+  --xy-selection-background-color: var(--color-accent-subtle);
+  --xy-selection-border: 1px dotted var(--color-accent-fg);
+  --xy-resize-background-color: var(--color-accent-emphasis);
+
+  /* Controls は図の上に浮く操作なので raised の面。 */
+  --xy-controls-button-background-color: var(--color-surface-raised);
+  --xy-controls-button-background-color-hover: var(--color-surface-hover);
+  --xy-controls-button-color: var(--color-fg);
+  --xy-controls-button-color-hover: var(--color-fg);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-controls-box-shadow: var(--shadow-sm);
+
+  --xy-minimap-background-color: var(--color-surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--color-canvas) 60%, transparent);
+  --xy-minimap-node-background-color: var(--color-border-strong);
+
+  --xy-attribution-background-color: var(--color-surface-raised);
+}
+
+/* 帰属表示のリンクの色は React Flow の CSS に生の色で書かれ、変数が無い。
+   React Flow の CSS は製品の画面の chunk で後から読まれるため、詳細度を 1 段上げて上書きする。 */
+.react-flow .react-flow__attribution a {
+  color: var(--color-fg-muted);
+}

@@ -1,0 +1,18 @@
+{
+  "sql": "UPDATE APP.ORDERS SET STATUS = 'CANCELLED' WHERE ORDER_ID = 1001",
+  "profile_id": "default",
+  "allowed_objects": {
+    "table_names": [
+      "APP.ORDERS"
+    ],
+    "columns": {
+      "APP.ORDERS": [
+        "ORDER_ID",
+        "STATUS"
+      ]
+    },
+    "enforce_table_scope": true
+  },
+  "row_limit": 100
+}
+

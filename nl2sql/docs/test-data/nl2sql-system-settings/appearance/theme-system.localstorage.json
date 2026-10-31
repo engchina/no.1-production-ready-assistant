@@ -1,0 +1,13 @@
+{
+  "state": {
+    "sidebarCollapsed": true,
+    "collapsedSections": {
+      "ai": false,
+      "dataPreparation": false,
+      "settings": false
+    },
+    "theme": "system"
+  },
+  "version": 0
+}
+

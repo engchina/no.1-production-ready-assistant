@@ -1,0 +1,18 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   DOMAIN EXTENSION — オントロジー / 関係グラフの配色
+
+   これはプラットフォーム共通の意味論ではなく NL2SQL 固有の語彙です。
+   core の semantic トークンと混ぜないために別ファイルに分離しています。
+   グラフを使わない製品（RAG / Agent）はこの @import を外して構いません。
+
+   規約: 種別 = 塗り (fill) / 状態 = 線 (stroke)
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --color-graph-entity:  light-dark(#dbeafe, #173a5e);
+  --color-graph-metric:  light-dark(#ede9fe, #362a59);
+  --color-graph-sql:     light-dark(#e2e8f0, #27323f);
+  --color-graph-term:    light-dark(#ccfbf1, #17473f);
+  --color-graph-default: light-dark(#f8fafc, #242b35);
+  --color-graph-fg:      light-dark(#0f172a, #eff3f7);
+  --color-graph-line:    light-dark(#94a3b8, #667386);
+}

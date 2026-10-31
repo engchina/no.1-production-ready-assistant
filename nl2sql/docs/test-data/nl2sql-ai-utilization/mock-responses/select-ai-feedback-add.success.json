@@ -1,0 +1,20 @@
+{
+  "data": {
+    "runtime": "deterministic",
+    "executed": true,
+    "status": "added",
+    "profile_name": "NL2SQL_DEFAULT",
+    "index_name": "NL2SQL_DEFAULT_FEEDBACK_IDX",
+    "table_name": "NL2SQL_DEFAULT_FEEDBACK",
+    "sql_text": "BEGIN DBMS_CLOUD_AI.FEEDBACK(...); END;",
+    "stored_feedback_type": "positive",
+    "plsql_preview": "DBMS_CLOUD_AI.FEEDBACK profile=NL2SQL_DEFAULT",
+    "warnings": [],
+    "engine_meta": {
+      "network_call": false
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

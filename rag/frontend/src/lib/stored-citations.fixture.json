@@ -1,0 +1,655 @@
+{
+  "cases": [
+    {
+      "name": "pdf_small_to_big_child",
+      "full": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:0",
+        "text": "障害連絡規程\n発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）",
+        "score": 0.031746,
+        "rerank_score": null,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "source_seq_ranges_json": "[{\"page\": 1, \"seq_start\": 1, \"seq_end\": 2}]",
+          "chunk_strategy": "small_to_big",
+          "element_ids": "docling-p1-1,docling-p1-2",
+          "start_offset": 0,
+          "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+          "vector_rank": 3,
+          "chunk_group_id": "chunk-docling-p000001",
+          "page_end": 1,
+          "rrf_k": 60,
+          "engine_metadata_json": "{\"schema_version\": 4, \"active\": true, \"atomic\": false, \"content_hash\": \"8be61fd36b1656b7f5e5700b22bbcdfc4a1650a6c7211ab2b1d24ce46aaa9c32\", \"document\": {\"schema_version\": 1, \"source_document_id\": \"source-14a6bcf3a44aa947eb2840cf34f4f5cb\", \"identity_source\": \"local_filename\", \"classification\": {\"large_category\": \"\", \"middle_category\": \"\", \"small_category\": \"\"}}, \"section_path\": [\"障害連絡規程\"], \"section_path_sources\": [\"section_header\"], \"source_categories\": [\"Section-header\", \"Text\"], \"retrieval_profile\": {\"active_profiles\": [\"file_data_confirmation\"]}, \"layout\": {\"display_regions\": [{\"page\": 1, \"boxes\": [{\"record_id\": \"docling-p1-1\", \"seq_no\": 1, \"category\": \"Section-header\", \"bbox\": [236.7, 168.2, 686.8, 276.8], \"text_preview\": \"障害連絡規程\"}, {\"record_id\": \"docling-p1-2\", \"seq_no\": 2, \"category\": \"Text\", \"bbox\": [236.7, 400.6, 2039.8, 467.0], \"text_preview\": \"発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）\"}]}], \"native_text_ranges\": [{\"record_id\": \"docling-p1-2\", \"page\": 1, \"start\": 7, \"end\": 51}]}}",
+          "atomic": false,
+          "keyword_score": 0.59,
+          "evidence_role": "neighbor_context",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "retrieval_vector_count": 150,
+          "end_offset": 51,
+          "bbox_unit": "absolute",
+          "source_parser": "docling_layout",
+          "text_sha256": "8be61fd36b1656b7f5e5700b22bbcdfc4a1650a6c7211ab2b1d24ce46aaa9c32",
+          "retrieval_fused_count": 150,
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "parent_text": "障害連絡規程\n発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）\n\n第 1 章 最初の連絡\n障害を見つけた人は、システムの重要度に応じて次のとおり連絡します。システムの重要度は、システ\nム台帳の「重要度",
+          "rrf_score": 0.031746,
+          "source_derivation_id": "856b81970bf148f69eb3bedb525f75fc",
+          "engine_chunk_id": "chunk-docling-c000001",
+          "parent_chunk_id": "chunk-docling-p000001",
+          "page_number": 1,
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程",
+          "engine_chunk_seq": 1,
+          "source_record_refs_json": "[{\"record_id\": \"docling-p1-1\", \"page\": 1, \"seq_no\": 1, \"category\": \"Section-header\", \"raw_type\": \"section_header\", \"bbox",
+          "retrieval_fusion_dropped_count": 0,
+          "retrieval_mode": "hybrid",
+          "bbox": "[236.7, 168.2, 2039.8, 467.0]",
+          "section_path": "障害連絡規程",
+          "engine_search_text": "Source file: incident-contact-rules.pdf\nPages: p.1\nSection path: 障害連絡規程\nParent summary: 障害連絡規程 発行: 2026年4月1日 対象: サンプル社のシ",
+          "retrieval_keyword_count": 7,
+          "page_start": 1,
+          "chunk_group_kind": "small_to_big_parent",
+          "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:0",
+          "keyword_rank": 3,
+          "chunk_index": 0,
+          "vector_score": 0.484151,
+          "retrieval_overlap_count": 7
+        }
+      },
+      "stored": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:0",
+        "text": "障害連絡規程\n発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）",
+        "score": 0.031746,
+        "rerank_score": null,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "element_ids": "docling-p1-1,docling-p1-2",
+          "vector_rank": 3,
+          "page_end": 1,
+          "evidence_role": "neighbor_context",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "bbox_unit": "absolute",
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "rrf_score": 0.031746,
+          "page_number": 1,
+          "bbox": "[236.7, 168.2, 2039.8, 467.0]",
+          "section_path": "障害連絡規程",
+          "page_start": 1,
+          "keyword_rank": 3,
+          "display_regions": [
+            {
+              "page": 1,
+              "boxes": [
+                {
+                  "record_id": "docling-p1-1",
+                  "seq_no": 1,
+                  "category": "Section-header",
+                  "bbox": [
+                    236.7,
+                    168.2,
+                    686.8,
+                    276.8
+                  ],
+                  "text_preview": "障害連絡規程"
+                },
+                {
+                  "record_id": "docling-p1-2",
+                  "seq_no": 2,
+                  "category": "Text",
+                  "bbox": [
+                    236.7,
+                    400.6,
+                    2039.8,
+                    467.0
+                  ],
+                  "text_preview": "発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）"
+                }
+              ]
+            }
+          ],
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程"
+        },
+        "figure_image_available": false
+      }
+    },
+    {
+      "name": "excel_rows",
+      "full": {
+        "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+        "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+        "text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘",
+        "score": 0.0125,
+        "rerank_score": null,
+        "file_name": "system-ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "context_group_expanded": true,
+          "parent_row_start": 40,
+          "chunk_strategy": "small_to_big",
+          "element_ids": "sheet-000-r40",
+          "start_offset": 2950,
+          "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+          "chunk_template": "office_sheet",
+          "chunk_part_count": 12,
+          "context_group_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "chunk_group_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "chunk_size_compliance": "within_limit",
+          "parent_row_end": 51,
+          "evidence_role": "neighbor_context",
+          "chunk_size_target": 1000,
+          "chunk_profile": "structure_v1",
+          "chunk_set_id": "fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b",
+          "row_end": 40,
+          "section_title": "システム台帳",
+          "evidence_model_used": false,
+          "context_anchor_chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:38",
+          "content_kind": "record",
+          "end_offset": 3026,
+          "source_parser": "sheet_records",
+          "context_group_distance": -1,
+          "text_sha256": "e0bf4d1a31de365e39cff027d83ab4b21da5318dd64c549f2fb9e343a7bcde91",
+          "chunk_size_limit": 1000,
+          "parent_text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘\nシステムID: SYS-138 / 正式名: 内部通報窓口システム / 略称・別表記:",
+          "text_chars": 76,
+          "source_derivation_id": "89be34c25379455598878d13e8f7bf56",
+          "row_start": 40,
+          "chunk_part_index": 1,
+          "parent_chunk_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "cell_range": "A40:F40",
+          "context_header": "system-ledger.xlsx > システム台帳",
+          "engine_chunk_seq": 37,
+          "element_kinds": "text",
+          "section_level": 1,
+          "parent_cell_range": "A40:F51",
+          "section_path": "システム台帳",
+          "chunk_group_kind": "small_to_big_parent",
+          "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+          "chunk_index": 37,
+          "sheet_name": "システム台帳"
+        }
+      },
+      "stored": {
+        "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+        "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+        "text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘",
+        "score": 0.0125,
+        "rerank_score": null,
+        "file_name": "system-ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "element_ids": "sheet-000-r40",
+          "evidence_role": "neighbor_context",
+          "chunk_profile": "structure_v1",
+          "chunk_set_id": "fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b",
+          "row_end": 40,
+          "section_title": "システム台帳",
+          "evidence_model_used": false,
+          "content_kind": "record",
+          "row_start": 40,
+          "section_path": "システム台帳",
+          "sheet_name": "システム台帳",
+          "context_header": "system-ledger.xlsx > システム台帳"
+        },
+        "figure_image_available": false
+      }
+    },
+    {
+      "name": "reranked",
+      "full": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+        "text": "第 3 章 連絡の手段\n連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。",
+        "score": 0.032787,
+        "rerank_score": 0.9426336,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "source_seq_ranges_json": "[{\"page\": 1, \"seq_start\": 14, \"seq_end\": 15}]",
+          "chunk_strategy": "small_to_big",
+          "element_ids": "docling-p1-14,docling-p1-15",
+          "start_offset": 0,
+          "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+          "vector_rank": 1,
+          "chunk_group_id": "chunk-docling-p000001",
+          "page_end": 1,
+          "rrf_k": 60,
+          "engine_metadata_json": "{\"schema_version\": 4, \"active\": true, \"atomic\": false, \"content_hash\": \"0aeda8661bcd34c51954a396c6c66a6882ea7a2ab7d59fa7c5a0ab930686885c\", \"document\": {\"schema_version\": 1, \"source_document_id\": \"source-14a6bcf3a44aa947eb2840cf34f4f5cb\", \"identity_source\": \"local_filename\", \"classification\": {\"large_category\": \"\", \"middle_category\": \"\", \"small_category\": \"\"}}, \"section_path\": [\"障害連絡規程\", \"第 3 章 連絡の手段\"], \"section_path_sources\": [\"section_header\", \"section_header\"], \"source_categories\": [\"Section-header\", \"Text\"], \"retrieval_profile\": {\"active_profiles\": [\"file_data_confirmation\"]}, \"layout\": {\"display_regions\": [{\"page\": 1, \"boxes\": [{\"record_id\": \"docling-p1-14\", \"seq_no\": 14, \"category\": \"Section-header\", \"bbox\": [236.7, 2307.1, 718.1, 2390.9], \"text_preview\": \"第 3 章 連絡の手段\"}, {\"record_id\": \"docling-p1-15\", \"seq_no\": 15, \"category\": \"Text\", \"bbox\": [236.7, 2466.1, 2363.2, 2638.7], \"text_preview\": \"連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。\"}]}], \"native_text_ranges\": [{\"record_id\": \"docling-p1-15\", \"page\": 1, \"start\": 12, \"end\": 85}]}}",
+          "atomic": false,
+          "keyword_score": 0.77,
+          "evidence_role": "retrieved_anchor",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "retrieval_vector_count": 150,
+          "end_offset": 85,
+          "bbox_unit": "absolute",
+          "source_parser": "docling_layout",
+          "text_sha256": "0aeda8661bcd34c51954a396c6c66a6882ea7a2ab7d59fa7c5a0ab930686885c",
+          "retrieval_fused_count": 150,
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "parent_text": "障害連絡規程\n発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）\n\n第 1 章 最初の連絡\n障害を見つけた人は、システムの重要度に応じて次のとおり連絡します。システムの重要度は、システ\nム台帳の「重要度",
+          "evidence_retrieval_rank": 1,
+          "rrf_score": 0.032787,
+          "source_derivation_id": "856b81970bf148f69eb3bedb525f75fc",
+          "engine_chunk_id": "chunk-docling-c000004",
+          "parent_chunk_id": "chunk-docling-p000001",
+          "answer_citation_lines": [
+            1
+          ],
+          "page_number": 1,
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程 > 第 3 章 連絡の手段",
+          "engine_chunk_seq": 4,
+          "source_record_refs_json": "[{\"record_id\": \"docling-p1-14\", \"page\": 1, \"seq_no\": 14, \"category\": \"Section-header\", \"raw_type\": \"section_header\", \"bb",
+          "retrieval_fusion_dropped_count": 0,
+          "rerank_rank": 1,
+          "retrieval_mode": "hybrid",
+          "bbox": "[236.7, 2307.1, 2363.2, 2638.7]",
+          "section_path": "障害連絡規程 > 第 3 章 連絡の手段",
+          "engine_search_text": "Source file: incident-contact-rules.pdf\nPages: p.1\nSection path: 障害連絡規程 > 第 3 章 連絡の手段\nParent summary: 障害連絡規程 発行: 2026年4月",
+          "retrieval_keyword_count": 7,
+          "page_start": 1,
+          "chunk_group_kind": "small_to_big_parent",
+          "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+          "keyword_rank": 1,
+          "chunk_index": 3,
+          "vector_score": 0.574311,
+          "retrieval_overlap_count": 7
+        }
+      },
+      "stored": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+        "text": "第 3 章 連絡の手段\n連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。",
+        "score": 0.032787,
+        "rerank_score": 0.9426336,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "element_ids": "docling-p1-14,docling-p1-15",
+          "vector_rank": 1,
+          "page_end": 1,
+          "evidence_role": "retrieved_anchor",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "bbox_unit": "absolute",
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "rrf_score": 0.032787,
+          "answer_citation_lines": [
+            1
+          ],
+          "page_number": 1,
+          "rerank_rank": 1,
+          "bbox": "[236.7, 2307.1, 2363.2, 2638.7]",
+          "section_path": "障害連絡規程 > 第 3 章 連絡の手段",
+          "page_start": 1,
+          "keyword_rank": 1,
+          "display_regions": [
+            {
+              "page": 1,
+              "boxes": [
+                {
+                  "record_id": "docling-p1-14",
+                  "seq_no": 14,
+                  "category": "Section-header",
+                  "bbox": [
+                    236.7,
+                    2307.1,
+                    718.1,
+                    2390.9
+                  ],
+                  "text_preview": "第 3 章 連絡の手段"
+                },
+                {
+                  "record_id": "docling-p1-15",
+                  "seq_no": 15,
+                  "category": "Text",
+                  "bbox": [
+                    236.7,
+                    2466.1,
+                    2363.2,
+                    2638.7
+                  ],
+                  "text_preview": "連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。"
+                }
+              ]
+            }
+          ],
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程 > 第 3 章 連絡の手段"
+        },
+        "figure_image_available": false
+      }
+    },
+    {
+      "name": "answer_citation_line",
+      "full": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+        "text": "第 3 章 連絡の手段\n連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。",
+        "score": 0.032787,
+        "rerank_score": 0.9426336,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "source_seq_ranges_json": "[{\"page\": 1, \"seq_start\": 14, \"seq_end\": 15}]",
+          "chunk_strategy": "small_to_big",
+          "element_ids": "docling-p1-14,docling-p1-15",
+          "start_offset": 0,
+          "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+          "vector_rank": 1,
+          "chunk_group_id": "chunk-docling-p000001",
+          "page_end": 1,
+          "rrf_k": 60,
+          "engine_metadata_json": "{\"schema_version\": 4, \"active\": true, \"atomic\": false, \"content_hash\": \"0aeda8661bcd34c51954a396c6c66a6882ea7a2ab7d59fa7c5a0ab930686885c\", \"document\": {\"schema_version\": 1, \"source_document_id\": \"source-14a6bcf3a44aa947eb2840cf34f4f5cb\", \"identity_source\": \"local_filename\", \"classification\": {\"large_category\": \"\", \"middle_category\": \"\", \"small_category\": \"\"}}, \"section_path\": [\"障害連絡規程\", \"第 3 章 連絡の手段\"], \"section_path_sources\": [\"section_header\", \"section_header\"], \"source_categories\": [\"Section-header\", \"Text\"], \"retrieval_profile\": {\"active_profiles\": [\"file_data_confirmation\"]}, \"layout\": {\"display_regions\": [{\"page\": 1, \"boxes\": [{\"record_id\": \"docling-p1-14\", \"seq_no\": 14, \"category\": \"Section-header\", \"bbox\": [236.7, 2307.1, 718.1, 2390.9], \"text_preview\": \"第 3 章 連絡の手段\"}, {\"record_id\": \"docling-p1-15\", \"seq_no\": 15, \"category\": \"Text\", \"bbox\": [236.7, 2466.1, 2363.2, 2638.7], \"text_preview\": \"連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。\"}]}], \"native_text_ranges\": [{\"record_id\": \"docling-p1-15\", \"page\": 1, \"start\": 12, \"end\": 85}]}}",
+          "atomic": false,
+          "keyword_score": 0.77,
+          "evidence_role": "retrieved_anchor",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "retrieval_vector_count": 150,
+          "end_offset": 85,
+          "bbox_unit": "absolute",
+          "source_parser": "docling_layout",
+          "text_sha256": "0aeda8661bcd34c51954a396c6c66a6882ea7a2ab7d59fa7c5a0ab930686885c",
+          "retrieval_fused_count": 150,
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "parent_text": "障害連絡規程\n発行: 2026年4月1日 対象: サンプル社のシステム（架空の会社。評 用の合成資料）\n\n第 1 章 最初の連絡\n障害を見つけた人は、システムの重要度に応じて次のとおり連絡します。システムの重要度は、システ\nム台帳の「重要度",
+          "evidence_retrieval_rank": 1,
+          "rrf_score": 0.032787,
+          "source_derivation_id": "856b81970bf148f69eb3bedb525f75fc",
+          "engine_chunk_id": "chunk-docling-c000004",
+          "parent_chunk_id": "chunk-docling-p000001",
+          "answer_citation_lines": [
+            1
+          ],
+          "page_number": 1,
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程 > 第 3 章 連絡の手段",
+          "engine_chunk_seq": 4,
+          "source_record_refs_json": "[{\"record_id\": \"docling-p1-14\", \"page\": 1, \"seq_no\": 14, \"category\": \"Section-header\", \"raw_type\": \"section_header\", \"bb",
+          "retrieval_fusion_dropped_count": 0,
+          "rerank_rank": 1,
+          "retrieval_mode": "hybrid",
+          "bbox": "[236.7, 2307.1, 2363.2, 2638.7]",
+          "section_path": "障害連絡規程 > 第 3 章 連絡の手段",
+          "engine_search_text": "Source file: incident-contact-rules.pdf\nPages: p.1\nSection path: 障害連絡規程 > 第 3 章 連絡の手段\nParent summary: 障害連絡規程 発行: 2026年4月",
+          "retrieval_keyword_count": 7,
+          "page_start": 1,
+          "chunk_group_kind": "small_to_big_parent",
+          "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+          "keyword_rank": 1,
+          "chunk_index": 3,
+          "vector_score": 0.574311,
+          "retrieval_overlap_count": 7
+        }
+      },
+      "stored": {
+        "document_id": "1af4795b4849482eb1bfcc7b250f43ba",
+        "chunk_id": "1af4795b4849482eb1bfcc7b250f43ba:14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7:3",
+        "text": "第 3 章 連絡の手段\n連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。",
+        "score": 0.032787,
+        "rerank_score": 0.9426336,
+        "file_name": "incident-contact-rules.pdf",
+        "category_name": null,
+        "metadata": {
+          "element_ids": "docling-p1-14,docling-p1-15",
+          "vector_rank": 1,
+          "page_end": 1,
+          "evidence_role": "retrieved_anchor",
+          "chunk_set_id": "14d7e71f39bc2c88c296b231fe59daad256b83a6a6ece2f13216f711fd8818e7",
+          "page_height": 3508,
+          "evidence_model_used": true,
+          "recipe_id": "edd307a0fe983863da384019cc66edf70c11c25a1d5dc8928e3a21bb6eae4939",
+          "content_kind": "text",
+          "bbox_unit": "absolute",
+          "page_width": 2481,
+          "recipe_slot_no": 1,
+          "rrf_score": 0.032787,
+          "answer_citation_lines": [
+            1
+          ],
+          "page_number": 1,
+          "rerank_rank": 1,
+          "bbox": "[236.7, 2307.1, 2363.2, 2638.7]",
+          "section_path": "障害連絡規程 > 第 3 章 連絡の手段",
+          "page_start": 1,
+          "keyword_rank": 1,
+          "display_regions": [
+            {
+              "page": 1,
+              "boxes": [
+                {
+                  "record_id": "docling-p1-14",
+                  "seq_no": 14,
+                  "category": "Section-header",
+                  "bbox": [
+                    236.7,
+                    2307.1,
+                    718.1,
+                    2390.9
+                  ],
+                  "text_preview": "第 3 章 連絡の手段"
+                },
+                {
+                  "record_id": "docling-p1-15",
+                  "seq_no": 15,
+                  "category": "Text",
+                  "bbox": [
+                    236.7,
+                    2466.1,
+                    2363.2,
+                    2638.7
+                  ],
+                  "text_preview": "連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書 き込み、15 分ごとに電話をかけ直します。"
+                }
+              ]
+            }
+          ],
+          "context_header": "incident-contact-rules.pdf > 障害連絡規程 > 第 3 章 連絡の手段"
+        },
+        "figure_image_available": false
+      }
+    },
+    {
+      "name": "neighbor_context",
+      "full": {
+        "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+        "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+        "text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘",
+        "score": 0.0125,
+        "rerank_score": null,
+        "file_name": "system-ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "context_group_expanded": true,
+          "parent_row_start": 40,
+          "chunk_strategy": "small_to_big",
+          "element_ids": "sheet-000-r40",
+          "start_offset": 2950,
+          "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+          "chunk_template": "office_sheet",
+          "chunk_part_count": 12,
+          "context_group_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "chunk_group_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "chunk_size_compliance": "within_limit",
+          "parent_row_end": 51,
+          "evidence_role": "neighbor_context",
+          "chunk_size_target": 1000,
+          "chunk_profile": "structure_v1",
+          "chunk_set_id": "fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b",
+          "row_end": 40,
+          "section_title": "システム台帳",
+          "evidence_model_used": false,
+          "context_anchor_chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:38",
+          "content_kind": "record",
+          "end_offset": 3026,
+          "source_parser": "sheet_records",
+          "context_group_distance": -1,
+          "text_sha256": "e0bf4d1a31de365e39cff027d83ab4b21da5318dd64c549f2fb9e343a7bcde91",
+          "chunk_size_limit": 1000,
+          "parent_text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘\nシステムID: SYS-138 / 正式名: 内部通報窓口システム / 略称・別表記:",
+          "text_chars": 76,
+          "source_derivation_id": "89be34c25379455598878d13e8f7bf56",
+          "row_start": 40,
+          "chunk_part_index": 1,
+          "parent_chunk_id": "6fc9a271c1e7301b3dcaefa600419551",
+          "cell_range": "A40:F40",
+          "context_header": "system-ledger.xlsx > システム台帳",
+          "engine_chunk_seq": 37,
+          "element_kinds": "text",
+          "section_level": 1,
+          "parent_cell_range": "A40:F51",
+          "section_path": "システム台帳",
+          "chunk_group_kind": "small_to_big_parent",
+          "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+          "chunk_index": 37,
+          "sheet_name": "システム台帳"
+        }
+      },
+      "stored": {
+        "document_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58",
+        "chunk_id": "1b5b49ab6c10443d9a2cd41a0d9e0e58:fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b:37",
+        "text": "システムID: SYS-137 / 正式名: 監査記録システム / 略称・別表記: 監査記録 / 担当部署: 監 / 重要度: B / 機密区分: 極秘",
+        "score": 0.0125,
+        "rerank_score": null,
+        "file_name": "system-ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "element_ids": "sheet-000-r40",
+          "evidence_role": "neighbor_context",
+          "chunk_profile": "structure_v1",
+          "chunk_set_id": "fd4ee32634b407075c67b2e88d824d7c327f4c0fe746899e7fb0d76cdabbb22b",
+          "row_end": 40,
+          "section_title": "システム台帳",
+          "evidence_model_used": false,
+          "content_kind": "record",
+          "row_start": 40,
+          "section_path": "システム台帳",
+          "sheet_name": "システム台帳",
+          "context_header": "system-ledger.xlsx > システム台帳"
+        },
+        "figure_image_available": false
+      }
+    },
+    {
+      "name": "synthetic_table_cell",
+      "full": {
+        "document_id": "doc-synthetic",
+        "chunk_id": "doc-synthetic:chunk-1",
+        "text": "表の値",
+        "score": 0.5,
+        "rerank_score": null,
+        "file_name": "ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "page": 2,
+          "page_label_start": "ii",
+          "content_kind": "table",
+          "table_id": "table-1",
+          "table_cell_refs": "B2,B3",
+          "table_cell_row": 2,
+          "table_cell_col": 3,
+          "bbox_x1": 0.1,
+          "bbox_y1": 0.2,
+          "bbox_x2": 0.6,
+          "bbox_y2": 0.4,
+          "bbox_coordinate_unit": "ratio",
+          "page_rotation": 90,
+          "layout": {
+            "display_regions": [
+              {
+                "page": 2,
+                "boxes": [
+                  {
+                    "bbox": [
+                      1,
+                      2,
+                      3,
+                      4
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "document_superseded": true,
+          "context_role": "evidence",
+          "evidence_model_used": false,
+          "keyword_rank": 4,
+          "parent_text": "親の本文",
+          "engine_search_text": "索引の文字列",
+          "source_record_refs_json": "[]",
+          "retrieval_mode": "hybrid",
+          "rrf_score": 0.01,
+          "empty": null
+        }
+      },
+      "stored": {
+        "document_id": "doc-synthetic",
+        "chunk_id": "doc-synthetic:chunk-1",
+        "text": "表の値",
+        "score": 0.5,
+        "rerank_score": null,
+        "file_name": "ledger.xlsx",
+        "category_name": null,
+        "metadata": {
+          "page": 2,
+          "page_label_start": "ii",
+          "content_kind": "table",
+          "table_id": "table-1",
+          "table_cell_refs": "B2,B3",
+          "table_cell_row": 2,
+          "table_cell_col": 3,
+          "bbox_x1": 0.1,
+          "bbox_y1": 0.2,
+          "bbox_x2": 0.6,
+          "bbox_y2": 0.4,
+          "bbox_coordinate_unit": "ratio",
+          "page_rotation": 90,
+          "document_superseded": true,
+          "context_role": "evidence",
+          "evidence_model_used": false,
+          "keyword_rank": 4,
+          "rrf_score": 0.01,
+          "display_regions": [
+            {
+              "page": 2,
+              "boxes": [
+                {
+                  "bbox": [
+                    1,
+                    2,
+                    3,
+                    4
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "figure_image_available": false
+      }
+    }
+  ]
+}

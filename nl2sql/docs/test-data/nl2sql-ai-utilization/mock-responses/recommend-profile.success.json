@@ -1,0 +1,67 @@
+{
+  "data": {
+    "recommended_profile_id": "finance",
+    "recommended_profile_name": "経理分析プロファイル",
+    "confidence": 0.91,
+    "reason": "質問に「未入金」「請求」が含まれるため、経理分析プロファイルを推薦しました。",
+    "rewritten_question": "未入金の請求金額を顧客別に集計してください",
+    "recommended_allowed_objects": {
+      "table_names": [
+        "APP.INVOICES",
+        "APP.CUSTOMERS"
+      ],
+      "columns": {
+        "APP.INVOICES": [
+          "INVOICE_ID",
+          "CUSTOMER_ID",
+          "STATUS",
+          "TOTAL_AMOUNT",
+          "DUE_DATE"
+        ],
+        "APP.CUSTOMERS": [
+          "CUSTOMER_ID",
+          "CUSTOMER_NAME"
+        ]
+      },
+      "enforce_table_scope": true
+    },
+    "candidates": [
+      {
+        "profile_id": "finance",
+        "profile_name": "経理分析プロファイル",
+        "score": 0.91,
+        "matched_terms": [
+          "未入金",
+          "請求"
+        ],
+        "allowed_tables": [
+          "APP.INVOICES",
+          "APP.CUSTOMERS"
+        ],
+        "category": "finance"
+      },
+      {
+        "profile_id": "default",
+        "profile_name": "標準業務プロファイル",
+        "score": 0.62,
+        "matched_terms": [
+          "顧客"
+        ],
+        "allowed_tables": [
+          "APP.ORDERS",
+          "APP.CUSTOMERS"
+        ],
+        "category": "sales"
+      }
+    ],
+    "recommendation_source": "deterministic",
+    "classifier_version": "classifier-v1",
+    "category_scores": {
+      "finance": 0.91,
+      "sales": 0.62
+    }
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+

@@ -1,0 +1,2074 @@
+name: CI
+
+# monorepo（platform / rag / nl2sql / agent）の統合 CI（#71）。
+# changes job で変更パスを判定し、変更のあった製品の job だけを実行する。
+# platform/ は frontend（共有 UI・システム設定画面・デザインシステム）と backend（backend_core・system_settings_backend）に
+# 分けて判定し、製品の frontend / backend の job はそれぞれの側の変更だけで動く（#339）。
+# 本 workflow・.github/actions/ と、どちらにも属さない platform のファイル（.env.example・contracts/ 等）の変更は両方に効く。
+# 例外: 回答の段落の判定の共通の事例（platform/contracts/answer-passages/）は backend のテストだけが読むので、
+# それを読む RAG / Engine・RAG / Backend・Agent / Backend だけを動かす（frontend・e2e は動かさない。#1488）。
+# ただし段落の印の契約（passage-marks.json）は共有 UI のテストも読むので、共有 UI の変更として frontend も動かす（#2738）。
+# 製品の frontend と E2E smoke の job は、その製品の frontend（と frontend のテストが読む backend の一部のファイル。
+# <製品>_frontend）か共有 UI の変更でだけ動く。e2e は API をすべてモックするので backend のコードを実行しない（#1531）。
+# 製品の backend の job（Backend・Engine・services の lint）は、その製品の frontend 以外（と backend のテストが読む
+# frontend の一部のファイル。<製品>_backend）か共通の backend の変更でだけ動く（#1592）。
+# 配備の検証（Suite / Deploy。suite-deploy.yml）は、製品の frontend・共有 UI・Markdown だけの変更では動かない（#1592）。
+# frontend が読む frontend の外のファイル・backend が読む frontend のファイルが filter に入っていることは
+# platform/scripts/ci_frontend_paths.py が確かめる。
+# MCP ツールの契約（platform/contracts/mcp/）は 3 製品の backend のテストだけが読むので、backend の job だけを動かす（#1531）。
+# RAG の job は、RAG が読む契約（rag_contracts: rag-tools.json と、Agent の回答の節の事例を除く answer-passages）の
+# 変更と、RAG の出力の合成の例（fixtures/rag-tool-outputs.json）の変更でだけ動く。Agent・NL2SQL の MCP の契約と
+# Agent の評価の共有の fixture は RAG が読まない（#3240。
+# rag/backend/tests/test_product_boundaries.py が rag のコードから読まないことを確かめる）。
+# 製品横断の評価（suite/evaluation。独立の uv project）は Suite / Evaluation が、platform の採点の部品
+# （platform/packages/evaluation_scoring）は Platform / evaluation_scoring と、それを使う RAG / Backend・Suite / Evaluation が
+# 確かめる（#3240）。採点の部品は platform_other から外し、ほかの製品の job は動かさない。
+# platform の Markdown（AGENTS.md・README・docs/ux-contracts・docs/design-system 等）だけの変更では製品の job を動かさない
+# （docs/design-system/ の Markdown 以外（lint の設定・plugin・reference）は frontend に数える。#1592）。
+# RAG の外部 parser のサービス（rag/services/parsers/<name>。uv の venv が独立）の pytest は、その parser と
+# path 依存（rag_parser_core・rag_engine・backend_core）・テストのデータ・venv を作るスクリプトが変わったときだけ動かす
+# （rag/ の他の変更では動かさない。torch 等が重い docling だけ。#1512）。
+# branch protection の必須 check は最後の `CI OK` だけにする（skip された job を必須にすると pending のまま止まるため）。
+# main の push で失敗したら ci-failure-issue.yml が Issue を作る（ruleset の strict をやめたため。#339）。
+# PR の e2e は製品ごとの smoke と、差分に影響を受ける spec（e2e-impact。#885）。impact が全件の製品は smoke を
+# 飛ばし（全件が smoke の spec を含む）、selected のときは smoke の spec を impact から除く（#1525）。
+# PR の e2e の 375px の project は、画面幅に依存するテスト（@responsive）だけを実行する（workflow の env の
+# E2E_MOBILE_SCOPE。全件は e2e-nightly.yml。#1582）。
+# runner は ubuntu-24.04 に固定する（#1587）。本番の Compute の OS は Oracle Linux 9 だが（#1611）、GitHub に
+# Oracle Linux の runner は無いため、テストの実行には ubuntu-24.04 を使う。OS の差（dnf の package の名前・
+# Nginx の配置）は `Suite / Oracle Linux 9`（container: oraclelinux:9）が配備のスクリプトの変更時に確かめる。
+# 実 Oracle の結合テスト（Oracle AI Database Free。oracle-integration.yml）は、その製品の DB の層（changes の
+# <製品>_oracle）が変わったときだけ実行する。3 製品は integration-nightly.yml が毎晩確かめる（#1595）。
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  # Dependabot の自動 merge（GITHUB_TOKEN）は main の push の CI を起動しない（GitHub の仕様）。毎日 1 回、main で
+  # 最後に成功した CI からの変更を確かめる（変更が無ければ job は動かない。#1609）。
+  schedule:
+    - cron: "23 16 * * *"
+  workflow_dispatch:
+
+# PR は同じ branch の古い run を取り消す。main の push は commit ごとの group にし、続けて merge しても
+# 前の merge commit の run を取り消さない（#1585。changes は直前の commit との差分で job を選ぶため、取り消すと
+# その commit の変更が main の CI で確かめられない。同じ group は pending を 1 つしか保たないので sha で分ける）。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# token の既定は読み取りだけにする（#1594）。ほかの権限が要る job は job の permissions で足す。
+permissions:
+  contents: read
+
+# PR / main の push の E2E smoke の spec（frontend からの相対パス、空白区切り）。smoke の job と、e2e の影響分析
+# （e2e-impact の `--skip-specs`。selected のとき、smoke が全 project で実行する spec を impact から除く）の
+# 両方が読む（#1525）。NL2SQL の desktop だけで実行する spec（*_DESKTOP）は 375px を impact に残すので除外しない。
+# E2E_MOBILE_SCOPE: PR の e2e（smoke・impact）の 375px（mobile）の project は、画面幅に依存するテスト（@responsive の
+# tag と、名前の括弧で mobile / 375px を前提にするもの）だけを実行する。desktop は全件。main の push と nightly は
+# 全件（all）で、mobile の退行は e2e-nightly.yml が拾う（#1582。platform/scripts/e2e-impact/mobile-scope.ts）。
+# E2E_RETRIES: PR の e2e の retries は 1、main の push は 2（nightly は env を付けないので 2）。PR で flaky のテストを
+# 3 回実行しないため。1 回の retry で通らないテストは PR を赤にして直す（#1593。platform/scripts/e2e-impact/ci-run.ts）。
+# E2E_NIGHTLY_ONLY: nightly だけで実行する spec（*.nightly.spec.ts。主要な画面の axe の確認）を、PR と main の push の
+# e2e で実行しない（全件の shard でも。e2e-nightly.yml は付けない。#1595。platform/scripts/e2e-impact/nightly-only.ts）。
+env:
+  E2E_MOBILE_SCOPE: ${{ github.event_name == 'pull_request' && 'responsive' || 'all' }}
+  E2E_NIGHTLY_ONLY: skip
+  E2E_RETRIES: ${{ github.event_name == 'pull_request' && '1' || '2' }}
+  RAG_E2E_SMOKE: >-
+    e2e/card-error-boundary.spec.ts e2e/db-down-degraded.spec.ts e2e/self-hosted-fonts.spec.ts
+    e2e/sidebar-grouping.spec.ts e2e/db-gate.spec.ts e2e/scrollbar-stability.spec.ts
+  NL2SQL_E2E_SMOKE: tests/e2e/header-utilities.spec.ts tests/e2e/scrollbar-stability.spec.ts
+  NL2SQL_E2E_SMOKE_DESKTOP: tests/e2e/sql-chat.spec.ts tests/e2e/database-gate.spec.ts
+  AGENT_E2E_SMOKE: >-
+    e2e/auth-login.spec.ts e2e/run-stream-auth.spec.ts e2e/agent-runtime-flow.spec.ts
+    e2e/security-management.spec.ts e2e/appearance.spec.ts e2e/self-hosted-fonts.spec.ts
+    e2e/permission-catalog.spec.ts e2e/vite-config.spec.ts e2e/scrollbar-stability.spec.ts
+  # PR / main の push の e2e（smoke・impact）は、3 製品の playwright.config.ts の webServer が vite build の成果物を
+  # vite preview で配信する（dev server より約 25〜30% 速い。build は job ごとに 1〜2 秒。#1583）。
+  # nightly（e2e-nightly.yml）は e2e-impact の記録が dev server の URL と sourcemap を使うので dev server のまま。
+  PLAYWRIGHT_WEB_SERVER: preview
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      # 製品の backend の job（Backend・Engine 等）を動かす変更。`<製品>/frontend/**` を除き、backend のテストが読む
+      # frontend のファイル（<製品>_backend_frontend）を足す（#1592。ci_frontend_paths.py が漏れを検出する）。
+      rag_backend: >-
+        ${{ steps.filter.outputs.rag_backend == 'true' || steps.filter.outputs.rag_backend_frontend == 'true' }}
+      nl2sql_backend: >-
+        ${{ steps.filter.outputs.nl2sql_backend == 'true' || steps.filter.outputs.nl2sql_backend_frontend == 'true' }}
+      agent_backend: >-
+        ${{ steps.filter.outputs.agent_backend == 'true' || steps.filter.outputs.agent_backend_frontend == 'true' }}
+      # 配備の検証（Suite / Deploy。suite-deploy.yml）を動かす変更（#1592）。
+      deploy: ${{ steps.filter.outputs.deploy == 'true' || steps.filter.outputs.ci == 'true' }}
+      # Compute の OS（Oracle Linux 9）に依存する配備のスクリプト（#1611）。
+      deploy_os: ${{ steps.filter.outputs.deploy_os == 'true' || steps.filter.outputs.ci == 'true' }}
+      # Terraform の stack の IaC の検査（Suite / Terraform IaC。trivy config。#1595）を動かす変更。
+      terraform: ${{ steps.filter.outputs.terraform }}
+      scripts: ${{ steps.filter.outputs.scripts == 'true' || steps.filter.outputs.ci == 'true' }}
+      platform_frontend: >-
+        ${{ steps.filter.outputs.platform_frontend == 'true' || steps.filter.outputs.ci == 'true'
+        || steps.filter.outputs.platform_other == 'true' }}
+      platform_backend: >-
+        ${{ steps.filter.outputs.platform_backend == 'true' || steps.filter.outputs.ci == 'true'
+        || steps.filter.outputs.platform_other == 'true' }}
+      # platform のどこか（Markdown だけの変更を除く）。配備スクリプト・Terraform の検証が使う。
+      platform: >-
+        ${{ steps.filter.outputs.platform_frontend == 'true' || steps.filter.outputs.platform_backend == 'true'
+        || steps.filter.outputs.ci == 'true' || steps.filter.outputs.platform_other == 'true' }}
+      nl2sql_frontend_contract: ${{ steps.filter.outputs.nl2sql_frontend_contract }}
+      # Agent / Backend のテストが読む、回答の段落の判定の共通の事例（#1370・#1488。RAG の job は rag_contracts）。
+      # platform_other から外しているので、これだけの変更では frontend・e2e・配備の検証は動かない。
+      answer_passages_contract: ${{ steps.filter.outputs.answer_passages_contract }}
+      # NL2SQL / Backend・Agent / Backend のテストが読む MCP ツールの契約（#248。RAG の job は rag_contracts）。
+      # platform_other から外している（#1531）。
+      mcp_contract: ${{ steps.filter.outputs.mcp_contract }}
+      # RAG / Engine・RAG / Backend が読む契約（RAG の MCP と回答の段落の事例。#3240）。
+      rag_contracts: ${{ steps.filter.outputs.rag_contracts }}
+      # 製品の frontend の job（Frontend・E2E smoke）を動かす変更（#1531）。
+      rag_frontend: ${{ steps.filter.outputs.rag_frontend }}
+      nl2sql_frontend: ${{ steps.filter.outputs.nl2sql_frontend }}
+      agent_frontend: ${{ steps.filter.outputs.agent_frontend }}
+      # pip-audit は依存（uv.lock / pyproject.toml）が変わったときだけ実行する。全件は dependency-audit-nightly.yml。
+      # `--skip-editable`: 自分たちの package（editable で入る backend と platform の package）は PyPI に無いので問い合わせない。
+      # PyPI が存在しない名前に 404 ではなく 503 を返し続け、pip-audit が失敗したため（#344）。
+      platform_backend_core_deps: ${{ steps.filter.outputs.platform_backend_core_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      # platform の採点の部品（#3240）。RAG / Backend と Suite / Evaluation も動かす。
+      platform_evaluation_scoring: >-
+        ${{ steps.filter.outputs.platform_evaluation_scoring == 'true' || steps.filter.outputs.ci == 'true' }}
+      platform_enterprise_ai_deps: >-
+        ${{ steps.filter.outputs.platform_enterprise_ai_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      platform_evaluation_scoring_deps: >-
+        ${{ steps.filter.outputs.platform_evaluation_scoring_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      # 製品横断の評価（suite/evaluation。#3240）と、そのテストが読む platform・製品の評価セットのファイル。
+      suite_evaluation: ${{ steps.filter.outputs.suite_evaluation == 'true' || steps.filter.outputs.ci == 'true' }}
+      suite_evaluation_deps: >-
+        ${{ steps.filter.outputs.suite_evaluation_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      platform_system_settings_deps: ${{ steps.filter.outputs.platform_system_settings_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      rag_deps: ${{ steps.filter.outputs.rag_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      nl2sql_deps: ${{ steps.filter.outputs.nl2sql_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      agent_deps: ${{ steps.filter.outputs.agent_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      # RAG の外部 parser のサービスのテスト（#1512）。
+      rag_parser_docling: ${{ steps.filter.outputs.rag_parser_docling == 'true' || steps.filter.outputs.ci == 'true' }}
+      # parser の pip-audit も、その parser の uv.lock / pyproject.toml の変更時だけ（全件は dependency-audit-nightly.yml。#1513）。
+      rag_parser_docling_deps: ${{ steps.filter.outputs.rag_parser_docling_deps == 'true' || steps.filter.outputs.ci == 'true' }}
+      # rag/packages・rag/services（docling 以外）の pip-audit は、変わった uv.lock / pyproject.toml の
+      # ディレクトリだけを検査する（空白区切りのファイルの一覧。ci.yml の変更では all = 全 lock。#1534）。
+      rag_services_deps: >-
+        ${{ steps.filter.outputs.ci == 'true' && 'all' || steps.filter.outputs.rag_services_deps_files }}
+      # Dependency review（#1588）を動かす、依存の manifest / lock と workflow・composite action の変更。
+      deps_manifest: ${{ steps.filter.outputs.deps_manifest }}
+      # 実 Oracle の結合テスト（oracle-integration.yml。#1595）を動かす、その製品の DB の層の変更。
+      # ci.yml の変更では動かさない（PR の時間を増やさない。3 製品は毎晩 integration-nightly.yml が確かめる）。
+      rag_oracle: ${{ steps.filter.outputs.rag_oracle == 'true' || steps.filter.outputs.oracle_common == 'true' }}
+      nl2sql_oracle: ${{ steps.filter.outputs.nl2sql_oracle == 'true' || steps.filter.outputs.oracle_common == 'true' }}
+      agent_oracle: ${{ steps.filter.outputs.agent_oracle == 'true' || steps.filter.outputs.oracle_common == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # main の CI は、最後に成功した commit との差分を取るため履歴を取る（PR は paths-filter が API で取る）。
+          fetch-depth: ${{ github.event_name == 'pull_request' && 1 || 0 }}
+
+      # main の CI（push・schedule・手動）は、直前の commit ではなく、main で ci.yml が最後に成功した commit と比べる
+      # （#1609）。取り消された run・起動されなかった run（Dependabot の自動 merge）の commit の変更も、ここで確かめる。
+      # 見つからない・祖先でないときは空にし、paths-filter の既定（push は直前の commit）に任せる。
+      - name: Find the last successful main commit
+        id: base
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=20" \
+            -q '[.workflow_runs[] | select(.event != "pull_request")][0].head_sha // ""' || true)"
+          if [ -n "${sha}" ] && git merge-base --is-ancestor "${sha}" HEAD 2>/dev/null; then
+            echo "base=${sha}" >> "${GITHUB_OUTPUT}"
+            echo "最後に成功した main の CI の commit: ${sha}（${sha:0:12}..${GITHUB_SHA:0:12} を確かめる）"
+          else
+            echo "最後に成功した main の CI の commit が見つからない（paths-filter の既定で比べる）。"
+          fi
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: ${{ steps.base.outputs.base }}
+          # `!` の除外は、その filter の中で含めたファイルから除く（除外の無い filter は従来の some と同じ。v4.0.3 以降）。
+          predicate-quantifier: some-with-excludes
+          # rag_services_deps_files（変わった lock のディレクトリ）に使う。ほかの filter の true / false は変わらない。
+          list-files: shell
+          filters: |
+            ci:
+              - ".github/workflows/ci.yml"
+              - ".github/actions/**"
+            # 設計システムの Markdown（README.md 等）は frontend のコード・テスト・e2e が読まないので、frontend の job を
+            # 動かさない（#1592。lint の設定 adherence.oxlintrc.json・plugin・reference は frontend に数える）。
+            platform_frontend:
+              - "platform/packages/ui/**"
+              - "platform/packages/system-settings/**"
+              - "platform/docs/design-system/**"
+              - "platform/package.json"
+              - "platform/package-lock.json"
+              # 共有 UI のテスト（tests/answer-passage-marks.test.tsx）が読む段落の印の契約（#2738）。
+              - "platform/contracts/answer-passages/passage-marks.json"
+              - "!platform/docs/design-system/**/*.md"
+            platform_backend:
+              - "platform/packages/backend_core/**"
+              - "platform/packages/system_settings_backend/**"
+              # OCI Enterprise AI の呼び方の共通の規則（pr_system_settings が使う。#3418）。
+              - "platform/packages/enterprise_ai/**"
+            # 製品の評価と suite の評価が共有する採点の部品（#3240）。使うのは RAG の backend と suite だけ。
+            platform_evaluation_scoring:
+              - "platform/packages/evaluation_scoring/**"
+            platform_enterprise_ai_deps:
+              - "platform/packages/enterprise_ai/uv.lock"
+              - "platform/packages/enterprise_ai/pyproject.toml"
+            platform_evaluation_scoring_deps:
+              - "platform/packages/evaluation_scoring/uv.lock"
+              - "platform/packages/evaluation_scoring/pyproject.toml"
+            # 製品横断の評価（#3240・#3417）。テストは Agent と RAG の MCP の契約と共有の fixture、Agent の回答の節の契約、
+            # 製品の評価セット（rag/evaluation の JSON）、製品と platform の package の依存（suite に依存しないこと）を読む。
+            suite_evaluation:
+              - "suite/evaluation/**"
+              - "platform/packages/evaluation_scoring/**"
+              # LLM による判定が使う OCI Enterprise AI の呼び方（#3418）。
+              - "platform/packages/enterprise_ai/**"
+              - "platform/contracts/mcp/agent-tools.json"
+              - "platform/contracts/mcp/rag-tools.json"
+              - "platform/contracts/mcp/fixtures/**"
+              - "platform/contracts/answer-passages/unverified-section.json"
+              - "rag/evaluation/*/*.json"
+              - "platform/packages/*/pyproject.toml"
+              - "rag/backend/pyproject.toml"
+              - "nl2sql/backend/pyproject.toml"
+              - "agent/backend/pyproject.toml"
+            suite_evaluation_deps:
+              - "suite/evaluation/uv.lock"
+              - "suite/evaluation/pyproject.toml"
+            # NL2SQL / Frontend のロジックテスト（tests/*-contract.test.ts）が読む、共通設定 API の backend の定義。
+            nl2sql_frontend_contract:
+              - "platform/packages/system_settings_backend/src/pr_system_settings/model.py"
+              - "platform/packages/system_settings_backend/src/pr_system_settings/database.py"
+            # RAG / Engine・RAG / Backend（rag_contracts）・Agent / Backend のテストが読む、回答の出典の行・段落の分け方・Agent の回答の節の事例（#1370・#1455・#1456）と、
+            # 両方の backend が実行のときに読む段落の分け方の語（vocabulary.json。#2197）。
+            answer_passages_contract:
+              - "platform/contracts/answer-passages/**"
+            mcp_contract:
+              - "platform/contracts/mcp/**"
+            # RAG が読む契約（#3240）。Agent の回答の節の事例（unverified-section.json）は Agent と suite だけが読み、
+            # RAG は Agent の回答の形式を持たない。
+            rag_contracts:
+              - "platform/contracts/mcp/rag-tools.json"
+              # RAG の出力の合成の例（Agent の fake が使い、RAG のテストが RAG の出力の型で読めることを確かめる）。
+              - "platform/contracts/mcp/fixtures/rag-tool-outputs.json"
+              - "platform/contracts/answer-passages/**"
+              - "!platform/contracts/answer-passages/unverified-section.json"
+            # 製品の backend（frontend を除く製品のすべて。#1592）。
+            rag_backend:
+              - "rag/**"
+              - "!rag/frontend/**"
+              # 入口の一覧のテスト（tests/test_system_access_entry_points.py）が、配備の後の確認で RAG の CLI を
+              # 呼ぶ platform の配備のスクリプトを読む（#3334）。
+              - "platform/deploy/*.sh"
+            nl2sql_backend:
+              - "nl2sql/**"
+              - "!nl2sql/frontend/**"
+            agent_backend:
+              - "agent/**"
+              - "!agent/frontend/**"
+              # 組み込みのスキル（Agent Skills の形式）と、外部の Agent へ配る plugin marketplace（#1816）。
+              # Agent の backend が読み込み、テストが仕様（skills-ref）で確かめる。
+              - "skills/**"
+              - ".claude-plugin/**"
+            # backend のテストが読む frontend のファイル（ナビ・権限・i18n の一致、引用の fixture）。backend のテストが
+            # frontend のファイルを新しく読んだら、ここに足す（ci_frontend_paths.py が検出する。#1592）。
+            rag_backend_frontend:
+              - "rag/frontend/src/components/layout/nav-config.ts"
+              - "rag/frontend/src/lib/i18n.ts"
+              - "rag/frontend/src/lib/permissions.ts"
+              - "rag/frontend/src/lib/stored-citations.fixture.json"
+              # アップロードで受け付ける形式の画面と backend の一致（tests/test_upload_format_contract.py。#3351）。
+              - "rag/frontend/src/lib/upload-selection.ts"
+            nl2sql_backend_frontend:
+              - "nl2sql/frontend/src/components/layout/nav-config.ts"
+              - "nl2sql/frontend/src/features/security/menu-permissions.ts"
+              - "nl2sql/frontend/src/lib/i18n.ts"
+              - "nl2sql/frontend/src/lib/nl2sql-base-i18n.ts"
+            agent_backend_frontend:
+              - "agent/frontend/src/components/layout/nav-config.ts"
+              - "agent/frontend/src/lib/i18n.ts"
+              - "agent/frontend/src/lib/permissions.ts"
+              - "agent/frontend/src/lib/rag-i18n.ts"
+            # 製品の frontend と、frontend の単体テスト・e2e が読む backend のファイル（#1531）。
+            # frontend のテストが frontend の外のファイルを新しく読んだら、ここに足す（ci_frontend_paths.py が検出する）。
+            rag_frontend:
+              - "rag/frontend/**"
+              - "rag/backend/app/rag/answer_engine.py"
+              - "rag/backend/app/rag/span_display.py"
+              - "rag/backend/app/security/permissions.py"
+              - "rag/backend/app/services/catalog.py"
+            nl2sql_frontend:
+              - "nl2sql/frontend/**"
+              - "nl2sql/backend/app/features/nl2sql/trace_spans.py"
+            agent_frontend:
+              - "agent/frontend/**"
+              - "agent/backend/app/features/agent/router.py"
+              - "agent/backend/app/security/permissions.py"
+            terraform:
+              - "terraform/**"
+            # 配備の検証（suite-deploy.yml）が読むもの。製品の frontend（init_script.sh の検証は build を fake にする）・
+            # 共有 UI・Markdown は読まない（#1592）。
+            deploy:
+              - "rag/**"
+              - "nl2sql/**"
+              - "agent/**"
+              - "terraform/**"
+              - "platform/**"
+              - ".github/workflows/suite-deploy.yml"
+              - "!rag/frontend/**"
+              - "!nl2sql/frontend/**"
+              - "!agent/frontend/**"
+              - "!platform/packages/ui/**"
+              - "!platform/packages/system-settings/**"
+              - "!platform/docs/design-system/**"
+              - "!platform/package.json"
+              - "!platform/package-lock.json"
+              - "!**/*.md"
+            # Compute の OS（Oracle Linux 9）の上で動く配備のスクリプトと、それが使う設定の雛形（#1611）。
+            deploy_os:
+              - "terraform/**"
+              - "platform/deploy/**"
+              - "platform/templates/nginx/**"
+              - "*/init_script.sh"
+              - "rag/scripts/rag-systemd.sh"
+              - "rag/scripts/rag-services.sh"
+              - "nl2sql/scripts/update-after-pull.sh"
+            # root の scripts/（monorepo の開発の補助。setup-worktree.sh・pr-merge-check.sh）と .github/
+            # （workflow の actionlint、.github/scripts の shellcheck。#1525。以前は ci.yml 以外の workflow の変更で
+            # 何も検査しなかった）。AGENTS.md と docs/agents/ の変更でも動かし、AGENTS.md の大きさを確かめる（#2276）。
+            # THIRD-PARTY-NOTICES.md と lockfile の変更でも動かし、通知の表と依存を突き合わせる（#3392）。
+            scripts:
+              - "scripts/**"
+              - ".github/**"
+              - "AGENTS.md"
+              - "**/AGENTS.md"
+              - "docs/agents/**"
+              - "*/docs/agents/**"
+              - "THIRD-PARTY-NOTICES.md"
+              - "**/uv.lock"
+              - "**/package-lock.json"
+            platform_backend_core_deps:
+              - "platform/packages/backend_core/uv.lock"
+              - "platform/packages/backend_core/pyproject.toml"
+            platform_system_settings_deps:
+              - "platform/packages/system_settings_backend/uv.lock"
+              - "platform/packages/system_settings_backend/pyproject.toml"
+            rag_deps:
+              - "rag/backend/uv.lock"
+              - "rag/backend/pyproject.toml"
+            nl2sql_deps:
+              - "nl2sql/backend/uv.lock"
+              - "nl2sql/backend/pyproject.toml"
+            agent_deps:
+              - "agent/backend/uv.lock"
+              - "agent/backend/pyproject.toml"
+            # 外部 parser のサービスの venv が path で入れる共有の package、venv を作るスクリプト（rag-services.sh）。
+            # docling の text layer の回帰テストは評価のデータセットの PDF を読む（#1505）。
+            rag_parser_docling:
+              - "rag/services/parsers/docling/**"
+              - "rag/packages/rag_parser_core/**"
+              - "rag/packages/rag_engine/**"
+              - "platform/packages/backend_core/**"
+              - "rag/evaluation/multi-hop/*.pdf"
+              - "rag/scripts/rag-services.sh"
+              - "rag/scripts/rag-systemd.sh"
+            rag_parser_docling_deps:
+              - "rag/services/parsers/docling/uv.lock"
+              - "rag/services/parsers/docling/pyproject.toml"
+            # docling は RAG / Parser docling の job が検査する。
+            rag_services_deps:
+              - "rag/packages/*/uv.lock"
+              - "rag/packages/*/pyproject.toml"
+              - "rag/services/*/*/uv.lock"
+              - "rag/services/*/*/pyproject.toml"
+              - "!rag/services/parsers/docling/**"
+            # Dependency review が見る依存の manifest / lock（npm・uv）と、action の参照（#1588）。
+            deps_manifest:
+              - "**/package.json"
+              - "**/package-lock.json"
+              - "**/uv.lock"
+              - "**/pyproject.toml"
+              - ".github/workflows/**"
+              - ".github/actions/**"
+            # 実 Oracle の結合テスト（oracle-integration.yml。#1595）の対象の DB の層: migration・system schema・
+            # Oracle の adapter / store・実 Oracle の fixture とテスト。ここに無い DB のコードを足したら、ここにも足す。
+            oracle_common:
+              - ".github/workflows/oracle-integration.yml"
+              - ".github/scripts/oracle-free-ci.sh"
+              - ".github/scripts/pytest-skip-gate.py"
+              - "platform/packages/backend_core/src/pr_backend_core/oracle_*.py"
+              - "platform/packages/system_settings_backend/src/pr_system_settings/system_schema.py"
+              - "platform/packages/system_settings_backend/src/pr_system_settings/auth/migrations.py"
+              - "platform/packages/system_settings_backend/src/pr_system_settings/auth/store.py"
+              - "platform/packages/system_settings_backend/src/pr_system_settings/trace_recording.py"
+            rag_oracle:
+              - "rag/artifacts/oracle-schema-migration.*"
+              - "rag/packages/rag_engine/rag_engine/retrieval/text_search_tokenizer.py"
+              - "rag/backend/app/rag/system_schema*.py"
+              - "rag/backend/app/rag/oracle_schema.py"
+              - "rag/backend/app/rag/schema_migrations/**"
+              - "rag/backend/app/rag/*_migration.py"
+              - "rag/backend/app/clients/oracle*.py"
+              - "rag/backend/app/clients/document_category_store.py"
+              - "rag/backend/app/clients/document_cleanup_store.py"
+              - "rag/backend/tests/conftest.py"
+              - "rag/backend/tests/_oracle_test_db.py"
+              - "rag/backend/tests/_ai_stubs.py"
+              - "rag/backend/tests/test_*oracle*.py"
+              - "rag/backend/tests/test_query_history_retirement.py"
+              - "rag/backend/tests/test_document_categories.py"
+              - "rag/backend/app/clients/support_guide_store.py"
+              - "rag/backend/app/clients/language_pack_release_store.py"
+            nl2sql_oracle:
+              - "nl2sql/backend/migrations/**"
+              - "nl2sql/backend/app/cli/nl2sql_system_schema.py"
+              - "nl2sql/backend/app/cli/app_security_migrate.py"
+              - "nl2sql/backend/app/features/settings/system_schema*.py"
+              - "nl2sql/backend/app/features/nl2sql/oracle_*.py"
+              - "nl2sql/backend/app/features/nl2sql/*store.py"
+              - "nl2sql/backend/app/features/nl2sql/synthetic_oracle.py"
+              - "nl2sql/backend/tests/conftest.py"
+              - "nl2sql/backend/tests/*oracle_live*.py"
+              - "nl2sql/backend/app/features/nl2sql/db_admin_chat_columns.py"
+            agent_oracle:
+              - "agent/backend/app/system_schema.py"
+              - "agent/backend/app/oracle_connection.py"
+              - "agent/backend/app/cli/agent_system_schema.py"
+              - "agent/backend/app/features/agent/*_store.py"
+              - "agent/backend/app/features/agent/storage_*.py"
+              - "agent/backend/app/features/agent/*_migration.py"
+              # Run・業務 Agent の Oracle の repository（1 件 = 1 行の読み書き。#1939）。
+              - "agent/backend/app/features/agent/runtime.py"
+              # Run の span の共通の span の表への書き込みと読み出し（#3226）。
+              - "agent/backend/app/features/agent/trace_spans.py"
+              # 共通の span の表の SQL と bind（#3271。実 Oracle は Agent の結合テストで確かめる）。
+              - "platform/packages/backend_core/src/pr_backend_core/observability/trace_store.py"
+              # Run の事実と確かめるべき実行のシグナルの SQL（#1822）と、実 Oracle の結合テスト。
+              - "agent/backend/app/features/agent/run_facts.py"
+              - "agent/backend/app/features/agent/run_signals.py"
+              - "agent/backend/tests/*oracle_live*.py"
+            # frontend / backend のどちらにも属さない platform のファイル（.env.example・contracts/・scripts/・templates/ 等）。
+            # answer-passages の事例は answer_passages_contract（段落の印の契約は platform_frontend も）で判定する（#1488・#2738）。
+            platform_other:
+              - "platform/**"
+              - "!platform/packages/ui/**"
+              - "!platform/packages/system-settings/**"
+              - "!platform/packages/backend_core/**"
+              - "!platform/packages/system_settings_backend/**"
+              - "!platform/packages/evaluation_scoring/**"
+              - "!platform/packages/enterprise_ai/**"
+              - "!platform/docs/design-system/**"
+              - "!platform/package.json"
+              - "!platform/package-lock.json"
+              - "!platform/contracts/answer-passages/**"
+              - "!platform/contracts/mcp/**"
+              - "!platform/**/*.md"
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # gitleaks-action は PR の commit の一覧を API で取る。
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # full history を走査して過去コミットの混入も検出する
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          # gitleaks-action は PR スキャンに GITHUB_TOKEN を要求する(未指定だと失敗する)。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # pre-commit hook と同一の設定/ルールで走査する（monorepo root の設定）
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # OSS リポジトリ向けライセンスは不要(private の場合のみ要設定)
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  # PR が追加・更新した依存（npm・uv の lock、GitHub Actions）の既知の脆弱性と license を、GitHub の dependency graph の
+  # base と head の差分で確かめる（#1588）。lock / manifest が変わった PR だけ（約 10 秒）。high 以上の脆弱性で失敗する。
+  # PR が触らない依存の advisory は dependency-audit-nightly.yml（pip-audit・npm audit）が毎晩検査する。
+  # license は job の summary に出すだけ（allow / deny の一覧は決めていない）。
+  dependency-review:
+    name: Dependency review
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.deps_manifest == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    # API で base と head の dependency graph を比べるので checkout は要らない。
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          show-openssf-scorecard: false
+
+  # ---------------------------------------------------------------- platform
+  #
+  # キャッシュの方針（#339）:
+  #   - uv の cache は main の push だけが保存し、PR は main の cache を復元するだけにする
+  #     （PR ごとに約 120 MB の cache を保存すると、repo の上限 10 GB を超えて main の cache が追い出される）。
+  #     保存前に `uv cache prune --ci` で PyPI から取れる wheel を落とすため、`prune-cache: true` を明示する
+  #     （setup-uv v9 から既定が false になり、prune しない cache は約 5 倍になる。#1664）。
+  #   - mypy の .mypy_cache・npm の ~/.npm・Playwright のブラウザも main だけが保存し、PR は main の cache を
+  #     復元するだけにする（#1589。.github/actions/mypy-cache・npm-cache・playwright-browsers）。
+  #   - 共有 UI の dist は .github/actions/platform-ui がキャッシュする（数 MB。PR でも保存する）。
+
+  platform-ui:
+    name: Platform / UI (@production-ready/ui)
+    needs: changes
+    if: needs.changes.outputs.platform_frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: ./.github/actions/npm-cache
+        with:
+          name: platform
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # main だけが保存する（PR は復元だけ。#1589）。
+      - name: Save npm cache
+        if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.key }}
+
+      # root の typecheck / test / build はそれぞれ ui を build し直す（ローカルの単発実行のため）。
+      # CI では ui を 1 回だけ build し、system-settings の型検査・テストはその dist を使う。
+      - name: Build UI (dist/index.js + d.ts + tokens.css)
+        run: npm run build -w @production-ready/ui
+
+      - name: Type check
+        run: |
+          npm run typecheck -w @production-ready/ui
+          npm run typecheck -w @production-ready/system-settings
+
+      # 共通のシステム設定・ユーザー / ロール管理の画面にも、3 製品と同じデザインシステム遵守ルールを掛ける（#1891）。
+      - name: Lint (system-settings / design system adherence)
+        run: npm run lint -w @production-ready/system-settings
+
+      - name: Unit tests
+        run: |
+          npm run test -w @production-ready/ui
+          npm run test -w @production-ready/system-settings
+
+      - name: Build system settings
+        run: npm run build -w @production-ready/system-settings
+
+      # dist が公開契約どおり生成されたことを確認する。
+      - name: Verify dist artifacts
+        run: |
+          test -f packages/ui/dist/index.js
+          test -f packages/ui/dist/index.d.ts
+          test -f packages/ui/dist/tokens.css
+          test -f packages/ui/dist/tokens/colors.css
+
+  platform-backend-core:
+    name: Platform / backend_core (production-ready-backend-core)
+    needs: changes
+    if: needs.changes.outputs.platform_backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform/packages/backend_core
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: platform/packages/backend_core/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      # 整形の検査は ruff format（#345。black から置き換えた）。設定は pyproject.toml の [tool.ruff.format]。
+      # ほかの backend の job も同じ。
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Restore mypy cache
+        id: mypy-cache
+        uses: ./.github/actions/mypy-cache
+        with:
+          name: platform-backend-core
+          path: platform/packages/backend_core/.mypy_cache
+          lockfile: platform/packages/backend_core/uv.lock
+
+      - name: Type check
+        run: uv run mypy src
+
+      # main の push だけが保存する（PR は復元だけ。#1589）。
+      - name: Save mypy cache
+        if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: platform/packages/backend_core/.mypy_cache
+          key: ${{ steps.mypy-cache.outputs.key }}
+
+      # -n auto: pytest-xdist で runner の CPU 数だけ並列に実行する（#344）。--durations=20: 遅いテストの上位 20 件を
+      # log に出す（#1591。1 テストの上限は pyproject の pytest-timeout の timeout）。
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r src
+
+      - name: Dependency audit
+        if: needs.changes.outputs.platform_backend_core_deps == 'true'
+        run: uv run pip-audit --skip-editable
+
+  platform-system-settings-backend:
+    name: Platform / system_settings_backend (pr_system_settings)
+    needs: changes
+    if: needs.changes.outputs.platform_backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform/packages/system_settings_backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: platform/packages/system_settings_backend/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Restore mypy cache
+        id: mypy-cache
+        uses: ./.github/actions/mypy-cache
+        with:
+          name: platform-system-settings
+          path: platform/packages/system_settings_backend/.mypy_cache
+          lockfile: platform/packages/system_settings_backend/uv.lock
+
+      - name: Type check
+        run: uv run mypy src
+
+      # main の push だけが保存する（PR は復元だけ。#1589）。
+      - name: Save mypy cache
+        if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: platform/packages/system_settings_backend/.mypy_cache
+          key: ${{ steps.mypy-cache.outputs.key }}
+
+      # -n auto: pytest-xdist で runner の CPU 数だけ並列に実行する（#344）。--durations=20: 遅いテストの上位 20 件を
+      # log に出す（#1591。1 テストの上限は pyproject の pytest-timeout の timeout）。
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r src
+
+      - name: Dependency audit
+        if: needs.changes.outputs.platform_system_settings_deps == 'true'
+        run: uv run pip-audit --skip-editable
+
+  # 製品の評価と suite の評価が共有する採点の部品（#3240）。標準 library だけ。
+  platform-evaluation-scoring:
+    name: Platform / evaluation_scoring (pr_evaluation_scoring)
+    needs: changes
+    if: needs.changes.outputs.platform_evaluation_scoring == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform/packages/evaluation_scoring
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: platform/packages/evaluation_scoring/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r src
+
+      - name: Dependency audit
+        if: needs.changes.outputs.platform_evaluation_scoring_deps == 'true'
+        run: uv run pip-audit --skip-editable
+
+  # OCI Enterprise AI の呼び方の共通の規則（#3418）。標準 library だけ。pr_system_settings と suite が使う。
+  platform-enterprise-ai:
+    name: Platform / enterprise_ai (pr_enterprise_ai)
+    needs: changes
+    if: needs.changes.outputs.platform_backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform/packages/enterprise_ai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: platform/packages/enterprise_ai/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy src
+
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r src
+
+      - name: Dependency audit
+        if: needs.changes.outputs.platform_enterprise_ai_deps == 'true'
+        run: uv run pip-audit --skip-editable
+
+  # ---------------------------------------------------------------- rag
+
+  rag-backend:
+    name: RAG / Backend
+    needs: changes
+    # 回答の段落の判定の共通の事例（platform/contracts/answer-passages/）と MCP ツールの契約
+    # （platform/contracts/mcp/rag-tools.json。#1531）を読む（rag_contracts。Agent の契約では動かさない。#3240）。
+    # 評価ランナーは platform の採点の部品を使う（#3240）。
+    if: >-
+      needs.changes.outputs.rag_backend == 'true' || needs.changes.outputs.platform_backend == 'true'
+      || needs.changes.outputs.rag_contracts == 'true' || needs.changes.outputs.platform_evaluation_scoring == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rag/backend
+    steps:
+      # backend は共有 production-ready-backend-core（../../platform/packages/backend_core）に path 依存する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: rag/backend/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Restore mypy cache
+        id: mypy-cache
+        uses: ./.github/actions/mypy-cache
+        with:
+          name: rag-backend
+          path: rag/backend/.mypy_cache
+          lockfile: rag/backend/uv.lock
+
+      - name: Type check
+        run: uv run mypy .
+
+      # main の push だけが保存する（PR は復元だけ。#1589）。
+      - name: Save mypy cache
+        if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: rag/backend/.mypy_cache
+          key: ${{ steps.mypy-cache.outputs.key }}
+
+      # coverage threshold を gate にしていないため CI では計測しない(nl2sql と同一構成)。
+      # -n auto: pytest-xdist で並列に実行する。実 Oracle のテストは pyproject の
+      # --dist loadgroup で 1 つの worker にまとまる（#344）。
+      # --assert=plain: pytest の assert の書き換え（失敗したときに比べた値を出す仕組み）を止める。
+      # CI にはテストの書き換え済みの .pyc が無く、worker ごとに全テスト（約 7 万行）を書き換えて、
+      # それだけで Test の約 3 分の 1（約 10 秒）を占めていた（#401）。失敗したときだけ、失敗した
+      # テストを書き換えありで流し直して詳細を出す（step の結果は失敗のまま）。--durations=20 は #1591。
+      - name: Test
+        run: |
+          uv run pytest -n auto --durations=20 --assert=plain && exit 0
+          echo "失敗したテストを、assert の詳細付きで流し直します（--lf）。"
+          uv run pytest --lf --lfnf=none --maxfail=20 || true
+          exit 1
+
+      - name: Security scan
+        run: uv run bandit -c pyproject.toml -r app
+
+      - name: Dependency audit
+        if: needs.changes.outputs.rag_deps == 'true'
+        # oci 2.185.1 が cryptography<51.0.0 へ制約を緩和したため cryptography 50 系へ更新でき、
+        # GHSA-537c-gmf6-5ccf の ignore は不要になった。ignore を戻す場合は理由をここへ明記する。
+        run: uv run pip-audit --skip-editable
+
+  rag-engine:
+    name: RAG / Engine
+    needs: changes
+    if: needs.changes.outputs.rag_backend == 'true' || needs.changes.outputs.rag_contracts == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: rag/packages/rag_engine
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # lock（#387）から入れる。PyPI の索引（/simple/）が落ちても、lock の中のファイルの URL から取れる。
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: rag/packages/rag_engine/uv.lock
+          cache-suffix: rag-engine
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # rag_poc 由来の解析・分割・回答・FAQ/ドメインキーワードの回帰テスト。
+      # docling/torch は入れず、PDF 描画・日本語分割・Excel の任意依存だけを入れる。
+      - name: Test rag_engine
+        run: |
+          uv sync --locked --extra pdf --extra japanese --extra excel --extra oracle
+          uv run --locked --no-sync python -m pytest -q tests
+
+  services-scripts-lint:
+    name: Lint / services & scripts
+    needs: changes
+    if: needs.changes.outputs.rag_backend == 'true' || needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # サービスごとの venv の依存（下の Unit tests）を、ほかの job と同じく main の push だけが保存する。
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: |
+            rag/services/**/uv.lock
+            rag/packages/*/uv.lock
+          cache-suffix: rag-services
+          save-cache: ${{ github.event_name == 'push' }}
+
+      # 各 backend の job は自分のディレクトリだけを検査するため、RAG のマイクロサービス（rag/services）と
+      # platform のスクリプト（platform/scripts）は、venv を作らずに ruff だけで検査する（#517）。
+      # 設定は各サービスの pyproject.toml と platform/scripts/ruff.toml。版は rag/backend の uv.lock の ruff にそろえる。
+      - name: Ruff
+        run: |
+          version="$(sed -n '/^name = "ruff"$/{n;s/^version = "\(.*\)"$/\1/p;}' rag/backend/uv.lock)"
+          test -n "${version}"
+          uvx "ruff@${version}" check rag/services rag/packages platform/scripts
+          uvx "ruff@${version}" format --check rag/services rag/packages platform/scripts
+
+      # e2e の影響分析の選択の規則（platform/scripts/e2e_impact.py。#885）。標準ライブラリだけで動く。
+      - name: Unit tests (platform/scripts)
+        run: python3 -m unittest discover -s platform/scripts/tests -p 'test_*.py'
+
+      # RAG のサービス（rag/services/<種類>/<name>/tests）と共有の parser の契約（rag_parser_core）の単体テスト。
+      # 以前は Excel の前処理（#1221）だけを実行し、ほかの 11 サービスと rag_parser_core のテストは CI のどこでも
+      # 実行していなかった（#1525）。各 uv.lock の依存（本番と同じ。--locked で pyproject とのずれも検出する）に
+      # pytest だけを足す。parser の docling は RAG / Parser docling の job が実行する（torch 等が重いので分ける）。
+      - name: Unit tests (rag/services, rag_parser_core)
+        run: |
+          status=0
+          for tests in rag/packages/rag_parser_core/tests rag/services/*/*/tests; do
+            dir="$(dirname "${tests}")"
+            case "${dir}" in
+              rag/services/parsers/docling) continue ;;
+            esac
+            echo "::group::${dir}"
+            (cd "${dir}" && uv run --locked --all-extras --with pytest python -m pytest -q tests) || status=1
+            echo "::endgroup::"
+          done
+          exit "${status}"
+
+      # テストの無い package・サービスも、uv.lock が pyproject.toml と合っていることを確かめる（配備の
+      # `uv sync --locked` が失敗しないように。#1525 で rag_parser_core・rag_pipeline_core の lock のずれが見つかった）。
+      - name: Lock check (rag/packages, rag/services)
+        run: |
+          for lock in rag/packages/*/uv.lock rag/services/*/*/uv.lock; do
+            if ! (cd "$(dirname "${lock}")" && uv lock --check -q); then
+              echo "::error file=${lock}::uv.lock が pyproject.toml と合っていません（そのディレクトリで uv lock を実行する）。"
+              exit 1
+            fi
+          done
+
+      # 配備（rag-services.sh）が venv を作る lock の脆弱性（#1534。以前はどこでも検査していなかった）。
+      # uv.lock / pyproject.toml が変わったディレクトリだけ（全件は dependency-audit-nightly.yml）。
+      # RAG / Parser <name> と同じく lock から書き出した requirements（hash 付き。path 依存は --no-emit-local で
+      # 除く）を検査する。package の extra（rag_engine の docling 等）も配備で入るので --all-extras を付ける。
+      # torch の CPU 版（+cpu）は、RAG / Parser docling と同じく同じ版の PyPI の torch として検査する（#1650）。
+      - name: Dependency audit (rag/packages, rag/services)
+        if: needs.changes.outputs.rag_services_deps != ''
+        env:
+          DEPS_FILES: ${{ needs.changes.outputs.rag_services_deps }}
+        run: |
+          version="$(sed -n '/^name = "pip-audit"$/{n;s/^version = "\(.*\)"$/\1/p;}' rag/backend/uv.lock)"
+          test -n "${version}"
+          if [ "${DEPS_FILES}" = "all" ]; then
+            mapfile -t dirs < <(for lock in rag/packages/*/uv.lock rag/services/*/*/uv.lock; do dirname "${lock}"; done)
+          else
+            # shellcheck disable=SC2086 # list-files: shell の空白区切り（パスに空白は無い）。
+            mapfile -t dirs < <(for file in ${DEPS_FILES}; do dirname "${file}"; done | sort -u)
+          fi
+          status=0
+          for dir in "${dirs[@]}"; do
+            case "${dir}" in
+              rag/services/parsers/docling) continue ;;
+            esac
+            [ -f "${dir}/uv.lock" ] || continue
+            echo "::group::${dir}"
+            (cd "${dir}" && uv export --locked --no-dev --all-extras --no-emit-local --format requirements.txt \
+              -o "${RUNNER_TEMP}/requirements.txt" -q \
+              && sed -i -E 's/^(torch[a-z]*)==([^ ;+]+)\+cpu /\1==\2 /' "${RUNNER_TEMP}/requirements.txt" \
+              && uvx "pip-audit@${version}" --disable-pip -r "${RUNNER_TEMP}/requirements.txt") \
+              || { status=1; echo "::error file=${dir}/uv.lock::pip-audit が既知の脆弱性を検出しました（uv lock --upgrade-package で修正版へ上げる）。"; }
+            echo "::endgroup::"
+          done
+          exit "${status}"
+
+  rag-parser-docling:
+    name: RAG / Parser docling
+    needs: changes
+    if: needs.changes.outputs.rag_parser_docling == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rag/services/parsers/docling
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: rag/services/parsers/docling/uv.lock
+          cache-suffix: rag-parser-docling
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # 本番と同じ venv（uv sync --locked --no-dev）を rag-services.sh で作る。lock の torch は CPU 版（#1650）。
+      # モデルは取得しない。テスト（text layer の抽出・LayoutRecord の変換・cv2 の import）はモデルを使わない（#1512）。
+      - name: Install dependencies
+        working-directory: rag
+        env:
+          RAG_SERVICES_MODELS: skip
+        run: scripts/rag-services.sh sync parser-docling
+
+      # parser の venv には pytest が無い（--no-dev の本番と同じ venv）ので、pytest だけを足して実行する。
+      # HF_HUB_OFFLINE: モデルを取得しない（テストはモデルの要らないものだけ。取得しようとしたら失敗させる）。
+      - name: Test
+        env:
+          HF_HUB_OFFLINE: "1"
+        run: uv run --no-sync --with pytest python -m pytest -q tests
+
+      # 版は rag/backend の uv.lock の bandit にそろえる（Lint / services & scripts の ruff と同じ）。
+      - name: Security scan
+        run: |
+          version="$(sed -n '/^name = "bandit"$/{n;s/^version = "\(.*\)"$/\1/p;}' ../../../backend/uv.lock)"
+          test -n "${version}"
+          uvx "bandit@${version}" -q -r app
+
+      # venv に pip-audit を入れないため、lock から書き出した requirements（hash 付き）を検査する。
+      # 自分たちの package（path 依存）は PyPI に無いので書き出さない（--no-emit-local。backend の --skip-editable と同じ）。
+      # torch の CPU 版（2.13.0+cpu。#1650）は PyPI に無い版で pip-audit が「検査できない」と飛ばすので、
+      # 同じ版の PyPI の torch として検査する（ローカル版の +cpu を外す。脆弱性は CPU 版と CUDA 版で同じ）。
+      - name: Dependency audit
+        if: needs.changes.outputs.rag_parser_docling_deps == 'true'
+        run: |
+          version="$(sed -n '/^name = "pip-audit"$/{n;s/^version = "\(.*\)"$/\1/p;}' ../../../backend/uv.lock)"
+          test -n "${version}"
+          uv export --locked --no-dev --no-emit-local --format requirements.txt -o "${RUNNER_TEMP}/requirements.txt" -q
+          sed -i -E 's/^(torch[a-z]*)==([^ ;+]+)\+cpu /\1==\2 /' "${RUNNER_TEMP}/requirements.txt"
+          uvx "pip-audit@${version}" --disable-pip -r "${RUNNER_TEMP}/requirements.txt"
+
+  rag-frontend:
+    name: RAG / Frontend
+    needs: changes
+    if: needs.changes.outputs.rag_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: rag/frontend
+    steps:
+      # frontend は file:../../platform/packages/ui に依存するため、先に共有 UI を build する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: rag/frontend
+
+      # 型検査は build の `tsc --noEmit` が兼ねる。Playwright E2E は rag-e2e job（#133）。
+      # デザインシステム遵守ルール（../../platform/docs/design-system/adherence.oxlintrc.json を ESLint に渡す）。
+      # NL2SQL / Agent と同じく CI で実行する（#1099。以前は lint を実行せず、main の失敗を検出できなかった）。
+      - name: Lint
+        run: npm run lint
+
+      # e2e の spec・fixture・playwright.config.ts の型検査（tsconfig.e2e.json。Playwright は実行時に型を検査しない。#1591）。
+      - name: Type check (e2e)
+        run: npm run typecheck:e2e
+
+      - name: Unit test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  rag-e2e:
+    name: RAG / E2E smoke
+    # impact が全件（rag_mode == full）なら smoke の spec も全件に含まれるので飛ばす（#1525）。push では e2e-impact が
+    # skip されるため、`!cancelled()` で needs の skip を許し、changes の成功を明示して確かめる。
+    needs: [changes, e2e-impact]
+    if: >-
+      !cancelled() && needs.changes.result == 'success'
+      && (needs.changes.outputs.rag_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true')
+      && needs.e2e-impact.outputs.rag_mode != 'full'
+    runs-on: ubuntu-24.04
+    # 実測は 1.5〜2 分（2026-10、2 worker。Playwright は約 1 分で、1 worker と差は無い。#1489）。
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: rag/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: rag/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: rag/frontend
+
+      # PR では約 1 分の smoke と、差分に影響を受ける spec（e2e-impact。#885）を実行する（#184。ユーザー指示：1 回の e2e はおおむね 1 分）。
+      # 全件は e2e-nightly.yml が毎晩実行する。desktop / mobile の 2 project（PR の mobile は @responsive だけ。
+      # workflow の env の E2E_MOBILE_SCOPE。#1582）、retries は workflow の env の E2E_RETRIES（PR は 1。#1593）。
+      # worker 数は playwright.config.ts の CI の値（2。4 vCPU の runner。spec のファイル単位で並べる。#1489）。
+      # spec は workflow の env の RAG_E2E_SMOKE（空白区切り。単語分割を意図している）。
+      - name: Playwright E2E (smoke)
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test $RAG_E2E_SMOKE
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rag-playwright-smoke
+          path: rag/frontend/test-results
+          retention-days: 7
+
+  # ---------------------------------------------------------------- nl2sql
+
+  nl2sql-frontend:
+    name: NL2SQL / Frontend
+    needs: changes
+    if: >-
+      needs.changes.outputs.nl2sql_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true'
+      || needs.changes.outputs.nl2sql_frontend_contract == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: nl2sql/frontend
+    steps:
+      # frontend は file:../../platform/packages/ui に依存するため、先に共有 UI を build する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: nl2sql/frontend
+
+      # デザインシステム遵守ルール（frontend/.oxlintrc.json が ../../platform の
+      # docs/design-system/adherence.oxlintrc.json を extends）と oxlint 既定の correctness ルール。
+      - name: Lint
+        run: npm run lint
+
+      # `tsc -p tsconfig.test.json`（tsconfig.json を extends し、src と tests を含む）で型検査してから node --test を実行する。
+      - name: Logic tests
+        run: npm run test:logic
+
+      # 型検査は Logic tests の tsc が src も含めて済ませているため、`npm run build`（tsc --noEmit && vite build）の
+      # tsc を二重に実行せず、vite build だけを行う（#339）。
+      - name: Build
+        run: npx --no-install vite build
+
+  nl2sql-e2e:
+    name: NL2SQL / E2E smoke
+    # impact が全件なら飛ばす（RAG / E2E smoke と同じ。#1525）。
+    needs: [changes, e2e-impact]
+    if: >-
+      !cancelled() && needs.changes.result == 'success'
+      && (needs.changes.outputs.nl2sql_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true')
+      && needs.e2e-impact.outputs.nl2sql_mode != 'full'
+    runs-on: ubuntu-24.04
+    # 実測は約 2.5 分（2026-10、2 worker。Playwright は 1.7〜1.9 分。1 worker・sql-chat の両 project では 5 分。#1489）。
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: nl2sql/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: nl2sql/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: nl2sql/frontend
+
+      # PR では約 1 分の smoke と、差分に影響を受ける spec（e2e-impact。#885）を実行する（#184。ユーザー指示：1 回の e2e はおおむね 1 分）。
+      # 全件は e2e-nightly.yml が毎晩 8 shard で実行する。retries は workflow の env の E2E_RETRIES（PR は 1。#1593）。
+      # worker 数は playwright.config.ts の CI の値（2。fullyParallel でテスト単位で並ぶ）。#175 の遅い環境での flake の後に
+      # `--workers=1` で 1 worker に固定していたが、smoke が 4〜6 分に伸びたため外した（#1489）。
+      # 最も重い sql-chat（両 project で約 80 テスト中 58）と database-gate は desktop だけにし、375px の確認は
+      # impact（チャットの画面に触る PR）と nightly に任せる。build と preview の起動を 1 回にするため 1 回の実行にまとめ、
+      # `--grep-invert` で mobile-375 の 2 spec を外す（grep は「project 名 spec のファイル名 題名」に当たる）。
+      # spec は workflow の env（NL2SQL_E2E_SMOKE は全 project、NL2SQL_E2E_SMOKE_DESKTOP は desktop だけ。
+      # DESKTOP を変えたら --grep-invert の spec 名もそろえる）。
+      - name: Playwright E2E (smoke)
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test --grep-invert "mobile-375 .*(sql-chat|database-gate)\.spec" \
+            $NL2SQL_E2E_SMOKE $NL2SQL_E2E_SMOKE_DESKTOP
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nl2sql-playwright-smoke
+          path: nl2sql/frontend/test-results
+          retention-days: 7
+
+  nl2sql-backend:
+    name: NL2SQL / Backend
+    needs: changes
+    # MCP ツールの契約（platform/contracts/mcp/nl2sql-tools.json）も読む（#1531）。
+    if: >-
+      needs.changes.outputs.nl2sql_backend == 'true' || needs.changes.outputs.platform_backend == 'true'
+      || needs.changes.outputs.mcp_contract == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NL2SQL_RUNTIME_MODE: memory
+      NL2SQL_FEEDBACK_EMBEDDING_ENABLED: "false"
+    defaults:
+      run:
+        working-directory: nl2sql/backend
+    steps:
+      # backend は共有 production-ready-backend-core（../../platform/packages/backend_core）に path 依存する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: nl2sql/backend/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Restore mypy cache
+        id: mypy-cache
+        uses: ./.github/actions/mypy-cache
+        with:
+          name: nl2sql-backend
+          path: nl2sql/backend/.mypy_cache
+          lockfile: nl2sql/backend/uv.lock
+
+      - name: Type check
+        run: uv run mypy .
+
+      # main の push だけが保存する（PR は復元だけ。#1589）。
+      - name: Save mypy cache
+        if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: nl2sql/backend/.mypy_cache
+          key: ${{ steps.mypy-cache.outputs.key }}
+
+      # -n auto: pytest-xdist で runner の CPU 数だけ並列に実行する（#344）。--durations=20: 遅いテストの上位 20 件を
+      # log に出す（#1591。1 テストの上限は pyproject の pytest-timeout の timeout）。
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r app
+
+      - name: Dependency audit
+        if: needs.changes.outputs.nl2sql_deps == 'true'
+        # OCI SDK currently constrains cryptography to <47.0.0, while GHSA-537c-gmf6-5ccf
+        # lists 48.0.1 as the first fixed version. Keep auditing all other findings.
+        # dependency-audit-nightly.yml にも同じ ignore を書く。
+        run: uv run pip-audit --skip-editable --ignore-vuln GHSA-537c-gmf6-5ccf
+
+  # ---------------------------------------------------------------- agent
+  #
+  # 旧 `Agent / Full Checks`（1 job で backend・frontend・Playwright 全件を直列に実行）を 3 job に分けた（#339）。
+  # PR の e2e は RAG / NL2SQL と同じく約 1 分の smoke と差分に影響を受ける spec（#885）にし、全件は e2e-nightly.yml が実行する。
+
+  agent-backend:
+    name: Agent / Backend
+    needs: changes
+    # MCP ツールの契約（platform/contracts/mcp/）も読む（#1531）。
+    if: >-
+      needs.changes.outputs.agent_backend == 'true' || needs.changes.outputs.platform_backend == 'true'
+      || needs.changes.outputs.answer_passages_contract == 'true' || needs.changes.outputs.mcp_contract == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      # backend は ../../platform の共有パッケージに path 依存する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: agent/backend/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Restore mypy cache
+        id: mypy-cache
+        uses: ./.github/actions/mypy-cache
+        with:
+          name: agent-backend
+          path: agent/backend/.mypy_cache
+          lockfile: agent/backend/uv.lock
+
+      # ruff format / ruff check / mypy / pytest / 検証 evidence の dry-run / release chain の rehearsal / bandit / pip-audit。
+      - name: Run backend checks
+        run: scripts/check-all.sh
+        env:
+          SKIP_FRONTEND: "1"
+          SKIP_AUDIT: ${{ needs.changes.outputs.agent_deps == 'true' && '0' || '1' }}
+          UV_SYNC_ARGS: "--locked --dev"
+          # pytest-xdist で runner の CPU 数だけ並列に実行する（#344）。遅いテストの上位 20 件を log に出す（#1591）。
+          PYTEST_ARGS: "-n auto --durations=20"
+
+      # main の push だけが保存する（PR は復元だけ。#1589）。
+      - name: Save mypy cache
+        if: github.ref == 'refs/heads/main' && steps.mypy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: agent/backend/.mypy_cache
+          key: ${{ steps.mypy-cache.outputs.key }}
+
+  agent-frontend:
+    name: Agent / Frontend
+    needs: changes
+    if: needs.changes.outputs.agent_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agent/frontend
+    steps:
+      # frontend は file:../../platform/packages/ui に依存するため、先に共有 UI を build する。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: agent/frontend
+
+      - name: Lint
+        run: npm run lint
+
+      # e2e の spec・fixture・playwright.config.ts の型検査（tsconfig.e2e.json。Playwright は実行時に型を検査しない。#1591）。
+      - name: Type check (e2e)
+        run: npm run typecheck:e2e
+
+      # src/lib の純粋な関数の単体テスト（vitest。RAG / Frontend と同じ。#1595）。画面の振る舞いは e2e が確かめる。
+      - name: Unit test
+        run: npm test
+
+      # 型検査は build の `tsc --noEmit` が兼ねる。
+      - name: Build
+        run: npm run build
+
+  agent-e2e:
+    name: Agent / E2E smoke
+    # impact が全件なら飛ばす（RAG / E2E smoke と同じ。#1525）。
+    needs: [changes, e2e-impact]
+    if: >-
+      !cancelled() && needs.changes.result == 'success'
+      && (needs.changes.outputs.agent_frontend == 'true' || needs.changes.outputs.platform_frontend == 'true')
+      && needs.e2e-impact.outputs.agent_mode != 'full'
+    runs-on: ubuntu-24.04
+    # 実測は約 2 分（2026-10、2 worker。Playwright は 1.2 分。1 worker では 1.8〜2.0 分。#1489）。
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agent/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: agent/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: agent/frontend
+
+      # PR では約 1 分の smoke と、差分に影響を受ける spec（e2e-impact。#885）を実行する（RAG / NL2SQL の #184 と同じ。#339）。
+      # ログイン・認証・Run の stream・Runtime の主導線・セキュリティ管理・外観・フォント・設定の契約。
+      # 全件（約 100 件）は e2e-nightly.yml が毎晩実行する。retries は workflow の env の E2E_RETRIES（PR は 1。#1593）、worker 数は
+      # playwright.config.ts の CI の値（2。spec のファイル単位で並べる。#1489）。
+      # spec は workflow の env の AGENT_E2E_SMOKE。
+      - name: Playwright E2E (smoke)
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test $AGENT_E2E_SMOKE
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-playwright-smoke
+          path: agent/frontend/test-results
+          retention-days: 7
+
+  # ---------------------------------------------------------------- e2e の影響分析（#885）
+  #
+  # PR の差分に影響を受ける Playwright の spec を選び、製品ごとに shard に分けて実行する。
+  # nightly（e2e-nightly.yml）が全件の実行で記録した spec ごとの実行範囲（artifact `e2e-impact-<製品>-<shard>`）と
+  # 差分の行を突き合わせる（platform/scripts/e2e_impact.py）。記録が無い・判定できない変更は全件にする。
+  # 画面のコードを変えた PR で、その画面を検証する既存の spec が nightly で初めて壊れることを防ぐ。
+
+  # changes を待たずに始める（shard の開始が 15〜30 秒早まる。#1525）。選択の規則は製品の frontend・共有 UI・
+  # 記録の仕組みのパスだけを見る（changes の rag / nl2sql / agent / platform_frontend が false の製品は必ず none）ので、
+  # PR では常に 3 製品とも select する。何も選ばない製品は nightly の記録を取得しない。
+  e2e-impact:
+    name: E2E impact / 影響を受ける spec の選択
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      rag_mode: ${{ steps.select.outputs.rag_mode }}
+      rag_matrix: ${{ steps.select.outputs.rag_matrix }}
+      rag_total: ${{ steps.select.outputs.rag_total }}
+      nl2sql_mode: ${{ steps.select.outputs.nl2sql_mode }}
+      nl2sql_matrix: ${{ steps.select.outputs.nl2sql_matrix }}
+      nl2sql_total: ${{ steps.select.outputs.nl2sql_total }}
+      agent_mode: ${{ steps.select.outputs.agent_mode }}
+      agent_matrix: ${{ steps.select.outputs.agent_matrix }}
+      agent_total: ${{ steps.select.outputs.agent_total }}
+    steps:
+      # base との差分と、nightly の記録の commit（main の履歴）の両方を使うため全履歴を取る。
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # spec が記録の fixture を通る `test` を使っていること（@playwright/test から直接 import しない）。
+      - name: Check e2e imports
+        run: python3 platform/scripts/e2e_impact.py check-imports
+
+      # frontend が読む frontend の外のファイルが frontend の job を動かす filter に（#1531）、backend のテストが読む
+      # frontend のファイルが backend の job を動かす filter に（#1592）入っていること。
+      - name: Check frontend paths in the CI filter
+        run: python3 platform/scripts/ci_frontend_paths.py
+
+      # --skip-specs: smoke が全 project で実行する spec（workflow の env の <製品>_E2E_SMOKE）は選ばない（#1525）。
+      - name: Select affected specs
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: origin/${{ github.base_ref }}
+        run: |
+          for product in rag nl2sql agent; do
+            smoke="$(echo "${product}" | tr '[:lower:]' '[:upper:]')_E2E_SMOKE"
+            python3 platform/scripts/e2e_impact.py select --product "${product}" --base "${BASE}" --download \
+              --skip-specs "${!smoke}"
+          done
+
+  rag-e2e-impact:
+    name: RAG / E2E impact (${{ matrix.shard }}/${{ needs.e2e-impact.outputs.rag_total }})
+    needs: e2e-impact
+    if: needs.e2e-impact.outputs.rag_mode == 'selected' || needs.e2e-impact.outputs.rag_mode == 'full'
+    runs-on: ubuntu-24.04
+    # nightly の 1 shard の実測の倍程度（選ぶ shard 数は 1 shard 約 6 分を目安に決める）。
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.e2e-impact.outputs.rag_matrix) }}
+    defaults:
+      run:
+        working-directory: rag/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: rag/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: rag/frontend
+
+      # matrix の specs は e2e_impact.py が nightly の実測の時間で shard に詰めた spec（#1488）。空なら全 spec
+      # （記録の無い NL2SQL の全件）。playwright_shard は NL2SQL（fullyParallel）が長い spec をテスト単位で
+      # 分けた部分の値（#1525）で、ほかは 1/1。
+      # spec のパスは空白区切りで渡す（単語分割を意図している）。worker は config の CI の値（2。#1489）。
+      - name: Playwright E2E (affected)
+        env:
+          SPECS: ${{ matrix.specs }}
+          PLAYWRIGHT_SHARD: ${{ matrix.playwright_shard }}
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test --pass-with-no-tests --shard="$PLAYWRIGHT_SHARD" $SPECS
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rag-playwright-impact-${{ matrix.shard }}
+          path: rag/frontend/test-results
+          retention-days: 7
+
+  nl2sql-e2e-impact:
+    name: NL2SQL / E2E impact (${{ matrix.shard }}/${{ needs.e2e-impact.outputs.nl2sql_total }})
+    needs: e2e-impact
+    if: needs.e2e-impact.outputs.nl2sql_mode == 'selected' || needs.e2e-impact.outputs.nl2sql_mode == 'full'
+    runs-on: ubuntu-24.04
+    # nightly の 1 shard の実測の倍程度（選ぶ shard 数は 1 shard 約 6 分を目安に決める）。
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.e2e-impact.outputs.nl2sql_matrix) }}
+    defaults:
+      run:
+        working-directory: nl2sql/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: nl2sql/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: nl2sql/frontend
+
+      # matrix の specs は e2e_impact.py が nightly の実測の時間で shard に詰めた spec（#1488）。空なら全 spec
+      # （記録の無い NL2SQL の全件）。playwright_shard は NL2SQL（fullyParallel）が長い spec をテスト単位で
+      # 分けた部分の値（#1525）で、ほかは 1/1。
+      # spec のパスは空白区切りで渡す（単語分割を意図している）。worker は config の CI の値（2。#1489）。
+      - name: Playwright E2E (affected)
+        env:
+          SPECS: ${{ matrix.specs }}
+          PLAYWRIGHT_SHARD: ${{ matrix.playwright_shard }}
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test --pass-with-no-tests --shard="$PLAYWRIGHT_SHARD" $SPECS
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nl2sql-playwright-impact-${{ matrix.shard }}
+          path: nl2sql/frontend/test-results
+          retention-days: 7
+
+  agent-e2e-impact:
+    name: Agent / E2E impact (${{ matrix.shard }}/${{ needs.e2e-impact.outputs.agent_total }})
+    needs: e2e-impact
+    if: needs.e2e-impact.outputs.agent_mode == 'selected' || needs.e2e-impact.outputs.agent_mode == 'full'
+    runs-on: ubuntu-24.04
+    # nightly の 1 shard の実測の倍程度（選ぶ shard 数は 1 shard 約 6 分を目安に決める）。
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.e2e-impact.outputs.agent_matrix) }}
+    defaults:
+      run:
+        working-directory: agent/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install dependencies and build shared UI
+        uses: ./.github/actions/platform-ui
+        with:
+          frontend: agent/frontend
+
+      - name: Install Playwright browsers
+        uses: ./.github/actions/playwright-browsers
+        with:
+          working-directory: agent/frontend
+
+      # matrix の specs は e2e_impact.py が nightly の実測の時間で shard に詰めた spec（#1488）。空なら全 spec
+      # （記録の無い NL2SQL の全件）。playwright_shard は NL2SQL（fullyParallel）が長い spec をテスト単位で
+      # 分けた部分の値（#1525）で、ほかは 1/1。
+      # spec のパスは空白区切りで渡す（単語分割を意図している）。worker は config の CI の値（2。#1489）。
+      - name: Playwright E2E (affected)
+        env:
+          SPECS: ${{ matrix.specs }}
+          PLAYWRIGHT_SHARD: ${{ matrix.playwright_shard }}
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test --pass-with-no-tests --shard="$PLAYWRIGHT_SHARD" $SPECS
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-playwright-impact-${{ matrix.shard }}
+          path: agent/frontend/test-results
+          retention-days: 7
+
+  # ---------------------------------------------------------------- 配備（init_script.sh・Terraform・platform/deploy）
+
+  # 1 台の Compute の配備の検証（#1592）。RAG / NL2SQL / Agent の init_script.sh と配備のスクリプト・Terraform の
+  # stack・platform/deploy を 1 つの job で検査する（以前の 4 つの job。中身は suite-deploy.yml。release も再利用する）。
+  # 製品横断の評価（suite/evaluation。#3240）。製品は公開の MCP の台本（MockTransport）で再生し、実サービスは呼ばない。
+  suite-evaluation:
+    name: Suite / Evaluation
+    needs: changes
+    if: needs.changes.outputs.suite_evaluation == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: suite/evaluation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: true
+          prune-cache: true
+          cache-dependency-glob: suite/evaluation/uv.lock
+          save-cache: ${{ github.event_name == 'push' }}
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --dev
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy src tests
+
+      - name: Test
+        run: uv run pytest -n auto --durations=20
+
+      - name: Security scan
+        run: uv run bandit -r src
+
+      - name: Dependency audit
+        if: needs.changes.outputs.suite_evaluation_deps == 'true'
+        run: uv run pip-audit --skip-editable
+
+  suite-deploy:
+    name: Suite / Deploy
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
+    uses: ./.github/workflows/suite-deploy.yml
+
+  # 本番の Compute の OS（Oracle Linux 9。#1611）で、配備のスクリプトが dnf で入れる package の名前（依存まで
+  # 解決し、入れない）・前提の command・bash -n と、本番と同じ配置（/etc/nginx/nginx.conf・conf.d）の Nginx を
+  # 確かめ、platform/deploy のテストも Oracle Linux の bash・openssl・Nginx で実行する。GitHub に Oracle Linux の
+  # runner は無いため、ubuntu-24.04 の上の container で動かす。SELinux・firewalld・systemd は container で
+  # 動かないため、実機（OCI）の確認は手動で行う（PR の手順）。
+  suite-oracle-linux:
+    name: Suite / Oracle Linux 9
+    needs: changes
+    if: needs.changes.outputs.deploy_os == 'true'
+    runs-on: ubuntu-24.04
+    container: oraclelinux:9
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check packages, commands and Nginx on Oracle Linux 9
+        run: bash platform/deploy/tests/oracle-linux.test.sh
+
+      # oracle-linux.test.sh が nginx（module の 1.24）・openssl・python3 を入れている。Nginx の worker を
+      # root から切り替えないよう、テストは root 以外のユーザーで実行する（runner の Ubuntu と同じ条件）。
+      - name: Test single-Compute deployment on Oracle Linux 9 (platform/deploy)
+        run: |
+          dnf -y -q install util-linux procps-ng diffutils findutils
+          useradd --create-home pr-ci
+          chmod -R a+rX "${GITHUB_WORKSPACE}"
+          for test_script in suite-tls suite-init suite-nginx; do
+            runuser -u pr-ci -- env NGINX_BIN=/usr/sbin/nginx bash "platform/deploy/tests/${test_script}.test.sh"
+          done
+
+  # Terraform の stack の IaC の検査（trivy config。#1595）。terraform/ が変わったときだけ実行する
+  # （製品・platform の変更では stack は変わらない）。HIGH / CRITICAL の misconfiguration で失敗する。
+  # 版を固定し、release の checksum で確かめてから使う（actionlint と同じ。third-party の action は使わない）。
+  suite-terraform-iac:
+    name: Suite / Terraform IaC (trivy config)
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Trivy config
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIVY_VERSION: "0.74.0"
+        run: |
+          dir="${RUNNER_TEMP}/trivy"
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          gh release download "v${TRIVY_VERSION}" --repo aquasecurity/trivy --dir "${dir}" \
+            --pattern "${archive}" --pattern "trivy_${TRIVY_VERSION}_checksums.txt"
+          (cd "${dir}" && sha256sum --check --ignore-missing "trivy_${TRIVY_VERSION}_checksums.txt" \
+            && tar -xzf "${archive}" trivy)
+          "${dir}/trivy" config --skip-version-check --cache-dir "${RUNNER_TEMP}/trivy-cache" \
+            --severity HIGH,CRITICAL --exit-code 1 terraform/stack
+
+  # ---------------------------------------------------------------- root の scripts/
+
+  # monorepo の開発の補助のスクリプト（setup-worktree.sh・pr-merge-check.sh・check-agents-md-size.sh・third-party-notices.py。#1328・#2276・#3392）を shellcheck と、
+  # 偽の gh・一時的な git リポジトリのテスト（scripts/tests/）で検査する。テストは GitHub に接続しない。
+  # .github/ の workflow（actionlint。run の script は shellcheck も通す）と .github/scripts も検査する（#1525）。
+  # workflow の安全の検査（zizmor。設定は .github/zizmor.yml。#1594）も行う。
+  suite-scripts:
+    name: Suite / Scripts
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # shellcheck は GitHub の ubuntu の runner に入っている。
+      - name: Shellcheck
+        run: shellcheck scripts/*.sh scripts/tests/*.sh .github/scripts/*.sh .github/actions/*/*.sh
+
+      - name: Test pr-merge-check
+        run: bash scripts/tests/pr-merge-check.test.sh
+
+      # 実 Oracle の結合テストの skip の監視（oracle-integration.yml。#1595）。runner の python3 で動く。
+      - name: Test pytest-skip-gate
+        run: bash scripts/tests/pytest-skip-gate.test.sh
+
+      # Playwright の OS の依存を、時間の上限と retry を付けて入れる script（.github/actions/playwright-browsers。#3489）。
+      - name: Test playwright-browsers install
+        run: bash scripts/tests/playwright-install.test.sh
+
+      # AGENTS.md の大きさ（直下は 20 KiB、直下と各ディレクトリの AGENTS.md の合計は 32 KiB まで。#2276）。
+      # Codex は合計が project_doc_max_bytes（既定 32 KiB）を超えた分を読まない。
+      - name: Check AGENTS.md size
+        run: bash scripts/check-agents-md-size.sh
+
+      - name: Test check-agents-md-size
+        run: bash scripts/tests/check-agents-md-size.test.sh
+
+      # THIRD-PARTY-NOTICES.md の表と、git が管理する uv.lock / package-lock.json の依存を突き合わせる（#3392）。
+      # 表の部品が依存から外れたとき、npm に permissive でないライセンスの package が増えて表に無いときに失敗する。
+      - name: Check third-party notices
+        run: python3 scripts/third-party-notices.py check
+
+      - name: Test third-party-notices
+        run: bash scripts/tests/third-party-notices.test.sh
+
+      # 版を固定し、release の checksum で確かめてから使う。shellcheck は runner のものを使う。
+      - name: Actionlint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIONLINT_VERSION: "1.7.12"
+        run: |
+          dir="${RUNNER_TEMP}/actionlint"
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          gh release download "v${ACTIONLINT_VERSION}" --repo rhysd/actionlint --dir "${dir}" \
+            --pattern "${archive}" --pattern "actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          (cd "${dir}" && sha256sum --check --ignore-missing "actionlint_${ACTIONLINT_VERSION}_checksums.txt" \
+            && tar -xzf "${archive}" actionlint)
+          "${dir}/actionlint" -color
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          enable-cache: false
+
+      # workflow・composite action・dependabot.yml の安全の検査（#1594。action の SHA の固定・token の権限・
+      # 危険な trigger・template の injection など）。版を固定し、設定と除外の理由は .github/zizmor.yml。
+      # --offline は GitHub の API を使う検査（action の版の照合など）をしない。
+      - name: Zizmor
+        env:
+          ZIZMOR_VERSION: "1.30.1"
+        run: uvx "zizmor@${ZIZMOR_VERSION}" --offline --format github --config .github/zizmor.yml .
+
+  # ---------------------------------------------------------------- 集約
+
+  # job を追加したら、この needs にも追加する（ここに無い job の失敗は CI OK に反映されない）。
+  # すべての job に timeout-minutes を付ける（通常 10〜15 分、e2e は実測の倍程度。既定の 360 分のまま止まると
+  # runner と PR の待ちを長く塞ぐ）。
+  # 実 Oracle の結合テスト（Oracle AI Database Free。#1595）。その製品の DB の層（changes の <製品>_oracle）が
+  # 変わったときだけ実行する（それ以外の PR では実行しない）。3 製品の全件は integration-nightly.yml が毎晩。
+  # job の timeout-minutes は呼び出し先（oracle-integration.yml）にある。
+  rag-oracle:
+    name: RAG / Oracle
+    needs: changes
+    if: needs.changes.outputs.rag_oracle == 'true'
+    uses: ./.github/workflows/oracle-integration.yml
+    with:
+      product: rag
+
+  nl2sql-oracle:
+    name: NL2SQL / Oracle
+    needs: changes
+    if: needs.changes.outputs.nl2sql_oracle == 'true'
+    uses: ./.github/workflows/oracle-integration.yml
+    with:
+      product: nl2sql
+
+  agent-oracle:
+    name: Agent / Oracle
+    needs: changes
+    if: needs.changes.outputs.agent_oracle == 'true'
+    uses: ./.github/workflows/oracle-integration.yml
+    with:
+      product: agent
+
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs:
+      - changes
+      - secret-scan
+      - dependency-review
+      - platform-ui
+      - platform-backend-core
+      - platform-system-settings-backend
+      - platform-evaluation-scoring
+      - platform-enterprise-ai
+      - rag-backend
+      - rag-engine
+      - services-scripts-lint
+      - rag-parser-docling
+      - rag-frontend
+      - rag-e2e
+      - nl2sql-frontend
+      - nl2sql-e2e
+      - nl2sql-backend
+      - agent-backend
+      - agent-frontend
+      - agent-e2e
+      - e2e-impact
+      - rag-e2e-impact
+      - nl2sql-e2e-impact
+      - agent-e2e-impact
+      - suite-deploy
+      - suite-oracle-linux
+      - suite-terraform-iac
+      - suite-scripts
+      - suite-evaluation
+      - rag-oracle
+      - nl2sql-oracle
+      - agent-oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # skip（変更のない製品）は成功扱い。failure / cancelled が1つでもあれば失敗させる。
+      - name: Check results
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "job results: ${RESULTS}"
+          if echo "${RESULTS}" | grep -Eq '"(failure|cancelled)"'; then
+            echo "::error::失敗または中断された job があります。"
+            exit 1
+          fi

@@ -1,0 +1,16 @@
+nl2sqldb_high =
+  (description =
+    (retry_count=20)(retry_delay=3)
+    (address=(protocol=tcps)(port=1522)(host=adb.ap-osaka-1.oraclecloud.example.com))
+    (connect_data=(service_name=example_nl2sqldb_high.adb.oraclecloud.com))
+    (security=(ssl_server_dn_match=yes))
+  )
+
+nl2sqldb_low =
+  (description =
+    (retry_count=20)(retry_delay=3)
+    (address=(protocol=tcps)(port=1522)(host=adb.ap-osaka-1.oraclecloud.example.com))
+    (connect_data=(service_name=example_nl2sqldb_low.adb.oraclecloud.com))
+    (security=(ssl_server_dn_match=yes))
+  )
+

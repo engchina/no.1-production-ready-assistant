@@ -1,0 +1,24 @@
+<!-- 目視確認用のリファレンス（製品コードではありません） -->
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><link rel="stylesheet" href="../css/styles.css">
+<style>body{margin:0;padding:16px;background:var(--color-surface);color:var(--color-fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pane{padding:12px;border-radius:var(--radius-lg);border:1px solid var(--color-border);background:var(--color-canvas)}
+.ph{font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted);margin-bottom:8px;display:block}
+.grid{display:grid;gap:8px}
+.sw{height:40px;border:1px solid var(--color-border);border-radius:var(--radius-md)}
+.n{display:block;margin-top:5px;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg)}
+.v{display:block;font:var(--text-meta);font-family:var(--font-mono);color:var(--color-fg-muted)}
+table{border-collapse:collapse;width:100%;font:var(--text-meta)}
+td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--color-border);vertical-align:top}
+th{color:var(--color-fg-muted);font-weight:600}
+code{font-family:var(--font-mono);font-size:0.95em}
+</style></head><body>
+<div class="pair">
+<div class="pane" data-theme="light"><span class="ph">light</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-fg)"></div><span class="n">--fg</span><span class="v">#1c1e21 · 本文</span></div><div><div class="sw" style="background:var(--color-fg-muted)"></div><span class="n">--fg-muted</span><span class="v">#6b7280 · 副次 4.6:1</span></div><div><div class="sw" style="background:var(--color-fg-subtle)"></div><span class="n">--fg-subtle</span><span class="v">#9aa4b2 · 装飾のみ</span></div><div><div class="sw" style="background:var(--color-fg-disabled)"></div><span class="n">--fg-disabled</span><span class="v">#8893a3 · 3.1:1</span></div></div></div>
+<div class="pane" data-theme="dark"><span class="ph">dark</span><div class="grid" style="grid-template-columns:repeat(4,1fr)">
+<div><div class="sw" style="background:var(--color-fg)"></div><span class="n">--fg</span><span class="v">#f2f4f7</span></div><div><div class="sw" style="background:var(--color-fg-muted)"></div><span class="n">--fg-muted</span><span class="v">#b2bac5</span></div><div><div class="sw" style="background:var(--color-fg-subtle)"></div><span class="n">--fg-subtle</span><span class="v">#747f8e</span></div><div><div class="sw" style="background:var(--color-fg-disabled)"></div><span class="n">--fg-disabled</span><span class="v">#747f8e</span></div></div></div>
+</div>
+<p style="font:var(--text-meta);color:var(--color-fg-muted);margin:10px 0 0"><code>--color-fg-subtle</code> は装飾グリフ専用（パンくずの ›）。<b>文章に使わない。</b> プレースホルダは文字なので <code>--color-fg-muted</code> を透過なしで使う（旧実装は 70% 透過で 3:1 を割っていた）。disabled も旧 <code>#9ca3af</code> の 2.5:1 から 3.1:1 に引き上げ済み。</p>
+</body></html>

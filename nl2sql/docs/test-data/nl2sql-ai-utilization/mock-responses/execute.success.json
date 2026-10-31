@@ -1,0 +1,25 @@
+{
+  "data": {
+    "columns": [
+      "ORDER_ID",
+      "CUSTOMER_ID",
+      "TOTAL_AMOUNT"
+    ],
+    "rows": [
+      {
+        "ORDER_ID": 1001,
+        "CUSTOMER_ID": 10,
+        "TOTAL_AMOUNT": 120000
+      },
+      {
+        "ORDER_ID": 1002,
+        "CUSTOMER_ID": 20,
+        "TOTAL_AMOUNT": 85000
+      }
+    ],
+    "total": 2
+  },
+  "error_messages": [],
+  "warning_messages": []
+}
+
