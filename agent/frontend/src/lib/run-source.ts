@@ -1,15 +1,14 @@
 import { t, type I18nKey } from "@/lib/i18n";
 
 /** Run のきっかけ（backend の `run_facts.run_source` と同じ判定。#1874）。 */
-export type RunSource = "user" | "automation" | "evaluation" | "mcp" | "replay";
+export type RunSource = "user" | "evaluation" | "mcp" | "replay";
 
-const RUN_SOURCES: readonly RunSource[] = ["user", "automation", "evaluation", "mcp", "replay"];
+const RUN_SOURCES: readonly RunSource[] = ["user", "evaluation", "mcp", "replay"];
 
-/** Run の metadata からきっかけを決める（品質評価 → 自動実行 → MCP → 再実行 → 画面の順）。 */
+/** Run の metadata からきっかけを決める（品質評価 → MCP → 再実行 → 画面の順）。 */
 export function runSourceOf(metadata: Record<string, unknown> | undefined): RunSource {
   const value = metadata ?? {};
   if (value.evaluation_job_id) return "evaluation";
-  if (value.automation_id) return "automation";
   if (value.source === "mcp") return "mcp";
   if (value.replayed_from_run_id) return "replay";
   return "user";

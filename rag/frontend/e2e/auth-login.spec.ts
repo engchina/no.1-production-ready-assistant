@@ -121,7 +121,7 @@ test("未ログインで開くとログイン画面へ移り、DB ユーザー�
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "システムにログイン" })).toBeVisible();
   // wordmark は RAG。
-  await expect(page.getByText("Production Ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("Private", { exact: true })).toBeVisible();
   await expect(page.getByText("RAG", { exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "サイドナビゲーション" })).toHaveCount(0);
   await expectNoPageOverflow(page);
@@ -176,7 +176,7 @@ test("初回ログインは強制パスワード変更へ移り、変更後は C
   baseURL,
 }) => {
   const auth = await mockAuthApi(page, null);
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3200" }]);
 
   await page.goto("/login");
   await page.getByLabel("ログインユーザーID").fill("first.user");
@@ -262,7 +262,7 @@ test("アカウントの欄からアカウントの画面を開き、タブを�
   baseURL,
 }) => {
   const auth = await mockAuthApi(page, loginTarget("admin.user"));
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3200" }]);
 
   await page.goto("/settings/database");
   // 375px ではナビがドロワー（#367）。開いて文言付きの操作を使う。

@@ -78,7 +78,6 @@ from pr_system_settings.model import enterprise_ai_vision_model_id as enterprise
 from pydantic import (
     BaseModel,
     Field,
-    PrivateAttr,
     ValidationError,
     field_validator,
     model_validator,
@@ -111,62 +110,30 @@ ParserAdapterBackend = Literal[
     "local",
     "docling",
     "unstructured",
-    # 前処理の構造化レコードの JSONL を記録の単位で解析し、検索用テキストを記録の境界で区切る
-    # (#2457)。使用エンジンで選んだときだけ使う。
-    "structured_records_jsonl",
-    # XML ツリー JSON(tag / attr / children の木の JSON)を要素の階層のまま解析する(#2024)。
-    # Docling・Unstructured と同じく、使用エンジンで選んだときだけ使う(#2042)。
-    "xml_tree_json",
-    "mineru",
-    "dots_ocr",
-    # service 系 backend。oci_document_understanding は OCI Document Understanding の
-    # 非同期 processor job で OCR/表抽出する(parser-oci-document-understanding へ委譲する)。
-    # 準備中(ロードマップ)で、まだ選べない(ROADMAP_PARSER_ADAPTER_BACKENDS。#3374)。
-    "oci_document_understanding",
 ]
 # 削除した文書解析エンジン(#270: Marker / Unlimited-OCR / GLM-OCR、#2042: OCI Generative AI
-# (Vision))。保存済みの設定(parser-settings.json・文書レシピ・KB 構築設定・取込ジョブ)に
-# 残っていても取込・画面を壊さないよう、読み込み時に既定エンジンへ寄せる(旧 ``auto`` と同じ扱い)。
+# (Vision)、#22: MinerU / Dots.OCR / OCI Document Understanding、#21: 構造化レコード JSONL /
+# XML ツリー JSON)。保存済みの設定
+# (parser-settings.json・文書レシピ・KB 構築設定・取込ジョブ)に残っていても取込・画面を
+# 壊さないよう、読み込み時に既定エンジンへ寄せる(旧 ``auto`` と同じ扱い)。
 # 旧値は再保存時に消えるため、既存データを書き換える migration は持たない。
 REMOVED_PARSER_ADAPTER_BACKENDS = frozenset(
-    {"marker", "unlimited_ocr", "glm_ocr", "oci_genai_vision", "enterprise_ai_vlm"}
+    {
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        # 前処理の構造化レコードの JSONL は Docling・Unstructured のサービスが読む(#21)。
+        "structured_records_jsonl",
+        "xml_tree_json",
+    }
 )
 # 既定の文書解析エンジン(#286: Unstructured から Docling へ変更)。Unstructured は明示選択で使える。
 DEFAULT_PARSER_ADAPTER_BACKEND: Literal["docling"] = "docling"
-# 準備中(ロードマップ)の文書解析エンジン(#3374)。client・parser のサービスの実装は残すが、
-# まだ選べない。
-# - 選ぶ操作(文書解析の全体設定の API・RAG_PARSER_ADAPTER_BACKEND・処理レシピの保存)は
-#   検証のエラーにする。
-# - 保存済みの値(parser-settings.json・文書レシピ・取込ジョブ)は読み込み時に既定エンジン /
-#   global の継承へ寄せる(画面・取込を壊さない)。取込の経路は選ばれていても呼ばずに止める
-#   (ingestion._partition_source)。
-ROADMAP_PARSER_ADAPTER_BACKENDS: dict[str, str] = {
-    # MinerU は外部の HTTP API の client とライセンスの確認(app.rag.mineru_license)を戻したうえで、
-    # 準備中にする(#3359。利用者の判断)。有効にするときはこの行を消す。
-    "mineru": "MinerU",
-    "oci_document_understanding": "OCI Document Understanding",
-}
-
-
-def is_roadmap_parser_adapter_backend(value: object) -> bool:
-    """準備中(ロードマップ)で、まだ選べない文書解析エンジンか。"""
-    return isinstance(value, str) and value.strip().casefold() in ROADMAP_PARSER_ADAPTER_BACKENDS
-
-
-def roadmap_parser_adapter_backend_message(value: object) -> str:
-    """準備中の文書解析エンジンを選んだときの検証のエラーの文言。"""
-    label = ROADMAP_PARSER_ADAPTER_BACKENDS.get(str(value).strip().casefold(), str(value))
-    return (
-        f"{label} の解析は準備中（ロードマップ）のため、まだ選べません。"
-        "Docling などの使える解析エンジンを選んでください。"
-    )
-
-
-def reject_roadmap_parser_adapter_backend(value: object) -> object:
-    """準備中の文書解析エンジンなら ValueError(理由の分かる文言)にする。それ以外はそのまま返す。"""
-    if is_roadmap_parser_adapter_backend(value):
-        raise ValueError(roadmap_parser_adapter_backend_message(value))
-    return value
 
 
 def normalize_parser_adapter_backend_value(value: object) -> object:
@@ -260,7 +227,7 @@ INGESTION_JOB_SUBPROCESS_TIMEOUT_MAX_SECONDS = 604800.0
 # 取込 job の停滞の時間の既定（秒。#2003）。進捗を出さない 1 回の呼び出し（再試行を含む）の最長
 # より長くする: 解析サービスは配備の unit の 1230 秒 × 5 回 + 待ち = 約 6170 秒（timeout も
 # 再試行する）、Vision の LLM は共通の設定（PLATFORM_OCI_ENTERPRISE_AI_*）で選べる最長が
-# 600 秒 × 6 回 = 3600 秒、MinerU の job は既定 1800 秒。これらより長い 2 時間にする。
+# 600 秒 × 6 回 = 3600 秒。これらより長い 2 時間にする。
 INGESTION_JOB_STALL_TIMEOUT_DEFAULT_SECONDS = 7200.0
 CHUNK_CHILD_TARGET_CHARS_DEFAULT = 1000
 CHUNK_CHILD_TARGET_CHARS_MIN = 300
@@ -299,7 +266,6 @@ AnswerFlow = Literal["crag", "standard_rag"]
 # 回答の LLM の用途ごとの推論(思考)の量(#1499)。model はモデルの登録値(共通のモデル設定)のまま、
 # none は送らない、low / medium / high はその値を送る(platform の推論の量の選択肢と同じ)。
 ReasoningEffortOverride = Literal["model", "none", "low", "medium", "high"]
-MineruTier = Literal["flash", "basic", "standard", "advanced"]
 VectorIndexProfile = Literal[
     "balanced",
     "accurate",
@@ -372,35 +338,14 @@ class _PersistedParserAdapterSettings(BaseModel):
     adapter_backend: ParserAdapterBackend = DEFAULT_PARSER_ADAPTER_BACKEND
     docling_enabled: bool = True
     unstructured_enabled: bool = False
-    mineru_enabled: bool = False
-    dots_ocr_enabled: bool = False
-    structured_records_jsonl_enabled: bool = False
-    xml_tree_json_enabled: bool = False
-    mineru_api_host: str = Field(default="", max_length=2048)
-    # MinerU のライセンスの条件を管理者が確認した記録（#3359）。確認するまで MinerU を有効にも
-    # 選択にもできない（app.rag.mineru_license）。確認した人の表示名と日時（UTC の ISO 8601）。
-    mineru_license_acknowledged_by: str = Field(default="", max_length=256)
-    mineru_license_acknowledged_at: str = Field(default="", max_length=64)
-    dots_ocr_api_host: str = Field(default="", max_length=2048)
-    dots_ocr_model: str = Field(default="rednote-hilab/dots.mocr", max_length=512)
 
-    # 削除済みエンジンの項目(marker_enabled 等)と、画面から外した docling_vision_enabled(#497。
-    # Vision の既定は backend/.env の RAG_VISION_ENABLED で決める。#528)は
-    # 既定の extra=ignore で読み捨てる。
-    # adapter_backend に削除済みエンジンが残っていれば既定エンジンへ寄せる(#270)。
-    # 準備中(ロードマップ)のエンジンが残っていても既定エンジンへ寄せる(#3374。以前の版が画面から
-    # 保存した値。起動を止めず、ログに出す。次に保存すると消える)。
+    # 削除済みエンジンの項目(marker_enabled・mineru_enabled 等)と、画面から外した
+    # docling_vision_enabled(#497。Vision の既定は backend/.env の RAG_VISION_ENABLED で
+    # 決める。#528)は既定の extra=ignore で読み捨てる。
+    # adapter_backend に削除済みエンジンが残っていれば既定エンジンへ寄せる(#270・#22)。
     @field_validator("adapter_backend", mode="before")
     @classmethod
     def normalize_adapter_backend(cls, value: object) -> object:
-        if is_roadmap_parser_adapter_backend(value):
-            logging.getLogger(__name__).warning(
-                "parser-settings.json の解析エンジン %s は準備中（ロードマップ）のため使わず、"
-                "既定の %s にします。",
-                value,
-                DEFAULT_PARSER_ADAPTER_BACKEND,
-            )
-            return DEFAULT_PARSER_ADAPTER_BACKEND
         return normalize_parser_adapter_backend_value(value)
 
 
@@ -478,12 +423,6 @@ class Settings(
 
     # 環境変数名は属性名から決める（共通の属性は `PLATFORM_*`、それ以外は `RAG_*`。#211）。
     model_config = product_settings_config(prefix="RAG_", backend_dir=BACKEND_ROOT)
-
-    # MinerU のライセンスの条件の確認（確認した人の表示名, UTC の ISO 8601 の日時。#3359）。
-    # 環境変数・`.env` では書けないよう、Settings の項目にせず private にする。書けるのは
-    # 「文書解析」画面（system_admin）の保存だけで、parser-settings.json から読む
-    # （app.rag.mineru_license）。model_copy は private の値も写す。
-    _mineru_license_acknowledgement: tuple[str, str] = PrivateAttr(default=("", ""))
 
     @classmethod
     def settings_customise_sources(
@@ -566,7 +505,7 @@ class Settings(
     huggingface_endpoint: str = Field(default="")
 
     # CORS 許可オリジン（フロントエンド）
-    cors_origins: list[str] = Field(default=["http://localhost:3000"])
+    cors_origins: list[str] = Field(default=["http://localhost:3100"])
 
     # --- OCI 共通 ---
     oci_config_file: str = Field(default="~/.oci/config")
@@ -679,14 +618,17 @@ class Settings(
     )
 
     # --- OCI Generative AI（埋め込み / リランク）---
-    oci_genai_embedding_model: str = Field(default="cohere.embed-v4.0")
+    oci_genai_embedding_model: str = Field(default="text-embedding-v4")
     oci_genai_embedding_dim: int = Field(
         default=1536,
         ge=1536,
         le=1536,
         description="Cohere Embed v4 と Oracle VECTOR(1536, FLOAT32) に合わせる。",
     )
-    oci_genai_rerank_model: str = Field(default="cohere.rerank-v4.0-fast")
+    oci_genai_rerank_model: str = Field(default="qwen3-rerank")
+    # 埋め込み / 再ランクの OpenAI 互換 Base URL(#8。空なら Enterprise AI の接続から)。
+    embedding_base_url: str = Field(default="")
+    rerank_base_url: str = Field(default="")
 
     # --- Oracle AI Database ---
     oracle_user: str = Field(default="")
@@ -950,7 +892,7 @@ class Settings(
         description=(
             "process isolation 時、進捗を出す段(解析のページ・図・表の説明)の途中で job の"
             "進捗(rag_ingestion_jobs.progress_json)がこの秒数変わらなければ止める(#2003)。"
-            "進捗を出さない 1 回の呼び出し(解析サービス・MinerU・Document Understanding・"
+            "進捗を出さない 1 回の呼び出し(解析サービス・"
             "Vision の LLM。再試行を含む)の最長より長くする(起動時に検証する)。"
         ),
     )
@@ -975,7 +917,7 @@ class Settings(
         ),
     )
     rag_chunk_delimiter: str = Field(
-        # 既定は構造化レコード JSONL の記録の境界のマーカー(#2457)。
+        # 既定は構造化レコードの JSONL を読んだ抽出の記録の境界のマーカー(#2457)。
         default=JSONL_RECORD_BOUNDARY,
         min_length=1,
         max_length=256,
@@ -1370,149 +1312,6 @@ class Settings(
             "操作画面を LLM で選び、その画面の根拠を検索候補に加える"
             "(LLM の呼び出しが 1 回増える。#554)。"
             "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
-        ),
-    )
-    rag_article_catalog_enabled: bool = Field(
-        default=True,
-        description=(
-            "回答で、検索の候補に出た条で構成された文書(XML ツリー JSON で取り込んだ文書など)の"
-            "条の目録から、質問の根拠になる条を LLM で選び、その条の根拠を候補に加えて context の"
-            "枠を確保する(#2254)。条で構成された文書が候補に無ければ LLM を呼ばない"
-            "(候補にあれば文書ごとに 1 回、並行に呼ぶ)。"
-        ),
-    )
-    rag_article_catalog_max_documents: int = Field(
-        default=16,
-        ge=0,
-        le=32,
-        description=(
-            "条の目録を読む文書の上限(検索の候補の文書の、候補の順位の逆数の合計の大きい順。"
-            "#2254・#2261)。0 は選ばない。既定は評価で必要だった文書の順位(最大 8)に"
-            "余裕を持たせた値(#3518)。文書ごとに LLM を 2 回呼ぶ。"
-        ),
-    )
-    rag_article_catalog_max_articles: int = Field(
-        default=8,
-        ge=0,
-        le=20,
-        description=(
-            "条の目録から 1 つの文書で選ぶ条の上限(#2254)。既定は評価で根拠の条が選ばれた"
-            "位置(最大 6)に余裕を持たせた値(#3518)。"
-        ),
-    )
-    rag_article_catalog_context_records: int = Field(
-        default=6,
-        ge=0,
-        le=10,
-        description=(
-            "条の目録で選んだ条のうち、context に足す数(rerank の順。#2254)。検索の根拠の"
-            "起点・親の枠の外に足し、検索の根拠を減らさない。0 は足さない(候補に加えるだけ)。"
-        ),
-    )
-    rag_article_catalog_scope_documents: int = Field(
-        default=2,
-        ge=0,
-        le=5,
-        description=(
-            "検索の範囲の条で構成された文書の一覧から、LLM が選んで目録を読む文書の数"
-            "(検索の候補に出ない文書。手続の一般的な規則の文書など。#2254)。0 は候補の文書だけ。"
-        ),
-    )
-    rag_article_catalog_original_question_search: bool = Field(
-        default=True,
-        description=(
-            "元の質問(業務 Agent が注入する original_question)でも 1 回ベクトル検索し、"
-            "その候補を条の目録を読む文書の順位に足す(候補・context には足さない)。"
-            "短い検索文で事例の論点の文書が候補に出ないことへの対策。"
-        ),
-    )
-    rag_mcp_catalog_article_evidence_limit: int = Field(
-        default=120,
-        ge=0,
-        le=200,
-        description=(
-            "MCP の rag_retrieve_evidence が evidence_limit の外で末尾に足す、"
-            "条の目録で選んだ条の根拠の数の上限(選んだ順。各文書の条を順に回した順)。"
-            "業務 Agent のモデルの入力を抑える。0 は足さない。"
-        ),
-    )
-    rag_article_catalog_refine_articles: int = Field(
-        default=6,
-        ge=0,
-        le=20,
-        description=(
-            "条の選択の 2 段目で、1 段目で選んだ条と同じ章の条と、選んだ条を書き出しで"
-            "名指しする別の章の条を本文の書き出しつきで見せ、文書ごとに足させる条の数の上限。"
-            "0 は 2 段目を行わない。"
-        ),
-    )
-    rag_article_catalog_review_enabled: bool = Field(
-        default=False,
-        description=(
-            "条の目録で選んだ条を回答の生成が引かなかったとき、条ごとに原文が支える説明を"
-            "別の LLM の呼び出しで検討し、その説明の出典に足す(#3526)。"
-            "足した出典も原文照合と条の出典の監査に掛ける。評価で確かめた説明に根拠の無い条の"
-            "出典が付いたので既定は無効。無効なら検討の呼び出しをしない。"
-        ),
-    )
-    rag_article_catalog_refine_candidates: int = Field(
-        default=60,
-        ge=0,
-        le=200,
-        description=(
-            "条の選択の 2 段目で見せる条の数の上限(書き出しつき。同じ章の条と、選んだ条を名指しする"
-            "別の章の条の合計。同じ章の条に 3 分の 2、名指しの条に 3 分の 1 を割り当てる。"
-            "名指しの条は 3 分の 1 を超えず、名指しの条の余りは同じ章の条が使う)。"
-            "0 は 2 段目を行わない。"
-        ),
-    )
-    rag_article_catalog_output_token_cap: int = Field(
-        default=8192,
-        ge=0,
-        le=32768,
-        description=(
-            "条の選択の LLM の呼び出し 1 回の出力の上限(token)。"
-            "選ぶ出力は目録の番号の列で通常は数百 token。"
-            "同じ出力を繰り返して書き続ける呼び出しを抑え、"
-            "超えた文書は選ばずに続ける。0 は抑えない。"
-        ),
-    )
-    rag_article_catalog_call_timeout_seconds: float = Field(
-        default=180.0,
-        ge=0.0,
-        le=600.0,
-        description=(
-            "条の選択の LLM の呼び出し 1 回の時間の上限(秒)。並行の呼び出しをすべて待つので、"
-            "1 つの遅い呼び出しで段全体が止まらないようにする。"
-            "超えた文書は選ばずに続ける。0 は抑えない。"
-        ),
-    )
-    rag_article_catalog_cache_dir: str = Field(
-        default="",
-        max_length=1024,
-        description=(
-            "条の選択と範囲の文書の選択の結果を、process をまたいで使う記録の置き場所(#3507)。"
-            "空は PLATFORM_LOCAL_STORAGE_DIR の下の cache/rag-article-catalog。"
-            "同じ Compute の backend の worker が同じ場所を読み書きする。"
-        ),
-    )
-    rag_article_catalog_cache_ttl_seconds: int = Field(
-        default=86400,
-        ge=0,
-        le=30 * 86400,
-        description=(
-            "条の選択の記録の有効期間(秒)。key は索引の版(chunk_set)・目録の内容・質問・"
-            "モデル・選択の設定で、同じ入力の LLM の結果だけを使い回す。"
-            "0 は process をまたぐ記録を使わない(process の中の記録だけ)。"
-        ),
-    )
-    rag_article_catalog_cache_max_entries: int = Field(
-        default=4096,
-        ge=0,
-        le=100_000,
-        description=(
-            "条の選択の記録の件数の上限(1 件は文書 1 つの選択か範囲の文書の選択 1 回)。"
-            "超えたら古い記録から消す。0 は process をまたぐ記録を使わない。"
         ),
     )
     rag_answer_validation_max_input_bytes: int = Field(
@@ -2075,10 +1874,7 @@ class Settings(
         default=1.0,
         ge=0.0,
         le=10.0,
-        description=(
-            "2 つの段落の幅の差が狭いほうの幅のこの倍数未満なら、幅が近いとみなす"
-            "（既定 1.0 は MinerU の段落の続きの規則と同じ）。"
-        ),
+        description=("2 つの段落の幅の差が狭いほうの幅のこの倍数未満なら、幅が近いとみなす。"),
     )
     # 取込の AI の呼び出しの並行と再試行（#2002。共通の部品 pr_backend_core.bounded_calls）。
     rag_vision_concurrency: int = Field(
@@ -2262,7 +2058,7 @@ class Settings(
     rag_preprocess_word_to_jsonl_service_url: str = Field(
         default="http://127.0.0.1:18017",
         description=(
-            "Word(.doc/.docx/.docm)→構造化レコード JSONL 前処理マイクロサービスの base URL(#2457)。"
+            "Word(.doc/.docx/.docm)→構造化レコードの JSONL の前処理サービスの base URL(#2457)。"
         ),
     )
     rag_preprocess_service_timeout_seconds: float = Field(
@@ -2282,10 +2078,9 @@ class Settings(
         default=DEFAULT_PARSER_ADAPTER_BACKEND,
         description=(
             "文書解析 backend の明示選択。既定は Docling(#286)。Unstructured は明示選択で使う。"
-            "Docling/Unstructured/構造化レコード JSONL/XML ツリー JSON/各 OCR は"
-            "対応 parser マイクロサービスまたは API へ HTTP 委譲する。"
+            "Docling/Unstructured は対応 parser マイクロサービスへ HTTP 委譲する"
+            "(前処理の構造化レコードの JSONL も同じサービスが読む。#21)。"
             "in-process 解析・local fallback は持たない。"
-            "OCI Document Understanding は準備中（ロードマップ）で、まだ選べない(#3374)。"
         ),
     )
     rag_parser_docling_enabled: bool = Field(
@@ -2312,93 +2107,13 @@ class Settings(
             "(画面で Unstructured を選ぶと有効になる)。選択時は parser-unstructured の起動が前提。"
         ),
     )
-    rag_parser_mineru_enabled: bool = Field(
-        default=False,
-        description="外部 MinerU native API adapter を feature flag で有効化する。",
-    )
-    rag_parser_dots_ocr_enabled: bool = Field(
-        default=False,
-        description="外部 Dots.OCR OpenAI 互換 API adapter を feature flag で有効化する。",
-    )
-    rag_parser_structured_records_jsonl_enabled: bool = Field(
-        default=False,
-        description=(
-            "構造化レコード JSONL adapter を有効化する(#2457)。既定 backend ではないため既定で"
-            " False(画面で構造化レコード JSONL を選ぶと有効になる)。選択時は"
-            " parser-structured-records-jsonl の起動が前提。"
-        ),
-    )
-    rag_parser_xml_tree_json_enabled: bool = Field(
-        default=False,
-        description=(
-            "XML ツリー JSON adapter を有効化する(#2024・#2042)。既定 backend ではないため既定で"
-            " False(画面で XML ツリー JSON を選ぶと有効になる)。選択時は parser-xml-tree-json の"
-            "起動が前提。"
-        ),
-    )
     rag_parser_docling_service_url: str = Field(
         default="http://127.0.0.1:18020",
         description="Docling parser マイクロサービスの base URL。",
     )
-    rag_xml_tree_json_source_url_template: str = Field(
-        default="",
-        description=(
-            "XML ツリー JSON の文書の原典の URL のひな形(#2024)。``{document_id}`` を文書 ID に"
-            "置き換え、引用カードの「原典を開く」と根拠の metadata(xml_tree_source_url)に使う。"
-            "空なら原典の URL を付けない。"
-        ),
-    )
-    rag_parser_structured_records_jsonl_service_url: str = Field(
-        default="http://127.0.0.1:18023",
-        description="構造化レコード JSONL の parser マイクロサービスの base URL(#2457)。",
-    )
-    rag_parser_xml_tree_json_service_url: str = Field(
-        default="http://127.0.0.1:18021",
-        description="XML ツリー JSON の parser マイクロサービスの base URL(#2024)。",
-    )
     rag_parser_unstructured_service_url: str = Field(
         default="http://127.0.0.1:18022",
         description="Unstructured parser マイクロサービスの base URL。",
-    )
-    # GPU OCR は外部で運用済みの native API を呼ぶ。旧 *_SERVICE_URL(/parse wrapper)
-    # は読まず、誤った protocol への自動移行を避ける。
-    rag_parser_mineru_api_host: str = Field(
-        default="", description="MinerU 4.x の V1 API（/v1/parse/jobs）の base URL。"
-    )
-    rag_parser_mineru_api_key: str = Field(default="", repr=False)
-    # MinerU 4.0 は解析の方式（pipeline / vlm / hybrid）を品質の tier にまとめた（#1329）。
-    # OCR の言語は MinerU の API サーバーの起動時の設定で、V1 の request には無い。
-    rag_parser_mineru_tier: MineruTier = Field(
-        default="basic",
-        description=(
-            "MinerU の解析の品質（flash / basic / standard / advanced）。basic は小さな"
-            "モデルで CPU でも動く（3.x の pipeline 相当）。"
-            "PDF・画像以外は MinerU が flash だけを持つ。"
-        ),
-    )
-    rag_parser_mineru_job_timeout_seconds: float = Field(
-        default=1800.0,
-        gt=0,
-        le=86400,
-        description=(
-            "MinerU の parse job を終了まで待つ上限（秒）。超えたら job を取り消して縮退する。"
-        ),
-    )
-    rag_parser_dots_ocr_api_host: str = Field(
-        default="", description="Dots.OCR OpenAI 互換 API の base URL。"
-    )
-    rag_parser_dots_ocr_model: str = Field(
-        default="rednote-hilab/dots.mocr", description="Dots.OCR の model ID。"
-    )
-    rag_parser_dots_ocr_api_key: str = Field(default="", repr=False)
-    rag_parser_dots_ocr_dpi: int = Field(default=200, ge=72, le=600)
-    rag_parser_dots_ocr_pdf_workers: int = Field(default=4, ge=1, le=16)
-    rag_parser_oci_document_understanding_service_url: str = Field(
-        default="http://127.0.0.1:18028",
-        description=(
-            "OCI Document Understanding parser マイクロサービスの base URL。"
-            "OCI を呼ぶ薄いプロキシで、認証はメイン設定(OCI env)を継承する。"
-        ),
     )
     rag_parser_service_timeout_seconds: float = Field(
         default=300.0,
@@ -2502,69 +2217,6 @@ class Settings(
             "サービス管理画面が各マイクロサービスの /health を問い合わせる timeout(秒)。"
             "接続拒否/timeout は stopped、到達したが status!=ok は degraded として表示する。"
         ),
-    )
-    # --- OCI Document Understanding（service 系 parser backend）---
-    # 別 OCI サービス(oci.ai_document)。非同期 processor job で日本語 OCR/表抽出する。
-    # 入出力は Object Storage 経由。未設定/失敗時は安全に既存フローへ縮退する。
-    oci_document_understanding_compartment_id: str = Field(
-        default="",
-        description=(
-            "OCI Document Understanding の compartment OCID。空のときは oci_compartment_id を使う。"
-        ),
-    )
-    oci_document_understanding_namespace: str = Field(
-        default="",
-        description=(
-            "DU 入出力 Object Storage の namespace。空のときは object_storage_namespace を使う。"
-        ),
-    )
-    oci_document_understanding_object_storage_region: str = Field(
-        default="",
-        description=(
-            "DU 入出力 Object Storage の region。空のときは PLATFORM_OCI_REGION、"
-            "さらに空なら object_storage_region を使う。"
-        ),
-    )
-    oci_document_understanding_input_bucket: str = Field(
-        default="",
-        description=(
-            "DU 入力ファイルを置く Object Storage bucket。空のときは object_storage_bucket を使う。"
-        ),
-    )
-    oci_document_understanding_output_bucket: str = Field(
-        default="",
-        description="DU 結果 JSON の出力先 bucket。空のときは入力 bucket を使う。",
-    )
-    oci_document_understanding_input_prefix: str = Field(
-        default="document-understanding/input",
-        max_length=256,
-        description="DU 入力ファイルの Object Storage key prefix。",
-    )
-    oci_document_understanding_output_prefix: str = Field(
-        default="document-understanding/output",
-        max_length=256,
-        description="DU 結果 JSON の Object Storage key prefix。",
-    )
-    oci_document_understanding_language: str = Field(
-        default="ja",
-        max_length=8,
-        description="DU の言語ヒント(BCP 47。日本語は ja / ja-JP)。",
-    )
-    oci_document_understanding_features: list[str] = Field(
-        default_factory=lambda: ["DOCUMENT_TEXT_EXTRACTION", "TABLE_EXTRACTION"],
-        description="DU で要求する analysis feature 種別。",
-    )
-    oci_document_understanding_poll_interval_seconds: float = Field(
-        default=5.0,
-        gt=0,
-        le=60.0,
-        description="DU processor job の状態 poll 間隔(秒)。",
-    )
-    oci_document_understanding_timeout_seconds: float = Field(
-        default=600.0,
-        gt=0,
-        le=3600.0,
-        description="DU processor job 完了待ちの上限(秒)。超過時は安全に縮退する。",
     )
     rag_segment_checkpoint_enabled: bool = Field(
         default=True,
@@ -2670,14 +2322,13 @@ class Settings(
     @field_validator("rag_parser_adapter_backend", mode="before")
     @classmethod
     def normalize_legacy_parser_adapter_backend(cls, value: object) -> object:
-        """旧値・削除済みエンジン(#270)の正規化。
+        """旧値・削除済みエンジン(#270・#22)の正規化。
 
         ``local`` は **正規化しない**。advanced diagnostics(scorecard/staging golden gate)が
         「常時利用可能な baseline」概念として扱う。runtime では ingestion._partition_source が
         ``local`` を既定エンジン(``docling``)のサービスへマップし、in-process 解析は実行しない。
-        準備中(ロードマップ)のエンジン(#3374)は理由の分かる検証のエラーにする(``.env`` で選べない)。
         """
-        return reject_roadmap_parser_adapter_backend(normalize_parser_adapter_backend_value(value))
+        return normalize_parser_adapter_backend_value(value)
 
     @field_validator("rag_preprocess_profile", mode="before")
     @classmethod
@@ -2796,10 +2447,6 @@ class Settings(
                 self.rag_parser_service_timeout_seconds * self.rag_http_service_retry_attempts
                 + self.rag_http_service_retry_max_delay_seconds
                 * max(self.rag_http_service_retry_attempts - 1, 0)
-            ),
-            "rag_parser_mineru_job_timeout_seconds": self.rag_parser_mineru_job_timeout_seconds,
-            "oci_document_understanding_timeout_seconds": (
-                self.oci_document_understanding_timeout_seconds
             ),
             "oci_enterprise_ai_timeout_seconds": (
                 self.oci_enterprise_ai_timeout_seconds * (self.oci_enterprise_ai_max_retries + 1)
@@ -2989,15 +2636,10 @@ def resolve_model_settings_file(path_value: str) -> Path:
     return (PLATFORM_ENV_FILE.parent / path).resolve()
 
 
-# MinerU のライセンスの確認（#3359）は Settings の項目ではなく private の値に読み書きする。
-_MINERU_LICENSE_FIELDS = ("mineru_license_acknowledged_by", "mineru_license_acknowledged_at")
-_PARSER_ADAPTER_FIELDS = tuple(
-    name
-    for name in _PersistedParserAdapterSettings.model_fields
-    if name not in _MINERU_LICENSE_FIELDS
-)
+_PARSER_ADAPTER_FIELDS = tuple(_PersistedParserAdapterSettings.model_fields)
 # parser の API key（JSON に書かず、RAG の backend/.env に保存する。#106 / #211）。
-PARSER_SECRET_ATTRS = ("rag_parser_mineru_api_key", "rag_parser_dots_ocr_api_key")
+# 外部 API を呼ぶ解析エンジンは無いため、現在は空(#22)。
+PARSER_SECRET_ATTRS: tuple[str, ...] = ()
 
 
 def resolve_language_pack_file(settings: Settings) -> Path:
@@ -3019,19 +2661,12 @@ def _load_parser_adapters(settings: Settings, raw: Mapping[str, Any]) -> None:
     parser = _PersistedParserAdapterSettings.model_validate(raw)
     for name in _PARSER_ADAPTER_FIELDS:
         setattr(settings, f"rag_parser_{name}", getattr(parser, name))
-    settings._mineru_license_acknowledgement = (
-        parser.mineru_license_acknowledged_by,
-        parser.mineru_license_acknowledged_at,
-    )
 
 
 def _dump_parser_adapters(settings: Settings) -> dict[str, Any]:
     document: dict[str, Any] = {
         name: getattr(settings, f"rag_parser_{name}") for name in _PARSER_ADAPTER_FIELDS
     }
-    by, at = settings._mineru_license_acknowledgement
-    document["mineru_license_acknowledged_by"] = by
-    document["mineru_license_acknowledged_at"] = at
     return document
 
 

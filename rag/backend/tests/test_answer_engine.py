@@ -733,21 +733,21 @@ async def test_answer_engine_standard_flow_without_rerank_answers(
 
 
 def test_build_engine_settings_configures_rerank(tmp_path: Any) -> None:
-    """rag_engine が rerank を実行する条件(model と compartment)を backend の設定から渡す(#275)。"""
+    """rag_engine が rerank を実行する条件(model と Base URL)を backend の設定から渡す(#275)。"""
     from rag_engine.generation.answer_records import _rerank_configured
 
     from app.rag.answer_engine import build_engine_settings
 
     engine_settings = build_engine_settings(
         Settings(
-            oci_compartment_id="ocid1.compartment.oc1..example",
-            oci_genai_rerank_model="cohere.rerank-v4.0-fast",
+            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            oci_genai_rerank_model="qwen3-rerank",
         ),
         output_dir=tmp_path,
     )
 
-    assert engine_settings.oci_compartment_id == "ocid1.compartment.oc1..example"
-    assert engine_settings.rerank_model == "cohere.rerank-v4.0-fast"
+    assert engine_settings.embedding_base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    assert engine_settings.rerank_model == "qwen3-rerank"
     assert _rerank_configured(engine_settings) is True
 
 
@@ -763,7 +763,7 @@ async def test_rerank_enabled_calls_backend_rerank(
 ) -> None:
     """Rerank ON(既定)なら、検索候補を backend の Cohere rerank で並べ替える(#275)。
 
-    以前は rag_engine の Settings に compartment が渡らず、Rerank ON でも常に「未実行」だった。
+    以前は rag_engine の Settings に接続先が渡らず、Rerank ON でも常に「未実行」だった。
     """
     import rag_engine.adapters.oci as engine_oci
 
@@ -781,7 +781,7 @@ async def test_rerank_enabled_calls_backend_rerank(
     genai = RecordingGenAi()
     engine = AnswerEngine(
         Settings(
-            oci_compartment_id="ocid1.compartment.oc1..example",
+            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -822,7 +822,7 @@ async def test_rerank_score_and_rank_reach_citations(
     monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
-            oci_compartment_id="ocid1.compartment.oc1..example",
+            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -848,10 +848,13 @@ async def test_rerank_score_and_rank_reach_citations(
     ("settings", "reason"),
     [
         (
-            {"oci_compartment_id": "ocid1.compartment.oc1..example", "rag_rerank_enabled": False},
+            {
+                "embedding_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "rag_rerank_enabled": False,
+            },
             "無効の設定",
         ),
-        ({"oci_compartment_id": ""}, "モデルまたはコンパートメントが未設定"),
+        ({"embedding_base_url": ""}, "モデルまたは Base URL が未設定"),
     ],
     ids=["disabled", "unconfigured"],
 )
@@ -3576,7 +3579,7 @@ async def test_original_question_keeps_numbered_requests_through_coverage(
             "Q2",
             "Q3",
         }
-    # 主の検索は言い換えた検索文で行う(元の質問の全文の検索は、条の目録の候補の補いだけ)。
+    # 主の検索は言い換えた検索文で行う。
     assert oracle.queries[0] == query
     # 回答の要求(rag_search の requests。回答の検査の入力)も元の質問の 3 要求(充足は監査が決める)。
     requests = outcome.diagnostics["envelope"]["requests"]

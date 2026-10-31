@@ -28,9 +28,11 @@ function createModelSettings() {
         max_retries: 3,
       },
       generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
+        embedding_model: "text-embedding-v4",
         embedding_dim: 1536,
-        rerank_model: "cohere.rerank-v4.0-fast",
+        embedding_base_url: "",
+        rerank_model: "qwen3-rerank",
+        rerank_base_url: "",
       },
     },
     checks: { enterprise_ai: "ok", generative_ai: "ok", embedding_dim: "ok" },

@@ -29,7 +29,7 @@ UPDATE_LOG_PATH="${UPDATE_LOG_PATH:-/var/log/nl2sql-update.log}"
 # （Nginx）は配備しないので、health は backend を直接確かめる（#19）。
 FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/nl2sql/}"
 
-# backend は 127.0.0.1:8010（RAG の 8000 と分ける。ローカルの開発と同じ。#1316）。
+# backend は 127.0.0.1:8010（RAG の 8000 と分ける。#1316。ローカルの開発の 8110 とは別。#25）。
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:8010/api/health}"
 HEALTHCHECK_TIMEOUT_SECONDS="${HEALTHCHECK_TIMEOUT_SECONDS:-90}"
 HEALTHCHECK_INTERVAL_SECONDS="${HEALTHCHECK_INTERVAL_SECONDS:-2}"

@@ -25,8 +25,8 @@ DATA_DIR="/u01/data/production-ready-nl2sql"
 LEGACY_DATA_DIR="/u01/production-ready-nl2sql"
 WALLET_DIR="${APP_ROOT}/wallet"
 BACKEND_HOST="127.0.0.1"
-# ローカルの開発（uv run uvicorn --port 8010）と同じ port。1 台の Compute に RAG（8000）・Agent（8020）と
-# 一緒に置くため、以前の 8000 から変えた（#1316）。
+# 1 台の Compute に RAG（8000）・Agent（8020）と
+# 一緒に置くため、以前の 8000 から変えた（#1316）。ローカルの開発の port（8110。#25）とは別。
 BACKEND_PORT="8010"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${APP_ROOT}/props/backend.env}"

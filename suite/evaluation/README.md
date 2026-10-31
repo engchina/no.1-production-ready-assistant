@@ -40,7 +40,7 @@ export SUITE_EVALUATION_API_KEY=prak_...   # 使える製品に rag と agent �
 # 1. 評価の資料を RAG に取り込み、文書の対応表を書く（RAG の評価の取り込みの CLI。rag/backend で）。
 #    ナレッジベースの ID と（--guides を渡したときは）検索・回答プロファイルの ID が出力に出る。
 #    uv run python -m app.rag.evaluation_corpus_cli ../evaluation/business-support/business-support.json \
-#        --api-base-url http://127.0.0.1:8000 --output ../../tmp/eval/bs.resolved.json \
+#        --api-base-url http://127.0.0.1:8100 --output ../../tmp/eval/bs.resolved.json \
 #        --document-map-output ../../tmp/eval/document-map.json \
 #        --guides ../evaluation/business-support/support-guides.json --guided-output ../../tmp/eval/bs.guided.json
 
@@ -48,12 +48,12 @@ SET=../../rag/evaluation/business-support/business-support.json
 MAP=../../tmp/eval/document-map.json
 # 2. A / C（RAG の公開の MCP の rag_search）と D（業務 Agent の公開の MCP）に流して採点する
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target rag-mcp \
-    --mcp-url http://127.0.0.1:8000/api/mcp --knowledge-base-id <ナレッジベース> --output ../../tmp/eval/a.json
+    --mcp-url http://127.0.0.1:8100/api/mcp --knowledge-base-id <ナレッジベース> --output ../../tmp/eval/a.json
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target rag-mcp \
-    --mcp-url http://127.0.0.1:8000/api/mcp --search-answer-profile-id <検索・回答プロファイル> \
+    --mcp-url http://127.0.0.1:8100/api/mcp --search-answer-profile-id <検索・回答プロファイル> \
     --output ../../tmp/eval/c.json
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target agent-mcp \
-    --mcp-url http://127.0.0.1:8020/api/mcp --agent-id <公開済みの業務 Agent> \
+    --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> \
     --guides ../../rag/evaluation/business-support/support-guides.json --output ../../tmp/eval/d.json
 
 # 3. 保存した観測を採点し直す（規則・期待を直したとき。モデル・製品を呼ばない）

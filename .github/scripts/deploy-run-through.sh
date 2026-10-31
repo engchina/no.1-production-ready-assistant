@@ -163,7 +163,7 @@ EOF
   # terraform/stack/locals.tf の rag_services（既定の入力。parser-unstructured・OCI の parser は入れない）。
   in_container "
     printf '%s\n' '${products}' > ${props}/products.txt
-    printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling parser-structured-records-jsonl parser-xml-tree-json' > ${props}/rag_services.txt
+    printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling' > ${props}/rag_services.txt
   "
   # walletless_tls でも RAG の init_script.sh は wallet.zip を展開する（中身は使わない。空の zip は unzip が失敗する）。
   # zip は host の python3 で作る（container の image に python3 が無いことがある）。

@@ -91,7 +91,7 @@ export function backendRunExecutor(filter: CommonRunExecutorFilter): Exclude<Run
 }
 
 /** 種類（きっかけ）の絞り込みの値（一つずつ選ぶもの）。 */
-export const AGENT_RUN_KINDS: readonly RunListKind[] = ["user", "automation", "mcp", "replay", "evaluation"];
+export const AGENT_RUN_KINDS: readonly RunListKind[] = ["user", "mcp", "replay", "evaluation"];
 
 /**
  * 種類の絞り込みの既定。品質評価の Run（評価のケースごとの Run）は利用者の実行に混ざると埋もれさせるので、
@@ -314,7 +314,7 @@ export function runTimelineSteps(
 /**
  * 実行の詳細の「会話を開く」の URL（#2343。3 製品で同じ規則）。チャットの画面から送った Run（きっかけが画面）で、
  * 会話（thread）があり、会話を見られる人（system_admin か会話の持ち主）がチャットを開ける権限を持つときだけ。
- * MCP・品質評価・自動実行・再実行の Run は、開く元のチャットの会話が無いので null（操作を出さない）。
+ * MCP・品質評価・再実行の Run は、開く元のチャットの会話が無いので null（操作を出さない）。
  */
 export function runConversationHref(
   run: Pick<RunState, "agent_id" | "thread_id" | "metadata" | "owned_by_me">,

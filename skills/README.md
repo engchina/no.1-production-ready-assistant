@@ -7,7 +7,6 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 | [`business-rag-research`](./business-rag-research/SKILL.md)（業務 RAG 調査） | `rag` | 社内の規程・手順書・台帳を検索し、根拠（文書名と節・頁）を示して答える |
 | [`structured-data-query`](./structured-data-query/SKILL.md)（構造化データ照会） | `nl2sql` | 業務データの件数・金額・一覧を SQL で照会する |
 | [`rag-and-structured-data`](./rag-and-structured-data/SKILL.md)（資料とデータの横断調査） | `rag`・`nl2sql` | 資料と業務データの両方が要る調査 |
-| [`article-catalog-lookup`](./article-catalog-lookup/SKILL.md)（条の目録から根拠を探す） | `rag` | 条で構成された文書（法令・規程の XML ツリー JSON など）の根拠の条が検索で当たらないとき、条の目録から選んで読む（`business-rag-research` と一緒に使う） |
 
 このディレクトリは Claude Code の plugin `production-ready-skills`（[`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)）でもあり、repo 直下の [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)（marketplace `production-ready-suite`）が配る。
 
@@ -16,8 +15,8 @@ Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込
 用意するもの:
 
 - RAG・NL2SQL・Agent の画面の左下のアカウントの欄から開くアカウントの画面の「API キー」のタブで発行した自分のキー（使える製品に RAG と NL2SQL を選ぶ）。キーの扱い・応答は [platform/docs/mcp-api-keys.md](../platform/docs/mcp-api-keys.md)。
-- 接続先: `https://<host>/rag/api/mcp` と `https://<host>/nl2sql/api/mcp`（開発の dev server は `http://localhost:8000/api/mcp` と `http://localhost:8010/api/mcp`）。
-- 業務 Agent に質問するなら Agent の `https://<host>/agent/api/mcp`（開発は `http://localhost:8020/api/mcp`。キーの使える製品に Agent を選ぶ）。下の「業務 Agent を専門家として呼ぶ」。
+- 接続先: `https://<host>/rag/api/mcp` と `https://<host>/nl2sql/api/mcp`（開発の dev server は `http://localhost:8100/api/mcp` と `http://localhost:8110/api/mcp`）。
+- 業務 Agent に質問するなら Agent の `https://<host>/agent/api/mcp`（開発は `http://localhost:8120/api/mcp`。キーの使える製品に Agent を選ぶ）。下の「業務 Agent を専門家として呼ぶ」。
 
 ### 1. スキルを入れる
 

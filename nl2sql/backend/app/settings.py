@@ -80,6 +80,8 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     model_config = product_settings_config(prefix="NL2SQL_", backend_dir=BACKEND_DIR)
 
     service_name: str = "production-ready-nl2sql"
+    # CORS 許可オリジンの既定は製品の dev server（suite と衝突しない port。#25）。
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3101"])
     enable_metrics: bool = True
     oracle_user: str = ""
     oracle_password: str = ""
@@ -109,7 +111,10 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
     oci_genai_embedding_dim: int = 1536
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
-    oci_genai_embed_model_id: str = "cohere.embed-v4.0"
+    oci_genai_embed_model_id: str = "text-embedding-v4"
+    # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の接続から）。
+    embedding_base_url: str = ""
+    rerank_base_url: str = ""
     oci_genai_rerank_model_id: str = "cohere.rerank-v4.0-fast"
     oci_enterprise_ai_endpoint: str = ""
     oci_enterprise_ai_project_ocid: str = ""

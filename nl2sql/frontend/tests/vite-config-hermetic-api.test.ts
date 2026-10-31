@@ -4,7 +4,7 @@ import type { Plugin, UserConfig, ViteDevServer } from "vite";
 
 import viteConfig from "../vite.config.ts";
 
-// BACKEND_URL 未設定で既定の backend（localhost:8010 等）へ proxy する fallback を戻さないための契約テスト。
+// BACKEND_URL 未設定で既定の backend（localhost:8110 等）へ proxy する fallback を戻さないための契約テスト。
 function resolveConfig(env: { BACKEND_URL?: string; PLAYWRIGHT_HERMETIC_API?: string }): UserConfig {
   const saved = { BACKEND_URL: process.env.BACKEND_URL, PLAYWRIGHT_HERMETIC_API: process.env.PLAYWRIGHT_HERMETIC_API };
   for (const key of ["BACKEND_URL", "PLAYWRIGHT_HERMETIC_API"] as const) {

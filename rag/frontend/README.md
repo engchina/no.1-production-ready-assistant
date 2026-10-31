@@ -8,7 +8,7 @@ UI/UX 構造は本リポジトリの AGENTS.md と `frontend/src` を正本と�
 
 ```bash
 npm ci
-BACKEND_URL=http://localhost:8000 npm run dev   # http://localhost:3000
+BACKEND_URL=http://localhost:8100 npm run dev   # http://localhost:3100
 ```
 
 `/api/*` は **`BACKEND_URL` を明示したときだけ** その URL へプロキシされる（既定の接続先は持たない）。

@@ -1244,15 +1244,14 @@ def test_parser_registry_unsupported_explicit_adapter_skips_simple_text(
         data,
         source_profile=profile,
         content_type=profile.content_type,
-        adapter_backend="mineru",
+        adapter_backend="docling",
         docling_enabled=True,
         unstructured_enabled=True,
-        mineru_enabled=True,
     )
 
     assert result.parser_backend == "local_partition"
     assert result.fallback_used is True
-    assert result.warnings == ("mineru_adapter_source_unsupported",)
+    assert result.warnings == ("docling_adapter_source_unsupported",)
     assert result.extraction is not None
     assert result.extraction.parser_artifacts["chunk_template"] == "markdown_by_heading"
 
@@ -1492,40 +1491,6 @@ def test_image_adapter_without_bbox_gets_full_frame_source_asset(
     assert asset.bbox == [0.0, 0.0, 1.0, 1.0]
     assert asset.metadata["bbox_scope"] == "source_image_full_frame"
     assert asset.metadata["bbox_unit"] == "ratio"
-
-
-def test_parser_registry_explicit_mineru_rejects_html_source(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """実装済み MinerU adapter が扱えない source は warning を残して local fallback する。"""
-
-    def fail_if_checked(name: str) -> bool:
-        raise AssertionError(f"unsupported mineru source should not import adapter: {name}")
-
-    monkeypatch.setattr("rag_parser_core.registry._module_available", fail_if_checked)
-    data = b"<h1>Title</h1><p>Body</p>"
-    profile = build_source_profile(
-        original_file_name="page.html",
-        sanitized_file_name="page.html",
-        content_type="text/html",
-        file_size_bytes=len(data),
-        content_sha256="4" * 64,
-        data=data,
-    )
-
-    result = parse_with_registry(
-        data,
-        source_profile=profile,
-        content_type=profile.content_type,
-        adapter_backend="mineru",
-        mineru_enabled=True,
-    )
-
-    assert result.parser_backend == "local_partition"
-    assert result.fallback_used is True
-    assert "mineru_adapter_source_unsupported" in result.warnings
-    assert result.extraction is not None
-    assert result.extraction.parser_artifacts["chunk_template"] == "html_semantic"
 
 
 def test_parser_registry_uses_docling_adapter_when_available(
@@ -3291,25 +3256,20 @@ _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         # unstructured: 汎用(メール含む)
         ("unstructured", "mail.eml", "message/rfc822", True),
         ("unstructured", "doc.pdf", "application/pdf", True),
-        # mineru: PDF・画像・Office(HTML 不可)
-        ("mineru", "sheet.xlsx", _XLSX_MIME, True),
-        ("mineru", "page.html", "text/html", False),
-        # 外部 GPU OCR は backend 側で PDF をページ画像化する。
-        ("dots_ocr", "scan.png", "image/png", True),
-        ("dots_ocr", "doc.pdf", "application/pdf", True),
-        # XML ツリー JSON: JSON だけ(#2042。対応する形かは解析で判定する)
-        ("xml_tree_json", "tree.json", "application/json", True),
-        ("xml_tree_json", "doc.pdf", "application/pdf", False),
-        # OCI service backend: PDF・画像
-        ("oci_document_understanding", "scan.png", "image/png", True),
-        ("oci_document_understanding", "mail.eml", "message/rfc822", False),
-        # 未宣言 backend と削除したエンジン(#270)は非対応
+        # 未宣言 backend と削除したエンジン(#270・#22・#21)は非対応
         ("no_such_backend", "doc.pdf", "application/pdf", False),
         ("marker", "doc.pdf", "application/pdf", False),
         ("unlimited_ocr", "doc.pdf", "application/pdf", False),
         ("glm_ocr", "scan.png", "image/png", False),
         # 削除した OCI Generative AI (Vision)(#2042)
         ("oci_genai_vision", "doc.pdf", "application/pdf", False),
+        # 削除した MinerU / Dots.OCR / OCI Document Understanding(#22)
+        ("mineru", "sheet.xlsx", _XLSX_MIME, False),
+        ("dots_ocr", "scan.png", "image/png", False),
+        ("oci_document_understanding", "scan.png", "image/png", False),
+        # 削除した構造化レコード JSONL / XML ツリー JSON(#21)
+        ("structured_records_jsonl", "rows.jsonl", "application/jsonl", False),
+        ("xml_tree_json", "tree.json", "application/json", False),
     ],
 )
 def test_adapter_capabilities_matrix(
@@ -3345,7 +3305,7 @@ def test_supported_modalities_for_display() -> None:
     """表示用一覧は定義順で UNKNOWN を含まない。"""
     from rag_parser_core.capabilities import supported_modalities
 
-    assert [m.value for m in supported_modalities("dots_ocr")] == ["pdf", "image"]
+    assert [m.value for m in supported_modalities("docling")] == ["pdf", "image"]
     assert [m.value for m in supported_modalities("unstructured")] == [
         "pdf",
         "image",

@@ -315,7 +315,7 @@ RUNTIME_ENTITY_MIGRATION_STATEMENTS: tuple[str, ...] = (
 )
 
 # 画面・API で変えた定義（#764）。ITEM_KIND は skill / mcp_connection / tool_policy /
-# automation / evaluation_set / evaluation_job。ITEM_JSON は定義の JSON
+# evaluation_set / evaluation_job。ITEM_JSON は定義の JSON
 # （MCP 接続の秘密は暗号化した値）。
 CONTROL_PLANE_STATEMENTS: tuple[str, ...] = (
     """
@@ -484,12 +484,15 @@ _RETIRED_CODES_008 = ("menu.plugin_marketplaces",)
 _RETIRED_CODES_010 = ("menu.plugins",)
 _RETIRED_CODES_011 = ("menu.settings_api_keys",)
 _RETIRED_CODES_017 = ("menu.settings_runtime_snapshot",)
-_RETIRED_CODES_018 = ("menu.settings_appearance",)
+_RETIRED_CODES_018 = ("menu.automations",)
+_RETIRED_CODES_019 = ("menu.settings_appearance",)
 if set(_RETIRED_CODES_002) | set(_RETIRED_CODES_004) | set(_RETIRED_CODES_005) | set(
     _RETIRED_CODES_008
 ) | set(_RETIRED_CODES_010) | set(_RETIRED_CODES_011) | set(_RETIRED_CODES_017) | set(
     _RETIRED_CODES_018
-) != set(RETIRED_PERMISSION_CODES):  # pragma: no cover - 定義の誤りを起動時に検出
+) | set(_RETIRED_CODES_019) != set(
+    RETIRED_PERMISSION_CODES
+):  # pragma: no cover - 定義の誤りを起動時に検出
     raise RuntimeError("廃止した権限コードを消す migration を追加してください。")
 
 # 013 で改名する組み込みのスキルの ID（旧 → 新。#1816）。migration の SQL は checksum に
@@ -698,13 +701,24 @@ MIGRATIONS: tuple[MigrationArtifact, ...] = (
         ),
     ),
     MigrationArtifact(
-        "20261031_018_remove_appearance_menu",
+        "20261031_018_remove_scheduled_runs_menu",
+        "remove the scheduled run menu permission (#20)",
+        # 業務 Agent の定時実行の機能を削除した（スケジューラ・API・画面を消した）。ロールの
+        # メニュー権限だけを消す。定義を保存していた AGENT_CONTROL_PLANE_ITEMS の行は残す
+        # （読む処理が無いので害は無く、消すと復元できないため）。
+        (
+            "DELETE FROM AGENT_ROLE_PERMISSIONS "  # nosec B608 - 固定の権限コード
+            f"WHERE PERMISSION_CODE IN ({_retired_codes_sql(_RETIRED_CODES_018)})",
+        ),
+    ),
+    MigrationArtifact(
+        "20261031_019_remove_appearance_menu",
         "remove the appearance and certificate menu permission (#19)",
         # Nginx と自作 CA の TLS 証明書を配備から外し、システム設定の「外観と証明書」の画面を
         # 削除した。ロールのメニュー権限だけを消す（データは消さない）。
         (
             "DELETE FROM AGENT_ROLE_PERMISSIONS "  # nosec B608 - 固定の権限コード
-            f"WHERE PERMISSION_CODE IN ({_retired_codes_sql(_RETIRED_CODES_018)})",
+            f"WHERE PERMISSION_CODE IN ({_retired_codes_sql(_RETIRED_CODES_019)})",
         ),
     ),
 )

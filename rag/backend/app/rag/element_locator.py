@@ -6,8 +6,8 @@
 - ``extraction_recipe_id`` は解析の結果（原本・前処理・解析の設定と、レシピの版）の識別子。
   文書分割の設定だけを変えて chunk を作り直しても同じ解析の結果を使うので、定位子は変わらない。
   解析をやり直すと変わり、古い定位子は ``source_stale`` になる。
-- ``element_id`` は解析の要素の ID（Docling の ``docling-p{頁}-{番号}``・MinerU の
-  ``mineru-p{頁}-b{番号}`` など）。chunk の metadata の ``element_ids``（カンマ区切り）に入る。
+- ``element_id`` は解析の要素の ID（Docling の ``docling-p{頁}-{番号}`` など）。chunk の
+  metadata の ``element_ids``（カンマ区切り）に入る。
 - 頁は人が読むための情報で、読み直しは ``ext`` と ``el`` だけで決める。
 
 ``element_ids`` を持たない分割（文字数・区切り文字・Markdown の見出しでの分割）の chunk は

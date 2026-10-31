@@ -414,7 +414,7 @@ export function AgentEditorView({
     ...availableSkills.filter((skill) => skillIds.includes(skill.id)).map(skillItem),
   ];
   // 公開は保存済みの下書きを版にする。画面の入力と違う内容を公開しないよう、未保存の変更があるあいだは
-  // 押せなくする（自動実行の「今すぐ実行」と同じ。#925）。
+  // 押せなくする（#925）。
   const publishBlocked = formDirty && actions.some((action) => action.id === "publish" && action.visible !== false);
   const editorActions = actions.map((action) =>
     action.id === "publish" ? { ...action, disabled: Boolean(action.disabled) || formDirty } : action

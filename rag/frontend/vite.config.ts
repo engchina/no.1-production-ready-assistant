@@ -28,10 +28,10 @@ function frontendBasePath(value: string | undefined): string {
 }
 
 const MISSING_BACKEND_URL_WARNING =
-  "[rag] BACKEND_URL が未設定のため /api を proxy せず 404 を返します（hermetic）。backend に接続する場合は BACKEND_URL=http://localhost:8000 npm run dev のように明示してください。";
+  "[rag] BACKEND_URL が未設定のため /api を proxy せず 404 を返します（hermetic）。backend に接続する場合は BACKEND_URL=http://localhost:8100 npm run dev のように明示してください。";
 
 export default defineConfig(() => {
-  // /api は BACKEND_URL を明示したときだけ proxy する。既定の接続先（localhost:8000 等）は持たない。
+  // /api は BACKEND_URL を明示したときだけ proxy する。既定の接続先（localhost:8100 等）は持たない。
   // 未設定のまま起動した dev サーバ（古い worktree、globalSetup の無い Playwright 設定、手動起動）が
   // 利用者の実 backend へ接続し、実環境の設定（~/.oci/config、backend/.env、model-settings.json 等）や DB に
   // 触れることを防ぐ。
@@ -74,12 +74,12 @@ export default defineConfig(() => {
     },
     server: {
       host: "0.0.0.0",
-      port: 3000,
+      port: 3100,
       proxy: apiProxy(),
     },
     preview: {
       host: "0.0.0.0",
-      port: 3000,
+      port: 3100,
       proxy: apiProxy(),
     },
   };

@@ -22,7 +22,6 @@ _REQUEST_STAGES = {
 _ENV_STAGES = {
     "diversity": {"RAG_CANDIDATE_DIVERSITY_MAX_EXTRA": "0"},
     "screen": {"RAG_SCREEN_LINKING_ENABLED": "false"},
-    "article": {"RAG_ARTICLE_CATALOG_ENABLED": "false"},
 }
 
 

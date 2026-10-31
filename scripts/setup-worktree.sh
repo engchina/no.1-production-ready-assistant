@@ -52,6 +52,6 @@ log "完了: ${products[*]}"
 for product in "${products[@]}"; do
   if [ "${product}" = "agent" ]; then
     # 主の dev server と同じ DB の Run の checkpoint に 2 つ目のプロセスが書く（#1916。agent/AGENTS.md「開発・検証」）。
-    log "注意: worktree で Agent の backend を主の .env（同じ DB）のまま起動しない。確かめるのは pytest と主の dev server（8020）で。"
+    log "注意: worktree で Agent の backend を主の .env（同じ DB）のまま起動しない。確かめるのは pytest と主の dev server（8120）で。"
   fi
 done

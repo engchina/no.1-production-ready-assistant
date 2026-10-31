@@ -264,8 +264,8 @@ def test_extraction_elements_carry_heading_path_and_positions() -> None:
     document = _records(synthetic_docx())
     extraction = structured_records_extraction(
         document,
-        source_parser="structured_records_jsonl",
-        parser_backend="structured_records_jsonl",
+        source_parser="docling",
+        parser_backend="docling",
         parser_version="v1",
     )
     assert extraction.document_type == "Word"
@@ -450,8 +450,8 @@ def test_doc_is_converted_and_records_original_and_derived(monkeypatch: pytest.M
     assert all(line.source_type == "doc" for line in records.lines)
     extraction = structured_records_extraction(
         records,
-        source_parser="structured_records_jsonl",
-        parser_backend="structured_records_jsonl",
+        source_parser="docling",
+        parser_backend="docling",
         parser_version="v1",
     )
     assert extraction.parser_artifacts["structured_records_location_basis"] == "derived"

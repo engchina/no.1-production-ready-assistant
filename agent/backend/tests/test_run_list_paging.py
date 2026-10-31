@@ -117,7 +117,7 @@ def test_run_list_filters_by_kind_period_and_waiting(paging_data: PagingData) ->
     assert [item["id"] for item in waiting["items"]] == [paging_data.waiting.id]
     # 種類は `run_source`（画面で作った Run は user）。
     assert _runs(q=paging_data.agent_id, kind="user")["total"] == 28
-    assert _runs(q=paging_data.agent_id, kind="automation")["total"] == 0
+    assert _runs(q=paging_data.agent_id, kind="mcp")["total"] == 0
     assert client.get("/api/runs", params={"kind": "unknown"}).status_code == 422
     # 期間は `since` 以後に始めた Run（ISO 8601。タイムゾーンの無い値は UTC）。
     past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()

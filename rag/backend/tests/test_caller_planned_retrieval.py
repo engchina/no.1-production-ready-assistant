@@ -1,6 +1,6 @@
 """呼び出し元（業務 Agent）が検索文を作る根拠の取得（planning=caller。#2651）のテスト。
 
-1 回の取得で、RAG 側の推論用の LLM / VLM（検索戦略の判定・質問拡張・条の目録の選択・画面目録の
+1 回の取得で、RAG 側の推論用の LLM / VLM（検索戦略の判定・質問拡張・画面目録の
 連携・抽出項目の条件の読み取り・CRAG・回答の生成と監査・根拠の画像の添付）が呼ばれないことを、
 呼ばれたら失敗するスタブで確かめる。embedding と rerank は別に数え、検索の品質を作る工程
 （hybrid search・rerank・前後の文脈）は通常の検索と同じに動くことを確かめる。
@@ -79,10 +79,9 @@ class QueryOracle(FakeOracle):
 def _reasoning_settings() -> Settings:
     """質問に応じた推論の工程をすべて有効にした設定（caller ではどれも使わないことを確かめる）。"""
     return Settings(
-        oci_compartment_id="ocid1.compartment.oc1..example",
+        embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         rag_query_strategy="auto_routing",
         rag_answer_flow="crag",
-        rag_article_catalog_enabled=True,
         rag_screen_linking_enabled=True,
         rag_auto_field_filter_enabled=True,
         # 回答のモデルが画像を読めても、回答を作らない検索では根拠の画像を切り出さない（#3444）。
@@ -171,7 +170,7 @@ async def test_rag_planned_retrieval_still_uses_query_expansion(
 
     monkeypatch.setattr(engine_oci, "parse_text_response", routing_only)
     engine = AnswerEngine(
-        Settings(rag_query_strategy="auto_routing", rag_article_catalog_enabled=False),
+        Settings(rag_query_strategy="auto_routing"),
         oracle=FakeOracle(),  # type: ignore[arg-type]
         genai=FakeGenAi(),  # type: ignore[arg-type]
     )

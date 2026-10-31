@@ -939,6 +939,18 @@ export function ModelSettingsPage({
                   helper={t("settings.model.genai.embeddingDimHelp")}
                   onChange={(value) => updateGenerative("embedding_dim", value)}
                 />
+                <TextField
+                  id="genai-embedding-base-url"
+                  label={t("settings.model.genai.embeddingBaseUrl")}
+                  value={draft.generative_ai.embedding_base_url}
+                  placeholder={t("settings.model.placeholder.embeddingBaseUrl")}
+                  helper={t("settings.model.genai.embeddingBaseUrlHelp")}
+                  onValueChange={(value) =>
+                    updateGenerative("embedding_base_url", value)
+                  }
+                  width="full"
+                  className="col-span-full"
+                />
               </FormGrid>
               <ModelTestResultPanel
                 result={testResults.embedding}
@@ -964,6 +976,18 @@ export function ModelSettingsPage({
                       vision_enabled: false,
                     })
                   }
+                />
+                <TextField
+                  id="genai-rerank-base-url"
+                  label={t("settings.model.genai.rerankBaseUrl")}
+                  value={draft.generative_ai.rerank_base_url}
+                  placeholder={t("settings.model.placeholder.rerankBaseUrl")}
+                  helper={t("settings.model.genai.rerankBaseUrlHelp")}
+                  onValueChange={(value) =>
+                    updateGenerative("rerank_base_url", value)
+                  }
+                  width="full"
+                  className="col-span-full"
                 />
               </FormGrid>
               <ModelTestResultPanel

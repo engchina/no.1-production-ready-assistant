@@ -404,7 +404,7 @@ class AnswerGenerationTests(unittest.TestCase):
 
     def test_rerank_records_does_not_depend_on_vision_endpoint(self):
         records = [_record("a", "docling", 1, 1, "first evidence")]
-        settings = replace(_rerank_ready_settings(), oci_vision_endpoint="", oci_rerank_endpoint="")
+        settings = replace(_rerank_ready_settings(), oci_vision_endpoint="")
 
         with patch(
             "rag_engine.generation.answering.rerank_text_with_scores",
@@ -3370,8 +3370,7 @@ def _rerank_ready_settings():
         get_settings(),
         default_rerank_enabled=True,
         rerank_model="cohere.rerank-v4.0-fast",
-        oci_compartment_id="ocid1.compartment.oc1..test",
-        oci_rerank_endpoint="https://inference.generativeai.ap-osaka-1.oci.oraclecloud.com",
+        rerank_base_url="https://dashscope.aliyuncs.com/compatible-api/v1",
         rerank_min_relevance_score=0.0,
     )
 

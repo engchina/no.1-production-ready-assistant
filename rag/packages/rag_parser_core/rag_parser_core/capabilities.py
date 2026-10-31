@@ -17,13 +17,6 @@ from rag_parser_core.source import SourceModality, SourceProfile
 from rag_parser_core.structured_records import STRUCTURED_RECORDS_CONTENT_TYPE
 
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".bmp"})
-_OPENXML_CONTENT_TYPES = frozenset(
-    {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }
-)
 _OPENXML_EXTENSIONS = frozenset({".docx", ".pptx", ".xlsx"})
 
 
@@ -37,21 +30,12 @@ class ParserBackendCapability:
     content_type_prefixes: frozenset[str] = frozenset()
 
 
-_PDF_AND_IMAGE = ParserBackendCapability(
-    modalities=frozenset({SourceModality.PDF, SourceModality.IMAGE}),
-    extensions=frozenset({".pdf"}) | _IMAGE_EXTENSIONS,
-    content_types=frozenset({"application/pdf"}),
-    content_type_prefixes=frozenset({"image/"}),
-)
-
 _IMAGE_ONLY = ParserBackendCapability(
     modalities=frozenset({SourceModality.IMAGE}),
     extensions=_IMAGE_EXTENSIONS,
     content_type_prefixes=frozenset({"image/"}),
 )
 
-# OCI service backend の宣言。oci_document_understanding は PDF/PNG/JPEG(TIFF はアップロード時に
-# unsupported_tiff_image で遮断済み)で、実質 PDF+画像として宣言する。
 ADAPTER_CAPABILITIES: Mapping[str, ParserBackendCapability] = {
     # Docling の parser サービス(services/parsers/docling。Docling のレイアウト解析)は
     # PDF と画像だけを解析する(rag_engine.parsing.rendering.SUPPORTED_SOURCE_FILE_TYPES)。
@@ -101,32 +85,6 @@ ADAPTER_CAPABILITIES: Mapping[str, ParserBackendCapability] = {
             | _OPENXML_EXTENSIONS
         ),
     ),
-    # 構造化レコード JSONL(#2457)。使用エンジンで選んだときだけ使う(形式で自動には回さない)。
-    # 前処理(csv_to_jsonl / excel_to_jsonl / word_to_jsonl)の成果物と、契約どおりの .jsonl を
-    # 受ける。契約に合わない入力は、解析のサービスが ``structured_records_invalid:<理由>@line<n>``
-    # を返して取込を止める。
-    "structured_records_jsonl": ParserBackendCapability(
-        modalities=frozenset(),
-        extensions=frozenset({".jsonl"}),
-        content_types=frozenset({STRUCTURED_RECORDS_CONTENT_TYPE}),
-    ),
-    # XML ツリー JSON(#2024・#2042)。使用エンジンで選んだときだけ使う(形式で自動には回さない)。
-    # modality を持たない(source kind の経路の候補に入らない)。対応しない形の JSON は、解析の
-    # サービスが ``xml_tree_json_unsupported_tree`` を返して取込を止める。
-    "xml_tree_json": ParserBackendCapability(
-        modalities=frozenset(),
-        extensions=frozenset({".json"}),
-        content_types=frozenset({"application/json"}),
-    ),
-    "mineru": ParserBackendCapability(
-        modalities=frozenset({SourceModality.PDF, SourceModality.IMAGE, SourceModality.OFFICE}),
-        extensions=frozenset({".pdf"}) | _IMAGE_EXTENSIONS | _OPENXML_EXTENSIONS,
-        content_types=frozenset({"application/pdf"}) | _OPENXML_CONTENT_TYPES,
-        content_type_prefixes=frozenset({"image/"}),
-    ),
-    # 外部 API は画像入力。backend が PDF をページ画像へ変換して順序を維持する。
-    "dots_ocr": _PDF_AND_IMAGE,
-    "oci_document_understanding": _PDF_AND_IMAGE,
 }
 
 # 表示用の modality 並び(SourceModality の定義順。UNKNOWN は表示しない)
@@ -150,11 +108,6 @@ def _normalized_content_type(content_type: str) -> str:
     return content_type.split(";", 1)[0].strip().casefold()
 
 
-# 前処理の構造化レコードの JSONL を受け付ける解析エンジン（#2457）。Docling / Unstructured は
-# 受けない（黙って変換せず、構造化レコード JSONL を選ぶよう診断で止める）。
-STRUCTURED_RECORDS_BACKENDS = frozenset({"structured_records_jsonl"})
-
-
 def adapter_supports_source(
     backend: str,
     *,
@@ -170,8 +123,8 @@ def adapter_supports_source(
     )
     if normalized == STRUCTURED_RECORDS_CONTENT_TYPE:
         # 前処理（csv_to_jsonl / excel_to_jsonl / word_to_jsonl）の構造化レコードの JSONL は、
-        # 構造化レコード JSONL の解析エンジンだけが読む（#2457）。
-        return backend in STRUCTURED_RECORDS_BACKENDS
+        # どの解析エンジンのサービスも共通の契約で読む（#2457・#21。``registry``）。
+        return True
     modality = source_profile.modality if source_profile is not None else SourceModality.UNKNOWN
     return (
         modality in capability.modalities

@@ -782,7 +782,7 @@ async def test_ingestion_vision_permission_error_stops_job() -> None:
             source_bytes=_pdf(),
             content_type="application/pdf",
             file_name="manual.pdf",
-            parser_backend="oci_document_understanding",
+            parser_backend="unstructured",
             cancel_checker=None,
         )
     assert reader.calls == 1
@@ -807,7 +807,7 @@ async def test_ingestion_vision_item_failure_can_fail_the_job() -> None:
         "source_bytes": _pdf(),
         "content_type": "application/pdf",
         "file_name": "manual.pdf",
-        "parser_backend": "oci_document_understanding",
+        "parser_backend": "unstructured",
         "cancel_checker": None,
     }
     extraction = _figure_extraction([0.168, 0.119, 0.504, 0.297])

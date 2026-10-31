@@ -18,7 +18,6 @@ from rag_engine.dependencies import AnswerDependencies, bind_dependencies
 from rag_engine.generation import grounded
 from rag_engine.generation.answering import synthesize_grounded_answer
 from rag_engine.models.llm import GroundedFactAudit, GroundedItem
-from rag_engine.retrieval.article_catalog import ARTICLE_UNIT_KEY
 
 QUESTION = "申請書の提出期限を教えてください"
 RULE = "第三条\n申請書は、事由の発生した日から三十日以内に提出しなければならない。"
@@ -27,10 +26,8 @@ CLAIM = "申請書は、事由の発生した日から三十日以内に提出�
 QUOTE = "申請書は、事由の発生した日から三十日以内に提出しなければならない。"
 
 
-def _context(*, article: bool = False):
+def _context():
     rule = record(0, RULE, "総則", page=1, source="規則A.xml")
-    if article:
-        rule = replace(rule, metadata={**rule.metadata, ARTICLE_UNIT_KEY: True})
     return context(rule, record(1, GUIDE, "提出の手順", page=4, source="手順書B.pdf"))
 
 
@@ -198,8 +195,8 @@ def test_raw_unsupported_first_citation_is_retained_beside_supported_second():
     assert not any(entry.get("citation_dropped") and entry["evidence_id"] == rule for entry in dropped)
 
 
-def test_article_citations_do_not_enable_an_audit_in_none_mode():
-    ctx = _context(article=True)
+def test_citations_do_not_enable_an_audit_in_none_mode():
+    ctx = _context()
     rule, guide = _labels(ctx)
     other = "窓口で受付印を受けます。"
     model = FakeModel([draft(_cite((rule, QUOTE)), _cite((guide, other), text=other))], [])
@@ -218,8 +215,8 @@ def test_article_citations_do_not_enable_an_audit_in_none_mode():
 
 
 @pytest.mark.parametrize("mode", [grounded.AUDIT_MODE_STANDARD, grounded.AUDIT_MODE_DETAILED])
-def test_enabled_audit_modes_review_both_article_and_other_sources(mode):
-    ctx = _context(article=True)
+def test_enabled_audit_modes_review_every_cited_source(mode):
+    ctx = _context()
     rule, guide = _labels(ctx)
     other = "窓口で受付印を受けます。"
     model = FakeModel([draft(_cite((rule, QUOTE)), _cite((guide, other), text=other))], [_audit_by_evidence({rule})])
@@ -230,17 +227,6 @@ def test_enabled_audit_modes_review_both_article_and_other_sources(mode):
     assert "unsupported" in [row["support"] for row in observed_audit(result)["reviews"]]
     assert other not in marks(result)
     assert result.generation_trace["rounds"][0]["audit_calls"] == 1
-
-
-def test_without_article_citations_the_audit_mode_none_calls_no_audit():
-    ctx = _context()
-    rule, _guide = _labels(ctx)
-    model = FakeModel([draft(_cite((rule, QUOTE)))], [])
-
-    result = _run(model, ctx)
-
-    assert [name for name, _prompt in model.prompts] == ["GroundedDraftWire"]
-    assert "article_audit_items" not in result.generation_trace["rounds"][0]["timing"]
 
 
 def test_a_citation_quoting_only_the_section_heading_is_dropped():

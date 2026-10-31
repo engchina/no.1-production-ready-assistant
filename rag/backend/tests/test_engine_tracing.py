@@ -100,27 +100,23 @@ def test_sdk_snapshot_keeps_rerank_diagnostics_and_omits_image() -> None:
 async def test_backend_sdk_boundary_keeps_request_response_and_failure(
     operation: str, failed: bool
 ) -> None:
-    from types import SimpleNamespace
 
-    models = importlib.import_module("oci.generative_ai_inference.models")
     sent: list[object] = []
 
-    def invoke(request: object) -> object:
-        sent.append(request)
+    def invoke(url: str, body: dict[str, object]) -> dict[str, object]:
+        sent.append(body)
         if failed:
             raise RuntimeError("合成の接続失敗")
-        data = (
-            models.EmbedTextResult(embeddings=[[1.0, 0.0, 0.0]])
-            if operation == "embeddings"
-            else models.RerankTextResult(
-                document_ranks=[models.DocumentRank(index=0, relevance_score=0.9)]
-            )
-        )
-        return SimpleNamespace(data=data)
+        if operation == "embeddings":
+            return {"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]}
+        return {"results": [{"index": 0, "relevance_score": 0.9}]}
 
     client = OciGenAiClient(
-        settings=Settings(oci_compartment_id="synthetic-compartment"),
-        inference_client=SimpleNamespace(embed_text=invoke, rerank_text=invoke),
+        settings=Settings(
+            embedding_base_url="https://synthetic.invalid/compatible-mode/v1",
+            oci_enterprise_ai_api_key="sk-synthetic",
+        ),
+        post=invoke,
     )
     configure_tracing(TracingSettings(), service_name="synthetic")
     try:

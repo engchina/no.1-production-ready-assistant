@@ -22,8 +22,9 @@ application services are ready.
 The bootstrap starts:
 
 - `production-ready-nl2sql-backend` on private upstream `127.0.0.1:8010`
-  (the same port as local development; changed from `8000` in #1316 so that RAG
-  can use `8000` on the same Compute)
+  (changed from `8000` in #1316 so that RAG
+  can use `8000` on the same Compute; local development uses `8110` instead, #25)
+
 The stack puts every selected product on one Compute (#1316). The suite builds
 the NL2SQL `frontend/dist` with `FRONTEND_BASE_PATH=/nl2sql/`. The deployment
 does not install a reverse proxy (Nginx etc.) or TLS certificates (#19):

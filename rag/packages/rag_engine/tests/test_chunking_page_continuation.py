@@ -70,7 +70,7 @@ _TABLE = "<table><tbody><tr><th>項目</th><th>値</th></tr><tr><td>A</td><td>1<
 
 
 def test_continued_paragraph_skips_table_between_halves() -> None:
-    """続きの間に表がある段落(MinerU の continues_prev は図・表をまたぐ。#2266)も同じ子に入れ、表は別の子にする。"""
+    """続きの間に表がある段落(続きの印は図・表をまたぐ。#2266)も同じ子に入れ、表は別の子にする。"""
     children = _children(
         [
             _record(1, 1, "Section-header", _HEAD),

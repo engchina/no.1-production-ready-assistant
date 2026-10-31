@@ -9,9 +9,9 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 
 | 製品 | URL（前段の reverse proxy で `/<製品>/` に並べたとき） | 開発の dev server |
 |---|---|---|
-| RAG | `https://<host>/rag/api/mcp` | `http://localhost:8000/api/mcp` |
-| NL2SQL | `https://<host>/nl2sql/api/mcp` | `http://localhost:8010/api/mcp` |
-| Agent | `https://<host>/agent/api/mcp` | `http://localhost:8020/api/mcp` |
+| RAG | `https://<host>/rag/api/mcp` | `http://localhost:8100/api/mcp` |
+| NL2SQL | `https://<host>/nl2sql/api/mcp` | `http://localhost:8110/api/mcp` |
+| Agent | `https://<host>/agent/api/mcp` | `http://localhost:8120/api/mcp` |
 
 - 配備は reverse proxy と TLS の証明書を作らない（#19）。前段に reverse proxy を置くときは、`/<製品>/api/` を prefix を外して backend へ渡し、`Authorization` ヘッダーをそのまま渡す。RAG の `mcp` は LLM を待つため、待ち時間を長く（600 秒より長く）する。reverse proxy を置かないときは backend の `http://<host>:<port>/api/mcp` を直接呼ぶ。
 - HTTPS の証明書は reverse proxy の側で用意する。自分の CA で署名したときは、クライアントの OS / ランタイムにその CA を信頼させる（Claude Code は `NODE_EXTRA_CA_CERTS`）。
@@ -58,7 +58,7 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 | `agent_skill_export` | 使える業務 Agent が使うスキルを Agent Skills の形（`SKILL.md` と `references/` のファイル）で返す。`name` のフォルダに置くと外部の Agent でも使える |
 
 - 業務 Agent は画面のチャットと同じく、公開中の版で RAG / NL2SQL などを調べて答える。会話（`thread_id`）は画面のチャットの会話と同じで、作った利用者だけが続けられる。
-- MCP から作った Run は、**承認の要るツールを呼ばない**（自動実行と同じ。承認する人が画面にいるとは限らないため）。業務 Agent は使えなかったツールを「確かめられなかった点」として答え、`skipped_approval_tools` に出す。
+- MCP から作った Run は、**承認の要るツールを呼ばない**（承認する人が画面にいるとは限らないため）。業務 Agent は使えなかったツールを「確かめられなかった点」として答え、`skipped_approval_tools` に出す。
 - 既定の待ち時間（50 秒）は Claude Code のツールの待ち時間の既定（60 秒）より短い。長くかかる質問は `agent_get_run` で続きを読むか、`MCP_TOOL_TIMEOUT` を延ばして `wait_seconds` を大きくする。
 
 ## 例

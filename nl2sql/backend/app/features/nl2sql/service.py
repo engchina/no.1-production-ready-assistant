@@ -153,7 +153,7 @@ from .db_admin_chat_store import DbAdminChatStore
 from .embedding_client import (
     EmbeddingClientError,
     FeedbackEmbeddingClient,
-    OciGenAiEmbeddingClient,
+    OpenAiCompatibleEmbeddingClient,
 )
 from .enterprise_ai_client import (
     EnterpriseAiDirectClient,
@@ -4820,7 +4820,7 @@ class Nl2SqlService:
         self._lock = threading.RLock()
         self._catalog = self._build_default_catalog()
         self._oracle_adapter = OracleNl2SqlAdapter(settings)
-        self._embedding_client: FeedbackEmbeddingClient = OciGenAiEmbeddingClient(settings)
+        self._embedding_client: FeedbackEmbeddingClient = OpenAiCompatibleEmbeddingClient(settings)
         self._enterprise_ai_client: EnterpriseAiDirectClient = OciEnterpriseAiDirectClient(settings)
         self._store: Nl2SqlStore
         self._incremental_repository: IncrementalNl2SqlRepository | None = None

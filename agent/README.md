@@ -58,12 +58,12 @@ cp backend/.env.example backend/.env
 # backend
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload --port 8020
+uv run uvicorn app.main:app --reload --port 8120
 
 # frontend
 cd frontend
 npm install
-BACKEND_URL=http://127.0.0.1:8020 npm run dev
+BACKEND_URL=http://127.0.0.1:8120 npm run dev
 ```
 
 frontend の Vite は `BACKEND_URL` を明示したときだけ `/api` を backend へ proxy します（既定の接続先は持ちません）。
@@ -74,7 +74,7 @@ frontend の Vite は `BACKEND_URL` を明示したときだけ `/api` を backe
 `PLATFORM_AUTH_MODE=authenticated` にし、共通 `.env` の `PLATFORM_ORACLE_*` と `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` を設定して
 運用設定 > システムテーブル か `cd backend && uv run python -m app.cli.agent_system_schema --initialize` でテーブルを作ります（[docs/security-rbac.md](docs/security-rbac.md)）。
 
-業務 Agent・スキル・MCP 接続・実行の履歴・自動実行・品質評価などの保存先は `backend/.env` の
+業務 Agent・スキル・MCP 接続・実行の履歴・品質評価などの保存先は `backend/.env` の
 `AGENT_RUNTIME_REPOSITORY_BACKEND` です。既定の `auto` は、共通 `.env` の `PLATFORM_ORACLE_*` がそろっていればデータベース
 （`oracle_checkpoint`。テーブルはシステムテーブルが作る）、無ければメモリ（backend の再起動で消える）に保存します。保存先は起動時に
 決まるので、起動の後にデータベースを設定したら backend を再起動してください。今の保存先は「運用設定 > 実行環境」の「保存先」で

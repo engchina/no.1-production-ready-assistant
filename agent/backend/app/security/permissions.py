@@ -59,7 +59,6 @@ MENU_RUNS = "menu.runs"
 MENU_APPROVALS = "menu.approvals"
 MENU_AGENTS = "menu.agents"
 MENU_SKILLS = "menu.skills"
-MENU_AUTOMATIONS = "menu.automations"
 MENU_EVALUATION = "menu.evaluation"
 MENU_FEEDBACK = "menu.feedback"
 MENU_USAGE = "menu.usage"
@@ -131,7 +130,6 @@ _ADMIN_MENUS = (
     MENU_RUNS,
     MENU_AGENTS,
     MENU_SKILLS,
-    MENU_AUTOMATIONS,
     MENU_EVALUATION,
     MENU_FEEDBACK,
     MENU_USAGE,
@@ -156,8 +154,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     # 管理者が業務 Agent を作る画面（RAG「ナレッジ構築」・NL2SQL「データ準備」に当たる。#791）。
     _menu_permission(MENU_AGENTS, _GROUP_BUILD, "業務 Agent"),
     _menu_permission(MENU_SKILLS, _GROUP_BUILD, "スキル"),
-    # 業務 Agent の自動実行（スケジュール。#784）。
-    _menu_permission(MENU_AUTOMATIONS, _GROUP_BUILD, "自動実行"),
     # 業務のセクションの後の「改善・運用」（RAG / NL2SQL と同じ名前・位置。#658 / #776）。
     _menu_permission(MENU_EVALUATION, _GROUP_IMPROVE, "品質評価"),
     # 業務のセクションの後の「改善・運用」（RAG / NL2SQL と同じ名前・位置。#658 / #774）。
@@ -251,6 +247,7 @@ ALL_PERMISSION_CODES = frozenset(item.code for item in PERMISSION_CATALOG)
 # - `menu.settings_api_keys`: Agent は外部に MCP を公開しないため、外部の MCP クライアント向けの
 #   API キーの画面と `POST /mcp` を削除した（#1809）。
 # - `menu.settings_runtime_snapshot`: 運用設定の「バックアップと復元」を削除した（#1961）。
+# - `menu.automations`: 業務 Agent の定時実行の機能を削除した（#20。スケジューラと画面を消した）。
 # - `menu.settings_appearance`: Nginx と自作 CA の TLS 証明書を配備から外し、システム設定の
 #   「外観と証明書」の画面を削除した（#19）。
 RETIRED_PERMISSION_CODES: tuple[str, ...] = (
@@ -262,6 +259,7 @@ RETIRED_PERMISSION_CODES: tuple[str, ...] = (
     "menu.plugins",
     "menu.settings_api_keys",
     "menu.settings_runtime_snapshot",
+    "menu.automations",
     "menu.settings_appearance",
 )
 PERMISSION_BY_CODE = {item.code: item for item in PERMISSION_CATALOG}
@@ -353,25 +351,23 @@ _DECIDE = _any(APPROVALS_DECIDE, ADMIN)
 _RUN_LIST = _any(MENU_RUNS, MENU_APPROVALS)
 _RUN_DETAIL = _any(MENU_RUNS, MENU_APPROVALS, MENU_AUDIT)
 _RUN_PROGRESS = _any(MENU_CHAT, MENU_RUNS, MENU_APPROVALS, MENU_AUDIT)
-# 業務 Agent を選ぶ・名前で示す画面（自動実行・品質評価・フィードバックの絞り込み）も読む。
+# 業務 Agent を選ぶ・名前で示す画面（品質評価・フィードバックの絞り込み）も読む。
 # 読めないと開いた直後の 403（経路の権限拒否）で権限なしの画面へ移る（#1113。対象範囲で絞る）。
 _AGENT_READ = _any(
     MENU_AGENTS,
     MENU_RUNS,
     MENU_CHAT,
-    MENU_AUTOMATIONS,
     MENU_EVALUATION,
     MENU_FEEDBACK,
 )
 _TOOL_READ = _any(MENU_AUDIT, ADMIN)
-# 保存先の状態（#839）を出す画面のメニュー（業務 Agent・スキル・実行・自動実行・
+# 保存先の状態（#839）を出す画面のメニュー（業務 Agent・スキル・実行・
 # 品質評価・実行環境・MCP 接続・システムテーブル）と、
 # ツール権限（Agent 管理）。
 _RUNTIME_STORAGE_READ = _any(
     MENU_AGENTS,
     MENU_SKILLS,
     MENU_RUNS,
-    MENU_AUTOMATIONS,
     MENU_EVALUATION,
     MENU_RUNTIMES,
     MENU_SETTINGS_EXTERNAL_MCP,
@@ -465,15 +461,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/approvals/{approval_id}/decision"): _DECIDE,
     ("GET", "/audit/tool-calls"): _any(MENU_AUDIT),
     ("GET", "/audit/tool-calls.csv"): _any(MENU_AUDIT),
-    # 自動実行（#784）。作成・変更・削除・今すぐ実行は Agent 管理。
-    ("GET", "/automations"): _any(MENU_AUTOMATIONS),
-    ("POST", "/automations"): _ADMIN_ONLY,
-    ("GET", "/automations/{automation_id}"): _any(MENU_AUTOMATIONS),
-    # 自動実行で使えない（承認が要る）ツールの確認（#1813。編集画面の警告）。
-    ("GET", "/automations/agents/{agent_id}/approval-tools"): _any(MENU_AUTOMATIONS),
-    ("PUT", "/automations/{automation_id}"): _ADMIN_ONLY,
-    ("DELETE", "/automations/{automation_id}"): _ADMIN_ONLY,
-    ("POST", "/automations/{automation_id}/run"): _ADMIN_ONLY,
     # ---- 改善・運用 ----
     # 品質評価（#776。評価の Run は始めた利用者の Run。router が業務 Agent の対象範囲を確かめる）。
     ("GET", "/evaluation-sets"): _any(MENU_EVALUATION),

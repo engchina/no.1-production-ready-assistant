@@ -72,9 +72,7 @@ async def parse(
     _ = parser_options  # 旧 backend が送る Vision の指定(#497 で廃止)は使わない。
     if is_structured_records_content_type(effective_content_type):
         # 前処理(csv_to_jsonl / excel_to_jsonl / word_to_jsonl)の構造化レコードの JSONL は
-        # Docling に渡さず、黙って変換もしない。共通の rag_parser_core が
-        # 「構造化レコード JSONL を選ぶ」診断
-        # (structured_records_requires_structured_records_jsonl)を返す(#2457)。
+        # Docling に渡さず、共通の rag_parser_core が契約どおりに記録を要素にする(#2457・#21)。
         result = await asyncio.to_thread(
             run_external_adapter, _BACKEND, source_bytes, profile, effective_content_type
         )
