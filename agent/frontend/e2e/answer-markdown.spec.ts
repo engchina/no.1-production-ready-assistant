@@ -62,12 +62,6 @@ function seedRun(mockApi: MockApi) {
   });
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth
@@ -107,37 +101,33 @@ async function expectMarkdownAnswer(page: Page, answer: Locator, testId: string,
 }
 
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`チャットの回答の Markdown を記号のまま出さずに描く (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/chat");
-      await page.getByTestId("chat-history-toggle").click();
-      if (viewport.width >= 1024) {
-        await page.getByTestId("chat-history").getByRole("button", { name: new RegExp(`^${QUESTION}`) }).click();
-      } else {
-        await page.getByRole("dialog", { name: "会話の履歴" }).getByText(QUESTION).click();
-      }
-      const answer = page.getByTestId(`chat-answer-${RUN_ID}`);
-      // 回答の本文の前に見出し「回答」（h3。会話の名前 h2 の下。#3433）を出し、回答の中の見出しはその下の h4 から。
-      const body = page.getByTestId(`chat-answer-body-${RUN_ID}`);
-      await expect(body.getByRole("heading", { level: 3, name: "回答", exact: true })).toBeVisible();
-      await expectMarkdownAnswer(page, answer, `chat-answer-${RUN_ID}`, 4);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}-${theme}.png`), fullPage: true });
-    });
+  test(`チャットの回答の Markdown を記号のまま出さずに描く (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/chat");
+    await page.getByTestId("chat-history-toggle").click();
+    if (viewport.width >= 1024) {
+      await page.getByTestId("chat-history").getByRole("button", { name: new RegExp(`^${QUESTION}`) }).click();
+    } else {
+      await page.getByRole("dialog", { name: "会話の履歴" }).getByText(QUESTION).click();
+    }
+    const answer = page.getByTestId(`chat-answer-${RUN_ID}`);
+    // 回答の本文の前に見出し「回答」（h3。会話の名前 h2 の下。#3433）を出し、回答の中の見出しはその下の h4 から。
+    const body = page.getByTestId(`chat-answer-body-${RUN_ID}`);
+    await expect(body.getByRole("heading", { level: 3, name: "回答", exact: true })).toBeVisible();
+    await expectMarkdownAnswer(page, answer, `chat-answer-${RUN_ID}`, 4);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`chat-${viewport.name}.png`), fullPage: true });
+  });
 
-    test(`実行の詳細の回答の Markdown を記号のまま出さずに描く (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      seedRun(mockApi);
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto(`/runs?id=${RUN_ID}`);
-      const answer = page.getByTestId("run-answer-answer");
-      // カードの見出し（h2）の下なので、回答の見出しは h3。
-      await expectMarkdownAnswer(page, answer, "run-answer-answer", 3);
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`run-${viewport.name}-${theme}.png`), fullPage: true });
-    });
-  }
+  test(`実行の詳細の回答の Markdown を記号のまま出さずに描く (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    seedRun(mockApi);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(`/runs?id=${RUN_ID}`);
+    const answer = page.getByTestId("run-answer-answer");
+    // カードの見出し（h2）の下なので、回答の見出しは h3。
+    await expectMarkdownAnswer(page, answer, "run-answer-answer", 3);
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`run-${viewport.name}.png`), fullPage: true });
+  });
 }

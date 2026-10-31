@@ -114,7 +114,7 @@ def _schema_vocabulary(node: object, found: set[str]) -> None:
     """JSON schema の中のフィールド名・enum / const の文字列の値・説明に書いた値の名前を集める。
 
     説明の値は、文字列のフィールドの値の一覧
-    （`role` の「retrieved_anchor / catalog_article」など）。
+    （`role` の「retrieved_anchor / entity_expansion」など）。
     """
     if isinstance(node, dict):
         description = node.get("description")

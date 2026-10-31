@@ -5,7 +5,6 @@ import hashlib
 import logging
 from typing import Any, cast
 
-import httpx
 import pytest
 from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pytest import LogCaptureFixture, MonkeyPatch
@@ -17,10 +16,9 @@ from app.clients.oracle import OracleClient
 from app.clients.parser_service import ParserServiceClient
 from app.config import Settings, get_settings
 from app.main import app
-from app.rag import ingestion as ingestion_module
 from app.rag.ingestion import INGESTION_INTERNAL_ERROR_MESSAGE, IngestionPipeline
 from app.rag.navigation import build_navigation_tree
-from app.schemas.document import FileStatus, SourceModality, SourceProfile
+from app.schemas.document import FileStatus, SourceProfile
 from app.schemas.extraction import StructuredExtraction
 from tests._ingestion_jobs import run_ingestion_job_and_queued_followups
 from tests.support import AsgiTestClient
@@ -292,90 +290,6 @@ async def test_ingestion_records_trace_spans_without_payload_text(
     assert isinstance(indexing_attributes, dict)
     assert indexing_attributes["chunk_count"] >= 1
     assert indexing_attributes["vector_count"] == indexing_attributes["chunk_count"]
-
-
-def _allow_roadmap_parser_backends(monkeypatch: MonkeyPatch) -> None:
-    """準備中(ロードマップ)の解析エンジンの判定を外す(#3374)。
-
-    残している service 系の経路のテスト用。
-    """
-    monkeypatch.setattr(ingestion_module, "is_roadmap_parser_adapter_backend", lambda _value: False)
-
-
-@pytest.mark.usefixtures("single_pass_ingestion")
-async def test_ingestion_passes_source_parser_profile_to_extraction_strategy(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """service 系の解析エンジン(Document Understanding)の呼び出しと品質レポートの解析エンジン。
-
-    OCI Document Understanding は準備中(ロードマップ。#3374)で取込が止めるが、service 系の
-    経路の実装は残すため、準備中の判定を外して経路を確かめる。
-    """
-    _allow_roadmap_parser_backends(monkeypatch)
-    monkeypatch.setattr(get_settings(), "rag_parser_adapter_backend", "oci_document_understanding")
-    captured: dict[str, str] = {}
-
-    def run_service_backend(
-        self: ParserServiceClient,
-        backend: str,
-        source_bytes: bytes,
-        *,
-        content_type: str,
-        document_id: str,
-        prompt: str = "",
-    ) -> ParserRegistryResult:
-        _ = self, source_bytes, document_id, prompt
-        captured.update(backend=backend, content_type=content_type)
-        return ParserRegistryResult(
-            extraction=StructuredExtraction(
-                raw_text="PDF 規程本文です。\n| 項目 | 値 |\n| 承認 | 部門長 |",
-                document_type="社内規程",
-                confidence=0.92,
-            ),
-            parser_backend=backend,
-            parser_version="oci_document_understanding_stub",
-            template="enterprise_ai_layout",
-        )
-
-    monkeypatch.setattr(ParserServiceClient, "run_service_backend", run_service_backend)
-    oracle = OracleClient()
-    document = await oracle.create_document(
-        file_name="layout.pdf",
-        object_storage_path="local://uploaded/layout.pdf",
-        content_type="application/pdf",
-        file_size_bytes=7,
-        content_sha256=hashlib.sha256(b"pdfdata").hexdigest(),
-    )
-    pipeline = IngestionPipeline(genai=StubEmbeddingClient(), oracle=oracle)
-    source_profile = SourceProfile(
-        original_file_name="layout.pdf",
-        sanitized_file_name="layout.pdf",
-        extension=".pdf",
-        content_type="application/pdf",
-        inferred_content_type="application/pdf",
-        file_size_bytes=7,
-        content_sha256=hashlib.sha256(b"pdfdata").hexdigest(),
-        modality=SourceModality.PDF,
-        parser_profile="enterprise_ai_pdf_layout",
-        quality_warnings=[],
-    )
-
-    detail = await pipeline.ingest(
-        document.id,
-        b"pdfdata",
-        "本文を抽出してください。",
-        content_type="application/pdf",
-        source_profile=source_profile,
-    )
-
-    assert detail.status == FileStatus.INDEXED
-    assert captured["backend"] == "oci_document_understanding"
-    assert captured["content_type"] == "application/pdf"
-    saved = await oracle.get_document(document.id)
-    assert saved is not None
-    quality_report = cast(dict[str, object], saved.extraction["quality_report"])
-    # 品質レポートには、strategy の profile ではなく実際に使った解析エンジンを残す。
-    assert quality_report["parser_profile"] == "oci_document_understanding"
 
 
 @pytest.mark.usefixtures("single_pass_ingestion")
@@ -1311,60 +1225,6 @@ def test_ingest_chunks_locally_without_http_delegation(
     assert stored.status == FileStatus.INDEXED
     assert stored.error_message in {None, ""}
     assert asyncio.run(OracleClient().count_document_chunks(document_id)) > 0
-
-
-@pytest.mark.parametrize(
-    "error",
-    [
-        httpx.ReadTimeout("VLM 解析サービスの応答がタイムアウトしました。"),
-        httpx.ConnectError("VLM 解析サービスに接続できません。"),
-    ],
-    ids=["timeout", "unreachable"],
-)
-def test_ingest_fails_job_when_vlm_parser_service_fails(
-    monkeypatch: MonkeyPatch,
-    caplog: LogCaptureFixture,
-    error: httpx.HTTPError,
-) -> None:
-    """OCI の解析サービスの timeout・未到達は FAILED job とレシピ ERROR にする。
-
-    抽出は parser マイクロサービス(oci_document_understanding)が行う。backend は失敗を別経路へ
-    縮退させず、理由付きの利用者向けエラーで取込を止める。準備中(ロードマップ。#3374)の判定は外して、
-    残している service 系の経路を確かめる。
-    """
-    _allow_roadmap_parser_backends(monkeypatch)
-    monkeypatch.setattr(get_settings(), "rag_parser_adapter_backend", "oci_document_understanding")
-    monkeypatch.setattr(
-        ParserServiceClient, "service_url", lambda self, backend: "http://parser.invalid"
-    )
-
-    def failing_post(self: ParserServiceClient, backend: str, url: str, **_: object) -> object:
-        raise error
-
-    monkeypatch.setattr(ParserServiceClient, "_post_parse_json", failing_post)
-    upload_resp = client.post(
-        "/api/documents/upload",
-        files={"file": ("slow-layout.pdf", b"%PDF slow", "application/pdf")},
-    )
-    assert upload_resp.status_code == 200
-    document_id = upload_resp.json()["data"]["id"]
-
-    with caplog.at_level(logging.INFO, logger="app.audit"):
-        job = _run_ingestion_and_get_job(document_id)
-
-    assert job["status"] == "FAILED"
-    assert "OCI Document Understanding" in job["error_message"]
-    assert "oci_document_understanding_adapter_service_unreachable" in job["error_message"]
-    recipe = _default_recipe(document_id)
-    assert recipe["status"] == "ERROR"
-    assert recipe["error_message"] == job["error_message"]
-    audit_record = next(
-        record for record in caplog.records if record.message == "rag_ingestion_audit"
-    )
-    audit_event = cast(Any, audit_record).audit_event
-    assert audit_event["document_id"] == document_id
-    assert audit_event["outcome"] == "error"
-    assert audit_event["error_type"] == "IngestionUserError"
 
 
 def _assert_recipe_failed_without_document_error(document_id: str, error_message: str) -> None:

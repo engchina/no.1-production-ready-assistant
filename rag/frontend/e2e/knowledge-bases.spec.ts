@@ -489,16 +489,6 @@ test("所属文書は 25 件ずつページングし、外して空になった�
   await expectNoPageOverflow(page);
 });
 
-/** アプリの外観の設定（localStorage）でテーマを切り替える（`emulateMedia` では切り替わらない）。 */
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem(
-      "production-ready-rag.ui",
-      JSON.stringify({ state: { theme: value }, version: 0 })
-    );
-  }, theme);
-}
-
 function addCandidateDocuments(state: ReturnType<typeof createKnowledgeBaseState>, count: number) {
   for (let index = 1; index <= count; index += 1) {
     const number = String(index).padStart(4, "0");
@@ -510,14 +500,13 @@ function addCandidateDocuments(state: ReturnType<typeof createKnowledgeBaseState
 
 // #600: 数千〜数万件の文書から、検索して複数を選び、一度に追加する（共通の ListPicker）。
 for (const viewport of [
-  { name: "desktop", width: 1280, height: 900, theme: "light" as const },
-  { name: "mobile", width: 375, height: 812, theme: "dark" as const },
+  { name: "desktop", width: 1280, height: 900 },
+  { name: "mobile", width: 375, height: 812 },
 ]) {
-  test(`文書を追加は 3,000 件から検索して複数を選び、一度に追加できる (${viewport.name} / ${viewport.theme})`, { tag: "@responsive" }, async ({
+  test(`文書を追加は 3,000 件から検索して複数を選び、一度に追加できる (${viewport.name})`, { tag: "@responsive" }, async ({
     page,
   }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await useTheme(page, viewport.theme);
     const state = createKnowledgeBaseState();
     addCandidateDocuments(state, 3000);
     await mockKnowledgeBaseApi(page, state);

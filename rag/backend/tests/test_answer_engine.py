@@ -740,7 +740,7 @@ def test_build_engine_settings_configures_rerank(tmp_path: Any) -> None:
 
     engine_settings = build_engine_settings(
         Settings(
-            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
             oci_genai_rerank_model="qwen3-rerank",
         ),
         output_dir=tmp_path,
@@ -749,6 +749,44 @@ def test_build_engine_settings_configures_rerank(tmp_path: Any) -> None:
     assert engine_settings.embedding_base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert engine_settings.rerank_model == "qwen3-rerank"
     assert _rerank_configured(engine_settings) is True
+
+
+def test_build_engine_settings_passes_embedding_model_connection(tmp_path: Any) -> None:
+    """埋め込み / 再ランクは、そのモデルの接続の endpoint と key を rag_engine に渡す(#45)。"""
+    from pr_system_settings.model import EnterpriseAiConfiguredModel
+
+    from app.rag.answer_engine import build_engine_settings
+
+    bailian = "https://llm-xxxx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    settings = Settings(
+        oci_enterprise_ai_endpoint="https://api.deepseek.com",
+        oci_enterprise_ai_api_key="sk-deepseek",
+        oci_enterprise_ai_tertiary_endpoint=bailian,
+        oci_enterprise_ai_tertiary_api_key="sk-aliyun",
+        oci_enterprise_ai_models=[
+            EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
+            EnterpriseAiConfiguredModel(
+                model_id="text-embedding-v4", kind="embedding", connection_id="tertiary"
+            ),
+            EnterpriseAiConfiguredModel(
+                model_id="qwen3-rerank", kind="rerank", connection_id="tertiary"
+            ),
+        ],
+        oci_enterprise_ai_default_text_model="deepseek-flash",
+        oci_genai_embedding_model="text-embedding-v4",
+        oci_genai_rerank_model="qwen3-rerank",
+    )
+
+    engine_settings = build_engine_settings(settings, output_dir=tmp_path)
+
+    assert engine_settings.embedding_base_url == bailian
+    assert engine_settings.embedding_api_key == "sk-aliyun"
+    assert engine_settings.rerank_base_url == bailian.replace(
+        "/compatible-mode/", "/compatible-api/"
+    )
+    assert engine_settings.rerank_api_key == "sk-aliyun"
+    # LLM はプライマリ接続（DeepSeek）のまま。
+    assert engine_settings.llm_providers["enterprise-ai"].api_key == "sk-deepseek"
 
 
 def test_answer_engine_has_no_domain_profile_setting(tmp_path: Any) -> None:
@@ -781,7 +819,7 @@ async def test_rerank_enabled_calls_backend_rerank(
     genai = RecordingGenAi()
     engine = AnswerEngine(
         Settings(
-            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -822,7 +860,7 @@ async def test_rerank_score_and_rank_reach_citations(
     monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
-            embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -849,12 +887,12 @@ async def test_rerank_score_and_rank_reach_citations(
     [
         (
             {
-                "embedding_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "oci_enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "rag_rerank_enabled": False,
             },
             "無効の設定",
         ),
-        ({"embedding_base_url": ""}, "モデルまたは Base URL が未設定"),
+        ({"oci_enterprise_ai_endpoint": ""}, "モデルまたは Base URL が未設定"),
     ],
     ids=["disabled", "unconfigured"],
 )
@@ -3579,7 +3617,7 @@ async def test_original_question_keeps_numbered_requests_through_coverage(
             "Q2",
             "Q3",
         }
-    # 主の検索は言い換えた検索文で行う(元の質問の全文の検索は、条の目録の候補の補いだけ)。
+    # 主の検索は言い換えた検索文で行う。
     assert oracle.queries[0] == query
     # 回答の要求(rag_search の requests。回答の検査の入力)も元の質問の 3 要求(充足は監査が決める)。
     requests = outcome.diagnostics["envelope"]["requests"]

@@ -237,7 +237,6 @@ from rag_engine.resources.rerank_diagnostics import bind_rerank_context
 from rag_engine.resources.runtime import resolve_prompt
 from rag_engine.resources.structured_failures import structured_failure_details
 from rag_engine.resources.tracing import observe_call
-from rag_engine.retrieval.article_catalog import is_added_catalog_article
 from rag_engine.retrieval.attachment_evidence import is_attachment_evidence
 from rag_engine.retrieval.candidate_budget import artifact_key as retrieval_artifact_key
 from rag_engine.retrieval.candidate_budget import record_id as retrieval_record_id
@@ -295,7 +294,6 @@ from rag_engine.retrieval.scope import (
     AdbSearchReadiness,
     normalize_retrieval_scope,
 )
-from rag_engine.retrieval.search_stages import ORIGINAL_QUESTION_SEARCH_STAGE
 from rag_engine.retrieval.task_contract import (
     COUNT_REQUEST,
     LIST_REQUEST,
@@ -774,9 +772,8 @@ def select_documents(
         return value if current is None or (value is not None and value > current) else current
 
     for position, record in enumerate(ranked_children, start=1):
-        if is_added_catalog_article(record) or is_attachment_evidence(record):
+        if is_attachment_evidence(record):
             # 会話の添付は利用者が明示した入力なので、文書間の関連度の比較に数えない。
-            # 目録で選んで加えた条（#2254）は文書の分数に数えない（加えた条の関連度で他の文書を後回しにしない）。
             continue
         key = document_context_key(record)
         scores[key] = higher(scores.get(key), rerank_score(record))
@@ -815,12 +812,8 @@ def select_documents(
     # 実体の 1 段の拡張で足した根拠（#1362）は、文書の分数が低くても後回しにしない（橋渡しの行）。関連度が
     # 下限未満の拡張の根拠は、印の無い候補と同じに扱う（#1390）。
     # 参照元の直後へ置いた交差参照の参照先（#1549）も、参照元に従うので後回しにしない。
-    # 目録で選んで加えた条（#2254）も、事例の言葉の質問では rerank の関連度が低いので後回しにしない。
     # 会話の添付（#3100）も、利用者が明示した入力なので後回しにしない。
-    reserved = [
-        is_reserved_entity_expansion(r) or is_followed_reference(r) or is_added_catalog_article(r) or is_attachment_evidence(r)
-        for r in ranked_children
-    ]
+    reserved = [is_reserved_entity_expansion(r) or is_followed_reference(r) or is_attachment_evidence(r) for r in ranked_children]
     kept = [r for r, keep in zip(ranked_children, reserved, strict=False) if document_context_key(r) not in excluded or keep]
     deferred = [r for r, keep in zip(ranked_children, reserved, strict=False) if document_context_key(r) in excluded and not keep]
     if step is not None:
@@ -869,7 +862,7 @@ def cap_anchors_per_document(
     rerank の上位は、章の多い 1 つの文書の似た節で占められやすく、分数の近い別の文書の候補が起点（上位 top_k）から
     押し出される（検索エンジンの host crowding と同じ）。超えた child は落とさず順位を保って後ろへ置く（起点が
     足りなければ使われる）。実体の拡張・交差参照で足した child は位置を保ち、数えない（参照元の直後に置くため）。
-    目録で選んで加えた条（#2254）も位置を保ち、数えない。0 は上限なし。
+    0 は上限なし。
     """
     from rag_engine.retrieval.metadata_context import document_context_key  # 循環 import を避けて関数内で読む
 
@@ -880,13 +873,8 @@ def cap_anchors_per_document(
     kept: list[AnswerRecord] = []
     later: list[AnswerRecord] = []
     for record in ranked_children:
-        # 目録で選んで加えた条（#2254）は起点・親の枠の外に足すので数えない。会話の添付（#3100）も数えない。
-        if (
-            is_reserved_entity_expansion(record)
-            or is_followed_reference(record)
-            or is_added_catalog_article(record)
-            or is_attachment_evidence(record)
-        ):
+        # 会話の添付（#3100）は数えない。
+        if is_reserved_entity_expansion(record) or is_followed_reference(record) or is_attachment_evidence(record):
             kept.append(record)
             continue
         key = document_context_key(record)
@@ -933,7 +921,6 @@ def _bundle_context(
         max_anchors_per_parent=_max_anchors_per_parent(settings),
         max_records=max_records,
         max_chars=max_chars,
-        catalog_records=int(getattr(settings, "article_catalog_context_records", 0) or 0),
     )
     # 同じ起点選択を先に行い、未採用の候補の親本文・近傍を読まない。文字予算は原文の取得後に適用する。
     provisional = build_chunk_context_bundle(replace(request, max_chars=2**31 - 1, select_anchors_only=True))
@@ -1108,23 +1095,6 @@ def build_adb_hybrid_answer_context(
         ]
         known = {record.chunk_uid for record in active_records}
         active_records.extend(record for record in expansion if record.chunk_uid not in known)
-    if getattr(settings, "article_catalog_enabled", False):
-        before_catalog = {retrieval_record_id(record) for record in ranked_children}
-        ranked_children, expansion = _catalog_article_children(
-            question,
-            ranked_children,
-            settings,
-            document_records=_original_question_children(question, queries, search_options, inquiry_conditions, settings),
-        )
-        known = {record.chunk_uid for record in active_records}
-        active_records.extend(record for record in expansion if record.chunk_uid not in known)
-    if getattr(settings, "article_catalog_enabled", False):
-        ranked_children = [
-            record
-            if retrieval_record_id(record) in before_catalog
-            else replace(record, metadata={**record.metadata, "retrieval_admission_stage": "article"})
-            for record in ranked_children
-        ]
     ranked_children, candidate_trace = select_candidates(
         ranked_children,
         max(0, int(getattr(settings, "rerank_candidate_limit", 0))),
@@ -3861,7 +3831,7 @@ def _cover_guide_steps(
 ) -> tuple[AnswerContext, dict[str, Any], tuple[tuple[str, str, tuple[str, ...]], ...]]:
     """業務ガイドの手順ごとに検索し、手順の根拠と参照の頁の根拠を回答の材料に足す (#2395)。
 
-    検索は embedding・hybrid 検索・rerank だけで、文書の選択・画面目録・条の目録（LLM を呼ぶ）は使わない。
+    検索は embedding・hybrid 検索・rerank だけで、文書の選択・画面目録（LLM を呼ぶ）は使わない。
     足した根拠は既存の根拠の後ろに置き、既存の根拠は追い出さない。戻り値は (回答に渡す context, 記録,
     手順ごとの根拠（手順 id, 題名, 根拠の chunk_uid の列）)。
     """
@@ -3902,7 +3872,6 @@ def _cover_guide_steps(
         settings,
         document_selection_enabled=False,
         screen_linking_enabled=False,
-        article_catalog_enabled=False,
     )
     per_step = max(1, int(getattr(settings, "guide_step_chunks_per_step", 1) or 1))
     reference_cap = max(0, int(getattr(settings, "guide_reference_max_chunks", 0) or 0))
@@ -4617,549 +4586,6 @@ def _linked_screen_children(
         return [_stored_chunk_answer_record(chunk) for chunk in added], links, expansion
 
 
-# 目録での条の選択（質問・文書・chunk_set・目録の内容・上限・モデル → 選んだ (section_id, 行)）。CRAG の各回と要求ごとの
-# 再検索で同じ質問の同じ文書を選び直さない。1 段目・2 段目の LLM に失敗した結果は cache しない（次の回で選び直す。#3285）。
-# process の中の記録の後ろに、process をまたいで時間で切れる記録（`article_catalog_cache_*`。#3507）を置く。
-_ARTICLE_SELECTION_CACHE: dict[tuple[object, ...], list[tuple[str, str]]] = {}
-_ARTICLE_CACHE_SIZE = 256
-# process をまたぐ記録の key の版。key の形・選択の入力の作り方（目録の prompt・2 段目の候補）を変えたら上げる。
-# 2: 質問を NFKC で揃えてから空白を詰める。
-_ARTICLE_RECORD_VERSION = 2
-# 記録の出どころ（工程「条の選択」に残す）。
-ARTICLE_SOURCE_LLM = "llm"
-ARTICLE_SOURCE_PROCESS = "process"
-ARTICLE_SOURCE_SHARED = "shared"
-
-
-def _article_cache_store(settings: Settings) -> Any:
-    """process をまたぐ条の選択の記録（設定が無い・0 なら None。#3507）。"""
-    from rag_engine.resources.shared_cache import shared_result_cache
-
-    return shared_result_cache(
-        getattr(settings, "article_catalog_cache_dir", None),
-        ttl_seconds=float(getattr(settings, "article_catalog_cache_ttl_seconds", 0.0) or 0.0),
-        max_entries=int(getattr(settings, "article_catalog_cache_max_entries", 0) or 0),
-    )
-
-
-def _article_inputs_key(settings: Settings) -> tuple[object, ...]:
-    """選択の結果を決める、質問と文書の外の入力: 記録の版・選択の指示・回答のモデル（provider・model・推論の量）・言語資源。
-
-    process をまたいで記録を使うので、モデル・指示・言語資源（2 段目の名指しの条の番号の照合）を変えたら選び直す。
-    """
-    from rag_engine.config import get_llm_provider
-    from rag_engine.retrieval.article_catalog import (
-        ARTICLE_DOCUMENT_SELECTION_SYSTEM_PROMPT,
-        ARTICLE_REFINE_SYSTEM_PROMPT,
-        ARTICLE_SELECTION_SYSTEM_PROMPT,
-    )
-
-    instructions = (
-        resolve_prompt("article_catalog.system", ARTICLE_SELECTION_SYSTEM_PROMPT),
-        resolve_prompt("article_catalog.refineSystem", ARTICLE_REFINE_SYSTEM_PROMPT),
-        resolve_prompt("article_catalog.documentSystem", ARTICLE_DOCUMENT_SELECTION_SYSTEM_PROMPT),
-    )
-    prompts = hashlib.sha256("\n\0".join(instructions).encode("utf-8")).hexdigest()[:16]
-    provider_id = str(getattr(settings, "default_answer_llm", "") or "")
-    try:
-        provider = get_llm_provider(settings, provider_id or None)
-        model: tuple[str, ...] = (provider_id, provider.model, provider.reasoning_effort)
-    except Exception:  # noqa: BLE001 - provider の無い設定（テストの設定など）は provider の id だけで分ける。
-        model = (provider_id,)
-    try:
-        pack = current_pack().hash
-    except Exception:  # noqa: BLE001 - 言語資源を読めないときは版を分けない。
-        pack = ""
-    return (_ARTICLE_RECORD_VERSION, prompts, model, pack)
-
-
-def _normalized_catalog_question(question: str) -> str:
-    """記録の key の質問: NFKC で揃え（全角・半角の英数字や記号の違い）、前後と連続の空白を詰める。
-
-    同じ文の再実行を同じ key にする。LLM に渡す質問は変えない。
-    """
-    return normalized_query_key(question)
-
-
-def _catalog_digest(catalog: Any) -> str:
-    """目録の内容（文書名・行・章節の id）の hash。同じ chunk_set でも目録の作り方が変われば選び直す。"""
-    payload = json.dumps([catalog.file_name, list(catalog.lines), list(catalog.section_ids)], ensure_ascii=False)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _remember(cache: dict[tuple[object, ...], Any], key: tuple[object, ...], value: Any) -> None:
-    """process の中の記録に入れる（上限を超えたら全部捨てる。今までと同じ）。"""
-    if key not in cache and len(cache) >= _ARTICLE_CACHE_SIZE:
-        cache.clear()
-    cache[key] = value
-
-
-def _recorded_articles(value: Any) -> list[tuple[str, str]] | None:
-    """process をまたぐ記録の値を条の選択に戻す。形が違えば None（記録が無いのと同じ）。"""
-    if not isinstance(value, list):
-        return None
-    articles: list[tuple[str, str]] = []
-    for item in value:
-        if not (isinstance(item, list) and len(item) == 2 and all(isinstance(part, str) for part in item)):
-            return None
-        articles.append((item[0], item[1]))
-    return articles
-
-
-def _recorded_documents(value: Any) -> list[str] | None:
-    """process をまたぐ記録の値を文書の選択に戻す。形が違えば None。"""
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        return None
-    return list(value)
-
-
-def _catalog_document_ids(*rankings: Sequence[AnswerRecord]) -> list[str]:
-    """候補の文書の id を、文書の候補の順位の逆数の合計（RRF と同じ k=60）の大きい順に返す（#2261）。
-
-    最初に出た順位だけで並べると、1 つの chunk が上位に当たった周辺の文書が先に来て、多くの chunk が中位に当たる
-    根拠の文書が後ろになる（短い検索文で目立つ）。文書ごとに候補全体の当たり方を合計して並べる。複数の候補の列
-    （検索文の候補と元の質問の候補）は列ごとの順位で数えて合計する。
-    """
-    scores: dict[str, float] = {}
-    for records in rankings:
-        for position, record in enumerate(records, start=1):
-            document_id = str(record.metadata.get("document_id") or "") if isinstance(record.metadata, dict) else ""
-            if document_id:
-                scores[document_id] = scores.get(document_id, 0.0) + 1.0 / (60 + position)
-    return sorted(scores, key=lambda document_id: -scores[document_id])
-
-
-def _original_question_children(
-    question: str,
-    queries: Sequence[str],
-    search_options: dict[str, Any],
-    inquiry_conditions: InquiryConditionParse | None,
-    settings: Settings,
-) -> list[AnswerRecord]:
-    """元の質問（注入されたとき）で 1 回ベクトル検索した child の候補。条の目録を読む文書の順位だけに使う。
-
-    業務 Agent は検索文を短いキーワードに言い換えることがあり、事例の論点の文書（政令・手続の規則など）が検索文の
-    候補の上位に出ない。元の質問の候補は文書の順位に足すだけで、回答の候補・context には足さない（法令以外の根拠を
-    減らさない）。元の質問が無い・検索文と同じ・設定が off・検索に失敗したときは空。
-    """
-    from rag_engine.dependencies import injected_article_question
-
-    if not getattr(settings, "article_catalog_original_question_search", False):
-        return []
-    original = (injected_article_question() or "").strip()
-    if not original or original == question.strip() or original in queries:
-        return []
-    options = {key: value for key, value in search_options.items() if key not in {"extra_text_queries", "vector_only_queries"}}
-    options.update(retrieval_queries=[original], vector_only_queries=(original,))
-    try:
-        # 文書の検索の中の段（処理の経過。#3475）。検索の埋め込み・DB の検索はこの段の子になる。
-        with observe_call("stage", ORIGINAL_QUESTION_SEARCH_STAGE):
-            result = search_adb_hybrid_chunks(inquiry_conditions=inquiry_conditions, **options)
-    except Exception as exc:
-        logger.warning("article catalog original question search failed", exc_info=True)
-        # 元の質問の候補を足さずに続けたことを、呼び出し元の診断に残す（#3286）。
-        report_degraded("article_original_question", exc)
-        return []
-    return [_stored_chunk_answer_record(chunk) for chunk in result.child_chunks]
-
-
-def _catalog_terms(question: str, settings: Settings) -> tuple[Any, ...]:
-    """条の選択に渡す用語: 質問（元の質問と検索文）に一致した登録の用語と、その別名・説明。
-
-    事例の語（業務の通称）と文書の言い方（法令の用語）が違うと、目録の見出しだけでは条を結び付けられない。
-    対応は利用者が登録した用語（実行時の知識）が持ち、コードには置かない。読めないときは渡さない。
-    """
-    from rag_engine.retrieval.article_catalog import CatalogTerm
-
-    runtime = build_runtime_knowledge_context(question, settings.output_dir, settings.runtime_knowledge_path)
-    return tuple(CatalogTerm(term=term.term, aliases=tuple(term.aliases), description=term.description) for term in runtime.matched_terms)
-
-
-@dataclass(frozen=True)
-class _CatalogReferences:
-    """2 段目に、選んだ条を名指しする別の章の条を候補にした文書（文書名・候補にした数・そのうち足した条の行）。"""
-
-    file_name: str
-    candidates: int
-    added: tuple[str, ...]
-
-
-def _select_catalog_articles(
-    question: str,
-    catalogs: Sequence[Any],
-    settings: Settings,
-    *,
-    terms: Sequence[Any] = (),
-    sources: dict[str, int] | None = None,
-) -> tuple[list[Any], list[tuple[str, str]], int, list[str], list[_CatalogReferences]]:
-    """文書ごとに目録から条を選び（並行に呼ぶ）、文書を順に回した順・選べなかった文書（名前, 理由）・2 段目で足した条の
-    数・2 段目に失敗した文書の名前・名指しの条を候補にした文書を返す（#2254・#3517）。
-
-    文書ごとに 2 段で選ぶ。1 段目は目録の行（条の名前）から論点ごとに選び、2 段目は選んだ条と同じ章の条と、選んだ条の
-    番号を書き出しで名指しする別の章の条（附則の特例・読替えなど）を本文の書き出しつきで見せて、足りない論点の条を
-    足させる（`article_catalog_refine_articles` 件まで。書き出しの読み込み `article_leads` が注入されたときだけ）。
-    条の名前が質問の語から遠い条（重なったときの扱い・特例など）を拾うため。名指しの条は cache した結果からは数えない
-    （この回に選んだ文書だけを工程に残す。足した条の数と同じ）。
-
-    呼び出し 1 回の出力と時間は役目に合わせて抑える（`article_catalog_output_token_cap` /
-    `article_catalog_call_timeout_seconds`。段ごとに数える）。同じ出力を繰り返して書き続ける呼び出しが 1 つあると、
-    並行の呼び出しをすべて待つ段全体が数分止まるため。1 段目で超えた文書は選ばずに続け（同じ入力は温度 0 で同じ出力
-    になるので送り直さない）、記録にも残さない（次の質問では呼び直す）。2 段目で失敗したら 1 段目の条だけを使い、
-    その結果も記録に残さない（#3285）。
-
-    記録は process の中（L1）と、process をまたいで時間で切れる記録（L2。`article_catalog_cache_*`。#3507）の順に引く。
-    key は質問（NFKC で揃えて空白を詰めたもの）・文書・chunk_set・目録の内容・上限・用語・2 段目の設定・モデル・指示の版で、同じ入力の
-    LLM の結果だけを使い回す（選び方は変えない）。`sources` を渡すと、文書ごとの出どころ（LLM / process の記録 /
-    共有の記録）の数を入れる。
-    """
-    from rag_engine.adapters.oci import IncompleteResponse, bind_output_cap
-    from rag_engine.dependencies import injected_article_leads, llm_call_count
-    from rag_engine.resources.deadline import Deadline, DeadlineExceeded, bind_deadline, current_deadline
-    from rag_engine.retrieval.article_catalog import interleave_selections, refine_articles, select_articles
-
-    limit = int(getattr(settings, "article_catalog_max_articles", 0) or 0)
-    refine_limit = int(getattr(settings, "article_catalog_refine_articles", 0) or 0)
-    refine_candidates = int(getattr(settings, "article_catalog_refine_candidates", 0) or 0)
-    load_leads = injected_article_leads() if refine_limit > 0 and refine_candidates > 0 else None
-    model = str(getattr(settings, "default_answer_llm", "") or "")
-    max_output = int(getattr(settings, "article_catalog_output_token_cap", 0) or 0)
-    timeout = float(getattr(settings, "article_catalog_call_timeout_seconds", 0.0) or 0.0)
-    # 登録の用語を変えたら選び直す（用語は選択の入力）。
-    term_key = tuple((term.term, tuple(term.aliases), term.description) for term in terms)
-    refine_key = (refine_limit, refine_candidates) if load_leads is not None else (0, 0)
-    inputs = _article_inputs_key(settings)
-    normalized = _normalized_catalog_question(question)
-    keys: list[tuple[object, ...]] = [
-        (
-            "article_selection",
-            normalized,
-            catalog.document_id,
-            catalog.chunk_set_id,
-            len(catalog.lines),
-            _catalog_digest(catalog),
-            limit,
-            model,
-            term_key,
-            refine_key,
-            inputs,
-        )
-        for catalog in catalogs
-    ]
-    store = _article_cache_store(settings)
-    cached: dict[int, list[tuple[str, str]]] = {}
-    origin: dict[int, str] = {}
-    for index, key in enumerate(keys):
-        hit = _ARTICLE_SELECTION_CACHE.get(key)
-        if hit is not None:
-            cached[index], origin[index] = hit, ARTICLE_SOURCE_PROCESS
-            continue
-        recorded = _recorded_articles(store.get(key)) if store is not None else None
-        if recorded is not None:
-            _remember(_ARTICLE_SELECTION_CACHE, key, recorded)
-            cached[index], origin[index] = recorded, ARTICLE_SOURCE_SHARED
-    missing = [index for index in range(len(keys)) if index not in cached]
-    failures: dict[int, str] = {}
-    refine_failures: set[int] = set()
-    results: dict[int, list[tuple[str, str]]] = {}
-    calls: dict[int, int] = {}
-    added_counts: dict[int, int] = {}
-    references: dict[int, _CatalogReferences] = {}
-    if missing:
-        parent = current_deadline()
-
-        def call(index: int) -> list[tuple[str, str]]:
-            catalog = catalogs[index]
-            own = Deadline(timeout, parent=parent) if timeout > 0 else parent
-
-            def failed(exc: Exception) -> None:
-                if isinstance(exc, IncompleteResponse):
-                    failures[index] = "出力の上限"
-                elif isinstance(exc, DeadlineExceeded) and own is not None and own.cut_short:
-                    failures[index] = "時間の上限"
-                else:
-                    failures[index] = "呼び出しの失敗"
-
-            with bind_deadline(own), bind_output_cap(max_output):
-                chosen = select_articles(question, catalog, parse_text_response, settings, limit=limit, terms=terms, on_error=failed)
-            calls[index] = 1
-            if load_leads is None or not chosen:
-                return chosen
-            second = Deadline(timeout, parent=parent) if timeout > 0 else parent
-            try:
-                with bind_deadline(second), bind_output_cap(max_output):
-                    calls[index] = 2
-                    refinement = refine_articles(
-                        question,
-                        catalog,
-                        chosen,
-                        lambda sections: load_leads(
-                            document_id=catalog.document_id,
-                            chunk_set_id=catalog.chunk_set_id,
-                            sections=sections,
-                            settings=settings,
-                        ),
-                        parse_text_response,
-                        settings,
-                        limit=refine_limit,
-                        candidate_limit=refine_candidates,
-                        terms=terms,
-                    )
-            except Exception:  # noqa: BLE001 - 2 段目は補助。1 段目の条で続ける。
-                logger.warning("article catalog refine failed", exc_info=True)
-                refinement = None
-            if refinement is None:
-                refine_failures.add(index)
-                return chosen
-            added = refinement.added
-            added_counts[index] = len(added)
-            if refinement.referencing:
-                referencing = set(refinement.referencing)
-                references[index] = _CatalogReferences(
-                    file_name=catalog.file_name,
-                    candidates=len(refinement.referencing),
-                    added=tuple(title for section_id, title in added if (section_id, title) in referencing),
-                )
-            # 足した条は足りない論点の根拠なので、1 段目の条と交互に並べて前に出す（後ろに置くと、文書を順に回した
-            # 順で先頭から数える上限（MCP の根拠の件数など）に切られる）。
-            merged: list[tuple[str, str]] = []
-            for position in range(max(len(chosen), len(added))):
-                merged.extend(item[position] for item in (chosen, added) if position < len(item))
-            return merged
-
-        with ThreadPoolExecutor(max_workers=len(missing), thread_name_prefix="article-catalog") as pool:
-            futures = {index: pool.submit(contextvars.copy_context().run, call, index) for index in missing}
-            results = {index: future.result() for index, future in futures.items()}
-        # 並行の呼び出しは thread の文脈で数えるので、呼び出し元の文脈の LLM の呼び出しの数に足す。
-        llm_call_count.set(llm_call_count.get() + sum(calls.values()))
-        if len(_ARTICLE_SELECTION_CACHE) + len(missing) > _ARTICLE_CACHE_SIZE:
-            _ARTICLE_SELECTION_CACHE.clear()
-        for index, chosen in results.items():
-            origin[index] = ARTICLE_SOURCE_LLM
-            if index not in failures and index not in refine_failures:
-                _ARTICLE_SELECTION_CACHE[keys[index]] = chosen
-                if store is not None:
-                    store.put(keys[index], [list(item) for item in chosen])
-    if sources is not None:
-        for value in origin.values():
-            sources[value] = sources.get(value, 0) + 1
-    # 2 段目に失敗した文書は cache しないが、この回は 1 段目の条で続ける。
-    selections = [results[index] if index in results else cached.get(index, []) for index in range(len(keys))]
-    failed = [(catalogs[index].file_name, failures[index]) for index in sorted(failures)]
-    refine_failed = [catalogs[index].file_name for index in sorted(refine_failures)]
-    referenced = [references[index] for index in sorted(references)]
-    return interleave_selections(catalogs, selections), failed, sum(added_counts.values()), refine_failed, referenced
-
-
-# 範囲の文書の選択（質問・文書の一覧・件数・モデル → 選んだ文書）。選択に失敗した結果は cache しない（#3285）。
-_ARTICLE_DOCUMENT_CACHE: dict[tuple[object, ...], list[str]] = {}
-
-
-def _catalog_question(query: str) -> str:
-    """条の選択に渡す質問: 元の質問が注入されていれば、元の質問と検索文（#2261）。
-
-    業務 Agent は検索文を短いキーワードに言い換えることがあり、検索文だけでは事例の論点（請求の種類・手続など）が
-    落ちて、根拠の文書・条を選べない。検索そのものは検索文で行う。
-    """
-    from rag_engine.dependencies import injected_article_question
-
-    original = injected_article_question()
-    if not original or original == query.strip():
-        return query
-    return f"{original}\n\n（検索文: {query}）"
-
-
-def _scope_catalog_documents(question: str, settings: Settings, exclude: set[str]) -> list[str] | None:
-    """検索の範囲の条で構成された文書の一覧から、根拠の条がありそうな文書を LLM で選ぶ（#2254）。
-
-    `exclude`（目録を読む候補の文書）と重なる分だけ多く選ばせ、重なりを除いて `article_catalog_scope_documents`
-    件まで返す（選んだ文書が候補の文書と重なっても枠を使い切る。#2261）。一覧の注入が無い・件数が 0・一覧が空なら
-    選ばない（LLM を呼ばない）。選択の LLM に失敗したら None を返し、cache しない（次の回で選び直す。#3285）。
-    """
-    return _scope_catalog_documents_with_source(question, settings, exclude)[0]
-
-
-def _scope_catalog_documents_with_source(question: str, settings: Settings, exclude: set[str]) -> tuple[list[str] | None, str]:
-    """`_scope_catalog_documents` と、選択の出どころ（LLM / process の記録 / 共有の記録。選ばなければ空。#3507）。"""
-    from rag_engine.dependencies import injected_article_documents
-    from rag_engine.retrieval.article_catalog import select_documents
-
-    limit = int(getattr(settings, "article_catalog_scope_documents", 0) or 0)
-    load = injected_article_documents()
-    if load is None or limit <= 0:
-        return [], ""
-    documents = [(str(document_id), str(name)) for document_id, name in load(settings=settings)]
-    if not documents:
-        return [], ""
-    overlap = sum(1 for document_id, _ in documents if document_id in exclude)
-    ask = limit + overlap
-    digest = hashlib.sha256(json.dumps(documents, ensure_ascii=False).encode("utf-8")).hexdigest()
-    key: tuple[object, ...] = (
-        "article_documents",
-        _normalized_catalog_question(question),
-        digest,
-        ask,
-        str(getattr(settings, "default_answer_llm", "") or ""),
-        _article_inputs_key(settings),
-    )
-    source = ARTICLE_SOURCE_PROCESS
-    chosen = _ARTICLE_DOCUMENT_CACHE.get(key)
-    store = _article_cache_store(settings) if chosen is None else None
-    if chosen is None and store is not None:
-        chosen = _recorded_documents(store.get(key))
-        if chosen is not None:
-            source = ARTICLE_SOURCE_SHARED
-            _remember(_ARTICLE_DOCUMENT_CACHE, key, chosen)
-    if chosen is None:
-        source = ARTICLE_SOURCE_LLM
-        chosen = select_documents(question, documents, parse_text_response, settings, limit=ask)
-        if chosen is None:
-            return None, source
-        _remember(_ARTICLE_DOCUMENT_CACHE, key, chosen)
-        if store is not None:
-            store.put(key, list(chosen))
-    return [document_id for document_id in chosen if document_id not in exclude][:limit], source
-
-
-_ARTICLE_SOURCE_LABELS = {
-    ARTICLE_SOURCE_LLM: "LLM",
-    ARTICLE_SOURCE_PROCESS: "同じ process の記録",
-    ARTICLE_SOURCE_SHARED: "共有の記録",
-}
-
-
-_ARTICLE_SHARED_BYPASS_LABEL = "共有の記録を使わない（評価）"
-
-
-def _article_sources_label(sources: Mapping[str, int]) -> str:
-    """文書ごとの条の選択の出どころの数（例: 「LLM 2 文書・共有の記録 8 文書」）。"""
-    parts = [f"{label} {sources[key]} 文書" for key, label in _ARTICLE_SOURCE_LABELS.items() if sources.get(key)]
-    return "・".join(parts) if parts else "なし"
-
-
-def _catalog_article_children(
-    question: str,
-    ranked_children: Sequence[AnswerRecord],
-    settings: Settings,
-    *,
-    document_records: Sequence[AnswerRecord] = (),
-) -> tuple[list[AnswerRecord], list[AnswerRecord]]:
-    """条の目録で選んだ条を候補に加え、印を付けた候補の列と context の展開に足す record を返す (#2254)。
-
-    目録は融合の候補に出た条で構成された文書の上位 `article_catalog_max_documents` 件から作り、選んだ条の章節の
-    最初の child（読み込みが印を付けて返す）を候補の末尾に加える（すでに候補にある child は印だけ付ける）。選んだ条は
-    rerank の順に、context の起点・親の枠の外に `article_catalog_context_records` 件まで足す（context_builder）。
-    候補に条で構成された文書があれば、候補に出ない文書も範囲の文書の一覧から LLM が選んで足す
-    （`_scope_catalog_documents`）。目録・chunk の読み込みの注入が無い、候補に条で構成された文書が無い、選べなかった
-    ときは候補をそのまま返す。
-    """
-    from rag_engine.dependencies import article_catalog_dependencies
-    from rag_engine.retrieval.article_catalog import ARTICLE_CATALOG_KEY, catalog_article_info
-
-    injected = article_catalog_dependencies()
-    max_documents = int(getattr(settings, "article_catalog_max_documents", 0) or 0)
-    if injected is None or max_documents <= 0 or int(getattr(settings, "article_catalog_max_articles", 0) or 0) <= 0:
-        return list(ranked_children), []
-    load_catalogs, load_chunks = injected
-    question = _catalog_question(question)
-    # 文書の順位は検索文の候補と、元の質問の候補（`document_records`。文書の順位だけに使う）を合わせて決める。
-    document_ids = _catalog_document_ids(ranked_children, document_records)
-    catalogs = list(load_catalogs(document_ids=document_ids, limit=max_documents, settings=settings))
-    if not catalogs:
-        # 候補に条で構成された文書が無い質問は、範囲の文書の一覧も読まない（LLM・DB を呼ばない）。
-        return list(ranked_children), []
-    with _execution_step("条の選択", "候補の文書の条の目録から、質問の根拠になる条を選び、その条の根拠を候補に加えます。") as step:
-        # 検索の候補に出ない文書（手続の一般的な規則の文書など）は、範囲の文書の一覧から LLM が選んで足す。文書の選択の
-        # LLM と目録の読み込みはこの工程の中で行う（処理の経過で条の選択の子にする。#3475）。
-        known = {catalog.document_id for catalog in catalogs}
-        extra, scope_source = _scope_catalog_documents_with_source(question, settings, known)
-        scope_failed = extra is None
-        extra = extra or []
-        if extra:
-            catalogs += list(load_catalogs(document_ids=extra, limit=len(extra), settings=settings))
-        terms = _catalog_terms(question, settings)
-        sources: dict[str, int] = {}
-        selected, failed, refined, refine_failed, referenced = _select_catalog_articles(
-            question, catalogs, settings, terms=terms, sources=sources
-        )
-        # 選択を LLM で行ったか、記録（同じ process・process をまたぐ共有の記録）から使ったか（#3507）。品質評価は
-        # 共有の記録を使わないことも残す（同じ質問の再実行でも実際の費用を測る）。
-        from rag_engine.resources.shared_cache import shared_cache_bypassed
-
-        bypass = (_ARTICLE_SHARED_BYPASS_LABEL,) if shared_cache_bypassed() else ()
-        step.field("条の選択の出どころ", "・".join((_article_sources_label(sources), *bypass)))
-        if scope_source:
-            step.field("範囲の文書の選択の出どころ", "・".join((_ARTICLE_SOURCE_LABELS[scope_source], *bypass)))
-        if terms:
-            step.field("選択に渡した用語", join_values(term.term for term in terms))
-        if refined:
-            step.field("2 段目で足した条", f"{refined} 件")
-        if referenced:
-            step.field("選んだ条を名指しする別の章の条（候補）", f"{sum(item.candidates for item in referenced)} 件")
-        step.field("条の目録を読んだ文書", f"{len(catalogs)} 件")
-        if extra:
-            step.field("範囲の一覧から加えた文書", f"{len(extra)} 件")
-        if failed:
-            step.field("条を選べなかった文書", f"{len(failed)} 件")
-        if refine_failed:
-            step.field("2 段目の条の選択に失敗した文書", f"{len(refine_failed)} 件")
-        step.add("条の目録を読んだ文書:", *numbered([catalog.file_name for catalog in catalogs], limit=8))
-        if failed:
-            step.add(
-                "上限を超えて条を選べなかった文書（選ばずに続けました）:",
-                *numbered([f"{name}（{reason}）" for name, reason in failed], limit=8),
-            )
-        if refine_failed:
-            step.add(
-                "2 段目の条の選択に失敗した文書（目録から選んだ条だけで続けました）:",
-                *numbered(refine_failed, limit=8),
-            )
-        if referenced:
-            step.add(
-                "選んだ条を名指しする別の章の条を候補にした文書（候補の数・そのうち足した条）:",
-                *numbered(
-                    [
-                        f"{item.file_name}（{item.candidates} 件" + (f"。足した条: {join_values(item.added)}）" if item.added else "）")
-                        for item in referenced
-                    ],
-                    limit=8,
-                ),
-            )
-        if scope_failed:
-            step.add("範囲の条で構成された文書の一覧からの文書の選択に失敗したため、候補の文書だけで続けました。")
-        if not selected:
-            if failed or scope_failed:
-                # 選択の失敗を「該当なし」と分ける（#3285）。
-                step.status = "条の選択に失敗"
-                step.add("条の選択に失敗したため、目録の条を加えずに続けます。")
-            else:
-                step.status = "該当なし"
-                step.add("目録から根拠になる条を選べませんでした。")
-            return list(ranked_children), []
-        loaded = [_stored_chunk_answer_record(chunk) for chunk in load_chunks(articles=selected, settings=settings)]
-        # 読み込みは選んだ条の章節の最初の child に印（選んだ順・文書・目録の行）を付けて返す。
-        info = {
-            record.chunk_uid: article
-            for record in loaded
-            if record.chunk_level == CHILD_CHUNK_LEVEL and (article := catalog_article_info(record)) is not None
-        }
-        existing = {record.chunk_uid for record in ranked_children}
-        marked = [
-            replace(record, metadata={**record.metadata, ARTICLE_CATALOG_KEY: info[record.chunk_uid]})
-            if record.chunk_uid in info
-            else record
-            for record in ranked_children
-        ]
-        added = [
-            replace(record, metadata={**record.metadata, ARTICLE_CATALOG_KEY: {**info[record.chunk_uid], "added": True}})
-            for record in loaded
-            if record.chunk_uid in info and record.chunk_uid not in existing and record.chunk_level == CHILD_CHUNK_LEVEL
-        ]
-        step.field("選んだ条", f"{len(selected)} 件")
-        step.add("選んだ条:", *numbered([f"{article.file_name} {article.title}" for article in selected], limit=8))
-        step.result(f"候補に加えた根拠: {len(added)} 件（候補にあった条 {len(info) - len(added)} 件）")
-        return [*marked, *added], loaded
-
-
 def _target_text_queries(question: str, settings: Settings) -> list[str]:
     """質問の対象語の部分語から作る Oracle Text のフレーズ検索式 (#730)。質問文と同じ tokenizer で分かち書きする。"""
     from rag_engine.retrieval.target_text_queries import target_text_queries
@@ -5298,7 +4724,7 @@ def answer_question_result(
     未実行工程を明示した結果を返し、回答 LLM を呼ばない。記録は呼び出しごとに分離する。
 
     ``caller_queries`` は呼び出し元（業務 Agent）が作った検索文（#2651）。渡すと検索文は ``question`` と
-    これだけになり、質問に応じた推論の LLM（検索戦略の判定・質問拡張・条の目録の選択・画面目録の連携）を
+    これだけになり、質問に応じた推論の LLM（検索戦略の判定・質問拡張・画面目録の連携）を
     呼ばない。``generate_answer=False`` とだけ組み合わせる。規則による質問の理解・用語の別名の検索文・
     hybrid search・rerank・親子と前後の文脈は通常の検索と同じに行う。
 
@@ -5325,7 +4751,7 @@ def answer_question_result(
             tuple(query.strip() for query in caller_queries or () if query.strip() and _dedupe_query_key(query) != question_key)
         )
         # 質問に応じて LLM を呼ぶ検索の補助は、設定に関わらずこの経路では使わない。
-        settings = replace(settings, article_catalog_enabled=False, screen_linking_enabled=False)
+        settings = replace(settings, screen_linking_enabled=False)
     # 章節の拡張（#1436）の時間の上限は、回答の開始から数える。
     answer_started_at = monotonic()
 
@@ -5718,7 +5144,7 @@ def answer_question_result(
             )
 
         # 超限した検索文は原要求ごとに補い、以後の補查と同じ枠・期限・既検索文を使う。
-        overflow_settings = replace(settings, document_selection_enabled=False, screen_linking_enabled=False, article_catalog_enabled=False)
+        overflow_settings = replace(settings, document_selection_enabled=False, screen_linking_enabled=False)
         overflow_config = normalize_text_search_tokenizer_config(_question_text_search_tokenizer_config(settings))
         overflow_keywords = (
             settings.domain_keywords_override

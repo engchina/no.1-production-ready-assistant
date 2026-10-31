@@ -707,43 +707,38 @@ for (const viewport of [
     for (let index = 0; index < 14; index++) seedRun(mockApi, `run-layout-${index}`);
     await page.goto("/runs");
     await expect(page.locator('a[data-run-id="run-layout-0"]')).toBeVisible();
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate((theme) => {
-        document.documentElement.dataset.theme = theme;
-      }, theme);
-      await page.screenshot({ path: testInfo.outputPath(`runs-list-${theme}.png`) });
-      await page.locator('a[data-run-id="run-layout-0"]').click();
-      await expect(page.getByText("売上合計は100万円です。", { exact: true })).toBeVisible();
-      const checkBounds = () =>
-        page.evaluate(() => ({
-          width: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          height: document.documentElement.scrollHeight - document.documentElement.clientHeight,
-          mainWidth: document.querySelector("main")!.clientWidth,
-        }));
-      const before = await checkBounds();
-      expect(before.width).toBeLessThanOrEqual(0);
-      expect(before.height).toBeLessThanOrEqual(0);
-      await page.screenshot({ path: testInfo.outputPath(`runs-detail-${theme}.png`) });
-      // 処理の詳細を開いても本文の幅は変わらない。
-      const technical = page.getByTestId("run-process-details");
-      await page.getByTestId("run-timeline-section-summary").click();
-      await technical.click();
-      expect((await checkBounds()).mainWidth).toBe(before.mainWidth);
-      await page.evaluate(() => {
-        document.documentElement.style.fontSize = "20px";
-      });
-      await technical.click();
-      const expanded = await checkBounds();
-      expect(expanded.width).toBeLessThanOrEqual(0);
-      expect(expanded.height).toBeLessThanOrEqual(0);
-      // 文字拡大は rem のサイドバーも拡大する。比較するのは同じ文字サイズでの節の開閉。
-      await technical.click();
-      expect((await checkBounds()).mainWidth).toBe(expanded.mainWidth);
-      await page.evaluate(() => {
-        document.documentElement.style.fontSize = "";
-      });
-      await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
-    }
+    await page.screenshot({ path: testInfo.outputPath(`runs-list.png`) });
+    await page.locator('a[data-run-id="run-layout-0"]').click();
+    await expect(page.getByText("売上合計は100万円です。", { exact: true })).toBeVisible();
+    const checkBounds = () =>
+      page.evaluate(() => ({
+        width: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        height: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+        mainWidth: document.querySelector("main")!.clientWidth,
+      }));
+    const before = await checkBounds();
+    expect(before.width).toBeLessThanOrEqual(0);
+    expect(before.height).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath(`runs-detail.png`) });
+    // 処理の詳細を開いても本文の幅は変わらない。
+    const technical = page.getByTestId("run-process-details");
+    await page.getByTestId("run-timeline-section-summary").click();
+    await technical.click();
+    expect((await checkBounds()).mainWidth).toBe(before.mainWidth);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "20px";
+    });
+    await technical.click();
+    const expanded = await checkBounds();
+    expect(expanded.width).toBeLessThanOrEqual(0);
+    expect(expanded.height).toBeLessThanOrEqual(0);
+    // 文字拡大は rem のサイドバーも拡大する。比較するのは同じ文字サイズでの節の開閉。
+    await technical.click();
+    expect((await checkBounds()).mainWidth).toBe(expanded.mainWidth);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "";
+    });
+    await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
   });
 }
 

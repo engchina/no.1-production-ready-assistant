@@ -195,78 +195,69 @@ function manyKeys(count: number): KeyPayload[] {
   });
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
+test(`API キーの一覧の件数とページ送り（全員のキー・自分のキー）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  await mockDatabaseReady(page);
+  let adminKeys = manyKeys(1);
+  await page.route("**/api/security/api-keys**", (route) => route.fulfill({ json: apiEnvelope({ keys: adminKeys }) }));
+  let myKeys = manyKeys(1);
+  await page.route("**/api/account/api-keys**", (route) =>
+    route.fulfill({ json: apiEnvelope({ keys: myKeys, public_base_url: "" }) })
+  );
+  await mockAuthUser(page, { permissions: ["menu.search", "menu.security_api_keys"] });
+  const wide = (page.viewportSize()?.width ?? 0) >= 640;
 
-for (const theme of ["light", "dark"] as const) {
-  test(`API キーの一覧の件数とページ送り（全員のキー・自分のキー、${theme}）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await useTheme(page, theme);
-    await mockDatabaseReady(page);
-    let adminKeys = manyKeys(1);
-    await page.route("**/api/security/api-keys**", (route) => route.fulfill({ json: apiEnvelope({ keys: adminKeys }) }));
-    let myKeys = manyKeys(1);
-    await page.route("**/api/account/api-keys**", (route) =>
-      route.fulfill({ json: apiEnvelope({ keys: myKeys, public_base_url: "" }) })
-    );
-    await mockAuthUser(page, { permissions: ["menu.search", "menu.security_api_keys"] });
-    const wide = (page.viewportSize()?.width ?? 0) >= 640;
-
-    // 1 件: 件数は「全 1 件」、ページ送りは出さない。件数は検索欄と同じ行で、縦の中心がそろう。
-    await page.goto("/settings/security/api-keys");
-    const toolbar = page.getByTestId("api-key-list-toolbar");
-    const count = toolbar.locator("[data-list-count]");
-    await expect(count).toHaveText("全 1 件");
-    await expect(page.getByTestId("api-keys-admin-pagination")).toHaveCount(0);
-    if (wide) {
-      const searchBox = await page.locator("#api-key-search").boundingBox();
-      const countBox = await count.boundingBox();
-      expect(searchBox && countBox).toBeTruthy();
-      if (searchBox && countBox) {
-        expect(Math.abs(searchBox.y + searchBox.height / 2 - (countBox.y + countBox.height / 2))).toBeLessThan(2);
-      }
+  // 1 件: 件数は「全 1 件」、ページ送りは出さない。件数は検索欄と同じ行で、縦の中心がそろう。
+  await page.goto("/settings/security/api-keys");
+  const toolbar = page.getByTestId("api-key-list-toolbar");
+  const count = toolbar.locator("[data-list-count]");
+  await expect(count).toHaveText("全 1 件");
+  await expect(page.getByTestId("api-keys-admin-pagination")).toHaveCount(0);
+  if (wide) {
+    const searchBox = await page.locator("#api-key-search").boundingBox();
+    const countBox = await count.boundingBox();
+    expect(searchBox && countBox).toBeTruthy();
+    if (searchBox && countBox) {
+      expect(Math.abs(searchBox.y + searchBox.height / 2 - (countBox.y + countBox.height / 2))).toBeLessThan(2);
     }
-    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-    expect(await findClippedPlaceholders(page)).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`api-keys-admin-1-${theme}.png`), fullPage: true });
+  }
+  expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+  expect(await findClippedPlaceholders(page)).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath(`api-keys-admin-1.png`), fullPage: true });
 
-    // 53 件: 25 件ずつ、ページ番号を入れて移り、表示件数を変えると 1 ページ目へ。再読込でもページと件数が残る。
-    adminKeys = manyKeys(53);
-    await page.reload();
-    await expect(count).toHaveText("全 53 件");
-    const pagination = page.getByTestId("api-keys-admin-pagination");
-    await expect(pagination).toContainText("1–25 / 53 件");
-    await expect(page.getByRole("table", { name: "API キーの一覧" }).locator("tbody tr")).toHaveCount(25);
-    await jumpToPage(pagination, 3);
-    await expect(pagination).toContainText("51–53 / 53 件");
-    await page.reload();
-    await expect(pagination).toContainText("51–53 / 53 件");
-    await pagination.getByRole("combobox", { name: "表示件数" }).click();
-    await page.getByRole("option", { name: "100 件" }).click();
-    await expect(pagination).toContainText("1–53 / 53 件");
-    await expect(page.getByRole("table", { name: "API キーの一覧" }).locator("tbody tr")).toHaveCount(53);
-    // 検索で絞ると「N 件（全 M 件）」。
-    await page.locator("#api-key-search").fill("キー 1");
-    await expect(count).toHaveText(/^\d+ 件（全 53 件）$/);
-    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: testInfo.outputPath(`api-keys-admin-53-${theme}.png`), fullPage: true });
+  // 53 件: 25 件ずつ、ページ番号を入れて移り、表示件数を変えると 1 ページ目へ。再読込でもページと件数が残る。
+  adminKeys = manyKeys(53);
+  await page.reload();
+  await expect(count).toHaveText("全 53 件");
+  const pagination = page.getByTestId("api-keys-admin-pagination");
+  await expect(pagination).toContainText("1–25 / 53 件");
+  await expect(page.getByRole("table", { name: "API キーの一覧" }).locator("tbody tr")).toHaveCount(25);
+  await jumpToPage(pagination, 3);
+  await expect(pagination).toContainText("51–53 / 53 件");
+  await page.reload();
+  await expect(pagination).toContainText("51–53 / 53 件");
+  await pagination.getByRole("combobox", { name: "表示件数" }).click();
+  await page.getByRole("option", { name: "100 件" }).click();
+  await expect(pagination).toContainText("1–53 / 53 件");
+  await expect(page.getByRole("table", { name: "API キーの一覧" }).locator("tbody tr")).toHaveCount(53);
+  // 検索で絞ると「N 件（全 M 件）」。
+  await page.locator("#api-key-search").fill("キー 1");
+  await expect(count).toHaveText(/^\d+ 件（全 53 件）$/);
+  expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath(`api-keys-admin-53.png`), fullPage: true });
 
-    // 自分のキー（アカウントの画面）: 1 件はページ送りなし、27 件は表の直下にページ送り。
-    await page.goto("/account?tab=api-keys");
-    const myCount = page.getByTestId("my-api-key-list-toolbar").locator("[data-list-count]");
-    await expect(myCount).toHaveText("全 1 件");
-    await expect(page.getByTestId("my-api-keys-pagination")).toHaveCount(0);
-    myKeys = manyKeys(27);
-    await page.reload();
-    await expect(myCount).toHaveText("全 27 件");
-    const myPagination = page.getByTestId("my-api-keys-pagination");
-    await expect(myPagination).toContainText("1–25 / 27 件");
-    await myPagination.getByRole("button", { name: "次へ" }).click();
-    await expect(myPagination).toContainText("26–27 / 27 件");
-    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
-    expect(await findClippedPlaceholders(page)).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`api-keys-mine-27-${theme}.png`), fullPage: true });
-  });
-}
+  // 自分のキー（アカウントの画面）: 1 件はページ送りなし、27 件は表の直下にページ送り。
+  await page.goto("/account?tab=api-keys");
+  const myCount = page.getByTestId("my-api-key-list-toolbar").locator("[data-list-count]");
+  await expect(myCount).toHaveText("全 1 件");
+  await expect(page.getByTestId("my-api-keys-pagination")).toHaveCount(0);
+  myKeys = manyKeys(27);
+  await page.reload();
+  await expect(myCount).toHaveText("全 27 件");
+  const myPagination = page.getByTestId("my-api-keys-pagination");
+  await expect(myPagination).toContainText("1–25 / 27 件");
+  await myPagination.getByRole("button", { name: "次へ" }).click();
+  await expect(myPagination).toContainText("26–27 / 27 件");
+  expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+  expect(await findClippedPlaceholders(page)).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath(`api-keys-mine-27.png`), fullPage: true });
+});

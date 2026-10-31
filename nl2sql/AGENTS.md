@@ -59,15 +59,15 @@ Oracle AI Database の業務データに、自然言語で SQL を生成・検�
 ## 開発コマンド
 
 ```bash
-# backend（http://localhost:8010/api/health）
+# backend（http://localhost:8110/api/health）
 cd backend && uv sync
-uv run uvicorn app.main:app --reload --port 8010   # または ../scripts/start-backend.sh
+uv run uvicorn app.main:app --reload --port 8110   # または ../scripts/start-backend.sh
 uv run pytest tests/test_<対象>.py                  # 関係するテスト（全件は CI）
 uv run ruff format --check . && uv run ruff check . && uv run mypy .   # 整形/lint/型
 
-# frontend（http://localhost:3001）
+# frontend（http://localhost:3101）
 cd frontend && npm install
-BACKEND_URL=http://127.0.0.1:8010 npm run dev   # BACKEND_URL 未指定なら /api は proxy せず 404（hermetic。起動時に警告）
+BACKEND_URL=http://127.0.0.1:8110 npm run dev   # BACKEND_URL 未指定なら /api は proxy せず 404（hermetic。起動時に警告）
 npm run lint && npm run build
 node scripts/run-unit-tests.mjs tests/<対象>.test.ts   # ロジックテスト
 npx playwright test tests/e2e/<対象>.spec.ts               # e2e（関係する spec だけ）

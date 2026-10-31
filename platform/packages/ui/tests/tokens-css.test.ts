@@ -17,8 +17,23 @@ describe("tokens CSS", () => {
     expect(colors).not.toMatch(/light-dark\(\s*\d+%/);
   });
 
-  it("意味トークンを color-scheme を切り替える要素すべてで宣言し直す（Lightning CSS 変換後もスコープ内でダーク値になる）", () => {
-    expect(colors).toMatch(/:root, \[data-theme\], \[data-surface\] \{[^}]*--color-canvas:\s*light-dark/);
+  it("意味トークンを color-scheme を切り替える要素（:root と暗いスラブ）で宣言し直す（Lightning CSS 変換後もスラブの内側で暗い値になる）", () => {
+    expect(colors).toMatch(/:root, \[data-surface\] \{[^}]*--color-canvas:\s*light-dark/);
+  });
+
+  it("テーマはライトだけ: ルートは color-scheme: light に固定し、ダークテーマ・OS 設定への追従を持たない（#17）", () => {
+    const styles = ["tokens.css", "tokens/colors.css", "tokens/a11y.css", "tokens/colors-graph.css", "tokens/elevation.css", "integrations/react-flow.css"]
+      .map((file) => read(file).replace(/\/\*[\s\S]*?\*\//g, ""));
+    for (const css of styles) {
+      expect(css).not.toMatch(/data-theme/);
+      expect(css).not.toMatch(new RegExp(["prefers", "color", "scheme"].join("-"))); // OS の配色設定への追従（#17）
+      expect(css).not.toMatch(/(^|[\s,(])(:root)?\.(light|dark)\b/m);
+    }
+    expect(colors).toMatch(/:root \{ color-scheme: light; \}/);
+    // color-scheme: dark は常時暗いスラブ（サイドバー・コード）の内側だけ
+    expect(colors.match(/color-scheme: dark;/g)).toHaveLength(2);
+    expect(colors).toMatch(/\[data-surface="inverted"\] \{\s*color-scheme: dark;/);
+    expect(colors).toMatch(/\[data-surface="code"\] \{\s*color-scheme: dark;/);
   });
 
   it("書体の並びは fonts.css が持ち、内容の言語（lang）で漢字の並びだけを替える（#3335）", () => {
@@ -53,13 +68,6 @@ describe("tokens CSS", () => {
     }
     expect(fonts).toMatch(/--font-han: "Noto Sans JP Variable", "Noto Sans JP Fallback",/);
     expect(fonts).toMatch(/--font-mono: "Google Sans Code", "Google Sans Code Fallback",/);
-  });
-
-  it("テーマ class（.light / .dark）はルート要素でだけ効く（外部ライブラリの同名 class に反応しない）", () => {
-    for (const css of [colors, read("tokens/a11y.css")]) {
-      expect(css.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/(^|[\s,])\.(light|dark)\b/m);
-    }
-    expect(colors).toMatch(/:root\.dark \{ color-scheme: dark; \}/);
   });
 
   it("文字は px、ルートは 14px のまま（余白の rem を動かさない）", () => {
@@ -132,7 +140,7 @@ describe("tokens CSS", () => {
     expect(rule).toMatch(/box-shadow:\s*inset 0 0 0 1px var\(--color-focus-ring\);/);
   });
 
-  describe("淡い色の面（[data-surface-tint]）の上の文字は両テーマで 4.5:1 以上（platform #64 / #1671）", () => {
+  describe("淡い色の面（[data-surface-tint]）の上の文字は 4.5:1 以上（platform #64 / #1671）", () => {
     const palette = read("tokens/palette.css");
     const a11y = read("tokens/a11y.css");
     const rgb = (name: string) => {
@@ -157,11 +165,11 @@ describe("tokens CSS", () => {
     };
     const tintBlock = colors.match(/\[data-surface-tint\] \{([^}]*)\}/)?.[1] ?? "";
 
-    // 淡い面の地。accent はライト blue-500 / ダーク blue-600 を surface（neutral-0 / neutral-900）に混ぜる（colors.css）。
+    // 淡い面の地。accent は teal-500 を surface（neutral-0）に混ぜる（colors.css）。テーマはライトだけ（#17）。
     const surfaces = {
       light: {
-        "accent-subtle": mix(rgb("blue-500"), 0.08, rgb("neutral-0")),
-        "accent-muted": mix(rgb("blue-500"), 0.12, rgb("neutral-0")),
+        "accent-subtle": mix(rgb("teal-500"), 0.08, rgb("neutral-0")),
+        "accent-muted": mix(rgb("teal-500"), 0.12, rgb("neutral-0")),
         "info-subtle": rgb(lightDark(colors, "color-info-subtle").light),
         "success-subtle": rgb(lightDark(colors, "color-success-subtle").light),
         "warning-subtle": rgb(lightDark(colors, "color-warning-subtle").light),
@@ -169,25 +177,15 @@ describe("tokens CSS", () => {
         // 灰色の面（hover の地を常に塗るチップなど）。fg-muted は 4.39:1 で、同じ [data-surface-tint="neutral"] で深くする。
         "surface-hover": rgb(lightDark(colors, "color-surface-hover").light),
       },
-      dark: {
-        "accent-subtle": mix(rgb("blue-600"), 0.16, rgb("neutral-900")),
-        "accent-muted": mix(rgb("blue-600"), 0.22, rgb("neutral-900")),
-        "info-subtle": rgb(lightDark(colors, "color-info-subtle").dark),
-        "success-subtle": rgb(lightDark(colors, "color-success-subtle").dark),
-        "warning-subtle": rgb(lightDark(colors, "color-warning-subtle").dark),
-        "danger-subtle": rgb(lightDark(colors, "color-danger-subtle").dark),
-        "surface-hover": rgb(lightDark(colors, "color-surface-hover").dark),
-      },
     } as const;
-    type Theme = keyof typeof surfaces;
     type Surface = keyof (typeof surfaces)["light"];
 
     /** [data-surface-tint="<tone>"] の内側で、各文字のトークンが解決する原色 */
-    const tintedText = (tone: string, theme: Theme) => {
-      const pick = (token: string) => lightDark(colors, token)[theme];
+    const tintedText = (tone: string) => {
+      const pick = (token: string) => lightDark(colors, token).light;
       return {
         fg: pick("color-fg"),
-        "fg-muted": lightDark(tintBlock, "color-fg-muted")[theme],
+        "fg-muted": lightDark(tintBlock, "color-fg-muted").light,
         "accent-fg": pick("color-accent-fg-strong"),
         "info-fg": pick("color-info-fg"),
         "danger-fg": pick("color-danger-fg"),
@@ -200,7 +198,7 @@ describe("tokens CSS", () => {
     it("[data-surface-tint] は副次・アクセントの文字を深くし、他の系統の success / warning を深い値にする", () => {
       expect(tintBlock).toMatch(/--color-fg-muted:\s*light-dark\(var\(--neutral-650\), var\(--neutral-350\)\);/);
       expect(tintBlock).toMatch(/--color-accent-fg:\s*var\(--color-accent-fg-strong\);/);
-      expect(colors).toMatch(/--color-accent-fg-strong:\s*light-dark\(var\(--blue-650\), var\(--blue-300\)\);/);
+      expect(colors).toMatch(/--color-accent-fg-strong:\s*light-dark\(var\(--teal-650\), var\(--teal-300\)\);/);
       expect(colors).toMatch(
         /\[data-surface-tint\]:not\(\[data-surface-tint="success"\]\) \{ --color-success-fg: var\(--color-success-fg-strong\); \}/
       );
@@ -209,42 +207,64 @@ describe("tokens CSS", () => {
       );
     });
 
-    for (const theme of ["light", "dark"] as const) {
-      for (const surface of Object.keys(surfaces[theme]) as Surface[]) {
-        it(`${theme}: ${surface} の上の文字（fg / fg-muted / accent-fg / 状態色の fg）`, () => {
-          for (const [text, color] of Object.entries(tintedText(toneOf(surface), theme))) {
-            expect(contrast(rgb(color), surfaces[theme][surface]), `${text}（--${color}）on ${surface}`).toBeGreaterThanOrEqual(4.5);
-          }
-        });
-      }
+    for (const surface of Object.keys(surfaces.light) as Surface[]) {
+      it(`${surface} の上の文字（fg / fg-muted / accent-fg / 状態色の fg）`, () => {
+        for (const [text, color] of Object.entries(tintedText(toneOf(surface)))) {
+          expect(contrast(rgb(color), surfaces.light[surface]), `${text}（--${color}）on ${surface}`).toBeGreaterThanOrEqual(4.5);
+        }
+      });
     }
 
-    it("変更前の値（fg-muted = neutral-600、accent-fg = blue-500、warning-fg = amber-700）はライトで不足していた", () => {
+    it("深くする前の値（fg-muted = neutral-600、warning-fg = amber-700）は淡い面の上で不足する", () => {
       const { light } = surfaces;
       for (const surface of Object.keys(light) as Surface[]) {
         expect(contrast(rgb("neutral-600"), light[surface]), surface).toBeLessThan(4.5);
-        if (surface !== "surface-hover") expect(contrast(rgb("blue-500"), light[surface]), surface).toBeLessThan(4.5);
       }
       expect(contrast(rgb("amber-700"), light["info-subtle"])).toBeLessThan(4.5);
       expect(contrast(rgb("green-700"), light["danger-subtle"])).toBeLessThan(4.5);
     });
 
     it("prefers-contrast: more の値（[data-surface-tint] も対象）も淡い面の上で 4.5:1 以上", () => {
-      const block = a11y.match(/:root, \[data-theme\], \[data-surface-tint\] \{([^}]*)\}/)?.[1] ?? "";
-      for (const theme of ["light", "dark"] as const) {
-        for (const token of ["color-fg-muted", "color-accent-fg"]) {
-          const color = lightDark(block, token)[theme];
-          for (const [surface, bg] of Object.entries(surfaces[theme])) {
-            expect(contrast(rgb(color), bg), `${theme} ${token} on ${surface}`).toBeGreaterThanOrEqual(4.5);
-          }
+      const block = a11y.match(/:root, \[data-surface-tint\] \{([^}]*)\}/)?.[1] ?? "";
+      for (const token of ["color-fg-muted", "color-accent-fg"]) {
+        const color = lightDark(block, token).light;
+        for (const [surface, bg] of Object.entries(surfaces.light)) {
+          expect(contrast(rgb(color), bg), `${token} on ${surface}`).toBeGreaterThanOrEqual(4.5);
         }
       }
     });
 
+    it("アクセントは深いティール（#18）: 本文・ボタンの文字は 4.5:1、フォーカスリングは 3:1 以上", () => {
+      const accent = lightDark(colors, "color-accent-fg").light;
+      const emphasis = lightDark(colors, "color-accent-emphasis").light;
+      const ring = lightDark(colors, "color-focus-ring").light;
+      expect([accent, emphasis, ring]).toEqual(["teal-500", "teal-500", "teal-500"]);
+      // 元の Production Ready の青（#1a73c1、色相 208）と見分けられる色相（165〜190）
+      const [r, g, b] = rgb("teal-500").map((v) => v / 255);
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const hue = max === g ? 60 * ((b - r) / (max - min)) + 120 : max === b ? 60 * ((r - g) / (max - min)) + 240 : 60 * (((g - b) / (max - min)) % 6);
+      expect(hue).toBeGreaterThanOrEqual(165);
+      expect(hue).toBeLessThanOrEqual(190);
+      const white = rgb("neutral-0");
+      const canvas = rgb(lightDark(colors, "color-canvas").light);
+      expect(contrast(rgb(accent), white)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(rgb(accent), canvas)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(white, rgb(emphasis))).toBeGreaterThanOrEqual(4.5); // primary ボタンの文字
+      for (const bg of [white, canvas, surfaces.light["accent-muted"], surfaces.light["surface-hover"]]) {
+        expect(contrast(rgb(ring), bg)).toBeGreaterThanOrEqual(3);
+      }
+      // サイドバー（常時暗いスラブ）の上のリングと文字
+      expect(colors).toMatch(/:root \{ --color-sidebar: var\(--teal-850\);/);
+      expect(contrast(rgb("teal-300"), rgb("teal-850"))).toBeGreaterThanOrEqual(3);
+      expect(contrast(rgb("slab-fg-muted"), rgb("teal-850"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(white, rgb("teal-600"))).toBeGreaterThanOrEqual(4.5); // スラブの中の塗り
+    });
+
     it("面のトークン一式は宣言し直さず、a11y の応答層（forced-colors / prefers-contrast）は対象に含める", () => {
       expect(colors).not.toMatch(/\[data-surface\], \[data-surface-tint\]/);
-      expect(a11y.match(/:root, \[data-theme\], \[data-surface\], \[data-surface-tint\] \{/g)).toHaveLength(2);
-      expect(a11y).toMatch(/:root, \[data-theme\], \[data-surface-tint\] \{\s*--color-fg-muted:/);
+      expect(a11y.match(/:root, \[data-surface\], \[data-surface-tint\] \{/g)).toHaveLength(2);
+      expect(a11y).toMatch(/:root, \[data-surface-tint\] \{\s*--color-fg-muted:/);
       // :not() の分だけ詳細度が高い success / warning の上書きも、強制カラーモードではシステム色になる
       expect(a11y).toMatch(/--color-success-fg-strong: CanvasText; --color-warning-fg-strong: CanvasText;/);
     });

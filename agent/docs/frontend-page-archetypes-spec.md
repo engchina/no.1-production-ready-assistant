@@ -147,7 +147,7 @@ Playwright は `desktop`（Desktop Chrome）と `mobile-375`（Pixel 5、375×81
 
 - `frontend/e2e/leave-guard-workspace-state.spec.ts`：desktop / 375px のサイドナビの移動の確認、保存後の解除、未変更時の自由な移動、`beforeunload`、画面内の「一覧へ戻る」、監査の絞り込み / 実行の目標の往復と再読込、URL の対象の再読込と一覧に無い ID の説明、確認語の解除。
 - `frontend/e2e/list-search.spec.ts` / `list-loading-paging.spec.ts`：一覧の検索（300ms・IME・0 件の「検索語をクリア」・1 ページ目へ戻す）、読み込み中の経過時間と Skeleton、縦スクロールとページング。
-- `frontend/e2e/list-field-standards.spec.ts`（#1891）：一覧の件数（`ListCount`）・表示件数（作業状態・API の `limit`）・ページ番号の入力と、各画面の横あふれ・placeholder の切れ・幅の段に当たらない欄（`platform/packages/ui/e2e/layout-checks.ts`）を 1280px / 1920px / 375px・ライト / ダークで確かめる。
+- `frontend/e2e/list-field-standards.spec.ts`（#1891）：一覧の件数（`ListCount`）・表示件数（作業状態・API の `limit`）・ページ番号の入力と、各画面の横あふれ・placeholder の切れ・幅の段に当たらない欄（`platform/packages/ui/e2e/layout-checks.ts`）を 1280px / 1920px / 375px で確かめる（テーマはライトだけ。#17）。
 
 一覧の基準（#1891）から外す所: 評価セットの評価ケース（編集するカードの並び。既定と同じ 25 件ずつのページ送りで、表示件数の選択は持たない）と、チャットの会話の履歴（狭いパネル。共通の部品の既定の 25 件ずつ。#1952）。監査ログの「1 ページの件数」の入力欄（1〜1000）は廃止し、ページ送りの表示件数（10 / 25 / 50 / 100）にした。
 - `frontend/e2e/entity-archetypes.spec.ts`：desktop / 375px の A 型（URL で開く・再読込・戻る / 進む・「一覧へ戻る」・`?id=new`、行のボタンは対象名とメニューだけ、行メニューの Enter / 矢印 / Esc とフォーカスの戻り、破壊的な操作の確認とキャンセル、`ObjectActionBar` からの削除と一覧への復帰）と B 型（ツールの `FixedSplitPane`、desktop は分割 / 375px は縦積み、divider のキー操作と保存 key、行の選択と詳細の更新、行メニューと詳細の操作の一致、承認の確認）。

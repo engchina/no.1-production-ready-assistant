@@ -113,7 +113,7 @@ async def test_backend_sdk_boundary_keeps_request_response_and_failure(
 
     client = OciGenAiClient(
         settings=Settings(
-            embedding_base_url="https://synthetic.invalid/compatible-mode/v1",
+            oci_enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
             oci_enterprise_ai_api_key="sk-synthetic",
         ),
         post=invoke,

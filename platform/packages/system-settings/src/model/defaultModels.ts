@@ -1,5 +1,6 @@
 /**
- * 既定のモデル（既定のテキストモデル / 既定の Vision モデル / 既定の判定モデル）の選択肢と検証（#499・#3574）。
+ * 既定のモデル（既定のテキストモデル / 既定の Vision モデル / 既定の判定モデル / 既定の埋め込みモデル /
+ * 既定の再ランクモデル）の選択肢と検証（#499・#3574・#45）。選択肢は種類が合う登録モデルだけ。
  * 検証の規則は backend の `pr_system_settings.model.validate_default_models` と同じ。
  */
 import type { SelectFieldOption } from "@production-ready/ui";
@@ -7,13 +8,16 @@ import type { SelectFieldOption } from "@production-ready/ui";
 import { t } from "./messages";
 import type {
   EnterpriseAiConfiguredModel,
+  EnterpriseAiModelKind,
   EnterpriseAiModelSettings,
 } from "./types";
 
 export type DefaultModelField =
   | "default_text_model_id"
   | "default_vision_model_id"
-  | "default_judge_model_id";
+  | "default_judge_model_id"
+  | "default_embedding_model_id"
+  | "default_rerank_model_id";
 export type DefaultModelErrors = Partial<Record<DefaultModelField, string>>;
 
 /** 画面の入力欄の id（保存前の検証で最初の不正な欄へフォーカスする）。 */
@@ -21,13 +25,30 @@ export const DEFAULT_MODEL_FIELD_IDS: Record<DefaultModelField, string> = {
   default_text_model_id: "enterprise-default-text-model",
   default_vision_model_id: "enterprise-default-vision-model",
   default_judge_model_id: "enterprise-default-judge-model",
+  default_embedding_model_id: "enterprise-default-embedding-model",
+  default_rerank_model_id: "enterprise-default-rerank-model",
 };
-/** フォーカスする順（画面の並び順。テキスト → Vision → 判定。#566・#3574）。 */
+/** フォーカスする順（画面の並び順。テキスト → Vision → 埋め込み → 再ランク → 判定。#566・#3574・#45）。 */
 export const DEFAULT_MODEL_FIELD_ORDER: readonly DefaultModelField[] = [
   "default_text_model_id",
   "default_vision_model_id",
+  "default_embedding_model_id",
+  "default_rerank_model_id",
   "default_judge_model_id",
 ];
+
+/** 登録モデルの種類（#45）。値の無いモデル（#45 より前）は text。 */
+export function modelKind(model: Pick<EnterpriseAiConfiguredModel, "kind">): EnterpriseAiModelKind {
+  return model.kind ?? "text";
+}
+
+/** 種類が `kind` の登録モデル（モデル ID を入力した行）。 */
+export function registeredModelsOfKind(
+  models: readonly EnterpriseAiConfiguredModel[],
+  kind: EnterpriseAiModelKind,
+): EnterpriseAiConfiguredModel[] {
+  return registeredModels(models).filter((model) => modelKind(model) === kind);
+}
 /**
  * 既定の判定モデルの「回答と同じモデル」を表す明示の値（#3574。backend の
  * `ENTERPRISE_AI_JUDGE_SAME_AS_ANSWER` と同じ）。空（既定）は既定のテキストモデル。
@@ -72,9 +93,15 @@ export function validateDefaultModels(
     EnterpriseAiModelSettings,
     "models" | "default_text_model_id" | "default_vision_model_id"
   > &
-    Partial<Pick<EnterpriseAiModelSettings, "default_judge_model_id">>,
+    Partial<
+      Pick<
+        EnterpriseAiModelSettings,
+        "default_judge_model_id" | "default_embedding_model_id" | "default_rerank_model_id"
+      >
+    >,
 ): DefaultModelErrors {
-  const models = registeredModels(enterprise.models);
+  // テキスト・Vision・判定は種類 text のモデル（LLM）から選ぶ（#45）。
+  const models = registeredModelsOfKind(enterprise.models, "text");
   const registered = new Set(models.map((model) => model.model_id));
   const visionCapable = new Set(
     models.filter((model) => model.vision_enabled).map((model) => model.model_id),
@@ -108,6 +135,32 @@ export function validateDefaultModels(
       model: judge,
     });
   }
+  // 埋め込み / 再ランク（#45）は、その種類のモデルを登録したら必須で、その種類のモデルに限る。
+  // 登録しないときは backend の `.env` の値のまま（検証しない）。
+  for (const [field, kind, required, removed] of [
+    [
+      "default_embedding_model_id",
+      "embedding",
+      "settings.model.defaults.error.embeddingRequired",
+      "settings.model.defaults.error.embeddingRemoved",
+    ],
+    [
+      "default_rerank_model_id",
+      "rerank",
+      "settings.model.defaults.error.rerankRequired",
+      "settings.model.defaults.error.rerankRemoved",
+    ],
+  ] as const) {
+    const ofKind = new Set(
+      registeredModelsOfKind(enterprise.models, kind).map((model) => model.model_id),
+    );
+    const value = (enterprise[field] ?? "").trim();
+    if (ofKind.size > 0 && !value) {
+      errors[field] = t(required);
+    } else if (ofKind.size > 0 && !ofKind.has(value)) {
+      errors[field] = t(removed, { model: value });
+    }
+  }
   return errors;
 }
 
@@ -118,20 +171,28 @@ function modelOption(model: EnterpriseAiConfiguredModel): SelectFieldOption {
     : { value: model.model_id, label: model.model_id };
 }
 
-/** 既定の Vision モデルの選択肢（画像入力に対応した登録モデルだけ）。 */
+/** 既定の Vision モデルの選択肢（画像入力に対応した種類 text の登録モデルだけ）。 */
 export function visionModelOptions(
   models: readonly EnterpriseAiConfiguredModel[],
 ): SelectFieldOption[] {
-  return uniqueById(registeredModels(models).filter((model) => model.vision_enabled)).map(
-    modelOption,
-  );
+  return uniqueById(
+    registeredModelsOfKind(models, "text").filter((model) => model.vision_enabled),
+  ).map(modelOption);
 }
 
-/** 既定のテキストモデルの選択肢（登録モデルすべて。Vision 対応のモデルも選べる）。 */
+/** 既定のテキストモデルの選択肢（種類 text の登録モデルすべて。Vision 対応のモデルも選べる）。 */
 export function textModelOptions(
   models: readonly EnterpriseAiConfiguredModel[],
 ): SelectFieldOption[] {
-  return uniqueById(registeredModels(models)).map(modelOption);
+  return uniqueById(registeredModelsOfKind(models, "text")).map(modelOption);
+}
+
+/** 既定の埋め込み / 再ランクのモデルの選択肢（#45。種類 embedding / rerank の登録モデルだけ）。 */
+export function kindModelOptions(
+  models: readonly EnterpriseAiConfiguredModel[],
+  kind: Exclude<EnterpriseAiModelKind, "text">,
+): SelectFieldOption[] {
+  return uniqueById(registeredModelsOfKind(models, kind)).map(modelOption);
 }
 
 /**
@@ -176,20 +237,29 @@ export function followModelChange(
   enterprise: Pick<
     EnterpriseAiModelSettings,
     "default_text_model_id" | "default_vision_model_id" | "default_judge_model_id"
-  >,
+  > &
+    Partial<
+      Pick<EnterpriseAiModelSettings, "default_embedding_model_id" | "default_rerank_model_id">
+    >,
   previous: EnterpriseAiConfiguredModel | undefined,
   next: EnterpriseAiConfiguredModel,
   /** 変更した後の登録モデルの一覧（渡せば、前の ID の行が残るかを確かめる）。 */
   modelsAfter?: readonly EnterpriseAiConfiguredModel[],
 ): Pick<
   EnterpriseAiModelSettings,
-  "default_text_model_id" | "default_vision_model_id" | "default_judge_model_id"
+  | "default_text_model_id"
+  | "default_vision_model_id"
+  | "default_judge_model_id"
+  | "default_embedding_model_id"
+  | "default_rerank_model_id"
 > {
   const previousId = previous?.model_id.trim() ?? "";
   const nextId = next.model_id.trim();
   let text = enterprise.default_text_model_id;
   let vision = enterprise.default_vision_model_id;
   let judge = enterprise.default_judge_model_id ?? "";
+  let embedding = enterprise.default_embedding_model_id ?? "";
+  let rerank = enterprise.default_rerank_model_id ?? "";
   const previousIdRemains = Boolean(
     modelsAfter?.some((model) => model.model_id.trim() === previousId),
   );
@@ -198,6 +268,14 @@ export function followModelChange(
     if (text.trim() === previousId) text = nextId;
     if (vision.trim() === previousId) vision = nextId;
     if (judge.trim() === previousId) judge = nextId;
+    if (embedding.trim() === previousId) embedding = nextId;
+    if (rerank.trim() === previousId) rerank = nextId;
+  }
+  // 種類を埋め込み / 再ランクにしたとき（#45）、その既定が未選択ならそのモデルを選ぶ。
+  const nextKind = modelKind(next);
+  if (nextId && previous && modelKind(previous) !== nextKind) {
+    if (nextKind === "embedding" && !embedding.trim()) embedding = nextId;
+    if (nextKind === "rerank" && !rerank.trim()) rerank = nextId;
   }
   if (next.vision_enabled && !previous?.vision_enabled && !vision.trim() && nextId) {
     vision = nextId;
@@ -206,5 +284,7 @@ export function followModelChange(
     default_text_model_id: text,
     default_vision_model_id: vision,
     default_judge_model_id: judge,
+    default_embedding_model_id: embedding,
+    default_rerank_model_id: rerank,
   };
 }

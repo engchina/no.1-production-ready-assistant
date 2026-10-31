@@ -20,6 +20,7 @@ from pr_backend_core.bounded_calls import KIND_LABELS, Attempt, BoundedCallFaile
 from pr_backend_core.chat_progress import chat_progress_details
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
 from pr_backend_core.observability.tracing import observed_span
+from pr_system_settings.model import embedding_api_base_url, embedding_model_connection
 from rag_engine.resources.rerank_diagnostics import (
     RerankCallReceipt,
     bind_rerank_attempt,
@@ -286,39 +287,31 @@ class OciGenAiClient:
                 )
 
     def _base_url(self, *, rerank: bool) -> str:
-        """埋め込み / 再ランクの OpenAI 互換 Base URL（#8）。
+        """埋め込み / 再ランクの OpenAI 互換 Base URL（#8 / #45。`embedding_api_base_url`）。
 
-        空のときは Enterprise AI の接続の endpoint を使う。再ランクは
+        既定の埋め込み / 再ランクのモデルの接続の endpoint を使う。再ランクは
         `/compatible-mode/` を `/compatible-api/` に読み替える（百煉は再ランクだけ
         `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
         """
-        base = str(getattr(self._settings, "rerank_base_url", "") or "").strip() if rerank else ""
-        if not base:
-            base = str(getattr(self._settings, "embedding_base_url", "") or "").strip()
-            if rerank and base:
-                base = base.replace("/compatible-mode/", "/compatible-api/")
-        if not base:
-            base = str(self._settings.oci_enterprise_ai_endpoint or "").strip()
-            if rerank and base:
-                base = base.replace("/compatible-mode/", "/compatible-api/")
+        base = embedding_api_base_url(self._settings, rerank=rerank)
         if not base:
             raise OciGenAiConfigError(
                 "埋め込み / 再ランクの Base URL が未設定です。"
-                "モデル設定の Base URL か、Enterprise AI の接続の Endpoint URL を入力してください。"
+                "埋め込み / 再ランクのモデルの接続の Endpoint URL を入力してください。"
             )
-        return base.rstrip("/")
+        return base
 
-    def _api_key(self) -> str:
-        """API key（#8。Enterprise AI の接続のものを使う）。"""
-        key = str(self._settings.oci_enterprise_ai_api_key or "").strip()
+    def _api_key(self, *, rerank: bool) -> str:
+        """API key（#45。既定の埋め込み / 再ランクのモデルの接続のものを使う）。"""
+        key = embedding_model_connection(self._settings, rerank=rerank).api_key
         if not key:
             raise OciGenAiConfigError(
                 "埋め込み / 再ランクの API key がありません"
-                "（Enterprise AI の接続の API key を使います）。"
+                "（埋め込み / 再ランクのモデルの接続の API key を使います）。"
             )
         return key
 
-    def _post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+    def _post(self, url: str, body: dict[str, Any], *, rerank: bool) -> dict[str, Any]:
         """OpenAI 互換の API を 1 回呼ぶ（#8）。**HTTP を叩くのはここだけ。**"""
         if self._post_json is not None:
             return self._post_json(url, body)
@@ -328,7 +321,7 @@ class OciGenAiClient:
             data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self._api_key()}",
+                "Authorization": f"Bearer {self._api_key(rerank=rerank)}",
             },
         )
         timeout = max(1, int(self._settings.oci_enterprise_ai_timeout_seconds or 60))
@@ -377,7 +370,7 @@ class OciGenAiClient:
             },
         ) as span:
             span.set_call_input(lambda: {"url": url, **body}, restricted=True)
-            payload = await self._sdk_call_runner(lambda: self._post(url, body))
+            payload = await self._sdk_call_runner(lambda: self._post(url, body, rerank=False))
             span.set_call_output(lambda: payload)
         rows = payload.get("data")
         if not isinstance(rows, list):
@@ -404,7 +397,7 @@ class OciGenAiClient:
             nonlocal attempt
             attempt = receipt.begin_sdk(attempt_number) if receipt is not None else None
             try:
-                payload = self._post(url, body)
+                payload = self._post(url, body, rerank=True)
             except BaseException as exc:
                 if receipt is not None and attempt is not None:
                     receipt.finish_sdk(

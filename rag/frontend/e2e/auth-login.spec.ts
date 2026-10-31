@@ -176,7 +176,7 @@ test("初回ログインは強制パスワード変更へ移り、変更後は C
   baseURL,
 }) => {
   const auth = await mockAuthApi(page, null);
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3200" }]);
 
   await page.goto("/login");
   await page.getByLabel("ログインユーザーID").fill("first.user");
@@ -262,7 +262,7 @@ test("アカウントの欄からアカウントの画面を開き、タブを�
   baseURL,
 }) => {
   const auth = await mockAuthApi(page, loginTarget("admin.user"));
-  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "pr_csrf", value: "csrf-e2e-token", url: baseURL ?? "http://127.0.0.1:3200" }]);
 
   await page.goto("/settings/appearance");
   // 375px ではナビがドロワー（#367）。開いて文言付きの操作を使う。
@@ -374,81 +374,74 @@ async function expectAccountFooterInsideSidebar(page: Page) {
   for (const value of overflow) expect(value).toBeLessThanOrEqual(0.5);
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`アカウント欄はログイン ID とロールの表示名を 1 行ずつ出し、長い行だけ省略記号で切って title に全文を出す（${theme}。#1644・#1696）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    // 外観の選好（共有 UI の ui-store が保存する値）を読み込みの前に入れておく。
-    await page.addInitScript((value) => {
-      window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-    }, theme);
-    const user = (loginUserId: string, displayName: string, roles: [code: string, name: string][]) =>
-      dbUser({
-        login_user_id: loginUserId,
-        display_name: displayName,
-        role_codes: roles.map(([code]) => code),
-        role_display_names: roles.map(([, name]) => name),
-        is_system_admin: true,
-        permissions: ALL_PERMISSION_CODES,
-        allowed_search_answer_profile_ids: null,
-        allowed_knowledge_base_ids: null,
-      });
-    // 構成のシステム管理者: 1 行目はログイン ID（表示名「システム管理者」ではない。#1696）、2 行目はロールの表示名（code ではない）。
-    const auth = await mockAuthApi(page, user("system_admin", "システム管理者", [["SYSTEM_ADMIN", "システム管理者"]]));
+test(`アカウント欄はログイン ID とロールの表示名を 1 行ずつ出し、長い行だけ省略記号で切って title に全文を出す（#1644・#1696）`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+  const user = (loginUserId: string, displayName: string, roles: [code: string, name: string][]) =>
+    dbUser({
+      login_user_id: loginUserId,
+      display_name: displayName,
+      role_codes: roles.map(([code]) => code),
+      role_display_names: roles.map(([, name]) => name),
+      is_system_admin: true,
+      permissions: ALL_PERMISSION_CODES,
+      allowed_search_answer_profile_ids: null,
+      allowed_knowledge_base_ids: null,
+    });
+  // 構成のシステム管理者: 1 行目はログイン ID（表示名「システム管理者」ではない。#1696）、2 行目はロールの表示名（code ではない）。
+  const auth = await mockAuthApi(page, user("system_admin", "システム管理者", [["SYSTEM_ADMIN", "システム管理者"]]));
 
-    await page.goto("/settings/appearance");
-    await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(theme === "dark");
-    const sidebar = await openSidebarNav(page);
-    await expect(sidebar.getByText("system_admin", { exact: true })).toBeVisible();
-    await expect(sidebar.getByText("システム管理者", { exact: true })).toBeVisible();
-    // ロールの code（SYSTEM_ADMIN）は出さない。
-    await expect(sidebar.getByText(/SYSTEM_ADMIN/)).toHaveCount(0);
-    const short = await measureAccountFooter(page);
-    await page.getByTestId("sidebar-account").screenshot({ path: testInfo.outputPath(`sidebar-account-login-id-${theme}.png`) });
-    expect(short.lines).toEqual([
-      expect.objectContaining({ text: "system_admin", title: "system_admin", lines: 1, truncated: false, insideSidebar: true }),
-      expect.objectContaining({ text: "システム管理者", title: "ロール: システム管理者", lines: 1, truncated: false, insideSidebar: true }),
-    ]);
-    // 読み上げはロールの行も「ロール: …」の全文。
-    await expect(page.getByTestId("sidebar-account")).toContainText("ロール: システム管理者");
-    // 欄は修正前より高くしない。
-    expect(short.height).toBeLessThanOrEqual(ACCOUNT_ROW_HEIGHT_BEFORE);
+  await page.goto("/settings/appearance");
+  const sidebar = await openSidebarNav(page);
+  await expect(sidebar.getByText("system_admin", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("システム管理者", { exact: true })).toBeVisible();
+  // ロールの code（SYSTEM_ADMIN）は出さない。
+  await expect(sidebar.getByText(/SYSTEM_ADMIN/)).toHaveCount(0);
+  const short = await measureAccountFooter(page);
+  await page.getByTestId("sidebar-account").screenshot({ path: testInfo.outputPath(`sidebar-account-login-id.png`) });
+  expect(short.lines).toEqual([
+    expect.objectContaining({ text: "system_admin", title: "system_admin", lines: 1, truncated: false, insideSidebar: true }),
+    expect.objectContaining({ text: "システム管理者", title: "ロール: システム管理者", lines: 1, truncated: false, insideSidebar: true }),
+  ]);
+  // 読み上げはロールの行も「ロール: …」の全文。
+  await expect(page.getByTestId("sidebar-account")).toContainText("ロール: システム管理者");
+  // 欄は修正前より高くしない。
+  expect(short.height).toBeLessThanOrEqual(ACCOUNT_ROW_HEIGHT_BEFORE);
+  await expectAccountFooterInsideSidebar(page);
+
+  // 1 行に入らない名前・ロールは折り返さず、各行の末尾を省略記号で切る。全文は title と DOM の文字（読み上げ）に残り、
+  // 欄の高さは変わらず、右へはみ出さない。複数のロールは表示名を「、」でつなぐ。
+  // 1 行目はログイン ID。表示名（長い日本語の名前）はアカウント欄に出さない（#1696）。
+  const longDisplayName = "山田 太郎 ナレッジベース運用責任者 品質評価と監査の担当 第二事業部";
+  const longName = "yamada.taro.knowledge-base-operations-lead.quality-audit.div2";
+  const longRoles: [string, string][] = [
+    ["SYSTEM_ADMIN", "システム管理者"],
+    ["RAG_KNOWLEDGE_ADMIN", "ナレッジベース管理者"],
+    ["RAG_EVALUATION_REVIEWER", "品質評価の確認者"],
+  ];
+  auth.current = user(longName, longDisplayName, longRoles);
+  await page.reload();
+  const reloaded = await openSidebarNav(page);
+  await expect(reloaded.getByText(longName, { exact: true })).toBeVisible();
+  await expect(reloaded.getByText(longDisplayName)).toHaveCount(0);
+  const long = await measureAccountFooter(page);
+  const longRoleNames = "システム管理者、ナレッジベース管理者、品質評価の確認者";
+  expect(long.lines).toEqual([
+    { text: longName, title: longName, lines: 1, truncated: true, ellipsis: true, insideSidebar: true },
+    { text: longRoleNames, title: `ロール: ${longRoleNames}`, lines: 1, truncated: true, ellipsis: true, insideSidebar: true },
+  ]);
+  expect(Math.abs(long.height - short.height)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(long.footerHeight - short.footerHeight)).toBeLessThanOrEqual(0.5);
+  await expectAccountFooterInsideSidebar(page);
+  await expectNoPageOverflow(page);
+
+  if (!(await page.getByTestId("nav-drawer-trigger").isVisible())) {
+    // 折りたたみ（アイコンだけ）のサイドナビは名前を出さず（アイコンの行のリンクだけ。#1873）、操作はアイコンの列に収まる。
+    await reloaded.getByRole("button", { name: "サイドバーを折りたたむ" }).click();
+    await expect(reloaded).toHaveAttribute("data-state", "collapsed");
+    await expect(reloaded.getByTestId("sidebar-account")).toHaveAttribute("aria-label", `アカウント設定を開く（${longName}）`);
+    await expect(reloaded.getByText(longRoleNames)).toHaveCount(0);
     await expectAccountFooterInsideSidebar(page);
-
-    // 1 行に入らない名前・ロールは折り返さず、各行の末尾を省略記号で切る。全文は title と DOM の文字（読み上げ）に残り、
-    // 欄の高さは変わらず、右へはみ出さない。複数のロールは表示名を「、」でつなぐ。
-    // 1 行目はログイン ID。表示名（長い日本語の名前）はアカウント欄に出さない（#1696）。
-    const longDisplayName = "山田 太郎 ナレッジベース運用責任者 品質評価と監査の担当 第二事業部";
-    const longName = "yamada.taro.knowledge-base-operations-lead.quality-audit.div2";
-    const longRoles: [string, string][] = [
-      ["SYSTEM_ADMIN", "システム管理者"],
-      ["RAG_KNOWLEDGE_ADMIN", "ナレッジベース管理者"],
-      ["RAG_EVALUATION_REVIEWER", "品質評価の確認者"],
-    ];
-    auth.current = user(longName, longDisplayName, longRoles);
-    await page.reload();
-    const reloaded = await openSidebarNav(page);
-    await expect(reloaded.getByText(longName, { exact: true })).toBeVisible();
-    await expect(reloaded.getByText(longDisplayName)).toHaveCount(0);
-    const long = await measureAccountFooter(page);
-    const longRoleNames = "システム管理者、ナレッジベース管理者、品質評価の確認者";
-    expect(long.lines).toEqual([
-      { text: longName, title: longName, lines: 1, truncated: true, ellipsis: true, insideSidebar: true },
-      { text: longRoleNames, title: `ロール: ${longRoleNames}`, lines: 1, truncated: true, ellipsis: true, insideSidebar: true },
-    ]);
-    expect(Math.abs(long.height - short.height)).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(long.footerHeight - short.footerHeight)).toBeLessThanOrEqual(0.5);
-    await expectAccountFooterInsideSidebar(page);
-    await expectNoPageOverflow(page);
-
-    if (!(await page.getByTestId("nav-drawer-trigger").isVisible())) {
-      // 折りたたみ（アイコンだけ）のサイドナビは名前を出さず（アイコンの行のリンクだけ。#1873）、操作はアイコンの列に収まる。
-      await reloaded.getByRole("button", { name: "サイドバーを折りたたむ" }).click();
-      await expect(reloaded).toHaveAttribute("data-state", "collapsed");
-      await expect(reloaded.getByTestId("sidebar-account")).toHaveAttribute("aria-label", `アカウント設定を開く（${longName}）`);
-      await expect(reloaded.getByText(longRoleNames)).toHaveCount(0);
-      await expectAccountFooterInsideSidebar(page);
-    }
-  });
-}
+  }
+});
 
 test("ローカル DEBUG はログインせずに全画面を使え、アカウント欄にログイン省略を示す（#307）", async ({ page }) => {
   await page.route("**/api/auth/me", (route) =>

@@ -16,61 +16,52 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-async function useTheme(page: Page, theme: "light" | "dark") {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-agent.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 for (const viewport of VIEWPORTS) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`テンプレートを選ぶとフォームに入り、そのまま作成できる (${viewport.name}, ${theme})`, async ({ page, mockApi }, testInfo) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await useTheme(page, theme);
-      await page.goto("/agents?id=new");
+  test(`テンプレートを選ぶとフォームに入り、そのまま作成できる (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto("/agents?id=new");
 
-      await expect(page.getByRole("heading", { name: "テンプレートから始める" })).toBeVisible();
-      const template = page.getByTestId("agent-template-sales-analytics");
-      await expect(template).toHaveAttribute("aria-pressed", "false");
-      await template.click();
+    await expect(page.getByRole("heading", { name: "テンプレートから始める" })).toBeVisible();
+    const template = page.getByTestId("agent-template-sales-analytics");
+    await expect(template).toHaveAttribute("aria-pressed", "false");
+    await template.click();
 
-      await expect(template).toHaveAttribute("aria-pressed", "true");
-      await expect(template).toContainText("適用中");
-      await expect(page.getByText("「営業分析」をフォームに入れました")).toBeVisible();
-      await expect(page.locator("#new-agent-name")).toHaveValue("営業分析");
-      await expect(page.locator("#new-agent-instructions")).toHaveValue(/構造化データ照会で集計し/);
-      await expect(page.getByRole("option", { name: /^構造化データ照会/ })).toBeChecked();
-      await expect(page.getByRole("option", { name: /^業務 RAG 調査/ })).not.toBeChecked();
-      await expect(page.getByTestId("agent-template-samples")).toContainText("今月の地域別の売上を教えてください。");
-      // テンプレートの評価ケースで評価セットを作る（既定はオン。#810）。
-      await expect(page.getByRole("checkbox", { name: /テンプレートの評価ケース（1 件）で評価セットを作る/ })).toBeChecked();
-      await expectNoHorizontalOverflow(page);
-      await page.screenshot({ path: testInfo.outputPath(`agent-templates-${viewport.name}-${theme}.png`), fullPage: true });
+    await expect(template).toHaveAttribute("aria-pressed", "true");
+    await expect(template).toContainText("適用中");
+    await expect(page.getByText("「営業分析」をフォームに入れました")).toBeVisible();
+    await expect(page.locator("#new-agent-name")).toHaveValue("営業分析");
+    await expect(page.locator("#new-agent-instructions")).toHaveValue(/構造化データ照会で集計し/);
+    await expect(page.getByRole("option", { name: /^構造化データ照会/ })).toBeChecked();
+    await expect(page.getByRole("option", { name: /^業務 RAG 調査/ })).not.toBeChecked();
+    await expect(page.getByTestId("agent-template-samples")).toContainText("今月の地域別の売上を教えてください。");
+    // テンプレートの評価ケースで評価セットを作る（既定はオン。#810）。
+    await expect(page.getByRole("checkbox", { name: /テンプレートの評価ケース（1 件）で評価セットを作る/ })).toBeChecked();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`agent-templates-${viewport.name}.png`), fullPage: true });
 
-      await page.getByRole("button", { name: "作成", exact: true }).first().click();
-      await expect(page.getByText("Agent を作成しました")).toBeVisible();
-      const body = mockApi.lastRequest("POST", "/api/agents")?.body as Record<string, unknown>;
-      expect(body.name).toBe("営業分析");
-      expect(body.skill_ids).toEqual(["structured-data-query"]);
-      expect(String(body.instructions)).toContain("あなたは営業企画の分析担当です。");
-      expect(body.template_id).toBe("sales-analytics");
-      await expect(page.getByText("評価セット「営業分析（テンプレート）」を作りました")).toBeVisible();
-      expect(mockApi.lastRequest("POST", "/api/evaluation-sets/from-template")?.body).toEqual({
-        agent_id: String(body.id ?? "agent-4"),
-      });
-      expect(mockApi.state.evaluationSets[0].cases).toEqual([
-        {
-          id: "case-1",
-          question: "今月の地域別の売上は？",
-          expected: "地域ごとの金額",
-          expected_tools: [],
-          expected_tools_in_order: false,
-          clarification_answers: [],
-          source_run_id: null,
-        },
-      ]);
+    await page.getByRole("button", { name: "作成", exact: true }).first().click();
+    await expect(page.getByText("Agent を作成しました")).toBeVisible();
+    const body = mockApi.lastRequest("POST", "/api/agents")?.body as Record<string, unknown>;
+    expect(body.name).toBe("営業分析");
+    expect(body.skill_ids).toEqual(["structured-data-query"]);
+    expect(String(body.instructions)).toContain("あなたは営業企画の分析担当です。");
+    expect(body.template_id).toBe("sales-analytics");
+    await expect(page.getByText("評価セット「営業分析（テンプレート）」を作りました")).toBeVisible();
+    expect(mockApi.lastRequest("POST", "/api/evaluation-sets/from-template")?.body).toEqual({
+      agent_id: String(body.id ?? "agent-4"),
     });
-  }
+    expect(mockApi.state.evaluationSets[0].cases).toEqual([
+      {
+        id: "case-1",
+        question: "今月の地域別の売上は？",
+        expected: "地域ごとの金額",
+        expected_tools: [],
+        expected_tools_in_order: false,
+        clarification_answers: [],
+        source_run_id: null,
+      },
+    ]);
+  });
 }
 
 test("入力した内容があるときは、確認してからテンプレートで置き換える", async ({ page }) => {

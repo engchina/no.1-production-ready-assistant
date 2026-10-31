@@ -47,7 +47,7 @@ export type {
   EnterpriseAiConfiguredModel,
   EnterpriseAiModelSettings,
   EnterpriseAiVlmInputMode,
-  GenerativeAiModelSettings,
+  EnterpriseAiModelKind,
   ModelSettingsData,
   ModelSettingsPayload,
   ModelSettingsSecretSource,
@@ -212,32 +212,8 @@ export type EvaluationOutcome =
   | "needs_human"
   | "insufficient_evidence";
 
-export type ParserAdapterBackend =
-  | "local"
-  | "docling"
-  | "unstructured"
-  | "structured_records_jsonl"
-  | "xml_tree_json"
-  | "mineru"
-  | "dots_ocr"
-  | "oci_document_understanding";
-export type ParserServiceBackendName = "oci_document_understanding";
-export type ParserAdapterBackendName =
-  | "docling"
-  | "unstructured"
-  | "structured_records_jsonl"
-  | "xml_tree_json"
-  | "mineru"
-  | "dots_ocr";
-export type ExternalParserBackendName = "mineru" | "dots_ocr";
-export type ExternalParserProtocol =
-  "mineru_v1" | "openai_chat_completions";
-export type ExternalParserConnectionStatus =
-  | "available"
-  | "unconfigured"
-  | "unreachable"
-  | "model_missing"
-  | "invalid_response";
+export type ParserAdapterBackend = "local" | "docling" | "unstructured";
+export type ParserAdapterBackendName = "docling" | "unstructured";
 export type ParserAdapterStatus =
   "active" | "available" | "disabled" | "ignored" | "missing";
 export type ParserAdapterScoreBackend = "local" | ParserAdapterBackendName;
@@ -1058,10 +1034,6 @@ export interface KnowledgeBaseIngestionConfig {
   parser_adapter_backend: ParserAdapterBackend | null;
   parser_docling_enabled: boolean | null;
   parser_unstructured_enabled: boolean | null;
-  parser_mineru_enabled: boolean | null;
-  parser_dots_ocr_enabled: boolean | null;
-  parser_structured_records_jsonl_enabled?: boolean | null;
-  parser_xml_tree_json_enabled?: boolean | null;
   /** 図・画像を AI で読み取る(Vision)。解析エンジンに関係なく使える(#497)。 */
   vision_enabled: boolean | null;
   /** 見出しの階層の推定（AI。#2277）。null は全体の既定（無効）に従う。 */
@@ -1709,7 +1681,7 @@ export interface FeedbackDetail extends FeedbackItem {
   execution: FeedbackExecutionInfo;
 }
 
-export type AnswerPromptKey = `${string}.${string}` | "vlm_answer" | "image_retrieval" | "external_ocr" | "heading_levels" | "field_extraction" | "navigation_summary" | "raptor_summary_system";
+export type AnswerPromptKey = `${string}.${string}` | "vlm_answer" | "image_retrieval" | "heading_levels" | "field_extraction" | "navigation_summary" | "raptor_summary_system";
 
 /** 機能別の設定画面で編集できるプロンプト。 */
 export interface AnswerPromptView {
@@ -2382,8 +2354,6 @@ export interface HuggingFaceSettingsUpdate {
 // --- 設定: Parser adapter ---
 export interface ParserAdapterStatusData {
   backend: ParserAdapterBackendName;
-  /** roadmap = 準備中（ロードマップ）で、まだ選べない（MinerU。#3359）。省略は available。 */
-  availability?: ServiceAvailability;
   package_name: string;
   import_name: string;
   distribution_name: string | null;
@@ -2440,55 +2410,20 @@ export interface ParserAdapterBackendSourceMatrixData {
   route_evidence: ParserAdapterSourceRouteData[];
 }
 
-export interface ParserServiceBackendData {
-  backend: ParserServiceBackendName;
-  /** roadmap = 準備中（ロードマップ）で、まだ選べない（#3374）。省略は available。 */
-  availability?: ServiceAvailability;
-  selected: boolean;
-  configured: boolean;
-  warning_code: string | null;
-}
-
 export interface ParserBackendCapabilityData {
   backend: string;
   modalities: string[];
   extensions: string[];
 }
 
-export interface ExternalParserConnectionData {
-  backend: ExternalParserBackendName;
-  protocol: ExternalParserProtocol;
-  endpoint: string;
-  model: string | null;
-  api_key_configured: boolean;
-  configured: boolean;
-}
-
-export interface ExternalParserConnectionUpdate {
-  backend: ExternalParserBackendName;
-  endpoint?: string;
-  model?: string;
-  api_key?: string;
-  clear_api_key?: boolean;
-}
-
-export interface ExternalParserConnectionStatusData {
-  backend: ExternalParserBackendName;
-  status: ExternalParserConnectionStatus;
-  version: string | null;
-  warning_code: string | null;
-}
-
 export interface ParserAdapterSettingsData {
   adapter_backend: ParserAdapterBackend;
   effective_order: ParserAdapterBackendName[];
   adapters: ParserAdapterStatusData[];
-  service_backends: ParserServiceBackendData[];
   scorecard: ParserAdapterScorecardData;
   source_routes: ParserAdapterSourceRouteData[];
   backend_source_kind_matrix: ParserAdapterBackendSourceMatrixData;
   capabilities: ParserBackendCapabilityData[];
-  connections: ExternalParserConnectionData[];
   /** 「解析後の処理」の全体の既定（#528）。保存先は backend/.env。 */
   vision_enabled: boolean;
   /** 見出しの階層の推定（AI。#2277）。 */
@@ -2500,16 +2435,7 @@ export interface ParserAdapterSettingsData {
   raptor_enabled?: boolean;
   /** 図・表の説明（Vision）を同時に呼ぶ数の上限（RAG_VISION_CONCURRENCY。1〜16。#2002）。 */
   vision_concurrency?: number;
-  /** MinerU のライセンスの条件の確認（#3359）。確認するまで MinerU を選べない。 */
-  mineru_license?: MineruLicenseAcknowledgement;
   config_source: "runtime";
-}
-
-/** MinerU のライセンスの条件を管理者が確認した記録（#3359）。 */
-export interface MineruLicenseAcknowledgement {
-  acknowledged: boolean;
-  acknowledged_by: string | null;
-  acknowledged_at: string | null;
 }
 
 /** `adapter_backend` を省略すると解析エンジンの設定は変えない（「解析後の処理」だけの保存。#528）。 */
@@ -2517,13 +2443,6 @@ export interface ParserAdapterSettingsUpdate {
   adapter_backend?: ParserAdapterBackend;
   docling_enabled?: boolean;
   unstructured_enabled?: boolean;
-  mineru_enabled?: boolean;
-  /** true で確認した人・日時を記録し、false で記録を消す（#3359）。 */
-  mineru_license_acknowledged?: boolean;
-  dots_ocr_enabled?: boolean;
-  structured_records_jsonl_enabled?: boolean;
-  xml_tree_json_enabled?: boolean;
-  connections?: ExternalParserConnectionUpdate[];
   vision_enabled?: boolean;
   heading_level_inference_enabled?: boolean;
   field_extraction_enabled?: boolean;
@@ -2605,12 +2524,8 @@ export type ServiceRuntimeStatus =
   | "failed"
   | "stopped"
   | "not_installed"
-  | "unconfigured"
-  // 準備中（ロードマップ）のサービス。配備しないので問い合わせない（#3374。エラーではない）。
-  | "roadmap";
+  | "unconfigured";
 export type ServiceExecutionPolicy = "selected_adapter" | "default_adapter";
-// available = 使える、roadmap = 準備中（ロードマップ）。roadmap は配備・起動しない（#3374）。
-export type ServiceAvailability = "available" | "roadmap";
 // 起動 = systemctl enable --now、停止 = systemctl disable --now、再起動 = systemctl restart。
 export type ServiceAction = "start" | "stop" | "restart";
 
@@ -2629,8 +2544,6 @@ export interface ServiceCatalogItemData {
   configured: boolean;
   /** 起動/停止・ログに使う systemd の unit 名。 */
   systemd_unit: string;
-  /** roadmap = 準備中（ロードマップ）で、灰色にして操作を出さない（#3374）。省略は available。 */
-  availability?: ServiceAvailability;
   model_cache: ServiceModelCacheData | null;
 }
 
@@ -4474,10 +4387,6 @@ export const api = {
     }),
   getParserAdapterSettings: () =>
     request<ParserAdapterSettingsData>("/api/settings/parser-adapters"),
-  getExternalParserStatus: (backend: ExternalParserBackendName) =>
-    request<ExternalParserConnectionStatusData>(
-      `/api/settings/parser-adapters/${encodeURIComponent(backend)}/status`,
-    ),
   updateParserAdapterSettings: (body: ParserAdapterSettingsUpdate) =>
     request<ParserAdapterSettingsData>("/api/settings/parser-adapters", {
       method: "PATCH",

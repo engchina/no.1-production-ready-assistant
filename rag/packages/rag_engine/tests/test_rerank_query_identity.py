@@ -5,15 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from rag_engine.generation.answering import _best_rerank_ranks, _normalized_catalog_question
+from rag_engine.generation.answering import _best_rerank_ranks
 from rag_engine.models.llm import RerankTextRank
 from rag_engine.retrieval.query_identity import normalized_query_key
 
 
 @pytest.mark.parametrize("variant", ["ABC 設定", "ＡＢＣ　設定", " ABC\t\n設定 "])
-def test_equivalent_query_forms_share_catalog_identity(variant):
+def test_equivalent_query_forms_share_identity(variant):
     assert normalized_query_key(variant) == "ABC 設定"
-    assert _normalized_catalog_question(variant) == "ABC 設定"
 
 
 @pytest.mark.parametrize("different", ["ABC設定", "abc 設定", "ABC 設定 追加条件", "ABC 変更"])

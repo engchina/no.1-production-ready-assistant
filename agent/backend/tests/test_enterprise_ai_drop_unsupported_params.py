@@ -126,11 +126,6 @@ def test_model_test_reports_dropped_parameter(monkeypatch: pytest.MonkeyPatch) -
             "default_vision_model_id": "",
             "text_response_path": "/output_text",
         },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1024,
-            "rerank_model": "cohere.rerank-v4.0-fast",
-        },
     }
     request = ModelSettingsTestRequest.model_validate(
         {"settings": payload, "target_type": "enterprise_text", "model_id": REASONING_MODEL}

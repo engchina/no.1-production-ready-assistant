@@ -74,7 +74,7 @@ export interface SidebarAccount {
   account: SidebarAccountLink;
   /** ローカル DEBUG（ログイン省略）では undefined。 */
   onLogout?: () => void;
-  labels: { logout: string; switchToLight: string; switchToDark: string };
+  labels: { logout: string };
   /** ローカル DEBUG（ログイン省略）で入っているか。製品はその旨の notice を出す。 */
   debugMode: boolean;
 }
@@ -129,7 +129,7 @@ export function useSidebarAccount({
     roles,
     rolesLabel: formatMessage(m.sidebarRoles, { roles }),
     debugMode: user.debug_mode,
-    labels: { logout: m.sidebarLogout, switchToLight: "", switchToDark: "" },
+    labels: { logout: m.sidebarLogout },
     account: {
       href: accountHref,
       label: formatMessage(m.sidebarOpenAccount, { name }),

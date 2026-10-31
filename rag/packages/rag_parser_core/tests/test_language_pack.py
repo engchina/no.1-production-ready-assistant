@@ -9,6 +9,7 @@ import pytest
 
 from rag_parser_core.language import (
     FIELD_SPECS,
+    REMOVED_FIELDS,
     LanguagePackError,
     bind_pack,
     build_pack,
@@ -18,6 +19,7 @@ from rag_parser_core.language import (
     pack_from_payload,
     resolve,
     set_default_pack,
+    stored_pack_hash,
 )
 
 
@@ -133,28 +135,17 @@ def test_roman_numerals_follow_the_pack() -> None:
         assert format_roman(6) == "vi"
 
 
-def test_headings_citations_and_number_phrases_follow_the_pack() -> None:
-    """番号の見出し・質問の引用・本文の数の書き方は言語資源から作る(#2181 段 1b)。"""
+def test_numbered_headings_follow_the_pack() -> None:
+    """番号の見出しの単位は言語資源から作る(#2181 段 1b)。"""
     from rag_parser_core.extraction import heading_level_from_prefix, numbered_heading
-    from rag_parser_core.xml_tree_json import arabic_number_phrases, query_citation_keys
 
     assert numbered_heading().match("第2部 概要") is not None
     assert heading_level_from_prefix("第2部") == 1
     assert numbered_heading().match("第2巻 概要") is None
-    assert arabic_number_phrases("六十五歳以上の者") == ["65歳以上"]
-    assert query_citation_keys("附則第三条の規定") == ["附則第3条"]
-    custom = resolve(
-        builtin_pack(),
-        {
-            "numbers": {"part_units": ["編", "部", "巻"], "counters": ["歳", "ヶ月"]},
-            "references": {"part_prefixes": ["附則", "補則"]},
-        },
-    )
+    custom = resolve(builtin_pack(), {"numbers": {"part_units": ["編", "部", "巻"]}})
     with bind_pack(custom):
         assert numbered_heading().match("第2巻 概要") is not None
         assert heading_level_from_prefix("第2巻") == 1
-        assert query_citation_keys("補則第三条の規定") == ["補則第3条"]
-        assert arabic_number_phrases("三ヶ月以内") == ["3ヶ月以内"]
 
 
 def test_parse_service_binds_language_pack_from_request(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,10 +159,10 @@ def test_parse_service_binds_language_pack_from_request(monkeypatch: pytest.Monk
 
     def fake_run(*args: object, **kwargs: object) -> ParserRegistryResult:
         seen.append(current_pack().hash)
-        return ParserRegistryResult(extraction=None, parser_backend="xml_tree_json")
+        return ParserRegistryResult(extraction=None, parser_backend="unstructured")
 
     monkeypatch.setattr(service, "run_external_adapter", fake_run)
-    app = service.create_parse_app(backend="xml_tree_json", import_name="rag_parser_core")
+    app = service.create_parse_app(backend="unstructured", import_name="rag_parser_core")
     client = TestClient(app)
     overrides = json.dumps({"numbers": {"article_units": ["条", "款"]}}, ensure_ascii=False)
     files = {"file": ("a.json", b"{}", "application/json")}
@@ -181,38 +172,6 @@ def test_parse_service_binds_language_pack_from_request(monkeypatch: pytest.Monk
     assert seen[1] == builtin_pack().hash
     bad = json.dumps({"numbers": {"no_such": ["x"]}})
     assert client.post("/parse", files=files, data={"language_pack": bad}).status_code == 422
-
-
-def test_xml_tree_labels_follow_the_pack() -> None:
-    """XML ツリー JSON のラベル（範囲・版の参照・検索の文の見出し）は言語資源から作る。"""
-    from rag_parser_core.xml_tree_json import (
-        numbered_label,
-        revision_ref_labels,
-        xml_tree_search_text,
-    )
-
-    assert numbered_label("1:3", "条", arabic=True) == "第1条から第3条まで"
-    assert revision_ref_labels("平成一六年六月一一日法律第一〇四号") == (
-        "平成十六年法律第百四号",
-        "平成16年法律第104号",
-    )
-    metadata = {"xml_tree_document_title": "テスト法", "xml_tree_parent_caption": "（目的）"}
-    assert xml_tree_search_text(metadata, "本文の文").splitlines()[0] == "文書: テスト法"
-    # 1 つの語の項目は空にできない。
-    with pytest.raises(LanguagePackError):
-        resolve(builtin_pack(), {"labels": {"range_end": ""}})
-    custom = resolve(
-        builtin_pack(),
-        {
-            "labels": {"range_start": "〜", "range_end": "迄"},
-            "search_labels": {"document": "法令名", "caption": "条の見出し"},
-        },
-    )
-    with bind_pack(custom):
-        assert numbered_label("1:3", "条", arabic=True) == "第1条〜第3条迄"
-        lines = xml_tree_search_text(metadata, "本文の文").splitlines()
-        assert lines[0] == "法令名: テスト法"
-        assert "条の見出し: （目的）" in lines
 
 
 def test_markers_and_boilerplate_follow_the_pack() -> None:
@@ -435,3 +394,16 @@ def test_invalid_abstention_labels_are_not_defaulted(key: str, value: object) ->
     raw["answer_labels"][key] = value
     with pytest.raises(LanguagePackError):
         build_pack(raw)
+
+
+def test_removed_xml_tree_label_is_dropped_without_changing_hashes() -> None:
+    """削除した XML ツリーの文書の種類（#42）は、保存済みの版に残っても読み捨てる。"""
+    pack = builtin_pack()
+    legacy = pack.to_dict()
+    legacy["labels"] = {**legacy["labels"], "xml_tree_document_type": "XML ツリー"}
+    loaded = build_pack(legacy)
+    assert ("labels", "xml_tree_document_type") in REMOVED_FIELDS
+    assert "xml_tree_document_type" not in loaded.sections["labels"]
+    assert (loaded.hash, loaded.ingest_hash) == (pack.hash, pack.ingest_hash)
+    assert stored_pack_hash(legacy, loaded) == pack.hash
+    assert resolve(pack, {"labels": {"xml_tree_document_type": "別の名前"}}).hash == pack.hash

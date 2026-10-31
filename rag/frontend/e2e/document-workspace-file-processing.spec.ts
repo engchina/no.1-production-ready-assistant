@@ -252,7 +252,7 @@ test("desktop の右ペインは高さを保ち、境界で主ページへスク
 test("取込解析エンジンは抽出工程行に segment parser だけを表示する", async ({
   page,
 }) => {
-  await mockDocumentWorkspace(page, { pdfPreview: true, mineruSegment: true });
+  await mockDocumentWorkspace(page, { pdfPreview: true, unstructuredSegment: true });
 
   await page.goto("/documents/doc-1");
 
@@ -268,8 +268,8 @@ test("取込解析エンジンは抽出工程行に segment parser だけを表�
   const jobsPanel = page
     .getByRole("heading", { name: "工程ごとの実行状況" })
     .locator("xpath=ancestor::section[1]");
-  await expect(jobsPanel.getByText("MinerU v1")).toBeVisible();
-  await expect(jobsPanel.getByText("mineru_adapter")).toHaveCount(0);
+  await expect(jobsPanel.getByText("Unstructured v1")).toBeVisible();
+  await expect(jobsPanel.getByText("unstructured_adapter")).toHaveCount(0);
   await expect(
     page.getByText("アップロード時の初期判定: OCI Enterprise AI / v1")
   ).toHaveCount(0);
@@ -991,25 +991,17 @@ test("プレビューの回転・拡大の後も強調が同じ位置に重な�
 });
 
 // 文書詳細のプレビューは、幅に合わせたときに 1 ページ全体が縦スクロールなしで入る高さにする（#559）。
-// desktop（1280 / 1920）と 375px、light / dark で、開いた直後の状態・拡大・ページ送りを確かめる。
+// desktop（1280 / 1920）と 375px で、開いた直後の状態・拡大・ページ送りを確かめる。
 for (const viewportCase of [
-  { name: "1280 light", width: 1280, height: 800, theme: "light" },
-  { name: "1920 dark", width: 1920, height: 1080, theme: "dark" },
-  { name: "1920 light", width: 1920, height: 1080, theme: "light" },
-  { name: "375 dark", width: 375, height: 812, theme: "dark" },
-  { name: "375 light", width: 375, height: 812, theme: "light" },
+  { name: "1280", width: 1280, height: 800 },
+  { name: "1920", width: 1920, height: 1080 },
+  { name: "375", width: 375, height: 812 },
 ] as const) {
   test(`プレビューは開いた直後に 1 ページ全体を縦スクロールなしで表示する (${viewportCase.name})`, async ({
     page,
   }, testInfo) => {
     // 幅は setViewportSize で決めるので、desktop のプロジェクトだけで実行する（mobile と同じ内容を 2 回走らせない）。
     test.skip(testInfo.project.name !== "desktop", "viewport は各ケースで指定する");
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 })
-      );
-    }, viewportCase.theme);
     await page.setViewportSize({ width: viewportCase.width, height: viewportCase.height });
     await mockDocumentWorkspace(page, { pdfPreview: true, pdfPages: true, layoutRegions: true });
 
@@ -1065,7 +1057,7 @@ for (const viewportCase of [
     // 目視の記録: ペインの下端（ページの下端とビューアの枠）が見える位置までスクロールして撮る。
     await pane.evaluate((element) => element.scrollIntoView({ block: "end" }));
     await page.screenshot({
-      path: testInfo.outputPath(`preview-pane-${viewportCase.width}-${viewportCase.theme}.png`),
+      path: testInfo.outputPath(`preview-pane-${viewportCase.width}.png`),
     });
 
     // 拡大してもペインの高さは変わらず、ページはビューアの中でスクロールする。
@@ -1492,7 +1484,7 @@ test("失敗した取込 job は取込中 banner を残さず原因を表示す�
 
 test("同じ取込エラー原因は上部の原因バナーに 1 本化する", async ({ page }) => {
   const message =
-    "選択した文書解析サービス（Dots.OCR）で解析処理が失敗しました。エラーコード: dots_ocr_adapter_failed";
+    "選択した文書解析サービス（Unstructured）で解析処理が失敗しました。エラーコード: unstructured_adapter_failed";
   await mockDocumentWorkspace(page, {
     documentStatus: "ERROR",
     latestJobStatus: "FAILED",
@@ -1502,13 +1494,13 @@ test("同じ取込エラー原因は上部の原因バナーに 1 本化する",
 
   await page.goto("/documents/doc-1");
 
-  const summary = "選択した文書解析サービス（Dots.OCR）で解析処理が失敗しました。";
+  const summary = "選択した文書解析サービス（Unstructured）で解析処理が失敗しました。";
   // 原因は画面全体で 1 回だけ表示する（§9 P2）。
   await expect(page.getByText(summary, { exact: true })).toHaveCount(1);
   // 上部の原因バナー(role=alert)に昇格する。エラーコードは本文から分け、「詳細」に出す（失敗なので開く。§10。#705）。
   const banner = page.getByRole("alert").filter({ hasText: summary });
   await expect(banner).toBeVisible();
-  await expect(banner.getByText("エラーコード: dots_ocr_adapter_failed")).toBeVisible();
+  await expect(banner.getByText("エラーコード: unstructured_adapter_failed")).toBeVisible();
   await expect(banner.getByText(message)).toHaveCount(0);
   // job パネルでは再掲しない。
   const jobPanel = page
@@ -2331,7 +2323,7 @@ async function mockDocumentWorkspace(
     segmentCount?: number;
     /** 既定の 2 件の後ろに足す chunk の数（一覧の内部スクロールの検証用。#403）。 */
     extraChunkCount?: number;
-    mineruSegment?: boolean;
+    unstructuredSegment?: boolean;
     latestJobStatus?: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
     latestJobPhase?: "PREPROCESS" | "EXTRACT" | "CHUNK" | "INDEX";
     latestJobStartedAt?: string;
@@ -2583,16 +2575,10 @@ async function mockDocumentWorkspace(
       json: {
         data: {
           settings: {
-            enterprise_ai: {},
-            generative_ai: {
-              embedding_model: "text-embedding-v4",
-              embedding_dim: 1024,
-              embedding_base_url: "",
-              rerank_model: "qwen3-rerank",
-              rerank_base_url: "",
-            },
+            enterprise_ai: { default_embedding_model_id: "text-embedding-v4" },
           },
           checks: {},
+          embedding_dim: 1024,
           model_settings_file: "models.json",
           source: "runtime",
         },
@@ -2886,7 +2872,7 @@ async function mockDocumentWorkspace(
         data: options.segmentError
           ? [failedSegment, notStartedSegment]
           : ingestionSegments(options.segmentCount ?? 1, {
-              mineru: options.mineruSegment,
+              unstructured: options.unstructuredSegment,
               progressScenario: options.progressScenario,
             }),
         error_messages: [],
@@ -2960,7 +2946,7 @@ function recipeSteps(
 function ingestionSegments(
   count: number,
   options: {
-    mineru?: boolean;
+    unstructured?: boolean;
     progressScenario?: "pdf17" | "source" | "doclingInline" | "segmentedStale";
   } = {}
 ) {
@@ -3062,15 +3048,15 @@ function ingestionSegments(
     const start = index * 10 + 1;
     const end = start + 9;
     const status = index < 4 ? "SUCCEEDED" : index === 4 ? "RUNNING" : "QUEUED";
-    const mineru = Boolean(options.mineru);
+    const unstructured = Boolean(options.unstructured);
     return {
       segment_id: `doc-1:p${start}-${end}`,
       document_id: "doc-1",
       recipe_id: "recipe-1",
       status,
-      parser_backend: mineru ? "mineru" : index === 0 ? "local_partition" : "enterprise_ai",
-      parser_profile: mineru
-        ? "mineru_adapter"
+      parser_backend: unstructured ? "unstructured" : index === 0 ? "local_partition" : "enterprise_ai",
+      parser_profile: unstructured
+        ? "unstructured_adapter"
         : index === 0
           ? "local_text_structure"
           : "enterprise_ai_pdf_layout",

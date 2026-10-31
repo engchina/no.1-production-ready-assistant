@@ -223,13 +223,13 @@ Excel は前処理 `excel_to_jsonl`）、旧版を新しい版に置き換えた
 ```bash
 cd rag/backend
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8000 --output /tmp/multi-hop.resolved.json \
+  --api-base-url http://127.0.0.1:8100 --output /tmp/multi-hop.resolved.json \
   --document-map-output /tmp/multi-hop.document-map.json
 uv run python -m app.rag.evaluation_cli /tmp/multi-hop.resolved.json --split dev \
-  --api-base-url http://127.0.0.1:8000 --output /tmp/multi-hop.a.json
+  --api-base-url http://127.0.0.1:8100 --output /tmp/multi-hop.a.json
 # 旧版を除かない評価（紛らわしさの測定）。別のナレッジベースに取り込む。
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8000 --keep-superseded-active \
+  --api-base-url http://127.0.0.1:8100 --keep-superseded-active \
   --output /tmp/multi-hop.keep-superseded.resolved.json
 ```
 
@@ -253,16 +253,16 @@ uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop
 cd rag/backend
 # レシピ無し（すべての文書のレシピで実体の抽出を無効にする。実体の抽出は全体の既定で on。#1388）
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8000 --knowledge-base-name "評価: 多段 実体なし" --no-entity-index \
+  --api-base-url http://127.0.0.1:8100 --knowledge-base-name "評価: 多段 実体なし" --no-entity-index \
   --output /tmp/multi-hop.plain.json
 # レシピ有り（すべての文書のレシピで実体の抽出を選ぶ）
 uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8000 --knowledge-base-name "評価: 多段 実体あり" --entity-index \
+  --api-base-url http://127.0.0.1:8100 --knowledge-base-name "評価: 多段 実体あり" --entity-index \
   --output /tmp/multi-hop.entity.json
 for variant in plain entity; do
   for split in dev holdout; do
     uv run python -m app.rag.evaluation_cli /tmp/multi-hop.$variant.json --split $split \
-      --api-base-url http://127.0.0.1:8000 --output /tmp/multi-hop.a.$variant.$split.json
+      --api-base-url http://127.0.0.1:8100 --output /tmp/multi-hop.a.$variant.$split.json
   done
 done
 ```
@@ -296,10 +296,10 @@ cd suite/evaluation
 export SUITE_EVALUATION_API_KEY=prak_...   # 使える製品に rag と agent を含む API キー
 SET=../../rag/evaluation/multi-hop/multi-hop.json
 uv run suite-evaluation run "$SET" --split dev --document-map /tmp/multi-hop.document-map.json \
-  --target rag-mcp --mcp-url http://127.0.0.1:8000/api/mcp --knowledge-base-id <ナレッジベース> \
+  --target rag-mcp --mcp-url http://127.0.0.1:8100/api/mcp --knowledge-base-id <ナレッジベース> \
   --output /tmp/multi-hop.suite-a.json
 uv run suite-evaluation run "$SET" --split dev --document-map /tmp/multi-hop.document-map.json \
-  --target agent-mcp --mcp-url http://127.0.0.1:8020/api/mcp --agent-id <公開済みの業務 Agent> \
+  --target agent-mcp --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> \
   --output /tmp/multi-hop.d.json
 # 比べる表（種類別・段の数別・区分ごとの種類別の根拠の連鎖の完全率の行を含む）
 uv run suite-evaluation compare A=/tmp/multi-hop.suite-a.json D=/tmp/multi-hop.d.json

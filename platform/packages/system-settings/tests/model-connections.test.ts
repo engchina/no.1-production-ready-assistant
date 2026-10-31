@@ -218,7 +218,6 @@ describe("接続（#533 / #542）", () => {
         default_text_model_id: "",
         default_vision_model_id: "m",
       },
-      generative_ai: { embedding_model: "e", embedding_dim: 1024, rerank_model: "r" },
     } as unknown as ModelSettingsPayload;
     const normalized = normalizeModelSettings(legacy);
     expect(normalized.enterprise_ai.connections).toEqual([
@@ -244,7 +243,6 @@ describe("接続（#533 / #542）", () => {
         default_text_model_id: "",
         default_vision_model_id: "",
       },
-      generative_ai: { embedding_model: "e", embedding_dim: 1024, rerank_model: "r" },
     } as unknown as ModelSettingsPayload;
     const normalized = normalizeModelSettings(withNames);
     expect(normalized.enterprise_ai.connections).toEqual([primary, secondary]);

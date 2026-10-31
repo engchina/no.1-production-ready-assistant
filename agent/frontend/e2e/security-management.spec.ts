@@ -41,7 +41,7 @@ for (const viewport of VIEWPORTS) {
     test.beforeEach(async ({ page, mockApi, context, baseURL }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       mockApi.setCurrentUser(SECURITY_ADMIN);
-      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3042" }]);
+      await context.addCookies([{ name: "pr_csrf", value: CSRF_TOKEN, url: baseURL ?? "http://127.0.0.1:3142" }]);
     });
 
     test("ユーザー管理とロール管理を開け、ロールの詳細から権限管理へ移れる", async ({ page }) => {
@@ -182,8 +182,6 @@ test("API キーの管理は専用権限で開け、削除を確定できる", {
   await expectNoPageOverflow(page);
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {}))));
   await page.screenshot({ path: testInfo.outputPath("api-keys-admin.png"), fullPage: true });
-  await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-  await page.screenshot({ path: testInfo.outputPath("api-keys-admin-dark.png"), fullPage: true });
   await page.getByTestId("api-key-row-actions-key-a-trigger").click();
   await page.getByRole("menuitem", { name: "削除", exact: true }).click();
   const dialog = page.getByRole("alertdialog");

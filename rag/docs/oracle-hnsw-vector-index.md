@@ -6,7 +6,7 @@
 
 ## 適用前提
 
-- データベース: Oracle AI Database（対応バージョンは [terraform/README.md](../../terraform/README.md) の「Autonomous AI Database（全製品で共有）」）。
+- データベース: Oracle AI Database（対応バージョンは [platform/docs/deployment.md](../../platform/docs/deployment.md) の「Autonomous AI Database（全製品で共有）」）。
 - ベクトル列: `VECTOR(1024, FLOAT32)`。
 - 埋め込み: 既定は `text-embedding-v4`、1024 次元（正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46 で 1536 から変えた）。
 - RAG 検索の優先度: まず根拠チャンクの召回率と回答の根拠性を重視し、その後にリランク、フィルタ、キャッシュでレイテンシを最適化する。

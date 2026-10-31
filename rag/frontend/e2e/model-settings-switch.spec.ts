@@ -10,11 +10,30 @@ const SECONDARY_CONNECTION = {
   clear_api_key: false,
 };
 
-type ModelSettingsOptions = { secondary?: boolean; textModel?: string };
+/** `embedding`: 埋め込み / 再ランクのモデル（種類 embedding / rerank。#45）を登録モデルの末尾に足す。 */
+type ModelSettingsOptions = { secondary?: boolean; textModel?: string; embedding?: boolean };
+
+const EMBEDDING_MODELS = [
+  {
+    model_id: "text-embedding-v4",
+    display_name: "",
+    vision_enabled: false,
+    kind: "embedding",
+    connection_id: "primary",
+  },
+  {
+    model_id: "qwen3-rerank",
+    display_name: "",
+    vision_enabled: false,
+    kind: "rerank",
+    connection_id: "primary",
+  },
+];
 
 function createModelSettings({
   secondary = false,
   textModel = "enterprise-llm",
+  embedding = false,
 }: ModelSettingsOptions = {}) {
   return {
     settings: {
@@ -45,7 +64,11 @@ function createModelSettings({
             connection_id: secondary ? "secondary" : "primary",
             max_output_tokens: 32768,
           },
+          ...(embedding ? EMBEDDING_MODELS : []),
         ],
+        ...(embedding
+          ? { default_embedding_model_id: "text-embedding-v4", default_rerank_model_id: "qwen3-rerank" }
+          : {}),
         default_text_model_id: textModel,
         default_vision_model_id: "enterprise-vision",
         // 既定の判定モデル（#3574）。空 = 既定のテキストモデル。
@@ -58,13 +81,6 @@ function createModelSettings({
         vision_response_path: "",
         timeout_seconds: 60,
         max_retries: 3,
-      },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1024,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
       },
     },
     model_settings_file: "model-settings.json",
@@ -93,7 +109,7 @@ for (const viewport of [
       });
     }
 
-    await mockModelSettings(page);
+    await mockModelSettings(page, undefined, { embedding: true });
     await page.goto("/settings/model");
 
     await expect(page.getByPlaceholder("https://…oraclecloud.com/openai/v1")).toBeVisible();
@@ -163,7 +179,6 @@ for (const viewport of [
     );
     const enterpriseSave = page.getByRole("button", { name: "OCI Enterprise AI: 保存" });
     const modelsSave = page.getByRole("button", { name: "登録モデル: 保存" });
-    const genaiSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
     const enterpriseTestButton = page.getByRole("button", { name: "enterprise-llm をテスト" });
     const embeddingTestButton = page.getByRole("button", {
       name: "text-embedding-v4 をテスト",
@@ -174,14 +189,20 @@ for (const viewport of [
     await expectActionInsideCard(page, "OCI Enterprise AI", enterpriseSave);
     await expectActionInsideCard(page, "登録モデル", modelsSave);
     await expectActionInsideCard(page, "登録モデル", enterpriseTestButton);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", genaiSave);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", embeddingTestButton);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", rerankTestButton);
+    // 埋め込み / 再ランクも登録モデルの行でテストする（#45。独立したカードは無い）。
+    await expectActionInsideCard(page, "登録モデル", embeddingTestButton);
+    await expectActionInsideCard(page, "登録モデル", rerankTestButton);
+    await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "既定の埋め込みモデル" })).toContainText(
+      "text-embedding-v4"
+    );
+    await expect(page.getByRole("combobox", { name: "既定の再ランクモデル" })).toContainText(
+      "qwen3-rerank"
+    );
 
     for (const button of [
       enterpriseSave,
       modelsSave,
-      genaiSave,
       enterpriseTestButton,
       embeddingTestButton,
       rerankTestButton,
@@ -257,23 +278,23 @@ for (const viewport of [
       await route.fulfill({ json: { data: current, error_messages: [], warning_messages: [] } });
     });
     await page.goto("/settings/model");
-    const rerank = page.getByRole("textbox", { name: "リランクモデル ID" });
-    await expect(rerank).toHaveValue("qwen3-rerank");
+    const displayName = page.getByLabel("表示名 1");
+    await expect(displayName).toHaveValue("標準 LLM");
 
-    // ほかの製品がセカンダリ接続とリランクモデルを保存した。
+    // ほかの製品がセカンダリ接続と表示名を保存した。
     const other = createModelSettings({ secondary: true });
-    other.settings.generative_ai.rerank_model = "rerank-from-nl2sql";
+    other.settings.enterprise_ai.models[0]!.display_name = "NL2SQL の表示名";
     current = { ...other, revision: "rev-2" };
 
-    await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
+    await displayName.fill("自分の表示名");
+    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
 
     await expect(page.getByText("この画面を開いた後にほかの画面（別の製品を含む）で更新されました。")).toBeVisible();
     expect(patches).toEqual([{ base_revision: "rev-1" }]);
-    await expect(rerank).toHaveValue("rerank-mine");
+    await expect(displayName).toHaveValue("自分の表示名");
     const reload = page.getByRole("button", { name: "最新の設定を読み込む" });
     await expect(reload).toHaveCount(1);
-    await expectActionInsideCard(page, "埋め込み / 再ランク", reload);
+    await expectActionInsideCard(page, "登録モデル", reload);
     await expectNoPageOverflow(page);
     await page.screenshot({
       path: test.info().outputPath(`model-settings-conflict-${viewport.name}.png`),
@@ -284,13 +305,13 @@ for (const viewport of [
     const dialog = page.getByRole("alertdialog", { name: "最新の設定を読み込みますか？" });
     await dialog.getByRole("button", { name: "読み込む" }).click();
 
-    await expect(rerank).toHaveValue("rerank-from-nl2sql");
+    await expect(displayName).toHaveValue("NL2SQL の表示名");
     await expect(page.getByRole("tab", { name: /セカンダリ接続/ })).toBeVisible();
     await expect(reload).toHaveCount(0);
 
-    await rerank.fill("rerank-mine");
-    await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
-    await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。").first()).toBeVisible();
+    await displayName.fill("自分の表示名");
+    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+    await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
     expect(patches.at(-1)).toEqual({ base_revision: "rev-2" });
   });
 }
@@ -335,115 +356,93 @@ test("既定の判定モデルは「既定のテキストモデル」→「回�
   await expectNoPageOverflow(page);
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`既定のモデルは Vision 対応のモデルだけを選べ、不正な選択は保存前にフィールドで止める (${scheme})`, async ({
-    page,
-  }) => {
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 })
-      );
-    }, scheme);
-    const patches: unknown[] = [];
-    await mockModelSettings(page, (payload) => patches.push(payload));
-    await page.goto("/settings/model");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(scheme === "dark");
+test(`既定のモデルは Vision 対応のモデルだけを選べ、不正な選択は保存前にフィールドで止める`, async ({
+  page,
+}) => {
+  const patches: unknown[] = [];
+  await mockModelSettings(page, (payload) => patches.push(payload));
+  await page.goto("/settings/model");
 
-    const vision = page.getByRole("combobox", { name: "既定の画像対応モデル" });
-    const text = page.getByRole("combobox", { name: "既定のテキストモデル" });
-    await expect(vision).toContainText("Vision LLM");
+  const vision = page.getByRole("combobox", { name: "既定の画像対応モデル" });
+  const text = page.getByRole("combobox", { name: "既定のテキストモデル" });
+  await expect(vision).toContainText("Vision LLM");
 
-    // 選択肢: Vision は Vision 対応のモデルだけ、テキストは全モデル（未選択に戻す選択肢はない。#566）。
-    await vision.click();
-    const visionOptions = page.getByRole("listbox", { name: "既定の画像対応モデル" }).getByRole("option");
-    await expect(visionOptions).toHaveCount(1);
-    await expect(visionOptions.first()).toContainText("Vision LLM");
-    await page.keyboard.press("Escape");
-    await text.click();
-    const textListbox = page.getByRole("listbox", { name: "既定のテキストモデル" });
-    await expect(textListbox.getByRole("option")).toHaveCount(2);
-    await expect(textListbox.getByRole("option", { name: "既定の画像対応モデルを使う" })).toHaveCount(0);
-    // テキストに Vision 対応のモデルを選んでもよい。
-    await textListbox.getByRole("option", { name: /Vision LLM/ }).click();
-    await expect(text).toContainText("Vision LLM");
+  // 選択肢: Vision は Vision 対応のモデルだけ、テキストは全モデル（未選択に戻す選択肢はない。#566）。
+  await vision.click();
+  const visionOptions = page.getByRole("listbox", { name: "既定の画像対応モデル" }).getByRole("option");
+  await expect(visionOptions).toHaveCount(1);
+  await expect(visionOptions.first()).toContainText("Vision LLM");
+  await page.keyboard.press("Escape");
+  await text.click();
+  const textListbox = page.getByRole("listbox", { name: "既定のテキストモデル" });
+  await expect(textListbox.getByRole("option")).toHaveCount(2);
+  await expect(textListbox.getByRole("option", { name: "既定の画像対応モデルを使う" })).toHaveCount(0);
+  // テキストに Vision 対応のモデルを選んでもよい。
+  await textListbox.getByRole("option", { name: /Vision LLM/ }).click();
+  await expect(text).toContainText("Vision LLM");
 
-    // 選んでいたモデルの Vision 対応を外すと、保存前にフィールドのエラーを出す。
-    await page.getByRole("switch", { name: "画像入力に対応 2" }).click();
-    await expect(vision).toHaveAttribute("aria-invalid", "true");
-    await expect(
-      page.getByText("画像入力に対応したモデルがありません。", { exact: false })
-    ).toBeVisible();
+  // 選んでいたモデルの Vision 対応を外すと、保存前にフィールドのエラーを出す。
+  await page.getByRole("switch", { name: "画像入力に対応 2" }).click();
+  await expect(vision).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByText("画像入力に対応したモデルがありません。", { exact: false })
+  ).toBeVisible();
 
-    // 保存は送信せず、最初の不正な欄へフォーカスする。
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(vision).toBeFocused();
-    expect(patches).toHaveLength(0);
+  // 保存は送信せず、最初の不正な欄へフォーカスする。
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(vision).toBeFocused();
+  expect(patches).toHaveLength(0);
 
-    // Vision 対応を戻して保存すると、既定のモデル 2 つを送る。
-    await page.getByRole("switch", { name: "画像入力に対応 2" }).click();
-    await expect(vision).toHaveAttribute("aria-invalid", "false");
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
-    expect(patches[0]).toMatchObject({
-      enterprise_ai: {
-        default_text_model_id: "enterprise-vision",
-        default_vision_model_id: "enterprise-vision",
-      },
-    });
-    await expectNoPageOverflow(page);
+  // Vision 対応を戻して保存すると、既定のモデル 2 つを送る。
+  await page.getByRole("switch", { name: "画像入力に対応 2" }).click();
+  await expect(vision).toHaveAttribute("aria-invalid", "false");
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
+  expect(patches[0]).toMatchObject({
+    enterprise_ai: {
+      default_text_model_id: "enterprise-vision",
+      default_vision_model_id: "enterprise-vision",
+    },
   });
-}
+  await expectNoPageOverflow(page);
+});
 
-for (const scheme of ["light", "dark"] as const) {
-  // desktop（1440px）と mobile（375px）は playwright.config の project で回す。
-  test(`既定のテキストモデルが未設定なら欄の直下にエラーを出し、選ぶまで保存しない (#566, ${scheme})`, { tag: "@responsive" }, async ({
-    page,
-  }) => {
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 })
-      );
-    }, scheme);
-    const patches: unknown[] = [];
-    // 以前の画面で「既定の画像対応モデルを使う」のまま保存した既存環境。
-    await mockModelSettings(page, (payload) => patches.push(payload), { textModel: "" });
-    await page.goto("/settings/model");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(scheme === "dark");
+// desktop（1440px）と mobile（375px）は playwright.config の project で回す。
+test(`既定のテキストモデルが未設定なら欄の直下にエラーを出し、選ぶまで保存しない (#566)`, { tag: "@responsive" }, async ({
+  page,
+}) => {
+  const patches: unknown[] = [];
+  // 以前の画面で「既定の画像対応モデルを使う」のまま保存した既存環境。
+  await mockModelSettings(page, (payload) => patches.push(payload), { textModel: "" });
+  await page.goto("/settings/model");
 
-    const text = page.getByRole("combobox", { name: "既定のテキストモデル" });
-    await expect(text).toContainText("モデルを選んでください");
-    await expect(text).toHaveAttribute("aria-invalid", "true");
-    await expectFieldErrorBelow(text, "既定のテキストモデルを選択してください。");
+  const text = page.getByRole("combobox", { name: "既定のテキストモデル" });
+  await expect(text).toContainText("モデルを選んでください");
+  await expect(text).toHaveAttribute("aria-invalid", "true");
+  await expectFieldErrorBelow(text, "既定のテキストモデルを選択してください。");
 
-    // 保存は送信せず、テキストの欄へフォーカスする。
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(text).toBeFocused();
-    expect(patches).toHaveLength(0);
+  // 保存は送信せず、テキストの欄へフォーカスする。
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(text).toBeFocused();
+  expect(patches).toHaveLength(0);
 
-    await text.click();
-    await page
-      .getByRole("listbox", { name: "既定のテキストモデル" })
-      .getByRole("option", { name: /標準 LLM/ })
-      .click();
-    await expect(text).toHaveAttribute("aria-invalid", "false");
-    await expect(page.getByText("既定のテキストモデルを選択してください。")).toHaveCount(0);
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
-    expect(patches[0]).toMatchObject({
-      enterprise_ai: {
-        default_text_model_id: "enterprise-llm",
-        default_vision_model_id: "enterprise-vision",
-      },
-    });
-    await expectNoPageOverflow(page);
+  await text.click();
+  await page
+    .getByRole("listbox", { name: "既定のテキストモデル" })
+    .getByRole("option", { name: /標準 LLM/ })
+    .click();
+  await expect(text).toHaveAttribute("aria-invalid", "false");
+  await expect(page.getByText("既定のテキストモデルを選択してください。")).toHaveCount(0);
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
+  expect(patches[0]).toMatchObject({
+    enterprise_ai: {
+      default_text_model_id: "enterprise-llm",
+      default_vision_model_id: "enterprise-vision",
+    },
   });
-}
+  await expectNoPageOverflow(page);
+});
 
 test("既定の画像対応モデルに選んだモデルを一覧から削除すると、選び直しを案内する", async ({ page }) => {
   const patches: unknown[] = [];
@@ -464,149 +463,147 @@ test("既定の画像対応モデルに選んだモデルを一覧から削除�
   expect(patches).toHaveLength(0);
 });
 
-for (const scheme of ["light", "dark"] as const) {
-  // desktop（1440px）と mobile（375px）は playwright.config の project で回す。
-  test(`接続はプライマリ接続とセカンダリ接続のタブで切り替え、登録モデルごとに接続を選んで保存する (${scheme})`, { tag: "@responsive" }, async ({
-    page,
-  }, testInfo) => {
-    const viewportWidth = page.viewportSize()?.width ?? 1440;
-    await page.addInitScript(
-      ({ theme, collapsed }) => {
-        window.localStorage.setItem(
-          "production-ready-rag.ui",
-          JSON.stringify({ state: { theme, sidebarCollapsed: collapsed }, version: 0 })
-        );
-      },
-      { theme: scheme, collapsed: viewportWidth < 768 }
-    );
-    const patches: Array<{ enterprise_ai: Record<string, unknown> }> = [];
-    await mockModelSettings(page, (payload) =>
-      patches.push(payload as { enterprise_ai: Record<string, unknown> })
-    );
-    await page.goto("/settings/model");
+// desktop（1440px）と mobile（375px）は playwright.config の project で回す。
+test(`接続はプライマリ接続とセカンダリ接続のタブで切り替え、登録モデルごとに接続を選んで保存する`, { tag: "@responsive" }, async ({
+  page,
+}, testInfo) => {
+  const viewportWidth = page.viewportSize()?.width ?? 1440;
+  await page.addInitScript(
+    (collapsed) => {
+      window.localStorage.setItem(
+        "production-ready-rag.ui",
+        JSON.stringify({ state: { sidebarCollapsed: collapsed }, version: 0 })
+      );
+    },
+    viewportWidth < 768
+  );
+  const patches: Array<{ enterprise_ai: Record<string, unknown> }> = [];
+  await mockModelSettings(page, (payload) =>
+    patches.push(payload as { enterprise_ai: Record<string, unknown> })
+  );
+  await page.goto("/settings/model");
 
-    // 接続は OCI Enterprise AI のカードの中の共有の Tabs（#542）。表示名の欄はない。
-    const tablist = page.getByRole("tablist", { name: "OCI Enterprise AI の接続" });
-    const primaryTab = tablist.getByRole("tab", { name: "プライマリ接続" });
-    const secondaryTab = tablist.getByRole("tab", { name: "セカンダリ接続" });
-    const tertiaryTab = tablist.getByRole("tab", { name: "ターシャリ接続" });
-    // タブの並びはプライマリ接続 → セカンダリ接続 → ターシャリ接続（#786）。
-    await expect(tablist.getByRole("tab")).toHaveText(["プライマリ接続", "セカンダリ接続", "ターシャリ接続"]);
-    await expect(primaryTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByLabel("表示名", { exact: true })).toHaveCount(0);
-    await expect(page.locator("#enterprise-connection-name")).toHaveCount(0);
-    const modelConnection1 = page.getByRole("combobox", { name: "モデル 1 の接続" });
-    await expect(modelConnection1).toContainText("プライマリ接続");
-    // 未設定のセカンダリ接続は、登録モデルの「接続」の選択肢に出さない。
-    await modelConnection1.click();
-    await expect(
-      page.getByRole("listbox", { name: "モデル 1 の接続" }).getByRole("option")
-    ).toHaveText(["プライマリ接続"]);
-    await page.keyboard.press("Escape");
+  // 接続は OCI Enterprise AI のカードの中の共有の Tabs（#542）。表示名の欄はない。
+  const tablist = page.getByRole("tablist", { name: "OCI Enterprise AI の接続" });
+  const primaryTab = tablist.getByRole("tab", { name: "プライマリ接続" });
+  const secondaryTab = tablist.getByRole("tab", { name: "セカンダリ接続" });
+  const tertiaryTab = tablist.getByRole("tab", { name: "ターシャリ接続" });
+  // タブの並びはプライマリ接続 → セカンダリ接続 → ターシャリ接続（#786）。
+  await expect(tablist.getByRole("tab")).toHaveText(["プライマリ接続", "セカンダリ接続", "ターシャリ接続"]);
+  await expect(primaryTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("表示名", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#enterprise-connection-name")).toHaveCount(0);
+  const modelConnection1 = page.getByRole("combobox", { name: "モデル 1 の接続" });
+  await expect(modelConnection1).toContainText("プライマリ接続");
+  // 未設定のセカンダリ接続は、登録モデルの「接続」の選択肢に出さない。
+  await modelConnection1.click();
+  await expect(
+    page.getByRole("listbox", { name: "モデル 1 の接続" }).getByRole("option")
+  ).toHaveText(["プライマリ接続"]);
+  await page.keyboard.press("Escape");
 
-    // ← → / Home / End でタブを移る。未設定のセカンダリ接続は空の状態と「セカンダリ接続を設定」。
-    await primaryTab.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(secondaryTab).toBeFocused();
-    await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("enterprise-connection-secondary-empty")).toContainText(
-      "セカンダリ接続は設定されていません。"
-    );
-    await page.keyboard.press("Home");
-    await expect(primaryTab).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("End");
-    await expect(tertiaryTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("enterprise-connection-tertiary-empty")).toContainText(
-      "ターシャリ接続は設定されていません。"
-    );
-    await page.keyboard.press("ArrowLeft");
-    await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
-    await page.screenshot({
-      path: testInfo.outputPath(`connection-secondary-empty-${scheme}-${testInfo.project.name}.png`),
-    });
-
-    // 設定すると入力欄を出し、Endpoint URL と API key は必須（Project OCID は任意。#9）。
-    await page.getByRole("button", { name: "セカンダリ接続を設定" }).click();
-    const secondary = page.getByTestId("enterprise-connection-secondary");
-    const secondaryEndpoint = page.locator("#enterprise-secondary-endpoint");
-    const secondaryProject = page.locator("#enterprise-secondary-project-ocid");
-    const secondaryApiKey = page.locator("#enterprise-secondary-api-key");
-    await expect(secondaryEndpoint).toBeFocused();
-    for (const field of [secondaryEndpoint, secondaryApiKey]) {
-      await expect(field).toHaveAttribute("aria-required", "true");
-    }
-    await expect(secondaryProject).not.toHaveAttribute("aria-required", "true");
-    await expect(page.getByTestId("enterprise-connection-tab-secondary-unsaved")).toHaveText("未保存");
-
-    // プライマリ接続のタブから保存しても、エラーのあるセカンダリ接続のタブへ移り、最初の欄へフォーカスする。
-    await primaryTab.click();
-    await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
-    await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
-    await expect(secondaryTab).toHaveAttribute("data-invalid", "true");
-    await expect(secondaryEndpoint).toBeFocused();
-    await expect(secondaryEndpoint).toHaveAttribute("aria-invalid", "true");
-    await expect(secondary.getByText("Endpoint URL を入力してください。")).toBeVisible();
-    await expect(secondary.getByText("Project OCID を入力してください。")).toHaveCount(0);
-    await expect(secondary.getByText("API key を入力してください。")).toBeVisible();
-    expect(patches).toHaveLength(0);
-    await page.screenshot({
-      path: testInfo.outputPath(`connection-secondary-errors-${scheme}-${testInfo.project.name}.png`),
-    });
-
-    await secondaryEndpoint.fill("https://secondary.example/openai/v1");
-    await secondaryProject.fill("ocid1.generativeaiproject.oc1.us-chicago-1.secondary");
-    await secondaryApiKey.fill("sk-secondary-input");
-    await expect(secondaryTab).not.toHaveAttribute("data-invalid", "true");
-
-    // 保存前の接続を選んだモデルは、登録モデルの保存を止めて先に接続の保存を案内する。
-    await modelConnection1.click();
-    await page
-      .getByRole("listbox", { name: "モデル 1 の接続" })
-      .getByRole("option", { name: "セカンダリ接続" })
-      .click();
-    await expect(modelConnection1).toContainText("セカンダリ接続");
-    await expect(modelConnection1).toHaveAttribute("aria-invalid", "true");
-    await expect(
-      page.getByText("セカンダリ接続 はまだ保存されていません。", { exact: false })
-    ).toBeVisible();
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(modelConnection1).toBeFocused();
-    expect(patches).toHaveLength(0);
-
-    await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
-    await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。").first()).toBeVisible();
-    expect(patches[0]?.enterprise_ai.connections).toEqual([
-      expect.objectContaining({ connection_id: "primary" }),
-      expect.objectContaining({
-        connection_id: "secondary",
-        endpoint: "https://secondary.example/openai/v1",
-        project_ocid: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
-        api_key: "sk-secondary-input",
-      }),
-    ]);
-    for (const connection of patches[0]?.enterprise_ai.connections as object[]) {
-      expect(connection).not.toHaveProperty("display_name");
-    }
-    await expect(modelConnection1).toHaveAttribute("aria-invalid", "false");
-    await expect(page.getByTestId("enterprise-connection-tab-secondary-unsaved")).toHaveCount(0);
-
-    await page.getByRole("button", { name: "登録モデル: 保存" }).click();
-    await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
-    expect(patches[1]?.enterprise_ai.models).toMatchObject([
-      { model_id: "enterprise-llm", connection_id: "secondary" },
-      { model_id: "enterprise-vision", connection_id: "primary" },
-    ]);
-
-    await expectNoPageOverflow(page);
-    await tablist.scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: testInfo.outputPath(`connections-${scheme}-${testInfo.project.name}.png`),
-    });
-    await page.locator("#enterprise-model-catalog").screenshot({
-      path: testInfo.outputPath(`model-catalog-${scheme}-${testInfo.project.name}.png`),
-    });
+  // ← → / Home / End でタブを移る。未設定のセカンダリ接続は空の状態と「セカンダリ接続を設定」。
+  await primaryTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(secondaryTab).toBeFocused();
+  await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("enterprise-connection-secondary-empty")).toContainText(
+    "セカンダリ接続は設定されていません。"
+  );
+  await page.keyboard.press("Home");
+  await expect(primaryTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("End");
+  await expect(tertiaryTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("enterprise-connection-tertiary-empty")).toContainText(
+    "ターシャリ接続は設定されていません。"
+  );
+  await page.keyboard.press("ArrowLeft");
+  await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
+  await page.screenshot({
+    path: testInfo.outputPath(`connection-secondary-empty-${testInfo.project.name}.png`),
   });
-}
+
+  // 設定すると入力欄を出し、Endpoint URL と API key は必須（Project OCID は任意。#9）。
+  await page.getByRole("button", { name: "セカンダリ接続を設定" }).click();
+  const secondary = page.getByTestId("enterprise-connection-secondary");
+  const secondaryEndpoint = page.locator("#enterprise-secondary-endpoint");
+  const secondaryProject = page.locator("#enterprise-secondary-project-ocid");
+  const secondaryApiKey = page.locator("#enterprise-secondary-api-key");
+  await expect(secondaryEndpoint).toBeFocused();
+  for (const field of [secondaryEndpoint, secondaryApiKey]) {
+    await expect(field).toHaveAttribute("aria-required", "true");
+  }
+  await expect(secondaryProject).not.toHaveAttribute("aria-required", "true");
+  await expect(page.getByTestId("enterprise-connection-tab-secondary-unsaved")).toHaveText("未保存");
+
+  // プライマリ接続のタブから保存しても、エラーのあるセカンダリ接続のタブへ移り、最初の欄へフォーカスする。
+  await primaryTab.click();
+  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await expect(secondaryTab).toHaveAttribute("aria-selected", "true");
+  await expect(secondaryTab).toHaveAttribute("data-invalid", "true");
+  await expect(secondaryEndpoint).toBeFocused();
+  await expect(secondaryEndpoint).toHaveAttribute("aria-invalid", "true");
+  await expect(secondary.getByText("Endpoint URL を入力してください。")).toBeVisible();
+  await expect(secondary.getByText("Project OCID を入力してください。")).toHaveCount(0);
+  await expect(secondary.getByText("API key を入力してください。")).toBeVisible();
+  expect(patches).toHaveLength(0);
+  await page.screenshot({
+    path: testInfo.outputPath(`connection-secondary-errors-${testInfo.project.name}.png`),
+  });
+
+  await secondaryEndpoint.fill("https://secondary.example/openai/v1");
+  await secondaryProject.fill("ocid1.generativeaiproject.oc1.us-chicago-1.secondary");
+  await secondaryApiKey.fill("sk-secondary-input");
+  await expect(secondaryTab).not.toHaveAttribute("data-invalid", "true");
+
+  // 保存前の接続を選んだモデルは、登録モデルの保存を止めて先に接続の保存を案内する。
+  await modelConnection1.click();
+  await page
+    .getByRole("listbox", { name: "モデル 1 の接続" })
+    .getByRole("option", { name: "セカンダリ接続" })
+    .click();
+  await expect(modelConnection1).toContainText("セカンダリ接続");
+  await expect(modelConnection1).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByText("セカンダリ接続 はまだ保存されていません。", { exact: false })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(modelConnection1).toBeFocused();
+  expect(patches).toHaveLength(0);
+
+  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。").first()).toBeVisible();
+  expect(patches[0]?.enterprise_ai.connections).toEqual([
+    expect.objectContaining({ connection_id: "primary" }),
+    expect.objectContaining({
+      connection_id: "secondary",
+      endpoint: "https://secondary.example/openai/v1",
+      project_ocid: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
+      api_key: "sk-secondary-input",
+    }),
+  ]);
+  for (const connection of patches[0]?.enterprise_ai.connections as object[]) {
+    expect(connection).not.toHaveProperty("display_name");
+  }
+  await expect(modelConnection1).toHaveAttribute("aria-invalid", "false");
+  await expect(page.getByTestId("enterprise-connection-tab-secondary-unsaved")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "登録モデル: 保存" }).click();
+  await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
+  expect(patches[1]?.enterprise_ai.models).toMatchObject([
+    { model_id: "enterprise-llm", connection_id: "secondary" },
+    { model_id: "enterprise-vision", connection_id: "primary" },
+  ]);
+
+  await expectNoPageOverflow(page);
+  await tablist.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: testInfo.outputPath(`connections-${testInfo.project.name}.png`),
+  });
+  await page.locator("#enterprise-model-catalog").screenshot({
+    path: testInfo.outputPath(`model-catalog-${testInfo.project.name}.png`),
+  });
+});
 
 test("セカンダリ接続を使うモデルがあるとき、削除は確認してプライマリ接続に移す", async ({ page }) => {
   const patches: Array<{ enterprise_ai: Record<string, unknown> }> = [];
@@ -712,7 +709,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
 });
 
 test("モデル設定はモデルごとのテスト成功と失敗を行内に表示する", async ({ page }, testInfo) => {
-  await mockModelSettings(page);
+  await mockModelSettings(page, undefined, { embedding: true });
   await page.goto("/settings/model");
 
   await page.getByRole("button", { name: "enterprise-llm をテスト" }).click();
@@ -727,7 +724,7 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
 
   await page.getByRole("button", { name: "text-embedding-v4 をテスト" }).click();
   await expect(
-    page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。")
+    page.getByText("埋め込みモデル「text-embedding-v4」のテストに失敗しました。")
   ).toBeVisible();
   await expect(page.getByText("確認ポイント")).toBeVisible();
   await expect(page.getByText("OCI config、設定名、region")).toBeVisible();
@@ -737,11 +734,11 @@ test("モデル設定はモデルごとのテスト成功と失敗を行内に�
   await expect(page.getByText("401 Unauthorized: invalid model")).toBeVisible();
   await expectNoPageOverflow(page);
   await page.screenshot({path: testInfo.outputPath("model-test-error-detail.png"), fullPage: true});
-  // 結果は操作した欄の行のすぐ下に出す: Embedding の結果は Rerank の欄より上（messaging.md §10）。
-  const embeddingResult = page.getByText("Embedding モデル「text-embedding-v4」のテストに失敗しました。");
+  // 結果は操作した行のすぐ下に出す: 埋め込みの行の結果は、次の再ランクの行より上（messaging.md §10・#45）。
+  const embeddingResult = page.getByText("埋め込みモデル「text-embedding-v4」のテストに失敗しました。");
   const embeddingBox = await embeddingResult.boundingBox();
-  const embeddingFieldBox = await page.locator("#genai-embedding-model").boundingBox();
-  const rerankFieldBox = await page.locator("#genai-rerank-model").boundingBox();
+  const embeddingFieldBox = await page.getByLabel("モデル ID 3").boundingBox();
+  const rerankFieldBox = await page.getByLabel("モデル ID 4").boundingBox();
   expect(embeddingBox && embeddingFieldBox && rerankFieldBox).toBeTruthy();
   expect(embeddingBox!.y).toBeGreaterThan(embeddingFieldBox!.y);
   expect(embeddingBox!.y).toBeLessThan(rerankFieldBox!.y);
@@ -958,7 +955,7 @@ async function mockModelSettings(
           target_type: payload.target_type,
           model_id: payload.model_id,
           message: failed
-            ? `Embedding モデル「${payload.model_id}」のテストに失敗しました。`
+            ? `埋め込みモデル「${payload.model_id}」のテストに失敗しました。`
             : `Enterprise AI の回答生成モデル「${payload.model_id}」から応答を取得しました。`,
           troubleshooting: failed
             ? [

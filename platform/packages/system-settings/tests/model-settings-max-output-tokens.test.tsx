@@ -65,11 +65,6 @@ function data(modelIds: string[] = ["llm"]): ModelSettingsData {
         timeout_seconds: 600,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
-        embedding_dim: 1024,
-        rerank_model: "cohere.rerank-v4.0-fast",
-      },
     },
     model_settings_file: "model-settings.json",
     source: "runtime",

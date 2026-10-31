@@ -39,7 +39,6 @@ from pr_system_settings.embedding import EMBEDDING_VECTOR_COLUMN_TYPE
 from pydantic import ValidationError
 from rag_engine.resources.tracing import observe_call
 from rag_engine.retrieval.search_stages import TEXT_SEARCH_STAGE, VECTOR_SEARCH_STAGE
-from rag_parser_core.xml_tree_json import query_citation_keys
 
 from app.clients.language_pack_release_store import LanguagePackReleaseStore
 from app.clients.oracle_read_stats import (
@@ -494,73 +493,11 @@ class OracleClient:
             return await self.keyword_search(query, top_k, filters)
 
         # vector と keyword は独立しているので並行に読む(#1490)。融合は順位だけで決まる。
-        vector_hits, keyword_hits, citation_hits = await asyncio.gather(
+        vector_hits, keyword_hits = await asyncio.gather(
             self.vector_search(embedding, top_k, filters),
             self.keyword_search(query, top_k, filters),
-            self.citation_label_search(query, filters),
         )
-        return _with_citation_hits(
-            citation_hits, self._fuse_hybrid_hits(vector_hits, keyword_hits, top_k), top_k
-        )
-
-    async def citation_label_search(
-        self, query: str, filters: dict[str, str] | None = None
-    ) -> list[RetrievedChunk]:
-        """質問の中の引用ラベルに一致する XML ツリー JSON の段落(#2024)。
-
-        ラベルが無い質問は SQL を実行しない。文書名つきの key に一致した段落があればそれだけを、
-        無ければ文書名なしの key に一致した段落を返す(検索と同じ見え方の条件。最大 5 件)。
-        """
-        keys = query_citation_keys(query)
-        if not keys:
-            return []
-        where_sql, binds = _oracle_retrieval_where(filters or {})
-        key_binds = {f"citation_key_{index}": key for index, key in enumerate(keys)}
-        key_sql = " OR ".join(
-            "DBMS_LOB.INSTR(JSON_VALUE(c.metadata_json, '$.xml_tree_lookup_keys' "
-            f"RETURNING CLOB), :{name}) > 0"
-            for name in key_binds
-        )
-        rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT
-                c.document_id,
-                c.chunk_id,
-                c.chunk_text,
-                c.metadata_json,
-                c.chunk_index,
-                c.chunk_set_id,
-                d.file_name,
-                d.category_name,
-                d.superseded_by_document_id,
-                0 AS score
-            FROM rag_chunks c
-            JOIN rag_documents d ON d.document_id = c.document_id
-            WHERE {where_sql}
-              AND ({key_sql})
-            ORDER BY c.chunk_index
-            FETCH FIRST 50 ROWS ONLY
-            """,
-                where_sql=where_sql,
-                key_sql=key_sql,
-            ),
-            {**binds, **key_binds},
-        )
-        matches: dict[str, list[RetrievedChunk]] = {}
-        for row in rows:
-            chunk = _retrieved_chunk_from_row(row)
-            chunk_keys = set(str(chunk.metadata.get("xml_tree_lookup_keys") or "").splitlines())
-            for key in keys:
-                if key in chunk_keys:
-                    matches.setdefault(key, []).append(chunk)
-        for key in keys:
-            if matches.get(key):
-                return [
-                    _with_retrieval_metadata(chunk, retrieval_mode="citation", citation_rank=rank)
-                    for rank, chunk in enumerate(matches[key][:5], start=1)
-                ]
-        return []
+        return self._fuse_hybrid_hits(vector_hits, keyword_hits, top_k)
 
     async def search_many(
         self,
@@ -635,19 +572,8 @@ class OracleClient:
                     for rank, (chunk, row) in enumerate(_distinct_text_hits(ordered), start=1)
                 ]
             )
-        # 質問の中の引用ラベルに一致する段落(#2024。ラベルの無い検索文は SQL を実行しない)。
-        citation_hits = await asyncio.gather(
-            *(
-                self.citation_label_search(query, filters)
-                if mode == SearchMode.HYBRID
-                else _no_citation_hits()
-                for query, _embedding, mode in searches
-            )
-        )
         results: list[list[RetrievedChunk]] = []
-        for (vector_branch, keyword_branch, mode), citations in zip(
-            plan, citation_hits, strict=True
-        ):
+        for vector_branch, keyword_branch, mode in plan:
             vector_hits = branch_hits[vector_branch] if vector_branch is not None else []
             keyword_hits = branch_hits[keyword_branch] if keyword_branch is not None else []
             if mode == SearchMode.VECTOR:
@@ -655,13 +581,7 @@ class OracleClient:
             elif mode == SearchMode.KEYWORD:
                 results.append(keyword_hits)
             else:
-                results.append(
-                    _with_citation_hits(
-                        citations,
-                        self._fuse_hybrid_hits(vector_hits, keyword_hits, top_k),
-                        top_k,
-                    )
-                )
+                results.append(self._fuse_hybrid_hits(vector_hits, keyword_hits, top_k))
         return results
 
     def _fuse_hybrid_hits(
@@ -938,35 +858,6 @@ class OracleClient:
             {"pack_hash": pack_hash},
         )
         return _int_value((row or {}).get("document_count"))
-
-    async def retrieval_article_documents(self, filters: dict[str, str]) -> list[tuple[str, str]]:
-        """検索と同じ条件の、条で構成された文書(chunk が XML ツリー JSON の引用ラベルを持つ)の
-        (document_id, 文書名) を文書名の順に返す(#2254)。
-
-        文書名は XML ツリー JSON の文書の題名(``xml_tree_document_title``)、無ければファイル名。
-        """
-        where_sql, binds = _oracle_retrieval_where(filters)
-        rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT d.document_id, d.file_name,
-                   MAX(JSON_VALUE(c.metadata_json, '$.xml_tree_document_title')) AS title
-            FROM rag_chunks c
-            JOIN rag_documents d ON d.document_id = c.document_id
-            WHERE {where_sql}
-              AND JSON_EXISTS(c.metadata_json, '$.xml_tree_label_arabic')
-            GROUP BY d.document_id, d.file_name
-            ORDER BY d.file_name
-            """,
-                where_sql=where_sql,
-            ),
-            binds,
-        )
-        return [
-            (str(row["document_id"]), str(row.get("title") or row["file_name"]))
-            for row in rows
-            if row.get("document_id") and row.get("file_name")
-        ]
 
     async def retrieval_screen_sections(
         self, filters: dict[str, str]
@@ -1453,56 +1344,6 @@ class OracleClient:
             # INSTR は部分一致なので、要素の ID の完全一致で確かめる
             # （p1-1 と p1-10 を取り違えない）。
             if element_id in chunk_element_ids(chunk.metadata):
-                return chunk
-        return None
-
-    async def retrievable_citation_chunk(
-        self, document_id: str, citation_key: str
-    ) -> RetrievedChunk | None:
-        """引用ラベルの照合の key(``xml_tree_lookup_keys``)が一致する、今の有効な chunk(#2024)。
-
-        ``retrievable_chunk`` と同じ見え方の条件。1 つの段落が複数の chunk に分かれたときは、
-        文書の中で最初の chunk を返す。
-        """
-        where_sql, binds = _oracle_retrieval_where({}, effective_period=False)
-        rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT
-                c.document_id,
-                c.chunk_id,
-                c.chunk_text,
-                c.metadata_json,
-                c.chunk_index,
-                c.chunk_set_id,
-                d.file_name,
-                d.category_name,
-                d.superseded_by_document_id,
-                0 AS score
-            FROM rag_chunks c
-            JOIN rag_documents d ON d.document_id = c.document_id
-            WHERE {where_sql}
-              AND c.document_id = :read_document_id
-              AND DBMS_LOB.INSTR(
-                  JSON_VALUE(c.metadata_json, '$.xml_tree_lookup_keys' RETURNING CLOB),
-                  :read_citation_key
-              ) > 0
-            ORDER BY c.chunk_index
-            FETCH FIRST 50 ROWS ONLY
-            """,
-                where_sql=where_sql,
-            ),
-            {
-                **binds,
-                "read_document_id": document_id,
-                "read_citation_key": citation_key,
-            },
-        )
-        for row in rows:
-            chunk = _retrieved_chunk_from_row(row)
-            # INSTR は部分一致なので、key の行の完全一致で確かめる(枝番の取り違えを防ぐ)。
-            keys = str(chunk.metadata.get("xml_tree_lookup_keys") or "").splitlines()
-            if citation_key in keys:
                 return chunk
         return None
 
@@ -16605,10 +16446,6 @@ def _retrieved_chunk_score_sort_key(
     return (-score, chunk.document_id, stable_index, chunk.chunk_id)
 
 
-async def _no_citation_hits() -> list[RetrievedChunk]:
-    return []
-
-
 async def _observed_reads(stage: str, reads: Sequence[Awaitable[None]]) -> None:
     """読み取りを並行に読み、全体を 1 つの処理の経過の段(``observe_call("stage", stage)``)にする。
 
@@ -16618,23 +16455,6 @@ async def _observed_reads(stage: str, reads: Sequence[Awaitable[None]]) -> None:
         return
     with observe_call("stage", stage):
         await asyncio.gather(*reads)
-
-
-def _with_citation_hits(
-    citation_hits: list[RetrievedChunk], fused: list[RetrievedChunk], top_k: int
-) -> list[RetrievedChunk]:
-    """引用ラベルに一致した段落を先頭に置く(#2024)。融合の結果の順位の metadata は残す。"""
-    if not citation_hits:
-        return fused
-    by_id = {hit.chunk_id: hit for hit in fused}
-    head = [
-        hit.model_copy(update={"metadata": {**by_id[hit.chunk_id].metadata, **hit.metadata}})
-        if hit.chunk_id in by_id
-        else hit
-        for hit in citation_hits
-    ]
-    head_ids = {hit.chunk_id for hit in head}
-    return [*head, *(hit for hit in fused if hit.chunk_id not in head_ids)][:top_k]
 
 
 def _with_retrieval_metadata(

@@ -8,7 +8,6 @@ import {
   Toaster,
   TraceDetailsLabelsProvider,
   createTraceDetailsLabels,
-  initTheme,
   loadStylesAfterFirstRender,
 } from "@production-ready/ui";
 import {
@@ -24,10 +23,6 @@ import "./globals.css";
 // 書体は @fontsource の woff2 を同一 origin で配信する（外部 CDN に依存しない）。
 import "./fonts.css";
 import { t } from "@/lib/i18n";
-import { useUiStore } from "@/lib/ui-store";
-
-// 永続化テーマを描画前に適用（FOUC 回避）＋ store / OS 設定の変更を購読する（#95）。
-initTheme(useUiStore);
 
 const root = document.getElementById("root");
 if (!root) {

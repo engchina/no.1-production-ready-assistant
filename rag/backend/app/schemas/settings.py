@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from typing import Literal
-from urllib.parse import urlsplit
 
 # OCI 認証の schema は3製品共通（platform の pr_system_settings。#100）。互換のため re-export する。
 # データベース設定の schema は3製品共通（pr_system_settings。#108）。互換のため re-export する。
@@ -15,9 +14,9 @@ from pr_system_settings.database import DatabaseSettingsUpdate as DatabaseSettin
 from pr_system_settings.model import (
     EnterpriseAiModelEntrySettings as EnterpriseAiModelEntrySettings,
 )
+from pr_system_settings.model import EnterpriseAiModelKind as EnterpriseAiModelKind
 from pr_system_settings.model import EnterpriseAiModelSettings as EnterpriseAiModelSettings
 from pr_system_settings.model import EnterpriseAiVlmInputMode as EnterpriseAiVlmInputMode
-from pr_system_settings.model import GenerativeAiModelSettings as GenerativeAiModelSettings
 from pr_system_settings.model import ModelSettingsData as ModelSettingsData
 from pr_system_settings.model import ModelSettingsPayload as ModelSettingsPayload
 from pr_system_settings.model import ModelSettingsSecretSource as ModelSettingsSecretSource
@@ -103,30 +102,15 @@ from app.config import (
     PreprocessProfile,
     QueryStrategy,
     VectorIndexProfile,
-    reject_roadmap_parser_adapter_backend,
 )
 from app.schemas.document import DocumentProcessingConfig
 from app.schemas.language_pack_release import LanguagePackRelease
 
-ParserAdapterBackendName = Literal[
-    "docling",
-    "unstructured",
-    "structured_records_jsonl",
-    "xml_tree_json",
-    "mineru",
-    "dots_ocr",
-]
-ExternalParserBackendName = Literal["mineru", "dots_ocr"]
-ExternalParserProtocol = Literal["mineru_v1", "openai_chat_completions"]
-ExternalParserConnectionStatus = Literal[
-    "available", "unconfigured", "unreachable", "model_missing", "invalid_response"
-]
+ParserAdapterBackendName = Literal["docling", "unstructured"]
 ParserAdapterScoreBackendName = Literal[
     "local",
     "docling",
     "unstructured",
-    "mineru",
-    "dots_ocr",
 ]
 ParserAdapterStatus = Literal["active", "available", "disabled", "ignored", "missing"]
 ParserAdapterScoreStatus = Literal[
@@ -250,66 +234,10 @@ class HuggingFaceSettingsUpdate(BaseModel):
         return value.strip()
 
 
-class ExternalParserConnectionData(BaseModel):
-    """外部 GPU parser の非機密接続設定。"""
-
-    backend: ExternalParserBackendName
-    protocol: ExternalParserProtocol
-    endpoint: str
-    model: str | None = None
-    api_key_configured: bool
-    configured: bool
-
-
-class ExternalParserConnectionUpdate(BaseModel):
-    """外部 GPU parser 接続の部分更新。secret は明示削除だけを許可する。"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    backend: ExternalParserBackendName
-    endpoint: str = Field(default="", max_length=2048)
-    model: str | None = Field(default=None, max_length=512)
-    api_key: str | None = Field(default=None, max_length=4096)
-    clear_api_key: bool = False
-
-    @field_validator("endpoint")
-    @classmethod
-    def validate_endpoint(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = value.strip().rstrip("/")
-        if not cleaned:
-            return ""
-        parsed = urlsplit(cleaned)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("接続先 URL は http:// または https:// で入力してください。")
-        if parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise ValueError("接続先 URL に認証情報、query、fragment は含められません。")
-        return cleaned
-
-    @field_validator("model", "api_key")
-    @classmethod
-    def strip_optional_text(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
-
-
-class ExternalParserConnectionStatusData(BaseModel):
-    """外部 GPU parser の疎通結果。"""
-
-    backend: ExternalParserBackendName
-    status: ExternalParserConnectionStatus
-    version: str | None = None
-    warning_code: str | None = None
-
-
 class ParserAdapterStatusData(BaseModel):
     """任意 parser adapter の feature flag / package readiness。"""
 
     backend: ParserAdapterBackendName
-    availability: Literal["available", "roadmap"] = Field(
-        default="available",
-        description="available=選べる、roadmap=準備中(ロードマップ)でまだ選べない(#3359)。",
-    )
     package_name: str
     import_name: str
     distribution_name: str | None = None
@@ -376,24 +304,6 @@ class ParserAdapterBackendSourceMatrixData(BaseModel):
     route_evidence: list[ParserAdapterSourceRouteData] = Field(default_factory=list)
 
 
-class ParserServiceBackendData(BaseModel):
-    """service 系 parser backend(OCI クラウドサービス直呼び)の選択状態と可用性。
-
-    package readiness の対象外。OCI Document Understanding を呼ぶため、設定の完全性で
-    「利用可能か」を示す。準備中(ロードマップ)のエンジンは ``availability="roadmap"`` で、
-    選べない(``selected`` は常に False、未設定の警告も出さない。#3374)。
-    """
-
-    backend: Literal["oci_document_understanding"]
-    availability: Literal["available", "roadmap"] = Field(
-        default="available",
-        description="available=選べる、roadmap=準備中(ロードマップ)でまだ選べない(#3374)。",
-    )
-    selected: bool
-    configured: bool
-    warning_code: str | None = None
-
-
 class ParserBackendCapabilityData(BaseModel):
     """backend が処理できる原本形式の宣言(rag_parser_core.capabilities 正本)。"""
 
@@ -402,23 +312,12 @@ class ParserBackendCapabilityData(BaseModel):
     extensions: list[str] = Field(default_factory=list)
 
 
-class MineruLicenseAcknowledgementData(BaseModel):
-    """MinerU のライセンスの条件の確認の状態（#3359）。確認するまで MinerU を選べない。"""
-
-    acknowledged: bool = False
-    # 確認した管理者の表示名と日時（UTC の ISO 8601）。未確認なら None。
-    acknowledged_by: str | None = None
-    acknowledged_at: str | None = None
-
-
 class ParserAdapterSettingsData(BaseModel):
     """任意 parser adapter 設定の非機密 runtime snapshot。"""
 
     adapter_backend: ParserAdapterBackend
     effective_order: list[ParserAdapterBackendName]
     adapters: list[ParserAdapterStatusData]
-    connections: list[ExternalParserConnectionData] = Field(default_factory=list)
-    service_backends: list[ParserServiceBackendData] = Field(default_factory=list)
     scorecard: ParserAdapterScorecardData
     source_routes: list[ParserAdapterSourceRouteData] = Field(default_factory=list)
     backend_source_kind_matrix: ParserAdapterBackendSourceMatrixData
@@ -433,9 +332,6 @@ class ParserAdapterSettingsData(BaseModel):
     navigation_summary_max_nodes: int
     # 図・表の説明（Vision）を同時に呼ぶ数の上限（RAG_VISION_CONCURRENCY。#2002）。
     vision_concurrency: int = 4
-    mineru_license: MineruLicenseAcknowledgementData = Field(
-        default_factory=MineruLicenseAcknowledgementData
-    )
     config_source: Literal["runtime"]
 
 
@@ -461,14 +357,6 @@ class ParserAdapterSettingsUpdate(BaseModel):
     adapter_backend: ParserAdapterBackend | None = None
     docling_enabled: bool | None = None
     unstructured_enabled: bool | None = None
-    mineru_enabled: bool | None = None
-    # MinerU のライセンスの条件の確認（#3359）。true で確認した人・日時を記録し、false で
-    # 記録を消す。省略・null は変えない。確認するまで MinerU を有効にも選択にもできない。
-    mineru_license_acknowledged: bool | None = None
-    dots_ocr_enabled: bool | None = None
-    structured_records_jsonl_enabled: bool | None = None
-    xml_tree_json_enabled: bool | None = None
-    connections: list[ExternalParserConnectionUpdate] = Field(default_factory=list, max_length=2)
     vision_enabled: bool | None = None
     heading_level_inference_enabled: bool | None = None
     field_extraction_enabled: bool | None = None
@@ -483,15 +371,7 @@ class ParserAdapterSettingsUpdate(BaseModel):
             raise ValueError(
                 "parser adapter の旧既定値は廃止されました。明示的な解析方式を選択してください。"
             )
-        # 準備中(ロードマップ)の解析エンジンは選べない(#3374)。
-        return reject_roadmap_parser_adapter_backend(value)
-
-    @model_validator(mode="after")
-    def reject_duplicate_connections(self) -> "ParserAdapterSettingsUpdate":
-        backends = [connection.backend for connection in self.connections]
-        if len(backends) != len(set(backends)):
-            raise ValueError("同じ外部解析エンジンの接続設定を重複して保存できません。")
-        return self
+        return value
 
 
 ChunkingStrategyName = ChunkingStrategy

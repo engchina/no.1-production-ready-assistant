@@ -339,7 +339,6 @@ def test_catalog_uses_current_image_template_with_runtime_rules() -> None:
 @pytest.mark.parametrize(
     "key",
     [
-        "external_ocr",
         "heading_levels",
         "field_extraction",
         "navigation_summary",
@@ -426,78 +425,3 @@ async def test_saved_summary_prompts_reach_the_model_without_cross_pipeline_leak
     assert all(call == ("", "独自の共通指示\n独自の階層指示") for call in calls[1:])
     unsaved = IngestionPipeline(oracle=cast(Any, object()), settings=Settings())
     assert await unsaved._stage_prompt("navigation_summary", "既定") == "既定"
-
-
-@pytest.mark.parametrize("backend", ["docling", "dots_ocr"])
-async def test_partition_loads_the_ocr_prompt_only_for_dots(
-    backend: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from typing import cast
-
-    from app.rag.ingestion import IngestionPipeline
-
-    loads: list[str] = []
-    seen: list[dict[str, Any]] = []
-
-    class Oracle:
-        async def answer_prompt_overrides(self) -> dict[str, str]:
-            loads.append("loaded")
-            return {"external_ocr": "合成の OCR 指示"}
-
-    pipeline = IngestionPipeline(
-        settings=Settings(rag_parser_adapter_backend=backend), oracle=cast(Any, Oracle())
-    )
-
-    def partition(**options: Any) -> Any:
-        seen.append(options)
-        raise RuntimeError("stop before parser")
-
-    monkeypatch.setattr(pipeline, "_partition_source", partition)
-    with pytest.raises(RuntimeError, match="stop before parser"):
-        await pipeline._run_partition_with_progress(
-            trace_id="trace",
-            parse_bytes=b"synthetic",
-            source_profile=None,
-            content_type="application/pdf",
-            attributes={},
-            on_progress=None,
-        )
-    assert len(loads) == (1 if backend == "dots_ocr" else 0)
-    assert seen[0].get("dots_ocr_prompt") == ("合成の OCR 指示" if backend == "dots_ocr" else None)
-
-
-async def test_partition_cleans_progress_poll_if_prompt_loading_is_cancelled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import asyncio
-    from typing import cast
-
-    from app.rag.ingestion import IngestionPipeline
-
-    closed: list[bool] = []
-
-    class Oracle:
-        async def answer_prompt_overrides(self) -> dict[str, str]:
-            await asyncio.sleep(0)
-            raise asyncio.CancelledError
-
-    async def poll(*args: Any) -> None:
-        try:
-            await asyncio.Event().wait()
-        finally:
-            closed.append(True)
-
-    pipeline = IngestionPipeline(
-        settings=Settings(rag_parser_adapter_backend="dots_ocr"), oracle=cast(Any, Oracle())
-    )
-    monkeypatch.setattr(pipeline, "_poll_parse_progress", poll)
-    with pytest.raises(asyncio.CancelledError):
-        await pipeline._run_partition_with_progress(
-            trace_id="trace",
-            parse_bytes=b"synthetic",
-            source_profile=None,
-            content_type="application/pdf",
-            attributes={},
-            on_progress=lambda _: None,
-        )
-    assert closed == [True]

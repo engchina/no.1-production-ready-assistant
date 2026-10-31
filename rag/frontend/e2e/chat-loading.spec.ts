@@ -96,65 +96,54 @@ async function holdProfiles(page: Page) {
   return () => release();
 }
 
-async function applyColorScheme(page: Page, colorScheme: "light" | "dark") {
-  await page.emulateMedia({ colorScheme });
-  await page.evaluate((scheme) => {
-    document.documentElement.dataset.theme = scheme;
-    document.documentElement.classList.toggle("dark", scheme === "dark");
-  }, colorScheme);
-}
+test(`検索・回答プロファイルの読み込み中は空の状態を出さず、Skeleton と無効の入力を出す`, async ({
+  page,
+}, testInfo) => {
+  await setup(page);
+  await page.route("**/api/search-answer-profiles**", (route) => route.fulfill(profilesPage));
+  await page.goto("/chat");
+  await selectSearchAnswerProfile(page, /経理アシスタント/);
+  await expect(page.getByText(EMPTY_TEXT, { exact: true })).toBeVisible();
+  const composer = page.getByRole("textbox", { name: COMPOSER, exact: true });
+  await composer.fill("書きかけの質問");
 
-for (const colorScheme of ["light", "dark"] as const) {
-  test(`検索・回答プロファイルの読み込み中は空の状態を出さず、Skeleton と無効の入力を出す (${colorScheme})`, async ({
-    page,
-  }, testInfo) => {
-    await setup(page);
-    await page.route("**/api/search-answer-profiles**", (route) => route.fulfill(profilesPage));
-    await page.goto("/chat");
-    await selectSearchAnswerProfile(page, /経理アシスタント/);
-    await expect(page.getByText(EMPTY_TEXT, { exact: true })).toBeVisible();
-    const composer = page.getByRole("textbox", { name: COMPOSER, exact: true });
-    await composer.fill("書きかけの質問");
+  // 再読込: 選んだ検索・回答プロファイルと書きかけの質問は作業状態から戻る。一覧の応答を止める。
+  await page.unroute("**/api/search-answer-profiles**");
+  const release = await holdProfiles(page);
+  await page.reload();
 
-    // 再読込: 選んだ検索・回答プロファイルと書きかけの質問は作業状態から戻る。一覧の応答を止める。
-    await page.unroute("**/api/search-answer-profiles**");
-    const release = await holdProfiles(page);
-    await page.reload();
-    await applyColorScheme(page, colorScheme);
+  // 上のカードは文言と経過時間（同じ取得の経過時間はここだけ）。
+  await expect(page.getByTestId("chat-search-answer-profiles-loading")).toContainText(
+    "検索・回答プロファイルを読み込んでいます"
+  );
+  // 会話の領域は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
+  await expect(page.getByTestId("chat-messages-skeleton")).toBeVisible();
+  await expect(page.getByText(EMPTY_TEXT, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("timer")).toHaveCount(1);
+  // 入力欄（書いた文字は残す）・送信・新しい会話・履歴の開閉は無効。
+  await expect(composer).toBeDisabled();
+  await expect(composer).toHaveValue("書きかけの質問");
+  await expect(page.getByTestId("chat-run-stop")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeDisabled();
+  await expect(page.getByTestId("chat-history-toggle")).toBeDisabled();
+  await page.screenshot({ path: testInfo.outputPath(`chat-loading.png`) });
 
-    // 上のカードは文言と経過時間（同じ取得の経過時間はここだけ）。
-    await expect(page.getByTestId("chat-search-answer-profiles-loading")).toContainText(
-      "検索・回答プロファイルを読み込んでいます"
-    );
-    // 会話の領域は最初から描き、空の状態の代わりに会話の形の Skeleton を出す。経過時間は重ねない。
-    await expect(page.getByTestId("chat-messages-skeleton")).toBeVisible();
-    await expect(page.getByText(EMPTY_TEXT, { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("timer")).toHaveCount(1);
-    // 入力欄（書いた文字は残す）・送信・新しい会話・履歴の開閉は無効。
-    await expect(composer).toBeDisabled();
-    await expect(composer).toHaveValue("書きかけの質問");
-    await expect(page.getByTestId("chat-run-stop")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeDisabled();
-    await expect(page.getByTestId("chat-history-toggle")).toBeDisabled();
-    await page.screenshot({ path: testInfo.outputPath(`chat-loading-${colorScheme}.png`) });
+  // 読み込み後: 空の状態と、使える入力欄。
+  release();
+  await expect(page.getByTestId("chat-search-answer-profiles-loading")).toHaveCount(0);
 
-    // 読み込み後: 空の状態と、使える入力欄。
-    release();
-    await expect(page.getByTestId("chat-search-answer-profiles-loading")).toHaveCount(0);
+  const toolbarTarget = page.locator("[data-chat-toolbar] #chat-search-answer-profile");
+  await expect(toolbarTarget).toBeVisible();
+  expect(await toolbarTarget.evaluate(node => node.closest("[data-chat-target-selector]") !== null)).toBe(true);
 
-    const toolbarTarget = page.locator("[data-chat-toolbar] #chat-search-answer-profile");
-    await expect(toolbarTarget).toBeVisible();
-    expect(await toolbarTarget.evaluate(node => node.closest("[data-chat-target-selector]") !== null)).toBe(true);
-
-    await expect(page.getByTestId("chat-messages-skeleton")).toHaveCount(0);
-    await expect(page.getByText(EMPTY_TEXT, { exact: true })).toBeVisible();
-    await expect(composer).toBeEnabled();
-    await expect(composer).toHaveValue("書きかけの質問");
-    await expect(page.getByTestId("chat-run-stop")).toBeEnabled();
-    await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeEnabled();
-    await expect(page.getByTestId("chat-history-toggle")).toBeEnabled();
-  });
-}
+  await expect(page.getByTestId("chat-messages-skeleton")).toHaveCount(0);
+  await expect(page.getByText(EMPTY_TEXT, { exact: true })).toBeVisible();
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue("書きかけの質問");
+  await expect(page.getByTestId("chat-run-stop")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "新しい会話", exact: true })).toBeEnabled();
+  await expect(page.getByTestId("chat-history-toggle")).toBeEnabled();
+});
 
 test("検索・回答プロファイルの一覧を読めなかったときは、0 件の案内ではなく失敗と再試行を出す", async ({
   page,

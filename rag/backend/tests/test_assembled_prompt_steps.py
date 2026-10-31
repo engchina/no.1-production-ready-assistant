@@ -196,7 +196,7 @@ async def test_ingestion_picture_prompt_keeps_continuous_steps(saved: dict[str, 
     pipeline = _pipeline(enabled=True, reader=reader)
     pipeline._oracle = PromptOracle(_validated(dict(saved)))
 
-    await _attach(pipeline, _figure_extraction([0.168, 0.119, 0.504, 0.297]), "mineru")
+    await _attach(pipeline, _figure_extraction([0.168, 0.119, 0.504, 0.297]), "unstructured")
 
     assert len(reader.calls) == 1
     prompt = str(reader.calls[0]["prompt"])

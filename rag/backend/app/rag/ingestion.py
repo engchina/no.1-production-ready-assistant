@@ -35,24 +35,19 @@ from rag_parser_core.oci_enterprise_ai import LLM_SYSTEM_PROMPT, sdk_retries_dis
 from rag_parser_core.preprocess import ConvertOutcome, SourceDerivation
 from rag_parser_core.result import (
     EXTERNAL_ADAPTER_PACKAGES,
-    SERVICE_ADAPTER_BACKENDS,
     ParserRegistryResult,
 )
 from rag_parser_core.source import template_for_source_profile
 from rag_parser_core.structured_records import (
     STRUCTURED_RECORDS_CONTENT_TYPE,
     STRUCTURED_RECORDS_FILE_EXTENSION,
-    STRUCTURED_RECORDS_JSONL_BACKEND,
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
     RecordBoundaryError,
-    is_structured_records_content_type,
     record_boundary_plain_text,
 )
 from rag_pipeline_core.raptor import build_raptor_summaries
 
 from app.clients.ai_calls import attach_ingestion_progress, ingestion_ai_calls, make_ai_caller
 from app.clients.object_storage import ObjectStorageClient
-from app.clients.oci_document_understanding import OciDocumentUnderstandingClient
 from app.clients.oci_enterprise_ai import (
     EnterpriseAiIncompleteResponseError,
     EnterpriseAiTimeoutError,
@@ -62,13 +57,9 @@ from app.clients.oci_enterprise_ai import (
 from app.clients.oci_genai import OciGenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.parser_service import (
-    PARSER_ENGINE_ROADMAP_REASON,
-    PARSER_ENGINE_ROADMAP_WARNING,
-    STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON,
     ParserServiceClient,
     ParserServiceUnavailableError,
     parse_progress_id,
-    structured_records_requires_jsonl_backend_message,
     supported_formats_label,
 )
 from app.clients.preprocess_service import PreprocessServiceClient
@@ -78,7 +69,6 @@ from app.config import (
     enterprise_ai_default_model_id,
     enterprise_ai_max_input_tokens,
     get_settings,
-    is_roadmap_parser_adapter_backend,
 )
 from app.rag.audit import record_rag_ingestion_audit
 from app.rag.chunking import Chunk, chunk_extraction_with_strategy
@@ -89,7 +79,7 @@ from app.rag.chunking_small_to_big import (
     small_to_big_parent_source,
 )
 from app.rag.chunking_strategy import resolve_chunking_params
-from app.rag.cross_references import annotate_cross_references, apply_reference_search_context
+from app.rag.cross_references import annotate_cross_references
 from app.rag.entity_index import EntityIndex, EntityIndexOptions, build_entity_index
 from app.rag.extraction_field_adapter import (
     FIELD_EXTRACTION_OUTCOME_ARTIFACT_KEY,
@@ -141,10 +131,6 @@ from app.rag.layer_fingerprint import (
     NAVIGATION_SUMMARY_MAX_NODES_ARTIFACT_KEY,
     field_schema_hash,
 )
-from app.rag.mineru_license import (
-    MINERU_LICENSE_REQUIRED_MESSAGE,
-    MINERU_LICENSE_UNACKNOWLEDGED_WARNING,
-)
 from app.rag.navigation import (
     build_navigation_tree,
     navigation_summary_elements,
@@ -185,7 +171,6 @@ from app.rag.vision import (
     read_figures_with_vision,
     vision_failure,
 )
-from app.rag.xml_tree_source_urls import apply_xml_tree_source_urls
 from app.schemas.document import (
     DocumentChunkView,
     DocumentDetail,
@@ -599,7 +584,6 @@ class IngestionPipeline:
         genai: OciGenAiClient | None = None,
         oracle: OracleClient | None = None,
         object_storage: ObjectStorageClient | None = None,
-        document_understanding: OciDocumentUnderstandingClient | None = None,
         settings: Settings | None = None,
         recipe_id: str | None = None,
         recipe_revision: int | None = None,
@@ -618,10 +602,6 @@ class IngestionPipeline:
         self._parser_service = ParserServiceClient(settings=self._settings)
         # 前処理(parse 前の原本変換)。軽量正規化は in-process、重い変換はサービスへ委譲。
         self._preprocess = PreprocessServiceClient(self._settings)
-        # service 系 backend(OCI Document Understanding)を backend から直接呼ぶ。
-        self._document_understanding = document_understanding or OciDocumentUnderstandingClient(
-            settings=self._settings
-        )
 
     def _selected_parser_backend(self) -> str:
         """設定の解析エンジン(小文字)。廃止済みの local / local_partition は既定のエンジン。"""
@@ -649,15 +629,12 @@ class IngestionPipeline:
         parse_bytes: bytes,
         source_profile: SourceProfile | None,
         content_type: str,
-        dots_ocr_prompt: str | None = None,
     ) -> ParserRegistryResult:
         """選択 parser backend を parser マイクロサービスへ HTTP 委譲する。
 
         in-process 解析・local fallback は一切持たない。
         - 非対応形式(outlook .msg / TIFF / 旧 Office バイナリ)は profiling 済みの
           ``source_profile.unsupported_reason`` を sentinel として返す。
-        - OCI service backend(Document Understanding)も sentinel を返し、
-          ``_extract_with_service_backend`` が直接 HTTP 呼び出しする。
         - それ以外(既定 ``docling`` 含む)は runner を fail-fast で実行する。
           抽出が空なら ``ParserServiceUnavailableError`` を送出し、別経路へ縮退しない。
         """
@@ -673,31 +650,11 @@ class IngestionPipeline:
                 unsupported_reason=unsupported_reason,
             )
         backend = self._selected_parser_backend()
-        # 準備中(ロードマップ)のエンジン(#3374)は選べない。保存済みの値・上書きに残っていても
-        # 呼ばずに止める。
-        if is_roadmap_parser_adapter_backend(backend):
-            raise ParserServiceUnavailableError(
-                backend,
-                PARSER_ENGINE_ROADMAP_REASON,
-                warning_code=PARSER_ENGINE_ROADMAP_WARNING,
-            )
-        if backend not in ADAPTER_CAPABILITIES and backend not in SERVICE_ADAPTER_BACKENDS:
+        if backend not in ADAPTER_CAPABILITIES:
             raise ParserServiceUnavailableError(
                 backend,
                 "engine_removed",
                 warning_code="parser_engine_removed",
-            )
-        # 構造化レコードの JSONL(CSV→JSONL・Excel→JSONL・Word→JSONL)は構造化レコード JSONL の
-        # 解析エンジンだけが読む。ほかのエンジンでは黙って変換せず、選び直すよう案内して
-        # 止める(#2457)。
-        if (
-            is_structured_records_content_type(content_type)
-            and backend != STRUCTURED_RECORDS_JSONL_BACKEND
-        ):
-            raise ParserServiceUnavailableError(
-                backend,
-                STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_REASON,
-                warning_code=STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING,
             )
         # pre-flight: 宣言 matrix で非対応形式なら microservice/OCI を呼ぶ前に停止する
         # (preprocess 変換後の content_type で判定するため、office_to_pdf 済み等は通る)。
@@ -709,19 +666,12 @@ class IngestionPipeline:
                 "adapter_source_unsupported",
                 warning_code=f"{backend}_adapter_source_unsupported",
             )
-        if backend in SERVICE_ADAPTER_BACKENDS:
-            return ParserRegistryResult(
-                extraction=None,
-                parser_backend=backend,
-                template="enterprise_ai_fallback",
-            )
         return self._parser_service.runner(
             backend,
             parse_bytes,
             source_profile,
             content_type,
             fail_fast=True,
-            **({"dots_ocr_prompt": dots_ocr_prompt} if dots_ocr_prompt is not None else {}),
         )
 
     async def _poll_parse_progress(
@@ -758,11 +708,6 @@ class IngestionPipeline:
             else None
         )
         try:
-            dots_ocr_prompt = (
-                await self._saved_prompt("external_ocr")
-                if self._settings.rag_parser_adapter_backend == "dots_ocr"
-                else None
-            )
             with parse_progress_id(progress_id):
                 return await _observe_cpu_ingestion_stage(
                     trace_id,
@@ -771,11 +716,6 @@ class IngestionPipeline:
                         parse_bytes=parse_bytes,
                         source_profile=source_profile,
                         content_type=content_type,
-                        **(
-                            {"dots_ocr_prompt": dots_ocr_prompt}
-                            if dots_ocr_prompt is not None
-                            else {}
-                        ),
                     ),
                     attributes=attributes,
                     result_attributes=_parser_result_attributes,
@@ -838,7 +778,7 @@ class IngestionPipeline:
         if source_profile is not None and source_profile.unsupported_reason:
             return None
         backend = self._selected_parser_backend()
-        if backend in SERVICE_ADAPTER_BACKENDS or backend not in ADAPTER_CAPABILITIES:
+        if backend not in ADAPTER_CAPABILITIES:
             return None
         if not adapter_supports_source(
             backend, source_profile=source_profile, content_type=content_type
@@ -1473,22 +1413,8 @@ class IngestionPipeline:
                 )
             await _raise_if_cancelled(cancel_checker)
             extraction: StructuredExtraction | None = None
-            service_backend = _service_parser_backend(parser_result.parser_backend)
             try:
-                if service_backend is not None:
-                    # 明示選択された service backend(OCI Document Understanding)は
-                    # ローカル/外部 adapter を飛ばして直接呼ぶ。
-                    extraction = await self._extract_with_service_backend(
-                        service_backend,
-                        trace_id=trace_id,
-                        document_id=document_id,
-                        source_bytes=parse_bytes,
-                        content_type=parse_content_type,
-                        parser_profile=strategy.parser_profile,
-                        checkpoint_segments=checkpoint_segments,
-                        cancel_checker=cancel_checker,
-                    )
-                if extraction is None and not segmented_parse:
+                if not segmented_parse:
                     # 後段失敗からの再開: cached full extraction artifact があれば再利用して復旧する
                     # (local fallback ではなく resume 最適化)。段ごとの解析(#2001)は段の artifact を
                     # 解析の前に読み戻すため、ここは原本全体を 1 回で解析する経路だけ。
@@ -1506,8 +1432,7 @@ class IngestionPipeline:
                     extraction = parser_result.extraction
                 else:
                     # local fallback / Office セグメント / 暗黙 VLM-OCR は持たない。
-                    # service backend は _extract_with_service_backend が抽出か例外を必ず返すため、
-                    # ここへ到達するのは設計上ありえない。防御的に fail-fast する。
+                    # 防御的に fail-fast する。
                     raise IngestionUserError(
                         _unsupported_parser_message(parser_result)
                         if parser_result.unsupported_reason
@@ -2127,7 +2052,7 @@ class IngestionPipeline:
         await _raise_if_cancelled(cancel_checker)
         chunking_params = resolve_chunking_params(self._settings)
         # 親子階層（small-to-big）は、どの解析の結果でも親子に分割する(#3377)。親子を作った入力
-        # (Docling・MinerU のレイアウト・行の記録・XML ツリー JSON・抽出の構造)は trace に残す。
+        # (Docling のレイアウト・行の記録・抽出の構造)は trace に残す。
         is_small_to_big = chunking_params.strategy == SMALL_TO_BIG_STRATEGY
 
         def _run_chunking() -> list[Chunk]:
@@ -2214,10 +2139,6 @@ class IngestionPipeline:
         apply_page_labels(chunks, labels_from_artifacts(extraction.parser_artifacts))
         # 本文の交差参照(「第3章を参照」など)を同じ文書の節に解決して metadata に残す(#1280)。
         annotate_cross_references(chunks, document_title=source_name)
-        # XML ツリー JSON の段落の検索の文に、参照先の条の内容を足す(読替え規定。#2148)。
-        apply_reference_search_context(chunks)
-        # XML ツリー JSON の文書の原典の URL(設定のひな形がある時だけ。#2024)。
-        apply_xml_tree_source_urls(chunks, self._settings)
         # 分割に使った言語資源の取込の項目の hash(#2181)。言語資源を変えたあと、分割し直しが
         # 要る文書を数える。
         language_hash = current_pack().ingest_hash
@@ -3636,42 +3557,6 @@ class IngestionPipeline:
                 extra={"segment_id": segment_id, "error_type": type(exc).__name__},
             )
 
-    async def _extract_with_service_backend(
-        self,
-        service_backend: str,
-        *,
-        trace_id: str,
-        document_id: str,
-        source_bytes: bytes,
-        content_type: str,
-        parser_profile: str,
-        checkpoint_segments: Sequence[IngestionSegment],
-        cancel_checker: Callable[[], Awaitable[bool]] | None,
-    ) -> StructuredExtraction | None:
-        """明示選択された service backend で抽出する。
-
-        まず再開用の cached 抽出を再利用し、無ければ各 OCI クラウドサービスを直接呼ぶ。
-        選択した service backend が抽出できない場合は別経路へ切り替えず取込を止める。
-        """
-        cached_extraction = await self._load_cached_full_extraction(
-            checkpoint_segments, parse_key=self._segment_parse_key(source_bytes)
-        )
-        if cached_extraction is not None:
-            return cached_extraction
-        # OCI Document Understanding の parser microservice へ HTTP 委譲する。
-        # 未到達/未設定/失敗時は別経路へ切り替えない。
-        await _raise_if_cancelled(cancel_checker)
-        service_result = await asyncio.to_thread(
-            self._parser_service.run_service_backend,
-            service_backend,
-            source_bytes,
-            content_type=content_type,
-            document_id=document_id,
-        )
-        if service_result.extraction is not None:
-            return service_result.extraction
-        raise IngestionUserError(_selected_parser_failure_message(service_backend, service_result))
-
     async def _augment_with_raptor(
         self,
         trace_id: str,
@@ -4067,21 +3952,10 @@ def _selected_parser_failure_message(
     label = _parser_backend_label(selected_backend)
     warning = result.warnings[0] if result.warnings else None
     warning_suffix = f" エラーコード: {warning}" if warning else ""
-    if warning == "xml_tree_json_unsupported_tree":
-        return (
-            f"選択した文書解析エンジン（{label}）は、XML の要素の木（tag / attr / children）の"
-            "形の JSON だけを解析できます。この JSON はその形ではないため、別の解析エンジンには"
-            "切り替えずに取込を停止しました。この文書の「処理レシピ」で「文書解析」を"
-            f"Unstructured などに変えてから再実行してください。{warning_suffix}"
-        )
-    if warning == STRUCTURED_RECORDS_REQUIRES_JSONL_BACKEND_WARNING:
-        return structured_records_requires_jsonl_backend_message(label) + warning_suffix
-    if warning == MINERU_LICENSE_UNACKNOWLEDGED_WARNING:
-        return MINERU_LICENSE_REQUIRED_MESSAGE + warning_suffix
     if warning and warning.startswith("structured_records_invalid:"):
         return (
-            f"選択した文書解析エンジン（{label}）は、ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が"
-            "作る構造化レコードの JSONL だけを解析できます。このファイルはその形式に合わないか、"
+            f"文書解析エンジン（{label}）は、ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が"
+            "作った構造化レコードの JSONL を読めませんでした。このファイルはその形式に合わないか、"
             "1 件の記録が大きすぎるため、別の解析エンジンには切り替えずに取込を停止しました。"
             "この文書の「処理レシピ」でファイル準備と文書解析の組み合わせを確認してから"
             f"再実行してください。{warning_suffix}"
@@ -4142,7 +4016,7 @@ def _selected_parser_failure_message(
 
 
 def record_boundary_failure_message(error: RecordBoundaryError) -> str:
-    """構造化レコード JSONL の記録の境界で分割できなかった理由を利用者向け文言へ寄せる(#2457)。"""
+    """構造化レコードの記録の境界で分割できなかった理由を利用者向け文言へ寄せる(#2457)。"""
     if error.code == "record_too_large":
         reason = "1 件の記録が chunk の上限を超えています"
     elif error.code == "boundary_count_mismatch":
@@ -4150,7 +4024,7 @@ def record_boundary_failure_message(error: RecordBoundaryError) -> str:
     else:
         reason = "検索用テキストの記録の境界が壊れています"
     return (
-        f"構造化レコード JSONL の抽出を記録の単位で分割できませんでした（{reason}）。"
+        f"構造化レコードの抽出を記録の単位で分割できませんでした（{reason}）。"
         "記録を結合・切り捨てずに取込を停止しました。抽出結果の確認で本文を編集した場合は、"
         "記録の境界の行を消さずに保存し直すか、文書を再処理してください。"
         f" エラーコード: structured_records_boundary_invalid:{error.code}"
@@ -4161,11 +4035,6 @@ def _parser_backend_label(backend: str) -> str:
     labels = {
         "docling": "Docling",
         "unstructured": "Unstructured",
-        "structured_records_jsonl": "構造化レコード JSONL",
-        "xml_tree_json": "XML ツリー JSON",
-        "mineru": "MinerU",
-        "dots_ocr": "Dots.OCR",
-        "oci_document_understanding": "OCI Document Understanding",
     }
     return labels.get(backend, backend)
 
@@ -4216,9 +4085,6 @@ def _checkpoint_parser_profile(
                 return artifact_value.strip()[:80]
     if _uses_external_adapter_extraction(parser_result):
         return parser_result.parser_backend[:80]
-    service_backend = _service_parser_backend(parser_result.parser_backend)
-    if service_backend is not None:
-        return service_backend[:80]
     return fallback[:80]
 
 
@@ -4230,19 +4096,7 @@ def _uses_external_adapter_extraction(parser_result: ParserRegistryResult) -> bo
 
 
 def _is_external_adapter_backend(parser_backend: str) -> bool:
-    return parser_backend in {
-        "docling",
-        "unstructured",
-        "structured_records_jsonl",
-        "xml_tree_json",
-        "mineru",
-        "dots_ocr",
-    }
-
-
-def _service_parser_backend(parser_backend: str) -> str | None:
-    """parser_result が service backend(OCI クラウド直接呼び出し)の sentinel か判定する。"""
-    return parser_backend if parser_backend in SERVICE_ADAPTER_BACKENDS else None
+    return parser_backend in {"docling", "unstructured"}
 
 
 def _extraction_with_parser_context(
@@ -4508,7 +4362,7 @@ def _source_parser_name(
 
 
 def _text_for_chunking(extraction: StructuredExtraction) -> str:
-    """抽出結果から索引用テキストを作る(構造化レコード JSONL の境界のマーカーは除く。#2457)。"""
+    """抽出結果から索引用テキストを作る(構造化レコードの記録の境界のマーカーは除く。#2457)。"""
     return record_boundary_plain_text(extraction).strip()
 
 

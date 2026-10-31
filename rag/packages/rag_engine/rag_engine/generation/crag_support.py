@@ -19,7 +19,7 @@ from rag_engine.retrieval.context_builder import ContextParentEvidence, context_
 from rag_engine.retrieval.context_recovery import recover_context_records
 from rag_engine.retrieval.definition_evidence import definition_labels, definition_ranges
 from rag_engine.retrieval.evidence_selection import evidence_excerpt, evidence_packet, evidence_relevance
-from rag_engine.retrieval.rerank_scores import best_rerank_score, keeps_original_order, rerank_first_key
+from rag_engine.retrieval.rerank_scores import best_rerank_score, rerank_first_key
 from rag_engine.retrieval.task_contract import query_rejection_reason, task_contract
 
 MAX_GENERATED_QUERY_CHARS = 900
@@ -42,8 +42,6 @@ def _merge_crag_evidence(
 
     親の点数は、その親の起点の child の rerank の点数の最高値（記録の metadata か根拠の木の起点）。点数の無い
     親は点数のある親の後ろに置き、語の一致の点数（操作の見出し・質問の語）は同点の順と点数の無い親の順だけに使う。
-    条の目録で選んだ条の親（rerank 最優先の例外。`keeps_original_order`）は切らず、枠の外に元の順で残す
-    （context の組み立てと同じく、関連度に関わらず枠の外に足す）。
     """
     if not previous.records:
         return current
@@ -68,21 +66,12 @@ def _merge_crag_evidence(
             )
             for p in parents
         }
-        exempt_keys = {
-            record_context_key(p.record) or p.record.id
-            for p in parents
-            if keeps_original_order(p.record) or any(keeps_original_order(child.record) for child in p.children)
-        }
 
         def score(record: AnswerRecord) -> float | None:
             own = best_rerank_score([record])
             return own if own is not None else tree_scores.get(record_context_key(record) or record.id)
 
-        def exempt(record: AnswerRecord) -> bool:
-            return keeps_original_order(record) or (record_context_key(record) or record.id) in exempt_keys
-
-        kept = sorted((r for r in records if not exempt(r)), key=lambda r: (*rerank_first_key(score(r)), -priority(r)))
-        records = kept[:limit] + [r for r in records if exempt(r)]
+        records = sorted(records, key=lambda r: (*rerank_first_key(score(r)), -priority(r)))[:limit]
     keys = {record_context_key(r) or r.id for r in records}
     tree = {record_context_key(p.record) or p.record.id: p for p in previous.evidence_tree}
     tree.update({record_context_key(p.record) or p.record.id: p for p in current.evidence_tree})

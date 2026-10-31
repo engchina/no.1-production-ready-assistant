@@ -196,20 +196,17 @@ test("学習データの取込の失敗は backend の理由を取込の欄の�
 test("候補の絞り込みは FilterSelect で 1 行にそろい、狭い画面はシート、条件をクリアで既定に戻す (#1933)", { tag: "@responsive" }, async ({ page, isMobile }) => {
   const state = await mockClassifierApi(page);
   const widths = isMobile ? [375] : [1280, 1920];
-  for (const theme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: theme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto("/question-classifier-models?tab=candidates");
-      const toolbar = page.getByTestId("qcm-candidate-filters");
-      await expect(page.getByTestId("qcm-training-candidate")).toHaveCount(1);
-      // 検索・状態・業務プロファイルの 3 つ。ツールバーが 28rem 未満ならシートにまとめる。
-      expect(await listToolbarUsesSheet(toolbar), `${width}px`).toBe(isMobile);
-      expect(await findToolbarMisalignment(page), `${width}px・${theme}`).toEqual([]);
-      expect(await findToolbarFieldWidthMismatch(page), `${width}px・${theme}`).toEqual([]);
-      expect(await findClippedPlaceholders(page), `${width}px・${theme}`).toEqual([]);
-      expect(await measureHorizontalOverflow(page), `${width}px・${theme}`).toBeLessThanOrEqual(1);
-    }
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/question-classifier-models?tab=candidates");
+    const toolbar = page.getByTestId("qcm-candidate-filters");
+    await expect(page.getByTestId("qcm-training-candidate")).toHaveCount(1);
+    // 検索・状態・業務プロファイルの 3 つ。ツールバーが 28rem 未満ならシートにまとめる。
+    expect(await listToolbarUsesSheet(toolbar), `${width}px`).toBe(isMobile);
+    expect(await findToolbarMisalignment(page), `${width}px`).toEqual([]);
+    expect(await findToolbarFieldWidthMismatch(page), `${width}px`).toEqual([]);
+    expect(await findClippedPlaceholders(page), `${width}px`).toEqual([]);
+    expect(await measureHorizontalOverflow(page), `${width}px`).toBeLessThanOrEqual(1);
   }
 
   const toolbar = page.getByTestId("qcm-candidate-filters");

@@ -123,17 +123,12 @@ export const ja = {
   "nav.section.improve": "改善・運用",
   "nav.section.operations": "運用設定",
   "nav.section.settings": "システム設定",
-  // 「外観と証明書」は配色テーマと HTTPS の証明書を扱う（#1316）。副題・カードの文言は platform の既定を使う。
+  // 「外観と証明書」は HTTPS の証明書を扱う（#1316。配色テーマの選択は #17 で廃止）。副題・カードの文言は platform の既定を使う。
   "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",
   "nav.settingsChatAttachments": "チャットの添付",
-  "appearance.theme.label": "配色テーマ",
-  "appearance.theme.hint": "画面全体の配色を切り替えます。「自動」は OS の設定に追従します。",
-  "appearance.theme.light": "ライト",
-  "appearance.theme.dark": "ダーク",
-  "appearance.theme.system": "自動（OS 設定）",
   "nav.upload": "文書アップロード",
   "nav.upload.sidebar": "文書アップロード",
   "nav.fileList": "文書インデックス",
@@ -211,82 +206,9 @@ export const ja = {
   "settings.parserAdapters.backend.local.description": "旧 in-process 解析。既定の Docling へ正規化",
   "settings.parserAdapters.backend.docling.description": "既定の解析エンジン。PDF と画像を解析",
   "settings.parserAdapters.backend.unstructured.description": "テキスト・HTML・Office・メールなども受ける汎用の解析。選んだ場合だけ使用",
-  "settings.parserAdapters.backend.mineru.description":
-    "外部 MinerU API を使用。ライセンスの条件の確認が要る",
-  // MinerU のライセンス（MinerU Open Source License）の主な条件と、利用の前の確認（#3359）。
-  "mineruLicense.title": "MinerU のライセンス（MinerU Open Source License）の主な条件",
-  "mineruLicense.intro":
-    "MinerU は Apache-2.0 に追加の条件を付けたライセンスで提供されています。主な条件は次のとおりです。",
-  "mineruLicense.point.threshold":
-    "利用者とその関連会社の合算で、月間アクティブユーザーが 1 億を超えるか、月の売上が 2,000 万米ドルを超えると、MinerU のチームの別途の商用ライセンスが要ります。",
-  "mineruLicense.point.attribution":
-    "MinerU を使って第三者にオンラインサービスを提供するときは、サービスの画面か公開の文書の目立つ所に、MinerU を使っていることを明示します。",
-  "mineruLicense.point.termination":
-    "上の条件を満たさないと、ライセンスは通知なしに自動で終わります。",
-  "mineruLicense.point.model":
-    "旧モデルの MinerU2.5-2509-1.2B は AGPL-3.0 です。MinerU2.5-Pro-2605-1.2B（Apache-2.0）を使ってください。",
-  "mineruLicense.confirmFullText":
-    "利用の前に、ライセンスの全文を確認してください。この案内は主な条件の抜粋で、法的な助言ではありません。",
-  "mineruLicense.link.repository": "MinerU の公式リポジトリ（GitHub）",
-  "mineruLicense.link.license": "ライセンスの全文（LICENSE.md）",
-  "mineruLicense.link.newTab": "（新しいタブで開く）",
-  "mineruLicense.acknowledge": "MinerU のライセンスの条件を確認した",
-  "mineruLicense.acknowledgeHelper":
-    "確認すると、MinerU を使用エンジンに選べます。確認した人と日時は保存の時に記録します。",
-  "mineruLicense.acknowledgedBy": "確認済み: {name}（{at}）",
-  "mineruLicense.acknowledgedAt": "確認済み（{at}）",
-  "mineruLicense.withdrawLocked":
-    "MinerU を使用エンジンにしている間は、確認を外せません。先に別の使用エンジンを選んでください。",
-  "mineruLicense.compact":
-    "MinerU のライセンス（MinerU Open Source License）は Apache-2.0 に追加の条件（企業の規模による別途の商用ライセンス・オンラインサービスでの利用の明示）があります。利用の前に全文を確認してください。",
-  "mineruLicense.adminOnly":
-    "MinerU のライセンスの条件の確認と取り消しは、システム管理者だけができます。",
-  "mineruLicense.selectBlocked":
-    "MinerU を選ぶには、先に下の「MinerU のライセンスの条件を確認した」を確かめてください。",
-  "mineruLicense.recipeUnacknowledged":
-    "MinerU を選ぶには、システム管理者が「取込・検索・回答設定 › 文書解析」で MinerU のライセンスの条件を確認する必要があります。",
-  "settings.parserAdapters.backend.dots_ocr.description": "外部 Dots.OCR API を使用",
-  "settings.parserAdapters.backend.oci_document_understanding": "OCI Document Understanding",
-  "settings.parserAdapters.backend.oci_document_understanding.description":
-    "OCI Document Understanding による OCR・表抽出を予定（未実装）",
   "settings.parserAdapters.capabilities": "対応形式",
   "settings.parserAdapters.legacyBackendNotice":
     "旧『local』設定です。未選択時は既定の Docling で解析します(内蔵フォールバックは廃止)。下から解析方式を選ぶと上書きされます。",
-  "settings.parserAdapters.serviceBackend.unconfigured": "未設定",
-  "settings.parserAdapters.roadmap.badge": "準備中（ロードマップ）",
-  "settings.parserAdapters.roadmap.reason": "準備中（ロードマップ）のため、まだ選べません。",
-  "settings.parserAdapters.backend.structured_records_jsonl": "構造化レコード JSONL",
-  "settings.parserAdapters.backend.structured_records_jsonl.description":
-    "ファイル準備の CSV→JSONL・Excel→JSONL・Word→JSONL が作る構造化レコードの JSONL を、記録の単位で解析。一般の JSONL ではなく、この構造化レコード形式が対象。解析後の分割は「文書分割」の設定で決まります",
-  "settings.parserAdapters.backend.xml_tree_json": "XML ツリー JSON",
-  "settings.parserAdapters.backend.xml_tree_json.description":
-    "XML の要素の木（tag / attr / children）を JSON にした文書を、要素の階層のまま解析。選んだ場合だけ使用",
-  "settings.parserAdapters.connection.title": "外部 GPU 解析エンジンの接続",
-  "settings.parserAdapters.connection.description":
-    "接続先とモデルを保存してから接続を確認します。API key は再表示されず、空欄のまま保存すると現在値を保持します。",
-  "settings.parserAdapters.connection.endpoint": "Endpoint",
-  "settings.parserAdapters.connection.model": "Model",
-  "settings.parserAdapters.connection.apiKey": "API key",
-  "settings.parserAdapters.connection.nativeModel": "接続先の MinerU 設定を使用",
-  "settings.parserAdapters.connection.apiKeyRetained": "設定済み（空欄なら保持）",
-  "settings.parserAdapters.connection.clearApiKey": "保存済み API key を削除",
-  "settings.parserAdapters.connection.configured": "設定済み",
-  "settings.parserAdapters.connection.test": "接続を確認",
-  "settings.parserAdapters.connection.testing": "{backend} への接続を確認しています",
-  "settings.parserAdapters.connection.saveBeforeTest":
-    "接続確認には保存済み設定を使います。先に変更を保存してください。",
-  "settings.parserAdapters.connection.testFailed": "接続を確認できませんでした。",
-  "settings.parserAdapters.connection.invalidEndpoint":
-    "http または https の Endpoint を入力してください。認証情報、query、fragment は URL に含められません。",
-  "settings.parserAdapters.connection.modelRequired": "Model を入力してください。",
-  "settings.parserAdapters.connection.status.available": "接続できました。",
-  "settings.parserAdapters.connection.status.unconfigured": "接続設定が未完了です。",
-  "settings.parserAdapters.connection.status.unreachable":
-    "接続先へ到達できません。Endpoint、ネットワーク、認証を確認してください。",
-  "settings.parserAdapters.connection.status.model_missing":
-    "設定した Model が接続先にありません。Model 名を確認してください。",
-  "settings.parserAdapters.connection.status.invalid_response":
-    "接続先の応答形式を確認できませんでした。対応プロトコルを確認してください。",
   "settings.parserAdapters.effectiveOrder": "実行順",
   "settings.parserAdapters.noEffectiveOrder": "外部解析方式なし",
   "settings.parserAdapters.source": "設定元",
@@ -536,8 +458,6 @@ export const ja = {
   "settings.language.field.month.help": "版の参照の日付の「月」です。",
   "settings.language.field.day": "日の字",
   "settings.language.field.day.help": "版の参照の日付の「日」です。",
-  "settings.language.field.xml_tree_document_type": "法令の XML の文書の種類",
-  "settings.language.field.xml_tree_document_type.help": "法令の XML ツリー JSON の文書の種類の表示です。",
   "settings.language.field.field_title": "文書名の項目の名前",
   "settings.language.field.field_title.help": "文書の情報の項目の名前です（例: 文書名）。",
   "settings.language.field.field_number": "文書番号の項目の名前",
@@ -1615,7 +1535,7 @@ export const ja = {
   "settings.chunking.params.active": "有効パラメータ",
   "settings.chunking.params.delimiter": "固定分割符文字列",
   "settings.chunking.params.delimiterHint":
-    "\\n, \\t, \\\\ の escape 表現を使用できます。分割符は chunk には残しません。既定の <<<JSONL_RECORD_BOUNDARY>>> は、構造化レコード JSONL の記録の境界です。",
+    "\\n, \\t, \\\\ の escape 表現を使用できます。分割符は chunk には残しません。既定の <<<JSONL_RECORD_BOUNDARY>>> は、構造化レコードの JSONL を読んだ抽出の記録の境界です。",
   "settings.chunking.params.chunkSize": "chunk サイズ(文字)",
   "settings.chunking.params.overlap": "overlap(文字)",
   "settings.chunking.params.headingSplitLimit": "見出し内の再分割上限(文字)",
@@ -1691,13 +1611,13 @@ export const ja = {
     "Word・PowerPoint の文書(旧形式の .doc・.ppt、マクロ付きの .docm・.pptm を含む)を PDF にしてから解析します。マクロは実行しません。PDF にした文書はブラウザーでプレビューできます。Excel は「Excel→JSONL」を使います。",
   "settings.preprocess.profile.csv_to_jsonl": "CSV→JSONL",
   "settings.preprocess.profile.csv_to_jsonl.description":
-    "CSV の表頭を除くデータの 1 記録を、列名と値の組の JSONL に変換します。空行は除き、元の行の位置を保ちます。文書解析は「構造化レコード JSONL」を使います。",
+    "CSV の表頭を除くデータの 1 記録を、列名と値の組の JSONL に変換します。空行は除き、元の行の位置を保ちます。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.profile.excel_to_jsonl": "Excel→JSONL",
   "settings.preprocess.profile.excel_to_jsonl.description":
-    "Excel ファイル(.xls・.xlsx・マクロ付きの .xlsm)の表の 1 行(手順は 1 手順)を、見出しの列名と値の組の 1 件の記録(JSONL)にしてから解析します。マクロは実行しません。シート・行・セル範囲を保ちます。既定では表示シート・表示セルを読み、数式は保存済みの計算結果を使います。計算結果がないセルは数式の文字列と警告を残します。文書解析は「構造化レコード JSONL」を使います。",
+    "Excel ファイル(.xls・.xlsx・マクロ付きの .xlsm)の表の 1 行(手順は 1 手順)を、見出しの列名と値の組の 1 件の記録(JSONL)にしてから解析します。マクロは実行しません。シート・行・セル範囲を保ちます。既定では表示シート・表示セルを読み、数式は保存済みの計算結果を使います。計算結果がないセルは数式の文字列と警告を残します。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.profile.word_to_jsonl": "Word→JSONL",
   "settings.preprocess.profile.word_to_jsonl.description":
-    "Word ファイル(.doc・.docx・マクロ付きの .docm)を、見出しの下の段落・リスト・表のまとまりを 1 件の記録(JSONL)にしてから解析します。見出しの階層と本文の順序を保ち、長い節は分割します。画像・ヘッダー・フッターは読み取らず、ページ番号は付けません。.doc は .docx にしてから読み、マクロは実行しません。文書解析は「構造化レコード JSONL」を使います。",
+    "Word ファイル(.doc・.docx・マクロ付きの .docm)を、見出しの下の段落・リスト・表のまとまりを 1 件の記録(JSONL)にしてから解析します。見出しの階層と本文の順序を保ち、長い節は分割します。画像・ヘッダー・フッターは読み取らず、ページ番号は付けません。.doc は .docx にしてから読み、マクロは実行しません。文書解析のエンジン（Docling・Unstructured）がこの記録を読みます。",
   "settings.preprocess.actions.save": "保存",
   "settings.preprocess.actions.label": "ファイル準備の設定の操作",
   "settings.preprocess.actions.saved": "ファイル準備の設定を保存しました。",
@@ -1758,9 +1678,6 @@ export const ja = {
   "settings.services.status.not_installed":
     "未登録",
   "settings.services.status.unconfigured": "未設定",
-  "settings.services.status.roadmap": "準備中（ロードマップ）",
-  "settings.services.roadmapHint":
-    "このサービスは準備中（ロードマップ）です。まだ配備・起動できません（実装は今後の版で使えるようにします）。",
   "settings.services.status.loading": "確認中",
   "settings.services.status.error": "取得失敗",
   "settings.services.modelCache.label": "モデルキャッシュ",
@@ -1770,7 +1687,7 @@ export const ja = {
   "settings.services.statusLoadingHint": "状態確認中です。",
   "settings.services.statusLoadErrorHint": "状態を取得できませんでした。更新してください。",
   "settings.services.notInstalledHint":
-    "systemd の unit が登録されていません。本番は Terraform の stack で配備を選び、開発は rag/scripts/rag-services.sh install で登録します。",
+    "systemd の unit が登録されていません。本番は配備の props の rag_services.txt に足して再配備し、開発は rag/scripts/rag-services.sh install で登録します。",
   "settings.services.failedHint":
     "起動に失敗しました。ログで原因を確認してから起動し直してください。",
   "settings.services.executionPolicy.defaultAdapter": "既定で使用",
@@ -1820,9 +1737,6 @@ export const ja = {
   "settings.services.item.preprocessWordToJsonl": "Word→JSONL",
   "settings.services.item.parserDocling": "Docling",
   "settings.services.item.parserUnstructured": "Unstructured",
-  "settings.services.item.parserStructuredRecordsJsonl": "構造化レコード JSONL",
-  "settings.services.item.parserXmlTreeJson": "XML ツリー JSON",
-  "settings.services.item.parserOciDocumentUnderstanding": "OCI Document Understanding",
   "settings.services.loadError": "サービス一覧を取得できませんでした。",
   "settings.retrieval.subtitle":
     "回答の検索方法と生成方式の全体設定、および検索に使うプロンプトを設定します。",
@@ -1969,7 +1883,7 @@ export const ja = {
   "settings.uploadStorage.backend.oci": "OCI Object Storage",
 
   "settings.model.subtitle":
-    "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
+    "LLM・埋め込み・再ランクのモデルと、呼び出しに使う接続（Endpoint URL と API key）を設定します。",
   "settings.model.displayNamePlaceholder": "業務 RAG 標準",
 
   "settings.huggingface.subtitle":
@@ -3336,7 +3250,7 @@ export const ja = {
     "処理設定を保存できませんでした。値と文書状態を確認して再試行してください。",
   "documents.processingConfig.parserFormats": "対応形式: {formats}",
   "documents.processingConfig.structuredRecordsHint":
-    "構造化レコードの JSONL は「構造化レコード JSONL」だけが解析できます。文書解析と分割（固定分割符・記録の境界）を合わせて上書きしました。",
+    "構造化レコードの JSONL は、選んだ文書解析エンジン（Docling・Unstructured）が記録の単位で読みます。分割（固定分割符・記録の境界）を合わせて上書きしました。",
   "documents.processingConfig.parserUnsupported":
     "この解析エンジンは {modality} 形式の文書に対応していません（対応: {formats}）。取込は開始前に失敗します。",
   "documents.processingConfig.parserRemoved": "解析エンジンは削除されました（{engine}）",
@@ -3938,7 +3852,7 @@ export const ja = {
   "settings.answerPrompts.phase.indexing.description": "文書分割の後に、任意の RAPTOR の階層の要約を作り、索引へ進みます。ファイル準備・通常の分割・埋め込み・文書構造索引の構築は LLM プロンプトを使いません。",
   "settings.answerPrompts.phase.knowledge.description": "回答で使う業務ガイドを準備する独立した処理です。文書の取込ごとに実行するものではありません。",
   "settings.answerPrompts.phase.question.description": "業務ガイドの条件確認、会話を踏まえた書き換え、項目の条件、検索戦略と検索文の順です。対象外の段は省略します。",
-  "settings.answerPrompts.phase.retrieval.description": "検索候補を集めた後、必要に応じて画面や条の目録から根拠を足します。",
+  "settings.answerPrompts.phase.retrieval.description": "検索候補を集めた後、必要に応じて画面目録から根拠を足します。",
   "settings.answerPrompts.phase.grounding.description": "取得した根拠を判定・補完します。CRAG は再検索や章節の拡張の途中で判定を繰り返すため、一方向に一度だけ進む処理ではありません。",
   "settings.answerPrompts.phase.generation.description": "登録済みQ&Aを選んだ場合は Q&A の経路、それ以外は検索した根拠による生成です。後者の システムプロンプトと入力テンプレートをこの順に示します。",
   "settings.answerPrompts.phase.audit.description": "回答の生成後に使う監査・資料との照合の指示です。RAG では LLM 監査が有効なときに使います（既定は無効）。MCP の資料との照合は独立して呼び出します。",
@@ -3949,9 +3863,6 @@ export const ja = {
   "settings.answerPrompts.fixedRules": "図・画像の指示と出力形式",
   "settings.answerPrompts.visionInstructions.description": "保存した指示は次の画像の読み取りから使います。処理済みの文書への反映には再処理が必要です。出力形式と上限は読み取り専用です。保存済みの出力例を編集しても、固定の項目・型・件数上限は変わりません。",
   "settings.answerPrompts.noPlaceholders": "必須の placeholder はありません。",
-  "settings.answerPrompts.external_ocr.title": "Dots.OCR の読み取りプロンプト",
-  "settings.answerPrompts.external_ocr.description": "文書解析で Dots.OCR を使用するときに、ページごとに渡す指示です。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
-  "settings.answerPrompts.external_ocr.field": "プロンプト",
   "settings.answerPrompts.heading_levels.title": "見出しの階層の推定プロンプト",
   "settings.answerPrompts.heading_levels.description": "「見出しの階層の推定（AI）」が有効で、対象の条件を満たす文書に使います。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
   "settings.answerPrompts.heading_levels.field": "プロンプト",
@@ -3965,8 +3876,6 @@ export const ja = {
   "settings.answerPrompts.raptor_summary_system.description": "文書分割後、RAPTOR の階層の要約が有効なときに使う共通の指示です。保存した内容は次の処理から使い、処理済みの文書には再処理するまで反映しません。",
   "settings.answerPrompts.raptor_summary_system.field": "プロンプト",
   "settings.raptor.description": "文書解析の章節の要約の後、文書を Chunk に分割してから、RAPTOR で階層ごとの要約を作り、Embedding・索引へ進みます。章節の要約とは独立した機能です。この設定を有効にすると、次の取込・再処理から実行します。既定は無効です。",
-  "settings.answerPrompts.stage.external_ocr": "外部の Dots.OCR で読み取る",
-  "settings.answerPrompts.stage.external_ocr.condition": "文書解析の使用エンジンが「Dots.OCR」のとき（ページごと）",
   "settings.answerPrompts.stage.picture_description": "図・画像の説明",
   "settings.answerPrompts.stage.picture_description.condition":
     "「図・画像を AI で読み取る」を有効にしたとき（図・表の画像ごと）。指示は文書解析の「図・画像の読み取りプロンプト」で編集します。出力形式と上限は読み取り専用です。",
@@ -4002,9 +3911,6 @@ export const ja = {
     "質問の拡張が「単純検索」以外のとき（自動ルーティングが検索文を返さなかったときを含む）",
   "settings.answerPrompts.stage.screen_linking": "画面目録で操作画面を探す",
   "settings.answerPrompts.stage.screen_linking.condition": "「画面目録で操作画面を探す」を有効にしたとき",
-  "settings.answerPrompts.stage.article_catalog": "条の目録から根拠の条を選ぶ",
-  "settings.answerPrompts.stage.article_catalog.condition":
-    "条の目録による選択を有効にし、検索候補に条で構成された文書があるとき。候補文書を選び、条を選択し、設定に応じて同じ章から追加します（文書ごと・再試行あり）",
   "settings.answerPrompts.stage.crag": "生成に使える根拠と必須観点の判定",
   "settings.answerPrompts.stage.crag.condition": "回答の生成方式が CRAG で、根拠の判定を省略する条件に当たらないとき。再検索や章節の拡張でも判定します",
   "settings.answerPrompts.stage.section_extraction": "長い章節から必要な原文を抜き出す",
@@ -4052,9 +3958,6 @@ export const ja = {
     "根拠の表と食い違う値を表の正しい値に直す（取り違えがあるときだけ）",
   "settings.answerPrompts.part.premiseConsistency":
     "利用者の確認の答えの条件・制約との両立の判定（確認の答えがあるときだけ）",
-  "settings.answerPrompts.part.documentSystem": "文書を選ぶ システムプロンプト",
-  "settings.answerPrompts.part.refineSystem": "同じ章の条を足す システムプロンプト",
-  "settings.answerPrompts.part.catalogReview": "条の目録で選んだ条が支える説明を検討する指示（生成後の回答確認が標準・詳細で、この設定が有効かつ生成が条を引かなかったときだけ）",
   "settings.answerRecords.title": "回答の記録の保存期間",
   "settings.answerRecords.description":
     "回答した質問・回答・根拠・実行記録と、チャット・RAG 検索の実行履歴を保存する期間です。既定は無期限で、自動では削除しません。期間を決めたときは、期限を過ぎた記録を次の回答の保存時とこの設定の保存時に削除します。",
@@ -4204,7 +4107,6 @@ export const ja = {
   "search.citation.contentKindValue": "{kind}",
   "search.citation.sectionTitleValue": "{title}",
   "search.citation.sectionPathValue": "{path}",
-  "search.citation.citationLabelLabel": "引用",
   "search.citation.profileValue": "{profile}",
   "search.citation.openPreview": "{file} の引用箇所",
   "search.citation.previewClose": "閉じる",
@@ -4378,7 +4280,6 @@ export const ja = {
   "answer.step.revise": "指摘された箇所の回答を直す",
   "answer.step.stopRevising": "回答の修正を打ち切る",
   "answer.step.deferDocumentCandidates": "同じ文書の超過候補を後ろへ回す",
-  "answer.step.selectArticles": "根拠に使う条を目録から選ぶ",
   "answer.step.retrieveUnanswered": "未回答の要求の根拠を探し直す",
   "answer.step.vectorSearch": "質問に意味が近い文書の箇所を探す",
   "answer.step.textSearch": "検索語を含む文書の箇所を探す",
@@ -4390,7 +4291,6 @@ export const ja = {
   "answer.step.expandStructure": "文書の章と表のつながりから根拠を加える",
   "answer.step.prepareFigures": "根拠の位置から図を切り出す",
   "answer.step.loadDocumentInfo": "文書の分類と背景を読み込む",
-  "answer.step.searchOriginalQuestion": "元の質問で候補の文書を探す",
   "answer.step.attempt": "{name}（{count} 回目）",
   "answer.progress.label": "回答を生成しています（{stage}）",
   "answer.progress.searchLabel": "検索しています（{stage}）",

@@ -879,7 +879,7 @@ async function mockProfileScopedApi(page: Page) {
 
 test("AI オントロジー構築の実行 → 進捗 → Markdown 下書き編集 → 公開の導線が機能する", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   await page.goto("/ontology-build?profile=default");
@@ -2278,7 +2278,7 @@ test("プロファイルが無いときは案内を表示し AI 構築は出さ�
 
 test("旧 tab URL を正規化し、モバイルでは単一ページを縦積みにする", { tag: "@responsive" }, async ({ page }) => {
   await mockApi(page);
-  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/ontology-build?profile=default&tab=usage&legacy=1");
 
@@ -2837,13 +2837,10 @@ test("強制終了した構築は理由と下書きを表示し保存済み入�
   await expect(page.getByText(failedJob.job.error_message_ja, { exact: false }).first()).toBeVisible();
   for (const width of (testInfo.project.name === "desktop" ? [1280, 1920] : [375])) {
     await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await retryButton.focus();
-      await expect(retryButton).toBeFocused();
-      await page.screenshot({ path: testInfo.outputPath(`build-worker-lost-${width}-${theme}.png`) });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    }
+    await retryButton.focus();
+    await expect(retryButton).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath(`build-worker-lost-${width}-light.png`) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   expect(retryCalled).toBe(0);
   await page.keyboard.press("Enter");
@@ -3193,15 +3190,14 @@ for (const lostFailureResponse of [false, true]) {
   });
 }
 
-test("統一 Markdown タブとグラフをキーボードと深色テーマで確認する", async ({page},testInfo) => {
+test("統一 Markdown タブとグラフをキーボードで確認する", async ({page},testInfo) => {
   await existingMarkdown(page);await unifiedGraphFixture(page);await page.reload();await loadOntologyBuildWorkspace(page);
   const draft=page.getByRole("tab",{name:"Markdown オントロジー下書き",exact:true});
   await draft.focus();await page.keyboard.press("End");await expect(page.getByRole("tab",{name:"公開済み Markdown オントロジー",exact:true})).toBeFocused();
   await page.keyboard.press("Home");await expect(draft).toBeFocused();
   const panel=await openUnifiedGraph(page);const kinds=panel.getByRole("combobox",{name:"概念の種類",exact:true});
   await kinds.focus();await page.keyboard.press("ArrowDown");await page.keyboard.press("Enter");await expect(kinds).toBeFocused();
-  await page.emulateMedia({colorScheme:"dark"});await page.evaluate(()=>document.documentElement.classList.add("dark"));
-  await page.screenshot({path:testInfo.outputPath("unified-markdown-dark.png"),fullPage:true});
+  await page.screenshot({path:testInfo.outputPath("unified-markdown.png"),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
@@ -3309,72 +3305,63 @@ for (const saveExplicitly of [true, false]) {
     await loadOntologyBuildWorkspace(page);
     await expect(editor).toHaveValue(/次の版への編集/);
     await expect(save).toBeDisabled();
-    if (!saveExplicitly) {
-      await page.emulateMedia({ colorScheme: "dark" });
-      await page.evaluate(() => document.documentElement.classList.add("dark"));
-    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await editor.scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath("markdown-edit-after-publication.png") });
   });
 }
 
-for (const theme of ["light", "dark"]) {
-  for (const width of [1280, 1920]) {
-    test(`統合概念生成は5段階とログを一度だけ表示する ${theme} ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "desktop" && width !== 1280, "375幅は各テーマ1回確認");
-      if (testInfo.project.name === "desktop") await page.setViewportSize({width, height: 1000});
-      await page.addInitScript(theme => {
-        localStorage.setItem("production-ready-nl2sql.ui", JSON.stringify({state:{sidebarCollapsed:false,collapsedSections:{},theme},version:0}));
-      }, theme);
-      await mockApi(page);
-      const payload = buildJob("running", "succeeded");
-      payload.job.definition_phases = ["freeze", "evidence", "concepts", "validation", "markdown", "save"].map(name => ({
-        name, status: name === "concepts" ? "running" : ["freeze", "evidence"].includes(name) ? "succeeded" : "pending", detail_ja: "",
-      }));
-      payload.job.steps.find(step => step.name === "schema_naming")!.status = "running";
-      payload.job.steps.find(step => step.name === "proposal_registration")!.status = "pending";
-      const typedEvents = [
-        {at:new Date().toISOString(),message_ja:"13種類の関連概念を抽出しています。",step:"schema_naming",phase:"concepts"},
-        {at:new Date().toISOString(),message_ja:"13種類の関連概念を抽出しています。",step:"schema_naming",phase:"concepts"},
-      ];
-      payload.job.events = typedEvents;
-      payload.job.started_at = new Date().toISOString();
-      await page.route("**/api/nl2sql/ontology-build/*", route => fulfillJson(route, payload));
-      await page.goto("/ontology-build?profile=default");
-      await loadOntologyBuildWorkspace(page);
-      await page.getByRole("button", {name:"AI 構築を実行",exact:true}).click();
-      const progress = page.getByTestId("ontology-build-steps");
-      const concepts = progress.getByTestId("ontology-build-stage-concepts");
-      await expect(concepts).toHaveAttribute("data-step-status", "running");
-      await expect(progress.locator("[data-testid^=ontology-build-stage-]")).toHaveCount(5);
-      await expect(page.getByTestId("ontology-build-step-progress")).toContainText("1/5");
-      await expect(progress).not.toContainText("基本概念の構築");
-      await expect(progress).not.toContainText("共有定義（Shared Definitions）");
-      await expect(concepts.getByText("13種類の関連概念を抽出しています。",{exact:true})).toHaveCount(1);
-      await expect(concepts.getByText("13種類の関連概念を抽出しています。",{exact:true})).toBeVisible();
-      // 共有の Disclosure は見出しの文言を summary の中の span に置く（#397）。getByText は focus できない span を指すため、
-      // キーボード操作は focus できる summary に対して行う（#424）。
-      const mainConcepts = concepts.locator("summary").filter({hasText:"主要概念（6種類）"});
-      await mainConcepts.focus(); await expect(mainConcepts).toBeFocused(); await page.keyboard.press("Enter");
-      await expect(concepts.getByText(/オブジェクト型（Object Type）/)).toBeVisible();
-      await progress.screenshot({path:testInfo.outputPath(`unified-progress-${theme}-${width}.png`)});
-      const savedNote = "Markdown 下書き v2 を生成しました(候補 13 件)。";
-      payload.job.steps.find(step => step.name === "proposal_registration")!.detail_ja = savedNote;
-      payload.job.events.push({at:new Date().toISOString(), message_ja:savedNote, step:"proposal_registration", phase:"save"} as typeof typedEvents[number]);
-      payload.job.events.push({at:new Date().toISOString(), message_ja:"保存後の整合性を確認しました。", step:"proposal_registration", phase:"save"} as typeof typedEvents[number]);
-      payload.job.status = "succeeded";
-      payload.job.definition_phases.forEach(p => {p.status = "succeeded";});
-      payload.job.steps.forEach(step => {step.status = "succeeded";});
-      await expect(page.getByTestId("ontology-build-step-progress")).toContainText("5/5");
-      const saveStage = progress.getByTestId("ontology-build-stage-save");
-      await saveStage.getByText("保存・最終確認",{exact:true}).click();
-      await expect(saveStage.getByText(savedNote,{exact:true})).toHaveCount(1);
-      await expect(saveStage.getByText(savedNote,{exact:true})).toBeVisible();
-      await expect(saveStage.getByText("保存後の整合性を確認しました。",{exact:true})).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    });
-  }
+for (const width of [1280, 1920]) {
+  test(`統合概念生成は5段階とログを一度だけ表示する ${width}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop" && width !== 1280, "375幅は各テーマ1回確認");
+    if (testInfo.project.name === "desktop") await page.setViewportSize({width, height: 1000});
+    await mockApi(page);
+    const payload = buildJob("running", "succeeded");
+    payload.job.definition_phases = ["freeze", "evidence", "concepts", "validation", "markdown", "save"].map(name => ({
+      name, status: name === "concepts" ? "running" : ["freeze", "evidence"].includes(name) ? "succeeded" : "pending", detail_ja: "",
+    }));
+    payload.job.steps.find(step => step.name === "schema_naming")!.status = "running";
+    payload.job.steps.find(step => step.name === "proposal_registration")!.status = "pending";
+    const typedEvents = [
+      {at:new Date().toISOString(),message_ja:"13種類の関連概念を抽出しています。",step:"schema_naming",phase:"concepts"},
+      {at:new Date().toISOString(),message_ja:"13種類の関連概念を抽出しています。",step:"schema_naming",phase:"concepts"},
+    ];
+    payload.job.events = typedEvents;
+    payload.job.started_at = new Date().toISOString();
+    await page.route("**/api/nl2sql/ontology-build/*", route => fulfillJson(route, payload));
+    await page.goto("/ontology-build?profile=default");
+    await loadOntologyBuildWorkspace(page);
+    await page.getByRole("button", {name:"AI 構築を実行",exact:true}).click();
+    const progress = page.getByTestId("ontology-build-steps");
+    const concepts = progress.getByTestId("ontology-build-stage-concepts");
+    await expect(concepts).toHaveAttribute("data-step-status", "running");
+    await expect(progress.locator("[data-testid^=ontology-build-stage-]")).toHaveCount(5);
+    await expect(page.getByTestId("ontology-build-step-progress")).toContainText("1/5");
+    await expect(progress).not.toContainText("基本概念の構築");
+    await expect(progress).not.toContainText("共有定義（Shared Definitions）");
+    await expect(concepts.getByText("13種類の関連概念を抽出しています。",{exact:true})).toHaveCount(1);
+    await expect(concepts.getByText("13種類の関連概念を抽出しています。",{exact:true})).toBeVisible();
+    // 共有の Disclosure は見出しの文言を summary の中の span に置く（#397）。getByText は focus できない span を指すため、
+    // キーボード操作は focus できる summary に対して行う（#424）。
+    const mainConcepts = concepts.locator("summary").filter({hasText:"主要概念（6種類）"});
+    await mainConcepts.focus(); await expect(mainConcepts).toBeFocused(); await page.keyboard.press("Enter");
+    await expect(concepts.getByText(/オブジェクト型（Object Type）/)).toBeVisible();
+    await progress.screenshot({path:testInfo.outputPath(`unified-progress-light-${width}.png`)});
+    const savedNote = "Markdown 下書き v2 を生成しました(候補 13 件)。";
+    payload.job.steps.find(step => step.name === "proposal_registration")!.detail_ja = savedNote;
+    payload.job.events.push({at:new Date().toISOString(), message_ja:savedNote, step:"proposal_registration", phase:"save"} as typeof typedEvents[number]);
+    payload.job.events.push({at:new Date().toISOString(), message_ja:"保存後の整合性を確認しました。", step:"proposal_registration", phase:"save"} as typeof typedEvents[number]);
+    payload.job.status = "succeeded";
+    payload.job.definition_phases.forEach(p => {p.status = "succeeded";});
+    payload.job.steps.forEach(step => {step.status = "succeeded";});
+    await expect(page.getByTestId("ontology-build-step-progress")).toContainText("5/5");
+    const saveStage = progress.getByTestId("ontology-build-stage-save");
+    await saveStage.getByText("保存・最終確認",{exact:true}).click();
+    await expect(saveStage.getByText(savedNote,{exact:true})).toHaveCount(1);
+    await expect(saveStage.getByText(savedNote,{exact:true})).toBeVisible();
+    await expect(saveStage.getByText("保存後の整合性を確認しました。",{exact:true})).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
 }
 
 for (const status of ["queued", "running", "succeeded", "failed", "cancelled"]) {
@@ -3419,21 +3406,18 @@ test("既存定義取り込みの廃止後も草稿の保存と公開を操作�
   const widths = testInfo.project.name === "desktop" ? [1280, 1920] : [375];
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await expect(page.getByRole("button", { name: "既存の定義を取り込む", exact: true })).toHaveCount(0);
-      if (width === 1920) {
-        const title = await page.getByRole("heading", { name: "オントロジー構築", exact: true, level: 1 }).boundingBox();
-        const content = await page.locator("#ontology-query-playground-panel").boundingBox();
-        expect(title).not.toBeNull();
-        expect(content).not.toBeNull();
-        expect(Math.abs(title!.x - content!.x)).toBeLessThanOrEqual(1);
-      }
-      await publish.focus();
-      await expect(publish).toBeFocused();
-      await page.screenshot({ path: testInfo.outputPath(`without-definition-import-${width}-${theme}.png`) });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect(page.getByRole("button", { name: "既存の定義を取り込む", exact: true })).toHaveCount(0);
+    if (width === 1920) {
+      const title = await page.getByRole("heading", { name: "オントロジー構築", exact: true, level: 1 }).boundingBox();
+      const content = await page.locator("#ontology-query-playground-panel").boundingBox();
+      expect(title).not.toBeNull();
+      expect(content).not.toBeNull();
+      expect(Math.abs(title!.x - content!.x)).toBeLessThanOrEqual(1);
     }
+    await publish.focus();
+    await expect(publish).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath(`without-definition-import-${width}-light.png`) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: "確認した内容を公開", exact: true })).toBeVisible();
@@ -3471,13 +3455,10 @@ for (const reason of ["timeout", "restart"] as const) {
     const widths = testInfo.project.name === "desktop" ? [1280, 1920] : [375];
     for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
-      for (const theme of ["light", "dark"] as const) {
-        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-        await publish.focus();
-        await expect(publish).toBeFocused();
-        await page.screenshot({ path: testInfo.outputPath(`preparation-${reason}-${width}-${theme}.png`) });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      }
+      await publish.focus();
+      await expect(publish).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath(`preparation-${reason}-${width}-light.png`) });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "確認した内容を公開", exact: true })).toBeVisible();
@@ -3517,25 +3498,22 @@ for (const status of ["failed", "ready"] as const) {
     else await expect(confirm).toHaveCount(0);
     for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const theme of ["light", "dark"] as const) {
-        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-        await region.scrollIntoViewIfNeeded();
-        const metrics = await region.evaluate(element => ({
-          height: element.getBoundingClientRect().height, max: 18 * parseFloat(getComputedStyle(document.documentElement).fontSize),
-          scroll: element.scrollHeight, client: element.clientHeight,
-        }));
-        expect(metrics.height).toBeLessThanOrEqual(metrics.max + 1);
-        expect(metrics.scroll).toBeGreaterThan(metrics.client);
-        await region.focus();
-        await expect(region).toBeFocused();
-        await pressScrollKey(region, "End");
-        await expect.poll(() => region.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-        await expect.poll(() => region.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
-        await pressScrollKey(region, "Home");
-        await expect.poll(() => region.evaluate(element => element.scrollTop)).toBe(0);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`diagnostics-${status}-${width}-${theme}.png`) });
-      }
+      await region.scrollIntoViewIfNeeded();
+      const metrics = await region.evaluate(element => ({
+        height: element.getBoundingClientRect().height, max: 18 * parseFloat(getComputedStyle(document.documentElement).fontSize),
+        scroll: element.scrollHeight, client: element.clientHeight,
+      }));
+      expect(metrics.height).toBeLessThanOrEqual(metrics.max + 1);
+      expect(metrics.scroll).toBeGreaterThan(metrics.client);
+      await region.focus();
+      await expect(region).toBeFocused();
+      await pressScrollKey(region, "End");
+      await expect.poll(() => region.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+      await expect.poll(() => region.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+      await pressScrollKey(region, "Home");
+      await expect.poll(() => region.evaluate(element => element.scrollTop)).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`diagnostics-${status}-${width}-light.png`) });
     }
     await region.locator("summary").first().press("Enter");
     await expect(region.getByText("Order.id / mappings.0.expression_sql / SQL_EXPRESSION_INVALID", { exact: true })).toBeVisible();
@@ -3584,11 +3562,8 @@ test("警告のみで公開し再読込後も診断を参照・保存できる",
   expect(record.snapshot_id).toBe("revision-draft-4");
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await saved.screenshot({ path: testInfo.outputPath(`published-diagnostics-${width}-${theme}.png`) });
-    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await saved.screenshot({ path: testInfo.outputPath(`published-diagnostics-${width}-light.png`) });
   }
 });
 
@@ -3633,14 +3608,11 @@ for (const operationalWarning of [false, true]) {
     await expect(draftTab).toBeFocused();
     for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const theme of ["light", "dark"]) {
-        await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-        await editor.scrollIntoViewIfNeeded();
-        await editor.focus();
-        await expect(editor).toBeFocused();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`content-notes-${width}-${theme}.png`) });
-      }
+      await editor.scrollIntoViewIfNeeded();
+      await editor.focus();
+      await expect(editor).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`content-notes-${width}-light.png`) });
     }
   });
 }
@@ -3667,14 +3639,11 @@ test("従業員 Markdown は業務内容だけを整形表示して公開でき�
   }
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await editor.scrollIntoViewIfNeeded();
-      await editor.focus();
-      await expect(editor).toBeFocused();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`clean-employee-${width}-${theme}.png`) });
-    }
+    await editor.scrollIntoViewIfNeeded();
+    await editor.focus();
+    await expect(editor).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`clean-employee-${width}-light.png`) });
   }
   await draft.press("End");
   await expect(markdown.getByRole("tab", { name: "公開済み Markdown オントロジー" })).toBeFocused();
@@ -3757,21 +3726,18 @@ test("公開確認は標準の折りたたみ・フォーム・状態表示を�
   await input.fill("[]");
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      await validation.scrollIntoViewIfNeeded();
-      await input.focus();
-      await expect(input).toBeFocused();
-      expect(await input.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe("none");
-      for (const disclosure of [unchangedSummary, summary]) {
-        expect(await disclosure.evaluate(element => getComputedStyle(element).listStyleType)).toBe("none");
-        await expect(disclosure.locator("svg").last()).toHaveAttribute("aria-hidden", "true");
-        expect((await disclosure.boundingBox())!.height).toBeGreaterThanOrEqual(await disclosure.evaluate(() => 2.75 * parseFloat(getComputedStyle(document.documentElement).fontSize)));
-      }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`publication-standard-${width}-${theme}.png`) });
-      await changes.screenshot({ path: testInfo.outputPath(`publication-changes-second-${width}-${theme}.png`) });
+    await validation.scrollIntoViewIfNeeded();
+    await input.focus();
+    await expect(input).toBeFocused();
+    expect(await input.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe("none");
+    for (const disclosure of [unchangedSummary, summary]) {
+      expect(await disclosure.evaluate(element => getComputedStyle(element).listStyleType)).toBe("none");
+      await expect(disclosure.locator("svg").last()).toHaveAttribute("aria-hidden", "true");
+      expect((await disclosure.boundingBox())!.height).toBeGreaterThanOrEqual(await disclosure.evaluate(() => 2.75 * parseFloat(getComputedStyle(document.documentElement).fontSize)));
     }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`publication-standard-${width}-light.png`) });
+    await changes.screenshot({ path: testInfo.outputPath(`publication-changes-second-${width}-light.png`) });
   }
   await validate.click();
   await expect.poll(() => validationCalls).toBe(1);
@@ -3846,17 +3812,14 @@ test("公開前の確認は graph の構成と、初回は差分の 1 行だけ�
   await expect(check.getByRole("button", { name: "確認した内容を公開", exact: true })).toBeEnabled();
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await check.screenshot({ path: testInfo.outputPath(`publication-best-effort-${width}-${theme}.png`) });
-    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await check.screenshot({ path: testInfo.outputPath(`publication-best-effort-${width}-light.png`) });
   }
 });
 
 test("公開を止める問題があるときは、業務説明に追記する改善案をコピーし、押したときだけ追記する (#1729)", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   state.jobPolls = 2;
@@ -3903,11 +3866,8 @@ test("公開を止める問題があるときは、業務説明に追記する�
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${first}\n${second}`);
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await panel.screenshot({ path: testInfo.outputPath(`publication-suggestion-${width}-${theme}.png`) });
-    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await panel.screenshot({ path: testInfo.outputPath(`publication-suggestion-${width}-light.png`) });
   }
   await panel.getByRole("button", { name: "業務説明に追記", exact: true }).click();
   await expect(businessText).toHaveValue(`受注の業務です。\n${first}\n${second}`);
@@ -3919,7 +3879,7 @@ test("公開を止める問題があるときは、業務説明に追記する�
 
 test("一意でない列でつなぐリンク型の警告は具体の結合のキーを示し、改善案は押したときだけ業務説明に追記する (#1760)", { tag: "@responsive" }, async ({ context, page }, testInfo) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3101"}`,
+    origin: `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? "3201"}`,
   });
   const state = await mockApi(page);
   state.jobPolls = 2;
@@ -3965,11 +3925,8 @@ test("一意でない列でつなぐリンク型の警告は具体の結合の�
   await expect(businessText).toHaveValue("従業員の業務です。");
   for (const width of testInfo.project.name === "desktop" ? [1280, 1920] : [375]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const theme of ["light", "dark"] as const) {
-      await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await check.screenshot({ path: testInfo.outputPath(`publication-link-suggestion-${width}-${theme}.png`) });
-    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await check.screenshot({ path: testInfo.outputPath(`publication-link-suggestion-${width}-light.png`) });
   }
   await panel.getByRole("button", { name: "業務説明に追記", exact: true }).click();
   await expect(businessText).toHaveValue(`従業員の業務です。\n${suggestion}`);
@@ -4089,27 +4046,24 @@ test("業務プロファイルの追加読み込みが失敗しても、選択�
   await expect(page).toHaveURL(/profile=sales/);
 });
 
-test("オントロジー構築は 1280 / 1920 / 375px・ライト / ダークで欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
+test("オントロジー構築は 1280 / 1920 / 375pxで欄の幅と placeholder が崩れない", { tag: "@responsive" }, async ({ page }) => {
   // 業務プロファイルの選択は lg、業務の説明は FormGrid の full、質問は full（#1891）。
   test.slow();
   await mockProfileScopedApi(page);
   const widths = test.info().project.name === "mobile-375" ? [375] : [1280, 1920];
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto("/ontology-build?profile=sales");
-      await expectSelectFieldValue(page.getByTestId("ontology-build-profile-select"), "sales");
-      await loadOntologyBuildWorkspace(page);
-      await expect(page.locator("#ontology-build-business-text")).toBeVisible();
-      const label = `ontology build ${width}px ${colorScheme}`;
-      expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
-      expect(await findClippedPlaceholders(page), label).toEqual([]);
-      if (width >= 640) {
-        // グラフ内の強調の検索（ツールバーの専用の枠。page-archetypes の例外）は段の外のまま。
-        const offScale = (await findFieldsOffWidthScale(page)).filter((field) => field.name !== "グラフ内を検索");
-        expect(offScale, label).toEqual([]);
-      }
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/ontology-build?profile=sales");
+    await expectSelectFieldValue(page.getByTestId("ontology-build-profile-select"), "sales");
+    await loadOntologyBuildWorkspace(page);
+    await expect(page.locator("#ontology-build-business-text")).toBeVisible();
+    const label = `ontology build ${width}px`;
+    expect(await measureHorizontalOverflow(page), label).toBeLessThanOrEqual(1);
+    expect(await findClippedPlaceholders(page), label).toEqual([]);
+    if (width >= 640) {
+      // グラフ内の強調の検索（ツールバーの専用の枠。page-archetypes の例外）は段の外のまま。
+      const offScale = (await findFieldsOffWidthScale(page)).filter((field) => field.name !== "グラフ内を検索");
+      expect(offScale, label).toEqual([]);
     }
   }
 });

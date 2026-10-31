@@ -44,8 +44,6 @@ import {
   type EvaluationJob,
   type EvaluationProcessRow,
   type EvaluationRunRequestBody,
-  type ExternalParserBackendName,
-  type ExternalParserConnectionStatusData,
   type FileStatus,
   type FeedbackListParams,
   type FeedbackRequestBody,
@@ -193,9 +191,6 @@ export const queryKeys = {
   huggingfaceSettings: ["settings", "huggingface"] as const,
   uploadStorageSettings: ["settings", "upload-storage"] as const,
   parserAdapterSettings: ["settings", "parser-adapters"] as const,
-  externalParserStatuses: ["settings", "parser-adapters", "status"] as const,
-  externalParserStatus: (backend: ExternalParserBackendName) =>
-    ["settings", "parser-adapters", "status", backend] as const,
   preprocessSettings: ["settings", "preprocess"] as const,
   chunkingSettings: ["settings", "chunking"] as const,
   languagePack: ["settings", "language-pack"] as const,
@@ -2058,18 +2053,6 @@ export function useParserAdapterSettings(enabled = true) {
   });
 }
 
-export function useExternalParserStatus(
-  backend: ExternalParserBackendName,
-  enabled = false,
-) {
-  return useQuery<ExternalParserConnectionStatusData>({
-    queryKey: queryKeys.externalParserStatus(backend),
-    queryFn: () => api.getExternalParserStatus(backend),
-    enabled,
-    retry: false,
-  });
-}
-
 /** 実体・別名索引を構築する全体の既定。 */
 export function useEntityIndexSettings() {
   return useQuery({
@@ -2304,7 +2287,6 @@ export function useUpdateParserAdapterSettings() {
       api.updateParserAdapterSettings(payload),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.parserAdapterSettings, data);
-      void qc.resetQueries({ queryKey: queryKeys.externalParserStatuses });
       // 設定の概要の全体の既定（解析エンジン・解析後の処理）も変わる（#528）。
       void qc.invalidateQueries({ queryKey: queryKeys.pipelineSettings });
     },

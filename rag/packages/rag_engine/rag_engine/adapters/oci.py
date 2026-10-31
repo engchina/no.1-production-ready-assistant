@@ -1977,11 +1977,16 @@ def _embedding_base_url(settings: Settings) -> str:
     return base
 
 
-def _embedding_api_key(settings: Settings) -> str:
-    """埋め込みの API key（#8。LLM の既定の接続のものを使う）。"""
-    key = get_llm_provider(settings, None).api_key
+def _embedding_api_key(settings: Settings, *, rerank: bool = False) -> str:
+    """埋め込み（`rerank=True` は再ランク）の API key（#8 / #45）。
+
+    backend が渡す `EMBEDDING_API_KEY` / `RERANK_API_KEY`（既定の埋め込み / 再ランクのモデルの
+    接続の key）。空なら LLM の既定の接続の key。
+    """
+    key = (settings.rerank_api_key if rerank else settings.embedding_api_key).strip()
+    key = key or get_llm_provider(settings, None).api_key
     if not key:
-        raise RuntimeError("埋め込みの API key がありません（LLM の接続の API key を使います）。")
+        raise RuntimeError("埋め込み / 再ランクの API key がありません（接続の API key を設定してください）。")
     return key
 
 
@@ -2102,7 +2107,7 @@ def _rerank_text_once(
         observation.request({"url": url, **body})
         attempt = receipt.begin_sdk(current_rerank_attempt()) if receipt is not None else None
         try:
-            payload = _rerank_request(url, body, _embedding_api_key(settings), settings.rerank_request_timeout_seconds)
+            payload = _rerank_request(url, body, _embedding_api_key(settings, rerank=True), settings.rerank_request_timeout_seconds)
             observation.response(payload)
         except BaseException as exc:
             if receipt is not None and attempt is not None:

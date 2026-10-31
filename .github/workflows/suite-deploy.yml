@@ -1,12 +1,10 @@
 name: Suite / Deploy
 
-# 1 台の Compute の配備の検証（#1592）。ci.yml の `suite-deploy` job と terraform-release.yml の release の前に
-# 再利用する（workflow_call）。以前は RAG / Compute init script・NL2SQL / Deployment scripts・
-# Agent / Compute init script・Suite / Terraform の 4 つの小さな job に分かれ、それぞれ runner の枠を使い、
+# 1 台の Compute の配備の検証（#1592）。ci.yml の `suite-deploy` job から呼ぶ（workflow_call）。
+# 以前は製品ごと・配備の層ごとの小さな job に分かれ、それぞれ runner の枠を使い、
 # 2 つの job がそれぞれ nginx を apt で入れていた。
 #   - 各製品の init_script.sh と配備・更新のスクリプト（systemctl 等は fake。生成した sudoers は visudo で検査）
 #   - Nginx のログの契約・frontend の起動スクリプト（隔離した Nginx）
-#   - OCI Resource Manager の統合 stack（terraform/stack。fmt・validate・zip・契約の検証。#217）
 #   - 1 台の Compute の配備（platform/deploy。suite-init・自作の CA と IP の証明書・Nginx の site。#1316）と、
 #     起動の待ち方・配備全体の確認（suite-health。#1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）
 # 実テナンシーへの配備確認は手動で行う。
@@ -19,7 +17,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Scripts and Terraform
+    name: Scripts
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -33,17 +31,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      # deploy-run-through のテスト（#1768）が、pr_system_settings を lock どおりに入れた一時の venv を作る。release でも
-      # 再利用する workflow のため、cache は使わない（cache の汚染を避ける。no-dev の依存だけで十数秒）。
+      # deploy-run-through のテスト（#1768）が、pr_system_settings を lock どおりに入れた一時の venv を作る。
+      # cache は使わない（cache の汚染を避ける。no-dev の依存だけで十数秒）。
       - name: Set up uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           enable-cache: false
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
-        with:
-          terraform_version: "1.5.7"
 
       # NL2SQL の Nginx のログの契約と platform/deploy の Nginx の site の検証が使う（1 回だけ入れる）。
       - name: Install nginx and openssl
@@ -84,17 +77,6 @@ jobs:
         run: |
           bash -n init_script.sh scripts/tests/init-script-deployment.test.sh
           bash scripts/tests/init-script-deployment.test.sh
-
-      # 契約の検証は各製品の init_script.sh・Settings と、自前の Dockerfile・compose が無いこと（#356）も確かめる。
-      - name: Terraform stack
-        working-directory: terraform
-        run: |
-          bash -n stack/extract_wallet.sh
-          terraform fmt -check -recursive stack
-          (cd stack && terraform init -backend=false && terraform validate)
-          python -m unittest discover -s scripts/tests -v
-          python scripts/package_stack.py --output "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
-          python scripts/verify_stack_contract.py "${RUNNER_TEMP}/production-ready-suite-terraform-stack.zip"
 
       # 1 台の Compute の配備（platform/deploy。#1316）: suite-init の振る舞い、自作の CA と IP の証明書（openssl）、
       # Nginx の site（prefix・SSE・MCP・login の上限・/ → /agent/・HTTPS on / off）を隔離した Nginx で検証する。

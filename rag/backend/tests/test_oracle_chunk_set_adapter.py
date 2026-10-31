@@ -52,7 +52,7 @@ async def test_document_processing_config_round_trip() -> None:
     client = OracleClient()
     document_id = await _new_document(client)
     expected = DocumentProcessingConfig(
-        parser_adapter_backend="mineru",
+        parser_adapter_backend="unstructured",
         chunking_strategy="page_level",
         chunk_size=900,
     )

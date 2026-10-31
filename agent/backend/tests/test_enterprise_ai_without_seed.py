@@ -65,7 +65,7 @@ def _payload() -> dict[str, Any]:
         # 廃止した項目は読み捨てる。
         "seed": 7,
     }
-    return {"enterprise_ai": enterprise, "generative_ai": {}}
+    return {"enterprise_ai": enterprise}
 
 
 @pytest.mark.parametrize(

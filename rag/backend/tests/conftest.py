@@ -178,16 +178,6 @@ def isolated_local_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         get_settings(), "rag_service_runtime_env_file", str(tmp_path / "service-runtime.env")
     )
-    # MinerU の parse job のポーリングの待ちはテストでは待たない（#1329）。
-    from app.clients import external_parser
-
-    monkeypatch.setattr(external_parser, "_poll_sleep", lambda _seconds: None)
-    # 条の選択の process をまたぐ記録（#3507）は、テストの間で共有しない
-    # （手元の保存先にも書かない）。
-    # 記録を確かめるテストは置き場所を tmp に差し替え直す。
-    from app.rag import answer_engine
-
-    monkeypatch.setattr(answer_engine, "article_catalog_cache_dir", lambda _settings: None)
 
 
 async def _systemd_unavailable(argv: list[str], timeout: float) -> object:
@@ -312,8 +302,6 @@ def oracle_db(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     """mutable runtime settings をテスト既定値へ戻す。"""
-    from app.rag.mineru_license import set_mineru_license_acknowledgement
-
     settings.upload_storage_backend = "local"
     settings.object_storage_namespace = ""
     settings.object_storage_bucket = ""
@@ -353,10 +341,6 @@ def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     settings.rag_parser_adapter_backend = "unstructured"
     settings.rag_parser_docling_enabled = False
     settings.rag_parser_unstructured_enabled = True
-    settings.rag_parser_mineru_enabled = False
-    # MinerU のライセンスの条件の確認（#3359）は未確認から始める（private の値）。
-    set_mineru_license_acknowledgement(settings, by="", at="")
-    settings.rag_parser_dots_ocr_enabled = False
     settings.oci_genai_embedding_model = "cohere.embed-v4.0"
     settings.oci_genai_embedding_dim = 1024
     settings.oci_genai_rerank_model = "cohere.rerank-v4.0-fast"
@@ -428,17 +412,6 @@ def _stub_upload_storage_object_storage(monkeypatch: pytest.MonkeyPatch) -> None
         "default_object_storage_client",
         lambda _settings: _ObjectStorageStub(),
     )
-
-
-@pytest.fixture
-def mineru_selectable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """MinerU の準備中(ロードマップ)の判定を外す(#3359)。
-
-    MinerU は準備中だが、client・ライセンスの確認の関門の実装は残す。その経路のテストで使う。
-    """
-    from app import config as app_config
-
-    monkeypatch.delitem(app_config.ROADMAP_PARSER_ADAPTER_BACKENDS, "mineru")
 
 
 @pytest.fixture(autouse=True)

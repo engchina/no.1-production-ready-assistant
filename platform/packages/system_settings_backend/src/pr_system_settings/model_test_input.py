@@ -87,3 +87,38 @@ def model_test_image_data_url() -> str:
     """テスト画像の data URL（OpenAI 互換の `input_image` の `image_url` に渡す）。"""
     encoded = base64.b64encode(MODEL_TEST_IMAGE_BYTES).decode("ascii")
     return f"data:{MODEL_TEST_IMAGE_MIME_TYPE};base64,{encoded}"
+
+
+def embedding_test_details(
+    vectors: Sequence[Sequence[float]], *, expected_dim: int
+) -> dict[str, int]:
+    """埋め込みのテストの結果（#45。3 製品で共通）。次元が `expected_dim` でなければ失敗にする。
+
+    `expected_dim` は製品の設定 `oci_genai_embedding_dim`（Oracle の VECTOR 列に合わせた値。
+    呼び出しに `dimensions` として送る値）。受け付けないモデルは既定の次元を返すので、そのまま
+    使うと Oracle の VECTOR 列に入らない。テストで止める。
+    """
+    vector = vectors[0] if vectors else []
+    if len(vector) != expected_dim:
+        raise ValueError(
+            f"埋め込みの次元が {expected_dim} ではありません"
+            f"（返った次元: {len(vector)}）。dimensions を受け付けるモデルか確かめてください。"
+        )
+    return {"vector_dim": len(vector), "input_count": len(vectors)}
+
+
+def rerank_test_details(
+    ranks: Sequence[tuple[int, float]],
+) -> dict[str, str | int | float]:
+    """再ランクのテストの結果（#45。3 製品で共通）。固定の 2 文書の並び順とスコア。
+
+    `ranked_order` は文書の番号（1 始まり）を順位の順に並べた文字列（例 `1 → 2`）。
+    結果が無いときは失敗にする。
+    """
+    if not ranks:
+        raise ValueError("再ランクの応答に結果（index と relevance_score）がありません。")
+    return {
+        "ranked_count": len(ranks),
+        "ranked_order": " → ".join(f"文書 {int(index) + 1}" for index, _ in ranks),
+        "top_score": round(float(ranks[0][1]), 4),
+    }

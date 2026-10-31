@@ -16,8 +16,6 @@ const RECIPE_DEFAULTS = {
   parser_adapter_backend: "docling",
   parser_docling_enabled: true,
   parser_unstructured_enabled: false,
-  parser_mineru_enabled: false,
-  parser_dots_ocr_enabled: false,
   vision_enabled: true,
   chunking_strategy: "structure_aware",
   chunk_size: 800,
@@ -175,100 +173,84 @@ const PROCESSING_ORDER = [
   "graph_profile",
 ];
 
-for (const scheme of ["light", "dark"] as const) {
-  test(`取込の流れは検索インデックスと 13 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する (${scheme})`, async ({
-    page,
-  }, testInfo) => {
-    await page.addInitScript((theme) => {
-      window.localStorage.setItem(
-        "production-ready-rag.ui",
-        JSON.stringify({ state: { theme }, version: 0 })
-      );
-    }, scheme);
-    const patches = await mockPipelineSettings(page, {
-      auto_parse_after_preprocess_enabled: true,
-      auto_chunk_after_extract_enabled: true,
-      auto_index_after_chunk_enabled: false,
-    });
-    await page.goto("/settings/pipeline");
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-      .toBe(scheme === "dark");
-
-    const flow = page.getByRole("region", { name: "取込の流れと全体の既定" });
-    const items = flow.getByTestId("pipeline-recipe-defaults");
-    // DOM の順（上から下）が処理順。
-    await expect(items.locator("[data-config-field]")).toHaveCount(PROCESSING_ORDER.length);
-    expect(
-      await items
-        .locator("[data-config-field]")
-        .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-config-field")))
-    ).toEqual(PROCESSING_ORDER);
-    await expect(items.getByRole("heading", { level: 3 })).toHaveText([
-      "1. ファイル準備",
-      "2. 抽出",
-      "3. Chunk 作成",
-      "4. Embedding / 索引",
-    ]);
-    // 全体の既定の値。
-    await expect(items.locator('[data-config-field="parser_adapter_backend"]')).toContainText("Docling");
-    await expect(items.locator('[data-config-field="vision_enabled"]')).toContainText("有効");
-    await expect(items.locator('[data-config-field="field_extraction_enabled"]')).toContainText("無効");
-    // XML ツリー JSON は使用エンジンの 1 つで、別の項目を持たない（#2042）。
-    await expect(items.locator('[data-config-field="parser_xml_tree_json_enabled"]')).toHaveCount(0);
-    await expect(
-      items.locator('[data-config-field="parser_structured_records_jsonl_enabled"]')
-    ).toHaveCount(0);
-
-    // 各項目から、その全体の既定を変える画面へ移動できる。
-    await expect(
-      items.getByRole("link", { name: "図・画像を AI で読み取る を設定する画面を開く" })
-    ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-vision");
-    await expect(items.locator('[data-config-field="chunk_context_header_enabled"]')).toHaveCount(0);
-    await expect(
-      items.getByRole("link", { name: "見出しの階層の推定（AI） を設定する画面を開く" })
-    ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-heading-levels");
-    await expect(items.locator('[data-config-field="heading_level_inference_enabled"]')).toContainText("無効");
-    await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(11);
-    // 索引構築の全体の既定は OFF。専用の設定画面から変更できる。
-    const entityIndex = items.locator('[data-config-field="entity_index_enabled"]');
-    await expect(entityIndex).toContainText("無効");
-    await expect(entityIndex.getByRole("link")).toHaveAttribute("href", "/settings/entity-index");
-    await expect(items.locator('[data-config-field="vector_index"]').getByRole("link")).toHaveAttribute("href", "/settings/vector-index");
-
-    // 工程の間の 3 つのスイッチ。
-    const parseGate = items.getByRole("switch", { name: "ファイル準備後に抽出へ進む" });
-    const chunkGate = items.getByRole("switch", { name: "抽出後に Chunk 作成へ進む" });
-    const indexGate = items.getByRole("switch", { name: "Chunk 後に Embedding / 索引へ進む" });
-    await expect(parseGate).toHaveAttribute("aria-checked", "true");
-    await expect(indexGate).toHaveAttribute("aria-checked", "false");
-    await chunkGate.focus();
-    await page.keyboard.press("Space");
-    await expect(chunkGate).toHaveAttribute("aria-checked", "false");
-    await expect(flow.getByText("未保存の変更があります。")).toBeVisible();
-
-    if (SCREENSHOT_DIR) {
-      await page.screenshot({
-        path: `${SCREENSHOT_DIR}/pipeline-flow-${testInfo.project.name}-${scheme}.png`,
-        fullPage: true,
-      });
-    }
-
-    await flow.getByRole("button", { name: "保存", exact: true }).click();
-    // 保存の成功は Toast（操作の行に常設の成功の表示を残さない。#992）。
-    await expect(page.getByText("工程の自動進行を保存しました。")).toBeVisible();
-    await expect(flow.getByText("工程の自動進行を保存しました。")).toHaveCount(0);
-    expect(patches).toEqual([
-      {
-        auto_parse_after_preprocess_enabled: true,
-        auto_chunk_after_extract_enabled: false,
-        auto_index_after_chunk_enabled: false,
-      },
-    ]);
-    await expect(items.locator('[data-config-field="auto_chunk_after_extract_enabled"]')).toBeVisible();
-    await expectNoPageOverflow(page);
+test(`取込の流れは検索インデックスと 13 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
+  page,
+}, testInfo) => {
+  const patches = await mockPipelineSettings(page, {
+    auto_parse_after_preprocess_enabled: true,
+    auto_chunk_after_extract_enabled: true,
+    auto_index_after_chunk_enabled: false,
   });
-}
+  await page.goto("/settings/pipeline");
+
+  const flow = page.getByRole("region", { name: "取込の流れと全体の既定" });
+  const items = flow.getByTestId("pipeline-recipe-defaults");
+  // DOM の順（上から下）が処理順。
+  await expect(items.locator("[data-config-field]")).toHaveCount(PROCESSING_ORDER.length);
+  expect(
+    await items
+      .locator("[data-config-field]")
+      .evaluateAll((elements) => elements.map((element) => element.getAttribute("data-config-field")))
+  ).toEqual(PROCESSING_ORDER);
+  await expect(items.getByRole("heading", { level: 3 })).toHaveText([
+    "1. ファイル準備",
+    "2. 抽出",
+    "3. Chunk 作成",
+    "4. Embedding / 索引",
+  ]);
+  // 全体の既定の値。
+  await expect(items.locator('[data-config-field="parser_adapter_backend"]')).toContainText("Docling");
+  await expect(items.locator('[data-config-field="vision_enabled"]')).toContainText("有効");
+  await expect(items.locator('[data-config-field="field_extraction_enabled"]')).toContainText("無効");
+
+  // 各項目から、その全体の既定を変える画面へ移動できる。
+  await expect(
+    items.getByRole("link", { name: "図・画像を AI で読み取る を設定する画面を開く" })
+  ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-vision");
+  await expect(items.locator('[data-config-field="chunk_context_header_enabled"]')).toHaveCount(0);
+  await expect(
+    items.getByRole("link", { name: "見出しの階層の推定（AI） を設定する画面を開く" })
+  ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-heading-levels");
+  await expect(items.locator('[data-config-field="heading_level_inference_enabled"]')).toContainText("無効");
+  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(11);
+  // 索引構築の全体の既定は OFF。専用の設定画面から変更できる。
+  const entityIndex = items.locator('[data-config-field="entity_index_enabled"]');
+  await expect(entityIndex).toContainText("無効");
+  await expect(entityIndex.getByRole("link")).toHaveAttribute("href", "/settings/entity-index");
+  await expect(items.locator('[data-config-field="vector_index"]').getByRole("link")).toHaveAttribute("href", "/settings/vector-index");
+
+  // 工程の間の 3 つのスイッチ。
+  const parseGate = items.getByRole("switch", { name: "ファイル準備後に抽出へ進む" });
+  const chunkGate = items.getByRole("switch", { name: "抽出後に Chunk 作成へ進む" });
+  const indexGate = items.getByRole("switch", { name: "Chunk 後に Embedding / 索引へ進む" });
+  await expect(parseGate).toHaveAttribute("aria-checked", "true");
+  await expect(indexGate).toHaveAttribute("aria-checked", "false");
+  await chunkGate.focus();
+  await page.keyboard.press("Space");
+  await expect(chunkGate).toHaveAttribute("aria-checked", "false");
+  await expect(flow.getByText("未保存の変更があります。")).toBeVisible();
+
+  if (SCREENSHOT_DIR) {
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/pipeline-flow-${testInfo.project.name}.png`,
+      fullPage: true,
+    });
+  }
+
+  await flow.getByRole("button", { name: "保存", exact: true }).click();
+  // 保存の成功は Toast（操作の行に常設の成功の表示を残さない。#992）。
+  await expect(page.getByText("工程の自動進行を保存しました。")).toBeVisible();
+  await expect(flow.getByText("工程の自動進行を保存しました。")).toHaveCount(0);
+  expect(patches).toEqual([
+    {
+      auto_parse_after_preprocess_enabled: true,
+      auto_chunk_after_extract_enabled: false,
+      auto_index_after_chunk_enabled: false,
+    },
+  ]);
+  await expect(items.locator('[data-config-field="auto_chunk_after_extract_enabled"]')).toBeVisible();
+  await expectNoPageOverflow(page);
+});
 
 test("取込の流れは読み込み中に形を予約し、取得に失敗したら再試行できる", async ({ page }) => {
   await mockPipelineSettings(page, undefined, { delayMs: 1500 });
@@ -343,51 +325,46 @@ for (const viewport of [
   });
 }
 
-for (const theme of ["light", "dark"] as const) {
-  test(`概要の設定リンクは常時識別でき、章節のカードには値と導線だけを出す (${theme})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    await page.addInitScript((value) => window.localStorage.setItem(
-      "production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 })
-    ), theme);
-    await page.goto("/settings/pipeline");
-    const items = page.getByTestId("pipeline-recipe-defaults");
-    const links = items.getByRole("link");
-    await expect(links).toHaveCount(11);
-    for (const link of await links.all()) {
-      expect(await link.evaluate((element) => getComputedStyle(element).textDecorationLine)).toContain("underline");
-      const colors = await link.evaluate((element) => ({
-        link: getComputedStyle(element).color,
-        text: getComputedStyle(element.closest("div")!.querySelector("dt")!).color,
-      }));
-      expect(colors.link).not.toBe(colors.text);
-    }
-    const sectionFields = items.locator(
-      '[data-config-field="section_rules_mode"], [data-config-field="navigation_summary_enabled"]'
-    );
-    expect(await sectionFields.evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute("data-config-field"))
-    )).toEqual(["section_rules_mode", "navigation_summary_enabled"]);
-    for (const [field, title, value] of [
-      ["section_rules_mode", "章節の抽出規則", "解析済みの見出しを使う"],
-      ["navigation_summary_enabled", "章節の要約", "無効"],
-    ]) {
-      const card = items.locator(`[data-config-field="${field}"]`);
-      await expect(card.locator("dt")).toHaveText(title);
-      await expect(card.locator("dd")).toHaveCount(2);
-      await expect(card.locator("dd").first()).toHaveText(value);
-      await expect(card.getByRole("link")).toContainText("設定画面へ");
-    }
-    const vision = items.getByRole("link", { name: "図・画像を AI で読み取る を設定する画面を開く" });
-    await vision.focus();
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Shift+Tab");
-    await expect(vision).toBeFocused();
-    expect(await vision.evaluate((element) => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
-    await page.screenshot({ path: testInfo.outputPath("overview-setting-links.png") });
-    await expectNoPageOverflow(page);
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/settings\/parser-adapters#post-parse-vision$/);
-  });
-}
+test("概要の設定リンクは常時識別でき、章節のカードには値と導線だけを出す", { tag: "@responsive" }, async ({ page }, testInfo) => {
+  await page.goto("/settings/pipeline");
+  const items = page.getByTestId("pipeline-recipe-defaults");
+  const links = items.getByRole("link");
+  await expect(links).toHaveCount(11);
+  for (const link of await links.all()) {
+    expect(await link.evaluate((element) => getComputedStyle(element).textDecorationLine)).toContain("underline");
+    const colors = await link.evaluate((element) => ({
+      link: getComputedStyle(element).color,
+      text: getComputedStyle(element.closest("div")!.querySelector("dt")!).color,
+    }));
+    expect(colors.link).not.toBe(colors.text);
+  }
+  const sectionFields = items.locator(
+    '[data-config-field="section_rules_mode"], [data-config-field="navigation_summary_enabled"]'
+  );
+  expect(await sectionFields.evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("data-config-field"))
+  )).toEqual(["section_rules_mode", "navigation_summary_enabled"]);
+  for (const [field, title, value] of [
+    ["section_rules_mode", "章節の抽出規則", "解析済みの見出しを使う"],
+    ["navigation_summary_enabled", "章節の要約", "無効"],
+  ]) {
+    const card = items.locator(`[data-config-field="${field}"]`);
+    await expect(card.locator("dt")).toHaveText(title);
+    await expect(card.locator("dd")).toHaveCount(2);
+    await expect(card.locator("dd").first()).toHaveText(value);
+    await expect(card.getByRole("link")).toContainText("設定画面へ");
+  }
+  const vision = items.getByRole("link", { name: "図・画像を AI で読み取る を設定する画面を開く" });
+  await vision.focus();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(vision).toBeFocused();
+  expect(await vision.evaluate((element) => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
+  await page.screenshot({ path: testInfo.outputPath("overview-setting-links.png") });
+  await expectNoPageOverflow(page);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/settings\/parser-adapters#post-parse-vision$/);
+});
 
 for (const [profile, label] of [["fast", "高速"], ["balanced", "バランス"], ["accurate", "高精度"]] as const) {
   test(`概要は保存された検索インデックスの ${label} を表示する`, { tag: "@responsive" }, async ({ page }) => {

@@ -20,7 +20,7 @@ import { apiEnvelope, mockLocalAuth, selectSearchAnswerProfile } from "./_helper
  *   セルからはみ出さない（`findFieldsOffWidthScale`。段の幅は sm 以上だけで効くので 375px では見ない）
  * - 欄の補足・エラーの文が min(20rem, 置き場所の幅) より狭く折り返さない（`findNarrowFieldTexts`。#1891 段 5）
  * - 1280px で `FormGrid` の置き場所を 42〜58rem に狭めても、上のすべてが成り立つ（2 列の境 57.5rem の前後。#1891 段 5）
- * ライト・ダークの両方で開く。desktop の project は 1280px と 1920px、mobile の project は 375px。
+ * desktop の project は 1280px と 1920px、mobile の project は 375px で開く。
  * `RAG_E2E_SCREENSHOT_DIR` を渡すと、代表の画面の画像を残す（PR の説明用）。
  */
 
@@ -30,7 +30,6 @@ const DESKTOP_WIDTHS = [
   { width: 1920, height: 1080 },
 ] as const;
 
-type Theme = "light" | "dark";
 
 interface FormScreen {
   /** 画面の名前（テスト名・画像の名前）。 */
@@ -121,13 +120,12 @@ function mockChunking(strategy: string) {
 // ---- 文書解析（外部の解析の接続・章節の抽出規則・抽出する項目） ----
 
 function parserAdapter(backend: string, selected: boolean) {
-  const external = backend === "mineru" || backend === "dots_ocr";
   return {
     backend,
-    package_name: external ? "external_api" : backend,
-    import_name: external ? "external_api" : backend,
+    package_name: backend,
+    import_name: backend,
     distribution_name: null,
-    install_package: external ? `外部 ${backend} API` : backend,
+    install_package: backend,
     enabled: selected,
     selected,
     installed: selected,
@@ -150,29 +148,8 @@ async function mockParserAdapters(page: Page) {
         adapters: [
           parserAdapter("docling", true),
           parserAdapter("unstructured", false),
-          parserAdapter("mineru", false),
-          parserAdapter("dots_ocr", false),
         ],
         source_routes: [],
-        connections: [
-          {
-            backend: "mineru",
-            protocol: "mineru_v1",
-            endpoint: "",
-            model: null,
-            api_key_configured: false,
-            configured: false,
-          },
-          {
-            backend: "dots_ocr",
-            protocol: "openai_chat_completions",
-            endpoint: "https://dots.example.com/v1",
-            model: "rednote-hilab/dots.mocr",
-            api_key_configured: true,
-            configured: true,
-          },
-        ],
-        service_backends: [],
         backend_source_kind_matrix: {
           evidence_source: "runtime_routes",
           required_source_kinds: [],
@@ -221,7 +198,6 @@ async function mockParserAdapters(page: Page) {
 }
 
 async function openParserAdapters(page: Page) {
-  await expect(page.getByRole("textbox", { name: "Endpoint" }).first()).toBeVisible();
   await page.locator("summary", { hasText: "抽出する項目の定義" }).click();
   await expect(page.getByRole("textbox", { name: /項目名/ }).first()).toBeVisible();
   await page.locator("#post-parse-section-rules").scrollIntoViewIfNeeded();
@@ -371,8 +347,6 @@ const PROCESSING_NULLS = {
   parser_adapter_backend: null,
   parser_docling_enabled: null,
   parser_unstructured_enabled: null,
-  parser_mineru_enabled: null,
-  parser_dots_ocr_enabled: null,
   chunking_strategy: null,
   chunk_size: null,
   chunk_overlap: null,
@@ -777,16 +751,6 @@ const SCREENS: FormScreen[] = [
   },
 ];
 
-/**
- * 外観の設定（localStorage）でテーマを決める。`emulateMedia` では切り替わらない。画面が離れるときに保存する
- * 作業状態で上書きされないよう、読み込みの前（init script）に入れる（後から足した script が後に動く）。
- */
-async function useTheme(page: Page, theme: Theme) {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: { theme: value }, version: 0 }));
-  }, theme);
-}
-
 async function expectLayout(page: Page, screen: FormScreen, label: string, checkWidthScale: boolean) {
   await expect
     .poll(() => measureHorizontalOverflow(page), { message: `${label}: ページの横あふれ`, timeout: 3000 })
@@ -828,32 +792,26 @@ test.describe("フォームの欄の幅と placeholder（#1891）", { tag: "@res
     test(`${screen.name} の欄が段の幅で、placeholder が収まり、横にあふれない`, async ({ page }, testInfo) => {
       const mobile = testInfo.project.name === "mobile";
       await screen.mock(page);
-      for (const theme of ["light", "dark"] as const) {
-        await useTheme(page, theme);
-        await page.goto(screen.path);
-        await expect
-          .poll(() => page.evaluate(() => document.documentElement.classList.contains("dark")))
-          .toBe(theme === "dark");
-        if (mobile) {
-          await screen.open(page);
-          await expectLayout(page, screen, `375px ${theme}`, false);
-          await screenshot(page, screen, `375-${theme}`);
-          continue;
-        }
-        for (const size of DESKTOP_WIDTHS) {
-          await page.setViewportSize(size);
-          if (size === DESKTOP_WIDTHS[0]) await screen.open(page);
-          await expectLayout(page, screen, `${size.width}px ${theme}`, true);
-          if (size !== DESKTOP_WIDTHS[0] || theme !== "light") continue;
-          // FormGrid の置き場所が 42〜58rem（2 列の境 57.5rem の前後）でも、欄が段の幅のままでセルからはみ出さない。
-          for (const rem of FORM_GRID_PROBE_WIDTHS_REM) {
-            await setFormGridMaxWidth(page, rem);
-            await expectLayout(page, screen, `${size.width}px ${theme} FormGrid ${rem}rem`, true);
-          }
-          await setFormGridMaxWidth(page, null);
-        }
-        await screenshot(page, screen, `1920-${theme}`);
+      await page.goto(screen.path);
+      if (mobile) {
+        await screen.open(page);
+        await expectLayout(page, screen, "375px", false);
+        await screenshot(page, screen, "375");
+        return;
       }
+      for (const size of DESKTOP_WIDTHS) {
+        await page.setViewportSize(size);
+        if (size === DESKTOP_WIDTHS[0]) await screen.open(page);
+        await expectLayout(page, screen, `${size.width}px`, true);
+        if (size !== DESKTOP_WIDTHS[0]) continue;
+        // FormGrid の置き場所が 42〜58rem（2 列の境 57.5rem の前後）でも、欄が段の幅のままでセルからはみ出さない。
+        for (const rem of FORM_GRID_PROBE_WIDTHS_REM) {
+          await setFormGridMaxWidth(page, rem);
+          await expectLayout(page, screen, `${size.width}px FormGrid ${rem}rem`, true);
+        }
+        await setFormGridMaxWidth(page, null);
+      }
+      await screenshot(page, screen, "1920");
     });
   }
 });

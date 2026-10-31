@@ -583,7 +583,6 @@ async def test_recipe_extraction_artifacts_are_isolated_and_pointer_switches_aft
         genai=cast(Any, object()),
         oracle=cast(Any, oracle),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         settings=settings,
         recipe_id="recipe-1",
         recipe_revision=2,
@@ -593,7 +592,6 @@ async def test_recipe_extraction_artifacts_are_isolated_and_pointer_switches_aft
         genai=cast(Any, object()),
         oracle=cast(Any, oracle),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         settings=settings,
         recipe_id="recipe-2",
         recipe_revision=2,
@@ -622,7 +620,6 @@ async def test_recipe_extraction_persistence_failure_is_fatal() -> None:
         genai=cast(Any, object()),
         oracle=cast(Any, FailingRecipeOracle()),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         settings=Settings(rag_parser_adapter_backend="local"),
         recipe_id="recipe-1",
         recipe_revision=1,
@@ -646,7 +643,6 @@ async def test_recipe_review_load_does_not_fall_back_to_document_extraction() ->
         genai=cast(Any, object()),
         oracle=cast(Any, oracle),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         settings=Settings(rag_parser_adapter_backend="local"),
         recipe_id="recipe-empty",
         recipe_revision=1,
@@ -1139,25 +1135,24 @@ async def test_ingestion_pipeline_does_not_reuse_full_extraction_for_other_parse
     assert artifacts["extraction_artifact_parse_key"] != first_key
 
 
-@pytest.mark.usefixtures("mineru_selectable")
 def test_ingestion_selected_external_parser_fallback_stops_ingestion() -> None:
     """明示選択 parser が fallback 結果なら Enterprise AI へ進めず止める。"""
     pipeline = object.__new__(IngestionPipeline)
     pipeline._settings = Settings(
         # 項目抽出は対象外(stub の VLM は応答しないため、有効なら取込が止まる。#2481)。
         rag_field_extraction_enabled=False,
-        rag_parser_adapter_backend="mineru",
-        rag_parser_mineru_enabled=True,
+        rag_parser_adapter_backend="unstructured",
+        rag_parser_unstructured_enabled=True,
     )
     result = ParserRegistryResult(
         extraction=None,
-        parser_backend="mineru",
+        parser_backend="unstructured",
         parser_version="service_unavailable",
         fallback_used=True,
-        warnings=("mineru_adapter_failed",),
+        warnings=("unstructured_adapter_failed",),
     )
 
-    with pytest.raises(IngestionUserError, match="MinerU"):
+    with pytest.raises(IngestionUserError, match="Unstructured"):
         pipeline._raise_if_selected_parser_was_not_used(result)
 
 
@@ -1398,7 +1393,6 @@ def _preflight_pipeline(backend: str, monkeypatch: pytest.MonkeyPatch) -> Ingest
         genai=cast(Any, object()),
         oracle=cast(Any, FakeOracle()),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         settings=Settings().model_copy(update={"rag_parser_adapter_backend": backend}),
     )
 
@@ -1406,10 +1400,10 @@ def _preflight_pipeline(backend: str, monkeypatch: pytest.MonkeyPatch) -> Ingest
 def test_partition_source_preflight_blocks_unsupported_format(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """dots_ocr × Office は外部 API を呼ぶ前に対応形式入りエラーで停止する。"""
+    """docling × Office は解析サービスを呼ぶ前に対応形式入りエラーで停止する。"""
     from app.clients.parser_service import ParserServiceUnavailableError
 
-    pipeline = _preflight_pipeline("dots_ocr", monkeypatch)
+    pipeline = _preflight_pipeline("docling", monkeypatch)
 
     with pytest.raises(ParserServiceUnavailableError) as exc_info:
         pipeline._partition_source(
@@ -1419,47 +1413,20 @@ def test_partition_source_preflight_blocks_unsupported_format(
         )
 
     assert exc_info.value.reason == "adapter_source_unsupported"
-    assert exc_info.value.warning_code == "dots_ocr_adapter_source_unsupported"
+    assert exc_info.value.warning_code == "docling_adapter_source_unsupported"
     assert "対応形式: PDF・画像" in str(exc_info.value)
 
 
-@pytest.mark.parametrize("content_kind", ["pdf", "office"], ids=["pdf", "office"])
-@pytest.mark.parametrize("backend", ["oci_document_understanding", "mineru"])
-def test_partition_source_blocks_roadmap_engine_before_any_call(
-    monkeypatch: pytest.MonkeyPatch, content_kind: str, backend: str
+@pytest.mark.parametrize(
+    "backend", ["removed_engine", "mineru", "dots_ocr", "oci_document_understanding"]
+)
+def test_partition_source_blocks_historical_removed_engine(
+    monkeypatch: pytest.MonkeyPatch, backend: str
 ) -> None:
-    """準備中(ロードマップ)のエンジンは、対応形式でも呼ばずに止める。
-
-    OCI Document Understanding(#3374)と MinerU(#3359)。
-    """
+    """履歴レシピの削除済み engine は旧結果を使うだけにし、新規処理を開始しない(#270・#22)。"""
     from app.clients.parser_service import ParserServiceUnavailableError
 
     pipeline = _preflight_pipeline(backend, monkeypatch)
-    profile = (
-        _pdf_source_profile(file_size_bytes=10)
-        if content_kind == "pdf"
-        else _office_source_profile()
-    )
-
-    with pytest.raises(ParserServiceUnavailableError) as exc_info:
-        pipeline._partition_source(
-            parse_bytes=b"source-bytes",
-            source_profile=profile,
-            content_type=profile.content_type,
-        )
-
-    assert exc_info.value.reason == "engine_roadmap"
-    assert exc_info.value.warning_code == "parser_engine_roadmap"
-    assert "準備中（ロードマップ）" in str(exc_info.value)
-
-
-def test_partition_source_blocks_historical_removed_engine(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """履歴レシピの削除済み engine は旧結果を使うだけにし、新規処理を開始しない。"""
-    from app.clients.parser_service import ParserServiceUnavailableError
-
-    pipeline = _preflight_pipeline("removed_engine", monkeypatch)
 
     with pytest.raises(ParserServiceUnavailableError) as exc_info:
         pipeline._partition_source(
@@ -1469,15 +1436,15 @@ def test_partition_source_blocks_historical_removed_engine(
         )
 
     assert exc_info.value.reason == "engine_removed"
-    assert "解析エンジン（removed_engine）は削除されました" in str(exc_info.value)
+    assert f"解析エンジン（{backend}）は削除されました" in str(exc_info.value)
     assert "旧結果は保持されています" in str(exc_info.value)
 
 
 def test_partition_source_preflight_passes_converted_pdf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """office_to_pdf 変換後(content_type=application/pdf)は dots_ocr でも通過する。"""
-    pipeline = _preflight_pipeline("dots_ocr", monkeypatch)
+    """office_to_pdf 変換後(content_type=application/pdf)は docling で通過する。"""
+    pipeline = _preflight_pipeline("docling", monkeypatch)
 
     def _runner(
         self: object,
@@ -1491,7 +1458,7 @@ def test_partition_source_preflight_passes_converted_pdf(
         return ParserRegistryResult(
             extraction=_canned_extraction(),
             parser_backend=backend,
-            parser_version="dots_ocr_test",
+            parser_version="docling_test",
         )
 
     monkeypatch.setattr(
@@ -1506,7 +1473,7 @@ def test_partition_source_preflight_passes_converted_pdf(
         content_type="application/pdf",
     )
 
-    assert result.parser_backend == "dots_ocr"
+    assert result.parser_backend == "docling"
     assert result.extraction is not None
 
 
@@ -1520,7 +1487,6 @@ def test_partition_source_maps_legacy_or_empty_backend_to_default_docling(
         genai=cast(Any, object()),
         oracle=cast(Any, FakeOracle()),
         object_storage=cast(Any, FakeObjectStorage()),
-        document_understanding=cast(Any, object()),
         # validator を通さず旧値・空値を直接入れる(保存済み snapshot 相当)。
         settings=Settings().model_copy(update={"rag_parser_adapter_backend": configured}),
     )

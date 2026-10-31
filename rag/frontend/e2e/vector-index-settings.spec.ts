@@ -85,28 +85,26 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 760, collapse: false },
   { name: "mobile", width: 375, height: 812, collapse: true },
 ]) {
-  for (const theme of ["light", "dark"] as const) {
-    test(`検索インデックス設定は現在の索引が推奨と一致すると再作成を案内しない (${viewport.name}, ${theme})`, async ({
-      page,
-    }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await setUiState(page, { theme, sidebarCollapsed: viewport.collapse });
-      await mockVectorIndex(page, "accurate", [48, 800]);
+  test(`検索インデックス設定は現在の索引が推奨と一致すると再作成を案内しない (${viewport.name})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await setUiState(page, { sidebarCollapsed: viewport.collapse });
+    await mockVectorIndex(page, "accurate", [48, 800]);
 
-      await page.goto("/settings/vector-index");
+    await page.goto("/settings/vector-index");
 
-      await expect(page.getByRole("radio", { name: /高精度/ })).toBeChecked();
-      const currentIndex = page.getByText("現在の索引", { exact: true }).locator("..");
-      await expect(currentIndex).toContainText("NEIGHBORS 48 / EFCONSTRUCTION 800");
-      await expect(page.getByText("推奨ビルドパラメータを適用するには", { exact: false })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "索引再作成 SQL" })).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /高精度/ })).toBeChecked();
+    const currentIndex = page.getByText("現在の索引", { exact: true }).locator("..");
+    await expect(currentIndex).toContainText("NEIGHBORS 48 / EFCONSTRUCTION 800");
+    await expect(page.getByText("推奨ビルドパラメータを適用するには", { exact: false })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "索引再作成 SQL" })).toHaveCount(0);
 
-      // 実際の索引と違う検索精度を選ぶと、backend の判定(reprovision)で警告を出す。
-      await page.getByRole("radio", { name: /高速/ }).click();
-      await expect(page.getByText("推奨ビルドパラメータを適用するには", { exact: false })).toBeVisible();
-      await expectNoHorizontalOverflow(page);
-    });
-  }
+    // 実際の索引と違う検索精度を選ぶと、backend の判定(reprovision)で警告を出す。
+    await page.getByRole("radio", { name: /高速/ }).click();
+    await expect(page.getByText("推奨ビルドパラメータを適用するには", { exact: false })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
 }
 
 test("検索インデックス設定は現在の索引を確認できないとき、その旨と再作成 SQL を出す", async ({
@@ -171,9 +169,9 @@ async function collapseSidebar(page: Page) {
 
 async function setUiState(
   page: Page,
-  state: { theme?: "light" | "dark"; sidebarCollapsed?: boolean }
+  state: { sidebarCollapsed?: boolean }
 ) {
-  // 外観の選好とサイドナビの折りたたみ(共有 UI の ui-store が保存する値)を読み込みの前に入れる。
+  // サイドナビの折りたたみ(共有 UI の ui-store が保存する値)を読み込みの前に入れる。
   await page.addInitScript((value) => {
     window.localStorage.setItem("production-ready-rag.ui", JSON.stringify({ state: value, version: 0 }));
   }, state);

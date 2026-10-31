@@ -135,10 +135,11 @@ platform を import できない層（RAG の `rag_engine` の `DEFAULT_EMBEDDIN
 SQL の migration のファイル）は同じ値を書き、一致をテストで確かめる。
 
 - **次元は設定では変えない（1024 に固定）。** Oracle のベクトル列は固定の次元で、値を変えるには列と索引の作り直しと全件の再埋め込みが
-  要るため、`.env`・設定画面の値は受け付けない（画面の「Embedding 次元」は表示だけ）。
+  要るため、`.env` の値は 1024 以外を受け付けない（「システム設定 › モデル」に次元の入力欄は無い。#45）。
 - **共通 `.env`（`platform/.env`）の `PLATFORM_OCI_GENAI_EMBEDDING_DIM=1536` は `1024` に書き換える（行を消してもよい）。** 1024 以外は
   3 製品とも起動の時に設定の検証で止まる（列と合わない次元で埋め込みを保存しないため）。
-- 保存済みの `model-settings.json` の `generative_ai.embedding_dim`（1536）は読まず、コードの値を使う（書き換えは要らない）。
+- #45 より前に保存した `model-settings.json` の `generative_ai`（`embedding_dim` の 1536 を含む）は、読み込みで登録モデルへ移し、次元は
+  読み捨てる（製品の設定の値を使う。書き換えは要らない）。
 
 ### 既存の DB の更新（ベクトルを削除する migration）
 

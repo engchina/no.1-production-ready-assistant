@@ -40,7 +40,6 @@ from rag_parser_core.extraction import is_derived_content
 from rag_parser_core.language import current_pack
 from rag_parser_core.language.text import parse_number
 
-from app.rag.chunking_small_to_big import ENGINE_SEARCH_TEXT_KEY
 from app.rag.reference_grammar import NEXT_KEY, PREVIOUS_KEY, SAME_KEY, current_grammar
 
 # chunk の metadata に参照先を載せる key(JSON の文字列。ChunkMetadata は scalar だけを持つ)。
@@ -851,71 +850,6 @@ def _citing_title(chunks: Sequence[Any], document_title: str) -> str:
     return _FILE_EXTENSION.sub("", normalize_text(document_title)).strip()
 
 
-# 検索の文に足す参照先の本文の文字数(1 件)と件数の上限(#2148)。
-_REFERENCE_CONTEXT_CHARS = 160
-_XML_TREE_SOURCE_PARSER = "xml_tree_json"
-
-
-def apply_reference_search_context(chunks: Sequence[Any]) -> int:
-    """XML ツリー JSON の段落の検索の文に、同じ文書の中で解決した参照先の条の内容を足す(#2148)。
-
-    読替え規定のように、本文に概念の名前が出ず参照(「第N条第M項第K号」)だけで意味が決まる段落は、
-    質問の概念に vector でも全文検索でも当たらない。参照先の段落の見出しの行と本文の冒頭(号の
-    指定があればその号の行)を ``engine_search_text`` に「参照先:」として足す。回答に使う本文は
-    変えない。``annotate_cross_references`` の後に呼ぶ。足した chunk の数を返す。
-    """
-    by_prefix: dict[tuple[str, ...], list[Any]] = {}
-    for chunk in chunks:
-        path = split_section_path(chunk.metadata.get("section_path"))
-        for depth in range(1, len(path) + 1):
-            by_prefix.setdefault(path[:depth], []).append(chunk)
-    added = 0
-    for chunk in chunks:
-        metadata = chunk.metadata
-        search_text = metadata.get(ENGINE_SEARCH_TEXT_KEY)
-        if metadata.get("source_parser") != _XML_TREE_SOURCE_PARSER or not isinstance(
-            search_text, str
-        ):
-            continue
-        lines = []
-        for target in reference_targets(metadata):
-            if target.document_title or target.section_path is None:
-                continue
-            within = by_prefix.get(split_section_path(target.section_path), [])
-            if excerpt := _reference_excerpt(target, within):
-                lines.append(f"- {excerpt}")
-        if lines:
-            label = current_pack().text("search_labels", "references")
-            metadata[ENGINE_SEARCH_TEXT_KEY] = f"{search_text}\n{label}:\n" + "\n".join(lines)
-            added += 1
-    return added
-
-
-def _reference_excerpt(target: ReferenceTarget, within: Sequence[Any]) -> str:
-    """参照先の段落の見出しの行と本文の冒頭(「第M項」の段落、「第K号」の行があればそれ)。"""
-    if not within:
-        return ""
-    label = normalize_text(target.label)
-    chunk = within[0]
-    grammar = current_grammar()
-    if paragraph := grammar.paragraph_label.search(label):
-        wanted = _number(paragraph.group(1))
-        chunk = next(
-            (c for c in within if str(c.metadata.get("xml_tree_paragraph_num") or "") == wanted),
-            chunk,
-        )
-    heading, _, body = str(chunk.text).partition("\n")
-    if item := grammar.item_label.search(label):
-        wanted = _number(item.group(1))
-        for line in body.splitlines():
-            number = grammar.line_number.match(normalize_text(line))
-            if number and _number(number.group(1)) == wanted:
-                body = line
-                break
-    body = " ".join(body.split())
-    return f"{heading.strip()}: {body[:_REFERENCE_CONTEXT_CHARS]}" if body else heading.strip()
-
-
 def resolve_reference_specs(
     specs: Sequence[ReferenceSpec],
     index: SectionIndex,
@@ -968,7 +902,6 @@ def reference_targets(metadata: Mapping[str, object]) -> list[ReferenceTarget]:
 
 
 __all__ = [
-    "apply_reference_search_context",
     "MAX_REFERENCES_PER_CHUNK",
     "MIN_DOCUMENT_NAME_CHARS",
     "REFERENCE_FROM_KEY",

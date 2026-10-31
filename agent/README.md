@@ -58,12 +58,12 @@ cp backend/.env.example backend/.env
 # backend
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload --port 8020
+uv run uvicorn app.main:app --reload --port 8120
 
 # frontend
 cd frontend
 npm install
-BACKEND_URL=http://127.0.0.1:8020 npm run dev
+BACKEND_URL=http://127.0.0.1:8120 npm run dev
 ```
 
 frontend の Vite は `BACKEND_URL` を明示したときだけ `/api` を backend へ proxy します（既定の接続先は持ちません）。
@@ -144,23 +144,22 @@ FULL=1 scripts/check-all.sh                                 # CI と同じく全
 4. スクリプトが扱わないものを手で直す。
    - （#754 以降は外部 Runtime を使わないため、compose の `agent/.env` と Binding の token の改名は不要です。）
 5. 再配備または再起動する。
-   - Resource Manager の stack で配備した instance: 手順 1〜4 を instance 上の
+   - Compute に配備した instance: 手順 1〜4 を instance 上の
      `/u01/aipoc/no.1-production-ready-suite` で（`git pull` と `agent/backend` の `uv sync --locked --no-dev` の後に）
-     行い、`sudo systemctl restart production-ready-agent-backend` を実行する。新しく配備する stack は最初から新構成で作られる。
+     行い、`sudo systemctl restart production-ready-agent-backend` を実行する。
    - 開発: backend（と dispatcher）を `uv run` で起動し直す。
 
 ## 既存環境の更新手順（#215）
 
-#215 で Agent も共通認証のログインと権限管理になり、Resource Manager の stack の Nginx Basic 認証を廃止しました。
+#215 で Agent も共通認証のログインと権限管理になり、配備の Nginx Basic 認証を廃止しました。
 共通 `.env` の `PLATFORM_ADMIN_*` の確認、`PLATFORM_AUTH_MODE=authenticated`、システムテーブルの作成・更新、
 Nginx の Basic 認証の削除の手順は [docs/security-rbac.md §8](docs/security-rbac.md#8-既存環境の更新手順215) を参照してください。
 
-## OCI への配備（Resource Manager）
+## 配備
 
-3製品共通の Terraform stack（monorepo root の `terraform/stack/`）で配備します。Autonomous AI Database は RAG / NL2SQL と共有し、
-Agent Control Plane は専用の Compute 1 台に配備します。ログインは構成管理者 `system_admin`（`app_admin_login_user_password`。RAG / NL2SQL と共通）と、
-ユーザー管理で作る DB ユーザーです。「配備する製品」で Agent Control Plane を選び、入力・instance 上の構成・制約は
-[terraform/README.md](../terraform/README.md) を参照してください。
+OCI Resource Manager の Terraform stack による配備は廃止しました（#12）。Agent Control Plane は RAG / NL2SQL と同じ 1 台の Compute に、
+`platform/deploy/` の配備のスクリプトで入れます（仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。
+ログインは構成管理者 `system_admin`（RAG / NL2SQL と共通）と、ユーザー管理で作る DB ユーザーです。
 
 ## 主要 API
 

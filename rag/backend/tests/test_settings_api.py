@@ -24,7 +24,6 @@ from pytest import MonkeyPatch
 
 from app import config as app_config
 from app.api.routes import settings as settings_routes
-from app.clients.external_parser import ExternalParserClient
 from app.clients.oracle import (
     OracleClient,
     OracleConnectionTimeoutError,
@@ -83,8 +82,6 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     monkeypatch.setattr(settings, "rag_parser_adapter_backend", "auto")
     monkeypatch.setattr(settings, "rag_parser_docling_enabled", True)
     monkeypatch.setattr(settings, "rag_parser_unstructured_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_mineru_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_dots_ocr_enabled", False)
 
     def package_info(
         import_name: str,
@@ -114,29 +111,11 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert by_backend["docling"]["warning_code"] == "adapter_flag_ignored_by_backend"
     assert by_backend["unstructured"]["install_package"] == "unstructured[all-docs]==0.23.1"
     assert by_backend["unstructured"]["status"] == "disabled"
-    # dots_ocr はローカル package/image ではなく外部 API で配信する。
-    assert by_backend["dots_ocr"]["install_package"] == "外部 Dots.OCR API"
-    connections = {item["backend"]: item for item in body["connections"]}
-    assert set(connections) == {"mineru", "dots_ocr"}
-    assert connections["dots_ocr"]["endpoint"] == ""
-    assert connections["dots_ocr"]["api_key_configured"] is False
-    assert "api_key" not in connections["dots_ocr"]
-    assert by_backend["mineru"]["install_package"] == "外部 MinerU API"
-    assert by_backend["mineru"]["status"] == "disabled"
-    assert by_backend["dots_ocr"]["status"] == "disabled"
-    # XML ツリー JSON は Docling・Unstructured と同じ使用エンジン(#2042)。
-    assert by_backend["xml_tree_json"]["status"] == "disabled"
-    assert by_backend["structured_records_jsonl"]["status"] == "disabled"
-    # 削除したエンジン(#270・#2042)は画面の選択肢・接続・対応形式に出さない。構造化レコード JSONL は
-    # Unstructured の後、XML ツリー JSON の前(#2457)。
-    assert list(by_backend) == [
-        "docling",
-        "unstructured",
-        "structured_records_jsonl",
-        "xml_tree_json",
-        "mineru",
-        "dots_ocr",
-    ]
+    # 外部の解析エンジンの接続（connections）は削除した（#22）。
+    assert "connections" not in body
+    assert "service_backends" not in body
+    # 削除したエンジン(#270・#2042・#22・#21)は画面の選択肢・対応形式に出さない。
+    assert list(by_backend) == ["docling", "unstructured"]
     assert "source_format_parsers" not in body
     assert body["scorecard"]["selected_backend"] == "local"
     assert body["scorecard"]["recommended_backend"] == "local"
@@ -145,7 +124,7 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert score_by_backend["docling"]["warning_codes"] == ["adapter_flag_ignored_by_backend"]
     assert set(score_by_backend) == {"local", "docling", "unstructured"}
     route_by_kind = {route["source_kind"]: route for route in body["source_routes"]}
-    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured", "mineru"]
+    assert route_by_kind["pdf"]["candidate_order"] == ["docling", "unstructured"]
     assert route_by_kind["pdf"]["attempted_order"] == []
     assert route_by_kind["pdf"]["selected_backend"] == "local"
     assert route_by_kind["email"]["selected_backend"] == "local"
@@ -158,79 +137,36 @@ def test_parser_adapter_settings_reports_flags_and_package_status(
     assert matrix["missing_source_kinds"] == []
     assert "raw_text" not in str(matrix)
     capability_by_backend = {item["backend"]: item for item in body["capabilities"]}
-    assert capability_by_backend["dots_ocr"]["modalities"] == ["pdf", "image"]
-    assert ".pdf" in capability_by_backend["dots_ocr"]["extensions"]
-    for removed in ("marker", "unlimited_ocr", "glm_ocr", "oci_genai_vision", "enterprise_ai_vlm"):
+    assert capability_by_backend["docling"]["modalities"] == ["pdf", "image"]
+    assert ".pdf" in capability_by_backend["docling"]["extensions"]
+    for removed in (
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ):
         assert removed not in capability_by_backend
-    assert capability_by_backend["xml_tree_json"]["extensions"] == [".json"]
-    assert capability_by_backend["structured_records_jsonl"]["extensions"] == [".jsonl"]
-    assert capability_by_backend["oci_document_understanding"]["modalities"] == [
-        "pdf",
-        "image",
-    ]
 
 
-def test_parser_adapter_settings_reports_roadmap_service_backend(
-    monkeypatch: MonkeyPatch,
+@pytest.mark.parametrize(
+    "removed", ["oci_document_understanding", "structured_records_jsonl", "xml_tree_json"]
+)
+def test_persisted_removed_parser_backend_falls_back_to_default(
+    tmp_path: Path, removed: str
 ) -> None:
-    """OCI Document Understanding は準備中(ロードマップ。#3374)。
+    """以前の版が parser-settings.json に保存した削除済みのエンジンは既定へ寄せる(#22・#21)。
 
-    選択中・未設定の警告にせず roadmap を返す。
-    """
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_adapter_backend", "docling")
-    monkeypatch.setattr(settings, "oci_compartment_id", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_compartment_id", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_namespace", "")
-    monkeypatch.setattr(settings, "oci_document_understanding_input_bucket", "")
-    monkeypatch.setattr(settings, "object_storage_namespace", "")
-    monkeypatch.setattr(settings, "object_storage_bucket", "")
-
-    resp = client.get("/api/settings/parser-adapters")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    service = {item["backend"]: item for item in body["service_backends"]}
-    # OCI Generative AI (Vision) は削除した(#2042)。
-    assert set(service) == {"oci_document_understanding"}
-    assert service["oci_document_understanding"]["availability"] == "roadmap"
-    assert service["oci_document_understanding"]["selected"] is False
-    # 準備中はエラーではないため、未設定の警告を出さない。
-    assert service["oci_document_understanding"]["warning_code"] is None
-
-
-def test_update_parser_adapter_settings_rejects_roadmap_backend_without_saving(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """準備中(ロードマップ)の解析エンジンは選べない(#3374)。
-
-    理由の分かる 422 にし、設定を変えない。
-    """
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_adapter_backend", "docling")
-    parser_file = PARSER_SETTINGS_STORE.path(settings)
-    before = parser_file.read_text(encoding="utf-8") if parser_file.exists() else None
-
-    resp = client.patch(
-        "/api/settings/parser-adapters",
-        json={"adapter_backend": "oci_document_understanding"},
-    )
-
-    assert resp.status_code == 422
-    assert "準備中（ロードマップ）" in json.dumps(resp.json(), ensure_ascii=False)
-    assert settings.rag_parser_adapter_backend == "docling"
-    after = parser_file.read_text(encoding="utf-8") if parser_file.exists() else None
-    assert after == before
-
-
-def test_persisted_roadmap_parser_backend_falls_back_to_default(tmp_path: Path) -> None:
-    """以前の版が parser-settings.json に保存した準備中のエンジンは既定へ寄せる(#3374)。
-
-    起動を止めない。
+    起動を止めない。削除したエンジンの有効化の項目も読み捨てる。
     """
     parser_file = tmp_path / "parser-settings.json"
     parser_file.write_text(
-        json.dumps({"adapter_backend": "oci_document_understanding"}), encoding="utf-8"
+        json.dumps({"adapter_backend": removed, f"{removed}_enabled": True}), encoding="utf-8"
     )
     worker_settings = Settings(
         _env_file=None,
@@ -245,13 +181,11 @@ def test_persisted_roadmap_parser_backend_falls_back_to_default(tmp_path: Path) 
     assert worker_settings.rag_parser_adapter_backend == "docling"
 
 
-def test_env_roadmap_parser_backend_is_rejected_with_reason() -> None:
-    """RAG_PARSER_ADAPTER_BACKEND でも準備中のエンジンは選べない(#3374)。
+def test_env_removed_parser_backend_falls_back_to_default() -> None:
+    """RAG_PARSER_ADAPTER_BACKEND の削除済みのエンジンも既定へ寄せる(#22)。"""
+    settings = Settings(_env_file=None, rag_parser_adapter_backend="oci_document_understanding")
 
-    理由の分かる検証のエラーにする。
-    """
-    with pytest.raises(ValueError, match="準備中（ロードマップ）"):
-        Settings(_env_file=None, rag_parser_adapter_backend="oci_document_understanding")
+    assert settings.rag_parser_adapter_backend == "docling"
 
 
 def test_parser_adapter_contract_endpoint_is_removed() -> None:
@@ -346,17 +280,14 @@ def test_parser_adapter_settings_no_longer_handle_docling_vision(
     )
 
 
-@pytest.mark.usefixtures("mineru_selectable")
-def test_update_parser_adapter_settings_persists_shared_gpu_flags_and_preserves_omitted_flags(
+def test_update_parser_adapter_settings_persists_flags_and_preserves_omitted_flags(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """GPU parser flags も保存し、省略された既存 flag は維持する。"""
+    """parser flags を保存し、省略された既存 flag は維持する。"""
     settings = get_settings()
     monkeypatch.setattr(settings, "rag_parser_adapter_backend", "local")
     monkeypatch.setattr(settings, "rag_parser_docling_enabled", True)
     monkeypatch.setattr(settings, "rag_parser_unstructured_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_mineru_enabled", False)
-    monkeypatch.setattr(settings, "rag_parser_dots_ocr_enabled", True)
     monkeypatch.setattr(
         parser_adapter_readiness,
         "_package_info",
@@ -365,88 +296,31 @@ def test_update_parser_adapter_settings_persists_shared_gpu_flags_and_preserves_
     resp = client.patch(
         "/api/settings/parser-adapters",
         json={
-            "adapter_backend": "mineru",
-            "mineru_enabled": True,
-            "mineru_license_acknowledged": True,
-            "dots_ocr_enabled": False,
+            "adapter_backend": "unstructured",
+            "unstructured_enabled": True,
         },
     )
 
     assert resp.status_code == 200
     body = resp.json()["data"]
-    assert body["adapter_backend"] == "mineru"
-    assert body["effective_order"] == ["mineru"]
+    assert body["adapter_backend"] == "unstructured"
+    assert body["effective_order"] == ["unstructured"]
     by_backend = {adapter["backend"]: adapter for adapter in body["adapters"]}
     assert by_backend["docling"]["enabled"] is True
-    assert by_backend["mineru"]["enabled"] is True
-    assert by_backend["dots_ocr"]["enabled"] is False
-    assert settings.rag_parser_adapter_backend == "mineru"
+    assert by_backend["unstructured"]["enabled"] is True
+    assert settings.rag_parser_adapter_backend == "unstructured"
     assert settings.rag_parser_docling_enabled is True
-    assert settings.rag_parser_mineru_enabled is True
-    assert settings.rag_parser_dots_ocr_enabled is False
+    assert settings.rag_parser_unstructured_enabled is True
     parser = _persisted_parser(settings)
-    assert parser["adapter_backend"] == "mineru"
+    assert parser["adapter_backend"] == "unstructured"
     assert parser["docling_enabled"] is True
-    assert parser["mineru_enabled"] is True
-    assert parser["dots_ocr_enabled"] is False
-    # 削除したエンジン(#270)の項目は保存しない。
-    assert not [key for key in parser if "marker" in key or "unlimited" in key or "glm" in key]
-
-
-@pytest.mark.usefixtures("mineru_selectable")
-def test_update_external_parser_connection_retains_and_clears_secret(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_parser_mineru_api_host", "https://old.example.com")
-    monkeypatch.setattr(settings, "rag_parser_mineru_api_key", "top-secret")
-    retained = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "mineru",
-            "mineru_license_acknowledged": True,
-            "connections": [
-                {
-                    "backend": "mineru",
-                    "endpoint": "https://mineru.example.com/",
-                    "api_key": "",
-                }
-            ],
-        },
-    )
-
-    assert retained.status_code == 200
-    connection = next(
-        item for item in retained.json()["data"]["connections"] if item["backend"] == "mineru"
-    )
-    assert connection == {
-        "backend": "mineru",
-        "protocol": "mineru_v1",
-        "endpoint": "https://mineru.example.com",
-        "model": None,
-        "api_key_configured": True,
-        "configured": True,
-    }
-    assert "top-secret" not in retained.text
-    assert settings.rag_parser_mineru_api_key == "top-secret"
-    parser = _persisted_parser(settings)
-    assert parser["mineru_api_host"] == "https://mineru.example.com"
-    # parser の API key も JSON ではなく .env に保存する（#106）。
-    assert "mineru_api_key" not in parser
-    assert "top-secret" not in PARSER_SETTINGS_STORE.path(settings).read_text(encoding="utf-8")
-    assert _saved_env_value(settings, "RAG_PARSER_MINERU_API_KEY") == "top-secret"
-
-    cleared = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "mineru",
-            "connections": [{"backend": "mineru", "clear_api_key": True}],
-        },
-    )
-
-    assert cleared.status_code == 200
-    assert settings.rag_parser_mineru_api_key == ""
-    assert "top-secret" not in cleared.text
+    assert parser["unstructured_enabled"] is True
+    # 削除したエンジン(#270・#22・#21)の項目は保存しない。
+    assert not [
+        key
+        for key in parser
+        if any(name in key for name in ("marker", "unlimited", "mineru", "xml_tree", "records"))
+    ]
 
 
 def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it(
@@ -462,7 +336,6 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
         _env_file=None,
         rag_parser_settings_file=str(parser_file),
         rag_parser_adapter_backend="local",
-        rag_parser_dots_ocr_api_host="",
     )
     # 別 worker は別プロセスなので、読込状態を持つ store も別になる。
     worker_store = copy.copy(PARSER_SETTINGS_STORE)
@@ -471,18 +344,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
 
     response = client.patch(
         "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "dots_ocr",
-            "dots_ocr_enabled": True,
-            "connections": [
-                {
-                    "backend": "dots_ocr",
-                    "endpoint": "https://dots.example.com/v1",
-                    "model": "dots-production",
-                    "api_key": "parser-secret",
-                }
-            ],
-        },
+        json={"adapter_backend": "unstructured", "unstructured_enabled": True},
     )
 
     assert response.status_code == 200
@@ -490,13 +352,9 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     assert stat.S_IMODE(parser_file.stat().st_mode) == 0o600
     lock_file = parser_file.with_name(f"{parser_file.name}.lock")
     assert stat.S_IMODE(lock_file.stat().st_mode) == 0o600
-    assert "parser-secret" not in parser_file.read_text(encoding="utf-8")
-    assert _saved_env_value(settings, "RAG_PARSER_DOTS_OCR_API_KEY") == "parser-secret"
-    assert settings.rag_parser_dots_ocr_api_key == "parser-secret"
     worker_store.reload_if_changed(worker_settings)
-    assert worker_settings.rag_parser_adapter_backend == "dots_ocr"
-    assert worker_settings.rag_parser_dots_ocr_api_host == "https://dots.example.com/v1"
-    assert worker_settings.rag_parser_dots_ocr_model == "dots-production"
+    assert worker_settings.rag_parser_adapter_backend == "unstructured"
+    assert worker_settings.rag_parser_unstructured_enabled is True
 
     parser_before = parser_file.read_text(encoding="utf-8")
     model_response = client.patch("/api/settings/model", json=_payload())
@@ -506,8 +364,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     assert "parser_adapters" not in persisted
     assert _saved_enterprise_ai_api_key(settings) == "sk-update-secret"
     assert parser_file.read_text(encoding="utf-8") == parser_before
-    assert _saved_env_value(settings, "RAG_PARSER_DOTS_OCR_API_KEY") == "parser-secret"
-    assert get_settings().rag_parser_adapter_backend == "dots_ocr"
+    assert get_settings().rag_parser_adapter_backend == "unstructured"
 
 
 def test_update_parser_adapter_settings_does_not_mutate_runtime_when_write_fails(
@@ -549,66 +406,28 @@ def test_update_parser_adapter_settings_rejects_unknown_backend() -> None:
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("removed", ["marker", "unlimited_ocr", "glm_ocr"])
+@pytest.mark.parametrize(
+    "removed",
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "mineru",
+        "dots_ocr",
+        "oci_document_understanding",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
+)
 def test_update_parser_adapter_settings_rejects_removed_engine(removed: str) -> None:
-    """削除したエンジン(#270)は新たに選択・接続設定できない。"""
+    """削除したエンジン(#270・#22・#21)は新たに選択できない。"""
     settings = get_settings()
     before = settings.rag_parser_adapter_backend
+
     resp = client.patch("/api/settings/parser-adapters", json={"adapter_backend": removed})
-    assert resp.status_code == 422
-    resp = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "unstructured",
-            "connections": [{"backend": removed, "endpoint": "https://example.com"}],
-        },
-    )
+
     assert resp.status_code == 422
     assert settings.rag_parser_adapter_backend == before
-
-
-def test_external_parser_status_endpoint_and_unknown_backend(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    async def run_inline(function: Any, *args: Any) -> Any:
-        return function(*args)
-
-    monkeypatch.setattr(asyncio, "to_thread", run_inline)
-    monkeypatch.setattr(
-        ExternalParserClient,
-        "status",
-        lambda _self, backend: SimpleNamespace(
-            backend=backend,
-            status="available",
-            version="served-model",
-            warning_code=None,
-        ),
-    )
-
-    response = client.get("/api/settings/parser-adapters/dots_ocr/status")
-
-    assert response.status_code == 200
-    assert response.json()["data"] == {
-        "backend": "dots_ocr",
-        "status": "available",
-        "version": "served-model",
-        "warning_code": None,
-    }
-    assert client.get("/api/settings/parser-adapters/removed_engine/status").status_code == 422
-    for removed in ("marker", "unlimited_ocr", "glm_ocr"):
-        assert client.get(f"/api/settings/parser-adapters/{removed}/status").status_code == 422
-
-
-def test_update_parser_connection_rejects_unknown_engine() -> None:
-    response = client.patch(
-        "/api/settings/parser-adapters",
-        json={
-            "adapter_backend": "unstructured",
-            "connections": [{"backend": "removed_engine", "endpoint": "https://example.com"}],
-        },
-    )
-
-    assert response.status_code == 422
 
 
 def test_preprocess_settings_reports_runtime_profile(monkeypatch: MonkeyPatch) -> None:
@@ -1311,6 +1130,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
             "model_id": "enterprise-llm",
             "display_name": "enterprise-llm",
             "vision_enabled": False,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1320,6 +1140,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
             "model_id": "enterprise-vlm",
             "display_name": "enterprise-vlm",
             "vision_enabled": True,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1334,7 +1155,8 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     assert body["settings"]["enterprise_ai"]["vision_payload_template"] == VLM_TEMPLATE
     assert body["settings"]["enterprise_ai"]["text_response_path"] == "/data/text"
     assert body["settings"]["enterprise_ai"]["vision_response_path"] == "/data/document"
-    assert body["settings"]["generative_ai"]["embedding_dim"] == 1024
+    assert "generative_ai" not in body["settings"]
+    assert body["embedding_dim"] == settings.oci_genai_embedding_dim
     assert "sk-runtime-secret" not in resp.text
 
 
@@ -1387,7 +1209,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
     assert stat.S_IMODE(settings_file.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(settings_file.stat().st_mode) == 0o600
     persisted = json.loads(settings_file.read_text(encoding="utf-8"))
-    assert persisted["version"] == 6
+    assert persisted["version"] == 7
     # API key は JSON ではなく共通 .env に保存する（#103 / #211）。
     assert "api_key" not in persisted["enterprise_ai"]
     assert _saved_enterprise_ai_api_key(settings) == "sk-update-secret"
@@ -1396,6 +1218,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
             "model_id": "enterprise-llm",
             "display_name": "標準 LLM",
             "vision_enabled": False,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1405,6 +1228,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
             "model_id": "enterprise-vlm",
             "display_name": "Vision LLM",
             "vision_enabled": True,
+            "kind": "text",
             "connection_id": "primary",
             "reasoning_effort": "low",
             "max_input_tokens": 128000,
@@ -1417,7 +1241,7 @@ def test_update_model_settings_persists_private_json(tmp_path: Path) -> None:
     assert persisted["enterprise_ai"]["vlm_input_mode"] == "files_api"
     # 共通の LLM / VLM の出力の上限は書かない（#1719。モデルごとの max_output_tokens）。
     assert not [key for key in persisted["enterprise_ai"] if key.endswith("_max_output_tokens")]
-    assert persisted["generative_ai"]["embedding_dim"] == 1024
+    assert "generative_ai" not in persisted
     # 文書解析の設定は共有の model-settings.json に書かない（#1701）。
     assert "parser_adapters" not in persisted
     assert "sk-update-secret" not in resp.text
@@ -1456,11 +1280,6 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
                     "vision_response_path": "/payload/document",
                     "timeout_seconds": 42,
                     "max_retries": 1,
-                },
-                "generative_ai": {
-                    "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1024,
-                    "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             }
         ),
@@ -1608,11 +1427,14 @@ def test_model_settings_test_embedding_uses_candidate_model(
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
             assert texts == ["モデル接続テスト"]
             assert input_type == "SEARCH_QUERY"
-            return [[0.0] * 1024]
+            return [[0.0] * get_settings().oci_genai_embedding_dim]
 
     monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
     payload = _payload()
-    payload["generative_ai"]["embedding_model"] = "cohere.embed-custom"
+    payload["enterprise_ai"]["models"].append(
+        {"model_id": "cohere.embed-custom", "display_name": "", "kind": "embedding"}
+    )
+    payload["enterprise_ai"]["default_embedding_model_id"] = "cohere.embed-custom"
 
     resp = client.post(
         "/api/settings/model/test",
@@ -1627,7 +1449,7 @@ def test_model_settings_test_embedding_uses_candidate_model(
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["status"] == "success"
-    assert body["details"]["vector_dim"] == 1024
+    assert body["details"]["vector_dim"] == get_settings().oci_genai_embedding_dim
     assert observed_settings[0].oci_genai_embedding_model == "cohere.embed-custom"
 
 
@@ -1746,9 +1568,13 @@ def test_model_settings_clears_existing_api_key(monkeypatch: MonkeyPatch) -> Non
     assert "sk-existing-secret" not in resp.text
 
 
-def test_model_settings_rejects_embedding_dim_other_than_the_oracle_column() -> None:
+def test_model_settings_rejects_default_embedding_of_other_kind() -> None:
+    """既定の埋め込みモデルは、種類が embedding の登録モデルに限る（#45）。"""
     payload = _payload()
-    payload["generative_ai"]["embedding_dim"] = 1536
+    payload["enterprise_ai"]["models"].append(
+        {"model_id": "text-embedding-v4", "display_name": "", "kind": "embedding"}
+    )
+    payload["enterprise_ai"]["default_embedding_model_id"] = "enterprise-llm"
 
     resp = client.patch("/api/settings/model", json=payload)
 
@@ -3186,11 +3012,6 @@ def _payload() -> dict[str, Any]:
             "timeout_seconds": 60.0,
             "max_retries": 2,
         },
-        "generative_ai": {
-            "embedding_model": "cohere.embed-v4.0",
-            "embedding_dim": 1024,
-            "rerank_model": "cohere.rerank-v4.0-fast",
-        },
     }
 
 
@@ -3643,8 +3464,8 @@ def test_model_settings_rerank_probe_has_explicit_purpose(monkeypatch: MonkeyPat
             self, query: str, documents: list[str], *, top_n: int
         ) -> list[tuple[int, float]]:
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
-            assert query and documents and top_n == 1
-            return [(0, 0.9)]
+            assert query and len(documents) == 2 and top_n == 2
+            return [(0, 0.9), (1, 0.1)]
 
     monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
     response = asyncio.run(
@@ -3655,7 +3476,7 @@ def test_model_settings_rerank_probe_has_explicit_purpose(monkeypatch: MonkeyPat
             ),
         )
     )
-    assert response == {"ranked_count": 1, "top_score": 0.9}
+    assert response == {"ranked_count": 2, "ranked_order": "文書 1 → 文書 2", "top_score": 0.9}
     assert model_purpose_attributes() == {}
 
 

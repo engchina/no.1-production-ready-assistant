@@ -757,13 +757,7 @@ test.describe("Agent Runtime settings", () => {
       // 準備ができていれば「ツールを取得」は使える。
       await expect(page.getByRole("button", { name: "ツールを取得" })).toBeEnabled();
       await expectNoHorizontalOverflow(page);
-      for (const theme of ["light", "dark"] as const) {
-        await page.emulateMedia({ colorScheme: theme });
-        await page.evaluate((value) => {
-          document.documentElement.dataset.theme = value;
-        }, theme);
-        await page.screenshot({ path: testInfo.outputPath(`mcp-builtin-locked-${viewport.name}-${theme}.png`), fullPage: true });
-      }
+      await page.screenshot({ path: testInfo.outputPath(`mcp-builtin-locked-${viewport.name}.png`), fullPage: true });
     }
 
     // タイムアウトは変えられ、URL と名前は送らない。

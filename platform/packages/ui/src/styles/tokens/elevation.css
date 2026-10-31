@@ -1,6 +1,6 @@
-/* 段(elevation)。ライトは影で、ダークは面の明度で浮きを作ります。
-   ダークで同じ影を使うと何も見えないので、影は濃くしたうえで
-   --color-surface-raised / -overlay と必ずセットで使うこと。 */
+/* 段(elevation)。浮きは影で作ります（テーマはライトだけ。#17）。
+   light-dark() の暗い値は常時暗いスラブ（[data-surface]）の内側の浮きの影で、
+   そこでは影を濃くしたうえで --color-surface-raised / -overlay と必ずセットで使うこと。 */
 :root {
   --shadow-sm: 0 1px 3px 0 light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.45)),
                0 1px 2px -1px light-dark(rgb(0 0 0 / 0.10), rgb(0 0 0 / 0.40));

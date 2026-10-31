@@ -44,11 +44,6 @@ V4_SHARED_DOCUMENT: dict[str, Any] = {
         "models": [{"model_id": "shared-llm", "display_name": "共有 LLM"}],
         "default_text_model_id": "shared-llm",
     },
-    "generative_ai": {
-        "embedding_model": "cohere.embed-v4.0",
-        "embedding_dim": 1024,
-        "rerank_model": "cohere.rerank-v4.0-fast",
-    },
 }
 
 
@@ -72,11 +67,6 @@ def _nl2sql_payload() -> ModelSettingsPayload:
                 "project_ocid": "ocid1.generativeaiproject.oc1..nl2sql",
                 "models": [{"model_id": "nl2sql-llm", "display_name": "NL2SQL LLM"}],
                 "default_text_model_id": "nl2sql-llm",
-            },
-            "generative_ai": {
-                "embedding_model": "cohere.embed-v4.0",
-                "embedding_dim": 1024,
-                "rerank_model": "cohere.rerank-v4.0-fast",
             },
         }
     )
@@ -108,7 +98,6 @@ def test_v4_shared_file_from_other_product_loads_and_backend_serves() -> None:
     assert response.json()["data"]["adapter_backend"] == before
 
 
-@pytest.mark.usefixtures("mineru_selectable")
 def test_rag_parser_save_then_nl2sql_save_then_rag_reads() -> None:
     """RAG が文書解析を保存 → NL2SQL がモデル設定を保存 → RAG は両方を読む。"""
     settings = get_settings()
@@ -116,24 +105,23 @@ def test_rag_parser_save_then_nl2sql_save_then_rag_reads() -> None:
     saved = client.patch(
         "/api/settings/parser-adapters",
         json={
-            "adapter_backend": "mineru",
-            "mineru_enabled": True,
-            "mineru_license_acknowledged": True,
+            "adapter_backend": "unstructured",
+            "unstructured_enabled": True,
         },
     )
     assert saved.status_code == 200
     assert not model_file.exists()
 
     _nl2sql_save(model_file)
-    settings.rag_parser_adapter_backend = "unstructured"  # 別 worker の古い値を模す
+    settings.rag_parser_adapter_backend = "docling"  # 別 worker の古い値を模す
     PARSER_SETTINGS_STORE.reset()
 
     reloaded = get_settings()
     shared = json.loads(model_file.read_text(encoding="utf-8"))
-    assert set(shared) == {"version", "enterprise_ai", "generative_ai"}
+    assert set(shared) == {"version", "enterprise_ai"}
     assert reloaded.oci_enterprise_ai_endpoint == "https://nl2sql-saved.example.com"
-    assert reloaded.rag_parser_adapter_backend == "mineru"
-    assert reloaded.rag_parser_mineru_enabled is True
+    assert reloaded.rag_parser_adapter_backend == "unstructured"
+    assert reloaded.rag_parser_unstructured_enabled is True
 
 
 def test_parser_section_in_shared_file_is_not_read() -> None:
@@ -142,7 +130,7 @@ def test_parser_section_in_shared_file_is_not_read() -> None:
     before = settings.rag_parser_adapter_backend
     _write(
         Path(settings.model_settings_file),
-        {**V4_SHARED_DOCUMENT, "parser_adapters": {"adapter_backend": "mineru"}},
+        {**V4_SHARED_DOCUMENT, "parser_adapters": {"adapter_backend": "unstructured"}},
     )
 
     assert get_settings().rag_parser_adapter_backend == before

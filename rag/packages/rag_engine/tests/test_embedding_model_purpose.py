@@ -44,7 +44,7 @@ def test_embedding_records_declared_purpose_without_changing_request(
 
     monkeypatch.setattr(oci, "_openai_client", openai_client)
     monkeypatch.setattr(oci, "_embedding_base_url", lambda settings: "https://synthetic.test/compatible-mode/v1")
-    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings: "synthetic-key")
+    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings, **_: "synthetic-key")
     monkeypatch.setattr(oci, "_embedding_output_dimensions", lambda settings: 3)
     settings = SimpleNamespace(embedding_model="model-a", llm_request_timeout_seconds=1)
     with bind_trace_observer(observer), model_call_purpose("connection.check" if probe else None):

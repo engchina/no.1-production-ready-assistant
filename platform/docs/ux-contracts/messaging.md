@@ -620,7 +620,7 @@ header           : StatusBadge（エンティティの状態の正本 = P1）
   - 対象の一覧を読めなかった: 上のカードに失敗の表示（`ApiErrorBanner` / `ApiErrorState`。原因・「詳細」・再試行）を出し、会話の欄は出さない（0 件のとき＝「使える◯◯がありません」と同じく、対象が無いと会話できないため）。0 件の案内（空の状態）と失敗を同じ分岐にしない。
   - 開いている会話の内容を読めなかった: 会話の欄に失敗の表示（再試行付き）を出し、空の状態は出さない。送信は無効のまま（内容の分からない会話に続けて送らない）。「新しい会話」と履歴は使えるままにし、失敗の後も別の会話へ移れるようにする。
 - 送った質問の表示（§11.1）を出している間は、その会話の読み込み中の表示で隠さない（作った会話の内容はキャッシュに先に入れる。§11.2）。
-- 実装: `ChatSkeleton`（`packages/ui`、[components-reference.md](../design-system/components-reference.md)「読み込み中と一覧の表示密度」）。製品は RAG `components/chat/ChatClient.tsx`、NL2SQL `features/nl2sql/SqlChatPage.tsx`、Agent `pages/ChatPage.tsx`。Playwright は対象の一覧の応答を遅らせ、空の状態が出ず Skeleton が出ること・経過時間が 1 つであること・入力欄と送信などが無効で入力欄の文字が残ること・読み込み後に使えること・失敗の表示を、会話の内容の応答を遅らせ、入力欄に書けて送信だけが止まることを、desktop / 375px・light / dark で確かめる（RAG `e2e/chat-loading.spec.ts`・NL2SQL `tests/e2e/sql-chat-loading.spec.ts`・Agent `e2e/chat-loading.spec.ts`）。
+- 実装: `ChatSkeleton`（`packages/ui`、[components-reference.md](../design-system/components-reference.md)「読み込み中と一覧の表示密度」）。製品は RAG `components/chat/ChatClient.tsx`、NL2SQL `features/nl2sql/SqlChatPage.tsx`、Agent `pages/ChatPage.tsx`。Playwright は対象の一覧の応答を遅らせ、空の状態が出ず Skeleton が出ること・経過時間が 1 つであること・入力欄と送信などが無効で入力欄の文字が残ること・読み込み後に使えること・失敗の表示を、会話の内容の応答を遅らせ、入力欄に書けて送信だけが止まることを、desktop / 375pxで確かめる（RAG `e2e/chat-loading.spec.ts`・NL2SQL `tests/e2e/sql-chat-loading.spec.ts`・Agent `e2e/chat-loading.spec.ts`）。
 
 ### 処理の詳細とトレースの階層（#3201）
 

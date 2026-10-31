@@ -1,6 +1,8 @@
 """モデル設定の API（3製品共通。NL2SQL の実装を基準に移設。#103）。
 
-- OCI Enterprise AI（回答生成 / Vision）と OCI Generative AI（埋め込み / リランク）の設定
+- 登録モデル（LLM・埋め込み・再ランク。種類 `kind`。#45）と、接続・既定のモデルの設定。
+  埋め込み / 再ランクも LLM と同じく、選んだ接続の Endpoint URL と API key で呼ぶ
+  （`embedding_model_connection` / `embedding_api_base_url`）
 - OCI Enterprise AI の接続（Endpoint URL・Project OCID・API key）は、プライマリ接続・
   セカンダリ接続・ターシャリ接続の 3 件まで（#533 / #542 / #786）。ターシャリ接続は OpenAI /
   OpenAI 互換 API 向けで、Project OCID は任意。登録モデルごとに `connection_id` で使う接続を選ぶ
@@ -67,7 +69,6 @@ from pr_enterprise_ai.urls import enterprise_ai_base_url as enterprise_ai_base_u
 from pr_enterprise_ai.urls import enterprise_ai_request_url as enterprise_ai_request_url
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
-from .embedding import EMBEDDING_DIMENSIONS
 from .env_file import write_env_values
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,10 @@ _OPTIONAL_CONNECTION_IDS = ENTERPRISE_AI_CONNECTION_IDS[1:]
 # 6: 登録モデルの `max_output_tokens`（#1719）。共通の `llm_max_output_tokens` /
 # `vlm_max_output_tokens` は持たず、5 の JSON のそれらは読み捨てる（項目の無いモデル =
 # 既定の 32768。入力の上限がそれより小さいモデルは入力の上限）。
-MODEL_SETTINGS_DOCUMENT_VERSION = 6
+# 7: 登録モデルの種類 `kind`（text / embedding / rerank）と、既定の埋め込み / 再ランクのモデル
+# （#45）。6 の JSON の `generative_ai` の節は、読み込むときに種類 embedding / rerank の登録モデル
+# （プライマリ接続）と既定のモデルへ移し、Base URL・次元は読み捨てる。
+MODEL_SETTINGS_DOCUMENT_VERSION = 7
 # この版より前の JSON だけが API key（`enterprise_ai.api_key`）を持てた
 # （v3 から secret は `.env`）。
 MODEL_SETTINGS_SECRET_FREE_DOCUMENT_VERSION = 3
@@ -112,6 +116,11 @@ MODEL_SETTINGS_DIRECTORY_MODE = 0o700
 
 EnterpriseAiVlmInputMode = Literal["auto", "files_api", "inline_image"]
 EnterpriseAiConnectionId = Literal["primary", "secondary", "tertiary"]
+# 登録モデルの種類（#45）。埋め込み / 再ランクも LLM と同じ一覧に、接続を選んで登録する。
+EnterpriseAiModelKind = Literal["text", "embedding", "rerank"]
+ENTERPRISE_AI_MODEL_KIND_TEXT: Final = "text"
+ENTERPRISE_AI_MODEL_KIND_EMBEDDING: Final = "embedding"
+ENTERPRISE_AI_MODEL_KIND_RERANK: Final = "rerank"
 ModelSettingsSecretSource = Literal["environment", "legacy_json", "missing"]
 # 推論（思考）の量（#1425。Responses API の `reasoning.effort`）。選択肢は 4 つで、既定は low
 # （推論が出力の上限を使い切って未完了のときは、送り直しで 1 段下げる。#2023）。
@@ -171,6 +180,10 @@ class EnterpriseAiConfiguredModel(BaseModel):
     model_id: str = Field(default="", max_length=256)
     display_name: str = Field(default="", max_length=256)
     vision_enabled: bool = False
+    # モデルの種類（#45）。text は LLM（画像対応は `vision_enabled`）、embedding は
+    # `POST {endpoint}/embeddings`、rerank は `POST {endpoint}/reranks` で呼ぶ。未指定（#45 より前の
+    # 設定）は text。
+    kind: EnterpriseAiModelKind = ENTERPRISE_AI_MODEL_KIND_TEXT
     # 呼び出しに使う接続（#533）。未指定（#533 より前の設定）はプライマリ接続。
     # 存在しない接続を指す値は、保存時に欄のエラーにする（`validate_enterprise_ai_connections`）。
     connection_id: str = Field(default=ENTERPRISE_AI_PRIMARY_CONNECTION_ID, max_length=64)
@@ -209,6 +222,23 @@ class EnterpriseAiConfiguredModel(BaseModel):
             max_input_tokens_to_use(result.get("max_input_tokens")),
         )
         return result
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def default_kind(cls, value: object) -> object:
+        """空・未指定は text にする。"""
+        if value is None:
+            return ENTERPRISE_AI_MODEL_KIND_TEXT
+        if isinstance(value, str):
+            return value.strip().casefold() or ENTERPRISE_AI_MODEL_KIND_TEXT
+        return value
+
+    @model_validator(mode="after")
+    def vision_only_for_text(self) -> EnterpriseAiConfiguredModel:
+        """画像対応はテキストのモデル（LLM）だけの属性（#45）。"""
+        if self.kind != ENTERPRISE_AI_MODEL_KIND_TEXT:
+            self.vision_enabled = False
+        return self
 
     @model_validator(mode="after")
     def output_within_input(self) -> EnterpriseAiConfiguredModel:
@@ -314,6 +344,10 @@ class EnterpriseAiModelSettings(BaseModel):
     # 品質評価で回答を判定するモデル（#3574）。空 = 既定のテキストモデル、
     # `ENTERPRISE_AI_JUDGE_SAME_AS_ANSWER` = 回答を作ったモデル、それ以外は登録モデルの ID。
     default_judge_model_id: str = Field(default="", max_length=256)
+    # 埋め込み / 再ランクに使うモデル（#45）。種類 embedding / rerank の登録モデルの ID。
+    # その種類のモデルを登録したら必須。
+    default_embedding_model_id: str = Field(default="", max_length=256)
+    default_rerank_model_id: str = Field(default="", max_length=256)
     api_path: str = Field(default="/responses", max_length=512)
     vlm_input_mode: EnterpriseAiVlmInputMode = "auto"
     text_payload_template: str = Field(default="", max_length=20000)
@@ -361,6 +395,8 @@ class EnterpriseAiModelSettings(BaseModel):
         "default_text_model_id",
         "default_vision_model_id",
         "default_judge_model_id",
+        "default_embedding_model_id",
+        "default_rerank_model_id",
         "api_path",
         "text_payload_template",
         "vision_payload_template",
@@ -406,50 +442,33 @@ class EnterpriseAiModelSettings(BaseModel):
         return value
 
 
-class GenerativeAiModelSettings(BaseModel):
-    """埋め込み / 再ランクのモデル設定（#8）。
+class _LegacyGenerativeAiSettings(BaseModel):
+    """#45 より前の JSON の `generative_ai`（埋め込み / 再ランクの独立した節）。読み込み互換専用。
 
-    接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の
-    `text-embedding-v4` と `qwen3-rerank`。
-
-    Base URL を空にしたときは、Enterprise AI のプライマリ接続の Endpoint URL から
-    組み立てる（API key も Enterprise AI のものを使う。百煉は LLM・埋め込み・再ランクで
-    同じ key）。**再ランクだけ `/compatible-api/v1` 配下**で、chat / 埋め込みの
-    `/compatible-mode/v1` に投げると 404 になるため、埋め込みの Base URL の
-    `/compatible-mode/` を `/compatible-api/` に読み替える。
+    読み込むときに、モデル ID を種類 `embedding` / `rerank` の登録モデル（プライマリ接続）と
+    既定の埋め込み / 再ランクのモデルへ移す（`ModelSettingsStore._apply`）。Base URL・次元は
+    読み捨てる（Base URL は接続の Endpoint URL に、次元は製品の設定 `oci_genai_embedding_dim`
+    にした。#46 からは `EMBEDDING_DIMENSIONS` の 1024 に固定）。
     """
 
-    embedding_model: str = Field(default="text-embedding-v4", max_length=256)
-    embedding_dim: int = Field(
-        default=EMBEDDING_DIMENSIONS,
-        ge=EMBEDDING_DIMENSIONS,
-        le=EMBEDDING_DIMENSIONS,
-        description="Oracle のベクトル列と互換にするため `EMBEDDING_DIMENSIONS` に固定（#46）。",
-    )
-    embedding_base_url: str = Field(
-        default="",
-        max_length=512,
-        description="埋め込みの OpenAI 互換 Base URL。空なら Enterprise AI のプライマリ接続から。",
-    )
-    rerank_model: str = Field(default="qwen3-rerank", max_length=256)
-    rerank_base_url: str = Field(
-        default="",
-        max_length=512,
-        description="再ランクの Base URL。空なら埋め込みの Base URL から読み替える。",
-    )
+    embedding_model: str = ""
+    rerank_model: str = ""
 
-    @field_validator("embedding_model", "rerank_model", "embedding_base_url", "rerank_base_url")
+    @field_validator("embedding_model", "rerank_model", mode="before")
     @classmethod
-    def strip_text(cls, value: str) -> str:
-        """前後空白を設定値へ混入させない。"""
-        return value.strip()
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class ModelSettingsPayload(BaseModel):
-    """モデル設定の読み書き payload。"""
+    """モデル設定の読み書き payload。
+
+    #45 で埋め込み / 再ランクの独立した節（`generative_ai`）を外した。埋め込み / 再ランクの
+    モデルは登録モデル（種類 `embedding` / `rerank`）と既定のモデルで表す。`generative_ai` を
+    含む古い request は、知らない key として読み捨てる。
+    """
 
     enterprise_ai: EnterpriseAiModelSettings
-    generative_ai: GenerativeAiModelSettings
 
 
 class ModelSettingsUpdateRequest(ModelSettingsPayload):
@@ -474,6 +493,9 @@ class ModelSettingsData(BaseModel):
     legacy_secret_detected: bool = False
     # 保存済みのモデル設定の版（#1037）。保存の `base_revision` に返す。
     revision: str = ""
+    # 埋め込みの次元（#45。読み取り専用の表示用）。製品の設定 `oci_genai_embedding_dim`（Oracle の
+    # VECTOR 列に合わせた値）で、埋め込みの呼び出しに `dimensions` として送る。
+    embedding_dim: int | None = None
 
 
 class ModelSettingsTestRequest(BaseModel):
@@ -708,6 +730,48 @@ def enterprise_ai_connection(settings: Any, connection_id: str) -> EnterpriseAiC
             extra={"warning_code": "ENTERPRISE_AI_CONNECTION_MISSING", "connection": connection_id},
         )
     return connections[0]
+
+
+def embedding_model_connection(settings: Any, *, rerank: bool = False) -> EnterpriseAiConnection:
+    """埋め込み（`rerank=True` は再ランク）のモデルを呼ぶ接続（#45）。
+
+    既定の埋め込み / 再ランクのモデル（Settings の `oci_genai_embedding_model` /
+    `oci_genai_rerank_model`）を登録モデルの同じ種類から引き、その接続を使う。登録に無い
+    モデル（`.env` だけで設定した場合）はプライマリ接続。3 製品と rag_engine の埋め込み /
+    再ランクの endpoint・API key はすべてこれで引く。
+    """
+    kind = ENTERPRISE_AI_MODEL_KIND_RERANK if rerank else ENTERPRISE_AI_MODEL_KIND_EMBEDDING
+    model_id = _setting_text(
+        settings, "oci_genai_rerank_model" if rerank else "oci_genai_embedding_model"
+    )
+    connection_id = next(
+        (
+            model.connection_id
+            for model in enterprise_ai_registered_models(settings)
+            if model.kind == kind and model.model_id == model_id
+        ),
+        ENTERPRISE_AI_PRIMARY_CONNECTION_ID,
+    )
+    return enterprise_ai_connection(settings, connection_id)
+
+
+def rerank_base_url(endpoint: str) -> str:
+    """再ランクの base URL（#8）。Endpoint URL の `/compatible-mode/` を `/compatible-api/` に。
+
+    百煉（DashScope）は chat・埋め込みが `/compatible-mode/v1`、**再ランクだけ**
+    `/compatible-api/v1` 配下で、`/compatible-mode/v1/reranks` は 404 になる。`/compatible-mode/` を
+    含まない endpoint はそのまま使う。
+    """
+    return enterprise_ai_base_url(endpoint).replace("/compatible-mode/", "/compatible-api/")
+
+
+def embedding_api_base_url(settings: Any, *, rerank: bool = False) -> str:
+    """埋め込み / 再ランクの OpenAI 互換 base URL（#8 / #45）。決まらなければ空文字。
+
+    `embedding_model_connection` の接続の Endpoint URL。再ランクは `rerank_base_url` で読み替える。
+    """
+    endpoint = embedding_model_connection(settings, rerank=rerank).endpoint
+    return rerank_base_url(endpoint) if rerank else enterprise_ai_base_url(endpoint)
 
 
 class EnterpriseAiModelNotRegisteredError(ValueError):
@@ -958,14 +1022,34 @@ def _coerce_model(value: object) -> EnterpriseAiConfiguredModel:
     return EnterpriseAiConfiguredModel.model_validate(value)
 
 
-def enterprise_ai_model_catalog(settings: Any) -> list[EnterpriseAiConfiguredModel]:
-    """Enterprise AI の登録モデル一覧を返す。一覧がなければ既定のモデルの設定から補う。"""
-    configured = [
+def _configured_models(settings: Any) -> list[EnterpriseAiConfiguredModel]:
+    return [
         model
         for model in (
             _coerce_model(item) for item in getattr(settings, "oci_enterprise_ai_models", [])
         )
         if model.model_id
+    ]
+
+
+def enterprise_ai_registered_models(settings: Any) -> list[EnterpriseAiConfiguredModel]:
+    """登録モデルの一覧（#45。種類を問わない）。一覧がなければ既定のモデルの設定から補う。
+
+    画面の登録モデルの一覧と、埋め込み / 再ランクの接続の解決に使う。LLM の選択肢は
+    `enterprise_ai_model_catalog`（種類 text だけ）。
+    """
+    return _configured_models(settings) or enterprise_ai_model_catalog(settings)
+
+
+def enterprise_ai_model_catalog(settings: Any) -> list[EnterpriseAiConfiguredModel]:
+    """LLM（種類 text）の登録モデル一覧を返す。一覧がなければ既定のモデルの設定から補う。
+
+    3 製品の LLM の選択肢・接続の解決はこれを使う。埋め込み / 再ランクのモデル（#45）は含めない。
+    """
+    configured = [
+        model
+        for model in _configured_models(settings)
+        if model.kind == ENTERPRISE_AI_MODEL_KIND_TEXT
     ]
     if configured:
         return configured
@@ -1156,9 +1240,40 @@ def validate_default_models(enterprise: EnterpriseAiModelSettings) -> list[Model
     - 既定のテキストモデルも、モデルを 1 つ以上登録したら必須（#566）。登録したモデルのどれか
       （Vision 対応でもよい）
     - 既定の判定モデル（#3574）は任意。空・「回答と同じモデル」以外は登録したモデルのどれか
-    エラーは画面の並び順（テキスト → Vision → 判定）で返す。
+    - テキスト・Vision・判定は種類 text のモデル、既定の埋め込み / 再ランクのモデル（#45）は
+      それぞれ種類 embedding / rerank のモデル。埋め込み / 再ランクは、その種類のモデルを
+      登録したら必須（登録しないときは `.env` の値のまま）
+    エラーは画面の並び順（テキスト → Vision → 判定 → 埋め込み → 再ランク）で返す。
     """
-    models = [model for model in enterprise.models if model.model_id]
+    errors = _validate_text_default_models(enterprise)
+    for kind, field_name, label in (
+        (ENTERPRISE_AI_MODEL_KIND_EMBEDDING, "default_embedding_model_id", "埋め込みモデル"),
+        (ENTERPRISE_AI_MODEL_KIND_RERANK, "default_rerank_model_id", "再ランクモデル"),
+    ):
+        of_kind = {
+            model.model_id for model in enterprise.models if model.model_id and model.kind == kind
+        }
+        value = str(getattr(enterprise, field_name))
+        if of_kind and not value:
+            errors.append(ModelFieldError(field_name, f"既定の{label}を選択してください。"))
+        elif of_kind and value not in of_kind:
+            errors.append(
+                ModelFieldError(
+                    field_name,
+                    f"既定の{label}「{value}」は登録モデルにありません。"
+                    "種類が合う登録モデルから選び直してください。",
+                )
+            )
+    return errors
+
+
+def _validate_text_default_models(enterprise: EnterpriseAiModelSettings) -> list[ModelFieldError]:
+    """既定のテキスト / Vision / 判定のモデル（種類 text の登録モデル）を確かめる。"""
+    models = [
+        model
+        for model in enterprise.models
+        if model.model_id and model.kind == ENTERPRISE_AI_MODEL_KIND_TEXT
+    ]
     registered = {model.model_id for model in models}
     vision_capable = {model.model_id for model in models if model.vision_enabled}
     errors: list[ModelFieldError] = []
@@ -1221,7 +1336,7 @@ def validate_default_models(enterprise: EnterpriseAiModelSettings) -> list[Model
 
 def model_payload(settings: Any) -> ModelSettingsPayload:
     """Settings から UI 用 payload を組み立てる（secret は含めない）。"""
-    models = [model.model_copy() for model in enterprise_ai_model_catalog(settings)]
+    models = [model.model_copy() for model in enterprise_ai_registered_models(settings)]
     if not models:
         models.append(EnterpriseAiConfiguredModel())
     api_path = settings.oci_enterprise_ai_llm_path or settings.oci_enterprise_ai_vlm_path
@@ -1241,6 +1356,12 @@ def model_payload(settings: Any) -> ModelSettingsPayload:
             default_text_model_id=_setting_text(settings, "oci_enterprise_ai_default_text_model"),
             default_vision_model_id=enterprise_ai_vision_model_id(settings),
             default_judge_model_id=_setting_text(settings, "oci_enterprise_ai_default_judge_model"),
+            default_embedding_model_id=_usable_embedding_model_id(
+                _setting_text(settings, "oci_genai_embedding_model")
+            ),
+            default_rerank_model_id=_usable_embedding_model_id(
+                _setting_text(settings, "oci_genai_rerank_model")
+            ),
             api_path=api_path or "/responses",
             vlm_input_mode=settings.oci_enterprise_ai_vlm_input_mode,
             text_payload_template=settings.oci_enterprise_ai_llm_payload_template,
@@ -1250,20 +1371,12 @@ def model_payload(settings: Any) -> ModelSettingsPayload:
             timeout_seconds=settings.oci_enterprise_ai_timeout_seconds,
             max_retries=settings.oci_enterprise_ai_max_retries,
         ),
-        generative_ai=GenerativeAiModelSettings(
-            embedding_model=settings.oci_genai_embedding_model,
-            embedding_dim=settings.oci_genai_embedding_dim,
-            embedding_base_url=_setting_text(settings, "embedding_base_url"),
-            rerank_model=settings.oci_genai_rerank_model,
-            rerank_base_url=_setting_text(settings, "rerank_base_url"),
-        ),
     )
 
 
 def apply_model_settings(settings: Any, payload: ModelSettingsPayload) -> None:
     """payload（secret 以外）を Settings へ反映する。API key は呼出側で扱う。"""
     enterprise = payload.enterprise_ai
-    generative = payload.generative_ai
     models = [model.model_copy() for model in enterprise.models if model.model_id]
     for connection_id, fields in _CONNECTION_FIELDS.items():
         # payload にない接続（セカンダリ接続・ターシャリ接続を削除した場合）は空にする。
@@ -1283,14 +1396,23 @@ def apply_model_settings(settings: Any, payload: ModelSettingsPayload) -> None:
     settings.oci_enterprise_ai_vlm_response_path = enterprise.vision_response_path
     settings.oci_enterprise_ai_timeout_seconds = enterprise.timeout_seconds
     settings.oci_enterprise_ai_max_retries = enterprise.max_retries
-    settings.oci_genai_embedding_model = generative.embedding_model
-    settings.oci_genai_embedding_dim = generative.embedding_dim
-    settings.oci_genai_rerank_model = generative.rerank_model
-    _set_if_field(settings, "embedding_base_url", generative.embedding_base_url)
-    _set_if_field(settings, "rerank_base_url", generative.rerank_base_url)
+    # 既定の埋め込み / 再ランクのモデル（#45）。endpoint・API key はそのモデルの接続から
+    # `embedding_model_connection` で引く。次元は製品の設定（`oci_genai_embedding_dim`。Oracle の
+    # VECTOR 列に合わせた値）のまま変えない。
+    _apply_embedding_models(
+        settings, enterprise.default_embedding_model_id, enterprise.default_rerank_model_id
+    )
+
+
+def _apply_embedding_models(settings: Any, embedding_model: str, rerank_model: str) -> None:
+    """既定の埋め込み / 再ランクのモデルを Settings へ。空は今の値（`.env`・製品の既定）のまま。"""
+    embedding_model = embedding_model or _setting_text(settings, "oci_genai_embedding_model")
+    rerank_model = rerank_model or _setting_text(settings, "oci_genai_rerank_model")
+    settings.oci_genai_embedding_model = embedding_model
+    settings.oci_genai_rerank_model = rerank_model
     # NL2SQL は旧名の model ID も読んでいる。
-    _set_if_field(settings, "oci_genai_embed_model_id", generative.embedding_model)
-    _set_if_field(settings, "oci_genai_rerank_model_id", generative.rerank_model)
+    _set_if_field(settings, "oci_genai_embed_model_id", embedding_model)
+    _set_if_field(settings, "oci_genai_rerank_model_id", rerank_model)
 
 
 def _set_if_field(settings: Any, name: str, value: object) -> None:
@@ -1356,7 +1478,13 @@ def model_settings_data(settings: Any) -> ModelSettingsData:
         secret_source=settings.model_secret_source,
         legacy_secret_detected=settings.legacy_model_secret_detected,
         revision=_payload_revision(payload),
+        embedding_dim=_embedding_dim_of(settings),
     )
+
+
+def _embedding_dim_of(settings: Any) -> int | None:
+    value = getattr(settings, "oci_genai_embedding_dim", None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 # --------------------------------------------------------------------------- persistence
@@ -1387,6 +1515,10 @@ class _PersistedEnterpriseAiSettings(BaseModel):
     default_vision_model_id: str | None = None
     # 既定の判定モデル（#3574。空 = 既定のテキストモデル）。前の JSON に無ければ空。
     default_judge_model_id: str = ""
+    # 既定の埋め込み / 再ランクのモデル（#45）。None は #45 より前の JSON（`generative_ai` の
+    # 節から移す）。
+    default_embedding_model_id: str | None = None
+    default_rerank_model_id: str | None = None
     # #499 より前の JSON の key（既定モデルが 1 つ）。読み込むときに上の 2 つへ移す。
     default_model_id: str | None = None
     api_path: str = "/responses"
@@ -1410,6 +1542,8 @@ class _PersistedEnterpriseAiSettings(BaseModel):
         "default_text_model_id",
         "default_vision_model_id",
         "default_judge_model_id",
+        "default_embedding_model_id",
+        "default_rerank_model_id",
         "default_model_id",
         mode="before",
     )
@@ -1479,19 +1613,8 @@ class _PersistedModelSettings(BaseModel):
     enterprise_ai: _PersistedEnterpriseAiSettings = Field(
         default_factory=_PersistedEnterpriseAiSettings
     )
-    generative_ai: GenerativeAiModelSettings = Field(default_factory=GenerativeAiModelSettings)
-
-    @field_validator("generative_ai", mode="before")
-    @classmethod
-    def drop_saved_embedding_dim(cls, value: Any) -> Any:
-        """保存済みの次元は読まず、コードの `EMBEDDING_DIMENSIONS` を使う（#46）。
-
-        次元は画面で変えられない固定の値で、保存の値は保存した時点の既定（#46 より前は 1536）に
-        すぎない。旧い値のファイルを読み込みの失敗にしない。
-        """
-        if isinstance(value, Mapping) and "embedding_dim" in value:
-            return {key: item for key, item in value.items() if key != "embedding_dim"}
-        return value
+    # #45 より前の JSON の埋め込み / 再ランクの節（読み込み互換専用）。
+    generative_ai: _LegacyGenerativeAiSettings | None = None
 
 
 class ModelSettingsStore:
@@ -1678,6 +1801,7 @@ class ModelSettingsStore:
         enterprise = persisted.enterprise_ai
         models = [model for model in enterprise.models if model.model_id]
         text_model, vision_model = enterprise.default_models(models)
+        embedding_model, rerank_model = _embedding_defaults(enterprise, persisted, models, settings)
         apply_model_settings(
             settings,
             ModelSettingsPayload.model_construct(
@@ -1692,14 +1816,17 @@ class ModelSettingsStore:
                             "default_model_id",
                             "default_text_model_id",
                             "default_vision_model_id",
+                            "default_embedding_model_id",
+                            "default_rerank_model_id",
                         }
                     ),
                     connections=enterprise.connection_settings(settings),
                     models=models,
                     default_text_model_id=text_model,
                     default_vision_model_id=vision_model,
+                    default_embedding_model_id=embedding_model,
+                    default_rerank_model_id=rerank_model,
                 ),
-                generative_ai=persisted.generative_ai,
             ),
         )
         legacy_secret = (enterprise.api_key or "").strip()
@@ -1711,9 +1838,66 @@ class ModelSettingsStore:
         )
 
 
+# #8 より前の OCI Generative AI（Cohere）の埋め込み / 再ランクのモデル ID の接頭辞。OpenAI 互換の
+# 経路では呼べないので、画面・移行では未設定として扱い、利用者に選び直させる（#45）。
+_LEGACY_OCI_GENAI_MODEL_PREFIX: Final = "cohere."
+
+
+def _usable_embedding_model_id(value: str) -> str:
+    """既定の埋め込み / 再ランクのモデル ID。旧 Cohere の ID は空にする（#45）。"""
+    return "" if value.startswith(_LEGACY_OCI_GENAI_MODEL_PREFIX) else value
+
+
+def _embedding_defaults(
+    enterprise: _PersistedEnterpriseAiSettings,
+    persisted: _PersistedModelSettings,
+    models: list[EnterpriseAiConfiguredModel],
+    settings: Any,
+) -> tuple[str, str]:
+    """保存済みの既定の埋め込み / 再ランクのモデル（#45）。`models` を書き換えることがある。
+
+    #45 より前の JSON（`default_embedding_model_id` が無い）は、`generative_ai` の節のモデル ID を
+    既定のモデルにし、登録に無ければ種類 embedding / rerank・プライマリ接続の登録モデルとして
+    足す（その JSON の埋め込み / 再ランクはプライマリ接続の key で呼んでいたので、挙動を保つ）。
+    旧 OCI Generative AI（Cohere。`cohere.` で始まる ID）は OpenAI 互換の経路で呼べないので
+    移さず、未設定（画面で選び直す）にする。`generative_ai` も無い JSON は今の Settings
+    （`.env`）の値のまま。
+    """
+    legacy = persisted.generative_ai
+    values: list[str] = []
+    for kind, saved, legacy_value, current in (
+        (
+            ENTERPRISE_AI_MODEL_KIND_EMBEDDING,
+            enterprise.default_embedding_model_id,
+            legacy.embedding_model if legacy else "",
+            _setting_text(settings, "oci_genai_embedding_model"),
+        ),
+        (
+            ENTERPRISE_AI_MODEL_KIND_RERANK,
+            enterprise.default_rerank_model_id,
+            legacy.rerank_model if legacy else "",
+            _setting_text(settings, "oci_genai_rerank_model"),
+        ),
+    ):
+        if saved is not None:
+            values.append(saved)
+            continue
+        legacy_value = _usable_embedding_model_id(legacy_value)
+        if legacy and not legacy_value:
+            values.append("")
+            continue
+        if legacy_value and not any(model.model_id == legacy_value for model in models):
+            models.append(
+                EnterpriseAiConfiguredModel(
+                    model_id=legacy_value, display_name=legacy_value, kind=kind
+                )
+            )
+        values.append(legacy_value or current)
+    return values[0], values[1]
+
+
 def _model_settings_document(payload: ModelSettingsPayload) -> dict[str, Any]:
     enterprise = payload.enterprise_ai
-    generative = payload.generative_ai
     return {
         "version": MODEL_SETTINGS_DOCUMENT_VERSION,
         "enterprise_ai": {
@@ -1727,6 +1911,7 @@ def _model_settings_document(payload: ModelSettingsPayload) -> dict[str, Any]:
                         "model_id",
                         "display_name",
                         "vision_enabled",
+                        "kind",
                         "connection_id",
                         "reasoning_effort",
                         "max_input_tokens",
@@ -1739,6 +1924,8 @@ def _model_settings_document(payload: ModelSettingsPayload) -> dict[str, Any]:
             "default_text_model_id": enterprise.default_text_model_id,
             "default_vision_model_id": enterprise.default_vision_model_id,
             "default_judge_model_id": enterprise.default_judge_model_id,
+            "default_embedding_model_id": enterprise.default_embedding_model_id,
+            "default_rerank_model_id": enterprise.default_rerank_model_id,
             "api_path": enterprise.api_path,
             "vlm_input_mode": enterprise.vlm_input_mode,
             "text_payload_template": enterprise.text_payload_template,
@@ -1748,7 +1935,6 @@ def _model_settings_document(payload: ModelSettingsPayload) -> dict[str, Any]:
             "timeout_seconds": enterprise.timeout_seconds,
             "max_retries": enterprise.max_retries,
         },
-        "generative_ai": generative.model_dump(),
     }
 
 
@@ -1809,7 +1995,9 @@ def model_test_candidate(settings: Any, request: ModelSettingsTestRequest) -> An
     return candidate
 
 
-def _model_test_success_message(target_type: ModelSettingsTestTargetType, model_id: str) -> str:
+def _model_test_success_message(
+    target_type: ModelSettingsTestTargetType, model_id: str, details: ModelTestDetails
+) -> str:
     if target_type == "enterprise_text":
         return f"Enterprise AI の回答生成モデル「{model_id}」から応答を取得しました。"
     if target_type == "enterprise_vision":
@@ -1817,18 +2005,26 @@ def _model_test_success_message(target_type: ModelSettingsTestTargetType, model_
             f"Enterprise AI の画像対応モデル「{model_id}」から構造化抽出レスポンスを取得しました。"
         )
     if target_type == "embedding":
+        dim = details.get("vector_dim")
+        if dim:
+            return f"埋め込みモデル「{model_id}」で {dim} 次元のベクトルを取得しました。"
+        return f"埋め込みモデル「{model_id}」でベクトルを取得しました。"
+    order = details.get("ranked_order")
+    score = details.get("top_score")
+    if order and score is not None:
         return (
-            f"Embedding モデル「{model_id}」で {EMBEDDING_DIMENSIONS} 次元ベクトルを取得しました。"
+            f"再ランクモデル「{model_id}」で文書を並べ替えました"
+            f"（順位: {order}。最上位のスコア {score}）。"
         )
-    return f"Rerank モデル「{model_id}」から順位スコアを取得しました。"
+    return f"再ランクモデル「{model_id}」から順位スコアを取得しました。"
 
 
 def _model_test_failure_message(target_type: ModelSettingsTestTargetType, model_id: str) -> str:
     if target_type in {"enterprise_text", "enterprise_vision"}:
         return f"Enterprise AI モデル「{model_id or '未入力'}」のテストに失敗しました。"
     if target_type == "embedding":
-        return f"Embedding モデル「{model_id or '未入力'}」のテストに失敗しました。"
-    return f"Rerank モデル「{model_id or '未入力'}」のテストに失敗しました。"
+        return f"埋め込みモデル「{model_id or '未入力'}」のテストに失敗しました。"
+    return f"再ランクモデル「{model_id or '未入力'}」のテストに失敗しました。"
 
 
 def _model_test_troubleshooting(
@@ -1955,7 +2151,7 @@ async def run_model_settings_test(
             error_type=type(exc).__name__,
             elapsed_ms=_elapsed_ms(started),
         )
-    message = _model_test_success_message(request.target_type, request.model_id)
+    message = _model_test_success_message(request.target_type, request.model_id, details)
     if dropped:
         names = ", ".join(sorted(dropped))
         details = {**details, "dropped_parameters": names}
@@ -2050,10 +2246,16 @@ def _default_models_changed(settings: Any, enterprise: EnterpriseAiModelSettings
 
     def key(value: EnterpriseAiModelSettings) -> tuple[object, ...]:
         return (
-            [(model.model_id, model.vision_enabled) for model in value.models if model.model_id],
+            [
+                (model.model_id, model.vision_enabled, model.kind)
+                for model in value.models
+                if model.model_id
+            ],
             value.default_text_model_id,
             value.default_vision_model_id,
             value.default_judge_model_id,
+            value.default_embedding_model_id,
+            value.default_rerank_model_id,
         )
 
     return key(model_payload(settings).enterprise_ai) != key(enterprise)

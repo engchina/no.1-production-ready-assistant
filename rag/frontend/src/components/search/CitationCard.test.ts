@@ -35,6 +35,7 @@ describe("citationEvidenceItem", () => {
         page_start: 3,
         recipe_slot_no: 2,
         document_superseded: true,
+        // 取込済みの文書に残った XML ツリー JSON の原典の URL は読まない（issue 42）。
         xml_tree_source_url: "https://example.com/a",
       },
     } satisfies RetrievedChunk);
@@ -46,8 +47,8 @@ describe("citationEvidenceItem", () => {
       superseded: true,
       score: 0.91,
       rerankScore: 0.42,
-      sourceUrl: "https://example.com/a",
     });
+    expect(item.sourceUrl).toBeUndefined();
     expect(item.routeBadges).toEqual(["Both", "Vector #1", "Keyword #2", "Evidence"]);
     expect(item.chips).toEqual([{ id: "page", label: "ページ", value: "p.3" }, { id: "context_header_enabled", label: "文脈ヘッダの索引への追加", value: "未記録" }]);
     expect(item.tags?.map((tag) => [tag.id, tag.tone ?? "neutral"])).toEqual([

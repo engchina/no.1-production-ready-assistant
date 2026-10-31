@@ -60,7 +60,7 @@ in_container() {
   "${docker_cmd}" exec -i "${container}" bash -euo pipefail -c "$1"
 }
 
-# cloud-init（terraform/stack/cloud_init/bootstrap.template.yaml）が入れる package と、OCI の image にある
+# 配備の前提の package（platform/deploy/tests/oracle-linux.test.sh の base_packages）と、OCI の image にある
 # opc のユーザー・sudo・systemd を入れた image。
 build_image() {
   "${docker_cmd}" build -t "${image}" -f - . <<EOF
@@ -75,7 +75,7 @@ CMD ["/usr/sbin/init"]
 EOF
 }
 
-# terraform/stack/locals.tf の platform_env・<製品>_backend_env と同じ鍵（値は CI 用）。
+# 配備の props（platform.env・<製品>.backend.env）の鍵（値は CI 用）。
 write_props() {
   local admin_password secret
   admin_password="Ci$(openssl rand -hex 8)_Aa1"
@@ -161,14 +161,14 @@ AGENT_EXTERNAL_RAG_MCP_URL=http://127.0.0.1:8000/api/mcp
 AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8010/api/mcp
 AGENT_EXTERNAL_RAG_PUBLIC_URL=/rag
 EOF
-  # terraform/stack/locals.tf の rag_services（既定の入力。parser-unstructured・OCI の parser は入れない）。
+  # 配備の props の rag_services.txt（既定の一覧。parser-unstructured・OCI の parser は入れない）。
   in_container "
     printf '%s\n' '${products}' > ${props}/products.txt
     printf '%s\n' true > ${props}/https_enabled.txt
     printf '%s\n' 80 > ${props}/http_port.txt
     printf '%s\n' 443 > ${props}/https_port.txt
     printf '%s\n' false > ${props}/assign_public_ip.txt
-    printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling parser-structured-records-jsonl parser-xml-tree-json' > ${props}/rag_services.txt
+    printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling' > ${props}/rag_services.txt
   "
   # walletless_tls でも RAG の init_script.sh は wallet.zip を展開する（中身は使わない。空の zip は unzip が失敗する）。
   # zip は host の python3 で作る（container の image に python3 が無いことがある）。

@@ -108,7 +108,6 @@ async def test_raptor_records_summary_purpose_for_each_actual_cluster_call(
         genai=cast(Any, object()),
         oracle=cast(Any, object()),
         object_storage=cast(Any, object()),
-        document_understanding=cast(Any, object()),
         settings=Settings(
             rag_raptor_enabled=True, rag_raptor_cluster_size=2, rag_raptor_max_levels=1
         ),
