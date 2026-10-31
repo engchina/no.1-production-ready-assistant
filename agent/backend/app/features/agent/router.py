@@ -13,6 +13,7 @@ import logging
 import re
 import stat
 import unicodedata
+import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from csv import DictWriter
 from datetime import UTC, datetime
@@ -21,7 +22,7 @@ from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Annotated, Any, Literal, NoReturn, cast
+from typing import Annotated, Any, Literal, NoReturn
 
 import httpx
 from anyio import fail_after
@@ -98,9 +99,6 @@ from pr_system_settings.model_test_input import (
     model_test_text_context,
 )
 from pr_system_settings.oci import build_oci_router
-from pr_system_settings.oci_auth import (
-    load_oci_config_without_prompt as _load_oci_config_without_prompt,
-)
 from pr_system_settings.trace_recording import build_trace_recording_router
 from pr_system_settings.upload_storage import (
     build_upload_storage_router,
@@ -856,9 +854,9 @@ async def _run_model_settings_test(
         text = await _run_enterprise_vision_model_test(enterprise_ai, connection)
         return {"response_chars": len(text), "surface": "vision"}
     if request.target_type == "embedding":
-        vector_dim = await _run_oci_embedding_model_test(settings, payload.generative_ai)
+        vector_dim = await _run_embedding_model_test(settings, payload.generative_ai)
         return {"vector_dim": vector_dim, "input_count": 1}
-    ranked_count, top_score = await _run_oci_rerank_model_test(settings, payload.generative_ai)
+    ranked_count, top_score = await _run_rerank_model_test(settings, payload.generative_ai)
     return {"ranked_count": ranked_count, "top_score": top_score}
 
 
@@ -1127,29 +1125,32 @@ def _json_pointer_value(document: Mapping[str, object], pointer: str) -> object:
     return current
 
 
-async def _run_oci_embedding_model_test(
+async def _run_embedding_model_test(
     settings: object,
     model_settings: GenerativeAiModelSettings,
 ) -> int:
-    models = import_module("oci.generative_ai_inference.models")
-    client = cast(Any, _oci_genai_inference_client(settings))
-    details = models.EmbedTextDetails(
-        inputs=[MODEL_TEST_EMBEDDING_INPUT],
-        serving_mode=models.OnDemandServingMode(model_id=model_settings.embedding_model),
-        compartment_id=_require_non_empty(
-            _settings_str_from(settings, "oci_compartment_id"),
-            "OCI compartment OCID",
-        ),
-        input_type="SEARCH_QUERY",
-        output_dimensions=model_settings.embedding_dim,
+    """OpenAI 互換の `POST {base_url}/embeddings` で 1 件埋め込み、次元を返す（#8）。
+
+    Oracle の `VECTOR(1536, FLOAT32)` に合わせるため `dimensions` を必ず送り、返った次元を検証する
+    （Aliyun の `text-embedding-v4` は既定 1024 次元）。
+    """
+    url = f"{_embedding_base_url(settings, model_settings, rerank=False)}/embeddings"
+    body: dict[str, object] = {
+        "model": model_settings.embedding_model,
+        "input": [MODEL_TEST_EMBEDDING_INPUT],
+        "dimensions": model_settings.embedding_dim,
+    }
+    api_key = _embedding_api_key(settings)
+    timeout = _embedding_timeout(settings)
+    payload = await anyio_to_thread.run_sync(
+        lambda: _post_openai_compatible(url, body, api_key, timeout)
     )
-    response = await anyio_to_thread.run_sync(lambda: client.embed_text(details))
-    embeddings = getattr(response.data, "embeddings", None)
-    if not isinstance(embeddings, list) or not embeddings:
-        raise ValueError("OCI embedding response に embeddings がありません。")
-    vector = embeddings[0]
+    rows = payload.get("data")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("embedding の応答に data がありません。")
+    vector = rows[0].get("embedding") if isinstance(rows[0], Mapping) else None
     if not isinstance(vector, list):
-        raise ValueError("OCI embedding response の vector が不正です。")
+        raise ValueError("embedding の応答の vector が不正です。")
     if len(vector) != model_settings.embedding_dim:
         raise ValueError(
             "embedding の次元数が不正です。"
@@ -1158,42 +1159,86 @@ async def _run_oci_embedding_model_test(
     return len(vector)
 
 
-async def _run_oci_rerank_model_test(
+async def _run_rerank_model_test(
     settings: object,
     model_settings: GenerativeAiModelSettings,
 ) -> tuple[int, float | None]:
-    models = import_module("oci.generative_ai_inference.models")
-    client = cast(Any, _oci_genai_inference_client(settings))
-    details = models.RerankTextDetails(
-        input=MODEL_TEST_RERANK_QUERY,
-        documents=list(MODEL_TEST_RERANK_DOCUMENTS),
-        serving_mode=models.OnDemandServingMode(model_id=model_settings.rerank_model),
-        compartment_id=_require_non_empty(
-            _settings_str_from(settings, "oci_compartment_id"),
-            "OCI compartment OCID",
-        ),
-        top_n=1,
+    """OpenAI 互換の `POST {base_url}/reranks` を呼ぶ（#8。複数形。`/rerank` は 404）。"""
+    url = f"{_embedding_base_url(settings, model_settings, rerank=True)}/reranks"
+    body: dict[str, object] = {
+        "model": model_settings.rerank_model,
+        "query": MODEL_TEST_RERANK_QUERY,
+        "documents": list(MODEL_TEST_RERANK_DOCUMENTS),
+        "top_n": 1,
+    }
+    api_key = _embedding_api_key(settings)
+    timeout = _embedding_timeout(settings)
+    payload = await anyio_to_thread.run_sync(
+        lambda: _post_openai_compatible(url, body, api_key, timeout)
     )
-    response = await anyio_to_thread.run_sync(lambda: client.rerank_text(details))
-    document_ranks = getattr(response.data, "document_ranks", None)
-    if not isinstance(document_ranks, list):
-        raise ValueError("OCI rerank response に document_ranks がありません。")
+    results = payload.get("results")
+    if not isinstance(results, list):
+        raise ValueError("rerank の応答に results がありません。")
     top_score = None
-    if document_ranks:
-        raw_score = getattr(document_ranks[0], "relevance_score", None)
+    if results and isinstance(results[0], Mapping):
+        raw_score = results[0].get("relevance_score")
         top_score = float(raw_score) if raw_score is not None else None
-    return len(document_ranks), top_score
+    return len(results), top_score
 
 
-def _oci_genai_inference_client(settings: object) -> object:
-    oci_config = import_module("oci.config")
-    genai = import_module("oci.generative_ai_inference")
-    config = _load_oci_config_without_prompt(
-        oci_config,
-        _settings_str_from(settings, "oci_config_file", "~/.oci/config"),
-        _settings_str_from(settings, "oci_config_profile", "DEFAULT"),
+def _embedding_base_url(
+    settings: object, model_settings: GenerativeAiModelSettings, *, rerank: bool
+) -> str:
+    """埋め込み / 再ランクの OpenAI 互換 Base URL（#8）。
+
+    空のときは Enterprise AI のプライマリ接続の endpoint を使う。再ランクは
+    `/compatible-mode/` を `/compatible-api/` に読み替える（百煉は再ランクだけ
+    `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404）。
+    """
+    base = model_settings.rerank_base_url.strip() if rerank else ""
+    if not base:
+        base = (
+            model_settings.embedding_base_url.strip()
+            or _settings_str_from(settings, "oci_enterprise_ai_endpoint").strip()
+        )
+        if rerank:
+            base = base.replace("/compatible-mode/", "/compatible-api/")
+    return _require_non_empty(
+        base, "埋め込み / 再ランクの Base URL（または Enterprise AI の Endpoint URL）"
+    ).rstrip("/")
+
+
+def _embedding_api_key(settings: object) -> str:
+    """API key（#8。Enterprise AI のプライマリ接続のものを使う）。"""
+    return _require_non_empty(
+        _settings_str_from(settings, "oci_enterprise_ai_api_key"),
+        "Enterprise AI の接続の API key",
     )
-    return genai.GenerativeAiInferenceClient(config)
+
+
+def _embedding_timeout(settings: object) -> int:
+    return max(1, int(_settings_float_from(settings, "oci_enterprise_ai_timeout_seconds", 60.0)))
+
+
+def _post_openai_compatible(
+    url: str, body: Mapping[str, object], api_key: str, timeout: int
+) -> dict[str, Any]:
+    """埋め込み / 再ランクの要求を 1 回送る（#8）。**HTTP を叩くのはここだけ。**"""
+    request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
+        url,
+        method="POST",
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
+    # HTTPError はそのまま伝播させる（`status` を持つので共有 router が失敗を表示できる）。
+    # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+    if request.type not in ("http", "https"):
+        raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{url} の応答が object ではありません。")
+    return payload
 
 
 def _require_non_empty(value: str, label: str) -> str:

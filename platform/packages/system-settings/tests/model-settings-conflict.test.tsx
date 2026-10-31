@@ -34,7 +34,7 @@ afterEach(() => {
 
 const pending = () => new Promise<never>(() => undefined);
 
-function data(revision: string, rerankModel = "cohere.rerank-v4.0-fast"): ModelSettingsData {
+function data(revision: string, rerankModel = "qwen3-rerank"): ModelSettingsData {
   return {
     settings: {
       enterprise_ai: {
@@ -63,7 +63,7 @@ function data(revision: string, rerankModel = "cohere.rerank-v4.0-fast"): ModelS
         max_retries: 3,
       },
       generative_ai: {
-        embedding_model: "cohere.embed-v4.0",
+        embedding_model: "text-embedding-v4",
         embedding_dim: 1536,
         rerank_model: rerankModel,
       },

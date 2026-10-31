@@ -116,7 +116,11 @@ export interface EnterpriseAiModelSettings {
 export interface GenerativeAiModelSettings {
   embedding_model: string;
   embedding_dim: number;
+  /** 埋め込みの OpenAI 互換 Base URL。空なら Enterprise AI のプライマリ接続から（#8）。 */
+  embedding_base_url: string;
   rerank_model: string;
+  /** 再ランクの Base URL。空なら埋め込みの Base URL から読み替える（#8）。 */
+  rerank_base_url: string;
 }
 
 export interface ModelSettingsPayload {
