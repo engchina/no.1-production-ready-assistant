@@ -56,16 +56,6 @@ class PostJson(Protocol):
     def __call__(self, url: str, body: dict[str, Any]) -> dict[str, Any]: ...
 
 
-class GenerativeAiInferenceClientProtocol(Protocol):
-    """OCI Generative AI Inference client の最小インターフェース。"""
-
-    def embed_text(self, embed_text_details: object) -> Any:
-        """OCI Generative AI embed_text を呼び出す。"""
-
-    def rerank_text(self, rerank_text_details: object) -> Any:
-        """OCI Generative AI rerank_text を呼び出す。"""
-
-
 logger = logging.getLogger(__name__)
 
 

@@ -137,7 +137,7 @@ export const MODEL_MESSAGES = {
     "埋め込みと再ランクに使う OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の text-embedding-v4 と qwen3-rerank。",
   "settings.model.genai.embeddingBaseUrl": "埋め込みの Base URL",
   "settings.model.genai.embeddingBaseUrlHelp":
-    "空にすると Enterprise AI のプライマリ接続の Endpoint URL を使います（API key も同じもの）。",
+    "例: https://dashscope.aliyuncs.com/compatible-mode/v1。空にすると Enterprise AI のプライマリ接続の Endpoint URL を使います（API key も同じもの）。",
   "settings.model.genai.embeddingDim": "Embedding 次元",
   "settings.model.genai.embeddingDimHelp":
     "固定値です。埋め込みモデルの出力次元と Oracle AI Database のベクトル列に合わせます。",
@@ -155,16 +155,15 @@ export const MODEL_MESSAGES = {
   "settings.model.loading": "モデル設定を読み込んでいます。",
   "settings.model.placeholder.apiKey": "sk-xxxxxxxxxxxxxxxx",
   "settings.model.placeholder.displayName": "業務 NL2SQL 標準",
-  "settings.model.placeholder.embeddingBaseUrl":
-    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  // 375px の欄に収まるよう host を省く（完全な形は補足の embeddingBaseUrlHelp）。
+  "settings.model.placeholder.embeddingBaseUrl": "https://…/compatible-mode/v1",
   "settings.model.placeholder.embeddingModel": "text-embedding-v4",
   // placeholder は 375px の欄にも収まる短い例（形は補足の endpointHelp。#1891）。
   "settings.model.placeholder.endpoint": "https://…oraclecloud.com/openai/v1",
   "settings.model.placeholder.endpointTertiary": "https://api.openai.com/v1",
   "settings.model.placeholder.modelId": "enterprise-llm",
   "settings.model.placeholder.project": "ocid1.generativeaiproject.oc1.…",
-  "settings.model.placeholder.rerankBaseUrl":
-    "https://dashscope.aliyuncs.com/compatible-api/v1",
+  "settings.model.placeholder.rerankBaseUrl": "https://…/compatible-api/v1",
   "settings.model.placeholder.rerankModel": "qwen3-rerank",
   "settings.model.requiredInOci": "OCI 運用時必須",
   "settings.model.save": "保存",

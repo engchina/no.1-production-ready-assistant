@@ -174,9 +174,9 @@ for (const viewport of [
     await expectActionInsideCard(page, "OCI Enterprise AI", enterpriseSave);
     await expectActionInsideCard(page, "登録モデル", modelsSave);
     await expectActionInsideCard(page, "登録モデル", enterpriseTestButton);
-    await expectActionInsideCard(page, "OCI Generative AI", genaiSave);
-    await expectActionInsideCard(page, "OCI Generative AI", embeddingTestButton);
-    await expectActionInsideCard(page, "OCI Generative AI", rerankTestButton);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", genaiSave);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", embeddingTestButton);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", rerankTestButton);
 
     for (const button of [
       enterpriseSave,
@@ -273,7 +273,7 @@ for (const viewport of [
     await expect(rerank).toHaveValue("rerank-mine");
     const reload = page.getByRole("button", { name: "最新の設定を読み込む" });
     await expect(reload).toHaveCount(1);
-    await expectActionInsideCard(page, "OCI Generative AI", reload);
+    await expectActionInsideCard(page, "埋め込み / 再ランク", reload);
     await expectNoPageOverflow(page);
     await page.screenshot({
       path: test.info().outputPath(`model-settings-conflict-${viewport.name}.png`),
@@ -290,7 +290,7 @@ for (const viewport of [
 
     await rerank.fill("rerank-mine");
     await page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }).click();
-    await expect(page.getByText("OCI Generative AI 設定を保存しました。").first()).toBeVisible();
+    await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。").first()).toBeVisible();
     expect(patches.at(-1)).toEqual({ base_revision: "rev-2" });
   });
 }

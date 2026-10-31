@@ -39,7 +39,6 @@ from rag_engine.config import (
     Settings,
     get_llm_provider,
     llm_output_token_limit,
-    oci_inference_endpoint,
 )
 from rag_engine.knowledge.prompt_files import (
     IMAGE_RETRIEVAL_PROMPT_KEY,
@@ -92,7 +91,6 @@ from rag_engine.resources.tracing import observe_call
 VISION_SYSTEM_PROMPT = (
     "## Step 1: 画像説明を作成する\nあなたは問い合わせRAG用の画像説明作成担当です。\n\n## Step 2: 結果を返す\nJSONだけを返してください。\n"
 )
-API_SIGNING_KEY_FIELDS = ("user", "tenancy", "fingerprint", "key_file", "region")
 
 
 # 埋め込みの用途。OpenAI 互換の `/embeddings` には query / document の区別が無いので
@@ -106,60 +104,6 @@ SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS = {64, 128, 256, 512, 768, 1024, 1536, 204
 EMBEDDING_BATCH_MAX_UTF8_BYTES = 64000
 # 再ランクの endpoint は `/reranks`（複数形）。`/rerank` は 404 が返る。
 RERANK_PATH = "/reranks"
-
-
-@dataclass(frozen=True)
-class _Runtime:
-    oci: Any
-    models: Any
-    client: Any
-    compartment_id: str
-
-
-def _load_api_signing_key_config(oci: Any, config_file: str, profile: str) -> dict[str, Any]:
-    """CLI session token ではなく、長期利用する OCI API signing-key profile を読み込みます。"""
-    sdk_config = dict(oci.config.from_file(str(Path(config_file).expanduser()), profile))
-    missing = [field for field in API_SIGNING_KEY_FIELDS if not sdk_config.get(field)]
-    if missing:
-        raise RuntimeError("OCI API signing key profile に必要な設定がありません: " + ", ".join(missing))
-    # 混在 profile に任意 key が含まれていても、この client は session-token auth ではなく
-    # 標準の user/fingerprint/private-key signer を必ず使う。
-    sdk_config.pop("security_token_file", None)
-    return sdk_config
-
-
-@application_cache(maxsize=16)
-def _runtime(
-    config_file: str,
-    profile: str,
-    compartment_id: str,
-    endpoint: str,
-    timeout_seconds: int,
-) -> _Runtime:
-    try:
-        import oci
-    except ImportError as exc:
-        raise RuntimeError("OCI SDK が未インストールです。`oci>=2.185.0` をインストールしてください。") from exc
-    if not compartment_id:
-        raise RuntimeError("OCI_COMPARTMENT_ID が未設定です。")
-
-    sdk_config = _load_api_signing_key_config(oci, config_file, profile)
-    service_endpoint = endpoint or oci_inference_endpoint(sdk_config["region"])
-    read_timeout = max(1, int(timeout_seconds))
-    client = oci.generative_ai_inference.GenerativeAiInferenceClient(
-        sdk_config,
-        service_endpoint=service_endpoint,
-        timeout=(min(10, read_timeout), read_timeout),
-        # 再試行は呼び出しごとに切り(NoneRetryStrategy)、呼び出し側の実行器が受け持つ。SDK の既定の
-        # circuit breaker も切る。429 が続くと先に開き、実行器の知らない例外で失敗する(#2211)。
-        circuit_breaker_strategy=oci.circuit_breaker.NoCircuitBreakerStrategy(),
-    )
-    return _Runtime(
-        oci=oci,
-        models=oci.generative_ai_inference.models,
-        client=client,
-        compartment_id=compartment_id,
-    )
 
 
 # 生成・監査・質問ルーティング・Vision 説明の全呼出で同じ入力から同じ出力を得やすくするための設定。

@@ -583,6 +583,21 @@ def _reasoning_effort_override(value: str) -> str:
     return "" if value == "model" else value
 
 
+def _rerank_base_url_configured(settings: Settings) -> bool:
+    """rag_engine の ``_rerank_configured`` と同じく、再ランクの Base URL が決まるか(#8)。
+
+    ``rerank_base_url`` → ``embedding_base_url`` → Enterprise AI の接続の endpoint の順に見る。
+    """
+    names = (
+        "rerank_base_url",
+        "embedding_base_url",
+        "oci_enterprise_ai_endpoint",
+        "oci_enterprise_ai_secondary_endpoint",
+        "oci_enterprise_ai_tertiary_endpoint",
+    )
+    return any(str(getattr(settings, name, "") or "").strip() for name in names)
+
+
 def build_engine_settings(
     settings: Settings,
     *,
@@ -1329,7 +1344,7 @@ class AnswerEngine:
         LLM(既定のテキストモデル。比較の列ではその列のモデル)は質問の理解・拡張・回答の生成・
         監査のすべてに使う(#3444)。``attached_images`` はそのモデルへ添付した根拠の画像の件数
         (画像を読めないモデル・画像の無い根拠は 0)。
-        rerank は実際に並べたときだけモデル名を出す: 無効・未設定(モデルか compartment が無い。
+        rerank は実際に並べたときだけモデル名を出す: 無効・未設定(モデルか Base URL が無い。#8。
         rag_engine はこのとき rerank を実行しない)なら空。rerank が失敗して取得の順で続けたとき
         (``rerank_failed``)も空にし、rerank で並べたように見せない(失敗は degraded_steps の
         ``rerank`` に出る。#3286)。
@@ -1350,7 +1365,7 @@ class AnswerEngine:
             "rerank": (
                 settings.oci_genai_rerank_model
                 if settings.rag_rerank_enabled
-                and settings.oci_compartment_id.strip()
+                and _rerank_base_url_configured(settings)
                 and not rerank_failed
                 else ""
             ),

@@ -787,7 +787,7 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "登録モデル", exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "OCI Generative AI", exact: true })
+    page.getByRole("heading", { name: "埋め込み / 再ランク", exact: true })
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
@@ -1788,7 +1788,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await generativeSave.focus();
   await expect(generativeSave).toBeFocused();
   await generativeSave.press("Enter");
-  await expect(page.getByText("OCI Generative AI 設定を保存しました。")).toBeVisible();
+  await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。")).toBeVisible();
   const generativeRequest = requests[2];
   expect(
     (generativeRequest.generative_ai as Record<string, unknown>).embedding_model
