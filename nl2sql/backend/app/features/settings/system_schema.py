@@ -654,7 +654,19 @@ class SystemSchemaManager(SystemSchemaManagerBase):
                 "AND OBJECT_TYPE IN ('TABLE', 'INDEX', 'SEQUENCE', 'PACKAGE', 'PACKAGE BODY')",
                 binds,
             )
-            return {(str(row[0]).upper(), str(row[1]).upper()): row[2] for row in cursor.fetchall()}
+            objects = {
+                (str(row[0]).upper(), str(row[1]).upper()): row[2] for row in cursor.fetchall()
+            }
+        # ベクトル索引は版によって USER_OBJECTS に出ない（Autonomous Database Free 23.9
+        # で確認。#10）。INDEX は USER_INDEXES でも確かめ、作成済みの索引を「不足」と誤らない。
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT INDEX_NAME FROM USER_INDEXES WHERE INDEX_NAME IN ({placeholders})",  # nosec B608 - fixed manifest binds
+                binds,
+            )
+            for row in cursor.fetchall():
+                objects.setdefault((str(row[0]).upper(), "INDEX"), None)
+        return objects
 
     @staticmethod
     def _load_schema_owner(connection: Any) -> str:

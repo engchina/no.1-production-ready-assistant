@@ -151,7 +151,7 @@ def _fail_interrupted_runs(repository: runtime.AgentRuntimeRepositoryContract) -
     """前のプロセスが実行していて、再起動で止まった Run を失敗にする（#1894）。
 
     in_process では Run の実行は backend のプロセスの asyncio の task だけで、再起動で task が
-    消えると Run は `running` / `queued` のまま終わらない（チャットは待ち続け、自動実行は前回の
+    消えると Run は `running` / `queued` のまま終わらない（チャットは待ち続け、前回の
     Run の終わりを待って次を作らない）。このプロセスの起動より前に作った・変えた Run だけを
     対象にする（起動の後の Run は、このプロセスが始めたものか、別のプロセスが動かしている途中）。
     承認待ち・確認待ちは保存した SDK の状態から再開できるので触らない。
@@ -263,7 +263,7 @@ def reset(*, ready: bool = False) -> None:
 
 SavedDataArea = Literal["runtime", "control_plane"]
 # runtime: Run・業務 Agent の checkpoint（AGENT_RUNTIME_CHECKPOINTS）。control_plane: 画面・API で
-# 変えた定義（AGENT_CONTROL_PLANE_ITEMS。スキル・MCP 接続・ツール権限・自動実行・品質評価）。
+# 変えた定義（AGENT_CONTROL_PLANE_ITEMS。スキル・MCP 接続・ツール権限・品質評価）。
 SAVED_DATA_AREAS: frozenset[SavedDataArea] = frozenset({"runtime", "control_plane"})
 BACKEND_PROCESS = "Agent の backend（systemd の production-ready-agent-backend.service）"
 DISPATCHER_PROCESS = "実行の dispatcher（python -m app.features.agent.runtime_dispatcher）"

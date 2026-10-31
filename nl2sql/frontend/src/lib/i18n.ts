@@ -229,8 +229,8 @@ const nl2sqlJa = {
     "修正した SQL を使うと、実行の前に分類し直し、確認語からやり直します。",
   "dbAdminChat.correctedApplied": "AI のエラー分析で修正した SQL です。",
 
-  "app.title": "Production Ready NL2SQL",
-  "app.sidebarTitle.line1": "Production Ready",
+  "app.title": "Private NL2SQL",
+  "app.sidebarTitle.line1": "Private",
   "app.sidebarTitle.line2": "NL2SQL",
   "app.route.loading": "画面を読み込んでいます…",
 

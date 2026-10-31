@@ -18,13 +18,7 @@ RAG_MICROSERVICES=(
   "preprocess-word-to-jsonl|services/preprocess/word_to_jsonl|18017|300"
   "parser-docling|services/parsers/docling|18020|300"
   "parser-unstructured|services/parsers/unstructured|18022|300"
-  "parser-structured-records-jsonl|services/parsers/structured_records_jsonl|18023|300"
-  "parser-xml-tree-json|services/parsers/xml_tree_json|18021|300"
 )
-# 初めて配備・登録しても起動しない（既定は停止の）サービス。unit と sudoers は作るので、サービス管理画面の
-# 「起動」（enable --now）で起動でき、以後は最後に操作した状態（enable / disable）を保つ。
-# XML ツリー JSON は使用エンジンに選んだときだけ使う（RAG_PARSER_XML_TREE_JSON_ENABLED の既定 false と同じ。#2453）。
-RAG_DEFAULT_STOPPED_SERVICES=(parser-xml-tree-json)
 RAG_UNIT_PREFIX="production-ready-rag-"
 # 画面から操作する unit に、systemctl / journalctl だけを許可する sudoers（backend の app.services.systemd と同じ argv）。
 RAG_SUDOERS_FILE_NAME="production-ready-rag-services"
@@ -57,18 +51,6 @@ rag_service_field() {
   local entry
   entry="$(rag_service_definition "${id}")" || return 1
   printf '%s\n' "${entry}" | cut -d '|' -f "${index}"
-}
-
-# 初めて配備・登録したときに起動しない（既定は停止の）サービスなら 0。
-rag_service_default_stopped() {
-  local id="$1"
-  local stopped
-  for stopped in "${RAG_DEFAULT_STOPPED_SERVICES[@]}"; do
-    if [ "${stopped}" = "${id}" ]; then
-      return 0
-    fi
-  done
-  return 1
 }
 
 rag_service_dir() { rag_service_field "$1" 2; }

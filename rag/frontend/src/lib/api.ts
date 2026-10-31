@@ -180,17 +180,8 @@ export type EvaluationOutcome =
   | "needs_human"
   | "insufficient_evidence";
 
-export type ParserAdapterBackend =
-  | "local"
-  | "docling"
-  | "unstructured"
-  | "structured_records_jsonl"
-  | "xml_tree_json";
-export type ParserAdapterBackendName =
-  | "docling"
-  | "unstructured"
-  | "structured_records_jsonl"
-  | "xml_tree_json";
+export type ParserAdapterBackend = "local" | "docling" | "unstructured";
+export type ParserAdapterBackendName = "docling" | "unstructured";
 export type ParserAdapterStatus =
   "active" | "available" | "disabled" | "ignored" | "missing";
 export type ParserAdapterScoreBackend = "local" | ParserAdapterBackendName;
@@ -1011,8 +1002,6 @@ export interface KnowledgeBaseIngestionConfig {
   parser_adapter_backend: ParserAdapterBackend | null;
   parser_docling_enabled: boolean | null;
   parser_unstructured_enabled: boolean | null;
-  parser_structured_records_jsonl_enabled?: boolean | null;
-  parser_xml_tree_json_enabled?: boolean | null;
   /** 図・画像を AI で読み取る(Vision)。解析エンジンに関係なく使える(#497)。 */
   vision_enabled: boolean | null;
   /** 見出しの階層の推定（AI。#2277）。null は全体の既定（無効）に従う。 */
@@ -2422,8 +2411,6 @@ export interface ParserAdapterSettingsUpdate {
   adapter_backend?: ParserAdapterBackend;
   docling_enabled?: boolean;
   unstructured_enabled?: boolean;
-  structured_records_jsonl_enabled?: boolean;
-  xml_tree_json_enabled?: boolean;
   vision_enabled?: boolean;
   heading_level_inference_enabled?: boolean;
   field_extraction_enabled?: boolean;

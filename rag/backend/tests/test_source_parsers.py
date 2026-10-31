@@ -3256,10 +3256,7 @@ _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         # unstructured: 汎用(メール含む)
         ("unstructured", "mail.eml", "message/rfc822", True),
         ("unstructured", "doc.pdf", "application/pdf", True),
-        # XML ツリー JSON: JSON だけ(#2042。対応する形かは解析で判定する)
-        ("xml_tree_json", "tree.json", "application/json", True),
-        ("xml_tree_json", "doc.pdf", "application/pdf", False),
-        # 未宣言 backend と削除したエンジン(#270・#22)は非対応
+        # 未宣言 backend と削除したエンジン(#270・#22・#21)は非対応
         ("no_such_backend", "doc.pdf", "application/pdf", False),
         ("marker", "doc.pdf", "application/pdf", False),
         ("unlimited_ocr", "doc.pdf", "application/pdf", False),
@@ -3270,6 +3267,9 @@ _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ("mineru", "sheet.xlsx", _XLSX_MIME, False),
         ("dots_ocr", "scan.png", "image/png", False),
         ("oci_document_understanding", "scan.png", "image/png", False),
+        # 削除した構造化レコード JSONL / XML ツリー JSON(#21)
+        ("structured_records_jsonl", "rows.jsonl", "application/jsonl", False),
+        ("xml_tree_json", "tree.json", "application/json", False),
     ],
 )
 def test_adapter_capabilities_matrix(

@@ -1,4 +1,6 @@
-"""構造化レコード JSONL の解析の抽出を固定分割で 1 記録 1 chunk にする検証（#2457）。
+"""構造化レコードの JSONL を読んだ抽出を固定分割で 1 記録 1 chunk にする検証（#2457）。
+
+読み手は選んだ解析エンジン（既定の Docling・Unstructured）のサービス（#21）。
 
 データはすべて合成。
 """
@@ -33,7 +35,7 @@ from rag_parser_core.structured_records import (
 from app.rag.chunking import CHUNKING_STRATEGIES, Chunk, chunk_extraction_with_strategy
 from app.schemas.extraction import StructuredExtraction
 
-BACKEND = "structured_records_jsonl"
+BACKEND = "docling"
 
 
 def _csv_extraction(*values: str) -> StructuredExtraction:
@@ -58,7 +60,9 @@ def _csv_extraction(*values: str) -> StructuredExtraction:
                 ],
             )
         )
-    extraction = run_external_adapter(BACKEND, dump_structured_records(lines), None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, dump_structured_records(lines), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     # backend は parser のサービスの応答を検証してから使う（raw_text の正規化を含む）。
     return StructuredExtraction.model_validate(extraction.model_dump())
@@ -91,7 +95,9 @@ def _excel_extraction() -> StructuredExtraction:
     data = dump_structured_records(
         sheet_records_to_lines(document, converter="excel_to_jsonl", converter_version="v4")
     )
-    extraction = run_external_adapter(BACKEND, data, None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, data, None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     return StructuredExtraction.model_validate(extraction.model_dump())
 
@@ -216,7 +222,9 @@ def _word_extraction() -> StructuredExtraction:
             for index in (1, 2)
         ],
     ]
-    result = run_external_adapter(BACKEND, dump_structured_records(lines), None, "")
+    result = run_external_adapter(
+        BACKEND, dump_structured_records(lines), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is not None
     return StructuredExtraction.model_validate(result.extraction.model_dump())
 
@@ -292,7 +300,7 @@ def test_other_extractions_keep_the_configured_delimiter() -> None:
     assert [chunk.text for chunk in _fixed(extraction)] == ["一段落目", "二段落目"]
 
 
-# ---- 取込の経路（使用エンジンで選んだときだけ。#2457）---------------------------------------
+# ---- 取込の経路（選んだ解析エンジンのサービスが読む。#2457・#21）------------------------------
 
 
 def _settings(**updates: object) -> Any:
@@ -359,19 +367,23 @@ def _jsonl(*values: str) -> bytes:
     return dump_structured_records(lines)
 
 
-def test_partition_source_uses_structured_records_service_when_selected(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("backend", ["docling", "unstructured"])
+def test_partition_source_reads_structured_records_with_selected_engine(
+    monkeypatch: pytest.MonkeyPatch, backend: str
 ) -> None:
+    """前処理の構造化レコードの JSONL は、選んだ解析エンジンのサービスが読む（#21）。"""
     called: list[str] = []
     _patch_runner(monkeypatch, called)
-    pipeline = _pipeline(_settings(rag_parser_adapter_backend=BACKEND))
+    pipeline = _pipeline(
+        _settings(rag_parser_adapter_backend=backend, **{f"rag_parser_{backend}_enabled": True})
+    )
     result = pipeline._partition_source(
         parse_bytes=_jsonl("A", "B"),
         source_profile=None,
         content_type=STRUCTURED_RECORDS_CONTENT_TYPE,
     )
-    assert called == [BACKEND]
-    assert result.parser_backend == BACKEND
+    assert called == [backend]
+    assert result.parser_backend == backend
     assert result.extraction is not None
     assert result.extraction.raw_text == f"項目: A\n{JSONL_RECORD_BOUNDARY}\n項目: B"
     pipeline._raise_if_selected_parser_was_not_used(result)
@@ -412,7 +424,7 @@ def test_converted_legacy_excel_is_parsed_not_stopped_by_original_format(
     assert result.extraction is not None
 
 
-def test_invalid_jsonl_with_structured_records_engine_stops_with_clear_message(
+def test_invalid_structured_records_stop_with_clear_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.rag.ingestion import IngestionUserError
@@ -428,7 +440,7 @@ def test_invalid_jsonl_with_structured_records_engine_stops_with_clear_message(
     with pytest.raises(IngestionUserError) as exc_info:
         pipeline._raise_if_selected_parser_was_not_used(result)
     message = str(exc_info.value)
-    assert "構造化レコード JSONL" in message
+    assert "構造化レコードの JSONL" in message
     assert "structured_records_invalid:unknown_schema@line1" in message
 
 
@@ -447,15 +459,6 @@ def test_text_for_chunking_and_field_extraction_drop_the_markers() -> None:
     text = _text_for_chunking(extraction)
     assert JSONL_RECORD_BOUNDARY not in text
     assert text == "\n".join(element.text for element in extraction.elements)
-
-
-def test_extraction_recipe_includes_structured_records_flag_only_for_its_engine() -> None:
-    from app.rag.variant_keys import extraction_recipe_subset
-
-    flag = "rag_parser_structured_records_jsonl_enabled"
-    assert flag not in extraction_recipe_subset(_settings())
-    subset = extraction_recipe_subset(_settings(rag_parser_adapter_backend=BACKEND, **{flag: True}))
-    assert subset[flag] is True
 
 
 # ---- 表の根拠の行・セルの座標（取込から根拠の locator まで。#3262）------------------------------
@@ -500,7 +503,9 @@ def test_csv_rows_cite_lines_and_cells_from_ingest_to_locator(strategy: str) -> 
     source = '区分,値,値\n区分 A,10,\n"区分 B\n続き",20,30\n区分 C,30,40\n'.encode()
     outcome = _csv_to_jsonl_converter().convert(source, "text/csv", "csv_to_jsonl", None)
     assert outcome.converted is True
-    extraction = run_external_adapter(BACKEND, outcome.derived_bytes, None, "").extraction
+    extraction = run_external_adapter(
+        BACKEND, outcome.derived_bytes, None, STRUCTURED_RECORDS_CONTENT_TYPE
+    ).extraction
     assert extraction is not None
     chunks = _chunks_of(StructuredExtraction.model_validate(extraction.model_dump()), strategy)
     locators = _locators(chunks)
@@ -599,7 +604,9 @@ def _word_table_extraction() -> StructuredExtraction:
             ],
         ),
     ]
-    result = run_external_adapter(BACKEND, dump_structured_records(lines), None, "")
+    result = run_external_adapter(
+        BACKEND, dump_structured_records(lines), None, STRUCTURED_RECORDS_CONTENT_TYPE
+    )
     assert result.extraction is not None
     return StructuredExtraction.model_validate(result.extraction.model_dump())
 

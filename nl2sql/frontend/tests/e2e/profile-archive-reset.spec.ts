@@ -469,7 +469,7 @@ test("ローカルフォントで全体と並べ替え列名を描画しキー�
       for (const weight of [400, 500, 600, 700]) {
         const faces = await document.fonts.load(
           `${weight} 14px "${family}"`,
-          family === "Noto Sans JP Variable" ? "名称 許可表 許可ビュー" : "Production Ready NL2SQL"
+          family === "Noto Sans JP Variable" ? "名称 許可表 許可ビュー" : "Private NL2SQL"
         );
         loaded.push({ family, weight, count: faces.length, loaded: faces.every((face) => face.status === "loaded") });
       }

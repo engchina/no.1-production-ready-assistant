@@ -70,8 +70,6 @@ function emptyConfig(): DocumentProcessingConfig {
     parser_adapter_backend: null,
     parser_docling_enabled: null,
     parser_unstructured_enabled: null,
-    parser_structured_records_jsonl_enabled: null,
-    parser_xml_tree_json_enabled: null,
     vision_enabled: null,
     heading_level_inference_enabled: null,
     chunking_strategy: null,
@@ -200,7 +198,7 @@ export function DocumentProcessingConfigPanel({
   // 前処理が excel_to_jsonl のときだけ「Excel の読み方」を出す（#1221）。
   const excelSelected =
     (form.preprocess_profile ?? configs?.effective.preprocess_profile ?? null) === "excel_to_jsonl";
-  // 構造化レコードの JSONL を作るファイル準備を選んでいるとき、解析・分割の組み合わせを案内する（#2457）。
+  // 構造化レコードの JSONL を作るファイル準備を選んでいるとき、分割の組み合わせを案内する（#2457）。
   const structuredRecordsSelected = isStructuredRecordsPreprocess(effectivePreprocessProfile);
   // 分割方式が固定分割のときだけ「固定分割符」を出す（#2457）。
   const fixedDelimiterSelected =

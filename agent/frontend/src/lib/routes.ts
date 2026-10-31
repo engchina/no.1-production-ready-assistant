@@ -27,8 +27,6 @@ export const APP_ROUTES = {
   agents: "/agents",
   runtimes: "/runtimes",
   runs: "/runs",
-  // 業務 Agent の自動実行（スケジュール。#784）。
-  automations: "/automations",
   approvals: "/approvals",
   audit: "/audit",
   tools: "/tools",

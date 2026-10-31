@@ -178,12 +178,6 @@ def isolated_local_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         get_settings(), "rag_service_runtime_env_file", str(tmp_path / "service-runtime.env")
     )
-    # 条の選択の process をまたぐ記録（#3507）は、テストの間で共有しない
-    # （手元の保存先にも書かない）。
-    # 記録を確かめるテストは置き場所を tmp に差し替え直す。
-    from app.rag import answer_engine
-
-    monkeypatch.setattr(answer_engine, "article_catalog_cache_dir", lambda _settings: None)
 
 
 async def _systemd_unavailable(argv: list[str], timeout: float) -> object:
@@ -342,8 +336,6 @@ def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     settings.rag_parser_adapter_backend = "unstructured"
     settings.rag_parser_docling_enabled = False
     settings.rag_parser_unstructured_enabled = True
-    settings.rag_parser_structured_records_jsonl_enabled = False
-    settings.rag_parser_xml_tree_json_enabled = False
     settings.oci_genai_embedding_model = "cohere.embed-v4.0"
     settings.oci_genai_embedding_dim = 1536
     settings.oci_genai_rerank_model = "cohere.rerank-v4.0-fast"

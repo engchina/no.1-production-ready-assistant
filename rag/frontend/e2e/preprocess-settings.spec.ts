@@ -33,7 +33,7 @@ for (const viewport of [
     await expect(
       page.getByRole("radio", { name: /Excel→JSONL.*Excel ファイル\(\.xls・\.xlsx・マクロ付きの \.xlsm\)/ })
     ).toBeVisible();
-    await expect(page.getByRole("radio", { name: /CSV→JSONL.*構造化レコード JSONL/ })).toBeVisible();
+    await expect(page.getByRole("radio", { name: /CSV→JSONL.*Docling・Unstructured/ })).toBeVisible();
     await expect(page.getByRole("radio", { name: /^Excel→JSONL/ })).toHaveAccessibleName(/保存済みの計算結果/);
     await expect(page.getByRole("radio", { name: /^Word→JSONL/ })).toHaveAccessibleName(/ページ番号は付けません/);
     // Word→JSONL は Excel→JSONL の直後（#2457）。

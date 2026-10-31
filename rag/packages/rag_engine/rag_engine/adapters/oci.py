@@ -2050,7 +2050,10 @@ def _rerank_request(url: str, body: dict[str, Any], api_key: str, timeout_second
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=max(1, int(timeout_seconds))) as response:  # noqa: S310
+        # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+        if request.type not in ("http", "https"):
+            raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+        with urllib.request.urlopen(request, timeout=max(1, int(timeout_seconds))) as response:  # noqa: S310  # nosec B310
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:500]

@@ -1,8 +1,8 @@
 """ファイル準備 csv_to_json / excel_to_json の改名と、固定分割符の既定の変更の移行（#2457）。
 
 - DB の保存値（文書レシピ・取込ジョブ・その記録）は system schema の migration が移す。
-- global の設定（backend/.env・parser-settings.json）は settings の migration の CLI が移す。
-- 構造化レコードの JSONL を作るファイル準備に Docling / Unstructured を選ぶと、取込の前に止める。
+- global の設定（backend/.env）は settings の migration の CLI が移す。解析エンジンは書き換えない。
+- 構造化レコードの JSONL を作るファイル準備は、Docling / Unstructured のまま取り込める（#21）。
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from app.rag.structured_records_settings_migration import (
 )
 from app.schemas.document import DocumentProcessingConfig
 
+# 適用済みの migration の名前(変えない)。
 _MIGRATION = "20261019_003_structured_records_jsonl_profiles"
 
 
@@ -94,7 +95,7 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
-def test_settings_migration_renames_env_and_switches_global_parser(tmp_path: Path) -> None:
+def test_settings_migration_renames_env_and_keeps_global_parser(tmp_path: Path) -> None:
     env_file = _write(
         tmp_path / ".env",
         "# 既存のコメント\n"
@@ -109,12 +110,14 @@ def test_settings_migration_renames_env_and_switches_global_parser(tmp_path: Pat
         json.dumps({"adapter_backend": "unstructured", "unstructured_enabled": True}),
     )
 
-    plan = plan_settings_migration(env_file, parser_file)
+    parser_before = parser_file.read_text(encoding="utf-8")
+
+    plan = plan_settings_migration(env_file)
     assert not plan.empty
     # 予定を作るだけではファイルを変えない。
     assert dotenv_values(env_file)["RAG_PREPROCESS_PROFILE"] == "csv_to_json"
 
-    apply_settings_migration(plan, env_file, parser_file)
+    apply_settings_migration(plan, env_file)
     env = dotenv_values(env_file)
     assert env["RAG_PREPROCESS_PROFILE"] == "csv_to_jsonl"
     assert "RAG_PREPROCESS_CSV_TO_JSON_SERVICE_URL" not in env
@@ -125,12 +128,9 @@ def test_settings_migration_renames_env_and_switches_global_parser(tmp_path: Pat
     assert env["RAG_CHUNK_DELIMITER"] == "\\n\\n"
     assert env["RAG_UNRELATED"] == "keep"
     assert "# 既存のコメント" in env_file.read_text(encoding="utf-8")
-    parser = json.loads(parser_file.read_text(encoding="utf-8"))
-    assert parser == {
-        "adapter_backend": "structured_records_jsonl",
-        "unstructured_enabled": True,
-        "structured_records_jsonl_enabled": True,
-    }
+    # 解析エンジンは書き換えない(構造化レコードの JSONL は Unstructured のサービスが読む。#21)。
+    assert parser_file.read_text(encoding="utf-8") == parser_before
+    assert "RAG_PARSER_ADAPTER_BACKEND" not in env
     # 移した値で起動できる（旧い値・旧い変数名は読まない）。
     settings = Settings(_env_file=env_file)
     assert settings.rag_preprocess_profile == "csv_to_jsonl"
@@ -138,20 +138,18 @@ def test_settings_migration_renames_env_and_switches_global_parser(tmp_path: Pat
     assert settings.rag_preprocess_csv_to_jsonl_service_url == "http://127.0.0.1:28012"
 
     # 2 回目は何も変えない（冪等）。
-    assert plan_settings_migration(env_file, parser_file).empty
+    assert plan_settings_migration(env_file).empty
 
 
-def test_settings_migration_without_parser_file_writes_backend_env(tmp_path: Path) -> None:
+def test_settings_migration_does_not_write_parser_backend(tmp_path: Path) -> None:
     env_file = _write(tmp_path / ".env", "RAG_PREPROCESS_PROFILE=excel_to_json\n")
-    parser_file = tmp_path / "parser-settings.json"
 
-    apply_settings_migration(plan_settings_migration(env_file, parser_file), env_file, parser_file)
+    apply_settings_migration(plan_settings_migration(env_file), env_file)
 
     env = dotenv_values(env_file)
     assert env["RAG_PREPROCESS_PROFILE"] == "excel_to_jsonl"
-    assert env["RAG_PARSER_ADAPTER_BACKEND"] == "structured_records_jsonl"
-    assert env["RAG_PARSER_STRUCTURED_RECORDS_JSONL_ENABLED"] == "true"
-    assert not parser_file.exists()
+    assert "RAG_PARSER_ADAPTER_BACKEND" not in env
+    assert not (tmp_path / "parser-settings.json").exists()
     # 固定分割を使っていなければ分割符は書かない（新しい既定のまま）。
     assert "RAG_CHUNK_DELIMITER" not in env
 
@@ -163,11 +161,8 @@ def test_settings_migration_keeps_unrelated_settings(tmp_path: Path) -> None:
         "RAG_CHUNKING_STRATEGY=fixed_delimiter\n"
         "RAG_CHUNK_DELIMITER=---\n",
     )
-    parser_file = _write(
-        tmp_path / "parser-settings.json", json.dumps({"adapter_backend": "docling"})
-    )
-    assert plan_settings_migration(env_file, parser_file).empty
-    assert main(["--env-file", str(env_file), "--parser-settings", str(parser_file)]) == 0
+    assert plan_settings_migration(env_file).empty
+    assert main(["--env-file", str(env_file)]) == 0
 
 
 def test_main_dry_run_does_not_write(tmp_path: Path, capsys: object) -> None:
@@ -183,8 +178,8 @@ def _settings(**update: object) -> Settings:
     return get_settings().model_copy(update=update)
 
 
-def test_jsonl_preprocess_with_docling_is_blocked_before_ingestion() -> None:
-    """構造化レコードの JSONL を作るファイル準備は、構造化レコード JSONL 以外では始めない。"""
+def test_jsonl_preprocess_with_docling_or_unstructured_is_not_blocked() -> None:
+    """構造化レコードの JSONL を作るファイル準備は、Docling / Unstructured のまま始める(#21)。"""
     profile = build_source_profile(
         original_file_name="table.csv",
         sanitized_file_name="table.csv",
@@ -198,20 +193,7 @@ def test_jsonl_preprocess_with_docling_is_blocked_before_ingestion() -> None:
             _settings(rag_preprocess_profile="csv_to_jsonl", rag_parser_adapter_backend=backend),
             profile,
         )
-        assert block is not None
-        assert block.code == "structured_records_requires_structured_records_jsonl"
-        assert block.suggested_backend == "structured_records_jsonl"
-        assert "「構造化レコード JSONL」" in block.message
-    assert (
-        parser_source_block(
-            _settings(
-                rag_preprocess_profile="csv_to_jsonl",
-                rag_parser_adapter_backend="structured_records_jsonl",
-            ),
-            profile,
-        )
-        is None
-    )
+        assert block is None, backend
 
 
 def test_recipe_chunk_delimiter_overrides_global_and_is_compared_only_for_fixed_split() -> None:

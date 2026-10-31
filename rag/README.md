@@ -37,14 +37,14 @@ npm ci
 BACKEND_URL=http://localhost:8000 npm run dev   # http://localhost:3000（BACKEND_URL 未指定なら /api は 404）
 
 # 前処理 / CPU parser(サービスごとの uv の venv + systemd の unit。rag/ で実行。#286)
-scripts/rag-services.sh install            # 前処理と既定の parser(docling・structured-records-jsonl・xml-tree-json。xml-tree-json は登録だけで起動しない)。--unstructured で足す
+scripts/rag-services.sh install            # 前処理と既定の parser(docling)。--unstructured で足す
 ```
 
-CPU の parser(docling / unstructured / structured_records_jsonl / xml_tree_json)は **独立した FastAPI マイクロサービス**(`services/parsers/<name>`)で
+CPU の parser(docling / unstructured)は **独立した FastAPI マイクロサービス**(`services/parsers/<name>`)で
 動き、backend は取込時に HTTP 委譲する。各 parser は独自依存で個別に upgrade できる。
-構造化レコードの JSONL(前処理 CSV→JSONL・Excel→JSONL・Word→JSONL の成果物)は、使用エンジンで選んだときだけ `structured_records_jsonl` で
-記録の単位に解析し、固定分割で 1 記録 1 chunk にする(#2457)。
-XML ツリー JSON(`.json`)は、文書解析の既定か処理レシピの使用エンジンで選んだときだけ `xml_tree_json` で解析する(#2042)。
+構造化レコードの JSONL(前処理 CSV→JSONL・Excel→JSONL・Word→JSONL の成果物)は、選んだ解析エンジン(Docling・Unstructured)の
+サービスが外部の parser に渡さず共通の契約(`rag_parser_core.structured_records`)で記録の単位に読み、固定分割で 1 記録 1 chunk にする
+(#2457・#21)。XML / JSON の木と構造化レコードの JSONL の専用の解析エンジンは削除した(#21。一般の `.json` / `.jsonl` は Unstructured で読む)。
 音声・動画は取り込まない(アップロードの画面と API の 415 で止める。#3369)。
 既定の解析エンジンは **Docling**(#286)。Docling は **PDF と画像だけ**を解析し、それ以外(テキスト・HTML・Office・メール など)は
 取込を始める前に止めて、処理レシピで Unstructured(または Office→PDF)を選ぶよう案内する(自動では振り分けない)。

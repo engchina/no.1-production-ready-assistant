@@ -31,7 +31,6 @@ from app.features.agent import builtin_runtime
 from app.features.agent.builtin_runtime import UNDECLARED_CALL_POLICY_DENIED, ModelTarget
 from app.features.agent.config import runtime_config_store
 from app.features.agent.runtime import (
-    AUTOMATION_APPROVAL_SKIPPED_CODE,
     MCP_APPROVAL_SKIPPED_CODE,
     AgentProfile,
     ApprovalStatus,
@@ -234,17 +233,13 @@ def test_injected_approval_and_policy_claims_do_not_skip_approval(
     ("metadata", "code"),
     [
         ({"source": "mcp", "api_key_id": "0123456789abcdef"}, MCP_APPROVAL_SKIPPED_CODE),
-        (
-            {"automation_id": "auto_3240", "automation_trigger": "schedule"},
-            AUTOMATION_APPROVAL_SKIPPED_CODE,
-        ),
     ],
-    ids=["mcp", "automation"],
+    ids=["mcp"],
 )
 def test_injected_approval_does_not_run_writes_in_unattended_runs(
     monkeypatch: MonkeyPatch, calls: _Calls, metadata: dict[str, Any], code: str
 ) -> None:
-    """無人の実行（外部の MCP クライアント・自動実行）は、結果が承認済みと言っても承認の要る
+    """無人の実行（外部の MCP クライアント）は、結果が承認済みと言っても承認の要る
     ツールを呼ばない。"""
     _follow_the_injection(monkeypatch)
     run_id = _create_run(**metadata)

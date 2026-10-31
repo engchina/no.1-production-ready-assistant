@@ -787,19 +787,6 @@ describe("api.request envelope", () => {
           version: null,
           warning_code: "adapter_flag_ignored_by_backend",
         },
-        {
-          backend: "xml_tree_json",
-          package_name: "rag_parser_core",
-          import_name: "rag_parser_core",
-          distribution_name: null,
-          install_package: "rag-parser-core",
-          enabled: false,
-          selected: false,
-          installed: false,
-          status: "disabled",
-          version: null,
-          warning_code: null,
-        },
       ],
       scorecard: {
         selected_backend: "docling",
@@ -879,7 +866,7 @@ describe("api.request envelope", () => {
     expect(result.adapter_backend).toBe("docling");
     expect(result.effective_order).toEqual(["docling"]);
     expect(result.adapters[1].warning_code).toBe("adapter_flag_ignored_by_backend");
-    expect(result.adapters.map((adapter) => adapter.backend)).toContain("xml_tree_json");
+    expect(result.adapters.map((adapter) => adapter.backend)).toEqual(["docling", "unstructured"]);
     expect(result.source_routes[0].candidate_order).toEqual(["docling", "unstructured"]);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/settings/parser-adapters",
@@ -894,8 +881,6 @@ describe("api.request envelope", () => {
       adapter_backend: "docling" as const,
       docling_enabled: true,
       unstructured_enabled: true,
-      structured_records_jsonl_enabled: false,
-      xml_tree_json_enabled: false,
     };
     const responsePayload = {
       adapter_backend: "docling",
@@ -926,19 +911,6 @@ describe("api.request envelope", () => {
           status: "ignored",
           version: null,
           warning_code: "adapter_flag_ignored_by_backend",
-        },
-        {
-          backend: "xml_tree_json",
-          package_name: "rag_parser_core",
-          import_name: "rag_parser_core",
-          distribution_name: null,
-          install_package: "rag-parser-core",
-          enabled: false,
-          selected: false,
-          installed: false,
-          status: "disabled",
-          version: null,
-          warning_code: null,
         },
       ],
       scorecard: {
@@ -972,7 +944,7 @@ describe("api.request envelope", () => {
     const result = await api.updateParserAdapterSettings(requestPayload);
 
     expect(result.effective_order).toEqual(["docling"]);
-    expect(result.adapters.map((adapter) => adapter.backend)).toContain("xml_tree_json");
+    expect(result.adapters.map((adapter) => adapter.backend)).toEqual(["docling", "unstructured"]);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/settings/parser-adapters",
       expect.objectContaining({
@@ -1018,10 +990,10 @@ describe("api.services", () => {
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({
         data: {
-          service_id: "parser-xml-tree-json",
+          service_id: "parser-unstructured",
           category: "parser",
           profile: "cpu",
-          label_key: "settings.services.item.parserXmlTreeJson",
+          label_key: "settings.services.item.parserUnstructured",
           execution_policy: "selected_adapter",
           status: "running",
           configured: true,
@@ -1032,11 +1004,11 @@ describe("api.services", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await api.getServiceStatus("parser-xml-tree-json");
+    const result = await api.getServiceStatus("parser-unstructured");
 
     expect(result.status).toBe("running");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/services/parser-xml-tree-json/status",
+      "/api/services/parser-unstructured/status",
       expect.anything()
     );
   });
@@ -1044,18 +1016,18 @@ describe("api.services", () => {
   it("controlService は service_id を URL エンコードして POST する", async () => {
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({
-        data: { service_id: "parser-xml-tree-json", action: "start", status: "running" },
+        data: { service_id: "parser-unstructured", action: "start", status: "running" },
         error_messages: [],
         warning_messages: [],
       })
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await api.controlService("parser-xml-tree-json", "start");
+    const result = await api.controlService("parser-unstructured", "start");
 
     expect(result.status).toBe("running");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/services/parser-xml-tree-json/start",
+      "/api/services/parser-unstructured/start",
       expect.objectContaining({ method: "POST" })
     );
   });

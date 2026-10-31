@@ -82,12 +82,11 @@ health の確認）への HTTP は、`HTTP_PROXY` を設定していてもプロ
 | preprocess-word-to-jsonl（Word→JSONL。既定で配備・起動。#2457） | `services/preprocess/word_to_jsonl` | 18017 |
 | parser-docling（既定の解析エンジン） | `services/parsers/docling` | 18020 |
 | parser-unstructured（既定では配備しない。Docling が扱えない形式を取り込む場合） | `services/parsers/unstructured` | 18022 |
-| parser-structured-records-jsonl（構造化レコード JSONL の解析エンジン。既定で配備・起動。#2457） | `services/parsers/structured_records_jsonl` | 18023 |
-| parser-xml-tree-json（XML ツリー JSON の解析エンジン。既定で配備し、既定は停止。#2024・#2042・#2453） | `services/parsers/xml_tree_json` | 18021 |
 
 音声・動画は取り込まない（アップロードで止める。#3369）。GPU の ASR の parser と、OCI Generative AI（Vision）の parser は
 #2042 で削除した。ファイル準備の「PDF を画像として読み直す」（`preprocess-pdf-to-page-images`、18011）は #3347 で、
-取込時の「PIIマスク」（`preprocess-pii-redact`、18016）は #3358 で削除した。
+取込時の「PIIマスク」（`preprocess-pii-redact`、18016）は #3358 で削除した。構造化レコード JSONL の解析エンジン
+（`parser-structured-records-jsonl`、18023）と XML ツリー JSON の解析エンジン（`parser-xml-tree-json`、18021）は #21 で削除した。
 
 backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_URL`）の既定はこの `127.0.0.1:<port>`。
 `backend/.env` に以前の Docker Compose の service 名（`http://parser-docling:8000` など）が残っている場合は `127.0.0.1:<port>` に直す（#356 から読み替えない）。
@@ -105,11 +104,10 @@ backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_
 2. systemd が PID 1 の環境（WSL2 は `/etc/wsl.conf` の `[boot] systemd=true`）では、unit と sudoers を登録する（`rag/` で実行）。
    venv を作り（docling のモデルも取得する）、unit を `/etc/systemd/system/` に、
    画面から操作する unit の `systemctl` / `journalctl` だけを現在のユーザーに許可する sudoers を
-   `/etc/sudoers.d/production-ready-rag-services` に置き、初めて登録した unit を起動する（既定は停止の parser-xml-tree-json は
-   登録だけして起動しない。使うときはサービス管理画面で起動する。#2453）。
+   `/etc/sudoers.d/production-ready-rag-services` に置き、初めて登録した unit を起動する。
 
    ```bash
-   scripts/rag-services.sh install            # 前処理 4 つと既定の CPU parser（docling・structured-records-jsonl・xml-tree-json）
+   scripts/rag-services.sh install            # 前処理 4 つと既定の CPU parser（docling）
    scripts/rag-services.sh install --unstructured  # Unstructured（Docling が扱えない形式を取り込む場合）
    scripts/rag-services.sh status             # unit の状態
    scripts/rag-services.sh render /tmp/units  # 登録せずに unit と sudoers の中身だけ確かめる
@@ -141,7 +139,7 @@ backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_
 |---|---|---|
 | PDF（`.pdf`）・画像（`.png` / `.jpg` / `.jpeg` / `.webp` / `.bmp` / `.gif`） | 解析できる | そのまま「処理を開始」 |
 | Word・PowerPoint（`.docx` / `.pptx`） | 解析できない | 処理レシピの「ファイル準備」で **Office→PDF** を選ぶ（PDF にしてから Docling で解析）か、「文書解析」で **Unstructured** を選ぶ |
-| Excel（`.xlsx`） | 解析できない | 処理レシピの「ファイル準備」で **Excel→JSONL** を選ぶ（文書解析は構造化レコード JSONL）か、「文書解析」で **Unstructured** を選ぶ。**Office→PDF は Excel を変換しない**（#2470） |
+| Excel（`.xlsx`） | 解析できない | 処理レシピの「ファイル準備」で **Excel→JSONL** を選ぶ（成果物の JSONL は Docling のまま読める）か、「文書解析」で **Unstructured** を選ぶ。**Office→PDF は Excel を変換しない**（#2470） |
 | 旧形式・マクロ付きの Office（`.doc` / `.ppt` / `.xls`・`.docm` / `.pptm` / `.xlsm`） | 原本のままでは解析しない | 処理レシピの「ファイル準備」で変換を選ぶ（Word・PowerPoint は **Office→PDF**、Word は **Word→JSONL** も可、Excel は **Excel→JSONL**）。マクロは実行しない（LibreOffice は変換ごとのプロファイルでマクロを無効にし、Excel→JSONL は VBA を読まない）。変換を選ばずに始めると、ファイル準備を飛ばして案内を出す（#2470） |
 | ODT・RTF（`.odt` / `.rtf`） | 原本のままでは解析しない | 処理レシピの「ファイル準備」で **Office→PDF** を選ぶ（PDF にしてから解析する）。Unstructured は原本を読まない（pandoc を入れないため。#3351） |
 | テキスト・Markdown・reStructuredText・Org・CSV / TSV・JSON / JSONL・XML・HTML（`.txt` / `.md` / `.rst` / `.org` / `.csv` / `.tsv` / `.json` / `.jsonl` / `.xml` / `.html` など） | 解析できない | 処理レシピの「文書解析」で **Unstructured** を選ぶ（`.rst` / `.org` はプレーンテキストとして読む。#3351） |
@@ -165,14 +163,10 @@ backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_
   - 開発: `scripts/rag-services.sh install parser-unstructured`（または `--unstructured`）で登録する。
   - サービスが未配備・停止中のときは、止めたときの案内にその旨を添える。
 - 全体の既定を Unstructured にする場合は「取込・検索・回答設定 › 文書解析」で選んで保存する（`RAG_PARSER_ADAPTER_BACKEND=unstructured`）。
-- **XML ツリー JSON**（XML の要素の木を `tag` / `attr` / `children` の JSON にした文書のうち、対応する形のもの。
-  `rag_parser_core.xml_tree_json`）は、Docling・Unstructured と同じ使用エンジンの 1 つ（`parser-xml-tree-json`。
-  `RAG_PARSER_ADAPTER_BACKEND=xml_tree_json`。対応形式は `.json`）。「取込・検索・回答設定 › 文書解析」の既定か、文書の処理レシピの
-  使用エンジンで XML ツリー JSON を選んだときだけ使い、形式を見て自動では回さない（#2042）。Docling のまま `.json` を取り込むと
-  上の表のとおり取込前に止まる。XML ツリー JSON を選んで対応しない形の JSON を渡すと、扱えない旨のエラーで止まる。
-- **構造化レコード JSONL**（ファイル準備の「CSV→JSON」「Excel→JSON」が作る構造化レコードの JSON Lines。
-  `rag_parser_core.structured_records`）も同じ使用エンジンの 1 つ（`parser-structured-records-jsonl`。
-  `RAG_PARSER_ADAPTER_BACKEND=structured_records_jsonl`）。選んだときだけ使い、形式を見て自動では回さない（#2457）。
+- **構造化レコードの JSONL**（ファイル準備の「CSV→JSONL」「Excel→JSONL」「Word→JSONL」が作る JSON Lines。
+  `rag_parser_core.structured_records`。content type `application/vnd.production-ready.structured-records+jsonl`）は、
+  選んだ解析エンジン（Docling・Unstructured）のサービスが外部の parser に渡さず共通の契約で読む（#2457・#21。専用の解析エンジンは
+  削除した）。一般の `.json` / `.jsonl` は構造化レコードとみなさない（上の表のとおり Unstructured で読む）。
   記録を 1 要素にし、検索用テキストの記録と記録の間に独立した行の `<<<JSONL_RECORD_BOUNDARY>>>` を置く（原文の同じ文字列は
   `<<<` + k 個の `\` + `JSONL_RECORD_BOUNDARY>>>` を k+1 個にする可逆のエスケープで区別する）。分割方式「固定分割」
   （`fixed_delimiter`）は、分割符の設定に関係なくこの境界で 1 記録 1 chunk にし（chunk size / overlap で再分割・結合しない）、
@@ -213,14 +207,68 @@ ln -s "${NEW}" "${OLD}"
 readiness の確認は `/api/ready` を使う。`enterprise_ai`、`genai`、`oracle`、`local_storage` の設定グループを確認する（`oci_common`・`object_storage` は #11 で削除）。
 `PLATFORM_ENVIRONMENT=production` では `audit_context_salt` も確認し、`RAG_AUDIT_CONTEXT_HASH_SALT` を必須にする。すべて `ok` のときだけ 200 になり、`missing`、`invalid`、`missing_credentials`、`wallet_not_found` が含まれる場合は 503 になる。
 
+## 既存環境の更新手順（#42 XML ツリー JSON の構造に依存する機能の削除）
+
+#21 で XML ツリー JSON の解析エンジンを削除したのに続き、その構造（条・項・号）と metadata（`xml_tree_*`）に依存する下流の
+機能を削除した。表の変更（migration）は無く、保存済みのデータも消さない（読み捨てる）。
+
+- 回答の「条の目録から根拠の条を選ぶ」段（#2254。範囲の文書の選択・2 段目・選んだ条の検討・process をまたぐ選択の記録 #3507）を
+  削除した。`backend/.env` の `RAG_ARTICLE_CATALOG_*`・`RAG_MCP_CATALOG_ARTICLE_EVIDENCE_LIMIT` は読まない（残っていても害は無いが、
+  消してよい）。選択の記録の置き場所（`PLATFORM_LOCAL_STORAGE_DIR` の下の `cache/rag-article-catalog`、または
+  `RAG_ARTICLE_CATALOG_CACHE_DIR`）が残っていれば消してよい。
+- 「回答生成のプロンプト」の「条の目録から根拠の条を選ぶ」の段と、回答の生成の「選んだ条が支える説明を検討する指示」を外した。
+  編集して保存した内容（`article_catalog.*`・`generation.catalogReview`）が DB に残っていても、表示も回答にも使わない。
+- MCP の `rag_retrieve_evidence` は、目録で選んだ条（`role=catalog_article`）を根拠の後ろに足さなくなった。
+- Agent の組み込みのスキル `article-catalog-lookup`（条の目録から根拠を探す）を削除した。業務 Agent の設定に残った ID は
+  解決できないスキルとして読み飛ばす。
+- 根拠の引用ラベル（`xml_tree_citation_label_arabic`）・画面の「原典を開く」（`xml_tree_source_url`）・回答の本文の出典を引用ラベルにする
+  処理を外した。XML ツリー JSON で取り込んだ文書の根拠は、文書名・ページ・章節（`section_path`）で示す。回答の記録には
+  `xml_tree_*` の key を新しく残さない（記録済みの回答の key はそのまま残るが、画面は読まない）。
+- 言語資源の「XML の文書の種類」（`labels.xml_tree_document_type`）を外した。保存済みの公開版・下書き・上書きに残った値は読み捨てる。
+  言語資源の hash は削除する前と同じ値で計算するので、公開版の照合は通り、取込済みの文書は作り直しにならない。
+
+## 既存環境の更新手順（#21 構造化レコード JSONL・XML ツリー JSON の解析エンジンの削除）
+
+XML / JSON の木を読む解析エンジン（XML ツリー JSON）と、構造化レコードの JSONL 専用の解析エンジン（構造化レコード JSONL）を
+削除した（parser のサービス・設定・画面・サービス管理の行を外した）。残る解析エンジンは Docling（既定）・Unstructured。表の変更
+（migration）は無い。
+
+- ファイル準備の CSV→JSONL・Excel→JSONL・Word→JSONL は残る。その成果物（構造化レコードの JSONL）は、選んだ解析エンジン
+  （Docling・Unstructured）のサービスが外部の parser に渡さず共通の契約（`rag_parser_core.structured_records`）で読む。
+  記録の単位の要素・記録の境界・固定分割の 1 記録 1 chunk は今までどおり。取込の前に「構造化レコード JSONL を選ぶ」案内で
+  止めることも無くなった。処理レシピでファイル準備にこの 3 つを選んでも、解析エンジンは書き換えない（分割の上書きだけを入れる）。
+- `parser-settings.json`・処理レシピ・KB 構築設定・取込ジョブに削除したエンジン（`structured_records_jsonl`・`xml_tree_json`）と
+  その有効化の項目が残っていても、読み込みで既定（全体は Docling、レシピは全体の継承）へ寄せる（次の保存で消える。#22 と同じ仕組み）。
+  `backend/.env` の `RAG_PARSER_ADAPTER_BACKEND` に削除したエンジンを書いていた環境も、起動時に既定の `docling` へ寄せる。
+- `backend/.env` の `RAG_PARSER_STRUCTURED_RECORDS_JSONL_*`・`RAG_PARSER_XML_TREE_JSON_*`・`RAG_XML_TREE_JSON_SOURCE_URL_TEMPLATE` は
+  読まない（残っていても害は無いが、消してよい）。
+- 抽出の ID（`extraction_recipe_id`）の入力の解析エンジン・前処理の成果物の形式の版（`structured_records_v1`）が変わるため、
+  CSV / Excel / Word の前処理で取り込んだ文書は再処理で作り直しになる（再処理まで、それまでの active な chunk_set を検索に使う）。
+- MCP の `rag_read_section` の引数 `citation`（XML ツリー JSON の引用ラベルで読む）と、質問の中の引用ラベルで段落を先頭に置く検索、
+  XML ツリー JSON の段落の親子・参照先の内容を検索の文に足す処理は削除した。
+- 以前の配備で入れた `production-ready-rag-parser-structured-records-jsonl.service`・`production-ready-rag-parser-xml-tree-json.service` は、
+  再配備（`sudo -n ./platform/deploy/suite-update.sh`）で止めて（`disable --now`）消し、sudoers からも外す（`rag_services.txt` に
+  残っていても読み飛ばして書き戻す）。開発は次を実行する。
+
+  ```bash
+  sudo systemctl disable --now production-ready-rag-parser-structured-records-jsonl.service production-ready-rag-parser-xml-tree-json.service
+  sudo rm -f /etc/systemd/system/production-ready-rag-parser-structured-records-jsonl.service \
+    /etc/systemd/system/production-ready-rag-parser-xml-tree-json.service
+  sudo systemctl daemon-reload
+  scripts/rag-services.sh install            # rag/ で実行。sudoers を今の unit だけで作り直す
+  ```
+
+  使っていなかった venv（`services/parsers/structured_records_jsonl/.venv`・`services/parsers/xml_tree_json/.venv`）が残っていれば消してよい。
+- XML ツリー JSON で取り込んだ文書の索引はそのまま検索できる。解析し直すときは、文書の詳細で Unstructured などの使えるエンジンを
+  選んで再処理する。
+
 ## 既存環境の更新手順（#22 MinerU・Dots.OCR・OCI Document Understanding の解析の削除）
 
 外部サービス・OCI に依存する解析エンジン MinerU・Dots.OCR・OCI Document Understanding を削除した
 （client・parser のサービス・設定・画面・ライセンスの確認を外した）。残る解析エンジンは Docling（既定）・
-Unstructured・構造化レコード JSONL・XML ツリー JSON。表の変更（migration）は無い。
+Unstructured（構造化レコード JSONL・XML ツリー JSON は #21 で削除）。表の変更（migration）は無い。
 
-- 使用エンジンの並びは Docling → Unstructured → 構造化レコード JSONL → XML ツリー JSON（処理レシピの
-  選択肢も同じ）。「外部 GPU 解析エンジンの接続」の節と「Dots.OCR の読み取りプロンプト」は無くなった。
+- 使用エンジンの並びは Docling → Unstructured（処理レシピの選択肢も同じ）。「外部 GPU 解析エンジンの接続」の節と「Dots.OCR の読み取りプロンプト」は無くなった。
 - `parser-settings.json`・処理レシピ・取込ジョブに削除したエンジンが残っていても、読み込みで既定
   （全体は Docling、レシピは全体の継承）へ寄せる（次の保存で消える）。
 - `backend/.env` の `RAG_PARSER_MINERU_*` / `RAG_PARSER_DOTS_OCR_*` / `RAG_OCI_DOCUMENT_UNDERSTANDING_*` と
@@ -432,7 +480,8 @@ unit・ディレクトリ・URL の設定も改名した: `preprocess-csv-to-jso
 あわせて次を変えた。
 
 - Docling / Unstructured は構造化レコードの JSONL を受けない。CSV→JSONL・Excel→JSONL と組み合わせると、取込を始める前（と解析の
-  サービス）で「構造化レコード JSONL を選ぶ」診断を出して止める（黙って変換しない）。
+  サービス）で「構造化レコード JSONL を選ぶ」診断を出して止める（黙って変換しない）。（#21 で専用の解析エンジンを削除し、
+  Docling / Unstructured のサービスが共通の契約で読むように変えた。この節の解析エンジンの書き換えは、読み込みで既定へ寄る。）
 - 固定分割符の既定を `\n\n` から `<<<JSONL_RECORD_BOUNDARY>>>` にした（global の初期値・API・画面・プレビュー・実処理）。
   文書レシピも分割符（`chunk_delimiter`）を持てるようになり、画面でファイル準備に CSV→JSONL・Excel→JSONL を選ぶと、解析エンジン
   「構造化レコード JSONL」と分割「固定分割符」・境界のマーカーを見える上書きとして入れる。固定分割以外の方式の chunk_set の ID は変わらない。
@@ -498,33 +547,6 @@ migration は値の書き換えだけで、データを消さない（承認は�
 2. backend・取込 worker を再起動する。
 3. 残っている記録は `SELECT document_id, attempt_count, last_error_type, updated_at FROM rag_document_cleanups` で確かめる
    （`last_error_type` は最後の失敗の例外の型。`attempt_count` が増え続けるときは保存先の権限・到達性を確かめる）。
-
-## 既存環境の更新手順（#2457 構造化レコード JSONL の解析エンジン）
-
-parser のサービス `parser-structured-records-jsonl`（`services/parsers/structured_records_jsonl`、`127.0.0.1:18023`）を足した。
-`rag_parser_core` だけで動く軽いサービスで、CSV / Excel の前処理と同じく既定で配備・起動する。DB の migration は無い。
-新しい設定は `RAG_PARSER_STRUCTURED_RECORDS_JSONL_ENABLED`（既定 `false`。画面で選ぶと有効になる）と
-`RAG_PARSER_STRUCTURED_RECORDS_JSONL_SERVICE_URL`（既定 `http://127.0.0.1:18023`）で、既定のままなら `.env` に書かなくてよい。
-
-1. 本番（OCI Compute）: `sudo platform/deploy/suite-update.sh` で再配備する。`init_script.sh` が必ず配備する parser として
-   `/u01/aipoc/props/rag_services.txt` に足し、venv と unit を作って起動する（`enable --now`）。
-2. 開発: `scripts/rag-services.sh install parser-structured-records-jsonl`（`--cpu` にも含まれる）で登録して起動する。
-3. backend・取込 worker を再起動する。
-4. 使うときは「取込・検索・回答設定 › 文書解析」の既定か、文書の処理レシピの使用エンジンで「構造化レコード JSONL」を選び、ファイル準備を
-   「CSV→JSON」「Excel→JSON」（後の #2457 の段 ③ で「CSV→JSONL」「Excel→JSONL」に改名）、分割方式を「固定分割」にする。既存の文書・レシピの設定は変わらない（Docling / Unstructured で
-   JSONL を受けたときの今の経路も残る）。
-
-## 既存環境の更新手順（#2453 XML ツリー JSON の解析サービスを既定で停止にする）
-
-XML ツリー JSON の解析サービス（`parser-xml-tree-json`）は、文書解析の使用エンジンに選んだときだけ使う（設定の既定
-`RAG_PARSER_XML_TREE_JSON_ENABLED=false`）。統合 stack の配備・`suite-update.sh`・`scripts/rag-services.sh install` は、
-このサービスの venv・unit・sudoers を今どおり作るが、初めて入れるときに `enable` も起動もしない（既定は停止のサービスの一覧は
-[`scripts/rag-systemd.sh`](../scripts/rag-systemd.sh) の `RAG_DEFAULT_STOPPED_SERVICES`）。DB の migration・設定の追加は無い。
-
-1. 新しい環境: 配備の後、「運用設定 › サービス管理 › 文書解析(CPU)」の XML ツリー JSON は「停止中」になる。XML ツリー JSON を
-   使用エンジンに選ぶときは、この画面で「起動」する（`enable --now`。以後の再起動・再配備でも起動のまま）。
-2. 既存の環境: 再配備は今の状態（最後に操作した enable / disable）を保つため、既に起動しているサービスは止めない。使わないなら
-   サービス管理画面で「停止」する（`disable --now`。以後の再配備でも停止のまま）。
 
 ## 既存環境の更新手順（#2450 取り消した migration を当てた DB の文書の分類の列を戻す）
 
@@ -679,27 +701,24 @@ backend と取込 worker を更新して再起動する。旧 `RAG_CHUNKING_SERV
 - **新しい設定**: `RAG_GRAPH_EXPANSION_ENABLED`（既定 `false`。検索方法の画面の「文書構造による検索拡張」が書く）と `RAG_GRAPH_EXPANSION_MAX_CHUNKS`（既定 `6`。1〜20）。どちらも全体設定だけで決め、検索・回答プロファイルでは上書きしない（`RAG_GRAPH_EXPANSION_MAX_CHUNKS` は #3523 から。保存済みのプロファイルの `graph_expansion_max_chunks` は適用せず、次の保存で消える）。
 - **関係情報の無い文書には効かない。** 文書構造索引の構築を「構築しない」で取り込んだ文書は、文書の詳細の処理レシピで「文書構造索引の構築」を「構築する」にして「再処理」するまで、何も足さない。
 
-## 既存環境の更新手順（#2042 XML ツリー JSON を使用エンジンにする・OCI Vision / ASR の parser とファイル準備の 2 つの変換方式の削除）
+## 既存環境の更新手順（#2042 OCI Vision / ASR の parser とファイル準備の 2 つの変換方式の削除）
 
-XML ツリー JSON の解析（`parser-xml-tree-json`）を、形式を見て自動で回す例外から、Docling・Unstructured と同じ使用エンジン
-（`RAG_PARSER_ADAPTER_BACKEND=xml_tree_json`）にした。形式で自動に回すスイッチは削除した。あわせて、OCI Generative AI（Vision）の
-parser（`parser-oci-genai-vision`、18027）と GPU の ASR の parser（`parser-asr`、18026）を削除した（音声の文字起こしは
+OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）と GPU の ASR の parser（`parser-asr`、18026）を削除した（音声の文字起こしは
 その後 backend の OCI AI Speech で行っていたが、#3369 で音声・動画の取込ごと削除した。取込の「図・画像を AI で読み取る」
 （OCI Enterprise AI の VLM）は変わらない）。
 「ファイル準備」の変換方式のうち、スキャン画像の補正（`preprocess-image-enhance`、18015）と URL→Markdown
 （`preprocess-url-to-markdown`、18014）も削除した。保存済みの設定・文書レシピにこの 2 つが残っていても、読み込み時に
-「変換なし」（passthrough）として扱い、次に保存すると消える。
-`parser-xml-tree-json` は統合 stack と `rag-services.sh install` の既定で配備・起動する。DB の migration は無い。
+「変換なし」（passthrough）として扱い、次に保存すると消える。DB の migration は無い。
+（このときに使用エンジンにした XML ツリー JSON の解析は #21 で削除した。）
 
 1. 本番（OCI Compute）: `sudo platform/deploy/suite-update.sh` だけでよい（stack の再適用は要らない）。`rag/init_script.sh` は
-   必ず配備する parser（`parser-docling`・`parser-xml-tree-json`）を、以前の stack が書いた `/u01/aipoc/props/rag_services.txt`
+   必ず配備する parser（`parser-docling`）を、以前の stack が書いた `/u01/aipoc/props/rag_services.txt`
    に無くても足し、提供しなくなったサービス（`parser-oci-genai-vision`・`parser-asr`・`preprocess-image-enhance`・`preprocess-url-to-markdown` など）は読み飛ばして、
-   `rag_services.txt` を今の一覧に書き戻す（所有者と mode は保つ。書けなくても配備は続ける）。初めて入る
-   `production-ready-rag-parser-xml-tree-json.service` は venv と unit を作って起動（`enable --now`）し、削除したサービスの
+   `rag_services.txt` を今の一覧に書き戻す（所有者と mode は保つ。書けなくても配備は続ける）。削除したサービスの
    unit は止めて（`disable --now`）消し、sudoers も今の unit だけで作り直す。`/var/log/rag-init.log` に
    `Adding required RAG service ...`・`Skipping RAG service that is no longer provided: ...`・
    `Removing systemd unit that is no longer deployed: ...` が出る。
-2. 開発: 登録済みの削除したサービスの unit を止めて消し、`scripts/rag-services.sh install` で `parser-xml-tree-json` を登録して
+2. 開発: 登録済みの削除したサービスの unit を止めて消し、`scripts/rag-services.sh install` で
    sudoers を作り直す（`install` は今のサービスの unit しか探さないため、削除したサービスの unit は手で消す）。
 
    ```bash
@@ -710,38 +729,12 @@ parser（`parser-oci-genai-vision`、18027）と GPU の ASR の parser（`parse
      /etc/systemd/system/production-ready-rag-preprocess-image-enhance.service \
      /etc/systemd/system/production-ready-rag-preprocess-url-to-markdown.service
    sudo systemctl daemon-reload
-   scripts/rag-services.sh install            # rag/ で実行。--cpu の既定に parser-xml-tree-json が入る
+   scripts/rag-services.sh install            # rag/ で実行
    ```
 
    使っていなかった venv（`services/parsers/asr/.venv`・`services/parsers/oci_genai_vision/.venv`・
    `services/preprocess/image_enhance/.venv`・`services/preprocess/url_to_markdown/.venv`）が残っていれば消してよい。
-3. backend・取込 worker を再起動する。XML ツリー JSON の文書を取り込むには、「取込・検索・回答設定 › 文書解析」の既定か、文書の
-   処理レシピの使用エンジンで「XML ツリー JSON」を選ぶ。Docling のままの `.json` は取込前に止まる。
-4. 取込済みの文書は今の解析結果のまま（再処理すると、その文書の使用エンジンで解析し直す）。
-
-## 既存環境の更新手順（#2024 XML ツリー JSON の解析エンジン）
-
-> #2042 で、XML ツリー JSON は使用エンジンで選んだときだけ使うように変わった（上の節）。
-
-XML の要素の木を `tag` / `attr` / `children` の JSON にした文書（対応するスキーマのもの）を、要素の階層のまま解析する
-parser のサービス `parser-xml-tree-json`（`services/parsers/xml_tree_json`、`127.0.0.1:18021`）を足した。標準ライブラリの
-`json` だけで動く軽いサービスで、統合 stack は既定で配備する。DB の migration は無い。
-
-1. 本番（OCI Compute）: 新しい release の stack で再配備する（`rag_services` に `parser-xml-tree-json` が入り、`init_script.sh`
-   が venv と unit を作る）。手で入れる場合は `rag/` で `scripts/rag-services.sh install parser-xml-tree-json`。
-2. 開発: `scripts/rag-services.sh install parser-xml-tree-json`（`--cpu` にも含まれる）で登録して起動する。
-3. backend・取込 worker を再起動する（新しい設定 `RAG_PARSER_XML_TREE_JSON_SERVICE_URL`（既定 `http://127.0.0.1:18021`）を読む）。
-4. 取込済みの JSON の文書は今の解析結果のまま。XML ツリー JSON の解析で作り直すには、文書の処理レシピの使用エンジンで
-   XML ツリー JSON を選んで再処理する。
-5. 任意: 引用カードの「原典を開く」を出すには、`RAG_XML_TREE_JSON_SOURCE_URL_TEMPLATE` に `https://…/{document_id}` の
-   形のひな形を書く（空なら出さない）。ひな形は取込（分割）のときに chunk の `xml_tree_source_url` へ入るので、変えたら再処理する。
-
-読み方の要点:
-
-- 番号つきの段落を子、その上の番号つきの単位を親にして分割する（親子階層 small-to-big。構造認識でも段落ごとに分ける）。
-- 各 chunk に引用ラベル（番号の漢数字と算用数字の両方）と、本文 / 附属の区分を metadata（`xml_tree_*`）と検索の文に入れる。
-- MCP の `rag_read_section` は `citation`（引用ラベル。漢数字でも算用数字でもよい）で段落を含む単位を読める。
-- 文書のメタデータ（文書名・文書番号・種類など）は抽出の `fields` になり、検索の絞り込み（`extraction_fields`）に使える。
+3. backend・取込 worker を再起動する。
 
 ## 既存環境の更新手順（#1990 新しい環境の検索の索引を既定の「高精度」の値で作る）
 
@@ -946,7 +939,7 @@ systemd の unit に移した。サービス管理画面は docker compose で�
 | OCI の設定 | named volume `production-ready-rag_oci-config` | `/var/lib/production-ready-rag/.oci/config` |
 | モデル（docling など） | image に焼き込み | `ragsvc` の `~/.cache`（配備時に取得） |
 | サービス管理の操作 | `docker compose up / stop / build / rm` | `systemctl enable --now / disable --now / restart`、`journalctl -u <unit>`（sudoers で許可した unit だけ） |
-| 起動 / 停止の状態 | 再配備で compose_services.txt の service を全部起動 | 最後に操作した状態（enable / disable）を再起動・再配備でも保つ。初めての unit は起動（既定は停止の parser-xml-tree-json を除く。#2453） |
+| 起動 / 停止の状態 | 再配備で compose_services.txt の service を全部起動 | 最後に操作した状態（enable / disable）を再起動・再配備でも保つ。初めての unit は起動 |
 | Terraform | `rag_compose_services` / `rag_enable_parser_docling` / `compose_services.txt` | `rag_services`（Docling は常に配備）/ `rag_services.txt` |
 | 既定の解析エンジン | Unstructured | Docling（`RAG_PARSER_ADAPTER_BACKEND=docling`） |
 
@@ -1708,7 +1701,7 @@ ADB（Oracle Autonomous AI Database）と Wallet も stack が用意し（NL2SQL
 | Python | `uv python install 3.12`（`/opt/uv/python`。`ragsvc` も読める）。各サービスの venv は `uv sync --locked --no-dev --python 3.12` |
 | backend | `production-ready-rag-backend.service`（gunicorn + UvicornWorker、`127.0.0.1:8000`、workers 2、`PLATFORM_ENVIRONMENT=production`、in-process の取込 worker は無効） |
 | 取込 worker | `production-ready-rag-ingestion-worker.service`（`python -m app.rag.ingestion_worker`、`KillMode=mixed`、`RAG_INGESTION_QUEUE_SHUTDOWN_GRACE_SECONDS=60`、`TimeoutStopSec=90`。停止は下の「取込 worker の lease と停止」） |
-| 前処理 / parser | `production-ready-rag-<service>.service`（サービスごとの venv の gunicorn、`127.0.0.1:<port>`）。対象は stack の `rag_services`（前処理 4 つ・parser-docling・parser-structured-records-jsonl・parser-xml-tree-json と、選べば parser-unstructured）。parser-xml-tree-json は既定は停止で、初めて配備しても起動しない（#2453）。GPU の parser は配備しない |
+| 前処理 / parser | `production-ready-rag-<service>.service`（サービスごとの venv の gunicorn、`127.0.0.1:<port>`）。対象は stack の `rag_services`（前処理 4 つ・parser-docling と、選べば parser-unstructured）。GPU の parser は配備しない |
 | frontend | host の Node.js 24 で `platform` と `rag/frontend` を build し、Nginx が `rag/frontend/dist` を配信して `/api/` を backend へ proxy する |
 | upload の上限 | Nginx の `client_max_body_size` は backend の `RAG_MAX_UPLOAD_BYTES`（`backend/.env`。既定 200 MiB）+ 10 MiB（MiB で切り上げ。Refs #306） |
 | 設定 | `platform/.env`（`PLATFORM_*`）と `rag/backend/.env`（`RAG_*`）。どちらも `ragsvc` だけが読める 0600。OCI parser の unit は両方を EnvironmentFile で読む |

@@ -302,44 +302,6 @@ class Settings:
     answer_max_input_tokens: int = 128_000
     # 同時に呼ぶ数（既定 4）。
     section_extraction_concurrency: int = 4
-    # 条の目録から条を選ぶ段（#2254）。融合の候補の上位の条で構成された文書（article_catalog_max_documents 件まで）の
-    # 章節の目録を LLM に文書ごとに 1 回渡して条を選ばせ（文書ごとに article_catalog_max_articles 件まで）、その条の
-    # 根拠を候補に加える。選んだ条は rerank の順に article_catalog_context_records 件まで、context の起点・親の枠の外に
-    # 足す（検索の根拠を減らさない）。目録と chunk を注入した呼び出し元（`AnswerDependencies.article_catalogs` /
-    # `article_chunks`）でだけ動き、条で構成された文書が候補に無ければ LLM を呼ばない。
-    article_catalog_enabled: bool = True
-    # 既定は評価の実測（必要な文書の順位は最大 8・条の 1 段目の位置は最大 6）に余裕を持たせた 2 のべき（#3518）。
-    article_catalog_max_documents: int = 16
-    article_catalog_max_articles: int = 8
-    article_catalog_context_records: int = 6
-    # 検索の範囲の条で構成された文書の一覧から LLM が選ぶ文書の数（候補の文書の外。手続の一般的な規則の文書など）。
-    # 0 は候補の文書だけを読む。一覧を注入した呼び出し元（`AnswerDependencies.article_documents`）でだけ動く。
-    article_catalog_scope_documents: int = 2
-    # 元の質問（注入されたとき）でも 1 回ベクトル検索し、その候補を目録を読む文書の順位に足す（候補・context には足さない）。
-    # 業務 Agent の短い検索文では、事例の論点の文書（政令・手続の規則など）が候補の上位に出ないため。
-    article_catalog_original_question_search: bool = True
-    # 条の選択の LLM の呼び出し 1 回の出力の上限（token）と時間の上限（秒）。選ぶ出力は目録の番号の列で、通常は数百
-    # token・数秒で終わる。まれにモデルが同じ出力を繰り返して回答の上限まで書き続け、1 回で数分かかって段全体を
-    # 待たせるため、役目に合わせて抑え、超えた文書は選ばずに続ける（工程に残す）。0 は抑えない。
-    # 条の選択の 2 段目: 1 段目で選んだ条と同じ章の条と、選んだ条の番号を書き出しで名指しする別の章の条（附則の特例・
-    # 読替えなど。#3517）を合わせて article_catalog_refine_candidates 件まで（名指しの条はその 3 分の 1 まで。#3531）
-    # 本文の書き出しつきで見せ、足りない論点の条を文書ごとに article_catalog_refine_articles 件まで足させる。条の名前が
-    # 質問の語から遠い条（重なったときの扱い・特例など）を拾う。書き出しを注入した呼び出し元
-    # （`AnswerDependencies.article_leads`）でだけ動く。0 は 2 段目を行わない。
-    article_catalog_refine_articles: int = 6
-    article_catalog_refine_candidates: int = 60
-    article_catalog_output_token_cap: int = 8192
-    article_catalog_call_timeout_seconds: float = 180.0
-    # 目録で選んだ条を生成が引かなかったとき、条ごとに原文が支える説明を別の呼び出しで検討させ、その説明の出典に足す
-    # （#3526。`grounded.CATALOG_REVIEW_SYSTEM_PROMPT`）。評価で確かめた説明に根拠の無い条の出典が付いたので既定は無効。
-    # 無効なら検討の呼び出しをしない。
-    article_catalog_review: bool = False
-    # 条の選択と範囲の文書の選択の結果を、process をまたいで時間を区切って使う記録の置き場所・有効期間（秒）・件数の
-    # 上限（#3507）。key は索引の版（chunk_set）・目録の内容・質問・モデル・選択の設定。ディレクトリが無い・有効期間か
-    # 件数が 0 なら process の中の記録だけを使う。選び方は変えない（同じ入力の LLM の結果を使い回すだけ）。
-    article_catalog_cache_dir: Path | None = None
-    article_catalog_cache_ttl_seconds: float = 86400.0
-    article_catalog_cache_max_entries: int = 4096
     # 回答の最終の検証（rag_validate_answer）でモデルに渡す入力の上限（UTF-8 の bytes。指示・質問・回答・根拠を含む）。
     # 根拠は渡された順に収まるだけ渡し、収まらない根拠は検証に使わない（結果の evidence_truncated）。品質評価の
     # 主張の監査の予算（`MAX_EVALUATION_INPUT_BYTES`）とは別。
@@ -493,7 +455,6 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         ENTERPRISE_AI_LLM_PROVIDER,
     )
     runtime_knowledge_raw = env.get("RUNTIME_KNOWLEDGE_PATH", "").strip()
-    cache_dir_raw = env.get("RAG_ENGINE_ARTICLE_CATALOG_CACHE_DIR", "").strip()
     settings = Settings(
         original_query_weighting_enabled=_env_bool(env, "RETRIEVAL_ORIGINAL_QUERY_WEIGHTING", True),
         original_query_only=_env_bool(env, "RETRIEVAL_ORIGINAL_QUERY_ONLY", False),
@@ -588,20 +549,6 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         ),
         answer_max_input_tokens=max(1, _env_int(env, "OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS", 128_000)),
         section_extraction_concurrency=max(1, _env_int(env, "RAG_ENGINE_SECTION_EXTRACTION_CONCURRENCY", 4)),
-        article_catalog_enabled=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG", True),
-        article_catalog_max_documents=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_MAX_DOCUMENTS", 16)),
-        article_catalog_max_articles=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_MAX_ARTICLES", 8)),
-        article_catalog_context_records=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_CONTEXT_RECORDS", 6)),
-        article_catalog_scope_documents=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_SCOPE_DOCUMENTS", 2)),
-        article_catalog_original_question_search=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG_ORIGINAL_QUESTION_SEARCH", True),
-        article_catalog_refine_articles=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_REFINE_ARTICLES", 6)),
-        article_catalog_refine_candidates=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_REFINE_CANDIDATES", 60)),
-        article_catalog_output_token_cap=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_OUTPUT_TOKEN_CAP", 8192)),
-        article_catalog_call_timeout_seconds=max(0.0, _env_float(env, "RAG_ENGINE_ARTICLE_CATALOG_CALL_TIMEOUT_SECONDS", 180.0)),
-        article_catalog_review=_env_bool(env, "RAG_ENGINE_ARTICLE_CATALOG_REVIEW", False),
-        article_catalog_cache_dir=Path(cache_dir_raw).expanduser() if cache_dir_raw else None,
-        article_catalog_cache_ttl_seconds=max(0.0, _env_float(env, "RAG_ENGINE_ARTICLE_CATALOG_CACHE_TTL_SECONDS", 86400.0)),
-        article_catalog_cache_max_entries=max(0, _env_int(env, "RAG_ENGINE_ARTICLE_CATALOG_CACHE_MAX_ENTRIES", 4096)),
         answer_validation_max_input_bytes=max(16_000, _env_int(env, "RAG_ENGINE_ANSWER_VALIDATION_MAX_INPUT_BYTES", 96_000)),
         strategy_reasoning_effort=normalize_reasoning_effort_override(env.get("RAG_ENGINE_STRATEGY_REASONING_EFFORT")),
         judge_reasoning_effort=normalize_reasoning_effort_override(env.get("RAG_ENGINE_JUDGE_REASONING_EFFORT")),

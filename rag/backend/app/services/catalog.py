@@ -131,28 +131,6 @@ SERVICE_CATALOG: tuple[ServiceCatalogEntry, ...] = (
         working_dir="services/parsers/unstructured",
         port=18022,
     ),
-    # 前処理の構造化レコードの JSONL を記録の単位で解析し、検索用テキストを記録の境界で区切る
-    # 解析(#2457)。rag_parser_core だけで動く軽いサービスで、使用エンジンで選んだときに使う。
-    ServiceCatalogEntry(
-        service_id="parser-structured-records-jsonl",
-        category="parser",
-        profile="cpu",
-        url_field="rag_parser_structured_records_jsonl_service_url",
-        label_key="settings.services.item.parserStructuredRecordsJsonl",
-        working_dir="services/parsers/structured_records_jsonl",
-        port=18023,
-    ),
-    # XML ツリー JSON(XML の要素の木の JSON)を要素の階層のまま段落の単位にする
-    # 解析(#2024)。標準ライブラリだけで動く軽いサービスで、使用エンジンで選んだときに使う(#2042)。
-    ServiceCatalogEntry(
-        service_id="parser-xml-tree-json",
-        category="parser",
-        profile="cpu",
-        url_field="rag_parser_xml_tree_json_service_url",
-        label_key="settings.services.item.parserXmlTreeJson",
-        working_dir="services/parsers/xml_tree_json",
-        port=18021,
-    ),
 )
 
 _CATALOG_BY_ID: dict[str, ServiceCatalogEntry] = {

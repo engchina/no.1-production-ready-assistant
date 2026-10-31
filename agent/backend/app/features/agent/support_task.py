@@ -1266,7 +1266,7 @@ def adjusted_search_limits(
 
 
 # 組み込み Runtime が RAG の根拠の取得に決める引数（#2651）。検索文はモデル（業務 Agent）が作り、
-# RAG には質問に応じた推論（言い換え・条の選択など）を重ねさせない（planning=caller）。追跡 ID は
+# RAG には質問に応じた推論（言い換えなど）を重ねさせない（planning=caller）。追跡 ID は
 # Run と呼び出しから決める。どちらもモデルに見せず、渡されても上書きする。
 CALLER_PLANNING = "caller"
 CALLER_PLANNED_ARGUMENTS = ("planning", "request_id")

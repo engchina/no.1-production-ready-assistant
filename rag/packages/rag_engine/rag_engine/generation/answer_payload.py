@@ -24,7 +24,6 @@ from rag_engine.generation.answer_models import (
 )
 from rag_engine.parsing.picture_text import fold_picture_ocr_entries
 from rag_engine.retrieval.context_builder import ContextParentEvidence, record_context_key
-from rag_engine.retrieval.rerank_scores import keeps_original_order
 
 
 def _records_for_prompt_injection_scan(
@@ -391,9 +390,7 @@ def answer_evidence_items(
         item = _answer_record_evidence_item(record, used_ids, usage_order, uses)
         item["children"] = []
         items.append(item)
-    # 条の目録で選んだ条（rerank 最優先の例外。`keeps_original_order`）を含む一覧は元の規則（rerank を使わない）で並べる。
-    original = any(keeps_original_order(record) for record in records)
-    return [item for _, item in sorted(enumerate(items), key=lambda pair: _evidence_item_sort_key(pair, rerank_first=not original))]
+    return [item for _, item in sorted(enumerate(items), key=lambda pair: _evidence_item_sort_key(pair, rerank_first=True))]
 
 
 def _answer_record_evidence_item(

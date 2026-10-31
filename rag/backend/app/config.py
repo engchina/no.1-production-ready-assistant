@@ -109,15 +109,10 @@ ParserAdapterBackend = Literal[
     "local",
     "docling",
     "unstructured",
-    # 前処理の構造化レコードの JSONL を記録の単位で解析し、検索用テキストを記録の境界で区切る
-    # (#2457)。使用エンジンで選んだときだけ使う。
-    "structured_records_jsonl",
-    # XML ツリー JSON(tag / attr / children の木の JSON)を要素の階層のまま解析する(#2024)。
-    # Docling・Unstructured と同じく、使用エンジンで選んだときだけ使う(#2042)。
-    "xml_tree_json",
 ]
 # 削除した文書解析エンジン(#270: Marker / Unlimited-OCR / GLM-OCR、#2042: OCI Generative AI
-# (Vision)、#22: MinerU / Dots.OCR / OCI Document Understanding)。保存済みの設定
+# (Vision)、#22: MinerU / Dots.OCR / OCI Document Understanding、#21: 構造化レコード JSONL /
+# XML ツリー JSON)。保存済みの設定
 # (parser-settings.json・文書レシピ・KB 構築設定・取込ジョブ)に残っていても取込・画面を
 # 壊さないよう、読み込み時に既定エンジンへ寄せる(旧 ``auto`` と同じ扱い)。
 # 旧値は再保存時に消えるため、既存データを書き換える migration は持たない。
@@ -131,6 +126,9 @@ REMOVED_PARSER_ADAPTER_BACKENDS = frozenset(
         "mineru",
         "dots_ocr",
         "oci_document_understanding",
+        # 前処理の構造化レコードの JSONL は Docling・Unstructured のサービスが読む(#21)。
+        "structured_records_jsonl",
+        "xml_tree_json",
     }
 )
 # 既定の文書解析エンジン(#286: Unstructured から Docling へ変更)。Unstructured は明示選択で使える。
@@ -339,8 +337,6 @@ class _PersistedParserAdapterSettings(BaseModel):
     adapter_backend: ParserAdapterBackend = DEFAULT_PARSER_ADAPTER_BACKEND
     docling_enabled: bool = True
     unstructured_enabled: bool = False
-    structured_records_jsonl_enabled: bool = False
-    xml_tree_json_enabled: bool = False
 
     # 削除済みエンジンの項目(marker_enabled・mineru_enabled 等)と、画面から外した
     # docling_vision_enabled(#497。Vision の既定は backend/.env の RAG_VISION_ENABLED で
@@ -888,7 +884,7 @@ class Settings(
         ),
     )
     rag_chunk_delimiter: str = Field(
-        # 既定は構造化レコード JSONL の記録の境界のマーカー(#2457)。
+        # 既定は構造化レコードの JSONL を読んだ抽出の記録の境界のマーカー(#2457)。
         default=JSONL_RECORD_BOUNDARY,
         min_length=1,
         max_length=256,
@@ -1283,149 +1279,6 @@ class Settings(
             "操作画面を LLM で選び、その画面の根拠を検索候補に加える"
             "(LLM の呼び出しが 1 回増える。#554)。"
             "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
-        ),
-    )
-    rag_article_catalog_enabled: bool = Field(
-        default=True,
-        description=(
-            "回答で、検索の候補に出た条で構成された文書(XML ツリー JSON で取り込んだ文書など)の"
-            "条の目録から、質問の根拠になる条を LLM で選び、その条の根拠を候補に加えて context の"
-            "枠を確保する(#2254)。条で構成された文書が候補に無ければ LLM を呼ばない"
-            "(候補にあれば文書ごとに 1 回、並行に呼ぶ)。"
-        ),
-    )
-    rag_article_catalog_max_documents: int = Field(
-        default=16,
-        ge=0,
-        le=32,
-        description=(
-            "条の目録を読む文書の上限(検索の候補の文書の、候補の順位の逆数の合計の大きい順。"
-            "#2254・#2261)。0 は選ばない。既定は評価で必要だった文書の順位(最大 8)に"
-            "余裕を持たせた値(#3518)。文書ごとに LLM を 2 回呼ぶ。"
-        ),
-    )
-    rag_article_catalog_max_articles: int = Field(
-        default=8,
-        ge=0,
-        le=20,
-        description=(
-            "条の目録から 1 つの文書で選ぶ条の上限(#2254)。既定は評価で根拠の条が選ばれた"
-            "位置(最大 6)に余裕を持たせた値(#3518)。"
-        ),
-    )
-    rag_article_catalog_context_records: int = Field(
-        default=6,
-        ge=0,
-        le=10,
-        description=(
-            "条の目録で選んだ条のうち、context に足す数(rerank の順。#2254)。検索の根拠の"
-            "起点・親の枠の外に足し、検索の根拠を減らさない。0 は足さない(候補に加えるだけ)。"
-        ),
-    )
-    rag_article_catalog_scope_documents: int = Field(
-        default=2,
-        ge=0,
-        le=5,
-        description=(
-            "検索の範囲の条で構成された文書の一覧から、LLM が選んで目録を読む文書の数"
-            "(検索の候補に出ない文書。手続の一般的な規則の文書など。#2254)。0 は候補の文書だけ。"
-        ),
-    )
-    rag_article_catalog_original_question_search: bool = Field(
-        default=True,
-        description=(
-            "元の質問(業務 Agent が注入する original_question)でも 1 回ベクトル検索し、"
-            "その候補を条の目録を読む文書の順位に足す(候補・context には足さない)。"
-            "短い検索文で事例の論点の文書が候補に出ないことへの対策。"
-        ),
-    )
-    rag_mcp_catalog_article_evidence_limit: int = Field(
-        default=120,
-        ge=0,
-        le=200,
-        description=(
-            "MCP の rag_retrieve_evidence が evidence_limit の外で末尾に足す、"
-            "条の目録で選んだ条の根拠の数の上限(選んだ順。各文書の条を順に回した順)。"
-            "業務 Agent のモデルの入力を抑える。0 は足さない。"
-        ),
-    )
-    rag_article_catalog_refine_articles: int = Field(
-        default=6,
-        ge=0,
-        le=20,
-        description=(
-            "条の選択の 2 段目で、1 段目で選んだ条と同じ章の条と、選んだ条を書き出しで"
-            "名指しする別の章の条を本文の書き出しつきで見せ、文書ごとに足させる条の数の上限。"
-            "0 は 2 段目を行わない。"
-        ),
-    )
-    rag_article_catalog_review_enabled: bool = Field(
-        default=False,
-        description=(
-            "条の目録で選んだ条を回答の生成が引かなかったとき、条ごとに原文が支える説明を"
-            "別の LLM の呼び出しで検討し、その説明の出典に足す(#3526)。"
-            "足した出典も原文照合と条の出典の監査に掛ける。評価で確かめた説明に根拠の無い条の"
-            "出典が付いたので既定は無効。無効なら検討の呼び出しをしない。"
-        ),
-    )
-    rag_article_catalog_refine_candidates: int = Field(
-        default=60,
-        ge=0,
-        le=200,
-        description=(
-            "条の選択の 2 段目で見せる条の数の上限(書き出しつき。同じ章の条と、選んだ条を名指しする"
-            "別の章の条の合計。同じ章の条に 3 分の 2、名指しの条に 3 分の 1 を割り当てる。"
-            "名指しの条は 3 分の 1 を超えず、名指しの条の余りは同じ章の条が使う)。"
-            "0 は 2 段目を行わない。"
-        ),
-    )
-    rag_article_catalog_output_token_cap: int = Field(
-        default=8192,
-        ge=0,
-        le=32768,
-        description=(
-            "条の選択の LLM の呼び出し 1 回の出力の上限(token)。"
-            "選ぶ出力は目録の番号の列で通常は数百 token。"
-            "同じ出力を繰り返して書き続ける呼び出しを抑え、"
-            "超えた文書は選ばずに続ける。0 は抑えない。"
-        ),
-    )
-    rag_article_catalog_call_timeout_seconds: float = Field(
-        default=180.0,
-        ge=0.0,
-        le=600.0,
-        description=(
-            "条の選択の LLM の呼び出し 1 回の時間の上限(秒)。並行の呼び出しをすべて待つので、"
-            "1 つの遅い呼び出しで段全体が止まらないようにする。"
-            "超えた文書は選ばずに続ける。0 は抑えない。"
-        ),
-    )
-    rag_article_catalog_cache_dir: str = Field(
-        default="",
-        max_length=1024,
-        description=(
-            "条の選択と範囲の文書の選択の結果を、process をまたいで使う記録の置き場所(#3507)。"
-            "空は PLATFORM_LOCAL_STORAGE_DIR の下の cache/rag-article-catalog。"
-            "同じ Compute の backend の worker が同じ場所を読み書きする。"
-        ),
-    )
-    rag_article_catalog_cache_ttl_seconds: int = Field(
-        default=86400,
-        ge=0,
-        le=30 * 86400,
-        description=(
-            "条の選択の記録の有効期間(秒)。key は索引の版(chunk_set)・目録の内容・質問・"
-            "モデル・選択の設定で、同じ入力の LLM の結果だけを使い回す。"
-            "0 は process をまたぐ記録を使わない(process の中の記録だけ)。"
-        ),
-    )
-    rag_article_catalog_cache_max_entries: int = Field(
-        default=4096,
-        ge=0,
-        le=100_000,
-        description=(
-            "条の選択の記録の件数の上限(1 件は文書 1 つの選択か範囲の文書の選択 1 回)。"
-            "超えたら古い記録から消す。0 は process をまたぐ記録を使わない。"
         ),
     )
     rag_answer_validation_max_input_bytes: int = Field(
@@ -2146,7 +1999,7 @@ class Settings(
     rag_preprocess_word_to_jsonl_service_url: str = Field(
         default="http://127.0.0.1:18017",
         description=(
-            "Word(.doc/.docx/.docm)→構造化レコード JSONL 前処理マイクロサービスの base URL(#2457)。"
+            "Word(.doc/.docx/.docm)→構造化レコードの JSONL の前処理サービスの base URL(#2457)。"
         ),
     )
     rag_preprocess_service_timeout_seconds: float = Field(
@@ -2166,8 +2019,8 @@ class Settings(
         default=DEFAULT_PARSER_ADAPTER_BACKEND,
         description=(
             "文書解析 backend の明示選択。既定は Docling(#286)。Unstructured は明示選択で使う。"
-            "Docling/Unstructured/構造化レコード JSONL/XML ツリー JSON は"
-            "対応 parser マイクロサービスへ HTTP 委譲する。"
+            "Docling/Unstructured は対応 parser マイクロサービスへ HTTP 委譲する"
+            "(前処理の構造化レコードの JSONL も同じサービスが読む。#21)。"
             "in-process 解析・local fallback は持たない。"
         ),
     )
@@ -2195,41 +2048,9 @@ class Settings(
             "(画面で Unstructured を選ぶと有効になる)。選択時は parser-unstructured の起動が前提。"
         ),
     )
-    rag_parser_structured_records_jsonl_enabled: bool = Field(
-        default=False,
-        description=(
-            "構造化レコード JSONL adapter を有効化する(#2457)。既定 backend ではないため既定で"
-            " False(画面で構造化レコード JSONL を選ぶと有効になる)。選択時は"
-            " parser-structured-records-jsonl の起動が前提。"
-        ),
-    )
-    rag_parser_xml_tree_json_enabled: bool = Field(
-        default=False,
-        description=(
-            "XML ツリー JSON adapter を有効化する(#2024・#2042)。既定 backend ではないため既定で"
-            " False(画面で XML ツリー JSON を選ぶと有効になる)。選択時は parser-xml-tree-json の"
-            "起動が前提。"
-        ),
-    )
     rag_parser_docling_service_url: str = Field(
         default="http://127.0.0.1:18020",
         description="Docling parser マイクロサービスの base URL。",
-    )
-    rag_xml_tree_json_source_url_template: str = Field(
-        default="",
-        description=(
-            "XML ツリー JSON の文書の原典の URL のひな形(#2024)。``{document_id}`` を文書 ID に"
-            "置き換え、引用カードの「原典を開く」と根拠の metadata(xml_tree_source_url)に使う。"
-            "空なら原典の URL を付けない。"
-        ),
-    )
-    rag_parser_structured_records_jsonl_service_url: str = Field(
-        default="http://127.0.0.1:18023",
-        description="構造化レコード JSONL の parser マイクロサービスの base URL(#2457)。",
-    )
-    rag_parser_xml_tree_json_service_url: str = Field(
-        default="http://127.0.0.1:18021",
-        description="XML ツリー JSON の parser マイクロサービスの base URL(#2024)。",
     )
     rag_parser_unstructured_service_url: str = Field(
         default="http://127.0.0.1:18022",

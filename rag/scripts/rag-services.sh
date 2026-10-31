@@ -13,10 +13,7 @@
 #   scripts/rag-services.sh run <service>     # systemd を使わず前面で起動する（systemd の無い環境向け。Ctrl+C で停止）
 #
 # 対象（省略時は --cpu）:
-#   --cpu   前処理 4 つと既定の CPU parser（parser-docling。PDF と画像）と parser-structured-records-jsonl
-#           （前処理の構造化レコードの JSONL。文書解析の使用エンジンに構造化レコード JSONL を選んだときに使う）と
-#           parser-xml-tree-json（XML ツリー JSON の .json。文書解析の使用エンジンに XML ツリー JSON を選んだときに
-#           使う。install は登録だけして起動しない）
+#   --cpu   前処理 4 つと既定の CPU parser（parser-docling。PDF と画像と、前処理の構造化レコードの JSONL）
 #   --unstructured  parser-unstructured（Docling が扱えないテキスト・Office・メール などを取り込む場合）
 #   --all   すべて
 #   <service_id>  個別に指定（例: parser-docling）
@@ -30,8 +27,7 @@
 #
 # unit は現在のユーザー（sudo で実行したときは SUDO_USER）で動き、backend と同じユーザーの
 # ~/.cache にモデルを置く。起動 / 停止の状態は systemd の enable / disable で保ち、install を
-# 再実行しても最後に操作した状態に戻す（初めて登録する unit は起動する。ただし parser-xml-tree-json など
-# 既定は停止のサービス（rag-systemd.sh の RAG_DEFAULT_STOPPED_SERVICES）は登録だけして、画面の「起動」で起動する）。
+# 再実行しても最後に操作した状態に戻す（初めて登録する unit は起動する）。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,8 +54,6 @@ CPU_SERVICES=(
   preprocess-excel-to-jsonl
   preprocess-word-to-jsonl
   parser-docling
-  parser-structured-records-jsonl
-  parser-xml-tree-json
 )
 UNSTRUCTURED_SERVICES=(parser-unstructured)
 SELECTED=()
@@ -206,9 +200,7 @@ install_services() {
   sudo systemctl daemon-reload
   for service in "${SELECTED[@]}"; do
     unit="$(rag_unit_name "${service}")"
-    if [[ " ${new_units[*]} " == *" ${unit} "* ]] && rag_service_default_stopped "${service}"; then
-      log "${unit}: 既定は停止のサービスなので、登録だけします（サービス管理画面の「起動」で起動します）。"
-    elif [[ " ${new_units[*]} " == *" ${unit} "* ]]; then
+    if [[ " ${new_units[*]} " == *" ${unit} "* ]]; then
       log "${unit}: 初めて登録したので起動します。"
       sudo systemctl enable --now "${unit}"
     elif systemctl is-enabled --quiet "${unit}"; then

@@ -458,7 +458,7 @@ export interface RunHistoryItem {
   status: RunStatus;
   /** 製品に固有の状態の文言（例: waiting →「承認待ち」）。 */
   statusLabel?: string;
-  /** 種類（RAG の「チャット / RAG 検索」、NL2SQL の「チャット / SQL 生成」、Agent の「チャット / API / 自動実行」）。 */
+  /** 種類（RAG の「チャット / RAG 検索」、NL2SQL の「チャット / SQL 生成」、Agent の「チャット / API」）。 */
   kind?: string | null;
   /** 実行者（#1954）。`isSelf` は「自分」と出す。 */
   executor?: { name: string; isSelf?: boolean } | null;

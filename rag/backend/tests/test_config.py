@@ -483,7 +483,6 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
         "RAG_PARSER_ADAPTER_BACKEND",
         "RAG_PARSER_DOCLING_ENABLED",
         "RAG_PARSER_UNSTRUCTURED_ENABLED",
-        "RAG_PARSER_XML_TREE_JSON_ENABLED",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = Settings(_env_file=None)
@@ -492,7 +491,6 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.rag_parser_adapter_backend == "docling"
     assert settings.rag_parser_docling_enabled is True
     assert settings.rag_parser_unstructured_enabled is False
-    assert settings.rag_parser_xml_tree_json_enabled is False
     # auto(旧既定)は既定 docling へ。local_partition は baseline 値 local へ。
     # local は正規化せず baseline 値として残す(runtime は ingestion で既定エンジンへマップ)。
     assert Settings(rag_parser_adapter_backend="auto").rag_parser_adapter_backend == "docling"
@@ -513,7 +511,16 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.parametrize(
     "removed",
-    ["marker", "unlimited_ocr", "glm_ocr", " Marker ", "oci_genai_vision", "enterprise_ai_vlm"],
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        " Marker ",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
 )
 def test_removed_parser_backends_fall_back_to_default(
     monkeypatch: pytest.MonkeyPatch, removed: str
@@ -525,7 +532,16 @@ def test_removed_parser_backends_fall_back_to_default(
 
 
 @pytest.mark.parametrize(
-    "removed", ["marker", "unlimited_ocr", "glm_ocr", "oci_genai_vision", "enterprise_ai_vlm"]
+    "removed",
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
 )
 def test_saved_parser_settings_with_removed_engine_load_as_default(removed: str) -> None:
     """parser-settings.json に削除したエンジン(#270)が残っていても読み込みで既定へ寄せる。"""
@@ -672,7 +688,15 @@ def test_backend_env_example_selects_docling_parser() -> None:
 def test_removed_parser_engine_settings_are_gone() -> None:
     """削除したエンジン(#270)の Settings 項目・環境変数は持たない(旧名は読まない)。"""
     names = settings_env_names(Settings)
-    for engine in ("marker", "unlimited_ocr", "glm_ocr", "genai_vision", "parser_asr_service"):
+    for engine in (
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "genai_vision",
+        "parser_asr_service",
+        "structured_records_jsonl",
+        "xml_tree",
+    ):
         assert not [name for name in names if engine in name], engine
 
 

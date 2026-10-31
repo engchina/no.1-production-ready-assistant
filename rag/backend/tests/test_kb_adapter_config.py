@@ -78,11 +78,7 @@ def test_settings_overrides_uses_allowlist_only() -> None:
 
 def test_external_parser_backend_enables_feature_flag() -> None:
     """外部 parser backend を選ぶと対応 feature flag が有効になる。"""
-    for backend, flag_field in (
-        ("unstructured", "rag_parser_unstructured_enabled"),
-        ("structured_records_jsonl", "rag_parser_structured_records_jsonl_enabled"),
-        ("xml_tree_json", "rag_parser_xml_tree_json_enabled"),
-    ):
+    for backend, flag_field in (("unstructured", "rag_parser_unstructured_enabled"),):
         # グローバル既定が無効でも backend 選択で有効化されることを確かめる。
         settings = get_settings().model_copy(update={flag_field: False})
         config = _config(ingestion={"parser_adapter_backend": backend})
@@ -162,7 +158,16 @@ def test_dump_parse_round_trip() -> None:
 
 
 @pytest.mark.parametrize(
-    "removed", ["marker", "unlimited_ocr", "glm_ocr", "oci_genai_vision", "enterprise_ai_vlm"]
+    "removed",
+    [
+        "marker",
+        "unlimited_ocr",
+        "glm_ocr",
+        "oci_genai_vision",
+        "enterprise_ai_vlm",
+        "structured_records_jsonl",
+        "xml_tree_json",
+    ],
 )
 def test_removed_parser_engine_in_saved_config_inherits_global_default(removed: str) -> None:
     """削除したエンジン(#270)が保存済み KB 構築設定に残っていても壊れず、global 既定を継承する。

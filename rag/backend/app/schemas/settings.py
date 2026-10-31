@@ -89,12 +89,7 @@ from app.config import (
 from app.schemas.document import DocumentProcessingConfig
 from app.schemas.language_pack_release import LanguagePackRelease
 
-ParserAdapterBackendName = Literal[
-    "docling",
-    "unstructured",
-    "structured_records_jsonl",
-    "xml_tree_json",
-]
+ParserAdapterBackendName = Literal["docling", "unstructured"]
 ParserAdapterScoreBackendName = Literal[
     "local",
     "docling",
@@ -345,8 +340,6 @@ class ParserAdapterSettingsUpdate(BaseModel):
     adapter_backend: ParserAdapterBackend | None = None
     docling_enabled: bool | None = None
     unstructured_enabled: bool | None = None
-    structured_records_jsonl_enabled: bool | None = None
-    xml_tree_json_enabled: bool | None = None
     vision_enabled: bool | None = None
     heading_level_inference_enabled: bool | None = None
     field_extraction_enabled: bool | None = None

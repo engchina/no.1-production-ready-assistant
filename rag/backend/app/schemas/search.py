@@ -231,7 +231,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1)
     # 利用者の元の質問(#2261)。呼び出し元(業務 Agent)が検索文 query を短く言い換えたときに渡す。
-    # 条の目録から文書・条を選ぶ段だけが query と合わせて使う(検索そのものは query で行う)。
+    # 回答の要求の単位と検索・回答プロファイルのルールの照合に使う(検索そのものは query で行う)。
     original_question: str | None = Field(default=None, max_length=8000)
     top_k: int = Field(
         default_factory=search_top_k_default,
@@ -253,7 +253,7 @@ class SearchRequest(BaseModel):
     retrieval_only: bool = Field(
         default=False,
         description=(
-            "回答フローを通らずに検索だけを行う(質問拡張・条の選択・回答の生成の LLM を呼ばない)。"
+            "回答フローを通らずに検索だけを行う(質問拡張・回答の生成の LLM を呼ばない)。"
             "KB の検索テストとレシピの検索比較が使う(#593)。"
         ),
     )
@@ -278,7 +278,7 @@ class SearchRequest(BaseModel):
         description=(
             "False なら回答を生成しない(RAG 検索の画面。#649)。根拠を集め終えるまで(質問の理解・"
             "拡張・文書の検索・回答フロー・章節の拡張・要求ごとの根拠の確認)はチャットと同じ工程で、"
-            "同じ LLM(質問拡張・条の選択・CRAG の根拠確認など)を呼ぶ。回答の生成と検査はしない"
+            "同じ LLM(質問拡張・CRAG の根拠確認など)を呼ぶ。回答の生成と検査はしない"
             "(#3506)。"
         ),
     )

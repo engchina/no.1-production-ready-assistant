@@ -121,7 +121,7 @@ test("未ログインで開くとログイン画面へ移り、DB ユーザー�
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "システムにログイン" })).toBeVisible();
   // wordmark は RAG。
-  await expect(page.getByText("Production Ready", { exact: true })).toBeVisible();
+  await expect(page.getByText("Private", { exact: true })).toBeVisible();
   await expect(page.getByText("RAG", { exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "サイドナビゲーション" })).toHaveCount(0);
   await expectNoPageOverflow(page);
