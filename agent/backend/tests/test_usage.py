@@ -275,7 +275,6 @@ def test_usage_api_accepts_browser_offset(name: str) -> None:
 
 def test_omitted_timezone_uses_the_common_setting(monkeypatch: MonkeyPatch) -> None:
     """時間帯を省いたら（API / MCP）、共通の設定の時間帯（#3255）で日を区切る。"""
-    from app.features.agent.automations import AutomationSchedule
     from app.settings import get_settings
 
     assert resolve_timezone("") == ZoneInfo("UTC")  # 既定は UTC（#3274）。
@@ -284,4 +283,3 @@ def test_omitted_timezone_uses_the_common_setting(monkeypatch: MonkeyPatch) -> N
     assert resolve_timezone("  ") == ZoneInfo("Asia/Tokyo")
     # 渡した時間帯は設定より優先する。
     assert resolve_timezone("UTC") == ZoneInfo("UTC")
-    assert AutomationSchedule().timezone == "Asia/Tokyo"

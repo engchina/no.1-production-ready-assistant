@@ -1106,11 +1106,11 @@ export declare const toast: {
   title="データベースに接続できません"
   titleId="database-unavailable-title"
   icon={Unplug}
-  message="データベースが停止しているか、ネットワーク経由で到達できません。データベース設定で起動状態と接続情報を確認してから、再試行してください。"
+  message="データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。"
   details={<p role="status">診断コード: wallet_not_found</p>}
   actions={
     <>
-      <ButtonLink to="/settings/database#adb-management" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
+      <ButtonLink to="/settings/database" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>
       <Button variant="secondary" icon={RefreshCw} onClick={retry}>再試行</Button>
     </>
   }
@@ -2516,7 +2516,7 @@ type SaveErrorBannerProps = {
 | Toast・フォームの下の `FormStatus` と併用しない | 同じ失敗が 2 か所に出ていた（検索・回答プロファイルなど） |
 
 - 単体テストは `packages/ui/tests/save-error-banner.test.tsx`（空のときは描かない・`role="alert"`・失敗と再試行のときだけ画面に入れる）。
-- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット・自動実行）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
+- 使う画面: system-settings（ユーザー・ロール・権限管理）、RAG（検索・回答プロファイル・ナレッジベースのエディタ）、Agent（Agent・Skill・MCP 接続・評価セット）。NL2SQL の業務プロファイルは保存ボタンが確認語の欄と並ぶので、ボタンの直下の `FormStatus`（§3.3）。
 
 ---
 

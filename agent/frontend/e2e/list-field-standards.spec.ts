@@ -89,8 +89,6 @@ const SCREENS: ReadonlyArray<{ name: string; path: string; ready: (page: Page) =
   { name: "runs", path: "/runs", ready: (page) => page.getByTestId("run-list-toolbar") },
   { name: "run-new", path: "/runs?id=new", ready: (page) => page.locator("#run-goal") },
   { name: "approvals", path: "/approvals", ready: (page) => page.getByTestId("approval-list-toolbar") },
-  { name: "automations", path: "/automations", ready: (page) => page.getByRole("heading", { level: 1 }) },
-  { name: "automation-new", path: "/automations?id=new", ready: (page) => page.getByTestId("automation-schedule") },
   { name: "skills", path: "/skills", ready: (page) => page.getByTestId("skill-list-toolbar") },
   { name: "skill-new", path: "/skills?id=new", ready: (page) => page.locator("#skill-mcp-requirements") },
   { name: "tools", path: "/tools", ready: (page) => page.getByTestId("tool-list-toolbar") },

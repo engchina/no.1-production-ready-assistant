@@ -172,6 +172,9 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
     oci_genai_embedding_dim: int = 1536
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
+    # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の接続から）。
+    embedding_base_url: str = ""
+    rerank_base_url: str = ""
     oracle_dsn: str | None = None
     oracle_user: str | None = None
     oracle_password: str | None = None

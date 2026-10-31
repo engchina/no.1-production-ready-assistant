@@ -20,7 +20,7 @@ import {
 } from "../src";
 
 const PHRASE = "RECREATE_DEMO_SYSTEM_TABLES";
-const routes = { databaseSettings: "/settings/database#adb-management", systemTables: "/settings/system-tables" };
+const routes = { databaseSettings: "/settings/database", systemTables: "/settings/system-tables" };
 const api: SystemTablesApi = {
   getSystemTablesStatus: () => new Promise<never>(() => undefined),
   initializeSystemTables: () => new Promise<never>(() => undefined),

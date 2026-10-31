@@ -1,7 +1,6 @@
 """論理要求・SDK開始・キャッシュを混同しない診断の回帰。"""
 
 import asyncio
-import importlib
 import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -16,20 +15,18 @@ from app.config import Settings
 
 
 class Sdk:
+    """OpenAI 互換の API の fake（#8。HTTP は送らない）。"""
+
     def __init__(self) -> None:
         self.calls = 0
         self.fail_once = False
 
-    def embed_text(self, details: object) -> object:
-        raise AssertionError("embedding は呼び出さない")
-
-    def rerank_text(self, details: object) -> object:
+    def __call__(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+        assert url.endswith("/reranks"), "embedding は呼び出さない"
         self.calls += 1
         if self.fail_once and self.calls == 1:
             raise TimeoutError("private error body")
-        return SimpleNamespace(
-            data=SimpleNamespace(document_ranks=[SimpleNamespace(index=0, relevance_score=0.9)])
-        )
+        return {"results": [{"index": 0, "relevance_score": 0.9}]}
 
 
 @pytest.fixture
@@ -49,18 +46,6 @@ def captured(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         )
 
     monkeypatch.setattr("app.clients.oci_genai.observed_span", observe)
-    original_import = importlib.import_module
-    monkeypatch.setattr(
-        "app.clients.oci_genai.importlib.import_module",
-        lambda name, *args: (
-            SimpleNamespace(
-                RerankTextDetails=lambda **kw: SimpleNamespace(**kw),
-                OnDemandServingMode=lambda **kw: SimpleNamespace(**kw),
-            )
-            if name == "oci.generative_ai_inference.models"
-            else original_import(name, *args)
-        ),
-    )
 
     async def no_sleep(seconds: float) -> None:
         pass
@@ -69,17 +54,20 @@ def captured(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return spans
 
 
-def client(sdk: Sdk, *, enabled: bool = True, runner: Any = None) -> OciGenAiClient:
+def client(sdk: Any, *, enabled: bool = True, runner: Any = None) -> OciGenAiClient:
     async def inline(operation: Callable[[], Any]) -> Any:
         return operation()
 
     return OciGenAiClient(
         settings=Settings.model_construct(
-            oci_compartment_id="synthetic",
             oci_genai_rerank_model="synthetic-rerank",
+            embedding_base_url="https://synthetic.invalid/compatible-mode/v1",
+            rerank_base_url="",
+            oci_enterprise_ai_api_key="sk-synthetic",
+            oci_enterprise_ai_timeout_seconds=60,
             rag_rerank_cache_enabled=enabled,
         ),
-        inference_client=sdk,
+        post=sdk,
         sdk_call_runner=runner or inline,
     )
 
@@ -178,10 +166,10 @@ async def test_client_initialization_error_is_not_sdk_start(
 ) -> None:
     adapter = client(Sdk())
 
-    def fail_client() -> Any:
+    def fail_base_url(*, rerank: bool) -> str:
         raise ValueError("private configuration")
 
-    monkeypatch.setattr(adapter, "_client", fail_client)
+    monkeypatch.setattr(adapter, "_base_url", fail_base_url)
     with pytest.raises(ValueError):
         await adapter.rerank("question", ["document"], 1)
     data = receipt(captured)
@@ -193,16 +181,13 @@ async def test_client_initialization_error_is_not_sdk_start(
 async def test_sdk_success_with_invalid_rank_is_logical_error(
     captured: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sdk = Sdk()
-    monkeypatch.setattr(
-        sdk,
-        "rerank_text",
-        lambda details: SimpleNamespace(
-            data=SimpleNamespace(document_ranks=[SimpleNamespace(index=99, relevance_score=0.9)])
-        ),
-    )
+    _ = monkeypatch
+
+    def invalid_rank(url: str, body: dict[str, Any]) -> dict[str, Any]:
+        return {"results": [{"index": 99, "relevance_score": 0.9}]}
+
     with pytest.raises(ValueError):
-        await client(sdk).rerank("question", ["document"], 1)
+        await client(invalid_rank).rerank("question", ["document"], 1)
     data = receipt(captured)
     assert data["status"] == "error" and data["sdk_attempt_count"] == 1
     assert data["sdk_attempts"][0]["status"] == "completed"
@@ -214,14 +199,13 @@ async def test_sdk_success_with_invalid_rank_is_logical_error(
 async def test_sdk_cancellation_records_started_attempt(
     captured: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    sdk = Sdk()
+    _ = monkeypatch
 
-    def cancel(details: object) -> object:
+    def cancel(url: str, body: dict[str, Any]) -> dict[str, Any]:
         raise asyncio.CancelledError
 
-    monkeypatch.setattr(sdk, "rerank_text", cancel)
     with pytest.raises(asyncio.CancelledError):
-        await client(sdk).rerank("question", ["document"], 1)
+        await client(cancel).rerank("question", ["document"], 1)
     data = receipt(captured)
     assert data["status"] == "cancelled" and data["sdk_attempt_count"] == 1
     assert data["sdk_attempts"][0]["status"] == "cancelled"

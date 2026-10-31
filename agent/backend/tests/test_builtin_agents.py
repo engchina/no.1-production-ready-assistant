@@ -52,7 +52,7 @@ def test_new_environment_has_three_builtin_agents() -> None:
         ["structured-data-query"],
     ]
     for agent in agents:
-        # 公開した版があり、利用者がすぐ使える（チャット・自動実行で選べる）。
+        # 公開した版があり、利用者がすぐ使える（チャットで選べる）。
         assert agent.source == "builtin"
         assert agent.published_version == 1
         assert agent.unpublished_changes is False

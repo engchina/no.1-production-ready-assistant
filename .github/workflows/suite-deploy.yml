@@ -8,8 +8,7 @@ name: Suite / Deploy
 #   - Nginx のログの契約・frontend の起動スクリプト（隔離した Nginx）
 #   - OCI Resource Manager の統合 stack（terraform/stack。fmt・validate・zip・契約の検証。#217）
 #   - 1 台の Compute の配備（platform/deploy。suite-init・自作の CA と IP の証明書・Nginx の site。#1316）と、
-#     起動の待ち方・配備全体の確認（suite-health。#1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）・
-#     ADB の自動の起動（suite-adb。#1745）
+#     起動の待ち方・配備全体の確認（suite-health。#1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）
 # 実テナンシーへの配備確認は手動で行う。
 
 on:
@@ -34,7 +33,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # suite-adb.py のテスト（#1745）が、pr_system_settings を lock どおりに入れた一時の venv を作る。release でも
+      # deploy-run-through のテスト（#1768）が、pr_system_settings を lock どおりに入れた一時の venv を作る。release でも
       # 再利用する workflow のため、cache は使わない（cache の汚染を避ける。no-dev の依存だけで十数秒）。
       - name: Set up uv
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -103,7 +102,7 @@ jobs:
         run: |
           bash -n platform/deploy/suite-init.sh platform/deploy/suite-nginx.sh platform/deploy/suite-tls.sh \
             platform/deploy/suite-pull.sh platform/deploy/suite-restart.sh platform/deploy/suite-update.sh \
-            platform/deploy/suite-health.sh platform/deploy/tests/suite-adb.test.sh \
+            platform/deploy/suite-health.sh \
             platform/deploy/tests/deploy-run-through.test.sh .github/scripts/deploy-run-through.sh
           bash platform/deploy/tests/suite-tls.test.sh
           bash platform/deploy/tests/suite-init.test.sh
@@ -113,7 +112,5 @@ jobs:
           bash platform/deploy/tests/suite-ops.test.sh
           # 配備で ADMIN からアプリ用の DB ユーザーを作る script（python-oracledb は stub。#1668）。
           bash platform/deploy/tests/suite-db-user.test.sh
-          # ADB が止まっていれば起動して AVAILABLE を待つ script（OCI SDK は stub。本物の pr_system_settings を通す。#1745）。
-          bash platform/deploy/tests/suite-adb.test.sh
           # 配備の通し（Deploy Nightly）の schema の確認の CLI の判定と、本物の pr_system_settings の要約の形（#1768）。
           bash platform/deploy/tests/deploy-run-through.test.sh

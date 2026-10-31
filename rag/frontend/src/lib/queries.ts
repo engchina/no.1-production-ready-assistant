@@ -188,7 +188,6 @@ export const queryKeys = {
   modelSettings: ["settings", "model"] as const,
   databaseSettings: ["settings", "database"] as const,
   systemTables: SYSTEM_TABLES_QUERY_KEY,
-  adbInfo: ["settings", "database", "adb"] as const,
   huggingfaceSettings: ["settings", "huggingface"] as const,
   uploadStorageSettings: ["settings", "upload-storage"] as const,
   parserAdapterSettings: ["settings", "parser-adapters"] as const,

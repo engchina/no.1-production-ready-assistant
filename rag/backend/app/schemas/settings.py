@@ -5,9 +5,6 @@ from typing import Literal
 
 # OCI 認証の schema は3製品共通（platform の pr_system_settings。#100）。互換のため re-export する。
 # データベース設定の schema は3製品共通（pr_system_settings。#108）。互換のため re-export する。
-from pr_system_settings.database import AdbInfoData as AdbInfoData
-from pr_system_settings.database import AdbOperationStatus as AdbOperationStatus
-from pr_system_settings.database import AdbSettingsUpdate as AdbSettingsUpdate
 from pr_system_settings.database import DatabaseConnectionTestResult as DatabaseConnectionTestResult
 from pr_system_settings.database import DatabaseConnectionTestStatus as DatabaseConnectionTestStatus
 from pr_system_settings.database import DatabaseSettingsData as DatabaseSettingsData

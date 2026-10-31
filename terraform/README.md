@@ -37,7 +37,7 @@
   - `us-chicago-1`: `ocid1.image.oc1.us-chicago-1.aaaaaaaaltnu52rsd7s6p7yepblc6cdq7b7orqkndiwlz2eggv5ja2ltn52a`
   - image を新しくするときは、`schema.yaml`・`variables.tf`・`terraform/scripts/verify_stack_contract.py`（`ORACLE_LINUX_IMAGES`）を同じ PR でそろえます。
   これら以外のリージョンで stack を作ると、`region` の validation で plan が失敗します。
-- 共通 `.env` の `PLATFORM_ORACLE_ADB_REGION` には stack のリージョンが入ります。システム設定 > データベース の「Autonomous Database 管理」のリージョンの選択肢は東京・大阪のみです。Chicago の保存値には非対応の案内が残ります（#3904）。これは画面の案内の制限で、管理 API の失敗を確認したものではありません。
+- 共通 `.env` の `PLATFORM_ORACLE_ADB_REGION` には stack のリージョンが入ります（OCI からの Wallet の取得に使います）。システム設定 > データベース は ADB の起動・停止・状態の取得を扱いません（#10）。
 
 ## フォームの入力順
 
@@ -509,7 +509,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 | スクリプト（`platform/deploy/`） | 実行 | 内容 |
 |---|---|---|
 | `suite-pull.sh` | opc か `sudo` | repository の所有者（opc）で `origin/main` を取得し、`main` を付け替える（clone は depth 1）。追跡ファイルに変更があれば中止し、未追跡のファイルは保つ。取得だけで、build・再起動はしない |
-| `suite-restart.sh` | `sudo` | 最初に ADB が止まっていれば起動して `AVAILABLE` を待つ（下の「ADB の自動の起動」。`--status` を除く。起動できなくても続ける）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・Nginx・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service と Nginx だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
+| `suite-restart.sh` | `sudo` | DB の起動・停止はしない（#10）。既定: 今のコードから build して再配備する（`suite-init.sh` の再実行。依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・systemd・Nginx・再起動）。最後に配備全体を確かめる（下の「配備が正常かの確認」）。`--no-build` は build せずに、有効（enabled）な `production-ready-*` の service と Nginx だけを再起動する。`--status` は再起動せず、確認だけを 1 回行う |
 | `suite-update.sh` | `sudo` | `suite-pull.sh` で取得し、取得した新しい `suite-restart.sh`（既定）を実行する |
 
 - `suite-init.sh` は props（Resource Manager の入力）から、各製品の `backend/.env` を作り直す。
@@ -532,52 +532,9 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
   再起動の回数を出す。service が `failed` になるか再起動を 3 回繰り返したら、すぐに status と journal を出して失敗にする（#1642）。
 - OS の再起動では、enabled の unit（`WantedBy=multi-user.target`）と Nginx が自動で起動する。
   - enabled の unit は、各製品の backend・worker と、起動にした RAG の前処理 / parser。
-  - ADB は Compute の外にあるため、OS の再起動では起動しない。止まっていれば `suite-restart.sh`（`--no-build` でもよい）を
-    実行する（下の「ADB の自動の起動」）か、OCI のコンソールから起動する。
-
-#### ADB の自動の起動（#1745）
-
-`suite-restart.sh`（既定と `--no-build`）と `suite-update.sh` は、DB を使う処理（build の migration・system schema の初期化・
-サービスの起動）の前に、ADB の状態を確かめる（`platform/deploy/suite-adb.py`。製品の backend の venv の Python で、`opc` として実行する）。
-
-- 対象は `platform/.env` の `PLATFORM_ORACLE_ADB_OCID`（stack が書く）、region は `PLATFORM_ORACLE_ADB_REGION`（空なら `PLATFORM_OCI_REGION`）。
-- OCI の呼び出しはシステム設定 › データベース の「起動」と同じ（`pr_system_settings.oci_database`）。認証は `PLATFORM_OCI_AUTH_MODE` で選ぶ。
-  - `config_file`（既定。未設定も同じ）: システム設定 › OCI 認証 で保存する `opc` の `~/.oci/config`（`PLATFORM_OCI_CONFIG_FILE` /
-    `PLATFORM_OCI_CONFIG_PROFILE`）。
-  - `instance_principal`: Compute の instance principal。
-- 状態ごとの振る舞い:
-
-| 状態 | 振る舞い |
-|---|---|
-| `AVAILABLE`（と、DB を開いたままの `AVAILABLE_NEEDS_ATTENTION`・`BACKUP_IN_PROGRESS`・`SCALE_IN_PROGRESS`） | そのまま進む |
-| `STOPPED` | 起動を要求し、`AVAILABLE` を待つ |
-| `STARTING`・`STOPPING`（`STOPPED` になってから起動）・`PROVISIONING`・`RESTARTING`・`UPDATING`・`MAINTENANCE_IN_PROGRESS` など | 待つ |
-| `UNAVAILABLE`・`TERMINATED`・`RESTORE_FAILED`・`INACCESSIBLE`・`STANDBY` など | 起動せず、理由を warning として出して続ける |
-
-- 待つ上限は 600 秒（`SUITE_ADB_START_TIMEOUT_SECONDS`）。15 秒ごとに状態を問い合わせ、状態が変わったときと 60 秒ごとに経過を
-  `/var/log/suite-ops.log` に出す。
-- 確認・起動は best effort（#1756）。使える状態にできないとき（`PLATFORM_ORACLE_ADB_OCID`・OCI の認証の設定が無い、401・404、時間切れ、
-  上の続ける状態）は、`[suite-adb] NG:` の行に理由と起動する方法（画面・OCI のコンソール・`oci db autonomous-database start`）を出し、
-  `[suite-restart] WARNING:` の行を出して、build・再起動をそのまま続ける（DB に接続できなくてもアプリケーションは起動する）。
-  ADB の NG だけでは終了コードを失敗にしない。DB に接続できない間は、各製品の system schema の初期化が warning のまま進み、
-  最後の確認（[配備が正常かの確認](#配備が正常かの確認1642)）が `check: <製品> schema NG` で 0 以外を返す（配備の時点の DB を見た結果）。
-  DB に接続できない間も、構成管理者 `system_admin` はログインできる。`system_admin` で「システム設定 › データベース」から ADB を
-  起動すれば、そのまま DB を使える（`suite-restart.sh` の再実行は要らない。#1762）。認証の値・secret は出さない。
-- `--status` は状態を見るだけで起動しない（結果は確認の終了コードに含めない）。ADB を停止する処理は持たない。
-- OCI の認証を Compute に置かず、ADB を手で起動して運用するときは `SUITE_ADB_AUTOSTART=skip` で確認を飛ばせる
-  （`sudo SUITE_ADB_AUTOSTART=skip .../suite-restart.sh`。飛ばさなくても warning が出るだけで続く）。
-
-要る IAM の権限（状態の取得 `GetAutonomousDatabase` は `AUTONOMOUS_DATABASE_INSPECT`＝`inspect`、起動 `StartAutonomousDatabase` は
-`AUTONOMOUS_DATABASE_UPDATE`＝`use`）。`use autonomous-databases` は `inspect` を含む:
-
-| 認証（`PLATFORM_OCI_AUTH_MODE`） | policy の例 |
-|---|---|
-| `config_file`（API キーのユーザー） | `Allow group <group> to use autonomous-databases in compartment <compartment>` |
-| `instance_principal` | dynamic group（例: `instance.id = '<Compute の OCID>'`）を作り、`Allow dynamic-group <dynamic-group> to use autonomous-databases in compartment <compartment>` |
-
-起動だけを許すときは `use` の代わりに `inspect autonomous-databases` と
-`manage autonomous-databases where request.operation = 'StartAutonomousDatabase'` を付ける。権限が無いと OCI は 404
-（`NotAuthorizedOrNotFound`）を返し、`[suite-adb] NG:` に要る verb を出す。
+  - DB は Compute の外にあるため、OS の再起動では起動しない。配備のスクリプト（`suite-restart.sh`・`suite-update.sh`）と
+    システム設定の画面は DB の起動・停止を扱わない（#10）。止まっていれば OCI のコンソール（ADB Free コンテナなら
+    `docker start <コンテナ名>`）から起動する。
 
 ### 配備が正常かの確認（#1642）
 

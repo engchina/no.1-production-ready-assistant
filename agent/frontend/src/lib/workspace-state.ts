@@ -34,11 +34,11 @@ export const WORKSPACE_FIELDS = {
   // 利用状況の期間と内訳のタブ（#772）。
   usage: ["days", "view"],
   // 一覧のページ番号（#265）。一覧 → エディタ → 一覧の移動と再読込で同じページに戻す。
-  lists: ["skillUpdates", "agents", "runs", "approvals", "tools", "mcpServers", "skills", "evaluationSets", "evaluationResults", "evaluationJobs", "evaluationCompare", "automations", "feedback", "feedbackSignals", "usage"],
+  lists: ["skillUpdates", "agents", "runs", "approvals", "tools", "mcpServers", "skills", "evaluationSets", "evaluationResults", "evaluationJobs", "evaluationCompare", "feedback", "feedbackSignals", "usage"],
   // 一覧の表示件数（10 / 25 / 50 / 100。#1891）。ページ番号と同じ一覧の名前に、監査ログを足す。
-  listPageSize: ["skillUpdates", "agents", "runs", "approvals", "tools", "mcpServers", "skills", "evaluationSets", "evaluationResults", "evaluationJobs", "evaluationCompare", "automations", "feedback", "feedbackSignals", "usage", "audit"],
+  listPageSize: ["skillUpdates", "agents", "runs", "approvals", "tools", "mcpServers", "skills", "evaluationSets", "evaluationResults", "evaluationJobs", "evaluationCompare", "feedback", "feedbackSignals", "usage", "audit"],
   // 一覧の絞り込みの検索語（SearchField が確定した値。#535 / #808）。
-  listSearch: ["agents", "runs", "approvals", "tools", "mcpServers", "skills", "toolPolicy", "automations"],
+  listSearch: ["agents", "runs", "approvals", "tools", "mcpServers", "skills", "toolPolicy"],
   // 一覧の状態の絞り込み（実行履歴の状態・承認の保留中 / 判断済み。#808）と、実行履歴の実行者の絞り込み
   // （すべて / 自分が実行 / 他の人が実行。#1954）と、種類（きっかけ）・期間（#1955）。
   listFilter: ["runs", "runsKind", "runsPeriod", "runsExecutor", "approvals"],

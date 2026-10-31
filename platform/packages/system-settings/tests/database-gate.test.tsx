@@ -24,12 +24,11 @@ const routes = { databaseSettings: "/settings/database", systemTables: "/setting
 const admin = { canManageDatabase: true, canManageSystemTables: true } as const;
 const api: DatabaseStatusApi = { getDatabaseStatus: () => new Promise<never>(() => undefined) };
 
-function snapshot(status: DatabaseStatusData["status"], check = "ok", adbLifecycleState: string | null = null): DatabaseStatusData {
+function snapshot(status: DatabaseStatusData["status"], check = "ok"): DatabaseStatusData {
   return {
     status,
     check,
     detail: status === "unreachable" ? "Oracle connection probe failed (ORA-12514)." : null,
-    adb_lifecycle_state: adbLifecycleState,
   };
 }
 
@@ -100,18 +99,17 @@ describe("databaseGateView（状態ごとの分岐）", () => {
       kind: "notice",
       status: "check_failed",
       reasonCode: null,
-      adbLifecycleState: null,
     });
     expect(databaseGateView({ ...base, data: snapshot("ok") })).toEqual({ kind: "children" });
     expect(databaseGateView({ ...base, data: snapshot("not_configured", "wallet_not_found") })).toEqual({
       kind: "notice",
       status: "not_configured",
       reasonCode: "wallet_not_found",
-      adbLifecycleState: null,
     });
-    expect(databaseGateView({ ...base, data: snapshot("unreachable", "ok", "STOPPED") })).toMatchObject({
+    expect(databaseGateView({ ...base, data: snapshot("unreachable", "ok") })).toEqual({
+      kind: "notice",
       status: "unreachable",
-      adbLifecycleState: "STOPPED",
+      reasonCode: "ok",
     });
     expect(databaseGateView({ ...base, data: snapshot("setup_required", "schema_check_failed") })).toMatchObject({
       status: "setup_required",
@@ -150,24 +148,6 @@ describe("DatabaseGate（表示）", () => {
         data: snapshot("unreachable"),
         title: DATABASE_GATE_MESSAGES["dbGate.unreachable.title"],
         message: DATABASE_GATE_MESSAGES["dbGate.unreachable.message"],
-        href: "/settings/database#adb-management",
-      },
-      {
-        data: snapshot("unreachable", "ok", "STOPPED"),
-        title: DATABASE_GATE_MESSAGES["dbGate.adbStopped.title"],
-        message: DATABASE_GATE_MESSAGES["dbGate.adbStopped.message"],
-        href: "/settings/database#adb-management",
-      },
-      {
-        data: snapshot("unreachable", "ok", "STARTING"),
-        title: DATABASE_GATE_MESSAGES["dbGate.adbStarting.title"],
-        message: DATABASE_GATE_MESSAGES["dbGate.adbStarting.message"],
-        href: "/settings/database#adb-management",
-      },
-      {
-        data: snapshot("unreachable", "ok", "AVAILABLE"),
-        title: DATABASE_GATE_MESSAGES["dbGate.unreachable.title"],
-        message: DATABASE_GATE_MESSAGES["dbGate.adbAvailable.message"],
         href: "/settings/database",
       },
     ];
@@ -192,16 +172,14 @@ describe("DatabaseGate（表示）", () => {
     expect(failed).toMatch(/<button[^>]*type="button"[^>]*>.*再試行/);
   });
 
-  it("接続できないときは ADB の状態を StatusBadge（アイコン付き）で出し、ORA コードは出さない（#320）", () => {
-    const html = renderGate("/profiles", clientWith(snapshot("unreachable", "ok", "STOPPED")), <p>業務画面</p>, admin);
-    expect(html).toContain('data-testid="database-gate-adb-state"');
-    expect(html).toContain("Autonomous Database: 停止済み");
-    expect(html).toContain('data-status-variant="neutral"');
+  it("接続できないときは接続設定と Wallet の確認を案内し、ADB の状態と ORA コードは出さない（#10・#320）", () => {
+    const html = renderGate("/profiles", clientWith(snapshot("unreachable")), <p>業務画面</p>, admin);
+    expect(html).toContain("Wallet を確認");
+    expect(html).not.toContain("Autonomous Database");
+    expect(html).not.toContain("database-gate-adb-state");
+    expect(html).not.toContain("adb-management");
     expect(html).not.toContain("ORA-12514");
     expect(html).not.toContain("診断コード");
-    expect(renderGate("/profiles", clientWith(snapshot("unreachable")), <p>業務画面</p>, admin)).not.toContain(
-      "database-gate-adb-state",
-    );
   });
 
   it("setup_required はシステムテーブルへ案内し、システムテーブルの画面は開ける", () => {
@@ -229,7 +207,6 @@ describe("DatabaseGate（表示）", () => {
     const cases = [
       [snapshot("not_configured", "missing"), "dbGate.notConfigured.contactAdmin"],
       [snapshot("unreachable"), "dbGate.unreachable.contactAdmin"],
-      [snapshot("unreachable", "ok", "STOPPED"), "dbGate.adbStopped.contactAdmin"],
       [snapshot("setup_required", "migration_required"), "dbGate.setupRequired.contactAdmin"],
     ] as const;
     for (const [data, messageKey] of cases) {
@@ -349,7 +326,7 @@ describe("DatabaseUnavailableNotice（banner）", () => {
     expect(html).toContain("データベースに接続できません");
     expect(html).toContain("最新のデータを取得できませんでした。");
     expect(html).toContain("再試行");
-    expect(html).toMatch(/<a[^>]*href="\/settings\/database#adb-management"/);
+    expect(html).toMatch(/<a[^>]*href="\/settings\/database"/);
     expect(html).not.toContain("database-unavailable-title");
   });
 

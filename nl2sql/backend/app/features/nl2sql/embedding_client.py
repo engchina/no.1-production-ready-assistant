@@ -1,14 +1,18 @@
-"""OCI Generative AI embedding client boundary for NL2SQL feedback learning.
+"""埋め込みの呼び出しの境界（feedback の学習で使う vector index 用）。
 
-LLM/VLM は Enterprise AI、embedding は OCI Generative AI という AGENTS.md の
-役割分担を保つため、feedback vector index 用の embedding 呼び出しはここに閉じ込める。
-CI/local は optional import のまま deterministic に動作する。
+LLM/VLM は Enterprise AI、埋め込みは専用の接続という AGENTS.md の役割分担を保つため、
+埋め込みの呼び出しはここに閉じ込める。接続先は OpenAI 互換の API で、既定は Aliyun
+百煉（DashScope）の `text-embedding-v4`（#8）。HTTP を叩くのはこのファイルだけ。
+
+Base URL と API key を空にしたときは Enterprise AI の接続のものを使う（百煉は chat・
+埋め込みが同じ `/compatible-mode/v1` 配下で、key も共通）。CI / local は設定が無ければ
+`is_configured()` が False を返し、deterministic に動く。
 """
 
 from __future__ import annotations
 
-import importlib
-from pathlib import Path
+import json
+import urllib.request
 from typing import Any, Protocol
 
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
@@ -17,7 +21,10 @@ from app.settings import Settings
 
 from .ai_calls import sync_ai_caller
 
-OCI_GENAI_EMBED_BATCH_SIZE = 96
+# 百煉の OpenAI 互換 API は 1 要求 10 件まで。超えると 400 が返る。
+EMBED_BATCH_SIZE = 10
+# Oracle の VECTOR(1536, FLOAT32) と互換にするため 1536 固定。
+EMBED_DIMENSIONS = 1536
 
 
 class EmbeddingClientError(RuntimeError):
@@ -37,164 +44,133 @@ class FeedbackEmbeddingClient(Protocol):
         """Embed texts into 1536-dimensional vectors."""
 
 
-class OciGenAiEmbeddingClient:
-    """OCI Generative AI Cohere Embed v4 client.
-
-    The exact OCI SDK objects are imported lazily to keep tests and local development
-    independent from live OCI credentials.
-    """
+class OpenAiCompatibleEmbeddingClient:
+    """OpenAI 互換の `POST {base_url}/embeddings` を呼ぶ client（#8）。"""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._oci: Any | None = None
-        self._client: Any | None = None
-        # client を作ったときの OCI 認証の設定（#2102）。別の製品・別の worker が OCI 認証を保存し、
-        # `get_settings()` が読み直したら（または OCI config のファイルが書き換わったら）作り直す。
-        self._client_key: tuple[object, ...] | None = None
+
+    def base_url(self) -> str:
+        """埋め込みの Base URL。空なら Enterprise AI の接続の endpoint。"""
+        base = str(getattr(self.settings, "embedding_base_url", "") or "").strip()
+        if not base:
+            base = str(self.settings.oci_enterprise_ai_endpoint or "").strip()
+        return base.rstrip("/")
+
+    def api_key(self) -> str:
+        """埋め込みの API key。Enterprise AI の接続のものを使う。"""
+        return str(self.settings.oci_enterprise_ai_api_key or "").strip()
 
     def is_configured(self) -> bool:
         return bool(
             self.settings.nl2sql_feedback_embedding_enabled
-            and self.settings.oci_region
-            and self.settings.oci_compartment_id
+            and self.base_url()
+            and self.api_key()
             and self.settings.oci_genai_embed_model_id
         )
 
     def module_available(self) -> bool:
-        try:
-            self._load_oci()
-        except EmbeddingClientError:
-            return False
+        """HTTP は標準ライブラリで送るので、追加の SDK は要らない。"""
         return True
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """96 件ずつの要求を上限つきの並行（``NL2SQL_EMBEDDING_CONCURRENCY``。#2004）で送る。
+        """10 件ずつの要求を上限つきの並行（``NL2SQL_EMBEDDING_CONCURRENCY``。#2004）で送る。
 
-        結果は入力の順。429・5xx・接続・時間切れの再試行と全体の待ちは共通の実行器が受け持つ
-        （OCI SDK の再試行は切る）。失敗は ``EmbeddingClientError``（元の例外は ``__cause__``）。
+        結果は入力の順。429・5xx・接続・時間切れの再試行と全体の待ちは共通の実行器が受け持つ。
+        失敗は ``EmbeddingClientError``（元の例外は ``__cause__``）。
         """
         if not texts:
             return []
         if not self.is_configured():
-            raise EmbeddingClientError("OCI GenAI embedding 設定が不足しています。")
-        client = self._get_client()
-        models = self._load_models()
+            raise EmbeddingClientError("埋め込みの設定が不足しています。")
+        url = f"{self.base_url()}/embeddings"
+        key = self.api_key()
+        model = self.settings.oci_genai_embed_model_id
+        timeout = max(1, int(getattr(self.settings, "oci_enterprise_ai_timeout_seconds", 60) or 60))
         batches = [
-            texts[offset : offset + OCI_GENAI_EMBED_BATCH_SIZE]
-            for offset in range(0, len(texts), OCI_GENAI_EMBED_BATCH_SIZE)
+            texts[offset : offset + EMBED_BATCH_SIZE]
+            for offset in range(0, len(texts), EMBED_BATCH_SIZE)
         ]
 
         def embed_batch(batch: list[str], _attempt: Attempt) -> list[list[float]]:
-            details = models.EmbedTextDetails()
-            details.inputs = batch
-            details.compartment_id = self.settings.oci_compartment_id
-            details.serving_mode = models.OnDemandServingMode(
-                model_id=self.settings.oci_genai_embed_model_id
+            payload = _post_json(
+                url,
+                {"model": model, "input": batch, "dimensions": EMBED_DIMENSIONS},
+                key,
+                timeout,
             )
-            if hasattr(details, "truncate"):
-                details.truncate = "END"
-            if hasattr(details, "input_type"):
-                details.input_type = "SEARCH_DOCUMENT"
-            response = client.embed_text(details)
-            embeddings = getattr(response.data, "embeddings", None)
-            if embeddings is None:
-                raise EmbeddingClientError("OCI GenAI embedding 応答に embeddings がありません。")
-            return [[float(value) for value in vector] for vector in embeddings]
+            return _vectors(payload, expected_count=len(batch))
 
         try:
             with sync_ai_caller(self.settings, "embedding") as bridge:
                 outcomes = bridge.map(batches, embed_batch)
         except BoundedCallAborted as exc:
-            raise EmbeddingClientError(f"OCI GenAI embedding に失敗しました: {exc}") from exc
+            raise EmbeddingClientError(f"埋め込みに失敗しました: {exc}") from exc
         vectors: list[list[float]] = []
         for batch, outcome in zip(batches, outcomes, strict=True):
             if outcome.error is not None:
                 cause = outcome.error.__cause__ or outcome.error
                 if isinstance(cause, EmbeddingClientError):
                     raise cause
-                message = f"OCI GenAI embedding に失敗しました: {cause}"
-                raise EmbeddingClientError(message) from cause
+                raise EmbeddingClientError(f"埋め込みに失敗しました: {cause}") from cause
             batch_vectors = outcome.value or []
             if len(batch_vectors) != len(batch):
-                raise EmbeddingClientError("OCI GenAI embedding 応答件数が入力件数と一致しません。")
-            for vector in batch_vectors:
-                if len(vector) != 1536:
-                    raise EmbeddingClientError(
-                        f"embedding 次元が 1536 ではありません: {len(vector)}"
-                    )
+                raise EmbeddingClientError("埋め込みの応答の件数が入力の件数と一致しません。")
             vectors.extend(batch_vectors)
         return vectors
 
-    def _load_oci(self) -> Any:
-        if self._oci is not None:
-            return self._oci
-        try:
-            self._oci = importlib.import_module("oci")
-        except ModuleNotFoundError as exc:
-            raise EmbeddingClientError("OCI SDK がインストールされていません。") from exc
-        return self._oci
 
-    def _load_models(self) -> Any:
-        try:
-            return importlib.import_module("oci.generative_ai_inference.models")
-        except ModuleNotFoundError as exc:
+def _post_json(url: str, body: dict[str, Any], api_key: str, timeout: int) -> dict[str, Any]:
+    """埋め込みの要求を 1 回送る。**HTTP を叩くのはここだけ。**"""
+    request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
+        url,
+        method="POST",
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
+    # HTTPError はそのまま伝播させる。`status` を持つので共通の分類器が種類（429 の
+    # 絞り・403 の権限など）を決め、再試行の可否を判断できる。
+    # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
+    if request.type not in ("http", "https"):
+        raise ValueError(f"URL は http(s) にしてください: {request.type}://…")
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310  # nosec B310
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise EmbeddingClientError("埋め込みの応答が object ではありません。")
+    return payload
+
+
+def _vectors(payload: dict[str, Any], *, expected_count: int) -> list[list[float]]:
+    """応答から入力の順でベクトルを取り出す（`data[].index` が入力の位置）。"""
+    rows = payload.get("data")
+    if not isinstance(rows, list):
+        raise EmbeddingClientError("埋め込みの応答に data がありません。")
+    if len(rows) != expected_count:
+        raise EmbeddingClientError("埋め込みの応答の件数が入力の件数と一致しません。")
+
+    ordered: list[Any] = [None] * expected_count
+    for position, row in enumerate(rows):
+        index = position
+        if isinstance(row, dict):
+            try:
+                index = int(row["index"])
+            except (KeyError, TypeError, ValueError):
+                index = position
+        if not 0 <= index < expected_count or ordered[index] is not None:
+            index = position
+        ordered[index] = row
+
+    vectors: list[list[float]] = []
+    for position, row in enumerate(ordered):
+        raw = row.get("embedding") if isinstance(row, dict) else None
+        if not isinstance(raw, list):
             raise EmbeddingClientError(
-                "OCI Generative AI Inference models が見つかりません。"
-            ) from exc
-
-    def _client_settings_key(self) -> tuple[object, ...]:
-        """client の作り方を決める OCI 認証の設定と、OCI config のファイルの状態。"""
-        settings = self.settings
-        config_file = settings.oci_config_file or str(Path.home() / ".oci" / "config")
-        try:
-            stat = Path(config_file).expanduser().stat()
-            config_state: tuple[int, int] | None = (stat.st_mtime_ns, stat.st_size)
-        except OSError:
-            config_state = None
-        return (
-            settings.oci_auth_mode.strip().lower(),
-            config_file,
-            settings.resolved_oci_config_profile,
-            settings.oci_region,
-            settings.oci_genai_endpoint,
-            config_state,
-        )
-
-    def _get_client(self) -> Any:
-        key = self._client_settings_key()
-        if self._client is not None and self._client_key == key:
-            return self._client
-        oci = self._load_oci()
-        inference = importlib.import_module("oci.generative_ai_inference")
-        endpoint = self.settings.oci_genai_endpoint or (
-            f"https://inference.generativeai.{self.settings.oci_region}.oci.oraclecloud.com"
-        )
-        auth_mode = self.settings.oci_auth_mode.strip().lower()
-        signer = None
-        config: dict[str, Any] = {}
-        if auth_mode == "instance_principal":
-            signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
-        elif auth_mode == "resource_principal":
-            signer = oci.auth.signers.get_resource_principals_signer()
-        else:
-            config_file = self.settings.oci_config_file or str(Path.home() / ".oci" / "config")
-            config = oci.config.from_file(
-                config_file,
-                self.settings.resolved_oci_config_profile,
+                f"埋め込みの応答の #{position + 1} に embedding がありません。"
             )
-        # 再試行は共通の上限つきの並行の実行器が受け持つ（#2004）。SDK の既定の再試行
-        # （DEFAULT_RETRY_STRATEGY）を残すと、全体の待ち・並行の数の調整を通らずに再試行する。
-        client_kwargs: dict[str, Any] = {"config": config, "service_endpoint": endpoint}
-        retry = getattr(oci, "retry", None)
-        if retry is not None:
-            client_kwargs["retry_strategy"] = retry.NoneRetryStrategy()
-        # SDK の既定の circuit breaker も切る。429 が続くと先に開き、
-        # 実行器の知らない例外で失敗する（#2211）。
-        circuit_breaker = getattr(oci, "circuit_breaker", None)
-        if circuit_breaker is not None:
-            client_kwargs["circuit_breaker_strategy"] = circuit_breaker.NoCircuitBreakerStrategy()
-        if signer is not None:
-            client_kwargs["signer"] = signer
-        self._client = inference.GenerativeAiInferenceClient(**client_kwargs)
-        self._client_key = key
-        return self._client
+        vector = [float(value) for value in raw]
+        if len(vector) != EMBED_DIMENSIONS:
+            raise EmbeddingClientError(
+                f"embedding 次元が {EMBED_DIMENSIONS} ではありません: {len(vector)}"
+            )
+        vectors.append(vector)
+    return vectors

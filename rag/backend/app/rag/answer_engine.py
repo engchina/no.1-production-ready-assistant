@@ -583,6 +583,21 @@ def _reasoning_effort_override(value: str) -> str:
     return "" if value == "model" else value
 
 
+def _rerank_base_url_configured(settings: Settings) -> bool:
+    """rag_engine の ``_rerank_configured`` と同じく、再ランクの Base URL が決まるか(#8)。
+
+    ``rerank_base_url`` → ``embedding_base_url`` → Enterprise AI の接続の endpoint の順に見る。
+    """
+    names = (
+        "rerank_base_url",
+        "embedding_base_url",
+        "oci_enterprise_ai_endpoint",
+        "oci_enterprise_ai_secondary_endpoint",
+        "oci_enterprise_ai_tertiary_endpoint",
+    )
+    return any(str(getattr(settings, name, "") or "").strip() for name in names)
+
+
 def build_engine_settings(
     settings: Settings,
     *,
@@ -642,12 +657,15 @@ def build_engine_settings(
         "OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, vision_model)
         ),
-        # rag_engine は rerank_model と oci_compartment_id が両方あるときだけ rerank を実行する
-        # (answer_records._rerank_configured)。rerank 自体は backend の Cohere client を注入して
-        # 呼ぶが、この 2 値を渡さないと RAG_RERANK_ENABLED=true でも
-        # 常に「未実行」になる(#275)。
-        "OCI_COMPARTMENT_ID": settings.oci_compartment_id,
+        # 埋め込みと再ランクは OpenAI 互換の API を呼ぶ(#8)。Base URL を空にすると
+        # rag_engine が LLM の既定の接続の endpoint から組み立てる(百煉は chat・埋め込みが
+        # 同じ /compatible-mode/v1 で、再ランクだけ /compatible-api/v1)。model を渡さないと
+        # RAG_RERANK_ENABLED=true でも常に「未実行」になる(#275)。
+        "EMBEDDING_MODEL": settings.oci_genai_embedding_model,
+        "EMBEDDING_OUTPUT_DIMENSIONS": str(int(settings.oci_genai_embedding_dim)),
+        "EMBEDDING_BASE_URL": settings.embedding_base_url,
         "RERANK_MODEL": settings.oci_genai_rerank_model,
+        "RERANK_BASE_URL": settings.rerank_base_url,
         "RAG_ENGINE_OUTPUT_DIR": str(output_dir),
         "RAG_ENGINE_RETRIEVAL_CANDIDATE_LIMIT": str(settings.rag_retrieval_candidate_limit),
         "RAG_ENGINE_RERANK_CANDIDATE_LIMIT": str(settings.rag_rerank_candidate_limit),
@@ -1326,7 +1344,7 @@ class AnswerEngine:
         LLM(既定のテキストモデル。比較の列ではその列のモデル)は質問の理解・拡張・回答の生成・
         監査のすべてに使う(#3444)。``attached_images`` はそのモデルへ添付した根拠の画像の件数
         (画像を読めないモデル・画像の無い根拠は 0)。
-        rerank は実際に並べたときだけモデル名を出す: 無効・未設定(モデルか compartment が無い。
+        rerank は実際に並べたときだけモデル名を出す: 無効・未設定(モデルか Base URL が無い。#8。
         rag_engine はこのとき rerank を実行しない)なら空。rerank が失敗して取得の順で続けたとき
         (``rerank_failed``)も空にし、rerank で並べたように見せない(失敗は degraded_steps の
         ``rerank`` に出る。#3286)。
@@ -1347,7 +1365,7 @@ class AnswerEngine:
             "rerank": (
                 settings.oci_genai_rerank_model
                 if settings.rag_rerank_enabled
-                and settings.oci_compartment_id.strip()
+                and _rerank_base_url_configured(settings)
                 and not rerank_failed
                 else ""
             ),
