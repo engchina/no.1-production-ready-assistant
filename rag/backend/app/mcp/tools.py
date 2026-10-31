@@ -116,7 +116,6 @@ from app.mcp.profile_scope import (
 )
 from app.rag.answer_engine import (
     ANSWER_VALIDATION_STEP,
-    CATALOG_ARTICLE_ROLE,
     AnswerScope,
     _answer_step_span,
 )
@@ -358,7 +357,7 @@ READ_SOURCE_MAX_CHARS_LIMIT = 20000
 # rag_read_document が 1 回で読む chunk の数の単位と、rag_outline が返す章節の上限（#1332）。
 READ_DOCUMENT_BATCH = 50
 OUTLINE_MAX_SECTIONS = 300
-# rag_outline の compact（条の目録。#2252）の文字数の上限と、本文の書き出しの文字数。
+# rag_outline の compact（章節の目録。#2252）の文字数の上限と、本文の書き出しの文字数。
 OUTLINE_COMPACT_MAX_CHARS = 40000
 OUTLINE_LEAD_CHARS_DEFAULT = 60
 OUTLINE_LEAD_CHARS_MAX = 200
@@ -549,7 +548,7 @@ class SearchInput(BaseModel):
         description=(
             "利用者の元の質問。query を検索用に短く言い換えたときに、言い換える前の全文を渡す"
             "（番号つきの小問は番号のまま）。検索は query で行い、回答は元の質問の要求ごとに"
-            "根拠を確かめて作る。条で構成された文書の根拠の条は query と合わせて選ぶ。"
+            "根拠を確かめて作る。"
         ),
     )
     search_answer_profile_id: OptionalText = Field(
@@ -651,20 +650,20 @@ class RetrieveEvidenceInput(SearchInput):
             "planning=rag は質問文でよい。"
         ),
     )
-    # 回答を作らないので、元の質問は条の選択（とルールの確認）にだけ使う
+    # 回答を作らないので、元の質問はルールと用語の照合にだけ使う
     # （rag_search と説明を分ける。#2665）。
     original_question: OptionalText = Field(
         default=None,
         max_length=8000,
         description=(
-            "利用者の元の質問。query を検索用に短く言い換えたときに渡す。条で構成された文書の"
-            "根拠の条を選ぶときに query と合わせて使う（検索は query で行う）。"
+            "利用者の元の質問。query を検索用に短く言い換えたときに渡す。検索・回答プロファイルの"
+            "ルールと用語の照合に使う（検索は query で行う）。"
         ),
     )
     planning: Literal["rag", "caller"] = Field(
         default="rag",
         description=(
-            "検索文を作る主体。rag=RAG が質問に応じて言い換え・関連の条の選択（AI）を足して"
+            "検索文を作る主体。rag=RAG が質問に応じた言い換え（AI）を足して"
             "検索する。caller=呼び出し元が作った query と queries だけで検索し、RAG は質問に"
             "応じた AI の処理をしない（用語の別名・rerank・前後の文脈の取得は同じ）。"
         ),
@@ -1608,11 +1607,9 @@ class RagEvidence(BaseModel):
     role: str | None = Field(
         default=None,
         description=(
-            "根拠の役割（retrieved_anchor / entity_expansion / catalog_article / parent_context"
-            " など）。entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）"
+            "根拠の役割（retrieved_anchor / entity_expansion / parent_context など）。"
+            "entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）"
             "から実体の表で 1 段だけたどって足した根拠（台帳の行・略号の表など。#1362）。"
-            "catalog_article は、条で構成された文書の条の目録から質問の根拠として選んだ条"
-            "（検索の語と条文の語が違っても選ぶ。#2254）。"
         ),
     )
     score: float | None = None
@@ -2135,9 +2132,7 @@ class RetrieveEvidenceOutput(VersionedOutput):
             "根拠（role=entity_expansion。候補の中の位置の順）を先に、前後の文脈"
             "（neighbor_context など）をその後ろに並べる。実体からたどった根拠（前後の文脈の"
             "役割になったものも含む）と、その同じ親の前後の文脈は、evidence_limit の 3 割まで"
-            "上限の内に入れる。条の目録で選んだ条（role=catalog_article）は evidence_limit に"
-            "数えず、選んだ順に末尾に足す（件数はサーバーの設定で上限がある）。回答は作らないので"
-            " used_in_answer は false。"
+            "上限の内に入れる。回答は作らないので used_in_answer は false。"
         )
     )
     evidence_omitted: int = Field(description="evidence_limit を超えて返さなかった根拠の数。")
@@ -2907,52 +2902,6 @@ def _fit_evidence(
     )
     filled = [_with_text(item, piece) for item, piece in zip(evidence, fitted, strict=True)]
     return filled, sum(1 for piece in fitted if piece.text_omitted)
-
-
-def _is_catalog_article(chunk: RetrievedChunk) -> bool:
-    return _metadata_str(chunk.metadata, "evidence_role") == CATALOG_ARTICLE_ROLE
-
-
-async def _catalog_article_evidence(
-    result: SearchResponse, citations: Sequence[RetrievedChunk], *, limit: int
-) -> list[RetrievedChunk]:
-    """回答の検索が条の目録で選んだ条(#2254)のうち、根拠に無い条の chunk(選んだ順に limit 件まで)。
-
-    選んだ条は回答の診断の ``article_catalog`` にある。検索と同じ見え方の条件で読み、読めない条は
-    足さない。役割は ``catalog_article``。選んだ条の数は検索の設定(文書の数 × 1 文書の条の数)で
-    決まり、全部を足すと業務 Agent のモデルの入力の上限を超えることがあるので、
-    ``rag_mcp_catalog_article_evidence_limit`` 件で切る(選んだ順は各文書の条を順に回した順)。
-    """
-    if limit <= 0:
-        return []
-    catalog = _answer_diagnostics(result).get("article_catalog")
-    articles = catalog.get("articles") if isinstance(catalog, dict) else None
-    if not isinstance(articles, list):
-        return []
-    seen = {chunk.chunk_id for chunk in citations}
-    oracle: OracleClient | None = None
-    added: list[RetrievedChunk] = []
-    for article in sorted(
-        (item for item in articles if isinstance(item, dict)),
-        key=lambda item: int(item.get("order") or 0),
-    ):
-        chunk_id = str(article.get("chunk_id") or "")
-        document_id = str(article.get("document_id") or "")
-        if not chunk_id or not document_id or chunk_id in seen:
-            continue
-        seen.add(chunk_id)
-        oracle = oracle or OracleClient()
-        try:
-            chunk = await oracle.retrievable_chunk(document_id, chunk_id)
-        except Exception:  # noqa: BLE001 - 選んだ条は補助。読めない条は足さない。
-            logger.warning("catalog article load failed", exc_info=True)
-            continue
-        if chunk is not None:
-            metadata = {**chunk.metadata, "evidence_role": CATALOG_ARTICLE_ROLE}
-            added.append(chunk.model_copy(update={"metadata": metadata}))
-            if len(added) >= limit:
-                break
-    return added
 
 
 def _answer_diagnostics(result: SearchResponse) -> dict[str, Any]:
@@ -5029,21 +4978,9 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
         )
         limit = retrieve_evidence_limit(arguments)
         # 検索で当たった chunk を関連度の順に先に、前後の文脈を後ろにしてから切る（#1348）。
-        # 条の目録で選んだ条とそのために足した親の chunk(#2254・#2261)は、上限に数えず後ろに足す
-        # (検索の根拠を減らさない)。
-        hits = [chunk for chunk in result.citations if not _is_catalog_article(chunk)]
-        catalog_limit = get_settings().rag_mcp_catalog_article_evidence_limit
-        catalog = [chunk for chunk in result.citations if _is_catalog_article(chunk)][
-            :catalog_limit
-        ]
+        hits = list(result.citations)
         ordered = mcp_evidence_order(hits, limit)
-        citations = await _with_extraction_recipe_ids(None, [*ordered[:limit], *catalog])
-        citations = [
-            *citations,
-            *await _catalog_article_evidence(
-                result, citations, limit=max(0, catalog_limit - len(catalog))
-            ),
-        ]
+        citations = await _with_extraction_recipe_ids(None, ordered[:limit])
         sections = await _chunk_sections(citations)
         output = RetrieveEvidenceOutput(
             trace_id=result.trace_id,

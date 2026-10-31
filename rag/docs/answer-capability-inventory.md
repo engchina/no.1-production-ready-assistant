@@ -90,12 +90,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | 章節の拡張の判定（CRAG の評価器） | 任意 | 失敗 → 読んだ章節のまま回答へ進む（`grade_error` で止める） | `DX`（`section_expansion` の段の `grade_error`。型の名前だけ） | 見せない | `rag/packages/rag_engine/rag_engine/generation/section_expansion.py::expand_sections` |
 | 章節の子の章節の並べ替え（rerank） | 任意 | 失敗 → 語の重なりで並べる | `DS`（`section_child_rerank`）・`DX`（`ranking: lexical`。rerank が無いときと同じ） | 見せない | `rag/packages/rag_engine/rag_engine/generation/section_expansion.py::_rank_children` |
 | 長い章節の抽出（#1437） | 任意（`RAG_SECTION_EXTRACTION_ENABLED`） | 1 回分の失敗・時間切れ → その分を「回答に未反映の関連章節」の範囲にする（理由 `extraction_error` / 時間の上限） | `DX`（`section_expansion` の読めなかった章節）。分ごとの記録（`parts_unread`）は抽出の trace にだけあり、診断に写していない | 見せない | `rag/packages/rag_engine/rag_engine/generation/section_extraction.py::SectionExtractor._unread` |
-| 条の目録の読み込み（#2254） | 任意（`RAG_ARTICLE_CATALOG_ENABLED`） | 読めない → その文書を飛ばす | `DS`（`article_catalog`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_catalogs` |
-| 条の選択の 1 段目（LLM） | 任意 | 失敗・出力の上限・時間の上限 → その文書の条を選ばない（cache しない） | `ST`（工程「条の選択」の選べなかった文書と理由） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py::_select_catalog_articles`・`rag/packages/rag_engine/rag_engine/retrieval/article_catalog.py::select_articles` |
-| 条の選択の 2 段目（書き出しつき） | 任意 | 書き出しを読めない → 書き出し無し。LLM の失敗 → 1 段目の条で続ける（その結果は cache しない。#3285） | 書き出し: `DS`（`article_lead`）。LLM: `DS`（`article_refine`。rag_engine から `report_degraded`）と `ST`（工程「条の選択」の 2 段目に失敗した文書） | 見せない（1 段目の条） | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_leads`・`rag/packages/rag_engine/rag_engine/generation/answering.py::_select_catalog_articles`・`rag/packages/rag_engine/rag_engine/retrieval/article_catalog.py::refine_articles` |
-| 範囲の条で構成された文書の一覧と選択 | 任意 | 一覧を読めない → 候補の文書だけで続ける。選択の LLM の失敗 → 候補の文書だけで続ける（失敗は cache しない。#3285） | 一覧: `DS`（`article_documents`）。選択: `DS`（`article_document_selection`。rag_engine から `report_degraded`）と `ST`（工程「条の選択」の文言。条を 1 つも選べなければ状態を「条の選択に失敗」にする） | 見せない（候補の文書だけ） | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_documents`・`rag/packages/rag_engine/rag_engine/retrieval/article_catalog.py::select_documents`・`rag/packages/rag_engine/rag_engine/generation/answering.py::_scope_catalog_documents` |
-| 条の根拠の chunk | 任意 | 読めない → その文書の条を足さない | `DS`（`article_chunks`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_chunks` |
-| 条の目録の元の質問の検索（#2261） | 任意 | 失敗 → 元の質問の候補を足さない | `DS`（`article_original_question`） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py::_original_question_children` |
 
 ### 質問の理解・拡張・根拠確認（rag_engine）
 
@@ -157,13 +151,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | `screen_chunks` | 画面の根拠の chunk | `rag/backend/app/rag/answer_engine.py::AnswerEngine._screen_chunks` |
 | `section_outline` | 章節の目録 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._section_outline` |
 | `section_chunks` | 章節の chunk の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._section_chunks` |
-| `article_catalog` | 条の目録の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_catalogs` |
-| `article_lead` | 条の選択の 2 段目の書き出し | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_leads` |
-| `article_documents` | 範囲の条で構成された文書の一覧 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_documents` |
-| `article_document_selection` | 範囲の条で構成された文書の選択の LLM（rag_engine） | `rag/packages/rag_engine/rag_engine/retrieval/article_catalog.py::select_documents` |
-| `article_refine` | 条の選択の 2 段目の LLM（rag_engine） | `rag/packages/rag_engine/rag_engine/retrieval/article_catalog.py::refine_articles` |
-| `article_chunks` | 条の根拠の chunk | `rag/backend/app/rag/answer_engine.py::AnswerEngine._article_chunks` |
-| `article_original_question` | 条の目録の元の質問の検索（rag_engine） | `rag/packages/rag_engine/rag_engine/generation/answering.py::_original_question_children` |
 | `history_rewrite` | 会話の履歴での質問の書き換えの LLM（回答エンジンの前の段） | `rag/backend/app/rag/pipeline.py::_rewrite_query_with_history` |
 | `field_filter` | 抽出項目の条件の読み取り（定義の読み込み・LLM。回答エンジンの前の段） | `rag/backend/app/rag/pipeline.py::_read_field_conditions`・`rag/backend/app/rag/field_filter_reader.py::read_field_conditions` |
 | `chat_attachments` | 会話の添付の読み込み・解析（回答エンジンの前の段） | `rag/backend/app/rag/chat_attachments.py::conversation_toolset`・`attachment_units`・`attachment_evidence` |
@@ -182,7 +169,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 - **必須の能力**（失敗すると回答がエラー・拒否になる）: 有効なときの安全チェック（入力・出力。fail-closed）、質問の embedding、vector 検索、全文検索の SQL、前後の文脈・分類・1 頁目の読み込み、派生の chunk の原文の読み込み、質問の理解（規則）、回答の生成の 1 組目、生成の監査（期限の打ち切りを除く）、承認済み FAQ からの回答。主の検索の失敗は 0 件にせずエラーにする（#3259 のテスト）。
 - **任意の能力**は、上の表のとおり縮退して回答を続ける。縮退した結果を「確かめた」「精密な位置」として見せる経路は、静的確認の範囲では見当たらない。`models.rerank` は rerank が失敗したとき空にした（#3286）。
-- **記録が足りない縮退**: #3286 の表の処理（rerank・追加の検索文の rerank・CRAG の判定・会話の書き換え・抽出項目の条件の読み取り・会話の添付・Sudachi・章節の子の並べ替え・条の目録の元の質問の検索）は `DS` に入れた。条の目録の範囲の文書の選択と 2 段目の失敗は `DS` に数え、cache しない（#3285。#3278 と同じ種類）。例外ではない縮退（書き換えの安全チェックの拒否・抽出項目の条件の読めない出力・呼び出し元の検索文の拒否）は `DS` に入れない。
+- **記録が足りない縮退**: #3286 の表の処理（rerank・追加の検索文の rerank・CRAG の判定・会話の書き換え・抽出項目の条件の読み取り・会話の添付・Sudachi・章節の子の並べ替え）は `DS` に入れた。例外ではない縮退（書き換えの安全チェックの拒否・抽出項目の条件の読めない出力・呼び出し元の検索文の拒否）は `DS` に入れない。
 - **診断に例外の文が残る経路**: 要求ごとの根拠の探し直しと、用語・同義語と回答ルールの読み込みは、例外の型の名前だけにした（#3284）。
 - **呼び出し元が判断できない点**: MCP の応答は `DS`（種類と回数）・`ZE`（段と件数）・`GD` を出す（#3262・#3546）。表の行・列の対応の検査が根拠を読めるかは根拠の `table_binding` に出すが、回答の中で検査が段落を外した・直したかは `rag_validate_answer` の claims（`support_check`）だけにある。
 

@@ -207,6 +207,26 @@ ln -s "${NEW}" "${OLD}"
 readiness の確認は `/api/ready` を使う。`oci_common`、`enterprise_ai`、`genai`、`oracle`、`object_storage` の設定グループを確認する。
 `PLATFORM_ENVIRONMENT=production` では `audit_context_salt` も確認し、`RAG_AUDIT_CONTEXT_HASH_SALT` を必須にする。すべて `ok` のときだけ 200 になり、`missing`、`invalid`、`missing_credentials`、`wallet_not_found` が含まれる場合は 503 になる。
 
+## 既存環境の更新手順（#42 XML ツリー JSON の構造に依存する機能の削除）
+
+#21 で XML ツリー JSON の解析エンジンを削除したのに続き、その構造（条・項・号）と metadata（`xml_tree_*`）に依存する下流の
+機能を削除した。表の変更（migration）は無く、保存済みのデータも消さない（読み捨てる）。
+
+- 回答の「条の目録から根拠の条を選ぶ」段（#2254。範囲の文書の選択・2 段目・選んだ条の検討・process をまたぐ選択の記録 #3507）を
+  削除した。`backend/.env` の `RAG_ARTICLE_CATALOG_*`・`RAG_MCP_CATALOG_ARTICLE_EVIDENCE_LIMIT` は読まない（残っていても害は無いが、
+  消してよい）。選択の記録の置き場所（`PLATFORM_LOCAL_STORAGE_DIR` の下の `cache/rag-article-catalog`、または
+  `RAG_ARTICLE_CATALOG_CACHE_DIR`）が残っていれば消してよい。
+- 「回答生成のプロンプト」の「条の目録から根拠の条を選ぶ」の段と、回答の生成の「選んだ条が支える説明を検討する指示」を外した。
+  編集して保存した内容（`article_catalog.*`・`generation.catalogReview`）が DB に残っていても、表示も回答にも使わない。
+- MCP の `rag_retrieve_evidence` は、目録で選んだ条（`role=catalog_article`）を根拠の後ろに足さなくなった。
+- Agent の組み込みのスキル `article-catalog-lookup`（条の目録から根拠を探す）を削除した。業務 Agent の設定に残った ID は
+  解決できないスキルとして読み飛ばす。
+- 根拠の引用ラベル（`xml_tree_citation_label_arabic`）・画面の「原典を開く」（`xml_tree_source_url`）・回答の本文の出典を引用ラベルにする
+  処理を外した。XML ツリー JSON で取り込んだ文書の根拠は、文書名・ページ・章節（`section_path`）で示す。回答の記録には
+  `xml_tree_*` の key を新しく残さない（記録済みの回答の key はそのまま残るが、画面は読まない）。
+- 言語資源の「XML の文書の種類」（`labels.xml_tree_document_type`）を外した。保存済みの公開版・下書き・上書きに残った値は読み捨てる。
+  言語資源の hash は削除する前と同じ値で計算するので、公開版の照合は通り、取込済みの文書は作り直しにならない。
+
 ## 既存環境の更新手順（#21 構造化レコード JSONL・XML ツリー JSON の解析エンジンの削除）
 
 XML / JSON の木を読む解析エンジン（XML ツリー JSON）と、構造化レコードの JSONL 専用の解析エンジン（構造化レコード JSONL）を

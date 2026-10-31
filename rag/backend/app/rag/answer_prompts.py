@@ -183,18 +183,6 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
         (("system", "rag_engine.retrieval.screen_catalog:LINK_SYSTEM_PROMPT"),),
     ),
     PromptStage(
-        "article_catalog",
-        "retrieval",
-        (
-            (
-                "documentSystem",
-                "rag_engine.retrieval.article_catalog:ARTICLE_DOCUMENT_SELECTION_SYSTEM_PROMPT",
-            ),
-            ("system", "rag_engine.retrieval.article_catalog:ARTICLE_SELECTION_SYSTEM_PROMPT"),
-            ("refineSystem", "rag_engine.retrieval.article_catalog:ARTICLE_REFINE_SYSTEM_PROMPT"),
-        ),
-    ),
-    PromptStage(
         "crag",
         "grounding",
         (
@@ -224,8 +212,6 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
                 "citationRepair",
                 "rag_engine.generation.citation_range_repair:CITATION_RANGE_REPAIR_SYSTEM_PROMPT",
             ),
-            # 目録で選んだ条を生成が引かなかったときだけ、支える説明を検討する（#3526）。
-            ("catalogReview", "rag_engine.generation.grounded:CATALOG_REVIEW_SYSTEM_PROMPT"),
         ),
     ),
     PromptStage(

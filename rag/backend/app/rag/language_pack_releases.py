@@ -6,6 +6,7 @@ from contextvars import ContextVar
 
 from rag_parser_core.language import (
     FIELD_SPECS,
+    REMOVED_FIELDS,
     LanguagePack,
     bind_pack,
     build_pack,
@@ -104,7 +105,8 @@ def compare_releases(
         old = before.effective.get(section, {})
         new = after.effective.get(section, {})
         for key in sorted(set(old) | set(new)):
-            if old.get(key) == new.get(key):
+            # 削除した項目（#42）は読み捨てる（旧版に残っていても差にしない）。
+            if old.get(key) == new.get(key) or (section, key) in REMOVED_FIELDS:
                 continue
             spec = specs.get((section, key))
             unknown = unknown or spec is None

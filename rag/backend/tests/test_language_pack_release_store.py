@@ -6,7 +6,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 import pytest
-from rag_parser_core.language import builtin_pack
+from rag_parser_core.language import REMOVED_FIELDS, builtin_pack
 
 from app.clients.language_pack_release_store import (
     LanguagePackReleaseConflict,
@@ -113,6 +113,9 @@ def legacy_release_row(mask: int = 63) -> dict[str, object]:
     """旧形式の項目集合から独立に元の保存 hash を計算する。"""
     row = release_row()
     effective = builtin_pack().to_dict()
+    # 削除した項目（#42）も、旧形式の公開版には残っている。
+    for (section, key), value in REMOVED_FIELDS.items():
+        effective[section][key] = value
     effective["answer_labels"]["cause_gap"] = "合成の保存済み文言"
     effective["answer_labels"]["crag_quote_only_note"] = "合成の保存済み注記"
     for index, key in enumerate(_COMPAT_KEYS):

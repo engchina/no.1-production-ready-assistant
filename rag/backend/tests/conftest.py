@@ -178,12 +178,6 @@ def isolated_local_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         get_settings(), "rag_service_runtime_env_file", str(tmp_path / "service-runtime.env")
     )
-    # 条の選択の process をまたぐ記録（#3507）は、テストの間で共有しない
-    # （手元の保存先にも書かない）。
-    # 記録を確かめるテストは置き場所を tmp に差し替え直す。
-    from app.rag import answer_engine
-
-    monkeypatch.setattr(answer_engine, "article_catalog_cache_dir", lambda _settings: None)
 
 
 async def _systemd_unavailable(argv: list[str], timeout: float) -> object:

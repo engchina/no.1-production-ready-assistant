@@ -858,35 +858,6 @@ class OracleClient:
         )
         return _int_value((row or {}).get("document_count"))
 
-    async def retrieval_article_documents(self, filters: dict[str, str]) -> list[tuple[str, str]]:
-        """検索と同じ条件の、条で構成された文書(chunk が XML ツリー JSON の引用ラベルを持つ)の
-        (document_id, 文書名) を文書名の順に返す(#2254)。
-
-        文書名は XML ツリー JSON の文書の題名(``xml_tree_document_title``)、無ければファイル名。
-        """
-        where_sql, binds = _oracle_retrieval_where(filters)
-        rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT d.document_id, d.file_name,
-                   MAX(JSON_VALUE(c.metadata_json, '$.xml_tree_document_title')) AS title
-            FROM rag_chunks c
-            JOIN rag_documents d ON d.document_id = c.document_id
-            WHERE {where_sql}
-              AND JSON_EXISTS(c.metadata_json, '$.xml_tree_label_arabic')
-            GROUP BY d.document_id, d.file_name
-            ORDER BY d.file_name
-            """,
-                where_sql=where_sql,
-            ),
-            binds,
-        )
-        return [
-            (str(row["document_id"]), str(row.get("title") or row["file_name"]))
-            for row in rows
-            if row.get("document_id") and row.get("file_name")
-        ]
-
     async def retrieval_screen_sections(
         self, filters: dict[str, str]
     ) -> list[tuple[str, str, int]]:

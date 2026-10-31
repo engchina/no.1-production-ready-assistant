@@ -2958,7 +2958,7 @@
               }
             ],
             "default": null,
-            "description": "利用者の元の質問。query を検索用に短く言い換えたときに渡す。条で構成された文書の根拠の条を選ぶときに query と合わせて使う（検索は query で行う）。",
+            "description": "利用者の元の質問。query を検索用に短く言い換えたときに渡す。検索・回答プロファイルのルールと用語の照合に使う（検索は query で行う）。",
             "title": "Original Question"
           },
           "search_answer_profile_id": {
@@ -3038,7 +3038,7 @@
           },
           "planning": {
             "default": "rag",
-            "description": "検索文を作る主体。rag=RAG が質問に応じて言い換え・関連の条の選択（AI）を足して検索する。caller=呼び出し元が作った query と queries だけで検索し、RAG は質問に応じた AI の処理をしない（用語の別名・rerank・前後の文脈の取得は同じ）。",
+            "description": "検索文を作る主体。rag=RAG が質問に応じた言い換え（AI）を足して検索する。caller=呼び出し元が作った query と queries だけで検索し、RAG は質問に応じた AI の処理をしない（用語の別名・rerank・前後の文脈の取得は同じ）。",
             "enum": [
               "rag",
               "caller"
@@ -4099,7 +4099,7 @@
                   }
                 ],
                 "default": null,
-                "description": "根拠の役割（retrieved_anchor / entity_expansion / catalog_article / parent_context など）。entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）から実体の表で 1 段だけたどって足した根拠（台帳の行・略号の表など。#1362）。catalog_article は、条で構成された文書の条の目録から質問の根拠として選んだ条（検索の語と条文の語が違っても選ぶ。#2254）。",
+                "description": "根拠の役割（retrieved_anchor / entity_expansion / parent_context など）。entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）から実体の表で 1 段だけたどって足した根拠（台帳の行・略号の表など。#1362）。",
                 "title": "Role"
               },
               "score": {
@@ -4311,7 +4311,7 @@
             "description": "根拠が 0 件のとき、0 件になった段と件数（根拠があれば null）。degraded_steps が空でなければ、補助の処理の失敗で候補を読めなかった可能性があり、資料に記載が無いとは限らない。"
           },
           "evidence": {
-            "description": "検索で当たった根拠（role=retrieved_anchor。関連度＝rerank の順）と、実体からたどった根拠（role=entity_expansion。候補の中の位置の順）を先に、前後の文脈（neighbor_context など）をその後ろに並べる。実体からたどった根拠（前後の文脈の役割になったものも含む）と、その同じ親の前後の文脈は、evidence_limit の 3 割まで上限の内に入れる。条の目録で選んだ条（role=catalog_article）は evidence_limit に数えず、選んだ順に末尾に足す（件数はサーバーの設定で上限がある）。回答は作らないので used_in_answer は false。",
+            "description": "検索で当たった根拠（role=retrieved_anchor。関連度＝rerank の順）と、実体からたどった根拠（role=entity_expansion。候補の中の位置の順）を先に、前後の文脈（neighbor_context など）をその後ろに並べる。実体からたどった根拠（前後の文脈の役割になったものも含む）と、その同じ親の前後の文脈は、evidence_limit の 3 割まで上限の内に入れる。回答は作らないので used_in_answer は false。",
             "items": {
               "$ref": "#/$defs/RagEvidence"
             },
@@ -4429,7 +4429,7 @@
               }
             ],
             "default": null,
-            "description": "利用者の元の質問。query を検索用に短く言い換えたときに、言い換える前の全文を渡す（番号つきの小問は番号のまま）。検索は query で行い、回答は元の質問の要求ごとに根拠を確かめて作る。条で構成された文書の根拠の条は query と合わせて選ぶ。",
+            "description": "利用者の元の質問。query を検索用に短く言い換えたときに、言い換える前の全文を渡す（番号つきの小問は番号のまま）。検索は query で行い、回答は元の質問の要求ごとに根拠を確かめて作る。",
             "title": "Original Question"
           },
           "search_answer_profile_id": {
@@ -5655,7 +5655,7 @@
                   }
                 ],
                 "default": null,
-                "description": "根拠の役割（retrieved_anchor / entity_expansion / catalog_article / parent_context など）。entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）から実体の表で 1 段だけたどって足した根拠（台帳の行・略号の表など。#1362）。catalog_article は、条で構成された文書の条の目録から質問の根拠として選んだ条（検索の語と条文の語が違っても選ぶ。#2254）。",
+                "description": "根拠の役割（retrieved_anchor / entity_expansion / parent_context など）。entity_expansion は、質問・検索の上位の根拠の実体（システム・部署の略号など）から実体の表で 1 段だけたどって足した根拠（台帳の行・略号の表など。#1362）。",
                 "title": "Role"
               },
               "score": {

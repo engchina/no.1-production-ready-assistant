@@ -3576,7 +3576,7 @@ async def test_original_question_keeps_numbered_requests_through_coverage(
             "Q2",
             "Q3",
         }
-    # 主の検索は言い換えた検索文で行う(元の質問の全文の検索は、条の目録の候補の補いだけ)。
+    # 主の検索は言い換えた検索文で行う。
     assert oracle.queries[0] == query
     # 回答の要求(rag_search の requests。回答の検査の入力)も元の質問の 3 要求(充足は監査が決める)。
     requests = outcome.diagnostics["envelope"]["requests"]

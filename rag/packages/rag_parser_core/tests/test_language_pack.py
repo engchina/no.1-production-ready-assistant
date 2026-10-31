@@ -9,6 +9,7 @@ import pytest
 
 from rag_parser_core.language import (
     FIELD_SPECS,
+    REMOVED_FIELDS,
     LanguagePackError,
     bind_pack,
     build_pack,
@@ -18,6 +19,7 @@ from rag_parser_core.language import (
     pack_from_payload,
     resolve,
     set_default_pack,
+    stored_pack_hash,
 )
 
 
@@ -392,3 +394,16 @@ def test_invalid_abstention_labels_are_not_defaulted(key: str, value: object) ->
     raw["answer_labels"][key] = value
     with pytest.raises(LanguagePackError):
         build_pack(raw)
+
+
+def test_removed_xml_tree_label_is_dropped_without_changing_hashes() -> None:
+    """削除した XML ツリーの文書の種類（#42）は、保存済みの版に残っても読み捨てる。"""
+    pack = builtin_pack()
+    legacy = pack.to_dict()
+    legacy["labels"] = {**legacy["labels"], "xml_tree_document_type": "XML ツリー"}
+    loaded = build_pack(legacy)
+    assert ("labels", "xml_tree_document_type") in REMOVED_FIELDS
+    assert "xml_tree_document_type" not in loaded.sections["labels"]
+    assert (loaded.hash, loaded.ingest_hash) == (pack.hash, pack.ingest_hash)
+    assert stored_pack_hash(legacy, loaded) == pack.hash
+    assert resolve(pack, {"labels": {"xml_tree_document_type": "別の名前"}}).hash == pack.hash
