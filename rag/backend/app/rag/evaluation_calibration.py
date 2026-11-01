@@ -78,6 +78,7 @@ from app.rag.answer_judge_calibration import (
     calibrate_evaluations,
     judge_prompt_sha256,
     judge_provenance,
+    judge_rubric_version,
 )
 from app.rag.request_context import current_audit_request_context
 
@@ -992,15 +993,6 @@ _SPLIT_KEYS = (
     "false_pass_rate",
     "false_fail_rate",
 )
-
-
-def judge_rubric_version(evaluations: Mapping[str, Mapping[str, Any]]) -> str | None:
-    """評価器の出力の rubric の版（`answer_eval` が評価に付ける `rubric_version`）。"""
-    for evaluation in evaluations.values():
-        version = evaluation.get("rubric_version")
-        if version is not None and version != "":
-            return str(version)
-    return None
 
 
 def summarize_report(

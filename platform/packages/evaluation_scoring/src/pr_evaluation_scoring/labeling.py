@@ -72,7 +72,8 @@ class ErrorType:
     holdout_target: int
 
 
-# #2577・#3418 で挙がった判定器の誤りの型と、誤合格・誤不合格を分ける対照（件数は holdout の目標）。
+# #2577・#3418（部分回答は #65）で挙がった判定器の誤りの型と、誤合格・誤不合格を分ける対照
+# （件数は holdout の目標）。
 ERROR_TYPES: tuple[ErrorType, ...] = (
     ErrorType(
         "attribute_swap",
@@ -127,6 +128,14 @@ ERROR_TYPES: tuple[ErrorType, ...] = (
         "correct_refusal",
         "対照",
         "正しい拒答・利用者への確認（資料に無い・条件が足りない）",
+        "（すべて pass）",
+        5,
+    ),
+    ErrorType(
+        "partial_answer",
+        "対照",
+        "部分回答（資料で答えられる部分だけ答え、残りは資料に無いと明示する。"
+        "答えた範囲が正しければ pass）",
         "（すべて pass）",
         5,
     ),

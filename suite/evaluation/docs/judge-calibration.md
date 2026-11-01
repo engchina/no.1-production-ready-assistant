@@ -44,6 +44,7 @@ LLM による回答の判定（`suite-evaluation judge`）と RAG の回答の�
 | 誤りの型 | `partial_omission` | 必要な論点の一部の不足 | requirement_coverage | 5 |
 | 対照 | `correct_paraphrase` | 正しい言い換え（誤不合格を見る） | （すべて pass） | 10 |
 | 対照 | `correct_refusal` | 正しい拒答・利用者への確認 | （すべて pass） | 5 |
+| 対照 | `partial_answer` | 部分回答（資料で答えられる部分だけ答え、残りは資料に無いと明示する） | （すべて pass） | 5 |
 
 ## 1. 校正のケースを作る
 
@@ -148,6 +149,7 @@ uv run python -m app.rag.answer_judge_calibration ../../tmp/judge-calibration/la
 ```
 
 - 項目ごとに RAG の評価器（画面の品質評価と同じ `evaluate_answer_payload` と指標の計算。接続とモデルは RAG の設定）を動かし、指標の値が `--pass-at`（既定 1.0）以上を pass として、同じ一致の集計・同じ閾値（platform の `pr_evaluation_scoring`）で合否を出す。`--evaluations <前の結果>` でモデルを呼ばずに集計だけやり直す。
+- 誤りの型ごとの内訳・項目ごとの判定と理由・`--baseline <前の結果>` の比較・同梱の合成の校正セットと実モデルでの測定は [rag/docs/answer-judge-calibration.md](../../../rag/docs/answer-judge-calibration.md)（#65）。
 
 ### 記録する
 

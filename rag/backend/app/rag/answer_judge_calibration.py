@@ -30,6 +30,13 @@ suite の package を import せずにこの module の型で読む。一致の�
     uv run python -m app.rag.answer_judge_calibration ../../tmp/eval/labels.json \\
         --evaluations ../../tmp/eval/rag-answer-calibration.json \\
         --output ../../tmp/eval/rag-answer-calibration.v2.json
+    # 指示・モデルを変えた後、前の結果を基線にして違い（指標の差・判定の変わった項目）を出す（#65）
+    uv run python -m app.rag.answer_judge_calibration ../../tmp/eval/labels.json \\
+        --baseline ../../tmp/eval/rag-answer-calibration.json \\
+        --output ../../tmp/eval/rag-answer-calibration.v3.json
+
+同梱の合成の校正セット（`rag/evaluation/judge-calibration/rag-answer-judge-calibration.v1.json`）と
+結果の読み方は `rag/docs/answer-judge-calibration.md`（#65）。
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -50,7 +58,8 @@ from pr_evaluation_scoring import (
     agreement,
     calibration_failures,
 )
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pr_evaluation_scoring.labeling import ERROR_TYPE_IDS
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 REPORT_SCHEMA_VERSION = 1
 PASS = "pass"  # nosec B105 - 判定のラベル（資格情報ではない）
@@ -86,6 +95,18 @@ class LabeledAnswer(BaseModel):
     evidence: list[LabeledEvidence] = Field(default_factory=list)
     labels: dict[str, Literal["pass", "fail"]] = Field(..., min_length=1)
     origin: Literal["human", "synthetic"] = "human"
+    # 誤りの型・対照（platform の `ERROR_TYPE_IDS`）と人の判定の根拠。
+    # 集計の内訳と人手の判定の見直しに使う（#65）。
+    error_types: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+    @field_validator("error_types")
+    @classmethod
+    def _known_error_types(cls, value: list[str]) -> list[str]:
+        unknown = sorted(set(value) - set(ERROR_TYPE_IDS))
+        if unknown:
+            raise ValueError(f"知らない誤りの型です: {', '.join(unknown)}")
+        return value
 
 
 class HumanLabels(BaseModel):
@@ -93,6 +114,15 @@ class HumanLabels(BaseModel):
 
     rubric_id: str
     items: list[LabeledAnswer] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _unique_ids(self) -> HumanLabels:
+        duplicated = sorted(
+            key for key, count in Counter(i.id for i in self.items).items() if count > 1
+        )
+        if duplicated:
+            raise ValueError(f"項目の ID が重なっています: {', '.join(duplicated)}")
+        return self
 
 
 def load_labels(path: Path) -> HumanLabels:
@@ -132,8 +162,68 @@ def aspect_label(
     return PASS if value >= pass_at else FAIL
 
 
+_UNSUPPORTED_CLAIMS = {"unsupported", "contradicted", "citation_error", "unassessed"}
+
+
+def aspect_reasons(evaluation: Mapping[str, Any] | None, aspect_id: str) -> list[str]:
+    """評価器が観点をその判定にした理由（人手の判定と食い違った項目の見直しに使う。#65）。
+
+    正しさは判定の理由、網羅は対応しなかった比較項目、根拠は裏付けられなかった主張と理由。
+    完了しない評価は status と例外の型だけ（例外の本文は接続の情報を含み得るので出さない）。
+    """
+    if not evaluation:
+        return ["評価がありません"]
+    status = evaluation.get("status")
+    if status != "completed":
+        error_type = evaluation.get("error_type")
+        return [f"評価が完了しませんでした（{status}{f'・{error_type}' if error_type else ''}）"]
+    if aspect_id == "answer_correctness":
+        reason = evaluation.get("correctness_reason")
+        return [str(reason)] if reason else []
+    if aspect_id == "requirement_coverage":
+        scope = evaluation.get("standard_answer_scope") or {}
+        requirements = scope.get("requirements") or []
+        reasons = []
+        for check in evaluation.get("coverage_checks") or []:
+            if check.get("status") == "addressed":
+                continue
+            index = int(check.get("requirement_index") or 0)
+            requirement = requirements[index - 1] if 0 < index <= len(requirements) else {}
+            reasons.append(f"{check.get('status')}: {requirement.get('requirement', index)}")
+        return reasons
+    if aspect_id == "claim_support":
+        return [
+            f"{claim.get('status')}: {str(claim.get('answer_quote') or '')[:80]}"
+            f" — {claim.get('reason')}"
+            for claim in evaluation.get("claim_checks") or []
+            if claim.get("status") in _UNSUPPORTED_CLAIMS
+        ]
+    return []
+
+
+def judge_rubric_version(evaluations: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """評価器の出力の rubric の版（`answer_eval` が評価に付ける `rubric_version`）。"""
+    for evaluation in evaluations.values():
+        version = evaluation.get("rubric_version")
+        if version is not None and version != "":
+            return str(version)
+    return None
+
+
 def _bucket(item: LabeledAnswer) -> str:
     return "synthetic" if item.origin == "synthetic" else item.split
+
+
+def _summary(pairs: Sequence[LabelPair]) -> dict[str, Any]:
+    """一致の集計と、誤合格・誤不合格・判定できなかった項目（Agent の校正 #66 と同じ key）。"""
+    result = agreement(pairs, HUMAN_LABELS, positive=PASS, negative=FAIL)
+    return {
+        **asdict(result),
+        "disagreements": [pair.item_id for pair in pairs if pair.judge != pair.human],
+        "false_pass_items": [p.item_id for p in pairs if p.human == FAIL and p.judge == PASS],
+        "false_fail_items": [p.item_id for p in pairs if p.human == PASS and p.judge == FAIL],
+        "unjudged_items": [pair.item_id for pair in pairs if pair.judge is None],
+    }
 
 
 def calibrate_evaluations(
@@ -148,36 +238,55 @@ def calibrate_evaluations(
 
     合成の項目（`origin=synthetic`。故意に壊した回答）は synthetic の区分に別に集計し、合否に
     入れない。評価器の対象でない観点（`ASPECT_METRICS` に無い観点）のラベルは集計しない。
+    誤りの型・対照（`error_types`）ごとの内訳と、項目ごとの判定・理由（`judgements`）も出す（#65）。
     """
     cutoffs = {aspect: (pass_at or {}).get(aspect, DEFAULT_PASS_AT) for aspect in ASPECT_METRICS}
+    judged = {
+        item.id: {
+            aspect_id: aspect_label(evaluations.get(item.id), aspect_id, pass_at=cutoffs[aspect_id])
+            for aspect_id in ASPECT_METRICS
+        }
+        for item in labels.items
+    }
     aspects: dict[str, Any] = {}
     for aspect_id in ASPECT_METRICS:
-        splits: dict[str, Any] = {}
-        holdout = None
-        for split in SPLITS:
-            pairs = [
-                LabelPair(
-                    item_id=item.id,
-                    human=human,
-                    judge=aspect_label(
-                        evaluations.get(item.id), aspect_id, pass_at=cutoffs[aspect_id]
-                    ),
-                )
-                for item in labels.items
-                if _bucket(item) == split and (human := item.labels.get(aspect_id)) is not None
+        labeled = [item for item in labels.items if aspect_id in item.labels]
+
+        def pairs(items: Sequence[LabeledAnswer], aspect: str = aspect_id) -> list[LabelPair]:
+            return [
+                LabelPair(item_id=i.id, human=i.labels[aspect], judge=judged[i.id][aspect])
+                for i in items
             ]
-            if not pairs:
-                continue
-            result = agreement(pairs, HUMAN_LABELS, positive=PASS, negative=FAIL)
-            splits[split] = {
-                **asdict(result),
-                "disagreements": [pair.item_id for pair in pairs if pair.judge != pair.human],
-                "unjudged_items": [pair.item_id for pair in pairs if pair.judge is None],
+
+        splits = {
+            split: _summary(pairs([item for item in labeled if _bucket(item) == split]))
+            for split in SPLITS
+            if any(_bucket(item) == split for item in labeled)
+        }
+        error_types = {
+            error_type: {
+                split: _summary(pairs(members))
+                for split in SPLITS
+                if (
+                    members := [
+                        i for i in labeled if error_type in i.error_types and _bucket(i) == split
+                    ]
+                )
             }
-            if split == "holdout":
-                holdout = result
-        failures = calibration_failures(holdout, thresholds)
-        aspects[aspect_id] = {"splits": splits, "passed": not failures, "failures": failures}
+            for error_type in ERROR_TYPE_IDS
+            if any(error_type in item.error_types for item in labeled)
+        }
+        holdout = pairs([item for item in labeled if _bucket(item) == "holdout"])
+        failures = calibration_failures(
+            agreement(holdout, HUMAN_LABELS, positive=PASS, negative=FAIL) if holdout else None,
+            thresholds,
+        )
+        aspects[aspect_id] = {
+            "splits": splits,
+            "error_types": error_types,
+            "passed": not failures,
+            "failures": failures,
+        }
     return {
         "schema_version": REPORT_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -188,22 +297,142 @@ def calibrate_evaluations(
                 "item_count": len(labels.items),
             },
             "evaluator": dict(evaluator or {}),
+            "judge_rubric_version": judge_rubric_version(evaluations),
             "aspect_metrics": dict(ASPECT_METRICS),
             "pass_at": cutoffs,
             "thresholds": thresholds.provenance(),
         },
         "aspects": aspects,
         "passed": all(item["passed"] for item in aspects.values()),
+        "judgements": {
+            item.id: {
+                "split": _bucket(item),
+                "error_types": item.error_types,
+                "human": dict(item.labels),
+                "judge": {
+                    aspect: judged[item.id][aspect]
+                    for aspect in item.labels
+                    if aspect in ASPECT_METRICS
+                },
+                "status": (evaluations.get(item.id) or {}).get("status"),
+                "reasons": {
+                    aspect: aspect_reasons(evaluations.get(item.id), aspect)
+                    for aspect in item.labels
+                    if aspect in ASPECT_METRICS
+                },
+            }
+            for item in labels.items
+        },
         "evaluations": {key: dict(value) for key, value in evaluations.items()},
     }
+
+
+_COMPARED_METRICS = ("accuracy", "kappa", "false_pass_rate", "false_fail_rate", "coverage")
+
+
+def _delta(base: Any, target: Any) -> float | None:
+    if isinstance(base, int | float) and isinstance(target, int | float):
+        return round(float(target) - float(base), 4)
+    return None
+
+
+def compare_reports(base: Mapping[str, Any], target: Mapping[str, Any]) -> dict[str, Any]:
+    """前の校正の結果（基線）と比べる（Agent の校正 #66 の `baseline` と同じ形）。
+
+    同じ人手の判定（sha256）・同じ結果の形でなければ比較できない（`comparable=false` と理由）。
+    評価器（モデル・指示の sha256・rubric の版）・`pass_at`・閾値の違いは `changes` に出す。判定の
+    モデルは seed を使わないので、`changes` が空でも差は判定の揺れを含む。
+    """
+    reasons: list[str] = []
+    if base.get("schema_version") != target.get("schema_version"):
+        reasons.append(
+            f"結果の形の版が違う（{base.get('schema_version')} → {target.get('schema_version')}）"
+        )
+    base_prov = base.get("provenance") or {}
+    target_prov = target.get("provenance") or {}
+    if (base_prov.get("labels") or {}).get("sha256") != (target_prov.get("labels") or {}).get(
+        "sha256"
+    ):
+        reasons.append("人手の判定が違う（sha256 が一致しない。項目・人手の判定を変えた）")
+    changes: list[str] = []
+    base_eval = base_prov.get("evaluator") or {}
+    target_eval = target_prov.get("evaluator") or {}
+    for key, title in (("model", "判定のモデル"), ("prompt_sha256", "判定の指示の sha256")):
+        if base_eval.get(key) != target_eval.get(key):
+            changes.append(f"{title}: {base_eval.get(key)} → {target_eval.get(key)}")
+    for key, title in (
+        ("judge_rubric_version", "評価器の rubric の版"),
+        ("pass_at", "pass にする指標の下限（pass_at）"),
+        ("thresholds", "校正の合否の閾値"),
+    ):
+        if base_prov.get(key) != target_prov.get(key):
+            changes.append(f"{title}が違う")
+    result: dict[str, Any] = {
+        "comparable": not reasons,
+        "reasons": reasons,
+        "changes": changes,
+        "base_created_at": base.get("created_at"),
+    }
+    if reasons:
+        return result
+    aspects: dict[str, Any] = {}
+    for aspect_id in ASPECT_METRICS:
+        base_aspect = (base.get("aspects") or {}).get(aspect_id)
+        target_aspect = (target.get("aspects") or {}).get(aspect_id)
+        if not base_aspect or not target_aspect:
+            continue
+        base_holdout = base_aspect["splits"].get("holdout") or {}
+        target_holdout = target_aspect["splits"].get("holdout") or {}
+        aspects[aspect_id] = {
+            "passed": {"base": base_aspect["passed"], "target": target_aspect["passed"]},
+            "holdout": {
+                metric: {
+                    "base": base_holdout.get(metric),
+                    "target": target_holdout.get(metric),
+                    "delta": _delta(base_holdout.get(metric), target_holdout.get(metric)),
+                }
+                for metric in _COMPARED_METRICS
+            },
+        }
+    base_judgements = base.get("judgements") or {}
+    result["aspects"] = aspects
+    result["flipped"] = [
+        {
+            "id": item_id,
+            "aspect": aspect_id,
+            "split": judgement.get("split"),
+            "human": (judgement.get("human") or {}).get(aspect_id),
+            "base": (base_judgements[item_id].get("judge") or {}).get(aspect_id),
+            "target": label,
+        }
+        for item_id, judgement in (target.get("judgements") or {}).items()
+        if item_id in base_judgements
+        for aspect_id, label in (judgement.get("judge") or {}).items()
+        if (base_judgements[item_id].get("judge") or {}).get(aspect_id) != label
+    ]
+    return result
 
 
 Evaluate = Callable[[LabeledAnswer], Mapping[str, Any]]
 
 
 def evaluate_labels(labels: HumanLabels, evaluate: Evaluate) -> dict[str, dict[str, Any]]:
-    """人手の判定の項目ごとに評価器を動かす（`evaluate` は 1 件の評価。テストでは台本）。"""
-    return {item.id: dict(evaluate(item)) for item in labels.items}
+    """人手の判定の項目ごとに評価器を動かす（`evaluate` は 1 件の評価。テストでは台本）。
+
+    1 件の呼び出しの失敗で校正全体を止めず、その項目を判定できなかった件（status=error と例外の
+    型）にする。例外の本文は接続の情報を含み得るので残さない（#65）。
+    """
+    evaluations: dict[str, dict[str, Any]] = {}
+    for item in labels.items:
+        try:
+            evaluations[item.id] = dict(evaluate(item))
+        except Exception as error:  # noqa: BLE001 - 失敗は判定できなかった件として数える
+            evaluations[item.id] = {
+                "status": "error",
+                "error_type": type(error).__name__,
+                "message": "評価器の呼び出しに失敗しました。",
+            }
+    return evaluations
 
 
 def resolve_judge_model_id(settings: Any, judge_model_id: str | None = None) -> str:
@@ -273,7 +502,12 @@ def backend_evaluator(
             judge_model_id=judge_model,
         )
 
-    return evaluate, {"provider": "enterprise_ai", "model": judge_model}
+    return evaluate, {
+        "provider": "enterprise_ai",
+        "model": judge_model,
+        "prompt_sha256": judge_prompt_sha256(),
+        "seed": None,
+    }
 
 
 def _backend_evaluator(judge_model_id: str | None = None) -> tuple[Evaluate, dict[str, Any]]:
@@ -301,6 +535,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("labels", type=Path, help="人手の判定（LabelSet の JSON）")
     parser.add_argument(
         "--evaluations", type=Path, help="前の校正の結果（評価器を呼ばずに集計だけやり直す）"
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="基線にする前の校正の結果（指標の差・判定の変わった項目を出す）",
     )
     parser.add_argument(
         "--pass-at",
@@ -347,6 +586,9 @@ def main(
         report = calibrate_evaluations(
             labels, evaluations, thresholds=thresholds, pass_at=cutoffs, evaluator=provenance
         )
+        if args.baseline:
+            baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+            report["baseline"] = compare_reports(baseline, report)
     except (OSError, ValueError, ValidationError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -360,8 +602,18 @@ def main(
         print(
             f"{aspect_id}: passed={item['passed']} kappa={holdout.get('kappa')} "
             f"items={holdout.get('total', 0)} "
+            f"false_pass={holdout.get('false_pass_rate')} "
+            f"false_fail={holdout.get('false_fail_rate')} "
             f"synthetic_false_pass={synthetic.get('false_pass_rate')} "
             f"{'; '.join(item['failures'])}",
+            file=sys.stderr,
+        )
+    if "baseline" in report:
+        baseline = report["baseline"]
+        print(
+            f"baseline: comparable={baseline['comparable']} "
+            f"flipped={len(baseline.get('flipped') or [])} "
+            f"{'; '.join(baseline['reasons'] + baseline['changes'])}",
             file=sys.stderr,
         )
     print(f"wrote {args.output}", file=sys.stderr)

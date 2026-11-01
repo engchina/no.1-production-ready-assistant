@@ -13,14 +13,25 @@ from typing import Any
 
 import pytest
 from pr_evaluation_scoring import CalibrationThresholds
+from pydantic import ValidationError
 
 from app.rag.answer_judge_calibration import (
+    ASPECT_METRICS,
     HumanLabels,
     LabeledAnswer,
     aspect_label,
+    aspect_reasons,
     calibrate_evaluations,
+    compare_reports,
+    evaluate_labels,
     evaluation_input,
+    load_labels,
     main,
+)
+
+BUNDLED_SET = (
+    Path(__file__).resolve().parents[2]
+    / "evaluation/judge-calibration/rag-answer-judge-calibration.v1.json"
 )
 
 
@@ -163,5 +174,181 @@ def test_cli_runs_the_evaluator_then_recomputes_from_saved_evaluations(
         "i05",
     ]
 
+    compared = tmp_path / "compared.json"
+    baseline_args = [
+        *rerun,
+        "--min-items",
+        "3",
+        "--baseline",
+        str(output),
+        "--output",
+        str(compared),
+    ]
+    assert main(baseline_args, evaluator=(fail, {})) == 0
+    baseline = json.loads(compared.read_text("utf-8"))["baseline"]
+    assert baseline["comparable"] is True
+    assert baseline["changes"] == ["pass にする指標の下限（pass_at）が違う"]
+    assert [flip["id"] for flip in baseline["flipped"]] == ["i03"]
+    assert "baseline: comparable=True flipped=1" in capsys.readouterr().err
+
     assert main([str(labels_path), "--pass-at", "x=1", "--output", str(again)]) == 2
     assert "--pass-at" in capsys.readouterr().err
+
+
+def _typed_labels() -> HumanLabels:
+    data = _labels()
+    data["items"][2]["error_types"] = ["unsupported_claim"]
+    data["items"][3]["error_types"] = ["attribute_swap"]
+    data["items"][1]["error_types"] = ["correct_paraphrase"]
+    return HumanLabels.model_validate(data)
+
+
+def test_report_breaks_down_error_types_and_keeps_reasons() -> None:
+    evaluations = {
+        **EVALUATIONS,
+        "i03": {
+            **_evaluation(1.0, 1.0, 0.5),
+            "claim_checks": [
+                {"status": "supported", "answer_quote": "正しい文", "reason": "根拠にある"},
+                {"status": "unsupported", "answer_quote": "根拠に無い文", "reason": "根拠に無い"},
+            ],
+        },
+        "i04": {**_evaluation(1.0, 1.0, 1.0), "correctness_reason": "標準回答と合う"},
+    }
+    report = calibrate_evaluations(
+        _typed_labels(), evaluations, thresholds=CalibrationThresholds(min_items=3)
+    )
+    correctness = report["aspects"]["answer_correctness"]
+    assert correctness["splits"]["holdout"]["false_pass_items"] == ["i04"]
+    assert correctness["splits"]["holdout"]["false_fail_items"] == []
+    # 誤りの型ごとの内訳: 取り違え（i04）を評価器は見逃した。
+    swap = correctness["error_types"]["attribute_swap"]["holdout"]
+    assert (swap["total"], swap["false_pass_rate"]) == (1, 1.0)
+    assert set(correctness["error_types"]) == {
+        "unsupported_claim",
+        "attribute_swap",
+        "correct_paraphrase",
+    }
+    judgement = report["judgements"]["i04"]
+    assert judgement["human"]["answer_correctness"] == "fail"
+    assert judgement["judge"]["answer_correctness"] == "pass"
+    assert judgement["reasons"]["answer_correctness"] == ["標準回答と合う"]
+    assert report["judgements"]["i03"]["reasons"]["claim_support"] == [
+        "unsupported: 根拠に無い文 — 根拠に無い"
+    ]
+    # 完了しない評価は status と例外の型だけを理由にする。
+    assert report["judgements"]["i05"]["reasons"]["claim_support"] == [
+        "評価が完了しませんでした（error）"
+    ]
+    assert report["provenance"]["judge_rubric_version"] == "11"
+
+
+def test_aspect_reasons_lists_unaddressed_requirements() -> None:
+    evaluation = {
+        "status": "completed",
+        "standard_answer_scope": {
+            "requirements": [{"requirement": "期限"}, {"requirement": "承認"}]
+        },
+        "coverage_checks": [
+            {"requirement_index": 1, "status": "addressed"},
+            {"requirement_index": 2, "status": "missing"},
+        ],
+    }
+    assert aspect_reasons(evaluation, "requirement_coverage") == ["missing: 承認"]
+    assert aspect_reasons(
+        {"status": "error", "error_type": "TimeoutError"}, "answer_correctness"
+    ) == ["評価が完了しませんでした（error・TimeoutError）"]
+    assert aspect_reasons(None, "claim_support") == ["評価がありません"]
+
+
+def test_failed_evaluator_calls_become_unjudged_without_the_message() -> None:
+    labels = HumanLabels.model_validate(_labels())
+
+    def evaluate(item: LabeledAnswer) -> Mapping[str, Any]:
+        if item.id == "i02":
+            raise ConnectionError("https://secret.example/ key=xxx")
+        return EVALUATIONS[item.id]
+
+    evaluations = evaluate_labels(labels, evaluate)
+    assert evaluations["i02"]["status"] == "error"
+    assert evaluations["i02"]["error_type"] == "ConnectionError"
+    assert "secret" not in json.dumps(evaluations, ensure_ascii=False)
+    report = calibrate_evaluations(labels, evaluations, thresholds=CalibrationThresholds())
+    assert "i02" in report["aspects"]["claim_support"]["splits"]["holdout"]["unjudged_items"]
+
+
+def test_labels_reject_unknown_error_types_and_duplicate_ids() -> None:
+    data = _labels()
+    data["items"][0]["error_types"] = ["unknown_type"]
+    with pytest.raises(ValidationError, match="知らない誤りの型"):
+        HumanLabels.model_validate(data)
+    data = _labels()
+    data["items"][1]["id"] = data["items"][0]["id"]
+    with pytest.raises(ValidationError, match="重なっています"):
+        HumanLabels.model_validate(data)
+
+
+def test_baseline_reports_metric_deltas_changes_and_flipped_items() -> None:
+    labels = _typed_labels()
+    thresholds = CalibrationThresholds(min_items=3)
+    base = calibrate_evaluations(
+        labels, EVALUATIONS, thresholds=thresholds, evaluator={"model": "m1", "prompt_sha256": "a"}
+    )
+    # 指示を直した評価器は i04 の誤りを見つける。
+    fixed = {**EVALUATIONS, "i04": _evaluation(1.0, 0.0, 1.0)}
+    target = calibrate_evaluations(
+        labels, fixed, thresholds=thresholds, evaluator={"model": "m1", "prompt_sha256": "b"}
+    )
+    result = compare_reports(base, target)
+    assert result["comparable"] is True
+    assert result["changes"] == ["判定の指示の sha256: a → b"]
+    holdout = result["aspects"]["answer_correctness"]["holdout"]
+    assert holdout["false_pass_rate"] == {"base": 1.0, "target": 0.0, "delta": -1.0}
+    assert result["flipped"] == [
+        {
+            "id": "i04",
+            "aspect": "answer_correctness",
+            "split": "holdout",
+            "human": "fail",
+            "base": "pass",
+            "target": "fail",
+        }
+    ]
+    # 人手の判定が違えば比べない。
+    other = HumanLabels.model_validate({**labels.model_dump(), "rubric_id": "other"})
+    changed = calibrate_evaluations(other, fixed, thresholds=thresholds)
+    refused = compare_reports(base, changed)
+    assert refused["comparable"] is False
+    assert "aspects" not in refused
+
+
+def test_bundled_set_covers_the_issue_cases_and_does_not_pass_by_size() -> None:
+    labels = load_labels(BUNDLED_SET)
+    assert all(item.note and item.origin == "human" for item in labels.items)
+    covered = {error_type for item in labels.items for error_type in item.error_types}
+    assert {
+        "correct_paraphrase",
+        "partial_omission",
+        "unsupported_claim",
+        "correct_refusal",
+        "partial_answer",
+    } <= covered
+    for aspect in ASPECT_METRICS:
+        values = {item.labels[aspect] for item in labels.items if aspect in item.labels}
+        assert values == {"pass", "fail"}
+    # 人手と同じ判定を返す台本でも、holdout の件数が閾値（50）に届かないので不合格のまま。
+    perfect = {
+        item.id: {
+            "status": "completed",
+            **{
+                metric: (1.0 if item.labels.get(aspect, "pass") == "pass" else 0.0)
+                for aspect, metric in ASPECT_METRICS.items()
+            },
+        }
+        for item in labels.items
+    }
+    report = calibrate_evaluations(labels, perfect, thresholds=CalibrationThresholds())
+    holdout = report["aspects"]["answer_correctness"]["splits"]["holdout"]
+    assert holdout["kappa"] == 1.0
+    assert report["passed"] is False
+    assert any("件数" in reason for reason in report["aspects"]["answer_correctness"]["failures"])
