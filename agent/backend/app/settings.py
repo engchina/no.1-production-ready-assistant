@@ -266,6 +266,9 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 上限つきの並行の実行器（pr_backend_core.bounded_calls）を共有し、429 を受けたら全体で待って
     # 並行の数を下げる（最小 1）。結果はケースの順のまま。1 は 1 件ずつ（#2004 より前と同じ）。
     agent_evaluation_concurrency: int = Field(default=2, ge=1, le=8)
+    # 品質評価の 1 回の評価で実行する「ケース × 試行」の数の上限（実行の予算。#62）。反復の回数を
+    # 指定した評価は、ケースの数 × 回数がこの値を超えると始めない（422）。
+    agent_evaluation_max_trial_runs: int = Field(default=200, ge=1, le=2000)
     # 公開に求める品質評価の合格率（#2519。0〜1、0 は求めない）。0 より大きいと、業務 Agent の
     # 公開には、下書きを最後に変えた後に始めた下書きの評価（完了したもの）の最新の合格率がこの値
     # 以上であることを求める。前の版に戻す・スキルの更新だけの公開は対象にしない。

@@ -518,6 +518,8 @@ export interface EvaluationClarificationRound {
 
 export interface EvaluationCaseResult {
   case: Required<Omit<EvaluationCase, "expected_output" | "expected_approval">> & Pick<EvaluationCase, "expected_output" | "expected_approval">;
+  /** 試行の番号（1 から。#62。結果は「ケース × 試行」で、#62 より前の評価は 1 回だけ）。 */
+  trial?: number;
   status: EvaluationCaseStatus;
   run_id: string | null;
   answer: string;
@@ -567,6 +569,44 @@ export interface EvaluationSummary {
   field_items?: number;
   field_items_correct?: number;
   field_item_accuracy?: number | null;
+  /**
+   * 反復試行（#62）。件数と `pass_rate` は試行の単位、`judged_cases` は 1 回以上判定できたケースの数。
+   * 区間は 95%（Wilson。単位はケース）。Pass@k / Pass^k の分母は k 回すべてを判定できたケース（`complete_cases`）。
+   */
+  trials?: number;
+  cases?: number;
+  judged_cases?: number;
+  judged_trials?: number;
+  pass_rate_interval?: EvaluationInterval | null;
+  complete_cases?: number;
+  incomplete_cases?: number;
+  missing_trials?: number;
+  stable_cases?: number;
+  unstable_cases?: number;
+  pass_at_k?: number | null;
+  pass_at_k_interval?: EvaluationInterval | null;
+  pass_hat_k?: number | null;
+  pass_hat_k_interval?: EvaluationInterval | null;
+}
+
+/** 95% の区間の [下限, 上限]（#62）。 */
+export type EvaluationInterval = [number, number];
+
+/** ケースの k 回の試行の安定性（#62）。 */
+export type EvaluationStability = "stable_pass" | "stable_fail" | "unstable" | "incomplete" | "unjudged";
+
+/** ケースごとの k 回の試行の集計（#62）。 */
+export interface EvaluationCaseTrials {
+  case_id: string;
+  question: string;
+  trials: number;
+  judged: number;
+  passed: number;
+  missing: number;
+  rate: number | null;
+  pass_at_k: boolean | null;
+  pass_hat_k: boolean | null;
+  stability: EvaluationStability;
 }
 
 export interface EvaluationJob {
@@ -585,6 +625,11 @@ export interface EvaluationJob {
   status: EvaluationJobStatus;
   created_by_user_uuid: string | null;
   results: EvaluationCaseResult[];
+  /** 1 ケースを反復した回数（#62）と、評価者（判定のモデルと判定の指示）の指紋。 */
+  trials?: number;
+  judge_fingerprint?: string | null;
+  /** ケースごとの k 回の試行の集計（#62）。 */
+  case_trials?: EvaluationCaseTrials[];
   error: string | null;
   summary: EvaluationSummary;
   created_at: string;
@@ -600,6 +645,8 @@ export type EvaluationJobItem = Pick<
   | "set_id"
   | "set_name"
   | "agent_version"
+  | "trials"
+  | "judge_fingerprint"
   | "status"
   | "summary"
   | "created_at"
@@ -620,6 +667,11 @@ export interface EvaluationComparisonOutcome {
   /** 出力の項目がすべて正しいか（#2558。期待する出力の無いケースは null）。 */
   field_correct?: boolean | null;
   run_id: string | null;
+  /** 試行の数・判定できた試行・成功した試行と成功率（#62）。 */
+  trials?: number;
+  judged_trials?: number;
+  passed_trials?: number;
+  success_rate?: number | null;
 }
 
 export interface EvaluationComparisonRow {
@@ -627,6 +679,22 @@ export interface EvaluationComparisonRow {
   base: EvaluationComparisonOutcome | null;
   target: EvaluationComparisonOutcome | null;
   change: EvaluationComparisonChange;
+  /** 2 つのケースの定義（期待・ツールなど）が同じか（#62。違えば対応比較に入れない）。 */
+  same_definition?: boolean;
+}
+
+/** 同じ定義のケースどうしの、ケースごとの成功率の差（比べる評価 − 基準。#62）。 */
+export interface EvaluationPairedComparison {
+  cases: number;
+  base_rate: number;
+  target_rate: number;
+  difference: number;
+  interval: EvaluationInterval;
+  /** 区間が 0 をまたがない（差の向きが確か）。 */
+  conclusive: boolean;
+  improved: number;
+  regressed: number;
+  unchanged: number;
 }
 
 /** 2 つの評価をケースごとに並べた比較（#1845）。 */
@@ -639,6 +707,11 @@ export interface EvaluationComparison {
   unchanged: number;
   base_only: number;
   target_only: number;
+  /** 比較できる条件か（#62）。 */
+  same_cases?: boolean;
+  definition_mismatch?: number;
+  same_judge?: boolean | null;
+  paired?: EvaluationPairedComparison | null;
 }
 
 /** 評価の履歴の 1 ページ（共通の `Page`。`total` は対象の評価の件数。#1266）。 */
@@ -1960,7 +2033,7 @@ export const agentApi = {
       body: JSON.stringify({ agent_id: agentId }),
     }),
   /** 評価を始める（`agent_id` を省くと評価セットの業務 Agent。#1845）。 */
-  createEvaluation: (payload: { set_id: string; agent_version?: EvaluationTarget; agent_id?: string }) =>
+  createEvaluation: (payload: { set_id: string; agent_version?: EvaluationTarget; agent_id?: string; trials?: number }) =>
     request<EvaluationJob>("/api/evaluations", { method: "POST", body: JSON.stringify(payload) }),
   /** 評価の履歴（新しい順のページ。終わった評価は削除せずに残る。#794・#3235）。 */
   listEvaluations: (page: { offset: number; limit: number }) =>

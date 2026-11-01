@@ -11,6 +11,8 @@
   LabelSet の項目の名前）。suite の記入用のブックと RAG の判定の校正の画面が共有する（#3578）。
 - `perturbation`: 故意に壊した回答（合成の対照）の壊し方と選び方。
 - `rubric`: 回答の判定の基準（同梱の JSON）と、観点の基準の文・判定する観点。
+- `trials`: ケースの反復試行の集計（Pass@k・Pass^k・安定性・欠測）と、成功率の Wilson 区間・
+  同じケースの対応のある差の区間（MOVER）。区間の単位はケース。
 
 製品の型（RAG の `SearchResponse` など）は持たない。使う側が自分の型から、ここの関数の入力
 （文書の ID・本文・場所の Mapping・対応の文字列）へ変換する。LLM・HTTP・DB を呼ばない。
@@ -76,6 +78,15 @@ from pr_evaluation_scoring.rubric import (
     load_rubric_data,
 )
 from pr_evaluation_scoring.text import contains_normalized, normalize_for_match, normalize_name
+from pr_evaluation_scoring.trials import (
+    CaseTrials,
+    PairedDifference,
+    TrialsSummary,
+    case_trials,
+    paired_difference,
+    summarize_trials,
+    wilson_interval,
+)
 
 __all__ = [
     "ASPECT_HOLDOUT_TARGET",
@@ -130,4 +141,11 @@ __all__ = [
     "text_outside_tables",
     "threshold_failures",
     "unique_in_order",
+    "CaseTrials",
+    "PairedDifference",
+    "TrialsSummary",
+    "case_trials",
+    "paired_difference",
+    "summarize_trials",
+    "wilson_interval",
 ]

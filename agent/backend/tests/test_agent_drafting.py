@@ -23,7 +23,12 @@ from app.features.agent.data_scope import (
     DataScopeCandidatesError,
 )
 from app.features.agent.drafting import MAX_EVALUATION_CASES
-from app.features.agent.evaluation import EvaluationCase, JobStatus, draft_definition_hash
+from app.features.agent.evaluation import (
+    EvaluationCase,
+    EvaluationCaseResult,
+    JobStatus,
+    draft_definition_hash,
+)
 from app.features.agent.runtime import AgentProfilePatch, runtime_repository
 from app.features.agent.skills import AgentSkillDefinition, skill_registry
 from app.security.permissions import MENU_AGENTS, RUNS_OPERATE
@@ -340,17 +345,25 @@ def _job(*, pass_rate: float | None, offset_seconds: float, **overrides: Any) ->
         "set_id": "evset_a",
         "set_name": "評価セット A",
         "results": _cases("質問 1", "質問 2"),
+        "trials": 1,
+        "judge_fingerprint": overrides.pop("judge_fingerprint", None),
         "summary": SimpleNamespace(
-            pass_rate=pass_rate, judged_cases=overrides.pop("judged_cases", 10)
+            pass_rate=pass_rate,
+            judged_cases=overrides.pop("judged_cases", 10),
+            pass_rate_interval=overrides.pop("pass_rate_interval", None),
+            trials=1,
+            missing_trials=0,
         ),
     }
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
-def _cases(*questions: str) -> list[SimpleNamespace]:
+def _cases(*questions: str) -> list[EvaluationCaseResult]:
     return [
-        SimpleNamespace(case=EvaluationCase(id=f"c{index}", question=question, expected="要点"))
+        EvaluationCaseResult(
+            case=EvaluationCase(id=f"c{index}", question=question, expected="要点")
+        )
         for index, question in enumerate(questions)
     ]
 
@@ -476,6 +489,36 @@ def test_publish_gate_compares_with_the_published_version(
 
     # 許す下げ幅の中なら公開できる（絶対の閾値は使わない設定）。
     _jobs(monkeypatch, _job(pass_rate=0.85, offset_seconds=10), baseline)
+    assert _publish().json()["data"]["published_version"] == 2
+
+
+def test_publish_gate_reports_uncertainty_and_needs_the_same_judge(
+    agent: None, monkeypatch: MonkeyPatch
+) -> None:
+    """拒否の文に区間とケースの数を添え、評価者が違う公開中の版の評価は基準にしない（#62）。"""
+    _gate(monkeypatch, min_pass_rate=0.8)
+    _jobs(
+        monkeypatch,
+        _job(pass_rate=0.5, offset_seconds=10, judged_cases=10, pass_rate_interval=(0.24, 0.76)),
+    )
+    low = _publish()
+    assert low.status_code == 409, low.text
+    assert "合格率 50%（95% 区間 24%〜76%、ケース 10 件）" in low.json()["error_messages"][0]
+
+    _gate(monkeypatch, max_drop=0.05)
+    _jobs(monkeypatch, _job(pass_rate=0.9, offset_seconds=10))
+    assert _publish().json()["data"]["published_version"] == 1
+    assert client.patch(f"/api/agents/{AGENT_ID}", json={"instructions": "v2"}).status_code == 200
+    draft = _job(pass_rate=0.9, offset_seconds=10, judge_fingerprint="judge-b")
+    other_judge = _job(
+        pass_rate=0.9, offset_seconds=5, agent_version=1, judge_fingerprint="judge-a"
+    )
+    _jobs(monkeypatch, draft, other_judge)
+    refused = _publish()
+    assert refused.status_code == 409, refused.text
+    assert "同じ評価者" in refused.json()["error_messages"][0]
+    same_judge = _job(pass_rate=0.9, offset_seconds=5, agent_version=1, judge_fingerprint="judge-b")
+    _jobs(monkeypatch, draft, other_judge, same_judge)
     assert _publish().json()["data"]["published_version"] == 2
 
 

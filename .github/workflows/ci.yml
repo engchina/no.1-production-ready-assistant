@@ -21,7 +21,7 @@ name: CI
 # Agent の評価の共有の fixture は RAG が読まない（#3240。
 # rag/backend/tests/test_product_boundaries.py が rag のコードから読まないことを確かめる）。
 # 製品横断の評価（suite/evaluation。独立の uv project）は Suite / Evaluation が、platform の採点の部品
-# （platform/packages/evaluation_scoring）は Platform / evaluation_scoring と、それを使う RAG / Backend・Suite / Evaluation が
+# （platform/packages/evaluation_scoring）は Platform / evaluation_scoring と、それを使う RAG / Backend・Agent / Backend・Suite / Evaluation が
 # 確かめる（#3240）。採点の部品は platform_other から外し、ほかの製品の job は動かさない。
 # platform の Markdown（AGENTS.md・README・docs/ux-contracts・docs/design-system 等）だけの変更では製品の job を動かさない
 # （docs/design-system/ の Markdown 以外（lint の設定・plugin・reference）は frontend に数える。#1592）。
@@ -225,7 +225,8 @@ jobs:
               - "platform/packages/system_settings_backend/**"
               # モデルの API の呼び方の共通の規則（pr_system_settings が使う。#3418）。
               - "platform/packages/enterprise_ai/**"
-            # 製品の評価と suite の評価が共有する採点の部品（#3240）。使うのは RAG の backend と suite だけ。
+            # 製品の評価と suite の評価が共有する採点の部品（#3240）。使うのは RAG / Agent の backend と suite
+            # （Agent は品質評価の反復試行の集計と区間。#62）。
             platform_evaluation_scoring:
               - "platform/packages/evaluation_scoring/**"
             platform_enterprise_ai_deps:
@@ -1417,10 +1418,11 @@ jobs:
   agent-backend:
     name: Agent / Backend
     needs: changes
-    # MCP ツールの契約（platform/contracts/mcp/）も読む（#1531）。
+    # MCP ツールの契約（platform/contracts/mcp/）も読む（#1531）。品質評価は platform の採点の部品を使う（#62）。
     if: >-
       needs.changes.outputs.agent_backend == 'true' || needs.changes.outputs.platform_backend == 'true'
       || needs.changes.outputs.answer_passages_contract == 'true' || needs.changes.outputs.mcp_contract == 'true'
+      || needs.changes.outputs.platform_evaluation_scoring == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
