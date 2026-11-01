@@ -4,7 +4,7 @@
 共通コードはここに集約し、各製品（`rag/` `nl2sql/` `agent/`）は `features/*`・ページ・業務文言だけを持つ。
 
 - フロント共有: `@production-ready/ui`（`packages/ui`）、`@production-ready/system-settings`（`packages/system-settings`、共通のシステム設定画面。`packages/ui` と違い業務の既定文言（日本語）を持ち、製品の i18n で上書きできる）
-- バックエンド共有: `production-ready-backend-core` / `pr_backend_core`（`packages/backend_core`）、`production-ready-system-settings-backend` / `pr_system_settings`（`packages/system_settings_backend`、共通のシステム設定 API。backend_core と違い業務の設定項目を持つ。OCI / Oracle に依存する設定は今後ここに入れる）
+- バックエンド共有: `production-ready-backend-core` / `pr_backend_core`（`packages/backend_core`）、`production-ready-system-settings-backend` / `pr_system_settings`（`packages/system_settings_backend`、共通のシステム設定 API。backend_core と違い業務の設定項目を持つ。Oracle・モデルの API に依存する設定は今後ここに入れる）
 
 原則は前後端で共通: **共通機能の変更は必ず `platform/` で行い、各製品にコピーしない。**
 GitHub 運用・PR 規約・CI は monorepo 共通の [../AGENTS.md](../AGENTS.md) に従う。
