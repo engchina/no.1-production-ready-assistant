@@ -52,6 +52,7 @@ from pr_system_settings.chat_attachments.tools import (
 )
 
 from app.features.agent.answer_passages import (
+    KIND_ABSENCE,
     KIND_CITATION,
     answer_passage_positions,
     non_claim_passages,
@@ -647,8 +648,10 @@ def validation_passage_citations(
       根拠と、本文の根拠の ID の印）を先にし、この接続に渡す残りの根拠を続ける。RAG が ID を書かない
       段落を回答の他の段落が引いた根拠で確かめ直す（#1412）のと同じ考え方で、業務 Agent の回答は
       段落ごとに出典を書かないので、他の段落に結び付かなかった根拠も除かない（#117）。
-    - 回答のどこにも根拠が結び付かなければ渡さない（RAG は今までどおり unassessed にする）。
-    - 主張ではない段落（見出し・出典の行・表の形・質問・不足の文）は渡さない。
+    - 回答のどこにも根拠が結び付かなくても、この接続に渡す根拠を渡す。不足の結論（「資料に
+      記載が無い」）は根拠の語を書かないので結び付かず、裏付けは渡した根拠の全体で判定する
+      しかない（#125）。
+    - 不足の結論以外の、主張ではない段落（見出し・出典の行・表の形・質問）は渡さない。
 
     出典は RAG に「この段落はこの根拠に拠る」と申告するだけで、裏付けの判定は RAG が根拠の本文で
     行う（結び付けが誤っていれば supported にならない）。本文に出典を書いた段落は RAG が本文の
@@ -663,12 +666,11 @@ def validation_passage_citations(
         {chunk_id for ids in bound.values() for chunk_id in ids} | cited_chunk_ids(answer, known),
         known,
     )
-    if not whole:
-        return []
     kinds = non_claim_passages(answer)
     citations: list[JsonObject] = []
     for start, end, text in answer_passage_positions(answer):
-        if not text or kinds.get(text) is not None:
+        # 不足の結論は主張ではないが RAG が監査するので、渡した根拠の全体を出典にする（#125）。
+        if not text or kinds.get(text) not in {None, KIND_ABSENCE}:
             continue
         ids = _ordered_ids(set(bound.get(text) or ()), known) or [
             *whole,

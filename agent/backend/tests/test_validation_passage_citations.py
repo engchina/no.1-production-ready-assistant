@@ -109,6 +109,9 @@ def test_tool_name_lines_are_lookup_notes_and_removed_before_validation() -> Non
     # 見出しとツール名が同じ行の形（#117）。
     assert is_lookup_note("**使用したツール:** `rag__rag_retrieve_evidence`")
     assert is_lookup_note("- 使ったツール：`rag__rag_search`、`nl2sql__nl2sql_query`")
+    assert is_lookup_note(
+        "- 使用ツール: `rag__rag_recommend_search_answer_profile`、`rag__rag_retrieve_evidence`"
+    )
     assert not is_lookup_note("**使用したツール:** 経費システム")
     body = without_lookup_notes(LODGING_ANSWER)
     assert "rag__" not in body
@@ -177,9 +180,10 @@ def test_unbound_passage_is_also_sent_the_evidence_no_other_passage_used() -> No
     assert CHUNKS["art3b"] in cited[note]
 
 
-def test_no_passage_citations_without_any_binding() -> None:
-    # 回答のどこにも根拠が結び付かなければ渡さない（RAG は今までどおり unassessed にする）。
-    assert validation_passage_citations("期限は 30 日です。", ITEMS) == []
+def test_passages_without_any_binding_are_sent_all_the_evidence() -> None:
+    # 不足の結論は根拠の語を書かないので結び付かない。渡した根拠の全体を出典にする（#125）。
+    absence = "社内資料を調べましたが、社員食堂の献立は確認できませんでした。"
+    assert _cited(absence, ITEMS) == {absence: [item["chunk_id"] for item in ITEMS]}
     assert validation_passage_citations(LEAD, []) == []
 
 

@@ -180,6 +180,10 @@ def test_valid_answer_is_kept_and_the_result_is_saved(
         "requests": [{"id": "Q1", "text": "契約条項", "status": "addressed"}],
         # rag_search の回答の監査の判定を再利用する（#1527）。
         "answer_trace_ids": ["rag-trace-1"],
+        # 段落に結び付く根拠が無くても、渡した根拠を出典にする（#125）。
+        "passage_citations": [
+            {"answer_range": {"start": 0, "end": len(ANSWER)}, "chunk_ids": ["chunk-1"]}
+        ],
     }
     assert call["claims"]["sub"] == USER_UUID
     assert call["claims"]["run_id"] == run.id
