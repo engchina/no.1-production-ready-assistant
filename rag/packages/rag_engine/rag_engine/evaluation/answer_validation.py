@@ -884,7 +884,7 @@ def _enforce_support(
                 claim, "contradicted", SUPPORT_PREMISE_CONFLICT, "段落が勧める内容は、原質問・確認の答えの条件・制約と両立しません。"
             )
         elif claim.status == "supported":
-            quote = claim.support_quote
+            quote = _without_audit_notes(claim.support_quote)
             support_texts = _support_texts(claim, catalog, texts)
             if quote and not (any(quote_in_text(quote, text) for text in support_texts) or quote_in_text(quote, "\n".join(support_texts))):
                 claim = _not_supported(
@@ -914,6 +914,19 @@ def _enforce_support(
                 )
         result.append(claim)
     return result
+
+
+# 監査が引用の欄に書いた注記の括弧（#131）。全体が 1 つの括弧の注記（「（全節に献立の記載なし）」）と、根拠の項目の
+# 欄の名前を足した括弧（「（page_start: 1, page_end: 1）」）。原文の括弧（「第3条（出張旅費）」）は除かない。
+_WHOLE_NOTE = re.compile(r"\s*(?:（[^（）]*）|\([^()]*\))\s*")
+_FIELD_NOTE = re.compile(r"\s*(?:（[^（）]*[a-z]+_[a-z_]+\s*[:：=][^（）]*）|\([^()]*[a-z]+_[a-z_]+\s*[:：=][^()]*\))")
+
+
+def _without_audit_notes(quote: str) -> str:
+    """引用から監査の注記の括弧を除く（全体が注記なら空。空の引用は ID だけで結び付ける。#131）。"""
+    if _WHOLE_NOTE.fullmatch(quote or ""):
+        return ""
+    return _FIELD_NOTE.sub("", quote or "").strip()
 
 
 # 段落が根拠の ID を書いた印（chunk の id の形・「【証拠 ID …】」「evidence_id: …」などのラベル）。
