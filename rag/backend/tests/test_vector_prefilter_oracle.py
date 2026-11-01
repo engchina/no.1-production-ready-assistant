@@ -189,7 +189,9 @@ async def test_vector_search_with_the_index_is_not_starved_by_inactive_chunk_set
     _rows, _elapsed, plan = await client._run_transaction(
         _run_statement(forced_sql, binds, with_plan=True)
     )
-    assert any("VECTOR INDEX HNSW SCAN" in op for op in vector_plan_operations(plan)), plan
+    assert any("VECTOR INDEX HNSW SCAN" in op for op in vector_plan_operations(plan)), "\n".join(
+        plan
+    )
 
     assert set(exact) == set(reference)
     assert set(approx) == set(reference)
