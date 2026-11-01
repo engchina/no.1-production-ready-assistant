@@ -643,9 +643,10 @@ def validation_passage_citations(
     章節の参照・引用・同じ文字の並び）で結び付けて渡す。
 
     - 段落そのものに結び付いた根拠があれば、その根拠。
-    - 無い段落（表の値の行など）は、回答全体が出典にした根拠（他の段落・出典の行が結び付けた根拠と、
-      本文の根拠の ID の印）。RAG が ID を書かない段落を回答の他の段落が引いた根拠で確かめ直す
-      （#1412）のと同じ考え方。
+    - 無い段落（言い換えた段落など）は、回答全体が出典にした根拠（他の段落・出典の行が結び付けた
+      根拠と、本文の根拠の ID の印）を先にし、この接続に渡す残りの根拠を続ける。RAG が ID を書かない
+      段落を回答の他の段落が引いた根拠で確かめ直す（#1412）のと同じ考え方で、業務 Agent の回答は
+      段落ごとに出典を書かないので、他の段落に結び付かなかった根拠も除かない（#117）。
     - 回答のどこにも根拠が結び付かなければ渡さない（RAG は今までどおり unassessed にする）。
     - 主張ではない段落（見出し・出典の行・表の形・質問・不足の文）は渡さない。
 
@@ -662,12 +663,17 @@ def validation_passage_citations(
         {chunk_id for ids in bound.values() for chunk_id in ids} | cited_chunk_ids(answer, known),
         known,
     )
+    if not whole:
+        return []
     kinds = non_claim_passages(answer)
     citations: list[JsonObject] = []
     for start, end, text in answer_passage_positions(answer):
         if not text or kinds.get(text) is not None:
             continue
-        ids = _ordered_ids(set(bound.get(text) or ()), known) or whole
+        ids = _ordered_ids(set(bound.get(text) or ()), known) or [
+            *whole,
+            *(chunk_id for chunk_id in known if chunk_id not in whole),
+        ]
         if not ids:
             continue
         citations.append(

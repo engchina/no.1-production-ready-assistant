@@ -1007,7 +1007,11 @@ _LOOKUP_ACTION = re.compile(
 # `<接続>__<ツール>` なので、`__` を含む名前に限る（設定のキーなど snake_case の語の説明は
 # 外さない）。
 _TOOL_NAME = r"`?[a-z][a-z0-9_]*__[a-z][a-z0-9_]*`?(?:\s*[（(][^（）()]*[）)])?"
-_TOOL_NAME_LINE = re.compile(rf"{_TOOL_NAME}(?:\s*[、,，/／]\s*{_TOOL_NAME})*[。.]?")
+# 先頭の「使用したツール:」の見出し（同じ行にツール名を書く形。強調の印つき。#117）も許す。
+_TOOL_NAME_LINE = re.compile(
+    r"(?:(?:使用した|使った|利用した|呼び出した)?ツール(?:名)?\s*\**\s*[:：]\s*\**\s*)?"
+    rf"{_TOOL_NAME}(?:\s*[、,，/／]\s*{_TOOL_NAME})*[。.]?"
+)
 
 
 def is_lookup_note(text: str) -> bool:
