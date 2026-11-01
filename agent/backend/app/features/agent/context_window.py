@@ -22,7 +22,12 @@ context editing が古いツールの結果から消す、LangChain の `trim_me
   3. 一覧の項目をすべて ID だけにし、一覧の外の長い文字列も先頭だけにする
   4. ID だけを残す（古い結果だけ）
   どの段階でも ID の項目（`id`・`*_id`。根拠の `document_id`・`chunk_id`・`evidence_id` など）は
-  消さない（引用の照合・回答の検証に使う）。縮めた結果には `context_compaction`（元の文字数と
+  消さない（引用の照合・回答の検証に使う）。次の手を選ぶのに要る作業の状態（`STATE_KEYS`。続きの
+  cursor・読み終えたか・状態・結論・条件の名前と値と出典・除外の理由・版。#71）も、短い値
+  （`STATE_VALUE_MAX_CHARS` 文字まで）なら元のまま残す（cursor を切ると続きを読めない）。
+  未確認の点・分かった条件の文の一覧（`STATE_LIST_KEYS`）も短い文を `STATE_LIST_MAX_ITEMS` 件まで
+  残す。
+  長い自由文は残さない（本文と同じく縮める）。縮めた結果には `context_compaction`（元の文字数と
   次の手。読み直すツールがあればその名前）を足す。同じツールの呼び直しを案内するのは、信頼できる
   読み取り専用のツールだけ（副作用があり得るツールは、呼び直すと同じ操作をもう一度実行する。#2632）。
 - Run の step に残すツールの結果は全文のまま（回答の検証・引用の照合は step を使う）。縮めるのは
@@ -70,6 +75,37 @@ _ITEM_OVERHEAD_TOKENS = 8
 # プロバイダが入力の超過を返したが prompt の token 数が読めないときに、見積もりに掛ける倍率。
 FALLBACK_PROVIDER_SCALE = 1.5
 _ID_KEY = re.compile(r"(?:^|_)id$")
+# どの段階でも元のまま残す作業の状態の項目（短い値だけ。#71）。続きの位置・読み終えたか・状態と
+# 結論・条件（名前・値・出典・不明の扱い）・除外や不足の理由・版と置き換え。
+STATE_KEYS = frozenset(
+    {
+        "next_cursor",
+        "cursor",
+        "has_more",
+        "section_complete",
+        "status",
+        "state",
+        "outcome",
+        "error_code",
+        "handling",
+        "label",
+        "value",
+        "source",
+        "reason",
+        "insufficient_reason",
+        "title",
+        "version",
+        "as_of",
+        "superseded",
+        "needs_human_review",
+        "evidence_omitted",
+    }
+)
+# 文の一覧で残す作業の状態（結論に効いた条件・資料で確かめられない点。#71）。
+STATE_LIST_KEYS = frozenset({"conditions", "gaps"})
+# 元のまま残す値の長さの上限（RAG の cursor の上限 256 文字に合わせる）と、一覧で残す件数。
+STATE_VALUE_MAX_CHARS = 256
+STATE_LIST_MAX_ITEMS = 10
 _TOOL_OUTPUT_TYPES = {"function_call_output"}
 
 
@@ -260,12 +296,35 @@ def is_id_key(key: object) -> bool:
     return isinstance(key, str) and bool(_ID_KEY.search(key))
 
 
+def _is_state(key: object, value: object) -> bool:
+    """縮めずに元のまま残す作業の状態か（`STATE_KEYS` の短い値。#71）。"""
+    if not isinstance(key, str) or key not in STATE_KEYS:
+        return False
+    if isinstance(value, str):
+        return len(value) <= STATE_VALUE_MAX_CHARS
+    return value is None or isinstance(value, bool | int | float)
+
+
+def _state_list(key: object, value: object) -> list[str] | None:
+    """残す文の一覧（`STATE_LIST_KEYS` の短い文。当たらなければ None）。"""
+    if not isinstance(key, str) or key not in STATE_LIST_KEYS or not isinstance(value, list):
+        return None
+    texts = [item for item in value if isinstance(item, str)]
+    if len(texts) != len(value) or any(len(item) > STATE_VALUE_MAX_CHARS for item in texts):
+        return None
+    return texts[:STATE_LIST_MAX_ITEMS]
+
+
 def _id_ref(item: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in item.items()
-        if is_id_key(key) and isinstance(value, str | int) and not isinstance(value, bool)
-    }
+    """ID と作業の状態だけの参照（一覧の項目を縮めるときに残す）。"""
+    ref: dict[str, Any] = {}
+    for key, value in item.items():
+        identifier = is_id_key(key) and isinstance(value, str | int) and not isinstance(value, bool)
+        if identifier or _is_state(key, value):
+            ref[key] = value
+        elif (texts := _state_list(key, value)) is not None:
+            ref[key] = texts
+    return ref
 
 
 @dataclass
@@ -305,7 +364,7 @@ def _shrink(value: Any, *, level: int, stats: _Stats, in_list: bool = False) -> 
         clipped = stats.clipped
         result = {
             key: item
-            if is_id_key(key)
+            if is_id_key(key) or _is_state(key, item) or _state_list(key, item) == item
             else _shrink(item, level=level, stats=stats, in_list=in_list)
             for key, item in value.items()
             if key != COMPACTION_KEY
@@ -320,7 +379,7 @@ def _ids_only(value: Any, stats: _Stats) -> Any:
     if isinstance(value, dict):
         kept: dict[str, Any] = _id_ref(value)
         for key, item in value.items():
-            if is_id_key(key) or key == COMPACTION_KEY:
+            if key in kept or key == COMPACTION_KEY:
                 continue
             if isinstance(item, dict | list):
                 nested = _ids_only(item, stats)
@@ -353,7 +412,8 @@ def _note(
     summary = "、".join(done) or "一部を省略"
     text = (
         f"この結果は長いため縮めました（元は {original_chars} 文字。{summary}）。"
-        "ID の項目は元のまま残しているので、引用にそのまま使えます。"
+        "ID の項目は元のまま残しているので、引用にそのまま使えます。続きの cursor・状態・条件・"
+        "除外の理由などの短い値も元のままです。"
     )
     if read_tool:
         text += (
