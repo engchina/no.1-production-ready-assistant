@@ -61,6 +61,7 @@ import json
 from collections.abc import Collection, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from app.features.agent import external_writes
 from app.features.agent.answer_outcome import INSUFFICIENT_EVIDENCE, OUTCOME_SCHEMA_VERSION
 from app.features.agent.answer_passages import (
     asks_for_request,
@@ -360,6 +361,10 @@ def grounding_failure_message(step: RunStep) -> str:
     call, result = step.tool_call, step.tool_result
     name = mcp_base_tool_name(call.name) if call is not None else ""
     reason = (result.error if result is not None else "") or ""
+    if external_writes.step_outcome_unknown(step):
+        # 結果不明の書き込み（#72）: 呼び先の文の「再実行してください」を出さない（重複し得る）。
+        reason = external_writes.OUTCOME_UNKNOWN_RUN_MESSAGE
+
     head = f"資料・業務データのツール（{name}）の実行に失敗したため、回答を作れませんでした。"
     tail = "資料・業務データに根拠が無いという意味ではありません。"
     return f"{head}{reason.strip()}{tail}" if reason.strip() else f"{head}{tail}"

@@ -1289,6 +1289,11 @@ const agentJa = {
   "resultTable.sheetTitle": "{name}（{count} 行）",
   "resultTable.close": "{name}を閉じる",
   "run.waitingApproval": "承認待ち",
+  "run.outcomeUnknown.title": "外部への書き込みの結果が不明です",
+  "run.outcomeUnknown.detail":
+    "相手に届いた後に応答を受け取れませんでした。反映済みかもしれないため、相手のシステムで操作の ID を手がかりに確かめてください。同じ操作を再実行すると重複する可能性があります。",
+  "run.outcomeUnknown.item": "{tool}（操作の ID: {key}）",
+
   "run.progress.queued": "実行の開始を待っています",
   "run.progress.running": "実行しています",
   "run.progress.waitingApproval": "承認を待っています",

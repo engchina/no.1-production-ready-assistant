@@ -192,9 +192,33 @@ export function runToolTitles(run: Pick<RunState, "metadata">): Record<string, s
 }
 
 /** ツールの span の params の、Run の step の id の key（backend の `RUN_STEP_PARAM`。#3226）。 */
+
 export const RUN_STEP_PARAM = "run_step";
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<RunState["status"]> = new Set(["completed", "failed", "cancelled"]);
+
+/** 結果不明の外部への書き込み（#72。backend の `external_writes.unknown_steps`）。 */
+export interface OutcomeUnknownWrite {
+  stepId: string;
+  toolName: string;
+  operationKey: string;
+}
+
+/**
+ * 結果が不明な外部への書き込みの step（届いた後の失敗・中断。backend の `external_writes.unknown_steps` と同じ判定）。
+ * 終わった Run の実行中の書き込み（取消の後に結果が届かないまま止まった）も含める。
+ */
+export function runOutcomeUnknownWrites(run: Pick<RunState, "status" | "steps">): OutcomeUnknownWrite[] {
+  const ended = TERMINAL_RUN_STATUSES.has(run.status);
+  return run.steps.flatMap((step) => {
+    const key = step.tool_call?.operation_key;
+    if (!step.tool_call || !key) return [];
+    const unknown =
+      (step.tool_result?.success === false && step.tool_result.error_details?.outcome === "unknown") ||
+      (ended && step.status === "running");
+    return unknown ? [{ stepId: step.id, toolName: step.tool_call.name, operationKey: key }] : [];
+  });
+}
 
 /**
  * 処理の経過の行（span の id）と、ツールの span が結んだ Run の step（引数・結果・データの範囲）。backend はツールの
