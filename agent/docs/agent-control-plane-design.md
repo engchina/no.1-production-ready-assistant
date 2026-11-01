@@ -758,6 +758,15 @@ dispatcher の claim）は `runtime.load_snapshot_tolerant` で、snapshot を J
   上限で止まった判定は上限を広げて（広げられなければ推論の量を 1 段下げて。#2023）1 回だけ送り直す（#1845）。権限・認証・モデルの設定の誤り・割り当ての使い切りは、そのケースに
   理由を残し、残りのケースを始めずに job を失敗にする（同じ失敗をくり返さない）。業務 Agent の Run の中の呼び出しは対象外
   （Run ごとの SDK の再試行のまま）。
+- 品質評価は 1 ケースを k 回反復できる（`POST /api/evaluations` の `trials`。既定 1、10 まで。#62）。ケースの数 × k は実行の
+  予算 `AGENT_EVALUATION_MAX_TRIAL_RUNS`（既定 200）まで。結果は「ケース × 試行」（`results[].trial`）で、試行の順に並べる
+  （取消で途中で止まっても先の試行はすべてのケースがそろう。Run の `metadata.evaluation_trial`）。概要の `pass_rate` は判定できた
+  試行の平均で、ほかに Pass^k（k 回すべて成功したケースの割合）・Pass@k（どれか 1 回成功）・安定 / 不安定・欠測（未完了・評価者の
+  失敗・取消・承認の停止）を出す。Pass@k / Pass^k の分母は k 回すべてを判定できたケースだけで、欠測のある k 回を成功に数えない。
+  区間（95%）の単位はケースで、合格率と Pass@k / Pass^k は Wilson の score 区間、2 つの評価の対応のある差（`GET /api/evaluations/compare`
+  の `paired`）は定義が同じケースだけで MOVER の区間を求める（集計は `pr_evaluation_scoring.trials`）。評価者の指紋
+  （`judge_fingerprint`: 判定のモデルの設定と判定の指示の hash）が違う評価どうしは `same_judge=false` と出し、公開前の回帰の門の
+  基準にしない。
 
 ## 7. Snapshot migration
 

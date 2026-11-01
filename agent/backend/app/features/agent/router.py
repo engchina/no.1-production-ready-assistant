@@ -164,12 +164,15 @@ from app.features.agent.evaluation import (
     EvaluationSetFullError,
     EvaluationSetInput,
     EvaluationSetsData,
+    EvaluationSummary,
     JobStatus,
     cases_fingerprint,
     compare_jobs,
     draft_definition_hash,
     evaluation_set_store,
     evaluation_store,
+    judge_fingerprint,
+    paired_comparison,
     recorded_output_rows,
     run_evaluation_job,
     set_item,
@@ -2756,6 +2759,16 @@ async def create_evaluation(
             status_code=409,
             detail="公開した版がありません。下書きで評価するか、公開してから評価してください。",
         )
+    # 反復の回数と実行の予算（#62）。ケース × 試行の数が予算を超える評価は始めない。
+    budget = get_settings().agent_evaluation_max_trial_runs
+    if len(item.cases) * evaluation.trials > budget:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"ケース {len(item.cases)} 件 × {evaluation.trials} 回の試行は、1 回の評価の"
+                f"実行の予算（{budget} 回）を超えます。回数かケースを減らしてください。"
+            ),
+        )
     job = EvaluationJob(
         agent_id=agent.id,
         agent_name=agent.name,
@@ -2763,8 +2776,15 @@ async def create_evaluation(
         set_name=item.name,
         agent_version="draft" if target == "draft" else agent.published_version,
         definition_hash=draft_definition_hash(agent) if target == "draft" else None,
+        trials=evaluation.trials,
+        judge_fingerprint=judge_fingerprint(),
         created_by_user_uuid=_run_creator_user_uuid(request),
-        results=[EvaluationCaseResult(case=case) for case in item.cases],
+        # 試行の順に並べる（取消で止まっても、先の試行はすべてのケースがそろう。#62）。
+        results=[
+            EvaluationCaseResult(case=case, trial=trial)
+            for trial in range(1, evaluation.trials + 1)
+            for case in item.cases
+        ],
     )
     try:
         created = evaluation_store.create(job)
@@ -3770,9 +3790,27 @@ def _format_rate(value: float) -> str:
     return f"{round(value * 100)}%"
 
 
+def _rate_uncertainty(summary: EvaluationSummary) -> str:
+    """合格率の不確実性と欠測（#62。拒否の文に添える）。"""
+    parts = []
+    if summary.pass_rate_interval is not None:
+        low, high = summary.pass_rate_interval
+        parts.append(f"95% 区間 {_format_rate(low)}〜{_format_rate(high)}")
+    parts.append(f"ケース {summary.judged_cases} 件")
+    if summary.trials > 1:
+        parts.append(f"各 {summary.trials} 回の試行")
+    if summary.missing_trials:
+        parts.append(f"欠測 {summary.missing_trials} 試行")
+    return f"（{'、'.join(parts)}）"
+
+
 def _publish_baseline(agent: AgentProfile, draft_job: EvaluationJob) -> EvaluationJob | None:
     """回帰の門の基準（#2569）: 下書きの評価と同じ評価セット・同じ評価ケースで、公開中の版を
-    評価した最新の評価（完了して合格率のあるもの）。"""
+    評価した最新の評価（完了して合格率のあるもの）。
+
+    評価者（判定のモデルと判定の指示）が違うと分かる評価は基準にしない（業務 Agent の差と評価者の
+    差を分けられないため。#62）。
+    """
     fingerprint = cases_fingerprint(draft_job)
     return next(
         (
@@ -3784,8 +3822,26 @@ def _publish_baseline(agent: AgentProfile, draft_job: EvaluationJob) -> Evaluati
             and job.set_id == draft_job.set_id
             and job.summary.pass_rate is not None
             and cases_fingerprint(job) == fingerprint
+            and not (
+                job.judge_fingerprint
+                and draft_job.judge_fingerprint
+                and job.judge_fingerprint != draft_job.judge_fingerprint
+            )
         ),
         None,
+    )
+
+
+def _paired_note(baseline: EvaluationJob, draft_job: EvaluationJob) -> str:
+    """公開中の版との対応のある差（同じ定義のケースごとの成功率の差。#62）の文。"""
+    paired = paired_comparison(baseline, draft_job)
+    if paired is None:
+        return ""
+    low, high = paired.interval
+    verdict = "差の向きは確か" if paired.conclusive else "区間が 0 をまたぐため差は不確か"
+    return (
+        f"同じケース {paired.cases} 件の対応比較では差 {round(paired.difference * 100):+d} pt"
+        f"（95% 区間 {round(low * 100):+d}〜{round(high * 100):+d} pt、{verdict}）。"
     )
 
 
@@ -3837,7 +3893,8 @@ def _publish_evaluation_refusal(agent: AgentProfile) -> str | None:
         )
     if threshold > 0 and rate < threshold:
         return (
-            f"今の下書きの品質評価（{latest.set_name}）が合格率 {_format_rate(rate)}で、"
+            f"今の下書きの品質評価（{latest.set_name}）が合格率 {_format_rate(rate)}"
+            f"{_rate_uncertainty(latest.summary)}で、"
             f"公開に必要な合格率 {_format_rate(threshold)} に届いていません。"
             "指示やスキルを直して評価し直してください。"
         )
@@ -3847,17 +3904,19 @@ def _publish_evaluation_refusal(agent: AgentProfile) -> str | None:
     if baseline is None:
         return (
             f"公開するには、公開中の版（v{agent.published_version}）も同じ評価セット"
-            f"（{latest.set_name}）・同じ評価ケースで評価してください（下書きの合格率を、公開中の版と"
-            "比べて確かめます）。"
+            f"（{latest.set_name}）・同じ評価ケース・同じ評価者（判定のモデルと判定の指示）で評価して"
+            "ください（下書きの合格率を、公開中の版と比べて確かめます）。"
         )
     base_rate = baseline.summary.pass_rate or 0.0
     # 浮動小数の誤差で、ちょうど許す下げ幅を断らない。
     if rate < base_rate - max_drop - 1e-9:
         return (
-            f"今の下書きの合格率 {_format_rate(rate)} が、"
-            f"公開中の版（v{agent.published_version}）の合格率 {_format_rate(base_rate)} から"
+            f"今の下書きの合格率 {_format_rate(rate)}{_rate_uncertainty(latest.summary)} が、"
+            f"公開中の版（v{agent.published_version}）の合格率 {_format_rate(base_rate)}"
+            f"{_rate_uncertainty(baseline.summary)} から"
             "下がりすぎています（許す下げ幅は "
             f"{_format_rate(max_drop)}、評価セット {latest.set_name}）。"
+            f"{_paired_note(baseline, latest)}"
             "指示やスキルを直して評価し直してください。"
         )
     return None

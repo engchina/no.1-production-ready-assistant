@@ -2317,6 +2317,8 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
         set_id: job.set_id ?? "",
         set_name: job.set_name ?? "",
         agent_version: job.agent_version ?? null,
+        trials: job.trials ?? 1,
+        judge_fingerprint: job.judge_fingerprint ?? null,
         status: job.status,
         summary: job.summary,
         created_at: job.created_at,

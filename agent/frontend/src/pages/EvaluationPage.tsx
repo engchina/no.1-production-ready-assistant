@@ -58,7 +58,10 @@ import {
   agentApi,
   type AgentProfile,
   type EvaluationCaseResult,
+  type EvaluationCaseTrials,
   type EvaluationFieldResult,
+  type EvaluationInterval,
+  type EvaluationStability,
   type EvaluationOutputValue,
   type EvaluationClarificationRound,
   type EvaluationJob,
@@ -83,6 +86,14 @@ const POLL_INTERVAL_MS = 1500;
 // 最近の評価の 1 ページ（サーバー側のページング。終わった評価は削除せずに残る。#794・#3235）。
 const JOBS_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 const ACTIVE: ReadonlySet<EvaluationJobStatus> = new Set(["queued", "running"]);
+// 1 ケースを反復する回数の選択肢（#62。backend の上限は 10 回）。
+const TRIAL_OPTIONS = [1, 2, 3, 5, 10] as const;
+
+/** ケース × 試行の結果のキー（#62。反復しない評価ではケースの ID と同じ）。 */
+function resultKey(result: EvaluationCaseResult): string {
+  const trial = result.trial ?? 1;
+  return trial > 1 ? `${result.case.id}#${trial}` : result.case.id;
+}
 
 export function EvaluationPage() {
   const queryClient = useQueryClient();
@@ -123,9 +134,16 @@ export function EvaluationPage() {
     canEvaluateDraft
   );
 
+  // 1 ケースを反復する回数（#62）。実行の意思なので作業状態には残さない。既定の 1 回は送らない。
+  const [trials, setTrials] = useState(1);
   const start = useMutation({
     mutationFn: ({ setId, version, agentId: evaluated }: { setId: string; version: EvaluationTarget; agentId?: string }) =>
-      agentApi.createEvaluation({ set_id: setId, agent_version: version, ...(evaluated ? { agent_id: evaluated } : {}) }),
+      agentApi.createEvaluation({
+        set_id: setId,
+        agent_version: version,
+        ...(evaluated ? { agent_id: evaluated } : {}),
+        ...(trials > 1 ? { trials } : {}),
+      }),
     onSuccess: (created) => {
       // 一覧に戻ったとき、評価セットの欄も評価した業務 Agent のものにする（#2589。評価セットを URL で開いたとき、
       // 業務 Agent の選択は既定のままなので、評価概要と対象が食い違わないように）。
@@ -202,6 +220,8 @@ export function EvaluationPage() {
       agent={selectedAgent}
       version={target}
       onVersionChange={(value) => setVersionChoice({ agentId: selectedAgentId, value })}
+      trials={trials}
+      onTrialsChange={setTrials}
       onAgentChange={setAgentId}
       agentOptions={usableAgents.map((agent) => ({ value: agent.id, label: agent.name }))}
       jobId={jobId}
@@ -220,6 +240,8 @@ function EvaluationOverview({
   agent,
   version,
   onVersionChange,
+  trials,
+  onTrialsChange,
   onAgentChange,
   agentOptions,
   jobId,
@@ -234,6 +256,8 @@ function EvaluationOverview({
   agent: AgentProfile | undefined;
   version: EvaluationTarget;
   onVersionChange: (version: EvaluationTarget) => void;
+  trials: number;
+  onTrialsChange: (trials: number) => void;
   onAgentChange: (agentId: string) => void;
   agentOptions: { value: string; label: string }[];
   jobId: string | null;
@@ -246,7 +270,7 @@ function EvaluationOverview({
 }) {
   const queryClient = useQueryClient();
   const confirm = useConfirm();
-  // シートで開いているケース（ID）。内容は表示中の評価の結果から引き、実行中の評価の取り直しで更新する。
+  // シートで開いているケースの試行（`resultKey`）。内容は表示中の評価の結果から引き、実行中の評価の取り直しで更新する。
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
   const sets = useQuery({
@@ -292,8 +316,8 @@ function EvaluationOverview({
   }, [jobId, job.isError, onJobChange]);
   // シートのケースと「前へ / 次へ」の前後（評価の結果の並び。結果の表の並びと同じ）。
   const caseResults = job.data?.results ?? [];
-  const selectedCase = caseResults.find((result) => result.case.id === selectedCaseId) ?? null;
-  const { previous: previousCase, next: nextCase } = adjacentListItems(caseResults, selectedCaseId, (result) => result.case.id);
+  const selectedCase = caseResults.find((result) => resultKey(result) === selectedCaseId) ?? null;
+  const { previous: previousCase, next: nextCase } = adjacentListItems(caseResults, selectedCaseId, resultKey);
   // 実行中の評価が終わったら、評価セットと最近の評価を取り直す。
   const shownStatus = job.data?.status;
   useEffect(() => {
@@ -418,6 +442,16 @@ function EvaluationOverview({
                 disabled={agentOptions.length === 0}
               />
               <EvaluationVersionField id="evaluation-version" agent={agent} value={version} onChange={onVersionChange} />
+              <SelectField<string>
+                id="evaluation-trials"
+                data-testid="evaluation-trials"
+                label={t("evaluation.form.trials")}
+                helper={t("evaluation.form.trialsHelper")}
+                width="sm"
+                value={String(trials)}
+                options={TRIAL_OPTIONS.map((count) => ({ value: String(count), label: t("evaluation.form.trialsOption", { count }) }))}
+                onValueChange={(value) => onTrialsChange(Number(value))}
+              />
             </div>
             {sets.isLoading ? (
               <TimedLoadingState label={t("loading.evaluationSets")} testId="evaluation-sets-loading">
@@ -473,7 +507,7 @@ function EvaluationOverview({
             cancelling={cancel.isPending}
             onCancel={() => cancel.mutate(job.data.id)}
             selectedCaseId={selectedCaseId}
-            onOpenCase={(result) => setSelectedCaseId(result.case.id)}
+            onOpenCase={(result) => setSelectedCaseId(resultKey(result))}
           />
         ) : null}
 
@@ -530,8 +564,8 @@ function EvaluationOverview({
           side="right"
           size="md"
           pager={{
-            onPrevious: previousCase ? () => setSelectedCaseId(previousCase.case.id) : null,
-            onNext: nextCase ? () => setSelectedCaseId(nextCase.case.id) : null,
+            onPrevious: previousCase ? () => setSelectedCaseId(resultKey(previousCase)) : null,
+            onNext: nextCase ? () => setSelectedCaseId(resultKey(nextCase)) : null,
             labels: { previous: t("listDetail.previous"), next: t("listDetail.next") },
             testId: "evaluation-case-pager",
           }}
@@ -735,33 +769,89 @@ function JobView({
         </CardContent>
       </Card>
 
+      {(summary.trials ?? 1) > 1 && job.case_trials ? (
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>{t("evaluation.stability.title")}</CardTitle>
+            <CardDescription>{t("evaluation.stability.description", { trials: summary.trials ?? 1 })}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <StabilityTable items={job.case_trials} jobId={job.id} />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>{t("evaluation.results.title")}</CardTitle>
           <CardDescription>{t("evaluation.results.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResultsTable results={job.results} jobId={job.id} selectedCaseId={selectedCaseId} onOpen={onOpenCase} />
+          <ResultsTable
+            results={job.results}
+            jobId={job.id}
+            trials={summary.trials ?? 1}
+            selectedCaseId={selectedCaseId}
+            onOpen={onOpenCase}
+          />
         </CardContent>
       </Card>
     </div>
   );
 }
 
+/** 95% の区間の文（#62。区間の無い評価は空）。 */
+function intervalText(interval: EvaluationInterval | null | undefined): string {
+  return interval ? t("evaluation.summary.interval", { low: formatRate(interval[0]), high: formatRate(interval[1]) }) : "";
+}
+
 function SummaryMetrics({ summary, previous }: { summary: EvaluationSummary; previous: EvaluationSummary | null }) {
   const ofTotal = t("evaluation.summary.ofTotal", { total: formatNumber(summary.total) });
+  const trials = summary.trials ?? 1;
+  const passRateBasis = [
+    previous ? rateDelta(summary.pass_rate, previous.pass_rate) : ofTotal,
+    intervalText(summary.pass_rate_interval),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     // 統計のタイルはカードの幅を等分する（6 個なので 2 / 3 列、出力の項目を判定したら 8 個なので 2 / 4 列。
     // design-system README §4「wide 画面の 100% 充填」）。
     <div
-      className={`grid grid-cols-2 gap-x-5 gap-y-4 ${summary.field_cases ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}
+      className={`grid grid-cols-2 gap-x-5 gap-y-4 ${summary.field_cases || trials > 1 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}
       data-testid="evaluation-summary"
     >
-      <Metric
-        label={t("evaluation.summary.passRate")}
-        value={formatRate(summary.pass_rate)}
-        detail={previous ? rateDelta(summary.pass_rate, previous.pass_rate) : ofTotal}
-      />
+      <Metric label={t("evaluation.summary.passRate")} value={formatRate(summary.pass_rate)} detail={passRateBasis} />
+      {trials > 1 ? (
+        // 反復試行（#62）。Pass^k（k 回すべて成功）と Pass@k（どれか 1 回成功）は、k 回すべてを判定できたケースが分母。
+        <>
+          <Metric
+            label={t("evaluation.summary.passHatK", { trials })}
+            value={formatRate(summary.pass_hat_k ?? null)}
+            detail={[
+              t("evaluation.summary.completeCases", { count: summary.complete_cases ?? 0 }),
+              intervalText(summary.pass_hat_k_interval),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          />
+          <Metric
+            label={t("evaluation.summary.passAtK", { trials })}
+            value={formatRate(summary.pass_at_k ?? null)}
+            detail={intervalText(summary.pass_at_k_interval) || t("evaluation.summary.completeCases", { count: 0 })}
+          />
+          <Metric
+            label={t("evaluation.summary.unstable")}
+            value={formatNumber(summary.unstable_cases ?? 0)}
+            detail={t("evaluation.summary.stableCases", { count: summary.stable_cases ?? 0 })}
+          />
+          <Metric
+            label={t("evaluation.summary.missing")}
+            value={formatNumber(summary.missing_trials ?? 0)}
+            detail={t("evaluation.summary.incompleteCases", { count: summary.incomplete_cases ?? 0 })}
+          />
+        </>
+      ) : null}
       <Metric
         label={t("evaluation.summary.averageScore")}
         value={summary.average_score === null ? "—" : summary.average_score.toFixed(2)}
@@ -828,11 +918,14 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 function ResultsTable({
   results,
   jobId,
+  trials,
   selectedCaseId,
   onOpen,
 }: {
   results: EvaluationCaseResult[];
   jobId: string;
+  /** 1 ケースを反復した回数（#62。2 回以上なら試行の列を出す）。 */
+  trials: number;
   selectedCaseId: string | null;
   onOpen: (result: EvaluationCaseResult) => void;
 }) {
@@ -846,11 +939,22 @@ function ResultsTable({
         <RowTitleButton
           title={result.case.question}
           subtitle={result.case.id}
-          current={result.case.id === selectedCaseId}
+          current={resultKey(result) === selectedCaseId}
           onClick={() => onOpen(result)}
         />
       ),
     },
+    ...(trials > 1
+      ? [
+          {
+            key: "trial",
+            header: t("evaluation.column.trial"),
+            align: "right" as const,
+            className: "whitespace-nowrap tabular-nums text-fg",
+            render: (result: EvaluationCaseResult) => t("evaluation.trial.number", { trial: result.trial ?? 1, trials }),
+          },
+        ]
+      : []),
     {
       key: "verdict",
       header: t("evaluation.column.verdict"),
@@ -900,9 +1004,70 @@ function ResultsTable({
         pageKey="evaluationResults"
         rows={results}
         columns={columns}
-        getRowKey={(result) => result.case.id}
+        getRowKey={resultKey}
         ariaLabel={t("evaluation.results.label")}
         tableClassName="w-full min-w-[54rem]"
+        resetKey={jobId}
+      />
+    </div>
+  );
+}
+
+const STABILITY_VARIANT: Record<EvaluationStability, StatusVariant> = {
+  stable_pass: "success",
+  stable_fail: "danger",
+  unstable: "warning",
+  incomplete: "neutral",
+  unjudged: "neutral",
+};
+
+/** ケースごとの k 回の試行の安定性（#62。状態は文と色で出す）。 */
+function StabilityTable({ items, jobId }: { items: EvaluationCaseTrials[]; jobId: string }) {
+  const columns: DataTableColumn<EvaluationCaseTrials>[] = [
+    {
+      key: "case",
+      header: t("evaluation.column.case"),
+      rowHeader: true,
+      className: "min-w-56 max-w-96",
+      render: (item) => (
+        <span className="flex min-w-0 flex-col">
+          <span className="break-words font-medium text-fg">{item.question}</span>
+          <span className="break-all text-xs text-fg-muted">{item.case_id}</span>
+        </span>
+      ),
+    },
+    {
+      key: "stability",
+      header: t("evaluation.stability.column"),
+      render: (item) => (
+        <StatusBadge variant={STABILITY_VARIANT[item.stability]} label={t(`evaluation.stability.${item.stability}` as I18nKey)} />
+      ),
+    },
+    {
+      key: "passed",
+      header: t("evaluation.stability.passed"),
+      align: "right",
+      className: "whitespace-nowrap tabular-nums text-fg",
+      render: (item) => t("evaluation.stability.passedValue", { passed: item.passed, judged: item.judged }),
+    },
+    {
+      key: "missing",
+      header: t("evaluation.stability.missing"),
+      align: "right",
+      className: "whitespace-nowrap tabular-nums text-fg",
+      render: (item) => formatNumber(item.missing),
+    },
+  ];
+  return (
+    <div className="grid min-w-0 gap-2">
+      <ListToolbar count={listTotal(items.length)} testId="evaluation-stability-toolbar" />
+      <PagedDataTable<EvaluationCaseTrials>
+        pageKey="evaluationStability"
+        rows={items}
+        columns={columns}
+        getRowKey={(item) => item.case_id}
+        ariaLabel={t("evaluation.stability.label")}
+        tableClassName="w-full min-w-[40rem]"
         resetKey={jobId}
       />
     </div>

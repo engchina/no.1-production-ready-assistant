@@ -18,6 +18,8 @@ dependencies = [
   "pyyaml>=6.0",
   "production-ready-backend-core",
   "production-ready-system-settings-backend",
+  # 品質評価の反復試行の集計と区間（#62。標準 library だけの採点の部品）。
+  "production-ready-evaluation-scoring",
   "openai-agents==0.24.0",
   # 品質評価の評価セットの Excel の取り込み・書き出し（NL2SQL と同じ。#776）。
   "openpyxl>=3.1",
@@ -46,6 +48,7 @@ dev = [
 # テンプレを <app>/backend へ展開したときの相対パス。
 production-ready-backend-core = { path = "../../platform/packages/backend_core", editable = true }
 production-ready-system-settings-backend = { path = "../../platform/packages/system_settings_backend", editable = true }
+production-ready-evaluation-scoring = { path = "../../platform/packages/evaluation_scoring", editable = true }
 
 [build-system]
 requires = ["hatchling"]

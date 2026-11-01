@@ -30,6 +30,11 @@ job・進み具合・取り消し・概要・ケース別結果）にそろえ�
 - 評価ケースは期待する出力（出力の項目の値）を持てる。項目ごとの判定はコードで行い（#2558）、
   比べ方が「意味が同じ」の文字の項目で文字が一致しなかったものだけを、ケースごとに 1 回の
   LLM の呼び出しでまとめて判定する（#2562）。
+- 1 ケースを k 回反復して評価できる（#62。既定は 1 回）。結果は「ケース × 試行」で持ち（`trial`）、
+  概要は試行の平均の合格率とは別に、k 回すべて成功したケースの割合（Pass^k）・どれか 1 回成功した
+  ケースの割合（Pass@k）・安定 / 不安定・欠測（未完了・評価者の失敗・取消）を出す。区間の単位は
+  ケース（Wilson の score 区間。同じケースの反復を独立した問題に数えない）。集計は platform の
+  `pr_evaluation_scoring.trials`。
 """
 
 from __future__ import annotations
@@ -57,6 +62,14 @@ from pr_backend_core.bounded_calls import (
     BoundedCaller,
     BoundedCallFailed,
     ErrorKind,
+)
+from pr_evaluation_scoring import (
+    CaseTrials,
+    PairedDifference,
+    case_trials,
+    paired_difference,
+    summarize_trials,
+    wilson_interval,
 )
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -92,6 +105,9 @@ EVALUATION_MAX_CASES = 50
 EVALUATION_QUESTION_MAX_CHARS = 4000
 EVALUATION_EXPECTED_MAX_CHARS = 8000
 EVALUATION_EXPECTED_TOOLS_MAX = 10
+# 1 ケースを反復する回数の上限（#62）。既定は 1 回。ケースの数 × 回数は実行の予算
+# （`AGENT_EVALUATION_MAX_TRIAL_RUNS`）までにする。
+EVALUATION_TRIALS_MAX = 10
 # 評価ケースが持てる問い返しへの答えの数と、1 ケースで答える往復の上限（#1845。共通の
 # 「回答前の確認」の往復の上限の既定 3 回にそろえる。
 # platform/docs/ux-contracts/confirm-before-answer.md）。
@@ -432,6 +448,8 @@ class EvaluationClarificationRound(BaseModel):
 
 class EvaluationCaseResult(BaseModel):
     case: EvaluationCase
+    # 試行の番号（1 から。#62。#62 より前の job は 1 回だけ）。
+    trial: int = Field(default=1, ge=1)
     status: CaseStatus = CaseStatus.PENDING
     run_id: str | None = None
     answer: str = ""
@@ -477,6 +495,50 @@ class JobStatus(StrEnum):
 
 ACTIVE_JOB_STATUSES = {JobStatus.QUEUED, JobStatus.RUNNING}
 
+# 合格率の分母に入る状態（業務 Agent の実行の失敗・時間切れは不合格。#1845）。それ以外の終わった
+# 状態（判定のモデルの失敗・実行条件の変更・承認による停止・取消）と未完了は欠測（#62）。
+_COUNTED_STATUSES = {CaseStatus.JUDGED, CaseStatus.RUN_FAILED, CaseStatus.TIMED_OUT}
+
+
+def trial_outcome(result: EvaluationCaseResult) -> bool | None:
+    """1 回の試行の合否（合格率の分母に入らない試行は None = 欠測。#62）。"""
+    if result.status not in _COUNTED_STATUSES:
+        return None
+    if result.status != CaseStatus.JUDGED:
+        return False
+    if result.judgement is None:
+        return None
+    return result.judgement.verdict == JudgeVerdict.CORRECT
+
+
+def case_groups(
+    results: Sequence[EvaluationCaseResult],
+) -> dict[tuple[str, int], list[EvaluationCaseResult]]:
+    """ケースごとの試行（評価ケースの順。#62）。
+
+    キーはケースの ID と、同じ ID・同じ試行の番号の何件目か（ID の重なる結果を 1 つのケースに
+    まとめない）。
+    """
+    groups: dict[tuple[str, int], list[EvaluationCaseResult]] = {}
+    seen: dict[tuple[str, int], int] = {}
+    for result in results:
+        number = seen.get((result.case.id, result.trial), 0)
+        seen[(result.case.id, result.trial)] = number + 1
+        groups.setdefault((result.case.id, number), []).append(result)
+    return groups
+
+
+def trial_count(results: Sequence[EvaluationCaseResult]) -> int:
+    """求めた反復の回数（試行の番号の最大。結果が無ければ 1）。"""
+    return max((result.trial for result in results), default=1)
+
+
+def _case_trials(trials: int, results: Sequence[EvaluationCaseResult]) -> CaseTrials:
+    return case_trials([trial_outcome(result) for result in results], trials)
+
+
+Interval = tuple[float, float]
+
 
 class EvaluationSummary(BaseModel):
     total: int = 0
@@ -511,6 +573,27 @@ class EvaluationSummary(BaseModel):
     # 拒答したケースと、調べた後に拒答したケース（#2608）。
     refused_before_tools: int = 0
     refused_after_tools: int = 0
+    # 反復試行（#62）。`total`・`completed`・`correct` などの件数と `pass_rate` は試行の単位
+    # （k = 1 ならケースの単位と同じ）。`judged_cases` は 1 回以上判定できたケースの数
+    # （試行の数は `judged_trials`）。
+    trials: int = 1
+    cases: int = 0
+    judged_trials: int = 0
+    # 合格率の 95% 区間（Wilson。単位はケースで n = judged_cases）。
+    pass_rate_interval: Interval | None = None
+    # k 回すべてを判定できたケースと、欠測（未完了・評価者の失敗・取消など）のあるケース・試行。
+    complete_cases: int = 0
+    incomplete_cases: int = 0
+    missing_trials: int = 0
+    # k 回の結果が同じ（すべて成功 / すべて失敗）ケースと、成功と失敗が混ざるケース。
+    stable_cases: int = 0
+    unstable_cases: int = 0
+    # Pass@k（どれか 1 回成功）と Pass^k（k 回すべて成功）。分母は complete_cases（欠測のある k 回を
+    # 成功にも失敗にも数えない）。
+    pass_at_k: float | None = None
+    pass_at_k_interval: Interval | None = None
+    pass_hat_k: float | None = None
+    pass_hat_k_interval: Interval | None = None
 
 
 def summarize(results: list[EvaluationCaseResult]) -> EvaluationSummary:
@@ -551,9 +634,24 @@ def summarize(results: list[EvaluationCaseResult]) -> EvaluationSummary:
         else:
             summary.uncertain += 1
     finished = summary.completed - cancelled - summary.unjudged - summary.approval_blocked
-    summary.judged_cases = max(0, finished)
+    summary.judged_trials = max(0, finished)
+    trials = trial_count(results)
+    totals = summarize_trials(
+        [_case_trials(trials, items) for items in case_groups(results).values()]
+    )
+    summary.trials = trials
+    summary.cases = totals.cases
+    summary.judged_cases = totals.judged_cases
+    summary.complete_cases = totals.complete_cases
+    summary.incomplete_cases = totals.incomplete_cases
+    summary.missing_trials = totals.missing_trials
+    summary.stable_cases = totals.stable_cases
+    summary.unstable_cases = totals.unstable_cases
+    summary.pass_at_k, summary.pass_at_k_interval = totals.pass_any_rate, totals.pass_any_interval
+    summary.pass_hat_k, summary.pass_hat_k_interval = totals.pass_all_rate, totals.pass_all_interval
     if finished > 0:
         summary.pass_rate = summary.correct / finished
+        summary.pass_rate_interval = wilson_interval(summary.pass_rate, totals.judged_cases)
     if scores:
         summary.average_score = sum(scores) / len(scores)
     if summary.tool_cases:
@@ -578,6 +676,46 @@ class EvaluationRequest(BaseModel):
     agent_id: str | None = Field(default=None, min_length=1, max_length=200)
     # 省略すると、公開していない変更があれば下書き、なければ公開中の版（#810）。
     agent_version: EvaluationTarget | None = None
+    # 1 ケースを反復する回数（#62。既定 1 回）。ケースの数 × 回数が実行の予算を超えたら断る。
+    trials: int = Field(default=1, ge=1, le=EVALUATION_TRIALS_MAX)
+
+
+class CaseTrialSummary(BaseModel):
+    """1 ケースの k 回の試行の集計（#62）。"""
+
+    case_id: str
+    question: str
+    trials: int
+    judged: int
+    passed: int
+    missing: int
+    rate: float | None = None
+    # k 回すべてを判定できたときだけ値を持つ（欠測があれば None）。
+    pass_at_k: bool | None = None
+    pass_hat_k: bool | None = None
+    stability: Literal["stable_pass", "stable_fail", "unstable", "incomplete", "unjudged"]
+
+
+def case_trial_summaries(results: Sequence[EvaluationCaseResult]) -> list[CaseTrialSummary]:
+    trials = trial_count(results)
+    summaries: list[CaseTrialSummary] = []
+    for (case_id, _), items in case_groups(results).items():
+        counted = _case_trials(trials, items)
+        summaries.append(
+            CaseTrialSummary(
+                case_id=case_id,
+                question=items[0].case.question,
+                trials=counted.trials,
+                judged=counted.judged,
+                passed=counted.passed,
+                missing=counted.missing,
+                rate=counted.rate,
+                pass_at_k=counted.pass_any,
+                pass_hat_k=counted.pass_all,
+                stability=counted.stability,
+            )
+        )
+    return summaries
 
 
 class EvaluationJob(BaseModel):
@@ -589,8 +727,14 @@ class EvaluationJob(BaseModel):
     # 評価した版（版の番号か "draft"。Run の `metadata.agent_version` と同じ値。#810）。
     agent_version: AgentVersionRef = None
     definition_hash: str | None = None
+    # 1 ケースを反復した回数（#62）と、評価者（判定のモデルの設定と判定の指示）の指紋。指紋が
+    # 違う評価どうしの差は、業務 Agent の差と評価者の差を分けられない（#62。古い job は None）。
+    trials: int = Field(default=1, ge=1)
+    judge_fingerprint: str | None = None
     status: JobStatus = JobStatus.QUEUED
     created_by_user_uuid: str | None = None
+    # ケース × 試行の結果（試行の順に、各試行は評価ケースの順。取消・予算で途中で止まっても、
+    # 先の試行はすべてのケースがそろう。#62）。
     results: list[EvaluationCaseResult] = Field(default_factory=list)
     # job 全体の失敗（利用者向けの日本語）。
     error: str | None = None
@@ -609,6 +753,12 @@ class EvaluationJob(BaseModel):
     def summary(self) -> EvaluationSummary:
         return summarize(self.results)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def case_trials(self) -> list[CaseTrialSummary]:
+        """ケースごとの k 回の試行の集計（#62）。"""
+        return case_trial_summaries(self.results)
+
 
 class EvaluationJobItem(BaseModel):
     """最近の評価の一覧の 1 行（ケース別結果を含めない）。"""
@@ -619,6 +769,8 @@ class EvaluationJobItem(BaseModel):
     set_id: str
     set_name: str
     agent_version: AgentVersionRef = None
+    trials: int = 1
+    judge_fingerprint: str | None = None
     status: JobStatus
     summary: EvaluationSummary
     created_at: datetime
@@ -798,32 +950,39 @@ def _keep_sources(
     ]
 
 
-def cases_fingerprint(job: EvaluationJob) -> tuple[tuple[Any, ...], ...]:
-    """job が評価したケース（質問・期待・期待するツール）。同じなら前回と比べられる（#810）。
+def case_definition(case: EvaluationCase) -> tuple[Any, ...]:
+    """ケースの定義（質問・期待・期待するツール・問い返しへの答え・期待する出力）。
 
+    同じ定義のケースだけを、統計の比較で同じ問題として扱う（#62。質問が同じでも期待が違えば別）。
     ツールの順を指定したケースは、指定した順のまま比べる（順の指定を変えたら別のケースにする。#1845）。
     """
+    return (
+        normalize_question(case.question),
+        case.expected.strip(),
+        case.expected_approval,
+        (
+            ("in_order", *case.expected_tools)
+            if case.expected_tools_in_order and case.expected_tools
+            else tuple(sorted(case.expected_tools))
+        ),
+        # 問い返しへの答えを変えたら別のケースにする（#1845）。
+        tuple(
+            (item.item_id, tuple(item.option_ids), item.other_text)
+            for item in case.clarification_answers
+        ),
+        # 期待する出力を変えたら別のケースにする（#2558）。
+        json.dumps(case.expected_output, sort_keys=True, ensure_ascii=False),
+    )
+
+
+def cases_fingerprint(job: EvaluationJob) -> tuple[tuple[Any, ...], ...]:
+    """job が評価したケースの定義。同じなら前回と比べられる（#810）。
+
+    反復の回数は含めない（同じケースを違う回数で評価した job も、ケースごとの成功率で
+    比べられる。#62）。
+    """
     return tuple(
-        sorted(
-            (
-                normalize_question(result.case.question),
-                result.case.expected.strip(),
-                result.case.expected_approval,
-                (
-                    ("in_order", *result.case.expected_tools)
-                    if result.case.expected_tools_in_order and result.case.expected_tools
-                    else tuple(sorted(result.case.expected_tools))
-                ),
-                # 問い返しへの答えを変えたら別のケースにする（#1845）。
-                tuple(
-                    (item.item_id, tuple(item.option_ids), item.other_text)
-                    for item in result.case.clarification_answers
-                ),
-                # 期待する出力を変えたら別のケースにする（#2558）。
-                json.dumps(result.case.expected_output, sort_keys=True, ensure_ascii=False),
-            )
-            for result in job.results
-        )
+        sorted(case_definition(items[0].case) for items in case_groups(job.results).values())
     )
 
 
@@ -1106,6 +1265,8 @@ def job_item(job: EvaluationJob) -> EvaluationJobItem:
         set_id=job.set_id,
         set_name=job.set_name,
         agent_version=job.agent_version,
+        trials=job.trials,
+        judge_fingerprint=job.judge_fingerprint,
         status=job.status,
         summary=job.summary,
         created_at=job.created_at,
@@ -1121,11 +1282,16 @@ ComparisonChange = Literal[
 
 
 class ComparisonOutcome(BaseModel):
-    """比べる job の 1 ケースの結果（判定か、判定まで進まなかった状態）。"""
+    """比べる job の 1 ケースの結果（判定か、判定まで進まなかった状態）。
+
+    反復したケース（#62）は k 回の試行をまとめる。`status` は k = 1 なら判定（correct など）か
+    ケースの状態、k > 1 なら安定性（correct = k 回すべて成功・incorrect = すべて失敗・unstable・
+    incomplete）。判定できた試行が無ければ最初の試行の状態。
+    """
 
     case_id: str
-    # correct / incorrect / uncertain（判定した）か、ケースの状態（run_failed など）。
     status: str
+    # k 回すべてを判定でき、すべて成功した（k = 1 なら「正しい」と判定した）。
     passed: bool
     score: float | None = None
     tool_calls: list[str] = Field(default_factory=list)
@@ -1133,6 +1299,11 @@ class ComparisonOutcome(BaseModel):
     # 出力の項目がすべて正しいか（#2558。期待する出力の無いケースは None）。
     field_correct: bool | None = None
     run_id: str | None = None
+    # 試行の数・判定できた試行・成功した試行と、判定できた試行の成功率（#62）。
+    trials: int = 1
+    judged_trials: int = 0
+    passed_trials: int = 0
+    success_rate: float | None = None
 
 
 class ComparisonRow(BaseModel):
@@ -1142,6 +1313,27 @@ class ComparisonRow(BaseModel):
     base: ComparisonOutcome | None = None
     target: ComparisonOutcome | None = None
     change: ComparisonChange
+    # 2 つのケースの定義（期待・ツール・問い返しへの答え・期待する出力）が同じか（#62）。違えば
+    # 行には並べるが、対応のある比較（`paired`）には入れない。
+    same_definition: bool = False
+
+
+class PairedComparison(BaseModel):
+    """同じ定義のケースどうしの、ケースごとの成功率の差（比べる job − 基準の job。#62）。
+
+    単位はケース（反復した試行を独立した問題に数えない）。区間は 95% の MOVER（各 job の Wilson
+    区間を、ケースごとの成功率の相関で組み合わせる）。`conclusive` は区間が 0 をまたがないこと。
+    """
+
+    cases: int
+    base_rate: float
+    target_rate: float
+    difference: float
+    interval: Interval
+    conclusive: bool
+    improved: int
+    regressed: int
+    unchanged: int
 
 
 class EvaluationComparison(BaseModel):
@@ -1156,78 +1348,177 @@ class EvaluationComparison(BaseModel):
     unchanged: int = 0
     base_only: int = 0
     target_only: int = 0
+    # 比較できる条件か（#62）: ケースの定義がすべて同じか・質問は同じで定義の違うケースの数・
+    # 評価者が同じか（どちらかの指紋が無い古い job は None）。
+    same_cases: bool = False
+    definition_mismatch: int = 0
+    same_judge: bool | None = None
+    paired: PairedComparison | None = None
 
 
-def _outcome(result: EvaluationCaseResult) -> ComparisonOutcome:
-    judged = result.status == CaseStatus.JUDGED and result.judgement is not None
-    verdict = result.judgement.verdict if judged and result.judgement else None
+# どちらかの試行がこの状態なら、合否の変化を比べない（承認の停止・実行条件の変更）。
+_NOT_COMPARABLE_STATUSES = {
+    CaseStatus.APPROVAL_BLOCKED,
+    CaseStatus.NEEDS_APPROVAL,
+    CaseStatus.DEFINITION_CHANGED,
+}
+
+
+def _all_true(values: Sequence[bool | None]) -> bool | None:
+    known = [value for value in values if value is not None]
+    return all(known) if known else None
+
+
+def _outcome(results: Sequence[EvaluationCaseResult], trials: int) -> ComparisonOutcome:
+    first = results[0]
+    counted = _case_trials(trials, results)
+    if trials == 1:
+        judged = first.status == CaseStatus.JUDGED and first.judgement is not None
+        verdict = first.judgement.verdict if judged and first.judgement else None
+        status = verdict.value if verdict else first.status.value
+    elif counted.stability == "unjudged":
+        status = first.status.value
+    else:
+        status = (
+            JudgeVerdict.CORRECT.value
+            if counted.stability == "stable_pass"
+            else JudgeVerdict.INCORRECT.value
+            if counted.stability == "stable_fail"
+            else counted.stability
+        )
+    scores = [
+        result.judgement.score
+        for result in results
+        if result.status == CaseStatus.JUDGED and result.judgement is not None
+    ]
     return ComparisonOutcome(
-        case_id=result.case.id,
-        status=verdict.value if verdict else result.status.value,
-        passed=verdict == JudgeVerdict.CORRECT,
-        score=result.judgement.score if judged and result.judgement else None,
-        tool_calls=list(result.tool_calls),
-        tool_selection_correct=result.tool_selection_correct,
-        field_correct=result.field_correct,
-        run_id=result.run_id,
+        case_id=first.case.id,
+        status=status,
+        passed=bool(counted.pass_all),
+        score=sum(scores) / len(scores) if scores else None,
+        tool_calls=list(dict.fromkeys(name for result in results for name in result.tool_calls)),
+        tool_selection_correct=_all_true([result.tool_selection_correct for result in results]),
+        field_correct=_all_true([result.field_correct for result in results]),
+        run_id=first.run_id,
+        trials=counted.trials,
+        judged_trials=counted.judged,
+        passed_trials=counted.passed,
+        success_rate=counted.rate,
     )
 
 
-def _keyed_results(job: EvaluationJob) -> dict[tuple[str, int], EvaluationCaseResult]:
-    """質問（空白をそろえる）と、同じ質問の何件目かで引けるケースの結果。"""
-    keyed: dict[tuple[str, int], EvaluationCaseResult] = {}
+def _keyed_results(job: EvaluationJob) -> dict[tuple[str, int], list[EvaluationCaseResult]]:
+    """質問（空白をそろえる）と、同じ質問の何件目かで引けるケースの試行。"""
+    keyed: dict[tuple[str, int], list[EvaluationCaseResult]] = {}
     seen: dict[str, int] = {}
-    for result in job.results:
-        question = normalize_question(result.case.question)
+    for items in case_groups(job.results).values():
+        question = normalize_question(items[0].case.question)
         number = seen.get(question, 0)
         seen[question] = number + 1
-        keyed[(question, number)] = result
+        keyed[(question, number)] = items
     return keyed
+
+
+def paired_comparison(base: EvaluationJob, target: EvaluationJob) -> PairedComparison | None:
+    """同じ定義のケースどうしの、ケースごとの成功率の対応のある差と区間（#62）。
+
+    両方の job に同じ定義のケースがあり、どちらも判定できた試行があるケースだけを使う。承認の停止・
+    実行条件の変更の試行を含むケースは使わない（合否の変化を比べない）。
+    """
+
+    def rates(job: EvaluationJob) -> dict[tuple[Any, ...], float]:
+        trials = trial_count(job.results)
+        found: dict[tuple[Any, ...], float] = {}
+        for items in case_groups(job.results).values():
+            rate = _case_trials(trials, items).rate
+            if rate is None or any(item.status in _NOT_COMPARABLE_STATUSES for item in items):
+                continue
+            found.setdefault(case_definition(items[0].case), rate)
+        return found
+
+    base_rates, target_rates = rates(base), rates(target)
+    pairs = [(rate, target_rates[key]) for key, rate in base_rates.items() if key in target_rates]
+    difference: PairedDifference | None = paired_difference(pairs)
+    if difference is None:
+        return None
+    return PairedComparison(
+        cases=difference.cases,
+        base_rate=difference.base_rate,
+        target_rate=difference.target_rate,
+        difference=difference.difference,
+        interval=difference.interval,
+        conclusive=difference.conclusive,
+        improved=difference.improved,
+        regressed=difference.regressed,
+        unchanged=difference.unchanged,
+    )
 
 
 def compare_jobs(base: EvaluationJob, target: EvaluationJob) -> EvaluationComparison:
     """2 つの job を、同じ質問のケースどうしで並べる（#1845）。
 
-    ケースは質問で対応させる（評価セットが違っても、同じ質問なら比べる）。変化は合否（「正しい」と
-    判定したか）で決め、合否が同じなら変化なし（スコア・ツールの差は行で見る）。片方にしか無い
-    ケースは `base_only` / `target_only`。並びは基準の job の順、その後に比べる job だけのケース。
+    ケースは質問で対応させる（評価セットが違っても、同じ質問なら比べる）。変化は合否（k 回の試行の
+    成功率。k = 1 なら「正しい」と判定したか）で決め、同じなら変化なし（スコア・ツールの差は行で
+    見る）。片方にしか無いケースは `base_only` / `target_only`。並びは基準の job の順、その後に
+    比べる job だけのケース。
+
+    対応のある差（`paired`。#62）は、定義が同じで、両方の試行に判定できたものがあるケースだけで
+    求める（質問が同じでも期待などが違うケースは同じ問題にしない）。
     """
     base_results = _keyed_results(base)
     target_results = _keyed_results(target)
+    base_trials, target_trials = trial_count(base.results), trial_count(target.results)
     keys = [*base_results, *(key for key in target_results if key not in base_results)]
-    comparison = EvaluationComparison(base=job_item(base), target=job_item(target))
+    comparison = EvaluationComparison(
+        base=job_item(base),
+        target=job_item(target),
+        same_cases=cases_fingerprint(base) == cases_fingerprint(target),
+        same_judge=base.judge_fingerprint == target.judge_fingerprint
+        if base.judge_fingerprint and target.judge_fingerprint
+        else None,
+    )
     for key in keys:
         before = base_results.get(key)
         after = target_results.get(key)
-        left = _outcome(before) if before else None
-        right = _outcome(after) if after else None
+        left = _outcome(before, base_trials) if before else None
+        right = _outcome(after, target_trials) if after else None
+        same_definition = bool(
+            before and after and case_definition(before[0].case) == case_definition(after[0].case)
+        )
         change: ComparisonChange
         if left is None:
             change = "target_only"
         elif right is None:
             change = "base_only"
-        elif left.status in {
-            CaseStatus.APPROVAL_BLOCKED,
-            CaseStatus.NEEDS_APPROVAL,
-            CaseStatus.DEFINITION_CHANGED,
-        } or right.status in {
-            CaseStatus.APPROVAL_BLOCKED,
-            CaseStatus.NEEDS_APPROVAL,
-            CaseStatus.DEFINITION_CHANGED,
-        }:
+        elif any(
+            result.status in _NOT_COMPARABLE_STATUSES
+            for result in [*(before or []), *(after or [])]
+        ):
             change = "not_comparable"
-        elif right.passed and not left.passed:
-            change = "improved"
-        elif left.passed and not right.passed:
-            change = "regressed"
         else:
-            change = "unchanged"
+            before_rate, after_rate = left.success_rate or 0.0, right.success_rate or 0.0
+            change = (
+                "improved"
+                if after_rate > before_rate
+                else "regressed"
+                if after_rate < before_rate
+                else "unchanged"
+            )
+        if left is not None and right is not None and not same_definition:
+            comparison.definition_mismatch += 1
         setattr(comparison, change, getattr(comparison, change) + 1)
         source = before or after
-        question = source.case.question if source else ""
+        question = source[0].case.question if source else ""
         comparison.rows.append(
-            ComparisonRow(question=question, base=left, target=right, change=change)
+            ComparisonRow(
+                question=question,
+                base=left,
+                target=right,
+                change=change,
+                same_definition=same_definition,
+            )
         )
+    comparison.paired = paired_comparison(base, target)
     return comparison
 
 
@@ -1457,6 +1748,20 @@ async def judge_output_meaning(
             update={"correct": verdict.same, "reason": verdict.reason.strip()[:500]}
         )
     return updated
+
+
+def judge_fingerprint() -> str | None:
+    """評価者の指紋（#62）: 判定のモデルの設定と、回答・出力の項目の判定の指示の hash の先頭。
+
+    資格情報は hash にだけ使い、返さない。モデルを解決できなければ None。
+    """
+    try:
+        target = asdict(builtin_runtime.resolve_model_target(""))
+    except builtin_runtime.BuiltinRuntimeError:
+        return None
+    source = {"model": target, "judge": JUDGE_INSTRUCTIONS, "meaning": MEANING_INSTRUCTIONS}
+    digest = hashlib.sha256(json.dumps(source, sort_keys=True, ensure_ascii=False).encode())
+    return digest.hexdigest()[:16]
 
 
 def tool_matches(called: str, expected: str) -> bool:
@@ -1901,6 +2206,7 @@ async def _run_case(
                 metadata={
                     "evaluation_job_id": job.id,
                     "evaluation_case_id": case.id,
+                    "evaluation_trial": job.results[index].trial,
                     EVALUATION_DRY_RUN_KEY: True,
                     **(
                         {"_evaluation_definition_hash": job.definition_hash}
