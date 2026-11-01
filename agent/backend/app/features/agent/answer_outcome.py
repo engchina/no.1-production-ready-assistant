@@ -32,7 +32,9 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
    手順を確かめる。#1491・#2738）
    `validation_nothing_confirmed`: 最終の検証が、残った主張の段落をすべて未確認とした（根拠で
    確かめた段落が 1 つも無い。根拠を読めない `no_evidence` を含む）か、主張の段落をすべて根拠と
-   矛盾するとして外した → insufficient_evidence（本文は出す。#2738）
+   矛盾するとして外した → insufficient_evidence（本文は出す。#2738）。未確認の理由が「確かめが
+   終わっていない」（`unassessed`。監査が終わらない・段落の出典が無い）だけの段落しか無いときは、
+   根拠が無いことを示していないので拒答に数えず、下の規則で決める（未確認の印つきの回答。#104）
 4. `rag_search`: 回答が最後の `rag_search` に拠る（その後に根拠を集め直していない）とき、
    その対応。ただし、現場のデータが要る（needs_environment_data）を現場のデータの道具（RAG 以外の
    MCP 接続のツール。#1283）で確かめたら answered / conditional（`environment_tools`）、確認の
@@ -41,8 +43,10 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
 5. `guide_handoff`: `rag_search` に拠らず、最も新しい `rag_lookup_guides` の最上位の業務ガイドの
    判断が人への引き継ぎ（handoff）→ needs_human
 6. `absence_conclusion`: 現場のデータの道具を使っておらず、Run のどれかの `rag_search` が
-   insufficient_evidence を返し、回答の最初の段落（結論。見出し・出典を除く）が資料から確かめられ
-   ないと述べた → insufficient_evidence（調べた資料の一覧・近い規定の紹介が続いても。#1454）。
+   insufficient_evidence を返した（または `rag_search` を使わずに `rag_retrieve_evidence` で根拠を
+   集めた。根拠を集めるだけのツールは対応を返さない。#104）うえで、回答の最初の段落（結論。
+   見出し・出典を除く）が資料から確かめられないと述べた → insufficient_evidence（調べた資料の
+   一覧・近い規定の紹介が続いても。範囲外の質問の拒答を含む。#1454）。
    根拠 0 件が補助の処理の縮退による `rag_search`（`degraded_steps`。資料に記載が無いことを
    示さない）は数えない（#3546）。
 7. `answer_passages`（または現場のデータの道具を使ったなら `environment_tools`）: Agent が自分で
@@ -211,6 +215,8 @@ _GAP_SIGNALS = frozenset(
 _RAG_LOOKUP_GUIDES = "rag_lookup_guides"
 # 業務ガイドの判断のうち、利用者の分かっていない条件に答えが拠るもの（#1321・#1322）。
 _GUIDE_CONDITIONAL_DECISIONS = frozenset({"clarify", "branch"})
+# 最終の検証の印の理由「確かめが終わっていない」（#104。根拠が無いことを示さない）。
+_UNASSESSED = "unassessed"
 # RAG の `rag_validate_answer` の、実データの確認を促すだけの段落の判定。
 _DATA_CONFIRMATION = "data_confirmation"
 # 結論の段落を探すときに飛ばす、主張ではない段落の種類（見出し・出典・表の形）。
@@ -342,6 +348,28 @@ def _validation_parts(
     )
 
 
+def _unassessed_only(validation: JsonObject | None) -> set[str]:
+    """未確認の印の理由が「確かめが終わっていない」（`unassessed`）だけの段落（#104）。
+
+    RAG が段落を監査し終えなかった・段落の出典が無く裏付けを確かめられなかった段落で、根拠で
+    確かめられない（`unsupported`）・根拠を読めない（`no_evidence`）とは違い、根拠が無いことを
+    示さない。判定が出た（`completed`）ときだけ使う。
+    """
+    if not isinstance(validation, dict) or validation.get("status") != STATUS_COMPLETED:
+        return set()
+    marks = validation.get("passage_marks")
+    found: set[str] = set()
+    for item in marks if isinstance(marks, list) else []:
+        if not isinstance(item, dict) or item.get("state") != MARK_UNVERIFIED:
+            continue
+        codes = {
+            reason.get("code") for reason in item.get("reasons") or [] if isinstance(reason, dict)
+        }
+        if codes == {_UNASSESSED}:
+            found.add(str(item.get("text") or ""))
+    return found - {""}
+
+
 def _supported_quotes(validation: JsonObject | None) -> set[str]:
     """最終の検証が根拠で確かめた（`supported`）段落（判定が出た `completed` のときだけ）。"""
     if not isinstance(validation, dict) or validation.get("status") != STATUS_COMPLETED:
@@ -436,6 +464,28 @@ def _rag_insufficient(steps: list[RunStep]) -> bool:
             and isinstance(output, dict)
             and output.get("outcome") == INSUFFICIENT_EVIDENCE
             and not degraded_absence(output)
+        ):
+            return True
+    return False
+
+
+def _retrieved_without_search(steps: list[RunStep]) -> bool:
+    """`rag_search` を使わずに `rag_retrieve_evidence` で根拠を集めたか（#104）。
+
+    根拠を集めるだけのツールは回答の対応（outcome）を返さないので、資料から確かめられないかは
+    回答の結論で決める（範囲外の質問の拒答を条件付きの回答に数えない）。根拠 0 件が補助の処理の
+    縮退によるもの（資料に記載が無いことを示さない）は数えない（#3546）。
+    """
+    if _last_rag_search(steps) is not None:
+        return False
+    for step in steps:
+        call, result = step.tool_call, step.tool_result
+        if not _succeeded(step) or call is None or result is None:
+            continue
+        if (
+            mcp_base_tool_name(call.name) == RAG_RETRIEVE_EVIDENCE
+            and isinstance(result.output, dict)
+            and not degraded_absence(result.output)
         ):
             return True
     return False
@@ -561,10 +611,14 @@ def answer_outcome(
     # 外した段落は利用者に見えないので数えない。
     confirmations |= environment_check_passages(answer) - removed
     remaining = [text for text in claims if text not in removed and text not in confirmations]
+    unassessed = _unassessed_only(validation)
     if (
         (removed or unverified)
         and (remaining or not confirmations)
         and all(text in unverified for text in remaining)
+        # 確かめが終わっていないだけ（`unassessed`）の段落しか無いときは、根拠が無いことを示して
+        # いないので拒答に数えない（#104。未確認の印つきの回答として下で決める）。
+        and (removed or any(text not in unassessed for text in remaining if text in unverified))
     ):
         # 根拠で確かめた段落が 1 つも無い（残った主張の段落がすべて未確認か、すべて矛盾で外した）。
         # 本文と印は出す（#2738）。実データの確認を促す段落だけが残ったときは下で決める。
@@ -634,7 +688,9 @@ def answer_outcome(
     environment = _environment_resolved(steps)
     if environment:
         signals.add(SIGNAL_ENVIRONMENT_TOOLS)
-    elif _rag_insufficient(steps) and _concludes_absence(answer):
+    elif (_rag_insufficient(steps) or _retrieved_without_search(steps)) and _concludes_absence(
+        answer
+    ):
         # 質問の対象が資料に無いと結論した回答（#1454）。調べた資料の一覧・近い規定の紹介が
         # 続いても答えなし（参考の説明は本文に残す）。
         return _content(

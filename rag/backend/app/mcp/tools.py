@@ -744,6 +744,45 @@ class EvidenceRefInput(BaseModel):
     chunk_id: str = Field(..., min_length=1, max_length=512)
 
 
+# 呼び出し側が渡せる段落の出典の件数の上限（回答の上限 20000 文字の段落の数より十分に大きい）と、
+# 1 つの段落に結び付けられる根拠の上限（evidence の上限と同じ）。#104。
+MAX_PASSAGE_CITATIONS = 300
+
+
+class AnswerRangeInput(BaseModel):
+    """answer の中の段落の位置（文字の位置。[start, end)）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: int = Field(..., ge=0, le=20000)
+    end: int = Field(..., ge=0, le=20000)
+
+
+class PassageCitationInput(BaseModel):
+    """呼び出し側が回答の段落に結び付けた根拠（段落の位置と、その段落の根拠の chunk_id）。"""
+
+    # 本文に出典を書かない呼び出し側（業務 Agent）が渡す（#104）。
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer_range: AnswerRangeInput = Field(
+        ...,
+        description=(
+            "answer の中の段落の位置（rag_validate_answer の claims の answer_range と"
+            "同じ数え方）。"
+        ),
+    )
+    chunk_ids: list[Annotated[str, Field(min_length=1, max_length=512)]] = Field(
+        ...,
+        min_length=1,
+        max_length=30,
+        description=(
+            "その段落の根拠の chunk_id（evidence に含めたもの）。evidence に無い chunk_id は"
+            "使わない。"
+        ),
+    )
+
+
 class ValidateRequestInput(BaseModel):
     """AnswerEnvelope の要求 1 件（rag_search の requests と同じ形）。"""
 
@@ -881,6 +920,18 @@ class ValidateAnswerInput(BaseModel):
             "根拠と並べ、結果の値をそのまま述べた段落と、資料の規則を結果の値に当てはめた結論を確かめる"
             "（資料・規程・手順の内容の裏付けには使わない）。結果だけで裏付けた段落の chunk_id は"
             " null。"
+        ),
+    )
+    passage_citations: list[PassageCitationInput] = Field(
+        default_factory=list,
+        max_length=MAX_PASSAGE_CITATIONS,
+        description=(
+            # 回答の本文に出典（根拠の ID・出典の行）を書かない呼び出し側（業務 Agent。根拠は
+            # 回答とは別に示す）が、段落ごとの根拠を渡す（#104）。本文が出典を書いた段落は本文の
+            # 出典を使い、これで広げない。
+            "段落ごとの出典（answer の中の段落の位置と、その段落の根拠の chunk_id）。本文に出典"
+            "（根拠の ID・出典の行）が無い段落だけ、ここで渡した根拠をその段落の出典として監査する"
+            "（本文が出典を書いた段落は本文の出典を使う）。evidence に無い chunk_id は使わない。"
         ),
     )
 
@@ -5017,6 +5068,14 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
                     answer_trace_ids=arguments.answer_trace_ids,
                     premises=[item.model_dump() for item in arguments.premises],
                     data_results=[item.model_dump() for item in arguments.data_results],
+                    passage_citations=[
+                        {
+                            "start": item.answer_range.start,
+                            "end": item.answer_range.end,
+                            "chunk_ids": list(item.chunk_ids),
+                        }
+                        for item in arguments.passage_citations
+                    ],
                     guide=(
                         GuideCheckRef(
                             guide.search_answer_profile_id,

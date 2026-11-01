@@ -148,6 +148,17 @@ class RagValidateDataResultIn(_ContractInput):
     result: str = Field(min_length=1, max_length=4000)
 
 
+class RagAnswerRangeIn(_ContractInput):
+    start: int = Field(ge=0, le=20000)
+    end: int = Field(ge=0, le=20000)
+
+
+class RagPassageCitationIn(_ContractInput):
+    # 段落ごとの出典（#104）。
+    answer_range: RagAnswerRangeIn
+    chunk_ids: list[str] = Field(min_length=1, max_length=30)
+
+
 class RagValidateAnswerIn(_ContractInput):
     query: str = Field(min_length=1, max_length=8000)
     answer: str = Field(min_length=1, max_length=20000)
@@ -160,6 +171,7 @@ class RagValidateAnswerIn(_ContractInput):
     answer_trace_ids: list[str] = Field(default_factory=list, max_length=10)
     premises: list[RagValidatePremiseIn] = Field(default_factory=list, max_length=10)
     data_results: list[RagValidateDataResultIn] = Field(default_factory=list, max_length=10)
+    passage_citations: list[RagPassageCitationIn] = Field(default_factory=list, max_length=300)
 
 
 class RagListSearchAnswerProfilesIn(_ContractInput):

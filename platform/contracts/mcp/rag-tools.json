@@ -6055,6 +6055,30 @@
       "description": "回答の段落ごとの主張を、渡した根拠（今の権限と版で読み直す）で監査します。公開する前の最終の検証に使います。見出し・出典の行・利用者への質問の段落は主張ではないので監査せず、claims に含めません。requests（要求の充足）・guide（業務ガイド）を渡すと、要求の漏れ・手順ごとの説明と順序・分岐・影響範囲も確かめます。",
       "inputSchema": {
         "$defs": {
+          "AnswerRangeInput": {
+            "additionalProperties": false,
+            "description": "answer の中の段落の位置（文字の位置。[start, end)）。",
+            "properties": {
+              "start": {
+                "maximum": 20000,
+                "minimum": 0,
+                "title": "Start",
+                "type": "integer"
+              },
+              "end": {
+                "maximum": 20000,
+                "minimum": 0,
+                "title": "End",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "AnswerRangeInput",
+            "type": "object"
+          },
           "EvidenceRefInput": {
             "additionalProperties": false,
             "properties": {
@@ -6076,6 +6100,34 @@
               "chunk_id"
             ],
             "title": "EvidenceRefInput",
+            "type": "object"
+          },
+          "PassageCitationInput": {
+            "additionalProperties": false,
+            "description": "呼び出し側が回答の段落に結び付けた根拠（段落の位置と、その段落の根拠の chunk_id）。",
+            "properties": {
+              "answer_range": {
+                "$ref": "#/$defs/AnswerRangeInput",
+                "description": "answer の中の段落の位置（rag_validate_answer の claims の answer_range と同じ数え方）。"
+              },
+              "chunk_ids": {
+                "description": "その段落の根拠の chunk_id（evidence に含めたもの）。evidence に無い chunk_id は使わない。",
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "minItems": 1,
+                "title": "Chunk Ids",
+                "type": "array"
+              }
+            },
+            "required": [
+              "answer_range",
+              "chunk_ids"
+            ],
+            "title": "PassageCitationInput",
             "type": "object"
           },
           "ValidateDataResultInput": {
@@ -6315,6 +6367,15 @@
             },
             "maxItems": 10,
             "title": "Data Results",
+            "type": "array"
+          },
+          "passage_citations": {
+            "description": "段落ごとの出典（answer の中の段落の位置と、その段落の根拠の chunk_id）。本文に出典（根拠の ID・出典の行）が無い段落だけ、ここで渡した根拠をその段落の出典として監査する（本文が出典を書いた段落は本文の出典を使う）。evidence に無い chunk_id は使わない。",
+            "items": {
+              "$ref": "#/$defs/PassageCitationInput"
+            },
+            "maxItems": 300,
+            "title": "Passage Citations",
             "type": "array"
           }
         },

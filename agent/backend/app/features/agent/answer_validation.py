@@ -17,6 +17,10 @@ RAG の MCP `rag_validate_answer` を呼ぶ。呼ぶのはモデルではなく 
   （`answer_trace_ids`）も渡し、RAG の回答の監査を通った説明と本文・根拠が同じ段落は、RAG が
   その判定を使ってモデルに渡さない（#1527。根拠は RAG が今の権限と版で読み直す。すべての段落が
   当たればモデルを呼ばない）。
+- 段落ごとの出典（`passage_citations`。#104）も渡す。業務 Agent の回答は根拠を本文とは別に示すので
+  段落に出典を書かないことが多く、RAG は段落の実際の出典だけで裏付けるため、渡さないと正しい段落も
+  `unassessed` になる。出典は「回答の根拠」と同じ決定的な照合で作る
+  （`answer_evidence.validation_passage_citations`。呼ぶのは `builtin_runtime`）。
 - 判定が valid でなければ、段落の印（platform/contracts/answer-passages/passage-marks.json。#2738）
   を付ける。本文から外すのは根拠と矛盾する段落（`contradicted`）だけで、外した段落と理由を節
   「根拠と矛盾し除いた内容」に示す。根拠で確かめられない・出典を確かめられない・確かめが終わら

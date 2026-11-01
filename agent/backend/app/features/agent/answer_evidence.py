@@ -51,7 +51,12 @@ from pr_system_settings.chat_attachments.tools import (
     VIEW_IMAGE_TOOL_NAME,
 )
 
-from app.features.agent.answer_passages import KIND_CITATION, non_claim_passages, passage_spans
+from app.features.agent.answer_passages import (
+    KIND_CITATION,
+    answer_passage_positions,
+    non_claim_passages,
+    passage_spans,
+)
 from app.features.agent.answer_validation import (
     FIGURE_IMAGE_READ,
     STATUS_COMPLETED,
@@ -93,6 +98,10 @@ BINDING_TEXT = "text"
 BINDING_PARTIAL = "partial"
 # 決定的な照合で 1 つの段落に結び付ける根拠の上限（当たりの重みの大きい順）。
 MAX_TEXT_BOUND_PER_PASSAGE = 3
+# 最終の検証に渡す段落ごとの出典の上限（`rag_validate_answer` の契約の `passage_citations` の
+# maxItems と、1 つの段落の chunk_ids の maxItems。#104）。
+MAX_VALIDATION_PASSAGE_CITATIONS = 300
+MAX_VALIDATION_CITATION_CHUNKS = 30
 # 「参考情報」に出す根拠の原文の上限の文字数。
 REFERENCE_QUOTE_CHARACTERS = 200
 # RAG の根拠の項目のうち、そのまま写すもの。
@@ -619,6 +628,69 @@ def _text_bound(
         if ids:
             bound[passage] = list(dict.fromkeys(ids))
     return bound
+
+
+def validation_passage_citations(
+    answer: str, items: Sequence[Mapping[str, Any]]
+) -> list[JsonObject]:
+    """最終の検証（`rag_validate_answer`）に渡す段落ごとの出典（`passage_citations`。#104）。
+
+    業務 Agent の回答は、使ったツールと根拠を本文とは別に示す（#2328）ため、段落に根拠の ID や
+    出典の行を書かないことが多い。RAG は段落の実際の出典の集合だけで主張を裏付ける（未引用の資料で
+    裏付けない）ので、出典を渡さなければ正しい段落もすべて「確かめが終わっていない」（unassessed）に
+    なる。そこで、この Run の根拠（`items`。この接続に渡す根拠だけ）と回答の段落を、検証が判定を
+    出さなかったときの「回答の根拠」と同じ決定的な照合（`_text_bound`。段落が書いた文書名と頁・
+    章節の参照・引用・同じ文字の並び）で結び付けて渡す。
+
+    - 段落そのものに結び付いた根拠があれば、その根拠。
+    - 無い段落（表の値の行など）は、回答全体が出典にした根拠（他の段落・出典の行が結び付けた根拠と、
+      本文の根拠の ID の印）。RAG が ID を書かない段落を回答の他の段落が引いた根拠で確かめ直す
+      （#1412）のと同じ考え方。
+    - 回答のどこにも根拠が結び付かなければ渡さない（RAG は今までどおり unassessed にする）。
+    - 主張ではない段落（見出し・出典の行・表の形・質問・不足の文）は渡さない。
+
+    出典は RAG に「この段落はこの根拠に拠る」と申告するだけで、裏付けの判定は RAG が根拠の本文で
+    行う（結び付けが誤っていれば supported にならない）。本文に出典を書いた段落は RAG が本文の
+    出典を使う（ここで広げない）。位置は `answer_passage_positions`（RAG の `answer_range` と
+    同じ数え方）。
+    """
+    if not answer.strip() or not items:
+        return []
+    known = [str(item["chunk_id"]) for item in items if item.get("chunk_id")]
+    bound = _text_bound(answer, items)
+    whole = _ordered_ids(
+        {chunk_id for ids in bound.values() for chunk_id in ids} | cited_chunk_ids(answer, known),
+        known,
+    )
+    kinds = non_claim_passages(answer)
+    citations: list[JsonObject] = []
+    for start, end, text in answer_passage_positions(answer):
+        if not text or kinds.get(text) is not None:
+            continue
+        ids = _ordered_ids(set(bound.get(text) or ()), known) or whole
+        if not ids:
+            continue
+        citations.append(
+            {
+                "answer_range": {"start": start, "end": end},
+                "chunk_ids": ids[:MAX_VALIDATION_CITATION_CHUNKS],
+            }
+        )
+    return citations[:MAX_VALIDATION_PASSAGE_CITATIONS]
+
+
+def run_validation_passage_citations(
+    steps: Sequence[RunStep], answer: str, refs: Sequence[Mapping[str, Any]]
+) -> list[JsonObject]:
+    """この Run で AI に渡した根拠のうち `refs`（1 つの接続に渡す根拠の参照）の根拠で作る、
+    最終の検証の段落ごとの出典（`validation_passage_citations`。#104）。
+
+    前のターンから引き継いだ根拠（`carried_evidence`）は今のターンの根拠の本文を持たないので
+    結び付けない（RAG は本文の出典が無ければ今までどおり確かめる）。
+    """
+    wanted = {str(ref.get("chunk_id") or "") for ref in refs} - {""}
+    items = [item for item in passed_evidence(steps) if str(item.get("chunk_id")) in wanted]
+    return validation_passage_citations(answer, items)
 
 
 def _reference_quote(item: Mapping[str, Any], passages: Sequence[str]) -> str:

@@ -49,7 +49,13 @@ from rag_engine.generation.answer_labels import answer_labels
 from rag_engine.generation.answer_policy import OPERATION_BINDING_POLICY, OPERATION_GUIDANCE_POLICY, RELATION_SUPPORT_POLICY
 from rag_engine.generation.check_cues import check_cues
 from rag_engine.generation.grounded import output_field_claim, quote_in_text
-from rag_engine.generation.operation_audit import is_non_claim_passage, is_operation_instruction, list_heading_lines, table_header_lines
+from rag_engine.generation.operation_audit import (
+    answer_passage_ranges,
+    is_non_claim_passage,
+    is_operation_instruction,
+    list_heading_lines,
+    table_header_lines,
+)
 from rag_engine.generation.table_binding import table_mismatch_notes, unbound_table_values
 from rag_engine.generation.table_records import record_tables
 from rag_engine.generation.table_revision import revise_table_passage
@@ -531,8 +537,48 @@ def _bind_validation(
     return bound.model_copy(update={"claim_checks": claims})
 
 
-def _actual_citation_ids(answer_text: str, catalog: Mapping[str, Mapping[str, Any]]) -> dict[str, list[str]]:
-    """段落の実際の出典の行・IDだけを片段へ結び付ける。"""
+def _caller_citation_ids(
+    answer_text: str, catalog: Mapping[str, Mapping[str, Any]], caller: Sequence[Mapping[str, Any]]
+) -> dict[str, list[str]]:
+    """呼び出し側が渡した段落ごとの根拠（``{start, end, chunk_ids}``。#104）を、位置の重なる段落の evidence_id にする。
+
+    位置は ``answer_passage_ranges`` と同じ数え方（呼び出し側の段落の分け方を写さず、位置の重なりで段落を決める）。
+    根拠（``catalog``）に無い chunk_id と前提・業務データの id は使わない（渡した根拠の外で裏付けない）。
+    """
+    if not caller:
+        return {}
+    by_chunk: dict[str, list[str]] = {}
+    for eid, node in catalog.items():
+        chunk = str(node.get("id") or "")
+        if chunk and not is_premise_id(chunk):
+            by_chunk.setdefault(chunk, []).append(eid)
+    result: dict[str, list[str]] = {}
+    for passage_id, start, end in answer_passage_ranges(answer_text):
+        ids: list[str] = []
+        for item in caller:
+            try:
+                begin, finish = int(item.get("start", 0)), int(item.get("end", 0))
+            except (TypeError, ValueError):
+                continue
+            if not (begin < end and start < finish):
+                continue
+            for chunk in item.get("chunk_ids") or ():
+                ids.extend(eid for eid in by_chunk.get(str(chunk), ()) if eid not in ids)
+        if ids:
+            result[passage_id] = ids
+    return result
+
+
+def _actual_citation_ids(
+    answer_text: str,
+    catalog: Mapping[str, Mapping[str, Any]],
+    caller: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, list[str]]:
+    """段落の実際の出典の行・IDだけを片段へ結び付ける。
+
+    本文に出典が無い段落は、呼び出し側が渡した段落ごとの根拠（``caller``。#104）をその段落の出典にする。本文が出典を
+    書いた段落は本文の出典だけを使い、呼び出し側の根拠で広げない（未引用の資料による昇格を防ぐ規則を保つ）。
+    """
     index = _EvidenceIndex(list(catalog.values()), ())
     citations, _groups = _passage_citations(answer_text)
     result = {}
@@ -540,6 +586,9 @@ def _actual_citation_ids(answer_text: str, catalog: Mapping[str, Mapping[str, An
         nodes = [node for line in lines for node in index.resolve(line)]
         chunks = {str(node.get("id") or "") for node in nodes}
         result[passage_id] = [eid for eid, node in catalog.items() if str(node.get("id") or "") in chunks]
+    for passage_id, ids in _caller_citation_ids(answer_text, catalog, caller).items():
+        if not result.get(passage_id):
+            result[passage_id] = ids
     return result
 
 
@@ -547,9 +596,13 @@ def _limit_citation_scope(
     claims: Sequence[ValidationClaimCheck],
     catalog: Mapping[str, Mapping[str, Any]],
     answer_text: str,
+    caller: Sequence[Mapping[str, Any]] = (),
 ) -> list[ValidationClaimCheck]:
-    """既存の支持判定を実際の引用集合に制限し、未引用の資料による昇格を防ぐ。"""
-    citation_ids = _actual_citation_ids(answer_text, catalog) if answer_text else {}
+    """既存の支持判定を実際の引用集合に制限し、未引用の資料による昇格を防ぐ。
+
+    ``caller`` は呼び出し側が渡した段落ごとの根拠（#104。本文に出典が無い段落の出典）。
+    """
+    citation_ids = _actual_citation_ids(answer_text, catalog, caller) if answer_text else {}
     result = []
     for claim in claims:
         if claim.status == "supported":
@@ -1313,6 +1366,7 @@ def validate_answer_claims(
     data_results: Sequence[Mapping[str, Any]] = (),
     batch_passages: int | None = None,
     max_concurrency: int = 1,
+    caller_citations: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """回答の主張を根拠で監査する。
 
@@ -1337,6 +1391,10 @@ def validate_answer_claims(
     ``data_results`` は業務データの照会の結果（``{source, question, sql, result}``。#1950）。前提の次に並べて渡し
     （予算で切り詰めない）、結果の値をそのまま述べた段落と、資料の規則を結果に当てはめた結論を裏付けられるようにする。
     結果だけで裏付けた段落の ``source_id`` は結果の id（``data:<番号>``）。
+
+    ``caller_citations`` は呼び出し側が回答の段落に結び付けた根拠（``{start, end, chunk_ids}``。位置は
+    ``answer_passage_ranges`` と同じ数え方。#104）。本文に出典（根拠の ID・出典の行）が無い段落だけ、その根拠を
+    段落の出典（``passage_citations``）にする。本文が出典を書いた段落は本文の出典を使う。
 
     ``batch_passages`` は 1 回の監査に渡す段落の数（None は分けない）、``max_concurrency`` は同時に監査する組の数
     （#2700）。文脈に期限（`rag_engine.resources.deadline`）があれば、期限までに返らなかった組の段落は unassessed
@@ -1396,7 +1454,7 @@ def validate_answer_claims(
     reaudited: list[str] = []
     timed_out: list[Mapping[str, str]] = []
     catalog = {item["evidence_id"]: item for item in evidence}
-    fixed["passage_citations"] = _actual_citation_ids(answer_text, catalog)
+    fixed["passage_citations"] = _actual_citation_ids(answer_text, catalog, caller_citations)
     if remaining:
         batches = passage_batches(remaining, batch_passages)
 
@@ -1460,7 +1518,7 @@ def validate_answer_claims(
     claims = _revise_table_claims(claims, table_texts, settings, provider_id)
     # 図の項目だけで裏付けた supported は、図の見た目だけで決まる主張でないかを確かめ直す（#2678）。
     claims, figure_rechecked = _recheck_figure_supported(claims, fixed, passages, evidence, catalog, settings, provider_id)
-    claims = _limit_citation_scope(claims, catalog, answer_text)
+    claims = _limit_citation_scope(claims, catalog, answer_text, caller_citations)
     counts: dict[str, int] = {}
     for claim in claims:
         counts[claim.status] = counts.get(claim.status, 0) + 1

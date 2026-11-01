@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from app.features.agent import tool_grounding
 from app.features.agent.answer_outcome import ANSWER_OUTCOMES, answer_outcome
 from app.features.agent.answer_passages import (
     asks_environment_data,
@@ -27,6 +28,7 @@ from app.features.agent.answer_validation import (
     combine_validations,
     validation_content,
 )
+from app.features.agent.evaluation import EvaluationCase, EvaluationCaseResult, summarize
 from app.features.agent.runtime import RunStep, StepStatus
 from app.features.agent.tools import ToolCall, ToolResult
 
@@ -207,7 +209,8 @@ def test_answer_with_an_absence_statement_is_conditional() -> None:
 def test_absence_only_answer_is_insufficient_evidence() -> None:
     # km-license-fee: 資料に記載が無いことだけを述べた回答（推定は「回答」）。
     answer = "ライセンス費用は資料に記載がありません。"
-    assert _outcome(answer, [_retrieve()]) == ("insufficient_evidence", "answer_passages")
+    # 根拠を集めるだけのツールは対応を返さないので、結論の不足の文で拒答に決める（#104）。
+    assert _outcome(answer, [_retrieve()]) == ("insufficient_evidence", "absence_conclusion")
     # 根拠で確かめられない助言だけが不足の文に添えてあっても、確かめた段落が無いので拒答
     # （助言は本文に残して印を付ける。#2738）。
     advice = "営業部に問い合わせると 1 日で分かります。"
@@ -387,8 +390,9 @@ def test_answer_kept_with_only_unresolved_citations_is_insufficient_evidence() -
 
 
 def test_unassessed_claims_without_a_confirmed_paragraph_are_insufficient_evidence() -> None:
-    # 不足の文と、確かめが終わらなかった助言だけの回答は、確かめた段落が無いので拒答のまま
-    # （助言は本文に残して印を付ける。#2738）。
+    # 不足の文と、確かめが終わらなかった助言だけの回答は拒答のまま（助言は本文に残して印を
+    # 付ける。#2738）。確かめが終わらなかった（unassessed）だけでは根拠が無いことを示さない
+    # ので、拒答に決めるのは結論の不足の文（#104）。
     absence = "パスワードの文字数要件は、資料に記載がありません。"
     advice = "現場の契約書や価格表など、別途確認できる情報が必要です。"
     answer = f"{absence}\n{advice}"
@@ -396,7 +400,7 @@ def test_unassessed_claims_without_a_confirmed_paragraph_are_insufficient_eviden
     assert validation["withheld"]["unverified"] == 1
     assert _outcome(answer, [_retrieve()], validation) == (
         "insufficient_evidence",
-        "validation_nothing_confirmed",
+        "absence_conclusion",
     )
 
 
@@ -446,10 +450,11 @@ def test_refusal_that_ends_with_cannot_answer_is_insufficient_evidence(
     # conditional になっていた（期待は insufficient_evidence）。
     validation = _validated(answer, *_verdicts(answer, statuses))
     content = answer_outcome(answer, steps=[_retrieve()], validation=validation)
-    # 確かめられない段落は本文に残して印を付け（#2738）、確かめた主張が無いので拒答のまま。
+    # 確かめられない段落は本文に残して印を付け（#2738）、結論が資料に無いと述べたので拒答のまま
+    # （根拠を集めるだけのツールでは結論の不足の文で決める。#104）。
     assert (content["value"], content["basis"]) == (
         "insufficient_evidence",
-        "validation_nothing_confirmed",
+        "absence_conclusion",
     )
     assert content["signals"] == ["absence", "unverified_passages"]
     # rag_search の後に根拠を集め直した回答も同じ（km-password-policy）。
@@ -1017,7 +1022,12 @@ def test_absence_in_the_conclusion_is_still_a_gap_even_with_a_supplement() -> No
     )
     validation = _validated(refusal, *_verdicts(refusal, {}))
     content = answer_outcome(refusal, steps=[_retrieve()], validation=validation)
-    assert (content["value"], content["signals"]) == ("conditional", ["absence"])
+    # 根拠を集めるだけのツールでも、rag_search の insufficient_evidence と同じく拒答（#104）。
+    assert (content["value"], content["basis"], content["signals"]) == (
+        "insufficient_evidence",
+        "absence_conclusion",
+        ["absence"],
+    )
     searched = answer_outcome(
         refusal, steps=[_search("insufficient_evidence")], validation=validation
     )
@@ -1106,3 +1116,129 @@ def test_record_signals_do_not_change_the_outcome_value() -> None:
         validation=validation,
     )
     assert content["signals"] == []
+
+
+# ---- 確かめが終わっていないだけの段落と範囲外の拒答（#104） ---------------------------------
+
+# Run run_a30a298b… の回答（社内規程で、出張の宿泊費の上限はいくらですか？）。「使用したツール」の
+# 行は組み込み Runtime が検証の前に外す（`without_lookup_notes`）。
+LODGING_ANSWER = "\n".join(
+    [
+        "社内規程（株式会社サンプル 勤務・出張・経費規程 第3条「出張旅費」、1ページ目）によると、"
+        "出張の宿泊費の上限（1泊）は役職で以下のとおりです。",
+        "",
+        "| 区分 | 宿泊費の上限（1泊） |",
+        "|---|---|",
+        "| 一般社員 | 12,000円 |",
+        "| 課長以上 | 15,000円 |",
+        "",
+        "根拠資料: **社内規程サンプル.pdf** ／ 株式会社サンプル 勤務・出張・経費規程 ／ "
+        "第3条（出張旅費）／ 1ページ目",
+    ]
+)
+OUT_OF_SCOPE_REFUSAL = "\n".join(
+    [
+        "明日の東京の天気は、社内資料（社内規程サンプル.pdf）にも記載がなく、この環境の資料・"
+        "業務データでは確かめられません。",
+        "",
+        "天気予報は社内の範囲外の情報なので、一般的な気象情報サイトなどでご確認ください。",
+    ]
+)
+OUT_OF_SCOPE_ADVICE = (
+    "天気予報は社内の範囲外の情報なので、一般的な気象情報サイトなどでご確認ください。"
+)
+
+
+def _claims_of(answer: str, status: str) -> list[dict[str, Any]]:
+    """回答の主張の段落（見出し・表の形・出典の行を除く）を、すべて `status` にした判定。"""
+    return [
+        _claim(text, status)
+        for line in answer.split("\n")
+        for _start, _end, text in passage_spans(line)
+        if not text.startswith(("| 区分", "|---", "根拠資料"))
+    ]
+
+
+def test_unassessed_only_validation_is_not_counted_as_a_refusal() -> None:
+    # 段落の出典を渡さず RAG がすべて unassessed にした正しい回答（#104）。根拠が無いことは
+    # 示していないので拒答（insufficient_evidence）にせず、未確認の印つきの回答にする。
+    validation = _validated(LODGING_ANSWER, *_claims_of(LODGING_ANSWER, "unassessed"))
+    assert validation["withheld"]["unverified"] == 3
+    content = answer_outcome(LODGING_ANSWER, steps=[_retrieve()], validation=validation)
+    assert (content["value"], content["basis"]) == ("conditional", "answer_passages")
+    assert content["signals"] == ["unverified_passages"]
+    assert tool_grounding.refusal_stage(content["value"], ["rag__rag_retrieve_evidence"]) is None
+    # 段落の出典を渡して RAG が裏付けた回答は answered。
+    supported = _validated(LODGING_ANSWER, *_claims_of(LODGING_ANSWER, "supported"))
+    assert _outcome(LODGING_ANSWER, [_retrieve()], supported) == ("answered", "answer_passages")
+
+
+def test_unsupported_passages_without_a_confirmed_one_stay_insufficient_evidence() -> None:
+    # 根拠で確かめられない（unsupported）段落が 1 つでもあり、確かめた段落が無ければ今までどおり
+    # 拒答（#2738）。確かめが終わっていない段落と混ざっていても同じ。
+    claims = _claims_of(LODGING_ANSWER, "unassessed")
+    claims[0] = {**claims[0], "status": "unsupported"}
+    validation = _validated(LODGING_ANSWER, *claims)
+    assert _outcome(LODGING_ANSWER, [_retrieve()], validation) == (
+        "insufficient_evidence",
+        "validation_nothing_confirmed",
+    )
+
+
+def test_out_of_scope_refusal_after_retrieving_evidence_is_a_refusal() -> None:
+    # 範囲外の質問を rag_retrieve_evidence で調べ、結論で確かめられないと答えた拒答（#104）。
+    # 根拠を集めるだけのツールは対応を返さないので、結論の不足の文で拒答に決める（以前は外部の
+    # 確認を促す段落で conditional になっていた）。
+    validation = _validated(
+        OUT_OF_SCOPE_REFUSAL,
+        _claim(OUT_OF_SCOPE_REFUSAL.split("\n")[0], "supported"),
+        _claim(OUT_OF_SCOPE_ADVICE, "data_confirmation"),
+    )
+    content = answer_outcome(OUT_OF_SCOPE_REFUSAL, steps=[_retrieve()], validation=validation)
+    assert (content["value"], content["basis"]) == ("insufficient_evidence", "absence_conclusion")
+    assert tool_grounding.refusal_stage(content["value"], ["rag__rag_retrieve_evidence"]) == (
+        tool_grounding.REFUSAL_AFTER_TOOLS
+    )
+    # 根拠 0 件が補助の処理の縮退による検索（資料に記載が無いことを示さない。#3546）は数えない。
+    degraded = _step(
+        "rag__rag_retrieve_evidence",
+        {"evidence": [], "degraded_steps": [{"kind": "rerank", "count": 1}]},
+    )
+    assert (
+        answer_outcome(OUT_OF_SCOPE_REFUSAL, steps=[degraded], validation=validation)["basis"]
+        != "absence_conclusion"
+    )
+
+
+def test_quality_summary_counts_only_actual_refusals_after_tools() -> None:
+    # 品質評価の refused_after_tools は実際の拒答の数と一致する（#104。合成 3 ケース: 社内規程の
+    # 正しい回答・同じ回答の別の試行・範囲外の拒答）。
+    tools = ["rag__rag_recommend_search_answer_profile", "rag__rag_retrieve_evidence"]
+    unassessed = _validated(LODGING_ANSWER, *_claims_of(LODGING_ANSWER, "unassessed"))
+    supported = _validated(LODGING_ANSWER, *_claims_of(LODGING_ANSWER, "supported"))
+    refusal = _validated(
+        OUT_OF_SCOPE_REFUSAL,
+        _claim(OUT_OF_SCOPE_REFUSAL.split("\n")[0], "supported"),
+        _claim(OUT_OF_SCOPE_ADVICE, "data_confirmation"),
+    )
+    outcomes = [
+        answer_outcome(answer, steps=[_retrieve()], validation=validation)["value"]
+        for answer, validation in (
+            (LODGING_ANSWER, unassessed),
+            (LODGING_ANSWER, supported),
+            (OUT_OF_SCOPE_REFUSAL, refusal),
+        )
+    ]
+    case = EvaluationCase(
+        id="c1", question="社内規程で、出張の宿泊費の上限はいくらですか？", expected="12,000円"
+    )
+    summary = summarize(
+        [
+            EvaluationCaseResult(
+                case=case, refusal_stage=tool_grounding.refusal_stage(value, tools)
+            )
+            for value in outcomes
+        ]
+    )
+    assert outcomes == ["conditional", "answered", "insufficient_evidence"]
+    assert (summary.refused_before_tools, summary.refused_after_tools) == (0, 1)
