@@ -235,7 +235,10 @@ def test_cases_are_run_as_agent_runs_and_judged(monkeypatch: MonkeyPatch, agent:
     assert isinstance(judge_input, list)
     prompt = str(judge_input[0]["content"])
     assert "## 期待する回答の要点\n300 万円" in prompt
-    assert "## 実際の回答\n今月の売上は 300 万円です。" in prompt
+    # 実際の回答は区切りの tag で囲んだデータとして渡す（#92）。
+    assert (
+        "## 実際の回答\n<evaluated_answer>\n今月の売上は 300 万円です。\n</evaluated_answer>"
+    ) in prompt
 
 
 def test_tools_needing_approval_are_not_run_and_tool_selection_is_judged(
