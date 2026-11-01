@@ -1,0 +1,1855 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "issue": "#101",
+    "sha256": {
+      "sources": "b291f2caa6c16cc75b3c4da5ca45e9120eb3b14030e8d58dd6672a2ee260e014",
+      "distractors": "41489da1ff94a42071f81b38dc6e1a461af7637f804edd114706fffcc2cf3e6e",
+      "cases": "9976bd58c6682b2835d11b89f69c8f909ecb7af9ac1f635595e1136d95fb8931"
+    },
+    "children": {
+      "small": 215,
+      "large": 2514
+    },
+    "documents": {
+      "small": 28,
+      "large": 2327
+    },
+    "cases": 76,
+    "case_groups": {
+      "lost_subject_title": 10,
+      "lost_subject_deep": 10,
+      "paraphrase": 10,
+      "direct_match": 6,
+      "self_contained": 8,
+      "long_evidence": 5,
+      "unanswerable": 6,
+      "multi_hop_existing": 21
+    },
+    "parameters": {
+      "candidates": 20,
+      "final_k": 5,
+      "rrf_k": 60
+    },
+    "retrieval_sha256": "926b85288ef671dd13f3ee2eb52ac723cc184dc081c6e039d56115667bd88232",
+    "scope": "changed",
+    "kbs": [
+      "large"
+    ],
+    "only_cases": [
+      "deep-01",
+      "deep-04",
+      "deep-07",
+      "deep-10",
+      "para-02",
+      "ir-room-booking-maintenance",
+      "ir-change-application-items",
+      "ir-backup-restore",
+      "deep-06",
+      "ir-emergency-change",
+      "ir-expired-data-erasure",
+      "ir-incident-phone-unreachable",
+      "long-02",
+      "none-02",
+      "para-04",
+      "para-06",
+      "para-07",
+      "para-09",
+      "self-02",
+      "self-03",
+      "self-08",
+      "sh-backup-c-frequency",
+      "title-03",
+      "title-07"
+    ],
+    "answer_prompt": {
+      "rerank-ctx-answer-v1": "d31af2bae597bf2602ea19ca59d30877fdc997e4476deaad3b1a5cc006157a95"
+    },
+    "standard_answers_sha256": "59eba143dbd0d46e57cb88eab389a6013b9f2db5e2397a8d1a2d08c3ad01a56f",
+    "models": {
+      "generation": "deepseek-flash",
+      "embedding": "text-embedding-v4",
+      "embedding_dim": 1024,
+      "rerank": "qwen3-rerank",
+      "judge": "deepseek-flash",
+      "judge_prompt_sha256": "ec25925f38b3a1e3245717096ef4f1f6984863298fbabf7a066977d6048e2019"
+    },
+    "external_calls": {
+      "mode": "record",
+      "calls": {
+        "llm": 301
+      },
+      "llm_tokens": {
+        "input": 341710,
+        "output": 103876,
+        "responses_with_usage": 301,
+        "total": 445586
+      },
+      "max_llm_tokens": 600000
+    }
+  },
+  "units": 48,
+  "compared": {
+    "large": {
+      "changed": [
+        "title-03",
+        "title-04",
+        "title-05",
+        "title-06",
+        "title-07",
+        "title-08",
+        "title-09",
+        "title-10",
+        "deep-01",
+        "deep-03",
+        "deep-04",
+        "deep-05",
+        "deep-06",
+        "deep-07",
+        "deep-08",
+        "deep-09",
+        "deep-10",
+        "para-01",
+        "para-02",
+        "para-03",
+        "para-04",
+        "para-05",
+        "para-06",
+        "para-07",
+        "para-08",
+        "para-09",
+        "para-10",
+        "direct-01",
+        "direct-02",
+        "direct-03",
+        "direct-04",
+        "direct-06",
+        "self-01",
+        "self-02",
+        "self-03",
+        "self-04",
+        "self-05",
+        "self-07",
+        "self-08",
+        "long-01",
+        "long-02",
+        "long-03",
+        "long-04",
+        "none-01",
+        "none-02",
+        "none-03",
+        "none-04",
+        "none-05",
+        "none-06",
+        "sh-approval-record-retention",
+        "sh-confidential-retention",
+        "sh-severity-c-report",
+        "ir-overdue-approval",
+        "ir-room-booking-maintenance",
+        "ir-change-application-items",
+        "ir-incident-phone-unreachable",
+        "ir-emergency-change",
+        "ir-expired-data-erasure",
+        "cmp-hrm-vs-oms-maintenance",
+        "ir-backup-restore",
+        "ir-access-review",
+        "sh-purchase-large-approver",
+        "ir-purchase-overdue",
+        "sh-backup-c-frequency",
+        "sr-inspection-preparation",
+        "sr-inspection-equipment-values",
+        "sr-inspection-record-items",
+        "sr-inspection-stop-conditions",
+        "sr-inspection-after-tasks",
+        "sr-inspection-stop-six"
+      ],
+      "answered": [
+        "title-03",
+        "title-07",
+        "deep-01",
+        "deep-04",
+        "deep-06",
+        "deep-07",
+        "deep-10",
+        "para-02",
+        "para-04",
+        "para-06",
+        "para-07",
+        "para-09",
+        "self-02",
+        "self-03",
+        "self-08",
+        "long-02",
+        "none-02",
+        "ir-room-booking-maintenance",
+        "ir-change-application-items",
+        "ir-incident-phone-unreachable",
+        "ir-emergency-change",
+        "ir-expired-data-erasure",
+        "ir-backup-restore",
+        "sh-backup-c-frequency"
+      ],
+      "subset": true
+    }
+  },
+  "summary": {
+    "large": {
+      "answer_correctness": {
+        "pairs": 24,
+        "changed_pairs_judged": 24,
+        "changed_pairs_unjudged": 0,
+        "changed_pairs_not_answered": 46,
+        "mean_over_answered": {
+          "current": 0.75,
+          "generated_context_rerank": 0.6667
+        },
+        "vs_current": {
+          "cases": 24,
+          "improved": 1,
+          "regressed": 3,
+          "mean_difference": -0.0833,
+          "interval": [
+            -0.25,
+            0.0833
+          ],
+          "p_value": 0.625,
+          "verdict": "inconclusive"
+        }
+      },
+      "citation_match": {
+        "pairs": 23,
+        "changed_pairs_judged": 23,
+        "changed_pairs_unjudged": 0,
+        "changed_pairs_not_answered": 41,
+        "mean_over_answered": {
+          "current": 0.8261,
+          "generated_context_rerank": 0.7391
+        },
+        "vs_current": {
+          "cases": 23,
+          "improved": 0,
+          "regressed": 2,
+          "mean_difference": -0.087,
+          "interval": [
+            -0.2174,
+            0.0
+          ],
+          "p_value": 0.5,
+          "verdict": "inconclusive"
+        }
+      },
+      "requirement_coverage": {
+        "pairs": 24,
+        "changed_pairs_judged": 24,
+        "changed_pairs_unjudged": 0,
+        "changed_pairs_not_answered": 46,
+        "mean_over_answered": {
+          "current": 0.8125,
+          "generated_context_rerank": 0.7708
+        },
+        "vs_current": {
+          "cases": 24,
+          "improved": 1,
+          "regressed": 2,
+          "mean_difference": -0.0417,
+          "interval": [
+            -0.2083,
+            0.0833
+          ],
+          "p_value": null,
+          "verdict": "inconclusive"
+        }
+      },
+      "claim_support_rate": {
+        "pairs": 22,
+        "changed_pairs_judged": 22,
+        "changed_pairs_unjudged": 2,
+        "changed_pairs_not_answered": 46,
+        "mean_over_answered": {
+          "current": 0.9167,
+          "generated_context_rerank": 0.8788
+        },
+        "vs_current": {
+          "cases": 22,
+          "improved": 1,
+          "regressed": 4,
+          "mean_difference": -0.0379,
+          "interval": [
+            -0.1515,
+            0.0909
+          ],
+          "p_value": null,
+          "verdict": "inconclusive"
+        }
+      },
+      "abstained": {
+        "pairs": 24,
+        "changed_pairs_judged": 24,
+        "changed_pairs_unjudged": 0,
+        "changed_pairs_not_answered": 46,
+        "mean_over_answered": {
+          "current": 0.1667,
+          "generated_context_rerank": 0.2083
+        },
+        "vs_current": {
+          "cases": 24,
+          "improved": 2,
+          "regressed": 1,
+          "mean_difference": 0.0417,
+          "interval": [
+            -0.0833,
+            0.2083
+          ],
+          "p_value": 1.0,
+          "verdict": "inconclusive"
+        }
+      }
+    }
+  },
+  "answers": {
+    "0566771fbcbfecf3": {
+      "case_id": "deep-01",
+      "final": [
+        "システム運用手順書.md#chunk-docling-c000002",
+        "システム運用手順書.md#chunk-docling-c000003",
+        "自動倉庫クレーン緊急停止後の再起動承認.md#chunk-docling-c000001",
+        "夜間バッチ再実行の承認区分について.md#chunk-docling-c000001",
+        "来客受付「VisitGate」受付端末の保守担当.md#chunk-docling-c000001"
+      ],
+      "answer": "在庫システム StockNavi の再起動は夜間の保守時間帯（22時から翌5時まで）に限られ、日中に再起動が必要な場合は情報システム部長の承認を得る必要があります。\n根拠：システム運用手順書.md",
+      "insufficient": false,
+      "cited": [
+        "システム運用手順書.md#chunk-docling-c000002",
+        "システム運用手順書.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "日中にStockNaviを再起動する場合に情報システム部長の承認が必要という結論が標準回答と一致しており、誤りがないため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "138f1892a54816b6": {
+      "case_id": "none-02",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000004",
+        "派遣社員就業規程.md#chunk-docling-c000004",
+        "契約社員就業規程.md#chunk-docling-c000001",
+        "契約社員就業規程.md#chunk-docling-c000005",
+        "契約社員就業規程.md#chunk-docling-c000003"
+      ],
+      "answer": "契約社員就業規程には適用範囲や備品の返却に関する記載はありますが、退職金の金額や制度についての記載は見当たりません。したがって、契約社員の退職金がいくらかは資料からは判断できません。\n根拠：契約社員就業規程.md",
+      "insufficient": true,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000001",
+        "契約社員就業規程.md#chunk-docling-c000005"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答は「退職金の額は資料に記載がない」としており、生成回答も同様に資料からは金額・制度が判断できないと述べている。結論が一致しており正確。"
+        ],
+        "claim_support": [
+          "unsupported: 契約社員就業規程には適用範囲や備品の返却に関する記載はありますが、退職金の金額や制度についての記載は見当たりません。 — E3で適用範囲、E4で備品の返却に関する記載は確認できるが、これらは規程の一部に過ぎず、退職金の金額や制度についての記載がないことを裏付けるものではない。Qは質問文であり資料ではない。したがって、段落の「退職金についての記載は見当たらない」という主張は、渡された根拠では確認できない。",
+          "unsupported: したがって、契約社員の退職金がいくらかは資料からは判断できません。 — 根拠として示されている E3 は適用範囲、E4 は備品返却に関する記載であり、いずれも退職金の金額や制度に触れていない。Q は質問文であって資料ではない。したがって「資料からは判断できない」という主張を直接裏付ける根拠は確認できない。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.0,
+        "citation_match": null,
+        "abstained": 1.0
+      }
+    },
+    "14cd1dd79366573d": {
+      "case_id": "para-02",
+      "final": [
+        "外部記憶媒体の持ち込み制限に関する規程.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000002",
+        "外部記憶媒体の持込申請(データ管理部).md#chunk-docling-c000001",
+        "共用端末へのローカル保存はお控えください.md#chunk-docling-c000001",
+        "外部接続端末の持込申請手続きについて.md#chunk-docling-c000001"
+      ],
+      "answer": "いいえ。私物のUSBメモリを業務端末に接続することは禁止されています。業務上必要な場合は、貸与媒体の申請を行い、情報セキュリティ室の登録を受けた媒体に限り使用できます。無断接続が確認された場合は、端末の利用権限が14日間停止されます。\n根拠：外部記憶媒体の持ち込み制限に関する規程.md、情報セキュリティ規程.md\n\nただし、データ管理部の文書には、私物のUSBメモリを業務端末へ接続する場合に事前の「外部媒体持込申請」が必要と記載されており、上記の禁止規程と整合しません。私物USBメモリの取扱いについては、情報セキュリティ室またはデータ管理部に確認してください。\n根拠：外部記憶媒体の持込申請(データ管理部).md",
+      "insufficient": false,
+      "cited": [
+        "外部記憶媒体の持ち込み制限に関する規程.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000002",
+        "外部記憶媒体の持込申請(データ管理部).md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答は私物USBメモリの業務端末接続を禁止しており、生成回答も「いいえ」と明確に禁止を示している。付加的な申請条件や規程間の不整合への言及はあるが、質問への結論は標準回答と一致している。"
+        ],
+        "claim_support": [
+          "unsupported: ただし、データ管理部の文書には、私物のUSBメモリを業務端末へ接続する場合に事前の「外部媒体持込申請」が必要と記載されており、上記の禁止規程と整合しません。 — 根拠 E3 は、私物USBメモリを業務端末へ接続する場合に事前の「外部媒体持込申請」が必要であることを裏付けています。しかし、段落が述べる「上記の禁止規程と整合しません」という点については、禁止規程の内容やそれとの矛盾を示す根拠が提示されておらず、確認できません。したがって、段落全体の主張は根拠だけでは支持されません。",
+          "unsupported: 私物USBメモリの取扱いについては、情報セキュリティ室またはデータ管理部に確認してください。 — 段落は私物USBメモリの取扱いについて情報セキュリティ室またはデータ管理部への確認を促しているが、根拠E3には外部媒体持込申請の手続きや利用後の検査についての記載はあるものの、情報セキュリティ室への確認や、取扱いの確認先として両部署を示す記載はない。したがって、渡された根拠では段落の主張を裏付けられない。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.6666666666666666,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "1c7fe2bf6835a189": {
+      "case_id": "self-03",
+      "final": [
+        "駐輪場の原動機付自転車利用申請.md#chunk-docling-c000001",
+        "緑ヶ丘工場 駐輪場の抽選申請.md#chunk-docling-c000001",
+        "駐車場利用「ParkPass」承認の案内.md#chunk-docling-c000001",
+        "駐輪場における放置自転車の撤去基準.md#chunk-docling-c000001",
+        "車両駐車場利用料の精算案内.md#chunk-docling-c000001"
+      ],
+      "answer": "原動機付自転車で通勤して駐輪場を使う場合は、車両登録票と任意保険の写しを添えて総務部へ申請し、許可された車両に交付される黄色のステッカーが必要です。申請は毎月10日までで、翌月1日からの利用となり、無許可車両は駐輪場に置けません。\n根拠：駐輪場の原動機付自転車利用申請.md\n\n緑ヶ丘工場の駐輪場は抽選制で、4月1日から10日までに総務課へ申請し、許可された場合は許可証を自転車の前かごに貼る必要があります。利用料は月500円です。\n根拠：緑ヶ丘工場 駐輪場の抽選申請.md",
+      "insufficient": false,
+      "cited": [
+        "駐輪場の原動機付自転車利用申請.md#chunk-docling-c000001",
+        "緑ヶ丘工場 駐輪場の抽選申請.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "partial: 駐輪場を利用するには、総務部への登録が必要である。"
+        ],
+        "answer_correctness": [
+          "標準回答は駐輪場利用に「総務部への登録」が必要という一般的要件を示していますが、生成回答は原動機付自転車通勤や緑ヶ丘工場の抽選申請という個別ケースの手続き・条件を述べるにとどまり、総務部への「登録」が必要という結論を明確に示していません。申請と登録は異なり、質問への答えとして標準回答と一致しないためです。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.5,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 0.0
+      }
+    },
+    "21d8ae2b6c62bac8": {
+      "case_id": "ir-change-application-items",
+      "final": [
+        "本番環境反映時間帯の変更について.md#chunk-docling-c000001",
+        "空調管理システム「AirTune」設定変更の申請.md#chunk-docling-c000001",
+        "サーバー構築申請「ServerGate」承認手順.md#chunk-docling-c000001",
+        "新田オフィス 会議室空調 設定変更の申請フロー.md#chunk-docling-c000001",
+        "本番以外の環境における変更連絡のルール.md#chunk-docling-c000001"
+      ],
+      "answer": "本番環境の設定変更については、資料では「構築後の設定変更は別途『変更申請』の承認が必要」とされているだけで、その申請に何を記載するかは示されていません。\n根拠：サーバー構築申請「ServerGate」承認手順.md\n\n本番環境の変更作業の申請については期限（前日15時まで）や、当日の作業開始時に作業者名と連絡先を運用掲示板へ記載するルールはありますが、申請書の記載事項としての説明ではありません。\n根拠：本番環境反映時間帯の変更について.md",
+      "insufficient": true,
+      "cited": [
+        "サーバー構築申請「ServerGate」承認手順.md#chunk-docling-c000001",
+        "本番環境反映時間帯の変更について.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 本番環境の設定変更の申請書には、切り戻しの手順など、第3章に定める項目を記載する。"
+        ],
+        "answer_correctness": [
+          "標準回答では、本番環境の設定変更申請には切り戻し手順などの第3章に定める項目を記載するとされているが、生成回答は申請の記載事項が示されていないとしており、結論が標準回答と矛盾している。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "2465dddd166cb6d4": {
+      "case_id": "para-04",
+      "final": [
+        "電子メール誤送信時の初動対応メモ.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000004",
+        "メール誤送信防止システム「MailGuard」運用規程.md#chunk-docling-c000001",
+        "情報セキュリティ室 不審メールの一次対応手順.md#chunk-docling-c000001",
+        "二重申請の取消方法に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "誤送信に気づいたら、まず送信先へ削除依頼の電話を入れてください。時刻を問わず、気づいた時点で実施します。\n根拠：電子メール誤送信時の初動対応メモ.md\n\nその後、上長と情報セキュリティ室へ30分以内に報告します。報告には送信日時、宛先、添付の有無、本文に含まれる情報の種別を記載してください。情報セキュリティ規程では、誤送信を認知した場合は直ちに情報セキュリティ窓口へ届け出ることとされています。\n根拠：電子メール誤送信時の初動対応メモ.md、情報セキュリティ規程.md",
+      "insufficient": false,
+      "cited": [
+        "電子メール誤送信時の初動対応メモ.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答は誤送信に気づいたら直ちに情報セキュリティ窓口へ届け出ることを求めています。生成回答はまず送信先へ削除依頼の電話をし、その後30分以内に上長と情報セキュリティ室へ報告すると述べており、初動対応と報告時期が標準回答の「直ちに情報セキュリティ窓口へ届け出る」と一致しません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "280d795bfc71f7c5": {
+      "case_id": "long-02",
+      "final": [
+        "出張旅費規程.md#chunk-docling-c000001",
+        "業務用携帯電話の利用範囲(FAQ).md#chunk-docling-c000001",
+        "検証環境の利用に関するFAQ.md#chunk-docling-c000001",
+        "交通系ICカード利用明細の月次提出について.md#chunk-docling-c000001",
+        "システム問い合わせ窓口の受付時間案内.md#chunk-docling-c000001"
+      ],
+      "answer": "国内出張の交通手段として、新幹線は片道の距離が100キロを超えるときに使えます。\n根拠：出張旅費規程.md",
+      "insufficient": false,
+      "cited": [
+        "出張旅費規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答の条件「片道の距離が100キロを超えるときに使える」と一致しており、結論・数値・適用条件に誤りがない。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "3c19b769d6686404": {
+      "case_id": "title-03",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000004",
+        "正社員就業規則.md#chunk-docling-c000004",
+        "那覇オフィス パートタイマー就業規程.md#chunk-docling-c000001",
+        "嘱託職員 勤務条件通知.md#chunk-docling-c000001",
+        "嘱託再雇用者の勤務条件に関する内規(札幌営業所).md#chunk-docling-c000001"
+      ],
+      "answer": "契約社員の通勤手当は実費支給で、上限は月額3万円です。\n根拠：契約社員就業規程.md",
+      "insufficient": false,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "契約社員の通勤手当が実費支給で上限が月額3万円である点が標準回答と一致しており、結論・数値に誤りがないため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "3fd6492a8add1261": {
+      "case_id": "title-07",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000003",
+        "派遣社員就業規程.md#chunk-docling-c000003",
+        "契約社員就業規程.md#chunk-docling-c000002",
+        "正社員就業規則.md#chunk-docling-c000003",
+        "有給休暇の時間単位取得に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "契約社員が時間外労働を行うには、所属長の事前承認を得る必要があります。また、時間外労働は1か月30時間までとされています。\n根拠：契約社員就業規程.md",
+      "insufficient": false,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は標準回答と同様に、契約社員の時間外労働には所属長の事前承認が必要であり、上限が1か月30時間であると正しく述べている。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "4895a61774528276": {
+      "case_id": "self-03",
+      "final": [
+        "駐輪場の原動機付自転車利用申請.md#chunk-docling-c000001",
+        "緑ヶ丘工場 駐輪場の抽選申請.md#chunk-docling-c000001",
+        "駐車場利用「ParkPass」承認の案内.md#chunk-docling-c000001",
+        "車両駐車場利用料の精算案内.md#chunk-docling-c000001",
+        "来客用駐車場の利用申込について.md#chunk-docling-c000001"
+      ],
+      "answer": "駐輪場の利用には申請と許可が必要です。原動機付自転車で通勤する場合は、車両登録票と任意保険の写しを添えて総務部へ申請し、許可された車両に交付される黄色のステッカーが必要です。申請は毎月10日までで、翌月1日からの利用となり、無許可車両は駐輪場に置けません。\n根拠：駐輪場の原動機付自転車利用申請.md\n\n緑ヶ丘工場の駐輪場は定員40台で、4月1日から10日までに総務課へ申請して抽選を受けます。利用には月500円の利用料が必要で、許可証を自転車の前かごに貼ってください。\n根拠：緑ヶ丘工場 駐輪場の抽選申請.md",
+      "insufficient": false,
+      "cited": [
+        "駐輪場の原動機付自転車利用申請.md#chunk-docling-c000001",
+        "緑ヶ丘工場 駐輪場の抽選申請.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "partial: 駐輪場を利用するには、総務部への登録が必要である。"
+        ],
+        "answer_correctness": [
+          "標準回答は「総務部への登録が必要」としているが、生成回答は「申請と許可が必要」と述べており、必須要件を登録として示していません。原動機付自転車の場合の申請や緑ヶ丘工場の抽選・利用料など具体策はありますが、一般的な必要要件の結論が標準回答と一致しません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.5,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 0.0
+      }
+    },
+    "4990e92b42caa662": {
+      "case_id": "para-04",
+      "final": [
+        "電子メール誤送信時の初動対応メモ.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000004",
+        "メール誤送信防止システム「MailGuard」運用規程.md#chunk-docling-c000001",
+        "二重申請の取消方法に関するFAQ.md#chunk-docling-c000001",
+        "情報セキュリティ室 不審メールの一次対応手順.md#chunk-docling-c000001"
+      ],
+      "answer": "メールを誤った相手に送ってしまった場合、資料では、気づいた時点でまず送信先へ削除依頼の電話を入れ、次に上長と情報セキュリティ室へ30分以内に報告することとされています。報告には送信日時、宛先、添付の有無、本文に含まれる情報の種別を記載し、謝罪文は送付前にセキュリティ室の内容確認を受ける必要があります。\n根拠：電子メール誤送信時の初動対応メモ.md\n\nあわせて、情報セキュリティ規程では誤送信を認知したら直ちに情報セキュリティ窓口へ届け出るとされ、MailGuardの運用規程では誤送信が疑われる場合に送信後5分以内に情報セキュリティ室へ連絡するとされています。\n根拠：情報セキュリティ規程.md、メール誤送信防止システム「MailGuard」運用規程.md",
+      "insufficient": false,
+      "cited": [
+        "電子メール誤送信時の初動対応メモ.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000004",
+        "メール誤送信防止システム「MailGuard」運用規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答は「誤送信に気づいたら直ちに情報セキュリティ窓口へ届け出る」としていますが、生成回答はまず送信先へ削除依頼の電話を入れ、その後30分以内に上長と情報セキュリティ室へ報告する作為を主たる対応として述べており、初動が「直ちに届け出る」と一致しません。後段で規程上の即時届出に触れてはいるものの、質問への回答として提示した手順が標準回答と矛盾しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "54d1b20a434e587f": {
+      "case_id": "self-02",
+      "final": [
+        "社内施設案内.md#chunk-docling-c000002",
+        "会議室予約システムの権限付与ガイド.md#chunk-docling-c000001",
+        "会議室予約「ルームリンク」重複予約エラー.md#chunk-docling-c000001",
+        "桜丘オフィス 会議室予約の優先ルール.md#chunk-docling-c000001",
+        "会議室予約システムの操作手順.md#chunk-docling-c000001"
+      ],
+      "answer": "社内施設案内では、会議室は施設予約で最大2週間先まで予約できると記載されています。\n根拠：社内施設案内.md\n\n一方、会議室予約システム「RoomMate」のガイドでは、一般利用者の予約可能期間は30日先までと記載されており、資料によって期間が異なります。\n根拠：会議室予約システムの権限付与ガイド.md",
+      "insufficient": false,
+      "cited": [
+        "社内施設案内.md#chunk-docling-c000002",
+        "会議室予約システムの権限付与ガイド.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答は「最大で2週間先まで」と明確に答えるが、生成回答は2週間と30日という異なる記載を併記して「資料によって期間が異なる」とし、質問に対する結論を明確に示していない。そのため、標準回答と意味上一致する回答になっていない。"
+        ],
+        "claim_support": [
+          "unsupported: 一方、会議室予約システム「RoomMate」のガイドでは、一般利用者の予約可能期間は30日先までと記載されており、資料によって期間が異なります。 — 根拠E9badc97c4c085a88b91aには、RoomMateの一般利用者の予約可能期間が30日先までであることが記載されており、段落前半は裏付けられる。しかし、段落後半の「資料によって期間が異なります」という、別資料との相違を述べる部分は、渡された根拠だけでは確認できない。したがって、段落全体としては支持されているとは言えない。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.5,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "6648fa05db3ce556": {
+      "case_id": "para-09",
+      "final": [
+        "経費の取扱い.md#chunk-docling-c000003",
+        "在宅勤務の通信費補助に関する案内.md#chunk-docling-c000001",
+        "在宅勤務手当の支給規程.md#chunk-docling-c000001",
+        "リモートワーク勤務手順(営業企画部).md#chunk-docling-c000001",
+        "出張中の食事代補助に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "出ます。経費の取扱いでは、在宅で勤務する日の通信費用として月額3,000円を支給するとされています。在宅勤務の通信費補助の案内でも、在宅勤務を行った月に1か月あたり上限3,000円の通信費補助を支給するとあります。\n根拠：経費の取扱い.md、在宅勤務の通信費補助に関する案内.md\n\nただし後者の案内では、対象は月4日以上の在宅勤務者で、翌月10日までに「在宅勤務実績報告」と領収書を所属長経由で提出し、翌々月の給与で支給されます。営業企画部については、通信費を月3,000円定額補助するとの記載があります。\n根拠：在宅勤務の通信費補助に関する案内.md、リモートワーク勤務手順(営業企画部).md\n\nなお、在宅勤務手当の支給規程では、通信費および電気代相当分として、月4日以上10日以下は1,500円、11日以上は2,500円を支給し、翌月5日までに所属課長へ申請するとされています。\n根拠：在宅勤務手当の支給規程.md",
+      "insufficient": false,
+      "cited": [
+        "経費の取扱い.md#chunk-docling-c000003",
+        "在宅勤務の通信費補助に関する案内.md#chunk-docling-c000001",
+        "リモートワーク勤務手順(営業企画部).md#chunk-docling-c000001",
+        "在宅勤務手当の支給規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "結論は「出る」で、在宅勤務日の通信費用として月額3,000円が支給されるという標準回答の内容と一致しています。追加で条件や別規程の金額が述べられていますが、主要な結論や金額を誤っているわけではありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "6cb4e13594612fc7": {
+      "case_id": "ir-emergency-change",
+      "final": [
+        "approval-rules.html#chunk-docling-c000004",
+        "緊急変更の事後承認に関する規程.md#chunk-docling-c000001",
+        "緊急変更時の電話連絡フロー.md#chunk-docling-c000001",
+        "権限変更の緊急時対応手順.md#chunk-docling-c000001",
+        "委託先による設定変更の承認要領.md#chunk-docling-c000001"
+      ],
+      "answer": "承認の前に緊急作業を行った場合は、作業の後24時間以内に承認者へ事後の承認を申請します。また、障害復旧のため即時に本番設定を切り替えた場合は、作業完了から3営業日以内に緊急変更報告書を情報基盤課へ提出し、事後承認は課長とリスク管理室の2名で行う規定もあります。\n根拠：approval-rules.html、緊急変更の事後承認に関する規程.md",
+      "insufficient": false,
+      "cited": [
+        "approval-rules.html#chunk-docling-c000004",
+        "緊急変更の事後承認に関する規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "緊急作業後に24時間以内に承認者へ事後の承認を申請するという結論が標準回答と一致しており、追加説明も結論を誤らせるものではありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "6e19cd9f3707c537": {
+      "case_id": "para-02",
+      "final": [
+        "外部記憶媒体の持ち込み制限に関する規程.md#chunk-docling-c000001",
+        "外部記憶媒体の持込申請(データ管理部).md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000002",
+        "共用端末へのローカル保存はお控えください.md#chunk-docling-c000001",
+        "外部接続端末の持込申請手続きについて.md#chunk-docling-c000001"
+      ],
+      "answer": "自分のUSBメモリをそのまま会社のパソコン（業務端末）に挿すことはできません。規程では、私物の外部記憶媒体を業務端末へ接続することが禁止されており、業務上必要な場合でも、貸与媒体の申請を行い、情報セキュリティ室の登録を受けたものに限り使用できます。\n根拠：外部記憶媒体の持ち込み制限に関する規程.md、情報セキュリティ規程.md\n\nなお、データ管理部の手続きには私物USBメモリの持込申請に関する記載もありますが、規程上の禁止を覆して私物USBの利用が認められるかは、この資料だけでは判断できません。\n根拠：外部記憶媒体の持込申請(データ管理部).md",
+      "insufficient": false,
+      "cited": [
+        "外部記憶媒体の持ち込み制限に関する規程.md#chunk-docling-c000001",
+        "情報セキュリティ規程.md#chunk-docling-c000002",
+        "外部記憶媒体の持込申請(データ管理部).md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答と同じく、私物のUSBメモリを業務端末に接続することは禁止であると正しく述べており、例外として貸与媒体の申請・登録済みのものに限る旨も規程に沿った説明です。結論に誤りはありません。"
+        ],
+        "claim_support": [
+          "unsupported: なお、データ管理部の手続きには私物USBメモリの持込申請に関する記載もありますが、規程上の禁止を覆して私物USBの利用が認められるかは、この資料だけでは判断でき — E2は私物USBメモリを業務端末に接続する際の持込申請手続きを記載しており、段落前半の「持込申請に関する記載」は裏付けられる。しかし、E2には規程上の禁止や、申請・承認がその禁止を覆して私物USBの利用を認めるかについての記載がない。そのため、段落後半の「規程上の禁止を覆して利用が認められるかはこの資料だけでは判断できない」という判断や、その前提となる「規程上の禁止」をこの根拠から確認することはできず、段落全体は supported とは言えない。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.6666666666666666,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "74ab5570e16c10d8": {
+      "case_id": "title-07",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000003",
+        "派遣社員就業規程.md#chunk-docling-c000003",
+        "契約社員就業規程.md#chunk-docling-c000002",
+        "正社員就業規則.md#chunk-docling-c000003",
+        "契約社員就業規程.md#chunk-docling-c000001"
+      ],
+      "answer": "契約社員就業規程では、時間外労働は所属長の事前承認を得て行うこととされ、上限は1か月30時間です。\n根拠：契約社員就業規程.md",
+      "insufficient": false,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000003",
+        "契約社員就業規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "契約社員の時間外労働には所属長の事前承認が必要であり、上限が1か月30時間である点が標準回答と一致しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "7883f280f50e23b4": {
+      "case_id": "deep-06",
+      "final": [
+        "製品保証規定.md#chunk-docling-c000003",
+        "製品保証規定.md#chunk-docling-c000002",
+        "自然災害による故障の保証取扱い FAQ.md#chunk-docling-c000001",
+        "消耗品保証の適用範囲FAQ.md#chunk-docling-c000001",
+        "白樺工場 ヘルメット寿命判定の目安.md#chunk-docling-c000001"
+      ],
+      "answer": "HM-50 のタンクのひび割れが保証対象かどうかを直接示す記載は、資料内に見当たりません。HM-50 については、保証の申し込みを顧客相談窓口で受け付けることや、空気清浄機と扱いの違う点があることまでは記載されていますが、タンクのひび割れの取扱いは示されていません。\n根拠：製品保証規定.md\n\nなお、タンクのひび割れを使い方による損傷として保証対象外とする記述はありますが、その記述が HM-50 を対象とするものか本文から確認できないため、HM-50 に適用できる根拠としては扱えません。\n根拠：製品保証規定.md",
+      "insufficient": true,
+      "cited": [
+        "製品保証規定.md#chunk-docling-c000002",
+        "製品保証規定.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: HM-50のタンクのひび割れが使い方による損傷である場合、保証の対象外であることを説明する。"
+        ],
+        "answer_correctness": [
+          "標準回答では「HM-50 のタンクのひび割れは使い方による損傷として保証対象外」と明確に述べていますが、生成回答は「HM-50 に適用できる根拠として扱えない」として保証対象外と断定しておらず、結論が一致していません。"
+        ],
+        "claim_support": [
+          "contradicted: HM-50 のタンクのひび割れが保証対象かどうかを直接示す記載は、資料内に見当たりません。 — 段落は「HM-50 のタンクのひび割れが保証対象かどうかを直接示す記載は資料内に見当たらない」と述べているが、根拠 E1 には「タンクのひび割れは、使い方による損傷として保証の対象外とする」と直接記載されている。したがって、段落の主張は根拠と食い違う。",
+          "contradicted: HM-50 については、保証の申し込みを顧客相談窓口で受け付けることや、空気清浄機と扱いの違う点があることまでは記載されていますが、タンクのひび割れの取扱いは示 — HM-50 について、保証申込みを顧客相談窓口で受け付ける点や空気清浄機と扱いが違う点は E2 に記載がある。しかし「タンクのひび割れの取扱いは示されていません」という主張は、E1 に「タンクのひび割れは、使い方による損傷として保証の対象外とする」と明確に示されているため、根拠と食い違う。",
+          "contradicted: なお、タンクのひび割れを使い方による損傷として保証対象外とする記述はありますが、その記述が HM-50 を対象とするものか本文から確認できないため、HM-50  — E2 で「次に、加湿器 HM-50 の保証の内容を定める」と述べて HM-50 の保証規定に入り、続く E1 に「タンクのひび割れは、使い方による損傷として保証の対象外とする」と明記されている。E1 の内容も水を扱う HM-50 向けの保証内容（出張修理、水あか等）と整合するため、タンクのひび割れの除外規定が HM-50 を対象とするものか本文から確認できない、という段落の主張は根拠と食い違う。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 0.0,
+        "citation_match": 1.0,
+        "abstained": 1.0
+      }
+    },
+    "78fd69679c6a6da9": {
+      "case_id": "para-09",
+      "final": [
+        "経費の取扱い.md#chunk-docling-c000003",
+        "在宅勤務の通信費補助に関する案内.md#chunk-docling-c000001",
+        "在宅勤務手当の支給規程.md#chunk-docling-c000001",
+        "リモートワーク勤務手順(営業企画部).md#chunk-docling-c000001",
+        "在宅勤務日の備品持ち出し申請.md#chunk-docling-c000001"
+      ],
+      "answer": "在宅勤務日の通信費は支給されます。経費の取扱いでは「在宅で勤務する日の通信の費用として、月額3,000円を支給する」とされ、案内でも1か月あたり上限3,000円の通信費補助が支給されるとされています。\n根拠：経費の取扱い.md、在宅勤務の通信費補助に関する案内.md\n\nただし案内では、対象は月4日以上の在宅勤務者で、翌月10日までに「在宅勤務実績報告」と領収書を所属長経由で提出し、支給は翌々月の給与とされています。別の規程では在宅勤務手当が日数に応じて1,500円または2,500円とされ、通信費および電気代相当分として扱われるため、適用される規程の確認が必要です。\n根拠：在宅勤務の通信費補助に関する案内.md、在宅勤務手当の支給規程.md",
+      "insufficient": false,
+      "cited": [
+        "経費の取扱い.md#chunk-docling-c000003",
+        "在宅勤務の通信費補助に関する案内.md#chunk-docling-c000001",
+        "在宅勤務手当の支給規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "在宅勤務日の通信費が支給され、月額3,000円であるという結論・数値は標準回答と一致している。追加の条件や別規程に関する記載はあるが、質問への回答としての結論は誤っていない。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "7b0271cc4cad4021": {
+      "case_id": "none-02",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000001",
+        "契約社員就業規程.md#chunk-docling-c000004",
+        "派遣社員就業規程.md#chunk-docling-c000004",
+        "正社員就業規則.md#chunk-docling-c000005",
+        "契約社員就業規程.md#chunk-docling-c000002"
+      ],
+      "answer": "契約社員の退職金の金額は、提示された資料には記載がありません。契約社員就業規程には適用範囲や通勤手当、勤務時間の記載はありますが、退職金に関する記述は見当たらないため、金額は不明です。\n根拠：契約社員就業規程.md",
+      "insufficient": true,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000001",
+        "契約社員就業規程.md#chunk-docling-c000004",
+        "契約社員就業規程.md#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答と同様に、契約社員の退職金額は資料に記載がないと述べており、結論は一致しています。"
+        ],
+        "claim_support": [
+          "unsupported: 契約社員就業規程には適用範囲や通勤手当、勤務時間の記載はありますが、退職金に関する記述は見当たらないため、金額は不明です。 — E1・E2・E5により適用範囲、通勤手当、勤務時間の記載があることは確認できる。しかし、提示された根拠は契約社員就業規程の一部であり、退職金に関する記述が文書全体に存在しないことや金額が不明であることまでは裏付けられない。段落全体の主張を支持するには不十分である。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.5,
+        "citation_match": null,
+        "abstained": 1.0
+      }
+    },
+    "7df8328d1bb70d21": {
+      "case_id": "title-03",
+      "final": [
+        "契約社員就業規程.md#chunk-docling-c000004",
+        "正社員就業規則.md#chunk-docling-c000004",
+        "嘱託職員 勤務条件通知.md#chunk-docling-c000001",
+        "那覇オフィス パートタイマー就業規程.md#chunk-docling-c000001",
+        "嘱託再雇用者の勤務条件に関する内規(札幌営業所).md#chunk-docling-c000001"
+      ],
+      "answer": "契約社員の通勤手当は実費支給で、上限は月額3万円です。\n根拠：契約社員就業規程.md",
+      "insufficient": false,
+      "cited": [
+        "契約社員就業規程.md#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答と同様に、契約社員の通勤手当は実費支給で上限が月額3万円であると正しく述べています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "7e4e4439333765e3": {
+      "case_id": "ir-backup-restore",
+      "final": [
+        "backup-rules.html#chunk-docling-c000003",
+        "システム運用手順書.md#chunk-docling-c000003",
+        "backup-rules.html#chunk-docling-c000004",
+        "backup-rules.html#chunk-docling-c000001",
+        "backup-rules.html#chunk-docling-c000002"
+      ],
+      "answer": "システムのデータをバックアップから復元する場合は、まず担当部署の承認者から承認を得たうえで、情報システム部（情シス）に復元を依頼します。復元後は、担当部署が内容を確認します。\n根拠：backup-rules.html",
+      "insufficient": false,
+      "cited": [
+        "backup-rules.html#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は、バックアップからの復元には担当部署の承認者の承認を得たうえで情シスに依頼するという標準回答の結論と一致しており、誤りはない。復元後の確認に関する記述は追加情報だが、標準回答と矛盾しない。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "827b39c1b408d66f": {
+      "case_id": "deep-10",
+      "final": [
+        "研修制度.md#chunk-docling-c000002",
+        "研修制度.md#chunk-docling-c000003",
+        "海外出張前安全研修の受講要件.md#chunk-docling-c000001",
+        "研修講師派遣の依頼手続き.md#chunk-docling-c000001",
+        "子会社出向者向け研修の受講案内.md#chunk-docling-c000001"
+      ],
+      "answer": "中途入社者研修の講師は、人事部の担当者が務めます。\n根拠：研修制度.md",
+      "insufficient": false,
+      "cited": [
+        "研修制度.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は「中途入社者研修の講師は人事部の担当者が務める」と述べており、標準回答と結論が一致しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "86e3dc89eeadcfa6": {
+      "case_id": "long-02",
+      "final": [
+        "出張旅費規程.md#chunk-docling-c000001",
+        "交通系ICカード利用明細の月次提出について.md#chunk-docling-c000001",
+        "業務用携帯電話の利用範囲(FAQ).md#chunk-docling-c000001",
+        "大雪時の出社判断に関するFAQ.md#chunk-docling-c000001",
+        "券売機ソフトウェア配信に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "国内出張の交通手段として、新幹線は片道の距離が100キロを超えるときに使えます。\n根拠：出張旅費規程.md",
+      "insufficient": false,
+      "cited": [
+        "出張旅費規程.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "新幹線が片道100キロを超えるときに使えるという条件が標準回答と一致しており、結論に誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "8e39bcda5d5ce6df": {
+      "case_id": "ir-backup-restore",
+      "final": [
+        "システム運用手順書.md#chunk-docling-c000003",
+        "backup-rules.html#chunk-docling-c000004",
+        "backup-rules.html#chunk-docling-c000003",
+        "backup-rules.html#chunk-docling-c000005",
+        "復旧目標時間の設定方法に関する説明資料.md#chunk-docling-c000001"
+      ],
+      "answer": "バックアップからの復元は、担当部署の承認者の承認を得てから情シスに依頼します。復元した後は、担当部署が内容を確かめます。\n根拠：backup-rules.html",
+      "insufficient": false,
+      "cited": [
+        "backup-rules.html#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は「担当部署の承認者の承認を得てから情シスに依頼する」という標準回答の結論と一致しており、追加の復元後の確認に関する記述も結論を誤らせるものではないため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "96f54fc3a65fc683": {
+      "case_id": "deep-06",
+      "final": [
+        "製品保証規定.md#chunk-docling-c000003",
+        "製品保証規定.md#chunk-docling-c000002",
+        "自然災害による故障の保証取扱い FAQ.md#chunk-docling-c000001",
+        "消耗品保証の適用範囲FAQ.md#chunk-docling-c000001",
+        "川崎工場 安全靴交換の基準.md#chunk-docling-c000001"
+      ],
+      "answer": "HM-50のタンクのひび割れは保証の対象ではありません。製品保証規定では、タンクのひび割れは使い方による損傷として保証の対象外とされています。\n根拠：製品保証規定.md",
+      "insufficient": false,
+      "cited": [
+        "製品保証規定.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は、HM-50のタンクのひび割れが使い方による損傷として保証対象外であると述べており、標準回答と結論・理由が一致している。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "9a420bbdc2a9e3d9": {
+      "case_id": "ir-expired-data-erasure",
+      "final": [
+        "data-retention-rules.html#chunk-docling-c000004",
+        "data-retention-rules.html#chunk-docling-c000002",
+        "VoIP音声メッセージ保管手順.md#chunk-docling-c000001",
+        "廃止システムのデータ保管手続き.md#chunk-docling-c000001",
+        "記録媒体の廃棄およびデータ消去の手順.md#chunk-docling-c000001"
+      ],
+      "answer": "保管期間を過ぎたデータは、システムを担当する部署の承認者の承認を得てから消去します。また、消去の記録は総務部に提出します。\n根拠：data-retention-rules.html",
+      "insufficient": false,
+      "cited": [
+        "data-retention-rules.html#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "保管期間を過ぎたデータについて、システム担当部署の承認者の承認を得てから消去し、消去記録を総務部に提出するとしており、標準回答と内容が一致しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "9c407863730b1d70": {
+      "case_id": "deep-10",
+      "final": [
+        "研修制度.md#chunk-docling-c000003",
+        "研修制度.md#chunk-docling-c000002",
+        "海外出張前安全研修の受講要件.md#chunk-docling-c000001",
+        "研修講師派遣の依頼手続き.md#chunk-docling-c000001",
+        "子会社出向者向け研修の受講案内.md#chunk-docling-c000001"
+      ],
+      "answer": "資料には中途入社者研修についての定めはありますが、その講師を誰が務めるかについての記載がありません。したがって、講師の担当者を資料から特定することはできません。\n根拠：研修制度.md",
+      "insufficient": true,
+      "cited": [
+        "研修制度.md#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 中途入社者研修の講師は、人事部の担当者が務める。"
+        ],
+        "answer_correctness": [
+          "標準回答では中途入社者研修の講師は人事部の担当者とされているが、生成回答は講師を資料から特定できないとしており、結論が標準回答と一致しないため。"
+        ],
+        "claim_support": [
+          "unsupported: したがって、講師の担当者を資料から特定することはできません。 — 根拠 E2 は新任管理職研修については講師が外部の研修会社の講師であると述べていますが、中途入社者研修の講師についての記載はなく、資料から講師を特定できないことまでは確認できません。Q は質問文であり資料の裏付けには使えません。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 0.5,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "a0ceb2d5a40b340b": {
+      "case_id": "para-07",
+      "final": [
+        "経費の取扱い.md#chunk-docling-c000001",
+        "飲食費精算の事前承認ルール.md#chunk-docling-c000001",
+        "部門懇親会費の補助申請について.md#chunk-docling-c000001",
+        "出張中の食事代補助に関するFAQ.md#chunk-docling-c000001",
+        "外部研修の推薦申請に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "取引先との会食に要した費用は交際費として処理され、1人あたり5,000円が上限です。したがって、お客さんとの飲み会の代金は1人5,000円まで会社が出す扱いとなります。\n根拠：経費の取扱い.md",
+      "insufficient": false,
+      "cited": [
+        "経費の取扱い.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答と同様に、取引先との会食費用は交際費として処理され、1人あたり5,000円が上限であると正しく述べており、結論・数値・条件に誤りがない。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "a108ad9e185b7c25": {
+      "case_id": "deep-07",
+      "final": [
+        "拠点別防災手順.md#chunk-docling-c000003",
+        "拠点別防災手順.md#chunk-docling-c000002",
+        "札幌支店 庁舎外の緊急集合場所の変更連絡.md#chunk-docling-c000001",
+        "名古屋支店 地震発生時の避難手順.md#chunk-docling-c000001",
+        "名古屋支店 津波避難ビル協定の運用細則.md#chunk-docling-c000001"
+      ],
+      "answer": "資料には、大阪支店の避難の集合場所は具体的に記載されていません。大阪支店については「商業ビルの5階にあり、ビルの管理会社の指示に従う」との記載にとどまり、集合場所そのものは示されていません。\n根拠：拠点別防災手順.md",
+      "insufficient": true,
+      "cited": [
+        "拠点別防災手順.md#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 大阪支店の避難の集合場所は、ビルの北側の公園であると案内する。"
+        ],
+        "answer_correctness": [
+          "標準回答は「ビルの北側の公園」と具体的に示しているのに対し、生成回答は「集合場所は記載されていない」としており、結論が標準回答と矛盾しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "a149a86671b8e2ea": {
+      "case_id": "ir-incident-phone-unreachable",
+      "final": [
+        "incident-contact-rules.html#chunk-docling-c000004",
+        "incident-contact-rules.html#chunk-docling-c000002",
+        "障害復旧連絡の初動手順.md#chunk-docling-c000001",
+        "在宅接続が不調なときの一次切り分け.md#chunk-docling-c000001",
+        "取引先向け 災害時の連絡窓口のご案内.md#chunk-docling-c000001"
+      ],
+      "answer": "障害の最初の連絡は電話で行います。電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書き込み、15分ごとに電話をかけ直します。最初の連絡の手段は第3章を参照することになっています。\n根拠：incident-contact-rules.html",
+      "insufficient": false,
+      "cited": [
+        "incident-contact-rules.html#chunk-docling-c000002",
+        "incident-contact-rules.html#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "電話がつながらない場合に、社内チャットの障害チャンネル（#incident）へ書き込み、15分ごとに電話をかけ直すという結論が標準回答と一致しているため。"
+        ],
+        "claim_support": [
+          "citation_error: 最初の連絡の手段は第3章を参照することになっています。 — 未登録の原文ID。第1章の根拠に「連絡の手段は第 3 章を参照してください」とあり、最初の連絡に関する記述の中で連絡手段を第3章に委ねているため、段落の主張は裏付けられています。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": null,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "a80c518ed0e1e728": {
+      "case_id": "ir-expired-data-erasure",
+      "final": [
+        "data-retention-rules.html#chunk-docling-c000004",
+        "data-retention-rules.html#chunk-docling-c000002",
+        "VoIP音声メッセージ保管手順.md#chunk-docling-c000001",
+        "廃止システムのデータ保管手続き.md#chunk-docling-c000001",
+        "シャワー室利用カード再発行FAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "保管期間を過ぎたデータは、システムを担当する部署の承認者の承認を得てから消去します。また、消去の記録は総務部に提出します。保管期間を過ぎたデータの消し方は、データ保管規程の第3章を参照することとされています。\n根拠：data-retention-rules.html",
+      "insufficient": false,
+      "cited": [
+        "data-retention-rules.html#chunk-docling-c000004",
+        "data-retention-rules.html#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "保管期間を過ぎたデータについて、システム担当部署の承認者の承認を得てから消去し、消去記録を総務部に提出するという標準回答の結論と一致しています。追加の参照情報はありますが、内容に誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "b4b174158a8c824e": {
+      "case_id": "para-07",
+      "final": [
+        "経費の取扱い.md#chunk-docling-c000001",
+        "飲食費精算の事前承認ルール.md#chunk-docling-c000001",
+        "外部研修の推薦申請に関するFAQ.md#chunk-docling-c000001",
+        "会議用お茶菓子の購入基準.md#chunk-docling-c000001",
+        "部門懇親会費の補助申請について.md#chunk-docling-c000001"
+      ],
+      "answer": "取引先との会食に要した費用は交際費として処理され、1人あたり5,000円が上限です。\n根拠：経費の取扱い.md\n\nなお、飲食費が1人8,000円を超える場合は、開催日の3営業日前までに部長の事前承認を得るルールがあります。これは上限額ではなく、事前承認の要否に関する定めです。\n根拠：飲食費精算の事前承認ルール.md",
+      "insufficient": false,
+      "cited": [
+        "経費の取扱い.md#chunk-docling-c000001",
+        "飲食費精算の事前承認ルール.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "取引先との会食費を交際費として処理し、1人あたり5,000円が上限であるという結論が標準回答と一致しています。追加の8,000円に関する記載も事前承認の要否に関するもので、上限額を変更するものではないと明示されており、結論に誤りはありません。"
+        ],
+        "claim_support": [
+          "unsupported: これは上限額ではなく、事前承認の要否に関する定めです。 — 根拠E2は「1人8,000円を超える飲食費は部長の事前承認を得る」という事前承認のルールを述べているため、段落の「事前承認の要否に関する定め」という部分は裏付けられる。しかし「上限額ではない」という部分は、資料に上限額でないと明記されているわけではなく、記載がないことから断定できない。したがって段落全体としては根拠だけでは確かめられない。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 0.6666666666666666,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "bb3d0e56dc089ccb": {
+      "case_id": "deep-04",
+      "final": [
+        "製品保証規定.md#chunk-docling-c000002",
+        "製品保証規定.md#chunk-docling-c000003",
+        "業務用製品の保証適用範囲に関する覚書.md#chunk-docling-c000001",
+        "製品保証規程の一部改定について.md#chunk-docling-c000001",
+        "延長保証加入手続き規程.md#chunk-docling-c000001"
+      ],
+      "answer": "加湿器 HM-50 の保証期間は、購入日から2年です。HM-50 は空気清浄機とは扱いが異なる製品として保証内容が定められており、その中で保証期間は購入日から2年とされています。\n根拠：製品保証規定.md",
+      "insufficient": false,
+      "cited": [
+        "製品保証規定.md#chunk-docling-c000002",
+        "製品保証規定.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "加湿器 HM-50 の保証期間を「購入日から2年」としており、標準回答と一致しています。追加の説明も結論を誤らせていません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "c1ce93ae6ddd3073": {
+      "case_id": "self-08",
+      "final": [
+        "社内施設案内.md#chunk-docling-c000008",
+        "個人ロッカーの利用規程.md#chunk-docling-c000001",
+        "ロッカー管理システム「Lockle」の利用ルール.md#chunk-docling-c000001",
+        "みなと第3倉庫 更衣室の清掃当番表の説明.md#chunk-docling-c000001",
+        "更衣室の私物置き場利用ルール.md#chunk-docling-c000001"
+      ],
+      "answer": "更衣室のロッカーは、総務部が1人1つ割り当てます。\n根拠：社内施設案内.md",
+      "insufficient": false,
+      "cited": [
+        "社内施設案内.md#chunk-docling-c000008"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は「更衣室のロッカーは総務部が1人1つ割り当てる」と述べており、標準回答と結論・内容が一致しているため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "ca4536f75a6a20c9": {
+      "case_id": "deep-07",
+      "final": [
+        "拠点別防災手順.md#chunk-docling-c000002",
+        "拠点別防災手順.md#chunk-docling-c000003",
+        "名古屋支店 地震発生時の避難手順.md#chunk-docling-c000001",
+        "札幌支店 庁舎外の緊急集合場所の変更連絡.md#chunk-docling-c000001",
+        "名古屋支店 津波避難ビル協定の運用細則.md#chunk-docling-c000001"
+      ],
+      "answer": "大阪支店の避難の集合場所は、ビルの北側の公園です。大阪支店は商業ビルの5階にあり、ビルの管理会社の指示に従うとされています。\n根拠：拠点別防災手順.md",
+      "insufficient": false,
+      "cited": [
+        "拠点別防災手順.md#chunk-docling-c000002",
+        "拠点別防災手順.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "大阪支店の避難の集合場所を「ビルの北側の公園」と正しく述べており、標準回答と意味上一致しています。追加の説明はありますが、結論に誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "cfaab5805432f59e": {
+      "case_id": "para-06",
+      "final": [
+        "社内チャット「Hiyoko」利用FAQ.md#chunk-docling-c000001",
+        "チャット「トークルーム」ファイル送信制限.md#chunk-docling-c000001",
+        "添付ファイルの上限を教えてください【FAQ】.md#chunk-docling-c000001",
+        "添付可能なファイル形式と容量に関するFAQ.md#chunk-docling-c000001",
+        "変更管理台帳の記載ルール.md#chunk-docling-c000001"
+      ],
+      "answer": "提示された資料には、ChatGPTに仕事の資料を貼り付けてもよいかについての記載がありません。資料は社内チャットや添付ファイルの容量・形式など別の制度に関するもので、ChatGPTの利用条件は確認できません。したがって、この資料だけでは可否を判断できません。",
+      "insufficient": true,
+      "cited": [],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 仕事の資料をChatGPTに貼り付けてよいかという問いに対して、「いいえ」と明確に回答する。",
+          "missing: 業務の情報を外部の生成AIサービスへ入力してはいけないという禁止事項を説明する。",
+          "missing: 情報システム部が認めたサービスは、業務情報を外部の生成AIサービスへ入力してはいけないという禁止の例外であることを説明する。"
+        ],
+        "answer_correctness": [
+          "標準回答は「業務情報を外部の生成AIサービスへ入力してはいけない（情報システム部が認めたサービスを除く）」と明確に答えており、ChatGPTへの貼り付けは原則不可です。生成回答は「資料だけでは可否を判断できない」として拒答しており、質問への結論が標準回答と一致しません。"
+        ],
+        "claim_support": [
+          "unassessed: 提示された資料には、ChatGPTに仕事の資料を貼り付けてもよいかについての記載がありません。 — 段落に対応する出典を確認できず、内容の支持は未評価。",
+          "unassessed: 資料は社内チャットや添付ファイルの容量・形式など別の制度に関するもので、ChatGPTの利用条件は確認できません。 — 段落に対応する出典を確認できず、内容の支持は未評価。",
+          "unassessed: したがって、この資料だけでは可否を判断できません。 — 段落に対応する出典を確認できず、内容の支持は未評価。"
+        ]
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": null,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "d45234a51bfd7984": {
+      "case_id": "self-08",
+      "final": [
+        "社内施設案内.md#chunk-docling-c000008",
+        "ロッカー管理システム「Lockle」の利用ルール.md#chunk-docling-c000001",
+        "個人ロッカーの利用規程.md#chunk-docling-c000001",
+        "みなと第3倉庫 更衣室の清掃当番表の説明.md#chunk-docling-c000001",
+        "更衣室の私物置き場利用ルール.md#chunk-docling-c000001"
+      ],
+      "answer": "本社ビル1階の更衣室では、ロッカーは総務部が1人1つ割り当てます。\n根拠：社内施設案内.md",
+      "insufficient": false,
+      "cited": [
+        "社内施設案内.md#chunk-docling-c000008"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "質問に対して、ロッカーは総務部が1人1つ割り当てるという標準回答の結論と一致しており、誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "daeff0ce4342126e": {
+      "case_id": "ir-room-booking-maintenance",
+      "final": [
+        "会議室予約システム「RoomMate」メンテナンス告知.md#chunk-docling-c000001",
+        "会議室予約システムの運用案内.md#chunk-docling-c000001",
+        "定期保守枠の予約方法.md#chunk-docling-c000001",
+        "system-operation-guide.html#chunk-docling-c000008",
+        "会議室予約「マド」の定期予約一括登録手順.md#chunk-docling-c000001"
+      ],
+      "answer": "会議室予約システム「RoomMate」の定期メンテナンスは、6月8日午後10時から翌日午前4時まで実施されます。この間は予約の閲覧・変更ができませんが、既存の予約内容は削除されません。\n根拠：会議室予約システム「RoomMate」メンテナンス告知.md",
+      "insufficient": false,
+      "cited": [
+        "会議室予約システム「RoomMate」メンテナンス告知.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 会議室予約システムは保守計画の個別の章に記載がないため、共通の保守枠で保守されること。",
+          "missing: 共通の保守枠は毎月最終金曜日の20:00〜24:00であること。"
+        ],
+        "answer_correctness": [
+          "標準回答では会議室予約システムは個別の保守計画に無いため、共通の保守枠である毎月最終金曜日20:00〜24:00に行うとされています。一方、生成回答は6月8日22:00〜翌日4:00という別の日時を述べており、定期保守の時期として標準回答と矛盾しています。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 0.0
+      }
+    },
+    "df7c0ed78aa9316c": {
+      "case_id": "sh-backup-c-frequency",
+      "final": [
+        "backup-rules.html#chunk-docling-c000003",
+        "incident-contact-rules.html#chunk-docling-c000003",
+        "backup-rules.html#chunk-docling-c000002",
+        "incident-contact-rules.html#chunk-docling-c000002",
+        "change-procedure.html#chunk-docling-c000005"
+      ],
+      "answer": "重要度 C のシステムのバックアップは、毎週日曜日に 1 回取得します。あわせて 4 世代を保管します。\n根拠：backup-rules.html",
+      "insufficient": false,
+      "cited": [
+        "backup-rules.html#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は「毎週日曜日に1回取得」「4世代を保管」としており、標準回答の頻度・世代数と一致している。結論に誤りはない。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "e2a705253110ff16": {
+      "case_id": "ir-change-application-items",
+      "final": [
+        "本番環境反映時間帯の変更について.md#chunk-docling-c000001",
+        "サーバー構築申請「ServerGate」承認手順.md#chunk-docling-c000001",
+        "新田オフィス 会議室空調 設定変更の申請フロー.md#chunk-docling-c000001",
+        "空調管理システム「AirTune」設定変更の申請.md#chunk-docling-c000001",
+        "保存期限通知設定の変更手続き.md#chunk-docling-c000001"
+      ],
+      "answer": "本番環境の構築後の設定変更には、別途「変更申請」の承認が必要とされています。ただし、その申請書に何を記載すればよいかは、資料に記載がありません。\n根拠：サーバー構築申請「ServerGate」承認手順.md",
+      "insufficient": true,
+      "cited": [
+        "サーバー構築申請「ServerGate」承認手順.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 本番環境の設定変更の申請書には、切り戻しの手順など、第3章に定める項目を記載する。"
+        ],
+        "answer_correctness": [
+          "標準回答では、本番環境の設定変更申請には切り戻し手順など第3章に定める項目を書くとされているが、生成回答は「申請書に何を記載すればよいかは資料に記載がない」としており、結論が標準回答と矛盾しているため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "e9d0c6cdf88e51d2": {
+      "case_id": "deep-01",
+      "final": [
+        "システム運用手順書.md#chunk-docling-c000003",
+        "システム運用手順書.md#chunk-docling-c000002",
+        "自動倉庫クレーン緊急停止後の再起動承認.md#chunk-docling-c000001",
+        "夜間バッチ再実行の承認区分について.md#chunk-docling-c000001",
+        "来客受付「VisitGate」受付端末の保守担当.md#chunk-docling-c000001"
+      ],
+      "answer": "StockNaviの再起動は夜間の保守時間帯（22時から翌5時まで）が原則ですが、日中に再起動が必要な場合は情報システム部長の承認を得る必要があります。\n根拠：システム運用手順書.md",
+      "insufficient": false,
+      "cited": [
+        "システム運用手順書.md#chunk-docling-c000003",
+        "システム運用手順書.md#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "日中に再起動する場合は情報システム部長の承認が必要という結論が標準回答と一致しており、誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "ec33605a94d504be": {
+      "case_id": "sh-backup-c-frequency",
+      "final": [
+        "backup-rules.html#chunk-docling-c000003",
+        "incident-contact-rules.html#chunk-docling-c000002",
+        "incident-contact-rules.html#chunk-docling-c000003",
+        "システム運用手順書.md#chunk-docling-c000003",
+        "change-procedure.html#chunk-docling-c000005"
+      ],
+      "answer": "重要度 C のシステムのバックアップは、毎週日曜日に 1 回取得し、4 世代を保管します。\n根拠：backup-rules.html",
+      "insufficient": false,
+      "cited": [
+        "backup-rules.html#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "重要度Cのバックアップを毎週日曜日に1回取得し、4世代保管するという内容が標準回答と一致しているため。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "f040783fdc25726a": {
+      "case_id": "self-02",
+      "final": [
+        "社内施設案内.md#chunk-docling-c000002",
+        "会議室予約システムの権限付与ガイド.md#chunk-docling-c000001",
+        "桜丘オフィス 会議室予約の優先ルール.md#chunk-docling-c000001",
+        "会議室予約システムの操作手順.md#chunk-docling-c000001",
+        "会議室予約「ルームリンク」重複予約エラー.md#chunk-docling-c000001"
+      ],
+      "answer": "社内施設案内では、会議室は最大で2週間先まで予約できるとされています。一方、会議室予約システム「RoomMate」の一般利用者は、予約可能期間が30日先までと記載されており、資料間で相違があります。\n根拠：社内施設案内.md、会議室予約システムの権限付与ガイド.md",
+      "insufficient": false,
+      "cited": [
+        "社内施設案内.md#chunk-docling-c000002",
+        "会議室予約システムの権限付与ガイド.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "標準回答の「最大で2週間先まで」と一致する内容を述べており、さらに予約システム側の30日先という記載との相違も示しているため、結論に誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "f48c4ff03fc0b241": {
+      "case_id": "ir-emergency-change",
+      "final": [
+        "approval-rules.html#chunk-docling-c000004",
+        "緊急変更の事後承認に関する規程.md#chunk-docling-c000001",
+        "権限変更の緊急時対応手順.md#chunk-docling-c000001",
+        "緊急変更時の電話連絡フロー.md#chunk-docling-c000001",
+        "委託先による設定変更の承認要領.md#chunk-docling-c000001"
+      ],
+      "answer": "承認規程では、障害復旧のため承認前に作業した緊急変更について、作業の後24時間以内に承認者へ事後の承認を申請することとされています。\n根拠：approval-rules.html",
+      "insufficient": false,
+      "cited": [
+        "approval-rules.html#chunk-docling-c000004"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "緊急変更を承認前に実施した場合、作業後24時間以内に承認者へ事後の承認を申請するという結論が標準回答と一致しており、誤りはありません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "f5a615ce7ecaef41": {
+      "case_id": "ir-room-booking-maintenance",
+      "final": [
+        "会議室予約システム「RoomMate」メンテナンス告知.md#chunk-docling-c000001",
+        "会議室予約「マド」の定期予約一括登録手順.md#chunk-docling-c000001",
+        "会議室予約システムの運用案内.md#chunk-docling-c000001",
+        "定期保守枠の予約方法.md#chunk-docling-c000001",
+        "仮想化基盤の保守枠設定規程.md#chunk-docling-c000001"
+      ],
+      "answer": "会議室予約システム「RoomMate」の定期メンテナンスは、6月8日午後10時から翌日午前4時まで実施されます。この間は予約の閲覧・変更ができませんが、既存の予約内容は削除されません。復旧後は午前6時までに動作確認が行われ、結果は施設管理部の掲示板に掲載されます。\n根拠：会議室予約システム「RoomMate」メンテナンス告知.md",
+      "insufficient": false,
+      "cited": [
+        "会議室予約システム「RoomMate」メンテナンス告知.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 会議室予約システムは保守計画の個別の章に記載がないため、共通の保守枠で保守されること。",
+          "missing: 共通の保守枠は毎月最終金曜日の20:00〜24:00であること。"
+        ],
+        "answer_correctness": [
+          "標準回答では、会議室予約システムは保守計画の個別章に記載がないため、共通の保守枠である毎月最終金曜日20:00〜24:00に保守するとしています。生成回答は「6月8日午後10時から翌日午前4時まで」としており、時期・時間帯が標準回答と一致せず、誤りです。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 0.0
+      }
+    },
+    "f7b59eb118bcbfaa": {
+      "case_id": "deep-04",
+      "final": [
+        "製品保証規定.md#chunk-docling-c000003",
+        "製品保証規定.md#chunk-docling-c000002",
+        "保証期間延長キャンペーン終了のお知らせ.md#chunk-docling-c000001",
+        "業務用製品の保証適用範囲に関する覚書.md#chunk-docling-c000001",
+        "製品保証規程の一部改定について.md#chunk-docling-c000001"
+      ],
+      "answer": "加湿器 HM-50 の保証期間は、購入日から2年です。製品保証規定の「2. 保証の内容」に、保証期間は購入日から2年と定められています。\n根拠：製品保証規定.md",
+      "insufficient": false,
+      "cited": [
+        "製品保証規定.md#chunk-docling-c000003"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "生成回答は「購入日から2年」と述べており、標準回答の保証期間（購入日から2年）と結論・数値・条件が一致している。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    },
+    "f858485a4780ab7c": {
+      "case_id": "para-06",
+      "final": [
+        "チャット「トークルーム」ファイル送信制限.md#chunk-docling-c000001",
+        "社内チャット「Hiyoko」利用FAQ.md#chunk-docling-c000001",
+        "添付ファイルの上限を教えてください【FAQ】.md#chunk-docling-c000001",
+        "変更管理台帳の記載ルール.md#chunk-docling-c000001",
+        "添付可能なファイル形式と容量に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "answer": "提供された資料には ChatGPT への業務資料の貼り付け可否についての記載がありません。資料は社内チャット「トークルーム」や「Hiyoko」、起案・申請管理ツール、変更管理台帳などの添付ルールを扱ったものにとどまり、ChatGPT を含む外部AIサービスへの入力可否には言及していません。\n根拠：チャット「トークルーム」ファイル送信制限.md、社内チャット「Hiyoko」利用FAQ.md、添付ファイルの上限を教えてください【FAQ】.md、変更管理台帳の記載ルール.md、添付可能なファイル形式と容量に関するFAQ.md",
+      "insufficient": true,
+      "cited": [
+        "チャット「トークルーム」ファイル送信制限.md#chunk-docling-c000001",
+        "社内チャット「Hiyoko」利用FAQ.md#chunk-docling-c000001",
+        "添付ファイルの上限を教えてください【FAQ】.md#chunk-docling-c000001",
+        "変更管理台帳の記載ルール.md#chunk-docling-c000001",
+        "添付可能なファイル形式と容量に関するFAQ.md#chunk-docling-c000001"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [
+          "missing: 仕事の資料をChatGPTに貼り付けてよいかという問いに対して、「いいえ」と明確に回答する。",
+          "missing: 業務の情報を外部の生成AIサービスへ入力してはいけないという禁止事項を説明する。",
+          "missing: 情報システム部が認めたサービスは、業務情報を外部の生成AIサービスへ入力してはいけないという禁止の例外であることを説明する。"
+        ],
+        "answer_correctness": [
+          "標準回答は「業務情報を外部生成AIに入力してはいけない（情報システム部が認めたサービスを除く）」と明確に「いいえ」と答えているが、生成回答は資料に記載がないとして可否自体に答えておらず、質問への実質的な拒答になっている。結論が標準回答と一致しないため誤り。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 0.0,
+        "requirement_coverage": 0.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 0.0,
+        "abstained": 1.0
+      }
+    },
+    "fe9e08f0cb9c166d": {
+      "case_id": "ir-incident-phone-unreachable",
+      "final": [
+        "incident-contact-rules.html#chunk-docling-c000004",
+        "incident-contact-rules.html#chunk-docling-c000002",
+        "取引先向け 災害時の連絡窓口のご案内.md#chunk-docling-c000001",
+        "緊急変更時の電話連絡フロー.md#chunk-docling-c000001",
+        "障害復旧連絡の初動手順.md#chunk-docling-c000001"
+      ],
+      "answer": "障害の最初の連絡では電話を使いますが、電話がつながらないときは、社内チャットの障害チャンネル（#incident）に書き込み、15分ごとに電話をかけ直します。最初の連絡の手段は第3章（連絡の手段）を参照することになっています。\n根拠：incident-contact-rules.html",
+      "insufficient": false,
+      "cited": [
+        "incident-contact-rules.html#chunk-docling-c000004",
+        "incident-contact-rules.html#chunk-docling-c000002"
+      ],
+      "evaluation_status": "completed",
+      "reasons": {
+        "requirement_coverage": [],
+        "answer_correctness": [
+          "電話がつながらない場合に、社内チャットの障害チャンネル（#incident）へ書き込み、15分ごとに電話をかけ直すという標準回答の内容と一致しています。追加の補足も結論を誤らせていません。"
+        ],
+        "claim_support": []
+      },
+      "metrics": {
+        "answer_correctness": 1.0,
+        "requirement_coverage": 1.0,
+        "claim_support_rate": 1.0,
+        "citation_match": 1.0,
+        "abstained": 0.0
+      }
+    }
+  },
+  "adoption": {
+    "a_answer_quality": {
+      "by_kb": {
+        "large": {
+          "improved": [],
+          "degraded": [],
+          "passed": false
+        }
+      },
+      "passed": false
+    },
+    "b_large_kb": {
+      "improved": [],
+      "passed": false
+    },
+    "adopt": false
+  }
+}
