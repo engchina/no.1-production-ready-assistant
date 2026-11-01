@@ -1,0 +1,7 @@
+{
+  "source_id": "manuals",
+  "manifest": "manifest.json",
+  "knowledge_base_ids": ["<同期先のナレッジベースの ID>"],
+  "page_size": 50,
+  "max_attempts": 3
+}
