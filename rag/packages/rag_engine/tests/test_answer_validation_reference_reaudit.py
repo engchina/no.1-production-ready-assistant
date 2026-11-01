@@ -48,9 +48,7 @@ STAFF = "一般社員の出張の宿泊費の上限は **1泊 12,000円** です
 MANAGER = "※ 同一表では「課長以上」は 1泊 15,000円（日当 3,000円）と定められています。"
 ANSWER = f"\n\n{STAFF}\n\n{MANAGER}"
 # Agent が渡す段落ごとの根拠（#104。本文に出典が無い段落の出典）。
-CITATIONS = [
-    {"start": ANSWER.index(text), "end": ANSWER.index(text) + len(text), "chunk_ids": [TABLE_CHUNK]} for text in (STAFF, MANAGER)
-]
+CITATIONS = [{"start": ANSWER.index(text), "end": ANSWER.index(text) + len(text), "chunk_ids": [TABLE_CHUNK]} for text in (STAFF, MANAGER)]
 # 監査が言い換えて写した原文（根拠の本文に無い）と、本文のまま写した原文。
 PARAPHRASED = {STAFF: "一般社員の宿泊費の上限は1泊12,000円", MANAGER: "課長以上の宿泊費の上限は1泊15,000円"}
 VERBATIM = {STAFF: "一般社員 12,000円 2,000円", MANAGER: "課長以上 15,000円 3,000円"}
