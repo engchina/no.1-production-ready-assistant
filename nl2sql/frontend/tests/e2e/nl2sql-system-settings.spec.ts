@@ -1090,7 +1090,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   // 埋め込み / 再ランクの独立したカード（と保存）は無い（#45。登録モデルの種類で登録する）。
   await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
   firstSaveGate.release();
-  await expect(page.getByText("モデルの API 接続設定を保存しました。")).toBeVisible();
+  await expect(page.getByText("モデルの API の接続設定を保存しました。")).toBeVisible();
 
   const connectionRequest = requests[0];
   const connectionEnterprise = connectionRequest.enterprise_ai as Record<string, unknown>;
@@ -1194,8 +1194,8 @@ test("モデル API Key を .env に新規保存して削除でき、プレビ�
   await expect(page.locator("body")).not.toContainText("new-key-fixture");
   await page.getByRole("button", { name: "モデルの API: 保存" }).click();
   const notificationRegion = page.getByRole("region", { name: "通知" });
-  await expect(notificationRegion).toContainText("モデルの API 接続設定を保存しました。");
-  await expect(page.getByText("モデルの API 接続設定を保存しました。")).toHaveCount(1);
+  await expect(notificationRegion).toContainText("モデルの API の接続設定を保存しました。");
+  await expect(page.getByText("モデルの API の接続設定を保存しました。")).toHaveCount(1);
   expect(primaryConnection(requests[0].enterprise_ai).api_key).toBe("new-key-fixture");
 
   await page.getByLabel("保存済み API key を削除する").check();
@@ -1378,14 +1378,14 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   await expect(endpoint).toHaveAttribute("placeholder", "https://api.openai.com/v1");
   // Endpoint URL は入力どおり使う（#1440）。書き方（path まで）と例を説明に出す。
   await expect(endpoint).toHaveAccessibleDescription(
-    /base URL を path まで.*https:\/\/api\.openai\.com\/v1.*https:\/\/api\.deepseek\.com\/v1.*path は補いません/,
+    /base URL を path まで.*https:\/\/api\.deepseek\.com\/v1.*https:\/\/api\.openai\.com\/v1.*path は補いません/,
   );
   await expect(apiKey).toHaveAttribute("placeholder", /^sk-/);
 
   await endpoint.fill("https://api.openai.com/v1");
   await apiKey.fill("sk-openai-fixture");
   await page.getByRole("button", { name: "モデルの API: 保存" }).click();
-  await expect(page.getByText("モデルの API 接続設定を保存しました。").first()).toBeVisible();
+  await expect(page.getByText("モデルの API の接続設定を保存しました。").first()).toBeVisible();
   const connections = (requests[0].enterprise_ai as Record<string, unknown>)
     .connections as Array<Record<string, unknown>>;
   expect(connections.map((connection) => connection.connection_id)).toEqual([
