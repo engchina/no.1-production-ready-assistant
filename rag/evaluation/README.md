@@ -116,6 +116,32 @@ uv run python -m app.rag.evaluation_run_cli diff ../../tmp/eval/live.json ../../
 - 再生は制御の回帰の確認です。今のモデルの能力・実サービスの速さの証明には使いません（結果の
   `run_manifest.external_calls.mode` が `replay`）。
 
+### 2 つの評価の、同じケースの対応のある比較（#60）
+
+平均の数ポイントの差だけでは、改善とケースの少なさ・生成の揺れを区別できません。`compare` は、同じ評価セットの
+同じ `case_id` を対にし、指標ごとに改善・悪化・同値の件数と、差（target − base）の平均の区間を出します。
+検索・回答プロファイルと比べる評価（`compare_search_answer_profile_id`）の結果にも、同じ比較が
+`comparison.paired` として入ります（全体の既定 → プロファイル）。
+
+```bash
+cd backend
+# 設定を変える前（base）と後（target）を同じ評価セットで流した結果を比べる（job の CLI の出力も読める）
+uv run python -m app.rag.evaluation_run_cli compare ../../tmp/eval/before.json ../../tmp/eval/after.json \
+  --seed 20260 --resamples 2000 --output ../../tmp/eval/paired.json
+```
+
+- 対にするのは両方で測れたケースだけです。片方でもエラーのケース（誤り）・測れなかったケース（欠測）は平均から除き、
+  改善にも悪化にも数えません。
+- 二値の指標（値が 0 / 1 だけ。応答の判断の正解など）は改善・悪化の件数の正確な符号検定（McNemar の正確検定）の
+  p 値で、ほかの指標（MRR・回答の正確性など）は seed を固定した配対 bootstrap（ケースを単位に復元抽出）の
+  percentile 区間で、差の向きを判定します。区間はどちらにも出します。同じ結果・seed・反復数なら同じ区間です。
+- 判定: `improved` / `regressed`（差の向きが確か）、`unchanged`（全ケースが同値）、`inconclusive`（区間が 0 を
+  またぐ・p 値が大きい）、`insufficient_cases`（対が `--min-cases`〔既定 10〕未満の小標本）、`not_measured`。
+- 評価セット（`run_manifest.evaluation_set.sha256`）・ケースの id が違う、実行中に条件が変わった結果は比較不能
+  （`not_comparable`）にし、差を出しません。比べたい違い（設定・プロファイルなど）は「条件の差」に出します。
+- 既存の絶対の閾値・失敗したケースによる不合格（gate）は、統計の判定とは別に出し、差の有無に関係なく終了コード 1
+  にします。比較不能・確かな悪化も 1、それ以外は 0 です。教材の近似式・固定の差の閾値は使いません。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・
