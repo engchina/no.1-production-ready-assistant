@@ -254,6 +254,22 @@ Agent はプラグインを持たず、スキルだけを持つ（#1798 でマ�
   Run の経過のイベント（warning）を残す。定時実行（スケジュール）は #20 で削除した。
   `_` で始まる key と Control Plane の予約の key（`RESERVED_RUN_METADATA_KEYS`。評価・MCP・再実行の印）は、
   利用者が `POST /api/runs` の `metadata` で付けると 422 にする（再開の状態や出所を偽らせない。#1130）。
+- Run 全体の実行予算（#68。`run_budget.py`）: 1 回の SDK 実行の `max_turns`・ツールの回数（`SupportTaskBudget`）・
+  通信の timeout とは別に、最初の実行・差し戻し（根拠・手順・章節・出力の項目）・承認や確認の後の再開を通した
+  モデルの呼び出しの回数・token・稼働時間を 1 つの予算で数える（`AGENT_RUN_MAX_MODEL_CALLS` /
+  `AGENT_RUN_MAX_TOTAL_TOKENS` / `AGENT_RUN_MAX_ACTIVE_SECONDS`。0 以下は数えない＝既定）。
+  - 予約と精算: `call_model_input_filter` で呼ぶ前に 1 回と入力の見積もりを予約し、`on_llm_end` で usage の実測に
+    精算する。usage の無い呼び出しは見積もりを消費にし、`unmeasured_calls`・`tokens_exact=false` で区別する。
+    出力の分は予約しないので、token は最後の 1 回の出力の分まで上限を超えうる。料金の上限は扱わない。
+    RAG / NL2SQL の内部のモデルの消費はこの Run の usage に入らない（二重に数えない）。
+  - 稼働時間は実行（開始・再開）ごとの計算・通信の時間だけを足す（承認・確認の待ちは数えない）。消費は
+    Run の metadata `run_budget`（予約の key。利用者は書けない）に残し、再開で 0 に戻さない。
+  - 上限に達したら、新しいツールの呼び出しを実行せず（step を作らず未実行として経過に残す。結果を読むモデルの
+    呼び出しが残らない場合も含む）、次のモデルの呼び出しの前に `runtime.run_budget_exceeded` で失敗にする。
+    失敗の文は決まった文で、そのためにモデルを呼ばない。実行中の呼び出しは中断しない。
+  - 報告（`run_budget`）: `limits`・`consumed`（実測・見積もり・欠測の回数・稼働・実行の回数）・`remaining`・
+    `exceeded`（scope・limit・used・止めた所 `model_call` / `tool_call`）・`operations`
+    （`not_executed`＝予算で実行しなかった呼び出し、`unknown_result`＝結果の無い step。取り消されたとはみなさない）。
 - tracing: `set_tracing_disabled(True)`（業務データを外部へ送らない）。
 - テスト: SDK の `agents.testing.ScriptedModel` でモデルを台本にする（`tests/test_builtin_runtime.py`）。
 

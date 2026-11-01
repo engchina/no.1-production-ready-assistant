@@ -49,6 +49,7 @@ from agents import (
     OpenAIResponsesModel,
     RunConfig,
     RunContextWrapper,
+    RunHooks,
     Runner,
     RunState,
     set_tracing_disabled,
@@ -109,6 +110,7 @@ from pr_system_settings.model import (
 from app.features.agent import (
     call_abort,
     data_scope,
+    run_budget,
     run_claim,
     tool_grounding,
     tool_loop_guard,
@@ -370,6 +372,11 @@ _STATIC_INSTRUCTIONS_ATTR = "_agent_static_instructions"
 # （`_ModelApiResponses.create`）とモデルの呼び出しの span の属性（#2583）が読む。
 _ACTIVE_CONTEXT_WINDOW: ContextVar[_ContextWindow | None] = ContextVar(
     "agent_context_window", default=None
+)
+# いま実行している Run 全体の実行予算（#68。`execute_run`・`resume_run` が入れる）。差し戻し・
+# 承認の後の再開の SDK 実行も同じ予算に積む（モデルの呼び出しの前・応答の後・ツールの境界が読む）。
+_ACTIVE_RUN_BUDGET: ContextVar[run_budget.RunBudget | None] = ContextVar(
+    "agent_run_budget", default=None
 )
 
 
@@ -1718,6 +1725,20 @@ class _ToolRecorder:
             # 上限で実行しなかった呼び出しも処理の経過に残す（step は作らない。#3226）。
             record_skipped_tool(self.run_id, ToolCall(name=name, arguments={}, trace_id=call_id))
             return self.loop_refused(name, stop)
+        # Run 全体の実行予算に達した後は、外部の操作を始めない（#68。step は作らず未実行に残す）。
+        budget = _ACTIVE_RUN_BUDGET.get()
+        exceeded = budget.reserve_tool_call() if budget is not None else None
+        if exceeded is not None:
+            record_skipped_tool(self.run_id, ToolCall(name=name, arguments={}, trace_id=call_id))
+            logger.info(
+                "builtin_runtime_tool_call_rejected",
+                extra={
+                    "run_id": self.run_id,
+                    "tool_name": name,
+                    "error_code": run_budget.RUN_BUDGET_EXCEEDED_CODE,
+                },
+            )
+            return json.dumps(run_budget.tool_refusal(exceeded), ensure_ascii=False)
         # 2. 引数: 読めない JSON・object 以外を空の引数にせず、モデルに見せた schema で確かめる
         # （#2630）。
         parsed, parse_errors = parse_arguments(arguments)
@@ -3271,7 +3292,15 @@ def _run_config(run_id: str, sdk_agent: Agent[Any]) -> RunConfig:
         stop = await asyncio.to_thread(_tool_loop_stop, run_id)
         if stop is not None:
             raise stop
-        return window(data) if window is not None else data.model_data
+        model_data = window(data) if window is not None else data.model_data
+        # Run 全体の実行予算（#68）: 呼ぶ前に 1 回と入力の見積もりを予約する。超えるなら呼ばない。
+        budget = _ACTIVE_RUN_BUDGET.get()
+        if budget is not None:
+            estimate = window.last_input.tokens_after if window and window.last_input else 0
+            exceeded = budget.reserve_model_call(estimate)
+            if exceeded is not None:
+                raise _run_budget_stop(run_id, budget, exceeded)
+        return model_data
 
     return RunConfig(
         tool_not_found_behavior="return_error_to_model",
@@ -3295,19 +3324,95 @@ async def _run_sdk(
     """
     try:
         config = _run_config(run_id, sdk_agent)
+        hooks = _RunBudgetHooks()
         result = await Runner.run(
-            sdk_agent, run_input, context=context, max_turns=_max_turns(), run_config=config
+            sdk_agent,
+            run_input,
+            context=context,
+            max_turns=_max_turns(),
+            run_config=config,
+            hooks=hooks,
         )
         for _ in range(_max_turns()):
             state = _settle_unreadable_calls(sdk_agent, result)
             if state is None:
                 break
             result = await Runner.run(
-                sdk_agent, state, context=context, max_turns=_max_turns(), run_config=config
+                sdk_agent,
+                state,
+                context=context,
+                max_turns=_max_turns(),
+                run_config=config,
+                hooks=hooks,
             )
         return result
     finally:
         _ACTIVE_CONTEXT_WINDOW.set(None)
+
+
+class _RunBudgetHooks(RunHooks[Any]):
+    """モデルの応答の usage で、Run 全体の実行予算の予約を精算する（#68）。"""
+
+    async def on_llm_end(
+        self, context: RunContextWrapper[Any], agent: Agent[Any], response: ModelResponse
+    ) -> None:
+        budget = _ACTIVE_RUN_BUDGET.get()
+        if budget is not None:
+            budget.settle(response.usage)
+
+
+def _run_budget_stop(
+    run_id: str, budget: run_budget.RunBudget, exceeded: Mapping[str, Any]
+) -> BuiltinRuntimeError:
+    """Run 全体の実行予算で Run を終える理由（モデルを呼ばずに決まった文を作る。#68）。"""
+    logger.warning(
+        "builtin_runtime_run_budget_exceeded",
+        extra={
+            "run_id": run_id,
+            "scope": exceeded.get("scope"),
+            "limit": exceeded.get("limit"),
+            "used": exceeded.get("used"),
+            "model_calls": budget.model_calls,
+            "total_tokens": budget.total_tokens,
+            "unmeasured_calls": budget.unmeasured_calls,
+            "refused_tool_calls": budget.refused_tool_calls,
+        },
+    )
+    return BuiltinRuntimeError(
+        run_budget.RUN_BUDGET_EXCEEDED_CODE, run_budget.exceeded_message(exceeded, budget)
+    )
+
+
+def _begin_run_budget(run: Any) -> Any:
+    """この実行の Run 全体の実行予算（前の実行の消費から続ける）を入れる（戻す token を返す）。"""
+    budget = run_budget.RunBudget.for_run(
+        run.metadata, run_budget.RunBudgetLimits.from_settings(get_settings())
+    )
+    return _ACTIVE_RUN_BUDGET.set(budget)
+
+
+def _record_run_budget(run_id: str) -> None:
+    """この実行までの Run 全体の実行予算の消費を Run に残す（区切りの書き込みの前に呼ぶ。#68）。
+
+    結果の無い step（呼び先へ送った後に結果が届いていない）は、結果不明として数える。
+    """
+    from app.features.agent.runtime import StepStatus, runtime_repository
+
+    budget = _ACTIVE_RUN_BUDGET.get()
+    if budget is None:
+        return
+    unknown = sum(
+        1
+        for step in _run_steps(run_id)
+        if step.status in {StepStatus.PENDING, StepStatus.RUNNING} and step.tool_result is None
+    )
+    try:
+        runtime_repository.record_run_budget(run_id, budget.snapshot(unknown_steps=unknown))
+    except Exception as exc:  # noqa: BLE001 - 記録は補助。残せなくても Run の結果は書く
+        logger.warning(
+            "builtin_runtime_run_budget_record_failed",
+            extra={"run_id": run_id, "exception_type": type(exc).__name__},
+        )
 
 
 def _readable_arguments(raw: object) -> bool:
@@ -3648,6 +3753,7 @@ async def execute_run(run_id: str, *, claim: RunClaim | None = None) -> None:
             ),
         ):
             execution = run_claim.bind_execution(run.id, run.metadata)
+            budget_token = _begin_run_budget(run)
             # 公開中の版に固定したスキルで動く（#1855）。
             pinned = use_pinned_skills(agent.pinned_skills)
             result: Any = None
@@ -3712,6 +3818,7 @@ async def execute_run(run_id: str, *, claim: RunClaim | None = None) -> None:
                     await cancel_run_nl2sql_jobs(run_id, agent.data_scopes)
                     finish_operation_trace(run_id, status="cancelled")
                 reset_pinned_skills(pinned)
+                _ACTIVE_RUN_BUDGET.reset(budget_token)
                 run_claim.release_execution(execution)
 
 
@@ -3743,6 +3850,7 @@ async def resume_run(run_id: str, *, claim: RunClaim | None = None) -> None:
                     "builtin_runtime_wait_span_failed",
                     extra={"run_id": run_id, "exception_type": type(exc).__name__},
                 )
+            budget_token = _begin_run_budget(run)
             pinned = use_pinned_skills(agent.pinned_skills)
             result: Any = None
             try:
@@ -3831,6 +3939,7 @@ async def resume_run(run_id: str, *, claim: RunClaim | None = None) -> None:
                     await cancel_run_nl2sql_jobs(run_id, agent.data_scopes)
                     finish_operation_trace(run_id, status="cancelled")
                 reset_pinned_skills(pinned)
+                _ACTIVE_RUN_BUDGET.reset(budget_token)
                 run_claim.release_execution(execution)
 
 
@@ -5158,6 +5267,8 @@ def _record_usage(run_id: str, source: object, model_id: str) -> None:
     """
     from app.features.agent.runtime import RunUsage, runtime_repository
 
+    # Run 全体の実行予算の消費も、同じ区切り（完了・失敗・承認待ち）で残す（#68）。
+    _record_run_budget(run_id)
     usage = getattr(getattr(source, "context_wrapper", None), "usage", None)
     if usage is None:
         return
