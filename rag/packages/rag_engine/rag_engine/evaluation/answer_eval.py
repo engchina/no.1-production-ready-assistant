@@ -508,12 +508,14 @@ def _parse_checked(
     attempts: int = 2,
     on_retry: RetryRecorder | None = None,
     purpose: str = "evaluation.judge",
+    final_check=None,
 ):
     """同じ根拠と採点範囲を保ち、違反内容を指摘して1回だけ再試行する。根拠の本文は ``model_request`` の形で渡す。
 
     再試行するのは出力の誤り（``_is_invalid_output``）だけ。通信・時間切れは adapter の再試行に任せる。
     attempts=1 は再試行しない（監査し直しのように、最初の判定を補うだけの呼び出し。#2625）。
     ``on_retry`` は再試行のたびに原因の例外を受け取る（評価の診断に回数を残す）。
+    ``final_check`` を渡すと、最後の試行だけそれで確かめる（違反した判定だけを外して残りを採る検査。#121）。
     """
     request = dict(model_request(inputs))
     for attempt in range(attempts):
@@ -523,7 +525,7 @@ def _parse_checked(
         try:
             raw = call_with_model_purpose(purpose, parse_text_response, system, _json(request), settings, schema, provider_id=provider_id)
             output = schema.model_validate(raw.model_dump())
-            check(output)
+            (final_check if final_check is not None and attempt + 1 >= attempts else check)(output)
             return output
         except Exception as exc:
             if attempt + 1 >= attempts or not _is_invalid_output(exc):
