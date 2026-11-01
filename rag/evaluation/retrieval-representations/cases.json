@@ -1,0 +1,606 @@
+{
+  "version": 1,
+  "issue": "#75",
+  "description": "文脈補足と複数の検索表現の比較の合成の評価セット。架空の社内文書（sources/*.md）で、業務の内容を含まない。evidence の quote は根拠の child chunk の本文に含まれる文字列。 妨害の資料として既存の合成の評価セット（multi-hop・business-support）の HTML を同じ索引に入れ、multi-hop の質問の一部を取り込む（新しい版に置き換わった文書は索引に入れない）。",
+  "groups": {
+    "lost_subject_title": "主語・適用対象が文書名・章の見出しにしか無い断片（同じ構造の別の文書がある）",
+    "lost_subject_deep": "主語が同じ節の前の段落にしか無く、見出し・文書名・親の冒頭でも分からない断片",
+    "paraphrase": "質問と本文の語が違う言い換え",
+    "direct_match": "コード・様式の番号の直接の一致",
+    "self_contained": "本文が主語を持つ自己完結した断片",
+    "long_evidence": "長い根拠の中ほどにある答え",
+    "unanswerable": "資料に答えの無い質問",
+    "multi_hop_existing": "既存の multi-hop の評価セットの質問（1 段・節の読み取り・比較・文書の中の参照。根拠のどれか 1 つが上位に入れば命中）"
+  },
+  "distractor_sources": [
+    "multi-hop/sources",
+    "business-support/sources"
+  ],
+  "imported_cases": {
+    "path": "multi-hop/multi-hop.json",
+    "group": "multi_hop_existing",
+    "reasoning_types": [
+      "single_hop",
+      "section_read",
+      "comparison",
+      "intra_document_reference"
+    ]
+  },
+  "cases": [
+    {
+      "id": "title-01",
+      "group": "lost_subject_title",
+      "question": "契約社員の終業時刻は何時ですか。",
+      "evidence": [
+        {
+          "document": "契約社員就業規程.md",
+          "quote": "終業は17時30分"
+        }
+      ]
+    },
+    {
+      "id": "title-02",
+      "group": "lost_subject_title",
+      "question": "派遣社員の時間外労働は月に何時間までですか。",
+      "evidence": [
+        {
+          "document": "派遣社員就業規程.md",
+          "quote": "1か月20時間まで"
+        }
+      ]
+    },
+    {
+      "id": "title-03",
+      "group": "lost_subject_title",
+      "question": "契約社員の通勤手当の上限額はいくらですか。",
+      "evidence": [
+        {
+          "document": "契約社員就業規程.md",
+          "quote": "上限は月額3万円"
+        }
+      ]
+    },
+    {
+      "id": "title-04",
+      "group": "lost_subject_title",
+      "question": "正社員の始業時刻を教えてください。",
+      "evidence": [
+        {
+          "document": "正社員就業規則.md",
+          "quote": "始業は8時45分"
+        }
+      ]
+    },
+    {
+      "id": "title-05",
+      "group": "lost_subject_title",
+      "question": "派遣社員の通勤手当はどこが支給しますか。",
+      "evidence": [
+        {
+          "document": "派遣社員就業規程.md",
+          "quote": "通勤手当は派遣元が支給し"
+        }
+      ]
+    },
+    {
+      "id": "title-06",
+      "group": "lost_subject_title",
+      "question": "正社員は貸与された備品をいつまでに返しますか。",
+      "evidence": [
+        {
+          "document": "正社員就業規則.md",
+          "quote": "退職日の前日までに所属長へ"
+        }
+      ]
+    },
+    {
+      "id": "title-07",
+      "group": "lost_subject_title",
+      "question": "契約社員が時間外労働をするには何が必要ですか。",
+      "evidence": [
+        {
+          "document": "契約社員就業規程.md",
+          "quote": "所属長の事前承認"
+        }
+      ]
+    },
+    {
+      "id": "title-08",
+      "group": "lost_subject_title",
+      "question": "派遣社員の備品の返却期限はいつですか。",
+      "evidence": [
+        {
+          "document": "派遣社員就業規程.md",
+          "quote": "契約の終了日まで"
+        }
+      ]
+    },
+    {
+      "id": "title-09",
+      "group": "lost_subject_title",
+      "question": "正社員の時間外労働の上限は月何時間ですか。",
+      "evidence": [
+        {
+          "document": "正社員就業規則.md",
+          "quote": "1か月45時間まで"
+        }
+      ]
+    },
+    {
+      "id": "title-10",
+      "group": "lost_subject_title",
+      "question": "派遣社員の終業時刻は何時ですか。",
+      "evidence": [
+        {
+          "document": "派遣社員就業規程.md",
+          "quote": "終業は18時"
+        }
+      ]
+    },
+    {
+      "id": "deep-01",
+      "group": "lost_subject_deep",
+      "question": "StockNavi を日中に再起動するには誰の承認が要りますか。",
+      "evidence": [
+        {
+          "document": "システム運用手順書.md",
+          "quote": "情報システム部長の承認"
+        }
+      ]
+    },
+    {
+      "id": "deep-02",
+      "group": "lost_subject_deep",
+      "question": "StockNavi のバックアップの保存期間は何日ですか。",
+      "evidence": [
+        {
+          "document": "システム運用手順書.md",
+          "quote": "保存期間は14日"
+        }
+      ]
+    },
+    {
+      "id": "deep-03",
+      "group": "lost_subject_deep",
+      "question": "StockNavi の障害の原因が読み取り端末のときはどこへ連絡しますか。",
+      "evidence": [
+        {
+          "document": "システム運用手順書.md",
+          "quote": "端末の保守業者へ連絡"
+        }
+      ]
+    },
+    {
+      "id": "deep-04",
+      "group": "lost_subject_deep",
+      "question": "加湿器 HM-50 の保証期間は何年ですか。",
+      "evidence": [
+        {
+          "document": "製品保証規定.md",
+          "quote": "購入日から2年"
+        }
+      ]
+    },
+    {
+      "id": "deep-05",
+      "group": "lost_subject_deep",
+      "question": "HM-50 の修理はどのような方法で受けられますか。",
+      "evidence": [
+        {
+          "document": "製品保証規定.md",
+          "quote": "出張修理"
+        }
+      ]
+    },
+    {
+      "id": "deep-06",
+      "group": "lost_subject_deep",
+      "question": "HM-50 のタンクのひび割れは保証の対象ですか。",
+      "evidence": [
+        {
+          "document": "製品保証規定.md",
+          "quote": "タンクのひび割れは"
+        }
+      ]
+    },
+    {
+      "id": "deep-07",
+      "group": "lost_subject_deep",
+      "question": "大阪支店の避難の集合場所はどこですか。",
+      "evidence": [
+        {
+          "document": "拠点別防災手順.md",
+          "quote": "ビルの北側の公園"
+        }
+      ]
+    },
+    {
+      "id": "deep-08",
+      "group": "lost_subject_deep",
+      "question": "大阪支店の非常用の備蓄はどこにありますか。",
+      "evidence": [
+        {
+          "document": "拠点別防災手順.md",
+          "quote": "地下1階の倉庫"
+        }
+      ]
+    },
+    {
+      "id": "deep-09",
+      "group": "lost_subject_deep",
+      "question": "中途入社者研修はいつまでに受講しますか。",
+      "evidence": [
+        {
+          "document": "研修制度.md",
+          "quote": "入社の日から3か月以内"
+        }
+      ]
+    },
+    {
+      "id": "deep-10",
+      "group": "lost_subject_deep",
+      "question": "中途入社者研修の講師は誰が務めますか。",
+      "evidence": [
+        {
+          "document": "研修制度.md",
+          "quote": "人事部の担当者が務める"
+        }
+      ]
+    },
+    {
+      "id": "para-01",
+      "group": "paraphrase",
+      "question": "ノートパソコンを家に持って帰ってもいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "携行型端末を事業所の外へ持ち出す"
+        }
+      ]
+    },
+    {
+      "id": "para-02",
+      "group": "paraphrase",
+      "question": "自分のUSBメモリを会社のパソコンに挿してもいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "私有の記録媒体を業務用端末に接続してはならない"
+        }
+      ]
+    },
+    {
+      "id": "para-03",
+      "group": "paraphrase",
+      "question": "席を外すときパソコンはどうしておけばいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "端末の画面を施錠する"
+        }
+      ]
+    },
+    {
+      "id": "para-04",
+      "group": "paraphrase",
+      "question": "メールを違う相手に送ってしまったらどうすればいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "誤送信を認知した場合"
+        }
+      ]
+    },
+    {
+      "id": "para-05",
+      "group": "paraphrase",
+      "question": "ログインのパスワードは何文字にすればいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "12文字以上"
+        }
+      ]
+    },
+    {
+      "id": "para-06",
+      "group": "paraphrase",
+      "question": "ChatGPT に仕事の資料を貼り付けてもいいですか。",
+      "evidence": [
+        {
+          "document": "情報セキュリティ規程.md",
+          "quote": "外部の生成AIのサービスへ入力してはならない"
+        }
+      ]
+    },
+    {
+      "id": "para-07",
+      "group": "paraphrase",
+      "question": "お客さんとの飲み会の代金はいくらまで会社が出しますか。",
+      "evidence": [
+        {
+          "document": "経費の取扱い.md",
+          "quote": "1人あたり5,000円を上限"
+        }
+      ]
+    },
+    {
+      "id": "para-08",
+      "group": "paraphrase",
+      "question": "仕事で使う本を買ったら経費で落とせますか。",
+      "evidence": [
+        {
+          "document": "経費の取扱い.md",
+          "quote": "研究費として精算できる"
+        }
+      ]
+    },
+    {
+      "id": "para-09",
+      "group": "paraphrase",
+      "question": "家で働く日のネット代は出ますか。",
+      "evidence": [
+        {
+          "document": "経費の取扱い.md",
+          "quote": "月額3,000円を支給"
+        }
+      ]
+    },
+    {
+      "id": "para-10",
+      "group": "paraphrase",
+      "question": "外部のセミナーに出るお金は会社が払ってくれますか。",
+      "evidence": [
+        {
+          "document": "経費の取扱い.md",
+          "quote": "社外の講習会の参加費"
+        }
+      ]
+    },
+    {
+      "id": "direct-01",
+      "group": "direct_match",
+      "question": "E-4012 が出たときの対処を教えてください。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "認証トークンの有効期限"
+        }
+      ]
+    },
+    {
+      "id": "direct-02",
+      "group": "direct_match",
+      "question": "E-4021 は何のエラーですか。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "多要素認証の確認コードが違う"
+        }
+      ]
+    },
+    {
+      "id": "direct-03",
+      "group": "direct_match",
+      "question": "E-4102 のときはどうすればいいですか。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "アカウントがロックされている"
+        }
+      ]
+    },
+    {
+      "id": "direct-04",
+      "group": "direct_match",
+      "question": "W-2001 の意味は何ですか。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "10MBを超えている"
+        }
+      ]
+    },
+    {
+      "id": "direct-05",
+      "group": "direct_match",
+      "question": "様式K-17 は何の申請書ですか。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "在宅勤務の申請書"
+        }
+      ]
+    },
+    {
+      "id": "direct-06",
+      "group": "direct_match",
+      "question": "様式K-71 はいつまでに提出しますか。",
+      "evidence": [
+        {
+          "document": "エラーコード一覧.md",
+          "quote": "休日出勤の前日まで"
+        }
+      ]
+    },
+    {
+      "id": "self-01",
+      "group": "self_contained",
+      "question": "社員食堂の営業時間は何時から何時までですか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "11時30分から14時まで"
+        }
+      ]
+    },
+    {
+      "id": "self-02",
+      "group": "self_contained",
+      "question": "会議室は何週間先まで予約できますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "最大で2週間先まで"
+        }
+      ]
+    },
+    {
+      "id": "self-03",
+      "group": "self_contained",
+      "question": "駐輪場を使うには何が必要ですか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "総務部への登録"
+        }
+      ]
+    },
+    {
+      "id": "self-04",
+      "group": "self_contained",
+      "question": "図書室では本を何冊まで借りられますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "1人5冊まで"
+        }
+      ]
+    },
+    {
+      "id": "self-05",
+      "group": "self_contained",
+      "question": "産業医の面談はいつ受けられますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "毎週水曜日の午後"
+        }
+      ]
+    },
+    {
+      "id": "self-06",
+      "group": "self_contained",
+      "question": "私物の宅配便を会社で受け取れますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "受け取ることはできない"
+        }
+      ]
+    },
+    {
+      "id": "self-07",
+      "group": "self_contained",
+      "question": "仮眠室は誰が使えますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "夜間の保守の作業をする社員だけ"
+        }
+      ]
+    },
+    {
+      "id": "self-08",
+      "group": "self_contained",
+      "question": "更衣室のロッカーは誰が割り当てますか。",
+      "evidence": [
+        {
+          "document": "社内施設案内.md",
+          "quote": "総務部が1人1つ割り当てる"
+        }
+      ]
+    },
+    {
+      "id": "long-01",
+      "group": "long_evidence",
+      "question": "大阪へ出張するときの1泊の宿泊費の上限はいくらですか。",
+      "evidence": [
+        {
+          "document": "出張旅費規程.md",
+          "quote": "東京と大阪では14,000円"
+        }
+      ]
+    },
+    {
+      "id": "long-02",
+      "group": "long_evidence",
+      "question": "新幹線はどんなときに使えますか。",
+      "evidence": [
+        {
+          "document": "出張旅費規程.md",
+          "quote": "片道の距離が100キロを超えるとき"
+        }
+      ]
+    },
+    {
+      "id": "long-03",
+      "group": "long_evidence",
+      "question": "国内出張の精算はいつまでに行いますか。",
+      "evidence": [
+        {
+          "document": "出張旅費規程.md",
+          "quote": "帰着の日から5営業日以内"
+        }
+      ]
+    },
+    {
+      "id": "long-04",
+      "group": "long_evidence",
+      "question": "海外出張で上位の座席を使えるのはどんなときですか。",
+      "evidence": [
+        {
+          "document": "出張旅費規程.md",
+          "quote": "飛行の時間が8時間を超えるとき"
+        }
+      ]
+    },
+    {
+      "id": "long-05",
+      "group": "long_evidence",
+      "question": "海外出張の精算の為替の換算はいつの率で行いますか。",
+      "evidence": [
+        {
+          "document": "出張旅費規程.md",
+          "quote": "出発の日の会社の定める換算の率"
+        }
+      ]
+    },
+    {
+      "id": "none-01",
+      "group": "unanswerable",
+      "question": "社員食堂で夕食は食べられますか。",
+      "evidence": []
+    },
+    {
+      "id": "none-02",
+      "group": "unanswerable",
+      "question": "契約社員の退職金はいくらですか。",
+      "evidence": []
+    },
+    {
+      "id": "none-03",
+      "group": "unanswerable",
+      "question": "StockNavi の年間の保守費用はいくらですか。",
+      "evidence": []
+    },
+    {
+      "id": "none-04",
+      "group": "unanswerable",
+      "question": "HM-50 の消費電力は何ワットですか。",
+      "evidence": []
+    },
+    {
+      "id": "none-05",
+      "group": "unanswerable",
+      "question": "大阪支店の駐車場は何台分ありますか。",
+      "evidence": []
+    },
+    {
+      "id": "none-06",
+      "group": "unanswerable",
+      "question": "エラーコード E-5000 の意味は何ですか。",
+      "evidence": []
+    }
+  ]
+}
