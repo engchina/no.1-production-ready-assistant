@@ -119,6 +119,17 @@ def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: P
     assert "super-secret-password" not in str(body)
 
 
+def test_readiness_does_not_require_project_id(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+    """Project ID は任意（#9）。無い接続（DeepSeek・Aliyun など）でも ready にする（#81）。"""
+    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    monkeypatch.setattr(get_settings(), "enterprise_ai_project_id", "")
+
+    resp = client.get("/api/ready")
+
+    assert resp.status_code == 200
+    assert resp.json()["data"]["checks"]["enterprise_ai"] == "ok"
+
+
 def test_readiness_with_local_upload_storage_checks_local_storage(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
