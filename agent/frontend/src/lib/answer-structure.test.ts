@@ -358,3 +358,41 @@ describe("段落の印の記録のある回答", () => {
     ]);
   });
 });
+
+// #109: 回答の末尾の区切り線・箇条書きを段落の文にしない。
+describe("structureAnswer の区切り線と箇条書き", () => {
+  const TAIL = "---\n**根拠**\n- 文書 A.pdf ／ 第 3 条、p.1";
+  const answer = ["期限は 30 日です。", "", "| 区分 | 期限 |", "|---|---|", "| 一般 | 30 日 |", "", TAIL].join("\n");
+
+  it("区切り線・太字・箇条書きの混ざる回答の末尾は、段落の文ではなく Markdown の塊にする", () => {
+    const blocks = structureAnswer(answer, evidence([{ text: "期限は 30 日です。", chunk_ids: ["c1"] }]), null, TITLES);
+    expect(shape(blocks)).toEqual([
+      { kind: "paragraph", key: "b0", text: "期限は 30 日です。", chunkIds: ["c1"] },
+      { kind: "markdown", key: "b1", text: "| 区分 | 期限 |\n|---|---|\n| 一般 | 30 日 |", chunkIds: [] },
+      { kind: "markdown", key: "b2", text: TAIL, chunkIds: [] },
+    ]);
+  });
+
+  it("段落の印の記録のある回答でも、末尾の区切り線の塊は Markdown の塊", () => {
+    const blocks = structureAnswer(
+      answer,
+      evidence([{ text: "期限は 30 日です。", chunk_ids: ["c1"] }]),
+      null,
+      TITLES,
+      { marks: [], removed: [], warnings: [] }
+    );
+    expect(blocks?.at(-1)).toMatchObject({ kind: "markdown", text: TAIL, raw: TAIL });
+  });
+
+  it("区切り線だけの塊と、段落の直後に空行なしで続く箇条書きも Markdown の塊。箇条書きだけ・見出しの節は今までどおり", () => {
+    const linked = evidence([{ text: "期限は 30 日です。", chunk_ids: ["c1"] }]);
+    const kinds = (text: string) =>
+      structureAnswer(text, linked, null, TITLES)?.map((block) => (block.kind === "section" ? `section:${block.title}` : block.kind));
+    expect(kinds("期限は 30 日です。\n\n***\n\n以上です。")).toEqual(["paragraph", "markdown", "paragraph"]);
+    expect(kinds("期限は 30 日です。\n\n対象は次のとおりです。\n- 一般社員\n- 課長以上")).toEqual(["paragraph", "markdown"]);
+    expect(kinds("期限は 30 日です。\n\n- 一般社員\n- 課長以上")).toEqual(["paragraph", "section:null"]);
+    expect(kinds("期限は 30 日です。\n\n**対象**\n- 一般社員")).toEqual(["paragraph", "section:対象"]);
+    // `・` は Markdown の箇条書きではない（段落の文のまま）。
+    expect(kinds("期限は 30 日です。\n\n対象:\n・一般社員")).toEqual(["paragraph", "paragraph"]);
+  });
+});
