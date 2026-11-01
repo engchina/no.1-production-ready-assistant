@@ -117,8 +117,8 @@ _ABORT_HINTS: Mapping[ErrorKind, str] = {
         "確かめてください。"
     ),
     ErrorKind.PERMISSION: (
-        "API を使う権限がありません。API key・project の設定で、このモデル・エンドポイントを使う権限"
-        "を確かめてください。"
+        "API を使う権限がありません。API key・project の設定で、このモデル・エンドポイントを"
+        "使う権限を確かめてください。"
     ),
     ErrorKind.NOT_FOUND: (
         "モデルまたはエンドポイントが見つかりません。モデルの設定（モデル ID・エンドポイント・"

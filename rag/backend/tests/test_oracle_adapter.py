@@ -2563,7 +2563,7 @@ async def test_oracle_list_document_chunks_accepts_json_element_ids_and_row_grou
 
 @pytest.mark.parametrize("strategy", ["small_to_big", "fixed_length"])
 async def test_oracle_context_group_siblings_uses_chunk_group_sql(strategy: str) -> None:
-    """Oracle mode の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
+    """Oracle の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
 
     起点ごとの条件(文書・chunk_set・group・自分を除く)・並び・件数は起点の表(``a``)の値で
     1 件ずつ読むときと同じにする(#1490)。行は sibling の chunk ごと(#1498)。
