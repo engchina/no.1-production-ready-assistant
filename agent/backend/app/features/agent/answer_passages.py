@@ -1014,6 +1014,17 @@ _TOOL_NAME_LINE = re.compile(
 )
 
 
+# ツール名に、回数（「×2」）・括弧の補足・「→」「:」の後の結果の説明だけが続く行
+# （「- `rag__rag_retrieve_evidence` ×2（「社員食堂 献立」で検索）」
+# 「- `rag__…` → 推薦プロファイル: 社内規程 Q&A」。#129）。
+_TOOL_REPORT_LINE = re.compile(
+    rf"{_TOOL_NAME}(?:\s*[×xX]\s*[0-9]+)?(?:\s*[（(][^（）()]*[）)])?(?:\s*(?:→|->|⇒|[:：])\s*\S.*)?"
+)
+# 検索・回答プロファイルの選択の報告の行
+# （「- 検索・回答プロファイル：社内規程 Q&A（ID: …）」。#129）。
+_PROFILE_NOTE = re.compile(r"[^:：。]{0,20}プロファイル(?:名)?\s*\**\s*[:：]")
+
+
 def is_lookup_note(text: str) -> bool:
     """調べるのに使ったツール・プロファイル・内部の ID だけを述べる行か（#2328）。
 
@@ -1024,7 +1035,11 @@ def is_lookup_note(text: str) -> bool:
     並べた行（「- `rag__rag_retrieve_evidence`」。括弧の補足つきを含む。#104）も作業の経過にする。
     """
     bare = _strip_bullet(text).strip("*").strip()
-    if len(bare) <= 200 and _TOOL_NAME_LINE.fullmatch(bare):
+    if len(bare) <= 200 and (
+        _TOOL_NAME_LINE.fullmatch(bare)
+        or _TOOL_REPORT_LINE.fullmatch(bare)
+        or _PROFILE_NOTE.match(bare)
+    ):
         # 使ったツールの名前だけの行（#104）。回答の本文ではなく作業の経過（`__` を強調の印として
         # 外す前に見る）。
         return True

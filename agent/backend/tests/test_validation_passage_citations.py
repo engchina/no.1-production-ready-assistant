@@ -113,6 +113,20 @@ def test_tool_name_lines_are_lookup_notes_and_removed_before_validation() -> Non
         "- 使用ツール: `rag__rag_recommend_search_answer_profile`、`rag__rag_retrieve_evidence`"
     )
     assert not is_lookup_note("**使用したツール:** 経費システム")
+    # 回数・矢印つきのツールの行と、プロファイルの選択の報告（#129）。
+    assert is_lookup_note(
+        "- `rag__rag_retrieve_evidence` ×2（「社員食堂 献立」「食堂 献立 メニュー 食事」で検索）"
+    )
+    assert is_lookup_note(
+        "- `rag__rag_recommend_search_answer_profile` → 推薦プロファイル: 社内規程 Q&A"
+    )
+    assert is_lookup_note(
+        "- `rag__rag_list_search_answer_profiles` → プロファイル 2 件（社内規程 Q&A、DEFAULT）"
+    )
+    assert is_lookup_note(
+        "- 検索・回答プロファイル：社内規程 Q&A（ID: 5a0003122aae46e7ac16176426f0962b）"
+    )
+    assert not is_lookup_note("- 第3条の宿泊費の上限は 12,000円 です。")
     body = without_lookup_notes(LODGING_ANSWER)
     assert "rag__" not in body
     # 中身が無くなった節の見出しも消し、本文と出典の行は残す。
