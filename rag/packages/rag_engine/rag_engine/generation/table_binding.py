@@ -436,6 +436,15 @@ def _unbound_in_table(window: str, table: Table) -> tuple[list[tuple[str, str]],
     def said(key: str) -> bool:
         return bool(starts(key))
 
+    def near(name: str, value: str) -> bool:
+        """見出しが値の前にあり、間に表の別の値が無いか（見出しがその値を指すか。#127）。"""
+        values = [(place, key) for key in mentioned if table.is_value(key) and key != value for place in found[key]]
+        return any(
+            head + len(name) <= place and not any(head + len(name) <= other < place for other, _key in values)
+            for head in starts(name)
+            for place in found.get(value, [])
+        )
+
     found = {key: places for key in counts if (table.is_value(key) or table.is_label(key)) and (places := starts(key))}
     # 述べた長いセルの中にだけ現れる短いセル（「部品 1」の「1」）は、別に述べたことにしない（#3564）。
     spans = [(place, place + len(key)) for key, places in found.items() for place in places]
@@ -457,7 +466,7 @@ def _unbound_in_table(window: str, table: Table) -> tuple[list[tuple[str, str]],
         others = {key for key in distinct - {value} if not (table.columns.get(key, frozenset()) & value_columns)}
         matched = [index for index, row in enumerate(table.rows) if value in row and row & others]
         if matched:
-            other_column = _other_column(table, value, matched, said)
+            other_column = _other_column(table, value, matched, said, lambda name, value=value: near(name, value))
             if other_column:
                 unbound.append((table.cells.get(value, value), table.cells.get(other_column, other_column)))
             else:
@@ -498,11 +507,12 @@ def _parallel(table: Table, index: int, value: str, value_columns: frozenset[int
     return False
 
 
-def _other_column(table: Table, value: str, rows: Sequence[int], said: Callable[[str], bool]) -> str:
+def _other_column(table: Table, value: str, rows: Sequence[int], said: Callable[[str], bool], near: Callable[[str], bool]) -> str:
     """行は合っている値について、文がその値の列の見出しを述べず、同じ行の別の列の見出しを述べたらその見出し。
 
     見出しの行が無い表・先頭の列（行の区分・名前の列）・同じ見出しが 2 列以上ある表は見ない。その行の別の列が
-    空欄・同じ値なら疑わない。
+    空欄・同じ値なら疑わない。別の列の見出しは、値の前にあって間に表の別の値が無いとき（``near``）だけ数える
+    （「宿泊費 15,000円・日当 3,000円」の「日当」は後ろの値の見出し。#127）。
     """
     names = [key for key in table.header if key]
     if not names or len(set(names)) != len(names):
@@ -522,7 +532,7 @@ def _other_column(table: Table, value: str, rows: Sequence[int], said: Callable[
                     and cells[other]
                     and cells[other] != key
                     and _is_label(name)
-                    and said(name)
+                    and near(name)
                 ):
                     return name
     return ""
