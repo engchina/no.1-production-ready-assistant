@@ -91,4 +91,4 @@ def test_perturb_items_is_deterministic_and_bounded() -> None:
 
 
 def test_error_types_are_unique() -> None:
-    assert len(set(ERROR_TYPE_IDS)) == len(ERROR_TYPE_IDS) == 8
+    assert len(set(ERROR_TYPE_IDS)) == len(ERROR_TYPE_IDS) == 9
