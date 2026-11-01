@@ -1042,6 +1042,12 @@ _ABSENCE_CONCLUSION = re.compile(
     r"(?:見つかりません|見つけられません|見当たりません|ありません|確認できません|確かめられません)"
     r"(?:でした)?[。．]?$"
 )
+# 質問の対象を主語にして、確かめられなかったとだけ結ぶ文（#108。「社員食堂の今日の献立は確かめられ
+# ませんでした。」）。「確かめられない」は資料・データで確かめた結果を述べる語で、業務の事実の主張
+# （「…は変更できません」）にならないので、主語の語を限らない。
+_UNCONFIRMED_CONCLUSION = re.compile(
+    r"^[^。]{1,60}?(?:は|が)[、,]?\s*確かめられません(?:でした)?[。．]?$"
+)
 
 
 def is_absence_conclusion(text: str) -> bool:
@@ -1049,13 +1055,15 @@ def is_absence_conclusion(text: str) -> bool:
 
     `is_absence` に加えて、前に調べたことだけを述べる節（「資料を確認しましたが、」）が付いた
     不足の文も数える（段落の判定〔主張ではない段落〕には使わない。回答の対応を決めるときに、
-    最初の段落にだけ使う）。数量・逆接（前の節を除く）・操作を含む文は除く。
+    最初の段落にだけ使う）。質問の対象を主語にして確かめられなかったとだけ結ぶ文（#108）も数える。
+    文頭のお詫びの節（「申し訳ありませんが、」）は外して判定する。数量・逆接（前の節を除く）・
+    操作を含む文は除く。
     """
     if is_absence(text):
         return True
-    value = _EMPHASIS.sub("", _strip_bullet(text)).strip()
+    value = _APOLOGY_LEAD.sub("", _EMPHASIS.sub("", _strip_bullet(text)).strip())
     value = _TRAILING_NOTE.sub("", _SEARCHED_LEAD.sub("", value, count=1))
-    if not _ABSENCE_CONCLUSION.search(value):
+    if not (_ABSENCE_CONCLUSION.search(value) or _UNCONFIRMED_CONCLUSION.search(value)):
         return False
     return not _ABSENCE_CLAIM.search(value) and not _OPERATION.search(value)
 

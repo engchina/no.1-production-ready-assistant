@@ -76,6 +76,7 @@ from app.features.agent.confirmation import CONFIRMATION_TOOL
 from app.features.agent.job_cancel import RUN_CANCEL_TRACE_PREFIX
 from app.features.agent.support_task import (
     GUIDE_CHECK_TRACE_PREFIX,
+    NON_GROUNDING_TOOLS,
     nl2sql_clarification_pending,
 )
 from app.features.agent.tools import MCP_TOOL_SEPARATOR, mcp_base_tool_name
@@ -99,19 +100,9 @@ MAX_RETRIES = 1
 REFUSAL_BEFORE_TOOLS = "before_tools"
 REFUSAL_AFTER_TOOLS = "after_tools"
 
-# 根拠・データを確かめないツール（業務プロファイル・検索・回答プロファイルの一覧と推薦）と、
-# Control Plane が自分で呼ぶツール（最終の検証・SQL の生成前の確認の取り消し）。
-_NON_GROUNDING_TOOLS = frozenset(
-    {
-        "rag_list_search_answer_profiles",
-        "rag_recommend_search_answer_profile",
-        "rag_validate_answer",
-        "nl2sql_list_profiles",
-        "nl2sql_recommend_profile",
-        "nl2sql_cancel_requirement",
-        "nl2sql_cancel_job",
-    }
-)
+# 根拠・データを確かめないツール（`support_task.NON_GROUNDING_TOOLS`。回答の対応の現場のデータの
+# 道具の判定と同じ。#108）。
+_NON_GROUNDING_TOOLS = NON_GROUNDING_TOOLS
 # Control Plane が自分で呼んだ step の trace_id の接頭辞（最終の検証は回答の確定の後なので
 # ここでは現れないが、念のため数えない）。
 _CONTROL_PLANE_TRACE_PREFIXES = (
