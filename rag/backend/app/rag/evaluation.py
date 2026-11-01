@@ -673,6 +673,7 @@ class EvaluationRunner:
                     "answer_correctness": None,
                     "requirement_coverage": None,
                     "missing_content": None,
+                    "missing_follow_up_content": None,
                 }
             )
         return summary
@@ -763,6 +764,38 @@ def _judge_diagnostics(evaluation: Mapping[str, object]) -> EvaluationJudgeDiagn
         return None
 
 
+def _requirement_relevances(evaluation: Mapping[str, object]) -> list[str]:
+    """比較範囲の項目ごとの relevance（required / follow_up。項目の番号 - 1 の位置。#105）。"""
+    scope = evaluation.get("standard_answer_scope")
+    requirements = scope.get("requirements") if isinstance(scope, Mapping) else None
+    return [
+        str(item.get("relevance") or "required") if isinstance(item, Mapping) else "required"
+        for item in (requirements if isinstance(requirements, list) else [])
+    ]
+
+
+def _check_relevance(check: Mapping[str, object], relevances: Sequence[str]) -> str:
+    """網羅の判定の項目の relevance。比較範囲に無い・番号が無い判定は required とみなす。"""
+    index = check.get("requirement_index")
+    if isinstance(index, int) and not isinstance(index, bool) and 0 < index <= len(relevances):
+        return relevances[index - 1]
+    return "required"
+
+
+def _has_missing(
+    coverage_checks: Sequence[Mapping[str, object]], relevances: Sequence[str], relevance: str
+) -> bool:
+    """その relevance の項目に、説明の無い（missing）項目があるか。
+
+    ``missing_content``（失敗理由）は requirement_coverage と同じく原質問に必要な項目（required）
+    だけで決める。追加相談（follow_up）の欠落は指標・合否に入らない参考なので、失敗理由にしない（#105）。
+    """
+    return any(
+        str(check.get("status")) == "missing" and _check_relevance(check, relevances) == relevance
+        for check in coverage_checks
+    )
+
+
 def summarize_answer_judgement(evaluation: Mapping[str, object]) -> EvaluationAnswerJudgement:
     """標準回答による評価の結果を、指標に使う要約へ変換する。"""
     status = str(evaluation.get("status") or "error")
@@ -778,6 +811,7 @@ def summarize_answer_judgement(evaluation: Mapping[str, object]) -> EvaluationAn
         claim for claim in _mapping_list(evaluation.get("claim_checks")) if claim.get("status")
     ]
     coverage_checks = _mapping_list(evaluation.get("coverage_checks"))
+    relevances = _requirement_relevances(evaluation)
     coverage = _optional_float(evaluation.get("requirement_coverage"))
     passed = evaluation.get("passed")
     return EvaluationAnswerJudgement(
@@ -789,7 +823,8 @@ def summarize_answer_judgement(evaluation: Mapping[str, object]) -> EvaluationAn
         requirement_coverage=(
             round(min(1.0, max(0.0, coverage)), 4) if coverage is not None else None
         ),
-        missing_content=any(str(check.get("status")) == "missing" for check in coverage_checks),
+        missing_content=_has_missing(coverage_checks, relevances, "required"),
+        missing_follow_up_content=_has_missing(coverage_checks, relevances, "follow_up"),
         message=str(message) if message else None,
         judge_diagnostics=diagnostics,
     )

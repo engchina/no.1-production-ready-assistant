@@ -515,6 +515,9 @@ class EvaluationAnswerJudgement(BaseModel):
     requirement_coverage: float | None = None
     # 原質問に必要な項目のうち、説明の無い項目があったか(rag_poc の「必要内容欠落」)。
     missing_content: bool | None = None
+    # 追加相談の項目（follow_up）のうち、説明の無い項目があったか。
+    # 参考の情報で、指標・合否・失敗理由（failure_reasons）には入れない（#105）。
+    missing_follow_up_content: bool | None = None
     message: str | None = None
     # 判定の診断（比較範囲を job の記録から使い回したか・出力の誤りで再試行した回数）。
     # 評価を完了できなかったケースでも残す。判定が記録を返さなかった（時間切れなど）ときは None。
