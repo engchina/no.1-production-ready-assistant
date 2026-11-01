@@ -9,6 +9,8 @@ manifest）を、この process の中で直接呼ぶ。Oracle は設定どお�
   ネットワーク不要）。記録の条件（manifest）・入力・呼び出しの数が違えば終了コード 2 で失敗し、
   実の API には接続しない。再生は制御の回帰の確認で、モデルの能力・実サービスの速さの証明ではない。
 - ``compare BASE TARGET``: 同じケースの対応のある差・区間・改善 / 悪化 / 同値の件数（#60）。
+- ``ablate SET --output-dir DIR``: full と検索の工程を 1 つずつ無効にした構成を同じ条件で流し、
+  品質・根拠の位置・時間・呼び出しの差を出す（#61。``--record`` / ``--replay`` で記録・再生）。
 - ``diff A B``: 2 つの評価の結果（この CLI・``evaluation_cli`` の出力）の実行条件の差を出す。
 
 記録・再生は呼び出しの順を揃えるため、ケースを 1 件ずつ流す（``RAG_EVALUATION_CONCURRENCY`` = 1）。
@@ -26,6 +28,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from datetime import date
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from pr_backend_core.logging import configure_cli_logging
@@ -36,7 +39,14 @@ from rag_engine.resources.external_calls import (
     use_external_calls,
 )
 
-from app.config import Settings, fixed_today, get_settings
+from app.config import Settings, fixed_today, get_settings, settings_today
+from app.rag.evaluation_ablation import (
+    ABLATIONS,
+    FULL,
+    AblationRun,
+    ablation_configs,
+    ablation_report,
+)
 from app.rag.evaluation_cli import (
     EvaluationGateError,
     _gate_failed,
@@ -76,6 +86,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _diff(args.left, args.right)
         if args.command == "compare":
             return _compare(args)
+        if args.command == "ablate":
+            return _ablate(args)
         return _run(args)
     except EvaluationGateError as exc:
         print(f"評価エラー: {exc}", file=sys.stderr)
@@ -111,6 +123,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="これより対が少なければ小標本として判定しない。",
     )
     compare.add_argument("--output", type=Path, help="比較の JSON の保存先。")
+    ablate = commands.add_parser(
+        "ablate", help="full と検索の工程を 1 つずつ無効にした構成を流し、差を出す（#61）。"
+    )
+    ablate.add_argument("golden_set", type=Path, help="EvaluationRunRequest 形式の JSON。")
+    ablate.add_argument("--split", choices=["dev", "holdout"], help="この区分のケースだけを流す。")
+    ablate.add_argument(
+        "--stages",
+        default=",".join(ABLATIONS),
+        help=f"無効にする工程（カンマ区切り。既定は全部: {','.join(ABLATIONS)}）。",
+    )
+    ablate.add_argument("--output-dir", type=Path, required=True, help="結果と表の保存先。")
+    ablate_mode = ablate.add_mutually_exclusive_group()
+    ablate_mode.add_argument(
+        "--record", action="store_true", help="構成ごとの外部の AI の応答も残す（実データを含む）。"
+    )
+    ablate_mode.add_argument(
+        "--replay", action="store_true", help="--output-dir の記録で、実の API を呼ばずに流す。"
+    )
+    ablate.add_argument(
+        "--full-again", action="store_true", help="最後に full をもう一度流す（揺れ・順の偏り）。"
+    )
+    ablate.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    ablate.add_argument("--resamples", type=int, default=DEFAULT_RESAMPLES)
+    ablate.add_argument("--min-cases", type=int, default=DEFAULT_MIN_CASES)
     diff = commands.add_parser("diff", help="2 つの評価の結果の実行条件の差を出す。")
     diff.add_argument("left", type=Path)
     diff.add_argument("right", type=Path)
@@ -118,8 +154,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
-    from app.api.routes.evaluation import _execute_run
-
     request = EvaluationRunRequest.model_validate(
         _load_evaluation_request(args.golden_set, split=args.split)
     )
@@ -128,64 +162,26 @@ def _run(args: argparse.Namespace) -> int:
     recorded_manifest: Mapping[str, Any] = {}
     recording_sha256: str | None = None
     if args.replay is not None:
-        raw = _read_bytes(args.replay)
-        recording_sha256 = hashlib.sha256(raw).hexdigest()
-        try:
-            recording = json.loads(raw)
-            session = ExternalCallSession.from_recording(recording)
-        except ValueError as exc:
-            raise EvaluationGateError(f"記録を読めません: {exc}") from exc
-        recorded_manifest = recording.get("manifest") or {}
+        session, recorded_manifest, recording_sha256 = _load_recording(args.replay)
         fill_replay_connections(settings)
     elif args.record is not None:
         session = ExternalCallSession("record")
     if session is not None:
         # 呼び出しの順（埋め込み・再ランクの cache の当たり方も）を記録と再生で揃える。
         settings.rag_evaluation_concurrency = 1
-    passes = 2 if request.compare_search_answer_profile_id else 1
-    time_limit = evaluation_job_time_limit_seconds(
-        settings, answer_runs=evaluation_answer_runs(request.cases) * passes
-    )
     # 再生は記録の日を「今日」にする（基準日・業務ガイドの期間・LLM に渡す今日を記録と揃える）。
     recorded_as_of = recorded_manifest.get("as_of")
-    today = fixed_today(date.fromisoformat(recorded_as_of)) if recorded_as_of else nullcontext()
-    try:
-        with use_external_calls(session), today:
-            metrics, evaluation_run_id = asyncio.run(
-                _execute_run(request, time_budget_seconds=time_limit)
-            )
-    except ExternalCallMismatch as exc:
-        # ふつうはケースの失敗として結果に残る。評価の外（条件の読み取りなど）で起きたら止める。
-        raise EvaluationGateError(str(exc), exit_code=REPLAY_FAILED_EXIT_CODE) from exc
+    metrics, evaluation_run_id, _ = _execute(
+        request, session, today=date.fromisoformat(recorded_as_of) if recorded_as_of else None
+    )
     manifest = dict(metrics.run_manifest or {})
-    external: dict[str, Any] = {"mode": session.mode if session is not None else "live"}
     problems: list[str] = []
     if session is not None and session.mode == "record":
-        recording_sha256 = _write_recording(args.record, session.to_recording(manifest))
-        external.update(recording_sha256=recording_sha256, calls=len(session.entries))
-        print(
-            f"外部の AI の応答を {len(session.entries)} 件記録しました: {args.record}",
-            file=sys.stderr,
-        )
+        external = _save_recording(args.record, session, manifest)
     elif session is not None:
-        differences = comparison_differences(recorded_manifest, manifest)
-        unused = session.unused()
-        problems = [
-            *(f"条件が記録と違います: {path}" for path in differences),
-            *session.mismatches,
-            *(
-                f"再生の不一致: 記録の呼び出しが使われませんでした（{entry['kind']} "
-                f"{entry.get('label', '')}、入力の hash {str(entry['key'])[:12]}）"
-                for entry in unused
-            ),
-        ]
-        external.update(
-            recording_sha256=recording_sha256,
-            calls=len(session.entries) - len(unused),
-            mismatches=len(session.mismatches),
-            unused=len(unused),
-            condition_differences=differences,
-        )
+        problems, external = _replay_check(session, recorded_manifest, manifest, recording_sha256)
+    else:
+        external = {"mode": "live"}
     manifest["external_calls"] = external
     metrics = metrics.model_copy(update={"run_manifest": manifest})
     _write_json(
@@ -193,12 +189,205 @@ def _run(args: argparse.Namespace) -> int:
         args.output,
     )
     if problems:
-        for problem in problems:
-            print(problem, file=sys.stderr)
-        print("再生は記録と一致しませんでした（実の API には接続していません）。", file=sys.stderr)
-        return REPLAY_FAILED_EXIT_CODE
+        return _replay_failed(problems)
     print(f"[{external['mode']}] " + _gate_summary(metrics, passed=not _gate_failed(metrics)))
     return 1 if _gate_failed(metrics) else 0
+
+
+def _ablate(args: argparse.Namespace) -> int:
+    """full と工程を 1 つずつ無効にした構成を同じ条件で流し、差の表を出す（#61）。"""
+    request = EvaluationRunRequest.model_validate(
+        _load_evaluation_request(args.golden_set, split=args.split)
+    )
+    settings = get_settings()
+    # 構成の間で呼び出しの順・時間の条件を揃える（ケースを 1 件ずつ）。
+    settings.rag_evaluation_concurrency = 1
+    if args.replay:
+        fill_replay_connections(settings)
+    try:
+        configs = ablation_configs(
+            settings, request.rag_overrides, args.stages.split(","), full_again=args.full_again
+        )
+    except ValueError as exc:
+        raise EvaluationGateError(str(exc)) from exc
+    output_dir: Path = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # 再生の結果は live の結果を上書きしない（``*.replay.json``）。
+    suffix = ".replay" if args.replay else ""
+    # すべての構成を同じ基準日で流す（live は開始時の今日、再生は full の記録の日）。
+    as_of = settings_today()
+    runs: list[AblationRun] = []
+    problems: list[str] = []
+    for config in configs:
+        if config.skipped_reason is not None:
+            continue
+        recording_path = output_dir / f"{config.name}.recording.json"
+        recorded_manifest: Mapping[str, Any] = {}
+        sha256: str | None = None
+        if args.replay:
+            session, recorded_manifest, sha256 = _load_recording(recording_path)
+            if config.name == FULL:
+                as_of = date.fromisoformat(str(recorded_manifest.get("as_of") or as_of))
+        else:
+            session = ExternalCallSession("record")
+        print(f"構成 {config.name} を流します。", file=sys.stderr)
+        metrics, _, wall_seconds = _execute(
+            request.model_copy(update={"rag_overrides": config.overrides}), session, today=as_of
+        )
+        manifest = dict(metrics.run_manifest or {})
+        if args.replay:
+            found, external = _replay_check(session, recorded_manifest, manifest, sha256)
+            problems.extend(f"{config.name}: {problem}" for problem in found)
+        elif args.record:
+            external = _save_recording(recording_path, session, manifest)
+        else:
+            external = {"mode": "live", "calls": len(session.entries)}
+        manifest["external_calls"] = external
+        metrics = metrics.model_copy(update={"run_manifest": manifest})
+        _write_json(
+            {"data": metrics.model_dump(mode="json")}, output_dir / f"{config.name}{suffix}.json"
+        )
+        runs.append(AblationRun(config, metrics, list(session.entries), wall_seconds))
+    if problems:
+        return _replay_failed(problems)
+    report = ablation_report(
+        runs,
+        [config for config in configs if config.skipped_reason is not None],
+        mode="replay" if args.replay else "live",
+        seed=args.seed,
+        resamples=args.resamples,
+        min_cases=args.min_cases,
+    )
+    _write_json(report, output_dir / f"ablation{suffix}.json")
+    _print_ablation(report)
+    return 1 if any(item.get("status") == "not_comparable" for item in report["stages"]) else 0
+
+
+def _print_ablation(report: Mapping[str, Any]) -> None:
+    print(
+        f"除去実験: {report['mode']}、基準日 {report['as_of']}、順 {' → '.join(report['order'])}、"
+        f"時間 {report['timing']}"
+    )
+    for item in report["stages"]:
+        if item["status"] == "already_off":
+            print(f"- {item['stage']}: full で既に無効のため流していません")
+            continue
+        quality = ", ".join(
+            f"{name} {_signed(value['mean_difference'])}（{value['verdict']}）"
+            for name, value in item["quality"].items()
+            if value["verdict"] != "not_measured"
+        )
+        regressed = sorted(
+            {case for value in item["quality"].values() for case in value["regressed_case_ids"]}
+        )
+        calls = ", ".join(
+            f"{kind} {_signed(value['difference'], digits=0)}"
+            for kind, value in item["calls"].items()
+        )
+        effect = (
+            ""
+            if item["observed_effect"]
+            else "（工程の記録・呼び出し・品質に差なし: 非適用の可能性）"
+        )
+        print(f"- {item['stage']} を除く: {item['status']}{effect}")
+        print(f"    品質: {quality or '-'}")
+        print(f"    悪化したケース: {', '.join(regressed) or 'なし'}")
+        print(
+            f"    時間: 全体 {_signed(item['wall_seconds']['difference'])} 秒、"
+            f"ケースの中央値 {_signed(item['case_median_ms']['difference'], digits=0)} ms"
+        )
+        print(f"    呼び出し: {calls or '-'}")
+        if item["reasons"]:
+            print(f"    比較不能の理由: {', '.join(item['reasons'])}")
+    if again := report.get("full_again"):
+        verdicts = sorted(
+            {value["verdict"] for value in again["quality"].values()} - {"not_measured"}
+        )
+        print(
+            f"- full をもう一度（揺れ・順の偏りの目安）: 品質 {', '.join(verdicts) or '-'}、"
+            f"全体の時間 {_signed(again['wall_seconds']['difference'])} 秒"
+        )
+    for name, reason in report["unsupported"].items():
+        print(f"- {name}: 未対応（{reason}）")
+
+
+def _signed(value: float | None, *, digits: int = 3) -> str:
+    return "-" if value is None else f"{value:+.{digits}f}"
+
+
+def _execute(
+    request: EvaluationRunRequest, session: ExternalCallSession | None, *, today: date | None
+) -> tuple[EvaluationMetrics, str | None, float]:
+    """評価を流す（job と同じ ``_execute_run``）。結果・評価の id・wall-clock の秒を返す。"""
+    from app.api.routes.evaluation import _execute_run
+
+    passes = 2 if request.compare_search_answer_profile_id else 1
+    time_limit = evaluation_job_time_limit_seconds(
+        get_settings(), answer_runs=evaluation_answer_runs(request.cases) * passes
+    )
+    started = perf_counter()
+    try:
+        with use_external_calls(session), fixed_today(today) if today else nullcontext():
+            metrics, evaluation_run_id = asyncio.run(
+                _execute_run(request, time_budget_seconds=time_limit)
+            )
+    except ExternalCallMismatch as exc:
+        # ふつうはケースの失敗として結果に残る。評価の外（条件の読み取りなど）で起きたら止める。
+        raise EvaluationGateError(str(exc), exit_code=REPLAY_FAILED_EXIT_CODE) from exc
+    return metrics, evaluation_run_id, perf_counter() - started
+
+
+def _load_recording(path: Path) -> tuple[ExternalCallSession, Mapping[str, Any], str]:
+    raw = _read_bytes(path)
+    try:
+        recording = json.loads(raw)
+        session = ExternalCallSession.from_recording(recording)
+    except ValueError as exc:
+        raise EvaluationGateError(f"記録を読めません: {exc}") from exc
+    return session, recording.get("manifest") or {}, hashlib.sha256(raw).hexdigest()
+
+
+def _save_recording(
+    path: Path, session: ExternalCallSession, manifest: Mapping[str, Any]
+) -> dict[str, Any]:
+    sha256 = _write_recording(path, session.to_recording(manifest))
+    print(f"外部の AI の応答を {len(session.entries)} 件記録しました: {path}", file=sys.stderr)
+    return {"mode": "record", "recording_sha256": sha256, "calls": len(session.entries)}
+
+
+def _replay_check(
+    session: ExternalCallSession,
+    recorded_manifest: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    recording_sha256: str | None,
+) -> tuple[list[str], dict[str, Any]]:
+    """再生が記録と一致したか（条件の差・不一致・使われなかった記録）と、結果に残す情報。"""
+    differences = comparison_differences(recorded_manifest, manifest)
+    unused = session.unused()
+    problems = [
+        *(f"条件が記録と違います: {path}" for path in differences),
+        *session.mismatches,
+        *(
+            f"再生の不一致: 記録の呼び出しが使われませんでした（{entry['kind']} "
+            f"{entry.get('label', '')}、入力の hash {str(entry['key'])[:12]}）"
+            for entry in unused
+        ),
+    ]
+    return problems, {
+        "mode": "replay",
+        "recording_sha256": recording_sha256,
+        "calls": len(session.entries) - len(unused),
+        "mismatches": len(session.mismatches),
+        "unused": len(unused),
+        "condition_differences": differences,
+    }
+
+
+def _replay_failed(problems: Sequence[str]) -> int:
+    for problem in problems:
+        print(problem, file=sys.stderr)
+    print("再生は記録と一致しませんでした（実の API には接続していません）。", file=sys.stderr)
+    return REPLAY_FAILED_EXIT_CODE
 
 
 def _diff(left_path: Path, right_path: Path) -> int:

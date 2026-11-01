@@ -142,6 +142,42 @@ uv run python -m app.rag.evaluation_run_cli compare ../../tmp/eval/before.json .
 - 既存の絶対の閾値・失敗したケースによる不合格（gate）は、統計の判定とは別に出し、差の有無に関係なく終了コード 1
   にします。比較不能・確かな悪化も 1、それ以外は 0 です。教材の近似式・固定の差の閾値は使いません。
 
+### 検索の工程ごとの除去実験（#61）
+
+`ablate` は、全部の工程を使う構成（full）と、工程を 1 つずつ無効にした構成（評価の上書き `rag_overrides`）を、
+同じ評価セット・基準日・範囲・索引で順に流し、full との差を表にします。工程は `rerank`・`neighbor_children`・
+`reference_expansion`・`entity_expansion`・`graph_expansion`・`section_expansion`（`--stages` で選ぶ）です。
+
+```bash
+cd backend
+# 1. 実の API で流し、構成ごとの応答も記録する（記録は実データを含む。git に入らない所へ）
+uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json \
+  --stages rerank,section_expansion,reference_expansion --full-again --record --output-dir ../../tmp/eval/ablation
+# 2. 同じ除去実験を API キー無しで再生する（結果は *.replay.json。時間は実の速さではない）
+uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json \
+  --stages rerank,section_expansion,reference_expansion --full-again --replay --output-dir ../../tmp/eval/ablation
+```
+
+`--output-dir` に構成ごとの結果（`full.json`・`no-rerank.json` など。`compare` / `diff` でも読める）と、
+表（`ablation.json`）を書きます。表の項目:
+
+| 項目 | 内容 |
+|---|---|
+| `quality` | 指標ごとの差・区間・判定と、悪化したケースの id（#60 の対応のある比較） |
+| `evidence_recall` | 期待する文書が、検索直後（`candidate_fusion`）・rerank の後（`rerank_output`）・生成に渡した根拠（`answer_context`）の選ばれた chunk に入った割合（回答の診断の `retrieval_stages`）。記録の無い位置は `null` |
+| `wall_seconds` / `case_median_ms` | 評価全体の wall-clock とケースの時間の中央値（工程の時間は `runs.<構成>.steps`。並列の工程の合計を全体の時間にしない） |
+| `calls` / `tokens` | 実の client が送った LLM（`llm`）・埋め込み・再ランクの request の数（再試行・失敗〔`failed`〕を含む）と、応答の `usage` の token。取れない値は `null`（0 にしない） |
+| `changed_steps` / `observed_effect` | 動いたケースの数が変わった工程（回答の診断の `execution_steps`）。工程の記録・呼び出し・品質のどれにも差が無ければ `observed_effect: false`（非適用・対象データ無しの可能性。「効かない」と断定しない） |
+| `status` | `compared`・`already_off`（full で既に無効なので流さない）・`not_comparable`（評価セットの違い・実行中の変化・上書き以外の条件の差） |
+| `full_again` | `--full-again` で最後に full をもう一度流した差（生成の揺れ・実行順の偏りの目安。工程の差はこれと比べて読む） |
+| `cache` / `order` | 埋め込み・再ランクの cache は構成ごとに空から始まり、構成の中では効く。DB・OS の cache は最初の構成の後は温まる |
+| `unsupported` | 評価の上書きで無効にできず測らない工程（質問の拡張・取込の前置きと分割・画像の検索） |
+
+- 構成の間で順と時間の条件を揃えるため、ケースを 1 件ずつ流します。比較不能の構成があれば終了コード 1、再生が記録と
+  一致しなければ 2 です。
+- 取込の前置き・分割の比較は同じ chunk の集合の検索の切替ではないため扱いません（別の文書レシピの成果物を比べます）。
+  費用は単価の出典を持たないため出さず、呼び出しの数と token だけを出します。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・
