@@ -1322,13 +1322,29 @@ def _original_range(quote: str, text: str) -> str:
 # 原文範囲の末尾に続く句点。照合では無視するが、表示する原文には含める。
 
 
+# 構造化出力の文字列の中で、改行・タブが二重に escape されて残った字（「\\n」の 2 字。#112）。
+_ESCAPED_BREAK = re.compile(r"\\r\\n|\\[nrt]")
+
+
 def _original_quote(quote: str, text: str) -> str:
     """原文と照合できた引用を返します。文字や数字の違い、出典の推測は受け入れません。
 
     連続範囲として一致しない複数行の引用は、各行が同じ原文の連続範囲なら受け入れる。図や表では見出しと
     内容が読み順で離れ、モデルは同じ根拠の2か所を改行で継ぎ合わせて引用する。どの行も原文そのままなので
     推測は含まない。言い換えを支持するかどうかは item 単位の監査が判断する。
+
+    モデルの構造化出力が改行を二重に escape し、引用に「\\n」の 2 字（逆斜線と n）が残ることがある（実モデルで
+    1 回の応答のすべての引用に起きた。#112）。原文にその 2 字が無く、そのままでは照合できないときだけ、改行と
+    して読み直して照合する（空白は照合で無視するので、文字・数字の並びの基準は変わらない）。
     """
+    matched = _verbatim_quote(quote, text)
+    if matched or not _ESCAPED_BREAK.search(quote) or _ESCAPED_BREAK.search(text):
+        return matched
+    return _verbatim_quote(_ESCAPED_BREAK.sub("\n", quote), text)
+
+
+def _verbatim_quote(quote: str, text: str) -> str:
+    """``_original_quote`` の照合（escape の残りを読み直す前）。"""
     matched = _original_range(quote, text)
     if matched:
         return matched

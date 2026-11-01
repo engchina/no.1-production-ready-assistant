@@ -23,6 +23,7 @@ from rag_parser_core.language.text import alternation, range_class
 
 from rag_engine.evaluation.answer_eval import (
     _CITED_CHUNK_ID,
+    AUDIT_REFERENCE_FAILURES,
     CLASSIFICATION_NON_CLAIM_MISMATCH,
     CLASSIFICATION_REAUDITED,
     FIGURE_EVIDENCE_TYPES,
@@ -92,7 +93,9 @@ from rag_engine.retrieval.task_contract import STEPS_REQUEST, explicit_requests,
 # 16: 原質問の状態と操作対象も、確認の答えと同じ条件整合の検査に渡す（#2653）。
 # 17: 最終検証の支持を段落の実際の引用集合に限定し、未確認の対象は判定を保留する。
 # 18: 制約が実行・提案のどちらを禁止するかを区別し、比較の採否を独立記録する（#3800）。
-VALIDATION_RUBRIC_VERSION = 18
+# 19: 監査が supported としたのに、監査の応答の参照（写した原文・返した ID）を根拠に結び付けられなかった段落を、
+#     誤りと直し方を差し戻してその段落だけで 1 回監査し直す（最初の監査の指示は変えていない。#112）。
+VALIDATION_RUBRIC_VERSION = 19
 
 # 図の見た目だけで決まる主張（要素の配置・矢印の向き・つながり・分岐への所属など、図の本文が明示しない内容）の判定。
 # 根拠の本文では確かめられず、図の画像を読んだかどうかで扱いが決まる（#2678。検証に通さない判定に数える）。
@@ -389,6 +392,10 @@ class ValidationClaimCheck(BaseModel):
     support_check: SkipJsonSchema[str] = ""
     # 根拠の表の対応の取り違えを、表の正しい値に直した段落（#3005。support_check が table_corrected のとき）。
     revised_text: SkipJsonSchema[str] = ""
+    # 監査が返した evidence_id（結び付けで書き換える前。参照の検査の失敗の原因を追う診断。#112）。
+    audit_evidence_id: SkipJsonSchema[str] = ""
+    # 監査の応答の参照の誤りを監査し直した結果（REFERENCE_REAUDIT_ADOPTED / REFERENCE_REAUDIT_REJECTED。#112）。
+    reference_reaudit: SkipJsonSchema[str] = ""
 
 
 class ClaimAuditOutput(BaseModel):
@@ -531,7 +538,14 @@ def _bind_validation(
     binding_output = output.model_copy(update={"claim_checks": binding_claims})
     bound = _bind_claims(binding_output, catalog, passages, passage_citations=True)
     claims = [
-        claim.model_copy(update={"support_quote": original.evidence_quote.strip(), "support_check": ""})
+        claim.model_copy(
+            update={
+                "support_quote": original.evidence_quote.strip(),
+                "support_check": "",
+                "audit_evidence_id": original.evidence_id.strip(),
+                "reference_reaudit": "",
+            }
+        )
         for original, claim in zip(output.claim_checks, bound.claim_checks, strict=True)
     ]
     return bound.model_copy(update={"claim_checks": claims})
@@ -1054,6 +1068,158 @@ def _reaudit_misclassified_passages(
     return result, [passage["id"] for passage in targets if passage["id"] in settled]
 
 
+# ---- 監査の応答の参照の誤りの監査し直し（#112） ------------------------------------------------------------
+#
+# 監査が supported と判定したのに、監査が裏付けとして写した原文（support_quote）が根拠の本文に無い・返した
+# evidence_id が根拠に決まらない（AUDIT_REFERENCE_FAILURES。回答の引用の誤りではなく監査の応答だけの誤り）段落は、
+# 決定的な検査で citation_error になる。判定の理由が正しくても、写し損ね（ファイル名を ID として返す、離れた所を
+# つないで写すなど）だけで正しい段落が未確認になっていた。そうした段落だけを、誤りと直し方の差し戻しの文で 1 回
+# だけ監査し直し、同じ決定的な検査を通った supported だけを採る（照合は緩めない）。
+
+# 監査し直しの結果（ValidationClaimCheck.reference_reaudit）。adopted は監査し直しの判定を採った、rejected は
+# 監査し直したが同じ検査を通らず、最初の判定（citation_error）のまま。
+REFERENCE_REAUDIT_ADOPTED = "adopted"
+REFERENCE_REAUDIT_REJECTED = "rejected"
+# 差し戻しの文に写す、前回の監査の引用・ID の上限の文字数。
+_REAUDIT_QUOTE_CHARS = 200
+# 監査し直しの差し戻しの文の先頭（入力の validation_feedback。違反と直し方だけを書く）。
+REFERENCE_REAUDIT_FEEDBACK = (
+    "## Step 1: 根拠の ID と原文の写しを直す\n"
+    "answer_passages の段落は、前回の監査が supported と判定しましたが、返した evidence_quote が evidence_items の text に"
+    "見つからない、または evidence_id が evidence_items の evidence_id に決まらなかった段落です。根拠に照らして判定し直して"
+    "ください。supported / contradicted の evidence_quote は evidence_items の text から 1 字も変えずにそのまま写し"
+    "（言い換え・要約・表の書き直し・記号や括弧の付け替えをしない。離れた 2 か所は「…」でつなぐ）、evidence_id は "
+    "evidence_items の evidence_id（E で始まる値）を省かずにそのまま書いてください。ファイル名・chunk の id・回答の文を "
+    "evidence_id・source_id に書かないでください。\n前回の誤り:"
+)
+
+
+def _is_audit_reference_failure(claim: ValidationClaimCheck) -> bool:
+    """監査は supported としたが、監査の応答の参照（原文の写し・ID）だけを根拠に結び付けられなかった判定か。"""
+    return claim.status == "citation_error" and claim.audit_status == "supported" and claim.reference_check in AUDIT_REFERENCE_FAILURES
+
+
+def _reference_failure_feedback(targets: Sequence[Mapping[str, str]], claims: Sequence[ValidationClaimCheck]) -> str:
+    """差し戻しの文（段落ごとの前回の誤りの種類・返した ID・写した原文を上限の字数で）。"""
+    target_ids = {passage["id"] for passage in targets}
+    lines = [REFERENCE_REAUDIT_FEEDBACK]
+    for claim in claims:
+        if claim.answer_passage_id in target_ids and _is_audit_reference_failure(claim):
+            evidence_id = (claim.audit_evidence_id or claim.evidence_id)[:_REAUDIT_QUOTE_CHARS]
+            quote = " ".join(claim.support_quote.split())[:_REAUDIT_QUOTE_CHARS]
+            lines.append(
+                f"- {claim.answer_passage_id}: {claim.reference_check}（evidence_id: {evidence_id or '（空）'}、evidence_quote: 「{quote}」）"
+            )
+    return "\n".join(lines)
+
+
+def _reaudit_reference_failures(
+    claims: list[ValidationClaimCheck],
+    fixed: Mapping[str, Any],
+    passages: Sequence[Mapping[str, str]],
+    evidence: Sequence[Mapping[str, Any]],
+    catalog: Mapping[str, Mapping[str, Any]],
+    settings: Any,
+    provider_id: str | None,
+    *,
+    enforce: Callable[[list[ValidationClaimCheck], Sequence[Mapping[str, str]]], list[ValidationClaimCheck]],
+    excluded: Collection[str] = (),
+    caller_citations: Sequence[Mapping[str, Any]] = (),
+) -> tuple[list[ValidationClaimCheck], dict[str, Any]]:
+    """監査の応答の参照の誤りだけで citation_error になった段落を、その段落だけで 1 回監査し直す (#112)。
+
+    対象は、段落の判定に `_is_audit_reference_failure` の判定があり、ほかの判定に否定（unsupported・contradicted・
+    figure_only）・回答の引用の誤り（answer_id_invalid）・システムが付けた判定の変更（support_check）が無い段落だけ。
+    ``excluded``（原質問・確認の答えと両立しない段落など）は除く。``caller_citations`` は `_limit_citation_scope` に渡す
+    呼び出し側の段落ごとの根拠（#104）。同じ根拠と、前回の誤り（種類・返した ID・写した
+    原文）と直し方の差し戻しの文でモデルに 1 回だけ渡す（再試行はしない。対象が無い・期限を過ぎていれば呼ばない）。
+    監査し直しの判定は、最初の監査と同じ決定的な検査（根拠への結び付け・図の根拠・``enforce``〔`_enforce_support`〕・
+    実際の引用の集合での制限）を通し、段落の判定がすべて supported になった段落だけ、監査し直した判定
+    （reference_reaudit=adopted）に替える。それ以外（否定の判定を含む）・呼び出しの失敗・期限切れは最初の判定のまま
+    （監査し直しで本文から外す理由を増やさない。reference_reaudit=rejected）。
+
+    戻り値は判定と、監査し直しの記録（status: not_required / deadline_exceeded / completed / failed、対象と採った段落の ID）。
+    """
+    by_passage: dict[str, list[ValidationClaimCheck]] = {}
+    for claim in claims:
+        by_passage.setdefault(claim.answer_passage_id, []).append(claim)
+    targets = [
+        passage
+        for passage in passages
+        if passage["id"] not in excluded
+        and (group := by_passage.get(passage["id"]))
+        and any(_is_audit_reference_failure(claim) for claim in group)
+        and all(_is_audit_reference_failure(claim) or (claim.status == "supported" and not claim.support_check) for claim in group)
+    ]
+    record: dict[str, Any] = {"status": "not_required", "target_passage_ids": [], "adopted_passage_ids": []}
+    if not targets:
+        return claims, record
+    record["target_passage_ids"] = [passage["id"] for passage in targets]
+    if _deadline_passed():
+        return claims, {**record, "status": "deadline_exceeded"}
+    answer_text = str(fixed.get("answer_text") or "")
+    inputs = {
+        **fixed,
+        "answer_passages": targets,
+        "evidence_items": list(evidence),
+        "validation_feedback": _reference_failure_feedback(targets, claims),
+    }
+    try:
+        output = _parse_checked(
+            resolve_prompt("answer_validation.system", VALIDATION_SYSTEM_PROMPT),
+            inputs,
+            settings,
+            ClaimAuditOutput,
+            provider_id,
+            _passage_check(targets, answer_text),
+            max_input_bytes=_max_input_bytes(settings),
+            attempts=1,
+            purpose="answer.recheck",
+        )
+    except Exception as exc:
+        # 監査し直しは最初の判定を補うだけなので、失敗しても最初の判定（citation_error）を返す。
+        logger.warning("answer validation reference reaudit failed", exc_info=not isinstance(exc, DeadlineExceeded))
+        status = "deadline_exceeded" if isinstance(exc, TimeoutError | DeadlineExceeded) or _deadline_passed() else "failed"
+        return _mark_rejected(claims, record["target_passage_ids"]), {**record, "status": status}
+    target_ids = set(record["target_passage_ids"])
+    rebound = _bind_figure_claims(_bind_validation(output, catalog, targets).claim_checks, catalog)
+    rebound = [_prefer_document_source(claim, catalog) for claim in rebound if claim.answer_passage_id in target_ids]
+    rebound = _limit_citation_scope(enforce(rebound, targets), catalog, answer_text, caller_citations)
+    replacements: dict[str, list[ValidationClaimCheck]] = {}
+    for claim in rebound:
+        replacements.setdefault(claim.answer_passage_id, []).append(
+            claim.model_copy(update={"reference_reaudit": REFERENCE_REAUDIT_ADOPTED})
+        )
+    adopted = [
+        passage_id
+        for passage_id in record["target_passage_ids"]
+        if (group := replacements.get(passage_id)) and all(claim.status == "supported" for claim in group)
+    ]
+    result: list[ValidationClaimCheck] = []
+    replaced: set[str] = set()
+    for claim in claims:
+        passage_id = claim.answer_passage_id
+        if passage_id in adopted:
+            # 段落の判定を監査し直した判定に替える（段落ごとに 1 回）。
+            if passage_id not in replaced:
+                result.extend(replacements[passage_id])
+                replaced.add(passage_id)
+        else:
+            result.append(claim)
+    rejected = [passage_id for passage_id in record["target_passage_ids"] if passage_id not in adopted]
+    return _mark_rejected(result, rejected), {**record, "status": "completed", "adopted_passage_ids": adopted}
+
+
+def _mark_rejected(claims: Sequence[ValidationClaimCheck], passage_ids: Collection[str]) -> list[ValidationClaimCheck]:
+    """監査し直したが採らなかった段落の、参照の誤りの判定に reference_reaudit=rejected を付ける。"""
+    return [
+        claim.model_copy(update={"reference_reaudit": REFERENCE_REAUDIT_REJECTED})
+        if claim.answer_passage_id in passage_ids and _is_audit_reference_failure(claim)
+        else claim
+        for claim in claims
+    ]
+
+
 # ---- 主張の監査の分割と期限（#2700） ---------------------------------------------------------------------
 #
 # 監査の 1 回の呼び出しの時間は、ほぼ出力（判定と推論）の token の数で決まり、段落の数に比例する。推論型のモデルの
@@ -1377,6 +1543,9 @@ def validate_answer_claims(
     見出し・出典の行・表の区切りと見出しの行・利用者への質問の段落は監査せず、claim_checks にも含めない（#1306 / #1317）。
     監査に渡した段落をモデルが not_a_claim と返したら、その段落だけで 1 回監査し直す（``reaudited_passage_ids``。
     決まらなければ unassessed のままで、判定の classification_check が non_claim_mismatch。#2625）。
+    監査が supported としたのに監査の応答の参照（写した原文・返した ID）だけを根拠に結び付けられなかった段落は、誤りを
+    差し戻してその段落だけで 1 回監査し直し、同じ決定的な検査を通った supported だけを採る（``reference_reaudit``・
+    判定の ``reference_reaudit``。#112）。
 
     ``audited`` は RAG の回答の監査を通った説明の本文（`audited_line_key`）→ 根拠の chunk の id（`audited_answer_items`。
     呼び出し側が今の権限と版で読み直して本文が変わっていないものだけ。#1527）。行の本文が同じ段落は、根拠が
@@ -1506,13 +1675,26 @@ def validate_answer_claims(
     table_texts = [str(item.get("text") or "") for item in evidence_items] + record_tables(evidence_items)
     # supported は、写した原文が根拠にあり・対象が同じで・表の行の対応に反しないものだけ（#2659・#2657・#2653）。
     premise_diagnostics: list[dict[str, Any]] = []
-    claims = _enforce_support(
+    support_texts = {str(item.get("chunk_uid") or item.get("id") or ""): str(item.get("text") or "") for item in sources}
+    conflicting = premise_conflicts(question, passages, premises, settings, provider_id, diagnostics=premise_diagnostics)
+
+    def enforce(items: list[ValidationClaimCheck], scope: Sequence[Mapping[str, str]]) -> list[ValidationClaimCheck]:
+        return _enforce_support(items, scope, catalog, support_texts, table_texts, premise_conflicts=conflicting)
+
+    claims = enforce(claims, passages)
+    # 監査の応答の参照の誤り（写した原文・返した ID）だけで citation_error になった段落は、誤りを差し戻して 1 回
+    # 監査し直し、同じ検査を通った supported だけを採る（#112）。
+    claims, reference_reaudit = _reaudit_reference_failures(
         claims,
+        fixed,
         passages,
+        evidence,
         catalog,
-        {str(item.get("chunk_uid") or item.get("id") or ""): str(item.get("text") or "") for item in sources},
-        table_texts,
-        premise_conflicts=premise_conflicts(question, passages, premises, settings, provider_id, diagnostics=premise_diagnostics),
+        settings,
+        provider_id,
+        enforce=enforce,
+        excluded=conflicting,
+        caller_citations=caller_citations,
     )
     # 根拠の表の対応と取り違えた段落は、表の正しい値に直せれば直した文を返す（#3005。直せなければ矛盾のまま）。
     claims = _revise_table_claims(claims, table_texts, settings, provider_id)
@@ -1539,6 +1721,8 @@ def validate_answer_claims(
         "figure_rechecked_passage_ids": figure_rechecked,
         # 期限までに監査し終わらなかった段落（#2700。判定は unassessed）。
         "timed_out_passage_ids": [passage["id"] for passage in passages if passage["id"] in timed_out_ids],
+        # 監査の応答の参照の誤りを監査し直した記録（#112。status・対象と採った段落の ID）。
+        "reference_reaudit": reference_reaudit,
     }
 
 
@@ -1554,6 +1738,9 @@ __all__ = [
     "MAX_DATA_RESULTS",
     "REAUDIT_FEEDBACK",
     "REAUDIT_STATUSES",
+    "REFERENCE_REAUDIT_ADOPTED",
+    "REFERENCE_REAUDIT_FEEDBACK",
+    "REFERENCE_REAUDIT_REJECTED",
     "REFERENCE_NOT_FIGURE",
     "REFERENCE_SINGLE_FIGURE",
     "REUSED_CLAIM_REASON",

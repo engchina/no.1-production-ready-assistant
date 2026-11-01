@@ -23,6 +23,13 @@ def _documents(payload: dict) -> list[dict]:
     return [item for item in payload["evidence_items"] if item.get("id") != QUESTION_ID]
 
 
+def _is_reference_reaudit(payload: dict) -> bool:
+    """監査の応答の参照の誤りの監査し直し（#112）の呼び出しか。"""
+    from rag_engine.evaluation.answer_validation import REFERENCE_REAUDIT_FEEDBACK
+
+    return str(payload.get("validation_feedback") or "").startswith(REFERENCE_REAUDIT_FEEDBACK)
+
+
 def _passages(inputs: str) -> list[str]:
     import json
 
@@ -815,18 +822,28 @@ RETENTION_ANSWER = "\n".join(
 )
 
 
-def _retention_validation(written: list[str], rechecks: list[dict] | None = None) -> dict:
+def _retention_validation(written: list[str], rechecks: list[dict] | None = None, reaudits: list[dict] | None = None) -> dict:
     """段落ごとに written の evidence_id を返すモデルのスタブ。
 
     2 回目の呼び出し（ID を書かない段落の確かめ直し。#1412）は、確かめ直す段落に evidence_id を空で返し
-    （出典が決まらない）、入力を rechecks に残す。
+    （出典が決まらない）、入力を rechecks に残す。監査の応答の参照の誤りの監査し直し（#112）には最初と同じ ID を返し、
+    入力を reaudits に残す。
     """
+    reaudits = [] if reaudits is None else reaudits
     calls = []
+    first: dict[str, str] = {}
 
     def parse(system, inputs, settings, schema, provider_id=None):
         payload = json.loads(inputs)
-        calls.append(payload)
-        answers = written if len(calls) == 1 else [""] * len(payload["answer_passages"])
+        if _is_reference_reaudit(payload):
+            # 監査し直し（#112）でも、モデルは同じ ID を返す（写し損ねを繰り返す）。
+            reaudits.append(payload)
+            answers = [first[passage["id"]] for passage in payload["answer_passages"]]
+        else:
+            calls.append(payload)
+            answers = written if len(calls) == 1 else [""] * len(payload["answer_passages"])
+            if len(calls) == 1:
+                first.update(zip((passage["id"] for passage in payload["answer_passages"]), written, strict=True))
         return ClaimAuditOutput.model_validate(
             {
                 "claim_checks": [
@@ -924,21 +941,31 @@ def _deadline_validation(
     answer: str = DEADLINE_ANSWER,
     recheck: list[tuple[str, str]] | None = None,
     calls: list[dict] | None = None,
+    reaudits: list[dict] | None = None,
 ) -> dict:
     """段落ごとに（status, evidence_id）を返すモデルのスタブ。理由はどれも「裏付けられる」。
 
     2 回目の呼び出し（ID を書かない段落の確かめ直し。#1412）には recheck を返す。evidence_id の
     「{0}」「{1}」は、確かめ直しに渡した根拠の片段の ID。recheck が無ければ 2 回目の呼び出しを認めない。
+    監査の応答の参照の誤りの監査し直し（#112）には最初と同じ判定を返し、入力を reaudits に残す（calls には入れない）。
     """
     seen: list[dict] = [] if calls is None else calls
+    first: dict[str, tuple[str, str]] = {}
 
     def parse(system, inputs, settings, schema, provider_id=None):
         payload = json.loads(inputs)
-        seen.append(payload)
         assert "ID の照合はシステムが行う" in system
-        if len(seen) == 1:
+        if _is_reference_reaudit(payload):
+            # 監査し直し（#112）でも、モデルは同じ判定と ID を返す（写し損ねを繰り返す）。
+            if reaudits is not None:
+                reaudits.append(payload)
+            answers = [first[passage["id"]] for passage in payload["answer_passages"]]
+        elif not seen:
+            seen.append(payload)
             answers = claims
+            first.update(zip((passage["id"] for passage in payload["answer_passages"]), claims, strict=True))
         else:
+            seen.append(payload)
             assert recheck is not None, "確かめ直しを想定していない"
             ids = [item["evidence_id"] for item in _documents(payload)]
             answers = [(status, evidence_id.format(*ids)) for status, evidence_id in recheck]
@@ -1031,13 +1058,19 @@ def test_unresolved_ids_in_the_answer_stay_citation_errors() -> None:
     )
     # ID を書かない 3 つ目の段落は、他の段落が引いた ID がどれも根拠に決まらないので確かめ直さない（#1412）。
     calls: list[dict] = []
+    reaudits: list[dict] = []
     result = _deadline_validation(
         [("supported", "E9f9f9f9f9f9f9f9f9f9f"), ("supported", "証拠"), ("supported", "第 3 章"), ("citation_error", "")],
         answer=answer,
         calls=calls,
+        reaudits=reaudits,
     )
     assert result["counts"] == {"citation_error": 4} and len(calls) == 1
     assert all(claim["reason"].startswith("未登録の原文ID。") for claim in result["claim_checks"][:3])
+    # 段落が書いた ID が根拠に無い段落（回答の引用の誤り）は監査し直さず、監査が返した ID だけの誤りの 3 つ目の
+    # 段落だけを 1 回監査し直す（#112。同じ ID を返したので citation_error のまま）。
+    assert [[passage["id"] for passage in call["answer_passages"]] for call in reaudits] == [["A3"]]
+    assert [claim["reference_reaudit"] for claim in result["claim_checks"]] == ["", "", "rejected", ""]
 
 
 # #1362 の確認の Run run_3b7a1c0ff119477781a0042ea2a8dd23（holdout br-customer-portal-change-window）の形
@@ -1105,8 +1138,12 @@ def _window_validation(
 
     def parse(system, inputs, settings, schema, provider_id=None):
         payload = json.loads(inputs)
-        calls.append((system, payload))
-        answers = first if len(calls) == 1 else recheck
+        if _is_reference_reaudit(payload):
+            # 監査し直し（#112）でも、モデルは同じ判定と ID を返す（写し損ねを繰り返す）。
+            answers = first
+        else:
+            calls.append((system, payload))
+            answers = first if len(calls) == 1 else recheck
         assert answers is not None, "確かめ直しを想定していない"
         if isinstance(answers, Exception):
             raise answers

@@ -358,6 +358,20 @@ executor が埋まっても待たない。1 回の検証ごとに `rag_answer_va
 （`grounded._table_binding_conflict`。取り違えた説明を根拠と矛盾として外し、表の正しい対応を理由に出す。#2998）でも使い、回答の生成の監査の指示（3.1）にも
 同じ規則（`RELATION_SUPPORT_RULES`）を入れる。
 
+**監査の応答の参照の誤りの監査し直し（#112）**: 監査が `supported` と判定したのに、監査の応答の参照（写した原文・返した
+`evidence_id`）だけを根拠に結び付けられず `citation_error` になった段落（`reference_check` が `quote_unmatched`・
+`audit_id_invalid`・`ambiguous_id`・`audit_id_missing`。回答が書いた ID の誤り `answer_id_invalid` は除く）は、誤りの種類・返した
+ID・写した原文（200 字まで）と「原文は 1 字も変えずに写す・ID は evidence_items の evidence_id を書く」差し戻しの文
+（`REFERENCE_REAUDIT_FEEDBACK`）で、その段落だけを同じ根拠で 1 回監査し直す（`_reaudit_reference_failures`。対象が無い・期限を
+過ぎたら呼ばない。再試行しない）。監査し直しの判定は最初と同じ決定的な検査（根拠への結び付け・`_enforce_support`・実際の引用の
+集合の制限）を通り、段落の判定がすべて `supported` になったときだけ採る（`reference_reaudit=adopted`）。それ以外（否定の判定・
+呼び出しの失敗）は最初の `citation_error` のまま（`rejected`）。結果の `reference_reaudit` に状態と対象・採った段落を残す。MCP の
+claims は、監査の応答の参照の誤りの判定に、監査が写した原文（`support_quote`）と返した ID（`audit_evidence_id`）を 200 字まで返す
+（呼び出し側が渡した根拠に対する監査の出力で、権限の外の本文を含まない）。稼働中の設定で同じ回答を繰り返し監査して確かめた原因は、
+構造化出力の文字列で改行が二重に escape された「\n」の 2 字（その応答のすべての引用。照合は改行として読み直す。
+`grounded._ESCAPED_BREAK`）と、2 つの根拠・表の行を「 / 」でつないだ引用（原文の斜線と区別できないので照合は広げず、監査し直しで
+直させる）だった。
+
 **表の値に直す（#3005）**: 段落・説明が根拠の表の別の行・列の値を結び付けたとき（`value_unbound`）、表の正しい値に直して残す（研究と改訂。RARR と同じ考え方）。`generation/table_revision.py` が LLM に段落と表の正しい対応（`table_mismatch_notes`）だけを渡し、誤った値だけを最小限に直させ（構造化出力 `TableRevision`）、直した文を決定的に確かめる（表の照合で取り違えが無い・正しい値をすべて述べる・元の段落との近さ 0.6 以上・長さ 1.6 倍以内）。確かめに通らない・LLM が失敗したら、今どおり矛盾として外す。回答の生成は `grounded.revise_table_conflicts`（印 `table_corrected`。理由に直した前後）、最終の検証は `rag_validate_answer` の claims の `revised_text`（`support_check=table_corrected`。status は `contradicted` のまま。Agent は段落を直した文に置き換えて `table_corrected` の印を付ける）。LLM の呼び出しは取り違えがある段落だけ。
 
 **段落の印（#2738）**: 本文から外すのは、根拠と矛盾する説明（監査の `contradicted` と、根拠の表が否定した対応。#2998）だけ。根拠で確かめられない

@@ -702,6 +702,9 @@ async def _validate_answer(
     findings += step_findings
     blocking = any(item.severity == "error" for item in findings)
     timed_out = len(result.get("timed_out_passage_ids") or ())
+    # 監査の応答の参照の誤りの監査し直し（#112。status と、対象・採った段落の数）。
+    reaudit = result.get("reference_reaudit")
+    reaudit = reaudit if isinstance(reaudit, Mapping) else {}
     logger.info(
         "rag_answer_validation",
         extra={
@@ -712,6 +715,9 @@ async def _validate_answer(
             "validation_claims": len(result.get("claim_checks") or ()),
             "validation_timed_out_claims": timed_out,
             "validation_reused_claims": len(result.get("reused_passage_ids") or ()),
+            "validation_reference_reaudit": str(reaudit.get("status") or "not_run"),
+            "validation_reference_reaudit_targets": len(reaudit.get("target_passage_ids") or ()),
+            "validation_reference_reaudit_adopted": len(reaudit.get("adopted_passage_ids") or ()),
             "validation_guide_step_embedding": step_embedding is not None,
             **{
                 f"validation_llm_{key}": round(float(usage.get(key) or 0), 1)

@@ -82,7 +82,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -692,7 +692,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -862,7 +862,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1274,7 +1274,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1728,7 +1728,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2515,7 +2515,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2764,7 +2764,7 @@
       "outputSchema": {
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2898,7 +2898,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -4268,7 +4268,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -5832,7 +5832,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -6717,6 +6717,49 @@
                 "default": null,
                 "description": "support_check が table_corrected のとき、段落を根拠の表の正しい値に直した文（表の照合で確かめた）。段落を外す代わりに、この文に置き換えて示せる。それ以外は null。",
                 "title": "Revised Text"
+              },
+              "support_quote": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "reference_check が監査の応答の誤り（audit_id_invalid / ambiguous_id / audit_id_missing / quote_unmatched）のとき、監査が裏付けとして写した原文（先頭 200 字。渡した根拠・質問に対する監査の出力で、照合の失敗の原因を確かめる診断）。それ以外は null。",
+                "title": "Support Quote"
+              },
+              "audit_evidence_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "reference_check が監査の応答の誤りのとき、監査が返した根拠の ID（照合に使う内部の ID で、chunk_id ではない。先頭 200 字。診断）。それ以外は null。",
+                "title": "Audit Evidence Id"
+              },
+              "reference_reaudit": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "adopted",
+                      "rejected"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "監査は裏付けたが、監査の応答の参照（写した原文・返した ID）を根拠に照合できなかった段落を監査し直した結果（adopted=監査し直しの判定が同じ照合を通り、その判定〔supported〕にした / rejected=監査し直しても照合を通らず、citation_error のまま）。監査し直していなければ null。",
+                "title": "Reference Reaudit"
               }
             },
             "required": [
@@ -6860,7 +6903,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 39,
+            "default": 40,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
