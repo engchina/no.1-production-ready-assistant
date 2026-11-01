@@ -5797,7 +5797,7 @@ GUIDE_STEP_MAIN_LEAD = 0.01
 class GuideStepSemantics:
     """業務ガイドの手順の主の操作の文を、意味の近さで決めるための embedding（#2649）。
 
-    ``embed`` は文の列を受け取り入力順の vector を返す（`ports.Embedder.embed`。OCI Generative AI の Cohere Embed）。
+    ``embed`` は文の列を受け取り入力順の vector を返す（`ports.Embedder.embed`。埋め込みモデル）。
     None なら意味の判定をせず、語の判定（安全側）に戻る。1 回の回答で 1 つ作り、同じ文の vector を作り直しの round と
     回答の確定でも再利用する（呼び直さない）。呼び出しが失敗したら、その回答では以後呼ばずに語の判定に戻る。
     ``calls`` / ``texts`` / ``seconds`` は回答の trace に残す呼び出しの回数・文の数・時間。

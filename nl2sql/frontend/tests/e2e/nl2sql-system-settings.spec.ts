@@ -43,7 +43,7 @@ function primaryConnectionFixture(overrides: Record<string, unknown> = {}) {
   return {
     connection_id: "primary",
     endpoint: "https://enterprise-ai.example.com",
-    project_ocid: "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
+    project_id: "proj_example",
     api_key: "",
     has_api_key: true,
     clear_api_key: false,
@@ -279,7 +279,7 @@ async function getActionButtonStyle(button: Locator) {
 
 async function expectModelSaveButtonsUsePrimaryStyle(page: Page) {
   const buttons = [
-    page.getByRole("button", { name: "OCI Enterprise AI: 保存" }),
+    page.getByRole("button", { name: "モデルの API: 保存" }),
     page.getByRole("button", { name: "登録モデル: 保存" }),
   ];
   await page.mouse.move(0, 0);
@@ -428,14 +428,14 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   await page.goto("/settings/model");
   await expect(page.getByRole("heading", { name: "モデル設定" }).first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "OCI Enterprise AI", exact: true })
+    page.getByRole("heading", { name: "モデルの API", exact: true })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "登録モデル", exact: true })).toBeVisible();
   // 埋め込み / 再ランクは登録モデルの種類で登録する（#45）。独立したカードは無い。
   await expect(
     page.getByRole("heading", { name: "埋め込み / 再ランク", exact: true })
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "モデルの API: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
   await expect(page.locator("#enterprise-api-path")).toHaveCount(0);
@@ -591,7 +591,7 @@ test("システム設定の失敗と API エラーを共通 danger パネルで�
       target_type: "embedding",
       model_id: "text-embedding-v4",
       message: "Embedding モデルのテストに失敗しました。",
-      troubleshooting: ["OCI Generative AI の設定を確認してください。"],
+      troubleshooting: ["埋め込みモデルの設定を確認してください。"],
       raw_error: "gateway timeout",
       error_type: "TimeoutError",
       elapsed_ms: 30000,
@@ -967,16 +967,9 @@ test("非正常な readiness 値も設定画面には表示しない", async ({ 
   await expectNoHorizontalOverflow(page);
 });
 
-test("Endpoint URL の公式ドキュメントをキーボードで開き、未保存入力を保持する", async ({
+test("Endpoint URL の補足は提供元に依らない base URL の例を示し、外部のリンクを出さない（#51）", async ({
   page,
-  context,
 }, testInfo) => {
-  const docsUrl = "https://docs.oracle.com/en-us/iaas/Content/generative-ai/openai-compatible-api.htm";
-  // 外部サイトへ接続せず、新しいタブの遷移先を検証する。
-  await context.route(docsUrl, (route) => route.fulfill({
-    contentType: "text/html",
-    body: "<title>OCI OpenAI-Compatible Endpoints</title>",
-  }));
   const mutations: string[] = [];
   page.on("request", (request) => {
     if (request.url().includes("/api/settings/model") && request.method() !== "GET") {
@@ -985,32 +978,20 @@ test("Endpoint URL の公式ドキュメントをキーボードで開き、未�
   });
 
   await page.goto("/settings/model");
-  const endpoint = page.getByRole("textbox", { name: "Endpoint URL" });
-  const docsLink = page.getByRole("link", { name: "公式ドキュメント（新しいタブで開く）" });
-  await expect(docsLink).toBeVisible();
-  await expect(docsLink).toHaveAttribute("href", docsUrl);
-  await expect(docsLink).toHaveAttribute("target", "_blank");
-  await expect(docsLink).toHaveAttribute("rel", "noopener noreferrer");
+  const endpoint = page.getByRole("textbox", { name: "Endpoint URL" }).first();
   await expect(endpoint).toHaveAccessibleDescription(
-    /OpenAI-compatible base URL を \/openai\/v1 まで.*\/responses.*path は補いません.*公式ドキュメント/,
+    /API の base URL を path まで.*https:\/\/api\.deepseek\.com\/v1.*\/responses.*path は補いません/,
   );
-  await endpoint.fill("https://unsaved.example.com/openai/v1");
+  await expect(page.getByRole("link", { name: "公式ドキュメント（新しいタブで開く）" })).toHaveCount(0);
+  await endpoint.fill("https://unsaved.example.com/v1");
   await endpoint.press("Tab");
-  await expect(docsLink).toBeFocused();
   await expectNoHorizontalOverflow(page);
-  await page.screenshot({ path: testInfo.outputPath("endpoint-docs-link.png") });
-
-  const popupPromise = page.waitForEvent("popup");
-  await docsLink.press("Enter");
-  const popup = await popupPromise;
-  await expect(popup).toHaveURL(docsUrl);
-  await popup.close();
-  await expect(page).toHaveURL(/\/settings\/model$/);
-  await expect(endpoint).toHaveValue("https://unsaved.example.com/openai/v1");
+  await page.screenshot({ path: testInfo.outputPath("endpoint-help.png") });
+  await expect(endpoint).toHaveValue("https://unsaved.example.com/v1");
   expect(mutations).toEqual([]);
 });
 
-test("モデル設定の読込失敗から再試行し、未設定 Endpoint URL の説明リンクを表示する", async ({ page }) => {
+test("モデル設定の読込失敗から再試行し、未設定 Endpoint URL の補足を表示する", async ({ page }) => {
   await page.unroute("**/api/settings/model");
   const gate = createRequestGate();
   let fail = true;
@@ -1035,7 +1016,7 @@ test("モデル設定の読込失敗から再試行し、未設定 Endpoint URL 
   fail = false;
   await page.getByRole("button", { name: "再試行" }).click();
   await expect(page.getByRole("textbox", { name: "Endpoint URL" })).toHaveValue("");
-  await expect(page.getByRole("link", { name: "公式ドキュメント（新しいタブで開く）" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Endpoint URL" })).toHaveAccessibleDescription(/API の base URL を path まで/);
   await expectNoHorizontalOverflow(page);
 });
 
@@ -1098,10 +1079,10 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await page.locator("#enterprise-endpoint").fill("https://changed.example.com");
   await page.getByRole("textbox", { name: "モデル ID 1" }).fill("enterprise-unsaved-model");
 
-  await expectLargeActionButton(page.getByRole("button", { name: "OCI Enterprise AI: 保存" }));
-  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await expectLargeActionButton(page.getByRole("button", { name: "モデルの API: 保存" }));
+  await page.getByRole("button", { name: "モデルの API: 保存" }).click();
   // loading 中もラベルは変えない（DS ルール）。aria-busy + disabled + スピナーで保存中を表す。
-  const enterpriseSaving = page.getByRole("button", { name: "OCI Enterprise AI: 保存" });
+  const enterpriseSaving = page.getByRole("button", { name: "モデルの API: 保存" });
   await expect(enterpriseSaving).toBeDisabled();
   await expect(enterpriseSaving).toHaveAttribute("aria-busy", "true");
   await expectLargeActionButton(enterpriseSaving);
@@ -1109,7 +1090,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   // 埋め込み / 再ランクの独立したカード（と保存）は無い（#45。登録モデルの種類で登録する）。
   await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
   firstSaveGate.release();
-  await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。")).toBeVisible();
+  await expect(page.getByText("モデルの API の接続設定を保存しました。")).toBeVisible();
 
   const connectionRequest = requests[0];
   const connectionEnterprise = connectionRequest.enterprise_ai as Record<string, unknown>;
@@ -1162,7 +1143,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoHorizontalOverflow(page);
-  await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "モデルの API: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
 });
@@ -1207,18 +1188,18 @@ test("モデル API Key を .env に新規保存して削除でき、プレビ�
   });
 
   await page.goto("/settings/model");
-  // ラベルには「OCI 運用時必須」のタグも入るので、欄は id で引く（#542）。
+  // ラベルには「利用時必須」のタグも入るので、欄は id で引く（#542）。
   await page.locator("#enterprise-api-key").fill("new-key-fixture");
   await expectModelPreviewPanelsAbsent(page);
   await expect(page.locator("body")).not.toContainText("new-key-fixture");
-  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await page.getByRole("button", { name: "モデルの API: 保存" }).click();
   const notificationRegion = page.getByRole("region", { name: "通知" });
-  await expect(notificationRegion).toContainText("OCI Enterprise AI 接続設定を保存しました。");
-  await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。")).toHaveCount(1);
+  await expect(notificationRegion).toContainText("モデルの API の接続設定を保存しました。");
+  await expect(page.getByText("モデルの API の接続設定を保存しました。")).toHaveCount(1);
   expect(primaryConnection(requests[0].enterprise_ai).api_key).toBe("new-key-fixture");
 
   await page.getByLabel("保存済み API key を削除する").check();
-  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await page.getByRole("button", { name: "モデルの API: 保存" }).click();
   expect(primaryConnection(requests[1].enterprise_ai).clear_api_key).toBe(true);
   await expect(page.getByText("未設定", { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -1258,7 +1239,7 @@ test("モデル設定はプライマリ接続とセカンダリ接続をタブ�
   });
 
   await page.goto("/settings/model");
-  const tablist = page.getByRole("tablist", { name: "OCI Enterprise AI の接続" });
+  const tablist = page.getByRole("tablist", { name: "モデルの API の接続" });
   await expect(tablist.getByRole("tab", { name: "プライマリ接続" })).toHaveAttribute(
     "aria-selected",
     "true"
@@ -1375,7 +1356,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   });
 
   await page.goto("/settings/model");
-  const tablist = page.getByRole("tablist", { name: "OCI Enterprise AI の接続" });
+  const tablist = page.getByRole("tablist", { name: "モデルの API の接続" });
   // タブの並びはプライマリ接続 → セカンダリ接続 → ターシャリ接続。
   await expect(tablist.getByRole("tab")).toHaveText([
     "プライマリ接続",
@@ -1388,7 +1369,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   );
   await page.getByRole("button", { name: "ターシャリ接続を設定" }).click();
   const endpoint = page.locator("#enterprise-tertiary-endpoint");
-  const project = page.locator("#enterprise-tertiary-project-ocid");
+  const project = page.locator("#enterprise-tertiary-project-id");
   const apiKey = page.locator("#enterprise-tertiary-api-key");
   await expect(endpoint).toBeFocused();
   await expect(endpoint).toHaveAttribute("aria-required", "true");
@@ -1397,14 +1378,14 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   await expect(endpoint).toHaveAttribute("placeholder", "https://api.openai.com/v1");
   // Endpoint URL は入力どおり使う（#1440）。書き方（path まで）と例を説明に出す。
   await expect(endpoint).toHaveAccessibleDescription(
-    /base URL を path まで.*https:\/\/api\.openai\.com\/v1.*https:\/\/api\.deepseek\.com\/v1.*path は補いません/,
+    /base URL を path まで.*https:\/\/api\.deepseek\.com\/v1.*https:\/\/api\.openai\.com\/v1.*path は補いません/,
   );
   await expect(apiKey).toHaveAttribute("placeholder", /^sk-/);
 
   await endpoint.fill("https://api.openai.com/v1");
   await apiKey.fill("sk-openai-fixture");
-  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
-  await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。").first()).toBeVisible();
+  await page.getByRole("button", { name: "モデルの API: 保存" }).click();
+  await expect(page.getByText("モデルの API の接続設定を保存しました。").first()).toBeVisible();
   const connections = (requests[0].enterprise_ai as Record<string, unknown>)
     .connections as Array<Record<string, unknown>>;
   expect(connections.map((connection) => connection.connection_id)).toEqual([
@@ -1413,7 +1394,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   ]);
   expect(connections[1]).toMatchObject({
     endpoint: "https://api.openai.com/v1",
-    project_ocid: "",
+    project_id: "",
     api_key: "sk-openai-fixture",
   });
 
@@ -1452,7 +1433,7 @@ test("legacy JSON の原因と復旧方法を表示し、保存時に既存 Key 
   await page.goto("/settings/model");
   await expect(page.getByText("旧 JSON に API Key が残っています")).toBeVisible();
   await expect(page.getByText(/原因: 旧形式の model-settings.json/)).toBeVisible();
-  await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
+  await page.getByRole("button", { name: "モデルの API: 保存" }).click();
 
   expect(savedRequests).toHaveLength(1);
   const enterprise = primaryConnection(savedRequests[0]?.enterprise_ai);
@@ -1552,7 +1533,7 @@ test("モデルのテスト中は編集・削除・別テスト・保存を止�
   await testButton.click();
   await expect.poll(() => tests).toBe(1);
   await expect(model).toBeDisabled();
-  await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "モデルの API: 保存" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /モデルを削除 1/ })).toBeDisabled();
   gate.release();
   await expect(page.getByText("レビュー対象モデルの確認成功")).toBeVisible();

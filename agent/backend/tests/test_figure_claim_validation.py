@@ -234,8 +234,8 @@ def _run(monkeypatch: MonkeyPatch, *, vision: bool, chunk_id: str = "chunk-fig")
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             vision_enabled=vision,
         ),

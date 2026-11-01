@@ -6,7 +6,7 @@
 
 ```text
 backend/app/features/agent/
-  builtin_runtime.py        組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI）
+  builtin_runtime.py        組み込み Runtime（OpenAI Agents SDK + モデルの API）
   runtime_dispatcher.py     claim/lease dispatcher（本番の別プロセス）
   runtime.py                共通 Run/Event/Artifact/Audit と legacy history
   skills.py                 Skill registry と組み込みのスキル（repo 直下の skills/ を読む。#1816）

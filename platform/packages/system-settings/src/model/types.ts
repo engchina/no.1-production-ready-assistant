@@ -7,9 +7,9 @@ export type ModelSettingsTestTargetType =
   "enterprise_text" | "enterprise_vision" | "embedding" | "rerank";
 
 /**
- * OCI Enterprise AI の接続の ID（#533）。接続ごとに backend の Settings の属性・env 名が決まっている。
+ * モデルの API の接続の ID（#533）。接続ごとに backend の Settings の属性・env 名が決まっている。
  * 画面の名前は「プライマリ接続」「セカンダリ接続」「ターシャリ接続」（#542 / #786）。
- * ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、Project OCID は任意。
+ * ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、Project ID は任意。
  */
 export type EnterpriseAiConnectionId = "primary" | "secondary" | "tertiary";
 /**
@@ -86,13 +86,13 @@ export interface EnterpriseAiConfiguredModel {
 }
 
 /**
- * OCI Enterprise AI の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空。
+ * モデルの API の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空。
  * 表示名は持たない（#542。画面は ID から「プライマリ接続」などと表示する）。
  */
 export interface EnterpriseAiConnectionSettings {
   connection_id: EnterpriseAiConnectionId;
   endpoint: string;
-  project_ocid: string;
+  project_id: string;
   api_key: string;
   has_api_key: boolean;
   clear_api_key: boolean;
@@ -149,7 +149,7 @@ export interface ModelSettingsData {
    */
   revision?: string;
   /**
-   * 埋め込みの次元（#45。読み取り専用の表示用）。backend の設定 `oci_genai_embedding_dim`（Oracle の
+   * 埋め込みの次元（#45。読み取り専用の表示用）。backend の設定 `genai_embedding_dim`（Oracle の
    * VECTOR 列に合わせた値）で、埋め込みの呼び出しに `dimensions` として送る。古い backend は返さない。
    */
   embedding_dim?: number | null;

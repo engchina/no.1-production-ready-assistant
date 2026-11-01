@@ -125,7 +125,7 @@ test("全幅の一覧を検索・数値ページングし、全幅の詳細の�
 
   await detail.getByRole("tab", { name: "実行情報" }).click();
   await expect(
-    page.getByRole("tabpanel", { name: "実行情報" }).getByText("oci.generativeai.command-r-plus", { exact: true })
+    page.getByRole("tabpanel", { name: "実行情報" }).getByText("deepseek-chat", { exact: true })
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "会話を開く" })).toHaveAttribute(
     "href",
@@ -533,7 +533,7 @@ function feedbackEnvelope(limit: number, offset: number) {
             created_at: "2026-07-01T09:00:00Z",
             conversation_id: "conv-1",
             conversation_title: "経費申請",
-            model: "oci.generativeai.command-r-plus",
+            model: "deepseek-chat",
             file_name: null,
             question_preview: "最新の経費申請期限を教えて",
             comment_preview: "規程が更新されています。",
@@ -578,7 +578,7 @@ function feedbackEnvelope(limit: number, offset: number) {
             created_at: "2026-06-30T23:59:00Z",
             conversation_id: null,
             conversation_title: null,
-            model: "ocid1.generativeaiendpoint.oc1.ap-osaka-1.amaaaaaaexample",
+            model: "dashscope/qwen3-235b-a22b-thinking-2507-long-context-example",
             file_name: "経費規程.pdf",
             question_preview: "旧データの評価（送信元が記録されていない）",
             comment_preview: null,
@@ -600,7 +600,7 @@ function feedbackEnvelope(limit: number, offset: number) {
             created_at: `2026-07-01T0${7 - Math.min(index, 7)}:00:00Z`,
             conversation_id: index % 3 === 0 ? "conv-1" : null,
             conversation_title: null,
-            model: index % 2 === 0 ? "oci.generativeai.command-r-plus" : null,
+            model: index % 2 === 0 ? "deepseek-chat" : null,
             file_name: index % 2 === 0 ? null : "経費規程.pdf",
             question_preview: `補足のフィードバック ${index + 1}`,
             comment_preview: null,
@@ -636,7 +636,7 @@ function feedbackDetailEnvelope() {
       created_at: "2026-07-01T09:00:00Z",
       conversation_id: "conv-1",
       conversation_title: "経費申請",
-      model: "oci.generativeai.command-r-plus",
+      model: "deepseek-chat",
       file_name: "経費規程.pdf",
       question_preview: "最新の経費申請期限を教えて",
       comment_preview: "規程が更新されています。",

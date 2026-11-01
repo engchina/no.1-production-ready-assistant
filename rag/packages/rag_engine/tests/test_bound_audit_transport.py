@@ -8,7 +8,7 @@ import pytest
 from openai import OpenAI
 from test_bound_audit_wire import deref, sample_wire
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.models.audit_wire import AuditWireResult
 
@@ -111,19 +111,19 @@ def test_actual_sdk_request_and_partial_decode_preserve_raw_contract(streamed: b
         max_retries=0,
         http_client=httpx.Client(transport=httpx.MockTransport(transport)),
     )
-    monkeypatch.setattr(oci, "_openai_client_for_provider", lambda *_args: client)
-    monkeypatch.setattr(oci, "_stall_detection_enabled", lambda _settings: streamed)
+    monkeypatch.setattr(model_api, "_openai_client_for_provider", lambda *_args: client)
+    monkeypatch.setattr(model_api, "_stall_detection_enabled", lambda _settings: streamed)
     settings = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
-            "OCI_ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
-            "OCI_ENTERPRISE_AI_API_KEY": "mock-only",
+            "ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
+            "ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
+            "ENTERPRISE_AI_API_KEY": "mock-only",
         },
         dotenv_path=None,
         llm_stall_resends=0,
     )
     try:
-        result = oci._parse_text_once(
+        result = model_api._parse_text_once(
             "## Step 1: 検査する", "合成入力", settings, schema, settings.llm_providers[settings.default_answer_llm]
         )
     finally:

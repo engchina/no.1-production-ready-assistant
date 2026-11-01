@@ -35,9 +35,9 @@ client = AsgiTestClient(app)
 
 @pytest.fixture(autouse=True)
 def _stub_llm(monkeypatch: MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
 
 class _ViewAndSearchOracle(FakeViewOracle, FakeOracle):
@@ -55,7 +55,7 @@ def _install_real_pipeline(
     oracle = _ViewAndSearchOracle(views)
     monkeypatch.setattr(search_route, "OracleClient", lambda *_args, **_kwargs: oracle)
     monkeypatch.setattr(pipeline_module, "OracleClient", lambda *_args, **_kwargs: oracle)
-    monkeypatch.setattr(pipeline_module, "OciGenAiClient", lambda *_args, **_kwargs: FakeGenAi())
+    monkeypatch.setattr(pipeline_module, "GenAiClient", lambda *_args, **_kwargs: FakeGenAi())
     return oracle
 
 

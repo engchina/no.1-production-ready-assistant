@@ -34,13 +34,13 @@ LlmCall = tuple[str, str, str, int]
 
 def _settings(judge: str = "") -> Settings:
     return Settings(
-        oci_enterprise_ai_endpoint=PRIMARY,
-        oci_enterprise_ai_project_ocid="ocid1.project.primary",
-        oci_enterprise_ai_api_key="sk-primary",
-        oci_enterprise_ai_secondary_endpoint=SECONDARY,
-        oci_enterprise_ai_secondary_project_ocid="ocid1.project.secondary",
-        oci_enterprise_ai_secondary_api_key="sk-secondary",
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint=PRIMARY,
+        enterprise_ai_project_id="proj-primary",
+        enterprise_ai_api_key="sk-primary",
+        enterprise_ai_secondary_endpoint=SECONDARY,
+        enterprise_ai_secondary_project_id="proj-secondary",
+        enterprise_ai_secondary_api_key="sk-secondary",
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(
                 model_id=DEFAULT_MODEL, display_name="A", vision_enabled=True
             ),
@@ -52,9 +52,9 @@ def _settings(judge: str = "") -> Settings:
             ),
             EnterpriseAiConfiguredModel(model_id=FIXED_MODEL, display_name="C"),
         ],
-        oci_enterprise_ai_default_text_model=DEFAULT_MODEL,
-        oci_enterprise_ai_default_vision_model=DEFAULT_MODEL,
-        oci_enterprise_ai_default_judge_model=judge,
+        enterprise_ai_default_text_model=DEFAULT_MODEL,
+        enterprise_ai_default_vision_model=DEFAULT_MODEL,
+        enterprise_ai_default_judge_model=judge,
     )
 
 
@@ -118,7 +118,7 @@ def _profile_resolver(answer_model: str | None) -> Any:
     ) -> tuple[SearchRequest, Settings]:
         if answer_model:
             settings = settings.model_copy(
-                update={"oci_enterprise_ai_default_text_model": answer_model}
+                update={"enterprise_ai_default_text_model": answer_model}
             )
         return request, settings
 
@@ -259,10 +259,10 @@ def _fake_evaluation_llm(calls: list[LlmCall]) -> Callable[..., Any]:
 
 
 def _stub_llm(monkeypatch: MonkeyPatch) -> list[LlmCall]:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     calls: list[LlmCall] = []
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_evaluation_llm(calls))
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_evaluation_llm(calls))
     return calls
 
 

@@ -1,4 +1,4 @@
-"""OCI Enterprise AI LLM/VLM endpoint 契約の疎通 probe CLI。"""
+"""モデルの API の LLM/VLM endpoint 契約の疎通 probe CLI。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Literal
 
 from pr_backend_core.observability.model_purpose import async_call_with_model_purpose
 
-from app.clients.oci_enterprise_ai import DEFAULT_MIME_TYPE, OciEnterpriseAiClient
+from app.clients.enterprise_ai import DEFAULT_MIME_TYPE, EnterpriseAiClient
 from app.config import Settings, get_settings
 
 ProbeSurface = Literal["llm", "vlm", "both"]
@@ -52,7 +52,7 @@ class EnterpriseAiProbeReport:
 
 def main() -> int:
     """CLI entrypoint。"""
-    parser = argparse.ArgumentParser(description="Probe OCI Enterprise AI LLM/VLM contracts.")
+    parser = argparse.ArgumentParser(description="Probe model API LLM/VLM contracts.")
     parser.add_argument(
         "--surface",
         choices=("llm", "vlm", "both"),
@@ -108,11 +108,11 @@ async def run_enterprise_ai_probe(
     vlm_text: str = DEFAULT_VLM_TEXT,
     mime_type: str = "text/plain",
     settings: Settings | None = None,
-    client: OciEnterpriseAiClient | None = None,
+    client: EnterpriseAiClient | None = None,
 ) -> EnterpriseAiProbeReport:
     """Enterprise AI の LLM/VLM endpoint 契約を個別に確認する。"""
     resolved_settings = settings or get_settings()
-    resolved_client = client or OciEnterpriseAiClient(settings=resolved_settings)
+    resolved_client = client or EnterpriseAiClient(settings=resolved_settings)
     surfaces = _selected_surfaces(surface)
     results = [
         await _probe_surface(
@@ -142,7 +142,7 @@ async def _probe_surface(
     vlm_prompt: str,
     vlm_text: str,
     mime_type: str,
-    client: OciEnterpriseAiClient,
+    client: EnterpriseAiClient,
 ) -> EnterpriseAiProbeResult:
     """1 surface の preview と任意の実 endpoint 呼び出しを行う。"""
     try:
@@ -204,7 +204,7 @@ async def _probe_surface(
 
 def _request_preview(
     surface: Literal["llm", "vlm"],
-    client: OciEnterpriseAiClient,
+    client: EnterpriseAiClient,
     prompt: str,
     context: str,
     vlm_prompt: str,
@@ -225,7 +225,7 @@ def _request_preview(
 
 async def _invoke_surface(
     surface: Literal["llm", "vlm"],
-    client: OciEnterpriseAiClient,
+    client: EnterpriseAiClient,
     prompt: str,
     context: str,
     vlm_prompt: str,

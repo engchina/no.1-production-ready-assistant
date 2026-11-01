@@ -13,7 +13,7 @@
   （続きの質問は 403。#3244）、別の業務 Agent の会話の ID を混ぜた続きは 404、モデルに渡す履歴に別の
   会話は入らない。
 
-RAG の MCP は契約どおりの fake（``mcp_support``）で、組み込み Runtime・OCI は呼ばない。
+RAG の MCP は契約どおりの fake（``mcp_support``）で、組み込み Runtime・モデルの API は呼ばない。
 """
 
 from __future__ import annotations

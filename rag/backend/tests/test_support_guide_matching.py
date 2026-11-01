@@ -1,6 +1,6 @@
 """業務ガイドの照合の用語の別名の展開・意味の照合・近い 2 つの確認（#2398）。
 
-内容は架空の画面・機能の名前（合成の例）だけを使う。埋め込みはスタブ（OCI は呼ばない）。
+内容は架空の画面・機能の名前（合成の例）だけを使う。埋め込みはスタブ（モデルの API は呼ばない）。
 """
 
 from __future__ import annotations
@@ -432,8 +432,8 @@ async def test_semantic_on_builds_and_saves_missing_example_embeddings(
     )
     fresh = StoredIntentEmbeddings(
         revision=3,
-        model_id=settings.oci_genai_embedding_model,
-        dimension=settings.oci_genai_embedding_dim,
+        model_id=settings.genai_embedding_model,
+        dimension=settings.genai_embedding_dim,
         examples_sha256=examples_sha256(EXPORT[2]),
         vectors=((0.0, 1.0, 0.0),),
     )

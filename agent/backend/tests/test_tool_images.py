@@ -627,8 +627,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any, vision: bool = True) -> Scrip
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             vision_enabled=vision,
         ),

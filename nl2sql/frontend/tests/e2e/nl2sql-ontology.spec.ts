@@ -1462,14 +1462,14 @@ const REQUIREMENT_LLM_FAILURE = {
   body: {
     data: null,
     error_messages: [
-      "回答前の確認で OCI Enterprise AI がサーバーのエラーを返しました（HTTP 500、2 回試行）。サービス側の一時的な障害の可能性があります。",
+      "回答前の確認でモデルの API がサーバーのエラーを返しました（HTTP 500、2 回試行）。サービス側の一時的な障害の可能性があります。",
     ],
     error_code: "REQUIREMENT_AI_FAILED",
     problem: {
       type: "urn:nl2sql:problem:REQUIREMENT_AI_FAILED",
       title: "Service Unavailable",
       status: 503,
-      detail: "回答前の確認で OCI Enterprise AI がサーバーのエラーを返しました（HTTP 500、2 回試行）。",
+      detail: "回答前の確認でモデルの API がサーバーのエラーを返しました（HTTP 500、2 回試行）。",
       code: "REQUIREMENT_AI_FAILED",
       request_id: "req-requirement-1",
       retryable: true,

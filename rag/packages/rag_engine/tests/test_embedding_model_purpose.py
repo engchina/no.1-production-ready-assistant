@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from pr_backend_core.observability.model_purpose import model_call_purpose, model_purpose_attributes
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.resources.tracing import bind_trace_observer
 
 
@@ -42,13 +42,13 @@ def test_embedding_records_declared_purpose_without_changing_request(
             response=lambda value: snapshots.append(("response", value)),
         )
 
-    monkeypatch.setattr(oci, "_openai_client", openai_client)
-    monkeypatch.setattr(oci, "_embedding_base_url", lambda settings: "https://synthetic.test/compatible-mode/v1")
-    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings, **_: "synthetic-key")
-    monkeypatch.setattr(oci, "_embedding_output_dimensions", lambda settings: 3)
+    monkeypatch.setattr(model_api, "_openai_client", openai_client)
+    monkeypatch.setattr(model_api, "_embedding_base_url", lambda settings: "https://synthetic.test/compatible-mode/v1")
+    monkeypatch.setattr(model_api, "_embedding_api_key", lambda settings, **_: "synthetic-key")
+    monkeypatch.setattr(model_api, "_embedding_output_dimensions", lambda settings: 3)
     settings = SimpleNamespace(embedding_model="model-a", llm_request_timeout_seconds=1)
     with bind_trace_observer(observer), model_call_purpose("connection.check" if probe else None):
-        result = oci._embed_text_batch_once(["合成の入力"], settings, input_type=input_type)
+        result = model_api._embed_text_batch_once(["合成の入力"], settings, input_type=input_type)
     assert result == [[1.0, 0.0, 0.0]]
     purpose = "connection.check" if probe else expected
     assert recorded == ([{"pr.gen_ai.purpose": purpose}] if purpose else [{}])
@@ -64,12 +64,12 @@ def test_image_embedding_is_not_supported(tmp_path: Path) -> None:
     path = tmp_path / "image.png"
     path.write_bytes(b"synthetic")
     with pytest.raises(RuntimeError, match="画像の埋め込みは未対応です"):
-        oci._embed_image_once(path, "", SimpleNamespace(), input_type="IMAGE")
+        model_api._embed_image_once(path, "", SimpleNamespace(), input_type="IMAGE")
 
 
 def test_default_embedding_dimensions_match_oracle_schema() -> None:
     """rag_engine の既定の次元は Oracle の列（ADB_EMBEDDING_DIMENSIONS）と同じ（#46）。"""
-    from rag_engine.adapters.oci import SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS
+    from rag_engine.adapters.model_api import SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS
     from rag_engine.adapters.oracle.store import ADB_EMBEDDING_DIMENSIONS
     from rag_engine.config import DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS
 

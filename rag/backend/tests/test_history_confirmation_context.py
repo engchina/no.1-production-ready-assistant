@@ -143,7 +143,7 @@ async def test_token_selection_reaches_generation_scope_and_preserves_original(
     monkeypatch.setattr(chat, "current_section_pages", empty)
     monkeypatch.setattr(chat, "_published_guides", empty)
     monkeypatch.setattr(chat, "_resolve_query_context", resolve)
-    monkeypatch.setattr("app.rag.pipeline.OciEnterpriseAiClient", lambda **kwargs: model)
+    monkeypatch.setattr("app.rag.pipeline.EnterpriseAiClient", lambda **kwargs: model)
     monkeypatch.setattr(oracle, "append_message", append, raising=False)
     query = "その手順は？"
     prepared, token = await chat.prepare_chat_question(
@@ -267,7 +267,7 @@ async def test_signed_token_cannot_reference_unsupplied_history_fact(
     monkeypatch.setattr(chat, "_ensure_caller_owns", lambda conversation: None)
     monkeypatch.setattr(chat, "load_runtime_knowledge_payload", empty)
     monkeypatch.setattr(chat, "_published_guides", empty)
-    monkeypatch.setattr("app.rag.pipeline.OciEnterpriseAiClient", lambda **kwargs: model)
+    monkeypatch.setattr("app.rag.pipeline.EnterpriseAiClient", lambda **kwargs: model)
     _, token = await chat.prepare_chat_question(
         cast(Any, oracle), "conversation-a", "profile-a", "その手順は？", settings
     )

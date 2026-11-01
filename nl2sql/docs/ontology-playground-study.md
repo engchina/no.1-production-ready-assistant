@@ -73,7 +73,7 @@
 | synonym(専用フィールドなし、文字列操作で吸収) | ノード `aliases` + プロファイル glossary | 本プロジェクトの方が明示的 |
 | RDF/XML カタログ(`<slug>.rdf` + `metadata.json`) | `serialize_owl_turtle`(Turtle)+ local OWL2RL/SHACL publish artifact。UI/API の RDF import/export は削除済み | §5 非採用 |
 | 業種テンプレート(`designerTemplates.ts`) | 非採用。Ontology 作成入口は `AI 構築を実行` に統一 | §5 非採用 |
-| Azure OpenAI 抽出(`generate-ontology`) | `OntologyBuildService`(OCI Enterprise AI)+ `OntologyBuildExtraction`(Pydantic 検証) | 抽出ルールを取り込み(§5 Gap 4) |
+| Azure OpenAI 抽出(`generate-ontology`) | `OntologyBuildService`(モデルの API)+ `OntologyBuildExtraction`(Pydantic 検証) | 抽出ルールを取り込み(§5 Gap 4) |
 | `queryEngine.ts`(決定論 NL マッピング) | 本複製の `queryPlayground.ts`(frontend 純関数) | §5 Gap 3 |
 | Cytoscape.js | ReactFlow(`OntologyGraphCanvas.tsx`) | 既存 canvas へ highlight props 追加 |
 | Fabric IQ エクスポート | **非対象**。代わりに `build_semantic_artifacts().llm_markdown` が Ontology クエリセッションの SQL 生成文脈へ流れる | §6 |
@@ -82,7 +82,7 @@
 
 ## 5. 複製方針(本プロジェクトへの取り込み)
 
-確定スタック(OCI Enterprise AI / Oracle AI Database)へ再マップし、**既存の draft → proposal → publish ライフサイクルと proposal 変換パイプ(`OntologyBuildExtraction` → `convert_extraction_to_proposals` → `create_build_proposal`)を再利用**する。新規 DDL・新規依存・スタンドアロンアプリは作らない。Ontology 作成入口は `AI 構築を実行` に統一し、テンプレート適用と RDF/OWL import/export の UI/API は削除済み。
+確定スタック(モデルの API / Oracle AI Database)へ再マップし、**既存の draft → proposal → publish ライフサイクルと proposal 変換パイプ(`OntologyBuildExtraction` → `convert_extraction_to_proposals` → `create_build_proposal`)を再利用**する。新規 DDL・新規依存・スタンドアロンアプリは作らない。Ontology 作成入口は `AI 構築を実行` に統一し、テンプレート適用と RDF/OWL import/export の UI/API は削除済み。
 
 - **非採用: 業種テンプレートカタログ** — Playground の `designerTemplates` 相当は、実 DB schema・業務説明・Q/A・構築資料から作る AI 構築と役割が重複するため削除。
 - **非採用: RDF/XML (OWL) export / import** — 外部ファイル連携導線は主用途外のため削除。公開時の local OWL2RL/SHACL は既存の `ontology_semantics.py` / `ontology_reasoning.py` に残す。

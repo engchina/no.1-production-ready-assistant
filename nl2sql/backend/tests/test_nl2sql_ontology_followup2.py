@@ -1,7 +1,7 @@
 """#1741〜#1743: 一意でない列で結合するリンク型・構築で外したものの次の構築への引き継ぎ・業務
 プロファイルの削除で残るオントロジーの成果物。
 
-実 OCI / Oracle は使わない（スタブと sql_assist_sample を模した schema context。実 Oracle は
+実際の LLM / Oracle は使わない（スタブと sql_assist_sample を模した schema context。実 Oracle は
 `test_nl2sql_profile_delete_oracle_live.py`）。
 """
 

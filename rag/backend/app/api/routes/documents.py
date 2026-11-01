@@ -35,7 +35,7 @@ from rag_parser_core.structured_records import RecordBoundaryError, record_bound
 from app.api.errors import DocumentFileMissingError
 from app.clients.document_cleanup_store import DocumentCleanupStore, DocumentCleanupTargets
 from app.clients.file_storage import FileStorageClient
-from app.clients.oci_genai import EMBEDDING_INPUT_MAX_CHARS
+from app.clients.genai import EMBEDDING_INPUT_MAX_CHARS
 from app.clients.oracle import (
     DocumentDeleteBlockedByRunningIngestionError,
     DocumentReviewEditConflictError,
@@ -273,7 +273,7 @@ async def upload_document(
     file: Annotated[UploadFile, File(...)],
     knowledge_base_ids: Annotated[list[str] | None, Form()] = None,
 ) -> ApiResponse[UploadResult]:
-    """ドキュメントファイルをアップロードし、Object Storage へ保管する。
+    """ドキュメントファイルをアップロードし、保存先へ保管する。
 
     原本の保存と文書行の登録までを行い、取込 job は作らない（取込は文書ごとに明示して始める）。
     """
@@ -288,7 +288,7 @@ async def batch_upload_documents(
     files: Annotated[list[UploadFile], File(...)],
     knowledge_base_ids: Annotated[list[str] | None, Form()] = None,
 ) -> ApiResponse[BatchUploadResult]:
-    """複数ドキュメントをまとめてアップロードし、Object Storage へ保管する。"""
+    """複数ドキュメントをまとめてアップロードし、保存先へ保管する。"""
     enforce_rate_limit("upload", http_request)
     if not files:
         raise HTTPException(status_code=400, detail="アップロード対象ファイルを選択してください。")

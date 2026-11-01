@@ -17,7 +17,7 @@ import pytest
 from grounded_stub import echo_model
 from test_answer_generation import _chunk_run_stub, _hybrid_result, _rerank_ready_settings, _stored_child
 
-from rag_engine.adapters.oci import RerankTextRank
+from rag_engine.adapters.model_api import RerankTextRank
 from rag_engine.generation import answering
 from rag_engine.generation.answering import SIMPLE_RETRIEVAL_LABEL, STANDARD_ANSWER_FLOW_LABEL, answer_question_result
 from rag_engine.resources.tracing import bind_trace_observer

@@ -4,7 +4,7 @@ Knowhere は「文書階層を tree 状に再構築し、chunk + navigation tree
 agent-ready context として保存」する。本モジュールは確定スタックに合わせて再実装し、
 - `build_navigation_tree`: `StructuredExtraction.elements` の section_path / parent_id /
   reading order から **決定論的**（LLM 不要）に章節 tree を組む。
-- `summarize_navigation_nodes`: 任意で OCI Enterprise AI LLM を使い node 単位の summary を付ける
+- `summarize_navigation_nodes`: 任意で LLM を使い node 単位の summary を付ける
   （feature flag。既定 OFF）。要約器は注入可能でテストは決定論。
 """
 

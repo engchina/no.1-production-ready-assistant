@@ -1,7 +1,7 @@
 """解析後の図・画像の読み取り(Vision)。解析エンジンに依存しない共通の段(#497)。
 
 文書のレシピの「図・画像を AI で読み取る」(``rag_vision_enabled``)が有効なとき、取込の解析の
-直後に、Docling を含む全ての解析エンジンの図を OCI Enterprise AI の既定の Vision モデルで読み取る。
+直後に、Docling を含む全ての解析エンジンの図を 既定の Vision モデルで読み取る。
 
 読み取りの規則は rag_engine の ``describe_layout_pictures``(旧 Docling サービスの Vision)を
 そのまま使い、二重に実装しない。
@@ -54,7 +54,7 @@ from rag_engine.parsing.rendering import (
     get_source_page_count,
     prepare_source_for_analysis,
 )
-from rag_parser_core.oci_enterprise_ai import sdk_retries_disabled
+from rag_parser_core.enterprise_ai import sdk_retries_disabled
 from rag_pipeline_core.chunking import table_vision_supplement
 
 from app.schemas.extraction import (
@@ -108,7 +108,7 @@ _CATEGORY_BY_KIND = {
 
 
 class VisionImageReader(Protocol):
-    """既定の Vision モデルを呼ぶ client(``OciEnterpriseAiClient.generate_from_images``)。"""
+    """既定の Vision モデルを呼ぶ client(``EnterpriseAiClient.generate_from_images``)。"""
 
     def generate_from_images(
         self,
@@ -156,7 +156,7 @@ def _is_list_annotation(annotation: object) -> bool:
 
 
 class EnterpriseAiPictureDescriber:
-    """rag_engine の ``PictureDescriber`` を OCI Enterprise AI の既定の Vision モデルで実装する。
+    """rag_engine の ``PictureDescriber`` を 既定の Vision モデルで実装する。
 
     rag_engine の読み取りは同期処理(thread)で動くので、非同期の client は取込の event loop へ
     ``run_coroutine_threadsafe`` で投げる。``caller``(上限つきの並行の実行器。#2002)を渡すと、
@@ -178,7 +178,7 @@ class EnterpriseAiPictureDescriber:
         project_id: str = "",
         caller: BoundedCaller | None = None,
     ) -> None:
-        from rag_engine.adapters.oci import VISION_SYSTEM_PROMPT
+        from rag_engine.adapters.model_api import VISION_SYSTEM_PROMPT
         from rag_engine.resources.runtime import resolve_prompt
 
         self.system_prompt = resolve_prompt("picture_description.system", VISION_SYSTEM_PROMPT)
@@ -188,7 +188,7 @@ class EnterpriseAiPictureDescriber:
         self._active = 0
         self._idle: asyncio.Event | None = None
         self._provider = SimpleNamespace(
-            provider_id="oci_enterprise_ai",
+            provider_id="enterprise_ai",
             model=model_id,
             region="",
             base_url=endpoint,

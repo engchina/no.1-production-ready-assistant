@@ -311,7 +311,7 @@ async def test_answer_prompts_round_trip_on_real_oracle() -> None:
 
 
 def test_catalog_uses_current_image_template_with_runtime_rules() -> None:
-    from rag_engine.adapters.oci import _picture_output_contract
+    from rag_engine.adapters.model_api import _picture_output_contract
 
     content = "## 独自の読み取り指示\n{{image_metadata}}"
     data = settings_routes._answer_prompts_data(

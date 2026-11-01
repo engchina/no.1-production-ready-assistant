@@ -1,8 +1,8 @@
 """回答前の確認の LLM の失敗の、利用者向けの理由と「詳細」（#1715）。
 
 失敗は platform の共通の表（`pr_system_settings.enterprise_ai_errors`）の種類に分け、利用者向けの
-1 行の理由（何が起きたか）と、画面の「詳細」に畳む値（種類・OCI Enterprise AI の HTTP ステータス・
-モデル ID・所要時間・試行回数・OCI の request id・応答の理由）を作る。
+1 行の理由（何が起きたか）と、画面の「詳細」に畳む値（種類・モデルの API の HTTP ステータス・
+モデル ID・所要時間・試行回数・上流の request id・応答の理由）を作る。
 
 「詳細」に出さないもの: API key・Authorization の header・prompt と context の全文・LLM の
 出力の本文。応答の理由（provider_message）は platform の `enterprise_ai_provider_message` で
@@ -109,22 +109,22 @@ def requirement_failure_message(
         message = f"{_SUBJECT}の{llm}が{within}応答しませんでした{tried_note}。"
     elif kind == "rate_limit":
         message = (
-            f"{_SUBJECT}で OCI Enterprise AI の呼び出しの上限に達しました"
+            f"{_SUBJECT}でモデルの API の呼び出しの上限に達しました"
             f"（HTTP {status}{tried_inline}）。"
         )
         hint = "少し待ってから、もう一度確認してください。"
     elif kind == "unavailable":
         message = (
-            f"{_SUBJECT}で OCI Enterprise AI がサーバーのエラーを返しました"
+            f"{_SUBJECT}でモデルの API がサーバーのエラーを返しました"
             f"（HTTP {status}{tried_inline}）。サービス側の一時的な障害の可能性があります。"
         )
     elif kind == "request":
         message = (
-            f"{_SUBJECT}の要求を OCI Enterprise AI が受け付けませんでした（HTTP {status}）。"
+            f"{_SUBJECT}の要求をモデルの API が受け付けませんでした（HTTP {status}）。"
             f"モデル{model_label}が受け付けない設定の可能性があります。"
         )
     elif kind == "connection":
-        message = f"{_SUBJECT}で OCI Enterprise AI に接続できませんでした{tried_note}。"
+        message = f"{_SUBJECT}でモデルの API に接続できませんでした{tried_note}。"
     elif kind == "incomplete":
         limit = f"（{error.max_output_tokens} token）" if error.max_output_tokens else ""
         if error.incomplete_reason == "max_output_tokens":

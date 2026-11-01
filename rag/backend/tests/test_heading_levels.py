@@ -1,4 +1,4 @@
-"""見出しの階層の推定(OCI Enterprise AI。任意。#2277)。
+"""見出しの階層の推定(モデルの API。任意。#2277)。
 
 LLM は決定論のスタブ。record と見出しは合成の内容。
 """
@@ -195,7 +195,7 @@ def test_apply_sets_levels_and_rebuilds_section_paths() -> None:
     assert report["status"] == "applied"
 
 
-class OciGenAiConfigError(Exception):
+class GenAiConfigError(Exception):
     """再試行しない種類(認証の設定の誤り)の失敗。待たずに失敗にする。"""
 
 
@@ -240,7 +240,7 @@ async def test_ingestion_applies_inferred_levels_with_structured_output() -> Non
     [
         (_response([1, 2, 2]), "invalid_response"),
         ("見出しの階層は次のとおりです。", "invalid_response"),
-        (OciGenAiConfigError("認証の設定がありません"), "failed"),
+        (GenAiConfigError("認証の設定がありません"), "failed"),
     ],
     ids=["missing-heading", "not-json", "call-failed"],
 )

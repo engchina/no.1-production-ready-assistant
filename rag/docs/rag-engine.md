@@ -56,7 +56,7 @@ sibling repo `../rag_poc` の、解析から回答生成までの実装を本リ
 | `backend/app/rag/search_answer_profile_knowledge.py` | 検索・回答プロファイル単位の知識（Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルール） |
 | `backend/app/rag/document_crop.py` | 解析に使ったファイルからの bbox の切り出し（プレビューと回答画像で共用） |
 
-LLM と VLM は、プロジェクト全体で openai SDK（OCI OpenAI 互換の Responses API）だけを使う。接続先はモデル設定（`OCI_ENTERPRISE_AI_*`）。embedding と rerank は Cohere（OCI SDK）のままである。
+LLM と VLM は、プロジェクト全体で openai SDK（OpenAI 互換の Responses API）だけを使う。接続先はモデル設定（`ENTERPRISE_AI_*`）。embedding と rerank は、既定の埋め込み / 再ランクのモデルの接続へ OpenAI 互換の HTTP API（`POST {base_url}/embeddings` など）で送る（`app/clients/genai.py`）。
 
 ## 3 層モデルでの責務
 
@@ -64,7 +64,7 @@ LLM と VLM は、プロジェクト全体で openai SDK（OCI OpenAI 互換の 
 |---|---|---|
 | Docling 解析 | 文書レシピ | 取込・検索・回答設定 > 文書解析、または文書のレシピ編集 |
 | 図・画像を AI で読み取る（Vision） | 文書レシピ | 文書のレシピ編集（解析エンジンに関係なく選べる）。全体の既定は `backend/.env` の `RAG_VISION_ENABLED`。文書解析の画面の「解析後の処理」から保存できる（#497 / #528） |
-| 見出しの階層の推定（AI） | 文書レシピ | 文書のレシピ編集。全体の既定は `backend/.env` の `RAG_HEADING_LEVEL_INFERENCE_ENABLED`（既定は無効）。文書解析の画面の「解析後の処理」から保存できる。しおりの深さを当てられず、番号の体系で深さを決められない見出しの多い Docling の結果だけ、見出しの文字列を OCI Enterprise AI に渡して階層（1〜6）を受け取る。応答は Pydantic で厳密に確かめ、合わない・失敗のときは今の階層のまま（#2277） |
+| 見出しの階層の推定（AI） | 文書レシピ | 文書のレシピ編集。全体の既定は `backend/.env` の `RAG_HEADING_LEVEL_INFERENCE_ENABLED`（既定は無効）。文書解析の画面の「解析後の処理」から保存できる。しおりの深さを当てられず、番号の体系で深さを決められない見出しの多い Docling の結果だけ、見出しの文字列を LLM に渡して階層（1〜6）を受け取る。応答は Pydantic で厳密に確かめ、合わない・失敗のときは今の階層のまま（#2277） |
 | 親子階層（small-to-big） | 文書レシピ | 取込・検索・回答設定 > 文書分割「親子階層（small-to-big）」（分割パラメータ 5 項目もここで設定）、または文書のレシピ編集 |
 | Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルール | 検索・回答プロファイル | 検索・回答プロファイルを編集 >「検索・回答プロファイルの知識」 |
 | 回答の検索の上書き（根拠の起点に採る同じ文書の chunk の上限・業務ガイドの照合） | 検索・回答プロファイル | 検索・回答プロファイルを編集 > 検索・回答設定（上書きできるのは `app/rag/search_answer_profile_config.py` の `PROFILE_GLOBAL_QUERY_FIELDS` に入っていない項目） |
@@ -96,7 +96,7 @@ KB（ナレッジベース）は検索対象の範囲を決めるだけで、上
 2. **分割**：文書分割は既定で親子階層（`small_to_big`。#594 で既定にした）。親は回答の文脈に渡す大きい単位、子は検索に当てる小さい単位（LangChain の ParentDocumentRetriever・LlamaIndex の階層の分割と同じ考え方）で、**どの解析の結果でも親子に分割する**（#3377。解析エンジンの名前では選ばず、抽出の形で親子の作り方を選ぶ。取込の trace の `chunk_parent_source`）。
    - 解析の結果がレイアウトの記録（`parser_artifacts.layout_records`。Docling の PDF・画像）を持つ文書は、その記録から親子を作る（`layout_records`。見出し・表・図の領域と根拠の元の要素を保つ）。
    - Excel の行の記録は行を子・表の一部を親（`sheet_records`。#1349）。
-   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured・OCI などの解析の結果、構造化レコードの JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
+   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured などの解析の結果、構造化レコードの JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
    - 以前（#300〜#3377）は、レイアウトの記録が無い文書を「構造認識」（`structure_aware`）へ縮退し、chunk に `chunk_strategy_fallback_reason=layout_missing` を残していた。その chunk は文書詳細の Chunk タブに「親子階層で分割されていない Chunk です」と表示し、Chunk を作り直すと親子階層で分割する（再解析は要らない）。
    子・親の大きさは同じ画面の「戦略別パラメータ」で変えられる（下の設定一覧）。
 3. **確認**：文書詳細の抽出タブで、次を確認できる。
@@ -143,7 +143,7 @@ KB（ナレッジベース）は検索対象の範囲を決めるだけで、上
 | `RAG_ENTITY_EXPANSION_MAX_CHUNKS` | `6` | 実体の 1 段の拡張で 1 回の検索に足す chunk 数の上限（1〜20）。全体設定だけで決め、検索・回答プロファイルでは上書きしない（#1388・#3053） |
 | `RAG_SECTION_EXPANSION_ENABLED` | `true` | 回答で、当たった chunk の章節（文書の「章節ナビゲーション」。章節と chunk の対応は #1438）から親の章節へ段階的に広げて文脈に入れる（#1436。`rag_engine/generation/section_expansion.py`）。**既定 ON**。広げる順は、当たった chunk → 所有の章節（leaf）→ 親の章節 → … → 最上位の章節 → 文書全体。起点は当たった chunk のすべての異なる所有章節（共有予算内で補完）。最初の CRAG の判定が十分でも、最低 1 段（所有の章節全体）を読んでから足りるかを判定し、不足するときだけ親の章節へ進む（#2760）。所有の章節がすでに全量文脈にあれば最後の判定を使い、余分な判定は呼ばない。新たな根拠を加えて判定するたびに LLM の呼び出しが 1 回増える。列挙・網羅を求める問（「すべて挙げて」「5 つすべて」「第 2 章から第 6 章までの各章で」。#1503。`rag_engine/retrieval/enumeration.py` が質問から決定的に件数・章の範囲・読む範囲を取り出す）は、CRAG の評価器に該当の項目ごとの根拠（`enumerated_items`。chunk_uid と原文の写し）を出させ、原文の写しが根拠の本文にある項目だけを数えて、件数・範囲の章に足りなければ観点 `enumeration_coverage` を確かめられていないとして広げる（評価器が足りると判定しても）。件数も範囲も無い網羅の問は、評価器が足りると判定しても読む範囲（章・節を名指しした問・対象の業務だけの問は所有の章節、文書の名前や「全体を通して」で範囲を示した問は文書全体）まで読んでから判定し、そこに届くまでの段は評価器を呼ばない（回答の診断の `section_expansion.minimum_scope`・`levels[].grade_skipped`）。上の段の章節は予算に入れば全体を読み、入らなければ子の章節の見出しを質問との関連度（rerank。使えなければ語の重なり）で並べ、関連の高い子の章節から予算に入るものを読む。文脈は、もとの根拠（関連度の順）を先頭に、広げた章節をその後ろに章節の中の読み順で置き、引用の ID は chunk のまま。上限（段・根拠の入力・時間）で止めて読めなかった章節があれば、回答を条件つき（`conditional`）にして「回答に未反映の関連章節」に出す。ただし、当たった章節より上の段で子の章節を読むときに、関連度の順でより上の兄弟の章節を全体で読んだ後に予算で読めなかった章節のうち、どの起点の chunk も含まないもの（読む範囲が文書全体の列挙の問を除く）は、回答に出さず診断の `section_expansion.unread_omitted` にだけ残す（#2816。質問に合わせて広げた参考の範囲で、当たった章節の読了は崩れない）。読取の失敗はどの章節でも出す。標準 RAG と CRAG で効き、標準 RAG は必要範囲の原文補完のみ、CRAG は不足時の追加拡張と再判定も行う。検索だけ（`AnswerEngine.retrieve`）では広げない。**全体設定だけで決め、検索・回答プロファイルでは上書きしない**（#3053）: 取込・検索・回答設定 > 検索方法「回答の検索と生成」の「章節で広げる根拠」で選び、`backend/.env` の `RAG_SECTION_EXPANSION_*` に保存する。検索・回答プロファイルの保存値は適用しない（`PROFILE_GLOBAL_QUERY_FIELDS`）。プロファイルを使わない検索（チャット・MCP の `rag_search`・評価の A）も同じ全体設定で広げる。回答の診断の `section_expansion`（段・止めた理由・読んだ章節・読めなかった章節）で分かる。品質評価の `rag_overrides` の `section_expansion_*` で有り / 無し・上限を比べられる |
 | `RAG_SECTION_EXPANSION_MAX_LEVELS` | `4` | 章節の拡張で上がる段の上限（1〜8。所有の章節を 1 段目に数える。#1436）。全体設定だけで決め、検索・回答プロファイルでは上書きしない |
-| `RAG_SECTION_EXPANSION_INPUT_TOKEN_PERCENT` | `50` | 章節の拡張で、1 回の回答の根拠の入力 token の上限にする、回答のモデルの入力の上限に対する割合（10〜90%。#1436）。全体設定だけで決め、検索・回答プロファイルでは上書きしない。モデルの入力の上限は「システム設定 › モデル」の登録モデルの「入力の上限（tokens）」（#1437。既定 128000）で、backend が platform の `enterprise_ai_max_input_tokens` で決めて `OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS` で rag_engine に渡す（`answer_max_input_tokens`）。根拠の本文の token は platform の `estimate_input_tokens` と同じ見積もり（ASCII は 4 字で 1 token、それ以外は 1 字で 1 token。多めに見積もる）で数える |
+| `RAG_SECTION_EXPANSION_INPUT_TOKEN_PERCENT` | `50` | 章節の拡張で、1 回の回答の根拠の入力 token の上限にする、回答のモデルの入力の上限に対する割合（10〜90%。#1436）。全体設定だけで決め、検索・回答プロファイルでは上書きしない。モデルの入力の上限は「システム設定 › モデル」の登録モデルの「入力の上限（tokens）」（#1437。既定 128000）で、backend が platform の `enterprise_ai_max_input_tokens` で決めて `ENTERPRISE_AI_MAX_INPUT_TOKENS` で rag_engine に渡す（`answer_max_input_tokens`）。根拠の本文の token は platform の `estimate_input_tokens` と同じ見積もり（ASCII は 4 字で 1 token、それ以外は 1 字で 1 token。多めに見積もる）で数える |
 | `RAG_EVIDENCE_BUDGET_CHARS` | `48000` | 回答の生成に渡す根拠の原文の文字予算（1,000〜500,000 文字。#3776）。根拠の本文・前置き・出典情報をこの予算で選ぶ（予算が数えるのは本文と、生成の入力に描いた補助情報。補助情報は機能の見出しと同じ文書名・文書名と章節から決まる索引用のヘッダ・子の chunk の uid を各根拠に繰り返さない。見出し行・行番号・終わりの印などの書式は選択では数えない。#3831）。全体設定だけで決め、検索・回答プロファイル・KB・文書レシピでは上書きしない。backend が `RAG_ENGINE_EVIDENCE_BUDGET_CHARS` で rag_engine に渡す（`evidence_budget_chars`）。章節の拡張で読む量は上の `RAG_SECTION_EXPANSION_INPUT_TOKEN_PERCENT`（入力 token）で別に数え、現在は広げた根拠をこの予算を超えて渡すことがある。設定値・実際に使った予算・送った根拠ブロックの文字数（本文 `evidence_text_chars`・補助情報 `evidence_metadata_chars`・書式 `evidence_format_chars` の内訳と、予算が数える対象 `budget_counts`）と見積もり token は回答の診断の `evidence_budget` に残る |
 | 原文の抽出 | — | 抽出回数の独立した上限は設けず、回答全体の期限と根拠の入力予算の範囲で処理する。`rag_engine/generation/section_extraction.py`）で、根拠の入力の上限に入らない章節から質問に関係する原文を抜き出す LLM の呼び出しの、1 回の回答の上限（1〜16）。章節の拡張で全体を読む必要があるのに入らない章節（子の章節が無い・子の章節も入らない）を、親 chunk の本文の見出し・段落の境界で 1 回分ずつ（モデルの入力の上限の 60%。段落が入らなければ文の境界。文の途中では切らない。隣の分と段落の単位で 5%・最大 2,000 token 重ねる）に分け、当たった chunk に近い分から、各分の質問に関係する原文を一字一句そのまま JSON（ブロックの番号 C1… と場所。プログラムで chunk の ID に戻す）で抜き出させる（並列。同時数は 4、temperature 0。指示と質問を先頭に置き、prompt のキャッシュが使える接続では共通の先頭が再利用される）。抜き出した原文は、その分で見せた原本の範囲と照合し（空白と NFKC の表記の揺れだけを許す）、一致しない引用は捨てる。すでに文脈にある章節の親（最初の根拠・前の段で読んだ親）も同じ要求に入れ、その分を抜き出した原文の予算に戻す（#1504。入力の上限が小さいモデルで、最初の根拠が予算を使い切って抽出が動かないことを防ぐ。同じ原文を二重に数えない）。抜き出した後、予算に入る親は当たった chunk に近い順に元の本文のまま残し、入らない親は抜き出した原文に置き換える（抜き出す原文が無ければ外す。上限で抜き出せなかった親は元のまま）。章節が予算に入るかも、まだ文脈に無い chunk の分で決め、章節の chunk がすべて文脈にあれば読まない（診断の `read: "in_context"`）。入らない子の章節が出たら、それより関連の低い子の章節もまとめて 1 つの要求で渡す。抜き出した原文の予算とは別に、1 回の呼び出しの入力（1 回分）はモデルの入力の上限から決める。重複を除いて原文の順に並べ、なお根拠の入力の残りに入らなければ、抜き出した原文を同じ方法でもう 1 段抜き出し、それでも入らなければ当たった chunk に近い順に残す。根拠は chunk ごとに抜き出した原文だけを本文にした親の record（chunk の ID のまま。頁は原文を含む child から）で、回答は既存の生成（引用つき）と最終の検証にかける。時間は回答の時間の上限から生成の分を残した範囲で、1 回の呼び出しの期限も縮める。上限（回答全体の期限・根拠の入力）で読めなかった分は頁の範囲で「回答に未反映の関連章節」に出し、回答を条件つきにする（十分との判定があっても、部分取得・抜粋は読了にせず未確認の範囲を残す。#2760）。分ごとに要約してまとめる方式（原文と出典が失われる）と refine（直列で遅い）は採らない。回答の診断の `section_expansion.levels[].sections[].extraction`（分の数・呼び出し・捨てた引用・使った token・文脈から戻した親 `context_parents` と、残した / 置き換えた / 外した親）と `read`（`whole` / `partial` / `children` / `in_context` / `extracted` / `skipped`）で分かる |
 | `RAG_SCREEN_LINKING_ENABLED` | `false` | 画面目録で操作画面を探す（rag_poc の画面目録の連携、#554）。検索範囲の文書の番号付きの見出し（「（２）帳票印字設定」など）の目録から、質問を解決する画面を LLM で選び、その画面の child chunk（画面ごとに最大 10 件）と親を検索候補に加える。候補は足すだけで減らさず、順位は rerank が決める。回答ごとに LLM の呼び出しが 1 回増える。LLM が見出しの先頭の番号を省いて返したときは、その文書で 1 つに決まる見出しだけを目録の表記で採る（#2056）。目録は検索範囲（検索と同じ実際の条件。質問から読み取った項目の条件と質問の文書名・ページを含み、0 件で外したときは外した条件。#2056）の全文書の `section_path` を DB で集計して作り（`OracleClient.retrieval_screen_sections`）、検索範囲と索引の状態（chunk の件数と chunk_id・文書名の hash。文書の追加・削除・再索引で変わる）ごとに process 内で cache する。選んだ画面の chunk も DB から読む（`retrieval_screen_chunks`）ので、検索で出なかった画面も候補に加わる。rag_engine の `AnswerDependencies.screen_catalog` / `screen_chunks` で注入する。取込・検索・回答設定 > 検索方法「回答の検索と生成」で変更でき、全体設定だけで決め、検索・回答プロファイルでは上書きしない |
@@ -203,7 +203,7 @@ KB（ナレッジベース）は検索対象の範囲を決めるだけで、上
 cache・出力・推論）と呼び出しの秒の和は `execution_steps[].llm_usage`、1 回ごとは backend の log（`LLM の呼び出し:`）で分かる。
 
 **期限の中の LLM の 1 回の上限（#1548）**: 回答の期限がある文脈では、LLM の 1 回の呼び出しに、timeout（残りの秒。#1422）に
-加えて、出力の上限（`max_output_tokens`）を残りの秒で出せる token の数に抑えて渡す（`rag_engine.adapters.oci.deadline_output_budget`。
+加えて、出力の上限（`max_output_tokens`）を残りの秒で出せる token の数に抑えて渡す（`rag_engine.adapters.model_api.deadline_output_budget`。
 同じ接続・モデルの直近 8 回の完了した呼び出しの出力の速さの最大 × 1.25 × 残りの秒。実測が無ければ抑えない）。抑えた上限に
 届いて未完了になったら、残りの時間では終わらないので上限を広げた送り直し（#987）をせず、今の期限を切って期限切れと同じに
 扱う（生成と監査の組では、確かめ終わった分で確定する）。こうすると打ち切った呼び出しにも usage が返り、出力・推論の token が
@@ -212,7 +212,7 @@ cache・出力・推論）と呼び出しの秒の和は `execution_steps[].llm_
 構造化出力の呼び出しの出力の上限は、回答の上限（`answer_max_tokens`。環境変数 `ANSWER_MAX_TOKENS`。既定 32768）と、呼ぶモデル
 （回答のモデル / Vision のモデル）の出力の上限の小さい方（`rag_engine.config.llm_output_token_limit`。#1719）。モデルの出力の上限は
 「システム設定 › モデル」の登録モデルの「出力の上限（tokens）」（既定 32768）で、backend が platform の
-`enterprise_ai_output_token_budget` で決めて `OCI_ENTERPRISE_AI_MAX_OUTPUT_TOKENS` / `OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS`
+`enterprise_ai_output_token_budget` で決めて `ENTERPRISE_AI_MAX_OUTPUT_TOKENS` / `ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS`
 で渡す（`LlmProviderSettings.max_output_tokens`）。出力の上限で未完了なら上限を 2 倍にして 1 回、それでも未完了なら推論の量を 1 段下げて（high → medium → low。`effort_retries`）1 回だけ送り直すが（#987・#2023）、2 倍はモデルの
 出力の上限で抑え、広げられなければ広げずに推論の量を下げる段へ進む。未完了で終わるときは、利用者向けの文（直し方）と「詳細」の文（理由・出力の上限・使った出力（うち推論）・推論の量）を分けて持つ。理由・上限・使った出力（うち推論）の
 token を出す。
@@ -224,20 +224,20 @@ token を出す。
 生成がある（記録: 1 回目が 200 秒で上限に届いて未完了、推論の量を下げた送り直しは 2 秒で完了）。停滞の検出（event の間隔・速さ）
 では見分けられないので、streaming で受ける呼び出し（下の停滞の検出が ON のとき）は出力の文（`response.output_text.delta`）の
 末尾を確かめ、末尾の 2,400 文字が周期 300 文字以下の完全な繰り返し（`runaway_repetition`）か、空白が 2,000 文字続いた
-（`runaway_whitespace`）ら stream を閉じ、推論の量を 1 段下げて（下げられなければそのまま）1 回だけ送り直す（`oci._RunawayMonitor`。
+（`runaway_whitespace`）ら stream を閉じ、推論の量を 1 段下げて（下げられなければそのまま）1 回だけ送り直す（`model_api._RunawayMonitor`。
 `RAG_LLM_RUNAWAY_DETECTION_ENABLED=false` で切れる）。行ごとに値が変わる表・一覧は打ち切らない。打ち切った呼び出しは
 `incomplete_reasons` に理由、送り直しは `runaway_resends` に残る。工程の記録は呼び出しの回数（`llm_calls`）と API への送信の
 回数（`llm_sends`。送り直しで多いときだけ）を分け、画面は「LLM 1 回・送信 2 回」と示す。
 streaming しない呼び出し（停滞の検出が OFF・回答の期限が無い文脈）は途中で打ち切れないので、出力の上限で未完了になった応答の
 出力の文に同じ基準の暴走（空白が 2,000 文字続いた箇所・末尾の繰り返し）があれば、上限を 2 倍に広げる送り直しをせず、streaming と
-同じく推論の量を下げて 1 回だけ送り直す（#3835。広げても空白・繰り返しが続くだけ。`oci._runaway_response_reason`）。理由は同じく
+同じく推論の量を下げて 1 回だけ送り直す（#3835。広げても空白・繰り返しが続くだけ。`model_api._runaway_response_reason`）。理由は同じく
 `incomplete_reasons` に残り、送り直しても暴走した呼び出しの失敗の詳細（生成後監査では `audit_failure`）は分類 `runaway_output` と
 打ち切りの理由（`cutoff_reason`）を持つ。生成後監査の固定キーの wire では、値と次の key の間（JSON の構造の空白）で空白が続く
 暴走が出る。strict の JSON schema は構造の空白を制限できず、自由記述の欄の `maxLength` では防げない（#3835 の固定入力の比較）。
 
-**停滞した LLM の呼び出しの送り直し（#1926）**: OCI Enterprise AI の呼び出しは、まれ（#1912 の記録の 206 件で約 1%）に
+**停滞した LLM の呼び出しの送り直し（#1926）**: モデルの API の LLM の呼び出しは、まれ（#1912 の記録の 206 件で約 1%）に
 通常の 1/10 以下の速さ（13〜23 token/秒。中央値 224）に落ち、同じ token 数で 36 秒 → 183 秒かかった。回答の期限がある文脈では
-LLM の呼び出しを streaming で受け（`rag_engine.adapters.oci._stream_parsed`）、次のとき stream を閉じて同じ要求を送り直す
+LLM の呼び出しを streaming で受け（`rag_engine.adapters.model_api._stream_parsed`）、次のとき stream を閉じて同じ要求を送り直す
 （`RAG_LLM_STALL_RESENDS` 回まで。最後の送信は検出せずに期限まで待つ。期限の残りが停滞の秒より短いときの timeout は停滞ではなく
 期限切れ）。
 
@@ -454,7 +454,7 @@ level は使わない。そのため「第 3 章 > 3.1」の 3.1 は第 3 章の
 何も置かず（根拠不足として扱う）、診断 `derived_evidence` に残す。前後の文脈・交差参照・実体と関係情報の拡張・章節の拡張・
 MCP の `rag_read_document` も派生の chunk を返さない。
 
-Vision は backend がモデル設定の既定の Vision モデル（OCI Enterprise AI）で呼ぶ。docling サービスは LLM を呼ばないため、OCI Enterprise AI の設定は渡さない（#497）。
+Vision は backend がモデル設定の既定の Vision モデル（モデルの API）で呼ぶ。docling サービスは LLM を呼ばないため、モデルの API の設定は渡さない（#497）。
 
 Docling 以外の解析エンジンの bbox は単位が違うため、Vision の段がページ画像の px へそろえる。確かでない bbox は切り出さず、要素の metadata に `vision_status=skipped` / `vision_skip_reason=bbox_unit_unknown` と warning `vision_bbox_unit_unknown` を残す。
 
@@ -462,7 +462,7 @@ Docling 以外の解析エンジンの bbox は単位が違うため、Vision �
 |---|---|---|
 | Docling | サービスが描いたページ画像の px（`RAG_ENGINE_RENDER_DPI`） | `layout_records.pages` の寸法から同じ解像度で描き直す。実サービス（docling 2.129.0）で確認済み（A4 の PDF は 2480x3509、画像は元画像の px）。#502 |
 | Unstructured | coordinates の座標系（PixelSpace 等）の px | registry が `layout_width` / `layout_height` を要素と asset の `page_width` / `page_height` に写す。無ければ不明。実サービス（unstructured 0.27.8、hi_res）で確認済み（PDF は PixelSpace で 350 dpi 相当のページ画像の px。A4 で 2893x4094。画像は元画像の px）。#502。座標系が左下原点（`PointSpace` / `RelativeCoordinateSystem`）なら y を反転する（#512） |
-| OCI Enterprise AI の VLM 解析 | 0-1 または 0-100 | 構造化抽出の prompt の指定。100 を超えれば不明 |
+| 画像対応モデル（VLM）の解析 | 0-1 または 0-100 | 構造化抽出の prompt の指定。100 を超えれば不明 |
 | 全ての解析エンジン | 値が全て 1 以下なら 0-1 | 画像ファイル全体の `source_image` の asset も含む |
 
 ### 頁番号のフッターの論理頁（#2289）
@@ -533,9 +533,9 @@ LlamaIndex AutoMerging 風の分割方式「親子階層」は削除し、一覧
 
 ## rag_poc との差分
 
-- 解析結果、チャンク、回答はファイル（`.runs/`）ではなく、本リポジトリの Oracle と Object Storage を使う。
+- 解析結果、チャンク、回答はファイル（`.runs/`）ではなく、本リポジトリの Oracle と原本の保存先（ローカルのディレクトリ）を使う。
 - ADB の独自スキーマ（`rag_chunk_runs` / `rag_chunk_embeddings` など）は使わない。検索は backend の hybrid 検索（vector と Oracle Text の RRF）に、rag_poc の「原質問を主軸にした重み付き融合」と Sudachi 分割を組み合わせる。
-- chicago / osaka の 2 系統 LLM 設定と、OCI SDK の LLM 経路は廃止した。
+- chicago / osaka の 2 系統 LLM 設定と、OCI SDK の LLM 経路は廃止した（今の LLM はモデルの API の接続で呼ぶ）。
 - 移植していないもの：
   - Gradio UI、PPT 資料、`verify/` の問題セット（データは移さない。検証 CLI `app.rag.answer_verify_cli` で rag_poc の `cases.json` / `crag_goldset.json` をそのまま使える）
   - `evaluate_crag_grader.py`（rag_poc 独自の ADB の保存先から候補を組み立てる設計のため）と、`run_answer_eval.py` の Excel 出力・LLM 呼び出し回数の集計

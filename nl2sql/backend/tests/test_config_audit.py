@@ -154,5 +154,5 @@ def test_platform_and_product_env_examples_load(monkeypatch: pytest.MonkeyPatch)
 
     assert settings.cors_origins
     assert all(origin.startswith("http://") for origin in settings.cors_origins)
-    assert settings.oci_enterprise_ai_models == []
+    assert settings.enterprise_ai_models == []
     assert settings.oracle_password in ("", None)

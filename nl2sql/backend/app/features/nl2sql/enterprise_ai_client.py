@@ -1,7 +1,7 @@
-"""OCI Enterprise AI direct NL2SQL client.
+"""モデルの API の direct NL2SQL client.
 
-OCI Generative AI chat API は使わず、Enterprise AI の OpenAI-compatible
-HTTP endpoint contract だけを扱う。未設定の local/CI では service 側が
+OpenAI 互換の Responses API（`POST {endpoint}/responses`）の HTTP endpoint contract
+だけを扱う。未設定の local/CI では service 側が
 deterministic fallback を使う。
 """
 
@@ -92,7 +92,7 @@ class EnterpriseAiDirectError(RuntimeError):
         self.model_id = model_id
         self.endpoint_host = endpoint_host
         # 画面の「詳細」に出す値（#1715）。provider_message は応答の本文の理由（秘密の値を
-        # 伏せた短い文）、upstream_request_id は OCI の `opc-request-id`（無ければ応答の `id`）。
+        # 伏せた短い文）、upstream_request_id は上流の `opc-request-id`（無ければ応答の `id`）。
         self.provider_message = provider_message
         self.upstream_request_id = upstream_request_id
         self.attempts = attempts
@@ -120,7 +120,7 @@ class EnterpriseAiDirectError(RuntimeError):
 
     @property
     def configuration_error(self) -> bool:
-        """設定（モデル・接続・API key・IAM policy）の誤りによる失敗か。"""
+        """設定（モデル・接続・API key・権限）の誤りによる失敗か。"""
         return self.http_failure is not None and self.http_failure.configuration_error
 
     def failure_actions(self) -> list[str]:
@@ -142,9 +142,9 @@ _CALL_FAILURE_KINDS_BY_CODE: dict[str, EnterpriseAiCallFailureKind] = {
 }
 
 
-# アプリが直接呼ぶ OCI Enterprise AI のモデルの決め方（#1684）。失敗の案内に添える。
+# アプリが直接呼ぶモデルの API のモデルの決め方（#1684）。失敗の案内に添える。
 ENTERPRISE_AI_DIRECT_MODEL_NOTE = (
-    "NL2SQL がアプリから呼ぶ OCI Enterprise AI（SQL の生成・回答前の確認など）は、"
+    "NL2SQL がアプリから呼ぶモデルの API（SQL の生成・回答前の確認など）は、"
     "システム設定 › モデル の既定のテキストモデルと、そのモデルを登録した接続を使います。"
 )
 
@@ -167,7 +167,7 @@ def enterprise_ai_configuration_failure_message(
     """設定の誤りによる失敗の、利用者向けの文（時間をおいても直らないことと、確かめる所）。"""
     return " ".join(
         [
-            f"{subject}OCI Enterprise AI の呼び出しが設定の誤りで失敗しました。"
+            f"{subject}モデルの API の呼び出しが設定の誤りで失敗しました。"
             "時間をおいても直りません。管理者に次の確認を依頼してください。",
             *error.failure_actions(),
             ENTERPRISE_AI_DIRECT_MODEL_NOTE,
@@ -201,8 +201,8 @@ class EnterpriseAiDirectClient(Protocol):
         ...
 
 
-class OciEnterpriseAiDirectClient:
-    """Small synchronous HTTP client for OCI Enterprise AI LLM endpoint.
+class HttpEnterpriseAiDirectClient:
+    """Small synchronous HTTP client for the model API (OpenAI-compatible) LLM endpoint.
 
     接続（endpoint / API key / project）は、呼ぶモデルの接続を使う（#533）。
     """
@@ -241,7 +241,7 @@ class OciEnterpriseAiDirectClient:
         回答前の確認。#2310）。
         """
         if not self.is_configured():
-            raise EnterpriseAiDirectError("OCI Enterprise AI Direct が未設定です。")
+            raise EnterpriseAiDirectError("モデルの API が未設定です。")
         # 既定のテキストモデル（システム設定の「モデル」）とその接続で呼ぶ（#1684）。
         model_id = self.model_id()
         # 出力の上限はモデルの出力の上限と、入力の上限から prompt の見積もりを引いた残りの小さい方
@@ -280,14 +280,14 @@ class OciEnterpriseAiDirectClient:
                 response = self._post_json(
                     payload,
                     connection=self.connection(model_id),
-                    path=self.settings.oci_enterprise_ai_llm_path,
+                    path=self.settings.enterprise_ai_llm_path,
                     timeout_seconds=timeout_seconds,
                     max_retries=max_retries,
                     model_id=model_id,
                 )
                 return _parse_response(
                     response,
-                    response_path=self.settings.oci_enterprise_ai_llm_response_path,
+                    response_path=self.settings.enterprise_ai_llm_response_path,
                     response_format=response_format,
                     max_output_tokens=budget,
                     model_id=model_id,
@@ -307,7 +307,7 @@ class OciEnterpriseAiDirectClient:
             budget=max(1, budget),
             prompt_tokens=prompt_tokens,
             # payload template の構成は `reasoning` を持たないので、推論の量を下げて送り直さない。
-            can_lower_effort=not self.settings.oci_enterprise_ai_llm_payload_template.strip(),
+            can_lower_effort=not self.settings.enterprise_ai_llm_payload_template.strip(),
             can_widen=not strict,
         )
 
@@ -411,10 +411,10 @@ class OciEnterpriseAiDirectClient:
     ) -> str:
         model_id = self.vision_model_id()
         if not model_id:
-            raise EnterpriseAiDirectError("OCI Enterprise AI の既定の画像対応モデルが未設定です。")
+            raise EnterpriseAiDirectError("既定の画像対応モデルが未設定です。")
         connection = self.connection(model_id)
         if not connection.is_configured():
-            raise EnterpriseAiDirectError("OCI Enterprise AI Direct が未設定です。")
+            raise EnterpriseAiDirectError("モデルの API が未設定です。")
         prompt_tokens = estimate_input_tokens(prompt)
 
         def call(budget: int, effort: str) -> str:
@@ -433,14 +433,14 @@ class OciEnterpriseAiDirectClient:
             response = self._post_json(
                 payload,
                 connection=connection,
-                path=getattr(self.settings, "oci_enterprise_ai_vlm_path", "")
-                or self.settings.oci_enterprise_ai_llm_path,
+                path=getattr(self.settings, "enterprise_ai_vlm_path", "")
+                or self.settings.enterprise_ai_llm_path,
                 max_retries=max_retries,
                 model_id=model_id,
             )
             return _parse_response(
                 response,
-                response_path=self.settings.oci_enterprise_ai_vlm_response_path,
+                response_path=self.settings.enterprise_ai_vlm_response_path,
                 response_format=response_format,
                 max_output_tokens=budget,
                 model_id=model_id,
@@ -454,7 +454,7 @@ class OciEnterpriseAiDirectClient:
                 self.settings, model_id, prompt_tokens=prompt_tokens
             ),
             prompt_tokens=prompt_tokens,
-            can_lower_effort=not self.settings.oci_enterprise_ai_vlm_payload_template.strip(),
+            can_lower_effort=not self.settings.enterprise_ai_vlm_payload_template.strip(),
         )
 
     def _post_json(
@@ -474,18 +474,16 @@ class OciEnterpriseAiDirectClient:
             "content-type": "application/json",
             "authorization": f"Bearer {connection.api_key}",
         }
-        if project := connection.project_ocid:
+        if project := connection.project_id:
             headers["OpenAI-Project"] = project
         timeout = float(
             timeout_seconds
             if timeout_seconds is not None
-            else self.settings.oci_enterprise_ai_timeout_seconds
+            else self.settings.enterprise_ai_timeout_seconds
         )
         retry_count = max(
             int(
-                max_retries
-                if max_retries is not None
-                else self.settings.oci_enterprise_ai_max_retries
+                max_retries if max_retries is not None else self.settings.enterprise_ai_max_retries
             ),
             0,
         )
@@ -542,7 +540,7 @@ class OciEnterpriseAiDirectClient:
                             time.sleep(min(0.2 * (attempt + 1), 1.0))
                             continue
                         raise EnterpriseAiDirectError(
-                            f"OCI Enterprise AI HTTP error: {exc}",
+                            f"Model API HTTP error: {exc}",
                             code="connection",
                             retryable=True,
                             model_id=model_id,
@@ -563,12 +561,12 @@ class OciEnterpriseAiDirectClient:
                         time.sleep(min(0.2 * (attempt + 1), 1.0))
                         continue
                     if response.status_code >= 400:
-                        # 分類は 3 製品で共通の対応表（#1684）。OCI の 404 は認可の失敗で、
+                        # 分類は 3 製品で共通の対応表（#1684）。404 は認可の失敗で、
                         # モデルが無いときは 400 になる。設定の誤りは再試行しない。
                         body = response.text[:500]
                         failure = classify_enterprise_ai_http_failure(response.status_code, body)
                         raise EnterpriseAiDirectError(
-                            f"OCI Enterprise AI HTTP {response.status_code}: {body}",
+                            f"Model API HTTP {response.status_code}: {body}",
                             code=failure.kind,
                             retryable=failure.retryable,
                             http_failure=failure,
@@ -584,7 +582,7 @@ class OciEnterpriseAiDirectClient:
                         parsed = response.json()
                     except ValueError as exc:
                         raise EnterpriseAiDirectError(
-                            "OCI Enterprise AI response が JSON ではありません。",
+                            "モデルの応答が JSON ではありません。",
                             code="response_format",
                             retryable=True,
                             upstream_request_id=_upstream_request_id(response),
@@ -592,7 +590,7 @@ class OciEnterpriseAiDirectClient:
                         ) from exc
                     if not isinstance(parsed, Mapping):
                         raise EnterpriseAiDirectError(
-                            "OCI Enterprise AI response が object ではありません。",
+                            "モデルの応答が object ではありません。",
                             code="response_format",
                             retryable=True,
                             upstream_request_id=_upstream_request_id(response),
@@ -602,11 +600,11 @@ class OciEnterpriseAiDirectClient:
                     record_genai_usage(call_span, parsed.get("usage"))
                     # 応答の検査の失敗の「詳細」に request id を出す（#1715）。
                     return _ResponseBody(parsed, upstream_request_id=_upstream_request_id(response))
-        raise EnterpriseAiDirectError(last_error or "OCI Enterprise AI call failed.")
+        raise EnterpriseAiDirectError(last_error or "Model API call failed.")
 
 
 class _ResponseBody(dict[str, Any]):
-    """応答の本文（JSON object）と、HTTP の header の OCI の request id。"""
+    """応答の本文（JSON object）と、HTTP の header の上流の request id。"""
 
     def __init__(self, body: Mapping[str, Any], *, upstream_request_id: str = "") -> None:
         super().__init__(body)
@@ -623,7 +621,7 @@ def _retry_after_headers(response: httpx.Response) -> dict[str, str]:
 
 
 def _upstream_request_id(response: httpx.Response) -> str:
-    """OCI の request id（`opc-request-id`。無ければ一般の `x-request-id`）。"""
+    """上流の request id（`opc-request-id`。無ければ一般の `x-request-id`）。"""
     for name in ("opc-request-id", "x-request-id", "request-id"):
         value = response.headers.get(name)
         if value:
@@ -662,10 +660,10 @@ def _build_payload(
         "temperature": 0,
         "response_format": dict(response_format) if response_format is not None else "",
     }
-    if settings.oci_enterprise_ai_llm_payload_template.strip():
+    if settings.enterprise_ai_llm_payload_template.strip():
         return _with_output_format(
             _render_payload_template(
-                settings.oci_enterprise_ai_llm_payload_template,
+                settings.enterprise_ai_llm_payload_template,
                 values,
             ),
             response_format,
@@ -711,9 +709,9 @@ def _build_image_payload(
         ),
         "temperature": 0,
     }
-    if settings.oci_enterprise_ai_vlm_payload_template.strip():
+    if settings.enterprise_ai_vlm_payload_template.strip():
         return _with_output_format(
-            _render_payload_template(settings.oci_enterprise_ai_vlm_payload_template, values),
+            _render_payload_template(settings.enterprise_ai_vlm_payload_template, values),
             response_format,
         )
     return _with_output_format(
@@ -778,12 +776,12 @@ def _render_payload_template(template: str, values: Mapping[str, Any]) -> Mappin
         parsed = json.loads(template)
     except ValueError as exc:
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object で指定してください。"
+            "PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object で指定してください。"
         ) from exc
     rendered = _render_template_value(parsed, values)
     if not isinstance(rendered, Mapping):
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object を返す必要があります。"
+            "PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object を返す必要があります。"
         )
     return rendered
 
@@ -882,7 +880,7 @@ def _parse_generated_text(response: Mapping[str, Any], *, response_path: str) ->
     if text.strip():
         return text.strip()
     raise EnterpriseAiDirectError(
-        "OCI Enterprise AI response に text がありません。",
+        "モデルの応答に text がありません。",
         code="response_format",
         retryable=True,
     )
@@ -894,7 +892,7 @@ def _select_response_path(payload: object, path: str) -> object:
         return payload
     if not cleaned.startswith("/"):
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH は / で始まる JSON Pointer 形式です。"
+            "PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH は / で始まる JSON Pointer 形式です。"
         )
     current = payload
     for raw_segment in cleaned.split("/")[1:]:
@@ -928,7 +926,7 @@ def _raise_for_response_error(candidate: object) -> None:
         message = str(error.get("message") or error.get("code") or error)
     else:
         message = str(error)
-    raise EnterpriseAiDirectError(f"OCI Enterprise AI response error: {message}")
+    raise EnterpriseAiDirectError(f"Model API response error: {message}")
 
 
 def _is_reasoning_part(candidate: object) -> bool:

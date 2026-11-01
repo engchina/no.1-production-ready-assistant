@@ -2084,7 +2084,7 @@ def _section_answer_llm(
 
 @pytest.fixture
 def section_scope(monkeypatch: pytest.MonkeyPatch) -> SectionScopeMap:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag import section_map_service
 
@@ -2094,7 +2094,7 @@ def section_scope(monkeypatch: pytest.MonkeyPatch) -> SectionScopeMap:
     monkeypatch.setattr(section_map_service, "chunk_section", stub.chunk_section)
     monkeypatch.setattr(section_map_service, "section_outline", stub.section_outline)
     monkeypatch.setattr(section_map_service, "read_section", stub.read_section)
-    monkeypatch.setattr(engine_oci, "parse_text_response", _section_answer_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _section_answer_llm)
     return stub
 
 

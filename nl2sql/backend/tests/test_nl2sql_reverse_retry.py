@@ -38,7 +38,7 @@ def test_structured_question_response_is_success_without_retry() -> None:
     )
     assert result.question == "すべての従業員情報を教えてください。"
     assert result.warnings == []
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert len(client.calls) == 3
     assert "指定された JSON Schema に従い" in client.calls[-1]["system_prompt"]
 

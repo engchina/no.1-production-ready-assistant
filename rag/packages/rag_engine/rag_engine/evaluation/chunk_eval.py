@@ -1,4 +1,4 @@
-"""チャンク分割サイズを同じ解析入力で比較する、ADB を更新しない監査・OCI 検索評価 CLI。"""
+"""チャンク分割サイズを同じ解析入力で比較する、ADB を更新しない監査・検索評価 CLI。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from rag_engine.adapters.oci import embed_query, embed_texts, rerank_text_with_scores
+from rag_engine.adapters.model_api import embed_query, embed_texts, rerank_text_with_scores
 from rag_engine.chunking import (
     CHILD_CHUNK_LEVEL,
     ChunkingConfig,
@@ -126,9 +126,9 @@ def evaluate_cohere_variants(
     candidate_k: int = 80,
     top_k: int = 20,
 ) -> dict[str, Any]:
-    """OCI embedding + cosine 候補 + Rerank を比較し、ADB には保存しません。
+    """埋め込みモデル + cosine 候補 + Rerank を比較し、ADB には保存しません。
 
-    OCI API の課金・通信が発生します。API 障害は伝播し、成功値に置換しません。
+    モデルの API の課金・通信が発生します。API 障害は伝播し、成功値に置換しません。
     本番の Oracle Text / image vector / 回答生成は含めず、回答正解率は測定しません。
     """
     if not 1 <= top_k <= candidate_k:
@@ -187,7 +187,7 @@ def evaluate_cohere_variants(
             "cases": rows,
         }
     return {
-        "mode": "oci_text_vector_cosine_rerank",
+        "mode": "text_vector_cosine_rerank",
         "candidate_k": candidate_k,
         "top_k": top_k,
         "query_embedding_seconds": query_seconds,
@@ -196,7 +196,7 @@ def evaluate_cohere_variants(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """保存済み解析を読み、監査 JSON を出力します。--live-cohere のみ OCI を呼びます。"""
+    """保存済み解析を読み、監査 JSON を出力します。--live-cohere のみモデルの API を呼びます。"""
     parser = argparse.ArgumentParser(description="Audit chunk sizes without changing active chunks or ADB.")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--run-id", action="append", required=True)

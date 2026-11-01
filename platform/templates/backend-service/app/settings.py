@@ -12,7 +12,7 @@ class Settings(BaseServiceSettings):
     """サービス固有設定。
 
     共通 `platform/.env`（`PLATFORM_*`）→ `backend/.env`（製品の接頭辞）の順に読む（#211）。
-    OCI/Oracle 等の共通の接続設定は属性名だけ足せば `PLATFORM_*` から読む（例: oracle_dsn）。
+    Oracle 等の共通の接続設定は属性名だけ足せば `PLATFORM_*` から読む（例: oracle_dsn）。
     製品の接頭辞は実際の製品名に合わせて変える。
     """
 

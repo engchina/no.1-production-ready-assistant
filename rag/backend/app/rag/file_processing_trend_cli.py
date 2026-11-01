@@ -1039,7 +1039,7 @@ def _object_storage_artifact_chain_regressions(
     current: Mapping[str, Any],
     baseline: Mapping[str, Any],
 ) -> list[TrendRegression]:
-    """Object Storage extraction artifact chain の退化を検出する。"""
+    """保存先の extraction artifact chain の退化を検出する。"""
     current_chain = _mapping(current.get("object_storage_artifact_chain"))
     baseline_chain = _mapping(baseline.get("object_storage_artifact_chain"))
     if not baseline_chain:
@@ -1073,8 +1073,8 @@ def _object_storage_artifact_chain_regressions(
             )
         )
     if (
-        baseline_chain.get("roundtrip_object_uri_scheme") == "oci"
-        and current_chain.get("roundtrip_object_uri_scheme") != "oci"
+        baseline_chain.get("roundtrip_object_uri_scheme") == "local"
+        and current_chain.get("roundtrip_object_uri_scheme") != "local"
     ):
         regressions.append(
             TrendRegression(
@@ -1108,8 +1108,8 @@ def _object_storage_artifact_chain_regressions(
             "object_storage_full_artifact_cached_case_count_decreased",
         ),
         (
-            "full_artifact_oci_case_count",
-            "object_storage_full_artifact_oci_case_count_decreased",
+            "full_artifact_local_case_count",
+            "object_storage_full_artifact_local_case_count_decreased",
         ),
         (
             "full_artifact_identity_present_case_count",
@@ -1128,8 +1128,8 @@ def _object_storage_artifact_chain_regressions(
             "object_storage_segment_artifact_expected_count_decreased",
         ),
         (
-            "segment_artifact_oci_uri_count",
-            "object_storage_segment_artifact_oci_uri_count_decreased",
+            "segment_artifact_local_uri_count",
+            "object_storage_segment_artifact_local_uri_count_decreased",
         ),
         (
             "segment_artifact_readable_count",
@@ -1174,10 +1174,10 @@ def _object_storage_artifact_chain_regressions(
     )
     regressions.extend(
         _count_regression(
-            metric="object_storage_segment_artifact_non_oci_uri_count",
-            current=_number(current_chain.get("segment_artifact_non_oci_uri_count")),
-            baseline=_number(baseline_chain.get("segment_artifact_non_oci_uri_count")),
-            reason="object_storage_segment_artifact_non_oci_uri_count_increased",
+            metric="object_storage_segment_artifact_non_local_uri_count",
+            current=_number(current_chain.get("segment_artifact_non_local_uri_count")),
+            baseline=_number(baseline_chain.get("segment_artifact_non_local_uri_count")),
+            reason="object_storage_segment_artifact_non_local_uri_count_increased",
         )
     )
     regressions.extend(
@@ -1420,8 +1420,8 @@ def _segment_artifact_reuse_regressions(
             "segment_artifact_reuse_cache_miss_case_count_increased",
         ),
         (
-            "segment_artifact_non_oci_uri_count",
-            "segment_artifact_reuse_non_oci_uri_count_increased",
+            "segment_artifact_non_local_uri_count",
+            "segment_artifact_reuse_non_local_uri_count_increased",
         ),
         (
             "artifact_integrity_error_count",

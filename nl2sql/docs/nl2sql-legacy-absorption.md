@@ -5,7 +5,7 @@
 主要な旧版吸収 API は `/api/nl2sql` 配下に集約する。
 
 - `POST /classifier/training-data/import`: CSV/XLSX の `CATEGORY,TEXT` または `CATEGORY,QUESTION` を取り込む。
-- `POST /classifier/train`: 取り込み済みデータを OCI GenAI embedding 1024 次元に変換し、LogisticRegression を学習する。
+- `POST /classifier/train`: 取り込み済みデータを埋め込みモデルで 1024 次元のベクトルに変換し、LogisticRegression を学習する。
 - `POST /classifier/predict`: 学習済み分類器で profile category を予測する。
 - `GET /classifier`: training data と classifier artifact の状態を確認する。
 - `POST /classifier/model/import`: joblib / JSON artifact で唯一の classifier model を置き換える。旧 `/classifier/models/import` は互換 alias として `activate=true` の場合だけ受理する。
@@ -13,7 +13,7 @@
 - `POST /comments/suggest`, `POST /comments/apply`: COMMENT ON 候補生成と確認後の実行。
 - `POST /annotations/generate`, `POST /annotations/apply`: Oracle annotations 候補生成と確認後の実行。
 
-LLM/VLM は OCI Enterprise AI のみ、embedding は OCI GenAI のみ、永続 state と SQL/DB 操作は Oracle に集約する。外部 LLM provider や外部 vector DB は使わない。
+LLM/VLM はモデルの API のみ、embedding は既定の埋め込みモデルのみ、永続 state と SQL/DB 操作は Oracle に集約する。外部 LLM provider や外部 vector DB は使わない。
 
 Classifier model は `classifier_artifact` 1 件のみを保存する。学習または artifact import が成功すると
 現在の model を置き換え、model registry・version 切替・個別削除 API は提供しない。旧 snapshot に
@@ -44,18 +44,15 @@ PLATFORM_ORACLE_DSN=...
 Enterprise AI:
 
 ```bash
-PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT=...
-PLATFORM_OCI_ENTERPRISE_AI_API_KEY=...
-PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=...
+PLATFORM_ENTERPRISE_AI_ENDPOINT=...
+PLATFORM_ENTERPRISE_AI_API_KEY=...
+PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=...
 ```
 
-OCI GenAI embedding:
+埋め込みモデル（endpoint と API key は、システム設定 › モデル の既定の埋め込みモデルを登録した接続のもの。#45）:
 
 ```bash
-PLATFORM_OCI_REGION=...
-PLATFORM_OCI_COMPARTMENT_ID=...
-PLATFORM_OCI_GENAI_ENDPOINT=...
-PLATFORM_OCI_GENAI_EMBED_MODEL_ID=...
+PLATFORM_GENAI_EMBED_MODEL_ID=...
 NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true
 ```
 

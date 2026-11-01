@@ -1,9 +1,9 @@
 """接続の Endpoint URL を入力どおり使い、`{endpoint}/responses` を呼ぶ（#1440）。
 
 組み込み Runtime（OpenAI SDK の base URL）とモデルの接続テストの両方で、RAG・NL2SQL のテストと
-同じ 3 種の Endpoint URL が同じ URL を呼ぶことを確かめる（path を補わない。OCI も `/openai/v1` まで
-書く）。
-OCI へは接続しない（HTTP は httpx.MockTransport）。
+同じ 3 種の Endpoint URL が同じ URL を呼ぶことを確かめる（path を補わない。`/openai/v1` のような
+path も入力どおり書く）。
+モデルの API へは接続しない（HTTP は httpx.MockTransport）。
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ from app.settings import Settings
 # (Endpoint URL, 呼ぶ URL)。RAG・NL2SQL の test_enterprise_ai_endpoint_url.py と同じ表。
 ENDPOINT_CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://llm.example/openai/v1",
+        "https://llm.example/openai/v1/responses",
     ),
     ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/responses"),
     ("https://api.deepseek.com", "https://api.deepseek.com/responses"),
 ]
-ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-without-path"]
+ENDPOINT_CASE_IDS = ["openai-v1-path", "compatible-with-path", "compatible-without-path"]
 
 _RESPONSE: dict[str, Any] = {
     "id": "resp-1",
@@ -63,10 +63,10 @@ def test_runtime_calls_endpoint_as_is(
 
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=endpoint,
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
-        oci_enterprise_ai_default_text_model="text-a",
+        enterprise_ai_endpoint=endpoint,
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
+        enterprise_ai_default_text_model="text-a",
     )
     monkeypatch.setattr(builtin_runtime, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -111,7 +111,7 @@ def test_model_test_calls_endpoint_as_is(
                 {
                     "connection_id": "primary",
                     "endpoint": endpoint,
-                    "project_ocid": "",
+                    "project_id": "",
                     "api_key": "sk-test",
                 }
             ],

@@ -113,7 +113,7 @@ export function useChatRequirementFlow({
       },
       {
         isCurrent,
-        // OCI Enterprise AI が無い環境では要件の検査を使えないので、確認せずに SQL を作る。
+        // モデルの API が無い環境では要件の検査を使えないので、確認せずに SQL を作る。
         onUnavailable: current.sessionId ? undefined : () => onSubmitRef.current(current, null),
       }
     ).then(async (loaded) => {

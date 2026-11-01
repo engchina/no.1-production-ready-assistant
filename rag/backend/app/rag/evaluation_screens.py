@@ -309,7 +309,7 @@ def screen_judge_context(
 
 
 def llm_screen_judge(llm: ScreenJudgeLlm) -> ScreenJudge:
-    """LLM（OCI Enterprise AI）で判定する判定器。"""
+    """LLM（モデルの API）で判定する判定器。"""
 
     async def judge(
         *,

@@ -149,7 +149,7 @@ def _install(monkeypatch: MonkeyPatch, oracle: Any, genai: Any) -> None:
     """検索 API・MCP・pipeline の Oracle と embedding を代役にし、自動の項目の条件を読ませる。"""
     for module in (search_route, mcp_tools, pipeline_module):
         monkeypatch.setattr(module, "OracleClient", lambda *_a, **_k: oracle)
-    monkeypatch.setattr(pipeline_module, "OciGenAiClient", lambda *_a, **_k: genai)
+    monkeypatch.setattr(pipeline_module, "GenAiClient", lambda *_a, **_k: genai)
 
     async def no_sections(chunk_ids: list[str]) -> dict[str, Any]:
         return {}  # 根拠の所属の章節(結果の表示の補助)は読まない
@@ -248,9 +248,9 @@ def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
     呼び出し元の条件は文書名・ページ・分類・手の項目の条件・旧版の扱い(include_superseded)・
     基準日。ナレッジベースはトークンの範囲のプロファイルの参照先。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _crag_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _crag_llm)
     oracle = ScopedViewSearchOracle()
     _install(monkeypatch, oracle, FakeGenAi())
     filters = {
@@ -327,9 +327,9 @@ def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_and_graph_d
     参照先を探す範囲は文書名・分類を外し、KB・旧版の扱い・基準日とトークンの範囲は残す。同じ
     呼び出しの実体・関係情報の拡張は、呼び出し元の文書名・分類を残す。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = ScopedViewReferenceOracle()
     _install(monkeypatch, oracle, ReferenceGenAi())
     filters = {"file_name": "合成文書A", "large_category": "分類A", "as_of": "2020-06-30"}
@@ -395,10 +395,10 @@ def test_mcp_section_expansion_reads_with_caller_conditions_and_as_of(
 
     基準日は呼び出し元が明示した値か、回答の初めに決めた既定の日(#2602)。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     # CRAG の判定は候補の関連を返さない(不足)ので、章節を広げる。
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     for name, value in {
         "rag_query_strategy": "auto_routing",
         "rag_section_expansion_enabled": True,
@@ -455,9 +455,9 @@ def test_mcp_section_expansion_reads_reference_target_outside_caller_file_name(
     分類は重ねない。認可の範囲はトークンの範囲に絞った監査 context の述語で当たる。呼び出し元の
     文書名の中の文書 A の章節は、呼び出し元の条件のまま読む。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _section_answer_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _section_answer_llm)
     for name, value in {
         "rag_query_strategy": "auto_routing",
         "rag_section_expansion_enabled": True,

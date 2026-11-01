@@ -171,7 +171,7 @@ async function mockSettingsAndFeedback(page: Page) {
     created_at: NOW,
     conversation_id: targetType === "answer" ? "conv-1" : null,
     conversation_title: targetType === "answer" ? "経費申請" : null,
-    model: "oci.generativeai.command-r-plus",
+    model: "deepseek-chat",
     file_name: targetType === "citation" ? "経費規程.pdf" : null,
     question_preview: "最新の経費申請期限を教えて",
     comment_preview: rating === "not_helpful" ? "規程が更新されています。" : null,

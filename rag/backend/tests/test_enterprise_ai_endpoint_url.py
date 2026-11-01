@@ -16,38 +16,38 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from app.clients.oci_enterprise_ai import EnterpriseAiHttpTransport, OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient, EnterpriseAiHttpTransport
 from app.config import EnterpriseAiConfiguredModel, Settings
 from app.services.control import service_runtime_env
 
 # (Endpoint URL, 呼ぶ URL)。NL2SQL・Agent の test_enterprise_ai_endpoint_url.py と同じ表。
 ENDPOINT_CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
     ),
     ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/responses"),
     ("https://api.deepseek.com", "https://api.deepseek.com/responses"),
 ]
-ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-without-path"]
+ENDPOINT_CASE_IDS = ["compatible-mode-v1", "compatible-with-path", "compatible-without-path"]
 
 
 def _settings(endpoint: str) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": endpoint,
-        "oci_enterprise_ai_project_ocid": "",
-        "oci_enterprise_ai_api_key": "sk-test",
-        "oci_enterprise_ai_models": [
+        "enterprise_ai_endpoint": endpoint,
+        "enterprise_ai_project_id": "",
+        "enterprise_ai_api_key": "sk-test",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel(model_id="text-a"),
             EnterpriseAiConfiguredModel(model_id="vision-b", vision_enabled=True),
         ],
-        "oci_enterprise_ai_default_text_model": "text-a",
-        "oci_enterprise_ai_default_vision_model": "vision-b",
-        "oci_enterprise_ai_llm_path": "/responses",
-        "oci_enterprise_ai_vlm_path": "/responses",
-        "oci_enterprise_ai_vlm_input_mode": "files_api",
-        "oci_enterprise_ai_timeout_seconds": 5.0,
-        "oci_enterprise_ai_max_retries": 0,
+        "enterprise_ai_default_text_model": "text-a",
+        "enterprise_ai_default_vision_model": "vision-b",
+        "enterprise_ai_llm_path": "/responses",
+        "enterprise_ai_vlm_path": "/responses",
+        "enterprise_ai_vlm_input_mode": "files_api",
+        "enterprise_ai_timeout_seconds": 5.0,
+        "enterprise_ai_max_retries": 0,
     }
     return Settings.model_construct(**values)
 
@@ -70,7 +70,7 @@ async def test_model_test_client_calls_endpoint_as_is(endpoint: str, expected: s
     """接続テスト・Vision が使う共有 core（rag_parser_core）の URL。"""
     transport = RecordingTransport()
     # テキストの生成は post_json だけを使う（ほかの method は呼ばない）。
-    client = OciEnterpriseAiClient(
+    client = EnterpriseAiClient(
         settings=_settings(endpoint),
         http_transport=cast(EnterpriseAiHttpTransport, transport),
     )
@@ -84,7 +84,7 @@ async def test_model_test_client_calls_endpoint_as_is(endpoint: str, expected: s
 @pytest.mark.parametrize(("endpoint", "expected"), ENDPOINT_CASES, ids=ENDPOINT_CASE_IDS)
 def test_answer_engine_calls_endpoint_as_is(tmp_path: Path, endpoint: str, expected: str) -> None:
     """回答・評価・`rag_validate_answer` が使う rag_engine の OpenAI SDK の URL。"""
-    from rag_engine.adapters import oci
+    from rag_engine.adapters import model_api
     from rag_engine.config import ENTERPRISE_AI_LLM_PROVIDER, ENTERPRISE_AI_VISION_LLM_PROVIDER
 
     from app.rag.answer_engine import build_engine_settings
@@ -98,7 +98,7 @@ def test_answer_engine_calls_endpoint_as_is(tmp_path: Path, endpoint: str, expec
 
     for provider_id in (ENTERPRISE_AI_LLM_PROVIDER, ENTERPRISE_AI_VISION_LLM_PROVIDER):
         provider = engine_settings.llm_providers[provider_id]
-        client = oci._openai_client_for_provider(provider, engine_settings).with_options(  # noqa: SLF001
+        client = model_api._openai_client_for_provider(provider, engine_settings).with_options(  # noqa: SLF001
             http_client=httpx.Client(transport=httpx.MockTransport(handler))
         )
         client.responses.create(model=provider.model, input="x")
@@ -108,11 +108,11 @@ def test_answer_engine_calls_endpoint_as_is(tmp_path: Path, endpoint: str, expec
 
 @pytest.mark.parametrize(("endpoint", "expected"), ENDPOINT_CASES, ids=ENDPOINT_CASE_IDS)
 def test_parser_service_env_calls_endpoint_as_is(endpoint: str, expected: str) -> None:
-    """OCI parser（microservice）は backend が渡す env の Endpoint URL で呼ぶ。"""
-    from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiClient as ParserClient
-    from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiConfig
+    """parser（microservice）は backend が渡す env の Endpoint URL で呼ぶ。"""
+    from rag_parser_core.enterprise_ai import EnterpriseAiClient as ParserClient
+    from rag_parser_core.enterprise_ai import EnterpriseAiConfig
 
     env = service_runtime_env(_settings(endpoint))
-    config = OciEnterpriseAiConfig.from_env(env)
+    config = EnterpriseAiConfig.from_env(env)
 
     assert ParserClient(config).preview_llm_request("質問", "根拠").url == expected

@@ -11,7 +11,7 @@ backend/                  FastAPI アプリ
     config.py             設定(pydantic-settings)
     api/routes/           health / documents / search / knowledge_bases /
                           search_answer_profiles / evaluation / settings / services
-    clients/              OCI / Oracle / Object Storage clients
+    clients/              モデルの API（enterprise_ai / genai）/ Oracle / ファイル保存先 / parser の clients
     rag/                  ingestion / parsing / chunking / 回答フロー(answer_engine) /
                           guardrail / evaluation / search answer profile
     schemas/              common / search / knowledge_base / search_answer_profile / settings

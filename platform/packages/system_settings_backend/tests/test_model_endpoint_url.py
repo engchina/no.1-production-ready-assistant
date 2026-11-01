@@ -16,9 +16,9 @@ from pr_system_settings.model import (
 # (Endpoint URL, base URL, Responses API の URL)
 CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
     ),
     (
         "https://api.deepseek.com/v1",
@@ -26,11 +26,11 @@ CASES = [
         "https://api.deepseek.com/v1/responses",
     ),
     ("https://api.deepseek.com", "https://api.deepseek.com", "https://api.deepseek.com/responses"),
-    # OCI の root URL にも path を補わない（利用者が /openai/v1 まで書く）。
+    # path の無い root URL にも path を補わない（利用者が API の base URL まで書く）。
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/responses",
+        "https://llm.example",
+        "https://llm.example",
+        "https://llm.example/responses",
     ),
     # 前後の空白と末尾の / だけ除く。
     (
@@ -41,10 +41,10 @@ CASES = [
     ("", "", "/responses"),
 ]
 CASE_IDS = [
-    "oci-openai-v1",
+    "compatible-with-long-path",
     "compatible-with-path",
     "compatible-without-path",
-    "oci-root",
+    "root-url",
     "trim",
     "empty",
 ]
@@ -55,7 +55,7 @@ def test_endpoint_is_used_as_is(endpoint: str, base_url: str, request_url: str) 
     assert enterprise_ai_base_url(endpoint) == base_url
     assert enterprise_ai_request_url(endpoint) == request_url
     connection = EnterpriseAiConnection(
-        connection_id="primary", endpoint=endpoint, project_ocid="", api_key="sk-test"
+        connection_id="primary", endpoint=endpoint, project_id="", api_key="sk-test"
     )
     assert connection.base_url == base_url
     assert connection.request_url() == request_url

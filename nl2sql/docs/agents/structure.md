@@ -31,11 +31,11 @@ backend/                  FastAPI アプリ（uv の venv。pyproject.toml に r
                           システムテーブル管理）
     features/mcp/         他製品（Agent）から呼ぶ MCP（POST /api/mcp）
     security/             権限管理・認可の判定
-    clients/              oci_enterprise_ai（LLM/VLM）/ oci_genai（embed・rerank）/ oracle
+    clients/              enterprise_ai（LLM/VLM）/ genai（embed・rerank）/ oracle
     cli/                  migration・system schema・各 worker のエントリ
     schemas/              設定 API のスキーマ
   migrations/             Oracle の DDL（番号順）
-  scripts/                実 Oracle / OCI Enterprise AI への手動の接続確認
+  scripts/                実 Oracle / モデルの API への手動の接続確認
   tests/                  pytest
 frontend/                 Vite + React Router + Tailwind v4 + 共有 UI
   src/App.tsx             ルート定義

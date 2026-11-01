@@ -34,7 +34,7 @@
 
 1. **Camp B**: 文書↔KB は N:N、chunk は共有(不要に複製しない)、**embedding は 1024 次元でグローバル固定**（#46 より前は Cohere v4 / 1536）。
    チャンク構成は **同一 1024 空間内**で chunk 集合を増やすだけ。per-KB embedding / per-KB 物理表(Camp A)にしない。
-2. **確定スタック**: OCI Enterprise AI / OCI GenAI Cohere / Oracle AI Database。外部ベクトル DB・別 LLM provider を入れない。
+2. **確定スタック**: モデルの API（OpenAI 互換の API。LLM・埋め込み・再ランク）/ Oracle AI Database。外部ベクトル DB・別 LLM provider を入れない。
 3. **VECTOR 索引は単一・共有**: `rag_chunks.embedding` の HNSW は 1 本のまま。`chunk_set_id` は**フィルタ列**であって索引を分割しない。
 4. **版管理 DDL は自動変更しない**: スキーマ追加は DDL artifact(下記)へ明示追加し、`requires_reprovision` 扱い。
 5. **2 段階処理**: parse → 人手プレビュー確認 → index。チャンク構成の materialize は **index 段**に入る。同じ extraction recipe だけ parse artifact を共有・再利用する。
@@ -145,7 +145,7 @@ CREATE INDEX rag_kb_cs_bind_cs_idx ON rag_kb_chunk_set_bindings (chunk_set_id);
 ---
 
 ## 4. VLM parse の非決定論対策(全 Phase 共通)
-- OCI Enterprise AI VLM parse は再実行で出力が揺れる。「両方走らせて同一出力を dedup」は前提が崩れる。
+- 画像対応モデル（VLM）の parse は再実行で出力が揺れる。「両方走らせて同一出力を dedup」は前提が崩れる。
 - **`hash(source_sha256, parse 影響 sub-config)` で parse artifact をキャッシュ**し、同 chunk_set_id の再 materialize は
   **走らせ直さずキャッシュ再利用**。Object Storage の既存 segment artifact 機構を流用候補。
 

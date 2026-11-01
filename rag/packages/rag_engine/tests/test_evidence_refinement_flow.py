@@ -11,7 +11,7 @@ from audit_fixtures import legacy_audit_result
 from openai import OpenAI
 from test_bound_audit_transport import response_bytes
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.dependencies import AnswerDependencies, bind_dependencies
 from rag_engine.generation import answering, grounded
@@ -228,13 +228,13 @@ def test_sdk_serializes_only_selected_second_round_sources(monkeypatch: pytest.M
         max_retries=0,
         http_client=httpx.Client(transport=httpx.MockTransport(transport)),
     )
-    monkeypatch.setattr(oci, "_openai_client_for_provider", lambda *_args: client)
-    monkeypatch.setattr(oci, "_stall_detection_enabled", lambda _settings: streamed)
+    monkeypatch.setattr(model_api, "_openai_client_for_provider", lambda *_args: client)
+    monkeypatch.setattr(model_api, "_stall_detection_enabled", lambda _settings: streamed)
     sdk_settings = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
-            "OCI_ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
-            "OCI_ENTERPRISE_AI_API_KEY": "mock-only",
+            "ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
+            "ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
+            "ENTERPRISE_AI_API_KEY": "mock-only",
         },
         dotenv_path=None,
         llm_stall_resends=0,
@@ -244,7 +244,9 @@ def test_sdk_serializes_only_selected_second_round_sources(monkeypatch: pytest.M
         def __call__(self, system: str, prompt: str, settings: Any, schema: Any, **options: Any) -> Any:
             assert schema is generation_draft_wire_model()
             self.calls.append({"prompt": prompt, "system": system})
-            return oci._parse_text_once(system, prompt, sdk_settings, schema, sdk_settings.llm_providers[sdk_settings.default_answer_llm])
+            return model_api._parse_text_once(
+                system, prompt, sdk_settings, schema, sdk_settings.llm_providers[sdk_settings.default_answer_llm]
+            )
 
     parser = SdkParser()
     try:

@@ -1,7 +1,7 @@
 """#1758〜#1760: 孤立したオントロジーのジョブの記録の掃除・再構築の粒度の競合・一意でない列で
 結合するリンク型の直し方と改善案。
 
-実 OCI / Oracle は使わない（スタブと sql_assist_sample を模した schema context。実 Oracle は
+実際の LLM / Oracle は使わない（スタブと sql_assist_sample を模した schema context。実 Oracle は
 `test_nl2sql_profile_delete_oracle_live.py`）。
 """
 

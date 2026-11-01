@@ -15,7 +15,7 @@ RAG（非構造化データ）・NL2SQL（構造化データ）・Agent（業務
 
 - 配備は reverse proxy と TLS の証明書を作らない（#19）。前段に reverse proxy を置くときは、`/<製品>/api/` を prefix を外して backend へ渡し、`Authorization` ヘッダーをそのまま渡す。RAG の `mcp` は LLM を待つため、待ち時間を長く（600 秒より長く）する。reverse proxy を置かないときは backend の `http://<host>:<port>/api/mcp` を直接呼ぶ。
 - HTTPS の証明書は reverse proxy の側で用意する。自分の CA で署名したときは、クライアントの OS / ランタイムにその CA を信頼させる（Claude Code は `NODE_EXTRA_CA_CERTS`）。
-- 画面の「API キー」の「接続先」に、製品ごとに **この画面の URL**（今開いている環境。Suite の配備では 3 製品、開発の dev server では開いている製品だけ）と **公開の URL（OCI）** を出す（同じなら 1 行。どちらもコピーできる。#1870）。
+- 画面の「API キー」の「接続先」に、製品ごとに **この画面の URL**（今開いている環境。Suite の配備では 3 製品、開発の dev server では開いている製品だけ）と **公開の URL** を出す（同じなら 1 行。どちらもコピーできる。#1870）。
 - 公開の URL は `platform/.env` の `PLATFORM_PUBLIC_BASE_URL`（例 `https://203.0.113.10` / `https://203.0.113.10:8443`）+ `/<製品>/api/mcp`。配備は書かない（#19）。前段に置いた reverse proxy の URL を利用者が書く。backend は自分のキーの一覧（`GET /api/account/api-keys`）の `public_base_url` で返す（`scheme://host[:port]` 以外の値は空として扱う）。空なら画面はこの画面の URL だけを出す。
 - 画面の「Claude Code の登録の例」は下の例と同じ形で、公開の URL があればその URL で書く。CA の証明書の配布は持たない（#19）。
 

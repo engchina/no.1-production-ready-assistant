@@ -350,7 +350,7 @@ class ExtractionAsset(BaseModel):
     page_number: int | None = Field(default=None, ge=1)
     bbox: list[float] | None = None
     alt_text: str | None = None
-    # OCI Enterprise AI VLM/LLM が生成した図表の要約（Knowhere の multimodal 要約 由来）。
+    # Model API VLM/LLM が生成した図表の要約（Knowhere の multimodal 要約 由来）。
     summary: str | None = None
     metadata: dict[str, ExtractionMetadataValue] = Field(default_factory=dict)
 
@@ -426,7 +426,7 @@ class ExtractionField(BaseModel):
 
 
 class StructuredExtraction(BaseModel):
-    """OCI Enterprise AI の VLM/LLM 出力を検証して保存するための正規化形。"""
+    """VLM/LLM 出力を検証して保存するための正規化形。"""
 
     raw_text: str = ""
     # 既定の文書の種類の表示は言語資源（#2181）。

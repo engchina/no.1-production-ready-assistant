@@ -30,8 +30,8 @@
 3. 共通 `.env` / 製品 `.env`。
 4. `Settings` の既定値（`.env.example` と同じ値）。
 
-secret は例外とし、`PLATFORM_OCI_ENTERPRISE_AI_API_KEY`（セカンダリ接続は `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_API_KEY`、ターシャリ接続は `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_API_KEY`）は共通 `.env`（または環境変数）だけから読み込む。
-OCI Enterprise AI の接続はプライマリ接続・セカンダリ接続・ターシャリ接続（OpenAI / OpenAI 互換 API 向け。#786）の 3 つまでで、NL2SQL の Enterprise AI Direct・接続テスト・診断は、呼ぶモデル（既定のテキストモデル・既定の Vision モデル）の接続を使う（#533 / #542 / #786。`platform/README.md` の「OCI Enterprise AI のプライマリ接続・セカンダリ接続・ターシャリ接続」）。
+secret は例外とし、`PLATFORM_ENTERPRISE_AI_API_KEY`（セカンダリ接続は `PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY`、ターシャリ接続は `PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY`）は共通 `.env`（または環境変数）だけから読み込む。
+モデルの API の接続はプライマリ接続・セカンダリ接続・ターシャリ接続（OpenAI / OpenAI 互換 API 向け。#786）の 3 つまでで、NL2SQL の Enterprise AI Direct・接続テスト・診断は、呼ぶモデル（既定のテキストモデル・既定の Vision モデル）の接続を使う（#533 / #542 / #786。`platform/README.md` の「モデルの API のプライマリ接続・セカンダリ接続・ターシャリ接続」）。
 旧 v1 `model-settings.json` の key は環境 key がない場合に限り一時的に読み込める。
 次回のモデル設定保存で `.env` へ移し、secret を含まない v2 JSON へ更新する。
 API 応答は `has_api_key`、`secret_source`、`legacy_secret_detected` だけを返す。
@@ -65,8 +65,8 @@ stable JSON を返す。設定値は出力しない。終了コードが 0 以�
 ## 既存環境の更新手順（#499 既定のモデルの変数名）
 
 #499 で既定のモデルを「既定のテキストモデル」と「既定の Vision モデル」の 2 つに分け（#566 で 2 つとも必須にした）、
-共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_MODEL` / `_LLM_MODEL` / `_VLM_MODEL` を
-`PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` / `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL` に改名した（旧名は読まない）。
+共通 `.env` の `PLATFORM_ENTERPRISE_AI_DEFAULT_MODEL` / `_LLM_MODEL` / `_VLM_MODEL` を
+`PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` / `PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL` に改名した（旧名は読まない）。
 `platform/.env` に既定のモデルを書いている環境は、backend と worker を止めてから
 `platform/scripts/migrate_model_env_names.py`（確認 → `--apply`）で書き換え、起動し直す。旧名と新名の対応、`model-settings.json` の
 扱い（旧 key は読み込み時に移す）は [platform/README.md の「既存環境の更新手順（#499）」](../../platform/README.md#既存環境の更新手順499-既定のモデルの変数名)を参照。

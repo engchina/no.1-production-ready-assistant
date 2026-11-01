@@ -48,7 +48,7 @@ class Storage(FakeObjectStorage):
         self.gets.append(path)
         if path in self.objects:
             return self.objects[path]
-        return self.objects[f"oci://namespace/bucket/{path}"]
+        return self.objects[f"local://{path}"]
 
 
 def _with_pictures(extraction: StructuredExtraction) -> StructuredExtraction:
@@ -328,6 +328,6 @@ async def test_permission_error_in_segment_vision_stops_ingestion(
     error = Exception("returned 403: Forbidden")
     error.response = SimpleNamespace(status_code=403, headers={})  # type: ignore[attr-defined]
     reader = Reader(failure=error)
-    with pytest.raises(IngestionUserError, match="IAM policy"):
+    with pytest.raises(IngestionUserError, match="権限がありません"):
         await _ingest(_pipeline(reader, PromptOracle(), Storage()), _pdf(23))
     assert len(reader.calls) <= 4  # 並行の上限の分だけで止める（残りの図を呼ばない）

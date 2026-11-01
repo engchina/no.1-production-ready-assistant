@@ -373,7 +373,7 @@ async def test_calibration_job_records_results(
     first, _ = clients
     label_set_id = await _create(first)
     await _label_all(clients, label_set_id, disagree=0)
-    provenance = dict(provider="oci_enterprise_ai", model="judge-model-a")
+    provenance = dict(provider="enterprise_ai", model="judge-model-a")
     monkeypatch.setattr(
         evaluation_calibration,
         "backend_evaluator",

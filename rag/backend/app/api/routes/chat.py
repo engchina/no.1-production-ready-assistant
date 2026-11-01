@@ -4,7 +4,7 @@
 file)配下に置く。メッセージ送信は既存 RAG パイプラインを
 
 再利用し、会話履歴で省略を補って確認・検索・回答へ渡す。
-``model_ids`` を複数指定すると設定済み OCI モデルへ fan-out し横並び比較できる。
+``model_ids`` を複数指定すると設定済み モデルへ fan-out し横並び比較できる。
 """
 
 import asyncio
@@ -44,7 +44,7 @@ from app.api.routes.search import (
     ensure_search_answer_profile_knowledge_bases_permitted,
     registered_answer_model_choices,
 )
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient, StoredConversation, StoredMessage
 from app.clients.oracle_run_history import RunHistoryStore
 from app.config import (
@@ -574,7 +574,7 @@ async def _load_sendable_conversation(
 def _resolve_compare_models(
     request: ChatMessageRequest, settings: Settings
 ) -> list[dict[str, str]]:
-    """比較対象の OCI モデル(model_id + label)を解決する。上限は設定値で抑える。"""
+    """比較対象の モデル(model_id + label)を解決する。上限は設定値で抑える。"""
     catalog = {
         choice["model_id"]: choice["display_name"]
         for choice in registered_answer_model_choices(settings)
@@ -1045,7 +1045,7 @@ async def _generate_chat_answer(
     )
     started_at = perf_counter()
     try:
-        llm = OciEnterpriseAiClient(settings=turn.settings, model_id=model_id or None)
+        llm = EnterpriseAiClient(settings=turn.settings, model_id=model_id or None)
         # llm は会話履歴による質問の書き換えに使う。回答は回答エンジンが自分でモデルを呼ぶので、
         # 列のモデルを別に渡す(#593)。
         pipeline = RagPipeline(

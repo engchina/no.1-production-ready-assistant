@@ -1,4 +1,7 @@
-"""業務ガイドの手順ごとの検索と参照の頁の固定(#2395)。OCI・Oracle はスタブ(合成の fixture)。"""
+"""業務ガイドの手順ごとの検索と参照の頁の固定(#2395)。
+
+モデルの API・Oracle はスタブ(合成の fixture)。
+"""
 
 from __future__ import annotations
 
@@ -82,9 +85,9 @@ def _guide(decision: str = "answer") -> dict[str, Any]:
 
 
 async def _answer(monkeypatch: pytest.MonkeyPatch, oracle: GuideStepOracle, **settings: Any) -> Any:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",

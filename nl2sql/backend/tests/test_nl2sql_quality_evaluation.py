@@ -489,7 +489,7 @@ def test_submit_accepts_repeat_boundaries_and_rejects_unavailable_engine(
         engine_runner=lambda *_args: "SELECT 1 FROM dual",
         judge_runner=_judge,
         readiness_provider=lambda _profile_id: {
-            Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (False, "OCI Enterprise AI が未構成です。")
+            Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (False, "モデルの API が未構成です。")
         },
     )
     with pytest.raises(QualityEvaluationValidationError, match="未構成"):
@@ -798,11 +798,11 @@ def test_quality_evaluation_worker_lease_uses_settings_and_retry_floor(
 
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_attempt_timeout_seconds", 300.0)
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_lease_seconds", 900.0)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_max_retries", 0)
+    monkeypatch.setattr(settings, "enterprise_ai_max_retries", 0)
     assert service._attempt_lease_seconds() == 900.0  # noqa: SLF001
 
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_lease_seconds", 60.0)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_max_retries", 3)
+    monkeypatch.setattr(settings, "enterprise_ai_max_retries", 3)
     assert service._attempt_lease_seconds() == 2400.0  # noqa: SLF001
 
 

@@ -13,7 +13,7 @@
 
 ## プロジェクト概要
 
-文書とナレッジベースを構築し、業務ごとの **Search Answer Profile** から検索・回答する RAG を本番品質で提供する（ingestion・grounding・回答生成・評価・観測・Oracle / OCI への配備）。SQL 専用の自然言語問い合わせは `../nl2sql/` の責務で、`rag/` へ機能・UI・API・設定を混在させない。
+文書とナレッジベースを構築し、業務ごとの **Search Answer Profile** から検索・回答する RAG を本番品質で提供する（ingestion・grounding・回答生成・評価・観測・配備）。SQL 専用の自然言語問い合わせは `../nl2sql/` の責務で、`rag/` へ機能・UI・API・設定を混在させない。
 
 ## 用語
 
@@ -27,12 +27,12 @@
 
 | 用途 | 採用 | 制約 |
 |---|---|---|
-| 回答生成・構造化抽出・クエリ計画 | OCI Enterprise AI | モデル設定は環境変数 / 設定 API 経由 |
-| 埋め込み / リランク | OCI Generative AI（Cohere Embed v4 / Rerank v4 fast） | 埋め込みの次元数を Oracle AI Vector Search とそろえる |
-| 画像・文書理解 | Enterprise AI Vision（OCI Document Understanding は準備中〔ロードマップ〕。#3374） | OCR・ページ解析・VLM 入力 |
+| 回答生成・構造化抽出・クエリ計画 | モデルの API（OpenAI 互換の API。DeepSeek・Aliyun 百煉など） | モデル設定は環境変数 / 設定 API 経由 |
+| 埋め込み / 再ランク | 埋め込みモデル・再ランクのモデル（モデル設定の登録モデル。既定は `text-embedding-v4` の 1024 次元） | 埋め込みの次元数を Oracle AI Vector Search とそろえる |
+| 画像・文書理解 | 画像対応モデル（VLM。モデルの API。OCI Document Understanding は #22 で削除） | OCR・ページ解析・VLM 入力 |
 
 - データ: Oracle Autonomous AI Database / Oracle AI Vector Search（チャンク・引用・文書構造・評価結果・監査ログ・ベクトル検索の正本）と、ローカルのディレクトリ（`PLATFORM_LOCAL_STORAGE_DIR`。原本・変換済み artifact・レビュー済み文書・評価 artifact）。
-- SDK は `python-oracledb`（`oci` は OCI Document Understanding の parser だけが使う）。Frontend は共有 UI に加えて shadcn/ui、通信は REST + SSE / WebSocket。
+- SDK は `python-oracledb`。Frontend は共有 UI に加えて shadcn/ui、通信は REST + SSE / WebSocket。
 - 観測は Langfuse + Prometheus + OpenTelemetry。品質は pytest / pytest-cov / ruff / mypy / bandit / pip-audit / Vitest / Playwright。
 - **配備**: backend・取込 worker・前処理・parser はサービスごとの uv の venv（`uv sync --locked --no-dev --python 3.12`）と systemd の unit で動かす。unit の定義は `scripts/rag-systemd.sh`（本番の `init_script.sh` と開発の `scripts/rag-services.sh` が共通で使う）。Compute には root の [docs/agents/deploy.md](../docs/agents/deploy.md) のとおり他の製品と同じ 1 台に入る（CPU parser のみ）。Dockerfile・compose は作り直さない。開発の起動は backend が `uv run uvicorn`、前処理 / parser が `scripts/rag-services.sh`、frontend が `npm run dev`（docs/deployment.md「ローカル開発」）。
 - **サービス管理画面**は systemd の unit を操作する（起動 = `enable --now`、停止 = `disable --now` で最後に操作した状態を保つ）。backend が実行してよいのは、sudoers で許可した allowlist の unit の `systemctl` / `journalctl` だけ（argv 固定・shell を通さない。`app/services/systemd.py`）。前処理 / parser を足すときは、catalog・`scripts/rag-systemd.sh` の `RAG_MICROSERVICES`・URL 設定の既定値（`127.0.0.1:<port>`）をそろえる（テストで照合する）。
@@ -90,6 +90,6 @@ CI の job は `RAG / Backend`・`RAG / Frontend`・`RAG / E2E smoke` 等。外�
 
 ## コーディング規約
 
-1. RAG の検索・回答は Oracle AI Vector Search、OCI Enterprise AI、OCI GenAI の embedding / rerank を中心に構成する（別 RAG SaaS も入れない）。
+1. RAG の検索・回答は Oracle AI Vector Search と、モデルの API（OpenAI 互換の API）の LLM・埋め込み・再ランクを中心に構成する（別 RAG SaaS も入れない）。
 2. KB の query の legacy config は runtime で無視し、保存時に新規保存しない。
 3. 機能開発では、既存のパターン・API・UI コンポーネントを優先する。

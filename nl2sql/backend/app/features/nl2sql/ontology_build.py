@@ -1,6 +1,6 @@
 """AI オントロジー構築(スキーマ・Q/A・資料から13種類の関連概念を統合抽出)。
 
-OCI Enterprise AI の入力 schema は Profile + DB schema catalog から直接作る。
+モデルの API の入力 schema は Profile + DB schema catalog から直接作る。
 出力は Pydantic(:class:`OntologyBuildExtraction`)で検証し、profile スコープ外の
 owner/object/column を参照する候補は Markdown 下書きへ入れず採用外候補として記録する。
 生成物は承認済み draft revision と Markdown 下書き artifact として保存され、
@@ -4714,7 +4714,7 @@ class OntologyBuildService:
         if client is None or not callable(configured) or not configured():
             self._fail(
                 job_id,
-                "OCI Enterprise AI が未設定のため、AI オントロジー構築を実行できません。",
+                "モデルの API が未設定のため、AI オントロジー構築を実行できません。",
                 error_code="LLM_UNCONFIGURED",
             )
             return

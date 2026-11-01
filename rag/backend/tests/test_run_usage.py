@@ -1,7 +1,7 @@
 """実行のモデルの利用量（実行履歴の概要。#3419）の集計のテスト。
 
 本物の `operation_trace` と回答エンジンの観測（`_observe_engine_call`）で span を作り、
-`AnswerTrace` の span の知らせから集めた値を確かめる。OCI は呼ばない（usage は合成の値）。
+`AnswerTrace` の span の知らせから集めた値を確かめる。モデルの API は呼ばない（usage は合成の値）。
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def test_usage_sums_llm_calls_without_double_counting_stages() -> None:
     """
     trace = AnswerTrace("op-usage", owner_user_uuid=None)
     with answer_trace(trace, trace_id="run-usage"):
-        # 会話の履歴による質問の書き換え（backend の OciEnterpriseAiClient と同じ span）。
+        # 会話の履歴による質問の書き換え（backend の EnterpriseAiClient と同じ span）。
         with observed_span(
             "gen_ai.chat", kind="client", attributes={"gen_ai.request.model": "model-rewrite"}
         ) as span:

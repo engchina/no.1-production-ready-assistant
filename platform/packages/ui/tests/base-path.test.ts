@@ -31,7 +31,7 @@ describe("base path（#1316）", () => {
   it("base が / のときは何も変えない（ローカルの開発・e2e）", () => {
     expect(withBasePath("/api/health", "/")).toBe("/api/health");
     expect(withBasePath("/api/health", undefined)).toBe("/api/health");
-    expect(stripBasePath("/settings/oci", "/")).toBe("/settings/oci");
+    expect(stripBasePath("/settings/model", "/")).toBe("/settings/model");
   });
 
   it("アプリの絶対パスに base を 1 回だけ付ける", () => {
@@ -54,7 +54,7 @@ describe("base path（#1316）", () => {
   });
 
   it("base を付けた path から base を外す", () => {
-    expect(stripBasePath("/nl2sql/settings/oci", "/nl2sql/")).toBe("/settings/oci");
+    expect(stripBasePath("/nl2sql/settings/model", "/nl2sql/")).toBe("/settings/model");
     expect(stripBasePath("/nl2sql", "/nl2sql/")).toBe("/");
     expect(stripBasePath("/nl2sql/", "/nl2sql/")).toBe("/");
     expect(stripBasePath("/nl2sql?x=1", "/nl2sql/")).toBe("/?x=1");

@@ -1,6 +1,6 @@
 # 障害対応 Runbook
 
-OCI Enterprise AI の抽出後に Oracle AI Database の登録件数を確認します。
+モデルの API の抽出後に Oracle AI Database の登録件数を確認します。
 
 ```sql
 select count(*) as chunk_count

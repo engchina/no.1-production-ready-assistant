@@ -1,6 +1,6 @@
 """モデルの接続テストの応答から、思考を除いた本文だけを返す回帰テスト(#1423)。
 
-2026-10-11 に OCI Enterprise AI の `/responses` から実際に返った形(claude-opus-5 と
+2026-10-11 にモデルの API の `/responses` から実際に返った形(claude-opus-5 と
 openai.gpt-oss-120b)を縮めて録画した。`output` の先頭に `type=reasoning` の item が付き、
 その `content` に英語の思考(`reasoning_text`)が入る。
 """

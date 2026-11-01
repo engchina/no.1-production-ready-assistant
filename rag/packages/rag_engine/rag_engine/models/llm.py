@@ -126,7 +126,7 @@ class QueryRoutingOutput(_StrictModel):
     最終的な不足判定ではなく、回答時に提供済み根拠と照合する対象です。
     """
 
-    # 戦略は schema の enum で ID に制約する。OpenAI Responses と OCI Generative AI のどちらも strict schema を
+    # 戦略は schema の enum で ID に制約する。OpenAI 互換の Responses API は strict schema を
     # 強制するため、LLM の出力がこの外に出ない。answer_models の定数を import すると循環するので文字列で書き、
     # answering._ROUTABLE_QUERY_STRATEGIES との一致はテストで固定する (#919)。
     strategy: Literal["simple_retrieval", "rag_fusion", "query_decomposition", "step_back_prompting", "hyde"]

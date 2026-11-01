@@ -49,7 +49,7 @@ def test_internal_urls(url: str) -> None:
 @pytest.mark.parametrize(
     "url",
     [
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/chat",
+        "https://llm.example/v1/chat/completions",
         "https://objectstorage.ap-tokyo-1.oraclecloud.com",
         "https://mcp.example.com/mcp",
         "http://8.8.8.8",

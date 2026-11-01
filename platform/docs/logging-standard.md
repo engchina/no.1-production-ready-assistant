@@ -34,7 +34,7 @@ HTTP summary は hop ごとに `http_access` を1件。route template、status�
 
 既存の安定した英語 event 名は維持する。英語 identifier だけの既存 message は event にも対応する。自由形式の既存日本語 message は `application_log`、第三者は `dependency_log` とし、SDK の自由本文は通常診断に持ち込まない。
 
-外部の HTTP クライアント・SDK の logger（`httpx`・`httpx2`・`httpcore`・`httpcore2`・`urllib3`・`requests`・`oci`）は既定で WARNING にし、呼び出しごとの INFO（本文を伏せると情報が無い行）を出さない（`pr_backend_core.logging.DEPENDENCY_LOGGER_LEVELS`。#1935）。戻すときは `configure_logging` の `quiet_loggers` に同じ名前で level を渡すか、`*_LOG_LEVEL` を DEBUG にする。HTTP の呼び出しの情報が要るなら、自前の構造化ログ（依存先の呼び出しの所要時間など）に持つ。
+外部の HTTP クライアント・SDK の logger（`httpx`・`httpx2`・`httpcore`・`httpcore2`・`urllib3`・`requests`）は既定で WARNING にし、呼び出しごとの INFO（本文を伏せると情報が無い行）を出さない（`pr_backend_core.logging.DEPENDENCY_LOGGER_LEVELS`。#1935）。戻すときは `configure_logging` の `quiet_loggers` に同じ名前で level を渡すか、`*_LOG_LEVEL` を DEBUG にする。HTTP の呼び出しの情報が要るなら、自前の構造化ログ（依存先の呼び出しの所要時間など）に持つ。
 
 | event | level / 用途 |
 |---|---|

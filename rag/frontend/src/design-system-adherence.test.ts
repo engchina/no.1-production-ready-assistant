@@ -212,7 +212,7 @@ const i = <label htmlFor="n">名前{"※必須"}</label>;
   it("共有部品の required・requiredLabel の上書き・エラー文言・SQL の * は許す", async () => {
     const messages = await lint(`
 const a = <TextField id="n" label="名前" required />;
-const b = <TextField id="r" label="リージョン" required requiredLabel="OCI 運用時必須" />;
+const b = <TextField id="r" label="リージョン" required requiredLabel="利用時必須" />;
 const c = <SelectField id="s" label="種別" required requiredLabel={t("common.required")} />;
 const d = <FieldLabel htmlFor="sql" label="SQL" required />;
 const e = <Fieldset legend="ロール" required>…</Fieldset>;

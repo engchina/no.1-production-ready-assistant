@@ -1,7 +1,7 @@
 [project]
 name = "production-ready-rag-backend"
 version = "0.1.0"
-description = "Production-ready RAG backend (FastAPI + OCI Enterprise AI + Oracle AI Database)"
+description = "Production-ready RAG backend (FastAPI + OpenAI-compatible model APIs + Oracle AI Database)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

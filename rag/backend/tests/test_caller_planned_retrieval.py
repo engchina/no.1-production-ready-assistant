@@ -79,16 +79,16 @@ class QueryOracle(FakeOracle):
 def _reasoning_settings() -> Settings:
     """質問に応じた推論の工程をすべて有効にした設定（caller ではどれも使わないことを確かめる）。"""
     return Settings(
-        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
         rag_query_strategy="auto_routing",
         rag_answer_flow="crag",
         rag_screen_linking_enabled=True,
         rag_auto_field_filter_enabled=True,
         # 回答のモデルが画像を読めても、回答を作らない検索では根拠の画像を切り出さない（#3444）。
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="vlm", display_name="VLM", vision_enabled=True)
         ],
-        oci_enterprise_ai_default_text_model="vlm",
+        enterprise_ai_default_text_model="vlm",
     )
 
 
@@ -98,11 +98,11 @@ async def _fail_source(oracle: object, document_id: str) -> bytes:
 
 @pytest.fixture
 def no_generation(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     GENERATION_CALLS.clear()
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fail_generation)
-    monkeypatch.setattr(engine_oci, "parse_multimodal_response", _fail_generation)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fail_generation)
+    monkeypatch.setattr(engine_api, "parse_multimodal_response", _fail_generation)
     # 根拠の画像を切り出す原本の読み込み（回答を作らない検索では行わない。#3444）。
     monkeypatch.setattr("app.rag.answer_engine.load_parsed_source", _fail_source)
     yield GENERATION_CALLS
@@ -157,7 +157,7 @@ async def test_rag_planned_retrieval_still_uses_query_expansion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """planning=rag（既定）は今までどおり RAG が検索戦略の判定（LLM）を行う（意味を変えない）。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.models.llm import QueryRoutingOutput
 
     schemas: list[str] = []
@@ -168,7 +168,7 @@ async def test_rag_planned_retrieval_still_uses_query_expansion(
             return QueryRoutingOutput(strategy="simple_retrieval", reason="単純", queries=[])
         raise AssertionError(f"unexpected schema: {schema.__name__}")
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", routing_only)
+    monkeypatch.setattr(engine_api, "parse_text_response", routing_only)
     engine = AnswerEngine(
         Settings(rag_query_strategy="auto_routing"),
         oracle=FakeOracle(),  # type: ignore[arg-type]

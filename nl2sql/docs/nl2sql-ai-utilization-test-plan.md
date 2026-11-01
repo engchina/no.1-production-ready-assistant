@@ -23,7 +23,7 @@
 - `AI 活用` メニューの閲覧には `search.view` 権限を使う。
 - SQL 実行ボタンは `search.execute` 権限が必要。権限なしでは実行不可 banner を確認する。
 - `SELECT SQL を実行` と SQL 生成 preview 実行は `/api/nl2sql/execute` を使う。管理 DDL/DML の `/api/nl2sql/db-admin/execute` とは別の SELECT-only 境界である。
-- 実 OCI / Oracle 接続がない環境では、mock response を使って UI 状態を検証する。
+- 実際のモデルの API / Oracle 接続がない環境では、mock response を使って UI 状態を検証する。
 - fixture の SQL は検証用であり、本番 DB に対して破壊的 SQL を実行しない。
 - DML / DDL / 複文 SQL は「ブロックされること」を確認するための入力データである。
 

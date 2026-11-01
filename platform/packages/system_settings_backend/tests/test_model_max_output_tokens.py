@@ -126,7 +126,7 @@ def test_budget_takes_min_of_model_limit_and_context_room() -> None:
 
 def test_model_budget_and_retry_widen_up_to_model_limit() -> None:
     settings = FakeSettings()
-    settings.oci_enterprise_ai_models = [
+    settings.enterprise_ai_models = [
         EnterpriseAiConfiguredModel(
             model_id="big", max_input_tokens=1_000_000, max_output_tokens=131_072
         ),

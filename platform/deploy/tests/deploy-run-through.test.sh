@@ -30,7 +30,7 @@ expect() {
 }
 
 # 1. 要約の形だけの判定。
-unreachable='状態を読めません（SCHEMA_STATUS_UNAVAILABLE: DPY-6005: ADB が停止しているか、この接続元から DB に届きません。OCI コンソールか…）'
+unreachable='状態を読めません（SCHEMA_STATUS_UNAVAILABLE: DPY-6005: ADB が停止しているか、この接続元から DB に届きません。DB の管理画面…）'
 expect "接続の失敗（DPY-6005）は DB に繋がらない" true 1 "${unreachable}"
 expect "接続の失敗（ORA のコード）も DB に繋がらない" true 1 \
   '状態を読めません（SCHEMA_STATUS_UNAVAILABLE: ORA-12541: DB の listener に届きません。…）'

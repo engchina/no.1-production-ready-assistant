@@ -104,7 +104,7 @@ from app.api.errors import DocumentFileMissingError
 from app.api.routes import documents as documents_route
 from app.api.routes import search as search_route
 from app.api.routes import search_answer_profiles as search_answer_profiles_route
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.section_map_store import SectionChunkRow, SectionMapStore
 from app.config import get_settings
@@ -4678,7 +4678,7 @@ async def _select_profile(
     result = await recommend_search_answer_profiles(
         question,
         oracle=OracleClient(),
-        embedder=OciGenAiClient(settings=get_settings()),
+        embedder=GenAiClient(settings=get_settings()),
     )
     chosen = next(
         (item for item in result.candidates if item.id == result.recommended_profile_id), None
@@ -4822,7 +4822,7 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
         result = await recommend_search_answer_profiles(
             arguments.question,
             oracle=OracleClient(),
-            embedder=OciGenAiClient(settings=get_settings()),
+            embedder=GenAiClient(settings=get_settings()),
             profile_ids=arguments.profile_ids,
             limit=arguments.limit,
         )

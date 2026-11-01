@@ -17,7 +17,7 @@ from app.settings import Settings
 
 PRIMARY = "https://primary.example/openai/v1"
 SECONDARY = "https://secondary.example/openai/v1"
-# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project OCID を入れない。
+# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project ID を入れない。
 TERTIARY = "https://api.openai.example/v1"
 
 
@@ -28,20 +28,20 @@ def _payload() -> dict[str, Any]:
                 {
                     "connection_id": "primary",
                     "endpoint": PRIMARY,
-                    "project_ocid": "ocid1.project.primary",
+                    "project_id": "proj-primary",
                     "api_key": "sk-primary",
                 },
                 {
                     "connection_id": "secondary",
                     "endpoint": SECONDARY,
-                    "project_ocid": "ocid1.project.secondary",
+                    "project_id": "proj-secondary",
                     "api_key": "",
                     "has_api_key": True,
                 },
                 {
                     "connection_id": "tertiary",
                     "endpoint": TERTIARY,
-                    "project_ocid": "",
+                    "project_id": "",
                     "api_key": "sk-tertiary",
                 },
             ],
@@ -64,14 +64,14 @@ def _payload() -> dict[str, Any]:
         (
             "enterprise_text",
             "text-a",
-            (PRIMARY, "Bearer sk-primary", "ocid1.project.primary"),
+            (PRIMARY, "Bearer sk-primary", "proj-primary"),
         ),
         (
             "enterprise_vision",
             "vision-b",
-            (SECONDARY, "Bearer sk-saved-secondary", "ocid1.project.secondary"),
+            (SECONDARY, "Bearer sk-saved-secondary", "proj-secondary"),
         ),
-        # Project OCID のないターシャリ接続は OpenAI-Project ヘッダーを送らない（#786）。
+        # Project ID のないターシャリ接続は OpenAI-Project ヘッダーを送らない（#786）。
         ("enterprise_text", "gpt-c", (TERTIARY, "Bearer sk-tertiary", "")),
     ],
     ids=["text-primary", "vision-secondary", "text-tertiary"],
@@ -100,7 +100,7 @@ def test_model_test_uses_connection_of_tested_model(
         lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
     )
     # 保存済みのセカンダリ接続の key（画面では空欄 = 保持）を使う。
-    saved = Settings(_env_file=None, oci_enterprise_ai_secondary_api_key="sk-saved-secondary")
+    saved = Settings(_env_file=None, enterprise_ai_secondary_api_key="sk-saved-secondary")
     request = ModelSettingsTestRequest.model_validate(
         {"settings": _payload(), "target_type": target_type, "model_id": model_id}
     )

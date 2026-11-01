@@ -1,7 +1,7 @@
 """LLM による回答の判定と、その人手の判定による校正（#3418・#2577）。
 
 判定のモデルは台本（`fixtures/judge_calibration/judge_outputs.json` の録画の代わりの応答）で、
-実サービスは呼ばない。OCI Enterprise AI の呼び方（URL・ヘッダー・構造化出力・失敗の分類）は
+実サービスは呼ばない。モデルの API の呼び方（URL・ヘッダー・構造化出力・失敗の分類）は
 MockTransport で確かめる。
 """
 
@@ -88,7 +88,7 @@ def _report(thresholds: CalibrationThresholds | None = None) -> CalibrationRepor
         labels,
         RUBRIC,
         judgements=judgements,
-        judge_provenance={"provider": "oci_enterprise_ai", "model": MODEL},
+        judge_provenance={"provider": "enterprise_ai", "model": MODEL},
         settings=settings,
         thresholds=thresholds or CalibrationThresholds(),
     )
@@ -246,7 +246,7 @@ def test_labels_must_match_the_rubric(tmp_path: Path) -> None:
         judge_labels(load_labels(path), RUBRIC, ScriptedJudge(), JudgeSettings())
 
 
-# ---- OCI Enterprise AI の呼び方 ----------------------------------------------------------------
+# ---- モデルの API の呼び方 -----------------------------------------------------------------------
 
 
 def _config(**fields: Any) -> JudgeModelConfig:
@@ -254,7 +254,7 @@ def _config(**fields: Any) -> JudgeModelConfig:
         "endpoint": "https://inference.example.invalid/openai/v1/",
         "model": "judge-model",
         "api_key": "synthetic-key",
-        "project_ocid": "ocid1.synthetic",
+        "project_id": "proj-synthetic",
     }
     return JudgeModelConfig(**{**values, **fields})
 
@@ -287,7 +287,7 @@ def test_enterprise_ai_client_posts_the_structured_output_request() -> None:
     request = seen[0]
     assert str(request.url) == "https://inference.example.invalid/openai/v1/responses"
     assert request.headers["authorization"] == "Bearer synthetic-key"
-    assert request.headers["openai-project"] == "ocid1.synthetic"
+    assert request.headers["openai-project"] == "proj-synthetic"
     body = json.loads(request.content)
     assert body["model"] == "judge-model"
     assert "seed" not in body
@@ -324,7 +324,7 @@ def test_model_config_comes_from_suite_env_without_a_default_model() -> None:
         }
     )
     assert config.provenance() == {
-        "provider": "oci_enterprise_ai",
+        "provider": "enterprise_ai",
         "endpoint_host": "host.example.invalid",
         "model": "m",
         "max_output_tokens": None,

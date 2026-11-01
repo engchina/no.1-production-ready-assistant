@@ -71,8 +71,8 @@ def test_embedding_and_rerank_use_their_model_connection(tmp_path: Path) -> None
     response = client.patch("/api/settings/model", json=payload())
 
     assert response.status_code == 200, response.text
-    assert settings.oci_genai_embedding_model == "text-embedding-v4"
-    assert settings.oci_genai_rerank_model == "qwen3-rerank"
+    assert settings.genai_embedding_model == "text-embedding-v4"
+    assert settings.genai_rerank_model == "qwen3-rerank"
     assert embedding_model_connection(settings).api_key == "sk-ali"
     assert embedding_model_connection(settings, rerank=True).api_key == "sk-ali"
     assert embedding_api_base_url(settings) == BAILIAN
@@ -96,8 +96,8 @@ def test_rerank_url_without_compatible_mode_is_kept() -> None:
 
 def test_unregistered_embedding_model_uses_primary_connection() -> None:
     settings = FakeSettings(
-        oci_enterprise_ai_endpoint="https://primary.example/v1",
-        oci_enterprise_ai_api_key="sk-primary",
+        enterprise_ai_endpoint="https://primary.example/v1",
+        enterprise_ai_api_key="sk-primary",
     )
     assert embedding_model_connection(settings).connection_id == "primary"
     assert embedding_api_base_url(settings) == "https://primary.example/v1"
@@ -178,8 +178,8 @@ def test_legacy_generative_ai_section_moves_to_registered_models(tmp_path: Path)
     store = make_store(tmp_path)
     store.load(settings)
 
-    assert settings.oci_genai_embedding_model == "text-embedding-v4"
-    assert settings.oci_genai_rerank_model == "qwen3-rerank"
+    assert settings.genai_embedding_model == "text-embedding-v4"
+    assert settings.genai_rerank_model == "qwen3-rerank"
     data = make_client(settings, store).get("/api/settings/model").json()["data"]["settings"]
     models = data["enterprise_ai"]["models"]
     assert [(model["model_id"], model["kind"], model["connection_id"]) for model in models] == [

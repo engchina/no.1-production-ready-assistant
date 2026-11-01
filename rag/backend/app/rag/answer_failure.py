@@ -2,7 +2,7 @@
 
 検索（REST・SSE）・チャット・MCP・品質評価の 1 ケースは、回答の pipeline の例外を同じ形で返す。
 
-- LLM の応答が未完了（`rag_engine.adapters.oci.IncompleteResponse`。Responses API の
+- LLM の応答が未完了（`rag_engine.adapters.model_api.IncompleteResponse`。Responses API の
   `status=incomplete`）で終わった失敗は、理由ごとの文（出力の上限・安全の判定）と直し方を返す。
   送り直し（上限を広げる・推論の量を下げる）は adapter が済ませている。
 - それ以外の予期しない例外は、定型文（``fallback``）のまま返す（内部の文を利用者に出さない）。
@@ -25,7 +25,7 @@ from typing import Any
 
 from pr_backend_core.bounded_calls import KIND_LABELS, ErrorKind, classify_error
 from pr_backend_core.logging import safe_error_code
-from rag_engine.adapters.oci import IncompleteResponse
+from rag_engine.adapters.model_api import IncompleteResponse
 from rag_engine.generation.execution_record import AnswerExecutionError
 
 # 未完了の応答の error_type（画面・SSE・MCP の error code）。3 製品の共通の error code と同じ値。
@@ -141,7 +141,7 @@ def describe_answer_failure(exc: BaseException, fallback: str) -> AnswerFailure:
 # 無い」と区別できるように、汎用の内部エラーにせず、種類つきの 5xx で返す。
 ANSWER_API_FAILED_ERROR_CODE = "RAG_ANSWER_AI_API_FAILED"
 # 呼び先の SDK・HTTP の例外の module（この例外が原因の連鎖にあれば AI の API の失敗とみなす）。
-_API_EXCEPTION_MODULES = ("openai", "httpx", "httpcore", "oci")
+_API_EXCEPTION_MODULES = ("openai", "httpx", "httpcore")
 # 呼び先が返した error code として残す値の形（本文・識別子を残さない）。
 _SAFE_PROVIDER_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 # 種類ごとの HTTP status（呼び先の失敗なので 5xx。時間切れは 504、流量・一時的な不可用は 503）。

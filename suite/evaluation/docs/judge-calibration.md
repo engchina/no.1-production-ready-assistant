@@ -128,14 +128,14 @@ uv run suite-evaluation label-import --items $W/labels.items.json \
 ### suite の判定（LLM-as-judge）
 
 ```bash
-export SUITE_EVALUATION_JUDGE_ENDPOINT=...   # OCI Enterprise AI の Endpoint URL
+export SUITE_EVALUATION_JUDGE_ENDPOINT=...   # モデルの API の Endpoint URL
 export SUITE_EVALUATION_JUDGE_API_KEY=...    # 引数・ログに出さない
 export SUITE_EVALUATION_JUDGE_MODEL=...      # 被評価の回答を作ったモデルと別の系統を選ぶ
 uv run suite-evaluation calibrate $W/labels.json --repeats 3 --output $W/calibration.json
 ```
 
 - 観点ごと・区分ごと（dev・holdout・synthetic）に一致率・κ・混同行列・誤合格 / 誤不合格・判定率を出し、holdout の人手の項目で合否を決める（`passed`・`failures`）。synthetic は合否に入れない参考（壊した回答の誤合格の率）。
-- **判定のモデルの seed は使わない**（OCI Enterprise AI の呼び出しから外した。#3529）。再現の条件として、判定のモデルの ID・rubric の sha256・指示と出力の形の sha256（`prompt_sha256`）を結果の `provenance` に残し、`--repeats N`（2 以上）で同じ項目を N 回判定して、観点ごとに回の間でラベル（か評価不能）が変わった項目の率（`variance.<観点>.unstable_rate`）を記録する。合否は最初の回で決める。揺れの率が高い観点は、κ が閾値を超えても合否に使う前に rubric を見直す。
+- **判定のモデルの seed は使わない**（モデルの API の呼び出しから外した。#3529）。再現の条件として、判定のモデルの ID・rubric の sha256・指示と出力の形の sha256（`prompt_sha256`）を結果の `provenance` に残し、`--repeats N`（2 以上）で同じ項目を N 回判定して、観点ごとに回の間でラベル（か評価不能）が変わった項目の率（`variance.<観点>.unstable_rate`）を記録する。合否は最初の回で決める。揺れの率が高い観点は、κ が閾値を超えても合否に使う前に rubric を見直す。
 - 人手の判定を直したら、`--judgements $W/calibration.json` でモデルを呼ばずに集計だけやり直す（`--repeats` の判定も引き継ぐ）。rubric を変えたら判定からやり直す（rubric の sha256 が違う校正の結果は使えない）。
 - dev の項目は rubric の調整に使ってよい。holdout の項目を見て rubric を直したら、その holdout はもう holdout ではない（新しいケースで holdout を作り直す）。
 
@@ -151,7 +151,7 @@ uv run python -m app.rag.answer_judge_calibration ../../tmp/judge-calibration/la
 
 ### 記録する
 
-結果のファイルは `./tmp/` に置いたまま、#3418（RAG の評価器は #2577）にコメントで次を残す（回答・根拠・質問の本文、業務の内容、endpoint・OCID などの実環境の情報は書かない）:
+結果のファイルは `./tmp/` に置いたまま、#3418（RAG の評価器は #2577）にコメントで次を残す（回答・根拠・質問の本文、業務の内容、endpoint・Project ID などの実環境の情報は書かない）:
 
 - 判定のモデルの ID、rubric の id・版・sha256、`prompt_sha256`、判定の設定（`max_attempts`・`max_evidence_chars`）
 - LabelSet の sha256、人手 / 合成の項目の数、観点ごとの holdout の行と pass / fail の数、記入者の数と記入者の間の κ（観点ごと）、裁定した行の数

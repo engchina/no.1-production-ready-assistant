@@ -104,7 +104,7 @@ class _Rule:
 
 
 _START_ADB_ACTION = (
-    "OCI コンソール（ADB Free コンテナなら docker ps -a）で DB の状態を確かめ、"
+    "DB の管理画面（ADB Free コンテナなら docker ps -a）で DB の状態を確かめ、"
     "停止していれば起動して（docker start。完了まで数分かかります）から再実行してください。"
 )
 

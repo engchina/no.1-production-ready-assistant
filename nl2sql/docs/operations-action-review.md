@@ -19,7 +19,7 @@
 
 ## 操作別の確認
 
-以下の「確認」は API fixture の実ブラウザ検証とコード・backend テストの範囲を示す。実 OCI / Oracle の運用データを更新したという意味ではない。
+以下の「確認」は API fixture の実ブラウザ検証とコード・backend テストの範囲を示す。実際のモデルの API / Oracle の運用データを更新したという意味ではない。
 
 ### 業務プロファイル `/profiles`
 
@@ -177,6 +177,6 @@ UV_CACHE_DIR=/tmp/nl2sql-uv-cache uv run --no-sync pytest tests/test_nl2sql_lega
 
 ## 制約
 
-- 実 OCI Enterprise AI、Oracle の運用資格情報での新規生成・公開・評価は実行していない。backend は InMemory/store・client fixture を含む回帰テストで検証した。
+- 実際のモデルの API、Oracle の運用資格情報での新規生成・公開・評価は実行していない。backend は InMemory/store・client fixture を含む回帰テストで検証した。
 - 未保存離脱の共通 hook は内部リンクと beforeunload を保護する。browser back/forward の完全なガードは既存 BrowserRouter の制約として対象外。
 - このレビューは列挙した action と回帰ケースの範囲であり、全入力・全ネットワーク障害の無欠陥を保証するものではない。

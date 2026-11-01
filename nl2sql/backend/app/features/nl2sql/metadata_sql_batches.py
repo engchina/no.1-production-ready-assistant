@@ -92,24 +92,18 @@ def metadata_fallback_reason(exc: BaseException) -> str:
     if isinstance(exc, EnterpriseAiDirectError):
         if exc.incomplete is not None and exc.incomplete.output_limit_reached:
             return (
-                "OCI Enterprise AI の応答が出力の上限に達して未完了でした。"
+                "モデルの応答が出力の上限に達して未完了でした。"
                 "システム設定 › モデル で既定のテキストモデルの「出力の上限（tokens）」を"
                 "大きくするか、対象の表を減らしてやり直してください。"
             )
         if exc.code == "incomplete":
-            return "OCI Enterprise AI の応答が未完了でした。時間をおいてやり直してください。"
+            return "モデルの応答が未完了でした。時間をおいてやり直してください。"
         if exc.configuration_error:
-            return (
-                "OCI Enterprise AI の呼び出しが設定の誤りで失敗しました"
-                "（時間をおいても直りません）。"
-            )
+            return "モデルの API の呼び出しが設定の誤りで失敗しました（時間をおいても直りません）。"
         if exc.code == "timeout":
-            return (
-                "OCI Enterprise AI の応答が時間内に返りませんでした。"
-                "時間をおいてやり直してください。"
-            )
-        return "OCI Enterprise AI の呼び出しに失敗しました。時間をおいてやり直してください。"
-    return "OCI Enterprise AI が返した SQL をそのまま使えませんでした。"
+            return "モデルの応答が時間内に返りませんでした。時間をおいてやり直してください。"
+        return "モデルの API の呼び出しに失敗しました。時間をおいてやり直してください。"
+    return "モデルの API が返した SQL をそのまま使えませんでした。"
 
 
 def metadata_fallback_detail(exc: BaseException) -> str:

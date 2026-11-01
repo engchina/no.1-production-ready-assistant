@@ -1,7 +1,7 @@
 """モデルのテストに送る入力（3製品で共通。#745）。
 
 システム設定 > モデル設定の「テスト」は、製品ごとの client（RAG / NL2SQL の
-`OciEnterpriseAiClient`、Agent の自前の payload）で呼ぶが、送る入力はここの 1 セットを使う。
+`EnterpriseAiClient`、Agent の自前の payload）で呼ぶが、送る入力はここの 1 セットを使う。
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def embedding_test_details(
 ) -> dict[str, int]:
     """埋め込みのテストの結果（#45。3 製品で共通）。次元が `expected_dim` でなければ失敗にする。
 
-    `expected_dim` は製品の設定 `oci_genai_embedding_dim`（Oracle の VECTOR 列に合わせた値。
+    `expected_dim` は製品の設定 `genai_embedding_dim`（Oracle の VECTOR 列に合わせた値。
     呼び出しに `dimensions` として送る値）。受け付けないモデルは既定の次元を返すので、そのまま
     使うと Oracle の VECTOR 列に入らない。テストで止める。
     """

@@ -1,6 +1,6 @@
-"""OCI Enterprise AI クライアント。
+"""モデルの API クライアント。
 
-RAG と同じ `app.clients.oci_enterprise_ai.OciEnterpriseAiClient` import path を提供する。
+RAG と同じ `app.clients.enterprise_ai.EnterpriseAiClient` import path を提供する。
 NL2SQL 側の既存 direct client を薄く包み、settings API からは RAG と同じ async
 interface で呼び出す。
 """
@@ -11,15 +11,15 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.features.nl2sql.structured_outputs import TextOutput, response_format
 from app.settings import Settings, get_settings
 
 type SyncCallRunner = Callable[[Callable[[], Any]], Any]
 
 
-class OciEnterpriseAiClient:
-    """Settings から OCI Enterprise AI 呼び出しを行う backend adapter。"""
+class EnterpriseAiClient:
+    """Settings からモデルの API 呼び出しを行う backend adapter。"""
 
     def __init__(
         self,
@@ -27,7 +27,7 @@ class OciEnterpriseAiClient:
         sync_call_runner: SyncCallRunner | None = None,
     ) -> None:
         self._settings = settings or get_settings()
-        self._client = OciEnterpriseAiDirectClient(self._settings)
+        self._client = HttpEnterpriseAiDirectClient(self._settings)
         self._sync_call_runner = sync_call_runner
 
     async def generate(self, prompt: str, context: str = "") -> str:

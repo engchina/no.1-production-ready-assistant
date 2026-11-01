@@ -110,7 +110,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.rag.ingestion_worker import IngestionQueueWorker
 
             # in-process ワーカーは Gunicorn worker ごとに 1 つ起動する。複数 worker で
-            # 動かすと実効同時取込数が WEB_CONCURRENCY 倍になり OCI/Oracle を過負荷にし得る。
+            # 動かすと実効同時取込数が WEB_CONCURRENCY 倍になり、モデルの API / Oracle を
+            # 過負荷にし得る。
             # 単一プロセス運用にするか、別プロセスワーカー（INPROCESS=false）へ切り出すこと。
             logger.warning(
                 "ingestion_inprocess_worker_enabled",

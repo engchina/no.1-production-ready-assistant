@@ -4,7 +4,7 @@ No.1 Production Ready 製品群（**RAG / NL2SQL / Agent**）の backend が共�
 「全サービスが必ず使う」プラットフォーム機能だけを持ち、業務ロジックは持たない。
 
 技術スタック（確定・RAG を正本）: **Python 3.12 + FastAPI + Pydantic v2 + uv**。
-依存は軽量に保つため **oci / oracledb は含めない**（各サービスが自分で持つ）。
+依存は軽量に保つため **oracledb は含めない**（各サービスが自分で持つ）。
 
 ## 含むもの
 

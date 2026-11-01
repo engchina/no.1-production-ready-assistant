@@ -745,7 +745,7 @@ def test_section_already_in_context_is_reported_as_in_context():
 def test_engine_settings_read_extraction_environment():
     settings = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS": "200000",
+            "ENTERPRISE_AI_MAX_INPUT_TOKENS": "200000",
             "RAG_ENGINE_SECTION_EXTRACTION_CONCURRENCY": "2",
         },
         dotenv_path=None,

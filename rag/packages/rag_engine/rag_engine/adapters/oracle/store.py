@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rag_engine.adapters.oci import (
+from rag_engine.adapters.model_api import (
     EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT,
     EMBEDDING_INPUT_TYPE_SEARCH_QUERY,
     _is_retryable_error,
@@ -1040,13 +1040,13 @@ def search_adb_hybrid_chunks(
 def _query_vectors(queries: Sequence[str], settings: Settings, query_embedder: QueryEmbeddingFunction) -> list[list[float]]:
     """検索文の embedding を検索文と同じ順で返す。
 
-    既定の `embed_query` は 1 件ずつ OCI へ往復するため、既定のままなら `embed_texts` で 1 回にまとめる
+    既定の `embed_query` は 1 件ずつモデルの API へ往復するため、既定のままなら `embed_texts` で 1 回にまとめる
     （byte 上限を超える分は `embed_texts` が分割する）。差し替えられた embedder は契約どおり 1 件ずつ呼ぶ (#876)。
     """
     if query_embedder is embed_query:
         vectors = embed_texts(list(queries), settings, input_type=EMBEDDING_INPUT_TYPE_SEARCH_QUERY)
         if len(vectors) != len(queries):
-            raise RuntimeError("OCI embedding query response count did not match the query count.")
+            raise RuntimeError("Embedding query response count did not match the query count.")
         return vectors
     return [query_embedder(query, settings) for query in queries]
 

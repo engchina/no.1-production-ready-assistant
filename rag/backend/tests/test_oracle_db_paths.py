@@ -32,7 +32,7 @@ from app.schemas.document import (
 )
 from tests.test_oracle_adapter import (
     FakeOraclePool,
-    _oci_settings,
+    _llm_settings,
     _oracle_document_row,
     _oracle_knowledge_base_row,
     _run_inline,
@@ -80,7 +80,7 @@ def _document_state_row(**overrides: object) -> dict[str, object]:
         "status": "UPLOADED",
         "tenant_id_hash": None,
         "category_name": None,
-        "object_storage_path": "oci://namespace/bucket/policy.txt",
+        "object_storage_path": "local://policy.txt",
         "content_type": "text/plain",
         "file_size_bytes": 12,
         "content_sha256": "a" * 64,
@@ -130,7 +130,7 @@ def _assert_no_json_columns(statements: list[str]) -> None:
 async def test_list_document_recipes_does_not_write_when_recipe_rows_exist() -> None:
     """レシピ行があれば読むだけ(MERGE も commit もしない)。"""
     pool = FakeOraclePool(execute_results=[[_recipe_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     rows = await client.list_document_recipes("doc-1")
 
@@ -154,7 +154,7 @@ async def test_list_document_recipes_returns_virtual_default_recipe_without_writ
         "recipe_count": 0,
     }
     pool = FakeOraclePool(execute_results=[[], [document_row]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     rows = await client.list_document_recipes("doc-1")
 
@@ -175,7 +175,7 @@ async def test_list_document_recipes_returns_virtual_default_recipe_without_writ
 async def test_list_document_recipes_raises_key_error_for_missing_document() -> None:
     """文書が無い(または見えない)ときは KeyError(API は 404)。"""
     pool = FakeOraclePool(execute_results=[[], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KeyError):
         await client.list_document_recipes("doc-1")
@@ -188,7 +188,7 @@ async def test_list_document_recipes_does_not_resurrect_deleted_recipe_one() -> 
     pool = FakeOraclePool(
         execute_results=[[_recipe_row(recipe_id="recipe-2", slot_no=2)]],
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     rows = await client.list_document_recipes("doc-1")
 
@@ -210,7 +210,7 @@ async def test_get_document_recipe_returns_virtual_default_recipe_without_write(
         "recipe_count": 0,
     }
     pool = FakeOraclePool(execute_results=[[], [document_row]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     row = await client.get_document_recipe("doc-1", _default_recipe_id())
 
@@ -222,7 +222,7 @@ async def test_get_document_recipe_returns_virtual_default_recipe_without_write(
 async def test_get_document_recipe_does_not_return_virtual_row_for_other_recipe_ids() -> None:
     """レシピ 1 以外の ID は仮の行を作らない。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.get_document_recipe("doc-1", "recipe-2") is None
     assert len(pool.connection.calls) == 1
@@ -231,7 +231,7 @@ async def test_get_document_recipe_does_not_return_virtual_row_for_other_recipe_
 async def test_ensure_default_document_recipe_skips_merge_when_recipe_exists() -> None:
     """投入の経路でも、レシピ 1 があれば MERGE せず JSON 列も読まない。"""
     pool = FakeOraclePool(execute_results=[[_recipe_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     row = await client.ensure_default_document_recipe("doc-1")
 
@@ -254,7 +254,7 @@ async def test_ensure_default_document_recipe_creates_missing_recipe_one() -> No
         "recipe_count": 0,
     }
     pool = FakeOraclePool(execute_results=[[], [document_row], [_recipe_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     row = await client.ensure_default_document_recipe("doc-1")
 
@@ -278,11 +278,11 @@ async def test_ensure_default_document_recipe_creates_missing_recipe_one() -> No
 async def test_create_document_creates_recipe_one_in_same_transaction() -> None:
     """文書の登録と同じ transaction でレシピ 1 を作る(GET で作らない前提)。"""
     pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
         knowledge_base_ids=["kb-1"],
     )
@@ -309,7 +309,7 @@ async def test_document_exists_and_summary_do_not_select_json_columns() -> None:
     pool = FakeOraclePool(
         execute_results=[[{"document_id": "doc-1"}], [_document_state_row()], [], []]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.document_exists("doc-1") is True
     summary = await client.get_document_summary("doc-1")
@@ -329,7 +329,7 @@ async def test_document_exists_and_summary_do_not_select_json_columns() -> None:
 async def test_list_documents_does_not_select_json_columns(monkeypatch: pytest.MonkeyPatch) -> None:
     """取込中にポーリングされる文書一覧は、要約に使わない JSON 列を読まない。"""
     pool = FakeOraclePool(execute_results=[[_document_state_row()], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     # 公開版の取得は独立に検証し、このテストでは元の文書 SQL の応答だけを供給する。
     monkeypatch.setattr(client, "document_language_pack_uses", AsyncMock(return_value={}))
 
@@ -343,7 +343,7 @@ async def test_list_documents_does_not_select_json_columns(monkeypatch: pytest.M
 
 async def test_update_document_processing_config_existence_check_skips_json_columns() -> None:
     pool = FakeOraclePool(execute_results=[[_document_state_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.update_document_processing_config("doc-1", DocumentProcessingConfig())
 
@@ -352,7 +352,7 @@ async def test_update_document_processing_config_existence_check_skips_json_colu
 
 async def test_create_document_ingestion_job_existence_check_skips_json_columns() -> None:
     pool = FakeOraclePool(execute_results=[[_document_state_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     job = IngestionJob(
         id="job-1",
         document_id="doc-1",
@@ -369,7 +369,7 @@ async def test_create_document_ingestion_job_existence_check_skips_json_columns(
 
 async def test_replace_ingestion_segments_existence_check_skips_json_columns() -> None:
     pool = FakeOraclePool(execute_results=[[_document_state_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.replace_ingestion_segments("doc-1", [])
 
@@ -379,7 +379,7 @@ async def test_replace_ingestion_segments_existence_check_skips_json_columns() -
 
 async def test_delete_document_existence_check_skips_json_columns() -> None:
     pool = FakeOraclePool(execute_results=[[_document_state_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.delete_document("doc-1")
 
@@ -390,7 +390,7 @@ async def test_delete_document_existence_check_skips_json_columns() -> None:
 async def test_update_document_status_existence_check_skips_json_columns() -> None:
     """状態の更新の前の存在確認は JSON 列を読まない(戻り値の詳細は従来どおり)。"""
     pool = FakeOraclePool(execute_results=[[_document_state_row()], [_oracle_document_row()], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.update_document_status("doc-1", FileStatus.PREPROCESSING)
 
@@ -484,7 +484,7 @@ async def test_transaction_rollback_failure_keeps_original_exception(
     )
     connection = _Connection(rollback_error=rollback_error, close_error=RuntimeError("closed"))
     pool = _Pool([connection])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     original = ValueError("元の例外")
 
     with (
@@ -507,7 +507,7 @@ async def test_transaction_retries_once_on_dead_session_with_new_connection(
     first = _Connection(rollback_error=RuntimeError("DPY-1001: not connected"))
     second = _Connection()
     pool = _Pool([first, second])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with caplog.at_level(logging.WARNING, logger="app.clients.oracle"):
         result = await client._run_transaction(_failing_operation([_dead_session_error()]))
@@ -523,7 +523,7 @@ async def test_transaction_retries_once_on_dead_session_with_new_connection(
 
 async def test_transaction_does_not_retry_more_than_once() -> None:
     pool = _Pool([_Connection(), _Connection(), _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(RuntimeError):
         await client._run_transaction(
@@ -535,7 +535,7 @@ async def test_transaction_does_not_retry_more_than_once() -> None:
 
 async def test_transaction_does_not_retry_non_transient_errors() -> None:
     pool = _Pool([_Connection(), _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError):
         await client._run_transaction(_failing_operation([ValueError("制約違反")]))
@@ -547,7 +547,7 @@ async def test_transaction_does_not_retry_when_commit_fails() -> None:
     """commit で切断したら反映済みか分からないため、再試行しない。"""
     first = _Connection(commit_error=_dead_session_error())
     pool = _Pool([first, _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(RuntimeError):
         await client._run_transaction(_failing_operation([]))
@@ -589,7 +589,7 @@ def test_real_oracledb_dead_session_error_is_transient() -> None:
 async def test_deadlock_retries_only_when_explicitly_enabled(retry: bool) -> None:
     first, second = _Connection(), _Connection()
     pool = _Pool([first, second])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     operation = _failing_operation([RuntimeError("ORA-00060: deadlock detected")])
     if retry:
         assert await client._run_transaction(operation, retry_deadlocks=True) == "ok"
@@ -604,7 +604,7 @@ async def test_deadlock_retries_only_when_explicitly_enabled(retry: bool) -> Non
 async def test_deadlock_is_not_retried_after_rollback_failure() -> None:
     connection = _Connection(rollback_error=RuntimeError("rollback failed"))
     pool = _Pool([connection, _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     with pytest.raises(RuntimeError, match="ORA-00060"):
         await client._run_transaction(
             _failing_operation([RuntimeError("ORA-00060: deadlock")]), retry_deadlocks=True
@@ -614,7 +614,7 @@ async def test_deadlock_is_not_retried_after_rollback_failure() -> None:
 
 async def test_deadlock_retry_is_bounded() -> None:
     pool = _Pool([_Connection(), _Connection(), _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     with pytest.raises(RuntimeError, match="ORA-00060"):
         await client._run_transaction(
             _failing_operation([RuntimeError("ORA-00060"), RuntimeError("ORA-00060")]),
@@ -646,7 +646,7 @@ async def test_transaction_failure_logs_phase_and_lower_codes_without_details(
     error = _text_commit_error()
     first = _Connection(commit_error=error if phase == "commit" else None)
     pool = _Pool([first, _Connection()])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     with pytest.raises(RuntimeError) as caught:
         await client._run_transaction(_failing_operation([error] if phase == "operation" else []))
     assert caught.value is error
@@ -689,14 +689,14 @@ async def test_embedding_save_commit_failure_keeps_original_and_does_not_return_
         raise error
 
     monkeypatch.setattr(pool.connection, "commit", fail_commit)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     entity_save = AsyncMock()
     pipeline = IngestionPipeline(
         vlm=cast(Any, object()),
         genai=cast(Any, object()),
         oracle=client,
         object_storage=cast(Any, object()),
-        settings=_oci_settings(),
+        settings=_llm_settings(),
     )
     monkeypatch.setattr(pipeline, "_save_entity_index_if_enabled", entity_save)
     chunk = Chunk(

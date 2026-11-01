@@ -13,8 +13,8 @@ from rag_engine.resources.runtime import Runtime
 
 
 def oracle_answer_dependencies() -> AnswerDependencies:
-    """既存 Oracle/OCI 関数を束ねる。ここでは接続・モデル読込を行わない。"""
-    from rag_engine.adapters.oci import parse_multimodal_response, parse_text_response, rerank_text_with_scores
+    """既存 Oracle / モデルの API 関数を束ねる。ここでは接続・モデル読込を行わない。"""
+    from rag_engine.adapters.model_api import parse_multimodal_response, parse_text_response, rerank_text_with_scores
     from rag_engine.adapters.oracle.store import check_adb_hybrid_search_ready, search_adb_hybrid_chunks
 
     return AnswerDependencies(
@@ -34,7 +34,7 @@ class OracleApplication:
         artifact_store: ArtifactStore | None = None,
         embedder: Embedder | None = None,
     ):
-        from rag_engine.adapters.sdk import DocumentParser, OciEmbedder, OciGenerator, OracleIndexer, OracleRetriever
+        from rag_engine.adapters.sdk import ApiEmbedder, ApiGenerator, DocumentParser, OracleIndexer, OracleRetriever
         from rag_engine.chunking.service import ChunkingService
         from rag_engine.generation.application import AnswerService
         from rag_engine.knowledge.service import KnowledgeService
@@ -46,12 +46,12 @@ class OracleApplication:
         # 索引と検索の vector 空間を揃えるため、同じ embedder を両方へ渡す。
         self.indexer = OracleIndexer(settings, runtime, embedder=embedder)
         self.retriever = OracleRetriever(settings, runtime, embedder=embedder)
-        self.generator = OciGenerator(settings, runtime)
+        self.generator = ApiGenerator(settings, runtime)
         self.ingestion = IngestionPipeline(self.parser, self.chunker, self.indexer)
         self.query = QueryPipeline(self.retriever, self.generator)
         if dependencies is None:
             # 業務ガイドの手順の充足を意味の近さで決める embedding も、索引と同じ embedder にする（#2649）。
-            dependencies = replace(oracle_answer_dependencies(), embedder=embedder or OciEmbedder(settings))
+            dependencies = replace(oracle_answer_dependencies(), embedder=embedder or ApiEmbedder(settings))
             if embedder is not None:
                 # advanced answer の検索 query も索引と同じ embedder で vector 化する。
                 dependencies = replace(

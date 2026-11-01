@@ -8,7 +8,7 @@ PoweRAG は LangExtract で entity/field/関係を抽出する。本モジュー
   あればそちらを使う(#548。`resolve_field_definitions`)。
   定義のファイルが無い(一度も保存していない)環境は、標準の項目(`STANDARD_FIELD_DEFINITIONS`)を
   全体の既定にする(#556)。保存した定義は空でもそのまま使う。
-- **抽出**: OCI Enterprise AI の structured output を注入された抽出器で呼び、`ExtractionField`
+- **抽出**: モデルの API の structured output を注入された抽出器で呼び、`ExtractionField`
   へ Pydantic 検証して保存。検索可能な合成 element も付けて既存 chunking 経路へ流す。
   本文は入力の予算に収まる単位に分けて 1 単位ずつ呼び、候補を統合する(#2720。分け方と統合の
   規則は `app.rag.field_extraction_units`)。
@@ -493,7 +493,7 @@ def parse_extraction_fields(raw: str, field_defs: list[FieldDefinition]) -> list
 
 
 def field_definitions_prompt(field_defs: list[FieldDefinition]) -> str:
-    """抽出器へ渡す field 仕様の JSON 文字列(OCI Enterprise AI structured output 用)。"""
+    """抽出器へ渡す field 仕様の JSON 文字列(モデルの API の structured output 用)。"""
     return json.dumps(
         [
             {"name": field.name, "description": field.description, "value_type": field.value_type}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 1 台の Compute に、選んだ製品（RAG / NL2SQL / Agent）を配備する（#1316）。
-# OCI Resource Manager の統合 stack（terraform/stack）の cloud-init から呼ぶ。
+# 配備の入力（/u01/aipoc/props）を置いてから root で実行する（以前の Terraform stack による配備は #12 で削除）。
 #
 # - 3 製品はこの suite でセットで配備する（単独では配備しない）。各製品の配備（uv の venv・systemd の unit・
 #   DB の初期化・frontend の build）は各製品の init_script.sh が持ち、ここから順に呼ぶ。
@@ -9,7 +9,7 @@
 # - reverse proxy（Nginx など）と TLS の証明書は配備しない（#19）。前段に reverse proxy を置くか、どう公開するかは
 #   利用者が決める（各製品の backend の port と frontend の dist を、その reverse proxy から使う）。
 #
-# cloud-init が /u01/aipoc/props に置くもの:
+# 配備の前に /u01/aipoc/props に置くもの:
 #   products.txt（配備する製品。空白区切り）
 #   platform.env（3 製品で共通の platform/.env）・<製品>.backend.env（各製品の backend/.env）・rag_services.txt・wallet.zip など
 #   adb_admin.env（アプリ用の DB ユーザーを使うときだけ。ADMIN のパスワードとアプリ用のユーザーの名前。root の 0600。#1668）
@@ -18,7 +18,7 @@
 # この Compute から ADMIN で ADB に接続し、アプリ用のユーザーを作って権限を付ける（platform/deploy/suite-db-user.py）。
 # 失敗しても（ADB に接続できない・ADMIN のパスワードの誤りなど）製品の配備と起動は続け、最後に失敗として返す
 # （DB が使えなくてもアプリケーションは起動する。製品の system schema の初期化の失敗と同じ扱い。#1756）。
-# ADB は Compute からしか接続できない（プライベート・エンドポイント・ACL）ため、Terraform（provider・local-exec）では
+# ADB は Compute からしか接続できない（プライベート・エンドポイント・ACL）ため、Compute の外からは
 # 行わない。3 製品は platform/.env の PLATFORM_ORACLE_USER（このユーザー）で接続する。ADMIN のパスワードは
 # platform/.env・各製品の backend/.env に書かない。
 #
@@ -41,7 +41,7 @@ source "${SUITE_DEPLOY_DIR}/suite-repo.sh"
 source "${SUITE_DEPLOY_DIR}/suite-health.sh"
 
 APP_ROOT="${APP_ROOT:-/u01/aipoc}"
-# 3 製品のプロセスは同じユーザーで動かす（共通の platform/.env・model-settings.json・Wallet・~/.oci を
+# 3 製品のプロセスは同じユーザーで動かす（共通の platform/.env・model-settings.json・Wallet を
 # 画面から読み書きするため。#1316。製品ごとの Compute では RAG だけ専用の ragsvc で動かしていた）。
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
@@ -51,7 +51,7 @@ PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 # suite-init.sh が dnf で入れる OS の package（製品の init_script.sh は製品が使うものだけを入れる）。
 SUITE_OS_PACKAGES=(git policycoreutils-python-utils tar unzip)
-# 時間帯（#3255）: PLATFORM_TIMEZONE が無いときの既定（backend の pr_backend_core.timezones・Terraform の timezone と同じ）。
+# 時間帯（#3255）: PLATFORM_TIMEZONE が無いときの既定（backend の pr_backend_core.timezones と同じ）。
 SUITE_DEFAULT_TIMEZONE="UTC"
 SUITE_ZONEINFO_DIR="${SUITE_ZONEINFO_DIR:-/usr/share/zoneinfo}"
 SUITE_LOCALTIME_PATH="${SUITE_LOCALTIME_PATH:-/etc/localtime}"
@@ -118,7 +118,7 @@ suite_env_value() {
 }
 
 # 時間帯（#3255・#3274）: 3 製品の共通の設定 PLATFORM_TIMEZONE（IANA の地域名。既定 UTC。日本時間は Asia/Tokyo）。
-# repository の platform/.env（再配備。手で変えた値）→ props の platform.env（初回。Terraform の timezone）の順に、
+# repository の platform/.env（再配備。手で変えた値）→ props の platform.env（初回。配備の入力）の順に、
 # key のある最初のファイルの値を使う。空なら backend と同じ既定。
 suite_timezone() {
   local file value
@@ -131,7 +131,7 @@ suite_timezone() {
   printf '%s\n' "${SUITE_DEFAULT_TIMEZONE}"
 }
 
-# IANA の地域名か（backend の pr_backend_core.timezones・Terraform の validation と同じ形で、tzdata にあるもの）。
+# IANA の地域名か（backend の pr_backend_core.timezones と同じ形で、tzdata にあるもの）。
 # 固定の offset（+09:00）・相対の path は受けない。
 suite_valid_timezone() {
   local name="$1"
@@ -186,7 +186,7 @@ suite_dnf() {
 
 # root の filesystem を boot volume いっぱいに広げる（#1984）。Oracle Linux 9 の platform image の root（LVM）は、
 # boot volume を大きくしても image の大きさ（約 30〜40 GB）のままで、3 製品の Python の環境・RAG の parser・
-# LibreOffice が入りきらない。OCI の oci-growfs で広げる（広げる余地が無ければ何もしない。何度実行してもよい）。
+# LibreOffice が入りきらない。Oracle Linux の oci-growfs（OCI の image にある）で広げる（広げる余地が無ければ何もしない。何度実行してもよい）。
 # 失敗しても配備は続ける（空きが足りなければ後の dnf が止まる）。広げた後の空きを log に出す。
 OCI_GROWFS="${OCI_GROWFS:-/usr/libexec/oci-growfs}"
 SUITE_ROOT_FS="${SUITE_ROOT_FS:-/}"

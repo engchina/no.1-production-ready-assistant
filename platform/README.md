@@ -136,7 +136,7 @@ SQL の migration のファイル）は同じ値を書き、一致をテスト�
 
 - **次元は設定では変えない（1024 に固定）。** Oracle のベクトル列は固定の次元で、値を変えるには列と索引の作り直しと全件の再埋め込みが
   要るため、`.env` の値は 1024 以外を受け付けない（「システム設定 › モデル」に次元の入力欄は無い。#45）。
-- **共通 `.env`（`platform/.env`）の `PLATFORM_OCI_GENAI_EMBEDDING_DIM=1536` は `1024` に書き換える（行を消してもよい）。** 1024 以外は
+- **共通 `.env`（`platform/.env`）の `PLATFORM_GENAI_EMBEDDING_DIM=1536` は `1024` に書き換える（行を消してもよい）。** 1024 以外は
   3 製品とも起動の時に設定の検証で止まる（列と合わない次元で埋め込みを保存しないため）。
 - #45 より前に保存した `model-settings.json` の `generative_ai`（`embedding_dim` の 1536 を含む）は、読み込みで登録モデルへ移し、次元は
   読み捨てる（製品の設定の値を使う。書き換えは要らない）。
@@ -148,7 +148,7 @@ SQL の migration のファイル）は同じ値を書き、一致をテスト�
 （[rag/docs/deployment.md](../rag/docs/deployment.md)「既存環境の更新手順の共通の注意」）。次元が既に 1024 の列（新しい環境）は何もしない。
 Agent はベクトルの列を持たないので、`.env` の書き換えだけでよい。
 
-1. 共通 `.env` の `PLATFORM_OCI_GENAI_EMBEDDING_DIM` を `1024` にする。
+1. 共通 `.env` の `PLATFORM_GENAI_EMBEDDING_DIM` を `1024` にする。
 2. RAG の取込・NL2SQL の job を止める（`systemctl stop` で worker を止めるか、実行中の job の完了を待つ）。
 3. 承認して更新する（画面は各製品の「システム設定 > データベース」のシステムテーブルの「作成・更新」の確認ダイアログで承認する）。
 
@@ -192,9 +192,9 @@ API は 422 で「既定のテキストモデルを選択してください。�
 
 | 旧名 | 新名 |
 |---|---|
-| `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_MODEL` | `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` |
-| `PLATFORM_OCI_ENTERPRISE_AI_LLM_MODEL` | `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL`（`DEFAULT_MODEL` が無いか空のときだけ。旧版と同じ優先順） |
-| `PLATFORM_OCI_ENTERPRISE_AI_VLM_MODEL` | `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL` |
+| `PLATFORM_ENTERPRISE_AI_DEFAULT_MODEL` | `PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` |
+| `PLATFORM_ENTERPRISE_AI_LLM_MODEL` | `PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL`（`DEFAULT_MODEL` が無いか空のときだけ。旧版と同じ優先順） |
+| `PLATFORM_ENTERPRISE_AI_VLM_MODEL` | `PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL` |
 
 - 画面で保存した `model-settings.json` は書き換えなくてよい。旧 key の `default_model_id` は、backend が読み込むときに
   既定のテキストモデルへ移し、既定の Vision モデルは従来と同じ規則（既定モデルが Vision 対応ならそれ、そうでなければ一覧で最初の
@@ -219,28 +219,28 @@ API は 422 で「既定のテキストモデルを選択してください。�
    ```
 
 4. 3 製品の backend と worker を起動する。RAG は、解析サービス（parser）に渡す実行用の env（`RAG_SERVICE_RUNTIME_ENV_FILE`）を
-   backend が書き直すので、RAG の「サービス管理」画面から OCI の parser を再起動する（`systemctl restart` だけでは古い env のまま）。
+   backend が書き直すので、RAG の「サービス管理」画面から parser を再起動する（`systemctl restart` だけでは古い env のまま）。
 
-## OCI Enterprise AI のプライマリ接続・セカンダリ接続・ターシャリ接続（#533 / #542 / #786）
+## モデルの API のプライマリ接続・セカンダリ接続・ターシャリ接続（#533 / #542 / #786）
 
-「システム設定 › モデル」の OCI Enterprise AI は、接続（Endpoint URL・Project OCID・API key）を「プライマリ接続」「セカンダリ接続」
+「システム設定 › モデル」の「モデルの API」は、接続（Endpoint URL・Project ID・API key）を「プライマリ接続」「セカンダリ接続」
 「ターシャリ接続」の 3 つまで持ち、登録モデルごとに使う接続を選ぶ（未指定のモデルはプライマリ接続）。画面はカードの中の共有の `Tabs` で
 プライマリ接続 → セカンダリ接続 → ターシャリ接続の順に切り替え、登録モデルの「接続」の選択肢もタブと同じ名前を出す（設定していない
 接続は出さない）。内部の ID は `primary` / `secondary` / `tertiary`、上限は `pr_system_settings.model.MAX_ENTERPRISE_AI_CONNECTIONS`（3）。
 接続はプライマリ接続を先頭にこの順で並べ、セカンダリ接続を置かずにターシャリ接続だけを置いてもよい（並びが違う・重複する payload は 422）。
 
-- **既存環境の更新は要らない。** プライマリ接続は今までの属性・変数名（`PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT` / `_PROJECT_OCID` /
+- **既存環境の更新は要らない。** プライマリ接続は今までの属性・変数名（`PLATFORM_ENTERPRISE_AI_ENDPOINT` / `_PROJECT_ID` /
   `_API_KEY`）のままで、保存済みの `model-settings.json`（接続 1 組の形）は、読み込むときにプライマリ接続として扱う。画面で保存し直すと、
   `enterprise_ai.connections`（secret なし）と、登録モデルの `connection_id` を書く。
-- **接続の表示名は廃止した（#542）。** #533 で入れた `PLATFORM_OCI_ENTERPRISE_AI_CONNECTION_NAME` /
-  `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_CONNECTION_NAME` は読まない（旧名との互換は持たない。`.env` に残っていても無視されるので、
+- **接続の表示名は廃止した（#542）。** #533 で入れた `PLATFORM_ENTERPRISE_AI_CONNECTION_NAME` /
+  `PLATFORM_ENTERPRISE_AI_SECONDARY_CONNECTION_NAME` は読まない（旧名との互換は持たない。`.env` に残っていても無視されるので、
   消してよい）。API の接続の `display_name` もない。表示名が残った `model-settings.json`・payload は、その項目を無視して読み込む
   （次に保存すると消える）。
-- 必須の欄: プライマリ接続の 3 つの欄は OCI で運用するときだけ必須（画面は「OCI 運用時必須」。保存は止めない）。セカンダリ接続は、
-  設定したら Endpoint URL・Project OCID・API key がすべて必須（backend も 422 で止める。API key は保存後の値で確かめ、空欄は
+- 必須の欄: プライマリ接続の Endpoint URL と API key は使うときだけ必須（画面は「利用時必須」。保存は止めない）。セカンダリ接続は、
+  設定したら Endpoint URL・API key が必須（Project ID は任意）（backend も 422 で止める。API key は保存後の値で確かめ、空欄は
   保存済みの key を保持する）。セカンダリ接続の API key だけを消す指定はなく、消すときはセカンダリ接続ごと削除する。
-- **ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向け**（OCI Enterprise AI にも使える）。設定したら Endpoint URL と API key が
-  必須で、Project OCID は任意（OCI Enterprise AI に使うときだけ入れる。入れたときだけ `OpenAI-Project` ヘッダーを送る）。
+- **ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向け**。設定したら Endpoint URL と API key が
+  必須で、Project ID は任意（提供元が project を求めるときだけ入れる。入れたときだけ `OpenAI-Project` ヘッダーを送る）。
   呼び出しはほかの接続と同じ Responses API（`{Endpoint URL}/responses`）で、Chat Completions は使わない。画面の Endpoint URL の例は
   `https://api.openai.com/v1`。API key だけを消す指定はなく、消すときはターシャリ接続ごと削除する（使っていた登録モデルはプライマリ接続へ移す）。
 - セカンダリ接続・ターシャリ接続の変数（共通 `.env`。`PLATFORM_SETTING_FIELDS` に登録済み）。Endpoint URL があるときだけその接続が
@@ -248,39 +248,38 @@ API は 422 で「既定のテキストモデルを選択してください。�
 
   | 変数 | 内容 |
   |---|---|
-  | `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_ENDPOINT` | セカンダリ接続の Endpoint URL |
-  | `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_PROJECT_OCID` | セカンダリ接続の Project OCID |
-  | `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_API_KEY` | セカンダリ接続の API key（`platform/.env` だけに保存。JSON・API の応答には含めない） |
-  | `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_ENDPOINT` | ターシャリ接続の Endpoint URL（例: `https://api.openai.com/v1`） |
-  | `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_PROJECT_OCID` | ターシャリ接続の Project OCID（任意。OCI Enterprise AI に使うときだけ） |
-  | `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_API_KEY` | ターシャリ接続の API key（`platform/.env` だけに保存。JSON・API の応答には含めない） |
+  | `PLATFORM_ENTERPRISE_AI_SECONDARY_ENDPOINT` | セカンダリ接続の Endpoint URL |
+  | `PLATFORM_ENTERPRISE_AI_SECONDARY_PROJECT_ID` | セカンダリ接続の Project ID |
+  | `PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY` | セカンダリ接続の API key（`platform/.env` だけに保存。JSON・API の応答には含めない） |
+  | `PLATFORM_ENTERPRISE_AI_TERTIARY_ENDPOINT` | ターシャリ接続の Endpoint URL（例: `https://api.openai.com/v1`） |
+  | `PLATFORM_ENTERPRISE_AI_TERTIARY_PROJECT_ID` | ターシャリ接続の Project ID（任意。提供元が求めるときだけ） |
+  | `PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY` | ターシャリ接続の API key（`platform/.env` だけに保存。JSON・API の応答には含めない） |
 
-- `.env` だけで設定する場合は、登録モデル（`PLATFORM_OCI_ENTERPRISE_AI_MODELS`）に `"connection_id": "secondary"`（ターシャリ接続は `"tertiary"`）を書く。
+- `.env` だけで設定する場合は、登録モデル（`PLATFORM_ENTERPRISE_AI_MODELS`）に `"connection_id": "secondary"`（ターシャリ接続は `"tertiary"`）を書く。
 - **Endpoint URL は入力どおり使い、path を補わない（#1440）。** 呼ぶ URL は `{Endpoint URL}{API path}`（既定 `/responses`）で、
   3 製品の呼び出し・接続テストはすべて `pr_system_settings.model` の `enterprise_ai_base_url` / `enterprise_ai_request_url`
-  （接続の `base_url` / `request_url()`）で決める（前後の空白と末尾の `/` だけ除く）。OCI Enterprise AI も `/openai/v1` まで書き、
-  OpenAI 互換 API は API の base URL まで書く。
+  （接続の `base_url` / `request_url()`）で決める（前後の空白と末尾の `/` だけ除く）。OpenAI 互換 API は API の base URL まで書く。
 
   | 接続先 | Endpoint URL | 呼ぶ URL |
   |---|---|---|
-  | OCI Enterprise AI | `https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1` | `…/openai/v1/responses` |
   | OpenAI | `https://api.openai.com/v1` | `https://api.openai.com/v1/responses` |
   | OpenAI 互換 API（例 DeepSeek） | `https://api.deepseek.com/v1` | `https://api.deepseek.com/v1/responses` |
+  | OpenAI 互換 API（例 Aliyun 百煉） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `…/compatible-mode/v1/responses` |
 
   以前の RAG（`rag_engine`）は path の無い Endpoint URL に `/openai/v1` を足していたため、`https://api.deepseek.com` では
   `https://api.deepseek.com/openai/v1/responses`（404）を呼び、Agent（`https://api.deepseek.com/responses`）とずれていた。いまはどの製品も
-  同じ URL を呼ぶ。OCI の root URL（`https://inference.generativeai.<region>.oci.oraclecloud.com`）だけを書いた接続は `/responses` が
-  404 になるので、`/openai/v1` まで書き直す。`rag_engine` / `rag_parser_core` は platform に依存しないため、RAG の backend が
+  同じ URL を呼ぶ。API の base URL ではなく host だけを書いた接続は `/responses` が 404 になることがあるので、
+  提供元の文書の base URL まで書き直す。`rag_engine` / `rag_parser_core` は platform に依存しないため、RAG の backend が
   `base_url` で決めた値を渡し、両者は受け取った値をそのまま使う。
 - 実行時は、モデルを呼ぶたびに `enterprise_ai_connection_for_model(settings, model_id)` でそのモデルの接続を引く（3 製品の呼び出し・
   接続テスト・RAG の readiness / NL2SQL の診断）。接続を持たない ID（登録モデルにない ID、消えた接続を指すモデル）はプライマリ接続を使う。
 - env だけを受け取る部品は、使うモデルの接続を渡す。
-  - RAG の OCI の parser（`service_runtime_env`）: VLM 抽出だけなので **既定の Vision モデルの接続** を `PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT`
-    / `_API_KEY` / `_PROJECT_OCID` に書く（接続を変えたら「サービス管理」から parser を再起動する）。
-  - RAG の回答フローの回答（`build_engine_settings`）: 回答は **既定のテキストモデルの接続**（`OCI_ENTERPRISE_AI_*`）、根拠画像の読み取りは
-    **既定の Vision モデルの接続**（`OCI_ENTERPRISE_AI_VLM_ENDPOINT` / `_VLM_API_KEY` / `_VLM_PROJECT_OCID`）。
-  - RAG の共有 client（`rag_parser_core.OciEnterpriseAiConfig`）: テキストはテキストのモデルの接続、Vision の呼び出し（VLM 抽出・
-    図の読み取り・Files API）は `vision_oci_enterprise_ai_*`（`for_vision()`）で既定の Vision モデルの接続を使う。
+  - RAG の parser（`service_runtime_env`）: VLM 抽出だけなので **既定の Vision モデルの接続** を `PLATFORM_ENTERPRISE_AI_ENDPOINT`
+    / `_API_KEY` / `_PROJECT_ID` に書く（接続を変えたら「サービス管理」から parser を再起動する）。
+  - RAG の回答フローの回答（`build_engine_settings`）: 回答は **既定のテキストモデルの接続**（`ENTERPRISE_AI_*`）、根拠画像の読み取りは
+    **既定の Vision モデルの接続**（`ENTERPRISE_AI_VLM_ENDPOINT` / `_VLM_API_KEY` / `_VLM_PROJECT_ID`）。
+  - RAG の共有 client（`rag_parser_core.EnterpriseAiConfig`）: テキストはテキストのモデルの接続、Vision の呼び出し（VLM 抽出・
+    図の読み取り・Files API）は `vision_enterprise_ai_*`（`for_vision()`）で既定の Vision モデルの接続を使う。
 
 ## 登録モデルごとの入力の上限（`max_input_tokens`。#1437）
 
@@ -288,7 +287,7 @@ API は 422 で「既定のテキストモデルを選択してください。�
 
 - 既定は **128000**（値の無いモデル・#1437 より前の設定・env だけで設定したモデル）。範囲は 4096〜2000000 の整数で、範囲外は保存（422）・読み込みとも検証エラー。
 - 値の解釈は `pr_system_settings.model` の 1 か所: `max_input_tokens_to_use`（値なし・範囲外は既定）、`enterprise_ai_max_input_tokens(settings, model_id)`（モデルの値）、`input_token_budget(上限, 割合%)`（入力の予算の token）、`estimate_input_tokens(text)`（本文の token の見積もり。ASCII は 4 字で 1 token、それ以外は 1 字で 1 token。モデルごとの tokenizer を持たないため多めに見積もる）。3 製品はこれを使う。
-- 使う製品: RAG（回答の章節の拡張の根拠の入力の上限と、長い章節を抽出してから統合する 1 回分の大きさ。backend が回答のモデルの値を `OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS` で `rag_engine` に渡す）。3 製品とも、出力の上限を入力の上限の残りで抑えるのに使う（#1719）。
+- 使う製品: RAG（回答の章節の拡張の根拠の入力の上限と、長い章節を抽出してから統合する 1 回分の大きさ。backend が回答のモデルの値を `ENTERPRISE_AI_MAX_INPUT_TOKENS` で `rag_engine` に渡す）。3 製品とも、出力の上限を入力の上限の残りで抑えるのに使う（#1719）。
 - 保存の形式: `model-settings.json` は version 5 で、`enterprise_ai.models[].max_input_tokens` を書く。version 4 はそのまま読める（書き換えは要らない。画面で保存し直すと version 5 になる）。
 - 画面: 登録モデルの表に「入力の上限（tokens）」の列を足し、8 列になったため表の形は 2xl（1536px）から（md〜2xl は 1 つのモデルの欄を 2 列に並べる）。#1719 で「出力の上限（tokens）」の列をその右に足した。範囲外は保存の操作で欄の直下にエラーを出してフォーカスする（登録モデルの form はブラウザの既定の検証を出さない）。
 
@@ -297,10 +296,10 @@ API は 422 で「既定のテキストモデルを選択してください。�
 「システム設定 › モデル」の登録モデルは、行ごとに「出力の上限（tokens）」（1 回の応答で出せる token の数。推論のあるモデルは推論の token も含む）を持つ。入力の上限は prompt と応答の合計（context）で、出力の上限はその中の応答の分。
 
 - 既定は **32768**（値の無いモデル・#1719 より前の設定・env だけで設定したモデル。入力の上限がそれより小さいモデルは入力の上限）。範囲は 1〜2000000 の整数で、**入力の上限以下**。範囲外・入力の上限を超える値は保存（422）・読み込みとも検証エラー。
-- OCI の公式文書（2026-10-13 に確認）: `xai.grok-4.3` は context 1M tokens（https://docs.oracle.com/en-us/iaas/Content/generative-ai/xai-grok-4-3.htm ）、`openai.gpt-oss-120b` は context 128k tokens（https://docs.oracle.com/en-us/iaas/Content/generative-ai/openai-gpt-oss-120b.htm ）。モデルで上限が大きく違うため、業界の一般的な作り（モデルごとに入力の上限と出力の上限を持つ）に合わせ、128k 以上も入れられる範囲にした。
+- 公開されている context（2026-10-13 に確認）: `xai.grok-4.3` は 1M tokens、`openai.gpt-oss-120b` は 128k tokens。モデルで上限が大きく違うため、業界の一般的な作り（モデルごとに入力の上限と出力の上限を持つ）に合わせ、128k 以上も入れられる範囲にした。
 - 呼び出しの `max_output_tokens` は `enterprise_ai_output_token_budget(settings, model_id, prompt_tokens=…, requested=…)`: min(機能の要る量（既定 32768 を下回らない。無ければモデルの出力の上限）, モデルの出力の上限, 入力の上限 − prompt の見積もり)。出力の上限の大きいモデルで prompt が入らずに失敗するのを防ぐ。
 - 未完了（`status=incomplete`・`incomplete_details.reason=max_output_tokens`）は、`enterprise_ai_retry_output_token_budget` でモデルの出力の上限まで広げて 1 回、それでも未完了（広げられないときを含む）なら推論の量を 1 段下げて（`lower_reasoning_effort`。high → medium → low。low・none は下げない）1 回だけ送り直す（#2023。`content_filter` などほかの理由は送り直さない。`pr_backend_core.bounded_calls` を通す呼び出しは、送り直しを実行器の `adaptive` の再試行に任せる）。それでも未完了なら、`pr_system_settings.enterprise_ai_errors.enterprise_ai_incomplete_message` で理由・上限・使った token（出力・推論）を失敗の文に出す（応答の本文・secret は出さない）。
-- 共通の LLM / VLM の出力の上限（#1719 より前の `llm_max_output_tokens`（既定 1200）/ `vlm_max_output_tokens`、`PLATFORM_OCI_ENTERPRISE_AI_LLM_MAX_OUTPUT_TOKENS` / `_VLM_MAX_OUTPUT_TOKENS`）は持たない。画像の処理も Vision のモデルの出力の上限を使う。
+- 共通の LLM / VLM の出力の上限（#1719 より前の `llm_max_output_tokens`（既定 1200）/ `vlm_max_output_tokens`、`PLATFORM_ENTERPRISE_AI_LLM_MAX_OUTPUT_TOKENS` / `_VLM_MAX_OUTPUT_TOKENS`）は持たない。画像の処理も Vision のモデルの出力の上限を使う。
 - 保存の形式: `model-settings.json` は version 6 で、`enterprise_ai.models[].max_output_tokens` を書く。version 5 はそのまま読め、共通の `llm_max_output_tokens` / `vlm_max_output_tokens` は読み捨てる（各モデルは既定の 32768）。画面で保存し直すと version 6 になる。
 - 2026-10-13 の実測（NL2SQL のコメント管理の SQL 生成と同じ要求。5 表・32 列）: `openai.gpt-oss-120b`（推論 medium・上限 1200）は `incomplete`（output 1200 のうち reasoning 1198、本文 0 文字）、上限 32768 では completed（output 2756、うち reasoning 1506）。`xai.grok-4.3`（推論 medium）は上限 1200 でも completed のことがあり（output 3300〜3700）、上限 300 では incomplete。
 
@@ -309,7 +308,7 @@ API は 422 で「既定のテキストモデルを選択してください。�
 「システム設定 › モデル」の登録モデルは、行ごとに「推論の量」（モデルが回答の前に考える量。Responses API の `reasoning.effort`）を持つ。
 
 - **選択肢は `none` / `low` / `medium` / `high` の 4 つ、既定は `medium`。** 新しく追加したモデルも、値を書いていない保存済みのモデル
-  （`model-settings.json` の version 3 まで・`.env` の `PLATFORM_OCI_ENTERPRISE_AI_MODELS`）も `medium` になり、登録モデルにない ID
+  （`model-settings.json` の version 3 まで・`.env` の `PLATFORM_ENTERPRISE_AI_MODELS`）も `medium` になり、登録モデルにない ID
   （`.env` だけで決めたモデルなど）も `medium` を送る。選択肢以外の値（`minimal` / `xhigh` など）は保存（422）でも読み込みでも検証エラー。
 - **`none` は「送らない」**（`reasoning` を送らず、モデル（endpoint）の既定のまま。画面は「none（送らない）」）。それ以外はその値を送る。
   値の解釈は `pr_system_settings.model.reasoning_effort_to_send` の 1 か所だけで、3 製品は `enterprise_ai_reasoning(settings, model_id)`
@@ -320,10 +319,10 @@ API は 422 で「既定のテキストモデルを選択してください。�
 - 保存の形式: `model-settings.json` は version 4 で、`enterprise_ai.models[].reasoning_effort` を書く。version 3 はそのまま読める
   （書き換えは要らない。画面で保存し直すと version 4 になる）。
 - 送る所（3 製品とも、Enterprise AI を呼ぶ所すべて。payload template の構成では template に任せる）:
-  - RAG: 共有 client（`rag_parser_core.OciEnterpriseAiConfig` の `text_reasoning_effort` / `vision_reasoning_effort`。回答・要約・
+  - RAG: 共有 client（`rag_parser_core.EnterpriseAiConfig` の `text_reasoning_effort` / `vision_reasoning_effort`。回答・要約・
     文書解析の VLM・図の読み取り・接続テスト）、回答フローの `responses.parse`（`build_engine_settings` の
-    `OCI_ENTERPRISE_AI_REASONING_EFFORT` / `OCI_ENTERPRISE_AI_VLM_REASONING_EFFORT`。回答・評価・検証）、OCI の parser
-    （`service_runtime_env` の `PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT` / `_VISION_REASONING_EFFORT`。値を変えたら
+    `ENTERPRISE_AI_REASONING_EFFORT` / `ENTERPRISE_AI_VLM_REASONING_EFFORT`。回答・評価・検証）、parser
+    （`service_runtime_env` の `PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT` / `_VISION_REASONING_EFFORT`。値を変えたら
     「サービス管理」から parser を再起動する）。env・config で渡す値は「送る値」（`none` は空）。
   - NL2SQL: `enterprise_ai_client`（SQL 生成・評価・オントロジーの VLM など、テキストと画像のすべての呼び出しと接続テスト）。
   - Agent: 組み込み Runtime の SDK の `ModelSettings(reasoning=…)`（Run と品質評価の判定）とモデルの接続テスト。

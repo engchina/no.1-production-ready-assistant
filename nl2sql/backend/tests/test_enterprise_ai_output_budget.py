@@ -32,17 +32,17 @@ _MODEL = "xai.grok-4.3"
 _REASONING_TOKENS = 1198
 # 推論の量を low に下げた送り直し（#2023）で使う推論の token（スタブの値）。
 _LOW_REASONING_TOKENS = 300
-_ENDPOINT = "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
-_PROJECT = "ocid1.generativeaiproject.oc1.us-chicago-1.synthetic"
+_ENDPOINT = "https://llm.example/v1"
+_PROJECT = "proj_synthetic"
 
 
 def _settings(**model: Any) -> Settings:
     return Settings(
-        oci_enterprise_ai_endpoint=_ENDPOINT,
-        oci_enterprise_ai_api_key=_API_KEY,
-        oci_enterprise_ai_project_ocid=_PROJECT,
-        oci_enterprise_ai_default_text_model=_MODEL,
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint=_ENDPOINT,
+        enterprise_ai_api_key=_API_KEY,
+        enterprise_ai_project_id=_PROJECT,
+        enterprise_ai_default_text_model=_MODEL,
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id=_MODEL, reasoning_effort="medium", **model)
         ],
     )
@@ -131,7 +131,7 @@ def _mock_http(monkeypatch: pytest.MonkeyPatch, handler: object) -> None:
 
 def _service(settings: Settings) -> Nl2SqlService:
     service = Nl2SqlService(store=MemoryNl2SqlStore())
-    service._enterprise_ai_client = module.OciEnterpriseAiDirectClient(settings)
+    service._enterprise_ai_client = module.HttpEnterpriseAiDirectClient(settings)
     return service
 
 
@@ -154,7 +154,7 @@ def _request(service: Nl2SqlService, count: int, columns: int = 10) -> MetadataS
 def test_old_common_limit_1200_is_dropped_and_model_default_32768_is_sent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """OCI の配備の状態（v5 の JSON に共通の上限 1200）を読んでも、モデルの既定 32768 で送る。"""
+    """既存の配備の状態（v5 の JSON に共通の上限 1200）を読んでも、モデルの既定 32768 で送る。"""
     (tmp_path / "model-settings.json").write_text(
         json.dumps(
             {
@@ -164,7 +164,7 @@ def test_old_common_limit_1200_is_dropped_and_model_default_32768_is_sent(
                         {
                             "connection_id": "primary",
                             "endpoint": _ENDPOINT,
-                            "project_ocid": _PROJECT,
+                            "project_id": _PROJECT,
                         }
                     ],
                     "models": [{"model_id": _MODEL, "reasoning_effort": "medium"}],
@@ -182,14 +182,14 @@ def test_old_common_limit_1200_is_dropped_and_model_default_32768_is_sent(
         resolve_path=lambda _settings: tmp_path / "model-settings.json",
         env_file=lambda _settings: tmp_path / ".env",
     ).load(settings)
-    assert settings.oci_enterprise_ai_models[0].max_output_tokens == 32_768
+    assert settings.enterprise_ai_models[0].max_output_tokens == 32_768
     model = _ReasoningModel()
     _mock_http(monkeypatch, model)
     service = _service(settings)
 
     result = service.generate_comment_sql(_request(service, 5))
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.fallback is False
     assert [payload["max_output_tokens"] for payload in model.payloads] == [32_768]
     assert model.payloads[0]["reasoning"] == {"effort": "medium"}
@@ -204,7 +204,7 @@ def test_incomplete_is_retried_once_with_the_model_limit(monkeypatch: pytest.Mon
 
     result = service.generate_comment_sql(_request(service, 5))
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.fallback is False
     assert [payload["max_output_tokens"] for payload in model.payloads] == [32_768, 131_072]
 
@@ -218,7 +218,7 @@ def test_many_tables_are_split_into_batches_and_succeed(monkeypatch: pytest.Monk
 
     result = service.generate_comment_sql(_request(service, 12))
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.fallback is False
     assert sorted(len(_targets_in(payload)) for payload in model.payloads) == [2, 10]
     assert all(payload["max_output_tokens"] == 4_096 for payload in model.payloads)
@@ -241,7 +241,7 @@ def test_annotation_and_domain_are_split_too(monkeypatch: pytest.MonkeyPatch) ->
     _mock_http(monkeypatch, annotation_model)
     service = _service(_settings(max_output_tokens=4_096))
     annotations = service.generate_annotation_sql(_request(service, 12))
-    assert annotations.source == "oci_enterprise_ai"
+    assert annotations.source == "enterprise_ai"
     assert annotations.fallback is False
     assert annotations.sql.count("ANNOTATIONS") == 12
 
@@ -251,7 +251,7 @@ def test_annotation_and_domain_are_split_too(monkeypatch: pytest.MonkeyPatch) ->
     )
     _mock_http(monkeypatch, domain_model)
     domains = service.generate_domain_sql(_request(service, 12))
-    assert domains.source == "oci_enterprise_ai"
+    assert domains.source == "enterprise_ai"
     assert domains.fallback is False
     assert [len(_targets_in(payload)) for payload in domain_model.payloads] == [10, 2]
     # ドメインは順に呼び、前の組で作るドメインを次の組に渡す（同じ意味の列で再利用させる）。
@@ -300,7 +300,7 @@ def test_partial_failure_marks_only_the_failed_batch(monkeypatch: pytest.MonkeyP
 
     result = service.generate_comment_sql(_request(service, 12))
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.fallback is True
     assert result.fallback_objects == [
         service._db_admin_object_identity(name).qualified_name for name in ("T11", "T12")
@@ -315,7 +315,7 @@ def test_client_error_message_after_retry_has_reason_limit_and_usage(
 ) -> None:
     model = _ReasoningModel(tokens_per_target=200_000)
     _mock_http(monkeypatch, model)
-    client = module.OciEnterpriseAiDirectClient(
+    client = module.HttpEnterpriseAiDirectClient(
         _settings(max_input_tokens=1_000_000, max_output_tokens=131_072)
     )
 
@@ -351,7 +351,7 @@ def test_incomplete_at_the_model_limit_succeeds_with_lower_reasoning_effort(
     # medium: 1198 + 200 > 1200 で未完了、low: 300 + 200 <= 1200 で完了。
     model = _ReasoningModel(tokens_per_target=200)
     _mock_http(monkeypatch, model)
-    client = module.OciEnterpriseAiDirectClient(_settings(max_output_tokens=1_200))
+    client = module.HttpEnterpriseAiDirectClient(_settings(max_output_tokens=1_200))
 
     text = client.generate(
         prompt="COMMENT",
@@ -374,7 +374,7 @@ def test_budget_is_capped_by_context_room(monkeypatch: pytest.MonkeyPatch) -> No
     """
     model = _ReasoningModel(tokens_per_target=1)
     _mock_http(monkeypatch, model)
-    client = module.OciEnterpriseAiDirectClient(
+    client = module.HttpEnterpriseAiDirectClient(
         _settings(max_input_tokens=8_192, max_output_tokens=8_192)
     )
     context = "targets: table:APP.T1\n" + "あ" * 3_000

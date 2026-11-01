@@ -1,10 +1,10 @@
 """回答を上限で打ち切ったとき、回答の thread が LLM を呼び続けないことを検証する（#1422）。
 
-遅い LLM はスタブ（`rag_engine.adapters.oci` の client を差し替え、渡された timeout だけ待って
+遅い LLM はスタブ（`rag_engine.adapters.model_api` の client を差し替え、渡された timeout だけ待って
 timeout の例外を出す。実際の HTTP の timeout と同じ振る舞い）。時間は短い上限で確かめる。
 
 回答の thread が終わるまでの待ちは、壁時計の短い上限に頼らない（#1427）。thread の中の
-処理（LLM の失敗の再試行の判定が初回に import する OCI SDK など）は、CI の並列（`-n auto`）の
+処理（LLM の失敗の再試行の判定が初回に import する SDK など）は、CI の並列（`-n auto`）の
 負荷の下では数秒かかることがある。import は先に済ませ（`_warm_retry_imports`）、待ちの上限は
 「遅い LLM 1 回」より短い範囲で十分に長くとる（期限で縮まらなければ失敗する）。
 
@@ -26,7 +26,7 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings as engine_get_settings
 from rag_engine.models.llm import TextOutput
 from rag_engine.resources.deadline import (
@@ -107,14 +107,14 @@ def _answer_flow(llm: _SlowLlm, finished: threading.Event, steps: int = 4) -> st
     """
     settings = _engine_settings()
     try:
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=llm.client()):
+        with mock.patch.object(model_api, "_openai_client_for_provider", return_value=llm.client()):
             for _ in range(steps):
                 with contextlib.suppress(Exception):
-                    oci._parse_with_retry(
-                        lambda: oci._openai_parsed([], settings, TextOutput, _PROVIDER),
+                    model_api._parse_with_retry(
+                        lambda: model_api._openai_parsed([], settings, TextOutput, _PROVIDER),
                         "Responses text",
                         settings,
-                        retries=oci._llm_transport_retries(settings),
+                        retries=model_api._llm_transport_retries(settings),
                     )
         return "answer"
     finally:
@@ -125,12 +125,12 @@ def _answer_flow(llm: _SlowLlm, finished: threading.Event, steps: int = 4) -> st
 def _warm_retry_imports() -> None:
     """LLM の失敗の再試行の判定が初回に import する SDK を先に読む。
 
-    `oci._is_retryable_error` は例外の型を見るため、OCI SDK・openai・httpx・requests を関数の中で
+    `model_api._is_retryable_error` は例外の型を見るため、openai・httpx・requests を関数の中で
     import する。回答の thread の中で初めて import すると、その process の最初の 1 回だけ thread の
     終わりが遅れる（CI の並列の負荷の下では 3 秒を超えた。#1427）。テストが確かめるのは打ち切りの
     振る舞いなので、import の時間を thread の時間に含めない。
     """
-    assert oci._is_retryable_error(TimeoutError())
+    assert model_api._is_retryable_error(TimeoutError())
 
 
 async def _wait_thread_exit(finished: threading.Event) -> bool:
@@ -174,7 +174,7 @@ def short_grace(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 async def small_default_executor() -> Any:
-    """既定の executor を 1 本にする（DB・OCI SDK の呼び出しの thread が足りない状態）。"""
+    """既定の executor を 1 本にする（DB・モデルの API の呼び出しの thread が足りない状態）。"""
     loop = asyncio.get_running_loop()
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="test-default")
     loop.set_default_executor(executor)

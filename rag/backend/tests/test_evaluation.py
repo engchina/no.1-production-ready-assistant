@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 from pytest import LogCaptureFixture, MonkeyPatch
 
-from app.config import OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings, get_settings
+from app.config import ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings, get_settings
 from app.main import app
 from app.rag.evaluation import (
     EVALUATION_CASE_ERROR_MESSAGE,
@@ -548,7 +548,7 @@ async def test_standard_answer_case_is_judged_with_answer_record() -> None:
     assert call["trace_id"] == pipeline.trace_ids[0]
     assert call["evaluation_input"] == EVALUATION_INPUT
     assert call["standard_answer"] == "合成の標準回答"
-    assert call["timeout_seconds"] == OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
+    assert call["timeout_seconds"] == ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
     assert call["citations"]
     assert metrics.claim_support_rate == 1
     assert metrics.answer_correctness == metrics.requirement_coverage == 1
@@ -1224,7 +1224,7 @@ def test_evaluation_api_limits_whole_run_by_time_budget(monkeypatch: MonkeyPatch
     run_response = client.post("/api/evaluation/run", json={"cases": [case]})
 
     assert run_response.status_code == 200
-    assert evaluation_route.EVALUATION_RUN_TIMEOUT_SECONDS == OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
+    assert evaluation_route.EVALUATION_RUN_TIMEOUT_SECONDS == ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
     assert observed == {"run": evaluation_route.EVALUATION_RUN_TIMEOUT_SECONDS}
 
 

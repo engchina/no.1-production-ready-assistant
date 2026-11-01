@@ -12,7 +12,7 @@ _DIAGNOSTICS = (
         {"DPY-6001", "ORA-12514", "ORA-12505"},
         "service_not_registered",
         "要求したデータベースサービスが listener に登録されていません。",
-        "OCI Console で ADB の稼働状態を確認し、"
+        "データベース（ADB）が起動しているか確認し、"
         "PLATFORM_ORACLE_DSN のサービス名を現在の接続文字列と"
         "照合してください。Wallet 利用時は tnsnames.ora が対象 ADB のものか確認してください。",
     ),

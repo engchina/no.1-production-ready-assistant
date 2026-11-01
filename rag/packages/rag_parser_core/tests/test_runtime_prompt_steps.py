@@ -2,16 +2,16 @@
 
 import re
 
-from rag_parser_core.oci_enterprise_ai import (
+from rag_parser_core.enterprise_ai import (
     LLM_SYSTEM_PROMPT,
-    OciEnterpriseAiConfig,
+    EnterpriseAiConfig,
     _build_llm_payload,
 )
 
 
 def test_default_system_instruction_is_sent_as_ordered_steps() -> None:
     payload = _build_llm_payload(
-        OciEnterpriseAiConfig(default_model_id="vendor.text"),
+        EnterpriseAiConfig(default_model_id="vendor.text"),
         "合成の依頼",
         "合成の本文",
     )
@@ -32,7 +32,7 @@ def test_default_system_instruction_is_sent_as_ordered_steps() -> None:
 def test_explicit_system_instruction_is_preserved_without_reformatting() -> None:
     saved = "保存済みの指示を保持する。"
     payload = _build_llm_payload(
-        OciEnterpriseAiConfig(default_model_id="vendor.text"),
+        EnterpriseAiConfig(default_model_id="vendor.text"),
         "合成の依頼",
         "合成の本文",
         system_prompt=saved,
@@ -42,7 +42,7 @@ def test_explicit_system_instruction_is_preserved_without_reformatting() -> None
 
 def test_user_input_template_keeps_untrusted_data_inside_its_boundaries() -> None:
     payload = _build_llm_payload(
-        OciEnterpriseAiConfig(default_model_id="vendor.text"),
+        EnterpriseAiConfig(default_model_id="vendor.text"),
         "合成の依頼",
         "合成の本文",
     )

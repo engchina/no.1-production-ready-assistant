@@ -26,13 +26,13 @@ REASONS = {
     "rate_limit": "Enterprise AI のリクエスト上限に達しました",
     "unavailable": "Enterprise AI が一時的に利用できませんでした",
     "authentication": "Enterprise AI の認証に失敗しました。API key を確認してください",
-    # OCI の 403 / 404 は API key の認可の失敗（#1684。モデルが無いときは model_not_found）。
+    # 403 / 404 は API key の認可の失敗（#1684。モデルが無いときは model_not_found）。
     "authorization": (
-        "Enterprise AI の呼び出しが認可されませんでした。API key の IAM policy と"
-        " Project OCID を確認してください"
+        "Enterprise AI の呼び出しが認可されませんでした。API key の権限と"
+        " Project ID を確認してください"
     ),
     "model_not_found": (
-        "既定のテキストモデルが接続のリージョンにありません。モデルの設定を確認してください"
+        "既定のテキストモデルがこの接続にありません。モデルの設定を確認してください"
     ),
     "request": "Enterprise AI のモデル・リクエスト設定を確認してください",
     "response_format": "応答が空、または必要な形式を満たしていませんでした",

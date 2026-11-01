@@ -4,7 +4,7 @@ leaf chunk を再帰的に cluster + 要約して多層级の summary node を�
 両方を索引できるようにする。長文書の主題レベル質問と細部質問の双方に強くなる。
 
 クラスタリングと summary chunk の構築は **決定論**(順序ベース)で core に置き、要約本文の生成は
-``summarizer``(OCI Enterprise AI 等)を注入する。要約が得られない/失敗した cluster は安全に
+``summarizer``(モデルの API 等)を注入する。要約が得られない/失敗した cluster は安全に
 skip し、最低でも leaf chunk はそのまま残す(opt-in・安全縮退)。ただし ``stops_batch`` の印の
 ある失敗(呼び出しの実行器が処理の全体を止めると決めた失敗。権限・設定の誤りなど)は skip せず
 そのまま送出する(#2067)。

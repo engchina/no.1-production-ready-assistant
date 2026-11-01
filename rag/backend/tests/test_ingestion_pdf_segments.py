@@ -332,7 +332,7 @@ async def test_stale_segments_from_interrupted_job_restart_from_queued(runner: _
             page_end=pages[segment_id][1],
             progress_unit="page",
             # 前の試行の成功の記録はあるが、artifact を読み戻せない(保存先が消えた)。
-            artifact_path="oci://namespace/bucket/missing.json" if status == "SUCCEEDED" else None,
+            artifact_path="local://missing.json" if status == "SUCCEEDED" else None,
         )
         for segment_id, status in stale.items()
     }

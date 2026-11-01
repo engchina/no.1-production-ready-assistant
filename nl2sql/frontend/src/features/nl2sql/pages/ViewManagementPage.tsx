@@ -85,8 +85,8 @@ function joinWherePromptProfileLabel() {
 }
 
 function joinWhereSourceLabel(source: string) {
-  return source === "oci_enterprise_ai"
-    ? t("viewMgmt.joinWhere.source.ociEnterpriseAi")
+  return source === "enterprise_ai"
+    ? t("viewMgmt.joinWhere.source.enterpriseAi")
     : t("viewMgmt.joinWhere.source.deterministic");
 }
 
@@ -248,10 +248,10 @@ function ViewJoinWherePanel({
       ) : result ? (
         <section className="grid gap-3 rounded-md border border-border bg-surface-sunken p-3 text-sm" aria-label={t("viewMgmt.joinWhere.result")}>
           <div className="flex flex-wrap gap-2">
-            {/* 抽出の方式は API の内部値（oci_enterprise_ai / deterministic）を出さず、文言で出す（#934）。 */}
+            {/* 抽出の方式は API の内部値（enterprise_ai / deterministic）を出さず、文言で出す（#934）。 */}
             <StatusBadge
               icon={false}
-              variant={result.source === "oci_enterprise_ai" ? "success" : "neutral"}
+              variant={result.source === "enterprise_ai" ? "success" : "neutral"}
               label={joinWhereSourceLabel(result.source)}
             />
             <StatusBadge

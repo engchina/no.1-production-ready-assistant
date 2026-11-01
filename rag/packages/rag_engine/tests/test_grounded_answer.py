@@ -1407,9 +1407,9 @@ class GroundedAnswerTest(unittest.TestCase):
             with bind_dependencies(AnswerDependencies(unused, unused, text_model, vision, unused)):
                 settings = get_settings(
                     environ={
-                        "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "answer-model",
-                        "OCI_ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1" if answer_reads_images else "0",
-                        "OCI_ENTERPRISE_AI_VLM_MODEL": "vision-model",
+                        "ENTERPRISE_AI_DEFAULT_MODEL": "answer-model",
+                        "ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1" if answer_reads_images else "0",
+                        "ENTERPRISE_AI_VLM_MODEL": "vision-model",
                     },
                     dotenv_path=None,
                 )
@@ -2522,7 +2522,7 @@ class ImageGenerationFallbackTest(unittest.TestCase):
         )
 
     def test_broken_image_output_is_regenerated_without_images(self):
-        from rag_engine.adapters.oci import InvalidStructuredOutput, is_invalid_structured_output
+        from rag_engine.adapters.model_api import InvalidStructuredOutput, is_invalid_structured_output
 
         def broken(*args, **kwargs):
             raise InvalidStructuredOutput("置換文字")
@@ -2535,7 +2535,7 @@ class ImageGenerationFallbackTest(unittest.TestCase):
         self.assertEqual([schema for schema, _ in self.text_model.prompts][0], "GroundedDraftWire")
 
     def test_other_failures_are_not_retried_without_images(self):
-        from rag_engine.adapters.oci import is_invalid_structured_output
+        from rag_engine.adapters.model_api import is_invalid_structured_output
 
         def failing(*args, **kwargs):
             raise TimeoutError("通信")

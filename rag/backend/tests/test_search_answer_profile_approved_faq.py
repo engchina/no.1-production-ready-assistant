@@ -19,12 +19,12 @@ BASE = "/api/search-answer-profiles/bv-1/approved-faq"
 def fake_oracle(monkeypatch: pytest.MonkeyPatch) -> FakeKnowledgeOracle:
     fake = FakeKnowledgeOracle()
     monkeypatch.setattr(knowledge_route, "OracleClient", lambda: fake)
-    monkeypatch.setattr(knowledge_route, "OciGenAiClient", StubGenAi)
+    monkeypatch.setattr(knowledge_route, "GenAiClient", StubGenAi)
     return fake
 
 
 class StubGenAi:
-    """意味照合の embedding を決定論化する(外部 OCI を呼ばない)。"""
+    """意味照合の embedding を決定論化する(外部モデルの API を呼ばない)。"""
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         pass

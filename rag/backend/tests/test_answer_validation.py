@@ -1600,7 +1600,7 @@ def test_review_reuse_invalidates_changed_dependencies(changed: str) -> None:
         arguments["settings"] = settings.model_copy(update={name: {"revision": "b"}})
     elif changed == "model":
         arguments["settings"] = settings.model_copy(
-            update={"oci_enterprise_ai_default_text_model": "test-model-b"}
+            update={"enterprise_ai_default_text_model": "test-model-b"}
         )
     else:
         arguments[changed] = replacements[changed]

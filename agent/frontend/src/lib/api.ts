@@ -1439,7 +1439,7 @@ export interface BuiltinRuntimeModel {
   display_name: string;
 }
 
-/** 組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI）の状態。API key は含まない（#754）。 */
+/** 組み込み Runtime（OpenAI Agents SDK + モデルの API）の状態。API key は含まない（#754）。 */
 export interface BuiltinRuntimeStatus {
   id: string;
   name: string;

@@ -9,7 +9,7 @@ parse の **前** に原本を一度だけ canonical な中間物へ変換する
   サービス無効・未達・timeout・5xx 時は、選択した前処理を別経路へ黙って縮退せず、
   利用者向けエラーとして呼び出し側へ伝える。
 
-戻り値は `rag_parser_core.ConvertOutcome`。Object Storage 保存後の `SourceDerivation`
+戻り値は `rag_parser_core.ConvertOutcome`。保存先へ保存した後の `SourceDerivation`
 (派生系譜)の確定は呼び出し側(ingestion)が行う。
 """
 

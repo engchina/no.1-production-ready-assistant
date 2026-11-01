@@ -1,6 +1,6 @@
-"""OCI Enterprise AI の HTTP の失敗の分類と、確かめる所の案内（#1684。3 製品で共通の対応表）。
+"""モデルの API の HTTP の失敗の分類と、確かめる所の案内（#1684。3 製品で共通の対応表）。
 
-3 製品は OCI Enterprise AI（OpenAI 互換の `/responses`）の失敗を、ここで分類して案内する。
+3 製品はモデルの API（OpenAI 互換の `/responses`）の失敗を、ここで分類して案内する。
 分類は status code と応答の本文で決め、設定の誤り（時間をおいても直らない）と一時的な失敗を分ける。
 
 2026-10-13 の実測（us-chicago-1 / ap-osaka-1 の `/openai/v1/responses`。#1684）:
@@ -12,9 +12,9 @@
   requested resource not found.`（実在するモデルでも 404。モデルが無いときの 400 とは違う）
 - 非 OpenAI のモデルで `OpenAI-Project` ヘッダーが無い: 400 `invalid_value`
 
-OCI の 404 は「モデルが無い」ではなく「認可されない」ことが多いので、403 と同じ `authorization` に
-分ける。OpenAI 互換の別の API（ターシャリ接続など）の 404 は Endpoint URL / API パスの誤りのことも
-あるので、案内に両方を書く。
+提供元によっては 404 を「モデルが無い」ではなく「認可されない」の意味で返すので、403 と
+同じ `authorization` に分ける。404 は Endpoint URL / API パスの誤りのこともあるので、案内に
+両方を書く。
 
 HTTP の失敗のほかに、応答が届かない・使えない失敗も同じ表で種類に分ける（#1715）:
 `timeout`（待ち時間の上限）・`connection`（接続できない）・`incomplete`（出力の上限などで応答が
@@ -113,7 +113,7 @@ _SECRET_PATTERNS: Final = (
 _PROVIDER_MESSAGE_MAX_LENGTH: Final = 300
 
 _MODEL_NOT_FOUND_RE: Final = re.compile(r"entity with key .+ not found", re.IGNORECASE)
-# 3 製品の失敗の文の書き方: NL2SQL / Agent `OCI Enterprise AI HTTP 404: …`、
+# 3 製品の失敗の文の書き方: NL2SQL / Agent `Model API HTTP 404: …`、
 # RAG `… returned 404: …`、httpx の既定 `Client error '404 Not Found' for url …`。
 _HTTP_STATUS_RE: Final = re.compile(
     r"\bHTTP (\d{3})\b|\breturned (\d{3})\b|\b(?:Client|Server) error '(\d{3})\b"
@@ -122,7 +122,7 @@ _HTTP_STATUS_RE: Final = re.compile(
 
 @dataclass(frozen=True)
 class EnterpriseAiHttpFailure:
-    """OCI Enterprise AI の HTTP の失敗の分類。"""
+    """モデルの API（OpenAI 互換）の HTTP の失敗の分類。"""
 
     kind: EnterpriseAiFailureKind
     status_code: int
@@ -162,7 +162,7 @@ def classify_enterprise_ai_http_failure(
 
 
 def enterprise_ai_http_status_from_message(message: str) -> int | None:
-    """`OCI Enterprise AI HTTP 404: …` のような文から status code を取り出す（無ければ None）。"""
+    """`Model API HTTP 404: …` のような文から status code を取り出す（無ければ None）。"""
     match = _HTTP_STATUS_RE.search(message or "")
     if match is None:
         return None
@@ -193,8 +193,8 @@ def enterprise_ai_failure_actions(
     status = failure.status_code
     if failure.kind == "model_not_found":
         return [
-            f"モデル{model}は、この接続{connection}のリージョンにありません（HTTP {status}）。"
-            "システム設定の「モデル」で、接続のリージョンにあるモデル ID を登録するか、"
+            f"モデル{model}は、この接続{connection}で使えません（HTTP {status}）。"
+            "システム設定の「モデル」で、接続の提供元・リージョンで使えるモデル ID を登録するか、"
             "モデルを登録する接続を変えてください。"
         ]
     if failure.kind == "authentication":
@@ -206,10 +206,8 @@ def enterprise_ai_failure_actions(
     if failure.kind == "authorization":
         return [
             f"接続{connection}でモデル{model}の呼び出しが認可されませんでした（HTTP {status}）。",
-            "OCI の IAM で、この API key（request.principal.type = 'generativeaiapikey'）に"
-            "Generative AI の推論を許す policy が、Project の compartment にあるか"
-            "確かめてください。",
-            "システム設定の「モデル」で、接続の Project OCID が Endpoint URL と同じリージョンの"
+            "提供元の管理画面で、この API key にモデルの推論を許す権限があるか確かめてください。",
+            "システム設定の「モデル」で、接続の Project ID を入れた場合は、その Endpoint URL の"
             " Project か確かめてください。OpenAI 互換の別の API では、Endpoint URL と API パスも"
             "確かめてください。",
         ]
@@ -221,7 +219,7 @@ def enterprise_ai_failure_actions(
     if failure.kind == "unavailable":
         return [
             f"サービス側または gateway 側の一時障害の可能性があります（HTTP {status}）。"
-            "少し待って再試行し、OCI 側の稼働状況を確認してください。"
+            "少し待って再試行し、提供元の稼働状況を確認してください。"
         ]
     return [
         f"リクエストが受け付けられませんでした（HTTP {status}）。"

@@ -1099,7 +1099,7 @@ test("生成に失敗した段階は「処理の経過」を開いて失敗を�
     created_at: iso(6_000),
     started_at: iso(5_000),
     finished_at: iso(0),
-    error_message: "OCI Enterprise AI で SQL を生成できませんでした。",
+    error_message: "モデルの API で SQL を生成できませんでした。",
     steps: [
       { stage: "prepare_context", status: "done", started_at: iso(5_000), finished_at: iso(4_000) },
       { stage: "generate_sql", status: "error", started_at: iso(4_000), finished_at: iso(0) },
@@ -1117,7 +1117,7 @@ test("生成に失敗した段階は「処理の経過」を開いて失敗を�
   await expect(failed).toContainText("失敗");
   // 後の段は始まっていないので span が無い（行を出さない。#3226）。
   await expect(progress.getByTestId("sql-chat-progress-step-safety_check")).toHaveCount(0);
-  await expect(turn.getByText("OCI Enterprise AI で SQL を生成できませんでした。")).toBeVisible();
+  await expect(turn.getByText("モデルの API で SQL を生成できませんでした。")).toBeVisible();
   // 失敗は 3 製品共通の失敗のカード: 止まった段・原因・次の操作・開いた「詳細」（#2342）。
   const failure = turn.getByTestId("sql-chat-turn-failure");
   await expect(failure.getByRole("alert")).toContainText("「SQL の生成」で処理が止まりました。");
@@ -1753,11 +1753,11 @@ test("質問が SQL の文でも同じに要件を確かめ、確認の質問が
   await expect(turn.getByTestId("sql-chat-turn-requirement")).toBeVisible();
 });
 
-test("OCI Enterprise AI が無い環境では、要件の検査を使わずにそのまま SQL を作る (#1442)", async ({ page }) => {
+test("モデルの API が無い環境では、要件の検査を使わずにそのまま SQL を作る (#1442)", async ({ page }) => {
   const state = await setup(page, {
     createFailure: {
       status: 503,
-      error: "OCI Enterprise AI が設定されていないため、回答前の確認を使えません。(REQUIREMENT_AI_NOT_CONFIGURED)",
+      error: "モデルの API が設定されていないため、回答前の確認を使えません。(REQUIREMENT_AI_NOT_CONFIGURED)",
     },
   });
   await page.goto("/chat");

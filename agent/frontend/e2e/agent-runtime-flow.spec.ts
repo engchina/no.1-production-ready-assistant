@@ -50,13 +50,13 @@ const skill = {
   updated_at: now,
 };
 
-// 組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI。#754）の状態。
+// 組み込み Runtime（OpenAI Agents SDK + モデルの API。#754）の状態。
 const runtimeStatus = {
   id: "builtin",
   name: "組み込み Runtime",
   sdk: "openai-agents",
   sdk_version: "0.22.3",
-  model_provider: "OCI Enterprise AI（Responses API）",
+  model_provider: "OpenAI 互換の API（Responses API）",
   model_id: "xai.grok-4",
   ready: true,
   error_code: null,

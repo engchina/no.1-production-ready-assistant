@@ -1,7 +1,7 @@
 {
   "name": "@production-ready/system-settings",
   "version": "0.1.0",
-  "description": "Shared system settings pages (OCI / upload storage / model / database) for the No.1 Production Ready product family (RAG / NL2SQL / Agent).",
+  "description": "Shared system settings pages (upload storage / model / database / API keys) for the No.1 Production Ready product family (RAG / NL2SQL / Agent).",
   "license": "MIT",
   "private": true,
   "type": "module",

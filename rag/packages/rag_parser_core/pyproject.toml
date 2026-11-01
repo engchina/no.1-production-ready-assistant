@@ -9,7 +9,7 @@ dependencies = [
     "production-ready-backend-core",
     "pydantic>=2.11",
     "charset-normalizer>=3.4,<4",
-    # oci_enterprise_ai(共有 VLM/LLM core)は openai SDK で OCI OpenAI 互換 API を呼ぶ。
+    # enterprise_ai(共有 VLM/LLM core)は openai SDK で OpenAI 互換 API を呼ぶ。
     # httpx は SDK 例外を既存のエラー経路へ変換するために直接参照する。
     "httpx>=0.27",
     # ponytail: 以前は marker-pdf が openai<2 を要求していたため 1.x に揃えた。marker は削除済み

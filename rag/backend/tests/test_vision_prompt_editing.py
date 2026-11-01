@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
-from rag_engine.adapters.oci import _picture_output_contract, _render_prompt
+from rag_engine.adapters.model_api import _picture_output_contract, _render_prompt
 from rag_engine.parsing.picture_descriptions import _bounded_vision_description
 from rag_engine.parsing.vision_prompt_rules import (
     MAX_TABLE_ROWS,
@@ -186,9 +186,9 @@ async def test_saved_vision_instructions_reach_serialized_http_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from rag_engine.models.llm import PictureDescriptionOutput
-    from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiClient, OciEnterpriseAiConfig
+    from rag_parser_core.enterprise_ai import EnterpriseAiClient, EnterpriseAiConfig
 
-    from tests.test_oci_enterprise_ai import FakeEnterpriseAiTransport
+    from tests.test_enterprise_ai import FakeEnterpriseAiTransport
 
     oracle = FakePromptOracle()
     monkeypatch.setattr(routes, "OracleClient", lambda: oracle)
@@ -207,12 +207,12 @@ async def test_saved_vision_instructions_reach_serialized_http_payload(
     transport = FakeEnterpriseAiTransport(
         {"output_text": json.dumps({"retrieval_text": "合成の説明"})}
     )
-    reader = OciEnterpriseAiClient(
-        OciEnterpriseAiConfig(
+    reader = EnterpriseAiClient(
+        EnterpriseAiConfig(
             default_model_id="openai.gpt-oss-120b",
             vision_model_id="openai.gpt-oss-120b",
-            oci_enterprise_ai_endpoint="https://inference.example/openai/v1",
-            oci_enterprise_ai_api_key="synthetic-api-key",
+            enterprise_ai_endpoint="https://inference.example/openai/v1",
+            enterprise_ai_api_key="synthetic-api-key",
         ),
         http_transport=transport,
     )

@@ -1,6 +1,6 @@
 """#1720: AI 構築のオントロジーを best effort で graph にし、graph の破損だけで公開を止める。
 
-実 OCI / Oracle は使わない（sql_assist_sample の表 3 つ・view 2 つを模した schema context）。
+実際の LLM / Oracle は使わない（sql_assist_sample の表 3 つ・view 2 つを模した schema context）。
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def prop(api_name: str, name_ja: str, owner: str, table: str, column: str) -> Pr
 
 
 def ai_output() -> list[Any]:
-    """OCI で公開を止めた AI の出力の形（列名が同じプロパティを 1 つだけ作り、共有した）。"""
+    """実環境で公開を止めた AI の出力の形（列名が同じプロパティを 1 つだけ作り、共有した）。"""
 
     return [
         obj("department", "部門", "DEPARTMENT", ["department_id", "department_name"]),
@@ -148,7 +148,7 @@ def repaired() -> list[Any]:
     return repair_definitions("sample", merged, SCHEMA)
 
 
-def test_ai_output_before_repair_blocks_publication_like_the_oci_report() -> None:
+def test_ai_output_before_repair_blocks_publication_like_the_live_report() -> None:
     findings = validate_definitions(bundle(ai_output()), SCHEMA)
     codes = {f.code for f in findings if f.severity == "error"}
     assert {"PROPERTY_OWNER_MISMATCH", "REFERENCE_INVALID"} <= codes

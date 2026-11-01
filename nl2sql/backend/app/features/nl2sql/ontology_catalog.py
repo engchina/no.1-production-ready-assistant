@@ -1,6 +1,6 @@
 """Oracle schema catalog と NL2SQL Ontology を接続する決定論的な変換層。
 
-このモジュールは network や LLM に依存しない。OCI Generative AI の embedding を
+このモジュールは network や LLM に依存しない。埋め込みモデルを
 利用する場合だけ、呼び出し元が明示的に callback を渡す。callback が無い、または
 利用できない場合は、profile view 内の業務名・別名・comment・glossary の一致だけで
 候補を絞り、確定できない意味は blocking ambiguity として返す。
@@ -117,7 +117,7 @@ class OntologyRetrievalHit(OntologyContract):
 
 
 class EmbeddingRetrievalCallback(Protocol):
-    """OCI embedding/Oracle Vector Search adapter が実装する任意 callback。"""
+    """埋め込み / Oracle Vector Search adapter が実装する任意 callback。"""
 
     def __call__(
         self,

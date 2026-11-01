@@ -89,14 +89,14 @@ uv run suite-evaluation compare A=../../tmp/eval/a.json C=../../tmp/eval/c.json 
 | module | 内容 |
 |---|---|
 | `judge/rubric.py`（JSON は platform の `pr_evaluation_scoring/rubrics/answer_quality_v1.json`。RAG の判定の校正の画面と共有。#3578） | 判定の基準（指示・観点・ラベル）。観点は `requirement_coverage`（必要な論点の充足）・`answer_correctness`（事実・推論の正しさ。対象・属性・数量・期間・条件の保持、手順の前後関係）・`claim_support`（根拠への忠実性）。ラベルは pass / fail / cannot_judge。内容の sha256 を記録する |
-| `judge/client.py` | OCI Enterprise AI の Responses API（`{Endpoint URL}/responses`。URL の規則と HTTP の失敗の分類は platform の `pr_enterprise_ai`。FastAPI を入れない）を構造化出力（JSON schema・strict）で呼ぶ |
+| `judge/client.py` | モデルの API（OpenAI 互換）の Responses API（`{Endpoint URL}/responses`。URL の規則と HTTP の失敗の分類は platform の `pr_enterprise_ai`。FastAPI を入れない）を構造化出力（JSON schema・strict）で呼ぶ |
 | `judge/judging.py` | 1 件の判定（Pydantic で出力を確かめ、形が違えば呼び直し、それでも違えば評価不能）、観点ごとの集計、校正の照合 |
 | `judge/run.py` | 保存した観測の回答を判定する（製品は呼ばない） |
 | `judge/calibration.py` | 人手の判定の形（`LabelSet`。人手 / 合成の別・記入者ごとの元の判定）と、一致の集計（platform の `pr_evaluation_scoring.agreement`: 一致率・Cohen の κ・混同行列・誤合格 / 誤不合格）・合否（閾値も platform の `CalibrationThresholds`）・判定の分散（`--repeats`） |
 | `judge/labeling.py`・`judge/workbook.py` | 人手の判定を集める（区分の決め方・誤りの型と目標・記入者の間の κ は platform の `pr_evaluation_scoring.labeling` を RAG の判定の校正の画面と共有。#3578）: 記入用のブック（.xlsx。1 行 = 項目 × 観点）と項目のファイルの書き出し（`label-template`。区分は層ごとの hash で決める）、記入者の間の一致と食い違い・裁定用のブック・LabelSet の書き出し（`label-import`） |
 | platform の `pr_evaluation_scoring.perturbation`（#3578 で移した） | 故意に壊した回答（合成の対照）: 数値の入れ替え・条件の文の削除・根拠に無い断定の追加・手順の逆順。壊した観点を fail とし、人手の判定と分けて集計する |
 
-判定のモデルと接続は環境変数で決める（既定のモデルは持たない）: `SUITE_EVALUATION_JUDGE_ENDPOINT`・`SUITE_EVALUATION_JUDGE_API_KEY`・`SUITE_EVALUATION_JUDGE_MODEL`（必須）、`SUITE_EVALUATION_JUDGE_PROJECT_OCID`・`SUITE_EVALUATION_JUDGE_MAX_OUTPUT_TOKENS`・`SUITE_EVALUATION_JUDGE_TIMEOUT_SECONDS`（任意）。
+判定のモデルと接続は環境変数で決める（既定のモデルは持たない）: `SUITE_EVALUATION_JUDGE_ENDPOINT`・`SUITE_EVALUATION_JUDGE_API_KEY`・`SUITE_EVALUATION_JUDGE_MODEL`（必須）、`SUITE_EVALUATION_JUDGE_PROJECT_ID`・`SUITE_EVALUATION_JUDGE_MAX_OUTPUT_TOKENS`・`SUITE_EVALUATION_JUDGE_TIMEOUT_SECONDS`（任意）。
 
 **人手の判定の集め方と校正の手順（ケースの作り方・記入・裁定・校正・記録・目標の件数・時間の目安）は [docs/judge-calibration.md](./docs/judge-calibration.md)。**
 

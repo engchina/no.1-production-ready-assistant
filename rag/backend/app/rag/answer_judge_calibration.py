@@ -20,7 +20,7 @@ suite の package を import せずにこの module の型で読む。一致の�
 評価が完了しない・値が無い（測れない）項目は判定できなかった件（`unjudged`）に数える。
 
     cd rag/backend
-    # 評価器を動かして校正する（OCI Enterprise AI を呼ぶ。接続とモデルは RAG の設定）
+    # 評価器を動かして校正する（モデルの API を呼ぶ。接続とモデルは RAG の設定）
     uv run python -m app.rag.answer_judge_calibration ../../tmp/eval/labels.json \\
         --output ../../tmp/eval/rag-answer-calibration.json
     # 判定のモデルを明示する（省略時は共通のモデル設定の既定の判定モデル。#3574）
@@ -216,7 +216,7 @@ def resolve_judge_model_id(settings: Any, judge_model_id: str | None = None) -> 
 def judge_provenance(settings: Any, judge_model_id: str | None = None) -> dict[str, Any]:
     """評価器の判定のモデル（校正の結果に記録し、画面の「校正済み」の照合に使う。#3578）。"""
     return {
-        "provider": "oci_enterprise_ai",
+        "provider": "enterprise_ai",
         "model": resolve_judge_model_id(settings, judge_model_id),
     }
 
@@ -273,7 +273,7 @@ def backend_evaluator(
             judge_model_id=judge_model,
         )
 
-    return evaluate, {"provider": "oci_enterprise_ai", "model": judge_model}
+    return evaluate, {"provider": "enterprise_ai", "model": judge_model}
 
 
 def _backend_evaluator(judge_model_id: str | None = None) -> tuple[Evaluate, dict[str, Any]]:

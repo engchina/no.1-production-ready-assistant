@@ -1,8 +1,7 @@
 # NL2SQL on OCI Compute — runtime and operations
 
 NL2SQL is installed on the suite's single Compute instance by the deployment
-scripts in `platform/deploy/` (the OCI Resource Manager Terraform stack was
-removed in #12). For the shared Autonomous AI Database, the app DB user,
+scripts in `platform/deploy/`. For the shared Autonomous AI Database, the app DB user,
 updates, and the deployment check, see
 [`platform/docs/deployment.md`](../../platform/docs/deployment.md).
 
@@ -75,8 +74,6 @@ and the database values come from the deployment inputs and are written into
 - `PLATFORM_ORACLE_CONNECTION_SECURITY` (`wallet_mtls` when mTLS is required,
   otherwise `walletless_tls`)
 - `PLATFORM_ORACLE_WALLET_PASSWORD` (reuses `existing_oracle_password`)
-- `PLATFORM_ORACLE_ADB_OCID`
-- `PLATFORM_ORACLE_ADB_REGION`
 
 実行環境は3製品共通の `PLATFORM_ENVIRONMENT` です。
 共通 `.env` に `PLATFORM_ENVIRONMENT` と `PLATFORM_AUTH_MODE=authenticated` を設定します。
@@ -94,13 +91,13 @@ when their dimension is not 1024. It deletes the stored vectors, so
 `--allow-destructive` (or the confirmation dialog of the system table screen).
 After it, rebuild and publish the ontology of each business profile, rebuild the
 feedback index if it is used, and retrain the question classifier. The full
-procedure (including the `PLATFORM_OCI_GENAI_EMBEDDING_DIM` change in
+procedure (including the `PLATFORM_GENAI_EMBEDDING_DIM` change in
 `platform/.env`) is in [platform/README.md](../../platform/README.md)
 「既存環境の更新手順（#46 埋め込みの次元を 1536 から 1024 に）」.
 
-### SQL generation by OCI Enterprise AI only (#7)
+### SQL generation by the model API only (#7)
 
-NL2SQL now generates SQL only by calling OCI Enterprise AI directly
+NL2SQL now generates SQL only by calling the model API (OpenAI-compatible) directly
 (`enterprise_ai_direct`). The update does not drop the database-side AI
 profiles, agent assets, or the `NL2SQL_OCI_CRED` credential that earlier
 versions may have created in the application schema; drop them manually only if
@@ -243,8 +240,7 @@ sudo journalctl \
 ```
 
 Then confirm Wallet refresh, application user management, and completion of any
-previously pending schema refresh job from the UI. Docker is not part of this recovery path, and OCI SDK circuit-breaker INFO
-messages are not failures.
+previously pending schema refresh job from the UI. Docker is not part of this recovery path.
 
 For a permanent rollout to a replacement Compute instance, keep the repaired old
 instance until the replacement passes the same health/UI checks, and migrate `/u01/data/production-ready-nl2sql` before cutover

@@ -208,7 +208,7 @@ def test_datetime_value_attaches_utc_to_naive_database_values() -> None:
 async def test_vector_index_build_params_reads_actual_index() -> None:
     """実際の索引の NEIGHBORS / EFCONSTRUCTION を v$vector_graph_index から読む(#562)。"""
     pool = FakeOraclePool(execute_results=[[{"num_neighbors": 48, "ef_construction": 800}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.get_vector_index_build_params() == (48, 800)
     call = pool.connection.calls[0]
@@ -229,7 +229,7 @@ async def test_vector_index_build_params_unknown_when_unreadable(
 ) -> None:
     """索引がない・V$ を読めないときは None(確認できない)で、例外にしない。"""
     pool = FakeOraclePool(execute_results=rows, fetch_errors=errors)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.get_vector_index_build_params() is None
 
@@ -745,11 +745,11 @@ def test_oracle_connection_test_strips_wallet_retry_descriptor(
 async def test_oracle_client_persists_documents_through_pool() -> None:
     """document persistence は Oracle pool 経由で実行される。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
     )
 
@@ -773,7 +773,7 @@ async def test_oracle_client_get_document_restores_preprocess_artifact(
             "derivation_id": "derivation-1",
             "profile": "office_to_pdf",
             "converted": True,
-            "object_storage_path": "oci://namespace/bucket/artifacts/canonical/doc-1.pdf",
+            "object_storage_path": "local://artifacts/canonical/doc-1.pdf",
             "content_type": "application/pdf",
             "sha256": "b" * 64,
             "file_name": "policy.pdf",
@@ -785,7 +785,7 @@ async def test_oracle_client_get_document_restores_preprocess_artifact(
             [{"document_id": "doc-1", "knowledge_base_id": "kb-1", "name": "社内規程"}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     # 公開版の取得は独立に検証し、このテストでは元の文書 SQL の応答だけを供給する。
     monkeypatch.setattr(client, "document_language_pack_uses", AsyncMock(return_value={}))
 
@@ -794,10 +794,7 @@ async def test_oracle_client_get_document_restores_preprocess_artifact(
     assert "preprocess_artifact" in pool.connection.calls[0].statement
     assert detail is not None
     assert detail.preprocess_artifact is not None
-    assert (
-        detail.preprocess_artifact.object_storage_path
-        == "oci://namespace/bucket/artifacts/canonical/doc-1.pdf"
-    )
+    assert detail.preprocess_artifact.object_storage_path == "local://artifacts/canonical/doc-1.pdf"
     assert detail.preprocess_artifact.content_type == "application/pdf"
     assert detail.preprocess_artifact.sha256 == "b" * 64
 
@@ -811,7 +808,7 @@ async def test_oracle_read_retries_one_recoverable_disconnect(
         execute_results=[[], [{"ok": 1}]],
         fetch_errors=[disconnect],
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with caplog.at_level(logging.WARNING, logger="app.clients.oracle"):
         rows = await client._fetch_all("SELECT 1 AS ok FROM DUAL")
@@ -838,7 +835,7 @@ async def test_oracle_read_does_not_retry_more_than_once_or_nonrecoverable_error
         execute_results=[[] for _ in range(expected_attempts)],
         fetch_errors=errors,
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(RuntimeError):
         await client._fetch_all("SELECT 1 AS ok FROM DUAL")
@@ -867,11 +864,11 @@ def test_fetch_all_preserves_fetch_error_when_cursor_close_also_fails() -> None:
 async def test_oracle_client_assigns_uploaded_document_to_selected_knowledge_base() -> None:
     """upload 時の KB 指定は既定 KB ではなく指定先 membership を作る。"""
     pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
         knowledge_base_ids=["kb-1"],
     )
@@ -886,7 +883,7 @@ async def test_oracle_client_assigns_uploaded_document_to_selected_knowledge_bas
 async def test_oracle_client_persists_ingestion_job() -> None:
     """取込 job は Oracle queue table へ保存する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     job = IngestionJob(
         id="job-1",
         document_id="doc-1",
@@ -914,7 +911,7 @@ async def test_oracle_client_persists_ingestion_job() -> None:
 async def test_oracle_client_creates_recipe_job_after_locked_revision_check() -> None:
     """recipe job はアクセス条件付き row lock と active/revision 検証後に作る。"""
     pool = FakeOraclePool(execute_results=[[{"config_revision": 3}], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     job = IngestionJob(
         id="job-recipe",
         document_id="doc-1",
@@ -954,7 +951,7 @@ async def test_oracle_client_rejects_recipe_job_before_insert(
         results.append([{"job_id": "active-job"}])
     pool = FakeOraclePool(execute_results=results)
     client = OracleClient(
-        settings=_oci_settings(),
+        settings=_llm_settings(),
         pool=pool,
         db_call_runner=_run_inline,
     )
@@ -980,7 +977,7 @@ async def test_oracle_client_rejects_recipe_job_before_insert(
 async def test_oracle_client_rejects_recipe_update_before_dml_when_scope_mismatches() -> None:
     """document/recipe scope が一致しなければ設定 UPDATE を行わない。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KeyError, match="レシピが見つかりません"):
         await client.update_document_recipe_config(
@@ -995,7 +992,7 @@ async def test_oracle_client_rejects_recipe_update_before_dml_when_scope_mismatc
 async def test_oracle_client_updates_recipe_status_without_null_timestamp_binds() -> None:
     """日時は DB 側で設定し、Oracle が NULL bind を CHAR と推論するのを避ける。"""
     pool = FakeOraclePool(execute_results=[])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.update_document_recipe_status(
         recipe_id="recipe-1",
@@ -1013,7 +1010,7 @@ async def test_oracle_client_updates_recipe_status_without_null_timestamp_binds(
 async def test_oracle_client_rejects_recipe_delete_before_dml_when_scope_mismatches() -> None:
     """document は見えても recipe が別文書なら削除 DML を行わない。"""
     pool = FakeOraclePool(execute_results=[[{"document_id": "doc-1"}], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KeyError, match="レシピが見つかりません"):
         await client.delete_document_recipe("doc-1", "recipe-other-document")
@@ -1027,7 +1024,7 @@ async def test_oracle_client_persists_ingestion_job_without_max_attempts_column(
         execute_results=[[_oracle_document_row()]],
         missing_ingestion_job_max_attempts=True,
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     job = IngestionJob(
         id="job-1",
         document_id="doc-1",
@@ -1055,7 +1052,7 @@ async def test_oracle_client_lists_and_counts_ingestion_jobs() -> None:
             [{"count_value": 1}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     jobs = await client.list_ingestion_jobs(
         status=IngestionJobStatus.QUEUED,
@@ -1084,7 +1081,7 @@ async def test_oracle_client_lists_and_counts_ingestion_jobs() -> None:
 async def test_oracle_client_lists_document_ingestion_jobs() -> None:
     """指定 document の取込 job 一覧は document_id と状態で絞り込める。"""
     pool = FakeOraclePool(execute_results=[[_oracle_ingestion_job_row(status="RUNNING")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     jobs = await client.list_document_ingestion_jobs(
         "doc-1",
@@ -1107,7 +1104,7 @@ async def test_oracle_client_ingestion_jobs_carry_document_file_name() -> None:
     """取込 job の一覧・取得は文書のファイル名を返す（一覧で文書 ID ではなく名前を出す。#306）。"""
     row = {**_oracle_ingestion_job_row(), "document_file_name": "経費規程.pdf"}
     pool = FakeOraclePool(execute_results=[[row], [row], [row]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     listed = await client.list_ingestion_jobs(limit=5, offset=0)
     fetched = await client.get_ingestion_job("job-1")
@@ -1124,7 +1121,7 @@ async def test_oracle_client_ingestion_jobs_carry_document_file_name() -> None:
 async def test_oracle_client_ingestion_job_without_document_file_name_is_none() -> None:
     """ファイル名の列がない行（作成直後の job 等）は None のまま扱う。"""
     pool = FakeOraclePool(execute_results=[[_oracle_ingestion_job_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     jobs = await client.list_ingestion_jobs(limit=5, offset=0)
 
@@ -1140,7 +1137,7 @@ async def test_oracle_client_transition_ingestion_job_uses_status_condition(
         execute_results=[[_oracle_ingestion_job_row(status="CANCELLED")]],
     )
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 1, raising=False)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.transition_ingestion_job(
         "job-1",
@@ -1169,7 +1166,7 @@ async def test_oracle_client_transition_ingestion_job_returns_none_when_no_row_m
     """遷移元の status でなければ 0 行更新になり、None を返して他者の状態を上書きしない。"""
     pool = FakeOraclePool(execute_results=[])
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 0, raising=False)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.transition_ingestion_job(
         "job-1",
@@ -1192,7 +1189,7 @@ async def test_oracle_client_transition_ingestion_job_with_lease_requires_own_le
     """lease を渡した遷移は、自分の lease の行だけを書く(再 claim 後の上書きを防ぐ。#359)。"""
     pool = FakeOraclePool(execute_results=[])
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 0, raising=False)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.transition_ingestion_job(
         "job-1",
@@ -1217,7 +1214,7 @@ async def test_oracle_client_reads_ingestion_job_lease() -> None:
     pool = FakeOraclePool(
         execute_results=[[{"status": "RUNNING", "lease_owner": "host:2:other"}], []]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     lease = await client.get_ingestion_job_lease("job-1")
     missing = await client.get_ingestion_job_lease("job-missing")
@@ -1257,7 +1254,7 @@ async def test_oracle_client_recovers_stale_ingestion_jobs(
             ],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     recovered = await client.recover_stale_ingestion_jobs(stale_before=stale_at, limit=10)
 
@@ -1278,7 +1275,7 @@ async def test_oracle_client_recovers_stale_ingestion_jobs(
     assert select_call.parameters["stale_before"] == stale_at
     assert (
         select_call.parameters["lease_ttl_seconds"]
-        == _oci_settings().ingestion_queue_lease_ttl_seconds
+        == _llm_settings().ingestion_queue_lease_ttl_seconds
     )
     assert select_call.parameters["limit"] == 10
     update_calls = [
@@ -1335,7 +1332,7 @@ async def test_oracle_client_recovers_stale_recipe_jobs_without_touching_documen
         "phase": "INDEX",
     }
     pool = FakeOraclePool(execute_results=[[retry_job, maxed_job], [], []])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.recover_stale_ingestion_jobs(stale_before=stale_at, limit=10)
 
@@ -1363,7 +1360,7 @@ async def test_oracle_client_recovers_orphaned_recipe_only() -> None:
     pool = FakeOraclePool(
         execute_results=[[], [], [{"recipe_id": "recipe-stuck", "status": "CHUNKING"}]]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.recover_stale_ingestion_jobs(
         stale_before=datetime(2026, 1, 2, 1, 0, tzinfo=UTC), limit=10
@@ -1387,7 +1384,7 @@ async def test_oracle_client_recovers_orphaned_ingesting_document() -> None:
             [{"document_id": "doc-stuck"}],  # orphan 文書
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     recovered = await client.recover_stale_ingestion_jobs(stale_before=stale_at, limit=10)
 
@@ -1440,7 +1437,7 @@ async def test_oracle_client_recovers_stale_ingestion_jobs_without_max_attempts_
         ],
         missing_ingestion_job_max_attempts=True,
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     recovered = await client.recover_stale_ingestion_jobs(stale_before=stale_at, limit=10)
 
@@ -1471,7 +1468,7 @@ async def test_oracle_client_recovery_skips_job_heartbeated_after_select() -> No
             ],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     recovered = await client.recover_stale_ingestion_jobs(
         stale_before=stale_at,
@@ -1503,7 +1500,7 @@ async def test_oracle_client_claims_ingestion_job_with_lease() -> None:
             [_oracle_ingestion_job_row()],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     claimed = await client.claim_ingestion_job(
         "job-1", started_at=started_at, lease_owner="host:1:worker"
@@ -1523,7 +1520,7 @@ async def test_oracle_client_heartbeats_own_running_jobs(
     """heartbeat は自分の lease の RUNNING job だけを、DB の時刻で更新する(#357 / #359)。"""
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 2, raising=False)
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.heartbeat_ingestion_jobs(lease_owner="host:1:worker")
 
@@ -1544,7 +1541,7 @@ async def test_oracle_client_writes_job_progress_only_for_own_running_job(
 
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 1, raising=False)
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     progress = IngestionJobProgress(
         stage="parse",
         parse=IngestionParseProgress(engine="docling", completed=40, total=82),
@@ -1630,7 +1627,7 @@ async def test_oracle_client_requeues_own_leased_jobs_without_consuming_attempt(
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     requeued = await client.requeue_leased_ingestion_jobs(lease_owner="host:1:worker")
 
@@ -1679,7 +1676,7 @@ async def test_oracle_client_requeue_skips_job_finished_after_select() -> None:
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     requeued = await client.requeue_leased_ingestion_jobs(lease_owner="host:1:worker")
 
@@ -1690,7 +1687,7 @@ async def test_oracle_client_requeue_skips_job_finished_after_select() -> None:
 async def test_oracle_client_lists_dispatchable_ingestion_jobs() -> None:
     """dispatch は同じ文書の job が RUNNING の QUEUED job と、自分が実行中の job を除く。"""
     pool = FakeOraclePool(execute_results=[[_oracle_ingestion_job_row(job_id="job-2")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     jobs = await client.list_dispatchable_ingestion_jobs(
         limit=2, exclude_job_ids=["job-1", "job-3", "job-1"]
@@ -1714,7 +1711,7 @@ async def test_oracle_client_lists_dispatchable_ingestion_jobs() -> None:
 async def test_oracle_client_lists_dispatchable_jobs_without_exclusions() -> None:
     """実行中の job が無ければ除外の条件を付けない。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.list_dispatchable_ingestion_jobs(limit=1) == []
     assert "exclude_job_id" not in pool.connection.calls[0].statement
@@ -1730,7 +1727,7 @@ async def test_oracle_client_claims_ingestion_job_with_row_lock() -> None:
             [_oracle_ingestion_job_row()],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     claimed = await client.claim_ingestion_job("job-1", started_at=started_at)
 
@@ -1761,7 +1758,7 @@ async def test_oracle_client_replaces_and_lists_ingestion_segments() -> None:
             [_oracle_ingestion_segment_row()],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     segment = IngestionSegment(
         segment_id="doc-1:p1-3",
         document_id="doc-1",
@@ -1792,13 +1789,13 @@ async def test_oracle_client_replaces_and_lists_ingestion_segments() -> None:
 async def test_oracle_client_updates_ingestion_segment_status() -> None:
     """segment checkpoint 更新は document access predicate 付きで行う。"""
     pool = FakeOraclePool(execute_results=[[_oracle_ingestion_segment_row(status="RUNNING")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.update_ingestion_segment(
         "doc-1:p1-3",
         status="RUNNING",
         attempt_count=2,
-        artifact_path="oci://namespace/bucket/artifacts/extractions/doc-1/trace.json",
+        artifact_path="local://artifacts/extractions/doc-1/trace.json",
     )
 
     assert updated is not None
@@ -1814,7 +1811,7 @@ async def test_oracle_client_updates_ingestion_segment_status() -> None:
 async def test_oracle_client_persists_knowledge_bases_through_pool() -> None:
     """knowledge base persistence は Oracle pool 経由で実行される。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.create_knowledge_base(
         name="社内規程",
@@ -1838,7 +1835,7 @@ async def test_oracle_client_persists_knowledge_bases_through_pool() -> None:
 async def test_oracle_client_lists_knowledge_bases_with_counts() -> None:
     """knowledge base 一覧は集計列を含む SQL で取得する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row(document_count=3)]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     items = await client.list_knowledge_bases(status=KnowledgeBaseStatus.ACTIVE, query="規程")
 
@@ -1861,7 +1858,7 @@ async def test_oracle_client_lists_knowledge_bases_with_counts() -> None:
 async def test_oracle_client_updates_knowledge_base_metadata() -> None:
     """knowledge base 更新は既存行を確認してから UPDATE する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.update_knowledge_base(
         "kb-1",
@@ -1883,7 +1880,7 @@ async def test_oracle_client_protects_default_knowledge_base() -> None:
     """DEFAULT は改名もアーカイブもできない。"""
     update_pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row(name="DEFAULT")]])
     update_client = OracleClient(
-        settings=_oci_settings(), pool=update_pool, db_call_runner=_run_inline
+        settings=_llm_settings(), pool=update_pool, db_call_runner=_run_inline
     )
 
     with pytest.raises(ValueError, match="名前は変更できません"):
@@ -1895,7 +1892,7 @@ async def test_oracle_client_protects_default_knowledge_base() -> None:
 
     archive_pool = FakeOraclePool(execute_results=[[_oracle_knowledge_base_row(name="DEFAULT")]])
     archive_client = OracleClient(
-        settings=_oci_settings(), pool=archive_pool, db_call_runner=_run_inline
+        settings=_llm_settings(), pool=archive_pool, db_call_runner=_run_inline
     )
 
     with pytest.raises(ValueError, match="アーカイブできません"):
@@ -1910,7 +1907,7 @@ async def test_oracle_client_assigns_documents_to_knowledge_base() -> None:
             [_oracle_document_row()],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.assign_documents_to_knowledge_base("kb-1", ["doc-1"])
 
@@ -1929,7 +1926,7 @@ async def test_oracle_client_rejects_assignment_to_archived_knowledge_base() -> 
             [_oracle_knowledge_base_row(status="ARCHIVED")],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError, match="アーカイブ済み"):
         await client.assign_documents_to_knowledge_base("kb-1", ["doc-1"])
@@ -1937,8 +1934,8 @@ async def test_oracle_client_rejects_assignment_to_archived_knowledge_base() -> 
     assert not pool.connection.many_calls
 
 
-async def test_oci_vector_search_uses_ai_vector_search_sql() -> None:
-    """OCI mode の vector search は Oracle AI Vector Search に bind 付きで問い合わせる。"""
+async def test_oracle_vector_search_uses_ai_vector_search_sql() -> None:
+    """Oracle の adapter の vector search は Oracle AI Vector Search に bind 付きで問い合わせる。"""
     pool = FakeOraclePool(
         execute_results=[
             [
@@ -1957,7 +1954,7 @@ async def test_oci_vector_search_uses_ai_vector_search_sql() -> None:
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     hits = await client.vector_search(
         [1.0, 0.0, 0.0],
@@ -1982,8 +1979,8 @@ async def test_oci_vector_search_uses_ai_vector_search_sql() -> None:
     assert call.parameters["filter_document_id"] == "doc-1"
 
 
-async def test_oci_vector_search_applies_chunk_metadata_filters() -> None:
-    """OCI retrieval SQL は chunk metadata filter も bind 付きで適用する。"""
+async def test_oracle_vector_search_applies_chunk_metadata_filters() -> None:
+    """Oracle の retrieval SQL は chunk metadata filter も bind 付きで適用する。"""
     pool = FakeOraclePool(
         execute_results=[
             [
@@ -2002,7 +1999,7 @@ async def test_oci_vector_search_applies_chunk_metadata_filters() -> None:
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     hits = await client.vector_search(
         [1.0, 0.0, 0.0],
@@ -2033,7 +2030,7 @@ async def test_oracle_knowledge_base_subgraph_requires_current_kb_membership() -
             [],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     nodes, edges = await client.fetch_knowledge_base_subgraph("kb-1", limit=10)
 
@@ -2052,7 +2049,7 @@ async def test_oracle_knowledge_base_subgraph_requires_active_chunk_sets() -> No
     pool = FakeOraclePool(
         execute_results=[[{"entity_id": "entity-active", "canonical_name": "section"}], []]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.fetch_knowledge_base_subgraph("kb-active", limit=10)
 
@@ -2066,7 +2063,7 @@ async def test_oracle_knowledge_base_subgraph_requires_active_chunk_sets() -> No
 async def test_upsert_extraction_artifact_preserves_existing_payload_when_omitted() -> None:
     """後段 status 更新では大きい抽出 JSON を再 bind せず、既存 payload を保持する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.upsert_document_extraction_artifact(
         document_id="doc-1",
@@ -2097,7 +2094,7 @@ async def test_upsert_extraction_artifact_preserves_existing_payload_when_omitte
 async def test_upsert_chunk_set_binds_recipe_subset_as_json() -> None:
     """recipe は JSON の文字列を CLOB で渡し、COALESCE は JSON(:x) で列と型をそろえる(#1363)。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.upsert_chunk_set(
         chunk_set_id="cs-1",
@@ -2119,7 +2116,7 @@ async def test_upsert_chunk_set_binds_recipe_subset_as_json() -> None:
 async def test_upsert_extraction_artifact_updates_payload_when_provided() -> None:
     """抽出 payload を渡す経路では JSON 列を明示更新する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.upsert_document_extraction_artifact(
         document_id="doc-1",
@@ -2147,7 +2144,7 @@ async def test_upsert_extraction_artifact_updates_payload_when_provided() -> Non
 async def test_upsert_extraction_artifact_binds_large_payload_as_json() -> None:
     """大きい抽出 payload も VARCHAR2 ではなく CLOB の bind で渡す(OSON は使わない。#1363)。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     large_text = "x" * 40000
 
     await client.upsert_document_extraction_artifact(
@@ -2191,7 +2188,7 @@ def test_json_bind_passes_json_text_with_clob_bind_not_oson() -> None:
 async def test_save_answer_record_binds_large_citations_as_clob_json_text() -> None:
     """1MB 程度の citations も JSON の文字列を CLOB で bind して保存する(#1363)。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     citations = [
         {"chunk_id": f"c-{index}", "text": "受注管理規程の本文" * 100, "score": 0.5}
         for index in range(400)
@@ -2224,7 +2221,7 @@ async def test_save_answer_record_binds_large_citations_as_clob_json_text() -> N
 async def test_update_recipe_status_coalesces_preprocess_artifact_as_json() -> None:
     """CLOB の bind は JSON 型の列と COALESCE できないため、JSON(:x) で型をそろえる(#1363)。"""
     pool = FakeOraclePool(execute_results=[])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     artifact = DocumentPreprocessArtifact(
         derivation_id="der-1",
         profile="passthrough",
@@ -2297,7 +2294,7 @@ async def test_oracle_replace_document_graph_index_replaces_document_scope() -> 
             [{"entity_id": "ent-doc"}, {"entity_id": "ent-old"}, {"entity_id": "ent-stale"}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.replace_document_graph_index("doc-1", graph_index)
 
@@ -2333,7 +2330,7 @@ async def test_oracle_replace_document_graph_index_replaces_document_scope() -> 
 async def test_oracle_save_evaluation_artifact_redacts_query_text() -> None:
     """評価 artifact は query 原文ではなく summary/hash だけを保存する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     evaluation_run_id = await client.save_evaluation_artifact(
         {
@@ -2358,10 +2355,10 @@ async def test_oracle_save_evaluation_artifact_redacts_query_text() -> None:
     assert "query_text" not in str(call.parameters)
 
 
-async def test_oci_save_index_replaces_existing_chunks_and_binds_vectors() -> None:
-    """OCI mode の索引保存は既存 chunk を消し、metadata・検索用テキスト・VECTOR を挿入する。"""
+async def test_oracle_save_index_replaces_existing_chunks_and_binds_vectors() -> None:
+    """Oracle mode の索引保存は既存 chunk を消し、metadata・検索用テキスト・VECTOR を挿入する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     saved = await client.save_index(
         "doc-1",
@@ -2404,10 +2401,10 @@ async def test_oci_save_index_replaces_existing_chunks_and_binds_vectors() -> No
     assert metadata["content_kind"] == "text"
 
 
-async def test_oci_save_index_persists_extraction_and_chunks_atomically() -> None:
+async def test_oracle_save_index_persists_extraction_and_chunks_atomically() -> None:
     """index 保存は extraction と chunk/vector を 1 transaction で置換する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     saved = await client.save_index(
         "doc-1",
@@ -2443,7 +2440,7 @@ async def test_oci_save_index_persists_extraction_and_chunks_atomically() -> Non
     assert inserted["embedding"] == array("f", [0.1, 0.2, 0.3])
 
 
-async def test_oci_save_index_stores_first_page_context_once_per_chunk_set() -> None:
+async def test_oracle_save_index_stores_first_page_context_once_per_chunk_set() -> None:
     """1 ページ目の本文は chunk の行に入れず、chunk set に 1 つだけ保存する(#557)。
 
     chunk set の行は chunk の保存の後に upsert_chunk_set が作るため、無ければ MERGE で作る。
@@ -2479,7 +2476,7 @@ async def test_oci_save_index_stores_first_page_context_once_per_chunk_set() -> 
 
     for chunk_set_id in ("cs-1", None):
         pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
-        client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+        client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
         await client.save_index(
             "doc-1",
@@ -2506,7 +2503,9 @@ async def test_oci_save_index_stores_first_page_context_once_per_chunk_set() -> 
         assert pool.connection.commits == 1
 
 
-async def test_oci_list_document_chunks_accepts_json_element_ids_and_row_group_metadata() -> None:
+async def test_oracle_list_document_chunks_accepts_json_element_ids_and_row_group_metadata() -> (
+    None
+):
     """chunk view は JSON array element_ids と table row-group metadata を保持する。"""
     pool = FakeOraclePool(
         execute_results=[
@@ -2539,7 +2538,7 @@ async def test_oci_list_document_chunks_accepts_json_element_ids_and_row_group_m
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     chunks = await client.list_document_chunks("doc-1")
 
@@ -2563,8 +2562,8 @@ async def test_oci_list_document_chunks_accepts_json_element_ids_and_row_group_m
 
 
 @pytest.mark.parametrize("strategy", ["small_to_big", "fixed_length"])
-async def test_oci_context_group_siblings_uses_chunk_group_sql(strategy: str) -> None:
-    """OCI mode の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
+async def test_oracle_context_group_siblings_uses_chunk_group_sql(strategy: str) -> None:
+    """Oracle の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
 
     起点ごとの条件(文書・chunk_set・group・自分を除く)・並び・件数は起点の表(``a``)の値で
     1 件ずつ読むときと同じにする(#1490)。行は sibling の chunk ごと(#1498)。
@@ -2597,7 +2596,7 @@ async def test_oci_context_group_siblings_uses_chunk_group_sql(strategy: str) ->
             ]
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     anchor = RetrievedChunk(
         document_id="doc-1",
         chunk_id="doc-1:2",
@@ -2668,12 +2667,12 @@ async def test_oci_context_group_siblings_uses_chunk_group_sql(strategy: str) ->
     assert call.parameters["ca_ord_49"] is None
 
 
-async def test_oci_update_error_status_preserves_chunks_and_extraction() -> None:
+async def test_oracle_update_error_status_preserves_chunks_and_extraction() -> None:
     """ERROR への状態遷移では段階レビュー用の chunk と抽出 JSON を保持する。"""
     extraction = {"document_type": "text", "raw_text": "抽出済み"}
     errored = _oracle_document_row(status="ERROR", extraction=extraction)
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()], [errored]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.update_document_status(
         "doc-1",
@@ -2689,10 +2688,10 @@ async def test_oci_update_error_status_preserves_chunks_and_extraction() -> None
     assert pool.connection.commits == 1
 
 
-async def test_oci_delete_document_removes_chunks_and_document_with_access_scope() -> None:
-    """OCI mode の削除は access scope を維持して document と chunk を同一 transaction で消す。"""
+async def test_oracle_delete_document_removes_chunks_and_document_with_access_scope() -> None:
+    """Oracle mode の削除は access scope を維持して document と chunk を同一 transaction で消す。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     token = set_audit_request_context(
         AuditRequestContext(
             request_id="request-1",
@@ -2755,7 +2754,7 @@ async def test_oci_delete_document_removes_chunks_and_document_with_access_scope
     assert pool.connection.commits == 1
 
 
-async def test_oci_delete_document_rolls_back_when_running_job_appears() -> None:
+async def test_oracle_delete_document_rolls_back_when_running_job_appears() -> None:
     """削除 transaction 中に RUNNING job が見えたら document 物理削除へ進まない。"""
     pool = FakeOraclePool(
         execute_results=[
@@ -2764,7 +2763,7 @@ async def test_oci_delete_document_rolls_back_when_running_job_appears() -> None
             [{"job_id": "job-running"}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(DocumentDeleteBlockedByRunningIngestionError):
         await client.delete_document("doc-1")
@@ -2777,10 +2776,10 @@ async def test_oci_delete_document_rolls_back_when_running_job_appears() -> None
     assert pool.connection.rollbacks == 1
 
 
-async def test_oci_retrieval_applies_request_access_scope_predicates() -> None:
-    """OCI retrieval SQL は request context の認可済み scope を必ず含める。"""
+async def test_oracle_retrieval_applies_request_access_scope_predicates() -> None:
+    """Oracle の retrieval SQL は request context の認可済み scope を必ず含める。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     token = set_audit_request_context(
         AuditRequestContext(
             request_id="request-1",
@@ -2805,10 +2804,10 @@ async def test_oci_retrieval_applies_request_access_scope_predicates() -> None:
     assert call.parameters["access_knowledge_base_id_0"] == "kb-allowed"
 
 
-async def test_oci_retrieval_applies_multiple_knowledge_base_filters() -> None:
-    """OCI retrieval SQL は複数 KB filter を bind 付き IN 条件で適用する。"""
+async def test_oracle_retrieval_applies_multiple_knowledge_base_filters() -> None:
+    """Oracle の retrieval SQL は複数 KB filter を bind 付き IN 条件で適用する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     hits = await client.keyword_search(
         "社内規程",
@@ -2846,10 +2845,10 @@ def test_oracle_text_terms_filters_japanese_particles_and_english_stopwords() ->
     assert {"it", "policy", "hr"} <= set(oracle_text_terms("IT policy for HR"))
 
 
-async def test_oci_keyword_search_normalizes_natural_language_query() -> None:
+async def test_oracle_keyword_search_normalizes_natural_language_query() -> None:
     """自然文 keyword query は Oracle Text 用の安全な term expression に変換する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     raw_query = "社内規程の申請フローは？"
 
     hits = await client.keyword_search(raw_query, top_k=3)
@@ -2868,10 +2867,10 @@ async def test_oci_keyword_search_normalizes_natural_language_query() -> None:
     assert "CONTAINS(hit.search_text, :query, 1) > 0" in call.statement
 
 
-async def test_oci_keyword_search_escapes_oracle_text_special_syntax() -> None:
+async def test_oracle_keyword_search_escapes_oracle_text_special_syntax() -> None:
     """Oracle Text の演算子/記号は literal term 化して query syntax にしない。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.keyword_search('policy - NEAR(oracle?) OR "x"', top_k=3)
 
@@ -2884,10 +2883,10 @@ async def test_oci_keyword_search_escapes_oracle_text_special_syntax() -> None:
     assert all(char not in text_query for char in '-?()"')
 
 
-async def test_oci_keyword_search_empty_normalized_query_skips_database() -> None:
+async def test_oracle_keyword_search_empty_normalized_query_skips_database() -> None:
     """検索語にできない入力は DB に投げず空結果にする。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     hits = await client.keyword_search("？！--", top_k=3)
 
@@ -2902,10 +2901,10 @@ async def test_oci_keyword_search_empty_normalized_query_skips_database() -> Non
     assert pool.connection.calls == []
 
 
-async def test_oci_hybrid_search_uses_normalized_keyword_query() -> None:
+async def test_oracle_hybrid_search_uses_normalized_keyword_query() -> None:
     """hybrid 内の keyword branch も同じ Oracle Text query normalization を通る。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     raw_query = "社内規程の申請フローは？"
 
     hits = await client.hybrid_search(
@@ -3086,10 +3085,10 @@ def test_oracle_ingestion_audit_schema_redacts_ocr_body() -> None:
     assert "ocr_text" not in normalized
 
 
-async def test_oci_ingestion_audit_persists_file_processing_metrics() -> None:
+async def test_oracle_ingestion_audit_persists_file_processing_metrics() -> None:
     """Oracle 取込監査は parser / segment の低機密集計を保存する。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.save_ingestion_audit_event(
         {
@@ -3334,7 +3333,7 @@ async def test_feedback_dashboard_filters_tenant_and_aggregates_latest_votes() -
 
 async def test_vector_search_rejects_wrong_embedding_dimension() -> None:
     """検索 embedding が Oracle VECTOR 幅と違う場合は明示的に拒否する。"""
-    client = OracleClient(settings=Settings.model_construct(oci_genai_embedding_dim=3))
+    client = OracleClient(settings=Settings.model_construct(genai_embedding_dim=3))
 
     with pytest.raises(ValueError, match="query embedding の次元数が不正です"):
         await client.vector_search([1.0, 0.0], top_k=1)
@@ -3485,9 +3484,9 @@ class FakeOracleCursor:
         self.closed = True
 
 
-def _oci_settings() -> Settings:
+def _llm_settings() -> Settings:
     return Settings.model_construct(
-        oci_genai_embedding_dim=3,
+        genai_embedding_dim=3,
         rag_min_similarity=0.05,
         oracle_vector_target_accuracy=90,
         # 設定の target accuracy をそのまま使う balanced に固定する（既定は高精度。#272）。
@@ -3509,7 +3508,7 @@ def _oracle_document_row(
         "status": status,
         "tenant_id_hash": None,
         "category_name": "社内規程",
-        "object_storage_path": "oci://namespace/bucket/policy.txt",
+        "object_storage_path": "local://policy.txt",
         "content_type": "text/plain",
         "file_size_bytes": 12,
         "content_sha256": "a" * 64,
@@ -3584,7 +3583,7 @@ def _oracle_ingestion_segment_row(
         "page_start": 1,
         "page_end": 3,
         "attempt_count": 1,
-        "artifact_path": "oci://namespace/bucket/artifacts/extractions/doc-1/trace.json",
+        "artifact_path": "local://artifacts/extractions/doc-1/trace.json",
         "error_code": None,
         "error_message": None,
     }

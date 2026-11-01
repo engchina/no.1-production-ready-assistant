@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OCI Resource Manager の統合 stack（terraform/stack、#217）の cloud-init から呼ばれる rag の Compute 初期化スクリプト。
+# platform/deploy/suite-init.sh から呼ばれる rag の Compute 初期化スクリプト（配備の入力は PROPS_DIR に置く）。
 # RAG は Docker を使わず、NL2SQL / Agent と同じくネイティブ（uv の venv + systemd）で動かす（#286）。
 #   - backend / ingestion-worker: rag/backend の venv。backend は 127.0.0.1:8000 だけで listen する
 #   - 前処理 / CPU parser: サービスごとの venv（rag/services/*/*/.venv）と systemd の unit。127.0.0.1:<port>
@@ -33,7 +33,7 @@ APP_ROOT="${APP_ROOT:-/u01/aipoc}"
 # リポジトリの所有者（git pull・uv sync・frontend の build を行う）。
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
-# RAG のプロセスを動かす専用のユーザー。APP_USER（OCI の Oracle Linux の opc は sudo を無制限に持つ）とは分け、
+# RAG のプロセスを動かす専用のユーザー。APP_USER（Oracle Linux の opc は sudo を無制限に持つ）とは分け、
 # sudo は sudoers で許可した unit の操作だけにする。
 SERVICE_USER="${SERVICE_USER:-ragsvc}"
 SERVICE_GROUP="${SERVICE_GROUP:-${SERVICE_USER}}"
@@ -81,7 +81,7 @@ LEGACY_COMPOSE_PROJECT="production-ready-rag"
 DOCKER_VOLUMES_DIR="${DOCKER_VOLUMES_DIR:-/var/lib/docker/volumes}"
 DATABASE_INITIALIZATION_READY=false
 
-# この stack が配備してよい前処理 / parser（CPU / OCI だけ。並びは scripts/rag-systemd.sh の RAG_MICROSERVICES と同じ）。
+# この配備が配備してよい前処理 / parser（CPU だけ。並びは scripts/rag-systemd.sh の RAG_MICROSERVICES と同じ）。
 # rag_services.txt に、提供するサービス（RAG_MICROSERVICES）のうちこれ以外の名前があれば失敗させる。
 # 提供しなくなったサービス（RAG_MICROSERVICES に無い名前）は、以前の stack が書いた
 # rag_services.txt に残っていても読み飛ばす（その unit は configure_systemd が止めて消し、
@@ -95,7 +95,7 @@ ALLOWED_RAG_SERVICES=(
   parser-unstructured
 )
 # 必ず配備する parser（既定の解析エンジンの Docling。前処理の構造化レコードの JSONL も読む。#21）と、
-# Terraform の stack が常に配備する前処理 CSV→JSONL・Excel→JSONL・Word→JSONL（#2457。terraform/stack/locals.tf の rag_services）。
+# 常に配備する前処理 CSV→JSONL・Excel→JSONL・Word→JSONL（#2457）。
 # rag_services.txt に無ければ足す（以前の stack が書いた一覧や、#2484 の前の再配備で CSV / Excel が消えた一覧でも、再配備で unit が入る。
 # #2486）。初めて配備したときは起動する。
 REQUIRED_RAG_SERVICES=(parser-docling preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl)
@@ -195,7 +195,7 @@ rag_service_old_name() {
   return 1
 }
 
-# 配備する前処理 / parser（Terraform の rag_services）。以前の stack の compose_services.txt も読む
+# 配備する前処理 / parser（PROPS_DIR の rag_services.txt）。以前の stack の compose_services.txt も読む
 # （backend / ingestion-worker は常に配備するため、その名前は読み飛ばす）。
 load_rag_services() {
   local services_file="${PROPS_DIR}/rag_services.txt"
@@ -608,7 +608,7 @@ set_env_value() {
   fi
 }
 
-# rag/backend/.env（RAG_*）は Resource Manager の入力から作り、空の RAG_AUDIT_CONTEXT_HASH_SALT だけを
+# rag/backend/.env（RAG_*）は配備の入力（BACKEND_ENV_SOURCE）から作り、空の RAG_AUDIT_CONTEXT_HASH_SALT だけを
 # instance 上で生成した値で補う。platform/.env（PLATFORM_*、3製品共通）はシステム設定画面の保存先でもあるため、
 # 既にあれば上書きしない（画面で保存した API key などを再実行で消さない）。どちらも SERVICE_USER だけが読む。
 install_runtime_env() {
@@ -799,8 +799,7 @@ RestartSec=5
       fi
     fi
     rag_write_microservice_unit "${SYSTEMD_UNIT_DIR}/${unit}" "${service}" "${APP_REPO_DIR}" \
-      "${SERVICE_USER}" "${SERVICE_GROUP}" "${SERVICE_HOME}" "${SERVICE_RUNTIME_ENV_FILE}" \
-      "${PLATFORM_ENV_FILE}" "${BACKEND_DIR}/.env"
+      "${SERVICE_USER}" "${SERVICE_GROUP}" "${SERVICE_HOME}" "${SERVICE_RUNTIME_ENV_FILE}"
     keep_units+=("${unit}")
     controllable_units+=("${unit}")
   done
@@ -868,7 +867,7 @@ dump_service_diagnostics() {
   journalctl -u "${unit}" -n 160 --no-pager || true
 }
 
-# /api/health は OCI / AI の設定前でも 200 を返す（/api/ready は設定が揃うまで 503）。
+# /api/health はモデルの API の設定前でも 200 を返す（/api/ready は設定が揃うまで 503）。
 # 一定の間隔で待ち、backend が failed になるか再起動を繰り返したら、上限を待たずに status と journal を出す。
 wait_for_backend() {
   if suite_wait_for_service_health "${BACKEND_UNIT}" "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"; then
@@ -901,7 +900,7 @@ main() {
   wait_for_backend
   # URL（scheme・IP・port）は suite-init.sh の最後に出す（製品は HTTPS・公開の port を知らない。#1639）。
   log "Initialization complete. The URLs are listed at the end of /var/log/suite-init.log (suite: and each product). Log in with the login user."
-  log "Then configure OCI authentication and models in System settings."
+  log "Then configure the model API connections and models in System settings."
 }
 
 if [ "${RAG_INIT_TEST_MODE:-false}" != "true" ]; then

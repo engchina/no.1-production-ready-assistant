@@ -271,7 +271,7 @@ test("取込解析エンジンは抽出工程行に segment parser だけを表�
   await expect(jobsPanel.getByText("Unstructured v1")).toBeVisible();
   await expect(jobsPanel.getByText("unstructured_adapter")).toHaveCount(0);
   await expect(
-    page.getByText("アップロード時の初期判定: OCI Enterprise AI / v1")
+    page.getByText("アップロード時の初期判定: モデルの API / v1")
   ).toHaveCount(0);
 });
 
@@ -2368,7 +2368,7 @@ async function mockDocumentWorkspace(
     extractionExportRequests: 0,
   };
   const segmentFailureMessage =
-    "OCI Enterprise AI VLM response が StructuredExtraction schema と一致しません。失敗項目: confidence: less_than_equal。";
+    "VLM の応答が StructuredExtraction schema と一致しません。失敗項目: confidence: less_than_equal。";
   await page.route("**/api/documents/doc-1", async (route) => {
     await route.fulfill({
       json: {

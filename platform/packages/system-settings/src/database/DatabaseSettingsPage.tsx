@@ -127,7 +127,7 @@ export interface DatabaseSettingsPageProps {
 /**
  * データベース設定（3製品共通。NL2SQL の画面を基準に移設。#108）。PageHeader は製品の route が描く。
  *
- * - Oracle AI Database の接続設定、Wallet（ZIP のアップロード。OCI からの自動取得は持たない。#11）、接続テスト
+ * - Oracle AI Database の接続設定、Wallet（ZIP のアップロード。クラウドの API からの自動取得は持たない。#11）、接続テスト
  * - DB の起動・停止はこの画面では扱わない（ADB Free コンテナは `docker start` / `docker stop`。#10）
  * - 保存中・テスト中は入力を止め、未保存のまま離れようとすると確認する
  * - 背景の再取得では、利用者が編集していない項目だけを更新する

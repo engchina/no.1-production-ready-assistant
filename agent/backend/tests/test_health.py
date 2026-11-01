@@ -105,7 +105,7 @@ def _settings_fixture(**overrides: object) -> SimpleNamespace:
         "local_storage_dir": "/u01/data/production-ready-agent",
         "max_upload_bytes": 100 * 1024 * 1024,
         "model_settings_file": "model-settings.json",
-        "oci_enterprise_ai_api_key": "",
+        "enterprise_ai_api_key": "",
         "oracle_user": "",
         "oracle_password": "",
         "oracle_dsn": "",
@@ -1092,14 +1092,14 @@ def test_model_settings_save_persists_json_and_env_secret(
     settings_file = tmp_path / "model-settings.json"
     env_file = tmp_path / ".env"
     monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    monkeypatch.delenv("PLATFORM_OCI_ENTERPRISE_AI_API_KEY", raising=False)
+    monkeypatch.delenv("PLATFORM_ENTERPRISE_AI_API_KEY", raising=False)
     settings = Settings(_env_file=None, model_settings_file=str(settings_file))
     app_settings.MODEL_SETTINGS_STORE.load(settings)
     monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
     payload = {
         "enterprise_ai": {
             "endpoint": "https://enterprise.example.test",
-            "project_ocid": "ocid1.aiproject.oc1..aaaaaaaa",
+            "project_id": "proj-enterprise-a",
             "api_key": "enterprise-secret",
             "has_api_key": False,
             "clear_api_key": False,
@@ -1129,10 +1129,10 @@ def test_model_settings_save_persists_json_and_env_secret(
     saved = json.loads(settings_file.read_text(encoding="utf-8"))
     # API key は JSON ではなく共通 .env（platform/.env）に保存する（#103 / #211）。
     assert "api_key" not in saved["enterprise_ai"]
-    assert "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=enterprise-secret" in env_file.read_text(
+    assert "PLATFORM_ENTERPRISE_AI_API_KEY=enterprise-secret" in env_file.read_text(
         encoding="utf-8"
     )
-    assert settings.oci_enterprise_ai_models[0].model_id == "enterprise-model"
+    assert settings.enterprise_ai_models[0].model_id == "enterprise-model"
     assert saved["enterprise_ai"]["default_vision_model_id"] == "enterprise-model"
     assert saved["enterprise_ai"]["default_text_model_id"] == "enterprise-model"
     assert "default_model_id" not in saved["enterprise_ai"]
@@ -1150,18 +1150,18 @@ def test_model_settings_test_uses_saved_secret_for_blank_key(
         settings: object,
         request: ModelSettingsTestRequest,
     ) -> dict[str, str | int | float | bool | None]:
-        assert cast(Any, settings).oci_enterprise_ai_api_key == "saved-secret"
-        assert cast(Any, settings).oci_enterprise_ai_default_text_model == "enterprise-model"
+        assert cast(Any, settings).enterprise_ai_api_key == "saved-secret"
+        assert cast(Any, settings).enterprise_ai_default_text_model == "enterprise-model"
         assert request.target_type == "enterprise_text"
         return {"response_chars": 2, "surface": "llm"}
 
-    saved = Settings(_env_file=None, oci_enterprise_ai_api_key="saved-secret")
+    saved = Settings(_env_file=None, enterprise_ai_api_key="saved-secret")
     monkeypatch.setattr(agent_router, "get_settings", lambda: saved)
     monkeypatch.setattr(agent_router, "_run_model_settings_test", fake_run_model_settings_test)
     payload = {
         "enterprise_ai": {
             "endpoint": "https://enterprise.example.test",
-            "project_ocid": "ocid1.generativeaiproject.oc1..aaaaaaaa",
+            "project_id": "proj-enterprise-b",
             "api_key": "",
             "has_api_key": True,
             "clear_api_key": False,

@@ -132,7 +132,7 @@ def searches(monkeypatch: MonkeyPatch) -> list[SearchRequest]:
     monkeypatch.setattr(search_route, "_run_search_with_timeout", fake_run)
     monkeypatch.setattr(mcp_tools, "rule_clarification_step", no_rule)
     monkeypatch.setattr(mcp_tools, "OracleClient", _KnowledgeOracle)
-    monkeypatch.setattr(mcp_tools, "OciGenAiClient", _NoGenerationClient)
+    monkeypatch.setattr(mcp_tools, "GenAiClient", _NoGenerationClient)
     return captured
 
 

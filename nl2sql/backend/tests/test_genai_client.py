@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from pr_system_settings.model import EnterpriseAiConfiguredModel
 
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.settings import Settings
 
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -31,10 +31,10 @@ class _FakePost:
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": ENDPOINT,
-        "oci_enterprise_ai_api_key": "sk-test",
-        "oci_genai_embedding_model": "text-embedding-v4",
-        "oci_genai_rerank_model": "qwen3-rerank",
+        "enterprise_ai_endpoint": ENDPOINT,
+        "enterprise_ai_api_key": "sk-test",
+        "genai_embedding_model": "text-embedding-v4",
+        "genai_rerank_model": "qwen3-rerank",
         **overrides,
     }
     return Settings(_env_file=None, **values)
@@ -49,7 +49,7 @@ async def test_embed_sends_dimensions_and_orders_by_index() -> None:
             ]
         }
     )
-    client = OciGenAiClient(settings=_settings(), post=post)
+    client = GenAiClient(settings=_settings(), post=post)
 
     vectors = await client.embed(["a", "b"], input_type="SEARCH_QUERY")
 
@@ -64,7 +64,7 @@ async def test_embed_sends_dimensions_and_orders_by_index() -> None:
 
 async def test_embed_rejects_wrong_dimension() -> None:
     post = _FakePost({"data": [{"index": 0, "embedding": [0.1] * 1536}]})
-    client = OciGenAiClient(settings=_settings(), post=post)
+    client = GenAiClient(settings=_settings(), post=post)
 
     with pytest.raises(
         ValueError, match=r"embedding の次元数が不正です。expected=1024, actual=1536"
@@ -76,7 +76,7 @@ async def test_rerank_rewrites_compatible_mode_to_compatible_api() -> None:
     post = _FakePost(
         {"results": [{"index": 1, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.2}]}
     )
-    client = OciGenAiClient(settings=_settings(), post=post)
+    client = GenAiClient(settings=_settings(), post=post)
 
     ranks = await client.rerank("q", ["d0", "d1"], top_n=1)
 
@@ -109,13 +109,13 @@ class _FakeResponse:
 def _connection_settings(connection_id: str) -> Settings:
     """プライマリ = DeepSeek（LLM）、セカンダリ / ターシャリ = 百煉（埋め込み / 再ランク。#45）。"""
     return _settings(
-        oci_enterprise_ai_endpoint="https://api.deepseek.com",
-        oci_enterprise_ai_api_key="sk-deepseek",
+        enterprise_ai_endpoint="https://api.deepseek.com",
+        enterprise_ai_api_key="sk-deepseek",
         **{
-            f"oci_enterprise_ai_{connection_id}_endpoint": BAILIAN,
-            f"oci_enterprise_ai_{connection_id}_api_key": f"sk-{connection_id}",
+            f"enterprise_ai_{connection_id}_endpoint": BAILIAN,
+            f"enterprise_ai_{connection_id}_api_key": f"sk-{connection_id}",
         },
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
             EnterpriseAiConfiguredModel(
                 model_id="text-embedding-v4", kind="embedding", connection_id=connection_id
@@ -141,9 +141,7 @@ async def test_embedding_and_rerank_use_model_connection_over_http(
         return _FakeResponse({"data": [{"index": 0, "embedding": [0.1] * 1024}]})
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    client = OciGenAiClient(
-        settings=_connection_settings(connection_id), sdk_call_runner=_run_inline
-    )
+    client = GenAiClient(settings=_connection_settings(connection_id), sdk_call_runner=_run_inline)
 
     await client.embed(["a"])
     await client.rerank("q", ["d0", "d1"], top_n=2)
@@ -162,7 +160,7 @@ async def _run_inline(operation: Any) -> Any:
 
 
 async def test_missing_base_url_is_config_error() -> None:
-    client = OciGenAiClient(settings=_settings(oci_enterprise_ai_endpoint=""), post=_FakePost({}))
+    client = GenAiClient(settings=_settings(enterprise_ai_endpoint=""), post=_FakePost({}))
 
     with pytest.raises(ValueError, match="Base URL が未設定です"):
         await client.embed(["a"])

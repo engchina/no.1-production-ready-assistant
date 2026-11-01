@@ -1,7 +1,8 @@
 # NL2SQL Manual Integration
 
 `nl2sql_manual_integration.py` is a local smoke test for the real Oracle runtime and
-OCI Enterprise AI Direct (`enterprise_ai_direct`, the only SQL generation engine). It
+Enterprise AI Direct (`enterprise_ai_direct`: the only SQL generation engine, which
+calls the model API directly). It
 uses the shared `platform/.env` (`PLATFORM_*`) and `backend/.env` (`NL2SQL_*`) through
 the existing FastAPI settings (#211) and does not print secret values.
 
@@ -26,7 +27,7 @@ uv run python scripts/nl2sql_manual_integration.py --diagnostics-only --json-rep
 ```
 
 Enterprise AI Direct-required check. This fails fast when
-`PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT`, `PLATFORM_OCI_ENTERPRISE_AI_API_KEY`, or an Enterprise AI
+`PLATFORM_ENTERPRISE_AI_ENDPOINT`, `PLATFORM_ENTERPRISE_AI_API_KEY`, or an Enterprise AI
 model is missing, and also fails if `enterprise_ai_direct` falls back to
 deterministic mode:
 
@@ -63,7 +64,7 @@ uv run python scripts/nl2sql_manual_integration.py --require-oracle --require-or
 ```
 
 Production release gate alias. This expands to full smoke and requires Oracle
-runtime, Oracle-backed NL2SQL state persistence, and OCI Enterprise AI Direct:
+runtime, Oracle-backed NL2SQL state persistence, and Enterprise AI Direct:
 
 ```bash
 uv run python scripts/nl2sql_manual_integration.py --release-gate --allowed-table YOUR_TABLE
@@ -99,7 +100,7 @@ uv run python scripts/nl2sql_manual_integration.py --require-oracle --check-lega
 ```
 
 Live feedback vector index smoke. This seeds demo feedback items and rebuilds
-the Oracle AI Database vector table/index using OCI GenAI embeddings:
+the Oracle AI Database vector table/index using the default embedding model:
 
 ```bash
 uv run python scripts/nl2sql_manual_integration.py --require-oracle --require-feedback-embedding --seed-demo-learning --execute-feedback-index
@@ -107,8 +108,8 @@ uv run python scripts/nl2sql_manual_integration.py --require-oracle --require-fe
 
 `--execute` runs the generated `SELECT` SQL and writes a history item through the
 normal NL2SQL job path. `--require-oracle` enforces the Oracle runtime;
-`--require-enterprise-ai` enforces real OCI Enterprise AI Direct runtime for
-`enterprise_ai_direct`; `--require-feedback-embedding` enforces OCI GenAI
+`--require-enterprise-ai` enforces real Enterprise AI Direct runtime for
+`enterprise_ai_direct`; `--require-feedback-embedding` enforces
 feedback embedding readiness for live vector learning checks;
 `--require-oracle-persistence` enforces Oracle-backed NL2SQL state persistence.
 Each diagnostics / preview / job line prints non-secret readiness and engine
@@ -117,4 +118,4 @@ metadata (runtime, provider, mode, model).
 the runtime is configured. `--release-gate` is the production gate alias for
 `--full-smoke` plus Oracle runtime, Oracle persistence, and Enterprise AI Direct
 requirements. It does not require live feedback embedding; run the feedback vector
-smoke separately when OCI GenAI embedding is part of the release gate.
+smoke separately when the embedding model is part of the release gate.

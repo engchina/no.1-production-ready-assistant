@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OCI Resource Manager の統合 stack（terraform/stack、#217）の cloud-init から呼ばれる agent の Compute 初期化スクリプト。
+# 3 製品の配備（platform/deploy/suite-init.sh）から呼ばれる agent の Compute 初期化スクリプト。
 # Agent Control Plane を Docker なしで systemd に直接配備する。
 # ADB の DDL は持たない。Runtime 状態の table は backend 起動時に Oracle repository が作成し、
 # 共通認証（PLATFORM_*）と Agent のシステムテーブル（AGENT_*）はアプリの CLI（agent_system_schema）が作成する（#751）。

@@ -1,6 +1,6 @@
 """業務 Agent の公開の版にスキルの中身を固定する（#1855）の決定論テスト。
 
-モデルは SDK の `ScriptedModel` に差し替え、OCI へは接続しない。公開中の版の Run は固定した
+モデルは SDK の `ScriptedModel` に差し替え、モデルの API へは接続しない。公開中の版の Run は固定した
 スキルの指示・ツールで動き、下書きの Run は今のスキルで動くことを、モデルに渡した指示と
 ツールで確かめる。
 """
@@ -112,8 +112,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )

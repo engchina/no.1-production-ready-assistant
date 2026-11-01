@@ -596,7 +596,7 @@ async def test_mcp_validate_answer_records_its_steps_and_model_calls(
             )
 
     def fake_claims(question: str, answer: str, items: Any, settings: Any, **_: Any) -> Any:
-        # 監査の thread の中のモデルの呼び出し（rag_engine の OCI の呼び出しと同じ観測）。
+        # 監査の thread の中のモデルの呼び出し（rag_engine のモデルの API の呼び出しと同じ観測）。
         with observe_call("chat", "synthetic-model"):
             pass
         return {"status": "completed", "counts": {"supported": 1}, "claim_checks": []}

@@ -330,7 +330,7 @@ def validation_reuse_context(
             "connection": {
                 "id": connection.connection_id,
                 "url": connection.base_url,
-                "project": connection.project_ocid,
+                "project": connection.project_id,
             },
             "reasoning": enterprise_ai_reasoning_effort_to_send(settings, model_id),
             "audit_settings": {

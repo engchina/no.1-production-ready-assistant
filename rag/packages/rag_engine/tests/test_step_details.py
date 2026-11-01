@@ -18,7 +18,7 @@ from test_answer_generation import (
     _stored_child,
 )
 
-from rag_engine.adapters.oci import RerankTextRank
+from rag_engine.adapters.model_api import RerankTextRank
 from rag_engine.config import get_settings
 from rag_engine.generation import step_details
 from rag_engine.generation.answer_models import AnswerRecord

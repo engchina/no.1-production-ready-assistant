@@ -76,7 +76,7 @@ class OutputContractTests(unittest.TestCase):
             '  "form_fields": [{"name": "項目名", "value": "表示値。空欄なら空文字", "state": '
             '"selected / unselected / enabled / disabled / required / optional / unknown"}],'
         )
-        from rag_engine.adapters.oci import _picture_output_contract, _render_prompt
+        from rag_engine.adapters.model_api import _picture_output_contract, _render_prompt
 
         saved = "方針\n{\n" + old + "\n}"
         refined = refine_image_retrieval_prompt(saved)

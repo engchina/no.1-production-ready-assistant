@@ -27,10 +27,10 @@ _MIGRATIONS = {migration.version: migration for migration in MIGRATIONS}
 
 def test_embedding_client_and_settings_use_platform_constant() -> None:
     assert EMBED_DIMENSIONS == EMBEDDING_DIMENSIONS
-    assert Settings().oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
+    assert Settings().genai_embedding_dim == EMBEDDING_DIMENSIONS
     # #46 より前の既定（1536）が `.env` に残っていたら、起動で止める（列と合わない）。
     with pytest.raises(ValidationError):
-        Settings(oci_genai_embedding_dim=1536)
+        Settings(genai_embedding_dim=1536)
 
 
 def test_ontology_ddl_uses_platform_vector_type() -> None:

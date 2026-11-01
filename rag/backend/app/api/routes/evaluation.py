@@ -22,8 +22,8 @@ from fastapi import (
 )
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
 from rag_engine.evaluation.answer_eval import standard_scope_cache
+from rag_parser_core.enterprise_ai import sdk_retries_disabled
 from rag_parser_core.language import current_pack
-from rag_parser_core.oci_enterprise_ai import sdk_retries_disabled
 
 from app.api.routes.search import (
     SEARCH_ANSWER_PROFILE_NOT_FOUND_PREFIX,
@@ -33,9 +33,9 @@ from app.api.routes.search import (
     permitted_knowledge_base_ids,
 )
 from app.clients.ai_calls import make_ai_caller
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient
-from app.config import OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings, get_settings
+from app.config import ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings, get_settings
 from app.rag.evaluation import EvaluationProgressCallback, EvaluationRunner
 from app.rag.evaluation_adapter import normalize_evaluation_suite, resolve_evaluation_suite
 from app.rag.evaluation_excel import (
@@ -93,14 +93,14 @@ logger = logging.getLogger(__name__)
 # 同期の品質評価（golden set。`/run`）の全体の時間の上限（秒。#383）。評価は同期の
 # HTTP で、1 ケースごとに回答生成（`rag_answer_timeout_seconds`）を行うため、ケース数 × 上限では
 # 前段の reverse proxy の待ちを超える。保存済みの回答の評価（#304）と同じく、LLM 1 回の
-# timeout の設定の上限（`OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS` = 600 秒）で打ち切り、
+# timeout の設定の上限（`ENTERPRISE_AI_TIMEOUT_MAX_SECONDS` = 600 秒）で打ち切り、
 # 上限に達した後のケースは実行せずに
 # 失敗として返す。前段に reverse proxy を置くときは、その待ち時間をこれより長くし（#19）、
 # 打ち切った結果を呼び出し元に届ける。
 # 画面と評価 CLI は job の API（`/jobs/run`。#390）に移した。job の全体の上限は
 # 回答の回数に比例させる（`evaluation_job_time_limit_seconds`。#1430）。同期の API は、外部から
 # 直接呼ぶ利用のために残す。
-EVALUATION_RUN_TIMEOUT_SECONDS = OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
+EVALUATION_RUN_TIMEOUT_SECONDS = ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
 
 
 async def _resolve_evaluation_suite_name(
@@ -282,7 +282,7 @@ async def import_evaluation_cases(
 
 def evaluation_process_llm(settings: Settings) -> GuideDraftLlm:
     """回答の過程を構造化する LLM（業務ガイドの取り込みと同じ呼び出し。テストで差し替える）。"""
-    return OciEnterpriseAiClient(settings=settings)
+    return EnterpriseAiClient(settings=settings)
 
 
 @router.post("/cases/process-drafts", response_model=ApiResponse[EvaluationProcessDraftData])
@@ -292,7 +292,7 @@ async def draft_evaluation_process_expectations(
 ) -> ApiResponse[EvaluationProcessDraftData]:
     """評価のケースの回答の過程から、期待（手順・条件・根拠・対応）の下書きを作る（#2402。保存しない）。
 
-    構造化は業務ガイドの取り込み（#2397）と同じ部品で、1 行で OCI Enterprise AI を 1 回呼ぶ（上限
+    構造化は業務ガイドの取り込み（#2397）と同じ部品で、1 行でモデルの API を 1 回呼ぶ（上限
     つき並行。``RAG_SUPPORT_GUIDE_IMPORT_CONCURRENCY``）。見出しの語は言語資源
     （``guide_import_cues.process_headings``）、資料の名前は選んだナレッジベースの文書で解決する。
     画面は行を ``EVALUATION_PROCESS_MAX_REQUEST_ROWS`` 行ずつに分けて送る。

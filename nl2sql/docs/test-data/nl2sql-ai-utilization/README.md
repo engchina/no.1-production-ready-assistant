@@ -15,7 +15,7 @@
 
 ## 注意
 
-- すべてダミー値です。実 OCI / Oracle secret は含みません。
+- すべてダミー値です。実際のモデルの API / Oracle secret は含みません。
 - DML / 複文 SQL は「ブロックされること」を確認するための異常系データです。
 - `mock-responses/` の JSON は `{ data, error_messages, warning_messages }` envelope 形式です。
 - `api/` の JSON は request body としてそのまま利用できます。

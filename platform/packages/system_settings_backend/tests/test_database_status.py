@@ -290,8 +290,8 @@ def test_wrapped_pool_timeout_from_schema_probe_is_unreachable() -> None:
     assert data["detail"] == "Oracle connection probe failed (DPY-4005)."
 
 
-def test_unreachable_does_not_query_oci_lifecycle() -> None:
-    """接続できないときも OCI へ DB の状態を問い合わせず、応答に ADB の状態を載せない（#10）。"""
+def test_unreachable_does_not_query_cloud_lifecycle() -> None:
+    """接続できないときもクラウドの API へ DB の状態を問い合わせず、ADB の状態を載せない（#10）。"""
     harness = Harness(ok_cache_seconds=0)
     harness.connect_error = RuntimeError("DPY-6005: cannot connect to database")
 

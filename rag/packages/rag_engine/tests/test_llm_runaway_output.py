@@ -10,7 +10,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation import execution_record
 from rag_engine.models.llm import TextOutput
@@ -49,14 +49,14 @@ def _table_rows(count: int) -> list[str]:
 
 class RunawayOutputTest(unittest.TestCase):
     def setUp(self) -> None:
-        oci._stream_baselines.clear()
-        oci._output_rates.clear()
+        model_api._stream_baselines.clear()
+        model_api._output_rates.clear()
         self.clock = _Clock()
         patcher = mock.patch("time.monotonic", self.clock)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(oci._stream_baselines.clear)
-        self.addCleanup(oci._output_rates.clear)
+        self.addCleanup(model_api._stream_baselines.clear)
+        self.addCleanup(model_api._output_rates.clear)
         self.settings = replace(
             get_settings(environ={"RAG_ENGINE_LLM_STALL_DETECTION": "1", "RAG_ENGINE_LLM_RUNAWAY_DETECTION": "1"}, dotenv_path=None),
             answer_max_tokens=32768,
@@ -69,12 +69,12 @@ class RunawayOutputTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO") as logs,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO") as logs,
                 bind_deadline(Deadline(600)),
                 execution_record._execution_step("生成"),
             ):
-                result = oci._openai_parsed([], settings or self.settings, TextOutput, PROVIDER)
+                result = model_api._openai_parsed([], settings or self.settings, TextOutput, PROVIDER)
         finally:
             llm_usage.reset(usage_token)
             execution_record._structured_steps.reset(step_token)
@@ -119,7 +119,7 @@ class RunawayOutputTest(unittest.TestCase):
     def test_resends_are_bounded(self):
         runaway = ["同じ説明。"] * 5000
         client = _RecordingClient(self.clock, [_text_script(runaway), _text_script(runaway)])
-        with self.assertRaises(oci.LlmRunawayOutput):
+        with self.assertRaises(model_api.LlmRunawayOutput):
             self.call(client)
         self.assertEqual(len(client.streams), 2)
 
@@ -128,7 +128,7 @@ class RunawayOutputTest(unittest.TestCase):
 
         whitespace = ['{"text": "a"', *(["\n   "] * 2000)]
         client = _RecordingClient(self.clock, [_text_script(whitespace), _text_script(whitespace)])
-        with self.assertRaises(oci.LlmRunawayOutput) as raised:
+        with self.assertRaises(model_api.LlmRunawayOutput) as raised:
             self.call(client)
         details = structured_failure_details(raised.exception)
         self.assertEqual((details["category"], details["cutoff_reason"]), ("runaway_output", "runaway_whitespace"))
@@ -144,11 +144,11 @@ class RunawayOutputTest(unittest.TestCase):
 
 class RepeatingTailTest(unittest.TestCase):
     def test_periodic_tail_only(self):
-        window = oci.RUNAWAY_WINDOW_CHARS + oci.RUNAWAY_MAX_PERIOD_CHARS
-        self.assertTrue(oci.repeating_tail("前置き" + "abc、" * window))
-        self.assertTrue(oci.repeating_tail("x" * window))
-        self.assertFalse(oci.repeating_tail("".join(_table_rows(400))))
-        self.assertFalse(oci.repeating_tail("abc、" * 10))  # 短い出力は見ない
+        window = model_api.RUNAWAY_WINDOW_CHARS + model_api.RUNAWAY_MAX_PERIOD_CHARS
+        self.assertTrue(model_api.repeating_tail("前置き" + "abc、" * window))
+        self.assertTrue(model_api.repeating_tail("x" * window))
+        self.assertFalse(model_api.repeating_tail("".join(_table_rows(400))))
+        self.assertFalse(model_api.repeating_tail("abc、" * 10))  # 短い出力は見ない
 
 
 # streaming しない呼び出しの暴走（#3835）。合成の応答だけを使う。
@@ -203,8 +203,8 @@ class NonStreamingRunawayTest(unittest.TestCase):
     """streaming しない呼び出し（停滞の検出が OFF）でも、出力の上限まで出た暴走は上限を広げずに送り直す（#3835）。"""
 
     def setUp(self) -> None:
-        oci._output_rates.clear()
-        self.addCleanup(oci._output_rates.clear)
+        model_api._output_rates.clear()
+        self.addCleanup(model_api._output_rates.clear)
         self.settings = replace(
             get_settings(environ={"RAG_ENGINE_LLM_RUNAWAY_DETECTION": "1"}, dotenv_path=None),
             answer_max_tokens=8192,
@@ -213,9 +213,12 @@ class NonStreamingRunawayTest(unittest.TestCase):
     def call(self, client: _NonStreamingClient, text_format=TextOutput, settings=None):
         usage_token = llm_usage.set(LlmUsage())
         try:
-            with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), self.assertLogs(oci.__name__, level="INFO"):
+            with (
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO"),
+            ):
                 try:
-                    result = oci._openai_parsed([], settings or self.settings, text_format, PROVIDER)
+                    result = model_api._openai_parsed([], settings or self.settings, text_format, PROVIDER)
                 finally:
                     self.usage = llm_usage.get().snapshot()
         finally:
@@ -240,7 +243,7 @@ class NonStreamingRunawayTest(unittest.TestCase):
 
     def test_whitespace_run_in_the_middle_counts(self):
         """streaming なら途中で打ち切った空白の連続は、その後に出力が続いていても暴走と見なす。"""
-        text = '{"text": "a' + " " * oci.RUNAWAY_WHITESPACE_CHARS + 'b", "more": ' + "x" * 50
+        text = '{"text": "a' + " " * model_api.RUNAWAY_WHITESPACE_CHARS + 'b", "more": ' + "x" * 50
         client = _NonStreamingClient([_runaway_incomplete(text), _completed()])
         self.assertEqual(self.call(client).text, "ok")
         self.assertEqual(self.usage["incomplete_reasons"], {"runaway_whitespace": 1})
@@ -256,7 +259,7 @@ class NonStreamingRunawayTest(unittest.TestCase):
 
         whitespace = '{"text": "a"' + "\n" * 3000
         client = _NonStreamingClient([_runaway_incomplete(whitespace), _runaway_incomplete(whitespace)])
-        with self.assertRaises(oci.LlmRunawayOutput) as raised:
+        with self.assertRaises(model_api.LlmRunawayOutput) as raised:
             self.call(client)
         self.assertEqual(len(client.budgets), 2)
         details = structured_failure_details(raised.exception)
@@ -275,6 +278,6 @@ class NonStreamingRunawayTest(unittest.TestCase):
 
     def test_other_incomplete_reasons_are_not_runaway(self):
         client = _NonStreamingClient([_runaway_incomplete(" " * 3000, reason="content_filter")])
-        with self.assertRaises(oci.IncompleteResponse):
+        with self.assertRaises(model_api.IncompleteResponse):
             self.call(client)
         self.assertEqual(len(client.budgets), 1)

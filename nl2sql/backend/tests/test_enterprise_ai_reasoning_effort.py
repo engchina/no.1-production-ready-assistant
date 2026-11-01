@@ -1,6 +1,6 @@
 """登録モデルごとの推論（思考）の量（#1425）が、NL2SQL の呼び出しの payload に入ること。
 
-HTTP は httpx.MockTransport（決定論）で受ける（OCI へは接続しない）。
+HTTP は httpx.MockTransport（決定論）で受ける（実際のモデルの API へは接続しない）。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
 ENDPOINT = "https://primary.example/openai/v1"
@@ -21,9 +21,9 @@ def _settings(
     text_effort: str = "medium", vision_effort: str = "medium", **overrides: Any
 ) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": ENDPOINT,
-        "oci_enterprise_ai_api_key": "sk-primary",
-        "oci_enterprise_ai_models": [
+        "enterprise_ai_endpoint": ENDPOINT,
+        "enterprise_ai_api_key": "sk-primary",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel.model_validate(
                 {"model_id": "text-a", "reasoning_effort": text_effort}
             ),
@@ -31,9 +31,9 @@ def _settings(
                 {"model_id": "vision-b", "vision_enabled": True, "reasoning_effort": vision_effort}
             ),
         ],
-        "oci_enterprise_ai_default_text_model": "text-a",
-        "oci_enterprise_ai_default_vision_model": "vision-b",
-        "oci_enterprise_ai_max_retries": 0,
+        "enterprise_ai_default_text_model": "text-a",
+        "enterprise_ai_default_vision_model": "vision-b",
+        "enterprise_ai_max_retries": 0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -58,7 +58,7 @@ def payloads(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 def test_text_and_image_calls_send_each_model_effort(payloads: list[dict[str, Any]]) -> None:
-    client = OciEnterpriseAiDirectClient(_settings("high", "low"))
+    client = HttpEnterpriseAiDirectClient(_settings("high", "low"))
 
     client.generate(prompt="質問", context="文脈", system_prompt="指示")
     client.generate_from_image(b"\x89PNG", "読んで")
@@ -71,7 +71,7 @@ def test_text_and_image_calls_send_each_model_effort(payloads: list[dict[str, An
 
 def test_none_effort_sends_no_reasoning(payloads: list[dict[str, Any]]) -> None:
     """none は「送らない」（`reasoning` を入れない）。"""
-    client = OciEnterpriseAiDirectClient(_settings("none", "none"))
+    client = HttpEnterpriseAiDirectClient(_settings("none", "none"))
 
     client.generate(prompt="質問", context="文脈", system_prompt="指示")
     client.generate_from_image(b"\x89PNG", "読んで")
@@ -82,8 +82,8 @@ def test_none_effort_sends_no_reasoning(payloads: list[dict[str, Any]]) -> None:
 def test_payload_template_is_left_to_template(payloads: list[dict[str, Any]]) -> None:
     """payload template の構成では、template が送る形をそのまま使う（`reasoning` を足さない）。"""
     template = json.dumps({"model": "{{model}}", "input": "{{user_message}}"})
-    client = OciEnterpriseAiDirectClient(
-        _settings("high", oci_enterprise_ai_llm_payload_template=template)
+    client = HttpEnterpriseAiDirectClient(
+        _settings("high", enterprise_ai_llm_payload_template=template)
     )
 
     client.generate(prompt="質問", context="文脈", system_prompt="指示")
@@ -95,14 +95,14 @@ def test_default_effort_is_low(payloads: list[dict[str, Any]]) -> None:
     """値の無いモデル（#1425 より前の設定も）は既定の low を送る（#3004）。"""
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="sk-primary",
-        oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
-        oci_enterprise_ai_default_text_model="text-a",
-        oci_enterprise_ai_max_retries=0,
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="sk-primary",
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
+        enterprise_ai_default_text_model="text-a",
+        enterprise_ai_max_retries=0,
     )
 
-    OciEnterpriseAiDirectClient(settings).generate(
+    HttpEnterpriseAiDirectClient(settings).generate(
         prompt="質問", context="文脈", system_prompt="指示"
     )
 

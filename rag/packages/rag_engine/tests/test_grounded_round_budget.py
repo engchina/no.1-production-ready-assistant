@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from test_grounded_answer import LIST_TEXT, FakeModel, audit, context, draft, ids, item, marks, record, run
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.generation import execution_record, grounded
 from rag_engine.models.llm import GroundedAudit, GroundedDraft
 from rag_engine.resources import deadline as deadlines
@@ -373,8 +373,8 @@ class LlmUsageTest(unittest.TestCase):
         )
         usage_token = llm_usage.set(LlmUsage())
         try:
-            with self.assertLogs(oci.__name__, level="INFO") as logs:
-                oci._record_usage(response, SimpleNamespace(model="m"), GroundedDraft, 42.0)
+            with self.assertLogs(model_api.__name__, level="INFO") as logs:
+                model_api._record_usage(response, SimpleNamespace(model="m"), GroundedDraft, 42.0)
             snapshot = llm_usage.get().snapshot()
         finally:
             llm_usage.reset(usage_token)
@@ -390,7 +390,7 @@ class LlmUsageTest(unittest.TestCase):
             ("llm_call_usage", "GroundedDraft", 42.0, 5000, 600),
         )
         # usage の無い応答（スタブ・古い endpoint）でも失敗しない。
-        oci._record_usage(SimpleNamespace(status="completed"), SimpleNamespace(model="m"), GroundedAudit, 1.0)
+        model_api._record_usage(SimpleNamespace(status="completed"), SimpleNamespace(model="m"), GroundedAudit, 1.0)
 
     def test_round_timing_line(self):
         current = SimpleNamespace(

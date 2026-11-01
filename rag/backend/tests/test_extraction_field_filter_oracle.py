@@ -27,7 +27,7 @@ async def _document_with_fields(
     """抽出の項目を持つ文書を作り、その抽出を参照する chunk_set を(既定で)採用中にする。"""
     detail = await client.create_document(
         file_name="contract.txt",
-        object_storage_path="oci://bucket/contract.txt",
+        object_storage_path="local://contract.txt",
         content_type="text/plain",
     )
     extraction_recipe_id = f"er_{uuid4().hex[:16]}"

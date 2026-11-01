@@ -67,23 +67,23 @@ def test_unsafe_request_id_header_is_not_reflected() -> None:
     assert " " not in resp.headers["x-request-id"]
 
 
-def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
+def test_readiness_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
     for field in (
-        "oci_enterprise_ai_endpoint",
-        "oci_enterprise_ai_project_ocid",
-        "oci_enterprise_ai_api_key",
-        "oci_enterprise_ai_default_text_model",
-        "oci_enterprise_ai_default_vision_model",
-        "oci_genai_embedding_model",
-        "oci_genai_rerank_model",
+        "enterprise_ai_endpoint",
+        "enterprise_ai_project_id",
+        "enterprise_ai_api_key",
+        "enterprise_ai_default_text_model",
+        "enterprise_ai_default_vision_model",
+        "genai_embedding_model",
+        "genai_rerank_model",
         "oracle_user",
         "oracle_password",
         "oracle_dsn",
         "oracle_wallet_dir",
     ):
         monkeypatch.setattr(settings, field, "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_models", [])
+    monkeypatch.setattr(settings, "enterprise_ai_models", [])
 
     resp = client.get("/api/ready")
 
@@ -98,8 +98,8 @@ def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> N
     }
 
 
-def test_readiness_oci_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
-    _configure_oci_readiness(
+def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+    _configure_llm_readiness(
         monkeypatch,
         oracle_password="super-secret-password",
         oracle_wallet_dir=str(wallet_dir),
@@ -124,7 +124,7 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
     tmp_path: Path,
     wallet_dir: Path,
 ) -> None:
-    _configure_oci_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
     settings = get_settings()
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path / "upload-storage"))
 
@@ -140,17 +140,17 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
     }
 
 
-def test_readiness_oci_requires_enterprise_ai_model_catalog(
+def test_readiness_requires_enterprise_ai_model_catalog(
     monkeypatch: MonkeyPatch,
     wallet_dir: Path,
 ) -> None:
-    _configure_oci_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_models", [])
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_text_model", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_vision_model", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_payload_template", LLM_TEMPLATE)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_payload_template", VLM_TEMPLATE)
+    monkeypatch.setattr(settings, "enterprise_ai_models", [])
+    monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "")
+    monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "")
+    monkeypatch.setattr(settings, "enterprise_ai_llm_payload_template", LLM_TEMPLATE)
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_payload_template", VLM_TEMPLATE)
 
     resp = client.get("/api/ready")
 
@@ -159,10 +159,10 @@ def test_readiness_oci_requires_enterprise_ai_model_catalog(
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
-def test_readiness_production_oci_requires_audit_salt(
+def test_readiness_production_requires_audit_salt(
     monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
 ) -> None:
-    _configure_oci_readiness(
+    _configure_llm_readiness(
         monkeypatch,
         environment=environment,
         audit_context_hash_salt="",
@@ -184,10 +184,10 @@ def test_readiness_production_oci_requires_audit_salt(
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
-def test_readiness_production_oci_complete_config_is_ok(
+def test_readiness_production_complete_config_is_ok(
     monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
 ) -> None:
-    _configure_oci_readiness(
+    _configure_llm_readiness(
         monkeypatch,
         environment=environment,
         audit_context_hash_salt="production-audit-salt",
@@ -209,14 +209,14 @@ def test_readiness_production_oci_complete_config_is_ok(
     assert "production-audit-salt" not in str(body)
 
 
-def test_readiness_oci_password_without_wallet_is_degraded(
+def test_readiness_password_without_wallet_is_degraded(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """DB パスワードがあっても Wallet が無ければ ok にしない（システム設定画面と同じ判定。#325）。
 
     旧 RAG の判定はパスワードがあれば ok を返していた。
     """
-    _configure_oci_readiness(
+    _configure_llm_readiness(
         monkeypatch,
         oracle_password="oracle-password",
         oracle_client_lib_dir="",
@@ -231,7 +231,7 @@ def test_readiness_oci_password_without_wallet_is_degraded(
     assert body["data"]["checks"]["oracle"] == "wallet_not_found"
 
 
-def test_readiness_oci_encrypted_wallet_without_password_is_degraded(
+def test_readiness_encrypted_wallet_without_password_is_degraded(
     monkeypatch: MonkeyPatch,
     wallet_dir: Path,
 ) -> None:
@@ -240,7 +240,7 @@ def test_readiness_oci_encrypted_wallet_without_password_is_degraded(
         "-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIB\n-----END ENCRYPTED PRIVATE KEY-----\n",
         encoding="utf-8",
     )
-    _configure_oci_readiness(
+    _configure_llm_readiness(
         monkeypatch,
         oracle_password="",
         oracle_wallet_dir=str(wallet_dir),
@@ -253,11 +253,11 @@ def test_readiness_oci_encrypted_wallet_without_password_is_degraded(
     assert resp.json()["data"]["checks"]["oracle"] == "wallet_password_invalid"
 
 
-def test_readiness_oci_missing_wallet_dir_is_degraded(
+def test_readiness_missing_wallet_dir_is_degraded(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    _configure_oci_readiness(
+    _configure_llm_readiness(
         monkeypatch,
         oracle_password="",
         oracle_wallet_dir=str(tmp_path / "missing-wallet"),
@@ -271,11 +271,11 @@ def test_readiness_oci_missing_wallet_dir_is_degraded(
     assert body["data"]["checks"]["oracle"] == "wallet_not_found"
 
 
-def test_readiness_oci_invalid_embedding_dim_is_degraded(
+def test_readiness_invalid_embedding_dim_is_degraded(
     monkeypatch: MonkeyPatch, wallet_dir: Path
 ) -> None:
-    _configure_oci_readiness(
-        monkeypatch, oci_genai_embedding_dim=1536, oracle_wallet_dir=str(wallet_dir)
+    _configure_llm_readiness(
+        monkeypatch, genai_embedding_dim=1536, oracle_wallet_dir=str(wallet_dir)
     )
 
     resp = client.get("/api/ready")
@@ -570,28 +570,28 @@ def test_unhandled_exception_uses_api_response_shape_and_logs_request_id(
     assert record_data["exception_type"] == "RuntimeError"
 
 
-def _configure_oci_readiness(
+def _configure_llm_readiness(
     monkeypatch: MonkeyPatch,
     *,
     oracle_password: str = "oracle-password",
     oracle_client_lib_dir: str = "",
     oracle_wallet_dir: str,
-    oci_genai_embedding_dim: int = 1024,
+    genai_embedding_dim: int = 1024,
     environment: str = "local",
     audit_context_hash_salt: str = "",
 ) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "environment", environment)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://enterprise-ai.example")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://enterprise-ai.example")
     monkeypatch.setattr(
         settings,
-        "oci_enterprise_ai_project_ocid",
-        "ocid1.generativeaiproject.oc1..example",
+        "enterprise_ai_project_id",
+        "proj-example",
     )
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_vision_model", "enterprise-vlm")
+    monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "enterprise-vlm")
     monkeypatch.setattr(
         settings,
-        "oci_enterprise_ai_models",
+        "enterprise_ai_models",
         [
             EnterpriseAiConfiguredModel(model_id="enterprise-llm", display_name="標準 LLM"),
             EnterpriseAiConfiguredModel(
@@ -601,15 +601,15 @@ def _configure_oci_readiness(
             ),
         ],
     )
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_text_model", "enterprise-llm")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "sk-test-secret")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_path", "/v1/llm/generate")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_path", "/v1/vlm/extract")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_payload_template", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_payload_template", "")
-    monkeypatch.setattr(settings, "oci_genai_embedding_model", "cohere.embed-v4.0")
-    monkeypatch.setattr(settings, "oci_genai_embedding_dim", oci_genai_embedding_dim)
-    monkeypatch.setattr(settings, "oci_genai_rerank_model", "cohere.rerank-v4.0-fast")
+    monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "enterprise-llm")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "sk-test-secret")
+    monkeypatch.setattr(settings, "enterprise_ai_llm_path", "/v1/llm/generate")
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_path", "/v1/vlm/extract")
+    monkeypatch.setattr(settings, "enterprise_ai_llm_payload_template", "")
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_payload_template", "")
+    monkeypatch.setattr(settings, "genai_embedding_model", "cohere.embed-v4.0")
+    monkeypatch.setattr(settings, "genai_embedding_dim", genai_embedding_dim)
+    monkeypatch.setattr(settings, "genai_rerank_model", "cohere.rerank-v4.0-fast")
     monkeypatch.setattr(settings, "oracle_user", "rag_app")
     monkeypatch.setattr(settings, "oracle_password", oracle_password)
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.com/rag")

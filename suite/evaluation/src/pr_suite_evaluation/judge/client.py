@@ -1,13 +1,13 @@
-"""判定のモデルの呼び出し（OCI Enterprise AI の Responses API。#3418）。
+"""判定のモデルの呼び出し（モデルの API〔OpenAI 互換〕の Responses API。#3418）。
 
 URL の決め方（`{Endpoint URL}/responses`。path は補わない）と HTTP の失敗の分類は、3 製品と同じ
 platform の `pr_enterprise_ai` の規則を使う。接続とモデルは suite の環境変数で決め、既定のモデル
 を持たない（指定が無ければ失敗にする。別のモデル・接続へ黙って切り替えない）。
 
-- `SUITE_EVALUATION_JUDGE_ENDPOINT`: OCI Enterprise AI の Endpoint URL（例
-  `https://…/openai/v1`）
+- `SUITE_EVALUATION_JUDGE_ENDPOINT`: モデルの API の Endpoint URL（例
+  `https://api.deepseek.com/v1`）
 - `SUITE_EVALUATION_JUDGE_API_KEY`: API キー（結果・ログに出さない）
-- `SUITE_EVALUATION_JUDGE_PROJECT_OCID`: Project OCID（入れたときだけ `OpenAI-Project` ヘッダーを
+- `SUITE_EVALUATION_JUDGE_PROJECT_ID`: Project ID（入れたときだけ `OpenAI-Project` ヘッダーを
   送る）
 - `SUITE_EVALUATION_JUDGE_MODEL`: 判定のモデルの ID
 - `SUITE_EVALUATION_JUDGE_MAX_OUTPUT_TOKENS`（任意）・
@@ -75,7 +75,7 @@ class JudgeModelConfig:
     endpoint: str
     model: str
     api_key: str = field(repr=False)
-    project_ocid: str = ""
+    project_id: str = ""
     max_output_tokens: int | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
@@ -107,15 +107,15 @@ class JudgeModelConfig:
             endpoint=value("ENDPOINT"),
             model=value("MODEL"),
             api_key=value("API_KEY"),
-            project_ocid=value("PROJECT_OCID"),
+            project_id=value("PROJECT_ID"),
             max_output_tokens=optional_int("MAX_OUTPUT_TOKENS"),
             timeout_seconds=float(timeout) if timeout else DEFAULT_TIMEOUT_SECONDS,
         )
 
     def provenance(self) -> dict[str, Any]:
-        """記録する設定（Endpoint はホストだけ。API キー・Project OCID は記録しない）。"""
+        """記録する設定（Endpoint はホストだけ。API キー・Project ID は記録しない）。"""
         return {
-            "provider": "oci_enterprise_ai",
+            "provider": "enterprise_ai",
             "endpoint_host": urlsplit(self.endpoint).hostname or "",
             "model": self.model,
             "max_output_tokens": self.max_output_tokens,
@@ -140,7 +140,7 @@ def response_text(payload: Mapping[str, Any]) -> str:
 
 
 class EnterpriseAiJudgeClient:
-    """OCI Enterprise AI の Responses API を構造化出力（JSON schema）で呼ぶ。"""
+    """モデルの API の Responses API を構造化出力（JSON schema）で呼ぶ。"""
 
     def __init__(self, client: httpx.Client, config: JudgeModelConfig) -> None:
         self._client = client
@@ -169,8 +169,8 @@ class EnterpriseAiJudgeClient:
         if self._config.max_output_tokens is not None:
             body["max_output_tokens"] = self._config.max_output_tokens
         headers = {"Authorization": f"Bearer {self._config.api_key}"}
-        if self._config.project_ocid:
-            headers["OpenAI-Project"] = self._config.project_ocid
+        if self._config.project_id:
+            headers["OpenAI-Project"] = self._config.project_id
         try:
             response = self._client.post(
                 enterprise_ai_request_url(self._config.endpoint),

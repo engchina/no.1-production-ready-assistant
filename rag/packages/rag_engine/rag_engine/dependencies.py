@@ -40,7 +40,7 @@ class AnswerDependencies:
     cache に入れる（戻り値は使わない）。結果を変えない（search の結果は並行にしないときと同じ）実装だけを渡す。
     省略時は先に読まない。
     embedder は業務ガイドの手順の充足で、根拠を共有する手順のどれを item が説明したかを語で決められないときに、
-    意味の近さで決める embedding（`ports.Embedder`。索引と同じ OCI Generative AI の Cohere Embed。#2649）。省略時は
+    意味の近さで決める embedding（`ports.Embedder`。索引と同じ 埋め込みモデル。#2649）。省略時は
     語の判定だけで決める。
     report_degraded は補助の処理（画面の選択など）が失敗して空のまま続けたことを、処理の種類と例外を受け取って
     呼び出し元の診断に残す（#3259。例外の文は呼び出し元が残さない）。省略時は残さない。

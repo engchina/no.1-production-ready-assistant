@@ -59,9 +59,9 @@ describe("必須の表示の既定（#531）", () => {
 
   it("requiredLabel で条件付きの必須の文言に上書きできる", () => {
     const html = renderToStaticMarkup(
-      <TextField id="region" label="リージョン" required requiredLabel="OCI 運用時必須" value="" readOnly />
+      <TextField id="region" label="リージョン" required requiredLabel="利用時必須" value="" readOnly />
     );
-    expect(html).toContain(">OCI 運用時必須</span>");
+    expect(html).toContain(">利用時必須</span>");
   });
 
   it("required が無い欄にはタグも aria-required も出さない（任意の欄には何も付けない）", () => {

@@ -1,7 +1,7 @@
 """NL2SQL application service.
 
-この実装は local / CI で外部 Oracle・OCI に依存せずに動く deterministic adapter を持つ。
-実運用では SQL の生成を OCI Enterprise AI の呼び出し（enterprise_ai_direct）に差し替える。
+この実装は local / CI で外部の Oracle・モデルの API に依存せずに動く deterministic adapter を持つ。
+実運用では SQL の生成をモデルの API の呼び出し（enterprise_ai_direct）に差し替える。
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ from .embedding_client import (
 from .enterprise_ai_client import (
     EnterpriseAiDirectClient,
     EnterpriseAiDirectError,
-    OciEnterpriseAiDirectClient,
+    HttpEnterpriseAiDirectClient,
     enterprise_ai_configuration_failure_message,
     find_enterprise_ai_error,
 )
@@ -748,7 +748,7 @@ def _job_failure_presentation(exc: BaseException) -> tuple[str, str | None]:
         )
     enterprise_error = find_enterprise_ai_error(exc)
     if enterprise_error is not None and enterprise_error.configuration_error:
-        # OCI Enterprise AI の設定の誤り（401 / 403 / 404 / モデルが無い 400）は、時間をおいても
+        # モデルの API の設定の誤り（401 / 403 / 404 / モデルが無い 400）は、時間をおいても
         # 直らないので「もう一度」と案内せず、どのモデル・接続の呼び出しが失敗したかと確かめる所を
         # 出す（#1684）。元の文は詳細に残す。
         return (
@@ -771,7 +771,7 @@ def _job_failure_error_code(exc: BaseException, *, fallback: str) -> str:
     codes = oracle_error_codes(exc)
     if codes:
         return codes[0]
-    # OCI Enterprise AI の HTTP の失敗は種類の分かるコード
+    # モデルの API の HTTP の失敗は種類の分かるコード
     # （ENTERPRISE_AI_AUTHORIZATION_FAILED など。3 製品で共通の対応表。#1684）。
     enterprise_error = find_enterprise_ai_error(exc)
     if enterprise_error is not None and enterprise_error.http_failure is not None:
@@ -4435,7 +4435,7 @@ class DbAdminChatGenerationError(RuntimeError):
 
 
 _DB_ADMIN_CHAT_MODEL_UNAVAILABLE = (
-    "OCI Enterprise AI のモデルの接続が設定されていないため、SQL を生成できません。"
+    "モデルの API の接続が設定されていないため、SQL を生成できません。"
     "システム設定 › モデルで既定のテキストモデルを設定してください。"
 )
 # SQL の無い応答（文章だけの答え）の作り直しの回数と、作り直させる理由・最後の失敗（#2333）。
@@ -4642,7 +4642,9 @@ class Nl2SqlService:
         self._catalog = self._build_default_catalog()
         self._oracle_adapter = OracleNl2SqlAdapter(settings)
         self._embedding_client: FeedbackEmbeddingClient = OpenAiCompatibleEmbeddingClient(settings)
-        self._enterprise_ai_client: EnterpriseAiDirectClient = OciEnterpriseAiDirectClient(settings)
+        self._enterprise_ai_client: EnterpriseAiDirectClient = HttpEnterpriseAiDirectClient(
+            settings
+        )
         self._store: Nl2SqlStore
         self._incremental_repository: IncrementalNl2SqlRepository | None = None
         if store is None and settings.nl2sql_persistence_mode.strip().lower() == "oracle":
@@ -10900,7 +10902,7 @@ class Nl2SqlService:
                 table_name=settings.nl2sql_feedback_vector_table,
                 index_name=settings.nl2sql_feedback_vector_index,
                 warnings=[
-                    "OCI GenAI embedding 設定が不足しているため、類似検索公開をスキップしました。"
+                    "埋め込みモデルの設定が不足しているため、類似検索公開をスキップしました。"
                 ],
             )
 
@@ -11270,7 +11272,7 @@ class Nl2SqlService:
             indexable_count=indexable_count,
             indexed_count=current_indexed,
             ddl=self._feedback_index_ddl(),
-            embedding_model=settings.oci_genai_embed_model_id,
+            embedding_model=settings.genai_embed_model_id,
             embedding_configured=embedding_configured,
             warnings=warnings,
             timing=self._timing(created_at, started, "feedback_index"),
@@ -11491,7 +11493,7 @@ class Nl2SqlService:
         if ready and metrics.get("embedding_fallback"):
             warnings.append(
                 "分類器は deterministic fallback embedding で学習されています。"
-                "OCI GenAI embedding とは併用できません。"
+                "埋め込みモデルの埋め込みとは併用できません。"
             )
         raw_vector_dimension = (
             artifact_payload.get("feature_dim", _CLASSIFIER_VECTOR_DIMENSION)
@@ -11516,7 +11518,7 @@ class Nl2SqlService:
             categories=categories,
             embedding_model=str(
                 artifact.get("embedding_model")
-                or get_settings().oci_genai_embed_model_id
+                or get_settings().genai_embed_model_id
                 or _DETERMINISTIC_EMBEDDING_MODEL
             ),
             vector_dimension=vector_dimension,
@@ -12898,29 +12900,23 @@ class Nl2SqlService:
                 return (
                     self._embedding_client.embed_texts(texts),
                     [],
-                    settings.oci_genai_embed_model_id,
+                    settings.genai_embed_model_id,
                 )
             except EmbeddingClientError as exc:
                 return (
                     [self._deterministic_embedding(text) for text in texts],
-                    [
-                        "OCI GenAI embedding に失敗したため deterministic fallback "
-                        f"を使いました: {exc}"
-                    ],
+                    [f"埋め込みに失敗したため deterministic fallback を使いました: {exc}"],
                     _DETERMINISTIC_EMBEDDING_MODEL,
                 )
             except Exception as exc:  # pragma: no cover - defensive SDK boundary
                 return (
                     [self._deterministic_embedding(text) for text in texts],
-                    [
-                        "OCI GenAI embedding に失敗したため deterministic fallback "
-                        f"を使いました: {exc}"
-                    ],
+                    [f"埋め込みに失敗したため deterministic fallback を使いました: {exc}"],
                     _DETERMINISTIC_EMBEDDING_MODEL,
                 )
         return (
             [self._deterministic_embedding(text) for text in texts],
-            ["OCI GenAI embedding が未設定のため deterministic fallback を使いました。"],
+            ["埋め込みモデルが未設定のため deterministic fallback を使いました。"],
             _DETERMINISTIC_EMBEDDING_MODEL,
         )
 
@@ -13018,8 +13014,9 @@ class Nl2SqlService:
                 )
             elif not self._embedding_client.is_configured():
                 warnings.append(
-                    "OCI GenAI embedding が未設定です。"
-                    "NL2SQL_FEEDBACK_EMBEDDING_ENABLED と OCI 設定を確認してください。"
+                    "埋め込みモデルが未設定です。"
+                    "NL2SQL_FEEDBACK_EMBEDDING_ENABLED と"
+                    "既定の埋め込みモデルの接続を確認してください。"
                 )
             else:
                 try:
@@ -13097,7 +13094,7 @@ class Nl2SqlService:
             indexable_count=len(indexable),
             indexed_count=indexed_count,
             ddl=self._feedback_index_ddl(),
-            embedding_model=settings.oci_genai_embed_model_id,
+            embedding_model=settings.genai_embed_model_id,
             embedding_configured=self._embedding_client.is_configured(),
             warnings=warnings,
             timing=self._timing(created_at, started, "feedback_index"),
@@ -13446,13 +13443,13 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": [
-                        "OCI Enterprise AI が未設定のため deterministic reverse を使用しました。"
+                        "モデルの API が未設定のため deterministic reverse を使用しました。"
                     ]
                 }
             )
         result = deterministic
         settings = get_settings()
-        timeout = max(1.0, settings.oci_enterprise_ai_timeout_seconds)
+        timeout = max(1.0, settings.enterprise_ai_timeout_seconds)
         deadline = time.monotonic() + min(1800.0, timeout * 3)
         try:
             profile = self.get_profile(request.profile_id)
@@ -13470,7 +13467,7 @@ class Nl2SqlService:
                 stage="structure_analysis",
                 parse=self._reverse_structure_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=request.sql,
                 context=context,
@@ -13488,7 +13485,7 @@ class Nl2SqlService:
                 stage="logical_structure",
                 parse=self._reverse_structure_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=json.dumps(
                     {"sql_structure": physical_structure, "sql": request.sql}, ensure_ascii=False
@@ -13504,7 +13501,7 @@ class Nl2SqlService:
                 update={
                     "logical_structure": logical_structure,
                     "logical_structure_items": [],
-                    "source": "oci_enterprise_ai",
+                    "source": "enterprise_ai",
                 }
             )
             question = generate_stage(
@@ -13512,7 +13509,7 @@ class Nl2SqlService:
                 stage="business_question",
                 parse=self._reverse_question_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=logical_structure,
                 context=context,
@@ -13627,7 +13624,7 @@ class Nl2SqlService:
     ) -> StructureToSqlData:
         """生成と安全検証を共通化する。DB 実行・履歴保存は行わない。"""
         if not self._enterprise_ai_client.is_configured():
-            raise ValueError("OCI Enterprise AI を設定してから SQL を再生成してください。")
+            raise ValueError("モデルの API を設定してから SQL を再生成してください。")
         raw = call_with_model_purpose(
             "sql.generate",
             self._enterprise_ai_client.generate,
@@ -13660,7 +13657,7 @@ class Nl2SqlService:
         return StructureToSqlData(
             sql=sql,
             explanation=output.explanation.strip(),
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             warnings=analysis.safety.warnings,
         )
 
@@ -14087,7 +14084,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "llm_warnings": [
-                        "OCI Enterprise AI が未設定のため deterministic analysis を使用しました。"
+                        "モデルの API が未設定のため deterministic analysis を使用しました。"
                     ]
                 }
             )
@@ -14190,8 +14187,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": [
-                        "OCI Enterprise AI が未設定のため deterministic comment 候補を"
-                        "使用しました。"
+                        "モデルの API が未設定のため deterministic comment 候補を使用しました。"
                     ]
                 }
             )
@@ -14221,7 +14217,7 @@ class Nl2SqlService:
                 raise ValueError("comment 候補が空です。")
             return CommentSuggestionData(
                 suggestions=suggestions,
-                source="oci_enterprise_ai",
+                source="enterprise_ai",
             )
         except (EnterpriseAiDirectError, ValueError, TypeError) as exc:
             return deterministic.model_copy(
@@ -14350,7 +14346,7 @@ class Nl2SqlService:
         self,
         request: MetadataSqlGenerateRequest,
     ) -> MetadataSqlGenerateData:
-        """SQL Assist コメント管理の SQL 生成を OCI Enterprise AI へ再マップする。"""
+        """SQL Assist コメント管理の SQL 生成をモデルの API へ再マップする。"""
         started = time.monotonic()
         created_at = _utc_now()
         deterministic_sql = self._deterministic_comment_sql(request)
@@ -14364,7 +14360,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": deterministic.warnings
-                    + ["OCI Enterprise AI が未設定のため deterministic SQL を使用しました。"]
+                    + ["モデルの API が未設定のため deterministic SQL を使用しました。"]
                 }
             )
 
@@ -14516,7 +14512,7 @@ class Nl2SqlService:
         self,
         request: MetadataSqlGenerateRequest,
     ) -> MetadataSqlGenerateData:
-        """アノテーション管理の SQL 生成を OCI Enterprise AI へ再マップする。
+        """アノテーション管理の SQL 生成をモデルの API へ再マップする。
 
         語彙は SQL の生成で業務用語を SQL に変換するのに効く "DESCRIPTION" / "ALIASES" /
         "VALUES" / "UNITS" / "JOIN COLUMN"(Oracle AI Database の検証記事に準拠)。
@@ -14535,7 +14531,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": deterministic.warnings
-                    + ["OCI Enterprise AI が未設定のため deterministic SQL を使用しました。"]
+                    + ["モデルの API が未設定のため deterministic SQL を使用しました。"]
                 }
             )
 
@@ -14687,7 +14683,7 @@ class Nl2SqlService:
                     if request.operation != "create"
                     else "複数テーブルで共通する列が無いため "
                     "deterministic のドメイン候補はありません。"
-                    "共通列を持つ表を一緒に選ぶか、OCI Enterprise AI の生成を使ってください。"
+                    "共通列を持つ表を一緒に選ぶか、モデルの API の生成を使ってください。"
                 )
             ]
         deterministic = MetadataSqlGenerateData(
@@ -14700,7 +14696,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": deterministic.warnings
-                    + ["OCI Enterprise AI が未設定のため deterministic SQL を使用しました。"]
+                    + ["モデルの API が未設定のため deterministic SQL を使用しました。"]
                 }
             )
 
@@ -15210,7 +15206,7 @@ class Nl2SqlService:
         sequential: bool,
         success_warnings: list[str],
     ) -> MetadataSqlGenerateData:
-        """コメント・アノテーション・ドメインの SQL を、組ごとに OCI Enterprise AI で作る（#1719）。
+        """コメント・アノテーション・ドメインの SQL を、組ごとにモデルの API で作る（#1719）。
 
         - 表が多ければ組に分けて呼ぶ（1 回の出力を小さくし、出力の上限での未完了を避ける）。
           コメント・アノテーションは組を同時に呼び（上限は `NL2SQL_METADATA_SQL_CONCURRENCY`）、
@@ -15261,7 +15257,7 @@ class Nl2SqlService:
         if not failures:
             return MetadataSqlGenerateData(
                 sql="\n".join(sql for _batch, sql, _exc in results if sql),
-                source="oci_enterprise_ai",
+                source="enterprise_ai",
                 warnings=success_warnings,
                 timing=timing,
             )
@@ -15300,7 +15296,7 @@ class Nl2SqlService:
         ]
         return MetadataSqlGenerateData(
             sql="\n".join(part for part in parts if part),
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             warnings=success_warnings,
             fallback_objects=[name for batch, _error in failures for name in object_names(batch)],
             timing=timing,
@@ -16032,33 +16028,32 @@ class Nl2SqlService:
             check_present("PLATFORM_ORACLE_DSN", "Oracle DSN"),
             check_present("PLATFORM_ORACLE_USER", "Oracle user"),
             # テキストモデルの接続（#533）。セカンダリ接続なら
-            # PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_*。
+            # PLATFORM_ENTERPRISE_AI_SECONDARY_*。
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
+                name="PLATFORM_ENTERPRISE_AI_ENDPOINT",
                 status="ok" if text_connection.endpoint else "warning",
                 message=(
-                    f"OCI Enterprise AI endpoint（{text_connection_label}）は設定済みです。"
+                    f"モデルの API の endpoint（{text_connection_label}）は設定済みです。"
                     if text_connection.endpoint
-                    else f"OCI Enterprise AI endpoint（{text_connection_label}）が未設定です。"
+                    else f"モデルの API の endpoint（{text_connection_label}）が未設定です。"
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
+                name="PLATFORM_ENTERPRISE_AI_API_KEY",
                 status="ok" if text_connection.api_key else "warning",
                 message=(
-                    f"OCI Enterprise AI API key（{text_connection_label}）は設定済みです。"
+                    f"モデルの API の API key（{text_connection_label}）は設定済みです。"
                     if text_connection.api_key
-                    else f"OCI Enterprise AI API key（{text_connection_label}）が未設定です。"
+                    else f"モデルの API の API key（{text_connection_label}）が未設定です。"
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+                name="PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
                 status="ok" if self._enterprise_ai_client.model_id() else "warning",
                 message=(
-                    "OCI Enterprise AI のテキストモデルは "
-                    f"{self._enterprise_ai_client.model_id()} です。"
+                    f"テキストモデルは {self._enterprise_ai_client.model_id()} です。"
                     if self._enterprise_ai_client.model_id()
-                    else "OCI Enterprise AI のテキストモデルが未設定です。"
+                    else "テキストモデルが未設定です。"
                 ),
             ),
             DiagnosticCheck(
@@ -16113,34 +16108,16 @@ class Nl2SqlService:
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_GENAI_ENDPOINT",
-                status=(
-                    "ok"
-                    if settings.oci_genai_endpoint.strip()
-                    or not settings.nl2sql_feedback_embedding_enabled
-                    else "warning"
-                ),
+                name="PLATFORM_GENAI_EMBED_MODEL_ID",
+                status="ok" if settings.genai_embed_model_id.strip() else "warning",
                 message=(
-                    "OCI GenAI endpoint は設定済みです。"
-                    if settings.oci_genai_endpoint.strip()
-                    else (
-                        "feedback embedding は無効なため OCI GenAI endpoint は任意です。"
-                        if not settings.nl2sql_feedback_embedding_enabled
-                        else "OCI GenAI endpoint が未設定です。"
-                    )
+                    f"埋め込みモデルは {settings.genai_embed_model_id} です。"
+                    if settings.genai_embed_model_id.strip()
+                    else "埋め込みモデルが未設定です。"
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_GENAI_EMBED_MODEL_ID",
-                status="ok" if settings.oci_genai_embed_model_id.strip() else "warning",
-                message=(
-                    f"OCI GenAI embedding model は {settings.oci_genai_embed_model_id} です。"
-                    if settings.oci_genai_embed_model_id.strip()
-                    else "OCI GenAI embedding model が未設定です。"
-                ),
-            ),
-            DiagnosticCheck(
-                name="OCI_GENAI_EMBEDDING",
+                name="GENAI_EMBEDDING",
                 status=(
                     "ok"
                     if (
@@ -16150,12 +16127,15 @@ class Nl2SqlService:
                     else "warning"
                 ),
                 message=(
-                    f"feedback embedding model は {settings.oci_genai_embed_model_id} です。"
+                    f"feedback embedding model は {settings.genai_embed_model_id} です。"
                     if embedding_configured and embedding_module_available
                     else (
                         "feedback embedding は無効です。"
                         if not settings.nl2sql_feedback_embedding_enabled
-                        else "feedback embedding の OCI 設定または OCI SDK が不足しています。"
+                        else (
+                            "feedback embedding の既定の埋め込みモデルの接続"
+                            "（endpoint / API key）が不足しています。"
+                        )
                     )
                 ),
             ),
@@ -16223,7 +16203,7 @@ class Nl2SqlService:
                 ),
                 next_action=next_action(
                     ["enterprise_ai_direct"],
-                    "OCI Enterprise AI endpoint / API key / model を設定してください。",
+                    "モデルの API の endpoint / API key / model を設定してください。",
                 ),
                 related_readiness=["enterprise_ai_direct"],
             ),
@@ -16241,7 +16221,7 @@ class Nl2SqlService:
                 ),
                 next_action=next_action(
                     ["oracle_adb", "feedback_embedding"],
-                    "Oracle runtime と OCI GenAI embedding 設定を確認してください。",
+                    "Oracle runtime と埋め込みモデルの設定を確認してください。",
                 ),
                 related_readiness=["oracle_adb", "feedback_embedding"],
             ),
@@ -16300,7 +16280,7 @@ class Nl2SqlService:
                 else fallback
             )
 
-        enterprise_model_name = "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"
+        enterprise_model_name = "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"
 
         return [
             DiagnosticConfigGuide(
@@ -16309,30 +16289,30 @@ class Nl2SqlService:
                 status=guide_status("enterprise_ai_direct"),
                 summary=guide_summary(
                     "enterprise_ai_direct",
-                    "OCI Enterprise AI Direct fallback の設定状態です。",
+                    "Enterprise AI Direct fallback の設定状態です。",
                 ),
                 next_action=guide_next_action(
                     "enterprise_ai_direct",
-                    "OCI Enterprise AI endpoint / API key / model を設定してください。",
+                    "モデルの API の endpoint / API key / model を設定してください。",
                 ),
                 required_env_vars=[
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT"),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_API_KEY"),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"),
+                    env_var("PLATFORM_ENTERPRISE_AI_ENDPOINT"),
+                    env_var("PLATFORM_ENTERPRISE_AI_API_KEY"),
+                    env_var("PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"),
                 ],
                 optional_env_vars=[
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_PROJECT_ID", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_PATH", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH", required=False),
                 ],
                 env_template=(
                     "NL2SQL_ENTERPRISE_AI_DIRECT_ENABLED=true\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=<enterprise-ai-api-key>\n"
+                    "PLATFORM_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>\n"
+                    "PLATFORM_ENTERPRISE_AI_API_KEY=<enterprise-ai-api-key>\n"
                     f"{enterprise_model_name}=<enterprise-ai-model>\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH=/responses"
+                    "PLATFORM_ENTERPRISE_AI_LLM_PATH=/responses"
                 ),
                 smoke_command=(
                     "uv run python scripts/nl2sql_manual_integration.py "
@@ -16351,13 +16331,12 @@ class Nl2SqlService:
                 ),
                 next_action=guide_next_action(
                     "feedback_embedding",
-                    "NL2SQL_FEEDBACK_EMBEDDING_ENABLED と OCI GenAI embedding "
-                    "設定を確認してください。",
+                    "NL2SQL_FEEDBACK_EMBEDDING_ENABLED と"
+                    "既定の埋め込みモデルの設定を確認してください。",
                 ),
                 required_env_vars=[
                     env_var("NL2SQL_FEEDBACK_EMBEDDING_ENABLED"),
-                    env_var("PLATFORM_OCI_GENAI_ENDPOINT"),
-                    env_var("PLATFORM_OCI_GENAI_EMBED_MODEL_ID"),
+                    env_var("PLATFORM_GENAI_EMBED_MODEL_ID"),
                 ],
                 optional_env_vars=[
                     env_var("NL2SQL_FEEDBACK_VECTOR_TABLE", required=False),
@@ -16365,8 +16344,7 @@ class Nl2SqlService:
                 ],
                 env_template=(
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true\n"
-                    "PLATFORM_OCI_GENAI_ENDPOINT=<oci-genai-endpoint>\n"
-                    "PLATFORM_OCI_GENAI_EMBED_MODEL_ID=cohere.embed-v4.0\n"
+                    "PLATFORM_GENAI_EMBED_MODEL_ID=text-embedding-v4\n"
                     "NL2SQL_FEEDBACK_VECTOR_TABLE=NL2SQL_FEEDBACK_VECTORS\n"
                     "NL2SQL_FEEDBACK_VECTOR_INDEX=NL2SQL_FEEDBACK_VEC_IDX"
                 ),
@@ -16442,13 +16420,13 @@ class Nl2SqlService:
             )
         )
         direct_summary = (
-            "Enterprise AI Direct fallback に必要な OCI 基本設定があります。"
+            "Enterprise AI Direct fallback に必要な基本設定があります。"
             if direct_ready
             else "Enterprise AI Direct 用の endpoint / API key / model を確認してください。"
         )
         embedding_summary = (
             (
-                f"Feedback 学習は {settings.oci_genai_embed_model_id} で "
+                f"Feedback 学習は {settings.genai_embed_model_id} で "
                 f"{EMBEDDING_DIMENSIONS} 次元 embedding を作成できます。"
             )
             if embedding_ready
@@ -16490,22 +16468,22 @@ class Nl2SqlService:
             ),
             DiagnosticReadiness(
                 area="enterprise_ai_direct",
-                label="OCI Enterprise AI Direct",
+                label="Enterprise AI Direct",
                 status="ok" if direct_ready else "warning",
                 summary=direct_summary,
                 next_action=(
                     ""
                     if direct_ready
                     else (
-                        "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT / "
-                        "PLATFORM_OCI_ENTERPRISE_AI_API_KEY / "
-                        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL を設定してください。"
+                        "PLATFORM_ENTERPRISE_AI_ENDPOINT / "
+                        "PLATFORM_ENTERPRISE_AI_API_KEY / "
+                        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL を設定してください。"
                     )
                 ),
                 related_checks=[
-                    "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
-                    "PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
-                    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+                    "PLATFORM_ENTERPRISE_AI_ENDPOINT",
+                    "PLATFORM_ENTERPRISE_AI_API_KEY",
+                    "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
                 ],
             ),
             DiagnosticReadiness(
@@ -16517,13 +16495,13 @@ class Nl2SqlService:
                     ""
                     if embedding_ready
                     else (
-                        "OCI GenAI embedding 設定を有効化して feedback index rebuild "
+                        "埋め込みモデルの設定を有効化して feedback index rebuild "
                         "を実行してください。"
                     )
                 ),
                 related_checks=[
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED",
-                    "OCI_GENAI_EMBEDDING",
+                    "GENAI_EMBEDDING",
                 ],
             ),
             DiagnosticReadiness(
@@ -17361,7 +17339,7 @@ class Nl2SqlService:
     def _generate_db_admin_chat_output(
         self, question: str, history: Sequence[DbAdminChatHistoryTurn]
     ) -> _DbAdminChatGenerated:
-        """生成の段: 文脈の表を選び、OCI Enterprise AI で SQL と説明を作る。"""
+        """生成の段: 文脈の表を選び、モデルの API で SQL と説明を作る。"""
 
         warnings: list[str] = []
         tables: list[SchemaTable] = []
@@ -17464,9 +17442,7 @@ class Nl2SqlService:
             return DbAdminChatAnalyzeData(
                 **deterministic.model_dump(exclude={"corrected_sql"}),
                 previous_attempts=previous,
-                warnings=[
-                    "OCI Enterprise AI が未設定のため、エラーコードからの分析を使用しました。"
-                ],
+                warnings=["モデルの API が未設定のため、エラーコードからの分析を使用しました。"],
             )
         context = (
             f"質問:\n{turn.question}\n\nSQL:\n{statement.sql}\n\n実行結果:\n{failure}"
@@ -17533,7 +17509,7 @@ class Nl2SqlService:
             fix=output.fix.strip() or deterministic.fix,
             conclusion=output.conclusion.strip() or deterministic.conclusion,
             corrected_plan=self._db_admin_chat_plan(corrected_sql) if corrected_sql else None,
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             model=self._enterprise_ai_client.model_id(),
             warnings=warnings,
             previous_attempts=previous,
@@ -19387,9 +19363,7 @@ class Nl2SqlService:
         if not self._enterprise_ai_client.is_configured():
             return deterministic.model_copy(
                 update={
-                    "warnings": [
-                        "OCI Enterprise AI が未設定のため deterministic 分析を使用しました。"
-                    ]
+                    "warnings": ["モデルの API が未設定のため deterministic 分析を使用しました。"]
                 }
             )
         target_label = {
@@ -19418,7 +19392,7 @@ class Nl2SqlService:
             analysis = AnalysisOutput.model_validate_json(raw).analysis.strip()
             if not analysis:
                 raise ValueError("AI 分析結果が空です。")
-            return DbAdminAiAnalysisData(analysis=analysis, source="oci_enterprise_ai")
+            return DbAdminAiAnalysisData(analysis=analysis, source="enterprise_ai")
         except (EnterpriseAiDirectError, ValueError) as exc:
             return deterministic.model_copy(
                 update={"warnings": [f"Enterprise AI 分析に失敗したため fallback しました: {exc}"]}
@@ -19487,7 +19461,7 @@ class Nl2SqlService:
         return DbAdminChatAnalysisOutput(
             cause="実行結果から既知の ORA エラーコードを検出できませんでした。",
             fix="SQL 文法と対象オブジェクトの存在を確認してください。",
-            conclusion="詳細分析には OCI Enterprise AI の設定が必要です。",
+            conclusion="詳細分析にはモデルの API の設定が必要です。",
         )
 
     def _view_query_sql_from_ddl(self, ddl: str) -> str:
@@ -19504,7 +19478,7 @@ class Nl2SqlService:
             return deterministic.model_copy(
                 update={
                     "warnings": [
-                        f"{prompt_profile}: OCI Enterprise AI が未設定のため "
+                        f"{prompt_profile}: モデルの API が未設定のため "
                         "deterministic 抽出を使用しました。"
                     ]
                 }
@@ -19554,7 +19528,7 @@ class Nl2SqlService:
         return DbAdminJoinWhereData(
             join_text="\n".join(join_lines) if join_lines else "None",
             where_text="\n".join(where_lines) if where_lines else "None",
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             prompt_profile=prompt_profile,
             structure_markdown=structure_markdown,
         )
@@ -21808,7 +21782,7 @@ class Nl2SqlService:
         engine_timings: list[dict[str, Any]] | None = None,
         sql_requirement: SqlRequirementSpec | None = None,
     ) -> GeneratedSql:
-        """SQL を生成する（OCI Enterprise AI と deterministic の共通の出口）。
+        """SQL を生成する（モデルの API と deterministic の共通の出口）。
 
         生成した SQL の今の日時（`SYSDATE` / `SYSTIMESTAMP`）は、session の時間帯（共通の設定の
         時間帯）の `CURRENT_DATE` / `CURRENT_TIMESTAMP` にそろえる（#3265）。ADB の `SYSDATE` は
@@ -21980,16 +21954,16 @@ class Nl2SqlService:
                 engine=engine.value,
                 started=skipped_started,
                 status="skipped",
-                error="OCI Enterprise AI Direct が構成されていません。",
+                error="モデルの API が構成されていません。",
             )
-            raise RuntimeError("OCI Enterprise AI Direct が構成されていません。")
+            raise RuntimeError("モデルの API が構成されていません。")
 
         if not allow_deterministic_fallback:
             raise RuntimeError(f"{engine.value} の実行結果を取得できませんでした。")
 
         deterministic_started = time.monotonic()
         sql = self._compose_select_sql(self._catalog_qualified_name(table), columns)
-        meta.update({"provider": "oci_enterprise_ai", "mode": "direct"})
+        meta.update({"provider": "enterprise_ai", "mode": "direct"})
         _record_engine_timing(
             engine_timings,
             engine="deterministic",
@@ -22031,11 +22005,7 @@ class Nl2SqlService:
         return {
             Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (
                 direct_ready,
-                (
-                    ""
-                    if direct_ready
-                    else profile_error or "OCI Enterprise AI Direct が構成されていません。"
-                ),
+                ("" if direct_ready else profile_error or "モデルの API が構成されていません。"),
             ),
         }
 
@@ -22143,9 +22113,9 @@ class Nl2SqlService:
                 engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT.value,
                 started=call_started,
                 status="failed",
-                error="OCI Enterprise AI response から SQL を抽出できません。",
+                error="モデルの応答から SQL を抽出できません。",
             )
-            raise EnterpriseAiDirectError("OCI Enterprise AI response から SQL を抽出できません。")
+            raise EnterpriseAiDirectError("モデルの応答から SQL を抽出できません。")
         _record_engine_timing(
             engine_timings,
             engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT.value,
@@ -22154,9 +22124,9 @@ class Nl2SqlService:
         )
         meta.update(
             {
-                "provider": "oci_enterprise_ai",
+                "provider": "enterprise_ai",
                 "mode": "direct",
-                "runtime": "oci_enterprise_ai",
+                "runtime": "enterprise_ai",
                 "model": self._enterprise_ai_client.model_id(),
                 "response_format": "json_schema",
             }
@@ -22164,7 +22134,7 @@ class Nl2SqlService:
         return GeneratedSql(
             engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql=sql,
-            explanation=explanation or "OCI Enterprise AI Direct で SQL を生成しました。",
+            explanation=explanation or "モデルの API で SQL を生成しました。",
             engine_meta=meta,
             fallback_reason="; ".join(fallback_messages),
             schema_catalog=catalog,

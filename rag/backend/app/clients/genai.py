@@ -41,7 +41,8 @@ EMBEDDING_INPUT_TYPES = frozenset(
 # ponytail: Cohere Embed v4 128k tokens への保守的な文字数ガード。
 # tokenizer は実際に必要になるまで入れない。
 EMBEDDING_INPUT_MAX_CHARS = 100_000
-# OCI Embed 4 は 1 request 内の全入力で 128k token。tokenizer 依存を増やさず保守的に抑える。
+# 埋め込みの API の 1 request 内の全入力の上限（Cohere Embed 4 では 128k token）。
+# tokenizer 依存を増やさず保守的に抑える。
 EMBEDDING_REQUEST_MAX_CHARS = 100_000
 EMBEDDING_REQUEST_MAX_INPUTS = 96
 # 1 件の入力の上限(Embed 4 が inputs[i] ごとに検証する。#2467 で実 API の応答から確認)。
@@ -60,13 +61,13 @@ class PostJson(Protocol):
 logger = logging.getLogger(__name__)
 
 
-class OciGenAiConfigError(ValueError):
-    """利用者が OCI 認証設定を直せる Generative AI 設定エラー。"""
+class GenAiConfigError(ValueError):
+    """利用者が埋め込み・再ランクのモデルの設定を直せる設定エラー。"""
 
     safe_for_user = True
 
 
-class OciEmbeddingRequestError(RuntimeError):
+class EmbeddingRequestError(RuntimeError):
     """Embedding の要求の失敗を、理由とバッチの位置・大きさで示す(#2467)。
 
     サービスの応答本文・入力の本文・認証情報は含めない。``diagnostics`` は構造化ログと同じ値。
@@ -79,7 +80,7 @@ class OciEmbeddingRequestError(RuntimeError):
         self.diagnostics = diagnostics
 
 
-class OciGenAiClient:
+class GenAiClient:
     """OpenAI 互換の API による埋め込み / 再ランクのクライアント（#8）。"""
 
     def __init__(
@@ -101,19 +102,19 @@ class OciGenAiClient:
         *,
         input_type: EmbeddingInputType = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
-        """テキストを `oci_genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元に埋め込む。"""
+        """テキストを `genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元に埋め込む。"""
         if input_type not in EMBEDDING_INPUT_TYPES:
             raise ValueError(f"embedding input_type が不正です。input_type={input_type}")
         if not texts:
             return []
         _validate_embedding_input_lengths(texts)
-        _raise_if_empty_embedding_input(texts, model_id=self._settings.oci_genai_embedding_model)
+        _raise_if_empty_embedding_input(texts, model_id=self._settings.genai_embedding_model)
         if self._embedding_cache_disabled():
-            vectors = await self._embed_with_oci_batches(texts, input_type=input_type)
+            vectors = await self._embed_batches(texts, input_type=input_type)
             _validate_embedding_batch(
                 vectors,
                 expected_count=len(texts),
-                expected_dim=self._settings.oci_genai_embedding_dim,
+                expected_dim=self._settings.genai_embedding_dim,
             )
             return vectors
 
@@ -121,7 +122,7 @@ class OciGenAiClient:
         _validate_embedding_batch(
             vectors,
             expected_count=len(texts),
-            expected_dim=self._settings.oci_genai_embedding_dim,
+            expected_dim=self._settings.genai_embedding_dim,
         )
         return vectors
 
@@ -131,7 +132,7 @@ class OciGenAiClient:
         *,
         input_type: EmbeddingInputType,
     ) -> list[list[float]]:
-        """cache hit を再利用し、miss だけをまとめて OCI embedding に出す。"""
+        """cache hit を再利用し、miss だけをまとめて 埋め込みモデル に出す。"""
         vectors: list[list[float] | None] = [None] * len(texts)
         miss_texts: list[str] = []
         miss_keys: list[str] = []
@@ -140,8 +141,8 @@ class OciGenAiClient:
             key = _embedding_cache_key(
                 text=text,
                 input_type=input_type,
-                model_id=self._settings.oci_genai_embedding_model,
-                dimension=self._settings.oci_genai_embedding_dim,
+                model_id=self._settings.genai_embedding_model,
+                dimension=self._settings.genai_embedding_dim,
             )
             cached = self._get_cached_embedding(key)
             if cached is not None:
@@ -154,14 +155,14 @@ class OciGenAiClient:
                 miss_texts.append(text)
 
         if miss_texts:
-            missing_vectors = await self._embed_with_oci_batches(
+            missing_vectors = await self._embed_batches(
                 miss_texts,
                 input_type=input_type,
             )
             _validate_embedding_batch(
                 missing_vectors,
                 expected_count=len(miss_texts),
-                expected_dim=self._settings.oci_genai_embedding_dim,
+                expected_dim=self._settings.genai_embedding_dim,
             )
             for key, vector in zip(miss_keys, missing_vectors, strict=True):
                 self._store_embedding(key, vector)
@@ -170,16 +171,16 @@ class OciGenAiClient:
 
         return [_require_cached_vector(vector, index) for index, vector in enumerate(vectors)]
 
-    async def _embed_with_oci_batches(
+    async def _embed_batches(
         self,
         texts: list[str],
         *,
         input_type: EmbeddingInputType,
     ) -> list[list[float]]:
-        """OCI embedding request を設定値で分割し、入力順に結合して返す。
+        """埋め込みの request を設定値で分割し、入力順に結合して返す。
 
         batch は上限つきの並行で送る(#2002。上限は ``rag_embedding_concurrency``)。429・5xx・
-        接続・timeout の再試行と全体の待ちは共通の実行器が受け持つ(OCI SDK の再試行は切っている)。
+        接続・timeout の再試行と全体の待ちは共通の実行器が受け持つ(SDK の再試行は切っている)。
         結果は入力の順に結合する。最後の再試行でも失敗した batch があれば、その失敗を出す。
         """
         batch_size = min(
@@ -194,11 +195,11 @@ class OciGenAiClient:
             # サービスの高負荷(HTTP 400 でも返る。#2467)のあとは、バッチを分けて小さい要求で送る。
             batch_vectors: list[list[float]] = []
             for part in _split_batch(batch, _retry_split_count(attempt, len(batch))):
-                batch_vectors.extend(await self._embed_with_oci(part, input_type=input_type))
+                batch_vectors.extend(await self._embed_with_api(part, input_type=input_type))
             _validate_embedding_batch(
                 batch_vectors,
                 expected_count=len(batch),
-                expected_dim=self._settings.oci_genai_embedding_dim,
+                expected_dim=self._settings.genai_embedding_dim,
             )
             return batch_vectors
 
@@ -218,7 +219,7 @@ class OciGenAiClient:
                     batch_index=index,
                     batch_total=len(batches),
                     total_inputs=len(texts),
-                    model_id=self._settings.oci_genai_embedding_model,
+                    model_id=self._settings.genai_embedding_model,
                 ) from (cause or outcome.error)
             vectors.extend(outcome.value or [])
         return vectors
@@ -226,7 +227,7 @@ class OciGenAiClient:
     async def rerank(self, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
         """Cohere Rerank v4 fast で再ランク付けし、(index, score) を返す。"""
         receipt = current_rerank_receipt() or RerankCallReceipt()
-        receipt.request(query, documents, model=self._settings.oci_genai_rerank_model, top_n=top_n)
+        receipt.request(query, documents, model=self._settings.genai_rerank_model, top_n=top_n)
         with (
             use_rerank_receipt(receipt),
             observed_span(
@@ -246,7 +247,7 @@ class OciGenAiClient:
                         query=query,
                         documents=documents,
                         top_n=top_n,
-                        model_id=self._settings.oci_genai_rerank_model,
+                        model_id=self._settings.genai_rerank_model,
                     )
                     cached = self._get_cached_rerank(cache_key)
                     if cached is not None:
@@ -256,9 +257,9 @@ class OciGenAiClient:
 
                 async def rerank_once(attempt: Attempt) -> Sequence[tuple[object, object]]:
                     with bind_rerank_attempt(attempt.number):
-                        return await self._rerank_with_oci(query, documents, top_n)
+                        return await self._rerank_with_api(query, documents, top_n)
 
-                # OCI SDK の再試行は切り、既存の共通実行器だけで再試行する。
+                # SDK の再試行は切り、既存の共通実行器だけで再試行する。
                 with ingestion_ai_calls(self._settings, "rerank", total=1) as caller:
                     results = await _unwrapped_item_failure(
                         caller.call(rerank_once, label="rerank")
@@ -295,7 +296,7 @@ class OciGenAiClient:
         """
         base = embedding_api_base_url(self._settings, rerank=rerank)
         if not base:
-            raise OciGenAiConfigError(
+            raise GenAiConfigError(
                 "埋め込み / 再ランクの Base URL が未設定です。"
                 "埋め込み / 再ランクのモデルの接続の Endpoint URL を入力してください。"
             )
@@ -305,7 +306,7 @@ class OciGenAiClient:
         """API key（#45。既定の埋め込み / 再ランクのモデルの接続のものを使う）。"""
         key = embedding_model_connection(self._settings, rerank=rerank).api_key
         if not key:
-            raise OciGenAiConfigError(
+            raise GenAiConfigError(
                 "埋め込み / 再ランクの API key がありません"
                 "（埋め込み / 再ランクのモデルの接続の API key を使います）。"
             )
@@ -324,7 +325,7 @@ class OciGenAiClient:
                 "Authorization": f"Bearer {self._api_key(rerank=rerank)}",
             },
         )
-        timeout = max(1, int(self._settings.oci_enterprise_ai_timeout_seconds or 60))
+        timeout = max(1, int(self._settings.enterprise_ai_timeout_seconds or 60))
         # HTTPError はそのまま伝播させる。`status` を持つので共通の分類器が種類
         # （429 の絞り・403 の権限など）を決め、再試行の可否を判断できる。
         # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
@@ -336,7 +337,7 @@ class OciGenAiClient:
             raise ValueError(f"{url} の応答が object ではありません。")
         return payload
 
-    async def _embed_with_oci(
+    async def _embed_with_api(
         self,
         texts: list[str],
         *,
@@ -347,12 +348,12 @@ class OciGenAiClient:
         `input_type` は観測の purpose にだけ使う（OpenAI 互換の `/embeddings` に
         query / document の区別は無い）。LLM/VLM には使わず、埋め込み専用に限定する。
         """
-        model = self._settings.oci_genai_embedding_model
+        model = self._settings.genai_embedding_model
         url = f"{self._base_url(rerank=False)}/embeddings"
         body: dict[str, Any] = {
             "model": model,
             "input": texts,
-            "dimensions": self._settings.oci_genai_embedding_dim,
+            "dimensions": self._settings.genai_embedding_dim,
         }
         with observed_span(
             "gen_ai.embeddings",
@@ -377,11 +378,11 @@ class OciGenAiClient:
             raise ValueError("embedding の応答に data がありません。")
         return _embedding_vectors_in_input_order(rows, expected_count=len(texts))
 
-    async def _rerank_with_oci(
+    async def _rerank_with_api(
         self, query: str, documents: list[str], top_n: int
     ) -> Sequence[tuple[object, object]]:
         """OpenAI 互換の `POST {base_url}/reranks` を呼ぶ（#8。複数形。`/rerank` は 404）。"""
-        model = self._settings.oci_genai_rerank_model
+        model = self._settings.genai_rerank_model
         url = f"{self._base_url(rerank=True)}/reranks"
         body: dict[str, Any] = {
             "model": model,
@@ -505,7 +506,7 @@ async def _unwrapped_item_failure[T](awaitable: Awaitable[T]) -> T:
 
 
 async def _run_sdk_call_in_thread(operation: Callable[[], Any]) -> Any:
-    """同期 OCI SDK 呼び出しを event loop 外で実行する。"""
+    """同期の SDK 呼び出しを event loop 外で実行する。"""
     return await asyncio.to_thread(operation)
 
 
@@ -582,17 +583,6 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _oci_invalid_config_message(error: Exception) -> str:
-    text = str(error).lower()
-    if "fingerprint" in text:
-        return (
-            "OCI 認証設定の fingerprint が不正です。"
-            "システム設定 > OCI 認証で API key fingerprint を"
-            "16 進数のコロン区切り形式に修正してください。"
-        )
-    return "OCI 認証設定が不正です。システム設定 > OCI 認証で設定を確認してください。"
-
-
 def _require_cached_vector(vector: list[float] | None, index: int) -> list[float]:
     if vector is None:
         raise ValueError(f"embedding[{index}] の cache 復元に失敗しました。")
@@ -622,7 +612,7 @@ def _raise_if_empty_embedding_input(texts: Sequence[str], *, model_id: str) -> N
         "model": model_id,
     }
     logger.warning("embedding_request_failed", extra=diagnostics)
-    raise OciEmbeddingRequestError(
+    raise EmbeddingRequestError(
         f"Embedding の入力に空の Chunk が {len(empty)} 件あります（最初は {empty[0] + 1} 件目）。"
         "Chunk 作成から再実行してください。",
         diagnostics=diagnostics,
@@ -689,7 +679,7 @@ def _embedding_request_error(
     batch_total: int,
     total_inputs: int,
     model_id: str,
-) -> OciEmbeddingRequestError:
+) -> EmbeddingRequestError:
     """失敗したバッチの診断(本文・入力を含めない)を構造化ログに出し、利用者向けの例外にする。"""
     status = failure.status
     service_code = getattr(cause, "code", None) if cause is not None else None
@@ -720,7 +710,7 @@ def _embedding_request_error(
     label = _EMBEDDING_REASON_LABELS.get(reason) or KIND_LABELS.get(failure.kind, "失敗")
     status_text = f"HTTP {status}・" if status is not None else ""
     hint = _EMBEDDING_REASON_HINTS.get(reason, _DEFAULT_EMBEDDING_HINT)
-    return OciEmbeddingRequestError(
+    return EmbeddingRequestError(
         f"Embedding の要求が失敗しました（{status_text}{label}）。"
         f"バッチ {batch_index + 1}/{batch_total}（{len(batch)} 件・{batch_chars:,} 文字）。{hint}",
         diagnostics=diagnostics,

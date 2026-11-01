@@ -71,7 +71,7 @@ class PromptFileTests(unittest.TestCase):
         self.assertIn("- table_rows:", DEFAULT_IMAGE_RETRIEVAL_PROMPT)
         self.assertIn("- form_fields.name:", DEFAULT_IMAGE_RETRIEVAL_PROMPT)
         self.assertIn("logo / watermark / background / decorative", DEFAULT_IMAGE_RETRIEVAL_PROMPT)
-        from rag_engine.adapters.oci import _picture_output_contract
+        from rag_engine.adapters.model_api import _picture_output_contract
 
         self.assertIn("diagram_nodes=30", _picture_output_contract())  # 件数上限はコードの契約に置く。
         self.assertIn("table_rows=20", _picture_output_contract())
@@ -309,7 +309,7 @@ def test_default_answer_template_keeps_steps_placeholders_and_trust_boundaries()
 def test_new_image_default_describes_all_fields_without_a_competing_json_shape():
     import re
 
-    from rag_engine.adapters.oci import _picture_output_contract, _render_prompt
+    from rag_engine.adapters.model_api import _picture_output_contract, _render_prompt
     from rag_engine.models.llm import PictureDescriptionOutput
 
     editable = prompt_files.PROMPT_FILES[IMAGE_RETRIEVAL_PROMPT_KEY].default_content
@@ -332,7 +332,7 @@ def test_new_image_default_describes_all_fields_without_a_competing_json_shape()
 
 
 def test_existing_custom_json_example_is_preserved_during_rendering():
-    from rag_engine.adapters.oci import _render_prompt
+    from rag_engine.adapters.model_api import _render_prompt
 
     example = '{"custom_field":"保存済みの独自説明"}'
     saved = "保存済みの説明\n{{image_metadata}}\n" + example

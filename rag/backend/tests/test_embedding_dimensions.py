@@ -16,7 +16,7 @@ def test_rag_engine_dimensions_match_platform_constant() -> None:
     """rag_engine は platform を import できないため同じ値を持つ。値の一致をここで確かめる。"""
     assert DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS == EMBEDDING_DIMENSIONS
     assert ADB_EMBEDDING_DIMENSIONS == EMBEDDING_DIMENSIONS
-    assert Settings().oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
+    assert Settings().genai_embedding_dim == EMBEDDING_DIMENSIONS
 
 
 def test_chunk_ddl_and_manifest_use_platform_vector_type() -> None:

@@ -2,7 +2,7 @@
 
 保存・解析・見え方・期限は platform の `pr_system_settings.chat_attachments`。NL2SQL が持つのは:
 
-- 画像の読み取り（既定の Vision モデル。`OciEnterpriseAiClient.generate_from_image`）。
+- 画像の読み取り（既定の Vision モデル。`EnterpriseAiClient.generate_from_image`）。
 - 添付の表: 会話の添付の Excel・CSV のシートを、SQL の WITH 句の行の表 `ATTACHMENT_<n>` に
   する（`JSON_TABLE` に行の JSON を CLOB の bind で渡す）。SQL の生成（Enterprise AI Direct）には
   表の名前・列・型・先頭の数行だけを渡し、業務の表と JOIN して照合できるようにする。実行のときに
@@ -73,11 +73,11 @@ def _image_reader() -> Callable[[bytes, str], Awaitable[str]] | None:
         return None
 
     async def read(data: bytes, media_type: str) -> str:
-        from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+        from app.clients.enterprise_ai import EnterpriseAiClient
 
         return await async_call_with_model_purpose(
             "document.read",
-            OciEnterpriseAiClient(get_settings()).generate_from_image,
+            EnterpriseAiClient(get_settings()).generate_from_image,
             data,
             IMAGE_READING_PROMPT,
             mime_type=media_type,

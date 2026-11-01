@@ -146,7 +146,7 @@ class VisionCheckpointTests(unittest.TestCase):
         second = replace(copy.deepcopy(self.record), id="docling-p1-2", seq_no=2)
         templates = iter(["旧方針 {{image_metadata}}", "新方針 {{image_metadata}}"])
         with (
-            patch("rag_engine.adapters.oci.read_prompt", side_effect=lambda key: next(templates)),
+            patch("rag_engine.adapters.model_api.read_prompt", side_effect=lambda key: next(templates)),
             patch("rag_engine.parsing.picture_descriptions.describe_picture", return_value={"retrieval_text": "description"}) as call,
         ):
             self.assertEqual(self.describe([self.record, second]).succeeded, 2)

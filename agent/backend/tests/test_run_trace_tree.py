@@ -61,12 +61,12 @@ RAG_WORK = "rag.test_retrieve"
 
 
 class _TracedScriptedModel(ScriptedModel):
-    """OCI の client と同じく、モデルの呼び出しを `gen_ai.chat` の span で測る台本のモデル。"""
+    """本番の client と同じく、モデルの呼び出しを `gen_ai.chat` の span で測る台本のモデル。"""
 
     async def get_response(self, *args: Any, **kwargs: Any) -> Any:
         with observed_span(CHAT, kind="client") as span:
             response = await super().get_response(*args, **kwargs)
-            builtin_runtime._set_turn_kind(span, response)  # noqa: SLF001 - OCI の client と同じ印
+            builtin_runtime._set_turn_kind(span, response)  # noqa: SLF001 - 本番の client と同じ印
             return response
 
 
@@ -77,8 +77,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> None:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )

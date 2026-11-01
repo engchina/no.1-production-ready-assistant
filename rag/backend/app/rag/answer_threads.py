@@ -2,11 +2,11 @@
 
 回答フロー（`rag_engine`）は同期関数なので worker thread で動かす。thread は外から止められないため、
 回答を上限で打ち切っても（`run_answer_with_timeout`）、そのままでは LLM 1 回の timeout・再試行の
-まま LLM を呼び続け、asyncio の既定の executor（DB・OCI SDK の呼び出しと共有）を使い切る。
+まま LLM を呼び続け、asyncio の既定の executor（DB・モデルの API の呼び出しと共有）を使い切る。
 
 - 期限（`rag_engine.resources.deadline.Deadline`）を thread の文脈に置き、待つ側が終わったとき
   （完了・打ち切り・取り消し）に取り消す。thread の中の LLM の呼び出しは、呼ぶ前に期限を確かめ、
-  1 回の timeout を残り時間に縮め、期限を過ぎたら再試行しない（`rag_engine.adapters.oci`）。
+  1 回の timeout を残り時間に縮め、期限を過ぎたら再試行しない（`rag_engine.adapters.model_api`）。
 - thread は既定の executor ではなく、この module の専用の executor（上限付き）で動かす。回答が
   長くかかっても、DB・API の処理の thread を食いつぶさない。
 - 回答の最終の検証（`rag_validate_answer`）は、回答フロー（チャット・検索・品質評価の

@@ -1,6 +1,6 @@
 """業務 Agent の出力の項目と `record_output`（#2549）。
 
-モデルは SDK の `ScriptedModel` に差し替え、OCI へは接続しない。
+モデルは SDK の `ScriptedModel` に差し替え、モデルの API へは接続しない。
 """
 
 from __future__ import annotations
@@ -173,8 +173,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )

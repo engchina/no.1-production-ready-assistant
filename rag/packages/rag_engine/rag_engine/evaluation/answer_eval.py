@@ -482,7 +482,7 @@ def _is_invalid_output(exc: Exception) -> bool:
     """指摘を付けて出し直させる出力の誤り（schema 違反・構造化出力として読めない・契約違反）か。"""
     if isinstance(exc, (ValidationError, EvaluationContractError)):
         return True
-    from rag_engine.adapters.oci import InvalidStructuredOutput
+    from rag_engine.adapters.model_api import InvalidStructuredOutput
 
     return isinstance(exc, InvalidStructuredOutput)
 

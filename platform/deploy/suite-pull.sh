@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 配備した Compute の上で、suite の repository を origin の main の最新にする（#1566）。
 #
-# - repository は cloud-init が `git clone --depth 1` で入れ、各製品の init_script.sh が opc に chown する。
+# - repository は配備の前に `git clone --depth 1` で入れ、各製品の init_script.sh が opc に chown する。
 #   root のまま git を実行すると「dubious ownership」で失敗するため、git は repository の所有者で実行する。
 # - 追跡ファイルに変更があれば中止する（手で直したファイルを黙って消さない）。未追跡のファイルは保ち、
 #   取得したファイルと衝突するときは git が更新を拒否する。

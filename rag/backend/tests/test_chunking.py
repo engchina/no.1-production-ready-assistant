@@ -415,7 +415,7 @@ def test_chunk_extraction_groups_figure_with_caption() -> None:
             ),
             DocumentElement(
                 kind="figure_caption",
-                text="図1: Oracle AI Database と OCI Enterprise AI の連携。",
+                text="図1: Oracle AI Database とモデルの API の連携。",
                 element_id="fig-1-caption",
                 parent_id="fig-1",
                 page_number=4,

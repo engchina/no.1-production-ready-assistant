@@ -1,6 +1,6 @@
-"""組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI。#754）の決定論テスト。
+"""組み込み Runtime（OpenAI Agents SDK + モデルの API。#754）の決定論テスト。
 
-モデルは SDK の `ScriptedModel`（台本どおりに応答する）に差し替え、OCI へは接続しない。
+モデルは SDK の `ScriptedModel`（台本どおりに応答する）に差し替え、モデルの API へは接続しない。
 ツールはテスト用に登録し、ポリシー・承認・step・成果物・再開を確かめる。
 """
 
@@ -147,8 +147,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )
@@ -565,15 +565,15 @@ def test_unregistered_model_fails_without_switching_connections(monkeypatch: Mon
     from app.settings import get_settings
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://primary.example/v1")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "k-primary")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://primary.example/v1")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "k-primary")
     monkeypatch.setattr(
         settings,
-        "oci_enterprise_ai_models",
+        "enterprise_ai_models",
         [EnterpriseAiConfiguredModel(model_id="registered-3240", display_name="R")],
     )
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_text_model", "registered-3240")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_vision_model", "")
+    monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "registered-3240")
+    monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "")
 
     with pytest.raises(builtin_runtime.BuiltinRuntimeError) as raised:
         builtin_runtime.resolve_model_target("removed-3240")
@@ -655,7 +655,7 @@ def test_runtime_status_reports_model_and_missing_settings(monkeypatch: MonkeyPa
         builtin_runtime,
         "resolve_model_target",
         lambda _model_id="": ModelTarget(
-            model_id="xai.grok-4", endpoint="https://oci.example", project_ocid="", api_key="secret"
+            model_id="xai.grok-4", endpoint="https://llm.example", project_id="", api_key="secret"
         ),
     )
     ready = client.get("/api/runtime/status").json()["data"]
@@ -681,8 +681,8 @@ def test_tracing_is_disabled() -> None:
     assert getattr(provider, "_disabled", True) is True
 
 
-def test_oci_model_omits_empty_tools_for_xai() -> None:
-    """OCI の xAI のモデルは空の `tools` を 400 で拒否するため、送る前に外す（実環境で確認）。"""
+def test_model_api_omits_empty_tools_for_xai() -> None:
+    """xAI のモデルは空の `tools` を 400 で拒否するため、送る前に外す（実環境で確認）。"""
 
     class _Responses:
         def __init__(self) -> None:
@@ -695,12 +695,12 @@ def test_oci_model_omits_empty_tools_for_xai() -> None:
     class _Client:
         def __init__(self) -> None:
             self.responses = _Responses()
-            self.base_url = "https://oci.example/openai/v1"
+            self.base_url = "https://llm.example/openai/v1"
 
     client = _Client()
-    model = builtin_runtime.OciResponsesModel(model="xai.grok-4.3", openai_client=client)  # type: ignore[arg-type]
+    model = builtin_runtime.ModelApiResponsesModel(model="xai.grok-4.3", openai_client=client)  # type: ignore[arg-type]
     wrapped: Any = model._get_client()  # noqa: SLF001 - SDK の内部の差し替えを確かめる
-    assert wrapped.base_url == "https://oci.example/openai/v1"
+    assert wrapped.base_url == "https://llm.example/openai/v1"
 
     anyio.run(lambda: wrapped.responses.create(model="m", input="x", tools=[], tool_choice="auto"))
     anyio.run(lambda: wrapped.responses.create(model="m", input="x", tools=[{"type": "function"}]))
@@ -715,7 +715,7 @@ def _bad_request(code: str, message: str) -> Any:
     from openai import BadRequestError
 
     body = {"code": code, "message": message, "param": None, "type": "invalid_request_error"}
-    response = httpx2.Response(400, request=httpx2.Request("POST", "https://oci.example/responses"))
+    response = httpx2.Response(400, request=httpx2.Request("POST", "https://llm.example/responses"))
     return BadRequestError(f"Error code: 400 - {body}", response=response, body=body)
 
 
@@ -736,20 +736,20 @@ class _RecordingClient:
         self.responses = responses
 
 
-def _oci_client(responses: _RecordingResponses) -> Any:
-    model = builtin_runtime.OciResponsesModel(
+def _model_api_client(responses: _RecordingResponses) -> Any:
+    model = builtin_runtime.ModelApiResponsesModel(
         model="openai.gpt-oss-120b",
         openai_client=_RecordingClient(responses),  # type: ignore[arg-type]
     )
     return model._get_client()  # noqa: SLF001 - SDK の内部の差し替えを確かめる
 
 
-def test_oci_model_omits_reasoning_text_from_the_input() -> None:
-    """OCI の gpt-oss は input の reasoning_text を 400 で拒否する（#1215。実環境で確認）。"""
+def test_model_api_omits_reasoning_text_from_the_input() -> None:
+    """gpt-oss は input の reasoning_text を 400 で拒否する（#1215。実環境で確認）。"""
     from openai.types.responses import ResponseReasoningItem
 
     responses = _RecordingResponses()
-    wrapped = _oci_client(responses)
+    wrapped = _model_api_client(responses)
     reasoning = {
         "id": "rs_1",
         "type": "reasoning",
@@ -774,23 +774,26 @@ def test_oci_model_omits_reasoning_text_from_the_input() -> None:
     assert responses.calls[1]["input"] == "x"
 
 
-def test_oci_model_retries_model_output_invalid_only() -> None:
-    """OCI が再試行を求める `model_output_invalid` だけ、上限まで同じ要求で再試行する（#1215）。"""
+def test_model_api_retries_model_output_invalid_only() -> None:
+    """モデルの API が再試行を求める `model_output_invalid` だけ、上限まで同じ要求で再試行する。
+
+    #1215。
+    """
     invalid = _bad_request("model_output_invalid", "The selected model could not produce ...")
     responses = _RecordingResponses([invalid, invalid])
-    wrapped = _oci_client(responses)
+    wrapped = _model_api_client(responses)
 
     assert anyio.run(lambda: wrapped.responses.create(model="m", input="x")) == {}
     assert len(responses.calls) == 3
 
     exhausted = _RecordingResponses([invalid] * 3)
     with pytest.raises(Exception, match="model_output_invalid"):
-        anyio.run(lambda: _oci_client(exhausted).responses.create(model="m", input="x"))
+        anyio.run(lambda: _model_api_client(exhausted).responses.create(model="m", input="x"))
     assert len(exhausted.calls) == 1 + builtin_runtime.MODEL_OUTPUT_INVALID_RETRIES
 
     other = _RecordingResponses([_bad_request("invalid_value", "reasoning_text is not supported")])
     with pytest.raises(Exception, match="invalid_value"):
-        anyio.run(lambda: _oci_client(other).responses.create(model="m", input="x"))
+        anyio.run(lambda: _model_api_client(other).responses.create(model="m", input="x"))
     assert len(other.calls) == 1
 
 

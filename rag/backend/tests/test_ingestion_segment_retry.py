@@ -9,8 +9,8 @@ from typing import Any
 
 from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
+from app.clients.genai import GenAiClient
 from app.config import Settings
 from app.rag import ingestion as ingestion_module
 from app.rag.ingestion import IngestionPipeline
@@ -176,7 +176,7 @@ async def test_cached_full_artifact_without_parse_key_is_not_reused() -> None:
     assert await pipeline._load_cached_full_extraction([segment], parse_key="key-a") is None
 
 
-class _RetrySegmentVlm(OciEnterpriseAiClient):
+class _RetrySegmentVlm(EnterpriseAiClient):
     """失敗 segment だけが呼ばれたことを記録する VLM fake。"""
 
     def __init__(self) -> None:
@@ -201,7 +201,7 @@ class _RetrySegmentVlm(OciEnterpriseAiClient):
         )
 
 
-class _EmbeddingClient(OciGenAiClient):
+class _EmbeddingClient(GenAiClient):
     """入力件数分の 1024 次元 embedding を返す fake。"""
 
     async def embed(
@@ -215,7 +215,7 @@ class _EmbeddingClient(OciGenAiClient):
 
 
 class _FakeObjectStorage:
-    """Object Storage artifact cache をメモリ上で再現する。"""
+    """保存先の artifact cache をメモリ上で再現する。"""
 
     def __init__(self, initial: dict[str, dict[str, object]]) -> None:
         self.objects = {

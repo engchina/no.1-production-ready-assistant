@@ -5,8 +5,8 @@ Production Ready NL2SQL の API は、単一 worker のローカル開発でも 
 
 ## 原則
 
-- **sync route by default**: domain service、Oracle repository、file/CLOB/Excel、OCI SDK など同期処理を呼ぶ route は普通の `def` で実装する。FastAPI/Starlette が route 全体を threadpool で実行する。
-- **async route は本当に async の時だけ**: `UploadFile.read()`、SSE/WebSocket、async OCI client など、`await` が必要な処理を持つ route だけ `async def` にする。
+- **sync route by default**: domain service、Oracle repository、file/CLOB/Excel、同期の HTTP client など同期処理を呼ぶ route は普通の `def` で実装する。FastAPI/Starlette が route 全体を threadpool で実行する。
+- **async route は本当に async の時だけ**: `UploadFile.read()`、SSE/WebSocket、async の HTTP client など、`await` が必要な処理を持つ route だけ `async def` にする。
 - **async route から同期処理を呼ぶ時は `run_sync_io`**: `backend/app/api/concurrency.py` の `run_sync_io(...)` で同期 I/O を threadpool に逃がす。
 - **CLI/worker は対象外**: ASGI event loop 上ではない CLI、batch、worker は同期 service を直接呼んでよい。
 
@@ -113,7 +113,7 @@ async def import_example(file: UploadFile) -> ApiResponse[ImportData]:
 1 つの処理の呼び出しは 1 つの実行器を共有する。エラーの種類ごとの扱いは #2002 の表と同じ（429 は全体で待って並行の数を
 半分にし、成功が続けば上限まで戻す。5xx・接続・時間切れは種類ごとに再試行し、`Retry-After` を守る。権限・認証・モデルの設定の
 誤り・割り当ての使い切りは再試行せず、処理を止める）。実行器を通す呼び出しは client の再試行を切る（Enterprise AI の direct
-client は `max_retries=0`、OCI Generative AI の SDK は `NoneRetryStrategy`）。
+client は `max_retries=0`。埋め込みの client は自前の再試行を持たない）。
 
 | 処理 | 並行の上限（`.env`） | 結果の順 | 権限・設定の誤り |
 |---|---|---|---|

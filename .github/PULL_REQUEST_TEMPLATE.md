@@ -43,7 +43,7 @@ Issue の要点と、この変更が必要な理由を記載する。bug fix で
 - UI/UX 変更では、対象 Playwright spec、desktop / 375px viewport、主要導線と
   空 / 読込 / エラー / ブロック状態の結果を書く。見た目を変えた場合は必要に応じて screenshot または
   visual check の結果を添え、意図的な見た目の変更は design-system README §7 と照合した結果を書く。
-- OCI / Oracle / LLM を呼ぶ範囲は、CI 上の決定論スタブ確認と手動 / ステージングでの
+- Oracle / LLM を呼ぶ範囲は、CI 上の決定論スタブ確認と手動 / ステージングでの
   実サービス確認を区別して書く。
 - docs-only など test 対象外でも省略せず、`git diff --check` 等の実施結果と、
   コード test を実行しない理由を書く。

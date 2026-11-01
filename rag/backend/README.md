@@ -1,6 +1,6 @@
 # backend — production-ready RAG API
 
-FastAPI + OCI Enterprise AI（LLM/VLM）+ OCI Generative AI（埋め込み/リランク）+ Oracle AI Database。
+FastAPI + モデルの API（OpenAI 互換の LLM/VLM・埋め込み・再ランク）+ Oracle AI Database。
 
 ## セットアップ
 
@@ -43,10 +43,10 @@ uv run bandit -r app          # セキュリティ
 
 | API | 用途 |
 |---|---|
-| `GET /api/health` | 稼働確認。OCI 前提の稼働 message を返す |
+| `GET /api/health` | 稼働確認 |
 | `GET /api/ready` | 依存設定を含む readiness。未設定時は 503 |
 | `GET /api/ready/database` | 画面の DB ゲートが使う DB の状態（3製品共通の判定と契約。常に 200。ログイン不要） |
-| `POST /api/documents/upload` | ドキュメントファイルを Object Storage 境界へ保存 |
+| `POST /api/documents/upload` | ドキュメントファイルを保存先へ保存 |
 | `GET /api/documents?status=UPLOADED&q=manual&limit=50&offset=0` | 文書一覧をページング・状態・ファイル名で絞り込み |
 | `POST /api/documents/{id}/ingestion-jobs?force=false&phase=PREPROCESS` | 保存済みドキュメント（既定レシピ）を永続取込 job としてキュー投入 |
 | `POST /api/documents/{id}/recipes/{recipe_id}/ingestion-jobs` | 処理レシピ単位で取込 job をキュー投入 |
@@ -64,26 +64,26 @@ uv run bandit -r app          # セキュリティ
 | `POST /api/mcp` | Agent 向けの MCP サーバー（Streamable HTTP の JSON 応答）。サービストークンの利用者として検索・回答を呼ぶ（下記「MCP」。#232。チャットは提供しない。#787） |
 | `GET /metrics` | Prometheus metrics |
 
-## OCI / Oracle 実装
+## モデルの API / Oracle 実装
 
-Backend は常に以下の OCI / Oracle 実装を使います。local / oci の実行モード切り替えはありません。
+Backend は常に以下のモデルの API / Oracle 実装を使います。実行モードの切り替えはありません。
 
-- `OciEnterpriseAiClient`: OCI Enterprise AI の VLM / LLM
-- `OciGenAiClient`: OCI Generative AI の Cohere Embed v4 / Rerank v4 fast
+- `EnterpriseAiClient`: VLM / LLM
+- `GenAiClient`: 埋め込みモデル v4 / Rerank v4 fast
 - `OracleClient`: python-oracledb pool + Oracle AI Vector Search / Oracle Text
 - `FileStorageClient`（`app/clients/file_storage.py`）: ローカルの保存先（`PLATFORM_LOCAL_STORAGE_DIR`）への原本ファイル・成果物の保存 / 取得（OCI Object Storage は #11 で削除）
 
 設定は、3製品共通の設定（アップロード保存先・モデル・データベース。`PLATFORM_*`）を共通 `.env`（リポジトリの `platform/.env`、場所は `PLATFORM_ENV_FILE` で上書き可）、RAG 固有の設定（`RAG_*`）を `backend/.env` に置きます。環境変数 → 共通 `.env` → `backend/.env` の順に読み、旧名（接頭辞のない名前や `HF_TOKEN` / `HF_ENDPOINT`）は読みません（#211。既存環境の移行は [docs/deployment.md](../docs/deployment.md) の「既存環境の更新手順（#211）」）。システム設定画面（アップロード保存先・データベース）は共通 `.env` に、RAG 固有の設定画面は `backend/.env` に保存します。
 
-モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
+モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
 
-`OciEnterpriseAiClient` は Enterprise AI の実 endpoint / model deployment / gateway が返す JSON envelope の揺れを吸収します。VLM は `structured_extraction`、`extraction`、`prediction(s)`、`output(s)`、JSON 文字列などから `StructuredExtraction` を取り出して Pydantic で検証します。`StructuredExtraction` は `raw_text` と `elements` を持ち、ページ、読み順、見出し、本文、リスト、表、図、header/footer などを同じ JSON で表せます。LLM は `answer`、`text`、`output_text`、`generated_text`、`choices[].message.content`、`inference_response` などから回答 text を取り出します。独自 gateway がさらに深い envelope を返す場合は `PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_RESPONSE_PATH` に JSON Pointer 形式(`/payload/results/0/text` など)を設定して候補 node を明示できます。いずれも OCI Generative AI chat API には接続しません。
+`EnterpriseAiClient` は Enterprise AI の実 endpoint / model deployment / gateway が返す JSON envelope の揺れを吸収します。VLM は `structured_extraction`、`extraction`、`prediction(s)`、`output(s)`、JSON 文字列などから `StructuredExtraction` を取り出して Pydantic で検証します。`StructuredExtraction` は `raw_text` と `elements` を持ち、ページ、読み順、見出し、本文、リスト、表、図、header/footer などを同じ JSON で表せます。LLM は `answer`、`text`、`output_text`、`generated_text`、`choices[].message.content`、`inference_response` などから回答 text を取り出します。独自 gateway がさらに深い envelope を返す場合は `PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_ENTERPRISE_AI_VLM_RESPONSE_PATH` に JSON Pointer 形式(`/payload/results/0/text` など)を設定して候補 node を明示できます。いずれも OCI Generative AI chat API には接続しません。
 
-Enterprise AI endpoint の request shape が標準 payload と異なる場合は、`PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` に JSON object template を設定できます。`${prompt}`、`${context}`、`${mime_type}`、`${data_base64}`、`${structure_instructions}` などの文字列 placeholder と、`"${messages}"`、`"${parameters}"`、`"${structured_extraction_schema}"` などの object placeholder を使えます。テンプレート未設定時は標準 payload を使い、アップロード時の MIME type と構造化抽出 instructions を VLM input に渡します。
+Enterprise AI endpoint の request shape が標準 payload と異なる場合は、`PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` に JSON object template を設定できます。`${prompt}`、`${context}`、`${mime_type}`、`${data_base64}`、`${structure_instructions}` などの文字列 placeholder と、`"${messages}"`、`"${parameters}"`、`"${structured_extraction_schema}"` などの object placeholder を使えます。テンプレート未設定時は標準 payload を使い、アップロード時の MIME type と構造化抽出 instructions を VLM input に渡します。
 
-VLM input の搬送方式は `PLATFORM_OCI_ENTERPRISE_AI_VLM_INPUT_MODE` で選べます。既定の `auto` は画像を inline data URL、PDF など非画像を OCI Enterprise AI `/files` API にアップロードして `file_id` を `/responses` へ渡します。`files_api` は画像も含めて明示的に `/files` 経由にし、`inline_image` は画像だけ inline で送ります。設定画面では「VLM 入力方式」で選択し、API パスは通常 `/responses` のままにします。
+VLM input の搬送方式は `PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE` で選べます。既定の `auto` は画像を inline data URL、PDF など非画像をモデルの API `/files` API にアップロードして `file_id` を `/responses` へ渡します。`files_api` は画像も含めて明示的に `/files` 経由にし、`inline_image` は画像だけ inline で送ります。設定画面では「VLM 入力方式」で選択し、API パスは通常 `/responses` のままにします。
 
-Enterprise AI endpoint の request / response 契約だけを Oracle や Object Storage から切り離して確認する場合は、`app.rag.enterprise_ai_probe` を使います。`--dry-run` は endpoint へ送信せず、URL、template 使用有無、payload key、payload shape、JSON byte 数だけを出します。本実行は LLM / VLM を直接呼び、回答本文や OCR 本文は出さず、text 文字数・element 件数などの非機密 summary だけを返します。
+Enterprise AI endpoint の request / response 契約だけを Oracle や 保存先から切り離して確認する場合は、`app.rag.enterprise_ai_probe` を使います。`--dry-run` は endpoint へ送信せず、URL、template 使用有無、payload key、payload shape、JSON byte 数だけを出します。本実行は LLM / VLM を直接呼び、回答本文や OCR 本文は出さず、text 文字数・element 件数などの非機密 summary だけを返します。
 
 ```bash
 uv run python -m app.rag.enterprise_ai_probe --surface both --dry-run
@@ -91,7 +91,7 @@ uv run python -m app.rag.enterprise_ai_probe --surface llm
 uv run python -m app.rag.enterprise_ai_probe --surface vlm --mime-type text/plain
 ```
 
-Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text-embedding-v4` の既定。正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46）を固定契約にしています。`OciGenAiClient` は OCI Generative AI Inference SDK の `embed_text` / `rerank_text` を使い、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`OciGenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`OciGenAiClient.rerank()` は Cohere Rerank v4 fast の返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
+Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text-embedding-v4` の既定。正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46）を固定契約にしています。`GenAiClient` は OpenAI 互換の埋め込み・再ランクの API（既定は Aliyun 百煉の `text-embedding-v4` / `qwen3-rerank`）を呼び、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`GenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`GenAiClient.rerank()` は再ランクのモデルの返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
 
 Oracle は共有 connection pool を遅延初期化し、アプリ終了時に閉じます。document/chunk の永続化、HNSW vector index + `FETCH APPROX ... WITH TARGET ACCURACY` による vector search、Oracle Text `CONTAINS` による keyword search を同じ tenant filter 付きで実行します。query 側の approximate search 精度は `RAG_ORACLE_VECTOR_TARGET_ACCURACY` で調整できます。
 
@@ -134,7 +134,7 @@ RAG のチャット（会話の作成・送信・取得）は画面の機能で�
 
 `GET /api/ready` は外部 API へ ping せず、デプロイ時に注入される設定を依存グループ単位で検証します。
 
-checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロード保存先のディレクトリを作成・書き込みできるか）です（OCI 認証の `oci_common` と OCI Object Storage の `object_storage` は #11 で削除しました）。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加え、`PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に接続用の Wallet ファイル（Thin: `tnsnames.ora` / `ewallet.pem`、Thick: `tnsnames.ora` / `sqlnet.ora` / `cwallet.sso`）がそろい、暗号化された `ewallet.pem` を `PLATFORM_ORACLE_WALLET_PASSWORD`（無ければ `PLATFORM_ORACLE_PASSWORD`）で復号でき、DSN が Wallet の別名なら `tnsnames.ora` にあることを要求します。値は `ok` / `missing` / `wallet_not_found` / `wallet_password_invalid` / `invalid` です。
+checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロード保存先のディレクトリを作成・書き込みできるか）です（OCI 認証の `oci_common` と OCI 保存先の `object_storage` は #11 で削除しました）。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加え、`PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に接続用の Wallet ファイル（Thin: `tnsnames.ora` / `ewallet.pem`、Thick: `tnsnames.ora` / `sqlnet.ora` / `cwallet.sso`）がそろい、暗号化された `ewallet.pem` を `PLATFORM_ORACLE_WALLET_PASSWORD`（無ければ `PLATFORM_ORACLE_PASSWORD`）で復号でき、DSN が Wallet の別名なら `tnsnames.ora` にあることを要求します。値は `ok` / `missing` / `wallet_not_found` / `wallet_password_invalid` / `invalid` です。
 以前の RAG は DB パスワードがあれば Wallet を見ずに `ok` としていましたが、#325 からは **DB パスワードがあっても Wallet が不備なら `wallet_not_found`（DB の状態 API では `not_configured`）** になります。既存環境で `/api/ready` が 503 になった場合は、システム設定 > データベースで Wallet を登録し直してください。
 レスポンスには設定値や secret は含めません。
 
@@ -183,7 +183,7 @@ uv run python -m app.rag.oracle_schema --migration \
 
 `RAG_MAX_UPLOAD_BYTES` で最大ファイルサイズを制御します。既定は 200 MiB です。
 `RAG_ALLOWED_UPLOAD_CONTENT_TYPES` で MIME type を制限します（既定は `app/config.py` の `allowed_upload_content_types`。画面のファイル選択の `rag/frontend/src/lib/upload-selection.ts` と同じ一覧で、テストで照合します）。HEIC / HEIF の画像と EPUB は、MIME type に関係なく変換の方法を添えた 415 で止めます（解析の依存の pi-heif・pandoc を入れないため。#3351）。
-Object Storage client の key は保存時に安全な文字へ正規化します。local 取得時は `local://`、OCI 取得時は `oci://namespace/bucket/key` または plain key だけを受け付けます。相対パス要素、16 階層超、1 要素 255 文字超、全体 1024 文字超の key は拒否し、異常な object path を取込処理へ渡しません。
+保存先の client の key は保存時に安全な文字へ正規化します。取得時は `local://` または plain key だけを受け付けます（以前の `oci://` の参照は #11 以降は読めません）。相対パス要素、16 階層超、1 要素 255 文字超、全体 1024 文字超の key は拒否し、異常な object path を取込処理へ渡しません。
 
 アップロード時は原本 bytes の `content_sha256` と `file_size_bytes` を保存します。同じ content hash の既存ドキュメントがある場合、レスポンスと詳細 API に `duplicate_of_document_id` を返します。重複アップロードでも原本は保存しますが、後続処理や UI で確認・スキップ判断できるよう参照元を明示します。
 
@@ -193,9 +193,9 @@ Object Storage client の key は保存時に安全な文字へ正規化しま�
 
 ローカル開発の既定では `RAG_INGESTION_QUEUE_DEDICATED_WORKER_ENABLED=true`、`RAG_INGESTION_QUEUE_INPROCESS_WORKER_ENABLED=true`、`RAG_INGESTION_QUEUE_PROCESS_ISOLATION_ENABLED=true` です。API process 内の worker は軽量 dispatcher として動き、job 本体は `python -m app.rag.ingestion_job_runner <job_id>` の subprocess で実行されます。Docling / OCR / CUDA 初期化が API event loop や他画面の設定 API を塞がないようにするためです。本番（#286 以降の systemd の配備）では `production-ready-rag-backend.service`（`RAG_INGESTION_QUEUE_INPROCESS_WORKER_ENABLED=false`）と `production-ready-rag-ingestion-worker.service` を分け、取込ジョブの consumer は worker の unit だけにします（process isolation は既定の true のまま）。
 
-取込前に Object Storage から取得した原本 bytes を `file_size_bytes` / `content_sha256` と照合します。不一致の場合は OCR/索引へ進まず `ERROR` 状態にし、409 を返します。
+取込前に 保存先から取得した原本 bytes を `file_size_bytes` / `content_sha256` と照合します。不一致の場合は OCR/索引へ進まず `ERROR` 状態にし、409 を返します。
 
-chunking は `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` で制御し、通常方式の既定値は 800 / 120 です。chunk size は 200-32,000 文字、overlap は 0-8,000 文字で、`RAG_CHUNK_OVERLAP >= RAG_CHUNK_SIZE` は起動時に拒否します。見出し単位・ページ単位は 32,000 / 0 を推奨し、見出し/ページを第一境界として、上限を超えた単位だけ同じ境界内で再分割します。文字数はモデルの token 数とは一致しません。取込では `chunk_extraction()` が `StructuredExtraction.elements` を優先し、Docling / Marker / Unstructured / RAGFlow DeepDoc の要素単位・章節単位 chunking を OCI-native に再実装した `structure_v1` chunk を作ります。外部 parser 依存は追加せず、旧形式の `raw_text` だけの抽出結果は軽量 element 推定へ fallback します。大きな文書でも chunk 総数では拒否せず、生成された全 chunk を embedding / indexing 対象にします。
+chunking は `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` で制御し、通常方式の既定値は 800 / 120 です。chunk size は 200-32,000 文字、overlap は 0-8,000 文字で、`RAG_CHUNK_OVERLAP >= RAG_CHUNK_SIZE` は起動時に拒否します。見出し単位・ページ単位は 32,000 / 0 を推奨し、見出し/ページを第一境界として、上限を超えた単位だけ同じ境界内で再分割します。文字数はモデルの token 数とは一致しません。取込では `chunk_extraction()` が `StructuredExtraction.elements` を優先し、Docling / Marker / Unstructured / RAGFlow DeepDoc の要素単位・章節単位 chunking を本リポジトリ向けに再実装した `structure_v1` chunk を作ります。外部 parser 依存は追加せず、旧形式の `raw_text` だけの抽出結果は軽量 element 推定へ fallback します。大きな文書でも chunk 総数では拒否せず、生成された全 chunk を embedding / indexing 対象にします。
 
 `structure_v1` では章節境界を跨がず、表は他要素から孤立させ、図・画像説明と図注は `content_kind=figure` として同一 chunk にまとめ、リストは連続性を保ち、header/footer は繰り返しノイズとして主索引から除外します。citation metadata には `chunk_profile`、`content_kind`、`section_title/path/level`、`page_start/page_end`、`element_kinds`、`element_ids`、`text_sha256`、`text_chars` を入れ、Oracle DDL を変えずに `rag_chunks.metadata_json` でトレースできるようにします。
 
@@ -282,10 +282,10 @@ app/
   main.py            FastAPI エントリ
   config.py          設定（pydantic-settings）
   api/routes/        health / documents / search / evaluation
-  clients/           oci_enterprise_ai(LLM/VLM) / oci_genai(embed,rerank) / oracle(Oracle AI Database) / file_storage(ローカル保存先)
+  clients/           enterprise_ai(LLM/VLM) / genai(embed,rerank) / oracle(Oracle AI Database) / file_storage(ローカル保存先)
   rag/               chunking / ingestion / pipeline
   schemas/           common / document / search
 tests/
 ```
 
-> ⚠️ LLM/VLM は **OCI Enterprise AI**（OCI Generative AI の chat API は使わない）。埋め込み/リランクは **OCI Generative AI**（Cohere Embed v4 / Rerank v4 fast）。ベクトル検索は **Oracle AI Vector Search**。
+> ⚠️ LLM/VLM は **モデルの API**（OpenAI 互換の Responses API）。埋め込み/リランクも OpenAI 互換の API（既定は `text-embedding-v4` / `qwen3-rerank`）。ベクトル検索は **Oracle AI Vector Search**。

@@ -730,7 +730,7 @@ test("SELECT 以外は実行確認語を入れたときだけ実行し、失敗�
     analyze: {
       cause: "対象の表がありません。", fix: "列の定義を確認します。", conclusion: "修正後に再実行します。",
       corrected_plan: plan(corrected),
-      source: "oci_enterprise_ai",
+      source: "enterprise_ai",
       model: "test-text-model",
       warnings: [],
     },
@@ -809,7 +809,7 @@ test("参照するオブジェクトに無い列の文は実際の列を添え�
     analyze: {
       cause: "V$LOCK に LOCK_TYPE はありません。", fix: "列の定義を確認します。", conclusion: "修正後に再実行します。",
       corrected_plan: plan(corrected),
-      source: "oci_enterprise_ai",
+      source: "enterprise_ai",
       model: "test-text-model",
       warnings: [],
     },
@@ -1058,7 +1058,7 @@ test("回答の注意書きを SQL の後に出す", { tag: "@responsive" }, asy
 test("修正後の再分析は履歴を表示し、同じ SQL の警告では適用を出さない", { tag: "@responsive" }, async ({ page }, testInfo) => {
   const analysis: Json = {
     cause: "修正案です。", fix: "列の定義を確認します。", conclusion: "修正後に再実行します。", corrected_plan: plan("DELETE FROM T2"),
-    source: "oci_enterprise_ai", model: "test-text-model", warnings: [], previous_attempts: [],
+    source: "enterprise_ai", model: "test-text-model", warnings: [], previous_attempts: [],
   };
   const mock = await setup(page, {
     responses: [generated(plan("DELETE FROM T1"))],
@@ -1107,7 +1107,7 @@ for (const code of ["ORA-01489", "ORA-01722"]) {
         statements[0]!.error_code = code;
         return result;
       },
-      analyze: { cause: "失敗の原因です。", fix: "列の定義を確認します。", conclusion: "修正後に再実行します。", corrected_plan: null, source: "oci_enterprise_ai", model: "test-model", warnings: [], previous_attempts: [] },
+      analyze: { cause: "失敗の原因です。", fix: "列の定義を確認します。", conclusion: "修正後に再実行します。", corrected_plan: null, source: "enterprise_ai", model: "test-model", warnings: [], previous_attempts: [] },
     });
     await page.goto("/db-admin-chat");
     await ask(page, "合成の行を削除する");
@@ -1139,7 +1139,7 @@ for (const targetIndex of [1, 2, 3]) {
       execute: (_request, _turn, statement) => mutationResult(statement.sql, false, statement.index),
       analyze: {
         cause: "合成のエラーです。", fix: "対象の式を直します。", conclusion: "修正後に確認します。",
-        corrected_plan: plan(corrected), source: "oci_enterprise_ai", model: "test-model", warnings: [], previous_attempts: [],
+        corrected_plan: plan(corrected), source: "enterprise_ai", model: "test-model", warnings: [], previous_attempts: [],
       },
     });
     await page.goto("/db-admin-chat");

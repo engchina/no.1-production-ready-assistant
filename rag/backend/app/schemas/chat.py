@@ -181,7 +181,7 @@ class ChatMessageRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=8000)
     question_context_token: str | None = Field(default=None, min_length=1, max_length=300000)
-    # 複数指定でマルチモデル比較(設定済み OCI モデル間)。空なら既定モデル 1 系統。
+    # 複数指定でマルチモデル比較(設定済み モデル間)。空なら既定モデル 1 系統。
     model_ids: list[str] = Field(default_factory=list, max_length=5)
     # 旧 standard の検索モード(``mode``)は #595 で削除した。送られても読み捨てる。
     # 検索する件数。チャットの画面は送らず、RAG 検索の既定と同じ値を使う(#3512)。

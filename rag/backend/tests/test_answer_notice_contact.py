@@ -37,9 +37,9 @@ SYSTEM_LINE = "解決しない場合は、システムの窓口へお問い合�
 
 @pytest.fixture(autouse=True)
 def _stub_llm(monkeypatch: MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
 
 def test_without_override_uses_the_system_notice() -> None:

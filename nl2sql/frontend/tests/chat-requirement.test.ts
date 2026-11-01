@@ -181,8 +181,8 @@ test("作業状態から戻した値は形を検査し、古い・壊れた値�
   );
 });
 
-test("要件の検査を使えない設定（OCI Enterprise AI が無い）だけは確認せずに SQL を作る", () => {
-  const unavailable = Object.assign(new Error("OCI Enterprise AI が設定されていません(REQUIREMENT_AI_NOT_CONFIGURED)"), {
+test("要件の検査を使えない設定（モデルの API が無い）だけは確認せずに SQL を作る", () => {
+  const unavailable = Object.assign(new Error("モデルの API が設定されていません(REQUIREMENT_AI_NOT_CONFIGURED)"), {
     status: 503,
   });
   const failed = Object.assign(new Error("LLM の呼び出しに失敗しました(REQUIREMENT_AI_FAILED)"), { status: 503 });

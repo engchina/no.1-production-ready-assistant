@@ -64,7 +64,7 @@ class OpenAiCompatibleEmbeddingClient:
             self.settings.nl2sql_feedback_embedding_enabled
             and self.base_url()
             and self.api_key()
-            and self.settings.oci_genai_embed_model_id
+            and self.settings.genai_embed_model_id
         )
 
     def module_available(self) -> bool:
@@ -83,8 +83,8 @@ class OpenAiCompatibleEmbeddingClient:
             raise EmbeddingClientError("埋め込みの設定が不足しています。")
         url = f"{self.base_url()}/embeddings"
         key = self.api_key()
-        model = self.settings.oci_genai_embed_model_id
-        timeout = max(1, int(getattr(self.settings, "oci_enterprise_ai_timeout_seconds", 60) or 60))
+        model = self.settings.genai_embed_model_id
+        timeout = max(1, int(getattr(self.settings, "enterprise_ai_timeout_seconds", 60) or 60))
         batches = [
             texts[offset : offset + EMBED_BATCH_SIZE]
             for offset in range(0, len(texts), EMBED_BATCH_SIZE)

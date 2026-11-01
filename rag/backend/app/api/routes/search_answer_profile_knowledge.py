@@ -15,7 +15,7 @@ from app.api.routes.search import (
     profile_scope_filters,
     support_guide_context,
 )
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.config import get_settings
 from app.rag.chat_question_token import with_rule_selection_answers
@@ -390,9 +390,7 @@ async def suggest_search_answer_profile_approved_faq(
     oracle = OracleClient()
     await _require_search_answer_profile(oracle, search_answer_profile_id)
     settings = get_settings()
-    genai = (
-        OciGenAiClient(settings=settings) if settings.rag_approved_faq_semantic_enabled else None
-    )
+    genai = GenAiClient(settings=settings) if settings.rag_approved_faq_semantic_enabled else None
     suggestions = await suggest_approved_faq(
         oracle,
         search_answer_profile_id,
@@ -407,8 +405,8 @@ async def suggest_search_answer_profile_approved_faq(
             if genai is not None
             else None
         ),
-        embedding_model=settings.oci_genai_embedding_model,
-        embedding_dimensions=settings.oci_genai_embedding_dim,
+        embedding_model=settings.genai_embedding_model,
+        embedding_dimensions=settings.genai_embedding_dim,
     )
     if suggestions:
         # 1 位とほぼ同じくらい近い候補だけを出す(#709)。

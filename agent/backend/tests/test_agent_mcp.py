@@ -1,7 +1,7 @@
 """業務 Agent を外部の MCP クライアントに公開する（`POST /api/mcp`。#1874）。
 
-業務 Agent のモデルは SDK の `ScriptedModel` に差し替え、OCI へは接続しない。API キーは共通の
-`pr_system_settings.auth.api_keys`（InMemory の store）。
+業務 Agent のモデルは SDK の `ScriptedModel` に差し替え、モデルの API へは接続しない。API キーは
+共通の `pr_system_settings.auth.api_keys`（InMemory の store）。
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         builtin_runtime,
         "resolve_model_target",
         lambda model_id="": ModelTarget(
-            model_id=model_id or "m", endpoint="https://oci.example", project_ocid="", api_key="k"
+            model_id=model_id or "m", endpoint="https://llm.example", project_id="", api_key="k"
         ),
     )
     monkeypatch.setattr(builtin_runtime, "model_factory", lambda _target: model)

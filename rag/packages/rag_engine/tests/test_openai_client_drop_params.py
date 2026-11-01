@@ -2,7 +2,7 @@
 
 回答・監査などの呼び出し（`responses.parse` / `responses.stream`）は `temperature` 0 を送る。サンプリングの
 引数を受け付けない推論モデルの 400 では、その引数を外して 1 回だけ送り直し、以後そのモデルには送らない。
-HTTP は httpx.MockTransport（決定論。合成の 400 の本文）で受け、OCI へは接続しない。
+HTTP は httpx.MockTransport（決定論。合成の 400 の本文）で受け、モデルの API へは接続しない。
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import pytest
 from pr_backend_core.llm_request_params import reset_dropped_parameters
 from pr_backend_core.llm_request_params_httpx import ParameterDroppingClient
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 
 ENDPOINT = "https://enterprise-ai.example/openai/v1"
 REASONING_MODEL = "reasoning-a"
@@ -59,16 +59,16 @@ def test_openai_client_drops_temperature_and_remembers(monkeypatch: pytest.Monke
         return httpx.Response(200, json=_RESPONSE)
 
     monkeypatch.setattr(
-        oci,
+        model_api,
         "ParameterDroppingClient",
         lambda **kwargs: ParameterDroppingClient(transport=httpx.MockTransport(handler), **kwargs),
     )
     # provider ごとの cache を通さずに作る（テストの間で client を持ち越さない）。
-    client = oci._openai_client.__wrapped__("provider-a", ENDPOINT, "test-key", "", 30, 0)
+    client = model_api._openai_client.__wrapped__("provider-a", ENDPOINT, "test-key", "", 30, 0)
 
-    client.responses.create(model=REASONING_MODEL, input="x", temperature=oci.LLM_TEMPERATURE)
+    client.responses.create(model=REASONING_MODEL, input="x", temperature=model_api.LLM_TEMPERATURE)
     assert ["temperature" in body for body in bodies] == [True, False]
 
-    client.responses.create(model=REASONING_MODEL, input="x", temperature=oci.LLM_TEMPERATURE)
+    client.responses.create(model=REASONING_MODEL, input="x", temperature=model_api.LLM_TEMPERATURE)
     assert len(bodies) == 3
     assert "temperature" not in bodies[2]

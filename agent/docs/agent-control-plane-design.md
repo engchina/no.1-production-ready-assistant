@@ -6,7 +6,7 @@
 その実行（組み込み Runtime）、共通の Run・Event・Artifact・Approval・Audit を 1 つの製品で持つ。
 
 #754 で、外部の Runtime（OpenClaw / Hermes / DeerFlow）への Binding による配置をやめ、Control Plane の中の
-組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI の Responses API）で実行する形にした。
+組み込み Runtime（OpenAI Agents SDK + モデルの API〔OpenAI 互換〕の Responses API）で実行する形にした。
 今後の作り変えは「Agent Platform 再設計案」（2026-10-02）に沿う。
 
 ```mermaid
@@ -17,7 +17,7 @@ flowchart TD
   A["業務 Agent（指示・Skill・モデル）"] --> S
   A --> X["Run"]
   X --> B["組み込み Runtime（OpenAI Agents SDK）"]
-  B --> O["OCI Enterprise AI（Responses API）"]
+  B --> O["モデルの API（OpenAI 互換・Responses API）"]
   B --> T
 ```
 
@@ -223,8 +223,8 @@ Agent はプラグインを持たず、スキルだけを持つ（#1798 でマ�
 
 - `features/agent/builtin_runtime.py`。SDK は `openai-agents`（`pyproject.toml` で版を固定）。
 - モデル: Agent の `model_id`（空なら「システム設定 > モデル」の既定のテキストモデル）と、その接続（Endpoint・API key・
-  Project OCID）。`OpenAIResponsesModel` に OCI の OpenAI 互換の base URL を渡す。xAI のモデルは空の `tools` を
-  拒否するため、ツールが無い呼び出しでは `tools` / `tool_choice` を送らない（`OciResponsesModel`）。
+  Project ID）。`OpenAIResponsesModel` に接続の OpenAI 互換の base URL を渡す。xAI のモデルは空の `tools` を
+  拒否するため、ツールが無い呼び出しでは `tools` / `tool_choice` を送らない（`ModelApiResponsesModel`）。
 - 指示: 共通の前置き（日本語・根拠・推測しない）＋ Agent の指示 ＋ 割り当てた Skill の指示。
   Skill の指示は MCP のツールを素の名前（`rag_search`）で書いてよい。Run を作るときに、Skill の requirement が
   名前で宣言し、この Run でモデルに渡すツールの名前（`rag__rag_search`）へ書き直す（Agent の指示・支援タスクの指示も同じ。

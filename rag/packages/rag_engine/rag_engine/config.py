@@ -17,7 +17,7 @@ from rag_engine.retrieval.text_search_tokenizer import (
     DEFAULT_TEXT_SEARCH_TOKENIZER_SUDACHI_DICT,
 )
 
-# LLM は本リポジトリのモデル設定(OCI Enterprise AI, OpenAI 互換 Responses API)に一本化する。
+# LLM は本リポジトリのモデル設定(モデルの API, OpenAI 互換 Responses API)に一本化する。
 # 回答系(生成・監査・CRAG・質問拡張)と Vision(図説明)で model だけを分ける。
 ENTERPRISE_AI_LLM_PROVIDER = "enterprise-ai"
 ENTERPRISE_AI_VISION_LLM_PROVIDER = "enterprise-ai-vision"
@@ -135,7 +135,7 @@ def normalize_llm_provider_id(value: str | None, default: str = DEFAULT_LLM_PROV
 
 
 def normalize_llm_api_mode(value: str | None, default: str = DEFAULT_LLM_API_MODE) -> str:
-    """LLM は openai SDK(Responses API)のみを使う。OCI SDK の LLM 経路は持たない。"""
+    """LLM は openai SDK(Responses API)のみを使う。別の SDK の LLM 経路は持たない。"""
     return OPENAI_RESPONSES_LLM_API_MODE
 
 
@@ -152,7 +152,7 @@ class LlmProviderSettings:
     label: str
     # 記録用(base URL の組み立てには使わない。#1440)。
     region: str
-    # OCI の OpenAI 互換 API が要求する project OCID。他の OpenAI 互換 API では空のままにする。
+    # `OpenAI-Project` ヘッダーで送る project ID。要求しない OpenAI 互換 API では空のままにする。
     project_id: str
     api_key: str
     model: str
@@ -169,8 +169,8 @@ class LlmProviderSettings:
     def base_url(self) -> str:
         """OpenAI 互換 API の base URL(endpoint を入力どおり使う。#1440)。
 
-        path は補わない(OCI Enterprise AI も利用者が `/openai/v1` まで書く)。backend は
-        platform の `enterprise_ai_base_url` で決めた値を `OCI_ENTERPRISE_AI_ENDPOINT` で渡すので、
+        path は補わない(利用者が `…/v1` まで書く)。backend は
+        platform の `enterprise_ai_base_url` で決めた値を `ENTERPRISE_AI_ENDPOINT` で渡すので、
         ここでは前後の空白と末尾の `/` を除くだけにして、3 製品と同じ URL を呼ぶ。
         """
         return self.endpoint.strip().rstrip("/")
@@ -304,7 +304,7 @@ class Settings:
     # 業務ガイドの手順ごとの検索の後に広げる段のために、最初の段で使わずに残す入力の割合（上の入力の上限に対する %。#2816）。
     section_expansion_followup_reserve_percent: int = 20
     # 回答のモデルの入力の上限（tokens。#1437）。backend が共通のモデル設定の登録モデルの値を
-    # `OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS` で渡す（platform の enterprise_ai_max_input_tokens。既定 128000）。
+    # `ENTERPRISE_AI_MAX_INPUT_TOKENS` で渡す（platform の enterprise_ai_max_input_tokens。既定 128000）。
     # 章節の拡張の根拠の入力の上限と、抽出してから統合の 1 回分の大きさをこの割合で決める。
     answer_max_input_tokens: int = 128_000
     # 同時に呼ぶ数（既定 4）。
@@ -400,30 +400,28 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
     )
     enabled_engines = [part.strip() for part in enabled.split(",") if part.strip()]
     llm_api_mode = normalize_llm_api_mode(env.get("LLM_API_MODE"), DEFAULT_LLM_API_MODE)
-    # 接続先・認証は backend のモデル設定(OCI_ENTERPRISE_AI_*)を共有する。model ID は既定値を持たず、
+    # 接続先・認証は backend のモデル設定(ENTERPRISE_AI_*)を共有する。model ID は既定値を持たず、
     # 未設定は呼び出し時に _validated_llm_provider() が不足として報告する。
-    endpoint = env.get("OCI_ENTERPRISE_AI_ENDPOINT", "").strip()
-    project = env.get("OCI_ENTERPRISE_AI_PROJECT_OCID", "").strip()
-    api_key = env.get("OCI_ENTERPRISE_AI_API_KEY", "").strip()
-    answer_model = env.get("OCI_ENTERPRISE_AI_DEFAULT_MODEL", "").strip()
-    vision_model = env.get("OCI_ENTERPRISE_AI_VLM_MODEL", "").strip() or answer_model
-    # Vision のモデルが別の接続のとき(#533)は OCI_ENTERPRISE_AI_VLM_* を使う。無ければ回答と同じ。
-    vision_endpoint = env.get("OCI_ENTERPRISE_AI_VLM_ENDPOINT", "").strip() or endpoint
-    vision_project = env.get("OCI_ENTERPRISE_AI_VLM_PROJECT_OCID", "").strip() or project
-    vision_api_key = env.get("OCI_ENTERPRISE_AI_VLM_API_KEY", "").strip() or api_key
+    endpoint = env.get("ENTERPRISE_AI_ENDPOINT", "").strip()
+    project = env.get("ENTERPRISE_AI_PROJECT_ID", "").strip()
+    api_key = env.get("ENTERPRISE_AI_API_KEY", "").strip()
+    answer_model = env.get("ENTERPRISE_AI_DEFAULT_MODEL", "").strip()
+    vision_model = env.get("ENTERPRISE_AI_VLM_MODEL", "").strip() or answer_model
+    # Vision のモデルが別の接続のとき(#533)は ENTERPRISE_AI_VLM_* を使う。無ければ回答と同じ。
+    vision_endpoint = env.get("ENTERPRISE_AI_VLM_ENDPOINT", "").strip() or endpoint
+    vision_project = env.get("ENTERPRISE_AI_VLM_PROJECT_ID", "").strip() or project
+    vision_api_key = env.get("ENTERPRISE_AI_VLM_API_KEY", "").strip() or api_key
     # 推論(思考)の量はモデルごと(#1425)。Vision のモデルを指定しないときは回答のモデルの値。
-    answer_reasoning = env.get("OCI_ENTERPRISE_AI_REASONING_EFFORT", "").strip()
+    answer_reasoning = env.get("ENTERPRISE_AI_REASONING_EFFORT", "").strip()
     vision_reasoning = (
-        env.get("OCI_ENTERPRISE_AI_VLM_REASONING_EFFORT", "").strip()
-        if env.get("OCI_ENTERPRISE_AI_VLM_MODEL", "").strip()
-        else answer_reasoning
+        env.get("ENTERPRISE_AI_VLM_REASONING_EFFORT", "").strip() if env.get("ENTERPRISE_AI_VLM_MODEL", "").strip() else answer_reasoning
     )
     # 出力の上限もモデルごと(#1719)。backend が platform の `enterprise_ai_output_token_budget` で決めて渡す。
     # Vision のモデルを指定しないときは回答のモデルの値。
-    answer_output_tokens = _positive_int(env, "OCI_ENTERPRISE_AI_MAX_OUTPUT_TOKENS", DEFAULT_MODEL_OUTPUT_TOKENS)
+    answer_output_tokens = _positive_int(env, "ENTERPRISE_AI_MAX_OUTPUT_TOKENS", DEFAULT_MODEL_OUTPUT_TOKENS)
     vision_output_tokens = (
-        _positive_int(env, "OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS", DEFAULT_MODEL_OUTPUT_TOKENS)
-        if env.get("OCI_ENTERPRISE_AI_VLM_MODEL", "").strip()
+        _positive_int(env, "ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS", DEFAULT_MODEL_OUTPUT_TOKENS)
+        if env.get("ENTERPRISE_AI_VLM_MODEL", "").strip()
         else answer_output_tokens
     )
     llm_providers = {
@@ -435,7 +433,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
             api_key=api_key,
             model=answer_model,
             # 回答のモデルが画像を読めるか(#3444。backend がモデル設定の登録モデルの vision_enabled で決めて渡す)。
-            supports_vision=_env_bool(env, "OCI_ENTERPRISE_AI_DEFAULT_MODEL_VISION", False),
+            supports_vision=_env_bool(env, "ENTERPRISE_AI_DEFAULT_MODEL_VISION", False),
             endpoint=endpoint,
             reasoning_effort=answer_reasoning,
             max_output_tokens=answer_output_tokens,
@@ -556,7 +554,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         section_expansion_followup_reserve_percent=max(
             0, min(50, _env_int(env, "RAG_ENGINE_SECTION_EXPANSION_FOLLOWUP_RESERVE_PERCENT", 20))
         ),
-        answer_max_input_tokens=max(1, _env_int(env, "OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS", 128_000)),
+        answer_max_input_tokens=max(1, _env_int(env, "ENTERPRISE_AI_MAX_INPUT_TOKENS", 128_000)),
         section_extraction_concurrency=max(1, _env_int(env, "RAG_ENGINE_SECTION_EXTRACTION_CONCURRENCY", 4)),
         answer_validation_max_input_bytes=max(16_000, _env_int(env, "RAG_ENGINE_ANSWER_VALIDATION_MAX_INPUT_BYTES", 96_000)),
         strategy_reasoning_effort=normalize_reasoning_effort_override(env.get("RAG_ENGINE_STRATEGY_REASONING_EFFORT")),

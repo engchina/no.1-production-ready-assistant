@@ -1,7 +1,7 @@
 """業務ガイドの分からなかった条件を、回答の根拠の画面の図の項目の種類で決める（#2404）。
 
 照合 → rag_engine に渡す条件 → 根拠の観測で決める → 回答の記録の業務ガイドの要約、を
-LLM・OCI なしで確かめる。
+LLM・モデルの API なしで確かめる。
 業務ガイド・項目名は合成の値だけを使う。
 """
 
@@ -30,7 +30,7 @@ from app.rag.support_guide_runtime import (
     match_guide,
 )
 from app.schemas.support_guide import SupportGuideContent
-from tests.test_oci_enterprise_ai import _oci_settings
+from tests.test_enterprise_ai import _llm_settings
 
 
 def field_guide(
@@ -148,7 +148,7 @@ def test_known_condition_is_not_a_candidate() -> None:
 
 
 def test_engine_settings_carry_evidence_conditions(tmp_path: Path) -> None:
-    settings = _oci_settings()
+    settings = _llm_settings()
     assert build_engine_settings(settings, output_dir=tmp_path).evidence_conditions == ()
     settings.rag_support_guide_enabled = True
     settings.rag_support_guide = _guide_settings(_match())
@@ -272,7 +272,7 @@ def test_evidence_plans_switch_branch_and_required_steps() -> None:
 
 def test_engine_settings_carry_evidence_plans(tmp_path: Path) -> None:
     match = _match(branching_guide())
-    settings = _oci_settings()
+    settings = _llm_settings()
     assert build_engine_settings(settings, output_dir=tmp_path).evidence_plans == ()
     settings.rag_support_guide_enabled = True
     settings.rag_support_guide = {

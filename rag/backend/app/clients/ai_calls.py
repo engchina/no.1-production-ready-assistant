@@ -5,8 +5,8 @@
 event（待ち・再試行・並行の数・成功）を job の進捗（``progress_json`` の ``calls``）へ写す。
 待っている間も heartbeat の間隔で進捗が変わるため、#2003 の停滞の検出が待ちを停滞と誤らない。
 
-SDK の再試行との分担: この実行器を通す呼び出しは SDK の再試行を切る（OCI Enterprise AI の
-openai SDK は ``sdk_retries_disabled``、OCI Generative AI の SDK は ``NoneRetryStrategy``）。
+SDK の再試行との分担: この実行器を通す呼び出しは SDK の再試行を切る（モデルの API の
+openai SDK は ``sdk_retries_disabled``）。
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ _INVALID_OUTPUT_MARKERS = (
 )
 
 
-# OCI Generative AI の Embedding が HTTP 400 で返す拒否の文の印(#2467。実 API の応答で確認)。
+# 埋め込みモデル が HTTP 400 で返す拒否の文の印(#2467。実 API の応答で確認)。
 # 高負荷は 400 で返るが一時的なため、再試行の対象にする(共通の分類では「要求の誤り」になる)。
 _EMBEDDING_REJECTION_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("service_overloaded", ("high load", "try again later")),
@@ -76,7 +76,7 @@ _EMBEDDING_REASON_KINDS: dict[str, ErrorKind] = {
 
 
 def embedding_rejection_reason(exc: BaseException) -> str | None:
-    """OCI の HTTP 400 の拒否を理由に分ける(本文は返さない)。400 でなければ None。"""
+    """埋め込みの API の HTTP 400 の拒否を理由に分ける(本文は返さない)。400 でなければ None。"""
     if getattr(exc, "status", None) != 400:
         return None
     text = " ".join(
@@ -93,7 +93,7 @@ def embedding_rejection_reason(exc: BaseException) -> str | None:
 def rag_error_kind(exc: BaseException) -> ErrorKind | None:
     """RAG の client の例外のうち、共通の分類では決まらないものの種類。"""
     name = type(exc).__name__
-    if name == "OciGenAiConfigError":
+    if name == "GenAiConfigError":
         return ErrorKind.AUTHENTICATION
     if name == "ServiceError":
         kind = _EMBEDDING_REASON_KINDS.get(embedding_rejection_reason(exc) or "")

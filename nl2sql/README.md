@@ -1,15 +1,14 @@
 # Production Ready NL2SQL
 
 Production Ready NL2SQL is a production-oriented NL2SQL reference implementation
-for deploying an Oracle AI Database-backed application with OCI Enterprise AI and OCI
-Generative AI.
+for deploying an Oracle AI Database-backed application that calls OpenAI-compatible
+model APIs (LLM / embedding / rerank).
 
 第三者の部品のライセンスの通知（同梱の native ライブラリ・書体など）は root の [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) にあります。
 
 ## Deployment
 
-Deployment through the OCI Resource Manager Terraform stack ("Deploy to Oracle
-Cloud" button) was removed in #12. NL2SQL is deployed together with RAG and the
+NL2SQL is deployed together with RAG and the
 Agent Control Plane on one Compute instance by the suite scripts in
 `platform/deploy/` (see
 [platform/docs/deployment.md](../platform/docs/deployment.md)). The Compute
@@ -66,7 +65,7 @@ pull が成功するまで再デプロイへ進まないでください。
 
 **platform だけが更新された場合も、同じ手順を使用できます。**
 反映対象は NL2SQL が利用する共有コンポーネントであり、platform 内のすべての独立アプリを
-デプロイするものではありません。通常の更新処理には OCI の権限修復、NL2SQL の
+デプロイするものではありません。通常の更新処理には配備先の権限修復、NL2SQL の
 database migration、サービス再起動、health check も含まれます。
 
 `--repair-only` は依存同期とビルド・frontend 公開を省略するため、共有コンポーネントの更新を
@@ -92,8 +91,8 @@ MCP サーバーの名前は `nl2sql` にします（組み込みのスキル（
 
 This deployment keeps the approved architecture:
 
-- LLM/VLM: OCI Enterprise AI
-- Embedding/rerank: OCI Generative AI
+- LLM/VLM: the model API (OpenAI-compatible Responses API, e.g. DeepSeek / Aliyun Model Studio)
+- Embedding/rerank: OpenAI-compatible embedding / rerank models (default: Aliyun Model Studio `text-embedding-v4` / `qwen3-rerank`)
 - Vector search and application state: Oracle AI Database (Oracle AI Vector Search)
 
 ## 共通ログ（JST）

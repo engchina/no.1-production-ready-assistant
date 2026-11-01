@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 LOG_PREFIX = "[suite-db-user]"
-# アプリ用のユーザーの名前（Oracle の引用符なしの識別子。terraform/stack/variables.tf の adb_app_user_name と同じ規則）。
+# アプリ用のユーザーの名前（Oracle の引用符なしの識別子。英大文字で始まる 30 文字まで）。
 APP_USER_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,29}$")
 # アプリ用に使えない名前（Oracle の管理のユーザー・ADMIN）。
 RESERVED_APP_USERS = frozenset(
@@ -286,7 +286,7 @@ def apply(args: argparse.Namespace, oracledb: Any) -> int:
         )
     app_password = app_env.get("PLATFORM_ORACLE_PASSWORD", "")
     # 画面（システム設定 > データベース）で保存したパスワードを優先する（3 製品はそれで接続する）。
-    # ユーザーが別に変わっていれば、stack の入力（props）のパスワードに合わせる。
+    # ユーザーが別に変わっていれば、配備の入力（props）のパスワードに合わせる。
     if args.current_env and Path(args.current_env).is_file():
         current = read_env_file(Path(args.current_env))
         if current.get("PLATFORM_ORACLE_USER", "").strip().upper() == app_user and current.get(
@@ -380,7 +380,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     sub = parser.add_subparsers(dest="command", required=True)
     apply_parser = sub.add_parser("apply", help="ADMIN で接続し、アプリ用のユーザーを作って権限を付ける")
     apply_parser.add_argument("--admin-env", required=True, help="SUITE_DB_ADMIN_USER / _PASSWORD / SUITE_DB_APP_USER")
-    apply_parser.add_argument("--app-env", required=True, help="PLATFORM_ORACLE_*（cloud-init の platform.env）")
+    apply_parser.add_argument("--app-env", required=True, help="PLATFORM_ORACLE_*（props の platform.env）")
     apply_parser.add_argument("--current-env", default="", help="repository の platform/.env（画面で保存した値）")
     apply_parser.add_argument("--wallet-dir", default="", help="Wallet（tnsnames.ora・ewallet.pem）の directory")
     apply_parser.add_argument("--connect-attempts", type=int, default=5)

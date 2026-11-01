@@ -13,7 +13,7 @@ from unittest import mock
 
 import httpx
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation import execution_record
 from rag_engine.models.llm import TextOutput
@@ -95,14 +95,14 @@ class _Client:
 
 class StallResendTest(unittest.TestCase):
     def setUp(self) -> None:
-        oci._stream_baselines.clear()
-        oci._output_rates.clear()
+        model_api._stream_baselines.clear()
+        model_api._output_rates.clear()
         self.clock = _Clock()
         patcher = mock.patch("time.monotonic", self.clock)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(oci._stream_baselines.clear)
-        self.addCleanup(oci._output_rates.clear)
+        self.addCleanup(model_api._stream_baselines.clear)
+        self.addCleanup(model_api._output_rates.clear)
         self.settings = replace(
             get_settings(environ={"RAG_ENGINE_LLM_STALL_DETECTION": "1"}, dotenv_path=None),
             answer_max_tokens=1000,
@@ -115,12 +115,12 @@ class StallResendTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO") as logs,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO") as logs,
                 bind_deadline(deadline if deadline is not None else Deadline(600)),
                 execution_record._execution_step("生成"),
             ):
-                result = oci._openai_parsed([], settings or self.settings, TextOutput, PROVIDER)
+                result = model_api._openai_parsed([], settings or self.settings, TextOutput, PROVIDER)
         finally:
             llm_usage.reset(usage_token)
             execution_record._structured_steps.reset(step_token)
@@ -139,7 +139,7 @@ class StallResendTest(unittest.TestCase):
         self.assertEqual(len(client.streams), 1)
         self.assertNotIn("stall_resends", usage)
         self.assertEqual(client.read_timeouts, [600])
-        self.assertEqual(len(oci._stream_baselines[oci._rate_key(PROVIDER)]), 1)
+        self.assertEqual(len(model_api._stream_baselines[model_api._rate_key(PROVIDER)]), 1)
 
     def test_slow_output_is_cut_and_resent(self):
         """直近 10 秒の出力の速さが基準（直近の中央値 × 0.25）を下回ったら打ち切って送り直す。"""
@@ -213,11 +213,11 @@ class StallResendTest(unittest.TestCase):
     def test_failed_event_is_a_retryable_connection_error(self):
         failed = SimpleNamespace(type="response.failed", response=SimpleNamespace(error=SimpleNamespace(message="overloaded")))
         client = _Client(self.clock, [_script(10, 200.0, final=failed), _script(10, 200.0, final=failed)])
-        with self.assertRaises(oci.LlmStreamFailed) as raised:
+        with self.assertRaises(model_api.LlmStreamFailed) as raised:
             self.call(client)
         self.assertIn("overloaded", str(raised.exception))
-        self.assertTrue(oci._is_retryable_error(raised.exception))
-        self.assertEqual(len(client.streams), 1 + oci.STREAM_FAILED_RESENDS)  # 送り直しは上限まで
+        self.assertTrue(model_api._is_retryable_error(raised.exception))
+        self.assertEqual(len(client.streams), 1 + model_api.STREAM_FAILED_RESENDS)  # 送り直しは上限まで
 
     def test_failed_event_is_resent_once(self):
         """失敗の event で終わった呼び出しは同じ要求を 1 回送り直す（#2814）。"""
@@ -246,18 +246,21 @@ class StallResendTest(unittest.TestCase):
 
     def test_sdk_stream_assembly_error_resends_are_bounded(self):
         broken = [(0.1, SimpleNamespace(type="response.created")), (None, AssertionError())]
-        client = _Client(self.clock, [list(broken) for _ in range(1 + oci.STREAM_FAILED_RESENDS)])
-        with self.assertRaises(oci.LlmStreamFailed):
+        client = _Client(self.clock, [list(broken) for _ in range(1 + model_api.STREAM_FAILED_RESENDS)])
+        with self.assertRaises(model_api.LlmStreamFailed):
             self.call(client)
-        self.assertEqual(len(client.streams), 1 + oci.STREAM_FAILED_RESENDS)
+        self.assertEqual(len(client.streams), 1 + model_api.STREAM_FAILED_RESENDS)
 
     def test_without_a_deadline_the_call_is_not_streamed(self):
         """回答の期限が無い文脈（取込など）は従来どおり `responses.parse` で受ける。"""
         client = _Client(self.clock, [])
         usage_token = llm_usage.set(LlmUsage())
         try:
-            with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), self.assertLogs(oci.__name__, level="INFO"):
-                result = oci._openai_parsed([], self.settings, TextOutput, PROVIDER)
+            with (
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO"),
+            ):
+                result = model_api._openai_parsed([], self.settings, TextOutput, PROVIDER)
         finally:
             llm_usage.reset(usage_token)
         self.assertEqual((result.text, client.parse_calls, client.streams), ("parse", 1, []))

@@ -14,8 +14,8 @@ describe("文書解析エンジンの並び", () => {
     expect([...PARSER_VALUES]).toEqual([...PARSER_BACKEND_ORDER]);
   });
 
-  it("サービス管理の節も CPU → GPU → OCI", () => {
-    expect(SERVICE_PROFILE_ORDER).toEqual(["cpu", "gpu", "oci"]);
+  it("サービス管理の節も CPU → GPU", () => {
+    expect(SERVICE_PROFILE_ORDER).toEqual(["cpu", "gpu"]);
   });
 
   it("画面のカードの並びを正本の順にそろえ、知らないエンジンは後ろに残す", () => {

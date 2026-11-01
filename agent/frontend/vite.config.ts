@@ -33,7 +33,7 @@ const MISSING_BACKEND_URL_WARNING =
 export default defineConfig(() => {
   // /api は BACKEND_URL を明示したときだけ proxy する。既定の接続先（localhost:8120 等）は持たない。
   // 未設定のまま起動した dev サーバ（古い worktree、globalSetup の無い Playwright 設定、手動起動）が
-  // 利用者の実 backend へ接続し、実環境の設定（~/.oci/config、backend/.env、backend/model-settings.json 等）へ
+  // 利用者の実 backend へ接続し、実環境の設定（backend/.env、backend/model-settings.json 等）へ
   // 書き込むことを防ぐ。
   const backendUrl = process.env.BACKEND_URL?.trim() || undefined;
   // Playwright e2e は全 API を page.route で mock する前提（hermetic）。PLAYWRIGHT_HERMETIC_API=1 なら

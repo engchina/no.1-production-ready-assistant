@@ -25,7 +25,6 @@ async def health() -> ApiResponse[HealthData]:
         data=HealthData(
             status="ok",
             version=settings.app_version,
-            message="oci",
         )
     )
 
@@ -42,7 +41,6 @@ async def readiness(response: Response) -> ApiResponse[HealthData]:
         data=HealthData(
             status="ok" if ready else "degraded",
             version=settings.app_version,
-            message="oci",
             checks=checks,
         )
     )

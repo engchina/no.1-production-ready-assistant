@@ -2,7 +2,7 @@
 
 ## 通信契約
 
-LLM/VLM の接続先は既存の OCI Enterprise AI を維持し、Responses 互換 endpoint に `text.format = {type: "json_schema", name, schema, strict: true}` を送る。OpenAI のサービスや Chat Completions API への切替ではない。
+LLM/VLM の接続先は既存のモデルの API（OpenAI 互換）を維持し、Responses 互換 endpoint に `text.format = {type: "json_schema", name, schema, strict: true}` を送る。Chat Completions API への切替ではない。
 
 [OpenAI Responses Structured Outputs 仕様](https://developers.openai.com/api/docs/guides/structured-outputs) に従い、Pydantic の domain 契約から送信用 Schema を作成する。すべての object を `additionalProperties:false` とし、全 property を required にする。nullable 型は null union を維持し、送信 Schema の default は除去する。domain の既定値や外部 API は変更しない。
 
@@ -27,7 +27,7 @@ LLM/VLM の接続先は既存の OCI Enterprise AI を維持し、Responses 互�
 
 質問意図の `filters.value` は任意の JSON 型を持つため、wire では `value_json:string` に JSON エンコードし、検証後に元の型へ戻す。`"001"` と `1`、null、配列、object を区別する。外部 API と保存データは従来の `value` のまま。`created_at` はサーバーが生成するため LLM Schema には含めない。
 
-決定論的 SQL 解析・fallback は非 LLM 処理であり、この HTTP 契約の対象外。OCI Generative AI の embedding/rerank も Responses に置き換えない。別 provider・ベクトル DB は追加しない。
+決定論的 SQL 解析・fallback は非 LLM 処理であり、この HTTP 契約の対象外。埋め込み / 再ランクのモデル（`/embeddings` / `/reranks`）も Responses に置き換えない。別 provider・ベクトル DB は追加しない。
 
 ## 失敗・retry
 
@@ -39,5 +39,5 @@ SQL→質問の既存段階 retry は維持する。失敗した段階だけ最�
 
 - `test_structured_outputs.py`: recursive required/closed/nullable、余分な field、型不正、全文検証、`text` 保持、reasoning 除外、refusal/incomplete、template、画像 payload、filter 値の型保持。
 - SQL 往復・質問・metadata・Ontology・judge・settings の既存回帰テストを構造化 wire に更新。
-- 2026-09-11 の既存 OCI 接続で架空のスキーマのみを使い、Question / SQL / Ontology extraction / QuestionIntent の4 Schema が正常応答・ローカル検証成功（各約4–7秒）。実データや credential を記録していない。
-- in-memory の架空スキーマで3段階の SQL→構造→質問が約15秒、`source=oci_enterprise_ai`、警告0件。構造からの SQL 再生成（約6秒）、質問からの専用 SQL 生成（約4秒）、自作の `TEST 123` 画像の VLM 抽出（約2秒）も成功。DB 実行や任意 SQL の意味同値性検証は行っていない。
+- 2026-09-11 に当時の接続で架空のスキーマのみを使い、Question / SQL / Ontology extraction / QuestionIntent の4 Schema が正常応答・ローカル検証成功（各約4–7秒）。実データや credential を記録していない。
+- in-memory の架空スキーマで3段階の SQL→構造→質問が約15秒、`source=enterprise_ai`、警告0件。構造からの SQL 再生成（約6秒）、質問からの専用 SQL 生成（約4秒）、自作の `TEST 123` 画像の VLM 抽出（約2秒）も成功。DB 実行や任意 SQL の意味同値性検証は行っていない。

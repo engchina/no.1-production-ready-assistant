@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
-from rag_engine.adapters.oci import VISION_SYSTEM_PROMPT, _image_retrieval_template, _render_prompt, describe_picture
+from rag_engine.adapters.model_api import VISION_SYSTEM_PROMPT, _image_retrieval_template, _render_prompt, describe_picture
 from rag_engine.config import Settings, get_llm_provider, llm_output_token_limit
 from rag_engine.models.layout import LayoutRecord, PageImage
 from rag_engine.models.llm import form_field_kind

@@ -22,7 +22,7 @@ from app.clients.oracle import (
     ReviewedExtractionWrite,
 )
 from app.schemas.document import FileStatus
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 def _recipe_row(*, status: str = "REVIEW", active: str | None = "er_base") -> dict[str, object]:
@@ -70,7 +70,7 @@ def _write(
 async def test_review_save_locks_recipe_before_reading_and_writes_in_one_transaction() -> None:
     """レシピの行を押さえてから成果を読み、書き込みと参照の切り替えを同じ transaction で行う。"""
     pool = FakeOraclePool(execute_results=[[_recipe_row()], [], [_artifact_row()]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     seen: list[tuple[Mapping[str, object], Mapping[str, object]]] = []
 
     def build(
@@ -121,7 +121,7 @@ async def test_review_save_rejects_without_writing(
 ) -> None:
     """確認待ちでない・処理中・抽出結果が無いときは書かずに競合を返し、rollback する。"""
     pool = FakeOraclePool(execute_results=results)
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(DocumentReviewEditConflictError, match=message):
         await client.save_document_recipe_review_extraction(
@@ -137,7 +137,7 @@ async def test_review_save_rejects_without_writing(
 async def test_review_save_missing_recipe_is_key_error() -> None:
     """見えないレシピは KeyError(画面は 404)。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KeyError):
         await client.save_document_recipe_review_extraction(
@@ -183,7 +183,7 @@ async def test_concurrent_review_saves_keep_both_element_edits() -> None:
     client = OracleClient()
     detail = await client.create_document(
         file_name="review-concurrency.txt",
-        object_storage_path="oci://bucket/review-concurrency.txt",
+        object_storage_path="local://review-concurrency.txt",
         content_type="text/plain",
     )
     recipe = await client.ensure_default_document_recipe(detail.id)

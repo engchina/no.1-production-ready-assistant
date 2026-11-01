@@ -3,7 +3,7 @@
 検索（REST・SSE）・チャット・MCP・品質評価の 1 ケースは、未完了の理由ごとの文（何が起きたかと
 直し方）を返し、技術的な値（理由・出力の上限・使った token・推論の量）は「詳細」の項目に分ける。
 予期しない例外は定型文のまま（内部の文を出さない）。未完了の応答は adapter
-（`rag_engine.adapters.oci`）が作る形のスタブで再現する。
+（`rag_engine.adapters.model_api`）が作る形のスタブで再現する。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from pr_backend_core.mcp import mcp_error_from_exception
 from pytest import LogCaptureFixture, MonkeyPatch
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.generation.execution_record import AnswerExecutionError
 
 from app.api.routes import chat as chat_route
@@ -52,8 +52,8 @@ def _answer_failure(reason: str = "max_output_tokens") -> AnswerExecutionError:
     response = SimpleNamespace(
         status="incomplete", incomplete_details=SimpleNamespace(reason=reason), usage=_USAGE
     )
-    raw = oci.IncompleteResponse(f"stub の Responses API 応答が未完了です: {reason}", reason)
-    final = oci._incomplete_error(
+    raw = model_api.IncompleteResponse(f"stub の Responses API 応答が未完了です: {reason}", reason)
+    final = model_api._incomplete_error(
         raw,
         response,
         _PROVIDER,  # type: ignore[arg-type]

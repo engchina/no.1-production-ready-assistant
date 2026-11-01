@@ -40,8 +40,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "draft-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )

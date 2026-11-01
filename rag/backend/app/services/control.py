@@ -53,24 +53,24 @@ ServiceLogsSource = Literal["journald"]
 ServiceFailureReason = Literal["unit_not_found", "permission_denied", "unavailable", "failed"]
 
 # サービス実行用の env ファイルに書く key(値は backend の実効設定)。
-# HF_TOKEN / HF_ENDPOINT は huggingface_hub が読む標準名。PLATFORM_OCI_ENTERPRISE_AI_* は
-# OCI parser が読む名前。docling の Vision が読んでいた接頭辞なしの OCI_ENTERPRISE_AI_* は、
+# HF_TOKEN / HF_ENDPOINT は huggingface_hub が読む標準名。PLATFORM_ENTERPRISE_AI_* は
+# parser が読む名前。docling の Vision が読んでいた接頭辞なしの ENTERPRISE_AI_* は、
 # Vision を backend の解析後の共通の段へ移した(#497)ため渡さない(docling は LLM を呼ばない)。
 SERVICE_RUNTIME_ENV_KEYS = (
     "HF_TOKEN",
     "HF_ENDPOINT",
-    "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
-    "PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
-    "PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID",
-    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL",
-    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
-    "PLATFORM_OCI_ENTERPRISE_AI_VLM_PATH",
-    "PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH",
-    "PLATFORM_OCI_ENTERPRISE_AI_VLM_INPUT_MODE",
-    "PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT",
-    "PLATFORM_OCI_ENTERPRISE_AI_VISION_REASONING_EFFORT",
-    "PLATFORM_OCI_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS",
-    "PLATFORM_OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS",
+    "PLATFORM_ENTERPRISE_AI_ENDPOINT",
+    "PLATFORM_ENTERPRISE_AI_API_KEY",
+    "PLATFORM_ENTERPRISE_AI_PROJECT_ID",
+    "PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL",
+    "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+    "PLATFORM_ENTERPRISE_AI_VLM_PATH",
+    "PLATFORM_ENTERPRISE_AI_LLM_PATH",
+    "PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE",
+    "PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT",
+    "PLATFORM_ENTERPRISE_AI_VISION_REASONING_EFFORT",
+    "PLATFORM_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS",
+    "PLATFORM_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS",
 )
 _RUNTIME_ENV_FILE_MODE = 0o600
 _ACTION_LABELS: dict[ServiceAction, str] = {
@@ -156,7 +156,7 @@ def service_runtime_env(settings: Settings) -> dict[str, str]:
     """マイクロサービスの unit に渡す実行用の環境変数(backend の実効設定)。
 
     HuggingFace 設定(``RAG_HUGGINGFACE_*``)を ``HF_TOKEN`` / ``HF_ENDPOINT`` として渡す。
-    parser のサービスはモデル設定 JSON を読まず env からのみ OCI Enterprise AI の設定を読むため、
+    parser のサービスはモデル設定 JSON を読まず env からのみモデルの API の設定を読むため、
     backend が解決済みの実効値(model-settings.json 由来を含む)を渡す。これで「モデル画面で設定 →
     parser 再起動 → 稼働中」が成立する(parser は起動時に 1 回だけ env を読むため再起動が必要)。
     parser のサービスが呼ぶのは Vision のモデルなので、接続(endpoint / API key / project)は既定の
@@ -171,7 +171,7 @@ def service_runtime_env(settings: Settings) -> dict[str, str]:
     # Endpoint URL は platform の関数で base URL にして渡す(#1440。parser はそのまま使う)。
     endpoint = connection.base_url
     api_key = connection.api_key
-    project = connection.project_ocid
+    project = connection.project_id
     text_reasoning = enterprise_ai_reasoning_effort_to_send(settings, default_model)
     vision_reasoning = enterprise_ai_reasoning_effort_to_send(settings, vlm_model)
     return {
@@ -179,20 +179,20 @@ def service_runtime_env(settings: Settings) -> dict[str, str]:
         # 空の HF_ENDPOINT は huggingface_hub が scheme 無しの endpoint として扱い DL が
         # 失敗するため、未設定のときは公式 hub を渡す。
         "HF_ENDPOINT": settings.huggingface_endpoint or "https://huggingface.co",
-        "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT": endpoint,
-        "PLATFORM_OCI_ENTERPRISE_AI_API_KEY": api_key,
-        "PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID": project,
-        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL": vlm_model,
-        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL": default_model,
-        "PLATFORM_OCI_ENTERPRISE_AI_VLM_PATH": settings.oci_enterprise_ai_vlm_path,
-        "PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH": settings.oci_enterprise_ai_llm_path,
-        "PLATFORM_OCI_ENTERPRISE_AI_VLM_INPUT_MODE": str(settings.oci_enterprise_ai_vlm_input_mode),
-        "PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT": text_reasoning,
-        "PLATFORM_OCI_ENTERPRISE_AI_VISION_REASONING_EFFORT": vision_reasoning,
-        "PLATFORM_OCI_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS": str(
+        "PLATFORM_ENTERPRISE_AI_ENDPOINT": endpoint,
+        "PLATFORM_ENTERPRISE_AI_API_KEY": api_key,
+        "PLATFORM_ENTERPRISE_AI_PROJECT_ID": project,
+        "PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL": vlm_model,
+        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL": default_model,
+        "PLATFORM_ENTERPRISE_AI_VLM_PATH": settings.enterprise_ai_vlm_path,
+        "PLATFORM_ENTERPRISE_AI_LLM_PATH": settings.enterprise_ai_llm_path,
+        "PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE": str(settings.enterprise_ai_vlm_input_mode),
+        "PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT": text_reasoning,
+        "PLATFORM_ENTERPRISE_AI_VISION_REASONING_EFFORT": vision_reasoning,
+        "PLATFORM_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, default_model)
         ),
-        "PLATFORM_OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
+        "PLATFORM_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, vlm_model)
         ),
     }

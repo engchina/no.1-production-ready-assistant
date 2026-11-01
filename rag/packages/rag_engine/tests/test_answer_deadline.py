@@ -7,7 +7,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation.execution_record import _execution_step
 from rag_engine.models.llm import TextOutput
@@ -62,12 +62,12 @@ class _FakeClient:
 
 
 def _parse(client, settings):
-    with mock.patch.object(oci, "_openai_client_for_provider", return_value=client):
-        return oci._parse_with_retry(
-            lambda: oci._openai_parsed([], settings, TextOutput, PROVIDER),
+    with mock.patch.object(model_api, "_openai_client_for_provider", return_value=client):
+        return model_api._parse_with_retry(
+            lambda: model_api._openai_parsed([], settings, TextOutput, PROVIDER),
             "Responses text",
             settings,
-            retries=oci._llm_transport_retries(settings),
+            retries=model_api._llm_transport_retries(settings),
         )
 
 

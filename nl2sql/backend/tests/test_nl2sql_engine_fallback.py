@@ -147,7 +147,7 @@ def test_unconfigured_enterprise_ai_is_an_error_in_oracle_runtime(
     assert len(engine_timings) == 1
     assert engine_timings[0]["engine"] == "enterprise_ai_direct"
     assert engine_timings[0]["status"] == "skipped"
-    assert engine_timings[0]["error"] == "OCI Enterprise AI Direct が構成されていません。"
+    assert engine_timings[0]["error"] == "モデルの API が構成されていません。"
     assert isinstance(engine_timings[0]["elapsed_ms"], int)
     assert engine_timings[0]["elapsed_ms"] >= 0
 
@@ -183,7 +183,7 @@ def test_direct_engine_uses_system_default_text_model(
 
     import httpx
 
-    from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+    from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
     from app.settings import Settings
 
     seen: list[tuple[str, str]] = []
@@ -198,15 +198,13 @@ def test_direct_engine_uses_system_default_text_model(
         httpx, "Client", lambda **kwargs: real_client(transport=transport, **kwargs)
     )
     settings = Settings(
-        oci_enterprise_ai_endpoint=(
-            "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
-        ),
-        oci_enterprise_ai_api_key="synthetic-test-key",
-        oci_enterprise_ai_project_ocid="ocid1.generativeaiproject.oc1.us-chicago-1.synthetic",
-        oci_enterprise_ai_default_text_model="openai.gpt-oss-120b",
+        enterprise_ai_endpoint=("https://llm.example/v1"),
+        enterprise_ai_api_key="synthetic-test-key",
+        enterprise_ai_project_id="proj_synthetic",
+        enterprise_ai_default_text_model="openai.gpt-oss-120b",
     )
     service = _oracle_runtime_service(monkeypatch, direct=_FakeEnterpriseAiClient(_DIRECT_SQL))
-    service._enterprise_ai_client = OciEnterpriseAiDirectClient(settings)  # noqa: SLF001
+    service._enterprise_ai_client = HttpEnterpriseAiDirectClient(settings)  # noqa: SLF001
     profile = service.get_profile(None)
 
     generated = service._generate_sql(  # noqa: SLF001
@@ -219,8 +217,6 @@ def test_direct_engine_uses_system_default_text_model(
         allow_deterministic_fallback=False,
     )
 
-    assert seen == [
-        ("inference.generativeai.us-chicago-1.oci.oraclecloud.com", "openai.gpt-oss-120b")
-    ]
+    assert seen == [("llm.example", "openai.gpt-oss-120b")]
     assert generated.engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     assert generated.engine_meta["model"] == "openai.gpt-oss-120b"

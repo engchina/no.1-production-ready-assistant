@@ -80,7 +80,7 @@ test.describe("API キー", { tag: "@responsive" }, () => {
     await expect(page.getByTestId("api-keys-endpoint-rag-public")).toHaveText("https://203.0.113.10/rag/api/mcp");
     await expect(page.getByTestId("api-keys-endpoint-nl2sql-public")).toHaveText("https://203.0.113.10/nl2sql/api/mcp");
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.getByRole("button", { name: "NL2SQLの公開の URL（OCI）: URL をコピー" }).click();
+    await page.getByRole("button", { name: "NL2SQLの公開の URL: URL をコピー" }).click();
     await expect(page.getByText("URL をコピーしました")).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://203.0.113.10/nl2sql/api/mcp");
     // 自作の CA の証明書は配らない（#19）。CA の証明書の案内は出さない。

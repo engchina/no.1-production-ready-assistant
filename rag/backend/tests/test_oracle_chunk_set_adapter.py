@@ -40,7 +40,7 @@ def _unique_id(prefix: str) -> str:
 async def _new_document(client: OracleClient) -> str:
     detail = await client.create_document(
         file_name="variant-doc.txt",
-        object_storage_path="oci://bucket/variant-doc.txt",
+        object_storage_path="local://variant-doc.txt",
         content_type="text/plain",
     )
     return detail.id

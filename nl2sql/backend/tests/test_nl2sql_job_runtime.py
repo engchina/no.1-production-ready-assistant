@@ -749,7 +749,7 @@ def test_business_scope_changed_does_not_suggest_retry(
 
 
 class _FailingEnterpriseAiClient(_FakeEnterpriseAiClient):
-    """OCI Enterprise AI の HTTP の失敗を返す client（#1684）。"""
+    """モデルの API の HTTP の失敗を返す client（#1684）。"""
 
     def __init__(self, status: int, body: str) -> None:
         super().__init__("")
@@ -768,16 +768,16 @@ class _FailingEnterpriseAiClient(_FakeEnterpriseAiClient):
         self.calls += 1
         failure = classify_enterprise_ai_http_failure(self.status, self.body)
         raise EnterpriseAiDirectError(
-            f"OCI Enterprise AI HTTP {self.status}: {self.body}",
+            f"Model API HTTP {self.status}: {self.body}",
             code=failure.kind,
             retryable=failure.retryable,
             http_failure=failure,
             model_id=self.model_id(),
-            endpoint_host="inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+            endpoint_host="llm.example",
         )
 
 
-_OCI_404_BODY = (
+_AUTH_404_BODY = (
     '{ "code": "404", "message": "Authorization failed or requested resource not found." }'
 )
 
@@ -786,7 +786,7 @@ def test_enterprise_ai_authorization_failure_explains_settings_not_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Enterprise AI Direct の 404（認可の失敗）は「時間をおいて」と案内しない（#1684）。"""
-    client = _FailingEnterpriseAiClient(404, _OCI_404_BODY)
+    client = _FailingEnterpriseAiClient(404, _AUTH_404_BODY)
     owner = _worker(_repository(), client)
     # 本番（oracle runtime）と同じく、生成の失敗をテンプレート SQL で埋めない。
     monkeypatch.setattr(owner, "_use_oracle_runtime", lambda: True)
@@ -799,9 +799,9 @@ def test_enterprise_ai_authorization_failure_explains_settings_not_retry(
     assert "時間をおいてもう一度" not in message
     assert "時間をおいても直りません" in message
     assert "openai.gpt-oss-120b" in message
-    assert "inference.generativeai.us-chicago-1.oci.oraclecloud.com" in message
+    assert "llm.example" in message
     assert "HTTP 404" in message
-    assert "IAM" in message
+    assert "認可されませんでした" in message
     assert "既定のテキストモデル" in message
     assert job.error_detail is not None and "Authorization failed" in job.error_detail
     steps = {step.stage: step.status for step in job.steps}

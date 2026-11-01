@@ -166,7 +166,7 @@ def _install(
     oracle = RecommendFakeOracle(hits)
     embedder = FakeEmbedder(fail=embed_fails)
     monkeypatch.setattr(mcp_tools, "OracleClient", lambda *_a, **_k: oracle)
-    monkeypatch.setattr(mcp_tools, "OciGenAiClient", lambda *_a, **_k: embedder)
+    monkeypatch.setattr(mcp_tools, "GenAiClient", lambda *_a, **_k: embedder)
     return oracle, embedder
 
 

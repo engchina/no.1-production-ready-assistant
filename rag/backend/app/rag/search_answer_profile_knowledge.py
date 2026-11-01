@@ -176,7 +176,7 @@ async def suggest_domain_keywords(
 
 APPROVED_FAQ_KIND = "approved_faq"
 FAQ_SEMANTIC_CACHE_KEY = "semantic_index_cache"
-# (texts, input_type) -> vectors。backend の Cohere embedding(OciGenAiClient.embed)を渡す。
+# (texts, input_type) -> vectors。backend の Cohere embedding(GenAiClient.embed)を渡す。
 FaqEmbedInputType = Literal["SEARCH_DOCUMENT", "SEARCH_QUERY"]
 FaqEmbedder = Callable[[list[str], FaqEmbedInputType], Awaitable[list[list[float]]]]
 APPROVED_FAQ_PREVIEW_ROWS = 10

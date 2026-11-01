@@ -238,7 +238,7 @@ class QualityEvaluationEngineCapability(BaseModel):
 class QualityEvaluationJudgeCapability(BaseModel):
     available: bool
     reason: str = ""
-    provider: str = "OCI Enterprise AI"
+    provider: str = "モデルの API"
 
 
 class QualityEvaluationLimits(BaseModel):

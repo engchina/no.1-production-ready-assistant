@@ -232,7 +232,7 @@
           {
             "connection_id": "primary",
             "endpoint": "",
-            "project_ocid": "",
+            "project_id": "",
             "api_key": "",
             "has_api_key": false,
             "clear_api_key": false

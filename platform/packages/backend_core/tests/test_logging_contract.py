@@ -190,7 +190,7 @@ def test_idempotent_configuration_preserves_collectors_and_server_level(capsys: 
 
 @pytest.fixture
 def dependency_loggers() -> Any:
-    names = [*DEPENDENCY_LOGGER_LEVELS, "oci.base_client.1"]
+    names = [*DEPENDENCY_LOGGER_LEVELS, "urllib3.connectionpool"]
     levels = {name: logging.getLogger(name).level for name in names}
     yield
     for name, original in levels.items():
@@ -201,12 +201,12 @@ def dependency_loggers() -> Any:
 def test_http_client_info_logs_are_quiet_by_default(capsys: Any) -> None:
     """外部の HTTP クライアントの INFO は既定で出さず、警告は残す（#1935）。"""
     configure_logging("INFO")
-    for name in ("httpx", "httpx2", "httpcore", "httpcore2", "urllib3", "oci"):
+    for name in ("httpx", "httpx2", "httpcore", "httpcore2", "urllib3", "requests"):
         logger = logging.getLogger(name)
         assert not logger.isEnabledFor(logging.INFO), name
         assert logger.isEnabledFor(logging.WARNING), name
     # SDK が id 付きで作る子の logger も親の level を継ぐ。
-    assert not logging.getLogger("oci.base_client.1").isEnabledFor(logging.INFO)
+    assert not logging.getLogger("urllib3.connectionpool").isEnabledFor(logging.INFO)
     logging.getLogger("httpx").info("HTTP Request: POST https://example.invalid/ OK")
     logging.getLogger("httpx2").warning("retry")
     logging.getLogger("app.test").info("own_event")

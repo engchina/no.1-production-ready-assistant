@@ -85,8 +85,8 @@ class StubError(Exception):
         self.response = type("Resp", (), {"status_code": status, "headers": headers or {}})()
 
 
-class OciServiceError(Exception):
-    """OCI SDK の ``ServiceError`` と同じ属性（status・code・message・headers）。"""
+class UpstreamServiceError(Exception):
+    """SDK の HTTP の例外の形（status・code・message・headers の属性）。"""
 
     def __init__(
         self, status: int, code: str, message: str = "", headers: dict[str, str] | None = None
@@ -195,7 +195,7 @@ def calls_of(service: Service, item: object) -> int:
         (StubError(429, "Too many requests"), ErrorKind.RATE_LIMITED),
         (StubError(429, '{"error": {"code": "insufficient_quota"}}'), ErrorKind.QUOTA_EXHAUSTED),
         (StubError(429, "token quota per hour"), ErrorKind.QUOTA_EXHAUSTED),
-        (OciServiceError(429, "TooManyRequests"), ErrorKind.RATE_LIMITED),
+        (UpstreamServiceError(429, "TooManyRequests"), ErrorKind.RATE_LIMITED),
         (StubError(500, "internal"), ErrorKind.SERVER_ERROR),
         (StubError(502), ErrorKind.UNAVAILABLE),
         (StubError(503), ErrorKind.UNAVAILABLE),
@@ -207,10 +207,10 @@ def calls_of(service: Service, item: object) -> int:
         (TimeoutError("read timeout"), ErrorKind.TIMEOUT),
         (StubError(408), ErrorKind.TIMEOUT),
         (StubError(401), ErrorKind.AUTHENTICATION),
-        (OciServiceError(401, "NotAuthenticated"), ErrorKind.AUTHENTICATION),
+        (UpstreamServiceError(401, "NotAuthenticated"), ErrorKind.AUTHENTICATION),
         (StubError(403), ErrorKind.PERMISSION),
         (
-            OciServiceError(404, "NotAuthorizedOrNotFound", "Authorization failed"),
+            UpstreamServiceError(404, "NotAuthorizedOrNotFound", "Authorization failed"),
             ErrorKind.PERMISSION,
         ),
         (StubError(404, "model not found"), ErrorKind.NOT_FOUND),
@@ -232,7 +232,7 @@ def calls_of(service: Service, item: object) -> int:
         ),
         (StubError(400, "The response was filtered due to content_filter"), ErrorKind.SAFETY),
         (
-            ValueError("OCI Enterprise AI response status=incomplete: content_filter"),
+            ValueError("Model API response status=incomplete: content_filter"),
             ErrorKind.SAFETY,
         ),
         (PictureValidationError("schema mismatch"), ErrorKind.INVALID_OUTPUT),
@@ -480,12 +480,12 @@ async def test_status_reports_waiting_reason_during_pause() -> None:
     ("error", "kind"),
     [
         (StubError(403, "forbidden"), ErrorKind.PERMISSION),
-        (OciServiceError(404, "NotAuthorizedOrNotFound"), ErrorKind.PERMISSION),
+        (UpstreamServiceError(404, "NotAuthorizedOrNotFound"), ErrorKind.PERMISSION),
         (StubError(404, "no such model"), ErrorKind.NOT_FOUND),
         (StubError(501), ErrorKind.NOT_SUPPORTED),
         (StubError(429, "insufficient_quota"), ErrorKind.QUOTA_EXHAUSTED),
     ],
-    ids=["403", "oci-404", "404", "501", "quota"],
+    ids=["403", "permission-404", "404", "501", "quota"],
 )
 async def test_configuration_errors_stop_the_job_without_retrying(
     error: BaseException, kind: ErrorKind

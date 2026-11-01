@@ -327,7 +327,7 @@ class AgentProfile(BaseModel):
     description: str = ""
     instructions: str = ""
     skill_ids: list[str] = Field(default_factory=list)
-    # 組み込み Runtime で使うモデル（OCI Enterprise AI の model_id）。
+    # 組み込み Runtime で使うモデル（モデルの API の model_id）。
     # 空なら既定のテキストモデル（#754）。
     model_id: str = ""
     # データの範囲（MCP 接続 → 使えるプロファイルの一覧と既定。#1378）。空の接続は範囲なし

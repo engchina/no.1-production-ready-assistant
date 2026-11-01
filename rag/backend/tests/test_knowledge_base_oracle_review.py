@@ -16,7 +16,7 @@ from app.clients.oracle import (
 )
 from tests.test_oracle_adapter import (
     FakeOraclePool,
-    _oci_settings,
+    _llm_settings,
     _oracle_document_row,
     _oracle_knowledge_base_row,
     _run_inline,
@@ -32,7 +32,7 @@ def _knowledge_base_row(knowledge_base_id: str, name: str) -> dict[str, object]:
 async def test_create_knowledge_base_rejects_duplicate_name() -> None:
     """同じ名前（大文字小文字を区別しない）の KB があると INSERT せず 409 用の例外にする。"""
     pool = FakeOraclePool(execute_results=[[_knowledge_base_row("kb-1", "社内規程")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KnowledgeBaseNameConflictError, match="同じ名前"):
         await client.create_knowledge_base(name="社内規程")
@@ -54,7 +54,7 @@ async def test_rename_knowledge_base_rejects_name_of_another_knowledge_base() ->
             [_knowledge_base_row("kb-2", "設計資料")],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(KnowledgeBaseNameConflictError):
         await client.update_knowledge_base("kb-1", name="設計資料", update_fields={"name"})
@@ -65,7 +65,7 @@ async def test_rename_knowledge_base_rejects_name_of_another_knowledge_base() ->
 async def test_rename_knowledge_base_allows_case_change_of_own_name() -> None:
     """自分の名前の大文字小文字だけを変える改名は重複扱いしない（名前の検索もしない）。"""
     pool = FakeOraclePool(execute_results=[[_knowledge_base_row("kb-1", "faq")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     updated = await client.update_knowledge_base("kb-1", name="FAQ", update_fields={"name"})
 
@@ -106,7 +106,7 @@ async def test_remove_last_membership_moves_document_to_default() -> None:
             [_knowledge_base_row("kb-default", "DEFAULT")],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.remove_document_from_knowledge_base("kb-1", "doc-1")
 
@@ -134,7 +134,7 @@ async def test_remove_membership_with_other_memberships_only_deletes() -> None:
             [{"knowledge_base_id": "kb-1"}, {"knowledge_base_id": "kb-2"}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.remove_document_from_knowledge_base("kb-1", "doc-1")
 
@@ -151,7 +151,7 @@ async def test_remove_default_only_membership_is_rejected() -> None:
             [{"knowledge_base_id": "kb-default"}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError, match="DEFAULT にだけ所属する文書は外せません"):
         await client.remove_document_from_knowledge_base("kb-default", "doc-1")
@@ -173,7 +173,7 @@ def _archived_knowledge_base_row(knowledge_base_id: str, name: str) -> dict[str,
 async def test_remove_membership_from_archived_knowledge_base_is_rejected() -> None:
     """アーカイブ済みの KB からは所属を外さない（追加と同じく 409 用の例外。#961）。"""
     pool = FakeOraclePool(execute_results=[[_archived_knowledge_base_row("kb-old", "旧規程")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError, match="アーカイブ済み"):
         await client.remove_document_from_knowledge_base("kb-old", "doc-1")
@@ -189,7 +189,7 @@ async def test_remove_membership_from_archived_knowledge_base_is_rejected() -> N
 async def test_update_archived_knowledge_base_is_rejected() -> None:
     """アーカイブ済みの KB は名前・説明を変えない（画面の読み取り専用と同じ。#961）。"""
     pool = FakeOraclePool(execute_results=[[_archived_knowledge_base_row("kb-old", "旧規程")]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError, match="アーカイブ済み"):
         await client.update_knowledge_base(

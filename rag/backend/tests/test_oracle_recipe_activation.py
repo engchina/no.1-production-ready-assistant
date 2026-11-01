@@ -89,7 +89,7 @@ async def test_activate_recipe_chunk_set_records_materialized_revision(
     client = OracleClient()
     detail = await client.create_document(
         file_name="activate-recipe.txt",
-        object_storage_path="oci://bucket/activate-recipe.txt",
+        object_storage_path="local://activate-recipe.txt",
         content_type="text/plain",
     )
     recipe = await client.ensure_default_document_recipe(detail.id)

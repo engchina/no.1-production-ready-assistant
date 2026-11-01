@@ -95,7 +95,7 @@ def _run_job(
         return pending.pop(0)
 
     _mock_http(monkeypatch, handler)
-    client = enterprise_ai_client.OciEnterpriseAiDirectClient(_direct_settings())
+    client = enterprise_ai_client.HttpEnterpriseAiDirectClient(_direct_settings())
     service = _worker(_repository(), client)  # type: ignore[arg-type]
     created = service.start_job(request, actor_user_uuid="user-1", actor_is_system_admin=True)
     assert service.run_next_nl2sql_job(worker_id="requirement-usage", job_id=created.job_id)

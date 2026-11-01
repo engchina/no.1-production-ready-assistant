@@ -116,7 +116,7 @@ def test_failures_are_typed_and_never_downgraded(response: dict[str, Any], code:
 
 def test_custom_template_cannot_omit_strict_format() -> None:
     settings = Settings(
-        oci_enterprise_ai_llm_payload_template='{"input":"${prompt}","text":{"verbosity":"low"}}'
+        enterprise_ai_llm_payload_template='{"input":"${prompt}","text":{"verbosity":"low"}}'
     )
     fmt = response_format(TextOutput)
     payload = _build_payload(
@@ -166,7 +166,7 @@ def test_invalid_intent_wire_value_is_rejected(raw: str) -> None:
 def test_vision_payload_always_contains_requested_schema(template: str) -> None:
     fmt = response_format(TextOutput)
     payload = _build_image_payload(
-        settings=Settings(oci_enterprise_ai_vlm_payload_template=template),
+        settings=Settings(enterprise_ai_vlm_payload_template=template),
         model_id="synthetic",
         image_bytes=b"synthetic",
         prompt="OCR",

@@ -6,12 +6,12 @@ import pytest
 
 from app.clients.oracle import OracleClient
 from app.schemas.document import FileStatus
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 async def test_document_list_and_bulk_selection_use_the_same_order() -> None:
     pool = FakeOraclePool(execute_results=[[], [], [{"count_value": 0}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     assert await client.list_documents(limit=3, offset=3) == []
     assert await client.list_document_ids(limit=3) == ([], 0)
     list_sql, ids_sql, _ = [call.statement for call in pool.connection.calls]

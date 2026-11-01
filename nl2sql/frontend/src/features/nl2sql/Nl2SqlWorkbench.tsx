@@ -118,7 +118,7 @@ function goodFeedbackSimilarHistory(items: SimilarHistoryItem[]): SimilarHistory
   return items;
 }
 
-/** SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+/** SQL の生成の方式（モデルの API の 1 つだけ）。 */
 const ENGINE: Nl2SqlEngine = "enterprise_ai_direct";
 
 type PageErrorSource = "profile-load" | "schema-load" | "schema-refresh" | "sample-import";

@@ -29,7 +29,7 @@ RAG と業務 Agent の検索・回答を確かめるための合成資料です
 
 2 段で作ります。先に RAG の命令で KB・検索・回答プロファイル・文書を作って取り込み、次に Agent の命令で、RAG の命令が残した検索・回答プロファイルの ID を使って業務 Agent を作成・公開します。RAG の命令は RAG の管理 API だけ、Agent の命令は Agent の管理 API だけを呼びます（2 つは `--state` のファイルだけでつながります）。
 
-前提は RAG と Agent の配備、管理 API を操作できる利用者、利用可能な Oracle / Object Storage、Docling の解析サービス、embedding・rerank と OCI Enterprise AI の接続です。Agent には組み込みの `business-rag-research` スキルと RAG の MCP 接続が必要です。モデルや接続先は対象環境のシステム設定を使います。取込の自動処理は各文書のレシピで選び、全体の設定・ツール権限は変更しません。
+前提は RAG と Agent の配備、管理 API を操作できる利用者、利用可能な Oracle、Docling の解析サービス、embedding・rerank と LLM のモデルの API の接続です。Agent には組み込みの `business-rag-research` スキルと RAG の MCP 接続が必要です。モデルや接続先は対象環境のシステム設定を使います。取込の自動処理は各文書のレシピで選び、全体の設定・ツール権限は変更しません。
 
 ### 1. RAG: KB・検索・回答プロファイル・文書
 

@@ -488,7 +488,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
     settings = get_settings()
     model_settings_file = tmp_path / "model-settings.json"
     env_file = tmp_path / ".env"
-    env_file.write_text("PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-secret\n", encoding="utf-8")
+    env_file.write_text("PLATFORM_ENTERPRISE_AI_API_KEY=saved-secret\n", encoding="utf-8")
     env_file.chmod(0o600)
     monkeypatch.setattr(settings, "model_settings_file", str(model_settings_file))
     monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
@@ -499,7 +499,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
         json={
             "enterprise_ai": {
                 "endpoint": "https://enterprise-ai.example.com",
-                "project_ocid": "ocid1.project.oc1..example",
+                "project_id": "proj_example",
                 "api_key": "",
                 "has_api_key": True,
                 "clear_api_key": False,
@@ -544,9 +544,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
     assert document["enterprise_ai"]["default_text_model_id"] == "cohere.command-r-plus"
     assert document["enterprise_ai"]["default_vision_model_id"] == "mistral.vision-model"
     assert "generative_ai" not in document
-    assert (
-        env_file.read_text(encoding="utf-8") == "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-secret\n"
-    )
+    assert env_file.read_text(encoding="utf-8") == "PLATFORM_ENTERPRISE_AI_API_KEY=saved-secret\n"
     assert resp.json()["data"]["secret_source"] == "environment"
     assert resp.json()["data"]["legacy_secret_detected"] is False
     assert stat.S_IMODE(model_settings_file.stat().st_mode) == 0o600
@@ -559,9 +557,7 @@ def test_enterprise_ai_api_key_env_update_and_clear_are_atomic(
 ) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "# keep this comment\n"
-        "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=old-secret\n"
-        "PLATFORM_OCI_REGION=x\n",
+        "# keep this comment\nPLATFORM_ENTERPRISE_AI_API_KEY=old-secret\nPLATFORM_OCI_REGION=x\n",
         encoding="utf-8",
     )
     env_file.chmod(0o600)
@@ -571,7 +567,7 @@ def test_enterprise_ai_api_key_env_update_and_clear_are_atomic(
 
     updated = env_file.read_text(encoding="utf-8")
     assert "old-secret" not in updated
-    assert "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=new-secret" in updated
+    assert "PLATFORM_ENTERPRISE_AI_API_KEY=new-secret" in updated
     assert "# keep this comment" in updated
     assert "PLATFORM_OCI_REGION=x" in updated
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
@@ -579,7 +575,7 @@ def test_enterprise_ai_api_key_env_update_and_clear_are_atomic(
     ModelSettingsStore._write_api_key(env_file, None)
 
     cleared = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_OCI_ENTERPRISE_AI_API_KEY" not in cleared
+    assert "PLATFORM_ENTERPRISE_AI_API_KEY" not in cleared
     assert "# keep this comment" in cleared
     assert "PLATFORM_OCI_REGION=x" in cleared
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
@@ -593,7 +589,7 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
           "version": 1,
           "enterprise_ai": {
             "endpoint": "https://enterprise-ai.example.com",
-            "project_ocid": "ocid1.project.oc1..example",
+            "project_id": "proj_example",
             "api_key": "persisted-secret",
             "models": [
               {
@@ -626,22 +622,22 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
 
     load_persisted_model_settings(settings)
 
-    assert settings.oci_enterprise_ai_endpoint == "https://enterprise-ai.example.com"
-    assert settings.oci_enterprise_ai_api_key == "persisted-secret"
+    assert settings.enterprise_ai_endpoint == "https://enterprise-ai.example.com"
+    assert settings.enterprise_ai_api_key == "persisted-secret"
     assert settings.model_secret_source == "legacy_json"
     assert settings.legacy_model_secret_detected is True
-    assert settings.oci_enterprise_ai_default_text_model == "cohere.command-r-plus"
-    assert settings.oci_enterprise_ai_default_vision_model == "mistral.vision-model"
+    assert settings.enterprise_ai_default_text_model == "cohere.command-r-plus"
+    assert settings.enterprise_ai_default_vision_model == "mistral.vision-model"
     # #45 より前の `generative_ai` の節の旧 OCI Generative AI（Cohere）のモデルは、OpenAI 互換の
     # 経路で呼べないので登録モデルへ移さない（画面で選び直す）。
-    assert [(model.model_id, model.kind) for model in settings.oci_enterprise_ai_models] == [
+    assert [(model.model_id, model.kind) for model in settings.enterprise_ai_models] == [
         ("cohere.command-r-plus", "text"),
         ("mistral.vision-model", "text"),
     ]
-    assert settings.oci_enterprise_ai_vlm_input_mode == "inline_image"
-    assert settings.oci_enterprise_ai_max_retries == 4
-    assert settings.oci_genai_embed_model_id == "cohere.embed-v4.0"
-    assert settings.oci_genai_rerank_model_id == "cohere.rerank-v4.0-fast"
+    assert settings.enterprise_ai_vlm_input_mode == "inline_image"
+    assert settings.enterprise_ai_max_retries == 4
+    assert settings.genai_embed_model_id == "cohere.embed-v4.0"
+    assert settings.genai_rerank_model == "cohere.rerank-v4.0-fast"
 
 
 def test_environment_model_secret_takes_precedence_over_v1_json(tmp_path: Path) -> None:
@@ -653,12 +649,12 @@ def test_environment_model_secret_takes_precedence_over_v1_json(tmp_path: Path) 
     settings = Settings(
         _env_file=None,
         model_settings_file=str(model_settings_file),
-        oci_enterprise_ai_api_key="environment-secret",
+        enterprise_ai_api_key="environment-secret",
     )
 
     load_persisted_model_settings(settings)
 
-    assert settings.oci_enterprise_ai_api_key == "environment-secret"
+    assert settings.enterprise_ai_api_key == "environment-secret"
     assert settings.model_secret_source == "environment"
     assert settings.legacy_model_secret_detected is True
 
@@ -673,7 +669,7 @@ def test_v3_model_settings_never_reads_api_key_field(tmp_path: Path) -> None:
 
     load_persisted_model_settings(settings)
 
-    assert settings.oci_enterprise_ai_api_key == ""
+    assert settings.enterprise_ai_api_key == ""
     assert settings.model_secret_source == "missing"
     assert settings.legacy_model_secret_detected is True
 
@@ -772,12 +768,12 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
         async def generate(self, prompt: str, context: str = "") -> str:
             captured["prompt"] = prompt
             captured["context"] = context
-            captured["endpoint"] = self.settings.oci_enterprise_ai_endpoint
-            captured["model_id"] = self.settings.oci_enterprise_ai_default_text_model
-            captured["api_key"] = self.settings.oci_enterprise_ai_api_key
+            captured["endpoint"] = self.settings.enterprise_ai_endpoint
+            captured["model_id"] = self.settings.enterprise_ai_default_text_model
+            captured["api_key"] = self.settings.enterprise_ai_api_key
             return "テスト応答"
 
-    monkeypatch.setattr(settings_router, "OciEnterpriseAiClient", FakeEnterpriseClient)
+    monkeypatch.setattr(settings_router, "EnterpriseAiClient", FakeEnterpriseClient)
 
     resp = client.post(
         "/api/settings/model/test",
@@ -787,7 +783,7 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
             "settings": {
                 "enterprise_ai": {
                     "endpoint": "https://enterprise-ai.example.com",
-                    "project_ocid": "ocid1.project.oc1..example",
+                    "project_id": "proj_example",
                     "api_key": "request-secret",
                     "models": [
                         {
@@ -850,7 +846,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
             observed.append((self.settings, image_bytes, prompt, mime_type))
             return "画像を確認しました。"
 
-    monkeypatch.setattr(settings_router, "OciEnterpriseAiClient", FakeEnterpriseClient)
+    monkeypatch.setattr(settings_router, "EnterpriseAiClient", FakeEnterpriseClient)
 
     resp = client.post(
         "/api/settings/model/test",
@@ -860,7 +856,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
             "settings": {
                 "enterprise_ai": {
                     "endpoint": "https://enterprise-ai.example.com",
-                    "project_ocid": "ocid1.project.oc1..example",
+                    "project_id": "proj_example",
                     "api_key": "request-secret",
                     "models": [
                         {
@@ -889,7 +885,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
     assert data["status"] == "success"
     assert data["details"]["surface"] == "vision"
     assert data["details"]["response_chars"] == len("画像を確認しました。")
-    assert observed[0][0].oci_enterprise_ai_default_vision_model == "google.gemini-2.5-flash"
+    assert observed[0][0].enterprise_ai_default_vision_model == "google.gemini-2.5-flash"
     assert observed[0][1] == MODEL_TEST_IMAGE_BYTES
     assert observed[0][2]
     assert observed[0][3] == "image/jpeg"

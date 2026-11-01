@@ -1,13 +1,13 @@
 """一括の LLM・Embedding の呼び出しの上限つきの並行の実行器（#2004）。
 
 共通の部品 ``pr_backend_core.bounded_calls`` に、NL2SQL の設定（段ごとの並行の上限）と、
-NL2SQL の client の例外の分類を渡す。NL2SQL の client は同期（httpx・OCI SDK）なので、
+NL2SQL の client の例外の分類を渡す。NL2SQL の client は同期（httpx・urllib）なので、
 ``SyncBoundedCaller`` を通して thread から呼ぶ。1 つの処理（業務プロファイルの AI 構築の
 job・メタデータ SQL の生成・Embedding の一括）の呼び出しは 1 つの実行器を共有し、429 を
 受けたら全体で待って並行の数を下げる。
 
 SDK の再試行との分担: この実行器を通す呼び出しは、client の再試行を切る（Enterprise AI の
-direct client は ``max_retries=0``、OCI Generative AI の SDK は ``NoneRetryStrategy``）。
+direct client は ``max_retries=0``。埋め込みの client は自前の再試行を持たない）。
 """
 
 from __future__ import annotations

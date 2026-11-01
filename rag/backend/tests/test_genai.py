@@ -12,12 +12,12 @@ import pytest
 from pr_backend_core.observability.model_purpose import model_call_purpose
 from pr_system_settings.model import EnterpriseAiConfiguredModel
 
-from app.clients.oci_genai import (
+from app.clients.genai import (
     EMBEDDING_INPUT_MAX_CHARS,
     EMBEDDING_REQUEST_MAX_CHARS,
     EMBEDDING_REQUEST_MAX_INPUTS,
-    OciGenAiClient,
-    OciGenAiConfigError,
+    GenAiClient,
+    GenAiConfigError,
 )
 from app.config import Settings
 
@@ -25,21 +25,17 @@ from app.config import Settings
 def test_embed_requires_base_url(tmp_path: Path) -> None:
     """Base URL が無いときは、利用者が直せる設定エラーとして返す（#8）。"""
     _ = tmp_path
-    client = OciGenAiClient(
-        settings=_oci_settings().model_copy(update={"oci_enterprise_ai_endpoint": ""})
-    )
+    client = GenAiClient(settings=_llm_settings().model_copy(update={"enterprise_ai_endpoint": ""}))
 
-    with pytest.raises(OciGenAiConfigError, match="Base URL が未設定です"):
+    with pytest.raises(GenAiConfigError, match="Base URL が未設定です"):
         client._base_url(rerank=False)
 
 
 def test_embed_requires_api_key() -> None:
     """API key が無いときは、利用者が直せる設定エラーとして返す（#8）。"""
-    client = OciGenAiClient(
-        settings=_oci_settings().model_copy(update={"oci_enterprise_ai_api_key": ""})
-    )
+    client = GenAiClient(settings=_llm_settings().model_copy(update={"enterprise_ai_api_key": ""}))
 
-    with pytest.raises(OciGenAiConfigError, match="API key がありません"):
+    with pytest.raises(GenAiConfigError, match="API key がありません"):
         client._api_key(rerank=False)
 
 
@@ -48,10 +44,10 @@ def test_rerank_base_url_falls_back_to_compatible_api() -> None:
 
     百煉は再ランクだけ `/compatible-api/v1` 配下で、`/compatible-mode/v1` に投げると 404。
     """
-    client = OciGenAiClient(
-        settings=_oci_settings().model_copy(
+    client = GenAiClient(
+        settings=_llm_settings().model_copy(
             update={
-                "oci_enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             }
         )
     )
@@ -98,13 +94,13 @@ async def test_embedding_and_rerank_use_model_connection_over_http(
         return operation()
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    settings = _oci_settings().model_copy(
+    settings = _llm_settings().model_copy(
         update={
-            "oci_enterprise_ai_endpoint": "https://api.deepseek.com",
-            "oci_enterprise_ai_api_key": "sk-deepseek",
-            f"oci_enterprise_ai_{connection_id}_endpoint": BAILIAN,
-            f"oci_enterprise_ai_{connection_id}_api_key": f"sk-{connection_id}",
-            "oci_enterprise_ai_models": [
+            "enterprise_ai_endpoint": "https://api.deepseek.com",
+            "enterprise_ai_api_key": "sk-deepseek",
+            f"enterprise_ai_{connection_id}_endpoint": BAILIAN,
+            f"enterprise_ai_{connection_id}_api_key": f"sk-{connection_id}",
+            "enterprise_ai_models": [
                 EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
                 EnterpriseAiConfiguredModel(
                     model_id="text-embedding-v4", kind="embedding", connection_id=connection_id
@@ -117,7 +113,7 @@ async def test_embedding_and_rerank_use_model_connection_over_http(
             "rag_rerank_cache_enabled": False,
         }
     )
-    client = OciGenAiClient(settings=settings, sdk_call_runner=inline)
+    client = GenAiClient(settings=settings, sdk_call_runner=inline)
 
     await client.embed(["a"])
     await client.rerank("q", ["d0", "d1"], top_n=2)
@@ -131,16 +127,16 @@ async def test_embedding_and_rerank_use_model_connection_over_http(
     ]
 
 
-async def test_embed_validates_oci_embedding_count() -> None:
-    """OCI embedding adapter の返却件数が入力件数と違う場合は拒否する。"""
+async def test_embed_validates_embedding_count() -> None:
+    """埋め込みの adapter の返却件数が入力件数と違う場合は拒否する。"""
     client = StubEmbeddingClient(vectors=[[1.0, 0.0, 0.0]])
 
     with pytest.raises(ValueError, match="embedding の件数が一致しません"):
         await client.embed(["a", "b"])
 
 
-async def test_embed_validates_oci_embedding_dimension() -> None:
-    """OCI embedding adapter の次元数が Oracle VECTOR 幅と違う場合は拒否する。"""
+async def test_embed_validates_embedding_dimension() -> None:
+    """埋め込みの adapter の次元数が Oracle VECTOR 幅と違う場合は拒否する。"""
     client = StubEmbeddingClient(vectors=[[1.0, 0.0]])
 
     with pytest.raises(ValueError, match=r"embedding\[0\] の次元数が不正です"):
@@ -154,8 +150,8 @@ async def test_embed_accepts_expected_dimension() -> None:
     assert await client.embed(["a"]) == [[1.0, 0.0, 0.0]]
 
 
-async def test_embed_rejects_too_long_input_before_oci_call() -> None:
-    """異常長 input は OCI embedding 呼び出し前に拒否する。"""
+async def test_embed_rejects_too_long_input_before_api_call() -> None:
+    """異常長 input は 埋め込みの呼び出し前に拒否する。"""
     client = CountingEmbeddingClient()
     long_text = "あ" * (EMBEDDING_INPUT_MAX_CHARS + 1)
 
@@ -169,7 +165,7 @@ async def test_embed_rejects_too_long_input_before_oci_call() -> None:
 
 
 async def test_embed_cache_reuses_hits_and_batches_only_misses() -> None:
-    """embedding cache は hit を再利用し、miss だけ OCI へまとめて送る。"""
+    """embedding cache は hit を再利用し、miss だけ API へまとめて送る。"""
     client = CountingEmbeddingClient()
 
     first = await client.embed(["承認", "監査"])
@@ -185,7 +181,7 @@ async def test_embed_cache_reuses_hits_and_batches_only_misses() -> None:
 async def test_embed_cache_batches_misses_with_configured_batch_size() -> None:
     """cache miss の embedding は設定した batch size で分割する。"""
     client = CountingEmbeddingClient(
-        settings=_oci_settings().model_copy(update={"rag_embedding_batch_size": 2})
+        settings=_llm_settings().model_copy(update={"rag_embedding_batch_size": 2})
     )
 
     vectors = await client.embed(["承認", "監査", "証跡", "監査", "規程"])
@@ -218,9 +214,9 @@ async def test_embed_batches_by_total_character_budget() -> None:
 
 
 async def test_embed_batches_by_maximum_input_count() -> None:
-    """設定 object が検証を迂回しても OCI request は 96 入力を超えない。"""
+    """設定 object が検証を迂回しても 埋め込みの request は 96 入力を超えない。"""
     client = CountingEmbeddingClient(
-        settings=_oci_settings().model_copy(update={"rag_embedding_batch_size": 1024})
+        settings=_llm_settings().model_copy(update={"rag_embedding_batch_size": 1024})
     )
     texts = [f"text-{index}" for index in range(EMBEDDING_REQUEST_MAX_INPUTS + 1)]
 
@@ -233,7 +229,7 @@ async def test_embed_batches_by_maximum_input_count() -> None:
 async def test_embed_cache_can_be_disabled() -> None:
     """設定で embedding cache を無効化できる。"""
     client = CountingEmbeddingClient(
-        settings=_oci_settings().model_copy(update={"rag_embedding_cache_enabled": False})
+        settings=_llm_settings().model_copy(update={"rag_embedding_cache_enabled": False})
     )
 
     await client.embed(["承認"])
@@ -243,10 +239,10 @@ async def test_embed_cache_can_be_disabled() -> None:
     assert client.batches == [["承認"], ["承認"]]
 
 
-async def test_embed_batches_oci_calls_when_cache_is_disabled() -> None:
-    """cache 無効時も OCI embedding request は batch size で分割する。"""
+async def test_embed_batches_api_calls_when_cache_is_disabled() -> None:
+    """cache 無効時も 埋め込みの request は batch size で分割する。"""
     client = CountingEmbeddingClient(
-        settings=_oci_settings().model_copy(
+        settings=_llm_settings().model_copy(
             update={
                 "rag_embedding_cache_enabled": False,
                 "rag_embedding_batch_size": 2,
@@ -267,8 +263,8 @@ async def test_embed_uses_openai_compatible_embeddings_request() -> None:
     `input_type` は観測の purpose にだけ使い、API へは送らない。
     """
     post = FakePostJson(embed_response={"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]})
-    client = OciGenAiClient(
-        settings=_oci_settings(),
+    client = GenAiClient(
+        settings=_llm_settings(),
         post=post,
         sdk_call_runner=_run_inline,
     )
@@ -285,9 +281,9 @@ async def test_embed_uses_openai_compatible_embeddings_request() -> None:
 
 
 async def test_embed_rejects_invalid_input_type() -> None:
-    """OCI/local 共通で embedding input_type の誤指定を fail fast する。"""
-    client = OciGenAiClient(
-        settings=_oci_settings(),
+    """embedding input_type の誤指定を fail fast する。"""
+    client = GenAiClient(
+        settings=_llm_settings(),
         post=FakePostJson(),
         sdk_call_runner=_run_inline,
     )
@@ -296,8 +292,8 @@ async def test_embed_rejects_invalid_input_type() -> None:
         await client.embed(["a"], input_type="BAD_TYPE")  # type: ignore[arg-type]
 
 
-async def test_rerank_accepts_and_sorts_valid_oci_results() -> None:
-    """OCI rerank adapter の正しい結果は score 降順に正規化する。"""
+async def test_rerank_accepts_and_sorts_valid_results() -> None:
+    """再ランクの adapter の正しい結果は score 降順に正規化する。"""
     client = StubRerankClient(results=[(1, 0.25), (0, 0.75)])
 
     assert await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=2) == [
@@ -327,7 +323,7 @@ async def test_rerank_cache_reuses_same_query_documents_and_top_n() -> None:
 async def test_rerank_cache_can_be_disabled() -> None:
     """設定で rerank cache を無効化できる。"""
     client = CountingRerankClient(
-        settings=_oci_settings().model_copy(update={"rag_rerank_cache_enabled": False})
+        settings=_llm_settings().model_copy(update={"rag_rerank_cache_enabled": False})
     )
 
     await client.rerank("承認条件", ["本文 A"], top_n=1)
@@ -350,8 +346,8 @@ async def test_rerank_uses_openai_compatible_reranks_request() -> None:
             ]
         }
     )
-    client = OciGenAiClient(
-        settings=_oci_settings(),
+    client = GenAiClient(
+        settings=_llm_settings(),
         post=post,
         sdk_call_runner=_run_inline,
     )
@@ -370,8 +366,8 @@ async def test_rerank_uses_openai_compatible_reranks_request() -> None:
     ]
 
 
-async def test_rerank_returns_empty_without_oci_call_when_documents_are_empty() -> None:
-    """候補文書が空なら OCI rerank 呼び出しを行わない。"""
+async def test_rerank_returns_empty_without_api_call_when_documents_are_empty() -> None:
+    """候補文書が空なら 再ランクの呼び出しを行わない。"""
     client = StubRerankClient(results=[(0, 0.75)])
 
     assert await client.rerank("社内規程", [], top_n=1) == []
@@ -387,7 +383,7 @@ async def test_rerank_rejects_invalid_top_n() -> None:
 
 
 async def test_rerank_rejects_too_many_results() -> None:
-    """OCI rerank adapter が top_n を超える件数を返した場合は拒否する。"""
+    """再ランクの adapter が top_n を超える件数を返した場合は拒否する。"""
     client = StubRerankClient(results=[(0, 0.75), (1, 0.25)])
 
     with pytest.raises(ValueError, match="rerank の返却件数が不正です"):
@@ -395,7 +391,7 @@ async def test_rerank_rejects_too_many_results() -> None:
 
 
 async def test_rerank_rejects_duplicate_index() -> None:
-    """OCI rerank adapter が同じ候補 index を重複返却した場合は拒否する。"""
+    """再ランクの adapter が同じ候補 index を重複返却した場合は拒否する。"""
     client = StubRerankClient(results=[(0, 0.75), (0, 0.25)])
 
     with pytest.raises(ValueError, match="rerank index が重複しています"):
@@ -403,7 +399,7 @@ async def test_rerank_rejects_duplicate_index() -> None:
 
 
 async def test_rerank_rejects_out_of_range_index() -> None:
-    """OCI rerank adapter が候補数外の index を返した場合は拒否する。"""
+    """再ランクの adapter が候補数外の index を返した場合は拒否する。"""
     client = StubRerankClient(results=[(2, 0.75)])
 
     with pytest.raises(ValueError, match="rerank index が範囲外です"):
@@ -411,24 +407,24 @@ async def test_rerank_rejects_out_of_range_index() -> None:
 
 
 async def test_rerank_rejects_non_finite_score() -> None:
-    """OCI rerank adapter が NaN/Infinity score を返した場合は拒否する。"""
+    """再ランクの adapter が NaN/Infinity score を返した場合は拒否する。"""
     client = StubRerankClient(results=[(0, float("nan"))])
 
     with pytest.raises(ValueError, match="rerank score が不正です"):
         await client.rerank("社内規程", ["本文"], top_n=1)
 
 
-class StubEmbeddingClient(OciGenAiClient):
-    """OCI embedding の戻り値だけを差し替えるテスト用 client。"""
+class StubEmbeddingClient(GenAiClient):
+    """埋め込みモデル の戻り値だけを差し替えるテスト用 client。"""
 
     def __init__(self, vectors: list[list[float]]) -> None:
         settings = Settings.model_construct(
-            oci_genai_embedding_dim=3,
+            genai_embedding_dim=3,
         )
         super().__init__(settings=settings)
         self._vectors = vectors
 
-    async def _embed_with_oci(
+    async def _embed_with_api(
         self,
         texts: list[str],
         *,
@@ -437,33 +433,33 @@ class StubEmbeddingClient(OciGenAiClient):
         return self._vectors
 
 
-class StubRerankClient(OciGenAiClient):
-    """OCI rerank の戻り値だけを差し替えるテスト用 client。"""
+class StubRerankClient(GenAiClient):
+    """再ランクのモデル の戻り値だけを差し替えるテスト用 client。"""
 
     def __init__(self, results: list[tuple[int, float]]) -> None:
         settings = Settings.model_construct(
-            oci_genai_embedding_dim=3,
+            genai_embedding_dim=3,
         )
         super().__init__(settings=settings)
         self._results = results
         self.calls = 0
 
-    async def _rerank_with_oci(
+    async def _rerank_with_api(
         self, query: str, documents: list[str], top_n: int
     ) -> list[tuple[int, float]]:
         self.calls += 1
         return self._results
 
 
-class CountingEmbeddingClient(OciGenAiClient):
+class CountingEmbeddingClient(GenAiClient):
     """cache 挙動確認用の deterministic embedding client。"""
 
     def __init__(self, settings: Settings | None = None) -> None:
-        super().__init__(settings=settings or _oci_settings())
+        super().__init__(settings=settings or _llm_settings())
         self.calls = 0
         self.batches: list[list[str]] = []
 
-    async def _embed_with_oci(
+    async def _embed_with_api(
         self,
         texts: list[str],
         *,
@@ -475,15 +471,15 @@ class CountingEmbeddingClient(OciGenAiClient):
         return [_vector_for_text(text) for text in texts]
 
 
-class CountingRerankClient(OciGenAiClient):
+class CountingRerankClient(GenAiClient):
     """cache 挙動確認用の deterministic rerank client。"""
 
     def __init__(self, settings: Settings | None = None) -> None:
-        super().__init__(settings=settings or _oci_settings())
+        super().__init__(settings=settings or _llm_settings())
         self.calls = 0
         self.calls_args: list[tuple[str, list[str], int]] = []
 
-    async def _rerank_with_oci(
+    async def _rerank_with_api(
         self, query: str, documents: list[str], top_n: int
     ) -> list[tuple[int, float]]:
         self.calls += 1
@@ -514,14 +510,14 @@ class FakePostJson:
         return [url for url, _ in self.calls if url.endswith(suffix)]
 
 
-def _oci_settings() -> Settings:
+def _llm_settings() -> Settings:
     return Settings.model_construct(
-        oci_genai_embedding_model="text-embedding-v4",
-        oci_genai_embedding_dim=3,
-        oci_genai_rerank_model="qwen3-rerank",
-        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_timeout_seconds=60,
+        genai_embedding_model="text-embedding-v4",
+        genai_embedding_dim=3,
+        genai_rerank_model="qwen3-rerank",
+        enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_timeout_seconds=60,
     )
 
 
@@ -550,7 +546,7 @@ async def test_embedding_purpose_uses_declared_input_type_and_preserves_probe(
     purpose: str | None,
     probe: bool,
 ) -> None:
-    from app.clients import oci_genai
+    from app.clients import genai
 
     captured: list[dict[str, object]] = []
 
@@ -565,9 +561,9 @@ async def test_embedding_purpose_uses_declared_input_type_and_preserves_probe(
             set_call_output=lambda *args, **kwargs: None,
         )
 
-    monkeypatch.setattr(oci_genai, "observed_span", capture)
+    monkeypatch.setattr(genai, "observed_span", capture)
     post = FakePostJson(embed_response={"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]})
-    client = OciGenAiClient(settings=_oci_settings(), post=post, sdk_call_runner=_run_inline)
+    client = GenAiClient(settings=_llm_settings(), post=post, sdk_call_runner=_run_inline)
     with model_call_purpose("connection.check" if probe else None):
         result = await client.embed(["合成の入力"], input_type=input_type)  # type: ignore[arg-type]
     assert result == [[1.0, 0.0, 0.0]]
@@ -596,7 +592,7 @@ async def test_rerank_cache_normalizes_only_query_presentation() -> None:
 
 
 def test_rerank_cache_key_keeps_model_boundary() -> None:
-    from app.clients.oci_genai import _rerank_cache_key
+    from app.clients.genai import _rerank_cache_key
 
     assert _rerank_cache_key(
         query="ABC 設定", documents=["本文 A"], top_n=1, model_id="model-a"

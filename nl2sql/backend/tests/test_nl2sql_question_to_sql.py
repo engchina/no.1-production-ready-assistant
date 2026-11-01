@@ -22,7 +22,7 @@ def test_question_is_the_only_generation_input_with_schema_and_without_glossary(
     question = "金額が100以上の請求情報をすべてID順に教えてください。"
     result = service.question_to_sql(QuestionToSqlRequest(question=question, profile_id="finance"))
     assert result.sql == sql
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert len(client.calls) == 1
     assert client.calls[0]["prompt"] == question
     assert "table APP.INVOICES logical=請求" in client.calls[0]["context"]

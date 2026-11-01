@@ -30,12 +30,12 @@ def _settings(*, answer_effort="medium", vision_effort="medium", **overrides):
     """外部の .env を読まない設定。モデルの登録値（送る値）は provider の reasoning_effort。"""
     base = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_ENDPOINT": "https://example.invalid/openai/v1",
-            "OCI_ENTERPRISE_AI_API_KEY": "test-key",
-            "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "test.model",
-            "OCI_ENTERPRISE_AI_VLM_MODEL": "test.vision",
-            "OCI_ENTERPRISE_AI_REASONING_EFFORT": answer_effort,
-            "OCI_ENTERPRISE_AI_VLM_REASONING_EFFORT": vision_effort,
+            "ENTERPRISE_AI_ENDPOINT": "https://example.invalid/openai/v1",
+            "ENTERPRISE_AI_API_KEY": "test-key",
+            "ENTERPRISE_AI_DEFAULT_MODEL": "test.model",
+            "ENTERPRISE_AI_VLM_MODEL": "test.vision",
+            "ENTERPRISE_AI_REASONING_EFFORT": answer_effort,
+            "ENTERPRISE_AI_VLM_REASONING_EFFORT": vision_effort,
         },
         dotenv_path=None,
     )

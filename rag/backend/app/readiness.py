@@ -95,24 +95,24 @@ def _upload_storage_checks(settings: Settings) -> dict[str, str]:
 
 
 def _genai_check(settings: Settings) -> str:
-    """OCI Generative AI の embedding/rerank 設定を確認する。"""
+    """埋め込み・再ランクのモデルの 設定を確認する。"""
     required_status = _required_values_check(
-        settings.oci_genai_embedding_model,
-        settings.oci_genai_rerank_model,
+        settings.genai_embedding_model,
+        settings.genai_rerank_model,
     )
     if required_status != READINESS_OK:
         return required_status
-    if settings.oci_genai_embedding_dim != EMBEDDING_DIMENSIONS:
+    if settings.genai_embedding_dim != EMBEDDING_DIMENSIONS:
         return READINESS_INVALID
     return READINESS_OK
 
 
 def _enterprise_ai_check(settings: Settings) -> str:
-    """OCI Enterprise AI の endpoint / model catalog を確認する。
+    """モデルの API の endpoint / model catalog を確認する。
 
     接続は既定のテキストモデルと既定の Vision モデルそれぞれの接続を確かめる(#533)。
     """
-    api_path = settings.oci_enterprise_ai_llm_path or settings.oci_enterprise_ai_vlm_path
+    api_path = settings.enterprise_ai_llm_path or settings.enterprise_ai_vlm_path
     default_model = enterprise_ai_default_model_id(settings)
     connections = {
         connection.connection_id: connection
@@ -124,7 +124,7 @@ def _enterprise_ai_check(settings: Settings) -> str:
     for connection in connections.values():
         required_status = _required_values_check(
             connection.endpoint,
-            connection.project_ocid,
+            connection.project_id,
             api_path,
         )
         if required_status != READINESS_OK:

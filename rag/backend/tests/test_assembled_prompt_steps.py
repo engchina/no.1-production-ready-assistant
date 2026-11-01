@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 import pytest
-from rag_engine.adapters.oci import _render_prompt
+from rag_engine.adapters.model_api import _render_prompt
 from rag_engine.generation.citation_wire import generation_draft_wire_model
 from rag_engine.generation.grounded import audit_system_prompt
 from rag_engine.knowledge.prompt_files import IMAGE_RETRIEVAL_PROMPT_KEY
@@ -101,7 +101,7 @@ async def test_generation_system_with_assumptions_keeps_continuous_steps(
     monkeypatch: pytest.MonkeyPatch, saved: dict[str, str]
 ) -> None:
     """生成の system と未確定の前提の追加部品を、回答の経路で組み立てた後に確かめる。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     systems: list[str] = []
 
@@ -110,7 +110,7 @@ async def test_generation_system_with_assumptions_keeps_continuous_steps(
             systems.append(system)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", llm)
     oracle = FakeOracle()
     oracle.prompt_overrides = _validated(saved)
     await AnswerEngine(

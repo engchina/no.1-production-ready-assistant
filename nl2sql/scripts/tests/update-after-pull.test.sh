@@ -585,4 +585,4 @@ if grep -Eq 'app\.cli\.nl2sql_system_schema[[:space:]]+--recreate' "${UPDATE_SCR
   fail_test "update script invokes destructive schema recreation"
 fi
 
-echo "unified update and deployed OCI repair behavior verified."
+echo "unified update and deployed repair behavior verified."

@@ -2,7 +2,7 @@
 
 業界の RAG 製品(Dify / RAGFlow / FastGPT 等)に倣い、Parser / Chunking /
 索引構築系の既定値を **ナレッジベース単位** で上書きできるようにする。
-ただし確定スタック(OCI Enterprise AI / OCI Generative AI Cohere / Oracle AI Database)は
+ただし確定スタック(モデルの API / 埋め込み・再ランクのモデル / Oracle AI Database)は
 不変で、上書きは既存 preset の選択に限定する。
 
 設計:
@@ -11,7 +11,7 @@
   確定し(取込時スナップショット)、後から KB を変えても既存チャンクは作り直さない。
 * ``query`` は V1 の互換読み取り用 legacy フィールドとして受け取るが、KB から runtime
   settings へは反映しない。検索・回答方針は Search Answer Profile が正本。
-* Embedding/Rerank(次元は `EMBEDDING_DIMENSIONS`)・DB・OCI・Object Storage はグローバル固定で
+* Embedding/Rerank(次元は `EMBEDDING_DIMENSIONS`)・DB・モデルの API・保存先はグローバル固定で
   KB 別にしない(ベクトル次元混在不可など物理制約)。
 * 永続化は既存 ``rag_knowledge_bases.retrieval_config`` JSON カラムを再利用し、
   DDL 変更を避ける。保存形は :func:`dump_adapter_config` 参照。

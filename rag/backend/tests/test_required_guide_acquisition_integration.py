@@ -61,7 +61,7 @@ class AcquisitionOracle(FakeOracle):
 async def test_branch_required_acquisition_reaches_none_generation_and_saved_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     content = SupportGuideContent.model_validate(
         {
@@ -131,7 +131,7 @@ async def test_branch_required_acquisition_reaches_none_generation_and_saved_ans
             }
         )
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", model)
+    monkeypatch.setattr(engine_api, "parse_text_response", model)
     settings = Settings(
         _env_file=None,
         rag_query_strategy="simple_retrieval",

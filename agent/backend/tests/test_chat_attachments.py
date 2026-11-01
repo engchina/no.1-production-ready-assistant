@@ -237,8 +237,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any, vision: bool = False) -> Scri
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             vision_enabled=vision,
         ),
@@ -550,7 +550,7 @@ async def test_image_reader_records_document_read_purpose_without_source_content
         attachment_module,
         "enterprise_ai_connection_for_model",
         lambda *_: SimpleNamespace(
-            base_url="https://model.example.test/v1", api_key="synthetic", project_ocid=None
+            base_url="https://model.example.test/v1", api_key="synthetic", project_id=None
         ),
     )
     monkeypatch.setattr(attachment_module, "enterprise_ai_reasoning", lambda *_: None)

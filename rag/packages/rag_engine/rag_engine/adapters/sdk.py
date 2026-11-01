@@ -1,4 +1,4 @@
-"""既存 Docling / Oracle / OCI 実装を SDK の機能契約へ接続する。"""
+"""既存 Docling / Oracle / モデルの API の実装を SDK の機能契約へ接続する。"""
 
 import json
 from collections.abc import Sequence
@@ -57,21 +57,21 @@ class DocumentParser:
         )
 
 
-class OciEmbedder:
-    """既存 OCI embedding のモデル・次元・retry 設定を利用する。"""
+class ApiEmbedder:
+    """既存 埋め込みモデル のモデル・次元・retry 設定を利用する。"""
 
     def __init__(self, settings: Settings):
         self.settings = settings
 
     def embed(self, texts: Sequence[str], *, query: bool = False) -> list[list[float]]:
         """入力順の embedding を返す。認証・通信エラーを伝播する。"""
-        from rag_engine.adapters.oci import embed_texts
+        from rag_engine.adapters.model_api import embed_texts
 
         return embed_texts(texts, self.settings, input_type="SEARCH_QUERY" if query else "SEARCH_DOCUMENT")
 
 
 def _require_text_only(settings: Settings, embedder: Embedder | None) -> None:
-    """image vector は常に OCI で作るため、別空間になる custom embedder との併用を拒否する。"""
+    """image vector は常に既定の埋め込みモデルで作るため、別空間になる custom embedder との併用を拒否する。"""
     if embedder is not None and settings.image_embedding_enabled:
         raise ValueError("A custom Embedder cannot be combined with IMAGE_EMBEDDING_ENABLED")
 
@@ -86,7 +86,7 @@ class OracleIndexer:
     def __init__(self, settings: Settings, runtime: Runtime, *, embedder: Embedder | None = None):
         _require_text_only(settings, embedder)
         self.settings, self.runtime = settings, runtime
-        self.embedder = embedder or OciEmbedder(settings)
+        self.embedder = embedder or ApiEmbedder(settings)
 
     def index(self, request: IndexRequest) -> IndexResult:
         """親子チャンク manifest と ADB 索引を保存する。失敗結果は例外に変換する。"""
@@ -165,7 +165,7 @@ class OracleRetriever:
         )
 
 
-class OciGenerator:
+class ApiGenerator:
     """既存の文書 grounding・画像根拠・回答出力契約を使用する。"""
 
     def __init__(self, settings: Settings, runtime: Runtime):
@@ -175,7 +175,7 @@ class OciGenerator:
         """根拠の全文をバッチごとにモデルへ渡し、所属証拠付きの回答を返す。
 
         空根拠または単一根拠の予算超過時はモデルを呼ばず不足を返す。
-        初回OCI呼出の失敗は呼出元へ送出する。不足後の画像補完だけが失敗した場合は
+        初回の API 呼出の失敗は呼出元へ送出する。不足後の画像補完だけが失敗した場合は
         元の部分回答と失敗traceを返す。画像非対応モデルからはChicagoへ切り替える。
         """
         from rag_engine.generation import answering as answer

@@ -1,4 +1,4 @@
-"""OCI Enterprise AI の失敗の分類（#1684）。正本は platform の `pr_enterprise_ai.errors`（#3418）。
+"""モデルの API の失敗の分類（#1684）。正本は platform の `pr_enterprise_ai.errors`（#3418）。
 
 3 製品が `pr_system_settings.enterprise_ai_errors` から import する名前を、そのまま出す。
 """

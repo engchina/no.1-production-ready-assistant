@@ -12,11 +12,11 @@ from pypdf import PdfReader
 from rag_parser_core.preprocess import ConvertOutcome
 from rag_parser_core.result import ParserRegistryResult
 
-from app.clients.oci_enterprise_ai import (
+from app.clients.enterprise_ai import (
+    EnterpriseAiClient,
     EnterpriseAiIncompleteResponseError,
-    OciEnterpriseAiClient,
 )
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.config import Settings
 from app.rag import ingestion as ingestion_module
 from app.rag.audit import record_rag_ingestion_audit
@@ -200,7 +200,7 @@ class FakeOracle:
         return updated
 
 
-class CapturingVlm(OciEnterpriseAiClient):
+class CapturingVlm(EnterpriseAiClient):
     """VLM 呼び出し時の parser profile と prompt を記録する。"""
 
     parser_profile: str | None = None
@@ -239,7 +239,7 @@ class CapturingVlm(OciEnterpriseAiClient):
         }
 
 
-class SegmentCapturingVlm(OciEnterpriseAiClient):
+class SegmentCapturingVlm(EnterpriseAiClient):
     """PDF segment ごとの VLM 呼び出しを記録する。"""
 
     def __init__(self, *, fail_multi_page_once: bool = False) -> None:
@@ -281,7 +281,7 @@ class SegmentCapturingVlm(OciEnterpriseAiClient):
         }
 
 
-class SegmentFailingVlm(OciEnterpriseAiClient):
+class SegmentFailingVlm(EnterpriseAiClient):
     """指定回数目の PDF segment 抽出で失敗する VLM fake。"""
 
     def __init__(self, *, fail_on_call: int) -> None:
@@ -319,7 +319,7 @@ class SegmentFailingVlm(OciEnterpriseAiClient):
         }
 
 
-class InvalidStructuredExtractionVlm(OciEnterpriseAiClient):
+class InvalidStructuredExtractionVlm(EnterpriseAiClient):
     """schema 不整合の VLM 応答を返す fake。"""
 
     async def extract_with_vlm(
@@ -339,7 +339,7 @@ class InvalidStructuredExtractionVlm(OciEnterpriseAiClient):
         }
 
 
-class FailingIfCalledVlm(OciEnterpriseAiClient):
+class FailingIfCalledVlm(EnterpriseAiClient):
     """再実行時に cached extraction が使われることを検証する VLM fake。"""
 
     async def extract_with_vlm(
@@ -354,7 +354,7 @@ class FailingIfCalledVlm(OciEnterpriseAiClient):
         raise AssertionError("cached extraction artifact があれば VLM を再実行しない")
 
 
-class FakeEmbeddingClient(OciGenAiClient):
+class FakeEmbeddingClient(GenAiClient):
     """チャンク数分の 1024 次元ベクトルを返す。"""
 
     async def embed(
@@ -367,7 +367,7 @@ class FakeEmbeddingClient(OciGenAiClient):
         return [[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts]
 
 
-class FailingEmbeddingClient(OciGenAiClient):
+class FailingEmbeddingClient(GenAiClient):
     """抽出 artifact cache 後の後段失敗を作る embedding fake。"""
 
     async def embed(
@@ -381,7 +381,7 @@ class FailingEmbeddingClient(OciGenAiClient):
 
 
 class FakeObjectStorage:
-    """抽出 artifact cache 用の Object Storage fake。"""
+    """抽出 artifact cache 用の 保存先の fake。"""
 
     def __init__(self) -> None:
         self.puts: list[tuple[str, bytes, str]] = []
@@ -390,7 +390,7 @@ class FakeObjectStorage:
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         self.puts.append((key, data, content_type))
-        path = f"oci://namespace/bucket/{key}"
+        path = f"local://{key}"
         self.objects[path] = data
         return path
 
@@ -403,7 +403,7 @@ class FakeObjectStorage:
 
 
 class FailingObjectStorage(FakeObjectStorage):
-    """full extraction artifact cache 失敗を作る Object Storage fake。"""
+    """full extraction artifact cache 失敗を作る 保存先の fake。"""
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         self.puts.append((key, data, content_type))
@@ -702,7 +702,7 @@ async def test_ingestion_pipeline_caches_extraction_artifact_and_segment_checkpo
     assert oracle.saved_extraction is not None
     artifact_path = oracle.saved_extraction.parser_artifacts["extraction_artifact_path"]
     assert isinstance(artifact_path, str)
-    assert artifact_path.startswith("oci://namespace/bucket/artifacts/extractions/doc-artifact/")
+    assert artifact_path.startswith("local://artifacts/extractions/doc-artifact/")
     assert oracle.saved_extraction.parser_artifacts["extraction_artifact_schema_version"] == 1
     assert oracle.saved_extraction.parser_artifacts["extraction_artifact_kind"] == "full"
     assert oracle.segments
@@ -796,7 +796,7 @@ async def test_ingestion_pipeline_stops_at_preprocessed_when_parse_gate_off() ->
 
 
 async def test_ingestion_pipeline_sanitizes_extraction_artifact_keys() -> None:
-    """artifact cache key は prefix/document id を安全な Object Storage path に正規化する。"""
+    """artifact cache key は prefix/document id を安全な 保存先の path に正規化する。"""
     oracle = FakeOracle()
     storage = FakeObjectStorage()
     pipeline = IngestionPipeline(
@@ -1302,10 +1302,10 @@ async def test_ingestion_pipeline_writes_graph_index_when_enabled() -> None:
         rag_graph_profile="entities",
         rag_chunk_size=800,
         rag_chunk_overlap=120,
-        oci_genai_embedding_model="cohere.embed-v4.0",
-        oci_enterprise_ai_models=[],
-        oci_enterprise_ai_default_text_model="",
-        oci_enterprise_ai_default_vision_model="enterprise-vlm",
+        genai_embedding_model="cohere.embed-v4.0",
+        enterprise_ai_models=[],
+        enterprise_ai_default_text_model="",
+        enterprise_ai_default_vision_model="enterprise-vlm",
     )
     pipeline = IngestionPipeline(
         vlm=CapturingVlm(),

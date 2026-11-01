@@ -80,10 +80,9 @@ type DisplayServiceData = ServiceCatalogItemData & {
 const PROFILE_META: Record<ServiceProfile, { className: string; labelKey: I18nKey }> = {
   cpu: { className: "bg-surface-hover text-fg-muted", labelKey: "settings.services.profile.cpu" },
   gpu: { className: "bg-accent-muted text-accent-fg-strong", labelKey: "settings.services.profile.gpu" },
-  oci: { className: "bg-info-subtle text-info-fg", labelKey: "settings.services.profile.oci" },
 };
-// 並びは CPU → GPU → OCI。サービス管理の工程の中の節の順。
-export const SERVICE_PROFILE_ORDER: ServiceProfile[] = ["cpu", "gpu", "oci"];
+// 並びは CPU → GPU。サービス管理の工程の中の節の順（OCI のプロキシの節は #22 で削除した）。
+export const SERVICE_PROFILE_ORDER: ServiceProfile[] = ["cpu", "gpu"];
 const PROFILE_GROUP_META: Record<
   ServiceProfile,
   { suffixKey: I18nKey; noteKey: I18nKey | null }
@@ -91,7 +90,6 @@ const PROFILE_GROUP_META: Record<
   cpu: { suffixKey: "settings.services.cpuSuffix", noteKey: "settings.services.cpuNote" },
   // GPU のサービスは今は無い（ASR は削除した。#2042）。行が無ければ節ごと出さない。
   gpu: { suffixKey: "settings.services.gpuSuffix", noteKey: null },
-  oci: { suffixKey: "settings.services.ociSuffix", noteKey: "settings.services.ociNote" },
 };
 
 export function serviceExecutionPolicyLabelKey(policy: ServiceExecutionPolicy): I18nKey {
@@ -216,8 +214,8 @@ export function ServicesManagementClient() {
   const controlEnabled = data.control_enabled;
   const deploymentMode = data.deployment_mode;
   // 工程の並び・名前・説明はサイドナビ（nav-config.ts の「取込・検索・回答設定」）と対応する設定画面の説明を正本にする
-  // （#638）。各工程は CPU/GPU/OCI のうち存在するプロファイルごとにグループを分けて表示する。
-  // プロファイル表示順と suffix/note。GPU/OCI は単独でも opt-in/要件を note で明示する。
+  // （#638）。各工程は CPU/GPU のうち存在するプロファイルごとにグループを分けて表示する。
+  // プロファイル表示順と suffix/note。GPU は単独でも opt-in/要件を note で明示する。
   const PROFILE_ORDER = SERVICE_PROFILE_ORDER.map((profile) => ({
     profile,
     ...PROFILE_GROUP_META[profile],
@@ -344,7 +342,7 @@ export function ServicesManagementClient() {
 
       {stageGroups.map((stage) => {
         // 単一プロファイルかつ CPU のときだけ suffix 無しのステージ名にする。
-        // 複数プロファイル、または GPU/OCI は suffix(+note)を付けて区別・要件を明示する。
+        // 複数プロファイル、または GPU は suffix(+note)を付けて区別・要件を明示する。
         const multi = stage.groups.length > 1;
         return (
           <Fragment key={stage.category}>
@@ -356,7 +354,7 @@ export function ServicesManagementClient() {
                     ? t(g.suffixKey, { stage: stage.label })
                     : stage.label
                 }
-                // 工程の説明（設定画面の説明と同じ文）は、工程の最初のグループにだけ出す（CPU/GPU/OCI で繰り返さない）。
+                // 工程の説明（設定画面の説明と同じ文）は、工程の最初のグループにだけ出す（CPU/GPU で繰り返さない）。
                 description={index === 0 ? stage.description : undefined}
                 note={
                   // CPU note(Docling 既定)は文書解析(parser)の工程のみ。ファイル準備の CPU には出さない。

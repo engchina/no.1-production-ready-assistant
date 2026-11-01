@@ -307,7 +307,7 @@ def test_adb_control_routes_are_removed(tmp_path: Path, method: str, path: str) 
 
 
 def test_wallet_download_route_is_removed(tmp_path: Path) -> None:
-    """OCI からの Wallet の自動取得は持たない（#11。Wallet はアップロードだけ）。"""
+    """クラウドの API からの Wallet の自動取得は持たない（#11。Wallet はアップロードだけ）。"""
     h = Harness(tmp_path)
     assert h.client.post("/api/settings/database/wallet/download").status_code in {404, 405}
 

@@ -1,6 +1,6 @@
 # RAG アーキテクチャ
 
-このリポジトリは、data ingestion、chunking、indexing、hybrid retrieval、reranking、evaluation、observability、guardrails、deployment best practices をカバーする production-ready RAG reference implementation です。Backend は OCI Enterprise AI / OCI Generative AI / Oracle AI Database を直接使い、local / oci の実行モード切り替えは持ちません。
+このリポジトリは、data ingestion、chunking、indexing、hybrid retrieval、reranking、evaluation、observability、guardrails、deployment best practices をカバーする production-ready RAG reference implementation です。Backend はモデルの API（OpenAI 互換の API。LLM・VLM・埋め込み・再ランク）と Oracle AI Database を直接使い、実行モードの切り替えは持ちません。
 
 回答は回答フロー（`app/rag/answer_engine.py`・`packages/rag_engine`。#594）だけが行う。旧 standard の回答エンジン（検索モード・根拠確認・回答スタイル・高度な検索・Agent Memory）は #595 で削除した。Oracle Developer Day 2026 の AIDB RAG / Memory Engineering 手法と回答フローの対応は [AIDB Memory Engineering](./aidb-memory-engineering.md) を正とする。回答は `依頼 → 安全チェック → 検索範囲の確定 → 質問の理解と質問拡張 → hybrid 検索（RRF）→ Rerank → 根拠の評価と補正検索（CRAG。選んだときだけ）→ small-to-big → 回答の生成と監査 → 回答側の安全チェック` の順に扱い、単純な vector 類似 chunk 投入に戻さない。
 
@@ -22,15 +22,15 @@
 2. OCR・本文抽出と索引
    - API: `POST /api/documents/{document_id}/ingestion-jobs`（文書の既定レシピ）/ `POST /api/documents/{document_id}/recipes/{recipe_id}/ingestion-jobs`（レシピ単位）で取込 job を投入する。確認待ちの工程は `POST /api/documents/{document_id}/recipes/{recipe_id}/approve` で次の工程へ進める。
    - 一括の投入（#2674）: `POST /api/documents/ingestion-jobs/bulk`（`{"document_ids": [...]}`。1 回に最大 10,000 件）は、文書ごとに 受付済み（`accepted`）/ 既に処理中（`already_active`）/ スキップ（`skipped`）/ 受付不可（`rejected`）と理由を判定し、受け付けた文書のレシピ1の job（QUEUED）を永続化してから結果を返す（`app/rag/bulk_ingestion.py`・`app/clients/oracle_bulk_ingestion_store.py`）。一度も取り込んでいない文書は状態の読み込みと job の登録をまとめて行い（IN と `executemany`。500 件ごとの transaction でレシピの行を lock して待機中・実行中の job を確かめ直す）、前回の出力の初期化が要る文書は 1 件の投入と同じ処理を並行数 4 で行う。流量制限（`ingest`）は要求 1 回として数え、高コストの処理の並行数は取込 worker が制御する。同じレシピに待機中・実行中の job があれば作らないため、通信断の後の再送で二重に登録しない。画面の「条件に一致する文書をすべて選ぶ」は `GET /api/documents/ids`（一覧と同じ条件の ID）で対象を読む。
-   - LLM/VLM は **OCI Enterprise AI** のみを使う。OCI Generative AI chat API は使わない。
-   - Object Storage から取得した原本 bytes は、保存済み `file_size_bytes` / `content_sha256` と照合してから OCR へ渡す。
+   - LLM/VLM は **モデルの API**（OpenAI 互換の Responses API）のみを使う。
+   - 保存先から取得した原本 bytes は、保存済み `file_size_bytes` / `content_sha256` と照合してから OCR へ渡す。
    - アップロード時の MIME type を VLM payload へ渡し、PDF / 画像 / text の real endpoint 解析条件を維持する。
    - サイズまたは SHA-256 が一致しない場合は `ERROR` にし、409 で拒否する。
    - VLM 出力は `StructuredExtraction` で Pydantic 検証してから保存する。`raw_text` に加えて `elements`（`title` / `text` / `list` / `table` / `figure` / `header` / `footer` 等）を持ち、page number、bbox、section path、confidence、parser metadata を保存できる。
    - `elements` が欠落した旧形式の抽出結果は `raw_text` から軽量推定し、`raw_text` が欠落した構造化結果は検索可能 element から本文を合成する。
-   - Docling / Marker / Unstructured / RAGFlow DeepDoc の「ページ・読み順・表・章節を要素として残す」ベストプラクティスは、外部 parser 依存を追加せず OCI Enterprise AI の structured output schema と軽量な raw text element 推定に再実装する。
-   - Enterprise AI gateway の request shape が標準 payload と異なる場合は、`PLATFORM_OCI_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` で JSON object template を設定する。
-   - `python -m app.rag.enterprise_ai_probe` で LLM/VLM endpoint の request preview と実 response parsing を Oracle / Object Storage から切り離して確認できる。probe 出力には raw prompt、context、OCR 本文、回答本文を含めず、payload shape と parse summary だけを残す。
+   - Docling / Marker / Unstructured / RAGFlow DeepDoc の「ページ・読み順・表・章節を要素として残す」ベストプラクティスは、外部 parser 依存を追加せず画像対応モデル（VLM）の structured output schema と軽量な raw text element 推定に再実装する。
+   - モデルの API の request shape が標準 payload と異なる場合は、`PLATFORM_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` で JSON object template を設定する。
+   - `python -m app.rag.enterprise_ai_probe` で LLM/VLM endpoint の request preview と実 response parsing を Oracle / 原本の保存先から切り離して確認できる。probe 出力には raw prompt、context、OCR 本文、回答本文を含めず、payload shape と parse summary だけを残す。
    - `GET /api/documents/{document_id}/recipes/{recipe_id}/extraction-export?format=json|markdown|html|chunks` で、レシピの保存済み `StructuredExtraction` を JSON / Markdown / escaped HTML / 非 embedding chunk view として監査できる。文書の詳細の「抽出エクスポート」タブで Markdown / HTML / JSON をダウンロード・コピーでき、chunk の JSON は「Chunk / Citation」タブからダウンロードできる（`download=true` で添付として返す。内容の確認は「本文テキスト」「構造化要素」「Chunk / Citation」タブが担う。#561）。HTML は `tables[].cells` を safe `<table>` として再構成し、row / col / bbox lineage を保持する。Marker / Docling 的な多形式出力はここで本プロジェクト schema へ再マップし、再解析や外部 LLM / vector DB 呼び出しは行わない。
    - `UPLOADED` / `ERROR` を取込対象にし、`INGESTING` は二重実行防止で 409 にする。
    - `INDEXED` は force なしなら既存結果を返す。`force=true` は `INDEXED` の再取込に使える。
@@ -48,10 +48,10 @@
    - 大きな文書でも chunk 総数では拒否せず、生成された全 chunk を embedding / indexing 対象にする。
 
 4. 埋め込み
-   - 実装: `backend/app/clients/oci_genai.py`
-   - 本番は OCI Generative AI Inference の 埋め込み（既定 `text-embedding-v4`）で 1024 次元（`EMBEDDING_DIMENSIONS`。#46）を使う。
+   - 実装: `backend/app/clients/genai.py`
+   - 本番は埋め込みモデル（モデルの API の OpenAI 互換の `/embeddings`。既定 `text-embedding-v4`）で 1024 次元（`EMBEDDING_DIMENSIONS`。#46）を使う。
    - query embedding は `SEARCH_QUERY`、文書 chunk embedding は `SEARCH_DOCUMENT` の input type を使う。
-   - OCI embedding の返却件数と 1024 次元幅を検証し、不一致なら Oracle へ渡す前に fail fast する。
+   - 埋め込みの返却件数と 1024 次元幅を検証し、不一致なら Oracle へ渡す前に fail fast する。
 
 5. 索引
    - 実装: `backend/app/clients/oracle.py`
@@ -87,8 +87,8 @@
    - GraphRAG/navigation/metadata layer が未 materialize の場合は diagnostics と KB 詳細で `planned_only` / `needs_reingest` を表示し、構築済みと見せない。
 
 8. リランク
-   - 本番は OCI Generative AI Cohere Rerank v4 fast。回答フローは融合した検索候補を rerank で並べ替える（`RAG_RERANK_ENABLED`。既定は有効）。
-   - OCI rerank の返却 index は候補範囲内・重複なし、返却件数は `top_n` 以内、score は finite number であることを検証し、不正な rerank 結果は fail fast する。
+   - 本番は再ランクのモデル（モデル設定の既定の再ランクモデル）。回答フローは融合した検索候補を rerank で並べ替える（`RAG_RERANK_ENABLED`。既定は有効）。
+   - 再ランクの返却 index は候補範囲内・重複なし、返却件数は `top_n` 以内、score は finite number であることを検証し、不正な rerank 結果は fail fast する。
    - 根拠の child と同じ `chunk_group_id` の兄弟 chunk（上限 `RAG_CONTEXT_GROUP_MAX_CHUNKS`）と親本文（`parent_text`）で親子を復元し（small-to-big）、根拠の child の前後の child（`RAG_NEIGHBOR_CHILD_COUNT`、既定 3）を文脈に足す。
    - 上位の候補の本文が参照する節（「第3章を参照」など。取込で解決して chunk の metadata に保存）の chunk を、上限付き（`RAG_REFERENCE_EXPANSION_MAX_CHUNKS`、既定 4）で参照元の直後に rerank の候補として足す（#1280。[rag-engine.md の設定一覧](./rag-engine.md#設定一覧)）。文書名だけで別の文書を指す文（「時間帯は定期保守計画で確かめます」）は、検索範囲の文書のタイトル・文書名で文書を決め、その文書の質問に関連の高い chunk（文書の中の検索と rerank）を足す（#1400）。参照先が下位の候補・前後の文脈にあるときも参照元の直後へ移す。参照の書き方の語（手がかりの語・章や条の単位・漢数字・記号など）は言語資源（取込・検索・回答設定 >「言語資源」。[language-resources.md](./language-resources.md)。#2181）。
    - 実体・別名索引: 文書中の対象（実体）を名称・ID・別名で識別し、表の行や本文の定義と原文の chunk を関連づける。構築は全体の既定（OFF）を文書レシピで上書きできる。検索方法の全体設定「実体・別名による検索拡張」（既定 OFF）を有効にすると、質問と上位の検索候補を起点に、同じ対象の定義（名寄せ）と属性で結び付く対象の根拠を 1 段だけ追加する。追加数の上限も全体設定で決め、検索・回答プロファイルでは上書きしない。Oracle の `rag_entities` / `rag_entity_aliases` / `rag_entity_chunks` を使い、外部のグラフ DB や LLM の抽出は使わない（[rag-engine.md の設定一覧](./rag-engine.md#設定一覧)）。
@@ -102,9 +102,9 @@
    - Memory Router / Retrieval Plan・Resolver / Verifier・Context Builder・Agent Memory（`rag_agent_memories` への検索と writeback）は #595 で削除し、テーブルは #596 で削除した。監査の列は既存の監査の行を変えないため残す。
 
 10. 回答生成
-   - LLM は **OCI Enterprise AI**。回答フローが、small-to-big で復元した根拠の文脈を回答生成のプロンプト（取込・検索・回答設定 > 回答プロンプト。`rag_answer_prompts`）で渡して回答を生成する。追加の LLM provider は導入しない。
+   - LLM は **モデルの API**。回答フローが、small-to-big で復元した根拠の文脈を回答生成のプロンプト（取込・検索・回答設定 > 回答プロンプト。`rag_answer_prompts`）で渡して回答を生成する。追加の LLM provider は導入しない。
    - チャットでは、会話履歴から質問を単独で意味が通る形に書き換えてから回答する（`RAG_HISTORY_REWRITE_ENABLED`）。書き換えた質問も安全チェックを通す。
-   - Enterprise AI gateway の request shape が標準 payload と異なる場合は、`PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` で JSON object template を設定する。
+   - モデルの API の request shape が標準 payload と異なる場合は、`PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` で JSON object template を設定する。
    - LLM 契約は `python -m app.rag.enterprise_ai_probe --surface llm` で個別に検証できる。回答本文は probe artifact に保存せず、parse 成功と文字数だけを確認する。
    - 生成後に回答側の安全チェックで secret leakage をブロックし、回答と根拠の文脈の token / n-gram 重なりが少ない場合は `low_groundedness` warning を返す。
    - `/api/search`・`/api/search/stream`・チャットの送信は、回答を LLM で生成するため `RAG_ANSWER_TIMEOUT_SECONDS`（既定 600 秒。#1425）で pipeline 実行時間を制限する（#375。品質評価の 1 ケースも同じ上限で打ち切る。#383）。通常検索は timeout 時に 504 を返す。SSE は stream 開始後に timeout した場合、HTTP status は維持して `error` event（`message` に時間切れになった工程と再試行の案内、`stage` に工程名）を返し、どちらも `rag_search_audit.error_stage=timeout` を残す。

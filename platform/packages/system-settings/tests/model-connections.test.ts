@@ -31,10 +31,10 @@ const primary: EnterpriseAiConnectionSettings = {
 const secondary: EnterpriseAiConnectionSettings = {
   ...emptyConnection("secondary"),
   endpoint: "https://secondary.example",
-  project_ocid: "ocid1.generativeaiproject.oc1..secondary",
+  project_id: "ocid1.generativeaiproject.oc1..secondary",
   has_api_key: true,
 };
-// ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project OCID を入れない。
+// ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project ID を入れない。
 const tertiary: EnterpriseAiConnectionSettings = {
   ...emptyConnection("tertiary"),
   endpoint: "https://api.openai.com/v1",
@@ -73,14 +73,14 @@ describe("接続（#533 / #542）", () => {
 
   it("プライマリ接続の入力欄の id は #533 より前のまま", () => {
     expect(connectionFieldId("primary", "endpoint")).toBe("enterprise-endpoint");
-    expect(connectionFieldId("primary", "project_ocid")).toBe("enterprise-project-ocid");
+    expect(connectionFieldId("primary", "project_id")).toBe("enterprise-project-id");
     expect(connectionFieldId("primary", "api_key")).toBe("enterprise-api-key");
     expect(connectionFieldId("secondary", "endpoint")).toBe("enterprise-secondary-endpoint");
     expect(connectionFieldId("secondary", "api_key")).toBe("enterprise-secondary-api-key");
     expect(connectionFieldId("tertiary", "endpoint")).toBe("enterprise-tertiary-endpoint");
   });
 
-  it("ターシャリ接続は Endpoint URL と API key が必須で、Project OCID は任意（#786）", () => {
+  it("ターシャリ接続は Endpoint URL と API key が必須で、Project ID は任意（#786）", () => {
     expect(validateConnections([primary, tertiary])).toEqual({});
     expect(validateConnections([primary, emptyConnection("tertiary")])).toEqual({
       tertiary: {
@@ -123,8 +123,8 @@ describe("接続（#533 / #542）", () => {
     expect(firstConnectionError({})).toBeNull();
   });
 
-  it("Project OCID はどの接続でも任意（#9）", () => {
-    const blank = { ...secondary, project_ocid: "" };
+  it("Project ID はどの接続でも任意（#9）", () => {
+    const blank = { ...secondary, project_id: "" };
     expect(validateConnections([primary, blank])).toEqual({});
   });
 
@@ -210,7 +210,7 @@ describe("接続（#533 / #542）", () => {
     const legacy = {
       enterprise_ai: {
         endpoint: "https://legacy.example",
-        project_ocid: "ocid1.legacy",
+        project_id: "ocid1.legacy",
         api_key: "",
         has_api_key: true,
         clear_api_key: false,
@@ -224,7 +224,7 @@ describe("接続（#533 / #542）", () => {
       {
         ...emptyConnection("primary"),
         endpoint: "https://legacy.example",
-        project_ocid: "ocid1.legacy",
+        project_id: "ocid1.legacy",
         has_api_key: true,
       },
     ]);

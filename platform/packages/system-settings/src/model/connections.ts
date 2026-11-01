@@ -1,5 +1,5 @@
 /**
- * OCI Enterprise AI の接続（プライマリ接続・セカンダリ接続・ターシャリ接続）と、登録モデルが使う接続
+ * モデルの API の接続（プライマリ接続・セカンダリ接続・ターシャリ接続）と、登録モデルが使う接続
  * （#533 / #542 / #786）。
  * 検証の規則は backend の `pr_system_settings.model.validate_enterprise_ai_connections` と同じ。
  */
@@ -23,16 +23,16 @@ export const SECONDARY_CONNECTION_ID: EnterpriseAiConnectionId = "secondary";
 export const TERTIARY_CONNECTION_ID: EnterpriseAiConnectionId = "tertiary";
 
 /** 接続の入力欄（検証とフォーカスの順）。 */
-export type ConnectionField = "endpoint" | "project_ocid" | "api_key";
+export type ConnectionField = "endpoint" | "project_id" | "api_key";
 export const CONNECTION_FIELD_ORDER: readonly ConnectionField[] = [
   "endpoint",
-  "project_ocid",
+  "project_id",
   "api_key",
 ];
 
 const CONNECTION_FIELD_ID_SUFFIX: Record<ConnectionField, string> = {
   endpoint: "endpoint",
-  project_ocid: "project-ocid",
+  project_id: "project-id",
   api_key: "api-key",
 };
 
@@ -108,7 +108,7 @@ export function emptyConnection(
   return {
     connection_id: connectionId,
     endpoint: "",
-    project_ocid: "",
+    project_id: "",
     api_key: "",
     has_api_key: false,
     clear_api_key: false,
@@ -183,8 +183,8 @@ export type ConnectionErrors = Partial<
 >;
 
 /**
- * 保存を止める欄。Project OCID はどの接続でも任意（#786 / #9）——`OpenAI-Project` ヘッダーは
- * 入力したときだけ送るので、OCI 以外の OpenAI 互換 API では空のままで足りる。
+ * 保存を止める欄。Project ID はどの接続でも任意（#786 / #9）——`OpenAI-Project` ヘッダーは
+ * 入力したときだけ送るので、project を求めない OpenAI 互換 API では空のままで足りる。
  * backend の `validate_enterprise_ai_connections` と同じ。
  */
 const REQUIRED_CONNECTION_FIELDS = [
@@ -209,8 +209,8 @@ export function connectionHasApiKey(connection: EnterpriseAiConnectionSettings):
 /**
  * 接続の入力のエラー（#542 / #786 / #9）。
  * - セカンダリ接続・ターシャリ接続を設定したら、Endpoint URL・API key は必須
- * - Project OCID はどの接続でも任意（OCI Enterprise AI を使うときだけ入れる）
- * - プライマリ接続は OCI で運用するときだけ必須（「OCI 運用時必須」の表示だけで、保存は止めない）
+ * - Project ID はどの接続でも任意（提供元が project を求めるときだけ入れる）
+ * - プライマリ接続は使うときだけ必須（「利用時必須」の表示だけで、保存は止めない）
  */
 export function validateConnections(
   connections: readonly EnterpriseAiConnectionSettings[],
@@ -259,7 +259,7 @@ export function unsavedConnectionIds(
       !current ||
       !baseline ||
       current.endpoint.trim() !== baseline.endpoint.trim() ||
-      current.project_ocid.trim() !== baseline.project_ocid.trim() ||
+      current.project_id.trim() !== baseline.project_id.trim() ||
       current.api_key.trim() !== baseline.api_key.trim() ||
       current.clear_api_key !== baseline.clear_api_key
     ) {
@@ -319,7 +319,7 @@ export function normalizeModelSettings(
     ? sortConnections(enterprise.connections).map((connection) => ({
         ...emptyConnection(connection.connection_id),
         endpoint: connection.endpoint ?? "",
-        project_ocid: connection.project_ocid ?? "",
+        project_id: connection.project_id ?? "",
         api_key: connection.api_key ?? "",
         has_api_key: connection.has_api_key ?? false,
         clear_api_key: connection.clear_api_key ?? false,
@@ -328,13 +328,13 @@ export function normalizeModelSettings(
         {
           ...emptyConnection(PRIMARY_CONNECTION_ID),
           endpoint: enterprise.endpoint ?? "",
-          project_ocid: enterprise.project_ocid ?? "",
+          project_id: enterprise.project_id ?? "",
           has_api_key: enterprise.has_api_key ?? false,
         },
       ];
   const {
     endpoint: _endpoint,
-    project_ocid: _project,
+    project_id: _project,
     api_key: _apiKey,
     has_api_key: _hasApiKey,
     clear_api_key: _clearApiKey,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OCI Compute へデプロイした後のアプリログをリアルタイムに表示する読み取り専用ビューア。
+# Compute へ配備した後のアプリログをリアルタイムに表示する読み取り専用ビューア。
 # systemd unit(journald)と /var/log 配下のログを 1 コマンドで統合表示する。
 # サービスの再起動など状態を変更する操作は一切行わない。
 set -Eeuo pipefail
@@ -71,7 +71,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/tail-logs.sh [options]
 
-OCI Compute 上のアプリログをリアルタイム表示します(読み取り専用)。
+Compute 上のアプリログをリアルタイム表示します(読み取り専用)。
 引数なしで backend と 製品の workerの systemd unit を統合追尾します。
 
 対象の選択:

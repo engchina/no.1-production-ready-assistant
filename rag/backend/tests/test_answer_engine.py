@@ -246,9 +246,9 @@ async def test_answer_engine_answers_with_backend_search_and_evidence(
     monkeypatch: pytest.MonkeyPatch,
     custom_format: bool,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = FakeOracle()
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"]),
@@ -320,7 +320,7 @@ async def test_answer_diagnostics_keep_llm_usage_and_round_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """工程ごとの LLM の token の数と、是正の round の時間の配分を診断に残す(#1516)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.resources.llm_usage import record_llm_usage
 
     def fake_with_usage(system: str, prompt: str, settings: Any, schema: Any, **_: Any) -> Any:
@@ -330,7 +330,7 @@ async def test_answer_diagnostics_keep_llm_usage_and_round_budget(
         )
         return _fake_llm(system, prompt, settings, schema)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", fake_with_usage)
+    monkeypatch.setattr(engine_api, "parse_text_response", fake_with_usage)
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"]),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -357,9 +357,9 @@ async def test_answer_diagnostics_keep_the_evidence_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """全体設定の根拠の文字予算が回答の経路まで届き、使った予算と送った文字数を診断に残す(#3776)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"], rag_evidence_budget_chars=64000),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -392,9 +392,9 @@ async def test_answer_diagnostics_keep_the_evidence_budget(
 
 async def test_execution_steps_carry_structured_details(monkeypatch: pytest.MonkeyPatch) -> None:
     """回答の記録の工程は、共有の詳細の形（見出しと値・行）の詳細を持つ（#2341）。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"]),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -418,11 +418,11 @@ async def test_execution_steps_carry_structured_details(monkeypatch: pytest.Monk
 
 @pytest.mark.usefixtures("trace_body_enabled")
 async def test_pipeline_delegates_to_answer_engine(monkeypatch: pytest.MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     pipeline = RagPipeline(
         settings=Settings(),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -510,11 +510,11 @@ async def test_pipeline_delegates_to_answer_engine(monkeypatch: pytest.MonkeyPat
 
 
 async def test_answer_engine_pipeline_records_search_audit(monkeypatch: pytest.MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.pipeline as pipeline_module
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     audits: list[dict[str, Any]] = []
     monkeypatch.setattr(
         pipeline_module, "record_rag_search_audit", lambda **kwargs: audits.append(kwargs)
@@ -661,7 +661,7 @@ async def test_answer_engine_passes_classification_filter(monkeypatch: pytest.Mo
 async def test_answer_engine_standard_flow_without_rerank_answers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     class NoRerankGenAi(FakeGenAi):
         async def rerank(
@@ -669,7 +669,7 @@ async def test_answer_engine_standard_flow_without_rerank_answers(
         ) -> list[tuple[int, float]]:
             raise AssertionError("rerank は無効")
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",
@@ -693,8 +693,8 @@ def test_build_engine_settings_configures_rerank(tmp_path: Any) -> None:
 
     engine_settings = build_engine_settings(
         Settings(
-            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            oci_genai_rerank_model="qwen3-rerank",
+            enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            genai_rerank_model="qwen3-rerank",
         ),
         output_dir=tmp_path,
     )
@@ -712,11 +712,11 @@ def test_build_engine_settings_passes_embedding_model_connection(tmp_path: Any) 
 
     bailian = "https://llm-xxxx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
     settings = Settings(
-        oci_enterprise_ai_endpoint="https://api.deepseek.com",
-        oci_enterprise_ai_api_key="sk-deepseek",
-        oci_enterprise_ai_tertiary_endpoint=bailian,
-        oci_enterprise_ai_tertiary_api_key="sk-aliyun",
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint="https://api.deepseek.com",
+        enterprise_ai_api_key="sk-deepseek",
+        enterprise_ai_tertiary_endpoint=bailian,
+        enterprise_ai_tertiary_api_key="sk-aliyun",
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
             EnterpriseAiConfiguredModel(
                 model_id="text-embedding-v4", kind="embedding", connection_id="tertiary"
@@ -725,9 +725,9 @@ def test_build_engine_settings_passes_embedding_model_connection(tmp_path: Any) 
                 model_id="qwen3-rerank", kind="rerank", connection_id="tertiary"
             ),
         ],
-        oci_enterprise_ai_default_text_model="deepseek-flash",
-        oci_genai_embedding_model="text-embedding-v4",
-        oci_genai_rerank_model="qwen3-rerank",
+        enterprise_ai_default_text_model="deepseek-flash",
+        genai_embedding_model="text-embedding-v4",
+        genai_rerank_model="qwen3-rerank",
     )
 
     engine_settings = build_engine_settings(settings, output_dir=tmp_path)
@@ -756,7 +756,7 @@ async def test_rerank_enabled_calls_backend_rerank(
 
     以前は rag_engine の Settings に接続先が渡らず、Rerank ON でも常に「未実行」だった。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     class RecordingGenAi(FakeGenAi):
         def __init__(self) -> None:
@@ -768,11 +768,11 @@ async def test_rerank_enabled_calls_backend_rerank(
             self.rerank_calls.append(len(documents))
             return await super().rerank(query, documents, top_n)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     genai = RecordingGenAi()
     engine = AnswerEngine(
         Settings(
-            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -787,7 +787,7 @@ async def test_rerank_enabled_calls_backend_rerank(
 
 
 class _ScoredGenAi(FakeGenAi):
-    """rerank の関連度を固定値で返すスタブ(OCI は呼ばない)。"""
+    """rerank の関連度を固定値で返すスタブ(モデルの API は呼ばない)。"""
 
     async def rerank(self, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
         return [(index, 0.87 - index * 0.1) for index in range(len(documents))][:top_n]
@@ -808,12 +808,12 @@ async def test_rerank_score_and_rank_reach_citations(
     以前は rerank を実行しても引用へ写さず、RAG 検索の引用カードが常に「Rerank 未実行」だった。
     rerank の候補ではない前後の chunk(同じ節の前後)は ``None`` のまま。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
-            oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
             rag_query_strategy="simple_retrieval",
             rag_answer_flow="standard_rag",
         ),
@@ -840,12 +840,12 @@ async def test_rerank_score_and_rank_reach_citations(
     [
         (
             {
-                "oci_enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "enterprise_ai_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "rag_rerank_enabled": False,
             },
             "無効の設定",
         ),
-        ({"oci_enterprise_ai_endpoint": ""}, "モデルまたは Base URL が未設定"),
+        ({"enterprise_ai_endpoint": ""}, "モデルまたは Base URL が未設定"),
     ],
     ids=["disabled", "unconfigured"],
 )
@@ -853,7 +853,7 @@ async def test_rerank_skip_is_recorded_with_reason(
     monkeypatch: pytest.MonkeyPatch, settings: dict[str, Any], reason: str
 ) -> None:
     """rerank を実行しないときは、実行記録の状態に理由を付け、引用の rerank は空のまま(#662)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     class NoRerankGenAi(FakeGenAi):
         async def rerank(
@@ -861,7 +861,7 @@ async def test_rerank_skip_is_recorded_with_reason(
         ) -> list[tuple[int, float]]:
             raise AssertionError("rerank は実行しない")
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(rag_query_strategy="simple_retrieval", rag_answer_flow="standard_rag", **settings),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -914,13 +914,13 @@ def _figure_oracle() -> FakeOracle:
 def _model_settings(**overrides: Any) -> Settings:
     """回答のモデルの候補: テキストだけのモデル 2 つと画像を読めるモデル 2 つ(既定の Vision)。"""
     values: dict[str, Any] = {
-        "oci_enterprise_ai_default_text_model": "text-model",
-        "oci_enterprise_ai_default_vision_model": "vision-model",
+        "enterprise_ai_default_text_model": "text-model",
+        "enterprise_ai_default_vision_model": "vision-model",
         **overrides,
     }
     return Settings(
         _env_file=None,
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="text-model", display_name="Text A"),
             EnterpriseAiConfiguredModel(model_id="text-model-b", display_name="Text B"),
             EnterpriseAiConfiguredModel(
@@ -954,7 +954,7 @@ async def test_answer_engine_attaches_evidence_images_for_vision_answer_model(
 
     質問は画像を名指ししない。既定の Vision モデルへは切り替えず、診断のモデルも 1 つだけ。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.answer_engine as engine_module
 
@@ -982,9 +982,9 @@ async def test_answer_engine_attaches_evidence_images_for_vision_answer_model(
         return _fake_llm(system, prompt, settings, schema, **kw)
 
     monkeypatch.setattr(engine_module, "load_parsed_source", fake_source)
-    monkeypatch.setattr(engine_oci, "parse_text_response", fake_text)
-    monkeypatch.setattr(engine_oci, "parse_multimodal_response", fake_multimodal)
-    overrides = {} if answer_model_id else {"oci_enterprise_ai_default_text_model": "vlm-answer"}
+    monkeypatch.setattr(engine_api, "parse_text_response", fake_text)
+    monkeypatch.setattr(engine_api, "parse_multimodal_response", fake_multimodal)
+    overrides = {} if answer_model_id else {"enterprise_ai_default_text_model": "vlm-answer"}
     engine = AnswerEngine(
         _model_settings(**overrides),
         oracle=_figure_oracle(),  # type: ignore[arg-type]
@@ -1013,7 +1013,7 @@ async def test_answer_engine_attaches_evidence_images_for_vision_answer_model(
         (_model_settings(), "text-model-b", "text-model-b"),
         # 既定の Vision モデルが無い環境。
         (
-            Settings(_env_file=None, oci_enterprise_ai_default_text_model="text-model"),
+            Settings(_env_file=None, enterprise_ai_default_text_model="text-model"),
             None,
             "text-model",
         ),
@@ -1029,7 +1029,7 @@ async def test_answer_engine_never_attaches_images_for_text_answer_model(
 
     図の内容は取り込み時に作った文字の説明(根拠の本文)で答える。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.answer_engine as engine_module
 
@@ -1046,8 +1046,8 @@ async def test_answer_engine_never_attaches_images_for_text_answer_model(
         return _fake_llm(system, prompt, settings, schema, **kw)
 
     monkeypatch.setattr(engine_module, "load_parsed_source", fail_source)
-    monkeypatch.setattr(engine_oci, "parse_text_response", fake_text)
-    monkeypatch.setattr(engine_oci, "parse_multimodal_response", fail_multimodal)
+    monkeypatch.setattr(engine_api, "parse_text_response", fake_text)
+    monkeypatch.setattr(engine_api, "parse_multimodal_response", fail_multimodal)
     engine = AnswerEngine(
         settings,
         oracle=_figure_oracle(),  # type: ignore[arg-type]
@@ -1128,11 +1128,11 @@ async def _run_chat(
     *,
     history: bool,
 ) -> tuple[Any, QueryRecordingOracle]:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import ChatTurn, RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = QueryRecordingOracle()
     pipeline = RagPipeline(
         settings=Settings(),
@@ -1215,11 +1215,11 @@ def _walk_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def test_answer_record_is_saved_per_surface(monkeypatch: pytest.MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = SavingOracle()
     pipeline = RagPipeline(
         settings=Settings(rag_answer_record_retention_days=90),
@@ -1272,11 +1272,11 @@ async def test_answer_record_purge_skipped_when_retention_unlimited(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """既定の保持日数は 0（無期限）で、回答の記録を自動では削除しない（#3235）。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = SavingOracle()
     assert Settings().rag_answer_record_retention_days == 0
     pipeline = RagPipeline(
@@ -1294,11 +1294,11 @@ async def test_answer_record_purge_skipped_when_retention_unlimited(
 async def test_answer_record_save_failure_still_returns_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     pipeline = RagPipeline(
         settings=Settings(),
         oracle=SavingOracle(fail=True),  # type: ignore[arg-type]
@@ -1351,11 +1351,11 @@ def _fake_evaluation_llm(
 async def test_saved_answer_is_evaluated_with_standard_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.answer_engine import evaluate_answer_record
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(),
         oracle=FakeOracle(),  # type: ignore[arg-type]
@@ -1364,7 +1364,7 @@ async def test_saved_answer_is_evaluated_with_standard_answer(
     outcome = await engine.run(SearchRequest(query="受注の登録方法は？"))
     assert outcome.evaluation_input is not None
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_evaluation_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_evaluation_llm)
     evaluation = evaluate_answer_record(
         outcome.evaluation_input,
         "受注番号を入力し、登録ボタンを押します。",
@@ -1490,9 +1490,9 @@ async def _answer_two_documents(
     question: str,
     filters: dict[str, str] | None = None,
 ) -> Any:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",
@@ -1720,7 +1720,7 @@ async def test_answer_record_passes_first_page_context_as_document_background(
 
     ヒットした chunk set の分を 1 回の回答で 1 回だけ読み、検索の文には入れない。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     prompts: list[str] = []
 
@@ -1728,7 +1728,7 @@ async def test_answer_record_passes_first_page_context_as_document_background(
         prompts.append(prompt)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", recording_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", recording_llm)
     oracle = FakeOracle()
     oracle.chunks = [_chunk_in_chunk_set(chunk) for chunk in oracle.chunks]
     oracle.first_page_contexts = {"cs-1": _first_page_context()}
@@ -2155,13 +2155,13 @@ async def _answer_with_screens(
     enabled: bool,
     auto_field_conditions: Sequence[Any] = (),
 ) -> tuple[Any, list[str]]:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation import answering
 
     from app.rag import answer_engine
 
     calls: list[str] = []
-    monkeypatch.setattr(engine_oci, "parse_text_response", _screen_llm(calls))
+    monkeypatch.setattr(engine_api, "parse_text_response", _screen_llm(calls))
     monkeypatch.setattr(answer_engine, "_SCREEN_CATALOG_CACHE", {})
     answering._SCREEN_LINK_CACHE.clear()
     engine = AnswerEngine(
@@ -2547,7 +2547,7 @@ def test_build_engine_settings_uses_answer_model_id(tmp_path: Any) -> None:
     from app.rag.answer_engine import build_engine_settings
 
     settings = Settings(
-        oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="model-b")],
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="model-b")],
     )
     default = build_engine_settings(settings, output_dir=tmp_path)
     chosen = build_engine_settings(settings, output_dir=tmp_path, answer_model_id="model-b")
@@ -2562,12 +2562,12 @@ async def test_pipeline_passes_answer_model_id_to_answer_engine(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """チャットの比較の列のモデルが、回答フローの設定まで届く(#593)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.answer_engine as answer_engine
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     seen: list[str | None] = []
     original = answer_engine.build_engine_settings
 
@@ -2576,7 +2576,7 @@ async def test_pipeline_passes_answer_model_id_to_answer_engine(
         return original(settings, **kwargs)
 
     monkeypatch.setattr(answer_engine, "build_engine_settings", capture)
-    settings = Settings(oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="model-a")])
+    settings = Settings(enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="model-a")])
     for model_id in ("model-a", None):
         pipeline = RagPipeline(
             settings=settings,
@@ -2603,11 +2603,11 @@ async def test_retrieval_only_returns_candidates_without_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """retrieval_only は回答フローの検索だけを行い、LLM・rerank・回答の保存を使わない(#593)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.pipeline as pipeline_module
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _no_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _no_llm)
     audits: list[dict[str, Any]] = []
     monkeypatch.setattr(
         pipeline_module, "record_rag_search_audit", lambda **kwargs: audits.append(kwargs)
@@ -2660,7 +2660,7 @@ async def _run_with_progress(
     complete_evidence: bool = True,
 ) -> tuple[Any, list[tuple[str, str]], list[str], SavingOracle]:
     """同じ stub の依存で pipeline を 1 回実行し、工程の開始・終了の列と LLM の schema を返す。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.pipeline as pipeline_module
 
@@ -2670,7 +2670,7 @@ async def _run_with_progress(
         schemas.append(schema.__name__)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", record_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", record_llm)
     oracle = SavingOracle()
     pipeline = pipeline_module.RagPipeline(
         settings=Settings(rag_query_strategy="auto_routing", rag_answer_flow=answer_flow),
@@ -2775,11 +2775,11 @@ async def test_evidence_retrieval_for_agent_stops_after_document_search(
 
 async def test_answer_diagnostics_include_models(monkeypatch: pytest.MonkeyPatch) -> None:
     """回答の診断に、使った LLM(表示名)・embedding・rerank のモデルが入る(#649)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     settings = Settings(
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="model-a", display_name="Model A"),
         ],
         rag_rerank_enabled=False,
@@ -2794,7 +2794,7 @@ async def test_answer_diagnostics_include_models(monkeypatch: pytest.MonkeyPatch
     assert outcome.diagnostics["models"] == {
         "llm": {"model_id": "model-a", "label": "Model A"},
         "attached_images": 0,
-        "embedding": settings.oci_genai_embedding_model,
+        "embedding": settings.genai_embedding_model,
         "rerank": "",
     }
 
@@ -2820,11 +2820,11 @@ async def test_answer_engine_applies_auto_field_conditions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """質問から読み取った条件を検索条件に足し、診断に出す(#652)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.schemas.search import ExtractionFieldCondition
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = FakeOracle()
     condition = ExtractionFieldCondition(name="金額", value_type="number", op="gte", value="100000")
     engine = AnswerEngine(
@@ -2849,11 +2849,11 @@ async def test_answer_engine_relaxes_auto_field_conditions_without_hits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """読み取った条件で 0 件なら、条件を外して 1 回だけ検索し直す(手の条件は外さない。#652)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.schemas.search import ExtractionFieldCondition
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = EmptyWithFieldFilterOracle()
     engine = AnswerEngine(
         Settings(),
@@ -3037,9 +3037,9 @@ async def test_zero_evidence_diagnostics_record_the_stage(
 
     検索の条件は項目の名前だけを残し、値(質問・文書の内容を含みうる)は出さない。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         settings,
         oracle=oracle,  # type: ignore[arg-type]
@@ -3071,12 +3071,12 @@ async def test_pipeline_reads_field_conditions_only_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """設定が有効なときだけ、検索・回答プロファイルの項目の定義で質問から条件を読み取る(#652)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     import app.rag.pipeline as pipeline_module
     from app.rag.extraction_field_adapter import FieldDefinition
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
     class ViewOracle(SavingOracle):
         async def get_search_answer_profile(self, search_answer_profile_id: str) -> Any:
@@ -3143,7 +3143,7 @@ async def test_answer_engine_answers_only_from_selected_approved_faq(
     """類似問を選んだら検索せず、質問・類似問・承認済みの回答だけを LLM に渡す(#702)。"""
     import json
 
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     import rag_engine.generation.answering as answering
     from rag_engine.generation.faq_answer import FaqAnswerDraft
 
@@ -3157,7 +3157,7 @@ async def test_answer_engine_answers_only_from_selected_approved_faq(
     def no_search(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("類似問を選んだときは検索しない")
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", fake_llm)
     monkeypatch.setattr(answering, "answer_question_result", no_search)
     oracle = FakeOracle()
     engine = AnswerEngine(
@@ -3206,7 +3206,7 @@ async def test_answer_engine_passes_the_clarification_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """確認で選んだ条件は回答の前提に渡し、回答の末尾と診断に対象の範囲を示す(#717)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     import rag_engine.generation.answering as answering
 
     from app.rag.answer_engine import AnswerScope
@@ -3218,7 +3218,7 @@ async def test_answer_engine_passes_the_clarification_scope(
         captured.update(kwargs)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     monkeypatch.setattr(answering, "answer_question_result", spy)
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"]),
@@ -3246,12 +3246,12 @@ async def test_answer_diagnostics_record_profile_and_prompt_versions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """回答の記録に検索・回答プロファイルの版とプロンプトの版を残す(#1276)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.answer_provenance import answer_prompt_version
     from app.rag.pipeline import RagPipeline
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     revision = {"id": "sap-1", "updated_at": "2026-10-01T00:00:00+00:00", "config_sha256": "abc"}
     pipeline = RagPipeline(
         settings=Settings(rag_search_answer_profile_revision=revision),
@@ -3347,7 +3347,7 @@ class CoverageOracle(FakeOracle):
 async def _answer_with_coverage(
     monkeypatch: pytest.MonkeyPatch, oracle: CoverageOracle, question: str, **settings: Any
 ) -> Any:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     def explicit_gap(system: str, prompt: str, config: Any, schema: type, **options: Any) -> Any:
         result = _fake_llm(system, prompt, config, schema, **options)
@@ -3364,7 +3364,7 @@ async def _answer_with_coverage(
             return GroundedDraft.model_validate(data)
         return result
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", explicit_gap)
+    monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
     settings.setdefault("rag_request_coverage_retrieval_enabled", True)
     engine = AnswerEngine(
         Settings(
@@ -3459,9 +3459,9 @@ async def test_original_question_keeps_numbered_requests_through_coverage(
 ) -> None:
     """元の質問の番号つきの 3 要求を、検索用に言い換えた検索文から作り直さずに、要求ごとの
     根拠の確認と探し直し・診断まで保つ(#2665)。検索は検索文で行う。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     oracle = ApprovalOnlyOracle()
     engine = AnswerEngine(
         Settings(
@@ -3511,9 +3511,9 @@ async def test_without_original_question_requests_come_from_the_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """元の質問を渡さなければ、要求は検索文から作る(省略時の挙動を変えない。#2665)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",
@@ -3594,7 +3594,7 @@ async def test_guide_preview_is_recorded_without_extra_model_calls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """下書きで試す回答（#1288）: 記録に印を残す。モデルの呼び出しは同じ。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag.pipeline import RagPipeline
     from app.rag.support_guide_runtime import GUIDE_PREVIEW_KEY
@@ -3605,7 +3605,7 @@ async def test_guide_preview_is_recorded_without_extra_model_calls(
         calls.append(schema.__name__)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", counting_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", counting_llm)
     request = SearchRequest(query="受注の登録方法は？", search_answer_profile_id="bv-1")
 
     normal_oracle = SavingOracle()

@@ -3,7 +3,7 @@
 1. ``POST .../support-guides/import/process/workbook``: Excel のシートと列を返す。列を選べば、
    選んだ列で行を読む（モデルは呼ばない）。
 2. ``POST .../support-guides/import/process/preview``: 行（Excel の行か、貼り付けたテキスト）ごとに
-   OCI Enterprise AI で業務ガイドの下書きを作り、資料名の解決と検証の結果を返す（保存しない）。
+   モデルの API で業務ガイドの下書きを作り、資料名の解決と検証の結果を返す（保存しない）。
 
 選んだ下書きは、既存の取り込み（``POST .../support-guides/import``）で下書きとして作る。ルールの
 候補は、用語・同義語と回答ルールの編集（``POST .../runtime-knowledge/edit``）で無効のルールとして
@@ -19,11 +19,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
+from rag_parser_core.enterprise_ai import sdk_retries_disabled
 from rag_parser_core.language import bind_pack, current_pack, resolve
-from rag_parser_core.oci_enterprise_ai import sdk_retries_disabled
 
 from app.clients.ai_calls import make_ai_caller
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient
 from app.config import Settings, get_settings
 from app.rag.rate_limit import enforce_rate_limit
@@ -51,7 +51,7 @@ _BASE = "/{search_answer_profile_id}/support-guides/import/process"
 
 def guide_draft_llm(settings: Settings) -> GuideDraftLlm:
     """下書きを作る LLM（テストで差し替える）。"""
-    return OciEnterpriseAiClient(settings=settings)
+    return EnterpriseAiClient(settings=settings)
 
 
 async def _profile(
@@ -105,7 +105,7 @@ async def preview_support_guide_process_import(
 ) -> ApiResponse[SupportGuideProcessPreviewData]:
     """行ごとに業務ガイドの下書きを作り、資料名の解決と検証の結果を返す（保存しない）。
 
-    1 行で OCI Enterprise AI を 1 回呼ぶ（上限つき並行。``RAG_SUPPORT_GUIDE_IMPORT_CONCURRENCY``）。
+    1 行でモデルの API を 1 回呼ぶ（上限つき並行。``RAG_SUPPORT_GUIDE_IMPORT_CONCURRENCY``）。
     行の数の上限は ``RAG_SUPPORT_GUIDE_IMPORT_MAX_ROWS``。見出しの語は言語資源
     （``guide_import_cues.process_headings``。プロファイルの上書きを重ねる）。
     """

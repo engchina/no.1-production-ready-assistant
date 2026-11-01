@@ -329,6 +329,6 @@ uv run suite-evaluation compare A=/tmp/multi-hop.suite-a.json D=/tmp/multi-hop.d
 
 ## nightly で流さない理由
 
-業務支援の評価セットと同じく、配備先に資料を取り込み（parser と OCI / Oracle が要る）、`file:` の参照を文書 ID に
+業務支援の評価セットと同じく、配備先に資料を取り込み（parser とモデルの API / Oracle が要る）、`file:` の参照を文書 ID に
 置き換えてからでないと採点できず、回答も 1 問 3〜5 回のモデルの呼び出しがかかるため、nightly には入れず手動 /
 ステージングで流します。

@@ -11,7 +11,7 @@ export const API_KEYS_MESSAGES = {
   "apiKeys.endpoint.copied": "URL をコピーしました",
   "apiKeys.endpoint.copyFailed": "コピーできませんでした。URL を選択してコピーしてください。",
   "apiKeys.endpoint.local": "この画面の URL",
-  "apiKeys.endpoint.public": "公開の URL（OCI）",
+  "apiKeys.endpoint.public": "公開の URL",
   "apiKeys.endpoint.same": "この画面の URL（公開の URL と同じ）",
   "apiKeys.endpoint.copyLabel": "{product}の{kind}: URL をコピー",
   "apiKeys.endpoint.example": "Claude Code の登録の例",

@@ -125,7 +125,7 @@ def _openai_client(
     `Retry-After` を尊重した指数バックオフで送り直します。通信系の再試行はこの client に
     一本化するため、呼び出し側では自前の再試行を重ねません。
 
-    `project_id` は OCI の OpenAI 互換 API 専用の設定です。空のときは `OpenAI-Project`
+    `project_id` は `OpenAI-Project` ヘッダーで送る任意の設定です。空のときは `OpenAI-Project`
     ヘッダを付けない（`project=None`）ことで、project の概念を持たない OpenAI 互換 API でも
     そのまま使えるようにします。
     """
@@ -145,12 +145,6 @@ def _openai_client(
         # timeout・接続の上限・redirect は SDK の既定の client と同じにする。
         http_client=ParameterDroppingClient(timeout=timeout, limits=DEFAULT_CONNECTION_LIMITS, follow_redirects=True),
     )
-
-
-def _serving_mode(models: Any, model_id: str):
-    if model_id.startswith("ocid1.generativeaiendpoint."):
-        return models.DedicatedServingMode(endpoint_id=model_id)
-    return models.OnDemandServingMode(model_id=model_id)
 
 
 def _image_retrieval_template() -> str:
@@ -366,7 +360,7 @@ def _llm_transport_retries(settings: Settings) -> int | None:
     """LLM 呼び出しで `_parse_with_retry` に掛けさせる通信系の再試行回数。
 
     OpenAI 互換 Responses 経路は OpenAI SDK 内蔵の再試行（`_openai_client` の `max_retries`）に
-    任せるため 0 を返し、自前のバックオフを二重に掛けません。OCI Generative AI 経路は全呼び出しを
+    任せるため 0 を返し、自前のバックオフを二重に掛けません。自前の JSON 解析の経路は全呼び出しを
     `NoneRetryStrategy` で送っていて SDK 側が再試行しないため、既定（`LLM_RETRIES`）のまま
     自前で再試行します (#743)。
 
@@ -450,7 +444,7 @@ class IncompleteResponse(RuntimeError):
 class InvalidStructuredOutput(RuntimeError):
     """モデルの応答が構造化出力の契約を満たさなかった（JSON が閉じない・必須項目欠落）。
 
-    OCI Generative AI 経路は応答を自前で JSON 解析・検証するため、この型で送出して `_parse_with_retry` の
+    この経路は応答を自前で JSON 解析・検証するため、この型で送出して `_parse_with_retry` の
     再実行（#663）の対象にする。OpenAI 互換経路は pydantic の ValidationError が素通しで届く (#835)。
     """
 
@@ -967,7 +961,7 @@ def _log_rejected_output(provider: LlmProviderSettings, text_format: type, respo
     )
 
 
-# 停滞の検出（#1926）。OCI Enterprise AI の呼び出しがまれに通常の 1/10 以下の速さに落ちる（#1912 の記録の 206 件で
+# 停滞の検出（#1926）。モデルの API の呼び出しがまれに通常の 1/10 以下の速さに落ちる（#1912 の記録の 206 件で
 # 約 1%。13〜23 token/秒、中央値は 224）。streaming の event の時刻から、event が来ない（待ち・止まった）か、出力の
 # 速さ（delta の event/秒）が同じ接続・モデルの直近の完了した呼び出しより大きく遅い（途中の停滞）かを判定する。
 # 判定の基準は、直近の完了した呼び出し（delta が `STALL_BASELINE_MIN_DELTAS` 以上）の `STALL_BASELINE_WINDOW` 回分から
@@ -1584,7 +1578,7 @@ def _validated_llm_provider(
     prefix = provider.provider_id.upper()
     missing = []
     # base URL は endpoint だけで決める(#1440)。
-    # project は OCI の OpenAI 互換 API だけが要求するため必須にしない。
+    # project は一部の OpenAI 互換 API だけが要求するため必須にしない。
     if not provider.base_url:
         missing.append(f"{prefix}_RAG_ENDPOINT")
     if not provider.api_key:
@@ -1810,7 +1804,7 @@ def embed_texts(
     """検索 text を件数・UTF-8 byte 数で分割して embedding を生成します。
 
     入力順を保持し、本文は切り捨てません。単体で byte 目安を超える入力は単独送信し、
-    実 token 超過は OCI のエラーとして呼び出し元へ伝播します。
+    実 token 超過はモデルの API のエラーとして呼び出し元へ伝播します。
     """
     normalized_texts = [str(text or "") for text in texts]
     if not normalized_texts:
@@ -1902,7 +1896,7 @@ def _embed_text_batch_once(
         "embedding",
         _embedding_base_url(settings),
         _embedding_api_key(settings),
-        "",  # project は送らない（OCI の OpenAI 互換 API 専用の設定）
+        "",  # project は送らない（一部の OpenAI 互換 API だけが要求する設定）
         settings.llm_request_timeout_seconds,
         0,  # 再試行は `_parse_with_retry` が受け持つ
     )

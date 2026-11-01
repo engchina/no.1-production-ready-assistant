@@ -96,7 +96,7 @@ export type TextFieldProps = {
   error?: string;
   /** 必須であることを aria-required と中立色の RequiredBadge「必須」で伝える。ネイティブの required 検証は行わない（検証はアプリ側）。 */
   required?: boolean;
-  /** 必須バッジの文言。既定「必須」。条件付きの必須（例:「OCI 運用時必須」）だけ上書きする。 */
+  /** 必須バッジの文言。既定「必須」。条件付きの必須（例:「利用時必須」）だけ上書きする。 */
   requiredLabel?: string;
   className?: string;
   inputClassName?: string;
