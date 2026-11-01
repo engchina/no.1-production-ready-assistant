@@ -7,7 +7,7 @@
 設計:
 
 * 参照 KB は多対多。1 つの KB を複数の検索・回答プロファイルから共有できる。逆も可。
-* query 上書き(回答の検索と生成・安全チェック)は KB の :class:`KnowledgeBaseQueryConfig` を
+* query 上書き(回答の検索と生成)は KB の :class:`KnowledgeBaseQueryConfig` を
   再利用する。複数 KB の query 設定は競合するため、検索時はこの**検索・回答プロファイル 1 枚から**
   解決する。KB 個別の query legacy 値は使わない。
 * persona(system prompt / 既定言語)は旧 standard の回答エンジンだけが使っていたため #595 で

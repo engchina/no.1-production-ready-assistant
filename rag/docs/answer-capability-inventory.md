@@ -19,26 +19,22 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 |---|---|---|
 | `DS` | 回答の診断の `degraded_steps`（処理の種類・回数・例外の型の名前。#3259）。根拠 0 件のときは `zero_evidence.degraded_steps` にも入る。回答エンジンの前の段（`pipeline.py`）の縮退も、同じ記録を回答エンジンへ渡して入れる（承認済み FAQ からの回答にも入る。#3286） | `rag/backend/app/rag/degraded_steps.py::DegradedSteps`・`rag/backend/app/rag/answer_engine.py::_SearchState.record_degraded`・`rag/packages/rag_engine/rag_engine/dependencies.py::report_degraded` |
 | `ZE` | 根拠 0 件の診断 `zero_evidence`（0 件になった段・検索の記録・外した自動の条件） | `rag/backend/app/rag/answer_engine.py::_zero_evidence_diagnostics` |
-| `GD` | 検索の診断の `guardrail_degraded`（OCI Guardrails で検査できなかった） | `rag/backend/app/schemas/search.py::SearchDiagnostics`・`rag/backend/app/rag/guardrails.py::GuardrailResult` |
 | `DX` | 回答の診断のその能力の項目（`graph_expansion`・`section_expansion`・`request_coverage`・`answer_validation`・`strategy` など） | `rag/backend/app/rag/answer_engine.py::_outcome_from_result` |
 | `ST` | 回答の診断の `execution_steps`（rag_engine の工程の `status` の文言と詳細の行）。rag_engine の工程の span（`rag.engine.stage`）の表示にも同じ値が出る。span の状態は例外のときだけ失敗で、縮退の文言だけでは成功のまま | `rag/packages/rag_engine/rag_engine/generation/execution_record.py::_execution_step` |
 | `SP` | backend の工程の span（`rag.<stage>`）と工程の結果（`success` / `skipped` / `error`） | `rag/backend/app/rag/pipeline.py::_observe_stage` |
 | `RT` | rag_engine の結果の trace だけ（backend の診断に写していない） | `rag/packages/rag_engine/rag_engine/generation/answering.py` |
 | `LOG` | ログだけ（診断では「無効・該当なし」と同じ値） | — |
 
-- MCP の応答（`rag_search`・`rag_retrieve_evidence`）は `DS` の処理の種類と回数を `degraded_steps` に出す（例外の型の名前は出さない。#3262。`rag/backend/app/mcp/tools.py::_degraded_steps`）。`ZE` は段と件数だけを `zero_evidence`（`stage`・`candidate_count`・`rejected_count`。検索の条件の項目・値・検索の記録は出さない）に、`GD` を `guardrail_degraded` に出す（#3546。`rag/backend/app/mcp/tools.py::_zero_evidence`・`_guardrail_degraded`）。Agent の組み込み Runtime は、根拠 0 件で `guardrail_degraded` か `degraded_steps` があるとき、モデルへのツールの結果に案内（`retrieval_notice`）を足し、回答の対応の `absence_conclusion` に数えない。`agent_get_run_observation` はツールの呼び出しごとに `degraded_steps`・`guardrail_degraded`・`zero_evidence_stage` を、根拠ごとに `table_binding` を写す（`agent/backend/app/features/agent/run_observation.py`）。MCP は回答の診断の `needs_human_review` から `outcome=conditional` を決める（`rag/backend/app/mcp/tools.py::_answer_fields`）。
+- MCP の応答（`rag_search`・`rag_retrieve_evidence`）は `DS` の処理の種類と回数を `degraded_steps` に出す（例外の型の名前は出さない。#3262。`rag/backend/app/mcp/tools.py::_degraded_steps`）。`ZE` は段と件数だけを `zero_evidence`（`stage`・`candidate_count`・`rejected_count`。検索の条件の項目・値・検索の記録は出さない）に出す（#3546。`rag/backend/app/mcp/tools.py::_zero_evidence`）。Agent の組み込み Runtime は、根拠 0 件で `degraded_steps` があるとき、モデルへのツールの結果に案内（`retrieval_notice`）を足し、回答の対応の `absence_conclusion` に数えない。`agent_get_run_observation` はツールの呼び出しごとに `degraded_steps`・`zero_evidence_stage` を、根拠ごとに `table_binding` を写す（`agent/backend/app/features/agent/run_observation.py`）。MCP は回答の診断の `needs_human_review` から `outcome=conditional` を決める（`rag/backend/app/mcp/tools.py::_answer_fields`）。
 - `SearchDiagnostics.answer` は自由な dict で、REST の schema には `DS` などの形を持たない。
 
 ## 能力の一覧
 
-### 入口の安全チェックと前段（`pipeline.py`）
+### 前段（`pipeline.py`）
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| 質問の安全チェック | 常に通過（OCI Guardrails は #11 で削除。外部の検査を持たない） | 失敗しない（常に許可・指摘なし）。段は pipeline・API・MCP の契約に残す（外すのは別の Issue） | `GD` は常に `false`。工程は「無効のため省略」 | 見せない | `rag/backend/app/rag/guardrails.py::GuardrailPolicy.validate_query`・`rag/backend/app/rag/pipeline.py::RagPipeline.run` |
-| 回答の安全チェック | 常に通過（OCI Guardrails は #11 で削除） | 失敗しない（常に許可・指摘なし） | `SP`（`answer_guardrail` が `skipped`。`guardrail_stage_outcome`） | 見せない | `rag/backend/app/rag/pipeline.py::guardrail_stage_outcome` |
-| 呼び出し元の検索文の安全チェック（#2651） | 任意（呼び出し元が検索文を渡したとき） | 拒否された検索文（検査できなかったものを含む）を外し、残りの検索文で続ける | metrics の `record_guardrail_findings` だけ。`GD` には入れない | 見せない（外した検索文では検索しない）。外した数は診断に出ない | `rag/backend/app/rag/pipeline.py::_checked_caller_queries` |
-| 会話の履歴での質問の書き換え | 任意（設定 `RAG_HISTORY_REWRITE_ENABLED`） | LLM の失敗・書き換えの安全チェックの拒否 → 元の質問で続ける | LLM の失敗: `DS`（`history_rewrite`）。安全チェックの拒否は `LOG` だけ（例外ではないので `DS` に入れない）。`SP` の `history_rewrite` は成功のまま | 見せない（元の質問で答える） | `rag/backend/app/rag/pipeline.py::_rewrite_query_with_history`・`_safe_rewritten_query` |
+| 会話の履歴での質問の書き換え | 任意（設定 `RAG_HISTORY_REWRITE_ENABLED`） | LLM の失敗 → 元の質問で続ける | LLM の失敗: `DS`（`history_rewrite`）。`SP` の `history_rewrite` は成功のまま | 見せない（元の質問で答える） | `rag/backend/app/rag/pipeline.py::_rewrite_query_with_history` |
 | 抽出項目の条件の読み取り（Metadata Filter Extraction。#652） | 任意（設定 `RAG_AUTO_FIELD_FILTER_ENABLED`） | 定義の読み込み・LLM の失敗 → 条件なしで検索する。LLM の出力が JSON として読めない → 条件なし | 読み込み・LLM の失敗: `DS`（`field_filter`）。工程の詳細は条件が無いときと同じ「なし」。読めない出力は記録しない（例外ではない） | 見せない（絞らない） | `rag/backend/app/rag/pipeline.py::_read_field_conditions`・`rag/backend/app/rag/field_filter_reader.py::read_field_conditions` |
 | 会話の添付の根拠（#2517） | 任意 | 添付を読めない → 根拠に入れない。rerank の失敗 → 語の一致で選ぶ | `DS`（`chat_attachments`・`chat_attachment_rerank`）。添付が無いときは記録しない | 見せない | `rag/backend/app/rag/chat_attachments.py::attachment_evidence`・`attachment_units`・`select_attachment_units` |
 | 編集した回答のプロンプト（#1276） | 任意 | 読めない → コードの既定のプロンプトで続ける | `DS`（`prompt_overrides`）。`provenance.prompt_version` は既定のプロンプトの版になる | 見せない（版は実際に使った既定のもの） | `rag/backend/app/rag/answer_engine.py::AnswerEngine._run` |
@@ -167,15 +163,14 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 ## 一覧から分かったこと
 
-- **必須の能力**（失敗すると回答がエラー・拒否になる）: 有効なときの安全チェック（入力・出力。fail-closed）、質問の embedding、vector 検索、全文検索の SQL、前後の文脈・分類・1 頁目の読み込み、派生の chunk の原文の読み込み、質問の理解（規則）、回答の生成の 1 組目、生成の監査（期限の打ち切りを除く）、承認済み FAQ からの回答。主の検索の失敗は 0 件にせずエラーにする（#3259 のテスト）。
+- **必須の能力**（失敗すると回答がエラー・拒否になる）: 質問の embedding、vector 検索、全文検索の SQL、前後の文脈・分類・1 頁目の読み込み、派生の chunk の原文の読み込み、質問の理解（規則）、回答の生成の 1 組目、生成の監査（期限の打ち切りを除く）、承認済み FAQ からの回答。主の検索の失敗は 0 件にせずエラーにする（#3259 のテスト）。
 - **任意の能力**は、上の表のとおり縮退して回答を続ける。縮退した結果を「確かめた」「精密な位置」として見せる経路は、静的確認の範囲では見当たらない。`models.rerank` は rerank が失敗したとき空にした（#3286）。
-- **記録が足りない縮退**: #3286 の表の処理（rerank・追加の検索文の rerank・CRAG の判定・会話の書き換え・抽出項目の条件の読み取り・会話の添付・Sudachi・章節の子の並べ替え）は `DS` に入れた。例外ではない縮退（書き換えの安全チェックの拒否・抽出項目の条件の読めない出力・呼び出し元の検索文の拒否）は `DS` に入れない。
+- **記録が足りない縮退**: #3286 の表の処理（rerank・追加の検索文の rerank・CRAG の判定・会話の書き換え・抽出項目の条件の読み取り・会話の添付・Sudachi・章節の子の並べ替え）は `DS` に入れた。例外ではない縮退（抽出項目の条件の読めない出力）は `DS` に入れない。
 - **診断に例外の文が残る経路**: 要求ごとの根拠の探し直しと、用語・同義語と回答ルールの読み込みは、例外の型の名前だけにした（#3284）。
-- **呼び出し元が判断できない点**: MCP の応答は `DS`（種類と回数）・`ZE`（段と件数）・`GD` を出す（#3262・#3546）。表の行・列の対応の検査が根拠を読めるかは根拠の `table_binding` に出すが、回答の中で検査が段落を外した・直したかは `rag_validate_answer` の claims（`support_check`）だけにある。
+- **呼び出し元が判断できない点**: MCP の応答は `DS`（種類と回数）・`ZE`（段と件数）を出す（#3262・#3546）。表の行・列の対応の検査が根拠を読めるかは根拠の `table_binding` に出すが、回答の中で検査が段落を外した・直したかは `rag_validate_answer` の claims（`support_check`）だけにある。
 
 ## 未確認の事項
 
 - 実 Oracle・実 LLM での失敗の振る舞い（すべて静的確認）。
-- chat の入口（`rag/backend/app/api/routes/chat.py`）の質問の安全チェックの工程の span。
 - 1 行の記録の根拠を複数並べたとき（表計算・CSV の 1 行 = 1 chunk）に、別の行の値の取り違えを根拠をまたいで照合すること（今の検査は 1 つの根拠の本文の中の表だけを見る。`not_checkable` で示す。同じ行・セルの照合の効果は #2594 で測る）。
 - PDF・HTML・画像の表の根拠は、解析が組み立てた表の格子の行（`row_basis=parsed_table`。原本の座標ではない。#3429・#3547）までで、原本の表の行・列には結び付けない。Word の表のセルの座標（まとまりが複数の行を含むので、行の範囲だけを出す。1 行 = 1 記録にするかは #2594 の比較で決める）。

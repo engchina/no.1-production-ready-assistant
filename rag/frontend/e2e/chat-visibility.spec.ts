@@ -79,7 +79,6 @@ const message = (overrides: Record<string, unknown>) => ({
   conversation_id: "conv-alice",
   model: null,
   citations: [],
-  guardrail_warnings: [],
   trace_id: null,
   status: "COMPLETE",
   reply_to_message_id: null,

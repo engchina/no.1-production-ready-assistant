@@ -286,7 +286,6 @@ def mcp_search(
             answer="回答",
             citations=[],
             trace_id="t-1",
-            guardrail_warnings=[],
             elapsed_ms=1.0,
             diagnostics=SearchDiagnostics(),
         )

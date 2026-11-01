@@ -1153,7 +1153,6 @@ def guide_short_circuit_outcome(guide: Mapping[str, Any]) -> Any:
             "needs_human_review": not clarify,
             "insufficient_reason": "",
         },
-        context_text="",
     )
 
 

@@ -785,7 +785,6 @@ function ExecutionTab({ detail }: { detail: FeedbackDetail }) {
     [t("feedback.detail.retrieved"), numberOrDash(detail.execution.retrieved_count)],
     [t("feedback.detail.reranked"), numberOrDash(detail.execution.reranked_count)],
     [t("feedback.detail.citationCount"), numberOrDash(detail.execution.citation_count)],
-    [t("feedback.detail.guardrail"), detail.execution.guardrail_codes.join(" / ") || "—"],
     [t("feedback.detail.fingerprint"), detail.execution.config_fingerprint ?? "—"],
   ];
   return (

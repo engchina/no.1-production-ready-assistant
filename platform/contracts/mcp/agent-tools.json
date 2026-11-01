@@ -2325,19 +2325,6 @@
                 "description": "RAG の根拠のツールの degraded_steps（失敗して縮退した任意の補助の処理の種類と回数。空なら縮退していない）。ほかのツール・失敗した呼び出しは null。",
                 "title": "Degraded Steps"
               },
-              "guardrail_degraded": {
-                "anyOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "RAG の根拠のツールの guardrail_degraded（安全チェックを完了できず止めた）。ほかのツール・失敗した呼び出しは null。",
-                "title": "Guardrail Degraded"
-              },
               "zero_evidence_stage": {
                 "anyOf": [
                   {
@@ -2409,7 +2396,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 5,
+            "default": 6,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"

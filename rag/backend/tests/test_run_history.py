@@ -30,7 +30,6 @@ from app.clients.oracle_run_history import RunHistoryStore, run_history_list_whe
 from app.config import EnterpriseAiConfiguredModel, Settings, get_settings
 from app.main import app
 from app.rag import run_history as run_history_module
-from app.rag.guardrails import GuardrailResult
 from app.rag.pipeline import RagPipeline
 from app.rag.request_context import (
     AuditRequestContext,
@@ -229,8 +228,8 @@ async def test_recorder_failure_does_not_raise(caplog: pytest.LogCaptureFixture)
 
 
 @pytest.mark.usefixtures("trace_body_enabled")
-async def test_pipeline_records_search_answer_and_blocked_runs(monkeypatch: MonkeyPatch) -> None:
-    """RAG 検索（回答なし・回答あり）と、安全チェックで止めた質問を記録する。"""
+async def test_pipeline_records_search_and_answer_runs(monkeypatch: MonkeyPatch) -> None:
+    """RAG 検索（回答なし・回答あり）を記録する。"""
     import rag_engine.adapters.model_api as engine_api
 
     monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
@@ -265,21 +264,15 @@ async def test_pipeline_records_search_answer_and_blocked_runs(monkeypatch: Monk
         )
     )
     await run(SearchRequest(query="受注の登録方法は？", search_answer_profile_id="bv-1"))
-    await run(
-        SearchRequest(query="止める質問", search_answer_profile_id="bv-1"),
-        query_guardrail_result=GuardrailResult(
-            allowed=False, sanitized_text="止める質問", findings=[]
-        ),
-    )
     # 根拠の検索だけ（ナレッジベースの検索テスト・レシピの検索比較）は残さない。
     await run(SearchRequest(query="受注", search_answer_profile_id="bv-1", retrieval_only=True))
 
     def span_names(index: int) -> set[str]:
         return {update.operation_name for update in traces[index].updates}
 
-    search_only, answered, blocked = store.records
+    search_only, answered = store.records
     # 実行履歴は、表を引く trace id（実行の root の span の trace id）を持つ。
-    for index, record in enumerate((search_only, answered, blocked)):
+    for index, record in enumerate((search_only, answered)):
         assert record["stages"]["trace"]["trace_id"] == traces[index].trace_id
     assert search_only["status"] == "success"
     assert search_only["answer_generated"] is False
@@ -301,8 +294,6 @@ async def test_pipeline_records_search_answer_and_blocked_runs(monkeypatch: Monk
     )
     # 工程の詳細は実行履歴の記録に置く（表には入れない）。
     assert answered["stages"]["trace"]["span_details"]
-    assert blocked["status"] == "blocked"
-    assert blocked["question"] is None
 
 
 # ---- 見え方（#1889） ----
@@ -751,8 +742,8 @@ async def test_recorder_keeps_failed_stage_error_code_and_storage_failures() -> 
 
     await callback(Progress("answer", "started"))
     await callback(Progress("answer", "success"))
-    await callback(Progress("answer_guardrail", "started"))
-    await callback(Progress("answer_guardrail", "error"))
+    await callback(Progress("answer_record_save", "started"))
+    await callback(Progress("answer_record_save", "error"))
     await recorder.record(
         run_id="trace-failed",
         question="q",
@@ -764,7 +755,7 @@ async def test_recorder_keeps_failed_stage_error_code_and_storage_failures() -> 
     )
     (failed,) = store.records
     assert failed["error_type"] == "_DatabaseError"
-    assert failed["error_stage"] == "answer_guardrail"
+    assert failed["error_stage"] == "answer_record_save"
     assert failed["stages"]["error_code"] == "ORA-03146"
 
     store.records.clear()

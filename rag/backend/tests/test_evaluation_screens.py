@@ -59,7 +59,6 @@ def _response(
         answer=answer,
         citations=list(citations) or [_chunk("本文")],
         trace_id=trace_id,
-        guardrail_warnings=[],
         elapsed_ms=1.0,
         diagnostics=SearchDiagnostics(answer=dict(answer_details or {"outcome": "answered"})),
     )

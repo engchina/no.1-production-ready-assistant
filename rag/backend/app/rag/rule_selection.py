@@ -16,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from rag_engine.resources.runtime import resolve_prompt
 
 from app.config import Settings
-from app.rag.guardrails import GuardrailPolicy
 from app.rag.search_answer_profile_knowledge import (
     SectionPages,
     _already_answered,
@@ -126,14 +125,6 @@ async def recognize_rule_selections(
             async with asyncio.timeout(
                 min(settings.enterprise_ai_timeout_seconds, settings.rag_answer_timeout_seconds)
             ):
-                checked = await asyncio.to_thread(GuardrailPolicy(settings).validate_query, text)
-                if not checked.allowed:
-                    span.set_attributes({"rule_clarification.status": "blocked"})
-                    return tuple(found)
-                text = checked.sanitized_text
-                data = json.loads(context)
-                data["user_statements"] = text
-                context = json.dumps(data, ensure_ascii=False)
                 raw = await async_call_with_model_purpose(
                     "query.conditions",
                     condition_client(settings).generate,

@@ -99,7 +99,6 @@ def _detail_row(feedback_id: str = "feedback-1") -> dict[str, object]:
         "question": "最新規程は？",
         "answer": "2024年版です。",
         "citations_json": "[]",
-        "guardrail_codes": "[]",
     }
 
 

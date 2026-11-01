@@ -19,7 +19,6 @@ def outcome() -> AnswerOutcome:
     return AnswerOutcome(
         answer="合成の説明を保持します。",
         citations=[],
-        context_text="",
         diagnostics={
             "semantic_audit_policy": dict(POLICY),
             "outcome": "answered",

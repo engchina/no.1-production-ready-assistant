@@ -1,4 +1,4 @@
-"""RAG / guardrail の監査イベント。"""
+"""RAG の監査イベント。"""
 
 import asyncio
 import hashlib
@@ -7,7 +7,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.rag.guardrails import GuardrailFinding
 from app.rag.request_context import current_audit_request_context
 from app.schemas.search import (
     RetrievedChunk,
@@ -38,8 +37,6 @@ class RagSearchAuditEvent(BaseModel):
     query_hash: str
     query_chars: int
     filter_keys: list[str] = Field(default_factory=list)
-    guardrail_codes: list[str] = Field(default_factory=list)
-    guardrail_severities: list[str] = Field(default_factory=list)
     retrieved_count: int = 0
     citation_count: int = 0
     document_ids: list[str] = Field(default_factory=list)
@@ -106,9 +103,8 @@ def record_rag_search_audit(
     *,
     trace_id: str,
     outcome: AuditOutcome,
-    sanitized_query: str,
+    query: str,
     filters: dict[str, str],
-    findings: list[GuardrailFinding],
     retrieved_count: int,
     citations: list[RetrievedChunk],
     elapsed_ms: float,
@@ -124,11 +120,9 @@ def record_rag_search_audit(
         tenant_id_hash=request_context.tenant_id_hash,
         user_id_hash=request_context.user_id_hash,
         outcome=outcome,
-        query_hash=_query_hash(sanitized_query),
-        query_chars=len(sanitized_query),
+        query_hash=_query_hash(query),
+        query_chars=len(query),
         filter_keys=sorted(filters),
-        guardrail_codes=[finding.code for finding in findings],
-        guardrail_severities=[finding.severity for finding in findings],
         retrieved_count=retrieved_count,
         citation_count=len(citations),
         document_ids=_unique_document_ids(citations),

@@ -577,7 +577,7 @@ function evaluationMetrics(suite:string) {
  metric_case_counts:{required_evidence_recall:1,mrr:1,answer_correctness:0,requirement_coverage:0,claim_support_rate:1,response_decision_accuracy:2},
  threshold_failures:[],failure_reason_counts:{},category_breakdown:{},
  decision_breakdown:{clarify:{case_count:1,error_count:0,metrics:{response_decision_accuracy:1},metric_case_counts:{response_decision_accuracy:1}}},
- case_results:[{case_id:"row-2",trace_id:"trace-1",status:"success",retrieved_document_ids:["doc-1"],relevant_document_ids:["doc-1"],hit_document_ids:["doc-1"],required_evidence_recall:1,mrr:1,answer_correctness:null,requirement_coverage:null,claim_support_rate:0.9,response_decision_accuracy:1,guardrail_warnings:[],missing_evidence:["evidence-2"],failure_reasons:[],diagnostics:{},elapsed_ms:1,error_type:null,error_message:null}],
+ case_results:[{case_id:"row-2",trace_id:"trace-1",status:"success",retrieved_document_ids:["doc-1"],relevant_document_ids:["doc-1"],hit_document_ids:["doc-1"],required_evidence_recall:1,mrr:1,answer_correctness:null,requirement_coverage:null,claim_support_rate:0.9,response_decision_accuracy:1,missing_evidence:["evidence-2"],failure_reasons:[],diagnostics:{},elapsed_ms:1,error_type:null,error_message:null}],
  };
 }
 

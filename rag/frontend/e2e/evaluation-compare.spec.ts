@@ -150,7 +150,6 @@ function caseResult(overrides: Record<string, unknown>) {
     abstained: false,
     refusal_correct: true,
     answer_evaluation: null,
-    guardrail_warnings: [],
     failure_reasons: [],
     diagnostics: {},
     elapsed_ms: 10,

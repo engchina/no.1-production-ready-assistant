@@ -1078,7 +1078,6 @@ function searchStreamBody(answer = "上限額を確認しました。"): string 
     `event: metadata\ndata: ${JSON.stringify({
       trace_id: "trace-bv",
       elapsed_ms: 10,
-      guardrail_warnings: [],
       diagnostics: {
         retrieval_strategy: "hybrid",
         retrieval_strategy_adapter: "grounded",

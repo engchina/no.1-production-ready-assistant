@@ -21,7 +21,7 @@ from typing import Literal
 from app.config import Settings
 
 # 工程の並びはサイドナビ(ファイル準備 → 文書解析)と同じ。画面の工程の並び・名前はフロントの
-# nav-config.ts が正本(#638)。検索インデックス・文書構造索引の構築・安全チェック・評価の基準の段は
+# nav-config.ts が正本(#638)。検索インデックス・文書構造索引の構築・評価の基準の段は
 # backend の中で動き、サービスを持たない(#3218)。
 ServiceCategory = Literal[
     "preprocess",

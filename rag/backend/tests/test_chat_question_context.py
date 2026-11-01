@@ -10,7 +10,6 @@ from app.api.routes import chat
 from app.clients.oracle import StoredConversation, StoredMessage
 from app.config import Settings
 from app.rag.chat_question_token import context_digest, issue_question_token, read_question_token
-from app.rag.guardrails import GuardrailPolicy
 from app.rag.pipeline import RagPipeline
 from app.schemas.search_answer_profile import SearchAnswerProfileDetail
 
@@ -61,7 +60,7 @@ def context_setup(monkeypatch: pytest.MonkeyPatch) -> tuple[ContextOracle, Setti
     async def empty(*args: Any) -> dict[str, Any]:
         return {}
 
-    async def rewrite(self: Any, query: str, history: Any) -> str:
+    async def rewrite(self: Any, query: str, history: Any, **_kwargs: Any) -> str:
         calls.append(query)
         assert history[0].role == "USER"
         return "対象 A の手順は？ 条件 B との違いは？"
@@ -69,7 +68,7 @@ def context_setup(monkeypatch: pytest.MonkeyPatch) -> tuple[ContextOracle, Setti
     monkeypatch.setattr(chat, "load_runtime_knowledge_payload", empty)
     monkeypatch.setattr(chat, "_published_guides", empty)
     monkeypatch.setattr(chat, "_ensure_caller_owns", lambda _conversation: None)
-    monkeypatch.setattr(RagPipeline, "_safe_rewritten_query", rewrite)
+    monkeypatch.setattr(RagPipeline, "_rewrite_query_with_history", rewrite)
     return oracle, settings, calls
 
 
@@ -205,7 +204,7 @@ async def test_prepared_query_reaches_search_while_original_is_saved(
 
 
 @pytest.mark.parametrize("outcome", ["answered", "skipped"])
-async def test_only_explicit_confirmations_enter_safe_user_history(outcome: str) -> None:
+async def test_only_explicit_confirmations_enter_user_history(outcome: str) -> None:
     message = StoredMessage(
         id="user-a",
         conversation_id="conversation-a",
@@ -218,7 +217,7 @@ async def test_only_explicit_confirmations_enter_safe_user_history(outcome: str)
             "entries": [{"prompt": "対象は？", "selected": ["対象 A"]}],
         },
     )
-    turns = await chat._build_safe_history([message], GuardrailPolicy(Settings()))
+    turns = await chat._build_history([message])
     assert turns[0].role == "USER"
     assert ("対象 A" in turns[0].content) is (outcome == "answered")
 
@@ -255,43 +254,6 @@ async def test_clarification_api_matches_resolved_question(
     assert len(calls) == 1
 
 
-async def test_blocked_confirmation_also_excludes_assistant_reply(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.rag.guardrails import GuardrailResult
-
-    policy = GuardrailPolicy(Settings())
-    monkeypatch.setattr(
-        policy,
-        "validate_query",
-        lambda text: GuardrailResult(
-            allowed="合成の拒否対象" not in text, sanitized_text=text, findings=[]
-        ),
-    )
-    user = StoredMessage(
-        id="user-a",
-        conversation_id="conversation-a",
-        role="USER",
-        content="その手順は？",
-        status="COMPLETE",
-        created_at=datetime.now(UTC),
-        clarification={
-            "outcome": "answered",
-            "entries": [{"prompt": "対象は？", "selected": ["合成の拒否対象"]}],
-        },
-    )
-    assistant = StoredMessage(
-        id="assistant-a",
-        conversation_id="conversation-a",
-        role="ASSISTANT",
-        content="合成の回答。",
-        reply_to_message_id="user-a",
-        status="COMPLETE",
-        created_at=datetime.now(UTC),
-    )
-    assert await chat._build_safe_history([user, assistant], policy) == []
-
-
 async def test_chat_history_understanding_uses_profile_language_scope(
     context_setup: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -309,11 +271,11 @@ async def test_chat_history_understanding_uses_profile_language_scope(
     global_hash = current_pack().hash
     observed: list[bool] = []
 
-    async def rewrite(self: Any, query: str, history: Any) -> str:
+    async def rewrite(self: Any, query: str, history: Any, **_kwargs: Any) -> str:
         observed.append(task_contract(query)["asks_cause"])
         return query
 
-    monkeypatch.setattr(RagPipeline, "_safe_rewritten_query", rewrite)
+    monkeypatch.setattr(RagPipeline, "_rewrite_query_with_history", rewrite)
     await chat.prepare_chat_question(
         oracle, "conversation-a", "profile-a", "対象 A の理屈を教えてください。", settings
     )

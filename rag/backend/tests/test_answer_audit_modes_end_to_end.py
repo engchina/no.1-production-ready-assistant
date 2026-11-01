@@ -140,7 +140,7 @@ async def test_final_validation_preserves_distinct_failure_execution_states(
         oracle=cast(Any, object()),
         genai=cast(Any, object()),
     )
-    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={})
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", AsyncMock(side_effect=failure))
     await engine._validate_outcome(SearchRequest(query="合成の質問"), outcome)
     assert outcome.diagnostics["answer_validation"] == {"status": status, "valid": False}
@@ -160,7 +160,7 @@ async def test_outer_deadline_permission_and_cancellation_are_not_swallowed(
         genai=cast(Any, object()),
     )
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", AsyncMock(side_effect=failure))
-    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={})
     with pytest.raises(type(failure)):
         await engine._validate_outcome(SearchRequest(query="合成の質問"), outcome)
 
@@ -175,7 +175,7 @@ async def test_empty_answer_is_not_run_for_a_distinct_reason(
         oracle=cast(Any, object()),
         genai=cast(Any, object()),
     )
-    outcome = AnswerOutcome(answer="", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="", citations=[], diagnostics={})
     await engine._validate_outcome(SearchRequest(query="合成の質問"), outcome)
     validator.assert_not_awaited()
     assert outcome.diagnostics["answer_validation"]["reason"] == "empty_answer"

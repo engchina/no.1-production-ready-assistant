@@ -67,7 +67,6 @@ def _approval_response(
             )
         ],
         trace_id=trace_id,
-        guardrail_warnings=[],
         elapsed_ms=1.0,
         diagnostics=SearchDiagnostics(knowledge_base_count=len(request.knowledge_base_ids)),
     ).with_evaluation_input(evaluation_input)
@@ -282,7 +281,6 @@ class DuplicateChunkPipeline:
                 )
             ],
             trace_id=trace_id or "trace",
-            guardrail_warnings=[],
             elapsed_ms=1.0,
         )
 
@@ -303,7 +301,7 @@ async def test_retrieval_metrics_are_document_level_not_chunk_level() -> None:
 
 
 class MissPipeline:
-    """関連 document を返さず、guardrail warning 付きの応答を返す pipeline。"""
+    """関連 document を返さない応答を返す pipeline。"""
 
     async def run(
         self,
@@ -322,7 +320,6 @@ class MissPipeline:
                 ),
             ],
             trace_id=trace_id or "trace-miss",
-            guardrail_warnings=["検索条件に一致する根拠が見つかりませんでした。"],
             elapsed_ms=12.5,
         )
 
@@ -349,7 +346,6 @@ async def test_evaluation_case_result_exposes_miss_diagnostics() -> None:
     assert result.retrieved_document_ids == ["doc-x"]
     assert result.hit_document_ids == []
     assert result.missing_evidence == ["e1"]
-    assert result.guardrail_warnings == ["検索条件に一致する根拠が見つかりませんでした。"]
     assert result.failure_reasons == ["evidence_miss", "retrieval_miss"]
     assert metrics.failure_reason_counts == {"evidence_miss": 1, "retrieval_miss": 1}
     assert result.elapsed_ms == 12.5
@@ -381,7 +377,6 @@ async def test_evaluation_runner_reports_threshold_failures() -> None:
 
 
 NO_RESULTS_ANSWER = "資料の中に、この質問に答えられる根拠が見つかりませんでした。"
-NO_RESULTS_WARNING = "検索条件に一致する根拠が見つかりませんでした。"
 
 
 class NoResultsPipeline:
@@ -397,7 +392,6 @@ class NoResultsPipeline:
             answer=NO_RESULTS_ANSWER,
             citations=[],
             trace_id=trace_id or "trace-no-results",
-            guardrail_warnings=[NO_RESULTS_WARNING],
             elapsed_ms=3.0,
         )
 
@@ -1247,7 +1241,6 @@ def test_evaluation_api_runs_against_local_pipeline(monkeypatch: MonkeyPatch) ->
             answer="資料からは確認できませんでした。",
             citations=[],
             diagnostics={"insufficient_reason": "該当する資料がありません。"},
-            context_text="",
             evaluation_input=None,
         )
 

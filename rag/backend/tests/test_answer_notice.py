@@ -25,7 +25,6 @@ from app.clients.oracle import StoredMessage
 from app.config import Settings, get_settings
 from app.main import app
 from app.rag.answer_notice import answer_outcome_takes_notice
-from app.rag.guardrails import GuardrailPolicy
 from app.rag.pipeline import RagPipeline
 from app.schemas.search import SearchRequest
 from app.security.service import SecurityService, set_security_service
@@ -176,9 +175,7 @@ async def test_chat_history_for_the_model_does_not_include_the_notice() -> None:
         content="最初の質問",
         created_at=datetime(2026, 10, 18, tzinfo=UTC),
     )
-    turns = await chat_route._build_safe_history(
-        [user, _message()], GuardrailPolicy(get_settings())
-    )
+    turns = await chat_route._build_history([user, _message()])
     assert [turn.content for turn in turns] == ["最初の質問", "回答の本文"]
     assert all("注意書きの文" not in turn.content for turn in turns)
 

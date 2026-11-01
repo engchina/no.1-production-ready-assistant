@@ -1733,7 +1733,6 @@ export const ja = {
   "settings.retrieval.actions.reset": "変更を破棄",
   "settings.prompts.subtitle":
     "回答を作るときに使う各工程の指示を編集します。回答生成・監査・資料との照合のプロンプトとその条件も確認できます。検索関連の指示は「検索方法」、品質評価の指示は「評価の基準」、文書解析・文書分割の指示は各設定画面で確認します。",
-  "chat.guardrail": "安全チェック",
   // 回答の場所の処理の段階（3 製品共通の ChatProgress。#1145 / #1146）。実行中は「〜しています」、完了は「〜しました」、
   // 失敗は「〜できませんでした」、未実行は名詞（NL2SQL・Agent と同じ）。
   "chat.progress.submit.running": "質問を送信しています",
@@ -4195,7 +4194,6 @@ export const ja = {
   "feedback.detail.retrieved": "検索件数",
   "feedback.detail.reranked": "リランク件数",
   "feedback.detail.citationCount": "AI に渡した件数",
-  "feedback.detail.guardrail": "安全チェック",
   "feedback.detail.fingerprint": "設定 fingerprint",
   // 工程の名前は backend の時間切れの文言（app/rag/span_display.py の ANSWER_STAGE_LABELS）と揃える（#375）。
   "search.stage.processing": "処理中",
@@ -4205,7 +4203,6 @@ export const ja = {
   "search.stage.answer": "質問の条件を整理して回答を作る",
   // 回答を作らない RAG 検索（チャットと同じ流れを回答の生成の手前で止める。#3506）
   "search.stage.evidence": "質問の条件を整理して根拠を探す",
-  "search.stage.answerGuardrail": "回答に安全上の問題がないか検査する",
   "search.stage.retrieval": "文書から根拠の候補を検索する",
   "search.stage.answerRecordSave": "質問と回答と根拠の記録を保存する",
   "search.stage.chatMessageSave": "回答を会話に保存する",
@@ -4269,7 +4266,6 @@ export const ja = {
   "search.searchAnswerProfileRequired.cta": "検索・回答プロファイルを作成",
   "search.searchAnswerProfileError": "検索・回答プロファイルを読み込めませんでした。",
   "search.searchAnswerProfileLoading": "検索・回答プロファイルを読み込んでいます。",
-  "search.guardrail": "安全チェック警告",
 
   // 入力欄の検証の共通の文言（UX 契約 messaging.md §3.2.1。{field} は欄のラベル。#541）
   "validation.required": "{field}を入力してください。",
@@ -4511,7 +4507,6 @@ export const ja = {
   "evaluation.failureReason.missing_content": "標準回答の必要な項目が抜けている",
   "evaluation.failureReason.answer_failed": "標準回答での評価が不合格",
   "evaluation.failureReason.answer_evaluation_error": "標準回答で評価できなかった",
-  "evaluation.failureReason.guardrail_warning": "安全チェックの警告",
   "evaluation.failureReason.case_error": "ケースの実行に失敗",
   "evaluation.failureReason.unexpected_handling": "対応が期待と違う",
   "evaluation.failureReason.step_missing": "手順の不足・順序の誤り",

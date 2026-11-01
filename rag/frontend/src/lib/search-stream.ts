@@ -35,7 +35,6 @@ export interface SearchStreamHandlers {
   onMetadata?: (meta: {
     trace_id: string;
     elapsed_ms: number;
-    guardrail_warnings: string[];
     diagnostics: SearchDiagnostics;
     /** 回答の注意書き（回答の本文と根拠の後に出す。無いときは null / 未指定。#2405）。 */
     notice?: string | null;

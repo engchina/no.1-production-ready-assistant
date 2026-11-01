@@ -3030,7 +3030,7 @@ def test_oracle_search_audit_schema_redacts_query_body() -> None:
     assert "top_k                 number(10)" in normalized
     assert "rerank_top_n          number(10)" in normalized
     assert "query_variant_count   number(10) default 1 not null" in normalized
-    assert "guardrail_codes       json" in normalized
+    assert "guardrail_codes" not in normalized
     assert "reranked_count        number(10) default 0 not null" in normalized
     assert "deduplicated_count    number(10) default 0 not null" in normalized
     assert "context_diversified_count number(10) default 0 not null" in normalized
@@ -3241,7 +3241,6 @@ async def test_feedback_detail_uses_oracle_safe_comment_alias() -> None:
                     "feedback_id": "feedback-1",
                     "comment": "古い回答です。",
                     "citations_json": "[]",
-                    "guardrail_codes": "[]",
                 }
             ]
         ]

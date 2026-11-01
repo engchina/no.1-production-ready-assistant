@@ -28,7 +28,6 @@ async def test_final_validation_follows_audit_mode_and_preserves_failed_verdict(
         answer="合成の回答",
         citations=[citation],
         diagnostics={"outcome": "answered", "envelope": {"outcome": "answered"}},
-        context_text=citation.text,
     )
     validator = AsyncMock(
         return_value=AnswerValidation(
@@ -78,7 +77,7 @@ async def test_final_validation_failure_remains_unverified(monkeypatch: pytest.M
         oracle=cast(Any, object()),
         genai=cast(Any, object()),
     )
-    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={})
     monkeypatch.setattr(
         "app.rag.answer_validation.validate_answer", AsyncMock(side_effect=TimeoutError())
     )
@@ -162,7 +161,7 @@ async def test_final_validation_uses_original_question_and_confirmed_conditions_
             confirmed_premises=(("対象は？", "合成選択肢"),),
         ),
     )
-    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={})
     validator = AsyncMock(return_value=AnswerValidation(status="completed", valid=True))
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     await engine._validate_outcome(
@@ -191,9 +190,7 @@ async def test_final_validation_never_silently_drops_excess_confirmed_conditions
             confirmed_premises=tuple((f"条件 {n}", "合成値") for n in range(MAX_PREMISES + 1)),
         ),
     )
-    outcome = AnswerOutcome(
-        answer="合成の回答", citations=[], diagnostics={"outcome": "answered"}, context_text=""
-    )
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={"outcome": "answered"})
     validator = AsyncMock()
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     await engine._validate_outcome(SearchRequest(query="合成の質問"), outcome)
@@ -247,7 +244,7 @@ async def test_resolved_rule_answer_reaches_final_validation_without_configured_
     engine = AnswerEngine(
         settings=settings, oracle=cast(Any, object()), genai=cast(Any, object()), scope=scope
     )
-    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={}, context_text="")
+    outcome = AnswerOutcome(answer="合成の回答", citations=[], diagnostics={})
     validator = AsyncMock(return_value=AnswerValidation(status="completed", valid=True))
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     await engine._validate_outcome(SearchRequest(query="合成の質問"), outcome)
@@ -283,9 +280,7 @@ async def test_final_validation_records_the_premise_consistency_decisions(
     citation = RetrievedChunk(
         document_id="doc-synthetic", chunk_id="chunk-synthetic", text="合成の根拠", score=1
     )
-    outcome = AnswerOutcome(
-        answer="合成の回答", citations=[citation], diagnostics={}, context_text=citation.text
-    )
+    outcome = AnswerOutcome(answer="合成の回答", citations=[citation], diagnostics={})
     checks = [
         {
             "answer_passage_id": "A1",

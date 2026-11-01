@@ -97,7 +97,6 @@ Prometheus metrics は `/metrics` で公開する。
 - `rag_ingestion_documents_total`
 - `rag_ingestion_chunks`
 - `rag_ingestion_stage_duration_seconds`
-- `rag_guardrail_findings_total`
 - `rag_rate_limit_decisions_total`
 
 `rag_search_stage_duration_seconds` は `mode`、`stage`、`outcome` label を持つ。`stage` は `history_rewrite`、`answer`、`retrieval`（検索だけの経路）、`outcome` は `success`、`error`、`cancelled` を使う。回答フローの中のどの工程（検索・Rerank・根拠確認・回答の生成など）が遅いかは、`diagnostics.answer.execution_steps`（負荷試験 CLI `search_load_cli` が工程ごとの p95 を集計する）で切り分ける。
@@ -105,8 +104,6 @@ Prometheus metrics は `/metrics` で公開する。
 `rag_ingestion_stage_duration_seconds` は `stage`、`outcome` label を持つ。`stage` は `vlm_extraction`、`chunking`、`embedding`、`indexing`、`outcome` は `success`、`error`、`cancelled` を使い、VLM の OCR/構造化、chunking、embedding、Oracle AI Database indexing のどこで遅延・失敗しているかを切り分ける。
 
 `rag_evaluation_cases_total{mode,status}` と `rag_evaluation_case_duration_seconds{mode,status}` は golden set の case 単位で記録する。`status` は `success` / `error` に固定し、case id や query 本文は label に入れない。
-
-`rag_guardrail_findings_total{surface,code,severity,action}` は query、answer の guardrail finding を数える。`surface` は `query` / `answer`、`action` は `blocked` / `warning` に固定し、query 本文、回答本文、OCR 原文、tenant/user id は label に入れない。
 
 `rag_rate_limit_decisions_total{scope,outcome}` は高コスト API の rate limit 判定を数える。`scope` は `search` / `evaluation` / `upload` / `ingest`、`outcome` は `allowed` / `blocked` に固定し、tenant/user id、IP、query 本文は label に入れない。429 応答には `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset-After` を返す。
 
@@ -138,9 +135,11 @@ OCI Guardrails の安全チェック（「取込・検索・回答設定 > 安�
 `RAG_GUARDRAILS_INPUT_ENABLED` / `RAG_GUARDRAILS_OUTPUT_ENABLED`）は #11 で削除しました。
 `.env` に残った `RAG_GUARDRAILS_*` は読みません。
 
-質問と回答の安全チェックの段（`app/rag/guardrails.py` の `GuardrailPolicy`）は外部の検査を持たない
-通過で、常に許可し、指摘を返しません（工程は「無効のため省略」）。pipeline・チャット・MCP の
-応答の `guardrail_warnings` などの形は互換のため残しています（段を外すのは別の Issue）。
+#11 の後に常に通るだけになった質問と回答の安全チェックの段は、#37 で pipeline・チャット・CLI・
+API・MCP の契約から外しました（処理の経過の `answer_guardrail`、応答の `guardrail_warnings`・
+`guardrail_degraded`、診断の `guardrails_input_enabled` / `guardrails_output_enabled` は返しません）。
+DB の列（`rag_messages.guardrail_warnings`・`rag_search_audit.guardrail_codes` /
+`guardrail_severities`）は migration `20261101_001_retire_guardrail_columns` で削除します。
 
 ローカルの機微情報検査・攻撃パターン検査・秘密文字列検査と、根拠との一致数・一致率による
 安全方針は使いません。引用の整合性の確認や評価専用の指標は、別の目的の処理です。

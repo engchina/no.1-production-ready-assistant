@@ -317,7 +317,9 @@ MCP_SERVER_NAME = "production-ready-rag"
 # 38: rag_search・rag_retrieve_evidence に、安全チェックを完了できず止めたか
 #     （guardrail_degraded）と、根拠 0 件のときに 0 件になった段と件数（zero_evidence）を足した
 #     （#3546。#3262 の残り）。
-MCP_OUTPUT_SCHEMA_VERSION = 38
+# 39: 常に通る安全チェックの段を外し、rag_search・rag_retrieve_evidence から guardrail_warnings と
+#     guardrail_degraded を削除した（#37）。
+MCP_OUTPUT_SCHEMA_VERSION = 39
 # 根拠の本文の 1 件の上限と、応答の根拠の合計の予算（token の見積もり。3 製品で共通の規則。
 # 値と決め方は pr_backend_core.source_text。#3321）。
 EVIDENCE_TEXT_ITEM_MAX_TOKENS = SOURCE_TEXT_ITEM_MAX_TOKENS
@@ -1835,7 +1837,7 @@ class DegradedStep(BaseModel):
 DEGRADED_STEPS_DESCRIPTION = (
     "失敗して縮退した任意の補助の処理（rerank・章節の目録・参照先の読み込みなど）。その処理を"
     "使わずに続けた結果（例: rerank の失敗は検索の順のまま）で、空なら縮退していない。必須の能力"
-    "（主の検索・回答の生成・有効な安全チェック）の失敗は縮退せずエラーで返る。"
+    "（主の検索・回答の生成）の失敗は縮退せずエラーで返る。"
 )
 
 
@@ -1862,18 +1864,11 @@ ZERO_EVIDENCE_DESCRIPTION = (
     "根拠が 0 件のとき、0 件になった段と件数（根拠があれば null）。degraded_steps が空でなければ、"
     "補助の処理の失敗で候補を読めなかった可能性があり、資料に記載が無いとは限らない。"
 )
-GUARDRAIL_DEGRADED_DESCRIPTION = (
-    "安全チェック（質問・回答の検査）を完了できず、処理を止めたか。true のとき資料は調べて"
-    "いない（answer は停止の文・evidence は空）か回答を止めており、資料に根拠が無いことを意味"
-    "しない。"
-)
 
 
 class SearchOutput(VersionedOutput):
     answer: str
     trace_id: str
-    guardrail_warnings: list[str]
-    guardrail_degraded: bool = Field(default=False, description=GUARDRAIL_DEGRADED_DESCRIPTION)
     outcome: AnswerOutcome = Field(
         description=(
             "回答の対応。answered=資料で答えた / conditional=条件・不足を示して答えた / "
@@ -2120,8 +2115,6 @@ class ProfileKnowledge(BaseModel):
 
 class RetrieveEvidenceOutput(VersionedOutput):
     trace_id: str
-    guardrail_warnings: list[str]
-    guardrail_degraded: bool = Field(default=False, description=GUARDRAIL_DEGRADED_DESCRIPTION)
     degraded_steps: list[DegradedStep] = Field(
         default_factory=list, description=DEGRADED_STEPS_DESCRIPTION
     )
@@ -3208,8 +3201,6 @@ def _answer_fields(result: SearchResponse, evidence_limit: int) -> dict[str, Any
     return {
         "answer": result.answer,
         "trace_id": result.trace_id,
-        "guardrail_warnings": list(result.guardrail_warnings),
-        "guardrail_degraded": _guardrail_degraded(result),
         "outcome": outcome,
         "requests": [
             request
@@ -3254,12 +3245,6 @@ def _degraded_steps(answer: Mapping[str, Any]) -> list[DegradedStep]:
         ):
             counts[kind] = counts.get(kind, 0) + max(0, count)
     return [DegradedStep(kind=kind, count=count) for kind, count in counts.items() if count]
-
-
-def _guardrail_degraded(result: SearchResponse) -> bool:
-    """安全チェック（OCI Guardrails）を完了できず止めたか（検索の診断の guardrail_degraded）。"""
-    diagnostics = result.diagnostics
-    return diagnostics is not None and diagnostics.guardrail_degraded
 
 
 def _zero_evidence(answer: Mapping[str, Any], result: SearchResponse) -> ZeroEvidence | None:
@@ -4276,7 +4261,6 @@ async def rule_clarification_step(
         return SearchOutput(
             answer=f"回答の前に確認が必要です: {clarification.question}",
             trace_id=new_trace_id(),
-            guardrail_warnings=[],
             outcome="needs_clarification",
             clarifications=[
                 GuideClarification(
@@ -4950,7 +4934,6 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
             if isinstance(rule, SearchOutput):
                 return RetrieveEvidenceOutput(
                     trace_id=rule.trace_id,
-                    guardrail_warnings=[],
                     evidence=[],
                     evidence_omitted=0,
                     clarifications=rule.clarifications,
@@ -4984,8 +4967,6 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
         sections = await _chunk_sections(citations)
         output = RetrieveEvidenceOutput(
             trace_id=result.trace_id,
-            guardrail_warnings=list(result.guardrail_warnings),
-            guardrail_degraded=_guardrail_degraded(result),
             degraded_steps=_degraded_steps(_answer_diagnostics(result)),
             zero_evidence=_zero_evidence(_answer_diagnostics(result), result),
             evidence=[],

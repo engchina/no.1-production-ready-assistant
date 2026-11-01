@@ -84,7 +84,6 @@
       ],
       "turn_results": [],
       "answer_evaluation": null,
-      "guardrail_warnings": [],
       "failure_reasons": [
         "evidence_miss"
       ],

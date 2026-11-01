@@ -67,7 +67,6 @@ function userMessage(id: string) {
     content: QUESTION,
     model: null,
     citations: [],
-    guardrail_warnings: [],
     trace_id: null,
     status: "COMPLETE",
     reply_to_message_id: null,
@@ -96,8 +95,8 @@ const reranking = [...answerProgress.finish("search"), ...answerProgress.start("
 const finished = [
   ...answerProgress.finish("rerank"),
   ...answerProgress.finish("answer"),
-  ...answerProgress.start("guardrail", ragSpan.stage("answer_guardrail")),
-  ...answerProgress.finish("guardrail"),
+  ...answerProgress.start("record_save", ragSpan.stage("answer_record_save")),
+  ...answerProgress.finish("record_save"),
   ...answerProgress.finish("root"),
 ];
 const completed = answerProgress.terminal("done");
@@ -123,7 +122,6 @@ function reply(userId: string, state: ReplyState) {
     content: state === "complete" ? ANSWER : state === "cancelled" ? "回答の作成を停止しました。" : "",
     model: "m1",
     citations: [],
-    guardrail_warnings: [],
     trace_id: state === "complete" ? "t1" : null,
     status: state === "complete" ? "COMPLETE" : state === "cancelled" ? "CANCELLED" : "STREAMING",
     reply_to_message_id: userId,
@@ -158,7 +156,7 @@ const restChunks: TimedChunk[] = [
     afterMs: 300,
     text: [
       progressEvents([...reranking, ...finished, ...completed]),
-      runEvent("metadata", { model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 1200, guardrail_warnings: [] }),
+      runEvent("metadata", { model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 1200 }),
       runEvent("delta", { model_id: "m1", text: ANSWER }),
       runEvent("citations", { model_id: "m1", citations: [] }),
       runEvent("done", { model_id: "m1", message_id: "a1" }),

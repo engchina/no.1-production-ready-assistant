@@ -76,7 +76,7 @@ SCORE_FIELDS: tuple[str, ...] = (
     "error_stage",
 )
 # 段 2 の結果にあり、suite に無い項目（RAG の評価の項目。Agent の経路ではいつも空）。
-RAG_ONLY_SCORE_FIELDS: dict[str, Any] = {"answer_evaluation": None, "guardrail_warnings": []}
+RAG_ONLY_SCORE_FIELDS: dict[str, Any] = {"answer_evaluation": None}
 RAG_ONLY_METRIC_FIELDS: dict[str, Any] = {"evaluation_suite": "standard", "comparison": None}
 # 旧形式の推定を選んだときに、段 2 から意図して変わる値（README.md「意図して作り直した値」）。
 STAGE2_DIFFS: dict[str, dict[str, tuple[Any, Any]]] = {

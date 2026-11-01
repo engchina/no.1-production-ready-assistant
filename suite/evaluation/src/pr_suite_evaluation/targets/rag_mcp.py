@@ -41,8 +41,8 @@ TOOL = "rag_search"
 # 読める出力の版（契約 rag-tools.json の rag_search の schema_version。#3240 で
 # rag_validate_answer の段落の位置・top_k の既定・失敗の code の一覧を足して 37（rag_search の
 # 出力の形は 36 と同じ）、#3546 で安全チェックの未完了 guardrail_degraded と根拠 0 件の段
-# zero_evidence を足して 38）。
-RAG_SEARCH_SCHEMA_VERSION = 38
+# zero_evidence を足して 38、#37 で guardrail_warnings・guardrail_degraded を外して 39）。
+RAG_SEARCH_SCHEMA_VERSION = 39
 # 返す根拠の上限（契約の evidence_limit の maximum）。
 DEFAULT_EVIDENCE_LIMIT = 50
 MAX_EVIDENCE_LIMIT = 50

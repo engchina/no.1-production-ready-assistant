@@ -97,7 +97,6 @@ def _output(
         "schema_version": RAG_SEARCH_SCHEMA_VERSION,
         "answer": "合成の回答です。",
         "trace_id": trace_id,
-        "guardrail_warnings": [],
         "outcome": outcome,
         "requests": [],
         "conditions": [],

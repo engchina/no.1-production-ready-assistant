@@ -625,7 +625,53 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261101_001_retire_guardrail_columns",
+            table_name="rag_messages",
+            sql=retire_guardrail_columns_sql(),
+            destructive_note=(
+                "常に通る安全チェックの段（#37 で削除）だけが書いた列"
+                "（rag_messages.guardrail_warnings・rag_search_audit.guardrail_codes・"
+                "rag_search_audit.guardrail_severities）を削除します。"
+                "会話・メッセージの本文・監査のほかの列は削除しません。"
+                "必要なら適用前に同列を export してください。削除後は復元できません。"
+            ),
+        )
+    )
     return sections
+
+
+def retire_guardrail_columns_sql() -> str:
+    """安全チェックの段（#37 で削除）だけが書いた列を消す。
+
+    どの列も、表と列があるときだけ削除し、何度当てても同じ結果になる（冪等）。
+    """
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_MESSAGES' AND column_name = 'GUARDRAIL_WARNINGS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_messages DROP COLUMN guardrail_warnings';
+    END IF;
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_SEARCH_AUDIT' AND column_name = 'GUARDRAIL_CODES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_search_audit DROP COLUMN guardrail_codes';
+    END IF;
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_SEARCH_AUDIT' AND column_name = 'GUARDRAIL_SEVERITIES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_search_audit DROP COLUMN guardrail_severities';
+    END IF;
+END;
+/
+""".strip()
 
 
 # 埋め込みの次元を 1536 から EMBEDDING_DIMENSIONS（1024）へ変える migration（#46）。

@@ -1,4 +1,4 @@
-"""検索 RAG パイプライン: 安全チェック -> 回答フロー -> 回答側の安全チェック。
+"""検索 RAG パイプライン: 会話の履歴での質問の書き換え -> 回答フロー -> 回答の記録の保存。
 
 回答は回答フロー(``AnswerEngine``)だけで行う(#594)。旧 standard の回答エンジン
 (検索モード・根拠確認・回答スタイル・高度な検索)は #595 で削除した。
@@ -42,13 +42,12 @@ from app.config import Settings, get_settings
 from app.rag.answer_engine import ANSWER_ENGINE, AnswerEngine, AnswerScope, answer_step_stage
 from app.rag.answer_notice import AnswerNoticeSource, compose_rag_answer_notice
 from app.rag.answer_route import answer_route
-from app.rag.audit import AuditOutcome, record_rag_search_audit
+from app.rag.audit import record_rag_search_audit
 from app.rag.chat_question_token import context_digest
 from app.rag.degraded_steps import DegradedSteps, ReportDegraded, not_recorded
 from app.rag.diagnostics import build_search_diagnostics
 from app.rag.extraction_field_adapter import load_field_schema, resolve_field_definitions
 from app.rag.field_filter_reader import read_field_conditions
-from app.rag.guardrails import GuardrailPolicy, GuardrailResult
 from app.rag.history_question import HISTORY_REWRITE_SYSTEM_PROMPT as HISTORY_REWRITE_SYSTEM_PROMPT
 from app.rag.history_question import HistoryConfirmation, HistoryRewrite
 from app.rag.observability import (
@@ -56,7 +55,6 @@ from app.rag.observability import (
     elapsed_ms,
     new_trace_id,
     record_answer_route,
-    record_guardrail_findings,
     record_rag_request,
     record_rag_stage,
     record_trace_span,
@@ -72,7 +70,6 @@ from app.rag.span_display import (
     failure_details,
 )
 from app.rag.step_details import (
-    answer_guardrail_details,
     field_filter_details,
     history_rewrite_details,
     step_details_model,
@@ -330,7 +327,7 @@ def _observe_engine_call(operation: str, model: str) -> Iterator[CallObservation
 class RagPipeline:
     """回答フローで検索・回答する RAG パイプライン。
 
-    検索の前後の安全チェック・回答記録・質問履歴・会話履歴による質問の書き換え・工程の計測を
+    回答記録・質問履歴・会話履歴による質問の書き換え・工程の計測を
     ここで行い、検索と回答の生成は ``AnswerEngine`` に任せる。
     """
 
@@ -339,7 +336,6 @@ class RagPipeline:
         genai: GenAiClient | None = None,
         oracle: OracleClient | None = None,
         llm: EnterpriseAiClient | None = None,
-        guardrails: GuardrailPolicy | None = None,
         settings: Settings | None = None,
         *,
         answer_model_id: str | None = None,
@@ -358,7 +354,6 @@ class RagPipeline:
         self._genai = genai or GenAiClient(settings=self._settings)
         self._oracle = oracle or OracleClient(settings=self._settings)
         self._llm = llm or EnterpriseAiClient(settings=self._settings)
-        self._guardrails = guardrails or GuardrailPolicy(self._settings)
         # 回答フローの回答のモデル。チャットのモデル比較で ``llm`` と同じモデルを渡す(#593)。
         # None は既定のモデル。
         self._answer_model_id = answer_model_id or None
@@ -396,7 +391,6 @@ class RagPipeline:
         token_callback: SearchTokenCallback | None = None,
         *,
         history: Sequence[ChatTurn] | None = None,
-        query_guardrail_result: GuardrailResult | None = None,
         trace: AnswerTrace | None = None,
     ) -> SearchResponse:
         """RAG 検索を実行する。
@@ -483,7 +477,6 @@ class RagPipeline:
                 progress_callback,
                 token_callback,
                 history=history,
-                query_guardrail_result=query_guardrail_result,
             )
             # 実行を確定する(root の span を閉じる。実行履歴に残す実行は記録のときに閉じている)。
             finish_operation_trace(trace_id)
@@ -497,7 +490,6 @@ class RagPipeline:
         token_callback: SearchTokenCallback | None = None,
         *,
         history: Sequence[ChatTurn] | None = None,
-        query_guardrail_result: GuardrailResult | None = None,
     ) -> SearchResponse:
         """RAG 検索を実行する。
 
@@ -510,99 +502,20 @@ class RagPipeline:
             raise ValueError(
                 "呼び出し元の検索文は、会話の履歴の無い、回答を作らない検索だけに使います。"
             )
-        if query_guardrail_result is None:
-            query_guardrail = await asyncio.to_thread(
-                self._guardrails.validate_query, request.query
-            )
-        else:
-            query_guardrail = query_guardrail_result
-        # 回答対象の原文も外部入力。検索文の検査済み結果だけでは原文を信用しない。
-        if query_guardrail.allowed and request.original_question is not None:
-            original_guardrail = (
-                query_guardrail
-                if request.original_question == request.query
-                else await asyncio.to_thread(
-                    self._guardrails.validate_query, request.original_question
-                )
-            )
-            request = request.model_copy(
-                update={"original_question": original_guardrail.sanitized_text}
-            )
-            if original_guardrail is not query_guardrail:
-                query_guardrail = GuardrailResult(
-                    allowed=original_guardrail.allowed,
-                    sanitized_text=(
-                        query_guardrail.sanitized_text
-                        if original_guardrail.allowed
-                        else original_guardrail.sanitized_text
-                    ),
-                    findings=[*query_guardrail.findings, *original_guardrail.findings],
-                    backend_degraded=(
-                        query_guardrail.backend_degraded or original_guardrail.backend_degraded
-                    ),
-                )
-        if query_guardrail.allowed:
-            request = request.model_copy(update={"query": query_guardrail.sanitized_text})
-        record_guardrail_findings(
-            "query",
-            query_guardrail.findings,
-            "blocked" if not query_guardrail.allowed else "warning",
-        )
-        if self._run_recorder is not None and query_guardrail.allowed:
-            # 失敗(時間切れなど)の記録にも、安全チェックの後の質問だけを使う(#1890)。
-            self._run_recorder.question = query_guardrail.sanitized_text
-        if not query_guardrail.allowed:
-            elapsed = elapsed_ms(started_at)
-            diagnostics = build_search_diagnostics(
-                request,
-                settings=self._settings,
-                retrieval_strategy_adapter="blocked",
-                guardrail_degraded=query_guardrail.backend_degraded,
-            )
-            record_rag_request(SEARCH_METRIC_MODE, "blocked", elapsed / 1000, 0)
-            record_rag_search_audit(
-                trace_id=trace_id,
-                outcome="blocked",
-                sanitized_query=query_guardrail.sanitized_text,
-                filters=request.filters,
-                findings=query_guardrail.findings,
-                retrieved_count=0,
-                citations=[],
-                elapsed_ms=elapsed,
-                diagnostics=diagnostics,
-            )
-            if self._run_recorder is not None and not request.retrieval_only:
-                # 止めた質問は保存しない(チャットの会話と同じ)。
-                await self._run_recorder.record(
-                    run_id=trace_id,
-                    question=None,
-                    search_answer_profile_id=request.search_answer_profile_id,
-                    answer_generated=request.generate_answer,
-                    status="blocked",
-                    elapsed_ms=elapsed,
-                )
-            return SearchResponse(
-                answer="この検索リクエストは安全ポリシーにより処理できませんでした。",
-                citations=[],
-                trace_id=trace_id,
-                guardrail_warnings=query_guardrail.warnings,
-                elapsed_ms=elapsed,
-                diagnostics=diagnostics,
-            )
-
+        if self._run_recorder is not None:
+            # 失敗(時間切れなど)の記録にも質問を残す(#1890)。
+            self._run_recorder.question = request.query
         if request.retrieval_only:
             return await self._run_engine_retrieval(
                 request,
                 trace_id=trace_id,
                 started_at=started_at,
-                query_guardrail=query_guardrail,
                 progress_callback=progress_callback,
             )
         return await self._run_engine(
             request,
             trace_id=trace_id,
             started_at=started_at,
-            query_guardrail=query_guardrail,
             token_callback=token_callback,
             history=history,
             progress_callback=progress_callback,
@@ -614,26 +527,21 @@ class RagPipeline:
         *,
         trace_id: str,
         started_at: float,
-        query_guardrail: GuardrailResult,
         token_callback: SearchTokenCallback | None,
         history: Sequence[ChatTurn] | None = None,
         progress_callback: SearchStageProgressCallback | None = None,
     ) -> SearchResponse:
-        """rag_poc の根拠付き回答エンジンで回答する。回答側ガードレールは共通。
+        """rag_poc の根拠付き回答エンジンで回答する。
 
         rag_poc の回答フローは単発質問前提のため、会話履歴がある場合は最新の質問を
         履歴を踏まえた単独の質問へ書き換えてから実行する(失敗時は元の質問)。
         """
-        # 実行履歴(#1890)は段(質問の書き換え・回答・回答側の安全チェックなど)の時間を集める。
+        # 実行履歴(#1890)は段(質問の書き換え・回答・回答の記録の保存など)の時間を集める。
         stage_callback = (
             self._run_recorder.observe(progress_callback)
             if self._run_recorder is not None
             else progress_callback
         )
-        # 検索・書き換え・保存には安全チェック後(機微情報マスク後)の質問を使う。
-        # request.query は利用者の原文で、機微な値がそのまま残っている。
-        if request.query != query_guardrail.sanitized_text:
-            request = request.model_copy(update={"query": query_guardrail.sanitized_text})
         original_query = request.original_question or request.query
         rewritten_query = (
             request.query
@@ -651,7 +559,7 @@ class RagPipeline:
             rewritten_query = await _observe_stage(
                 trace_id,
                 "history_rewrite",
-                self._safe_rewritten_query(
+                self._rewrite_query_with_history(
                     original_query, history, report_degraded=degraded.record_degraded
                 ),
                 progress_callback=stage_callback,
@@ -662,7 +570,7 @@ class RagPipeline:
                     update={"query": rewritten_query, "original_question": original_query}
                 )
         caller_queries = (
-            await self._checked_caller_queries(self._caller_queries)
+            [query for query in self._caller_queries if query.strip()]
             if self._caller_queries is not None
             else None
         )
@@ -777,46 +685,9 @@ class RagPipeline:
             route = answer_route(outcome.diagnostics)
             outcome.diagnostics["route"] = route
             record_answer_route(route["reason"], route["requires_environment_data"])
-        if request.generate_answer:
-            # 回答側の安全チェックも工程として計測し、進捗に出す
-            # (チャットの「回答を確認しています」。#1146)。
-            answer_guardrail = await _observe_stage(
-                trace_id,
-                "answer_guardrail",
-                asyncio.to_thread(
-                    self._guardrails.validate_answer, outcome.answer, outcome.context_text
-                ),
-                progress_callback=stage_callback,
-                result_details=lambda result: answer_guardrail_details(result, outcome.answer),
-                result_outcome=guardrail_stage_outcome,
-            )
-            record_guardrail_findings(
-                "answer",
-                answer_guardrail.findings,
-                "blocked" if not answer_guardrail.allowed else "warning",
-            )
-        else:
-            # 回答が無い(本文は検索できなかった理由だけ)ので、回答側の安全チェックはしない。
-            answer_guardrail = GuardrailResult(
-                allowed=True, sanitized_text=outcome.answer, findings=[]
-            )
-        final_answer = answer_guardrail.sanitized_text
+        final_answer = outcome.answer
         if outcome.evaluation_input is not None:
             outcome.evaluation_input["answer_text"] = final_answer
-        if final_answer != outcome.answer:
-            # 安全処理後の本文へ、変更前の本文の検査済み表示を引き継がない。
-            previous_validation = outcome.diagnostics.get("answer_validation")
-            outcome.diagnostics["answer_validation"] = {
-                "previous_body_validation": previous_validation,
-                "status": "body_changed",
-                "valid": False,
-                "reuse_context": "",
-                "previous_status": previous_validation.get("status")
-                if isinstance(previous_validation, dict)
-                else None,
-            }
-            outcome.diagnostics["needs_human_review"] = True
-            outcome.diagnostics["confidence"] = "low"
         # 回答の注意書き（#2405）。回答の確定の後に、本文とは別の項目として付ける。
         # 窓口の案内は検索・回答プロファイルの上書きと業務ガイドの引き継ぎで決める（#2400）。
         notice = (
@@ -835,9 +706,6 @@ class RagPipeline:
             request,
             settings=self._settings,
             retrieval_strategy_adapter="grounded",
-            guardrail_degraded=(
-                query_guardrail.backend_degraded or answer_guardrail.backend_degraded
-            ),
             answer=cast(
                 dict[str, JsonValue],
                 {
@@ -847,17 +715,13 @@ class RagPipeline:
                 },
             ),
         )
-        outcome_label: AuditOutcome = "success" if answer_guardrail.allowed else "blocked"
         elapsed = elapsed_ms(started_at)
-        record_rag_request(
-            SEARCH_METRIC_MODE, outcome_label, elapsed / 1000, len(outcome.citations)
-        )
+        record_rag_request(SEARCH_METRIC_MODE, "success", elapsed / 1000, len(outcome.citations))
         record_rag_search_audit(
             trace_id=trace_id,
-            outcome=outcome_label,
-            sanitized_query=query_guardrail.sanitized_text,
+            outcome="success",
+            query=request.query,
             filters=request.filters,
-            findings=[*query_guardrail.findings, *answer_guardrail.findings],
             retrieved_count=len(outcome.citations),
             citations=outcome.citations,
             elapsed_ms=elapsed,
@@ -897,7 +761,7 @@ class RagPipeline:
                 question=original_query,
                 search_answer_profile_id=request.search_answer_profile_id,
                 answer_generated=request.generate_answer,
-                status="blocked" if outcome_label == "blocked" else "success",
+                status="success",
                 elapsed_ms=elapsed,
                 citations=outcome.citations,
                 answer_diagnostics=diagnostics.answer,
@@ -907,10 +771,8 @@ class RagPipeline:
             answer=final_answer,
             citations=outcome.citations,
             trace_id=trace_id,
-            guardrail_warnings=[*query_guardrail.warnings, *answer_guardrail.warnings],
             elapsed_ms=elapsed,
             diagnostics=diagnostics,
-            answer_replaced=final_answer != outcome.answer,
             storage_failures=storage_failures,
             notice=notice,
             # 品質評価が標準回答で比較するときに使う(応答には出さない。#591)。
@@ -922,16 +784,13 @@ class RagPipeline:
         *,
         trace_id: str,
         started_at: float,
-        query_guardrail: GuardrailResult,
         progress_callback: SearchStageProgressCallback | None = None,
     ) -> SearchResponse:
         """回答フローの検索だけを行い、回答を作らずに候補を引用として返す(#593)。
 
         KB の検索テストとレシピの検索比較が使う(``SearchRequest.retrieval_only``)。LLM を呼ばず、
-        回答記録・質問履歴も保存しない。回答側の安全チェックは回答が無いので行わない。
+        回答記録・質問履歴も保存しない。
         """
-        if request.query != query_guardrail.sanitized_text:
-            request = request.model_copy(update={"query": query_guardrail.sanitized_text})
         engine = AnswerEngine(self._settings, oracle=self._oracle, genai=self._genai)
         citations = await _observe_stage(
             trace_id,
@@ -944,16 +803,14 @@ class RagPipeline:
             request,
             settings=self._settings,
             retrieval_strategy_adapter="retrieval_only",
-            guardrail_degraded=query_guardrail.backend_degraded,
         )
         elapsed = elapsed_ms(started_at)
         record_rag_request(SEARCH_METRIC_MODE, "success", elapsed / 1000, len(citations))
         record_rag_search_audit(
             trace_id=trace_id,
             outcome="success",
-            sanitized_query=query_guardrail.sanitized_text,
+            query=request.query,
             filters=request.filters,
-            findings=list(query_guardrail.findings),
             retrieved_count=len(citations),
             citations=citations,
             elapsed_ms=elapsed,
@@ -963,7 +820,6 @@ class RagPipeline:
             answer="",
             citations=citations,
             trace_id=trace_id,
-            guardrail_warnings=query_guardrail.warnings,
             elapsed_ms=elapsed,
             diagnostics=diagnostics,
         )
@@ -1022,21 +878,6 @@ class RagPipeline:
                     extra={"trace_id": trace_id, **safe_exception_fields(exc)},
                 )
 
-    async def _checked_caller_queries(self, queries: Sequence[str]) -> list[str]:
-        """呼び出し元の検索文に、質問と同じ安全チェックを当てる(#2651)。
-
-        機微情報は質問と同じく伏せた文で検索し、拒否された検索文は使わない(残りの検索文で続ける)。
-        """
-        checked: list[str] = []
-        for query in queries:
-            result = await asyncio.to_thread(self._guardrails.validate_query, query)
-            record_guardrail_findings(
-                "query", result.findings, "blocked" if not result.allowed else "warning"
-            )
-            if result.allowed and result.sanitized_text.strip():
-                checked.append(result.sanitized_text)
-        return checked
-
     async def _read_field_conditions(
         self, request: SearchRequest, *, report_degraded: ReportDegraded = not_recorded
     ) -> list[ExtractionFieldCondition]:
@@ -1075,34 +916,6 @@ class RagPipeline:
             request.query, field_defs, self._llm, report_degraded=report_degraded
         )
 
-    async def _safe_rewritten_query(
-        self,
-        query: str,
-        history: Sequence[ChatTurn],
-        *,
-        report_degraded: ReportDegraded = not_recorded,
-    ) -> str:
-        """履歴で書き換えた質問を、元の質問と同じ安全チェックに通してから返す。
-
-        書き換えは未信頼の履歴を読んだ LLM の出力なので、そのまま検索・回答へ使わない。
-        拒否されたら空文字(元の質問で続ける)、許可されたらマスク後の質問を返す。
-        """
-        self._selected_history_facts = ()
-        rewritten = await self._rewrite_query_with_history(
-            query, history, report_degraded=report_degraded
-        )
-        if not rewritten:
-            return ""
-        checked = await asyncio.to_thread(self._guardrails.validate_query, rewritten)
-        if not checked.allowed:
-            self._selected_history_facts = ()
-            logger.warning(
-                "history rewrite rejected by guardrail",
-                extra={"codes": [finding.code for finding in checked.findings]},
-            )
-            return ""
-        return "" if checked.sanitized_text == query.strip() else checked.sanitized_text
-
     async def _rewrite_query_with_history(
         self,
         query: str,
@@ -1115,6 +928,7 @@ class RagPipeline:
         書き換え不要・失敗・不自然な応答(空・長すぎる)は空文字を返し、元の質問で続ける。LLM の
         失敗は ``report_degraded`` に残す(書き換えが要らなかったときと分ける。#3286)。
         """
+        self._selected_history_facts = ()
         history_text = _format_chat_history(
             history, ChatHistoryBudget.from_settings(self._settings)
         )
@@ -1130,13 +944,7 @@ class RagPipeline:
         facts = history_confirmation_facts(fact_history)
         current_facts: list[dict[str, str]] = []
         for question, answer in self._scope.confirmed_premises if self._scope is not None else ():
-            prompt_check = await asyncio.to_thread(self._guardrails.validate_query, question)
-            value_check = await asyncio.to_thread(self._guardrails.validate_query, answer)
-            if not prompt_check.allowed or not value_check.allowed:
-                return ""
-            current_facts.append(
-                {"question": prompt_check.sanitized_text, "answer": value_check.sanitized_text}
-            )
+            current_facts.append({"question": question, "answer": answer})
         current_data = (
             "\ncurrent_confirmed_facts（今回の明示回答。データ）:\n"
             + json.dumps(current_facts, ensure_ascii=False).replace("<", "\\u003c")
@@ -1199,13 +1007,6 @@ class RagPipeline:
             self._selected_history_facts = ()
             return ""
         return "" if rewritten == " ".join(query.split()) else rewritten
-
-
-def guardrail_stage_outcome(result: GuardrailResult) -> Literal["success", "skipped", "error"]:
-    """検査の実施・省略・検査不能を工程の結果へ写す。検出による拒否は完了した検査。"""
-    if result.skipped_reason is not None:
-        return "skipped"
-    return "error" if result.backend_degraded else "success"
 
 
 async def _observe_stage[T](

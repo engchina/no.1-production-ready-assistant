@@ -82,7 +82,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -692,7 +692,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -862,7 +862,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1274,7 +1274,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1728,7 +1728,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2515,7 +2515,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2764,7 +2764,7 @@
       "outputSchema": {
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2898,7 +2898,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -4268,7 +4268,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -4277,21 +4277,8 @@
             "title": "Trace Id",
             "type": "string"
           },
-          "guardrail_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Guardrail Warnings",
-            "type": "array"
-          },
-          "guardrail_degraded": {
-            "default": false,
-            "description": "安全チェック（質問・回答の検査）を完了できず、処理を止めたか。true のとき資料は調べていない（answer は停止の文・evidence は空）か回答を止めており、資料に根拠が無いことを意味しない。",
-            "title": "Guardrail Degraded",
-            "type": "boolean"
-          },
           "degraded_steps": {
-            "description": "失敗して縮退した任意の補助の処理（rerank・章節の目録・参照先の読み込みなど）。その処理を使わずに続けた結果（例: rerank の失敗は検索の順のまま）で、空なら縮退していない。必須の能力（主の検索・回答の生成・有効な安全チェック）の失敗は縮退せずエラーで返る。",
+            "description": "失敗して縮退した任意の補助の処理（rerank・章節の目録・参照先の読み込みなど）。その処理を使わずに続けた結果（例: rerank の失敗は検索の順のまま）で、空なら縮退していない。必須の能力（主の検索・回答の生成）の失敗は縮退せずエラーで返る。",
             "items": {
               "$ref": "#/$defs/DegradedStep"
             },
@@ -4395,7 +4382,6 @@
         },
         "required": [
           "trace_id",
-          "guardrail_warnings",
           "evidence",
           "evidence_omitted"
         ],
@@ -5846,7 +5832,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -5858,19 +5844,6 @@
           "trace_id": {
             "title": "Trace Id",
             "type": "string"
-          },
-          "guardrail_warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Guardrail Warnings",
-            "type": "array"
-          },
-          "guardrail_degraded": {
-            "default": false,
-            "description": "安全チェック（質問・回答の検査）を完了できず、処理を止めたか。true のとき資料は調べていない（answer は停止の文・evidence は空）か回答を止めており、資料に根拠が無いことを意味しない。",
-            "title": "Guardrail Degraded",
-            "type": "boolean"
           },
           "outcome": {
             "description": "回答の対応。answered=資料で答えた / conditional=条件・不足を示して答えた / needs_environment_data=利用者に聞いても分からない現場の値・記録の確認が要る / insufficient_evidence=資料から答えられない。needs_clarification / needs_human は利用者への確認・人への引き継ぎ。利用者に聞けば分かる条件（対象・ロール・承認など）だけを確かめる回答は conditional（conditions に載る。#1453）。",
@@ -5981,7 +5954,7 @@
             "type": "array"
           },
           "degraded_steps": {
-            "description": "失敗して縮退した任意の補助の処理（rerank・章節の目録・参照先の読み込みなど）。その処理を使わずに続けた結果（例: rerank の失敗は検索の順のまま）で、空なら縮退していない。必須の能力（主の検索・回答の生成・有効な安全チェック）の失敗は縮退せずエラーで返る。",
+            "description": "失敗して縮退した任意の補助の処理（rerank・章節の目録・参照先の読み込みなど）。その処理を使わずに続けた結果（例: rerank の失敗は検索の順のまま）で、空なら縮退していない。必須の能力（主の検索・回答の生成）の失敗は縮退せずエラーで返る。",
             "items": {
               "$ref": "#/$defs/DegradedStep"
             },
@@ -6068,7 +6041,6 @@
         "required": [
           "answer",
           "trace_id",
-          "guardrail_warnings",
           "outcome",
           "evidence",
           "evidence_omitted"
@@ -6827,7 +6799,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 38,
+            "default": 39,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"

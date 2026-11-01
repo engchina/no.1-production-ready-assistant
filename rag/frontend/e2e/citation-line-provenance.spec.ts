@@ -101,7 +101,6 @@ async function ask(
         `event: metadata\ndata: ${JSON.stringify({
           trace_id: "trace-provenance",
           elapsed_ms: 10,
-          guardrail_warnings: [],
           diagnostics: {
             search_answer_profile_applied: PROFILE.id,
             retrieval_strategy: "hybrid",

@@ -88,7 +88,6 @@ async function mockApi(page: Page, answer: Record<string, unknown>, citations: u
         `event: metadata\ndata: ${JSON.stringify({
           trace_id: "trace-guide",
           elapsed_ms: 20,
-          guardrail_warnings: [],
           diagnostics: {
             search_answer_profile_applied: "bv-1",
             retrieval_strategy: "hybrid",

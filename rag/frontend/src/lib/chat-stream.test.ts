@@ -21,7 +21,7 @@ describe("streamChatMessage", () => {
       })}\n\n`,
       `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "回答" })}\n\n`,
       `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "です。" })}\n\n`,
-      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [] })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5 })}\n\n`,
       `event: citations\ndata: ${JSON.stringify({ model_id: "m1", citations: [{ chunk_id: "ch1" }] })}\n\n`,
       `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
       `event: all_done\ndata: ${JSON.stringify({ conversation_id: "c1" })}\n\n`,

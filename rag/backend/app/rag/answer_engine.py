@@ -313,7 +313,6 @@ class AnswerOutcome:
     answer: str
     citations: list[RetrievedChunk]
     diagnostics: dict[str, Any]
-    context_text: str
     # 標準回答による LLM 評価(evaluate_answer_payload)の入力。回答記録に保存する。
     evaluation_input: dict[str, Any] | None = None
 
@@ -1233,8 +1232,6 @@ class AnswerEngine:
                 ],
                 **({"degraded_steps": degraded} if degraded else {}),
             },
-            # 回答の安全チェックが照合する根拠は、選んだ FAQ だけ。
-            context_text=f"類似問: {faq_question}\n承認済みの回答: {faq_answer}",
         )
 
     def _models_used(
@@ -4096,13 +4093,11 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
         "execution_steps": steps,
         "evidence_tree": tree,
     }
-    context_text = "\n\n".join(chunk.text for chunk in citations)
     answer = result.answer_text or result.answer
     return AnswerOutcome(
         answer=answer,
         citations=citations,
         diagnostics=diagnostics,
-        context_text=context_text,
         evaluation_input=_evaluation_input(result),
     )
 

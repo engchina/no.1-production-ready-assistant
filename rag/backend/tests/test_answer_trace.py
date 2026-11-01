@@ -48,7 +48,7 @@ async def test_records_root_stage_and_answer_steps_as_a_span_tree() -> None:
                 pass
 
         await pipeline_stage("answer", answer())
-        await pipeline_stage("answer_guardrail")
+        await pipeline_stage("answer_record_save")
 
     assert span_rows(tracker.events) == [
         # 始まった順（包む段の後に中の工程）。
@@ -57,7 +57,7 @@ async def test_records_root_stage_and_answer_steps_as_a_span_tree() -> None:
         ("rag.engine.stage", ANSWER_STEP_KIND, "質問の理解", "done"),
         ("rag.engine.stage", ANSWER_STEP_KIND, "文書検索", "done"),
         ("rag.engine.stage", ANSWER_STEP_KIND, "Rerank", "done"),
-        ("rag.answer_guardrail", "answer_guardrail", None, "done"),
+        ("rag.answer_record_save", "answer_record_save", None, "done"),
     ]
     steps = {event.step_id: event for event in span_steps(tracker.events)}
     root = next(event for event in steps.values() if event.root)

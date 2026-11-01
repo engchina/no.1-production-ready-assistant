@@ -23,7 +23,6 @@ from app.features.agent import builtin_runtime
 from app.features.agent.builtin_runtime import ModelTarget
 from app.features.agent.rag_retrieval_state import (
     DEGRADED_ZERO_EVIDENCE_HINT,
-    GUARDRAIL_DEGRADED_HINT,
     retrieval_notice,
 )
 from app.features.agent.runtime import (
@@ -260,14 +259,13 @@ def test_answered_rag_result_has_no_next_step(
             "degraded_steps",
             DEGRADED_ZERO_EVIDENCE_HINT,
         ),
-        ({"guardrail_degraded": True}, "guardrail_degraded", GUARDRAIL_DEGRADED_HINT),
     ],
-    ids=["degraded-steps", "guardrail"],
+    ids=["degraded-steps"],
 )
 def test_degraded_zero_evidence_result_tells_the_model_it_is_not_an_absence(
     degraded: dict[str, Any], reason: str, hint: str, monkeypatch: MonkeyPatch, mcp: FakeProductMcp
 ) -> None:
-    """根拠 0 件が縮退・安全チェックの未完了によるとき、モデルへの結果に案内を足す（#3546）。"""
+    """根拠 0 件が縮退によるとき、モデルへの結果に案内を足す（#3546）。"""
     output = _search_output("insufficient_evidence")
     output.update(evidence=[], **degraded)
     mcp.outputs["rag_search"] = output
@@ -300,7 +298,7 @@ def test_degraded_zero_evidence_result_tells_the_model_it_is_not_an_absence(
         # 縮退していない 0 件（検索で当たらなかった）。
         {"evidence": [], "degraded_steps": [], "zero_evidence": {"stage": "retrieval"}},
         # 形の合わない縮退の記録。
-        {"evidence": [], "degraded_steps": [{"kind": "", "count": 1}], "guardrail_degraded": 1},
+        {"evidence": [], "degraded_steps": [{"kind": "", "count": 1}]},
     ],
     ids=["with-evidence", "no-hit", "malformed"],
 )
