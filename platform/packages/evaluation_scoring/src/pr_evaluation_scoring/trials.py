@@ -30,8 +30,10 @@ Stability = Literal["stable_pass", "stable_fail", "unstable", "incomplete", "unj
 
 def wilson_interval(rate: float, n: int, z: float = Z_95) -> tuple[float, float] | None:
     """成功率 `rate`（0〜1）・標本の数 `n` の Wilson の score 区間（n が 0 なら None）。"""
-    if n <= 0:
-        return None
+    return _wilson(rate, n, z) if n > 0 else None
+
+
+def _wilson(rate: float, n: int, z: float) -> tuple[float, float]:
     p = min(1.0, max(0.0, rate))
     z2 = z * z
     center = (p + z2 / (2 * n)) / (1 + z2 / n)
@@ -183,11 +185,8 @@ def paired_difference(
     target = [min(1.0, max(0.0, right)) for _, right in pairs]
     n = len(pairs)
     p1, p2 = fsum(base) / n, fsum(target) / n
-    base_interval = wilson_interval(p1, n, z)
-    target_interval = wilson_interval(p2, n, z)
-    assert base_interval is not None and target_interval is not None
-    l1, u1 = base_interval
-    l2, u2 = target_interval
+    l1, u1 = _wilson(p1, n, z)
+    l2, u2 = _wilson(p2, n, z)
     r = _correlation(base, target)
     difference = p2 - p1
     low = difference - sqrt(
