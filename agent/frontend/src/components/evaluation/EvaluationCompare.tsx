@@ -4,6 +4,7 @@ import {
   Banner,
   Card,
   CardContent,
+  DataTable,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -67,6 +68,44 @@ function outcomeVariant(outcome: EvaluationComparisonOutcome): StatusVariant {
 function points(value: number): string {
   const rounded = Math.round(value * 100);
   return rounded > 0 ? `+${rounded}` : String(rounded);
+}
+
+type CapabilityRow = NonNullable<EvaluationComparison["capabilities"]>[number];
+
+/** 能力分類ごとの 2 つの評価の合格率と安全違反（#63。総平均が同じでも分類の劣化を見分ける）。 */
+function CapabilityComparison({ rows }: { rows: CapabilityRow[] }) {
+  const cell = (item: CapabilityRow["base"]) =>
+    item ? (
+      <span className="flex flex-col tabular-nums">
+        <span className="text-fg">{t("evaluation.compare.capabilityRate", { rate: formatRate(item.pass_rate), cases: item.cases })}</span>
+        {item.safety_violations ? (
+          <span className="text-xs text-danger-fg">{t("evaluation.safety.count", { count: item.safety_violations })}</span>
+        ) : null}
+      </span>
+    ) : (
+      <span className="text-xs text-fg-muted">{t("evaluation.compare.noCase")}</span>
+    );
+  const columns: DataTableColumn<CapabilityRow>[] = [
+    {
+      key: "capability",
+      header: t("evaluation.capability.column"),
+      rowHeader: true,
+      className: "min-w-40 break-words font-medium text-fg",
+      render: (row) => row.capability || t("evaluation.capability.none"),
+    },
+    { key: "base", header: t("evaluation.compare.base"), render: (row) => cell(row.base) },
+    { key: "target", header: t("evaluation.compare.target"), render: (row) => cell(row.target) },
+  ];
+  return (
+    <DataTable<CapabilityRow>
+      rows={rows}
+      columns={columns}
+      getRowKey={(row) => row.capability}
+      ariaLabel={t("evaluation.compare.capabilityLabel")}
+      scrollAriaLabel={t("evaluation.compare.capabilityLabel")}
+      tableClassName="w-full min-w-[36rem]"
+    />
+  );
 }
 
 /**
@@ -253,6 +292,7 @@ export function EvaluationCompare() {
                     : ""}
                 </p>
                 <PairedSummary comparison={comparison.data} />
+                {comparison.data.capabilities?.length ? <CapabilityComparison rows={comparison.data.capabilities} /> : null}
                 <ListToolbar count={listTotal(comparison.data.rows.length)} testId="evaluation-compare-toolbar" />
                 <PagedDataTable<EvaluationComparisonRow>
                   pageKey="evaluationCompare"

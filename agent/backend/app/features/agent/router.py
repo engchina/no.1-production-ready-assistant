@@ -3845,21 +3845,65 @@ def _paired_note(baseline: EvaluationJob, draft_job: EvaluationJob) -> str:
     )
 
 
+_SAFETY_KIND_LABELS = {
+    "forbidden_tool_executed": "禁止するツールの実行",
+    "unapproved_write": "承認なしの実行",
+    "unexecuted_claim": "未実行の完了報告",
+}
+
+
+def _safety_veto(agent: AgentProfile, since: datetime, definition: str) -> str | None:
+    """安全違反の拒否（#63）: 下書きを最後に変えた後の、今の下書きの評価のどれかに安全違反があれば
+    公開を断る。
+
+    最新の 1 件だけでなく、同じ下書きのすべての評価（取り消し・失敗した評価も）を見る（評価し直して
+    違反の出なかった回で、違反を打ち消さない。統計的なぶれで安全の門を緩めない）。
+    """
+    for job in evaluation_store.list():
+        if (
+            job.agent_id != agent.id
+            or job.agent_version != "draft"
+            or job.created_at < since
+            or job.definition_hash != definition
+            or not job.summary.safety_violations
+        ):
+            continue
+        kinds = dict.fromkeys(
+            _SAFETY_KIND_LABELS.get(violation.kind, violation.kind)
+            for result in job.results
+            for violation in result.safety_violations
+        )
+        return (
+            f"今の下書きの品質評価（{job.set_name}）で安全違反が "
+            f"{job.summary.safety_violation_cases} ケース（{job.summary.safety_violations} 試行。"
+            f"{'・'.join(kinds)}）ありました。合格率に関わらず公開できません。"
+            "指示・スキル・ツール権限を直して評価し直してください。"
+        )
+    return None
+
+
 def _publish_evaluation_refusal(agent: AgentProfile) -> str | None:
     """公開前の評価の門（#2519・#2569）。満たさなければ理由の文、満たす・門が無ければ None。
 
     数えるのは、下書きを最後に変えた後に始めた、この業務 Agent の下書きの評価（完了したもの）の
-    最新の 1 件。公開中の版と下書きが同じ（変更の無い再公開）なら求めない。門は、合格率の閾値
+    最新の 1 件。公開中の版と下書きが同じ（変更の無い再公開）なら求めない。今の下書きの評価に
+    安全違反があれば、門の設定に依らず断る（#63。`_safety_veto`）。門は、合格率の閾値
     （`AGENT_PUBLISH_MIN_PASS_RATE`）と、公開中の版との回帰（`AGENT_PUBLISH_MAX_PASS_RATE_DROP`）の
     2 つで、どちらかを使うときはケースの数の下限（`AGENT_PUBLISH_MIN_CASES`）も見る。
     """
     settings = get_settings()
     threshold = settings.agent_publish_min_pass_rate
     max_drop = settings.agent_publish_max_pass_rate_drop
-    if (threshold <= 0 and max_drop is None) or not agent.has_unpublished_changes():
+    if not agent.has_unpublished_changes():
         return None
     since = agent.draft_updated_at or agent.created_at
     current_definition = draft_definition_hash(agent)
+    # 安全違反の拒否（#63）は合格率の門の設定に依らず、平均の品質でも打ち消さない。
+    vetoed = _safety_veto(agent, since, current_definition)
+    if vetoed is not None:
+        return vetoed
+    if threshold <= 0 and max_drop is None:
+        return None
     latest = next(
         (
             job

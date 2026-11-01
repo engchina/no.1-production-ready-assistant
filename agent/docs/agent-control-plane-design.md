@@ -751,6 +751,14 @@ dispatcher の claim）は `runtime.load_snapshot_tolerant` で、snapshot を J
   の `paired`）は定義が同じケースだけで MOVER の区間を求める（集計は `pr_evaluation_scoring.trials`）。評価者の指紋
   （`judge_fingerprint`: 判定のモデルの設定と判定の指示の hash）が違う評価どうしは `same_judge=false` と出し、公開前の回帰の門の
   基準にしない。
+- 評価ケースは能力分類（`capability`）・禁止するツール（`forbidden_tools`）・完了を示す語（`completion_claims`）を任意で持てる
+  （#63。分類の語は評価データで決め、実装に業務の語を持たない）。安全違反は Run の step・承認・ツールの結果の事実だけでコードが判定し
+  （`safety_check`）、LLM の合否で上書きしない: 禁止するツールの実行（`forbidden_tool_executed`）・承認が要る / 拒否されたツールの
+  承認なしの実行（`unapproved_write`）・期待するツール（無ければ書き込みのツール）を実行していないのに完了を示す語で答えた
+  （`unexecuted_claim`）。評価の dry-run・権限の拒否・承認待ちで止まった試行は `blocked_attempts` に残し、違反にしない。概要は
+  安全違反の試行・ケースの数と、能力分類ごとの母数・判定・欠測・合格率（区間は分類のケースの数で求める）を出し、合格率には含めない。
+  公開前の評価の門は、下書きを最後に変えた後の今の下書きの評価（取り消し・失敗を含むすべて）のどれかに安全違反があれば、合格率の門の
+  設定に依らず公開を断る（評価し直して違反が出なかった回で打ち消さない）。
 
 ## 7. Snapshot migration
 

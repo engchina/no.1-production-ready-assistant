@@ -411,6 +411,19 @@ export interface EvaluationCase {
   expected_output?: Record<string, EvaluationOutputValue>[];
 }
 
+/**
+ * 評価ケースの能力分類と安全の期待（任意。#63）。保存したケースでも省かれることがある（#63 より前の
+ * ケース）ので、`Required<EvaluationCase>` には含めない。
+ */
+export interface EvaluationCaseLabels {
+  /** 能力分類（評価データで決める語）。 */
+  capability?: string;
+  /** 実行してはいけないツール（実行に成功したら安全違反。ブロックされた試行は違反にしない）。 */
+  forbidden_tools?: string[];
+  /** 操作を完了したと報告する語（期待するツールを実行せずにこの語で答えたら安全違反）。 */
+  completion_claims?: string[];
+}
+
 /** 出力の項目の値（文字・数値・真偽・null。#2558）。 */
 export type EvaluationOutputValue = string | number | boolean | null;
 
@@ -455,12 +468,12 @@ export interface EvaluationSetInput {
   agent_id: string;
   name: string;
   description: string;
-  cases: EvaluationCase[];
+  cases: (EvaluationCase & EvaluationCaseLabels)[];
 }
 
 export interface EvaluationSet extends EvaluationSetInput {
   id: string;
-  cases: Required<EvaluationCase>[];
+  cases: (Required<EvaluationCase> & EvaluationCaseLabels)[];
   created_by_user_uuid: string | null;
   created_at: string;
   updated_at: string;
@@ -517,7 +530,9 @@ export interface EvaluationClarificationRound {
 }
 
 export interface EvaluationCaseResult {
-  case: Required<Omit<EvaluationCase, "expected_output" | "expected_approval">> & Pick<EvaluationCase, "expected_output" | "expected_approval">;
+  case: Required<Omit<EvaluationCase, "expected_output" | "expected_approval">> &
+    Pick<EvaluationCase, "expected_output" | "expected_approval"> &
+    EvaluationCaseLabels;
   /** 試行の番号（1 から。#62。結果は「ケース × 試行」で、#62 より前の評価は 1 回だけ）。 */
   trial?: number;
   status: EvaluationCaseStatus;
@@ -541,6 +556,9 @@ export interface EvaluationCaseResult {
   /** 出力の項目の判定（#2558。期待する出力の無いケースは空と null）。 */
   field_results?: EvaluationFieldResult[];
   field_correct?: boolean | null;
+  /** 安全違反（#63。コードで判定し、LLM の合否で上書きしない）と、止まった禁止・書き込みの試行。 */
+  safety_violations?: EvaluationSafetyViolation[];
+  blocked_attempts?: string[];
   error: string | null;
   duration_ms: number | null;
 }
@@ -587,6 +605,36 @@ export interface EvaluationSummary {
   pass_at_k_interval?: EvaluationInterval | null;
   pass_hat_k?: number | null;
   pass_hat_k_interval?: EvaluationInterval | null;
+  /** 安全違反のあった試行・ケースと、止まった禁止・書き込みの試行（#63。合格率には含めない）。 */
+  safety_violations?: number;
+  safety_violation_cases?: number;
+  blocked_attempts?: number;
+  /** 能力分類ごとの集計（#63。分類の無い評価は空）。 */
+  capabilities?: EvaluationCapabilitySummary[];
+}
+
+/** 安全違反の種類（#63）。 */
+export type EvaluationSafetyViolationKind = "forbidden_tool_executed" | "unapproved_write" | "unexecuted_claim";
+
+export interface EvaluationSafetyViolation {
+  kind: EvaluationSafetyViolationKind;
+  /** 対象のツール（未実行の完了報告は語）。 */
+  tool: string;
+  run_id: string | null;
+  detail: string;
+}
+
+/** 能力分類ごとの集計（#63。区間は分類のケースの数で求める）。 */
+export interface EvaluationCapabilitySummary {
+  capability: string;
+  cases: number;
+  trials: number;
+  judged_trials: number;
+  missing_trials: number;
+  correct: number;
+  pass_rate: number | null;
+  pass_rate_interval: EvaluationInterval | null;
+  safety_violations: number;
 }
 
 /** 95% の区間の [下限, 上限]（#62）。 */
@@ -712,6 +760,8 @@ export interface EvaluationComparison {
   definition_mismatch?: number;
   same_judge?: boolean | null;
   paired?: EvaluationPairedComparison | null;
+  /** 能力分類ごとの 2 つの評価の集計（#63）。 */
+  capabilities?: { capability: string; base: EvaluationCapabilitySummary | null; target: EvaluationCapabilitySummary | null }[];
 }
 
 /** 評価の履歴の 1 ページ（共通の `Page`。`total` は対象の評価の件数。#1266）。 */
@@ -2012,7 +2062,10 @@ export const agentApi = {
   parseEvaluationCasesXlsx: (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    return request<{ cases: Required<EvaluationCase>[] }>("/api/evaluation-sets/parse-xlsx", { method: "POST", body });
+    return request<{ cases: (Required<EvaluationCase> & EvaluationCaseLabels)[] }>("/api/evaluation-sets/parse-xlsx", {
+      method: "POST",
+      body,
+    });
   },
   downloadEvaluationTemplate: () => requestBlob("/api/evaluation-sets/template.xlsx"),
   downloadEvaluationSetXlsx: (setId: string) =>
