@@ -84,6 +84,11 @@ from app.features.agent.ai_calls import (
     make_ai_caller,
     retry_model_target,
 )
+from app.features.agent.evaluation_aids import (
+    DISABLED_AIDS_METADATA_KEY,
+    EVALUATION_AIDS,
+    EvaluationAid,
+)
 from app.features.agent.output_fields import (
     EVALUATION_EXPECTED_OUTPUT_ROWS_MAX,
     OUTPUT_KIND,
@@ -807,6 +812,16 @@ class EvaluationRequest(BaseModel):
     agent_version: EvaluationTarget | None = None
     # 1 ケースを反復する回数（#62。既定 1 回）。ケースの数 × 回数が実行の予算を超えたら断る。
     trials: int = Field(default=1, ge=1, le=EVALUATION_TRIALS_MAX)
+    # この評価の Run だけで外す実行補助（#69。寄与を比べる除去実験。`evaluation_aids`）。外した
+    # 評価は公開前の合格率・回帰の門と「前回」に使わない（安全違反の拒否には数える）。
+    disabled_aids: list[EvaluationAid] = Field(
+        default_factory=list, max_length=len(EVALUATION_AIDS)
+    )
+
+    @field_validator("disabled_aids")
+    @classmethod
+    def _unique_aids(cls, value: list[EvaluationAid]) -> list[EvaluationAid]:
+        return sorted(set(value))
 
 
 class CaseTrialSummary(BaseModel):
@@ -860,6 +875,8 @@ class EvaluationJob(BaseModel):
     # 違う評価どうしの差は、業務 Agent の差と評価者の差を分けられない（#62。古い job は None）。
     trials: int = Field(default=1, ge=1)
     judge_fingerprint: str | None = None
+    # この評価で外した実行補助（#69。空なら全構成）。
+    disabled_aids: list[str] = Field(default_factory=list)
     status: JobStatus = JobStatus.QUEUED
     created_by_user_uuid: str | None = None
     # ケース × 試行の結果（試行の順に、各試行は評価ケースの順。取消・予算で途中で止まっても、
@@ -1217,6 +1234,7 @@ class EvaluationStore:
                     and item.id != job.id
                     and item.status == JobStatus.COMPLETED
                     and item.created_at < job.created_at
+                    and item.disabled_aids == job.disabled_aids
                     and cases_fingerprint(item) == fingerprint
                 ),
                 None,
@@ -2448,6 +2466,11 @@ async def _run_case(
                     "evaluation_case_id": case.id,
                     "evaluation_trial": job.results[index].trial,
                     EVALUATION_DRY_RUN_KEY: True,
+                    **(
+                        {DISABLED_AIDS_METADATA_KEY: list(job.disabled_aids)}
+                        if job.disabled_aids
+                        else {}
+                    ),
                     **(
                         {"_evaluation_definition_hash": job.definition_hash}
                         if job.definition_hash

@@ -178,6 +178,7 @@ from app.features.agent.evaluation import (
     run_evaluation_job,
     set_item,
 )
+from app.features.agent.evaluation_ablation import ablation_report
 from app.features.agent.evaluation_excel import (
     EXCEL_MAX_BYTES,
     EvaluationExcelError,
@@ -2779,6 +2780,7 @@ async def create_evaluation(
         definition_hash=draft_definition_hash(agent) if target == "draft" else None,
         trials=evaluation.trials,
         judge_fingerprint=judge_fingerprint(),
+        disabled_aids=list(evaluation.disabled_aids),
         created_by_user_uuid=_run_creator_user_uuid(request),
         # 試行の順に並べる（取消で止まっても、先の試行はすべてのケースがそろう。#62）。
         results=[
@@ -2847,6 +2849,32 @@ async def compare_evaluations(
     base = _evaluation_for_actor(request, base_job_id)
     target = _evaluation_for_actor(request, target_job_id)
     return ApiResponse(data=compare_jobs(base, target))
+
+
+@router.get("/evaluations/ablation", response_model=ApiResponse[dict[str, Any]])
+async def evaluation_ablation(
+    request: Request,
+    target_job_id: Annotated[list[str], Query(min_length=1, max_length=10)],
+    base_job_id: str = Query(min_length=1, max_length=100),
+) -> ApiResponse[dict[str, Any]]:
+    """実行補助を外した評価と全構成の評価の比較の表（#69。`evaluation_ablation`）。
+
+    権限は `GET /evaluations/compare` と同じ（メニュー権限と、利用者が使える業務 Agent の job）。
+    保存した job と Run の記録だけから作る（モデル・MCP を呼ばない）。
+    """
+    if base_job_id in target_job_id:
+        raise HTTPException(status_code=422, detail="基準と違う評価を選んでください。")
+    base = _evaluation_for_actor(request, base_job_id)
+    targets = [_evaluation_for_actor(request, job_id) for job_id in target_job_id]
+
+    def get_run(run_id: str) -> RunState | None:
+        try:
+            return runtime_repository.get_run(run_id)
+        except KeyError:
+            return None
+
+    report = await run_in_threadpool(ablation_report, base, targets, get_run)
+    return ApiResponse(data=report)
 
 
 @router.get("/evaluations/{job_id}", response_model=ApiResponse[EvaluationJob])
@@ -3844,6 +3872,7 @@ def _publish_baseline(agent: AgentProfile, draft_job: EvaluationJob) -> Evaluati
             if job.agent_id == agent.id
             and job.agent_version == agent.published_version
             and job.status == JobStatus.COMPLETED
+            and not job.disabled_aids
             and job.set_id == draft_job.set_id
             and job.summary.pass_rate is not None
             and cases_fingerprint(job) == fingerprint
@@ -3936,6 +3965,8 @@ def _publish_evaluation_refusal(agent: AgentProfile) -> str | None:
             if job.agent_id == agent.id
             and job.agent_version == "draft"
             and job.status == JobStatus.COMPLETED
+            # 補助を外した除去実験（#69）は、公開する構成の評価ではない。
+            and not job.disabled_aids
             and job.created_at >= since
             and job.definition_hash == current_definition
         ),

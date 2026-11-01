@@ -348,6 +348,7 @@ def _job(*, pass_rate: float | None, offset_seconds: float, **overrides: Any) ->
         "results": _cases("質問 1", "質問 2"),
         "trials": 1,
         "judge_fingerprint": overrides.pop("judge_fingerprint", None),
+        "disabled_aids": overrides.pop("disabled_aids", []),
         "summary": SimpleNamespace(
             pass_rate=pass_rate,
             judged_cases=overrides.pop("judged_cases", 10),
@@ -394,6 +395,8 @@ def test_publish_needs_evaluation_after_last_draft_change(
     # 合格率が足りない・下書きを変える前の評価・公開中の版の評価・失敗した評価は数えない。
     _jobs(
         monkeypatch,
+        # 実行補助を外した除去実験（#69）は公開する構成の評価ではない（新しくても数えない）。
+        _job(pass_rate=1.0, offset_seconds=30, disabled_aids=["final_validation"]),
         _job(pass_rate=0.5, offset_seconds=10),
         _job(pass_rate=1.0, offset_seconds=-10),
         _job(pass_rate=1.0, offset_seconds=20, agent_version=1),
