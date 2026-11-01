@@ -653,6 +653,8 @@ RESERVED_RUN_METADATA_KEYS = frozenset(
         MCP_API_KEY_ID_KEY,
         MCP_API_KEY_NAME_KEY,
         "replayed_from_run_id",
+        # 品質評価が外す実行補助（#69。評価の Run だけが読む）。利用者が付けて外せないようにする。
+        "evaluation_disabled_aids",
         # 確認の取り消し（#1441・#1445）。`RunCreateRequest.clarification_cancel` から作る。
         CANCEL_METADATA_KEY,
         # 回答前の確認（#1839）。確認の答えの操作から作る。

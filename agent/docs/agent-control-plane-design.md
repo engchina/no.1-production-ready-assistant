@@ -776,6 +776,13 @@ dispatcher の claim）は `runtime.load_snapshot_tolerant` で、snapshot を J
   公開前の評価の門は、下書きを最後に変えた後の今の下書きの評価（取り消し・失敗を含むすべて）のどれかに安全違反があれば、合格率の門の
   設定に依らず公開を断る（評価し直して違反が出なかった回で打ち消さない）。
 
+- 実行補助の除去実験（#69）: `POST /api/evaluations` の `disabled_aids`（`final_validation`・`tool_grounding`・`context_compaction`）で、
+  その評価の Run（dry-run）だけ補助を外す（Run の metadata `evaluation_disabled_aids`。評価の Run でなければ読まない。権限・承認・
+  データの範囲・予算は外せない）。`GET /api/evaluations/ablation` が全構成の評価と並べ、対応のある差と区間・悪化したケース・完了の
+  仕方・モデル / ツール / MCP / RAG の呼び出し・token・p50 / p95・補助のコード経路が動いたかと、判定（adopt / reconsider /
+  undetermined / not_applicable / not_comparable）を出す。外した評価は公開の合格率・回帰の門と「前回」に使わない（安全違反の拒否には
+  数える）。手順は [agent-aid-ablation.md](./agent-aid-ablation.md)。
+
 ## 7. Snapshot migration
 
 Snapshot v2 は runs/agents を持つ（旧版の `control_plane_state.runtimes/bindings`（#754）と `memory`（#756）は読み込んでも使わない）。

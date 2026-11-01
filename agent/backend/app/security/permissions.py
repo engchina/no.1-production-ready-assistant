@@ -474,6 +474,7 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/evaluations"): _any(MENU_EVALUATION),
     ("GET", "/evaluations"): _any(MENU_EVALUATION),
     ("GET", "/evaluations/compare"): _any(MENU_EVALUATION),
+    ("GET", "/evaluations/ablation"): _any(MENU_EVALUATION),
     ("GET", "/evaluations/{job_id}"): _any(MENU_EVALUATION),
     ("POST", "/evaluations/{job_id}/cancel"): _any(MENU_EVALUATION),
     ("DELETE", "/evaluations/{job_id}"): _any(MENU_EVALUATION),
