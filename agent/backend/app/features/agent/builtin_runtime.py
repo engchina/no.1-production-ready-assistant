@@ -113,6 +113,7 @@ from app.features.agent import (
     external_writes,
     run_budget,
     run_claim,
+    run_config,
     tool_grounding,
     tool_loop_guard,
 )
@@ -261,6 +262,7 @@ from app.features.agent.skills import (
     EVIDENCE_PLANNING_CALLER,
     reset_pinned_skills,
     resolve_skill,
+    skill_registry,
     use_pinned_skills,
 )
 from app.features.agent.support_task import (
@@ -2921,7 +2923,55 @@ def build_sdk_agent(
         ),
     )
     setattr(sdk_agent, _STATIC_INSTRUCTIONS_ATTR, static_instructions)
+    config = _run_configuration(
+        skill_ids, static_instructions, tools, mcp_tools, target, data_scopes
+    )
+    # Run の無い組み立て（設定の確認など）では残さない。
+    with suppress(KeyError):
+        runtime_repository.note_run_config(run_id, config)
     return sdk_agent
+
+
+def _run_configuration(
+    skill_ids: list[str],
+    static_instructions: str,
+    tools: Sequence[Any],
+    mcp_tools: Sequence[McpRuntimeTool],
+    target: ModelTarget,
+    data_scopes: data_scope.AgentDataScopes | None,
+) -> dict[str, Any]:
+    """Run の実行構成の指紋（#67。本文・資格情報は入れない）。"""
+    skills: list[dict[str, Any]] = []
+    for skill_id in skill_ids:
+        resolved = resolve_skill(skill_id)
+        if resolved is None:
+            continue
+        current = skill_registry.get(skill_id)
+        contents = {item.path: item.content for item in (current.references if current else [])}
+        dumped = resolved.model_dump(mode="json", exclude={"updated_at", "created_at"})
+        dumped["references"] = [
+            {
+                "path": item.path,
+                "sha256": run_config.sha256(contents[item.path]) if item.path in contents else None,
+            }
+            for item in resolved.references
+        ]
+        skills.append(dumped)
+    return run_config.run_configuration(
+        static_instructions=static_instructions,
+        tools=tools,
+        skills=skills,
+        mcp_tools=[definition for definition, _handler in mcp_tools],
+        model={
+            "model_id": target.model_id,
+            "reasoning_effort": target.reasoning_effort,
+            "max_output_tokens": target.max_output_tokens,
+            "max_input_tokens": target.max_input_tokens,
+            "vision_enabled": target.vision_enabled,
+        },
+        data_scopes=data_scopes,
+        sdk_version=sdk_version(),
+    )
 
 
 # 無いツールの呼び出しの返答で、候補として並べるツールの数の上限（#1303）。

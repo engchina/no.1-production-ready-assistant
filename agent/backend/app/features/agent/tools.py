@@ -1396,6 +1396,39 @@ def _sanitize_value(value: Any, warnings: set[str], *, error_text: bool = False)
     return value
 
 
+def sensitive_findings(value: Any, *, field_names: bool = True) -> list[str]:
+    """値に含まれる資格情報・個人情報の種類（ツールの出力の検査と同じ規則。#67 の記録の拒否）。
+
+    機微な名前の項目は、文字の値のときだけ数える（`max_output_tokens` のような数の設定は資格情報
+    ではない）。`field_names=False` は名前を見ず、値の形（Bearer・URL の資格情報・メールなど）
+    だけで数える（Run の記録の承認の理由・実行の token のような、機微な名前の正当な項目を除く）。
+    指示の注入の疑い（`prompt_injection.*`）は機微情報ではないので含めない。
+    """
+    warnings: set[str] = set()
+
+    def walk(item: Any) -> None:
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if (
+                    field_names
+                    and _SENSITIVE_KEY_PATTERN.search(str(key))
+                    and isinstance(child, str)
+                    and child
+                ):
+                    warnings.add(f"sensitive_field:{key}")
+                walk(child)
+        elif isinstance(item, list):
+            for child in item:
+                walk(child)
+        elif isinstance(item, str):
+            _sanitize_sensitive_text(mask_urls_in_text(item), warnings)
+            if mask_urls_in_text(item) != item:
+                warnings.add("secret.url_credentials_masked")
+
+    walk(value)
+    return sorted(warnings)
+
+
 def _sanitize_sensitive_text(value: str, warnings: set[str]) -> str:
     sanitized = _INLINE_SECRET_PATTERN.sub(
         lambda match: _mask_inline_secret(match, warnings),

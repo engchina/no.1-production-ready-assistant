@@ -653,6 +653,8 @@ RESERVED_RUN_METADATA_KEYS = frozenset(
         MCP_API_KEY_ID_KEY,
         MCP_API_KEY_NAME_KEY,
         "replayed_from_run_id",
+        # 実行構成の指紋（#67）。Runtime が書き、利用者の値で上書きさせない。
+        "run_config",
         # 確認の取り消し（#1441・#1445）。`RunCreateRequest.clarification_cancel` から作る。
         CANCEL_METADATA_KEY,
         # 回答前の確認（#1839）。確認の答えの操作から作る。
@@ -1427,6 +1429,7 @@ class AgentRuntimeRepositoryContract(Protocol):
     def fail_interrupted_runs(self, *, updated_before: datetime) -> list[str]: ...
     def note_builtin_warning(self, run_id: str, message: str) -> None: ...
     def note_builtin_tool_titles(self, run_id: str, titles: Mapping[str, str]) -> None: ...
+    def note_run_config(self, run_id: str, config: JsonObject) -> None: ...
     def builtin_tool_titles(self, run_id: str) -> dict[str, str]: ...
     def builtin_tool_steps(self, run_id: str, call_ids: Collection[str]) -> list[RunStep]: ...
     def builtin_tool_step(self, run_id: str, step_id: str) -> RunStep | None: ...
@@ -3358,6 +3361,30 @@ class AgentRuntimeRepository:
         with self._lock:
             run = self._require_run(run_id)
             self._append_event(run, RunEventType.RUNTIME_EVENT, message, {"severity": "warning"})
+            self._persist_locked()
+
+    def note_run_config(self, run_id: str, config: JsonObject) -> None:
+        """Run の実行構成の指紋（#67。`run_config.run_configuration`）を metadata に残す。
+
+        承認の後の再開で作り直した構成が最初と違えば、前の指紋を `previous_fingerprints` に残す
+        （同じ Run の中で構成が変わった＝記録再生・比較の前提が崩れたことを分かるようにする）。
+        """
+        from app.features.agent.run_config import RUN_CONFIG_METADATA_KEY
+
+        with self._lock:
+            run = self._require_run(run_id)
+            current = run.metadata.get(RUN_CONFIG_METADATA_KEY)
+            updated = dict(config)
+            if isinstance(current, dict):
+                previous = [str(item) for item in current.get("previous_fingerprints") or []]
+                if current.get("fingerprint") != config.get("fingerprint"):
+                    previous.append(str(current.get("fingerprint")))
+                if previous:
+                    updated["previous_fingerprints"] = previous
+            if updated == current:
+                return
+            run.metadata[RUN_CONFIG_METADATA_KEY] = updated
+            self._mark_run_changed(run)
             self._persist_locked()
 
     def note_builtin_tool_titles(self, run_id: str, titles: Mapping[str, str]) -> None:
