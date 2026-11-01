@@ -112,7 +112,7 @@ for (const viewport of [
     await mockModelSettings(page, undefined, { embedding: true });
     await page.goto("/settings/model");
 
-    await expect(page.locator("#enterprise-primary-endpoint")).toBeVisible();
+    await expect(page.locator("#enterprise-endpoint")).toBeVisible();
     await expect(page.getByLabel("Project ID")).toHaveValue(
       "proj-example"
     );
@@ -224,7 +224,7 @@ test("モデル設定は節ごとに保存し、画面にない項目は保存�
   await page.goto("/settings/model");
 
   await page.getByLabel("モデル ID 2").fill("enterprise-vision-v2");
-  await page.locator("#enterprise-primary-endpoint").fill("https://unsaved.example");
+  await page.locator("#enterprise-endpoint").fill("https://unsaved.example");
   await page.getByRole("button", { name: "登録モデル: 保存" }).click();
 
   await expect(page.getByText("登録モデルを保存しました。").first()).toBeVisible();
@@ -243,7 +243,7 @@ test("モデル設定は節ごとに保存し、画面にない項目は保存�
   });
   // 保存していない節の入力は画面に残る。
   await expect(
-    page.locator("#enterprise-primary-endpoint")
+    page.locator("#enterprise-endpoint")
   ).toHaveValue("https://unsaved.example");
 });
 
