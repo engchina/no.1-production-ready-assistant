@@ -256,7 +256,7 @@ prop の妥当性（`Button` に存在しない prop を渡す等）は lint で
 
 ## 8. バージョン運用
 
-3アプリは monorepo `no.1-production-ready-suite` の中で、`file:../../platform/packages/ui` の相対リンクで
+3アプリは monorepo `no.1-production-ready-assistant` の中で、`file:../../platform/packages/ui` の相対リンクで
 ソースを直接参照しています（2026-09-25 に4 repo を統合）。
 
 この構成では **`packages/ui` を壊すと3アプリが同時に壊れます。** そのため:

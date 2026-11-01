@@ -1,5 +1,5 @@
 [project]
-name = "production-ready-suite-evaluation"
+name = "production-ready-assistant-evaluation"
 version = "0.1.0"
 description = "Cross-product evaluation CLI of the No.1 Production Ready suite: runs an evaluation dataset against a product through its public MCP contract and scores the saved observations."
 readme = "README.md"

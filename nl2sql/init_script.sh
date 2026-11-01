@@ -15,8 +15,8 @@ source "${INIT_SCRIPT_DIR}/../platform/deploy/suite-repo.sh"
 APP_ROOT="${APP_ROOT:-/u01/aipoc}"
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
-# NL2SQL と共有 platform は monorepo（no.1-production-ready-suite）の nl2sql/ と platform/ にある。
-SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+# NL2SQL と共有 platform は monorepo（no.1-production-ready-assistant）の nl2sql/ と platform/ にある。
+SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
 APP_REPO_DIR="${SUITE_REPO_DIR}/nl2sql"
 PLATFORM_REPO_DIR="${SUITE_REPO_DIR}/platform"
 BACKEND_DIR="${APP_REPO_DIR}/backend"

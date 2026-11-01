@@ -110,7 +110,7 @@ state の代わりに `--profile A=<プロファイルの ID> --profile B=<プ�
 
 既存の評価形式へ変換する場合は、`question` を質問欄に、`expected_answer` を標準回答欄に設定します。ファイル名はアップロード後の文書 ID に解決し、A・B に分けて対応するプロファイルまたは Agent で実行してください。RAG の評価形式は [evaluation/README.md](../../evaluation/README.md) を参照してください。
 
-構成定義と再構築コマンドの仕様は [#2905](https://github.com/engchina/no.1-production-ready-suite/issues/2905)、業務 Agent の段を Agent の命令へ分けた経緯は [#3545](https://github.com/engchina/no.1-production-ready-suite/issues/3545) を参照してください。
+構成定義と再構築コマンドの仕様は [#2905](https://github.com/engchina/no.1-production-ready-assistant/issues/2905)、業務 Agent の段を Agent の命令へ分けた経緯は [#3545](https://github.com/engchina/no.1-production-ready-assistant/issues/3545) を参照してください。
 
 ## 原本の確認
 

@@ -113,7 +113,7 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 #    （元の props は退避）、suite-init.sh を実行する（#1577。suite-pull.sh の後の再起動で最新のコードを使う）。
 (
   export APP_ROOT="${task_dir}/rebuild"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   mkdir -p "${SUITE_REPO_DIR}/rag/backend" "${SUITE_REPO_DIR}/agent/backend" "${PROPS_DIR}"
   printf 'rag agent\n' > "${PROPS_DIR}/products.txt"
@@ -145,7 +145,7 @@ grep -qxF '  exec bash "${SUITE_RESTART_SCRIPT}"' "${repo}/platform/deploy/suite
 #    --status は ADB の状態を確かめずに、それぞれの処理と確認だけを行う。
 (
   export APP_ROOT="${task_dir}/no-adb"
-  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+  export SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
   export PROPS_DIR="${APP_ROOT}/props"
   export SUITE_OPS_INHERITED=true
   mkdir -p "${PROPS_DIR}"

@@ -434,7 +434,7 @@ uv run python -m rag_engine.knowledge.answer_migration /path/to/answer.json --ap
 3. 承認して更新する。CLI は `--allow-destructive` を付ける。画面は「作成・更新」の確認ダイアログで「削除して更新」を押す。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -815,7 +815,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 2. `backend/.env` の旧名の行を改名し、値の旧名（`RAG_CHUNKING_STRATEGY=docrag_small_to_big`）も書き換える（バックアップを取ってから編集する。値が旧名のままだと backend が起動時の検証で止まる。#624）。Compute では、`init_script.sh` が配備の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
 
    ```bash
-   for env_file in /u01/aipoc/no.1-production-ready-suite/rag/backend/.env /u01/aipoc/props/backend.env; do
+   for env_file in /u01/aipoc/no.1-production-ready-assistant/rag/backend/.env /u01/aipoc/props/backend.env; do
      [ -f "${env_file}" ] || continue
      sudo cp -p "${env_file}" "${env_file}.bak-599"
      sudo sed -i -E \
@@ -839,7 +839,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
    ```bash
    # OCI Compute（手で行う場合）
-   cd /u01/aipoc/no.1-production-ready-suite/rag
+   cd /u01/aipoc/no.1-production-ready-assistant/rag
    sudo -u opc bash -c 'cd backend && uv sync --locked --no-dev --python 3.12'
    sudo -u opc bash -c 'cd services/parsers/docling && uv sync --locked --no-dev --python 3.12'
 
@@ -851,7 +851,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 5. システムテーブルを更新する（#599 の migration だけが未適用なら承認は要らない）。画面の「システム設定 > データベース > RAG システムテーブル」の「作成・更新」でもよい。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize
    ```
 
@@ -892,7 +892,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
    ```bash
    # OCI Compute
-   cd /u01/aipoc/no.1-production-ready-suite/rag
+   cd /u01/aipoc/no.1-production-ready-assistant/rag
    sudo -u opc bash -c 'cd backend && uv sync --locked --no-dev --python 3.12'
 
    # ローカル
@@ -902,7 +902,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 4. サービスを止めたまま、システムテーブルを承認付きで更新する（006 と 007 を当てる）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -961,7 +961,7 @@ systemd の unit に移した。サービス管理画面は docker compose で�
 拒否するので、そのときは `compose_services.txt` に `parser-docling` を足す。
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite
+cd /u01/aipoc/no.1-production-ready-assistant
 sudo -u opc git fetch --depth 1 origin <suite-v の tag> && sudo -u opc git checkout -f FETCH_HEAD
 # 既定の解析エンジン（Docling）と、画面からの起動 / 停止を有効にする（stack の新しい既定と同じ）
 sudo sed -i -e 's/^RAG_PARSER_ADAPTER_BACKEND=.*/RAG_PARSER_ADAPTER_BACKEND=docling/' \
@@ -1041,7 +1041,7 @@ sudo ls /u01/data/production-ready-rag /var/lib/production-ready-rag/.oci
 
    ```bash
    # OCI Compute（init_script.sh で配備した環境）
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc mkdir -p /var/lib/production-ready-rag/exports
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.legacy_export \
      --table rag_agent_memories --output /var/lib/production-ready-rag/exports/rag_agent_memories.jsonl
@@ -1056,7 +1056,7 @@ sudo ls /u01/data/production-ready-rag /var/lib/production-ready-rag/.oci
 4. システムテーブルを更新する。データを削除する migration なので承認を付ける（#619）。画面の「システム設定 > データベース > RAG システムテーブル」からでもよい（「作成・更新」の確認ダイアログで「削除して更新」を押す）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -1224,7 +1224,7 @@ RAG のログインは、`.env` の単一アカウント（`RAG_AUTH_USERNAME` /
 2. 更新した版で起動し、システムテーブルを初期化する（`PLATFORM_*` がなければ作り、`RAG_ROLE_*` を追加する。冪等）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize
    ```
 

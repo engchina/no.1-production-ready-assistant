@@ -1,4 +1,4 @@
-# AGENTS.md — No.1 Production Ready Suite（monorepo 共通ルール）
+# AGENTS.md — No.1 Production Ready Assistant（monorepo 共通ルール）
 
 > monorepo 全体の共通ルールの正本（Claude Code と Codex が直接読む。`CLAUDE.md` は置かない）。作業対象のディレクトリの `AGENTS.md` もあわせて適用し、矛盾する場合は製品固有のルールを優先する（GitHub 運用と CI は本ファイルが優先）。
 > 本ファイルには守る規則と、作業ごとに読む文書の案内だけを書く。詳細は下の表の文書にあり、**その作業を始める前に読む**（本ファイルと同じ強さで守る）。詳細を足すときは表の文書に書き、本ファイルには規則の要約と案内だけを足す。Codex は repo の直下から起動したディレクトリまでの `AGENTS.md` を合計 32 KiB で切るため、本ファイルは 20 KB 以下、製品の `AGENTS.md` との合計は 32 KB 以下に保つ（`scripts/check-agents-md-size.sh`）。`@path` の import は使わない。

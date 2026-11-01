@@ -531,7 +531,7 @@ dev = [
 ]
 
 [[package]]
-name = "production-ready-suite-evaluation"
+name = "production-ready-assistant-evaluation"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -10,7 +10,7 @@ run_initialization_case() (
   local scenario="$1"
   local fail_pattern="$2"
   local case_dir="${TEST_TMP_DIR}/${scenario}"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/nl2sql/backend"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/nl2sql/backend"
   export APP_ROOT="${case_dir}/app"
   export NL2SQL_INIT_TEST_MODE=true
   export APPLICATION_PORT=80
@@ -35,7 +35,7 @@ run_systemd_case() (
   local scenario="$1"
   local ready="$2"
   local case_dir="${TEST_TMP_DIR}/${scenario}"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/nl2sql/backend" "${case_dir}/units"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/nl2sql/backend" "${case_dir}/units"
   export APP_ROOT="${case_dir}/app"
   export NL2SQL_INIT_TEST_MODE=true
   export APPLICATION_PORT=80
