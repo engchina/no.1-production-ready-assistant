@@ -22,3 +22,21 @@
 - サービストークンは呼び出しごとの `issue_service_token`（`sub` = Run の利用者 `RunState.created_by_user_uuid`、画面の単発の操作はログイン中の利用者。`aud` = 接続の audience）。承認後の実行も承認者ではなく Run の利用者で呼ぶ。利用者の無い呼び出しは `mcp.user_required` で失敗し、別の主体に置き換えない（#3251）。サービスの主体で呼んでよい入口は無く、将来要るなら `sub` を黙って替えず、呼び先に見える別の主体（RFC 8693 の `act` など）として足す。業務 Agent にデータの範囲があれば、その接続の範囲の ID を claim `profile_ids` に入れ、呼び先でも強制させる（#1379。範囲なしなら付けない）。
 - Run の取消は実行中の MCP の呼び出しも打ち切る（#2691。手順と読み取り専用のツールは接続を切り、書き込みのツールは送った後は結果を待つ。詳細は runtime.md）。呼び先（RAG / NL2SQL）は切断で読み取り専用のツールの処理を止める（`pr_backend_core.mcp`）。NL2SQL のジョブ（呼び先の worker で動く）は切断では止まらないので、Run が始めてまだ終わっていないジョブに Control Plane が `nl2sql_cancel_job` を送る（#3318。runtime.md）。
 - 再試行は、送信前の失敗と 429 / 503 は全メッセージ、502 / 504 は手順と読み取り専用（`readOnlyHint`。注釈を信頼する接続だけ。#2595）のツールだけで、書き込みのツールと注釈を信頼しない接続のツールは呼び先に届いた後の失敗では再送しない。待ちは backoff + jitter（`Retry-After` に従う）、呼び出し全体は接続の timeout に収める（docs/agent-control-plane-design.md §4.1）。
+
+## ツールの露出（一括 / 段階的開示の判断。#70）
+
+- **判断: 段階的開示（ツールの一覧 → 詳細 → 呼び出しを分ける deferred 方式）は採用しない。** Skill の requirement ∩ 接続の catalog ∩ ツール権限で絞った定義を、1 回目のモデルの呼び出しから一括で渡す（`build_function_tools`。direct 方式）。
+- 基線（2026-11。`tests/test_tool_exposure_baseline.py` を `pytest -s` で再現。見積もりは本番の span の `pr.context.estimate.tool_definitions_tokens` と同じ。tiktoken `o200k_base` との差は 3% 以内）:
+
+  | 対象 | 渡すツール | ツールの定義 | 指示 |
+  |---|---|---|---|
+  | 資料・データ横断（default） | 13 | 約 7.3k tokens | 約 9.3k |
+  | 資料調査（rag-research） | 9 | 約 5.4k | 約 5.3k |
+  | データ照会（data-query） | 5 | 約 2.4k | 約 2.3k |
+  | 合成の catalog（契約のツールの複製） 25 / 50 / 100 | 26 / 51 / 101 | 約 15k / 33k / 64k | 約 1.2k |
+  | 合成の catalog 200 | 200 | 約 130k（入力の上限 128k のモデルでは Run の開始前に止まる） | — |
+
+- 理由: 標準の catalog では、定義を渡さないことで減らせるのは呼び出しごとに最大で約 3〜4k tokens（よく使う `rag_retrieve_evidence` 約 1.2k・`nl2sql_query` 約 1.1k などは結局読み込む）。一方 deferred は、ツールを使うたびに発見・詳細の取得のモデルの往復が少なくとも 1 回増え（往復ごとに指示と履歴の約 10〜20k tokens を送り直す）、Run の途中でツールの一覧が変わるので prompt の prefix cache（`pr.context.tools.fingerprint` が同じ間だけ効く）も切れる。小さい catalog では一括のほうが token・遅延とも少ない。
+- 未実測: 実モデルでの選択の正解率と遅延（この判断の作業環境ではモデルの資格情報を使っていない）。実モデルの比較は品質評価（`evaluation`）のツールの選択の判定で行う。
+- 見直す条件: 1 つの業務 Agent のツールの定義の見積もりが `REEVALUATE_TOOL_DEFINITION_TOKENS`（15k tokens）を超えたら（テストが失敗する）、または本番の span の `pr.context.tools.count` / `tool_definitions_tokens` が同じ水準を超えたら、判断を見直す。
+- 採用するときの制約（#70 の修正方針。決定論テストで先に確かめる）: 発見も実行も Skill の閉包 ∩ 接続の catalog ∩ 利用者の権限だけを対象にし、任意の接続名・ツール名から閉包の外へ届かせない。発見したツールは万能の `call_tool` で仲介せず、それぞれの function tool（固有の `needs_approval`・引数の検証 #2630・`tool_registry.invoke`・監査・call ID）として渡す。再開で復元する「以前見せたツール」は、今のツール権限（ASK / DENY。#2610）と catalog で検査し直す。`McpSession` は `nextCursor` の paging をしないので、全ページを発見済みと前提しない（paging を足すなら件数・時間・ページ数を制限する）。
