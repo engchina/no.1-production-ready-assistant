@@ -50,7 +50,9 @@ _SENTENCE_PUNCTUATION = re.compile(r"[、。，．]")
 # ローマ数字だけのセル（「Ⅱ」）。NFKC で「ii」になるが、値ではなく区分の名前として扱う。
 _ROMAN_CELL = re.compile(r"[\u2160-\u217f]{1,4}")
 # セルの照合に使う頭の部分（「01（通常）」「区分Ⅱ (旧)」の括弧・空白の前）。
-_CELL_KEY_END = re.compile(r"\s*[（(［\[〔【「『<＜]|\s{2,}|\s*[、。,，;；]")
+# 数の桁区切りのカンマ（「12,000円」）は区切りにしない（#123）。
+_DIGIT_GROUP_COMMA = r"(?<![0-9])[,，]|[,，](?![0-9]{3}(?![0-9]))"
+_CELL_KEY_END = re.compile(rf"\s*[（(［\[〔【「『<＜]|\s{{2,}}|\s*(?:[、。;；]|{_DIGIT_GROUP_COMMA})")
 _ROW = re.compile(r"<tr\b[^>]*>(.*?)</tr\s*>", re.IGNORECASE | re.DOTALL)
 _CELL = re.compile(r"<t([dh])\b([^>]*)>(.*?)</t[dh]\s*>", re.IGNORECASE | re.DOTALL)
 _SPAN = re.compile(r"""(row|col)span\s*=\s*["']?(\d+)""", re.IGNORECASE)
@@ -69,7 +71,9 @@ _PROSE_PAIR = re.compile(
 )
 # 文の区間の区切り（読点・句点・改行・セミコロン）。
 _SENTENCE_END = re.compile(r"[。！？!?\n]+")
-_CLAUSE_END = re.compile(r"[、，,；;]")
+_CLAUSE_END = re.compile(rf"[、；;]|{_DIGIT_GROUP_COMMA}")
+# 値の照合の区間は、括弧の始まりでも区切る（「…です（参考：課長以上は…）」の括弧の中は別の事実。#123）。
+_WINDOW_END = re.compile(rf"{_CLAUSE_END.pattern}|[（(]")
 # 文の中で値の照合から除く所（根拠の ID・出典の括弧・頁の参照・強調の印）。
 _CITATION = re.compile(r"【[^【】]*】|\[[^\[\]]*(?:ID|id)[^\[\]]*\]")
 _CHUNK_ID = re.compile(r"(?<![0-9A-Za-z])[0-9A-Fa-f]{6,}(?:[0-9A-Fa-f:…‥\-]|\.{2,})*:[0-9]+(?![0-9A-Za-z])")
@@ -399,7 +403,7 @@ def _windows(claim: str, values: set[str]) -> Iterable[str]:
     """文の区間（読点・句点で区切る）。表の値（``values``）の無い区間は続く区間と合わせる。"""
     for sentence in _SENTENCE_END.split(claim):
         pending = ""
-        for clause in _CLAUSE_END.split(sentence):
+        for clause in _WINDOW_END.split(sentence):
             pending = f"{pending} {clause}" if pending else clause
             if any(_mentions(value, clause) for value in values):
                 yield pending
