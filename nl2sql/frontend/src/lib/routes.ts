@@ -41,7 +41,6 @@ export const APP_ROUTES = {
   settingsModel: SYSTEM_SETTINGS_PATHS.model,
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,
   settingsSystemTables: "/settings/system-tables",
-  settingsAppearance: SYSTEM_SETTINGS_PATHS.appearance,
   // 回答の注意書き（設定は製品ごと。#2405・#2449）
   settingsAnswerNotice: ANSWER_NOTICE_PATH,
   // チャットの添付（設定は製品ごと。#2517）

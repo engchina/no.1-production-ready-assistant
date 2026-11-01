@@ -31,7 +31,6 @@ SHARED_NAV_ITEMS: dict[str, tuple[tuple[str, str], ...]] = {
         ("nav.settingsUploadStorage", "settingsUploadStorage"),
         ("nav.settingsModel.sidebar", "settingsModel"),
         ("nav.settingsDatabase.sidebar", "settingsDatabase"),
-        ("nav.settingsAppearance", "settingsAppearance"),
     ),
 }
 

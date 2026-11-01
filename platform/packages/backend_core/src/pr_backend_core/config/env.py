@@ -84,10 +84,6 @@ PLATFORM_SETTING_FIELDS = frozenset(
         "oci_genai_rerank_model",
         "oci_genai_embed_model_id",
         "oci_genai_rerank_model_id",
-        # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の
-        # プライマリ接続から組み立てる。再ランクは埋め込みの URL から読み替える）。
-        "embedding_base_url",
-        "rerank_base_url",
         # データベース
         "oracle_user",
         "oracle_password",

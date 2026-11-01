@@ -91,7 +91,7 @@ claude -p "経費の精算の申請期限はいつまでですか？期限を過
 | スキルは選ばれるが MCP のツールが呼ばれない・見つからない | MCP サーバーの名前が `rag` / `nl2sql` でない（`production-ready-rag` など）。名前を合わせて登録し直す |
 | `claude -p` でツールが使われずに終わる | 非対話では許可の確認ができない。`--allowedTools "Skill,mcp__rag,mcp__nl2sql"` を渡す |
 | 401 `SECURITY_API_KEY_INVALID` / 403 `SECURITY_API_KEY_PRODUCT_FORBIDDEN` | キーの誤り・削除・期限切れ、または使える製品にその製品が無い（[応答の一覧](../platform/docs/mcp-api-keys.md#応答)） |
-| HTTPS で証明書のエラー（`UNABLE_TO_VERIFY_LEAF_SIGNATURE`） | 配備の既定の自作の CA を信頼させる: `~/.claude/settings.json` の `env` に `NODE_EXTRA_CA_CERTS`（ダウンロードした ca.crt の絶対パス。CA は `https://<host>/platform/ca.crt`）を置き、新しいセッションを始める（CA は起動のときにだけ読まれる）。シェルの環境変数（`~/.bashrc`）は Claude デスクトップ版では読まれない |
+| HTTPS で証明書のエラー（`UNABLE_TO_VERIFY_LEAF_SIGNATURE`） | reverse proxy の証明書を自分の CA で署名しているなら、その CA を信頼させる: `~/.claude/settings.json` の `env` に `NODE_EXTRA_CA_CERTS`（CA の証明書の絶対パス）を置き、新しいセッションを始める（CA は起動のときにだけ読まれる）。配備は証明書を作らない（#19）。シェルの環境変数（`~/.bashrc`）は Claude デスクトップ版では読まれない |
 | `Missing environment variables: PR_API_KEY`（ターミナルでは動き、Claude デスクトップ版で失敗する） | デスクトップ版は `~/.bashrc` を読まないので、`headers` の `${PR_API_KEY}` が展開できない。キーのファイルを読む `headersHelper` で登録し直す（[README の手順](../README.md#claude-code-から-rag--nl2sql--agent-を使うmcp-とスキル)）。確かめるのは `env -i HOME="$HOME" PATH="$PATH" claude mcp list` |
 | プロファイルを聞き返される・違うプロファイルで答える | 推薦の候補が違う資料に割れた・当たりが無い。候補から選ぶか、質問にプロファイルの名前を書く（`rag_recommend_search_answer_profile` は利用者が使えるプロファイルの資料を 1 回検索して決める） |
 | スキルが出ない | `claude plugin list` で enabled か確かめ、新しいセッションを始める（今のセッションは `/reload-plugins`） |
@@ -101,7 +101,7 @@ claude -p "経費の精算の申請期限はいつまでですか？期限を過
 ### 長くかかるツール
 
 - `rag_search` は回答を作るので、モデルを 3〜8 回呼ぶ（質問拡張・根拠の評価・章節の拡張の判定・回答文の生成と監査）。#1864 の計測（`openai.gpt-oss-120b`、代表の 9 問）では 1 回 18〜112 秒（平均 47 秒）。サーバーの上限は 600 秒（`RAG_ANSWER_TIMEOUT_SECONDS`）で、超えると `isError: true`（`HTTP_504`）を返す。
-- **推奨の待ち時間は 660 秒**（`MCP_TOOL_TIMEOUT=660000`）。サーバーの上限（600 秒）より長くし、時間切れはサーバーのエラー（どの工程で切れたか付き）で受け取る。配備の Nginx の待ち時間（660 秒）と同じ。
+- **推奨の待ち時間は 660 秒**（`MCP_TOOL_TIMEOUT=660000`）。サーバーの上限（600 秒）より長くし、時間切れはサーバーのエラー（どの工程で切れたか付き）で受け取る。前段に reverse proxy を置くときは、その待ち時間も 600 秒より長くする。
 - **進み具合の通知（progress）**: client が `tools/call` に `_meta.progressToken` を付け、`Accept` に `text/event-stream` を含めると、応答は SSE になり、10 秒ごとと工程が変わるたびに `notifications/progress`（`message` は「経過 30 秒: 根拠確認（1回目）」の形）を送ってから結果を送る。進み具合を受けて待ち時間を延ばす client（MCP の SDK の `resetTimeoutOnProgress`）なら、待ち時間が短くても切れない。Claude Code が進み具合で待ち時間を延ばすかは確かめていない（未確認）ので、`MCP_TOOL_TIMEOUT` は付ける。
 - 回答を Agent が自分で組み立てるなら、`rag_retrieve_evidence`（回答を作らず根拠だけ。モデルを呼ばない。4〜8 秒）で根拠を集め、公開の前に `rag_validate_answer` で監査する。
 

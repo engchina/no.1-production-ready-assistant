@@ -15,7 +15,7 @@ const VIEWPORTS = [
 ] as const;
 
 const SETTINGS_HINT =
-  "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 
 type DbStatus = "ok" | "not_configured" | "unreachable" | "setup_required";
 
@@ -161,7 +161,6 @@ for (const viewport of VIEWPORTS) {
         { path: "/settings/upload-storage", title: "アップロード保存先" },
         { path: "/settings/model", title: "モデル設定" },
         { path: "/settings/database", title: "データベース設定" },
-        { path: "/settings/appearance", title: "外観と証明書" },
       ]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1, name: title }), path).toBeVisible();

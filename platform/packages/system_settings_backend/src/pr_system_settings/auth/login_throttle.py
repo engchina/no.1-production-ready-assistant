@@ -38,7 +38,7 @@ commit してから、窓の中の行を数える（予約）。自分以外の�
 数えるので、許可される失敗は上限を超えない（READ COMMITTED のままでよく、表の lock は要らない）。
 同時の試行どうしが互いの行を数えて両方とも拒否されることはある（安全側）。
 
-送信元 IP は `request.client.host` で、Nginx の後ろでは uvicorn の proxy headers（gunicorn の
+送信元 IP は `request.client.host` で、proxy の後ろでは uvicorn の proxy headers（gunicorn の
 `forwarded_allow_ips` の既定は 127.0.0.1 / ::1）が `X-Forwarded-For` の右端の信頼しない host に
 置き換える。アプリは `X-Forwarded-For` を直接読まない。
 """

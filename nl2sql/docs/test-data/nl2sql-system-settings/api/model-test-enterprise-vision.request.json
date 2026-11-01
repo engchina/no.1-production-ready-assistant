@@ -28,15 +28,9 @@
       "vision_response_path": "/output/0/content/0/text",
       "timeout_seconds": 120,
       "max_retries": 3
-    },
-    "generative_ai": {
-      "embedding_model": "cohere.embed-v4.0",
-      "embedding_dim": 1536,
-      "rerank_model": "cohere.rerank-v4.0-fast"
     }
   },
   "target_type": "enterprise_vision",
   "model_id": "enterprise-nl2sql-vlm",
   "vision_enabled": true
 }
-

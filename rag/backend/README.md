@@ -140,7 +140,7 @@ checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロ
 
 ## DB の状態（`GET /api/ready/database`）
 
-画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 4 画面（アップロード保存先・モデル・データベース・外観と証明書）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status}` です（DB の起動・停止と状態の取得は扱わない。#10）。
+画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 3 画面（アップロード保存先・モデル・データベース）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status}` です（DB の起動・停止と状態の取得は扱わない。#10）。
 
 1. 設定の判定（上の Readiness の `oracle` と同じ）が `ok` でなければ `not_configured`（接続は試さない）
 2. `test_oracle_connection` の bounded な接続確認に失敗すれば `unreachable`

@@ -13,7 +13,7 @@ for (const width of [1280, 1920, 375]) {
     }));
     await mockDatabaseGateReady(page);
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ["/profiles", "/history", "/settings/appearance"]) {
+    for (const route of ["/profiles", "/history", "/settings/upload-storage"]) {
       await page.goto(route);
       await expect(page.locator("main h1")).toBeVisible();
       await page.evaluate(() => document.fonts.ready);

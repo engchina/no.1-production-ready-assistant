@@ -74,7 +74,6 @@ MENU_SECURITY_API_KEYS = "menu.security_api_keys"
 MENU_SETTINGS_UPLOAD_STORAGE = "menu.settings_upload_storage"
 MENU_SETTINGS_MODEL = "menu.settings_model"
 MENU_SETTINGS_DATABASE = "menu.settings_database"
-MENU_SETTINGS_APPEARANCE = "menu.settings_appearance"
 # チャットの添付を使うか（設定は製品ごと。運用設定のシステムテーブルの下。#2517・#2546）。
 MENU_SETTINGS_TRACE_RECORDING = "menu.settings_trace_recording"
 MENU_SETTINGS_CHAT_ATTACHMENTS = "menu.settings_chat_attachments"
@@ -121,7 +120,6 @@ _SYSTEM_SETTINGS_MENUS = (
     MENU_SETTINGS_UPLOAD_STORAGE,
     MENU_SETTINGS_MODEL,
     MENU_SETTINGS_DATABASE,
-    MENU_SETTINGS_APPEARANCE,
 )
 # agent.admin が暗黙に含むメニュー（ユーザーとロール・権限管理は含まない）。
 _ADMIN_MENUS = (
@@ -180,7 +178,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission(MENU_SETTINGS_UPLOAD_STORAGE, _GROUP_SETTINGS, "アップロード保存先"),
     _menu_permission(MENU_SETTINGS_MODEL, _GROUP_SETTINGS, "モデル"),
     _menu_permission(MENU_SETTINGS_DATABASE, _GROUP_SETTINGS, "データベース"),
-    _menu_permission(MENU_SETTINGS_APPEARANCE, _GROUP_SETTINGS, "外観と証明書"),
     # capability は従来の 5 ロール（viewer / operator / approver / auditor / admin）に対応する。
     # 名前は利用者の言葉にし、ロール名は docs/security-rbac.md の対応表に書く（#791）。
     _permission(
@@ -248,6 +245,8 @@ ALL_PERMISSION_CODES = frozenset(item.code for item in PERMISSION_CATALOG)
 #   API キーの画面と `POST /mcp` を削除した（#1809）。
 # - `menu.settings_runtime_snapshot`: 運用設定の「バックアップと復元」を削除した（#1961）。
 # - `menu.automations`: 業務 Agent の定時実行の機能を削除した（#20。スケジューラと画面を消した）。
+# - `menu.settings_appearance`: Nginx と自作 CA の TLS 証明書を配備から外し、システム設定の
+#   「外観と証明書」の画面を削除した（#19）。
 RETIRED_PERMISSION_CODES: tuple[str, ...] = (
     "menu.dashboard",
     "menu.settings_external_rag",
@@ -258,6 +257,7 @@ RETIRED_PERMISSION_CODES: tuple[str, ...] = (
     "menu.settings_api_keys",
     "menu.settings_runtime_snapshot",
     "menu.automations",
+    "menu.settings_appearance",
 )
 PERMISSION_BY_CODE = {item.code: item for item in PERMISSION_CATALOG}
 CAPABILITY_CODES = frozenset(CAPABILITY_ROLES)

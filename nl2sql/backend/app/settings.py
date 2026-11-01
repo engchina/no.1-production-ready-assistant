@@ -94,9 +94,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oci_genai_embedding_dim: int = 1536
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
     oci_genai_embed_model_id: str = "text-embedding-v4"
-    # 埋め込み / 再ランクの OpenAI 互換 Base URL（#8。空なら Enterprise AI の接続から）。
-    embedding_base_url: str = ""
-    rerank_base_url: str = ""
     oci_genai_rerank_model_id: str = "cohere.rerank-v4.0-fast"
     oci_enterprise_ai_endpoint: str = ""
     oci_enterprise_ai_project_ocid: str = ""
@@ -332,8 +329,8 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # Agent が MCP（/api/mcp）を Run の利用者として呼ぶサービストークンの署名鍵（#230 / #231）。
     # 共通 .env の PLATFORM_SERVICE_TOKEN_SECRET。空なら MCP は 503 になる。
     app_service_token_secret: str = ""
-    # 公開の基底の URL（共通 .env の PLATFORM_PUBLIC_BASE_URL。例 https://<公開 IP>）。配備の
-    # suite-init.sh が書き、API キーの画面の接続先に出す（#1870）。
+    # 公開の基底の URL（共通 .env の PLATFORM_PUBLIC_BASE_URL。例 https://<公開 IP>）。前段の
+    # reverse proxy の URL を利用者が書き、API キーの画面の接続先に出す（#1870・#19）。
     app_public_base_url: str = ""
     # 外部の MCP クライアントの API キーの 1 分あたりの呼び出しの回数（#1874。0 は上限なし）。
     app_api_key_calls_per_minute: int = Field(default=60, ge=0, le=100_000)

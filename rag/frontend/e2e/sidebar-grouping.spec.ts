@@ -89,10 +89,10 @@ test("サイドバーのセクション再編とラベルを確認", { tag: "@re
   await expect(operationsSection.getByRole("link", { name: /HuggingFace/ })).toBeVisible();
   await expect(operationsSection.getByRole("link", { name: /サービス管理/ })).toBeVisible();
 
-  // システム設定は3製品で共通の4項目だけを持つ（回答の注意書きは運用設定。#2449。OCI 認証は #11 で削除）。
+  // システム設定は3製品で共通の3項目だけを持つ（回答の注意書きは運用設定。#2449。OCI 認証は #11、外観と証明書は #19 で削除）。
   const settingsSection = sidebar.locator("#nav-section-nav-section-settings");
-  await expect(settingsSection.getByRole("link")).toHaveCount(4);
-  for (const label of ["アップロード保存先", "モデル", "データベース", "外観と証明書"]) {
+  await expect(settingsSection.getByRole("link")).toHaveCount(3);
+  for (const label of ["アップロード保存先", "モデル", "データベース"]) {
     await expect(settingsSection.getByText(label, { exact: true })).toBeVisible();
   }
 

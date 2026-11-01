@@ -2,8 +2,8 @@ name: Deploy Nightly
 
 # 配備の通し（#1595）。本番の Compute と同じ Oracle Linux 9 の container（systemd を PID 1 にした privileged の
 # container）で、cloud-init と同じ props を置いて platform/deploy/suite-init.sh を実際に実行し、3 製品の配備
-# （dnf・Node.js・uv の venv・RAG の前処理 / parser・frontend の build・systemd・自作 CA の HTTPS・Nginx・firewalld）と、
-# Nginx を通した /rag/ /nl2sql/ /agent/ の画面と API の health を確かめる（中身は .github/scripts/deploy-run-through.sh）。
+# （dnf・Node.js・uv の venv・RAG の前処理 / parser・frontend の build・systemd）と、各製品の backend の health と
+# frontend の dist を確かめる（中身は .github/scripts/deploy-run-through.sh。reverse proxy と TLS は配備しない。#19）。
 # PR の CI（Suite / Deploy・Suite / Oracle Linux 9）は fake の command と package の名前の解決までを確かめ、実際の
 # 配備はここで毎晩確かめる（数十分かかるため、PR ではこの workflow と script を変えたときだけ実行する）。
 # 対象外（script の冒頭に理由）: Oracle（DB は無く、system schema の初期化は degraded で進む。suite-init.sh の最後の
@@ -56,7 +56,7 @@ jobs:
       - name: Run suite-init.sh
         run: bash .github/scripts/deploy-run-through.sh deploy
 
-      - name: Verify through Nginx
+      - name: Verify backends and frontend builds
         run: bash .github/scripts/deploy-run-through.sh verify
 
       - name: Diagnostics

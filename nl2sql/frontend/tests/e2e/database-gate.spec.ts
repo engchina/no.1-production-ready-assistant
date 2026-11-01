@@ -178,7 +178,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 const DATABASE_UNAVAILABLE_MESSAGE =
   "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
 const DATABASE_SETTINGS_HINT =
-  "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 
 async function expectDatabaseGate(
   page: Page,
@@ -303,7 +303,7 @@ test("migration 未適用では通常機能を止め、システムテーブル�
     actionName: "システムテーブルを開く",
     actionHref: "/settings/system-tables",
     settingsHint:
-      "アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
+      "アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
   });
 
   await page.route("**/api/settings/database/system-tables", (route) =>

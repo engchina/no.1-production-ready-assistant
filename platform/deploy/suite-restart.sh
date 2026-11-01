@@ -5,24 +5,25 @@
 # 既定（build して再起動）:
 #   1. 各製品の今の backend/.env を props（cloud-init が置いた元）へ写す。suite-init.sh は props から backend/.env を
 #      作り直すため、写さないと画面で保存した値（RAG の HuggingFace・解析後の処理
-#      など）が消える。元の props は recovery/<時刻>/ に退避する。platform/.env・Wallet・HTTPS の CA は
+#      など）が消える。元の props は recovery/<時刻>/ に退避する。platform/.env・Wallet は
 #      suite-init.sh がそのまま保つ。
 #   2. suite-init.sh を再実行する（依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・
-#      systemd の unit・Nginx・サービスの再起動）。suite-pull.sh で取得した最新のコードは、ここで使われる。
+#      systemd の unit・サービスの再起動）。suite-pull.sh で取得した最新のコードは、ここで使われる。
 #   3. 配備全体を確かめる（platform/deploy/suite-health.sh の suite_check_deployment。#1642）: 有効な
-#      production-ready-* の service がすべて active か、配備した製品の backend の /api/health と、Nginx を通した
-#      /<製品>/api/health が応答するか、Nginx が active か。製品ごとに 1 行の要約を出し、NG なら journal の末尾を出す。
-# --no-build: build せず、有効（enabled）な production-ready-* の service と Nginx だけを再起動する。
-#   RAG の前処理 / parser で画面から「停止」にしたもの（disabled）は起動しない。証明書の更新の oneshot も対象にしない。
+#      production-ready-* の service がすべて active か、配備した製品の backend の /api/health が応答するか。
+#      製品ごとに 1 行の要約を出し、NG なら journal の末尾を出す。
+# --no-build: build せず、有効（enabled）な production-ready-* の service だけを再起動する。
+#   RAG の前処理 / parser で画面から「停止」にしたもの（disabled）は起動しない。
 # --status: 再起動せず、3. の確認だけを 1 回行う（待たない）。
 #
-# OS の再起動では、enabled の unit と Nginx が自動で起動する（WantedBy=multi-user.target）。
+# OS の再起動では、enabled の unit が自動で起動する（WantedBy=multi-user.target）。
+# reverse proxy（Nginx など）は配備しない（#19）。前段に置いたときは、その再起動は利用者が行う。
 set -euo pipefail
 
 SUITE_DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUITE_RESTART_SCRIPT="${SUITE_DEPLOY_DIR}/suite-restart.sh"
-# shellcheck source=suite-nginx.sh
-source "${SUITE_DEPLOY_DIR}/suite-nginx.sh"
+# shellcheck source=suite-products.sh
+source "${SUITE_DEPLOY_DIR}/suite-products.sh"
 # shellcheck source=suite-health.sh
 source "${SUITE_DEPLOY_DIR}/suite-health.sh"
 
@@ -48,13 +49,12 @@ restart_usage() {
 Usage: sudo platform/deploy/suite-restart.sh [--no-build | --status]
 
 引数なし     今のコードから build して再配備し（依存の同期・共有 UI と各製品の frontend の build・DB の migration・
-             systemd・Nginx）、全サービスを再起動して、各製品の backend の health を待ちます。
+             systemd）、全サービスを再起動して、各製品の backend の health を待ちます。
              suite-pull.sh で取得した最新のコードは、これで反映されます。
---no-build  build せず、有効な production-ready-* の service と Nginx だけを再起動します。
---status    再起動せず、配備の確認（service の状態・各製品の backend と Nginx を通した health・Nginx）だけを
-             1 回行います。
+--no-build  build せず、有効な production-ready-* の service だけを再起動します。
+--status    再起動せず、配備の確認（service の状態・各製品の backend の health）だけを 1 回行います。
 
-画面で保存した値（各製品の backend/.env・platform/.env）、Wallet、HTTPS の CA は保ちます。
+画面で保存した値（各製品の backend/.env・platform/.env）と Wallet は保ちます。
 log は /var/log/suite-ops.log（再配備の詳細は /var/log/suite-init.log）。
 
 DB（ADB Free コンテナ）の起動・停止はしません。DB が止まっていれば、docker start で起動してから実行してください。
@@ -96,7 +96,7 @@ suite_check_deployed() {
   local products=()
   mapfile -t products < <(suite_deployed_products)
   SUITE_HEALTH_LOG=restart_log SUITE_CHECK_TIMEOUT_SECONDS="${SUITE_HEALTH_TIMEOUT_SECONDS}" \
-    suite_check_deployment "$(suite_local_nginx_base_url "${PROPS_DIR}")" "${products[@]}"
+    suite_check_deployment "${products[@]}"
 }
 
 # 各製品の今の backend/.env を props へ写す（suite-init.sh が props から作り直しても値が変わらないように）。
@@ -119,7 +119,7 @@ suite_preserve_backend_envs() {
   done < <(suite_deployed_products)
 }
 
-# 今のコードで再配備する（build・migration・systemd・Nginx・再起動）。
+# 今のコードで再配備する（build・migration・systemd・再起動）。
 suite_rebuild_and_restart() {
   local status=0
   suite_preserve_backend_envs
@@ -142,9 +142,6 @@ suite_restart_services() {
   restart_log "再起動します: ${units[*]}"
   systemctl daemon-reload
   systemctl restart "${units[@]}"
-  restart_log "Nginx の設定を確かめて再起動します。"
-  nginx -t
-  systemctl restart nginx
 }
 
 suite_restart_main() {

@@ -42,6 +42,14 @@ export const MODEL_MESSAGES = {
   "settings.model.connection.unsaved": "未保存",
   "settings.model.defaults.description":
     "処理の種類ごとに使うモデルを登録モデルから選びます。",
+  "settings.model.defaults.error.embeddingRemoved":
+    "「{model}」は種類が「埋め込み」の登録モデルにありません。登録モデルから選び直してください。",
+  "settings.model.defaults.error.embeddingRequired":
+    "既定の埋め込みモデルを選択してください。",
+  "settings.model.defaults.error.rerankRemoved":
+    "「{model}」は種類が「再ランク」の登録モデルにありません。登録モデルから選び直してください。",
+  "settings.model.defaults.error.rerankRequired":
+    "既定の再ランクモデルを選択してください。",
   "settings.model.defaults.error.judgeRemoved":
     "「{model}」は登録モデルにありません。登録モデルから選び直してください。",
   "settings.model.defaults.error.noVisionModel":
@@ -56,6 +64,16 @@ export const MODEL_MESSAGES = {
     "「{model}」は登録モデルにありません。登録モデルから選び直してください。",
   "settings.model.defaults.error.visionRequired":
     "既定の画像対応モデルを選択してください。",
+  "settings.model.defaults.embedding": "既定の埋め込みモデル",
+  "settings.model.defaults.embeddingEmpty":
+    "登録モデルに種類が「埋め込み」のモデルを登録すると選べます。",
+  "settings.model.defaults.embeddingHelp":
+    "文書と質問のベクトル化（埋め込み・Embedding）に使います。登録モデルのうち種類が「埋め込み」のものだけを選べます。",
+  "settings.model.defaults.rerank": "既定の再ランクモデル",
+  "settings.model.defaults.rerankEmpty":
+    "登録モデルに種類が「再ランク」のモデルを登録すると選べます。",
+  "settings.model.defaults.rerankHelp":
+    "検索結果の並べ替え（再ランク・Rerank）に使います。登録モデルのうち種類が「再ランク」のものだけを選べます。",
   "settings.model.defaults.judge": "既定の判定モデル",
   "settings.model.defaults.judgeDefaultText": "既定のテキストモデル",
   "settings.model.defaults.judgeHelp":
@@ -80,9 +98,14 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.apiKeyShow": "API key を表示",
   "settings.model.enterprise.clearApiKey": "保存済み API key を削除する",
   "settings.model.enterprise.connection": "接続",
+  "settings.model.enterprise.kind": "種類",
+  "settings.model.enterprise.kind.embedding": "埋め込み",
+  "settings.model.enterprise.kind.rerank": "再ランク",
+  "settings.model.enterprise.kind.text": "テキスト",
+  "settings.model.enterprise.kindOfModel": "モデル {number} の種類",
   "settings.model.enterprise.connectionOfModel": "モデル {number} の接続",
   "settings.model.enterprise.description":
-    "回答生成と画像・OCR の解析に使う Enterprise AI の接続情報を設定します。プライマリ接続に加えてセカンダリ接続と、OpenAI や OpenAI 互換 API にも使えるターシャリ接続を設定でき、登録モデルごとに使う接続を選べます。",
+    "LLM・埋め込み・再ランクのモデルを呼ぶ接続（Endpoint URL と API key）を設定します。プライマリ接続に加えてセカンダリ接続と、OpenAI や OpenAI 互換 API にも使えるターシャリ接続を設定でき、登録モデルごとに使う接続を選べます。",
   "settings.model.enterprise.displayName": "表示名",
   "settings.model.enterprise.endpoint": "Endpoint URL",
   "settings.model.enterprise.endpointDocs":
@@ -96,7 +119,7 @@ export const MODEL_MESSAGES = {
     "モデル ID「{model}」はすでに登録されています。同じモデルは 1 行にまとめてください。",
   "settings.model.enterprise.models": "登録モデル",
   "settings.model.enterprise.modelsDescription":
-    "回答生成と画像の読み取りに使うモデルを登録し、画像入力に対応するかを指定します。画像入力に対応したモデルを、画面では「画像対応モデル」（Vision 対応のモデル）と呼びます。",
+    "LLM（テキスト）・埋め込み・再ランクのモデルを、種類と使う接続を選んで登録します。テキストのモデルは画像入力に対応するかも指定します。画像入力に対応したモデルを、画面では「画像対応モデル」（Vision 対応のモデル）と呼びます。",
   "settings.model.enterprise.modelsSaved": "登録モデルを保存しました。",
   "settings.model.enterprise.project": "Project OCID",
   "settings.model.enterprise.projectHelp":
@@ -133,21 +156,6 @@ export const MODEL_MESSAGES = {
     "OCI Enterprise AI 接続設定を保存しました。",
   "settings.model.enterprise.title": "OCI Enterprise AI",
   "settings.model.enterprise.vision": "画像入力に対応",
-  "settings.model.genai.description":
-    "埋め込みと再ランクに使う OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の text-embedding-v4 と qwen3-rerank。",
-  "settings.model.genai.embeddingBaseUrl": "埋め込みの Base URL",
-  "settings.model.genai.embeddingBaseUrlHelp":
-    "例: https://dashscope.aliyuncs.com/compatible-mode/v1。空にすると Enterprise AI のプライマリ接続の Endpoint URL を使います（API key も同じもの）。",
-  "settings.model.genai.embeddingDim": "Embedding 次元",
-  "settings.model.genai.embeddingDimHelp":
-    "固定値です。埋め込みモデルの出力次元と Oracle AI Database のベクトル列に合わせます。",
-  "settings.model.genai.embeddingModel": "埋め込みモデル ID",
-  "settings.model.genai.rerankBaseUrl": "再ランクの Base URL",
-  "settings.model.genai.rerankBaseUrlHelp":
-    "空にすると埋め込みの Base URL から読み替えます。百煉は再ランクだけ /compatible-api/v1 配下で、/compatible-mode/v1 に投げると 404 になります。",
-  "settings.model.genai.rerankModel": "リランクモデル ID",
-  "settings.model.genai.saved": "埋め込み / 再ランクの設定を保存しました。",
-  "settings.model.genai.title": "埋め込み / 再ランク",
   "settings.model.legacySecret.description":
     "原因: 旧形式の model-settings.json に API Key が保存されています。復旧方法: この画面で保存すると API Key を .env へ移し、JSON から secret を削除します。移行後は接続テストを実行してください。",
   "settings.model.legacySecret.title": "旧 JSON に API Key が残っています",
@@ -155,16 +163,12 @@ export const MODEL_MESSAGES = {
   "settings.model.loading": "モデル設定を読み込んでいます。",
   "settings.model.placeholder.apiKey": "sk-xxxxxxxxxxxxxxxx",
   "settings.model.placeholder.displayName": "業務 NL2SQL 標準",
-  // 375px の欄に収まるよう host を省く（完全な形は補足の embeddingBaseUrlHelp）。
-  "settings.model.placeholder.embeddingBaseUrl": "https://…/compatible-mode/v1",
-  "settings.model.placeholder.embeddingModel": "text-embedding-v4",
   // placeholder は 375px の欄にも収まる短い例（形は補足の endpointHelp。#1891）。
   "settings.model.placeholder.endpoint": "https://…oraclecloud.com/openai/v1",
   "settings.model.placeholder.endpointTertiary": "https://api.openai.com/v1",
   "settings.model.placeholder.modelId": "enterprise-llm",
   "settings.model.placeholder.project": "ocid1.generativeaiproject.oc1.…",
-  "settings.model.placeholder.rerankBaseUrl": "https://…/compatible-api/v1",
-  "settings.model.placeholder.rerankModel": "qwen3-rerank",
+  "settings.model.required": "必須",
   "settings.model.requiredInOci": "OCI 運用時必須",
   "settings.model.save": "保存",
   "settings.model.conflict.message":

@@ -79,7 +79,7 @@ class QueryOracle(FakeOracle):
 def _reasoning_settings() -> Settings:
     """質問に応じた推論の工程をすべて有効にした設定（caller ではどれも使わないことを確かめる）。"""
     return Settings(
-        embedding_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
         rag_query_strategy="auto_routing",
         rag_answer_flow="crag",
         rag_screen_linking_enabled=True,

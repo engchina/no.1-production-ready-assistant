@@ -72,7 +72,6 @@ const SYSTEM_SETTINGS_MENU_PERMISSIONS = {
   uploadStorage: MENU_PERMISSIONS.settingsUploadStorage,
   model: MENU_PERMISSIONS.settingsModel,
   database: MENU_PERMISSIONS.settingsDatabase,
-  appearance: MENU_PERMISSIONS.settingsAppearance,
 } satisfies Record<SystemSettingsKey, string>;
 
 /** 共通2項目（ユーザー管理・ロール管理）に付ける RAG の menu 権限。 */

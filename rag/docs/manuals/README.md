@@ -7,7 +7,6 @@
 | アップロード保存先 | [アップロード保存先を使ってみる](upload-storage/README.md) |
 | モデル | [モデル設定を使ってみる](model-settings/README.md) |
 | データベース | [データベース設定を使ってみる](database-settings/README.md) |
-| 外観と証明書 | [外観と証明書を使ってみる](appearance-certificates/README.md) |
 
 各記事に、日本語の合成サンプル、機密情報を除いた注釈付き実画面、検証記録をまとめています。実操作で確認した範囲、実装を照合した説明、未実施の操作を区別しています。
 

@@ -16,7 +16,7 @@ export const ja = {
 
   "settings.uploadStorage.subtitle": "ドキュメントアップロード時の原本を保存するローカルのディレクトリを設定します。",
   "settings.model.subtitle":
-    "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
+    "LLM・埋め込み・再ランクのモデルと、呼び出しに使う接続（Endpoint URL と API key）を設定します。",
   "settings.database.subtitle": "Oracle AI Database への接続を設定します。",
 
   "pager.prev": "前へ",

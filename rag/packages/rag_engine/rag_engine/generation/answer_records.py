@@ -161,7 +161,8 @@ def _rerank_configured(settings: Settings) -> bool:
     """再ランクを実行できるか（#8）。
 
     model があり、Base URL が決まること。Base URL は `rerank_base_url`、
-    `embedding_base_url`、LLM の既定の接続の endpoint のいずれかで決まる。
+    `embedding_base_url`、LLM の既定の接続の endpoint のいずれかで決まる（backend は既定の
+    再ランクのモデルの接続から決めた `rerank_base_url` を渡す。#45）。
     """
     if not str(getattr(settings, "rerank_model", "") or "").strip():
         return False

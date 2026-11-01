@@ -273,7 +273,6 @@ const nl2sqlJa = {
   "nav.settingsConnection": "接続設定",
   "nav.settingsModel": "モデル",
   "nav.settingsDatabase": "データベース",
-  "nav.settingsAppearance": "外観と証明書",
   "nav.settingsAnswerNotice": "回答の注意書き",
   "nav.settingsTraceRecording": "軌跡の記録",
   "settings.traceRecording.subtitle": "軌跡に入力・結果の本文を残すかを3製品で共通に設定します。",
@@ -537,7 +536,6 @@ const nl2sqlJa = {
   "profiles.access.hint": "この業務プロファイルを利用できるロールです。設定は権限管理で変更します。",
   "profiles.access.none": "この業務プロファイルを利用できるロールはまだ設定されていません。",
   // 狭い列（22rem まで）の検索欄に収める（#1891）。ロールコード・データリソースでも絞り込める。
-
 
   "page.query.subtitle": "業務プロファイルのデータに質問し、SQL を生成して実行する",
   "page.settings.subtitle": "接続・モデル・データベースの設定",

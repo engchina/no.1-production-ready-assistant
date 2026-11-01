@@ -1,8 +1,13 @@
-"""埋め込みの client の境界（#8。OpenAI 互換の API を呼ぶ）。"""
+"""埋め込みの client の境界（#8。OpenAI 互換の API を呼ぶ）。
+
+埋め込みは既定の埋め込みモデル（登録モデルの種類 embedding。#45）の接続の endpoint と key で呼ぶ。
+ここではプライマリ接続 = DeepSeek（LLM）、セカンダリ接続 = 百煉（埋め込み）。
+"""
 
 from typing import Any
 
 import pytest
+from pr_system_settings.model import EnterpriseAiConfiguredModel
 
 from app.features.nl2sql.embedding_client import (
     EMBED_BATCH_SIZE,
@@ -12,32 +17,42 @@ from app.features.nl2sql.embedding_client import (
 )
 from app.settings import Settings
 
+BAILIAN = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
 
 def _settings(**overrides: Any) -> Settings:
     base: dict[str, Any] = {
         "nl2sql_feedback_embedding_enabled": True,
+        "oci_genai_embedding_model": "text-embedding-v4",
         "oci_genai_embed_model_id": "text-embedding-v4",
-        "embedding_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "oci_enterprise_ai_endpoint": "https://enterprise.invalid/compatible-mode/v1",
-        "oci_enterprise_ai_api_key": "sk-test",
+        "oci_enterprise_ai_endpoint": "https://api.deepseek.com",
+        "oci_enterprise_ai_api_key": "sk-deepseek",
+        "oci_enterprise_ai_secondary_endpoint": BAILIAN,
+        "oci_enterprise_ai_secondary_api_key": "sk-test",
+        "oci_enterprise_ai_models": [
+            EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
+            EnterpriseAiConfiguredModel(
+                model_id="text-embedding-v4", kind="embedding", connection_id="secondary"
+            ),
+        ],
         "nl2sql_embedding_concurrency": 2,
     }
     base.update(overrides)
     return Settings.model_construct(**base)
 
 
-def test_base_url_prefers_embedding_setting() -> None:
-    """Base URL は埋め込みの設定が優先。空なら Enterprise AI の接続の endpoint。"""
+def test_base_url_and_key_come_from_embedding_model_connection() -> None:
+    """endpoint と key は既定の埋め込みモデルの接続（セカンダリ接続）のもの（#45）。"""
     client = OpenAiCompatibleEmbeddingClient(_settings())
-    assert client.base_url() == "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-    fallback = OpenAiCompatibleEmbeddingClient(_settings(embedding_base_url=""))
-    assert fallback.base_url() == "https://enterprise.invalid/compatible-mode/v1"
+    assert client.base_url() == BAILIAN
+    assert client.api_key() == "sk-test"
 
 
-def test_api_key_comes_from_enterprise_ai_connection() -> None:
-    """API key は Enterprise AI の接続のものを使う（百煉は chat と共通）。"""
-    assert OpenAiCompatibleEmbeddingClient(_settings()).api_key() == "sk-test"
+def test_unregistered_embedding_model_uses_primary_connection() -> None:
+    """登録に無い埋め込みモデル（.env だけの設定）はプライマリ接続で呼ぶ。"""
+    client = OpenAiCompatibleEmbeddingClient(_settings(oci_enterprise_ai_models=[]))
+    assert client.base_url() == "https://api.deepseek.com"
+    assert client.api_key() == "sk-deepseek"
 
 
 def test_is_configured_requires_enabled_url_key_and_model() -> None:
@@ -45,8 +60,8 @@ def test_is_configured_requires_enabled_url_key_and_model() -> None:
     assert OpenAiCompatibleEmbeddingClient(_settings()).is_configured() is True
     for overrides in (
         {"nl2sql_feedback_embedding_enabled": False},
-        {"embedding_base_url": "", "oci_enterprise_ai_endpoint": ""},
-        {"oci_enterprise_ai_api_key": ""},
+        {"oci_enterprise_ai_secondary_endpoint": "", "oci_enterprise_ai_endpoint": ""},
+        {"oci_enterprise_ai_secondary_api_key": ""},
         {"oci_genai_embed_model_id": ""},
     ):
         assert OpenAiCompatibleEmbeddingClient(_settings(**overrides)).is_configured() is False
@@ -64,7 +79,7 @@ def test_embed_texts_splits_into_batches_and_keeps_order(
     sent: list[dict[str, Any]] = []
 
     def fake_post(url: str, body: dict[str, Any], api_key: str, timeout: int) -> dict[str, Any]:
-        assert url == "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+        assert url == f"{BAILIAN}/embeddings"
         assert api_key == "sk-test"
         assert body["model"] == "text-embedding-v4"
         assert body["dimensions"] == EMBED_DIMENSIONS
@@ -119,7 +134,7 @@ def test_embed_texts_rejects_wrong_dimensions(monkeypatch: pytest.MonkeyPatch) -
 
 def test_embed_texts_requires_configuration() -> None:
     """設定が足りないまま呼んだら、実行せずに失敗する。"""
-    client = OpenAiCompatibleEmbeddingClient(_settings(oci_enterprise_ai_api_key=""))
+    client = OpenAiCompatibleEmbeddingClient(_settings(oci_enterprise_ai_secondary_api_key=""))
 
     with pytest.raises(EmbeddingClientError, match="設定が不足"):
         client.embed_texts(["a"])

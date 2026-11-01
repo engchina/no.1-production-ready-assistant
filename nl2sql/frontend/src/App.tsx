@@ -175,11 +175,6 @@ const AnswerNoticeSettingsClient = lazy(() =>
     default: module.AnswerNoticeSettingsClient,
   }))
 );
-const AppearanceSettings = lazy(() =>
-  import("@/components/settings/AppearanceSettings").then((module) => ({
-    default: module.AppearanceSettings,
-  }))
-);
 const SecurityUsersPage = lazy(() =>
   import("@/features/security/SecurityUsersPage").then((module) => ({
     default: module.SecurityUsersPage,
@@ -334,7 +329,6 @@ function AuthorizedApplication() {
               path={APP_ROUTES.settingsSystemTables}
               element={<SettingsSystemTablesRoute />}
             />
-            <Route path={APP_ROUTES.settingsAppearance} element={<AppearanceSettings />} />
             <Route path={APP_ROUTES.settingsAnswerNotice} element={<SettingsAnswerNoticeRoute />} />
             <Route path={APP_ROUTES.settingsTraceRecording} element={<SettingsTraceRecordingRoute />} />
             <Route path={APP_ROUTES.settingsChatAttachments} element={<SettingsChatAttachmentsRoute />} />

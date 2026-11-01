@@ -81,13 +81,6 @@ function modelSettingsFixture(overrides: Record<string, unknown> = {}) {
         timeout_seconds: 120,
         max_retries: 3,
       },
-      generative_ai: {
-        embedding_model: "text-embedding-v4",
-        embedding_dim: 1536,
-        embedding_base_url: "",
-        rerank_model: "qwen3-rerank",
-        rerank_base_url: "",
-      },
     },
     model_settings_file: "runtime-settings",
     source: "runtime",
@@ -288,7 +281,6 @@ async function expectModelSaveButtonsUsePrimaryStyle(page: Page) {
   const buttons = [
     page.getByRole("button", { name: "OCI Enterprise AI: 保存" }),
     page.getByRole("button", { name: "登録モデル: 保存" }),
-    page.getByRole("button", { name: "埋め込み / 再ランク: 保存" }),
   ];
   await page.mouse.move(0, 0);
   await Promise.all(buttons.map((button) => button.evaluate(async (element) => {
@@ -439,12 +431,12 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
     page.getByRole("heading", { name: "OCI Enterprise AI", exact: true })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "登録モデル", exact: true })).toBeVisible();
+  // 埋め込み / 再ランクは登録モデルの種類で登録する（#45）。独立したカードは無い。
   await expect(
     page.getByRole("heading", { name: "埋め込み / 再ランク", exact: true })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
   await expect(page.locator("#enterprise-api-path")).toHaveCount(0);
   await expect(page.locator("#enterprise-vlm-input-mode")).toHaveCount(0);
@@ -483,7 +475,47 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   await expectNoHorizontalOverflow(page);
 });
 
+// 埋め込み / 再ランクの登録モデルも持つ構成（行ごとのテストボタンが種類で分岐する。#45）。
+async function routeModelSettingsWithEmbeddingRerank(page: Page) {
+  const base = modelSettingsFixture();
+  const enterpriseAi = base.settings.enterprise_ai;
+  await page.unroute("**/api/settings/model");
+  await page.route("**/api/settings/model", (route) =>
+    fulfillJson(
+      route,
+      modelSettingsFixture({
+        settings: {
+          ...base.settings,
+          enterprise_ai: {
+            ...enterpriseAi,
+            models: [
+              ...enterpriseAi.models,
+              {
+                model_id: "text-embedding-v4",
+                display_name: "埋め込み",
+                vision_enabled: false,
+                kind: "embedding",
+                connection_id: "primary",
+              },
+              {
+                model_id: "qwen3-rerank",
+                display_name: "再ランク",
+                vision_enabled: false,
+                kind: "rerank",
+                connection_id: "primary",
+              },
+            ],
+            default_embedding_model_id: "text-embedding-v4",
+            default_rerank_model_id: "qwen3-rerank",
+          },
+        },
+      })
+    )
+  );
+}
+
 test("システム設定のテスト成功結果を共通パネルで表示する", async ({ page }, testInfo) => {
+  await routeModelSettingsWithEmbeddingRerank(page);
   await page.goto("/settings/model");
   await page
     .getByRole("button", { name: "enterprise-nl2sql-vlm をテスト", exact: true })
@@ -551,6 +583,7 @@ test("システム設定のテスト成功結果を共通パネルで表示す�
 });
 
 test("システム設定の失敗と API エラーを共通 danger パネルで表示する", async ({ page }) => {
+  await routeModelSettingsWithEmbeddingRerank(page);
   await page.unroute("**/api/settings/model/test");
   await page.route("**/api/settings/model/test", (route) =>
     fulfillJson(route, {
@@ -1064,7 +1097,6 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
 
   await page.locator("#enterprise-endpoint").fill("https://changed.example.com");
   await page.getByRole("textbox", { name: "モデル ID 1" }).fill("enterprise-unsaved-model");
-  await page.locator("#genai-embedding-model").fill("cohere.unsaved-embed");
 
   await expectLargeActionButton(page.getByRole("button", { name: "OCI Enterprise AI: 保存" }));
   await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
@@ -1074,7 +1106,8 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expect(enterpriseSaving).toHaveAttribute("aria-busy", "true");
   await expectLargeActionButton(enterpriseSaving);
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeDisabled();
+  // 埋め込み / 再ランクの独立したカード（と保存）は無い（#45。登録モデルの種類で登録する）。
+  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toHaveCount(0);
   firstSaveGate.release();
   await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。")).toBeVisible();
 
@@ -1092,13 +1125,10 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   expect(
     ((connectionEnterprise.models as Array<Record<string, unknown>>)[0]).model_id
   ).toBe("enterprise-nl2sql-llm");
-  expect(
-    (connectionRequest.generative_ai as Record<string, unknown>).embedding_model
-  ).toBe("text-embedding-v4");
+  expect(connectionRequest).not.toHaveProperty("generative_ai");
   await expect(page.getByRole("textbox", { name: "モデル ID 1" })).toHaveValue(
     "enterprise-unsaved-model"
   );
-  await expect(page.locator("#genai-embedding-model")).toHaveValue("cohere.unsaved-embed");
 
   await page.getByRole("button", { name: "登録モデル: 保存" }).click();
   await expect(page.getByText("登録モデルを保存しました。")).toBeVisible();
@@ -1115,30 +1145,7 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   expect(((modelsEnterprise.models as Array<Record<string, unknown>>)[0]).model_id).toBe(
     "enterprise-unsaved-model"
   );
-  expect((modelsRequest.generative_ai as Record<string, unknown>).embedding_model).toBe(
-    "text-embedding-v4"
-  );
-  await expect(page.locator("#genai-embedding-model")).toHaveValue("cohere.unsaved-embed");
-
-  const generativeSave = page.getByRole("button", { name: "埋め込み / 再ランク: 保存" });
-  await generativeSave.focus();
-  await expect(generativeSave).toBeFocused();
-  await generativeSave.press("Enter");
-  await expect(page.getByText("埋め込み / 再ランクの設定を保存しました。")).toBeVisible();
-  const generativeRequest = requests[2];
-  expect(
-    (generativeRequest.generative_ai as Record<string, unknown>).embedding_model
-  ).toBe("cohere.unsaved-embed");
-  expect(
-    ((generativeRequest.enterprise_ai as Record<string, unknown>).models as Array<
-      Record<string, unknown>
-    >)[0].model_id
-  ).toBe("enterprise-unsaved-model");
-  expect(
-    ((generativeRequest.enterprise_ai as Record<string, unknown>).models as Array<
-      Record<string, unknown>
-    >)[0].max_output_tokens
-  ).toBe(65536);
+  expect(modelsRequest).not.toHaveProperty("generative_ai");
 
   rejectNextSave = true;
   await page.getByRole("textbox", { name: "モデル ID 1" }).fill("enterprise-failed-model");
@@ -1157,7 +1164,6 @@ test("モデル設定を3カードごとに独立保存し、非表示設定と�
   await expectNoHorizontalOverflow(page);
   await expect(page.getByRole("button", { name: "OCI Enterprise AI: 保存" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登録モデル: 保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "埋め込み / 再ランク: 保存" })).toBeVisible();
   await expectModelSaveButtonsUsePrimaryStyle(page);
 });
 
@@ -1457,14 +1463,9 @@ test("legacy JSON の原因と復旧方法を表示し、保存時に既存 Key 
   await expect(page.getByText("保存済み", { exact: true })).toBeVisible();
 });
 
-test("外観と証明書にテーマの選択は無く、配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
-  await page.goto("/settings/appearance");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
-  await expect(page.getByText("HTTPS の接続に使う証明書を取得します。配色はライトの 1 種類で、切り替えはありません。")).toBeVisible();
-  await expect(page.getByTestId("appearance-theme-toggle")).toHaveCount(0);
-  for (const name of ["ライト", "ダーク", "自動（OS 設定）"]) {
-    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
-  }
+test("配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
+  await page.goto("/settings/upload-storage");
+  await expect(page.locator("#upload-storage-local-dir")).toBeVisible();
   const html = page.locator("html");
   // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
   // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
@@ -1487,7 +1488,7 @@ test("外観と証明書にテーマの選択は無く、配色は OS の設定�
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+    await expect(page.locator("#oci-user-ocid")).toBeVisible();
     await expect(html).toHaveCSS("color-scheme", "light");
     await expect(html).not.toHaveAttribute("data-theme");
     expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
@@ -1633,6 +1634,8 @@ test("レビュー補完: モデル追加・既定のモデル 2 つ・Vision・
     model_id: "review-model",
     display_name: "レビュー用",
     vision_enabled: true,
+    // 追加したモデルの種類は既定のテキスト（#45）。
+    kind: "text",
     connection_id: "primary",
     // 追加したモデルの推論の量は既定の low（#1425・#3004）。
     reasoning_effort: "low",
@@ -1725,19 +1728,14 @@ test("未保存の変更があるときはブラウザの戻る操作でも破�
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
-test("レビュー補完: システム設定5画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
-  // 外観と証明書はテーマの選択が無い（#17）ので、CA の証明書を配る状態にしてダウンロードのリンクへフォーカスする。
-  await page.route("**/platform/ca.crt", (route) =>
-    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-  );
-  for (const slug of ["upload-storage", "model", "database", "system-tables", "appearance"]) {
+test("レビュー補完: システム設定4画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
+  for (const slug of ["upload-storage", "model", "database", "system-tables"]) {
     await page.goto(`/settings/${slug}`);
     await expect(page.locator("main")).toBeVisible();
     const ready = slug === "upload-storage" ? page.locator("#upload-storage-local-dir")
       : slug === "model" ? page.locator("#enterprise-endpoint")
       : slug === "database" ? page.locator("#oracle-user")
-      : slug === "system-tables" ? page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" })
-      : page.getByRole("link", { name: "CA の証明書をダウンロード" });
+      : page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" });
     await expect(ready).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await ready.focus();
@@ -1750,37 +1748,4 @@ test("レビュー補完: システム設定5画面の表示とキーボード�
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === "skipped") return;
   await expectLocalUiFonts(page);
-});
-
-// HTTPS の証明書（#1316）: 1 台の Compute の Nginx が /platform/ca.crt で CA の証明書を配る。製品は /<製品>/ の下でも
-// サイトの root の /platform/ca.crt を見る。ローカルの開発（Vite）は配っていないので説明だけを出す。
-test("外観と証明書の HTTPS の証明書", async ({ page }) => {
-  await page.goto("/settings/appearance");
-
-  const card = page.getByTestId("appearance-ca-certificate");
-  await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
-  await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
-  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
-
-  await page.route("**/platform/ca.crt", (route) =>
-    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-  );
-  await page.reload();
-  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
-  await card.getByText("端末への取り込み方").click();
-  // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
-  await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
-    "Windows（Edge・Chrome）",
-    "macOS（Safari・Chrome・Edge）",
-    "iPhone / iPad（すべてのブラウザ）",
-    "Android（Chrome）",
-    "Edge",
-    "Chrome",
-    "Firefox",
-  ]);
-  await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
 });

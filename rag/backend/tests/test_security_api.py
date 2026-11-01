@@ -880,9 +880,13 @@ def test_role_access_update_validates_input(
 def test_retired_permission_code_left_in_store_is_ignored(
     auth: ProductionAuth, scoped_oracle: ScopedFakeOracle
 ) -> None:
-    """DB に残った廃止済みの権限コード（`menu.dashboard`。#261）は、実効権限・権限管理の表示・
-    ロールの割り当て・保存のどれでも無視し、エラーにしない（migration の適用前でも壊れない）。"""
-    stale = auth.create_role(["menu.search", "menu.dashboard"], search_answer_profile_ids=["bv-1"])
+    """DB に残った廃止済みの権限コード（`menu.dashboard`。#261、`menu.settings_appearance`。
+    #19）は、実効権限・権限管理の表示・ロールの割り当て・保存のどれでも無視し、エラーにしない
+    （migration の適用前でも壊れない）。"""
+    stale = auth.create_role(
+        ["menu.search", "menu.dashboard", "menu.settings_appearance"],
+        search_answer_profile_ids=["bv-1"],
+    )
     auth.create_user("member", [stale])
     member, _token, _csrf = auth.service.login("member", USER_PASSWORD)
     assert member.permissions == {"menu.search"}
@@ -909,7 +913,9 @@ def test_retired_permission_code_left_in_store_is_ignored(
     by_id = {item["role_id"]: item for item in listed.json()["data"]}
     assert by_id[stale.role_id]["permissions"] == ["menu.search"]
     catalog = client.get("/api/security/permissions", headers=headers).json()["data"]
-    assert "menu.dashboard" not in {item["code"] for item in catalog}
+    assert {"menu.dashboard", "menu.settings_appearance"}.isdisjoint(
+        {item["code"] for item in catalog}
+    )
 
     # 権限管理画面は表示したコードをそのまま保存する。保存後は古いコードも消える。
     saved = _put_access(

@@ -57,10 +57,21 @@ export const DEFAULT_ENTERPRISE_AI_MAX_OUTPUT_TOKENS = 32_768;
 export const ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MIN = 1;
 export const ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MAX = 2_000_000;
 
+/**
+ * 登録モデルの種類（#45。backend の EnterpriseAiModelKind と同じ）。text は LLM（画像対応は
+ * `vision_enabled`）、embedding は `POST {endpoint}/embeddings`、rerank は `POST {endpoint}/reranks`。
+ * 埋め込み / 再ランクも LLM と同じ一覧に、接続を選んで登録する。
+ */
+export const ENTERPRISE_AI_MODEL_KINDS = ["text", "embedding", "rerank"] as const;
+export type EnterpriseAiModelKind = (typeof ENTERPRISE_AI_MODEL_KINDS)[number];
+
 export interface EnterpriseAiConfiguredModel {
   model_id: string;
   display_name: string;
+  /** 画像入力に対応（種類 text だけの属性。ほかの種類は backend が false にする）。 */
   vision_enabled: boolean;
+  /** モデルの種類（#45）。未指定は text。 */
+  kind?: EnterpriseAiModelKind;
   /** 呼び出しに使う接続（#533）。未指定はプライマリ接続。存在しない接続を指すと保存時に欄のエラー。 */
   connection_id?: string;
   /** 推論（思考）の量（#1425）。未指定は既定（medium）、none は送らない。 */
@@ -103,6 +114,10 @@ export interface EnterpriseAiModelSettings {
    * JUDGE_SAME_AS_ANSWER（"same_as_answer"）は回答を作ったモデル、それ以外は登録モデルの ID。
    */
   default_judge_model_id?: string;
+  /** 埋め込みに使うモデル（#45。種類 embedding の登録モデル。その種類を登録したら必須）。 */
+  default_embedding_model_id?: string;
+  /** 再ランクに使うモデル（#45。種類 rerank の登録モデル。その種類を登録したら必須）。 */
+  default_rerank_model_id?: string;
   api_path: string;
   vlm_input_mode: EnterpriseAiVlmInputMode;
   text_payload_template: string;
@@ -113,19 +128,12 @@ export interface EnterpriseAiModelSettings {
   max_retries: number;
 }
 
-export interface GenerativeAiModelSettings {
-  embedding_model: string;
-  embedding_dim: number;
-  /** 埋め込みの OpenAI 互換 Base URL。空なら Enterprise AI のプライマリ接続から（#8）。 */
-  embedding_base_url: string;
-  rerank_model: string;
-  /** 再ランクの Base URL。空なら埋め込みの Base URL から読み替える（#8）。 */
-  rerank_base_url: string;
-}
-
+/**
+ * モデル設定の読み書きの payload。#45 で埋め込み / 再ランクの独立した節（`generative_ai`）を外し、
+ * 登録モデル（種類 embedding / rerank）と既定のモデルで表す。
+ */
 export interface ModelSettingsPayload {
   enterprise_ai: EnterpriseAiModelSettings;
-  generative_ai: GenerativeAiModelSettings;
 }
 
 export interface ModelSettingsData {
@@ -140,6 +148,11 @@ export interface ModelSettingsData {
    * 古い backend は返さない（そのときは送らない）。
    */
   revision?: string;
+  /**
+   * 埋め込みの次元（#45。読み取り専用の表示用）。backend の設定 `oci_genai_embedding_dim`（Oracle の
+   * VECTOR 列に合わせた値）で、埋め込みの呼び出しに `dimensions` として送る。古い backend は返さない。
+   */
+  embedding_dim?: number | null;
 }
 
 /** 保存（PATCH）の body。`base_revision` は読み込んだ時点の `ModelSettingsData.revision`（#1037）。 */

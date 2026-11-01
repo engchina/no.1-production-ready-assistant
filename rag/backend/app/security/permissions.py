@@ -83,7 +83,6 @@ MENU_SETTINGS_SERVICES = "menu.settings_services"
 MENU_SETTINGS_UPLOAD_STORAGE = "menu.settings_upload_storage"
 MENU_SETTINGS_MODEL = "menu.settings_model"
 MENU_SETTINGS_DATABASE = "menu.settings_database"
-MENU_SETTINGS_APPEARANCE = "menu.settings_appearance"
 # チャットの添付を使うか（設定は製品ごと。運用設定のシステムテーブルの下。#2517・#2546）。
 MENU_SETTINGS_TRACE_RECORDING = "menu.settings_trace_recording"
 MENU_SETTINGS_CHAT_ATTACHMENTS = "menu.settings_chat_attachments"
@@ -178,7 +177,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission(MENU_SETTINGS_UPLOAD_STORAGE, _GROUP_SETTINGS, "アップロード保存先"),
     _menu_permission(MENU_SETTINGS_MODEL, _GROUP_SETTINGS, "モデル"),
     _menu_permission(MENU_SETTINGS_DATABASE, _GROUP_SETTINGS, "データベース"),
-    _menu_permission(MENU_SETTINGS_APPEARANCE, _GROUP_SETTINGS, "外観と証明書"),
     _permission(
         SEARCH_ANSWER_PROFILES_MANAGE,
         _GROUP_MANAGE,

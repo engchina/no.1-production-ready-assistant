@@ -22,11 +22,6 @@ export {
   type UserRoleNavItem,
 } from "./paths";
 
-// 外観と証明書（#95。HTTPS の CA 証明書は #1316）
-export { AppearanceSettingsPage, type AppearanceSettingsPageProps } from "./appearance/AppearanceSettingsPage";
-export { CA_CERTIFICATE_PATH, probeCaCertificate } from "./appearance/CaCertificateCard";
-export { APPEARANCE_MESSAGES, type AppearanceMessages } from "./appearance/messages";
-
 // 回答の注意書き（設定は製品ごと。#2405・#2449）
 export {
   AnswerNoticeSettingsPage,
@@ -110,6 +105,7 @@ export {
   ENTERPRISE_AI_MAX_INPUT_TOKENS_MIN,
   ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MAX,
   ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MIN,
+  ENTERPRISE_AI_MODEL_KINDS,
   ENTERPRISE_AI_REASONING_EFFORTS,
   MAX_ENTERPRISE_AI_CONNECTIONS,
   MODEL_SETTINGS_QUERY_KEY,
@@ -119,7 +115,7 @@ export {
   type EnterpriseAiConnectionSettings,
   type EnterpriseAiModelSettings,
   type EnterpriseAiVlmInputMode,
-  type GenerativeAiModelSettings,
+  type EnterpriseAiModelKind,
   type ModelSettingsApi,
   type ModelSettingsData,
   type ModelSettingsPayload,
@@ -399,7 +395,7 @@ export { MyApiKeysPanel, type MyApiKeysPanelProps } from "./api-keys/MyApiKeysPa
 // アカウントの画面（API キー / パスワード変更のタブ。3 製品で同じ。#1873）
 export { AccountPage, type AccountPageProps } from "./account/AccountPage";
 export { ApiKeysAdminPage, type ApiKeysAdminPageProps } from "./api-keys/ApiKeysAdminPage";
-export { caCertificateUrl, mcpEndpointRows, mcpEndpoints, mcpRegistrationExample } from "./api-keys/endpoints";
+export { mcpEndpointRows, mcpEndpoints, mcpRegistrationExample } from "./api-keys/endpoints";
 export {
   API_KEYS_MESSAGES,
   type ApiKeysMessageKey,

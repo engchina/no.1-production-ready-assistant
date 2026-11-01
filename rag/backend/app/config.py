@@ -55,6 +55,8 @@ from pr_system_settings.chat_attachments.limits import (
 from pr_system_settings.model import EnterpriseAiConfiguredModel as EnterpriseAiConfiguredModel
 from pr_system_settings.model import EnterpriseAiConnection as EnterpriseAiConnection
 from pr_system_settings.model import ModelSecretStateMixin, ModelSettingsStore
+from pr_system_settings.model import embedding_api_base_url as embedding_api_base_url
+from pr_system_settings.model import embedding_model_connection as embedding_model_connection
 from pr_system_settings.model import (
     enterprise_ai_connection_for_model as enterprise_ai_connection_for_model,
 )
@@ -471,8 +473,8 @@ class Settings(
     # Agent が MCP（`POST /api/mcp`）を利用者として呼ぶサービストークンの署名鍵（#230 / #232）。
     # 共通 `.env` の PLATFORM_SERVICE_TOKEN_SECRET。空なら MCP は 503 で拒否する。
     app_service_token_secret: str = Field(default="", repr=False)
-    # 公開の基底の URL（共通 `.env` の PLATFORM_PUBLIC_BASE_URL。例 `https://<公開 IP>`）。配備の
-    # suite-init.sh が書き、API キーの画面の接続先に出す（#1870）。
+    # 公開の基底の URL（共通 `.env` の PLATFORM_PUBLIC_BASE_URL。例 `https://<公開 IP>`）。前段の
+    # reverse proxy の URL を利用者が書き、API キーの画面の接続先に出す（#1870・#19）。
     app_public_base_url: str = ""
     # 外部の MCP クライアントの API キーの 1 分あたりの呼び出しの回数（#1874。0 は上限なし）。
     app_api_key_calls_per_minute: int = Field(default=60, ge=0, le=100_000)
@@ -619,9 +621,6 @@ class Settings(
         description="Cohere Embed v4 と Oracle VECTOR(1536, FLOAT32) に合わせる。",
     )
     oci_genai_rerank_model: str = Field(default="qwen3-rerank")
-    # 埋め込み / 再ランクの OpenAI 互換 Base URL(#8。空なら Enterprise AI の接続から)。
-    embedding_base_url: str = Field(default="")
-    rerank_base_url: str = Field(default="")
 
     # --- Oracle AI Database ---
     oracle_user: str = Field(default="")

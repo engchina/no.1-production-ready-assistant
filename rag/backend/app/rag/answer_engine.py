@@ -71,6 +71,8 @@ from app.clients.oracle_read_stats import (
 )
 from app.config import (
     Settings,
+    embedding_api_base_url,
+    embedding_model_connection,
     enterprise_ai_connection_for_model,
     enterprise_ai_default_model_id,
     enterprise_ai_judge_model_id,
@@ -542,21 +544,6 @@ def _reasoning_effort_override(value: str) -> str:
     return "" if value == "model" else value
 
 
-def _rerank_base_url_configured(settings: Settings) -> bool:
-    """rag_engine の ``_rerank_configured`` と同じく、再ランクの Base URL が決まるか(#8)。
-
-    ``rerank_base_url`` → ``embedding_base_url`` → Enterprise AI の接続の endpoint の順に見る。
-    """
-    names = (
-        "rerank_base_url",
-        "embedding_base_url",
-        "oci_enterprise_ai_endpoint",
-        "oci_enterprise_ai_secondary_endpoint",
-        "oci_enterprise_ai_tertiary_endpoint",
-    )
-    return any(str(getattr(settings, name, "") or "").strip() for name in names)
-
-
 def build_engine_settings(
     settings: Settings,
     *,
@@ -616,15 +603,18 @@ def build_engine_settings(
         "OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, vision_model)
         ),
-        # 埋め込みと再ランクは OpenAI 互換の API を呼ぶ(#8)。Base URL を空にすると
-        # rag_engine が LLM の既定の接続の endpoint から組み立てる(百煉は chat・埋め込みが
-        # 同じ /compatible-mode/v1 で、再ランクだけ /compatible-api/v1)。model を渡さないと
-        # RAG_RERANK_ENABLED=true でも常に「未実行」になる(#275)。
+        # 埋め込みと再ランクは OpenAI 互換の API を、既定の埋め込み / 再ランクのモデルの接続の
+        # endpoint と API key で呼ぶ(#8 / #45。LLM と別の接続にできる)。再ランクの base URL は
+        # platform の関数で /compatible-mode/ を /compatible-api/ に読み替えて渡す(百煉は
+        # 再ランクだけ /compatible-api/v1)。model を渡さないと RAG_RERANK_ENABLED=true でも
+        # 常に「未実行」になる(#275)。
         "EMBEDDING_MODEL": settings.oci_genai_embedding_model,
         "EMBEDDING_OUTPUT_DIMENSIONS": str(int(settings.oci_genai_embedding_dim)),
-        "EMBEDDING_BASE_URL": settings.embedding_base_url,
+        "EMBEDDING_BASE_URL": embedding_api_base_url(settings),
+        "EMBEDDING_API_KEY": embedding_model_connection(settings).api_key,
         "RERANK_MODEL": settings.oci_genai_rerank_model,
-        "RERANK_BASE_URL": settings.rerank_base_url,
+        "RERANK_BASE_URL": embedding_api_base_url(settings, rerank=True),
+        "RERANK_API_KEY": embedding_model_connection(settings, rerank=True).api_key,
         "RAG_ENGINE_OUTPUT_DIR": str(output_dir),
         "RAG_ENGINE_RETRIEVAL_CANDIDATE_LIMIT": str(settings.rag_retrieval_candidate_limit),
         "RAG_ENGINE_RERANK_CANDIDATE_LIMIT": str(settings.rag_rerank_candidate_limit),
@@ -1276,7 +1266,7 @@ class AnswerEngine:
             "rerank": (
                 settings.oci_genai_rerank_model
                 if settings.rag_rerank_enabled
-                and _rerank_base_url_configured(settings)
+                and bool(embedding_api_base_url(settings, rerank=True))
                 and not rerank_failed
                 else ""
             ),

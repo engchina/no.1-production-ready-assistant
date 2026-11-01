@@ -71,7 +71,7 @@ def test_effort_is_saved_per_model_and_reloaded(tmp_path: Path) -> None:
     models = response.json()["data"]["settings"]["enterprise_ai"]["models"]
     assert [model["reasoning_effort"] for model in models] == ["low", "none"]
     document = json.loads((tmp_path / "model-settings.json").read_text(encoding="utf-8"))
-    assert document["version"] == MODEL_SETTINGS_DOCUMENT_VERSION == 6
+    assert document["version"] == MODEL_SETTINGS_DOCUMENT_VERSION == 7
     assert [model["reasoning_effort"] for model in document["enterprise_ai"]["models"]] == [
         "low",
         "none",

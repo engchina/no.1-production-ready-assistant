@@ -218,6 +218,7 @@ class Settings:
     # 0（既定）は候補に加えるだけで順位は rerank に任せる。比較実験用 (#1108)。
     screen_linking_reserve_rank: int
     # 埋め込みの OpenAI 互換 Base URL。空なら LLM のプライマリ接続の endpoint を使う（#8）。
+    # backend は既定の埋め込みモデルの接続の endpoint を渡す（#45）。
     embedding_base_url: str
     embedding_model: str
     embedding_output_dimensions: int
@@ -242,6 +243,10 @@ class Settings:
 
     # None は保存済み辞書、空 tuple は評価用の辞書無効化を表す。共有ファイルは変更しない。
     domain_keywords_override: tuple[str, ...] | None = None
+    # 埋め込み / 再ランクの API key（#45）。backend が既定の埋め込み / 再ランクのモデルの接続の key を
+    # 渡す（LLM と別の接続にできる）。空なら LLM の既定の接続の key。
+    embedding_api_key: str = ""
+    rerank_api_key: str = ""
     # 検索の比較実験用。重み付けを切ると全検索文が同じ票、original_query_only は原質問だけで検索する。
     original_query_weighting_enabled: bool = True
     original_query_only: bool = False
@@ -489,6 +494,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         approved_faq_semantic_suggestions_enabled=_env_bool(env, "APPROVED_FAQ_SEMANTIC_SUGGESTIONS_ENABLED", False),
         rerank_model=env.get("RERANK_MODEL", DEFAULT_RERANK_MODEL).strip() or DEFAULT_RERANK_MODEL,
         rerank_base_url=env.get("RERANK_BASE_URL", "").strip(),
+        rerank_api_key=env.get("RERANK_API_KEY", "").strip(),
         rerank_request_timeout_seconds=_env_int(env, "RERANK_REQUEST_TIMEOUT_SECONDS", 90),
         rerank_retries=_env_int(env, "RERANK_RETRIES", 3),
         rerank_retry_initial_wait_seconds=_env_float(env, "RERANK_RETRY_INITIAL_WAIT_SECONDS", 2.0),
@@ -502,6 +508,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         screen_linking_enabled=_env_bool(env, "RAG_ENGINE_SCREEN_LINKING", False),
         screen_linking_reserve_rank=max(0, _env_int(env, "RAG_ENGINE_SCREEN_LINKING_RESERVE_RANK", 0)),
         embedding_base_url=env.get("EMBEDDING_BASE_URL", "").strip(),
+        embedding_api_key=env.get("EMBEDDING_API_KEY", "").strip(),
         embedding_model=env.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL,
         embedding_output_dimensions=_env_int(
             env,

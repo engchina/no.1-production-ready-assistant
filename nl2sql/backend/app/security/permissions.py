@@ -260,7 +260,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
             PERSISTENCE_RECOVER_PERMISSION,
         ),
     ),
-    _menu_permission("menu.settings_appearance", "システム設定", "外観と証明書"),
     # ここから下はナビに無い権限（画面の中の操作を許可する capability）。
     _permission(
         "nl2sql.ontology.capabilities.manage",
@@ -409,7 +408,10 @@ SCHEMA_READ_MENUS = frozenset(
 )
 
 LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
-    "dashboard.view": ("menu.settings_appearance",),
+    # 廃止して置き換え先の無い権限（#19 で「外観と証明書」の画面ごと削除）。保存済みのロールに
+    # 残っていても未知のコードとして拒否せず、正規化で落とす。
+    "menu.settings_appearance": (),
+    "dashboard.view": (),
     "documents.view": (
         "menu.table_management",
         "menu.view_management",
@@ -464,7 +466,7 @@ LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
         "menu.admin_sql",
         "menu.settings_system_tables",
     ),
-    "settings.appearance.view": ("menu.settings_appearance",),
+    "settings.appearance.view": (),
     "security.users.view": ("menu.security_users",),
     "security.users.manage": ("menu.security_users",),
     "security.roles.view": ("menu.security_roles",),

@@ -113,8 +113,9 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
   // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足し、
-  // #7 で運用設定の Select AI Credential とセキュリティ設定の Deep Data Security を、#11 でシステム設定の OCI 認証を削除して 33 項目。
-  expect(menuIconSignatures).toHaveLength(33);
+  // #7 で運用設定の Select AI Credential とセキュリティ設定の Deep Data Security を、#11 でシステム設定の OCI 認証を、
+  // #19 でシステム設定の外観と証明書を削除して 32 項目。
+  expect(menuIconSignatures).toHaveLength(32);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -433,19 +434,19 @@ test("SQL 生成権限がない既定入口は root から最初の許可画面�
   await page.unroute("**/api/**");
   await mockApi(page, {
     ...SYSTEM_ADMIN_USER,
-    user_uuid: "appearance-user",
-    login_user_id: "appearance.user",
-    display_name: "外観閲覧ユーザー",
-    role_codes: ["APPEARANCE_VIEWER"],
+    user_uuid: "model-settings-user",
+    login_user_id: "model.settings.user",
+    display_name: "モデル設定担当ユーザー",
+    role_codes: ["MODEL_SETTINGS_VIEWER"],
     is_system_admin: false,
-    permissions: ["menu.settings_appearance"],
+    permissions: ["menu.settings_model"],
   });
 
   await page.goto("/");
 
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/model$/);
   const sidebar = await openSidebarNav(page);
-  await expect(sidebar.getByRole("link", { name: "外観と証明書" })).toHaveAttribute(
+  await expect(sidebar.getByRole("link", { name: "モデル", exact: true })).toHaveAttribute(
     "aria-current",
     "page"
   );

@@ -5,7 +5,6 @@ import {
   HardDrive,
   KeySquare,
   MessageSquareWarning,
-  Palette,
   Paperclip,
   Shield,
   Users,
@@ -20,7 +19,6 @@ export const SYSTEM_SETTINGS_PATHS = {
   uploadStorage: "/settings/upload-storage",
   model: "/settings/model",
   database: "/settings/database",
-  appearance: "/settings/appearance",
 } as const;
 
 export type SystemSettingsKey = keyof typeof SYSTEM_SETTINGS_PATHS;
@@ -35,7 +33,7 @@ export interface SystemSettingsNavItem {
 }
 
 /**
- * サイドナビ「システム設定」の共通4項目（#116。OCI 認証は #11 で削除）。項目・並び順・アイコンは共有パッケージが決め、
+ * サイドナビ「システム設定」の共通3項目（#116。OCI 認証は #11、「外観と証明書」は #19 で削除）。項目・並び順・アイコンは共有パッケージが決め、
  * 各製品の nav config はこれをそのまま使う（NL2SQL は各項目に menu 権限を付ける）。
  */
 export const SYSTEM_SETTINGS_NAV_ITEMS = [
@@ -58,12 +56,6 @@ export const SYSTEM_SETTINGS_NAV_ITEMS = [
     labelKey: "nav.settingsDatabase",
     sidebarLabelKey: "nav.settingsDatabase.sidebar",
     icon: Database,
-  },
-  {
-    key: "appearance",
-    href: SYSTEM_SETTINGS_PATHS.appearance,
-    labelKey: "nav.settingsAppearance",
-    icon: Palette,
   },
 ] as const satisfies readonly SystemSettingsNavItem[];
 

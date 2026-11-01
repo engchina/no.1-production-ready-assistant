@@ -40,9 +40,6 @@ const DatabaseSettingsClient = lazy(() =>
 const SystemTablesCard = lazy(() =>
   import("@/components/settings/SystemTablesCard").then((module) => ({ default: module.SystemTablesCard }))
 );
-const AppearanceSettings = lazy(() =>
-  import("@/components/settings/AppearanceSettings").then((module) => ({ default: module.AppearanceSettings }))
-);
 const ModelSettingsClient = lazy(() =>
   import("@/components/settings/ModelSettingsClient").then((module) => ({ default: module.ModelSettingsClient }))
 );
@@ -176,7 +173,6 @@ export function App() {
         <Route path={APP_ROUTES.settingsDatabase} element={<SettingsDatabaseRoute />} />
         <Route path={APP_ROUTES.settingsMcpConnections} element={<McpConnectionsPage />} />
         <Route path={APP_ROUTES.settingsToolPolicy} element={<ToolPolicySettingsPage />} />
-        <Route path={APP_ROUTES.settingsAppearance} element={<AppearanceSettings />} />
         <Route path={APP_ROUTES.settingsAnswerNotice} element={<SettingsAnswerNoticeRoute />} />
         <Route path={APP_ROUTES.settingsTraceRecording} element={<SettingsTraceRecordingRoute />} />
         <Route path={APP_ROUTES.settingsChatAttachments} element={<SettingsChatAttachmentsRoute />} />

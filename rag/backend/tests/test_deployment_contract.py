@@ -1,4 +1,4 @@
-"""配布物(ネイティブ配備: uv の venv + systemd + Nginx。#286)の最低限の本番運用契約のテスト。"""
+"""配布物(ネイティブ配備: uv の venv + systemd。#286)の最低限の本番運用契約のテスト。"""
 
 from pathlib import Path
 
@@ -39,19 +39,20 @@ def test_frontend_build_uses_reproducible_install() -> None:
     assert 'if [ "${PR_SUITE_SKIP_PLATFORM_UI_BUILD}" = "true" ]; then' in build
 
 
-def test_frontend_is_served_as_static_assets_by_nginx() -> None:
-    """frontend の build 済みの静的 assets を suite の Nginx が /rag/ で配信する。
+def test_frontend_is_built_as_static_assets_without_reverse_proxy() -> None:
+    """frontend は /rag/ を base に静的に build し、reverse proxy の site は書かない。
 
-    RAG は単独では配備しない(#1316)。Nginx の site は platform/deploy/suite-nginx.sh の 1 つだけ。
+    RAG は単独では配備しない(#1316)。suite も Nginx を配備しない(#19)。
+    前段の reverse proxy は利用者が置く。
     """
-    suite_nginx = (REPO_ROOT.parent / "platform" / "deploy" / "suite-nginx.sh").read_text(
-        encoding="utf-8"
-    )
+    deploy_dir = REPO_ROOT.parent / "platform" / "deploy"
 
     assert "configure_nginx" not in _init_script()
-    assert "alias ${dist_dir}/;" in suite_nginx
-    assert '"${repo_dir}/${product}/frontend/dist"' in suite_nginx
-    assert "node_modules" not in suite_nginx
+    assert not (deploy_dir / "suite-nginx.sh").exists()
+    assert not (deploy_dir / "suite-tls.sh").exists()
+    suite_init = (deploy_dir / "suite-init.sh").read_text(encoding="utf-8")
+    body = suite_init.split("\nset -euo pipefail", 1)[1]
+    assert "nginx" not in body.lower()
 
 
 def test_services_run_as_dedicated_non_root_user() -> None:
@@ -275,12 +276,7 @@ def test_native_deployment_defaults_match_backend_settings() -> None:
     from app.config import BACKEND_ROOT, DEFAULT_LOCAL_STORAGE_DIR, Settings
 
     init_script = (REPO_ROOT / "init_script.sh").read_text(encoding="utf-8")
-    suite_init = (REPO_ROOT.parent / "platform" / "deploy" / "suite-init.sh").read_text(
-        encoding="utf-8"
-    )
     fields = Settings.model_fields
-    # Nginx の upload の上限の元は suite の配備(#1316)。
-    assert f"RAG_DEFAULT_MAX_UPLOAD_BYTES={fields['max_upload_bytes'].default}" in suite_init
     assert fields["rag_service_runtime_env_file"].default == str(
         BACKEND_ROOT / "service-runtime.env"
     )

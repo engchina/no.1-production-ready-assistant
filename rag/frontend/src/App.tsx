@@ -38,7 +38,6 @@ import { DatabaseSettingsClient } from "@/components/settings/DatabaseSettingsCl
 import { HuggingFaceSettingsClient } from "@/components/settings/HuggingFaceSettingsClient";
 import { AnswerNoticeSettingsClient } from "@/components/settings/AnswerNoticeSettingsClient";
 import { ChatAttachmentSettingsClient } from "@/components/settings/ChatAttachmentSettingsClient";
-import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { ModelSettingsClient } from "@/components/settings/ModelSettingsClient";
 import { ParserAdapterSettingsClient } from "@/components/settings/ParserAdapterSettingsClient";
 import { ChunkingSettingsClient } from "@/components/settings/ChunkingSettingsClient";
@@ -150,7 +149,6 @@ export function App() {
         <Route path={APP_ROUTES.settingsSystemTables} element={<SettingsSystemTablesRoute />} />
         <Route path={APP_ROUTES.settingsHuggingface} element={<SettingsHuggingfaceRoute />} />
         <Route path={APP_ROUTES.settingsServices} element={<SettingsServicesRoute />} />
-        <Route path={APP_ROUTES.settingsAppearance} element={<AppearanceSettings />} />
         <Route path={APP_ROUTES.settingsAnswerNotice} element={<SettingsAnswerNoticeRoute />} />
         <Route path={APP_ROUTES.settingsTraceRecording} element={<SettingsTraceRecordingRoute />} />
         <Route path={APP_ROUTES.settingsChatAttachments} element={<SettingsChatAttachmentsRoute />} />

@@ -408,6 +408,18 @@ test("ユーザー・ロール一覧は一覧の列（画面の高さまで）�
   await expectNoPageHorizontalScroll(page);
 });
 
+// DB に依存しない共有のシステム設定の画面（アップロード保存先）を mock で開く。
+async function mockUploadStorageSettingsPage(page: Page) {
+  await page.route("**/api/settings/upload-storage", (route) =>
+    fulfill(route, {
+      local_storage_dir: "/u01/data/production-ready-nl2sql",
+      readiness: "ok",
+      max_upload_bytes: 104857600,
+      config_source: "runtime",
+    })
+  );
+}
+
 test("ローカル DEBUG はログインせず SYSTEM_ADMIN として入り、状態を明示する", async ({ page }) => {
   await mockDatabaseGateReady(page);
   await page.unroute("**/api/auth/me");
@@ -421,11 +433,13 @@ test("ローカル DEBUG はログインせず SYSTEM_ADMIN として入り、�
     })
   );
 
-  await page.goto("/settings/appearance");
+  await mockUploadStorageSettingsPage(page);
+
+  await page.goto("/settings/upload-storage");
 
   // 375px ではナビがドロワー（#367）。開いてから読む。
   const sidebar = await openSidebarNav(page);
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
+  await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   await expect(page.getByRole("heading", { name: "システムにログイン" })).toHaveCount(0);
   await expect(
     sidebar.getByRole("status", {
@@ -453,28 +467,29 @@ test("ローカル DEBUG はログインせず SYSTEM_ADMIN として入り、�
   expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
 });
 
-test("外観と証明書のページは専用権限だけで表示でき、権限なしでは直達できない", async ({ page }) => {
+test("アップロード保存先のページは専用権限だけで表示でき、権限なしでは直達できない", async ({ page }) => {
   await mockDatabaseGateReady(page);
+  await mockUploadStorageSettingsPage(page);
   await page.unroute("**/api/auth/me");
   await page.route("**/api/auth/me", (route) =>
     fulfill(route, {
       ...systemAdminMe,
-      user_uuid: "appearance-viewer",
-      login_user_id: "appearance.viewer",
-      display_name: "外観閲覧ユーザー",
-      role_codes: ["APPEARANCE_VIEWER"],
+      user_uuid: "upload-storage-viewer",
+      login_user_id: "upload.storage.viewer",
+      display_name: "アップロード保存先担当ユーザー",
+      role_codes: ["UPLOAD_STORAGE_VIEWER"],
       is_system_admin: false,
-      permissions: ["menu.settings_appearance"],
+      permissions: ["menu.settings_upload_storage"],
       password_change_allowed: true,
     })
   );
 
   await page.goto("/");
-  await expect(page).toHaveURL(/\/settings\/appearance$/);
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/upload-storage$/);
+  await expect(page.getByRole("heading", { name: "アップロード保存先", exact: true, level: 1 })).toBeVisible();
   // 375px ではナビがドロワー（#367）。開いてから読む。
   const sidebar = await openSidebarNav(page);
-  await expect(sidebar.getByRole("link", { name: "外観と証明書" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "アップロード保存先" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "SQL 生成" })).toHaveCount(0);
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoPageHorizontalScroll(page);
@@ -493,7 +508,7 @@ test("外観と証明書のページは専用権限だけで表示でき、権�
     })
   );
 
-  await page.goto("/settings/appearance");
+  await page.goto("/settings/upload-storage");
   await expect(page.getByRole("heading", { name: "この機能を利用する権限がありません" })).toBeVisible();
 });
 
@@ -2617,10 +2632,10 @@ test("ロール管理はテーブル一覧と詳細で表示し、権限の選�
   await mockDatabaseGateReady(page);
   const permissionRows = [
     {
-      code: "menu.settings_appearance",
+      code: "menu.settings_upload_storage",
       group: "システム設定",
-      label: "外観と証明書",
-      description: "外観と証明書を表示し、関連操作を利用できます。",
+      label: "アップロード保存先",
+      description: "アップロード保存先を表示し、関連操作を利用できます。",
       implies: [],
     },
     {
@@ -2730,12 +2745,12 @@ test("ロール管理はテーブル一覧と詳細で表示し、権限の選�
   await expect(page.getByText("ダッシュボード表示", { exact: true })).toHaveCount(0);
   await expect(page.getByText("security.users.view", { exact: true })).toHaveCount(0);
   await expect(page.getByText("security.users.manage", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: /外観と証明書/ })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /アップロード保存先/ })).toBeVisible();
   const permissionBulkActions = page.getByTestId("security-roles-permission-selection-actions");
   await expect(permissionBulkActions.getByRole("button", { name: "すべて選択" })).toBeEnabled();
   await expect(permissionBulkActions.getByRole("button", { name: "選択をすべて解除" })).toBeEnabled();
   await permissionBulkActions.getByRole("button", { name: "すべて選択" }).click();
-  await expect(page.getByRole("checkbox", { name: /外観と証明書/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /アップロード保存先/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /ユーザー管理/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /^ロール管理/ })).toBeChecked();
   // 機能の一覧は左のナビのグループ・名前にそろえる（Issue 567）。backend のグループ「セキュリティ管理」・

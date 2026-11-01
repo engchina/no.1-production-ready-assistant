@@ -79,7 +79,6 @@ const EXPECTED_ICON_NAMES_BY_LABEL_KEY = new Map<string, string>([
   ["nav.settingsUploadStorage", "HardDrive"],
   ["nav.settingsModel", "BrainCog"],
   ["nav.settingsDatabase", "Database"],
-  ["nav.settingsAppearance", "Palette"],
 ]);
 
 test("サイドバーのメニュー icon は機能ごとに期待した Lucide icon を使う", () => {
@@ -119,7 +118,6 @@ test("サイドバーは AI 活用だけを既定で展開し、ほかのセク�
 
 test("既定入口は SQL 生成権限がなければ root に戻し、root が最初の許可画面へ振り分ける", () => {
   const queryOnly = (permission: string) => permission === "menu.query";
-  const appearanceOnly = (permission: string) => permission === "menu.settings_appearance";
   const uploadStorageOnly = (permission: string) => permission === "menu.settings_upload_storage";
   const modelOnly = (permission: string) => permission === "menu.settings_model";
   const databaseOnly = (permission: string) => permission === "menu.settings_database";
@@ -128,12 +126,11 @@ test("既定入口は SQL 生成権限がなければ root に戻し、root が�
   const noPermissions = () => false;
 
   assert.equal(defaultEntryRoute(queryOnly), "/query");
-  assert.equal(defaultEntryRoute(appearanceOnly), "/");
+  assert.equal(defaultEntryRoute(uploadStorageOnly), "/");
   assert.equal(firstAllowedRoute(uploadStorageOnly), "/settings/upload-storage");
   assert.equal(firstAllowedRoute(modelOnly), "/settings/model");
   assert.equal(firstAllowedRoute(databaseOnly), "/settings/database");
   assert.equal(firstAllowedRoute(systemTablesOnly), "/settings/system-tables");
-  assert.equal(firstAllowedRoute(appearanceOnly), "/settings/appearance");
   assert.equal(defaultEntryRoute(adminSqlOnly), "/");
   assert.equal(firstAllowedRoute(adminSqlOnly), "/admin-sql");
   assert.equal(firstAllowedRoute(noPermissions), "/forbidden");

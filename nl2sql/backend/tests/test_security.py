@@ -752,21 +752,25 @@ def test_security_ddl_is_the_final_shape_without_legacy_migrations() -> None:
         assert not (migration_dir / removed).exists()
 
 
-def test_dashboard_permission_is_retired_for_appearance_settings() -> None:
-    assert "dashboard.view" not in ALL_PERMISSION_CODES
-    assert "menu.settings_appearance" in ALL_PERMISSION_CODES
+@pytest.mark.parametrize(
+    "retired_code", ["menu.settings_appearance", "dashboard.view", "settings.appearance.view"]
+)
+def test_retired_appearance_permissions_are_accepted_and_dropped(retired_code: str) -> None:
+    """「外観と証明書」の画面ごと廃止した権限（#19）は、未知のコードとして拒否せずに落とす。"""
+
+    assert retired_code not in ALL_PERMISSION_CODES
 
     service = _service()
     actor, _, _ = _login(service)
 
     role = service.create_role(
-        role_code="LEGACY_DASHBOARD",
-        display_name="旧ダッシュボード",
+        role_code="LEGACY_APPEARANCE",
+        display_name="旧外観",
         description="",
-        permissions={"dashboard.view"},
+        permissions={retired_code, "menu.query"},
         actor=actor,
     )
-    assert role.permissions == {"menu.settings_appearance"}
+    assert role.permissions == {"menu.query"}
 
 
 def test_stale_permission_codes_are_hidden_from_role_api_and_principals() -> None:
@@ -796,11 +800,14 @@ def test_stale_permission_codes_are_hidden_from_role_api_and_principals() -> Non
 
     stale_role = store.get_role("role-stale")
     assert stale_role is not None
-    assert "dashboard.view" not in RoleData.from_record(stale_role).permissions
+    stale_permissions = RoleData.from_record(stale_role).permissions
+    assert "dashboard.view" not in stale_permissions
+    assert "menu.settings_appearance" not in stale_permissions
 
     principal, _, _ = service.login("stale.user", "IndependentPass!456")
     assert "dashboard.view" not in principal.permissions
-    assert {"menu.settings_appearance", "menu.query", "menu.direct_sql"} <= principal.permissions
+    assert "menu.settings_appearance" not in principal.permissions
+    assert {"menu.query", "menu.direct_sql"} <= principal.permissions
 
 
 def test_multiple_roles_union_permissions_and_profile_access() -> None:
@@ -4829,7 +4836,7 @@ def test_removed_oci_settings_permission_left_in_saved_role_is_ignored(
         role_code="SETTINGS_REVIEW",
         display_name="設定レビュー",
         description="",
-        permissions={"menu.settings_appearance"},
+        permissions={"menu.settings_model"},
         actor=admin,
     )
     store = service.store
@@ -4842,7 +4849,7 @@ def test_removed_oci_settings_permission_left_in_saved_role_is_ignored(
         is_built_in=role.is_built_in,
         archived=role.archived,
         version=role.version,
-        permissions={"menu.settings_oci", "menu.settings_appearance"},
+        permissions={"menu.settings_oci", "menu.settings_model"},
     )
     _create_active_user(
         service,
@@ -4873,7 +4880,7 @@ def test_removed_oci_settings_permission_left_in_saved_role_is_ignored(
     asyncio.run(exercise())
     loaded = service.get_role(role.role_id)
     assert loaded is not None
-    assert RoleData.from_record(loaded).permissions == ["menu.settings_appearance"]
+    assert RoleData.from_record(loaded).permissions == ["menu.settings_model"]
 
 
 def test_profile_access_profiles_search_and_page_on_server(

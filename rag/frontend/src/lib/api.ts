@@ -3,7 +3,7 @@ import type { TraceRecordingSettingsData } from "@production-ready/system-settin
  * バックエンド API クライアント。
  *
  * - レスポンスは共通エンベロープ `ApiResponse<T>`（snake_case）。
- * - `/api/*` は Vite dev/preview proxy または本番の Nginx(host)でバックエンドへ転送される。
+ * - `/api/*` は Vite dev/preview proxy または本番で利用者が置く reverse proxy でバックエンドへ転送される。
  * - 型はバックエンドの Pydantic スキーマ（snake_case）にそのまま対応させる。
  */
 
@@ -45,7 +45,7 @@ export type {
   EnterpriseAiConfiguredModel,
   EnterpriseAiModelSettings,
   EnterpriseAiVlmInputMode,
-  GenerativeAiModelSettings,
+  EnterpriseAiModelKind,
   ModelSettingsData,
   ModelSettingsPayload,
   ModelSettingsSecretSource,
@@ -698,8 +698,8 @@ export const BULK_INGESTION_MAX_DOCUMENTS = 10_000;
 
 /**
  * 一括の投入の待ち時間（#2674）。1 万件の判定と登録（失敗の後のやり直しで出力の初期化が要る文書は
- * 1 件の投入と同じ処理）を 1 回の要求で行うため、通常の 30 秒では足りない。Nginx の既定の待ち時間
- * （600 秒）にそろえる。途中で切れても、再送は受付済みの文書を二重に登録しない。
+ * 1 件の投入と同じ処理）を 1 回の要求で行うため、通常の 30 秒では足りない。backend の
+ * 長い要求の上限（600 秒）にそろえる。途中で切れても、再送は受付済みの文書を二重に登録しない。
  */
 export const BULK_INGESTION_TIMEOUT_MS = 600_000;
 

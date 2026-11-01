@@ -29,7 +29,7 @@ function dbStatus(status: DbStatus, check?: string) {
 }
 
 const SETTINGS_HINT =
-  "アップロード保存先・モデル・データベース・外観と証明書の各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 
 async function routeAuth(page: Page) {
   await mockLocalAuth(page);
@@ -70,7 +70,7 @@ test("DB 接続済みでも schema 未作成ならシステムテーブルへ案
     actionName: "システムテーブルを開く",
     actionHref: "/settings/system-tables",
     settingsHint:
-      "アップロード保存先・モデル・データベース・システムテーブル・外観と証明書の各設定ページは引き続き利用できます。",
+      "アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
   });
 
   // システムテーブルの画面（運用設定。#658）は未初期化でもゲートに塞がれずに開ける。
