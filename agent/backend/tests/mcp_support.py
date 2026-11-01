@@ -390,7 +390,12 @@ ToolOutput = dict[str, Any] | Exception | Callable[[BaseModel], dict[str, Any]]
 
 
 # 失敗の指定（HTTP status・読み取りの timeout・接続できない・status と header）。
-Failure = int | Literal["timeout", "connect", "connect_timeout"] | tuple[int, dict[str, str]]
+# "invalid_json" は 200 で JSON でない本文（保守画面の HTML など。障害注入の #64）。
+Failure = (
+    int
+    | Literal["timeout", "connect", "connect_timeout", "invalid_json"]
+    | tuple[int, dict[str, str]]
+)
 
 
 @dataclass
@@ -554,6 +559,10 @@ def _failure_response(failure: Failure, request: httpx.Request) -> httpx.Respons
         raise httpx.ConnectError("connection refused", request=request)
     if failure == "connect_timeout":
         raise httpx.ConnectTimeout("connect timeout", request=request)
+    if failure == "invalid_json":
+        return httpx.Response(
+            200, text="<html>maintenance</html>", headers={"content-type": "text/html"}
+        )
     if isinstance(failure, tuple):
         status, headers = failure
         return httpx.Response(status, text="upstream error", headers=headers)
