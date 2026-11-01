@@ -106,6 +106,10 @@ def test_tool_name_lines_are_lookup_notes_and_removed_before_validation() -> Non
     # `__` の無い snake_case（設定のキーなど）の説明・主張は外さない。
     assert not is_lookup_note("- `max_retries`（再試行の回数）")
     assert not is_lookup_note("- `rag__rag_search` の結果、上限は 12,000円 です。")
+    # 見出しとツール名が同じ行の形（#117）。
+    assert is_lookup_note("**使用したツール:** `rag__rag_retrieve_evidence`")
+    assert is_lookup_note("- 使ったツール：`rag__rag_search`、`nl2sql__nl2sql_query`")
+    assert not is_lookup_note("**使用したツール:** 経費システム")
     body = without_lookup_notes(LODGING_ANSWER)
     assert "rag__" not in body
     # 中身が無くなった節の見出しも消し、本文と出典の行は残す。
@@ -161,6 +165,16 @@ def test_table_values_bind_to_the_table_not_to_the_quoted_document_title() -> No
     cited = _cited(f"{staff}\n\n{manager}", items)
     assert CHUNKS["art3"] in cited[staff]
     assert cited[manager] == [CHUNKS["art3"]]
+
+
+def test_unbound_passage_is_also_sent_the_evidence_no_other_passage_used() -> None:
+    # 言い換えた段落（どの根拠とも同じ並びにならない）には、回答全体の出典を先にして、他の段落に
+    # 結び付かなかった根拠も渡す（新幹線の定めは art3b にある。#117）。
+    note = "（参考：同条では、新幹線は普通車の指定席が原則です。）"
+    cited = _cited(f"{ROW_STAFF}\n\n{note}", ITEMS)
+    assert cited[ROW_STAFF] == [CHUNKS["art3"]]
+    assert cited[note][0] == CHUNKS["art3"]
+    assert CHUNKS["art3b"] in cited[note]
 
 
 def test_no_passage_citations_without_any_binding() -> None:
