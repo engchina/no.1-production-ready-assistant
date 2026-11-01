@@ -72,6 +72,9 @@ OTHER_ENTRY_POINTS: dict[str, str] = {
     "app.rag.answer_judge_calibration": (
         "人手の判定の項目を回答の評価器（LLM）にかけて集計するだけ。DB は読まない（設定だけ）"
     ),
+    "app.rag.representation_experiment": (
+        "同梱の合成の資料を手元で分割・検索して比べるだけ。DB は読まない（設定だけ。#75）"
+    ),
 }
 
 # API の process の起動時に要求の外で動く処理（`app.main.lifespan`）と分類。

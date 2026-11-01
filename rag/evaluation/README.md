@@ -178,6 +178,10 @@ uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json
 - 取込の前置き・分割の比較は同じ chunk の集合の検索の切替ではないため扱いません（別の文書レシピの成果物を比べます）。
   費用は単価の出典を持たないため出さず、呼び出しの数と token だけを出します。
 
+### 文脈補足と複数の検索表現の比較（#75）
+
+`retrieval-representations/` に、検索文の前置き・生成した文脈・想定質問（複数の検索表現）を同じ条件で比べる合成の資料（架空の社内文書 12 件。既存の multi-hop・business-support の HTML を妨害の資料として足す）と質問 76 問（主語を失った断片・言い換え・コードの一致・答えの無い質問などの群）を置いています。`python -m app.rag.representation_experiment`（`--record` / `--replay`）で比べます。測定の結果と採用の判断は [文脈補足と複数の検索表現の比較](../docs/retrieval-representations.md)。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・
