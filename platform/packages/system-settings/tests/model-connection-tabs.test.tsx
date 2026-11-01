@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ModelSettingsPage, type ModelSettingsApi, type ModelSettingsData } from "../src";
 
-// #542: OCI Enterprise AI の接続は、カードの中の共有 Tabs（プライマリ接続 / セカンダリ接続 / ターシャリ接続）で
+// #542: モデルの API の接続は、カードの中の共有 Tabs（プライマリ接続 / セカンダリ接続 / ターシャリ接続）で
 // 切り替える。表示名の欄はなく、セカンダリ接続は「設定」したときだけ入力欄を出し、3 つの欄とも必須にする。
-// #786: ターシャリ接続（OpenAI / OpenAI 互換 API 向け）は Endpoint URL と API key が必須で、Project OCID は任意。
+// #786: ターシャリ接続（OpenAI / OpenAI 互換 API 向け）は Endpoint URL と API key が必須で、Project ID は任意。
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -175,7 +175,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
       testModelSettings: pending,
     });
 
-    const tablist = host.querySelector('[role="tablist"][aria-label="OCI Enterprise AI の接続"]');
+    const tablist = host.querySelector('[role="tablist"][aria-label="モデルの API の接続"]');
     expect(tablist).not.toBeNull();
     // タブの並びはプライマリ接続 → セカンダリ接続 → ターシャリ接続（#786）。
     expect([...tablist!.querySelectorAll('[role="tab"]')].map((item) => item.textContent)).toEqual([
@@ -187,11 +187,11 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(tab("セカンダリ接続").getAttribute("aria-selected")).toBe("false");
     expect(host.querySelector("#enterprise-connection-name")).toBeNull();
     expect(host.textContent).not.toContain("表示名を");
-    // プライマリ接続の Endpoint URL と API key は、同じ条件付きの必須（OCI 運用時必須）。
-    // Project OCID はどの接続でも任意なので印を出さない（#9）。
-    expect(labelText("enterprise-endpoint")).toBe("Endpoint URLOCI 運用時必須");
-    expect(labelText("enterprise-project-ocid")).toBe("Project OCID");
-    expect(labelText("enterprise-api-key")).toBe("API keyOCI 運用時必須");
+    // プライマリ接続の Endpoint URL と API key は、同じ条件付きの必須（利用時必須）。
+    // Project ID はどの接続でも任意なので印を出さない（#9）。
+    expect(labelText("enterprise-endpoint")).toBe("Endpoint URL利用時必須");
+    expect(labelText("enterprise-project-id")).toBe("Project ID");
+    expect(labelText("enterprise-api-key")).toBe("API key利用時必須");
     expect(host.textContent).toContain("登録モデルで接続を選ばなければ、プライマリ接続を使います。");
 
     // ← → / Home / End で移る（WAI-ARIA Tabs）。
@@ -231,7 +231,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     await click(buttonByText("セカンダリ接続を設定"));
     expect(document.activeElement?.id).toBe("enterprise-secondary-endpoint");
     expect(labelText("enterprise-secondary-endpoint")).toBe("Endpoint URL必須");
-    expect(labelText("enterprise-secondary-project-ocid")).toBe("Project OCID");
+    expect(labelText("enterprise-secondary-project-id")).toBe("Project ID");
     expect(labelText("enterprise-secondary-api-key")).toBe("API key必須");
     // API key だけを消す指定は出さない（消すときはセカンダリ接続ごと削除する）。
     expect(host.querySelector("#enterprise-secondary-api-key-clear")).toBeNull();
@@ -248,8 +248,8 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(fieldError("enterprise-secondary-endpoint")).toBe(
       "Endpoint URL を入力してください。",
     );
-    // Project OCID は任意なのでエラーを出さない（#9）。
-    expect(fieldError("enterprise-secondary-project-ocid")).toBeUndefined();
+    // Project ID は任意なのでエラーを出さない（#9）。
+    expect(fieldError("enterprise-secondary-project-id")).toBeUndefined();
     expect(fieldError("enterprise-secondary-api-key")).toBe(
       "API key を入力してください。",
     );
@@ -281,7 +281,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(host.querySelector('[data-testid="enterprise-connection-tab-secondary-unsaved"]')).not.toBeNull();
   });
 
-  it("ターシャリ接続は Endpoint URL と API key だけで保存でき、Project OCID は任意（#786）", async () => {
+  it("ターシャリ接続は Endpoint URL と API key だけで保存でき、Project ID は任意（#786）", async () => {
     const updateModelSettings = vi.fn(pending);
     await renderPage({
       getModelSettings: async () => data(),
@@ -294,7 +294,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     await click(buttonByText("ターシャリ接続を設定"));
     expect(document.activeElement?.id).toBe("enterprise-tertiary-endpoint");
     expect(labelText("enterprise-tertiary-endpoint")).toBe("Endpoint URL必須");
-    expect(labelText("enterprise-tertiary-project-ocid")).toBe("Project OCID");
+    expect(labelText("enterprise-tertiary-project-id")).toBe("Project ID");
     expect(labelText("enterprise-tertiary-api-key")).toBe("API key必須");
     // OpenAI の例を出す。
     expect(
@@ -303,13 +303,13 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     expect(
       host.querySelector<HTMLInputElement>("#enterprise-tertiary-api-key")?.placeholder,
     ).toMatch(/^sk-/);
-    expect(host.textContent).toContain("OCI Enterprise AI を使うときだけ");
+    expect(host.textContent).toContain("提供元が project を求めるときだけ");
     expect(host.textContent).not.toContain("任意");
 
     // 未入力の保存は Endpoint URL と API key だけをエラーにする。
     await submitConnections();
     expect(fieldError("enterprise-tertiary-endpoint")).toBe("Endpoint URL を入力してください。");
-    expect(fieldError("enterprise-tertiary-project-ocid")).toBeUndefined();
+    expect(fieldError("enterprise-tertiary-project-id")).toBeUndefined();
     expect(fieldError("enterprise-tertiary-api-key")).toBe("API key を入力してください。");
     expect(updateModelSettings).not.toHaveBeenCalled();
 
@@ -344,7 +344,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     await click(tab("セカンダリ接続"));
     await click(buttonByText("セカンダリ接続を設定"));
     await setInputValue("enterprise-secondary-endpoint", "https://secondary.example");
-    await setInputValue("enterprise-secondary-project-ocid", "ocid1.generativeaiproject.oc1..s");
+    await setInputValue("enterprise-secondary-project-id", "ocid1.generativeaiproject.oc1..s");
     await setInputValue("enterprise-secondary-api-key", "sk-secondary");
     await submitConnections();
 

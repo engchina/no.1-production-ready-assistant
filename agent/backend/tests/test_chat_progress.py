@@ -1,9 +1,10 @@
 """チャットの処理の経過（3 製品共通の契約。#1359）を、Run の trace（span の木。#3226）から
 作るテスト。span は共通の span の表（`PLATFORM_TRACE_SPANS`。#3226 の案 A）に書く。
 
-組み込み Runtime は SDK の `ScriptedModel` で台本にし（OCI へは接続しない）、モデルの呼び出しの
-span は OCI の client と同じ形（`gen_ai.chat` に工程の種類を付ける）で作る。記録の位置（ツール
-なし・ツール・実行中・並列・承認・却下・承認の 2 回目・引数の誤り・失敗・停止・実行中の停止）、
+組み込み Runtime は SDK の `ScriptedModel` で台本にし（モデルの API へは接続しない）、モデルの
+呼び出しの span は本番の client と同じ形（`gen_ai.chat` に工程の種類を付ける）で作る。記録の位置
+（ツールなし・ツール・実行中・並列・承認・却下・承認の 2 回目・引数の誤り・失敗・停止・実行中の
+停止）、
 Run に残すもの（trace id・工程の詳細）の保存先（file / Oracle の checkpoint・normalized）、表への
 書き込み（Oracle の書き手。fake の DB）、読み出しの API（`GET /api/runs/{run_id}/trace`）と権限を
 確かめる。テストの保存先は memory なので、span は process の中の表（`trace_spans.memory`）にある。
@@ -83,7 +84,7 @@ Row = tuple[str | None, str | None, str, dict[str, Any] | None]
 
 
 class _TracedScriptedModel(ScriptedModel):
-    """OCI の client と同じく、モデルの呼び出しを `gen_ai.chat` の span で測る台本のモデル。"""
+    """本番の client と同じく、モデルの呼び出しを `gen_ai.chat` の span で測る台本のモデル。"""
 
     async def get_response(self, *args: Any, **kwargs: Any) -> Any:
         with observed_span(
@@ -96,7 +97,7 @@ class _TracedScriptedModel(ScriptedModel):
             },
         ) as span:
             response = await super().get_response(*args, **kwargs)
-            builtin_runtime._set_turn_kind(span, response)  # noqa: SLF001 - OCI の client と同じ印
+            builtin_runtime._set_turn_kind(span, response)  # noqa: SLF001 - 本番の client と同じ印
             return response
 
 

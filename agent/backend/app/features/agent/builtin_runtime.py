@@ -1,8 +1,8 @@
-"""組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI の Responses API。#754）。
+"""組み込み Runtime（OpenAI Agents SDK + OpenAI 互換のモデルの API の Responses API。#754）。
 
 Control Plane の中で業務 Agent を実行する。外部の Runtime・Binding・Docker は使わない。
 
-- モデル: システム設定 > モデル の OCI Enterprise AI（Agent の `model_id`、無ければ既定の
+- モデル: システム設定 > モデル のモデルの API（Agent の `model_id`、無ければ既定の
   テキストモデル）。
   SDK の tracing は無効にする（業務データを外部へ送らない）。
 - 指示: Agent の指示と、割り当てた Skill の指示を合わせる。指示の中の MCP のツールの素の名前は、
@@ -367,7 +367,7 @@ _CONTEXT_LIMITS_ATTR = "_agent_context_limits"
 _STATIC_INSTRUCTIONS_ATTR = "_agent_static_instructions"
 # いまモデルを呼んでいる Run の入力の管理（`_ContextWindow`）。呼び出しの直前に SDK の
 # `call_model_input_filter` が入れ、プロバイダの入力の超過の送り直し
-# （`_CompatResponses.create`）とモデルの呼び出しの span の属性（#2583）が読む。
+# （`_ModelApiResponses.create`）とモデルの呼び出しの span の属性（#2583）が読む。
 _ACTIVE_CONTEXT_WINDOW: ContextVar[_ContextWindow | None] = ContextVar(
     "agent_context_window", default=None
 )
@@ -434,7 +434,7 @@ def resolve_model_target(model_id: str = "") -> ModelTarget:
     if not connection.is_configured():
         raise BuiltinRuntimeError(
             "runtime.model_connection_not_configured",
-            "OCI Enterprise AI の接続（Endpoint URL と API key）が設定されていません。"
+            "モデルの API の接続（Endpoint URL と API key）が設定されていません。"
             "システム設定 > モデル で設定してください。",
         )
     return ModelTarget(
@@ -483,7 +483,7 @@ def model_settings_for(target: ModelTarget) -> ModelSettings:
 def _omit_empty_tools(kwargs: dict[str, Any]) -> dict[str, Any]:
     """ツールが無い呼び出しから `tools: []` と `tool_choice` を外す。
 
-    OCI Enterprise AI の xAI のモデルは、空の `tools` を「ツールなしで tool_choice を指定した」
+    モデルの API によっては、xAI のモデルが空の `tools` を「ツールなしで tool_choice を指定した」
     として 400 で拒否する（gpt-oss は受け付ける。2026-10-02 に実環境で確認）。SDK はツールが
     無くても空の `tools` を送るため、送る前に外す。
     """
@@ -500,7 +500,7 @@ def _omit_empty_tools(kwargs: dict[str, Any]) -> dict[str, Any]:
 def _omit_reasoning_text(kwargs: dict[str, Any]) -> dict[str, Any]:
     """`input` の reasoning item から本文（`content` の `reasoning_text`）を外す（#1215）。
 
-    SDK は前の応答の reasoning item をそのまま次の呼び出しの `input` に入れる。OCI Enterprise AI の
+    SDK は前の応答の reasoning item をそのまま次の呼び出しの `input` に入れる。モデルの API の
     `openai.gpt-oss-120b` は、`input` の `reasoning_text` を「reasoning_text is not supported by
     model」の 400 で拒否するため、ツールを呼んだ後の回答が作れない（2026-10-07 に実環境で確認）。
     item（`id`・`summary`）は残す（item ごと除いても回答できることも確認した）。
@@ -522,13 +522,13 @@ def _omit_reasoning_text(kwargs: dict[str, Any]) -> dict[str, Any]:
     return {**kwargs, "input": sanitized} if changed else kwargs
 
 
-def _compat_request(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """`responses.create` の引数を OCI Enterprise AI が受け付ける形にする。"""
+def _adapt_request(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """`responses.create` の引数をモデルの API が受け付ける形にする。"""
     return _omit_reasoning_text(_omit_empty_tools(kwargs))
 
 
-# OCI が「再試行してください」と返す、モデルの出力の一時的な失敗（400 `model_output_invalid`）を
-# 同じ要求で再試行する回数（#1215）。
+# モデルの API が「再試行してください」と返す、モデルの出力の一時的な失敗
+# （400 `model_output_invalid`）を同じ要求で再試行する回数（#1215）。
 MODEL_OUTPUT_INVALID_RETRIES = 2
 MODEL_OUTPUT_INVALID_CODE = "model_output_invalid"
 
@@ -616,7 +616,7 @@ def _raise_for_incomplete(
     SDK は未完了を `ModelBehaviorError`（型名だけが Run の失敗に残る）にするため、その前に
     platform の `enterprise_ai_incomplete_message` の文で失敗させる。送った上限はもうモデルの
     出力の上限（`max_output_tokens`）なので、広げて送り直さない（推論の量を下げる送り直しは
-    `_CompatResponses.create`）。
+    `_ModelApiResponses.create`）。
     """
     raise BuiltinRuntimeError(
         MODEL_OUTPUT_INCOMPLETE_CODE,
@@ -768,20 +768,20 @@ class _ObservedResponseManager:
             self._scope.__exit__(*args)
 
 
-class _CompatStreamingResponses:
+class _ModelApiStreamingResponses:
     def __init__(self, inner: Any) -> None:
         self._inner = inner
 
     def create(self, **kwargs: Any) -> Any:
-        request = _compat_request(kwargs)
+        request = _adapt_request(kwargs)
         return _ObservedResponseManager(self._inner.create(**request), request)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
 
-class _CompatResponses:
-    """`responses.create` を OCI 向けに直し、未完了の応答を扱う。
+class _ModelApiResponses:
+    """`responses.create` をモデルの API 向けに直し、未完了の応答を扱う。
 
     ``lower_effort_on_incomplete`` が偽なら、出力の上限で未完了でも送り直さない（推論の量を下げる
     送り直しも、わずかな出力の未完了の送り直し〔#2355〕も。上限つきの並行の実行器
@@ -794,7 +794,7 @@ class _CompatResponses:
         self._lower_effort_on_incomplete = lower_effort_on_incomplete
 
     async def create(self, **kwargs: Any) -> Any:
-        request = _compat_request(kwargs)
+        request = _adapt_request(kwargs)
         attempt = 0
         lowered_effort = False
         transient_retried = False
@@ -916,23 +916,23 @@ class _CompatResponses:
             return response
 
     @property
-    def with_streaming_response(self) -> _CompatStreamingResponses:
-        return _CompatStreamingResponses(self._inner.with_streaming_response)
+    def with_streaming_response(self) -> _ModelApiStreamingResponses:
+        return _ModelApiStreamingResponses(self._inner.with_streaming_response)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
 
-class _CompatClient:
-    """`responses.create` の引数だけを OCI Enterprise AI 向けに直し、他はそのまま渡す。"""
+class _ModelApiClient:
+    """`responses.create` の引数だけをモデルの API 向けに直し、他はそのまま渡す。"""
 
     def __init__(self, inner: AsyncOpenAI, *, lower_effort_on_incomplete: bool = True) -> None:
         self._inner = inner
         self._lower_effort_on_incomplete = lower_effort_on_incomplete
 
     @property
-    def responses(self) -> _CompatResponses:
-        return _CompatResponses(
+    def responses(self) -> _ModelApiResponses:
+        return _ModelApiResponses(
             self._inner.responses, lower_effort_on_incomplete=self._lower_effort_on_incomplete
         )
 
@@ -940,8 +940,11 @@ class _CompatClient:
         return getattr(self._inner, name)
 
 
-class CompatResponsesModel(OpenAIResponsesModel):
-    """OCI Enterprise AI の Responses API 用（SDK の `_get_client` を包む。SDK は版を固定する）。"""
+class ModelApiResponsesModel(OpenAIResponsesModel):
+    """モデルの API（OpenAI 互換）の Responses API 用。
+
+    SDK の `_get_client` を包む（SDK は版を固定する）。
+    """
 
     # 出力の上限で未完了の応答を、推論の量を下げて送り直すか（#2023）。
     lower_effort_on_incomplete: bool = True
@@ -949,7 +952,7 @@ class CompatResponsesModel(OpenAIResponsesModel):
     def _get_client(self) -> AsyncOpenAI:
         return cast(
             AsyncOpenAI,
-            _CompatClient(
+            _ModelApiClient(
                 super()._get_client(),
                 lower_effort_on_incomplete=self.lower_effort_on_incomplete,
             ),
@@ -986,7 +989,7 @@ def _default_model_factory(target: ModelTarget) -> Model:
         ),
         http_client=enterprise_ai_http_client(),
     )
-    model = CompatResponsesModel(model=target.model_id, openai_client=client)
+    model = ModelApiResponsesModel(model=target.model_id, openai_client=client)
     # 上限つきの並行の実行器を通す呼び出し（SDK の再試行 0）は、送り直しを実行器に任せる（#2023）。
     model.lower_effort_on_incomplete = target.sdk_max_retries != 0
     return model
@@ -5199,7 +5202,8 @@ def _record_failure(run_id: str, exc: Exception) -> None:
         message = "ツールの呼び出しが上限の回数に達したため止めました。"
     else:
         code = "runtime.model_failed"
-        # OCI の error code（`invalid_value` など）まで残す（型名だけでは原因が分からない。#1215）。
+        # モデルの API の error code（`invalid_value` など）まで残す（型名だけでは原因が
+        # 分からない。#1215）。
         model_code = model_error_code(exc)
         reason = f"{type(exc).__name__}: {model_code}" if model_code else type(exc).__name__
         message = f"モデルの呼び出しに失敗しました（{reason}）。"
@@ -5210,7 +5214,7 @@ def _record_failure(run_id: str, exc: Exception) -> None:
             "error_code": code,
             "exception_type": type(exc).__name__,
             "model_error_code": model_error_code(exc),
-            # OCI の API のメッセージ（モデル名と理由。業務データ・資格情報は含まない）。
+            # モデルの API のメッセージ（モデル名と理由。業務データ・資格情報は含まない）。
             "model_error_message": _model_error_message(exc),
         },
     )
@@ -5240,7 +5244,7 @@ def runtime_status() -> dict[str, Any]:
         "name": "組み込み Runtime",
         "sdk": SDK_PACKAGE,
         "sdk_version": sdk_version(),
-        "model_provider": "OCI Enterprise AI（Responses API）",
+        "model_provider": "OpenAI 互換の API（Responses API）",
         "model_id": "",
         "ready": False,
         "error_code": None,

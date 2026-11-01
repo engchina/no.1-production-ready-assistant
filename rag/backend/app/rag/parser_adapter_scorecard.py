@@ -3,7 +3,7 @@
 任意 adapter を導入しても、実運用では「どれを使うべきか」を golden/staging
 指標で判断できる必要がある。この module は AutoRAG 的な評価駆動の考え方を、
 本プロジェクトの parser adapter readiness と file-processing 指標へ閉じ込める。
-外部 parser engine は実行せず、OCI/Oracle の確定スタックも変更しない。
+外部 parser engine は実行せず、モデルの API / Oracle の確定スタックも変更しない。
 """
 
 from __future__ import annotations

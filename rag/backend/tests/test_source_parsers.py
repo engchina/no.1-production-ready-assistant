@@ -250,7 +250,7 @@ def test_parser_registry_preserves_markdown_table_caption_and_escaped_pipe() -> 
 
 |項目|説明|
 |---|---|
-|OCI\\|Oracle|クラウド基盤|
+|Cloud\\|Oracle|クラウド基盤|
 |RAG|検索\\|生成|
 """.encode()
     content_type = "text/markdown"
@@ -278,7 +278,7 @@ def test_parser_registry_preserves_markdown_table_caption_and_escaped_pipe() -> 
     assert [(cell.row, cell.col, cell.text) for cell in table.cells] == [
         (0, 0, "項目"),
         (0, 1, "説明"),
-        (1, 0, "OCI|Oracle"),
+        (1, 0, "Cloud|Oracle"),
         (1, 1, "クラウド基盤"),
         (2, 0, "RAG"),
         (2, 1, "検索|生成"),

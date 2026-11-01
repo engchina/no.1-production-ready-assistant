@@ -1,7 +1,7 @@
-"""OCI Enterprise AI クライアント（LLM / VLM）共有 core。
+"""モデルの API クライアント（LLM / VLM）共有 core。
 
-⚠️ 重要: LLM / VLM は **OCI Enterprise AI** を使う。
-OCI Generative AI の chat 推論 API は使わない（AGENTS.md 参照）。
+⚠️ 重要: LLM / VLM は **モデルの API** を使う。
+OpenAI 互換の Responses API だけを使う（AGENTS.md 参照）。
 
 backend `Settings` には依存せず、`EnterpriseAiConfig`(env からも構築可能)で駆動する。
 backend は `app.clients.enterprise_ai` の Settings→config adapter / re-export shim 経由で
@@ -42,7 +42,7 @@ DEFAULT_MAX_OUTPUT_TOKENS = 32768
 
 @dataclass(frozen=True)
 class EnterpriseAiConfig:
-    """OCI Enterprise AI(LLM/VLM)呼び出しの非機密設定。Settings / env から構築できる。
+    """モデルの API(LLM/VLM)呼び出しの非機密設定。Settings / env から構築できる。
 
     モデル ID は呼び出し側(backend は model catalog 解決、microservice は env)で解決済みの
     値を `vision_model_id` / `default_model_id` として渡す。
@@ -61,8 +61,8 @@ class EnterpriseAiConfig:
     `enterprise_ai_output_token_budget` で決める。モデルの出力の上限と入力の上限の小さい方。
     既定 32768)。共通の LLM / VLM の出力の上限は持たない。
 
-    endpoint(#1440)は OpenAI 互換 API の base URL で、入力どおり使い path を補わない(OCI
-    Enterprise AI も `…/openai/v1` まで書く)。backend は platform の `enterprise_ai_base_url` で
+    endpoint(#1440)は OpenAI 互換 API の base URL で、入力どおり使い path を補わない(利用者が
+    `…/v1` まで書く)。backend は platform の `enterprise_ai_base_url` で
     決めた値を渡し、呼ぶ URL は `{endpoint}{path}`(既定 `/responses`)で 3 製品と同じになる。
     """
 
@@ -291,7 +291,7 @@ class EnterpriseAiHttpTransport(Protocol):
 
 
 class EnterpriseAiTimeoutError(TimeoutError):
-    """OCI Enterprise AI 呼び出しの timeout を利用者向けに正規化したエラー。"""
+    """モデルの API 呼び出しの timeout を利用者向けに正規化したエラー。"""
 
     safe_for_user = True
 
@@ -306,7 +306,7 @@ class EnterpriseAiTimeoutError(TimeoutError):
 
 
 class EnterpriseAiIncompleteResponseError(ValueError):
-    """OCI Enterprise AI が不完全な response を返したことを表すエラー。"""
+    """モデルの API が不完全な response を返したことを表すエラー。"""
 
     safe_for_user = True
 
@@ -315,7 +315,7 @@ class EnterpriseAiIncompleteResponseError(ValueError):
 
 
 class EnterpriseAiValidationError(ValueError):
-    """OCI Enterprise AI の構造化応答がアプリ schema と合わないことを表すエラー。"""
+    """モデルの API の構造化応答がアプリ schema と合わないことを表すエラー。"""
 
     safe_for_user = True
     error_code = "enterprise_ai_response_validation_error"
@@ -349,7 +349,7 @@ class EnterpriseAiRequestPreview:
 
 
 class EnterpriseAiClient:
-    """OCI Enterprise AI による LLM / VLM 推論クライアント。"""
+    """モデルの API による LLM / VLM 推論クライアント。"""
 
     def __init__(
         self,
@@ -542,7 +542,7 @@ class EnterpriseAiClient:
         mime_type: str,
         parser_profile: str,
     ) -> dict[str, object]:
-        """OCI Enterprise AI VLM endpoint を呼び出し、構造化抽出を検証する。"""
+        """Model API VLM endpoint を呼び出し、構造化抽出を検証する。"""
         uploaded_file_id = ""
         config = self._vision_config
         normalized_mime_type = _normalized_mime_type(mime_type)
@@ -587,11 +587,11 @@ class EnterpriseAiClient:
         *,
         mime_type: str,
     ) -> str:
-        """OCI Files API へ VLM 入力をアップロードし、Responses 用 file_id を返す。"""
+        """Files API へ VLM 入力をアップロードし、Responses 用 file_id を返す。"""
         config = self._vision_config
         endpoint = _require_value(
             config.enterprise_ai_endpoint,
-            "OCI Enterprise AI endpoint",
+            "Model API endpoint",
         )
         normalized_mime_type = _normalized_mime_type(mime_type)
         timeout = config.enterprise_ai_timeout_seconds
@@ -606,15 +606,15 @@ class EnterpriseAiClient:
                 timeout=timeout,
             )
         except httpx.TimeoutException as exc:
-            raise EnterpriseAiTimeoutError("OCI Enterprise AI Files API", timeout) from exc
+            raise EnterpriseAiTimeoutError("Model API Files API", timeout) from exc
         return _uploaded_file_id(response)
 
     async def _delete_uploaded_file(self, file_id: str) -> None:
-        """OCI Files API の一時ファイルを best-effort で削除する。"""
+        """Files API の一時ファイルを best-effort で削除する。"""
         config = self._vision_config
         endpoint = _require_value(
             config.enterprise_ai_endpoint,
-            "OCI Enterprise AI endpoint",
+            "Model API endpoint",
         )
         try:
             await self._vision_http_transport.delete(
@@ -634,7 +634,7 @@ class EnterpriseAiClient:
         response_schema: Mapping[str, Any] | None = None,
         response_schema_name: str = "structured_answer",
     ) -> str:
-        """OCI Enterprise AI LLM endpoint を呼び出し、RAG 回答を生成する。"""
+        """LLM endpoint を呼び出し、RAG 回答を生成する。"""
         payload = _build_llm_payload(
             self._config,
             prompt,
@@ -664,7 +664,7 @@ class EnterpriseAiClient:
         transport = self._vision_http_transport if vision else self._http_transport
         endpoint = _require_value(
             config.enterprise_ai_endpoint,
-            "OCI Enterprise AI endpoint",
+            "Model API endpoint",
         )
         url = _join_endpoint_path(endpoint, path)
         timeout = config.enterprise_ai_timeout_seconds
@@ -676,7 +676,7 @@ class EnterpriseAiClient:
                 timeout=timeout,
             )
         except httpx.TimeoutException as exc:
-            raise EnterpriseAiTimeoutError("OCI Enterprise AI endpoint", timeout) from exc
+            raise EnterpriseAiTimeoutError("Model API endpoint", timeout) from exc
 
     async def _post_enterprise_ai_with_schema_retry(
         self,
@@ -699,7 +699,7 @@ class EnterpriseAiClient:
                 await asyncio.sleep(_retry_delay(attempt))
         if last_error is not None:
             raise last_error
-        raise RuntimeError("OCI Enterprise AI VLM response の検証に失敗しました。")
+        raise RuntimeError("Model API VLM response の検証に失敗しました。")
 
 
 # 呼び出し側が再試行を受け持つとき(取込の上限つきの並行の実行器。#2002)、SDK の再試行の回数を
@@ -775,7 +775,7 @@ class _DefaultEnterpriseAiTransport:
     ) -> Mapping[str, Any]:
         async with (
             self._client(timeout) as client,
-            _translated_openai_errors("OCI Enterprise AI endpoint"),
+            _translated_openai_errors("Model API endpoint"),
         ):
             response = await client.post(
                 url,
@@ -795,7 +795,7 @@ class _DefaultEnterpriseAiTransport:
     ) -> AsyncIterator[str]:
         async with (
             self._client(timeout) as client,
-            _translated_openai_errors("OCI Enterprise AI endpoint"),
+            _translated_openai_errors("Model API endpoint"),
         ):
             stream = await client.post(
                 url,
@@ -827,7 +827,7 @@ class _DefaultEnterpriseAiTransport:
     ) -> Mapping[str, Any]:
         async with (
             self._client(timeout) as client,
-            _translated_openai_errors("OCI Enterprise AI Files API"),
+            _translated_openai_errors("Model API Files API"),
         ):
             response = await client.post(
                 url,
@@ -852,7 +852,7 @@ class _DefaultEnterpriseAiTransport:
     ) -> Mapping[str, Any]:
         async with (
             self._client(timeout) as client,
-            _translated_openai_errors("OCI Enterprise AI Files API"),
+            _translated_openai_errors("Model API Files API"),
         ):
             response = await client.delete(
                 url,
@@ -1092,15 +1092,15 @@ def _build_vlm_payload(
         _require_template_values(
             config.enterprise_ai_vlm_payload_template,
             values,
-            "OCI Enterprise AI VLM payload template",
+            "Model API VLM payload template",
         )
         return _render_payload_template(
             config.enterprise_ai_vlm_payload_template,
             values,
-            "OCI Enterprise AI VLM payload template",
+            "Model API VLM payload template",
         )
 
-    _require_value(model_id, "OCI Enterprise AI Vision model")
+    _require_value(model_id, "Model API Vision model")
     text_format = {
         "type": "json_schema",
         "name": "structured_extraction",
@@ -1148,7 +1148,7 @@ def _build_vlm_payload(
 def _supports_responses_json_schema(model_id: str) -> bool:
     """Responses の text.format JSON Schema を安全に使える model か判定する。"""
     normalized = model_id.strip().casefold()
-    # OCI の OpenAI-compatible gateway で Gemini provider へ JSON Schema を渡すと、
+    # OpenAI 互換の gateway で Gemini provider へ JSON Schema を渡すと、
     # provider 側の schema サブセットに合わず INVALID_ARGUMENT になる場合がある。
     return "gemini" not in normalized
 
@@ -1178,7 +1178,7 @@ def _build_vision_text_payload(
 ) -> dict[str, Any]:
     """Vision 接続確認用の最小 OpenAI Responses payload を作る。"""
     model_id = config.vision_model_id
-    _require_value(model_id, "OCI Enterprise AI Vision model")
+    _require_value(model_id, "Model API Vision model")
     normalized_mime_type = _normalized_mime_type(mime_type)
     data_base64 = base64.b64encode(image_bytes).decode("ascii")
     if file_id:
@@ -1222,7 +1222,7 @@ def _build_images_text_payload(
 ) -> dict[str, Any]:
     """複数画像を渡す OpenAI Responses payload を作る(画像は指示の後に並べる)。"""
     model_id = config.vision_model_id
-    _require_value(model_id, "OCI Enterprise AI Vision model")
+    _require_value(model_id, "Model API Vision model")
     if not images:
         raise EnterpriseAiUnsupportedInputError("読み取る画像がありません。")
     normalized_mime_type = _normalized_mime_type(mime_type)
@@ -1301,15 +1301,15 @@ def _build_llm_payload(
         _require_template_values(
             config.enterprise_ai_llm_payload_template,
             values,
-            "OCI Enterprise AI LLM payload template",
+            "Model API LLM payload template",
         )
         return _render_payload_template(
             config.enterprise_ai_llm_payload_template,
             values,
-            "OCI Enterprise AI LLM payload template",
+            "Model API LLM payload template",
         )
 
-    _require_value(model_id, "OCI Enterprise AI default model")
+    _require_value(model_id, "Model API default model")
     payload: dict[str, Any] = {
         "model": model_id,
         "instructions": effective_system_prompt,
@@ -1437,7 +1437,7 @@ def _upload_file_purpose(mime_type: str) -> str:
 
 
 def _uploaded_file_name(mime_type: str) -> str:
-    """OCI Files API に渡す一時ファイル名を作る。"""
+    """Files API に渡す一時ファイル名を作る。"""
     extension = FILE_EXTENSION_BY_MIME_TYPE.get(mime_type, ".bin")
     return f"enterprise-ai-input{extension}"
 
@@ -1446,7 +1446,7 @@ def _uploaded_file_id(response: Mapping[str, Any]) -> str:
     """Files API response から file id を取り出す。"""
     file_id = response.get("id")
     if not isinstance(file_id, str) or not file_id.strip():
-        raise ValueError("OCI Enterprise AI Files API response に file id がありません。")
+        raise ValueError("Model API Files API response に file id がありません。")
     return file_id.strip()
 
 
@@ -1471,11 +1471,11 @@ def _enterprise_ai_headers(
     *,
     json_content_type: bool = True,
 ) -> dict[str, str]:
-    """OCI OpenAI-compatible API の project/API key ヘッダーを付与する。"""
+    """OpenAI-compatible API の project/API key ヘッダーを付与する。"""
     headers = dict(JSON_HEADERS if json_content_type else {"accept": "application/json"})
     if project := config.enterprise_ai_project_id.strip():
         headers["OpenAI-Project"] = project
-    api_key = _require_value(config.enterprise_ai_api_key, "OCI Enterprise AI API key")
+    api_key = _require_value(config.enterprise_ai_api_key, "Model API key")
     headers["Authorization"] = f"Bearer {api_key}"
     return headers
 
@@ -1498,7 +1498,7 @@ def _request_preview(
     response_path_set: bool,
 ) -> EnterpriseAiRequestPreview:
     """Enterprise AI request の非機密プレビューを作る。"""
-    endpoint = _require_value(config.enterprise_ai_endpoint, "OCI Enterprise AI endpoint")
+    endpoint = _require_value(config.enterprise_ai_endpoint, "Model API endpoint")
     payload_shape = _payload_shape(payload)
     if not isinstance(payload_shape, dict):
         payload_shape = {}
@@ -1555,14 +1555,14 @@ def _json_response_object(response: httpx.Response) -> Mapping[str, Any]:
     try:
         payload = response.json()
     except ValueError as exc:
-        raise ValueError("OCI Enterprise AI response が JSON ではありません。") from exc
+        raise ValueError("Model API response が JSON ではありません。") from exc
     if not isinstance(payload, dict):
-        raise ValueError("OCI Enterprise AI response は JSON object である必要があります。")
+        raise ValueError("Model API response は JSON object である必要があります。")
     return payload
 
 
 def _raise_for_status_with_body(response: httpx.Response, label: str) -> None:
-    """HTTP error に OCI response body を含めて原因調査しやすくする。"""
+    """HTTP error に response body を含めて原因調査しやすくする。"""
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -1611,7 +1611,7 @@ def _parse_structured_extraction(
     candidate = _select_response_path(
         response,
         response_path,
-        "OCI Enterprise AI VLM response path",
+        "Model API VLM response path",
     )
     _raise_for_response_error(candidate)
     text = _extract_text_candidate(candidate)
@@ -1627,7 +1627,7 @@ def _parse_structured_extraction(
         if text:
             candidate = _json_string_to_object(text)
     if not isinstance(candidate, Mapping):
-        raise ValueError("OCI Enterprise AI VLM response に構造化抽出 object がありません。")
+        raise ValueError("Model API VLM response に構造化抽出 object がありません。")
     return _validate_structured_extraction(candidate)
 
 
@@ -1656,7 +1656,7 @@ def _validation_error_message(error: ValidationError) -> str:
         details.append(f"ほか {error.error_count() - len(details)} 件")
     joined = " / ".join(details)
     return (
-        "OCI Enterprise AI VLM response が StructuredExtraction schema と一致しません。"
+        "Model API VLM response が StructuredExtraction schema と一致しません。"
         f"失敗項目: {joined}。"
         "設定 > モデル の VLM response path / payload template と、VLM 出力 JSON の"
         " raw_text・confidence・elements 形式を確認して再実行してください。"
@@ -1672,7 +1672,7 @@ def _parse_generated_text(
     candidate = _select_response_path(
         response,
         response_path,
-        "OCI Enterprise AI LLM response path",
+        "Model API LLM response path",
     )
     _raise_for_response_error(candidate)
     text = _extract_text_candidate(candidate)
@@ -1682,7 +1682,7 @@ def _parse_generated_text(
     _raise_for_response_error(candidate)
     text = _extract_text_candidate(candidate)
     if not text.strip():
-        raise ValueError("OCI Enterprise AI LLM response に回答 text がありません。")
+        raise ValueError("Model API LLM response に回答 text がありません。")
     return text.strip()
 
 
@@ -1899,13 +1899,13 @@ def _response_error_message(payload: object) -> str:
     if not isinstance(payload, Mapping):
         return ""
     if error := payload.get("error"):
-        return _format_response_error(error, "OCI Enterprise AI response error")
+        return _format_response_error(error, "Model API response error")
     incomplete_details = payload.get("incomplete_details")
     status = str(payload.get("status", "")).strip().lower()
     if status in {"failed", "incomplete", "cancelled"}:
         detail = _format_response_error(
             incomplete_details,
-            f"OCI Enterprise AI response status={status}",
+            f"Model API response status={status}",
         )
         return detail
     return ""
@@ -1956,7 +1956,7 @@ def _max_output_incomplete_message(payload: object) -> str:
                 used += f"(うち推論 {reasoning_tokens})"
             parts.append(used)
     model = str(response.get("model") or "").strip()
-    subject = f"モデル「{model}」の" if model else "OCI Enterprise AI の"
+    subject = f"モデル「{model}」の" if model else "モデルの API の"
     return (
         f"{subject}応答が出力の上限に達して未完了でした({'・'.join(parts)})。"
         "推論のあるモデルは推論の token も出力の上限に数えます。"
@@ -2011,11 +2011,9 @@ def _json_string_to_object(value: str) -> Mapping[str, Any]:
     if parsed is None and (object_text := _extract_json_object_text(cleaned)):
         parsed = _loads_json_lenient(object_text)
     if parsed is None:
-        raise ValueError("OCI Enterprise AI VLM response の JSON 文字列を解析できません。")
+        raise ValueError("Model API VLM response の JSON 文字列を解析できません。")
     if not isinstance(parsed, dict):
-        raise ValueError(
-            "OCI Enterprise AI VLM response の JSON 文字列は object である必要があります。"
-        )
+        raise ValueError("Model API VLM response の JSON 文字列は object である必要があります。")
     return parsed
 
 

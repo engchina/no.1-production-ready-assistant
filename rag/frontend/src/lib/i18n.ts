@@ -226,16 +226,16 @@ export const ja = {
   "settings.parserAdapters.postParse.vision.openModel": "モデル設定を開く",
   "settings.parserAdapters.postParse.vision.prompt": "図・画像の読み取りプロンプト",
   "settings.parserAdapters.postParse.headingLevels.hint":
-    "Docling の解析結果のうち、PDF のしおりの階層を使えず、番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす文書が対象です。見出しの文字列だけ（長さの上限あり）を OCI Enterprise AI にまとめて送り、章・節の深さを推定して章節の木と検索用の分割に反映します。通常は対象の文書ごとに 1 回呼び出しますが、一時的な通信障害や流量制限などで再試行する場合があります。応答が使えないときや呼び出しに失敗したときは、今の階層のまま取り込みます。",
+    "Docling の解析結果のうち、PDF のしおりの階層を使えず、番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす文書が対象です。見出しの文字列だけ（長さの上限あり）を LLM にまとめて送り、章・節の深さを推定して章節の木と検索用の分割に反映します。通常は対象の文書ごとに 1 回呼び出しますが、一時的な通信障害や流量制限などで再試行する場合があります。応答が使えないときや呼び出しに失敗したときは、今の階層のまま取り込みます。",
   "settings.parserAdapters.postParse.fieldExtraction.hint":
-    "解析した本文全体から、下で定義した項目（標準は文書の種類・文書タイトル・発行日・作成日・発行元・作成部署）を OCI Enterprise AI で抽出し、検索の絞り込みに使える項目にします。長い本文は分けて送り、部分ごとにモデルを呼び出します。本文が長いほど入力トークンの総量と処理時間が増えます。",
+    "解析した本文全体から、下で定義した項目（標準は文書の種類・文書タイトル・発行日・作成日・発行元・作成部署）を LLM で抽出し、検索の絞り込みに使える項目にします。長い本文は分けて送り、部分ごとにモデルを呼び出します。本文が長いほど入力トークンの総量と処理時間が増えます。",
   "settings.parserAdapters.postParse.fieldExtraction.definitions": "抽出する項目の定義",
   "settings.parserAdapters.postParse.fieldExtraction.count": "{count} 件",
   "settings.parserAdapters.postParse.fieldExtraction.standard": "標準の項目",
   "settings.parserAdapters.postParse.fieldExtraction.empty":
     "項目の定義が 0 件で保存されているため、ナレッジベースで項目を定義していない文書からは何も抽出しません。下の項目の定義で項目を追加するか、「標準の項目に戻す」を使ってください。",
   "settings.parserAdapters.postParse.navigationSummary.hint":
-    "「章節の抽出規則」で作る章節ごとに、要約を OCI Enterprise AI で作り、検索にも使います。章節ごとにモデルを呼び出します。無効でも章節ナビゲーションは作られ、「章節の抽出規則」は独立して適用されます。",
+    "「章節の抽出規則」で作る章節ごとに、要約を LLM で作り、検索にも使います。章節ごとにモデルを呼び出します。無効でも章節ナビゲーションは作られ、「章節の抽出規則」は独立して適用されます。",
   "settings.parserAdapters.postParse.navigationSummary.limit": "1 文書の 1 回の取込で、先頭から要約対象の章節を処理し、正常に処理した章節が最大 {count} 件になると止めます。上限を超えた章節もナビゲーションには残ります。失敗や再試行があるため、モデルの呼び出し回数の上限ではありません。",
   "settings.parserAdapters.postParse.actionsLabel": "解析後の処理の操作",
   "settings.parserAdapters.postParse.save": "解析後の処理を保存",
@@ -1653,14 +1653,10 @@ export const ja = {
   "settings.services.lastUpdated": "最終更新: {time}",
   "settings.services.cpuSuffix": "{stage}(CPU)",
   "settings.services.gpuSuffix": "{stage}(GPU)",
-  "settings.services.ociSuffix": "{stage}(OCI)",
   "settings.services.profile.cpu": "CPU",
   "settings.services.profile.gpu": "GPU",
-  "settings.services.profile.oci": "OCI",
   "settings.services.cpuNote":
     "「既定で使用」は文書解析の全体設定で選んだエンジンです。処理レシピでエンジンを指定しない取込で使うため、取込時は起動してください。その他のエンジンは、処理レシピで選んだ場合に使います。",
-  "settings.services.ociNote":
-    "OCI クラウドサービスを呼ぶ軽量プロキシ(OCI 認証はメイン設定を継承・GPU 不要)。OCI Document Understanding は準備中（ロードマップ）のため、まだ配備・起動できません。",
   "settings.services.status.running": "稼働中",
   "settings.services.status.degraded": "縮退",
   "settings.services.status.starting":
@@ -2537,7 +2533,7 @@ export const ja = {
   "knowledgeBases.adapter.field.navigationSummary": "章節の要約",
   "knowledgeBases.adapter.field.headingLevels": "見出しの階層の推定（AI）",
   "knowledgeBases.adapter.field.headingLevels.hint":
-    "Docling の解析結果で、しおりの階層を使えず、番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす場合に、見出しの文字列を OCI Enterprise AI にまとめて送り、階層を推定します。通常は文書ごとに 1 回で、再試行する場合があります。変えると解析からやり直します。",
+    "Docling の解析結果で、しおりの階層を使えず、番号から階層を決められない見出しの割合と見出し数が設定の条件を満たす場合に、見出しの文字列を LLM にまとめて送り、階層を推定します。通常は文書ごとに 1 回で、再試行する場合があります。変えると解析からやり直します。",
   "knowledgeBases.adapter.field.entityIndex": "実体・別名索引",
   "knowledgeBases.adapter.field.entityIndex.hint": "実体（文書中の対象）の名称・ID・別名と、根拠となる文書の断片の関連を、表の行や本文の定義から記録します。AI は使いません。全体の既定は無効です。文書レシピで上書きできます。表の名前・属性の列を個別に指定でき、未指定なら列名で決めます。検索で利用するかは、検索方法の「実体・別名による検索拡張」で設定します（全体の設定）。変えると索引から作り直します。",
   "knowledgeBases.adapter.field.autoParseAfterPreprocess": "ファイル準備後に抽出へ進む",
@@ -3947,7 +3943,7 @@ export const ja = {
   "settings.answering.options": "回答の検索のオプション",
   "settings.answering.rerank": "Rerank で検索候補を並べ替える",
   "settings.answering.rerankHint":
-    "OCI Generative AI の Rerank で、検索候補を質問との関連の強さの順に並べ替えます。",
+    "再ランクのモデルで、検索候補を質問との関連の強さの順に並べ替えます。",
   "settings.answering.autoFieldFilter": "質問から項目の条件を読み取る",
   "settings.answering.autoFieldFilterHint":
     "質問の条件を、検索・回答プロファイルの対象ナレッジベースで定義した抽出項目の条件として AI が読み取り、検索を絞り込みます。項目定義がない場合や、呼び出し元が検索文を指定した場合は読み取りません。自動で読んだ条件で候補が見つからない場合は、その条件を外して探し直します。読み取りを行う場合にモデル呼び出しが増えます。",

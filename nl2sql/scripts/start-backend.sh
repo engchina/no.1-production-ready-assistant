@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # バックエンド(FastAPI / Uvicorn)を開発モードで起動する。
 # - 依存は uv sync で解決する。
-# - .env が無い場合でも、デフォルト設定(local)で起動できる。OCI/Oracle 等の
-#   サービス固有設定は backend/.env に追加する。
+# - .env が無い場合でも、デフォルト設定(local)で起動できる。モデルの API・Oracle 等の
+#   サービス固有設定は backend/.env（共通の設定は platform/.env）に追加する。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,7 +53,7 @@ fi
 
 kill_port "${PORT}"
 
-# 環境のプロキシ（OCI のための HTTP_PROXY 等）を、同じマシンのサービス・MCP への呼び出しに使わない
+# 環境のプロキシ（外部のモデルの API のための HTTP_PROXY 等）を、同じマシンのサービス・MCP への呼び出しに使わない
 # （#852）。backend のコードも内部の宛先ではプロキシを外す（pr_backend_core.internal_http）。
 # ここは多重の防御として、既存の値を残したまま NO_PROXY / no_proxy に loopback を足す。
 add_loopback_no_proxy() {

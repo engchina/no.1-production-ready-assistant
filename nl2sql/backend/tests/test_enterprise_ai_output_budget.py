@@ -32,8 +32,8 @@ _MODEL = "xai.grok-4.3"
 _REASONING_TOKENS = 1198
 # 推論の量を low に下げた送り直し（#2023）で使う推論の token（スタブの値）。
 _LOW_REASONING_TOKENS = 300
-_ENDPOINT = "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
-_PROJECT = "ocid1.generativeaiproject.oc1.us-chicago-1.synthetic"
+_ENDPOINT = "https://llm.example/v1"
+_PROJECT = "proj_synthetic"
 
 
 def _settings(**model: Any) -> Settings:
@@ -154,7 +154,7 @@ def _request(service: Nl2SqlService, count: int, columns: int = 10) -> MetadataS
 def test_old_common_limit_1200_is_dropped_and_model_default_32768_is_sent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """OCI の配備の状態（v5 の JSON に共通の上限 1200）を読んでも、モデルの既定 32768 で送る。"""
+    """既存の配備の状態（v5 の JSON に共通の上限 1200）を読んでも、モデルの既定 32768 で送る。"""
     (tmp_path / "model-settings.json").write_text(
         json.dumps(
             {

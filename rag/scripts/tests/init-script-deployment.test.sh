@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# rag/init_script.sh（OCI Resource Manager stack の Compute 初期化）の振る舞いを外部依存なしで検証する。
+# rag/init_script.sh（platform/deploy/suite-init.sh が呼ぶ Compute 初期化）の振る舞いを外部依存なしで検証する。
 # RAG は Docker を使わず、uv の venv + systemd で動かす（#286）。systemctl / runuser は
 # fake にし、手元の systemd は触らない。visudo があれば、生成した sudoers の構文も確かめる。
 set -euo pipefail
@@ -292,7 +292,7 @@ EOF
   migrate_from_docker_compose >> "${case_dir}/migration.log" 2>&1
 )
 
-# --- 配備する前処理 / parser（CPU / OCI だけ。提供しないサービスは読み飛ばし、必ず配備する parser は足す） ---
+# --- 配備する前処理 / parser（CPU だけ。提供しないサービスは読み飛ばし、必ず配備する parser は足す） ---
 # stack が配備してよい一覧は、提供するサービス（rag-systemd.sh の RAG_MICROSERVICES）と同じ並び。
 allowed_order="$(RAG_INIT_TEST_MODE=true bash -c 'source "$1/init_script.sh"; printf "%s\n" "${ALLOWED_RAG_SERVICES[*]}"' _ "${REPO_DIR}")"
 provided_order="$(bash -c 'source "$1/scripts/rag-systemd.sh"; for e in "${RAG_MICROSERVICES[@]}"; do printf "%s " "${e%%|*}"; done' _ "${REPO_DIR}")"
@@ -430,12 +430,12 @@ grep -Fqx "ExecStart=${rag_dir}/services/parsers/docling/.venv/bin/gunicorn app.
   || fail "parser-docling が自分の venv で 127.0.0.1:18020 に bind していない"
 grep -Fqx "WorkingDirectory=${rag_dir}/services/parsers/docling" "${docling_unit}" || fail "parser-docling の作業ディレクトリが違う"
 grep -Fqx "EnvironmentFile=-${rag_dir}/backend/service-runtime.env" "${docling_unit}" \
-  || fail "parser-docling がサービス実行用の env（HF / OCI Enterprise AI）を読まない"
+  || fail "parser-docling がサービス実行用の env（HF / モデルの API）を読まない"
 grep -Fqx "Environment=HOME=${TEST_TMP_DIR}/systemd/service-home" "${docling_unit}" \
   || fail "parser-docling の HOME（モデルのキャッシュ）が SERVICE_HOME ではない"
 grep -Fqx "User=${service_user}" "${docling_unit}" || fail "parser-docling が SERVICE_USER で動いていない"
 if grep -Fq "platform/.env" "${docling_unit}"; then
-  fail "OCI 以外の parser に共通 .env（secret）を渡している"
+  fail "parser に共通 .env（secret）を渡している"
 fi
 if grep -Eiq 'docker|compose' "${backend_unit}" "${worker_unit}" "${docling_unit}"; then
   fail "systemd の unit が docker を使っている"

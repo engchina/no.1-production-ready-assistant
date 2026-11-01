@@ -49,7 +49,7 @@ _MAX_STRING = 1024
 # 外部の HTTP クライアント・SDK の logger の既定の level（#1935）。INFO の行（`HTTP Request: POST …`
 # など）は本文を伏せると「外部ライブラリの診断」だけになり、呼び出しごとに出ても情報が無い。
 # 警告・失敗は残す。戻すときは `configure_logging` の `quiet_loggers` で同じ名前に level を渡すか、
-# 全体の level を DEBUG にする。子の logger（`oci.base_client.…` など）は親の level を継ぐ。
+# 全体の level を DEBUG にする。子の logger（`httpx._client` など）は親の level を継ぐ。
 DEPENDENCY_LOGGER_LEVELS: Mapping[str, int] = {
     "httpx": logging.WARNING,
     # openai-agents / mcp が使う次世代の httpx（logger 名が `httpx2` / `httpcore2`）。
@@ -58,7 +58,6 @@ DEPENDENCY_LOGGER_LEVELS: Mapping[str, int] = {
     "httpcore2": logging.WARNING,
     "urllib3": logging.WARNING,
     "requests": logging.WARNING,
-    "oci": logging.WARNING,
 }
 _MAX_ITEMS = 32
 _MAX_DEPTH = 5

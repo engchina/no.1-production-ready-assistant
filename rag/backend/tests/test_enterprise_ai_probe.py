@@ -187,10 +187,10 @@ class FakeEnterpriseAiTransport:
 
 
 def _llm_settings() -> Settings:
-    """Enterprise AI probe 用の OCI 設定を返す。"""
+    """Enterprise AI probe 用のモデルの API の設定を返す。"""
     return Settings.model_construct(
         enterprise_ai_endpoint="https://enterprise-ai.example",
-        enterprise_ai_project_id="ocid1.generativeaiproject.oc1..example",
+        enterprise_ai_project_id="proj-example",
         enterprise_ai_api_key="sk-test-secret",
         enterprise_ai_default_text_model="enterprise-llm",
         enterprise_ai_default_vision_model="enterprise-vlm",

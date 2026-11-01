@@ -1,6 +1,6 @@
 """LLM の base URL は Endpoint URL を入力どおり使い、path を補わない(#1440)。
 
-以前は path の無い Endpoint URL に `/openai/v1` を足し、OCI 以外の OpenAI 互換 API
+以前は path の無い Endpoint URL に `/openai/v1` を足し、path の違う OpenAI 互換 API
 (例 `https://api.deepseek.com`)で `…/openai/v1/responses` を呼んで 404 になっていた。
 backend は platform の `enterprise_ai_base_url` で決めた値を渡す。NL2SQL・Agent・RAG backend の
 test_enterprise_ai_endpoint_url.py と同じ表で、OpenAI SDK が呼ぶ URL を確かめる。
@@ -15,13 +15,13 @@ from rag_engine.config import ENTERPRISE_AI_LLM_PROVIDER, get_settings
 # (Endpoint URL, 呼ぶ URL)
 ENDPOINT_CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
     ),
     ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/responses"),
     ("https://api.deepseek.com", "https://api.deepseek.com/responses"),
 ]
-ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-without-path"]
+ENDPOINT_CASE_IDS = ["compatible-mode-v1", "compatible-with-path", "compatible-without-path"]
 
 
 def _settings(endpoint: str):

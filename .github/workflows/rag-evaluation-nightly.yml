@@ -46,7 +46,7 @@ on:
         default: false
         type: boolean
       run_file_processing_staging:
-        description: "OCI/Oracle staging 実環境で file-processing pending checks を検証します。"
+        description: "Oracle staging 実環境で file-processing pending checks を検証します。"
         required: false
         default: false
         type: boolean

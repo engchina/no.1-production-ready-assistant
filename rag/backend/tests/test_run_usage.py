@@ -1,7 +1,7 @@
 """実行のモデルの利用量（実行履歴の概要。#3419）の集計のテスト。
 
 本物の `operation_trace` と回答エンジンの観測（`_observe_engine_call`）で span を作り、
-`AnswerTrace` の span の知らせから集めた値を確かめる。OCI は呼ばない（usage は合成の値）。
+`AnswerTrace` の span の知らせから集めた値を確かめる。モデルの API は呼ばない（usage は合成の値）。
 """
 
 from __future__ import annotations

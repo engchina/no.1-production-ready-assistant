@@ -42,10 +42,8 @@ RUN_HOME="$(getent passwd "${RUN_USER}" | cut -d: -f6)"
 RUN_HOME="${RUN_HOME:-${HOME}}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 SUDOERS_DIR="${SUDOERS_DIR:-/etc/sudoers.d}"
-# backend の既定値（RAG_SERVICE_RUNTIME_ENV_FILE / PLATFORM_ENV_FILE / backend/.env）と同じ場所。
+# backend の既定値（RAG_SERVICE_RUNTIME_ENV_FILE）と同じ場所。
 RUNTIME_ENV_FILE="${RAG_DIR}/backend/service-runtime.env"
-PLATFORM_ENV_FILE="${SUITE_DIR}/platform/.env"
-BACKEND_ENV_FILE="${RAG_DIR}/backend/.env"
 MODELS_VARIANT="${RAG_SERVICES_MODELS:-}"
 
 CPU_SERVICES=(
@@ -153,7 +151,7 @@ render_units() {
   mkdir -p "${out_dir}"
   for service in "${SELECTED[@]}"; do
     rag_write_microservice_unit "${out_dir}/$(rag_unit_name "${service}")" "${service}" "${RAG_DIR}" \
-      "${RUN_USER}" "${RUN_GROUP}" "${RUN_HOME}" "${RUNTIME_ENV_FILE}" "${PLATFORM_ENV_FILE}" "${BACKEND_ENV_FILE}"
+      "${RUN_USER}" "${RUN_GROUP}" "${RUN_HOME}" "${RUNTIME_ENV_FILE}"
     units+=("$(rag_unit_name "${service}")")
   done
   rag_write_sudoers "${out_dir}/${RAG_SUDOERS_FILE_NAME}" "${RUN_USER}" "${units[@]}"

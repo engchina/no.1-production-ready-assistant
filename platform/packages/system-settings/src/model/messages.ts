@@ -11,7 +11,7 @@ export const MODEL_MESSAGES = {
   "settings.model.connection.error.missing":
     "「{model}」の接続がありません。登録されている接続から選び直してください。",
   "settings.model.connection.error.unsaved":
-    "{connection} はまだ保存されていません。上の「OCI Enterprise AI」で接続を保存してから、登録モデルを保存してください。",
+    "{connection} はまだ保存されていません。上の「モデルの API」で接続を保存してから、登録モデルを保存してください。",
   "settings.model.connection.primary": "プライマリ接続",
   "settings.model.connection.primaryDescription":
     "登録モデルで接続を選ばなければ、プライマリ接続を使います。",
@@ -28,15 +28,15 @@ export const MODEL_MESSAGES = {
   "settings.model.connection.secondaryDescription":
     "登録モデルの「接続」でセカンダリ接続を選んだモデルは、この接続で呼び出します。",
   "settings.model.connection.secondaryEmpty.hint":
-    "別のリージョンや Project にあるモデルを使うときに設定します。設定すると、Endpoint URL・Project OCID・API key はすべて必須です。",
+    "別のリージョンや Project にあるモデルを使うときに設定します。設定すると、Endpoint URL・Project ID・API key はすべて必須です。",
   "settings.model.connection.secondaryEmpty.title":
     "セカンダリ接続は設定されていません。",
-  "settings.model.connection.tabs": "OCI Enterprise AI の接続",
+  "settings.model.connection.tabs": "モデルの API の接続",
   "settings.model.connection.tertiary": "ターシャリ接続",
   "settings.model.connection.tertiaryDescription":
     "登録モデルの「接続」でターシャリ接続を選んだモデルは、この接続で呼び出します。OpenAI や OpenAI 互換 API のモデルにも使えます。",
   "settings.model.connection.tertiaryEmpty.hint":
-    "OpenAI や OpenAI 互換 API（OCI Enterprise AI も可）のモデルを使うときに設定します。設定すると、Endpoint URL と API key は必須です。Project OCID は OCI Enterprise AI を使うときだけ入力します。",
+    "OpenAI や OpenAI 互換 API のモデルを使うときに設定します。設定すると、Endpoint URL と API key は必須です。Project ID は提供元が求めるときだけ入力します。",
   "settings.model.connection.tertiaryEmpty.title":
     "ターシャリ接続は設定されていません。",
   "settings.model.connection.unsaved": "未保存",
@@ -108,12 +108,8 @@ export const MODEL_MESSAGES = {
     "LLM・埋め込み・再ランクのモデルを呼ぶ接続（Endpoint URL と API key）を設定します。プライマリ接続に加えてセカンダリ接続と、OpenAI や OpenAI 互換 API にも使えるターシャリ接続を設定でき、登録モデルごとに使う接続を選べます。",
   "settings.model.enterprise.displayName": "表示名",
   "settings.model.enterprise.endpoint": "Endpoint URL",
-  "settings.model.enterprise.endpointDocs":
-    "公式ドキュメント（新しいタブで開く）",
   "settings.model.enterprise.endpointHelp":
-    "公式 docs の OpenAI-compatible base URL を /openai/v1 まで指定します。入力した URL に Responses API の /responses を付けて呼び出し、path は補いません。",
-  "settings.model.enterprise.endpointHelpTertiary":
-    "API の base URL を path まで指定します（OpenAI は https://api.openai.com/v1、OpenAI 互換 API は https://api.deepseek.com/v1 など、OCI Enterprise AI は …/openai/v1）。入力した URL に /responses を付けて呼び出し、path は補いません。",
+    "API の base URL を path まで指定します（DeepSeek は https://api.deepseek.com/v1、Aliyun 百煉は https://dashscope.aliyuncs.com/compatible-mode/v1、OpenAI は https://api.openai.com/v1 など）。入力した URL に Responses API の /responses を付けて呼び出し、path は補いません。",
   "settings.model.enterprise.modelId": "モデル ID",
   "settings.model.enterprise.modelIdDuplicate":
     "モデル ID「{model}」はすでに登録されています。同じモデルは 1 行にまとめてください。",
@@ -121,12 +117,10 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.modelsDescription":
     "LLM（テキスト）・埋め込み・再ランクのモデルを、種類と使う接続を選んで登録します。テキストのモデルは画像入力に対応するかも指定します。画像入力に対応したモデルを、画面では「画像対応モデル」（Vision 対応のモデル）と呼びます。",
   "settings.model.enterprise.modelsSaved": "登録モデルを保存しました。",
-  "settings.model.enterprise.project": "Project OCID",
+  "settings.model.enterprise.project": "Project ID",
   "settings.model.enterprise.projectHelp":
-    "OCI Enterprise AI を使うときだけ、Generative AI project OCID を入力します（入力したときだけ OpenAI-Project ヘッダーで送ります）。OpenAI や OpenAI 互換 API では空のままにします。",
+    "提供元が project を求めるときだけ、Project ID を入力します（入力したときだけ OpenAI-Project ヘッダーで送ります）。求めない API では空のままにします。",
   "settings.model.enterprise.parameterHelp": "推論の量・入力と出力の上限について",
-  "settings.model.enterprise.modelDocs": "Oracle 公式: モデルの仕様",
-  "settings.model.enterprise.apiDocs": "Oracle 公式: API の仕様",
   "settings.model.enterprise.reasoningEffort": "推論の量",
   "settings.model.enterprise.reasoningEffortOfModel": "モデル {number} の推論の量",
   "settings.model.enterprise.reasoningEffortHelp":
@@ -153,8 +147,8 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.removeConfirm.title": "このモデルを削除しますか？",
   "settings.model.enterprise.removeModel": "モデルを削除",
   "settings.model.enterprise.saved":
-    "OCI Enterprise AI 接続設定を保存しました。",
-  "settings.model.enterprise.title": "OCI Enterprise AI",
+    "モデルの API の接続設定を保存しました。",
+  "settings.model.enterprise.title": "モデルの API",
   "settings.model.enterprise.vision": "画像入力に対応",
   "settings.model.legacySecret.description":
     "原因: 旧形式の model-settings.json に API Key が保存されています。復旧方法: この画面で保存すると API Key を .env へ移し、JSON から secret を削除します。移行後は接続テストを実行してください。",
@@ -164,12 +158,12 @@ export const MODEL_MESSAGES = {
   "settings.model.placeholder.apiKey": "sk-xxxxxxxxxxxxxxxx",
   "settings.model.placeholder.displayName": "業務 NL2SQL 標準",
   // placeholder は 375px の欄にも収まる短い例（形は補足の endpointHelp。#1891）。
-  "settings.model.placeholder.endpoint": "https://…oraclecloud.com/openai/v1",
+  "settings.model.placeholder.endpoint": "https://api.deepseek.com/v1",
   "settings.model.placeholder.endpointTertiary": "https://api.openai.com/v1",
   "settings.model.placeholder.modelId": "enterprise-llm",
-  "settings.model.placeholder.project": "ocid1.generativeaiproject.oc1.…",
+  "settings.model.placeholder.project": "proj_…",
   "settings.model.required": "必須",
-  "settings.model.requiredInOci": "OCI 運用時必須",
+  "settings.model.requiredWhenUsed": "利用時必須",
   "settings.model.save": "保存",
   "settings.model.conflict.message":
     "モデル設定は、この画面を開いた後にほかの画面（別の製品を含む）で更新されました。最新の設定を読み込んでから、保存し直してください。",
@@ -182,7 +176,7 @@ export const MODEL_MESSAGES = {
   "settings.model.saveError":
     "モデル設定を保存できませんでした。入力内容とバックエンド接続を確認して再試行してください。",
   "settings.model.subtitle":
-    "OCI Enterprise AI の LLM カタログと OCI Generative AI（埋め込み/リランク）のモデルを設定します。",
+    "LLM・埋め込み・再ランクのモデルと、それを呼ぶモデルの API（OpenAI 互換）の接続を設定します。",
   "settings.model.test.action": "テスト",
   "settings.model.test.apiFailed":
     "モデルテスト API の呼び出しに失敗しました。バックエンドのログとネットワークを確認してください。",

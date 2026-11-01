@@ -1099,7 +1099,7 @@ def test_model_settings_save_persists_json_and_env_secret(
     payload = {
         "enterprise_ai": {
             "endpoint": "https://enterprise.example.test",
-            "project_id": "ocid1.aiproject.oc1..aaaaaaaa",
+            "project_id": "proj-enterprise-a",
             "api_key": "enterprise-secret",
             "has_api_key": False,
             "clear_api_key": False,
@@ -1161,7 +1161,7 @@ def test_model_settings_test_uses_saved_secret_for_blank_key(
     payload = {
         "enterprise_ai": {
             "endpoint": "https://enterprise.example.test",
-            "project_id": "ocid1.generativeaiproject.oc1..aaaaaaaa",
+            "project_id": "proj-enterprise-b",
             "api_key": "",
             "has_api_key": True,
             "clear_api_key": False,

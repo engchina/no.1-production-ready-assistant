@@ -1,12 +1,12 @@
 """内部のサービス・MCP への HTTP を環境のプロキシに通さないための helper（#852）。
 
-OCI に届くために ``HTTP_PROXY`` / ``HTTPS_PROXY``（社内プロキシ）を設定し、``NO_PROXY`` を
+外部のモデルの API に届くために ``HTTP_PROXY`` / ``HTTPS_PROXY``（社内プロキシ）を設定し、``NO_PROXY`` を
 設定しない環境では、httpx の既定（``trust_env=True``）が 127.0.0.1 などの内部の宛先への要求まで
 プロキシへ送る。プロキシは内部の宛先へ届けられず ``502 cannotconnect`` などを返すため、
 未起動のサービスへの「未到達」が「サービスが応答した失敗」に見えてしまう。
 
 宛先が内部（loopback・link-local・private network・``localhost`` / ``*.local``・unix socket）の
-ときだけ ``trust_env=False`` にして環境のプロキシを使わない。外部の宛先（OCI など）は今までどおり
+ときだけ ``trust_env=False`` にして環境のプロキシを使わない。外部の宛先（モデルの API など）は今までどおり
 環境のプロキシを使う。DNS は引かない（名前の形と IP の値だけで判定する）。
 
 使い方::

@@ -216,7 +216,7 @@ def normalize_legacy_chunking_strategy_value(value: object) -> object:
 # 親子階層（small-to-big。`small_to_big`）の分割パラメータ。既定値と範囲は rag_poc の
 # rag_engine.chunking.constants(DEFAULT_* / *_RANGE)と同じ(テストで一致を確認する)。
 # rag_engine.chunking は import すると分割実装一式を読み込むため、ここでは値を複製して持つ。
-# OCI Enterprise AI の LLM 1 回の timeout（`enterprise_ai_timeout_seconds`）の上限（秒）。
+# モデルの API の LLM 1 回の timeout（`enterprise_ai_timeout_seconds`）の上限（秒）。
 # 保存済みの回答の評価の時間の上限もこの値から決める（#304）。
 ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = 600.0
 # 品質評価の job の全体の時間の上限の最大（秒。1 日）。job の上限は、回答の回数 × 回答の上限を
@@ -509,17 +509,17 @@ class Settings(
     # CORS 許可オリジン（フロントエンド）
     cors_origins: list[str] = Field(default=["http://localhost:3100"])
 
-    # --- OCI Enterprise AI（LLM / Vision-capable LLM）---
-    # 注意: OCI Generative AI の chat 推論 API ではなく Enterprise AI を使う
+    # --- モデルの API（LLM / Vision-capable LLM）---
+    # 注意: LLM / VLM は OpenAI 互換のモデルの API（Responses API）を使う
     enterprise_ai_endpoint: str = Field(default="")
     enterprise_ai_project_id: str = Field(default="")
     enterprise_ai_api_key: str = Field(default="")
-    # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
+    # モデルの API のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
     enterprise_ai_secondary_endpoint: str = Field(default="")
     enterprise_ai_secondary_project_id: str = Field(default="")
     enterprise_ai_secondary_api_key: str = Field(default="")
-    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
+    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project ID は任意）。
     enterprise_ai_tertiary_endpoint: str = Field(default="")
     enterprise_ai_tertiary_project_id: str = Field(default="")
     enterprise_ai_tertiary_api_key: str = Field(default="")
@@ -613,7 +613,7 @@ class Settings(
         le=CHAT_ATTACHMENT_MAX_FILES_MAX,
     )
 
-    # --- OCI Generative AI（埋め込み / リランク）---
+    # --- 埋め込み / 再ランクのモデル ---
     genai_embedding_model: str = Field(default="text-embedding-v4")
     genai_embedding_dim: int = Field(
         default=EMBEDDING_DIMENSIONS,
@@ -1077,7 +1077,7 @@ class Settings(
     rag_navigation_summary_enabled: bool = Field(
         default=False,
         description=(
-            "取込時に navigation tree の各章節 node を OCI Enterprise AI LLM で要約し、"
+            "取込時に navigation tree の各章節 node を LLM で要約し、"
             "progressive disclosure / Navigate retrieval に使う（既定 OFF）。"
         ),
     )
@@ -1088,12 +1088,12 @@ class Settings(
         description="navigation node 要約を生成する node 数の上限（LLM 呼び出し回数の bound）。",
     )
     # 見出しの階層の推定（#2277）。しおりの深さを当てられず、番号の体系でも多くの見出しの深さを
-    # 決められない文書（Docling の結果）だけ、見出しの文字列を OCI Enterprise AI に渡して階層を
+    # 決められない文書（Docling の結果）だけ、見出しの文字列をモデルの API に渡して階層を
     # 受け取る。
     rag_heading_level_inference_enabled: bool = Field(
         default=False,
         description=(
-            "しおりも番号も無い文書の見出しの階層を OCI Enterprise AI で推定する"
+            "しおりも番号も無い文書の見出しの階層をモデルの API で推定する"
             "（#2277。既定 OFF）。"
             "見出しの文字列だけを渡し、応答の形が合わない・失敗のときは今の階層のまま。"
         ),
@@ -1127,7 +1127,7 @@ class Settings(
     rag_field_extraction_enabled: bool = Field(
         default=False,
         description=(
-            "取込時に field schema 定義に従い OCI Enterprise AI structured output で named "
+            "取込時に field schema 定義に従いモデルの API の structured output で named "
             "field/entity を抽出する（PoweRAG/LangExtract 由来。既定 OFF。#2839。"
             "項目の定義が 0 件のときは何もしない。#537）。"
         ),
@@ -1268,7 +1268,7 @@ class Settings(
     rag_rerank_enabled: bool = Field(
         default=True,
         description=(
-            "回答で、検索候補を OCI Generative AI の rerank で並べ替える。"
+            "回答で、検索候補を 再ランクのモデル で並べ替える。"
             "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
         ),
     )
@@ -1522,7 +1522,7 @@ class Settings(
         default=True,
         description=(
             "(#1926)回答(検索の回答・チャット)の LLM の呼び出しを streaming で受け、"
-            "停滞した呼び出しを打ち切って同じ要求を送り直す。OCI Enterprise AI の呼び出しは"
+            "停滞した呼び出しを打ち切って同じ要求を送り直す。モデルの API の呼び出しは"
             "まれ(記録の約 1%)に通常の 1/10 以下の速さ(13〜23 token/秒。中央値 224)に落ち、"
             "同じ token 数で 36 秒 → 183 秒かかった。"
             "判定の基準は同じ接続・モデルの直近の完了した呼び出し(3 回以上)から学ぶ。"
@@ -1653,7 +1653,7 @@ class Settings(
     rag_support_guide_semantic_match_enabled: bool = Field(
         default=False,
         description=(
-            "業務ガイドの照合で、質問と質問の例（intent_examples）の埋め込み（OCI Generative AI）"
+            "業務ガイドの照合で、質問と質問の例（intent_examples）の埋め込み"
             "の近さを点に足す（#2398）。質問ごとに埋め込みの呼び出しが 1 回増える。質問の例の"
             "埋め込みは公開のときに作って持つ。検索・回答プロファイルで上書きできる。"
         ),
@@ -1733,7 +1733,7 @@ class Settings(
     rag_embedding_cache_enabled: bool = Field(
         default=True,
         description=(
-            "同一 process 内で OCI Generative AI embedding 結果を LRU cache する。"
+            "同一 process 内で 埋め込みモデル 結果を LRU cache する。"
             "cache key は本文 hash と model/input_type/dimension だけで構成する。"
         ),
     )
@@ -1743,14 +1743,14 @@ class Settings(
         ge=1,
         le=96,
         description=(
-            "OCI Generative AI embedding へ 1 回に送る text 数(最大 96)。"
+            "埋め込みモデル へ 1 回に送る text 数(最大 96)。"
             "大きな文書取込や query expansion で API payload を過大化しない。"
         ),
     )
     rag_rerank_cache_enabled: bool = Field(
         default=True,
         description=(
-            "同一 process 内で OCI Generative AI rerank 結果を LRU cache する。"
+            "同一 process 内で 再ランクのモデル 結果を LRU cache する。"
             "cache key は query/document hash と model/top_n だけで構成する。"
         ),
     )
@@ -2013,7 +2013,7 @@ class Settings(
     rag_canonical_artifact_prefix: str = Field(
         default="artifacts/canonical",
         max_length=256,
-        description="前処理で生成した正規化原本(canonical source)の Object Storage key prefix。",
+        description="前処理で生成した正規化原本(canonical source)の 保存先の key prefix。",
     )
     rag_parser_adapter_backend: ParserAdapterBackend = Field(
         default=DEFAULT_PARSER_ADAPTER_BACKEND,
@@ -2034,7 +2034,7 @@ class Settings(
     rag_vision_enabled: bool = Field(
         default=True,
         description=(
-            "文書解析の後に図・画像を OCI Enterprise AI の VLM で読み取り、図の要素の本文を"
+            "文書解析の後に図・画像を VLM で読み取り、図の要素の本文を"
             "説明文にする(全ての解析エンジン。Docling は解析サービスの中で読み取る)。"
             "全体の既定は backend/.env で決め(文書解析の画面の「解析後の処理」から"
             "保存できる。#528)、文書のレシピで上書きする。既定 ON(#537)。"
@@ -2085,7 +2085,7 @@ class Settings(
     rag_raptor_enabled: bool = Field(
         default=False,
         description=(
-            "RAPTOR 再帰要約索引: chunking 後に leaf chunk を再帰 cluster + OCI Enterprise AI で"
+            "RAPTOR 再帰要約索引: chunking 後に leaf chunk を再帰 cluster + モデルの API で"
             "要約し、多層级 summary node を leaf と一緒に索引する。OFF(既定)は leaf のみ。"
             "追加 LLM 呼び出しを伴う opt-in。再試行のあとも要約できない cluster は飛ばす(leaf は"
             "残る)。権限・モデルの設定の誤り・割り当ての使い切りは取込を止める(#2067)。"
@@ -2147,7 +2147,7 @@ class Settings(
         default=str(BACKEND_ROOT / "service-runtime.env"),
         description=(
             "マイクロサービスの unit が EnvironmentFile で読む実行用の env ファイル。"
-            "backend が起動/再起動の前に HuggingFace 設定と実効 OCI Enterprise AI 設定"
+            "backend が起動/再起動の前に HuggingFace 設定と実効のモデルの API の設定"
             "(model-settings.json 由来を含む)を書く(0600)。unit 側の path と一致させる。"
         ),
     )
@@ -2165,12 +2165,12 @@ class Settings(
     )
     rag_extraction_artifact_cache_enabled: bool = Field(
         default=True,
-        description="構造化抽出 JSON artifact を chunk/embedding 前に Object Storage へ保存する。",
+        description="構造化抽出 JSON artifact を chunk/embedding 前に 保存先へ保存する。",
     )
     rag_extraction_artifact_prefix: str = Field(
         default="artifacts/extractions",
         max_length=256,
-        description="構造化抽出 artifact の Object Storage key prefix。",
+        description="構造化抽出 artifact の 保存先の key prefix。",
     )
     rag_review_gate_enabled: bool = Field(
         default=True,
@@ -2204,7 +2204,7 @@ class Settings(
         default=3,
         ge=1,
         le=5,
-        description="マルチモデル比較で同時に回答生成する OCI モデルの最大数。",
+        description="マルチモデル比較で同時に回答生成する モデルの最大数。",
     )
     rag_chat_max_active_answers_per_user: int = Field(
         default=3,

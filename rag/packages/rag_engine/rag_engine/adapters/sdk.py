@@ -1,4 +1,4 @@
-"""既存 Docling / Oracle / OCI 実装を SDK の機能契約へ接続する。"""
+"""既存 Docling / Oracle / モデルの API の実装を SDK の機能契約へ接続する。"""
 
 import json
 from collections.abc import Sequence
@@ -58,7 +58,7 @@ class DocumentParser:
 
 
 class ApiEmbedder:
-    """既存 OCI embedding のモデル・次元・retry 設定を利用する。"""
+    """既存 埋め込みモデル のモデル・次元・retry 設定を利用する。"""
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -71,7 +71,7 @@ class ApiEmbedder:
 
 
 def _require_text_only(settings: Settings, embedder: Embedder | None) -> None:
-    """image vector は常に OCI で作るため、別空間になる custom embedder との併用を拒否する。"""
+    """image vector は常に既定の埋め込みモデルで作るため、別空間になる custom embedder との併用を拒否する。"""
     if embedder is not None and settings.image_embedding_enabled:
         raise ValueError("A custom Embedder cannot be combined with IMAGE_EMBEDDING_ENABLED")
 
@@ -175,7 +175,7 @@ class ApiGenerator:
         """根拠の全文をバッチごとにモデルへ渡し、所属証拠付きの回答を返す。
 
         空根拠または単一根拠の予算超過時はモデルを呼ばず不足を返す。
-        初回OCI呼出の失敗は呼出元へ送出する。不足後の画像補完だけが失敗した場合は
+        初回の API 呼出の失敗は呼出元へ送出する。不足後の画像補完だけが失敗した場合は
         元の部分回答と失敗traceを返す。画像非対応モデルからはChicagoへ切り替える。
         """
         from rag_engine.generation import answering as answer

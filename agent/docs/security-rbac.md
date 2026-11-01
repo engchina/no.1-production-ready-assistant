@@ -230,7 +230,8 @@ Run は RAG から受け取った根拠（ツールの結果・`tool.completed` 
    プラグインが配っていたスキル・MCP 接続を使い続けるなら、先にスキル（`AGENT_SKILLS_DIR` か画面）と MCP 接続として登録し直す。
 11. （#11 以降に更新する環境）削除したシステム設定の「OCI 認証」のメニュー権限 `menu.settings_oci` は、既存ロールに
    残っていても読まない（migration で消さない）。`platform/.env` に残る OCI 認証の `PLATFORM_OCI_*`
-   （`PLATFORM_ENTERPRISE_AI_*` は除く）/ `PLATFORM_UPLOAD_STORAGE_BACKEND` / `PLATFORM_OBJECT_STORAGE_*` /
+   （モデルの接続の旧名 `PLATFORM_OCI_ENTERPRISE_AI_*` / `PLATFORM_OCI_GENAI_*` は除く。#51 で
+   `PLATFORM_ENTERPRISE_AI_*` / `PLATFORM_GENAI_*` へ改名した）/ `PLATFORM_UPLOAD_STORAGE_BACKEND` / `PLATFORM_OBJECT_STORAGE_*` /
    `PLATFORM_ORACLE_ADB_*` は読まれない（アップロードは `PLATFORM_LOCAL_STORAGE_DIR` だけに保存する）ので削除してよい。
 
 ## 9. 既知の制約

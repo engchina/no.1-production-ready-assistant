@@ -33,7 +33,7 @@ export interface SystemSettingsNavItem {
 }
 
 /**
- * サイドナビ「システム設定」の共通3項目（#116。OCI 認証は #11、「外観と証明書」は #19 で削除）。項目・並び順・アイコンは共有パッケージが決め、
+ * サイドナビ「システム設定」の共通3項目（#116。旧「OCI 認証」は #11、「外観と証明書」は #19 で削除）。項目・並び順・アイコンは共有パッケージが決め、
  * 各製品の nav config はこれをそのまま使う（NL2SQL は各項目に menu 権限を付ける）。
  */
 export const SYSTEM_SETTINGS_NAV_ITEMS = [

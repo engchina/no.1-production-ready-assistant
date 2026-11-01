@@ -1,7 +1,7 @@
 """解析後の図・画像の読み取り(Vision)。解析エンジンに依存しない共通の段(#497)。
 
 文書のレシピの「図・画像を AI で読み取る」(``rag_vision_enabled``)が有効なとき、取込の解析の
-直後に、Docling を含む全ての解析エンジンの図を OCI Enterprise AI の既定の Vision モデルで読み取る。
+直後に、Docling を含む全ての解析エンジンの図を 既定の Vision モデルで読み取る。
 
 読み取りの規則は rag_engine の ``describe_layout_pictures``(旧 Docling サービスの Vision)を
 そのまま使い、二重に実装しない。
@@ -156,7 +156,7 @@ def _is_list_annotation(annotation: object) -> bool:
 
 
 class EnterpriseAiPictureDescriber:
-    """rag_engine の ``PictureDescriber`` を OCI Enterprise AI の既定の Vision モデルで実装する。
+    """rag_engine の ``PictureDescriber`` を 既定の Vision モデルで実装する。
 
     rag_engine の読み取りは同期処理(thread)で動くので、非同期の client は取込の event loop へ
     ``run_coroutine_threadsafe`` で投げる。``caller``(上限つきの並行の実行器。#2002)を渡すと、

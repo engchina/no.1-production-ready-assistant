@@ -13,7 +13,7 @@ from rag_engine.resources.runtime import Runtime
 
 
 def oracle_answer_dependencies() -> AnswerDependencies:
-    """既存 Oracle/OCI 関数を束ねる。ここでは接続・モデル読込を行わない。"""
+    """既存 Oracle / モデルの API 関数を束ねる。ここでは接続・モデル読込を行わない。"""
     from rag_engine.adapters.model_api import parse_multimodal_response, parse_text_response, rerank_text_with_scores
     from rag_engine.adapters.oracle.store import check_adb_hybrid_search_ready, search_adb_hybrid_chunks
 

@@ -48,7 +48,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| 質問の embedding（OCI Generative AI） | 必須 | 例外を送出 → 回答は**エラー**（0 件にしない） | `SP`（`answer` / `retrieval` が `error`。`error_type` と安全なコードだけ） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._search` |
+| 質問の embedding（埋め込みモデル） | 必須 | 例外を送出 → 回答は**エラー**（0 件にしない） | `SP`（`answer` / `retrieval` が `error`。`error_type` と安全なコードだけ） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._search` |
 | vector 検索（Oracle AI Vector Search） | 必須 | 例外を送出 → **エラー** | `SP` | 見せない | `rag/backend/app/clients/oracle.py::OracleClient.search_many`・`_read_vector_branch` |
 | 全文検索（Oracle Text） | 必須（hybrid の方式で検索するとき） | SQL の失敗は例外を送出 → **エラー**。質問から検索語が作れないとき（`_oracle_text_query` が `None`）は全文検索を飛ばす（失敗ではない） | `SP` | 見せない | `rag/backend/app/clients/oracle.py::_read_keyword_branch`・`_oracle_text_query` |
 | 全文検索の語の分割（Sudachi） | 任意 | Sudachi・辞書が使えない・分割に失敗 → 文字種の区切りだけで検索語を作る | `DS`（`text_search_tokenizer`。使えないときは回答ごとに 1 回、分割の失敗は 1 回ごと）。使えるかの確認は process ごとに 1 回（例外を cache する） | 見せない（縮退は `DS` で分かる） | `rag/packages/rag_engine/rag_engine/retrieval/text_search_tokenizer.py::_sudachi_failure`・`sudachi_unavailable`・`_content_terms`・`rag/packages/rag_engine/rag_engine/generation/answering.py::answer_question_result` |
@@ -65,7 +65,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| rerank（Cohere Rerank） | 任意（設定 `RAG_RERANK_ENABLED`。モデル・compartment が未設定なら実行しない） | 原質問の rerank の失敗 → 取得の順で続ける | `DS`（`rerank`）・`ST`（工程「Rerank」の status「失敗・取得順を保持」） | 見せない: 診断の `models.rerank` は、無効・未設定のときと、回答の中で 1 回でも rerank が失敗したとき空にする（#3286）。引用には `rerank_score` が付かない | `rag/packages/rag_engine/rag_engine/generation/answering.py::_rerank_records`・`rag/backend/app/rag/answer_engine.py::AnswerEngine._models_used` |
+| rerank（再ランクのモデル） | 任意（設定 `RAG_RERANK_ENABLED`。再ランクのモデルの接続の Endpoint URL が未設定なら実行しない） | 原質問の rerank の失敗 → 取得の順で続ける | `DS`（`rerank`）・`ST`（工程「Rerank」の status「失敗・取得順を保持」） | 見せない: 診断の `models.rerank` は、無効・未設定のときと、回答の中で 1 回でも rerank が失敗したとき空にする（#3286）。引用には `rerank_score` が付かない | `rag/packages/rag_engine/rag_engine/generation/answering.py::_rerank_records`・`rag/backend/app/rag/answer_engine.py::AnswerEngine._models_used` |
 | 追加の検索文の rerank（#2161） | 任意 | その検索文を飛ばし、原質問の関連度で補う | `DS`（`rerank_extra_query`）・`ST`（「検索文 N 本の最高値」の N） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py::_best_rerank_ranks` |
 
 ### 検索の拡張（`answer_engine.py`）
@@ -110,7 +110,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| 回答の生成（OCI Enterprise AI） | 必須 | 1 組目の生成の失敗 → **エラー**。回答の期限で切れたときは、確かめ終わった round か「関係する資料の記載だけ」を示す | `SP`・`DX`（`round_budget`） | 見せない（期限で切れた回答は時間切れの回答として示す） | `rag/packages/rag_engine/rag_engine/generation/answering.py`（`budget.cut_round`） |
+| 回答の生成（モデルの API の LLM） | 必須 | 1 組目の生成の失敗 → **エラー**。回答の期限で切れたときは、確かめ終わった round か「関係する資料の記載だけ」を示す | `SP`・`DX`（`round_budget`） | 見せない（期限で切れた回答は時間切れの回答として示す） | `rag/packages/rag_engine/rag_engine/generation/answering.py`（`budget.cut_round`） |
 | 是正（作り直し）の round | 任意 | 失敗 → 直前に採用した回答を公開し、回答全体の警告に残す（#2729） | `ST`・回答の警告（段落の印） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py`（`correction_failure`） |
 | 生成の監査（LLM） | 必須（監査をする型のとき） | 期限で切れたとき → 監査なしの round にし、全要求を未回答として是正へ進む。他の失敗 → **エラー** | `RT`（round の `audit_cut`） | 見せない（未回答として扱う） | `rag/packages/rag_engine/rag_engine/generation/grounded.py` |
 | 規則の当てはめの段（#2155） | 任意 | 失敗 → 当てはめを足さず、結論は確かめていないまま | `RT`（`application_step.error`。型の名前だけ。backend の診断に写していない） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py`（`application_step`） |

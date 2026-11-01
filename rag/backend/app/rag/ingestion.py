@@ -656,7 +656,7 @@ class IngestionPipeline:
                 "engine_removed",
                 warning_code="parser_engine_removed",
             )
-        # pre-flight: 宣言 matrix で非対応形式なら microservice/OCI を呼ぶ前に停止する
+        # pre-flight: 宣言 matrix で非対応形式なら microservice・モデルの API を呼ぶ前に停止する
         # (preprocess 変換後の content_type で判定するため、office_to_pdf 済み等は通る)。
         if not adapter_supports_source(
             backend, source_profile=source_profile, content_type=content_type
@@ -738,7 +738,7 @@ class IngestionPipeline:
         attributes: Mapping[str, object],
         progress: IngestionProgressReporter | None,
     ) -> ParserRegistryResult:
-        """原本全体を 1 回で解析する(PDF 以外・段が 1 つ・OCI の解析サービス)。
+        """原本全体を 1 回で解析する(PDF 以外・段が 1 つ・段ごとに解析しない解析エンジン)。
 
         解析の間のページの進捗を解析サービスから読み、job の進捗へ写す(#1999)。最初に段の
         始まり(ページ数は未確定)を記録し、解析サービスが進捗を返さない間もその段を出す。
@@ -764,7 +764,7 @@ class IngestionPipeline:
         """段ごとに解析する PDF なら (解析エンジン, 段) を返す(#2001)。それ以外は None。
 
         対象は解析サービス(Docling・Unstructured など)・外部の解析 API で解析する 2 段以上の PDF。
-        OCI の解析サービス(Document Understanding・Vision)と、形式・設定で解析できない原本は
+        段ごとの解析に対応しない解析エンジンと、形式・設定で解析できない原本は
         原本全体の経路に任せる(そちらが利用者向けの理由で止める)。
         """
         settings = self._settings
@@ -2345,7 +2345,7 @@ class IngestionPipeline:
 
         passthrough(既定)は変換せず原本をそのまま返す(現行挙動と一致)。それ以外は
         in-process(text_normalize)または前処理マイクロサービスへ委譲し、変換物を
-        Object Storage へ保存して派生系譜(SourceDerivation)に object path / sha を残す。
+        保存先へ保存して派生系譜(SourceDerivation)に object path / sha を残す。
         選択済みの前処理マイクロサービスが失敗した場合は別経路へ切り替えない。
         """
         profile = resolve_preprocess_profile(self._settings)
@@ -2498,7 +2498,7 @@ class IngestionPipeline:
         derived_bytes: bytes,
         content_type: str,
     ) -> str | None:
-        """前処理で生成した正規化原本(canonical source)を Object Storage へ保存する。
+        """前処理で生成した正規化原本(canonical source)を 保存先へ保存する。
 
         変換物(処理後ファイル)は下流の抽出/プレビューに必須なため、抽出 JSON 用の
         rag_extraction_artifact_cache_enabled では握らず常に保存する。保存失敗は呼び出し側で
@@ -2594,7 +2594,7 @@ class IngestionPipeline:
         trace_id: str,
         extraction: StructuredExtraction,
     ) -> StructuredExtraction:
-        """しおりも番号も無い文書の見出しの階層を OCI Enterprise AI で推定する(#2277)。
+        """しおりも番号も無い文書の見出しの階層をモデルの API で推定する(#2277)。
 
         `rag_heading_level_inference_enabled` が真で、対象の条件(`heading_levels`)に合う文書だけ
         LLM を 1 回呼ぶ。応答の形が合わない・呼び出しが失敗したときは今の階層のまま続ける
@@ -2642,7 +2642,7 @@ class IngestionPipeline:
     ) -> StructuredExtraction:
         """`rag_field_extraction_enabled` が真なら field schema に従い named field を抽出する。
 
-        定義済み field を OCI Enterprise AI の structured output で抽出し、`ExtractionField`
+        定義済み field をモデルの API の structured output で抽出し、`ExtractionField`
         へ Pydantic 検証して保存する（既定 OFF）。項目は文書が属する KB の定義（無ければ全体の
         既定。複数の KB に属するときは和集合）を使う（#548）。実行結果(完了と件数・定義なし)を
         刻み、抽出の失敗(不正な応答を含む)は 0 件にせず取込を止める（#2481）。
@@ -3126,7 +3126,7 @@ class IngestionPipeline:
         """章節 navigation tree を決定論的に構築し、任意で node 要約を付与する。
 
         tree 構築は LLM 不要で常に実行する。node 要約は
-        `rag_navigation_summary_enabled` が真のときだけ OCI Enterprise AI LLM で行う。
+        `rag_navigation_summary_enabled` が真のときだけ LLM で行う。
         """
         from rag_parser_core.extraction import NAV_SUMMARY_KEY, SECTION_SUMMARY_CONTENT_KIND
 
@@ -3239,7 +3239,7 @@ class IngestionPipeline:
         extraction: StructuredExtraction,
         parse_key: str | None = None,
     ) -> tuple[StructuredExtraction, str | None]:
-        """抽出 JSON artifact を Object Storage に保存し、path を metadata へ戻す。
+        """抽出 JSON artifact を 保存先に保存し、path を metadata へ戻す。
 
         ``parse_key`` は解析に渡した内容と設定の鍵(``_segment_parse_key``)。再開で読み戻すときに
         今回の鍵と一致するかを確かめる(#2076)。
@@ -3564,7 +3564,7 @@ class IngestionPipeline:
     ) -> list[Chunk]:
         """RAPTOR 再帰要約索引(opt-in)。leaf に summary node を加えて返す。
 
-        要約は OCI Enterprise AI で行う。OFF(既定)のときは leaf chunk をそのまま返す。
+        要約はモデルの API で行う。OFF(既定)のときは leaf chunk をそのまま返す。
         1 つの階層の cluster は取込のほかの段と同じ上限つきの並行の実行器で呼ぶ(#2067。
         ``rag_raptor_concurrency``)。429 は段の全体で待ち、再試行のあとも要約できない cluster は
         飛ばす(leaf は残る)。権限・モデルの設定の誤り・割り当ての使い切りは取込を止める。
@@ -4551,7 +4551,7 @@ def _extraction_with_artifact_cache_metadata(
     segment: IngestionSegment | None = None,
     parse_key: str | None = None,
 ) -> StructuredExtraction:
-    """Object Storage cache payload を後方互換な parser_artifacts で自描述にする。"""
+    """保存先の cache payload を後方互換な parser_artifacts で自描述にする。"""
     parser_artifacts: dict[str, ExtractionArtifactValue] = {
         **extraction.parser_artifacts,
         "extraction_artifact_schema_version": EXTRACTION_ARTIFACT_SCHEMA_VERSION,
@@ -4576,7 +4576,7 @@ def _cached_segment_artifact_matches(
     *,
     parse_key: str | None = None,
 ) -> bool:
-    """Object Storage の segment artifact が現在の checkpoint と一致するか確認する。
+    """保存先の segment artifact が現在の checkpoint と一致するか確認する。
 
     ``parse_key`` を渡すと、段の PDF と解析・前処理の設定の鍵も一致する artifact だけを使う。
     """
@@ -4603,7 +4603,7 @@ def _cached_full_artifact_matches(
     *,
     parse_key: str,
 ) -> bool:
-    """Object Storage の full extraction artifact が現在文書の、同じ入力と設定のものか確認する。
+    """保存先の full extraction artifact が現在文書の、同じ入力と設定のものか確認する。
 
     鍵を持たない(#2076 の前に保存した)artifact は再利用しない(もう一度解析する)。
     """
@@ -4775,7 +4775,7 @@ def document_artifact_prefixes(settings: object, document_id: str) -> list[str]:
 
 
 def _safe_artifact_prefix(value: object) -> str:
-    """Object Storage artifact prefix を監査しやすい key path へ正規化する。"""
+    """保存先の artifact prefix を監査しやすい key path へ正規化する。"""
     raw = str(value or "").replace("\\", "/")
     parts = [
         _safe_artifact_key_part(part)

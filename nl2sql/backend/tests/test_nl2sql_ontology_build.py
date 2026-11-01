@@ -1363,7 +1363,7 @@ def test_build_job_fails_gracefully_without_enterprise_ai(
     finished = _wait_for_job(service, job.id)
 
     assert finished.status == OntologyBuildStatus.FAILED
-    assert "Enterprise AI" in finished.error_message_ja
+    assert "モデルの API" in finished.error_message_ja
     assert finished.proposal_ids == []
     assert all(step.status == OntologyBuildStepStatus.SKIPPED for step in finished.steps)
 
@@ -3188,7 +3188,7 @@ class _ThrottledEnterpriseAiClient(_FakeEnterpriseAiClient):
             time.sleep(self.delay)
             if fail:
                 raise EnterpriseAiDirectError(
-                    f"OCI Enterprise AI HTTP {self.status}",
+                    f"Model API HTTP {self.status}",
                     code="http",
                     http_failure=classify_enterprise_ai_http_failure(self.status, ""),
                     headers={"retry-after": "0"},

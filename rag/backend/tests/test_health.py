@@ -67,7 +67,7 @@ def test_unsafe_request_id_header_is_not_reflected() -> None:
     assert " " not in resp.headers["x-request-id"]
 
 
-def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
+def test_readiness_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
     for field in (
         "enterprise_ai_endpoint",
@@ -98,7 +98,7 @@ def test_readiness_oci_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> N
     }
 
 
-def test_readiness_oci_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
     _configure_llm_readiness(
         monkeypatch,
         oracle_password="super-secret-password",
@@ -140,7 +140,7 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
     }
 
 
-def test_readiness_oci_requires_enterprise_ai_model_catalog(
+def test_readiness_requires_enterprise_ai_model_catalog(
     monkeypatch: MonkeyPatch,
     wallet_dir: Path,
 ) -> None:
@@ -159,7 +159,7 @@ def test_readiness_oci_requires_enterprise_ai_model_catalog(
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
-def test_readiness_production_oci_requires_audit_salt(
+def test_readiness_production_requires_audit_salt(
     monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
 ) -> None:
     _configure_llm_readiness(
@@ -184,7 +184,7 @@ def test_readiness_production_oci_requires_audit_salt(
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
-def test_readiness_production_oci_complete_config_is_ok(
+def test_readiness_production_complete_config_is_ok(
     monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
 ) -> None:
     _configure_llm_readiness(
@@ -209,7 +209,7 @@ def test_readiness_production_oci_complete_config_is_ok(
     assert "production-audit-salt" not in str(body)
 
 
-def test_readiness_oci_password_without_wallet_is_degraded(
+def test_readiness_password_without_wallet_is_degraded(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """DB パスワードがあっても Wallet が無ければ ok にしない（システム設定画面と同じ判定。#325）。
@@ -231,7 +231,7 @@ def test_readiness_oci_password_without_wallet_is_degraded(
     assert body["data"]["checks"]["oracle"] == "wallet_not_found"
 
 
-def test_readiness_oci_encrypted_wallet_without_password_is_degraded(
+def test_readiness_encrypted_wallet_without_password_is_degraded(
     monkeypatch: MonkeyPatch,
     wallet_dir: Path,
 ) -> None:
@@ -253,7 +253,7 @@ def test_readiness_oci_encrypted_wallet_without_password_is_degraded(
     assert resp.json()["data"]["checks"]["oracle"] == "wallet_password_invalid"
 
 
-def test_readiness_oci_missing_wallet_dir_is_degraded(
+def test_readiness_missing_wallet_dir_is_degraded(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -271,7 +271,7 @@ def test_readiness_oci_missing_wallet_dir_is_degraded(
     assert body["data"]["checks"]["oracle"] == "wallet_not_found"
 
 
-def test_readiness_oci_invalid_embedding_dim_is_degraded(
+def test_readiness_invalid_embedding_dim_is_degraded(
     monkeypatch: MonkeyPatch, wallet_dir: Path
 ) -> None:
     _configure_llm_readiness(
@@ -586,7 +586,7 @@ def _configure_llm_readiness(
     monkeypatch.setattr(
         settings,
         "enterprise_ai_project_id",
-        "ocid1.generativeaiproject.oc1..example",
+        "proj-example",
     )
     monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "enterprise-vlm")
     monkeypatch.setattr(

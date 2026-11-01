@@ -83,7 +83,7 @@ const TERMINAL_STATUSES = new Set<QualityEvaluationStatus>([
 const ACTIVE_STATUSES = new Set<QualityEvaluationStatus>(["pending", "running"]);
 const sectionClass = "grid min-w-0 gap-5 rounded-lg border border-border bg-surface p-4 shadow-sm lg:p-5";
 
-/** 評価する SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+/** 評価する SQL の生成の方式（モデルの API の 1 つだけ）。 */
 const ENGINES: readonly QualityEvaluationEngine[] = ["enterprise_ai_direct"];
 
 type FormErrors = Partial<Record<"profile" | "file" | "engines" | "repeat", string>>;
@@ -505,7 +505,7 @@ export function EvaluationPage() {
                 </div>
               </FormGrid>
 
-              {/* SQL の生成の方式（OCI Enterprise AI）がこの環境で使えないときは、理由を開始の前に示す。 */}
+              {/* SQL の生成の方式（モデルの API）がこの環境で使えないときは、理由を開始の前に示す。 */}
               {selectedUnavailable ? (
                 <div data-testid="quality-evaluation-engine-unavailable">
                   <Banner severity="warning" title={t("qualityEvaluation.engines.unavailable")}>

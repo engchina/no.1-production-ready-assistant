@@ -27,9 +27,8 @@ ServiceCategory = Literal[
     "preprocess",
     "parser",
 ]
-# cpu/gpu はローカル ML 依存の重さで分ける。oci は OCI クラウドサービスを呼ぶ薄い
-# プロキシ microservice(GPU 不要・OCI 認証はメイン設定を継承)。
-ServiceProfile = Literal["cpu", "gpu", "oci"]
+# cpu/gpu はローカル ML 依存の重さで分ける(OCI のクラウドサービスを呼ぶ oci は #11 で削除した)。
+ServiceProfile = Literal["cpu", "gpu"]
 ServiceExecutionPolicy = Literal["selected_adapter", "default_adapter"]
 
 # systemd の unit 名の接頭辞。init_script.sh / scripts/rag-services.sh が作る unit と同じ。
@@ -74,7 +73,7 @@ class ServiceCatalogEntry:
         return f"http://127.0.0.1:{self.port}"
 
 
-# 工程の順に並べる(ファイル準備 → 文書解析 CPU / GPU / OCI → 文書分割以降の工程)。
+# 工程の順に並べる(ファイル準備 → 文書解析 CPU / GPU → 文書分割以降の工程)。
 SERVICE_CATALOG: tuple[ServiceCatalogEntry, ...] = (
     ServiceCatalogEntry(
         service_id="preprocess-office-to-pdf",

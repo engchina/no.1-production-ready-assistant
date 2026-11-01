@@ -258,7 +258,7 @@ def _enterprise_ai_sql_generation_exception(exc: EnterpriseAiDirectError) -> HTT
         )
     return HTTPException(
         status_code=502,
-        detail="OCI Enterprise AI で SQL を生成できませんでした。再試行してください。",
+        detail="モデルの API で SQL を生成できませんでした。再試行してください。",
     )
 
 
@@ -2658,7 +2658,7 @@ def db_admin_upload_csv(
 def db_admin_analyze_error(
     req: DbAdminAiAnalysisRequest,
 ) -> ApiResponse[DbAdminAiAnalysisData]:
-    """Admin SQL 実行結果の AI 分析(OCI Enterprise AI、未設定時は deterministic)。"""
+    """Admin SQL 実行結果の AI 分析(モデルの API、未設定時は deterministic)。"""
     return ApiResponse(data=nl2sql_service.analyze_db_admin_failure(req))
 
 
@@ -2932,7 +2932,7 @@ def db_admin_chat_analyze_error(
 def db_admin_extract_join_where(
     req: DbAdminJoinWhereRequest,
 ) -> ApiResponse[DbAdminJoinWhereData]:
-    """ビュー DDL から JOIN/WHERE 条件を抽出する(OCI Enterprise AI、未設定時は deterministic)。"""
+    """ビュー DDL から JOIN/WHERE 条件を抽出する(モデルの API、未設定時は deterministic)。"""
     return ApiResponse(data=nl2sql_service.extract_db_admin_join_where(req))
 
 
@@ -2987,5 +2987,5 @@ def db_admin_export_view_xlsx(view_name: str, limit: int = 1000, owner: str = ""
 
 @router.get("/diagnostics", response_model=ApiResponse[DiagnosticsData])
 def diagnostics() -> ApiResponse[DiagnosticsData]:
-    """OCI / Oracle / NL2SQL エンジン設定の非 secret 診断を返す。"""
+    """モデルの API / Oracle / NL2SQL エンジン設定の非 secret 診断を返す。"""
     return ApiResponse(data=nl2sql_service.diagnostics())

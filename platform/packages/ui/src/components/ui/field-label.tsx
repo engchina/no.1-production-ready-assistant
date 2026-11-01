@@ -18,7 +18,7 @@ import { DEFAULT_REQUIRED_LABEL, RequiredBadge } from "./required-badge";
 type RequiredProps = {
   /** 必須の欄。ラベルの後ろに RequiredBadge を出す。 */
   required?: boolean;
-  /** タグの文言。既定「必須」。条件付きの必須（例:「OCI 運用時必須」）だけ上書きする。 */
+  /** タグの文言。既定「必須」。条件付きの必須（例:「利用時必須」）だけ上書きする。 */
   requiredLabel?: string;
   /**
    * 入力側（またはグループ）が aria-required / required で必須を伝えているか。

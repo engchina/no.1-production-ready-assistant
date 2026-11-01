@@ -14,7 +14,7 @@
   文書・chunk・版に縛り、頁の番号は同じ文書の中だけを読む。
 - MCP の文書を読むツール: 呼んだ利用者の今の範囲で読む（範囲の外は source_not_found）。
 
-Oracle・Object Storage・LLM は fake / スタブ（合成の内容）で、実サービスは呼ばない。
+Oracle・保存先・LLM は fake / スタブ（合成の内容）で、実サービスは呼ばない。
 """
 
 from __future__ import annotations

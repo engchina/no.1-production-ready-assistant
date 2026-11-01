@@ -20,7 +20,7 @@ def _config(max_retries: int = 0) -> EnterpriseAiConfig:
     return EnterpriseAiConfig(
         enterprise_ai_endpoint=ENDPOINT,
         enterprise_ai_api_key="test-key",
-        enterprise_ai_project_id="ocid1.project.test",
+        enterprise_ai_project_id="proj-test",
         default_model_id="test-llm",
         enterprise_ai_max_retries=max_retries,
     )
@@ -60,7 +60,7 @@ async def test_generate_posts_responses_via_openai_sdk(monkeypatch: pytest.Monke
     request = requests[0]
     assert str(request.url) == f"{ENDPOINT}/responses"
     assert request.headers["authorization"] == "Bearer test-key"
-    assert request.headers["openai-project"] == "ocid1.project.test"
+    assert request.headers["openai-project"] == "proj-test"
     assert json.loads(request.content)["model"] == "test-llm"
     # SDK が付けるヘッダーを重ねて送らない(重複を連結する gateway は 400。#3527)
     assert request.headers.get_list("content-type") == ["application/json"]

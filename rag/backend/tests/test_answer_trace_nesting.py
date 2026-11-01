@@ -1,8 +1,8 @@
 """処理の経過の span の親子（#3475）。
 
 工程の中の処理（検索・並べ替え・モデルの呼び出し）は、その工程の子。本物の `RagPipeline` →
-`AnswerEngine` → rag_engine の回答フロー（注入した backend の検索・rerank）を通し、OCI・DB の
-代役が本物と同じ名前の span を開く。span の木（親の名前）を確かめる。
+`AnswerEngine` → rag_engine の回答フロー（注入した backend の検索・rerank）を通し、
+モデルの API・DB の代役が本物と同じ名前の span を開く。span の木（親の名前）を確かめる。
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ class _TracedGenAi(FakeGenAi):
 
 
 def _traced_llm(system: str, prompt: str, settings: Any, schema: type, **options: Any) -> Any:
-    # rag_engine の OCI の呼び出し（`adapters/oci.py`）と同じ観測。
+    # rag_engine のモデルの API の呼び出し（`adapters/model_api.py`）と同じ観測。
     with observe_call("chat", "synthetic-model"):
         return _fake_llm(system, prompt, settings, schema, **options)
 

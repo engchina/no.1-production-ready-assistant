@@ -499,7 +499,7 @@ def test_update_model_settings_persists_v2_json_and_env_secret(
         json={
             "enterprise_ai": {
                 "endpoint": "https://enterprise-ai.example.com",
-                "project_id": "ocid1.project.oc1..example",
+                "project_id": "proj_example",
                 "api_key": "",
                 "has_api_key": True,
                 "clear_api_key": False,
@@ -589,7 +589,7 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
           "version": 1,
           "enterprise_ai": {
             "endpoint": "https://enterprise-ai.example.com",
-            "project_id": "ocid1.project.oc1..example",
+            "project_id": "proj_example",
             "api_key": "persisted-secret",
             "models": [
               {
@@ -637,7 +637,7 @@ def test_load_persisted_model_settings_applies_runtime_fields(tmp_path: Path) ->
     assert settings.enterprise_ai_vlm_input_mode == "inline_image"
     assert settings.enterprise_ai_max_retries == 4
     assert settings.genai_embed_model_id == "cohere.embed-v4.0"
-    assert settings.genai_rerank_model_id == "cohere.rerank-v4.0-fast"
+    assert settings.genai_rerank_model == "cohere.rerank-v4.0-fast"
 
 
 def test_environment_model_secret_takes_precedence_over_v1_json(tmp_path: Path) -> None:
@@ -783,7 +783,7 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
             "settings": {
                 "enterprise_ai": {
                     "endpoint": "https://enterprise-ai.example.com",
-                    "project_id": "ocid1.project.oc1..example",
+                    "project_id": "proj_example",
                     "api_key": "request-secret",
                     "models": [
                         {
@@ -856,7 +856,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
             "settings": {
                 "enterprise_ai": {
                     "endpoint": "https://enterprise-ai.example.com",
-                    "project_id": "ocid1.project.oc1..example",
+                    "project_id": "proj_example",
                     "api_key": "request-secret",
                     "models": [
                         {

@@ -8,7 +8,7 @@
 - MCP の `nl2sql_query`: 回答前の確認の LLM の呼び出しは確認の工程（`nl2sql.requirement`）の子、
   ジョブは確認の工程の外（ツールの span の子）で作る。
 
-LLM は OCI Enterprise AI の実の client を httpx の mock で、DB は fake の接続で動かす。
+LLM はモデルの API の実の client を httpx の mock で、DB は fake の接続で動かす。
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ class _LlmRequirementRuntime(_ReadyRequirementRuntime):
 
 
 class _UnconfiguredRequirementRuntime(_ReadyRequirementRuntime):
-    """OCI Enterprise AI を設定していない構成（回答前の確認をせずに SQL を作る）。"""
+    """モデルの API を設定していない構成（回答前の確認をせずに SQL を作る）。"""
 
     def create_session(self, request: Any, **kwargs: Any) -> Any:
         raise RequirementAiUnavailableError("REQUIREMENT_AI_NOT_CONFIGURED", "未設定")

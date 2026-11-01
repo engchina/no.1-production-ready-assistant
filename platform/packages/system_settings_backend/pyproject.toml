@@ -14,7 +14,7 @@ dependencies = [
   # 共通認証のパスワード hash（Argon2id。#212）
   "pwdlib[argon2]>=0.3,<1.0",
   "production-ready-backend-core",
-  # OCI Enterprise AI の URL の規則と失敗の分類（suite と共有する標準 library だけの package。#3418）
+  # モデルの API の URL の規則と失敗の分類（suite と共有する標準 library だけの package。#3418）
   "production-ready-enterprise-ai",
   # 会話の添付の解析（#2517）。PDF の文字・Excel の行・Office の XML（zip bomb・XXE を防ぐ）・文字コード。
   "pypdf>=6.4,<7",

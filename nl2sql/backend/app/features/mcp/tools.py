@@ -139,7 +139,7 @@ _REQUIREMENT_CLOSED_MESSAGE = (
     "nl2sql_query を呼び直してください。"
 )
 _REQUIREMENT_SKIPPED_MESSAGE = (
-    "OCI Enterprise AI が設定されていないため、回答前の確認をせずに SQL を生成しました。"
+    "モデルの API が設定されていないため、回答前の確認をせずに SQL を生成しました。"
 )
 # 業務プロファイルの「曖昧な質問の扱い」が「前提を示して SQL を生成する」（#1839）で、
 # 確認せずに作った。
@@ -441,7 +441,7 @@ class RequirementOutput(BaseModel):
     status: str = Field(
         description=(
             "needs_answer / ready / unanswerable / applied / cancelled / skipped"
-            "（OCI Enterprise AI が無い構成・業務プロファイルの方針が"
+            "（モデルの API が無い構成・業務プロファイルの方針が"
             "「前提を示して SQL を生成する」・skip_clarification で確かめなかった）"
         )
     )
@@ -531,7 +531,7 @@ class Nl2SqlJobResult(VersionedOutput):
             "SCHEMA_CATALOG_EMPTY・JOB_CANCELLED・JOB_INTERRUPTED・NL2SQL_JOB_FAILED・"
             "NL2SQL_PROFILE_REVALIDATION_REQUIRED（公開の後に業務プロファイルか Schema が変わり、"
             "管理者が業務定義を再検証して公開するまで再試行しても直らない）、"
-            "OCI Enterprise AI の HTTP の失敗なら ENTERPRISE_AI_AUTHORIZATION_FAILED・"
+            "モデルの API の HTTP の失敗なら ENTERPRISE_AI_AUTHORIZATION_FAILED・"
             "ENTERPRISE_AI_AUTHENTICATION_FAILED・ENTERPRISE_AI_MODEL_NOT_FOUND"
             "（設定の誤りで、再試行しても直らない）・ENTERPRISE_AI_RATE_LIMITED・"
             "ENTERPRISE_AI_UNAVAILABLE・ENTERPRISE_AI_REQUEST_REJECTED など"
@@ -1119,7 +1119,7 @@ def build_mcp_server(request: Request) -> McpServer:
                     or arguments.requirement_session_id
                 ):
                     raise
-                # OCI Enterprise AI を設定していない構成（ローカルの決定論など）は、
+                # モデルの API を設定していない構成（ローカルの決定論など）は、
                 # SQL の生成前の確認をせずに SQL を作る。確かめていないことを requirement で返す。
                 requirement_trace.set_status("skipped")
                 return (

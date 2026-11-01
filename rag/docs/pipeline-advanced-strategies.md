@@ -2,7 +2,7 @@
 
 > 本ドキュメントは、回答フロー(`app/rag/answer_engine.py`・`packages/rag_engine`)に追加しうる
 > **実行配線が重い高度な検索・回答方式** の設計メモをまとめる。いずれも確定スタック
-> (OCI Enterprise AI / OCI Generative AI Cohere / Oracle AI Database)を不変とし、外部ベクトル DB・別
+> (モデルの API〔OpenAI 互換の API。LLM・埋め込み・再ランク〕/ Oracle AI Database)を不変とし、外部ベクトル DB・別
 > LLM provider は導入しない。GPU / 版管理 schema DDL / 実 Oracle を要するものは **本リポジトリの
 > CI(GPU・実 DB なし)では検証不能** のため、決定論部分の実装 → 実環境配線 → 検証の順で導入する。
 >
@@ -35,9 +35,9 @@ cosine 類似度ではなく **LLM が章節 tree を navigation** して関連 
 ### 設計メモ
 - **tree 構築(取込時 or 検索時キャッシュ)**: 既存の `DocumentElement.section_path` /
   `parent_id` 階層から、文書ごとに `section tree`(node = {title, summary, page_range,
-  child_ids})を構築。要約は OCI Enterprise AI(RAPTOR と共用可)。
+  child_ids})を構築。要約は LLM(RAPTOR と共用可)。
   既存 `navigation` JSON(`app/rag/navigation.py`)を再利用して node を永続化する。
-- **検索時 navigation**: OCI Enterprise AI に「query + 現在 node の title/summary 群」を渡し、各 node
+- **検索時 navigation**: LLM に「query + 現在 node の title/summary 群」を渡し、各 node
   で yes/no(展開/スキップ)を JSON で判断 → 命中 leaf の chunk を Oracle から取得。踏破 node 列は
   回答フローの実行記録(`diagnostics.answer.execution_steps`)に残して監査可能にする。
 - **融合**: 回答フローの検索の RRF に 1 チャネルとして加える(画面目録の候補と同じく、足すだけで減らさない)。
@@ -53,7 +53,7 @@ cosine 類似度ではなく **LLM が章節 tree を navigation** して関連 
 
 ### 設計メモ(要 GPU + 版管理 schema DDL)
 - **取込時**: PDF の各ページを画像に描画する(前処理 `pdf_to_page_images` は #3347 で削除した)→ **GPU サービス**(ColQwen/ColPali を
-  transformers でロード)で **multi-vector embedding** を生成。OCI Enterprise AI VLM 経路でも近似可能だが
+  transformers でロード)で **multi-vector embedding** を生成。画像対応モデル（VLM）の経路でも近似可能だが
   multi-vector が要点。
 - **索引(schema 変更)**: Oracle AI Database に視覚 embedding 列/表(`rag_page_visual_vectors`、
   `VECTOR` 複数 or per-patch 行)を追加。**版管理された schema DDL artifact の変更が必要**
@@ -70,7 +70,7 @@ cosine 類似度ではなく **LLM が章節 tree を navigation** して関連 
 
 ## 3. 残りの高度戦略(設計メモ)
 
-- **self_reflective(Self-RAG)**: OCI Enterprise AI が
+- **self_reflective(Self-RAG)**: LLM が
   `{"answer":..., "confidence":0-1, "grounded_in_context":bool}` を出力し、`confidence<閾値` or
   `grounded_in_context==false` で **1 回だけ再検索**する。回答フローの CRAG(根拠の評価と補正検索)と
   回答文の生成後の根拠確認が同じ役割を持つため、足すならその中で扱う。
@@ -88,7 +88,7 @@ cosine 類似度ではなく **LLM が章節 tree を navigation** して関連 
 
 - 決定論部分(tree navigation 判定の集約、late-interaction スコアの数値、reflection パース)は
   injectable + unit test で CI 緑にする。
-- LLM/VLM/GPU/Oracle を要する実行は **staging(実 OCI/Oracle/GPU host)** で結合検証し、
+- LLM/VLM/GPU/Oracle を要する実行は **staging(実モデルの API/Oracle/GPU host)** で結合検証し、
   file-processing / retrieval staging gate(`docs/evaluation`)に指標(retrieval recall / table QA /
   page hit / tree path coverage)を合流させる。
 - すべて opt-in・未配線時は既存の回答フローの挙動のままにし、既定の挙動・レイテンシを変えない。

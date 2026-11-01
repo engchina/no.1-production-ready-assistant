@@ -325,7 +325,7 @@ async def suggest_agent_draft(
     candidates: Mapping[str, tuple[str, Sequence[DataScopeCandidate]]],
     notices: Sequence[str] = (),
 ) -> AgentDraftSuggestion:
-    """業務の説明から下書きを提案する（OCI Enterprise AI の既定のテキストモデル。構造化出力）。
+    """業務の説明から下書きを提案する（既定のテキストモデル。構造化出力）。
 
     呼び出しは品質評価の判定と同じ上限つきの実行器を通す（429・5xx・接続・時間切れは種類ごとに
     再試行し、出力の上限で止まったら上限を広げて 1 回だけ送り直す）。権限・設定の誤りは

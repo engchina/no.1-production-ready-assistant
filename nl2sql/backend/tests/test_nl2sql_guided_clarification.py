@@ -521,7 +521,7 @@ def test_invalid_llm_output_is_rejected() -> None:
     ids=["authorization", "temporary"],
 )
 def test_llm_http_failure_guidance_depends_on_kind(status: int, configuration_error: bool) -> None:
-    """設定の誤り（OCI の 404 など）は「もう一度」と案内せず、確かめる所を出す（#1684）。"""
+    """設定の誤り（404 など）は「もう一度」と案内せず、確かめる所を出す（#1684）。"""
     from pr_system_settings.enterprise_ai_errors import classify_enterprise_ai_http_failure
 
     from app.features.nl2sql.enterprise_ai_client import EnterpriseAiDirectError
@@ -530,12 +530,12 @@ def test_llm_http_failure_guidance_depends_on_kind(status: int, configuration_er
         def generate(self, **kwargs: Any) -> str:
             failure = classify_enterprise_ai_http_failure(status, "synthetic")
             raise EnterpriseAiDirectError(
-                f"OCI Enterprise AI HTTP {status}: synthetic",
+                f"Model API HTTP {status}: synthetic",
                 code=failure.kind,
                 retryable=failure.retryable,
                 http_failure=failure,
                 model_id="openai.gpt-oss-120b",
-                endpoint_host="inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+                endpoint_host="llm.example",
             )
 
     runtime = _runtime(_FailingLlm())

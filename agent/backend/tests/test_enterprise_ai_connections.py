@@ -17,7 +17,7 @@ from app.settings import Settings
 
 PRIMARY = "https://primary.example/openai/v1"
 SECONDARY = "https://secondary.example/openai/v1"
-# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project OCID を入れない。
+# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project ID を入れない。
 TERTIARY = "https://api.openai.example/v1"
 
 
@@ -28,13 +28,13 @@ def _payload() -> dict[str, Any]:
                 {
                     "connection_id": "primary",
                     "endpoint": PRIMARY,
-                    "project_id": "ocid1.project.primary",
+                    "project_id": "proj-primary",
                     "api_key": "sk-primary",
                 },
                 {
                     "connection_id": "secondary",
                     "endpoint": SECONDARY,
-                    "project_id": "ocid1.project.secondary",
+                    "project_id": "proj-secondary",
                     "api_key": "",
                     "has_api_key": True,
                 },
@@ -64,14 +64,14 @@ def _payload() -> dict[str, Any]:
         (
             "enterprise_text",
             "text-a",
-            (PRIMARY, "Bearer sk-primary", "ocid1.project.primary"),
+            (PRIMARY, "Bearer sk-primary", "proj-primary"),
         ),
         (
             "enterprise_vision",
             "vision-b",
-            (SECONDARY, "Bearer sk-saved-secondary", "ocid1.project.secondary"),
+            (SECONDARY, "Bearer sk-saved-secondary", "proj-secondary"),
         ),
-        # Project OCID のないターシャリ接続は OpenAI-Project ヘッダーを送らない（#786）。
+        # Project ID のないターシャリ接続は OpenAI-Project ヘッダーを送らない（#786）。
         ("enterprise_text", "gpt-c", (TERTIARY, "Bearer sk-tertiary", "")),
     ],
     ids=["text-primary", "vision-secondary", "text-tertiary"],

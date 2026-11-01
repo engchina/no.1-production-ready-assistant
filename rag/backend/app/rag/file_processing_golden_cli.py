@@ -39,7 +39,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--fail-on-pending",
         action="store_true",
-        help="OCI staging が必要な pending check が残っている場合も失敗にします。",
+        help=(
+            "staging（モデルの API・Oracle・保存先）が必要な pending check が残っている場合も"
+            "失敗にします。"
+        ),
     )
     parser.add_argument(
         "--github-annotations",

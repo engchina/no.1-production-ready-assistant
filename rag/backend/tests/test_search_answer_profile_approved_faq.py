@@ -24,7 +24,7 @@ def fake_oracle(monkeypatch: pytest.MonkeyPatch) -> FakeKnowledgeOracle:
 
 
 class StubGenAi:
-    """意味照合の embedding を決定論化する(外部 OCI を呼ばない)。"""
+    """意味照合の embedding を決定論化する(外部モデルの API を呼ばない)。"""
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         pass

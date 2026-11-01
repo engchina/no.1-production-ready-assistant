@@ -6,7 +6,7 @@
 - 読み取り（`GET /api/figures/{token}`）: 読むたびに署名・期限・利用者の今の権限・見え方・版を
   確かめ直し、cache・Referer・MIME の推測を止めるヘッダーで返す。
 
-Oracle・Object Storage は fake（`tests.test_mcp_api` と同じ図の PDF）。
+Oracle・保存先 は fake（`tests.test_mcp_api` と同じ図の PDF）。
 """
 
 from __future__ import annotations

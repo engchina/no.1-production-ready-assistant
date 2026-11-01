@@ -1,4 +1,4 @@
-"""OCI Enterprise AI LLM/VLM endpoint 契約の疎通 probe CLI。"""
+"""モデルの API の LLM/VLM endpoint 契約の疎通 probe CLI。"""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class EnterpriseAiProbeReport:
 
 def main() -> int:
     """CLI entrypoint。"""
-    parser = argparse.ArgumentParser(description="Probe OCI Enterprise AI LLM/VLM contracts.")
+    parser = argparse.ArgumentParser(description="Probe model API LLM/VLM contracts.")
     parser.add_argument(
         "--surface",
         choices=("llm", "vlm", "both"),

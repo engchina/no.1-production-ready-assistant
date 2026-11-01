@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agent/init_script.sh（OCI Resource Manager stack の Compute 初期化）の振る舞いを外部依存なしで検証する。
+# agent/init_script.sh（3 製品の配備の Compute 初期化）の振る舞いを外部依存なしで検証する。
 set -euo pipefail
 
 TEST_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

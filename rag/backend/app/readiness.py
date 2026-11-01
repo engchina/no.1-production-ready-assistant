@@ -95,7 +95,7 @@ def _upload_storage_checks(settings: Settings) -> dict[str, str]:
 
 
 def _genai_check(settings: Settings) -> str:
-    """OCI Generative AI の embedding/rerank 設定を確認する。"""
+    """埋め込み・再ランクのモデルの 設定を確認する。"""
     required_status = _required_values_check(
         settings.genai_embedding_model,
         settings.genai_rerank_model,
@@ -108,7 +108,7 @@ def _genai_check(settings: Settings) -> str:
 
 
 def _enterprise_ai_check(settings: Settings) -> str:
-    """OCI Enterprise AI の endpoint / model catalog を確認する。
+    """モデルの API の endpoint / model catalog を確認する。
 
     接続は既定のテキストモデルと既定の Vision モデルそれぞれの接続を確かめる(#533)。
     """

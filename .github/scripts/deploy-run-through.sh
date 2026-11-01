@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 配備の通し（Deploy Nightly。deploy-nightly.yml。#1595）。本番の Compute と同じ Oracle Linux 9 の container
-# （systemd を PID 1 にした privileged の container）で、cloud-init と同じ props を置いて
+# （systemd を PID 1 にした privileged の container）で、配備と同じ props を置いて
 # platform/deploy/suite-init.sh を実際に実行し、3 製品の配備（dnf・Node.js・uv の venv・RAG の前処理 / parser・
 # frontend の build・systemd の unit）と、各製品の backend の health・frontend の dist を確かめる。reverse proxy（Nginx）と
 # TLS の証明書は配備しない（#19）。
@@ -144,7 +144,7 @@ AGENT_EXTERNAL_RAG_MCP_URL=http://127.0.0.1:8000/api/mcp
 AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8010/api/mcp
 AGENT_EXTERNAL_RAG_PUBLIC_URL=/rag
 EOF
-  # 配備の props の rag_services.txt（既定の一覧。parser-unstructured・OCI の parser は入れない）。
+  # 配備の props の rag_services.txt（既定の一覧。parser-unstructured は入れない）。
   in_container "
     printf '%s\n' '${products}' > ${props}/products.txt
     printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling' > ${props}/rag_services.txt

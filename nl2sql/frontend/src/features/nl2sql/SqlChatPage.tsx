@@ -176,7 +176,7 @@ async function submitChatJob(
   }
 }
 
-/** SQL の生成の方式（OCI Enterprise AI の 1 つだけ）。 */
+/** SQL の生成の方式（モデルの API の 1 つだけ）。 */
 const CHAT_ENGINE: Nl2SqlEngine = "enterprise_ai_direct";
 
 /**

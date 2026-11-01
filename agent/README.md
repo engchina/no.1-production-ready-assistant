@@ -3,14 +3,14 @@
 **業務・業界の Agent を作り、Skill と MCP（RAG・NL2SQL・その他）を安全に使わせる。**
 
 業務 Agent・Skill を定義し、Control Plane の中の組み込み Runtime（OpenAI Agents SDK）で実行します。
-モデルは OCI Enterprise AI の Responses API、ツールの実行は承認・監査を通します（#754）。
+モデルは OpenAI 互換のモデルの API（Responses API）、ツールの実行は承認・監査を通します（#754）。
 
 ```text
 Skill（SKILL.md・references/・宣言・画面）→ Skill Registry
                                          │
 業務 Agent（指示・Skill・モデル）──────→ Skill → ツール（RAG / NL2SQL / 外部 MCP）
        │
-       └─ Run → 組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI）→ 承認・監査・成果物
+       └─ Run → 組み込み Runtime（OpenAI Agents SDK + モデルの API）→ 承認・監査・成果物
 ```
 
 第三者の部品のライセンスの通知（Apache-2.0 の NOTICE・書体など）は root の [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) にあります。
@@ -19,7 +19,7 @@ Skill（SKILL.md・references/・宣言・画面）→ Skill Registry
 
 - 業務 Agent: 業務指示、説明、有効状態、`skill_ids`、使うモデル（`model_id`。空なら既定のテキストモデル）。
 - Skill: AgentSkills 互換指示、`mcp_requirements`、参照文書（SKILL.md と同じディレクトリの `references/`。必要なときだけ `skill_reference_read` で読む）。プラグインは持たない（#1803）。
-- 組み込み Runtime: Agent と Skill の指示、Skill が必要とするツールを OpenAI Agents SDK に渡し、OCI Enterprise AI で実行する。
+- 組み込み Runtime: Agent と Skill の指示、Skill が必要とするツールを OpenAI Agents SDK に渡し、モデルの API で実行する。
   承認が必要なツールで止まり、承認・却下の後に再開する。SDK の tracing は外部へ送らない。
 - Common Run: 状態、Event、cancel、Artifact（回答・ツールの結果）、Approval、Audit。
 - Dispatcher: 開発は in-process、本番は Oracle row lock + claim/lease worker。
@@ -97,7 +97,7 @@ FULL=1 scripts/check-all.sh                                 # CI と同じく全
 業務 Agent は Control Plane の組み込み Runtime（`backend/app/features/agent/builtin_runtime.py`、`openai-agents` を版固定）
 で実行します。Docker・外部の Runtime は使いません。
 
-- モデル: 「システム設定 > モデル」の OCI Enterprise AI の接続と、Agent の `model_id`（空なら既定のテキストモデル）。
+- モデル: 「システム設定 > モデル」のモデルの API の接続と、Agent の `model_id`（空なら既定のテキストモデル）。
   Runtime 画面で SDK の版・既定のモデル・選べるモデル・実行できるかを確認できます。
 - 実行: 開発は API のプロセス（`AGENT_RUNTIME_DISPATCH_MODE=in_process`）。本番で別プロセスにする場合は
   `uv run python -m app.features.agent.runtime_dispatcher` を起動します（Oracle の checkpoint の row lock と Run lease）。

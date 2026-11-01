@@ -1446,7 +1446,7 @@ def test_metadata_sql_generation_fallback_and_fence_cleanup() -> None:
     )
     assert "COMMENT ON TABLE" in fallback.sql
     assert fallback.source == "deterministic"
-    assert any("OCI Enterprise AI" in warning for warning in fallback.warnings)
+    assert any("モデルの API" in warning for warning in fallback.warnings)
 
     service._enterprise_ai_client = FakeEnterpriseAiClient(
         "```sql\nCOMMENT ON VIEW V_EMP IS '社員ビュー';\n```"
@@ -4468,7 +4468,7 @@ def test_deterministic_domain_sql_groups_shared_columns_across_tables() -> None:
     assert "STATUS" not in result.sql
     assert "SALES_ID" not in result.sql
     assert "SALES_V" not in result.sql
-    assert any("Enterprise AI が未設定" in warning for warning in result.warnings)
+    assert any("モデルの API が未設定" in warning for warning in result.warnings)
 
     single = service.generate_domain_sql(
         _domain_request(targets=[{"object_name": "SALES", "object_type": "table"}])

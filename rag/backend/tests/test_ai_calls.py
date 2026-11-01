@@ -99,7 +99,7 @@ def test_rag_error_kind_maps_client_errors() -> None:
 
     assert rag_error_kind(GenAiConfigError("bad")) is ErrorKind.AUTHENTICATION
     assert (
-        rag_error_kind(ValueError("OCI Enterprise AI LLM response に回答 text がありません。"))
+        rag_error_kind(ValueError("Model API LLM response に回答 text がありません。"))
         is ErrorKind.INVALID_OUTPUT
     )
     assert (
@@ -256,7 +256,7 @@ async def test_embedding_rate_limit_and_unavailable_are_retried() -> None:
 async def test_embedding_permission_error_stops_without_retry() -> None:
     settings = _settings(rag_embedding_batch_size=1, rag_embedding_concurrency=1)
     client = _EmbeddingClient(settings, {index: [HttpError(403)] for index in range(10)})
-    with pytest.raises(BoundedCallAborted, match="IAM policy"):
+    with pytest.raises(BoundedCallAborted, match="権限がありません"):
         await client.embed(_texts(10, 1))
     assert len(client.calls) == 1
 
@@ -269,7 +269,7 @@ async def test_embedding_item_failure_raises_original_error_after_final_retry() 
 
 
 class ServiceError(Exception):
-    """OCI SDK の ``ServiceError`` と同じ属性(status / code / message / request_id)のスタブ。"""
+    """SDK の ``ServiceError`` 型の例外と同じ属性(status / code / message / request_id)のスタブ。"""
 
     def __init__(self, status: int, message: str) -> None:
         super().__init__(f"{{'status': {status}, 'message': '{message}'}}")
@@ -279,13 +279,13 @@ class ServiceError(Exception):
         self.request_id = "opc-request-id-example"
 
 
-# OCI Generative AI の Embedding が実際に返した HTTP 400 の文(#2467。合成データで確認)。
+# 埋め込みモデル が実際に返した HTTP 400 の文(#2467。合成データで確認)。
 _OVERLOADED = "the requested model is currently experiencing high load, please try again later"
 _TOO_LONG = "invalid request: inputs[0] is too long. Max tokens per text must be at most 128000"
 _EMPTY = "Input text cannot be empty."
 
 
-def test_rag_error_kind_maps_oci_embedding_rejections() -> None:
+def test_rag_error_kind_maps_embedding_rejections() -> None:
     # 高負荷は 400 で返るが一時的なため再試行する。1 件の入力の超過は同じ要求をくり返さない。
     assert rag_error_kind(ServiceError(400, _OVERLOADED)) is ErrorKind.UNAVAILABLE
     assert rag_error_kind(ServiceError(400, _TOO_LONG)) is ErrorKind.TOO_LARGE
@@ -775,7 +775,7 @@ async def test_ingestion_vision_permission_error_stops_job() -> None:
         oracle=PromptOracle(),  # type: ignore[arg-type]
         settings=Settings(rag_vision_enabled=True),
     )
-    with pytest.raises(IngestionUserError, match="IAM policy"):
+    with pytest.raises(IngestionUserError, match="権限がありません"):
         await pipeline._attach_vision(
             "trace",
             _figure_extraction([0.168, 0.119, 0.504, 0.297]),

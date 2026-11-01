@@ -1,7 +1,7 @@
 """LLM による回答の判定（LLM-as-judge）と、その人手の判定による校正（#3418・#2577）。
 
 - `rubric`: 判定の観点・ラベル・指示（版と sha256）。
-- `client`: OCI Enterprise AI の Responses API を構造化出力で呼ぶ（接続とモデルは
+- `client`: モデルの API の Responses API を構造化出力で呼ぶ（接続とモデルは
   `SUITE_EVALUATION_JUDGE_*`）。
 - `judging`: 1 件の判定（出力の検証・呼び直し・評価不能）と、観点ごとの集計・校正の照合。
 - `run`: 保存した観測の回答を判定して、結果のファイルに判定を足す（決定的な採点と分けて置く）。

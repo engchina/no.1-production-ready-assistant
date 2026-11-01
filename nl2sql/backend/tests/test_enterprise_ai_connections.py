@@ -1,4 +1,4 @@
-"""OCI Enterprise AI の接続をモデルごとに選ぶ（#533 / #786）。呼び出しが対象モデルの接続を使うこと。
+"""モデルの API の接続をモデルごとに選ぶ（#533 / #786）。呼び出しが対象モデルの接続を使うこと。
 
 HTTP は httpx.MockTransport（決定論）で受け、URL・API key・Project のヘッダーを確かめる。
 """
@@ -18,21 +18,21 @@ from app.settings import EnterpriseAiConfiguredModel, Settings
 
 PRIMARY = "https://primary.example/openai/v1"
 SECONDARY = "https://secondary.example/openai/v1"
-# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project OCID を入れない。
+# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project ID を入れない。
 TERTIARY = "https://api.openai.example/v1"
-PRIMARY_CONNECTION = (PRIMARY, "Bearer sk-primary", "ocid1.project.primary")
-SECONDARY_CONNECTION = (SECONDARY, "Bearer sk-secondary", "ocid1.project.secondary")
-# Project OCID がないので OpenAI-Project ヘッダーは送らない。
+PRIMARY_CONNECTION = (PRIMARY, "Bearer sk-primary", "proj_primary")
+SECONDARY_CONNECTION = (SECONDARY, "Bearer sk-secondary", "proj_secondary")
+# Project ID がないので OpenAI-Project ヘッダーは送らない。
 TERTIARY_CONNECTION = (TERTIARY, "Bearer sk-tertiary", "")
 
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "enterprise_ai_endpoint": PRIMARY,
-        "enterprise_ai_project_id": "ocid1.project.primary",
+        "enterprise_ai_project_id": "proj_primary",
         "enterprise_ai_api_key": "sk-primary",
         "enterprise_ai_secondary_endpoint": SECONDARY,
-        "enterprise_ai_secondary_project_id": "ocid1.project.secondary",
+        "enterprise_ai_secondary_project_id": "proj_secondary",
         "enterprise_ai_secondary_api_key": "sk-secondary",
         "enterprise_ai_tertiary_endpoint": TERTIARY,
         "enterprise_ai_tertiary_api_key": "sk-tertiary",
@@ -97,7 +97,7 @@ def test_text_model_on_secondary_uses_secondary(recorded: list[tuple[str, str, s
 def test_text_model_on_tertiary_uses_tertiary_without_project(
     recorded: list[tuple[str, str, str]],
 ) -> None:
-    """ターシャリ接続（Project OCID なし）は Responses API を OpenAI-Project ヘッダーなしで呼ぶ。"""
+    """ターシャリ接続（Project ID なし）は Responses API を OpenAI-Project ヘッダーなしで呼ぶ。"""
     settings = _settings(enterprise_ai_default_text_model="gpt-c")
     client = HttpEnterpriseAiDirectClient(settings)
 
@@ -157,13 +157,13 @@ def test_model_settings_test_calls_connection_of_tested_model(
                         {
                             "connection_id": "primary",
                             "endpoint": PRIMARY,
-                            "project_id": "ocid1.project.primary",
+                            "project_id": "proj_primary",
                             "api_key": "sk-primary",
                         },
                         {
                             "connection_id": "secondary",
                             "endpoint": SECONDARY,
-                            "project_id": "ocid1.project.secondary",
+                            "project_id": "proj_secondary",
                             "api_key": "sk-secondary",
                         },
                         {

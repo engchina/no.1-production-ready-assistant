@@ -2,7 +2,7 @@
 
 Oracle はテストでも実 DB を使うが、VLM / embedding / rerank / LLM 回答は
 非決定的かつ課金対象のため、エンドポイント経由のテストではこれらの
-OCI クライアントを決定論スタブへ差し替える。embedding は全テキストを
+モデルの API のクライアントを決定論スタブへ差し替える。embedding は全テキストを
 同一ベクトルにするため、実 Oracle のベクトル検索でも確実に候補が返る。
 """
 
@@ -131,7 +131,7 @@ def _stub_parser_runner(
 
 
 def patch_ai_clients(monkeypatch: pytest.MonkeyPatch) -> None:
-    """取込・検索パイプラインが既定構築する OCI クライアントを差し替える。"""
+    """取込・検索パイプラインが既定構築するモデルの API のクライアントを差し替える。"""
     monkeypatch.setattr("app.rag.ingestion.EnterpriseAiClient", DeterministicEnterpriseAi)
     monkeypatch.setattr("app.rag.ingestion.GenAiClient", DeterministicGenAi)
     monkeypatch.setattr("app.rag.pipeline.EnterpriseAiClient", DeterministicEnterpriseAi)

@@ -1,6 +1,6 @@
 """一括の LLM・Embedding の呼び出しの上限つきの並行（#2004）。
 
-HTTP・OCI SDK はスタブにし、再試行の待ちは実時間で待たない（``ai_calls._sleep`` を差し替える）。
+HTTP はスタブにし、再試行の待ちは実時間で待たない（``ai_calls._sleep`` を差し替える）。
 429 を返しても上限を超えずに結果を失わずに終わること、権限の誤り（403）で再試行せずに止まる
 ことを確かめる。
 """
@@ -224,7 +224,7 @@ def test_quality_evaluation_classifies_wrapped_enterprise_ai_rate_limit() -> Non
 
     caller = ai_calls.make_ai_caller(get_settings(), "quality_evaluation")
     cause = EnterpriseAiDirectError(
-        "OCI Enterprise AI HTTP 429: slow down",
+        "Model API HTTP 429: slow down",
         http_failure=classify_enterprise_ai_http_failure(429, "slow down"),
         headers={"retry-after": "7"},
     )

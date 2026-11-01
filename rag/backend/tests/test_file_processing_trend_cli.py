@@ -1761,22 +1761,22 @@ def test_file_processing_trend_cli_fails_on_backend_source_kind_missing_set_repl
 def test_file_processing_trend_cli_fails_on_object_storage_artifact_chain_regression(
     tmp_path: Path,
 ) -> None:
-    """Object Storage artifact chain の退化は metric が同じでも失敗させる。"""
+    """保存先の artifact chain の退化は metric が同じでも失敗させる。"""
     baseline = _trend(
         metrics={"retrieval_recall": 1.0},
         result_sha256="baseline",
         object_storage_artifact_chain={
             "passed": True,
             "roundtrip_check": "ok",
-            "roundtrip_object_uri_scheme": "oci",
+            "roundtrip_object_uri_scheme": "local",
             "full_artifact_cached_case_count": 3,
-            "full_artifact_oci_case_count": 3,
+            "full_artifact_local_case_count": 3,
             "full_artifact_identity_present_case_count": 3,
             "full_artifact_readable_case_count": 3,
             "full_artifact_identity_verified_case_count": 3,
             "segment_artifact_expected_count": 6,
-            "segment_artifact_oci_uri_count": 6,
-            "segment_artifact_non_oci_uri_count": 0,
+            "segment_artifact_local_uri_count": 6,
+            "segment_artifact_non_local_uri_count": 0,
             "segment_artifact_readable_count": 6,
             "segment_artifact_identity_verified_count": 6,
             "artifact_integrity_error_count": 0,
@@ -1793,15 +1793,15 @@ def test_file_processing_trend_cli_fails_on_object_storage_artifact_chain_regres
         object_storage_artifact_chain={
             "passed": False,
             "roundtrip_check": "failed",
-            "roundtrip_object_uri_scheme": "local",
+            "roundtrip_object_uri_scheme": "mock",
             "full_artifact_cached_case_count": 2,
-            "full_artifact_oci_case_count": 1,
+            "full_artifact_local_case_count": 1,
             "full_artifact_identity_present_case_count": 2,
             "full_artifact_readable_case_count": 1,
             "full_artifact_identity_verified_case_count": 1,
             "segment_artifact_expected_count": 5,
-            "segment_artifact_oci_uri_count": 4,
-            "segment_artifact_non_oci_uri_count": 1,
+            "segment_artifact_local_uri_count": 4,
+            "segment_artifact_non_local_uri_count": 1,
             "segment_artifact_readable_count": 4,
             "segment_artifact_identity_verified_count": 3,
             "artifact_integrity_error_count": 1,
@@ -1828,13 +1828,13 @@ def test_file_processing_trend_cli_fails_on_object_storage_artifact_chain_regres
     assert "object_storage_artifact_roundtrip_uri_scheme_regressed" in reasons
     assert "object_storage_audit_payload_redaction_regressed" in reasons
     assert "object_storage_full_artifact_cached_case_count_decreased" in reasons
-    assert "object_storage_full_artifact_oci_case_count_decreased" in reasons
+    assert "object_storage_full_artifact_local_case_count_decreased" in reasons
     assert "object_storage_full_artifact_identity_count_decreased" in reasons
     assert "object_storage_full_artifact_readable_count_decreased" in reasons
     assert "object_storage_full_artifact_identity_verified_count_decreased" in reasons
     assert "object_storage_segment_artifact_expected_count_decreased" in reasons
-    assert "object_storage_segment_artifact_oci_uri_count_decreased" in reasons
-    assert "object_storage_segment_artifact_non_oci_uri_count_increased" in reasons
+    assert "object_storage_segment_artifact_local_uri_count_decreased" in reasons
+    assert "object_storage_segment_artifact_non_local_uri_count_increased" in reasons
     assert "object_storage_segment_artifact_readable_count_decreased" in reasons
     assert "object_storage_segment_artifact_identity_verified_count_decreased" in reasons
     assert "object_storage_artifact_integrity_error_count_increased" in reasons
@@ -1869,7 +1869,7 @@ def test_file_processing_trend_cli_fails_on_segment_artifact_reuse_regression(
             "segment_artifact_expected_count": 5,
             "segment_artifact_readable_count": 5,
             "segment_artifact_identity_verified_count": 5,
-            "segment_artifact_non_oci_uri_count": 0,
+            "segment_artifact_non_local_uri_count": 0,
             "artifact_integrity_error_count": 0,
         },
     )
@@ -1893,7 +1893,7 @@ def test_file_processing_trend_cli_fails_on_segment_artifact_reuse_regression(
             "segment_artifact_expected_count": 4,
             "segment_artifact_readable_count": 3,
             "segment_artifact_identity_verified_count": 3,
-            "segment_artifact_non_oci_uri_count": 1,
+            "segment_artifact_non_local_uri_count": 1,
             "artifact_integrity_error_count": 1,
         },
     )
@@ -1924,7 +1924,7 @@ def test_file_processing_trend_cli_fails_on_segment_artifact_reuse_regression(
     assert "segment_artifact_reuse_reprocessed_successful_segment_count_increased" in reasons
     assert "segment_artifact_reuse_cache_miss_count_increased" in reasons
     assert "segment_artifact_reuse_cache_miss_case_count_increased" in reasons
-    assert "segment_artifact_reuse_non_oci_uri_count_increased" in reasons
+    assert "segment_artifact_reuse_non_local_uri_count_increased" in reasons
     assert "segment_artifact_reuse_integrity_error_count_increased" in reasons
     assert "raw_text" not in output_path.read_text(encoding="utf-8")
 
@@ -1936,17 +1936,17 @@ def test_file_processing_trend_cli_fails_on_artifact_case_ref_replacement(
     baseline_object_chain = {
         "passed": True,
         "roundtrip_check": "ok",
-        "roundtrip_object_uri_scheme": "oci",
+        "roundtrip_object_uri_scheme": "local",
         "full_artifact_cached_case_count": 1,
         "full_artifact_cached_case_refs": ["case:artifact-old"],
-        "full_artifact_oci_case_count": 1,
+        "full_artifact_local_case_count": 1,
         "full_artifact_identity_present_case_count": 1,
         "full_artifact_readable_case_count": 1,
         "full_artifact_identity_verified_case_count": 1,
         "full_artifact_identity_verified_case_refs": ["case:artifact-old"],
         "segment_artifact_expected_count": 1,
-        "segment_artifact_oci_uri_count": 1,
-        "segment_artifact_non_oci_uri_count": 0,
+        "segment_artifact_local_uri_count": 1,
+        "segment_artifact_non_local_uri_count": 0,
         "segment_artifact_readable_count": 1,
         "segment_artifact_identity_verified_count": 1,
         "artifact_integrity_error_count": 0,
@@ -1980,7 +1980,7 @@ def test_file_processing_trend_cli_fails_on_artifact_case_ref_replacement(
         "segment_artifact_expected_count": 1,
         "segment_artifact_readable_count": 1,
         "segment_artifact_identity_verified_count": 1,
-        "segment_artifact_non_oci_uri_count": 0,
+        "segment_artifact_non_local_uri_count": 0,
         "artifact_integrity_error_count": 0,
     }
     baseline = _trend(

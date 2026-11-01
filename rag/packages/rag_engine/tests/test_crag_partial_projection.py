@@ -1,6 +1,6 @@
 """CRAG の部分回答の扱い（project_partial_answer）。監査なしで確かめた部分が増えても説明を外さない（#3843）。
 
-合成の根拠・説明だけを使い、モデル・OCI は呼ばない。
+合成の根拠・説明だけを使い、モデルの API は呼ばない。
 """
 
 from dataclasses import dataclass, field

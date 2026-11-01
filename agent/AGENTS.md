@@ -26,7 +26,7 @@
 
 全文は [docs/agents/runtime.md](./docs/agents/runtime.md)。特に次を守る。
 
-- 実行は Control Plane の**組み込み Runtime**（`features/agent/builtin_runtime.py`。OpenAI Agents SDK・OCI Enterprise AI の Responses API）。別の LLM provider は組み込まず、SDK の tracing は常に無効にする（業務データを外部へ送らない）。外部の Runtime・Binding・Docker の Runtime は持たない（#754）。
+- 実行は Control Plane の**組み込み Runtime**（`features/agent/builtin_runtime.py`。OpenAI Agents SDK・モデルの API〔OpenAI 互換〕の Responses API）。別の LLM の SDK は組み込まず、SDK の tracing は常に無効にする（業務データを外部へ送らない）。外部の Runtime・Binding・Docker の Runtime は持たない（#754）。
 - ツールの実行は `tool_registry.invoke`（ポリシー・ガードレール・監査・成果物）を必ず通す。「拒否」のツールはモデルに渡さず、「承認」のツールは SDK の `needs_approval` で中断して `waiting_approval` にし、却下したツールは実行しない。
 - 業務 Agent は版を持ち、「公開」した版だけが利用者の Run に使われる（公開の版は使うスキルの中身を固定する）。下書きで実行できるのは Agent 管理（admin）と、個人の業務 Agent の持ち主（`agent.agents.build`。#2523）だけ。
 - 保存先は `AGENT_RUNTIME_REPOSITORY_BACKEND` に従う（Oracle では `AGENT_RUNTIME_*` / `AGENT_CONTROL_PLANE_ITEMS`。テーブルはシステムテーブルが作り、アプリは DDL を実行しない）。MCP 接続の秘密は `app.secret_box` で暗号化し、テストは memory に固定する。
@@ -77,6 +77,6 @@
 - 機能変更と同時に pytest / Playwright を追加・更新する。
 - 完了前に `scripts/check-all.sh`（backend の ruff format / ruff check / mypy / pytest・bandit、frontend の lint / build）を実行する。ローカルの既定は Playwright と pip-audit を省く。関係する spec だけ `SKIP_E2E=0 E2E_ARGS="e2e/<対象>.spec.ts" scripts/check-all.sh`、全部は `FULL=1`。
 - CI の job は `Agent / Backend`・`Agent / Frontend`・`Agent / E2E smoke`。smoke に入れる spec は `ci.yml` の `agent-e2e` に書く（ログイン・認証・Run の stream・Runtime の主導線など、壊れると全体に響くもの。合計が CI でおおむね 1 分に収まる量）。
-- 組み込み Runtime のテストは SDK の `ScriptedModel`（`agents.testing`）でモデルを台本にし、OCI へは接続しない。実環境の OCI Enterprise AI での確認は手動 / ステージングで行い、PR に分けて書く。
+- 組み込み Runtime のテストは SDK の `ScriptedModel`（`agents.testing`）でモデルを台本にし、モデルの API へは接続しない。実環境のモデルの API での確認は手動 / ステージングで行い、PR に分けて書く。
 - 既存のユーザーの変更を尊重し、無関係な差分を戻さない。
 - **worktree で Agent の backend を主の `.env`（`platform/.env` の `PLATFORM_ORACLE_*`）のまま起動しない**（#1916）。主の dev server（8120）と同じ DB の Run・業務 Agent の保存先（`AGENT_RUNTIME_CHECKPOINTS` / `AGENT_RUNTIME_ENTITIES`）に 2 つ目のプロセスが書く。書き込みは head を lock して別のプロセスの変更を Run・業務 Agent の単位で取り込むので更新は消えないが、起動した側は主の dev server の実行中の Run を「中断した Run」として失敗にし（#1894）、互いのメモリは次に書くまで古いまま。worktree の確認は pytest（保存先は memory・偽の Oracle）と CI の実 Oracle の結合テストで行い、実画面で要るなら主の dev server を使う。どうしても起動するなら、別の DB（別の `PLATFORM_ENV_FILE`）か `AGENT_RUNTIME_REPOSITORY_BACKEND=memory` にする。重なったときはログ `agent_runtime_checkpoint_concurrent_write`（相手の `other_writer_id`）が出る。

@@ -105,7 +105,7 @@ class StagingOracleProtocol(Protocol):
 
 
 class StagingObjectStorageProtocol(Protocol):
-    """file-processing staging runner が使う Object Storage の最小契約。"""
+    """file-processing staging runner が使う 保存先の最小契約。"""
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         """object を保存し URI を返す。"""
@@ -359,7 +359,7 @@ async def run_file_processing_staging_checks_with_real_clients(
     cleanup: bool = False,
     settings: Settings | None = None,
 ) -> FileProcessingStagingReport:
-    """実 OCI / Oracle client を使って staging checks を実行する。"""
+    """実際のモデルの API・Oracle・保存先の client を使って staging checks を実行する。"""
     resolved_settings = settings or get_settings()
     oracle = OracleClient(settings=resolved_settings)
     storage = FileStorageClient(settings=resolved_settings)
@@ -908,7 +908,7 @@ async def _verify_artifact_integrity(
     extraction: Mapping[str, object],
     segments: Sequence[IngestionSegment],
 ) -> Mapping[str, object]:
-    """Object Storage artifact を読み戻し、identity metadata だけを非機密化する。"""
+    """保存先の artifact を読み戻し、identity metadata だけを非機密化する。"""
     parser_artifacts = _mapping(extraction.get("parser_artifacts"))
     full_path = _optional_str(parser_artifacts.get("extraction_artifact_path"))
     full_uri_scheme = _storage_uri_scheme(full_path)
@@ -930,14 +930,14 @@ async def _verify_artifact_integrity(
     segment_readable = 0
     segment_identity_verified = 0
     segment_payload_bytes = 0
-    segment_oci_uri_count = 0
-    segment_non_oci_uri_count = 0
+    segment_local_uri_count = 0
+    segment_non_local_uri_count = 0
     for segment in _segments_with_unique_artifact_path(segments):
         segment_expected += 1
-        if _storage_uri_scheme(segment.artifact_path) == "oci":
-            segment_oci_uri_count += 1
+        if _storage_uri_scheme(segment.artifact_path) == "local":
+            segment_local_uri_count += 1
         else:
-            segment_non_oci_uri_count += 1
+            segment_non_local_uri_count += 1
         payload, payload_bytes = await _read_artifact_payload(storage, segment.artifact_path or "")
         segment_payload_bytes += payload_bytes
         if payload is None:
@@ -952,13 +952,13 @@ async def _verify_artifact_integrity(
     return {
         "artifact_full_present": bool(full_path),
         "artifact_full_uri_scheme": full_uri_scheme,
-        "artifact_full_oci_uri": full_uri_scheme == "oci",
+        "artifact_full_local_uri": full_uri_scheme == "local",
         "artifact_full_readable": full_readable,
         "artifact_full_identity_verified": full_identity_verified,
         "artifact_full_payload_bytes": full_payload_bytes,
         "artifact_segment_expected_count": segment_expected,
-        "artifact_segment_oci_uri_count": segment_oci_uri_count,
-        "artifact_segment_non_oci_uri_count": segment_non_oci_uri_count,
+        "artifact_segment_local_uri_count": segment_local_uri_count,
+        "artifact_segment_non_local_uri_count": segment_non_local_uri_count,
         "artifact_segment_readable_count": segment_readable,
         "artifact_segment_identity_verified_count": segment_identity_verified,
         "artifact_segment_payload_bytes": segment_payload_bytes,
@@ -2007,8 +2007,8 @@ def _segment_artifact_reuse_metric_evidence(
             for summary in summaries.values()
             if summary.get("full_artifact_identity_present") is True
         ),
-        "full_artifact_oci_case_count": sum(
-            1 for summary in summaries.values() if summary.get("artifact_full_oci_uri") is True
+        "full_artifact_local_case_count": sum(
+            1 for summary in summaries.values() if summary.get("artifact_full_local_uri") is True
         ),
         "full_artifact_readable_case_count": sum(
             1 for summary in summaries.values() if summary.get("artifact_full_readable") is True
@@ -2030,12 +2030,12 @@ def _segment_artifact_reuse_metric_evidence(
             _positive_int(summary.get("artifact_segment_expected_count"))
             for summary in summaries.values()
         ),
-        "segment_artifact_oci_uri_count": sum(
-            _positive_int(summary.get("artifact_segment_oci_uri_count"))
+        "segment_artifact_local_uri_count": sum(
+            _positive_int(summary.get("artifact_segment_local_uri_count"))
             for summary in summaries.values()
         ),
-        "segment_artifact_non_oci_uri_count": sum(
-            _positive_int(summary.get("artifact_segment_non_oci_uri_count"))
+        "segment_artifact_non_local_uri_count": sum(
+            _positive_int(summary.get("artifact_segment_non_local_uri_count"))
             for summary in summaries.values()
         ),
         "segment_artifact_readable_count": sum(

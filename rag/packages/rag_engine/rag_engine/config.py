@@ -17,7 +17,7 @@ from rag_engine.retrieval.text_search_tokenizer import (
     DEFAULT_TEXT_SEARCH_TOKENIZER_SUDACHI_DICT,
 )
 
-# LLM は本リポジトリのモデル設定(OCI Enterprise AI, OpenAI 互換 Responses API)に一本化する。
+# LLM は本リポジトリのモデル設定(モデルの API, OpenAI 互換 Responses API)に一本化する。
 # 回答系(生成・監査・CRAG・質問拡張)と Vision(図説明)で model だけを分ける。
 ENTERPRISE_AI_LLM_PROVIDER = "enterprise-ai"
 ENTERPRISE_AI_VISION_LLM_PROVIDER = "enterprise-ai-vision"
@@ -135,7 +135,7 @@ def normalize_llm_provider_id(value: str | None, default: str = DEFAULT_LLM_PROV
 
 
 def normalize_llm_api_mode(value: str | None, default: str = DEFAULT_LLM_API_MODE) -> str:
-    """LLM は openai SDK(Responses API)のみを使う。OCI SDK の LLM 経路は持たない。"""
+    """LLM は openai SDK(Responses API)のみを使う。別の SDK の LLM 経路は持たない。"""
     return OPENAI_RESPONSES_LLM_API_MODE
 
 
@@ -152,7 +152,7 @@ class LlmProviderSettings:
     label: str
     # 記録用(base URL の組み立てには使わない。#1440)。
     region: str
-    # OCI の OpenAI 互換 API が要求する project OCID。他の OpenAI 互換 API では空のままにする。
+    # `OpenAI-Project` ヘッダーで送る project ID。要求しない OpenAI 互換 API では空のままにする。
     project_id: str
     api_key: str
     model: str
@@ -169,7 +169,7 @@ class LlmProviderSettings:
     def base_url(self) -> str:
         """OpenAI 互換 API の base URL(endpoint を入力どおり使う。#1440)。
 
-        path は補わない(OCI Enterprise AI も利用者が `/openai/v1` まで書く)。backend は
+        path は補わない(利用者が `…/v1` まで書く)。backend は
         platform の `enterprise_ai_base_url` で決めた値を `ENTERPRISE_AI_ENDPOINT` で渡すので、
         ここでは前後の空白と末尾の `/` を除くだけにして、3 製品と同じ URL を呼ぶ。
         """

@@ -26,9 +26,9 @@ from rag_parser_core.registry import ParserRegistryResult, run_external_adapter
 from rag_parser_core.result import ParseHealth, ParseResponse
 from rag_parser_core.source import SourceProfile
 
-# service 系 backend(OCI クラウド)の /parse ハンドラ。bytes + content_type +
+# service 系 backend(外部のサービスを呼ぶ)の /parse ハンドラ。bytes + content_type +
 # source_profile + document_id + prompt を受け取り ParseResponse(StructuredExtraction
-# wire 形式)を返す。document_id は OCI 入力 object 名の一意化、prompt は VLM 抽出指示に使う
+# wire 形式)を返す。document_id は外部サービスへの入力名の一意化、prompt は VLM 抽出指示に使う
 # (DU など prompt 不要な backend は無視してよい)。
 ServiceParseHandler = Callable[
     [bytes, str, "SourceProfile | None", str, str], Awaitable[ParseResponse]
@@ -157,10 +157,10 @@ def create_service_parse_app(
     is_configured: Callable[[], bool] | None = None,
     title: str | None = None,
 ) -> FastAPI:
-    """OCI クラウド service 系 backend 用の FastAPI app を生成する。
+    """外部のサービスを呼ぶ service 系 backend 用の FastAPI app を生成する。
 
-    package readiness ではなく `is_configured`(OCI 設定の充足)で /health を返す。
-    `parse` は OCI を呼んで ParseResponse を返す非同期ハンドラ(env 由来 config で構築)。
+    package readiness ではなく `is_configured`(設定の充足)で /health を返す。
+    `parse` は外部のサービスを呼んで ParseResponse を返す非同期ハンドラ(env 由来 config で構築)。
     """
     app = FastAPI(
         title=title or f"parser-{backend}", docs_url=None, redoc_url=None, openapi_url=None

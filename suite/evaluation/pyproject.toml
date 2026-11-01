@@ -10,7 +10,7 @@ dependencies = [
   "httpx==0.28.1",
   "pydantic>=2.11",
   "production-ready-evaluation-scoring",
-  # LLM による判定の OCI Enterprise AI の呼び方（URL の規則・HTTP の失敗の分類）を 3 製品と共有する
+  # LLM による判定のモデルの API の呼び方（URL の規則・HTTP の失敗の分類）を 3 製品と共有する
   # （標準 library だけの platform の package。FastAPI を入れない。#3418）。
   "production-ready-enterprise-ai",
   # 人手の判定の記入用の Excel のブック（label-template / label-import。#3418）。

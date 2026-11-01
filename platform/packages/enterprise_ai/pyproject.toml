@@ -1,7 +1,7 @@
 [project]
 name = "production-ready-enterprise-ai"
 version = "0.1.0"
-description = "Shared rules for calling OCI Enterprise AI (request URL, HTTP failure classification) for the No.1 Production Ready products and suite (stdlib only)."
+description = "Shared rules for calling OpenAI-compatible model APIs (request URL, HTTP failure classification) for the No.1 Production Ready products and suite (stdlib only)."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }

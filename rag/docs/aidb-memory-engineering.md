@@ -11,7 +11,7 @@ RAG の回答は、単純な「近い chunk を prompt へ入れる」形では�
 1. 依頼を受け、安全チェックで質問を検査する（ブロックしたら検索しない）
 2. Business Context Pack（誰のどの業務か＝検索範囲）を確定する
 3. チャットでは、会話履歴から質問を単独で意味が通る形に書き換える（`RAG_HISTORY_REWRITE_ENABLED`）
-4. 回答フロー: 質問の理解 → 質問の拡張で検索文を作る → 文書検索（Oracle AI Vector Search と Oracle Text の hybrid 検索を RRF で融合）→ Rerank（OCI Generative AI Cohere Rerank）→ 根拠の評価と補正検索（CRAG。任意で、既定の標準 RAG では行わない）→ small-to-big（親本文と前後の child）で文脈を足す → 回答文の生成と根拠確認（監査）
+4. 回答フロー: 質問の理解 → 質問の拡張で検索文を作る → 文書検索（Oracle AI Vector Search と Oracle Text の hybrid 検索を RRF で融合）→ 再ランク（再ランクのモデル）→ 根拠の評価と補正検索（CRAG。任意で、既定の標準 RAG では行わない）→ small-to-big（親本文と前後の child）で文脈を足す → 回答文の生成と根拠確認（監査）
 5. 回答側の安全チェックを行い、監査・回答の記録・質問履歴を残す
 
 ## Business Context Pack
@@ -33,7 +33,7 @@ raw tenant/user id や query 本文は audit / trace へ保存しない。
 | 手法の要素 | 回答フローでの扱い |
 |---|---|
 | Memory Router / Retrieval Plan | 質問の拡張（`RAG_QUERY_STRATEGY`。既定は単純検索）が検索文を、質問の理解（`inquiry_conditions`）が名指しされた文書名・ページ・業務（検索条件）と候補の加点に使う語を決める（質問の理解は検索文を作らない。#3496） |
-| evidence（必須根拠） | Oracle AI Vector Search と Oracle Text の hybrid 検索（RRF。原質問を主軸にした重み付き融合）と Cohere Rerank で選んだ child chunk |
+| evidence（必須根拠） | Oracle AI Vector Search と Oracle Text の hybrid 検索（RRF。原質問を主軸にした重み付き融合）と再ランクで選んだ child chunk |
 | structure（構造） | 親子階層の親本文（`parent_text`）と、根拠の child の前後の child（`RAG_NEIGHBOR_CHILD_COUNT`）。画面目録で操作画面を探す（`RAG_SCREEN_LINKING_ENABLED`）。文書構造索引の構築（文書と章・節の見出しのつながり）は KB のグラフ表示と、`RAG_GRAPH_EXPANSION_ENABLED`（既定 OFF。全体設定だけで決め、検索・回答プロファイルでは上書きしない）を ON にしたときの回答の検索の候補の追加に使う（#2055） |
 | history（継続文脈） | チャットの会話履歴による質問の書き換え。Agent Memory（`rag_agent_memories`）への検索・保存は #595 で削除した |
 | Resolver / Verifier | 根拠確認（CRAG の grade）と補正検索（`RAG_ANSWER_FLOW=crag` を選んだときだけ。既定は `standard_rag`）、回答文の生成後の根拠確認（監査）。根拠が足りないときは、足りない理由（`insufficient_reason`）と人手確認の要否を回答に付ける |

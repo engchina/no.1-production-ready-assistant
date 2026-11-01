@@ -1,6 +1,6 @@
 """NL2SQL API models.
 
-外部サービスへ依存しない契約をここに集約する。Oracle / OCI の実呼び出しは
+外部サービスへ依存しない契約をここに集約する。Oracle / モデルの API の実呼び出しは
 service 層の adapter に閉じ込め、API と UI は同じ shape を使い続ける。
 """
 
@@ -52,7 +52,7 @@ def _validate_sql_row_limit(value: int | None) -> int | None:
 
 
 class Nl2SqlEngine(StrEnum):
-    """NL2SQL の SQL 生成の方式（OCI Enterprise AI を直接呼ぶ方式だけ。#7）。"""
+    """NL2SQL の SQL 生成の方式（モデルの API を直接呼ぶ方式だけ。#7）。"""
 
     ENTERPRISE_AI_DIRECT = "enterprise_ai_direct"
 
@@ -1667,7 +1667,7 @@ class JobCreateRequest(BaseModel):
     """非同期 NL2SQL job create request."""
 
     question: str
-    # 生成の方式（OCI Enterprise AI を直接呼ぶ方式だけ。#7）。
+    # 生成の方式（モデルの API を直接呼ぶ方式だけ。#7）。
     engine: Nl2SqlEngine = Field(
         default=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         description="生成の方式（enterprise_ai_direct だけ）",
@@ -2910,7 +2910,7 @@ class MetadataSqlGenerateData(BaseModel):
     sql: str = ""
     source: str = "deterministic"
     warnings: list[str] = Field(default_factory=list)
-    # OCI Enterprise AI で作れず、規則ベース（名前をそのまま入れた SQL）にしたか（#1719）。
+    # モデルの API で作れず、規則ベース（名前をそのまま入れた SQL）にしたか（#1719）。
     # 未設定で AI を使わなかった場合は False（`warnings` に出す）。
     fallback: bool = False
     # 規則ベースにした表（一部の組だけ失敗した場合。空 = 全部）。
@@ -2941,7 +2941,7 @@ class DiagnosticReadiness(BaseModel):
 
 
 class DiagnosticSmokeCheck(BaseModel):
-    """Manual/live smoke check item for Oracle / OCI NL2SQL engines."""
+    """Manual/live smoke check item for Oracle / model API NL2SQL engines."""
 
     id: str
     label: str
@@ -2966,7 +2966,7 @@ class DiagnosticConfigVar(BaseModel):
 
 
 class DiagnosticConfigGuide(BaseModel):
-    """OCI / Oracle 設定を完了するための非 secret ガイド。"""
+    """モデルの API / Oracle 設定を完了するための非 secret ガイド。"""
 
     id: str
     label: str
@@ -2981,7 +2981,7 @@ class DiagnosticConfigGuide(BaseModel):
 
 
 class DiagnosticsData(BaseModel):
-    """OCI / Oracle / engine 設定診断 response."""
+    """モデルの API / Oracle / engine 設定診断 response."""
 
     checks: list[DiagnosticCheck]
     readiness: list[DiagnosticReadiness] = Field(default_factory=list)

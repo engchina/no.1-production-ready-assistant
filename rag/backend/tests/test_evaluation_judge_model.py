@@ -35,10 +35,10 @@ LlmCall = tuple[str, str, str, int]
 def _settings(judge: str = "") -> Settings:
     return Settings(
         enterprise_ai_endpoint=PRIMARY,
-        enterprise_ai_project_id="ocid1.project.primary",
+        enterprise_ai_project_id="proj-primary",
         enterprise_ai_api_key="sk-primary",
         enterprise_ai_secondary_endpoint=SECONDARY,
-        enterprise_ai_secondary_project_id="ocid1.project.secondary",
+        enterprise_ai_secondary_project_id="proj-secondary",
         enterprise_ai_secondary_api_key="sk-secondary",
         enterprise_ai_models=[
             EnterpriseAiConfiguredModel(

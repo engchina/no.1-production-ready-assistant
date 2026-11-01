@@ -85,9 +85,9 @@ def test_ingestion_job_error_message_preserves_safe_errors() -> None:
 
     assert (
         documents_route._safe_ingestion_job_error_message(
-            SafeConfigError("OCI 認証設定の fingerprint が不正です。")
+            SafeConfigError("埋め込みモデルの設定が不正です。")
         )
-        == "OCI 認証設定の fingerprint が不正です。"
+        == "埋め込みモデルの設定が不正です。"
     )
     assert (
         documents_route._safe_ingestion_job_error_message(RuntimeError("secret detail"))
@@ -2318,7 +2318,7 @@ def test_retry_failed_ingestion_segments_creates_retry_job(
             parser_profile="enterprise_ai_pdf_layout",
             page_start=1,
             page_end=2,
-            artifact_path=f"oci://namespace/bucket/artifacts/extractions/{document_id}/p1-2.json",
+            artifact_path=f"local://artifacts/extractions/{document_id}/p1-2.json",
         ),
         IngestionSegment(
             segment_id=f"{document_id}:p3-4",
@@ -2368,7 +2368,7 @@ def test_retry_failed_ingestion_segments_requires_failed_checkpoint(
             parser_profile="enterprise_ai_pdf_layout",
             page_start=1,
             page_end=2,
-            artifact_path=f"oci://namespace/bucket/artifacts/extractions/{document_id}/p1-2.json",
+            artifact_path=f"local://artifacts/extractions/{document_id}/p1-2.json",
         )
     ]
 
@@ -3838,7 +3838,7 @@ def test_document_extraction_export_returns_html_view(
             {
                 "asset_id": "fig-1",
                 "kind": "figure",
-                "object_path": "oci://namespace/bucket/internal/figure.png",
+                "object_path": "local://internal/figure.png",
                 "page_number": 2,
                 "bbox": {"x": 5, "y": 10, "w": 25, "h": 35},
                 "alt_text": "<画像プレビュー>",
@@ -3892,7 +3892,7 @@ def test_document_extraction_export_returns_html_view(
     assert 'data-page="2"' in data["content"]
     assert 'data-bbox="5,10,30,45"' in data["content"]
     assert "&lt;画像プレビュー&gt;" in data["content"]
-    assert "oci://namespace/bucket/internal/figure.png" not in data["content"]
+    assert "local://internal/figure.png" not in data["content"]
     assert "&lt;INDEXED&gt;" in data["content"]
     assert "<INDEXED>" not in data["content"]
 

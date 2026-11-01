@@ -1,6 +1,6 @@
 """#1729: 同じ物を指す概念の統合・物理での併合の判定・関係の作成・改善案・用語の対応表。
 
-実 OCI / Oracle は使わない（sql_assist_sample の表 3 つ・view 2 つを模した schema context）。
+実際の LLM / Oracle は使わない（sql_assist_sample の表 3 つ・view 2 つを模した schema context）。
 """
 
 from __future__ import annotations

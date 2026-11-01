@@ -138,9 +138,9 @@ test.describe("Agent Runtime settings", () => {
 
     await page.goto("/settings/model");
     await expect(page.getByRole("heading", { name: "モデル設定", level: 1 })).toBeVisible();
-    // OCI Enterprise AI の接続はプライマリ接続・セカンダリ接続・ターシャリ接続のタブ（この順）。
+    // モデルの API の接続はプライマリ接続・セカンダリ接続・ターシャリ接続のタブ（この順）。
     // 登録モデルごとに接続を選ぶ（#533 / #542 / #786）。
-    const connectionTabs = page.getByRole("tablist", { name: "OCI Enterprise AI の接続" });
+    const connectionTabs = page.getByRole("tablist", { name: "モデルの API の接続" });
     await expect(connectionTabs.getByRole("tab")).toHaveText([
       "プライマリ接続",
       "セカンダリ接続",
@@ -152,7 +152,7 @@ test.describe("Agent Runtime settings", () => {
     );
     await connectionTabs.getByRole("tab", { name: "セカンダリ接続" }).click();
     await expect(page.getByRole("button", { name: "セカンダリ接続を設定" })).toBeVisible();
-    // ターシャリ接続（OpenAI / OpenAI 互換 API 向け）は Project OCID が任意。
+    // ターシャリ接続（OpenAI / OpenAI 互換 API 向け）は Project ID が任意。
     await connectionTabs.getByRole("tab", { name: "ターシャリ接続" }).click();
     await page.getByRole("button", { name: "ターシャリ接続を設定" }).click();
     await expect(page.locator("#enterprise-tertiary-endpoint")).toHaveAttribute(
@@ -163,7 +163,7 @@ test.describe("Agent Runtime settings", () => {
       "aria-required",
       "true"
     );
-    await expect(page.locator("#enterprise-tertiary-project-ocid")).not.toHaveAttribute(
+    await expect(page.locator("#enterprise-tertiary-project-id")).not.toHaveAttribute(
       "aria-required",
       "true"
     );
@@ -175,8 +175,8 @@ test.describe("Agent Runtime settings", () => {
       "プライマリ接続"
     );
     await page.getByRole("textbox", { name: "API key" }).fill("test-api-key");
-    await page.getByRole("button", { name: "OCI Enterprise AI: 保存" }).click();
-    await expect(page.getByText("OCI Enterprise AI 接続設定を保存しました。").first()).toBeVisible();
+    await page.getByRole("button", { name: "モデルの API: 保存" }).click();
+    await expect(page.getByText(/接続設定を保存しました。/).first()).toBeVisible();
     expect(mockApi.lastRequest("PATCH", "/api/settings/model")?.body).toMatchObject({
       // 接続情報の節の保存は、既定のモデル 2 つを保存済みの値のまま送る（#499）。
       enterprise_ai: {

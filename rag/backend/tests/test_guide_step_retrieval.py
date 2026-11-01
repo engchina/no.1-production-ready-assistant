@@ -1,4 +1,7 @@
-"""業務ガイドの手順ごとの検索と参照の頁の固定(#2395)。OCI・Oracle はスタブ(合成の fixture)。"""
+"""業務ガイドの手順ごとの検索と参照の頁の固定(#2395)。
+
+モデルの API・Oracle はスタブ(合成の fixture)。
+"""
 
 from __future__ import annotations
 

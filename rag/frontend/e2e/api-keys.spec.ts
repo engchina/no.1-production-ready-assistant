@@ -92,7 +92,7 @@ test.describe("API キー", { tag: "@responsive" }, () => {
     await expect(page.getByTestId("api-keys-endpoint-rag-public")).toHaveText("https://203.0.113.10/rag/api/mcp");
     await expect(page.getByTestId("api-keys-endpoint-nl2sql-public")).toHaveText("https://203.0.113.10/nl2sql/api/mcp");
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.getByRole("button", { name: "RAGの公開の URL（OCI）: URL をコピー" }).click();
+    await page.getByRole("button", { name: "RAGの公開の URL: URL をコピー" }).click();
     await expect(page.getByText("URL をコピーしました")).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://203.0.113.10/rag/api/mcp");
     // 配備は自作の CA の証明書を配らない（#19）。CA の案内は出さない。

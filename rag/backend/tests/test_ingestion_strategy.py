@@ -381,7 +381,7 @@ class FailingEmbeddingClient(GenAiClient):
 
 
 class FakeObjectStorage:
-    """抽出 artifact cache 用の Object Storage fake。"""
+    """抽出 artifact cache 用の 保存先の fake。"""
 
     def __init__(self) -> None:
         self.puts: list[tuple[str, bytes, str]] = []
@@ -390,7 +390,7 @@ class FakeObjectStorage:
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         self.puts.append((key, data, content_type))
-        path = f"oci://namespace/bucket/{key}"
+        path = f"local://{key}"
         self.objects[path] = data
         return path
 
@@ -403,7 +403,7 @@ class FakeObjectStorage:
 
 
 class FailingObjectStorage(FakeObjectStorage):
-    """full extraction artifact cache 失敗を作る Object Storage fake。"""
+    """full extraction artifact cache 失敗を作る 保存先の fake。"""
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         self.puts.append((key, data, content_type))
@@ -702,7 +702,7 @@ async def test_ingestion_pipeline_caches_extraction_artifact_and_segment_checkpo
     assert oracle.saved_extraction is not None
     artifact_path = oracle.saved_extraction.parser_artifacts["extraction_artifact_path"]
     assert isinstance(artifact_path, str)
-    assert artifact_path.startswith("oci://namespace/bucket/artifacts/extractions/doc-artifact/")
+    assert artifact_path.startswith("local://artifacts/extractions/doc-artifact/")
     assert oracle.saved_extraction.parser_artifacts["extraction_artifact_schema_version"] == 1
     assert oracle.saved_extraction.parser_artifacts["extraction_artifact_kind"] == "full"
     assert oracle.segments
@@ -796,7 +796,7 @@ async def test_ingestion_pipeline_stops_at_preprocessed_when_parse_gate_off() ->
 
 
 async def test_ingestion_pipeline_sanitizes_extraction_artifact_keys() -> None:
-    """artifact cache key は prefix/document id を安全な Object Storage path に正規化する。"""
+    """artifact cache key は prefix/document id を安全な 保存先の path に正規化する。"""
     oracle = FakeOracle()
     storage = FakeObjectStorage()
     pipeline = IngestionPipeline(

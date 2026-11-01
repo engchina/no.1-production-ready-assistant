@@ -912,12 +912,12 @@ const OPTIONAL_CONNECTION_MESSAGES = {
 
 /**
  * 接続のタブの中身（#542 / #786）。
- * - プライマリ接続: 入力欄。OCI で運用するときだけ必須なので、Endpoint URL と API key は「OCI 運用時必須」（保存は止めない）
+ * - プライマリ接続: 入力欄。使うときだけ必須なので、Endpoint URL と API key は「利用時必須」（保存は止めない）
  * - セカンダリ接続・ターシャリ接続（未設定）: 空の状態と「◯◯接続を設定」
  * - セカンダリ接続・ターシャリ接続（設定済み）: 入力欄（Endpoint URL と API key は「必須」）と「◯◯接続を削除」。
  *   削除は説明の行の右端に置く（主操作の保存と隣に並べない。README「カード内の操作行」）。
  *   API key だけを消す指定は出さない（必須の欄を空にするため。消すときは接続ごと削除する）
- * - Project OCID はどの接続でも任意（OCI Enterprise AI を使うときだけ入れる。#9）
+ * - Project ID はどの接続でも任意（提供元が project を求めるときだけ入れる。#9）
  */
 function ConnectionTabContent({
   connectionId,
@@ -967,8 +967,8 @@ function ConnectionTabContent({
     );
   }
   // プライマリ接続は条件付きの必須（文言で区別。README §4「必須の表示」）。セカンダリ接続・ターシャリ接続は
-  // 既定の「必須」。Project OCID はどの接続でも任意なので印を出さない（#786 / #9）。
-  const requiredLabel = primary ? t("settings.model.requiredInOci") : undefined;
+  // 既定の「必須」。Project ID はどの接続でも任意なので印を出さない（#786 / #9）。
+  const requiredLabel = primary ? t("settings.model.requiredWhenUsed") : undefined;
   return (
     <div
       data-testid={`enterprise-connection-${connectionId}`}
@@ -994,7 +994,7 @@ function ConnectionTabContent({
           </Button>
         )}
       </div>
-      {/* Endpoint URL・Project OCID は長いので全幅（FormGrid の最大 60rem まで）、API key は lg の段（#1891）。 */}
+      {/* Endpoint URL・Project ID は長いので全幅（FormGrid の最大 60rem まで）、API key は lg の段（#1891）。 */}
       <FormGrid>
         <TextField
           id={connectionFieldId(connectionId, "endpoint")}
@@ -1008,25 +1008,7 @@ function ConnectionTabContent({
               : t("settings.model.placeholder.endpoint")
           }
           error={errors?.endpoint}
-          helper={
-            tertiary ? (
-              t("settings.model.enterprise.endpointHelpTertiary")
-            ) : (
-              <>
-                <span className="block">
-                  {t("settings.model.enterprise.endpointHelp")}
-                </span>
-                <a
-                  href="https://docs.oracle.com/en-us/iaas/Content/generative-ai/openai-compatible-api.htm"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center rounded-sm text-accent-fg underline underline-offset-4 hover:text-accent-fg"
-                >
-                  {t("settings.model.enterprise.endpointDocs")}
-                </a>
-              </>
-            )
-          }
+          helper={t("settings.model.enterprise.endpointHelp")}
           onValueChange={(value) => onChange({ endpoint: value })}
           width="full"
           className="col-span-full"
@@ -1183,7 +1165,7 @@ function ModelCatalogEditor({
           {t("settings.model.enterprise.models")}
           {/* oxlint-disable-next-line design-system/restricted-syntax -- 上のコメントの理由で RequiredBadge を直接置く（#531） */}
           <RequiredBadge
-            // OCI に依存しない構成（DeepSeek・百煉など）でも必須なので「必須」（#45）。
+            // どの提供元（DeepSeek・百煉など）でも必須なので「必須」（#45）。
             label={t("settings.model.required")}
             className="ml-2 align-middle"
           />
@@ -1430,14 +1412,6 @@ function ModelCatalogEditor({
         <p id={MAX_OUTPUT_TOKENS_HELP_ID} className="text-xs leading-relaxed text-fg-muted">
           {t("settings.model.enterprise.maxOutputTokensHelp")}
         </p>
-        <div className="flex flex-wrap gap-3 text-xs">
-          <a href="https://docs.oracle.com/en-us/iaas/Content/generative-ai/models.htm" target="_blank" rel="noopener noreferrer" className="text-accent-fg underline underline-offset-2">
-            {t("settings.model.enterprise.modelDocs")}
-          </a>
-          <a href="https://docs.oracle.com/en-us/iaas/Content/generative-ai/responses-api.htm" target="_blank" rel="noopener noreferrer" className="text-accent-fg underline underline-offset-2">
-            {t("settings.model.enterprise.apiDocs")}
-          </a>
-        </div>
       </Disclosure>
     </div>
   );

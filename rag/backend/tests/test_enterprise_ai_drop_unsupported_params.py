@@ -4,7 +4,7 @@
 共有の Enterprise AI の client（openai SDK の transport）とモデルの接続テストは、その引数を
 外して 1 回だけ送り直し、以後そのモデルには送らない。受け付けるモデルには temperature 0 を
 送り続ける。
-OCI へは接続しない（HTTP は httpx.MockTransport。合成の 400 の本文）。
+モデルの API へは接続しない（HTTP は httpx.MockTransport。合成の 400 の本文）。
 """
 
 import json

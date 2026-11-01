@@ -396,7 +396,7 @@ export function useRequirementSession(
 /** 答えられない質問・最低の基準（SELECT / FROM）・再検査の上限の知らせ。 */
 /**
  * 要件の検査（回答前の確認の session の作成・読み込み）の状態。SQL 生成の画面（ボタンで開く）とチャット（送信の
- * ときに自動）で同じ hook を使い、検査中・失敗・OCI Enterprise AI が無いときの扱いを 1 か所で決める（#1715）。
+ * ときに自動）で同じ hook を使い、検査中・失敗・モデルの API が無いときの扱いを 1 か所で決める（#1715）。
  */
 export interface RequirementCheckRunner {
   /** 検査の最中（session の作成の応答を待っている）。 */
@@ -405,7 +405,7 @@ export interface RequirementCheckRunner {
   checkError: unknown;
   /**
    * 検査を行う。成功したら結果を返し、失敗は `checkError` に入れて null を返す。`isCurrent` が false になった
-   * （中止した・別の送信に移った）ときは状態を変えずに null を返す。OCI Enterprise AI が無い
+   * （中止した・別の送信に移った）ときは状態を変えずに null を返す。モデルの API が無い
    * （`REQUIREMENT_AI_NOT_CONFIGURED`）ときは `onUnavailable` を呼ぶ（確認せずに SQL を作る）。
    */
   run: <T>(

@@ -35,7 +35,7 @@ backend/                  FastAPI アプリ（uv の venv。pyproject.toml に r
     cli/                  migration・system schema・各 worker のエントリ
     schemas/              設定 API のスキーマ
   migrations/             Oracle の DDL（番号順）
-  scripts/                実 Oracle / OCI Enterprise AI への手動の接続確認
+  scripts/                実 Oracle / モデルの API への手動の接続確認
   tests/                  pytest
 frontend/                 Vite + React Router + Tailwind v4 + 共有 UI
   src/App.tsx             ルート定義

@@ -1200,7 +1200,7 @@ def call_requirement_llm(
     if not callable(configured) or not configured() or not callable(generate):
         raise RequirementAiUnavailableError(
             "REQUIREMENT_AI_NOT_CONFIGURED",
-            "OCI Enterprise AI が設定されていないため、回答前の確認を使えません。",
+            "モデルの API が設定されていないため、回答前の確認を使えません。",
         )
     model_id = ""
     model_id_fn = getattr(client, "model_id", None)

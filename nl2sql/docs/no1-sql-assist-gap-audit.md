@@ -2,14 +2,14 @@
 
 基準: `/u01/workspace/No.1-SQL-Assist`
 
-本表は旧版の主要低層機能を、現在の FastAPI + React 構成へ再マップした吸収状況の正本です。外部 LLM provider、外部 vector DB、旧 Gradio UI は意図的に除外し、LLM/VLM は OCI Enterprise AI、embedding/rerank は OCI GenAI、状態とデータソースは Oracle に集約します。
+本表は旧版の主要低層機能を、現在の FastAPI + React 構成へ再マップした吸収状況の正本です。外部 LLM provider、外部 vector DB、旧 Gradio UI は意図的に除外し、LLM/VLM はモデルの API、embedding/rerank は埋め込み / 再ランクのモデル（OpenAI 互換の API）、状態とデータソースは Oracle に集約します。
 
 | 旧版領域 | 旧版参照 | 現在の実装 | UI | 状態 |
 |---|---|---|---|---|
 | 完整数据库管理 | `utils/management_util.py` の table/view/DDL/comment/drop/general SQL | `/api/nl2sql/db-admin/tables`, `/views`, `/execute`, `/drop-table`, `/import-tabular`, `/tables/{name}/export.xlsx` | Data Tools: Database Admin / Excel 運用 | extended |
 | Excel 运维流程 | `samples/*.xlsx`, training/terms/rules import/export | CSV/XLSX import preview/execute、training data XLSX/JSONL export、profile learning material import/export | Data Tools, Learning, Glossary Rules | extended |
-| 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | OCI GenAI 1024 embedding + sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
-| SQL 深度分析/逆生成 | `utils/query_util.py` SQL 分析・逆生成 | `/analyze` deterministic deep fields + optional OCI Enterprise AI structured JSON、`/reverse/deep` fallback付き逆生成 | SQL Analysis | extended |
+| 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | 埋め込みモデル（1024 次元）+ sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
+| SQL 深度分析/逆生成 | `utils/query_util.py` SQL 分析・逆生成 | `/analyze` deterministic deep fields + optional モデルの API structured JSON、`/reverse/deep` fallback付き逆生成 | SQL Analysis | extended |
 | OCI/ADB Wallet 運用 | `utils/oci_util.py` の4ファイル確認・ADB Wallet生成・自動配置 | Wallet ZIP の手動アップロード（`POST /api/settings/database/wallet`）だけ。OCI Database API からの自動取得は削除した（#11） | Database Settings: Wallet ZIP のアップロード・状態表示 | removed |
 
 質問分類 model は単一 current artifact に収斂した。version 一覧・activate・個別 delete API は削除し、
@@ -31,16 +31,15 @@ OCI に依存しない構成へ移すために削除した（#11）。Wallet は
 - 旧 Gradio UI。
 - 外部 LLM provider。
 - 外部 vector DB。
-- 旧版の DB 内 AI profile の管理・Agent の操作・DB 内のデータ生成（ADB 専用の package を前提にするため。SQL の生成は OCI Enterprise AI を直接呼ぶ。#7）。
+- 旧版の DB 内 AI profile の管理・Agent の操作・DB 内のデータ生成（ADB 専用の package を前提にするため。SQL の生成はモデルの API を直接呼ぶ。#7）。
 - `.xls` legacy import。実 fixture 受領後に `xlrd` 導入可否を判断します。
 
 ## Blocked-by-env
 
 以下はコード実装済みですが、production live 受入には実環境が必要です。
 
-- OCI GenAI embedding 実 training。
-- OCI Enterprise AI direct structured output。
-- OCI Database API による実 ADB Wallet 生成（対象環境の IAM policy と永続 Wallet volume が必要）。
+- 埋め込みモデルを使う実 training。
+- モデルの API の direct structured output。
 
 ## SQL 論理構造からの往復生成（Issue #321）
 

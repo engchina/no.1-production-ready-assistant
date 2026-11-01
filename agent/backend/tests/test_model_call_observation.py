@@ -1,10 +1,10 @@
 """モデルの呼び出しごとの文脈予算・入力の構成・指紋と cache の利用量の記録（#2583）。
 
-モデルは OCI の client の層（`CompatResponsesModel` → `_CompatResponses`）を通し、呼び先だけを合成の
-応答を返す fake にする（OCI へは接続しない）。モデルの呼び出しの span（`gen_ai.chat`）の属性を
-確かめる: 指紋の安定と変化・入力の部分ごとの見積もり・予算と縮める前後・プロバイダが cache を
-返さないときの不明（0 と区別）・呼び出しごとの usage と Run の累計（承認の再開・差し戻し・入力の
-超過の送り直し）が二重に数えられないこと。本文（指示・引数・結果・質問）は属性に入らない。
+モデルはモデルの API の client の層（`ModelApiResponsesModel` → `_ModelApiResponses`）を通し、
+呼び先だけを合成の応答を返す fake にする（モデルの API へは接続しない）。モデルの呼び出しの span
+（`gen_ai.chat`）の属性を確かめる: 指紋の安定と変化・入力の部分ごとの見積もり・予算と縮める
+前後・プロバイダが cache を返さないときの不明（0 と区別）・呼び出しごとの usage と Run の累計
+（承認の再開・差し戻し・入力の超過の送り直し）が二重に数えられないこと。本文（指示・引数・結果・質問）は属性に入らない。
 """
 
 from __future__ import annotations
@@ -298,7 +298,7 @@ def test_static_instructions_come_before_the_run_state(monkeypatch: MonkeyPatch)
 
 
 # --------------------------------------------------------------------------------------------
-# OCI の client の層の span
+# モデルの API の client の層の span
 # --------------------------------------------------------------------------------------------
 
 
@@ -353,7 +353,7 @@ def test_cache_usage_not_reported_is_unknown_not_zero(
             return SimpleNamespace(status="completed", output=[], usage=usage, model="test-model")
 
     async def call() -> None:
-        await builtin_runtime._CompatResponses(Inner()).create(**_request())  # noqa: SLF001
+        await builtin_runtime._ModelApiResponses(Inner()).create(**_request())  # noqa: SLF001
 
     with (
         _chat_spans(monkeypatch) as spans,
@@ -395,7 +395,7 @@ def test_provider_overflow_resend_records_usage_only_on_the_sent_attempt(
 
     async def call() -> None:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        await builtin_runtime._CompatResponses(Inner()).create(  # noqa: SLF001
+        await builtin_runtime._ModelApiResponses(Inner()).create(  # noqa: SLF001
             model="test-model", input=items, instructions=STATIC, tools=[]
         )
 
@@ -456,12 +456,12 @@ class _FakeClient:
 
 
 def _route(monkeypatch: MonkeyPatch, *steps: tuple[list[Any], ResponseUsage]) -> _FakeResponses:
-    """Run のモデルを、OCI の client の層を通す fake の呼び先にする。"""
+    """Run のモデルを、モデルの API の client の層を通す fake の呼び先にする。"""
     _script_model(monkeypatch)
     client = _FakeClient(list(steps))
 
     def factory(target: Any) -> Any:
-        return builtin_runtime.CompatResponsesModel(
+        return builtin_runtime.ModelApiResponsesModel(
             model=target.model_id,
             openai_client=client,  # type: ignore[arg-type]
         )

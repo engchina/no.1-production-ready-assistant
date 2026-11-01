@@ -1,4 +1,4 @@
-"""OCI Enterprise AI クライアント(共有 core の Settings adapter / re-export shim)。
+"""モデルの API クライアント(共有 core の Settings adapter / re-export shim)。
 
 正本は共有 package `rag_parser_core.enterprise_ai`。backend は Settings から
 `EnterpriseAiConfig` を組み立てて駆動する薄い adapter として本モジュールを使い、

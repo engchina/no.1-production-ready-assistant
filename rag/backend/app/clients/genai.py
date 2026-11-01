@@ -41,7 +41,8 @@ EMBEDDING_INPUT_TYPES = frozenset(
 # ponytail: Cohere Embed v4 128k tokens への保守的な文字数ガード。
 # tokenizer は実際に必要になるまで入れない。
 EMBEDDING_INPUT_MAX_CHARS = 100_000
-# OCI Embed 4 は 1 request 内の全入力で 128k token。tokenizer 依存を増やさず保守的に抑える。
+# 埋め込みの API の 1 request 内の全入力の上限（Cohere Embed 4 では 128k token）。
+# tokenizer 依存を増やさず保守的に抑える。
 EMBEDDING_REQUEST_MAX_CHARS = 100_000
 EMBEDDING_REQUEST_MAX_INPUTS = 96
 # 1 件の入力の上限(Embed 4 が inputs[i] ごとに検証する。#2467 で実 API の応答から確認)。
@@ -61,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 
 class GenAiConfigError(ValueError):
-    """利用者が OCI 認証設定を直せる Generative AI 設定エラー。"""
+    """利用者が埋め込み・再ランクのモデルの設定を直せる設定エラー。"""
 
     safe_for_user = True
 
@@ -131,7 +132,7 @@ class GenAiClient:
         *,
         input_type: EmbeddingInputType,
     ) -> list[list[float]]:
-        """cache hit を再利用し、miss だけをまとめて OCI embedding に出す。"""
+        """cache hit を再利用し、miss だけをまとめて 埋め込みモデル に出す。"""
         vectors: list[list[float] | None] = [None] * len(texts)
         miss_texts: list[str] = []
         miss_keys: list[str] = []
@@ -176,10 +177,10 @@ class GenAiClient:
         *,
         input_type: EmbeddingInputType,
     ) -> list[list[float]]:
-        """OCI embedding request を設定値で分割し、入力順に結合して返す。
+        """埋め込みの request を設定値で分割し、入力順に結合して返す。
 
         batch は上限つきの並行で送る(#2002。上限は ``rag_embedding_concurrency``)。429・5xx・
-        接続・timeout の再試行と全体の待ちは共通の実行器が受け持つ(OCI SDK の再試行は切っている)。
+        接続・timeout の再試行と全体の待ちは共通の実行器が受け持つ(SDK の再試行は切っている)。
         結果は入力の順に結合する。最後の再試行でも失敗した batch があれば、その失敗を出す。
         """
         batch_size = min(
@@ -258,7 +259,7 @@ class GenAiClient:
                     with bind_rerank_attempt(attempt.number):
                         return await self._rerank_with_api(query, documents, top_n)
 
-                # OCI SDK の再試行は切り、既存の共通実行器だけで再試行する。
+                # SDK の再試行は切り、既存の共通実行器だけで再試行する。
                 with ingestion_ai_calls(self._settings, "rerank", total=1) as caller:
                     results = await _unwrapped_item_failure(
                         caller.call(rerank_once, label="rerank")
@@ -505,7 +506,7 @@ async def _unwrapped_item_failure[T](awaitable: Awaitable[T]) -> T:
 
 
 async def _run_sdk_call_in_thread(operation: Callable[[], Any]) -> Any:
-    """同期 OCI SDK 呼び出しを event loop 外で実行する。"""
+    """同期の SDK 呼び出しを event loop 外で実行する。"""
     return await asyncio.to_thread(operation)
 
 
@@ -580,17 +581,6 @@ def _cache_key(payload: dict[str, object]) -> str:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _invalid_config_message(error: Exception) -> str:
-    text = str(error).lower()
-    if "fingerprint" in text:
-        return (
-            "OCI 認証設定の fingerprint が不正です。"
-            "システム設定 > OCI 認証で API key fingerprint を"
-            "16 進数のコロン区切り形式に修正してください。"
-        )
-    return "OCI 認証設定が不正です。システム設定 > OCI 認証で設定を確認してください。"
 
 
 def _require_cached_vector(vector: list[float] | None, index: int) -> list[float]:

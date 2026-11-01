@@ -229,7 +229,7 @@ async def _document_with_recipe(client: OracleClient) -> tuple[str, dict[str, ob
     file_name = f"queue-pos-{uuid4().hex[:12]}.txt"
     detail = await client.create_document(
         file_name=file_name,
-        object_storage_path=f"oci://bucket/{file_name}",
+        object_storage_path=f"local://{file_name}",
         content_type="text/plain",
     )
     recipe = await client.ensure_default_document_recipe(detail.id)

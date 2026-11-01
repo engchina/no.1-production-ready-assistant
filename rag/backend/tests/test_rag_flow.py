@@ -27,7 +27,7 @@ from tests.support import test_audit_request_context as audit_request_context
 client = AsgiTestClient(app)
 NO_TENANT_HEADERS = {"X-Tenant-ID": "", "X-User-ID": ""}
 
-# 実 Oracle AI Database + OCI を用いる統合テスト（DB 未到達環境では自動 skip）。
+# 実 Oracle AI Database + モデルの API を用いる統合テスト（DB 未到達環境では自動 skip）。
 pytestmark = pytest.mark.usefixtures("oracle_db")
 
 

@@ -292,7 +292,7 @@ async def draft_evaluation_process_expectations(
 ) -> ApiResponse[EvaluationProcessDraftData]:
     """評価のケースの回答の過程から、期待（手順・条件・根拠・対応）の下書きを作る（#2402。保存しない）。
 
-    構造化は業務ガイドの取り込み（#2397）と同じ部品で、1 行で OCI Enterprise AI を 1 回呼ぶ（上限
+    構造化は業務ガイドの取り込み（#2397）と同じ部品で、1 行でモデルの API を 1 回呼ぶ（上限
     つき並行。``RAG_SUPPORT_GUIDE_IMPORT_CONCURRENCY``）。見出しの語は言語資源
     （``guide_import_cues.process_headings``）、資料の名前は選んだナレッジベースの文書で解決する。
     画面は行を ``EVALUATION_PROCESS_MAX_REQUEST_ROWS`` 行ずつに分けて送る。

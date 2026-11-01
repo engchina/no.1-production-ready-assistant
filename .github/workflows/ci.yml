@@ -223,7 +223,7 @@ jobs:
             platform_backend:
               - "platform/packages/backend_core/**"
               - "platform/packages/system_settings_backend/**"
-              # OCI Enterprise AI の呼び方の共通の規則（pr_system_settings が使う。#3418）。
+              # モデルの API の呼び方の共通の規則（pr_system_settings が使う。#3418）。
               - "platform/packages/enterprise_ai/**"
             # 製品の評価と suite の評価が共有する採点の部品（#3240）。使うのは RAG の backend と suite だけ。
             platform_evaluation_scoring:
@@ -239,7 +239,7 @@ jobs:
             suite_evaluation:
               - "suite/evaluation/**"
               - "platform/packages/evaluation_scoring/**"
-              # LLM による判定が使う OCI Enterprise AI の呼び方（#3418）。
+              # LLM による判定が使うモデルの API の呼び方（#3418）。
               - "platform/packages/enterprise_ai/**"
               - "platform/contracts/mcp/agent-tools.json"
               - "platform/contracts/mcp/rag-tools.json"
@@ -795,7 +795,7 @@ jobs:
         if: needs.changes.outputs.platform_evaluation_scoring_deps == 'true'
         run: uv run pip-audit --skip-editable
 
-  # OCI Enterprise AI の呼び方の共通の規則（#3418）。標準 library だけ。pr_system_settings と suite が使う。
+  # モデルの API の呼び方の共通の規則（#3418）。標準 library だけ。pr_system_settings と suite が使う。
   platform-enterprise-ai:
     name: Platform / enterprise_ai (pr_enterprise_ai)
     needs: changes
@@ -929,8 +929,7 @@ jobs:
 
       - name: Dependency audit
         if: needs.changes.outputs.rag_deps == 'true'
-        # oci 2.185.1 が cryptography<51.0.0 へ制約を緩和したため cryptography 50 系へ更新でき、
-        # GHSA-537c-gmf6-5ccf の ignore は不要になった。ignore を戻す場合は理由をここへ明記する。
+        # ignore は持たない。ignore を足す場合は理由をここへ明記する。
         run: uv run pip-audit --skip-editable
 
   rag-engine:
@@ -1406,10 +1405,9 @@ jobs:
 
       - name: Dependency audit
         if: needs.changes.outputs.nl2sql_deps == 'true'
-        # OCI SDK currently constrains cryptography to <47.0.0, while GHSA-537c-gmf6-5ccf
-        # lists 48.0.1 as the first fixed version. Keep auditing all other findings.
-        # dependency-audit-nightly.yml にも同じ ignore を書く。
-        run: uv run pip-audit --skip-editable --ignore-vuln GHSA-537c-gmf6-5ccf
+        # ignore は持たない（以前の GHSA-537c-gmf6-5ccf の ignore は、OCI SDK の依存を外した #11 で不要になった）。
+        # ignore を足すときは dependency-audit-nightly.yml にも同じ ignore を書く。
+        run: uv run pip-audit --skip-editable
 
   # ---------------------------------------------------------------- agent
   #

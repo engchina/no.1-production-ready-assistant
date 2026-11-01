@@ -4,7 +4,7 @@
 file)配下に置く。メッセージ送信は既存 RAG パイプラインを
 
 再利用し、会話履歴で省略を補って確認・検索・回答へ渡す。
-``model_ids`` を複数指定すると設定済み OCI モデルへ fan-out し横並び比較できる。
+``model_ids`` を複数指定すると設定済み モデルへ fan-out し横並び比較できる。
 """
 
 import asyncio
@@ -577,7 +577,7 @@ async def _load_sendable_conversation(
 def _resolve_compare_models(
     request: ChatMessageRequest, settings: Settings
 ) -> list[dict[str, str]]:
-    """比較対象の OCI モデル(model_id + label)を解決する。上限は設定値で抑える。"""
+    """比較対象の モデル(model_id + label)を解決する。上限は設定値で抑える。"""
     catalog = {
         choice["model_id"]: choice["display_name"]
         for choice in registered_answer_model_choices(settings)

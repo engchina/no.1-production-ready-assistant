@@ -205,7 +205,7 @@ def test_answer_after_the_retry_with_a_tool_is_kept(
     assert len(mcp.calls_of("rag_search")) == 1
     # 差し戻しは利用者のメッセージとして、前の回答の後に足す（同じ会話の続き）。
     retry_input = model.calls[1].input
-    # 前の assistant のメッセージは入力に入れず（OCI の gpt-oss は output_text を受け付けない）、
+    # 前の assistant のメッセージは入力に入れず（gpt-oss は output_text を受け付けない）、
     # 差し戻しのメッセージに元の回答を引用して添える。
     # チャットの Run（方針「確認する」）は ask_user_confirmation を渡すので、本文で聞き返さず
     # 資料のツールか確認のカードで確かめる差し戻しの文にする（#1881）。
@@ -812,7 +812,7 @@ def test_retry_input_drops_the_assistant_message_and_its_reasoning() -> None:
 
     retried = tool_grounding.retry_input(items, "こんにちは！" + "あ" * 5000)
 
-    # OCI の gpt-oss は入力の output_text を受け付けないので、assistant のメッセージと直前の
+    # gpt-oss は入力の output_text を受け付けないので、assistant のメッセージと直前の
     # reasoning を外し、ツールの呼び出しは残す。
     assert retried[:3] == items[:3]
     assert len(retried) == 4

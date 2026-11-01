@@ -1,7 +1,7 @@
 """業務 Agent を外部の MCP クライアントに公開する（`POST /api/mcp`。#1874）。
 
-業務 Agent のモデルは SDK の `ScriptedModel` に差し替え、OCI へは接続しない。API キーは共通の
-`pr_system_settings.auth.api_keys`（InMemory の store）。
+業務 Agent のモデルは SDK の `ScriptedModel` に差し替え、モデルの API へは接続しない。API キーは
+共通の `pr_system_settings.auth.api_keys`（InMemory の store）。
 """
 
 from __future__ import annotations

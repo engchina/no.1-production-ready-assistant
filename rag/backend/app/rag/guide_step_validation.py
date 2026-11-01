@@ -10,7 +10,7 @@
 - 順序・分岐・依存の検査（`answer_checks.check_guide_steps`）には、手順の説明にした段落の位置を
   渡す。
 
-意味の近さの判定の embedding は回答の検証 1 回で多くて 1 回（OCI Generative AI の Cohere Embed。
+意味の近さの判定の embedding は回答の検証 1 回で多くて 1 回（埋め込みモデル。
 検索と同じ）。使えない・失敗なら語の判定（安全側）に戻る。
 """
 

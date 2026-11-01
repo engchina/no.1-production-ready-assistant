@@ -138,7 +138,7 @@ RAG 自身の評価（`evaluation_cli` に `--output` / `--guided-output` の評
 
 nightly（`.github/workflows/rag-evaluation-nightly.yml`）の評価は、repo variable の `RAG_EVALUATION_API_BASE_URL`
 が指す配備先の API に評価セットを送るだけで、variable が無ければ skip します（2026-10-08 の時点で未設定）。この
-評価セットは、配備先に資料を取り込み（`evaluation_corpus_cli`。parser と OCI / Oracle が要る）、`file:` の参照を
+評価セットは、配備先に資料を取り込み（`evaluation_corpus_cli`。parser とモデルの API / Oracle が要る）、`file:` の参照を
 文書 ID に置き換えてからでないと採点できず、回答も 1 問 3〜5 回のモデルの呼び出しで 20 分前後かかります（nightly
 の評価の待ちの上限は 15 分）。新しい secret・変数（取り込んだナレッジベースの ID など）と実環境が要るため、nightly
 には入れず、手動（上の「取り込んで評価する」）で流します。

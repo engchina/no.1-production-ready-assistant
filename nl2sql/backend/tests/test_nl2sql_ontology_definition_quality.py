@@ -1,4 +1,4 @@
-"""根拠・再構築・batch 復旧の回帰テスト。実 OCI/Oracle は使用しない。"""
+"""根拠・再構築・batch 復旧の回帰テスト。実際のモデルの API / Oracle は使用しない。"""
 
 from __future__ import annotations
 

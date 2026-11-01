@@ -29,15 +29,15 @@ describe("PreconditionBanner（#1688）", () => {
       <PreconditionBanner
         id="save-precondition"
         testId="precondition"
-        title="OCI 認証が設定されていません"
-        message="保存には OCI 認証が必要です。"
+        title="データベースの接続が設定されていません"
+        message="保存にはデータベースの接続が必要です。"
       />,
     );
     expect(html).toContain('id="save-precondition"');
     expect(html).toContain('data-testid="precondition"');
     expect(html).toContain('role="status"');
     expect(html).toContain('data-surface-tint="warning"');
-    expect(html).toContain("OCI 認証が設定されていません");
+    expect(html).toContain("データベースの接続が設定されていません");
     // 導線も再試行も渡さなければ操作の行を描かない（閉じる × も付けない）。
     expect(html).not.toContain("<a ");
     expect(html).not.toContain("<button");
@@ -48,11 +48,11 @@ describe("PreconditionBanner（#1688）", () => {
     act(() =>
       root.render(
         <PreconditionBanner
-          title="OCI 認証が設定されていません"
+          title="データベースの接続が設定されていません"
           message="本文"
           settingsLink={{
-            to: "/settings/oci",
-            label: "OCI 認証を開く",
+            to: "/settings/model",
+            label: "データベースの設定を開く",
             icon: FileKey,
             testId: "open-settings",
           }}
@@ -63,11 +63,11 @@ describe("PreconditionBanner（#1688）", () => {
     );
     const controls = [...host.querySelectorAll("a, button")];
     expect(controls.map((element) => element.textContent)).toEqual([
-      "OCI 認証を開く",
+      "データベースの設定を開く",
       "再試行",
     ]);
     const link = host.querySelector('[data-testid="open-settings"]');
-    expect(link?.getAttribute("href")).toBe("/settings/oci");
+    expect(link?.getAttribute("href")).toBe("/settings/model");
     // 先頭アイコンと方向のアイコン（ArrowRight）の 2 つ。
     expect(link?.querySelectorAll("svg")).toHaveLength(2);
     act(() => (host.querySelector('[data-testid="retry"]') as HTMLButtonElement).click());

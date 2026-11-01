@@ -2,7 +2,7 @@
 
 seed を受け付けないモデルでは未知の引数として HTTP 400 になるため、標準の payload・回答フローの
 `responses.parse`・parser のサービスへ渡す env のどれにも seed を入れない。
-HTTP は決定論の fake transport で受ける（OCI へは接続しない）。
+HTTP は決定論の fake transport で受ける（モデルの API へは接続しない）。
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ async def test_text_and_image_calls_do_not_send_seed() -> None:
 
 
 def test_config_and_parser_env_have_no_seed() -> None:
-    """共有 client の config と、parser（OCI の VLM。env から読む）の env に seed が無い。"""
+    """共有 client の config と、parser（VLM。env から読む）の env に seed が無い。"""
     assert not hasattr(config_from_settings(_llm_settings()), "seed")
     assert not hasattr(EnterpriseAiConfig.from_env({}), "seed")
     env = service_runtime_env(_llm_settings())

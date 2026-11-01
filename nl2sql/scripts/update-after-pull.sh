@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OCI Compute 上で手動のソース更新後に、安全な修復と再デプロイを行う。
+# Compute 上で手動のソース更新後に、安全な修復と再デプロイを行う。
 # ソース管理、.env の内容、Wallet の内容、systemd unit は変更しない。
 set -Eeuo pipefail
 
@@ -159,9 +159,9 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/update-after-pull.sh [--check | --repair-only]
 
-引数なし       ソース更新後の build、OCI 修復、migration、再起動、frontend 公開を行います。
+引数なし       ソース更新後の build、配備先の修復、migration、再起動、frontend 公開を行います。
 --check        固定パス、Wallet 権限、systemd、system schema を読み取り専用で確認します。
---repair-only  build と frontend 公開を省略し、OCI 修復、migration、再起動だけを行います。
+--repair-only  build と frontend 公開を省略し、配備先の修復、migration、再起動だけを行います。
 
 このスクリプト自身は Git 操作と schema --recreate を行いません。
 opc 実行時は sudo -n のみを使用し、パスワード入力を要求しません。
@@ -236,18 +236,18 @@ service_exists() {
   systemctl cat "$1" >/dev/null 2>&1
 }
 
-validate_fixed_oci_layout() {
+validate_fixed_deploy_layout() {
   local configured_wallet resolved_root
   if ! test_mode_enabled; then
     [ "${APP_USER}" = "opc" ] || fail "実行ユーザー設定は opc である必要があります。"
     [ "${APP_GROUP}" = "opc" ] || fail "実行グループ設定は opc である必要があります。"
     [ "${APP_ROOT}" = "/u01/aipoc" ] || fail "APP_ROOT は /u01/aipoc 固定です。"
     [ "${APP_REPO_DIR}" = "/u01/aipoc/no.1-production-ready-assistant/nl2sql" ] || \
-      fail "アプリケーションパスが OCI の固定パスではありません。"
+      fail "アプリケーションパスが配備先の固定パスではありません。"
     [ "${BACKEND_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-assistant/nl2sql/backend/.env" ] || \
-      fail "backend/.env が OCI の固定パスではありません。"
+      fail "backend/.env が配備先の固定パスではありません。"
     [ "${PLATFORM_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-assistant/platform/.env" ] || \
-      fail "platform/.env が OCI の固定パスではありません。"
+      fail "platform/.env が配備先の固定パスではありません。"
     [ "${WALLET_DIR}" = "/u01/aipoc/wallet" ] || fail "Wallet path は /u01/aipoc/wallet 固定です。"
     [ "${RECOVERY_ROOT}" = "/u01/aipoc/recovery" ] || fail "recovery path は /u01/aipoc/recovery 固定です。"
     [ "${UPDATE_LOG_PATH}" = "/var/log/nl2sql-update.log" ] || \
@@ -300,7 +300,7 @@ preflight() {
   require_command uv
   require_file "${BACKEND_DIR}/pyproject.toml"
   require_file "${BACKEND_DIR}/uv.lock"
-  validate_fixed_oci_layout
+  validate_fixed_deploy_layout
 
   if [ "${ACTION}" = "check" ]; then
     return 0

@@ -133,7 +133,7 @@ describe("API キーの画面（#1805）", () => {
     expect(html).not.toContain("利用者</th>");
     // 公開の URL が無いときは、この画面の URL だけを出す（#1870）。CA の証明書の案内は出さない（#19）。
     expect(html).toContain("この画面の URL");
-    expect(html).not.toContain("公開の URL（OCI）");
+    expect(html).not.toContain("公開の URL");
     expect(html).not.toContain("/platform/ca.crt");
     expect(html).not.toContain('data-testid="api-keys-ca-note"');
     // 発行の既定の製品は、開いている製品によらず 3 製品のすべて（#1869・#1874）。
@@ -180,8 +180,8 @@ describe("API キーの画面（#1805）", () => {
     expect(html).toContain("http://localhost:5174/api/mcp");
     expect(html).toContain("https://203.0.113.10:8443/rag/api/mcp");
     expect(html).toContain("https://203.0.113.10:8443/nl2sql/api/mcp");
-    expect(html).toContain("公開の URL（OCI）");
-    expect(html).toContain('aria-label="NL2SQLの公開の URL（OCI）: URL をコピー"');
+    expect(html).toContain("公開の URL");
+    expect(html).toContain('aria-label="NL2SQLの公開の URL: URL をコピー"');
     expect(html).not.toContain("/platform/ca.crt");
     // 配備した画面で開いて、この画面の URL と公開の URL が同じなら 1 行。
     const same = render(
@@ -189,7 +189,7 @@ describe("API キーの画面（#1805）", () => {
       { mine: [], publicBaseUrl: "https://203.0.113.10:8443" }
     );
     expect(same).toContain("この画面の URL（公開の URL と同じ）");
-    expect(same).not.toContain("公開の URL（OCI）");
+    expect(same).not.toContain("の公開の URL: URL をコピー");
     expect(same.match(/URL をコピー<\/span><\/button>/g)).toHaveLength(3);
   });
 

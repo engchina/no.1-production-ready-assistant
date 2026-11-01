@@ -13,7 +13,7 @@
 #     悪意のあるコード（供給網の攻撃）を、取り下げられる前に自動 merge しないため）。security updates には効かない。
 #   - security updates（repo の設定で有効。#1588）は、entry ごとの `*-security` の group で 1 本にまとめる
 #     （applies-to: security-updates。schedule を待たずに作られる）。auto-merge は version updates と同じ扱い。
-#   - 確定スタックの中核（oci / oracledb / fastapi / react / react-router / vite）は
+#   - 確定スタックの中核（oracledb / fastapi / react / react-router / vite）は
 #     major を無視する。破壊的変更の取り込みは Issue を立てて個別に判断する。
 #   - patch/minor は required checks 成功後に自動 merge する（#76、
 #     .github/workflows/dependabot-auto-merge.yml）。major は手動レビューで判断する。
@@ -75,8 +75,6 @@ updates:
           - "*"
     ignore:
       # 確定スタックの中核。major は挙動と接続互換に直結するため個別判断する。
-      - dependency-name: oci
-        update-types: ["version-update:semver-major"]
       - dependency-name: oracledb
         update-types: ["version-update:semver-major"]
       - dependency-name: fastapi
@@ -200,8 +198,6 @@ updates:
           - "*"
     ignore:
       # 確定スタックの中核（rag/backend と同じ）。major は個別に判断する。
-      - dependency-name: oci
-        update-types: ["version-update:semver-major"]
       - dependency-name: oracledb
         update-types: ["version-update:semver-major"]
       - dependency-name: fastapi

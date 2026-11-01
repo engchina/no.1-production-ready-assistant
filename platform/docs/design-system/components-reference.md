@@ -1248,7 +1248,7 @@ import { DEFAULT_ROADMAP_LABEL, RoadmapBadge, SelectField } from "@production-re
 | `badge` は中立色の `StatusBadge`（アイコンなし）。カード・一覧の行の印は `RoadmapBadge`（中立色・`CalendarClock`） | 状態を色だけで表さない（文字で「準備中（ロードマップ）」）。3 製品で同じ語にそろえるため、既定の文言 `DEFAULT_ROADMAP_LABEL` を `packages/ui` が持つ（`DEFAULT_TAB_INVALID_LABEL` と同じ） |
 | 保存済みの値が選べない選択肢でも、閉じたボタンはそのラベルを出す | 以前に保存した値を消さずに見せ、別の値を選び直させる |
 
-- 使っている所: RAG の処理レシピの「文書解析」（OCI Document Understanding）。`RoadmapBadge` は RAG の文書解析の使用エンジンのカードとサービス管理の行。
+- 使っている所: 今は無い（RAG の文書解析の準備中のエンジン（以前の OCI Document Understanding など）は #22 で削除した）。準備中の選択肢を出すときに使う。
 - 単体テストは `packages/ui/tests/select-field.test.tsx`、動きは RAG の e2e（`document-processing-config.spec.ts`）。
 
 ---
@@ -1795,7 +1795,7 @@ import { TextareaField } from "@production-ready/ui";
 ```tsx
 <Tabs
   idPrefix="enterprise-connection"
-  ariaLabel="OCI Enterprise AI の接続"
+  ariaLabel="モデルの API の接続"
   value={tab}
   onChange={setTab}
   items={[
@@ -1992,7 +1992,7 @@ import { FieldLabel, FieldLegend, Fieldset, SelectField, TextField } from "@prod
 // 1 行の入力・選択・secret: required だけで「必須」のタグと aria-required が付く（requiredLabel の既定は「必須」）
 <TextField id="profile-name" label={t("profiles.field.name")} required value={name} onValueChange={setName}
   error={nameError ?? undefined} />
-<SelectField id="region" label={t("settings.oci.region")} required value={region} options={regions} onValueChange={setRegion} />
+<SelectField id="region" label={t("settings.storage.region")} required value={region} options={regions} onValueChange={setRegion} />
 // 条件付きの必須だけ文言を上書きする（別の見た目を作らない）
 <TextField id="compartment" label={t("settings.model.compartment")} required requiredLabel={t("settings.model.requiredInOci")} />
 
@@ -2033,7 +2033,7 @@ export function RequiredBadge(props: {
 
 type RequiredProps = {
   required?: boolean;
-  /** 既定「必須」。条件付きの必須（「OCI 運用時必須」）だけ上書きする。 */
+  /** 既定「必須」。条件付きの必須（「利用時必須」）だけ上書きする。 */
   requiredLabel?: string;
   /** 入力・群が aria-required で伝えるなら true（タグは aria-hidden）。FieldLabel の既定 true、FieldLegend の既定 false。 */
   requiredAnnouncedByControl?: boolean;
@@ -2323,14 +2323,14 @@ messaging.md §9.1）。製品は自分の失敗の情報を `ProcessFailure` �
 
 ```tsx
 <PreconditionBanner
-  id="save-oci-precondition"
-  title="OCI 認証が設定されていません"
-  message="この操作には OCI 認証の設定が必要です。設定するまで保存できません。システム設定の「OCI 認証」で設定してから、再試行してください。"
-  settingsLink={canOpen ? { to: "/settings/oci", label: "OCI 認証を開く", icon: KeyRound, linkComponent: Link } : undefined}
+  id="save-database-precondition"
+  title="データベースの接続が設定されていません"
+  message="この操作にはデータベースの接続の設定が必要です。設定するまで保存できません。システム設定の「データベース」で設定してから、再試行してください。"
+  settingsLink={canOpen ? { to: "/settings/database", label: "データベースの設定を開く", icon: KeyRound, linkComponent: Link } : undefined}
   onRetry={recheck}
   retrying={rechecking}
 />
-<Button disabled={blocked} aria-describedby={blocked ? "save-oci-precondition" : undefined}>保存</Button>
+<Button disabled={blocked} aria-describedby={blocked ? "save-database-precondition" : undefined}>保存</Button>
 ```
 
 ### PreconditionBanner の props

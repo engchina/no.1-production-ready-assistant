@@ -1017,7 +1017,7 @@ async def _post_enterprise_ai(
 ) -> Mapping[str, object]:
     # Endpoint URL は入力どおり使い、API path を付ける（#1440。3 製品で platform の関数）。
     url = connection.request_url(api_path)
-    api_key = _require_non_empty(connection.api_key, "OCI Enterprise AI API key")
+    api_key = _require_non_empty(connection.api_key, "Model API key")
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -1033,10 +1033,10 @@ async def _post_enterprise_ai(
         )
     if response.is_error:
         # 受け付けない推論の量（#1425）などの 400 は、応答の本文に理由があるので結果の詳細に出す。
-        raise ValueError(f"OCI Enterprise AI HTTP {response.status_code}: {response.text[:500]}")
+        raise ValueError(f"Model API HTTP {response.status_code}: {response.text[:500]}")
     data = response.json()
     if not isinstance(data, Mapping):
-        raise ValueError("Enterprise AI response は JSON object である必要があります。")
+        raise ValueError("Model API response は JSON object である必要があります。")
     return data
 
 
@@ -1663,7 +1663,7 @@ class BuiltinRuntimeStatus(BaseModel):
 
 @router.get("/runtime/status", response_model=ApiResponse[BuiltinRuntimeStatus])
 async def get_builtin_runtime_status() -> ApiResponse[BuiltinRuntimeStatus]:
-    """組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI）の SDK の版と使うモデル。
+    """組み込み Runtime（OpenAI Agents SDK + モデルの API）の SDK の版と使うモデル。
 
     権限は manifest（実行環境・業務 Agent のメニュー）だけで判定する。Run のデータ・秘密を
     含まないため、Run の capability は求めない（「実行環境」をメニュー権限で開ける。#1041）。
@@ -2000,7 +2000,7 @@ async def create_run(
                 run_request.attachment_ids,
                 conversation_id=run_request.thread_id,
             )
-        # 実行は組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI。#754）。Run は操作した
+        # 実行は組み込み Runtime（OpenAI Agents SDK + モデルの API。#754）。Run は操作した
         # 利用者として実行し、続ける会話は自分の会話だけ（他の利用者の会話は保存先も 404。#3244）。
         run = await run_in_threadpool(
             runtime_repository.create_builtin_run,

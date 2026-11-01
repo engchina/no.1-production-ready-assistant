@@ -1,6 +1,6 @@
 """RAG の回答の評価器の、人手の判定（LabelSet の JSON）による校正（#3418・#2577）。
 
-評価器は台本（`evaluate_answer_payload` と指標の計算の出力の形の合成の値）で、OCI Enterprise AI は
+評価器は台本（`evaluate_answer_payload` と指標の計算の出力の形の合成の値）で、モデルの API は
 呼ばない。人手の判定は合成の内容（業務の内容を含まない）。
 """
 

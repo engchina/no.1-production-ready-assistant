@@ -1,4 +1,4 @@
-"""OCI Enterprise AI(Vision)parser の env 解決(#211)。"""
+"""モデルの API(Vision)parser の env 解決(#211)。"""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from rag_parser_core.enterprise_ai import EnterpriseAiConfig
 
 
 def test_config_from_env_reads_platform_names() -> None:
-    """共通設定は backend と同じ PLATFORM_OCI_* を読む。"""
+    """共通設定は backend と同じ PLATFORM_ENTERPRISE_AI_* を読む。"""
     config = EnterpriseAiConfig.from_env(
         {
             "PLATFORM_ENTERPRISE_AI_ENDPOINT": "https://inference.example/openai/v1",
             "PLATFORM_ENTERPRISE_AI_API_KEY": "sk-test",
-            "PLATFORM_ENTERPRISE_AI_PROJECT_ID": "ocid1.generativeaiproject.oc1..x",
+            "PLATFORM_ENTERPRISE_AI_PROJECT_ID": "proj-x",
             "PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL": "vendor.vision",
             "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL": "vendor.llm",
             "PLATFORM_ENTERPRISE_AI_TIMEOUT_SECONDS": "30",
@@ -58,7 +58,7 @@ def test_for_vision_uses_vision_connection_only_when_set() -> None:
     config = EnterpriseAiConfig(
         enterprise_ai_endpoint="https://primary.example",
         enterprise_ai_api_key="sk-primary",
-        enterprise_ai_project_id="ocid1.primary",
+        enterprise_ai_project_id="proj-primary",
         vision_model_id="vendor.vision",
     )
     assert config.for_vision() is config
@@ -66,7 +66,7 @@ def test_for_vision_uses_vision_connection_only_when_set() -> None:
     separate = EnterpriseAiConfig(
         enterprise_ai_endpoint="https://primary.example",
         enterprise_ai_api_key="sk-primary",
-        enterprise_ai_project_id="ocid1.primary",
+        enterprise_ai_project_id="proj-primary",
         vision_enterprise_ai_endpoint="https://secondary.example",
         vision_enterprise_ai_api_key="sk-secondary",
         vision_enterprise_ai_project_id="",

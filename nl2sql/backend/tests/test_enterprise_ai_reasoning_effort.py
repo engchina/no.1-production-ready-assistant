@@ -1,6 +1,6 @@
 """登録モデルごとの推論（思考）の量（#1425）が、NL2SQL の呼び出しの payload に入ること。
 
-HTTP は httpx.MockTransport（決定論）で受ける（OCI へは接続しない）。
+HTTP は httpx.MockTransport（決定論）で受ける（実際のモデルの API へは接続しない）。
 """
 
 from __future__ import annotations

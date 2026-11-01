@@ -183,7 +183,7 @@ async def test_concurrent_review_saves_keep_both_element_edits() -> None:
     client = OracleClient()
     detail = await client.create_document(
         file_name="review-concurrency.txt",
-        object_storage_path="oci://bucket/review-concurrency.txt",
+        object_storage_path="local://review-concurrency.txt",
         content_type="text/plain",
     )
     recipe = await client.ensure_default_document_recipe(detail.id)

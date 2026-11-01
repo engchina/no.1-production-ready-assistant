@@ -1,7 +1,7 @@
 """業務 Agent の品質評価（#776）。
 
 評価セット（業務 Agent ごとに保存する評価ケースの集まり）を業務 Agent の Run として
-上限つきの並行（#2004）で実行し、回答を OCI Enterprise AI の既定のテキストモデルで判定する
+上限つきの並行（#2004）で実行し、回答を既定のテキストモデルで判定する
 （LLM-as-judge）。業界の評価の基盤（評価セットの保存・表での編集と取り込み・ツールの
 選択の評価・前回との比較）と、RAG の品質評価・NL2SQL の SQL生成評価の形（バックグラウンドの
 job・進み具合・取り消し・概要・ケース別結果）にそろえる。
@@ -1316,7 +1316,7 @@ async def judge_answer(
     *,
     caller: BoundedCaller | None = None,
 ) -> tuple[EvaluationJudgement, int]:
-    """回答を判定する（OCI Enterprise AI の既定のテキストモデル。structured output）。
+    """回答を判定する（既定のテキストモデル。structured output）。
 
     判定と、判定のモデルを呼んだ回数を返す。呼び出しは上限つきの並行の実行器（#2004。job の中で
     共有する ``caller``）を通し、429・5xx・接続・時間切れは実行器が種類ごとに再試行する（429 は

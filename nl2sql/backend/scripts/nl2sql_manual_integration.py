@@ -1,4 +1,4 @@
-"""Manual NL2SQL integration smoke test (Oracle runtime + OCI Enterprise AI Direct).
+"""Manual NL2SQL integration smoke test (Oracle runtime + Enterprise AI Direct).
 
 Run from `backend/`:
 
@@ -140,7 +140,7 @@ def _diagnostics(
             check.name
             for check in diagnostics.checks
             if (
-                check.name.startswith("OCI_GENAI")
+                check.name.startswith(("PLATFORM_GENAI_", "GENAI_"))
                 or check.name == "NL2SQL_FEEDBACK_EMBEDDING_ENABLED"
             )
             and check.status != "ok"
@@ -873,7 +873,7 @@ def _write_json_report(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Manual NL2SQL integration smoke test (OCI Enterprise AI Direct).",
+        description="Manual NL2SQL integration smoke test (Enterprise AI Direct).",
     )
     parser.add_argument("--profile-id", default=None, help="NL2SQL profile id. Default: default")
     parser.add_argument("--question", default=DEFAULT_QUESTION, help="Natural language question.")
@@ -969,7 +969,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Execute feedback vector index rebuild. Requires Oracle runtime and "
-            "OCI GenAI embedding configuration."
+            "embedding model configuration."
         ),
     )
     parser.add_argument(
@@ -989,7 +989,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--require-feedback-embedding",
         action="store_true",
         help=(
-            "Fail if OCI GenAI feedback embedding is not configured. "
+            "Fail if the feedback embedding model is not configured. "
             "Use with --execute-feedback-index for live Oracle AI Vector Search smoke."
         ),
     )

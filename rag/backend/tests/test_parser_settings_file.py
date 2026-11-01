@@ -30,7 +30,7 @@ from tests.support import AsgiTestClient
 
 client = AsgiTestClient(app)
 
-# 本番（OCI）で NL2SQL / Agent が保存した version 4 のファイルの形（RAG の設定が無い）。
+# 本番で NL2SQL / Agent が保存した version 4 のファイルの形（RAG の設定が無い）。
 V4_SHARED_DOCUMENT: dict[str, Any] = {
     "version": 4,
     "enterprise_ai": {
@@ -38,7 +38,7 @@ V4_SHARED_DOCUMENT: dict[str, Any] = {
             {
                 "connection_id": "primary",
                 "endpoint": "https://shared.example.com",
-                "project_id": "ocid1.generativeaiproject.oc1..shared",
+                "project_id": "proj-shared",
             }
         ],
         "models": [{"model_id": "shared-llm", "display_name": "共有 LLM"}],
@@ -64,7 +64,7 @@ def _nl2sql_payload() -> ModelSettingsPayload:
         {
             "enterprise_ai": {
                 "endpoint": "https://nl2sql-saved.example.com",
-                "project_id": "ocid1.generativeaiproject.oc1..nl2sql",
+                "project_id": "proj-nl2sql",
                 "models": [{"model_id": "nl2sql-llm", "display_name": "NL2SQL LLM"}],
                 "default_text_model_id": "nl2sql-llm",
             },

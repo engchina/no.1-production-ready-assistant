@@ -31,7 +31,7 @@
 4. `Settings` の既定値（`.env.example` と同じ値）。
 
 secret は例外とし、`PLATFORM_ENTERPRISE_AI_API_KEY`（セカンダリ接続は `PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY`、ターシャリ接続は `PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY`）は共通 `.env`（または環境変数）だけから読み込む。
-OCI Enterprise AI の接続はプライマリ接続・セカンダリ接続・ターシャリ接続（OpenAI / OpenAI 互換 API 向け。#786）の 3 つまでで、NL2SQL の Enterprise AI Direct・接続テスト・診断は、呼ぶモデル（既定のテキストモデル・既定の Vision モデル）の接続を使う（#533 / #542 / #786。`platform/README.md` の「OCI Enterprise AI のプライマリ接続・セカンダリ接続・ターシャリ接続」）。
+モデルの API の接続はプライマリ接続・セカンダリ接続・ターシャリ接続（OpenAI / OpenAI 互換 API 向け。#786）の 3 つまでで、NL2SQL の Enterprise AI Direct・接続テスト・診断は、呼ぶモデル（既定のテキストモデル・既定の Vision モデル）の接続を使う（#533 / #542 / #786。`platform/README.md` の「モデルの API のプライマリ接続・セカンダリ接続・ターシャリ接続」）。
 旧 v1 `model-settings.json` の key は環境 key がない場合に限り一時的に読み込める。
 次回のモデル設定保存で `.env` へ移し、secret を含まない v2 JSON へ更新する。
 API 応答は `has_api_key`、`secret_source`、`legacy_secret_detected` だけを返す。

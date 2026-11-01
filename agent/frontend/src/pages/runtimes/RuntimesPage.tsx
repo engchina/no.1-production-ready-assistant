@@ -29,7 +29,7 @@ const PERSISTENT_STORAGE_SETTING = "AGENT_RUNTIME_REPOSITORY_BACKEND=oracle_chec
 
 /**
  * Runtime（組み込み Runtime の状態。#754）。業務 Agent は Control Plane の中の OpenAI Agents SDK で実行し、
- * モデルは「システム設定 > モデル」の OCI Enterprise AI を使う。外部 Runtime の登録・Docker の操作は無い。
+ * モデルは「システム設定 > モデル」のモデルの API を使う。外部 Runtime の登録・Docker の操作は無い。
  */
 export function RuntimesPage() {
   const { hasPermission } = useAuth();

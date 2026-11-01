@@ -14,7 +14,7 @@ class BaseServiceSettings(
 ):
     """3 サービス共通の最小設定。
 
-    各サービスはこれを継承し、自分のドメイン設定（OCI/Oracle 接続等）を追加する。
+    各サービスはこれを継承し、自分のドメイン設定（Oracle の接続等）を追加する。
     `.env` + 環境変数から読み込む（pydantic-settings）。
     """
 

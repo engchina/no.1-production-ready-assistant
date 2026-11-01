@@ -4,7 +4,7 @@
 
 - suite の src は標準 library・httpx・pydantic・openpyxl（人手の判定の記入用のブック）・platform の
   `pr_evaluation_scoring`
-  /`pr_enterprise_ai`（OCI Enterprise AI の呼び方）・自分だけを import する（製品の `app.*`・
+  /`pr_enterprise_ai`（モデルの API の呼び方）・自分だけを import する（製品の `app.*`・
   `rag_*`・`nl2sql`・Agent の package を import しない）。
 - suite の src は製品の DB の driver（`oracledb`）を import せず、製品のディレクトリの path を書か
   ない。
@@ -12,7 +12,7 @@
   ない）。製品・platform の設定と DB の object の名前（`RAG_`・`NL2SQL_`・`AGENT_`・`PLATFORM_` で
   始まる名前）を持たない（suite の設定は `SUITE_`）。
 - suite の依存の閉包（`uv.lock`）にある自分たちの package は、platform の公開の package だけ。
-- suite が使う platform の package（採点の部品・OCI Enterprise AI の呼び方）は、標準 library と
+- suite が使う platform の package（採点の部品・モデルの API の呼び方）は、標準 library と
   自分だけを import する（製品・suite を import しない）。
 - 製品と platform の package は suite に依存しない。
 
@@ -190,7 +190,7 @@ def test_products_and_platform_do_not_depend_on_the_suite() -> None:
 
 
 def test_suite_does_not_install_fastapi() -> None:
-    """suite の venv に FastAPI を入れない（OCI Enterprise AI の呼び方は標準 library だけの
+    """suite の venv に FastAPI を入れない（モデルの API の呼び方は標準 library だけの
     `pr_enterprise_ai` から使う。#3418）。"""
     assert "production-ready-system-settings-backend" not in (
         SUITE_ROOT / "pyproject.toml"

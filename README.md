@@ -108,6 +108,16 @@ PLATFORM_ORACLE_DSN=myatp_low
 PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls
 PLATFORM_ORACLE_WALLET_DIR=/u01/workspace/adb-free-wallet
 PLATFORM_ORACLE_WALLET_PASSWORD=<Wallet のパスワード>
+PLATFORM_SERVICE_TOKEN_SECRET=<32 文字以上のランダムな値>   # 例: openssl rand -base64 48
+```
+
+`PLATFORM_SERVICE_TOKEN_SECRET` は、Agent が RAG / NL2SQL の MCP（`POST /api/mcp`）を呼ぶサービストークンの署名鍵です。空だと MCP は 503 を返します。
+
+Agent から RAG / NL2SQL を呼ぶには、`agent/backend/.env` に呼び先の MCP の URL（ローカル開発の backend の port）を書きます。書かないと Agent の画面で MCP の接続が「未設定」になります。
+
+```dotenv
+AGENT_EXTERNAL_RAG_MCP_URL=http://127.0.0.1:8100/api/mcp
+AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8110/api/mcp
 ```
 
 `system_admin` のパスワードにも同じ規則（12〜30 文字・大文字/小文字/数字・`admin` を含まない）があり、満たさないと「構成管理者の認証情報が設定されていません」（503）になります。
@@ -149,9 +159,9 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 
 | 製品 | 画面 | backend |
 |---|---|---|
-| RAG | http://localhost:3000 | http://localhost:8000/api/health |
-| NL2SQL | http://localhost:3001 | http://localhost:8010/api/health |
-| Agent | http://localhost:3002 | http://localhost:8020/api/health |
+| RAG | http://localhost:3100 | http://localhost:8100/api/health |
+| NL2SQL | http://localhost:3101 | http://localhost:8110/api/health |
+| Agent | http://localhost:3102 | http://localhost:8120/api/health |
 
 `system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
 
@@ -358,7 +368,7 @@ claude plugin list   # production-ready-skills@production-ready-assistant が �
 | Agent | `3102` | `8120` | `3142` |
 
 - 起動 script は `PORT` / `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_URL` で上書きできます。
-- OCI Compute への配備（`platform/deploy/` と各製品の `init_script.sh` の systemd）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
+- Compute への配備（`platform/deploy/` と各製品の `init_script.sh` の systemd）の backend は従来どおり `127.0.0.1:8000` / `8010` / `8020` です（1 台の Compute に suite と同居しないため変えていません）。
 - 文書の解析・前処理のサービス（`127.0.0.1:18010`〜`18023`）は変えていません。
 
 ## 開発ルール

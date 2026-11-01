@@ -2,7 +2,7 @@
   "settings": {
     "enterprise_ai": {
       "endpoint": "https://enterprise-ai.example.com",
-      "project_id": "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
+      "project_id": "proj_example",
       "api_key": "dummy-enterprise-ai-api-key",
       "has_api_key": true,
       "clear_api_key": false,

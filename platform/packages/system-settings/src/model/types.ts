@@ -7,9 +7,9 @@ export type ModelSettingsTestTargetType =
   "enterprise_text" | "enterprise_vision" | "embedding" | "rerank";
 
 /**
- * OCI Enterprise AI の接続の ID（#533）。接続ごとに backend の Settings の属性・env 名が決まっている。
+ * モデルの API の接続の ID（#533）。接続ごとに backend の Settings の属性・env 名が決まっている。
  * 画面の名前は「プライマリ接続」「セカンダリ接続」「ターシャリ接続」（#542 / #786）。
- * ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、Project OCID は任意。
+ * ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、Project ID は任意。
  */
 export type EnterpriseAiConnectionId = "primary" | "secondary" | "tertiary";
 /**
@@ -86,7 +86,7 @@ export interface EnterpriseAiConfiguredModel {
 }
 
 /**
- * OCI Enterprise AI の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空。
+ * モデルの API の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空。
  * 表示名は持たない（#542。画面は ID から「プライマリ接続」などと表示する）。
  */
 export interface EnterpriseAiConnectionSettings {

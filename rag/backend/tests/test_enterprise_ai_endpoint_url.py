@@ -23,13 +23,13 @@ from app.services.control import service_runtime_env
 # (Endpoint URL, 呼ぶ URL)。NL2SQL・Agent の test_enterprise_ai_endpoint_url.py と同じ表。
 ENDPOINT_CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
     ),
     ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/responses"),
     ("https://api.deepseek.com", "https://api.deepseek.com/responses"),
 ]
-ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-without-path"]
+ENDPOINT_CASE_IDS = ["compatible-mode-v1", "compatible-with-path", "compatible-without-path"]
 
 
 def _settings(endpoint: str) -> Settings:
@@ -108,7 +108,7 @@ def test_answer_engine_calls_endpoint_as_is(tmp_path: Path, endpoint: str, expec
 
 @pytest.mark.parametrize(("endpoint", "expected"), ENDPOINT_CASES, ids=ENDPOINT_CASE_IDS)
 def test_parser_service_env_calls_endpoint_as_is(endpoint: str, expected: str) -> None:
-    """OCI parser（microservice）は backend が渡す env の Endpoint URL で呼ぶ。"""
+    """parser（microservice）は backend が渡す env の Endpoint URL で呼ぶ。"""
     from rag_parser_core.enterprise_ai import EnterpriseAiClient as ParserClient
     from rag_parser_core.enterprise_ai import EnterpriseAiConfig
 

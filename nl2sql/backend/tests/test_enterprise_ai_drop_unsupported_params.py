@@ -3,7 +3,7 @@
 サンプリングの引数を受け付けない推論モデルは `temperature` を HTTP 400 で拒む。
 Enterprise AI Direct はその引数を外して 1 回だけ送り直し、以後そのモデルには送らない。
 受け付けるモデルには今までどおり送る。
-HTTP は httpx.MockTransport（決定論。合成の 400 の本文）で受け、OCI へは接続しない。
+HTTP は httpx.MockTransport（決定論。合成の 400 の本文）で受け、実際のモデルの API へは接続しない。
 """
 
 from __future__ import annotations

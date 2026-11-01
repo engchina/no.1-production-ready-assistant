@@ -3,7 +3,7 @@
 ジョブの trace の span の知らせから、LLM の呼び出しの回数と入力・出力・合計の token を集め、
 実行履歴の行（`usage`）に残すことと、一覧・詳細の API が合計と計測の状態を返すことを確かめる。
 
-- Enterprise AI Direct: OCI Enterprise AI の実の client を httpx の mock で動かす（usage は合成）。
+- Enterprise AI Direct: モデルの API の実の client を httpx の mock で動かす（usage は合成）。
 - 利用量の記録の無い行（この機能より前）は、一覧・詳細とも未計測（0 にしない）。
 """
 

@@ -21,7 +21,7 @@
 
 | ディレクトリ | 内容 |
 |---|---|
-| `platform/` | 3 製品の共通基盤: `packages/ui`（`@production-ready/ui`）、`packages/system-settings`（`@production-ready/system-settings`。共通のシステム設定・ユーザー / ロール管理の画面）、`packages/backend_core`（`pr_backend_core`）、`packages/system_settings_backend`（`pr_system_settings`。共通の設定 API と認証基盤）、`packages/evaluation_scoring`（`pr_evaluation_scoring`。製品と suite の評価が共有する採点の部品）、`packages/enterprise_ai`（`pr_enterprise_ai`。OCI Enterprise AI の URL の規則と失敗の分類。標準 library だけ）、`docs/design-system/`、`deploy/`（1 台の Compute の配備） |
+| `platform/` | 3 製品の共通基盤: `packages/ui`（`@production-ready/ui`）、`packages/system-settings`（`@production-ready/system-settings`。共通のシステム設定・ユーザー / ロール管理の画面）、`packages/backend_core`（`pr_backend_core`）、`packages/system_settings_backend`（`pr_system_settings`。共通の設定 API と認証基盤）、`packages/evaluation_scoring`（`pr_evaluation_scoring`。製品と suite の評価が共有する採点の部品）、`packages/enterprise_ai`（`pr_enterprise_ai`。モデルの API（OpenAI 互換）の URL の規則と失敗の分類。標準 library だけ）、`docs/design-system/`、`deploy/`（1 台の Compute の配備） |
 | `rag/` | Production Ready RAG |
 | `nl2sql/` | Production Ready NL2SQL（SQL 専用の自然言語問い合わせ） |
 | `agent/` | Production Control Plane for AI Agents |
@@ -80,13 +80,13 @@
 
 ## 共通の技術方針
 
-- **AI / DB は OCI / Oracle に集約する**: LLM / VLM = **OCI Enterprise AI**、embedding / rerank = **OCI Generative AI**（Cohere Embed v4 / Rerank v4 fast）、ベクトル検索 = **Oracle AI Vector Search**、データの正本 = **Oracle AI Database**。この分担を取り違えない。外部ベクトル DB・別 LLM provider・別 SaaS は入れず、逸脱するなら理由を添えてユーザーに確認する。
+- **AI / DB の分担**: LLM / VLM・embedding / rerank = **OpenAI 互換のモデルの API**（システム設定の 3 つの接続。DeepSeek・Aliyun 百煉など。既定の埋め込み / 再ランクは `text-embedding-v4` / `qwen3-rerank`）、ベクトル検索 = **Oracle AI Vector Search**、データの正本 = **Oracle AI Database**。この分担を取り違えない。提供元に固有の SDK・外部ベクトル DB・別 SaaS は入れず、逸脱するなら理由を添えてユーザーに確認する。
 - **Oracle の製品名は公式名で、バージョン（`26ai` 等）を入れない**（「Oracle AI Database」「Oracle AI Vector Search」「Oracle Autonomous AI Database」）。対応バージョンは [platform/docs/deployment.md](./platform/docs/deployment.md)「Autonomous AI Database（全製品で共有）」だけに書く（`adb_db_version`・`oracle_26ai` などの値・識別子は変えない）。
 - Backend は Python 3.12 + FastAPI + Pydantic v2 + uv と `pr_backend_core`。Frontend は Vite + React Router + TypeScript + Tailwind + 共有 UI + TanStack Query + Zustand。
 - **Python は 3.12 に固定する**（全 `pyproject.toml` の `requires-python = ">=3.12,<3.13"`、直下の `.python-version` は `3.12`。uv は project の中で直下の `.python-version` を読まないため、上限は `requires-python` で掛ける）。版を変えるときは `pyproject.toml`・`uv.lock`・CI の `python-version`・各製品の `init_script.sh` の `uv python install` / `--python` を同じ PR でそろえる。
 - シークレットは `.env` / secret store 経由（ハードコード・commit・API 応答への展開をしない）。LLM の出力は Pydantic で検証してから使う。
 - **ハードコードしない。** 特定の文書・業務・質問・データに合わせた語・規則・閾値・手順をコード（分岐・正規表現・プロンプトの例）に書かない。必要なら skill（`skills/<name>/SKILL.md`）か設定（`.env`・設定画面・検索・回答プロファイル・言語資源）に置き、コードは汎用の仕組みにする。
-- OCI / Oracle / LLM を呼ぶ層は CI では決定論スタブ / 録画応答でテストし、実サービスは手動 / ステージングで確かめる。
+- Oracle / LLM を呼ぶ層は CI では決定論スタブ / 録画応答でテストし、実サービスは手動 / ステージングで確かめる。
 - 実装と同時にテストを追加・更新し、該当範囲の lint・型チェック・テストの結果を報告する。ローカルでは変更した範囲だけを検査し、全件は CI に任せる（[docs/agents/ci.md](./docs/agents/ci.md)「ローカルの検証の範囲」）。
 - **不具合は局所検証で一つずつ直してからフルフローを確認する。** 毎回全工程を再実行せず、関連回帰の通過後に統合受入を行う。局所成功と全体成功を分け、必須 CI は省略しない（[手順](./docs/agents/ci.md)）。
 - Excel（.xlsx / .xlsm / .csv / .tsv）の作成・編集・分析は Codex の `spreadsheet` skill を使う（[導入と検証](./docs/agents/spreadsheets.md)）。その他の文書（.docx / .pptx / .pdf）の生成は対応する skill（`document-skills:*` / `pdf`）を使う。

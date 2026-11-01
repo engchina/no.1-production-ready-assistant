@@ -1026,7 +1026,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     monkeypatch.setattr(
         settings,
         "enterprise_ai_project_id",
-        "ocid1.generativeaiproject.oc1..example",
+        "proj-example",
     )
     monkeypatch.setattr(settings, "enterprise_ai_api_key", "sk-runtime-secret")
     monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "enterprise-llm")
@@ -1050,10 +1050,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
         body["settings"]["enterprise_ai"]["connections"][0]["endpoint"]
         == "https://enterprise-ai.example"
     )
-    assert (
-        body["settings"]["enterprise_ai"]["connections"][0]["project_id"]
-        == "ocid1.generativeaiproject.oc1..example"
-    )
+    assert body["settings"]["enterprise_ai"]["connections"][0]["project_id"] == "proj-example"
     assert body["settings"]["enterprise_ai"]["connections"][0]["api_key"] == ""
     assert body["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is True
     assert body["settings"]["enterprise_ai"]["models"] == [
@@ -1101,7 +1098,7 @@ def test_update_model_settings_mutates_runtime_settings() -> None:
     assert body["model_settings_file"] == get_settings().model_settings_file
     settings = get_settings()
     assert settings.enterprise_ai_endpoint == "https://enterprise-ai.example"
-    assert settings.enterprise_ai_project_id == "ocid1.generativeaiproject.oc1..example"
+    assert settings.enterprise_ai_project_id == "proj-example"
     assert settings.enterprise_ai_api_key == "sk-update-secret"
     assert settings.enterprise_ai_default_text_model == "enterprise-llm"
     assert settings.enterprise_ai_default_vision_model == "enterprise-vlm"
@@ -1188,7 +1185,7 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
                 "version": 1,
                 "enterprise_ai": {
                     "endpoint": "https://persisted-enterprise.example",
-                    "project_id": "ocid1.generativeaiproject.oc1..persisted",
+                    "project_id": "proj-persisted",
                     "api_key": "sk-persisted-secret",
                     "models": [
                         {
@@ -1224,7 +1221,7 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
     load_persisted_model_settings(settings)
 
     assert settings.enterprise_ai_endpoint == "https://persisted-enterprise.example"
-    assert settings.enterprise_ai_project_id == "ocid1.generativeaiproject.oc1..persisted"
+    assert settings.enterprise_ai_project_id == "proj-persisted"
     assert settings.enterprise_ai_api_key == "sk-persisted-secret"
     assert [model.model_id for model in settings.enterprise_ai_models] == [
         "persisted-text",
@@ -2125,7 +2122,7 @@ def _platform_env_file(
     tmp_path: Path,
     content: str = "",
 ) -> Path:
-    """共通 .env（OCI / アップロード保存先 / データベースの保存先。#211）を tmp に置く。"""
+    """共通 .env（アップロード保存先 / データベースの保存先。#211）を tmp に置く。"""
     env_file = tmp_path / "platform.env"
     if content:
         env_file.write_text(content, encoding="utf-8")
@@ -2149,7 +2146,7 @@ def _payload() -> dict[str, Any]:
     return {
         "enterprise_ai": {
             "endpoint": "https://enterprise-ai.example",
-            "project_id": "ocid1.generativeaiproject.oc1..example",
+            "project_id": "proj-example",
             "api_key": "sk-update-secret",
             "has_api_key": False,
             "clear_api_key": False,

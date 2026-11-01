@@ -83,7 +83,7 @@ class StagingSmokePreflightError(RuntimeError):
 @with_system_access
 def main() -> int:
     """CLI entrypoint。"""
-    parser = argparse.ArgumentParser(description="Run OCI / Oracle RAG staging smoke test.")
+    parser = argparse.ArgumentParser(description="Run model API / Oracle RAG staging smoke test.")
     parser.add_argument(
         "--query",
         default=DEFAULT_SMOKE_QUERY_TEMPLATE,
@@ -97,7 +97,7 @@ def main() -> int:
     parser.add_argument(
         "--cleanup",
         action="store_true",
-        help="実行後に作成した Oracle document/chunk と Object Storage object を削除する。",
+        help="実行後に作成した Oracle document/chunk と 保存先の object を削除する。",
     )
     args = parser.parse_args()
 
@@ -341,7 +341,7 @@ def _error_payload(error: Exception) -> dict[str, object]:
 
 
 def _safe_cause_details(error: Exception) -> dict[str, str]:
-    """OCI SDK 等の低機密診断値だけを取り出す。raw message は含めない。"""
+    """SDK の例外の低機密診断値だけを取り出す。raw message は含めない。"""
     details: dict[str, str] = {}
     for attr in ("status", "code", "opc_request_id", "request_id"):
         value = getattr(error, attr, None)

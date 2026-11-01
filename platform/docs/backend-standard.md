@@ -13,14 +13,14 @@
 | Validation / Config | Pydantic v2 + pydantic-settings（`.env` + 任意 JSON 設定） |
 | HTTP client | httpx |
 | DB / Vector | Oracle AI Database + python-oracledb（Oracle AI Vector Search / Oracle Text）。対応バージョンは [deployment.md](./deployment.md) |
-| LLM・VLM | OCI Enterprise AI |
-| Embedding・Rerank | OCI Generative AI（Cohere） |
+| LLM・VLM | OpenAI 互換のモデルの API（Responses API。DeepSeek・Aliyun 百煉など） |
+| Embedding・Rerank | OpenAI 互換のモデルの API（既定は Aliyun 百煉の `text-embedding-v4`・`qwen3-rerank`） |
 | Observability | Prometheus metrics + JSON logging + request-id |
 | Test / Lint / Type | pytest(+asyncio,cov) / Ruff（lint・整形。black は使わない）/ mypy strict |
 | Security | Bandit + pip-audit + gitleaks |
 | CI | GitHub Actions（`uv sync --locked`） |
 
-> ⚠️ LLM/VLM = Enterprise AI、embedding/rerank = OCI GenAI、ベクトル DB = Oracle AI Database。
+> ⚠️ LLM/VLM・embedding/rerank = OpenAI 互換のモデルの API、ベクトル DB = Oracle AI Database。
 > 外部ベクトル DB・別 LLM provider は導入しない（各業務 repo のルールに従う）。
 
 ## 役割分担（backend_core ↔ 業務 repo）
@@ -67,7 +67,7 @@ FastAPI の API ドキュメント（Swagger UI `/docs`・ReDoc `/redoc`・`/ope
 - 応答: `{status: ok|not_configured|unreachable|setup_required, check, detail, context_id, schema_status}`。常に HTTP 200。
 - 判定の順: `short_circuit`（DB を使わない構成）→ システム設定画面と同じ `database_readiness`（`ok` 以外は `not_configured`。接続は試さない）→ 製品の `test_connection`（bounded。失敗は `unreachable`）→ 製品の `schema_probe`（準備状態の確認）→ `ok`。
 - `schema_probe` の例外は、接続・pool のエラー（`pr_backend_core.oracle_errors.is_oracle_connection_error`。`DPY-4005`・`DPY-6xxx`・`DPY-4011`・`ORA-125xx` / `12170`・`ORA-03113` / `03114`・`ORA-01017` など。`raise ... from` の原因の連鎖も見る）なら `unreachable`、それ以外（辞書・DDL・権限など）だけを `setup_required`（`check=schema_check_failed`）にする（#820）。接続確認の後に pool が接続を返さないとき、「初期化が必要」と案内しない。製品の `schema_probe` が自分で例外を正規化するとき（NL2SQL の `migration_check_failed`）も同じ関数で分ける。
-- `unreachable` のときも OCI の制御 API へ DB の状態を問い合わせない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。画面は接続設定と Wallet の確認を案内する。
+- `unreachable` のときもクラウドの制御 API へ DB の状態を問い合わせない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。画面は接続設定と Wallet の確認を案内する。
 - `detail` は接続先・資格情報・Wallet の path を返さない（ORA / DPY / DPI のコードだけ）。`context_id` は接続先の値の SHA-256 で、生値は返さない。
 - 製品が注入するもの: `test_connection`（接続 pool と接続処理は製品が持つ）、`extra_readiness`（システム設定画面の `build_database_router` と同じもの）、`schema_probe`（RAG の system schema、NL2SQL の incremental store）、`short_circuit`（NL2SQL の memory モード、Agent のローカル認証）、`context_fields`（NL2SQL は実行モード・保存モードも含める）。
 - `ok` の結果だけを、接続先と資格情報の指紋（hash。生値は持たない）ごとに 30 秒サーバー側で cache する（`ok_cache_seconds`。#793）。設定の判定は毎回行い、`unreachable` / `setup_required` は cache しない。DB 設定の保存（`build_database_router`）とシステムテーブルの操作（`SystemSchemaManagerBase.initialize` / `delete_orphaned_rows`）で `clear_database_status_cache` が捨てる。テストは autouse の fixture で捨てる。
@@ -176,7 +176,7 @@ Agent が RAG / NL2SQL を呼ぶときは、呼び先の `POST /api/mcp`（MCP �
   - 8 往復は OpenAI の trimming の既定と同じ。続きの質問の省略を補うのは直近の数往復で足り、古い往復ほど現在の質問から外れた指示に引きずられやすい（cookbook の指摘）。
   - 合計 16,000 文字は、日本語はおおむね 1 文字が 1 token 前後なので約 16k token。128k の文脈の 1 割強に留め、検索の根拠・スキーマ・ツールの結果に文脈を残す（Anthropic の context engineering の「文脈は有限の資源で、少ない高信号の token にする」）。1 往復 4,000 文字は、長い回答・SQL があっても 4 往復以上が入る値。文字数で数えるのは、モデルごとに tokenizer が違っても 3 製品で同じ値を使うため。
   - ツールの結果・SQL の結果の表は渡さない（Anthropic の context editing が古いツールの結果から消すのと同じ。結果は大きく、個人情報・権限の範囲を含みうる）。
-- **compaction（要約）はしない**: 古い往復の要約（OpenAI の `SummarizingSession`、OCI の会話の compaction）は、1 回ごとに LLM の呼び出しが増え、要約の誤りが後に残るため今回は入れない（残課題）。
+- **compaction（要約）はしない**: 古い往復の要約（OpenAI の `SummarizingSession`、提供元の会話の compaction）は、1 回ごとに LLM の呼び出しが増え、要約の誤りが後に残るため今回は入れない（残課題）。
 - テストは `platform/packages/backend_core/tests/test_chat_history.py`（予算・切り詰め・0 で無効・タグの無害化）と、各製品のチャットのテスト。
 
 ## チャットの「会話の履歴」の期間（#2340）
@@ -208,7 +208,7 @@ Agent が RAG / NL2SQL を呼ぶときは、呼び先の `POST /api/mcp`（MCP �
 
 ## 内部の HTTP と環境のプロキシ（#852）
 
-OCI に届くために `HTTP_PROXY` / `HTTPS_PROXY`（社内プロキシ）を設定した環境でも、同じマシン・private network の
+外部のモデルの API に届くために `HTTP_PROXY` / `HTTPS_PROXY`（社内プロキシ）を設定した環境でも、同じマシン・private network の
 サービスへの HTTP は環境のプロキシを通さない。プロキシは 127.0.0.1 などへ届けられず `502 cannotconnect` などを返し、
 未起動のサービスへの「未到達」が「サービスの応答した失敗」に見えてしまう（#852 で RAG の pipeline の stage が
 in-process へ縮退せず、MCP の `rag_search` が止まった）。
@@ -216,11 +216,11 @@ in-process へ縮退せず、MCP の `rag_search` が止まった）。
 - httpx の client（`Client` / `AsyncClient`）は、宛先の URL を `pr_backend_core.internal_http.http_client_options(url)`
   に通した引数で作る: `httpx.Client(timeout=..., **http_client_options(url))`。宛先が内部（loopback `127.0.0.0/8`・`::1`・
   `localhost` / `*.localhost`・`0.0.0.0`・link-local・RFC 1918 / ULA の private・`*.local` / `*.internal`・unix socket）なら
-  `trust_env=False`（環境のプロキシ・`SSL_CERT_FILE`・`.netrc` を読まない）、外部（OCI・外部の MCP など）なら空で、
+  `trust_env=False`（環境のプロキシ・`SSL_CERT_FILE`・`.netrc` を読まない）、外部（モデルの API・外部の MCP など）なら空で、
   今までどおり環境のプロキシを使う。DNS は引かず、名前の形と IP の値だけで判定する（`is_internal_url`）。
 - 対象: RAG の前処理・parser・外部 parser・pipeline の stage・サービス管理の health・parser の readiness・trace の送信・
   評価 / 検証 / 負荷の CLI、Agent の MCP 接続（RAG / NL2SQL / 外部）と OAuth の token・trace の
-  送信。宛先が設定値の接続も、内部の宛先のときだけプロキシを外す。OCI Enterprise AI など外部だけへの client は対象外。
+  送信。宛先が設定値の接続も、内部の宛先のときだけプロキシを外す。モデルの API など外部だけへの client は対象外。
 - 多重の防御として、各製品の `scripts/start-backend.sh` は既存の値を残したまま `NO_PROXY` / `no_proxy` に
   `localhost,127.0.0.1,::1` を足して backend を起動する（起動の readiness の確認は #781 の `curl --noproxy "*"`）。
 - 内部の宛先をホスト名（例: VCN の DNS 名）で設定する場合は、名前からは判定できないため `NO_PROXY` に加える。RAG の

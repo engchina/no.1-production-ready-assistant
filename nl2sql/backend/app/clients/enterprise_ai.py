@@ -1,4 +1,4 @@
-"""OCI Enterprise AI クライアント。
+"""モデルの API クライアント。
 
 RAG と同じ `app.clients.enterprise_ai.EnterpriseAiClient` import path を提供する。
 NL2SQL 側の既存 direct client を薄く包み、settings API からは RAG と同じ async
@@ -19,7 +19,7 @@ type SyncCallRunner = Callable[[Callable[[], Any]], Any]
 
 
 class EnterpriseAiClient:
-    """Settings から OCI Enterprise AI 呼び出しを行う backend adapter。"""
+    """Settings からモデルの API 呼び出しを行う backend adapter。"""
 
     def __init__(
         self,

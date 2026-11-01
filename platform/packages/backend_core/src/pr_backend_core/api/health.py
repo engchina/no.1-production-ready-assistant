@@ -24,7 +24,7 @@ def create_health_router(
         version_getter: アプリ version を返す callable。
         readiness_checks_getter: 依存設定の readiness check（name -> status）を返す callable。
             省略時は `/ready` は常に ok を返す（依存チェックなし）。各サービスは自分の
-            OCI/Oracle 等のチェックをここで注入する。
+            Oracle・モデルの API 等のチェックをここで注入する。
         message: HealthData.message に載せる固定メッセージ（任意）。
     """
     router = APIRouter()

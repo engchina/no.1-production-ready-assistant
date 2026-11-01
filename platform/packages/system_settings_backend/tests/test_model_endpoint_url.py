@@ -16,9 +16,9 @@ from pr_system_settings.model import (
 # (Endpoint URL, base URL, Responses API の URL)
 CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/responses",
     ),
     (
         "https://api.deepseek.com/v1",
@@ -26,11 +26,11 @@ CASES = [
         "https://api.deepseek.com/v1/responses",
     ),
     ("https://api.deepseek.com", "https://api.deepseek.com", "https://api.deepseek.com/responses"),
-    # OCI の root URL にも path を補わない（利用者が /openai/v1 まで書く）。
+    # path の無い root URL にも path を補わない（利用者が API の base URL まで書く）。
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/responses",
+        "https://llm.example",
+        "https://llm.example",
+        "https://llm.example/responses",
     ),
     # 前後の空白と末尾の / だけ除く。
     (
@@ -41,10 +41,10 @@ CASES = [
     ("", "", "/responses"),
 ]
 CASE_IDS = [
-    "oci-openai-v1",
+    "compatible-with-long-path",
     "compatible-with-path",
     "compatible-without-path",
-    "oci-root",
+    "root-url",
     "trim",
     "empty",
 ]

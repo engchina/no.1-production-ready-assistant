@@ -20,7 +20,7 @@ suite の package を import せずにこの module の型で読む。一致の�
 評価が完了しない・値が無い（測れない）項目は判定できなかった件（`unjudged`）に数える。
 
     cd rag/backend
-    # 評価器を動かして校正する（OCI Enterprise AI を呼ぶ。接続とモデルは RAG の設定）
+    # 評価器を動かして校正する（モデルの API を呼ぶ。接続とモデルは RAG の設定）
     uv run python -m app.rag.answer_judge_calibration ../../tmp/eval/labels.json \\
         --output ../../tmp/eval/rag-answer-calibration.json
     # 判定のモデルを明示する（省略時は共通のモデル設定の既定の判定モデル。#3574）

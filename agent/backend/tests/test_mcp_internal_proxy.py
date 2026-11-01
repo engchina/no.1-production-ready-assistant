@@ -1,7 +1,7 @@
 """内部の MCP 接続は環境のプロキシを通さない（#852）。
 
-OCI のために `HTTP_PROXY` を設定し `NO_PROXY` の無い環境で、127.0.0.1 の RAG / NL2SQL の MCP へ
-送る要求がプロキシへ送られ、プロキシの `502 cannotconnect` になっていた。
+外部の API のために `HTTP_PROXY` を設定し `NO_PROXY` の無い環境で、127.0.0.1 の RAG / NL2SQL の
+MCP へ送る要求がプロキシへ送られ、プロキシの `502 cannotconnect` になっていた。
 """
 
 from __future__ import annotations

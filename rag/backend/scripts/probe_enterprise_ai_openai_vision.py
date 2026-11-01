@@ -1,4 +1,4 @@
-"""Probe OCI Enterprise AI Vision through the OpenAI Responses SDK.
+"""Probe the model API Vision through the OpenAI Responses SDK.
 
 Required environment variables:
   PLATFORM_ENTERPRISE_AI_ENDPOINT

@@ -1,6 +1,6 @@
 """#1765: 再構築のリンク型の多重度（Cardinality）の競合と、使われない移行の経路の削除。
 
-実 OCI / Oracle は使わない（sql_assist_sample を模した schema context）。
+実際のモデルの API / Oracle は使わない（sql_assist_sample を模した schema context）。
 """
 
 from __future__ import annotations

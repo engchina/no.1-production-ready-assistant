@@ -1,6 +1,6 @@
 """DB 管理チャット（#2264）: 分類・方針で止める文・確認語・実行・監査・生成・分析。
 
-LLM（OCI Enterprise AI）と Oracle は決定論のスタブで置き換える。表・列の名前は合成のもの。
+LLM（モデルの API）と Oracle は決定論のスタブで置き換える。表・列の名前は合成のもの。
 """
 
 from __future__ import annotations

@@ -4165,7 +4165,7 @@ test("query workbench generates SQL through the job flow and shows results", { t
 test("query workbench shows job action errors below the execution buttons", { tag: "@responsive" }, async ({ page }) => {
   await mockNl2SqlApi(page);
   const agentError =
-    "OCI Enterprise AI の呼び出しに失敗しました: 応答がありませんでした。";
+    "モデルの API の呼び出しに失敗しました: 応答がありませんでした。";
   await page.route("**/api/nl2sql/jobs", (route) =>
     route.fulfill({
       status: 502,
@@ -11544,7 +11544,7 @@ test("metadata SQL regeneration resets the edited execution SQL", async ({ page 
 
 for (const metadata of [
   { mode: "comment", path: "comments", source: "deterministic", label: "規則ベース（AI 未使用）" },
-  { mode: "annotation", path: "annotations", source: "enterprise_ai", label: "OCI Enterprise AI" },
+  { mode: "annotation", path: "annotations", source: "enterprise_ai", label: "LLM" },
   { mode: "domain", path: "domains", source: "deterministic", label: "規則ベース（AI 未使用）" },
 ] as const) {
   test(`${metadata.mode}-management は SQL の生成方式を内部値ではなく文言で出す`, async ({ page }) => {
@@ -11590,7 +11590,7 @@ for (const metadata of [
           fallback: true,
           fallback_objects: [],
           fallback_reason:
-            "OCI Enterprise AI の応答が出力の上限に達して未完了でした。システム設定 › モデル で既定のテキストモデルの「出力の上限（tokens）」を大きくするか、対象の表を減らしてやり直してください。",
+            "モデルの応答が出力の上限に達して未完了でした。システム設定 › モデル で既定のテキストモデルの「出力の上限（tokens）」を大きくするか、対象の表を減らしてやり直してください。",
           fallback_detail: METADATA_FALLBACK_DETAIL,
           timing,
         })
@@ -11640,7 +11640,7 @@ test("comment-management は一部の表だけ規則ベースにした結果を�
       warnings: [],
       fallback: true,
       fallback_objects: ["APP.INVOICES"],
-      fallback_reason: "OCI Enterprise AI の呼び出しに失敗しました。時間をおいてやり直してください。",
+      fallback_reason: "モデルの API の呼び出しに失敗しました。時間をおいてやり直してください。",
       fallback_detail: "APP.INVOICES: timeout after 600.0s",
       timing,
     })
@@ -11653,7 +11653,7 @@ test("comment-management は一部の表だけ規則ベースにした結果を�
   const fallback = executePanel.getByTestId("comment-management-ai-fallback");
   await expect(fallback).toContainText("一部の表は AI で SQL を生成できず、規則ベースの SQL にしています");
   await expect(fallback).toContainText("規則ベースにした表: APP.INVOICES");
-  await expect(executePanel.getByText("OCI Enterprise AI（一部は規則ベース）", { exact: true })).toBeVisible();
+  await expect(executePanel.getByText("LLM（一部は規則ベース）", { exact: true })).toBeVisible();
 });
 
 test("ドメイン管理は SQL 実行後に構造と既存ドメインを取り直す", async ({ page }) => {

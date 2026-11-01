@@ -3,9 +3,9 @@
 - 登録モデル（LLM・埋め込み・再ランク。種類 `kind`。#45）と、接続・既定のモデルの設定。
   埋め込み / 再ランクも LLM と同じく、選んだ接続の Endpoint URL と API key で呼ぶ
   （`embedding_model_connection` / `embedding_api_base_url`）
-- OCI Enterprise AI の接続（Endpoint URL・Project OCID・API key）は、プライマリ接続・
+- モデルの API の接続（Endpoint URL・Project ID・API key）は、プライマリ接続・
   セカンダリ接続・ターシャリ接続の 3 件まで（#533 / #542 / #786）。ターシャリ接続は OpenAI /
-  OpenAI 互換 API 向けで、Project OCID は任意。登録モデルごとに `connection_id` で使う接続を選ぶ
+  OpenAI 互換 API 向けで、Project ID は任意。登録モデルごとに `connection_id` で使う接続を選ぶ
   （未指定ならプライマリ接続）。実行時は `enterprise_ai_connection_for_model` でモデルから接続を引く
 - API key は共通 `.env`（`platform/.env`）の `PLATFORM_ENTERPRISE_AI_API_KEY`
   （プライマリ接続）・`PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY`（セカンダリ接続）・
@@ -67,7 +67,7 @@ from pr_enterprise_ai.urls import (
 )
 from pr_enterprise_ai.urls import enterprise_ai_base_url as enterprise_ai_base_url
 from pr_enterprise_ai.urls import enterprise_ai_request_url as enterprise_ai_request_url
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from .env_file import write_env_values
 
@@ -76,7 +76,7 @@ logger = logging.getLogger(__name__)
 ENTERPRISE_AI_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_API_KEY"
 ENTERPRISE_AI_SECONDARY_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY"
 ENTERPRISE_AI_TERTIARY_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY"
-# OCI Enterprise AI の接続（#533）。プライマリ接続が既定。接続ごとに Settings の属性（env 名）が
+# モデルの API の接続（#533）。プライマリ接続が既定。接続ごとに Settings の属性（env 名）が
 # 決まっているので、ID は枠の名前にする。画面の名前は「プライマリ接続」「セカンダリ接続」
 # 「ターシャリ接続」（#542 / #786）。プライマリ接続は #533 より前からの属性・env 名をそのまま使う。
 ENTERPRISE_AI_PRIMARY_CONNECTION_ID: Final = "primary"
@@ -94,8 +94,8 @@ MAX_ENTERPRISE_AI_CONNECTIONS = len(ENTERPRISE_AI_CONNECTION_IDS)
 ENTERPRISE_AI_JUDGE_SAME_AS_ANSWER: Final = "same_as_answer"
 # 設定してもしなくてもよい接続（プライマリ接続の後ろ）。Endpoint URL があるときだけ有効になる。
 _OPTIONAL_CONNECTION_IDS = ENTERPRISE_AI_CONNECTION_IDS[1:]
-# Project OCID を任意にする接続（#786）。ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、
-# Project OCID（`OpenAI-Project` ヘッダー）は OCI Enterprise AI に使うときだけ要る。
+# Project ID を任意にする接続（#786）。ターシャリ接続は OpenAI / OpenAI 互換 API 向けで、
+# Project ID（`OpenAI-Project` ヘッダー）は、提供元が project を求めるときだけ要る。
 
 # 4: 登録モデルの `reasoning_effort`（#1425）。3 の JSON はそのまま読める
 # （項目が無い = 既定の low）。
@@ -161,7 +161,7 @@ ENTERPRISE_AI_MAX_INPUT_TOKENS_MAX: Final = 2_000_000
 # 推論のあるモデルは推論の token も出力の上限に数えるため、表・列の多い Structured Outputs でも
 # 足りる大きさにする（2026-10-13 の実測: openai.gpt-oss-120b・推論 medium は 5 表・32 列のコメントで
 # 出力 2756 token（うち推論 1506）、上限 1200 では推論だけで上限に達して incomplete）。範囲は
-# 1〜2000000（OCI の公式文書の context は xai.grok-4.3 が 1M、openai.gpt-oss-120b が 128k。
+# 1〜2000000（公開されている context は xai.grok-4.3 が 1M、openai.gpt-oss-120b が 128k。
 # 128k 以上を入れられるようにする）で、入力の上限（context）以下。
 DEFAULT_ENTERPRISE_AI_MAX_OUTPUT_TOKENS: Final = 32_768
 ENTERPRISE_AI_MAX_OUTPUT_TOKENS_MIN: Final = 1
@@ -175,7 +175,7 @@ ModelTestDetails = dict[str, str | int | float | bool | None]
 
 
 class EnterpriseAiConfiguredModel(BaseModel):
-    """OCI Enterprise AI provider に登録する LLM。"""
+    """モデルの API の接続で呼ぶ、登録した LLM。"""
 
     model_id: str = Field(default="", max_length=256)
     display_name: str = Field(default="", max_length=256)
@@ -303,7 +303,7 @@ EnterpriseAiModelEntrySettings = EnterpriseAiConfiguredModel
 
 
 class EnterpriseAiConnectionSettings(BaseModel):
-    """OCI Enterprise AI の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空にする。
+    """モデルの API の接続 1 件（#533）。`api_key` は書き込み専用で、応答では空にする。
 
     接続の表示名は持たない（#542。画面は ID から「プライマリ接続」などと表示する）。
     #533 の表示名（`display_name`）を含む payload も、知らない key として無視して受け付ける。
@@ -328,7 +328,7 @@ _LEGACY_CONNECTION_KEYS = ("endpoint", "project_id", "api_key", "has_api_key", "
 
 
 class EnterpriseAiModelSettings(BaseModel):
-    """OCI Enterprise AI モデル provider 設定。"""
+    """モデルの API の設定（接続・登録モデル・既定のモデル）。"""
 
     # 1 件目（プライマリ接続）が既定。セカンダリ接続・ターシャリ接続は任意（#533 / #786）。
     connections: list[EnterpriseAiConnectionSettings] = Field(
@@ -671,7 +671,7 @@ _CONNECTION_FIELDS: dict[str, _ConnectionFields] = {
 
 @dataclass(frozen=True)
 class EnterpriseAiConnection:
-    """モデルの呼び出しに使う OCI Enterprise AI の接続（#533）。
+    """モデルの呼び出しに使うモデルの API の接続（#533）。
 
     API key を含むので、API の応答やログに出さない。
     """
@@ -682,7 +682,7 @@ class EnterpriseAiConnection:
     api_key: str = field(repr=False)
 
     def is_configured(self) -> bool:
-        """Endpoint と API key がそろっているか（Project OCID は任意）。"""
+        """Endpoint と API key がそろっているか（Project ID は任意）。"""
         return bool(self.endpoint and self.api_key)
 
     @property
@@ -1165,12 +1165,12 @@ def validate_enterprise_ai_connections(
     """接続と、登録モデルが指す接続を確かめる（#533 / #542）。
 
     - セカンダリ接続・ターシャリ接続を設定したら、Endpoint URL・API key は必須。
-      Project OCID はどの接続でも任意（#786 / #9。OCI Enterprise AI に使うときだけ入れる。
-      入力したときだけ `OpenAI-Project` header で送るので、OCI 以外の
+      Project ID はどの接続でも任意（#786 / #9。提供元が project を求めるときだけ入れる。
+      入力したときだけ `OpenAI-Project` header で送るので、project を求めない
       OpenAI 互換 API では空で足りる）。
       API key は保存後の値（`resolve_api_keys` の結果。空欄は保存済みの値を保持）で確かめるので、
       `api_keys` を渡したときだけ確かめる
-    - プライマリ接続は OCI で運用するときだけ必須（画面は「OCI 運用時必須」）なので、
+    - プライマリ接続は使うときだけ必須（画面は「利用時必須」）なので、
       ここでは確かめない
     - 登録モデルは、存在する接続を指す
     """
@@ -1486,11 +1486,16 @@ def _embedding_dim_of(settings: Any) -> int | None:
 # --------------------------------------------------------------------------- persistence
 
 
+# 接続の Project ID の JSON の key。#51 で `project_ocid` から `project_id` に改めた。
+_PROJECT_ID_ALIASES = AliasChoices("project_id", "project_ocid")
+
+
 class _PersistedConnection(BaseModel):
     # #533 の JSON にある表示名（`display_name`）は、知らない key として読み捨てる（#542）。
     connection_id: str = ""
     endpoint: str = ""
-    project_id: str = ""
+    # #51 より前の JSON の key（`project_ocid`）も読む。書くときは `project_id`。
+    project_id: str = Field(default="", validation_alias=_PROJECT_ID_ALIASES)
 
     @field_validator("connection_id", "endpoint", "project_id", mode="before")
     @classmethod
@@ -1503,7 +1508,7 @@ class _PersistedEnterpriseAiSettings(BaseModel):
     # top-level の `endpoint` / `project_id` に持つ形）で、プライマリ接続として読む。
     connections: list[_PersistedConnection] | None = None
     endpoint: str = ""
-    project_id: str = ""
+    project_id: str = Field(default="", validation_alias=_PROJECT_ID_ALIASES)
     # v1 / v2（RAG・Agent）の読込互換専用。v3 の writer は secret を JSON へ出力しない。
     api_key: str | None = None
     models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
@@ -2034,7 +2039,7 @@ def _model_test_troubleshooting(
     if target_type in {"enterprise_text", "enterprise_vision"}:
         tips.extend(
             [
-                "Endpoint URL、API パス、Project OCID、API key が Enterprise AI の"
+                "Endpoint URL、API パス、Project ID、API key が Enterprise AI の"
                 " OpenAI-compatible gateway と一致しているか確認してください。",
                 "モデル ID が Enterprise AI 側の model deployment / gateway で"
                 "利用可能か確認してください。",
@@ -2048,10 +2053,10 @@ def _model_test_troubleshooting(
     else:
         tips.extend(
             [
-                "OCI config file、profile、region、compartment OCID が"
-                "バックエンド実行環境から参照できるか確認してください。",
-                "モデル ID と IAM policy が OCI Generative AI Inference の"
-                " embedding/rerank 呼び出しを許可しているか確認してください。",
+                "接続の Endpoint URL と API key が、バックエンドの実行環境から使えるか"
+                "確認してください。",
+                "モデル ID が、接続の提供元の embedding / rerank の API で使えるか"
+                "確認してください。",
             ]
         )
     http_status = (
@@ -2060,8 +2065,8 @@ def _model_test_troubleshooting(
         else None
     )
     if http_status is not None:
-        # Enterprise AI の HTTP の失敗は、3 製品で共通の対応表で案内する（#1684。OCI の 404 は
-        # 「モデルが無い」ではなく API key の認可の失敗で、モデルが無いときは 400 になる）。
+        # モデルの API の HTTP の失敗は、3 製品で共通の対応表で案内する（#1684。提供元によっては
+        # 404 が「モデルが無い」ではなく API key の認可の失敗で、モデルが無いときは 400 になる）。
         tips.extend(
             enterprise_ai_failure_actions(
                 classify_enterprise_ai_http_failure(http_status, raw_error)
@@ -2074,19 +2079,16 @@ def _model_test_troubleshooting(
             )
         return list(dict.fromkeys(tips))
     if any(token in lowered for token in ("401", "unauthorized", "authentication")):
-        tips.append(
-            "認証エラーです。API key / OCI config の資格情報を再発行または再保存してください。"
-        )
+        tips.append("認証エラーです。API key を再発行または再保存してください。")
     if any(token in lowered for token in ("403", "notauthorized", "not authorized", "forbidden")):
         tips.append(
-            "権限エラーです。Project / compartment / IAM policy の対象が"
+            "権限エラーです。API key と Project ID の権限が"
             "このモデル呼び出しを許可しているか確認してください。"
         )
     if any(token in lowered for token in ("404", "not found")):
         tips.append(
-            "Endpoint、API パス、model ID のいずれかが見つからないか、IAM policy が"
-            "この呼び出しを許可していません（OCI は権限の不足も 404 で返します）。"
-            "リージョンと IAM policy も確認してください。"
+            "Endpoint、API パス、model ID のいずれかが見つからないか、API key の権限が"
+            "この呼び出しを許可していません（提供元によっては権限の不足も 404 で返します）。"
         )
     if any(token in lowered for token in ("timeout", "timed out")):
         tips.append(
@@ -2101,7 +2103,7 @@ def _model_test_troubleshooting(
     if any(token in lowered for token in ("500", "502", "503", "504")):
         tips.append(
             "サービス側または gateway 側の一時障害の可能性があります。"
-            "少し待って再試行し、OCI 側の稼働状況を確認してください。"
+            "少し待って再試行し、提供元の稼働状況を確認してください。"
         )
     return list(dict.fromkeys(tips))
 

@@ -188,7 +188,7 @@ EOF
   : > "${calls}"
   configure_timezone | grep -qF '変更なし' || fail "同じ時間帯で変更なしと出さない"
   [ ! -s "${calls}" ] || fail "同じ時間帯なのに timedatectl を呼んだ"
-  # props の platform.env（初回。Terraform の timezone）。quote は外す。
+  # props の platform.env（初回。配備の入力）。quote は外す。
   printf "PLATFORM_ORACLE_USER=APP\nPLATFORM_TIMEZONE='Asia/Tokyo'\n" > "${PROPS_DIR}/platform.env"
   [ "$(suite_timezone)" = "Asia/Tokyo" ] || fail "props の時間帯: $(suite_timezone)"
   # repository の platform/.env（再配備）を優先する。key があって空なら既定。

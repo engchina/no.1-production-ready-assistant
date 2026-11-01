@@ -1,4 +1,4 @@
-"""OCI Enterprise AI の呼び方の共通の規則（#3418）。"""
+"""モデルの API（OpenAI 互換）の呼び方の共通の規則（#3418）。"""
 
 from __future__ import annotations
 

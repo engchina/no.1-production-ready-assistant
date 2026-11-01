@@ -1,5 +1,5 @@
 /**
- * OCI Enterprise AI の接続（プライマリ接続・セカンダリ接続・ターシャリ接続）と、登録モデルが使う接続
+ * モデルの API の接続（プライマリ接続・セカンダリ接続・ターシャリ接続）と、登録モデルが使う接続
  * （#533 / #542 / #786）。
  * 検証の規則は backend の `pr_system_settings.model.validate_enterprise_ai_connections` と同じ。
  */
@@ -32,7 +32,7 @@ export const CONNECTION_FIELD_ORDER: readonly ConnectionField[] = [
 
 const CONNECTION_FIELD_ID_SUFFIX: Record<ConnectionField, string> = {
   endpoint: "endpoint",
-  project_id: "project-ocid",
+  project_id: "project-id",
   api_key: "api-key",
 };
 
@@ -183,8 +183,8 @@ export type ConnectionErrors = Partial<
 >;
 
 /**
- * 保存を止める欄。Project OCID はどの接続でも任意（#786 / #9）——`OpenAI-Project` ヘッダーは
- * 入力したときだけ送るので、OCI 以外の OpenAI 互換 API では空のままで足りる。
+ * 保存を止める欄。Project ID はどの接続でも任意（#786 / #9）——`OpenAI-Project` ヘッダーは
+ * 入力したときだけ送るので、project を求めない OpenAI 互換 API では空のままで足りる。
  * backend の `validate_enterprise_ai_connections` と同じ。
  */
 const REQUIRED_CONNECTION_FIELDS = [
@@ -209,8 +209,8 @@ export function connectionHasApiKey(connection: EnterpriseAiConnectionSettings):
 /**
  * 接続の入力のエラー（#542 / #786 / #9）。
  * - セカンダリ接続・ターシャリ接続を設定したら、Endpoint URL・API key は必須
- * - Project OCID はどの接続でも任意（OCI Enterprise AI を使うときだけ入れる）
- * - プライマリ接続は OCI で運用するときだけ必須（「OCI 運用時必須」の表示だけで、保存は止めない）
+ * - Project ID はどの接続でも任意（提供元が project を求めるときだけ入れる）
+ * - プライマリ接続は使うときだけ必須（「利用時必須」の表示だけで、保存は止めない）
  */
 export function validateConnections(
   connections: readonly EnterpriseAiConnectionSettings[],

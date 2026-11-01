@@ -141,7 +141,7 @@ def describe_answer_failure(exc: BaseException, fallback: str) -> AnswerFailure:
 # 無い」と区別できるように、汎用の内部エラーにせず、種類つきの 5xx で返す。
 ANSWER_API_FAILED_ERROR_CODE = "RAG_ANSWER_AI_API_FAILED"
 # 呼び先の SDK・HTTP の例外の module（この例外が原因の連鎖にあれば AI の API の失敗とみなす）。
-_API_EXCEPTION_MODULES = ("openai", "httpx", "httpcore", "oci")
+_API_EXCEPTION_MODULES = ("openai", "httpx", "httpcore")
 # 呼び先が返した error code として残す値の形（本文・識別子を残さない）。
 _SAFE_PROVIDER_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 # 種類ごとの HTTP status（呼び先の失敗なので 5xx。時間切れは 504、流量・一時的な不可用は 503）。

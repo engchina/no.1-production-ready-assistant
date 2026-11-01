@@ -56,7 +56,7 @@ sibling repo `../rag_poc` の、解析から回答生成までの実装を本リ
 | `backend/app/rag/search_answer_profile_knowledge.py` | 検索・回答プロファイル単位の知識（Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルール） |
 | `backend/app/rag/document_crop.py` | 解析に使ったファイルからの bbox の切り出し（プレビューと回答画像で共用） |
 
-LLM と VLM は、プロジェクト全体で openai SDK（OCI OpenAI 互換の Responses API）だけを使う。接続先はモデル設定（`ENTERPRISE_AI_*`）。embedding と rerank は Cohere（OCI SDK）のままである。
+LLM と VLM は、プロジェクト全体で openai SDK（OpenAI 互換の Responses API）だけを使う。接続先はモデル設定（`ENTERPRISE_AI_*`）。embedding と rerank は、既定の埋め込み / 再ランクのモデルの接続へ OpenAI 互換の HTTP API（`POST {base_url}/embeddings` など）で送る（`app/clients/genai.py`）。
 
 ## 3 層モデルでの責務
 
@@ -64,7 +64,7 @@ LLM と VLM は、プロジェクト全体で openai SDK（OCI OpenAI 互換の 
 |---|---|---|
 | Docling 解析 | 文書レシピ | 取込・検索・回答設定 > 文書解析、または文書のレシピ編集 |
 | 図・画像を AI で読み取る（Vision） | 文書レシピ | 文書のレシピ編集（解析エンジンに関係なく選べる）。全体の既定は `backend/.env` の `RAG_VISION_ENABLED`。文書解析の画面の「解析後の処理」から保存できる（#497 / #528） |
-| 見出しの階層の推定（AI） | 文書レシピ | 文書のレシピ編集。全体の既定は `backend/.env` の `RAG_HEADING_LEVEL_INFERENCE_ENABLED`（既定は無効）。文書解析の画面の「解析後の処理」から保存できる。しおりの深さを当てられず、番号の体系で深さを決められない見出しの多い Docling の結果だけ、見出しの文字列を OCI Enterprise AI に渡して階層（1〜6）を受け取る。応答は Pydantic で厳密に確かめ、合わない・失敗のときは今の階層のまま（#2277） |
+| 見出しの階層の推定（AI） | 文書レシピ | 文書のレシピ編集。全体の既定は `backend/.env` の `RAG_HEADING_LEVEL_INFERENCE_ENABLED`（既定は無効）。文書解析の画面の「解析後の処理」から保存できる。しおりの深さを当てられず、番号の体系で深さを決められない見出しの多い Docling の結果だけ、見出しの文字列を LLM に渡して階層（1〜6）を受け取る。応答は Pydantic で厳密に確かめ、合わない・失敗のときは今の階層のまま（#2277） |
 | 親子階層（small-to-big） | 文書レシピ | 取込・検索・回答設定 > 文書分割「親子階層（small-to-big）」（分割パラメータ 5 項目もここで設定）、または文書のレシピ編集 |
 | Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルール | 検索・回答プロファイル | 検索・回答プロファイルを編集 >「検索・回答プロファイルの知識」 |
 | 回答の検索の上書き（根拠の起点に採る同じ文書の chunk の上限・業務ガイドの照合） | 検索・回答プロファイル | 検索・回答プロファイルを編集 > 検索・回答設定（上書きできるのは `app/rag/search_answer_profile_config.py` の `PROFILE_GLOBAL_QUERY_FIELDS` に入っていない項目） |
@@ -96,7 +96,7 @@ KB（ナレッジベース）は検索対象の範囲を決めるだけで、上
 2. **分割**：文書分割は既定で親子階層（`small_to_big`。#594 で既定にした）。親は回答の文脈に渡す大きい単位、子は検索に当てる小さい単位（LangChain の ParentDocumentRetriever・LlamaIndex の階層の分割と同じ考え方）で、**どの解析の結果でも親子に分割する**（#3377。解析エンジンの名前では選ばず、抽出の形で親子の作り方を選ぶ。取込の trace の `chunk_parent_source`）。
    - 解析の結果がレイアウトの記録（`parser_artifacts.layout_records`。Docling の PDF・画像）を持つ文書は、その記録から親子を作る（`layout_records`。見出し・表・図の領域と根拠の元の要素を保つ）。
    - Excel の行の記録は行を子・表の一部を親（`sheet_records`。#1349）。
-   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured・OCI などの解析の結果、構造化レコードの JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
+   - それ以外の抽出（標準の解析の Markdown・テキスト、Unstructured などの解析の結果、構造化レコードの JSONL の CSV・Word など）は、抽出の構造から親子を作る（`extraction_structure`）。子は構造認識と同じ要素の分割（同じ節・同じ種類の要素だけをつなぐ）を子の目標文字数で行い、表は表の子の目標文字数で行のまとまりに分けて列見出しを繰り返す。見出しだけの子は作らず、続く本文の子の先頭に入れる。構造化レコード JSONL は 1 記録 = 1 子（#2457）。親は続く子を、節（文書を 2 つ以上に分ける最初の見出しの段。題が 1 つの文書はその下の段）をまたがず、親の目標文字数・子の数・ページ数の上限の中でまとめる。見出しの無い文書は順と大きさだけでまとめる。子の metadata は Docling の親子と同じ（`chunk_strategy=small_to_big`・`parent_chunk_id` / `chunk_group_id`・`chunk_group_kind=small_to_big_parent`・`parent_text`・`section_path`・頁・`element_ids`）で、回答は同じ経路で親の本文を文脈にする。
    - 以前（#300〜#3377）は、レイアウトの記録が無い文書を「構造認識」（`structure_aware`）へ縮退し、chunk に `chunk_strategy_fallback_reason=layout_missing` を残していた。その chunk は文書詳細の Chunk タブに「親子階層で分割されていない Chunk です」と表示し、Chunk を作り直すと親子階層で分割する（再解析は要らない）。
    子・親の大きさは同じ画面の「戦略別パラメータ」で変えられる（下の設定一覧）。
 3. **確認**：文書詳細の抽出タブで、次を確認できる。
@@ -224,18 +224,18 @@ token を出す。
 生成がある（記録: 1 回目が 200 秒で上限に届いて未完了、推論の量を下げた送り直しは 2 秒で完了）。停滞の検出（event の間隔・速さ）
 では見分けられないので、streaming で受ける呼び出し（下の停滞の検出が ON のとき）は出力の文（`response.output_text.delta`）の
 末尾を確かめ、末尾の 2,400 文字が周期 300 文字以下の完全な繰り返し（`runaway_repetition`）か、空白が 2,000 文字続いた
-（`runaway_whitespace`）ら stream を閉じ、推論の量を 1 段下げて（下げられなければそのまま）1 回だけ送り直す（`oci._RunawayMonitor`。
+（`runaway_whitespace`）ら stream を閉じ、推論の量を 1 段下げて（下げられなければそのまま）1 回だけ送り直す（`model_api._RunawayMonitor`。
 `RAG_LLM_RUNAWAY_DETECTION_ENABLED=false` で切れる）。行ごとに値が変わる表・一覧は打ち切らない。打ち切った呼び出しは
 `incomplete_reasons` に理由、送り直しは `runaway_resends` に残る。工程の記録は呼び出しの回数（`llm_calls`）と API への送信の
 回数（`llm_sends`。送り直しで多いときだけ）を分け、画面は「LLM 1 回・送信 2 回」と示す。
 streaming しない呼び出し（停滞の検出が OFF・回答の期限が無い文脈）は途中で打ち切れないので、出力の上限で未完了になった応答の
 出力の文に同じ基準の暴走（空白が 2,000 文字続いた箇所・末尾の繰り返し）があれば、上限を 2 倍に広げる送り直しをせず、streaming と
-同じく推論の量を下げて 1 回だけ送り直す（#3835。広げても空白・繰り返しが続くだけ。`oci._runaway_response_reason`）。理由は同じく
+同じく推論の量を下げて 1 回だけ送り直す（#3835。広げても空白・繰り返しが続くだけ。`model_api._runaway_response_reason`）。理由は同じく
 `incomplete_reasons` に残り、送り直しても暴走した呼び出しの失敗の詳細（生成後監査では `audit_failure`）は分類 `runaway_output` と
 打ち切りの理由（`cutoff_reason`）を持つ。生成後監査の固定キーの wire では、値と次の key の間（JSON の構造の空白）で空白が続く
 暴走が出る。strict の JSON schema は構造の空白を制限できず、自由記述の欄の `maxLength` では防げない（#3835 の固定入力の比較）。
 
-**停滞した LLM の呼び出しの送り直し（#1926）**: OCI Enterprise AI の呼び出しは、まれ（#1912 の記録の 206 件で約 1%）に
+**停滞した LLM の呼び出しの送り直し（#1926）**: モデルの API の LLM の呼び出しは、まれ（#1912 の記録の 206 件で約 1%）に
 通常の 1/10 以下の速さ（13〜23 token/秒。中央値 224）に落ち、同じ token 数で 36 秒 → 183 秒かかった。回答の期限がある文脈では
 LLM の呼び出しを streaming で受け（`rag_engine.adapters.model_api._stream_parsed`）、次のとき stream を閉じて同じ要求を送り直す
 （`RAG_LLM_STALL_RESENDS` 回まで。最後の送信は検出せずに期限まで待つ。期限の残りが停滞の秒より短いときの timeout は停滞ではなく
@@ -454,7 +454,7 @@ level は使わない。そのため「第 3 章 > 3.1」の 3.1 は第 3 章の
 何も置かず（根拠不足として扱う）、診断 `derived_evidence` に残す。前後の文脈・交差参照・実体と関係情報の拡張・章節の拡張・
 MCP の `rag_read_document` も派生の chunk を返さない。
 
-Vision は backend がモデル設定の既定の Vision モデル（OCI Enterprise AI）で呼ぶ。docling サービスは LLM を呼ばないため、OCI Enterprise AI の設定は渡さない（#497）。
+Vision は backend がモデル設定の既定の Vision モデル（モデルの API）で呼ぶ。docling サービスは LLM を呼ばないため、モデルの API の設定は渡さない（#497）。
 
 Docling 以外の解析エンジンの bbox は単位が違うため、Vision の段がページ画像の px へそろえる。確かでない bbox は切り出さず、要素の metadata に `vision_status=skipped` / `vision_skip_reason=bbox_unit_unknown` と warning `vision_bbox_unit_unknown` を残す。
 
@@ -462,7 +462,7 @@ Docling 以外の解析エンジンの bbox は単位が違うため、Vision �
 |---|---|---|
 | Docling | サービスが描いたページ画像の px（`RAG_ENGINE_RENDER_DPI`） | `layout_records.pages` の寸法から同じ解像度で描き直す。実サービス（docling 2.129.0）で確認済み（A4 の PDF は 2480x3509、画像は元画像の px）。#502 |
 | Unstructured | coordinates の座標系（PixelSpace 等）の px | registry が `layout_width` / `layout_height` を要素と asset の `page_width` / `page_height` に写す。無ければ不明。実サービス（unstructured 0.27.8、hi_res）で確認済み（PDF は PixelSpace で 350 dpi 相当のページ画像の px。A4 で 2893x4094。画像は元画像の px）。#502。座標系が左下原点（`PointSpace` / `RelativeCoordinateSystem`）なら y を反転する（#512） |
-| OCI Enterprise AI の VLM 解析 | 0-1 または 0-100 | 構造化抽出の prompt の指定。100 を超えれば不明 |
+| 画像対応モデル（VLM）の解析 | 0-1 または 0-100 | 構造化抽出の prompt の指定。100 を超えれば不明 |
 | 全ての解析エンジン | 値が全て 1 以下なら 0-1 | 画像ファイル全体の `source_image` の asset も含む |
 
 ### 頁番号のフッターの論理頁（#2289）
@@ -533,9 +533,9 @@ LlamaIndex AutoMerging 風の分割方式「親子階層」は削除し、一覧
 
 ## rag_poc との差分
 
-- 解析結果、チャンク、回答はファイル（`.runs/`）ではなく、本リポジトリの Oracle と Object Storage を使う。
+- 解析結果、チャンク、回答はファイル（`.runs/`）ではなく、本リポジトリの Oracle と原本の保存先（ローカルのディレクトリ）を使う。
 - ADB の独自スキーマ（`rag_chunk_runs` / `rag_chunk_embeddings` など）は使わない。検索は backend の hybrid 検索（vector と Oracle Text の RRF）に、rag_poc の「原質問を主軸にした重み付き融合」と Sudachi 分割を組み合わせる。
-- chicago / osaka の 2 系統 LLM 設定と、OCI SDK の LLM 経路は廃止した。
+- chicago / osaka の 2 系統 LLM 設定と、OCI SDK の LLM 経路は廃止した（今の LLM はモデルの API の接続で呼ぶ）。
 - 移植していないもの：
   - Gradio UI、PPT 資料、`verify/` の問題セット（データは移さない。検証 CLI `app.rag.answer_verify_cli` で rag_poc の `cases.json` / `crag_goldset.json` をそのまま使える）
   - `evaluate_crag_grader.py`（rag_poc 独自の ADB の保存先から候補を組み立てる設計のため）と、`run_answer_eval.py` の Excel 出力・LLM 呼び出し回数の集計

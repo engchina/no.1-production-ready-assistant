@@ -749,7 +749,7 @@ async def test_oracle_client_persists_documents_through_pool() -> None:
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
     )
 
@@ -773,7 +773,7 @@ async def test_oracle_client_get_document_restores_preprocess_artifact(
             "derivation_id": "derivation-1",
             "profile": "office_to_pdf",
             "converted": True,
-            "object_storage_path": "oci://namespace/bucket/artifacts/canonical/doc-1.pdf",
+            "object_storage_path": "local://artifacts/canonical/doc-1.pdf",
             "content_type": "application/pdf",
             "sha256": "b" * 64,
             "file_name": "policy.pdf",
@@ -794,10 +794,7 @@ async def test_oracle_client_get_document_restores_preprocess_artifact(
     assert "preprocess_artifact" in pool.connection.calls[0].statement
     assert detail is not None
     assert detail.preprocess_artifact is not None
-    assert (
-        detail.preprocess_artifact.object_storage_path
-        == "oci://namespace/bucket/artifacts/canonical/doc-1.pdf"
-    )
+    assert detail.preprocess_artifact.object_storage_path == "local://artifacts/canonical/doc-1.pdf"
     assert detail.preprocess_artifact.content_type == "application/pdf"
     assert detail.preprocess_artifact.sha256 == "b" * 64
 
@@ -871,7 +868,7 @@ async def test_oracle_client_assigns_uploaded_document_to_selected_knowledge_bas
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
         knowledge_base_ids=["kb-1"],
     )
@@ -1798,7 +1795,7 @@ async def test_oracle_client_updates_ingestion_segment_status() -> None:
         "doc-1:p1-3",
         status="RUNNING",
         attempt_count=2,
-        artifact_path="oci://namespace/bucket/artifacts/extractions/doc-1/trace.json",
+        artifact_path="local://artifacts/extractions/doc-1/trace.json",
     )
 
     assert updated is not None
@@ -1937,8 +1934,8 @@ async def test_oracle_client_rejects_assignment_to_archived_knowledge_base() -> 
     assert not pool.connection.many_calls
 
 
-async def test_oci_vector_search_uses_ai_vector_search_sql() -> None:
-    """OCI mode の vector search は Oracle AI Vector Search に bind 付きで問い合わせる。"""
+async def test_oracle_vector_search_uses_ai_vector_search_sql() -> None:
+    """Oracle の adapter の vector search は Oracle AI Vector Search に bind 付きで問い合わせる。"""
     pool = FakeOraclePool(
         execute_results=[
             [
@@ -1982,8 +1979,8 @@ async def test_oci_vector_search_uses_ai_vector_search_sql() -> None:
     assert call.parameters["filter_document_id"] == "doc-1"
 
 
-async def test_oci_vector_search_applies_chunk_metadata_filters() -> None:
-    """OCI retrieval SQL は chunk metadata filter も bind 付きで適用する。"""
+async def test_oracle_vector_search_applies_chunk_metadata_filters() -> None:
+    """Oracle の retrieval SQL は chunk metadata filter も bind 付きで適用する。"""
     pool = FakeOraclePool(
         execute_results=[
             [
@@ -2358,8 +2355,8 @@ async def test_oracle_save_evaluation_artifact_redacts_query_text() -> None:
     assert "query_text" not in str(call.parameters)
 
 
-async def test_oci_save_index_replaces_existing_chunks_and_binds_vectors() -> None:
-    """OCI mode の索引保存は既存 chunk を消し、metadata・検索用テキスト・VECTOR を挿入する。"""
+async def test_oracle_save_index_replaces_existing_chunks_and_binds_vectors() -> None:
+    """Oracle mode の索引保存は既存 chunk を消し、metadata・検索用テキスト・VECTOR を挿入する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
@@ -2404,7 +2401,7 @@ async def test_oci_save_index_replaces_existing_chunks_and_binds_vectors() -> No
     assert metadata["content_kind"] == "text"
 
 
-async def test_oci_save_index_persists_extraction_and_chunks_atomically() -> None:
+async def test_oracle_save_index_persists_extraction_and_chunks_atomically() -> None:
     """index 保存は extraction と chunk/vector を 1 transaction で置換する。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -2443,7 +2440,7 @@ async def test_oci_save_index_persists_extraction_and_chunks_atomically() -> Non
     assert inserted["embedding"] == array("f", [0.1, 0.2, 0.3])
 
 
-async def test_oci_save_index_stores_first_page_context_once_per_chunk_set() -> None:
+async def test_oracle_save_index_stores_first_page_context_once_per_chunk_set() -> None:
     """1 ページ目の本文は chunk の行に入れず、chunk set に 1 つだけ保存する(#557)。
 
     chunk set の行は chunk の保存の後に upsert_chunk_set が作るため、無ければ MERGE で作る。
@@ -2506,7 +2503,9 @@ async def test_oci_save_index_stores_first_page_context_once_per_chunk_set() -> 
         assert pool.connection.commits == 1
 
 
-async def test_oci_list_document_chunks_accepts_json_element_ids_and_row_group_metadata() -> None:
+async def test_oracle_list_document_chunks_accepts_json_element_ids_and_row_group_metadata() -> (
+    None
+):
     """chunk view は JSON array element_ids と table row-group metadata を保持する。"""
     pool = FakeOraclePool(
         execute_results=[
@@ -2563,8 +2562,8 @@ async def test_oci_list_document_chunks_accepts_json_element_ids_and_row_group_m
 
 
 @pytest.mark.parametrize("strategy", ["small_to_big", "fixed_length"])
-async def test_oci_context_group_siblings_uses_chunk_group_sql(strategy: str) -> None:
-    """OCI mode の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
+async def test_oracle_context_group_siblings_uses_chunk_group_sql(strategy: str) -> None:
+    """Oracle mode の同一 group context は、起点をまとめた 1 回の SQL で chunk_group_id から取得する。
 
     起点ごとの条件(文書・chunk_set・group・自分を除く)・並び・件数は起点の表(``a``)の値で
     1 件ずつ読むときと同じにする(#1490)。行は sibling の chunk ごと(#1498)。
@@ -2668,7 +2667,7 @@ async def test_oci_context_group_siblings_uses_chunk_group_sql(strategy: str) ->
     assert call.parameters["ca_ord_49"] is None
 
 
-async def test_oci_update_error_status_preserves_chunks_and_extraction() -> None:
+async def test_oracle_update_error_status_preserves_chunks_and_extraction() -> None:
     """ERROR への状態遷移では段階レビュー用の chunk と抽出 JSON を保持する。"""
     extraction = {"document_type": "text", "raw_text": "抽出済み"}
     errored = _oracle_document_row(status="ERROR", extraction=extraction)
@@ -2689,8 +2688,8 @@ async def test_oci_update_error_status_preserves_chunks_and_extraction() -> None
     assert pool.connection.commits == 1
 
 
-async def test_oci_delete_document_removes_chunks_and_document_with_access_scope() -> None:
-    """OCI mode の削除は access scope を維持して document と chunk を同一 transaction で消す。"""
+async def test_oracle_delete_document_removes_chunks_and_document_with_access_scope() -> None:
+    """Oracle mode の削除は access scope を維持して document と chunk を同一 transaction で消す。"""
     pool = FakeOraclePool(execute_results=[[_oracle_document_row()]])
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     token = set_audit_request_context(
@@ -2755,7 +2754,7 @@ async def test_oci_delete_document_removes_chunks_and_document_with_access_scope
     assert pool.connection.commits == 1
 
 
-async def test_oci_delete_document_rolls_back_when_running_job_appears() -> None:
+async def test_oracle_delete_document_rolls_back_when_running_job_appears() -> None:
     """削除 transaction 中に RUNNING job が見えたら document 物理削除へ進まない。"""
     pool = FakeOraclePool(
         execute_results=[
@@ -2777,8 +2776,8 @@ async def test_oci_delete_document_rolls_back_when_running_job_appears() -> None
     assert pool.connection.rollbacks == 1
 
 
-async def test_oci_retrieval_applies_request_access_scope_predicates() -> None:
-    """OCI retrieval SQL は request context の認可済み scope を必ず含める。"""
+async def test_oracle_retrieval_applies_request_access_scope_predicates() -> None:
+    """Oracle の retrieval SQL は request context の認可済み scope を必ず含める。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     token = set_audit_request_context(
@@ -2805,8 +2804,8 @@ async def test_oci_retrieval_applies_request_access_scope_predicates() -> None:
     assert call.parameters["access_knowledge_base_id_0"] == "kb-allowed"
 
 
-async def test_oci_retrieval_applies_multiple_knowledge_base_filters() -> None:
-    """OCI retrieval SQL は複数 KB filter を bind 付き IN 条件で適用する。"""
+async def test_oracle_retrieval_applies_multiple_knowledge_base_filters() -> None:
+    """Oracle の retrieval SQL は複数 KB filter を bind 付き IN 条件で適用する。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
@@ -2846,7 +2845,7 @@ def test_oracle_text_terms_filters_japanese_particles_and_english_stopwords() ->
     assert {"it", "policy", "hr"} <= set(oracle_text_terms("IT policy for HR"))
 
 
-async def test_oci_keyword_search_normalizes_natural_language_query() -> None:
+async def test_oracle_keyword_search_normalizes_natural_language_query() -> None:
     """自然文 keyword query は Oracle Text 用の安全な term expression に変換する。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -2868,7 +2867,7 @@ async def test_oci_keyword_search_normalizes_natural_language_query() -> None:
     assert "CONTAINS(hit.search_text, :query, 1) > 0" in call.statement
 
 
-async def test_oci_keyword_search_escapes_oracle_text_special_syntax() -> None:
+async def test_oracle_keyword_search_escapes_oracle_text_special_syntax() -> None:
     """Oracle Text の演算子/記号は literal term 化して query syntax にしない。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -2884,7 +2883,7 @@ async def test_oci_keyword_search_escapes_oracle_text_special_syntax() -> None:
     assert all(char not in text_query for char in '-?()"')
 
 
-async def test_oci_keyword_search_empty_normalized_query_skips_database() -> None:
+async def test_oracle_keyword_search_empty_normalized_query_skips_database() -> None:
     """検索語にできない入力は DB に投げず空結果にする。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -2902,7 +2901,7 @@ async def test_oci_keyword_search_empty_normalized_query_skips_database() -> Non
     assert pool.connection.calls == []
 
 
-async def test_oci_hybrid_search_uses_normalized_keyword_query() -> None:
+async def test_oracle_hybrid_search_uses_normalized_keyword_query() -> None:
     """hybrid 内の keyword branch も同じ Oracle Text query normalization を通る。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -3086,7 +3085,7 @@ def test_oracle_ingestion_audit_schema_redacts_ocr_body() -> None:
     assert "ocr_text" not in normalized
 
 
-async def test_oci_ingestion_audit_persists_file_processing_metrics() -> None:
+async def test_oracle_ingestion_audit_persists_file_processing_metrics() -> None:
     """Oracle 取込監査は parser / segment の低機密集計を保存する。"""
     pool = FakeOraclePool()
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
@@ -3510,7 +3509,7 @@ def _oracle_document_row(
         "status": status,
         "tenant_id_hash": None,
         "category_name": "社内規程",
-        "object_storage_path": "oci://namespace/bucket/policy.txt",
+        "object_storage_path": "local://policy.txt",
         "content_type": "text/plain",
         "file_size_bytes": 12,
         "content_sha256": "a" * 64,
@@ -3585,7 +3584,7 @@ def _oracle_ingestion_segment_row(
         "page_start": 1,
         "page_end": 3,
         "attempt_count": 1,
-        "artifact_path": "oci://namespace/bucket/artifacts/extractions/doc-1/trace.json",
+        "artifact_path": "local://artifacts/extractions/doc-1/trace.json",
         "error_code": None,
         "error_message": None,
     }

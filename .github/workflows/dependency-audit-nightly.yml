@@ -30,8 +30,7 @@ jobs:
           - { name: "Platform / enterprise_ai", dir: platform/packages/enterprise_ai, args: "" }
           - { name: "Suite / Evaluation", dir: suite/evaluation, args: "" }
           - { name: "RAG / Backend", dir: rag/backend, args: "" }
-          # OCI SDK が cryptography を <47.0.0 に制約し、GHSA-537c-gmf6-5ccf の修正版は 48.0.1（ci.yml と同じ）。
-          - { name: "NL2SQL / Backend", dir: nl2sql/backend, args: "--ignore-vuln GHSA-537c-gmf6-5ccf" }
+          - { name: "NL2SQL / Backend", dir: nl2sql/backend, args: "" }
           - { name: "Agent / Backend", dir: agent/backend, args: "" }
     defaults:
       run:

@@ -2,7 +2,7 @@
 
 ## 適用範囲
 
-本機能は OCI IAM を使用せず、Oracle に永続化した local application user と role で認証・認可する。
+本機能は外部の ID 基盤を使用せず、Oracle に永続化した local application user と role で認証・認可する。
 ただし共通 `.env`（`platform/.env`）の `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` / `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` に一致する構成管理者は、
 認証 table を参照しない `SYSTEM_ADMIN` として扱う。`PLATFORM_ADMIN_LOGIN_USER_ID` は `system_admin` 固定・
 大小文字区別であり、`System_Admin` / `SYSTEM_ADMIN` などは database user へ fallback しない。
@@ -197,7 +197,7 @@ platform の `docs/backend-standard.md`「製品間の連携（MCP とサービ�
 `nl2sql_query` は SQL を作る前に回答前の確認（`POST /api/nl2sql/query-sessions` の guided と同じ。#1441）を行い、確認の要る項目があれば
 `status=needs_clarification` と `requirement.question` を返す（ジョブは作らない）。続きの `requirement_session_id` は本人の session だけで、
 業務プロファイルは同じ `profile_id` に限る。業務プロファイルは呼び出し元が `profile_id` で明示して選ぶため、画面の推薦の確認（確認の token）は
-求めない。OCI Enterprise AI を設定していない構成（`REQUIREMENT_AI_NOT_CONFIGURED`）の
+求めない。モデルの API を設定していない構成（`REQUIREMENT_AI_NOT_CONFIGURED`）の
 ときは確かめずにジョブを作り、`requirement.status=skipped` を返す（質問が SQL の文でも飛ばさずに同じに確かめる。#1727）。
 ジョブの `question` は利用者の質問のままにし、確かめた質問の文は生成にだけ使う（#1727）。回答前の確認の LLM の失敗（`REQUIREMENT_AI_FAILED` /
 `REQUIREMENT_AI_INVALID_OUTPUT`）は、`structuredContent` の `details` に失敗の種類・HTTP ステータス・モデル ID・所要時間・request id を添える（#1715）。
@@ -445,7 +445,7 @@ SELECT-only guard で拒否する。許可された SQL は、アプリの DB �
 管理 SQL の実行（SELECT を含む）と止めた文は、表 `NL2SQL_ADMIN_AUDIT_LOG` に件数の上限なく残す（#2264）。
 
 データ準備の `/db-admin-chat`（DB 管理チャット。#2264）は `menu.db_admin_chat` を持つ利用者（既定は
-system_admin だけ）の画面で、OCI Enterprise AI Direct で生成した SQL を、SELECT を含めて application DB
+system_admin だけ）の画面で、Enterprise AI Direct で生成した SQL を、SELECT を含めて application DB
 user の管理の接続で実行する。SELECT 以外は `ADMIN_EXECUTE`（1 つの対象の
 DROP / TRUNCATE は対象の名前）の確認語を要し、方針で止める文（`ALTER SYSTEM`・`DROP USER`・動的 SQL・
 外部への通信のパッケージなど）はコードの規則で止める。API は画面だけで、MCP・API キーからは使えない。
@@ -456,7 +456,7 @@ system_admin は全員の会話、それ以外は自分の会話だけ（他人�
 
 NL2SQL job の生成済み SELECT 実行は、actor の種類で pool を分けたアプリの接続を使う（#904）。
 
-OCI Enterprise AI で生成した SQL と、利用者が入力・編集した SQL は、アプリの安全確認（SELECT-only guard・
+モデルの API で生成した SQL と、利用者が入力・編集した SQL は、アプリの安全確認（SELECT-only guard・
 危険な関数・bind の placeholder・未承認の関数・他製品のシステムの表・業務プロファイルの表と列の範囲）を
 すべて掛ける（[sql-chat.md](./sql-chat.md)）。
 

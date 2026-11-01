@@ -203,7 +203,7 @@ async def test_list_documents_status_follows_recipe_status_in_oracle() -> None:
     file_name = f"list-status-{uuid4().hex[:12]}.txt"
     detail = await client.create_document(
         file_name=file_name,
-        object_storage_path=f"oci://bucket/{file_name}",
+        object_storage_path=f"local://{file_name}",
         content_type="text/plain",
     )
     recipe = await client.ensure_default_document_recipe(detail.id)

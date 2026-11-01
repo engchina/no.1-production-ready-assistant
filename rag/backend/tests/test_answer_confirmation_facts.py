@@ -1,7 +1,7 @@
 """確認の項目の規則へ渡す backend の材料（#1492）。
 
 分かっている条件（業務ガイドの照合の結果）を rag_engine の設定へ、旧版の文書の印
-（document_superseded）を rag_engine の根拠へ渡す。LLM・OCI へは接続しない。
+（document_superseded）を rag_engine の根拠へ渡す。LLM・モデルの API へは接続しない。
 """
 
 from __future__ import annotations

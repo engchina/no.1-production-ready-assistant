@@ -170,7 +170,7 @@ export const BUILTIN_RUNTIME_STATUS = {
   name: "組み込み Runtime",
   sdk: "openai-agents",
   sdk_version: "0.22.3",
-  model_provider: "OCI Enterprise AI（Responses API）",
+  model_provider: "OpenAI 互換の API（Responses API）",
   model_id: "xai.grok-4",
   ready: true,
   error_code: null,

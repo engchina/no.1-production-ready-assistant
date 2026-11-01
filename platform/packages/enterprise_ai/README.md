@@ -1,6 +1,6 @@
 # production-ready-enterprise-ai (`pr_enterprise_ai`)
 
-OCI Enterprise AI（OpenAI 互換の Responses API）を呼ぶときの共通の規則（#3418）。標準 library だけで書き、FastAPI・HTTP の client・DB に依存しない。
+モデルの API（OpenAI 互換の Responses API）を呼ぶときの共通の規則（#3418）。標準 library だけで書き、FastAPI・HTTP の client・DB に依存しない。
 
 | モジュール | 内容 |
 |---|---|

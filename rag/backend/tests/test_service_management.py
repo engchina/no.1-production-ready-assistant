@@ -212,12 +212,12 @@ def test_service_runtime_env_defaults_hf_endpoint_to_official_hub() -> None:
 
 
 def test_service_runtime_env_injects_enterprise_ai_settings() -> None:
-    """OCI parser と docling の Vision 向けに実効 OCI Enterprise AI 設定を渡す。"""
+    """parser と docling の Vision 向けに実効のモデルの API の設定を渡す。"""
     settings = get_settings().model_copy(
         update={
             "enterprise_ai_endpoint": "https://inference.example/openai/v1",
             "enterprise_ai_api_key": "sk-secret",
-            "enterprise_ai_project_id": "ocid1.generativeaiproject.oc1..x",
+            "enterprise_ai_project_id": "proj-x",
             # catalog が空でも resolver は legacy VLM/LLM へフォールバックする。
             "enterprise_ai_models": [],
             "enterprise_ai_default_vision_model": "xai.grok-4.3",
@@ -228,7 +228,7 @@ def test_service_runtime_env_injects_enterprise_ai_settings() -> None:
     env = service_runtime_env(settings)
     assert env["PLATFORM_ENTERPRISE_AI_ENDPOINT"] == "https://inference.example/openai/v1"
     assert env["PLATFORM_ENTERPRISE_AI_API_KEY"] == "sk-secret"
-    assert env["PLATFORM_ENTERPRISE_AI_PROJECT_ID"] == "ocid1.generativeaiproject.oc1..x"
+    assert env["PLATFORM_ENTERPRISE_AI_PROJECT_ID"] == "proj-x"
     assert env["PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL"] == "xai.grok-4.3"
     assert env["PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"] == "xai.grok-4.3"
     assert env["PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE"] == "files_api"
@@ -240,7 +240,7 @@ def test_service_runtime_env_injects_enterprise_ai_settings() -> None:
     assert "ENTERPRISE_AI_API_KEY" not in env
 
 
-def test_service_runtime_env_oci_vlm_model_empty_when_unconfigured() -> None:
+def test_service_runtime_env_vlm_model_empty_when_unconfigured() -> None:
     """Vision モデル未設定なら空文字で渡し、parser は degraded を維持する。"""
     settings = get_settings().model_copy(
         update={

@@ -1,6 +1,6 @@
 """登録モデルごとの推論（思考）の量（#1425）が、RAG の各呼び出しの payload に入ること。
 
-HTTP は決定論の fake transport で受ける（OCI へは接続しない）。
+HTTP は決定論の fake transport で受ける（モデルの API へは接続しない）。
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def test_config_carries_effort_of_each_model() -> None:
 
 
 def test_parser_service_env_carries_effort() -> None:
-    """parser（OCI の VLM）は env から読むので、backend が値を書く。"""
+    """parser（VLM）は env から読むので、backend が値を書く。"""
     env = service_runtime_env(_settings("low", "high"))
 
     assert env["PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT"] == "low"

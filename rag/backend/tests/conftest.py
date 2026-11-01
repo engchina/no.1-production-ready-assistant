@@ -160,7 +160,7 @@ def isolated_local_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     from app.rag.language_pack_store import LANGUAGE_PACK_STORE
 
     LANGUAGE_PACK_STORE.reset()
-    # 共通 .env（モデルの API key・OCI / DB / 保存先の画面保存先）と RAG の backend/.env
+    # 共通 .env（モデルの API key・DB / 保存先の画面保存先）と RAG の backend/.env
     # （parser の API key・RAG 固有の画面保存先）は tmp へ分離する（#211）。
     monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path / "platform.env")
     monkeypatch.setattr(app_config, "BACKEND_ENV_FILE", tmp_path / ".env")

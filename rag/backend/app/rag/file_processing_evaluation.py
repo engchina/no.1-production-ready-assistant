@@ -948,7 +948,7 @@ def run_file_processing_contract_checks(
 ) -> FileProcessingContractReport:
     """同梱 fixture を local parser/chunker で検証する。
 
-    OCI Enterprise AI、Object Storage、Oracle AI Database が必要な品質 check は失敗扱いにせず、
+    モデルの API、保存先、Oracle AI Database が必要な品質 check は失敗扱いにせず、
     ``pending_checks`` として返す。CI では local contract の退化を検出し、staging/nightly
     では pending check を実データで閉じる。
     """
@@ -3229,7 +3229,7 @@ def _staging_required_evidence(check: str, reason: str) -> tuple[str, ...]:
         "requires_enterprise_ai"
     ):
         return (
-            "OCI Enterprise AI extraction completed for fixture",
+            "Model API extraction completed for fixture",
             "document status is INDEXED",
             "extraction pages/elements are stored without raw text leakage in artifacts",
             "chunk citation metadata includes document_id/chunk_id/page/element lineage",
@@ -3289,7 +3289,7 @@ def _staging_required_evidence(check: str, reason: str) -> tuple[str, ...]:
         )
     if check == "artifact_reuse":
         return (
-            "successful segment extraction artifact is stored in Object Storage",
+            "successful segment extraction artifact is stored in the artifact storage",
             "retry only reprocesses failed segment ids",
             "ingestion-segments API shows successful segment artifact path retained",
         )

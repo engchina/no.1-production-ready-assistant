@@ -5,7 +5,7 @@ parse の **前** に原本を一度だけ canonical な中間物へ変換し(`�
 原本を保全したまま「派生物→原本」の系譜(`SourceDerivation`)を残す。
 
 - `PREPROCESS_PROFILES`: 変換プリセット名(backend config の `PreprocessProfile` と一致)。
-- `SourceDerivation`: 派生系譜(溯源)。backend が Object Storage 保存後に確定し、
+- `SourceDerivation`: 派生系譜(溯源)。backend が保存先へ保存した後に確定し、
   既存 JSON(`StructuredExtraction.parser_artifacts["source_derivation"]`)へ格納する。
 - `ConvertOutcome` / `ConvertResponse` / `ConvertHealth`: マイクロサービスの HTTP 契約。
 - `create_preprocess_app`: 1 つの前処理サービス用 FastAPI app factory(converter 注入式)。
@@ -98,7 +98,7 @@ class ConvertResponse(BaseModel):
     """`POST /convert` のレスポンス本体(`ConvertOutcome` の wire 形式)。
 
     派生 bytes は base64 で運ぶ(内部サービス・timeout 付きの小〜中規模文書想定)。
-    object path / sha256 は backend が Object Storage 保存後に確定するため含めない。
+    object path / sha256 は backend が保存先へ保存した後に確定するため含めない。
     """
 
     converted: bool = False

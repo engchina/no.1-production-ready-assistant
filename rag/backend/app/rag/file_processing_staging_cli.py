@@ -111,13 +111,13 @@ STAGING_GATE_EVIDENCE_ALLOWLIST = frozenset(
         "artifact_segment_count",
         "artifact_full_present",
         "artifact_full_uri_scheme",
-        "artifact_full_oci_uri",
+        "artifact_full_local_uri",
         "artifact_full_readable",
         "artifact_full_identity_verified",
         "artifact_full_payload_bytes",
         "artifact_segment_expected_count",
-        "artifact_segment_oci_uri_count",
-        "artifact_segment_non_oci_uri_count",
+        "artifact_segment_local_uri_count",
+        "artifact_segment_non_local_uri_count",
         "artifact_segment_readable_count",
         "artifact_segment_identity_verified_count",
         "artifact_segment_payload_bytes",
@@ -1104,7 +1104,7 @@ def _adapter_golden_gate_promotion_blockers(
 def _object_storage_artifact_chain(
     report: FileProcessingStagingReport,
 ) -> dict[str, Any]:
-    """Object Storage artifact の復旧/再利用 chain を非機密 gate summary にする。"""
+    """保存先の artifact の復旧/再利用 chain を非機密 gate summary にする。"""
     runtime_checks = {check.check: check for check in report.runtime_checks}
     runtime_status = {check_name: check.status for check_name, check in runtime_checks.items()}
     roundtrip_check = runtime_checks.get("extraction_artifact_cache_roundtrip")
@@ -1115,10 +1115,10 @@ def _object_storage_artifact_chain(
     roundtrip_object_uri_scheme = _string_value(roundtrip_evidence.get("object_uri_scheme"))
     if roundtrip_status != "ok":
         blocker_codes.append("object_storage_artifact_roundtrip_not_ok")
-    if roundtrip_status == "ok" and roundtrip_object_uri_scheme != "oci":
-        blocker_codes.append("object_storage_artifact_roundtrip_not_oci")
+    if roundtrip_status == "ok" and roundtrip_object_uri_scheme != "local":
+        blocker_codes.append("object_storage_artifact_roundtrip_not_local")
     full_artifact_cached_case_count = _int_value(evidence.get("full_artifact_cached_case_count"))
-    full_artifact_oci_case_count = _int_value(evidence.get("full_artifact_oci_case_count"))
+    full_artifact_local_case_count = _int_value(evidence.get("full_artifact_local_case_count"))
     full_artifact_identity_present_case_count = _int_value(
         evidence.get("full_artifact_identity_present_case_count")
     )
@@ -1129,9 +1129,9 @@ def _object_storage_artifact_chain(
         evidence.get("full_artifact_identity_verified_case_count")
     )
     segment_artifact_expected_count = _int_value(evidence.get("segment_artifact_expected_count"))
-    segment_artifact_oci_uri_count = _int_value(evidence.get("segment_artifact_oci_uri_count"))
-    segment_artifact_non_oci_uri_count = _int_value(
-        evidence.get("segment_artifact_non_oci_uri_count")
+    segment_artifact_local_uri_count = _int_value(evidence.get("segment_artifact_local_uri_count"))
+    segment_artifact_non_local_uri_count = _int_value(
+        evidence.get("segment_artifact_non_local_uri_count")
     )
     segment_artifact_readable_count = _int_value(evidence.get("segment_artifact_readable_count"))
     segment_artifact_identity_verified_count = _int_value(
@@ -1140,8 +1140,8 @@ def _object_storage_artifact_chain(
     artifact_integrity_error_count = _int_value(evidence.get("artifact_integrity_error_count"))
     if full_artifact_cached_case_count <= 0:
         blocker_codes.append("object_storage_full_artifact_not_cached")
-    if full_artifact_oci_case_count < full_artifact_cached_case_count:
-        blocker_codes.append("object_storage_full_artifact_not_oci")
+    if full_artifact_local_case_count < full_artifact_cached_case_count:
+        blocker_codes.append("object_storage_full_artifact_not_local")
     if full_artifact_identity_present_case_count < full_artifact_cached_case_count:
         blocker_codes.append("object_storage_full_artifact_identity_missing")
     if full_artifact_readable_case_count < full_artifact_cached_case_count:
@@ -1151,10 +1151,10 @@ def _object_storage_artifact_chain(
     if segment_artifact_readable_count < segment_artifact_expected_count:
         blocker_codes.append("object_storage_segment_artifact_unreadable")
     if (
-        segment_artifact_oci_uri_count < segment_artifact_expected_count
-        or segment_artifact_non_oci_uri_count > 0
+        segment_artifact_local_uri_count < segment_artifact_expected_count
+        or segment_artifact_non_local_uri_count > 0
     ):
-        blocker_codes.append("object_storage_segment_artifact_not_oci")
+        blocker_codes.append("object_storage_segment_artifact_not_local")
     if segment_artifact_identity_verified_count < segment_artifact_expected_count:
         blocker_codes.append("object_storage_segment_artifact_identity_unverified")
     if artifact_integrity_error_count > 0:
@@ -1175,7 +1175,7 @@ def _object_storage_artifact_chain(
         "full_artifact_cached_case_refs": _string_list(
             evidence.get("full_artifact_cached_case_refs")
         ),
-        "full_artifact_oci_case_count": full_artifact_oci_case_count,
+        "full_artifact_local_case_count": full_artifact_local_case_count,
         "full_artifact_identity_present_case_count": (full_artifact_identity_present_case_count),
         "full_artifact_readable_case_count": full_artifact_readable_case_count,
         "full_artifact_identity_verified_case_count": (full_artifact_identity_verified_case_count),
@@ -1183,8 +1183,8 @@ def _object_storage_artifact_chain(
             evidence.get("full_artifact_identity_verified_case_refs")
         ),
         "segment_artifact_expected_count": segment_artifact_expected_count,
-        "segment_artifact_oci_uri_count": segment_artifact_oci_uri_count,
-        "segment_artifact_non_oci_uri_count": segment_artifact_non_oci_uri_count,
+        "segment_artifact_local_uri_count": segment_artifact_local_uri_count,
+        "segment_artifact_non_local_uri_count": segment_artifact_non_local_uri_count,
         "segment_artifact_readable_count": segment_artifact_readable_count,
         "segment_artifact_identity_verified_count": segment_artifact_identity_verified_count,
         "artifact_integrity_error_count": artifact_integrity_error_count,
@@ -1803,7 +1803,7 @@ def _object_storage_artifact_chain_trend(payload: Mapping[str, Any]) -> dict[str
             "full_artifact_cached_case_refs": _string_list(
                 chain.get("full_artifact_cached_case_refs")
             ),
-            "full_artifact_oci_case_count": chain.get("full_artifact_oci_case_count"),
+            "full_artifact_local_case_count": chain.get("full_artifact_local_case_count"),
             "full_artifact_identity_present_case_count": chain.get(
                 "full_artifact_identity_present_case_count"
             ),
@@ -1815,8 +1815,10 @@ def _object_storage_artifact_chain_trend(payload: Mapping[str, Any]) -> dict[str
                 chain.get("full_artifact_identity_verified_case_refs")
             ),
             "segment_artifact_expected_count": chain.get("segment_artifact_expected_count"),
-            "segment_artifact_oci_uri_count": chain.get("segment_artifact_oci_uri_count"),
-            "segment_artifact_non_oci_uri_count": chain.get("segment_artifact_non_oci_uri_count"),
+            "segment_artifact_local_uri_count": chain.get("segment_artifact_local_uri_count"),
+            "segment_artifact_non_local_uri_count": chain.get(
+                "segment_artifact_non_local_uri_count"
+            ),
             "segment_artifact_readable_count": chain.get("segment_artifact_readable_count"),
             "segment_artifact_identity_verified_count": chain.get(
                 "segment_artifact_identity_verified_count"

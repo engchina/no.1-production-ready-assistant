@@ -1489,7 +1489,7 @@ def test_request_scope_is_intersection_and_unknown_profile_never_falls_back(
     assert profile_error.value.code == "NL2SQL_PROFILE_NOT_FOUND"
 
 
-def test_ontology_embedding_uses_oci_boundary_and_is_persisted_with_nodes(
+def test_ontology_embedding_uses_embedding_boundary_and_is_persisted_with_nodes(
     runtime: tuple[OntologyApiRuntime, InMemoryOntologyStore, _FakeLegacyNl2SqlService],
 ) -> None:
     api, store, legacy = runtime
@@ -2368,7 +2368,7 @@ def test_zero_match_recommendation_can_be_confirmed_manually(
     assert token
 
 
-def test_profile_recommendation_uses_existing_oci_embedding_boundary(
+def test_profile_recommendation_uses_existing_embedding_boundary(
     runtime: tuple[OntologyApiRuntime, InMemoryOntologyStore, _FakeLegacyNl2SqlService],
 ) -> None:
     api, _store, legacy = runtime

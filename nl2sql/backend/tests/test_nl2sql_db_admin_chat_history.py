@@ -3,7 +3,7 @@
 見え方は「AI 活用」と同じ（#3244）: system_admin は他の利用者の会話を見て削除できるが、続きの質問・
 実行・SQL の置き換え・エラーの分析・名前の変更は持ち主だけ（403）。
 
-LLM（OCI Enterprise AI）と Oracle は決定論のスタブで置き換える（memory の保存先）。表・列の名前は
+LLM（モデルの API）と Oracle は決定論のスタブで置き換える（memory の保存先）。表・列の名前は
 合成のもの。route の関数は画面の request の代わりに principal だけを持つ値で呼ぶ。
 """
 

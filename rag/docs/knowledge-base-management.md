@@ -3,7 +3,7 @@
 > 本ドキュメントは、Production Ready RAG に「ナレッジベース管理」を追加するための設計メモである。
 > Dify / RAGFlow / AnythingLLM / FastGPT / MaxKB / R2R などのプロダクト級 RAG が持つ
 > dataset / knowledge base / collection の考え方を参考にしつつ、実装は本プロジェクトの確定スタック
-> (OCI Enterprise AI / OCI Generative AI Cohere / Oracle AI Database / Vite + React Router) へ再マッピングする。
+> (モデルの API〔OpenAI 互換の API。LLM・埋め込み・再ランク〕/ Oracle AI Database / Vite + React Router) へ再マッピングする。
 
 最終更新: 2026-06-28
 

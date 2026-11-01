@@ -834,7 +834,7 @@ async def test_rerank_enabled_calls_backend_rerank(
 
 
 class _ScoredGenAi(FakeGenAi):
-    """rerank の関連度を固定値で返すスタブ(OCI は呼ばない)。"""
+    """rerank の関連度を固定値で返すスタブ(モデルの API は呼ばない)。"""
 
     async def rerank(self, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
         return [(index, 0.87 - index * 0.1) for index in range(len(documents))][:top_n]

@@ -1,7 +1,8 @@
 """公開の Agent MCP の観測 `agent_get_run_observation`（#3240 の段 2 の PR 4）。
 
 Run は合成の記録を保存先に直接置き、RAG の MCP は契約どおりの fake（``mcp_support``）にする
-（組み込み Runtime・OCI は呼ばない）。認可の行列（主体 × 範囲）は ``test_evidence_read_authz``。
+（組み込み Runtime・モデルの API は呼ばない）。認可の行列（主体 × 範囲）は
+``test_evidence_read_authz``。
 """
 
 from __future__ import annotations

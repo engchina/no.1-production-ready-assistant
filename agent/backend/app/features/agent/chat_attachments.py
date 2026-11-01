@@ -3,7 +3,7 @@
 保存・解析・見え方・期限は platform の `pr_system_settings.chat_attachments`。Agent が持つのは:
 
 - 会話（thread）の持ち主の判定（添付の API の `conversation_owner`）。
-- 画像の読み取り（既定の Vision モデル。OCI Enterprise AI の Responses API）。送信した後、ツールが
+- 画像の読み取り（既定の Vision モデル。モデルの API の Responses API）。送信した後、ツールが
   画像を初めて読むときに呼ぶ（アップロードでは呼ばない。#2652）。
 - 画像の原本（`chat_attachment_view_image`）: モデルが画像に対応すれば、原画像をツールの結果の
   画像（#2650 の `ToolOutputWithImages`）としてモデルの入力へ渡す。対応しなければ、質問の観点

@@ -103,12 +103,12 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     enterprise_ai_endpoint: str = ""
     enterprise_ai_project_id: str = ""
     enterprise_ai_api_key: str = ""
-    # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
+    # モデルの API のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
     enterprise_ai_secondary_endpoint: str = ""
     enterprise_ai_secondary_project_id: str = ""
     enterprise_ai_secondary_api_key: str = ""
-    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
+    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project ID は任意）。
     enterprise_ai_tertiary_endpoint: str = ""
     enterprise_ai_tertiary_project_id: str = ""
     enterprise_ai_tertiary_api_key: str = ""
@@ -197,7 +197,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     agent_external_nl2sql_mcp_url: str | None = None
     # NL2SQL の `nl2sql_query` / `nl2sql_get_job` は SQL の生成・実行をジョブにし、1 回の
     # 呼び出しでは結果を最大 45 秒（`wait_seconds`）だけ待って、終わらなければ job_id を返す。
-    # `nl2sql_query` は SQL の生成前の確認（OCI Enterprise AI の LLM。下書きと回答の後の
+    # `nl2sql_query` は SQL の生成前の確認（LLM。下書きと回答の後の
     # 再検査で最大 2 回。#1441）を呼び、その分だけジョブを待つ秒数を減らす。待ちの上限 45 秒と
     # SQL の生成前の確認の 480 秒（NL2SQL の LLM 1 回 240 秒 × 試行 2 回。#2240）に、HTTP の往復・
     # ジョブの登録・DB の負荷の余裕 75 秒を足した 600 秒にする（#1432・#2240）。続きの取得

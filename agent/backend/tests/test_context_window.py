@@ -600,7 +600,7 @@ def test_provider_overflow_is_compacted_and_resent_once(mcp: FakeProductMcp) -> 
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._ModelApiResponses(inner).create(  # noqa: SLF001
             model="test-model-2383", input=items, instructions="指示", tools=[]
         )
 
@@ -627,7 +627,7 @@ def test_second_provider_overflow_fails_with_a_clear_reason(mcp: FakeProductMcp)
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._ModelApiResponses(inner).create(  # noqa: SLF001
             model="test-model-2383", input=items, instructions="指示", tools=[]
         )
 
@@ -646,7 +646,7 @@ def test_provider_overflow_without_a_run_window_is_raised_as_is() -> None:
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(None)  # noqa: SLF001
-        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._ModelApiResponses(inner).create(  # noqa: SLF001
             model="m", input=[], instructions="指示", tools=[]
         )
 

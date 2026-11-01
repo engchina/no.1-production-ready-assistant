@@ -1,4 +1,4 @@
-"""OCI Enterprise AI（OpenAI 互換の API）を呼ぶ URL の決め方（#1440）。
+"""モデルの API（OpenAI 互換の API）を呼ぶ URL の決め方（#1440）。
 
 #3418 で pr_system_settings から移した。
 """
@@ -15,11 +15,10 @@ def enterprise_ai_base_url(endpoint: str) -> str:
 
     3 製品と suite の呼び出し・接続テストの URL はすべてこれ（と `enterprise_ai_request_url`）で
     決める。
-    入力どおり使い、前後の空白と末尾の `/` だけを除く。path は補わない（OCI Enterprise AI も
-    `https://inference.generativeai.<region>.oci.oraclecloud.com/openai/v1` のように利用者が
-    `/openai/v1` まで書く。OpenAI 互換 API は `https://api.openai.com/v1` のように API の
-    base URL まで書く）。以前の RAG は path の無い URL に `/openai/v1` を足していたため、
-    OCI 以外の OpenAI 互換 API（例 `https://api.deepseek.com`）で 404 になっていた。
+    入力どおり使い、前後の空白と末尾の `/` だけを除く。path は補わない（OpenAI 互換 API は
+    `https://api.openai.com/v1`・`https://dashscope.aliyuncs.com/compatible-mode/v1` のように
+    利用者が API の base URL まで書く）。以前の RAG は path の無い URL に `/openai/v1` を足して
+    いたため、OpenAI 互換 API（例 `https://api.deepseek.com`）で 404 になっていた。
     """
     return endpoint.strip().rstrip("/")
 

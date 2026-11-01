@@ -215,7 +215,7 @@ class _EmbeddingClient(GenAiClient):
 
 
 class _FakeObjectStorage:
-    """Object Storage artifact cache をメモリ上で再現する。"""
+    """保存先の artifact cache をメモリ上で再現する。"""
 
     def __init__(self, initial: dict[str, dict[str, object]]) -> None:
         self.objects = {

@@ -385,7 +385,7 @@ class _OracleRuntimeNl2SqlService(Nl2SqlService):
         super().__init__(store=MemoryNl2SqlStore())
         self._oracle_adapter = adapter
         self._embedding_client = _FakeEmbeddingClient()
-        # SQL の生成（OCI Enterprise AI）は決定論の fake。adapter が SQL を持てばそれを返す。
+        # SQL の生成（モデルの API）は決定論の fake。adapter が SQL を持てばそれを返す。
         self._enterprise_ai_client = _CaptureEnterpriseAiClient(adapter)
         # SQL の生成は schema を文脈に渡すため、fake の DB の表を catalog に置く。
         self._catalog = _oracle_runtime_catalog()
@@ -2572,9 +2572,10 @@ async def test_reverse_comments_and_diagnostics() -> None:
             "PLATFORM_ENTERPRISE_AI_ENDPOINT",
             "PLATFORM_ENTERPRISE_AI_API_KEY",
             "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
-            "PLATFORM_GENAI_ENDPOINT",
             "PLATFORM_GENAI_EMBED_MODEL_ID",
         } <= check_names
+        # 埋め込みの endpoint は既定の埋め込みモデルの接続のもの（#45）。使わない設定は診断しない。
+        assert "PLATFORM_GENAI_ENDPOINT" not in check_names
         readiness = diagnostics_data["readiness"]
         assert readiness
         readiness_areas = {item["area"] for item in readiness}
@@ -2615,9 +2616,9 @@ async def test_reverse_comments_and_diagnostics() -> None:
         required_feedback_env = {item["name"] for item in feedback_guide["required_env_vars"]}
         assert {
             "NL2SQL_FEEDBACK_EMBEDDING_ENABLED",
-            "PLATFORM_GENAI_ENDPOINT",
             "PLATFORM_GENAI_EMBED_MODEL_ID",
         } <= required_feedback_env
+        assert "PLATFORM_GENAI_ENDPOINT" not in required_feedback_env
 
 
 async def test_diagnostics_reads_platform_env_file_not_current_working_directory(

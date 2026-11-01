@@ -1,4 +1,4 @@
-"""旧公開 worker の失効・遅着・部分 commit 復旧。実 Oracle/OCI は使用しない。"""
+"""旧公開 worker の失効・遅着・部分 commit 復旧。実 Oracle / モデルの API は使用しない。"""
 
 import threading
 from datetime import UTC, datetime, timedelta

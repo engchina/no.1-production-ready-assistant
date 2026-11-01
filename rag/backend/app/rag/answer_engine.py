@@ -3021,7 +3021,7 @@ class AnswerEngine:
 
 @dataclass(frozen=True)
 class _LoopEmbedder:
-    """回答の thread から event loop の OCI Generative AI の embedding を呼ぶ Embedder(#2649)。
+    """回答の thread から event loop の 埋め込みモデル を呼ぶ Embedder(#2649)。
 
     ``rag_engine.ports.Embedder`` を満たす。業務ガイドの手順の充足で、根拠を共有する手順の
     どれを item が説明したかを語で決められないときに使う。

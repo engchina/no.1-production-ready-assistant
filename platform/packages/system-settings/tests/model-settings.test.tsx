@@ -162,7 +162,7 @@ describe("buildSectionSavePayload（ターシャリ接続。#786）", () => {
     },
   };
 
-  it("ターシャリ接続を使う登録モデルはそのまま送り、Project OCID は空のまま送る", () => {
+  it("ターシャリ接続を使う登録モデルはそのまま送り、Project ID は空のまま送る", () => {
     const payload = buildSectionSavePayload(withTertiary, withTertiary, "enterprise_models");
     expect(payload.enterprise_ai.models[0]?.connection_id).toBe("tertiary");
     expect(payload.enterprise_ai.connections.map((c) => c.connection_id)).toEqual([

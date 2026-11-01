@@ -265,7 +265,7 @@ readme が規定していた「左右ガター 2rem / セクション間 1.5rem�
 | `FormActionBar` の直置きのボタンは mousedown でフォーカスを動かさず、click でボタンへフォーカスを移してから操作する（#1786 の `sticky` の行から、#2715 ですべての行へ） | 押した瞬間に入力欄の blur の検証が欄の下にエラーを出すと、下にある確定の行が押している間に動き、クリックが外れていた（375px で欄が縦に積まれるとき） |
 | 未保存の変更がある状態で戻るときの確認（#586）は、`back.onClick` から呼ぶ製品の離脱ガードのまま | 戻る導線の置き場所だけを変え、確認の規則は変えない |
 | **例外**: 確認語が要る作業の画面（NL2SQL のテーブル・ビューの作成・取込）は、実行を確認語欄（`ExecutionConfirmationField`）の操作行に置き、戻るだけを左上にする | 確認語と確定を 1 つの区画にまとめる（README §4「確認語欄」、#379）。どちらもフォームの末尾にあり、#1786 の規則と同じ置き方 |
-| 設定の画面（OCI・データベース・モデルなど、1 ページに複数のカードのフォームがある画面）は、今までどおりカードの末尾の `FormActionBar`（`sticky` は付けない） | 1 ページに保存の対象が複数ある。カードごとの短いフォームなので貼り付けない |
+| 設定の画面（アップロード保存先・データベース・モデルなど、1 ページに複数のカードのフォームがある画面）は、今までどおりカードの末尾の `FormActionBar`（`sticky` は付けない） | 1 ページに保存の対象が複数ある。カードごとの短いフォームなので貼り付けない |
 
 - 部品: `PageHeader` の `back`（`{ label, onClick, ariaLabel?, disabled?, testId? }`。`data-page-header-back`）、`FormActionBar`（`data-form-action-bar`。`sticky` は #2715 で削除）。`actions` に `id: "back"` の操作を入れない（adherence の lint が検出する）。
 - 置き換えた画面（#1786）: system-settings のユーザー管理・ロール管理（作成・編集）・権限管理（編集）、RAG のナレッジベース（作成・詳細）・検索・回答プロファイル（作成・編集）、Agent の業務 Agent・Skill・MCP 接続・評価セット・自動実行（作成・編集）とプラグインの導入・マーケットプレイスの追加。NL2SQL の業務プロファイル・テーブル・ビューは上の例外のまま。
@@ -609,7 +609,7 @@ import { Wrench } from "lucide-react";
 // チェックボックスの群・複数選択（ラジオは role="radiogroup"）
 <Fieldset legend="ロール" required error={rolesError}>…</Fieldset>
 // 条件付きの必須だけ文言を上書きする
-<TextField id="region" label="リージョン" required requiredLabel="OCI 運用時必須" />
+<TextField id="region" label="リージョン" required requiredLabel="利用時必須" />
 ```
 
 | 決めたこと | 理由 |
@@ -621,7 +621,7 @@ import { Wrench } from "lucide-react";
 | 文字コントラスト 4.5:1 以上 | 実測: light は surface 上 4.83:1、sunken 上 4.55:1。dark は surface 上 8.72:1、overlay 上 7.06:1。淡い灰色の必須表示は弱視の利用者が見落とします（NN/g） |
 | 形は pill（`--radius-pill`）、`ring-inset` の輪郭で行の高さを変えない | バッジの角丸トークンに合わせます。アイコンは付けません。`StatusBadge`（状態 = アイコン必須）と区別するためです |
 | **支援技術には `aria-required="true"`（またはネイティブの `required`）で伝え、タグは二重に読み上げない** | 入力の名前・役割・状態をプログラムで伝えます（WCAG 4.1.2 Name, Role, Value）。`TextField` / `SelectField` / `SecretField` / `FieldLabel` のタグは `aria-hidden` です（「必須、必須」を防ぐ）。fieldset（role=group）は `aria-required` を持てないため、`FieldLegend` / `Fieldset` のタグは読み上げます（群の名前「ロール 必須」として 1 回だけ読まれる）。`role="radiogroup"` の `Fieldset` は群に `aria-required` を付け、タグを読みません |
-| 条件付きの必須も同じタグで、文言で区別する（例:「OCI 運用時必須」） | info 色のバッジで別扱いすると、必須表示が 2 種類になります |
+| 条件付きの必須も同じタグで、文言で区別する（例:「利用時必須」） | info 色のバッジで別扱いすると、必須表示が 2 種類になります |
 | **未入力のエラーは欄の直下に「〇〇を入力してください。」「〇〇を選択してください。」**。保存時は最初のエラーの欄へフォーカスする | 何が足りないかと直し方を、問題の欄のそばで伝えます（WCAG 3.3.1 / 3.3.3、GOV.UK「Error message」）。文言の型とフォーカスは UX 契約 `messaging.md` §3.2.1 |
 
 - **`requiredLabel` は渡さなくてよくなりました**（既定「必須」）。以前は呼び出し側が必ず渡す作りで、渡し忘れた欄は見た目で必須が分かりませんでした。条件付きの必須の文言だけ上書きします
@@ -958,7 +958,7 @@ md 未満の上端の通知がナビゲーションのバーより高い場合�
 - 計算は `lib/toast-placement.ts` の `resolveToastPlacement({ narrow })`（画面幅だけを読む。`PageHeader` の位置・スクロールは読まない）。`PageHeader` の `data-page-header` / `data-page-header-actions` は e2e の目印として残す
 - 新しい通知は下に足す（DOM の順 = 読み上げ・Tab の順 = 見た目の上下の順）
 - それでも覆いうるもの: desktop で通知の位置（右下、下端から 8〜14rem ほど）にスクロールで来た本文の中ほどの欄・ボタン（スクロールすれば離れる）。375px で 2 件以上積んだときの下の通知（スクロールしていない `PageHeader` の操作に届く）。連続した操作で通知を積み上げない（messaging.md §4.2）
-- 確かめる e2e: 3 製品の `a11y.nightly.spec.ts` の「〈画面〉の主操作は通知の置き場所と重ならない」（サイドナビの全項目、desktop と 375px。`PageHeader` の操作・`FormActionBar`・`ObjectActionBar`・チャットの入力欄と送信・ページの末尾の操作）と、代表の画面の `expectToastPlacement`（NL2SQL `toast-placement.spec.ts` ほか、RAG `oci-settings-layout.spec.ts`、Agent `agent-settings.spec.ts`）。helper は 3 製品に同じ内容で置く（RAG `e2e/_toast-placement.ts`・Agent `e2e/fixtures/toast-placement.ts`・NL2SQL `tests/e2e/_helpers/toast.ts`）
+- 確かめる e2e: 3 製品の `a11y.nightly.spec.ts` の「〈画面〉の主操作は通知の置き場所と重ならない」（サイドナビの全項目、desktop と 375px。`PageHeader` の操作・`FormActionBar`・`ObjectActionBar`・チャットの入力欄と送信・ページの末尾の操作）と、代表の画面の `expectToastPlacement`（NL2SQL `toast-placement.spec.ts` ほか、RAG `a11y.nightly.spec.ts`、Agent `agent-settings.spec.ts`）。helper は 3 製品に同じ内容で置く（RAG `e2e/_toast-placement.ts`・Agent `e2e/fixtures/toast-placement.ts`・NL2SQL `tests/e2e/_helpers/toast.ts`）
 
 ### メッセージの本文の折り返し（新設）— ★ 日本語を文節で折り返し、語の途中で切らない（#899）
 
@@ -1297,7 +1297,7 @@ QA に事前共有してください。**178点あります。**
 | 46 | **権限管理の「利用できる対象」の候補の行が名前と説明だけになり、高さがそろう** | 各行に名前・説明・内部の ID（等幅、32 桁の hash など）を並べ、行の高さが内容で変わった。高さに上限のあるスクロール領域の grid で行が `min-h-11` まで縮み、375px の 1 列では次の行の名前が前の行の ID・説明に重なった → ID は出さない。名前は 1 行・説明は 2 行で省略し（全文は `title`、チェックボックスの名前は全文）、説明を持つ候補がある対象ではすべての行が説明の 2 行分を取って高さがそろう。行は内容の高さ（`auto-rows-max`）で、縮めて重ねない。名前の行はバッジの高さを常に取る。ホバーで行の地が `surface-hover` になる。NL2SQL の業務プロファイル・Agent のエージェント / 検索・回答プロファイルも同じ部品（説明を持たない対象は名前だけの行） | 利用者には ID が意味を持たず、何の対象かを名前と説明で見分ける。行の重なりを解消する（`RolePermissionTargetOption`、#521） |
 | 47 | **必須の欄に「必須」のタグがそろい、「(任意)」が消える** | 必須の欄でも `requiredLabel` を渡し忘れた欄・素の `<label>` の欄はタグが無く、一部の欄だけにタグがあった。任意の欄はラベル・placeholder に「(任意)」「（任意）」を書く画面があった（RAG・NL2SQL・Agent で 14 か所）→ backend の検証か送信ガードで必須の欄すべてにタグ「必須」と `aria-required`、任意の欄には何も付けない。チェックボックスの群・ラジオの必須は legend の後ろに同じタグ。NL2SQL / system-settings の独自の `FieldLabel` は共有部品になる（見た目は同じ） | 必須だけを 1 通りの印で示し、凡例なしで見分けられるようにする。placeholder をラベルの代わりにしない（§4「必須の表示」、WCAG 3.3.2 / 1.4.1 / 4.1.2、#531） |
 | 48 | **一覧の絞り込みの検索ボタンが無くなり、入力に合わせて絞り込む**（#535） | RAG の検索・回答プロファイルの一覧: 検索欄（固定 `w-56`・先頭アイコンなし）+「名前・説明で検索」のボタン → ナレッジベースの一覧と同じ `SearchField`（先頭アイコン・消去、`w-64`、375px は全幅）でボタンなし。NL2SQL の学習候補・アプリ内フィードバック: 条件の行の右端の「絞り込み」（44px）→ ボタンなしで、条件を変えるとすぐ読み込む（読込中は一覧の上に経過時間とスピナー）。アプリ内フィードバックの検索欄は手書きの入力欄 → `SearchField`（44px、虫眼鏡・消去付き）。Agent のメモリの検索欄は手書きの入力欄（40px、地が `surface-sunken`）→ `SearchField`（36px、地は `surface`）。0 件の空の状態に「検索語をクリア」（RAG のナレッジベース・検索・回答プロファイル・文書、ユーザー・ロール・権限管理） | 同じ種類の画面（一覧の絞り込み）の操作を 3 製品でそろえる。押し忘れ・押し直しを無くす。0 件から 1 操作で戻れる（UX 契約 page-archetypes.md「一覧の絞り込みの検索」） |
-| 49 | **モデル設定の OCI Enterprise AI の接続がタブになり、エラーのあるタブに印が付く** | 「接続 1（既定）」「接続 2」の枠（`border` + `bg-surface-sunken`）を縦に並べ、各接続に自由入力の「表示名」があった → カードの中の共有の `Tabs`（「プライマリ接続」「セカンダリ接続」）で切り替え、表示名の欄は無い。未設定のセカンダリ接続は `EmptyState` と「セカンダリ接続を設定」、設定済みは入力欄と「セカンダリ接続を削除」（説明の行の右端、ghost の danger）。エラーのあるタブはラベルの後ろに danger 色の `CircleAlert`、未保存の入力があるタブは「未保存」のバッジ。Endpoint URL・Project OCID・API key の必須のタグは、プライマリ接続が 3 つとも「OCI 運用時必須」、セカンダリ接続が 3 つとも「必須」 | 同じ設定の別の枠はタブで切り替える（§4「`Tabs`」）。名前を画面・選択肢・保存値でそろえ、別のタブのエラーを見落とさない（#542） |
+| 49 | **モデル設定の OCI Enterprise AI の接続がタブになり、エラーのあるタブに印が付く** | 「接続 1（既定）」「接続 2」の枠（`border` + `bg-surface-sunken`）を縦に並べ、各接続に自由入力の「表示名」があった → カードの中の共有の `Tabs`（「プライマリ接続」「セカンダリ接続」）で切り替え、表示名の欄は無い。未設定のセカンダリ接続は `EmptyState` と「セカンダリ接続を設定」、設定済みは入力欄と「セカンダリ接続を削除」（説明の行の右端、ghost の danger）。エラーのあるタブはラベルの後ろに danger 色の `CircleAlert`、未保存の入力があるタブは「未保存」のバッジ。Endpoint URL・Project ID・API key の必須のタグは、プライマリ接続が 3 つとも「OCI 運用時必須」、セカンダリ接続が 3 つとも「必須」 | 同じ設定の別の枠はタブで切り替える（§4「`Tabs`」）。名前を画面・選択肢・保存値でそろえ、別のタブのエラーを見落とさない（#542） |
 | 50 | **数百件から選ぶ選択が「検索 ＋ 候補の一覧 ＋ 選択済みの chip」になる**（#578） | RAG の文書インデックスの「ナレッジベース」の絞り込みは `SelectField`（検索できず、選んだ長い名前は「利用できるすべてのナ…」と省略）→ `SearchableSelectField`（ボタンは名前を折り返して全体を出す。押すと検索欄と候補の一覧を重ねて開き、右端に文書数、下に「51 / 300 件」）。同じ画面の状態の絞り込みは 11 個の `ToggleChip`（desktop でも 2 行、375px では 5 行に折り返した）→ 「状態」の `SelectField`（状態・ナレッジベース・検索欄が 1 行）。KB と検索・回答プロファイルの複数選択（RAG 固有の `MultiSelectCombobox`: 枠の中に chip と枠なしの入力欄・先頭に塗りの虫眼鏡のタイル）→ `SearchableMultiSelect`（上に `SearchField` の検索欄と開閉の iconOnly、開いている間だけ下に候補の一覧、その下に選択済みの chip。chip の名前は省略せず折り返す。「表示中をすべて選択」「クリア」は文字のリンク → ghost の `Button`）。KB の選択の見出しの先頭のデータベースのアイコンは無くなり、「空の KB を隠す」のチェックも無くなる（作ったばかりの空の KB へ登録するため） | 数百件でも検索して選べ、全件を読まない（201 件以上はサーバー側の検索）。選んだ名前を切らない。キーボード・IME・読み上げを 3 製品で共通の部品にそろえる |
 | 51 | **狭い画面のページの操作が 2 つなら「その他の操作」に畳まない**（#582） | lg 未満の `PageHeader` は主操作 1 つ +「その他の操作」。操作が 2 つ（RAG の検索・回答プロファイル・Agent のエディタの「一覧へ戻る」+ 保存、NL2SQL・system-settings の一覧の「表示を更新」+「新規作成」など）でも、残りの 1 つだけのメニューになり、戻るのに 2 タップ要った → メニューに入るのが 1 つだけなら畳まず 2 つとも出す。読み上げ名は「その他の操作」→「その他の操作（ページ操作）」「その他の操作（〇〇の操作）」（見た目の文言は同じ） | 戻る操作を 1 タップにし、ページとカードの「その他の操作」を読み上げで区別する（§4「`PageHeader`」7・8） |
 | 52 | **複数行の入力欄の見た目が 1 つにそろう**（#584） | 手書きの `<textarea>`: 地が `bg-surface-sunken`（RAG の検索・回答プロファイル・設定・評価など）/ `bg-surface`、角丸 `rounded-md`、disabled が `opacity-50` など、ラベル・文字数の位置も画面ごと → 共有 `TextareaField`: 地は `bg-surface`（read-only は `bg-surface-sunken`、disabled は `bg-surface-disabled`）、角丸 `--radius-control`、余白 `px-3 py-2`、枠線・フォーカスは `TextField` と同じ、文字数と補足は欄の下（RAG のドメインキーワードの補足は欄の上 → 下）。等幅の欄（SQL・JSON・論理構造など。NL2SQL の SQL の入力欄は 14px だった）は `--font-mono` の 12px。RAG の回答プロンプトの「既定値／カスタマイズ済み」のバッジはラベルの横 → 操作の行 | 1 行の入力欄と同じ部品に見せ、disabled を透過で薄めない（§4「`TextareaField`」） |

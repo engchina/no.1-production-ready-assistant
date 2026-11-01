@@ -4,7 +4,7 @@
 並行にしたときに同時に 429 を受けた呼び出しが一斉に再試行して再び 429 になる（thundering herd）。
 この部品は、呼び出しの全体で次を共有する。
 
-- **エラーの種類**（``ErrorKind``）: HTTP status・例外の型・SDK の例外（openai・OCI）・応答の本文
+- **エラーの種類**（``ErrorKind``）: HTTP status・例外の型・SDK の例外（openai など）・応答の本文
   （quota・安全の拒否・context の長さの超過）から分ける（``classify_error``。差し替えられる）。
   種類ごとに、再試行の有無と回数・件の失敗か job の停止か・全体の待ちに数えるかを ``KindRule`` で
   決める（既定は ``DEFAULT_KIND_RULES``。AWS SDK の retry mode・Google Cloud / Azure の retry の
@@ -28,10 +28,9 @@
   「API の制限のため N 秒待っています」と、停滞の検出が待ちを停滞と誤らないための heartbeat）。
 
 SDK の再試行との分担: この部品を通す呼び出しは、SDK の再試行を切る（openai SDK の
-``max_retries=0``、OCI SDK の ``NoneRetryStrategy``）。SDK の中で再試行すると、全体の待ち・
-AIMD・予算・circuit breaker を通らないため。OCI SDK の既定の circuit breaker も切る
-（``NoCircuitBreakerStrategy``）。残すと 429 が続いたときに先に開き、この部品が知らない
-``CircuitBreakerError`` で件が失敗する（#2211）。
+``max_retries=0``）。SDK の中で再試行すると、全体の待ち・AIMD・予算・circuit breaker を
+通らないため。SDK が独自の circuit breaker を持つときも切る。残すと 429 が続いたときに先に開き、
+この部品が知らない例外で件が失敗する（#2211）。
 
 時計・乱数・sleep は差し替えられる（テストは実時間で待たない）。並行の制御は 1 つの event loop
 の中で行う（同期のコード・thread から使うときは ``SyncBoundedCaller``。#2004）。
@@ -118,8 +117,8 @@ _ABORT_HINTS: Mapping[ErrorKind, str] = {
         "確かめてください。"
     ),
     ErrorKind.PERMISSION: (
-        "API を使う権限がありません。IAM policy で、このモデル・エンドポイントを使う権限"
-        "（例: OCI Generative AI の generative-ai-family の use）を確かめてください。"
+        "API を使う権限がありません。API key・project の設定で、このモデル・エンドポイントを使う権限"
+        "を確かめてください。"
     ),
     ErrorKind.NOT_FOUND: (
         "モデルまたはエンドポイントが見つかりません。モデルの設定（モデル ID・エンドポイント・"
@@ -215,7 +214,7 @@ _SAFETY_MARKERS = (
     "inappropriate content",
     "blocked by",
 )
-# 入力（prompt）の長さの超過。OCI Enterprise AI の vLLM 系のモデル（openai.gpt-oss-120b）は
+# 入力（prompt）の長さの超過。vLLM 系のモデル（openai.gpt-oss-120b など）は
 # 400 の本文で「The engine prompt length N exceeds the max_model_len N」（type は
 # invalid_request_error）と返す（2026-10-20 の合成の入力での実測。#2720）。この印が無いと
 # 要求の誤りに分かれ、入力を分け直せない。
@@ -318,7 +317,7 @@ def _exception_chain(exc: BaseException, limit: int = 8) -> list[BaseException]:
 def _status_of(exc: BaseException) -> int | None:
     """HTTP status を返す。
 
-    openai の ``status_code``・httpx の ``response.status_code``・OCI の ``status`` を読む。
+    openai の ``status_code``・httpx の ``response.status_code``・SDK の例外の ``status`` を読む。
 
     status の無い例外は None。
     """
@@ -516,8 +515,8 @@ def classify_error(exc: BaseException) -> ClassifiedError:
     原因の連鎖（``__cause__`` / ``__context__``）をたどり、次の順で決める。
 
     1. TLS の証明書の誤り（``ssl.SSLCertVerificationError`` など）。
-    2. HTTP status（openai・httpx・OCI の ``ServiceError``）と本文（quota・安全・context の長さ・
-       OCI の ``NotAuthorizedOrNotFound``）。``Retry-After`` を読む。
+    2. HTTP status（openai・httpx・SDK の例外の ``status``）と本文（quota・安全・context の長さ・
+       ``NotAuthorizedOrNotFound``）。``Retry-After`` を読む。
     3. HTTP status の無い SDK の例外の、本文の構造化したエラーの code（``RESOURCE_EXHAUSTED``・
        ``rate_limit_exceeded``・入れ子の JSON の ``"code": 429`` など）。2 と同じ規則で分ける。
     4. 例外の型（時間切れ・接続・出力の打ち切り・出力の形の誤り）と、本文の印（安全の拒否・

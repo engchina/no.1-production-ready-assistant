@@ -1027,7 +1027,7 @@ def build_adb_hybrid_answer_context(
     page_ranges は検索を絞る文書の頁の範囲（{document_id, page_start, page_end} の列。業務ガイドの手順の参照。
     #2395）。空なら絞らない。絞り込みは注入された検索実装が行う。
 
-    query_embedder は索引と同じ embedder を使う SDK 用。未指定なら検索実装の既定（OCI）を使う。
+    query_embedder は索引と同じ embedder を使う SDK 用。未指定なら検索実装の既定（埋め込みモデル）を使う。
     vector_only_queries は retrieval_queries のうち全文検索に使わない検索文（HyDE の仮説文。#911）。
 
     pinned_chunk_run_id 指定時は保存済み実行を直接読み、latest 更新による評価条件の変化を防ぐ。

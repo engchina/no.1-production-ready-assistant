@@ -25,7 +25,6 @@ import {
 import { csrfHeader, notifyAuthResponse, notifyAuthStatus } from "@production-ready/system-settings";
 import type { BaseCurrentUser } from "@production-ready/system-settings";
 
-// OCI 認証 API の型は platform の共有パッケージが正本（#100）。
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
@@ -2482,7 +2481,7 @@ export interface PreprocessSettingsUpdate {
 // --- サービス管理（各工程のサービスの稼働可視化・起動/停止）---
 // カテゴリと工程の設定画面の対応は components/settings/service-stages.ts（並びはサイドナビ。#638）。
 export type ServiceCategory = "preprocess" | "parser";
-export type ServiceProfile = "cpu" | "gpu" | "oci";
+export type ServiceProfile = "cpu" | "gpu";
 // systemd の unit の状態 + /health（#286）。starting は unit が動いているが /health にまだ届かない、
 // failed は unit が失敗して止まった、not_installed は unit が登録されていない。
 export type ServiceRuntimeStatus =
@@ -2816,8 +2815,6 @@ export interface GraphSettingsData {
 export interface GraphSettingsUpdate {
   profile: GraphProfileName;
 }
-
-// --- 設定: OCI config ---
 
 /** API 由来のエラー。`messages` は日本語のユーザー向け文言。 */
 /** 入力項目に結び付く API の問題（JSON Pointer と表示文言）。 */

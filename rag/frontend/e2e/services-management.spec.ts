@@ -13,7 +13,7 @@ type ServiceStatus =
 interface ServiceRow {
   service_id: string;
   category: "preprocess" | "parser";
-  profile: "cpu" | "gpu" | "oci";
+  profile: "cpu" | "gpu";
   label_key: string;
   execution_policy: "selected_adapter" | "default_adapter";
   status: ServiceStatus;

@@ -6,7 +6,7 @@
     "message": "Enterprise AI endpoint に接続できませんでした。",
     "troubleshooting": [
       "endpoint が https:// で始まることを確認してください。",
-      "API key と project OCID が検証環境の値であることを確認してください。"
+      "API key と Project ID が検証環境の値であることを確認してください。"
     ],
     "raw_error": "connect ETIMEDOUT enterprise-ai.example.com",
     "error_type": "network_timeout",

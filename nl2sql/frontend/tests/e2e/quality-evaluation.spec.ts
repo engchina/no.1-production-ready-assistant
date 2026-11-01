@@ -52,7 +52,7 @@ const capabilities = {
       reason: "",
     },
   ],
-  judge: { available: true, reason: "", provider: "OCI Enterprise AI" },
+  judge: { available: true, reason: "", provider: "モデルの API" },
   limits: {
     max_file_bytes: 10 * 1024 * 1024,
     max_cases: 100,
@@ -243,7 +243,7 @@ const results = [
     total_elapsed_ms: 500,
     verdict: "not_analyzed",
     judge: null,
-    generation_error: "OCI Enterprise AI timeout",
+    generation_error: "Model API timeout",
     judge_error: "",
     created_at: "2026-07-22T08:00:03Z",
   },
@@ -327,8 +327,8 @@ async function mockQualityApi(
           options.judgeAvailable === false
             ? {
                 available: false,
-                reason: "OCI Enterprise AI Judge が未構成です。",
-                provider: "OCI Enterprise AI",
+                reason: "LLM Judge が未構成です。",
+                provider: "モデルの API",
               }
             : capabilities.judge,
       });
@@ -1046,7 +1046,7 @@ test("mobile restores completed results as cards without page overflow", { tag: 
   ).toBeVisible();
   await expect(page.locator("table")).toBeHidden();
   await expect(
-    page.getByText("OCI Enterprise AI timeout").filter({ visible: true }).first()
+    page.getByText("Model API timeout").filter({ visible: true }).first()
   ).toBeVisible();
   const mobileAnalysisToggle = page
     .getByTestId("quality-evaluation-analysis-toggle")

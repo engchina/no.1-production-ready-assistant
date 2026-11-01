@@ -97,7 +97,7 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
     assert report.runtime_checks[0].status == "ok"
     assert report.runtime_checks[0].evidence is not None
     assert report.runtime_checks[0].evidence["cleanup"] == "deleted"
-    assert report.runtime_checks[0].evidence["object_uri_scheme"] == "oci"
+    assert report.runtime_checks[0].evidence["object_uri_scheme"] == "local"
     assert "contains_document_text" not in str(report.runtime_checks[0].evidence)
     assert report.metrics["gate_pass_rate"] == 1.0
     assert report.metrics["parser_fallback_rate"] == 0.0
@@ -303,10 +303,10 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
     artifact_chain = payload["object_storage_artifact_chain"]
     assert artifact_chain["passed"] is True
     assert artifact_chain["roundtrip_check"] == "ok"
-    assert artifact_chain["roundtrip_object_uri_scheme"] == "oci"
+    assert artifact_chain["roundtrip_object_uri_scheme"] == "local"
     assert artifact_chain["full_artifact_cached_case_count"] >= 1
     assert (
-        artifact_chain["full_artifact_oci_case_count"]
+        artifact_chain["full_artifact_local_case_count"]
         == (artifact_chain["full_artifact_cached_case_count"])
     )
     assert artifact_chain["full_artifact_identity_present_case_count"] >= 1
@@ -314,10 +314,10 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
     assert artifact_chain["full_artifact_identity_verified_case_count"] >= 1
     assert artifact_chain["segment_artifact_expected_count"] >= 1
     assert (
-        artifact_chain["segment_artifact_oci_uri_count"]
+        artifact_chain["segment_artifact_local_uri_count"]
         == (artifact_chain["segment_artifact_expected_count"])
     )
-    assert artifact_chain["segment_artifact_non_oci_uri_count"] == 0
+    assert artifact_chain["segment_artifact_non_local_uri_count"] == 0
     assert (
         artifact_chain["segment_artifact_readable_count"]
         == (artifact_chain["segment_artifact_expected_count"])
@@ -437,17 +437,15 @@ async def test_file_processing_staging_runner_closes_pending_gates_with_evidence
         gate.suggested_gate == "structural_section_search_gate" for gate in html.gate_results
     )
     assert any(
-        deleted.startswith("oci://namespace/bucket/artifacts/extractions/staging-preflight/run-1/")
+        deleted.startswith("local://artifacts/extractions/staging-preflight/run-1/")
         for deleted in storage.deleted
     )
     assert any(
-        deleted.startswith("oci://namespace/bucket/artifacts/extractions/doc-")
-        and "/full.json" in deleted
+        deleted.startswith("local://artifacts/extractions/doc-") and "/full.json" in deleted
         for deleted in storage.deleted
     )
     assert any(
-        deleted.startswith("oci://namespace/bucket/artifacts/extractions/doc-")
-        and "/segments/" in deleted
+        deleted.startswith("local://artifacts/extractions/doc-") and "/segments/" in deleted
         for deleted in storage.deleted
     )
     assert any("/artifacts/extractions/doc-" in fetched for fetched in storage.gets)
@@ -682,7 +680,7 @@ async def test_file_processing_staging_runner_fails_on_unreadable_artifact_cache
 
 
 async def test_staging_blocks_promotion_when_extraction_artifact_is_unreadable() -> None:
-    """ingestion 後 artifact が Object Storage から読めない場合は promotion を止める。"""
+    """ingestion 後 artifact が 保存先から読めない場合は promotion を止める。"""
     manifest_path = REPO_ROOT / "docs/evaluation/file-processing-golden-set.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     oracle = FakeStagingOracle()
@@ -723,9 +721,9 @@ async def test_staging_blocks_promotion_when_extraction_artifact_is_unreadable()
     assert "raw_text" not in json.dumps(payload["object_storage_artifact_chain"])
 
 
-def test_staging_blocks_promotion_when_artifact_chain_is_not_oci() -> None:
-    """promotion では local/mock URI の artifact chain を OCI Object Storage 証跡にしない。"""
-    report = _promotion_ready_staging_report("non-oci-artifact-chain")
+def test_staging_blocks_promotion_when_artifact_chain_is_not_local() -> None:
+    """promotion では保存先（`local://`）以外の URI（mock 等）の artifact chain を証跡にしない。"""
+    report = _promotion_ready_staging_report("non-local-artifact-chain")
     segment_artifact_evidence = cast(
         Mapping[str, object],
         report.metric_evidence["segment_artifact_reuse"],
@@ -738,8 +736,8 @@ def test_staging_blocks_promotion_when_artifact_chain_is_not_oci() -> None:
                 check="extraction_artifact_cache_roundtrip",
                 status="ok",
                 evidence={
-                    "object_ref_hash": "artifact:local",
-                    "object_uri_scheme": "local",
+                    "object_ref_hash": "artifact:mock",
+                    "object_uri_scheme": "mock",
                     "payload_bytes": 68,
                     "cleanup": "deleted",
                 },
@@ -751,9 +749,9 @@ def test_staging_blocks_promotion_when_artifact_chain_is_not_oci() -> None:
             **dict(report.metric_evidence),
             "segment_artifact_reuse": {
                 **dict(segment_artifact_evidence),
-                "full_artifact_oci_case_count": 0,
-                "segment_artifact_oci_uri_count": 0,
-                "segment_artifact_non_oci_uri_count": 1,
+                "full_artifact_local_case_count": 0,
+                "segment_artifact_local_uri_count": 0,
+                "segment_artifact_non_local_uri_count": 1,
             },
         },
         threshold_results=report.threshold_results,
@@ -776,10 +774,10 @@ def test_staging_blocks_promotion_when_artifact_chain_is_not_oci() -> None:
     artifact_chain = payload["object_storage_artifact_chain"]
     assert payload["promotion_ready"] is False
     assert artifact_chain["passed"] is False
-    assert artifact_chain["roundtrip_object_uri_scheme"] == "local"
-    assert "object_storage_artifact_roundtrip_not_oci" in artifact_chain["blocker_codes"]
-    assert "object_storage_full_artifact_not_oci" in artifact_chain["blocker_codes"]
-    assert "object_storage_segment_artifact_not_oci" in artifact_chain["blocker_codes"]
+    assert artifact_chain["roundtrip_object_uri_scheme"] == "mock"
+    assert "object_storage_artifact_roundtrip_not_local" in artifact_chain["blocker_codes"]
+    assert "object_storage_full_artifact_not_local" in artifact_chain["blocker_codes"]
+    assert "object_storage_segment_artifact_not_local" in artifact_chain["blocker_codes"]
     assert any(
         blocker["code"] == "object_storage_artifact_chain_failed"
         for blocker in payload["promotion_blockers"]
@@ -2782,8 +2780,8 @@ def test_file_processing_staging_cli_blocks_weakened_promotion_policy() -> None:
                 check="extraction_artifact_cache_roundtrip",
                 status="ok",
                 evidence={
-                    "object_ref_hash": "artifact:oci",
-                    "object_uri_scheme": "oci",
+                    "object_ref_hash": "artifact:local",
+                    "object_uri_scheme": "local",
                     "payload_bytes": 68,
                     "cleanup": "deleted",
                 },
@@ -3018,13 +3016,13 @@ def _promotion_ready_staging_report(run_id: str) -> FileProcessingStagingReport:
             },
             "segment_artifact_reuse": {
                 "full_artifact_cached_case_count": 1,
-                "full_artifact_oci_case_count": 1,
+                "full_artifact_local_case_count": 1,
                 "full_artifact_identity_present_case_count": 1,
                 "full_artifact_readable_case_count": 1,
                 "full_artifact_identity_verified_case_count": 1,
                 "segment_artifact_expected_count": 1,
-                "segment_artifact_oci_uri_count": 1,
-                "segment_artifact_non_oci_uri_count": 0,
+                "segment_artifact_local_uri_count": 1,
+                "segment_artifact_non_local_uri_count": 0,
                 "segment_artifact_readable_count": 1,
                 "segment_artifact_identity_verified_count": 1,
                 "artifact_integrity_error_count": 0,
@@ -3064,7 +3062,7 @@ def _contract_passed_case(
 def _complete_llm_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "enterprise_ai_endpoint": "https://enterprise-ai.example.com",
-        "enterprise_ai_project_id": "ocid1.generativeaiproject.oc1..example",
+        "enterprise_ai_project_id": "proj-example",
         "enterprise_ai_api_key": "sk-test-secret",
         "enterprise_ai_default_text_model": "llm-deployment",
         "enterprise_ai_default_vision_model": "vlm-deployment",
@@ -3080,7 +3078,7 @@ def _complete_llm_settings(**overrides: Any) -> Settings:
 
 
 class FakeObjectStorage:
-    """Object Storage fake。"""
+    """保存先の fake。"""
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
@@ -3089,7 +3087,7 @@ class FakeObjectStorage:
 
     async def put(self, key: str, data: bytes, content_type: str) -> str:
         assert content_type
-        uri = f"oci://namespace/bucket/{key}"
+        uri = f"local://{key}"
         self.objects[uri] = data
         return uri
 
@@ -3309,7 +3307,7 @@ class FakeStagingOracle:
                         "extraction_artifact_document_id": document_id,
                         "extraction_artifact_trace_id": "fake-staging-trace",
                         "extraction_artifact_path": (
-                            f"oci://namespace/bucket/artifacts/extractions/{document_id}/full.json"
+                            f"local://artifacts/extractions/{document_id}/full.json"
                         ),
                     },
                     "quality_report": {
@@ -3355,7 +3353,7 @@ class FakeStagingOracle:
                 page_start=1,
                 page_end=1,
                 attempt_count=succeeded_attempt,
-                artifact_path=f"oci://namespace/bucket/artifacts/{document_id}/sheet1.json",
+                artifact_path=f"local://artifacts/{document_id}/sheet1.json",
             ),
             IngestionSegment(
                 segment_id=failed_id,
@@ -3444,8 +3442,7 @@ class FakeIngestion:
                     document_id=document_id,
                     status="SUCCEEDED",
                     artifact_path=(
-                        "oci://namespace/bucket/artifacts/extractions/"
-                        f"{document_id}/segments/source.json"
+                        f"local://artifacts/extractions/{document_id}/segments/source.json"
                     ),
                 )
             ],

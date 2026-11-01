@@ -1,6 +1,6 @@
 """#1733・#1734・#1735: ビューの列の型、共有プロパティの同一性と前の定義、自由な行の解析。
 
-実 OCI / Oracle は使わない（スタブと sql_assist_sample を模した schema context）。
+実際のモデルの API / Oracle は使わない（スタブと sql_assist_sample を模した schema context）。
 """
 
 from __future__ import annotations

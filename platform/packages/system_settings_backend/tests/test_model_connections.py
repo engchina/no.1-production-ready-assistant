@@ -1,4 +1,4 @@
-"""OCI Enterprise AI の接続（プライマリ / セカンダリ / ターシャリ）を持ち、モデルごとに選ぶ。
+"""モデルの API の接続（プライマリ / セカンダリ / ターシャリ）を持ち、モデルごとに選ぶ。
 
 #533 / #542 / #786。
 """
@@ -274,7 +274,8 @@ def test_old_json_is_read_as_single_connection(tmp_path: Path) -> None:
         "version": 3,
         "enterprise_ai": {
             "endpoint": PRIMARY_ENDPOINT,
-            "project_id": "ocid1.project.primary",
+            # #51 より前の JSON の key。
+            "project_ocid": "ocid1.project.primary",
             "models": [{"model_id": "vlm", "display_name": "V", "vision_enabled": True}],
             "default_text_model_id": "",
             "default_vision_model_id": "vlm",
@@ -304,6 +305,45 @@ def test_old_json_is_read_as_single_connection(tmp_path: Path) -> None:
     assert enterprise["models"][0]["connection_id"] == "primary"
     connection = enterprise_ai_connection_for_model(settings, "vlm")
     assert (connection.endpoint, connection.api_key) == (PRIMARY_ENDPOINT, "sk-old")
+
+
+def test_saved_json_with_old_project_key_is_read(tmp_path: Path) -> None:
+    """#51 より前の JSON の接続の key `project_ocid` を `project_id` として読む。"""
+    document = {
+        "version": 6,
+        "enterprise_ai": {
+            "connections": [
+                {
+                    "connection_id": "primary",
+                    "endpoint": PRIMARY_ENDPOINT,
+                    "project_ocid": "proj-a",
+                },
+                {
+                    "connection_id": "secondary",
+                    "endpoint": SECONDARY_ENDPOINT,
+                    "project_ocid": "proj-b",
+                },
+            ],
+            "models": [],
+        },
+    }
+    path = tmp_path / "model-settings.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    settings = FakeSettings(enterprise_ai_secondary_api_key="sk-secondary")
+    store = make_store(tmp_path)
+    store.load(settings)
+    connections = enterprise_ai_connections(settings)
+    assert [(c.connection_id, c.project_id) for c in connections] == [
+        ("primary", "proj-a"),
+        ("secondary", "proj-b"),
+    ]
+
+    client = make_client(settings, store)
+    payload = client.get("/api/settings/model").json()["data"]["settings"]
+    assert client.patch("/api/settings/model", json=payload).status_code == 200
+    saved = json.loads(path.read_text(encoding="utf-8"))["enterprise_ai"]["connections"]
+    assert [item.get("project_id") for item in saved] == ["proj-a", "proj-b"]
+    assert all("project_ocid" not in item for item in saved)
 
 
 def test_saved_json_with_unknown_connections_is_read_leniently(tmp_path: Path) -> None:
@@ -361,7 +401,7 @@ def test_secondary_connection_requires_each_field(field: str, label: str) -> Non
 
 
 def test_secondary_connection_does_not_require_project_id() -> None:
-    """Project OCID はどの接続でも任意（#9）。OCI 以外の OpenAI 互換 API では空で足りる。"""
+    """Project ID はどの接続でも任意（#9）。project を求めない OpenAI 互換 API では空で足りる。"""
     enterprise = EnterpriseAiModelSettings.model_validate(
         two_connection_payload(project_id="")["enterprise_ai"]
     )
@@ -370,7 +410,7 @@ def test_secondary_connection_does_not_require_project_id() -> None:
 
 
 def test_primary_connection_fields_stay_optional() -> None:
-    """プライマリ接続は OCI で運用するときだけ必須（画面は「OCI 運用時必須」）。保存は止めない。"""
+    """プライマリ接続は使うときだけ必須（画面は「利用時必須」）。保存は止めない。"""
     payload = two_connection_payload()
     payload["enterprise_ai"]["connections"][0].update(endpoint="", project_id="", api_key="")
     enterprise = EnterpriseAiModelSettings.model_validate(payload["enterprise_ai"])
@@ -535,7 +575,7 @@ def test_model_payload_hides_keys_of_both_connections() -> None:
 
 
 def three_connection_payload(**tertiary: Any) -> dict[str, Any]:
-    """ターシャリ接続（OpenAI 向け。Project OCID なし）を足した payload。"""
+    """ターシャリ接続（OpenAI 向け。Project ID なし）を足した payload。"""
     payload = two_connection_payload()
     payload["enterprise_ai"]["connections"].append(
         {
@@ -553,7 +593,7 @@ def three_connection_payload(**tertiary: Any) -> dict[str, Any]:
 
 
 def test_tertiary_connection_does_not_require_project_id() -> None:
-    """ターシャリ接続は Endpoint URL と API key が必須で、Project OCID は任意（#786 / #9）。"""
+    """ターシャリ接続は Endpoint URL と API key が必須で、Project ID は任意（#786 / #9）。"""
     enterprise = EnterpriseAiModelSettings.model_validate(
         three_connection_payload()["enterprise_ai"]
     )
@@ -571,7 +611,7 @@ def test_tertiary_connection_does_not_require_project_id() -> None:
 
 
 def test_save_and_load_tertiary_connection(tmp_path: Path) -> None:
-    """ターシャリ接続は JSON（Endpoint・Project OCID）と `.env`（API key）に分けて保存する。"""
+    """ターシャリ接続は JSON（Endpoint・Project ID）と `.env`（API key）に分けて保存する。"""
     settings = FakeSettings()
     store = make_store(tmp_path)
     store.load(settings)

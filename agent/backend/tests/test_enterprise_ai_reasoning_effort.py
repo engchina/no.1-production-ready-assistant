@@ -1,6 +1,6 @@
 """登録モデルごとの推論（思考）の量（#1425）が、組み込み Runtime と接続テストに渡ること。
 
-OCI へは接続しない（モデルは差し替え、HTTP は httpx.MockTransport）。
+モデルの API へは接続しない（モデルは差し替え、HTTP は httpx.MockTransport）。
 """
 
 from __future__ import annotations

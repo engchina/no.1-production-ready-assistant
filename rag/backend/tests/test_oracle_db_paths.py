@@ -80,7 +80,7 @@ def _document_state_row(**overrides: object) -> dict[str, object]:
         "status": "UPLOADED",
         "tenant_id_hash": None,
         "category_name": None,
-        "object_storage_path": "oci://namespace/bucket/policy.txt",
+        "object_storage_path": "local://policy.txt",
         "content_type": "text/plain",
         "file_size_bytes": 12,
         "content_sha256": "a" * 64,
@@ -282,7 +282,7 @@ async def test_create_document_creates_recipe_one_in_same_transaction() -> None:
 
     detail = await client.create_document(
         file_name="policy.txt",
-        object_storage_path="oci://bucket/policy.txt",
+        object_storage_path="local://policy.txt",
         content_type="text/plain",
         knowledge_base_ids=["kb-1"],
     )

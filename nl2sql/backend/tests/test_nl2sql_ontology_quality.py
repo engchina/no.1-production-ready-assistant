@@ -2,7 +2,7 @@
 更新可能の食い違い・DB を使わない経路のカタログ）と、#1737 の残課題（ビュー → 表の多重度・二分割の
 子タスクの前の定義）。
 
-実 OCI / Oracle は使わない（スタブと sql_assist_sample を模した schema context）。
+実際のモデルの API / Oracle は使わない（スタブと sql_assist_sample を模した schema context）。
 """
 
 from __future__ import annotations

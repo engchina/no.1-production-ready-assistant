@@ -71,7 +71,7 @@ async def _document(client: OracleClient) -> str:
     file_name = f"dispatch-order-{uuid4().hex[:12]}.txt"
     detail = await client.create_document(
         file_name=file_name,
-        object_storage_path=f"oci://bucket/{file_name}",
+        object_storage_path=f"local://{file_name}",
         content_type="text/plain",
     )
     return detail.id

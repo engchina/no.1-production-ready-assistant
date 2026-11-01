@@ -971,7 +971,7 @@ class AnswerGenerationTests(unittest.TestCase):
         self.assertIn("信頼度: high", formatted)
         self.assertIn("人手確認: 不要", formatted)
 
-    def test_answer_question_handles_no_records_without_calling_oci(self):
+    def test_answer_question_handles_no_records_without_calling_model(self):
         with TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
             _write_viewer_data(output_dir, "abcdef", records=[])

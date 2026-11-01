@@ -363,7 +363,7 @@
       "expected_warning": "unsupported_tiff_image",
       "expected_unsupported_reason": "tiff_image_not_supported",
       "required_checks": ["unsupported_reason", "safe_error", "parser_warning_taxonomy"],
-      "notes": "TIFF remains accepted for upload metadata but must be skipped before Enterprise AI image input until conversion or a supported adapter is available."
+      "notes": "TIFF remains accepted for upload metadata but must be skipped before VLM image input until conversion or a supported adapter is available."
     },
     {
       "id": "duplicate-file-canonical-kb",
@@ -409,7 +409,7 @@
       "expected_warning": "unsupported_legacy_office_binary",
       "expected_unsupported_reason": "legacy_office_binary_not_supported",
       "required_checks": ["unsupported_reason", "safe_error", "parser_warning_taxonomy"],
-      "notes": "Legacy binary Office is accepted for upload metadata but must be skipped before Enterprise AI file input until a supported parser adapter is enabled."
+      "notes": "Legacy binary Office is accepted for upload metadata but must be skipped before VLM file input until a supported parser adapter is enabled."
     }
   ]
 }

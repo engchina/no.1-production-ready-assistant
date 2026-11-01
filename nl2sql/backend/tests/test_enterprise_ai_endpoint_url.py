@@ -1,7 +1,7 @@
 """接続の Endpoint URL を入力どおり使い、`{endpoint}/responses` を呼ぶ（#1440）。
 
 3 製品は platform の `enterprise_ai_request_url` で URL を決める。RAG・Agent のテストと同じ 3 種の
-Endpoint URL で、同じ URL を呼ぶことを確かめる（path を補わない。OCI も `/openai/v1` まで書く）。
+Endpoint URL で、同じ URL を呼ぶことを確かめる（path を補わない。`/v1` まで書く）。
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from app.settings import EnterpriseAiConfiguredModel, Settings
 # (Endpoint URL, 呼ぶ URL)。RAG・Agent の test_enterprise_ai_endpoint_url.py と同じ表。
 ENDPOINT_CASES = [
     (
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-        "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1/responses",
+        "https://llm.example/v1",
+        "https://llm.example/v1/responses",
     ),
     ("https://api.deepseek.com/v1", "https://api.deepseek.com/v1/responses"),
     ("https://api.deepseek.com", "https://api.deepseek.com/responses"),
 ]
-ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-without-path"]
+ENDPOINT_CASE_IDS = ["llm-v1", "compatible-with-path", "compatible-without-path"]
 
 
 def _settings(endpoint: str) -> Settings:

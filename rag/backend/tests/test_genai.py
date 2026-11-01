@@ -127,16 +127,16 @@ async def test_embedding_and_rerank_use_model_connection_over_http(
     ]
 
 
-async def test_embed_validates_oci_embedding_count() -> None:
-    """OCI embedding adapter の返却件数が入力件数と違う場合は拒否する。"""
+async def test_embed_validates_embedding_count() -> None:
+    """埋め込みの adapter の返却件数が入力件数と違う場合は拒否する。"""
     client = StubEmbeddingClient(vectors=[[1.0, 0.0, 0.0]])
 
     with pytest.raises(ValueError, match="embedding の件数が一致しません"):
         await client.embed(["a", "b"])
 
 
-async def test_embed_validates_oci_embedding_dimension() -> None:
-    """OCI embedding adapter の次元数が Oracle VECTOR 幅と違う場合は拒否する。"""
+async def test_embed_validates_embedding_dimension() -> None:
+    """埋め込みの adapter の次元数が Oracle VECTOR 幅と違う場合は拒否する。"""
     client = StubEmbeddingClient(vectors=[[1.0, 0.0]])
 
     with pytest.raises(ValueError, match=r"embedding\[0\] の次元数が不正です"):
@@ -150,8 +150,8 @@ async def test_embed_accepts_expected_dimension() -> None:
     assert await client.embed(["a"]) == [[1.0, 0.0, 0.0]]
 
 
-async def test_embed_rejects_too_long_input_before_oci_call() -> None:
-    """異常長 input は OCI embedding 呼び出し前に拒否する。"""
+async def test_embed_rejects_too_long_input_before_api_call() -> None:
+    """異常長 input は 埋め込みの呼び出し前に拒否する。"""
     client = CountingEmbeddingClient()
     long_text = "あ" * (EMBEDDING_INPUT_MAX_CHARS + 1)
 
@@ -165,7 +165,7 @@ async def test_embed_rejects_too_long_input_before_oci_call() -> None:
 
 
 async def test_embed_cache_reuses_hits_and_batches_only_misses() -> None:
-    """embedding cache は hit を再利用し、miss だけ OCI へまとめて送る。"""
+    """embedding cache は hit を再利用し、miss だけ API へまとめて送る。"""
     client = CountingEmbeddingClient()
 
     first = await client.embed(["承認", "監査"])
@@ -214,7 +214,7 @@ async def test_embed_batches_by_total_character_budget() -> None:
 
 
 async def test_embed_batches_by_maximum_input_count() -> None:
-    """設定 object が検証を迂回しても OCI request は 96 入力を超えない。"""
+    """設定 object が検証を迂回しても 埋め込みの request は 96 入力を超えない。"""
     client = CountingEmbeddingClient(
         settings=_llm_settings().model_copy(update={"rag_embedding_batch_size": 1024})
     )
@@ -239,8 +239,8 @@ async def test_embed_cache_can_be_disabled() -> None:
     assert client.batches == [["承認"], ["承認"]]
 
 
-async def test_embed_batches_oci_calls_when_cache_is_disabled() -> None:
-    """cache 無効時も OCI embedding request は batch size で分割する。"""
+async def test_embed_batches_api_calls_when_cache_is_disabled() -> None:
+    """cache 無効時も 埋め込みの request は batch size で分割する。"""
     client = CountingEmbeddingClient(
         settings=_llm_settings().model_copy(
             update={
@@ -281,7 +281,7 @@ async def test_embed_uses_openai_compatible_embeddings_request() -> None:
 
 
 async def test_embed_rejects_invalid_input_type() -> None:
-    """OCI/local 共通で embedding input_type の誤指定を fail fast する。"""
+    """embedding input_type の誤指定を fail fast する。"""
     client = GenAiClient(
         settings=_llm_settings(),
         post=FakePostJson(),
@@ -292,8 +292,8 @@ async def test_embed_rejects_invalid_input_type() -> None:
         await client.embed(["a"], input_type="BAD_TYPE")  # type: ignore[arg-type]
 
 
-async def test_rerank_accepts_and_sorts_valid_oci_results() -> None:
-    """OCI rerank adapter の正しい結果は score 降順に正規化する。"""
+async def test_rerank_accepts_and_sorts_valid_results() -> None:
+    """再ランクの adapter の正しい結果は score 降順に正規化する。"""
     client = StubRerankClient(results=[(1, 0.25), (0, 0.75)])
 
     assert await client.rerank("社内規程", ["本文 A", "本文 B"], top_n=2) == [
@@ -366,8 +366,8 @@ async def test_rerank_uses_openai_compatible_reranks_request() -> None:
     ]
 
 
-async def test_rerank_returns_empty_without_oci_call_when_documents_are_empty() -> None:
-    """候補文書が空なら OCI rerank 呼び出しを行わない。"""
+async def test_rerank_returns_empty_without_api_call_when_documents_are_empty() -> None:
+    """候補文書が空なら 再ランクの呼び出しを行わない。"""
     client = StubRerankClient(results=[(0, 0.75)])
 
     assert await client.rerank("社内規程", [], top_n=1) == []
@@ -383,7 +383,7 @@ async def test_rerank_rejects_invalid_top_n() -> None:
 
 
 async def test_rerank_rejects_too_many_results() -> None:
-    """OCI rerank adapter が top_n を超える件数を返した場合は拒否する。"""
+    """再ランクの adapter が top_n を超える件数を返した場合は拒否する。"""
     client = StubRerankClient(results=[(0, 0.75), (1, 0.25)])
 
     with pytest.raises(ValueError, match="rerank の返却件数が不正です"):
@@ -391,7 +391,7 @@ async def test_rerank_rejects_too_many_results() -> None:
 
 
 async def test_rerank_rejects_duplicate_index() -> None:
-    """OCI rerank adapter が同じ候補 index を重複返却した場合は拒否する。"""
+    """再ランクの adapter が同じ候補 index を重複返却した場合は拒否する。"""
     client = StubRerankClient(results=[(0, 0.75), (0, 0.25)])
 
     with pytest.raises(ValueError, match="rerank index が重複しています"):
@@ -399,7 +399,7 @@ async def test_rerank_rejects_duplicate_index() -> None:
 
 
 async def test_rerank_rejects_out_of_range_index() -> None:
-    """OCI rerank adapter が候補数外の index を返した場合は拒否する。"""
+    """再ランクの adapter が候補数外の index を返した場合は拒否する。"""
     client = StubRerankClient(results=[(2, 0.75)])
 
     with pytest.raises(ValueError, match="rerank index が範囲外です"):
@@ -407,7 +407,7 @@ async def test_rerank_rejects_out_of_range_index() -> None:
 
 
 async def test_rerank_rejects_non_finite_score() -> None:
-    """OCI rerank adapter が NaN/Infinity score を返した場合は拒否する。"""
+    """再ランクの adapter が NaN/Infinity score を返した場合は拒否する。"""
     client = StubRerankClient(results=[(0, float("nan"))])
 
     with pytest.raises(ValueError, match="rerank score が不正です"):
@@ -415,7 +415,7 @@ async def test_rerank_rejects_non_finite_score() -> None:
 
 
 class StubEmbeddingClient(GenAiClient):
-    """OCI embedding の戻り値だけを差し替えるテスト用 client。"""
+    """埋め込みモデル の戻り値だけを差し替えるテスト用 client。"""
 
     def __init__(self, vectors: list[list[float]]) -> None:
         settings = Settings.model_construct(
@@ -434,7 +434,7 @@ class StubEmbeddingClient(GenAiClient):
 
 
 class StubRerankClient(GenAiClient):
-    """OCI rerank の戻り値だけを差し替えるテスト用 client。"""
+    """再ランクのモデル の戻り値だけを差し替えるテスト用 client。"""
 
     def __init__(self, results: list[tuple[int, float]]) -> None:
         settings = Settings.model_construct(

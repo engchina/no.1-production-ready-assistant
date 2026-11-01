@@ -57,7 +57,7 @@ async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
 async def test_staging_smoke_cleanup_deletes_created_resources(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """cleanup 指定時は成功後に Oracle document/chunk と Object Storage object を消す。"""
+    """cleanup 指定時は成功後に Oracle document/chunk と 保存先の object を消す。"""
     FakeFileStorageClient.put_body = b""
     FakeFileStorageClient.deleted_objects = []
     FakeOracleClient.deleted_documents = []
@@ -77,9 +77,7 @@ async def test_staging_smoke_cleanup_deletes_created_resources(
     assert result.cleanup == {"document": "deleted", "object": "deleted"}
     assert FakeOracleClient.deleted_documents == ["doc-smoke"]
     assert len(FakeFileStorageClient.deleted_objects) == 1
-    assert FakeFileStorageClient.deleted_objects[0].startswith(
-        "oci://namespace/bucket/staging-smoke/"
-    )
+    assert FakeFileStorageClient.deleted_objects[0].startswith("local://staging-smoke/")
 
 
 async def test_staging_smoke_requires_answer_marker_for_default_query(
@@ -186,7 +184,7 @@ def test_staging_smoke_preflight_accepts_local_storage(tmp_path: Path) -> None:
 async def test_staging_smoke_stops_before_external_clients_when_preflight_fails(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """preflight 失敗時は Object Storage / Oracle client を初期化しない。"""
+    """preflight 失敗時は 保存先 / Oracle client を初期化しない。"""
 
     def fail_object_storage(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("external client must not be constructed")
@@ -220,7 +218,7 @@ def test_error_payload_includes_failed_stage_without_raw_message() -> None:
 
 
 def test_error_payload_includes_safe_external_error_details() -> None:
-    """OCI SDK の status/code/request id は raw message なしで診断に使える。"""
+    """SDK の例外の status/code/request id は raw message なしで診断に使える。"""
 
     class ExternalServiceError(RuntimeError):
         status = 404
@@ -268,10 +266,10 @@ def test_error_payload_includes_preflight_checks_without_raw_values() -> None:
 
 
 def _complete_llm_settings(**overrides: Any) -> Settings:
-    """staging smoke preflight を通す OCI 設定を作る。"""
+    """staging smoke preflight を通すモデルの API の設定を作る。"""
     values: dict[str, Any] = {
         "enterprise_ai_endpoint": "https://enterprise-ai.example.com",
-        "enterprise_ai_project_id": "ocid1.generativeaiproject.oc1..example",
+        "enterprise_ai_project_id": "proj-example",
         "enterprise_ai_api_key": "sk-test-secret",
         "enterprise_ai_default_text_model": "llm-deployment",
         "enterprise_ai_default_vision_model": "vlm-deployment",
@@ -287,7 +285,7 @@ def _complete_llm_settings(**overrides: Any) -> Settings:
 
 
 class FakeFileStorageClient:
-    """Object Storage fake。"""
+    """保存先の fake。"""
 
     put_body = b""
     deleted_objects: list[str] = []
@@ -299,14 +297,14 @@ class FakeFileStorageClient:
         assert key.startswith("staging-smoke/")
         assert content_type == "text/plain"
         self.__class__.put_body = body
-        return f"oci://namespace/bucket/{key}"
+        return f"local://{key}"
 
     async def get(self, object_uri: str) -> bytes:
-        assert object_uri.startswith("oci://namespace/bucket/staging-smoke/")
+        assert object_uri.startswith("local://staging-smoke/")
         return self.__class__.put_body
 
     async def delete(self, object_uri: str) -> bool:
-        assert object_uri.startswith("oci://namespace/bucket/staging-smoke/")
+        assert object_uri.startswith("local://staging-smoke/")
         self.__class__.deleted_objects.append(object_uri)
         return True
 

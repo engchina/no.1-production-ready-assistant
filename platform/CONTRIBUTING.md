@@ -34,7 +34,7 @@ GitHub 運用・PR 規約・CI は monorepo 共通の [../AGENTS.md](../AGENTS.m
 標準は [`docs/backend-standard.md`](docs/backend-standard.md)。
 
 - **共通 backend 機能（app factory / logging / metrics / request-id / エラー envelope / health-ready / settings 基底 / pagination）の変更は必ず backend_core で行う。** 各製品にコピーしない。業務ロジック（RAG ingestion / NL2SQL の NL→SQL / Agent の tool 実行）は各製品側。
-- **oci / oracledb は backend_core に入れない**（依存を軽く保つ）。各サービスが自分で持つ。
+- **oracledb は backend_core に入れない**（依存を軽く保つ）。各サービスが自分で持つ。
 - envelope は `ApiResponse`（`data` / `error_messages` / `warning_messages`）で固定。破壊的変更は major として扱い、3 フロントの API 契約と同じ PR で更新する。
 - CI gate は `ruff format --check` + `ruff check` + `mypy strict` + `pytest`(Oracle 不要) + `bandit` + `pip-audit`（`Platform / backend_core` job。`pip-audit` は `uv.lock` / `pyproject.toml` の変更時だけ実行し、全件は `dependency-audit-nightly.yml` が毎晩実行する。#339）。
 - 新サービスは `templates/backend-service` から派生し、`service_name` / `features/<domain>` だけ実装する。

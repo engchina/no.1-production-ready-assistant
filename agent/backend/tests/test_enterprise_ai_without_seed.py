@@ -1,7 +1,7 @@
 """Agent の LLM の呼び出しは seed を送らない（#3529）。
 
 組み込み Runtime の SDK の ModelSettings と、モデルの接続テストの payload に seed を入れない。
-OCI へは接続しない（モデルは差し替え、HTTP は httpx.MockTransport）。
+モデルの API へは接続しない（モデルは差し替え、HTTP は httpx.MockTransport）。
 """
 
 from __future__ import annotations

@@ -12,12 +12,12 @@ A production-ready RAG reference implementation covering data ingestion, chunkin
 
 | レイヤー | 採用 |
 |---|---|
-| LLM / VLM | **OCI Enterprise AI**（OCI Generative AI の chat API は使わない） |
-| 埋め込み / リランク | **OCI Generative AI**（既定は `text-embedding-v4` の 1024 次元。次元は `pr_system_settings.embedding` の `EMBEDDING_DIMENSIONS` が正本。#46） |
+| LLM / VLM | **モデルの API**（OpenAI 互換の API。DeepSeek・Aliyun 百煉など。接続はモデル設定で 3 つまで） |
+| 埋め込み / 再ランク | **埋め込みモデル・再ランクのモデル**（モデルの API の登録モデル。既定は `text-embedding-v4` の 1024 次元。次元は `pr_system_settings.embedding` の `EMBEDDING_DIMENSIONS` が正本。#46） |
 | ベクトル検索 / DB | **Oracle AI Database** / Oracle AI Vector Search（`VECTOR(1024, FLOAT32)`）+ Oracle Text |
 | バックエンド | Python 3.12 + **FastAPI** + Pydantic v2 + uv |
 | フロントエンド | **Vite + React Router** + TypeScript + Tailwind v4 + shadcn/ui + TanStack Query + Zustand |
-| ストレージ | OCI Object Storage |
+| ストレージ | ローカルのディレクトリ（`PLATFORM_LOCAL_STORAGE_DIR`。OCI Object Storage は #11 で削除） |
 
 UI/UX は日本語第一の業務アプリとして、情報設計・画面構成・状態モデル・タイポグラフィを本リポジトリ内で管理する。実装技術は AGENTS.md の確定スタックを正とする。
 
@@ -27,7 +27,7 @@ UI/UX は日本語第一の業務アプリとして、情報設計・画面構�
 # バックエンド(重い parser 依存は持たない。外部 parser はマイクロサービスへ HTTP 委譲)
 cd backend
 uv sync
-cp ../../platform/.env.example ../../platform/.env   # 3製品共通の設定（OCI / Oracle 接続など。PLATFORM_*）
+cp ../../platform/.env.example ../../platform/.env   # 3製品共通の設定（モデルの API / Oracle 接続など。PLATFORM_*）
 cp .env.example .env        # RAG 固有の設定（RAG_*）
 uv run uvicorn app.main:app --reload --port 8100   # http://localhost:8100/api/health
 
@@ -74,19 +74,19 @@ MinerU・Dots.OCR・OCI Document Understanding への対応も削除した(#22�
 
 ## 実装済みの参照フロー
 
-- `POST /api/documents/upload`: 原本を Object Storage 境界へ保存し、SHA-256 / サイズ / 重複元を記録してドキュメント行を作成。
-- `POST /api/documents/{id}/ingestion-jobs`（文書の既定レシピ）/ `POST /api/documents/{id}/recipes/{recipe_id}/ingestion-jobs`（レシピ単位）: 取込 job を投入し、worker がファイル準備 → OCI Enterprise AI 境界での OCR/構造化要素抽出 → ページ・章節・表・リスト感知 chunking → embedding → Oracle AI Database 境界への索引を工程ごとに実行する。確認待ちの工程は `POST /api/documents/{id}/recipes/{recipe_id}/approve` で次へ進め、抽出の修正は `PATCH /api/documents/{id}/recipes/{recipe_id}/review-edits` で保存する。
-- `POST /api/search`: 質問の安全チェックと検索範囲（Business Context Pack）の確定の後、回答フロー（質問の理解・質問の拡張・Oracle AI Vector Search と Oracle Text の hybrid 検索（RRF）・Cohere Rerank・根拠の評価と補正検索（CRAG）・small-to-big・回答の生成と監査）で citation-grounded 回答を作り、回答側の安全チェック・trace ID・guardrail warning・回答フローの実行記録を返却。
+- `POST /api/documents/upload`: 原本を保存先（ローカルのディレクトリ）へ保存し、SHA-256 / サイズ / 重複元を記録してドキュメント行を作成。
+- `POST /api/documents/{id}/ingestion-jobs`（文書の既定レシピ）/ `POST /api/documents/{id}/recipes/{recipe_id}/ingestion-jobs`（レシピ単位）: 取込 job を投入し、worker がファイル準備 → 解析エンジン（Docling など）と画像対応モデルでの OCR/構造化要素抽出 → ページ・章節・表・リスト感知 chunking → embedding → Oracle AI Database 境界への索引を工程ごとに実行する。確認待ちの工程は `POST /api/documents/{id}/recipes/{recipe_id}/approve` で次へ進め、抽出の修正は `PATCH /api/documents/{id}/recipes/{recipe_id}/review-edits` で保存する。
+- `POST /api/search`: 質問の安全チェックと検索範囲（Business Context Pack）の確定の後、回答フロー（質問の理解・質問の拡張・Oracle AI Vector Search と Oracle Text の hybrid 検索（RRF）・再ランク・根拠の評価と補正検索（CRAG）・small-to-big・回答の生成と監査）で citation-grounded 回答を作り、回答側の安全チェック・trace ID・guardrail warning・回答フローの実行記録を返却。
 - `POST /api/evaluation/run`: golden set による precision@k、recall@k、MRR、回答キーワード命中率、groundedness pass rate、case 単位の失敗理由分布を算出。
 - `/metrics`: Prometheus metrics を公開。
 
 `evaluation/golden-set.example.json` は評価 API のテンプレートです。実データ投入後に `evaluation/golden-set.json` へコピーして document id と期待キーワードを調整し、CI / staging gate で使います。
 
-Backend は常に OCI Enterprise AI、OCI Generative AI、Oracle AI Database を前提に動作します。開発・staging・本番のいずれも OCI / Oracle 接続情報を共通 `.env`（リポジトリの `platform/.env`、`PLATFORM_*`）または設定画面から注入してください。RAG 固有の設定は `backend/.env`（`RAG_*`）に置きます（#211。詳細と既存環境の移行は [docs/deployment.md](docs/deployment.md)）。
+Backend は常にモデルの API（OpenAI 互換の API）と Oracle AI Database を前提に動作します。開発・staging・本番のいずれもモデルの API / Oracle の接続情報を共通 `.env`（リポジトリの `platform/.env`、`PLATFORM_*`）または設定画面から注入してください。RAG 固有の設定は `backend/.env`（`RAG_*`）に置きます（#211。詳細と既存環境の移行は [docs/deployment.md](docs/deployment.md)）。
 
 ## 配備
 
-OCI Resource Manager の Terraform stack による配備は廃止しました（#12）。RAG は NL2SQL / Agent と同じ 1 台の Compute に、
+以前の配備の仕組み（OCI Resource Manager の stack）は廃止しました（#12）。RAG は NL2SQL / Agent と同じ 1 台の Compute に、
 ネイティブ配備（uv の venv + systemd。Docker は使わない。#286。reverse proxy は利用者の選択。#19）で入れます（`platform/deploy/` の配備のスクリプト。
 仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。以前の Docker Compose で配備した環境の移行は
 [docs/deployment.md](./docs/deployment.md) を参照してください。

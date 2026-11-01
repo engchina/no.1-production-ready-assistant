@@ -3,7 +3,7 @@
 サンプリングの引数を受け付けない推論モデルは `temperature` を HTTP 400 で拒む。
 組み込み Runtime の SDK の client とモデルの接続テストは、その引数を外して 1 回だけ送り直し、
 以後そのモデルには送らない。
-OCI へは接続しない（HTTP は httpx / httpx2 の MockTransport。合成の 400 の本文）。
+モデルの API へは接続しない（HTTP は httpx / httpx2 の MockTransport。合成の 400 の本文）。
 """
 
 from __future__ import annotations

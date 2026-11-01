@@ -558,7 +558,7 @@ describe("api.request envelope", () => {
           {
             connection_id: "primary" as const,
             endpoint: "https://enterprise-ai.example",
-            project_id: "ocid1.generativeaiproject.oc1..example",
+            project_id: "proj-example",
             api_key: "",
             has_api_key: false,
             clear_api_key: false,
@@ -612,7 +612,7 @@ describe("api.request envelope", () => {
             {
               connection_id: "primary" as const,
               endpoint: "https://enterprise-ai.example",
-              project_id: "ocid1.generativeaiproject.oc1..example",
+              project_id: "proj-example",
               api_key: "",
               has_api_key: true,
               clear_api_key: false,

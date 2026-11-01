@@ -9,7 +9,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** 要件の検査を使えない設定（OCI Enterprise AI が無い）。このときは確認せずに SQL を作る。 */
+/** 要件の検査を使えない設定（モデルの API が無い）。このときは確認せずに SQL を作る。 */
 export function isRequirementCheckUnavailable(error: unknown): boolean {
   return (
     isRecord(error) &&

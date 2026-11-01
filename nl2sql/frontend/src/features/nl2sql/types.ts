@@ -1522,7 +1522,7 @@ export interface MetadataSqlGenerateData {
   sql: string;
   source: string;
   warnings: string[];
-  /** OCI Enterprise AI で作れず、規則ベース（名前をそのまま入れた SQL）にしたか（#1719）。 */
+  /** モデルの API で作れず、規則ベース（名前をそのまま入れた SQL）にしたか（#1719）。 */
   fallback?: boolean;
   /** 規則ベースにした表（一部の組だけ失敗した場合。空 = 全部）。 */
   fallback_objects?: string[];

@@ -36,13 +36,13 @@ Oracle AI Database の業務データに、自然言語で SQL を生成・検�
 
 | 用途 | 採用 | 重要な制約 |
 |---|---|---|
-| LLM（SQL 生成・構造化出力） | **OCI Enterprise AI** | ⚠️ **OCI Generative AI の chat 推論 API は LLM / VLM に使わない** |
-| VLM（オントロジー構築の資料の PDF ページの読み取り） | **OCI Enterprise AI** | 同上 |
-| 埋め込み | **OCI Generative AI**（Cohere Embed v4） | オントロジーのノードの埋め込み。多言語・**1024 次元**（`pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46） |
-| リランク | **OCI Generative AI**（Cohere Rerank v4 fast） | 3 製品共通のモデル設定。NL2SQL ではモデル設定の接続テストだけが呼ぶ |
+| LLM（SQL 生成・構造化出力） | **モデルの API**（OpenAI 互換の Responses API） | ⚠️ **Chat Completions など別の推論 API は LLM / VLM に使わない** |
+| VLM（オントロジー構築の資料の PDF ページの読み取り） | **モデルの API** | 同上 |
+| 埋め込み | **埋め込みモデル**（OpenAI 互換の `/embeddings`。既定は Aliyun 百煉の `text-embedding-v4`） | オントロジーのノードの埋め込み。多言語・**1024 次元**（`pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46） |
+| リランク | **再ランクのモデル**（既定は Aliyun 百煉の `qwen3-rerank`） | 3 製品共通のモデル設定。NL2SQL ではモデル設定の接続テストだけが呼ぶ |
 
 - LLM / VLM と embedding / rerank は別クライアント（`app/clients/enterprise_ai.py` / `app/clients/genai.py`）に抽象化する。
-- **Oracle AI Database** が業務データと NL2SQL の状態（業務プロファイル・オントロジー・履歴・job 等）の正本。ベクトル列は **`VECTOR(1024, FLOAT32)`**。アップロード保存先は local / OCI Object Storage を共通のシステム設定で選ぶ。
+- **Oracle AI Database** が業務データと NL2SQL の状態（業務プロファイル・オントロジー・履歴・job 等）の正本。ベクトル列は **`VECTOR(1024, FLOAT32)`**。アップロード保存先は local のディレクトリ（共通のシステム設定。OCI Object Storage は #11 で削除）。
 - Backend: DB の接続は `python-oracledb`、SQL の解析は **sqlglot**、オントロジーは **rdflib** / **pyshacl**、サーバは Uvicorn（本番は + Gunicorn）。
 - Frontend: Tailwind CSS v4 と共有 UI、関係グラフは `@xyflow/react`、通信は REST（時間のかかる処理は永続 job のポーリング）。
 - 観測は構造化ログ + Prometheus（`prometheus-client`）。品質は pytest / pytest-cov / ruff / mypy / bandit / pip-audit / `node --test`（ロジックテスト）/ Playwright。
@@ -89,5 +89,5 @@ npx playwright test tests/e2e/<対象>.spec.ts               # e2e（関係す�
 
 ## コーディング規約
 
-1. **LLM / VLM は OCI Enterprise AI 経由のみ**（OCI Generative AI の chat API を使わない）。embedding / rerank は OCI Generative AI（Cohere）、ベクトル検索は Oracle AI Vector Search。
-2. **Backend の ASGI event loop 上で同期 I/O を直接実行しない。** 詳細は [docs/backend-concurrency-contract.md](./docs/backend-concurrency-contract.md) を正とする。同期 domain service / Oracle repository / file・CLOB・Excel 処理 / OCI SDK 呼び出しは sync FastAPI route（`def`）、CLI / worker、または `backend/app/api/concurrency.py` の `run_sync_io(...)` 内だけで実行する。`async def` route は `UploadFile`・SSE / WebSocket・async client など本当に `await` が必要な場合に限定する。
+1. **LLM / VLM はモデルの API（OpenAI 互換の Responses API）経由のみ**。embedding / rerank は埋め込みモデル / 再ランクのモデル（OpenAI 互換の API）、ベクトル検索は Oracle AI Vector Search。
+2. **Backend の ASGI event loop 上で同期 I/O を直接実行しない。** 詳細は [docs/backend-concurrency-contract.md](./docs/backend-concurrency-contract.md) を正とする。同期 domain service / Oracle repository / file・CLOB・Excel 処理 / 同期の HTTP 呼び出しは sync FastAPI route（`def`）、CLI / worker、または `backend/app/api/concurrency.py` の `run_sync_io(...)` 内だけで実行する。`async def` route は `UploadFile`・SSE / WebSocket・async client など本当に `await` が必要な場合に限定する。

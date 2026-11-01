@@ -447,7 +447,7 @@ def retry_input(
 ) -> list[Any]:
     """差し戻して Run を続ける入力（前の入力・ツールの呼び出し・差し戻しの利用者のメッセージ）。
 
-    前の応答の assistant のメッセージ（`output_text`）は入力に入れない。OCI Enterprise AI の
+    前の応答の assistant のメッセージ（`output_text`）は入力に入れない。モデルの API の
     `openai.gpt-oss-120b` は、`input` の `output_text` を「output_text is not supported by model」の
     400 で拒否する（2026-10-14 に実環境で確認）。その直前の reasoning item も、続く出力が無くなる
     ため外す。元の回答は差し戻しのメッセージの中に引用として添える（何を直すかをモデルに示す）。

@@ -1,6 +1,6 @@
 """回答前の確認の LLM の失敗の理由と「詳細」、最低限の要件だけを確かめる方針（#1715・#1727）。
 
-OCI Enterprise AI は httpx.MockTransport（決定論）で受ける。応答の形は 2026-10-13 の実測
+モデルの API は httpx.MockTransport（決定論）で受ける。応答の形は 2026-10-13 の実測
 （`xai.grok-4.3` の HTTP 500 `internal_error`、`openai.gpt-oss-120b` の `status=incomplete`・
 `incomplete_details.reason=max_output_tokens`）に合わせる。実サービスの確認は PR に書く。
 """
@@ -26,7 +26,7 @@ from app.features.nl2sql.sql_requirement import (
 from app.main import http_exception_problem_handler
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
-ENDPOINT = "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
+ENDPOINT = "https://llm.example/v1"
 API_KEY = "sk-requirement-secret-key-0001"
 MODEL = "xai.grok-4.3"
 QUESTION = "部門ごとの社員の平均給与"
@@ -384,7 +384,7 @@ async def test_api_returns_reason_and_details() -> None:
         _raise_domain_error(
             RequirementAiUnavailableError(
                 "REQUIREMENT_AI_FAILED",
-                "回答前の確認で OCI Enterprise AI がサーバーのエラーを返しました（HTTP 500）。",
+                "回答前の確認でモデルの API がサーバーのエラーを返しました（HTTP 500）。",
                 details={"kind": "unavailable", "http_status": 500, "model_id": MODEL},
             )
         )
@@ -403,7 +403,7 @@ async def test_api_returns_reason_and_details() -> None:
     assert response.status_code == 503
     body = response.json()
     assert body["error_messages"] == [
-        "回答前の確認で OCI Enterprise AI がサーバーのエラーを返しました（HTTP 500）。"
+        "回答前の確認でモデルの API がサーバーのエラーを返しました（HTTP 500）。"
     ]
     assert body["error_code"] == "REQUIREMENT_AI_FAILED"
     assert body["problem"]["code"] == "REQUIREMENT_AI_FAILED"

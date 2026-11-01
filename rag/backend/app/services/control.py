@@ -54,7 +54,7 @@ ServiceFailureReason = Literal["unit_not_found", "permission_denied", "unavailab
 
 # サービス実行用の env ファイルに書く key(値は backend の実効設定)。
 # HF_TOKEN / HF_ENDPOINT は huggingface_hub が読む標準名。PLATFORM_ENTERPRISE_AI_* は
-# OCI parser が読む名前。docling の Vision が読んでいた接頭辞なしの ENTERPRISE_AI_* は、
+# parser が読む名前。docling の Vision が読んでいた接頭辞なしの ENTERPRISE_AI_* は、
 # Vision を backend の解析後の共通の段へ移した(#497)ため渡さない(docling は LLM を呼ばない)。
 SERVICE_RUNTIME_ENV_KEYS = (
     "HF_TOKEN",
@@ -156,7 +156,7 @@ def service_runtime_env(settings: Settings) -> dict[str, str]:
     """マイクロサービスの unit に渡す実行用の環境変数(backend の実効設定)。
 
     HuggingFace 設定(``RAG_HUGGINGFACE_*``)を ``HF_TOKEN`` / ``HF_ENDPOINT`` として渡す。
-    parser のサービスはモデル設定 JSON を読まず env からのみ OCI Enterprise AI の設定を読むため、
+    parser のサービスはモデル設定 JSON を読まず env からのみモデルの API の設定を読むため、
     backend が解決済みの実効値(model-settings.json 由来を含む)を渡す。これで「モデル画面で設定 →
     parser 再起動 → 稼働中」が成立する(parser は起動時に 1 回だけ env を読むため再起動が必要)。
     parser のサービスが呼ぶのは Vision のモデルなので、接続(endpoint / API key / project)は既定の

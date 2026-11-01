@@ -128,7 +128,7 @@
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| APP-001 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）OCI 設定のページを開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
+| APP-001 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）モデル設定のページを開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
 
 ## 9. 推奨 Playwright fixture 利用例
 

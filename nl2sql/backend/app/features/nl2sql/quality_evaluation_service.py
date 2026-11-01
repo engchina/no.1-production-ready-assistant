@@ -282,7 +282,7 @@ class QualityEvaluationService:
             ],
             judge=QualityEvaluationJudgeCapability(
                 available=judge_ready,
-                reason="" if judge_ready else "OCI Enterprise AI Judge が構成されていません。",
+                reason="" if judge_ready else "LLM Judge が構成されていません。",
             ),
             limits=_quality_evaluation_limits(),
         )

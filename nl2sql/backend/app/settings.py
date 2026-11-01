@@ -90,7 +90,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_client_lib_dir: str = ""
     oracle_wallet_dir: str = "/u01/aipoc/wallet"
     oracle_wallet_password: str = ""
-    genai_endpoint: str = ""
     genai_embedding_model: str = "cohere.embed-v4.0"
     # Oracle のベクトル列の次元（`EMBEDDING_DIMENSIONS`）に固定する。旧い既定（1536）は
     # 起動で拒否する（#46）。
@@ -99,16 +98,15 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     )
     genai_rerank_model: str = "cohere.rerank-v4.0-fast"
     genai_embed_model_id: str = "text-embedding-v4"
-    genai_rerank_model_id: str = "cohere.rerank-v4.0-fast"
     enterprise_ai_endpoint: str = ""
     enterprise_ai_project_id: str = ""
     enterprise_ai_api_key: str = ""
-    # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
+    # モデルの API のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
     enterprise_ai_secondary_endpoint: str = ""
     enterprise_ai_secondary_project_id: str = ""
     enterprise_ai_secondary_api_key: str = ""
-    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
+    # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project ID は任意）。
     enterprise_ai_tertiary_endpoint: str = ""
     enterprise_ai_tertiary_project_id: str = ""
     enterprise_ai_tertiary_api_key: str = ""
@@ -248,7 +246,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     nl2sql_ontology_shacl_enabled: bool = True
     nl2sql_ontology_profile_confirmation_required: bool = True
     nl2sql_ontology_confirmation_ttl_seconds: int = 900
-    # SQL の生成（OCI Enterprise AI を直接呼ぶ方式）を使うか。
+    # SQL の生成（モデルの API を直接呼ぶ方式）を使うか。
     nl2sql_enterprise_ai_direct_enabled: bool = True
     nl2sql_schema_owner_allowlist: list[str] = Field(default_factory=list)
     nl2sql_schema_sample_rows: int = 3
@@ -403,7 +401,7 @@ def reload_platform_settings_if_changed(settings: Settings) -> list[str]:
     """別の製品・別の worker が共通 `.env` に保存した共通の設定を取り込む（#2092・#2102）。
 
     `.env` を読み直した項目があれば、model-settings.json のモデル設定をかけ直す（JSON の値を
-    `.env` の値より優先する。RAG の `reload_env_settings_if_changed` と同じ）。接続 pool・OCI の
+    `.env` の値より優先する。RAG の `reload_env_settings_if_changed` と同じ）。接続 pool・モデルの
     client は、作ったときの設定と今の設定を比べて作り直す（`SharedOraclePool` など）。
     """
     changed = _PLATFORM_ENV_RELOADER.reload_if_changed(settings)

@@ -1,4 +1,4 @@
-"""OCI Enterprise AI の接続をモデルごとに選ぶ（#533 / #786）。呼び出しが対象モデルの接続を使うこと。
+"""モデルの API の接続をモデルごとに選ぶ（#533 / #786）。呼び出しが対象モデルの接続を使うこと。
 
 HTTP は決定論の fake transport で受け、URL・API key・Project のヘッダーを確かめる。
 """
@@ -19,17 +19,17 @@ from app.services.control import service_runtime_env
 
 PRIMARY = "https://primary.example/openai/v1"
 SECONDARY = "https://secondary.example/openai/v1"
-# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project OCID を入れない。
+# ターシャリ接続（#786）は OpenAI / OpenAI 互換 API 向けで、Project ID を入れない。
 TERTIARY = "https://api.openai.example/v1"
 
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
         "enterprise_ai_endpoint": PRIMARY,
-        "enterprise_ai_project_id": "ocid1.project.primary",
+        "enterprise_ai_project_id": "proj-primary",
         "enterprise_ai_api_key": "sk-primary",
         "enterprise_ai_secondary_endpoint": SECONDARY,
-        "enterprise_ai_secondary_project_id": "ocid1.project.secondary",
+        "enterprise_ai_secondary_project_id": "proj-secondary",
         "enterprise_ai_secondary_api_key": "sk-secondary",
         "enterprise_ai_tertiary_endpoint": TERTIARY,
         "enterprise_ai_tertiary_project_id": "",
@@ -110,9 +110,9 @@ def _connection_of(call: Mapping[str, Any]) -> tuple[str, str, str]:
     return base, headers["Authorization"], headers.get("OpenAI-Project", "")
 
 
-PRIMARY_CONNECTION = (PRIMARY, "Bearer sk-primary", "ocid1.project.primary")
-SECONDARY_CONNECTION = (SECONDARY, "Bearer sk-secondary", "ocid1.project.secondary")
-# Project OCID がないので OpenAI-Project ヘッダーは送らない。
+PRIMARY_CONNECTION = (PRIMARY, "Bearer sk-primary", "proj-primary")
+SECONDARY_CONNECTION = (SECONDARY, "Bearer sk-secondary", "proj-secondary")
+# Project ID がないので OpenAI-Project ヘッダーは送らない。
 TERTIARY_CONNECTION = (TERTIARY, "Bearer sk-tertiary", "")
 
 
@@ -127,7 +127,7 @@ def test_config_uses_text_and_vision_connections() -> None:
         SECONDARY,
         "sk-secondary",
     )
-    assert vision.enterprise_ai_project_id == "ocid1.project.secondary"
+    assert vision.enterprise_ai_project_id == "proj-secondary"
     assert vision.vision_model_id == "vision-b"
 
 
@@ -185,7 +185,7 @@ async def test_compare_model_override_uses_that_model_connection() -> None:
 
 
 async def test_tertiary_model_uses_responses_api_without_project_header() -> None:
-    """ターシャリ接続（Project OCID なし）のモデルは、OpenAI-Project ヘッダーなしで呼ぶ。"""
+    """ターシャリ接続（Project ID なし）のモデルは、OpenAI-Project ヘッダーなしで呼ぶ。"""
     transport = RecordingTransport()
     client = EnterpriseAiClient(settings=_settings(), http_transport=transport, model_id="gpt-d")
 
@@ -209,11 +209,11 @@ def test_default_transport_is_built_per_connection(monkeypatch: pytest.MonkeyPat
 
 
 def test_parser_service_env_uses_vision_model_connection() -> None:
-    """OCI parser は VLM 抽出だけなので、既定の Vision モデルの接続を渡す。"""
+    """parser は VLM 抽出だけなので、既定の Vision モデルの接続を渡す。"""
     env = service_runtime_env(_settings())
     assert env["PLATFORM_ENTERPRISE_AI_ENDPOINT"] == SECONDARY
     assert env["PLATFORM_ENTERPRISE_AI_API_KEY"] == "sk-secondary"
-    assert env["PLATFORM_ENTERPRISE_AI_PROJECT_ID"] == "ocid1.project.secondary"
+    assert env["PLATFORM_ENTERPRISE_AI_PROJECT_ID"] == "proj-secondary"
     assert env["PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL"] == "vision-b"
 
 
@@ -228,13 +228,13 @@ def test_engine_settings_use_answer_and_vision_connections(tmp_path: Path) -> No
     assert (answer.endpoint, answer.api_key, answer.project_id, answer.model) == (
         PRIMARY,
         "sk-primary",
-        "ocid1.project.primary",
+        "proj-primary",
         "text-a",
     )
     assert (vision.endpoint, vision.api_key, vision.project_id, vision.model) == (
         SECONDARY,
         "sk-secondary",
-        "ocid1.project.secondary",
+        "proj-secondary",
         "vision-b",
     )
 
@@ -254,7 +254,7 @@ def _two_connection_payload() -> dict[str, Any]:
                 {
                     "connection_id": "primary",
                     "endpoint": PRIMARY,
-                    "project_id": "ocid1.project.primary",
+                    "project_id": "proj-primary",
                     "api_key": "sk-primary",
                 },
                 {
@@ -262,7 +262,7 @@ def _two_connection_payload() -> dict[str, Any]:
                     # #533 の表示名が残った payload も受け付ける（#542 で廃止。無視する）。
                     "display_name": "シカゴ",
                     "endpoint": SECONDARY,
-                    "project_id": "ocid1.project.secondary",
+                    "project_id": "proj-secondary",
                     "api_key": "sk-secondary",
                 },
                 {

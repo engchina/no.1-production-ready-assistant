@@ -6,7 +6,7 @@
 
 - 実行は Control Plane の**組み込み Runtime**（`features/agent/builtin_runtime.py`）。
   - SDK は OpenAI Agents SDK（`openai-agents`。版を固定し、Dependabot の PR で上げる）。
-  - モデルは OCI Enterprise AI の Responses API（システム設定 > モデルの接続）。別の LLM provider は組み込まない。
+  - モデルは OpenAI 互換のモデルの API の Responses API（システム設定 > モデルの接続）。別の LLM の SDK は組み込まない。
   - SDK の tracing は常に無効にする（業務データを外部へ送らない）。
 - 外部の Runtime（OpenClaw / Hermes / DeerFlow など）・Binding・Docker の Runtime は持たない（#754）。
 - 指示は「Agent の指示 + 割り当てた Skill の指示」。ツールは Skill の requirement が必要とするものだけを function tool として渡す。`server_id="control-plane"` は `tool_registry` のツール、それ以外は MCP 接続（`rag` / `nl2sql` / 登録した接続）の `tools/list` のツール（名前は `<接続>__<ツール>`）。Skill の指示は MCP のツールを素の名前（`rag_search`）で書いてよく、Run のときにモデルへ渡す名前へ書き直す。モデルが無い名前のツールを呼んでも Run は落とさず、呼ぶ名前をモデルへ返して呼び直させる（読み替えて実行はしない。#1303）。
@@ -126,4 +126,4 @@
 | 取消の後の新しい外部の操作 | 3 | `test_tool_call_boundary.py::test_cancel_during_a_read_stops_the_following_write` / `test_approved_call_is_not_run_after_cancel`（#2609） |
 | 二重の実行（古い所有者の開始） | 3 | `test_run_claim_fencing.py`（#2606） |
 
-不変条件では扱わず #2586 に残すもの: 停止と復帰の手順（受付の停止・特定の能力の禁止・緊急の停止）とその演練、点検の証拠の集約（pass / blocker / warning / not-applicable）、承認の滞留の責任者、request / run / tool の ID の関連付けの測定、実 OCI / Oracle の隔離環境での確認。
+不変条件では扱わず #2586 に残すもの: 停止と復帰の手順（受付の停止・特定の能力の禁止・緊急の停止）とその演練、点検の証拠の集約（pass / blocker / warning / not-applicable）、承認の滞留の責任者、request / run / tool の ID の関連付けの測定、実環境のモデルの API / Oracle の隔離環境での確認。

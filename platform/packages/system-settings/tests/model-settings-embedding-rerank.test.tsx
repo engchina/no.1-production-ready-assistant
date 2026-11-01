@@ -166,9 +166,9 @@ describe("埋め込み / 再ランクの登録モデル（#45）", () => {
         host.querySelector<HTMLButtonElement>(`button[role="switch"][aria-label="画像入力に対応 ${index + 1}"]`)?.disabled,
       ).toBe(true);
     }
-    // 登録モデルの必須の印は OCI に依存しない「必須」。
+    // 登録モデルの必須の印は条件の無い「必須」。
     expect(host.querySelector("#enterprise-model-catalog-label")?.textContent).toContain("必須");
-    expect(host.querySelector("#enterprise-model-catalog-label")?.textContent).not.toContain("OCI 運用時必須");
+    expect(host.querySelector("#enterprise-model-catalog-label")?.textContent).not.toContain("利用時必須");
   });
 
   it("行のテストは種類で呼び分ける（埋め込みは embedding、再ランクは rerank）", async () => {

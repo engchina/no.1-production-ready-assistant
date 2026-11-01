@@ -43,7 +43,7 @@ KB は文書の集合だけを持つ。
 \* 所有章節のみは内容が十分とは判定しないため、誤十分判定は0となる。手順充足0.70の通り、最低範囲の補完だけで
 回答の完結を保証しない。予算不足ケースでは必要根拠が残り、未読を示して止まる。
 実行結果の各行に `elapsed_ms`（実測）、入力 token の見積もり、引用の原文 ID、未読数、読了状態も出す。
-ローカルの実測時間は I/O・LLM をスタブにした値であり、OCI や Oracle の時間・費用ではない。
+ローカルの実測時間は I/O・LLM をスタブにした値であり、モデルの API や Oracle の時間・費用ではない。
 この表から実サービスの高速化率や品質向上率を主張しない。
 
 同じ5問で、固定祖父より少ない不要文脈・入力で同じ取得 Recall になるため、最低範囲と適応的な展開を維持する。
@@ -70,5 +70,5 @@ KB は文書の集合だけを持つ。
 - [Anthropic Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval): 索引前補足は今回とは別の評価軸。
 - [Lost in the Middle](https://arxiv.org/abs/2307.03172): 長い入力の配置も評価する理由。
 
-参考実装の provider やライブラリを導入せず、Oracle AI Vector Search、OCI Generative AI の rerank、
-OCI Enterprise AI の既存構成で評価する。普遍的な固定の読取段数という業界標準は前提にしない。
+参考実装の provider やライブラリを導入せず、Oracle AI Vector Search、再ランクのモデル、
+モデルの API の LLM の既存構成で評価する。普遍的な固定の読取段数という業界標準は前提にしない。

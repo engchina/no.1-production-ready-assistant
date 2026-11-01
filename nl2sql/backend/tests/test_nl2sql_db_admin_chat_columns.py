@@ -1,6 +1,6 @@
 """DB 管理チャットの列の検査（#2352）: 参照する object の実際の列・直させる・止める・警告。
 
-object の列は合成の値（`_FakeDescriber`）、LLM（OCI Enterprise AI）は決定論のスタブ。実 Oracle で
+object の列は合成の値（`_FakeDescriber`）、LLM（モデルの API）は決定論のスタブ。実 Oracle で
 データ辞書のビューと動的性能ビューを調べるのは
 `test_nl2sql_db_admin_chat_history_oracle_live.py` の後半。
 """

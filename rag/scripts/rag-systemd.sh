@@ -75,8 +75,7 @@ rag_service_model_command() {
 
 # マイクロサービスの unit を書く。
 #   $1 unit のパス / $2 service_id / $3 rag/ の絶対パス / $4 実行ユーザー / $5 group / $6 HOME
-#   $7 サービス実行用の env ファイル（backend が書く。HF_* と実効 OCI Enterprise AI 設定）
-#   $8 共通 .env（platform/.env）/ $9 backend/.env（OCI parser だけが読む）
+#   $7 サービス実行用の env ファイル（backend が書く。HF_* と実効のモデルの API の設定）
 rag_write_microservice_unit() {
   local unit_path="$1"
   local id="$2"
@@ -85,23 +84,14 @@ rag_write_microservice_unit() {
   local group="$5"
   local home="$6"
   local runtime_env="$7"
-  local platform_env="$8"
-  local backend_env="$9"
-  local dir port timeout workdir env_files extra_env
+  local dir port timeout workdir extra_env
 
   dir="$(rag_service_dir "${id}")" || return 1
   port="$(rag_service_port "${id}")"
   timeout="$(rag_service_timeout "${id}")"
   workdir="${rag_dir}/${dir}"
-  env_files=""
   extra_env=""
   case "${id}" in
-    parser-oci-*)
-      # OCI parser は OCI 認証・Object Storage の設定を backend と同じ .env から読む。
-      env_files="EnvironmentFile=-${platform_env}
-EnvironmentFile=-${backend_env}
-"
-      ;;
     parser-docling)
       extra_env="Environment=RAG_ENGINE_OUTPUT_DIR=/tmp/production-ready-rag-engine-runs
 "
@@ -123,7 +113,7 @@ WorkingDirectory=${workdir}
 Environment=HOME=${home}
 Environment=PYTHONUNBUFFERED=1
 Environment=PORT=${port}
-${extra_env}${env_files}EnvironmentFile=-${runtime_env}
+${extra_env}EnvironmentFile=-${runtime_env}
 ExecStart=${workdir}/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:${port} --workers 1 --timeout ${timeout} --graceful-timeout 30 --error-logfile -
 Restart=on-failure
 RestartSec=5
