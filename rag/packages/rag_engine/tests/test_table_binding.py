@@ -397,3 +397,24 @@ def test_short_value_inside_a_stated_name_is_not_a_separate_value() -> None:
     assert unbound_table_values("区分 3 の数量は 2 です。", [table]) == []
     # 名前の外で述べた値は、今までどおり照合する。
     assert unbound_table_values("区分 3 の数量は 1 です。", [table]) == [("1", "区分 3")]
+
+
+# #123 の再現（synthetic-test-7）: 桁区切りのカンマで値と区間が切れ、正しい課長以上の宿泊費を「日当の列の値」と誤判定した。
+LODGING_TABLE = (
+    "第3条（出張旅費）\n<table><tbody><tr><td>区分</td><td>宿泊費の上限（1泊）</td><td>日当</td></tr>"
+    "<tr><td>一般社員</td><td>12,000円</td><td>2,000円</td></tr><tr><td>課長以上</td><td>15,000円</td><td>3,000円</td></tr></tbody></table>"
+)
+
+
+def test_digit_group_commas_do_not_split_values_or_clauses() -> None:
+    from rag_engine.generation.table_binding import unbound_table_values
+
+    correct = (
+        "規程には宿泊費の上限と日当が区分ごとに定められており、一般社員は1泊12,000円、日当2,000円です"
+        "（参考：課長以上は1泊15,000円、日当3,000円）。"
+    )
+    assert unbound_table_values(correct, [LODGING_TABLE]) == []
+    assert unbound_table_values("一般社員は1泊12,000円（日当2,000円）です。", [LODGING_TABLE]) == []
+    # 取り違えは今までどおり見つける（別の行・別の列の値）。
+    assert unbound_table_values("課長以上は1泊12,000円、日当3,000円です。", [LODGING_TABLE]) == [("12,000円", "課長以上")]
+    assert unbound_table_values("一般社員の日当は12,000円です。", [LODGING_TABLE]) == [("12,000円", "日当")]
