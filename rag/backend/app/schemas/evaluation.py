@@ -1,7 +1,7 @@
 """RAG 評価スキーマ。"""
 
 from datetime import datetime
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -644,6 +644,8 @@ class EvaluationMetrics(BaseModel):
     decision_breakdown: dict[str, EvaluationReasoningSummary] = Field(default_factory=dict)
     case_results: list[EvaluationCaseResult] = Field(default_factory=list)
     comparison: "EvaluationComparison | None" = None
+    # 評価の実行条件（#59。`app.rag.evaluation_manifest`）。#59 より前の結果は None。
+    run_manifest: dict[str, Any] | None = None
 
 
 class EvaluationComparison(BaseModel):

@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
@@ -69,6 +70,7 @@ from rag_engine.resources.deadline import (
     expire_deadline,
     remaining_seconds,
 )
+from rag_engine.resources.external_calls import external_call, send_http
 from rag_engine.resources.llm_usage import (
     record_llm_effort_retry,
     record_llm_output_retry,
@@ -110,6 +112,14 @@ RERANK_PATH = "/reranks"
 LLM_TEMPERATURE = 0.0
 
 
+class _ModelApiClient(ParameterDroppingClient):
+    """モデルの API の httpx client。評価の記録・再生の session があれば応答を記録・再生する（#59）。"""
+
+    def send(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        parent = super().send
+        return send_http(lambda item: parent(item, *args, **kwargs), request)
+
+
 @application_cache(maxsize=16)
 def _openai_client(
     provider_id: str,
@@ -143,7 +153,7 @@ def _openai_client(
         # モデルが受け付けない引数（temperature など）の 400 は、外して 1 回だけ送り直し、以後この
         # モデルには送らない（#3539。platform の部品）。受け付けるモデルには temperature 0 を送り続ける。
         # timeout・接続の上限・redirect は SDK の既定の client と同じにする。
-        http_client=ParameterDroppingClient(timeout=timeout, limits=DEFAULT_CONNECTION_LIMITS, follow_redirects=True),
+        http_client=_ModelApiClient(timeout=timeout, limits=DEFAULT_CONNECTION_LIMITS, follow_redirects=True),
     )
 
 
@@ -2042,7 +2052,16 @@ def _embedding_vectors(data: Any, *, expected_count: int, expected_dimensions: i
 
 
 def _rerank_request(url: str, body: dict[str, Any], api_key: str, timeout_seconds: int) -> dict[str, Any]:
-    """`POST {base_url}/reranks` を 1 回送る（#8）。**HTTP を叩くのはここだけ。**"""
+    """`POST {base_url}/reranks` を 1 回送る（#8）。**HTTP を叩くのはここだけ。**評価の記録・再生の対象（#59）。"""
+    return external_call(
+        "rerank",
+        {"path": urllib.parse.urlsplit(url).path, "body": body},
+        lambda: _send_rerank_request(url, body, api_key, timeout_seconds),
+        label=str(body.get("model") or ""),
+    )
+
+
+def _send_rerank_request(url: str, body: dict[str, Any], api_key: str, timeout_seconds: int) -> dict[str, Any]:
     request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
         url,
         method="POST",

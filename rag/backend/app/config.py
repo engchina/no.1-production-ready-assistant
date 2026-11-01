@@ -8,7 +8,8 @@ import contextlib
 import logging
 import os
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
@@ -2476,13 +2477,30 @@ def get_settings() -> Settings:
     return settings
 
 
+# 評価の実行の間だけ固定する「今日」（#59。文脈ごと。通常の質問は固定しない）。
+_FIXED_TODAY: ContextVar[date | None] = ContextVar("rag_fixed_today", default=None)
+
+
 def settings_today() -> date:
     """共通の設定の時間帯（`PLATFORM_TIMEZONE`。既定 UTC）の今日（#3255）。
 
     OS の時間帯に左右されない。検索の基準日（`as_of`）・業務ガイドの期間・LLM に渡す
-    「今日の日付」の既定に使う。
+    「今日の日付」の既定に使う。評価の実行の中（``fixed_today``）は、評価の開始時に決めた日（#59）。
     """
-    return local_today(get_settings())
+    return _FIXED_TODAY.get() or local_today(get_settings())
+
+
+@contextlib.contextmanager
+def fixed_today(day: date) -> Iterator[None]:
+    """この文脈（thread・task は引き継ぐ）の ``settings_today`` を ``day`` に固定する（#59）。
+
+    評価が日付を跨いでも、全ケースの検索の基準日・業務ガイドの期間・LLM に渡す今日を同じ日にする。
+    """
+    token = _FIXED_TODAY.set(day)
+    try:
+        yield
+    finally:
+        _FIXED_TODAY.reset(token)
 
 
 def reset_settings_cache() -> None:

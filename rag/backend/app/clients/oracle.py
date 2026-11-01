@@ -1901,6 +1901,46 @@ class OracleClient:
             _with_tenant_bind({"selected_ids": json.dumps(list(dict.fromkeys(document_ids)))}),
         )
 
+    async def evaluation_corpus_rows(
+        self, knowledge_base_ids: Sequence[str]
+    ) -> list[dict[str, object]]:
+        """評価の条件（#59）に残す、検索に出る chunk_set と、その内容の版を返す（読み取りだけ）。
+
+        利用者の範囲（tenant・文書・KB）の中の配信中（is_serving）の chunk_set ごとに、レシピの版・
+        抽出の元の hash と更新時刻・chunk と vector の件数・更新時刻を返す。``knowledge_base_ids``
+        を渡すとその KB の文書だけ（空なら範囲の全部）。削除・権限の剥奪・active の切替・抽出の
+        更新で行が変わるため、評価の前後で比べて実行中の更新を検出できる。
+        """
+        ids = [kb_id for kb_id in dict.fromkeys(knowledge_base_ids) if kb_id][:200]
+        binds: dict[str, object] = {f"corpus_kb_{index}": kb_id for index, kb_id in enumerate(ids)}
+        kb_sql = ""
+        if ids:
+            placeholders = ", ".join(f":corpus_kb_{index}" for index in range(len(ids)))
+            kb_sql = (
+                "AND d.document_id IN (SELECT dkb.document_id "
+                "FROM rag_document_knowledge_bases dkb "
+                f"WHERE dkb.knowledge_base_id IN ({placeholders}))"
+            )
+        return await self._fetch_all(
+            f"""
+            SELECT
+                d.document_id, d.status AS document_status, cs.chunk_set_id, cs.recipe_id,
+                cs.extraction_recipe_id, cs.language_pack_ingest_hash,
+                cs.status AS chunk_set_status, cs.chunk_count, cs.vector_count,
+                cs.updated_at AS chunk_set_updated_at,
+                r.config_revision, r.materialized_revision,
+                e.source_sha256, e.updated_at AS extraction_updated_at
+            FROM rag_documents d
+            JOIN rag_chunk_sets cs ON cs.document_id = d.document_id AND cs.is_serving = 1
+            LEFT JOIN rag_document_recipes r ON r.recipe_id = cs.recipe_id
+            LEFT JOIN rag_document_extractions e
+              ON e.document_id = cs.document_id AND e.extraction_recipe_id = cs.extraction_recipe_id
+            WHERE {_oracle_access_predicate_sql(alias="d")} {kb_sql}
+            ORDER BY d.document_id, cs.chunk_set_id
+            """,  # nosec B608 - 値はすべて bind。組み立てるのは bind の名前と固定の条件だけ。
+            _with_tenant_bind(binds),
+        )
+
     async def list_document_recipes(self, document_id: str) -> list[dict[str, object]]:
         """文書レシピを active chunk_set の件数とともに返す(読み取りだけ。書き込まない)。
 

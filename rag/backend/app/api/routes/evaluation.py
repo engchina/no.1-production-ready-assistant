@@ -6,6 +6,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import replace
+from datetime import date
 from pathlib import PurePath
 from typing import Annotated, Any
 
@@ -35,7 +36,14 @@ from app.api.routes.search import (
 from app.clients.ai_calls import make_ai_caller
 from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient
-from app.config import ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings, get_settings
+from app.config import (
+    ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+    Settings,
+    fixed_today,
+    get_settings,
+    settings_today,
+)
+from app.rag.answer_engine import AS_OF_FILTER_KEY
 from app.rag.evaluation import EvaluationProgressCallback, EvaluationRunner
 from app.rag.evaluation_adapter import normalize_evaluation_suite, resolve_evaluation_suite
 from app.rag.evaluation_excel import (
@@ -61,6 +69,7 @@ from app.rag.evaluation_jobs import (
     evaluation_job_time_limit_seconds,
     get_evaluation_job_service,
 )
+from app.rag.evaluation_manifest import build_run_manifest, with_run_check
 from app.rag.evaluation_process import guide_process_row, process_draft
 from app.rag.evaluation_results_excel import evaluation_results_xlsx
 from app.rag.rate_limit import enforce_rate_limit
@@ -493,8 +502,24 @@ async def _execute_run(
         if request.thresholds is not None
         else resolve_evaluation_suite(suite_name)
     )
+    # 評価の実行条件（#59）。基準日は明示が無ければ開始時の今日にし、評価の間は固定する
+    # （日付を跨いでも全ケースが同じ日で検索・業務ガイドの期間を判定する。通常の質問は変えない）。
+    explicit_as_of = (request.filters.get(AS_OF_FILTER_KEY) or "").strip()
+    as_of = date.fromisoformat(explicit_as_of) if explicit_as_of else settings_today()
+    settings = get_settings()
+
+    async def manifest() -> dict[str, Any]:
+        return await build_run_manifest(
+            request,
+            settings=settings,
+            oracle=OracleClient(),
+            as_of=as_of,
+            as_of_source="request" if explicit_as_of else "run_start",
+        )
+
+    started_manifest = await manifest()
     # 標準回答の比較範囲は、job の 2 つの pass で同じものを使う（#3570）。
-    with standard_scope_cache():
+    with standard_scope_cache(), fixed_today(as_of):
         started = time.monotonic()
         metrics = await EvaluationRunner().run(
             cases=request.cases,
@@ -536,6 +561,10 @@ async def _execute_run(
                     )
                 }
             )
+    # 実行中に変わった条件（プロファイル・chunk_set・権限・削除など）があれば比較不能の印を付ける。
+    metrics = metrics.model_copy(
+        update={"run_manifest": with_run_check(started_manifest, await manifest())}
+    )
     evaluation_run_id = await _save_evaluation_artifact(
         request_summary=_run_request_summary(request),
         result_summary=metrics.model_dump(mode="json"),

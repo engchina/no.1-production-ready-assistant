@@ -10,9 +10,12 @@ import json
 import logging
 import math
 import re
+import urllib.error
+import urllib.parse
 import urllib.request
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from email.message import Message
 from numbers import Real
 from typing import Any, Literal, Protocol
 
@@ -21,6 +24,7 @@ from pr_backend_core.chat_progress import chat_progress_details
 from pr_backend_core.observability.model_purpose import model_purpose_attributes
 from pr_backend_core.observability.tracing import observed_span
 from pr_system_settings.model import embedding_api_base_url, embedding_model_connection
+from rag_engine.resources.external_calls import external_call
 from rag_engine.resources.rerank_diagnostics import (
     RerankCallReceipt,
     bind_rerank_attempt,
@@ -313,9 +317,34 @@ class GenAiClient:
         return key
 
     def _post(self, url: str, body: dict[str, Any], *, rerank: bool) -> dict[str, Any]:
-        """OpenAI 互換の API を 1 回呼ぶ（#8）。**HTTP を叩くのはここだけ。**"""
+        """OpenAI 互換の API を 1 回呼ぶ（#8）。**HTTP を叩くのはここだけ。**
+
+        評価の CLI の記録・再生の session があれば、応答を記録・再生する（#59）。失敗は HTTP の
+        status も残し、再生でも同じ status の ``HTTPError`` にする（分類器が再試行の可否を決める）。
+        """
         if self._post_json is not None:
             return self._post_json(url, body)
+
+        def build_error(error: Mapping[str, Any]) -> BaseException:
+            status = error.get("status")
+            if isinstance(status, int):
+                message = str(error.get("message", ""))
+                return urllib.error.HTTPError(url, status, message, Message(), None)
+            if error.get("type") == "URLError":
+                return urllib.error.URLError(str(error.get("message", "")))
+            if error.get("type") == "TimeoutError":
+                return TimeoutError(str(error.get("message", "")))
+            return RuntimeError(str(error.get("message", "")))
+
+        return external_call(
+            "rerank" if rerank else "embeddings",
+            {"path": urllib.parse.urlsplit(url).path, "body": body},
+            lambda: self._send(url, body, rerank=rerank),
+            label=str(body.get("model") or ""),
+            build_error=build_error,
+        )
+
+    def _send(self, url: str, body: dict[str, Any], *, rerank: bool) -> dict[str, Any]:
         request = urllib.request.Request(  # noqa: S310 — 設定の Base URL は https を期待する
             url,
             method="POST",
