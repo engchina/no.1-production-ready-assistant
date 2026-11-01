@@ -268,6 +268,51 @@ WHERE index_name = 'RAG_CHUNKS_EMBEDDING_HNSW_IDX'
 ORDER BY task_time DESC;
 ```
 
+## 絞り込みを含む実検索 SQL の再現率と実行計画(#74)
+
+`DBMS_VECTOR.INDEX_ACCURACY_QUERY` / `INDEX_ACCURACY_REPORT` は索引だけの精度を測り、回答の検索が付ける
+絞り込み(tenant・認可の範囲・KB・文書・ページ・有効期間・active な chunk_set)を含まない。絞り込みの一部が
+索引の**後**で評価されると、索引が近い順に返した k 件から行が捨てられ、索引の精度が 100% でも k 件に
+満たない。これを回答の検索と同じ SQL で測る CLI を置いている。
+
+```bash
+# テスト用の DB ユーザーで実行する(索引を作り直し、作った行を消す。共用の DB では実行しない)
+cd rag/backend
+PLATFORM_ENV_FILE=/path/to/test-db.env uv run python -m app.rag.vector_recall_cli \
+    --yes-test-schema --output /tmp/vector-recall.json
+```
+
+- 比べるのは `vector_search_statement`(回答の検索の `_vector_rows` と同じ SQL)の `FETCH APPROX` と、
+  近似の句だけを `FETCH EXACT` にした基準。target accuracy 100 は exact ではないので基準にしない。
+- 合成の 80 文書・5,058 chunk(1024 次元、話題 40)を製品の書き込みの経路で保存し、9 つの場面
+  (絞り込みなし・KB 80% / 5%・文書 1 件・KB+ページ・基準日・候補が k 未満・同距離 15 件・空集合)で、
+  Recall@10(同距離の入れ替わりは漏れにしない)・件数・p50/p95・`DBMS_XPLAN.DISPLAY_CURSOR` の vector の
+  操作を出す。段は `ingested`(行の無い索引に後から取り込んだ状態)・`rebuilt`(索引の作り直し後)・
+  `after_dml`(文書の削除と再取込の公開の後)。
+- 各段を、optimizer の選んだ計画と、`VECTOR_INDEX_TRANSFORM` の hint で索引を使わせた計画
+  (行が増えて optimizer が索引を選ぶときの計画の再現)の 2 通りで測る。hint は測定だけに使う。
+
+ADB Free(Oracle Database 23.9、`vector_memory_size` 約 45 MB)での結果(Recall@10 の平均 / 最小):
+
+| 段・計画 | 絞り込みなし | 文書 1 件 | ほかの 7 場面 |
+|---|---|---|---|
+| 変更前 `ingested`(optimizer が HNSW PRE-FILTER を選んだ) | 0.975 / 0.700 | 1.000(全件走査) | 1.000 |
+| 変更前 `rebuilt` + 索引を強制 | 0.975 / 0.700 | 0.715 / 0.500 | 1.000 |
+| 変更前 `after_dml`(再取込の途中の chunk_set が無い) | 1.000 | 1.000 | 1.000 |
+| 変更後(全段・両方の計画) | 1.000 | 1.000 | 1.000 |
+
+- 原因: active な chunk_set の条件(相関の `EXISTS` を `OR` で結んだもの)は HNSW の PRE-FILTER に入らず、
+  索引の後の `FILTER` で評価されていた。再取込の途中(active でない chunk_set)の chunk が問に近いと、
+  k 件のうち数件しか残らない。
+- 変更: vector の検索だけ、この条件を 1 つの列の式の `IN` / `NOT IN`(`_ACTIVE_CHUNK_PREFILTER_SQL`)にした。
+  選ぶ行は従来と同じ(実 Oracle のテスト `test_vector_prefilter_oracle.py`)。`OR` や 2 つの列を使う式は
+  PRE-FILTER に入らない(23.9 で確かめた)。keyword の検索・ID で読む入口の条件は変えていない。
+- optimizer の選んだ計画の時間(p50)は 5 千 chunk で約 30 ms → 約 40 ms(全件走査のまま、条件の
+  副問い合わせの分)。
+- target accuracy・HNSW のビルドの値は変えない(索引を使う計画でも Recall@10 が 1.0 のため)。
+- 未確認: Vector Pool が約 45 MB の ADB Free では 1024 次元で約 5 千 vector までしか測れない。10 万件を超える
+  規模の計画と時間は、実際の ADB で同じ CLI を流して確かめる。
+
 ## 運用上の注意
 
 - HNSW 索引はメモリ専用構造であり、Vector Pool の設計が必須。
