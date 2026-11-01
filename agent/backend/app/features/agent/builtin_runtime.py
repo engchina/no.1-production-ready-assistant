@@ -121,6 +121,7 @@ from app.features.agent.answer_evidence import (
     ANSWER_EVIDENCE_KIND,
     ANSWER_EVIDENCE_NAME,
     answer_evidence,
+    run_validation_passage_citations,
 )
 from app.features.agent.answer_identifiers import IdentifierCheck, identifier_index
 from app.features.agent.answer_notice import answer_takes_notice, current_answer_notice
@@ -5353,6 +5354,14 @@ async def _validate_with_connection(
     # この Run の業務データ（NL2SQL）の照会の結果（#1950）。件数・金額・一覧の段落を、資料の根拠
     # だけで「確かめられない」として外さない。
     data_results = validation_data_results(run.steps)
+    # 段落ごとの出典（#104）。業務 Agent の回答は根拠を本文とは別に示すので、段落に出典を
+    # 書かない。RAG は段落の実際の出典だけで裏付けるため、渡さないと正しい段落も unassessed に
+    # なる。古い RAG（契約に `passage_citations` が無い）には渡さない（extra=forbid で失敗する）。
+    passage_citations = (
+        run_validation_passage_citations(run.steps, answer, refs)
+        if _accepts_input(tool.input_schema, "passage_citations")
+        else []
+    )
     step_id, result = await recorder.call(
         ToolCall(
             name=definition.name,
@@ -5364,6 +5373,7 @@ async def _validate_with_connection(
                 **connection_check_inputs(run.steps, evidence_tool),
                 **({"premises": premises} if premises else {}),
                 **({"data_results": data_results} if data_results else {}),
+                **({"passage_citations": passage_citations} if passage_citations else {}),
             },
             trace_id=f"answer_validation_{run.id}_{config.server_id}",
         ),
@@ -5392,6 +5402,12 @@ async def _validate_with_connection(
             **common,
         )
     return validation_content(STATUS_COMPLETED, result=result.output, evidence=refs, **common)
+
+
+def _accepts_input(schema: object, name: str) -> bool:
+    """MCP のツールの inputSchema が入力の項目 `name` を持つか（契約の版の違いを吸収する）。"""
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    return isinstance(properties, dict) and name in properties
 
 
 def _record_usage(run_id: str, source: object, model_id: str) -> None:

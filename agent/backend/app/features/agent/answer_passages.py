@@ -1002,14 +1002,28 @@ _LOOKUP_ACTION = re.compile(
 )
 
 
+# 調べるのに使ったツールの名前だけの行（「- `rag__rag_retrieve_evidence`」「- `rag__rag_recommend_
+# search_answer_profile`（社内規程 Q&A を推薦）」。#104）。モデルに渡すツールの名前は
+# `<接続>__<ツール>` なので、`__` を含む名前に限る（設定のキーなど snake_case の語の説明は
+# 外さない）。
+_TOOL_NAME = r"`?[a-z][a-z0-9_]*__[a-z][a-z0-9_]*`?(?:\s*[（(][^（）()]*[）)])?"
+_TOOL_NAME_LINE = re.compile(rf"{_TOOL_NAME}(?:\s*[、,，/／]\s*{_TOOL_NAME})*[。.]?")
+
+
 def is_lookup_note(text: str) -> bool:
     """調べるのに使ったツール・プロファイル・内部の ID だけを述べる行か（#2328）。
 
     「〈プロファイル名〉（ID: 0f3a9c2e…）を用いて上記根拠を取得しました。」のような
     作業の経過で、資料の主張ではない（使ったツールと根拠は画面と MCP の `sources` が
     別に示す）。内部の識別子（`_INTERNAL_ID`）と調べ方の述語（`_LOOKUP_ACTION`）の
-    両方がある文に限る。操作の指示・質問は除く。
+    両方がある文に限る。操作の指示・質問は除く。使ったツールの名前（`<接続>__<ツール>`）だけを
+    並べた行（「- `rag__rag_retrieve_evidence`」。括弧の補足つきを含む。#104）も作業の経過にする。
     """
+    bare = _strip_bullet(text).strip("*").strip()
+    if len(bare) <= 200 and _TOOL_NAME_LINE.fullmatch(bare):
+        # 使ったツールの名前だけの行（#104）。回答の本文ではなく作業の経過（`__` を強調の印として
+        # 外す前に見る）。
+        return True
     value = _EMPHASIS.sub("", _strip_bullet(text)).strip()
     if not value or len(value) > 200 or is_question(value) or _OPERATION.search(value):
         return False

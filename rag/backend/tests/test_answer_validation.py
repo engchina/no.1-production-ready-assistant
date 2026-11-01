@@ -1493,6 +1493,78 @@ async def test_validate_answer_passes_premises_to_the_claim_audit(monkeypatch: M
     assert result.status == "completed"
 
 
+def test_mcp_validate_answer_passes_passage_citations(
+    auth: Any,  # noqa: F811
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """本文に出典を書かない呼び出し側の段落ごとの出典（passage_citations）を検証に渡す（#104）。"""
+    captured: dict[str, Any] = {}
+
+    async def fake_validate(
+        question: str, answer: str, refs: list[EvidenceRef], settings: Any, **kwargs: Any
+    ) -> AnswerValidation:
+        captured.update(kwargs)
+        return AnswerValidation(status="completed", valid=True, counts={"supported": 1})
+
+    monkeypatch.setattr(mcp_tools, "validate_answer", fake_validate)
+    user = auth.user_with_permissions("searcher", ["menu.search"])
+    citation = {"answer_range": {"start": 0, "end": 9}, "chunk_ids": ["c1"]}
+    arguments: dict[str, Any] = {
+        "query": "q",
+        "answer": "上限は1万円です。",
+        "evidence": [{"document_id": "d1", "chunk_id": "c1"}],
+        "passage_citations": [citation],
+    }
+    _call("rag_validate_answer", arguments, _token(user.user_uuid))
+    assert captured["passage_citations"] == [{"start": 0, "end": 9, "chunk_ids": ["c1"]}]
+    # 省略は空（今までどおり本文の出典だけ）。
+    captured.clear()
+    _call(
+        "rag_validate_answer",
+        {key: value for key, value in arguments.items() if key != "passage_citations"},
+        _token(user.user_uuid),
+    )
+    assert captured["passage_citations"] == []
+    for invalid in (
+        [{**citation, "chunk_ids": []}],
+        [{**citation, "answer_range": {"start": -1, "end": 9}}],
+        [{**citation, "extra": "x"}],
+    ):
+        denied = _call(
+            "rag_validate_answer",
+            {**arguments, "passage_citations": invalid},
+            _token(user.user_uuid),
+        )
+        assert denied["isError"] is True
+
+
+async def test_validate_answer_passes_passage_citations_to_the_claim_audit(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """段落ごとの出典は主張の監査へ渡す（#104）。"""
+    seen: dict[str, Any] = {}
+
+    def fake_claims(
+        question: str, answer: str, items: list[dict[str, Any]], settings: Any, **options: Any
+    ) -> dict[str, Any]:
+        seen.update(options)
+        return {"status": "completed", "counts": {"supported": 1}, "claim_checks": []}
+
+    import rag_engine.evaluation.answer_validation as engine_validation
+
+    monkeypatch.setattr(engine_validation, "validate_answer_claims", fake_claims)
+    citations = [{"start": 0, "end": 9, "chunk_ids": ["c1"]}]
+    await validate_answer(
+        "q",
+        "上限は1万円です。",
+        [EvidenceRef("d1", "c1")],
+        get_settings(),
+        oracle=cast(Any, _RecordOracle()),
+        passage_citations=citations,
+    )
+    assert seen["caller_citations"] == citations
+
+
 def test_mcp_validate_answer_passes_data_results_and_hides_their_sources(
     auth: Any,  # noqa: F811
     monkeypatch: MonkeyPatch,
