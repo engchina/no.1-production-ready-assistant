@@ -95,7 +95,7 @@ def test_deep_steps_are_projected_into_details_when_counts_differ() -> None:
 
     data = service.reverse_sql_deep(ReverseSqlRequest(sql=_SQL, profile_id=None))
 
-    assert data.source == "oci_enterprise_ai"
+    assert data.source == "enterprise_ai"
     assert data.question == "部署ごとの給与合計を知りたい"
     assert data.logical_steps == ["社員を部署ごとにまとめる", "給与を合計する"]
     # UI が優先する details にも LLM の手順が業務行として入る。

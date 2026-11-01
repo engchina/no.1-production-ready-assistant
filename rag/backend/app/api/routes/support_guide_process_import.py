@@ -19,11 +19,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
+from rag_parser_core.enterprise_ai import sdk_retries_disabled
 from rag_parser_core.language import bind_pack, current_pack, resolve
-from rag_parser_core.oci_enterprise_ai import sdk_retries_disabled
 
 from app.clients.ai_calls import make_ai_caller
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient
 from app.config import Settings, get_settings
 from app.rag.rate_limit import enforce_rate_limit
@@ -51,7 +51,7 @@ _BASE = "/{search_answer_profile_id}/support-guides/import/process"
 
 def guide_draft_llm(settings: Settings) -> GuideDraftLlm:
     """下書きを作る LLM（テストで差し替える）。"""
-    return OciEnterpriseAiClient(settings=settings)
+    return EnterpriseAiClient(settings=settings)
 
 
 async def _profile(

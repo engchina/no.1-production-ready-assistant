@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from test_llm_runaway_output import PROVIDER, _RecordingClient, _text_script
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.models.llm import GroundedDraft
 from rag_engine.resources.deadline import Deadline, bind_deadline
@@ -25,7 +25,7 @@ def entries(*, distinct=False):
 @pytest.mark.parametrize("size", [1, 17, 4096])
 def test_long_repeated_objects_are_cut_before_the_full_plan(size):
     text = json.dumps({"request_coverage": entries()}, ensure_ascii=False)
-    monitor = oci._RunawayMonitor(draft_arrays=True)
+    monitor = model_api._RunawayMonitor(draft_arrays=True)
     cut = None
     for offset in range(0, len(text), size):
         if monitor.feed(text[offset : offset + size]):
@@ -33,12 +33,12 @@ def test_long_repeated_objects_are_cut_before_the_full_plan(size):
             break
     assert cut is not None and cut < len(text) // 2
     # 旧来の短い周期の検出には該当しない。
-    assert oci._RunawayMonitor().feed(text) is None
+    assert model_api._RunawayMonitor().feed(text) is None
 
 
 def test_different_entries_other_arrays_and_json_strings_are_not_cut():
     for data in [{"request_coverage": entries(distinct=True)}, {"rows": entries()}, {"summary": json.dumps({"items": entries()})}]:
-        assert oci._RunawayMonitor(draft_arrays=True).feed(json.dumps(data, ensure_ascii=False)) is None
+        assert model_api._RunawayMonitor(draft_arrays=True).feed(json.dumps(data, ensure_ascii=False)) is None
 
 
 @pytest.mark.parametrize("enabled", [True, False])
@@ -55,11 +55,11 @@ def test_streaming_retries_only_when_existing_guard_is_enabled(enabled):
     client = _RecordingClient(clock, scripts)
     settings = replace(get_settings(environ={}, dotenv_path=None), llm_runaway_detection=enabled, llm_stall_detection=True)
     with (
-        patch.object(oci.time, "monotonic", clock),
-        patch.object(oci, "_openai_client_for_provider", return_value=client),
+        patch.object(model_api.time, "monotonic", clock),
+        patch.object(model_api, "_openai_client_for_provider", return_value=client),
         bind_deadline(Deadline(600)),
     ):
-        result = oci._openai_parsed([], settings, GroundedDraft, PROVIDER)
+        result = model_api._openai_parsed([], settings, GroundedDraft, PROVIDER)
     assert not result.items
     assert len(client.streams) == (2 if enabled else 1)
     assert all(stream.closed for stream in client.streams)
@@ -97,16 +97,16 @@ def test_repetition_resend_receives_feedback_and_preserves_original_question(rec
     original = deepcopy(messages)
     settings = replace(get_settings(environ={}, dotenv_path=None), llm_runaway_detection=True, llm_stall_detection=True)
     with (
-        patch.object(oci.time, "monotonic", clock),
-        patch.object(oci, "_openai_client_for_provider", return_value=client),
+        patch.object(model_api.time, "monotonic", clock),
+        patch.object(model_api, "_openai_client_for_provider", return_value=client),
         bind_deadline(Deadline(600)),
     ):
         if recovered:
-            result = oci._openai_parsed(messages, settings, schema, PROVIDER)
+            result = model_api._openai_parsed(messages, settings, schema, PROVIDER)
             assert not result.items
         else:
-            with pytest.raises(oci.LlmRunawayOutput):
-                oci._openai_parsed(messages, settings, schema, PROVIDER)
+            with pytest.raises(model_api.LlmRunawayOutput):
+                model_api._openai_parsed(messages, settings, schema, PROVIDER)
     assert messages == original and client.inputs[0] == original
     assert client.inputs[1][:-1] == original
     feedback = client.inputs[1][-1]["content"][0]["text"]
@@ -122,8 +122,8 @@ def test_feedback_is_confined_to_draft_resends_and_contains_no_rejected_output(r
     from rag_engine.models.llm import TextOutput
 
     messages = [{"role": "user", "content": "元の質問"}]
-    assert oci._runaway_retry_messages(messages, TextOutput, reason) is messages
-    retried = oci._runaway_retry_messages(messages, GroundedDraft, reason)
+    assert model_api._runaway_retry_messages(messages, TextOutput, reason) is messages
+    retried = model_api._runaway_retry_messages(messages, GroundedDraft, reason)
     assert retried[:-1] == messages and len(messages) == 1
     assert ("空白だけの出力" if reason.endswith("whitespace") else "同じ内容の反復") in retried[-1]["content"][0]["text"]
 
@@ -151,13 +151,16 @@ def test_nonstreaming_draft_repetition_resend_uses_the_same_feedback(small_budge
     client = Client()
     messages = [{"role": "user", "content": "合成の質問"}]
     settings = replace(get_settings(environ={}, dotenv_path=None), llm_runaway_detection=True, llm_stall_detection=False)
-    with patch.object(oci, "_openai_client_for_provider", return_value=client), oci.bind_output_cap(1 if small_budget else None):
+    with (
+        patch.object(model_api, "_openai_client_for_provider", return_value=client),
+        model_api.bind_output_cap(1 if small_budget else None),
+    ):
         if small_budget:
-            with pytest.raises(oci.LlmRunawayOutput):
-                oci._openai_parsed(messages, settings, GroundedDraft, PROVIDER)
+            with pytest.raises(model_api.LlmRunawayOutput):
+                model_api._openai_parsed(messages, settings, GroundedDraft, PROVIDER)
             assert client.inputs == [messages, messages]
         else:
-            result = oci._openai_parsed(messages, settings, GroundedDraft, PROVIDER)
+            result = model_api._openai_parsed(messages, settings, GroundedDraft, PROVIDER)
             assert not result.items and len(client.inputs) == 2
             assert client.inputs[1][:-1] == messages
             assert "同じ内容の反復" in client.inputs[1][-1]["content"][0]["text"]

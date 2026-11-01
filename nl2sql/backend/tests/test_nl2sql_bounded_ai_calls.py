@@ -99,7 +99,7 @@ def test_metadata_sql_429_waits_globally_and_keeps_every_batch(
 
     result = service.generate_comment_sql(_request(service, 25))
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.fallback is False
     assert result.sql.count("COMMENT ON TABLE") == 25
     # 3 組（10・10・5 表）と、429 の 2 回の再試行。client の再試行は切っている。
@@ -134,7 +134,7 @@ def test_nl2sql_error_kind_maps_non_http_codes() -> None:
     assert nl2sql_error_kind(RuntimeError("x")) is None
 
 
-class _OciError(Exception):
+class _UpstreamError(Exception):
     """HTTP の失敗のスタブ。``status`` を持つので共通の分類器が種類を決める。"""
 
     def __init__(self, status: int) -> None:
@@ -176,7 +176,7 @@ class _ThrottledEmbedClient:
 
 def test_embedding_429_keeps_order_and_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     client = OpenAiCompatibleEmbeddingClient(_embedding_settings())
-    fake = _ThrottledEmbedClient(errors=[_OciError(429)])
+    fake = _ThrottledEmbedClient(errors=[_UpstreamError(429)])
     monkeypatch.setattr("app.features.nl2sql.embedding_client._post_json", fake)
 
     vectors = client.embed_texts([f"text-{index}" for index in range(40)])
@@ -189,7 +189,7 @@ def test_embedding_429_keeps_order_and_limit(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_embedding_permission_error_raises_client_error(monkeypatch: pytest.MonkeyPatch) -> None:
     client = OpenAiCompatibleEmbeddingClient(_embedding_settings())
-    fake = _ThrottledEmbedClient(errors=[_OciError(403)] * 10)
+    fake = _ThrottledEmbedClient(errors=[_UpstreamError(403)] * 10)
     monkeypatch.setattr("app.features.nl2sql.embedding_client._post_json", fake)
     client.settings.nl2sql_embedding_concurrency = 1
 

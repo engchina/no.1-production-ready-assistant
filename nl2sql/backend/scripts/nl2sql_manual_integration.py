@@ -122,7 +122,7 @@ def _diagnostics(
         missing = [
             check.name
             for check in diagnostics.checks
-            if check.name.startswith("OCI_ENTERPRISE_AI") and check.status != "ok"
+            if check.name.startswith("ENTERPRISE_AI") and check.status != "ok"
         ]
         detail = ",".join(missing)
         if not detail:
@@ -365,7 +365,7 @@ def _preview(
     runtime = str(data.engine_meta.get("runtime") or "deterministic")
     ok = data.is_safe
     if require_enterprise_ai and engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT:
-        ok = ok and runtime == "oci_enterprise_ai" and not data.fallback_reason
+        ok = ok and runtime == "enterprise_ai" and not data.fallback_reason
     message = (
         f"engine={data.engine.value}; runtime={runtime}; safe={data.is_safe}; "
         f"row_limit={data.row_limit}; meta={_engine_meta_summary(data.engine_meta)}; "
@@ -420,7 +420,7 @@ def _job(
     if require_enterprise_ai and engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT:
         ok = (
             ok
-            and result_runtime == "oci_enterprise_ai"
+            and result_runtime == "enterprise_ai"
             and not (data.result and data.result.fallback_reason)
         )
     message = (

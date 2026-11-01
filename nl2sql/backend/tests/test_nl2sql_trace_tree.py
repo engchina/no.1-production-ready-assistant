@@ -87,7 +87,7 @@ def test_job_generation_retry_and_execution_nest_under_their_stages(
 
     _mock_http(monkeypatch, handler)
     monkeypatch.setattr("time.sleep", lambda _seconds: None)
-    client = enterprise_ai_client.OciEnterpriseAiDirectClient(_direct_settings())
+    client = enterprise_ai_client.HttpEnterpriseAiDirectClient(_direct_settings())
     service = _worker(_repository(), client)  # type: ignore[arg-type]
     created = service.start_job(
         _request().model_copy(update={"chat": True}),

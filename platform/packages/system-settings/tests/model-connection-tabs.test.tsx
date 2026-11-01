@@ -38,7 +38,7 @@ function data(withSecondary = false): ModelSettingsData {
           {
             connection_id: "primary",
             endpoint: "https://primary.example",
-            project_ocid: "ocid1.generativeaiproject.oc1..primary",
+            project_id: "ocid1.generativeaiproject.oc1..primary",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,
@@ -48,7 +48,7 @@ function data(withSecondary = false): ModelSettingsData {
                 {
                   connection_id: "secondary" as const,
                   endpoint: "https://secondary.example",
-                  project_ocid: "ocid1.generativeaiproject.oc1..secondary",
+                  project_id: "ocid1.generativeaiproject.oc1..secondary",
                   api_key: "",
                   has_api_key: true,
                   clear_api_key: false,
@@ -324,7 +324,7 @@ describe("ModelSettingsPage の接続のタブ（#542）", () => {
     ]);
     expect(payload.enterprise_ai.connections[1]).toMatchObject({
       endpoint: "https://api.openai.com/v1",
-      project_ocid: "",
+      project_id: "",
       api_key: "sk-openai",
     });
   });

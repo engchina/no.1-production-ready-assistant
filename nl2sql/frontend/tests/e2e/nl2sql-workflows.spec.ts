@@ -1693,7 +1693,7 @@ async function mockNl2SqlApi(page: Page): Promise<MockApiState> {
       indexed_count: 0,
       vector_dimension: 1024,
       vector_backend: "oracle_26ai",
-      embedding_provider: "oci_genai",
+      embedding_provider: "genai",
       embedding_model: "cohere.embed-v4.0",
       embedding_configured: false,
       ddl: [
@@ -1715,7 +1715,7 @@ async function mockNl2SqlApi(page: Page): Promise<MockApiState> {
       indexed_count: 1,
       vector_dimension: 1024,
       vector_backend: "oracle_26ai",
-      embedding_provider: "oci_genai",
+      embedding_provider: "genai",
       embedding_model: "cohere.embed-v4.0",
       embedding_configured: false,
       ddl: [
@@ -1737,7 +1737,7 @@ async function mockNl2SqlApi(page: Page): Promise<MockApiState> {
       indexed_count: 0,
       vector_dimension: 1024,
       vector_backend: "oracle_26ai",
-      embedding_provider: "oci_genai",
+      embedding_provider: "genai",
       embedding_model: "cohere.embed-v4.0",
       embedding_configured: false,
       ddl: ["CREATE TABLE NL2SQL_FEEDBACK_VECTORS (EMBEDDING VECTOR(1024, FLOAT32))"],
@@ -2061,7 +2061,7 @@ async function mockNl2SqlApi(page: Page): Promise<MockApiState> {
         },
         { kind: "aggregation", business: "合計を計算します", technical: "集計: SUM" },
       ],
-      source: "oci_enterprise_ai",
+      source: "enterprise_ai",
       warnings: [],
     });
   });
@@ -11544,11 +11544,11 @@ test("metadata SQL regeneration resets the edited execution SQL", async ({ page 
 
 for (const metadata of [
   { mode: "comment", path: "comments", source: "deterministic", label: "規則ベース（AI 未使用）" },
-  { mode: "annotation", path: "annotations", source: "oci_enterprise_ai", label: "OCI Enterprise AI" },
+  { mode: "annotation", path: "annotations", source: "enterprise_ai", label: "OCI Enterprise AI" },
   { mode: "domain", path: "domains", source: "deterministic", label: "規則ベース（AI 未使用）" },
 ] as const) {
   test(`${metadata.mode}-management は SQL の生成方式を内部値ではなく文言で出す`, async ({ page }) => {
-    // #962: generated.source（oci_enterprise_ai / deterministic）を英語の内部値のまま出さない。
+    // #962: generated.source（enterprise_ai / deterministic）を英語の内部値のまま出さない。
     await mockNl2SqlApi(page);
     await page.unroute(`**/api/nl2sql/${metadata.path}/generate-sql`);
     await page.route(`**/api/nl2sql/${metadata.path}/generate-sql`, (route) =>
@@ -11636,7 +11636,7 @@ test("comment-management は一部の表だけ規則ベースにした結果を�
   await page.route("**/api/nl2sql/comments/generate-sql", (route) =>
     fulfillJson(route, {
       sql: "COMMENT ON TABLE APP.INVOICES IS '請求';",
-      source: "oci_enterprise_ai",
+      source: "enterprise_ai",
       warnings: [],
       fallback: true,
       fallback_objects: ["APP.INVOICES"],
@@ -15780,7 +15780,7 @@ test("論理構造の再生成不能理由を表示し編集内容を保持し�
   await page.route("**/api/nl2sql/reverse/sql", async (route) => {
     calls += 1;
     if (calls === 1) return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ detail: "対象の列名を論理構造に追加してください。" }) });
-    await fulfillJson(route, { sql: "SELECT ID FROM APP.INVOICES", explanation: "指定された列を取得します。", source: "oci_enterprise_ai", warnings: [] });
+    await fulfillJson(route, { sql: "SELECT ID FROM APP.INVOICES", explanation: "指定された列を取得します。", source: "enterprise_ai", warnings: [] });
   });
   await page.goto("/sql-to-question");
   await sqlToQuestionInput(page).fill("select * from INVOICES");
@@ -16148,7 +16148,7 @@ for (const questionFailed of [false, true]) {
       question: "従業員情報を取得したい", explanation: "従業員を参照します。", referenced_tables: ["employee"],
       sql_structure: analysis, logical_structure: logical,
       logical_structure_items: [],
-      source: questionFailed ? "deterministic" : "oci_enterprise_ai", warnings: questionFailed ? [warning] : [],
+      source: questionFailed ? "deterministic" : "enterprise_ai", warnings: questionFailed ? [warning] : [],
     }));
     let payload: Record<string, unknown> | null = null;
     await page.route("**/api/nl2sql/reverse/sql", (route) => {
@@ -16165,7 +16165,7 @@ for (const questionFailed of [false, true]) {
     if (questionFailed) await expect(page.getByText(warning).first()).toBeVisible();
     const candidate = page.getByRole("region", { name: "質問候補", exact: true });
     await expect(candidate).toContainText("従業員情報を取得したい");
-    await expect(candidate).not.toContainText("oci_enterprise_ai");
+    await expect(candidate).not.toContainText("enterprise_ai");
     await expect(candidate).not.toContainText("SQL の処理手順");
     await expectNoHorizontalScroll(page);
     await page.screenshot({ path: testInfo.outputPath("sql-assist-analysis.png"), fullPage: true });

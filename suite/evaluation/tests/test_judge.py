@@ -88,7 +88,7 @@ def _report(thresholds: CalibrationThresholds | None = None) -> CalibrationRepor
         labels,
         RUBRIC,
         judgements=judgements,
-        judge_provenance={"provider": "oci_enterprise_ai", "model": MODEL},
+        judge_provenance={"provider": "enterprise_ai", "model": MODEL},
         settings=settings,
         thresholds=thresholds or CalibrationThresholds(),
     )
@@ -254,7 +254,7 @@ def _config(**fields: Any) -> JudgeModelConfig:
         "endpoint": "https://inference.example.invalid/openai/v1/",
         "model": "judge-model",
         "api_key": "synthetic-key",
-        "project_ocid": "ocid1.synthetic",
+        "project_id": "ocid1.synthetic",
     }
     return JudgeModelConfig(**{**values, **fields})
 
@@ -324,7 +324,7 @@ def test_model_config_comes_from_suite_env_without_a_default_model() -> None:
         }
     )
     assert config.provenance() == {
-        "provider": "oci_enterprise_ai",
+        "provider": "enterprise_ai",
         "endpoint_host": "host.example.invalid",
         "model": "m",
         "max_output_tokens": None,

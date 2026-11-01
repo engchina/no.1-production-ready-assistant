@@ -28,20 +28,20 @@ def _payload() -> dict[str, Any]:
                 {
                     "connection_id": "primary",
                     "endpoint": PRIMARY,
-                    "project_ocid": "ocid1.project.primary",
+                    "project_id": "ocid1.project.primary",
                     "api_key": "sk-primary",
                 },
                 {
                     "connection_id": "secondary",
                     "endpoint": SECONDARY,
-                    "project_ocid": "ocid1.project.secondary",
+                    "project_id": "ocid1.project.secondary",
                     "api_key": "",
                     "has_api_key": True,
                 },
                 {
                     "connection_id": "tertiary",
                     "endpoint": TERTIARY,
-                    "project_ocid": "",
+                    "project_id": "",
                     "api_key": "sk-tertiary",
                 },
             ],
@@ -100,7 +100,7 @@ def test_model_test_uses_connection_of_tested_model(
         lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs),
     )
     # 保存済みのセカンダリ接続の key（画面では空欄 = 保持）を使う。
-    saved = Settings(_env_file=None, oci_enterprise_ai_secondary_api_key="sk-saved-secondary")
+    saved = Settings(_env_file=None, enterprise_ai_secondary_api_key="sk-saved-secondary")
     request = ModelSettingsTestRequest.model_validate(
         {"settings": _payload(), "target_type": target_type, "model_id": model_id}
     )

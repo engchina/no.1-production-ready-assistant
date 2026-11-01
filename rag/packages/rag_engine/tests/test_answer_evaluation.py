@@ -13,7 +13,7 @@ from judge_stub import calls_of
 from judge_stub import judge as stub_judge
 from pydantic import ValidationError
 
-from rag_engine.adapters.oci import InvalidStructuredOutput
+from rag_engine.adapters.model_api import InvalidStructuredOutput
 from rag_engine.config import get_settings
 from rag_engine.evaluation.answer_eval import (
     CLAIM_PROMPT,

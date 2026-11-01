@@ -2,7 +2,7 @@
 
 検索（REST・SSE）・チャット・MCP・品質評価の 1 ケースは、回答の pipeline の例外を同じ形で返す。
 
-- LLM の応答が未完了（`rag_engine.adapters.oci.IncompleteResponse`。Responses API の
+- LLM の応答が未完了（`rag_engine.adapters.model_api.IncompleteResponse`。Responses API の
   `status=incomplete`）で終わった失敗は、理由ごとの文（出力の上限・安全の判定）と直し方を返す。
   送り直し（上限を広げる・推論の量を下げる）は adapter が済ませている。
 - それ以外の予期しない例外は、定型文（``fallback``）のまま返す（内部の文を利用者に出さない）。
@@ -25,7 +25,7 @@ from typing import Any
 
 from pr_backend_core.bounded_calls import KIND_LABELS, ErrorKind, classify_error
 from pr_backend_core.logging import safe_error_code
-from rag_engine.adapters.oci import IncompleteResponse
+from rag_engine.adapters.model_api import IncompleteResponse
 from rag_engine.generation.execution_record import AnswerExecutionError
 
 # 未完了の応答の error_type（画面・SSE・MCP の error code）。3 製品の共通の error code と同じ値。

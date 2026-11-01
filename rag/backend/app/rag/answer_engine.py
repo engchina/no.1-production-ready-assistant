@@ -19,7 +19,7 @@ rag_poc の ``answer_question_result``(質問ルーティング / CRAG / 親子�
   ``section_path`` から DB で作り(範囲と索引の状態ごとに cache)、選ばれた画面の chunk も DB から
   読んで rag_engine へ注入する(検索結果に出なかった画面も候補に加える)。
 - rerank: backend の Cohere rerank。
-- LLM: openai SDK(OCI_ENTERPRISE_AI_*)。rag_engine 内部の Responses API 経路を使う。
+- LLM: openai SDK(ENTERPRISE_AI_*)。rag_engine 内部の Responses API 経路を使う。
 回答フローは同期関数のため回答の専用の worker thread で動かし、非同期 I/O はイベントループへ戻して
 実行する。回答の打ち切り・取り消しは期限として thread に伝え、LLM の呼び出しと I/O を止める(#1422)。
 """
@@ -63,7 +63,7 @@ from rag_engine.retrieval.search_stages import (
     REFERENCE_EXPANSION_STAGE,
 )
 
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.oracle_read_stats import (
     current_db_call_stats,
@@ -557,7 +557,7 @@ def build_engine_settings(
     ``answer_model_id`` を渡すと、回答のモデル(とその接続)をそのモデルにする。チャットの
     モデル比較で、列ごとのモデルで答えるために使う(#593)。省略時は既定のモデル。回答の実行の
     LLM の呼び出しはすべてこのモデルで行い、根拠の画像はこのモデルが読めるときだけ添付する
-    (#3444)。既定の Vision モデル(``OCI_ENTERPRISE_AI_VLM_*``)は取り込みの処理(図の説明など)
+    (#3444)。既定の Vision モデル(``ENTERPRISE_AI_VLM_*``)は取り込みの処理(図の説明など)
     だけが使う。
 
     """
@@ -570,37 +570,37 @@ def build_engine_settings(
     vision = enterprise_ai_connection_for_model(settings, vision_model)
     environ = {
         # Endpoint URL は platform の関数で base URL にして渡す(#1440。rag_engine はそのまま使う)。
-        "OCI_ENTERPRISE_AI_ENDPOINT": answer.base_url,
-        "OCI_ENTERPRISE_AI_API_KEY": answer.api_key,
-        "OCI_ENTERPRISE_AI_PROJECT_OCID": answer.project_ocid,
-        "OCI_ENTERPRISE_AI_DEFAULT_MODEL": answer_model,
+        "ENTERPRISE_AI_ENDPOINT": answer.base_url,
+        "ENTERPRISE_AI_API_KEY": answer.api_key,
+        "ENTERPRISE_AI_PROJECT_ID": answer.project_id,
+        "ENTERPRISE_AI_DEFAULT_MODEL": answer_model,
         # 回答のモデルが画像を読めるか(#3444)。読めるときだけ根拠の画像を回答の入力に添付する。
-        "OCI_ENTERPRISE_AI_DEFAULT_MODEL_VISION": (
+        "ENTERPRISE_AI_DEFAULT_MODEL_VISION": (
             "1" if answer_model_reads_images(settings, answer_model) else "0"
         ),
-        "OCI_ENTERPRISE_AI_VLM_MODEL": vision_model,
-        "OCI_ENTERPRISE_AI_VLM_ENDPOINT": vision.base_url,
-        "OCI_ENTERPRISE_AI_VLM_API_KEY": vision.api_key,
-        "OCI_ENTERPRISE_AI_VLM_PROJECT_OCID": vision.project_ocid,
+        "ENTERPRISE_AI_VLM_MODEL": vision_model,
+        "ENTERPRISE_AI_VLM_ENDPOINT": vision.base_url,
+        "ENTERPRISE_AI_VLM_API_KEY": vision.api_key,
+        "ENTERPRISE_AI_VLM_PROJECT_ID": vision.project_id,
         # 推論(思考)の量はモデルごとの送る値(#1425。none は空 = 送らない)。
-        "OCI_ENTERPRISE_AI_REASONING_EFFORT": enterprise_ai_reasoning_effort_to_send(
+        "ENTERPRISE_AI_REASONING_EFFORT": enterprise_ai_reasoning_effort_to_send(
             settings, answer_model
         ),
-        "OCI_ENTERPRISE_AI_VLM_REASONING_EFFORT": enterprise_ai_reasoning_effort_to_send(
+        "ENTERPRISE_AI_VLM_REASONING_EFFORT": enterprise_ai_reasoning_effort_to_send(
             settings, vision_model
         ),
         # 回答のモデルの入力の上限(tokens。#1437)。章節の拡張の根拠の入力の上限と、抽出してから
         # 統合の 1 回分の大きさを、この値の割合で決める(値の解釈は platform の 1 か所)。
-        "OCI_ENTERPRISE_AI_MAX_INPUT_TOKENS": str(
+        "ENTERPRISE_AI_MAX_INPUT_TOKENS": str(
             enterprise_ai_max_input_tokens(settings, answer_model)
         ),
         # 回答のモデルと Vision のモデルの出力の上限(tokens。#1719)。rag_engine は回答の上限
         # (answer_max_tokens。既定 32768)とこの値の小さい方を送り、未完了の送り直しもこの値で抑える
         # (値の解釈は platform の enterprise_ai_output_token_budget。prompt は見積もらない)。
-        "OCI_ENTERPRISE_AI_MAX_OUTPUT_TOKENS": str(
+        "ENTERPRISE_AI_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, answer_model)
         ),
-        "OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
+        "ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS": str(
             enterprise_ai_output_token_budget(settings, vision_model)
         ),
         # 埋め込みと再ランクは OpenAI 互換の API を、既定の埋め込み / 再ランクのモデルの接続の
@@ -608,11 +608,11 @@ def build_engine_settings(
         # platform の関数で /compatible-mode/ を /compatible-api/ に読み替えて渡す(百煉は
         # 再ランクだけ /compatible-api/v1)。model を渡さないと RAG_RERANK_ENABLED=true でも
         # 常に「未実行」になる(#275)。
-        "EMBEDDING_MODEL": settings.oci_genai_embedding_model,
-        "EMBEDDING_OUTPUT_DIMENSIONS": str(int(settings.oci_genai_embedding_dim)),
+        "EMBEDDING_MODEL": settings.genai_embedding_model,
+        "EMBEDDING_OUTPUT_DIMENSIONS": str(int(settings.genai_embedding_dim)),
         "EMBEDDING_BASE_URL": embedding_api_base_url(settings),
         "EMBEDDING_API_KEY": embedding_model_connection(settings).api_key,
-        "RERANK_MODEL": settings.oci_genai_rerank_model,
+        "RERANK_MODEL": settings.genai_rerank_model,
         "RERANK_BASE_URL": embedding_api_base_url(settings, rerank=True),
         "RERANK_API_KEY": embedding_model_connection(settings, rerank=True).api_key,
         "RAG_ENGINE_OUTPUT_DIR": str(output_dir),
@@ -637,8 +637,8 @@ def build_engine_settings(
         ),
         # 「今日」(基準日の既定)の時間帯(共通の設定 PLATFORM_TIMEZONE。#3249)。
         "PLATFORM_TIMEZONE": configured_timezone_name(settings),
-        "LLM_REQUEST_TIMEOUT_SECONDS": str(int(settings.oci_enterprise_ai_timeout_seconds)),
-        "LLM_RETRIES": str(int(settings.oci_enterprise_ai_max_retries)),
+        "LLM_REQUEST_TIMEOUT_SECONDS": str(int(settings.enterprise_ai_timeout_seconds)),
+        "LLM_RETRIES": str(int(settings.enterprise_ai_max_retries)),
         # 画面目録で操作画面を探す(#554)。rag_engine は明示した environ だけを読む。
         "RAG_ENGINE_SCREEN_LINKING": "1" if settings.rag_screen_linking_enabled else "0",
         # 回答の最終の検証の入力の上限。
@@ -844,7 +844,7 @@ class AnswerEngine:
         settings: Settings,
         *,
         oracle: OracleClient,
-        genai: OciGenAiClient,
+        genai: GenAiClient,
         runtime_knowledge_payload: Mapping[str, object] | None = None,
         answer_model_id: str | None = None,
         auto_field_conditions: Sequence[ExtractionFieldCondition] = (),
@@ -1262,9 +1262,9 @@ class AnswerEngine:
         return {
             "llm": model(self._answer_model_id or enterprise_ai_default_model_id(settings)),
             "attached_images": attached_images,
-            "embedding": settings.oci_genai_embedding_model,
+            "embedding": settings.genai_embedding_model,
             "rerank": (
-                settings.oci_genai_rerank_model
+                settings.genai_rerank_model
                 if settings.rag_rerank_enabled
                 and bool(embedding_api_base_url(settings, rerank=True))
                 and not rerank_failed
@@ -1319,7 +1319,7 @@ class AnswerEngine:
         business_names: Sequence[str] = (),
         step_callback: StepCallback | None = None,
     ) -> Any:
-        from rag_engine.adapters.oci import parse_multimodal_response, parse_text_response
+        from rag_engine.adapters.model_api import parse_multimodal_response, parse_text_response
         from rag_engine.dependencies import AnswerDependencies, bind_dependencies
         from rag_engine.generation.answering import answer_question_result
         from rag_engine.generation.execution_record import bind_step_listener, bind_step_metrics
@@ -3027,7 +3027,7 @@ class _LoopEmbedder:
     どれを item が説明したかを語で決められないときに使う。
     """
 
-    genai: OciGenAiClient
+    genai: GenAiClient
     loop: asyncio.AbstractEventLoop
 
     def embed(self, texts: Sequence[str], *, query: bool = False) -> list[list[float]]:

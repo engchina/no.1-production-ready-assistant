@@ -30,7 +30,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from app.clients.oci_genai import EmbeddingInputType
+from app.clients.genai import EmbeddingInputType
 from app.schemas.search import RetrievedChunk, SearchMode, format_search_id_filter
 from app.schemas.search_answer_profile import SearchAnswerProfileTarget
 

@@ -216,9 +216,9 @@ def normalize_legacy_chunking_strategy_value(value: object) -> object:
 # 親子階層（small-to-big。`small_to_big`）の分割パラメータ。既定値と範囲は rag_poc の
 # rag_engine.chunking.constants(DEFAULT_* / *_RANGE)と同じ(テストで一致を確認する)。
 # rag_engine.chunking は import すると分割実装一式を読み込むため、ここでは値を複製して持つ。
-# OCI Enterprise AI の LLM 1 回の timeout（`oci_enterprise_ai_timeout_seconds`）の上限（秒）。
+# OCI Enterprise AI の LLM 1 回の timeout（`enterprise_ai_timeout_seconds`）の上限（秒）。
 # 保存済みの回答の評価の時間の上限もこの値から決める（#304）。
-OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = 600.0
+ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = 600.0
 # 品質評価の job の全体の時間の上限の最大（秒。1 日）。job の上限は、回答の回数 × 回答の上限を
 # この値で抑える（#1430。`app.rag.evaluation_jobs.evaluation_job_time_limit_seconds`）。
 RAG_EVALUATION_JOB_TIMEOUT_MAX_SECONDS = 86400
@@ -228,7 +228,7 @@ INGESTION_JOB_SUBPROCESS_TIMEOUT_DEFAULT_SECONDS = 86400.0
 INGESTION_JOB_SUBPROCESS_TIMEOUT_MAX_SECONDS = 604800.0
 # 取込 job の停滞の時間の既定（秒。#2003）。進捗を出さない 1 回の呼び出し（再試行を含む）の最長
 # より長くする: 解析サービスは配備の unit の 1230 秒 × 5 回 + 待ち = 約 6170 秒（timeout も
-# 再試行する）、Vision の LLM は共通の設定（PLATFORM_OCI_ENTERPRISE_AI_*）で選べる最長が
+# 再試行する）、Vision の LLM は共通の設定（PLATFORM_ENTERPRISE_AI_*）で選べる最長が
 # 600 秒 × 6 回 = 3600 秒。これらより長い 2 時間にする。
 INGESTION_JOB_STALL_TIMEOUT_DEFAULT_SECONDS = 7200.0
 CHUNK_CHILD_TARGET_CHARS_DEFAULT = 1000
@@ -511,69 +511,69 @@ class Settings(
 
     # --- OCI Enterprise AI（LLM / Vision-capable LLM）---
     # 注意: OCI Generative AI の chat 推論 API ではなく Enterprise AI を使う
-    oci_enterprise_ai_endpoint: str = Field(default="")
-    oci_enterprise_ai_project_ocid: str = Field(default="")
-    oci_enterprise_ai_api_key: str = Field(default="")
+    enterprise_ai_endpoint: str = Field(default="")
+    enterprise_ai_project_id: str = Field(default="")
+    enterprise_ai_api_key: str = Field(default="")
     # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
-    oci_enterprise_ai_secondary_endpoint: str = Field(default="")
-    oci_enterprise_ai_secondary_project_ocid: str = Field(default="")
-    oci_enterprise_ai_secondary_api_key: str = Field(default="")
+    enterprise_ai_secondary_endpoint: str = Field(default="")
+    enterprise_ai_secondary_project_id: str = Field(default="")
+    enterprise_ai_secondary_api_key: str = Field(default="")
     # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
-    oci_enterprise_ai_tertiary_endpoint: str = Field(default="")
-    oci_enterprise_ai_tertiary_project_ocid: str = Field(default="")
-    oci_enterprise_ai_tertiary_api_key: str = Field(default="")
-    oci_enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
+    enterprise_ai_tertiary_endpoint: str = Field(default="")
+    enterprise_ai_tertiary_project_id: str = Field(default="")
+    enterprise_ai_tertiary_api_key: str = Field(default="")
+    enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
     # 既定のテキストモデルと既定の Vision モデル（#499。画面・API では 2 つとも必須。#566）。
     # 呼び出しに使う ID は enterprise_ai_default_model_id / enterprise_ai_vision_model_id
     # で解決する。
-    oci_enterprise_ai_default_text_model: str = Field(default="")
-    oci_enterprise_ai_default_vision_model: str = Field(default="")
+    enterprise_ai_default_text_model: str = Field(default="")
+    enterprise_ai_default_vision_model: str = Field(default="")
     # 品質評価の判定のモデル（#3574。空 = 既定のテキストモデル、
     # same_as_answer = 回答と同じモデル）。
     # 判定に使う ID は enterprise_ai_judge_model_id で解決する。
-    oci_enterprise_ai_default_judge_model: str = Field(default="")
-    oci_enterprise_ai_llm_path: str = Field(default="/responses")
-    oci_enterprise_ai_vlm_path: str = Field(default="/responses")
-    oci_enterprise_ai_vlm_input_mode: EnterpriseAiVlmInputMode = Field(
+    enterprise_ai_default_judge_model: str = Field(default="")
+    enterprise_ai_llm_path: str = Field(default="/responses")
+    enterprise_ai_vlm_path: str = Field(default="/responses")
+    enterprise_ai_vlm_input_mode: EnterpriseAiVlmInputMode = Field(
         default="files_api",
         description=(
             "Enterprise AI VLM への入力搬送方式。files_api は VLM 入力を明示的に /files "
             "経由へ送る。inline_image は画像のみ inline。"
         ),
     )
-    oci_enterprise_ai_llm_payload_template: str = Field(
+    enterprise_ai_llm_payload_template: str = Field(
         default="",
         description=(
             "Enterprise AI LLM endpoint の request JSON template。空なら標準 RAG payload。"
         ),
     )
-    oci_enterprise_ai_vlm_payload_template: str = Field(
+    enterprise_ai_vlm_payload_template: str = Field(
         default="",
         description=(
             "Enterprise AI VLM endpoint の request JSON template。空なら標準 OCR payload。"
         ),
     )
-    oci_enterprise_ai_llm_response_path: str = Field(
+    enterprise_ai_llm_response_path: str = Field(
         default="",
         description=(
             "Enterprise AI LLM response から回答候補を取り出す JSON Pointer。"
             "空なら既知 envelope を順番に照合する。"
         ),
     )
-    oci_enterprise_ai_vlm_response_path: str = Field(
+    enterprise_ai_vlm_response_path: str = Field(
         default="",
         description=(
             "Enterprise AI VLM response から StructuredExtraction 候補を取り出す JSON Pointer。"
             "空なら既知 envelope を順番に照合する。"
         ),
     )
-    oci_enterprise_ai_timeout_seconds: float = Field(
-        default=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+    enterprise_ai_timeout_seconds: float = Field(
+        default=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
         gt=0.0,
-        le=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+        le=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
     )
-    oci_enterprise_ai_max_retries: int = Field(default=3, ge=0, le=5)
+    enterprise_ai_max_retries: int = Field(default=3, ge=0, le=5)
     # 出力の上限は登録モデルごとの `max_output_tokens`(#1719。platform の
     # `enterprise_ai_output_token_budget`)。共通の LLM / VLM の出力の上限は持たない。
     # チャットで同じ会話の前のターンを LLM に渡す予算（共通の設定。#1818）。
@@ -614,14 +614,14 @@ class Settings(
     )
 
     # --- OCI Generative AI（埋め込み / リランク）---
-    oci_genai_embedding_model: str = Field(default="text-embedding-v4")
-    oci_genai_embedding_dim: int = Field(
+    genai_embedding_model: str = Field(default="text-embedding-v4")
+    genai_embedding_dim: int = Field(
         default=EMBEDDING_DIMENSIONS,
         ge=EMBEDDING_DIMENSIONS,
         le=EMBEDDING_DIMENSIONS,
         description="Oracle の rag_chunks.embedding の次元（EMBEDDING_DIMENSIONS）に固定（#46）。",
     )
-    oci_genai_rerank_model: str = Field(default="qwen3-rerank")
+    genai_rerank_model: str = Field(default="qwen3-rerank")
 
     # --- Oracle AI Database ---
     oracle_user: str = Field(default="")
@@ -1295,7 +1295,7 @@ class Settings(
     rag_answer_validation_timeout_seconds: float = Field(
         default=540.0,
         gt=0.0,
-        le=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+        le=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
         description=(
             "回答の最終の検証(rag_validate_answer)の通しの上限(秒。#2700)。"
             "根拠の読み直しから監査の LLM の呼び出しまでを含み、LLM 1 回の timeout と"
@@ -1772,7 +1772,7 @@ class Settings(
     rag_answer_timeout_seconds: float = Field(
         default=600.0,
         gt=0.0,
-        le=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+        le=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
         description=(
             "LLM を呼ぶ回答生成（チャット・RAG 検索の回答。ストリーム・非ストリーム・MCP。"
             "品質評価の 1 ケース）の通しの上限（秒。#375 / #383）。検索の計画・追加の検索の再分解・"
@@ -2290,7 +2290,7 @@ class Settings(
         normalized = str(value).strip().casefold()
         return LEGACY_EVALUATION_SUITES.get(normalized, value)
 
-    @field_validator("oci_enterprise_ai_vlm_input_mode", mode="before")
+    @field_validator("enterprise_ai_vlm_input_mode", mode="before")
     @classmethod
     def normalize_legacy_settings_vlm_input_mode(cls, value: object) -> object:
         """廃止済み旧値は起動互換のため files_api へ寄せる。"""
@@ -2389,8 +2389,8 @@ class Settings(
                 + self.rag_http_service_retry_max_delay_seconds
                 * max(self.rag_http_service_retry_attempts - 1, 0)
             ),
-            "oci_enterprise_ai_timeout_seconds": (
-                self.oci_enterprise_ai_timeout_seconds * (self.oci_enterprise_ai_max_retries + 1)
+            "enterprise_ai_timeout_seconds": (
+                self.enterprise_ai_timeout_seconds * (self.enterprise_ai_max_retries + 1)
             ),
         }
         return {settings_env_name("RAG_", field): value for field, value in timeouts.items()}
@@ -2609,7 +2609,7 @@ def _dump_parser_adapters(settings: Settings) -> dict[str, Any]:
 # モデル設定の読み書きは3製品共通（platform の pr_system_settings。#103）。
 MODEL_SETTINGS_STORE = ModelSettingsStore(
     resolve_path=lambda settings: resolve_model_settings_file(settings.model_settings_file),
-    # モデルの API key（PLATFORM_OCI_ENTERPRISE_AI_API_KEY）は共通 `.env` に保存する（#211）。
+    # モデルの API key（PLATFORM_ENTERPRISE_AI_API_KEY）は共通 `.env` に保存する（#211）。
     # テストで差し替えられるよう、呼出時に module の値を参照する。
     env_file=lambda _settings: PLATFORM_ENV_FILE,
 )

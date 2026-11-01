@@ -44,7 +44,7 @@ function data(): ModelSettingsData {
           {
             connection_id: "primary",
             endpoint: "https://api.deepseek.com",
-            project_ocid: "",
+            project_id: "",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,
@@ -52,7 +52,7 @@ function data(): ModelSettingsData {
           {
             connection_id: "secondary",
             endpoint: BAILIAN,
-            project_ocid: "",
+            project_id: "",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,

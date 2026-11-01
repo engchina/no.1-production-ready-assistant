@@ -153,7 +153,7 @@ async def test_formal_answer_forwards_confirmed_premises_and_does_not_leak_to_ne
             return GroundedDraft.model_validate(data)
         return result
 
-    monkeypatch.setattr("rag_engine.adapters.oci.parse_text_response", parser)
+    monkeypatch.setattr("rag_engine.adapters.model_api.parse_text_response", parser)
     validator = AsyncMock(return_value=AnswerValidation(status="completed", valid=True))
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     first = AnswerEngine(

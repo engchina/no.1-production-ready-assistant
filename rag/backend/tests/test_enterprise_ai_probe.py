@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import asdict
 from typing import Any
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.config import Settings
 from app.rag.enterprise_ai_probe import run_enterprise_ai_probe
 
@@ -12,14 +12,14 @@ from app.rag.enterprise_ai_probe import run_enterprise_ai_probe
 async def test_enterprise_ai_probe_dry_run_redacts_payload_values() -> None:
     """dry-run は endpoint を呼ばず、prompt/context の raw 値を出さない。"""
     transport = FakeEnterpriseAiTransport({"answer": "unused"})
-    client = OciEnterpriseAiClient(settings=_oci_settings(), http_transport=transport)
+    client = EnterpriseAiClient(settings=_llm_settings(), http_transport=transport)
 
     report = await run_enterprise_ai_probe(
         surface="llm",
         dry_run=True,
         prompt="SECRET-PROMPT",
         context="SECRET-CONTEXT",
-        settings=_oci_settings(),
+        settings=_llm_settings(),
         client=client,
     )
 
@@ -44,9 +44,9 @@ async def test_enterprise_ai_probe_dry_run_redacts_payload_values() -> None:
 
 async def test_enterprise_ai_probe_invokes_llm_and_summarizes_text() -> None:
     """LLM probe は回答本文を出さず、parse 結果を長さだけで返す。"""
-    settings = _oci_settings()
+    settings = _llm_settings()
     transport = FakeEnterpriseAiTransport({"answer": "根拠に基づく probe 回答"})
-    client = OciEnterpriseAiClient(settings=settings, http_transport=transport)
+    client = EnterpriseAiClient(settings=settings, http_transport=transport)
 
     report = await run_enterprise_ai_probe(surface="llm", settings=settings, client=client)
 
@@ -60,7 +60,7 @@ async def test_enterprise_ai_probe_invokes_llm_and_summarizes_text() -> None:
 
 async def test_enterprise_ai_probe_invokes_vlm_and_summarizes_extraction() -> None:
     """VLM probe は OCR 本文を出さず、構造化抽出の件数だけを返す。"""
-    settings = _oci_settings()
+    settings = _llm_settings()
     transport = FakeEnterpriseAiTransport(
         {
             "data": {
@@ -72,7 +72,7 @@ async def test_enterprise_ai_probe_invokes_vlm_and_summarizes_extraction() -> No
             }
         }
     )
-    client = OciEnterpriseAiClient(settings=settings, http_transport=transport)
+    client = EnterpriseAiClient(settings=settings, http_transport=transport)
 
     report = await run_enterprise_ai_probe(surface="vlm", settings=settings, client=client)
 
@@ -90,10 +90,10 @@ async def test_enterprise_ai_probe_invokes_vlm_and_summarizes_extraction() -> No
 
 async def test_enterprise_ai_probe_reports_payload_errors_without_transport_call() -> None:
     """endpoint/template 不備は transport 呼び出し前に payload stage で返す。"""
-    settings = _oci_settings()
-    settings.oci_enterprise_ai_endpoint = ""
+    settings = _llm_settings()
+    settings.enterprise_ai_endpoint = ""
     transport = FakeEnterpriseAiTransport({"answer": "unused"})
-    client = OciEnterpriseAiClient(settings=settings, http_transport=transport)
+    client = EnterpriseAiClient(settings=settings, http_transport=transport)
 
     report = await run_enterprise_ai_probe(surface="llm", settings=settings, client=client)
 
@@ -186,20 +186,20 @@ class FakeEnterpriseAiTransport:
         return {"id": "file-test", "deleted": True}
 
 
-def _oci_settings() -> Settings:
+def _llm_settings() -> Settings:
     """Enterprise AI probe 用の OCI 設定を返す。"""
     return Settings.model_construct(
-        oci_enterprise_ai_endpoint="https://enterprise-ai.example",
-        oci_enterprise_ai_project_ocid="ocid1.generativeaiproject.oc1..example",
-        oci_enterprise_ai_api_key="sk-test-secret",
-        oci_enterprise_ai_default_text_model="enterprise-llm",
-        oci_enterprise_ai_default_vision_model="enterprise-vlm",
-        oci_enterprise_ai_llm_path="/llm/generate",
-        oci_enterprise_ai_vlm_path="/vlm/extract",
-        oci_enterprise_ai_llm_payload_template="",
-        oci_enterprise_ai_vlm_payload_template="",
-        oci_enterprise_ai_llm_response_path="",
-        oci_enterprise_ai_vlm_response_path="",
-        oci_enterprise_ai_timeout_seconds=12.0,
-        oci_enterprise_ai_max_retries=0,
+        enterprise_ai_endpoint="https://enterprise-ai.example",
+        enterprise_ai_project_id="ocid1.generativeaiproject.oc1..example",
+        enterprise_ai_api_key="sk-test-secret",
+        enterprise_ai_default_text_model="enterprise-llm",
+        enterprise_ai_default_vision_model="enterprise-vlm",
+        enterprise_ai_llm_path="/llm/generate",
+        enterprise_ai_vlm_path="/vlm/extract",
+        enterprise_ai_llm_payload_template="",
+        enterprise_ai_vlm_payload_template="",
+        enterprise_ai_llm_response_path="",
+        enterprise_ai_vlm_response_path="",
+        enterprise_ai_timeout_seconds=12.0,
+        enterprise_ai_max_retries=0,
     )

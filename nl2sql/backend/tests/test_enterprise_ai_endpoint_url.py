@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
 # (Endpoint URL, 呼ぶ URL)。RAG・Agent の test_enterprise_ai_endpoint_url.py と同じ表。
@@ -29,16 +29,16 @@ ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-withou
 
 def _settings(endpoint: str) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": endpoint,
-        "oci_enterprise_ai_project_ocid": "",
-        "oci_enterprise_ai_api_key": "sk-test",
-        "oci_enterprise_ai_models": [
+        "enterprise_ai_endpoint": endpoint,
+        "enterprise_ai_project_id": "",
+        "enterprise_ai_api_key": "sk-test",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel(model_id="text-a"),
             EnterpriseAiConfiguredModel(model_id="vision-b", vision_enabled=True),
         ],
-        "oci_enterprise_ai_default_text_model": "text-a",
-        "oci_enterprise_ai_default_vision_model": "vision-b",
-        "oci_enterprise_ai_max_retries": 0,
+        "enterprise_ai_default_text_model": "text-a",
+        "enterprise_ai_default_vision_model": "vision-b",
+        "enterprise_ai_max_retries": 0,
     }
     return Settings(_env_file=None, **values)
 
@@ -64,7 +64,7 @@ def recorded_urls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 def test_text_and_vision_call_endpoint_as_is(
     recorded_urls: list[str], endpoint: str, expected: str
 ) -> None:
-    client = OciEnterpriseAiDirectClient(_settings(endpoint))
+    client = HttpEnterpriseAiDirectClient(_settings(endpoint))
 
     client.generate(prompt="質問", context="", system_prompt="日本語で答える")
     client.generate_from_image(b"jpeg", "説明してください")

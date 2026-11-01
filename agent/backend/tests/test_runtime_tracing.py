@@ -14,7 +14,7 @@ from pr_backend_core.observability.tracing import (
 )
 
 from app import observability as obs
-from app.features.agent.builtin_runtime import _OciResponses
+from app.features.agent.builtin_runtime import _CompatResponses
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_stream_span_lives_until_consumption_and_records_known_usage() -> 
     configure_tracing(TracingSettings(), service_name="synthetic")
     try:
         with operation_trace("agent.execute", operation_id="run-a") as summary:
-            stream = await _OciResponses(Client()).create(
+            stream = await _CompatResponses(Client()).create(
                 model="model-a", stream=True, input="private-payload"
             )
             assert not summary.spans
@@ -74,10 +74,10 @@ async def test_model_call_span_carries_the_turn_kind_for_progress() -> None:
             return SimpleNamespace(status="completed", output=self.output, usage=None)
 
     with operation_trace("agent.execute", operation_id="run-k", listener=updates.append):
-        await _OciResponses(Client([SimpleNamespace(type="function_call")])).create(
+        await _CompatResponses(Client([SimpleNamespace(type="function_call")])).create(
             model="model-a", input="x"
         )
-        await _OciResponses(Client([SimpleNamespace(type="message")])).create(
+        await _CompatResponses(Client([SimpleNamespace(type="message")])).create(
             model="model-a", input="x"
         )
     chats = [update for update in updates if update.operation_name == "gen_ai.chat"]
@@ -114,7 +114,7 @@ async def test_streamed_model_call_takes_the_turn_kind_from_the_completed_event(
             return Stream()
 
     with operation_trace("agent.execute", operation_id="run-s") as summary:
-        stream = await _OciResponses(Client()).create(model="model-a", stream=True, input="x")
+        stream = await _CompatResponses(Client()).create(model="model-a", stream=True, input="x")
         async for _ in stream:
             pass
     [chat] = [span for span in summary.spans if span.operation_name == "gen_ai.chat"]

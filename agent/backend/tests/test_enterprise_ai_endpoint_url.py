@@ -63,10 +63,10 @@ def test_runtime_calls_endpoint_as_is(
 
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=endpoint,
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
-        oci_enterprise_ai_default_text_model="text-a",
+        enterprise_ai_endpoint=endpoint,
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id="text-a")],
+        enterprise_ai_default_text_model="text-a",
     )
     monkeypatch.setattr(builtin_runtime, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -111,7 +111,7 @@ def test_model_test_calls_endpoint_as_is(
                 {
                     "connection_id": "primary",
                     "endpoint": endpoint,
-                    "project_ocid": "",
+                    "project_id": "",
                     "api_key": "sk-test",
                 }
             ],

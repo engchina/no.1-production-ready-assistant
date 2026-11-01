@@ -10569,7 +10569,7 @@ class OracleClient:
 
     def _validate_embedding_width(self, embedding: list[float], label: str) -> None:
         """Oracle の `EMBEDDING_VECTOR_COLUMN_TYPE` の列に保存/検索できる幅か検証する。"""
-        expected_dim = self._settings.oci_genai_embedding_dim
+        expected_dim = self._settings.genai_embedding_dim
         if len(embedding) != expected_dim:
             raise ValueError(
                 f"{label} の次元数が不正です。expected={expected_dim}, actual={len(embedding)}"

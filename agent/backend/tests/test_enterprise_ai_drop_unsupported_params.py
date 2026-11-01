@@ -66,10 +66,10 @@ def test_runtime_client_drops_temperature_and_remembers(monkeypatch: pytest.Monk
 
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id=REASONING_MODEL)],
-        oci_enterprise_ai_default_text_model=REASONING_MODEL,
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id=REASONING_MODEL)],
+        enterprise_ai_default_text_model=REASONING_MODEL,
     )
     monkeypatch.setattr(builtin_runtime, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -117,7 +117,7 @@ def test_model_test_reports_dropped_parameter(monkeypatch: pytest.MonkeyPatch) -
                 {
                     "connection_id": "primary",
                     "endpoint": ENDPOINT,
-                    "project_ocid": "",
+                    "project_id": "",
                     "api_key": "sk-test",
                 }
             ],

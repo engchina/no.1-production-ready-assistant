@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.models.llm import TextOutput
 from rag_engine.resources.tracing import bind_trace_observer
@@ -46,19 +46,19 @@ def test_sdk_boundary_records_private_request_schema_and_response(monkeypatch, s
         return response, None
 
     client = SimpleNamespace(responses=SimpleNamespace(parse=parse))
-    monkeypatch.setattr(oci, "_stall_detection_enabled", lambda _: streamed)
-    monkeypatch.setattr(oci, "_stall_limits", lambda *_: None)
-    monkeypatch.setattr(oci, "_openai_client_for_provider", lambda *_: client)
-    monkeypatch.setattr(oci, "_openai_client_with_deadline", lambda client, _: client)
-    monkeypatch.setattr(oci, "_stream_parsed", stream)
+    monkeypatch.setattr(model_api, "_stall_detection_enabled", lambda _: streamed)
+    monkeypatch.setattr(model_api, "_stall_limits", lambda *_: None)
+    monkeypatch.setattr(model_api, "_openai_client_for_provider", lambda *_: client)
+    monkeypatch.setattr(model_api, "_openai_client_with_deadline", lambda client, _: client)
+    monkeypatch.setattr(model_api, "_stream_parsed", stream)
     provider = SimpleNamespace(model="synthetic-model", label="synthetic", reasoning_effort="", base_url="https://synthetic.invalid")
     messages = [{"role": "user", "content": "合成の入力"}]
     with bind_trace_observer(observer):
         if failed:
             with pytest.raises(RuntimeError, match="合成の接続失敗"):
-                oci._openai_parsed(messages, get_settings(environ={}, dotenv_path=None), TextOutput, provider)
+                model_api._openai_parsed(messages, get_settings(environ={}, dotenv_path=None), TextOutput, provider)
         else:
-            oci._openai_parsed(messages, get_settings(environ={}, dotenv_path=None), TextOutput, provider)
+            model_api._openai_parsed(messages, get_settings(environ={}, dotenv_path=None), TextOutput, provider)
     assert len(sent) == 1
     assert [item[0] for item in recorded] == (["request"] if failed else ["request", "response"])
     request, schema = recorded[0][1:]
@@ -91,7 +91,7 @@ def test_stream_failure_keeps_received_prefix():
     client.with_options = lambda **_: client
     snapshots = []
     with pytest.raises(RuntimeError, match="synthetic failure"):
-        oci._stream_parsed(client, {}, get_settings(environ={}, dotenv_path=None), None, capture=CallStreamCapture(snapshots.append))
+        model_api._stream_parsed(client, {}, get_settings(environ={}, dotenv_path=None), None, capture=CallStreamCapture(snapshots.append))
     assert snapshots[-1]["status"] == "interrupted"
     assert snapshots[-1]["output"][0]["content"][0]["text"] == "合成の思考"
     assert snapshots[-1]["output"][1]["content"][0]["text"] == "合成の途中の回答"

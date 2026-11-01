@@ -355,10 +355,10 @@ async def _answer(
     *,
     filters: dict[str, str] | None = None,
 ) -> tuple[Any, list[str]]:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     prompts: list[str] = []
-    monkeypatch.setattr(engine_oci, "parse_text_response", _prompts_llm(prompts))
+    monkeypatch.setattr(engine_api, "parse_text_response", _prompts_llm(prompts))
     engine = AnswerEngine(
         Settings(rag_domain_keywords=["受注番号"]),
         oracle=oracle,  # type: ignore[arg-type]

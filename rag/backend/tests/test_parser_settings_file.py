@@ -38,7 +38,7 @@ V4_SHARED_DOCUMENT: dict[str, Any] = {
             {
                 "connection_id": "primary",
                 "endpoint": "https://shared.example.com",
-                "project_ocid": "ocid1.generativeaiproject.oc1..shared",
+                "project_id": "ocid1.generativeaiproject.oc1..shared",
             }
         ],
         "models": [{"model_id": "shared-llm", "display_name": "共有 LLM"}],
@@ -64,7 +64,7 @@ def _nl2sql_payload() -> ModelSettingsPayload:
         {
             "enterprise_ai": {
                 "endpoint": "https://nl2sql-saved.example.com",
-                "project_ocid": "ocid1.generativeaiproject.oc1..nl2sql",
+                "project_id": "ocid1.generativeaiproject.oc1..nl2sql",
                 "models": [{"model_id": "nl2sql-llm", "display_name": "NL2SQL LLM"}],
                 "default_text_model_id": "nl2sql-llm",
             },
@@ -91,7 +91,7 @@ def test_v4_shared_file_from_other_product_loads_and_backend_serves() -> None:
 
     reloaded = get_settings()  # mtime の変化で読み直す
 
-    assert reloaded.oci_enterprise_ai_endpoint == "https://shared.example.com"
+    assert reloaded.enterprise_ai_endpoint == "https://shared.example.com"
     assert reloaded.rag_parser_adapter_backend == before
     response = client.get("/api/settings/parser-adapters")
     assert response.status_code == 200
@@ -119,7 +119,7 @@ def test_rag_parser_save_then_nl2sql_save_then_rag_reads() -> None:
     reloaded = get_settings()
     shared = json.loads(model_file.read_text(encoding="utf-8"))
     assert set(shared) == {"version", "enterprise_ai"}
-    assert reloaded.oci_enterprise_ai_endpoint == "https://nl2sql-saved.example.com"
+    assert reloaded.enterprise_ai_endpoint == "https://nl2sql-saved.example.com"
     assert reloaded.rag_parser_adapter_backend == "unstructured"
     assert reloaded.rag_parser_unstructured_enabled is True
 

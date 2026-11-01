@@ -92,7 +92,7 @@ export interface EnterpriseAiConfiguredModel {
 export interface EnterpriseAiConnectionSettings {
   connection_id: EnterpriseAiConnectionId;
   endpoint: string;
-  project_ocid: string;
+  project_id: string;
   api_key: string;
   has_api_key: boolean;
   clear_api_key: boolean;
@@ -149,7 +149,7 @@ export interface ModelSettingsData {
    */
   revision?: string;
   /**
-   * 埋め込みの次元（#45。読み取り専用の表示用）。backend の設定 `oci_genai_embedding_dim`（Oracle の
+   * 埋め込みの次元（#45。読み取り専用の表示用）。backend の設定 `genai_embedding_dim`（Oracle の
    * VECTOR 列に合わせた値）で、埋め込みの呼び出しに `dimensions` として送る。古い backend は返さない。
    */
   embedding_dim?: number | null;

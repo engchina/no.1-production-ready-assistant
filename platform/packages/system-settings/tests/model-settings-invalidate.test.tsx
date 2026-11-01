@@ -42,7 +42,7 @@ function data(displayName: string): ModelSettingsData {
           {
             connection_id: "primary",
             endpoint: "https://primary.example",
-            project_ocid: "ocid1.generativeaiproject.oc1..primary",
+            project_id: "ocid1.generativeaiproject.oc1..primary",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,

@@ -40,4 +40,4 @@ SQL→質問の既存段階 retry は維持する。失敗した段階だけ最�
 - `test_structured_outputs.py`: recursive required/closed/nullable、余分な field、型不正、全文検証、`text` 保持、reasoning 除外、refusal/incomplete、template、画像 payload、filter 値の型保持。
 - SQL 往復・質問・metadata・Ontology・judge・settings の既存回帰テストを構造化 wire に更新。
 - 2026-09-11 の既存 OCI 接続で架空のスキーマのみを使い、Question / SQL / Ontology extraction / QuestionIntent の4 Schema が正常応答・ローカル検証成功（各約4–7秒）。実データや credential を記録していない。
-- in-memory の架空スキーマで3段階の SQL→構造→質問が約15秒、`source=oci_enterprise_ai`、警告0件。構造からの SQL 再生成（約6秒）、質問からの専用 SQL 生成（約4秒）、自作の `TEST 123` 画像の VLM 抽出（約2秒）も成功。DB 実行や任意 SQL の意味同値性検証は行っていない。
+- in-memory の架空スキーマで3段階の SQL→構造→質問が約15秒、`source=enterprise_ai`、警告0件。構造からの SQL 再生成（約6秒）、質問からの専用 SQL 生成（約4秒）、自作の `TEST 123` 画像の VLM 抽出（約2秒）も成功。DB 実行や任意 SQL の意味同値性検証は行っていない。

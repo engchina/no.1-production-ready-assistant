@@ -1486,11 +1486,11 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
         file_processing_staging_cli,
         "get_settings",
         lambda: Settings(
-            oci_enterprise_ai_endpoint="",
-            oci_enterprise_ai_project_ocid="",
-            oci_enterprise_ai_api_key="",
-            oci_enterprise_ai_models=[],
-            oci_enterprise_ai_default_text_model="",
+            enterprise_ai_endpoint="",
+            enterprise_ai_project_id="",
+            enterprise_ai_api_key="",
+            enterprise_ai_models=[],
+            enterprise_ai_default_text_model="",
             oracle_user="",
             oracle_dsn="",
             local_storage_dir=str(tmp_path / "storage"),
@@ -1857,7 +1857,7 @@ def test_file_processing_staging_cli_strict_preflight_requires_selected_adapter(
     monkeypatch.setattr(
         file_processing_staging_cli,
         "get_settings",
-        lambda: _complete_oci_settings(
+        lambda: _complete_llm_settings(
             rag_parser_adapter_backend="local",
             rag_parser_docling_enabled=False,
             rag_parser_unstructured_enabled=False,
@@ -2120,7 +2120,7 @@ def test_file_processing_staging_cli_fails_when_report_is_not_promotion_ready(
     monkeypatch.setattr(
         file_processing_staging_cli,
         "get_settings",
-        lambda: _complete_oci_settings(rag_parser_adapter_backend="local"),
+        lambda: _complete_llm_settings(rag_parser_adapter_backend="local"),
     )
     monkeypatch.setattr(
         file_processing_staging_cli,
@@ -2196,7 +2196,7 @@ def test_file_processing_staging_cli_blocks_underperforming_selected_adapter(
         "_package_info",
         lambda *_args: (True, "1.0.0", "docling"),
     )
-    settings = _complete_oci_settings(
+    settings = _complete_llm_settings(
         rag_parser_adapter_backend="docling",
         rag_parser_docling_enabled=True,
     )
@@ -2836,7 +2836,7 @@ def test_file_processing_staging_cli_fails_preflight_when_selected_adapter_missi
     monkeypatch.setattr(
         file_processing_staging_cli,
         "get_settings",
-        lambda: _complete_oci_settings(
+        lambda: _complete_llm_settings(
             rag_parser_adapter_backend="docling",
             rag_parser_docling_enabled=True,
         ),
@@ -2888,7 +2888,7 @@ def test_file_processing_staging_cli_fails_preflight_when_selected_adapter_flag_
     monkeypatch.setattr(
         file_processing_staging_cli,
         "get_settings",
-        lambda: _complete_oci_settings(
+        lambda: _complete_llm_settings(
             rag_parser_adapter_backend="docling",
             rag_parser_docling_enabled=False,
             rag_parser_unstructured_enabled=False,
@@ -2941,7 +2941,7 @@ def test_file_processing_staging_cli_allows_available_selected_adapter(
     monkeypatch.setattr(
         file_processing_staging_cli,
         "get_settings",
-        lambda: _complete_oci_settings(
+        lambda: _complete_llm_settings(
             rag_parser_adapter_backend="docling",
             rag_parser_docling_enabled=True,
         ),
@@ -3061,13 +3061,13 @@ def _contract_passed_case(
     )
 
 
-def _complete_oci_settings(**overrides: Any) -> Settings:
+def _complete_llm_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": "https://enterprise-ai.example.com",
-        "oci_enterprise_ai_project_ocid": "ocid1.generativeaiproject.oc1..example",
-        "oci_enterprise_ai_api_key": "sk-test-secret",
-        "oci_enterprise_ai_default_text_model": "llm-deployment",
-        "oci_enterprise_ai_default_vision_model": "vlm-deployment",
+        "enterprise_ai_endpoint": "https://enterprise-ai.example.com",
+        "enterprise_ai_project_id": "ocid1.generativeaiproject.oc1..example",
+        "enterprise_ai_api_key": "sk-test-secret",
+        "enterprise_ai_default_text_model": "llm-deployment",
+        "enterprise_ai_default_vision_model": "vlm-deployment",
         "oracle_user": "rag_user",
         "oracle_password": "oracle-password",
         "oracle_dsn": "adb.example.com/rag",

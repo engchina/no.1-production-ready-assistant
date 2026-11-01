@@ -20,9 +20,9 @@ from tests.support import AsgiTestClient
 def settings() -> Settings:
     return get_settings().model_copy(
         update={
-            "oci_enterprise_ai_default_text_model": "model-a",
-            "oci_enterprise_ai_default_vision_model": "model-b",
-            "oci_enterprise_ai_models": [
+            "enterprise_ai_default_text_model": "model-a",
+            "enterprise_ai_default_vision_model": "model-b",
+            "enterprise_ai_models": [
                 {"model_id": "model-a", "display_name": "モデル A"},
                 {"model_id": "model-b", "display_name": "モデル B", "vision_enabled": True},
                 {"model_id": "model-c", "display_name": "モデル C"},
@@ -37,9 +37,9 @@ def test_profile_selects_registered_model_without_mutating_global_defaults() -> 
         original, SearchAnswerProfileConfig(answer_model_id="model-c")
     )
     assert applied
-    assert effective.oci_enterprise_ai_default_text_model == "model-c"
-    assert original.oci_enterprise_ai_default_text_model == "model-a"
-    assert effective.oci_enterprise_ai_default_vision_model == "model-b"
+    assert effective.enterprise_ai_default_text_model == "model-c"
+    assert original.enterprise_ai_default_text_model == "model-a"
+    assert effective.enterprise_ai_default_vision_model == "model-b"
     assert (
         search_route._answer_model_id(
             SearchRequest(query="操作方法", model_id="model-a"), effective
@@ -77,7 +77,7 @@ def test_removed_model_has_actionable_error_but_does_not_block_retrieval_only() 
     effective, _ = resolve_search_answer_profile_settings(
         settings(), config, apply_answer_model=False
     )
-    assert effective.oci_enterprise_ai_default_text_model == "model-a"
+    assert effective.enterprise_ai_default_text_model == "model-a"
 
 
 def test_candidates_only_return_public_model_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -149,4 +149,4 @@ async def test_query_resolution_applies_request_then_profile_then_defaults(
         generate_answer=generate,
     )
     _, effective, _, _ = await search_route._resolve_query_context(request, settings())
-    assert effective.oci_enterprise_ai_default_text_model == expected
+    assert effective.enterprise_ai_default_text_model == expected

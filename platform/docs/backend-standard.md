@@ -309,7 +309,7 @@ API・worker・RAG の独立微サービス・browser の共通 schema、JST 時
 | 画面 | 項目 | ほかのプロセスでの反映 |
 |---|---|---|
 | アップロード保存先 | ローカルのディレクトリ | 次の要求から（#2092） |
-| モデル | `model-settings.json`・API key（`PLATFORM_OCI_ENTERPRISE_AI_*_API_KEY`） | 次の要求から（JSON の mtime） |
+| モデル | `model-settings.json`・API key（`PLATFORM_ENTERPRISE_AI_*_API_KEY`） | 次の要求から（JSON の mtime） |
 | データベース | user・password・DSN・Wallet・接続のセキュリティ（NL2SQL） | 次に接続を借りるときに pool を作り直す: `SharedOraclePool`（接続引数の指紋）、RAG の共有 pool（`_shared_pool_settings_key`）、NL2SQL の control pool（`OraclePoolManager._pool_identity`）。古い pool は閉じる |
 | データベース | Instant Client の場所（`PLATFORM_ORACLE_CLIENT_LIB_DIR`）・driver mode（NL2SQL） | **再起動が要る**（python-oracledb の Thick mode の初期化はプロセスで 1 回だけ） |
 | データベース（Agent） | 起動時に DB が未設定で、後から設定した | **再起動が要る**（`AGENT_RUNTIME_REPOSITORY_BACKEND=auto` の判定と、メモリに読んだ保存データは起動時のまま） |

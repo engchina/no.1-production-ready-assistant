@@ -201,7 +201,7 @@ class EnterpriseAiDirectClient(Protocol):
         ...
 
 
-class OciEnterpriseAiDirectClient:
+class HttpEnterpriseAiDirectClient:
     """Small synchronous HTTP client for OCI Enterprise AI LLM endpoint.
 
     接続（endpoint / API key / project）は、呼ぶモデルの接続を使う（#533）。
@@ -280,14 +280,14 @@ class OciEnterpriseAiDirectClient:
                 response = self._post_json(
                     payload,
                     connection=self.connection(model_id),
-                    path=self.settings.oci_enterprise_ai_llm_path,
+                    path=self.settings.enterprise_ai_llm_path,
                     timeout_seconds=timeout_seconds,
                     max_retries=max_retries,
                     model_id=model_id,
                 )
                 return _parse_response(
                     response,
-                    response_path=self.settings.oci_enterprise_ai_llm_response_path,
+                    response_path=self.settings.enterprise_ai_llm_response_path,
                     response_format=response_format,
                     max_output_tokens=budget,
                     model_id=model_id,
@@ -307,7 +307,7 @@ class OciEnterpriseAiDirectClient:
             budget=max(1, budget),
             prompt_tokens=prompt_tokens,
             # payload template の構成は `reasoning` を持たないので、推論の量を下げて送り直さない。
-            can_lower_effort=not self.settings.oci_enterprise_ai_llm_payload_template.strip(),
+            can_lower_effort=not self.settings.enterprise_ai_llm_payload_template.strip(),
             can_widen=not strict,
         )
 
@@ -433,14 +433,14 @@ class OciEnterpriseAiDirectClient:
             response = self._post_json(
                 payload,
                 connection=connection,
-                path=getattr(self.settings, "oci_enterprise_ai_vlm_path", "")
-                or self.settings.oci_enterprise_ai_llm_path,
+                path=getattr(self.settings, "enterprise_ai_vlm_path", "")
+                or self.settings.enterprise_ai_llm_path,
                 max_retries=max_retries,
                 model_id=model_id,
             )
             return _parse_response(
                 response,
-                response_path=self.settings.oci_enterprise_ai_vlm_response_path,
+                response_path=self.settings.enterprise_ai_vlm_response_path,
                 response_format=response_format,
                 max_output_tokens=budget,
                 model_id=model_id,
@@ -454,7 +454,7 @@ class OciEnterpriseAiDirectClient:
                 self.settings, model_id, prompt_tokens=prompt_tokens
             ),
             prompt_tokens=prompt_tokens,
-            can_lower_effort=not self.settings.oci_enterprise_ai_vlm_payload_template.strip(),
+            can_lower_effort=not self.settings.enterprise_ai_vlm_payload_template.strip(),
         )
 
     def _post_json(
@@ -474,18 +474,16 @@ class OciEnterpriseAiDirectClient:
             "content-type": "application/json",
             "authorization": f"Bearer {connection.api_key}",
         }
-        if project := connection.project_ocid:
+        if project := connection.project_id:
             headers["OpenAI-Project"] = project
         timeout = float(
             timeout_seconds
             if timeout_seconds is not None
-            else self.settings.oci_enterprise_ai_timeout_seconds
+            else self.settings.enterprise_ai_timeout_seconds
         )
         retry_count = max(
             int(
-                max_retries
-                if max_retries is not None
-                else self.settings.oci_enterprise_ai_max_retries
+                max_retries if max_retries is not None else self.settings.enterprise_ai_max_retries
             ),
             0,
         )
@@ -662,10 +660,10 @@ def _build_payload(
         "temperature": 0,
         "response_format": dict(response_format) if response_format is not None else "",
     }
-    if settings.oci_enterprise_ai_llm_payload_template.strip():
+    if settings.enterprise_ai_llm_payload_template.strip():
         return _with_output_format(
             _render_payload_template(
-                settings.oci_enterprise_ai_llm_payload_template,
+                settings.enterprise_ai_llm_payload_template,
                 values,
             ),
             response_format,
@@ -711,9 +709,9 @@ def _build_image_payload(
         ),
         "temperature": 0,
     }
-    if settings.oci_enterprise_ai_vlm_payload_template.strip():
+    if settings.enterprise_ai_vlm_payload_template.strip():
         return _with_output_format(
-            _render_payload_template(settings.oci_enterprise_ai_vlm_payload_template, values),
+            _render_payload_template(settings.enterprise_ai_vlm_payload_template, values),
             response_format,
         )
     return _with_output_format(
@@ -778,12 +776,12 @@ def _render_payload_template(template: str, values: Mapping[str, Any]) -> Mappin
         parsed = json.loads(template)
     except ValueError as exc:
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object で指定してください。"
+            "PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object で指定してください。"
         ) from exc
     rendered = _render_template_value(parsed, values)
     if not isinstance(rendered, Mapping):
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object を返す必要があります。"
+            "PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE は JSON object を返す必要があります。"
         )
     return rendered
 
@@ -894,7 +892,7 @@ def _select_response_path(payload: object, path: str) -> object:
         return payload
     if not cleaned.startswith("/"):
         raise EnterpriseAiDirectError(
-            "PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH は / で始まる JSON Pointer 形式です。"
+            "PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH は / で始まる JSON Pointer 形式です。"
         )
     current = payload
     for raw_segment in cleaned.split("/")[1:]:

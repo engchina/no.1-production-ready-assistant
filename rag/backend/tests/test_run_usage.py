@@ -40,7 +40,7 @@ def test_usage_sums_llm_calls_without_double_counting_stages() -> None:
     """
     trace = AnswerTrace("op-usage", owner_user_uuid=None)
     with answer_trace(trace, trace_id="run-usage"):
-        # 会話の履歴による質問の書き換え（backend の OciEnterpriseAiClient と同じ span）。
+        # 会話の履歴による質問の書き換え（backend の EnterpriseAiClient と同じ span）。
         with observed_span(
             "gen_ai.chat", kind="client", attributes={"gen_ai.request.model": "model-rewrite"}
         ) as span:

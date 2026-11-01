@@ -11,21 +11,21 @@ from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
-from rag_engine.adapters import oci as engine_oci
+from rag_engine.adapters import model_api as engine_api
 from rag_engine.config import get_settings as engine_get_settings
 from rag_engine.models.llm import TextOutput
-from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiConfig
+from rag_parser_core.enterprise_ai import EnterpriseAiConfig
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient, config_from_settings
+from app.clients.enterprise_ai import EnterpriseAiClient, config_from_settings
 from app.services.control import SERVICE_RUNTIME_ENV_KEYS, service_runtime_env
-from tests.test_oci_enterprise_ai import FakeEnterpriseAiTransport, _oci_settings
+from tests.test_enterprise_ai import FakeEnterpriseAiTransport, _llm_settings
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 async def test_text_and_image_calls_do_not_send_seed() -> None:
     transport = FakeEnterpriseAiTransport({"output_text": "回答"})
-    client = OciEnterpriseAiClient(settings=_oci_settings(), http_transport=transport)
+    client = EnterpriseAiClient(settings=_llm_settings(), http_transport=transport)
 
     await client.generate("質問", "根拠")
     await client.generate_from_image(PNG, "説明して", mime_type="image/png")
@@ -37,9 +37,9 @@ async def test_text_and_image_calls_do_not_send_seed() -> None:
 
 def test_config_and_parser_env_have_no_seed() -> None:
     """共有 client の config と、parser（OCI の VLM。env から読む）の env に seed が無い。"""
-    assert not hasattr(config_from_settings(_oci_settings()), "seed")
-    assert not hasattr(OciEnterpriseAiConfig.from_env({}), "seed")
-    env = service_runtime_env(_oci_settings())
+    assert not hasattr(config_from_settings(_llm_settings()), "seed")
+    assert not hasattr(EnterpriseAiConfig.from_env({}), "seed")
+    env = service_runtime_env(_llm_settings())
     assert not any("SEED" in key for key in env)
     assert not any("SEED" in key for key in SERVICE_RUNTIME_ENV_KEYS)
 
@@ -60,8 +60,8 @@ def test_engine_parse_does_not_send_seed() -> None:
     provider = SimpleNamespace(model="m", label="m", reasoning_effort="")
     settings = engine_get_settings(environ={}, dotenv_path=None)
 
-    with mock.patch.object(engine_oci, "_openai_client_for_provider", return_value=client):
-        engine_oci._openai_parsed([], settings, TextOutput, provider)  # type: ignore[arg-type]
+    with mock.patch.object(engine_api, "_openai_client_for_provider", return_value=client):
+        engine_api._openai_parsed([], settings, TextOutput, provider)  # type: ignore[arg-type]
 
     assert "seed" not in responses.calls[0]
     assert "seed" not in responses.calls[0].get("extra_body", {})

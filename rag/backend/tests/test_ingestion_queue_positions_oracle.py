@@ -27,7 +27,7 @@ from app.schemas.document import (
     IngestionJobPhase,
     IngestionJobStatus,
 )
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 def _selects(pool: FakeOraclePool) -> list[str]:
@@ -41,7 +41,7 @@ def _selects(pool: FakeOraclePool) -> list[str]:
 async def test_queue_positions_skip_query_without_targets() -> None:
     """対象の job も文書も無ければ問い合わせない。"""
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert await client.list_ingestion_queue_positions() == []
     assert pool.connection.calls == []
@@ -54,7 +54,7 @@ async def test_queue_positions_count_like_worker_claim_order() -> None:
             [{"job_id": "job-b", "document_id": "doc-b", "jobs_ahead": 3}],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     rows = await client.list_ingestion_queue_positions(
         job_ids=["job-b"], document_ids=["doc-b", "doc-c"]

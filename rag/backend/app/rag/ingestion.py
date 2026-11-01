@@ -30,8 +30,8 @@ from pr_backend_core.logging import safe_exception_fields
 from pr_backend_core.observability.model_purpose import async_call_with_model_purpose
 from pydantic import ValidationError
 from rag_parser_core.capabilities import ADAPTER_CAPABILITIES, adapter_supports_source
+from rag_parser_core.enterprise_ai import LLM_SYSTEM_PROMPT, sdk_retries_disabled
 from rag_parser_core.language import LANGUAGE_PACK_HASH_KEY, current_pack
-from rag_parser_core.oci_enterprise_ai import LLM_SYSTEM_PROMPT, sdk_retries_disabled
 from rag_parser_core.preprocess import ConvertOutcome, SourceDerivation
 from rag_parser_core.result import (
     EXTERNAL_ADAPTER_PACKAGES,
@@ -47,14 +47,14 @@ from rag_parser_core.structured_records import (
 from rag_pipeline_core.raptor import build_raptor_summaries
 
 from app.clients.ai_calls import attach_ingestion_progress, ingestion_ai_calls, make_ai_caller
-from app.clients.file_storage import FileStorageClient
-from app.clients.oci_enterprise_ai import (
+from app.clients.enterprise_ai import (
+    EnterpriseAiClient,
     EnterpriseAiIncompleteResponseError,
     EnterpriseAiTimeoutError,
     EnterpriseAiValidationError,
-    OciEnterpriseAiClient,
 )
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.file_storage import FileStorageClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.parser_service import (
     ParserServiceClient,
@@ -580,8 +580,8 @@ class IngestionPipeline:
 
     def __init__(
         self,
-        vlm: OciEnterpriseAiClient | None = None,
-        genai: OciGenAiClient | None = None,
+        vlm: EnterpriseAiClient | None = None,
+        genai: GenAiClient | None = None,
         oracle: OracleClient | None = None,
         object_storage: FileStorageClient | None = None,
         settings: Settings | None = None,
@@ -594,8 +594,8 @@ class IngestionPipeline:
         # ``record_outcome=False`` で索引まで終えた取込の、記録していない成功の内容(#504)。
         # 公開の工程(ingest / index_reviewed / chunk_reviewed / index_chunked)の開始で空に戻す。
         self.deferred_success_outcome: IngestionSuccessOutcome | None = None
-        self._vlm = vlm or OciEnterpriseAiClient(settings=self._settings)
-        self._genai = genai or OciGenAiClient(settings=self._settings)
+        self._vlm = vlm or EnterpriseAiClient(settings=self._settings)
+        self._genai = genai or GenAiClient(settings=self._settings)
         self._oracle = oracle or OracleClient(settings=self._settings)
         self._object_storage = object_storage or FileStorageClient(settings=self._settings)
         # 外部 adapter は同一プロセスで import せず parser マイクロサービスへ HTTP 委譲する。
@@ -2256,7 +2256,7 @@ class IngestionPipeline:
             "embedding",
             self._genai.embed(embed_inputs),
             attributes={
-                "model": self._settings.oci_genai_embedding_model,
+                "model": self._settings.genai_embedding_model,
                 "input_count": len(chunks),
                 "context_header_enabled": self._settings.rag_chunk_context_header_enabled,
             },
@@ -2832,7 +2832,7 @@ class IngestionPipeline:
         from rag_engine.parsing.vision_prompt_rules import refine_image_retrieval_prompt
         from rag_engine.resources.runtime import bind_prompt_overrides
 
-        from app.clients.oci_enterprise_ai import config_from_settings
+        from app.clients.enterprise_ai import config_from_settings
         from app.rag.answer_prompts import default_prompt
 
         saved = await self._saved_prompt_snapshot()
@@ -2885,8 +2885,8 @@ class IngestionPipeline:
                 self._vlm,
                 loop,
                 model_id=config.vision_model_id,
-                endpoint=config.oci_enterprise_ai_endpoint,
-                project_id=config.oci_enterprise_ai_project_ocid,
+                endpoint=config.enterprise_ai_endpoint,
+                project_id=config.enterprise_ai_project_id,
                 caller=caller,
             )
             try:

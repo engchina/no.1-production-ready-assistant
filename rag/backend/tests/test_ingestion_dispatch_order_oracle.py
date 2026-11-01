@@ -26,7 +26,7 @@ from app.schemas.document import (
     IngestionJobPhase,
     IngestionJobStatus,
 )
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 def test_dispatch_order_sql_uses_alias_and_window_bind() -> None:
@@ -39,7 +39,7 @@ def test_dispatch_order_sql_uses_alias_and_window_bind() -> None:
     assert "q.phase IN ('CHUNK', 'INDEX')" in sql
     assert ":dispatch_priority_window_seconds" in sql
     assert " j." not in sql
-    settings = _oci_settings().model_copy(
+    settings = _llm_settings().model_copy(
         update={"ingestion_queue_pipeline_priority_window_seconds": 0}
     )
     assert ingestion_dispatch_order_binds(settings) == {"dispatch_priority_window_seconds": 0}
@@ -48,7 +48,7 @@ def test_dispatch_order_sql_uses_alias_and_window_bind() -> None:
 async def test_list_dispatchable_excludes_full_phases() -> None:
     """重い段の上限に達した worker は、重い段を除いて軽い段の job を取る。"""
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     assert (
         await client.list_dispatchable_ingestion_jobs(

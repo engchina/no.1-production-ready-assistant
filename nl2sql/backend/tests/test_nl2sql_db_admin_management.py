@@ -1457,7 +1457,7 @@ def test_metadata_sql_generation_fallback_and_fence_cleanup() -> None:
             structure_text="OBJECT: V_EMP",
         )
     )
-    assert comment_ai.source == "oci_enterprise_ai"
+    assert comment_ai.source == "enterprise_ai"
     assert comment_ai.sql == "COMMENT ON TABLE V_EMP IS '社員ビュー';"
 
     service._enterprise_ai_client = FakeEnterpriseAiClient(
@@ -1471,7 +1471,7 @@ def test_metadata_sql_generation_fallback_and_fence_cleanup() -> None:
             structure_text="OBJECT: EMPLOYEE",
         )
     )
-    assert annotation_ai.source == "oci_enterprise_ai"
+    assert annotation_ai.source == "enterprise_ai"
     assert annotation_ai.sql == (
         "ALTER TABLE EMPLOYEE MODIFY "
         "(EMPLOYEE_NAME ANNOTATIONS (ADD IF NOT EXISTS UI_Display '社員名'));"
@@ -1496,7 +1496,7 @@ def test_annotation_generation_ports_reference_prompt_and_filters_sample_annotat
         )
     )
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.sql == "ALTER TABLE T1 ANNOTATIONS (ADD IF NOT EXISTS UI_Display 'T, One');"
     assert "COMMENT: は入力メタデータ" in enterprise_ai.calls[0]["prompt"]
     assert (
@@ -4179,7 +4179,7 @@ def test_analyze_error_uses_enterprise_ai_and_falls_back() -> None:
             result_text="ORA-00955: name is already used by an existing object",
         )
     )
-    assert analyzed.source == "oci_enterprise_ai"
+    assert analyzed.source == "enterprise_ai"
     assert "エラー原因" in analyzed.analysis
 
     cast(Any, service)._enterprise_ai_client = FakeEnterpriseAiClient(
@@ -4220,7 +4220,7 @@ def test_extract_join_where_defaults_to_sql_structure_and_falls_back() -> None:
         "JOIN DEPARTMENT d ON e.DEPT_ID = d.DEPT_ID WHERE e.STATUS = 'A'"
     )
     extracted = service.extract_db_admin_join_where(DbAdminJoinWhereRequest(ddl=ddl))
-    assert extracted.source == "oci_enterprise_ai"
+    assert extracted.source == "enterprise_ai"
     assert extracted.prompt_profile == "sql_structure"
     assert "EMPLOYEE" in extracted.join_text
     assert extracted.where_text == "EMPLOYEE(e).STATUS = 'A'"
@@ -4281,7 +4281,7 @@ def test_extract_join_where_uses_sql_structure_prompt_profile() -> None:
         DbAdminJoinWhereRequest(ddl=ddl, prompt_profile="sql_structure")
     )
 
-    assert extracted.source == "oci_enterprise_ai"
+    assert extracted.source == "enterprise_ai"
     assert extracted.prompt_profile == "sql_structure"
     assert "EMPLOYEE(e) JOIN DEPARTMENT(d)" in extracted.join_text
     assert "ON: EMPLOYEE(e).DEPT_ID = DEPARTMENT(d).DEPT_ID" in extracted.join_text
@@ -4526,7 +4526,7 @@ def test_domain_generation_uses_enterprise_ai_and_falls_back_on_violations() -> 
 
     result = service.generate_domain_sql(request)
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.sql == (
         "CREATE DOMAIN IF NOT EXISTS APP.CUSTOMER_ID_DOM AS NUMBER "
         "ANNOTATIONS (UI_Display '顧客ID', Description '顧客番号');\n"
@@ -4789,7 +4789,7 @@ def test_domain_generation_prompt_carries_operation_and_allows_inventory_tables(
 
     result = service.generate_domain_sql(request)
 
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert result.sql.startswith("DROP DOMAIN APP.CUSTOMER_ID_D FORCE;")
     assert "ALTER TABLE APP.ORDERS MODIFY (CUSTOMER_ID) ADD DOMAIN APP.CUSTOMER_ID_D;" in result.sql
     assert result.warnings == [
@@ -4838,7 +4838,7 @@ def test_deterministic_annotation_skips_domain_columns_and_comment_prompt_guides
             structure_text="OBJECT: APP.SALES\nTYPE: table\nCOMMENT: 売上",
         )
     )
-    assert comments.source == "oci_enterprise_ai"
+    assert comments.source == "enterprise_ai"
     assert "コード値の意味" in enterprise_ai.calls[0]["prompt"]
     assert "Join with ORD_TXN.CUST_ID." in enterprise_ai.calls[0]["prompt"]
     assert "推測しない" in enterprise_ai.calls[0]["prompt"]

@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 from test_audit_failure_preserves_draft import run_failed_audit
 from test_grounded_answer import context, record
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import LlmProviderSettings, get_settings
 from rag_engine.generation import answering, execution_record
 from rag_engine.generation.answer_models import CragRetrievalAttempt
@@ -32,7 +32,7 @@ def invalid_json_output() -> Exception:
     try:
         json.loads('{"private-key":')
     except json.JSONDecodeError as cause:
-        error = oci.InvalidStructuredOutput("private-message")
+        error = model_api.InvalidStructuredOutput("private-message")
         error.__cause__ = cause
         return error
     raise AssertionError("合成のJSONは閉じていない")
@@ -42,13 +42,15 @@ def invalid_output() -> Exception:
     try:
         Schema.model_validate({"count": "private-input"})
     except ValidationError as cause:
-        error = oci.InvalidStructuredOutput("private-message")
+        error = model_api.InvalidStructuredOutput("private-message")
         error.__cause__ = cause
         return error
     raise AssertionError("合成の入力は型違反になる")
 
 
-@pytest.mark.parametrize("error", [invalid_output(), invalid_json_output(), oci.IncompleteResponse("private-message", "max_output_tokens")])
+@pytest.mark.parametrize(
+    "error", [invalid_output(), invalid_json_output(), model_api.IncompleteResponse("private-message", "max_output_tokens")]
+)
 def test_audit_failure_is_preserved_in_response_trace(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
     current, _, calls = cast(Callable[..., Any], run_failed_audit)(monkeypatch, error)
     details = current.trace()["timing"]["audit_failure"]
@@ -63,8 +65,8 @@ def test_audit_failure_is_preserved_in_response_trace(monkeypatch: pytest.Monkey
 
 def test_failed_call_logger_keeps_safe_chain_as_extra(caplog: pytest.LogCaptureFixture) -> None:
     provider = synthetic_provider()
-    with caplog.at_level(logging.INFO, logger=oci.__name__):
-        oci._record_failed_call(invalid_output(), provider, Schema, 0.1)
+    with caplog.at_level(logging.INFO, logger=model_api.__name__):
+        model_api._record_failed_call(invalid_output(), provider, Schema, 0.1)
     event = caplog.records[-1]
     assert event.__dict__["llm_failure"]["category"] == "schema_field"
     assert event.__dict__["llm_failure"]["cause_classes"] == ["ValidationError"]
@@ -83,7 +85,9 @@ def run_crag(monkeypatch: pytest.MonkeyPatch, grade: object) -> tuple[Any, Mock]
     return answering.build_crag_answer_context("対象Aを確認する方法は？", None, (), get_settings(), rerank_enabled=False), mock
 
 
-@pytest.mark.parametrize("error", [invalid_output(), invalid_json_output(), oci.IncompleteResponse("private-message", "max_output_tokens")])
+@pytest.mark.parametrize(
+    "error", [invalid_output(), invalid_json_output(), model_api.IncompleteResponse("private-message", "max_output_tokens")]
+)
 def test_crag_failed_grade_has_details_without_missing_evidence(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
     (_, _, attempts), mock = run_crag(monkeypatch, error)
     payload = attempts[0].to_payload()
@@ -133,7 +137,7 @@ def test_grade_enum_failure_has_safe_enum_location() -> None:
         CragRetrievalGradeOutput.model_validate(
             {"candidate_verdicts": [{"chunk_id": "private", "relevant": True}], "recovery_action": "private"}
         )
-    error = oci.InvalidStructuredOutput("private")
+    error = model_api.InvalidStructuredOutput("private")
     error.__cause__ = caught.value
     from rag_engine.resources.structured_failures import structured_failure_details
 
@@ -146,8 +150,8 @@ def test_grade_enum_failure_has_safe_enum_location() -> None:
 def test_real_structured_formatter_retains_failure_extra(caplog: pytest.LogCaptureFixture) -> None:
     from pr_backend_core.logging import StructuredFormatter
 
-    with caplog.at_level(logging.INFO, logger=oci.__name__):
-        oci._record_failed_call(invalid_output(), synthetic_provider(), Schema, 0.1)
+    with caplog.at_level(logging.INFO, logger=model_api.__name__):
+        model_api._record_failed_call(invalid_output(), synthetic_provider(), Schema, 0.1)
     formatter = StructuredFormatter(
         service_name="test", service_version="test", environment="test", component="test", max_record_bytes=32768
     )

@@ -39,7 +39,7 @@ from rag_engine.evaluation.answer_eval import standard_scope_cache
 from app.clients.ai_calls import make_ai_caller
 from app.clients.oracle import OracleClient
 from app.config import (
-    OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
+    ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
     Settings,
     enterprise_ai_default_model_id,
     enterprise_ai_judge_model_id,
@@ -108,7 +108,7 @@ EVALUATION_TIME_BUDGET_ERROR_TYPE = "EvaluationTimeBudgetExceeded"
 EVALUATION_TIME_BUDGET_MESSAGE_PREFIX = "評価全体の時間の上限に達したため、"
 EVALUATION_TIME_BUDGET_MESSAGE_SUFFIX = "ケースを減らすか、分けて評価してください。"
 # 標準回答による評価 1 件の時間の上限(保存済みの回答の評価の API と同じ。#304)。
-ANSWER_JUDGE_TIMEOUT_SECONDS = OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
+ANSWER_JUDGE_TIMEOUT_SECONDS = ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
 ANSWER_JUDGE_UNAVAILABLE_MESSAGE = (
     "この回答には標準回答で評価するための記録がありません(安全ポリシーで止めた質問など)。"
 )

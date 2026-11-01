@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.features.nl2sql.models import Nl2SqlProfile, ProfilePatchRequest
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
@@ -23,15 +23,15 @@ ENDPOINT = "https://primary.example/openai/v1"
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": ENDPOINT,
-        "oci_enterprise_ai_api_key": "sk-primary",
-        "oci_enterprise_ai_models": [
+        "enterprise_ai_endpoint": ENDPOINT,
+        "enterprise_ai_api_key": "sk-primary",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel(model_id="text-a"),
             EnterpriseAiConfiguredModel(model_id="vision-b", vision_enabled=True),
         ],
-        "oci_enterprise_ai_default_text_model": "text-a",
-        "oci_enterprise_ai_default_vision_model": "vision-b",
-        "oci_enterprise_ai_max_retries": 0,
+        "enterprise_ai_default_text_model": "text-a",
+        "enterprise_ai_default_vision_model": "vision-b",
+        "enterprise_ai_max_retries": 0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -56,7 +56,7 @@ def payloads(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 def test_text_and_image_calls_do_not_send_seed(payloads: list[dict[str, Any]]) -> None:
-    client = OciEnterpriseAiDirectClient(_settings())
+    client = HttpEnterpriseAiDirectClient(_settings())
 
     client.generate(prompt="質問", context="文脈", system_prompt="指示")
     client.generate_from_image(b"\x89PNG", "読んで")

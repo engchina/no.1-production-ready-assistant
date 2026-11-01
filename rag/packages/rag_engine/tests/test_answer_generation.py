@@ -741,9 +741,9 @@ class AnswerGenerationTests(unittest.TestCase):
             settings = replace(
                 get_settings(
                     environ={
-                        "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "answer-model",
-                        "OCI_ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1",
-                        "OCI_ENTERPRISE_AI_VLM_MODEL": "vision-model",
+                        "ENTERPRISE_AI_DEFAULT_MODEL": "answer-model",
+                        "ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1",
+                        "ENTERPRISE_AI_VLM_MODEL": "vision-model",
                     },
                     dotenv_path=None,
                 ),
@@ -808,8 +808,8 @@ class AnswerGenerationTests(unittest.TestCase):
             settings = replace(
                 get_settings(
                     environ={
-                        "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "text-model",
-                        "OCI_ENTERPRISE_AI_VLM_MODEL": "vision-model",
+                        "ENTERPRISE_AI_DEFAULT_MODEL": "text-model",
+                        "ENTERPRISE_AI_VLM_MODEL": "vision-model",
                     },
                     dotenv_path=None,
                 ),
@@ -866,10 +866,10 @@ class AnswerGenerationTests(unittest.TestCase):
         for name, environ, expected_mode in (
             (
                 "image_model",
-                {"OCI_ENTERPRISE_AI_DEFAULT_MODEL": "answer-model", "OCI_ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1"},
+                {"ENTERPRISE_AI_DEFAULT_MODEL": "answer-model", "ENTERPRISE_AI_DEFAULT_MODEL_VISION": "1"},
                 "vision_attachments",
             ),
-            ("text_model", {"OCI_ENTERPRISE_AI_DEFAULT_MODEL": "text-model"}, "text_only"),
+            ("text_model", {"ENTERPRISE_AI_DEFAULT_MODEL": "text-model"}, "text_only"),
         ):
             with self.subTest(name), TemporaryDirectory() as tmp:
                 output_dir = Path(tmp)
@@ -877,7 +877,7 @@ class AnswerGenerationTests(unittest.TestCase):
                 page_image.parent.mkdir(parents=True)
                 page_image.write_bytes(b"png")
                 settings = replace(
-                    get_settings(environ={**environ, "OCI_ENTERPRISE_AI_VLM_MODEL": "vision-model"}, dotenv_path=None),
+                    get_settings(environ={**environ, "ENTERPRISE_AI_VLM_MODEL": "vision-model"}, dotenv_path=None),
                     output_dir=output_dir,
                 )
                 chunk = _stored_child(

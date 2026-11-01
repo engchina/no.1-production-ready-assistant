@@ -7,9 +7,9 @@
   セカンダリ接続・ターシャリ接続の 3 件まで（#533 / #542 / #786）。ターシャリ接続は OpenAI /
   OpenAI 互換 API 向けで、Project OCID は任意。登録モデルごとに `connection_id` で使う接続を選ぶ
   （未指定ならプライマリ接続）。実行時は `enterprise_ai_connection_for_model` でモデルから接続を引く
-- API key は共通 `.env`（`platform/.env`）の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY`
-  （プライマリ接続）・`PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_API_KEY`（セカンダリ接続）・
-  `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_API_KEY`（ターシャリ接続）だけに保存し、JSON には書かない
+- API key は共通 `.env`（`platform/.env`）の `PLATFORM_ENTERPRISE_AI_API_KEY`
+  （プライマリ接続）・`PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY`（セカンダリ接続）・
+  `PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY`（ターシャリ接続）だけに保存し、JSON には書かない
 - それ以外は `model-settings.json`（`version: 4`）へ保存し、起動時と mtime の変化時に読み込む
 - 登録に無いモデルは、別の接続へ切り替えずに失敗させる（#3240）
 - 登録モデルごとに推論（思考）の量 `reasoning_effort` を持つ（#1425。既定は low。#3004）。
@@ -73,9 +73,9 @@ from .env_file import write_env_values
 
 logger = logging.getLogger(__name__)
 
-ENTERPRISE_AI_API_KEY_ENV = "PLATFORM_OCI_ENTERPRISE_AI_API_KEY"
-ENTERPRISE_AI_SECONDARY_API_KEY_ENV = "PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_API_KEY"
-ENTERPRISE_AI_TERTIARY_API_KEY_ENV = "PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_API_KEY"
+ENTERPRISE_AI_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_API_KEY"
+ENTERPRISE_AI_SECONDARY_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY"
+ENTERPRISE_AI_TERTIARY_API_KEY_ENV = "PLATFORM_ENTERPRISE_AI_TERTIARY_API_KEY"
 # OCI Enterprise AI の接続（#533）。プライマリ接続が既定。接続ごとに Settings の属性（env 名）が
 # 決まっているので、ID は枠の名前にする。画面の名前は「プライマリ接続」「セカンダリ接続」
 # 「ターシャリ接続」（#542 / #786）。プライマリ接続は #533 より前からの属性・env 名をそのまま使う。
@@ -311,12 +311,12 @@ class EnterpriseAiConnectionSettings(BaseModel):
 
     connection_id: EnterpriseAiConnectionId = ENTERPRISE_AI_PRIMARY_CONNECTION_ID
     endpoint: str = Field(default="", max_length=2048)
-    project_ocid: str = Field(default="", max_length=512)
+    project_id: str = Field(default="", max_length=512)
     api_key: str = Field(default="", max_length=4096)
     has_api_key: bool = False
     clear_api_key: bool = False
 
-    @field_validator("endpoint", "project_ocid", "api_key")
+    @field_validator("endpoint", "project_id", "api_key")
     @classmethod
     def strip_text(cls, value: str) -> str:
         """前後空白を設定値へ混入させない。"""
@@ -324,7 +324,7 @@ class EnterpriseAiConnectionSettings(BaseModel):
 
 
 # #533 より前の payload の接続の key（プライマリ接続の 1 組を top-level に持つ形）。
-_LEGACY_CONNECTION_KEYS = ("endpoint", "project_ocid", "api_key", "has_api_key", "clear_api_key")
+_LEGACY_CONNECTION_KEYS = ("endpoint", "project_id", "api_key", "has_api_key", "clear_api_key")
 
 
 class EnterpriseAiModelSettings(BaseModel):
@@ -447,7 +447,7 @@ class _LegacyGenerativeAiSettings(BaseModel):
 
     読み込むときに、モデル ID を種類 `embedding` / `rerank` の登録モデル（プライマリ接続）と
     既定の埋め込み / 再ランクのモデルへ移す（`ModelSettingsStore._apply`）。Base URL・次元は
-    読み捨てる（Base URL は接続の Endpoint URL に、次元は製品の設定 `oci_genai_embedding_dim`
+    読み捨てる（Base URL は接続の Endpoint URL に、次元は製品の設定 `genai_embedding_dim`
     にした。#46 からは `EMBEDDING_DIMENSIONS` の 1024 に固定）。
     """
 
@@ -493,7 +493,7 @@ class ModelSettingsData(BaseModel):
     legacy_secret_detected: bool = False
     # 保存済みのモデル設定の版（#1037）。保存の `base_revision` に返す。
     revision: str = ""
-    # 埋め込みの次元（#45。読み取り専用の表示用）。製品の設定 `oci_genai_embedding_dim`（Oracle の
+    # 埋め込みの次元（#45。読み取り専用の表示用）。製品の設定 `genai_embedding_dim`（Oracle の
     # VECTOR 列に合わせた値）で、埋め込みの呼び出しに `dimensions` として送る。
     embedding_dim: int | None = None
 
@@ -621,11 +621,11 @@ class ModelSecretStateMixin(BaseModel):
 
     def _set_api_key(self, value: str) -> None:
         # Settings 側のフィールド（mixin 自体は持たない）。
-        setattr(self, "oci_enterprise_ai_api_key", value)  # noqa: B010
+        setattr(self, "enterprise_ai_api_key", value)  # noqa: B010
 
 
 def _api_key_of(settings: Any) -> str:
-    return str(getattr(settings, "oci_enterprise_ai_api_key", "") or "")
+    return str(getattr(settings, "enterprise_ai_api_key", "") or "")
 
 
 # --------------------------------------------------------------------------- connections
@@ -636,30 +636,30 @@ class _ConnectionFields:
     """接続ごとの Settings の属性名と、API key の env 名。"""
 
     endpoint: str
-    project_ocid: str
+    project_id: str
     api_key: str
     api_key_env: str
 
 
 # プライマリ接続は #533 より前からの属性・env 名（既存環境の更新は要らない）。セカンダリ接続は
-# `PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_*`、ターシャリ接続は `PLATFORM_OCI_ENTERPRISE_AI_TERTIARY_*`
+# `PLATFORM_ENTERPRISE_AI_SECONDARY_*`、ターシャリ接続は `PLATFORM_ENTERPRISE_AI_TERTIARY_*`
 # （どちらも `PLATFORM_SETTING_FIELDS` に登録）。
 _PRIMARY_FIELDS = _ConnectionFields(
-    endpoint="oci_enterprise_ai_endpoint",
-    project_ocid="oci_enterprise_ai_project_ocid",
-    api_key="oci_enterprise_ai_api_key",
+    endpoint="enterprise_ai_endpoint",
+    project_id="enterprise_ai_project_id",
+    api_key="enterprise_ai_api_key",
     api_key_env=ENTERPRISE_AI_API_KEY_ENV,
 )
 _SECONDARY_FIELDS = _ConnectionFields(
-    endpoint="oci_enterprise_ai_secondary_endpoint",
-    project_ocid="oci_enterprise_ai_secondary_project_ocid",
-    api_key="oci_enterprise_ai_secondary_api_key",
+    endpoint="enterprise_ai_secondary_endpoint",
+    project_id="enterprise_ai_secondary_project_id",
+    api_key="enterprise_ai_secondary_api_key",
     api_key_env=ENTERPRISE_AI_SECONDARY_API_KEY_ENV,
 )
 _TERTIARY_FIELDS = _ConnectionFields(
-    endpoint="oci_enterprise_ai_tertiary_endpoint",
-    project_ocid="oci_enterprise_ai_tertiary_project_ocid",
-    api_key="oci_enterprise_ai_tertiary_api_key",
+    endpoint="enterprise_ai_tertiary_endpoint",
+    project_id="enterprise_ai_tertiary_project_id",
+    api_key="enterprise_ai_tertiary_api_key",
     api_key_env=ENTERPRISE_AI_TERTIARY_API_KEY_ENV,
 )
 _CONNECTION_FIELDS: dict[str, _ConnectionFields] = {
@@ -678,7 +678,7 @@ class EnterpriseAiConnection:
 
     connection_id: str
     endpoint: str
-    project_ocid: str
+    project_id: str
     api_key: str = field(repr=False)
 
     def is_configured(self) -> bool:
@@ -700,7 +700,7 @@ def _connection_from_settings(settings: Any, connection_id: str) -> EnterpriseAi
     return EnterpriseAiConnection(
         connection_id=connection_id,
         endpoint=_setting_text(settings, fields.endpoint),
-        project_ocid=_setting_text(settings, fields.project_ocid),
+        project_id=_setting_text(settings, fields.project_id),
         api_key=_setting_text(settings, fields.api_key),
     )
 
@@ -735,15 +735,13 @@ def enterprise_ai_connection(settings: Any, connection_id: str) -> EnterpriseAiC
 def embedding_model_connection(settings: Any, *, rerank: bool = False) -> EnterpriseAiConnection:
     """埋め込み（`rerank=True` は再ランク）のモデルを呼ぶ接続（#45）。
 
-    既定の埋め込み / 再ランクのモデル（Settings の `oci_genai_embedding_model` /
-    `oci_genai_rerank_model`）を登録モデルの同じ種類から引き、その接続を使う。登録に無い
+    既定の埋め込み / 再ランクのモデル（Settings の `genai_embedding_model` /
+    `genai_rerank_model`）を登録モデルの同じ種類から引き、その接続を使う。登録に無い
     モデル（`.env` だけで設定した場合）はプライマリ接続。3 製品と rag_engine の埋め込み /
     再ランクの endpoint・API key はすべてこれで引く。
     """
     kind = ENTERPRISE_AI_MODEL_KIND_RERANK if rerank else ENTERPRISE_AI_MODEL_KIND_EMBEDDING
-    model_id = _setting_text(
-        settings, "oci_genai_rerank_model" if rerank else "oci_genai_embedding_model"
-    )
+    model_id = _setting_text(settings, "genai_rerank_model" if rerank else "genai_embedding_model")
     connection_id = next(
         (
             model.connection_id
@@ -809,8 +807,8 @@ def enterprise_ai_connection_for_model(settings: Any, model_id: str) -> Enterpri
     )
     if connection_id is None:
         defaults = {
-            _setting_text(settings, "oci_enterprise_ai_default_text_model"),
-            _setting_text(settings, "oci_enterprise_ai_default_vision_model"),
+            _setting_text(settings, "enterprise_ai_default_text_model"),
+            _setting_text(settings, "enterprise_ai_default_vision_model"),
         }
         if normalized and normalized not in defaults:
             raise EnterpriseAiModelNotRegisteredError(normalized)
@@ -1025,9 +1023,7 @@ def _coerce_model(value: object) -> EnterpriseAiConfiguredModel:
 def _configured_models(settings: Any) -> list[EnterpriseAiConfiguredModel]:
     return [
         model
-        for model in (
-            _coerce_model(item) for item in getattr(settings, "oci_enterprise_ai_models", [])
-        )
+        for model in (_coerce_model(item) for item in getattr(settings, "enterprise_ai_models", []))
         if model.model_id
     ]
 
@@ -1053,8 +1049,8 @@ def enterprise_ai_model_catalog(settings: Any) -> list[EnterpriseAiConfiguredMod
     ]
     if configured:
         return configured
-    text_model = _setting_text(settings, "oci_enterprise_ai_default_text_model")
-    vision_model = _setting_text(settings, "oci_enterprise_ai_default_vision_model")
+    text_model = _setting_text(settings, "enterprise_ai_default_text_model")
+    vision_model = _setting_text(settings, "enterprise_ai_default_vision_model")
     models: list[EnterpriseAiConfiguredModel] = []
     if text_model:
         models.append(
@@ -1083,12 +1079,12 @@ def enterprise_ai_vision_model_id(settings: Any) -> str:
     明示の設定がない環境（`.env` で登録モデルだけを書いた場合など）では、登録モデルのうち
     Vision 対応のもの（既定のテキストモデルが Vision 対応ならそれ）を使う。
     """
-    explicit = _setting_text(settings, "oci_enterprise_ai_default_vision_model")
+    explicit = _setting_text(settings, "enterprise_ai_default_vision_model")
     if explicit:
         return explicit
     return _vision_model_id(
         enterprise_ai_model_catalog(settings),
-        _setting_text(settings, "oci_enterprise_ai_default_text_model"),
+        _setting_text(settings, "enterprise_ai_default_text_model"),
     )
 
 
@@ -1100,7 +1096,7 @@ def enterprise_ai_judge_model_id(settings: Any, answer_model_id: str | None = No
       （回答を作ったモデル）。分からなければ既定のテキストモデル
     - 登録モデルの ID: そのモデル（すべての回答を同じモデルで判定する）
     """
-    judge = _setting_text(settings, "oci_enterprise_ai_default_judge_model")
+    judge = _setting_text(settings, "enterprise_ai_default_judge_model")
     if judge == ENTERPRISE_AI_JUDGE_SAME_AS_ANSWER:
         return (answer_model_id or "").strip() or enterprise_ai_default_model_id(settings)
     return judge or enterprise_ai_default_model_id(settings)
@@ -1113,7 +1109,7 @@ def enterprise_ai_default_model_id(settings: Any) -> str:
     画面・API では既定のテキストモデルは必須（#566）。Vision・先頭への代替は、`.env` だけで
     構成した既存環境が設定を保存し直すまで動き続けるための安全策として残す。
     """
-    text_model = _setting_text(settings, "oci_enterprise_ai_default_text_model")
+    text_model = _setting_text(settings, "enterprise_ai_default_text_model")
     if text_model:
         return text_model
     vision_model = enterprise_ai_vision_model_id(settings)
@@ -1339,37 +1335,37 @@ def model_payload(settings: Any) -> ModelSettingsPayload:
     models = [model.model_copy() for model in enterprise_ai_registered_models(settings)]
     if not models:
         models.append(EnterpriseAiConfiguredModel())
-    api_path = settings.oci_enterprise_ai_llm_path or settings.oci_enterprise_ai_vlm_path
+    api_path = settings.enterprise_ai_llm_path or settings.enterprise_ai_vlm_path
     return ModelSettingsPayload(
         enterprise_ai=EnterpriseAiModelSettings(
             connections=[
                 EnterpriseAiConnectionSettings(
                     connection_id=connection.connection_id,
                     endpoint=connection.endpoint,
-                    project_ocid=connection.project_ocid,
+                    project_id=connection.project_id,
                     api_key="",
                     has_api_key=bool(connection.api_key),
                 )
                 for connection in enterprise_ai_connections(settings)
             ],
             models=models,
-            default_text_model_id=_setting_text(settings, "oci_enterprise_ai_default_text_model"),
+            default_text_model_id=_setting_text(settings, "enterprise_ai_default_text_model"),
             default_vision_model_id=enterprise_ai_vision_model_id(settings),
-            default_judge_model_id=_setting_text(settings, "oci_enterprise_ai_default_judge_model"),
+            default_judge_model_id=_setting_text(settings, "enterprise_ai_default_judge_model"),
             default_embedding_model_id=_usable_embedding_model_id(
-                _setting_text(settings, "oci_genai_embedding_model")
+                _setting_text(settings, "genai_embedding_model")
             ),
             default_rerank_model_id=_usable_embedding_model_id(
-                _setting_text(settings, "oci_genai_rerank_model")
+                _setting_text(settings, "genai_rerank_model")
             ),
             api_path=api_path or "/responses",
-            vlm_input_mode=settings.oci_enterprise_ai_vlm_input_mode,
-            text_payload_template=settings.oci_enterprise_ai_llm_payload_template,
-            vision_payload_template=settings.oci_enterprise_ai_vlm_payload_template,
-            text_response_path=settings.oci_enterprise_ai_llm_response_path,
-            vision_response_path=settings.oci_enterprise_ai_vlm_response_path,
-            timeout_seconds=settings.oci_enterprise_ai_timeout_seconds,
-            max_retries=settings.oci_enterprise_ai_max_retries,
+            vlm_input_mode=settings.enterprise_ai_vlm_input_mode,
+            text_payload_template=settings.enterprise_ai_llm_payload_template,
+            vision_payload_template=settings.enterprise_ai_vlm_payload_template,
+            text_response_path=settings.enterprise_ai_llm_response_path,
+            vision_response_path=settings.enterprise_ai_vlm_response_path,
+            timeout_seconds=settings.enterprise_ai_timeout_seconds,
+            max_retries=settings.enterprise_ai_max_retries,
         ),
     )
 
@@ -1382,22 +1378,22 @@ def apply_model_settings(settings: Any, payload: ModelSettingsPayload) -> None:
         # payload にない接続（セカンダリ接続・ターシャリ接続を削除した場合）は空にする。
         connection = enterprise.connection(connection_id) or EnterpriseAiConnectionSettings()
         _set_if_field(settings, fields.endpoint, connection.endpoint)
-        _set_if_field(settings, fields.project_ocid, connection.project_ocid)
-    settings.oci_enterprise_ai_models = models
-    settings.oci_enterprise_ai_default_text_model = enterprise.default_text_model_id
-    settings.oci_enterprise_ai_default_vision_model = enterprise.default_vision_model_id
-    settings.oci_enterprise_ai_default_judge_model = enterprise.default_judge_model_id
-    settings.oci_enterprise_ai_llm_path = enterprise.api_path
-    settings.oci_enterprise_ai_vlm_path = enterprise.api_path
-    settings.oci_enterprise_ai_vlm_input_mode = enterprise.vlm_input_mode
-    settings.oci_enterprise_ai_llm_payload_template = enterprise.text_payload_template
-    settings.oci_enterprise_ai_vlm_payload_template = enterprise.vision_payload_template
-    settings.oci_enterprise_ai_llm_response_path = enterprise.text_response_path
-    settings.oci_enterprise_ai_vlm_response_path = enterprise.vision_response_path
-    settings.oci_enterprise_ai_timeout_seconds = enterprise.timeout_seconds
-    settings.oci_enterprise_ai_max_retries = enterprise.max_retries
+        _set_if_field(settings, fields.project_id, connection.project_id)
+    settings.enterprise_ai_models = models
+    settings.enterprise_ai_default_text_model = enterprise.default_text_model_id
+    settings.enterprise_ai_default_vision_model = enterprise.default_vision_model_id
+    settings.enterprise_ai_default_judge_model = enterprise.default_judge_model_id
+    settings.enterprise_ai_llm_path = enterprise.api_path
+    settings.enterprise_ai_vlm_path = enterprise.api_path
+    settings.enterprise_ai_vlm_input_mode = enterprise.vlm_input_mode
+    settings.enterprise_ai_llm_payload_template = enterprise.text_payload_template
+    settings.enterprise_ai_vlm_payload_template = enterprise.vision_payload_template
+    settings.enterprise_ai_llm_response_path = enterprise.text_response_path
+    settings.enterprise_ai_vlm_response_path = enterprise.vision_response_path
+    settings.enterprise_ai_timeout_seconds = enterprise.timeout_seconds
+    settings.enterprise_ai_max_retries = enterprise.max_retries
     # 既定の埋め込み / 再ランクのモデル（#45）。endpoint・API key はそのモデルの接続から
-    # `embedding_model_connection` で引く。次元は製品の設定（`oci_genai_embedding_dim`。Oracle の
+    # `embedding_model_connection` で引く。次元は製品の設定（`genai_embedding_dim`。Oracle の
     # VECTOR 列に合わせた値）のまま変えない。
     _apply_embedding_models(
         settings, enterprise.default_embedding_model_id, enterprise.default_rerank_model_id
@@ -1406,13 +1402,13 @@ def apply_model_settings(settings: Any, payload: ModelSettingsPayload) -> None:
 
 def _apply_embedding_models(settings: Any, embedding_model: str, rerank_model: str) -> None:
     """既定の埋め込み / 再ランクのモデルを Settings へ。空は今の値（`.env`・製品の既定）のまま。"""
-    embedding_model = embedding_model or _setting_text(settings, "oci_genai_embedding_model")
-    rerank_model = rerank_model or _setting_text(settings, "oci_genai_rerank_model")
-    settings.oci_genai_embedding_model = embedding_model
-    settings.oci_genai_rerank_model = rerank_model
+    embedding_model = embedding_model or _setting_text(settings, "genai_embedding_model")
+    rerank_model = rerank_model or _setting_text(settings, "genai_rerank_model")
+    settings.genai_embedding_model = embedding_model
+    settings.genai_rerank_model = rerank_model
     # NL2SQL は旧名の model ID も読んでいる。
-    _set_if_field(settings, "oci_genai_embed_model_id", embedding_model)
-    _set_if_field(settings, "oci_genai_rerank_model_id", rerank_model)
+    _set_if_field(settings, "genai_embed_model_id", embedding_model)
+    _set_if_field(settings, "genai_rerank_model_id", rerank_model)
 
 
 def _set_if_field(settings: Any, name: str, value: object) -> None:
@@ -1483,7 +1479,7 @@ def model_settings_data(settings: Any) -> ModelSettingsData:
 
 
 def _embedding_dim_of(settings: Any) -> int | None:
-    value = getattr(settings, "oci_genai_embedding_dim", None)
+    value = getattr(settings, "genai_embedding_dim", None)
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
@@ -1494,9 +1490,9 @@ class _PersistedConnection(BaseModel):
     # #533 の JSON にある表示名（`display_name`）は、知らない key として読み捨てる（#542）。
     connection_id: str = ""
     endpoint: str = ""
-    project_ocid: str = ""
+    project_id: str = ""
 
-    @field_validator("connection_id", "endpoint", "project_ocid", mode="before")
+    @field_validator("connection_id", "endpoint", "project_id", mode="before")
     @classmethod
     def strip_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
@@ -1504,10 +1500,10 @@ class _PersistedConnection(BaseModel):
 
 class _PersistedEnterpriseAiSettings(BaseModel):
     # #533 からの接続の一覧（secret は書かない）。None は #533 より前の JSON（接続 1 組を
-    # top-level の `endpoint` / `project_ocid` に持つ形）で、プライマリ接続として読む。
+    # top-level の `endpoint` / `project_id` に持つ形）で、プライマリ接続として読む。
     connections: list[_PersistedConnection] | None = None
     endpoint: str = ""
-    project_ocid: str = ""
+    project_id: str = ""
     # v1 / v2（RAG・Agent）の読込互換専用。v3 の writer は secret を JSON へ出力しない。
     api_key: str | None = None
     models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
@@ -1580,13 +1576,13 @@ class _PersistedEnterpriseAiSettings(BaseModel):
             primary = EnterpriseAiConnectionSettings(
                 connection_id=ENTERPRISE_AI_PRIMARY_CONNECTION_ID,
                 endpoint=self.endpoint,
-                project_ocid=self.project_ocid,
+                project_id=self.project_id,
             )
             return [primary] + [
                 EnterpriseAiConnectionSettings(
                     connection_id=item.connection_id,
                     endpoint=item.endpoint,
-                    project_ocid=item.project_ocid,
+                    project_id=item.project_id,
                 )
                 for item in enterprise_ai_connections(settings)[1:]
             ]
@@ -1602,7 +1598,7 @@ class _PersistedEnterpriseAiSettings(BaseModel):
                 EnterpriseAiConnectionSettings(
                     connection_id=connection_id,
                     endpoint=item.endpoint,
-                    project_ocid=item.project_ocid,
+                    project_id=item.project_id,
                 )
             )
         return connections
@@ -1810,7 +1806,7 @@ class ModelSettingsStore:
                         exclude={
                             "connections",
                             "endpoint",
-                            "project_ocid",
+                            "project_id",
                             "api_key",
                             "models",
                             "default_model_id",
@@ -1840,12 +1836,12 @@ class ModelSettingsStore:
 
 # #8 より前の OCI Generative AI（Cohere）の埋め込み / 再ランクのモデル ID の接頭辞。OpenAI 互換の
 # 経路では呼べないので、画面・移行では未設定として扱い、利用者に選び直させる（#45）。
-_LEGACY_OCI_GENAI_MODEL_PREFIX: Final = "cohere."
+_LEGACY_GENAI_MODEL_PREFIX: Final = "cohere."
 
 
 def _usable_embedding_model_id(value: str) -> str:
     """既定の埋め込み / 再ランクのモデル ID。旧 Cohere の ID は空にする（#45）。"""
-    return "" if value.startswith(_LEGACY_OCI_GENAI_MODEL_PREFIX) else value
+    return "" if value.startswith(_LEGACY_GENAI_MODEL_PREFIX) else value
 
 
 def _embedding_defaults(
@@ -1870,13 +1866,13 @@ def _embedding_defaults(
             ENTERPRISE_AI_MODEL_KIND_EMBEDDING,
             enterprise.default_embedding_model_id,
             legacy.embedding_model if legacy else "",
-            _setting_text(settings, "oci_genai_embedding_model"),
+            _setting_text(settings, "genai_embedding_model"),
         ),
         (
             ENTERPRISE_AI_MODEL_KIND_RERANK,
             enterprise.default_rerank_model_id,
             legacy.rerank_model if legacy else "",
-            _setting_text(settings, "oci_genai_rerank_model"),
+            _setting_text(settings, "genai_rerank_model"),
         ),
     ):
         if saved is not None:
@@ -1902,7 +1898,7 @@ def _model_settings_document(payload: ModelSettingsPayload) -> dict[str, Any]:
         "version": MODEL_SETTINGS_DOCUMENT_VERSION,
         "enterprise_ai": {
             "connections": [
-                connection.model_dump(include={"connection_id", "endpoint", "project_ocid"})
+                connection.model_dump(include={"connection_id", "endpoint", "project_id"})
                 for connection in enterprise.connections
             ],
             "models": [
@@ -1977,21 +1973,21 @@ def model_test_candidate(settings: Any, request: ModelSettingsTestRequest) -> An
         _set_if_field(candidate, fields.api_key, keys[connection_id])
     model_id = request.model_id
     if request.target_type in {"enterprise_text", "enterprise_vision"}:
-        candidate.oci_enterprise_ai_default_text_model = model_id
+        candidate.enterprise_ai_default_text_model = model_id
     if request.target_type == "enterprise_vision":
-        candidate.oci_enterprise_ai_default_vision_model = model_id
-        candidate.oci_enterprise_ai_models = [
+        candidate.enterprise_ai_default_vision_model = model_id
+        candidate.enterprise_ai_models = [
             model.model_copy(
                 update={"vision_enabled": model.model_id == model_id or model.vision_enabled}
             )
             for model in enterprise_ai_model_catalog(candidate)
         ]
     elif request.target_type == "embedding":
-        candidate.oci_genai_embedding_model = model_id
-        _set_if_field(candidate, "oci_genai_embed_model_id", model_id)
+        candidate.genai_embedding_model = model_id
+        _set_if_field(candidate, "genai_embed_model_id", model_id)
     elif request.target_type == "rerank":
-        candidate.oci_genai_rerank_model = model_id
-        _set_if_field(candidate, "oci_genai_rerank_model_id", model_id)
+        candidate.genai_rerank_model = model_id
+        _set_if_field(candidate, "genai_rerank_model_id", model_id)
     return candidate
 
 

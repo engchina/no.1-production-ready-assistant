@@ -79,7 +79,7 @@ def test_manual_integration_preview_smoke(
     assert "[ok] diagnostics:" in output
     assert "readiness=" in output
     assert "[ok] preview_enterprise_ai_direct:" in output
-    assert "provider=oci_enterprise_ai,mode=direct" in output
+    assert "provider=enterprise_ai,mode=direct" in output
     assert "PLATFORM_ORACLE_PASSWORD" not in output
 
 
@@ -110,7 +110,7 @@ def test_manual_integration_execute_smoke(
     assert "[ok] preview_enterprise_ai_direct:" in output
     assert "[ok] job_enterprise_ai_direct:" in output
     assert "status=done" in output
-    assert "provider=oci_enterprise_ai,mode=direct" in output
+    assert "provider=enterprise_ai,mode=direct" in output
     assert "PLATFORM_ORACLE_PASSWORD" not in output
 
 
@@ -165,11 +165,11 @@ def test_manual_integration_require_enterprise_ai_stops_when_unconfigured(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_vision_model", "")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_models", [])
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_text_model", "")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "")
+    monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "")
+    monkeypatch.setattr(settings, "enterprise_ai_models", [])
+    monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "")
 
     exit_code = script.main(
         [
@@ -185,7 +185,7 @@ def test_manual_integration_require_enterprise_ai_stops_when_unconfigured(
     output = capsys.readouterr().out
     assert "[ng] diagnostics:" in output
     assert "Enterprise AI Direct is not ready" in output
-    assert "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT" in output
+    assert "PLATFORM_ENTERPRISE_AI_ENDPOINT" in output
     assert "PLATFORM_ORACLE_PASSWORD" not in output
 
 

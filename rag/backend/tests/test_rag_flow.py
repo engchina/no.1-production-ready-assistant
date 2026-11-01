@@ -11,7 +11,7 @@ from pytest import LogCaptureFixture, MonkeyPatch
 from rag_parser_core.result import ParserRegistryResult
 
 from app.clients.file_storage import FileStorageClient
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.parser_service import ParserServiceClient
 from app.config import Settings, get_settings
@@ -552,7 +552,7 @@ def test_prompt_injection_query_is_blocked(
     assert audit_event["citation_count"] == 0
 
 
-class StubEmbeddingClient(OciGenAiClient):
+class StubEmbeddingClient(GenAiClient):
     """入力件数分の 1024 次元 embedding を返すテスト用 client。"""
 
     async def embed(
@@ -564,7 +564,7 @@ class StubEmbeddingClient(OciGenAiClient):
         return [[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1) for _ in texts]
 
 
-class FailingEmbeddingClient(OciGenAiClient):
+class FailingEmbeddingClient(GenAiClient):
     """内部情報を含む embedding failure を再現する client。"""
 
     async def embed(

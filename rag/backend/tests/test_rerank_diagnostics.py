@@ -10,7 +10,7 @@ from typing import Any, cast
 import pytest
 from rag_engine.resources.rerank_diagnostics import bind_rerank_context, current_rerank_receipt
 
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.config import Settings
 
 
@@ -45,7 +45,7 @@ def captured(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
             set_display=lambda **values: data.update(values),
         )
 
-    monkeypatch.setattr("app.clients.oci_genai.observed_span", observe)
+    monkeypatch.setattr("app.clients.genai.observed_span", observe)
 
     async def no_sleep(seconds: float) -> None:
         pass
@@ -54,16 +54,16 @@ def captured(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return spans
 
 
-def client(sdk: Any, *, enabled: bool = True, runner: Any = None) -> OciGenAiClient:
+def client(sdk: Any, *, enabled: bool = True, runner: Any = None) -> GenAiClient:
     async def inline(operation: Callable[[], Any]) -> Any:
         return operation()
 
-    return OciGenAiClient(
+    return GenAiClient(
         settings=Settings.model_construct(
-            oci_genai_rerank_model="synthetic-rerank",
-            oci_enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
-            oci_enterprise_ai_api_key="sk-synthetic",
-            oci_enterprise_ai_timeout_seconds=60,
+            genai_rerank_model="synthetic-rerank",
+            enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
+            enterprise_ai_api_key="sk-synthetic",
+            enterprise_ai_timeout_seconds=60,
             rag_rerank_cache_enabled=enabled,
         ),
         post=sdk,

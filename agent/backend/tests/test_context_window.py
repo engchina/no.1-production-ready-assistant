@@ -360,8 +360,8 @@ def _script(
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "test-model-2383",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             max_input_tokens=max_input,
             max_output_tokens=max_output,
@@ -554,7 +554,7 @@ def _overflow_error(prompt: int = 160066, limit: int = 131072) -> Any:
         "param": None,
         "type": "BadRequestError",
     }
-    response = httpx2.Response(400, request=httpx2.Request("POST", "https://oci.example/responses"))
+    response = httpx2.Response(400, request=httpx2.Request("POST", "https://llm.example/responses"))
     return BadRequestError(f"Error code: 400 - {body}", response=response, body=body)
 
 
@@ -600,7 +600,7 @@ def test_provider_overflow_is_compacted_and_resent_once(mcp: FakeProductMcp) -> 
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        return await builtin_runtime._OciResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
             model="test-model-2383", input=items, instructions="指示", tools=[]
         )
 
@@ -627,7 +627,7 @@ def test_second_provider_overflow_fails_with_a_clear_reason(mcp: FakeProductMcp)
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        return await builtin_runtime._OciResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
             model="test-model-2383", input=items, instructions="指示", tools=[]
         )
 
@@ -646,7 +646,7 @@ def test_provider_overflow_without_a_run_window_is_raised_as_is() -> None:
 
     async def call() -> Any:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(None)  # noqa: SLF001
-        return await builtin_runtime._OciResponses(inner).create(  # noqa: SLF001
+        return await builtin_runtime._CompatResponses(inner).create(  # noqa: SLF001
             model="m", input=[], instructions="指示", tools=[]
         )
 

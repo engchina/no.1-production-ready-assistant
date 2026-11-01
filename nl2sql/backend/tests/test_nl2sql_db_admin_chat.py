@@ -1019,7 +1019,7 @@ def test_analyze_returns_corrected_plan() -> None:
         actor="chat-user",
         all_users=False,
     )
-    assert data.source == "oci_enterprise_ai"
+    assert data.source == "enterprise_ai"
     assert data.cause and data.fix and data.conclusion
     assert "analysis" not in data.model_dump()
     assert data.corrected_plan is not None

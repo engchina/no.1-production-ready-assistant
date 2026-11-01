@@ -76,7 +76,7 @@
 | MOD-011 | 既定の埋め込みモデルの種類 | 既定の埋め込みモデルに種類がテキストのモデルを指定する | 保存が失敗し、種類が「埋め込み」の登録モデルから選び直すよう案内される | `model/model-settings.invalid-default-embedding-kind.json` |
 | MOD-012 | Enterprise text test | text model のテストを実行 | success / failed が結果領域に表示される | `api/model-test-enterprise-text.request.json` |
 | MOD-013 | Enterprise vision test | vision model のテストを実行 | vision_enabled に応じた target test が実行される | `api/model-test-enterprise-vision.request.json` |
-| MOD-014 | Embedding test | 種類が埋め込みの登録モデルの行でテストを実行 | 設定の次元（`oci_genai_embedding_dim`）のベクトルが返ることを確認できる | `api/model-test-embedding.request.json` |
+| MOD-014 | Embedding test | 種類が埋め込みの登録モデルの行でテストを実行 | 設定の次元（`genai_embedding_dim`）のベクトルが返ることを確認できる | `api/model-test-embedding.request.json` |
 | MOD-015 | Rerank test | 種類が再ランクの登録モデルの行でテストを実行 | 2 文書の並び順と最上位のスコア（success / failed）が表示される | `api/model-test-rerank.request.json` |
 
 ## 6. データベース

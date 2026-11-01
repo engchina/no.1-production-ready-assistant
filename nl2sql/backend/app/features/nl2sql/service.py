@@ -156,7 +156,7 @@ from .embedding_client import (
 from .enterprise_ai_client import (
     EnterpriseAiDirectClient,
     EnterpriseAiDirectError,
-    OciEnterpriseAiDirectClient,
+    HttpEnterpriseAiDirectClient,
     enterprise_ai_configuration_failure_message,
     find_enterprise_ai_error,
 )
@@ -4642,7 +4642,9 @@ class Nl2SqlService:
         self._catalog = self._build_default_catalog()
         self._oracle_adapter = OracleNl2SqlAdapter(settings)
         self._embedding_client: FeedbackEmbeddingClient = OpenAiCompatibleEmbeddingClient(settings)
-        self._enterprise_ai_client: EnterpriseAiDirectClient = OciEnterpriseAiDirectClient(settings)
+        self._enterprise_ai_client: EnterpriseAiDirectClient = HttpEnterpriseAiDirectClient(
+            settings
+        )
         self._store: Nl2SqlStore
         self._incremental_repository: IncrementalNl2SqlRepository | None = None
         if store is None and settings.nl2sql_persistence_mode.strip().lower() == "oracle":
@@ -11270,7 +11272,7 @@ class Nl2SqlService:
             indexable_count=indexable_count,
             indexed_count=current_indexed,
             ddl=self._feedback_index_ddl(),
-            embedding_model=settings.oci_genai_embed_model_id,
+            embedding_model=settings.genai_embed_model_id,
             embedding_configured=embedding_configured,
             warnings=warnings,
             timing=self._timing(created_at, started, "feedback_index"),
@@ -11516,7 +11518,7 @@ class Nl2SqlService:
             categories=categories,
             embedding_model=str(
                 artifact.get("embedding_model")
-                or get_settings().oci_genai_embed_model_id
+                or get_settings().genai_embed_model_id
                 or _DETERMINISTIC_EMBEDDING_MODEL
             ),
             vector_dimension=vector_dimension,
@@ -12898,7 +12900,7 @@ class Nl2SqlService:
                 return (
                     self._embedding_client.embed_texts(texts),
                     [],
-                    settings.oci_genai_embed_model_id,
+                    settings.genai_embed_model_id,
                 )
             except EmbeddingClientError as exc:
                 return (
@@ -13097,7 +13099,7 @@ class Nl2SqlService:
             indexable_count=len(indexable),
             indexed_count=indexed_count,
             ddl=self._feedback_index_ddl(),
-            embedding_model=settings.oci_genai_embed_model_id,
+            embedding_model=settings.genai_embed_model_id,
             embedding_configured=self._embedding_client.is_configured(),
             warnings=warnings,
             timing=self._timing(created_at, started, "feedback_index"),
@@ -13452,7 +13454,7 @@ class Nl2SqlService:
             )
         result = deterministic
         settings = get_settings()
-        timeout = max(1.0, settings.oci_enterprise_ai_timeout_seconds)
+        timeout = max(1.0, settings.enterprise_ai_timeout_seconds)
         deadline = time.monotonic() + min(1800.0, timeout * 3)
         try:
             profile = self.get_profile(request.profile_id)
@@ -13470,7 +13472,7 @@ class Nl2SqlService:
                 stage="structure_analysis",
                 parse=self._reverse_structure_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=request.sql,
                 context=context,
@@ -13488,7 +13490,7 @@ class Nl2SqlService:
                 stage="logical_structure",
                 parse=self._reverse_structure_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=json.dumps(
                     {"sql_structure": physical_structure, "sql": request.sql}, ensure_ascii=False
@@ -13504,7 +13506,7 @@ class Nl2SqlService:
                 update={
                     "logical_structure": logical_structure,
                     "logical_structure_items": [],
-                    "source": "oci_enterprise_ai",
+                    "source": "enterprise_ai",
                 }
             )
             question = generate_stage(
@@ -13512,7 +13514,7 @@ class Nl2SqlService:
                 stage="business_question",
                 parse=self._reverse_question_from_text,
                 timeout_seconds=timeout,
-                max_retries=settings.oci_enterprise_ai_max_retries,
+                max_retries=settings.enterprise_ai_max_retries,
                 deadline=deadline,
                 prompt=logical_structure,
                 context=context,
@@ -13660,7 +13662,7 @@ class Nl2SqlService:
         return StructureToSqlData(
             sql=sql,
             explanation=output.explanation.strip(),
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             warnings=analysis.safety.warnings,
         )
 
@@ -14221,7 +14223,7 @@ class Nl2SqlService:
                 raise ValueError("comment 候補が空です。")
             return CommentSuggestionData(
                 suggestions=suggestions,
-                source="oci_enterprise_ai",
+                source="enterprise_ai",
             )
         except (EnterpriseAiDirectError, ValueError, TypeError) as exc:
             return deterministic.model_copy(
@@ -15261,7 +15263,7 @@ class Nl2SqlService:
         if not failures:
             return MetadataSqlGenerateData(
                 sql="\n".join(sql for _batch, sql, _exc in results if sql),
-                source="oci_enterprise_ai",
+                source="enterprise_ai",
                 warnings=success_warnings,
                 timing=timing,
             )
@@ -15300,7 +15302,7 @@ class Nl2SqlService:
         ]
         return MetadataSqlGenerateData(
             sql="\n".join(part for part in parts if part),
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             warnings=success_warnings,
             fallback_objects=[name for batch, _error in failures for name in object_names(batch)],
             timing=timing,
@@ -16032,9 +16034,9 @@ class Nl2SqlService:
             check_present("PLATFORM_ORACLE_DSN", "Oracle DSN"),
             check_present("PLATFORM_ORACLE_USER", "Oracle user"),
             # テキストモデルの接続（#533）。セカンダリ接続なら
-            # PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_*。
+            # PLATFORM_ENTERPRISE_AI_SECONDARY_*。
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
+                name="PLATFORM_ENTERPRISE_AI_ENDPOINT",
                 status="ok" if text_connection.endpoint else "warning",
                 message=(
                     f"OCI Enterprise AI endpoint（{text_connection_label}）は設定済みです。"
@@ -16043,7 +16045,7 @@ class Nl2SqlService:
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
+                name="PLATFORM_ENTERPRISE_AI_API_KEY",
                 status="ok" if text_connection.api_key else "warning",
                 message=(
                     f"OCI Enterprise AI API key（{text_connection_label}）は設定済みです。"
@@ -16052,7 +16054,7 @@ class Nl2SqlService:
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+                name="PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
                 status="ok" if self._enterprise_ai_client.model_id() else "warning",
                 message=(
                     "OCI Enterprise AI のテキストモデルは "
@@ -16113,16 +16115,16 @@ class Nl2SqlService:
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_GENAI_ENDPOINT",
+                name="PLATFORM_GENAI_ENDPOINT",
                 status=(
                     "ok"
-                    if settings.oci_genai_endpoint.strip()
+                    if settings.genai_endpoint.strip()
                     or not settings.nl2sql_feedback_embedding_enabled
                     else "warning"
                 ),
                 message=(
                     "OCI GenAI endpoint は設定済みです。"
-                    if settings.oci_genai_endpoint.strip()
+                    if settings.genai_endpoint.strip()
                     else (
                         "feedback embedding は無効なため OCI GenAI endpoint は任意です。"
                         if not settings.nl2sql_feedback_embedding_enabled
@@ -16131,16 +16133,16 @@ class Nl2SqlService:
                 ),
             ),
             DiagnosticCheck(
-                name="PLATFORM_OCI_GENAI_EMBED_MODEL_ID",
-                status="ok" if settings.oci_genai_embed_model_id.strip() else "warning",
+                name="PLATFORM_GENAI_EMBED_MODEL_ID",
+                status="ok" if settings.genai_embed_model_id.strip() else "warning",
                 message=(
-                    f"OCI GenAI embedding model は {settings.oci_genai_embed_model_id} です。"
-                    if settings.oci_genai_embed_model_id.strip()
+                    f"OCI GenAI embedding model は {settings.genai_embed_model_id} です。"
+                    if settings.genai_embed_model_id.strip()
                     else "OCI GenAI embedding model が未設定です。"
                 ),
             ),
             DiagnosticCheck(
-                name="OCI_GENAI_EMBEDDING",
+                name="GENAI_EMBEDDING",
                 status=(
                     "ok"
                     if (
@@ -16150,7 +16152,7 @@ class Nl2SqlService:
                     else "warning"
                 ),
                 message=(
-                    f"feedback embedding model は {settings.oci_genai_embed_model_id} です。"
+                    f"feedback embedding model は {settings.genai_embed_model_id} です。"
                     if embedding_configured and embedding_module_available
                     else (
                         "feedback embedding は無効です。"
@@ -16300,7 +16302,7 @@ class Nl2SqlService:
                 else fallback
             )
 
-        enterprise_model_name = "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"
+        enterprise_model_name = "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"
 
         return [
             DiagnosticConfigGuide(
@@ -16316,23 +16318,23 @@ class Nl2SqlService:
                     "OCI Enterprise AI endpoint / API key / model を設定してください。",
                 ),
                 required_env_vars=[
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT"),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_API_KEY"),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"),
+                    env_var("PLATFORM_ENTERPRISE_AI_ENDPOINT"),
+                    env_var("PLATFORM_ENTERPRISE_AI_API_KEY"),
+                    env_var("PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL"),
                 ],
                 optional_env_vars=[
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE", required=False),
-                    env_var("PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_PROJECT_ID", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_PATH", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE", required=False),
+                    env_var("PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH", required=False),
                 ],
                 env_template=(
                     "NL2SQL_ENTERPRISE_AI_DIRECT_ENABLED=true\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_API_KEY=<enterprise-ai-api-key>\n"
+                    "PLATFORM_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>\n"
+                    "PLATFORM_ENTERPRISE_AI_API_KEY=<enterprise-ai-api-key>\n"
                     f"{enterprise_model_name}=<enterprise-ai-model>\n"
-                    "PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH=/responses"
+                    "PLATFORM_ENTERPRISE_AI_LLM_PATH=/responses"
                 ),
                 smoke_command=(
                     "uv run python scripts/nl2sql_manual_integration.py "
@@ -16356,8 +16358,8 @@ class Nl2SqlService:
                 ),
                 required_env_vars=[
                     env_var("NL2SQL_FEEDBACK_EMBEDDING_ENABLED"),
-                    env_var("PLATFORM_OCI_GENAI_ENDPOINT"),
-                    env_var("PLATFORM_OCI_GENAI_EMBED_MODEL_ID"),
+                    env_var("PLATFORM_GENAI_ENDPOINT"),
+                    env_var("PLATFORM_GENAI_EMBED_MODEL_ID"),
                 ],
                 optional_env_vars=[
                     env_var("NL2SQL_FEEDBACK_VECTOR_TABLE", required=False),
@@ -16365,8 +16367,8 @@ class Nl2SqlService:
                 ],
                 env_template=(
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true\n"
-                    "PLATFORM_OCI_GENAI_ENDPOINT=<oci-genai-endpoint>\n"
-                    "PLATFORM_OCI_GENAI_EMBED_MODEL_ID=cohere.embed-v4.0\n"
+                    "PLATFORM_GENAI_ENDPOINT=<oci-genai-endpoint>\n"
+                    "PLATFORM_GENAI_EMBED_MODEL_ID=cohere.embed-v4.0\n"
                     "NL2SQL_FEEDBACK_VECTOR_TABLE=NL2SQL_FEEDBACK_VECTORS\n"
                     "NL2SQL_FEEDBACK_VECTOR_INDEX=NL2SQL_FEEDBACK_VEC_IDX"
                 ),
@@ -16448,7 +16450,7 @@ class Nl2SqlService:
         )
         embedding_summary = (
             (
-                f"Feedback 学習は {settings.oci_genai_embed_model_id} で "
+                f"Feedback 学習は {settings.genai_embed_model_id} で "
                 f"{EMBEDDING_DIMENSIONS} 次元 embedding を作成できます。"
             )
             if embedding_ready
@@ -16497,15 +16499,15 @@ class Nl2SqlService:
                     ""
                     if direct_ready
                     else (
-                        "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT / "
-                        "PLATFORM_OCI_ENTERPRISE_AI_API_KEY / "
-                        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL を設定してください。"
+                        "PLATFORM_ENTERPRISE_AI_ENDPOINT / "
+                        "PLATFORM_ENTERPRISE_AI_API_KEY / "
+                        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL を設定してください。"
                     )
                 ),
                 related_checks=[
-                    "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
-                    "PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
-                    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+                    "PLATFORM_ENTERPRISE_AI_ENDPOINT",
+                    "PLATFORM_ENTERPRISE_AI_API_KEY",
+                    "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
                 ],
             ),
             DiagnosticReadiness(
@@ -16523,7 +16525,7 @@ class Nl2SqlService:
                 ),
                 related_checks=[
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED",
-                    "OCI_GENAI_EMBEDDING",
+                    "GENAI_EMBEDDING",
                 ],
             ),
             DiagnosticReadiness(
@@ -17533,7 +17535,7 @@ class Nl2SqlService:
             fix=output.fix.strip() or deterministic.fix,
             conclusion=output.conclusion.strip() or deterministic.conclusion,
             corrected_plan=self._db_admin_chat_plan(corrected_sql) if corrected_sql else None,
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             model=self._enterprise_ai_client.model_id(),
             warnings=warnings,
             previous_attempts=previous,
@@ -19418,7 +19420,7 @@ class Nl2SqlService:
             analysis = AnalysisOutput.model_validate_json(raw).analysis.strip()
             if not analysis:
                 raise ValueError("AI 分析結果が空です。")
-            return DbAdminAiAnalysisData(analysis=analysis, source="oci_enterprise_ai")
+            return DbAdminAiAnalysisData(analysis=analysis, source="enterprise_ai")
         except (EnterpriseAiDirectError, ValueError) as exc:
             return deterministic.model_copy(
                 update={"warnings": [f"Enterprise AI 分析に失敗したため fallback しました: {exc}"]}
@@ -19554,7 +19556,7 @@ class Nl2SqlService:
         return DbAdminJoinWhereData(
             join_text="\n".join(join_lines) if join_lines else "None",
             where_text="\n".join(where_lines) if where_lines else "None",
-            source="oci_enterprise_ai",
+            source="enterprise_ai",
             prompt_profile=prompt_profile,
             structure_markdown=structure_markdown,
         )
@@ -21989,7 +21991,7 @@ class Nl2SqlService:
 
         deterministic_started = time.monotonic()
         sql = self._compose_select_sql(self._catalog_qualified_name(table), columns)
-        meta.update({"provider": "oci_enterprise_ai", "mode": "direct"})
+        meta.update({"provider": "enterprise_ai", "mode": "direct"})
         _record_engine_timing(
             engine_timings,
             engine="deterministic",
@@ -22154,9 +22156,9 @@ class Nl2SqlService:
         )
         meta.update(
             {
-                "provider": "oci_enterprise_ai",
+                "provider": "enterprise_ai",
                 "mode": "direct",
-                "runtime": "oci_enterprise_ai",
+                "runtime": "enterprise_ai",
                 "model": self._enterprise_ai_client.model_id(),
                 "response_format": "json_schema",
             }

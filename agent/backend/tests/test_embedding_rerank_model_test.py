@@ -25,7 +25,7 @@ from app.settings import Settings
 
 BAILIAN = "https://llm-xxxx.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
 # 埋め込みの次元は製品の設定（Oracle の VECTOR 列に合わせた値）から作る（直書きしない）。
-DIM = Settings(_env_file=None).oci_genai_embedding_dim
+DIM = Settings(_env_file=None).genai_embedding_dim
 
 
 def _request(
@@ -175,4 +175,4 @@ def test_embedding_dim_is_the_platform_constant() -> None:
 
     assert DIM == EMBEDDING_DIMENSIONS
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, oci_genai_embedding_dim=1536)
+        Settings(_env_file=None, genai_embedding_dim=1536)

@@ -492,7 +492,7 @@ async function mockModelSettingsWithAnswerModels(page: Page) {
           {
             connection_id: "primary",
             endpoint: "https://inference.example",
-            project_ocid: "ocid1.generativeaiproject.oc1..example",
+            project_id: "ocid1.generativeaiproject.oc1..example",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,

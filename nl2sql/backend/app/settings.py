@@ -90,42 +90,42 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_client_lib_dir: str = ""
     oracle_wallet_dir: str = "/u01/aipoc/wallet"
     oracle_wallet_password: str = ""
-    oci_genai_endpoint: str = ""
-    oci_genai_embedding_model: str = "cohere.embed-v4.0"
+    genai_endpoint: str = ""
+    genai_embedding_model: str = "cohere.embed-v4.0"
     # Oracle のベクトル列の次元（`EMBEDDING_DIMENSIONS`）に固定する。旧い既定（1536）は
     # 起動で拒否する（#46）。
-    oci_genai_embedding_dim: int = Field(
+    genai_embedding_dim: int = Field(
         default=EMBEDDING_DIMENSIONS, ge=EMBEDDING_DIMENSIONS, le=EMBEDDING_DIMENSIONS
     )
-    oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
-    oci_genai_embed_model_id: str = "text-embedding-v4"
-    oci_genai_rerank_model_id: str = "cohere.rerank-v4.0-fast"
-    oci_enterprise_ai_endpoint: str = ""
-    oci_enterprise_ai_project_ocid: str = ""
-    oci_enterprise_ai_api_key: str = ""
+    genai_rerank_model: str = "cohere.rerank-v4.0-fast"
+    genai_embed_model_id: str = "text-embedding-v4"
+    genai_rerank_model_id: str = "cohere.rerank-v4.0-fast"
+    enterprise_ai_endpoint: str = ""
+    enterprise_ai_project_id: str = ""
+    enterprise_ai_api_key: str = ""
     # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
-    oci_enterprise_ai_secondary_endpoint: str = ""
-    oci_enterprise_ai_secondary_project_ocid: str = ""
-    oci_enterprise_ai_secondary_api_key: str = ""
+    enterprise_ai_secondary_endpoint: str = ""
+    enterprise_ai_secondary_project_id: str = ""
+    enterprise_ai_secondary_api_key: str = ""
     # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
-    oci_enterprise_ai_tertiary_endpoint: str = ""
-    oci_enterprise_ai_tertiary_project_ocid: str = ""
-    oci_enterprise_ai_tertiary_api_key: str = ""
-    oci_enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
-    oci_enterprise_ai_default_text_model: str = ""
-    oci_enterprise_ai_default_vision_model: str = ""
+    enterprise_ai_tertiary_endpoint: str = ""
+    enterprise_ai_tertiary_project_id: str = ""
+    enterprise_ai_tertiary_api_key: str = ""
+    enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
+    enterprise_ai_default_text_model: str = ""
+    enterprise_ai_default_vision_model: str = ""
     # 品質評価の判定のモデル（#3574。共通のモデル設定の保存で持つ。RAG の品質評価だけが読む）。
-    oci_enterprise_ai_default_judge_model: str = ""
-    oci_enterprise_ai_llm_path: str = "/responses"
-    oci_enterprise_ai_llm_payload_template: str = ""
-    oci_enterprise_ai_llm_response_path: str = ""
-    oci_enterprise_ai_vlm_path: str = "/responses"
-    oci_enterprise_ai_vlm_payload_template: str = ""
-    oci_enterprise_ai_vlm_response_path: str = ""
-    oci_enterprise_ai_vlm_input_mode: str = "auto"
-    oci_enterprise_ai_timeout_seconds: float = 600.0
-    oci_enterprise_ai_max_retries: int = 3
+    enterprise_ai_default_judge_model: str = ""
+    enterprise_ai_llm_path: str = "/responses"
+    enterprise_ai_llm_payload_template: str = ""
+    enterprise_ai_llm_response_path: str = ""
+    enterprise_ai_vlm_path: str = "/responses"
+    enterprise_ai_vlm_payload_template: str = ""
+    enterprise_ai_vlm_response_path: str = ""
+    enterprise_ai_vlm_input_mode: str = "auto"
+    enterprise_ai_timeout_seconds: float = 600.0
+    enterprise_ai_max_retries: int = 3
     # 出力の上限は登録モデルごとの `max_output_tokens`（#1719。既定 32768）。共通の LLM / VLM の
     # 上限は持たない（呼び出しは pr_system_settings の enterprise_ai_output_token_budget）。
     # チャットで同じ会話の前のターンを LLM に渡す予算（共通の設定。#1818）。
@@ -444,7 +444,7 @@ def resolve_model_settings_file(path_value: str) -> Path:
 
 
 # モデル設定の読み書きは3製品共通（platform の pr_system_settings。#103）。
-# API key（PLATFORM_OCI_ENTERPRISE_AI_API_KEY）は共通 .env へ保存する（#211）。
+# API key（PLATFORM_ENTERPRISE_AI_API_KEY）は共通 .env へ保存する（#211）。
 MODEL_SETTINGS_STORE = ModelSettingsStore(
     resolve_path=lambda settings: resolve_model_settings_file(settings.model_settings_file),
     env_file=lambda _settings: PLATFORM_ENV_FILE,

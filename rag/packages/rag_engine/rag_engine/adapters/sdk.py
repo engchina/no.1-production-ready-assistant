@@ -57,7 +57,7 @@ class DocumentParser:
         )
 
 
-class OciEmbedder:
+class ApiEmbedder:
     """既存 OCI embedding のモデル・次元・retry 設定を利用する。"""
 
     def __init__(self, settings: Settings):
@@ -65,7 +65,7 @@ class OciEmbedder:
 
     def embed(self, texts: Sequence[str], *, query: bool = False) -> list[list[float]]:
         """入力順の embedding を返す。認証・通信エラーを伝播する。"""
-        from rag_engine.adapters.oci import embed_texts
+        from rag_engine.adapters.model_api import embed_texts
 
         return embed_texts(texts, self.settings, input_type="SEARCH_QUERY" if query else "SEARCH_DOCUMENT")
 
@@ -86,7 +86,7 @@ class OracleIndexer:
     def __init__(self, settings: Settings, runtime: Runtime, *, embedder: Embedder | None = None):
         _require_text_only(settings, embedder)
         self.settings, self.runtime = settings, runtime
-        self.embedder = embedder or OciEmbedder(settings)
+        self.embedder = embedder or ApiEmbedder(settings)
 
     def index(self, request: IndexRequest) -> IndexResult:
         """親子チャンク manifest と ADB 索引を保存する。失敗結果は例外に変換する。"""
@@ -165,7 +165,7 @@ class OracleRetriever:
         )
 
 
-class OciGenerator:
+class ApiGenerator:
     """既存の文書 grounding・画像根拠・回答出力契約を使用する。"""
 
     def __init__(self, settings: Settings, runtime: Runtime):

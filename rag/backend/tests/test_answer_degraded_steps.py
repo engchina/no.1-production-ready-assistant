@@ -344,9 +344,9 @@ class _OverridesOracle(EmptyWithKeysOracle):
 
 
 async def _run(monkeypatch: pytest.MonkeyPatch, oracle: FakeOracle) -> Any:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     # 実体・関係情報の拡張は、この試験の外(FakeOracle に無い SQL を読む。処理ごとの試験は
     # 上にある)。章節の拡張は既定のまま(FakeOracle の文書は章節の対応を持たず、広げない)。
     engine = _engine(
@@ -389,9 +389,9 @@ async def test_shared_fake_oracle_answers_without_degraded_steps(
     代役に無い読み取りが ``AttributeError`` で degraded_steps に混ざると、各試験の診断が
     実際の失敗と見分けられない。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     # 章節の拡張は既定で有効(章節の対応を読む)。
     assert Settings().rag_section_expansion_enabled
     engine = _engine(FakeOracle())
@@ -424,7 +424,7 @@ async def test_screen_link_failure_in_rag_engine_is_recorded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """rag_engine の中の画面の選択(LLM)の失敗も、同じ記録に残す(「該当なし」と分ける)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation import answering
     from rag_engine.retrieval.screen_catalog import ScreenLinks
 
@@ -433,7 +433,7 @@ async def test_screen_link_failure_in_rag_engine_is_recorded(
             raise Boom(SECRET)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", failing_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", failing_llm)
     monkeypatch.setattr(answer_engine_module, "_SCREEN_CATALOG_CACHE", {})
     monkeypatch.setattr(answering, "_SCREEN_LINK_CACHE", {})
     oracle = ScreenOracle()
@@ -648,7 +648,7 @@ async def test_chat_attachments_failure_reaches_answer_diagnostics(
     monkeypatch: pytest.MonkeyPatch, fail: bool
 ) -> None:
     """会話の添付を読めないときは添付なしで回答を続け、回答の診断に出す(添付が無いときは出さない)。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag import chat_attachments
     from app.rag.pipeline import RagPipeline
@@ -663,7 +663,7 @@ async def test_chat_attachments_failure_reaches_answer_diagnostics(
                 raise Boom(SECRET)
             return None
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     chat_attachments.set_chat_attachment_service(Service())  # type: ignore[arg-type]
     try:
         pipeline = RagPipeline(
@@ -689,13 +689,13 @@ async def test_pre_answer_degraded_steps_reach_approved_faq_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """承認済み FAQ から答えるときも、前の段の縮退を回答の診断に出す。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation.faq_answer import FaqAnswerDraft
 
     from app.rag.degraded_steps import DegradedSteps
 
     monkeypatch.setattr(
-        engine_oci,
+        engine_api,
         "parse_text_response",
         lambda *args, **kwargs: FaqAnswerDraft(answer="日当は 1 泊 2,000 円です。"),
     )
@@ -724,7 +724,7 @@ async def test_rerank_failure_does_not_show_the_rerank_model(
     monkeypatch: pytest.MonkeyPatch, fail: bool
 ) -> None:
     """rerank が失敗したら取得の順で回答を続け、models.rerank にモデル名を出さない。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     class RerankGenAi(FakeGenAi):
         async def rerank(
@@ -734,9 +734,9 @@ async def test_rerank_failure_does_not_show_the_rerank_model(
                 raise Boom(SECRET)
             return await super().rerank(query, documents, top_n)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     settings = Settings(
-        oci_enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        enterprise_ai_endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
         rag_query_strategy="simple_retrieval",
         rag_answer_flow="standard_rag",
         rag_rerank_enabled=True,
@@ -752,18 +752,18 @@ async def test_rerank_failure_does_not_show_the_rerank_model(
     assert outcome.citations
     steps = cast(list[dict[str, Any]], outcome.diagnostics.get("degraded_steps", []))
     rerank_steps = [step for step in steps if step["kind"] == "rerank"]
-    assert settings.oci_genai_rerank_model
+    assert settings.genai_rerank_model
     if fail:
         assert rerank_steps == [{"kind": "rerank", "count": 1, "exc_type": "Boom"}]
         assert outcome.diagnostics["models"]["rerank"] == ""
     else:
         assert rerank_steps == []
-        assert outcome.diagnostics["models"]["rerank"] == settings.oci_genai_rerank_model
+        assert outcome.diagnostics["models"]["rerank"] == settings.genai_rerank_model
     assert SECRET not in json.dumps(outcome.diagnostics, ensure_ascii=False, default=str)
 
 
 def test_unconfigured_rerank_does_not_show_the_rerank_model() -> None:
     """Base URL が無いと rag_engine は rerank しないので、models.rerank にモデル名を出さない。"""
-    engine = _engine(FakeOracle(), oci_enterprise_ai_endpoint="", rag_rerank_enabled=True)
+    engine = _engine(FakeOracle(), enterprise_ai_endpoint="", rag_rerank_enabled=True)
 
     assert engine._models_used()["rerank"] == ""

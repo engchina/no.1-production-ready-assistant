@@ -165,8 +165,8 @@ def isolated_local_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path / "platform.env")
     monkeypatch.setattr(app_config, "BACKEND_ENV_FILE", tmp_path / ".env")
     monkeypatch.setattr(settings_routes, "BACKEND_ENV_FILE", tmp_path / ".env")
-    monkeypatch.delenv("PLATFORM_OCI_ENTERPRISE_AI_API_KEY", raising=False)
-    monkeypatch.delenv("PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_API_KEY", raising=False)
+    monkeypatch.delenv("PLATFORM_ENTERPRISE_AI_API_KEY", raising=False)
+    monkeypatch.delenv("PLATFORM_ENTERPRISE_AI_SECONDARY_API_KEY", raising=False)
     set_security_service(None)
     reset_rate_limiter()
     reset_guardrail_static_cache()
@@ -313,32 +313,32 @@ def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     settings.app_auth_cookie_secure = False
     settings.model_settings_file = str(tmp_path / "model-settings.json")
     settings.rag_parser_settings_file = str(tmp_path / "parser-settings.json")
-    settings.oci_enterprise_ai_endpoint = ""
-    settings.oci_enterprise_ai_project_ocid = ""
-    settings.oci_enterprise_ai_secondary_endpoint = ""
-    settings.oci_enterprise_ai_secondary_project_ocid = ""
-    settings.oci_enterprise_ai_tertiary_endpoint = ""
-    settings.oci_enterprise_ai_tertiary_project_ocid = ""
+    settings.enterprise_ai_endpoint = ""
+    settings.enterprise_ai_project_id = ""
+    settings.enterprise_ai_secondary_endpoint = ""
+    settings.enterprise_ai_secondary_project_id = ""
+    settings.enterprise_ai_tertiary_endpoint = ""
+    settings.enterprise_ai_tertiary_project_id = ""
     # プライマリ接続・セカンダリ接続・ターシャリ接続（#533 / #786）の API key の基準値を空にする。
     settings.prepare_model_secret_state("", "", "")
-    settings.oci_enterprise_ai_models = []
-    settings.oci_enterprise_ai_default_text_model = ""
-    settings.oci_enterprise_ai_default_vision_model = ""
-    settings.oci_enterprise_ai_llm_path = "/responses"
-    settings.oci_enterprise_ai_vlm_path = "/responses"
-    settings.oci_enterprise_ai_llm_payload_template = ""
-    settings.oci_enterprise_ai_vlm_payload_template = ""
-    settings.oci_enterprise_ai_llm_response_path = ""
-    settings.oci_enterprise_ai_vlm_response_path = ""
-    settings.oci_enterprise_ai_timeout_seconds = 600.0
-    settings.oci_enterprise_ai_max_retries = 3
-    settings.oci_enterprise_ai_vlm_input_mode = "files_api"
+    settings.enterprise_ai_models = []
+    settings.enterprise_ai_default_text_model = ""
+    settings.enterprise_ai_default_vision_model = ""
+    settings.enterprise_ai_llm_path = "/responses"
+    settings.enterprise_ai_vlm_path = "/responses"
+    settings.enterprise_ai_llm_payload_template = ""
+    settings.enterprise_ai_vlm_payload_template = ""
+    settings.enterprise_ai_llm_response_path = ""
+    settings.enterprise_ai_vlm_response_path = ""
+    settings.enterprise_ai_timeout_seconds = 600.0
+    settings.enterprise_ai_max_retries = 3
+    settings.enterprise_ai_vlm_input_mode = "files_api"
     settings.rag_parser_adapter_backend = "unstructured"
     settings.rag_parser_docling_enabled = False
     settings.rag_parser_unstructured_enabled = True
-    settings.oci_genai_embedding_model = "cohere.embed-v4.0"
-    settings.oci_genai_embedding_dim = 1024
-    settings.oci_genai_rerank_model = "cohere.rerank-v4.0-fast"
+    settings.genai_embedding_model = "cohere.embed-v4.0"
+    settings.genai_embedding_dim = 1024
+    settings.genai_rerank_model = "cohere.rerank-v4.0-fast"
     settings.rag_pdf_segmentation_enabled = True
     settings.rag_pdf_max_pages_per_segment = 10
     settings.rag_pdf_max_segments = 300

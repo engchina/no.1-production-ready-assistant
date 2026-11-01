@@ -36,7 +36,7 @@ async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
     monkeypatch.setattr(staging_smoke, "RagPipeline", FakeRagPipeline)
     monkeypatch.setattr(staging_smoke, "close_oracle_pool", close_pool)
 
-    result = await staging_smoke.run_staging_smoke(settings=_complete_oci_settings())
+    result = await staging_smoke.run_staging_smoke(settings=_complete_llm_settings())
 
     assert result.ok is True
     assert result.document_id == "doc-smoke"
@@ -70,7 +70,7 @@ async def test_staging_smoke_cleanup_deletes_created_resources(
     monkeypatch.setattr(staging_smoke, "close_oracle_pool", lambda: None)
 
     result = await staging_smoke.run_staging_smoke(
-        settings=_complete_oci_settings(),
+        settings=_complete_llm_settings(),
         cleanup=True,
     )
 
@@ -98,7 +98,7 @@ async def test_staging_smoke_requires_answer_marker_for_default_query(
     monkeypatch.setattr(staging_smoke, "close_oracle_pool", lambda: None)
 
     try:
-        await staging_smoke.run_staging_smoke(settings=_complete_oci_settings())
+        await staging_smoke.run_staging_smoke(settings=_complete_llm_settings())
     except staging_smoke.StagingSmokeError as exc:
         assert exc.stage == "rag_answer_marker"
         assert exc.cause_type == "RuntimeError"
@@ -125,7 +125,7 @@ async def test_staging_smoke_cleanup_runs_after_marker_failure(
 
     try:
         await staging_smoke.run_staging_smoke(
-            settings=_complete_oci_settings(),
+            settings=_complete_llm_settings(),
             cleanup=True,
         )
     except staging_smoke.StagingSmokeError as exc:
@@ -150,11 +150,11 @@ def test_staging_smoke_preflight_reports_missing_config_without_secrets(tmp_path
     """preflight は未設定グループだけを返し、secret 値は出さない。"""
     result = staging_smoke.staging_smoke_preflight(
         settings=Settings(
-            oci_enterprise_ai_endpoint="",
-            oci_enterprise_ai_project_ocid="",
-            oci_enterprise_ai_api_key="",
-            oci_enterprise_ai_models=[],
-            oci_enterprise_ai_default_text_model="",
+            enterprise_ai_endpoint="",
+            enterprise_ai_project_id="",
+            enterprise_ai_api_key="",
+            enterprise_ai_models=[],
+            enterprise_ai_default_text_model="",
             oracle_user="",
             oracle_dsn="",
             local_storage_dir=str(tmp_path / "storage"),
@@ -175,7 +175,7 @@ def test_staging_smoke_preflight_reports_missing_config_without_secrets(tmp_path
 def test_staging_smoke_preflight_accepts_local_storage(tmp_path: Path) -> None:
     """保存先はローカルだけ（OCI Object Storage は #11 で削除）。ローカルで smoke を通す。"""
     result = staging_smoke.staging_smoke_preflight(
-        settings=_complete_oci_settings(local_storage_dir=str(tmp_path / "storage"))
+        settings=_complete_llm_settings(local_storage_dir=str(tmp_path / "storage"))
     )
 
     assert result.ok is True
@@ -267,14 +267,14 @@ def test_error_payload_includes_preflight_checks_without_raw_values() -> None:
     }
 
 
-def _complete_oci_settings(**overrides: Any) -> Settings:
+def _complete_llm_settings(**overrides: Any) -> Settings:
     """staging smoke preflight を通す OCI 設定を作る。"""
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": "https://enterprise-ai.example.com",
-        "oci_enterprise_ai_project_ocid": "ocid1.generativeaiproject.oc1..example",
-        "oci_enterprise_ai_api_key": "sk-test-secret",
-        "oci_enterprise_ai_default_text_model": "llm-deployment",
-        "oci_enterprise_ai_default_vision_model": "vlm-deployment",
+        "enterprise_ai_endpoint": "https://enterprise-ai.example.com",
+        "enterprise_ai_project_id": "ocid1.generativeaiproject.oc1..example",
+        "enterprise_ai_api_key": "sk-test-secret",
+        "enterprise_ai_default_text_model": "llm-deployment",
+        "enterprise_ai_default_vision_model": "vlm-deployment",
         "oracle_user": "rag_user",
         "oracle_password": "oracle-password",
         "oracle_dsn": "adb.example.com/rag",

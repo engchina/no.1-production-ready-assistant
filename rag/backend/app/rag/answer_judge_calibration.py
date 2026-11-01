@@ -216,7 +216,7 @@ def resolve_judge_model_id(settings: Any, judge_model_id: str | None = None) -> 
 def judge_provenance(settings: Any, judge_model_id: str | None = None) -> dict[str, Any]:
     """評価器の判定のモデル（校正の結果に記録し、画面の「校正済み」の照合に使う。#3578）。"""
     return {
-        "provider": "oci_enterprise_ai",
+        "provider": "enterprise_ai",
         "model": resolve_judge_model_id(settings, judge_model_id),
     }
 
@@ -273,7 +273,7 @@ def backend_evaluator(
             judge_model_id=judge_model,
         )
 
-    return evaluate, {"provider": "oci_enterprise_ai", "model": judge_model}
+    return evaluate, {"provider": "enterprise_ai", "model": judge_model}
 
 
 def _backend_evaluator(judge_model_id: str | None = None) -> tuple[Evaluate, dict[str, Any]]:

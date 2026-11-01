@@ -19,7 +19,7 @@ BASE = "/api/search-answer-profiles/bv-1/approved-faq"
 def fake_oracle(monkeypatch: pytest.MonkeyPatch) -> FakeKnowledgeOracle:
     fake = FakeKnowledgeOracle()
     monkeypatch.setattr(knowledge_route, "OracleClient", lambda: fake)
-    monkeypatch.setattr(knowledge_route, "OciGenAiClient", StubGenAi)
+    monkeypatch.setattr(knowledge_route, "GenAiClient", StubGenAi)
     return fake
 
 

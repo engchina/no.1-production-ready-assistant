@@ -14,8 +14,8 @@ import httpx
 import pytest
 from pr_backend_core.llm_request_params_httpx import AsyncParameterDroppingClient
 from pr_system_settings.model import ModelSettingsTestRequest, run_model_settings_test
-from rag_parser_core import oci_enterprise_ai as shared_client
-from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiClient, OciEnterpriseAiConfig
+from rag_parser_core import enterprise_ai as shared_client
+from rag_parser_core.enterprise_ai import EnterpriseAiClient, EnterpriseAiConfig
 
 from app.api.routes import settings as settings_routes
 from app.config import get_settings
@@ -58,13 +58,13 @@ def bodies(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return sent
 
 
-def _client(model_id: str) -> OciEnterpriseAiClient:
-    return OciEnterpriseAiClient(
-        OciEnterpriseAiConfig(
-            oci_enterprise_ai_endpoint=ENDPOINT,
-            oci_enterprise_ai_api_key="test-key",
+def _client(model_id: str) -> EnterpriseAiClient:
+    return EnterpriseAiClient(
+        EnterpriseAiConfig(
+            enterprise_ai_endpoint=ENDPOINT,
+            enterprise_ai_api_key="test-key",
             default_model_id=model_id,
-            oci_enterprise_ai_max_retries=0,
+            enterprise_ai_max_retries=0,
         )
     )
 

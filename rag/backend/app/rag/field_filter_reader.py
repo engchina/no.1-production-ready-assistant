@@ -35,7 +35,7 @@ from app.schemas.search import (
 )
 
 if TYPE_CHECKING:
-    from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+    from app.clients.enterprise_ai import EnterpriseAiClient
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ FIELD_FILTER_SYSTEM_PROMPT = (
 async def read_field_conditions(
     question: str,
     field_defs: Sequence[FieldDefinition],
-    llm: OciEnterpriseAiClient,
+    llm: EnterpriseAiClient,
     *,
     today: date | None = None,
     report_degraded: ReportDegraded = not_recorded,

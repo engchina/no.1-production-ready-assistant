@@ -1440,7 +1440,7 @@ def test_comment_llm_generation_uses_enterprise_ai_and_falls_back_on_bad_json() 
 
     generated = service.suggest_comments(CommentSuggestionRequest(use_llm=True, max_items=2))
 
-    assert generated.source == "oci_enterprise_ai"
+    assert generated.source == "enterprise_ai"
     assert generated.suggestions[0].object_name == "APP.EMPLOYEE"
     assert generated.suggestions[0].suggested_comment == "社員情報のヘッダ"
 
@@ -1561,7 +1561,7 @@ def test_reverse_deep_uses_enterprise_ai_and_falls_back_on_invalid_json() -> Non
 
     reversed_sql = service.reverse_sql_deep(request)
 
-    assert reversed_sql.source == "oci_enterprise_ai"
+    assert reversed_sql.source == "enterprise_ai"
     assert reversed_sql.question == "請求金額を確認したい"
     assert reversed_sql.logical_structure == "SQL 論理構造"
     assert reversed_sql.logical_steps == ["INVOICES を参照", "TOTAL_AMOUNT を選択"]

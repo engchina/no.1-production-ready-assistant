@@ -16,7 +16,7 @@ import pytest
 from fastapi import FastAPI
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.features.nl2sql.ontology_router import _raise_domain_error
 from app.features.nl2sql.sql_requirement import (
     RequirementAiUnavailableError,
@@ -34,12 +34,12 @@ QUESTION = "部門ごとの社員の平均給与"
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": ENDPOINT,
-        "oci_enterprise_ai_api_key": API_KEY,
-        "oci_enterprise_ai_models": [EnterpriseAiConfiguredModel(model_id=MODEL)],
-        "oci_enterprise_ai_default_text_model": MODEL,
-        "oci_enterprise_ai_max_retries": 3,
-        "oci_enterprise_ai_llm_max_output_tokens": 1200,
+        "enterprise_ai_endpoint": ENDPOINT,
+        "enterprise_ai_api_key": API_KEY,
+        "enterprise_ai_models": [EnterpriseAiConfiguredModel(model_id=MODEL)],
+        "enterprise_ai_default_text_model": MODEL,
+        "enterprise_ai_max_retries": 3,
+        "enterprise_ai_llm_max_output_tokens": 1200,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -93,7 +93,7 @@ class _Transport:
 
 def _call(settings: Settings, **options: Any) -> Any:
     return call_requirement_llm(
-        OciEnterpriseAiDirectClient(settings),
+        HttpEnterpriseAiDirectClient(settings),
         question=QUESTION,
         context=_context(),
         mode="draft",
@@ -281,9 +281,7 @@ def test_requirement_output_limit_is_capped_by_the_model_limit(
     """回答前の確認の上限より、モデルの出力の上限が小さければモデルの上限で送る。"""
     transport = _Transport(monkeypatch, _json(200, {"output_text": json.dumps(_valid_output())}))
     settings = _settings(
-        oci_enterprise_ai_models=[
-            EnterpriseAiConfiguredModel(model_id=MODEL, max_output_tokens=12_000)
-        ]
+        enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id=MODEL, max_output_tokens=12_000)]
     )
     _call(settings, max_output_tokens=16384, max_retries=0)
 
@@ -317,7 +315,7 @@ def test_requirement_output_limit_retries_with_lower_effort_without_widening(
         _json(200, {"output_text": json.dumps(_valid_output())}),
     )
     settings = _settings(
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(
                 model_id=MODEL,
                 reasoning_effort="medium",

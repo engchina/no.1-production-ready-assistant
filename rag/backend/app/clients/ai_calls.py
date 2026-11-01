@@ -93,7 +93,7 @@ def embedding_rejection_reason(exc: BaseException) -> str | None:
 def rag_error_kind(exc: BaseException) -> ErrorKind | None:
     """RAG の client の例外のうち、共通の分類では決まらないものの種類。"""
     name = type(exc).__name__
-    if name == "OciGenAiConfigError":
+    if name == "GenAiConfigError":
         return ErrorKind.AUTHENTICATION
     if name == "ServiceError":
         kind = _EMBEDDING_REASON_KINDS.get(embedding_rejection_reason(exc) or "")

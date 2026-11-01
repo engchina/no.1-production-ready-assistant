@@ -13,7 +13,7 @@ const baseline: ModelSettingsPayload = {
       {
         connection_id: "primary",
         endpoint: "https://saved.example",
-        project_ocid: "ocid1.generativeaiproject.oc1..saved",
+        project_id: "ocid1.generativeaiproject.oc1..saved",
         api_key: "",
         has_api_key: true,
         clear_api_key: false,
@@ -97,7 +97,7 @@ describe("buildSectionSavePayload（接続。#533 / #542）", () => {
   const secondary = {
     connection_id: "secondary" as const,
     endpoint: "https://secondary.example",
-    project_ocid: "ocid1.generativeaiproject.oc1..secondary",
+    project_id: "ocid1.generativeaiproject.oc1..secondary",
     api_key: "",
     has_api_key: true,
     clear_api_key: false,
@@ -148,7 +148,7 @@ describe("buildSectionSavePayload（ターシャリ接続。#786）", () => {
   const tertiary = {
     connection_id: "tertiary" as const,
     endpoint: "https://api.openai.com/v1",
-    project_ocid: "",
+    project_id: "",
     api_key: "",
     has_api_key: true,
     clear_api_key: false,
@@ -169,7 +169,7 @@ describe("buildSectionSavePayload（ターシャリ接続。#786）", () => {
       "primary",
       "tertiary",
     ]);
-    expect(payload.enterprise_ai.connections[1]?.project_ocid).toBe("");
+    expect(payload.enterprise_ai.connections[1]?.project_id).toBe("");
   });
 
   it("ターシャリ接続を削除すると、使っていた保存済みのモデルをプライマリ接続に移す", () => {

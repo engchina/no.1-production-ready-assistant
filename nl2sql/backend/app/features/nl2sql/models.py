@@ -2181,7 +2181,7 @@ class FeedbackIndexData(BaseModel):
     indexed_count: int = 0
     vector_dimension: int = EMBEDDING_DIMENSIONS
     vector_backend: str = "oracle_26ai"
-    embedding_provider: str = "oci_genai"
+    embedding_provider: str = "genai"
     embedding_model: str = ""
     embedding_configured: bool = False
     ddl: list[str] = Field(default_factory=list)
@@ -2643,7 +2643,7 @@ class StructureToSqlOutput(BaseModel):
 class StructureToSqlData(BaseModel):
     sql: str = Field(min_length=1)
     explanation: str = ""
-    source: str = "oci_enterprise_ai"
+    source: str = "enterprise_ai"
     warnings: list[str] = Field(default_factory=list)
 
 

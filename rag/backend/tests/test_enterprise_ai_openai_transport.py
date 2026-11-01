@@ -6,23 +6,23 @@ from collections.abc import Callable
 import httpx
 import openai
 import pytest
-from rag_parser_core.oci_enterprise_ai import (
+from rag_parser_core.enterprise_ai import (
+    EnterpriseAiClient,
+    EnterpriseAiConfig,
     EnterpriseAiTimeoutError,
-    OciEnterpriseAiClient,
-    OciEnterpriseAiConfig,
     _DefaultEnterpriseAiTransport,
 )
 
 ENDPOINT = "https://enterprise-ai.example/openai/v1"
 
 
-def _config(max_retries: int = 0) -> OciEnterpriseAiConfig:
-    return OciEnterpriseAiConfig(
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="test-key",
-        oci_enterprise_ai_project_ocid="ocid1.project.test",
+def _config(max_retries: int = 0) -> EnterpriseAiConfig:
+    return EnterpriseAiConfig(
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="test-key",
+        enterprise_ai_project_id="ocid1.project.test",
         default_model_id="test-llm",
-        oci_enterprise_ai_max_retries=max_retries,
+        enterprise_ai_max_retries=max_retries,
     )
 
 
@@ -31,7 +31,7 @@ def _client(
     handler: Callable[[httpx.Request], httpx.Response],
     *,
     max_retries: int = 0,
-) -> OciEnterpriseAiClient:
+) -> EnterpriseAiClient:
     """実 transport(openai SDK)を使い、HTTP 層だけ MockTransport に差し替える。"""
 
     def _sdk_client(self: _DefaultEnterpriseAiTransport, timeout: float) -> openai.AsyncOpenAI:
@@ -44,7 +44,7 @@ def _client(
         )
 
     monkeypatch.setattr(_DefaultEnterpriseAiTransport, "_client", _sdk_client)
-    return OciEnterpriseAiClient(_config(max_retries))
+    return EnterpriseAiClient(_config(max_retries))
 
 
 async def test_generate_posts_responses_via_openai_sdk(monkeypatch: pytest.MonkeyPatch) -> None:

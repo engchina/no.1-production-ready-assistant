@@ -2,7 +2,7 @@
 
 保存・解析・見え方・期限は platform の `pr_system_settings.chat_attachments`。RAG が持つのは:
 
-- 画像の読み取り（既定の Vision モデル。`OciEnterpriseAiClient.generate_from_image`）。
+- 画像の読み取り（既定の Vision モデル。`EnterpriseAiClient.generate_from_image`）。
 - 回答の根拠: 会話に送信した添付を、根拠を選ぶときに共通のサービスで解析し（アップロードでは
   解析しない。結果は保存して再利用する。#2652）、節・行を、質問との関連（rerank。使えなければ
   文字の一致）で選び、
@@ -77,11 +77,11 @@ def _image_reader() -> Callable[[bytes, str], Awaitable[str]] | None:
         return None
 
     async def read(data: bytes, media_type: str) -> str:
-        from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+        from app.clients.enterprise_ai import EnterpriseAiClient
 
         return await async_call_with_model_purpose(
             "document.read",
-            OciEnterpriseAiClient(settings=get_settings()).generate_from_image,
+            EnterpriseAiClient(settings=get_settings()).generate_from_image,
             data,
             IMAGE_READING_PROMPT,
             mime_type=media_type,

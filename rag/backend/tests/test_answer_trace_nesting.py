@@ -39,7 +39,7 @@ class _TracedOracle(FakeOracle):
 
 
 class _TracedGenAi(FakeGenAi):
-    """埋め込み・rerank を本物の `OciGenAiClient` と同じ名前の span で包む代役。"""
+    """埋め込み・rerank を本物の `GenAiClient` と同じ名前の span で包む代役。"""
 
     async def embed(
         self, texts: list[str], *, input_type: str = "SEARCH_DOCUMENT"
@@ -66,14 +66,14 @@ def _name(step: Any) -> str:
 async def test_spans_are_nested_under_the_step_that_did_the_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _traced_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _traced_llm)
     pipeline = RagPipeline(
         # 質問の言い換えに LLM を使う戦略（元の質問の検索を並行に先読みする。#1499）。
         settings=Settings(
             rag_query_strategy="auto_routing",
-            oci_enterprise_ai_endpoint="https://synthetic.test/v1",
+            enterprise_ai_endpoint="https://synthetic.test/v1",
         ),
         oracle=_TracedOracle(),  # type: ignore[arg-type]
         genai=_TracedGenAi(),  # type: ignore[arg-type]
@@ -120,7 +120,7 @@ async def test_attachment_evidence_is_its_own_pipeline_step(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """会話の添付の根拠の選択（添付の読み込みと rerank）は、全体の直下ではなく自分の段の子。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     from app.rag import chat_attachments
 
@@ -134,7 +134,7 @@ async def test_attachment_evidence_is_its_own_pipeline_step(
         "chat_attachment_service",
         lambda: SimpleNamespace(reading_status=lambda: "done"),
     )
-    monkeypatch.setattr(engine_oci, "parse_text_response", _traced_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _traced_llm)
     pipeline = RagPipeline(
         settings=Settings(),
         oracle=_TracedOracle(),  # type: ignore[arg-type]
@@ -153,7 +153,7 @@ async def test_attachment_evidence_is_its_own_pipeline_step(
 
 
 async def test_disabled_attachment_step_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from pr_system_settings.chat_attachments import (
         ChatAttachmentService,
         InMemoryChatAttachmentStore,
@@ -168,7 +168,7 @@ async def test_disabled_attachment_step_is_skipped(monkeypatch: pytest.MonkeyPat
         enabled=lambda: False,
     )
     monkeypatch.setattr(chat_attachments, "chat_attachment_service", lambda: service)
-    monkeypatch.setattr(engine_oci, "parse_text_response", _traced_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _traced_llm)
     pipeline = RagPipeline(
         settings=Settings(),
         oracle=_TracedOracle(),  # type: ignore[arg-type]

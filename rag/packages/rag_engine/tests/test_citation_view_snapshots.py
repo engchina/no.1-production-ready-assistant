@@ -10,7 +10,7 @@ import httpx
 import pytest
 from openai import OpenAI
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation import grounded
 from rag_engine.generation.citation_wire import canonical_generation_draft, generation_draft_wire_model
@@ -191,12 +191,12 @@ def test_sdk_raw_wire_is_private_and_separate_from_canonical_and_telemetry(
         telemetry.append((args, kwargs))
         yield Observation()
 
-    monkeypatch.setattr(oci, "observe_call", observe)
+    monkeypatch.setattr(model_api, "observe_call", observe)
     settings = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
-            "OCI_ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
-            "OCI_ENTERPRISE_AI_API_KEY": "mock-only",
+            "ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
+            "ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
+            "ENTERPRISE_AI_API_KEY": "mock-only",
         },
         dotenv_path=None,
         llm_stall_resends=0,
@@ -207,11 +207,11 @@ def test_sdk_raw_wire_is_private_and_separate_from_canonical_and_telemetry(
         max_retries=0,
         http_client=httpx.Client(transport=httpx.MockTransport(transport)),
     )
-    monkeypatch.setattr(oci, "_openai_client_for_provider", lambda *_a: client)
-    monkeypatch.setattr(oci, "_stall_detection_enabled", lambda _s: streamed)
+    monkeypatch.setattr(model_api, "_openai_client_for_provider", lambda *_a: client)
+    monkeypatch.setattr(model_api, "_stall_detection_enabled", lambda _s: streamed)
 
     def parse(system: str, prompt: str, _settings: Any, output_schema: Any, **_options: Any) -> Any:
-        return oci._parse_text_once(system, prompt, settings, output_schema, settings.llm_providers[settings.default_answer_llm])
+        return model_api._parse_text_once(system, prompt, settings, output_schema, settings.llm_providers[settings.default_answer_llm])
 
     evidence = span()
     prompt = grounded.format_functions([evidence])

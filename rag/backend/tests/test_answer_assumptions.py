@@ -169,7 +169,7 @@ async def test_search_chat_mcp_shared_context_forwards_rule_and_guide_questions(
 async def test_final_answer_generation_receives_assumptions(
     monkeypatch: pytest.MonkeyPatch, policy: str
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     prompts: list[str] = []
 
@@ -184,7 +184,7 @@ async def test_final_answer_generation_receives_assumptions(
                 output.summary = "前提: 設定の対象は未確定です。"
         return output
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", llm)
     outcome = await AnswerEngine(
         Settings(rag_answer_flow="standard_rag"),
         oracle=FakeOracle(),  # type: ignore[arg-type]

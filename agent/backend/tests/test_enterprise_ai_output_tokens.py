@@ -23,13 +23,13 @@ ENDPOINT = "https://primary.example/openai/v1"
 
 def test_model_settings_send_model_output_limit() -> None:
     target = ModelTarget(
-        model_id="m", endpoint=ENDPOINT, project_ocid="", api_key="k", max_output_tokens=16000
+        model_id="m", endpoint=ENDPOINT, project_id="", api_key="k", max_output_tokens=16000
     )
 
     assert builtin_runtime.model_settings_for(target).max_tokens == 16000
     # 推論の量を送るときも同じ。
     with_effort = ModelTarget(
-        model_id="m", endpoint=ENDPOINT, project_ocid="", api_key="k", reasoning_effort="high"
+        model_id="m", endpoint=ENDPOINT, project_id="", api_key="k", reasoning_effort="high"
     )
     assert builtin_runtime.model_settings_for(with_effort).max_tokens == 32768
 
@@ -39,14 +39,14 @@ def test_resolve_model_target_reads_output_limit_of_agent_model(
 ) -> None:
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="text-a", max_output_tokens=16000),
             EnterpriseAiConfiguredModel(model_id="text-small", max_input_tokens=8192),
             EnterpriseAiConfiguredModel(model_id="text-b"),
         ],
-        oci_enterprise_ai_default_text_model="text-a",
+        enterprise_ai_default_text_model="text-a",
     )
     monkeypatch.setattr(builtin_runtime, "get_settings", lambda: settings)
 
@@ -88,7 +88,7 @@ def _incomplete() -> _Response:
 
 def test_incomplete_response_fails_with_reason_limit_and_used_tokens() -> None:
     inner = _Inner(_incomplete())
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
 
     async def call() -> None:
         await responses.create(model="openai.gpt-oss-120b", input=[], max_output_tokens=1200)
@@ -108,7 +108,7 @@ def test_incomplete_response_fails_with_reason_limit_and_used_tokens() -> None:
 
 def test_completed_response_is_returned() -> None:
     completed = _Response({"status": "completed"})
-    responses = builtin_runtime._OciResponses(_Inner(completed))
+    responses = builtin_runtime._CompatResponses(_Inner(completed))
 
     async def call() -> Any:
         return await responses.create(model="m", input=[], max_output_tokens=32768)
@@ -132,7 +132,7 @@ def test_incomplete_is_resent_once_with_lower_reasoning_effort() -> None:
     """出力の上限で未完了なら、推論の量を 1 段下げて（medium → low）1 回だけ送り直す。"""
     completed = _Response({"status": "completed"})
     inner = _Sequence(_incomplete(), completed)
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
 
     async def call() -> Any:
         return await responses.create(
@@ -149,7 +149,7 @@ def test_incomplete_is_resent_once_with_lower_reasoning_effort() -> None:
 
 def test_incomplete_after_lowering_fails_with_the_retry_and_advice() -> None:
     inner = _Sequence(_incomplete(), _incomplete())
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
 
     async def call() -> None:
         await responses.create(
@@ -185,7 +185,7 @@ def test_incomplete_is_not_resent_when_effort_cannot_drop(
     response = _incomplete()
     response._data["incomplete_details"] = {"reason": reason}
     inner = _Inner(response)
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
     kwargs: dict[str, Any] = {"model": "m", "input": [], "max_output_tokens": 1200}
     if reasoning is not None:
         kwargs["reasoning"] = reasoning
@@ -205,20 +205,18 @@ def test_bounded_call_model_leaves_the_resend_to_the_caller() -> None:
     再試行の主体を二重にしない。
     """
     run_model = builtin_runtime._default_model_factory(
-        ModelTarget(model_id="m", endpoint=ENDPOINT, project_ocid="", api_key="k")
+        ModelTarget(model_id="m", endpoint=ENDPOINT, project_id="", api_key="k")
     )
     bounded = builtin_runtime._default_model_factory(
-        ModelTarget(
-            model_id="m", endpoint=ENDPOINT, project_ocid="", api_key="k", sdk_max_retries=0
-        )
+        ModelTarget(model_id="m", endpoint=ENDPOINT, project_id="", api_key="k", sdk_max_retries=0)
     )
-    assert isinstance(run_model, builtin_runtime.OciResponsesModel)
-    assert isinstance(bounded, builtin_runtime.OciResponsesModel)
+    assert isinstance(run_model, builtin_runtime.CompatResponsesModel)
+    assert isinstance(bounded, builtin_runtime.CompatResponsesModel)
     assert run_model.lower_effort_on_incomplete is True
     assert bounded.lower_effort_on_incomplete is False
 
     inner = _Inner(_incomplete())
-    responses = builtin_runtime._OciResponses(inner, lower_effort_on_incomplete=False)
+    responses = builtin_runtime._CompatResponses(inner, lower_effort_on_incomplete=False)
 
     async def call() -> None:
         await responses.create(
@@ -259,7 +257,7 @@ def test_tiny_incomplete_is_resent_once_with_the_same_request(
     _settings(monkeypatch)
     completed = _Response({"status": "completed"})
     inner = _Sequence(_tiny_incomplete(), completed)
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
     model = "model-tiny-retry-ok"
     before = _retries(model)
 
@@ -278,7 +276,7 @@ def test_tiny_incomplete_twice_keeps_the_failure(monkeypatch: pytest.MonkeyPatch
     """送り直しも未完了なら、今までどおり失敗にする（推論の量 low は下げられない）。"""
     _settings(monkeypatch)
     inner = _Sequence(_tiny_incomplete(), _tiny_incomplete())
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
 
     async def call() -> None:
         await responses.create(
@@ -302,7 +300,7 @@ def test_tiny_incomplete_then_lowering_effort_is_still_tried(
     _settings(monkeypatch)
     completed = _Response({"status": "completed"})
     inner = _Sequence(_tiny_incomplete(), _tiny_incomplete(), completed)
-    responses = builtin_runtime._OciResponses(inner)
+    responses = builtin_runtime._CompatResponses(inner)
 
     async def call() -> Any:
         return await responses.create(
@@ -327,7 +325,7 @@ def test_tiny_incomplete_is_not_resent_when_disabled(
 ) -> None:
     _settings(monkeypatch, agent_model_incomplete_retry_output_ratio=ratio)
     inner = _Inner(_tiny_incomplete())
-    responses = builtin_runtime._OciResponses(
+    responses = builtin_runtime._CompatResponses(
         inner, lower_effort_on_incomplete=lower_effort_on_incomplete
     )
 
@@ -344,7 +342,7 @@ def test_tiny_incomplete_is_not_resent_when_disabled(
 def test_sdk_call_snapshot_records_input_and_response() -> None:
     from pr_backend_core.observability.tracing import operation_trace
 
-    responses = builtin_runtime._OciResponses(
+    responses = builtin_runtime._CompatResponses(
         _Inner(_Response({"status": "completed", "output_text": "synthetic-result"}))
     )
 

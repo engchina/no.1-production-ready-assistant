@@ -202,7 +202,7 @@ def resolve_search_answer_profile_settings(
         applied = True
     if apply_answer_model and config.answer_model_id:
         settings = settings.model_copy(
-            update={"oci_enterprise_ai_default_text_model": config.answer_model_id}
+            update={"enterprise_ai_default_text_model": config.answer_model_id}
         )
         applied = True
     if settings.rag_language_pack_overrides != config.language_pack:

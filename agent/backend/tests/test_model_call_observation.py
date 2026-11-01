@@ -1,6 +1,6 @@
 """モデルの呼び出しごとの文脈予算・入力の構成・指紋と cache の利用量の記録（#2583）。
 
-モデルは OCI の client の層（`OciResponsesModel` → `_OciResponses`）を通し、呼び先だけを合成の
+モデルは OCI の client の層（`CompatResponsesModel` → `_CompatResponses`）を通し、呼び先だけを合成の
 応答を返す fake にする（OCI へは接続しない）。モデルの呼び出しの span（`gen_ai.chat`）の属性を
 確かめる: 指紋の安定と変化・入力の部分ごとの見積もり・予算と縮める前後・プロバイダが cache を
 返さないときの不明（0 と区別）・呼び出しごとの usage と Run の累計（承認の再開・差し戻し・入力の
@@ -353,7 +353,7 @@ def test_cache_usage_not_reported_is_unknown_not_zero(
             return SimpleNamespace(status="completed", output=[], usage=usage, model="test-model")
 
     async def call() -> None:
-        await builtin_runtime._OciResponses(Inner()).create(**_request())  # noqa: SLF001
+        await builtin_runtime._CompatResponses(Inner()).create(**_request())  # noqa: SLF001
 
     with (
         _chat_spans(monkeypatch) as spans,
@@ -395,7 +395,7 @@ def test_provider_overflow_resend_records_usage_only_on_the_sent_attempt(
 
     async def call() -> None:
         builtin_runtime._ACTIVE_CONTEXT_WINDOW.set(window)  # noqa: SLF001
-        await builtin_runtime._OciResponses(Inner()).create(  # noqa: SLF001
+        await builtin_runtime._CompatResponses(Inner()).create(  # noqa: SLF001
             model="test-model", input=items, instructions=STATIC, tools=[]
         )
 
@@ -449,7 +449,7 @@ class _FakeResponses:
 
 
 class _FakeClient:
-    base_url = "https://oci.example/openai/v1/"
+    base_url = "https://llm.example/openai/v1/"
 
     def __init__(self, steps: list[tuple[list[Any], ResponseUsage]]) -> None:
         self.responses = _FakeResponses(steps)
@@ -461,7 +461,7 @@ def _route(monkeypatch: MonkeyPatch, *steps: tuple[list[Any], ResponseUsage]) ->
     client = _FakeClient(list(steps))
 
     def factory(target: Any) -> Any:
-        return builtin_runtime.OciResponsesModel(
+        return builtin_runtime.CompatResponsesModel(
             model=target.model_id,
             openai_client=client,  # type: ignore[arg-type]
         )

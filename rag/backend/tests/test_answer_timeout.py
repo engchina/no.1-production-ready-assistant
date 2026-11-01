@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from pydantic import ValidationError
 
-from app.config import OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings
+from app.config import ENTERPRISE_AI_TIMEOUT_MAX_SECONDS, Settings
 from app.rag.answer_timeout import (
     AnswerTimeoutError,
     StageTracker,
@@ -29,11 +29,11 @@ def test_answer_timeout_default_and_limit() -> None:
     回答生成の上限で打ち切る）。
     """
     settings = Settings()
-    assert settings.rag_answer_timeout_seconds == 600.0 == OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
+    assert settings.rag_answer_timeout_seconds == 600.0 == ENTERPRISE_AI_TIMEOUT_MAX_SECONDS
     assert not hasattr(settings, "rag_search_timeout_seconds")
-    assert Settings(rag_answer_timeout_seconds=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS)
+    assert Settings(rag_answer_timeout_seconds=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS)
     with pytest.raises(ValidationError):
-        Settings(rag_answer_timeout_seconds=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS + 1)
+        Settings(rag_answer_timeout_seconds=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS + 1)
     with pytest.raises(ValidationError):
         Settings(rag_answer_timeout_seconds=0)
 

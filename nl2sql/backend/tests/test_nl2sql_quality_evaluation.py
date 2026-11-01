@@ -798,11 +798,11 @@ def test_quality_evaluation_worker_lease_uses_settings_and_retry_floor(
 
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_attempt_timeout_seconds", 300.0)
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_lease_seconds", 900.0)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_max_retries", 0)
+    monkeypatch.setattr(settings, "enterprise_ai_max_retries", 0)
     assert service._attempt_lease_seconds() == 900.0  # noqa: SLF001
 
     monkeypatch.setattr(settings, "nl2sql_quality_evaluation_lease_seconds", 60.0)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_max_retries", 3)
+    monkeypatch.setattr(settings, "enterprise_ai_max_retries", 3)
     assert service._attempt_lease_seconds() == 2400.0  # noqa: SLF001
 
 

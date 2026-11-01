@@ -17,7 +17,7 @@ from pr_backend_core.observability.model_purpose import async_call_with_model_pu
 from pydantic import BaseModel, ConfigDict, Field
 from rag_engine.resources.runtime import resolve_prompt
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.config import Settings
 from app.rag.support_guide_runtime import (
     ConditionState,
@@ -61,8 +61,8 @@ class ConditionValues(BaseModel):
     conditions: list[ConditionValue] = Field(max_length=30)
 
 
-def condition_client(settings: Settings) -> OciEnterpriseAiClient:
-    return OciEnterpriseAiClient(settings=settings)
+def condition_client(settings: Settings) -> EnterpriseAiClient:
+    return EnterpriseAiClient(settings=settings)
 
 
 async def resolve_text_conditions(

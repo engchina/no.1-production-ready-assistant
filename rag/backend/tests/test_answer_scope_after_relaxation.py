@@ -215,9 +215,9 @@ async def test_relaxation_keeps_user_conditions_as_of_and_access_in_every_search
     relaxed: list[str],
 ) -> None:
     """自動の条件を外した後のすべての検索と、実体・関係情報の拡張に、利用者の条件・基準日・認可が残る。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _crag_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _crag_llm)
     monkeypatch.setattr(answer_engine, "_today", lambda: date(2026, 4, 1))
     oracle = AutoBlockedOracle()
     filters = {**user_filters, "extraction_fields": _manual_fields()}
@@ -391,7 +391,7 @@ async def test_request_coverage_re_search_keeps_user_conditions_after_relaxation
     monkeypatch: pytest.MonkeyPatch, access: AuditRequestContext
 ) -> None:
     """自動の条件を外した後の、根拠の無い要求だけの再検索も、利用者の条件・基準日・認可で検索する。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.models.llm import GroundedDraft
 
     def explicit_gap(system: str, prompt: str, config: Any, schema: type, **options: Any) -> Any:
@@ -412,7 +412,7 @@ async def test_request_coverage_re_search_keeps_user_conditions_after_relaxation
             return GroundedDraft.model_validate(data)
         return result
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", explicit_gap)
+    monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
     oracle = RelaxedCoverageOracle()
     filters = {
         "knowledge_base_id": "kb-1",

@@ -55,7 +55,7 @@ def test_endpoint_is_used_as_is(endpoint: str, base_url: str, request_url: str) 
     assert enterprise_ai_base_url(endpoint) == base_url
     assert enterprise_ai_request_url(endpoint) == request_url
     connection = EnterpriseAiConnection(
-        connection_id="primary", endpoint=endpoint, project_ocid="", api_key="sk-test"
+        connection_id="primary", endpoint=endpoint, project_id="", api_key="sk-test"
     )
     assert connection.base_url == base_url
     assert connection.request_url() == request_url

@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
 from app.main import app
 from app.settings import EnterpriseAiConfiguredModel, Settings
 
@@ -28,24 +28,24 @@ TERTIARY_CONNECTION = (TERTIARY, "Bearer sk-tertiary", "")
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_enterprise_ai_endpoint": PRIMARY,
-        "oci_enterprise_ai_project_ocid": "ocid1.project.primary",
-        "oci_enterprise_ai_api_key": "sk-primary",
-        "oci_enterprise_ai_secondary_endpoint": SECONDARY,
-        "oci_enterprise_ai_secondary_project_ocid": "ocid1.project.secondary",
-        "oci_enterprise_ai_secondary_api_key": "sk-secondary",
-        "oci_enterprise_ai_tertiary_endpoint": TERTIARY,
-        "oci_enterprise_ai_tertiary_api_key": "sk-tertiary",
-        "oci_enterprise_ai_models": [
+        "enterprise_ai_endpoint": PRIMARY,
+        "enterprise_ai_project_id": "ocid1.project.primary",
+        "enterprise_ai_api_key": "sk-primary",
+        "enterprise_ai_secondary_endpoint": SECONDARY,
+        "enterprise_ai_secondary_project_id": "ocid1.project.secondary",
+        "enterprise_ai_secondary_api_key": "sk-secondary",
+        "enterprise_ai_tertiary_endpoint": TERTIARY,
+        "enterprise_ai_tertiary_api_key": "sk-tertiary",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel(model_id="text-a"),
             EnterpriseAiConfiguredModel(
                 model_id="vision-b", vision_enabled=True, connection_id="secondary"
             ),
             EnterpriseAiConfiguredModel(model_id="gpt-c", connection_id="tertiary"),
         ],
-        "oci_enterprise_ai_default_text_model": "text-a",
-        "oci_enterprise_ai_default_vision_model": "vision-b",
-        "oci_enterprise_ai_max_retries": 0,
+        "enterprise_ai_default_text_model": "text-a",
+        "enterprise_ai_default_vision_model": "vision-b",
+        "enterprise_ai_max_retries": 0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -77,7 +77,7 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, str]]:
 def test_text_and_vision_calls_use_each_model_connection(
     recorded: list[tuple[str, str, str]],
 ) -> None:
-    client = OciEnterpriseAiDirectClient(_settings())
+    client = HttpEnterpriseAiDirectClient(_settings())
 
     client.generate(prompt="質問", context="", system_prompt="日本語で答える")
     client.generate_from_image(b"jpeg", "説明してください")
@@ -86,8 +86,8 @@ def test_text_and_vision_calls_use_each_model_connection(
 
 
 def test_text_model_on_secondary_uses_secondary(recorded: list[tuple[str, str, str]]) -> None:
-    settings = _settings(oci_enterprise_ai_default_text_model="vision-b")
-    client = OciEnterpriseAiDirectClient(settings)
+    settings = _settings(enterprise_ai_default_text_model="vision-b")
+    client = HttpEnterpriseAiDirectClient(settings)
 
     client.generate(prompt="質問", context="", system_prompt="日本語で答える")
 
@@ -98,8 +98,8 @@ def test_text_model_on_tertiary_uses_tertiary_without_project(
     recorded: list[tuple[str, str, str]],
 ) -> None:
     """ターシャリ接続（Project OCID なし）は Responses API を OpenAI-Project ヘッダーなしで呼ぶ。"""
-    settings = _settings(oci_enterprise_ai_default_text_model="gpt-c")
-    client = OciEnterpriseAiDirectClient(settings)
+    settings = _settings(enterprise_ai_default_text_model="gpt-c")
+    client = HttpEnterpriseAiDirectClient(settings)
 
     assert client.is_configured() is True
     client.generate(prompt="質問", context="", system_prompt="日本語で答える")
@@ -108,12 +108,12 @@ def test_text_model_on_tertiary_uses_tertiary_without_project(
 
 
 def test_is_configured_checks_text_model_connection() -> None:
-    assert OciEnterpriseAiDirectClient(_settings()).is_configured() is True
+    assert HttpEnterpriseAiDirectClient(_settings()).is_configured() is True
     assert (
-        OciEnterpriseAiDirectClient(
+        HttpEnterpriseAiDirectClient(
             _settings(
-                oci_enterprise_ai_default_text_model="vision-b",
-                oci_enterprise_ai_secondary_api_key="",
+                enterprise_ai_default_text_model="vision-b",
+                enterprise_ai_secondary_api_key="",
             )
         ).is_configured()
         is False
@@ -157,19 +157,19 @@ def test_model_settings_test_calls_connection_of_tested_model(
                         {
                             "connection_id": "primary",
                             "endpoint": PRIMARY,
-                            "project_ocid": "ocid1.project.primary",
+                            "project_id": "ocid1.project.primary",
                             "api_key": "sk-primary",
                         },
                         {
                             "connection_id": "secondary",
                             "endpoint": SECONDARY,
-                            "project_ocid": "ocid1.project.secondary",
+                            "project_id": "ocid1.project.secondary",
                             "api_key": "sk-secondary",
                         },
                         {
                             "connection_id": "tertiary",
                             "endpoint": TERTIARY,
-                            "project_ocid": "",
+                            "project_id": "",
                             "api_key": "sk-tertiary",
                         },
                     ],

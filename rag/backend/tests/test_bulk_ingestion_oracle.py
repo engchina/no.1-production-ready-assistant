@@ -25,13 +25,13 @@ from app.schemas.document import (
     IngestionJobPhase,
     IngestionJobStatus,
 )
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 NOW = datetime(2026, 10, 20, tzinfo=UTC)
 
 
 def _client(pool: FakeOraclePool) -> OracleClient:
-    return OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    return OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
 
 def _document_row(document_id: str, **overrides: object) -> dict[str, object]:

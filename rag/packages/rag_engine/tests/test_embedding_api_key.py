@@ -6,12 +6,12 @@ backend は既定の埋め込み / 再ランクのモデルの接続の key を 
 
 from __future__ import annotations
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 
 BASE_ENV = {
-    "OCI_ENTERPRISE_AI_ENDPOINT": "https://api.deepseek.com",
-    "OCI_ENTERPRISE_AI_API_KEY": "sk-deepseek",
+    "ENTERPRISE_AI_ENDPOINT": "https://api.deepseek.com",
+    "ENTERPRISE_AI_API_KEY": "sk-deepseek",
 }
 
 
@@ -26,14 +26,14 @@ def test_embedding_and_rerank_keys_come_from_backend_env() -> None:
         }
     )
 
-    assert oci._embedding_api_key(settings) == "sk-aliyun-embed"
-    assert oci._embedding_api_key(settings, rerank=True) == "sk-aliyun-rerank"
-    assert oci._embedding_base_url(settings) == "https://bailian.example/compatible-mode/v1"
-    assert oci._rerank_base_url(settings) == "https://bailian.example/compatible-api/v1"
+    assert model_api._embedding_api_key(settings) == "sk-aliyun-embed"
+    assert model_api._embedding_api_key(settings, rerank=True) == "sk-aliyun-rerank"
+    assert model_api._embedding_base_url(settings) == "https://bailian.example/compatible-mode/v1"
+    assert model_api._rerank_base_url(settings) == "https://bailian.example/compatible-api/v1"
 
 
 def test_keys_fall_back_to_llm_connection() -> None:
     settings = get_settings(environ=dict(BASE_ENV))
 
-    assert oci._embedding_api_key(settings) == "sk-deepseek"
-    assert oci._embedding_api_key(settings, rerank=True) == "sk-deepseek"
+    assert model_api._embedding_api_key(settings) == "sk-deepseek"
+    assert model_api._embedding_api_key(settings, rerank=True) == "sk-deepseek"

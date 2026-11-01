@@ -154,10 +154,10 @@ def _engine(**settings: Any) -> AnswerEngine:
 
 @pytest.fixture
 def stub_llm(monkeypatch: pytest.MonkeyPatch) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
     # CRAG の判定は候補の関連を返さない（不足）ので、章節を広げる。
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
 
 @pytest.mark.usefixtures("stub_llm")
@@ -190,7 +190,7 @@ async def test_answer_reads_the_section_of_the_hit_chunk_and_cites_chunks(
 async def test_max_levels_limit_makes_the_answer_conditional(
     section_map: SectionMapStub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.models.llm import CragRetrievalGradeOutput
 
     def missing_procedure(
@@ -215,7 +215,7 @@ async def test_max_levels_limit_makes_the_answer_conditional(
             )
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", missing_procedure)
+    monkeypatch.setattr(engine_api, "parse_text_response", missing_procedure)
     outcome = await _engine(rag_section_expansion_max_levels=1).run(
         SearchRequest(query="受注の登録方法は？")
     )
@@ -231,7 +231,7 @@ async def test_max_levels_limit_makes_the_answer_conditional(
 async def test_initial_sufficient_grade_still_adds_section_text_to_generation(
     section_map: SectionMapStub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation import answering
     from rag_engine.generation.answer_models import CragRetrievalAttempt
     from rag_engine.models.llm import GroundedDraft
@@ -266,7 +266,7 @@ async def test_initial_sufficient_grade_still_adds_section_text_to_generation(
         return _fake_llm(system, prompt, settings, schema, **options)
 
     monkeypatch.setattr(answering, "_grade_crag_retrieval", enough)
-    monkeypatch.setattr(engine_oci, "parse_text_response", llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", llm)
     outcome = await _engine().run(SearchRequest(query="受注の登録方法は？"))
 
     assert section_map.reads and section_map.reads[0][0] == "s1"
@@ -400,8 +400,8 @@ def test_build_engine_settings_passes_model_input_limit(tmp_path: Any) -> None:
         EnterpriseAiConfiguredModel(model_id="llm-b"),
     ]
     settings = Settings(
-        oci_enterprise_ai_models=models,
-        oci_enterprise_ai_default_text_model="llm-a",
+        enterprise_ai_models=models,
+        enterprise_ai_default_text_model="llm-a",
     )
 
     engine = build_engine_settings(settings, output_dir=tmp_path)
@@ -423,9 +423,9 @@ def test_build_engine_settings_passes_model_output_limits(tmp_path: Any) -> None
         EnterpriseAiConfiguredModel(model_id="llm-small", max_input_tokens=8_192),
     ]
     settings = Settings(
-        oci_enterprise_ai_models=models,
-        oci_enterprise_ai_default_text_model="llm-a",
-        oci_enterprise_ai_default_vision_model="vlm-a",
+        enterprise_ai_models=models,
+        enterprise_ai_default_text_model="llm-a",
+        enterprise_ai_default_vision_model="vlm-a",
     )
 
     engine = build_engine_settings(settings, output_dir=tmp_path)
@@ -528,7 +528,7 @@ async def test_long_section_is_extracted_but_fixed_generation_input_exceeds_mode
 ) -> None:
     import re
 
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from pr_system_settings.model import EnterpriseAiConfiguredModel
     from rag_engine.models.llm import (
         GroundedDraft,
@@ -559,17 +559,17 @@ async def test_long_section_is_extracted_but_fixed_generation_input_exceeds_mode
             prompts["draft"].append(prompt)
         return _fake_llm(system, prompt, settings, schema, **options)
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", llm)
     engine = AnswerEngine(
         Settings(
             rag_domain_keywords=["受注番号"],
             rag_query_strategy="auto_routing",
             rag_answer_flow="crag",
             rag_section_extraction_enabled=True,
-            oci_enterprise_ai_models=[
+            enterprise_ai_models=[
                 EnterpriseAiConfiguredModel(model_id="llm-a", max_input_tokens=4096)
             ],
-            oci_enterprise_ai_default_text_model="llm-a",
+            enterprise_ai_default_text_model="llm-a",
         ),
         oracle=FakeOracle(),  # type: ignore[arg-type]
         genai=FakeGenAi(),  # type: ignore[arg-type]
@@ -602,7 +602,7 @@ async def test_long_section_is_extracted_but_fixed_generation_input_exceeds_mode
 async def test_section_completion_reaches_generation_in_both_answer_flows(
     flow: str, enabled: bool, section_map: SectionMapStub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation import answering
     from rag_engine.generation.answer_models import CragRetrievalAttempt
     from rag_engine.models.llm import GroundedDraft
@@ -634,7 +634,7 @@ async def test_section_completion_reaches_generation_in_both_answer_flows(
         return _fake_llm(system, prompt, settings, schema, **options)
 
     monkeypatch.setattr(answering, "_grade_crag_retrieval", grade)
-    monkeypatch.setattr(engine_oci, "parse_text_response", llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", llm)
     outcome = await _engine(rag_answer_flow=flow, rag_section_expansion_enabled=enabled).run(
         SearchRequest(query="登録方法は？")
     )
@@ -795,7 +795,7 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
             return add_anchor(context), trace
 
         monkeypatch.setattr(answering, "_cover_missing_requests", cover)
-        import rag_engine.adapters.oci as engine_oci
+        import rag_engine.adapters.model_api as engine_api
         from rag_engine.models.llm import GroundedDraft
 
         def explicit_gap(
@@ -820,7 +820,7 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
                 return GroundedDraft.model_validate(data)
             return result
 
-        monkeypatch.setattr(engine_oci, "parse_text_response", explicit_gap)
+        monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
 
     outcome = await _engine(
         rag_answer_flow="standard_rag", rag_request_coverage_retrieval_enabled=True

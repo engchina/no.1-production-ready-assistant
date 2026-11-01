@@ -1187,10 +1187,10 @@ function MetadataExecutePanel({
  * AI で作れずに規則ベースにした結果（#1719）は、AI を使わなかった場合と分けて示す。
  */
 function metadataSourceLabel(generated: MetadataSqlGenerateData) {
-  if (generated.source === "oci_enterprise_ai") {
+  if (generated.source === "enterprise_ai") {
     return generated.fallback
       ? t("metadataSql.source.partialFallback")
-      : t("metadataSql.source.ociEnterpriseAi");
+      : t("metadataSql.source.enterpriseAi");
   }
   return generated.fallback
     ? t("metadataSql.source.fallback")
@@ -1199,7 +1199,7 @@ function metadataSourceLabel(generated: MetadataSqlGenerateData) {
 
 function metadataSourceVariant(generated: MetadataSqlGenerateData) {
   if (generated.fallback) return "warning" as const;
-  return generated.source === "oci_enterprise_ai" ? ("success" as const) : ("neutral" as const);
+  return generated.source === "enterprise_ai" ? ("success" as const) : ("neutral" as const);
 }
 
 /**

@@ -2521,7 +2521,7 @@ def _audit_glossary(runtime_knowledge: RuntimeKnowledgeContext | None) -> list[d
 
 def _invalid_structured_output(exc: Exception) -> bool:
     """LLM の応答が構造化出力の契約を満たさなかった例外か（再試行の後も。#2772）。"""
-    from rag_engine.adapters.oci import LlmRunawayOutput, is_invalid_structured_output
+    from rag_engine.adapters.model_api import LlmRunawayOutput, is_invalid_structured_output
 
     return isinstance(exc, LlmRunawayOutput) or is_invalid_structured_output(exc)
 

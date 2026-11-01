@@ -183,7 +183,7 @@ def test_direct_engine_uses_system_default_text_model(
 
     import httpx
 
-    from app.features.nl2sql.enterprise_ai_client import OciEnterpriseAiDirectClient
+    from app.features.nl2sql.enterprise_ai_client import HttpEnterpriseAiDirectClient
     from app.settings import Settings
 
     seen: list[tuple[str, str]] = []
@@ -198,15 +198,15 @@ def test_direct_engine_uses_system_default_text_model(
         httpx, "Client", lambda **kwargs: real_client(transport=transport, **kwargs)
     )
     settings = Settings(
-        oci_enterprise_ai_endpoint=(
+        enterprise_ai_endpoint=(
             "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
         ),
-        oci_enterprise_ai_api_key="synthetic-test-key",
-        oci_enterprise_ai_project_ocid="ocid1.generativeaiproject.oc1.us-chicago-1.synthetic",
-        oci_enterprise_ai_default_text_model="openai.gpt-oss-120b",
+        enterprise_ai_api_key="synthetic-test-key",
+        enterprise_ai_project_id="ocid1.generativeaiproject.oc1.us-chicago-1.synthetic",
+        enterprise_ai_default_text_model="openai.gpt-oss-120b",
     )
     service = _oracle_runtime_service(monkeypatch, direct=_FakeEnterpriseAiClient(_DIRECT_SQL))
-    service._enterprise_ai_client = OciEnterpriseAiDirectClient(settings)  # noqa: SLF001
+    service._enterprise_ai_client = HttpEnterpriseAiDirectClient(settings)  # noqa: SLF001
     profile = service.get_profile(None)
 
     generated = service._generate_sql(  # noqa: SLF001

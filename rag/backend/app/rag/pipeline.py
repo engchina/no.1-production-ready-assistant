@@ -34,8 +34,8 @@ from rag_engine.resources.deadline import current_deadline
 from rag_engine.resources.runtime import resolve_prompt
 from rag_engine.resources.tracing import CallObservation, bind_trace_observer
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.oracle_read_stats import track_db_calls
 from app.config import Settings, get_settings
@@ -336,9 +336,9 @@ class RagPipeline:
 
     def __init__(
         self,
-        genai: OciGenAiClient | None = None,
+        genai: GenAiClient | None = None,
         oracle: OracleClient | None = None,
-        llm: OciEnterpriseAiClient | None = None,
+        llm: EnterpriseAiClient | None = None,
         guardrails: GuardrailPolicy | None = None,
         settings: Settings | None = None,
         *,
@@ -355,9 +355,9 @@ class RagPipeline:
         self._settings = settings or get_settings()
         if not self._settings.rag_support_guide_enabled:
             self._settings = self._settings.model_copy(update={"rag_support_guide": {}})
-        self._genai = genai or OciGenAiClient(settings=self._settings)
+        self._genai = genai or GenAiClient(settings=self._settings)
         self._oracle = oracle or OracleClient(settings=self._settings)
-        self._llm = llm or OciEnterpriseAiClient(settings=self._settings)
+        self._llm = llm or EnterpriseAiClient(settings=self._settings)
         self._guardrails = guardrails or GuardrailPolicy(self._settings)
         # 回答フローの回答のモデル。チャットのモデル比較で ``llm`` と同じモデルを渡す(#593)。
         # None は既定のモデル。

@@ -99,7 +99,7 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
         "picture_description",
         "ingestion",
         (
-            ("system", "rag_engine.adapters.oci:VISION_SYSTEM_PROMPT"),
+            ("system", "rag_engine.adapters.model_api:VISION_SYSTEM_PROMPT"),
             ("rules", "rag_engine.parsing.vision_prompt_rules:VISION_EXTRACTION_INSTRUCTION"),
             ("picture", "rag_engine.parsing.vision_prompt_rules:PICTURE_EXTRACTION_INSTRUCTION"),
             ("table", "rag_engine.parsing.vision_prompt_rules:TABLE_EXTRACTION_INSTRUCTION"),
@@ -355,7 +355,7 @@ def readonly_prompt_stages(
                     )[0],
                 },
             )
-            from rag_engine.adapters.oci import _picture_output_contract
+            from rag_engine.adapters.model_api import _picture_output_contract
 
             parts.append(
                 {"id": "contract", "content": _picture_output_contract(), "prompt_key": None}

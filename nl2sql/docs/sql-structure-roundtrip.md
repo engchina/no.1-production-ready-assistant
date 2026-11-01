@@ -48,7 +48,7 @@ Issue #321。対象は「SQL から質問を生成」の SQL → 物理構造 �
 - 既存 `test_nl2sql_reverse_deep_steps.py` / `test_nl2sql_reverse_access.py` と legacy の reverse 関連テストを更新。
 - `nl2sql-workflows.spec.ts` の desktop / mobile-375: 成功後タブ・フォーカス、構造編集と再生成、失敗時草稿保持、未実行/旧結果表示、再読込、重複送信なし、主要な空/読込/エラー状態、横 overflow、150% zoom。
 
-自動テストは Enterprise AI と API を fake/mock 化した契約検証である。Issue #421 では `select * from employee` の実 Enterprise AI 応答が JSON ではなく原版形式の Markdown で返ることを確認した。修正後の全生成経路でも SELECT句・FROM句を保持し、`source=oci_enterprise_ai`、警告なしで成功した（テスト用 Profile、DB 実行なし）。Issue #423 では人工の `DEMO.EMPLOYEE` スキーマ（論理名: 従業員情報）だけを使用した実モデル検証で、論理構造の FROM が `[従業員情報] e`、質問が「すべての従業員情報を教えてください。」となることを確認した。用語集・実 DB データは使用していない。実モデルと Oracle のデータで結果の同値性を比較する live 受入は別途必要。任意の SQL について「100% 同値」を証明したものではない。
+自動テストは Enterprise AI と API を fake/mock 化した契約検証である。Issue #421 では `select * from employee` の実 Enterprise AI 応答が JSON ではなく原版形式の Markdown で返ることを確認した。修正後の全生成経路でも SELECT句・FROM句を保持し、`source=enterprise_ai`、警告なしで成功した（テスト用 Profile、DB 実行なし）。Issue #423 では人工の `DEMO.EMPLOYEE` スキーマ（論理名: 従業員情報）だけを使用した実モデル検証で、論理構造の FROM が `[従業員情報] e`、質問が「すべての従業員情報を教えてください。」となることを確認した。用語集・実 DB データは使用していない。実モデルと Oracle のデータで結果の同値性を比較する live 受入は別途必要。任意の SQL について「100% 同値」を証明したものではない。
 
 ## 自然言語の質問から SQL を生成（Issue #425）
 
@@ -64,7 +64,7 @@ Issue #321。対象は「SQL から質問を生成」の SQL → 物理構造 �
 
 質問段階の原文は自然言語の質問のみを要求するが、旧実装は JSON object だけを受理していた。架空 EMPLOYEE の実接続で 3.68 秒後に正常な日本語質問が返っても JSON 検証失敗になることを再現した。Issue #429 では一旦自然言語と JSON の両方を受理した。Issue #431 で送信時の形式を Structured Outputs に統一し、現在は Schema に従う JSON `question` のみを受理する。原文の自然言語本文はこの field 内に保持する。壊れた JSON、空文字、型不正は成功として扱わない。
 
-各段階の空・形式不正、接続失敗、timeout、429/500/502/503/504 は同じ段階だけを再試行する。回数は設定 `oci_enterprise_ai_max_retries` に従い、最大2 retry（合計3回）、1秒/2秒の待機。HTTP 層の retry をこのフローでは0にして多重 retry を避ける。401/403、その他の非一時的な HTTP エラー、refusal、未完了応答は retry しない。全3段階で最大30分（設定 timeout × 3 が短ければその時間）の予算を共有し、各呼出しへ残り時間以下の timeout を渡す。完了した段階は再送しない。
+各段階の空・形式不正、接続失敗、timeout、429/500/502/503/504 は同じ段階だけを再試行する。回数は設定 `enterprise_ai_max_retries` に従い、最大2 retry（合計3回）、1秒/2秒の待機。HTTP 層の retry をこのフローでは0にして多重 retry を避ける。401/403、その他の非一時的な HTTP エラー、refusal、未完了応答は retry しない。全3段階で最大30分（設定 timeout × 3 が短ければその時間）の予算を共有し、各呼出しへ残り時間以下の timeout を渡す。完了した段階は再送しない。
 
 警告は失敗段階、原因、試行回数、保持している結果、再試行方法を示す。質問だけ失敗した場合、生成済み SQL 論理構造を保持する。ログ `reverse_sql_stage_failed` には stage / reason / attempt / elapsed_ms を記録し、SQL・schema・生応答・credential を含めない。
 

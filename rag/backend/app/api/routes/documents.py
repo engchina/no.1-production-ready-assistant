@@ -35,7 +35,7 @@ from rag_parser_core.structured_records import RecordBoundaryError, record_bound
 from app.api.errors import DocumentFileMissingError
 from app.clients.document_cleanup_store import DocumentCleanupStore, DocumentCleanupTargets
 from app.clients.file_storage import FileStorageClient
-from app.clients.oci_genai import EMBEDDING_INPUT_MAX_CHARS
+from app.clients.genai import EMBEDDING_INPUT_MAX_CHARS
 from app.clients.oracle import (
     DocumentDeleteBlockedByRunningIngestionError,
     DocumentReviewEditConflictError,

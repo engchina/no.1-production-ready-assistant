@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from rag_engine.adapters.oci import (
+from rag_engine.adapters.model_api import (
     EMBEDDING_INPUT_TYPE_SEARCH_DOCUMENT,
     EMBEDDING_INPUT_TYPE_SEARCH_QUERY,
     _is_retryable_error,

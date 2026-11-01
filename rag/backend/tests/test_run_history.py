@@ -231,9 +231,9 @@ async def test_recorder_failure_does_not_raise(caplog: pytest.LogCaptureFixture)
 @pytest.mark.usefixtures("trace_body_enabled")
 async def test_pipeline_records_search_answer_and_blocked_runs(monkeypatch: MonkeyPatch) -> None:
     """RAG 検索（回答なし・回答あり）と、安全チェックで止めた質問を記録する。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
     class AnswerOracle(FakeOracle):
         async def save_answer_record(self, record: Any) -> None:
@@ -801,9 +801,9 @@ async def test_pipeline_returns_answer_when_answer_record_save_fails(
 
     期限切れの記録の削除の失敗は、保存の失敗に含めない。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
 
     class FailingOracle(FakeOracle):
         async def save_answer_record(self, record: Any) -> None:
@@ -1025,7 +1025,7 @@ async def _record_pipeline_run(
 ) -> RecordingTrace:
     tracker = RecordingTrace(model_id.encode().hex().ljust(32, "0")[:32])
     # 回答のモデルは登録モデルから接続を引く（登録に無いモデルは失敗にする。#3240）。
-    settings = Settings(oci_enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id=model_id)])
+    settings = Settings(enterprise_ai_models=[EnterpriseAiConfiguredModel(model_id=model_id)])
     recorder = RunRecorder(
         surface="chat",
         settings=settings,
@@ -1049,9 +1049,9 @@ async def test_pipeline_records_the_model_usage_of_each_run(monkeypatch: MonkeyP
 
     工程の span と二重に数えない。
     """
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm_with_usage("model-a"))
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm_with_usage("model-a"))
     store = RecordingStore()
     tracker = await _record_pipeline_run(
         SearchRequest(query="合成の質問 A", search_answer_profile_id="bv-1"),
@@ -1079,9 +1079,9 @@ async def test_pipeline_records_the_model_usage_of_each_run(monkeypatch: MonkeyP
 
 async def test_compared_columns_keep_their_own_usage(monkeypatch: MonkeyPatch) -> None:
     """比較の列を同時に実行しても、列ごとの実行の利用量は混ざらない。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm_with_usage("model-shared"))
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm_with_usage("model-shared"))
     store = RecordingStore()
     request = SearchRequest(query="合成の質問 A", search_answer_profile_id="bv-1")
     first, second = await asyncio.gather(
@@ -1097,12 +1097,12 @@ async def test_compared_columns_keep_their_own_usage(monkeypatch: MonkeyPatch) -
 
 async def test_failed_run_keeps_the_calls_it_made_as_partial(monkeypatch: MonkeyPatch) -> None:
     """失敗した実行は、失敗までの呼び出しを数え、利用量の無い呼び出しがあれば一部計測にする。"""
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
     from rag_engine.generation.citation_wire import generation_draft_wire_model
 
     # 生成専用の実送信schemaで失敗させ、監査の保留とは区別する。
     monkeypatch.setattr(
-        engine_oci,
+        engine_api,
         "parse_text_response",
         _fake_llm_with_usage("model-a", fail_on=generation_draft_wire_model()),
     )
@@ -1162,7 +1162,7 @@ async def test_recorder_without_a_trace_keeps_no_usage() -> None:
 
 def test_search_records_the_concrete_default_model() -> None:
     """RAG 検索の実行は、未指定でも実行のときの既定のテキストモデルの具体的な ID を残す。"""
-    settings = Settings(oci_enterprise_ai_default_text_model="model-default")
+    settings = Settings(enterprise_ai_default_text_model="model-default")
     assert _run_model_id(None, settings) == "model-default"
     assert _run_model_id("model-explicit", settings) == "model-explicit"
 

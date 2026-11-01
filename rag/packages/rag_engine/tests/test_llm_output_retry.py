@@ -11,7 +11,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation import execution_record
 from rag_engine.models.llm import TextOutput
@@ -58,12 +58,12 @@ class OutputRetryRecordTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO") as logs,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO") as logs,
                 execution_record._execution_step("生成"),
-                suppress(oci.IncompleteResponse),
+                suppress(model_api.IncompleteResponse),
             ):
-                oci._openai_parsed([], settings, TextOutput, provider)
+                model_api._openai_parsed([], settings, TextOutput, provider)
         finally:
             llm_usage.reset(usage_token)
             execution_record._structured_steps.reset(step_token)
@@ -104,8 +104,8 @@ class OutputRetryRecordTest(unittest.TestCase):
         corrupted = SimpleNamespace(status="completed", output_parsed=TextOutput(text="説明\ufffd"), usage=USAGE)
         client = _Client([corrupted, _completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client):
-            result = oci._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
+        with mock.patch.object(model_api, "_openai_client_for_provider", return_value=client):
+            result = model_api._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
         self.assertEqual(result.text, "ok")
         self.assertEqual(len(client.budgets), 2)
 
@@ -113,8 +113,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         corrupted = SimpleNamespace(status="completed", output_parsed=TextOutput(text="説明\ufffd"), usage=USAGE)
         client = _Client([corrupted, corrupted])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), self.assertRaises(oci.InvalidStructuredOutput):
-            oci._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
+        with (
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertRaises(model_api.InvalidStructuredOutput),
+        ):
+            model_api._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
         self.assertEqual(len(client.budgets), 2)
 
     def test_rejected_corruption_names_the_fields_but_not_the_text(self):
@@ -123,11 +126,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         client = _Client([corrupted, corrupted])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="WARNING") as logs,
-            self.assertRaises(oci.InvalidStructuredOutput) as raised,
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="WARNING") as logs,
+            self.assertRaises(model_api.InvalidStructuredOutput) as raised,
         ):
-            oci._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
+            model_api._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
         self.assertIn("欄: text", str(raised.exception))
         self.assertNotIn("合成の説明", str(raised.exception))
         rejected = [record for record in logs.records if getattr(record, "event", "") == "llm_output_rejected"]
@@ -138,15 +141,15 @@ class OutputRetryRecordTest(unittest.TestCase):
 
     def test_replacement_char_paths_point_into_nested_lists(self):
         value = {"request_coverage": [{"evidence_scope": [{"target": "a"}, {"target": "b�"}]}], "items": [{"text": "�"}]}
-        self.assertEqual(oci.replacement_char_paths(value), ["request_coverage[0].evidence_scope[1].target", "items[0].text"])
-        self.assertEqual(oci.replacement_char_paths({"xs": ["�"] * 20}, limit=2), ["xs[0]", "xs[1]"])
+        self.assertEqual(model_api.replacement_char_paths(value), ["request_coverage[0].evidence_scope[1].target", "items[0].text"])
+        self.assertEqual(model_api.replacement_char_paths({"xs": ["�"] * 20}, limit=2), ["xs[0]", "xs[1]"])
 
     def test_original_replacement_character_is_preserved(self):
         corrupted = SimpleNamespace(status="completed", output_parsed=TextOutput(text="原文\ufffd"), usage=USAGE)
         client = _Client([corrupted])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client):
-            result = oci._parse_text_with_retry("system", "引用: 原文\ufffd", settings, TextOutput, PROVIDER)
+        with mock.patch.object(model_api, "_openai_client_for_provider", return_value=client):
+            result = model_api._parse_text_with_retry("system", "引用: 原文\ufffd", settings, TextOutput, PROVIDER)
         self.assertEqual(result.text, "原文\ufffd")
         self.assertEqual(len(client.budgets), 1)
 
@@ -154,8 +157,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         """text の呼び出し（`_parse_text_with_retry` → `_parse_openai_text_once`）が Responses API まで届く。"""
         client = _Client([_completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), self.assertLogs(oci.__name__, level="INFO"):
-            result = oci._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
+        with (
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+        ):
+            result = model_api._parse_text_with_retry("system", "prompt", settings, TextOutput, PROVIDER)
         self.assertEqual((result.text, client.budgets), ("ok", [1000]))
 
     def test_retry_is_capped_by_the_model_output_limit(self):
@@ -163,8 +169,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         client = _Client([_incomplete("max_output_tokens"), _completed()])
         provider = SimpleNamespace(model="stub-model", label="stub", reasoning_effort="", max_output_tokens=1500)
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), self.assertLogs(oci.__name__, level="INFO"):
-            oci._openai_parsed([], settings, TextOutput, provider)
+        with (
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+        ):
+            model_api._openai_parsed([], settings, TextOutput, provider)
         self.assertEqual(client.budgets, [1000, 1500])
 
     def test_first_budget_is_capped_and_not_retried_when_it_cannot_widen(self):
@@ -179,11 +188,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO"),
-                self.assertRaises(oci.IncompleteResponse) as raised,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO"),
+                self.assertRaises(model_api.IncompleteResponse) as raised,
             ):
-                oci._openai_parsed([], settings, TextOutput, provider)
+                model_api._openai_parsed([], settings, TextOutput, provider)
             usage = llm_usage.get().snapshot()
         finally:
             llm_usage.reset(usage_token)
@@ -199,11 +208,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         client = _Client([_incomplete("max_output_tokens"), _incomplete("max_output_tokens")])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
-            self.assertRaises(oci.IncompleteResponse) as raised,
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+            self.assertRaises(model_api.IncompleteResponse) as raised,
         ):
-            oci._openai_parsed([], settings, TextOutput, PROVIDER)
+            model_api._openai_parsed([], settings, TextOutput, PROVIDER)
         self.assertEqual(client.budgets, [1000, 2000])
         self.assertIn("上限を広げて送り直しても", str(raised.exception))
         self.assertIn("出力の上限=2000 tokens", str(raised.exception))
@@ -235,11 +244,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         client = _Client([_incomplete("max_output_tokens")] * 3)
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
-            self.assertRaises(oci.IncompleteResponse) as raised,
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+            self.assertRaises(model_api.IncompleteResponse) as raised,
         ):
-            oci._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
+            model_api._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
         error = raised.exception
         self.assertEqual(client.efforts, ["medium", "medium", "low"])
         self.assertIn("回答が長くなり", error.user_message)
@@ -258,11 +267,11 @@ class OutputRetryRecordTest(unittest.TestCase):
         provider = SimpleNamespace(model="stub-model", label="stub", reasoning_effort="low")
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
-            self.assertRaises(oci.IncompleteResponse),
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+            self.assertRaises(model_api.IncompleteResponse),
         ):
-            oci._openai_parsed([], settings, TextOutput, provider)
+            model_api._openai_parsed([], settings, TextOutput, provider)
         self.assertEqual(client.efforts, ["low", "low"])
 
     def test_bound_output_cap_limits_the_budget_and_never_widens(self):
@@ -270,12 +279,12 @@ class OutputRetryRecordTest(unittest.TestCase):
         client = _Client([_incomplete("max_output_tokens"), _incomplete("max_output_tokens"), _completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
-            self.assertRaises(oci.IncompleteResponse),
-            oci.bind_output_cap(300),
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+            self.assertRaises(model_api.IncompleteResponse),
+            model_api.bind_output_cap(300),
         ):
-            oci._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
+            model_api._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
         # 広げずに推論の量を 1 段下げて 1 回だけ送り直し、それでも未完了なら失敗にする。
         self.assertEqual(client.budgets, [300, 300])
         self.assertEqual(client.efforts, ["medium", "low"])
@@ -283,21 +292,21 @@ class OutputRetryRecordTest(unittest.TestCase):
     def test_output_cap_is_dropped_outside_the_context(self):
         client = _Client([_completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
-        with oci.bind_output_cap(300):
+        with model_api.bind_output_cap(300):
             pass
-        with mock.patch.object(oci, "_openai_client_for_provider", return_value=client), oci.bind_output_cap(0):
-            oci._openai_parsed([], settings, TextOutput, PROVIDER)
+        with mock.patch.object(model_api, "_openai_client_for_provider", return_value=client), model_api.bind_output_cap(0):
+            model_api._openai_parsed([], settings, TextOutput, PROVIDER)
         self.assertEqual(client.budgets, [1000])
 
     def test_content_filter_is_not_retried_and_says_so(self):
         client = _Client([_incomplete("content_filter")])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
-            self.assertRaises(oci.IncompleteResponse) as raised,
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
+            self.assertRaises(model_api.IncompleteResponse) as raised,
         ):
-            oci._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
+            model_api._openai_parsed([], settings, TextOutput, MEDIUM_PROVIDER)
         self.assertEqual(client.budgets, [1000])
         self.assertIn("安全の判定", raised.exception.user_message)
 
@@ -310,33 +319,33 @@ class DeadlineOutputBudgetTest(unittest.TestCase):
     """回答の期限の残りに合わせた出力の上限（#1548）。"""
 
     def setUp(self):
-        oci._output_rates.clear()
-        self.addCleanup(oci._output_rates.clear)
+        model_api._output_rates.clear()
+        self.addCleanup(model_api._output_rates.clear)
 
     def test_budget_is_kept_without_deadline_or_measured_rate(self):
-        self.assertEqual(oci.deadline_output_budget(1000, PROVIDER), (1000, False))
+        self.assertEqual(model_api.deadline_output_budget(1000, PROVIDER), (1000, False))
         with bind_deadline(Deadline(10.0)):
             # 速さの実測が無ければ抑えない。
-            self.assertEqual(oci.deadline_output_budget(1000, PROVIDER), (1000, False))
-        oci._note_output_rate(PROVIDER, 4000, 100.0)  # 40 token/秒
-        self.assertEqual(oci.deadline_output_budget(1000, PROVIDER), (1000, False))
+            self.assertEqual(model_api.deadline_output_budget(1000, PROVIDER), (1000, False))
+        model_api._note_output_rate(PROVIDER, 4000, 100.0)  # 40 token/秒
+        self.assertEqual(model_api.deadline_output_budget(1000, PROVIDER), (1000, False))
 
     def test_budget_is_capped_by_the_fastest_rate_with_margin(self):
-        oci._note_output_rate(PROVIDER, 3000, 100.0)  # 30 token/秒
-        oci._note_output_rate(PROVIDER, 4000, 100.0)  # 40 token/秒
-        oci._note_output_rate(PROVIDER, 100, 0.5)  # 出力の短い呼び出しは速さに数えない
+        model_api._note_output_rate(PROVIDER, 3000, 100.0)  # 30 token/秒
+        model_api._note_output_rate(PROVIDER, 4000, 100.0)  # 40 token/秒
+        model_api._note_output_rate(PROVIDER, 100, 0.5)  # 出力の短い呼び出しは速さに数えない
         with bind_deadline(Deadline(10.0)):
-            budget, capped = oci.deadline_output_budget(24576, PROVIDER)
+            budget, capped = model_api.deadline_output_budget(24576, PROVIDER)
         self.assertTrue(capped)
         # 40 token/秒 × 1.25 × 残り（約 10 秒）。
         self.assertLessEqual(budget, 500)
         self.assertGreater(budget, 490)
         # 別のモデルの速さは使わない。
         with bind_deadline(Deadline(10.0)):
-            self.assertEqual(oci.deadline_output_budget(24576, SimpleNamespace(model="other")), (24576, False))
+            self.assertEqual(model_api.deadline_output_budget(24576, SimpleNamespace(model="other")), (24576, False))
 
     def test_capped_incomplete_response_cuts_the_deadline_without_retry(self):
-        oci._note_output_rate(PROVIDER, 4000, 100.0)
+        model_api._note_output_rate(PROVIDER, 4000, 100.0)
         client = _Client([_incomplete("max_output_tokens"), _completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=24576)
         outer = Deadline(600.0)
@@ -344,12 +353,12 @@ class DeadlineOutputBudgetTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO") as logs,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO") as logs,
                 bind_deadline(child),
                 self.assertRaises(DeadlineExceeded),
             ):
-                oci._openai_parsed([], settings, TextOutput, PROVIDER)
+                model_api._openai_parsed([], settings, TextOutput, PROVIDER)
             usage = llm_usage.get().snapshot()
         finally:
             llm_usage.reset(usage_token)
@@ -366,11 +375,11 @@ class DeadlineOutputBudgetTest(unittest.TestCase):
         client = _Client([_incomplete("max_output_tokens"), _completed()])
         settings = replace(get_settings(environ={}, dotenv_path=None), answer_max_tokens=1000)
         with (
-            mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-            self.assertLogs(oci.__name__, level="INFO"),
+            mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+            self.assertLogs(model_api.__name__, level="INFO"),
             bind_deadline(Deadline(600.0)),
         ):
-            oci._openai_parsed([], settings, TextOutput, PROVIDER)
+            model_api._openai_parsed([], settings, TextOutput, PROVIDER)
         self.assertEqual(client.budgets, [1000, 2000])
 
     def test_failed_call_is_recorded_with_seconds_and_reason(self):
@@ -379,11 +388,11 @@ class DeadlineOutputBudgetTest(unittest.TestCase):
         usage_token = llm_usage.set(LlmUsage())
         try:
             with (
-                mock.patch.object(oci, "_openai_client_for_provider", return_value=client),
-                self.assertLogs(oci.__name__, level="INFO") as logs,
+                mock.patch.object(model_api, "_openai_client_for_provider", return_value=client),
+                self.assertLogs(model_api.__name__, level="INFO") as logs,
                 self.assertRaises(TimeoutError),
             ):
-                oci._openai_parsed([], settings, TextOutput, PROVIDER)
+                model_api._openai_parsed([], settings, TextOutput, PROVIDER)
             usage = llm_usage.get().snapshot()
         finally:
             llm_usage.reset(usage_token)

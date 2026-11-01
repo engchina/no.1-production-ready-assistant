@@ -124,7 +124,7 @@ async def recognize_rule_selections(
         try:
             # 既存のAPIと回答処理の時間枠を超えて、認識だけを待たない。
             async with asyncio.timeout(
-                min(settings.oci_enterprise_ai_timeout_seconds, settings.rag_answer_timeout_seconds)
+                min(settings.enterprise_ai_timeout_seconds, settings.rag_answer_timeout_seconds)
             ):
                 checked = await asyncio.to_thread(GuardrailPolicy(settings).validate_query, text)
                 if not checked.allowed:

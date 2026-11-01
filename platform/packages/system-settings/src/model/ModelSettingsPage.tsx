@@ -1032,13 +1032,13 @@ function ConnectionTabContent({
           className="col-span-full"
         />
         <TextField
-          id={connectionFieldId(connectionId, "project_ocid")}
+          id={connectionFieldId(connectionId, "project_id")}
           label={t("settings.model.enterprise.project")}
-          value={connection.project_ocid}
+          value={connection.project_id}
           placeholder={t("settings.model.placeholder.project")}
           helper={t("settings.model.enterprise.projectHelp")}
-          error={errors?.project_ocid}
-          onValueChange={(value) => onChange({ project_ocid: value })}
+          error={errors?.project_id}
+          onValueChange={(value) => onChange({ project_id: value })}
           width="full"
           className="col-span-full"
         />

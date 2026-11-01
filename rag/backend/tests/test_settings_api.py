@@ -64,7 +64,7 @@ def _persisted_parser(settings: Settings) -> dict[str, Any]:
 
 
 def _saved_enterprise_ai_api_key(settings: Settings) -> str | None:
-    return _saved_env_value(settings, "PLATFORM_OCI_ENTERPRISE_AI_API_KEY")
+    return _saved_env_value(settings, "PLATFORM_ENTERPRISE_AI_API_KEY")
 
 
 def test_parser_adapter_settings_reports_flags_and_package_status(
@@ -325,7 +325,7 @@ def test_parser_settings_file_reloads_in_worker_and_model_save_does_not_touch_it
     settings = get_settings()
     model_file = Path(settings.model_settings_file)
     parser_file = PARSER_SETTINGS_STORE.path(settings)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://existing.example.com")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://existing.example.com")
     settings.set_runtime_enterprise_ai_api_key("existing-model-secret")
     worker_settings = Settings(
         _env_file=None,
@@ -1022,25 +1022,25 @@ def test_update_graph_settings_rejects_unknown_profile() -> None:
 
 def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://enterprise-ai.example")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://enterprise-ai.example")
     monkeypatch.setattr(
         settings,
-        "oci_enterprise_ai_project_ocid",
+        "enterprise_ai_project_id",
         "ocid1.generativeaiproject.oc1..example",
     )
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "sk-runtime-secret")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_text_model", "enterprise-llm")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_default_vision_model", "enterprise-vlm")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_models", [])
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_path", "/responses")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_path", "/responses")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_payload_template", LLM_TEMPLATE)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_payload_template", VLM_TEMPLATE)
-    monkeypatch.setattr(settings, "oci_enterprise_ai_llm_response_path", "/data/text")
-    monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_response_path", "/data/document")
-    monkeypatch.setattr(settings, "oci_genai_embedding_model", "cohere.embed-v4.0")
-    monkeypatch.setattr(settings, "oci_genai_embedding_dim", 1024)
-    monkeypatch.setattr(settings, "oci_genai_rerank_model", "cohere.rerank-v4.0-fast")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "sk-runtime-secret")
+    monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "enterprise-llm")
+    monkeypatch.setattr(settings, "enterprise_ai_default_vision_model", "enterprise-vlm")
+    monkeypatch.setattr(settings, "enterprise_ai_models", [])
+    monkeypatch.setattr(settings, "enterprise_ai_llm_path", "/responses")
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_path", "/responses")
+    monkeypatch.setattr(settings, "enterprise_ai_llm_payload_template", LLM_TEMPLATE)
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_payload_template", VLM_TEMPLATE)
+    monkeypatch.setattr(settings, "enterprise_ai_llm_response_path", "/data/text")
+    monkeypatch.setattr(settings, "enterprise_ai_vlm_response_path", "/data/document")
+    monkeypatch.setattr(settings, "genai_embedding_model", "cohere.embed-v4.0")
+    monkeypatch.setattr(settings, "genai_embedding_dim", 1024)
+    monkeypatch.setattr(settings, "genai_rerank_model", "cohere.rerank-v4.0-fast")
 
     resp = client.get("/api/settings/model")
 
@@ -1051,7 +1051,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
         == "https://enterprise-ai.example"
     )
     assert (
-        body["settings"]["enterprise_ai"]["connections"][0]["project_ocid"]
+        body["settings"]["enterprise_ai"]["connections"][0]["project_id"]
         == "ocid1.generativeaiproject.oc1..example"
     )
     assert body["settings"]["enterprise_ai"]["connections"][0]["api_key"] == ""
@@ -1087,7 +1087,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     assert body["settings"]["enterprise_ai"]["text_response_path"] == "/data/text"
     assert body["settings"]["enterprise_ai"]["vision_response_path"] == "/data/document"
     assert "generative_ai" not in body["settings"]
-    assert body["embedding_dim"] == settings.oci_genai_embedding_dim
+    assert body["embedding_dim"] == settings.genai_embedding_dim
     assert "sk-runtime-secret" not in resp.text
 
 
@@ -1100,30 +1100,30 @@ def test_update_model_settings_mutates_runtime_settings() -> None:
     body = resp.json()["data"]
     assert body["model_settings_file"] == get_settings().model_settings_file
     settings = get_settings()
-    assert settings.oci_enterprise_ai_endpoint == "https://enterprise-ai.example"
-    assert settings.oci_enterprise_ai_project_ocid == "ocid1.generativeaiproject.oc1..example"
-    assert settings.oci_enterprise_ai_api_key == "sk-update-secret"
-    assert settings.oci_enterprise_ai_default_text_model == "enterprise-llm"
-    assert settings.oci_enterprise_ai_default_vision_model == "enterprise-vlm"
-    assert [model.model_id for model in settings.oci_enterprise_ai_models] == [
+    assert settings.enterprise_ai_endpoint == "https://enterprise-ai.example"
+    assert settings.enterprise_ai_project_id == "ocid1.generativeaiproject.oc1..example"
+    assert settings.enterprise_ai_api_key == "sk-update-secret"
+    assert settings.enterprise_ai_default_text_model == "enterprise-llm"
+    assert settings.enterprise_ai_default_vision_model == "enterprise-vlm"
+    assert [model.model_id for model in settings.enterprise_ai_models] == [
         "enterprise-llm",
         "enterprise-vlm",
     ]
-    assert settings.oci_enterprise_ai_llm_path == "/responses"
-    assert settings.oci_enterprise_ai_vlm_path == "/responses"
-    assert settings.oci_enterprise_ai_vlm_input_mode == "files_api"
-    assert settings.oci_enterprise_ai_llm_payload_template == LLM_TEMPLATE
-    assert settings.oci_enterprise_ai_vlm_payload_template == VLM_TEMPLATE
-    assert settings.oci_enterprise_ai_llm_response_path == "/data/text"
-    assert settings.oci_enterprise_ai_vlm_response_path == "/data/document"
+    assert settings.enterprise_ai_llm_path == "/responses"
+    assert settings.enterprise_ai_vlm_path == "/responses"
+    assert settings.enterprise_ai_vlm_input_mode == "files_api"
+    assert settings.enterprise_ai_llm_payload_template == LLM_TEMPLATE
+    assert settings.enterprise_ai_vlm_payload_template == VLM_TEMPLATE
+    assert settings.enterprise_ai_llm_response_path == "/data/text"
+    assert settings.enterprise_ai_vlm_response_path == "/data/document"
     # 出力の上限は登録モデルごとの値（#1719）。
-    assert [model.max_output_tokens for model in settings.oci_enterprise_ai_models] == [
+    assert [model.max_output_tokens for model in settings.enterprise_ai_models] == [
         16000,
         64000,
     ]
-    assert settings.oci_genai_embedding_model == "cohere.embed-v4.0"
-    assert settings.oci_genai_embedding_dim == 1024
-    assert settings.oci_genai_rerank_model == "cohere.rerank-v4.0-fast"
+    assert settings.genai_embedding_model == "cohere.embed-v4.0"
+    assert settings.genai_embedding_dim == 1024
+    assert settings.genai_rerank_model == "cohere.rerank-v4.0-fast"
     assert "sk-update-secret" not in resp.text
 
 
@@ -1188,7 +1188,7 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
                 "version": 1,
                 "enterprise_ai": {
                     "endpoint": "https://persisted-enterprise.example",
-                    "project_ocid": "ocid1.generativeaiproject.oc1..persisted",
+                    "project_id": "ocid1.generativeaiproject.oc1..persisted",
                     "api_key": "sk-persisted-secret",
                     "models": [
                         {
@@ -1223,23 +1223,23 @@ def test_load_persisted_model_settings_applies_saved_model_catalog(
     )
     load_persisted_model_settings(settings)
 
-    assert settings.oci_enterprise_ai_endpoint == "https://persisted-enterprise.example"
-    assert settings.oci_enterprise_ai_project_ocid == "ocid1.generativeaiproject.oc1..persisted"
-    assert settings.oci_enterprise_ai_api_key == "sk-persisted-secret"
-    assert [model.model_id for model in settings.oci_enterprise_ai_models] == [
+    assert settings.enterprise_ai_endpoint == "https://persisted-enterprise.example"
+    assert settings.enterprise_ai_project_id == "ocid1.generativeaiproject.oc1..persisted"
+    assert settings.enterprise_ai_api_key == "sk-persisted-secret"
+    assert [model.model_id for model in settings.enterprise_ai_models] == [
         "persisted-text",
         "persisted-vision",
     ]
     # #499 より前の JSON（default_model_id だけ）は、従来と同じモデルになるよう補う。
-    assert settings.oci_enterprise_ai_default_text_model == "persisted-text"
-    assert settings.oci_enterprise_ai_default_vision_model == "persisted-vision"
-    assert settings.oci_enterprise_ai_vlm_input_mode == "inline_image"
-    assert settings.oci_enterprise_ai_llm_response_path == "/payload/text"
-    assert settings.oci_enterprise_ai_vlm_response_path == "/payload/document"
-    assert settings.oci_enterprise_ai_timeout_seconds == 42
-    assert settings.oci_enterprise_ai_max_retries == 1
+    assert settings.enterprise_ai_default_text_model == "persisted-text"
+    assert settings.enterprise_ai_default_vision_model == "persisted-vision"
+    assert settings.enterprise_ai_vlm_input_mode == "inline_image"
+    assert settings.enterprise_ai_llm_response_path == "/payload/text"
+    assert settings.enterprise_ai_vlm_response_path == "/payload/document"
+    assert settings.enterprise_ai_timeout_seconds == 42
+    assert settings.enterprise_ai_max_retries == 1
     # 出力の上限の無い古い JSON のモデルは既定の 32768（#1719）。
-    assert [model.max_output_tokens for model in settings.oci_enterprise_ai_models] == [
+    assert [model.max_output_tokens for model in settings.enterprise_ai_models] == [
         32768,
         32768,
     ]
@@ -1252,21 +1252,21 @@ def test_update_model_settings_does_not_mutate_runtime_when_persist_fails(
 ) -> None:
     settings = get_settings()
     settings.model_settings_file = str(tmp_path)
-    settings.oci_enterprise_ai_endpoint = "https://old-enterprise.example"
-    settings.oci_enterprise_ai_api_key = "sk-old-secret"
+    settings.enterprise_ai_endpoint = "https://old-enterprise.example"
+    settings.enterprise_ai_api_key = "sk-old-secret"
 
     resp = client.patch("/api/settings/model", json=_payload())
 
     assert resp.status_code == 500
-    assert settings.oci_enterprise_ai_endpoint == "https://old-enterprise.example"
-    assert settings.oci_enterprise_ai_api_key == "sk-old-secret"
+    assert settings.enterprise_ai_endpoint == "https://old-enterprise.example"
+    assert settings.enterprise_ai_api_key == "sk-old-secret"
 
 
 def test_model_settings_test_enterprise_text_uses_candidate_without_mutating_runtime(
     monkeypatch: MonkeyPatch,
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_endpoint", "https://runtime.example")
+    monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://runtime.example")
     observed_settings: list[Settings] = []
 
     class FakeEnterpriseAiClient:
@@ -1278,7 +1278,7 @@ def test_model_settings_test_enterprise_text_uses_candidate_without_mutating_run
             assert context
             return "接続テスト応答"
 
-    monkeypatch.setattr(settings_routes, "OciEnterpriseAiClient", FakeEnterpriseAiClient)
+    monkeypatch.setattr(settings_routes, "EnterpriseAiClient", FakeEnterpriseAiClient)
     payload = _payload()
 
     resp = client.post(
@@ -1296,9 +1296,9 @@ def test_model_settings_test_enterprise_text_uses_candidate_without_mutating_run
     assert body["status"] == "success"
     assert body["target_type"] == "enterprise_text"
     assert body["details"]["surface"] == "llm"
-    assert observed_settings[0].oci_enterprise_ai_default_text_model == "enterprise-llm"
-    assert observed_settings[0].oci_enterprise_ai_api_key == "sk-update-secret"
-    assert settings.oci_enterprise_ai_endpoint == "https://runtime.example"
+    assert observed_settings[0].enterprise_ai_default_text_model == "enterprise-llm"
+    assert observed_settings[0].enterprise_ai_api_key == "sk-update-secret"
+    assert settings.enterprise_ai_endpoint == "https://runtime.example"
     assert "sk-update-secret" not in resp.text
 
 
@@ -1321,7 +1321,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
             observed.append((self.settings, image_bytes, prompt, mime_type))
             return "画像を確認しました。"
 
-    monkeypatch.setattr(settings_routes, "OciEnterpriseAiClient", FakeEnterpriseAiClient)
+    monkeypatch.setattr(settings_routes, "EnterpriseAiClient", FakeEnterpriseAiClient)
     payload = _payload()
 
     resp = client.post(
@@ -1339,7 +1339,7 @@ def test_model_settings_test_enterprise_vision_uses_smoke_image_payload(
     assert body["status"] == "success"
     assert body["details"]["surface"] == "vision"
     assert body["details"]["response_chars"] == len("画像を確認しました。")
-    assert observed[0][0].oci_enterprise_ai_default_vision_model == "google.gemini-2.5-flash"
+    assert observed[0][0].enterprise_ai_default_vision_model == "google.gemini-2.5-flash"
     assert observed[0][1] == MODEL_TEST_IMAGE_BYTES
     assert observed[0][2]
     assert observed[0][3] == "image/jpeg"
@@ -1358,9 +1358,9 @@ def test_model_settings_test_embedding_uses_candidate_model(
             assert model_purpose_attributes() == {"pr.gen_ai.purpose": "connection.check"}
             assert texts == ["モデル接続テスト"]
             assert input_type == "SEARCH_QUERY"
-            return [[0.0] * get_settings().oci_genai_embedding_dim]
+            return [[0.0] * get_settings().genai_embedding_dim]
 
-    monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
+    monkeypatch.setattr(settings_routes, "GenAiClient", FakeGenAiClient)
     payload = _payload()
     payload["enterprise_ai"]["models"].append(
         {"model_id": "cohere.embed-custom", "display_name": "", "kind": "embedding"}
@@ -1380,8 +1380,8 @@ def test_model_settings_test_embedding_uses_candidate_model(
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["status"] == "success"
-    assert body["details"]["vector_dim"] == get_settings().oci_genai_embedding_dim
-    assert observed_settings[0].oci_genai_embedding_model == "cohere.embed-custom"
+    assert body["details"]["vector_dim"] == get_settings().genai_embedding_dim
+    assert observed_settings[0].genai_embedding_model == "cohere.embed-custom"
 
 
 def test_model_settings_test_returns_real_error_with_troubleshooting_and_masks_secret(
@@ -1392,11 +1392,9 @@ def test_model_settings_test_returns_real_error_with_troubleshooting_and_masks_s
             self.settings = settings
 
         async def generate(self, prompt: str, context: str) -> str:
-            raise RuntimeError(
-                f"401 Unauthorized: bearer {self.settings.oci_enterprise_ai_api_key}"
-            )
+            raise RuntimeError(f"401 Unauthorized: bearer {self.settings.enterprise_ai_api_key}")
 
-    monkeypatch.setattr(settings_routes, "OciEnterpriseAiClient", FailingEnterpriseAiClient)
+    monkeypatch.setattr(settings_routes, "EnterpriseAiClient", FailingEnterpriseAiClient)
     payload = _payload()
 
     resp = client.post(
@@ -1432,16 +1430,16 @@ def test_model_settings_rejects_null_endpoint() -> None:
 def test_update_model_settings_allows_invalid_readiness_fields() -> None:
     payload = _payload()
     payload["enterprise_ai"]["endpoint"] = "enterprise-ai.example"
-    payload["enterprise_ai"]["project_ocid"] = "not-an-ocid"
+    payload["enterprise_ai"]["project_id"] = "not-an-ocid"
     payload["enterprise_ai"]["api_path"] = "responses"
 
     resp = client.patch("/api/settings/model", json=payload)
 
     assert resp.status_code == 200
     settings = get_settings()
-    assert settings.oci_enterprise_ai_endpoint == "enterprise-ai.example"
-    assert settings.oci_enterprise_ai_project_ocid == "not-an-ocid"
-    assert settings.oci_enterprise_ai_llm_path == "responses"
+    assert settings.enterprise_ai_endpoint == "enterprise-ai.example"
+    assert settings.enterprise_ai_project_id == "not-an-ocid"
+    assert settings.enterprise_ai_llm_path == "responses"
 
 
 def test_enterprise_ai_model_settings_defaults_max_retries_to_three() -> None:
@@ -1468,7 +1466,7 @@ def test_model_settings_keeps_existing_api_key_when_secret_input_is_blank(
     monkeypatch: MonkeyPatch,
 ) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "sk-existing-secret")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "sk-existing-secret")
     payload = _payload()
     payload["enterprise_ai"]["api_key"] = ""
     payload["enterprise_ai"]["has_api_key"] = True
@@ -1476,14 +1474,14 @@ def test_model_settings_keeps_existing_api_key_when_secret_input_is_blank(
     resp = client.patch("/api/settings/model", json=payload)
 
     assert resp.status_code == 200
-    assert settings.oci_enterprise_ai_api_key == "sk-existing-secret"
+    assert settings.enterprise_ai_api_key == "sk-existing-secret"
     assert resp.json()["data"]["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is True
     assert "sk-existing-secret" not in resp.text
 
 
 def test_model_settings_clears_existing_api_key(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
-    monkeypatch.setattr(settings, "oci_enterprise_ai_api_key", "sk-existing-secret")
+    monkeypatch.setattr(settings, "enterprise_ai_api_key", "sk-existing-secret")
     payload = _payload()
     payload["enterprise_ai"]["api_key"] = ""
     payload["enterprise_ai"]["has_api_key"] = True
@@ -1492,7 +1490,7 @@ def test_model_settings_clears_existing_api_key(monkeypatch: MonkeyPatch) -> Non
     resp = client.patch("/api/settings/model", json=payload)
 
     assert resp.status_code == 200
-    assert settings.oci_enterprise_ai_api_key == ""
+    assert settings.enterprise_ai_api_key == ""
     assert (
         resp.json()["data"]["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is False
     )
@@ -2151,7 +2149,7 @@ def _payload() -> dict[str, Any]:
     return {
         "enterprise_ai": {
             "endpoint": "https://enterprise-ai.example",
-            "project_ocid": "ocid1.generativeaiproject.oc1..example",
+            "project_id": "ocid1.generativeaiproject.oc1..example",
             "api_key": "sk-update-secret",
             "has_api_key": False,
             "clear_api_key": False,
@@ -2547,7 +2545,7 @@ def test_model_settings_rerank_probe_has_explicit_purpose(monkeypatch: MonkeyPat
             assert query and len(documents) == 2 and top_n == 2
             return [(0, 0.9), (1, 0.1)]
 
-    monkeypatch.setattr(settings_routes, "OciGenAiClient", FakeGenAiClient)
+    monkeypatch.setattr(settings_routes, "GenAiClient", FakeGenAiClient)
     response = asyncio.run(
         settings_routes._run_model_settings_test(
             get_settings(),

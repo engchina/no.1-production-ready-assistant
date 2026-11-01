@@ -23,13 +23,13 @@ BAILIAN = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 def _settings(**overrides: Any) -> Settings:
     base: dict[str, Any] = {
         "nl2sql_feedback_embedding_enabled": True,
-        "oci_genai_embedding_model": "text-embedding-v4",
-        "oci_genai_embed_model_id": "text-embedding-v4",
-        "oci_enterprise_ai_endpoint": "https://api.deepseek.com",
-        "oci_enterprise_ai_api_key": "sk-deepseek",
-        "oci_enterprise_ai_secondary_endpoint": BAILIAN,
-        "oci_enterprise_ai_secondary_api_key": "sk-test",
-        "oci_enterprise_ai_models": [
+        "genai_embedding_model": "text-embedding-v4",
+        "genai_embed_model_id": "text-embedding-v4",
+        "enterprise_ai_endpoint": "https://api.deepseek.com",
+        "enterprise_ai_api_key": "sk-deepseek",
+        "enterprise_ai_secondary_endpoint": BAILIAN,
+        "enterprise_ai_secondary_api_key": "sk-test",
+        "enterprise_ai_models": [
             EnterpriseAiConfiguredModel(model_id="deepseek-flash"),
             EnterpriseAiConfiguredModel(
                 model_id="text-embedding-v4", kind="embedding", connection_id="secondary"
@@ -50,7 +50,7 @@ def test_base_url_and_key_come_from_embedding_model_connection() -> None:
 
 def test_unregistered_embedding_model_uses_primary_connection() -> None:
     """登録に無い埋め込みモデル（.env だけの設定）はプライマリ接続で呼ぶ。"""
-    client = OpenAiCompatibleEmbeddingClient(_settings(oci_enterprise_ai_models=[]))
+    client = OpenAiCompatibleEmbeddingClient(_settings(enterprise_ai_models=[]))
     assert client.base_url() == "https://api.deepseek.com"
     assert client.api_key() == "sk-deepseek"
 
@@ -60,9 +60,9 @@ def test_is_configured_requires_enabled_url_key_and_model() -> None:
     assert OpenAiCompatibleEmbeddingClient(_settings()).is_configured() is True
     for overrides in (
         {"nl2sql_feedback_embedding_enabled": False},
-        {"oci_enterprise_ai_secondary_endpoint": "", "oci_enterprise_ai_endpoint": ""},
-        {"oci_enterprise_ai_secondary_api_key": ""},
-        {"oci_genai_embed_model_id": ""},
+        {"enterprise_ai_secondary_endpoint": "", "enterprise_ai_endpoint": ""},
+        {"enterprise_ai_secondary_api_key": ""},
+        {"genai_embed_model_id": ""},
     ):
         assert OpenAiCompatibleEmbeddingClient(_settings(**overrides)).is_configured() is False
 
@@ -134,7 +134,7 @@ def test_embed_texts_rejects_wrong_dimensions(monkeypatch: pytest.MonkeyPatch) -
 
 def test_embed_texts_requires_configuration() -> None:
     """設定が足りないまま呼んだら、実行せずに失敗する。"""
-    client = OpenAiCompatibleEmbeddingClient(_settings(oci_enterprise_ai_secondary_api_key=""))
+    client = OpenAiCompatibleEmbeddingClient(_settings(enterprise_ai_secondary_api_key=""))
 
     with pytest.raises(EmbeddingClientError, match="設定が不足"):
         client.embed_texts(["a"])

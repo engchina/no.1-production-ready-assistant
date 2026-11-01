@@ -115,8 +115,8 @@ FULL=1 scripts/check-all.sh                                 # CI と同じく全
 ## 既存環境の更新手順（#499 既定のモデルの変数名）
 
 #499 で既定のモデルを「既定のテキストモデル」と「既定の Vision モデル」の 2 つに分け（#566 で 2 つとも必須にした）、
-共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_MODEL` / `_LLM_MODEL` / `_VLM_MODEL` を
-`PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` / `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL` に改名しました（旧名は読みません）。
+共通 `.env` の `PLATFORM_ENTERPRISE_AI_DEFAULT_MODEL` / `_LLM_MODEL` / `_VLM_MODEL` を
+`PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL` / `PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL` に改名しました（旧名は読みません）。
 `platform/.env` に既定のモデルを書いている環境は、backend を止めてから `platform/scripts/migrate_model_env_names.py`（確認 → `--apply`）で
 書き換え、起動し直します。詳細は [platform/README.md の「既存環境の更新手順（#499）」](../platform/README.md#既存環境の更新手順499-既定のモデルの変数名)を参照してください。
 

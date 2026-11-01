@@ -4,7 +4,7 @@ import { expectMainScrollEndsAtContent, expectNoPageOverflow, mockLocalAuth } fr
 const SECONDARY_CONNECTION = {
   connection_id: "secondary",
   endpoint: "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1",
-  project_ocid: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
+  project_id: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
   api_key: "",
   has_api_key: true,
   clear_api_key: false,
@@ -42,7 +42,7 @@ function createModelSettings({
           {
             connection_id: "primary",
             endpoint: "",
-            project_ocid: "ocid1.generativeaiproject.oc1.us-chicago-1.example",
+            project_id: "ocid1.generativeaiproject.oc1.us-chicago-1.example",
             api_key: "",
             has_api_key: true,
             clear_api_key: false,
@@ -578,7 +578,7 @@ test(`接続はプライマリ接続とセカンダリ接続のタブで切り�
     expect.objectContaining({
       connection_id: "secondary",
       endpoint: "https://secondary.example/openai/v1",
-      project_ocid: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
+      project_id: "ocid1.generativeaiproject.oc1.us-chicago-1.secondary",
       api_key: "sk-secondary-input",
     }),
   ]);
@@ -682,7 +682,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
     expect.objectContaining({
       connection_id: "tertiary",
       endpoint: "https://api.openai.com/v1",
-      project_ocid: "",
+      project_id: "",
       api_key: "sk-openai-input",
     }),
   ]);

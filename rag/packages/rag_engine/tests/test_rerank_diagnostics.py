@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.resources.rerank_diagnostics import bind_rerank_context, current_rerank_receipt
 from rag_engine.resources.tracing import bind_trace_observer
 
@@ -21,10 +21,10 @@ def test_direct_sdk_retry_keeps_request_and_actual_attempts(monkeypatch):
             raise TimeoutError("private failure")
         return {"results": [{"index": 0, "relevance_score": 0.9}]}
 
-    monkeypatch.setattr(oci, "_rerank_request", rerank_request)
-    monkeypatch.setattr(oci, "_embedding_api_key", lambda settings, **_: "synthetic-key")
-    monkeypatch.setattr(oci, "_is_retryable_error", lambda exc: True)
-    monkeypatch.setattr(oci.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(model_api, "_rerank_request", rerank_request)
+    monkeypatch.setattr(model_api, "_embedding_api_key", lambda settings, **_: "synthetic-key")
+    monkeypatch.setattr(model_api, "_is_retryable_error", lambda exc: True)
+    monkeypatch.setattr(model_api.time, "sleep", lambda seconds: None)
     settings = SimpleNamespace(
         rerank_model="model-a",
         rerank_base_url="https://synthetic.test/compatible-api/v1",
@@ -46,7 +46,7 @@ def test_direct_sdk_retry_keeps_request_and_actual_attempts(monkeypatch):
         bind_trace_observer(observer),
         bind_rerank_context(phase="crag_recovery", batch_id="batch-a", query_index=1, query_role="supplement") as receipt,
     ):
-        ranks = oci._rerank_text_with_retry("Ａ  B", ["private document"], settings, top_n=1)
+        ranks = model_api._rerank_text_with_retry("Ａ  B", ["private document"], settings, top_n=1)
     assert [{key: value for key, value in row.items() if key != "url"} for row in private_requests] == requests
     assert len(private_responses) == 1 and private_responses[0]["results"][0]["index"] == 0
     assert ranks[0].index == 0

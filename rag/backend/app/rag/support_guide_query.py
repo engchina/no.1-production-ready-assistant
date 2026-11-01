@@ -20,7 +20,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
-from app.clients.oci_genai import EmbeddingInputType, OciGenAiClient
+from app.clients.genai import EmbeddingInputType, GenAiClient
 from app.clients.oracle import OracleClient
 from app.clients.support_guide_store import StoredIntentEmbeddings, SupportGuideStore
 from app.config import Settings
@@ -41,7 +41,7 @@ class GuideEmbedder(Protocol):
 
 def guide_embedder(settings: Settings) -> GuideEmbedder:
     """意味の照合の埋め込みの呼び出し先（テストで差し替える）。"""
-    return OciGenAiClient(settings=settings)
+    return GenAiClient(settings=settings)
 
 
 def examples_sha256(content: SupportGuideContent) -> str:
@@ -55,8 +55,8 @@ def _fresh(
 ) -> bool:
     return (
         stored.revision == revision
-        and stored.model_id == settings.oci_genai_embedding_model
-        and stored.dimension == settings.oci_genai_embedding_dim
+        and stored.model_id == settings.genai_embedding_model
+        and stored.dimension == settings.genai_embedding_dim
         and stored.examples_sha256 == examples_sha256(content)
         and len(stored.vectors) == len(content.goal.intent_examples)
     )
@@ -83,8 +83,8 @@ async def store_intent_embeddings(
         await SupportGuideStore(oracle).save_intent_embeddings(
             guide_id,
             revision,
-            model_id=settings.oci_genai_embedding_model,
-            dimension=settings.oci_genai_embedding_dim,
+            model_id=settings.genai_embedding_model,
+            dimension=settings.genai_embedding_dim,
             examples_sha256=examples_sha256(content),
             vectors=vectors,
         )
@@ -132,8 +132,8 @@ async def _example_vectors(
             await store.save_intent_embeddings(
                 guide_id,
                 revision,
-                model_id=settings.oci_genai_embedding_model,
-                dimension=settings.oci_genai_embedding_dim,
+                model_id=settings.genai_embedding_model,
+                dimension=settings.genai_embedding_dim,
                 examples_sha256=examples_sha256(content),
                 vectors=vectors[guide_id],
             )

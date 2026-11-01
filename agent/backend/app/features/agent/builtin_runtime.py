@@ -367,7 +367,7 @@ _CONTEXT_LIMITS_ATTR = "_agent_context_limits"
 _STATIC_INSTRUCTIONS_ATTR = "_agent_static_instructions"
 # いまモデルを呼んでいる Run の入力の管理（`_ContextWindow`）。呼び出しの直前に SDK の
 # `call_model_input_filter` が入れ、プロバイダの入力の超過の送り直し
-# （`_OciResponses.create`）とモデルの呼び出しの span の属性（#2583）が読む。
+# （`_CompatResponses.create`）とモデルの呼び出しの span の属性（#2583）が読む。
 _ACTIVE_CONTEXT_WINDOW: ContextVar[_ContextWindow | None] = ContextVar(
     "agent_context_window", default=None
 )
@@ -388,7 +388,7 @@ class ModelTarget:
 
     model_id: str
     endpoint: str
-    project_ocid: str
+    project_id: str
     api_key: str
     # 推論（思考）の量（#1425。システム設定 > モデル の登録モデルの値）。none は送らない。
     reasoning_effort: str = ""
@@ -441,7 +441,7 @@ def resolve_model_target(model_id: str = "") -> ModelTarget:
         model_id=resolved,
         # OpenAI 互換 API の base URL（Endpoint URL を入力どおり。#1440。platform の関数）。
         endpoint=connection.base_url,
-        project_ocid=connection.project_ocid,
+        project_id=connection.project_id,
         api_key=connection.api_key,
         reasoning_effort=enterprise_ai_reasoning_effort(settings, resolved),
         # モデルの出力の上限と入力の上限の小さい方（#1719。prompt は会話で伸びるので見積もらない）。
@@ -522,7 +522,7 @@ def _omit_reasoning_text(kwargs: dict[str, Any]) -> dict[str, Any]:
     return {**kwargs, "input": sanitized} if changed else kwargs
 
 
-def _oci_request(kwargs: dict[str, Any]) -> dict[str, Any]:
+def _compat_request(kwargs: dict[str, Any]) -> dict[str, Any]:
     """`responses.create` の引数を OCI Enterprise AI が受け付ける形にする。"""
     return _omit_reasoning_text(_omit_empty_tools(kwargs))
 
@@ -616,7 +616,7 @@ def _raise_for_incomplete(
     SDK は未完了を `ModelBehaviorError`（型名だけが Run の失敗に残る）にするため、その前に
     platform の `enterprise_ai_incomplete_message` の文で失敗させる。送った上限はもうモデルの
     出力の上限（`max_output_tokens`）なので、広げて送り直さない（推論の量を下げる送り直しは
-    `_OciResponses.create`）。
+    `_CompatResponses.create`）。
     """
     raise BuiltinRuntimeError(
         MODEL_OUTPUT_INCOMPLETE_CODE,
@@ -768,19 +768,19 @@ class _ObservedResponseManager:
             self._scope.__exit__(*args)
 
 
-class _OciStreamingResponses:
+class _CompatStreamingResponses:
     def __init__(self, inner: Any) -> None:
         self._inner = inner
 
     def create(self, **kwargs: Any) -> Any:
-        request = _oci_request(kwargs)
+        request = _compat_request(kwargs)
         return _ObservedResponseManager(self._inner.create(**request), request)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
 
-class _OciResponses:
+class _CompatResponses:
     """`responses.create` を OCI 向けに直し、未完了の応答を扱う。
 
     ``lower_effort_on_incomplete`` が偽なら、出力の上限で未完了でも送り直さない（推論の量を下げる
@@ -794,7 +794,7 @@ class _OciResponses:
         self._lower_effort_on_incomplete = lower_effort_on_incomplete
 
     async def create(self, **kwargs: Any) -> Any:
-        request = _oci_request(kwargs)
+        request = _compat_request(kwargs)
         attempt = 0
         lowered_effort = False
         transient_retried = False
@@ -916,14 +916,14 @@ class _OciResponses:
             return response
 
     @property
-    def with_streaming_response(self) -> _OciStreamingResponses:
-        return _OciStreamingResponses(self._inner.with_streaming_response)
+    def with_streaming_response(self) -> _CompatStreamingResponses:
+        return _CompatStreamingResponses(self._inner.with_streaming_response)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._inner, name)
 
 
-class _OciCompatClient:
+class _CompatClient:
     """`responses.create` の引数だけを OCI Enterprise AI 向けに直し、他はそのまま渡す。"""
 
     def __init__(self, inner: AsyncOpenAI, *, lower_effort_on_incomplete: bool = True) -> None:
@@ -931,8 +931,8 @@ class _OciCompatClient:
         self._lower_effort_on_incomplete = lower_effort_on_incomplete
 
     @property
-    def responses(self) -> _OciResponses:
-        return _OciResponses(
+    def responses(self) -> _CompatResponses:
+        return _CompatResponses(
             self._inner.responses, lower_effort_on_incomplete=self._lower_effort_on_incomplete
         )
 
@@ -940,7 +940,7 @@ class _OciCompatClient:
         return getattr(self._inner, name)
 
 
-class OciResponsesModel(OpenAIResponsesModel):
+class CompatResponsesModel(OpenAIResponsesModel):
     """OCI Enterprise AI の Responses API 用（SDK の `_get_client` を包む。SDK は版を固定する）。"""
 
     # 出力の上限で未完了の応答を、推論の量を下げて送り直すか（#2023）。
@@ -949,7 +949,7 @@ class OciResponsesModel(OpenAIResponsesModel):
     def _get_client(self) -> AsyncOpenAI:
         return cast(
             AsyncOpenAI,
-            _OciCompatClient(
+            _CompatClient(
                 super()._get_client(),
                 lower_effort_on_incomplete=self.lower_effort_on_incomplete,
             ),
@@ -976,7 +976,7 @@ def enterprise_ai_http_client(timeout: float | None = None) -> DefaultAsyncHttpx
 
 
 def _default_model_factory(target: ModelTarget) -> Model:
-    headers = {"OpenAI-Project": target.project_ocid} if target.project_ocid else None
+    headers = {"OpenAI-Project": target.project_id} if target.project_id else None
     client = AsyncOpenAI(
         base_url=target.endpoint,
         api_key=target.api_key,
@@ -986,7 +986,7 @@ def _default_model_factory(target: ModelTarget) -> Model:
         ),
         http_client=enterprise_ai_http_client(),
     )
-    model = OciResponsesModel(model=target.model_id, openai_client=client)
+    model = CompatResponsesModel(model=target.model_id, openai_client=client)
     # 上限つきの並行の実行器を通す呼び出し（SDK の再試行 0）は、送り直しを実行器に任せる（#2023）。
     model.lower_effort_on_incomplete = target.sdk_max_retries != 0
     return model

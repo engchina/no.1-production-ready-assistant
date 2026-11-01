@@ -96,7 +96,7 @@ def _image_reader(
 
         from app.features.agent.builtin_runtime import enterprise_ai_http_client
 
-        headers = {"OpenAI-Project": connection.project_ocid} if connection.project_ocid else None
+        headers = {"OpenAI-Project": connection.project_id} if connection.project_id else None
         client = AsyncOpenAI(
             base_url=connection.base_url,
             api_key=connection.api_key,

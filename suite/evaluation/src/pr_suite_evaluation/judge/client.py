@@ -7,7 +7,7 @@ platform の `pr_enterprise_ai` の規則を使う。接続とモデルは suite
 - `SUITE_EVALUATION_JUDGE_ENDPOINT`: OCI Enterprise AI の Endpoint URL（例
   `https://…/openai/v1`）
 - `SUITE_EVALUATION_JUDGE_API_KEY`: API キー（結果・ログに出さない）
-- `SUITE_EVALUATION_JUDGE_PROJECT_OCID`: Project OCID（入れたときだけ `OpenAI-Project` ヘッダーを
+- `SUITE_EVALUATION_JUDGE_PROJECT_ID`: Project OCID（入れたときだけ `OpenAI-Project` ヘッダーを
   送る）
 - `SUITE_EVALUATION_JUDGE_MODEL`: 判定のモデルの ID
 - `SUITE_EVALUATION_JUDGE_MAX_OUTPUT_TOKENS`（任意）・
@@ -75,7 +75,7 @@ class JudgeModelConfig:
     endpoint: str
     model: str
     api_key: str = field(repr=False)
-    project_ocid: str = ""
+    project_id: str = ""
     max_output_tokens: int | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
 
@@ -107,7 +107,7 @@ class JudgeModelConfig:
             endpoint=value("ENDPOINT"),
             model=value("MODEL"),
             api_key=value("API_KEY"),
-            project_ocid=value("PROJECT_OCID"),
+            project_id=value("PROJECT_ID"),
             max_output_tokens=optional_int("MAX_OUTPUT_TOKENS"),
             timeout_seconds=float(timeout) if timeout else DEFAULT_TIMEOUT_SECONDS,
         )
@@ -115,7 +115,7 @@ class JudgeModelConfig:
     def provenance(self) -> dict[str, Any]:
         """記録する設定（Endpoint はホストだけ。API キー・Project OCID は記録しない）。"""
         return {
-            "provider": "oci_enterprise_ai",
+            "provider": "enterprise_ai",
             "endpoint_host": urlsplit(self.endpoint).hostname or "",
             "model": self.model,
             "max_output_tokens": self.max_output_tokens,
@@ -169,8 +169,8 @@ class EnterpriseAiJudgeClient:
         if self._config.max_output_tokens is not None:
             body["max_output_tokens"] = self._config.max_output_tokens
         headers = {"Authorization": f"Bearer {self._config.api_key}"}
-        if self._config.project_ocid:
-            headers["OpenAI-Project"] = self._config.project_ocid
+        if self._config.project_id:
+            headers["OpenAI-Project"] = self._config.project_id
         try:
             response = self._client.post(
                 enterprise_ai_request_url(self._config.endpoint),

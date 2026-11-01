@@ -107,7 +107,7 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         builtin_runtime,
         "resolve_model_target",
         lambda model_id="": ModelTarget(
-            model_id=model_id or "m", endpoint="https://oci.example", project_ocid="", api_key="k"
+            model_id=model_id or "m", endpoint="https://llm.example", project_id="", api_key="k"
         ),
     )
     monkeypatch.setattr(builtin_runtime, "model_factory", lambda _target: model)

@@ -26,7 +26,7 @@ uv run python scripts/nl2sql_manual_integration.py --diagnostics-only --json-rep
 ```
 
 Enterprise AI Direct-required check. This fails fast when
-`PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT`, `PLATFORM_OCI_ENTERPRISE_AI_API_KEY`, or an Enterprise AI
+`PLATFORM_ENTERPRISE_AI_ENDPOINT`, `PLATFORM_ENTERPRISE_AI_API_KEY`, or an Enterprise AI
 model is missing, and also fails if `enterprise_ai_direct` falls back to
 deterministic mode:
 

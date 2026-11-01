@@ -33,7 +33,7 @@ class PostJson(Protocol):
     def __call__(self, url: str, body: dict[str, Any]) -> dict[str, Any]: ...
 
 
-class OciGenAiClient:
+class GenAiClient:
     """OpenAI 互換の API による埋め込み / 再ランクのクライアント（#8）。"""
 
     def __init__(
@@ -53,7 +53,7 @@ class OciGenAiClient:
         *,
         input_type: EmbeddingInputType = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
-        """テキストを `oci_genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元のベクトルに埋め込む。
+        """テキストを `genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元のベクトルに埋め込む。
 
         `input_type` は呼び出し側の互換のために受け取るだけ（OpenAI 互換の `/embeddings`
         に query / document の区別は無い）。
@@ -64,9 +64,9 @@ class OciGenAiClient:
             return []
         url = f"{self._base_url(rerank=False)}/embeddings"
         body: dict[str, Any] = {
-            "model": self._settings.oci_genai_embedding_model,
+            "model": self._settings.genai_embedding_model,
             "input": texts,
-            "dimensions": self._settings.oci_genai_embedding_dim,
+            "dimensions": self._settings.genai_embedding_dim,
         }
         payload = await self._sdk_call_runner(lambda: self._post(url, body, rerank=False))
         rows = payload.get("data")
@@ -75,7 +75,7 @@ class OciGenAiClient:
         return _validate_embedding_batch(
             _embedding_rows_in_input_order(rows, expected_count=len(texts)),
             expected_count=len(texts),
-            expected_dim=self._settings.oci_genai_embedding_dim,
+            expected_dim=self._settings.genai_embedding_dim,
         )
 
     async def rerank(self, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
@@ -86,7 +86,7 @@ class OciGenAiClient:
             return []
         url = f"{self._base_url(rerank=True)}/reranks"
         body: dict[str, Any] = {
-            "model": self._settings.oci_genai_rerank_model,
+            "model": self._settings.genai_rerank_model,
             "query": query,
             "documents": documents,
             "top_n": top_n,
@@ -140,7 +140,7 @@ class OciGenAiClient:
                 "Authorization": f"Bearer {self._api_key(rerank=rerank)}",
             },
         )
-        timeout = max(1, int(self._settings.oci_enterprise_ai_timeout_seconds or 60))
+        timeout = max(1, int(self._settings.enterprise_ai_timeout_seconds or 60))
         # HTTPError はそのまま伝播させる（`status` を持つので呼び出し側が種類を判断できる）。
         # file:// などを開かないよう、scheme を http(s) に限定する（bandit B310）。
         if request.type not in ("http", "https"):

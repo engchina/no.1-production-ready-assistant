@@ -9,7 +9,7 @@ from pr_backend_core.observability.model_purpose import (
     model_call_purpose,
     model_purpose_attributes,
 )
-from rag_engine.adapters import oci as engine_oci
+from rag_engine.adapters import model_api as engine_api
 
 from app.config import Settings
 from app.rag.chunking import Chunk
@@ -41,20 +41,20 @@ def test_picture_reading_sets_purpose_for_both_image_paths_and_restores_caller(
             raise failure
         return SimpleNamespace(model_dump=lambda **kwargs: result)
 
-    monkeypatch.setattr(engine_oci, "_validated_llm_provider", lambda *args, **kwargs: provider)
-    monkeypatch.setattr(engine_oci, "_parse_image_with_retry", parse)
-    monkeypatch.setattr(engine_oci, "_parse_multimodal_with_retry", parse)
+    monkeypatch.setattr(engine_api, "_validated_llm_provider", lambda *args, **kwargs: provider)
+    monkeypatch.setattr(engine_api, "_parse_image_with_retry", parse)
+    monkeypatch.setattr(engine_api, "_parse_multimodal_with_retry", parse)
     with model_call_purpose("answer.audit"):
         kwargs: dict[str, Any] = {"context_image_paths": [context]} if multimodal else {}
         if failed:
             with pytest.raises(RuntimeError) as raised:
-                engine_oci.describe_picture(
+                engine_api.describe_picture(
                     target, {}, cast(Any, settings), rendered_prompt="固定の合成指示", **kwargs
                 )
             assert raised.value is failure
         else:
             assert (
-                engine_oci.describe_picture(
+                engine_api.describe_picture(
                     target, {}, cast(Any, settings), rendered_prompt="固定の合成指示", **kwargs
                 )
                 is result

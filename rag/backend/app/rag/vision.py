@@ -54,7 +54,7 @@ from rag_engine.parsing.rendering import (
     get_source_page_count,
     prepare_source_for_analysis,
 )
-from rag_parser_core.oci_enterprise_ai import sdk_retries_disabled
+from rag_parser_core.enterprise_ai import sdk_retries_disabled
 from rag_pipeline_core.chunking import table_vision_supplement
 
 from app.schemas.extraction import (
@@ -108,7 +108,7 @@ _CATEGORY_BY_KIND = {
 
 
 class VisionImageReader(Protocol):
-    """既定の Vision モデルを呼ぶ client(``OciEnterpriseAiClient.generate_from_images``)。"""
+    """既定の Vision モデルを呼ぶ client(``EnterpriseAiClient.generate_from_images``)。"""
 
     def generate_from_images(
         self,
@@ -178,7 +178,7 @@ class EnterpriseAiPictureDescriber:
         project_id: str = "",
         caller: BoundedCaller | None = None,
     ) -> None:
-        from rag_engine.adapters.oci import VISION_SYSTEM_PROMPT
+        from rag_engine.adapters.model_api import VISION_SYSTEM_PROMPT
         from rag_engine.resources.runtime import resolve_prompt
 
         self.system_prompt = resolve_prompt("picture_description.system", VISION_SYSTEM_PROMPT)
@@ -188,7 +188,7 @@ class EnterpriseAiPictureDescriber:
         self._active = 0
         self._idle: asyncio.Event | None = None
         self._provider = SimpleNamespace(
-            provider_id="oci_enterprise_ai",
+            provider_id="enterprise_ai",
             model=model_id,
             region="",
             base_url=endpoint,

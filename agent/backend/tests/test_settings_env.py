@@ -18,7 +18,7 @@ def test_settings_env_names_split_platform_and_agent() -> None:
     assert names["oracle_dsn"] == "PLATFORM_ORACLE_DSN"
     assert names["local_storage_dir"] == "PLATFORM_LOCAL_STORAGE_DIR"
     assert names["model_settings_file"] == "PLATFORM_MODEL_SETTINGS_FILE"
-    assert names["oci_enterprise_ai_api_key"] == "PLATFORM_OCI_ENTERPRISE_AI_API_KEY"
+    assert names["enterprise_ai_api_key"] == "PLATFORM_ENTERPRISE_AI_API_KEY"
     assert names["service_name"] == "AGENT_SERVICE_NAME"
     assert names["log_level"] == "AGENT_LOG_LEVEL"
     assert names["cors_origins"] == "AGENT_CORS_ORIGINS"
@@ -100,7 +100,7 @@ def test_platform_and_product_env_examples_load(monkeypatch: pytest.MonkeyPatch)
 
     assert settings.cors_origins
     assert all(origin.startswith("http://") for origin in settings.cors_origins)
-    assert settings.oci_enterprise_ai_models == []
+    assert settings.enterprise_ai_models == []
     assert settings.oracle_password in ("", None)
 
 
@@ -192,7 +192,7 @@ _SHARED_ENV_NAMES = (
     "PLATFORM_ORACLE_USER",
     "PLATFORM_ORACLE_WALLET_DIR",
     "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES",
-    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+    "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
 )
 
 
@@ -250,7 +250,7 @@ def test_platform_env_reload_keeps_model_settings_file_values(
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text(
-        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_LOCAL_STORAGE_DIR=/data/a\n",
+        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_LOCAL_STORAGE_DIR=/data/a\n",
         encoding="utf-8",
     )
     (tmp_path / "model-settings.json").write_text(
@@ -271,16 +271,16 @@ def test_platform_env_reload_keeps_model_settings_file_values(
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert settings.oci_enterprise_ai_default_text_model == "json-model"
+        assert settings.enterprise_ai_default_text_model == "json-model"
 
         platform_env.write_text(
-            "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
+            "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
             "PLATFORM_LOCAL_STORAGE_DIR=/data/b\n",
             encoding="utf-8",
         )
         reloaded = app_settings.get_settings()
 
         assert reloaded.local_storage_dir == "/data/b"
-        assert reloaded.oci_enterprise_ai_default_text_model == "json-model"
+        assert reloaded.enterprise_ai_default_text_model == "json-model"
     finally:
         app_settings.reset_settings_cache()

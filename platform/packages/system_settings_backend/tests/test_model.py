@@ -31,37 +31,37 @@ class FakeSettings(ModelSecretStateMixin):
     """製品の Settings のうちモデル設定 API が読む属性だけを持つ。"""
 
     model_settings_file: str = "model-settings.json"
-    oci_enterprise_ai_endpoint: str = ""
-    oci_enterprise_ai_project_ocid: str = ""
-    oci_enterprise_ai_api_key: str = ""
-    oci_enterprise_ai_secondary_endpoint: str = ""
-    oci_enterprise_ai_secondary_project_ocid: str = ""
-    oci_enterprise_ai_secondary_api_key: str = ""
-    oci_enterprise_ai_tertiary_endpoint: str = ""
-    oci_enterprise_ai_tertiary_project_ocid: str = ""
-    oci_enterprise_ai_tertiary_api_key: str = ""
-    oci_enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
-    oci_enterprise_ai_default_text_model: str = ""
-    oci_enterprise_ai_default_vision_model: str = ""
-    oci_enterprise_ai_default_judge_model: str = ""
-    oci_enterprise_ai_llm_path: str = "/responses"
-    oci_enterprise_ai_vlm_path: str = "/responses"
-    oci_enterprise_ai_vlm_input_mode: str = "auto"
-    oci_enterprise_ai_llm_payload_template: str = ""
-    oci_enterprise_ai_vlm_payload_template: str = ""
-    oci_enterprise_ai_llm_response_path: str = ""
-    oci_enterprise_ai_vlm_response_path: str = ""
-    oci_enterprise_ai_timeout_seconds: float = 600.0
-    oci_enterprise_ai_max_retries: int = 3
-    oci_genai_embedding_model: str = "cohere.embed-v4.0"
-    oci_genai_embedding_dim: int = EMBEDDING_DIMENSIONS
-    oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
+    enterprise_ai_endpoint: str = ""
+    enterprise_ai_project_id: str = ""
+    enterprise_ai_api_key: str = ""
+    enterprise_ai_secondary_endpoint: str = ""
+    enterprise_ai_secondary_project_id: str = ""
+    enterprise_ai_secondary_api_key: str = ""
+    enterprise_ai_tertiary_endpoint: str = ""
+    enterprise_ai_tertiary_project_id: str = ""
+    enterprise_ai_tertiary_api_key: str = ""
+    enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
+    enterprise_ai_default_text_model: str = ""
+    enterprise_ai_default_vision_model: str = ""
+    enterprise_ai_default_judge_model: str = ""
+    enterprise_ai_llm_path: str = "/responses"
+    enterprise_ai_vlm_path: str = "/responses"
+    enterprise_ai_vlm_input_mode: str = "auto"
+    enterprise_ai_llm_payload_template: str = ""
+    enterprise_ai_vlm_payload_template: str = ""
+    enterprise_ai_llm_response_path: str = ""
+    enterprise_ai_vlm_response_path: str = ""
+    enterprise_ai_timeout_seconds: float = 600.0
+    enterprise_ai_max_retries: int = 3
+    genai_embedding_model: str = "cohere.embed-v4.0"
+    genai_embedding_dim: int = EMBEDDING_DIMENSIONS
+    genai_rerank_model: str = "cohere.rerank-v4.0-fast"
 
 
 PAYLOAD: dict[str, Any] = {
     "enterprise_ai": {
         "endpoint": "https://example.invalid/openai/v1",
-        "project_ocid": "ocid1.generativeaiproject.oc1..aaaa",
+        "project_id": "ocid1.generativeaiproject.oc1..aaaa",
         "api_key": "sk-new",
         "models": [
             {"model_id": "llm-a", "display_name": "A", "vision_enabled": False},
@@ -91,7 +91,7 @@ def make_store(tmp_path: Path) -> ModelSettingsStore:
 
 def make_client(settings: FakeSettings, store: ModelSettingsStore, **kwargs: Any) -> TestClient:
     async def run_test(candidate: Any, request: ModelSettingsTestRequest) -> dict[str, Any]:
-        return {"key": candidate.oci_enterprise_ai_api_key, "model": request.model_id}
+        return {"key": candidate.enterprise_ai_api_key, "model": request.model_id}
 
     def get_settings() -> FakeSettings:
         store.reload_if_changed(settings)
@@ -129,22 +129,22 @@ def test_patch_saves_key_only_in_env(tmp_path: Path) -> None:
     assert set(document) == {"version", "enterprise_ai"}
     assert stat.S_IMODE((tmp_path / "model-settings.json").stat().st_mode) == 0o600
     assert dotenv_values(tmp_path / ".env")[ENTERPRISE_AI_API_KEY_ENV] == "sk-new"
-    assert settings.oci_enterprise_ai_api_key == "sk-new"
-    assert settings.oci_enterprise_ai_default_vision_model == "vlm-b"
+    assert settings.enterprise_ai_api_key == "sk-new"
+    assert settings.enterprise_ai_default_vision_model == "vlm-b"
     assert document["enterprise_ai"]["default_text_model_id"] == "llm-a"
     assert document["enterprise_ai"]["default_vision_model_id"] == "vlm-b"
     assert "default_model_id" not in document["enterprise_ai"]
 
 
 def test_blank_key_keeps_current_and_clear_removes_it(tmp_path: Path) -> None:
-    settings = FakeSettings(oci_enterprise_ai_api_key="sk-old")
+    settings = FakeSettings(enterprise_ai_api_key="sk-old")
     store = make_store(tmp_path)
     store.load(settings)
     client = make_client(settings, store)
     keep = {**PAYLOAD, "enterprise_ai": {**PAYLOAD["enterprise_ai"], "api_key": ""}}
 
     assert client.patch("/api/settings/model", json=keep).status_code == 200
-    assert settings.oci_enterprise_ai_api_key == "sk-old"
+    assert settings.enterprise_ai_api_key == "sk-old"
 
     clear = {**PAYLOAD, "enterprise_ai": {**keep["enterprise_ai"], "clear_api_key": True}}
     data = client.patch("/api/settings/model", json=clear).json()["data"]
@@ -159,7 +159,7 @@ def test_legacy_json_key_is_used_until_saved_to_env(tmp_path: Path) -> None:
     settings = FakeSettings()
     store = make_store(tmp_path)
     store.load(settings)
-    assert settings.oci_enterprise_ai_api_key == "sk-legacy"
+    assert settings.enterprise_ai_api_key == "sk-legacy"
     assert settings.model_secret_source == "legacy_json"
     assert settings.legacy_model_secret_detected is True
 
@@ -175,9 +175,9 @@ def test_legacy_json_key_is_used_until_saved_to_env(tmp_path: Path) -> None:
 def test_environment_key_wins_over_legacy_json(tmp_path: Path) -> None:
     legacy = {"version": 1, "enterprise_ai": {"api_key": "sk-legacy"}}
     (tmp_path / "model-settings.json").write_text(json.dumps(legacy), encoding="utf-8")
-    settings = FakeSettings(oci_enterprise_ai_api_key="sk-env")
+    settings = FakeSettings(enterprise_ai_api_key="sk-env")
     make_store(tmp_path).load(settings)
-    assert settings.oci_enterprise_ai_api_key == "sk-env"
+    assert settings.enterprise_ai_api_key == "sk-env"
     assert settings.model_secret_source == "environment"
     assert settings.legacy_model_secret_detected is True
 
@@ -186,7 +186,7 @@ def test_json_failure_restores_env_and_keeps_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / ".env").write_text(f"{ENTERPRISE_AI_API_KEY_ENV}=sk-old\n", encoding="utf-8")
-    settings = FakeSettings(oci_enterprise_ai_api_key="sk-old")
+    settings = FakeSettings(enterprise_ai_api_key="sk-old")
     store = make_store(tmp_path)
     store.load(settings)
 
@@ -198,8 +198,8 @@ def test_json_failure_restores_env_and_keeps_runtime(
 
     assert response.status_code == 500
     assert dotenv_values(tmp_path / ".env")[ENTERPRISE_AI_API_KEY_ENV] == "sk-old"
-    assert settings.oci_enterprise_ai_api_key == "sk-old"
-    assert settings.oci_enterprise_ai_endpoint == ""
+    assert settings.enterprise_ai_api_key == "sk-old"
+    assert settings.enterprise_ai_endpoint == ""
 
 
 def test_other_worker_picks_up_saved_key_and_settings(tmp_path: Path) -> None:
@@ -211,7 +211,7 @@ def test_other_worker_picks_up_saved_key_and_settings(tmp_path: Path) -> None:
     make_client(worker_a, store_a).patch("/api/settings/model", json=PAYLOAD)
     data = make_client(worker_b, store_b).get("/api/settings/model").json()["data"]
 
-    assert worker_b.oci_enterprise_ai_api_key == "sk-new"
+    assert worker_b.enterprise_ai_api_key == "sk-new"
     assert data["settings"]["enterprise_ai"]["default_text_model_id"] == "llm-a"
     assert data["settings"]["enterprise_ai"]["default_vision_model_id"] == "vlm-b"
 
@@ -240,7 +240,7 @@ def test_get_without_models_returns_one_blank_row(tmp_path: Path) -> None:
 
 
 def test_model_test_uses_unsaved_payload_and_masks_secret(tmp_path: Path) -> None:
-    settings = FakeSettings(oci_enterprise_ai_api_key="sk-saved")
+    settings = FakeSettings(enterprise_ai_api_key="sk-saved")
     store = make_store(tmp_path)
     store.load(settings)
     request = {"settings": PAYLOAD, "target_type": "enterprise_vision", "model_id": "llm-a"}
@@ -250,9 +250,9 @@ def test_model_test_uses_unsaved_payload_and_masks_secret(tmp_path: Path) -> Non
     assert ok["details"] == {"key": "sk-new", "model": "llm-a"}
 
     async def fail(candidate: Any, _request: ModelSettingsTestRequest) -> dict[str, Any]:
-        assert candidate.oci_enterprise_ai_default_vision_model == "llm-a"
+        assert candidate.enterprise_ai_default_vision_model == "llm-a"
         assert shared_model.enterprise_ai_vision_model_id(candidate) == "llm-a"
-        raise RuntimeError(f"401 Unauthorized for {candidate.oci_enterprise_ai_api_key}")
+        raise RuntimeError(f"401 Unauthorized for {candidate.enterprise_ai_api_key}")
 
     failed = (
         make_client(settings, store, run_model_test=fail)
@@ -263,7 +263,7 @@ def test_model_test_uses_unsaved_payload_and_masks_secret(tmp_path: Path) -> Non
     assert "sk-new" not in failed["raw_error"]
     assert "<secret>" in failed["raw_error"]
     assert any("認証エラー" in tip for tip in failed["troubleshooting"])
-    assert settings.oci_enterprise_ai_endpoint == ""
+    assert settings.enterprise_ai_endpoint == ""
 
 
 def test_model_test_requires_model_id(tmp_path: Path) -> None:
@@ -309,21 +309,21 @@ def test_saved_key_overrides_process_environment_key(
 ) -> None:
     """画面で保存した key はプロセスの環境変数より優先し、削除すると環境変数へ戻る。"""
     monkeypatch.setenv(ENTERPRISE_AI_API_KEY_ENV, "sk-process")
-    settings = FakeSettings(oci_enterprise_ai_api_key="sk-process")
+    settings = FakeSettings(enterprise_ai_api_key="sk-process")
     store = make_store(tmp_path)
     store.load(settings)
     client = make_client(settings, store)
 
     client.patch("/api/settings/model", json=PAYLOAD)
     data = client.get("/api/settings/model").json()["data"]
-    assert settings.oci_enterprise_ai_api_key == "sk-new"
+    assert settings.enterprise_ai_api_key == "sk-new"
     assert data["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is True
 
     clear = {**PAYLOAD, "enterprise_ai": {**PAYLOAD["enterprise_ai"], "clear_api_key": True}}
     cleared = client.patch("/api/settings/model", json=clear).json()["data"]
     assert cleared["settings"]["enterprise_ai"]["connections"][0]["has_api_key"] is True
     client.get("/api/settings/model")
-    assert settings.oci_enterprise_ai_api_key == "sk-process"
+    assert settings.enterprise_ai_api_key == "sk-process"
 
 
 def test_seed_is_not_kept(tmp_path: Path) -> None:
@@ -366,7 +366,7 @@ def test_broken_json_is_reported(tmp_path: Path) -> None:
 
 def test_catalog_falls_back_to_default_text_and_vision_ids() -> None:
     settings = FakeSettings(
-        oci_enterprise_ai_default_text_model="llm", oci_enterprise_ai_default_vision_model="vlm"
+        enterprise_ai_default_text_model="llm", enterprise_ai_default_vision_model="vlm"
     )
     assert [
         (m.model_id, m.vision_enabled) for m in shared_model.enterprise_ai_model_catalog(settings)
@@ -385,14 +385,14 @@ MODELS = [
 
 def test_resolution_uses_text_model_and_falls_back_to_vision_model() -> None:
     settings = FakeSettings(
-        oci_enterprise_ai_models=MODELS,
-        oci_enterprise_ai_default_text_model="llm-a",
-        oci_enterprise_ai_default_vision_model="vlm-b",
+        enterprise_ai_models=MODELS,
+        enterprise_ai_default_text_model="llm-a",
+        enterprise_ai_default_vision_model="vlm-b",
     )
     assert shared_model.enterprise_ai_default_model_id(settings) == "llm-a"
     assert shared_model.enterprise_ai_vision_model_id(settings) == "vlm-b"
 
-    settings.oci_enterprise_ai_default_text_model = ""
+    settings.enterprise_ai_default_text_model = ""
     # 画面・API では必須だが（#566）、未設定の既存環境では画像を扱わない呼び出しも
     # 既定の画像対応モデルを使う（安全策）。
     assert shared_model.enterprise_ai_default_model_id(settings) == "vlm-b"
@@ -401,7 +401,7 @@ def test_resolution_uses_text_model_and_falls_back_to_vision_model() -> None:
 
 def test_vision_model_is_derived_when_not_set_explicitly() -> None:
     """`.env` で登録モデルだけを書いた環境は、従来どおり Vision 対応のモデルを使う。"""
-    settings = FakeSettings(oci_enterprise_ai_models=MODELS)
+    settings = FakeSettings(enterprise_ai_models=MODELS)
     assert shared_model.enterprise_ai_vision_model_id(settings) == "vlm-b"
     assert shared_model.enterprise_ai_default_model_id(settings) == "vlm-b"
 
@@ -484,10 +484,10 @@ def test_default_model_errors_follow_screen_order() -> None:
 def test_judge_model_resolution(judge: str, answer_model: str | None, expected: str) -> None:
     """空（既定）は既定のテキストモデル、「回答と同じモデル」は回答のモデル、ほかはそのモデル。"""
     settings = FakeSettings(
-        oci_enterprise_ai_models=MODELS,
-        oci_enterprise_ai_default_text_model="llm-a",
-        oci_enterprise_ai_default_vision_model="vlm-b",
-        oci_enterprise_ai_default_judge_model=judge,
+        enterprise_ai_models=MODELS,
+        enterprise_ai_default_text_model="llm-a",
+        enterprise_ai_default_vision_model="vlm-b",
+        enterprise_ai_default_judge_model=judge,
     )
     assert shared_model.enterprise_ai_judge_model_id(settings, answer_model) == expected
 
@@ -553,7 +553,7 @@ def test_judge_model_is_saved_and_reloaded(tmp_path: Path) -> None:
     assert document["enterprise_ai"]["default_judge_model_id"] == same
     reloaded = FakeSettings()
     store.load(reloaded)
-    assert reloaded.oci_enterprise_ai_default_judge_model == same
+    assert reloaded.enterprise_ai_default_judge_model == same
 
 
 def test_document_without_judge_model_defaults_to_default_text_model(tmp_path: Path) -> None:
@@ -561,9 +561,9 @@ def test_document_without_judge_model_defaults_to_default_text_model(tmp_path: P
     (tmp_path / "model-settings.json").write_text(
         json.dumps({"version": 6, "enterprise_ai": PAYLOAD["enterprise_ai"]}), encoding="utf-8"
     )
-    settings = FakeSettings(oci_enterprise_ai_default_judge_model="llm-a")
+    settings = FakeSettings(enterprise_ai_default_judge_model="llm-a")
     make_store(tmp_path).load(settings)
-    assert settings.oci_enterprise_ai_default_judge_model == ""
+    assert settings.enterprise_ai_default_judge_model == ""
     assert shared_model.enterprise_ai_judge_model_id(settings, "vlm-b") == "llm-a"
 
 
@@ -649,7 +649,7 @@ def test_saving_other_sections_is_not_blocked_by_saved_duplicate_model_ids(
     response = client.patch("/api/settings/model", json=current)
 
     assert response.status_code == 200
-    assert settings.oci_enterprise_ai_timeout_seconds == 30.0
+    assert settings.enterprise_ai_timeout_seconds == 30.0
 
 
 def test_saving_other_sections_is_not_blocked_by_saved_invalid_defaults(tmp_path: Path) -> None:
@@ -677,7 +677,7 @@ def test_saving_other_sections_is_not_blocked_by_saved_invalid_defaults(tmp_path
     response = client.patch("/api/settings/model", json=current)
 
     assert response.status_code == 200
-    assert settings.oci_enterprise_ai_endpoint == "https://changed.invalid/openai/v1"
+    assert settings.enterprise_ai_endpoint == "https://changed.invalid/openai/v1"
 
 
 @pytest.mark.parametrize(
@@ -724,8 +724,8 @@ def test_legacy_json_default_model_id_is_backfilled(
     make_store(tmp_path).load(settings)
 
     assert (
-        settings.oci_enterprise_ai_default_text_model,
-        settings.oci_enterprise_ai_default_vision_model,
+        settings.enterprise_ai_default_text_model,
+        settings.enterprise_ai_default_vision_model,
     ) == expected
     assert shared_model.enterprise_ai_default_model_id(settings) == expected[0]
     assert shared_model.enterprise_ai_vision_model_id(settings) == expected[1]
@@ -784,8 +784,8 @@ def test_saved_vision_model_that_is_not_vision_capable_is_replaced_on_load(
     settings = FakeSettings()
     make_store(tmp_path).load(settings)
 
-    assert settings.oci_enterprise_ai_default_text_model == ""
-    assert settings.oci_enterprise_ai_default_vision_model == "vlm-b"
+    assert settings.enterprise_ai_default_text_model == ""
+    assert settings.enterprise_ai_default_vision_model == "vlm-b"
 
 
 def test_key_saved_in_env_file_is_used_on_startup(tmp_path: Path) -> None:
@@ -793,7 +793,7 @@ def test_key_saved_in_env_file_is_used_on_startup(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text(f"{ENTERPRISE_AI_API_KEY_ENV}=sk-volume\n", encoding="utf-8")
     settings = FakeSettings()
     make_store(tmp_path).load(settings)
-    assert settings.oci_enterprise_ai_api_key == "sk-volume"
+    assert settings.enterprise_ai_api_key == "sk-volume"
     assert settings.model_secret_source == "environment"
 
 
@@ -839,5 +839,5 @@ def test_saved_embedding_dim_is_ignored_and_code_constant_is_used(tmp_path: Path
     settings = FakeSettings()
     make_store(tmp_path).load(settings)
 
-    assert settings.oci_genai_embedding_model == "text-embedding-v4"
-    assert settings.oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
+    assert settings.genai_embedding_model == "text-embedding-v4"
+    assert settings.genai_embedding_dim == EMBEDDING_DIMENSIONS

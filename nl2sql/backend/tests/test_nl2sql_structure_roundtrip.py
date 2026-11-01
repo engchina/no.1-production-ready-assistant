@@ -86,7 +86,7 @@ def test_three_stages_pass_complete_outputs_and_regeneration_uses_only_edited_st
     assert client.calls[3]["prompt"] == edited
     assert "LIKE は前方・後方・部分一致" in client.calls[3]["system_prompt"]
     assert "AMOUNT >= 100" not in client.calls[3]["context"]
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
 
 
 @pytest.mark.parametrize(
@@ -177,7 +177,7 @@ def test_sql_assist_markdown_response_is_preserved_without_business_name_substit
     assert result.sql_structure == physical
     assert result.logical_structure == logical
     assert result.logical_structure_items == []
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert not result.warnings
     assert client.calls[2]["prompt"] == logical
 
@@ -236,7 +236,7 @@ def test_original_glossary_prompt_is_applied_only_when_requested(use_glossary: b
             sql="SELECT ID FROM APP.INVOICES", profile_id="finance", use_glossary=use_glossary
         )
     )
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert ("本タスクでは逆最適化を行います" in client.calls[2]["system_prompt"]) == use_glossary
     assert ("- 請求: INVOICES" in client.calls[2]["context"]) == use_glossary
 
@@ -354,7 +354,7 @@ def test_edited_simple_structure_never_silently_restores_old_sql(use_glossary: b
         )
     )
     assert result.sql == updated
-    assert result.source == "oci_enterprise_ai"
+    assert result.source == "enterprise_ai"
     assert client.calls[0]["prompt"] == structure
 
 

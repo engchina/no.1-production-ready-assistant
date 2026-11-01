@@ -11,23 +11,23 @@ from typing import Any
 from unittest import mock
 
 import pytest
-from rag_engine.adapters import oci as engine_oci
+from rag_engine.adapters import model_api as engine_api
 from rag_engine.config import get_settings as engine_get_settings
 from rag_engine.models.llm import TextOutput
-from rag_parser_core.oci_enterprise_ai import OciEnterpriseAiConfig
+from rag_parser_core.enterprise_ai import EnterpriseAiConfig
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient, config_from_settings
+from app.clients.enterprise_ai import EnterpriseAiClient, config_from_settings
 from app.config import EnterpriseAiConfiguredModel, Settings
 from app.rag.answer_engine import build_engine_settings
 from app.services.control import SERVICE_RUNTIME_ENV_KEYS, service_runtime_env
-from tests.test_oci_enterprise_ai import FakeEnterpriseAiTransport, _oci_settings
+from tests.test_enterprise_ai import FakeEnterpriseAiTransport, _llm_settings
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 def _settings(text_effort: str = "medium", vision_effort: str = "medium") -> Settings:
-    settings = _oci_settings()
-    settings.oci_enterprise_ai_models = [
+    settings = _llm_settings()
+    settings.enterprise_ai_models = [
         EnterpriseAiConfiguredModel.model_validate(
             {"model_id": "enterprise-llm", "reasoning_effort": text_effort}
         ),
@@ -44,7 +44,7 @@ def _settings(text_effort: str = "medium", vision_effort: str = "medium") -> Set
 
 async def test_generate_sends_reasoning_of_text_model() -> None:
     transport = FakeEnterpriseAiTransport({"output_text": "回答"})
-    client = OciEnterpriseAiClient(settings=_settings("low", "high"), http_transport=transport)
+    client = EnterpriseAiClient(settings=_settings("low", "high"), http_transport=transport)
 
     await client.generate("質問", "根拠")
 
@@ -54,7 +54,7 @@ async def test_generate_sends_reasoning_of_text_model() -> None:
 async def test_generate_default_sends_low() -> None:
     """値の無いモデル（#1425 より前の設定も）は既定の low を送る（#3004）。"""
     transport = FakeEnterpriseAiTransport({"output_text": "回答"})
-    client = OciEnterpriseAiClient(settings=_oci_settings(), http_transport=transport)
+    client = EnterpriseAiClient(settings=_llm_settings(), http_transport=transport)
 
     await client.generate("質問", "根拠")
 
@@ -64,7 +64,7 @@ async def test_generate_default_sends_low() -> None:
 async def test_generate_with_none_sends_no_reasoning() -> None:
     """none は「送らない」（`reasoning` を入れない）。"""
     transport = FakeEnterpriseAiTransport({"output_text": "回答"})
-    client = OciEnterpriseAiClient(settings=_settings("none", "high"), http_transport=transport)
+    client = EnterpriseAiClient(settings=_settings("none", "high"), http_transport=transport)
 
     await client.generate("質問", "根拠")
 
@@ -74,13 +74,11 @@ async def test_generate_with_none_sends_no_reasoning() -> None:
 async def test_compared_model_uses_its_own_effort() -> None:
     """チャットのモデル比較（`model_id`）は、そのモデルの値を使う。"""
     settings = _settings("none", "none")
-    settings.oci_enterprise_ai_models.append(
+    settings.enterprise_ai_models.append(
         EnterpriseAiConfiguredModel(model_id="other-llm", reasoning_effort="low")
     )
     transport = FakeEnterpriseAiTransport({"output_text": "回答"})
-    client = OciEnterpriseAiClient(
-        settings=settings, http_transport=transport, model_id="other-llm"
-    )
+    client = EnterpriseAiClient(settings=settings, http_transport=transport, model_id="other-llm")
 
     await client.generate("質問", "根拠")
 
@@ -89,7 +87,7 @@ async def test_compared_model_uses_its_own_effort() -> None:
 
 async def test_image_calls_send_reasoning_of_vision_model() -> None:
     transport = FakeEnterpriseAiTransport({"output_text": "画像の説明"})
-    client = OciEnterpriseAiClient(settings=_settings("none", "high"), http_transport=transport)
+    client = EnterpriseAiClient(settings=_settings("none", "high"), http_transport=transport)
 
     await client.generate_from_image(PNG, "説明して", mime_type="image/png")
     await client.generate_from_images([PNG], "説明して", mime_type="image/png")
@@ -113,10 +111,10 @@ def test_parser_service_env_carries_effort() -> None:
     """parser（OCI の VLM）は env から読むので、backend が値を書く。"""
     env = service_runtime_env(_settings("low", "high"))
 
-    assert env["PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT"] == "low"
-    assert env["PLATFORM_OCI_ENTERPRISE_AI_VISION_REASONING_EFFORT"] == "high"
+    assert env["PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT"] == "low"
+    assert env["PLATFORM_ENTERPRISE_AI_VISION_REASONING_EFFORT"] == "high"
     assert set(env) <= set(SERVICE_RUNTIME_ENV_KEYS)
-    config = OciEnterpriseAiConfig.from_env(env)
+    config = EnterpriseAiConfig.from_env(env)
     assert (config.text_reasoning_effort, config.vision_reasoning_effort) == ("low", "high")
 
 
@@ -158,7 +156,7 @@ def test_engine_parse_sends_reasoning(effort: str, expected: dict[str, str] | No
     provider = SimpleNamespace(model="m", label="m", reasoning_effort=effort)
     settings = engine_get_settings(environ={}, dotenv_path=None)
 
-    with mock.patch.object(engine_oci, "_openai_client_for_provider", return_value=client):
-        engine_oci._openai_parsed([], settings, TextOutput, provider)  # type: ignore[arg-type]
+    with mock.patch.object(engine_api, "_openai_client_for_provider", return_value=client):
+        engine_api._openai_parsed([], settings, TextOutput, provider)  # type: ignore[arg-type]
 
     assert responses.calls[0].get("reasoning") == expected

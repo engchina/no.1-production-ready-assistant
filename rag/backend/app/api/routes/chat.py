@@ -44,7 +44,7 @@ from app.api.routes.search import (
     ensure_search_answer_profile_knowledge_bases_permitted,
     registered_answer_model_choices,
 )
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient, StoredConversation, StoredMessage
 from app.clients.oracle_run_history import RunHistoryStore
 from app.config import (
@@ -1096,7 +1096,7 @@ async def _generate_chat_answer(
     )
     started_at = perf_counter()
     try:
-        llm = OciEnterpriseAiClient(settings=turn.settings, model_id=model_id or None)
+        llm = EnterpriseAiClient(settings=turn.settings, model_id=model_id or None)
         # llm は会話履歴による質問の書き換えに使う。回答は回答エンジンが自分でモデルを呼ぶので、
         # 列のモデルを別に渡す(#593)。
         pipeline = RagPipeline(

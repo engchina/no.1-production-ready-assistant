@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from rag_engine.adapters.oci import RerankTextRank
+from rag_engine.adapters.model_api import RerankTextRank
 from rag_engine.config import get_settings
 from rag_engine.evaluation.chunk_eval import audit_variants, evaluate_cohere_variants, evidence_metrics, load_token_counter, main
 

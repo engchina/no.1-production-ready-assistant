@@ -72,7 +72,7 @@ _VALIDATION_TYPES = {
 }
 _PROVIDER_STATUSES = {"incomplete", "completed", "failed", "cancelled", "queued", "in_progress"}
 _INCOMPLETE_REASONS = {"max_output_tokens", "content_filter"}
-# 出力の暴走で呼び出しを打ち切った理由（`rag_engine.adapters.oci.LlmRunawayOutput.reason`。#2966・#3835）。
+# 出力の暴走で呼び出しを打ち切った理由（`rag_engine.adapters.model_api.LlmRunawayOutput.reason`。#2966・#3835）。
 _CUTOFF_REASONS = {"runaway_whitespace", "runaway_repetition"}
 
 

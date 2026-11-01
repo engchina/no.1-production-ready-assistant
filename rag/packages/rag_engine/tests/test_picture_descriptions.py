@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from rag_engine.adapters.oci import VISION_SYSTEM_PROMPT
+from rag_engine.adapters.model_api import VISION_SYSTEM_PROMPT
 from rag_engine.config import get_settings
 from rag_engine.models.layout import LayoutRecord, PageImage
 from rag_engine.parsing.picture_descriptions import (
@@ -236,7 +236,7 @@ class PictureDescriptionTests(unittest.TestCase):
                     run_dir=run_dir,
                     pdf_name="manual.pdf",
                     # Vision の model は provider 設定が決める。コードに既定値が無いので env で与える (#1034)。
-                    settings=get_settings(environ={"OCI_ENTERPRISE_AI_VLM_MODEL": "vendor.vision-1"}, dotenv_path=None),
+                    settings=get_settings(environ={"ENTERPRISE_AI_VLM_MODEL": "vendor.vision-1"}, dotenv_path=None),
                 )
 
             self.assertEqual((stats.targets, stats.succeeded, stats.failed), (2, 2, 0))

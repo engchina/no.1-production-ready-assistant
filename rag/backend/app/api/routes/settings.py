@@ -39,8 +39,8 @@ from rag_parser_core.language import FIELD_SPECS
 
 from app import config as app_config
 from app.api.routes.documents import global_document_processing_config
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
+from app.clients.genai import GenAiClient
 from app.clients.oracle import (
     OracleClient,
     close_oracle_pool,
@@ -856,7 +856,7 @@ async def _run_model_settings_test(
     if request.target_type == "enterprise_text":
         text = await async_call_with_model_purpose(
             "connection.check",
-            OciEnterpriseAiClient(settings=settings).generate,
+            EnterpriseAiClient(settings=settings).generate,
             MODEL_TEST_TEXT_PROMPT,
             model_test_text_context("Production Ready RAG"),
         )
@@ -864,7 +864,7 @@ async def _run_model_settings_test(
     if request.target_type == "enterprise_vision":
         text = await async_call_with_model_purpose(
             "connection.check",
-            OciEnterpriseAiClient(settings=settings).generate_from_image,
+            EnterpriseAiClient(settings=settings).generate_from_image,
             MODEL_TEST_IMAGE_BYTES,
             MODEL_TEST_VISION_PROMPT,
             mime_type=MODEL_TEST_IMAGE_MIME_TYPE,
@@ -876,18 +876,16 @@ async def _run_model_settings_test(
     if request.target_type == "embedding":
         vectors = await async_call_with_model_purpose(
             "connection.check",
-            OciGenAiClient(settings=settings).embed,
+            GenAiClient(settings=settings).embed,
             [MODEL_TEST_EMBEDDING_INPUT],
             input_type="SEARCH_QUERY",
         )
         # 次元が設定の値（Oracle の VECTOR 列）と同じかを確かめる（#45）。
-        return dict(
-            embedding_test_details(vectors, expected_dim=int(settings.oci_genai_embedding_dim))
-        )
+        return dict(embedding_test_details(vectors, expected_dim=int(settings.genai_embedding_dim)))
     # 固定の query と 2 文書を並べ、index と relevance_score が返るかを確かめる（#45）。
     ranks = await async_call_with_model_purpose(
         "connection.check",
-        OciGenAiClient(settings=settings).rerank,
+        GenAiClient(settings=settings).rerank,
         MODEL_TEST_RERANK_QUERY,
         list(MODEL_TEST_RERANK_DOCUMENTS),
         top_n=len(MODEL_TEST_RERANK_DOCUMENTS),

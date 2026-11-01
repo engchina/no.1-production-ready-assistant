@@ -17,8 +17,8 @@ from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pydantic import BaseModel
 from rag_parser_core.result import ParserRegistryResult
 
-from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.enterprise_ai import EnterpriseAiClient
+from app.clients.genai import GenAiClient
 from app.schemas.document import SourceProfile
 from app.schemas.extraction import StructuredExtraction
 
@@ -37,7 +37,7 @@ def _guess_document_type(text: str) -> str:
     return "文書"
 
 
-class DeterministicEnterpriseAi(OciEnterpriseAiClient):
+class DeterministicEnterpriseAi(EnterpriseAiClient):
     """VLM 抽出と LLM 回答を決定論的に返す Enterprise AI スタブ。
 
     extract_with_vlm は raw_text のみ返し、element/page は raw_text から
@@ -83,7 +83,7 @@ class DeterministicEnterpriseAi(OciEnterpriseAiClient):
         )
 
 
-class DeterministicGenAi(OciGenAiClient):
+class DeterministicGenAi(GenAiClient):
     """埋め込みとリランクを決定論的に返す Generative AI スタブ。"""
 
     async def embed(
@@ -132,10 +132,10 @@ def _stub_parser_runner(
 
 def patch_ai_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     """取込・検索パイプラインが既定構築する OCI クライアントを差し替える。"""
-    monkeypatch.setattr("app.rag.ingestion.OciEnterpriseAiClient", DeterministicEnterpriseAi)
-    monkeypatch.setattr("app.rag.ingestion.OciGenAiClient", DeterministicGenAi)
-    monkeypatch.setattr("app.rag.pipeline.OciEnterpriseAiClient", DeterministicEnterpriseAi)
-    monkeypatch.setattr("app.rag.pipeline.OciGenAiClient", DeterministicGenAi)
+    monkeypatch.setattr("app.rag.ingestion.EnterpriseAiClient", DeterministicEnterpriseAi)
+    monkeypatch.setattr("app.rag.ingestion.GenAiClient", DeterministicGenAi)
+    monkeypatch.setattr("app.rag.pipeline.EnterpriseAiClient", DeterministicEnterpriseAi)
+    monkeypatch.setattr("app.rag.pipeline.GenAiClient", DeterministicGenAi)
     # 解析は parser マイクロサービスへ委譲する。
     # 実サービス未起動でも取込できるよう runner を差し替え。
     monkeypatch.setattr(
@@ -146,7 +146,7 @@ def patch_ai_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     # テストは LLM の設定を空にするので、差し替えないと
     # 「LLM 設定が不足しています」で失敗する（#1595）。
     monkeypatch.setattr(
-        "rag_engine.adapters.oci.parse_text_response", deterministic_parse_text_response
+        "rag_engine.adapters.model_api.parse_text_response", deterministic_parse_text_response
     )
 
 

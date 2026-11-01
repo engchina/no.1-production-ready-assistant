@@ -40,7 +40,7 @@
 
 ### 判定のモデル（#3574）
 
-正確性・網羅性・忠実性を採点する LLM の判定は、共通のモデル設定（システム設定 › モデル › 既定のモデル）の「既定の判定モデル」（`default_judge_model_id`。env は `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_JUDGE_MODEL`）で選んだモデルで行います。
+正確性・網羅性・忠実性を採点する LLM の判定は、共通のモデル設定（システム設定 › モデル › 既定のモデル）の「既定の判定モデル」（`default_judge_model_id`。env は `PLATFORM_ENTERPRISE_AI_DEFAULT_JUDGE_MODEL`）で選んだモデルで行います。
 
 | 値 | 判定のモデル |
 |---|---|

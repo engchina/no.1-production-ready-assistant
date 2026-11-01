@@ -15,7 +15,7 @@ def test_database_settings_show_the_code_vector_column() -> None:
     """データベースの設定の表示は、設定の値ではなく DDL と同じ正本を出す。"""
 
     class Settings:
-        oci_genai_embedding_dim = 1536
+        genai_embedding_dim = 1536
 
     data = database_settings_data(Settings())
 

@@ -144,8 +144,8 @@ def _script(monkeypatch: MonkeyPatch, *steps: Any) -> ScriptedModel:
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id=model_id or "judge-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
         ),
     )
@@ -1105,8 +1105,8 @@ def test_judge_retry_widens_the_output_limit(monkeypatch: MonkeyPatch) -> None:
     """広げられるときはモデルの出力の上限まで広げて送り直す（#1845）。"""
     target = ModelTarget(
         model_id="judge-model",
-        endpoint="https://oci.example",
-        project_ocid="",
+        endpoint="https://llm.example",
+        project_id="",
         api_key="k",
         max_output_tokens=8192,
     )
@@ -1119,8 +1119,8 @@ def test_judge_retry_widens_the_output_limit(monkeypatch: MonkeyPatch) -> None:
     widest = retry_model_target(
         ModelTarget(
             model_id="judge-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             max_output_tokens=32768,
         )
@@ -1733,8 +1733,8 @@ def test_judge_retry_lowers_reasoning_effort_when_the_limit_cannot_widen(
     def target(effort: str) -> ModelTarget:
         return ModelTarget(
             model_id="judge-model",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="k",
             reasoning_effort=effort,
         )
@@ -2268,8 +2268,8 @@ def test_definition_hash_tracks_skills_output_and_model_settings(
         "resolve_model_target",
         lambda model_id="": ModelTarget(
             model_id="different",
-            endpoint="https://oci.example",
-            project_ocid="",
+            endpoint="https://llm.example",
+            project_id="",
             api_key="synthetic-secret",
             max_output_tokens=1234,
         ),

@@ -23,16 +23,16 @@ export const SECONDARY_CONNECTION_ID: EnterpriseAiConnectionId = "secondary";
 export const TERTIARY_CONNECTION_ID: EnterpriseAiConnectionId = "tertiary";
 
 /** 接続の入力欄（検証とフォーカスの順）。 */
-export type ConnectionField = "endpoint" | "project_ocid" | "api_key";
+export type ConnectionField = "endpoint" | "project_id" | "api_key";
 export const CONNECTION_FIELD_ORDER: readonly ConnectionField[] = [
   "endpoint",
-  "project_ocid",
+  "project_id",
   "api_key",
 ];
 
 const CONNECTION_FIELD_ID_SUFFIX: Record<ConnectionField, string> = {
   endpoint: "endpoint",
-  project_ocid: "project-ocid",
+  project_id: "project-ocid",
   api_key: "api-key",
 };
 
@@ -108,7 +108,7 @@ export function emptyConnection(
   return {
     connection_id: connectionId,
     endpoint: "",
-    project_ocid: "",
+    project_id: "",
     api_key: "",
     has_api_key: false,
     clear_api_key: false,
@@ -259,7 +259,7 @@ export function unsavedConnectionIds(
       !current ||
       !baseline ||
       current.endpoint.trim() !== baseline.endpoint.trim() ||
-      current.project_ocid.trim() !== baseline.project_ocid.trim() ||
+      current.project_id.trim() !== baseline.project_id.trim() ||
       current.api_key.trim() !== baseline.api_key.trim() ||
       current.clear_api_key !== baseline.clear_api_key
     ) {
@@ -319,7 +319,7 @@ export function normalizeModelSettings(
     ? sortConnections(enterprise.connections).map((connection) => ({
         ...emptyConnection(connection.connection_id),
         endpoint: connection.endpoint ?? "",
-        project_ocid: connection.project_ocid ?? "",
+        project_id: connection.project_id ?? "",
         api_key: connection.api_key ?? "",
         has_api_key: connection.has_api_key ?? false,
         clear_api_key: connection.clear_api_key ?? false,
@@ -328,13 +328,13 @@ export function normalizeModelSettings(
         {
           ...emptyConnection(PRIMARY_CONNECTION_ID),
           endpoint: enterprise.endpoint ?? "",
-          project_ocid: enterprise.project_ocid ?? "",
+          project_id: enterprise.project_id ?? "",
           has_api_key: enterprise.has_api_key ?? false,
         },
       ];
   const {
     endpoint: _endpoint,
-    project_ocid: _project,
+    project_id: _project,
     api_key: _apiKey,
     has_api_key: _hasApiKey,
     clear_api_key: _clearApiKey,

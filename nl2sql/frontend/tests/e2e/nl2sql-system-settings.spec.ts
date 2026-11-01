@@ -43,7 +43,7 @@ function primaryConnectionFixture(overrides: Record<string, unknown> = {}) {
   return {
     connection_id: "primary",
     endpoint: "https://enterprise-ai.example.com",
-    project_ocid: "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
+    project_id: "ocid1.generativeaiproject.oc1.ap-osaka-1.example",
     api_key: "",
     has_api_key: true,
     clear_api_key: false,
@@ -1413,7 +1413,7 @@ test("ターシャリ接続は Endpoint URL と API key だけで設定し、登
   ]);
   expect(connections[1]).toMatchObject({
     endpoint: "https://api.openai.com/v1",
-    project_ocid: "",
+    project_id: "",
     api_key: "sk-openai-fixture",
   });
 

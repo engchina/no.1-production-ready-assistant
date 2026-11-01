@@ -13,7 +13,7 @@ from pr_backend_core.observability.tracing import (
 from rag_engine.generation.execution_record import _execution_step
 from rag_engine.resources.tracing import bind_trace_observer, observe_call
 
-from app.clients.oci_genai import OciGenAiClient
+from app.clients.genai import GenAiClient
 from app.config import Settings
 from app.rag.pipeline import _observe_engine_call
 
@@ -104,10 +104,10 @@ async def test_backend_sdk_boundary_keeps_request_response_and_failure(
             return {"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}]}
         return {"results": [{"index": 0, "relevance_score": 0.9}]}
 
-    client = OciGenAiClient(
+    client = GenAiClient(
         settings=Settings(
-            oci_enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
-            oci_enterprise_ai_api_key="sk-synthetic",
+            enterprise_ai_endpoint="https://synthetic.invalid/compatible-mode/v1",
+            enterprise_ai_api_key="sk-synthetic",
         ),
         post=invoke,
     )
@@ -115,9 +115,9 @@ async def test_backend_sdk_boundary_keeps_request_response_and_failure(
     try:
         with operation_trace("rag.search", operation_id="synthetic") as summary:
             call = (
-                client._embed_with_oci(["合成の入力"], input_type="SEARCH_QUERY")
+                client._embed_with_api(["合成の入力"], input_type="SEARCH_QUERY")
                 if operation == "embeddings"
-                else client._rerank_with_oci("合成の入力", ["合成の資料"], 1)
+                else client._rerank_with_api("合成の入力", ["合成の資料"], 1)
             )
             if failed:
                 with pytest.raises(RuntimeError, match="合成の接続失敗"):

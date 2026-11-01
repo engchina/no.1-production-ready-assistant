@@ -83,7 +83,7 @@ _SHARED_ENV_NAMES = (
     "PLATFORM_ORACLE_DSN",
     "PLATFORM_ORACLE_USER",
     "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES",
-    "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+    "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
     "PLATFORM_ORACLE_CONNECTION_SECURITY",
 )
 
@@ -141,7 +141,7 @@ def test_platform_env_reload_keeps_model_settings_file_values(
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text(
-        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_ORACLE_DSN=db-a_high\n",
+        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_ORACLE_DSN=db-a_high\n",
         encoding="utf-8",
     )
     (tmp_path / "model-settings.json").write_text(
@@ -162,16 +162,16 @@ def test_platform_env_reload_keeps_model_settings_file_values(
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert settings.oci_enterprise_ai_default_text_model == "json-model"
+        assert settings.enterprise_ai_default_text_model == "json-model"
 
         platform_env.write_text(
-            "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
+            "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
             "PLATFORM_ORACLE_DSN=db-b_high\n",
             encoding="utf-8",
         )
         reloaded = app_settings.get_settings()
 
         assert reloaded.oracle_dsn == "db-b_high"
-        assert reloaded.oci_enterprise_ai_default_text_model == "json-model"
+        assert reloaded.enterprise_ai_default_text_model == "json-model"
     finally:
         app_settings.reset_settings_cache()

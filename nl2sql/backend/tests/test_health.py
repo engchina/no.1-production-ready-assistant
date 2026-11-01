@@ -604,7 +604,7 @@ def test_enterprise_ai_direct_preview_uses_configured_client() -> None:
 
     assert preview.engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     assert preview.sql == "SELECT EMPLOYEE_NAME, DEPARTMENT_NAME FROM V_EMP_DEPT"
-    assert preview.engine_meta["runtime"] == "oci_enterprise_ai"
+    assert preview.engine_meta["runtime"] == "enterprise_ai"
     assert preview.engine_meta["model"] == "enterprise-nl2sql-model"
     # 件数未指定時は total result maximum を設定せず、SQL にも fetch 上限を足さない。
     assert preview.executable_sql == "SELECT EMPLOYEE_NAME, DEPARTMENT_NAME FROM V_EMP_DEPT"
@@ -2569,11 +2569,11 @@ async def test_reverse_comments_and_diagnostics() -> None:
             "NL2SQL_PERSISTENCE_READY",
             "PYTHON_ORACLEDB",
             "ORACLE_RUNTIME_READY",
-            "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT",
-            "PLATFORM_OCI_ENTERPRISE_AI_API_KEY",
-            "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
-            "PLATFORM_OCI_GENAI_ENDPOINT",
-            "PLATFORM_OCI_GENAI_EMBED_MODEL_ID",
+            "PLATFORM_ENTERPRISE_AI_ENDPOINT",
+            "PLATFORM_ENTERPRISE_AI_API_KEY",
+            "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
+            "PLATFORM_GENAI_ENDPOINT",
+            "PLATFORM_GENAI_EMBED_MODEL_ID",
         } <= check_names
         readiness = diagnostics_data["readiness"]
         assert readiness
@@ -2607,7 +2607,7 @@ async def test_reverse_comments_and_diagnostics() -> None:
             item for item in config_guides if item["id"] == "enterprise_ai_direct"
         )
         assert (
-            "PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>"
+            "PLATFORM_ENTERPRISE_AI_ENDPOINT=<enterprise-ai-endpoint>"
             in enterprise_guide["env_template"]
         )
         assert "PLATFORM_ORACLE_PASSWORD" not in enterprise_guide["env_template"]
@@ -2615,8 +2615,8 @@ async def test_reverse_comments_and_diagnostics() -> None:
         required_feedback_env = {item["name"] for item in feedback_guide["required_env_vars"]}
         assert {
             "NL2SQL_FEEDBACK_EMBEDDING_ENABLED",
-            "PLATFORM_OCI_GENAI_ENDPOINT",
-            "PLATFORM_OCI_GENAI_EMBED_MODEL_ID",
+            "PLATFORM_GENAI_ENDPOINT",
+            "PLATFORM_GENAI_EMBED_MODEL_ID",
         } <= required_feedback_env
 
 

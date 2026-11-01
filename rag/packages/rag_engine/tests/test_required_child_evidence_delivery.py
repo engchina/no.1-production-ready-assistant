@@ -11,7 +11,7 @@ import pytest
 from openai import OpenAI
 from test_bound_audit_transport import response_bytes
 
-from rag_engine.adapters import oci
+from rag_engine.adapters import model_api
 from rag_engine.config import get_settings
 from rag_engine.generation import answering, grounded
 from rag_engine.generation.answer_models import AnswerContext, AnswerRecord
@@ -236,19 +236,19 @@ def test_sdk_sends_required_child_bodies_in_quotable_context(
         max_retries=0,
         http_client=httpx.Client(transport=httpx.MockTransport(transport)),
     )
-    monkeypatch.setattr(oci, "_openai_client_for_provider", lambda *_args: client)
-    monkeypatch.setattr(oci, "_stall_detection_enabled", lambda _settings: streamed)
+    monkeypatch.setattr(model_api, "_openai_client_for_provider", lambda *_args: client)
+    monkeypatch.setattr(model_api, "_stall_detection_enabled", lambda _settings: streamed)
     settings = get_settings(
         environ={
-            "OCI_ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
-            "OCI_ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
-            "OCI_ENTERPRISE_AI_API_KEY": "mock-only",
+            "ENTERPRISE_AI_DEFAULT_MODEL": "synthetic",
+            "ENTERPRISE_AI_ENDPOINT": "https://mock.invalid/v1",
+            "ENTERPRISE_AI_API_KEY": "mock-only",
         },
         dotenv_path=None,
         llm_stall_resends=0,
     )
     try:
-        result = oci._parse_text_once(
+        result = model_api._parse_text_once(
             "## Step 1: 資料の手順を回答する", prompt, settings, schema, settings.llm_providers[settings.default_answer_llm]
         )
     finally:

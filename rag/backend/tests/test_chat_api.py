@@ -687,7 +687,7 @@ def _stub_answer_models(
 ) -> None:
     catalog = [EnterpriseAiConfiguredModel(model_id=m, display_name=m.upper()) for m in models]
     # 回答のモデルの接続は登録モデルから引く（登録に無いモデルは失敗にする。#3240）。
-    monkeypatch.setattr(get_settings(), "oci_enterprise_ai_models", catalog)
+    monkeypatch.setattr(get_settings(), "enterprise_ai_models", catalog)
     monkeypatch.setattr(search_route, "enterprise_ai_model_catalog", lambda _s: catalog)
     monkeypatch.setattr(search_route, "enterprise_ai_default_model_id", lambda _s: text)
     monkeypatch.setattr(search_route, "enterprise_ai_vision_model_id", lambda _s: "".join(vision))

@@ -3,8 +3,8 @@
 ⚠️ 重要: LLM / VLM は **OCI Enterprise AI** を使う。
 OCI Generative AI の chat 推論 API は使わない（AGENTS.md 参照）。
 
-backend `Settings` には依存せず、`OciEnterpriseAiConfig`(env からも構築可能)で駆動する。
-backend は `app.clients.oci_enterprise_ai` の Settings→config adapter / re-export shim 経由で
+backend `Settings` には依存せず、`EnterpriseAiConfig`(env からも構築可能)で駆動する。
+backend は `app.clients.enterprise_ai` の Settings→config adapter / re-export shim 経由で
 従来の import パスを維持する。
 """
 
@@ -41,14 +41,14 @@ DEFAULT_MAX_OUTPUT_TOKENS = 32768
 
 
 @dataclass(frozen=True)
-class OciEnterpriseAiConfig:
+class EnterpriseAiConfig:
     """OCI Enterprise AI(LLM/VLM)呼び出しの非機密設定。Settings / env から構築できる。
 
     モデル ID は呼び出し側(backend は model catalog 解決、microservice は env)で解決済みの
     値を `vision_model_id` / `default_model_id` として渡す。
 
-    接続(endpoint / API key / project)はモデルごとに選ぶ(#533)。`oci_enterprise_ai_*` は
-    `default_model_id`(テキスト)の接続で、Vision の呼び出しは `vision_oci_enterprise_ai_*` が
+    接続(endpoint / API key / project)はモデルごとに選ぶ(#533)。`enterprise_ai_*` は
+    `default_model_id`(テキスト)の接続で、Vision の呼び出しは `vision_enterprise_ai_*` が
     None でなければそれを使う(`for_vision()`)。None は「テキストと同じ接続」。
 
     推論(思考)の量(#1425)は、テキストのモデルの送る値を `text_reasoning_effort`、Vision のモデルの
@@ -66,57 +66,57 @@ class OciEnterpriseAiConfig:
     決めた値を渡し、呼ぶ URL は `{endpoint}{path}`(既定 `/responses`)で 3 製品と同じになる。
     """
 
-    oci_enterprise_ai_endpoint: str = ""
-    oci_enterprise_ai_api_key: str = ""
-    oci_enterprise_ai_project_ocid: str = ""
-    vision_oci_enterprise_ai_endpoint: str | None = None
-    vision_oci_enterprise_ai_api_key: str | None = None
-    vision_oci_enterprise_ai_project_ocid: str | None = None
+    enterprise_ai_endpoint: str = ""
+    enterprise_ai_api_key: str = ""
+    enterprise_ai_project_id: str = ""
+    vision_enterprise_ai_endpoint: str | None = None
+    vision_enterprise_ai_api_key: str | None = None
+    vision_enterprise_ai_project_id: str | None = None
     vision_model_id: str = ""
     default_model_id: str = ""
-    oci_enterprise_ai_llm_path: str = "/responses"
-    oci_enterprise_ai_vlm_path: str = "/responses"
-    oci_enterprise_ai_llm_response_path: str = ""
-    oci_enterprise_ai_vlm_response_path: str = ""
-    oci_enterprise_ai_llm_payload_template: str = ""
-    oci_enterprise_ai_vlm_payload_template: str = ""
-    oci_enterprise_ai_vlm_input_mode: str = "files_api"
-    oci_enterprise_ai_timeout_seconds: float = 600.0
-    oci_enterprise_ai_max_retries: int = 3
+    enterprise_ai_llm_path: str = "/responses"
+    enterprise_ai_vlm_path: str = "/responses"
+    enterprise_ai_llm_response_path: str = ""
+    enterprise_ai_vlm_response_path: str = ""
+    enterprise_ai_llm_payload_template: str = ""
+    enterprise_ai_vlm_payload_template: str = ""
+    enterprise_ai_vlm_input_mode: str = "files_api"
+    enterprise_ai_timeout_seconds: float = 600.0
+    enterprise_ai_max_retries: int = 3
     text_max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
     vision_max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
     text_reasoning_effort: str = ""
     vision_reasoning_effort: str = ""
 
-    def for_vision(self) -> OciEnterpriseAiConfig:
+    def for_vision(self) -> EnterpriseAiConfig:
         """Vision の呼び出しに使う config(既定の Vision モデルの接続。#533)。"""
-        if self.vision_oci_enterprise_ai_endpoint is None:
+        if self.vision_enterprise_ai_endpoint is None:
             return self
         return dataclasses.replace(
             self,
-            oci_enterprise_ai_endpoint=self.vision_oci_enterprise_ai_endpoint,
-            oci_enterprise_ai_api_key=self.vision_oci_enterprise_ai_api_key or "",
-            oci_enterprise_ai_project_ocid=self.vision_oci_enterprise_ai_project_ocid or "",
-            vision_oci_enterprise_ai_endpoint=None,
-            vision_oci_enterprise_ai_api_key=None,
-            vision_oci_enterprise_ai_project_ocid=None,
+            enterprise_ai_endpoint=self.vision_enterprise_ai_endpoint,
+            enterprise_ai_api_key=self.vision_enterprise_ai_api_key or "",
+            enterprise_ai_project_id=self.vision_enterprise_ai_project_id or "",
+            vision_enterprise_ai_endpoint=None,
+            vision_enterprise_ai_api_key=None,
+            vision_enterprise_ai_project_id=None,
         )
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> OciEnterpriseAiConfig:
-        """環境変数(backend と同じ共通設定の PLATFORM_OCI_ENTERPRISE_AI_* キー。#211)から構築する。
+    def from_env(cls, env: Mapping[str, str] | None = None) -> EnterpriseAiConfig:
+        """環境変数(backend と同じ共通設定の PLATFORM_ENTERPRISE_AI_* キー。#211)から構築する。
 
         microservice は VLM 抽出のみを行うため、vision_model_id は
-        `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL`、default_model_id は
-        `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL`(無ければ既定の Vision モデル)で
+        `PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL`、default_model_id は
+        `PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL`(無ければ既定の Vision モデル)で
         解決する(#499。backend と同じ規則)。
-        接続(`PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT` / `_API_KEY` / `_PROJECT_OCID`)は、backend が
+        接続(`PLATFORM_ENTERPRISE_AI_ENDPOINT` / `_API_KEY` / `_PROJECT_ID`)は、backend が
         サービス実行用の env に「既定の Vision モデルの接続」を書く(#533。
         `app.services.control.service_runtime_env`)。
-        推論の量(#1425)は `PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT` /
-        `PLATFORM_OCI_ENTERPRISE_AI_VISION_REASONING_EFFORT`(同じく backend が書く)。
-        出力の上限(#1719)は `PLATFORM_OCI_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS` /
-        `PLATFORM_OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS`(同じく backend がモデルごとの
+        推論の量(#1425)は `PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT` /
+        `PLATFORM_ENTERPRISE_AI_VISION_REASONING_EFFORT`(同じく backend が書く)。
+        出力の上限(#1719)は `PLATFORM_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS` /
+        `PLATFORM_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS`(同じく backend がモデルごとの
         値を書く。無ければ 32768)。
         """
         src = os.environ if env is None else env
@@ -124,47 +124,34 @@ class OciEnterpriseAiConfig:
         def _get(name: str, default: str = "") -> str:
             return str(src.get(name, default) or default)
 
-        vision_model_id = _get("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL")
+        vision_model_id = _get("PLATFORM_ENTERPRISE_AI_DEFAULT_VISION_MODEL")
         return cls(
-            oci_enterprise_ai_endpoint=_get("PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT"),
-            oci_enterprise_ai_api_key=_get("PLATFORM_OCI_ENTERPRISE_AI_API_KEY"),
-            oci_enterprise_ai_project_ocid=_get("PLATFORM_OCI_ENTERPRISE_AI_PROJECT_OCID"),
+            enterprise_ai_endpoint=_get("PLATFORM_ENTERPRISE_AI_ENDPOINT"),
+            enterprise_ai_api_key=_get("PLATFORM_ENTERPRISE_AI_API_KEY"),
+            enterprise_ai_project_id=_get("PLATFORM_ENTERPRISE_AI_PROJECT_ID"),
             vision_model_id=vision_model_id,
-            default_model_id=_get("PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL")
-            or vision_model_id,
-            oci_enterprise_ai_llm_path=_get("PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH", "/responses"),
-            oci_enterprise_ai_vlm_path=_get("PLATFORM_OCI_ENTERPRISE_AI_VLM_PATH", "/responses"),
-            oci_enterprise_ai_llm_response_path=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH"
+            default_model_id=_get("PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL") or vision_model_id,
+            enterprise_ai_llm_path=_get("PLATFORM_ENTERPRISE_AI_LLM_PATH", "/responses"),
+            enterprise_ai_vlm_path=_get("PLATFORM_ENTERPRISE_AI_VLM_PATH", "/responses"),
+            enterprise_ai_llm_response_path=_get("PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH"),
+            enterprise_ai_vlm_response_path=_get("PLATFORM_ENTERPRISE_AI_VLM_RESPONSE_PATH"),
+            enterprise_ai_llm_payload_template=_get("PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE"),
+            enterprise_ai_vlm_payload_template=_get("PLATFORM_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE"),
+            enterprise_ai_vlm_input_mode=_get("PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE", "files_api"),
+            enterprise_ai_timeout_seconds=_float(
+                _get("PLATFORM_ENTERPRISE_AI_TIMEOUT_SECONDS"), 600.0
             ),
-            oci_enterprise_ai_vlm_response_path=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_VLM_RESPONSE_PATH"
-            ),
-            oci_enterprise_ai_llm_payload_template=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE"
-            ),
-            oci_enterprise_ai_vlm_payload_template=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE"
-            ),
-            oci_enterprise_ai_vlm_input_mode=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_VLM_INPUT_MODE", "files_api"
-            ),
-            oci_enterprise_ai_timeout_seconds=_float(
-                _get("PLATFORM_OCI_ENTERPRISE_AI_TIMEOUT_SECONDS"), 600.0
-            ),
-            oci_enterprise_ai_max_retries=_int(_get("PLATFORM_OCI_ENTERPRISE_AI_MAX_RETRIES"), 3),
+            enterprise_ai_max_retries=_int(_get("PLATFORM_ENTERPRISE_AI_MAX_RETRIES"), 3),
             text_max_output_tokens=_int(
-                _get("PLATFORM_OCI_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS"),
+                _get("PLATFORM_ENTERPRISE_AI_TEXT_MAX_OUTPUT_TOKENS"),
                 DEFAULT_MAX_OUTPUT_TOKENS,
             ),
             vision_max_output_tokens=_int(
-                _get("PLATFORM_OCI_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS"),
+                _get("PLATFORM_ENTERPRISE_AI_VISION_MAX_OUTPUT_TOKENS"),
                 DEFAULT_MAX_OUTPUT_TOKENS,
             ),
-            text_reasoning_effort=_get("PLATFORM_OCI_ENTERPRISE_AI_TEXT_REASONING_EFFORT").strip(),
-            vision_reasoning_effort=_get(
-                "PLATFORM_OCI_ENTERPRISE_AI_VISION_REASONING_EFFORT"
-            ).strip(),
+            text_reasoning_effort=_get("PLATFORM_ENTERPRISE_AI_TEXT_REASONING_EFFORT").strip(),
+            vision_reasoning_effort=_get("PLATFORM_ENTERPRISE_AI_VISION_REASONING_EFFORT").strip(),
         )
 
 
@@ -361,12 +348,12 @@ class EnterpriseAiRequestPreview:
     payload_json_bytes: int
 
 
-class OciEnterpriseAiClient:
+class EnterpriseAiClient:
     """OCI Enterprise AI による LLM / VLM 推論クライアント。"""
 
     def __init__(
         self,
-        config: OciEnterpriseAiConfig,
+        config: EnterpriseAiConfig,
         http_transport: EnterpriseAiHttpTransport | None = None,
     ) -> None:
         self._config = config
@@ -462,13 +449,13 @@ class OciEnterpriseAiClient:
                 file_id=uploaded_file_id,
             )
             response = await self._post_enterprise_ai(
-                config.oci_enterprise_ai_vlm_path,
+                config.enterprise_ai_vlm_path,
                 payload,
                 vision=True,
             )
             return _parse_generated_text(
                 response,
-                response_path=config.oci_enterprise_ai_vlm_response_path,
+                response_path=config.enterprise_ai_vlm_response_path,
             )
         finally:
             if uploaded_file_id:
@@ -500,13 +487,13 @@ class OciEnterpriseAiClient:
             mime_type=mime_type,
         )
         response = await self._post_enterprise_ai(
-            config.oci_enterprise_ai_vlm_path,
+            config.enterprise_ai_vlm_path,
             payload,
             vision=True,
         )
         return _parse_generated_text(
             response,
-            response_path=config.oci_enterprise_ai_vlm_response_path,
+            response_path=config.enterprise_ai_vlm_response_path,
         )
 
     def preview_llm_request(self, prompt: str, context: str) -> EnterpriseAiRequestPreview:
@@ -515,10 +502,10 @@ class OciEnterpriseAiClient:
         return _request_preview(
             self._config,
             surface="llm",
-            path=self._config.oci_enterprise_ai_llm_path,
+            path=self._config.enterprise_ai_llm_path,
             payload=payload,
-            template_used=bool(self._config.oci_enterprise_ai_llm_payload_template.strip()),
-            response_path_set=bool(self._config.oci_enterprise_ai_llm_response_path.strip()),
+            template_used=bool(self._config.enterprise_ai_llm_payload_template.strip()),
+            response_path_set=bool(self._config.enterprise_ai_llm_response_path.strip()),
         )
 
     def preview_vlm_request(
@@ -541,10 +528,10 @@ class OciEnterpriseAiClient:
         return _request_preview(
             config,
             surface="vlm",
-            path=config.oci_enterprise_ai_vlm_path,
+            path=config.enterprise_ai_vlm_path,
             payload=payload,
-            template_used=bool(config.oci_enterprise_ai_vlm_payload_template.strip()),
-            response_path_set=bool(config.oci_enterprise_ai_vlm_response_path.strip()),
+            template_used=bool(config.enterprise_ai_vlm_payload_template.strip()),
+            response_path_set=bool(config.enterprise_ai_vlm_response_path.strip()),
         )
 
     async def _extract_with_enterprise_ai(
@@ -582,9 +569,9 @@ class OciEnterpriseAiClient:
             )
             try:
                 extraction = await self._post_enterprise_ai_with_schema_retry(
-                    config.oci_enterprise_ai_vlm_path,
+                    config.enterprise_ai_vlm_path,
                     payload,
-                    response_path=config.oci_enterprise_ai_vlm_response_path,
+                    response_path=config.enterprise_ai_vlm_response_path,
                 )
             except httpx.HTTPStatusError as exc:
                 _raise_for_unsupported_file_input(exc, model_id=config.vision_model_id)
@@ -603,11 +590,11 @@ class OciEnterpriseAiClient:
         """OCI Files API へ VLM 入力をアップロードし、Responses 用 file_id を返す。"""
         config = self._vision_config
         endpoint = _require_value(
-            config.oci_enterprise_ai_endpoint,
+            config.enterprise_ai_endpoint,
             "OCI Enterprise AI endpoint",
         )
         normalized_mime_type = _normalized_mime_type(mime_type)
-        timeout = config.oci_enterprise_ai_timeout_seconds
+        timeout = config.enterprise_ai_timeout_seconds
         try:
             response = await self._vision_http_transport.upload_file(
                 _join_endpoint_path(endpoint, "/files"),
@@ -626,14 +613,14 @@ class OciEnterpriseAiClient:
         """OCI Files API の一時ファイルを best-effort で削除する。"""
         config = self._vision_config
         endpoint = _require_value(
-            config.oci_enterprise_ai_endpoint,
+            config.enterprise_ai_endpoint,
             "OCI Enterprise AI endpoint",
         )
         try:
             await self._vision_http_transport.delete(
                 _join_endpoint_path(endpoint, f"/files/{file_id}"),
                 headers=_enterprise_ai_headers(config, json_content_type=False),
-                timeout=config.oci_enterprise_ai_timeout_seconds,
+                timeout=config.enterprise_ai_timeout_seconds,
             )
         except Exception:
             return
@@ -657,12 +644,12 @@ class OciEnterpriseAiClient:
             response_schema_name=response_schema_name,
         )
         response = await self._post_enterprise_ai(
-            self._config.oci_enterprise_ai_llm_path,
+            self._config.enterprise_ai_llm_path,
             payload,
         )
         return _parse_generated_text(
             response,
-            response_path=self._config.oci_enterprise_ai_llm_response_path,
+            response_path=self._config.enterprise_ai_llm_response_path,
         )
 
     async def _post_enterprise_ai(
@@ -676,11 +663,11 @@ class OciEnterpriseAiClient:
         config = self._vision_config if vision else self._config
         transport = self._vision_http_transport if vision else self._http_transport
         endpoint = _require_value(
-            config.oci_enterprise_ai_endpoint,
+            config.enterprise_ai_endpoint,
             "OCI Enterprise AI endpoint",
         )
         url = _join_endpoint_path(endpoint, path)
-        timeout = config.oci_enterprise_ai_timeout_seconds
+        timeout = config.enterprise_ai_timeout_seconds
         try:
             return await transport.post_json(
                 url,
@@ -699,7 +686,7 @@ class OciEnterpriseAiClient:
         response_path: str,
     ) -> StructuredExtraction:
         """VLM 応答の schema 不整合は短い指数 backoff で再取得する。"""
-        attempts = self._vision_config.oci_enterprise_ai_max_retries + 1
+        attempts = self._vision_config.enterprise_ai_max_retries + 1
         last_error: EnterpriseAiValidationError | None = None
         for attempt in range(attempts):
             response = await self._post_enterprise_ai(path, payload, vision=True)
@@ -732,10 +719,10 @@ def sdk_retries_disabled() -> Iterator[None]:
         _SDK_MAX_RETRIES_OVERRIDE.reset(token)
 
 
-def sdk_max_retries(config: OciEnterpriseAiConfig) -> int:
+def sdk_max_retries(config: EnterpriseAiConfig) -> int:
     """今の context の SDK の再試行の回数(上書きが無ければ設定の値)。"""
     override = _SDK_MAX_RETRIES_OVERRIDE.get()
-    return config.oci_enterprise_ai_max_retries if override is None else override
+    return config.enterprise_ai_max_retries if override is None else override
 
 
 # SDK が自分で付けるヘッダー。呼び出し側の同じ名前を大文字・小文字の違いで重ねて送ると、
@@ -758,14 +745,14 @@ class _DefaultEnterpriseAiTransport:
     SDK 例外は既存の httpx 例外経路へ変換し、上位のエラーメッセージ整形を維持する。
     """
 
-    def __init__(self, config: OciEnterpriseAiConfig) -> None:
+    def __init__(self, config: EnterpriseAiConfig) -> None:
         self._config = config
 
     def _client(self, timeout: float) -> openai.AsyncOpenAI:
         # URL は呼び出し側で絶対 URL に組み立て済み。認証ヘッダも headers で明示的に渡す。
         return openai.AsyncOpenAI(
-            api_key=self._config.oci_enterprise_ai_api_key.strip() or "unset",
-            base_url=self._config.oci_enterprise_ai_endpoint.strip() or None,
+            api_key=self._config.enterprise_ai_api_key.strip() or "unset",
+            base_url=self._config.enterprise_ai_endpoint.strip() or None,
             max_retries=sdk_max_retries(self._config),
             timeout=timeout,
             # モデルが受け付けない引数(temperature など)の 400 は、外して 1 回だけ送り直し、以後
@@ -904,12 +891,12 @@ def _rag_user_message(prompt: str, context: str) -> str:
     )
 
 
-def _text_output_token_limit(config: OciEnterpriseAiConfig) -> int:
+def _text_output_token_limit(config: EnterpriseAiConfig) -> int:
     """テキストのモデルの呼び出しの出力 token 上限(モデルごとの値。#1719)。"""
     return max(1, int(config.text_max_output_tokens))
 
 
-def _vision_output_token_limit(config: OciEnterpriseAiConfig) -> int:
+def _vision_output_token_limit(config: EnterpriseAiConfig) -> int:
     """Vision のモデルの呼び出し(OCR/構造化抽出・図の読み取り)の出力 token 上限(#1719)。"""
     return max(1, int(config.vision_max_output_tokens))
 
@@ -1065,7 +1052,7 @@ def _vlm_structured_extraction_schema() -> dict[str, Any]:
 
 
 def _build_vlm_payload(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     image_bytes: bytes,
     prompt: str,
     *,
@@ -1083,8 +1070,8 @@ def _build_vlm_payload(
     }
     values = {
         "model": model_id,
-        "project": config.oci_enterprise_ai_project_ocid,
-        "project_ocid": config.oci_enterprise_ai_project_ocid,
+        "project": config.enterprise_ai_project_id,
+        "project_id": config.enterprise_ai_project_id,
         "task": "structured_document_extraction",
         "language": "ja",
         "parser_profile": parser_profile,
@@ -1101,14 +1088,14 @@ def _build_vlm_payload(
             ensure_ascii=False,
         ),
     }
-    if config.oci_enterprise_ai_vlm_payload_template.strip():
+    if config.enterprise_ai_vlm_payload_template.strip():
         _require_template_values(
-            config.oci_enterprise_ai_vlm_payload_template,
+            config.enterprise_ai_vlm_payload_template,
             values,
             "OCI Enterprise AI VLM payload template",
         )
         return _render_payload_template(
-            config.oci_enterprise_ai_vlm_payload_template,
+            config.enterprise_ai_vlm_payload_template,
             values,
             "OCI Enterprise AI VLM payload template",
         )
@@ -1182,7 +1169,7 @@ def _structured_extraction_prompt(prompt: str, *, use_text_format: bool) -> str:
 
 
 def _build_vision_text_payload(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     image_bytes: bytes,
     prompt: str,
     *,
@@ -1224,7 +1211,7 @@ def _build_vision_text_payload(
 
 
 def _build_images_text_payload(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     images: Sequence[bytes],
     prompt: str,
     *,
@@ -1268,7 +1255,7 @@ def _build_images_text_payload(
 
 
 def _build_llm_payload(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     prompt: str,
     context: str,
     system_prompt: str | None = None,
@@ -1293,8 +1280,8 @@ def _build_llm_payload(
     }
     values = {
         "model": model_id,
-        "project": config.oci_enterprise_ai_project_ocid,
-        "project_ocid": config.oci_enterprise_ai_project_ocid,
+        "project": config.enterprise_ai_project_id,
+        "project_id": config.enterprise_ai_project_id,
         "task": "rag_answer_generation",
         "language": "ja",
         "prompt": prompt,
@@ -1310,14 +1297,14 @@ def _build_llm_payload(
         "response_schema": dict(response_schema or {}),
         "response_schema_json": json.dumps(response_schema or {}, ensure_ascii=False),
     }
-    if config.oci_enterprise_ai_llm_payload_template.strip():
+    if config.enterprise_ai_llm_payload_template.strip():
         _require_template_values(
-            config.oci_enterprise_ai_llm_payload_template,
+            config.enterprise_ai_llm_payload_template,
             values,
             "OCI Enterprise AI LLM payload template",
         )
         return _render_payload_template(
-            config.oci_enterprise_ai_llm_payload_template,
+            config.enterprise_ai_llm_payload_template,
             values,
             "OCI Enterprise AI LLM payload template",
         )
@@ -1391,9 +1378,9 @@ def _normalized_mime_type(value: str) -> str:
     return cleaned or DEFAULT_MIME_TYPE
 
 
-def _vlm_input_mode(config: OciEnterpriseAiConfig) -> str:
+def _vlm_input_mode(config: EnterpriseAiConfig) -> str:
     """設定値を VLM 入力搬送方式として正規化する。"""
-    mode = str(getattr(config, "oci_enterprise_ai_vlm_input_mode", "files_api")).strip().casefold()
+    mode = str(getattr(config, "enterprise_ai_vlm_input_mode", "files_api")).strip().casefold()
     if mode == "auto":
         return "files_api"
     if mode in {"files_api", "inline_image"}:
@@ -1401,9 +1388,9 @@ def _vlm_input_mode(config: OciEnterpriseAiConfig) -> str:
     return "files_api"
 
 
-def _should_upload_vlm_input(config: OciEnterpriseAiConfig, *, mime_type: str) -> bool:
+def _should_upload_vlm_input(config: EnterpriseAiConfig, *, mime_type: str) -> bool:
     """VLM 入力を Files API へアップロードするかを設定から決める。"""
-    if config.oci_enterprise_ai_vlm_payload_template.strip():
+    if config.enterprise_ai_vlm_payload_template.strip():
         return False
     mode = _vlm_input_mode(config)
     if mode == "files_api":
@@ -1480,15 +1467,15 @@ def _join_endpoint_path(endpoint: str, path: str) -> str:
 
 
 def _enterprise_ai_headers(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     *,
     json_content_type: bool = True,
 ) -> dict[str, str]:
     """OCI OpenAI-compatible API の project/API key ヘッダーを付与する。"""
     headers = dict(JSON_HEADERS if json_content_type else {"accept": "application/json"})
-    if project := config.oci_enterprise_ai_project_ocid.strip():
+    if project := config.enterprise_ai_project_id.strip():
         headers["OpenAI-Project"] = project
-    api_key = _require_value(config.oci_enterprise_ai_api_key, "OCI Enterprise AI API key")
+    api_key = _require_value(config.enterprise_ai_api_key, "OCI Enterprise AI API key")
     headers["Authorization"] = f"Bearer {api_key}"
     return headers
 
@@ -1502,7 +1489,7 @@ def _require_value(value: str, label: str) -> str:
 
 
 def _request_preview(
-    config: OciEnterpriseAiConfig,
+    config: EnterpriseAiConfig,
     *,
     surface: str,
     path: str,
@@ -1511,7 +1498,7 @@ def _request_preview(
     response_path_set: bool,
 ) -> EnterpriseAiRequestPreview:
     """Enterprise AI request の非機密プレビューを作る。"""
-    endpoint = _require_value(config.oci_enterprise_ai_endpoint, "OCI Enterprise AI endpoint")
+    endpoint = _require_value(config.enterprise_ai_endpoint, "OCI Enterprise AI endpoint")
     payload_shape = _payload_shape(payload)
     if not isinstance(payload_shape, dict):
         payload_shape = {}
@@ -1519,8 +1506,8 @@ def _request_preview(
         surface=surface,
         url=_join_endpoint_path(endpoint, path),
         template_used=template_used,
-        timeout_seconds=config.oci_enterprise_ai_timeout_seconds,
-        max_retries=config.oci_enterprise_ai_max_retries,
+        timeout_seconds=config.enterprise_ai_timeout_seconds,
+        max_retries=config.enterprise_ai_max_retries,
         response_path_set=response_path_set,
         payload_keys=sorted(str(key) for key in payload),
         payload_shape=payload_shape,

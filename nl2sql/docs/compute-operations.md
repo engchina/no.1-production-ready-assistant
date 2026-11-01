@@ -94,7 +94,7 @@ when their dimension is not 1024. It deletes the stored vectors, so
 `--allow-destructive` (or the confirmation dialog of the system table screen).
 After it, rebuild and publish the ontology of each business profile, rebuild the
 feedback index if it is used, and retrain the question classifier. The full
-procedure (including the `PLATFORM_OCI_GENAI_EMBEDDING_DIM` change in
+procedure (including the `PLATFORM_GENAI_EMBEDDING_DIM` change in
 `platform/.env`) is in [platform/README.md](../../platform/README.md)
 「既存環境の更新手順（#46 埋め込みの次元を 1536 から 1024 に）」.
 

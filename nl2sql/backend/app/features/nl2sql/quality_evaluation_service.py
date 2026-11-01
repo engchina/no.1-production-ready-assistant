@@ -709,7 +709,7 @@ class QualityEvaluationService:
         settings = get_settings()
         attempt_timeout = self._attempt_timeout_seconds(job)
         configured = max(30.0, float(settings.nl2sql_quality_evaluation_lease_seconds))
-        retry_attempts = max(1, max(int(settings.oci_enterprise_ai_max_retries), 0) + 1)
+        retry_attempts = max(1, max(int(settings.enterprise_ai_max_retries), 0) + 1)
         retry_floor = 2.0 * attempt_timeout * retry_attempts
         return max(configured, retry_floor)
 

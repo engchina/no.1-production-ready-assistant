@@ -100,32 +100,32 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     local_storage_dir: str = "/u01/data/production-ready-agent"
     max_upload_bytes: int = 100 * 1024 * 1024
     model_settings_file: str = "model-settings.json"
-    oci_enterprise_ai_endpoint: str = ""
-    oci_enterprise_ai_project_ocid: str = ""
-    oci_enterprise_ai_api_key: str = ""
+    enterprise_ai_endpoint: str = ""
+    enterprise_ai_project_id: str = ""
+    enterprise_ai_api_key: str = ""
     # OCI Enterprise AI のセカンダリ接続（#533）。モデルを呼ぶ接続は
     # enterprise_ai_connection_for_model で引く。
-    oci_enterprise_ai_secondary_endpoint: str = ""
-    oci_enterprise_ai_secondary_project_ocid: str = ""
-    oci_enterprise_ai_secondary_api_key: str = ""
+    enterprise_ai_secondary_endpoint: str = ""
+    enterprise_ai_secondary_project_id: str = ""
+    enterprise_ai_secondary_api_key: str = ""
     # ターシャリ接続（#786。OpenAI / OpenAI 互換 API 向け。Project OCID は任意）。
-    oci_enterprise_ai_tertiary_endpoint: str = ""
-    oci_enterprise_ai_tertiary_project_ocid: str = ""
-    oci_enterprise_ai_tertiary_api_key: str = ""
-    oci_enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
-    oci_enterprise_ai_default_text_model: str = ""
-    oci_enterprise_ai_default_vision_model: str = ""
+    enterprise_ai_tertiary_endpoint: str = ""
+    enterprise_ai_tertiary_project_id: str = ""
+    enterprise_ai_tertiary_api_key: str = ""
+    enterprise_ai_models: list[EnterpriseAiConfiguredModel] = Field(default_factory=list)
+    enterprise_ai_default_text_model: str = ""
+    enterprise_ai_default_vision_model: str = ""
     # 品質評価の判定のモデル（#3574。共通のモデル設定の保存で持つ。RAG の品質評価だけが読む）。
-    oci_enterprise_ai_default_judge_model: str = ""
-    oci_enterprise_ai_llm_path: str = "/responses"
-    oci_enterprise_ai_vlm_path: str = "/responses"
-    oci_enterprise_ai_vlm_input_mode: str = "auto"
-    oci_enterprise_ai_llm_payload_template: str = ""
-    oci_enterprise_ai_vlm_payload_template: str = ""
-    oci_enterprise_ai_llm_response_path: str = ""
-    oci_enterprise_ai_vlm_response_path: str = ""
-    oci_enterprise_ai_timeout_seconds: float = 600.0
-    oci_enterprise_ai_max_retries: int = 3
+    enterprise_ai_default_judge_model: str = ""
+    enterprise_ai_llm_path: str = "/responses"
+    enterprise_ai_vlm_path: str = "/responses"
+    enterprise_ai_vlm_input_mode: str = "auto"
+    enterprise_ai_llm_payload_template: str = ""
+    enterprise_ai_vlm_payload_template: str = ""
+    enterprise_ai_llm_response_path: str = ""
+    enterprise_ai_vlm_response_path: str = ""
+    enterprise_ai_timeout_seconds: float = 600.0
+    enterprise_ai_max_retries: int = 3
     # 出力の上限は登録モデルごとの `max_output_tokens`（#1719。platform の
     # `enterprise_ai_output_token_budget`）。共通の LLM / VLM の出力の上限は持たない。
     # チャットで同じ会話の前のターンを LLM に渡す予算（共通の設定。#1818）。
@@ -164,13 +164,13 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         ge=CHAT_ATTACHMENT_MAX_FILES_MIN,
         le=CHAT_ATTACHMENT_MAX_FILES_MAX,
     )
-    oci_genai_embedding_model: str = "cohere.embed-v4.0"
+    genai_embedding_model: str = "cohere.embed-v4.0"
     # 3 製品の Oracle のベクトル列の次元（`EMBEDDING_DIMENSIONS`）に固定する。旧い既定（1536）は
     # 起動で拒否する（#46）。
-    oci_genai_embedding_dim: int = Field(
+    genai_embedding_dim: int = Field(
         default=EMBEDDING_DIMENSIONS, ge=EMBEDDING_DIMENSIONS, le=EMBEDDING_DIMENSIONS
     )
-    oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
+    genai_rerank_model: str = "cohere.rerank-v4.0-fast"
     oracle_dsn: str | None = None
     oracle_user: str | None = None
     oracle_password: str | None = None

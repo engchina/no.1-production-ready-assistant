@@ -19,7 +19,7 @@ from pr_system_settings.model import ModelSettingsTestRequest, run_model_setting
 from app.features.nl2sql import enterprise_ai_client
 from app.features.nl2sql.enterprise_ai_client import (
     EnterpriseAiDirectError,
-    OciEnterpriseAiDirectClient,
+    HttpEnterpriseAiDirectClient,
 )
 from app.features.settings import router as settings_router
 from app.settings import EnterpriseAiConfiguredModel, Settings
@@ -40,14 +40,14 @@ UNSUPPORTED_TEMPERATURE = {
 def _settings(default_model: str = REASONING_MODEL) -> Settings:
     return Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="sk-primary",
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="sk-primary",
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id=REASONING_MODEL),
             EnterpriseAiConfiguredModel(model_id=SAMPLING_MODEL),
         ],
-        oci_enterprise_ai_default_text_model=default_model,
-        oci_enterprise_ai_max_retries=0,
+        enterprise_ai_default_text_model=default_model,
+        enterprise_ai_max_retries=0,
     )
 
 
@@ -76,7 +76,7 @@ def payloads(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 def _generate(settings: Settings) -> str:
-    return OciEnterpriseAiDirectClient(settings).generate(
+    return HttpEnterpriseAiDirectClient(settings).generate(
         prompt="質問", context="文脈", system_prompt="指示"
     )
 

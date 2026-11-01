@@ -27,7 +27,7 @@ from app.schemas.document import (
     IngestionJobStatus,
 )
 from tests.support import AsgiTestClient
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 from tests.test_oracle_db_paths import _document_state_row
 
 _RECIPE_STATUS_SQL = "MIN(r.status) KEEP (DENSE_RANK FIRST ORDER BY r.slot_no)"
@@ -58,7 +58,7 @@ async def test_list_documents_selects_status_from_first_recipe(
             [],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     # 公開版の取得は独立に検証し、このテストでは元の文書 SQL の応答だけを供給する。
     monkeypatch.setattr(client, "document_language_pack_uses", AsyncMock(return_value={}))
 
@@ -79,7 +79,7 @@ async def test_list_documents_selects_status_from_first_recipe(
 async def test_list_and_count_filter_status_by_first_recipe() -> None:
     """状態の絞り込みと件数は、一覧に出す状態と同じ式で判定する(文書の列だけで判定しない)。"""
     pool = FakeOraclePool(execute_results=[[], [{"count_value": 0}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.list_documents(status=FileStatus.REVIEW, limit=10)
     await client.count_documents(status=FileStatus.REVIEW)
@@ -100,7 +100,7 @@ async def test_status_filter_excludes_queued_documents() -> None:
     順番待ちの行は「〈工程〉の順番待ち」と出るため、行の表示とそろえる。
     """
     pool = FakeOraclePool(execute_results=[[], [{"count_value": 0}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.list_documents(status=FileStatus.UPLOADED, limit=10)
     await client.count_documents(status=FileStatus.UPLOADED)
@@ -117,7 +117,7 @@ async def test_status_filter_excludes_queued_documents() -> None:
 async def test_list_and_count_filter_by_queued_phase() -> None:
     """`queued_phase` は一覧と件数を、レシピ1の最初の QUEUED の job の段で同じ式で絞る(#2677)。"""
     pool = FakeOraclePool(execute_results=[[], [{"count_value": 0}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     await client.list_documents(queued_phase=IngestionJobPhase.PREPROCESS, limit=10, offset=25)
     await client.count_documents(queued_phase=IngestionJobPhase.PREPROCESS)

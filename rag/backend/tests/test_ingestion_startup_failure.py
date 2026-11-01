@@ -13,7 +13,7 @@ from app.clients.oracle import OracleClient
 from app.config import get_settings
 from app.rag import ingestion_worker as iw
 from app.schemas.document import IngestionJob, IngestionJobPhase, IngestionJobStatus
-from tests.test_oracle_adapter import FakeOracleCursor, FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOracleCursor, FakeOraclePool, _llm_settings, _run_inline
 
 
 def _job(job_id: str, *, attempts: int = 0, recipe_id: str | None = None) -> IngestionJob:
@@ -190,7 +190,7 @@ async def test_startup_failure_sql_is_conditional_and_atomic(
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 1, raising=False)
     job = _job("a", attempts=attempts, recipe_id=recipe_id)
     pool = FakeOraclePool(execute_results=[[{"document_id": job.document_id}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     assert await client.record_ingestion_startup_failure(job, expected_attempt_count=attempts)
     calls = pool.connection.calls
     assert "FOR UPDATE" in calls[0].statement
@@ -216,7 +216,7 @@ async def test_startup_failure_does_not_update_target_after_losing_race(
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 0, raising=False)
     job = _job("a", attempts=2)
     pool = FakeOraclePool(execute_results=[[{"document_id": job.document_id}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     assert not await client.record_ingestion_startup_failure(job, expected_attempt_count=2)
     assert len(pool.connection.calls) == 2
 
@@ -230,7 +230,7 @@ async def test_startup_failure_transaction_rolls_back_on_target_update_error(
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 1, raising=False)
     job = _job("a", attempts=2)
     pool = FakeOraclePool(execute_results=[[{"document_id": job.document_id}]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     original = oracle_module._execute
 
     def fail_target(*args: object, **kwargs: object) -> None:
@@ -283,6 +283,6 @@ async def test_missing_parent_is_not_updated(monkeypatch: pytest.MonkeyPatch) ->
     """文書の削除・アクセス範囲の変更後は job の失敗も書き込まない。"""
     monkeypatch.setattr(FakeOracleCursor, "rowcount", 1, raising=False)
     pool = FakeOraclePool(execute_results=[[]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     assert not await client.record_ingestion_startup_failure(_job("a"), expected_attempt_count=0)
     assert len(pool.connection.calls) == 1

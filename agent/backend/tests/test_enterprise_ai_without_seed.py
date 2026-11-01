@@ -27,7 +27,7 @@ def _target(*, effort: str = "medium") -> ModelTarget:
     return ModelTarget(
         model_id="m",
         endpoint=ENDPOINT,
-        project_ocid="",
+        project_id="",
         api_key="k",
         reasoning_effort=effort,
     )

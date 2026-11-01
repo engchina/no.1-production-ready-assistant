@@ -70,7 +70,7 @@ async def test_formal_answer_entry_passes_mode_and_observes_real_generation_audi
             )
         return _fake_llm(system, prompt, engine_settings, schema, **options)
 
-    monkeypatch.setattr("rag_engine.adapters.oci.parse_text_response", model)
+    monkeypatch.setattr("rag_engine.adapters.model_api.parse_text_response", model)
     validator = AsyncMock(
         return_value=AnswerValidation(status="completed", valid=False, counts={"unsupported": 1})
     )
@@ -314,7 +314,7 @@ async def test_formal_entry_does_not_spend_budget_on_uncalibrated_material_obser
             )
         return _fake_llm(system, prompt, config, schema, **options)
 
-    monkeypatch.setattr("rag_engine.adapters.oci.parse_text_response", model)
+    monkeypatch.setattr("rag_engine.adapters.model_api.parse_text_response", model)
     monkeypatch.setattr(
         "app.rag.answer_validation.validate_answer",
         AsyncMock(return_value=AnswerValidation(status="completed", valid=True)),
@@ -396,7 +396,7 @@ async def test_formal_none_entry_keeps_invalid_id_and_range_checks(
             )
         return _fake_llm(system, prompt, config, schema, **options)
 
-    monkeypatch.setattr("rag_engine.adapters.oci.parse_text_response", model)
+    monkeypatch.setattr("rag_engine.adapters.model_api.parse_text_response", model)
     validator = AsyncMock()
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     result = await AnswerEngine(

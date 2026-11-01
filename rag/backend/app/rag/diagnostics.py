@@ -56,9 +56,9 @@ def rag_config_fingerprint(settings: Settings | None = None) -> str:
     """検索・回答の結果に効く RAG 設定の非機密 fingerprint を返す。"""
     resolved_settings = settings or get_settings()
     payload = {
-        "embedding_dim": resolved_settings.oci_genai_embedding_dim,
-        "embedding_model": resolved_settings.oci_genai_embedding_model,
-        "rerank_model": resolved_settings.oci_genai_rerank_model,
+        "embedding_dim": resolved_settings.genai_embedding_dim,
+        "embedding_model": resolved_settings.genai_embedding_model,
+        "rerank_model": resolved_settings.genai_rerank_model,
         "chunk_size": resolved_settings.rag_chunk_size,
         "chunk_overlap": resolved_settings.rag_chunk_overlap,
         "context_group_max_chunks": resolved_settings.rag_context_group_max_chunks,

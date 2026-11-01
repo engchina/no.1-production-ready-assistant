@@ -28,7 +28,7 @@ ENDPOINT = "https://primary.example/openai/v1"
 
 def _target(effort: str) -> ModelTarget:
     return ModelTarget(
-        model_id="m", endpoint=ENDPOINT, project_ocid="", api_key="k", reasoning_effort=effort
+        model_id="m", endpoint=ENDPOINT, project_id="", api_key="k", reasoning_effort=effort
     )
 
 
@@ -47,13 +47,13 @@ def test_model_settings_send_effort_only_when_set(effort: str, expected: str | N
 def test_resolve_model_target_reads_effort_of_agent_model(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(
         _env_file=None,
-        oci_enterprise_ai_endpoint=ENDPOINT,
-        oci_enterprise_ai_api_key="sk-test",
-        oci_enterprise_ai_models=[
+        enterprise_ai_endpoint=ENDPOINT,
+        enterprise_ai_api_key="sk-test",
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="text-a", reasoning_effort="none"),
             EnterpriseAiConfiguredModel(model_id="text-b"),
         ],
-        oci_enterprise_ai_default_text_model="text-a",
+        enterprise_ai_default_text_model="text-a",
     )
     monkeypatch.setattr(builtin_runtime, "get_settings", lambda: settings)
 

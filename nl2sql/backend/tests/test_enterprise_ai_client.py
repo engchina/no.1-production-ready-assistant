@@ -38,7 +38,7 @@ def test_enterprise_ai_payload_template_receives_response_format_object() -> Non
         "strict": True,
     }
     settings = Settings(
-        oci_enterprise_ai_llm_payload_template=(
+        enterprise_ai_llm_payload_template=(
             '{"model":"${model}","format":"${response_format}","input":"${prompt}"}'
         )
     )
@@ -61,8 +61,8 @@ def test_reverse_retry_uses_typed_http_errors(monkeypatch: pytest.MonkeyPatch) -
     from app.features.nl2sql import enterprise_ai_client as module
 
     settings = Settings(
-        oci_enterprise_ai_endpoint="https://enterprise.example.test",
-        oci_enterprise_ai_api_key="synthetic-test-key",
+        enterprise_ai_endpoint="https://enterprise.example.test",
+        enterprise_ai_api_key="synthetic-test-key",
     )
     real_client = httpx.Client
     for status, code, retryable in [
@@ -83,7 +83,7 @@ def test_reverse_retry_uses_typed_http_errors(monkeypatch: pytest.MonkeyPatch) -
             lambda transport=transport, **kwargs: real_client(transport=transport, **kwargs),
         )
         with pytest.raises(module.EnterpriseAiDirectError) as error:
-            client = module.OciEnterpriseAiDirectClient(settings)
+            client = module.HttpEnterpriseAiDirectClient(settings)
             client._post_json(
                 {}, connection=client.connection(""), path="/responses", max_retries=0
             )
@@ -103,12 +103,12 @@ _OCI_MODEL_NOT_FOUND_BODY = (
 
 def _direct_settings() -> Settings:
     return Settings(
-        oci_enterprise_ai_endpoint=(
+        enterprise_ai_endpoint=(
             "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/openai/v1"
         ),
-        oci_enterprise_ai_api_key="synthetic-test-key",
-        oci_enterprise_ai_project_ocid="ocid1.generativeaiproject.oc1.us-chicago-1.synthetic",
-        oci_enterprise_ai_default_text_model="openai.gpt-oss-120b",
+        enterprise_ai_api_key="synthetic-test-key",
+        enterprise_ai_project_id="ocid1.generativeaiproject.oc1.us-chicago-1.synthetic",
+        enterprise_ai_default_text_model="openai.gpt-oss-120b",
     )
 
 
@@ -159,7 +159,7 @@ def test_configuration_failures_are_classified_and_not_retried(
         return httpx.Response(status, text=body)
 
     _mock_http(monkeypatch, handler)
-    client = module.OciEnterpriseAiDirectClient(_direct_settings())
+    client = module.HttpEnterpriseAiDirectClient(_direct_settings())
     with pytest.raises(module.EnterpriseAiDirectError) as raised:
         client.generate(prompt="社員一覧", context="", system_prompt="SQL", max_retries=3)
 
@@ -192,7 +192,7 @@ def test_unavailable_is_still_retried(monkeypatch: pytest.MonkeyPatch) -> None:
 
     _mock_http(monkeypatch, handler)
     monkeypatch.setattr("time.sleep", lambda _seconds: None)
-    client = module.OciEnterpriseAiDirectClient(_direct_settings())
+    client = module.HttpEnterpriseAiDirectClient(_direct_settings())
     with pytest.raises(module.EnterpriseAiDirectError) as raised:
         client.generate(prompt="社員一覧", context="", system_prompt="SQL", max_retries=2)
 
@@ -225,7 +225,7 @@ def test_direct_call_uses_system_default_text_model_and_its_connection(
         return httpx.Response(200, json={"output_text": '{"text":"ok"}'})
 
     _mock_http(monkeypatch, handler)
-    client = module.OciEnterpriseAiDirectClient(_direct_settings())
+    client = module.HttpEnterpriseAiDirectClient(_direct_settings())
     client.generate(prompt="社員一覧", context="", system_prompt="SQL")
 
     url, payload, project = seen[0]
@@ -249,7 +249,7 @@ def test_model_call_snapshot_includes_schema_and_returned_output(
         monkeypatch,
         lambda request: httpx.Response(200, json={"output_text": '{"text":"synthetic-result"}'}),
     )
-    client = module.OciEnterpriseAiDirectClient(_direct_settings())
+    client = module.HttpEnterpriseAiDirectClient(_direct_settings())
     with operation_trace("synthetic", operation_id="a") as trace:
         client.generate(prompt="synthetic-input", context="", system_prompt="synthetic-system")
     span = next(s for s in trace.spans if s.operation_name == "gen_ai.chat")

@@ -156,7 +156,7 @@ def test_model_rejects_values_outside_choices() -> None:
 
 def test_unregistered_model_uses_default_low() -> None:
     settings = FakeSettings(
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="llm-a", reasoning_effort="none")
         ]
     )

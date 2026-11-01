@@ -189,10 +189,10 @@ def test_embedding_dimension_is_fixed_to_oracle_vector_width() -> None:
 
     #46 より前の既定（1536）は拒否する。
     """
-    assert Settings().oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
+    assert Settings().genai_embedding_dim == EMBEDDING_DIMENSIONS
 
     with pytest.raises(ValidationError):
-        Settings(oci_genai_embedding_dim=1536)
+        Settings(genai_embedding_dim=1536)
 
 
 def test_model_settings_file_defaults_to_relative_env_sibling_path(
@@ -330,14 +330,14 @@ def test_auth_settings_use_platform_and_rag_env_names() -> None:
 
 def test_enterprise_ai_max_retries_defaults_to_three_and_is_bounded() -> None:
     """Enterprise AI の最大リトライ回数は既定 3、0-5 に制限する。"""
-    assert Settings().oci_enterprise_ai_max_retries == 3
-    assert Settings(oci_enterprise_ai_max_retries=0).oci_enterprise_ai_max_retries == 0
-    assert Settings(oci_enterprise_ai_max_retries=5).oci_enterprise_ai_max_retries == 5
+    assert Settings().enterprise_ai_max_retries == 3
+    assert Settings(enterprise_ai_max_retries=0).enterprise_ai_max_retries == 0
+    assert Settings(enterprise_ai_max_retries=5).enterprise_ai_max_retries == 5
 
     with pytest.raises(ValidationError):
-        Settings(oci_enterprise_ai_max_retries=-1)
+        Settings(enterprise_ai_max_retries=-1)
     with pytest.raises(ValidationError):
-        Settings(oci_enterprise_ai_max_retries=6)
+        Settings(enterprise_ai_max_retries=6)
 
 
 def test_http_service_retry_defaults_to_five_attempts_and_is_bounded() -> None:
@@ -356,17 +356,17 @@ def test_http_service_retry_defaults_to_five_attempts_and_is_bounded() -> None:
 
 def test_enterprise_ai_timeout_defaults_to_pdf_friendly_value() -> None:
     """PDF/VLM 取込は 60 秒を超えることがあるため既定 timeout を長めにする。"""
-    assert Settings().oci_enterprise_ai_timeout_seconds == 600.0
+    assert Settings().enterprise_ai_timeout_seconds == 600.0
 
     with pytest.raises(ValidationError):
-        Settings(oci_enterprise_ai_timeout_seconds=0)
+        Settings(enterprise_ai_timeout_seconds=0)
 
 
 def test_enterprise_ai_output_token_limits_follow_each_model() -> None:
     """出力の上限は登録モデルごとの値(#1719)。共通の LLM / VLM の出力の上限は持たない。"""
     assert not [name for name in Settings.model_fields if name.endswith("_max_output_tokens")]
     settings = Settings(
-        oci_enterprise_ai_models=[
+        enterprise_ai_models=[
             EnterpriseAiConfiguredModel(model_id="llm-a", max_output_tokens=16000),
             EnterpriseAiConfiguredModel(model_id="llm-small", max_input_tokens=8192),
         ]
@@ -423,11 +423,11 @@ def test_ingestion_job_stall_timeout_exceeds_longest_silent_call() -> None:
     assert settings.ingestion_job_stall_timeout_seconds > longest
     # Vision の LLM は 1 回 600 秒を再試行込みで 4 回まで呼ぶ。
     assert settings.ingestion_silent_call_timeouts()[
-        "PLATFORM_OCI_ENTERPRISE_AI_TIMEOUT_SECONDS"
+        "PLATFORM_ENTERPRISE_AI_TIMEOUT_SECONDS"
     ] == pytest.approx(2400.0)
     # 共通の設定(3 製品で共有)で選べる最長(600 秒 × 6 回)でも、既定の停滞の時間で起動できる。
     widest = Settings(
-        _env_file=None, oci_enterprise_ai_timeout_seconds=600.0, oci_enterprise_ai_max_retries=5
+        _env_file=None, enterprise_ai_timeout_seconds=600.0, enterprise_ai_max_retries=5
     )
     assert widest.ingestion_job_stall_timeout_seconds > max(
         widest.ingestion_silent_call_timeouts().values()
@@ -451,7 +451,7 @@ def test_ingestion_job_stall_timeout_default_starts_with_deployed_parser_timeout
 @pytest.mark.parametrize(
     ("overrides", "setting_name"),
     [
-        ({"ingestion_job_stall_timeout_seconds": 1800.0}, "PLATFORM_OCI_ENTERPRISE_AI"),
+        ({"ingestion_job_stall_timeout_seconds": 1800.0}, "PLATFORM_ENTERPRISE_AI"),
         (
             {"rag_parser_service_timeout_seconds": 3600.0},
             "RAG_PARSER_SERVICE_TIMEOUT_SECONDS",
@@ -777,12 +777,10 @@ def test_enterprise_ai_response_paths_default_to_known_envelope_detection() -> N
     """Enterprise AI response path は既定で空にし、既知 envelope を順番に照合する。"""
     settings = Settings()
 
-    assert settings.oci_enterprise_ai_llm_response_path == ""
-    assert settings.oci_enterprise_ai_vlm_response_path == ""
+    assert settings.enterprise_ai_llm_response_path == ""
+    assert settings.enterprise_ai_vlm_response_path == ""
     assert (
-        Settings(
-            oci_enterprise_ai_llm_response_path="/data/text"
-        ).oci_enterprise_ai_llm_response_path
+        Settings(enterprise_ai_llm_response_path="/data/text").enterprise_ai_llm_response_path
         == "/data/text"
     )
 
@@ -1089,7 +1087,7 @@ def test_platform_and_product_env_examples_load(monkeypatch: pytest.MonkeyPatch)
 
     assert settings.cors_origins
     assert all(origin.startswith("http://") for origin in settings.cors_origins)
-    assert settings.oci_enterprise_ai_models == []
+    assert settings.enterprise_ai_models == []
     assert settings.oracle_password in ("", None)
 
 

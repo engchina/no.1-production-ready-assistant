@@ -175,7 +175,6 @@ def generic_target_words() -> frozenset[str]:
 
 
 def _requester_terms_pattern() -> str:
-
     terms = _cues().words["requester_terms"]
     return "|".join(re.escape(term) for term in dict.fromkeys(term for term in terms if term))
 

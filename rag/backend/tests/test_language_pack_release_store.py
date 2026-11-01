@@ -17,7 +17,7 @@ from app.clients.language_pack_release_store import (
 )
 from app.clients.oracle import OracleClient
 from app.schemas.language_pack_release import LanguagePackRelease, LanguagePackReleaseState
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 def release_row() -> dict[str, object]:
@@ -80,7 +80,7 @@ async def test_stale_save_rolls_back_without_insert_or_update() -> None:
             [release_row()],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     with pytest.raises(LanguagePackReleaseConflict):
         await LanguagePackReleaseStore(client).save_draft(
             builtin_pack().to_dict(), expected_revision=2
@@ -93,7 +93,7 @@ async def test_stale_save_rolls_back_without_insert_or_update() -> None:
 @pytest.mark.parametrize("limit,offset", [(0, 0), (101, 0), (25, -1)])
 async def test_invalid_paging_does_not_connect(limit: int, offset: int) -> None:
     pool = FakeOraclePool()
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     with pytest.raises(ValueError):
         await LanguagePackReleaseStore(client).list(limit=limit, offset=offset)
     assert pool.acquire_calls == 0
@@ -241,7 +241,7 @@ async def test_explicit_publish_enriches_new_release_without_rewriting_old(
     )
     monkeypatch.setattr(oracle_module, "_execute", lambda *_args, **_kwargs: None)
     pool = FakeOraclePool()
-    oracle = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    oracle = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
     await LanguagePackReleaseStore(oracle).publish(expected_revision=1, expected_current_id=old.id)
     assert len(inserted) == 1
     new = inserted[0]

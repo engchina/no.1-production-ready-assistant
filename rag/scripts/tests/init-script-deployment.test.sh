@@ -154,7 +154,7 @@ EOF
   cp "${BACKEND_DIR}/.env" "${case_dir}/first.env"
   cp "${PLATFORM_ENV_FILE}" "${case_dir}/first-platform.env"
   # 画面から保存した値（API key 等）は再実行で消えない。
-  printf 'PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-on-screen\n' >> "${PLATFORM_ENV_FILE}"
+  printf 'PLATFORM_ENTERPRISE_AI_API_KEY=saved-on-screen\n' >> "${PLATFORM_ENV_FILE}"
   install_runtime_env
   cp "${BACKEND_DIR}/.env" "${case_dir}/second.env"
   cp "${PLATFORM_ENV_FILE}" "${case_dir}/second-platform.env"
@@ -391,7 +391,7 @@ if grep -q '^PLATFORM_' "${first}"; then
 fi
 test "$(stat -c '%a' "${TEST_TMP_DIR}/runtime-env/app/no.1-production-ready-assistant/platform/.env")" = "600" \
   || fail "platform/.env の permission が 0600 ではない"
-grep -Fqx 'PLATFORM_OCI_ENTERPRISE_AI_API_KEY=saved-on-screen' "${TEST_TMP_DIR}/runtime-env/second-platform.env" \
+grep -Fqx 'PLATFORM_ENTERPRISE_AI_API_KEY=saved-on-screen' "${TEST_TMP_DIR}/runtime-env/second-platform.env" \
   || fail "再実行で画面から保存した共通 .env の値が消えた"
 
 # --- systemd の unit・状態の保持・sudoers ---
@@ -652,10 +652,10 @@ done
 grep -Fq 'FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/rag/}"' "${REPO_DIR}/init_script.sh" \
   || fail "frontend を /rag/ を base に build しない"
 # backend の回答生成の上限（RAG_ANSWER_TIMEOUT_SECONDS の設定の上限）が画面（630 秒）より短いこと。
-answer_timeout_max="$(sed -n 's/^OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = \([0-9]*\)\.0$/\1/p' "${REPO_DIR}/backend/app/config.py")"
+answer_timeout_max="$(sed -n 's/^ENTERPRISE_AI_TIMEOUT_MAX_SECONDS = \([0-9]*\)\.0$/\1/p' "${REPO_DIR}/backend/app/config.py")"
 test "${answer_timeout_max}" = "600" || fail "LLM 1 回の timeout の上限（回答生成の上限）が 600 秒ではない"
 awk '/rag_answer_timeout_seconds: float = Field\(/ {found = 1} found {print} found && /^    \)$/ {exit}' \
-  "${REPO_DIR}/backend/app/config.py" | grep -Fq 'le=OCI_ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,' \
+  "${REPO_DIR}/backend/app/config.py" | grep -Fq 'le=ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,' \
   || fail "回答生成の上限（RAG_ANSWER_TIMEOUT_SECONDS）が LLM 1 回の timeout の上限で抑えられていない"
 # reverse proxy の設定の雛形を製品に置かない（#306・#19）。
 test ! -e "${REPO_DIR}/frontend/nginx.conf.template" \

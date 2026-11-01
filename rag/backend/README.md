@@ -68,20 +68,20 @@ uv run bandit -r app          # セキュリティ
 
 Backend は常に以下の OCI / Oracle 実装を使います。local / oci の実行モード切り替えはありません。
 
-- `OciEnterpriseAiClient`: OCI Enterprise AI の VLM / LLM
-- `OciGenAiClient`: OCI Generative AI の Cohere Embed v4 / Rerank v4 fast
+- `EnterpriseAiClient`: OCI Enterprise AI の VLM / LLM
+- `GenAiClient`: OCI Generative AI の Cohere Embed v4 / Rerank v4 fast
 - `OracleClient`: python-oracledb pool + Oracle AI Vector Search / Oracle Text
 - `FileStorageClient`（`app/clients/file_storage.py`）: ローカルの保存先（`PLATFORM_LOCAL_STORAGE_DIR`）への原本ファイル・成果物の保存 / 取得（OCI Object Storage は #11 で削除）
 
 設定は、3製品共通の設定（アップロード保存先・モデル・データベース。`PLATFORM_*`）を共通 `.env`（リポジトリの `platform/.env`、場所は `PLATFORM_ENV_FILE` で上書き可）、RAG 固有の設定（`RAG_*`）を `backend/.env` に置きます。環境変数 → 共通 `.env` → `backend/.env` の順に読み、旧名（接頭辞のない名前や `HF_TOKEN` / `HF_ENDPOINT`）は読みません（#211。既存環境の移行は [docs/deployment.md](../docs/deployment.md) の「既存環境の更新手順（#211）」）。システム設定画面（アップロード保存先・データベース）は共通 `.env` に、RAG 固有の設定画面は `backend/.env` に保存します。
 
-モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
+モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
 
-`OciEnterpriseAiClient` は Enterprise AI の実 endpoint / model deployment / gateway が返す JSON envelope の揺れを吸収します。VLM は `structured_extraction`、`extraction`、`prediction(s)`、`output(s)`、JSON 文字列などから `StructuredExtraction` を取り出して Pydantic で検証します。`StructuredExtraction` は `raw_text` と `elements` を持ち、ページ、読み順、見出し、本文、リスト、表、図、header/footer などを同じ JSON で表せます。LLM は `answer`、`text`、`output_text`、`generated_text`、`choices[].message.content`、`inference_response` などから回答 text を取り出します。独自 gateway がさらに深い envelope を返す場合は `PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_RESPONSE_PATH` に JSON Pointer 形式(`/payload/results/0/text` など)を設定して候補 node を明示できます。いずれも OCI Generative AI chat API には接続しません。
+`EnterpriseAiClient` は Enterprise AI の実 endpoint / model deployment / gateway が返す JSON envelope の揺れを吸収します。VLM は `structured_extraction`、`extraction`、`prediction(s)`、`output(s)`、JSON 文字列などから `StructuredExtraction` を取り出して Pydantic で検証します。`StructuredExtraction` は `raw_text` と `elements` を持ち、ページ、読み順、見出し、本文、リスト、表、図、header/footer などを同じ JSON で表せます。LLM は `answer`、`text`、`output_text`、`generated_text`、`choices[].message.content`、`inference_response` などから回答 text を取り出します。独自 gateway がさらに深い envelope を返す場合は `PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_ENTERPRISE_AI_VLM_RESPONSE_PATH` に JSON Pointer 形式(`/payload/results/0/text` など)を設定して候補 node を明示できます。いずれも OCI Generative AI chat API には接続しません。
 
-Enterprise AI endpoint の request shape が標準 payload と異なる場合は、`PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` に JSON object template を設定できます。`${prompt}`、`${context}`、`${mime_type}`、`${data_base64}`、`${structure_instructions}` などの文字列 placeholder と、`"${messages}"`、`"${parameters}"`、`"${structured_extraction_schema}"` などの object placeholder を使えます。テンプレート未設定時は標準 payload を使い、アップロード時の MIME type と構造化抽出 instructions を VLM input に渡します。
+Enterprise AI endpoint の request shape が標準 payload と異なる場合は、`PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` に JSON object template を設定できます。`${prompt}`、`${context}`、`${mime_type}`、`${data_base64}`、`${structure_instructions}` などの文字列 placeholder と、`"${messages}"`、`"${parameters}"`、`"${structured_extraction_schema}"` などの object placeholder を使えます。テンプレート未設定時は標準 payload を使い、アップロード時の MIME type と構造化抽出 instructions を VLM input に渡します。
 
-VLM input の搬送方式は `PLATFORM_OCI_ENTERPRISE_AI_VLM_INPUT_MODE` で選べます。既定の `auto` は画像を inline data URL、PDF など非画像を OCI Enterprise AI `/files` API にアップロードして `file_id` を `/responses` へ渡します。`files_api` は画像も含めて明示的に `/files` 経由にし、`inline_image` は画像だけ inline で送ります。設定画面では「VLM 入力方式」で選択し、API パスは通常 `/responses` のままにします。
+VLM input の搬送方式は `PLATFORM_ENTERPRISE_AI_VLM_INPUT_MODE` で選べます。既定の `auto` は画像を inline data URL、PDF など非画像を OCI Enterprise AI `/files` API にアップロードして `file_id` を `/responses` へ渡します。`files_api` は画像も含めて明示的に `/files` 経由にし、`inline_image` は画像だけ inline で送ります。設定画面では「VLM 入力方式」で選択し、API パスは通常 `/responses` のままにします。
 
 Enterprise AI endpoint の request / response 契約だけを Oracle や Object Storage から切り離して確認する場合は、`app.rag.enterprise_ai_probe` を使います。`--dry-run` は endpoint へ送信せず、URL、template 使用有無、payload key、payload shape、JSON byte 数だけを出します。本実行は LLM / VLM を直接呼び、回答本文や OCR 本文は出さず、text 文字数・element 件数などの非機密 summary だけを返します。
 
@@ -91,7 +91,7 @@ uv run python -m app.rag.enterprise_ai_probe --surface llm
 uv run python -m app.rag.enterprise_ai_probe --surface vlm --mime-type text/plain
 ```
 
-Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text-embedding-v4` の既定。正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46）を固定契約にしています。`OciGenAiClient` は OCI Generative AI Inference SDK の `embed_text` / `rerank_text` を使い、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`OciGenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`OciGenAiClient.rerank()` は Cohere Rerank v4 fast の返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
+Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text-embedding-v4` の既定。正本は `pr_system_settings.embedding.EMBEDDING_DIMENSIONS`。#46）を固定契約にしています。`GenAiClient` は OCI Generative AI Inference SDK の `embed_text` / `rerank_text` を使い、検索 query は `SEARCH_QUERY`、文書 chunk は `SEARCH_DOCUMENT` として embedding します。`GenAiClient.embed()` は返却件数と次元数を検証し、`OracleClient` も chunk 保存・vector search の入口で再検証します。`GenAiClient.rerank()` は Cohere Rerank v4 fast の返却 index が候補範囲内で重複せず、返却件数が `top_n` 以内、score が finite number であることを検証してから pipeline に渡します。
 
 Oracle は共有 connection pool を遅延初期化し、アプリ終了時に閉じます。document/chunk の永続化、HNSW vector index + `FETCH APPROX ... WITH TARGET ACCURACY` による vector search、Oracle Text `CONTAINS` による keyword search を同じ tenant filter 付きで実行します。query 側の approximate search 精度は `RAG_ORACLE_VECTOR_TARGET_ACCURACY` で調整できます。
 
@@ -284,7 +284,7 @@ app/
   main.py            FastAPI エントリ
   config.py          設定（pydantic-settings）
   api/routes/        health / documents / search / evaluation
-  clients/           oci_enterprise_ai(LLM/VLM) / oci_genai(embed,rerank) / oracle(Oracle AI Database) / file_storage(ローカル保存先)
+  clients/           enterprise_ai(LLM/VLM) / genai(embed,rerank) / oracle(Oracle AI Database) / file_storage(ローカル保存先)
   rag/               chunking / ingestion / pipeline
   schemas/           common / document / search
 tests/

@@ -82,9 +82,9 @@ def _guide(decision: str = "answer") -> dict[str, Any]:
 
 
 async def _answer(monkeypatch: pytest.MonkeyPatch, oracle: GuideStepOracle, **settings: Any) -> Any:
-    import rag_engine.adapters.oci as engine_oci
+    import rag_engine.adapters.model_api as engine_api
 
-    monkeypatch.setattr(engine_oci, "parse_text_response", _fake_llm)
+    monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",

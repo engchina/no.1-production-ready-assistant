@@ -863,7 +863,7 @@ async def _run_enterprise_text_model_test(
         settings,
         prompt=MODEL_TEST_TEXT_PROMPT,
         context=model_test_text_context("Production Ready Agent"),
-        project_ocid=connection.project_ocid,
+        project_id=connection.project_id,
     )
     response = await _post_enterprise_ai(settings, connection, settings.api_path, payload)
     return _parse_enterprise_text_response(response, settings.text_response_path)
@@ -875,7 +875,7 @@ async def _run_enterprise_vision_model_test(
     payload = _enterprise_vision_payload(
         settings,
         prompt=MODEL_TEST_VISION_PROMPT,
-        project_ocid=connection.project_ocid,
+        project_id=connection.project_id,
     )
     response = await _post_enterprise_ai(settings, connection, settings.api_path, payload)
     return _parse_enterprise_text_response(response, settings.vision_response_path)
@@ -891,15 +891,15 @@ def _enterprise_text_payload(
     *,
     prompt: str,
     context: str,
-    project_ocid: str = "",
+    project_id: str = "",
 ) -> dict[str, object]:
     system_prompt = "根拠に基づいて日本語で簡潔に回答してください。"
     user_message = f"{context}\n\n質問: {prompt}" if context else prompt
     max_output_tokens = _model_output_token_budget(settings, _enterprise_text_model_id(settings))
     values = {
         "model": _enterprise_text_model_id(settings),
-        "project": project_ocid,
-        "project_ocid": project_ocid,
+        "project": project_id,
+        "project_id": project_id,
         "prompt": prompt,
         "context": context,
         "system_prompt": system_prompt,
@@ -962,7 +962,7 @@ def _enterprise_vision_payload(
     settings: EnterpriseAiModelSettings,
     *,
     prompt: str,
-    project_ocid: str = "",
+    project_id: str = "",
 ) -> dict[str, object]:
     content = [
         {"type": "input_text", "text": prompt},
@@ -970,8 +970,8 @@ def _enterprise_vision_payload(
     ]
     values = {
         "model": settings.default_vision_model_id,
-        "project": project_ocid,
-        "project_ocid": project_ocid,
+        "project": project_id,
+        "project_id": project_id,
         "prompt": prompt,
         "input": [{"role": "user", "content": content}],
         "messages": [{"role": "user", "content": content}],
@@ -1023,8 +1023,8 @@ async def _post_enterprise_ai(
         "content-type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
-    if connection.project_ocid:
-        headers["OpenAI-Project"] = connection.project_ocid
+    if connection.project_id:
+        headers["OpenAI-Project"] = connection.project_id
     async with httpx.AsyncClient(timeout=settings.timeout_seconds) as client:
         # モデルが受け付けない引数（temperature など）の 400 は、外して 1 回だけ送り直し、
         # 以後このモデルには送らない（#3539。外した引数は結果の詳細に出る）。
@@ -1124,12 +1124,12 @@ def _json_pointer_value(document: Mapping[str, object], pointer: str) -> object:
 async def _run_embedding_model_test(settings: object) -> list[list[float]]:
     """OpenAI 互換の `POST {base_url}/embeddings` で 1 件埋め込み、ベクトルを返す（#8 / #45）。
 
-    Oracle の VECTOR 列に合わせるため `dimensions`（`oci_genai_embedding_dim`）を必ず送る
+    Oracle の VECTOR 列に合わせるため `dimensions`（`genai_embedding_dim`）を必ず送る
     （次元の検証は `embedding_test_details`）。
     """
     url = f"{_embedding_base_url(settings, rerank=False)}/embeddings"
     body: dict[str, object] = {
-        "model": _settings_str_from(settings, "oci_genai_embedding_model"),
+        "model": _settings_str_from(settings, "genai_embedding_model"),
         "input": [MODEL_TEST_EMBEDDING_INPUT],
         "dimensions": _embedding_dim(settings),
     }
@@ -1154,7 +1154,7 @@ async def _run_rerank_model_test(settings: object) -> list[tuple[int, float]]:
     """
     url = f"{_embedding_base_url(settings, rerank=True)}/reranks"
     body: dict[str, object] = {
-        "model": _settings_str_from(settings, "oci_genai_rerank_model"),
+        "model": _settings_str_from(settings, "genai_rerank_model"),
         "query": MODEL_TEST_RERANK_QUERY,
         "documents": list(MODEL_TEST_RERANK_DOCUMENTS),
         "top_n": len(MODEL_TEST_RERANK_DOCUMENTS),
@@ -1199,12 +1199,12 @@ def _embedding_api_key(settings: object, *, rerank: bool) -> str:
 
 
 def _embedding_dim(settings: object) -> int:
-    """埋め込みの次元（`oci_genai_embedding_dim`。Oracle の VECTOR 列に合わせた値）。"""
-    return int(_settings_float_from(settings, "oci_genai_embedding_dim", 0.0))
+    """埋め込みの次元（`genai_embedding_dim`。Oracle の VECTOR 列に合わせた値）。"""
+    return int(_settings_float_from(settings, "genai_embedding_dim", 0.0))
 
 
 def _embedding_timeout(settings: object) -> int:
-    return max(1, int(_settings_float_from(settings, "oci_enterprise_ai_timeout_seconds", 60.0)))
+    return max(1, int(_settings_float_from(settings, "enterprise_ai_timeout_seconds", 60.0)))
 
 
 def _post_openai_compatible(

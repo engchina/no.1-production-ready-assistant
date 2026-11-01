@@ -11,7 +11,7 @@ import pytest
 
 from app.clients.oracle import OracleClient, _oracle_knowledge_base_where
 from app.schemas.knowledge_base import KnowledgeBaseStatus
-from tests.test_oracle_adapter import FakeOraclePool, _oci_settings, _run_inline
+from tests.test_oracle_adapter import FakeOraclePool, _llm_settings, _run_inline
 
 
 def _search_answer_profile_row(
@@ -45,7 +45,7 @@ async def test_search_answer_profile_detail_marks_archived_and_missing_knowledge
             ],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     detail = await client.get_search_answer_profile("bv-1")
 
@@ -80,7 +80,7 @@ async def test_profile_list_counts_archived_and_missing_references_in_one_lookup
             ],
         ]
     )
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     views = await client.list_search_answer_profiles(limit=20)
 
@@ -105,7 +105,7 @@ async def test_profile_list_counts_archived_and_missing_references_in_one_lookup
 async def test_search_answer_profile_list_without_references_skips_lookup() -> None:
     """参照 KB がなければ KB の解決をしない。"""
     pool = FakeOraclePool(execute_results=[[_search_answer_profile_row("bv-1", [])]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     views = await client.list_search_answer_profiles(limit=20)
 
@@ -138,7 +138,7 @@ async def test_update_archived_search_answer_profile_is_rejected() -> None:
     """アーカイブ済みの検索・回答プロファイルは更新しない（画面の読み取り専用と同じ。#961）。"""
     row = _search_answer_profile_row("bv-old", ["kb-1"]) | {"status": "ARCHIVED"}
     pool = FakeOraclePool(execute_results=[[], [row]])
-    client = OracleClient(settings=_oci_settings(), pool=pool, db_call_runner=_run_inline)
+    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
 
     with pytest.raises(ValueError, match="アーカイブ済みの検索・回答プロファイルは変更できません"):
         await client.update_search_answer_profile(
