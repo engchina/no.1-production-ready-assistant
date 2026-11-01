@@ -88,7 +88,6 @@ type Phase = "idle" | "streaming" | "done" | "cancelled" | "error";
 interface Meta {
   trace_id: string;
   elapsed_ms: number;
-  guardrail_warnings: string[];
   diagnostics: Partial<SearchDiagnostics> | null;
   /** 回答の注意書き（#2405。無いときは null）。 */
   notice?: string | null;
@@ -358,7 +357,6 @@ export function SearchClient() {
             setMeta({
               trace_id: m.trace_id,
               elapsed_ms: m.elapsed_ms,
-              guardrail_warnings: m.guardrail_warnings,
               diagnostics: m.diagnostics ?? null,
               notice: m.notice ?? null,
             });
@@ -786,14 +784,6 @@ export function SearchClient() {
             />
           ) : (
             <>
-              {/* 安全チェック警告 */}
-              {meta?.guardrail_warnings.length ? (
-                <Banner severity="warning">
-                  <span className="font-medium">{t("search.guardrail")}: </span>
-                  {meta.guardrail_warnings.join(" / ")}
-                </Banner>
-              ) : null}
-
               {phase === "cancelled" ? (
                 <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg-muted" role="status">
                   {t("search.cancelled")}

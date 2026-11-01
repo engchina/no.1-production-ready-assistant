@@ -6,7 +6,7 @@
  *
  * - 回答フローの工程: 種類 `answer_step`（値の `name` が工程名、終わったら LLM の回数 `llm_calls`・送信の回数
  *   `llm_sends`・結果の説明 `note`）。
- * - 回答フローの外の工程（`history_rewrite` / `field_filter` / `answer_guardrail` / `answer_record_save`）: 工程の名前が
+ * - 回答フローの外の工程（`history_rewrite` / `field_filter` / `answer_record_save`）: 工程の名前が
  *   種類。
  *
  * 入れ子は span の親子で決まる（共通の `labelChatProgressSteps`）。種類の無い span（全体を包む段・モデルの呼び出し

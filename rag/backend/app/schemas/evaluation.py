@@ -113,7 +113,6 @@ EvaluationFailureReason = Literal[
     "missing_content",
     "answer_failed",
     "answer_evaluation_error",
-    "guardrail_warning",
     "unexpected_handling",
     "step_missing",
     "forbidden_action",
@@ -561,7 +560,6 @@ class EvaluationCaseResult(BaseModel):
     missing_evidence: list[str] = Field(default_factory=list)
     turn_results: list[EvaluationTurnResult] = Field(default_factory=list)
     answer_evaluation: EvaluationAnswerJudgement | None = None
-    guardrail_warnings: list[str] = Field(default_factory=list)
     failure_reasons: list[str] = Field(default_factory=list)
     diagnostics: SearchDiagnostics = Field(default_factory=SearchDiagnostics)
     elapsed_ms: float

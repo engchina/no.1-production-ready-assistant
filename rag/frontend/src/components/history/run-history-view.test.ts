@@ -238,7 +238,7 @@ it("処理の経過は実行の trace の API の snapshot の段を、操作画
       params: { name: "回答生成フロー", note: "根拠不足で終了", llm_calls: 1, llm_sends: 2 },
       details: { fields: [{ label: "結果", value: "合成の結果" }] },
     }),
-    spanEvent(4, "4", { name: "rag.answer_guardrail", parent_id: "1".repeat(16), kind: "answer_guardrail", status: "skipped" }),
+    spanEvent(4, "4", { name: "rag.answer_record_save", parent_id: "1".repeat(16), kind: "answer_record_save", status: "skipped" }),
   ];
   const events = parseChatProgressEvents(raw);
   const steps = chatProgressStepsFromEvents(events, CHAT_PROGRESS_DEFINITIONS);

@@ -1032,7 +1032,6 @@ def _case_result(
         missing_evidence=missing_evidence,
         turn_results=turn_results if case.turns else [],
         answer_evaluation=judgement,
-        guardrail_warnings=response.guardrail_warnings,
         failure_reasons=list(failure_reasons),
         diagnostics=response.diagnostics,
         elapsed_ms=round(sum(run.response.elapsed_ms for run in runs), 3),
@@ -1226,9 +1225,8 @@ def _record_case_error_audit(
     record_rag_search_audit(
         trace_id=trace_id,
         outcome="error",
-        sanitized_query=request.query,
+        query=request.query,
         filters=request.filters,
-        findings=[],
         retrieved_count=0,
         citations=[],
         elapsed_ms=elapsed,

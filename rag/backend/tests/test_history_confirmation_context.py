@@ -16,7 +16,6 @@ from app.rag.chat_question_token import (
     read_rule_selection_elapsed,
     with_rule_selection_answers,
 )
-from app.rag.guardrails import GuardrailPolicy
 from app.rag.history_question import HistoryConfirmation
 from app.rag.pipeline import (
     ChatTurn,
@@ -50,7 +49,7 @@ async def test_rewrite_only_selects_actual_saved_confirmations(selected: list[st
     model = Model(selected)
     pipeline = RagPipeline(settings=Settings(), llm=cast(Any, model))
     history = [ChatTurn(role="USER", content="対象の確認", confirmed_facts=(fact(),))]
-    rewritten = await pipeline._safe_rewritten_query("その手順は？", history)
+    rewritten = await pipeline._rewrite_query_with_history("その手順は？", history)
     assert len(model.calls) == 1
     assert "confirmed_facts" in model.calls[0][1]
     assert pipeline._selected_history_facts == ((fact(),) if selected == ["user-a:0"] else ())
@@ -76,7 +75,7 @@ def test_latest_confirmation_and_skip_retire_older_values() -> None:
 async def test_current_change_and_ambiguity_do_not_reuse_old_fact() -> None:
     for query in ("対象を合成 B に変更する。その手順は？", "合成 A か合成 B か未定。その手順は？"):
         pipeline = RagPipeline(settings=Settings(), llm=cast(Any, Model([], question=query)))
-        await pipeline._safe_rewritten_query(
+        await pipeline._rewrite_query_with_history(
             query, [ChatTurn(role="USER", content="前の確認", confirmed_facts=(fact(),))]
         )
         assert pipeline._selected_history_facts == ()
@@ -198,7 +197,7 @@ async def test_nonconfirmed_history_never_becomes_candidate(mode: str) -> None:
         message.status = "ERROR"
     elif mode == "other_owner":
         message.user_id_hash = "other-user"
-    turns = await chat._build_safe_history([message], GuardrailPolicy(Settings()))
+    turns = await chat._build_history([message])
     assert history_confirmation_facts(turns) == {}
 
 
@@ -209,7 +208,7 @@ async def test_retired_confirmation_id_is_not_revived_by_model() -> None:
         ChatTurn(role="USER", content="以前", confirmed_facts=(fact("old", "合成 A"),)),
         ChatTurn(role="USER", content="更新", confirmed_facts=(fact("new", "合成 B"),)),
     ]
-    assert await pipeline._safe_rewritten_query("その手順は？", history) == ""
+    assert await pipeline._rewrite_query_with_history("その手順は？", history) == ""
     assert pipeline._selected_history_facts == ()
 
 
@@ -223,65 +222,29 @@ async def test_structured_confirmation_input_uses_existing_history_budget() -> N
         ChatTurn(role="USER", content="古い履歴", confirmed_facts=(fact("old", "旧値"),)),
         ChatTurn(role="USER", content="新しい履歴" * 300, confirmed_facts=(fact("new", "新値"),)),
     ]
-    await pipeline._safe_rewritten_query("その手順は？", history)
+    await pipeline._rewrite_query_with_history("その手順は？", history)
     context = model.calls[0][1]
     assert len(context) <= 1000
     assert '"id": "old"' not in context
     assert '"id": "new"' in context
 
 
-async def test_guardrail_checks_each_structured_field_before_reuse(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.rag.guardrails import GuardrailResult
-
-    oracle = ContextOracle()
-    oracle.messages[0].clarification = {
-        "outcome": "answered",
-        "entries": [{"prompt": "対象は？", "selected": ["合成 A"]}],
-    }
-    policy = GuardrailPolicy(Settings())
-    calls: list[str] = []
-
-    def checked(text: str) -> GuardrailResult:
-        calls.append(text)
-        return GuardrailResult(allowed=text != "合成 A", sanitized_text=text, findings=[])
-
-    monkeypatch.setattr(policy, "validate_query", checked)
-    turns = await chat._build_safe_history(oracle.messages, policy)
-    assert "対象は？" in calls and "合成 A" in calls
-    assert history_confirmation_facts(turns) == {}
-
-
-async def test_masked_question_uses_stable_identity_when_later_skipped(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_later_skip_retires_answered_confirmation() -> None:
     from dataclasses import replace
-
-    from app.rag.guardrails import GuardrailResult
 
     oracle = ContextOracle()
     first = oracle.messages[0]
     first.clarification = {
         "outcome": "answered",
-        "entries": [{"prompt": "対象 合成識別子 は？", "selected": ["合成 A"]}],
+        "entries": [{"prompt": "対象は？", "selected": ["合成 A"]}],
     }
     skipped = replace(
         first,
         id="user-b",
-        clarification={"outcome": "skipped", "entries": [{"prompt": "対象 合成識別子 は？"}]},
+        clarification={"outcome": "skipped", "entries": [{"prompt": "対象は？"}]},
     )
-    policy = GuardrailPolicy(Settings())
-    monkeypatch.setattr(
-        policy,
-        "validate_query",
-        lambda text: GuardrailResult(
-            allowed=True, sanitized_text=text.replace("合成識別子", "[MASK]"), findings=[]
-        ),
-    )
-    turns = await chat._build_safe_history([first, skipped], policy)
-    assert turns[0].confirmed_facts[0].question == "対象 [MASK] は？"
-    assert "合成識別子" not in turns[0].confirmed_facts[0].key
+    turns = await chat._build_history([first, skipped])
+    assert turns[0].confirmed_facts[0].question == "対象は？"
     assert history_confirmation_facts(turns) == {}
 
 

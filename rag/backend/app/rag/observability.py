@@ -2,7 +2,6 @@
 
 import logging
 import re
-from collections.abc import Iterable
 from contextlib import suppress
 from queue import Empty, Full, Queue
 from threading import Event, Thread
@@ -17,7 +16,6 @@ from pydantic import BaseModel, Field
 
 from app.clients.http_retry import HttpRetryConfig, request_with_retry, retry_config_from_settings
 from app.config import Settings
-from app.rag.guardrails import GuardrailFinding
 
 trace_logger = logging.getLogger("app.trace")
 TraceOutcome = Literal["success", "error", "cancelled", "skipped"]
@@ -221,11 +219,6 @@ RETRIEVAL_HITS = Histogram(
     "検索で取得した候補チャンク数",
     ["mode"],
 )
-GUARDRAIL_FINDINGS = Counter(
-    "rag_guardrail_findings_total",
-    "RAG guardrail の検出件数",
-    ["surface", "code", "severity", "action"],
-)
 # 回答の経路の理由と、現場のデータの確認の要否（#1283）。
 # 理由は回答の対応の 7 値だけ（低 cardinality）。
 ANSWER_ROUTES = Counter(
@@ -292,21 +285,6 @@ def record_evaluation_case(mode: str, status: str, seconds: float) -> None:
     """golden set 評価 case のメトリクスを記録する。"""
     EVALUATION_CASES.labels(mode=mode, status=status).inc()
     EVALUATION_CASE_DURATION.labels(mode=mode, status=status).observe(seconds)
-
-
-def record_guardrail_findings(
-    surface: str,
-    findings: Iterable[GuardrailFinding],
-    action: str,
-) -> None:
-    """guardrail finding を低 cardinality label で記録する。"""
-    for finding in findings:
-        GUARDRAIL_FINDINGS.labels(
-            surface=surface,
-            code=finding.code,
-            severity=finding.severity,
-            action=action,
-        ).inc()
 
 
 def record_answer_route(reason: str, requires_environment_data: bool) -> None:

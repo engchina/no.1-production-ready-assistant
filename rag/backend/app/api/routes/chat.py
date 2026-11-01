@@ -74,7 +74,6 @@ from app.rag.chat_question_token import (
     read_rule_selection_elapsed,
 )
 from app.rag.document_sections_service import current_section_pages
-from app.rag.guardrails import GuardrailPolicy, GuardrailResult
 from app.rag.history_question import HistoryConfirmation
 from app.rag.observability import elapsed_ms, new_trace_id
 from app.rag.pipeline import (
@@ -136,7 +135,6 @@ CHAT_DISABLED_MESSAGE = "チャット機能は現在無効です。"
 CONVERSATION_NOT_FOUND_MESSAGE = "会話が見つかりません。"
 SEARCH_ANSWER_PROFILE_NOT_FOUND_MESSAGE = "検索・回答プロファイルが見つかりません。"
 HISTORY_PROMPT_LIMIT = 40
-BLOCKED_MESSAGE_PLACEHOLDER = "安全ポリシーにより内容を保存しませんでした。"
 ANSWER_STREAM_NOT_FOUND_MESSAGE = (
     "回答の配信を再開できません。保存済みの会話から回答を取り直してください。"
 )
@@ -253,7 +251,6 @@ def _to_chat_message(
         model=message.model,
         citations=citations,
         withheld_evidence_count=withheld,
-        guardrail_warnings=message.guardrail_warnings,
         trace_id=message.trace_id,
         status=MessageStatus(message.status),
         reply_to_message_id=message.reply_to_message_id,
@@ -597,96 +594,70 @@ def _resolve_compare_models(
     return selected[: settings.rag_chat_max_compare_models]
 
 
-async def _build_safe_history(
-    messages: list[StoredMessage], guardrails: GuardrailPolicy
-) -> list[ChatTurn]:
-    """ブロック済みターンを除外し、旧メッセージも再検査して生成履歴を作る。"""
+async def _build_history(messages: list[StoredMessage]) -> list[ChatTurn]:
+    """完了していないターンを除外して生成履歴を作る。"""
     turns: list[ChatTurn] = []
     seen_replies: set[str] = set()
-    allowed_user_ids: set[str] = set()
-    blocked_user_ids: set[str] = set()
+    completed_user_ids: set[str] = set()
     for message in messages[-HISTORY_PROMPT_LIMIT * 3 :]:
         if message.role == "USER":
             if message.status != "COMPLETE":
-                blocked_user_ids.add(message.id)
                 continue
-            result = await asyncio.to_thread(guardrails.validate_query, message.content)
-            if not result.allowed:
-                blocked_user_ids.add(message.id)
-                continue
-            allowed_user_ids.add(message.id)
+            completed_user_ids.add(message.id)
             # 確認への明示的な回答だけを利用者の履歴へ足す。スキップ・前提は足さない。
             content = _guide_user_context([message])[0]
-            checked = (
-                await asyncio.to_thread(guardrails.validate_query, content)
-                if content != message.content
-                else result
-            )
-            if checked.allowed:
-                facts: list[HistoryConfirmation] = []
-                resets: list[str] = []
-                record = _saved_clarification(message)
-                owner = current_audit_request_context().user_id_hash
-                if (
-                    record is not None
-                    and record.outcome == "answered"
-                    and message.user_id_hash in (None, owner)
-                ):
-                    for index, entry in enumerate(record.entries):
-                        values = [
-                            *entry.selected,
-                            *([entry.other_text] if entry.other_text else []),
-                        ]
-                        if not values:
-                            continue
-                        prompt_check = await asyncio.to_thread(
-                            guardrails.validate_query, entry.prompt
+            facts: list[HistoryConfirmation] = []
+            resets: list[str] = []
+            record = _saved_clarification(message)
+            owner = current_audit_request_context().user_id_hash
+            if (
+                record is not None
+                and record.outcome == "answered"
+                and message.user_id_hash in (None, owner)
+            ):
+                for index, entry in enumerate(record.entries):
+                    values = [
+                        *entry.selected,
+                        *([entry.other_text] if entry.other_text else []),
+                    ]
+                    if not values:
+                        continue
+                    facts.append(
+                        HistoryConfirmation(
+                            id=f"{message.id}:{index}",
+                            key=context_digest(entry.prompt),
+                            question=entry.prompt,
+                            answer="、".join(values),
                         )
-                        value_check = await asyncio.to_thread(
-                            guardrails.validate_query, "、".join(values)
-                        )
-                        if prompt_check.allowed and value_check.allowed:
-                            facts.append(
-                                HistoryConfirmation(
-                                    id=f"{message.id}:{index}",
-                                    key=context_digest(entry.prompt),
-                                    question=prompt_check.sanitized_text,
-                                    answer=value_check.sanitized_text,
-                                )
-                            )
-                if (
-                    record is not None
-                    and record.outcome == "skipped"
-                    and message.user_id_hash in (None, owner)
-                ):
-                    resets = [context_digest(entry.prompt) for entry in record.entries]
-                turns.append(
-                    ChatTurn(
-                        role="USER",
-                        content=checked.sanitized_text,
-                        confirmed_facts=tuple(facts),
-                        confirmation_resets=tuple(resets),
                     )
+            if (
+                record is not None
+                and record.outcome == "skipped"
+                and message.user_id_hash in (None, owner)
+            ):
+                resets = [context_digest(entry.prompt) for entry in record.entries]
+            turns.append(
+                ChatTurn(
+                    role="USER",
+                    content=content,
+                    confirmed_facts=tuple(facts),
+                    confirmation_resets=tuple(resets),
                 )
-            else:
-                allowed_user_ids.discard(message.id)
-                blocked_user_ids.add(message.id)
+            )
         elif message.role == "ASSISTANT":
             if message.status != "COMPLETE":
                 continue
-            if message.reply_to_message_id in blocked_user_ids:
-                continue
-            if message.reply_to_message_id and message.reply_to_message_id not in allowed_user_ids:
+            if (
+                message.reply_to_message_id
+                and message.reply_to_message_id not in completed_user_ids
+            ):
                 continue
             # 同一ユーザーターンに複数モデルの回答がある場合は先頭だけを履歴に使う。
             key = message.reply_to_message_id or message.id
             if key in seen_replies:
                 continue
-            result = await asyncio.to_thread(guardrails.validate_answer, message.content)
-            if not result.allowed:
-                continue
             seen_replies.add(key)
-            turns.append(ChatTurn(role="ASSISTANT", content=result.sanitized_text))
+            turns.append(ChatTurn(role="ASSISTANT", content=message.content))
     return turns[-HISTORY_PROMPT_LIMIT:]
 
 
@@ -737,11 +708,7 @@ async def prepare_chat_question(
                 ]
             ),
         }
-        guardrails = GuardrailPolicy(settings)
-        checked = await asyncio.to_thread(guardrails.validate_query, query)
-        if not checked.allowed:
-            return query, None
-        history = await _build_safe_history(messages, guardrails)
+        history = await _build_history(messages)
         facts = history_confirmation_facts(history)
         if token:
             try:
@@ -758,11 +725,11 @@ async def prepare_chat_question(
             if confirmed_facts is not None:
                 confirmed_facts.extend(facts[identity] for identity in selected)
             return question, token
-        question = checked.sanitized_text
+        question = query
         selected_facts: tuple[HistoryConfirmation, ...] = ()
         if history and settings.rag_history_rewrite_enabled:
-            pipeline = RagPipeline(settings=settings, guardrails=guardrails)
-            question = await pipeline._safe_rewritten_query(question, history) or question
+            pipeline = RagPipeline(settings=settings)
+            question = await pipeline._rewrite_query_with_history(question, history) or question
             selected_facts = pipeline._selected_history_facts
         if confirmed_facts is not None:
             confirmed_facts.extend(selected_facts)
@@ -788,8 +755,6 @@ class PreparedChatTurn:
     conversation_id: str
     request: SearchRequest
     settings: Settings
-    guardrails: GuardrailPolicy
-    query_guardrail: GuardrailResult
     history: list[ChatTurn]
     user_message: StoredMessage
     # 利用者が選んだ類似の承認済み FAQ(質問・承認済みの回答。#684)。
@@ -988,18 +953,11 @@ async def _prepare_chat_turn(
         and not request.clarification.rule_id.startswith(GUIDE_CLARIFICATION_PREFIX)
         else (),
     )
-    guardrails = GuardrailPolicy(effective_settings)
-    original_guardrail = await asyncio.to_thread(guardrails.validate_query, request.content)
-    query_guardrail = (
-        await asyncio.to_thread(guardrails.validate_query, prepared_question)
-        if original_guardrail.allowed
-        else original_guardrail
-    )
     if request.client_message_id and any(
         message.id == request.client_message_id for message in prior_messages
     ):
         raise HTTPException(status_code=409, detail=DUPLICATE_MESSAGE_ID_MESSAGE)
-    history = await _build_safe_history(prior_messages, guardrails)
+    history = await _build_history(prior_messages)
     if reset_questions:
         history = [
             replace(
@@ -1019,15 +977,8 @@ async def _prepare_chat_turn(
             id=request.client_message_id or uuid4().hex,
             conversation_id=conversation_id,
             role="USER",
-            content=(
-                original_guardrail.sanitized_text
-                if query_guardrail.allowed and prepared_question != request.content
-                else query_guardrail.sanitized_text
-                if query_guardrail.allowed
-                else BLOCKED_MESSAGE_PLACEHOLDER
-            ),
-            guardrail_warnings=query_guardrail.warnings,
-            status="COMPLETE" if query_guardrail.allowed else "ERROR",
+            content=request.content,
+            status="COMPLETE",
             created_at=now,
             clarification=clarification_log,
             attachments=(
@@ -1041,8 +992,6 @@ async def _prepare_chat_turn(
         conversation_id=conversation_id,
         request=effective_request,
         settings=effective_settings,
-        guardrails=guardrails,
-        query_guardrail=query_guardrail,
         history=history,
         user_message=user_message,
         history_question_prepared=request.question_context_token is not None,
@@ -1102,7 +1051,6 @@ async def _generate_chat_answer(
         pipeline = RagPipeline(
             settings=turn.settings,
             llm=llm,
-            guardrails=turn.guardrails,
             answer_model_id=model_id or None,
             approved_faq=turn.approved_faq,
             scope=turn.scope,
@@ -1118,7 +1066,6 @@ async def _generate_chat_answer(
                 trace_id=trace_id,
                 progress_callback=progress_tracker,
                 history=turn.history,
-                query_guardrail_result=turn.query_guardrail,
                 # 処理の経過は回答の span（共通の span の表。#3226）。
                 trace=trace,
             ),
@@ -1133,7 +1080,6 @@ async def _generate_chat_answer(
             content=result.answer,
             # 画面が使う項目だけを保存する（索引の内部の項目・親の本文を持たない。#1371）。
             citations=stored_citations(result.citations),
-            guardrail_warnings=result.guardrail_warnings,
             trace_id=result.trace_id,
             status="COMPLETE",
             elapsed_ms=result.elapsed_ms,
@@ -1371,7 +1317,6 @@ async def _answer_turn(
                 "message_id": assistant.id,
                 "trace_id": result.trace_id,
                 "elapsed_ms": result.elapsed_ms,
-                "guardrail_warnings": result.guardrail_warnings,
                 # 回答エンジンの根拠・実行記録(無いときは None)。
                 "answer_diagnostics": result.diagnostics.answer,
                 # 作ったが保存できなかった記録（回答の記録・会話の回答。#2342）。

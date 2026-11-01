@@ -356,7 +356,6 @@ class SlowPipeline:
             answer="承認は部門長です。",
             citations=[],
             trace_id=trace_id or "trace",
-            guardrail_warnings=[],
             elapsed_ms=1.0,
             diagnostics=SearchDiagnostics(),
         )

@@ -111,7 +111,6 @@
         }
       ],
       "answer_evaluation": null,
-      "guardrail_warnings": [],
       "failure_reasons": [],
       "elapsed_ms": 3250.0,
       "error_type": null,

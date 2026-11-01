@@ -21,16 +21,13 @@ def test_search_diagnostics_exposes_execution_shape_without_secrets() -> None:
         request,
         settings=settings,
         retrieval_strategy_adapter="grounded",
-        guardrail_degraded=True,
         answer={"confidence": "high"},
     )
 
     assert diagnostics.retrieval_strategy == "hybrid"
     assert diagnostics.retrieval_strategy_adapter == "grounded"
-    # 安全チェックは通過だけ（#11）。応答の項目は互換のため false で残る。
-    assert diagnostics.guardrails_input_enabled is False
-    assert diagnostics.guardrails_output_enabled is False
-    assert diagnostics.guardrail_degraded is True
+    # 常に通る安全チェックの段は外した（#37）。診断にその項目は無い。
+    assert not any(key.startswith("guardrail") for key in diagnostics.model_dump())
     assert diagnostics.answer == {"confidence": "high"}
     assert diagnostics.filter_keys == ["file_name", "knowledge_base_id", "status"]
     assert diagnostics.knowledge_base_count == 2

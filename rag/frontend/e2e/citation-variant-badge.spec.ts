@@ -58,7 +58,6 @@ function searchStreamBody(chunkId: string, extraMetadata: Record<string, unknown
     `event: metadata\ndata: ${JSON.stringify({
       trace_id: "trace-1",
       elapsed_ms: 12,
-      guardrail_warnings: [],
       diagnostics: {
         retrieval_strategy: "hybrid",
         retrieval_strategy_adapter: "grounded",

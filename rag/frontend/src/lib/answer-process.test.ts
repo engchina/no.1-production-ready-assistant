@@ -99,7 +99,7 @@ describe("処理の経過の span の木（Issue 3226）", () => {
     { id: "4", parent: "3", name: "rag.engine.stage", kind: "answer_step", params: { name: "回答生成フロー" }, attributes: { "pr.stage": "回答生成フロー" } },
     { id: "5", parent: "4", name: "rag.engine.stage", kind: "answer_step", params: { name: "文書検索", llm_calls: 2, note: "該当なし" }, attributes: { "pr.stage": "文書検索" } },
     { id: "6", parent: "5", name: "gen_ai.embeddings", attributes: { "gen_ai.request.model": "synthetic-embed" } },
-    { id: "7", parent: "1", name: "rag.answer_guardrail", kind: "answer_guardrail", status: "running" },
+    { id: "7", parent: "1", name: "rag.answer_record_save", kind: "answer_record_save", status: "running" },
   ]);
 
   it("root を行にせず、工程の定義・段の名前・技術の span の名前で、親子の入れ子にする", () => {
@@ -111,7 +111,7 @@ describe("処理の経過の span の木（Issue 3226）", () => {
       [answerStepDisplayName("文書検索"), 2, "done", "該当なし · LLM 2 回"],
       [`${t("trace.span.embeddings")} · synthetic-embed`, 3, "done", null],
       // 実行中の span は実行中の行になる。
-      [t("search.stage.answerGuardrail"), 0, "running", null],
+      [t("search.stage.answerRecordSave"), 0, "running", null],
     ]);
     // 行を開くと技術の値（span の名前）が付く。
     expect(steps[3].details?.fields?.some((field) => field.label === "Span name" && field.value === "rag.engine.stage")).toBe(true);
@@ -158,7 +158,7 @@ describe("RAG_TRACE_DETAILS_LABELS（トレースの span の名前）", () => {
     span("4", "3", "rag.engine.stage", { "pr.stage": "回答生成フロー" }),
     span("5", "4", "rag.engine.stage", { "pr.stage": "文書検索（2回目）" }),
     span("6", "5", "gen_ai.embeddings", { "gen_ai.request.model": "synthetic-embed" }),
-    span("7", "1", "rag.answer_guardrail", { "pr.stage": "answer_guardrail" }),
+    span("7", "1", "rag.answer_record_save", { "pr.stage": "answer_record_save" }),
   ] };
 
   it("処理の経過と同じ名前を付け、root と中の同名の段を分ける", () => {
@@ -170,7 +170,7 @@ describe("RAG_TRACE_DETAILS_LABELS（トレースの span の名前）", () => {
       answerStepDisplayName("回答生成フロー"),
       answerStepDisplayName("文書検索（2回目）"),
       `${t("trace.span.embeddings")} · synthetic-embed`,
-      t("search.stage.answerGuardrail"),
+      t("search.stage.answerRecordSave"),
     ]);
     expect(labels.some((label) => /rag\.|gen_ai\./.test(label))).toBe(false);
     expect(labels[3]).toBe(t("answer.step.answerFlow"));
@@ -179,7 +179,7 @@ describe("RAG_TRACE_DETAILS_LABELS（トレースの span の名前）", () => {
   });
 
   it("処理の経過の段の名前と trace の段の名前は同じ関数から作る", () => {
-    for (const stage of ["history_rewrite", "field_filter", "answer", "evidence", "retrieval", "answer_guardrail", "answer_record_save", "質問の理解", "根拠検索フロー", "根拠確認（2回目）"]) {
+    for (const stage of ["history_rewrite", "field_filter", "answer", "evidence", "retrieval", "answer_record_save", "質問の理解", "根拠検索フロー", "根拠確認（2回目）"]) {
       expect(RAG_TRACE_DETAILS_LABELS.stageName?.(stage, "done")).toBe(answerStageName(stage));
     }
     expect(answerStageName("evidence")).toBe("質問の条件を整理して根拠を探す");

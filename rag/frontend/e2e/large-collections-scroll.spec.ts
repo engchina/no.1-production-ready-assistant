@@ -199,7 +199,6 @@ function evaluationMetrics(caseCount: number) {
     claim_support_rate: 1,
     response_decision_accuracy: 1,
     answer_evaluation: null,
-    guardrail_warnings: [],
     failure_reasons: [],
     diagnostics: {},
     elapsed_ms: 12,

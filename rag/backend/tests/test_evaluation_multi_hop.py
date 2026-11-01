@@ -333,7 +333,6 @@ def _response(chunks: Sequence[tuple[str, str]], answer: str = "回答", **detai
             for index, (doc, text) in enumerate(chunks)
         ],
         trace_id="trace",
-        guardrail_warnings=[],
         elapsed_ms=1.0,
         diagnostics=SearchDiagnostics(answer=details or None),
     )

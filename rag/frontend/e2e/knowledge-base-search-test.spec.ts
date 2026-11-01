@@ -69,7 +69,7 @@ function searchStreamBody(fileName = "policy.pdf", citationCount = 1) {
   }));
   return [
     'event: stage\ndata: {"trace_id":"trace-1","stage":"retrieval","outcome":"success","elapsed_ms":12,"attributes":{}}',
-    'event: metadata\ndata: {"trace_id":"trace-1","elapsed_ms":120,"guardrail_warnings":[],"diagnostics":{}}',
+    'event: metadata\ndata: {"trace_id":"trace-1","elapsed_ms":120,"diagnostics":{}}',
     `event: citations\ndata: ${JSON.stringify(citations)}`,
     'event: delta\ndata: {"text":"これはテスト回答です。"}',
     'event: done\ndata: {"trace_id":"trace-1"}',

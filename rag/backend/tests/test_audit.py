@@ -6,7 +6,6 @@ from typing import Any, cast
 from pytest import LogCaptureFixture
 
 from app.rag.audit import record_rag_ingestion_audit, record_rag_search_audit
-from app.rag.guardrails import GuardrailFinding
 from app.rag.request_context import (
     AuditRequestContext,
     reset_audit_request_context,
@@ -23,15 +22,8 @@ def test_rag_search_audit_redacts_query_text(caplog: LogCaptureFixture) -> None:
         event = record_rag_search_audit(
             trace_id="trace-1",
             outcome="success",
-            sanitized_query=query,
+            query=query,
             filters={"status": "INDEXED", "file_name": "policy"},
-            findings=[
-                GuardrailFinding(
-                    code="sql_mutation_intent",
-                    severity="warning",
-                    message="検索のみ実行します。",
-                )
-            ],
             retrieved_count=3,
             citations=[
                 RetrievedChunk(
@@ -61,7 +53,7 @@ def test_rag_search_audit_redacts_query_text(caplog: LogCaptureFixture) -> None:
     assert event.query_hash
     assert event.query_hash != query
     assert event.filter_keys == ["file_name", "status"]
-    assert event.guardrail_codes == ["sql_mutation_intent"]
+    assert "guardrail_codes" not in event.model_dump()
     assert event.config_fingerprint == "fp-audit"
     # 回答は回答フロー(hybrid + RRF)だけ。旧 standard の計測の列は既定値のまま(列の削除は #596)。
     assert event.mode == SearchMode.HYBRID
@@ -90,9 +82,8 @@ def test_rag_search_audit_records_error_type_without_error_message(
         event = record_rag_search_audit(
             trace_id="trace-error",
             outcome="error",
-            sanitized_query=query,
+            query=query,
             filters={},
-            findings=[],
             retrieved_count=0,
             citations=[],
             elapsed_ms=4.2,
@@ -128,9 +119,8 @@ def test_rag_search_audit_includes_hashed_request_context(
             event = record_rag_search_audit(
                 trace_id="trace-context",
                 outcome="no_results",
-                sanitized_query="社内規程",
+                query="社内規程",
                 filters={},
-                findings=[],
                 retrieved_count=0,
                 citations=[],
                 elapsed_ms=1.0,

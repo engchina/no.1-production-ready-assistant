@@ -82,7 +82,6 @@ async def test_final_validation_mode_reaches_real_claim_parser_and_keeps_its_ver
         answer=answer,
         citations=[citation],
         diagnostics={"outcome": "answered", "envelope": {"outcome": "answered"}},
-        context_text=source,
     )
     # validate_answer、validate_answer_claims とスレッド実行は置換しない。
     await engine._validate_outcome(SearchRequest(query="有効期限は何日ですか。"), outcome)

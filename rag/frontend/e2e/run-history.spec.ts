@@ -172,10 +172,10 @@ function detail(row: RunRow) {
             },
             // 段の詳細（見出しと値・行。#2341）。
             {
-              key: "guardrail",
-              spec: ragSpan.stage("answer_guardrail"),
+              key: "record_save",
+              spec: ragSpan.stage("answer_record_save"),
               at: [1.1, 1.14],
-              details: { fields: [{ label: "結果", value: "問題なし" }] },
+              details: { fields: [{ label: "結果", value: "保存しました" }] },
             },
           ]
         : [
@@ -646,7 +646,7 @@ test.describe("実行履歴", { tag: "@responsive" }, () => {
     await expect(timeline.locator("[data-run-timeline-step]").nth(1)).toHaveAttribute("data-level", "1");
     await expect(timeline.locator("[data-run-timeline-step]").nth(1)).toContainText("0.3 秒");
     await expect(timeline.locator("[data-run-timeline-step]").nth(1).locator("[data-run-result-summary]")).toContainText("LLM 1 回・送信 2 回");
-    await expect(timeline.locator("[data-run-timeline-step]").nth(3)).toContainText("回答に安全上の問題がないか検査する");
+    await expect(timeline.locator("[data-run-timeline-step]").nth(3)).toContainText("質問と回答と根拠の記録を保存する");
     if (!isNarrow(page)) await expect(timeline.locator("[data-run-timeline-bar]").first()).toBeVisible();
     // 段の詳細（#2341）: 行を開くと工程の詳細と技術の値（span の名前）を出す（既定で閉じる）。
     const steps = timeline.locator("[data-run-timeline-step]");
@@ -666,9 +666,9 @@ test.describe("実行履歴", { tag: "@responsive" }, () => {
     await expectNoPageOverflow(page);
     await searchToggle.click();
     await expect(searchDetails).toBeHidden();
-    const guardrailToggle = steps.nth(3).locator("[data-run-timeline-toggle]");
-    await guardrailToggle.click();
-    await expect(steps.nth(3).locator("[data-run-timeline-details]")).toContainText("問題なし");
+    const recordSaveToggle = steps.nth(3).locator("[data-run-timeline-toggle]");
+    await recordSaveToggle.click();
+    await expect(steps.nth(3).locator("[data-run-timeline-details]")).toContainText("保存しました");
 
     await expect(page.getByTestId("run-history-feedback-open-fb-1")).toHaveAttribute(
       "href",

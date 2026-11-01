@@ -1950,11 +1950,6 @@ uv run python -m app.rag.file_processing_staging_cli \
 - `RAG_RATE_LIMIT_WINDOW_SECONDS`: fixed-window limiter の窓幅。
 - `RAG_RATE_LIMIT_SEARCH_REQUESTS` / `RAG_RATE_LIMIT_EVALUATION_RUNS` / `RAG_RATE_LIMIT_UPLOADS` / `RAG_RATE_LIMIT_INGEST_REQUESTS`: tenant/user hash 単位の窓内上限。OCI / Oracle / LLM の quota と業務ピークに合わせて調整する。
 - `X-RAG-Allowed-Document-Ids` / `X-RAG-Allowed-Category-Names`: `PLATFORM_AUTH_MODE=local` のときだけ使う、認証ゲートウェイまたはアプリケーション権限層が認可済み scope として backend へ付与する request header（`production` ではログインした利用者の権限から範囲を決め、この header は使わない。#214）。backend は raw 値を監査ログへ出さず、document 一覧、詳細、chunk count、retrieval に deny-by-default の scope filter として適用する。外部クライアントから直接信頼しない。
-- `RAG_GUARDRAIL_MASK_SENSITIVE_IDENTIFIERS`: query / answer 内の個人番号、口座番号、電話番号、メールアドレスらしき値を `[機微情報]` にマスクする。外部 DLP と責務分担する場合だけ無効化を検討する。
-
-安全チェックを含むリリースは、コード展開後に `uv run python -m app.rag.chat_history_sanitization --dry-run --format json` を実行し、Oracle バックアップを取得してから `--apply` する。適用後は `rag_guardrail_findings_total` の `guardrail_backend_unavailable` / `prompt_injection` / `low_groundedness` と阻止率を監視する。CLI は冪等で、原文の別バックアップをアプリ DB 内には作成しない。
-
-履歴の浄化は会話全体の検査を終えてから更新する。検査を完了できない会話は本文・状態・警告を更新せず、その会話のメッセージ数を `failed` に数える。`failed` が 1 件以上なら CLI は終了コード 1 を返す（#2879）。安全チェックは OCI Guardrails を #11 で削除してから通過だけなので、この CLI は保存済みの履歴を書き換えない。
 
 ## OCI へ切り替えるときの順序
 

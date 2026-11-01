@@ -46,7 +46,6 @@ function searchStreamBody(): string {
     `event: metadata\ndata: ${JSON.stringify({
       trace_id: "trace-figure",
       elapsed_ms: 12,
-      guardrail_warnings: [],
       diagnostics: { retrieval_strategy: "hybrid", retrieval_strategy_adapter: "grounded" },
     })}\n\n`,
     `event: citations\ndata: ${JSON.stringify(CITATIONS)}\n\n`,

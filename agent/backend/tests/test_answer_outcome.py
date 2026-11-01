@@ -1059,15 +1059,13 @@ ABSENCE_ANSWER = "ご質問の手続きの期限は、検索した資料には�
         ({}, "absence_conclusion"),
         # 補助の処理の縮退で 0 件（読めなかった可能性がある）。資料に無いとは結論しない。
         ({"degraded_steps": [{"kind": "reference_load", "count": 1}]}, "answer_passages"),
-        # 安全チェックを完了できず止めた（資料を調べていない）。
-        ({"guardrail_degraded": True}, "answer_passages"),
     ],
-    ids=["no-hit", "degraded", "guardrail"],
+    ids=["no-hit", "degraded"],
 )
 def test_absence_conclusion_does_not_count_a_degraded_zero_evidence_search(
     search_output: dict[str, Any], basis: str
 ) -> None:
-    """縮退・安全チェックの未完了で 0 件の rag_search は、答えなしの根拠に数えない（#3546）。"""
+    """縮退で 0 件の rag_search は、答えなしの根拠に数えない（#3546）。"""
     steps = [
         _step(
             "rag__rag_search",

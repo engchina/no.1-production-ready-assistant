@@ -315,33 +315,16 @@ async def test_single_complete_label_does_not_call_semantic_model(
     assert len(result) == 1 and result[0].option_ids == ["a"]
 
 
-async def test_guardrail_blocks_recognition_before_model_and_masks_allowed_source(
+async def test_recognition_sends_user_statements_to_the_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.rag.guardrails import GuardrailResult
-
     calls = []
-
-    class Policy:
-        allowed = False
-
-        def __init__(self, settings: Settings) -> None:
-            pass
-
-        def validate_query(self, query: str) -> GuardrailResult:
-            return GuardrailResult(
-                allowed=self.allowed, sanitized_text="設定は [MASK]", findings=[]
-            )
 
     class Client:
         async def generate(self, prompt: str, context: str, **kwargs: Any) -> str:
             calls.append(json.loads(context)["user_statements"])
             return '{"conditions": []}'
 
-    monkeypatch.setattr(rule_selection, "GuardrailPolicy", Policy)
     monkeypatch.setattr(rule_selection, "condition_client", lambda settings: Client())
-    assert not await recognize_rule_selections(PAYLOAD, "設定は非公開の値", Settings())
-    assert not calls
-    Policy.allowed = True
-    assert not await recognize_rule_selections(PAYLOAD, "設定は非公開の値", Settings())
-    assert calls == ["設定は [MASK]"]
+    assert not await recognize_rule_selections(PAYLOAD, "設定は合成の値", Settings())
+    assert calls == ["設定は合成の値"]

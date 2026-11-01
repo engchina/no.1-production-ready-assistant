@@ -79,7 +79,6 @@ class _Pipeline:
                 RetrievedChunk(document_id="doc-1", chunk_id="doc-1:0", text=BODY, score=1.0)
             ],
             trace_id=trace_id or "trace",
-            guardrail_warnings=[],
             elapsed_ms=1.0,
             diagnostics=SearchDiagnostics(answer=answer or None),
         ).with_evaluation_input({"question": "手順", "answer_text": BODY})

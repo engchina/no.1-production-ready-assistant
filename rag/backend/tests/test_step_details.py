@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from app.rag.step_details import (
-    answer_guardrail_details,
     field_filter_details,
     history_rewrite_details,
     step_details_payload,
@@ -70,80 +67,3 @@ def test_field_filter_details() -> None:
     assert field_filter_details([]) == {
         "fields": [{"label": "読み取った条件", "value": "なし（条件で絞らずに検索します）"}]
     }
-
-
-@pytest.mark.parametrize(
-    ("result", "expected_fields", "expected_lines"),
-    [
-        (
-            SimpleNamespace(
-                allowed=True, sanitized_text="回答", findings=[], backend_degraded=False
-            ),
-            [("結果", "問題なし")],
-            [],
-        ),
-        (
-            SimpleNamespace(
-                allowed=True,
-                sanitized_text="伏せた回答",
-                findings=[
-                    SimpleNamespace(code="oci_pii_detected", severity="warning", message="指摘 1")
-                ],
-                backend_degraded=False,
-            ),
-            [
-                ("結果", "警告 1 件（回答は出します）"),
-                ("回答の書き換え", "機密らしい箇所を伏せました"),
-            ],
-            ["指摘 1"],
-        ),
-        (
-            SimpleNamespace(
-                allowed=False,
-                sanitized_text="安全チェックにより処理を停止しました。",
-                findings=[
-                    SimpleNamespace(code="c2", severity="error", message="指摘 2"),
-                    SimpleNamespace(code="c2", severity="error", message="指摘 2"),
-                ],
-                backend_degraded=False,
-            ),
-            [("結果", "回答を止めました")],
-            ["指摘 2"],
-        ),
-        (
-            SimpleNamespace(
-                allowed=False,
-                sanitized_text="安全検査を完了できないため、処理を停止しました。",
-                findings=[
-                    SimpleNamespace(
-                        code="guardrail_backend_unavailable", severity="error", message="検査不能"
-                    )
-                ],
-                backend_degraded=True,
-            ),
-            [
-                ("結果", "安全検査を完了できず、回答を止めました"),
-                ("外部の検査", "OCI Guardrails を利用できませんでした"),
-            ],
-            ["検査不能"],
-        ),
-        (
-            SimpleNamespace(
-                allowed=True,
-                sanitized_text="別の回答",
-                findings=[SimpleNamespace(code="c3", severity="warning", message="指摘 3")],
-                backend_degraded=False,
-            ),
-            [("結果", "警告 1 件（回答は出します）")],
-            ["指摘 3"],
-        ),
-    ],
-    ids=["clean", "pii-masked", "blocked", "unavailable", "non-pii-replacement"],
-)
-def test_answer_guardrail_details(
-    result: SimpleNamespace, expected_fields: list[tuple[str, str]], expected_lines: list[str]
-) -> None:
-    details = answer_guardrail_details(result, "回答")
-    assert details is not None
-    assert [(item["label"], item["value"]) for item in details["fields"]] == expected_fields
-    assert details.get("lines", []) == expected_lines

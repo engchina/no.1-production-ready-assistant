@@ -279,7 +279,6 @@ class FeedbackExecutionInfo(BaseModel):
     retrieved_count: int | None = None
     reranked_count: int | None = None
     citation_count: int | None = None
-    guardrail_codes: list[str] = Field(default_factory=list)
     config_fingerprint: str | None = None
 
 

@@ -132,7 +132,7 @@ for (const outcome of ["needs_clarification", "needs_human", "insufficient_evide
   test(`根拠 0 件の表示は回答の状態に合わせる (${outcome})`, async ({ page }, testInfo) => {
     const answer = outcome === "needs_clarification" ? "対象の種類を教えてください。" : "資料だけでは回答を確定できません。";
     await page.route("**/api/search/stream", (route) => fulfillStream(route, sse([
-      ["metadata", { trace_id: "t-empty", elapsed_ms: 5, guardrail_warnings: [], diagnostics: { answer: { outcome } } }],
+      ["metadata", { trace_id: "t-empty", elapsed_ms: 5, diagnostics: { answer: { outcome } } }],
       ["delta", { text: answer }],
       ["citations", []],
       ["done", { trace_id: "t-empty" }],
@@ -159,7 +159,7 @@ test("done を受けずに途切れた stream は途中終了のエラーにす�
     fulfillStream(
       route,
       sse([
-        ["metadata", { trace_id: "t2", elapsed_ms: 5, guardrail_warnings: [], diagnostics: {} }],
+        ["metadata", { trace_id: "t2", elapsed_ms: 5, diagnostics: {} }],
         ["delta", { text: "途中まで" }],
       ])
     )
@@ -182,7 +182,6 @@ test("回答の評価は検索したときの検索・回答プロファイル�
           {
             trace_id: "t3",
             elapsed_ms: 5,
-            guardrail_warnings: [],
             diagnostics: { search_answer_profile_applied: "bv-1" },
           },
         ],
@@ -322,7 +321,7 @@ test("質問から読み取った条件を「自動」のチップで出し、�
     return fulfillStream(
       route,
       sse([
-        ["metadata", { trace_id: `t${requests.length}`, elapsed_ms: 5, guardrail_warnings: [], diagnostics: { answer } }],
+        ["metadata", { trace_id: `t${requests.length}`, elapsed_ms: 5, diagnostics: { answer } }],
         ["citations", []],
         ["done", { trace_id: `t${requests.length}` }],
       ])
@@ -511,7 +510,7 @@ test.describe("送り直す操作は、表示中の結果を出した検索の�
       return fulfillStream(
         route,
         sse([
-          ["metadata", { trace_id: traceId, elapsed_ms: 5, guardrail_warnings: [], diagnostics: { answer: AUTO_ANSWER } }],
+          ["metadata", { trace_id: traceId, elapsed_ms: 5, diagnostics: { answer: AUTO_ANSWER } }],
           ["citations", []],
           ["done", { trace_id: traceId }],
         ])
@@ -585,7 +584,7 @@ test.describe("送り直す操作は、表示中の結果を出した検索の�
       return fulfillStream(
         route,
         sse([
-          ["metadata", { trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], diagnostics: {} }],
+          ["metadata", { trace_id: "t1", elapsed_ms: 5, diagnostics: {} }],
           ["citations", []],
           ["done", { trace_id: "t1" }],
         ])
@@ -690,7 +689,7 @@ for (const viewport of [
       fulfillStream(
         route,
         sse([
-          ["metadata", { trace_id: "t-notice", elapsed_ms: 5, guardrail_warnings: [], diagnostics: {}, notice }],
+          ["metadata", { trace_id: "t-notice", elapsed_ms: 5, diagnostics: {}, notice }],
           ["delta", { text: "交通費の上限は 1 万円です。" }],
           ["citations", []],
           ["done", { trace_id: "t-notice" }],
@@ -717,7 +716,7 @@ test("FAQ の提示対象が無いときは質問を止めず検索する", { ta
   await page.route("**/api/search/stream", (route) => {
     searched = true;
     return fulfillStream(route, sse([
-      ["metadata", { trace_id: "faq-filtered", elapsed_ms: 5, guardrail_warnings: [], diagnostics: {} }],
+      ["metadata", { trace_id: "faq-filtered", elapsed_ms: 5, diagnostics: {} }],
       ["citations", []], ["done", { trace_id: "faq-filtered" }],
     ]));
   });
@@ -751,7 +750,7 @@ test("RAG 検索の処理の経過は span の木で、2 つ目の「トレー�
   );
   await page.route("**/api/search/stream", route => fulfillStream(route, sse([
     ...progressSse(progress),
-    ["metadata", { trace_id: "synthetic-a", elapsed_ms: 2000, guardrail_warnings: [], diagnostics: { answer: { outcome: "answered" } } }],
+    ["metadata", { trace_id: "synthetic-a", elapsed_ms: 2000, diagnostics: { answer: { outcome: "answered" } } }],
     ["delta", { text: "合成の回答です。" }], ["citations", []], ["done", { trace_id: "synthetic-a" }],
   ])));
   await page.goto("/search");
@@ -778,53 +777,8 @@ test("RAG 検索の処理の経過は span の木で、2 つ目の「トレー�
 });
 
 
-for (const scenario of [
-  { name: "無効", outcome: "skipped", status: "skipped", verdict: "無効のため省略", enabled: false },
-  { name: "正常", outcome: "success", status: "done", verdict: "問題なし", enabled: true },
-  { name: "検出による停止", outcome: "success", status: "done", verdict: "回答を止めました", enabled: true },
-  { name: "検査不能", outcome: "error", status: "failed", verdict: "安全検査を完了できず、回答を止めました", enabled: true },
-]) {
-  test(`出力の安全チェックの実施結果を区別する: ${scenario.name}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
-    // 検査の段の span の状態と詳細（#3226）。
-    const progress = savedSpanProgress(
-      "synthetic-guardrail",
-      [
-        { key: "root", spec: ragSpan.root() },
-        {
-          key: "guardrail",
-          spec: ragSpan.stage("answer_guardrail"),
-          status: scenario.status as "done" | "failed" | "skipped",
-          details: { fields: [{ label: "結果", value: scenario.verdict }] },
-        },
-      ],
-      { terminal: "done" }
-    );
-    await page.route("**/api/search/stream", route => fulfillStream(route, sse([
-      ...progressSse(progress),
-      ["metadata", { trace_id: "synthetic-guardrail", elapsed_ms: 2, guardrail_warnings: [], diagnostics: { guardrails_output_enabled: scenario.enabled, answer: { outcome: "answered" } } }],
-      ["delta", { text: "合成の回答です。" }], ["citations", []], ["done", { trace_id: "synthetic-guardrail" }],
-    ])));
-    await page.goto("/search");
-    await selectSearchAnswerProfile(page, VIEWS[0].name);
-    await search(page, "合成データを確認");
-    await expect(page.getByText("合成の回答です。", { exact: true })).toBeVisible();
-    // 処理の経過は実行の trace の API で読む（回答の本文の後に届くことがある。#3226）。段が出てから開閉を決める。
-    await expect(page.getByTestId("search-run-progress-summary")).toContainText("1 ステップ");
-    const row = page.getByTestId(`search-run-progress-step-${spanStepId("guardrail")}`);
-    if (!(await row.isVisible())) await page.getByTestId("search-run-progress-summary").click();
-    await expect(row).toHaveAttribute("data-status", scenario.status);
-    const toggle = row.getByRole("button").first();
-    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    await expect(row).toContainText(scenario.verdict);
-    if (!scenario.enabled) await expect(row).not.toContainText("問題なし");
-    await row.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: testInfo.outputPath("answer-guardrail-state.png") });
-    await expectNoPageOverflow(page);
-  });
-}
-
 test("RAG 検索と履歴の工程の内容・階層・状態・時間が一致する", {tag: "@responsive"}, async ({page}, testInfo) => {
-  // 工程の span の親子（回答生成フロー > 文書検索 > Rerank）と回答に安全上の問題がないか検査する（#3226）。
+  // 工程の span の親子（回答生成フロー > 文書検索 > Rerank）と質問と回答と根拠の記録を保存する（#3226）。
   const progress_events = savedSpanProgress(
     "synthetic-parity",
     [
@@ -833,18 +787,18 @@ test("RAG 検索と履歴の工程の内容・階層・状態・時間が一致�
       { key: "search", spec: ragSpan.step("文書検索", "flow"), at: [0.1, 0.5] },
       { key: "rerank", spec: ragSpan.step("Rerank", "search"), at: [0.2, 0.4] },
       {
-        key: "guardrail",
-        spec: ragSpan.stage("answer_guardrail"),
+        key: "record_save",
+        spec: ragSpan.stage("answer_record_save"),
         at: [1, 1.001],
         status: "skipped",
-        details: { fields: [{ label: "結果", value: "無効のため省略" }] },
+        details: { fields: [{ label: "結果", value: "保存しませんでした" }] },
       },
     ],
     { terminal: "done", base: "2026-10-23T00:00:00Z" }
   );
   await page.route("**/api/search/stream", (route) => fulfillStream(route, sse([
     ...progressSse(progress_events),
-    ["metadata", {trace_id: "synthetic-parity", elapsed_ms: 1001, guardrail_warnings: [], diagnostics: {answer: {outcome: "insufficient_evidence"}}}],
+    ["metadata", {trace_id: "synthetic-parity", elapsed_ms: 1001, diagnostics: {answer: {outcome: "insufficient_evidence"}}}],
     ["delta", {text: "合成の回答です。"}], ["citations", []], ["done", {trace_id: "synthetic-parity"}],
   ])));
   await page.goto("/search");

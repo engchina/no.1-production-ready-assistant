@@ -43,8 +43,8 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
 6. `absence_conclusion`: 現場のデータの道具を使っておらず、Run のどれかの `rag_search` が
    insufficient_evidence を返し、回答の最初の段落（結論。見出し・出典を除く）が資料から確かめられ
    ないと述べた → insufficient_evidence（調べた資料の一覧・近い規定の紹介が続いても。#1454）。
-   根拠 0 件が安全チェックの未完了・補助の処理の縮退による `rag_search`（`guardrail_degraded`・
-   `degraded_steps`。資料に記載が無いことを示さない）は数えない（#3546）。
+   根拠 0 件が補助の処理の縮退による `rag_search`（`degraded_steps`。資料に記載が無いことを
+   示さない）は数えない（#3546）。
 7. `answer_passages`（または現場のデータの道具を使ったなら `environment_tools`）: Agent が自分で
    組み立てた回答。主張の段落（最終の検証で外した段落と、実データの確認を促すだけの段落を除く）が
    無ければ、実データの確認を促していれば needs_environment_data、それ以外は insufficient_evidence。
@@ -75,8 +75,8 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
 記録の `rule_warnings` だけを付ける（answered のまま。#2738）。
 
 記録だけのシグナル（対応の値を変えない。#3546）: RAG の根拠のツールが縮退した検索の結果を返した
-（`rag_degraded`。任意の補助の処理の縮退 `degraded_steps` か安全チェックの未完了
-`guardrail_degraded`。任意の能力の縮退は回答を続ける契約なので不足の印にしない）・最終の検証が
+（`rag_degraded`。任意の補助の処理の縮退 `degraded_steps`。任意の能力の縮退は回答を続ける
+契約なので不足の印にしない）・最終の検証が
 裏付けた（`supported`）段落の根拠が、表の行・列の対応の検査が本文を読めない表の根拠
 （`table_binding_unchecked`。RAG の根拠の `table_binding=not_checkable`。表の対応は検査して
 いない）。

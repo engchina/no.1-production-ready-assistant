@@ -18,16 +18,16 @@ from rag_pipeline_core.guardrail import (
 
 from app.config import Settings
 
-GuardrailPolicy = Literal["standard", "strict", "lenient", "regulated"]
-DEFAULT_GUARDRAIL_POLICY: GuardrailPolicy = "standard"
-GUARDRAIL_POLICY_ORDER: tuple[GuardrailPolicy, ...] = GUARDRAIL_POLICIES  # type: ignore[assignment]
+GuardrailStaticPolicy = Literal["standard", "strict", "lenient", "regulated"]
+DEFAULT_GUARDRAIL_POLICY: GuardrailStaticPolicy = "standard"
+GUARDRAIL_POLICY_ORDER: tuple[GuardrailStaticPolicy, ...] = GUARDRAIL_POLICIES  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
 class GuardrailAdapterParams:
     """ガードレール段へ渡す解決済み effective パラメータ。"""
 
-    policy: GuardrailPolicy
+    policy: GuardrailStaticPolicy
     block_prompt_injection: bool
     mask_sensitive_identifiers: bool
     max_query_chars: int
@@ -37,10 +37,10 @@ class GuardrailAdapterParams:
 
 
 @dataclass(frozen=True)
-class GuardrailPolicyStatus:
+class GuardrailStaticPolicyStatus:
     """1 安全ポリシーの選択状態と groundedness 厳格度。"""
 
-    name: GuardrailPolicy
+    name: GuardrailStaticPolicy
     origin: str
     recommended_for: tuple[str, ...]
     selected: bool
@@ -53,17 +53,17 @@ class GuardrailPolicyStatus:
 class GuardrailAdapterRuntimeSettings:
     """Guardrail アダプターの非機密 runtime snapshot。"""
 
-    policy: GuardrailPolicy
+    policy: GuardrailStaticPolicy
     block_prompt_injection: bool
     mask_sensitive_identifiers: bool
     max_query_chars: int
     grounding_min_overlap: int
     grounding_min_ratio: float
     audit_emphasis: bool
-    policies: tuple[GuardrailPolicyStatus, ...]
+    policies: tuple[GuardrailStaticPolicyStatus, ...]
 
 
-def normalize_guardrail_policy(value: object) -> GuardrailPolicy:
+def normalize_guardrail_policy(value: object) -> GuardrailStaticPolicy:
     """未知のポリシー名は既定 standard へ寄せる。"""
     return _core_normalize(value)  # type: ignore[return-value]
 
@@ -115,7 +115,7 @@ def guardrail_adapter_runtime_settings(settings: Settings) -> GuardrailAdapterRu
     """Settings から Guardrail アダプター readiness snapshot を作る。"""
     params = resolve_guardrail_adapter(settings)
     statuses = tuple(
-        GuardrailPolicyStatus(
+        GuardrailStaticPolicyStatus(
             name=spec.name,  # type: ignore[arg-type]
             origin=spec.origin,
             recommended_for=spec.recommended_for,

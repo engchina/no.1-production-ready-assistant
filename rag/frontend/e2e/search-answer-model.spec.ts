@@ -54,7 +54,6 @@ async function mockApi(page: Page, attachedImages: number) {
         `event: metadata\ndata: ${JSON.stringify({
           trace_id: "trace-model",
           elapsed_ms: 20,
-          guardrail_warnings: [],
           diagnostics: {
             search_answer_profile_applied: "profile-a",
             retrieval_strategy: "hybrid",

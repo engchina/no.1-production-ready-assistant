@@ -55,7 +55,6 @@
       "missing_evidence": [],
       "turn_results": [],
       "answer_evaluation": null,
-      "guardrail_warnings": [],
       "failure_reasons": [
         "retrieval_miss",
         "unexpected_handling"

@@ -140,8 +140,8 @@ CANCEL_OUTPUT_SCHEMA_VERSION = 1
 # 範囲 source_line_start / source_line_end を足して 3、#3429 で行の番号の基準に解析の表の格子の
 # parsed_table を足して 4、#3546 でツールの呼び出しに RAG の縮退（degraded_steps・
 # guardrail_degraded・zero_evidence_stage）を、根拠に表の行・列の対応の検査が読めるか
-# （table_binding）を足して 5）。
-OBSERVATION_SCHEMA_VERSION = 5
+# （table_binding）を足して 5、#37 で RAG の契約から外した guardrail_degraded を削除して 6）。
+OBSERVATION_SCHEMA_VERSION = 6
 # 根拠の件数の上限。本文は件ごとの全文を応答の予算に入れる（3 製品で共通の規則。値と決め方は
 # pr_backend_core.source_text。#3321）。
 _MAX_SOURCES = 10
@@ -605,13 +605,6 @@ class ObservedToolCall(BaseModel):
         description=(
             "RAG の根拠のツールの degraded_steps（失敗して縮退した任意の補助の処理の種類と回数。"
             "空なら縮退していない）。ほかのツール・失敗した呼び出しは null。"
-        ),
-    )
-    guardrail_degraded: bool | None = Field(
-        default=None,
-        description=(
-            "RAG の根拠のツールの guardrail_degraded（安全チェックを完了できず止めた）。"
-            "ほかのツール・失敗した呼び出しは null。"
         ),
     )
     zero_evidence_stage: ObservedZeroEvidenceStage | None = Field(
@@ -1314,7 +1307,6 @@ async def run_observation(
                     if call.degraded_steps is not None
                     else None
                 ),
-                guardrail_degraded=call.guardrail_degraded,
                 zero_evidence_stage=cast(
                     ObservedZeroEvidenceStage | None,
                     call.zero_evidence_stage,

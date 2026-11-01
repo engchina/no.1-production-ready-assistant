@@ -54,10 +54,9 @@ RUN_FEEDBACK_LIMIT = 20
 def oracle_run_history_schema_sql(table_name: str = RUN_HISTORY_TABLE) -> str:
     """実行履歴の表の DDL（#1890）。
 
-    `question` は安全チェックの後（機微情報をマスクした後）の質問。安全チェックで止めた質問は
-    保存しない（NULL。チャットの会話と同じ）。`user_uuid` は実行した利用者（一覧の「実行者」の
-    表示名を引く）、`user_id_hash` は見え方の判定に使う。`conversation_id` の索引は、会話の持ち主に
-    見せる条件（持ち主の会話の実行。#1954）に使う。
+    `question` は pipeline が受け取った質問（pipeline の前に失敗したときは NULL）。`user_uuid` は
+    実行した利用者（一覧の「実行者」の表示名を引く）、`user_id_hash` は見え方の判定に使う。
+    `conversation_id` の索引は、会話の持ち主に見せる条件（持ち主の会話の実行。#1954）に使う。
     """
     surfaces = ", ".join(f"'{item}'" for item in RUN_SURFACES)
     statuses = ", ".join(f"'{item}'" for item in RUN_STATUSES)

@@ -76,7 +76,6 @@ class ChatMessage(BaseModel):
     citations: list[RetrievedChunk] = Field(default_factory=list)
     # 保存した引用のうち、見る人が今の権限で見られない根拠の数（抜粋・文書は返さない。#3252）。
     withheld_evidence_count: int = 0
-    guardrail_warnings: list[str] = Field(default_factory=list)
     trace_id: str | None = None
     status: MessageStatus = MessageStatus.COMPLETE
     reply_to_message_id: str | None = None
