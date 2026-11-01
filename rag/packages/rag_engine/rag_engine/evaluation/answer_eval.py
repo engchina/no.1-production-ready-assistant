@@ -930,7 +930,12 @@ def _resolve_tokens(tokens, claim, catalog):
         if span not in spans:
             spans.append(span)
     quote = (claim.evidence_quote or "").strip()
-    if quote and not any(quote_in_text(quote, span["text"]) for span in spans):
+    # 複数の片段にまたがる引用（各片段の見出しを「 / 」でつないだ形。#119）は、つないだ本文で照合する。
+    if (
+        quote
+        and not any(quote_in_text(quote, span["text"]) for span in spans)
+        and not (len(spans) > 1 and quote_in_text(quote, "\n".join(span["text"] for span in spans)))
+    ):
         return None
     return spans
 
