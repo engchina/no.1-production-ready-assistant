@@ -103,6 +103,10 @@ class ToolCall(BaseModel):
     # 業務 Agent のデータの範囲を当てた記録（#1378。接続・使ったプロファイル・埋めた / 上書きした /
     # 拒否した / 絞った）。呼び先へは送らない（送るのは arguments だけ）。範囲が効かなければ None。
     data_scope: JsonObject | None = None
+    # 外部への書き込みの論理操作の ID（#72。`external_writes.operation_key`）。副作用のあり得る
+    # 呼び出しにだけ付け、MCP の `params._meta` で呼び先へ渡す（引数には足さない）。承認・再開・
+    # 通信の再送・結果不明の後の承認済みの再送で同じ値を保つ。
+    operation_key: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -134,6 +138,17 @@ class ToolDefinition(BaseModel):
     # 指示の名前との対応と、別のツールの名前の衝突の検出はこちらで行う。
     mcp_server_id: str | None = None
     mcp_tool_name: str | None = None
+    # 同じ呼び出しを繰り返しても追加の副作用が無いという申告（MCP の `annotations.idempotentHint`。
+    # #72）。信頼するのは `annotations_trusted` のときだけ（`resend_safe`）。
+    idempotent: bool = False
+
+    @property
+    def resend_safe(self) -> bool:
+        """届いた後の失敗（結果が不明）で同じ呼び出しを送り直してよいか（#2595・#72）。
+
+        信頼できる読み取り専用か、信頼できる冪等の申告（`idempotentHint`）のツールだけ。
+        """
+        return self.trusted_read_only or (self.idempotent and self.annotations_trusted)
 
     @property
     def trusted_read_only(self) -> bool:
@@ -191,6 +206,9 @@ class ExternalMcpToolInfo(BaseModel):
     server_id: str | None = None
     # MCP の annotations.readOnlyHint。信頼した接続では、True なら既定で承認なしに呼べる。
     read_only: bool = False
+    # MCP の annotations.idempotentHint（書き込みのツールだけ意味がある。#72）。信頼した接続では、
+    # 届いた後の失敗でも同じ呼び出しを送り直す。
+    idempotent: bool = False
     # ツール権限で個別に決めていないときの判定（接続のツールの一覧の画面に出す。#1832）。
     default_decision: ToolPolicyDecision | None = None
     # Agent のモデルに渡す function tool の名前（`<接続>__<ツール>`）。
@@ -229,6 +247,8 @@ class ToolInvocationContext(BaseModel):
 
     approval_id: str | None = None
     trace_id: str | None = None
+    # 外部への書き込みの論理操作の ID（#72。`ToolCall.operation_key`）。
+    operation_key: str | None = None
     agent_id: str | None = None
     # Run の ID と、Run を作った利用者（共通認証の user_uuid。#233）。RAG / NL2SQL の MCP は
     # この利用者の token で呼ぶ。利用者が無い呼び出しは `mcp.user_required` で失敗し、別の主体に
@@ -364,6 +384,7 @@ def _tool_audit_metadata(
         "trace_id": context.trace_id,
         "approval_id": context.approval_id,
         "force": force,
+        **({"operation_key": context.operation_key} if context.operation_key else {}),
     }
 
 
@@ -488,6 +509,7 @@ class ToolRegistry:
                 call.arguments,
                 context,
             )
+
         except ExternalToolError as exc:
             return _tool_result(
                 name=call.name,
@@ -529,6 +551,13 @@ class ToolRegistry:
         )
         return with_tool_result_images(result, images) if images else result
 
+
+# 外部への書き込みの論理操作の ID を入れる `tools/call` の `params._meta` の key（#72）。
+# 引数ではないので、対応しない呼び先は無視する（引数の schema を変えない）。
+OPERATION_KEY_META = "production-ready/operation_key"
+# 呼び先に届いた後の失敗で、相手で反映されたかが分からないことを表す詳細（#72。
+# `error_details["outcome"]`）。書き込みのツール（`unsafe`）の失敗にだけ付ける。
+OUTCOME_UNKNOWN = "unknown"
 
 MCP_PROTOCOL_VERSION = "2025-06-18"
 _MCP_ACCEPT = "application/json, text/event-stream"
@@ -946,6 +975,7 @@ def _post_mcp_attempts(
                 f"（{target} のサービスの負荷や処理の時間を確認してください）。",
                 {"reason": type(exc).__name__, "timeout_seconds": timeout_seconds},
             )
+            _note_outcome_unknown(error, kind)
         except httpx.HTTPStatusError as exc:
             status_code = exc.response.status_code
             retryable = status_code in retry_statuses
@@ -956,6 +986,9 @@ def _post_mcp_attempts(
                 _http_error_message(service_label, target, status_code),
                 {"status_code": status_code, "body": _response_text(exc.response)},
             )
+            if status_code >= 500 and status_code != 503:
+                # 500 / 502 / 504 は呼び先（か途中の gateway）で処理が進んだかが分からない。
+                _note_outcome_unknown(error, kind)
         except httpx.RequestError as exc:
             # 送った後に通信が切れた（応答の途中の切断など）。副作用の無いものだけ再試行する。
             retryable = kind != McpRetryKind.UNSAFE
@@ -965,14 +998,17 @@ def _post_mcp_attempts(
                 "確認してください）。",
                 {"reason": type(exc).__name__},
             )
+            _note_outcome_unknown(error, kind)
         except ExternalToolError:
             raise
         except ValueError as exc:
-            raise ExternalToolError(
+            error = ExternalToolError(
                 f"{service_code}.invalid_json",
                 f"{service_label}の応答が JSON ではありません。",
                 {"attempt": attempt},
-            ) from exc
+            )
+            _note_outcome_unknown(error, kind)
+            raise error from exc
         delay = 0.0
         if retryable and attempt < attempts:
             delay = (
@@ -1003,6 +1039,17 @@ def _post_mcp_attempts(
             },
         )
         _retry_sleep(delay)
+
+
+def _note_outcome_unknown(error: ExternalToolError, kind: McpRetryKind) -> None:
+    """書き込みのツールの届いた後の失敗に「結果不明」を付ける（#72）。
+
+    相手では反映済みかもしれないので、未実行とは扱わない（Runtime は同じ操作を承認なしに
+    送り直さない。`external_writes`）。送信前の失敗・429 / 503・JSON-RPC の誤り・`isError` の
+    結果は、相手が受け付けなかった・失敗を返したので付けない。
+    """
+    if kind == McpRetryKind.UNSAFE:
+        error.details["outcome"] = OUTCOME_UNKNOWN
 
 
 def _http_error_message(service_label: str, target: str, status_code: int) -> str:
@@ -1644,11 +1691,16 @@ class McpConnectionClient:
         *,
         idempotent: bool = False,
         trace_id: str | None = None,
+        operation_key: str | None = None,
     ) -> JsonObject:
         """ツールを呼び、文字の結果（JSON）を返す（画像は参照だけ。画像も要るときは
         `call_tool_result`）。"""
         return self.call_tool_result(
-            tool_name, arguments, idempotent=idempotent, trace_id=trace_id
+            tool_name,
+            arguments,
+            idempotent=idempotent,
+            trace_id=trace_id,
+            operation_key=operation_key,
         ).output
 
     def call_tool_result(
@@ -1658,14 +1710,22 @@ class McpConnectionClient:
         *,
         idempotent: bool = False,
         trace_id: str | None = None,
+        operation_key: str | None = None,
     ) -> ToolOutputWithImages:
         """ツールを呼ぶ。`idempotent=False`（既定。書き込みのツール）は、送信前の失敗と 429 / 503
         だけ再試行する。`idempotent=True`（読み取り専用のツール）は 502 / 504 も再試行する。
         読み取りの timeout はどちらも再試行しない（呼び先で LLM の処理が進んでいる可能性が
-        ある）。結果は文字の結果と画像に分ける（`parse_mcp_tool_result`。#2650）。"""
+        ある）。結果は文字の結果と画像に分ける（`parse_mcp_tool_result`。#2650）。
+
+        `operation_key`（書き込みの論理操作の ID。#72）は `params._meta` で渡す（引数には
+        足さない）。再試行も同じ payload を送るので、同じ ID のまま。"""
+
+        params: JsonObject = {"name": tool_name, "arguments": arguments}
+        if operation_key:
+            params["_meta"] = {OPERATION_KEY_META: operation_key}
         response = self._session().request(
             "tools/call",
-            {"name": tool_name, "arguments": arguments},
+            params,
             request_id=trace_id or f"mcp_{uuid4().hex}",
             idempotent=idempotent,
         )
@@ -1806,6 +1866,11 @@ def _mcp_tools_from_result(server_id: str, response: JsonRpcResponse) -> Externa
         description = raw_tool.get("description")
         annotations = raw_tool.get("annotations")
         read_only = isinstance(annotations, dict) and annotations.get("readOnlyHint") is True
+        idempotent = (
+            not read_only
+            and isinstance(annotations, dict)
+            and annotations.get("idempotentHint") is True
+        )
         metadata = raw_tool.get("metadata")
         tools.append(
             ExternalMcpToolInfo(
@@ -1816,6 +1881,7 @@ def _mcp_tools_from_result(server_id: str, response: JsonRpcResponse) -> Externa
                 output_schema=_mcp_schema_value(raw_tool, "outputSchema", "output_schema"),
                 server_id=server_id,
                 read_only=read_only,
+                idempotent=idempotent,
                 function_name=function_names[name],
                 metadata=metadata if isinstance(metadata, dict) else {},
             )
@@ -1973,6 +2039,7 @@ def mcp_tool_definition(config: McpConnectionConfig, tool: ExternalMcpToolInfo) 
         and tool.name in STANDARD_AUTO_APPROVED_TOOLS.get(config.server_id, frozenset()),
         mcp_server_id=config.server_id,
         mcp_tool_name=tool.name,
+        idempotent=tool.idempotent,
     )
 
 
@@ -1983,8 +2050,11 @@ def retry_after_delivery_allowed(config: McpConnectionConfig, tool: ExternalMcpT
     明示した接続）だけ根拠にする。ツール権限の個別の許可や利用者の承認は根拠にしない（実行してよい
     ことと、同じ操作を 2 回送ってよいことは別）。送信前の失敗と 429 / 503 は、これに依らず
     再試行する（`_post_mcp_message`）。
+
+    冪等の申告（idempotentHint。#72）も同じ信頼の境界で根拠にする（同じ呼び出しは同じ
+    `operation_key` を送るので、呼び先は ID でも重複を判定できる）。
     """
-    return tool.read_only and config.annotations_trusted()
+    return (tool.read_only or tool.idempotent) and config.annotations_trusted()
 
 
 def mcp_tool_handler(config: McpConnectionConfig, tool: ExternalMcpToolInfo) -> ToolHandler:
@@ -2006,7 +2076,9 @@ def mcp_tool_handler(config: McpConnectionConfig, tool: ExternalMcpToolInfo) -> 
             arguments,
             idempotent=retry_after_delivery_allowed(config, tool),
             trace_id=context.trace_id,
+            operation_key=context.operation_key,
         )
+
         if follow_up_tool is None:
             # 画像は文字の結果と分けて返す（#2650。`tool_registry.invoke` が分ける）。
             return result if result.images else result.output

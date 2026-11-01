@@ -133,7 +133,10 @@ export interface ToolCall {
   trace_id?: string;
   /** 業務 Agent のデータの範囲を当てた記録（#1378。範囲が効かなければ null）。 */
   data_scope?: ToolCallDataScope | null;
+  /** 外部への書き込みの論理操作の ID（#72。副作用のあり得る呼び出しだけ）。 */
+  operation_key?: string | null;
 }
+
 
 /** データの範囲を当てた記録（使ったプロファイルと、埋めた / 上書きした / 拒否した / 絞った）。 */
 export interface ToolCallDataScope {
