@@ -1324,6 +1324,11 @@ def _original_range(quote: str, text: str) -> str:
 
 # 構造化出力の文字列の中で、改行・タブが二重に escape されて残った字（「\\n」の 2 字。#112）。
 _ESCAPED_BREAK = re.compile(r"\\r\\n|\\[nrt]")
+# 監査モデルが原文の離れた箇所（表の行・各 chunk の見出し）をつなぐ「 / 」（前後に空白のある斜線。#119）。
+_SLASH_JOIN = re.compile(r"\s+[/／]\s+")
+# 「 / 」でつないだ断片として受け入れる最小の文字数（空白・記号を除く。「第3条(出張旅費)」が 7）。短い断片（「一般社員」「15,000円」）は
+# 表の離れたセルを組み替えて区分と値を取り違えた引用でも原文に見つかるので、行・見出しの長さに限る。
+_MIN_JOINED_FRAGMENT_CHARS = 7
 
 
 def _original_quote(quote: str, text: str) -> str:
@@ -1351,6 +1356,9 @@ def _verbatim_quote(quote: str, text: str) -> str:
     elided = _elided_quote(quote, text)
     if elided:
         return elided
+    joined = _slash_joined_quote(quote, text)
+    if joined:
+        return joined
     lines = [line for line in quote.splitlines() if len(_canonical(line)[0]) >= 2]
     if len(lines) < 2:
         # 手順番号（①②…、1.、(1)）で区切られた複数の手順を 1 行につないだ引用。間の ※ 注記などを
@@ -1384,6 +1392,29 @@ def _elided_quote(quote: str, text: str) -> str:
     if len(parts) == 1:
         return _original_range(parts[0], text)
     return _ordered_ranges(parts, text)
+
+
+def _slash_joined_quote(quote: str, text: str) -> str:
+    """「 / 」でつないだ引用を、断片ごとに原文と照合します（#119）。
+
+    監査モデルは表の離れた行や複数の見出しを `A / B` とつないで写す（行の順を入れ替えることもある）。改行で
+    つないだ複数行の引用と同じく、各断片が原文そのままなら受け入れ、読み順は問わない。省略記号・改行も断片の
+    区切りにする。断片の語の並びは変えないので、区切りの斜線を落とした引用・値を入れ替えた引用は通さない。
+    断片は行・見出しの長さ（`_MIN_JOINED_FRAGMENT_CHARS`）に限る（短いセルの組み替えを通さない）。
+    """
+    if not _SLASH_JOIN.search(quote):
+        return ""
+    parts = [
+        part
+        for line in quote.splitlines()
+        for piece in check_cues().ellipsis_split.split(line)
+        for part in _SLASH_JOIN.split(piece)
+        if len(_canonical(part)[0]) >= 2
+    ]
+    if len(parts) < 2 or any(len(_canonical(part)[0]) < _MIN_JOINED_FRAGMENT_CHARS for part in parts):
+        return ""
+    matched = [_original_range(part, text) for part in parts]
+    return " … ".join(matched) if all(matched) else ""
 
 
 def _ordered_ranges(parts: Sequence[str], text: str) -> str:

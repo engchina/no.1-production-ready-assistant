@@ -90,3 +90,35 @@ def test_two_evidence_items_joined_with_a_slash_do_not_match() -> None:
     assert not grounded.quote_in_text(joined, f"{HEADER}\n{TABLE}")
     # 指示どおり「…」でつなげば照合する。
     assert grounded.quote_in_text(joined.replace(" / 第3条", "…第3条"), f"{HEADER}\n{TABLE}")
+
+
+# #119 の再現（synthetic-test-5）: 監査が表の離れた行・各 chunk の見出しを「 / 」でつないで写した（行の順も入れ替えた）。
+SLASH_TABLE_QUOTE = "第3条(出張旅費) … 課長以上 | 15,000円 | 3,000円 / 一般社員 | 12,000円 | 2,000円"
+
+
+def test_slash_joined_fragments_match_when_each_fragment_is_verbatim() -> None:
+    assert grounded.quote_in_text(SLASH_TABLE_QUOTE, TABLE)
+    assert grounded.quote_in_text("課長以上 | 15,000円 | 3,000円 ／ 一般社員 | 12,000円", TABLE)
+    # 断片の値を入れ替えた引用・原文に無い断片を含む引用は通さない。
+    assert not grounded.quote_in_text(SLASH_TABLE_QUOTE.replace("15,000円", "12,000円"), TABLE)
+    assert not grounded.quote_in_text("一般社員 | 12,000円 / 部長 | 20,000円", TABLE)
+    # 短いセルを組み替えた引用（区分と値の取り違え）は、各セルが原文にあっても通さない。
+    assert not grounded.quote_in_text("一般社員 / 15,000円", TABLE)
+    # 区切りの無い斜線（「1泊/2,000円」）は断片の区切りにしない。
+    assert not grounded.quote_in_text("一般社員/12,000円/課長以上", TABLE)
+
+
+def test_slash_joined_quote_across_several_evidence_spans_resolves() -> None:
+    from types import SimpleNamespace
+
+    from rag_engine.evaluation import answer_eval
+
+    catalog = {
+        "E1": {"id": "c0", "evidence_id": "E1", "text": HEADER},
+        "E2": {"id": "c3", "evidence_id": "E2", "text": TABLE},
+    }
+    claim = SimpleNamespace(evidence_id="E1,E2", evidence_quote="株式会社サンプル 勤務・出張・経費規程 / 第3条(出張旅費)")
+    assert [span["id"] for span in answer_eval._spans_for_ids(claim, catalog)] == ["c0", "c3"]
+    # どの片段にも無い断片があれば今までどおり結び付けない。
+    claim.evidence_quote = "株式会社サンプル 勤務・出張・経費規程 / 第9条(社員食堂)"
+    assert answer_eval._spans_for_ids(claim, catalog) is None
