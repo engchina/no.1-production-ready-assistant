@@ -1,6 +1,6 @@
 # No.1 Production Ready Assistant
 
-Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
+Oracle Database（ADB Free）の上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
 
 ## ローカルで動かす（Oracle Autonomous Database Free コンテナ）
 
@@ -210,7 +210,7 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 ```
 
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
-- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [platform/docs/deployment.md](./platform/docs/deployment.md#adb-の自動の起動1745) を参照してください。
+- 2 つのスクリプトは DB の起動・停止を行いません。DB（ADB Free コンテナ）は `docker start adb-free` などで別に動かしておきます（[ローカルで動かす](#ローカルで動かすoracle-autonomous-database-free-コンテナ)）。DB に接続できなくてもアプリケーションは起動し、`system_admin` はログインできます。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
 - 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）と Wallet は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
@@ -241,7 +241,6 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 | [`suite/`](./suite/evaluation/README.md) | 製品をまたぐスイートのアプリケーション。`suite/evaluation` は製品の公開の MCP だけで業務 Agent などを評価する CLI |
 | [`skills/`](./skills/) | 組み込みのスキル（Agent Skills の形式 `skills/<name>/SKILL.md`）。Agent が読み、外部の Agent にも入れられる |
 
-- 準備中（ロードマップ）の機能は各製品の README の「ロードマップ」にあります（RAG: OCI Document Understanding の解析は準備中で、まだ選べません。[rag/README.md](./rag/README.md#ロードマップ)）。
 - 依存は `platform/` → 各製品・`suite/` の一方向です（suite は製品を公開の MCP だけで呼びます）。各製品は `platform/` を相対パスで参照し、backend / frontend / 実行環境（uv の venv）/ 配備はそれぞれ独立しています。
 - 開発・起動方法は各ディレクトリの `README.md` を参照してください。
 
