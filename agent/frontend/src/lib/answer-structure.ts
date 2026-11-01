@@ -64,6 +64,17 @@ const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 // Markdown の箇条書きの行（`・` は Markdown の箇条書きではないので含めない）。
 const MARKDOWN_LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]+\S/;
 
+/**
+ * 本文の先頭の見出しが、本文を囲む枠の見出し（チャットの `ChatAnswerBody`・実行の詳細の節の「回答」）と同じ文言なら
+ * その行を除く（#133）。LLM が本文を「## 回答」で始めると、枠の見出しの直下に同じ見出しが二重に出るため。
+ * 先頭の 1 行だけを見る。本文の途中の見出しと、文言の違う見出しは残す。
+ */
+export function withoutFrameHeading(answer: string, frameHeading: string): string {
+  const match = /^\s*(.*)(?:\n|$)/.exec(answer);
+  if (!match || headingText(match[1]) !== frameHeading) return answer;
+  return answer.slice(match[0].length).replace(/^\s*\n/, "");
+}
+
 /** 回答の節（`notice.heading`）。資料との照合の成果物の内容から読む。 */
 export function noticeHeading(validation: Record<string, unknown> | null): string | null {
   const notice = validation?.notice;
