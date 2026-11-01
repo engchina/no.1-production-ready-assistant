@@ -122,11 +122,8 @@ def _enterprise_ai_check(settings: Settings) -> str:
         )
     }
     for connection in connections.values():
-        required_status = _required_values_check(
-            connection.endpoint,
-            connection.project_id,
-            api_path,
-        )
+        # Project ID は任意（#9・#81）。空なら送らないので、ready の必須値にしない。
+        required_status = _required_values_check(connection.endpoint, api_path)
         if required_status != READINESS_OK:
             return required_status
     if not all(_is_present(connection.api_key) for connection in connections.values()):

@@ -257,6 +257,14 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     agent_max_rag_calls_per_run: int = 6
     # 同じ会話（thread）の通しのツールの呼び出し。前の Run の支援タスクの状態に積む。
     agent_max_tool_calls_per_task: int = 60
+    # Run 全体の実行予算（#68。`run_budget`）。最初の実行・差し戻し・承認や確認の後の再開を通した
+    # モデルの呼び出しの回数・token（実測。usage の無い呼び出しは入力の見積もり）・稼働時間（秒。
+    # 人の待ちを除く）。上限に達したら新しいツールを実行せず、次のモデルの呼び出しの前に Run を
+    # 失敗にする。0 以下（既定）は数えない（消費は Run の metadata `run_budget` に常に残すので、
+    # 基線を測ってから設定する）。
+    agent_run_max_model_calls: int = 0
+    agent_run_max_total_tokens: int = 0
+    agent_run_max_active_seconds: float = 0.0
     # 品質評価の 1 ケースの上限時間（秒。Run の実行。判定は別。#1432）。0 以下（既定）は自動で、
     # 接続 `rag` の待ち時間 ×（Run の RAG の予算〔agent_max_rag_calls_per_run。0 以下なら
     # agent_max_tool_calls_per_run〕+ 1）にする。+1 は回答の最終の検証（rag_validate_answer）と

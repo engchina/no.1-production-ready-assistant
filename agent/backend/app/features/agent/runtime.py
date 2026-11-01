@@ -78,6 +78,7 @@ from app.features.agent.confirmation import (
 from app.features.agent.confirmation import METADATA_KEYS as CONFIRMATION_METADATA_KEYS
 from app.features.agent.data_scope import AgentDataScopes, normalize_data_scopes
 from app.features.agent.output_fields import AgentOutputField, validate_output_fields
+from app.features.agent.run_budget import RUN_BUDGET_METADATA_KEY
 from app.features.agent.run_claim import RunClaim
 from app.features.agent.skills import (
     BUSINESS_RAG_RESEARCH_SKILL_ID,
@@ -656,6 +657,8 @@ RESERVED_RUN_METADATA_KEYS = frozenset(
         CANCEL_METADATA_KEY,
         # 回答前の確認（#1839）。確認の答えの操作から作る。
         *CONFIRMATION_METADATA_KEYS,
+        # Run 全体の実行予算の消費（#68）。利用者が少ない消費を書いて予算を増やせないようにする。
+        RUN_BUDGET_METADATA_KEY,
     }
 )
 
@@ -1466,6 +1469,7 @@ class AgentRuntimeRepositoryContract(Protocol):
     def record_builtin_unattended_skips(self, run_id: str, calls: Sequence[ToolCall]) -> None: ...
     def run_statuses(self, run_ids: Collection[str]) -> dict[str, RunStatus]: ...
     def record_builtin_usage(self, run_id: str, usage: RunUsage) -> None: ...
+    def record_run_budget(self, run_id: str, snapshot: JsonObject) -> None: ...
     def list_runs(self) -> list[RunState]: ...
     def list_run_summaries(self) -> list[RunSummary]: ...
     def list_approval_summaries(self) -> list[ApprovalSummary]: ...
@@ -3316,6 +3320,20 @@ class AgentRuntimeRepository:
             self._mark_run_changed(run)
             self._persist_locked()
             self._record_fact_locked(run)
+
+    def record_run_budget(self, run_id: str, snapshot: JsonObject) -> None:
+        """Run 全体の実行予算の消費（再開を含めた累計。#68 `run_budget`）を metadata に残す。
+
+        取り消し・失敗で終えた Run にも残す（消費は戻らない）。別の実行が始まった後の遅れた
+        書き戻しは、新しい実行の累計を上書きしない（#2606）。
+        """
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run is None or self._stale_execution_locked(run, "run_budget", segment_end=False):
+                return
+            run.metadata = {**run.metadata, RUN_BUDGET_METADATA_KEY: deepcopy(snapshot)}
+            self._mark_run_changed(run)
+            self._persist_locked()
 
     def note_builtin_warning(self, run_id: str, message: str) -> None:
         """実行は続けるが利用者に伝えたいこと（取得できなかった MCP 接続など）をイベントに残す。"""
