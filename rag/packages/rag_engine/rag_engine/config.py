@@ -33,7 +33,9 @@ DEFAULT_OCI_VISION_ENDPOINT = OCI_INFERENCE_ENDPOINT_TEMPLATE.format(region=DEFA
 OPENAI_RESPONSES_LLM_API_MODE = "openai_responses"
 DEFAULT_LLM_API_MODE = OPENAI_RESPONSES_LLM_API_MODE
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v4"
-DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS = 1536
+# Oracle の rag_chunks.embedding（VECTOR(1024, FLOAT32)）と同じ次元。rag_engine は platform を import
+# できないため同じ値を持ち、一致を rag backend のテストで確かめる（#46）。
+DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS = 1024
 # 百煉（DashScope）の OpenAI 互換 API は 1 要求 10 件まで。超えると 400 が返る（#8）。
 DEFAULT_EMBEDDING_BATCH_SIZE = 10
 DEFAULT_RERANK_MODEL = "qwen3-rerank"

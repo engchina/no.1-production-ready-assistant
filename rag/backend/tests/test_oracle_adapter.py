@@ -2991,8 +2991,8 @@ def test_oracle_vector_schema_includes_tenant_filter_columns() -> None:
 
     assert "tenant_id_hash  CHAR(64)" in ddl
     assert "search_text     CLOB NOT NULL" in ddl
-    assert "embedding       VECTOR(1536, FLOAT32)," in ddl
-    assert "embedding       VECTOR(1536, FLOAT32) NOT NULL" not in ddl
+    assert "embedding       VECTOR(1024, FLOAT32)," in ddl
+    assert "embedding       VECTOR(1024, FLOAT32) NOT NULL" not in ddl
     assert "CREATE VECTOR INDEX rag_chunks_embedding_hnsw_idx" in ddl
     assert "ORGANIZATION INMEMORY NEIGHBOR GRAPH" in ddl
     assert "DISTANCE COSINE" in ddl

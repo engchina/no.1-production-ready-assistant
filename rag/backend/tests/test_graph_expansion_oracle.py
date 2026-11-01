@@ -21,7 +21,7 @@ from app.schemas.document import FileStatus
 from app.schemas.extraction import StructuredExtraction
 from app.schemas.search import RetrievedChunk
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 
 
 def _chunks(sections: list[tuple[str, int]]) -> list[Chunk]:

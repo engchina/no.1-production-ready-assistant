@@ -273,8 +273,8 @@
     "has_password": false,
     "has_wallet_password": false,
     "readiness": "missing",
-    "embedding_dimension": 1536,
-    "vector_column": "VECTOR(1536, FLOAT32)",
+    "embedding_dimension": 1024,
+    "vector_column": "VECTOR(1024, FLOAT32)",
     "adb_ocid": "",
     "region": "",
     "config_source": "runtime"

@@ -115,6 +115,7 @@ def test_manifest_covers_every_core_create_and_excludes_preserved_tables() -> No
         22,
         23,
         24,
+        25,
     ]
     assert all("security" not in migration.filename for migration in MIGRATIONS)
     assert set(MANAGED_TABLES).isdisjoint(PRESERVED_TABLES)
@@ -595,7 +596,7 @@ class _IncrementalWorkflowManager(_WorkflowManager):
         super().__init__("partial")
         self.before = _partial_status(
             applied_versions=[0, 1, 2, 3, 5, 6],
-            pending_versions=[7, 8, 9, 15, 17, 18, 19, 21, 22, 23, 24],
+            pending_versions=[7, 8, 9, 15, 17, 18, 19, 21, 22, 23, 24, 25],
             missing_objects=[
                 ("NL2SQL_EVALUATION_JOBS", "TABLE"),
                 ("NL2SQL_EVALUATION_RESULTS", "TABLE"),
@@ -614,7 +615,7 @@ def test_incremental_update_reaches_ready_without_replaying_old_migrations() -> 
 
     result = manager.initialize()
 
-    assert manager.applied_migrations == [7, 8, 9, 15, 17, 18, 19, 21, 22, 23, 24]
+    assert manager.applied_migrations == [7, 8, 9, 15, 17, 18, 19, 21, 22, 23, 24, 25]
     assert result["operation"] == "migrated"
     assert result["status"] == "ready"
     assert result["existing_object_count"] == len(MANAGED_OBJECTS)
@@ -862,7 +863,9 @@ class _ApiManager:
     def status(self) -> dict[str, Any]:
         return _status_payload("partial", existing=4)
 
-    def initialize(self, *, recreate: bool, confirmation: str | None) -> dict[str, Any]:
+    def initialize(
+        self, *, recreate: bool, confirmation: str | None, allow_destructive: bool = False
+    ) -> dict[str, Any]:
         result = _status_payload("ready")
         return {
             **result,
@@ -874,7 +877,9 @@ class _ApiManager:
 
 
 class _LockedApiManager(_ApiManager):
-    def initialize(self, *, recreate: bool, confirmation: str | None) -> dict[str, Any]:
+    def initialize(
+        self, *, recreate: bool, confirmation: str | None, allow_destructive: bool = False
+    ) -> dict[str, Any]:
         raise SystemSchemaError(
             "ORA-00054",
             "Oracle の対象オブジェクトのロックが待機時間内に解放されませんでした。",

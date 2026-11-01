@@ -126,6 +126,52 @@ import { AppShell, Sidebar } from "@production-ready/ui";
 
 ---
 
+## 既存環境の更新手順（#46 埋め込みの次元を 1536 から 1024 に）
+
+#46 で埋め込みの次元を、Cohere Embed v4 に合わせた **1536** から、Aliyun 百煉の `text-embedding-v4` の既定の **1024** に変えた。
+次元の正本は `pr_system_settings.embedding` の `EMBEDDING_DIMENSIONS`（とベクトル列の型 `EMBEDDING_VECTOR_COLUMN_TYPE` =
+`VECTOR(1024, FLOAT32)`）の 1 か所で、3 製品の Oracle の DDL・埋め込みの呼び出しの `dimensions`・返った次元の検証・画面の表示がこれを使う。
+platform を import できない層（RAG の `rag_engine` の `DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS` / `ADB_EMBEDDING_DIMENSIONS`、NL2SQL の
+SQL の migration のファイル）は同じ値を書き、一致をテストで確かめる。
+
+- **次元は設定では変えない（1024 に固定）。** Oracle のベクトル列は固定の次元で、値を変えるには列と索引の作り直しと全件の再埋め込みが
+  要るため、`.env` の値は 1024 以外を受け付けない（「システム設定 › モデル」に次元の入力欄は無い。#45）。
+- **共通 `.env`（`platform/.env`）の `PLATFORM_OCI_GENAI_EMBEDDING_DIM=1536` は `1024` に書き換える（行を消してもよい）。** 1024 以外は
+  3 製品とも起動の時に設定の検証で止まる（列と合わない次元で埋め込みを保存しないため）。
+- #45 より前に保存した `model-settings.json` の `generative_ai`（`embedding_dim` の 1536 を含む）は、読み込みで登録モデルへ移し、次元は
+  読み捨てる（製品の設定の値を使う。書き換えは要らない）。
+
+### 既存の DB の更新（ベクトルを削除する migration）
+
+ベクトルの列は次元を変えられないため、列と HNSW 索引を作り直す migration（RAG は `20261031_002_embedding_dimensions_1024`、NL2SQL は
+`025_embedding_dimensions_1024`）を足した。**保存済みのベクトルはすべて消える**ので、データを削除する migration として明示の承認が要る
+（[rag/docs/deployment.md](../rag/docs/deployment.md)「既存環境の更新手順の共通の注意」）。次元が既に 1024 の列（新しい環境）は何もしない。
+Agent はベクトルの列を持たないので、`.env` の書き換えだけでよい。
+
+1. 共通 `.env` の `PLATFORM_OCI_GENAI_EMBEDDING_DIM` を `1024` にする。
+2. RAG の取込・NL2SQL の job を止める（`systemctl stop` で worker を止めるか、実行中の job の完了を待つ）。
+3. 承認して更新する（画面は各製品の「システム設定 > データベース」のシステムテーブルの「作成・更新」の確認ダイアログで承認する）。
+
+   ```bash
+   # RAG（rag/backend）
+   uv run python -m app.rag.system_schema_cli status       # pending_destructive_migrations を確かめる
+   uv run python -m app.rag.system_schema_cli initialize --allow-destructive
+   # NL2SQL（nl2sql/backend）
+   uv run python -m app.cli.nl2sql_system_schema --status
+   uv run python -m app.cli.nl2sql_system_schema --initialize --allow-destructive
+   ```
+
+4. 3 製品の backend と worker を再起動する（プロセスの中の埋め込みの cache を捨てる）。`check`（RAG は `system_schema_cli check`、NL2SQL は
+   `nl2sql_system_schema --check`、Agent は `app.cli.agent_system_schema --check`）が ready になることを確かめる。
+5. 再埋め込みする。
+   - **RAG**: 文書の chunk は残るが、ベクトルが空なのでベクトル検索に出ない（キーワード検索には出る）。すべての文書を再取込する
+     （`POST /api/documents/{id}/ingestion-jobs?force=true`。文書ごとに取込の job を入れ直す）。索引を検索・回答プロファイルの推奨ビルドで
+     作り直していた場合は、migration が既定のビルドで作るので、画面の SQL で作り直す。業務ガイドの質問の例・承認済み FAQ の埋め込みは、
+     保存の次元が違うと次の照合で作り直す（手順は要らない）。
+   - **NL2SQL**: オントロジーのノードの埋め込みが消える。業務プロファイルごとにオントロジーを構築し直して公開する。feedback の学習を
+     使う環境は、feedback の索引を再構築する（`POST /api/nl2sql/feedback-index/rebuild` を `{"execute":true}` で。旧い表は migration が削除した）。
+     質問の分類器は 1536 次元で学習した model を使えない（予測は決定論の推薦に切り替わる）ので、学習し直す。
+
 ## 既存環境の更新手順（#566 既定のテキストモデルの必須化）
 
 #566 で「システム設定 › モデル」の既定のモデルを **既定のテキストモデル** → **既定の Vision モデル** の順に並べ、2 つとも必須にした。

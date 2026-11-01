@@ -18,7 +18,7 @@ from app.schemas.document import FileStatus
 from app.schemas.extraction import StructuredExtraction
 from app.schemas.search import RetrievedChunk
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 # chunk の位置 → chunk group(0〜4 は表 A、5〜7 は表 B)。
 _GROUPS = ["grp-a"] * 5 + ["grp-b"] * 3
 

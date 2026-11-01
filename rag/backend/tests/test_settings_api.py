@@ -1108,7 +1108,7 @@ def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> 
     monkeypatch.setattr(settings, "oci_enterprise_ai_llm_response_path", "/data/text")
     monkeypatch.setattr(settings, "oci_enterprise_ai_vlm_response_path", "/data/document")
     monkeypatch.setattr(settings, "oci_genai_embedding_model", "cohere.embed-v4.0")
-    monkeypatch.setattr(settings, "oci_genai_embedding_dim", 1536)
+    monkeypatch.setattr(settings, "oci_genai_embedding_dim", 1024)
     monkeypatch.setattr(settings, "oci_genai_rerank_model", "cohere.rerank-v4.0-fast")
 
     resp = client.get("/api/settings/model")
@@ -1191,7 +1191,7 @@ def test_update_model_settings_mutates_runtime_settings() -> None:
         64000,
     ]
     assert settings.oci_genai_embedding_model == "cohere.embed-v4.0"
-    assert settings.oci_genai_embedding_dim == 1536
+    assert settings.oci_genai_embedding_dim == 1024
     assert settings.oci_genai_rerank_model == "cohere.rerank-v4.0-fast"
     assert "sk-update-secret" not in resp.text
 
@@ -2278,7 +2278,7 @@ def test_get_database_settings_masks_secrets(monkeypatch: MonkeyPatch) -> None:
     assert body["available_services"] == []
     # #108 から readiness は NL2SQL と同じく Wallet のファイルも確認する。
     assert body["readiness"] == "wallet_not_found"
-    assert body["vector_column"] == "VECTOR(1536, FLOAT32)"
+    assert body["vector_column"] == "VECTOR(1024, FLOAT32)"
     assert "super-secret-password" not in resp.text
     assert "wallet-secret" not in resp.text
 

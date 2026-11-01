@@ -129,6 +129,13 @@ class SystemObjectMetadata(BaseModel):
     last_analyzed_at: str | None = None
 
 
+class SystemTableDestructiveMigration(BaseModel):
+    """データを消す未適用の migration（作成・更新の前に承認が要る。#46）。"""
+
+    name: str
+    description: str
+
+
 class SystemTablesStatusData(BaseModel):
     """NL2SQL system table の read-only status。"""
 
@@ -136,6 +143,9 @@ class SystemTablesStatusData(BaseModel):
     schema_head: int
     applied_versions: list[int]
     pending_versions: list[int]
+    pending_destructive_migrations: list[SystemTableDestructiveMigration] = Field(
+        default_factory=list
+    )
     expected_object_count: int
     existing_object_count: int
     expected_table_count: int

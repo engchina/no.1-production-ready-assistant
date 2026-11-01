@@ -52,6 +52,7 @@ from pr_system_settings.chat_attachments.limits import (
     CHAT_ATTACHMENT_TTL_HOURS_MAX,
     CHAT_ATTACHMENT_TTL_HOURS_MIN,
 )
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pr_system_settings.model import EnterpriseAiConfiguredModel as EnterpriseAiConfiguredModel
 from pr_system_settings.model import EnterpriseAiConnection as EnterpriseAiConnection
 from pr_system_settings.model import ModelSecretStateMixin, ModelSettingsStore
@@ -622,10 +623,10 @@ class Settings(
     # --- OCI Generative AI（埋め込み / リランク）---
     oci_genai_embedding_model: str = Field(default="text-embedding-v4")
     oci_genai_embedding_dim: int = Field(
-        default=1536,
-        ge=1536,
-        le=1536,
-        description="Cohere Embed v4 と Oracle VECTOR(1536, FLOAT32) に合わせる。",
+        default=EMBEDDING_DIMENSIONS,
+        ge=EMBEDDING_DIMENSIONS,
+        le=EMBEDDING_DIMENSIONS,
+        description="Oracle の rag_chunks.embedding の次元（EMBEDDING_DIMENSIONS）に固定（#46）。",
     )
     oci_genai_rerank_model: str = Field(default="qwen3-rerank")
 

@@ -8,8 +8,8 @@
     "details": {
       "service": "nl2sqldb_high",
       "current_schema": "NL2SQL_APP",
-      "embedding_dimension": 1536,
-      "vector_column": "VECTOR(1536, FLOAT32)"
+      "embedding_dimension": 1024,
+      "vector_column": "VECTOR(1024, FLOAT32)"
     },
     "checked_at": "2026-08-12T00:00:00.000Z",
     "error_type": null

@@ -33,7 +33,6 @@ class FakeSettings(BaseModel):
     oracle_wallet_password: str = ""
     oracle_adb_ocid: str = ""
     oracle_adb_region: str = ""
-    oci_genai_embedding_dim: int = 1536
     oracle_db_test_timeout_seconds: float = 15.0
 
     @property

@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_COLUMN_TYPE
+
 from app.clients.document_category_store import oracle_document_category_schema_sql
 from app.clients.document_cleanup_store import oracle_document_cleanup_schema_sql
 from app.clients.entity_store import oracle_entity_schema_sql
@@ -58,8 +60,8 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261009_001"
-VECTOR_CONTRACT = "VECTOR(1536, FLOAT32)"
+MIGRATION_ARTIFACT_VERSION = "20261031_002"
+VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
 VECTOR_INDEX_CONTRACT = {
@@ -607,7 +609,64 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name=EMBEDDING_DIMENSIONS_MIGRATION,
+            table_name="rag_chunks",
+            sql=embedding_dimensions_migration_sql(),
+            destructive_note=(
+                f"rag_chunks.embedding の次元が {EMBEDDING_DIMENSIONS} でなければ、"
+                "ベクトルの列と HNSW 索引（rag_chunks_embedding_hnsw_idx）を削除して"
+                f"{EMBEDDING_VECTOR_COLUMN_TYPE} で作り直します。保存済みのベクトルはすべて消え、"
+                "作り直した後は全文書の再埋め込み（再取込）が要ります。"
+                "chunk の本文・文書・ナレッジベースは削除しません。"
+                "索引を検索・回答プロファイルの推奨ビルドで作り直していた場合は、"
+                "適用の後に画面の SQL で作り直してください。"
+            ),
+        )
+    )
     return sections
+
+
+# 埋め込みの次元を 1536 から EMBEDDING_DIMENSIONS（1024）へ変える migration（#46）。
+EMBEDDING_DIMENSIONS_MIGRATION = "20261031_002_embedding_dimensions_1024"
+
+
+def embedding_dimensions_migration_sql() -> str:
+    """rag_chunks.embedding を `EMBEDDING_VECTOR_COLUMN_TYPE` で作り直す（#46）。
+
+    Oracle のベクトル列は次元を変えられないため、次元が違う（#46 より前の 1536）ときだけ HNSW 索引と
+    列を削除し、正本の型の列と既定の推奨ビルドの索引を作る。既に正本の次元なら何もしない（新しい
+    環境・適用済み）。次元は ``USER_TAB_COLUMNS.VECTOR_INFO``（例 ``VECTOR(1024,FLOAT32,DENSE)``）で
+    読む。保存済みのベクトルは消えるため、破壊的な migration として承認を求める。
+    """
+    index_name = "rag_chunks_embedding_hnsw_idx"
+    create_index = oracle_vector_index_create_sql(table="rag_chunks", index=index_name)
+    literal_lines = _ddl_literal_lines(create_index.rstrip(";").replace("'", "''"))
+    create_index_literal = "\n".join(
+        f"            {'|| ' if index else ''}'{line}'" for index, line in enumerate(literal_lines)
+    )
+    return f"""DECLARE
+    v_vector_info VARCHAR2(256);
+    v_count NUMBER;
+BEGIN
+    SELECT MAX(vector_info) INTO v_vector_info
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_CHUNKS' AND column_name = 'EMBEDDING';
+    IF v_vector_info IS NOT NULL
+        AND REPLACE(v_vector_info, ' ', '') NOT LIKE 'VECTOR({EMBEDDING_DIMENSIONS},FLOAT32%' THEN
+        SELECT COUNT(*) INTO v_count FROM user_indexes
+        WHERE index_name = '{index_name.upper()}';
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE 'DROP INDEX {index_name}';
+        END IF;
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_chunks DROP COLUMN embedding';
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_chunks ADD (embedding {EMBEDDING_VECTOR_COLUMN_TYPE})';
+        EXECUTE IMMEDIATE
+{create_index_literal};
+    END IF;
+END;
+/"""
 
 
 def retire_appearance_permission_sql() -> str:

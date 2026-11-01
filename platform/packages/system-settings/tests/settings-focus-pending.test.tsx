@@ -98,7 +98,7 @@ const DB_SETTINGS: DatabaseSettingsData = {
   has_password: true,
   has_wallet_password: false,
   readiness: "ok",
-  embedding_dimension: 1536,
+  embedding_dimension: 1024,
   vector_column: "EMBEDDING",
   adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
   region: "ap-osaka-1",

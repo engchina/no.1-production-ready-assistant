@@ -447,7 +447,8 @@ class _LegacyGenerativeAiSettings(BaseModel):
 
     読み込むときに、モデル ID を種類 `embedding` / `rerank` の登録モデル（プライマリ接続）と
     既定の埋め込み / 再ランクのモデルへ移す（`ModelSettingsStore._apply`）。Base URL・次元は
-    読み捨てる（Base URL は接続の Endpoint URL に、次元は 1536 固定にした）。
+    読み捨てる（Base URL は接続の Endpoint URL に、次元は製品の設定 `oci_genai_embedding_dim`
+    にした。#46 からは `EMBEDDING_DIMENSIONS` の 1024 に固定）。
     """
 
     embedding_model: str = ""

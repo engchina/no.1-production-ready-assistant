@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 完整数据库管理 | `utils/management_util.py` の table/view/DDL/comment/drop/general SQL | `/api/nl2sql/db-admin/tables`, `/views`, `/execute`, `/drop-table`, `/import-tabular`, `/tables/{name}/export.xlsx` | Data Tools: Database Admin / Excel 運用 | extended |
 | Excel 运维流程 | `samples/*.xlsx`, training/terms/rules import/export | CSV/XLSX import preview/execute、training data XLSX/JSONL export、profile learning material import/export | Data Tools, Learning, Glossary Rules | extended |
-| 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | OCI GenAI 1536 embedding + sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
+| 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | OCI GenAI 1024 embedding + sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
 | Select AI Profile 低层管理 | `utils/selectai_util.py` profile create/drop/set/list/detail | DB profile list/detail/create/update/drop、attributes JSON import/export、confirmation/audit | Engine Operations: DB profile JSON editor | extended |
 | SQL 深度分析/逆生成 | `utils/query_util.py` SQL 分析・逆生成 | `/analyze` deterministic deep fields + optional OCI Enterprise AI structured JSON、`/reverse/deep` fallback付き逆生成 | SQL Analysis | extended |
 | DBMS_CLOUD_AI 合成数据 | `DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA` | single object / object_list、profile_name/profile_id、prompt/sample/comment options、operation status/results | Data Tools: DBMS_CLOUD_AI Synthetic Data | extended |

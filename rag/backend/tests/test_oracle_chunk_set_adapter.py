@@ -17,7 +17,7 @@ from app.rag.ingestion import _coerce_extraction_payload, _validate_structured_e
 from app.schemas.document import DocumentProcessingConfig
 from app.schemas.extraction import StructuredExtraction
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 
 
 def _chunks(prefix: str, count: int) -> list[Chunk]:

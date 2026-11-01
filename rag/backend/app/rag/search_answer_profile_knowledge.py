@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from pr_backend_core.logging import safe_exception_fields
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from rag_engine.knowledge.approved_faq import (
     APPROVED_FAQ_APPROVED_STATUS,
     APPROVED_FAQ_IMPORT_MODES,
@@ -342,7 +343,7 @@ async def suggest_approved_faq(
     min_score: float | None = None,
     embed: FaqEmbedder | None = None,
     embedding_model: str = "",
-    embedding_dimensions: int = 1536,
+    embedding_dimensions: int = EMBEDDING_DIMENSIONS,
 ) -> list[ApprovedFaqSuggestion]:
     """質問に近い承認済み FAQ を返す。
 
