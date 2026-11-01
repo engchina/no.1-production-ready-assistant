@@ -71,6 +71,113 @@ uv run python -m app.rag.evaluation_cli \
   --output ../evaluation/evaluation-result.json
 ```
 
+### 実行条件の固定と、外部の AI の応答の記録・再生（#59）
+
+評価の結果（`data.run_manifest`）に、その評価の実行条件を残します。評価の開始時と終了時に作って比べ、実行中に変わった
+条件を `changed_during_run` に出します（変わったら `comparable: false`。比べてはいけない結果）。#59 より前の結果は
+`run_manifest` が無く、そのまま読めます。
+
+| 項目 | 内容 |
+|---|---|
+| `as_of` / `as_of_source` | 検索の基準日。`filters.as_of` が無ければ評価の開始時の今日（`run_start`）にし、評価の間は固定する（日付を跨いでも全ケースが同じ日。通常の質問は今日のまま） |
+| `evaluation_set` | 評価セット（ケース）の sha256 と件数 |
+| `request` | top_k・条件の key と値の hash・ナレッジベース・検索・回答プロファイル・`rag_overrides` |
+| `settings` | 設定の fingerprint（`rag_config_fingerprint`）・プロンプトの版（`answer_prompt_version`） |
+| `models` | 回答・判定・埋め込み（次元）・再ランクのモデル。提供側の重みの版は API で取れないため `snapshot: unverified` |
+| `profiles` | 検索・回答プロファイルの更新時刻・設定の sha256・用語と回答ルール・ドメインキーワードの sha256・参照 KB |
+| `corpus` | 検索に出る（配信中の）chunk_set の id・件数と、レシピの版・抽出の元の hash と更新時刻を含む行の sha256。active の切替・抽出の更新・削除・権限の剥奪で変わる |
+| `code_version` / `external_calls` | backend の git の commit（手元の変更は `+dirty`）と、外部の AI の応答の扱い（`live` / `record` / `replay`）。この 2 つは条件の比較に入れない |
+
+秘密（API キー）・質問と根拠の原文は入れません（条件の値は hash）。読めなかった条件は `unverified` にします。
+
+評価を backend の process の中で流す CLI（`evaluation_run_cli`。job と同じ処理）で、生成・判定・質問の拡張・埋め込み・
+再ランクの応答を記録し、API キー・外部のネットワーク無しで同じ評価を再生できます。Oracle は設定どおりに接続します
+（検索の結果は固定しない）。
+
+```bash
+cd backend
+# 1. 実の API で流し、応答を記録する（記録は実データの応答を含む。リポジトリの外か /tmp/ など git に入らない所へ。権限 0600）
+uv run python -m app.rag.evaluation_run_cli run ../evaluation/golden-set.json \
+  --record ../../tmp/eval/recording.json --output ../../tmp/eval/live.json
+# 2. API キー無しで再生する（記録の日を「今日」にする。入力・呼び出しの数・条件が違えば終了コード 2）
+uv run python -m app.rag.evaluation_run_cli run ../evaluation/golden-set.json \
+  --replay ../../tmp/eval/recording.json --output ../../tmp/eval/replay.json
+# 3. 2 つの結果の実行条件の差（job の CLI の出力も読める。差・実行中の変化があれば終了コード 1）
+uv run python -m app.rag.evaluation_run_cli diff ../../tmp/eval/live.json ../../tmp/eval/replay.json
+```
+
+- 再生は、入力（種類・path・本文の正規化した JSON）の hash ごとに記録の順で応答を返します。記録に無い入力・同じ入力の
+  余分な呼び出しは失敗し、**実の API へ fallback しません**。使わなかった記録（呼び出しの不足）も失敗にします。
+  並行の呼び出しがあるため、順は同じ入力の中で照合します。記録・再生ではケースを 1 件ずつ流します。
+- 時間切れ・接続の失敗・HTTP の失敗（429 など）も記録し、再生で同じ例外を起こします（再試行・時間切れの経路の回帰）。
+  不正な構造化出力・拒否・引用も応答の本文として同じに戻ります。
+- 記録には入力の本文と API キーを残しません。応答の本文（回答・埋め込み）は残るため、実データの記録は明示した保存先だけに
+  置き、公開の場所・GitHub に置かないでください。公開のテストの記録は合成のものだけです。
+- 再生は制御の回帰の確認です。今のモデルの能力・実サービスの速さの証明には使いません（結果の
+  `run_manifest.external_calls.mode` が `replay`）。
+
+### 2 つの評価の、同じケースの対応のある比較（#60）
+
+平均の数ポイントの差だけでは、改善とケースの少なさ・生成の揺れを区別できません。`compare` は、同じ評価セットの
+同じ `case_id` を対にし、指標ごとに改善・悪化・同値の件数と、差（target − base）の平均の区間を出します。
+検索・回答プロファイルと比べる評価（`compare_search_answer_profile_id`）の結果にも、同じ比較が
+`comparison.paired` として入ります（全体の既定 → プロファイル）。
+
+```bash
+cd backend
+# 設定を変える前（base）と後（target）を同じ評価セットで流した結果を比べる（job の CLI の出力も読める）
+uv run python -m app.rag.evaluation_run_cli compare ../../tmp/eval/before.json ../../tmp/eval/after.json \
+  --seed 20260 --resamples 2000 --output ../../tmp/eval/paired.json
+```
+
+- 対にするのは両方で測れたケースだけです。片方でもエラーのケース（誤り）・測れなかったケース（欠測）は平均から除き、
+  改善にも悪化にも数えません。
+- 二値の指標（値が 0 / 1 だけ。応答の判断の正解など）は改善・悪化の件数の正確な符号検定（McNemar の正確検定）の
+  p 値で、ほかの指標（MRR・回答の正確性など）は seed を固定した配対 bootstrap（ケースを単位に復元抽出）の
+  percentile 区間で、差の向きを判定します。区間はどちらにも出します。同じ結果・seed・反復数なら同じ区間です。
+- 判定: `improved` / `regressed`（差の向きが確か）、`unchanged`（全ケースが同値）、`inconclusive`（区間が 0 を
+  またぐ・p 値が大きい）、`insufficient_cases`（対が `--min-cases`〔既定 10〕未満の小標本）、`not_measured`。
+- 評価セット（`run_manifest.evaluation_set.sha256`）・ケースの id が違う、実行中に条件が変わった結果は比較不能
+  （`not_comparable`）にし、差を出しません。比べたい違い（設定・プロファイルなど）は「条件の差」に出します。
+- 既存の絶対の閾値・失敗したケースによる不合格（gate）は、統計の判定とは別に出し、差の有無に関係なく終了コード 1
+  にします。比較不能・確かな悪化も 1、それ以外は 0 です。教材の近似式・固定の差の閾値は使いません。
+
+### 検索の工程ごとの除去実験（#61）
+
+`ablate` は、全部の工程を使う構成（full）と、工程を 1 つずつ無効にした構成（評価の上書き `rag_overrides`）を、
+同じ評価セット・基準日・範囲・索引で順に流し、full との差を表にします。工程は `rerank`・`neighbor_children`・
+`reference_expansion`・`entity_expansion`・`graph_expansion`・`section_expansion`（`--stages` で選ぶ）です。
+
+```bash
+cd backend
+# 1. 実の API で流し、構成ごとの応答も記録する（記録は実データを含む。git に入らない所へ）
+uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json \
+  --stages rerank,section_expansion,reference_expansion --full-again --record --output-dir ../../tmp/eval/ablation
+# 2. 同じ除去実験を API キー無しで再生する（結果は *.replay.json。時間は実の速さではない）
+uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json \
+  --stages rerank,section_expansion,reference_expansion --full-again --replay --output-dir ../../tmp/eval/ablation
+```
+
+`--output-dir` に構成ごとの結果（`full.json`・`no-rerank.json` など。`compare` / `diff` でも読める）と、
+表（`ablation.json`）を書きます。表の項目:
+
+| 項目 | 内容 |
+|---|---|
+| `quality` | 指標ごとの差・区間・判定と、悪化したケースの id（#60 の対応のある比較） |
+| `evidence_recall` | 期待する文書が、検索直後（`candidate_fusion`）・rerank の後（`rerank_output`）・生成に渡した根拠（`answer_context`）の選ばれた chunk に入った割合（回答の診断の `retrieval_stages`）。記録の無い位置は `null` |
+| `wall_seconds` / `case_median_ms` | 評価全体の wall-clock とケースの時間の中央値（工程の時間は `runs.<構成>.steps`。並列の工程の合計を全体の時間にしない） |
+| `calls` / `tokens` | 実の client が送った LLM（`llm`）・埋め込み・再ランクの request の数（再試行・失敗〔`failed`〕を含む）と、応答の `usage` の token。取れない値は `null`（0 にしない） |
+| `changed_steps` / `observed_effect` | 動いたケースの数が変わった工程（回答の診断の `execution_steps`）。工程の記録・呼び出し・品質のどれにも差が無ければ `observed_effect: false`（非適用・対象データ無しの可能性。「効かない」と断定しない） |
+| `status` | `compared`・`already_off`（full で既に無効なので流さない）・`not_comparable`（評価セットの違い・実行中の変化・上書き以外の条件の差） |
+| `full_again` | `--full-again` で最後に full をもう一度流した差（生成の揺れ・実行順の偏りの目安。工程の差はこれと比べて読む） |
+| `cache` / `order` | 埋め込み・再ランクの cache は構成ごとに空から始まり、構成の中では効く。DB・OS の cache は最初の構成の後は温まる |
+| `unsupported` | 評価の上書きで無効にできず測らない工程（質問の拡張・取込の前置きと分割・画像の検索） |
+
+- 構成の間で順と時間の条件を揃えるため、ケースを 1 件ずつ流します。比較不能の構成があれば終了コード 1、再生が記録と
+  一致しなければ 2 です。
+- 取込の前置き・分割の比較は同じ chunk の集合の検索の切替ではないため扱いません（別の文書レシピの成果物を比べます）。
+  費用は単価の出典を持たないため出さず、呼び出しの数と token だけを出します。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・

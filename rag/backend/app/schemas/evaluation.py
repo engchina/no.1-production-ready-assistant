@@ -1,7 +1,7 @@
 """RAG 評価スキーマ。"""
 
 from datetime import datetime
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -644,6 +644,73 @@ class EvaluationMetrics(BaseModel):
     decision_breakdown: dict[str, EvaluationReasoningSummary] = Field(default_factory=dict)
     case_results: list[EvaluationCaseResult] = Field(default_factory=list)
     comparison: "EvaluationComparison | None" = None
+    # 評価の実行条件（#59。`app.rag.evaluation_manifest`）。#59 より前の結果は None。
+    run_manifest: dict[str, Any] | None = None
+
+
+PairedVerdict = Literal[
+    "improved", "regressed", "unchanged", "inconclusive", "insufficient_cases", "not_measured"
+]
+
+
+class EvaluationPairedMetric(BaseModel):
+    """1 指標の、同じケースの対応のある差（target − base。#60）。
+
+    ``verdict``: improved / regressed（区間・検定で差の向きが確か）、unchanged（全ケースが同値）、
+    inconclusive（区間が 0 をまたぐ）、insufficient_cases（対の数が最小の件数に満たない小標本）、
+    not_measured（両方で測れたケースが無い）。片方でもエラー・未測定のケースは平均に入れない。
+    """
+
+    metric: str
+    binary: bool
+    method: Literal["paired_bootstrap", "exact_sign_test"]
+    paired_cases: int
+    missing_cases: int
+    error_cases: int
+    improved: int
+    regressed: int
+    unchanged: int
+    base_mean: float | None = None
+    target_mean: float | None = None
+    mean_difference: float | None = None
+    interval: tuple[float, float] | None = None
+    p_value: float | None = None
+    verdict: PairedVerdict
+
+
+class EvaluationPairedCase(BaseModel):
+    """1 ケースの両側の状態と、指標ごとの差（片方でも測れなければ None。#60）。"""
+
+    case_id: str
+    base_status: Literal["success", "error"]
+    target_status: Literal["success", "error"]
+    differences: dict[str, float | None] = Field(default_factory=dict)
+
+
+class EvaluationPairedComparison(BaseModel):
+    """2 つの評価の、同じケースの対応のある比較（#60）。
+
+    ``status`` が not_comparable（評価セットの違い・ケースの id の不一致・実行中の条件の変化）なら
+    指標の差を出さない。``target_gate_failed`` は既存の絶対の閾値・失敗したケースによる不合格で、
+    統計の判定（verdict）とは別に、差の有無に関係なく失敗にする。
+    """
+
+    status: Literal["compared", "not_comparable"]
+    reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    paired_case_count: int = 0
+    base_only_case_ids: list[str] = Field(default_factory=list)
+    target_only_case_ids: list[str] = Field(default_factory=list)
+    condition_differences: list[str] = Field(default_factory=list)
+    seed: int
+    resamples: int
+    confidence: float
+    min_cases: int
+    metrics: list[EvaluationPairedMetric] = Field(default_factory=list)
+    cases: list[EvaluationPairedCase] = Field(default_factory=list)
+    base_gate_failed: bool
+    target_gate_failed: bool
+    target_threshold_failures: list[EvaluationThresholdFailure] = Field(default_factory=list)
 
 
 class EvaluationComparison(BaseModel):
@@ -651,6 +718,8 @@ class EvaluationComparison(BaseModel):
 
     search_answer_profile_id: str
     metrics: EvaluationMetrics
+    # 全体の既定（base）とプロファイル（target）の、同じケースの対応のある比較（#60）。
+    paired: EvaluationPairedComparison | None = None
 
 
 EvaluationMetrics.model_rebuild()
