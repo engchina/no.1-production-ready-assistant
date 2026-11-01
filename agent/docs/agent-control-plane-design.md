@@ -775,6 +775,12 @@ dispatcher の claim）は `runtime.load_snapshot_tolerant` で、snapshot を J
   安全違反の試行・ケースの数と、能力分類ごとの母数・判定・欠測・合格率（区間は分類のケースの数で求める）を出し、合格率には含めない。
   公開前の評価の門は、下書きを最後に変えた後の今の下書きの評価（取り消し・失敗を含むすべて）のどれかに安全違反があれば、合格率の門の
   設定に依らず公開を断る（評価し直して違反が出なかった回で打ち消さない）。
+- 品質評価の評価者（回答の要点の判定・出力の項目の意味の判定）は、人が判定した校正セットで校正する（#66。
+  `python -m app.cli.judge_calibration`。合成のセットは `agent/evaluation/judge-calibration/`）。dev / holdout に分け、holdout の
+  件数・判定率・κ・誤合格の率で合否を決め（RAG / suite と同じ `pr_evaluation_scoring` の閾値）、観点（否定・数値・日付・条件・
+  長さや丁寧さの偏り・回答の中の評価者への指示・未実行の完了報告など）ごとの誤合格 / 誤不合格・判定できなかった件と判定の理由を
+  出す。評価者・指示を変えたら前の結果と比べ、校正セットが違えば比較できない理由を出す。安全・状態の遷移はコードの判定（上の `safety_check`）が正本で、
+  LLM の判定で上書きしない。手順は [agent-judge-calibration.md](./agent-judge-calibration.md)。
 
 ## 7. Snapshot migration
 
