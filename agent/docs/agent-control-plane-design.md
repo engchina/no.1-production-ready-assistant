@@ -776,6 +776,13 @@ dispatcher の claim）は `runtime.load_snapshot_tolerant` で、snapshot を J
   公開前の評価の門は、下書きを最後に変えた後の今の下書きの評価（取り消し・失敗を含むすべて）のどれかに安全違反があれば、合格率の門の
   設定に依らず公開を断る（評価し直して違反が出なかった回で打ち消さない）。
 
+- Run の実行構成の指紋（#67）: 組み込み Runtime は SDK の Agent を組み立てるたびに、指示の変わらない部分・モデルに渡すツールの定義・
+  スキル・MCP の schema・モデルの設定・データの範囲の hash を `metadata.run_config`（予約の key）に残す（本文・資格情報は入れない。
+  再開で構成が変われば `previous_fingerprints`）。ツール権限の承認 / 自動は指紋に入らない。開発・CI 用の記録再生
+  `python -m app.cli.run_replay`（合成の記録。モデル・MCP・実の通信は 0）が、同じ構成で承認・拒否・中断・呼び先へ届く呼び出し・
+  成果物が記録と同じかを確かめる。利用者向けの再実行（`POST /api/runs/{run_id}/replay`）とは別。手順は
+  [agent-run-replay.md](./agent-run-replay.md)。
+
 ## 7. Snapshot migration
 
 Snapshot v2 は runs/agents を持つ（旧版の `control_plane_state.runtimes/bindings`（#754）と `memory`（#756）は読み込んでも使わない）。
