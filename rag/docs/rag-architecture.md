@@ -8,7 +8,7 @@
 
 1. ドキュメントアップロード
    - API: `POST /api/documents/upload`
-   - 原本は Object Storage 境界へ保存する。`PLATFORM_UPLOAD_STORAGE_BACKEND=local` では `local://...` として `PLATFORM_LOCAL_STORAGE_DIR` 配下に保存し、`PLATFORM_UPLOAD_STORAGE_BACKEND=oci` では Object Storage SDK で `oci://namespace/bucket/key` として保存する。
+   - 原本は `local://...` として `PLATFORM_LOCAL_STORAGE_DIR` 配下に保存する（OCI Object Storage は #11 で削除）。
    - `RAG_MAX_UPLOAD_BYTES` と `RAG_ALLOWED_UPLOAD_CONTENT_TYPES` でサイズ・MIME type を制限する。
    - 原本 bytes から SHA-256 とサイズを計算し、`content_sha256` / `file_size_bytes` として文書行へ保存する。
    - 同一 `content_sha256` の既存文書がある場合は `duplicate_of_document_id` に最初の原本文書 ID を保存する。

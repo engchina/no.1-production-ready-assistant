@@ -9,7 +9,6 @@ trap 'rm -rf -- "${TEST_TMP_DIR}"' EXIT
 
 BACKEND_UNIT="production-ready-nl2sql-backend.service"
 SCHEMA_UNIT="production-ready-nl2sql-schema-refresh-worker.service"
-SYNTHETIC_UNIT="production-ready-nl2sql-synthetic-worker.service"
 QUALITY_UNIT="production-ready-nl2sql-quality-evaluation-worker.service"
 ONTOLOGY_UNIT="production-ready-nl2sql-ontology-worker.service"
 
@@ -114,7 +113,7 @@ EOF
 # --- 追尾対象の解決 -----------------------------------------------------------
 
 result="$(parse_case)"
-assert_contains "${result}" "units=${BACKEND_UNIT} ${SCHEMA_UNIT} ${SYNTHETIC_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
+assert_contains "${result}" "units=${BACKEND_UNIT} ${SCHEMA_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
   "引数なしでアプリ 5 unit が既定にならない"
 assert_contains "${result}" "files=" "引数なしでファイルが対象に入っている"
 assert_contains "${result}" "follow=true" "引数なしで追尾が無効になっている"
@@ -126,7 +125,7 @@ assert_contains "${result}" "units=${BACKEND_UNIT}" "--backend で backend unit 
 assert_contains "${result}" "show_unit=false" "単一 unit なのに unit 列が出る"
 
 result="$(parse_case --workers)"
-assert_contains "${result}" "units=${SCHEMA_UNIT} ${SYNTHETIC_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
+assert_contains "${result}" "units=${SCHEMA_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
   "--workers で worker 4 unit にならない"
 assert_not_contains "${result}" "${BACKEND_UNIT}" "--workers に backend が混ざっている"
 
@@ -138,7 +137,7 @@ result="$(parse_case --unit backend --unit backend --backend)"
 assert_contains "${result}" "units=${BACKEND_UNIT}" "重複指定した unit が排除されていない"
 
 result="$(INIT_LOG_PATH=/tmp/i.log UPDATE_LOG_PATH=/tmp/u.log parse_case --all)"
-assert_contains "${result}" "units=${BACKEND_UNIT} ${SCHEMA_UNIT} ${SYNTHETIC_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
+assert_contains "${result}" "units=${BACKEND_UNIT} ${SCHEMA_UNIT} ${QUALITY_UNIT} ${ONTOLOGY_UNIT}" \
   "--all にアプリ 5 unit が含まれない"
 assert_contains "${result}" "files=init=/tmp/i.log update=/tmp/u.log" \
   "--all に init / update ログが含まれない"
@@ -159,7 +158,7 @@ fi
 # --- journalctl 引数の組み立て -------------------------------------------------
 
 result="$(journal_args_case)"
-assert_equals "--no-pager|-n|200|-u|${BACKEND_UNIT}|-u|${SCHEMA_UNIT}|-u|${SYNTHETIC_UNIT}|-u|${QUALITY_UNIT}|-u|${ONTOLOGY_UNIT}|-o|json|-f" \
+assert_equals "--no-pager|-n|200|-u|${BACKEND_UNIT}|-u|${SCHEMA_UNIT}|-u|${QUALITY_UNIT}|-u|${ONTOLOGY_UNIT}|-o|json|-f" \
   "${result}" "既定の journalctl 引数が想定と異なる"
 
 result="$(journal_args_case --backend --no-follow --since "-15 min" -n 50 --grep boom)"

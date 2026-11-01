@@ -53,14 +53,6 @@ async def import_example(file: UploadFile) -> ApiResponse[ImportData]:
 - 実行開始と結果保存は同じ成果物の ETag を使う。重複配送は解析を再送せず、中断・期限切れ後の遅着結果は破棄する。期限は同期 HTTP スレッドを強制 kill するものではない。
 - エラー後は画面から公開前の確認を再実行する。解析成功後も、差分・検証結果を確認してから公開するゲートを維持する。
 
-## Oracle Profile 同期
-
-- `NL2SQL_PROFILE_SYNC_JOB_TIMEOUT_SECONDS`（既定 300 秒）の期限を job payload の `deadline_at` に保存する。旧 job は作成日時から判定し、取得時に期限切れを `PROFILE_SYNC_TIMEOUT` へ収束させる。
-- API は認可用 `peek()` の後に scope を確認し、初めて状態を回復する `get()` を呼ぶ。起動時の DB 読み取りは行わない。
-- 同期開始は queued の取得済み ETag で claim する。各 phase / 終了 / 失敗の保存と次の Oracle 操作の前に、その実行が保持する ETag を検証する。running / terminal の再配送で Oracle 反映を再送しない。
-- 正常停止では、このプロセスが開始した job を off-loop で中断してから pool を閉じる。同期呼び出しの強制 kill は行わず、中断後の戻り値を破棄し後続 phase を開始しない。
-- Oracle 操作は部分反映の可能性があるため、中断は成功と断定しない。日本語メッセージで Oracle Profile / Agent の確認を促し、明示的な再試行だけを受け付ける。自プロセスの前回呼び出しがまだ残っている場合は再試行を拒否する。
-
 ## オントロジー AI 構築
 
 - `NL2SQL_ONTOLOGY_BUILD_TIMEOUT_SECONDS`（既定 21600 秒）の絶対期限と `NL2SQL_ONTOLOGY_BUILD_LEASE_SECONDS`（既定 120 秒）の heartbeat を永続化する。長い LLM 呼び出し中も heartbeat を更新する。
@@ -85,14 +77,6 @@ async def import_example(file: UploadFile) -> ApiResponse[ImportData]:
 - SQL_EXECUTE / Profile scope の認可、読み取り専用 SQL、sample_limit、検証後の Profile / schema fingerprint / bundle ETag 確認を維持する。sampled data を全 DB の検証済みとは扱わない。
 - inprocess の shutdown は所有 job のみを off-loop で回復し、pool close 前に実施する。同期 SQL スレッドの強制 kill は行わない。現在の Markdown snapshot のデータ検証とは別の旧 async API が対象。
 
-## Select AI DB Profile 一覧更新
-
-- `NL2SQL_PROFILE_LIST_REFRESH_TIMEOUT_SECONDS`（既定600秒）を絶対期限として永続化する。旧 pending/running は作成日時から回復し、期限・lease 切れを error として一覧更新の再実行を案内する。
-- 一覧更新 collection 内で有効な実行は1件にする。Oracle の exclusive claim は短い transaction 内で state table を lock して同 collection の生存 job を確認する。外部 DB の一覧・詳細取得は lock の外で実行する。通常の SQL job claim は従来の行単位 SKIP LOCKED のまま。
-- state repository の `patch_document_if_current()` は worker / attempt 等の比較と lease / deadline を row lock 内で確認する。Profile キャッシュの差分、更新メタ情報、job 完了を同一 transaction で保存し、失効・保存失敗で旧キャッシュを部分更新しない。
-- 取得時の回復は CAS 相当の条件付き更新を使い、生存 worker や完了済み job を上書きしない。running の GET は thread を再配送しない。
-- inprocess shutdown はこのサービスが dispatch / claim した job だけを pool close 前に off-loop で中断する。実 Oracle Profile の作成・変更を自動再送せず、再実行するのは一覧の読み取りのみ。
-
 ### DB 構造再取得の実行所有権 (#645)
 
 - schema refresh の heartbeat / phase / 完了 / 失敗保存は、保存済みの `running`、`worker_id`、`attempt`、未失効 lease が一致する場合だけ受理する。例外処理で最新 job を読み直して新 worker の権限を借りない。
@@ -110,19 +94,17 @@ async def import_example(file: UploadFile) -> ApiResponse[ImportData]:
 
 ### バックグラウンド起動経路の横断確認 (#639)
 
-2026-09-15 時点の `threading.Thread` / `ThreadPoolExecutor` / `create_task` の起動経路を再検索した。SQL 生成・schema refresh・DB Profile 一覧更新以外は次の契約で処理する。
+2026-09-15 時点の `threading.Thread` / `ThreadPoolExecutor` / `create_task` の起動経路を再検索した。SQL 生成・schema refresh 以外は次の契約で処理する。
 
 | 機能 | 回復と再実行の契約 | 検証 |
 | --- | --- | --- |
-| Profile 同期 | deadline / shutdown、元の ETag。Oracle の反映状態が不明な場合、確認せず反映を自動再送しない | #635 / #640 |
 | Ontology AI 構築 | deadline / heartbeat lease / 実行 ID。中断を表示し、入力と checkpoint を保持した明示的 retry | #636 / #641 |
 | 旧公開・推論 | deadline / 実行 ID。既に公開された revision の receipt を照合し、公開操作を繰り返さない | #637 / #642 |
 | 旧実データ検証 | deadline / 実行 ID / ETag。保存済み report receipt で回復し、SQL を再送しない | #638 / #644 |
 | Markdown 公開準備 | deadline / shutdown / ETag。解析の自動再送なし | #633 / #634、`test_nl2sql_markdown_preparation_lifecycle.py` |
 | SQL 生成評価 | lease / worker / attempt による条件付き保存。中断 attempt を timeout と記録し、遅着結果を破棄 | `test_nl2sql_quality_evaluation.py` |
-| 合成データ生成 | Oracle operation / session を照合。確認不能時は状態不明を表示し、生成呼び出しを再送しない | `test_nl2sql_synthetic_runs.py` |
 
-実 DB は job テーブルの SELECT 集計で確認し、回復のために生成・公開・反映操作を呼ばない。2026-09-15 12:18 JST の対象集計では、ontology / SQL job / schema refresh / DB Profile 一覧更新 / 評価 / 合成データに pending・running 等の残留はなかった。これは同時点の観測であり、将来の全外部障害を保証するものではない。
+実 DB は job テーブルの SELECT 集計で確認し、回復のために生成・公開・反映操作を呼ばない。2026-09-15 12:18 JST の対象集計では、ontology / SQL job / schema refresh / 評価に pending・running 等の残留はなかった。これは同時点の観測であり、将来の全外部障害を保証するものではない。
 
 ## 一括の LLM・Embedding の呼び出し（#2004）
 
@@ -152,5 +134,3 @@ SQL生成評価（#2059）の扱い:
   競合は今までどおり fence（`worker_id`・`attempt_no`）が防ぐ。
 - 画面の「現在のケース」などは、実行中の試行のうち最も前に始めた試行（時間切れに最も近い試行）を出し、診断の行に
   「同時に実行中 N / M 試行」を出す。
-- Select AI / Select AI Agent の試行は DB の接続を使うため、並行の上限は接続の pool の上限（`NL2SQL_ORACLE_RUNTIME_POOL_MAX`、
-  既定 8）より小さくする。

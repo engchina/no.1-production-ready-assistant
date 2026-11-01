@@ -1,56 +1,37 @@
 import { WarningsBanner } from "@/components/WarningsBanner";
-import { DbProfileListSyncNotice } from "../components/DbProfileListSyncNotice";
-import { useDbProfileListSync, type DbProfileListSync } from "../useDbProfileListSync";
 import { useWorkspaceActive, useWorkspaceState, useWorkspaceRevalidation, useResetExecutionConsent, useTransientDraftGuard, useWorkspaceUrlSelection } from "@/components/WorkspaceState";
-import { syntheticRunPollingInterval } from "../syntheticRunPolling";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useValuesChanged } from "@/lib/render-sync";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Database, Eye, FileSpreadsheet, Play, RefreshCw, Table2, Trash2, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { FileSpreadsheet, Play, RefreshCw, Table2, Trash2, Upload } from "lucide-react";
 
 import {
-  compareNames,
   Button,
-  ButtonLink,
-  Banner,
   EmptyState,
   toast,
   StatusBadge,
   PageHeader,
   PageBody,
-  ContentActionBar,
   ClearActionButton,
   ProcessingIndicator,
   ObjectActionBar,
   type EntityAction,
-  ListPicker,
-  type ListPickerItem,
   INFORMATION_TABLE_FIXED_VISIBLE_ROWS,
   ExecutionConfirmationField,
   FieldLegend,
   FormGrid,
   SelectField,
-  TextareaField,
-  TextField,
   useActionPending,
   FilterSelect,
   isFilterActive,
 } from "@production-ready/ui";
 
-import { SyntheticRunPanel, useSyntheticRuns, reviewExpired, type SyntheticRun } from "../syntheticRuns";
-import { SelectAiCredentialPrecondition } from "../components/SelectAiCredentialPrecondition";
-import { useSelectAiCredentialReadiness } from "../useSelectAiCredentialReadiness";
-import { SyntheticReview } from "../SyntheticReview";
 
 import { ErrorState } from "@/components/StateViews";
 import { FileDropzone } from "@/components/ui/file-dropzone";
-import { apiFetch, apiGet, apiPost, isTimeoutError } from "@/lib/api";
+import { apiFetch, apiPost, isTimeoutError } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { randomUuid } from "@/lib/randomUuid";
 import { t } from "@/lib/i18n";
 import { API_TIMEOUT_MS, requestTimeoutSeconds } from "@/lib/requestPolicy";
-import { APP_ROUTES } from "@/lib/routes";
 import { CORE_TABULAR_FILE_FORMATS } from "@/lib/tabular-file-formats";
 import { selectedVisibleStringKey } from "@/lib/visible-selection";
 import {
@@ -93,8 +74,6 @@ import {
   type DbObjectPickerItem,
 } from "../components/DbObjectManagementShared";
 import { DbObjectName } from "../components/DbObjectName";
-import { formatDbAdminObjectPart } from "../dbObjectIdentity";
-import { BUSINESS_SELECT_AI_DB_PROFILES_URL } from "../selectAiProfileUrls";
 import { useSchemaRefreshCoordinator } from "../SchemaRefreshCoordinator";
 import {
   SchemaRefreshHeaderStatus,
@@ -106,25 +85,18 @@ import {
   useDbAdminObjects,
 } from "../incrementalQueries";
 import { dbAdminObjectCountsFromPage } from "../dbAdminObjectCounts";
-import { useNumberDraft } from "../useNumberDraft";
 import type {
   DbAdminCsvUploadData,
   DbAdminDataPreviewData,
   DbAdminExecuteData,
   DbAdminObjectSummary,
-  SelectAiDbProfile,
-  SelectAiDbProfileDetailData,
-  SelectAiDbProfilesData,
-  SyntheticDataOperationData,
-  SyntheticDataResultsData,
 } from "../types";
 
-type ActiveView = "preview" | "csv" | "synthetic";
+type ActiveView = "preview" | "csv";
 type CsvStep = "file" | "execute";
 type CsvMode = "insert" | "truncate_insert";
 type PreviewObjectKind = "table" | "view";
 type PreviewObjectKindFilter = "all" | PreviewObjectKind;
-type SyntheticLoading = "" | "tables" | "generate" | "results";
 
 const DATA_MANAGEMENT_ID = "data-management";
 /** ヘッダーの「スキーマを更新」の起点（SchemaRefreshCoordinator の start(origin)。#821）。 */
@@ -132,7 +104,6 @@ const DATA_SCHEMA_REFRESH_HEADER = "data-management-header";
 /** 切り詰めの後の案内の「DB 構造を再取得」の起点（#2031）。 */
 const DATA_SCHEMA_REFRESH_NOTICE = "data-management-notice";
 const DEFAULT_DATA_PREVIEW_ROW_LIMIT = DEFAULT_SQL_ROW_LIMIT;
-const DEFAULT_SYNTHETIC_RESULT_LIMIT = DEFAULT_SQL_ROW_LIMIT;
 const DEFAULT_OBJECT_PICKER_SORT: DbObjectPickerSortState = { key: "name", direction: "asc" };
 const DEFAULT_PREVIEW_OBJECT_SORT: DbObjectSortState = { key: "name", direction: "asc" };
 /**
@@ -140,11 +111,6 @@ const DEFAULT_PREVIEW_OBJECT_SORT: DbObjectSortState = { key: "name", direction:
  * タブの 1 つだけが一覧 + 詳細なので、ほかのタブへ移るときに URL から外す（タブへ戻ると最後の選択を戻す）。
  */
 const PREVIEW_OBJECT_PARAM = "object";
-
-function resolveBusinessSelectAiProfileName(current: string, profiles: SelectAiDbProfile[]) {
-  if (current && profiles.some((profile) => profile.name === current)) return current;
-  return profiles[0]?.name ?? "";
-}
 
 function nextPreviewObjectSort(current: DbObjectSortState, key: DbObjectSortKey): DbObjectSortState {
   // 一覧の並べ替えは名前・行数の列見出し（狭い列で種類・所有者の列は持たない）。
@@ -162,11 +128,7 @@ function nextObjectPickerSort(
   return { key, direction: "asc" };
 }
 
-/** 合成データの「生成」の aria-describedby が指す、Select AI の Credential の事前条件（#1688）。 */
-const SYNTHETIC_CREDENTIAL_PRECONDITION_ID = "synthetic-credential-precondition";
-
 export function DataManagementPage() {
-  const queryClient = useQueryClient();
   useWorkspaceRevalidation();
   const workspaceActive = useWorkspaceActive();
   const [activeView, setActiveView] = useWorkspaceState<ActiveView>("activeView", "preview");
@@ -188,7 +150,6 @@ export function DataManagementPage() {
   const [csvConfirmation, setCsvConfirmation] = useState("");
   const [csvUploadResult, setCsvUploadResult] = useState<DbAdminCsvUploadData | null>(null);
   useTransientDraftGuard(Boolean(csvBase64) && !csvUploadResult?.executed);
-  const syntheticRuns = useSyntheticRuns({ enabled: workspaceActive });
   const [searchParams, setSearchParams] = useSearchParams();
   // データの表示で選んだ対象は URL の `?object=` が唯一の情報源（一覧 + 詳細。#2315）。先頭の行を自動で選ばない。
   const previewSelection = useWorkspaceUrlSelection(PREVIEW_OBJECT_PARAM, { enabled: activeView === "preview" });
@@ -208,41 +169,6 @@ export function DataManagementPage() {
     }
     setActiveView(view);
   };
-  const [syntheticRunId, setSyntheticRunId] = useWorkspaceState("syntheticRunId", "");
-  const [submissionKey, setSubmissionKey] = useWorkspaceState("syntheticSubmission", { signature: "", key: "" });
-  const requestedRunId = searchParams.get("synthetic_run") || syntheticRunId;
-  const listedRun = requestedRunId ? syntheticRuns.data?.find((r) => r.run_id === requestedRunId) : syntheticRuns.data?.[0];
-  const historicalRun = useQuery({
-    queryKey: [...syntheticRuns.key, requestedRunId],
-    queryFn: ({ signal }) => apiGet<SyntheticRun>(`/api/nl2sql/synthetic-data/runs/${encodeURIComponent(requestedRunId)}`, { signal, timeoutMs: API_TIMEOUT_MS.interactiveDetail }),
-    enabled: workspaceActive && Boolean(requestedRunId) && !listedRun && syntheticRuns.isSuccess,
-    refetchInterval: syntheticRunPollingInterval,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
-    retry: false,
-  });
-  const candidateRun = listedRun ?? (requestedRunId ? historicalRun.data : null) ?? null;
-  // 生成の記録は期間で消さないので、確認用データの期間を過ぎた記録も選んで読める（#3235）。
-  const selectedRun = candidateRun;
-  const [syntheticQueryTime, setSyntheticQueryTime] = useState("");
-  const resultRequest = useRef(0);
-  const [resultGeneratedRows, setResultGeneratedRows] = useState<number | null>(null);
-  const autoPreviewed = useRef(new Set<string>());
-  const resultSelectionEdited = useRef(false);
-  const [syntheticData, setSyntheticData] = useState<SyntheticDataOperationData | null>(null);
-  const [syntheticDataResults, setSyntheticDataResults] = useState<SyntheticDataResultsData | null>(null);
-  const [viewedPreviews, setViewedPreviews] = useState<Record<string, string>>({});
-  const [syntheticProfileName, setSyntheticProfileName] = useState("");
-  const [syntheticAvailableTables, setSyntheticAvailableTables] = useState<string[]>([]);
-  const [syntheticSelectedTables, setSyntheticSelectedTables] = useState<string[]>([]);
-  const [syntheticPrompt, setSyntheticPrompt] = useWorkspaceState("syntheticPrompt", "");
-  const [syntheticConfirmation, setSyntheticConfirmation] = useState("");
-  const [syntheticRows, setSyntheticRows] = useWorkspaceState("syntheticRows", 1);
-  const [syntheticSampleRows, setSyntheticSampleRows] = useWorkspaceState("syntheticSampleRows", 5);
-  const [syntheticUseComments, setSyntheticUseComments] = useWorkspaceState("syntheticUseComments", true);
-  const [syntheticResultTable, setSyntheticResultTable] = useState("");
-  const [syntheticResultLimitInput, setSyntheticResultLimitInput] = useState(String(DEFAULT_SYNTHETIC_RESULT_LIMIT));
-  const [executedSyntheticResultLimit, setExecutedSyntheticResultLimit] = useState<number | null>(null);
   const [previewLoadingObject, setPreviewLoadingObject] = useState("");
   // 「表示」を押して始めたプレビューか。切り詰めの後の自動の表示・「再試行」ではボタンを回さず、
   // 結果の領域の読込表示がスピナーを出す（#819）。
@@ -251,19 +177,14 @@ export function DataManagementPage() {
   const [truncateConfirmation, setTruncateConfirmation] = useState("");
   const [truncateLoading, setTruncateLoading] = useState(false);
   const [truncateError, setTruncateError] = useState("");
-  useResetExecutionConsent(() => { setCsvConfirmation(""); setSyntheticConfirmation(""); setTruncateConfirmation(""); setTruncateTargetName(""); }, JSON.stringify([csvTable, csvBase64, csvMode, syntheticProfileName, syntheticSelectedTables, syntheticPrompt, syntheticRows]));
+  useResetExecutionConsent(() => { setCsvConfirmation(""); setTruncateConfirmation(""); setTruncateTargetName(""); }, JSON.stringify([csvTable, csvBase64, csvMode]));
   const [previewError, setPreviewError] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState("");
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvUploadError, setCsvUploadError] = useState("");
-  const [syntheticLoading, setSyntheticLoading] = useState<SyntheticLoading>("");
-  // 「テーブル再取得」を押して始めた取得か。失敗の「再試行」からの取得ではボタンを回さない（#819）。
-  const [syntheticTablesFromButton, setSyntheticTablesFromButton] = useState(false);
   // ヘッダーの「最新情報を取得」を押した取り直しの間だけ true（切り詰め・取込の後の取り直しでは回さない。#819）。
   const manualRefresh = useActionPending();
-  const [syntheticError, setSyntheticError] = useState("");
-  const [syntheticErrorOperation, setSyntheticErrorOperation] = useState<SyntheticLoading>("");
   const previewRequestSequence = useRef(0);
   const csvTableManualSelection = useRef(false);
   // 検索語・所有者の接頭辞は SearchField が確定した値（入力が止まって 300ms・Enter・消去。IME の変換中は
@@ -278,41 +199,6 @@ export function DataManagementPage() {
     "name_comment"
   );
   const sharedSchemaRefresh = useSchemaRefreshCoordinator();
-  const selectAiProfilesQuery = useQuery({
-    queryKey: ["nl2sql", "select-ai", "db-profiles", "business"],
-    queryFn: ({ signal }) =>
-      apiGet<SelectAiDbProfilesData>(BUSINESS_SELECT_AI_DB_PROFILES_URL, {
-        signal,
-        timeoutMs: API_TIMEOUT_MS.interactiveList,
-      }),
-    enabled: activeView === "synthetic",
-    staleTime: 5_000,
-    retry: false,
-  });
-  const selectAiDbProfiles = selectAiProfilesQuery.data ?? null;
-  // DB Profile 一覧の読み取りモデルが未初期化なら、「対象」の欄に再取得を求める案内を 1 か所だけ出す。押すと
-  // 進行は同じ案内の中のボタンの直下に出し、再取得が終わって一覧を取り直したら案内を消す（構造化した
-  // `profile_list_refresh_required` を正本にし、警告の文で判定しない。messaging §10.2、#2034）。
-  const { refetch: refetchSelectAiProfiles } = selectAiProfilesQuery;
-  const dbProfileListRequired = Boolean(selectAiDbProfiles?.profile_list_refresh_required);
-  const dbProfileListSync = useDbProfileListSync({
-    onDone: () => void refetchSelectAiProfiles(),
-    required: dbProfileListRequired
-      ? {
-          // 取り直した一覧がまだ未初期化なら、案内を出し直す。
-          key: String(selectAiProfilesQuery.dataUpdatedAt),
-          notice: {
-            severity: "warning",
-            title: t("dataTools.syntheticData.dbProfileRefreshRequiredTitle"),
-            message: t("dataTools.syntheticData.dbProfileRefreshRequiredHint"),
-            errorCode: "",
-          },
-        }
-      : null,
-  });
-  const dbProfileRefreshing = dbProfileListSync.busy;
-  // 再取得の完了の後、一覧を取り直すまでの間は案内を出さない（解消した案内を出し直さない）。
-  const dbProfileRefreshRequired = dbProfileListRequired && !dbProfileListSync.requiredResolved;
   const baseObjectPages = baseObjectsQuery.data?.pages ?? [];
   const previewObjectItems = useMemo<DbAdminObjectSummary[]>(
     () => (previewObjectsQuery.data?.pages ?? []).flatMap((page) => page.items),
@@ -383,12 +269,7 @@ export function DataManagementPage() {
     [csvTableItems, csvTableSort]
   );
 
-  const selectedSyntheticProfile = useMemo(
-    () => selectAiDbProfiles?.profiles.find((profile) => profile.name === syntheticProfileName) ?? null,
-    [selectAiDbProfiles, syntheticProfileName]
-  );
-  // 対象名確認: CSV は選択テーブル名、synthetic は単一テーブル指定時のみ対象名
-  // (複数テーブル指定は単一対象名が無いため ADMIN_EXECUTE)。backend の検証と一致させる。
+  // 対象名確認: CSV は選択テーブル名。backend の検証と一致させる。
   const csvConfirmed = Boolean(csvTable.trim()) && csvConfirmation.trim() === csvTable.trim();
   const canUploadCsv = Boolean(csvTable && csvBase64 && csvConfirmed && !csvUploading);
   const canClearCsvUpload = Boolean(
@@ -399,99 +280,6 @@ export function DataManagementPage() {
       csvUploadError ||
       csvMode !== "insert"
   );
-  const syntheticExpectedConfirmation =
-    syntheticSelectedTables.length === 1 ? syntheticSelectedTables[0] : "ADMIN_EXECUTE";
-  const syntheticDataConfirmed = syntheticConfirmation.trim() === syntheticExpectedConfirmation;
-  // 合成データは業務プロファイルの DBMS_CLOUD_AI Profile で作るので、Select AI の Credential が前提
-  // （#1688）。無いと分かったら生成の操作の直前に事前条件を示し、生成を止める。
-  const selectAiCredential = useSelectAiCredentialReadiness();
-  const syntheticCredentialPrecondition = selectAiCredential.missing ? (
-    <SelectAiCredentialPrecondition
-      id={SYNTHETIC_CREDENTIAL_PRECONDITION_ID}
-      testId="synthetic-credential-precondition"
-      operation={t("selectAiCredential.precondition.operation.synthetic")}
-          action={t("selectAiCredential.precondition.action.syntheticStart")}
-          credentialName={selectAiCredential.credentialName}
-      canOpenSettings={selectAiCredential.canOpenSettings}
-      rechecking={selectAiCredential.rechecking}
-      onRecheck={() => void selectAiCredential.recheck()}
-    />
-  ) : null;
-  const canGenerateSyntheticData = Boolean(
-    syntheticProfileName.trim() &&
-      syntheticSelectedTables.length > 0 &&
-      syntheticDataConfirmed &&
-      !syntheticLoading &&
-      !selectAiCredential.missing
-  );
-  // 生成条件のリセットは入力（と生成開始の失敗表示）だけを戻す。表示中の結果は「表示件数・結果をリセット」、
-  // サーバーに残る生成（生成状況・確認・適用）は「確認用データを破棄」で扱う。
-  const canClearSyntheticGeneration = Boolean(
-    syntheticSelectedTables.length > 0 ||
-      syntheticPrompt ||
-      syntheticConfirmation ||
-      (syntheticError && syntheticErrorOperation !== "results") ||
-      syntheticRows !== 1 ||
-      syntheticSampleRows !== 5 ||
-      !syntheticUseComments
-  );
-  const syntheticResultLimit = parseSqlRowLimit(syntheticResultLimitInput);
-  const syntheticResultLimitError =
-    syntheticResultLimit === null ? t("queryResults.rowLimit.error") : "";
-  const syntheticResultError = syntheticErrorOperation === "results" ? syntheticError : "";
-  const syntheticWorkspaceError = syntheticErrorOperation === "results" ? "" : syntheticError;
-  const canLoadSyntheticDataResults = Boolean(
-    (!selectedRun?.preview || (["ready", "applied"].includes(selectedRun.review_status ?? "") && !reviewExpired(selectedRun))) &&
-    (selectedRun ? selectedRun.targets.some((target) => target.table_name === syntheticResultTable) : syntheticAvailableTables.includes(syntheticResultTable)) && syntheticResultLimit !== null && !syntheticLoading
-  );
-  const canClearSyntheticDataResults = Boolean(
-    syntheticDataResults ||
-      syntheticResultError ||
-      executedSyntheticResultLimit !== null ||
-      syntheticResultLimitInput !== String(DEFAULT_SYNTHETIC_RESULT_LIMIT)
-  );
-
-  const clearSyntheticResultState = ({ resetLimit = false }: { resetLimit?: boolean } = {}) => {
-    setSyntheticDataResults(null);
-    setExecutedSyntheticResultLimit(null);
-    if (resetLimit) setSyntheticResultLimitInput(String(DEFAULT_SYNTHETIC_RESULT_LIMIT));
-    if (syntheticErrorOperation === "results") {
-      setSyntheticError("");
-      setSyntheticErrorOperation("");
-    }
-  };
-
-  const clearSyntheticProfileTargets = () => {
-    setSyntheticAvailableTables([]);
-    setSyntheticSelectedTables([]);
-    setSyntheticResultTable("");
-    setSyntheticData(null);
-    setSyntheticDataResults(null);
-    setExecutedSyntheticResultLimit(null);
-    setSyntheticResultLimitInput(String(DEFAULT_SYNTHETIC_RESULT_LIMIT));
-    if (syntheticErrorOperation === "results") {
-      setSyntheticError("");
-      setSyntheticErrorOperation("");
-    }
-  };
-
-  const changeSyntheticProfileName = (value: string) => {
-    if (value === syntheticProfileName) return;
-    setSyntheticProfileName(value);
-    clearSyntheticProfileTargets();
-  };
-
-  // profile 一覧が変わったレンダーで、選択中の profile 名を直す（effect で setState しない）。
-  const selectAiProfiles = selectAiProfilesQuery.data;
-  const selectAiProfilesChanged = useValuesChanged([selectAiProfiles]);
-  if (selectAiProfilesChanged && selectAiProfiles) {
-    const nextName = resolveBusinessSelectAiProfileName(syntheticProfileName, selectAiProfiles.profiles);
-    if (nextName !== syntheticProfileName) setSyntheticProfileName(nextName);
-    if (syntheticProfileName && syntheticProfileName !== nextName) {
-      clearSyntheticProfileTargets();
-    }
-  }
-
   useEffect(() => {
     const nextTable = selectedVisibleStringKey(csvTablePickerItems, csvTable, (item) => item.key, {
       preserveSelected: csvTableManualSelection.current,
@@ -754,167 +542,6 @@ export function DataManagementPage() {
     }
   };
 
-  const refreshSyntheticTables = async (fromButton = false) => {
-    const profileName = syntheticProfileName.trim();
-    if (!profileName) return;
-    setSyntheticLoading("tables");
-    setSyntheticTablesFromButton(fromButton);
-    setSyntheticError("");
-    setSyntheticErrorOperation("");
-    try {
-      let profile = selectedSyntheticProfile;
-      try {
-        const detail = await apiGet<SelectAiDbProfileDetailData>(
-          `/api/nl2sql/select-ai/db-profiles/${encodeURIComponent(profileName)}`,
-          { timeoutMs: API_TIMEOUT_MS.interactiveDetail }
-        );
-        profile = detail.profile;
-      } catch {
-        profile = selectedSyntheticProfile;
-      }
-      const profileTables = profileObjectNames(profile);
-      const nextTables = profileTables;
-      setSyntheticAvailableTables(nextTables);
-      setSyntheticSelectedTables((current) => current.filter((tableName) => nextTables.includes(tableName)));
-      setSyntheticResultTable((current) => (current && nextTables.includes(current) ? current : (nextTables[0] ?? "")));
-      setSyntheticData(null);
-      clearSyntheticResultState();
-      toast.success(t("dataTools.syntheticData.toast.tablesLoaded", { count: nextTables.length }));
-    } catch (err) {
-      setSyntheticError(apiErrorMessage(err, "dataTools.error.load"));
-      setSyntheticErrorOperation("tables");
-    } finally {
-      setSyntheticLoading("");
-    }
-  };
-
-  const generateSyntheticData = async () => {
-    if (!canGenerateSyntheticData) return;
-    const selectedTables = syntheticSelectedTables;
-    const singleTable = selectedTables.length === 1;
-    setSyntheticLoading("generate");
-    setSyntheticData(null);
-    setSyntheticError("");
-    setSyntheticErrorOperation("");
-    try {
-      clearSyntheticResultState();
-      const body = {
-        table_name: singleTable ? selectedTables[0] : "", object_list: singleTable ? [] : selectedTables,
-        row_count: syntheticRows, rows_per_table: syntheticRows, profile_name: syntheticProfileName,
-        user_prompt: syntheticPrompt, sample_rows: syntheticSampleRows, use_comments: syntheticUseComments,
-        reason: "ui-synthetic-data",
-      };
-      const signature = JSON.stringify(body);
-      const key = submissionKey.signature === signature ? submissionKey.key : randomUuid();
-      setSubmissionKey({ signature, key });
-      const run = await apiPost<SyntheticRun>("/api/nl2sql/synthetic-data/runs", {
-        ...body, confirmation: syntheticConfirmation, idempotency_key: key,
-      }, { timeoutMs: API_TIMEOUT_MS.interactiveDetail });
-      queryClient.setQueryData<SyntheticRun[]>(syntheticRuns.key, (old = []) => [run, ...old.filter((r) => r.run_id !== run.run_id)]);
-      setSyntheticRunId(run.run_id);
-      setSearchParams((params) => { params.delete("synthetic_run"); return params; }, { replace: true });
-      setSyntheticConfirmation("");
-      setSubmissionKey({ signature: "", key: "" });
-      resultSelectionEdited.current = false;
-      setSyntheticResultTable(run.targets[0]?.table_name ?? "");
-      toast.info(t("syntheticRun.accepted"));
-    } catch (err) {
-      setSyntheticError(apiErrorMessage(err, "dataTools.error.syntheticData", "syntheticRun.submitUnknown"));
-      setSyntheticErrorOperation("generate");
-      selectAiCredential.refreshAfterError(err);
-    } finally {
-      setSyntheticLoading("");
-    }
-  };
-
-  const clearSyntheticGeneration = () => {
-    setSubmissionKey({ signature: "", key: "" });
-    setSyntheticSelectedTables([]);
-    setSyntheticPrompt("");
-    setSyntheticConfirmation("");
-    setSyntheticRows(1);
-    setSyntheticSampleRows(5);
-    setSyntheticUseComments(true);
-    if (syntheticErrorOperation !== "results") {
-      setSyntheticError("");
-      setSyntheticErrorOperation("");
-    }
-  };
-
-  const loadSyntheticDataResults = async () => {
-    const tableName = syntheticResultTable.trim();
-    const rowLimit = syntheticResultLimit;
-    if (!tableName || !(selectedRun ? selectedRun.targets.some((target) => target.table_name === tableName) : syntheticAvailableTables.includes(tableName)) || rowLimit === null) return;
-    const requestVersion = ++resultRequest.current;
-    const generatedRows = selectedRun?.targets.find((target) => target.table_name === tableName)?.loaded_rows ?? null;
-    setSyntheticLoading("results");
-    setSyntheticError("");
-    setSyntheticErrorOperation("");
-    setSyntheticDataResults(null);
-    setExecutedSyntheticResultLimit(null);
-    try {
-      const result = await apiGet<SyntheticDataResultsData>(
-        `/api/nl2sql/synthetic-data/${selectedRun ? `runs/${selectedRun.run_id}/results` : "results"}?table_name=${encodeURIComponent(tableName)}&limit=${rowLimit}`,
-        { timeoutMs: API_TIMEOUT_MS.interactiveDetail }
-      );
-      if (requestVersion !== resultRequest.current) return;
-      setResultGeneratedRows(generatedRows);
-      setSyntheticDataResults(result);
-      if (result.preview_digest && result.run_id === selectedRun?.run_id) {
-        const checksum = result.preview_digest;
-        setViewedPreviews(current => ({ ...current, [tableName]: checksum }));
-      }
-      setSyntheticQueryTime(new Date().toISOString());
-      setExecutedSyntheticResultLimit(rowLimit);
-      if (!result.preview_digest) toast.success(t("dataTools.syntheticData.toast.resultsLoaded", { name: result.table_name }));
-    } catch (err) {
-      if (requestVersion !== resultRequest.current) return;
-      setSyntheticError(apiErrorMessage(err, "dataTools.error.syntheticResults"));
-      setSyntheticErrorOperation("results");
-    } finally {
-      if (requestVersion === resultRequest.current) setSyntheticLoading("");
-    }
-  };
-
-  // 選択中の run が変わったレンダーで、結果・確認済みの preview・run の表示を直す（effect で setState しない）。
-  // 古い結果の応答は effect で捨てる。
-  const selectedRunIdChanged = useValuesChanged([selectedRun?.run_id]);
-  if (selectedRunIdChanged) {
-    setSyntheticDataResults(null);
-    setSyntheticLoading((value) => value === "results" ? "" : value);
-  }
-  // run が実際に変わったときだけ数える。同じ run で effect が再実行されたとき（StrictMode の mount 時の再実行など）に
-  // 数えると、同じ commit で下の自動表示が始めた読み込みの応答まで捨て、閲覧済みの preview が記録されない（#342）。
-  const resultRequestRunId = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (resultRequestRunId.current === selectedRun?.run_id) return;
-    resultRequestRunId.current = selectedRun?.run_id;
-    resultRequest.current += 1;
-  }, [selectedRun?.run_id]);
-
-  const viewedPreviewsStale = useValuesChanged([selectedRun?.run_id, workspaceActive]);
-  if (viewedPreviewsStale) setViewedPreviews({});
-
-  const selectedRunChanged = useValuesChanged([selectedRun?.run_id, selectedRun?.status]);
-  if (selectedRunChanged && selectedRun) {
-    if (searchParams.has("synthetic_run")) setActiveView("synthetic");
-    setSyntheticRunId(selectedRun.run_id);
-    setSyntheticData({ table_name: selectedRun.targets[0]?.table_name ?? "", object_list: selectedRun.targets.map((target) => target.table_name), row_count: 0, status: selectedRun.status, executed: selectedRun.status === "completed", runtime: "oracle", message: selectedRun.message, warnings: [], engine_meta: {}, timing: { created_at: selectedRun.created_at, stage_timings: [] } });
-    setSyntheticResultTable((current) => selectedRun.targets.some((target) => target.table_name === current) ? current : selectedRun.targets[0]?.table_name ?? "");
-  }
-
-  // 自動の結果表示は run・表示の条件が変わったときだけ判定する。読み込みは最新の関数を ref から呼ぶ
-  // （毎レンダー作り直す関数を deps に入れると、条件の変わらないレンダーでも判定し直してしまう）。
-  const loadSyntheticDataResultsRef = useRef(loadSyntheticDataResults);
-  useLayoutEffect(() => { loadSyntheticDataResultsRef.current = loadSyntheticDataResults; });
-  const selectedRunId = selectedRun?.run_id;
-  const selectedRunStatus = selectedRun?.status;
-  useEffect(() => {
-    if (selectedRunId === undefined || selectedRunStatus === undefined || !["completed", "partial"].includes(selectedRunStatus) || autoPreviewed.current.has(selectedRunId) || activeView !== "synthetic" || !workspaceActive || resultSelectionEdited.current || !canLoadSyntheticDataResults) return;
-    autoPreviewed.current.add(selectedRunId);
-    void loadSyntheticDataResultsRef.current();
-  }, [selectedRunId, selectedRunStatus, canLoadSyntheticDataResults, activeView, workspaceActive]);
-
   const previewObjectErrorMessage =
     previewObjectsQuery.error && !previewObjectsQuery.data
       ? objectListErrorMessage(previewObjectsQuery.error)
@@ -948,36 +575,6 @@ export function DataManagementPage() {
   // 同じ処理のスピナーは 1 つ。messaging §3.7、#416）。
   const objectReloadingWithContent = [baseObjectsQuery, previewObjectsQuery, csvTablesQuery].some(
     (query) => Boolean(query.data) && query.isFetching && !query.isFetchingNextPage
-  );
-
-  const syntheticProgress = (
-    <>
-      <SyntheticRunPanel
-        run={selectedRun}
-        runs={selectedRun && !listedRun ? [selectedRun, ...syntheticRuns.data ?? []] : syntheticRuns.data ?? []}
-        submitting={syntheticLoading === "generate"}
-        error={Boolean(syntheticRuns.error || historicalRun.error)}
-        onSelect={(id) => {
-          setSyntheticRunId(id);
-          setSearchParams((params) => { params.delete("synthetic_run"); return params; }, { replace: true });
-          clearSyntheticResultState();
-          resultSelectionEdited.current = false;
-        }}
-        onRefresh={async () => {
-          const [list, history] = await Promise.all([
-            syntheticRuns.refetch({ cancelRefetch: false }),
-            requestedRunId && !listedRun ? historicalRun.refetch({ cancelRefetch: false }) : Promise.resolve(null),
-          ]);
-          if (list.isError || history?.isError) throw new Error("synthetic run refresh failed");
-          const latest = list.data?.find((item) => item.run_id === selectedRun?.run_id) ?? history?.data ?? null;
-          if (selectedRun && !latest) throw new Error("synthetic run missing");
-          return latest;
-        }}
-      />
-      {historicalRun.error && requestedRunId && !listedRun && (
-        <Banner severity="warning">{apiErrorMessage(historicalRun.error, "syntheticRun.missing")}</Banner>
-      )}
-    </>
   );
 
   return (
@@ -1050,7 +647,6 @@ export function DataManagementPage() {
           tabs={[
             { id: "preview", label: t("dataMgmt.preview.title"), icon: Table2 },
             { id: "csv", label: t("dataMgmt.csv.title"), icon: Upload },
-            { id: "synthetic", label: t("dataTools.synthetic.title"), icon: Database },
           ] satisfies Array<DbObjectTab<ActiveView>>}
           idPrefix={DATA_MANAGEMENT_ID}
           ariaLabel={t("dataMgmt.tabs.label")}
@@ -1213,125 +809,6 @@ export function DataManagementPage() {
             />
           </DbObjectManagementPanelShell>
         )}
-
-        {activeView === "synthetic" && (
-          <DbObjectManagementPanelShell
-            id="data-management-panel-synthetic"
-            labelledBy="data-management-tab-synthetic"
-            idPrefix={DATA_MANAGEMENT_ID}
-            ariaLabel={t("dataMgmt.workspace.synthetic")}
-          >
-            {(selectAiProfilesQuery.isPending || selectAiProfilesQuery.error) && syntheticProgress}
-            {selectAiProfilesQuery.isPending ? (
-              <DbManagementLoadingSkeleton
-                idPrefix="data-synthetic-profiles"
-                ariaLabel={t("dataTools.syntheticData.profilesLoading")}
-                variant="detail"
-              />
-            ) : selectAiProfilesQuery.error ? (
-              <ErrorState
-                message={apiErrorMessage(selectAiProfilesQuery.error, "dataMgmt.profiles.error")}
-                onRetry={() => void selectAiProfilesQuery.refetch()}
-              />
-            ) : (
-            <SyntheticWorkspace
-              generationProgress={syntheticProgress}
-              submitting={syntheticLoading === "generate"}
-              selectAiDbProfiles={selectAiDbProfiles}
-              selectedSyntheticProfile={selectedSyntheticProfile}
-              syntheticData={syntheticData}
-              syntheticDataResults={syntheticDataResults}
-              syntheticProfileName={syntheticProfileName}
-              syntheticAvailableTables={syntheticAvailableTables}
-              syntheticResultTables={selectedRun ? selectedRun.targets.map((target) => target.table_name) : syntheticAvailableTables}
-              syntheticSelectedTables={syntheticSelectedTables}
-              syntheticPrompt={syntheticPrompt}
-              syntheticConfirmation={syntheticConfirmation}
-              syntheticDataConfirmed={syntheticDataConfirmed}
-              canGenerateSyntheticData={canGenerateSyntheticData}
-              syntheticCredentialPrecondition={syntheticCredentialPrecondition}
-              canClearSyntheticGeneration={canClearSyntheticGeneration}
-              syntheticRows={syntheticRows}
-              syntheticSampleRows={syntheticSampleRows}
-              syntheticUseComments={syntheticUseComments}
-              syntheticResultTable={syntheticResultTable}
-              syntheticResultLimitInput={syntheticResultLimitInput}
-              syntheticResultLimitError={syntheticResultLimitError}
-              executedSyntheticResultLimit={executedSyntheticResultLimit}
-              canLoadSyntheticDataResults={canLoadSyntheticDataResults}
-              canClearSyntheticDataResults={canClearSyntheticDataResults}
-              loading={syntheticLoading}
-              tablesButtonLoading={syntheticLoading === "tables" && syntheticTablesFromButton}
-              error={syntheticWorkspaceError}
-              resultError={syntheticResultError}
-              dbProfileRefreshRequired={dbProfileRefreshRequired}
-              dbProfileRefreshing={dbProfileRefreshing}
-              dbProfileListSync={dbProfileListSync}
-              onRefreshTables={() => void refreshSyntheticTables(true)}
-              onSyntheticProfileNameChange={changeSyntheticProfileName}
-              onSyntheticTableToggle={(tableName, selected) => {
-                const nextTables = selected
-                  ? uniqueStrings([...syntheticSelectedTables, tableName])
-                  : syntheticSelectedTables.filter((item) => item !== tableName);
-                setSyntheticSelectedTables(nextTables);
-                setSyntheticResultTable((currentTable) =>
-                  currentTable && nextTables.includes(currentTable) ? currentTable : (nextTables[0] ?? "")
-                );
-                setSyntheticData(null);
-                clearSyntheticResultState();
-              }}
-              onSyntheticTablesBulkChange={(tableNames, selected) => {
-                const targetSet = new Set(tableNames);
-                const nextTables = selected
-                  ? uniqueStrings([...syntheticSelectedTables, ...tableNames])
-                  : syntheticSelectedTables.filter((item) => !targetSet.has(item));
-                setSyntheticSelectedTables(nextTables);
-                setSyntheticResultTable((currentTable) =>
-                  currentTable && nextTables.includes(currentTable) ? currentTable : (nextTables[0] ?? "")
-                );
-                setSyntheticData(null);
-                clearSyntheticResultState();
-              }}
-              onSyntheticPromptChange={setSyntheticPrompt}
-              onSyntheticConfirmationChange={setSyntheticConfirmation}
-              onSyntheticRowsChange={(value) => setSyntheticRows(clampNumber(value, 1, 100))}
-              onSyntheticSampleRowsChange={(value) => setSyntheticSampleRows(clampNumber(value, 0, 100))}
-              onSyntheticUseCommentsChange={setSyntheticUseComments}
-              onSyntheticResultTableChange={(value) => {
-                if (!(selectedRun ? selectedRun.targets.some((target) => target.table_name === value) : syntheticAvailableTables.includes(value))) return;
-                resultSelectionEdited.current = true;
-                setSyntheticResultTable(value);
-                clearSyntheticResultState();
-              }}
-              onSyntheticResultLimitChange={(value) => {
-                resultSelectionEdited.current = true;
-                setSyntheticResultLimitInput(value);
-                clearSyntheticResultState();
-              }}
-              onGenerateSyntheticData={() => void generateSyntheticData()}
-              onClearSyntheticGeneration={clearSyntheticGeneration}
-              onLoadSyntheticDataResults={() => void loadSyntheticDataResults()}
-              onClearSyntheticDataResults={() => clearSyntheticResultState({ resetLimit: true })}
-              onRetry={() => {
-                if (syntheticErrorOperation === "tables") void refreshSyntheticTables();
-                else if (syntheticErrorOperation === "results") void loadSyntheticDataResults();
-                else void generateSyntheticData();
-              }}
-            />
-            )}
-            {syntheticDataResults && <Banner severity={syntheticDataResults.results.rows.length === 0 ? "warning" : "info"}>
-              <p>{t(selectedRun?.preview ? "syntheticPreview.resultHint" : "syntheticRun.currentData")}</p>
-              <p>{t("syntheticRun.queryTime", { time: formatDateTime(syntheticQueryTime) })}</p>
-              {syntheticDataResults.results.rows.length === 0 && <p>{t(resultGeneratedRows === null ? "syntheticRun.unverifiedResult" : resultGeneratedRows > 0 ? "syntheticRun.mismatch" : "syntheticRun.zero")}</p>}
-            </Banner>}
-            {selectedRun?.preview && <SyntheticReview key={selectedRun.run_id} run={selectedRun} previews={viewedPreviews}
-              stale={Boolean(syntheticRuns.error || historicalRun.error)}
-              onUpdated={(updated) => {
-                queryClient.setQueryData<SyntheticRun[]>(syntheticRuns.key, (old = []) => [updated, ...old.filter(item => item.run_id !== updated.run_id)]);
-                if (updated.review_status === "discarded") clearSyntheticResultState();
-              }} />}
-          </DbObjectManagementPanelShell>
-        )}
       </PageBody>
       {truncateTargetName && (
         <DropDbObjectDialog
@@ -1398,10 +875,6 @@ function objectListLoadMoreErrorMessage(error: unknown) {
   return apiErrorMessage(error, "dataMgmt.objectList.error", "objectSelector.loadMoreTimeout", {
     seconds: requestTimeoutSeconds(API_TIMEOUT_MS.interactiveList),
   });
-}
-
-function isSyntheticDataExecuted(result: SyntheticDataOperationData) {
-  return result.executed === true || (result.status ?? "").toLowerCase() === "executed";
 }
 
 function previewObjectKindLabel(kind: PreviewObjectKind) {
@@ -1908,476 +1381,6 @@ function csvModeLabel(mode: string) {
   if (mode === "truncate_insert") return t("dataMgmt.csv.mode.truncateInsert");
   return mode;
 }
-
-function SyntheticWorkspace({
-  generationProgress,
-  submitting,
-  selectAiDbProfiles,
-  selectedSyntheticProfile,
-  syntheticData,
-  syntheticDataResults,
-  syntheticProfileName,
-  syntheticAvailableTables,
-  syntheticResultTables,
-  syntheticSelectedTables,
-  syntheticPrompt,
-  syntheticConfirmation,
-  syntheticDataConfirmed,
-  canGenerateSyntheticData,
-  syntheticCredentialPrecondition,
-  canClearSyntheticGeneration,
-  syntheticRows,
-  syntheticSampleRows,
-  syntheticUseComments,
-  syntheticResultTable,
-  syntheticResultLimitInput,
-  syntheticResultLimitError,
-  executedSyntheticResultLimit,
-  canLoadSyntheticDataResults,
-  canClearSyntheticDataResults,
-  loading,
-  tablesButtonLoading,
-  error,
-  resultError,
-  dbProfileRefreshRequired,
-  dbProfileRefreshing,
-  dbProfileListSync,
-  onRefreshTables,
-  onSyntheticProfileNameChange,
-  onSyntheticTableToggle,
-  onSyntheticTablesBulkChange,
-  onSyntheticPromptChange,
-  onSyntheticConfirmationChange,
-  onSyntheticRowsChange,
-  onSyntheticSampleRowsChange,
-  onSyntheticUseCommentsChange,
-  onSyntheticResultTableChange,
-  onSyntheticResultLimitChange,
-  onGenerateSyntheticData,
-  onClearSyntheticGeneration,
-  onLoadSyntheticDataResults,
-  onClearSyntheticDataResults,
-  onRetry,
-}: {
-  generationProgress: ReactNode;
-  submitting: boolean;
-  selectAiDbProfiles: SelectAiDbProfilesData | null;
-  selectedSyntheticProfile: SelectAiDbProfile | null;
-  syntheticData: SyntheticDataOperationData | null;
-  syntheticDataResults: SyntheticDataResultsData | null;
-  syntheticProfileName: string;
-  syntheticAvailableTables: string[];
-  syntheticResultTables: string[];
-  syntheticSelectedTables: string[];
-  syntheticPrompt: string;
-  syntheticConfirmation: string;
-  syntheticDataConfirmed: boolean;
-  canGenerateSyntheticData: boolean;
-  /** Select AI の Credential が無いときの事前条件の案内（#1688）。無ければ null。 */
-  syntheticCredentialPrecondition: ReactNode;
-  canClearSyntheticGeneration: boolean;
-  syntheticRows: number;
-  syntheticSampleRows: number;
-  syntheticUseComments: boolean;
-  syntheticResultTable: string;
-  syntheticResultLimitInput: string;
-  syntheticResultLimitError: string;
-  executedSyntheticResultLimit: number | null;
-  canLoadSyntheticDataResults: boolean;
-  canClearSyntheticDataResults: boolean;
-  loading: SyntheticLoading;
-  /** 「テーブル再取得」を押して始めた取得の間だけ true（#819）。 */
-  tablesButtonLoading: boolean;
-  error: string;
-  resultError: string;
-  dbProfileRefreshRequired: boolean;
-  dbProfileRefreshing: boolean;
-  /** DB Profile 一覧の再取得（案内と進行は「対象」の欄の 1 か所。#2034）。 */
-  dbProfileListSync: DbProfileListSync;
-  onRefreshTables: () => void;
-  onSyntheticProfileNameChange: (value: string) => void;
-  onSyntheticTableToggle: (tableName: string, selected: boolean) => void;
-  onSyntheticTablesBulkChange: (tableNames: string[], selected: boolean) => void;
-  onSyntheticPromptChange: (value: string) => void;
-  onSyntheticConfirmationChange: (value: string) => void;
-  onSyntheticRowsChange: (value: number) => void;
-  onSyntheticSampleRowsChange: (value: number) => void;
-  onSyntheticUseCommentsChange: (value: boolean) => void;
-  onSyntheticResultTableChange: (value: string) => void;
-  onSyntheticResultLimitChange: (value: string) => void;
-  onGenerateSyntheticData: () => void;
-  onClearSyntheticGeneration: () => void;
-  onLoadSyntheticDataResults: () => void;
-  onClearSyntheticDataResults: () => void;
-  onRetry: () => void;
-}) {
-  const generationSucceeded = syntheticData !== null && isSyntheticDataExecuted(syntheticData);
-  const activeStep = generationSucceeded || syntheticDataResults ? 1 : 0;
-  const [syntheticTableSearch, setSyntheticTableSearch] = useState("");
-  // 件数の欄は入力中の文字を欄で持ち、範囲内の整数のときだけ値を変える（空にしても即 1 / 0 にしない。#1103）。
-  const syntheticRowsDraft = useNumberDraft(syntheticRows, {
-    min: 1,
-    max: 100,
-    integer: true,
-    onChange: onSyntheticRowsChange,
-  });
-  const syntheticSampleRowsDraft = useNumberDraft(syntheticSampleRows, {
-    min: 0,
-    max: 100,
-    integer: true,
-    onChange: onSyntheticSampleRowsChange,
-  });
-  // 親の syntheticDataConfirmed と同じ規則(単一テーブル=対象名 / 複数=ADMIN_EXECUTE)。
-  const syntheticExpectedConfirmation =
-    syntheticSelectedTables.length === 1 ? syntheticSelectedTables[0] : "ADMIN_EXECUTE";
-  const resultTableOptions = syntheticResultTables;
-  const hasValidResultTable = resultTableOptions.includes(syntheticResultTable);
-  const normalizedSyntheticTableSearch = syntheticTableSearch.trim().toLowerCase();
-  const filteredSyntheticTables = normalizedSyntheticTableSearch
-    ? syntheticAvailableTables.filter((tableName) =>
-        tableName.toLowerCase().includes(normalizedSyntheticTableSearch)
-      )
-    : syntheticAvailableTables;
-  const selectedSyntheticTableSet = new Set(syntheticSelectedTables);
-  // 一覧の再取得を求める状態は構造化した項目（`profile_list_refresh_required`）から案内に出す。backend は同じ文を
-  // warnings に入れない（#2034）。
-  const visibleWarnings = selectAiDbProfiles?.warnings ?? [];
-
-  return (
-    <div className="grid gap-4">
-      <DbObjectPanelHeader
-        icon={Database}
-        title={t("dataTools.synthetic.title")}
-        description={t("dataMgmt.section.syntheticHint")}
-      />
-      {error && <ErrorState message={error} onRetry={onRetry} />}
-      <DbObjectStepIndicator
-        steps={[
-          t("dataTools.syntheticData.stepTarget"),
-          t("dataTools.syntheticData.stepResults"),
-        ]}
-        activeIndex={activeStep}
-        ariaLabel={t("dataTools.syntheticData.steps")}
-        dataTestId="data-synthetic-steps"
-      />
-
-      <fieldset disabled={loading === "generate"} className="grid min-w-0 gap-3 rounded-md border border-border bg-surface-sunken p-3" aria-labelledby="synthetic-target-heading">
-        <DbObjectPanelHeader
-          headingId="synthetic-target-heading"
-          icon={Database}
-          title={t("dataTools.syntheticData.stepTarget")}
-          description={t("dataTools.syntheticData.targetHint")}
-        />
-
-        {dbProfileRefreshRequired || dbProfileListSync.view ? (
-          <DbProfileListSyncNotice
-            sync={dbProfileListSync}
-            testId="data-synthetic-db-profile-refresh-notice"
-            actionTestId="data-synthetic-db-profile-refresh"
-            processingTestId="data-synthetic-db-profile-refresh-processing"
-            actions={
-              <ButtonLink
-                to={APP_ROUTES.profiles}
-                linkComponent={Link}
-                variant="secondary"
-                size="sm"
-                trailingIcon={ArrowRight}
-                className="w-full sm:w-auto"
-              >
-                {t("dataTools.syntheticData.openProfileManagement")}
-              </ButtonLink>
-            }
-          />
-        ) : null}
-
-        {/* Select AI のプロファイルは対象の選択なので lg、1 表あたりの行数は数値なので xs（#1891）。 */}
-        <FormGrid>
-          {/* 生成とテーブル取得は DB Profile の選択が前提（canGenerateSyntheticData）なので必須として示す（#531）。 */}
-          <SelectField
-            id="data-synthetic-profile"
-            label={t("dataTools.syntheticData.profile")}
-            required
-            value={syntheticProfileName}
-            placeholder={(selectAiDbProfiles?.profiles ?? []).length === 0 ? t("dataTools.syntheticData.noProfiles") : ""}
-            options={(selectAiDbProfiles?.profiles ?? []).map((profile) => ({ value: profile.name, label: profile.name }))}
-            onValueChange={onSyntheticProfileNameChange}
-            disabled={dbProfileRefreshRequired || dbProfileRefreshing}
-            width="lg"
-            className="min-w-0"
-          />
-          <TextField
-            id="data-synthetic-rows-per-table"
-            label={t("dataTools.syntheticData.rowsPerTable")}
-            type="number"
-            min={1}
-            max={100}
-            {...syntheticRowsDraft}
-            width="xs"
-            className="min-w-0"
-          />
-        </FormGrid>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge
-            icon={false}
-            variant={syntheticSelectedTables.length > 0 ? "info" : "neutral"}
-            label={t("dataTools.syntheticData.selectedCount", { count: syntheticSelectedTables.length })}
-          />
-          {selectedSyntheticProfile?.owner && <StatusBadge icon={false} variant="neutral" label={selectedSyntheticProfile.owner} />}
-          {selectedSyntheticProfile?.status && <StatusBadge icon={false} variant="neutral" label={selectedSyntheticProfile.status} />}
-        </div>
-        <WarningsBanner warnings={visibleWarnings} />
-
-        <ContentActionBar
-          ariaLabel={t("dataTools.syntheticData.refreshTablesActions")}
-          title={t("dataTools.syntheticData.refreshTablesActionTitle")}
-          description={
-            syntheticProfileName
-              ? t("dataTools.syntheticData.refreshTablesActionReady")
-              : t("dataTools.syntheticData.refreshTablesActionDisabled")
-          }
-          actionsClassName="w-full sm:w-auto"
-          testId="data-synthetic-refresh-tables-actions"
-        >
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            className="w-full sm:w-auto"
-            // 押した取得の間だけ回す。失敗の「再試行」からの取得では無効にするだけ（候補の一覧の読込表示が出す。#819）。
-            loading={tablesButtonLoading}
-            disabled={
-              !syntheticProfileName ||
-              dbProfileRefreshRequired ||
-              dbProfileRefreshing ||
-              (loading === "tables" && !tablesButtonLoading)
-            }
-            onClick={onRefreshTables} icon={RefreshCw}>
-            <span>{t("dataTools.syntheticData.refreshTables")}</span>
-          </Button>
-        </ContentActionBar>
-
-        {/* 対象の表は業務プロファイルの許可する表（数百件になりうる）。複数を選ぶので、大量の候補から選ぶ共通の
-            ListPicker にする（#608）。候補はプロファイルから全件を読んでいるので、検索は画面側で絞る。 */}
-        <ListPicker
-          id="data-synthetic-table-picker"
-          label={t("dataTools.syntheticData.tables")}
-          items={filteredSyntheticTables.map(syntheticTablePickerItem)}
-          selectedKeys={selectedSyntheticTableSet}
-          selectedItems={syntheticSelectedTables.map(syntheticTablePickerItem)}
-          onToggle={(item, selected) => onSyntheticTableToggle(item.key, selected)}
-          onSelectMany={(visible) => onSyntheticTablesBulkChange(visible.map((item) => item.key), true)}
-          onClearSelection={() => onSyntheticTablesBulkChange(syntheticSelectedTables, false)}
-          total={filteredSyntheticTables.length}
-          search={{
-            id: "data-synthetic-table-search",
-            label: t("dataTools.syntheticData.tables"),
-            placeholder: t("dataTools.syntheticData.tableSearchPlaceholder"),
-            value: syntheticTableSearch,
-            onSearch: setSyntheticTableSearch,
-            clearLabel: t("common.clearSearch"),
-          }}
-          loading={loading === "tables"}
-          fixedHeight
-          labels={{
-            resultCount: ({ visible, selected }) =>
-              t("objectSelector.resultCountWithSelected", {
-                visible,
-                total: syntheticAvailableTables.length,
-                selected,
-              }),
-            loading: t("dataTools.syntheticData.tablesLoading"),
-            emptyTitle: t("dataTools.syntheticData.noTablesTitle"),
-            emptyHint: t("dataTools.syntheticData.noTablesHint"),
-            noResultsTitle: t("dataTools.syntheticData.noTableResultsTitle"),
-            noResultsHint: t("dataTools.syntheticData.noTableResultsHint"),
-            clearSearch: t("common.clearSearch"),
-            keyboardHint: t("objectSelector.keyboardHint"),
-          }}
-          testId="data-synthetic-table"
-        />
-
-        {/* 指示（文章）は full で 2 列にまたがせ、オプションはその下（#1891）。placeholder は短い例、説明は helper。 */}
-        <FormGrid>
-          <TextareaField
-            id="data-synthetic-prompt"
-            label={t("dataTools.syntheticData.prompt")}
-            className="col-span-full min-w-0"
-            value={syntheticPrompt}
-            onChange={(event) => onSyntheticPromptChange(event.currentTarget.value)}
-            rows={5}
-            width="full"
-            placeholder={t("dataTools.syntheticData.promptPlaceholder")}
-            helper={t("dataTools.syntheticData.promptHelper")}
-          />
-          <fieldset className="grid content-start gap-3 rounded-md border border-border bg-surface p-3">
-            <legend className="px-1 text-sm font-semibold text-fg">{t("dataTools.syntheticData.options")}</legend>
-            <TextField
-              id="data-synthetic-sample-rows"
-              label={t("dataTools.syntheticData.sampleRows")}
-              type="number"
-              min={0}
-              max={100}
-              {...syntheticSampleRowsDraft}
-              width="xs"
-            />
-            <label className="flex min-h-11 items-center gap-2 rounded-md border border-border bg-surface-sunken px-3 py-2 text-sm font-medium text-fg">
-              <input
-                type="checkbox"
-                checked={syntheticUseComments}
-                onChange={(event) => onSyntheticUseCommentsChange(event.currentTarget.checked)}
-                className="h-4 w-4 rounded border-border text-accent-fg"
-              />
-              <span>{t("dataTools.syntheticData.useComments")}</span>
-            </label>
-          </fieldset>
-        </FormGrid>
-
-        <fieldset className="grid gap-3 rounded-md border border-border bg-surface p-3">
-          <legend className="px-1 text-sm font-semibold text-fg">{t("dataTools.syntheticData.executeTitle")}</legend>
-          {syntheticCredentialPrecondition}
-          <ExecutionConfirmationField
-            value={syntheticConfirmation}
-            onChange={onSyntheticConfirmationChange}
-            confirmed={syntheticDataConfirmed}
-            placeholder={syntheticExpectedConfirmation}
-            expectedLabel={syntheticExpectedConfirmation}
-            helper={t("dbAdmin.confirmation.helper.danger", {
-              phrase: syntheticExpectedConfirmation,
-            })}
-            actions={
-              <>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="lg"
-                  className="w-full sm:w-auto"
-                  loading={submitting}
-                  disabled={!canGenerateSyntheticData || dbProfileRefreshRequired || dbProfileRefreshing}
-                  aria-describedby={
-                    syntheticCredentialPrecondition ? SYNTHETIC_CREDENTIAL_PRECONDITION_ID : undefined
-                  }
-                  onClick={onGenerateSyntheticData} icon={Database}>
-                  <span>{t("dataTools.syntheticData.generate")}</span>
-                </Button>
-                <ClearActionButton size="lg"
-                  label={t("dataTools.syntheticData.actions.clear")}
-                  className="w-full sm:w-auto"
-                  disabled={
-                    !canClearSyntheticGeneration ||
-                    Boolean(loading) ||
-                    dbProfileRefreshRequired ||
-                    dbProfileRefreshing
-                  }
-                  onClick={onClearSyntheticGeneration}
-                />
-              </>
-            }
-          />
-        </fieldset>
-
-      </fieldset>
-
-      {generationProgress}
-
-      <section className="grid min-w-0 content-start gap-3 rounded-md border border-border bg-surface-sunken p-4" aria-labelledby="synthetic-results-heading">
-        <DbObjectPanelHeader
-          headingId="synthetic-results-heading"
-          icon={Eye}
-          title={t("dataTools.syntheticData.resultsActionTitle")}
-          description={t("dataTools.syntheticData.resultsActionDisabled")}
-        />
-
-        {/* 結果テーブル（表名なので md）と取得件数上限（xs）は FormGrid、ボタン行はその下の全幅（#1891）。 */}
-        <div className="border-t border-border pt-3">
-        <FormGrid>
-          <SelectField
-            id="data-synthetic-result-table"
-            label={t("dataTools.syntheticData.resultTable")}
-            data-testid="synthetic-result-table-select"
-            value={hasValidResultTable ? syntheticResultTable : ""}
-            placeholder={resultTableOptions.length === 0 ? t("dataTools.syntheticData.noResultTables") : ""}
-            options={resultTableOptions.map((tableName) => ({ value: tableName, label: tableName }))}
-            onValueChange={onSyntheticResultTableChange}
-            disabled={loading === "results"}
-            width="md"
-            className="min-w-0"
-          />
-          <RowLimitField
-            value={syntheticResultLimitInput}
-            onChange={onSyntheticResultLimitChange}
-            disabled={loading === "results"}
-            error={syntheticResultLimitError}
-          />
-          <div
-            className="col-span-full flex flex-col gap-2 sm:flex-row sm:flex-wrap"
-            role="group"
-            aria-label={t("dataTools.syntheticData.resultsActions")}
-            data-testid="data-synthetic-results-actions"
-          >
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              className="w-full sm:w-auto"
-              loading={loading === "results"}
-              disabled={!canLoadSyntheticDataResults}
-              onClick={onLoadSyntheticDataResults} icon={Eye}>
-              <span>{t("dataTools.syntheticData.results")}</span>
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="w-full sm:w-auto"
-              disabled={!canClearSyntheticDataResults || loading === "results"}
-              onClick={onClearSyntheticDataResults} icon={X}>
-              <span>{t("dataTools.syntheticData.clearResults")}</span>
-            </Button>
-          </div>
-        </FormGrid>
-        </div>
-
-        {loading === "results" ? (
-          <DbManagementLoadingSkeleton
-            idPrefix="data-synthetic-results"
-            ariaLabel={t("dataTools.syntheticData.resultsLoading")}
-            variant="detail"
-            placement="result"
-          />
-        ) : resultError ? (
-          <ErrorState message={resultError} onRetry={onLoadSyntheticDataResults} />
-        ) : syntheticDataResults ? (
-          <div className="grid min-w-0 gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <DbObjectName value={syntheticDataResults.table_name} size="sm" />
-              <StatusBadge icon={false} variant="neutral" label={syntheticDataResults.runtime} />
-            </div>
-            <WarningsBanner warnings={syntheticDataResults.warnings} />
-            <QueryResultTable
-              results={syntheticDataResults.results}
-              rowLimit={executedSyntheticResultLimit}
-              name={t("queryResults.name.synthetic")}
-              csvFilePrefix="nl2sql-synthetic-data"
-            />
-          </div>
-        ) : (
-          <EmptyState title={t("dataTools.syntheticData.noResultsTitle")} hint={t("dataTools.syntheticData.noResultsHint")} />
-        )}
-      </section>
-    </div>
-  );
-}
-
-/** 合成データの対象の表の候補の 1 行（名前は SQL と同じ表記）。 */
-function syntheticTablePickerItem(tableName: string): ListPickerItem {
-  return {
-    key: tableName,
-    label: <DbObjectName value={tableName} size="xs" truncate className="block" />,
-    textValue: tableName,
-  };
-}
-
 async function previewExportError(response: Response) {
   try {
     const payload = (await response.json()) as { detail?: unknown; error?: unknown };
@@ -2385,100 +1388,4 @@ async function previewExportError(response: Response) {
   } catch {
     return t("dataMgmt.error.previewExport");
   }
-}
-
-function profileObjectNames(profile: SelectAiDbProfile | null | undefined) {
-  if (!profile) return [];
-  const rawItems = [
-    ...collectProfileObjectListItems(profile.object_list, true),
-    ...collectProfileObjectListItems(profile.attributes, false),
-  ];
-  return uniqueStrings(
-    rawItems.flatMap((item) => {
-      const name = profileObjectName(item);
-      return name ? [name] : [];
-    })
-  );
-}
-
-function collectProfileObjectListItems(value: unknown, candidateScope: boolean, depth = 0): unknown[] {
-  if (value === null || value === undefined || depth > 6) return [];
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return [];
-    try {
-      return collectProfileObjectListItems(JSON.parse(trimmed) as unknown, candidateScope, depth + 1);
-    } catch {
-      return candidateScope ? [trimmed] : [];
-    }
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => collectProfileObjectListItems(item, true, depth + 1));
-  }
-  if (!isRecord(value)) return [];
-  if (candidateScope && profileObjectName(value)) return [value];
-
-  const rawItems: unknown[] = [];
-  for (const key of ["object_list", "OBJECT_LIST", "objectList", "objects", "OBJECTS", "tables", "TABLES"]) {
-    if (key in value) {
-      rawItems.push(...collectProfileObjectListItems(value[key], true, depth + 1));
-    }
-  }
-  for (const key of [
-    "attributes",
-    "ATTRIBUTES",
-    "profile_attributes",
-    "PROFILE_ATTRIBUTES",
-    "profileAttributes",
-    "params",
-    "PARAMS",
-  ]) {
-    if (key in value) {
-      rawItems.push(...collectProfileObjectListItems(value[key], false, depth + 1));
-    }
-  }
-  return rawItems;
-}
-
-function profileObjectName(item: unknown) {
-  if (typeof item === "string") return item.trim();
-  if (!isRecord(item)) return "";
-  const owner = item.owner ?? item.OWNER;
-  const name =
-    item.name ??
-    item.NAME ??
-    item.object_name ??
-    item.OBJECT_NAME ??
-    item.table_name ??
-    item.TABLE_NAME ??
-    item.objectName ??
-    item.tableName;
-  if (typeof name !== "string") return "";
-  const trimmedName = name.trim();
-  if (!trimmedName) return "";
-  const trimmedOwner = typeof owner === "string" ? owner.trim() : "";
-  // profile の object_list は利用者の入力値のため、backend と同じ入力規則で正規化する
-  // （引用符のない名前は大文字化）。owner が無い場合は名前だけにし、推測で補わない。
-  try {
-    return trimmedOwner
-      ? parseDbAdminObjectTarget(trimmedName, trimmedOwner).qualifiedName
-      : formatDbAdminObjectPart(trimmedName);
-  } catch {
-    return trimmedOwner ? `${trimmedOwner}.${trimmedName}` : trimmedName;
-  }
-}
-
-function uniqueStrings(values: string[]) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) =>
-    compareNames(left, right)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function clampNumber(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return min;
-  return Math.min(max, Math.max(min, value));
 }

@@ -161,7 +161,6 @@ test("データ管理プレビューは取得件数上限を指定でき、詳�
   assert.match(dataManagementSource, /limit: rowLimit/u);
   assert.match(dataManagementSource, /<RowLimitField/u);
   assert.match(dataManagementSource, /icon=\{Play\}/u);
-  assert.match(dataManagementSource, /icon=\{X\}/u);
   assert.match(dataManagementSource, /size="lg"[\s\S]*?\{t\("dataMgmt\.preview\.show"\)\}/u);
   // 行を選ぶとすぐにデータを表示し、取得のたびに結果を置き換えるので、取得件数上限と結果を既定に戻すボタンは持たない（#2330）。
   assert.doesNotMatch(dataManagementSource, /dataMgmt\.preview\.clear|onClearPreview|canClearPreview/u);

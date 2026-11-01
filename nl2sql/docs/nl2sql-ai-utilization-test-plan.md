@@ -73,13 +73,10 @@
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| QRY-001 | 初期表示 | `/query` を開く | engine selector、profile selector、質問 textarea、schema 参照、preview/run ボタンが表示される | `mock-responses/profiles-search.success.json`、`mock-responses/schema-objects.success.json` |
+| QRY-001 | 初期表示 | `/query` を開く | profile selector、質問 textarea、schema 参照、preview/run ボタンが表示される | `mock-responses/profiles-search.success.json`、`mock-responses/schema-objects.success.json` |
 | QRY-002 | profile 自動選択 | profile list 取得後、既定 profile が選択される | profile detail と allowed object が反映される | `mock-responses/profile-detail.default.json` |
 | QRY-003 | profile 推薦 | 質問を 4 文字以上入力し 500ms 待つ | 推薦 profile、confidence、候補が表示され、適用できる | `api/recommend-profile.request.json`、`mock-responses/recommend-profile.success.json` |
 | QRY-004 | schema 参照挿入 | schema panel の table / column をクリック | 質問 textarea のカーソル位置へ日本語論理名が挿入される | `mock-responses/schema-object-detail.orders.json` |
-| QRY-005 | engine 切替 | `select_ai` / `select_ai_agent` / `enterprise_ai_direct` / `auto` を選択 | POST payload の `engine` が選択値になる | `api/preview.request.json`、`api/job-create.request.json` |
-| QRY-006 | Select AI override | engine `select_ai` で詳細設定を開き role / additional instructions を入力 | `select_ai_overrides` が payload に含まれる | `api/preview-select-ai-overrides.request.json` |
-| QRY-007 | override 不正組合せ | engine `enterprise_ai_direct` で override 付き payload を送る | backend validation で 400 になり、UI はエラーを表示 | `api/preview-invalid-overrides.request.json` |
 | QRY-008 | 質問 rewrite(用語置換のみ) | `用語・同義語を使う` を ON にして「SQL を生成して実行」 | glossary 置換が起きたときだけ書き換えカード(変更前/生成に使用される質問・適用ボタン)が出る。無変換ならカードは出ず、件数表現などは追加されない | `api/rewrite.request.json`、`mock-responses/rewrite.success.json` |
 | QRY-009 | similar history | 質問入力後 650ms 待つ | 類似履歴の score、reason、SQL snippet が表示される | `api/similar-history.request.json`、`mock-responses/similar-history.success.json` |
 | QRY-010 | preview 成功 | `SQL プレビュー` を実行 | SQL、safety badge、推奨事項、`preview SQL を実行` 導線が表示される | `api/preview.request.json`、`mock-responses/preview.safe.json` |
@@ -87,10 +84,10 @@
 | QRY-012 | preview SQL 実行 | safe preview 後に preview SQL を実行 | `/api/nl2sql/execute` が呼ばれ、結果表が表示される | `api/execute-select.request.json`、`mock-responses/execute.success.json` |
 | QRY-013 | 非同期 run | `実行` を押す | job 作成後、polling 中ステップが表示され、done で結果表と履歴が更新される | `mock-responses/jobs.created.json`、`mock-responses/job.running.json`、`mock-responses/job.done.json` |
 | QRY-014 | job error | job が error で返る | OperationStatusStrip にエラーが出て、結果表は更新されない | `mock-responses/job.error.json` |
-| QRY-015 | reset | 入力、selection、結果、override がある状態で reset | 全 UI 状態が初期化され、tracked job も消える | - |
+| QRY-015 | reset | 入力、selection、結果がある状態で reset | 全 UI 状態が初期化され、tracked job も消える | - |
 | QRY-016 | sample data import | catalog empty の状態で sample import を押す | confirmation `ADMIN_EXECUTE` 付き import API が呼ばれる | `api/sample-data-import.request.json` |
-| QRY-017 | feedback good | 実行結果ありで「良い」を押す | Select AI feedback add と app feedback が保存され、toast success | `api/select-ai-feedback-good.request.json`、`api/feedback-good.request.json` |
-| QRY-018 | feedback bad 必須 | 「違う」で修正 SQL またはコメントを空にする | クライアント側で必須メッセージが出る | `api/select-ai-feedback-bad.request.json` |
+| QRY-017 | feedback good | 実行結果ありで「良い」を押す | app feedback が保存され、toast success | `api/feedback-good.request.json` |
+| QRY-018 | feedback bad 必須 | 「違う」で修正 SQL またはコメントを空にする | クライアント側で必須メッセージが出る | `api/feedback-bad.request.json` |
 | QRY-019 | 業務確認 profile 推薦 | `業務確認 flow` を開始 | ontology profile 候補が表示され、候補を確認できる | `api/ontology-profile-recommendation.request.json`、`mock-responses/ontology-profile-recommendation.success.json` |
 | QRY-020 | query session 作成 | profile 推薦を確認後、再度 flow を開始 | `query-sessions` が作成され、intent 確認 UI が表示される | `api/query-session-create.request.json`、`mock-responses/query-session-created.json` |
 | QRY-021 | query session 版競合 | intent patch が 409 を返す | current version と再読込導線が表示される | `mock-responses/query-session-conflict.error.json` |
@@ -149,7 +146,7 @@
 | HIS-005 | safety filter | safe / blocked を切替 | blocked SQL 履歴が分離される | `mock-responses/history.success.json` |
 | HIS-006 | sort | question / created_at sort を切替 | 昇順/降順が切り替わる | `mock-responses/history.success.json` |
 | HIS-007 | detail tab | 履歴を選択し overview / SQL tab を切替 | 質問、profile、row/column count、generated/executable SQL が確認できる | `mock-responses/history.success.json` |
-| HIS-008 | 再実行 | detail の再実行を押す | `/query` に遷移し、question / engine / profile が prefill される | `mock-responses/history.success.json` |
+| HIS-008 | 再実行 | detail の再実行を押す | `/query` に遷移し、question / profile が prefill される | `mock-responses/history.success.json` |
 | HIS-009 | refresh | 表示更新を押す | loading indicator 後に toast success | `mock-responses/history.success.json` |
 | HIS-010 | load error | history GET を 500 にする | retry hint と再試行ボタンが表示される | `mock-responses/error.persistence-unavailable.json` |
 
@@ -175,5 +172,4 @@ test("SQL 生成 preview の結果を表示できる", async ({ page }) => {
 
 - 実 Oracle で検証した場合は、履歴と feedback が検証用 profile に保存されていることを確認する。
 - DML / DDL fixture は実行禁止。安全境界でブロックされることだけを確認する。
-- Select AI feedback add は DBMS_CLOUD_AI profile へ学習データを追加する可能性があるため、専用検証 profile で実施する。
 - query session / ontology flow は versioned state を作成するため、検証後に対象 session/proposal をアーカイブまたは検証 DB を破棄する。

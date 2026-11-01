@@ -21,7 +21,6 @@ function normalizedRole(role: SecurityRole): SecurityRole {
   return {
     ...role,
     allowed_profile_ids: role.allowed_profile_ids ?? [],
-    data_entitlements: role.data_entitlements ?? [],
     permissions: role.permissions ?? [],
   };
 }

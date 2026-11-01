@@ -12,7 +12,6 @@ const SYSTEM_ADMIN_USER: CurrentUser = {
   role_display_names: ["システム管理者"],
   is_system_admin: true,
   permissions: [],
-  data_entitlements: [],
   allowed_profile_ids: [],
   debug_mode: false,
   password_change_allowed: true,
@@ -56,11 +55,7 @@ async function mockApi(page: Page, currentUser: CurrentUser = SYSTEM_ADMIN_USER)
           ? []
         : path === "/api/settings/upload-storage"
           ? {
-              backend: "local",
               local_storage_dir: "/u01/data/production-ready-nl2sql",
-              object_storage_region: "ap-osaka-1",
-              object_storage_namespace: "exampletenancy",
-              object_storage_bucket: "nl2sql-originals",
               readiness: "ok",
               max_upload_bytes: 104857600,
               config_source: "runtime",
@@ -111,15 +106,16 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("フィードバック管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 
   const menuIconSignatures = await sidebar.locator("nav a svg").evaluateAll((icons) =>
     icons.map((icon) => icon.innerHTML.replace(/\s+/g, " ").trim())
   );
   // AI 活用の先頭にチャットを足した（#871）。ユーザーとロールの末尾の API キー（#1805）、データ準備の
   // DB 管理チャット（#2264）、運用設定の回答の注意書き（#2405・#2449）とチャットの添付（#2517）と軌跡の記録（#3901）を足し、
-  // システム設定の外観と証明書（#19）を削除して 35 項目。
-  expect(menuIconSignatures).toHaveLength(35);
+  // #7 で運用設定の Select AI Credential とセキュリティ設定の Deep Data Security を、#11 でシステム設定の OCI 認証を、
+  // #19 でシステム設定の外観と証明書を削除して 32 項目。
+  expect(menuIconSignatures).toHaveLength(32);
   expect(new Set(menuIconSignatures).size).toBe(menuIconSignatures.length);
 
   for (const section of ["データ準備", "AI 活用", "改善・運用", "セキュリティ設定", "ユーザーとロール", "運用設定", "システム設定"]) {
@@ -195,26 +191,24 @@ test("サイドバーを producer / consumer 思想のユーザー向け 5 セ�
   await expect(sidebar.getByText("質問学習", { exact: true })).toHaveCount(0);
   await expect(sidebar.getByText("接続診断", { exact: true })).toHaveCount(0);
 
-  for (const label of ["OCI 認証", "アップロード保存先", "モデル", "データベース"]) {
+  for (const label of ["アップロード保存先", "モデル", "データベース"]) {
     await expect(sidebar.getByText(label, { exact: true })).toBeVisible();
   }
-  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き → Select AI Credential」（#658・#2449・#2517・#2546）。
+  // 運用設定は「システムテーブル → 軌跡の記録 → チャットの添付 → 回答の注意書き」（#2449・#2517・#2546）。
   const systemTablesBox = await sidebar.getByText("システムテーブル", { exact: true }).boundingBox();
   const traceRecordingBox = await sidebar.getByText("軌跡の記録", { exact: true }).boundingBox();
   const answerNoticeBox = await sidebar.getByText("回答の注意書き", { exact: true }).boundingBox();
   const attachmentsBox = await sidebar.getByText("チャットの添付", { exact: true }).boundingBox();
-  const credentialBox = await sidebar.getByText("Select AI Credential", { exact: true }).boundingBox();
-  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox || !credentialBox) {
+  if (!systemTablesBox || !traceRecordingBox || !answerNoticeBox || !attachmentsBox) {
     throw new Error("運用設定のメニュー位置を取得できませんでした。");
   }
   expect(systemTablesBox.y).toBeLessThan(traceRecordingBox.y);
   expect(traceRecordingBox.y).toBeLessThan(attachmentsBox.y);
   expect(attachmentsBox.y).toBeLessThan(answerNoticeBox.y);
-  expect(answerNoticeBox.y).toBeLessThan(credentialBox.y);
 
   // 「API キー」（全員のキーの管理。RAG / NL2SQL だけ。#1805）はユーザーとロールの末尾。アカウント欄の
   // 「API キー」（自分のキー。ボタン）と区別するため、ナビのリンクで探す。
-  const securityLabels = ["権限管理", "Deep Data Security", "ユーザー管理", "ロール管理", "API キー"];
+  const securityLabels = ["権限管理", "ユーザー管理", "ロール管理", "API キー"];
   const securityItemBoxes = await Promise.all(
     securityLabels.map(async (label) => {
       const item = sidebar.getByRole("link", { name: label, exact: true });
@@ -363,14 +357,13 @@ test("セクション折りたたみで所属項目だけを隠し、他セク�
   await expect(sidebar.getByText("SQL 生成", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("フィードバック管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("質問分類モデル管理", { exact: true })).toBeHidden();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 
   await sidebar.getByRole("button", { name: "セキュリティ設定 を展開" }).click();
   await expect(sidebar.getByText("権限管理", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Deep Data Security", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("ユーザー管理", { exact: true })).toBeHidden();
   await expect(sidebar.getByText("テーブルの管理", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("OCI 認証", { exact: true })).toBeHidden();
+  await expect(sidebar.getByText("アップロード保存先", { exact: true })).toBeHidden();
 });
 
 test("手動で展開したセクションは再読み込み後も保存状態を維持する", { tag: "@responsive" }, async ({ page }) => {
@@ -441,19 +434,19 @@ test("SQL 生成権限がない既定入口は root から最初の許可画面�
   await page.unroute("**/api/**");
   await mockApi(page, {
     ...SYSTEM_ADMIN_USER,
-    user_uuid: "oci-settings-user",
-    login_user_id: "oci.settings.user",
-    display_name: "OCI 認証担当ユーザー",
-    role_codes: ["OCI_SETTINGS_VIEWER"],
+    user_uuid: "model-settings-user",
+    login_user_id: "model.settings.user",
+    display_name: "モデル設定担当ユーザー",
+    role_codes: ["MODEL_SETTINGS_VIEWER"],
     is_system_admin: false,
-    permissions: ["menu.settings_oci"],
+    permissions: ["menu.settings_model"],
   });
 
   await page.goto("/");
 
-  await expect(page).toHaveURL(/\/settings\/oci$/);
+  await expect(page).toHaveURL(/\/settings\/model$/);
   const sidebar = await openSidebarNav(page);
-  await expect(sidebar.getByRole("link", { name: "OCI 認証" })).toHaveAttribute(
+  await expect(sidebar.getByRole("link", { name: "モデル設定", exact: true })).toHaveAttribute(
     "aria-current",
     "page"
   );
@@ -535,7 +528,6 @@ test("375px 幅ではナビがドロワーになり、開くと主要リンク�
   await expect(sidebar.getByRole("link", { name: "ユーザー管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "ロール管理" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "権限管理" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Deep Data Security" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "監査ログ" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "データベース設定" })).toBeVisible();
   expect(

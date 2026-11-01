@@ -10,7 +10,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pr_backend_core import CursorPage, Page
@@ -25,6 +25,7 @@ from pr_system_settings.chat_attachments import ChatAttachmentReference
 from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     ValidationInfo,
@@ -51,11 +52,24 @@ def _validate_sql_row_limit(value: int | None) -> int | None:
 
 
 class Nl2SqlEngine(StrEnum):
-    """NL2SQL 実行エンジン。"""
+    """NL2SQL の SQL 生成の方式（OCI Enterprise AI を直接呼ぶ方式だけ。#7）。"""
 
-    SELECT_AI = "select_ai"
-    SELECT_AI_AGENT = "select_ai_agent"
     ENTERPRISE_AI_DIRECT = "enterprise_ai_direct"
+
+
+def read_stored_engine(value: object) -> object:
+    """保存済みの記録（履歴・ジョブ・評価）の生成方式を読む。
+
+    削除した生成方式（#7）で保存された記録も読めるよう、今の enum に無い値は唯一の方式として
+    読む。利用者の要求の検証には使わない（要求の未知の値は 422 にする）。
+    """
+
+    if isinstance(value, str) and value not in Nl2SqlEngine._value2member_map_:
+        return Nl2SqlEngine.ENTERPRISE_AI_DIRECT
+    return value
+
+
+StoredNl2SqlEngine = Annotated[Nl2SqlEngine, BeforeValidator(read_stored_engine)]
 
 
 class JobStatus(StrEnum):
@@ -283,8 +297,6 @@ class AllowedObjects(BaseModel):
     enforce_table_scope: bool = False
 
 
-SELECT_AI_MAX_TOKENS_MIN = 4096
-SELECT_AI_MAX_TOKENS_MAX = 32000
 PROFILE_IDENTIFIER_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
@@ -296,47 +308,6 @@ def validate_profile_identifier(value: str) -> str:
     if not PROFILE_IDENTIFIER_PATTERN.fullmatch(value):
         raise ValueError("名称は英字で開始し、英字・数字・アンダースコアのみ使用できます。")
     return value
-
-
-class ProfileSelectAiConfig(BaseModel):
-    """業務 profile から Oracle DBMS_CLOUD_AI profile を作るための設定。"""
-
-    profile_name: str = ""
-    previous_profile_name: str = ""
-    region: str = ""
-    model: str = ""
-    embedding_model: str = "cohere.embed-v4.0"
-    max_tokens: int = Field(
-        default=SELECT_AI_MAX_TOKENS_MAX,
-        ge=SELECT_AI_MAX_TOKENS_MIN,
-        le=SELECT_AI_MAX_TOKENS_MAX,
-    )
-    enforce_object_list: bool = True
-    comments: bool = True
-    annotations: bool = False
-    constraints: bool = False
-    role: str = ""
-    additional_instructions: str = ""
-
-
-class ProfileSelectAiConfigPatch(BaseModel):
-    """Profile PATCH 用の Select AI 設定差分。"""
-
-    profile_name: str | None = None
-    region: str | None = None
-    model: str | None = None
-    embedding_model: str | None = None
-    max_tokens: int | None = Field(
-        default=None,
-        ge=SELECT_AI_MAX_TOKENS_MIN,
-        le=SELECT_AI_MAX_TOKENS_MAX,
-    )
-    enforce_object_list: bool | None = None
-    comments: bool | None = None
-    annotations: bool | None = None
-    constraints: bool | None = None
-    role: str | None = None
-    additional_instructions: str | None = None
 
 
 ClarificationPolicy = Literal["confirm", "assume"]
@@ -366,15 +337,8 @@ class Nl2SqlProfile(BaseModel):
     default_row_limit: int = 100
     safety_policy: str = "select_only"
     few_shot_examples: list[dict[str, str]] = Field(default_factory=list)
-    select_ai_config: ProfileSelectAiConfig = Field(default_factory=ProfileSelectAiConfig)
-    # 既定の生成方式（#1524）。生成の方式を指定しないジョブ（Agent の MCP の `nl2sql_query`・API）が
-    # 使い、SQL 生成・チャットの画面の初期の選択にもなる。
-    default_engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
-    # 保存（Oracle 反映）のたびに Select AI Agent アセット（tool / agent / task / team）も
-    # 再構築するか（#1690）。Select AI Agent を使う業務プロファイルの設定として保存し、
-    # 画面を開き直しても保つ。
-    # オフにしても既存のアセットは消さない（削除は Select AI Agent アセットの cleanup の操作）。
-    rebuild_agent_assets_on_save: bool = False
+    # 以前の版が保存した生成の方式・DB 側の AI profile の設定の項目は読まない（保存済みの JSON に
+    # 残っていても無視する。#7）。全体ルールだけは `fold_legacy_rules` が `sql_rules` へ移す。
     # 回答前の確認（#1839。旧名「AI要件確認」）の業務プロファイルの方針。`confirm` は曖昧な質問を
     # 確認してから SQL を生成し、`assume` は確認せずに前提を示して生成する（チャットと MCP の
     # `nl2sql_query`。SQL 生成の画面の「回答前の確認」のボタンは利用者の明示の操作なので変えない）。
@@ -388,20 +352,33 @@ class Nl2SqlProfile(BaseModel):
     updated_at: str = ""
     object_scope_version: int = Field(default=1, ge=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def fold_legacy_rules(cls, data: Any) -> Any:
+        """以前の版が DB 側の AI profile の設定に入れた全体ルールを `sql_rules` へ移す（#7）。
 
-class Nl2SqlEngineAvailability(BaseModel):
-    """生成の方式がこの環境で使えるか（業務プロファイルの既定の生成方式の選択肢。#1524）。"""
+        以前の版は全体ルールを `sql_rules` でなく、削除した生成方式（Select AI）の設定の
+        `additional_instructions`（1 行 1 件）に保存していた。保存済みの業務プロファイルの
+        全体ルールを失わないよう、読むときに `sql_rules` の後ろへ足す（重複は除く）。
+        """
 
-    engine: Nl2SqlEngine
-    available: bool
-    # 使えない理由（利用者向けの日本語。使えるときは空）。
-    reason: str = ""
+        if not isinstance(data, Mapping):
+            return data
+        legacy = data.get(_LEGACY_RULES_CONFIG_KEY)
+        if not isinstance(legacy, Mapping):
+            return data
+        text = legacy.get("additional_instructions")
+        if not isinstance(text, str) or not text.strip():
+            return data
+        rules = [str(rule).strip() for rule in data.get("sql_rules") or [] if str(rule).strip()]
+        for line in text.splitlines():
+            if line.strip() and line.strip() not in rules:
+                rules.append(line.strip())
+        return {**data, "sql_rules": rules}
 
 
-class Nl2SqlEnginesData(BaseModel):
-    """`GET /nl2sql/engines` の応答（#1524）。"""
-
-    engines: list[Nl2SqlEngineAvailability] = Field(default_factory=list)
+# 以前の版の業務プロファイルの JSON で、全体ルールを持っていた設定の key（#7。読むだけ）。
+_LEGACY_RULES_CONFIG_KEY = "select_ai_config"
 
 
 class ProfileSummary(BaseModel):
@@ -430,8 +407,6 @@ class ProfileUsageContext(BaseModel):
     description: str = ""
     allowed_tables: list[str] = Field(default_factory=list)
     allowed_views: list[str] = Field(default_factory=list)
-    # 既定の生成方式（#1524）。SQL 生成・チャットの画面の初期の選択。
-    default_engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
     # 回答前の確認の方針（#1839）。チャットは `assume` なら確認事項を聞かずに作る。
     clarification_policy: ClarificationPolicy = "confirm"
     archived: bool = False
@@ -546,9 +521,6 @@ class ProfileUpsertRequest(BaseModel):
     default_row_limit: int = Field(default=100, ge=1, le=5000)
     safety_policy: str = "select_only"
     few_shot_examples: list[dict[str, str]] = Field(default_factory=list)
-    select_ai_config: ProfileSelectAiConfig = Field(default_factory=ProfileSelectAiConfig)
-    default_engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
-    rebuild_agent_assets_on_save: bool = False
     clarification_policy: ClarificationPolicy = "confirm"
     clarification_max_rounds: int = Field(default=0, ge=0, le=CLARIFICATION_MAX_ROUNDS_LIMIT)
 
@@ -573,13 +545,6 @@ class ProfileUpsertRequest(BaseModel):
     def normalize_glossary(cls, value: Any) -> Any:
         return _normalize_glossary_payload(value)
 
-    @model_validator(mode="after")
-    def align_select_ai_profile_name(self) -> ProfileUpsertRequest:
-        self.select_ai_config = self.select_ai_config.model_copy(
-            update={"profile_name": self.name, "previous_profile_name": ""}
-        )
-        return self
-
 
 class ProfilePatchRequest(BaseModel):
     """Profile 更新 request。省略された項目は既存値を保持する。"""
@@ -594,9 +559,6 @@ class ProfilePatchRequest(BaseModel):
     default_row_limit: int | None = Field(default=None, ge=1, le=5000)
     safety_policy: str | None = None
     few_shot_examples: list[dict[str, str]] | None = None
-    select_ai_config: ProfileSelectAiConfigPatch | None = None
-    default_engine: Nl2SqlEngine | None = None
-    rebuild_agent_assets_on_save: bool | None = None
     clarification_policy: ClarificationPolicy | None = None
     clarification_max_rounds: int | None = Field(
         default=None, ge=0, le=CLARIFICATION_MAX_ROUNDS_LIMIT
@@ -635,13 +597,6 @@ class AdminExecutionConfirmation(StrictMutationRequest):
 
     confirmation: str = ""
     reason: str = ""
-
-
-class ProfileSelectAiProfileRequest(AdminExecutionConfirmation):
-    """業務 profile から DBMS_CLOUD_AI profile を作成する request."""
-
-    attributes_override: dict[str, Any] | None = None
-    original_name: str = ""
 
 
 class ProfileLearningMaterialImportData(BaseModel):
@@ -693,9 +648,7 @@ class SafetyReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     referenced_tables: list[str] = Field(default_factory=list)
     referenced_columns: list[str] = Field(default_factory=list)
-    # 安全確認をしたか（#1523）。Select AI / Select AI Agent が生成した SQL は既定で SELECT 文
-    # なので確かめない（False。業務プロファイルの表・列の範囲の照合も行わない）。
-    # 利用者の SQL・LLM（enterprise_ai_direct）が生成した SQL は確かめる。
+    # 安全確認をしたか（#1523）。利用者の SQL・LLM が生成した SQL は確かめる。
     safety_checked: bool = True
     # 安全確認を省略した理由（利用者向けの文。省略しなかったときは空）。
     safety_check_skip_reason: str = ""
@@ -713,10 +666,8 @@ class QueryResults(BaseModel):
     execution_context: Literal[
         "deterministic",
         "oracle_data_plane",
-        "deepsec_data_plane",
         "admin_control_plane",
     ] = "deterministic"
-    vpd_context_enforced: bool = False
 
     @field_serializer("rows", when_used="json")
     def serialize_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -879,10 +830,8 @@ class DbAdminExecuteData(BaseModel):
     execution_context: Literal[
         "deterministic",
         "oracle_data_plane",
-        "deepsec_data_plane",
         "admin_control_plane",
     ] = "deterministic"
-    vpd_context_enforced: bool = False
     select_result: QueryResults | None = None
     statements: list[DbAdminStatementResult] = Field(default_factory=list)
     committed: bool = False
@@ -1394,7 +1343,7 @@ class Nl2SqlResult(BaseModel):
 
     business_release_id: str = ""
     history_id: str = ""
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     engine_meta: dict[str, Any] = Field(default_factory=dict)
     fallback_reason: str = ""
     original_question: str
@@ -1409,7 +1358,6 @@ class Nl2SqlResult(BaseModel):
     results: QueryResults
     timing: TimingEnvelope
     interpretation: Nl2SqlInterpretationArtifact | None = None
-    show_prompt: Nl2SqlShowPromptArtifact | None = None
     # 回答の注意書き（システム設定の文。#2405）。SQL を実行して答えた job（DONE）だけに付ける。
     # モデルに渡す会話の履歴（前の質問と SQL）には入れない。
     notice: str | None = None
@@ -1505,50 +1453,16 @@ class Nl2SqlInterpretationArtifact(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class Nl2SqlShowPromptArtifact(BaseModel):
-    """Select AI showprompt の表示用 artifact。"""
-
-    available: bool = False
-    engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
-    action: str = "showprompt"
-    prompt: str = ""
-    unavailable_reason: str = ""
-    warnings: list[str] = Field(default_factory=list)
-
-
-class SelectAiRequestOverrides(BaseModel):
-    """1 回の DBMS_CLOUD_AI.GENERATE 呼び出しだけに適用する属性。"""
-
-    role: str = ""
-    additional_instructions: str = ""
-
-    def has_values(self) -> bool:
-        return bool(self.role.strip() or self.additional_instructions.strip())
-
-
-def _validate_select_ai_request_overrides(
-    engine: Nl2SqlEngine, overrides: SelectAiRequestOverrides | None
-) -> None:
-    if overrides is not None and overrides.has_values() and engine != Nl2SqlEngine.SELECT_AI:
-        raise ValueError("select_ai_overrides は engine=select_ai の場合のみ指定できます。")
-
-
 class PreviewRequest(BaseModel):
     """自然言語から SQL を生成し、実行せずに safety を返す。"""
 
     question: str = Field(min_length=1)
-    engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
+    engine: Nl2SqlEngine = Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     profile_id: str | None = None
     allowed_objects: AllowedObjects = Field(default_factory=AllowedObjects)
     row_limit: int | None = Field(default=None, ge=1, le=5000)
-    select_ai_overrides: SelectAiRequestOverrides | None = None
     ontology_context: OntologySqlGenerationContext | None = None
     use_glossary: bool = False
-
-    @model_validator(mode="after")
-    def validate_select_ai_overrides(self) -> PreviewRequest:
-        _validate_select_ai_request_overrides(self.engine, self.select_ai_overrides)
-        return self
 
 
 class PreviewData(BaseModel):
@@ -1561,7 +1475,7 @@ class PreviewData(BaseModel):
     is_safe: bool
     row_limit: int
     note: str
-    engine: Nl2SqlEngine = Nl2SqlEngine.SELECT_AI
+    engine: StoredNl2SqlEngine = Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     engine_meta: dict[str, Any] = Field(default_factory=dict)
     fallback_reason: str = ""
     rewritten_question: str = ""
@@ -1668,25 +1582,6 @@ class SqlRequirementSpec(BaseModel):
             lines.extend(f"  - {value}" for value in self.unresolved_ja)
         return "\n".join(lines)
 
-    def question_with_requirements(self, question: str) -> str:
-        """Select AI / Select AI Agent に渡す、明確な質問の文（要件を短い条件で添える）。"""
-
-        conditions = [f"使う表は {'、'.join(self.tables)} だけ"]
-        if self.joins:
-            conditions.append(f"結合の条件は {' / '.join(self.joins)}")
-        for item in self.items:
-            if item.section in {"from", "join"}:
-                continue
-            if item.sql_hint:
-                conditions.append(f"{item.label_ja}: {item.sql_hint}")
-            elif item.period_range_ja:
-                conditions.append(f"{item.label_ja}: {item.period_range_ja}")
-        return (
-            question.strip()
-            + "\n\n必ず守る条件:\n"
-            + "\n".join(f"- {value}" for value in conditions)
-        )
-
 
 class RequirementAnswerRecord(BaseModel):
     """回答前の確認で利用者が答えた 1 件（会話に「回答前に確認した内容」として残す。#1839）。"""
@@ -1772,18 +1667,14 @@ class JobCreateRequest(BaseModel):
     """非同期 NL2SQL job create request."""
 
     question: str
-    # 生成の方式。省略したジョブ（Agent の MCP の `nl2sql_query` など）は、ジョブの作成
-    # （`Nl2SqlService.start_job`）が業務プロファイルの既定の生成方式（`default_engine`）にする
-    # （`with_profile_default_engine`。#1524）。省略は `model_fields_set` で判定し、
-    # 保存するジョブには決めた方式が入る。
+    # 生成の方式（OCI Enterprise AI を直接呼ぶ方式だけ。#7）。
     engine: Nl2SqlEngine = Field(
-        default=Nl2SqlEngine.SELECT_AI,
-        description="生成の方式。省略すると業務プロファイルの既定の生成方式（default_engine）",
+        default=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
+        description="生成の方式（enterprise_ai_direct だけ）",
     )
     profile_id: str | None = None
     allowed_objects: AllowedObjects = Field(default_factory=AllowedObjects)
     row_limit: int | None = Field(default=None, ge=1, le=5000)
-    select_ai_overrides: SelectAiRequestOverrides | None = None
     use_glossary: bool = False
     # SQL の生成の prompt に公開版のオントロジーの文脈を入れる（公開版の確定もこれで決まる）。
     use_ontology_context: bool = True
@@ -1793,7 +1684,6 @@ class JobCreateRequest(BaseModel):
     # 公開版の確定が前提のため、`use_ontology_context` が false なら指定にかかわらず行わない。
     include_ontology_grounding: bool | None = None
     include_interpretation: bool = False
-    include_show_prompt: bool = False
     # 生成と安全検査だけを行い、SQL を実行しない（実行の段階は SKIPPED）。既定は実行あり。
     # チャットのターンは、SQL 生成の画面と同じく生成した SQL を同じジョブで実行する（#1176）。
     # 実行の権限（`nl2sql.sql.execute`）が無い利用者のチャットは、route がこれを true にする。
@@ -1833,24 +1723,19 @@ class JobCreateRequest(BaseModel):
             raise ValueError(f"質問は {JOB_QUESTION_MAX_LENGTH} 文字以内で入力してください。")
         return value
 
+    @field_validator("engine", mode="before")
+    @classmethod
+    def read_stored_engine_value(cls, value: object, info: ValidationInfo) -> object:
+        # 保存済みの snapshot の読み戻しだけ、削除した生成方式（#7）の値を唯一の方式として読む。
+        if isinstance(info.context, Mapping) and info.context.get(STORED_JOB_REQUEST_CONTEXT):
+            return read_stored_engine(value)
+        return value
+
     @model_validator(mode="after")
-    def validate_select_ai_overrides(self) -> JobCreateRequest:
-        _validate_select_ai_request_overrides(self.engine, self.select_ai_overrides)
+    def validate_chat_continuation(self) -> JobCreateRequest:
         if self.previous_job_id and not self.is_chat_turn:
             raise ValueError("会話の継続はチャットのジョブで利用できます。")
         return self
-
-    def with_profile_default_engine(self, default_engine: Nl2SqlEngine) -> JobCreateRequest:
-        """生成の方式を省略したジョブを、業務プロファイルの既定の生成方式にする（#1524）。
-
-        方式を明示したジョブはそのまま返す。Select AI の指示の上書き（`select_ai_overrides`）は
-        Select AI だけで使えるため、既定が別の方式なら明示の方式と同じく拒否する。
-        """
-
-        if "engine" in self.model_fields_set:
-            return self
-        _validate_select_ai_request_overrides(default_engine, self.select_ai_overrides)
-        return self.model_copy(update={"engine": default_engine})
 
     @property
     def is_chat_turn(self) -> bool:
@@ -1982,7 +1867,7 @@ class JobData(BaseModel):
     # チャット（会話）のターンか（#1176。旧版のチャットは generation_only だけで表す）。
     chat: bool = False
     # 生成方法（チャットの段階の補足に出す。#1145）。
-    engine: Nl2SqlEngine | None = None
+    engine: StoredNl2SqlEngine | None = None
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
@@ -2100,7 +1985,7 @@ class HistoryItem(BaseModel):
     business_release_id: str = ""
     id: str
     question: str
-    engine: Nl2SqlEngine
+    engine: StoredNl2SqlEngine
     generated_sql: str
     created_at: str
     elapsed_ms: int | None = None
@@ -2166,9 +2051,8 @@ class HistoryItem(BaseModel):
     kind: Literal["chat", "query", "mcp", "evaluation"] | None = None
     ontology_trace_summary: dict[str, Any] = Field(default_factory=dict)
     # 実行のモデルの呼び出しの回数と利用量（ジョブの trace の `gen_ai.chat` の span から集める。
-    # 3 製品共通の `pr_backend_core.observability.model_usage`。#3543）。Select AI の DB の中の
-    # 呼び出しは数を作らず `unmeasured_sources` に残す。この機能より前の行と、trace の始まる前に
-    # 止まった実行は None（画面は「未計測」）。
+    # 3 製品共通の `pr_backend_core.observability.model_usage`。#3543）。この機能より前の行と、
+    # trace の始まる前に止まった実行は None（画面は「未計測」）。
     usage: RunModelUsage | None = None
     # 一覧の「token」の列（合計の token と計測の状態。`usage` から応答だけに入れる。#3543）。
     # 利用量の記録の無い行はどちらも None（0 にしない）。
@@ -2392,7 +2276,7 @@ class SimilarHistoryData(BaseModel):
 
     items: list[SimilarHistoryItem] = Field(default_factory=list)
     used_for_generation: bool = True
-    engine: Nl2SqlEngine | None = None
+    engine: StoredNl2SqlEngine | None = None
 
 
 class ProfileRecommendationRequest(BaseModel):
@@ -2680,337 +2564,10 @@ class AnalyzeData(BaseModel):
     llm_warnings: list[str] = Field(default_factory=list)
 
 
-class AssetRefreshData(BaseModel):
-    """Select AI / Agent asset refresh response."""
-
-    engine: Nl2SqlEngine
-    refreshed: bool
-    status: str = "ready"
-    refreshed_at: str = ""
-    profile_name: str = ""
-    team_name: str = ""
-    warning: str = ""
-    asset_names: dict[str, str] = Field(default_factory=dict)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-
-
-class AssetCleanupData(BaseModel):
-    """Select AI / Agent asset cleanup response."""
-
-    engine: Nl2SqlEngine
-    executed: bool
-    status: str = "error"
-    cleaned_at: str = ""
-    profile_name: str = ""
-    team_name: str = ""
-    warning: str = ""
-    asset_names: dict[str, str] = Field(default_factory=dict)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-    profile_list_refresh_job_id: str = ""
-    profile_list_refresh_required: bool = False
-    profile_list_refresh_reason_code: str = ""
-
-
-class AssetCleanupRequest(AdminExecutionConfirmation):
-    """Select AI / Agent asset cleanup request."""
-
-    profile_id: str | None = None
-    engines: list[Nl2SqlEngine] = Field(
-        default_factory=lambda: [Nl2SqlEngine.SELECT_AI_AGENT, Nl2SqlEngine.SELECT_AI]
-    )
-
-
 class ProfileDeleteData(BaseModel):
-    """業務 profile 削除と Oracle asset cleanup の結果。"""
+    """業務 profile 削除の結果。"""
 
     profile: Nl2SqlProfile
-    oracle_cleanup: list[AssetCleanupData] = Field(default_factory=list)
-
-
-class SelectAiDbProfile(BaseModel):
-    """Oracle DBMS_CLOUD_AI profile metadata."""
-
-    name: str
-    status: str = "unknown"
-    owner: str = ""
-    created_at: str = ""
-    description: str = ""
-    category: str = ""
-    object_list: list[dict[str, Any]] = Field(default_factory=list)
-    tables: list[str] = Field(default_factory=list)
-    views: list[str] = Field(default_factory=list)
-    region: str = ""
-    model: str = ""
-    embedding_model: str = ""
-    schema_text: str = ""
-    context_ddl: str = ""
-    attributes: dict[str, Any] = Field(default_factory=dict)
-
-
-class SelectAiDbProfileRefreshMode(StrEnum):
-    """Oracle DB profile list refresh の実行範囲。"""
-
-    FULL = "full"
-    TARGETED = "targeted"
-
-
-class SelectAiDbProfileRefreshStatus(StrEnum):
-    """Oracle DB profile list refresh job の状態。"""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    DONE = "done"
-    ERROR = "error"
-
-
-class SelectAiDbProfileRefreshPhase(StrEnum):
-    """Oracle DB profile list refresh job の進捗段階。"""
-
-    QUEUED = "queued"
-    FETCHING = "fetching"
-    PERSISTING = "persisting"
-    DONE = "done"
-
-
-class SelectAiDbProfileRefreshTarget(BaseModel):
-    """Targeted DB profile refresh で確認する profile。"""
-
-    profile_name: str
-    expected_state: Literal["present", "absent", "unknown"] = "unknown"
-
-
-class SelectAiDbProfileRefreshJobData(BaseModel):
-    """Oracle DB profile list refresh job."""
-
-    worker_id: str = ""
-    attempt: int = 0
-    heartbeat_at: str | None = None
-    lease_expires_at: str | None = None
-    deadline_at: str | None = None
-    job_id: str
-    status: SelectAiDbProfileRefreshStatus = SelectAiDbProfileRefreshStatus.PENDING
-    mode: SelectAiDbProfileRefreshMode = SelectAiDbProfileRefreshMode.FULL
-    source: str = "manual"
-    target_profiles: list[SelectAiDbProfileRefreshTarget] = Field(default_factory=list)
-    requires_full_refresh: bool = False
-    phase: SelectAiDbProfileRefreshPhase = SelectAiDbProfileRefreshPhase.QUEUED
-    created_at: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    total_profiles: int = 0
-    processed_profiles: int = 0
-    scanned_profiles: int = 0
-    changed_profiles: int = 0
-    deleted_profiles: int = 0
-    error_code: str = ""
-    error_message: str = ""
-
-
-class SelectAiDbProfilesData(BaseModel):
-    """Oracle Select AI profile list response."""
-
-    runtime: str = "deterministic"
-    profiles: list[SelectAiDbProfile] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    profile_list_refresh_required: bool = False
-    profile_list_refresh_reason_code: str = ""
-
-
-class SelectAiDbProfileDropRequest(AdminExecutionConfirmation):
-    """Drop an Oracle Select AI profile by exact profile name."""
-
-
-class SelectAiDbProfileDetailData(BaseModel):
-    """Oracle Select AI profile detail response."""
-
-    runtime: str = "deterministic"
-    profile: SelectAiDbProfile
-    warnings: list[str] = Field(default_factory=list)
-
-
-class SelectAiDbProfileUpsertRequest(AdminExecutionConfirmation):
-    """Create/update an Oracle Select AI profile from low-level attributes JSON."""
-
-    profile_name: str = Field(min_length=1)
-    attributes: dict[str, Any] = Field(default_factory=dict)
-    description: str = ""
-    category: str = ""
-    original_name: str = ""
-
-
-class SelectAiDbProfileMutationData(BaseModel):
-    """Oracle Select AI profile create/update/import/export mutation response."""
-
-    runtime: str = "deterministic"
-    executed: bool = False
-    status: str = "error"
-    profile_name: str = ""
-    original_name: str = ""
-    ddl: list[str] = Field(default_factory=list)
-    profile: SelectAiDbProfile | None = None
-    warnings: list[str] = Field(default_factory=list)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-    profile_list_refresh_job_id: str = ""
-    profile_list_refresh_required: bool = False
-    profile_list_refresh_reason_code: str = ""
-
-
-class ProfileSyncJobStatus(StrEnum):
-    """業務 Profile から Oracle asset へ反映する永続 job 状態。"""
-
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ProfileSyncJobPhase(StrEnum):
-    """Oracle Profile 同期のユーザー向け進捗段階。"""
-
-    QUEUED = "queued"
-    SYNCING_ORACLE_PROFILE = "syncing_oracle_profile"
-    REBUILDING_AGENT_ASSETS = "rebuilding_agent_assets"
-    VERIFYING = "verifying"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ProfileSyncJobRequest(AdminExecutionConfirmation):
-    """Oracle Profile 同期を受け付ける要求。確認語は job へ保存しない。"""
-
-    # 省略すると業務プロファイルの `rebuild_agent_assets_on_save` に従う（#1690）。
-    rebuild_agent_assets: bool | None = None
-
-
-class ProfileSyncJobData(BaseModel):
-    """永続 Oracle Profile 同期 job。"""
-
-    job_id: str = Field(min_length=1)
-    profile_id: str = Field(min_length=1)
-    profile_etag: str = ""
-    original_name: str = ""
-    status: ProfileSyncJobStatus = ProfileSyncJobStatus.QUEUED
-    phase: ProfileSyncJobPhase = ProfileSyncJobPhase.QUEUED
-    rebuild_agent_assets: bool = False
-    oracle_result: SelectAiDbProfileMutationData | None = None
-    agent_result: AssetRefreshData | None = None
-    error_code: str = ""
-    error_message_ja: str = ""
-    # 失敗した工程（phase は失敗時に failed へ変わるため別に残す）。
-    # DBMS_CLOUD_AI Profile の反映は済み、Agent アセットの再構築・検証だけが失敗した
-    # 「一部の成功」を画面が見分けるのに使う。
-    failed_phase: ProfileSyncJobPhase | None = None
-    retry_of_job_id: str = ""
-    created_at: str = ""
-    deadline_at: str = ""
-    started_at: str = ""
-    finished_at: str = ""
-
-
-class SelectAiCredentialReadinessData(BaseModel):
-    """Select AI の Credential の事前条件（#1683 / #1688）。秘密は含めない。
-
-    業務 Profile の Oracle 反映・Select AI / Select AI Agent での生成・合成データ・SQL 生成評価の
-    前に、画面が Credential の有無を知るのに使う。
-    """
-
-    # Oracle runtime で Credential 名が設定されているときだけ、Credential が要る。
-    credential_required: bool = False
-    credential_name: str = ""
-    # USER_CREDENTIALS で確かめた結果。確かめられなかった（DB に接続できない等）ときは None。
-    credential_exists: bool | None = None
-
-
-class SelectAiProfilesExportData(BaseModel):
-    """Select AI profiles JSON export response."""
-
-    profiles: list[SelectAiDbProfile] = Field(default_factory=list)
-    exported_at: str = ""
-
-
-class SelectAiProfilesImportRequest(AdminExecutionConfirmation):
-    """Import Select AI profile JSON definitions."""
-
-    profiles: list[SelectAiDbProfile] = Field(default_factory=list)
-    replace_existing: bool = False
-
-
-class SelectAiFeedbackEntry(BaseModel):
-    """Oracle Select AI feedback vector table row."""
-
-    content: str = ""
-    sql_id: str = ""
-    sql_text: str = ""
-    attributes: dict[str, Any] = Field(default_factory=dict)
-    raw_attributes: str = ""
-
-
-class SelectAiFeedbackEntriesData(Page[SelectAiFeedbackEntry]):
-    """Select AI feedback（DBMS_CLOUD_AI の feedback vector table）の 1 ページ（offset 型。#1891）。
-
-    絞り込みが無いので `unfiltered_total` は `total` と同じ（ほかの一覧と同じ形にそろえる）。
-    """
-
-    runtime: str = "deterministic"
-    profile_name: str = ""
-    index_name: str = ""
-    table_name: str = ""
-    # feedback vector table の所有者（current schema）と所有者付きの表名。
-    table_owner: str = ""
-    table_qualified_name: str = ""
-    unfiltered_total: int = 0
-    warnings: list[str] = Field(default_factory=list)
-
-
-class SelectAiFeedbackDeleteRequest(BaseModel):
-    """Delete one Oracle Select AI feedback entry by SQL text."""
-
-    profile_name: str = Field(min_length=1)
-    sql_text: str = Field(min_length=1)
-
-
-class SelectAiFeedbackVectorIndexRequest(BaseModel):
-    """Update Oracle Select AI feedback vector index attributes."""
-
-    profile_name: str = Field(min_length=1)
-    similarity_threshold: float = Field(default=0.9, ge=0.1, le=0.95)
-    match_limit: int = Field(default=3, ge=1, le=5)
-
-
-class SelectAiFeedbackAddRequest(BaseModel):
-    """Add one DBMS_CLOUD_AI feedback item from the SQL generation flow."""
-
-    profile_id: str = Field(default="default", min_length=1)
-    profile_name: str = ""
-    question: str = Field(min_length=1)
-    feedback_type: Literal["positive", "negative"] = "positive"
-    response: str = ""
-    feedback_content: str = ""
-    generated_sql: str = ""
-
-    @model_validator(mode="after")
-    def validate_feedback_payload(self) -> SelectAiFeedbackAddRequest:
-        if self.feedback_type == "negative" and not self.response.strip():
-            raise ValueError("negative feedback では修正SQL(response)が必須です。")
-        return self
-
-
-class SelectAiFeedbackAddData(BaseModel):
-    """DBMS_CLOUD_AI feedback ADD mutation response."""
-
-    runtime: str = "deterministic"
-    executed: bool = False
-    status: str = "error"
-    profile_name: str = ""
-    index_name: str = ""
-    table_name: str = ""
-    sql_text: str = ""
-    stored_feedback_type: str = ""
-    plsql_preview: str = ""
-    warnings: list[str] = Field(default_factory=list)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class AdminFeedbackReviewRequest(BaseModel):
@@ -3020,9 +2577,6 @@ class AdminFeedbackReviewRequest(BaseModel):
     rating: FeedbackRating
     # 「違う」のときは管理者レビューコメントが必須（画面の欄と同じ規則・文言。#540）。
     feedback_content: str = Field(default="", validate_default=True)
-    register_select_ai_feedback: bool = False
-    select_ai_response: str = ""
-    select_ai_profile_name: str = ""
 
     @field_validator("feedback_content")
     @classmethod
@@ -3051,105 +2605,7 @@ class AdminFeedbackReviewData(BaseModel):
     rating: FeedbackRating
     saved: bool
     feedback_content: str = ""
-    select_ai_feedback: SelectAiFeedbackAddData | None = None
     similar_history_publish: SimilarHistoryPublishData | None = None
-
-
-class SelectAiFeedbackMutationData(BaseModel):
-    """Oracle Select AI feedback mutation response."""
-
-    runtime: str = "deterministic"
-    executed: bool = False
-    status: str = "error"
-    profile_name: str = ""
-    index_name: str = ""
-    table_name: str = ""
-    warnings: list[str] = Field(default_factory=list)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-
-
-class AgentTeamRunRequest(BaseModel):
-    """Select AI Agent team run request."""
-
-    prompt: str = Field(min_length=1)
-    team_name: str = ""
-    profile_id: str | None = None
-    conversation_id: str = ""
-    tool_name: str = ""
-
-
-class AgentTeamRunData(BaseModel):
-    """Select AI Agent team run response."""
-
-    team_name: str
-    prompt: str
-    generated_sql: str = ""
-    conversation_id: str = ""
-    runtime: str = "deterministic"
-    warnings: list[str] = Field(default_factory=list)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-
-
-class SelectAiAgentAsset(BaseModel):
-    """Select AI Agent asset names and attributes."""
-
-    profile_id: str = ""
-    profile_name: str = ""
-    tool_name: str = ""
-    agent_name: str = ""
-    task_name: str = ""
-    team_name: str = ""
-    source: str = "state"
-    attributes: dict[str, Any] = Field(default_factory=dict)
-
-
-class SelectAiAgentAssetsData(BaseModel):
-    """Select AI Agent assets response."""
-
-    runtime: str = "deterministic"
-    items: list[SelectAiAgentAsset] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-
-
-class AgentToolRunRequest(BaseModel):
-    """Select AI Agent tool run request."""
-
-    prompt: str = Field(min_length=1)
-    tool_name: str = Field(min_length=1)
-    conversation_id: str = ""
-
-
-class AgentConversationCreateRequest(BaseModel):
-    """Create Select AI Agent conversation request."""
-
-    profile_id: str | None = None
-    team_name: str = ""
-
-
-class AgentConversationCreateData(BaseModel):
-    """Create Select AI Agent conversation response."""
-
-    conversation_id: str = ""
-    runtime: str = "deterministic"
-    warnings: list[str] = Field(default_factory=list)
-
-
-class AgentConversationItem(BaseModel):
-    """Select AI Agent conversation prompt item."""
-
-    conversation_id: str
-    prompt: str
-    response: str = ""
-    created_at: str = ""
-    team_name: str = ""
-
-
-class AgentConversationsData(BaseModel):
-    """Select AI Agent conversation history response."""
-
-    runtime: str = "deterministic"
-    items: list[AgentConversationItem] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
 
 
 class ReverseSqlRequest(BaseModel):
@@ -3465,60 +2921,12 @@ class MetadataSqlGenerateData(BaseModel):
     timing: TimingEnvelope
 
 
-class SyntheticDataGenerateRequest(AdminExecutionConfirmation):
-    """DBMS_CLOUD_AI synthetic table data generation request."""
-
-    table_name: str = ""
-    object_list: list[str] = Field(default_factory=list)
-    row_count: int = Field(default=10, ge=1, le=10000)
-    rows_per_table: int | None = Field(default=None, ge=1, le=10000)
-    profile_id: str | None = None
-    profile_name: str = ""
-    user_prompt: str = ""
-    extra_prompt: str = ""
-    sample_rows: int = Field(default=0, ge=0, le=100)
-    use_comments: bool = True
-
-
-class SyntheticDataOperationData(BaseModel):
-    """Synthetic DB data generation operation response."""
-
-    table_name: str
-    object_list: list[str] = Field(default_factory=list)
-    row_count: int
-    executed: bool = False
-    runtime: str = "deterministic"
-    status: str = "error"
-    message: str = ""
-    warnings: list[str] = Field(default_factory=list)
-    engine_meta: dict[str, Any] = Field(default_factory=dict)
-    timing: TimingEnvelope
-
-
-class SyntheticDataResultsData(BaseModel):
-    """Synthetic DB data result preview from a generated table."""
-
-    table_name: str
-    runtime: str = "deterministic"
-    results: QueryResults
-    warnings: list[str] = Field(default_factory=list)
-
-
 class DiagnosticCheck(BaseModel):
     """接続/設定診断の 1 項目。"""
 
     name: str
     status: str
     message: str
-
-
-class AgentPrivilegeCheckData(BaseModel):
-    """Select AI Agent privilege / dictionary-view readiness check response."""
-
-    runtime: str = "deterministic"
-    status: str = "warning"
-    checks: list[DiagnosticCheck] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
 
 
 class DiagnosticReadiness(BaseModel):

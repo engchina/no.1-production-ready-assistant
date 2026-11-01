@@ -1209,8 +1209,6 @@ class UnsupportedFileInputTransport(FakeEnterpriseAiTransport):
 
 def _oci_settings() -> Settings:
     return Settings.model_construct(
-        oci_region="ap-osaka-1",
-        oci_compartment_id="ocid1.compartment.oc1..example",
         oci_enterprise_ai_endpoint="https://enterprise-ai.example",
         oci_enterprise_ai_project_ocid="ocid1.generativeaiproject.oc1..example",
         oci_enterprise_ai_api_key="sk-test-secret",

@@ -52,7 +52,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/answer-notice" },
   { path: "/runtimes" },
   { path: "/settings/mcp-connections" },
-  { path: "/settings/oci" },
   { path: "/settings/upload-storage" },
   { path: "/settings/model" },
   { path: "/settings/database" },

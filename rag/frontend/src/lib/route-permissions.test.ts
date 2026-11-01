@@ -220,7 +220,7 @@ describe("ルートの権限", () => {
   });
 
   it("/settings はシステム設定のうち最初に開ける画面、無ければ既定の入口", () => {
-    expect(settingsEntryRoute(() => true)).toBe(APP_ROUTES.settingsOci);
+    expect(settingsEntryRoute(() => true)).toBe(APP_ROUTES.settingsUploadStorage);
     expect(settingsEntryRoute(allow(MENU_PERMISSIONS.settingsModel, MENU_PERMISSIONS.search))).toBe(
       APP_ROUTES.settingsModel
     );

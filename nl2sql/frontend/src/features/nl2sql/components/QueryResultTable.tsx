@@ -21,7 +21,7 @@ import type { QueryResults } from "../types";
 
 /**
  * 画面のデータの結果（SQL 生成・SELECT SQL・管理 SQL の実行の結果、テーブル・ビューのデータの表示、取り込みの
- * サンプル行、合成データの結果）。チャットの結果と同じ共通の `ResultTable`（#1154 / #1178）で、要約・先頭の行の
+ * サンプル行）。チャットの結果と同じ共通の `ResultTable`（#1154 / #1178）で、要約・先頭の行の
  * プレビュー（表の中で縦横スクロール）・「すべての行を見る」（広いシートでページ送り）・CSV（取得した行だけ）を出す。
  * 表・ページング・要約は製品で持たない。ここは NL2SQL の API の形の変換と、表の名前・実行の接続を渡すだけ。
  */
@@ -78,11 +78,7 @@ export function QueryResultTable({
               />
             ) : null}
             {contextKey ? (
-              <StatusBadge
-                icon={false}
-                variant={results.vpd_context_enforced ? "info" : "neutral"}
-                label={t(contextKey)}
-              />
+              <StatusBadge icon={false} variant="neutral" label={t(contextKey)} />
             ) : null}
           </span>
         ) : null

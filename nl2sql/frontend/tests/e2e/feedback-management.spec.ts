@@ -12,7 +12,7 @@ import {
 } from "../../../../platform/packages/ui/e2e/layout-checks";
 
 /**
- * フィードバック管理（#968）: 履歴検索のフォーカス・数値欄のキーボード入力・Select AI feedback の登録先。
+ * フィードバック管理（#968）: 履歴検索のフォーカス・数値欄のキーボード入力。
  */
 
 function envelope(route: Route, data: unknown, status = 200) {
@@ -23,7 +23,7 @@ function feedbackItem(id: string, question: string) {
   return {
     id,
     question,
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     profile_id: "sales",
     profile_name: "売上",
     profile_category: "販売",
@@ -44,10 +44,8 @@ function feedbackItem(id: string, question: string) {
 interface MockState {
   feedbackQueries: string[];
   feedbackRequests: URL[];
-  vectorIndexPayload: unknown;
   feedbackConfigPayload: unknown;
   adminReviewPayload: Record<string, unknown> | null;
-  selectAiFeedbackRequests: URL[];
 }
 
 interface MockOptions {
@@ -56,68 +54,16 @@ interface MockOptions {
   items?: () => Array<Record<string, unknown> & { question: string }>;
   /** フィードバック履歴の応答を待たせる（読み込み中の表示を確かめる）。 */
   feedbackGate?: () => Promise<void> | undefined;
-  /** Select AI feedback の件数（limit / offset で返す。既定 0 件。#1891）。 */
-  selectAiEntryCount?: number;
-}
-
-function selectAiEntry(index: number) {
-  const sqlId = `sql-${String(index).padStart(3, "0")}`;
-  return {
-    content: `select ai showsql 確認 ${index}`,
-    sql_id: sqlId,
-    sql_text: `SELECT ${index} FROM DUAL`,
-    attributes: { sql_id: sqlId },
-    raw_attributes: `{"sql_id":"${sqlId}"}`,
-  };
 }
 
 async function mockFeedbackApi(page: Page, options: MockOptions = {}) {
   const state: MockState = {
     feedbackQueries: [],
     feedbackRequests: [],
-    vectorIndexPayload: null,
     feedbackConfigPayload: null,
     adminReviewPayload: null,
-    selectAiFeedbackRequests: [],
   };
   await mockDatabaseGateReady(page);
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    envelope(route, {
-      runtime: "oracle",
-      // 先頭は対象の履歴（売上）とは別の業務の profile。
-      profiles: [
-        { name: "NL2SQL_HR_PROFILE", owner: "APP" },
-        { name: "NL2SQL_SALES_PROFILE", owner: "APP" },
-      ],
-      warnings: [],
-    })
-  );
-  await page.route("**/api/nl2sql/select-ai/feedback?**", (route) => {
-    const url = new URL(route.request().url());
-    state.selectAiFeedbackRequests.push(url);
-    const profileName = url.searchParams.get("profile_name") ?? "";
-    const total = options.selectAiEntryCount ?? 0;
-    const limit = Number(url.searchParams.get("limit") ?? "10");
-    const offset = Number(url.searchParams.get("offset") ?? "0");
-    const items = Array.from({ length: total }, (_, index) => selectAiEntry(index + 1)).slice(offset, offset + limit);
-    return envelope(route, {
-      runtime: "oracle",
-      profile_name: profileName,
-      index_name: `${profileName}_FEEDBACK_VECINDEX`,
-      table_name: `${profileName}_FEEDBACK_VECINDEX$VECTAB`,
-      items,
-      total,
-      limit,
-      offset,
-      has_next: offset + items.length < total,
-      unfiltered_total: total,
-      warnings: [],
-    });
-  });
-  await page.route("**/api/nl2sql/select-ai/feedback/vector-index", (route) => {
-    state.vectorIndexPayload = route.request().postDataJSON();
-    return envelope(route, { runtime: "oracle", executed: true, status: "updated", warnings: [] });
-  });
   await page.route("**/api/nl2sql/profiles/search**", (route) =>
     envelope(route, {
       items: [{ id: "sales", name: "売上", category: "販売", description: "", archived: false }],
@@ -170,19 +116,6 @@ async function mockFeedbackApi(page: Page, options: MockOptions = {}) {
       saved: true,
       feedback_content: state.adminReviewPayload.feedback_content,
       similar_history_publish: { history_id: "hist-sales-1", status: "published", runtime: "oracle", warnings: [] },
-      select_ai_feedback: {
-        runtime: "oracle",
-        executed: true,
-        status: "added",
-        profile_name: "NL2SQL_SALES_PROFILE",
-        index_name: "",
-        table_name: "",
-        sql_text: "select ai showsql 売上の推移を確認したい",
-        stored_feedback_type: "NEGATIVE",
-        plsql_preview: "",
-        warnings: [],
-        engine_meta: {},
-      },
     });
   });
   return state;
@@ -224,40 +157,10 @@ test("履歴検索は一覧の読み込み中もフォーカスを保ち、続�
   await expect(page.getByRole("button", { name: "フィードバック保存" })).toBeEnabled();
 });
 
-test("ベクトルインデックスと類似検索の数値欄にキーボードで値を入力できる (#968)", async ({ page }) => {
+test("類似検索の数値欄にキーボードで値を入力できる (#968)", async ({ page }) => {
   const state = await mockFeedbackApi(page);
-  await page.goto("/feedback-management?tab=vectorIndex");
+  await page.goto("/feedback-management?tab=similarityIndex");
 
-  const threshold = page.getByLabel("Similarity_Threshold", { exact: true });
-  await threshold.click();
-  await threshold.press("ControlOrMeta+a");
-  await page.keyboard.type("0.5");
-  await expect(threshold).toHaveValue("0.5");
-
-  const matchLimit = page.getByLabel("Match_Limit", { exact: true });
-  await matchLimit.click();
-  await matchLimit.press("ControlOrMeta+a");
-  await page.keyboard.press("Backspace");
-  // 空の間は最小値に置き換えない。
-  await expect(matchLimit).toHaveValue("");
-  await page.keyboard.type("4");
-  await expect(matchLimit).toHaveValue("4");
-  await page.getByRole("button", { name: "ベクトルインデックスを更新" }).click();
-  await expect.poll(() => state.vectorIndexPayload).toEqual({
-    profile_name: "NL2SQL_HR_PROFILE",
-    similarity_threshold: 0.5,
-    match_limit: 4,
-  });
-
-  // 範囲外の値は確定せず、欄を離れたら確定した値の表示に戻す。
-  await threshold.click();
-  await threshold.press("ControlOrMeta+a");
-  await page.keyboard.type("3");
-  await expect(threshold).toHaveValue("3");
-  await matchLimit.click();
-  await expect(threshold).toHaveValue("0.5");
-
-  await page.getByRole("tab", { name: "類似検索インデックス" }).click();
   const similarityMatchLimit = page.locator("#feedback-similarity-match-limit");
   await similarityMatchLimit.click();
   await similarityMatchLimit.press("ControlOrMeta+a");
@@ -269,31 +172,6 @@ test("ベクトルインデックスと類似検索の数値欄にキーボー�
   await expect.poll(() => state.feedbackConfigPayload).toEqual({ similarity_threshold: 0.8, match_limit: 12 });
 });
 
-test("管理者レビューからの Select AI feedback の登録先は対象の履歴の業務プロファイルで決める (#968)", async ({
-  page,
-}, testInfo) => {
-  const state = await mockFeedbackApi(page);
-  // 選んだ履歴は URL の `?feedback=` で開ける（共有のリンク・再読込。#2283）。
-  await page.goto("/feedback-management?tab=appFeedback&feedback=hist-sales-1");
-  await expect(page.getByTestId("app-feedback-selected-question")).toContainText("売上の推移を確認したい");
-
-  const register = page.getByRole("checkbox", { name: "Select AI feedback に登録する" });
-  await expect(register).toHaveAccessibleDescription(
-    "対象の履歴の業務プロファイルの Select AI profile に登録します。"
-  );
-  await register.check();
-  await register.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("feedback-register-select-ai.png") });
-  await page.getByRole("button", { name: "フィードバック保存" }).click();
-  await expect(page.getByText("管理者レビューを保存し、Select AI feedback に登録しました。")).toBeVisible();
-  // 「Select AI feedback」タブで選んでいる profile（先頭の NL2SQL_HR_PROFILE）を送らない。
-  expect(state.adminReviewPayload).toMatchObject({
-    history_id: "hist-sales-1",
-    register_select_ai_feedback: true,
-    select_ai_profile_name: "",
-  });
-});
-
 const LONG_QUESTIONS = [
   "selected_profile の売上を月別・地域別に集計して前年同月比も出してください",
   "sales テーブルの今月の上位 10 顧客を金額の降順で確認したい",
@@ -303,7 +181,7 @@ const LONG_QUESTIONS = [
 function manyFeedbackItems(count: number) {
   return Array.from({ length: count }, (_, index) => ({
     ...feedbackItem(`hist-${String(index + 1).padStart(2, "0")}`, `${index + 1}: ${LONG_QUESTIONS[index % LONG_QUESTIONS.length]}`),
-    engine: index % 2 ? "select_ai" : "enterprise_ai_direct",
+    engine: "enterprise_ai_direct",
     feedback_rating: index % 3 === 0 ? "bad" : "good",
     feedback_comment: index % 3 === 0 ? "集計条件が違います" : "",
     admin_feedback_rating: index % 4 === 0 ? "good" : null,
@@ -398,51 +276,6 @@ test("フィードバック履歴は 26 件以上で 25 件ずつのページを
   expect(state.feedbackRequests.at(-1)?.searchParams.get("offset")).toBe("0");
   expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
   expect(await findClippedPlaceholders(page)).toEqual([]);
-});
-
-test("Select AI feedback はサーバー側で 25 件ずつのページを取り、ページと表示件数を作業状態に残す (#1891)", { tag: "@responsive" }, async ({ page }) => {
-  const state = await mockFeedbackApi(page, { selectAiEntryCount: 27 });
-  await page.goto("/feedback-management?tab=entries");
-  const table = page.getByTestId("feedback-management-entries-scroll-region");
-  const rows = table.locator("tbody tr");
-  const pagination = page.getByTestId("feedback-management-entries-pagination");
-  const detail = page.getByTestId("feedback-management-entry-detail");
-  await expect(rows).toHaveCount(25);
-  // API には 1 ページ分だけを求める（以前は先頭の 50 件を取り、画面の中でページを送っていた）。既定は 25 件。
-  const first = state.selectAiFeedbackRequests.at(-1);
-  expect(first?.searchParams.get("limit")).toBe("25");
-  expect(first?.searchParams.get("offset")).toBe("0");
-  // 件数は API の総数（全件）を一覧の上の 1 か所に出す。
-  await expect(page.getByTestId("feedback-management-entry-count")).toHaveText("全 27 件");
-  await expect(pagination).toContainText("1–25 / 27 件");
-  await expect(pagination).toContainText("1 / 2 ページ");
-
-  // ページ番号を入れて移ると、そのページを API から取り、先頭の行を選ぶ。
-  await jumpToPage(pagination, 2);
-  await expect(rows).toHaveCount(2);
-  await expect(pagination).toContainText("26–27 / 27 件");
-  expect(state.selectAiFeedbackRequests.at(-1)?.searchParams.get("offset")).toBe("25");
-  await expect(detail).toContainText("select ai showsql 確認 26");
-
-  // 再読込のあとも同じページに戻る（作業状態）。
-  await page.reload();
-  await expect(rows).toHaveCount(2);
-  await expect(pagination).toContainText("2 / 2 ページ");
-  expect(state.selectAiFeedbackRequests.at(-1)?.searchParams.get("offset")).toBe("25");
-
-  // 表示件数を変えると 1 ページ目へ戻り、件数を API に渡す。
-  await chooseSelectFieldOption(pagination.getByRole("combobox", { name: "表示件数" }), "10");
-  await expect(rows).toHaveCount(10);
-  await expect(pagination).toContainText("1–10 / 27 件");
-  expect(state.selectAiFeedbackRequests.at(-1)?.searchParams.get("limit")).toBe("10");
-  expect(state.selectAiFeedbackRequests.at(-1)?.searchParams.get("offset")).toBe("0");
-  await jumpToPage(pagination, 3);
-  await expect(rows).toHaveCount(7);
-  await page.reload();
-  await expect(rows).toHaveCount(7);
-  await expect(pagination).toContainText("21–27 / 27 件");
-  expect(state.selectAiFeedbackRequests.at(-1)?.searchParams.get("limit")).toBe("10");
-  expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
 });
 
 test("フィードバック履歴は表示件数を変えると 1 ページ目に戻り、件数を作業状態に残す (#1891)", { tag: "@responsive" }, async ({ page }) => {
@@ -560,8 +393,7 @@ test("再読込の失敗の「再試行」は案内を残したまま押した�
   await page.goto("/feedback-management");
   const header = page.getByTestId("feedback-management-actions");
   const headerRefresh = header.getByRole("button", { name: "最新情報を取得" });
-  await page.getByRole("tab", { name: "Select AI feedback" }).click();
-  await expect(page.getByTestId("feedback-management-entries-workspace")).toBeVisible();
+  await expect(historyList(page)).toBeVisible();
   mode = "fail";
   if (await headerRefresh.isVisible()) {
     await headerRefresh.click();

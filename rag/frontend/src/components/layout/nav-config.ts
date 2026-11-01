@@ -19,7 +19,6 @@ import {
   Scissors,
   Search,
   Server,
-  ShieldAlert,
   TableProperties,
   Tags,
   ThumbsUp,
@@ -70,7 +69,6 @@ export interface NavSection {
 
 /** 共通4項目（共有パッケージ）に付ける RAG の menu 権限（NL2SQL と同じコード）。 */
 const SYSTEM_SETTINGS_MENU_PERMISSIONS = {
-  oci: MENU_PERMISSIONS.settingsOci,
   uploadStorage: MENU_PERMISSIONS.settingsUploadStorage,
   model: MENU_PERMISSIONS.settingsModel,
   database: MENU_PERMISSIONS.settingsDatabase,
@@ -203,13 +201,6 @@ export const NAV_SECTIONS: NavSection[] = [
         sidebarLabelKey: "nav.settingsPrompts.sidebar",
         icon: NotebookPen,
         permission: MENU_PERMISSIONS.settingsPrompts,
-      },
-      {
-        href: APP_ROUTES.settingsGuardrail,
-        labelKey: "nav.settingsGuardrail",
-        sidebarLabelKey: "nav.settingsGuardrail.sidebar",
-        icon: ShieldAlert,
-        permission: MENU_PERMISSIONS.settingsGuardrail,
       },
       {
         href: APP_ROUTES.settingsEvaluation,

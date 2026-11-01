@@ -150,7 +150,7 @@ def test_actual_model_spans_receive_context_but_non_model_spans_do_not(
 ) -> None:
     with operation_trace("task", operation_id="operation-a") as summary:
         with model_call_purpose("sql.generate"):
-            with observed_span("oracle.select_ai"):
+            with observed_span("gen_ai.embeddings"):
                 pass
             with observed_span("gen_ai.chat", attributes={"gen_ai.request.model": "model-a"}):
                 pass
@@ -161,7 +161,7 @@ def test_actual_model_spans_receive_context_but_non_model_spans_do_not(
         with observed_span("gen_ai.chat"):
             pass
     spans = summary.spans
-    model_spans = [item for item in spans if item.operation_name == "oracle.select_ai"]
+    model_spans = [item for item in spans if item.operation_name == "gen_ai.embeddings"]
     assert len(model_spans) == 1
     assert model_spans[0].attributes["pr.gen_ai.purpose"] == "sql.generate"
     chat_spans = [item for item in spans if item.operation_name == "gen_ai.chat"]
@@ -173,12 +173,12 @@ def test_actual_model_spans_receive_context_but_non_model_spans_do_not(
     assert all(
         "pr.gen_ai.purpose" not in item.attributes
         for item in spans
-        if item.operation_name not in {"gen_ai.chat", "oracle.select_ai"}
+        if item.operation_name not in {"gen_ai.chat", "gen_ai.embeddings"}
     )
     assert shutdown_tracing()
     exported = tracing_scope.get_finished_spans()
     assert any(
-        item.name == "oracle.select_ai"
+        item.name == "gen_ai.embeddings"
         and (item.attributes or {}).get("pr.gen_ai.purpose") == "sql.generate"
         for item in exported
     )

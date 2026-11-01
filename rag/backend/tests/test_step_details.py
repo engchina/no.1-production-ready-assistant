@@ -6,9 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.clients.oci_guardrails import OciGuardrailsClient
-from app.config import Settings
-from app.rag.guardrails import GuardrailPolicy
 from app.rag.step_details import (
     answer_guardrail_details,
     field_filter_details,
@@ -150,23 +147,3 @@ def test_answer_guardrail_details(
     assert details is not None
     assert [(item["label"], item["value"]) for item in details["fields"]] == expected_fields
     assert details.get("lines", []) == expected_lines
-
-
-def test_actual_oci_failure_does_not_claim_local_inspection_or_masking(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def fail(self: object, text: str) -> None:
-        raise RuntimeError("合成の検査障害")
-
-    monkeypatch.setattr(OciGuardrailsClient, "inspect_text", fail)
-    answer = "合成の正常な回答"
-    result = GuardrailPolicy(
-        Settings(rag_guardrails_input_enabled=True, rag_guardrails_output_enabled=True)
-    ).validate_answer(answer)
-    details = answer_guardrail_details(result, answer)
-    assert result.backend_degraded and not result.allowed
-    assert details is not None
-    assert details["fields"] == [
-        {"label": "結果", "value": "安全検査を完了できず、回答を止めました"},
-        {"label": "外部の検査", "value": "OCI Guardrails を利用できませんでした"},
-    ]

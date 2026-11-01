@@ -71,7 +71,6 @@ MENU_SETTINGS_EXTERNAL_MCP = "menu.settings_external_mcp"
 MENU_SECURITY_USERS = "menu.security_users"
 MENU_SECURITY_ROLES = "menu.security_roles"
 MENU_SECURITY_API_KEYS = "menu.security_api_keys"
-MENU_SETTINGS_OCI = "menu.settings_oci"
 MENU_SETTINGS_UPLOAD_STORAGE = "menu.settings_upload_storage"
 MENU_SETTINGS_MODEL = "menu.settings_model"
 MENU_SETTINGS_DATABASE = "menu.settings_database"
@@ -118,7 +117,6 @@ _GROUP_EXECUTE = "実行権限"
 _GROUP_MANAGE = "管理権限"
 
 _SYSTEM_SETTINGS_MENUS = (
-    MENU_SETTINGS_OCI,
     MENU_SETTINGS_UPLOAD_STORAGE,
     MENU_SETTINGS_MODEL,
     MENU_SETTINGS_DATABASE,
@@ -177,7 +175,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     # 組み込み Runtime の状態とモデルの確認（#754 / #791）。
     _menu_permission(MENU_RUNTIMES, _GROUP_OPERATIONS, "実行環境"),
     _menu_permission(MENU_SETTINGS_EXTERNAL_MCP, _GROUP_OPERATIONS, "MCP 接続"),
-    _menu_permission(MENU_SETTINGS_OCI, _GROUP_SETTINGS, "OCI 認証"),
     _menu_permission(MENU_SETTINGS_UPLOAD_STORAGE, _GROUP_SETTINGS, "アップロード保存先"),
     _menu_permission(MENU_SETTINGS_MODEL, _GROUP_SETTINGS, "モデル"),
     _menu_permission(MENU_SETTINGS_DATABASE, _GROUP_SETTINGS, "データベース"),
@@ -507,28 +504,14 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("GET", "/settings/tool-policy/tools"): _ADMIN_ONLY,
     ("PATCH", "/settings/tool-policy"): _ADMIN_ONLY,
     # ---- システム設定（3 製品共通。RAG / NL2SQL と同じくメニュー権限で保存・操作できる） ----
-    ("GET", "/settings/upload-storage"): _any(MENU_SETTINGS_UPLOAD_STORAGE, MENU_SETTINGS_OCI),
+    ("GET", "/settings/upload-storage"): _any(MENU_SETTINGS_UPLOAD_STORAGE),
     ("PATCH", "/settings/upload-storage"): _any(MENU_SETTINGS_UPLOAD_STORAGE),
-    # 確認は確認用の object を書くので、保存と同じ権限（#2101）。
-    ("POST", "/settings/upload-storage/test"): _any(MENU_SETTINGS_UPLOAD_STORAGE),
-    ("GET", "/settings/oci"): _any(MENU_SETTINGS_OCI),
-    ("PATCH", "/settings/oci"): _any(MENU_SETTINGS_OCI),
-    ("PATCH", "/settings/oci/object-storage"): _any(
-        MENU_SETTINGS_OCI, MENU_SETTINGS_UPLOAD_STORAGE
-    ),
-    ("POST", "/settings/oci/config/read"): _any(MENU_SETTINGS_OCI),
-    ("POST", "/settings/oci/config/test"): _any(MENU_SETTINGS_OCI),
-    ("POST", "/settings/oci/object-storage/namespace"): _any(
-        MENU_SETTINGS_OCI, MENU_SETTINGS_UPLOAD_STORAGE
-    ),
-    ("POST", "/settings/oci/key-file"): _any(MENU_SETTINGS_OCI),
     ("GET", "/settings/model"): _any(MENU_SETTINGS_MODEL),
     ("PATCH", "/settings/model"): _any(MENU_SETTINGS_MODEL),
     ("POST", "/settings/model/test"): _any(MENU_SETTINGS_MODEL),
     ("GET", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
     ("PATCH", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/wallet"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/wallet/download"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/test"): _any(MENU_SETTINGS_DATABASE),
     # 回答の注意書き（設定は製品ごと。#2449）。
     ("GET", "/settings/answer-notice"): _any(MENU_SETTINGS_ANSWER_NOTICE),

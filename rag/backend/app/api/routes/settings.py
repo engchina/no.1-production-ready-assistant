@@ -29,8 +29,6 @@ from pr_system_settings.model_test_input import (
     model_test_text_context,
     rerank_test_details,
 )
-from pr_system_settings.oci import build_oci_router
-from pr_system_settings.oci import test_oci_config as _test_oci_config
 from pr_system_settings.system_schema import system_tables_status_error
 from pr_system_settings.trace_recording import build_trace_recording_router
 from pr_system_settings.upload_storage import (
@@ -134,12 +132,9 @@ from app.schemas.settings import (
     GraphProfileStatusData,
     GraphSettingsData,
     GraphSettingsUpdate,
-    GuardrailSettingsData,
-    GuardrailSettingsUpdate,
     HuggingFaceSettingsData,
     HuggingFaceSettingsUpdate,
     ModelSettingsTestRequest,
-    OciConfigField,
     ParserAdapterBackendSourceMatrixData,
     ParserAdapterScorecardData,
     ParserAdapterScorecardEntryData,
@@ -167,7 +162,6 @@ from app.security.service import get_security_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-OCI_DIRECTORY_MODE = 0o700
 # RAG 固有の設定（`RAG_*`）の保存先。3製品共通の設定（`PLATFORM_*`）は共通 `.env`
 # （app.config.PLATFORM_ENV_FILE）へ保存する（#211）。
 BACKEND_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -176,13 +170,6 @@ BACKEND_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 # テストで get_settings / PLATFORM_ENV_FILE を差し替えられるよう、呼出時に module の値を参照する。
 router.include_router(
     build_upload_storage_router(
-        get_settings=lambda: get_settings(),
-        env_file=lambda: app_config.PLATFORM_ENV_FILE,
-    )
-)
-# OCI 認証も3製品共通の実装（pr_system_settings.oci。#100）。
-router.include_router(
-    build_oci_router(
         get_settings=lambda: get_settings(),
         env_file=lambda: app_config.PLATFORM_ENV_FILE,
     )
@@ -227,13 +214,6 @@ router.include_router(
 )
 ENV_FILE_MODE = 0o600
 ENV_ASSIGNMENT_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
-OCI_CONFIG_KEYS: tuple[OciConfigField, ...] = (
-    "user",
-    "fingerprint",
-    "tenancy",
-    "region",
-    "key_file",
-)
 
 
 @router.get(
@@ -784,37 +764,6 @@ async def reset_section_rules_settings() -> ApiResponse[SectionRulesSettingsData
     return ApiResponse(data=section_rules_settings())
 
 
-@router.get("/guardrail", response_model=ApiResponse[GuardrailSettingsData])
-async def get_guardrail_settings() -> ApiResponse[GuardrailSettingsData]:
-    """OCI Guardrails の有効状態と準備状況を返す。"""
-    return ApiResponse(data=_guardrail_settings_data(get_settings()))
-
-
-@router.patch("/guardrail", response_model=ApiResponse[GuardrailSettingsData])
-async def update_guardrail_settings(
-    payload: GuardrailSettingsUpdate,
-) -> ApiResponse[GuardrailSettingsData]:
-    """安全チェック設定を backend/.env と現在プロセスへ反映する。"""
-    settings = get_settings()
-    candidate = settings.model_copy(
-        update={
-            "rag_guardrails_input_enabled": payload.input_enabled,
-            "rag_guardrails_output_enabled": payload.output_enabled,
-        }
-    )
-    if (
-        candidate.rag_guardrails_input_enabled or candidate.rag_guardrails_output_enabled
-    ) and _oci_guardrails_readiness_code(candidate):
-        raise HTTPException(
-            status_code=422,
-            detail="OCI Guardrails を有効にする前に、OCI 認証と compartment を設定してください。",
-        )
-    _persist_guardrail_settings(candidate)
-    settings.rag_guardrails_input_enabled = candidate.rag_guardrails_input_enabled
-    settings.rag_guardrails_output_enabled = candidate.rag_guardrails_output_enabled
-    return ApiResponse(data=_guardrail_settings_data(settings))
-
-
 @router.get("/vector-index", response_model=ApiResponse[VectorIndexSettingsData])
 async def get_vector_index_settings() -> ApiResponse[VectorIndexSettingsData]:
     """Vector Index アダプター(索引/検索精度)の選択と解決内容を返す。"""
@@ -1309,54 +1258,6 @@ def _persist_vector_index_settings(settings: Settings) -> None:
         {"RAG_VECTOR_INDEX_PROFILE": settings.rag_vector_index_profile},
         section_comment="# Vector Index アダプター",
         error_detail="検索インデックス設定を backend/.env へ保存できませんでした。",
-    )
-
-
-def _guardrail_settings_data(settings: Settings) -> GuardrailSettingsData:
-    """Settings から安全チェック設定の表示用データを作る。"""
-    return GuardrailSettingsData(
-        input_enabled=settings.rag_guardrails_input_enabled,
-        output_enabled=settings.rag_guardrails_output_enabled,
-        oci_configured=_oci_guardrails_configured(settings),
-        oci_warning_code=_oci_guardrails_readiness_code(settings),
-    )
-
-
-def _oci_guardrails_configured(settings: Settings) -> bool:
-    """OCI Guardrails の compartment と API キー認証を静的に確認する。"""
-    compartment_configured = bool(
-        str(getattr(settings, "oci_guardrails_compartment_id", "") or "").strip()
-        or str(getattr(settings, "oci_compartment_id", "") or "").strip()
-    )
-    return (
-        compartment_configured
-        and _test_oci_config(settings, verify_with_oci=False).status == "success"
-    )
-
-
-def _oci_guardrails_readiness_code(settings: Settings) -> str | None:
-    """OCI Guardrails を使う場合の静的 readiness の問題(なければ None)を返す。"""
-    compartment_configured = bool(
-        str(getattr(settings, "oci_guardrails_compartment_id", "") or "").strip()
-        or str(getattr(settings, "oci_compartment_id", "") or "").strip()
-    )
-    if not compartment_configured:
-        return "oci_guardrails_compartment_missing"
-    if _test_oci_config(settings, verify_with_oci=False).status != "success":
-        return "oci_guardrails_credentials_invalid"
-    return None
-
-
-def _persist_guardrail_settings(settings: Settings) -> None:
-    """安全チェック設定を backend/.env へ永続化する。"""
-    _write_env_values(
-        BACKEND_ENV_FILE,
-        {
-            "RAG_GUARDRAILS_INPUT_ENABLED": str(settings.rag_guardrails_input_enabled).lower(),
-            "RAG_GUARDRAILS_OUTPUT_ENABLED": str(settings.rag_guardrails_output_enabled).lower(),
-        },
-        section_comment="# OCI Guardrails",
-        error_detail="安全チェック設定を backend/.env へ保存できませんでした。",
     )
 
 

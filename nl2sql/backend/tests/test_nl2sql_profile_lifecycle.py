@@ -10,26 +10,20 @@ from fastapi import HTTPException, Request, Response
 from pr_backend_core.api import CursorParams
 from pydantic import ValidationError
 
-from app.features.nl2sql import ontology_router, profile_sync
+from app.features.nl2sql import ontology_router
 from app.features.nl2sql import router as nl2sql_router
 from app.features.nl2sql.incremental_store import (
     IncrementalVersionConflict,
     MemoryIncrementalNl2SqlRepository,
 )
 from app.features.nl2sql.models import (
-    Nl2SqlEngine,
     Nl2SqlProfile,
     ProfilePatchRequest,
-    ProfileSelectAiConfig,
-    ProfileSelectAiProfileRequest,
-    ProfileSyncJobRequest,
     ProfileUpsertRequest,
 )
-from app.features.nl2sql.oracle_adapter import OracleAdapterError
 from app.features.nl2sql.service import (
     Nl2SqlService,
     ProfileNameConflict,
-    ProfileOracleCleanupFailed,
 )
 from app.features.nl2sql.store import MemoryNl2SqlStore
 from app.security.domain import Principal
@@ -53,7 +47,6 @@ def _profile_user_request(allowed_profile_ids: set[str]) -> Request:
         force_password_change=False,
         role_codes=["ANALYST"],
         permissions=set(),
-        data_entitlements=[],
         allowed_profile_ids=set(allowed_profile_ids),
         session_id="session-1",
         csrf_token_hash="csrf",
@@ -67,22 +60,6 @@ def _assert_raises_404(route_call: Callable[[], object]) -> None:
     assert exc.value.status_code == 404
 
 
-class _FakeOracleCleanupAdapter:
-    def __init__(self, *, fail_agent: bool = False) -> None:
-        self.fail_agent = fail_agent
-        self.calls: list[tuple[str, dict[str, str]]] = []
-
-    def drop_select_ai_agent_assets(self, **kwargs: str) -> dict[str, str]:
-        self.calls.append(("agent", kwargs))
-        if self.fail_agent:
-            raise OracleAdapterError("agent cleanup failed")
-        return {"runtime": "oracle", "package": "DBMS_CLOUD_AI_AGENT"}
-
-    def drop_select_ai_profile(self, **kwargs: str) -> dict[str, str]:
-        self.calls.append(("profile", kwargs))
-        return {"runtime": "oracle", "package": "DBMS_CLOUD_AI"}
-
-
 class _ProfileNameConflictService:
     def archive_profile(self, _profile_id: str) -> None:
         raise ProfileNameConflict("SALES_PROFILE")
@@ -91,14 +68,40 @@ class _ProfileNameConflictService:
         raise ProfileNameConflict("SALES_PROFILE")
 
 
-def test_profile_upsert_request_uses_name_for_select_ai_profile_name() -> None:
-    request = ProfileUpsertRequest(
-        name="sales_profile",
-        select_ai_config={"profile_name": "LEGACY_PROFILE"},
-    )
+def test_profile_upsert_request_normalizes_name() -> None:
+    request = ProfileUpsertRequest(name="sales_profile")
 
     assert request.name == "SALES_PROFILE"
-    assert request.select_ai_config.profile_name == "SALES_PROFILE"
+
+
+def test_profile_reads_legacy_rules_into_sql_rules() -> None:
+    """以前の版が DB 側の AI profile の設定に保存した全体ルールを sql_rules として読む（#7）。"""
+
+    profile = Nl2SqlProfile.model_validate(
+        {
+            "id": "legacy",
+            "name": "LEGACY_PROFILE",
+            "sql_rules": ["a"],
+            "select_ai_config": {"additional_instructions": "a\nb\n"},
+            "default_engine": "select_ai",
+        }
+    )
+
+    assert profile.sql_rules == ["a", "b"]
+    assert "select_ai_config" not in profile.model_dump()
+
+
+def test_profile_rules_are_saved_in_sql_rules_without_duplicates() -> None:
+    service = Nl2SqlService(store=MemoryNl2SqlStore())
+
+    created = service.create_profile(
+        Nl2SqlProfile(
+            id="rules", name="RULES_PROFILE", sql_rules=["規則 A", " ", "規則 A", "規則 B"]
+        )
+    )
+
+    assert created.sql_rules == ["規則 A", "規則 B"]
+    assert service.get_profile("rules").sql_rules == ["規則 A", "規則 B"]
 
 
 def test_profile_upsert_request_rejects_invalid_name() -> None:
@@ -256,33 +259,6 @@ def test_learning_material_upload_rejects_large_file_before_read() -> None:
     assert exc_info.value.status_code == 413
 
 
-def test_profile_patch_ignores_separate_select_ai_profile_name(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
-
-    created = nl2sql_router.create_profile(
-        ProfileUpsertRequest(name="sales_profile"),
-        Response(),
-    ).data
-    assert created is not None
-
-    updated = nl2sql_router.update_profile(
-        created.id,
-        ProfilePatchRequest(
-            select_ai_config={"profile_name": "OTHER_PROFILE", "region": "ap-osaka-1"}
-        ),
-        _anon_request(),
-        Response(),
-    ).data
-
-    assert updated is not None
-    assert updated.name == "SALES_PROFILE"
-    assert updated.select_ai_config.profile_name == "SALES_PROFILE"
-    assert updated.select_ai_config.region == "ap-osaka-1"
-
-
 def test_profile_create_update_and_restore_never_materialize_ontology_view(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -300,7 +276,6 @@ def test_profile_create_update_and_restore_never_materialize_ontology_view(
     ).data
     assert created is not None
     assert created.name == "INVOICE_PROFILE"
-    assert created.select_ai_config.profile_name == "INVOICE_PROFILE"
     updated = nl2sql_router.update_profile(
         created.id,
         ProfileUpsertRequest(name="invoice_profile_v2", allowed_tables=["APP.INVOICES"]),  # type: ignore[arg-type]
@@ -309,8 +284,6 @@ def test_profile_create_update_and_restore_never_materialize_ontology_view(
     ).data
     assert updated is not None
     assert updated.name == "INVOICE_PROFILE_V2"
-    assert updated.select_ai_config.profile_name == "INVOICE_PROFILE_V2"
-    assert updated.select_ai_config.previous_profile_name == "INVOICE_PROFILE"
     archived = nl2sql_router.archive_profile(created.id, _anon_request()).data
     assert archived is not None
     assert archived.archived is True
@@ -331,11 +304,6 @@ def test_default_profile_delete_uses_shared_physical_delete_and_cleanup(
         lambda profile_id: cleanup_calls.append(("build", profile_id)),
     )
     monkeypatch.setattr(
-        profile_sync.profile_sync_service,
-        "cancel_for_profile",
-        lambda profile_id: cleanup_calls.append(("sync", profile_id)),
-    )
-    monkeypatch.setattr(
         ontology_router.ontology_runtime,
         "delete_profile_state",
         lambda profile_id: cleanup_calls.append(("runtime", profile_id)),
@@ -345,15 +313,9 @@ def test_default_profile_delete_uses_shared_physical_delete_and_cleanup(
 
     assert deleted is not None
     assert deleted.profile.id == "default"
-    assert [item.engine for item in deleted.oracle_cleanup] == [
-        Nl2SqlEngine.SELECT_AI_AGENT,
-        Nl2SqlEngine.SELECT_AI,
-    ]
-    assert {item.status for item in deleted.oracle_cleanup} == {"skipped"}
     assert service.list_profiles(include_archived=True) == []
     assert cleanup_calls == [
         ("build", "default"),
-        ("sync", "default"),
         ("runtime", "default"),
     ]
 
@@ -368,11 +330,6 @@ def test_default_profile_delete_honors_incremental_preconditions_and_not_found(
     monkeypatch.setattr(
         ontology_router.ontology_build_service,
         "cancel_profile_jobs",
-        lambda _profile_id: 0,
-    )
-    monkeypatch.setattr(
-        profile_sync.profile_sync_service,
-        "cancel_for_profile",
         lambda _profile_id: 0,
     )
     monkeypatch.setattr(
@@ -412,11 +369,6 @@ def test_profile_not_found_routes_return_404_with_incremental_repository(
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     service._incremental_repository = MemoryIncrementalNl2SqlRepository()  # noqa: SLF001
     monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
-    monkeypatch.setattr(
-        profile_sync,
-        "profile_sync_service",
-        profile_sync.ProfileSyncService(service=service),
-    )
 
     request = _anon_request()
     missing_id = "missing-profile"
@@ -424,19 +376,6 @@ def test_profile_not_found_routes_return_404_with_incremental_repository(
         lambda: nl2sql_router.archive_profile(missing_id, request),
         lambda: nl2sql_router.restore_profile(missing_id, request),
         lambda: nl2sql_router.export_profile_learning_material(missing_id, request),
-        lambda: nl2sql_router.upsert_profile_select_ai_profile(
-            missing_id,
-            ProfileSelectAiProfileRequest(confirmation="ADMIN_EXECUTE"),
-            request,
-        ),
-        lambda: nl2sql_router.create_profile_oracle_sync_job(
-            missing_id,
-            ProfileSyncJobRequest(confirmation="ADMIN_EXECUTE"),
-            "sync-missing-profile",
-            request,
-        ),
-        lambda: nl2sql_router.refresh_select_ai_profile(request, profile_id=missing_id),
-        lambda: nl2sql_router.refresh_select_ai_agent_assets(request, profile_id=missing_id),
     ]
 
     for route_call in cases:
@@ -449,11 +388,6 @@ def test_archived_profile_active_only_routes_return_404_with_incremental_reposit
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     service._incremental_repository = MemoryIncrementalNl2SqlRepository()  # noqa: SLF001
     monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
-    monkeypatch.setattr(
-        profile_sync,
-        "profile_sync_service",
-        profile_sync.ProfileSyncService(service=service),
-    )
     request = _anon_request()
 
     archived = nl2sql_router.archive_profile("default", request).data
@@ -462,19 +396,6 @@ def test_archived_profile_active_only_routes_return_404_with_incremental_reposit
 
     cases: list[Callable[[], object]] = [
         lambda: nl2sql_router.export_profile_learning_material("default", request),
-        lambda: nl2sql_router.upsert_profile_select_ai_profile(
-            "default",
-            ProfileSelectAiProfileRequest(confirmation="ADMIN_EXECUTE"),
-            request,
-        ),
-        lambda: nl2sql_router.create_profile_oracle_sync_job(
-            "default",
-            ProfileSyncJobRequest(confirmation="ADMIN_EXECUTE"),
-            "sync-archived-profile",
-            request,
-        ),
-        lambda: nl2sql_router.refresh_select_ai_profile(request, profile_id="default"),
-        lambda: nl2sql_router.refresh_select_ai_agent_assets(request, profile_id="default"),
     ]
 
     for route_call in cases:
@@ -521,98 +442,22 @@ def test_restricted_profile_search_uses_current_summary_etag_after_update(
     assert second_page.items[0].etag != first_summary.etag
 
 
-def test_profile_delete_executes_oracle_agent_then_profile_cleanup(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_profile_delete_with_result_returns_deleted_profile() -> None:
     service = Nl2SqlService(store=MemoryNl2SqlStore())
-    adapter = _FakeOracleCleanupAdapter()
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_oracle_adapter", adapter)
 
-    deleted = service.delete_profile_with_oracle_cleanup("default")
+    deleted = service.delete_profile_with_result("default")
 
     assert deleted.profile.id == "default"
-    assert [item.engine for item in deleted.oracle_cleanup] == [
-        Nl2SqlEngine.SELECT_AI_AGENT,
-        Nl2SqlEngine.SELECT_AI,
-    ]
-    assert [call[0] for call in adapter.calls] == ["agent", "profile"]
-    assert adapter.calls[0][1]["profile_name"] == "NL2SQL_DEFAULT_PROFILE"
-    assert adapter.calls[0][1]["team_name"] == "NL2SQL_DEFAULT_TEAM"
-    assert adapter.calls[1][1]["profile_name"] == "NL2SQL_DEFAULT_PROFILE"
+    assert "oracle_cleanup" not in deleted.model_dump()
     assert service.list_profiles(include_archived=True) == []
 
 
-def test_cleanup_archived_profile_uses_stored_select_ai_profile_name(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    adapter = _FakeOracleCleanupAdapter()
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_oracle_adapter", adapter)
-    profile = service.create_profile(
-        Nl2SqlProfile(
-            id="sales",
-            name="SALES_PROFILE",
-            select_ai_config=ProfileSelectAiConfig(profile_name="SALES_PROFILE"),
-        )
-    )
-    service.archive_profile(profile.id)
-
-    cleanup = service.cleanup_select_ai_assets(
-        profile_id=profile.id,
-        engines=[Nl2SqlEngine.SELECT_AI],
-        confirmation="ADMIN_EXECUTE",
-    )
-
-    assert cleanup[0].profile_name == "SALES_PROFILE"
-    assert adapter.calls == [("profile", {"profile_name": "SALES_PROFILE"})]
-
-
-def test_profile_delete_stale_etag_does_not_cleanup_oracle_assets(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_profile_delete_stale_etag_keeps_profile() -> None:
     repository = MemoryIncrementalNl2SqlRepository()
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     service._incremental_repository = repository  # noqa: SLF001
-    adapter = _FakeOracleCleanupAdapter()
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_oracle_adapter", adapter)
 
     with pytest.raises(IncrementalVersionConflict):
-        service.delete_profile_with_oracle_cleanup("default", expected_etag="stale")
+        service.delete_profile_with_result("default", expected_etag="stale")
 
-    assert adapter.calls == []
-    assert service.get_profile("default").id == "default"
-
-
-def test_profile_delete_oracle_cleanup_failure_keeps_profile(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    adapter = _FakeOracleCleanupAdapter(fail_agent=True)
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_oracle_adapter", adapter)
-
-    with pytest.raises(ProfileOracleCleanupFailed):
-        service.delete_profile_with_oracle_cleanup("default")
-
-    assert [call[0] for call in adapter.calls] == ["agent", "profile"]
-    assert service.get_profile("default").id == "default"
-
-
-def test_profile_delete_oracle_cleanup_failure_returns_502(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = Nl2SqlService(store=MemoryNl2SqlStore())
-    adapter = _FakeOracleCleanupAdapter(fail_agent=True)
-    monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_oracle_adapter", adapter)
-    monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
-
-    with pytest.raises(HTTPException) as exc:
-        nl2sql_router.delete_profile("default", _anon_request())
-
-    assert exc.value.status_code == 502
-    assert "業務プロファイルは削除していません" in str(exc.value.detail)
     assert service.get_profile("default").id == "default"

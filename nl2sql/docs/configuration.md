@@ -4,8 +4,8 @@
 
 | ファイル | 雛形（設定カタログ） | 置くもの | 変数名 |
 |---|---|---|---|
-| 共通 `.env`（`platform/.env`） | `platform/.env.example` | 3製品共通の設定。OCI 認証・データベース接続・モデル・アップロード保存先・構成管理者・認証ポリシー | `PLATFORM_*` |
-| 製品 `.env`（`nl2sql/backend/.env`） | `nl2sql/backend/.env.example` | NL2SQL だけが使う設定。アプリ・認証の有効 / 無効・Deep Data Security・NL2SQL runtime・Select AI など | `NL2SQL_*` |
+| 共通 `.env`（`platform/.env`） | `platform/.env.example` | 3製品共通の設定。データベース接続・モデル・アップロード保存先・構成管理者・認証ポリシー | `PLATFORM_*` |
+| 製品 `.env`（`nl2sql/backend/.env`） | `nl2sql/backend/.env.example` | NL2SQL だけが使う設定。アプリ・認証の有効 / 無効・NL2SQL runtime・SQL の生成など | `NL2SQL_*` |
 
 - backend は共通 `.env` → 製品 `.env` の順に読む。同じ変数が環境変数にあれば環境変数が優先される。
 - 共通 `.env` の場所は環境変数 `PLATFORM_ENV_FILE` で変えられる（既定は monorepo の `platform/.env`）。
@@ -19,11 +19,9 @@
 
 | 画面 / 操作 | 書き込み先 |
 |---|---|
-| システム設定（OCI 認証・アップロード保存先・データベース・ADB・モデルの API key） | 共通 `.env`（`PLATFORM_*`） |
+| システム設定（アップロード保存先・データベース・ADB・モデルの API key） | 共通 `.env`（`PLATFORM_*`） |
 | モデルの非 secret 設定 | `PLATFORM_MODEL_SETTINGS_FILE`（既定 `model-settings.json`。相対パスは共通 `.env` の場所から解決し、3製品で共有する） |
 | 構成管理者のパスワード変更 | 共通 `.env` の `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` |
-| Deep Data Security の DATA USER パスワード | 製品 `.env` の `NL2SQL_ORACLE_DEEPSEC_*` |
-| Select AI Credential の作成 | 製品 `.env` の `NL2SQL_SELECT_AI_CREDENTIAL_NAME` / `NL2SQL_SELECT_AI_REGION` |
 
 ## 優先順位と secret
 
@@ -38,7 +36,7 @@ OCI Enterprise AI の接続はプライマリ接続・セカンダリ接続・�
 次回のモデル設定保存で `.env` へ移し、secret を含まない v2 JSON へ更新する。
 API 応答は `has_api_key`、`secret_source`、`legacy_secret_detected` だけを返す。
 
-OCI SDK の profile は `PLATFORM_OCI_CONFIG_PROFILE` だけで決める（空なら `DEFAULT`）。旧 `OCI_PROFILE` は読まない。
+OCI SDK・OCI config は使わない（#11）。`PLATFORM_OCI_CONFIG_*` と旧 `OCI_PROFILE` は読まない。
 
 ## 設定の監査
 
@@ -82,7 +80,6 @@ OCI Compute（`platform/deploy` で配備した環境）での手順を示す。
 
    ```bash
    sudo systemctl stop production-ready-nl2sql-schema-refresh-worker.service \
-     production-ready-nl2sql-synthetic-worker.service \
      production-ready-nl2sql-quality-evaluation-worker.service \
      production-ready-nl2sql-ontology-worker.service
    sudo systemctl stop production-ready-nl2sql-backend.service
@@ -105,8 +102,8 @@ OCI Compute（`platform/deploy` で配備した環境）での手順を示す。
    ```
 
    - 旧 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD`（`APP_ADMIN_LOGIN_USER_*` より前の旧名）と `OCI_PROFILE` は移さない。
-     使っていた場合は `platform/.env` に `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` /
-     `PLATFORM_ADMIN_LOGIN_USER_PASSWORD`、`PLATFORM_OCI_CONFIG_PROFILE` を手で設定する。
+     管理者を使っていた場合は `platform/.env` に `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` /
+     `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` を手で設定する（`OCI_PROFILE` は OCI SDK を使わないので不要。#11）。
    - `model-settings.json` は共通 `.env` の場所になければコピーされる（`PLATFORM_MODEL_SETTINGS_FILE` を
      絶対パスで指定している場合はそのファイルを使い続ける）。
 

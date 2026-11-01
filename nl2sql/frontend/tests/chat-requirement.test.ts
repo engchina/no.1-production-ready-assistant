@@ -24,7 +24,7 @@ import type {
 const request: ChatJobRequest = {
   question: "多い順にして",
   profile_id: "sales",
-  engine: "select_ai",
+  engine: "enterprise_ai_direct",
   previous_job_id: "job-1",
   client_job_id: "11111111-1111-4111-8111-111111111111",
 };
@@ -79,7 +79,7 @@ test("自動の検査は会話の続き（前のターン）とチャットの�
   assert.deepEqual(chatRequirementSessionRequest(request), {
     question: "多い順にして",
     profile_id: "sales",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     clarification_mode: "guided",
     chat: true,
     previous_job_id: "job-1",

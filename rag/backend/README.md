@@ -71,9 +71,9 @@ Backend は常に以下の OCI / Oracle 実装を使います。local / oci の�
 - `OciEnterpriseAiClient`: OCI Enterprise AI の VLM / LLM
 - `OciGenAiClient`: OCI Generative AI の Cohere Embed v4 / Rerank v4 fast
 - `OracleClient`: python-oracledb pool + Oracle AI Vector Search / Oracle Text
-- `ObjectStorageClient`: OCI Object Storage SDK による原本ファイル保存 / 取得
+- `FileStorageClient`（`app/clients/file_storage.py`）: ローカルの保存先（`PLATFORM_LOCAL_STORAGE_DIR`）への原本ファイル・成果物の保存 / 取得（OCI Object Storage は #11 で削除）
 
-設定は、3製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース。`PLATFORM_*`）を共通 `.env`（リポジトリの `platform/.env`、場所は `PLATFORM_ENV_FILE` で上書き可）、RAG 固有の設定（`RAG_*`）を `backend/.env` に置きます。環境変数 → 共通 `.env` → `backend/.env` の順に読み、旧名（接頭辞のない名前や `HF_TOKEN` / `HF_ENDPOINT`）は読みません（#211。既存環境の移行は [docs/deployment.md](../docs/deployment.md) の「既存環境の更新手順（#211）」）。システム設定画面（OCI 認証・アップロード保存先・データベース）は共通 `.env` に、RAG 固有の設定画面は `backend/.env` に保存します。
+設定は、3製品共通の設定（アップロード保存先・モデル・データベース。`PLATFORM_*`）を共通 `.env`（リポジトリの `platform/.env`、場所は `PLATFORM_ENV_FILE` で上書き可）、RAG 固有の設定（`RAG_*`）を `backend/.env` に置きます。環境変数 → 共通 `.env` → `backend/.env` の順に読み、旧名（接頭辞のない名前や `HF_TOKEN` / `HF_ENDPOINT`）は読みません（#211。既存環境の移行は [docs/deployment.md](../docs/deployment.md) の「既存環境の更新手順（#211）」）。システム設定画面（アップロード保存先・データベース）は共通 `.env` に、RAG 固有の設定画面は `backend/.env` に保存します。
 
 モデル設定画面で保存した Enterprise AI / Generative AI 設定は `PLATFORM_MODEL_SETTINGS_FILE` の JSON を正本として永続化します。既定は `model-settings.json` で、相対パスは共通 `.env` と同じディレクトリ（`platform/`）を基準に解決され、3製品で共有します（知らない key は保存時に残します）。`.env` は初期値・bootstrap 用で、保存済み JSON が存在する場合は JSON が優先されます。Enterprise AI API key は JSON には書かず、共通 `.env` の `PLATFORM_OCI_ENTERPRISE_AI_API_KEY` に保存します（3製品共通の `pr_system_settings.model`。#103）。文書解析の画面で保存した解析エンジンと外部接続は、共有の JSON ではなく RAG 専用の `RAG_PARSER_SETTINGS_FILE`（既定 `parser-settings.json`。相対パスは `backend/` 基準）に保存します（#1701）。旧形式のモデル設定の JSON に残っている key は、次にモデル設定を保存したときに `.env` へ移します。画面で保存した key は、プロセスの環境変数より優先されます（画面で削除すると環境変数の値に戻ります）。環境変数から来ただけの key は `.env` に書きません。backend は親ディレクトリを `0700`、ファイルを `0600` に補正して保存します。
 
@@ -95,7 +95,7 @@ Embedding は Oracle `VECTOR(1024, FLOAT32)` に合わせて 1024 次元（`text
 
 Oracle は共有 connection pool を遅延初期化し、アプリ終了時に閉じます。document/chunk の永続化、HNSW vector index + `FETCH APPROX ... WITH TARGET ACCURACY` による vector search、Oracle Text `CONTAINS` による keyword search を同じ tenant filter 付きで実行します。query 側の approximate search 精度は `RAG_ORACLE_VECTOR_TARGET_ACCURACY` で調整できます。
 
-Object Storage は `PLATFORM_OBJECT_STORAGE_REGION` / `PLATFORM_OBJECT_STORAGE_NAMESPACE` / `PLATFORM_OBJECT_STORAGE_BUCKET` を使って OCI SDK の `put_object` / `get_object` を呼び出し、保存後は `oci://namespace/bucket/key` を document table に保存します。取得時は URI の namespace / bucket が設定と一致することを検証し、別 bucket の object を誤って取込しないようにします。
+原本と成果物は `PLATFORM_LOCAL_STORAGE_DIR/objects/` に保存し、`local://key` を document table に保存します（OCI Object Storage は #11 で削除しました。DB に残った以前の `oci://` の参照は読めず、原本が無いものとして扱います）。
 
 ## 認証
 
@@ -134,13 +134,13 @@ RAG のチャット（会話の作成・送信・取得）は画面の機能で�
 
 `GET /api/ready` は外部 API へ ping せず、デプロイ時に注入される設定を依存グループ単位で検証します。
 
-checks は `oci_common`、`enterprise_ai`、`genai`、`oracle`、`object_storage` です。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加え、`PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に接続用の Wallet ファイル（Thin: `tnsnames.ora` / `ewallet.pem`、Thick: `tnsnames.ora` / `sqlnet.ora` / `cwallet.sso`）がそろい、暗号化された `ewallet.pem` を `PLATFORM_ORACLE_WALLET_PASSWORD`（無ければ `PLATFORM_ORACLE_PASSWORD`）で復号でき、DSN が Wallet の別名なら `tnsnames.ora` にあることを要求します。値は `ok` / `missing` / `wallet_not_found` / `wallet_password_invalid` / `invalid` です。
+checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロード保存先のディレクトリを作成・書き込みできるか）です（OCI 認証の `oci_common` と OCI Object Storage の `object_storage` は #11 で削除しました）。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加え、`PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に接続用の Wallet ファイル（Thin: `tnsnames.ora` / `ewallet.pem`、Thick: `tnsnames.ora` / `sqlnet.ora` / `cwallet.sso`）がそろい、暗号化された `ewallet.pem` を `PLATFORM_ORACLE_WALLET_PASSWORD`（無ければ `PLATFORM_ORACLE_PASSWORD`）で復号でき、DSN が Wallet の別名なら `tnsnames.ora` にあることを要求します。値は `ok` / `missing` / `wallet_not_found` / `wallet_password_invalid` / `invalid` です。
 以前の RAG は DB パスワードがあれば Wallet を見ずに `ok` としていましたが、#325 からは **DB パスワードがあっても Wallet が不備なら `wallet_not_found`（DB の状態 API では `not_configured`）** になります。既存環境で `/api/ready` が 503 になった場合は、システム設定 > データベースで Wallet を登録し直してください。
 レスポンスには設定値や secret は含めません。
 
 ## DB の状態（`GET /api/ready/database`）
 
-画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 5 画面（OCI 認証・アップロード保存先・モデル・データベース）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status}` です（DB の起動・停止と状態の取得は扱わない。#10）。
+画面の DB ゲート（3製品共通の `DatabaseGate`）が、システム設定の 3 画面（アップロード保存先・モデル・データベース）以外を開く前に参照します。3製品共通の部品（`pr_system_settings.database_status`。#325）で、常に HTTP 200 を返し、`status` で `ok` / `not_configured` / `unreachable` / `setup_required` を区別します。応答は `{status, check, detail, context_id, schema_status}` です（DB の起動・停止と状態の取得は扱わない。#10）。
 
 1. 設定の判定（上の Readiness の `oracle` と同じ）が `ok` でなければ `not_configured`（接続は試さない）
 2. `test_oracle_connection` の bounded な接続確認に失敗すれば `unreachable`
@@ -223,7 +223,7 @@ Hybrid retrieval は Reciprocal Rank Fusion を使います。`RAG_RRF_K` で RR
 
 `RAG_ANSWER_TIMEOUT_SECONDS`（既定 600 秒で上限と同じ。#1425）で、LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP の `rag_search`・品質評価の 1 ケース）の pipeline 実行時間を制限します（#375 / #383）。回答フローが質問の理解・根拠の評価（CRAG）・回答の生成・監査で LLM を複数回呼ぶためです（以前の検索だけの上限 `RAG_SEARCH_TIMEOUT_SECONDS` は #383 で削除しました）。品質評価はケースの時間切れを工程とともにケースの結果に残して評価を続け、評価全体を job の上限（回答の回数 × `RAG_ANSWER_TIMEOUT_SECONDS` と `RAG_EVALUATION_JOB_TIMEOUT_SECONDS`〔最小値。既定 3600 秒〕の大きいほうで、86400 秒まで。#1430。同期の API は 600 秒）で打ち切ります（`docs/evaluation-observability-guardrails.md`）。timeout 時は `ApiResponse` 形式の 504（SSE は `error` event、チャットは ERROR の回答として保存）を返し、文言には時間切れになった工程（例: 回答フローの「文書検索（1回目）」）と再試行の案内を含めます。`rag_search_audit` には `outcome=error` / `error_stage=timeout` を残します。
 
-安全チェックは `RAG_GUARDRAILS_INPUT_ENABLED`（質問）と `RAG_GUARDRAILS_OUTPUT_ENABLED`（回答）を独立に選びます。既定は両方 false で、有効な側だけ OCI Guardrails を呼びます。PII の検出位置はアプリでマスクし、攻撃・不適切な内容・検査失敗は処理を止めます。Local 検査と根拠の一致率による方針は使いません。詳しくは `docs/evaluation-observability-guardrails.md` を参照してください。
+安全チェック（OCI Guardrails）と設定 `RAG_GUARDRAILS_*` は #11 で削除しました。質問と回答の安全チェックの段は外部の検査を持たない通過（常に許可・指摘なし）で、応答の `guardrail_warnings` などの形は残しています。詳しくは `docs/evaluation-observability-guardrails.md` を参照してください。
 
 ## 評価
 
@@ -235,9 +235,9 @@ CI / nightly では `python -m app.rag.evaluation_cli` を使うと、golden set
 
 ## Staging smoke test
 
-OCI / Oracle staging では各種接続設定を注入し、`PLATFORM_UPLOAD_STORAGE_BACKEND=oci` で原本保存先も OCI Object Storage にした上で、backend container 内から `uv run python -m app.rag.enterprise_ai_probe --surface both --dry-run` と `uv run python -m app.rag.staging_smoke --preflight-only` を先に実行します。Enterprise AI probe は LLM/VLM の request 契約を、staging smoke preflight は `/api/ready` と同じ依存グループに加えて実 smoke が local storage へ逃げていないことを `smoke_object_storage_backend` で確認します。すべて `ok` になったら `uv run python -m app.rag.enterprise_ai_probe --surface both` と `uv run python -m app.rag.staging_smoke` を実行します。
+Oracle / モデルの staging では各種接続設定を注入し（原本の保存先はローカルのディレクトリ。#11）、backend container 内から `uv run python -m app.rag.enterprise_ai_probe --surface both --dry-run` と `uv run python -m app.rag.staging_smoke --preflight-only` を先に実行します。Enterprise AI probe は LLM/VLM の request 契約を、staging smoke preflight は `/api/ready` と同じ依存グループを確認します。すべて `ok` になったら `uv run python -m app.rag.enterprise_ai_probe --surface both` と `uv run python -m app.rag.staging_smoke` を実行します。
 
-本実行では Object Storage put/get、Oracle document 作成、Enterprise AI VLM、chunking、embedding、Oracle indexing、hybrid search、Enterprise AI LLM 生成を 1 回通し、作成した smoke document が citation に含まれることを JSON で確認できます。既定 query は今回作成した一意な `SMOKE-...` marker の引用を要求し、検索は `document_id` filter で新規 document に限定します。既定 query では LLM 回答にも marker が含まれることを gate し、出力には `marker`、実行 `query`、`answer_contains_marker`、`trace_id`、chunk/citation 件数、非機密 `diagnostics`、`cleanup` status が含まれます。既定では evidence として smoke artifact を残すため `cleanup` は `skipped` です。staging DB/Object Storage を汚したくない確認では `--cleanup` を付け、成功・失敗どちらでも作成済み Oracle document/chunk と Object Storage object の削除を best-effort で試みます。回答フローの工程ごとの記録は `diagnostics.answer.execution_steps` で確認します。失敗時は raw 例外 message を出さず、preflight 失敗では `checks`、実行中の失敗では `stage` と `cause_type`、cleanup 指定時は `cleanup` status だけを JSON に含めます。
+本実行では保存先の put/get、Oracle document 作成、Enterprise AI VLM、chunking、embedding、Oracle indexing、hybrid search、Enterprise AI LLM 生成を 1 回通し、作成した smoke document が citation に含まれることを JSON で確認できます。既定 query は今回作成した一意な `SMOKE-...` marker の引用を要求し、検索は `document_id` filter で新規 document に限定します。既定 query では LLM 回答にも marker が含まれることを gate し、出力には `marker`、実行 `query`、`answer_contains_marker`、`trace_id`、chunk/citation 件数、非機密 `diagnostics`、`cleanup` status が含まれます。既定では evidence として smoke artifact を残すため `cleanup` は `skipped` です。staging の DB・保存先を汚したくない確認では `--cleanup` を付け、成功・失敗どちらでも作成済み Oracle document/chunk と保存先の object の削除を best-effort で試みます。回答フローの工程ごとの記録は `diagnostics.answer.execution_steps` で確認します。失敗時は raw 例外 message を出さず、preflight 失敗では `checks`、実行中の失敗では `stage` と `cause_type`、cleanup 指定時は `cleanup` status だけを JSON に含めます。
 
 ```bash
 uv run python -m app.rag.staging_smoke --preflight-only
@@ -284,7 +284,7 @@ app/
   main.py            FastAPI エントリ
   config.py          設定（pydantic-settings）
   api/routes/        health / documents / search / evaluation
-  clients/           oci_enterprise_ai(LLM/VLM) / oci_genai(embed,rerank) / oracle(Oracle AI Database) / object_storage
+  clients/           oci_enterprise_ai(LLM/VLM) / oci_genai(embed,rerank) / oracle(Oracle AI Database) / file_storage(ローカル保存先)
   rag/               chunking / ingestion / pipeline
   schemas/           common / document / search
 tests/

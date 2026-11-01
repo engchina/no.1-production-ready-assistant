@@ -16,12 +16,6 @@ const CASES: ReadonlyArray<{
   to: { link: string; url: RegExp };
 }> = [
   { path: "/settings/upload-storage", api: "/api/settings/upload-storage", to: { link: "データベース設定", url: /\/settings\/database$/ } },
-  {
-    path: "/settings/oci",
-    api: "/api/settings/oci",
-    alsoHold: ["/api/settings/upload-storage"],
-    to: { link: "データベース設定", url: /\/settings\/database$/ },
-  },
   { path: "/settings/model", api: "/api/settings/model", to: { link: "データベース設定", url: /\/settings\/database$/ } },
   { path: "/settings/database", api: "/api/settings/database", to: { link: "モデル設定", url: /\/settings\/model$/ } },
 ];

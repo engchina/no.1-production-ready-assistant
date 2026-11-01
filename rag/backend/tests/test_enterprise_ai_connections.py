@@ -25,7 +25,6 @@ TERTIARY = "https://api.openai.example/v1"
 
 def _settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_compartment_id": "ocid1.compartment.oc1..example",
         "oci_enterprise_ai_endpoint": PRIMARY,
         "oci_enterprise_ai_project_ocid": "ocid1.project.primary",
         "oci_enterprise_ai_api_key": "sk-primary",

@@ -1,6 +1,6 @@
 # No.1 Production Ready Assistant
 
-Oracle / OCI 上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
+Oracle Database（ADB Free）の上で動く本番品質の AI 業務アプリ群（**RAG / NL2SQL / Agent**）と、その共通基盤をまとめた monorepo です。
 
 ## ローカルで動かす（Oracle Autonomous Database Free コンテナ）
 
@@ -162,18 +162,9 @@ OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン
 1 台の Compute に 3 製品を入れる配備のスクリプト（`platform/deploy/`）の DB・更新・確認の仕組みは
 [platform/docs/deployment.md](./platform/docs/deployment.md) にあります。配備は reverse proxy（Nginx など）と TLS の証明書を作りません（#19。[各製品の公開](#各製品の公開reverse-proxy-は利用者の選択)）。
 
-### 配備の前に: Object Storage の bucket
+### アップロードした原本の保存先
 
-アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、配備の直後は Compute のディスク（`/u01/data/production-ready-<製品>` の下）に保存します（`platform/.env` の `PLATFORM_UPLOAD_STORAGE_BACKEND=local`）。保存先を OCI Object Storage にするときは、配備は bucket も IAM の policy も作らないので、次を用意してください。ローカルのまま使うなら要りません。
-
-| 用意するもの | 内容 |
-|---|---|
-| bucket | OCI のコンソールの「ストレージ › オブジェクト・ストレージとアーカイブ・ストレージ › バケット」で作ります。名前は `platform/.env` の既定の `production-ready`（別の名前なら配備の後に画面で指定します）。リージョンは `platform/.env` の `PLATFORM_OBJECT_STORAGE_REGION` です。3 製品は OCI SDK の署名付きの要求で読み書きするので、bucket は公開しなくてかまいません。 |
-| IAM の policy | 「システム設定 › OCI 認証」で設定する API キーのユーザーのグループに、bucket の参照と object の読み書き・削除を許します: `Allow group <group> to read buckets in compartment <bucket の compartment>` と `Allow group <group> to manage objects in compartment <bucket の compartment>` |
-
-- 配備の後に `system_admin` でログインし、「システム設定 › OCI 認証」の「Object Storage」で、namespace を「取得」ボタンで取得して（手入力はできません）リージョンとともに保存します。続けて「システム設定 › アップロード保存先」で「OCI Object Storage」を選び、bucket を指定して「接続を確認」を押します。設定は 3 製品で共通です。
-- 「接続を確認」と保存のときは、bucket の参照（`read buckets`）と、確認用の小さな object の書き込み・読み取り・削除（`manage objects`）を試します。bucket が無い・権限が足りないときは保存しません（#2101）。
-- Object Storage へは Compute から HTTPS（TCP `443`）で出ます。private subnet なら NAT gateway か Service gateway の経路を用意します。
+アップロードした原本（RAG の文書・NL2SQL のオントロジーの資料）は、Compute のディスク（`/u01/data/production-ready-<製品>` の下。`platform/.env` の `PLATFORM_LOCAL_STORAGE_DIR`）に保存します。保存先は「システム設定 › アップロード保存先」でローカルのディレクトリだけを選べます（OCI Object Storage は使いません。#11）。
 
 ## 配備した後の初期設定（推奨のロールとユーザー）
 
@@ -185,7 +176,7 @@ OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン
 | `APP_ADMIN` | アプリ管理者 | 3 製品の「システム設定」**以外**のすべての権限 |
 | `APP_USER` | 一般利用者 | 3 製品の「AI 活用」の権限だけ |
 
-- 「システム設定」（OCI 認証・アップロード保存先・モデル・データベース）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
+- 「システム設定」（アップロード保存先・モデル・データベース）は `APP_ADMIN` にも付けず、`system_admin` だけが変えます（接続と認証の設定を日々の管理の操作で壊さないため）。
 
 動作確認用のユーザー（配備の後に、ロールと権限が意図どおりかを確かめるためのもの）:
 
@@ -219,7 +210,7 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 ```
 
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
-- 2 つのスクリプト（`--status` を除く）は、最初に ADB の状態を確かめ、止まっていれば `platform/.env` の OCI の認証（システム設定 › OCI 認証 で保存した `~/.oci/config`）で起動し、AVAILABLE になってから続けます（最大 600 秒）。起動できないとき（OCI の認証が無い・権限が無い・時間切れ）も止まらず、理由と手で起動する方法を warning として出し、build と再起動を続けます（DB に接続できなくてもアプリケーションは起動します。#1756）。DB に接続できない間も `system_admin` はログインでき、「システム設定 › データベース」から ADB を起動すれば、スクリプトを実行し直さなくてもそのまま DB を使えます（#1762）。要る IAM の権限は [platform/docs/deployment.md](./platform/docs/deployment.md#adb-の自動の起動1745) を参照してください。
+- 2 つのスクリプトは DB の起動・停止を行いません。DB（ADB Free コンテナ）は `docker start adb-free` などで別に動かしておきます（[ローカルで動かす](#ローカルで動かすoracle-autonomous-database-free-コンテナ)）。DB に接続できなくてもアプリケーションは起動し、`system_admin` はログインできます。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
 - 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）と Wallet は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
@@ -250,7 +241,6 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 | [`suite/`](./suite/evaluation/README.md) | 製品をまたぐスイートのアプリケーション。`suite/evaluation` は製品の公開の MCP だけで業務 Agent などを評価する CLI |
 | [`skills/`](./skills/) | 組み込みのスキル（Agent Skills の形式 `skills/<name>/SKILL.md`）。Agent が読み、外部の Agent にも入れられる |
 
-- 準備中（ロードマップ）の機能は各製品の README の「ロードマップ」にあります（RAG: OCI Document Understanding の解析は準備中で、まだ選べません。[rag/README.md](./rag/README.md#ロードマップ)）。
 - 依存は `platform/` → 各製品・`suite/` の一方向です（suite は製品を公開の MCP だけで呼びます）。各製品は `platform/` を相対パスで参照し、backend / frontend / 実行環境（uv の venv）/ 配備はそれぞれ独立しています。
 - 開発・起動方法は各ディレクトリの `README.md` を参照してください。
 

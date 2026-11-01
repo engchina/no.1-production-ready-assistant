@@ -156,11 +156,6 @@ class _FakeNl2SqlService:
         origin: JobOrigin | None = None,
     ) -> JobCreateData:
         job_id = str(uuid.uuid4())
-        # 実装と同じく、生成の方式を省略したジョブは業務プロファイルの既定にする（#1524）。
-        profile = next(
-            item for item in self.profiles if item.id == (request.profile_id or "default")
-        )
-        request = request.with_profile_default_engine(profile.default_engine)
         self.started.append((request, actor_user_uuid, actor_is_system_admin))
         self.origins.append(origin)
         self.jobs[job_id] = StoredJob(
@@ -231,7 +226,7 @@ class _FakeNl2SqlService:
 def _result(request: JobCreateRequest) -> Nl2SqlResult:
     return Nl2SqlResult(
         history_id="history-1",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         original_question=request.question,
         rewritten_question=request.question,
         generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
@@ -365,7 +360,6 @@ class _Users:
             display_name=login_user_id,
             description="",
             permissions=permissions,
-            entitlements=[],
             allowed_profile_ids=allowed_profile_ids or set(),
             actor=self.admin,
         )
@@ -912,23 +906,16 @@ def test_query_passes_row_limit_and_actor_and_returns_result(
     assert len(fake_service.started) == 2
 
 
-def test_query_uses_profile_default_engine(users: _Users, fake_service: _FakeNl2SqlService) -> None:
-    """nl2sql_query は生成の方式を指定せず、業務プロファイルの既定の生成方式で作る（#1524）。"""
+def test_query_uses_enterprise_ai_direct(users: _Users, fake_service: _FakeNl2SqlService) -> None:
+    """nl2sql_query は生成の方式を指定せず、唯一の方式（enterprise_ai_direct）で作る（#7）。"""
 
     user = users.create("mcp.engine", permissions={"menu.query"}, allowed_profile_ids={"sales"})
     token = _token(user.user_uuid)
-    for engine in Nl2SqlEngine:
-        fake_service.profiles[1] = fake_service.profiles[1].model_copy(
-            update={"default_engine": engine}
-        )
-        is_error, _content = _structured(
-            _run(
-                _call("nl2sql_query", {"question": "売上一覧", "profile_id": "sales"}), token=token
-            )
-        )
-        assert is_error is False
-        assert fake_service.started[-1][0].engine == engine
-    assert len(fake_service.started) == len(Nl2SqlEngine)
+    is_error, _content = _structured(
+        _run(_call("nl2sql_query", {"question": "売上一覧", "profile_id": "sales"}), token=token)
+    )
+    assert is_error is False
+    assert fake_service.started[-1][0].engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
 
 
 @pytest.mark.parametrize(

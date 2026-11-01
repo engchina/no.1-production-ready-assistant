@@ -4,7 +4,7 @@
   lifespan とジョブの worker の起動の後に `start_trace_span_store`、終了で
   `stop_trace_span_store` を呼ぶ。主の処理は queue に積むだけで DB を待たない（ジョブの文書の
   保存の往復は増えない。#904）。接続は共通認証と同じ pool（`PLATFORM_*` と同じ schema・同じ
-  接続。状態の保存先・業務データ・Select AI の接続とは混ぜない）。
+  接続。状態の保存先・業務データの接続とは混ぜない）。
 - 状態の保存先が memory（テスト・local）のときは書き手を入れない（span の表は無い）。テストは
   `install_trace_span_store` で fake の接続に差し替える。
 - 読むときは、製品の記録（ジョブ・実行履歴・DB 管理チャットのターン）を今の判定で開いた後に、

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.api.routes import documents as documents_route
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.config import get_settings
 from app.main import app
 from tests.support import AsgiTestClient
@@ -130,12 +130,10 @@ def test_upload_reports_storage_failure_with_guidance(
     oracle = FakeWorkspaceOracle()
     _use_oracle(monkeypatch, oracle)
 
-    async def failing_put(
-        self: ObjectStorageClient, key: str, data: bytes, content_type: str
-    ) -> str:
-        raise ValueError("OCI Object Storage の namespace / bucket が未設定です。")
+    async def failing_put(self: FileStorageClient, key: str, data: bytes, content_type: str) -> str:
+        raise PermissionError("合成の書き込み失敗")
 
-    monkeypatch.setattr(ObjectStorageClient, "put", failing_put)
+    monkeypatch.setattr(FileStorageClient, "put", failing_put)
 
     single = client.post(
         "/api/documents/upload",
@@ -153,36 +151,6 @@ def test_upload_reports_storage_failure_with_guidance(
     assert [(item["status_code"], item["message"]) for item in failed] == [
         (503, documents_route.UPLOAD_STORAGE_FAILED_MESSAGE)
     ]
-    assert oracle.documents == {}
-
-
-def test_upload_reports_missing_bucket_with_bucket_guidance(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """OCI の bucket が無い・権限が無い（404）ときは、bucket 名と権限の確認を案内する（#2093）。"""
-    oracle = FakeWorkspaceOracle()
-    _use_oracle(monkeypatch, oracle)
-
-    class BucketNotFoundError(Exception):
-        status = 404
-        code = "BucketNotFound"
-
-    async def failing_put(
-        self: ObjectStorageClient, key: str, data: bytes, content_type: str
-    ) -> str:
-        raise BucketNotFoundError("bucket not found")
-
-    monkeypatch.setattr(ObjectStorageClient, "put", failing_put)
-
-    response = client.post(
-        "/api/documents/upload",
-        files={"file": ("policy.txt", "経費規程".encode(), "text/plain")},
-    )
-
-    assert response.status_code == 503
-    [message] = response.json()["error_messages"]
-    assert "bucket が見つからないか" in message
-    assert "IAM ポリシー" in message
     assert oracle.documents == {}
 
 

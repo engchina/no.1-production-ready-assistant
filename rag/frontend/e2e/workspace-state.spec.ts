@@ -69,8 +69,8 @@ test.describe("未保存変更の離脱ガード", () => {
     await expect(page.locator("#hf-endpoint")).toBeVisible();
 
     expect(await beforeUnloadPrevented(page)).toBe(false);
-    await openFromSidebar(page, "OCI 認証設定");
-    await expect(page).toHaveURL(/\/settings\/oci$/);
+    await openFromSidebar(page, "アップロード保存先");
+    await expect(page).toHaveURL(/\/settings\/upload-storage$/);
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
   });
 
@@ -83,7 +83,7 @@ test.describe("未保存変更の離脱ガード", () => {
 
     expect(await beforeUnloadPrevented(page)).toBe(true);
 
-    await openFromSidebar(page, "OCI 認証設定");
+    await openFromSidebar(page, "アップロード保存先");
     const dialog = page.getByRole("alertdialog", { name: "変更を破棄しますか" });
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "キャンセル" }).click();
@@ -91,12 +91,12 @@ test.describe("未保存変更の離脱ガード", () => {
     await expect(page).toHaveURL(/\/settings\/huggingface$/);
     await expect(page.locator("#hf-endpoint")).toHaveValue("https://hf-mirror.com");
 
-    await openFromSidebar(page, "OCI 認証設定");
+    await openFromSidebar(page, "アップロード保存先");
     await page
       .getByRole("alertdialog", { name: "変更を破棄しますか" })
       .getByRole("button", { name: "破棄して移動" })
       .click();
-    await expect(page).toHaveURL(/\/settings\/oci$/);
+    await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   });
 
   test("変更があるとブラウザの戻る/進むでも確認し、キャンセルで URL と入力が残る（#138）", async ({ page }) => {
@@ -104,8 +104,8 @@ test.describe("未保存変更の離脱ガード", () => {
     await page.goto("/settings/huggingface");
     await expect(page.locator("#hf-endpoint")).toBeVisible();
     // 未変更の移動と戻るは確認しない（SPA 内の履歴を 1 つ積む）。
-    await openFromSidebar(page, "OCI 認証設定");
-    await expect(page).toHaveURL(/\/settings\/oci$/);
+    await openFromSidebar(page, "アップロード保存先");
+    await expect(page).toHaveURL(/\/settings\/upload-storage$/);
     await page.goBack();
     await expect(page).toHaveURL(/\/settings\/huggingface$/);
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
@@ -121,7 +121,7 @@ test.describe("未保存変更の離脱ガード", () => {
 
     await page.goForward();
     await dialog.getByRole("button", { name: "破棄して移動" }).click();
-    await expect(page).toHaveURL(/\/settings\/oci$/);
+    await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   });
 
   test("保存に成功すると基準が更新され、確認なしで移動できる", async ({ page }) => {
@@ -139,8 +139,8 @@ test.describe("未保存変更の離脱ガード", () => {
     await expect(page.getByText("HuggingFace 設定を保存しました")).toBeVisible();
 
     expect(await beforeUnloadPrevented(page)).toBe(false);
-    await openFromSidebar(page, "OCI 認証設定");
-    await expect(page).toHaveURL(/\/settings\/oci$/);
+    await openFromSidebar(page, "アップロード保存先");
+    await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   });
 
   test("検索・回答プロファイルの下書きは確認のうえ移動しても、このタブに戻ると復元される", async ({ page }) => {

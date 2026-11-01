@@ -1,4 +1,4 @@
-"""Oracle statement 共用执行器。Direct SQL 与 DeepSec 共用此事务/结果契约。"""
+"""Oracle statement の共通の実行部品。直接の SQL の実行がこのトランザクション・結果の契約を使う。"""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ class OracleStatementExecutor:
         """statement 群を順に実行する。
 
         `stop_on_error=True` なら最初の error で止め、後続の statement を実行しない。
-        DDL は暗黙 commit で rollback できないため、順序で安全を保つ処理（DeepSec の
-        Data Grant の付け外しなど）は、失敗した工程の後ろを実行してはならない（#1022）。
+        DDL は暗黙 commit で rollback できないため、順序で安全を保つ処理は、失敗した工程の
+        後ろを実行してはならない（#1022）。
         `query_indexes`（1 始まりの番号）の文は SELECT として実行し、`query_reader` で同じ cursor
         から
         行を読む（返す `(行数, 結果)` の結果は `select_result` に入れる）。

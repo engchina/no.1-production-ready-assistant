@@ -8,7 +8,7 @@ import {
 import { expectSpinnerStable } from "./_spinner-stability";
 
 /**
- * DB ゲート（3製品共通の部品。#325）: システム設定の 5 画面以外は、DB 接続不可/未設定のとき
+ * DB ゲート（3製品共通の部品。#325）: システム設定の 4 画面以外は、DB 接続不可/未設定のとき
  * エラー画面ではなく落ち着いた案内を表示し、状態ごとの導線（未設定・接続できない → データベース設定、
  * 初期化が必要 → システムテーブル）と再試行を出す。設定を開けない利用者には導線を出さず、
  * システム管理者への連絡を案内する（#820）。
@@ -29,7 +29,7 @@ function dbStatus(status: DbStatus, check?: string) {
 }
 
 const SETTINGS_HINT =
-  "OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 
 async function routeAuth(page: Page) {
   await mockLocalAuth(page);
@@ -70,7 +70,7 @@ test("DB 接続済みでも schema 未作成ならシステムテーブルへ案
     actionName: "システムテーブルを開く",
     actionHref: "/settings/system-tables",
     settingsHint:
-      "OCI 認証・アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
+      "アップロード保存先・モデル・データベース・システムテーブルの各設定ページは引き続き利用できます。",
   });
 
   // システムテーブルの画面（運用設定。#658）は未初期化でもゲートに塞がれずに開ける。
@@ -268,7 +268,7 @@ test(`確認中のスピナーは回転しても見た目の重心が上下・�
   await page.screenshot({ path: testInfo.outputPath("db-gate-checking.png") });
 });
 
-test("システム設定の 5 画面は DB が無くてもゲートを通さずに開ける", async ({ page }) => {
+test("システム設定の 4 画面は DB が無くてもゲートを通さずに開ける", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
     route.fulfill({ json: dbStatus("unreachable") })

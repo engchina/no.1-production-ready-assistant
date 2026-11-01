@@ -5,8 +5,6 @@
 
 - ジョブ（生成 + 実行）: 工程の span は実行の全体（`nl2sql.execute`）の子で、SQL の生成の LLM の
   呼び出し（`gen_ai.chat`。HTTP の再試行は試行ごと）は `nl2sql.generate_sql` の子。
-- Select AI Agent の team が使えず tool の直接の実行に切り替えたとき、2 つの呼び出し
-  （`oracle.select_ai`）は生成の工程の下の兄弟で、切り替える前の呼び出しは失敗。
 - MCP の `nl2sql_query`: 回答前の確認の LLM の呼び出しは確認の工程（`nl2sql.requirement`）の子、
   ジョブは確認の工程の外（ツールの span の子）で作る。
 
@@ -22,10 +20,8 @@ import pytest
 from pr_backend_core.observability.tracing import (
     capture_trace_context,
     observed_span,
-    operation_trace,
 )
 from test_enterprise_ai_client import _direct_settings, _mock_http
-from test_health import _FakeOracleDb, _FakeRuntimeOracleAdapter
 from test_mcp import (  # noqa: F401 - fixture
     _call,
     _FakeNl2SqlService,
@@ -120,39 +116,6 @@ def test_job_generation_retry_and_execution_nest_under_their_stages(
         (2, "done"),
     ]
     assert generate["status"] == "done"
-
-
-def test_select_ai_agent_fallback_is_a_sibling_of_the_failed_team_call() -> None:
-    fake_db = _FakeOracleDb()
-    fake_db.run_team_profile_loss = True
-    adapter = _FakeRuntimeOracleAdapter(fake_db)
-
-    with (
-        operation_trace("nl2sql.execute", operation_id="tree-select-ai") as summary,
-        observed_span("nl2sql.generate_sql") as generate,
-    ):
-        sql, conversation_id = adapter.run_select_ai_agent_team(
-            team_name="NL2SQL_DEFAULT_TEAM_VABC12345",
-            tool_name="NL2SQL_DEFAULT_TOOL",
-            question="合成の質問",
-        )
-
-    assert sql == "SELECT TOTAL_AMOUNT FROM INVOICES"
-    assert conversation_id == "run_tool:NL2SQL_DEFAULT_TOOL"
-    generate_id = f"{generate.span.get_span_context().span_id:016x}"
-    calls = sorted(
-        (span for span in summary.spans if span.operation_name == "oracle.select_ai"),
-        key=lambda span: span.started_at,
-    )
-    # RUN_TEAM（失敗）と切り替えた RUN_TOOL は、生成の工程の下の兄弟。
-    assert [(span.parent_span_id, span.status) for span in calls] == [
-        (generate_id, "failed"),
-        (generate_id, "done"),
-    ]
-    assert {span.attributes["pr.gen_ai.purpose"] for span in calls} == {"sql.generate"}
-    assert calls[0].attributes["error.type"] == "RuntimeError"
-    assert calls[0].finished_at is not None
-    assert calls[0].finished_at <= calls[1].started_at
 
 
 class _LlmRequirementRuntime(_ReadyRequirementRuntime):

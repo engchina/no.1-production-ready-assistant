@@ -6,7 +6,7 @@
 
 | ファイル | 内容 | 変数名 |
 |---|---|---|
-| `platform/.env`（雛形 `platform/.env.example`） | 3製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース）。システム設定画面の保存先。`model-settings.json` も同じディレクトリに置き、3製品で共有する | `PLATFORM_*` |
+| `platform/.env`（雛形 `platform/.env.example`） | 3製品共通の設定（アップロード保存先・モデル・データベース）。システム設定画面の保存先。`model-settings.json` も同じディレクトリに置き、3製品で共有する | `PLATFORM_*` |
 | `rag/backend/.env`（雛形 `rag/backend/.env.example`） | RAG 固有の設定（認証・文書解析・検索・回答・HuggingFace など）。「文書解析」画面で保存した解析エンジンと接続は同じディレクトリの `parser-settings.json`（`RAG_PARSER_SETTINGS_FILE`。#1701）に置き、共有の `model-settings.json` には書かない | `RAG_*` |
 
 backend は 環境変数 → `platform/.env` → `backend/.env` の順に読む（環境変数が最優先）。共通 `.env` の場所は
@@ -178,7 +178,7 @@ backend の URL 設定（`RAG_PARSER_*_SERVICE_URL` / `RAG_PREPROCESS_*_SERVICE_
 
 ### ローカル保存ディレクトリ(`PLATFORM_LOCAL_STORAGE_DIR`)
 
-`PLATFORM_UPLOAD_STORAGE_BACKEND=local` の原本は `PLATFORM_LOCAL_STORAGE_DIR/objects/` に保存される。既定値は製品ごとに `/u01/data/<製品名>` で統一している(RAG: `/u01/data/production-ready-rag`、NL2SQL: `/u01/data/production-ready-nl2sql`、Agent: `/u01/data/production-ready-agent`)。
+原本は `PLATFORM_LOCAL_STORAGE_DIR/objects/` に保存される（保存先はローカルだけ。#11）。既定値は製品ごとに `/u01/data/<製品名>` で統一している(RAG: `/u01/data/production-ready-rag`、NL2SQL: `/u01/data/production-ready-nl2sql`、Agent: `/u01/data/production-ready-agent`)。
 
 #### 旧既定値 `/u01/production-ready-rag` からの移行
 
@@ -204,7 +204,7 @@ ln -s "${NEW}" "${OLD}"
 ```
 
 移行後に backend を起動し、警告ログが出ないこと、既存文書のプレビュー / 再取込ができることを確認してから退避ディレクトリを削除する。
-readiness の確認は `/api/ready` を使う。`oci_common`、`enterprise_ai`、`genai`、`oracle`、`object_storage` の設定グループを確認する。
+readiness の確認は `/api/ready` を使う。`enterprise_ai`、`genai`、`oracle`、`local_storage` の設定グループを確認する（`oci_common`・`object_storage` は #11 で削除）。
 `PLATFORM_ENVIRONMENT=production` では `audit_context_salt` も確認し、`RAG_AUDIT_CONTEXT_HASH_SALT` を必須にする。すべて `ok` のときだけ 200 になり、`missing`、`invalid`、`missing_credentials`、`wallet_not_found` が含まれる場合は 503 になる。
 
 ## 既存環境の更新手順（#42 XML ツリー JSON の構造に依存する機能の削除）
@@ -1209,7 +1209,7 @@ SELECT NVL(JSON_VALUE(profile_config, '$.query.answer_engine'), '(継承)') AS a
    `backend/.env` へ移す（またはシステム設定画面で入力し直す）。
 5. 再配備または再起動する。Compute の stack では更新した tag で `init_script.sh` を実行し直す（#286 の手順）。
    ローカルでは uvicorn を起動し直す。
-6. `/api/ready` がすべて `ok` になること、システム設定画面（OCI 認証・アップロード保存先・モデル・データベース）に
+6. `/api/ready` がすべて `ok` になること、システム設定画面（アップロード保存先・モデル・データベース）に
    移行前の値が表示されることを確認する。確認後に `*.bak-211` を削除する。
 
 ## 既存環境の更新手順（#214 共通認証と権限管理）
@@ -1954,18 +1954,18 @@ uv run python -m app.rag.file_processing_staging_cli \
 
 安全チェックを含むリリースは、コード展開後に `uv run python -m app.rag.chat_history_sanitization --dry-run --format json` を実行し、Oracle バックアップを取得してから `--apply` する。適用後は `rag_guardrail_findings_total` の `guardrail_backend_unavailable` / `prompt_injection` / `low_groundedness` と阻止率を監視する。CLI は冪等で、原文の別バックアップをアプリ DB 内には作成しない。
 
-履歴の浄化は会話全体の検査を終えてから更新する。OCI Guardrails が利用できないなど、検査を完了できない会話は本文・状態・警告を更新せず、その会話のメッセージ数を `failed` に数える。`failed` が 1 件以上なら CLI は終了コード 1 を返す。OCI の設定・接続が回復してから再実行する（#2879）。
+履歴の浄化は会話全体の検査を終えてから更新する。検査を完了できない会話は本文・状態・警告を更新せず、その会話のメッセージ数を `failed` に数える。`failed` が 1 件以上なら CLI は終了コード 1 を返す（#2879）。安全チェックは OCI Guardrails を #11 で削除してから通過だけなので、この CLI は保存済みの履歴を書き換えない。
 
 ## OCI へ切り替えるときの順序
 
 1. Oracle AI Database に document / chunk / audit tables を作成する。まず backend の venv（`rag/backend`）または CI runner で `uv run python -m app.rag.oracle_schema --output ../artifacts/oracle-schema.sql --manifest-output ../artifacts/oracle-schema.manifest.json` を実行し、DDL 成果物と manifest の hash / statement 数をレビューする。既存 DB を現行 DDL 契約へ寄せる場合は `uv run python -m app.rag.oracle_schema --migration --output ../artifacts/oracle-schema-migration.sql --manifest-output ../artifacts/oracle-schema-migration.manifest.json` を実行し、migration artifact をレビューして適用する。V3 の構築 artifact(`rag_chunk_sets`、`rag_document_extractions`、`rag_artifact_layers`、`rag_kb_chunk_set_bindings`、`rag_chunks.chunk_set_id`)を既存データへ反映する場合は、あわせて `uv run python -m app.rag.variant_backfill_cli --format sql --checks-only --output ../artifacts/variant-backfill-checks.sql` と `uv run python -m app.rag.variant_backfill_cli --format json --output ../artifacts/variant-backfill.manifest.json` を生成し、[oracle-variant-backfill-runbook.md](./oracle-variant-backfill-runbook.md) の acceptance を staging artifact として保存する。生成 SQL は document table に `content_sha256`、`file_size_bytes`、`duplicate_of_document_id`、`tenant_id_hash` を含め、`content_sha256` と `tenant_id_hash, status, uploaded_at` に索引を作る。chunk table は `VECTOR(1024, FLOAT32)`、HNSW ベクトル索引(`COSINE`、目標精度 `95`、neighbors `32`、efconstruction `500`)、`tenant_id_hash`、`document_id + chunk_index`、`chunk_set_id + chunk_index` 用索引を含め、retrieval で tenant 条件、request access scope 条件、KB serving chunk_set 条件を必ず適用できるようにする。audit table は query 本文、OCR 原文、tenant/user id の raw 値を保存せず、hash、request id、trace id、guardrail code、検索件数・citation 件数、設定 fingerprint、error type を保存する（旧 standard の検索・context の内訳の列は #595 以降は既定値。既存の監査の行を変えないため列は残す。#596）。レビュー済み SQL を SQLcl や管理された migration 手順で適用してから次へ進む。
 
-2. `ObjectStorageClient` の OCI Object Storage SDK 実装を有効化する。`PLATFORM_OBJECT_STORAGE_REGION` / `PLATFORM_OBJECT_STORAGE_NAMESPACE` / `PLATFORM_OBJECT_STORAGE_BUCKET` を設定し、保存 URI が `oci://namespace/bucket/key` になり、取得時に namespace / bucket 不一致を拒否することを staging で確認する。取込前に Object Storage から取得した bytes が document table の `file_size_bytes` / `content_sha256` と一致することも確認する。
+2. 原本の保存先はローカルのディレクトリ（`PLATFORM_LOCAL_STORAGE_DIR`。`FileStorageClient`）だけ（OCI Object Storage は #11 で削除）。保存 URI が `local://key` になり、取込前に保存先から取得した bytes が document table の `file_size_bytes` / `content_sha256` と一致することを staging で確認する。DB に残った以前の `oci://` の参照は読めない（原本が無いものとして扱う）。
 3. `OracleClient` の python-oracledb pool、vector search、keyword search、document/chunk persistence、同じ chunk group の兄弟 chunk の取得を有効化する。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` / `PLATFORM_ORACLE_PASSWORD` または `PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に配置した wallet を設定する。`INGESTING` / `ERROR` への状態遷移では該当 document の chunk/index 行と古い抽出結果を削除し、検索対象は `INDEXED` に限定する。staging では `VECTOR_DISTANCE`、`FETCH APPROX ... WITH TARGET ACCURACY`、Oracle Text `CONTAINS`、document 別 chunk count、`chunk_index` window による同一 document 前後 chunk 取得、`INDEXED` 文書が hybrid search の citation に含まれることを確認する。
 4. `OciGenAiClient` の embedding / rerank は OCI Generative AI Inference SDK 実装を使う。staging では `PLATFORM_OCI_CONFIG_FILE` / profile / region / compartment / model id、埋め込み（既定 `text-embedding-v4`）の 1024 次元、Cohere Rerank v4 fast の返却件数・候補 index 範囲・index 重複なし・finite score を確認する。
 5. `OciEnterpriseAiClient` は `PLATFORM_OCI_ENTERPRISE_AI_ENDPOINT`、`PLATFORM_OCI_ENTERPRISE_AI_API_KEY`、既定のテキストモデル・既定の Vision モデル（画面の「モデル」、または `PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL`・`PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_VISION_MODEL`。#499）、`PLATFORM_OCI_ENTERPRISE_AI_LLM_PATH`、`PLATFORM_OCI_ENTERPRISE_AI_VLM_PATH` を使って Enterprise AI endpoint を呼び出す。標準 payload で合わない model deployment / gateway は `PLATFORM_OCI_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE` で request shape を差し替え、response envelope が独自の場合は `PLATFORM_OCI_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_OCI_ENTERPRISE_AI_VLM_RESPONSE_PATH` で候補 node を指定する。staging ではまず `uv run python -m app.rag.enterprise_ai_probe --surface both --dry-run` で URL、template 使用有無、response path 使用有無、payload key / shape、JSON byte 数を確認し、その後 `uv run python -m app.rag.enterprise_ai_probe --surface both` で LLM/VLM を直接呼び出す。probe は回答本文や OCR 本文を出さず、text 文字数・element 件数だけを artifact に残す。ここで Bearer 認証、timeout/retry、VLM の MIME type / 構造化抽出 JSON schema、LLM の citation-grounded 生成 payload、response parsing を実 endpoint で確認する。VLM response は `StructuredExtraction` へ検証し、LLM response は空 text を fail fast する。
 6. staging にデプロイし、`/api/ready` の checks がすべて `ok` になることを確認する。production 昇格時は `PLATFORM_ENVIRONMENT=production` にして、追加 checks の `audit_context_salt` も `ok` にする。Oracle は `PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加えて `PLATFORM_ORACLE_PASSWORD` または `PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に存在する Wallet が必要。
-7. staging 環境でまず `uv run python -m app.rag.staging_smoke --preflight-only` を実行する。OCI/Oracle 接続設定、Enterprise AI LLM/VLM 設定、Cohere embedding/rerank 設定、`PLATFORM_UPLOAD_STORAGE_BACKEND=oci`、Object Storage namespace/bucket がそろっていることを JSON の `checks` で確認する。preflight 失敗時は外部依存へ接続せず、secret 値も出力しない。
+7. staging 環境でまず `uv run python -m app.rag.staging_smoke --preflight-only` を実行する。OCI/Oracle 接続設定、Enterprise AI LLM/VLM 設定、Cohere embedding/rerank 設定、書き込める保存先のディレクトリ（`local_storage`）がそろっていることを JSON の `checks` で確認する。preflight 失敗時は外部依存へ接続せず、secret 値も出力しない。
 8. preflight が `ok=true` なら `uv run python -m app.rag.staging_smoke` を実行する。Object Storage put/get、Oracle document 作成、Enterprise AI VLM、chunking、embedding、Oracle indexing、hybrid search、Enterprise AI LLM 生成を 1 回通し、作成した smoke document が citation に含まれることを確認する。既定 query は一意な `SMOKE-...` marker の原文引用を要求し、検索は新規 `document_id` に限定される。既定 query では LLM 回答にも marker が含まれない場合に `stage=rag_answer_marker` で失敗する。JSON 出力の `ok`、`marker`、`query`、`answer_contains_marker`、`trace_id`、`chunk_count`、`citation_count`、`cleanup`、`diagnostics`（`config_fingerprint`、回答フローの実行記録 `diagnostics.answer.execution_steps` など）を保存し、staging gate の artifact にする。既定では evidence として作成物を保持し、`cleanup` は `skipped` になる。DB/Object Storage を汚したくない一時確認では `uv run python -m app.rag.staging_smoke --cleanup` を使い、成功・失敗どちらでも作成済み Oracle document/chunk と Object Storage object の削除 status を確認する。失敗時は preflight の `checks` または本実行の `stage` / `cause_type` を見て、Object Storage、Oracle、取込（VLM・chunking・embedding・索引）、検索と回答（`rag_search`）、回答の確認（`rag_answer_marker`）のどこで止まったかを切り分ける。回答フローの中の工程は `diagnostics.answer.execution_steps` で確かめる。query を変える場合は `--query "確認用キーワード {marker} を要約してください"` のように `{marker}` placeholder を残す。
 9. golden set 評価と負荷試験を通してから production へ昇格する。
 
@@ -1989,9 +1989,8 @@ placeholder を置き換えます。旧名を実行時に展開する互換処�
 
 ### 安全チェックを OCI Guardrails のスイッチへ更新（#2863）
 
-更新時に `python -m app.rag.guardrail_settings_migration --env-file .env` を実行し、
-回答 backend を再読み込みします。旧 OCI 選択は on、Local 選択は off へ移ります。
-設定・障害時の扱いは [安全チェック](evaluation-observability-guardrails.md) を参照してください。
+OCI Guardrails の安全チェックと移行の CLI（`app.rag.guardrail_settings_migration`）は #11 で削除しました。
+`.env` に残った `RAG_GUARDRAILS_*` は読みません（[安全チェック](evaluation-observability-guardrails.md)）。
 
 ## 外部 DomainProfile の読込の廃止（#3668）
 

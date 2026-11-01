@@ -2,7 +2,6 @@
 
 import base64
 import csv
-import hashlib
 import io
 import json
 import os
@@ -23,12 +22,8 @@ import anyio
 import httpx
 import pytest
 from checkpoint_support import CheckpointTable, export_state, load_state
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from mcp_support import fake_product_mcp
 from pr_backend_core.oracle_session import SESSION_INIT_SQL
-from pr_system_settings import oci as shared_oci
-from pr_system_settings import oci_connectivity
 from pr_system_settings.auth.domain import LOCAL_DEBUG_USER_UUID
 from pr_system_settings.model import ModelSettingsTestRequest
 from pytest import MonkeyPatch
@@ -107,19 +102,8 @@ TEST_WALLET_PEM = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\
 
 def _settings_fixture(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
-        "upload_storage_backend": "local",
         "local_storage_dir": "/u01/data/production-ready-agent",
-        "object_storage_region": "",
-        "object_storage_namespace": "",
-        "object_storage_bucket": "",
         "max_upload_bytes": 100 * 1024 * 1024,
-        "oci_config_file": "~/.oci/config",
-        "oci_config_profile": "DEFAULT",
-        "oci_region": "",
-        "oci_user_ocid": "",
-        "oci_fingerprint": "",
-        "oci_tenancy_ocid": "",
-        "oci_compartment_id": "",
         "model_settings_file": "model-settings.json",
         "oci_enterprise_ai_api_key": "",
         "oracle_user": "",
@@ -128,8 +112,6 @@ def _settings_fixture(**overrides: object) -> SimpleNamespace:
         "oracle_client_lib_dir": "",
         "oracle_wallet_dir": "",
         "oracle_wallet_password": "",
-        "oracle_adb_ocid": "",
-        "oracle_adb_region": "",
         "oracle_tcp_connect_timeout_seconds": 10.0,
         "oracle_db_test_timeout_seconds": 15.0,
         "agent_runtime_oracle_password": "",
@@ -872,318 +854,32 @@ def test_database_status_does_not_short_circuit_local_auth(monkeypatch: MonkeyPa
         assert client.get("/api/ready/database").json()["data"]["status"] == "not_configured"
 
 
-def test_oci_settings_defaults_match_rag_when_credentials_missing(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    config_file = str(tmp_path / "missing_oci_config")
-    key_file = str(tmp_path / "missing_oci_api_key.pem")
-    monkeypatch.setattr(shared_oci, "OCI_PRIVATE_KEY_FILE", key_file)
+def test_upload_storage_defaults_are_local_only(monkeypatch: MonkeyPatch) -> None:
+    """アップロード保存先はローカルだけ（OCI Object Storage は扱わない。#11）。"""
     monkeypatch.setattr(
         agent_router,
         "get_settings",
         lambda: SimpleNamespace(
-            upload_storage_backend=None,
             # 保存先の既定値は Settings が持つ（共有 API は Settings の値をそのまま返す。#97）。
             local_storage_dir="/u01/data/production-ready-agent",
-            object_storage_region=None,
-            object_storage_namespace=None,
-            object_storage_bucket=None,
             max_upload_bytes=100 * 1024 * 1024,
-            oci_config_file=config_file,
-            oci_config_profile=None,
-            oci_user_ocid=None,
-            oci_fingerprint=None,
-            oci_tenancy_ocid=None,
-            oci_region=None,
-            oci_key_file=None,
-            oci_key_file_exists=False,
-            oci_config_file_exists=False,
         ),
     )
-
-    oci_resp = client.get("/api/settings/oci")
-    assert oci_resp.status_code == 200
-    assert oci_resp.json()["data"] == {
-        "config_file": config_file,
-        "profile": "DEFAULT",
-        "user": "",
-        "fingerprint": "",
-        "tenancy": "",
-        "region": "",
-        "key_file": key_file,
-        "key_file_exists": False,
-        "config_file_exists": False,
-        "config_source": "runtime",
-        "config_error": None,
-    }
 
     storage_resp = client.get("/api/settings/upload-storage")
     assert storage_resp.status_code == 200
-    storage = storage_resp.json()["data"]
-    assert storage["backend"] == "local"
-    assert storage["local_storage_dir"] == "/u01/data/production-ready-agent"
-    assert storage["object_storage_region"] == ""
-    assert storage["object_storage_namespace"] == ""
-    assert storage["object_storage_bucket"] == ""
-
-
-def test_oci_config_read_parses_default_profile_like_rag(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    config = tmp_path / "config"
-    config.write_text(
-        "\n".join(
-            [
-                "[DEFAULT]",
-                "user=ocid1.user.oc1..aaaaaaaa",
-                "fingerprint=12:34:56:78:90:ab:cd:ef",
-                "tenancy=ocid1.tenancy.oc1..aaaaaaaa",
-                "region=ap-osaka-1",
-                "key_file=~/.oci/oci_api_key.pem",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    # 読むのは実行中の設定の config / profile（要求の config_file は使わない。#1067）。
-    monkeypatch.setattr(
-        agent_router,
-        "get_settings",
-        lambda: SimpleNamespace(oci_config_file=str(config), oci_config_profile="DEFAULT"),
-    )
-
-    resp = client.post(
-        "/api/settings/oci/config/read",
-        json={"config_file": str(tmp_path / "other"), "profile": "OTHER"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"] == {
-        "profile": "DEFAULT",
-        "user": "ocid1.user.oc1..aaaaaaaa",
-        "fingerprint": "12:34:56:78:90:ab:cd:ef",
-        "tenancy": "ocid1.tenancy.oc1..aaaaaaaa",
-        "region": "ap-osaka-1",
-        "key_file": "~/.oci/oci_api_key.pem",
-        "applied_fields": ["user", "fingerprint", "tenancy", "region", "key_file"],
+    assert storage_resp.json()["data"] == {
+        "local_storage_dir": "/u01/data/production-ready-agent",
+        "readiness": "ok",
+        "max_upload_bytes": 100 * 1024 * 1024,
+        "config_source": "runtime",
     }
-
-
-def test_oci_object_storage_namespace_reads_from_sdk_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    config_file = tmp_path / "config"
-    key_file = tmp_path / "oci_api_key.pem"
-    key_file.write_text("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----\n")
-    captured: dict[str, object] = {}
-
-    class FakeOciConfig:
-        @staticmethod
-        def from_file(path: str, profile: str) -> dict[str, object]:
-            captured["config_file"] = path
-            captured["profile"] = profile
-            return {"key_file": str(key_file), "region": "us-chicago-1"}
-
-    class FakeObjectStorage:
-        class ObjectStorageClient:
-            def __init__(self, config: dict[str, object]) -> None:
-                captured["client_config"] = config
-
-            def get_namespace(self) -> SimpleNamespace:
-                return SimpleNamespace(data=" mytenancynamespace ")
-
-    def fake_import_module(name: str) -> object:
-        if name == "oci.config":
-            return FakeOciConfig
-        if name == "oci.object_storage":
-            return FakeObjectStorage
-        raise AssertionError(name)
-
-    monkeypatch.setattr(shared_oci, "importlib", SimpleNamespace(import_module=fake_import_module))
-    # 取得に使う config は実行中の設定のもの（要求の config_file は使わない。#1067）。
-    monkeypatch.setattr(
-        agent_router,
-        "get_settings",
-        lambda: SimpleNamespace(oci_config_file=str(config_file), oci_config_profile="DEFAULT"),
-    )
-
-    resp = client.post(
-        "/api/settings/oci/object-storage/namespace",
-        json={
-            "config_file": str(tmp_path / "other"),
-            "profile": "OTHER",
-            "region": "ap-osaka-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"] == {"namespace": "mytenancynamespace"}
-    assert captured["config_file"] == str(config_file)
-    assert captured["profile"] == "DEFAULT"
-    assert captured["client_config"] == {
-        "key_file": str(key_file),
-        "region": "ap-osaka-1",
-    }
-
-
-def test_oci_settings_save_writes_config_and_env_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    config_file = tmp_path / ".oci" / "config"
-    env_file = tmp_path / ".env"
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    monkeypatch.setattr(shared_oci, "OCI_PRIVATE_KEY_FILE", str(key_file))
-    monkeypatch.setattr(
-        agent_router,
-        "get_settings",
-        lambda: _settings_fixture(oci_config_file=str(config_file)),
-    )
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={
-            "user": "ocid1.user.oc1..aaaaaaaa",
-            "fingerprint": "12:34:56:78:90:ab:cd:ef",
-            "tenancy": "ocid1.tenancy.oc1..aaaaaaaa",
-            "region": "us-chicago-1",
-        },
-    )
-
-    assert resp.status_code == 200
-    assert config_file.is_file()
-    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
-    config_text = config_file.read_text(encoding="utf-8")
-    assert "user=ocid1.user.oc1..aaaaaaaa" in config_text
-    assert "key_file=" + str(key_file) in config_text
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_OCI_CONFIG_FILE=" + str(config_file) in env_text
-    assert "PLATFORM_OCI_CONFIG_PROFILE=DEFAULT" in env_text
-    assert "PLATFORM_OCI_REGION=us-chicago-1" in env_text
-    data = resp.json()["data"]
-    assert data["user"] == "ocid1.user.oc1..aaaaaaaa"
-    assert data["region"] == "us-chicago-1"
-    assert data["config_file_exists"] is True
-
-
-def test_oci_settings_save_does_not_write_empty_defaults_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    config_file = tmp_path / ".oci" / "config"
-    env_file = tmp_path / ".env"
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    monkeypatch.setattr(shared_oci, "OCI_PRIVATE_KEY_FILE", str(key_file))
-    settings = _settings_fixture(oci_config_file=str(config_file), oci_region="us-chicago-1")
-    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
-
-    resp = client.patch(
-        "/api/settings/oci",
-        json={"user": "", "fingerprint": "", "tenancy": "", "region": ""},
-    )
-
-    assert resp.status_code == 200
-    config_text = config_file.read_text(encoding="utf-8")
-    assert "user=" not in config_text
-    assert "fingerprint=" not in config_text
-    assert "tenancy=" not in config_text
-    assert "region=" not in config_text
-    assert "key_file=" not in config_text
-    assert settings.oci_region == ""
-    assert "PLATFORM_OCI_REGION" not in env_file.read_text(encoding="utf-8")
-
-
-def test_upload_oci_private_key_writes_pem_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    key_file = tmp_path / ".oci" / "oci_api_key.pem"
-    monkeypatch.setattr(shared_oci, "OCI_PRIVATE_KEY_FILE", str(key_file))
-    monkeypatch.setattr(agent_router, "get_settings", lambda: _settings_fixture())
-    pem = b"-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n"
-
-    resp = client.post(
-        "/api/settings/oci/key-file",
-        files={"file": ("oci_api_key.pem", pem, "application/x-pem-file")},
-    )
-
-    assert resp.status_code == 200
-    assert key_file.read_bytes() == pem
-    assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
-    assert resp.json()["data"] == {"key_file": str(key_file), "saved": True}
-
-
-def test_oci_config_test_checks_files_permissions_and_key_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    oci_dir = tmp_path / ".oci"
-    oci_dir.mkdir()
-    oci_dir.chmod(0o700)
-    key_file = oci_dir / "oci_api_key.pem"
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    key_file.write_bytes(
-        private_key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        )
-    )
-    public_der = private_key.public_key().public_bytes(
-        serialization.Encoding.DER,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    digest = hashlib.md5(public_der, usedforsecurity=False).hexdigest()
-    fingerprint = ":".join(digest[index : index + 2] for index in range(0, 32, 2))
-    key_file.chmod(0o600)
-    config_file = oci_dir / "config"
-    config_file.write_text(
-        "\n".join(
-            [
-                "[DEFAULT]",
-                "user=ocid1.user.oc1..aaaaaaaa",
-                f"fingerprint={fingerprint}",
-                "tenancy=ocid1.tenancy.oc1..aaaaaaaa",
-                "region=ap-osaka-1",
-                f"key_file={key_file}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    config_file.chmod(0o600)
-    monkeypatch.setattr(shared_oci, "OCI_PRIVATE_KEY_FILE", str(key_file))
-    monkeypatch.setattr(
-        agent_router,
-        "get_settings",
-        lambda: _settings_fixture(oci_config_file=str(config_file)),
-    )
-
-    namespace_calls: list[str] = []
-    monkeypatch.setattr(
-        oci_connectivity,
-        "_get_object_storage_namespace",
-        lambda config: namespace_calls.append(str(config["region"])),
-    )
-
-    resp = client.post("/api/settings/oci/config/test")
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "success"
-    assert data["missing_fields"] == []
-    assert data["permission_issues"] == []
-    assert data["oci_directory_mode"] == "0700"
-    assert data["config_file_mode"] == "0600"
-    assert data["key_file_mode"] == "0600"
-    assert [stage["status"] for stage in data["stages"]] == ["success"] * 4
-    assert namespace_calls == ["ap-osaka-1"]
-    assert fingerprint not in resp.text
+    # OCI 認証・Object Storage・Wallet の OCI からの取得の API は持たない（#11）。
+    paths = set(app.openapi()["paths"])
+    assert "/api/settings/upload-storage" in paths
+    assert not {path for path in paths if path.startswith("/api/settings/oci")}
+    assert "/api/settings/upload-storage/test" not in paths
+    assert "/api/settings/database/wallet/download" not in paths
 
 
 def test_upload_database_wallet_extracts_zip_like_rag(
@@ -1354,24 +1050,16 @@ def test_upload_storage_save_writes_env_like_rag(
 
     resp = client.patch(
         "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/var/uploads",
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "mytenancynamespace",
-            "object_storage_bucket": "rag-uploads",
-        },
+        json={"local_storage_dir": "/var/uploads"},
     )
 
     assert resp.status_code == 200
     env_text = env_file.read_text(encoding="utf-8")
-    assert "PLATFORM_UPLOAD_STORAGE_BACKEND=oci" in env_text
-    assert "PLATFORM_OBJECT_STORAGE_REGION=us-chicago-1" in env_text
     assert "PLATFORM_LOCAL_STORAGE_DIR=/var/uploads" in env_text
-    assert "PLATFORM_OBJECT_STORAGE_NAMESPACE=mytenancynamespace" in env_text
-    assert "PLATFORM_OBJECT_STORAGE_BUCKET=rag-uploads" in env_text
-    assert settings.upload_storage_backend == "oci"
-    assert settings.object_storage_bucket == "rag-uploads"
+    # 保存先の種類・Object Storage の key は書かない（#11）。
+    assert "PLATFORM_UPLOAD_STORAGE_BACKEND" not in env_text
+    assert "PLATFORM_OBJECT_STORAGE_" not in env_text
+    assert settings.local_storage_dir == "/var/uploads"
 
 
 def test_upload_storage_save_failure_keeps_previous_values(
@@ -1388,7 +1076,7 @@ def test_upload_storage_save_failure_keeps_previous_values(
 
     resp = client.patch(
         "/api/settings/upload-storage",
-        json={"backend": "local", "local_storage_dir": "/var/changed"},
+        json={"local_storage_dir": "/var/changed"},
     )
 
     assert resp.status_code == 500
@@ -3313,98 +3001,6 @@ def test_delete_agent_and_default_protection() -> None:
     assert "tmp_agent" not in {a["id"] for a in deleted.json()["data"]["agents"]}
     assert client.request("DELETE", "/api/agents/default").status_code == 400
     assert client.request("DELETE", "/api/agents/missing").status_code == 404
-
-
-class _MissingBucketError(Exception):
-    """OCI SDK の ServiceError と同じ属性を持つ（HeadBucket の 404 BucketNotFound）。"""
-
-    status = 404
-    code = "BucketNotFound"
-    request_id = "req-test"
-
-
-class _MissingBucketStorage:
-    def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-        raise _MissingBucketError("bucket not found")
-
-
-def _stub_missing_bucket(monkeypatch: MonkeyPatch) -> None:
-    from pr_system_settings import upload_storage_check
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _MissingBucketStorage(),
-    )
-
-
-def test_update_upload_storage_rejects_missing_bucket_without_saving(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """存在しない bucket は、保存せずに理由と直し方を返す（#2101）。"""
-    env_file = tmp_path / ".env"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    settings = _settings_fixture()
-    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
-    _stub_missing_bucket(monkeypatch)
-    before = settings.upload_storage_backend
-
-    resp = client.patch(
-        "/api/settings/upload-storage",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/check",
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "examplenamespace",
-            "object_storage_bucket": "missing-bucket",
-        },
-    )
-
-    assert resp.status_code == 422
-    body = resp.json()
-    detail = json.dumps(body, ensure_ascii=False)  # 製品ごとのエラーの形に依らない
-    assert "保存していません" in detail
-    assert "404 BucketNotFound" in detail
-    assert "missing-bucket" not in detail
-    assert settings.upload_storage_backend == before
-    assert not env_file.exists() or "missing-bucket" not in env_file.read_text(encoding="utf-8")
-
-
-def test_upload_storage_check_reports_stages_without_saving(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """「接続を確認」は入力中の値で段階ごとの結果を返し、保存しない（#2101）。"""
-    env_file = tmp_path / ".env"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    settings = _settings_fixture()
-    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
-    _stub_missing_bucket(monkeypatch)
-
-    resp = client.post(
-        "/api/settings/upload-storage/test",
-        json={
-            "backend": "oci",
-            "local_storage_dir": "/u01/data/check",
-            "object_storage_region": "us-chicago-1",
-            "object_storage_namespace": "examplenamespace",
-            "object_storage_bucket": "missing-bucket",
-        },
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["status"] == "failed"
-    assert [stage["status"] for stage in data["stages"]] == [
-        "success",
-        "failed",
-        "skipped",
-        "skipped",
-        "skipped",
-    ]
-    assert not env_file.exists() or "missing-bucket" not in env_file.read_text(encoding="utf-8")
-    assert settings.object_storage_bucket != "missing-bucket"
 
 
 @pytest.mark.parametrize("recorded", [True, False])

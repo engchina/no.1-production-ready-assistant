@@ -402,19 +402,6 @@ class AnswerGenerationTests(unittest.TestCase):
 
         self.assertEqual(reranked, [])
 
-    def test_rerank_records_does_not_depend_on_vision_endpoint(self):
-        records = [_record("a", "docling", 1, 1, "first evidence")]
-        settings = replace(_rerank_ready_settings(), oci_vision_endpoint="")
-
-        with patch(
-            "rag_engine.generation.answering.rerank_text_with_scores",
-            return_value=[RerankTextRank(0, 0.91)],
-        ) as rerank:
-            reranked = rerank_records("question", records, settings, enabled=True)
-
-        rerank.assert_called_once()
-        self.assertEqual([record.id for record in reranked], ["a"])
-
     def test_rerank_records_preserves_image_vector_only_candidates(self):
         image_record = replace(
             _record("image", "docling", 1, 1, "Image evidence | id=red-button"),

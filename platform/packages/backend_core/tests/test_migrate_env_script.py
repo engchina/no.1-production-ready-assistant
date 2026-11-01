@@ -15,11 +15,11 @@ def test_moves_common_keys_and_prefixes_product_keys(tmp_path: Path) -> None:
     backend_env.write_text(
         "# アプリ\nLOG_LEVEL=INFO\nNL2SQL_RUNTIME_MODE=oracle\n"
         "ORACLE_DSN=db_high\nAPP_ADMIN_LOGIN_USER_PASSWORD='Secret#1'\n"
-        "OCI_REGION=ap-osaka-1\nAPP_ADMIN_USERNAME=old\n",
+        "ORACLE_USER=app_old\nAPP_ADMIN_USERNAME=old\n",
         encoding="utf-8",
     )
     platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_OCI_REGION=us-chicago-1\n", encoding="utf-8")
+    platform_env.write_text("PLATFORM_ORACLE_USER=app_new\n", encoding="utf-8")
 
     migrate_env.main(
         [
@@ -40,6 +40,6 @@ def test_moves_common_keys_and_prefixes_product_keys(tmp_path: Path) -> None:
     assert "PLATFORM_ORACLE_DSN=db_high" in platform_text
     assert "PLATFORM_ADMIN_LOGIN_USER_PASSWORD='Secret#1'" in platform_text
     # 競合は共通 .env の値を残す。
-    assert "PLATFORM_OCI_REGION=us-chicago-1" in platform_text
-    assert "ap-osaka-1" not in platform_text
+    assert "PLATFORM_ORACLE_USER=app_new" in platform_text
+    assert "app_old" not in platform_text
     assert (tmp_path / ".env.bak-211").is_file()

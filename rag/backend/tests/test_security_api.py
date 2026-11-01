@@ -547,7 +547,7 @@ def test_user_without_roles_is_denied_everything_except_auth(
         ("GET", "/api/knowledge-bases"),
         ("GET", "/api/security/permissions"),
         ("GET", "/api/security/users"),
-        ("GET", "/api/settings/oci"),
+        ("GET", "/api/settings/upload-storage"),
     ):
         response = client.request(method, path, headers=headers)
         assert response.status_code == 403, path
@@ -713,7 +713,8 @@ def test_permission_catalog_requires_permission_management(auth: ProductionAuth)
     assert by_code["menu.security_permissions"]["group"] == "セキュリティ設定"
     assert by_code["menu.settings_system_tables"]["group"] == "運用設定"
     assert by_code["menu.security_users"]["group"] == "ユーザーとロール"
-    assert by_code["menu.settings_oci"]["group"] == "システム設定"
+    assert by_code["menu.settings_upload_storage"]["group"] == "システム設定"
+    assert "menu.settings_oci" not in by_code and "menu.settings_guardrail" not in by_code
     assert by_code["rag.search_answer_profiles.manage"]["implies"] == [
         "menu.search_answer_profiles"
     ]

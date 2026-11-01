@@ -549,12 +549,7 @@ def test_build_history_takes_first_assistant_per_turn() -> None:
     turns = asyncio.run(
         chat_route._build_safe_history(
             messages,
-            GuardrailPolicy(
-                Settings(
-                    rag_guardrails_input_enabled=False,
-                    rag_guardrails_output_enabled=False,
-                )
-            ),
+            GuardrailPolicy(Settings()),
         )
     )
     assert [(t.role, t.content) for t in turns] == [("USER", "質問1"), ("ASSISTANT", "回答A")]
@@ -1049,9 +1044,9 @@ def test_chat_answer_uses_answer_timeout_not_search_timeout(monkeypatch: MonkeyP
 def test_stream_message_sanitizes_user_content_before_database_and_sse(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    from tests.guardrail_support import enable_oci_stub
+    from tests.guardrail_support import enable_scripted_guardrails
 
-    enable_oci_stub(monkeypatch)
+    enable_scripted_guardrails(monkeypatch)
     fake = FakeChatOracle()
     fake.conversations["conv-safe"] = StoredConversation(
         id="conv-safe",
@@ -1079,9 +1074,9 @@ def test_stream_message_sanitizes_user_content_before_database_and_sse(
 def test_stream_message_does_not_persist_or_echo_blocked_attack(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    from tests.guardrail_support import enable_oci_stub
+    from tests.guardrail_support import enable_scripted_guardrails
 
-    enable_oci_stub(monkeypatch)
+    enable_scripted_guardrails(monkeypatch)
     fake = FakeChatOracle()
     fake.conversations["conv-block"] = StoredConversation(
         id="conv-block",
@@ -1110,9 +1105,9 @@ def test_stream_message_does_not_persist_or_echo_blocked_attack(
 def test_safe_history_skips_blocked_turn_and_sanitizes_legacy_content(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    from tests.guardrail_support import enable_oci_stub
+    from tests.guardrail_support import enable_scripted_guardrails
 
-    enable_oci_stub(monkeypatch)
+    enable_scripted_guardrails(monkeypatch)
     now = datetime(2026, 1, 1, tzinfo=UTC)
     messages = [
         StoredMessage(
@@ -1142,12 +1137,7 @@ def test_safe_history_skips_blocked_turn_and_sanitizes_legacy_content(
     turns = asyncio.run(
         chat_route._build_safe_history(
             messages,
-            GuardrailPolicy(
-                Settings(
-                    rag_guardrails_input_enabled=True,
-                    rag_guardrails_output_enabled=True,
-                )
-            ),
+            GuardrailPolicy(Settings()),
         )
     )
 

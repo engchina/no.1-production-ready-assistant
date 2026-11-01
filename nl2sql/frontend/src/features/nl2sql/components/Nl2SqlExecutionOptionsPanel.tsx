@@ -1,8 +1,7 @@
 import { Button, DisclosureChevron } from "@production-ready/ui";
-import { Eye, FileText, Network, Sparkles } from "lucide-react";
+import { Eye, Network, Sparkles } from "lucide-react";
 
 import { t } from "@/lib/i18n";
-import type { Nl2SqlEngine } from "../types";
 
 function OptionCheckbox({
   checked,
@@ -41,41 +40,27 @@ function OptionCheckbox({
 
 export function Nl2SqlExecutionOptionsPanel({
   disabled,
-  engine,
   includeInterpretation,
-  includeShowPrompt,
   open,
-  selectAiOverridesInactive,
   useOntologyContext,
   onIncludeInterpretationChange,
-  onIncludeShowPromptChange,
   onOpenChange,
   onRewriteUseGlossaryChange,
   onUseOntologyContextChange,
   rewriteUseGlossary,
 }: {
   disabled: boolean;
-  engine: Nl2SqlEngine;
   includeInterpretation: boolean;
-  includeShowPrompt: boolean;
   open: boolean;
-  selectAiOverridesInactive: boolean;
   useOntologyContext: boolean;
   onIncludeInterpretationChange: (checked: boolean) => void;
-  onIncludeShowPromptChange: (checked: boolean) => void;
   onOpenChange: (open: boolean) => void;
   onRewriteUseGlossaryChange: (checked: boolean) => void;
   onUseOntologyContextChange: (checked: boolean) => void;
   rewriteUseGlossary: boolean;
 }) {
-  const showPromptUnavailable = includeShowPrompt && engine !== "select_ai";
-  // 既定値からの変更有無でバッジを出す。用語・同義語と Show Prompt は既定 off なので ON が「変更あり」。
-  const hasChangedOptions =
-    rewriteUseGlossary ||
-    selectAiOverridesInactive ||
-    !useOntologyContext ||
-    !includeInterpretation ||
-    includeShowPrompt;
+  // 既定値からの変更有無でバッジを出す。用語・同義語は既定 off なので ON が「変更あり」。
+  const hasChangedOptions = rewriteUseGlossary || !useOntologyContext || !includeInterpretation;
 
   return (
     <section
@@ -102,7 +87,7 @@ export function Nl2SqlExecutionOptionsPanel({
           </span>
           {hasChangedOptions ? (
             <span data-surface-tint="accent" className="shrink-0 rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-accent-fg">
-              {t("nl2sql.selectAiOverrides.activeBadge")}
+              {t("nl2sql.executionOptions.changedBadge")}
             </span>
           ) : null}
         </span>
@@ -139,24 +124,7 @@ export function Nl2SqlExecutionOptionsPanel({
             label={t("nl2sql.executionOptions.includeInterpretation")}
             onChange={onIncludeInterpretationChange}
           />
-          <OptionCheckbox
-            checked={includeShowPrompt}
-            disabled={disabled}
-            icon={FileText}
-            label={t("nl2sql.executionOptions.includeShowPrompt")}
-            onChange={onIncludeShowPromptChange}
-          />
         </div>
-        {showPromptUnavailable ? (
-          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs leading-5 text-fg-muted">
-            {t("nl2sql.executionOptions.showPromptUnsupported")}
-          </p>
-        ) : null}
-        {selectAiOverridesInactive ? (
-          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs leading-5 text-fg-muted">
-            {t("nl2sql.executionOptions.selectAiOverridesUnsupported")}
-          </p>
-        ) : null}
       </div>
     </section>
   );

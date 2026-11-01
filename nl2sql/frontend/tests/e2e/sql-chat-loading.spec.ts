@@ -5,7 +5,7 @@ import { mockChatRequirement } from "./_helpers/chat-requirement";
 /**
  * チャットの前提（業務プロファイルの一覧・開いている会話の内容）の読み込み中・失敗の表示（#1153）。
  * 3 製品で同じ規則（UX 契約 messaging.md §11.7）: 前提が揃うまで会話の欄に空の状態を出さず、
- * 会話の形の Skeleton を出し、送信を止める。入力欄・生成方法・新しい会話・履歴の開閉を無効にするのは
+ * 会話の形の Skeleton を出し、送信を止める。入力欄・新しい会話・履歴の開閉を無効にするのは
  * 業務プロファイルの一覧の読み込み中だけで、会話の内容の読み込み中は書ける（#1188。sql-chat.spec.ts）。
  * desktop と mobile-375 の 2 project で実行する。
  */
@@ -69,11 +69,11 @@ test(`業務プロファイルの読み込み中は会話の欄に空の状態�
   ).toHaveCount(0);
   await expect(panel.getByRole("log").getByRole("timer")).toHaveCount(0);
   await expect(page.getByRole("timer")).toHaveCount(1);
-  // 入力欄・生成方法・送信・新しい会話・履歴の開閉は無効。
+  // 入力欄・送信・新しい会話・履歴の開閉は無効。生成方法は 1 つだけなので選ぶ欄を出さない（#7）。
   await expect(
     page.getByRole("textbox", { name: "質問", exact: true }),
   ).toBeDisabled();
-  await expect(page.locator("#sql-chat-engine")).toBeDisabled();
+  await expect(page.locator("#sql-chat-engine")).toHaveCount(0);
   await expect(page.getByTestId("sql-chat-send")).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "新しい会話", exact: true }),
@@ -93,7 +93,6 @@ test(`業務プロファイルの読み込み中は会話の欄に空の状態�
   ).toBeVisible();
   const composer = page.getByRole("textbox", { name: "質問", exact: true });
   await expect(composer).toBeEnabled();
-  await expect(page.locator("#sql-chat-engine")).toBeEnabled();
   await expect(
     page.getByRole("button", { name: "新しい会話", exact: true }),
   ).toBeEnabled();

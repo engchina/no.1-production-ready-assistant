@@ -1940,7 +1940,7 @@ def wait_for_product_job(
 
 # 標準の接続のツールのうち、Agent が既定で承認なしに実行するもの（#1832。ユーザーの決定）。
 # `nl2sql_query` は呼び先で SELECT だけを実行し（書き込みの文は監査だけ）、見える範囲は
-# 業務プロファイル・Deep Data Security・利用者の権限で決まるため、既定を「自動実行」にする。
+# 業務プロファイル・利用者の権限で決まるため、既定を「自動実行」にする。
 # `readOnlyHint` は false のまま（ジョブを作るので送信後の失敗では再送しない）。
 # `nl2sql_cancel_requirement` は承認のまま。
 STANDARD_AUTO_APPROVED_TOOLS: dict[str, frozenset[str]] = {

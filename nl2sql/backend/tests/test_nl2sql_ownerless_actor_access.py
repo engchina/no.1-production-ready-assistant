@@ -30,7 +30,6 @@ def _principal(user_uuid: str, *, admin: bool = False) -> Principal:
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={"nl2sql.query.generate", "nl2sql.feedback.write"},
-        data_entitlements=[],
         allowed_profile_ids={"default"},
         session_id=f"session-{user_uuid}",
         csrf_token_hash="csrf",
@@ -41,7 +40,7 @@ def _history(actor_user_uuid: str) -> HistoryItem:
     return HistoryItem(
         id="history-1",
         question="社員一覧",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT EMPLOYEE_ID FROM EMPLOYEE",
         created_at="2026-10-01T00:00:00+00:00",
         profile_id="default",

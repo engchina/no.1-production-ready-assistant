@@ -234,7 +234,7 @@ def test_query_session_history_keeps_trace_and_is_idempotent() -> None:
         session_id="session-1",
         question="受注件数を表示",
         rewritten_question="受注の件数を表示",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT COUNT(*) FROM ORDERS",
         executable_sql="SELECT COUNT(*) FROM ORDERS FETCH FIRST 100 ROWS ONLY",
         profile_id="default",
@@ -246,7 +246,7 @@ def test_query_session_history_keeps_trace_and_is_idempotent() -> None:
         session_id="session-1",
         question="差し替えを許可しない",
         rewritten_question="差し替えを許可しない",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="SELECT 1 FROM DUAL",
         executable_sql="SELECT 1 FROM DUAL",
         profile_id="default",
@@ -267,7 +267,7 @@ def test_connection_wraps_connect_failure_as_oracle_adapter_error(
 ) -> None:
     """oracledb.connect() の生の失敗を OracleAdapterError へ統一変換する。
 
-    接続確立の失敗が素通りすると list_select_ai_db_profiles 等の
+    接続確立の失敗が素通りすると呼び出し側の
     `except OracleAdapterError` で捕まらず 500 になる回帰の防止。
     """
 

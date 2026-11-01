@@ -39,7 +39,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, data: bytes) -> None:
             return data
 
     monkeypatch.setattr(documents_route, "OracleClient", FakeOracle)
-    monkeypatch.setattr(document_crop, "ObjectStorageClient", FakeStorage)
+    monkeypatch.setattr(document_crop, "FileStorageClient", FakeStorage)
 
 
 def _size(data: bytes) -> tuple[int, int]:
@@ -128,7 +128,7 @@ def test_crop_image_source_and_invalid_requests(monkeypatch: pytest.MonkeyPatch)
 
 
 def _install_preview(monkeypatch: pytest.MonkeyPatch, data: bytes) -> None:
-    """プレビューのページ画像 API 用(原本の読み出しは documents route の ObjectStorageClient)。"""
+    """プレビューのページ画像 API 用(原本の読み出しは documents route の FileStorageClient)。"""
     detail = SimpleNamespace(
         object_storage_path="docs/doc-1/source",
         preprocess_artifact=None,
@@ -146,7 +146,7 @@ def _install_preview(monkeypatch: pytest.MonkeyPatch, data: bytes) -> None:
             return data
 
     monkeypatch.setattr(documents_route, "OracleClient", FakeOracle)
-    monkeypatch.setattr(documents_route, "ObjectStorageClient", FakeStorage)
+    monkeypatch.setattr(documents_route, "FileStorageClient", FakeStorage)
 
 
 def _rotated_two_page_pdf() -> bytes:
@@ -267,7 +267,7 @@ def test_recipe_preview_pages_use_recipe_prepared_artifact(
             return prepared
 
     monkeypatch.setattr(documents_route, "OracleClient", FakeOracle)
-    monkeypatch.setattr(documents_route, "ObjectStorageClient", FakeStorage)
+    monkeypatch.setattr(documents_route, "FileStorageClient", FakeStorage)
 
     pages = client.get(
         "/api/documents/doc-1/recipes/recipe-1/preview-pages", params={"variant": "prepared"}
@@ -353,7 +353,7 @@ async def test_load_parsed_source_uses_recipe_prepared_artifact(
             read.append(path)
             return b"pdf"
 
-    monkeypatch.setattr(document_crop, "ObjectStorageClient", FakeStorage)
+    monkeypatch.setattr(document_crop, "FileStorageClient", FakeStorage)
     oracle = cast(Any, FakeOracle())
 
     await document_crop.load_parsed_source(oracle, "doc-1", "recipe-1")

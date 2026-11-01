@@ -26,12 +26,9 @@ os.environ["PLATFORM_AUTH_MODE"] = "local"
 
 
 os.environ["NL2SQL_ENABLE_METRICS"] = "false"
-os.environ["NL2SQL_SYNTHETIC_WORKER_MODE"] = "external"
 os.environ["NL2SQL_RUNTIME_MODE"] = "deterministic"
 os.environ["NL2SQL_PERSISTENCE_MODE"] = "memory"
-os.environ["NL2SQL_SELECT_AI_CREDENTIAL_NAME"] = ""
 os.environ["PLATFORM_ORACLE_USER"] = "APP"
-os.environ["NL2SQL_ORACLE_DEEPSEC_ENABLED"] = "false"
 # 業務データの SELECT の間だけ session の時間帯を切り替える経路（#3265）を通すため、
 # 既定（UTC。#3274）ではない時間帯にする。UTC のときに切り替えないことは個別のテストで確かめる。
 os.environ["PLATFORM_TIMEZONE"] = "Asia/Tokyo"
@@ -133,12 +130,10 @@ def _isolate_model_secret_env_file(tmp_path: Any, monkeypatch: pytest.MonkeyPatc
 
     共通 .env（API key・システム設定画面の保存先）と model-settings.json は tmp_path に置く。
     """
-    import app.security.deepsec as deepsec_module
     import app.settings as app_settings
 
     monkeypatch.setattr(app_settings, "BACKEND_ENV_FILE", tmp_path / "backend.env")
     monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", tmp_path / "platform.env")
-    monkeypatch.setattr(deepsec_module, "_BACKEND_ENV_FILE", tmp_path / "backend.env")
 
 
 @pytest.fixture(autouse=True)
@@ -250,31 +245,3 @@ def _markdown_rule_parser(request: pytest.FixtureRequest, monkeypatch: pytest.Mo
 
     monkeypatch.setattr(parser, "parse_rendered_markdown", lambda _markdown: None)
     monkeypatch.setattr(parser, "parse_markdown_rules", all_free)
-
-
-@pytest.fixture(autouse=True)
-def _stub_upload_storage_object_storage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """アップロード保存先の保存の前の確認（#2101）で、実の OCI を呼ばない（既定は成功）。
-
-    失敗を確かめるテストは `default_object_storage_client` をさらに差し替える。
-    """
-    from pr_system_settings import upload_storage_check
-
-    class _ObjectStorageStub:
-        def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def put_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def get_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def delete_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _ObjectStorageStub(),
-    )

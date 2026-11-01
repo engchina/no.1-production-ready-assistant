@@ -1,8 +1,7 @@
 """NL2SQL application service.
 
 この実装は local / CI で外部 Oracle・OCI に依存せずに動く deterministic adapter を持つ。
-実運用では `SelectAiAdapter` / `SelectAiAgentAdapter` / `EnterpriseAiDirectAdapter`
-の generate 部分を Oracle / OCI 呼び出しに差し替える。
+実運用では SQL の生成を OCI Enterprise AI の呼び出し（enterprise_ai_direct）に差し替える。
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ from pr_backend_core.api import (
     DEFAULT_PAGE_LIMIT,
     OffsetParams,
     decode_offset_cursor,
-    empty_page,
     next_offset_cursor,
     paginate,
     paginate_slice,
@@ -96,7 +94,6 @@ from app.features.nl2sql.db_admin_chat_corrections import (
 from app.security.request_actor import (
     actor_scope,
     current_actor_context,
-    current_actor_is_system_admin,
 )
 from app.settings import connection_label, enterprise_ai_connection_for_model, get_settings
 
@@ -216,14 +213,6 @@ from .models import (
     STORED_JOB_REQUEST_CONTEXT,
     AdminFeedbackReviewData,
     AdminFeedbackReviewRequest,
-    AgentConversationCreateData,
-    AgentConversationCreateRequest,
-    AgentConversationItem,
-    AgentConversationsData,
-    AgentPrivilegeCheckData,
-    AgentTeamRunData,
-    AgentTeamRunRequest,
-    AgentToolRunRequest,
     AllowedObjects,
     AnalyzeData,
     AnnotationApplyData,
@@ -232,9 +221,6 @@ from .models import (
     AnnotationApplyStatement,
     AnnotationSuggestion,
     AnnotationSuggestionData,
-    AssetCleanupData,
-    AssetCleanupRequest,
-    AssetRefreshData,
     ClassifierFeedbackImportData,
     ClassifierFeedbackImportRequest,
     ClassifierFeedbackImportResult,
@@ -340,7 +326,6 @@ from .models import (
     MetadataSqlSampleRequest,
     MetadataSqlTarget,
     Nl2SqlEngine,
-    Nl2SqlEngineAvailability,
     Nl2SqlInterpretationArtifact,
     Nl2SqlLogicalStep,
     Nl2SqlLogicalStructureItem,
@@ -348,7 +333,6 @@ from .models import (
     Nl2SqlProfile,
     Nl2SqlQuestionInterpretation,
     Nl2SqlResult,
-    Nl2SqlShowPromptArtifact,
     Nl2SqlSqlInterpretation,
     OntologyGroundingSkipReason,
     PersistenceStatusData,
@@ -359,8 +343,6 @@ from .models import (
     ProfileRecommendationCandidate,
     ProfileRecommendationData,
     ProfileRecommendationRequest,
-    ProfileSelectAiConfig,
-    ProfileSelectAiProfileRequest,
     ProfileSummary,
     ProfileSummaryPage,
     QueryResults,
@@ -392,28 +374,6 @@ from .models import (
     SchemaRefreshTargetObject,
     SchemaTable,
     SchemaViewDependency,
-    SelectAiAgentAsset,
-    SelectAiAgentAssetsData,
-    SelectAiDbProfile,
-    SelectAiDbProfileDetailData,
-    SelectAiDbProfileMutationData,
-    SelectAiDbProfileRefreshJobData,
-    SelectAiDbProfileRefreshMode,
-    SelectAiDbProfileRefreshPhase,
-    SelectAiDbProfileRefreshStatus,
-    SelectAiDbProfileRefreshTarget,
-    SelectAiDbProfilesData,
-    SelectAiDbProfileUpsertRequest,
-    SelectAiFeedbackAddData,
-    SelectAiFeedbackAddRequest,
-    SelectAiFeedbackDeleteRequest,
-    SelectAiFeedbackEntriesData,
-    SelectAiFeedbackEntry,
-    SelectAiFeedbackMutationData,
-    SelectAiFeedbackVectorIndexRequest,
-    SelectAiProfilesExportData,
-    SelectAiProfilesImportRequest,
-    SelectAiRequestOverrides,
     SimilarHistoryData,
     SimilarHistoryItem,
     SimilarHistoryPublishData,
@@ -428,9 +388,6 @@ from .models import (
     StructureToSqlData,
     StructureToSqlOutput,
     StructureToSqlRequest,
-    SyntheticDataGenerateRequest,
-    SyntheticDataOperationData,
-    SyntheticDataResultsData,
     TimingEnvelope,
     TraceProgressData,
 )
@@ -461,10 +418,7 @@ from .ontology_service import BUSINESS_SCOPE_CHANGED_CODE, OntologyGateBlockedEr
 from .oracle_adapter import (
     OracleAdapterError,
     OracleNl2SqlAdapter,
-    SelectAiCredentialMissingError,
-    SelectAiFeedbackNotFoundError,
     TabularImportValidationError,
-    select_ai_object_list_entry,
 )
 from .oracle_dialect import OracleConversion
 from .reverse_generation import ReverseStageError, generate_stage
@@ -476,7 +430,6 @@ from .reverse_prompts import (
     stage_prompt,
 )
 from .sample_datasets import SAMPLE_DATA_CONFIRMATION, SAMPLE_DATASETS
-from .select_ai_readiness import SELECT_AI_CREDENTIAL_ENGINES, assert_select_ai_credential_ready
 from .sql_lexing import prepare_oracle_query, use_session_current_datetime
 from .sql_semantics import parse_oracle_sql
 from .store import MemoryNl2SqlStore, Nl2SqlStore
@@ -511,9 +464,6 @@ from .trace_spans import (
 
 logger = logging.getLogger(__name__)
 
-_SELECT_AI_DB_PROFILE_COLLECTION = "select_ai_db_profiles"
-_SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION = "select_ai_db_profile_refresh_jobs"
-_SELECT_AI_DB_PROFILE_REFRESH_META_COLLECTION = "select_ai_db_profile_refresh_meta"
 _CLASSIFIER_MODEL_FORMAT = "logistic_regression_coefficients_v1"
 # 分類器の特徴量は質問の埋め込み（Oracle のベクトル列と同じ次元。#46）。
 _CLASSIFIER_VECTOR_DIMENSION = EMBEDDING_DIMENSIONS
@@ -552,22 +502,6 @@ class Nl2SqlRepositoryOperationFailed(RuntimeError):
     def __init__(self, reason_code: str) -> None:
         super().__init__(self.public_message)
         self.reason_code = reason_code
-
-
-class ProfileOracleCleanupFailed(RuntimeError):
-    """業務 profile 削除前の Oracle asset cleanup が失敗した場合の公開例外。"""
-
-    public_message = (
-        "Oracle DBMS_CLOUD_AI Profile / Select AI Agent 関連アセットの削除に失敗しました。"
-        "業務プロファイルは削除していません。"
-    )
-
-    def __init__(self, cleanup: list[AssetCleanupData]) -> None:
-        warnings = [item.warning for item in cleanup if item.warning]
-        detail = " ".join(warnings).strip()
-        message = f"{self.public_message} {detail}".strip()
-        super().__init__(message)
-        self.cleanup = cleanup
 
 
 class ProfileNameConflict(ValueError):
@@ -644,42 +578,8 @@ class SchemaRefreshFullRequired(RuntimeError):
         self.reason_code = reason_code
 
 
-@dataclass(frozen=True)
-class SelectAiDbProfileListRefreshSync:
-    """DBMS_CLOUD_AI profile 一覧 mutation 後に UI へ返す同期状態。"""
-
-    job_id: str = ""
-    required: bool = False
-    reason_code: str = ""
-
-
 class JobExecutionLost(RuntimeError):
     """接管または期限切れ後の SQL job 実行を中止する。"""
-
-
-class ProfileListRefreshExecutionLost(RuntimeError):
-    """失効した一覧更新の保存を拒否する。"""
-
-
-class SelectAiDbProfileListRefreshFullRequired(RuntimeError):
-    """Targeted DB profile list sync が安全に確定できず full refresh が必要な状態。"""
-
-    def __init__(self, reason_code: str = "profile_list_refresh_full_required") -> None:
-        super().__init__(reason_code)
-        self.reason_code = reason_code
-
-
-def _profile_list_refresh_required_warning(reason_code: str) -> str:
-    if reason_code == "profile_list_refresh_target_unresolved":
-        return (
-            "DB Profile 一覧の差分同期対象を安全に特定できませんでした。"
-            "DB Profile 一覧を再取得してください。"
-        )
-    if reason_code == "profile_list_refresh_submit_failed":
-        return (
-            "DB Profile 一覧の差分同期を開始できませんでした。DB Profile 一覧を再取得してください。"
-        )
-    return "DB Profile 一覧の差分同期で不整合を検出しました。DB Profile 一覧を再取得してください。"
 
 
 _ORACLE_ERROR_CODE_RE = re.compile(r"\b(?:ORA|DPY|DPI)-\d{4,5}\b", re.IGNORECASE)
@@ -1183,19 +1083,6 @@ class _SampleObjectState:
     legacy: list[str] = field(default_factory=list)
 
 
-_SYNTHETIC_DATA_UNSUPPORTED_DATA_TYPES = {
-    "BFILE",
-    "BLOB",
-    "CLOB",
-    "JSON",
-    "LONG",
-    "LONG RAW",
-    "NCLOB",
-    "RAW",
-    "SDO_GEOMETRY",
-    "VECTOR",
-    "XMLTYPE",
-}
 _SCHEMA_EMPTY_MESSAGE = (
     "Schema catalog が空です。Oracle schema を refresh するか、"
     "Data Tools から sample data を明示的に import してください。"
@@ -3172,26 +3059,6 @@ def _elapsed_ms(started: float) -> int:
     return int((time.monotonic() - started) * 1000)
 
 
-_SELECT_AI_AGENT_RUN_TOOL_PREFIX = "run_tool:"
-
-
-def _select_ai_agent_run_mode(conversation_id: str) -> tuple[str, str]:
-    """Select AI Agent の実行が RUN_TEAM か、RUN_TOOL への切り替えかと、その警告を返す（#1681）。
-
-    adapter は team の profile が消えたときだけ RUN_TOOL に切り替え、conversation_id を
-    ``run_tool:<tool>`` にする。切り替えたことを engine_meta と利用者への警告に残す。
-    """
-    if conversation_id.startswith(_SELECT_AI_AGENT_RUN_TOOL_PREFIX):
-        tool_name = conversation_id[len(_SELECT_AI_AGENT_RUN_TOOL_PREFIX) :]
-        return (
-            "run_tool",
-            "Select AI Agent の team が参照する profile が見つからないため、"
-            f"team を通さずに tool（{tool_name}）を直接実行しました（RUN_TOOL）。"
-            "Select AI Agent の資産を再作成してください。",
-        )
-    return "run_team", ""
-
-
 def _record_engine_timing(
     engine_timings: list[dict[str, Any]],
     *,
@@ -3293,15 +3160,6 @@ def _column_identifier_token(value: str) -> str:
     return parts[-1] if parts else ""
 
 
-def _synthetic_data_type_key(value: str) -> str:
-    normalized = re.sub(r"\s+", " ", value.strip().upper())
-    if normalized.startswith("LONG RAW"):
-        return "LONG RAW"
-    if normalized.startswith("SDO_GEOMETRY"):
-        return "SDO_GEOMETRY"
-    return normalized.split("(", 1)[0].strip()
-
-
 def _csv_identifier(value: str, fallback: str) -> str:
     normalized = re.sub(r"[^0-9A-Za-z_]+", "_", value.strip().upper()).strip("_")
     if not normalized:
@@ -3309,22 +3167,6 @@ def _csv_identifier(value: str, fallback: str) -> str:
     if normalized[0].isdigit():
         normalized = f"C_{normalized}"
     return normalized[:128]
-
-
-def _oracle_asset_key(value: str, fallback: str) -> str:
-    normalized = re.sub(r"[^0-9A-Za-z_]+", "_", value.strip().upper()).strip("_")
-    if not normalized:
-        normalized = fallback.strip().upper() or "PROFILE"
-    return normalized[:128]
-
-
-def _oracle_agent_asset_name(*, prefix: str, profile_key: str, suffix: str) -> str:
-    safe_prefix = _csv_identifier(prefix, "NL2SQL")
-    safe_suffix = _oracle_asset_key(suffix, "ASSET")
-    base = f"{safe_prefix}_{_oracle_asset_key(profile_key, 'PROFILE')}"
-    max_base_length = max(1, 128 - len(safe_suffix) - 1)
-    safe_base = base[:max_base_length].rstrip("_") or safe_prefix[:max_base_length].rstrip("_")
-    return f"{safe_base}_{safe_suffix}"
 
 
 def _existing_oracle_identifier(value: str) -> str:
@@ -3458,22 +3300,6 @@ def _similar_history_question_text_for_similarity(value: str) -> str:
 
 def _similar_history_question_tokens(value: str) -> set[str]:
     return _similarity_tokens(_similar_history_question_text_for_similarity(value))
-
-
-# Select AI / Select AI Agent が生成した SQL の、安全確認を省略する理由（#1523）。
-SELECT_AI_SAFETY_CHECK_SKIP_REASON = "Select AI が生成した SELECT 文のため省略しました。"
-
-_SAFETY_CHECK_SKIPPED_ENGINES = frozenset({Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT})
-
-
-def engine_skips_safety_check(engine: Nl2SqlEngine | None) -> bool:
-    """生成の方式が SQL の安全確認を省略するか（#1523）。
-
-    Select AI / Select AI Agent は既定で SELECT 文を生成するため確かめない（業務プロファイルの
-    表・列の範囲の照合も含めて行わない）。LLM で生成する enterprise_ai_direct と、生成の方式の
-    無い経路（利用者の SQL・SQL の解析の画面）は確かめる。
-    """
-    return engine in _SAFETY_CHECK_SKIPPED_ENGINES
 
 
 def is_select_only(sql: str) -> bool:
@@ -4077,7 +3903,7 @@ def _new_job_steps() -> list[JobStepData]:
 # `kind` に段階の id を持ち、名前は画面の段階の定義が付ける。
 _JOB_PROGRESS_QUEUE_STEP = "queue"
 _JOB_PROGRESS_STAGE_KINDS = frozenset({_JOB_PROGRESS_QUEUE_STEP, *_NL2SQL_JOB_STAGES})
-# 安全性の確認を省略した印（Select AI / Select AI Agent の SQL。#1523）。
+# 安全性の確認を省略した印（#1523）。
 _JOB_PROGRESS_SAFETY_CHECK_SKIPPED_PARAM = "safety_check_skipped"
 # 安全性の確認の補足に出す参照した表の数（残りは件数だけ。画面の「ほか N 件」）。
 _JOB_PROGRESS_TABLES_SHOWN = 3
@@ -4264,10 +4090,7 @@ def _job_progress_execute_details(results: QueryResults) -> ChatProgressStepDeta
 
 
 def _job_safety_check_status(safety: SafetyReport) -> JobStepStatus:
-    """安全性の確認の段階の状態（#1523）。
-
-    遮断は失敗。Select AI / Select AI Agent の SQL で安全確認を省略したときは「省略」。
-    """
+    """安全性の確認の段階の状態（#1523）。遮断は失敗、安全確認を省略したときは「省略」。"""
 
     if not safety.is_safe:
         return JobStepStatus.ERROR
@@ -4603,12 +4426,6 @@ def _reverse_deep_step_details(
     ]
 
 
-# OCI Enterprise AI で生成できない環境の理由（業務プロファイルの既定の生成方式の選択肢。#1524）。
-_DIRECT_ENGINE_UNAVAILABLE_REASON = (
-    "OCI Enterprise AI のモデルの接続が設定されていないか、無効になっています。"
-)
-
-
 class DbAdminChatGenerationError(RuntimeError):
     """DB 管理チャットの SQL の生成・分析ができない（#2264）。`status_code` は応答の status。"""
 
@@ -4821,7 +4638,6 @@ class Nl2SqlService:
 
     def __init__(self, store: Nl2SqlStore | None = None) -> None:
         settings = get_settings()
-        self._deepsec_enabled = settings.oracle_deepsec_enabled
         self._lock = threading.RLock()
         self._catalog = self._build_default_catalog()
         self._oracle_adapter = OracleNl2SqlAdapter(settings)
@@ -4920,7 +4736,6 @@ class Nl2SqlService:
         self._classifier_state_checked_at = 0.0
         self._classifier_model_payload_cache: tuple[str, str, dict[str, Any]] | None = None
         self._classifier_import_lock = threading.RLock()
-        self._asset_meta: dict[Nl2SqlEngine, AssetRefreshData] = {}
         # DB 管理の操作の監査（#2264）。Oracle の永続化では表 NL2SQL_ADMIN_AUDIT_LOG に
         # 件数の上限なく残す。
         self._admin_audit_store = AdminAuditStore(
@@ -5092,10 +4907,6 @@ class Nl2SqlService:
             if item.get("job_id")
         }
         history = [HistoryItem.model_validate(item) for item in snapshot.get("history", [])]
-        asset_meta = {
-            Nl2SqlEngine(engine): AssetRefreshData.model_validate(data)
-            for engine, data in snapshot.get("asset_meta", {}).items()
-        }
         feedback_indexed_ids = {str(item) for item in snapshot.get("feedback_indexed_ids", [])}
         feedback_config = snapshot.get("feedback_search_config", {})
         classifier_examples = [
@@ -5131,7 +4942,6 @@ class Nl2SqlService:
             self._classifier_state_token = -1
             self._classifier_state_checked_at = 0.0
             self._classifier_model_payload_cache = None
-            self._asset_meta = asset_meta
             self._legacy_learning_material = legacy_learning_material
             self._legacy_learning_material_loaded = True
             self._legacy_learning_material_checked_at = time.monotonic()
@@ -5299,45 +5109,13 @@ class Nl2SqlService:
             self._persistence_checked_at = _utc_now()
             self._ontology_name_index_cache = None
 
-    def _merge_additional_instruction_lines(
-        self,
-        existing: str,
-        additions: Iterable[str],
-    ) -> str:
-        base = existing.strip()
-        seen = {line.strip() for line in base.splitlines() if line.strip()}
-        next_lines: list[str] = []
-        for value in additions:
-            line = str(value or "").strip()
-            if not line or line in seen:
-                continue
-            seen.add(line)
-            next_lines.append(line)
-        if not next_lines:
-            return base
-        if base:
-            return "\n".join([base, *next_lines])
-        return "\n".join(next_lines)
+    def _profile_with_unique_sql_rules(self, profile: Nl2SqlProfile) -> Nl2SqlProfile:
+        """全体ルールの空行と重複を除く（1 行 1 件。順序は保つ）。"""
 
-    def _profile_with_sql_rules_absorbed(
-        self,
-        profile: Nl2SqlProfile,
-        *,
-        inherited_rules: Iterable[str] | None = None,
-    ) -> Nl2SqlProfile:
-        config = ProfileSelectAiConfig.model_validate(profile.select_ai_config)
-        rules = self._merge_unique_strings(list(inherited_rules or []), profile.sql_rules)
-        if not rules:
-            return profile.model_copy(update={"sql_rules": [], "select_ai_config": config})
-        config = config.model_copy(
-            update={
-                "additional_instructions": self._merge_additional_instruction_lines(
-                    config.additional_instructions,
-                    rules,
-                )
-            }
-        )
-        return profile.model_copy(update={"sql_rules": [], "select_ai_config": config})
+        rules = self._merge_unique_strings([], profile.sql_rules)
+        if rules == profile.sql_rules:
+            return profile
+        return profile.model_copy(update={"sql_rules": rules})
 
     def _recover_interrupted_jobs(self) -> None:
         for job in self._jobs.values():
@@ -5482,10 +5260,6 @@ class Nl2SqlService:
                 "match_limit": self._feedback_match_limit,
             },
             "classifier_artifact": copy.deepcopy(self._classifier_artifact),
-            "asset_meta": {
-                engine.value: data.model_dump(mode="json")
-                for engine, data in self._asset_meta.items()
-            },
             "legacy_learning_material": self._legacy_learning_material.model_dump(mode="json"),
         }
         if entity_ids is None:
@@ -5890,10 +5664,6 @@ class Nl2SqlService:
                 item.model_dump(mode="json") for item in self._classifier_examples
             ],
             "classifier_artifact": self._classifier_artifact,
-            "asset_meta": {
-                engine.value: data.model_dump(mode="json")
-                for engine, data in self._asset_meta.items()
-            },
             "legacy_learning_material": self._legacy_learning_material.model_dump(mode="json"),
             "saved_at": _utc_now(),
         }
@@ -7987,155 +7757,9 @@ class Nl2SqlService:
         return migrated
 
     def profile_allowed_object_names(self, profile: Nl2SqlProfile) -> list[str]:
-        """Profile が検索・Select AI で参照できる table/view 名を返す。"""
+        """Profile が SQL の生成で参照できる table/view 名を返す。"""
         scoped = self._profile_scope_for_read(profile)
         return self._dedupe_object_names([*scoped.allowed_tables, *scoped.allowed_views])
-
-    def build_select_ai_additional_instructions(
-        self,
-        profile: Nl2SqlProfile,
-        request_instructions: str = "",
-        *,
-        ontology_instructions: str = "",
-    ) -> str:
-        """業務 profile の文脈を Select AI 用の決定論的な指示へまとめる。"""
-        sections: list[str] = []
-
-        rule_lines = [
-            f"- {rule.strip()}" for rule in self._effective_sql_rules(profile) if rule.strip()
-        ]
-        if rule_lines:
-            sections.append("## SQL 生成ルール\n" + "\n".join(rule_lines))
-
-        persistent = profile.select_ai_config.additional_instructions.strip()
-        if persistent:
-            sections.append(f"## プロファイル追加指示\n{persistent}")
-
-        request_value = request_instructions.strip()
-        if request_value:
-            sections.append(f"## 今回の追加指示\n{request_value}")
-        ontology_value = ontology_instructions.strip()
-        if ontology_value:
-            sections.append(f"## 確認済み Ontology コンテキスト\n{ontology_value}")
-        return "\n\n".join(sections)
-
-    def _select_ai_generate_attributes(
-        self,
-        profile: Nl2SqlProfile,
-        overrides: SelectAiRequestOverrides | None,
-        ontology_context: Any | None = None,
-        sql_requirement: SqlRequirementSpec | None = None,
-    ) -> dict[str, Any] | None:
-        ontology_instructions = (
-            self._ontology_generation_context_prompt(ontology_context)
-            if ontology_context is not None
-            else ""
-        )
-        if sql_requirement is not None:
-            requirement_block = sql_requirement.prompt_block()
-            ontology_instructions = (
-                f"{ontology_instructions}\n\n{requirement_block}"
-                if ontology_instructions
-                else requirement_block
-            )
-        attributes: dict[str, Any] = {}
-        request_instructions = overrides.additional_instructions if overrides is not None else ""
-        role = (
-            overrides.role.strip() if overrides is not None else ""
-        ) or profile.select_ai_config.role.strip()
-        instructions = self.build_select_ai_additional_instructions(
-            profile,
-            request_instructions,
-            ontology_instructions=ontology_instructions,
-        )
-        if role:
-            attributes["role"] = role
-        # 空も明示し、保存済み profile の古い共通ルールを残さない。
-        attributes["additional_instructions"] = instructions
-        if sql_requirement is not None and sql_requirement.tables:
-            # object_list を回答前の確認で選んだ表に絞る（#1439。業務プロファイルの範囲の中だけ）。
-            object_list = self._select_ai_requirement_object_list(profile, sql_requirement.tables)
-            if object_list:
-                attributes["object_list"] = object_list
-        return attributes or None
-
-    def _select_ai_requirement_object_list(
-        self, profile: Nl2SqlProfile, tables: Sequence[str]
-    ) -> list[dict[str, str]]:
-        scope = set(self.profile_allowed_object_names(profile))
-        result: list[dict[str, str]] = []
-        for table in tables:
-            canonical = self._resolve_profile_object_name(table)
-            if canonical not in scope:
-                continue
-            try:
-                identity = parse_object_identity(canonical)
-            except ValueError:
-                continue
-            result.append(select_ai_object_list_entry(identity))
-        return result
-
-    def _redact_select_ai_context_attributes(self, attributes: dict[str, Any]) -> dict[str, Any]:
-        """監査・engine meta から業務 prompt 本文を除外する。"""
-        redacted = {
-            key: value
-            for key, value in attributes.items()
-            if key not in {"role", "additional_instructions"}
-        }
-        role = str(attributes.get("role") or "")
-        instructions = str(attributes.get("additional_instructions") or "")
-        redacted.update(
-            {
-                "role_applied": bool(role),
-                "role_length": len(role),
-                "additional_instructions_applied": bool(instructions),
-                "additional_instructions_length": len(instructions),
-            }
-        )
-        return redacted
-
-    def build_select_ai_profile_attributes(self, profile: Nl2SqlProfile) -> dict[str, Any]:
-        """業務 profile から OCI 固定の DBMS_CLOUD_AI attributes を組み立てる。"""
-        settings = get_settings()
-        config = profile.select_ai_config
-        attributes: dict[str, Any] = {
-            "provider": "oci",
-            "enforce_object_list": config.enforce_object_list,
-            "comments": config.comments,
-            "annotations": config.annotations,
-            "constraints": config.constraints,
-            "max_tokens": config.max_tokens,
-            "object_list": self._select_ai_object_list(self.profile_allowed_object_names(profile)),
-        }
-        credential_name = settings.nl2sql_select_ai_credential_name.strip()
-        region = (
-            config.region.strip()
-            or settings.nl2sql_select_ai_region.strip()
-            or settings.oci_region.strip()
-        )
-        model = config.model.strip() or settings.nl2sql_select_ai_model.strip()
-        embedding_model = (
-            config.embedding_model.strip()
-            or settings.oci_genai_embed_model_id.strip()
-            or "cohere.embed-v4.0"
-        )
-        if credential_name:
-            attributes["credential_name"] = credential_name
-        if settings.oci_compartment_id.strip():
-            attributes["oci_compartment_id"] = settings.oci_compartment_id.strip()
-        if region:
-            attributes["region"] = region
-        if model:
-            attributes["model"] = model
-        if embedding_model:
-            attributes["embedding_model"] = embedding_model
-        role = config.role.strip()
-        if role:
-            attributes["role"] = role
-        additional_instructions = self.build_select_ai_additional_instructions(profile)
-        if additional_instructions:
-            attributes["additional_instructions"] = additional_instructions
-        return attributes
 
     def search_profiles(
         self,
@@ -8261,16 +7885,9 @@ class Nl2SqlService:
 
     def create_profile(self, profile: Nl2SqlProfile) -> Nl2SqlProfile:
         profile = self._canonical_profile_scope(
-            self._profile_with_sql_rules_absorbed(profile),
+            self._profile_with_unique_sql_rules(profile),
             migrate_legacy_empty=False,
         ).model_copy(update={"object_scope_version": 2})
-        profile = profile.model_copy(
-            update={
-                "select_ai_config": profile.select_ai_config.model_copy(
-                    update={"previous_profile_name": ""}
-                )
-            }
-        )
         self._assert_profile_name_available(profile.name, exclude_profile_id=profile.id)
         if self._incremental_repository is not None:
             try:
@@ -8303,10 +7920,9 @@ class Nl2SqlService:
             if expected_etag is not None and expected_etag != current.etag:
                 raise IncrementalVersionConflict(current.etag)
             updated = self._canonical_profile_scope(
-                self._profile_with_sql_rules_absorbed(patcher(current)),
+                self._profile_with_unique_sql_rules(patcher(current)),
                 migrate_legacy_empty=False,
             ).model_copy(update={"object_scope_version": 2})
-            updated = self._profile_with_select_ai_rename_marker(current, updated)
             self._assert_profile_name_available(updated.name, exclude_profile_id=profile_id)
             try:
                 stored = self._incremental_repository.save_profile(
@@ -8328,10 +7944,9 @@ class Nl2SqlService:
             self.ensure_persistence_available()
             current = self._profiles[profile_id]
             updated = self._canonical_profile_scope(
-                self._profile_with_sql_rules_absorbed(patcher(current)),
+                self._profile_with_unique_sql_rules(patcher(current)),
                 migrate_legacy_empty=False,
             ).model_copy(update={"object_scope_version": 2})
-            updated = self._profile_with_select_ai_rename_marker(current, updated)
             self._assert_profile_name_available(updated.name, exclude_profile_id=profile_id)
             self._profiles[profile_id] = updated
             self._persist_state()
@@ -8349,52 +7964,6 @@ class Nl2SqlService:
                 continue
             if existing.name.strip().upper() == name_key:
                 raise ProfileNameConflict(profile_name)
-
-    def _profile_with_select_ai_rename_marker(
-        self,
-        current: Nl2SqlProfile,
-        updated: Nl2SqlProfile,
-    ) -> Nl2SqlProfile:
-        current_name = self._select_ai_profile_name(current).strip()
-        current_previous_name = current.select_ai_config.previous_profile_name.strip()
-        requested_previous_name = updated.select_ai_config.previous_profile_name.strip()
-        new_name = self._select_ai_profile_name(updated).strip()
-        select_ai_config = updated.select_ai_config
-        if (
-            current_previous_name
-            and not requested_previous_name
-            and current_name.upper() == new_name.upper()
-        ):
-            return updated
-        old_name = current_previous_name or current_name
-        if old_name and new_name and old_name.upper() != new_name.upper():
-            select_ai_config = select_ai_config.model_copy(
-                update={"previous_profile_name": old_name}
-            )
-        elif (
-            select_ai_config.previous_profile_name.strip()
-            and select_ai_config.previous_profile_name.strip().upper() == new_name.upper()
-        ):
-            select_ai_config = select_ai_config.model_copy(update={"previous_profile_name": ""})
-        return updated.model_copy(update={"select_ai_config": select_ai_config})
-
-    def clear_profile_select_ai_previous_name(
-        self,
-        profile_id: str,
-        *,
-        expected_etag: str | None = None,
-    ) -> Nl2SqlProfile:
-        return self.update_profile(
-            profile_id,
-            lambda profile: profile.model_copy(
-                update={
-                    "select_ai_config": profile.select_ai_config.model_copy(
-                        update={"previous_profile_name": ""}
-                    )
-                }
-            ),
-            expected_etag=expected_etag,
-        )
 
     def delete_profile(self, profile_id: str, *, expected_etag: str | None = None) -> Nl2SqlProfile:
         if self._incremental_repository is not None:
@@ -8423,13 +7992,13 @@ class Nl2SqlService:
             self._persist_state()
         return deleted
 
-    def delete_profile_with_oracle_cleanup(
+    def delete_profile_with_result(
         self,
         profile_id: str,
         *,
         expected_etag: str | None = None,
     ) -> ProfileDeleteData:
-        """業務 profile 削除前に紐づく Oracle Select AI / Agent assets を削除する。"""
+        """業務 profile を削除して返す（版の不一致は IncrementalVersionConflict）。"""
         try:
             current = self.get_profile(profile_id, include_archived=True)
         except ValueError as exc:
@@ -8441,14 +8010,8 @@ class Nl2SqlService:
         ):
             raise IncrementalVersionConflict(current.etag)
 
-        oracle_cleanup = self._cleanup_profile_oracle_assets_for_delete(current)
-        if self._use_oracle_runtime() and any(
-            item.status != "cleaned" or not item.executed for item in oracle_cleanup
-        ):
-            raise ProfileOracleCleanupFailed(oracle_cleanup)
-
         deleted = self.delete_profile(profile_id, expected_etag=expected_etag)
-        return ProfileDeleteData(profile=deleted, oracle_cleanup=oracle_cleanup)
+        return ProfileDeleteData(profile=deleted)
 
     def import_profile_learning_material(
         self,
@@ -8484,20 +8047,11 @@ class Nl2SqlService:
                     current.few_shot_examples,
                     parsed["examples"],
                 )
-            config = current.select_ai_config.model_copy(
-                update={
-                    "additional_instructions": self._merge_additional_instruction_lines(
-                        current.select_ai_config.additional_instructions,
-                        parsed["rules"],
-                    )
-                }
-            )
             return current.model_copy(
                 update={
                     "glossary": glossary,
-                    "sql_rules": [],
+                    "sql_rules": self._merge_unique_strings(current.sql_rules, parsed["rules"]),
                     "few_shot_examples": examples,
-                    "select_ai_config": config,
                 }
             )
 
@@ -8536,11 +8090,7 @@ class Nl2SqlService:
                     examples_sheet,
                     [example.get("question", ""), example.get("sql", "")],
                 )
-        rules = [
-            line.strip()
-            for line in profile.select_ai_config.additional_instructions.splitlines()
-            if line.strip()
-        ]
+        rules = [rule.strip() for rule in profile.sql_rules if rule.strip()]
         if rules:
             rules_sheet = workbook.create_sheet("rules")
             _append_excel_text_row(rules_sheet, ["RULE"])
@@ -8870,10 +8420,7 @@ class Nl2SqlService:
         # Queue 投入前に profile と request scope を検証し、未知 profile を非同期
         # error へ隠さない。
         accepted_started = time.monotonic()
-        profile = self.get_profile(request.profile_id)
-        # 生成の方式を省略したジョブ（Agent の MCP の nl2sql_query など）は業務プロファイルの既定の
-        # 生成方式にする（#1524）。保存するジョブ・再送の照合は決めた方式で行う。
-        request = request.with_profile_default_engine(profile.default_engine)
+        self.get_profile(request.profile_id)
         self._resolve_allowed_objects(request.profile_id, request.allowed_objects)
         if request.client_job_id is not None:
             # 応答が届かなかった送信の再送は、作成済みのジョブを返す（二重に生成しない。#900）。
@@ -8883,10 +8430,6 @@ class Nl2SqlService:
             job_id = str(request.client_job_id)
         else:
             job_id = str(uuid.uuid4())
-        if request.engine in SELECT_AI_CREDENTIAL_ENGINES:
-            # Select AI / Select AI Agent の生成は Select AI の Credential が前提。新しいジョブを
-            # 作る前に確かめ、無ければ止める（画面・Agent の MCP とも同じ。#1688）。
-            assert_select_ai_credential_ready(self._oracle_adapter)
         conversation_id = ""
         conversation_owner = ""
         if request.is_chat_turn:
@@ -8928,8 +8471,6 @@ class Nl2SqlService:
             )
         elif request.attachments or request.attachment_ids:
             raise ValueError("添付ファイルはチャットの質問にだけ付けられます。")
-        if self._deepsec_enabled and not actor_user_uuid:
-            raise ValueError("DeepSec 有効時のジョブには認証済み actor が必要です。")
         # オントロジーの公開版（business_release_id）は worker の prepare_context で確定する。
         # 確定にはオントロジーの runtime の lock と DB の読み取りが要り、その lock は別の処理
         # （オントロジーの同期・前のジョブの結果の整形など）が DB I/O の間も持つことがある。投入の
@@ -10033,7 +9574,7 @@ class Nl2SqlService:
         → 安全検査（`analyze_sql`。SELECT だけ。生成の後に範囲が変わっていれば拒否する）→
         `execute_sql`
         （`OracleNl2SqlAdapter.user_data_connection(read_only=True)`。system_admin と
-        非 system_admin で別の接続、DeepSec 有効時の非 system_admin は DATA USER の pool。#904）
+        非 system_admin で別の接続。#904）
         → 実行履歴（監査）。actor は要求の利用者を `actor_scope` で明示する（ジョブの worker の
         `_run_job_safely` と同じ）。
 
@@ -10084,8 +9625,6 @@ class Nl2SqlService:
                 question=result.rewritten_question or job.request.question,
                 allowed=allowed,
                 log_event="nl2sql_chat_execute_sql_failed",
-                # ジョブに保存した生成の方式（画面から受け取らない。#1523）。
-                engine=result.engine,
             )
         history_item = HistoryItem(
             generation_only=False,
@@ -10154,12 +9693,10 @@ class Nl2SqlService:
         question: str,
         allowed: AllowedObjects,
         log_event: str,
-        engine: Nl2SqlEngine | None,
     ) -> SqlChatExecuteData:
         """チャットのターンの SQL をチャットの上限で実行する（明示の実行とジョブの中。#1176）。
 
         経路は SQL 生成のジョブの実行の段階と同じ（安全検査 → `_execute_generated_sql`）。
-        `engine` は SQL を生成した方式（Select AI / Select AI Agent は安全確認を省略する。#1523）。
         行数・セルの文字数・バイト数はチャットの上限（#1154）。actor（接続の分離。#904）は呼び出し側が
         `actor_scope` で明示する（ジョブの worker は `_run_job_safely`）。
         """
@@ -10170,7 +9707,7 @@ class Nl2SqlService:
         )
         max_cell_chars = int(settings.nl2sql_chat_result_max_cell_chars)
         started = time.monotonic()
-        analysis = self.analyze_sql(generated_sql, allowed, row_limit, engine=engine)
+        analysis = self.analyze_sql(generated_sql, allowed, row_limit)
         analysis = self._apply_empty_filter_generation_guard(question, analysis)
         if analysis.safety.is_safe:
             execution = self._execute_generated_sql(
@@ -10232,7 +9769,6 @@ class Nl2SqlService:
                 "has_more": bool(data.results.has_more or data.results.truncated),
                 "cells_truncated": data.cells_truncated,
                 "execution_context": data.results.execution_context,
-                "vpd_context_enforced": data.results.vpd_context_enforced,
                 "elapsed_ms": data.elapsed_ms,
                 # ジョブの中の実行（送信）か、明示の実行（もう一度実行）か（#1176）。
                 "in_job": in_job,
@@ -10338,7 +9874,6 @@ class Nl2SqlService:
             profile=profile,
             allowed=allowed,
             row_limit=request.row_limit,
-            select_ai_overrides=request.select_ai_overrides,
             ontology_context=request.ontology_context,
             use_glossary=request.use_glossary,
         )
@@ -10348,7 +9883,6 @@ class Nl2SqlService:
             allowed,
             row_limit,
             catalog=generated.schema_catalog,
-            engine=generated.engine,
         )
         analysis = self._apply_empty_filter_generation_guard(rewritten, analysis)
         timing = TimingEnvelope(
@@ -10479,19 +10013,8 @@ class Nl2SqlService:
         *,
         use_llm: bool = False,
         catalog: SchemaCatalog | None = None,
-        engine: Nl2SqlEngine | None = None,
     ) -> AnalyzeData:
-        """SQL の安全性・参照した表と列・構造を解析する。
-
-        `engine` は SQL を生成した方式（#1523）。Select AI / Select AI Agent が生成した SQL は
-        既定で SELECT 文なので、安全確認を一切しない（SELECT だけか・危険な関数・bind の
-        placeholder・未承認の関数・他製品のシステムの表・業務プロファイルの表と列の範囲・LLM の
-        解析の補強）。業務プロファイルの列の制限は、Select AI の profile の object_list が表の単位の
-        ため、この 2 方式では効かない。参照した表・列と構造は表示のために解析する。
-        `engine` が無い経路（利用者の SQL の実行・SQL の解析の画面）と enterprise_ai_direct は、
-        すべてを確かめる。
-        """
-        skip_safety_check = engine_skips_safety_check(engine)
+        """SQL の安全性・参照した表と列・構造を解析する（生成した SQL も利用者の SQL も）。"""
         # 会話の添付の表（#2517。WITH 句で用意する表）は、列の形だけの CTE を前に付けて検証する
         # （業務の表の範囲・列の制限は今までどおり）。
         sql = validation_sql(sql)
@@ -10544,9 +10067,8 @@ class Nl2SqlService:
         has_wildcard = bool(
             graph and any(projection.contains_wildcard for projection in graph.projections)
         )
-        # Select AI の SQL は SELECT 文として扱う（確かめない。#1523）。
-        select_only = skip_safety_check or (graph is not None and is_select_only(sql))
-        form_check = not skip_safety_check and graph is not None and select_only
+        select_only = graph is not None and is_select_only(sql)
+        form_check = graph is not None and select_only
         dangerous_function_names = _dangerous_oracle_function_names(sql) if form_check else []
         bind_placeholder_names = _bind_placeholder_names(sql) if form_check else []
         unapproved_function_names = (
@@ -10556,10 +10078,7 @@ class Nl2SqlService:
         )
         warnings: list[str] = []
         blocked_reason = ""
-        if skip_safety_check:
-            # Select AI / Select AI Agent の SQL は止めない（#1523）。
-            pass
-        elif graph is None:
+        if graph is None:
             blocked_reason = semantic.validation.findings[0].message_ja
         elif not select_only:
             blocked_reason = (
@@ -10573,12 +10092,8 @@ class Nl2SqlService:
             blocked_reason = (
                 f"{', '.join(unapproved_function_names)}: {_UNAPPROVED_FUNCTION_MESSAGE}"
             )
-        hidden_referenced = (
-            []
-            if skip_safety_check
-            else _hidden_schema_object_names(referenced, current_owner=current_owner)
-        )
-        if skip_safety_check or blocked_reason:
+        hidden_referenced = _hidden_schema_object_names(referenced, current_owner=current_owner)
+        if blocked_reason:
             pass
         elif hidden_referenced:
             blocked_reason = _system_object_blocked_message(hidden_referenced)
@@ -10602,7 +10117,7 @@ class Nl2SqlService:
             warnings.append(f"SQL に行数制限がないため、取得は先頭 {row_limit} 件までになります。")
         if sql.strip().endswith(";") and ";" not in sql.strip().rstrip(";"):
             warnings.append("API 実行時は末尾のセミコロンを除去します。")
-        if not skip_safety_check and has_wildcard and allowed.columns:
+        if has_wildcard and allowed.columns:
             warnings.append("列選択が制限されているため、SELECT * は実行できません。")
         safety = SafetyReport(
             is_safe=not blocked_reason,
@@ -10612,25 +10127,16 @@ class Nl2SqlService:
             warnings=warnings,
             referenced_tables=referenced,
             referenced_columns=referenced_columns,
-            safety_checked=not skip_safety_check,
-            safety_check_skip_reason=SELECT_AI_SAFETY_CHECK_SKIP_REASON
-            if skip_safety_check
-            else "",
         )
         executable_sql = normalize_executable_sql(sql) if select_only else ""
-        # 確かめなかった SQL には修正案を出さない（#1523）。
-        repaired_sql = (
-            ""
-            if skip_safety_check
-            else self._repair_sql(
-                sql=sql,
-                safety=safety,
-                allowed=allowed,
-                referenced_tables=referenced,
-                referenced_columns=referenced_columns,
-                has_wildcard=has_wildcard,
-                catalog=catalog,
-            )
+        repaired_sql = self._repair_sql(
+            sql=sql,
+            safety=safety,
+            allowed=allowed,
+            referenced_tables=referenced,
+            referenced_columns=referenced_columns,
+            has_wildcard=has_wildcard,
+            catalog=catalog,
         )
         structure = self._sql_structure(sql, referenced)
         optimization_hints = self._optimization_hints(safety=safety, sql=sql, row_limit=row_limit)
@@ -10666,7 +10172,7 @@ class Nl2SqlService:
             joins=structure["joins"],
             aggregations=structure["aggregations"],
         )
-        if use_llm and not skip_safety_check:
+        if use_llm:
             return self._enhance_sql_analysis_with_llm(data, sql, allowed, catalog=catalog)
         return data
 
@@ -11340,42 +10846,11 @@ class Nl2SqlService:
         )
         similar_history_publish = self._publish_admin_feedback_to_similar_history(updated)
 
-        select_ai_feedback: SelectAiFeedbackAddData | None = None
-        if request.register_select_ai_feedback:
-            response = (
-                request.select_ai_response.strip()
-                or current.executable_sql.strip()
-                or current.generated_sql.strip()
-            )
-            if not response:
-                select_ai_feedback = SelectAiFeedbackAddData(
-                    runtime="oracle" if self._use_oracle_runtime() else "deterministic",
-                    executed=False,
-                    status="validation_error",
-                    profile_name=request.select_ai_profile_name.strip(),
-                    warnings=["Select AI feedback 登録用 response SQL を入力してください。"],
-                )
-            else:
-                select_ai_feedback = self.add_select_ai_feedback(
-                    SelectAiFeedbackAddRequest(
-                        profile_id=current.profile_id or "default",
-                        profile_name=request.select_ai_profile_name.strip(),
-                        question=current.question,
-                        feedback_type=(
-                            "positive" if request.rating == FeedbackRating.GOOD else "negative"
-                        ),
-                        response=response,
-                        feedback_content=feedback_content,
-                        generated_sql=current.generated_sql,
-                    )
-                )
-
         return AdminFeedbackReviewData(
             history_id=request.history_id,
             rating=request.rating,
             saved=True,
             feedback_content=feedback_content,
-            select_ai_feedback=select_ai_feedback,
             similar_history_publish=similar_history_publish,
         )
 
@@ -11819,7 +11294,7 @@ class Nl2SqlService:
         )
         return SimilarHistoryData(
             items=[self._similar_history_item(candidate) for candidate in candidates],
-            used_for_generation=self._engine_uses_similar_history_few_shot(engine),
+            used_for_generation=True,
             engine=engine,
         )
 
@@ -14905,7 +14380,7 @@ class Nl2SqlService:
                 prompt=(
                     "以下の情報に基づき、Oracle COMMENT ON 文のみを生成してください。"
                     "説明文、前置き、markdown code fence は出力しないでください。\n\n"
-                    "コメントの書き方(Select AI が業務用語を正しく SQL に変換できるようにする):\n"
+                    "コメントの書き方(SQL の生成で業務用語を正しく SQL に変換できるようにする):\n"
                     "- 表: 1 行が何を表すか"
                     "(例: 'Customer master. One row represents one customer.')\n"
                     "- 列: 業務上の意味に加え、コード値の意味"
@@ -15043,7 +14518,7 @@ class Nl2SqlService:
     ) -> MetadataSqlGenerateData:
         """アノテーション管理の SQL 生成を OCI Enterprise AI へ再マップする。
 
-        語彙は Select AI が業務用語を SQL に変換するのに効く "DESCRIPTION" / "ALIASES" /
+        語彙は SQL の生成で業務用語を SQL に変換するのに効く "DESCRIPTION" / "ALIASES" /
         "VALUES" / "UNITS" / "JOIN COLUMN"(Oracle AI Database の検証記事に準拠)。
         """
         started = time.monotonic()
@@ -15075,7 +14550,7 @@ class Nl2SqlService:
                 response_format=response_format(SqlOutput),
                 max_output_tokens=self._metadata_sql_output_tokens(batch),
                 prompt=(
-                    "以下の情報に基づき、Select AI(NL2SQL)が業務用語を正しく SQL に変換できる"
+                    "以下の情報に基づき、SQL の生成(NL2SQL)で業務用語を正しく SQL に変換できる"
                     "ように、Oracle ALTER TABLE/ALTER VIEW/ALTER MATERIALIZED VIEW の "
                     "ANNOTATIONS 文のみを生成してください。\n\n"
                     "出力ルール:\n"
@@ -15099,7 +14574,7 @@ class Nl2SqlService:
                     '- "JOIN COLUMN": 外部キー情報から結合先'
                     "(例: 'Join with CUST_MST.CUST_ID.')\n"
                     "- COMMENT: は入力メタデータの項目名であり、annotation 名として使用しない\n"
-                    "- data_type / nullable / sample_header / sample_data は Select AI が DDL から"
+                    "- data_type / nullable / sample_header / sample_data は SQL の生成が DDL から"
                     "得るため生成しない\n"
                     '- 構造情報で DOMAIN= が付いた列はドメインから "DESCRIPTION" 等を継承するため、'
                     '表固有の "JOIN COLUMN" だけを付ける\n\n'
@@ -15142,7 +14617,7 @@ class Nl2SqlService:
             )
 
         def finish(raw: str, batch: MetadataSqlGenerateRequest) -> str:
-            # sample_header / sample_data は Select AI に不要なため常に除外する。
+            # sample_header / sample_data は SQL の生成に不要なため常に除外する。
             sql = self._clean_generated_metadata_sql(
                 SqlOutput.model_validate_json(raw).sql,
                 "annotation_sql",
@@ -15262,7 +14737,7 @@ class Nl2SqlService:
                         if has_samples
                         else "- サンプルが無いため CHECK 制約は付けない\n"
                     )
-                    + "- ANNOTATIONS は Select AI が読む語彙で付ける: "
+                    + "- ANNOTATIONS は SQL の生成が読む語彙で付ける: "
                     '"DESCRIPTION"(業務上の意味)、'
                     '"ALIASES"(英語と日本語の同義語をカンマ区切り)、'
                     '"VALUES"(コード値の意味。サンプルから明確な場合のみ)、'
@@ -16518,173 +15993,11 @@ class Nl2SqlService:
             if is_user_visible_schema_object(table.owner, table.table_name)
         ]
 
-    def _synthetic_unsupported_columns(self, table: SchemaTable) -> list[SchemaColumn]:
-        return [
-            column
-            for column in table.columns
-            if _synthetic_data_type_key(column.data_type) in _SYNTHETIC_DATA_UNSUPPORTED_DATA_TYPES
-        ]
-
     def _find_catalog_column(self, table: SchemaTable, column_name: str) -> SchemaColumn | None:
         normalized = _normalize_identifier(column_name)
         return next(
             (column for column in table.columns if column.column_name == normalized),
             None,
-        )
-
-    def generate_synthetic_data(
-        self, request: SyntheticDataGenerateRequest
-    ) -> SyntheticDataOperationData:
-        started = time.monotonic()
-        created_at = _utc_now()
-        warnings: list[str] = []
-        requested_source = (
-            [request.table_name] if request.table_name.strip() else request.object_list
-        )
-        safe_objects: list[str] = []
-        for raw_object_name in requested_source:
-            if not raw_object_name.strip():
-                continue
-            identity = self._db_admin_object_identity(raw_object_name)
-            object_name = identity.qualified_name
-            table = self._find_catalog_table(object_name)
-            if table is None:
-                warnings.append(f"{object_name}: catalog に存在しない table です。")
-                safe_objects.append(object_name)
-                continue
-            unsupported_columns = self._synthetic_unsupported_columns(table)
-            if unsupported_columns:
-                column_text = ", ".join(
-                    f"{column.column_name}({column.data_type})" for column in unsupported_columns
-                )
-                warnings.append(
-                    f"{object_name}: DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA は "
-                    f"{column_text} を含む table をサポートしません。"
-                    "BLOB/CLOB/RAW/VECTOR などを除いた view または別 table を対象にしてください。"
-                )
-                continue
-            safe_objects.append(object_name)
-        safe_table_name = safe_objects[0] if safe_objects else ""
-        if not safe_objects:
-            warnings.append("synthetic data の対象にできる table がありません。")
-        executed = False
-        status = "error"
-        engine_meta: dict[str, Any] = {"runtime": "deterministic"}
-        runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
-        row_count = request.rows_per_table or request.row_count
-        profile_name = request.profile_name.strip()
-        if not profile_name and request.profile_id:
-            profile_name = self._select_ai_profile_name(self.get_profile(request.profile_id))
-        prompt = "\n".join(
-            part for part in [request.user_prompt.strip(), request.extra_prompt.strip()] if part
-        )
-        object_summary = ", ".join(safe_objects) or "-"
-        message = f"{object_summary} に {row_count} 行/表の synthetic data を生成する plan です。"
-        if not safe_objects:
-            message = "synthetic data の対象にできる table がありません。"
-        if safe_objects:
-            # 単一テーブル指定(table_name)は対象名の入力を必須にする。複数テーブル
-            # 指定(object_list)は単一の対象名が存在しないため ADMIN_EXECUTE で確認
-            # する。判定はユーザーが確認した時点の request の形に合わせる(skip に
-            # よる絞り込み後の件数では変えない)。
-            confirmation_error = self._admin_confirmation_error(
-                confirmation=request.confirmation,
-                target=safe_table_name if request.table_name.strip() else "ADMIN_EXECUTE",
-            )
-            if (
-                confirmation_error
-                and request.table_name.strip()
-                and safe_table_name.split(".", 1)[0] == self._current_schema_owner()
-            ):
-                confirmation_error = self._admin_confirmation_error(
-                    confirmation=request.confirmation,
-                    target=safe_table_name.split(".", 1)[1],
-                )
-            if confirmation_error:
-                status = "confirmation_required"
-                warnings.append(confirmation_error)
-            elif not self._use_oracle_runtime():
-                status = "requires_oracle"
-                warnings.append(
-                    "DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA の実行には "
-                    "NL2SQL_RUNTIME_MODE=oracle が必要です。"
-                )
-            elif not profile_name:
-                raise ValueError(
-                    "DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA の実行には "
-                    "Select AI profile 名が必要です。"
-                )
-            else:
-                try:
-                    use_object_list = not request.table_name.strip() and len(safe_objects) > 1
-                    raw_engine_meta = self._oracle_adapter.generate_synthetic_data(
-                        table_name="" if use_object_list else safe_table_name,
-                        object_list=safe_objects if use_object_list else [],
-                        row_count=row_count,
-                        profile_name=profile_name,
-                        user_prompt=prompt,
-                        sample_rows=request.sample_rows,
-                        use_comments=request.use_comments,
-                    )
-                    engine_meta.update(
-                        {
-                            key: value
-                            for key, value in raw_engine_meta.items()
-                            if key not in {"operation_id", "operationId"}
-                        }
-                    )
-                    executed = True
-                    status = "executed"
-                    message = "DBMS_CLOUD_AI synthetic data generation を実行しました。"
-                    self._record_admin_audit(
-                        operation="synthetic_data_generate",
-                        target=",".join(safe_objects),
-                        executed=True,
-                        reason=request.reason,
-                        detail={
-                            "profile_name": profile_name,
-                            "row_count": row_count,
-                        },
-                    )
-                except OracleAdapterError as exc:
-                    status = "error"
-                    warnings.append(str(exc))
-        return SyntheticDataOperationData(
-            table_name=safe_table_name,
-            object_list=safe_objects,
-            row_count=row_count,
-            executed=executed,
-            runtime=runtime,
-            status=status,
-            message=message,
-            warnings=warnings,
-            engine_meta=engine_meta,
-            timing=self._timing(created_at, started, "synthetic_data"),
-        )
-
-    def synthetic_data_results(self, table_name: str, limit: int = 100) -> SyntheticDataResultsData:
-        identity = self._db_admin_object_identity(table_name)
-        safe_table_name = identity.qualified_name
-        quoted_table_name = _quote_object_identity(identity)
-        sql = normalize_executable_sql(f"SELECT * FROM {quoted_table_name}")  # nosec B608
-        warnings: list[str] = []
-        if self._use_oracle_runtime():
-            try:
-                results = self._oracle_adapter.execute_select(sql, limit)
-                return SyntheticDataResultsData(
-                    table_name=safe_table_name,
-                    runtime="oracle",
-                    results=results,
-                    warnings=warnings,
-                )
-            except OracleAdapterError:
-                raise
-        return SyntheticDataResultsData(
-            table_name=safe_table_name,
-            runtime="deterministic",
-            results=self._mock_execute(sql, min(limit, 20)),
-            warnings=warnings
-            or ["Oracle runtime ではないため deterministic result preview を返しました。"],
         )
 
     def diagnostics(self) -> DiagnosticsData:
@@ -16710,19 +16023,6 @@ class Nl2SqlService:
         )
         text_connection_label = connection_label(text_connection.connection_id)
         uses_oracle_runtime = self._use_oracle_runtime()
-        with self._lock:
-            select_ai_asset_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI)
-            agent_asset_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        select_ai_assets_ready = (
-            select_ai_asset_meta is not None
-            and select_ai_asset_meta.refreshed
-            and select_ai_asset_meta.status == "ready"
-        )
-        agent_assets_ready = (
-            agent_asset_meta is not None
-            and agent_asset_meta.refreshed
-            and agent_asset_meta.status == "ready"
-        )
         oracle_live_ok = False
         oracle_live_message = "deterministic runtime のため live 接続は未確認です。"
         if uses_oracle_runtime:
@@ -16731,9 +16031,6 @@ class Nl2SqlService:
         checks = [
             check_present("PLATFORM_ORACLE_DSN", "Oracle DSN"),
             check_present("PLATFORM_ORACLE_USER", "Oracle user"),
-            check_present("PLATFORM_ORACLE_ADB_OCID", "ADB OCID"),
-            check_present("PLATFORM_OCI_REGION", "OCI region"),
-            check_present("PLATFORM_OCI_COMPARTMENT_ID", "OCI compartment"),
             # テキストモデルの接続（#533）。セカンダリ接続なら
             # PLATFORM_OCI_ENTERPRISE_AI_SECONDARY_*。
             DiagnosticCheck(
@@ -16778,76 +16075,6 @@ class Nl2SqlService:
                 name="NL2SQL_PERSISTENCE_READY",
                 status="ok" if persistence_ready else "warning",
                 message=persistence_message,
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_ENABLED",
-                status="ok" if settings.nl2sql_select_ai_enabled else "warning",
-                message=(
-                    "Select AI engine は有効です。"
-                    if settings.nl2sql_select_ai_enabled
-                    else "Select AI engine は無効です。"
-                ),
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_PROVIDER",
-                status="ok" if settings.nl2sql_select_ai_provider else "warning",
-                message=(
-                    f"Select AI provider は {settings.nl2sql_select_ai_provider} です。"
-                    if settings.nl2sql_select_ai_provider
-                    else "Select AI provider が未設定です。"
-                ),
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_CREDENTIAL_NAME",
-                status=(
-                    "ok"
-                    if settings.nl2sql_select_ai_credential_name or not uses_oracle_runtime
-                    else "warning"
-                ),
-                message=(
-                    "Select AI credential name は設定済みです。"
-                    if settings.nl2sql_select_ai_credential_name
-                    else (
-                        "Oracle runtime では Select AI credential name の設定を推奨します。"
-                        if uses_oracle_runtime
-                        else "deterministic runtime のため credential name は任意です。"
-                    )
-                ),
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_PROFILE_REFRESHED",
-                status="ok" if (select_ai_assets_ready or not uses_oracle_runtime) else "warning",
-                message=(
-                    f"Select AI profile は {select_ai_asset_meta.profile_name} として更新済みです。"
-                    if select_ai_assets_ready and select_ai_asset_meta is not None
-                    else (
-                        "deterministic runtime のため Select AI profile refresh は任意です。"
-                        if not uses_oracle_runtime
-                        else "Select AI profile refresh がこの app state では未確認です。"
-                    )
-                ),
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_AGENT_ENABLED",
-                status="ok" if settings.nl2sql_select_ai_agent_enabled else "warning",
-                message=(
-                    "Select AI Agent engine は有効です。"
-                    if settings.nl2sql_select_ai_agent_enabled
-                    else "Select AI Agent engine は無効です。"
-                ),
-            ),
-            DiagnosticCheck(
-                name="NL2SQL_SELECT_AI_AGENT_ASSETS_REFRESHED",
-                status="ok" if (agent_assets_ready or not uses_oracle_runtime) else "warning",
-                message=(
-                    f"Select AI Agent team は {agent_asset_meta.team_name} として更新済みです。"
-                    if agent_assets_ready and agent_asset_meta is not None
-                    else (
-                        "deterministic runtime のため Agent assets refresh は任意です。"
-                        if not uses_oracle_runtime
-                        else "Select AI Agent assets refresh がこの app state では未確認です。"
-                    )
-                ),
             ),
             DiagnosticCheck(
                 name="NL2SQL_RUNTIME_MODE",
@@ -16944,8 +16171,6 @@ class Nl2SqlService:
             embedding_configured=embedding_configured,
             embedding_module_available=embedding_module_available,
             enterprise_ai_configured=enterprise_ai_configured,
-            select_ai_assets_ready=select_ai_assets_ready,
-            agent_assets_ready=agent_assets_ready,
         )
         smoke_checks = self._diagnostic_smoke_checks(readiness=readiness)
         config_guides = self._diagnostic_config_guides(
@@ -16983,70 +16208,6 @@ class Nl2SqlService:
             return "ok" if is_ready(areas) else "warning"
 
         return [
-            DiagnosticSmokeCheck(
-                id="refresh_select_ai_profile",
-                label="Select AI profile refresh",
-                category="asset_refresh",
-                status=status(["oracle_adb", "select_ai"]),
-                method="POST",
-                endpoint="/api/nl2sql/select-ai/profiles/refresh?profile_id=<business-profile-id>",
-                expected="refreshed=true, status=ready, profile_name が返ること。",
-                next_action=next_action(
-                    ["oracle_adb", "select_ai"],
-                    "Oracle runtime と Select AI provider / credential を設定してください。",
-                ),
-                related_readiness=["oracle_adb", "select_ai"],
-            ),
-            DiagnosticSmokeCheck(
-                id="refresh_select_ai_agent_assets",
-                label="Select AI Agent assets refresh",
-                category="asset_refresh",
-                status=status(["oracle_adb", "select_ai_agent"]),
-                method="POST",
-                endpoint="/api/nl2sql/select-ai-agent/assets/refresh?profile_id=<business-profile-id>",
-                expected="tool / agent / task / team 名と status=ready が返ること。",
-                next_action=next_action(
-                    ["oracle_adb", "select_ai_agent"],
-                    "Select AI profile 更新後に Agent assets refresh を実行してください。",
-                ),
-                related_readiness=["oracle_adb", "select_ai_agent"],
-            ),
-            DiagnosticSmokeCheck(
-                id="preview_select_ai",
-                label="Select AI preview",
-                category="engine_preview",
-                status=status(["oracle_adb", "select_ai"]),
-                method="POST",
-                endpoint="/api/nl2sql/preview",
-                request_hint='{"engine":"select_ai","question":"登録済みの表から主要な列を一覧したい"}',
-                expected="engine=select_ai, safety.is_safe=true, generated SQL が SELECT/WITH。",
-                next_action=next_action(
-                    ["oracle_adb", "select_ai"],
-                    "Select AI profile refresh を先に完了してください。",
-                ),
-                related_readiness=["oracle_adb", "select_ai"],
-            ),
-            DiagnosticSmokeCheck(
-                id="preview_select_ai_agent",
-                label="Select AI Agent preview",
-                category="engine_preview",
-                status=status(["oracle_adb", "select_ai_agent"]),
-                method="POST",
-                endpoint="/api/nl2sql/preview",
-                request_hint=(
-                    '{"engine":"select_ai_agent","profile_id":"<business-profile-id>",'
-                    '"question":"登録済みの表から主要な列を一覧したい"}'
-                ),
-                expected=(
-                    "engine=select_ai_agent, engine_meta.team_name / conversation_id, "
-                    "safety.is_safe=true。"
-                ),
-                next_action=next_action(
-                    ["oracle_adb", "select_ai_agent"],
-                    "Agent tool / task / team assets refresh を先に完了してください。",
-                ),
-                related_readiness=["oracle_adb", "select_ai_agent"],
-            ),
             DiagnosticSmokeCheck(
                 id="preview_enterprise_ai_direct",
                 label="Enterprise AI Direct preview",
@@ -17088,19 +16249,19 @@ class Nl2SqlService:
                 id="manual_integration_script",
                 label="Manual integration script",
                 category="manual_script",
-                status=status(["oracle_adb", "select_ai", "select_ai_agent"]),
+                status=status(["oracle_adb", "enterprise_ai_direct"]),
                 command=(
                     "cd backend && uv run python scripts/nl2sql_manual_integration.py "
-                    "--require-oracle --refresh-assets --execute "
+                    "--require-oracle --execute "
                     "--check-supporting-features "
-                    "--engines select_ai_agent,select_ai,enterprise_ai_direct"
+                    "--engines enterprise_ai_direct"
                 ),
-                expected="[ok] diagnostics / refresh / preview / job lines が表示されること。",
+                expected="[ok] diagnostics / preview / job lines が表示されること。",
                 next_action=next_action(
-                    ["oracle_adb", "select_ai", "select_ai_agent"],
-                    "Oracle / Select AI / Agent readiness を ok にしてください。",
+                    ["oracle_adb", "enterprise_ai_direct"],
+                    "Oracle / Enterprise AI Direct の readiness を ok にしてください。",
                 ),
-                related_readiness=["oracle_adb", "select_ai", "select_ai_agent"],
+                related_readiness=["oracle_adb", "enterprise_ai_direct"],
             ),
         ]
 
@@ -17195,8 +16356,6 @@ class Nl2SqlService:
                 ),
                 required_env_vars=[
                     env_var("NL2SQL_FEEDBACK_EMBEDDING_ENABLED"),
-                    env_var("PLATFORM_OCI_REGION"),
-                    env_var("PLATFORM_OCI_COMPARTMENT_ID"),
                     env_var("PLATFORM_OCI_GENAI_ENDPOINT"),
                     env_var("PLATFORM_OCI_GENAI_EMBED_MODEL_ID"),
                 ],
@@ -17206,8 +16365,6 @@ class Nl2SqlService:
                 ],
                 env_template=(
                     "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true\n"
-                    "PLATFORM_OCI_REGION=<oci-region>\n"
-                    "PLATFORM_OCI_COMPARTMENT_ID=<compartment-ocid>\n"
                     "PLATFORM_OCI_GENAI_ENDPOINT=<oci-genai-endpoint>\n"
                     "PLATFORM_OCI_GENAI_EMBED_MODEL_ID=cohere.embed-v4.0\n"
                     "NL2SQL_FEEDBACK_VECTOR_TABLE=NL2SQL_FEEDBACK_VECTORS\n"
@@ -17229,40 +16386,26 @@ class Nl2SqlService:
                     "ok"
                     if all(
                         readiness_by_area.get(area) and readiness_by_area[area].status == "ok"
-                        for area in ["oracle_adb", "persistence", "select_ai", "select_ai_agent"]
+                        for area in ["oracle_adb", "persistence", "enterprise_ai_direct"]
                     )
                     else "warning"
                 ),
-                summary=("Oracle / persistence / Select AI / Agent assets の本番 gate 設定です。"),
-                next_action=(
-                    "Select AI / Agent assets refresh と diagnostics-only を実行してから "
-                    "release gate を実行してください。"
-                ),
+                summary="Oracle / persistence / Enterprise AI Direct の本番 gate 設定です。",
+                next_action="diagnostics-only を実行してから release gate を実行してください。",
                 required_env_vars=[
                     env_var("PLATFORM_ORACLE_USER"),
                     env_var("PLATFORM_ORACLE_DSN"),
                     env_var("NL2SQL_RUNTIME_MODE"),
                     env_var("NL2SQL_PERSISTENCE_MODE"),
-                    env_var("NL2SQL_SELECT_AI_CREDENTIAL_NAME"),
                 ],
-                optional_env_vars=[
-                    env_var("NL2SQL_SELECT_AI_PROFILE_PREFIX", required=False),
-                    env_var("NL2SQL_SELECT_AI_MODEL", required=False),
-                ],
-                env_template=(
-                    "NL2SQL_RUNTIME_MODE=oracle\n"
-                    "NL2SQL_PERSISTENCE_MODE=oracle\n"
-                    "NL2SQL_SELECT_AI_ENABLED=true\n"
-                    "NL2SQL_SELECT_AI_AGENT_ENABLED=true\n"
-                    "NL2SQL_SELECT_AI_CREDENTIAL_NAME=<dbms-cloud-ai-credential>\n"
-                    "NL2SQL_SELECT_AI_MODEL=<select-ai-model>"
-                ),
+                optional_env_vars=[],
+                env_template=("NL2SQL_RUNTIME_MODE=oracle\nNL2SQL_PERSISTENCE_MODE=oracle"),
                 smoke_command=(
                     "uv run python scripts/nl2sql_manual_integration.py "
-                    "--release-gate --engines select_ai_agent,select_ai "
+                    "--release-gate --engines enterprise_ai_direct "
                     "--allowed-table YOUR_TABLE --json-report reports/nl2sql-release-gate.json"
                 ),
-                related_readiness=["oracle_adb", "persistence", "select_ai", "select_ai_agent"],
+                related_readiness=["oracle_adb", "persistence", "enterprise_ai_direct"],
             ),
         ]
 
@@ -17279,26 +16422,8 @@ class Nl2SqlService:
         embedding_configured: bool,
         embedding_module_available: bool,
         enterprise_ai_configured: bool,
-        select_ai_assets_ready: bool,
-        agent_assets_ready: bool,
     ) -> list[DiagnosticReadiness]:
         oracle_ready = uses_oracle_runtime and oracle_configured and oracle_live_ok
-        select_ai_config_ready = (
-            settings.nl2sql_select_ai_enabled
-            and bool(settings.nl2sql_select_ai_provider)
-            and (
-                not uses_oracle_runtime
-                or (oracle_ready and bool(settings.nl2sql_select_ai_credential_name))
-            )
-        )
-        select_ai_ready = select_ai_config_ready and (
-            select_ai_assets_ready or not uses_oracle_runtime
-        )
-        agent_ready = (
-            settings.nl2sql_select_ai_agent_enabled
-            and select_ai_ready
-            and (agent_assets_ready or not uses_oracle_runtime)
-        )
         direct_ready = settings.nl2sql_enterprise_ai_direct_enabled and enterprise_ai_configured
         embedding_ready = (
             settings.nl2sql_feedback_embedding_enabled
@@ -17316,28 +16441,6 @@ class Nl2SqlService:
                 else oracle_live_message
             )
         )
-        select_ai_summary = (
-            "Select AI profile 作成・実行に必要な設定が揃っています。"
-            if select_ai_ready
-            else (
-                "Select AI profile refresh が未確認です。"
-                if select_ai_config_ready and uses_oracle_runtime
-                else "Select AI の provider / credential / Oracle runtime 設定を確認してください。"
-            )
-        )
-        agent_summary = (
-            "Select AI Agent assets を更新・実行できる設定です。"
-            if agent_ready
-            else (
-                "Select AI Agent assets refresh が未確認です。"
-                if (
-                    settings.nl2sql_select_ai_agent_enabled
-                    and select_ai_ready
-                    and uses_oracle_runtime
-                )
-                else "Agent は Select AI profile と credential を前提にするため未準備です。"
-            )
-        )
         direct_summary = (
             "Enterprise AI Direct fallback に必要な OCI 基本設定があります。"
             if direct_ready
@@ -17353,10 +16456,7 @@ class Nl2SqlService:
                 "Feedback embedding は無効です。必要な場合は "
                 "NL2SQL_FEEDBACK_EMBEDDING_ENABLED=true にしてください。"
                 if not settings.nl2sql_feedback_embedding_enabled
-                else (
-                    "Feedback embedding 用 OCI SDK / endpoint / region / compartment を"
-                    "確認してください。"
-                )
+                else ("Feedback embedding 用の endpoint とモデルを確認してください。")
             )
         )
         persistence_summary = (
@@ -17384,57 +16484,7 @@ class Nl2SqlService:
                     "NL2SQL_RUNTIME_MODE",
                     "PLATFORM_ORACLE_DSN",
                     "PLATFORM_ORACLE_USER",
-                    "PLATFORM_ORACLE_ADB_OCID",
                     "PYTHON_ORACLEDB",
-                    "ORACLE_RUNTIME_READY",
-                ],
-            ),
-            DiagnosticReadiness(
-                area="select_ai",
-                label="Oracle Select AI",
-                status="ok" if select_ai_ready else "warning",
-                summary=select_ai_summary,
-                next_action=(
-                    ""
-                    if select_ai_ready
-                    else (
-                        "NL2SQL_SELECT_AI_PROVIDER と NL2SQL_SELECT_AI_CREDENTIAL_NAME "
-                        "を設定し、profile refresh を実行してください。"
-                        if not (select_ai_config_ready and uses_oracle_runtime)
-                        else "Select AI profile refresh を実行してください。"
-                    )
-                ),
-                related_checks=[
-                    "NL2SQL_SELECT_AI_ENABLED",
-                    "NL2SQL_SELECT_AI_PROVIDER",
-                    "NL2SQL_SELECT_AI_CREDENTIAL_NAME",
-                    "NL2SQL_SELECT_AI_PROFILE_REFRESHED",
-                    "ORACLE_RUNTIME_READY",
-                ],
-            ),
-            DiagnosticReadiness(
-                area="select_ai_agent",
-                label="Oracle Select AI Agent",
-                status="ok" if agent_ready else "warning",
-                summary=agent_summary,
-                next_action=(
-                    ""
-                    if agent_ready
-                    else (
-                        "Agent tool / task / team assets を refresh してください。"
-                        if select_ai_ready
-                        else (
-                            "Select AI profile を更新後、Agent tool / task / team assets "
-                            "を refresh してください。"
-                        )
-                    )
-                ),
-                related_checks=[
-                    "NL2SQL_SELECT_AI_AGENT_ENABLED",
-                    "NL2SQL_SELECT_AI_PROFILE_REFRESHED",
-                    "NL2SQL_SELECT_AI_AGENT_ASSETS_REFRESHED",
-                    "NL2SQL_SELECT_AI_PROVIDER",
-                    "NL2SQL_SELECT_AI_CREDENTIAL_NAME",
                     "ORACLE_RUNTIME_READY",
                 ],
             ),
@@ -19328,17 +18378,9 @@ class Nl2SqlService:
         runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
         # DB 管理チャットの SELECT は system_admin と同じアプリのユーザーの管理の接続で実行する
         # （#2264）。
-        select_vpd_context_enforced = (
-            not chat
-            and self._use_oracle_runtime()
-            and self._deepsec_enabled
-            and not current_actor_is_system_admin()
-        )
         select_execution_context = (
             "admin_control_plane"
             if chat and self._use_oracle_runtime()
-            else "deepsec_data_plane"
-            if select_vpd_context_enforced
             else "oracle_data_plane"
             if self._use_oracle_runtime()
             else "deterministic"
@@ -19479,7 +18521,6 @@ class Nl2SqlService:
                     executed=False,
                     runtime="oracle",
                     execution_context=select_execution_context,
-                    vpd_context_enforced=select_vpd_context_enforced,
                     statements=[
                         DbAdminStatementResult(
                             index=1,
@@ -19496,7 +18537,6 @@ class Nl2SqlService:
                 executed=True,
                 runtime=runtime,
                 execution_context=results.execution_context,
-                vpd_context_enforced=results.vpd_context_enforced,
                 select_result=results,
                 statements=[
                     DbAdminStatementResult(
@@ -20744,79 +19784,6 @@ class Nl2SqlService:
             )
             raise Nl2SqlRepositoryOperationFailed("admin_audit_write_failed") from exc
 
-    def refresh_select_ai_profile(self, profile_id: str | None) -> AssetRefreshData:
-        profile = self.get_profile(profile_id)
-        profile_name = self._select_ai_profile_name(profile)
-        attributes = self.build_select_ai_profile_attributes(profile)
-        expected_scope = self._select_ai_object_scope_set(attributes.get("object_list"))
-        actual_scope = set(expected_scope)
-        warning = ""
-        engine_meta: dict[str, Any] = {
-            "allowed_tables": profile.allowed_tables,
-            "allowed_views": profile.allowed_views,
-            "allowed_objects": self.profile_allowed_object_names(profile),
-            "profile_attributes": self._redact_select_ai_context_attributes(attributes),
-            "runtime": "deterministic",
-        }
-        if self._use_oracle_runtime():
-            try:
-                oracle_meta = self._oracle_adapter.upsert_select_ai_profile_low_level(
-                    profile_name=profile_name,
-                    description="",
-                    attributes=attributes,
-                )
-                if isinstance(oracle_meta.get("attributes"), dict):
-                    oracle_meta["attributes"] = self._redact_select_ai_context_attributes(
-                        oracle_meta["attributes"]
-                    )
-                engine_meta.update(oracle_meta)
-                detail = self._enrich_select_ai_db_profile(
-                    SelectAiDbProfile.model_validate(
-                        self._oracle_adapter.get_select_ai_profile_detail(profile_name=profile_name)
-                    )
-                )
-                actual_scope = self._select_ai_object_scope_set(detail.object_list)
-            except OracleAdapterError as exc:
-                warning = str(exc)
-                actual_scope = set()
-        data = self._record_select_ai_scope_state(
-            profile_name=profile_name,
-            expected_scope=expected_scope,
-            actual_scope=actual_scope,
-            warning=warning,
-        )
-        return data.model_copy(update={"engine_meta": {**engine_meta, **data.engine_meta}})
-
-    def upsert_profile_select_ai_profile(
-        self,
-        profile_id: str,
-        request: ProfileSelectAiProfileRequest,
-    ) -> SelectAiDbProfileMutationData:
-        profile = self.get_profile(profile_id)
-        attributes = self.build_select_ai_profile_attributes(profile)
-        if request.attributes_override:
-            attributes = {**attributes, **request.attributes_override}
-        profile_name = self._select_ai_profile_name(profile)
-        original_name = (
-            request.original_name.strip() or profile.select_ai_config.previous_profile_name.strip()
-        )
-        # Oracle profile 名は機械導出でありユーザーが入力しないため、この wrapper が
-        # ユーザー境界として ADMIN_EXECUTE を受理し、内部委譲時に導出名へ変換する。
-        confirmation = request.confirmation.strip()
-        if confirmation == "ADMIN_EXECUTE":
-            confirmation = profile_name
-        return self.upsert_select_ai_db_profile(
-            SelectAiDbProfileUpsertRequest(
-                profile_name=profile_name,
-                attributes=attributes,
-                description="",
-                category=profile.category or profile.name,
-                confirmation=confirmation,
-                original_name=original_name,
-                reason=request.reason,
-            )
-        )
-
     def _parse_csv_sample(
         self,
         *,
@@ -21015,1868 +19982,6 @@ class Nl2SqlService:
         # Safe: generated SQL uses sanitized CSV identifiers; execution path uses Oracle binds.
         return f'INSERT INTO "{table_name}" ({column_names}) VALUES ({binds})'  # nosec B608
 
-    def refresh_select_ai_agent_assets(
-        self,
-        profile_id: str | None,
-        *,
-        profile_already_synced: bool = False,
-    ) -> AssetRefreshData:
-        profile = self.get_profile(profile_id)
-        profile_name = self._select_ai_profile_name(profile)
-        asset_names = self._select_ai_agent_asset_names(profile)
-        tool_name = asset_names["tool"]
-        agent_name = asset_names["agent"]
-        task_name = asset_names["task"]
-        team_name = asset_names["team"]
-        warning = ""
-        refreshed = True
-        status = "ready"
-        engine_meta: dict[str, Any] = {
-            "tool_name": tool_name,
-            "agent_name": agent_name,
-            "task_name": task_name,
-            "allowed_tables": profile.allowed_tables,
-            "allowed_views": profile.allowed_views,
-            "allowed_objects": self.profile_allowed_object_names(profile),
-            "runtime": "deterministic",
-        }
-        if self._use_oracle_runtime():
-            profile_sync = (
-                None if profile_already_synced else self.refresh_select_ai_profile(profile.id)
-            )
-            if profile_sync is not None:
-                engine_meta["select_ai_profile_sync"] = profile_sync.model_dump(mode="json")
-            if profile_sync is not None and not profile_sync.refreshed:
-                data = AssetRefreshData(
-                    engine=Nl2SqlEngine.SELECT_AI_AGENT,
-                    refreshed=False,
-                    status="error",
-                    refreshed_at=_utc_now(),
-                    profile_name=profile_name,
-                    team_name=team_name,
-                    warning=profile_sync.warning,
-                    asset_names={
-                        "profile": profile_name,
-                        "tool": tool_name,
-                        "agent": agent_name,
-                        "task": task_name,
-                        "team": team_name,
-                    },
-                    engine_meta=engine_meta,
-                )
-                with self._lock:
-                    self._asset_meta[Nl2SqlEngine.SELECT_AI_AGENT] = data
-                self._persist_singletons("asset_meta")
-                return data
-            try:
-                previous_warning = self._cleanup_previous_select_ai_agent_team(
-                    profile_name=profile_name,
-                    tool_name=tool_name,
-                    agent_name=agent_name,
-                    task_name=task_name,
-                    base_team_name=team_name,
-                )
-                if previous_warning:
-                    warning = previous_warning
-                try:
-                    engine_meta.update(
-                        self._refresh_select_ai_agent_assets_with_team(
-                            profile=profile,
-                            profile_name=profile_name,
-                            tool_name=tool_name,
-                            agent_name=agent_name,
-                            task_name=task_name,
-                            team_name=team_name,
-                        )
-                    )
-                except OracleAdapterError as exc:
-                    if not self._looks_like_agent_generated_profile_conflict(str(exc)):
-                        raise
-                    team_name = self._versioned_select_ai_team_name(team_name)
-                    version_warning = (
-                        "Oracle maintained Agent profile が残っていたため、"
-                        f"versioned team {team_name} を使用しました。"
-                    )
-                    warning = f"{warning} {version_warning}".strip()
-                    engine_meta.update(
-                        self._refresh_select_ai_agent_assets_with_team(
-                            profile=profile,
-                            profile_name=profile_name,
-                            tool_name=tool_name,
-                            agent_name=agent_name,
-                            task_name=task_name,
-                            team_name=team_name,
-                        )
-                    )
-            except OracleAdapterError as exc:
-                refreshed = False
-                status = "error"
-                warning = f"{warning} {exc}".strip()
-        data = AssetRefreshData(
-            engine=Nl2SqlEngine.SELECT_AI_AGENT,
-            refreshed=refreshed,
-            status=status,
-            refreshed_at=_utc_now(),
-            profile_name=profile_name,
-            team_name=team_name,
-            warning=warning,
-            asset_names={
-                "profile": profile_name,
-                "tool": tool_name,
-                "agent": agent_name,
-                "task": task_name,
-                "team": team_name,
-            },
-            engine_meta=engine_meta,
-        )
-        with self._lock:
-            self._asset_meta[Nl2SqlEngine.SELECT_AI_AGENT] = data
-        self._persist_singletons("asset_meta")
-        return data
-
-    def _cleanup_previous_select_ai_agent_team(
-        self,
-        *,
-        profile_name: str,
-        tool_name: str,
-        agent_name: str,
-        task_name: str,
-        base_team_name: str,
-    ) -> str:
-        previous = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        if (
-            previous is None
-            or previous.profile_name != profile_name
-            or not previous.team_name
-            or previous.team_name == base_team_name
-        ):
-            return ""
-        try:
-            self._oracle_adapter.drop_select_ai_agent_assets(
-                profile_name=profile_name,
-                tool_name=tool_name,
-                agent_name=agent_name,
-                task_name=task_name,
-                team_name=previous.team_name,
-            )
-        except OracleAdapterError as exc:
-            return f"previous Agent team cleanup warning: {exc}"
-        return f"previous Agent team {previous.team_name} を cleanup しました。"
-
-    def cleanup_select_ai_assets(
-        self,
-        profile_id: str | None,
-        engines: list[Nl2SqlEngine],
-        confirmation: str = "",
-        reason: str = "",
-    ) -> list[AssetCleanupData]:
-        """Select AI / Agent assets を確認後に cleanup する。"""
-        confirmation_error = self._admin_confirmation_error(
-            confirmation=confirmation,
-            target="ADMIN_EXECUTE",
-        )
-        if confirmation_error:
-            return [
-                AssetCleanupData(
-                    engine=engine,
-                    executed=False,
-                    status="confirmation_required",
-                    cleaned_at=_utc_now(),
-                    warning=confirmation_error,
-                    engine_meta={"runtime": "deterministic"},
-                )
-                for engine in engines
-            ]
-        cleaned: list[AssetCleanupData] = []
-        for engine in engines:
-            if engine == Nl2SqlEngine.SELECT_AI:
-                cleaned.append(self._cleanup_select_ai_profile(profile_id))
-            elif engine == Nl2SqlEngine.SELECT_AI_AGENT:
-                cleaned.append(self._cleanup_select_ai_agent_assets(profile_id))
-            else:
-                cleaned.append(
-                    AssetCleanupData(
-                        engine=engine,
-                        executed=False,
-                        status="skipped",
-                        cleaned_at=_utc_now(),
-                        warning="この engine に cleanup 対象の Oracle asset はありません。",
-                        engine_meta={"runtime": "deterministic"},
-                    )
-                )
-        if any(item.executed for item in cleaned):
-            self._record_admin_audit(
-                operation="select_ai_assets_cleanup",
-                target="ADMIN_EXECUTE",
-                executed=True,
-                reason=reason,
-                detail={"engines": [engine.value for engine in engines], "profile_id": profile_id},
-            )
-        self._persist_singletons("asset_meta")
-        return cleaned
-
-    def list_select_ai_db_profiles(
-        self,
-        include_detail: bool = False,
-        *,
-        business_profiles_only: bool = False,
-        include_archived_business_profiles: bool = True,
-    ) -> SelectAiDbProfilesData:
-        del include_detail
-        warnings: list[str] = []
-        profile_list_refresh_required = False
-        profile_list_refresh_reason_code = ""
-        business_profile_names = (
-            self._business_select_ai_profile_names(
-                include_archived=include_archived_business_profiles
-            )
-            if business_profiles_only
-            else None
-        )
-        profiles = [
-            self._enrich_select_ai_db_profile(profile)
-            for profile in self._load_select_ai_db_profile_documents()
-            if self._is_business_select_ai_profile(profile.name, business_profile_names)
-        ]
-        if not profiles and not self._select_ai_db_profile_refresh_initialized():
-            profile_list_refresh_required = True
-            profile_list_refresh_reason_code = "profile_list_read_model_uninitialized"
-            profiles = self._fallback_select_ai_db_profiles_from_asset_meta(business_profile_names)
-            # 再取得を求める状態は構造化した項目（profile_list_refresh_required）で
-            # 返し、同じ文を warnings に重ねない（画面が 2 か所に出すため。#2034）。
-        runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
-        if not self._use_oracle_runtime() and not profiles:
-            warnings.append("Oracle runtime ではないため保存済み asset metadata を表示しています。")
-        return SelectAiDbProfilesData(
-            runtime=runtime,
-            profiles=profiles,
-            warnings=warnings,
-            profile_list_refresh_required=profile_list_refresh_required,
-            profile_list_refresh_reason_code=profile_list_refresh_reason_code,
-        )
-
-    def get_select_ai_db_profile(self, profile_name: str) -> SelectAiDbProfileDetailData:
-        warnings: list[str] = []
-        key = self._select_ai_db_profile_key(profile_name)
-        document = self._refresh_job_repository.get_document(
-            _SELECT_AI_DB_PROFILE_COLLECTION,
-            key,
-        )
-        if document is not None:
-            return SelectAiDbProfileDetailData(
-                runtime="oracle" if self._use_oracle_runtime() else "deterministic",
-                profile=self._enrich_select_ai_db_profile(
-                    SelectAiDbProfile.model_validate(document)
-                ),
-                warnings=warnings,
-            )
-        profiles = self.list_select_ai_db_profiles()
-        profile = next(
-            (
-                item
-                for item in profiles.profiles
-                if item.name.upper() == profile_name.strip().upper()
-            ),
-            SelectAiDbProfile(name=profile_name, status="not_found"),
-        )
-        return SelectAiDbProfileDetailData(
-            runtime=profiles.runtime,
-            profile=profile,
-            warnings=[*warnings, *profiles.warnings],
-        )
-
-    def _enrich_select_ai_db_profile(self, profile: SelectAiDbProfile) -> SelectAiDbProfile:
-        attributes = dict(profile.attributes)
-        object_list = profile.object_list
-        raw_object_list = attributes.get("object_list")
-        if not object_list and isinstance(raw_object_list, list):
-            object_list = [item for item in raw_object_list if isinstance(item, dict)]
-        table_names, view_names = self._split_select_ai_object_names(object_list)
-        return profile.model_copy(
-            update={
-                "object_list": object_list,
-                "tables": table_names,
-                "views": view_names,
-                "region": str(attributes.get("region") or profile.region or ""),
-                "model": str(attributes.get("model") or profile.model or ""),
-                "embedding_model": str(
-                    attributes.get("embedding_model") or profile.embedding_model or ""
-                ),
-                "category": profile.category or profile.description,
-            }
-        )
-
-    def _split_select_ai_object_names(
-        self, object_list: Sequence[dict[str, Any]]
-    ) -> tuple[list[str], list[str]]:
-        catalog_types = {
-            self._catalog_qualified_name(table): table.table_type.lower()
-            for table in self._catalog.tables
-        }
-        tables: list[str] = []
-        views: list[str] = []
-        for item in object_list:
-            raw_name = str(item.get("name") or "").strip()
-            if not raw_name:
-                continue
-            identity = parse_object_identity(
-                raw_name,
-                default_owner=str(item.get("owner") or self._current_schema_owner()),
-            )
-            qualified = identity.qualified_name
-            object_type = catalog_types.get(qualified, "")
-            if "view" in object_type or identity.object_name.startswith("V_"):
-                views.append(qualified)
-            else:
-                tables.append(qualified)
-        return self._dedupe_object_names(tables), self._dedupe_object_names(views)
-
-    def _select_ai_object_scope_set(self, value: Any) -> set[str]:
-        if not isinstance(value, list):
-            return set()
-        scope: set[str] = set()
-        for item in value:
-            if isinstance(item, str):
-                scope.add(self._resolve_profile_object_name(item))
-                continue
-            if not isinstance(item, dict):
-                continue
-            name = str(item.get("name") or item.get("object_name") or "").strip()
-            if not name:
-                continue
-            identity = parse_object_identity(
-                name,
-                default_owner=str(item.get("owner") or self._current_schema_owner()),
-            )
-            scope.add(identity.qualified_name)
-        return scope
-
-    @staticmethod
-    def _select_ai_db_profile_key(profile_name: str) -> str:
-        return profile_name.strip().upper()
-
-    def _load_select_ai_db_profile_documents(self) -> list[SelectAiDbProfile]:
-        documents = self._refresh_job_repository.list_documents(
-            _SELECT_AI_DB_PROFILE_COLLECTION,
-            limit=10000,
-        )
-        profiles: list[SelectAiDbProfile] = []
-        for document in documents:
-            try:
-                profiles.append(SelectAiDbProfile.model_validate(document))
-            except Exception:  # nosec B112
-                continue
-        return sorted(profiles, key=lambda item: item.name.upper())
-
-    def _select_ai_db_profile_refresh_initialized(self) -> bool:
-        return (
-            self._refresh_job_repository.get_document(
-                _SELECT_AI_DB_PROFILE_REFRESH_META_COLLECTION,
-                "head",
-            )
-            is not None
-        )
-
-    def _save_select_ai_db_profile_refresh_meta(
-        self,
-        *,
-        mode: SelectAiDbProfileRefreshMode,
-    ) -> None:
-        self._refresh_job_repository.put_document(
-            _SELECT_AI_DB_PROFILE_REFRESH_META_COLLECTION,
-            "head",
-            {
-                "refreshed_at": _utc_now(),
-                "mode": mode.value,
-                "profile_count": len(self._load_select_ai_db_profile_documents()),
-            },
-            status="ready",
-        )
-
-    @staticmethod
-    def _profile_refresh_expired(job: SelectAiDbProfileRefreshJobData) -> bool:
-        try:
-            deadline = (
-                datetime.fromisoformat(job.deadline_at)
-                if job.deadline_at
-                else (
-                    datetime.fromisoformat(job.created_at)
-                    + timedelta(seconds=get_settings().nl2sql_profile_list_refresh_timeout_seconds)
-                )
-            )
-            if deadline.tzinfo is None:
-                deadline = deadline.replace(tzinfo=UTC)
-            if datetime.now(UTC) >= deadline:
-                return True
-            if job.status == SelectAiDbProfileRefreshStatus.RUNNING and job.lease_expires_at:
-                lease = datetime.fromisoformat(job.lease_expires_at)
-                if lease.tzinfo is None:
-                    lease = lease.replace(tzinfo=UTC)
-                return datetime.now(UTC) >= lease
-            return False
-        except (ValueError, TypeError):
-            return True
-
-    def _recover_profile_refresh_job(
-        self,
-        job_id: str,
-        *,
-        interrupted: bool = False,
-    ) -> SelectAiDbProfileRefreshJobData | None:
-        repository = self._refresh_job_repository
-        for _ in range(3):
-            current = repository.get_document(_SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION, job_id)
-            if current is None:
-                return None
-            job = SelectAiDbProfileRefreshJobData.model_validate(current)
-            if job.status not in {
-                SelectAiDbProfileRefreshStatus.PENDING,
-                SelectAiDbProfileRefreshStatus.RUNNING,
-            }:
-                return job
-            if interrupted:
-                with self._profile_list_refresh_dispatch_lock:
-                    owned = self._profile_list_refresh_owned.get(job_id)
-                    dispatched = job_id in self._profile_list_refresh_dispatching_job_ids
-                if job.status == SelectAiDbProfileRefreshStatus.RUNNING:
-                    if owned != (job.worker_id, job.attempt):
-                        return job
-                elif not dispatched:
-                    return job
-            elif not self._profile_refresh_expired(job):
-                return job
-            updated = job.model_copy(
-                update={
-                    "status": SelectAiDbProfileRefreshStatus.ERROR,
-                    "finished_at": _utc_now(),
-                    "error_code": (
-                        "profile_list_refresh_interrupted"
-                        if interrupted
-                        else "profile_list_refresh_timeout"
-                    ),
-                    "error_message": (
-                        "DB Profile 一覧更新を中断しました。保存済みの一覧を保持しています。"
-                        "状態を確認して一覧更新を再実行してください。"
-                    ),
-                }
-            )
-            expected = {
-                key: current.get(key)
-                for key in (
-                    "status",
-                    "worker_id",
-                    "attempt",
-                    "lease_expires_at",
-                    "deadline_at",
-                )
-            }
-            saved = repository.patch_document_if_current(
-                _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-                job_id,
-                updated.model_dump(mode="json"),
-                expected=expected,
-                status="error",
-            )
-            if saved is None:
-                continue
-            logger.warning(
-                "DB Profile 一覧更新を中断状態へ回復しました。",
-                extra={
-                    "job_id": job_id,
-                    "error_code": updated.error_code,
-                    "worker_id": job.worker_id,
-                    "attempt": job.attempt,
-                },
-            )
-            return SelectAiDbProfileRefreshJobData.model_validate(saved)
-        return self._load_select_ai_db_profile_refresh_job(job_id)
-
-    def shutdown_select_ai_db_profile_refresh_jobs(self) -> None:
-        with self._profile_list_refresh_dispatch_lock:
-            job_ids = (
-                set(self._profile_list_refresh_owned)
-                | self._profile_list_refresh_dispatching_job_ids
-            )
-        for job_id in job_ids:
-            try:
-                self._recover_profile_refresh_job(job_id, interrupted=True)
-            except Exception:
-                logger.exception(
-                    "DB Profile 一覧更新の中断を保存できませんでした。", extra={"job_id": job_id}
-                )
-
-    def _profile_refresh_owner(self, job_id: str) -> dict[str, Any]:
-        current = self._recover_profile_refresh_job(job_id)
-        with self._profile_list_refresh_dispatch_lock:
-            owned = self._profile_list_refresh_owned.get(job_id)
-        if (
-            not current
-            or not owned
-            or current.status != SelectAiDbProfileRefreshStatus.RUNNING
-            or owned != (current.worker_id, current.attempt)
-        ):
-            raise ProfileListRefreshExecutionLost(job_id)
-        return {"status": "running", "worker_id": owned[0], "attempt": owned[1]}
-
-    def _save_select_ai_db_profile_refresh_job(
-        self,
-        job: SelectAiDbProfileRefreshJobData,
-    ) -> SelectAiDbProfileRefreshJobData:
-        repository = self._refresh_job_repository
-        current = repository.get_document(_SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION, job.job_id)
-        if current is None:
-            repository.put_document(
-                _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-                job.job_id,
-                job.model_dump(mode="json"),
-                status=job.status.value,
-            )
-            return job.model_copy(deep=True)
-        saved = repository.patch_document_if_current(
-            _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-            job.job_id,
-            job.model_dump(mode="json"),
-            expected=self._profile_refresh_owner(job.job_id),
-            status=job.status.value,
-            require_live_lease=True,
-        )
-        if saved is None:
-            raise ProfileListRefreshExecutionLost(job.job_id)
-        return SelectAiDbProfileRefreshJobData.model_validate(saved)
-
-    def _load_select_ai_db_profile_refresh_job(
-        self,
-        job_id: str,
-    ) -> SelectAiDbProfileRefreshJobData | None:
-        document = self._refresh_job_repository.get_document(
-            _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-            job_id,
-        )
-        if document is None:
-            return None
-        return SelectAiDbProfileRefreshJobData.model_validate(document)
-
-    def get_select_ai_db_profile_refresh_job(
-        self,
-        job_id: str,
-    ) -> SelectAiDbProfileRefreshJobData | None:
-        job = self._recover_profile_refresh_job(job_id)
-        if job is None:
-            return None
-        if job.status == SelectAiDbProfileRefreshStatus.PENDING:
-            self._dispatch_select_ai_db_profile_refresh_job(job.job_id)
-        return job
-
-    def start_select_ai_db_profile_refresh_job(
-        self,
-        *,
-        dispatch: bool = True,
-        mode: SelectAiDbProfileRefreshMode | str = SelectAiDbProfileRefreshMode.FULL,
-        source: str = "manual",
-        target_profiles: Sequence[SelectAiDbProfileRefreshTarget] | None = None,
-    ) -> SelectAiDbProfileRefreshJobData:
-        normalized_mode = SelectAiDbProfileRefreshMode(mode)
-        targets = self._dedupe_select_ai_db_profile_refresh_targets(target_profiles or [])
-        if normalized_mode == SelectAiDbProfileRefreshMode.TARGETED and not targets:
-            raise SelectAiDbProfileListRefreshFullRequired("profile_list_refresh_target_unresolved")
-        job = SelectAiDbProfileRefreshJobData(
-            job_id=str(uuid.uuid4()),
-            mode=normalized_mode,
-            source=source,
-            target_profiles=targets,
-            created_at=_utc_now(),
-            deadline_at=(
-                datetime.now(UTC)
-                + timedelta(seconds=get_settings().nl2sql_profile_list_refresh_timeout_seconds)
-            ).isoformat(),
-        )
-        saved = self._save_select_ai_db_profile_refresh_job(job)
-        if dispatch:
-            self._dispatch_select_ai_db_profile_refresh_job(saved.job_id)
-        return saved
-
-    def _dispatch_select_ai_db_profile_refresh_job(self, job_id: str) -> bool:
-        with self._profile_list_refresh_dispatch_lock:
-            if job_id in self._profile_list_refresh_dispatching_job_ids:
-                return False
-            self._profile_list_refresh_dispatching_job_ids.add(job_id)
-
-        def run() -> None:
-            try:
-                self._run_select_ai_db_profile_refresh_job(job_id)
-            finally:
-                with self._profile_list_refresh_dispatch_lock:
-                    self._profile_list_refresh_dispatching_job_ids.discard(job_id)
-
-        thread = threading.Thread(
-            target=run,
-            daemon=True,
-            name=f"db-profile-refresh-{job_id[:8]}",
-        )
-        thread.start()
-        return True
-
-    @staticmethod
-    def _dedupe_select_ai_db_profile_refresh_targets(
-        targets: Sequence[SelectAiDbProfileRefreshTarget],
-    ) -> list[SelectAiDbProfileRefreshTarget]:
-        merged: dict[str, SelectAiDbProfileRefreshTarget] = {}
-        for target in targets:
-            key = target.profile_name.strip().upper()
-            if not key:
-                continue
-            current = merged.get(key)
-            if current is None or target.expected_state != "unknown":
-                merged[key] = target.model_copy(update={"profile_name": key})
-        return list(merged.values())
-
-    def _submit_select_ai_db_profile_list_refresh_after_mutation(
-        self,
-        *,
-        target_profiles: Sequence[SelectAiDbProfileRefreshTarget] | None,
-        source: str,
-    ) -> SelectAiDbProfileListRefreshSync:
-        targets = self._dedupe_select_ai_db_profile_refresh_targets(target_profiles or [])
-        if not targets:
-            return SelectAiDbProfileListRefreshSync(
-                required=True,
-                reason_code="profile_list_refresh_target_unresolved",
-            )
-        try:
-            job = self.start_select_ai_db_profile_refresh_job(
-                mode=SelectAiDbProfileRefreshMode.TARGETED,
-                source=source,
-                target_profiles=targets,
-            )
-        except SelectAiDbProfileListRefreshFullRequired as exc:
-            return SelectAiDbProfileListRefreshSync(
-                required=True,
-                reason_code=exc.reason_code,
-            )
-        except Exception:
-            logger.warning(
-                "select_ai_db_profile_refresh_submit_failed",
-                exc_info=True,
-                extra={"source": source},
-            )
-            return SelectAiDbProfileListRefreshSync(
-                required=True,
-                reason_code="profile_list_refresh_submit_failed",
-            )
-        if job.requires_full_refresh:
-            return SelectAiDbProfileListRefreshSync(
-                job_id=job.job_id,
-                required=True,
-                reason_code=job.error_code or "profile_list_refresh_full_required",
-            )
-        return SelectAiDbProfileListRefreshSync(job_id=job.job_id)
-
-    @staticmethod
-    def _select_ai_db_profile_target(
-        profile_name: str,
-        *,
-        expected_state: Literal["present", "absent", "unknown"],
-    ) -> SelectAiDbProfileRefreshTarget | None:
-        key = profile_name.strip().upper()
-        if not key:
-            return None
-        return SelectAiDbProfileRefreshTarget(
-            profile_name=key,
-            expected_state=expected_state,
-        )
-
-    def _select_ai_db_profile_upsert_refresh_targets(
-        self,
-        *,
-        profile_name: str,
-        original_name: str,
-    ) -> list[SelectAiDbProfileRefreshTarget]:
-        targets: list[SelectAiDbProfileRefreshTarget] = []
-        old_key = original_name.strip().upper()
-        new_key = profile_name.strip().upper()
-        if old_key and old_key != new_key:
-            old_target = self._select_ai_db_profile_target(
-                original_name,
-                expected_state="absent",
-            )
-            if old_target is not None:
-                targets.append(old_target)
-        new_target = self._select_ai_db_profile_target(
-            profile_name,
-            expected_state="present",
-        )
-        if new_target is not None:
-            targets.append(new_target)
-        return targets
-
-    def _select_ai_db_profile_from_oracle_detail(
-        self,
-        profile_name: str,
-    ) -> SelectAiDbProfile:
-        return self._enrich_select_ai_db_profile(
-            SelectAiDbProfile.model_validate(
-                self._oracle_adapter.get_select_ai_profile_detail(profile_name=profile_name)
-            )
-        )
-
-    def _fallback_select_ai_db_profiles_from_asset_meta(
-        self,
-        business_profile_names: set[str] | None,
-    ) -> list[SelectAiDbProfile]:
-        with self._lock:
-            profiles = [
-                self._enrich_select_ai_db_profile(
-                    SelectAiDbProfile(
-                        name=data.profile_name,
-                        status=data.status,
-                        attributes=dict(
-                            data.engine_meta.get("profile_attributes") or data.engine_meta
-                        ),
-                        created_at=data.refreshed_at,
-                    )
-                )
-                for data in self._asset_meta.values()
-                if data.profile_name
-                and self._is_business_select_ai_profile(data.profile_name, business_profile_names)
-            ]
-        return sorted(profiles, key=lambda item: item.name.upper())
-
-    def _run_select_ai_db_profile_refresh_job(self, job_id: str) -> bool:
-        if not self._profile_list_refresh_lock.acquire(blocking=False):
-            return False
-        try:
-            current = self._recover_profile_refresh_job(job_id)
-            if current is None or current.status != SelectAiDbProfileRefreshStatus.PENDING:
-                return False
-            claimed = self._refresh_job_repository.claim_document(
-                _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-                worker_id=self._profile_list_refresh_worker_id,
-                lease_seconds=get_settings().nl2sql_profile_list_refresh_timeout_seconds,
-                entity_id=job_id,
-                exclusive=True,
-            )
-            if claimed is None:
-                return False
-            job = SelectAiDbProfileRefreshJobData.model_validate(claimed)
-            with self._profile_list_refresh_dispatch_lock:
-                self._profile_list_refresh_owned[job_id] = (job.worker_id, job.attempt)
-            job = self._save_select_ai_db_profile_refresh_job(
-                job.model_copy(
-                    update={
-                        "phase": SelectAiDbProfileRefreshPhase.FETCHING,
-                        "error_code": "",
-                        "error_message": "",
-                        "deadline_at": job.deadline_at
-                        or (
-                            datetime.fromisoformat(job.created_at)
-                            + timedelta(
-                                seconds=get_settings().nl2sql_profile_list_refresh_timeout_seconds
-                            )
-                        ).isoformat(),
-                    }
-                )
-            )
-            targets = self._dedupe_select_ai_db_profile_refresh_targets(job.target_profiles)
-            target_names = {target.profile_name for target in targets}
-            if job.mode == SelectAiDbProfileRefreshMode.TARGETED and not target_names:
-                raise SelectAiDbProfileListRefreshFullRequired(
-                    "profile_list_refresh_target_unresolved"
-                )
-
-            existing = {
-                self._select_ai_db_profile_key(profile.name): profile
-                for profile in self._load_select_ai_db_profile_documents()
-            }
-            expected = {target.profile_name: target.expected_state for target in targets}
-            to_upsert: dict[str, SelectAiDbProfile] = {}
-            to_delete: set[str] = set()
-            if self._use_oracle_runtime():
-                present_names = self._oracle_adapter.fetch_select_ai_profile_names(
-                    target_names if job.mode == SelectAiDbProfileRefreshMode.TARGETED else None
-                )
-                if job.mode == SelectAiDbProfileRefreshMode.TARGETED:
-                    missing_present = {
-                        name
-                        for name in target_names
-                        if expected.get(name) == "present" and name not in present_names
-                    }
-                    still_present = {
-                        name
-                        for name in target_names
-                        if expected.get(name) == "absent" and name in present_names
-                    }
-                    if missing_present or still_present:
-                        raise SelectAiDbProfileListRefreshFullRequired(
-                            "profile_list_refresh_full_required"
-                        )
-                    scoped_names = target_names
-                else:
-                    scoped_names = present_names
-                for name in sorted(scoped_names):
-                    self._profile_refresh_owner(job_id)
-                    if name in present_names:
-                        try:
-                            to_upsert[name] = self._select_ai_db_profile_from_oracle_detail(name)
-                        except OracleAdapterError as exc:
-                            if job.mode != SelectAiDbProfileRefreshMode.TARGETED:
-                                raise
-                            raise SelectAiDbProfileListRefreshFullRequired(
-                                "profile_list_refresh_full_required"
-                            ) from exc
-                    elif name in existing:
-                        to_delete.add(name)
-                if job.mode == SelectAiDbProfileRefreshMode.FULL:
-                    to_delete.update(set(existing) - present_names)
-            else:
-                fallback = {
-                    self._select_ai_db_profile_key(profile.name): profile
-                    for profile in self._fallback_select_ai_db_profiles_from_asset_meta(None)
-                }
-                present_names = set(fallback)
-                scoped_names = (
-                    target_names
-                    if job.mode == SelectAiDbProfileRefreshMode.TARGETED
-                    else present_names
-                )
-                for name in sorted(scoped_names):
-                    if name in fallback:
-                        to_upsert[name] = fallback[name]
-                    elif name in existing:
-                        to_delete.add(name)
-                if job.mode == SelectAiDbProfileRefreshMode.FULL:
-                    to_delete.update(set(existing) - present_names)
-
-            changed = {name for name, profile in to_upsert.items() if existing.get(name) != profile}
-            deleted = {name for name in to_delete if name in existing}
-            total_profiles = (
-                len(target_names)
-                if job.mode == SelectAiDbProfileRefreshMode.TARGETED
-                else len(to_upsert)
-            )
-            job = self._save_select_ai_db_profile_refresh_job(
-                job.model_copy(
-                    update={
-                        "phase": SelectAiDbProfileRefreshPhase.PERSISTING,
-                        "total_profiles": total_profiles,
-                        "processed_profiles": total_profiles,
-                    }
-                )
-            )
-            completed = job.model_copy(
-                update={
-                    "status": SelectAiDbProfileRefreshStatus.DONE,
-                    "phase": SelectAiDbProfileRefreshPhase.DONE,
-                    "finished_at": _utc_now(),
-                    "scanned_profiles": total_profiles,
-                    "changed_profiles": len(changed),
-                    "deleted_profiles": len(deleted),
-                }
-            )
-            upserts: list[tuple[str, str, Mapping[str, Any], str, str]] = [
-                (
-                    _SELECT_AI_DB_PROFILE_COLLECTION,
-                    name,
-                    to_upsert[name].model_dump(mode="json"),
-                    "",
-                    to_upsert[name].status,
-                )
-                for name in sorted(changed)
-            ]
-            upserts.append(
-                (
-                    _SELECT_AI_DB_PROFILE_REFRESH_META_COLLECTION,
-                    "head",
-                    {
-                        "refreshed_at": _utc_now(),
-                        "mode": job.mode.value,
-                        "profile_count": len((set(existing) - deleted) | set(to_upsert)),
-                    },
-                    "",
-                    "ready",
-                )
-            )
-            saved = self._refresh_job_repository.patch_document_if_current(
-                _SELECT_AI_DB_PROFILE_REFRESH_JOB_COLLECTION,
-                job_id,
-                completed.model_dump(mode="json"),
-                expected=self._profile_refresh_owner(job_id),
-                status="done",
-                require_live_lease=True,
-                upserts=upserts,
-                deletes=[(_SELECT_AI_DB_PROFILE_COLLECTION, name) for name in sorted(deleted)],
-            )
-            if saved is None:
-                raise ProfileListRefreshExecutionLost(job_id)
-            return True
-        except ProfileListRefreshExecutionLost:
-            logger.info(
-                "失効した DB Profile 一覧更新の結果を破棄しました。", extra={"job_id": job_id}
-            )
-            return False
-        except Exception as exc:
-            logger.exception("DB Profile 一覧更新に失敗しました。", extra={"job_id": job_id})
-            current = self._load_select_ai_db_profile_refresh_job(job_id)
-            if current is not None:
-                code = (
-                    exc.reason_code
-                    if isinstance(exc, SelectAiDbProfileListRefreshFullRequired)
-                    else "profile_list_refresh_failed"
-                )
-                with suppress(ProfileListRefreshExecutionLost):
-                    self._save_select_ai_db_profile_refresh_job(
-                        current.model_copy(
-                            update={
-                                "status": SelectAiDbProfileRefreshStatus.ERROR,
-                                "phase": SelectAiDbProfileRefreshPhase.FETCHING,
-                                "requires_full_refresh": isinstance(
-                                    exc, SelectAiDbProfileListRefreshFullRequired
-                                ),
-                                "error_code": code,
-                                "error_message": (
-                                    _profile_list_refresh_required_warning(code)
-                                    if isinstance(exc, SelectAiDbProfileListRefreshFullRequired)
-                                    else (
-                                        "DB Profile 一覧更新に失敗しました。"
-                                        "バックエンドのログを確認してください。"
-                                    )
-                                ),
-                                "finished_at": _utc_now(),
-                            }
-                        )
-                    )
-            return False
-        finally:
-            with self._profile_list_refresh_dispatch_lock:
-                self._profile_list_refresh_owned.pop(job_id, None)
-            self._profile_list_refresh_lock.release()
-
-    def _record_select_ai_scope_state(
-        self,
-        *,
-        profile_name: str,
-        expected_scope: set[str],
-        actual_scope: set[str],
-        warning: str = "",
-    ) -> AssetRefreshData:
-        synchronized = not warning and expected_scope == actual_scope
-        if not warning and not synchronized:
-            warning = (
-                "Oracle Profile の object_list 再読込結果が要求 scope と一致しません。"
-                f" missing={sorted(expected_scope - actual_scope) or '-'}"
-                f" unexpected={sorted(actual_scope - expected_scope) or '-'}"
-            )
-        with self._lock:
-            previous = self._asset_meta.get(Nl2SqlEngine.SELECT_AI)
-            previous_states = (
-                previous.engine_meta.get("profile_scope_states", {}) if previous is not None else {}
-            )
-            profile_scope_states = {
-                str(key): dict(value)
-                for key, value in (
-                    previous_states.items() if isinstance(previous_states, dict) else []
-                )
-                if isinstance(value, dict)
-            }
-            refreshed_at = _utc_now()
-            profile_scope_states[profile_name.upper()] = {
-                "refreshed": synchronized,
-                "status": "ready" if synchronized else "error",
-                "warning": warning,
-                "refreshed_at": refreshed_at,
-                "expected_object_scope": sorted(expected_scope),
-                "actual_object_scope": sorted(actual_scope),
-            }
-            data = AssetRefreshData(
-                engine=Nl2SqlEngine.SELECT_AI,
-                refreshed=synchronized,
-                status="ready" if synchronized else "error",
-                refreshed_at=refreshed_at,
-                profile_name=profile_name,
-                warning=warning,
-                asset_names={"profile": profile_name},
-                engine_meta={
-                    "expected_object_scope": sorted(expected_scope),
-                    "actual_object_scope": sorted(actual_scope),
-                    "profile_scope_states": profile_scope_states,
-                },
-            )
-            self._asset_meta[Nl2SqlEngine.SELECT_AI] = data
-        self._persist_singletons("asset_meta")
-        return data
-
-    def _assert_select_ai_scope_ready(self, profile: Nl2SqlProfile) -> None:
-        profile_name = self._select_ai_profile_name(profile)
-        scope_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI)
-        if scope_meta is None:
-            return
-        raw_states = scope_meta.engine_meta.get("profile_scope_states", {})
-        profile_state = (
-            raw_states.get(profile_name.upper()) if isinstance(raw_states, dict) else None
-        )
-        if isinstance(profile_state, dict):
-            if (
-                not bool(profile_state.get("refreshed"))
-                or str(profile_state.get("status") or "") != "ready"
-            ):
-                raise OracleAdapterError(
-                    "Oracle Select AI Profile の object scope が未同期です。"
-                    "業務プロファイルを再同期してから実行してください。"
-                )
-            return
-        if scope_meta.profile_name == profile_name and (
-            not scope_meta.refreshed or scope_meta.status != "ready"
-        ):
-            raise OracleAdapterError(
-                "Oracle Select AI Profile の object scope が未同期です。"
-                "業務プロファイルを再同期してから実行してください。"
-            )
-
-    def list_select_ai_feedback_entries(
-        self, profile_name: str, *, limit: int = 25, offset: int = 0
-    ) -> SelectAiFeedbackEntriesData:
-        """Select AI feedback の 1 ページ（offset 型。#1891）。"""
-        warnings: list[str] = []
-        runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
-        if self._use_oracle_runtime():
-            try:
-                data = self._oracle_adapter.list_select_ai_feedback_entries(
-                    profile_name=profile_name,
-                    limit=limit,
-                    offset=offset,
-                )
-                feedback_table = str(data.get("table_name") or "")
-                feedback_owner = self._current_schema_owner() if feedback_table else ""
-                items = [
-                    SelectAiFeedbackEntry.model_validate(item) for item in data.get("items", [])
-                ]
-                total = int(data.get("total") or 0)
-                page = paginate(items, total=total, limit=limit, offset=offset)
-                return SelectAiFeedbackEntriesData(
-                    **dict(page),
-                    unfiltered_total=total,
-                    runtime="oracle",
-                    profile_name=str(data.get("profile_name") or profile_name),
-                    index_name=str(data.get("index_name") or ""),
-                    table_name=feedback_table,
-                    table_owner=feedback_owner,
-                    table_qualified_name=_display_qualified_name(feedback_owner, feedback_table),
-                )
-            except OracleAdapterError as exc:
-                warnings.append(str(exc))
-        else:
-            warnings.append("Select AI feedback 管理には NL2SQL_RUNTIME_MODE=oracle が必要です。")
-        return SelectAiFeedbackEntriesData(
-            **dict(empty_page(limit=limit, offset=offset)),
-            runtime=runtime,
-            profile_name=profile_name,
-            warnings=warnings,
-        )
-
-    def delete_select_ai_feedback(
-        self, request: SelectAiFeedbackDeleteRequest
-    ) -> SelectAiFeedbackMutationData:
-        if not self._use_oracle_runtime():
-            return SelectAiFeedbackMutationData(
-                runtime="deterministic",
-                executed=False,
-                status="requires_oracle",
-                profile_name=request.profile_name,
-                warnings=["Select AI feedback 削除には NL2SQL_RUNTIME_MODE=oracle が必要です。"],
-            )
-        try:
-            meta = self._oracle_adapter.delete_select_ai_feedback(
-                profile_name=request.profile_name,
-                sql_text=request.sql_text,
-            )
-            self._record_admin_audit(
-                operation="select_ai_feedback_delete",
-                target=str(meta.get("profile_name") or request.profile_name),
-                executed=True,
-                reason="ui-select-ai-feedback-delete",
-                detail={"sql_text": request.sql_text},
-            )
-            return SelectAiFeedbackMutationData(
-                runtime="oracle",
-                executed=True,
-                status="deleted",
-                profile_name=str(meta.get("profile_name") or request.profile_name),
-                index_name=str(meta.get("index_name") or ""),
-                table_name=str(meta.get("table_name") or ""),
-                engine_meta=meta,
-            )
-        except OracleAdapterError as exc:
-            return SelectAiFeedbackMutationData(
-                runtime="oracle",
-                executed=False,
-                status="not_found" if isinstance(exc, SelectAiFeedbackNotFoundError) else "error",
-                profile_name=request.profile_name,
-                warnings=[str(exc)],
-            )
-
-    def add_select_ai_feedback(
-        self, request: SelectAiFeedbackAddRequest
-    ) -> SelectAiFeedbackAddData:
-        profile_name = request.profile_name.strip()
-        if not profile_name:
-            profile_name = self._select_ai_profile_name(self.get_profile(request.profile_id))
-        sql_text = self._select_ai_feedback_showsql(request.question)
-        # positive の評価も NEGATIVE + response（正しい SQL）で登録する。DBMS_CLOUD_AI.FEEDBACK は
-        # sql_text と response があれば、その select ai の文を実行していなくても登録できるが、
-        # positive・response なしは実行の記録（V$MAPPED_SQL）が無いと ORA-20000 になる（#1681）。
-        stored_feedback_type = "NEGATIVE"
-        response = (
-            request.generated_sql.strip()
-            if request.feedback_type == "positive" and not request.response.strip()
-            else request.response.strip()
-        )
-        feedback_content = request.feedback_content.strip()
-        plsql_preview = self._select_ai_feedback_plsql_preview(
-            profile_name=profile_name,
-            sql_text=sql_text,
-            feedback_type=stored_feedback_type,
-            response=response,
-            feedback_content=feedback_content,
-        )
-        if not response:
-            return SelectAiFeedbackAddData(
-                runtime="oracle" if self._use_oracle_runtime() else "deterministic",
-                executed=False,
-                status="validation_error",
-                profile_name=profile_name,
-                sql_text=sql_text,
-                stored_feedback_type=stored_feedback_type,
-                plsql_preview=plsql_preview,
-                warnings=["feedback response が空です。生成SQLまたは修正SQLを入力してください。"],
-            )
-        if not self._use_oracle_runtime():
-            return SelectAiFeedbackAddData(
-                runtime="deterministic",
-                executed=False,
-                status="requires_oracle",
-                profile_name=profile_name,
-                sql_text=sql_text,
-                stored_feedback_type=stored_feedback_type,
-                plsql_preview=plsql_preview,
-                warnings=["Select AI feedback 追加には NL2SQL_RUNTIME_MODE=oracle が必要です。"],
-            )
-        try:
-            meta = self._oracle_adapter.add_select_ai_feedback(
-                profile_name=profile_name,
-                sql_text=sql_text,
-                feedback_type=stored_feedback_type,
-                response=response,
-                feedback_content=feedback_content,
-            )
-            self._record_admin_audit(
-                operation="select_ai_feedback_add",
-                target=str(meta.get("profile_name") or profile_name),
-                executed=True,
-                reason="ui-select-ai-feedback-add",
-                detail={
-                    "sql_text": sql_text,
-                    "feedback_type": stored_feedback_type,
-                    "source_feedback_type": request.feedback_type,
-                },
-            )
-            return SelectAiFeedbackAddData(
-                runtime="oracle",
-                executed=True,
-                status="added",
-                profile_name=str(meta.get("profile_name") or profile_name),
-                index_name=str(meta.get("index_name") or ""),
-                table_name=str(meta.get("table_name") or ""),
-                sql_text=sql_text,
-                stored_feedback_type=stored_feedback_type,
-                plsql_preview=plsql_preview,
-                engine_meta=meta,
-            )
-        except OracleAdapterError as exc:
-            return SelectAiFeedbackAddData(
-                runtime="oracle",
-                executed=False,
-                status="error",
-                profile_name=profile_name,
-                sql_text=sql_text,
-                stored_feedback_type=stored_feedback_type,
-                plsql_preview=plsql_preview,
-                warnings=[str(exc)],
-            )
-
-    def update_select_ai_feedback_vector_index(
-        self, request: SelectAiFeedbackVectorIndexRequest
-    ) -> SelectAiFeedbackMutationData:
-        if not self._use_oracle_runtime():
-            return SelectAiFeedbackMutationData(
-                runtime="deterministic",
-                executed=False,
-                status="requires_oracle",
-                profile_name=request.profile_name,
-                warnings=[
-                    "Select AI feedback vector index 更新には "
-                    "NL2SQL_RUNTIME_MODE=oracle が必要です。"
-                ],
-            )
-        try:
-            meta = self._oracle_adapter.update_select_ai_feedback_vector_index(
-                profile_name=request.profile_name,
-                similarity_threshold=request.similarity_threshold,
-                match_limit=request.match_limit,
-            )
-            self._record_admin_audit(
-                operation="select_ai_feedback_vector_index_update",
-                target=str(meta.get("index_name") or request.profile_name),
-                executed=True,
-                reason="ui-select-ai-feedback-vector-index-update",
-                detail={
-                    "similarity_threshold": request.similarity_threshold,
-                    "match_limit": request.match_limit,
-                },
-            )
-            return SelectAiFeedbackMutationData(
-                runtime="oracle",
-                executed=True,
-                status="updated",
-                profile_name=str(meta.get("profile_name") or request.profile_name),
-                index_name=str(meta.get("index_name") or ""),
-                table_name=str(meta.get("table_name") or ""),
-                engine_meta=meta,
-            )
-        except OracleAdapterError as exc:
-            return SelectAiFeedbackMutationData(
-                runtime="oracle",
-                executed=False,
-                status="error",
-                profile_name=request.profile_name,
-                warnings=[str(exc)],
-            )
-
-    def upsert_select_ai_db_profile(
-        self, request: SelectAiDbProfileUpsertRequest
-    ) -> SelectAiDbProfileMutationData:
-        profile_name = request.profile_name.strip()
-        original_name = request.original_name.strip()
-        escaped_profile_name = profile_name.replace("'", "''")
-        ddl = [
-            f"BEGIN DBMS_CLOUD_AI.DROP_PROFILE(profile_name => '{escaped_profile_name}'); END;",
-            "BEGIN DBMS_CLOUD_AI.CREATE_PROFILE(profile_name => :name, attributes => :attrs); END;",
-        ]
-        warnings: list[str] = []
-        confirmation_error = self._admin_confirmation_error(
-            confirmation=request.confirmation,
-            target=profile_name,
-        )
-        if confirmation_error:
-            return SelectAiDbProfileMutationData(
-                runtime="oracle" if self._use_oracle_runtime() else "deterministic",
-                executed=False,
-                status="confirmation_required",
-                profile_name=profile_name,
-                original_name=original_name,
-                ddl=ddl,
-                warnings=[confirmation_error],
-            )
-        if not self._use_oracle_runtime():
-            return SelectAiDbProfileMutationData(
-                runtime="deterministic",
-                executed=False,
-                status="requires_oracle",
-                profile_name=profile_name,
-                original_name=original_name,
-                ddl=ddl,
-                warnings=[
-                    "DBMS_CLOUD_AI profile の作成/更新には NL2SQL_RUNTIME_MODE=oracle が必要です。"
-                ],
-            )
-        try:
-            meta = self._oracle_adapter.upsert_select_ai_profile_low_level(
-                profile_name=profile_name,
-                attributes=request.attributes,
-                description=request.description,
-                original_name=original_name,
-            )
-            detail = self._enrich_select_ai_db_profile(
-                SelectAiDbProfile.model_validate(
-                    self._oracle_adapter.get_select_ai_profile_detail(profile_name=profile_name)
-                )
-            )
-            expected_scope = self._select_ai_object_scope_set(request.attributes.get("object_list"))
-            actual_scope = self._select_ai_object_scope_set(detail.object_list)
-            if expected_scope != actual_scope:
-                asset_error = self._record_select_ai_scope_state(
-                    profile_name=profile_name,
-                    expected_scope=expected_scope,
-                    actual_scope=actual_scope,
-                )
-                sync = self._submit_select_ai_db_profile_list_refresh_after_mutation(
-                    target_profiles=self._select_ai_db_profile_upsert_refresh_targets(
-                        profile_name=profile_name,
-                        original_name=original_name,
-                    ),
-                    source="select_ai_db_profile_upsert_scope_mismatch",
-                )
-                # DB Profile 一覧の再取得を求める状態は profile_list_refresh_* で返す
-                # （warnings に重ねない。#2034）。
-                response_warnings = [asset_error.warning]
-                return SelectAiDbProfileMutationData(
-                    runtime="oracle",
-                    executed=False,
-                    status="scope_mismatch",
-                    profile_name=profile_name,
-                    original_name=original_name,
-                    ddl=ddl,
-                    profile=detail,
-                    warnings=response_warnings,
-                    engine_meta={
-                        **meta,
-                        "expected_object_scope": sorted(expected_scope),
-                        "actual_object_scope": sorted(actual_scope),
-                    },
-                    profile_list_refresh_job_id=sync.job_id,
-                    profile_list_refresh_required=sync.required,
-                    profile_list_refresh_reason_code=sync.reason_code,
-                )
-            self._record_select_ai_scope_state(
-                profile_name=profile_name,
-                expected_scope=expected_scope,
-                actual_scope=actual_scope,
-            )
-            self._record_admin_audit(
-                operation="select_ai_profile_upsert",
-                target=profile_name,
-                executed=True,
-                reason=request.reason,
-                detail={
-                    "original_name": original_name,
-                    "category": request.category,
-                    "attributes": self._redact_select_ai_context_attributes(request.attributes),
-                },
-            )
-            sync = self._submit_select_ai_db_profile_list_refresh_after_mutation(
-                target_profiles=self._select_ai_db_profile_upsert_refresh_targets(
-                    profile_name=profile_name,
-                    original_name=original_name,
-                ),
-                source="select_ai_db_profile_upsert",
-            )
-            # DB Profile 一覧の再取得を求める状態は profile_list_refresh_* で返す
-            # （warnings に重ねない。#2034）。
-            return SelectAiDbProfileMutationData(
-                runtime="oracle",
-                executed=True,
-                status="saved",
-                profile_name=profile_name,
-                original_name=original_name,
-                ddl=ddl,
-                profile=detail,
-                warnings=warnings,
-                engine_meta={
-                    **meta,
-                    "attributes": self._redact_select_ai_context_attributes(request.attributes),
-                },
-                profile_list_refresh_job_id=sync.job_id,
-                profile_list_refresh_required=sync.required,
-                profile_list_refresh_reason_code=sync.reason_code,
-            )
-        except OracleAdapterError as exc:
-            expected_scope = self._select_ai_object_scope_set(request.attributes.get("object_list"))
-            self._record_select_ai_scope_state(
-                profile_name=profile_name,
-                expected_scope=expected_scope,
-                actual_scope=set(),
-                warning=str(exc),
-            )
-            if isinstance(exc, SelectAiCredentialMissingError):
-                raise
-            return SelectAiDbProfileMutationData(
-                runtime="oracle",
-                executed=False,
-                status="error",
-                profile_name=profile_name,
-                original_name=original_name,
-                ddl=ddl,
-                warnings=[str(exc)],
-            )
-
-    def export_select_ai_profiles_json(
-        self,
-        *,
-        business_profiles_only: bool = False,
-        include_archived_business_profiles: bool = True,
-    ) -> SelectAiProfilesExportData:
-        return SelectAiProfilesExportData(
-            profiles=self.list_select_ai_db_profiles(
-                business_profiles_only=business_profiles_only,
-                include_archived_business_profiles=include_archived_business_profiles,
-            ).profiles,
-            exported_at=_utc_now(),
-        )
-
-    def import_select_ai_profiles_json(
-        self, request: SelectAiProfilesImportRequest
-    ) -> list[SelectAiDbProfileMutationData]:
-        results: list[SelectAiDbProfileMutationData] = []
-        for profile in request.profiles:
-            results.append(
-                self.upsert_select_ai_db_profile(
-                    SelectAiDbProfileUpsertRequest(
-                        profile_name=profile.name,
-                        attributes=profile.attributes,
-                        description=profile.description,
-                        category=profile.category,
-                        confirmation=request.confirmation,
-                        reason=request.reason,
-                    )
-                )
-            )
-        return results
-
-    def drop_select_ai_db_profile(
-        self, profile_name: str, confirmation: str = "", reason: str = ""
-    ) -> AssetCleanupData:
-        cleaned_at = _utc_now()
-        status = "error"
-        warning = ""
-        executed = False
-        engine_meta: dict[str, Any] = {"runtime": "deterministic"}
-        sync = SelectAiDbProfileListRefreshSync()
-        confirmation_error = self._admin_confirmation_error(
-            confirmation=confirmation,
-            target=profile_name,
-        )
-        if confirmation_error:
-            status = "confirmation_required"
-            warning = confirmation_error
-        elif not self._use_oracle_runtime():
-            warning = "DBMS_CLOUD_AI profile drop には NL2SQL_RUNTIME_MODE=oracle が必要です。"
-        else:
-            try:
-                engine_meta.update(
-                    self._oracle_adapter.drop_select_ai_profile(profile_name=profile_name)
-                )
-                status = "cleaned"
-                executed = True
-                self._record_admin_audit(
-                    operation="select_ai_profile_drop",
-                    target=profile_name,
-                    executed=True,
-                    reason=reason,
-                    detail={},
-                )
-                sync = self._submit_select_ai_db_profile_list_refresh_after_mutation(
-                    target_profiles=[
-                        target
-                        for target in [
-                            self._select_ai_db_profile_target(
-                                profile_name,
-                                expected_state="absent",
-                            )
-                        ]
-                        if target is not None
-                    ],
-                    source="select_ai_db_profile_drop",
-                )
-                # DB Profile 一覧の再取得を求める状態は profile_list_refresh_* で返す
-                # （warning に重ねない。#2034）。
-            except OracleAdapterError as exc:
-                warning = str(exc)
-        return AssetCleanupData(
-            engine=Nl2SqlEngine.SELECT_AI,
-            executed=executed,
-            status=status,
-            cleaned_at=cleaned_at,
-            profile_name=profile_name,
-            warning=warning,
-            asset_names={"profile": profile_name},
-            engine_meta=engine_meta,
-            profile_list_refresh_job_id=sync.job_id,
-            profile_list_refresh_required=sync.required,
-            profile_list_refresh_reason_code=sync.reason_code,
-        )
-
-    def run_select_ai_agent_team(self, request: AgentTeamRunRequest) -> AgentTeamRunData:
-        profile = self.get_profile(request.profile_id)
-        team_name = request.team_name.strip() or self._select_ai_runtime_team_name(profile)
-        warnings: list[str] = []
-        if self._use_oracle_runtime():
-            self._assert_select_ai_scope_ready(profile)
-            sql, conversation_id = self._oracle_adapter.run_select_ai_agent_team(
-                team_name=team_name,
-                question=request.prompt,
-                tool_name=self._select_ai_agent_asset_names(profile)["tool"],
-                conversation_id=request.conversation_id.strip() or None,
-            )
-            run_mode, run_warning = _select_ai_agent_run_mode(conversation_id)
-            return AgentTeamRunData(
-                team_name=team_name,
-                prompt=request.prompt,
-                generated_sql=sql,
-                conversation_id=conversation_id,
-                runtime="oracle",
-                warnings=[run_warning] if run_warning else [],
-                engine_meta={"package": "DBMS_CLOUD_AI_AGENT", "agent_run_mode": run_mode},
-            )
-        generated = self._generate_sql(
-            Nl2SqlEngine.SELECT_AI_AGENT,
-            request.prompt,
-            profile,
-            AllowedObjects(),
-            None,
-            warnings,
-        )
-        return AgentTeamRunData(
-            team_name=team_name,
-            prompt=request.prompt,
-            generated_sql=generated.generated_sql,
-            conversation_id=str(generated.engine_meta.get("conversation_id") or ""),
-            runtime="deterministic",
-            warnings=warnings
-            or ["Oracle runtime ではないため deterministic Agent 生成を返しました。"],
-            engine_meta=generated.engine_meta,
-        )
-
-    def list_select_ai_agent_assets(self) -> SelectAiAgentAssetsData:
-        with self._lock:
-            meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-            profiles = self.list_profiles()
-        items: list[SelectAiAgentAsset] = []
-        if meta is not None:
-            items.append(
-                SelectAiAgentAsset(
-                    profile_name=meta.profile_name,
-                    tool_name=meta.asset_names.get("tool", ""),
-                    agent_name=meta.asset_names.get("agent", ""),
-                    task_name=meta.asset_names.get("task", ""),
-                    team_name=meta.asset_names.get("team", meta.team_name),
-                    source="state",
-                    attributes=meta.engine_meta,
-                )
-            )
-        for profile in profiles:
-            names = self._select_ai_agent_asset_names(profile)
-            if any(item.team_name == names["team"] for item in items):
-                continue
-            items.append(
-                SelectAiAgentAsset(
-                    profile_id=profile.id,
-                    profile_name=self._select_ai_profile_name(profile),
-                    tool_name=names["tool"],
-                    agent_name=names["agent"],
-                    task_name=names["task"],
-                    team_name=self._select_ai_runtime_team_name(profile),
-                    source="derived",
-                )
-            )
-        return SelectAiAgentAssetsData(
-            runtime="oracle" if self._use_oracle_runtime() else "deterministic",
-            items=items,
-        )
-
-    def run_select_ai_agent_tool(self, request: AgentToolRunRequest) -> AgentTeamRunData:
-        warnings: list[str] = []
-        profile = next(
-            (
-                candidate
-                for candidate in self.list_profiles()
-                if self._select_ai_agent_asset_names(candidate)["tool"].upper()
-                == request.tool_name.strip().upper()
-            ),
-            self.get_profile(None),
-        )
-        if self._use_oracle_runtime():
-            self._assert_select_ai_scope_ready(profile)
-            sql, conversation_id = self._oracle_adapter.run_select_ai_agent_tool(
-                tool_name=request.tool_name,
-                question=request.prompt,
-            )
-            return AgentTeamRunData(
-                team_name="",
-                prompt=request.prompt,
-                generated_sql=sql,
-                conversation_id=request.conversation_id or conversation_id,
-                runtime="oracle",
-                engine_meta={
-                    "package": "DBMS_CLOUD_AI_AGENT",
-                    "tool_name": request.tool_name,
-                },
-            )
-        generated = self._generate_sql(
-            Nl2SqlEngine.SELECT_AI_AGENT,
-            request.prompt,
-            profile,
-            AllowedObjects(),
-            None,
-            warnings,
-        )
-        return AgentTeamRunData(
-            team_name="",
-            prompt=request.prompt,
-            generated_sql=generated.generated_sql,
-            conversation_id=request.conversation_id,
-            runtime="deterministic",
-            warnings=warnings
-            or ["Oracle runtime ではないため deterministic Agent tool 生成を返しました。"],
-            engine_meta={"tool_name": request.tool_name, **generated.engine_meta},
-        )
-
-    def create_select_ai_agent_conversation(
-        self, request: AgentConversationCreateRequest
-    ) -> AgentConversationCreateData:
-        del request
-        if self._use_oracle_runtime():
-            # 作れないときに偽の id（deterministic-<uuid>）を返さない。RUN_TEAM は
-            # DBMS_CLOUD_AI.CREATE_CONVERSATION で作っていない id を受け付けない（#1681。
-            # 実 ADB で ORA-06502）。失敗は OracleAdapterError のまま router が 502 にする。
-            return AgentConversationCreateData(
-                conversation_id=self._oracle_adapter.create_agent_conversation(),
-                runtime="oracle",
-            )
-        return AgentConversationCreateData(
-            conversation_id=f"deterministic-{uuid.uuid4()}",
-            runtime="deterministic",
-            warnings=["Oracle runtime ではないため deterministic conversation id を返しました。"],
-        )
-
-    def cleanup_select_ai_agent_assets_low_level(
-        self, request: AssetCleanupRequest
-    ) -> list[AssetCleanupData]:
-        return self.cleanup_select_ai_assets(
-            profile_id=request.profile_id,
-            engines=[Nl2SqlEngine.SELECT_AI_AGENT],
-            confirmation=request.confirmation,
-            reason=request.reason,
-        )
-
-    def list_select_ai_agent_conversations(
-        self, team_name: str | None = None, limit: int = 20
-    ) -> AgentConversationsData:
-        warnings: list[str] = []
-        if self._use_oracle_runtime():
-            try:
-                return AgentConversationsData(
-                    runtime="oracle",
-                    items=[
-                        AgentConversationItem.model_validate(item)
-                        for item in self._oracle_adapter.list_agent_conversations(
-                            team_name=team_name,
-                            limit=limit,
-                        )
-                    ],
-                )
-            except OracleAdapterError as exc:
-                warnings.append(str(exc))
-        return AgentConversationsData(
-            runtime="deterministic",
-            items=[],
-            warnings=warnings
-            or ["Oracle runtime ではないため conversation 履歴は取得していません。"],
-        )
-
-    def check_select_ai_agent_privileges(self) -> AgentPrivilegeCheckData:
-        runtime = "oracle" if self._use_oracle_runtime() else "deterministic"
-        if not self._use_oracle_runtime():
-            return AgentPrivilegeCheckData(
-                runtime=runtime,
-                status="warning",
-                checks=[
-                    DiagnosticCheck(
-                        name="nl2sql_runtime_mode",
-                        status="warning",
-                        message=(
-                            "NL2SQL_RUNTIME_MODE=oracle ではないため Oracle 権限を"
-                            "確認していません。"
-                        ),
-                    )
-                ],
-                warnings=["Oracle runtime ではないため Select AI Agent 権限は未確認です。"],
-            )
-        try:
-            checks = [
-                DiagnosticCheck.model_validate(item)
-                for item in self._oracle_adapter.check_select_ai_agent_privileges()
-            ]
-            ok = bool(checks) and all(item.status == "ok" for item in checks)
-            return AgentPrivilegeCheckData(
-                runtime=runtime,
-                status="ok" if ok else "warning",
-                checks=checks,
-            )
-        except OracleAdapterError as exc:
-            return AgentPrivilegeCheckData(
-                runtime=runtime,
-                status="error",
-                checks=[
-                    DiagnosticCheck(
-                        name="select_ai_agent_privileges",
-                        status="error",
-                        message=str(exc),
-                    )
-                ],
-                warnings=[str(exc)],
-            )
-
-    def _cleanup_profile_oracle_assets_for_delete(
-        self,
-        profile: Nl2SqlProfile,
-    ) -> list[AssetCleanupData]:
-        cleaned = [
-            self._cleanup_select_ai_agent_assets_for_profile(profile),
-            self._cleanup_select_ai_profile_for_profile(profile),
-        ]
-        if any(item.executed for item in cleaned):
-            self._record_admin_audit(
-                operation="profile_delete_oracle_assets_cleanup",
-                target=profile.id,
-                executed=True,
-                reason="profile_delete",
-                detail={
-                    "profile_id": profile.id,
-                    "engines": [item.engine.value for item in cleaned],
-                },
-            )
-            self._persist_singletons("asset_meta")
-        return cleaned
-
-    def _cleanup_select_ai_profile(self, profile_id: str | None) -> AssetCleanupData:
-        return self._cleanup_select_ai_profile_for_profile(self._cleanup_profile_target(profile_id))
-
-    def _cleanup_select_ai_profile_for_profile(self, profile: Nl2SqlProfile) -> AssetCleanupData:
-        profile_name = self._select_ai_profile_name(profile)
-        warning = ""
-        status = "error"
-        executed = False
-        engine_meta: dict[str, Any] = {"runtime": "deterministic"}
-        sync = SelectAiDbProfileListRefreshSync()
-        if self._use_oracle_runtime():
-            try:
-                engine_meta.update(
-                    self._oracle_adapter.drop_select_ai_profile(profile_name=profile_name)
-                )
-                status = "cleaned"
-                executed = True
-                with self._lock:
-                    self._asset_meta.pop(Nl2SqlEngine.SELECT_AI, None)
-                sync = self._submit_select_ai_db_profile_list_refresh_after_mutation(
-                    target_profiles=[
-                        target
-                        for target in [
-                            self._select_ai_db_profile_target(
-                                profile_name,
-                                expected_state="absent",
-                            )
-                        ]
-                        if target is not None
-                    ],
-                    source="select_ai_profile_cleanup",
-                )
-                # DB Profile 一覧の再取得を求める状態は profile_list_refresh_* で返す
-                # （warning に重ねない。#2034）。
-            except OracleAdapterError as exc:
-                warning = str(exc)
-        else:
-            status = "skipped"
-            warning = "cleanup の実行には NL2SQL_RUNTIME_MODE=oracle が必要です。"
-        return AssetCleanupData(
-            engine=Nl2SqlEngine.SELECT_AI,
-            executed=executed,
-            status=status,
-            cleaned_at=_utc_now(),
-            profile_name=profile_name,
-            warning=warning,
-            asset_names={"profile": profile_name},
-            engine_meta=engine_meta,
-            profile_list_refresh_job_id=sync.job_id,
-            profile_list_refresh_required=sync.required,
-            profile_list_refresh_reason_code=sync.reason_code,
-        )
-
-    def _cleanup_select_ai_agent_assets(self, profile_id: str | None) -> AssetCleanupData:
-        return self._cleanup_select_ai_agent_assets_for_profile(
-            self._cleanup_profile_target(profile_id)
-        )
-
-    def _cleanup_select_ai_agent_assets_for_profile(
-        self,
-        profile: Nl2SqlProfile,
-    ) -> AssetCleanupData:
-        profile_name = self._select_ai_profile_name(profile)
-        asset_names = self._select_ai_agent_asset_names(profile)
-        asset_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        if asset_meta and asset_meta.profile_name == profile_name and asset_meta.team_name:
-            asset_names["team"] = asset_meta.team_name
-        warning = ""
-        status = "error"
-        executed = False
-        engine_meta: dict[str, Any] = {"runtime": "deterministic"}
-        if self._use_oracle_runtime():
-            try:
-                engine_meta.update(
-                    self._oracle_adapter.drop_select_ai_agent_assets(
-                        profile_name=profile_name,
-                        tool_name=asset_names["tool"],
-                        agent_name=asset_names["agent"],
-                        task_name=asset_names["task"],
-                        team_name=asset_names["team"],
-                    )
-                )
-                status = "cleaned"
-                executed = True
-                with self._lock:
-                    self._asset_meta.pop(Nl2SqlEngine.SELECT_AI_AGENT, None)
-            except OracleAdapterError as exc:
-                warning = str(exc)
-        else:
-            status = "skipped"
-            warning = "cleanup の実行には NL2SQL_RUNTIME_MODE=oracle が必要です。"
-        return AssetCleanupData(
-            engine=Nl2SqlEngine.SELECT_AI_AGENT,
-            executed=executed,
-            status=status,
-            cleaned_at=_utc_now(),
-            profile_name=profile_name,
-            team_name=asset_names["team"],
-            warning=warning,
-            asset_names={"profile": profile_name, **asset_names},
-            engine_meta=engine_meta,
-        )
-
-    def _refresh_select_ai_agent_assets_with_team(
-        self,
-        *,
-        profile: Nl2SqlProfile,
-        profile_name: str,
-        tool_name: str,
-        agent_name: str,
-        task_name: str,
-        team_name: str,
-    ) -> dict[str, Any]:
-        return self._oracle_adapter.refresh_select_ai_agent_assets(
-            profile_name=profile_name,
-            tool_name=tool_name,
-            agent_name=agent_name,
-            task_name=task_name,
-            team_name=team_name,
-            allowed_tables=self.profile_allowed_object_names(profile),
-            row_limit=None,
-            description="",
-            # service boundary で Profile sync を一度だけ実行する。ProfileSyncJob では
-            # 直前の phase で完了済みなので、ここでも再利用する。
-            refresh_profile=False,
-        )
-
-    def _cleanup_profile_target(self, profile_id: str | None) -> Nl2SqlProfile:
-        if not profile_id:
-            return self.get_profile(None)
-        try:
-            return self.get_profile(profile_id, include_archived=True)
-        except ValueError:
-            pass
-        return Nl2SqlProfile(
-            id=profile_id,
-            name=profile_id,
-            description="Cleanup target profile",
-            default_row_limit=get_settings().nl2sql_default_row_limit,
-        )
-
     def _effective_glossary(self, profile: Nl2SqlProfile) -> dict[str, str]:
         legacy = dict(self._load_legacy_learning_material(force_reload=False).glossary)
         return {**legacy, **profile.glossary}
@@ -22971,10 +20076,6 @@ class Nl2SqlService:
         except (KeyError, ValueError):
             return None
 
-    @staticmethod
-    def _engine_uses_similar_history_few_shot(engine: Nl2SqlEngine) -> bool:
-        return engine not in {Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT}
-
     def _profile_learning_examples(self, profile: Nl2SqlProfile) -> list[LearningExample]:
         examples: list[LearningExample] = []
         for profile_example in profile.few_shot_examples[:_PROFILE_FEW_SHOT_EXAMPLE_LIMIT]:
@@ -23002,8 +20103,6 @@ class Nl2SqlService:
         allowed_profile_ids: set[str] | None = None,
         limit: int | None = None,
     ) -> list[SimilarHistoryCandidate]:
-        if not self._engine_uses_similar_history_few_shot(engine):
-            return []
         profile_example_count = len(self._profile_learning_examples(profile)) if profile else 0
         remaining_slots = max(0, _LEARNING_EXAMPLE_LIMIT - profile_example_count)
         configured_limit = max(0, self._feedback_match_limit)
@@ -23027,8 +20126,6 @@ class Nl2SqlService:
     def _learning_examples_for_generation(
         self, *, question: str, profile: Nl2SqlProfile, engine: Nl2SqlEngine
     ) -> list[LearningExample]:
-        if not self._engine_uses_similar_history_few_shot(engine):
-            return []
         examples = self._profile_learning_examples(profile)
         for history_candidate in self._similar_history_candidates_for_generation(
             question=question,
@@ -23962,67 +21059,6 @@ class Nl2SqlService:
             )
             return None, [f"Ontology グラフ artifact の生成に失敗しました: {exc}"]
 
-    def _build_show_prompt_artifact(
-        self,
-        *,
-        request: JobCreateRequest,
-        profile: Nl2SqlProfile,
-        generated: GeneratedSql,
-        rewritten_question: str,
-        ontology_context: Any | None = None,
-    ) -> Nl2SqlShowPromptArtifact:
-        if generated.engine != Nl2SqlEngine.SELECT_AI:
-            return Nl2SqlShowPromptArtifact(
-                available=False,
-                engine=generated.engine,
-                unavailable_reason="Show Prompt は Select AI 実行時のみ利用できます。",
-            )
-        if generated.engine_meta.get("runtime") != "oracle" or not self._use_oracle_runtime():
-            return Nl2SqlShowPromptArtifact(
-                available=False,
-                engine=generated.engine,
-                unavailable_reason=(
-                    "Show Prompt は Oracle Select AI runtime で生成された場合のみ表示できます。"
-                ),
-            )
-        try:
-            attributes = self._select_ai_generate_attributes(
-                profile,
-                request.select_ai_overrides,
-                ontology_context=ontology_context,
-                sql_requirement=request.sql_requirement,
-            )
-            show_question = _question_with_empty_filter_guard(rewritten_question)
-            if request.sql_requirement is not None:
-                show_question = request.sql_requirement.question_with_requirements(show_question)
-            prompt = self._oracle_adapter.generate_select_ai_prompt(
-                profile_name=str(
-                    generated.engine_meta.get("select_ai_profile")
-                    or self._select_ai_profile_name(profile)
-                ),
-                question=show_question,
-                attributes=attributes,
-            )
-            if not prompt.strip():
-                return Nl2SqlShowPromptArtifact(
-                    available=False,
-                    engine=generated.engine,
-                    unavailable_reason="Oracle Select AI から Show Prompt が返りませんでした。",
-                )
-            return Nl2SqlShowPromptArtifact(
-                available=True,
-                engine=generated.engine,
-                prompt=prompt,
-            )
-        except Exception as exc:  # pragma: no cover - artifact must never fail the job
-            logger.warning("nl2sql_showprompt_artifact_failed", exc_info=True)
-            return Nl2SqlShowPromptArtifact(
-                available=False,
-                engine=generated.engine,
-                unavailable_reason="Show Prompt の取得に失敗しました。",
-                warnings=[str(exc)],
-            )
-
     def _job_published_ontology_markdown(
         self,
         *,
@@ -24230,7 +21266,6 @@ class Nl2SqlService:
                 profile=profile,
                 allowed=allowed,
                 row_limit=row_limit,
-                select_ai_overrides=request.select_ai_overrides,
                 ontology_context=ontology_context,
                 use_glossary=request.use_glossary,
                 sql_requirement=request.sql_requirement,
@@ -24258,7 +21293,6 @@ class Nl2SqlService:
                 allowed,
                 row_limit,
                 catalog=generated.schema_catalog,
-                engine=generated.engine,
             )
             analysis = self._apply_empty_filter_generation_guard(rewritten, analysis)
             if not analysis.safety.safety_checked:
@@ -24329,7 +21363,6 @@ class Nl2SqlService:
                     question=rewritten,
                     allowed=allowed,
                     log_event="nl2sql_job_execute_sql_failed",
-                    engine=generated.engine,
                 )
                 safety = analysis.safety
                 executable = chat_execution.executable_sql or analysis.executable_sql
@@ -24464,24 +21497,6 @@ class Nl2SqlService:
                         available=False,
                         warnings=[f"解釈 artifact の生成に失敗しました: {exc}"],
                     )
-            show_prompt: Nl2SqlShowPromptArtifact | None = None
-            if request.include_show_prompt:
-                try:
-                    show_prompt = self._build_show_prompt_artifact(
-                        request=request,
-                        profile=profile,
-                        generated=generated,
-                        rewritten_question=rewritten,
-                        ontology_context=ontology_context,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive artifact boundary
-                    logger.warning("nl2sql_showprompt_artifact_boundary_failed", exc_info=True)
-                    show_prompt = Nl2SqlShowPromptArtifact(
-                        available=False,
-                        engine=generated.engine,
-                        unavailable_reason="Show Prompt の取得に失敗しました。",
-                        warnings=[str(exc)],
-                    )
             history_id = str(uuid.uuid4())
             result = Nl2SqlResult(
                 business_release_id=business_release_id,
@@ -24501,7 +21516,6 @@ class Nl2SqlService:
                 results=results,
                 timing=timing,
                 interpretation=interpretation,
-                show_prompt=show_prompt,
             )
         stage_elapsed = _elapsed_ms(stage_started)
         stage_timings.append(StageTiming(stage="format_results", elapsed_ms=stage_elapsed))
@@ -24752,7 +21766,6 @@ class Nl2SqlService:
         profile: Nl2SqlProfile,
         allowed: AllowedObjects,
         row_limit: int | None,
-        select_ai_overrides: SelectAiRequestOverrides | None = None,
         ontology_context: Any | None = None,
         *,
         use_glossary: bool = False,
@@ -24772,10 +21785,8 @@ class Nl2SqlService:
             allowed,
             row_limit,
             [],
-            select_ai_overrides,
             ontology_context,
             use_glossary=use_glossary,
-            allow_deterministic_fallback=engine != Nl2SqlEngine.SELECT_AI_AGENT,
             engine_timings=engine_timings,
             sql_requirement=sql_requirement,
         )
@@ -24788,7 +21799,6 @@ class Nl2SqlService:
         allowed: AllowedObjects,
         row_limit: int | None,
         fallback_messages: list[str],
-        select_ai_overrides: SelectAiRequestOverrides | None = None,
         ontology_context: Any | None = None,
         *,
         use_glossary: bool = False,
@@ -24798,7 +21808,7 @@ class Nl2SqlService:
         engine_timings: list[dict[str, Any]] | None = None,
         sql_requirement: SqlRequirementSpec | None = None,
     ) -> GeneratedSql:
-        """SQL を生成する（3 つの生成方法と deterministic の共通の出口）。
+        """SQL を生成する（OCI Enterprise AI と deterministic の共通の出口）。
 
         生成した SQL の今の日時（`SYSDATE` / `SYSTIMESTAMP`）は、session の時間帯（共通の設定の
         時間帯）の `CURRENT_DATE` / `CURRENT_TIMESTAMP` にそろえる（#3265）。ADB の `SYSDATE` は
@@ -24811,7 +21821,6 @@ class Nl2SqlService:
             allowed,
             row_limit,
             fallback_messages,
-            select_ai_overrides,
             ontology_context,
             use_glossary=use_glossary,
             allow_deterministic_fallback=allow_deterministic_fallback,
@@ -24834,7 +21843,6 @@ class Nl2SqlService:
         allowed: AllowedObjects,
         row_limit: int | None,
         fallback_messages: list[str],
-        select_ai_overrides: SelectAiRequestOverrides | None = None,
         ontology_context: Any | None = None,
         *,
         use_glossary: bool = False,
@@ -24869,21 +21877,16 @@ class Nl2SqlService:
             use_glossary=use_glossary,
         )
         runtime_question = _question_with_empty_filter_guard(effective_question)
-        is_select_ai_engine = engine in {Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT}
         meta: dict[str, Any] = {
             "profile_id": profile.id,
             "profile_name": profile.name,
             "row_limit": row_limit or 0,
             "allowed_tables": allowed.table_names or self.profile_allowed_object_names(profile),
         }
-        learning_examples = (
-            []
-            if is_select_ai_engine
-            else self._learning_examples_for_generation(
-                question=effective_question,
-                profile=profile,
-                engine=engine,
-            )
+        learning_examples = self._learning_examples_for_generation(
+            question=effective_question,
+            profile=profile,
+            engine=engine,
         )
         history_examples = [
             example for example in learning_examples if example.source == "similar_history"
@@ -24910,7 +21913,7 @@ class Nl2SqlService:
                 for example in history_examples
             ]
         if sql_requirement is not None:
-            # 回答前の確認の構造化した要件（#1439）。3 つの生成方法のどれにも渡す。
+            # 回答前の確認の構造化した要件（#1439）。
             meta.update(
                 {
                     "sql_requirement_applied": True,
@@ -24929,55 +21932,6 @@ class Nl2SqlService:
                     "ontology_context_instruction_length": len(ontology_instructions),
                 }
             )
-        if self._use_oracle_runtime() and engine in {
-            Nl2SqlEngine.SELECT_AI,
-            Nl2SqlEngine.SELECT_AI_AGENT,
-        }:
-            timing_count = len(engine_timings)
-            try:
-                generated = self._generate_oracle_sql(
-                    engine=engine,
-                    question=runtime_question,
-                    profile=profile,
-                    fallback_messages=fallback_messages,
-                    meta=dict(meta),
-                    learning_examples=learning_examples,
-                    select_ai_overrides=select_ai_overrides,
-                    ontology_context=ontology_context,
-                    runtime_timeout_seconds=runtime_timeout_seconds,
-                    engine_timings=engine_timings,
-                    sql_requirement=sql_requirement,
-                )
-                generated.engine_meta = _engine_meta_with_timings(
-                    generated.engine_meta,
-                    engine_timings,
-                )
-                return generated
-            except OracleAdapterError as exc:
-                if len(engine_timings) == timing_count:
-                    skipped_started = time.monotonic()
-                    _record_engine_timing(
-                        engine_timings,
-                        engine=engine.value,
-                        started=skipped_started,
-                        status="skipped",
-                        error=str(exc),
-                    )
-                fallback_messages.append(f"{engine.value}: {exc}")
-                if not allow_deterministic_fallback:
-                    raise RuntimeError(str(exc)) from exc
-        elif engine in {Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT} and not (
-            allow_deterministic_fallback
-        ):
-            skipped_started = time.monotonic()
-            _record_engine_timing(
-                engine_timings,
-                engine=engine.value,
-                started=skipped_started,
-                status="skipped",
-                error="Oracle runtime が構成されていません。",
-            )
-            raise RuntimeError("Oracle runtime が構成されていません。")
         generation_catalog = self._generation_schema_catalog(profile, allowed)
         table = self._choose_table(effective_question, profile, allowed, generation_catalog)
         columns = self._choose_columns(table, allowed)
@@ -25035,18 +21989,7 @@ class Nl2SqlService:
 
         deterministic_started = time.monotonic()
         sql = self._compose_select_sql(self._catalog_qualified_name(table), columns)
-        if engine == Nl2SqlEngine.SELECT_AI:
-            meta.update({"select_ai_profile": self._select_ai_profile_name(profile)})
-        elif engine == Nl2SqlEngine.SELECT_AI_AGENT:
-            meta.update(
-                {
-                    "select_ai_profile": self._select_ai_profile_name(profile),
-                    "team_name": self._select_ai_team_name(profile),
-                    "conversation_id": str(uuid.uuid4()),
-                }
-            )
-        else:
-            meta.update({"provider": "oci_enterprise_ai", "mode": "direct"})
+        meta.update({"provider": "oci_enterprise_ai", "mode": "direct"})
         _record_engine_timing(
             engine_timings,
             engine="deterministic",
@@ -25073,88 +22016,6 @@ class Nl2SqlService:
         except ValueError as exc:
             return None, str(exc)
 
-    def _select_ai_known_scope_blocking_reason(self, profile: Nl2SqlProfile | None) -> str:
-        if profile is None:
-            return ""
-        profile_name = self._select_ai_profile_name(profile)
-        scope_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI)
-        if scope_meta is None:
-            return ""
-        raw_states = scope_meta.engine_meta.get("profile_scope_states", {})
-        profile_state = (
-            raw_states.get(profile_name.upper()) if isinstance(raw_states, dict) else None
-        )
-        if isinstance(profile_state, dict):
-            if (
-                not bool(profile_state.get("refreshed"))
-                or str(profile_state.get("status") or "") != "ready"
-            ):
-                return (
-                    "Oracle Select AI Profile の object scope が未同期です。"
-                    "Profile を再同期してから実行してください。"
-                )
-            return ""
-        if scope_meta.profile_name == profile_name and (
-            not scope_meta.refreshed or scope_meta.status != "ready"
-        ):
-            return (
-                "Oracle Select AI Profile の object scope が未同期です。"
-                "Profile を再同期してから実行してください。"
-            )
-        return ""
-
-    def _select_ai_agent_known_asset_blocking_reason(self, profile: Nl2SqlProfile | None) -> str:
-        if profile is None:
-            return ""
-        profile_name = self._select_ai_profile_name(profile)
-        asset_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        if (
-            asset_meta is not None
-            and asset_meta.profile_name == profile_name
-            and (not asset_meta.refreshed or asset_meta.status != "ready")
-        ):
-            return (
-                "Oracle Select AI Agent assets が未同期です。"
-                "Profile を再同期してから実行してください。"
-            )
-        return ""
-
-    def engine_availability(self) -> list[Nl2SqlEngineAvailability]:
-        """この環境で使える生成の方式（業務プロファイルの既定の生成方式の選択肢。#1524）。
-
-        Select AI は基準の方式で常に選べる。Select AI Agent と OCI Enterprise AI は、その方式の
-        設定の有無で決める（Select AI の資産の状態・接続の確認はしない。実行の時に確かめる）。
-        """
-
-        settings = get_settings()
-        agent_ready = bool(
-            settings.nl2sql_select_ai_enabled and settings.nl2sql_select_ai_agent_enabled
-        )
-        direct_ready = bool(
-            settings.nl2sql_enterprise_ai_direct_enabled
-            and self._enterprise_ai_client.is_configured()
-        )
-        return [
-            Nl2SqlEngineAvailability(engine=Nl2SqlEngine.SELECT_AI, available=True),
-            Nl2SqlEngineAvailability(
-                engine=Nl2SqlEngine.SELECT_AI_AGENT,
-                available=agent_ready,
-                reason="" if agent_ready else "Select AI Agent が無効になっています。",
-            ),
-            Nl2SqlEngineAvailability(
-                engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
-                available=direct_ready,
-                reason="" if direct_ready else _DIRECT_ENGINE_UNAVAILABLE_REASON,
-            ),
-        ]
-
-    def assert_engine_available(self, engine: Nl2SqlEngine) -> None:
-        """この環境で使えない生成の方式を、業務プロファイルの既定にさせない（#1524）。"""
-
-        for item in self.engine_availability():
-            if item.engine == engine and not item.available:
-                raise ValueError(f"この環境では選べない生成の方式です。{item.reason}")
-
     def quality_evaluation_engine_readiness(
         self, profile_id: str | None = None
     ) -> dict[Nl2SqlEngine, tuple[bool, str]]:
@@ -25162,58 +22023,12 @@ class Nl2SqlService:
 
         settings = get_settings()
         profile, profile_error = self._quality_evaluation_profile(profile_id)
-        oracle_ready = bool(
-            self._use_oracle_runtime()
-            and self._oracle_adapter.is_configured()
-            and settings.nl2sql_select_ai_provider.strip()
-            and settings.nl2sql_select_ai_credential_name.strip()
-        )
-        select_ai_blocking_reason = self._select_ai_known_scope_blocking_reason(profile)
-        agent_blocking_reason = self._select_ai_agent_known_asset_blocking_reason(profile)
-        select_ai_ready = bool(
-            not profile_error
-            and settings.nl2sql_select_ai_enabled
-            and oracle_ready
-            and not select_ai_blocking_reason
-        )
-        agent_ready = bool(
-            not profile_error
-            and settings.nl2sql_select_ai_agent_enabled
-            and oracle_ready
-            and not select_ai_blocking_reason
-            and not agent_blocking_reason
-        )
         direct_ready = bool(
             not profile_error
             and settings.nl2sql_enterprise_ai_direct_enabled
             and self._enterprise_ai_client.is_configured()
         )
         return {
-            Nl2SqlEngine.SELECT_AI: (
-                select_ai_ready,
-                (
-                    ""
-                    if select_ai_ready
-                    else (
-                        profile_error
-                        or select_ai_blocking_reason
-                        or "Oracle Select AI の接続・credential・profile が未構成です。"
-                    )
-                ),
-            ),
-            Nl2SqlEngine.SELECT_AI_AGENT: (
-                agent_ready,
-                (
-                    ""
-                    if agent_ready
-                    else (
-                        profile_error
-                        or select_ai_blocking_reason
-                        or agent_blocking_reason
-                        or "Oracle Select AI Agent の接続・credential・team が未構成です。"
-                    )
-                ),
-            ),
             Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (
                 direct_ready,
                 (
@@ -25388,10 +22203,6 @@ class Nl2SqlService:
         if rules:
             lines.append("sql_rules:")
             lines.extend(f"- {rule}" for rule in rules)
-        additional_instructions = profile.select_ai_config.additional_instructions.strip()
-        if additional_instructions:
-            lines.append("additional_instructions:")
-            lines.append(additional_instructions)
         lines.append("schema:")
         for table in catalog.tables:
             qualified_name = self._catalog_qualified_name(table)
@@ -25444,158 +22255,6 @@ class Nl2SqlService:
         if not match:
             return ""
         return match.group(0).split(";", 1)[0].strip()
-
-    def _generate_oracle_sql(
-        self,
-        *,
-        engine: Nl2SqlEngine,
-        question: str,
-        profile: Nl2SqlProfile,
-        fallback_messages: list[str],
-        meta: dict[str, Any],
-        learning_examples: list[LearningExample],
-        select_ai_overrides: SelectAiRequestOverrides | None = None,
-        ontology_context: Any | None = None,
-        runtime_timeout_seconds: float | None = None,
-        engine_timings: list[dict[str, Any]] | None = None,
-        sql_requirement: SqlRequirementSpec | None = None,
-    ) -> GeneratedSql:
-        engine_timings = engine_timings if engine_timings is not None else []
-        self._assert_select_ai_scope_ready(profile)
-        asset_meta = self._asset_meta.get(engine)
-        expected_profile_name = self._select_ai_profile_name(profile)
-        if (
-            asset_meta is not None
-            and asset_meta.profile_name == expected_profile_name
-            and (not asset_meta.refreshed or asset_meta.status != "ready")
-        ):
-            raise OracleAdapterError(
-                "Oracle Select AI asset の object scope が未同期です。"
-                "業務プロファイルを再同期してから実行してください。"
-            )
-        runtime_question = question
-        if sql_requirement is not None:
-            # Select AI / Select AI Agent: 要件を明確な質問の文にする（#1439）。
-            runtime_question = sql_requirement.question_with_requirements(question)
-        ontology_instructions = (
-            self._ontology_generation_context_prompt(ontology_context)
-            if ontology_context is not None
-            else ""
-        )
-        if engine == Nl2SqlEngine.SELECT_AI:
-            profile_name = self._select_ai_profile_name(profile)
-            attributes = self._select_ai_generate_attributes(
-                profile,
-                select_ai_overrides,
-                ontology_context=ontology_context,
-                sql_requirement=sql_requirement,
-            )
-            if attributes:
-                select_ai_kwargs: dict[str, Any] = {
-                    "profile_name": profile_name,
-                    "question": runtime_question,
-                    "attributes": attributes,
-                }
-            else:
-                select_ai_kwargs = {
-                    "profile_name": profile_name,
-                    "question": runtime_question,
-                }
-            if runtime_timeout_seconds is not None:
-                select_ai_kwargs["call_timeout_seconds"] = runtime_timeout_seconds
-            call_started = time.monotonic()
-            try:
-                sql = self._oracle_adapter.generate_select_ai_sql(**select_ai_kwargs)
-            except OracleAdapterError as exc:
-                _record_engine_timing(
-                    engine_timings,
-                    engine=engine.value,
-                    started=call_started,
-                    status="failed",
-                    error=str(exc),
-                )
-                raise
-            meta.update({"select_ai_profile": profile_name, "runtime": "oracle"})
-            if attributes:
-                request_instructions = (
-                    select_ai_overrides.additional_instructions.strip()
-                    if select_ai_overrides is not None
-                    else ""
-                )
-                meta.update(
-                    {
-                        "select_ai_role_applied": "role" in attributes,
-                        "select_ai_role_length": len(attributes.get("role", "")),
-                        "select_ai_additional_instructions_applied": bool(request_instructions),
-                        "select_ai_additional_instructions_length": len(request_instructions),
-                    }
-                )
-        else:
-            team_name = self._select_ai_runtime_team_name(profile)
-            tool_name = self._select_ai_agent_asset_names(profile)["tool"]
-            if ontology_instructions:
-                runtime_question = "\n\n".join(
-                    [
-                        runtime_question,
-                        "確認済み Ontology コンテキスト:",
-                        ontology_instructions,
-                    ]
-                )
-            if sql_requirement is not None:
-                runtime_question = "\n\n".join([runtime_question, sql_requirement.prompt_block()])
-            agent_kwargs: dict[str, Any] = {
-                "team_name": team_name,
-                "question": runtime_question,
-                "tool_name": tool_name,
-            }
-            if runtime_timeout_seconds is not None:
-                agent_kwargs["call_timeout_seconds"] = runtime_timeout_seconds
-            call_started = time.monotonic()
-            try:
-                sql, conversation_id = self._oracle_adapter.run_select_ai_agent_team(**agent_kwargs)
-            except OracleAdapterError as exc:
-                _record_engine_timing(
-                    engine_timings,
-                    engine=engine.value,
-                    started=call_started,
-                    status="failed",
-                    error=str(exc),
-                )
-                raise
-            run_mode, run_warning = _select_ai_agent_run_mode(conversation_id)
-            meta.update(
-                {
-                    "select_ai_profile": self._select_ai_profile_name(profile),
-                    "team_name": team_name,
-                    "conversation_id": conversation_id,
-                    "agent_run_mode": run_mode,
-                    "runtime": "oracle",
-                }
-            )
-            if run_warning:
-                fallback_messages.append(run_warning)
-        if not sql:
-            _record_engine_timing(
-                engine_timings,
-                engine=engine.value,
-                started=call_started,
-                status="failed",
-                error="Oracle engine から SQL を取得できませんでした。",
-            )
-            raise OracleAdapterError("Oracle engine から SQL を取得できませんでした。")
-        _record_engine_timing(
-            engine_timings,
-            engine=engine.value,
-            started=call_started,
-            status="success",
-        )
-        return GeneratedSql(
-            engine=engine,
-            generated_sql=sql,
-            explanation="SQL を生成しました。",
-            engine_meta=meta,
-            fallback_reason="; ".join(fallback_messages),
-        )
 
     def _ontology_generation_context_prompt(self, context: Any) -> str:
         """確認済み Ontology context を SQL 生成器向けの短い制約文へ変換する。"""
@@ -25731,95 +22390,6 @@ class Nl2SqlService:
     def _use_oracle_runtime(self) -> bool:
         return get_settings().nl2sql_runtime_mode.strip().lower() == "oracle"
 
-    def _select_ai_feedback_showsql(self, question: str) -> str:
-        cleaned = question.strip()
-        if cleaned.endswith(";"):
-            cleaned = cleaned[:-1].rstrip()
-        return f"select ai showsql {cleaned}"
-
-    def _select_ai_feedback_plsql_preview(
-        self,
-        *,
-        profile_name: str,
-        sql_text: str,
-        feedback_type: str,
-        response: str,
-        feedback_content: str,
-    ) -> str:
-        response_expr = "NULL" if not response else _quote_sql_string(response)
-        feedback_content_expr = (
-            "NULL" if not feedback_content else _quote_sql_string(feedback_content)
-        )
-        return "\n".join(
-            [
-                "BEGIN",
-                "  DBMS_CLOUD_AI.FEEDBACK(",
-                f"    profile_name => {_quote_sql_string(profile_name)},",
-                f"    sql_text => {_quote_sql_string(sql_text)},",
-                f"    feedback_type => {_quote_sql_string(feedback_type)},",
-                f"    response => {response_expr},",
-                f"    feedback_content => {feedback_content_expr},",
-                "    operation => 'ADD'",
-                "  );",
-                "END;",
-            ]
-        )
-
-    def _select_ai_profile_name(self, profile: Nl2SqlProfile) -> str:
-        configured = profile.select_ai_config.profile_name.strip()
-        if configured:
-            return configured
-        prefix = get_settings().nl2sql_select_ai_profile_prefix.strip() or "NL2SQL"
-        return f"{prefix}_{profile.id.upper()}_PROFILE"
-
-    def _business_select_ai_profile_names(self, *, include_archived: bool) -> set[str]:
-        profiles = self.list_profiles(include_archived=include_archived)
-        names: set[str] = set()
-        for profile in profiles:
-            if profile.archived and not include_archived:
-                continue
-            profile_name = self._select_ai_profile_name(profile).strip()
-            if profile_name:
-                names.add(profile_name.upper())
-        return names
-
-    def _is_business_select_ai_profile(
-        self, profile_name: str, business_profile_names: set[str] | None
-    ) -> bool:
-        if business_profile_names is None:
-            return True
-        return profile_name.strip().upper() in business_profile_names
-
-    def _select_ai_team_name(self, profile: Nl2SqlProfile) -> str:
-        prefix = get_settings().nl2sql_select_ai_profile_prefix.strip() or "NL2SQL"
-        return _oracle_agent_asset_name(prefix=prefix, profile_key=profile.id, suffix="TEAM")
-
-    def _select_ai_runtime_team_name(self, profile: Nl2SqlProfile) -> str:
-        profile_name = self._select_ai_profile_name(profile)
-        asset_meta = self._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        if asset_meta and asset_meta.profile_name == profile_name and asset_meta.team_name:
-            return asset_meta.team_name
-        return self._select_ai_team_name(profile)
-
-    def _versioned_select_ai_team_name(self, base_team_name: str) -> str:
-        suffix = uuid.uuid4().hex[:8].upper()
-        return f"{base_team_name[:118]}_V{suffix}"
-
-    def _looks_like_agent_generated_profile_conflict(self, message: str) -> bool:
-        normalized = message.upper()
-        return "AGENT$" in normalized and "PROFILE" in normalized and "ALREADY EXISTS" in normalized
-
-    def _select_ai_agent_asset_names(self, profile: Nl2SqlProfile) -> dict[str, str]:
-        prefix = get_settings().nl2sql_select_ai_profile_prefix.strip() or "NL2SQL"
-        return {
-            "tool": _oracle_agent_asset_name(prefix=prefix, profile_key=profile.id, suffix="TOOL"),
-            "agent": _oracle_agent_asset_name(
-                prefix=prefix, profile_key=profile.id, suffix="AGENT"
-            ),
-            "task": _oracle_agent_asset_name(prefix=prefix, profile_key=profile.id, suffix="TASK"),
-            "team": _oracle_agent_asset_name(prefix=prefix, profile_key=profile.id, suffix="TEAM"),
-        }
-
     def _dedupe_object_names(self, names: Sequence[str]) -> list[str]:
         seen: set[str] = set()
         objects: list[str] = []
@@ -25833,19 +22403,6 @@ class Nl2SqlService:
                 continue
             seen.add(normalized)
             objects.append(normalized)
-        return objects
-
-    def _select_ai_object_list(self, object_names: Sequence[str]) -> list[dict[str, str]]:
-        # 引用名は `"Mixed_Case"` の token で渡す。DBMS_CLOUD_AI は SQL 識別子として解釈するため、
-        # 引用しない `Mixed_Case` は大文字の同名表 `MIXED_CASE` になる（#564 で実 Oracle を確認）。
-        objects: list[dict[str, str]] = []
-        for object_name in object_names:
-            if not str(object_name or "").strip():
-                continue
-            identity = parse_object_identity(
-                self._resolve_profile_object_name(str(object_name)),
-            )
-            objects.append(select_ai_object_list_entry(identity))
         return objects
 
     def _resolve_allowed_objects(

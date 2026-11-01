@@ -20,7 +20,7 @@ import json
 import os
 import re
 
-ALL_PRIVS = ["CREATE TABLE", "CREATE END USER", "GRANT ANY DATA ROLE", "ADMINISTER ANY DATA GRANT", "SET USE DATA GRANTS ONLY"]
+ALL_PRIVS = ["CREATE TABLE"]
 
 
 class DatabaseError(Exception):
@@ -150,10 +150,7 @@ base_state='{"admin_user": "ADMIN", "admin_password": "'"${admin_pass}"'", "exec
 # 1. plan: 付ける権限の一覧（DB に繋がない）。
 plan="$("${python_bin}" "${script}" plan --app-user adb_app_user)"
 expected_plan='CREATE USER ADB_APP_USER IDENTIFIED BY "<password>" DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
-GRANT PDB_DBA TO ADB_APP_USER;
-GRANT GRANT ANY DATA ROLE TO ADB_APP_USER;
-GRANT ADMINISTER ANY DATA GRANT TO ADB_APP_USER;
-GRANT SET USE DATA GRANTS ONLY TO ADB_APP_USER;'
+GRANT PDB_DBA TO ADB_APP_USER;'
 [ "${plan}" = "${expected_plan}" ] || fail "plan: ${plan}"
 "${python_bin}" "${script}" plan --app-user ADB_APP_USER --existing | head -n 1 \
   | grep -qxF 'ALTER USER ADB_APP_USER DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;' \
@@ -166,8 +163,7 @@ run_apply "${case_dir}" "${base_state}" || fail "作成が失敗した: $(cat "$
 sql="$(executed "${case_dir}")"
 printf '%s\n' "${sql}" | grep -qxF "CREATE USER ADB_APP_USER IDENTIFIED BY \"${app_pass}\" DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE" \
   || fail "CREATE USER: ${sql}"
-for grant in "GRANT PDB_DBA TO ADB_APP_USER" "GRANT GRANT ANY DATA ROLE TO ADB_APP_USER" "GRANT ADMINISTER ANY DATA GRANT TO ADB_APP_USER" \
-  "GRANT SET USE DATA GRANTS ONLY TO ADB_APP_USER"; do
+for grant in "GRANT PDB_DBA TO ADB_APP_USER"; do
   printf '%s\n' "${sql}" | grep -qxF "${grant}" || fail "${grant} が無い: ${sql}"
 done
 if printf '%s\n' "${sql}" | grep -q "GRANT DBA "; then fail "ADB では DBA ではなく PDB_DBA を付ける"; fi
@@ -273,7 +269,7 @@ status=0
 run_apply "${case_dir}" "${base_state}" || status=$?
 [ "${status}" -eq 1 ] && grep -qF "PLATFORM_ORACLE_USER（OTHER）がアプリ用のユーザー（ADB_APP_USER）と違います" "${case_dir}/out.log" \
   || fail "食い違いを検出しない: $(cat "${case_dir}/out.log")"
-for name in ADMIN SYS DEEPSEC_DATA_USER ORA_X 9USER 'A-B'; do
+for name in ADMIN SYS ORA_X 9USER 'A-B'; do
   case_dir="${task_dir}/name-${name//[^A-Za-z0-9]/_}"
   write_case "${case_dir}" "${name}" "${name}"
   status=0
@@ -295,8 +291,8 @@ run_apply "${case_dir}" "${base_state%\}}, \"fail_sql\": {\"match\": \"GRANT PDB
 case_dir="${task_dir}/missing-privs"
 write_case "${case_dir}"
 status=0
-run_apply "${case_dir}" "${base_state%\}}, \"session_privs\": [\"CREATE TABLE\", \"CREATE END USER\"]}" || status=$?
-[ "${status}" -eq 1 ] && grep -qF "権限が付いていません: ADMINISTER ANY DATA GRANT, GRANT ANY DATA ROLE, SET USE DATA GRANTS ONLY" \
+run_apply "${case_dir}" "${base_state%\}}, \"session_privs\": []}" || status=$?
+[ "${status}" -eq 1 ] && grep -qF "権限が付いていません: CREATE TABLE" \
   "${case_dir}/out.log" || fail "権限の不足を検出しない: $(cat "${case_dir}/out.log")"
 case_dir="${task_dir}/password-has-user"
 write_case "${case_dir}"

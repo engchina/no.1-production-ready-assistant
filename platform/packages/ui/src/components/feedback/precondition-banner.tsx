@@ -21,7 +21,7 @@ export interface PreconditionBannerProps {
    * 案内の id。押せなくした操作の `aria-describedby` に渡し、押せない理由を操作に結ぶ。
    */
   id?: string;
-  /** 何が足りないか（翻訳済み。例「Select AI Credential が作成されていません」）。 */
+  /** 何が足りないか（翻訳済み。例「OCI 認証が設定されていません」）。 */
   title: string;
   /**
    * 何に要るか・いつまで操作できないか・次の行動（翻訳済み）。前提を満たす画面を開けない利用者には、

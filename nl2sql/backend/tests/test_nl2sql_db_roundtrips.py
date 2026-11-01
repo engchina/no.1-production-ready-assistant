@@ -10,12 +10,12 @@ fake で、次を数える。
   LOB の read は起きない。python-oracledb Thin と同じ数え方）
 
 状態の保存先（`NL2SQL_*` の表）は、結果をメモリの repository で作り、往復は Oracle の repository の
-SQL を同じ引数で fake 接続へ流して数える（`_ShadowStateRepository`）。業務データの SQL・Select AI は
+SQL を同じ引数で fake 接続へ流して数える（`_ShadowStateRepository`）。業務データの SQL は
 `OracleNl2SqlAdapter` をそのまま fake 接続で動かす。投入（`start_job`）と worker の処理を
 分けて数え、pool がすでにある 2 回目のジョブ（定常）を比べる。
 
-あわせて、system_admin / 非 system_admin（DeepSec 有効・無効）で業務データの SQL が使う接続
-（pool）と、DeepSec の利用者の context の設定・消去を確かめる（Issue #904 の必須の要件）。
+あわせて、system_admin / 非 system_admin で業務データの SQL が使う接続（pool）を確かめる
+（Issue #904 の必須の要件）。
 
 内訳の表示: `uv run pytest tests/test_nl2sql_db_roundtrips.py -s -k round_trips`
 （HTTP の層（共通認証の session の確認など）とオントロジーの保存先の往復は含まない）
@@ -577,19 +577,16 @@ def _clob(document: dict[str, Any]) -> Clob:
     return Clob(json.dumps(_memory_document_payload(document), ensure_ascii=False))
 
 
-# --- 業務データの SQL・Select AI の応答 ----------------------------------------------------------
+# --- 業務データの SQL の応答 ---------------------------------------------------------------------
 
 
 def _runtime_responder(sql: str, _binds: dict[str, Any]) -> list[tuple[Any, ...]]:
     text = sql.upper()
-    if "DBMS_CLOUD_AI.GENERATE" in text:
-        # DBMS_CLOUD_AI.GENERATE は CLOB を返す。
-        return [(Clob("SELECT ID FROM APP.ORDERS"),)]
     if text.startswith("SELECT ID FROM APP.ORDERS"):
         return [(1,), (2,)]
     if text.startswith("ALTER SESSION"):
         return []
-    raise AssertionError(f"業務データ・Select AI の未対応の SQL です: {sql}")
+    raise AssertionError(f"業務データの未対応の SQL です: {sql}")
 
 
 # --- シナリオ -------------------------------------------------------------------------------
@@ -637,9 +634,6 @@ def _settings(**overrides: Any) -> Settings:
         "nl2sql_runtime_mode": "oracle",
         "nl2sql_persistence_mode": "oracle",
         "nl2sql_job_worker_mode": "external",
-        "oracle_deepsec_enabled": False,
-        "oracle_deepsec_data_user": "NL2SQL_DATA_USER",
-        "oracle_deepsec_data_user_password": "DataPass!123",  # nosec B106 - テスト用
     }
     values.update(overrides)
     return get_settings().model_copy(update=values)
@@ -654,7 +648,7 @@ class Harness:
     state: FakeOracledb
     runtime_admin: FakeOracledb
     runtime_user: FakeOracledb
-    deepsec: FakeOracledb
+    control: FakeOracledb
 
     def submit(self, request: JobCreateRequest, *, actor: str, is_system_admin: bool) -> Any:
         return self.service.start_job(
@@ -694,16 +688,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., Harness]]
         app = FakeOracledb(recorder, "app-connect", responder=_runtime_responder)
         runtime_admin = FakeOracledb(recorder, "runtime-admin", responder=_runtime_responder)
         runtime_user = FakeOracledb(recorder, "runtime-user", responder=_runtime_responder)
-        deepsec = FakeOracledb(
-            recorder,
-            "deepsec",
-            responder=_runtime_responder,
-            plane_for=lambda kwargs: (
-                "deepsec-data"
-                if kwargs.get("user") == settings.oracle_deepsec_data_user
-                else "deepsec-control"
-            ),
-        )
+        control = FakeOracledb(recorder, "control", responder=_runtime_responder)
         for pool, fake in (
             (oracle_adapter._RUNTIME_ADMIN_CONNECTION_POOL, runtime_admin),  # noqa: SLF001
             (oracle_adapter._RUNTIME_USER_CONNECTION_POOL, runtime_user),  # noqa: SLF001
@@ -715,7 +700,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., Harness]]
         state_pool.close()
         monkeypatch.setattr(state_pool, "_oracledb_loader", lambda: state)
         manager = oracle_runtime.OraclePoolManager(settings)
-        manager._oracledb = deepsec  # noqa: SLF001
+        manager._oracledb = control  # noqa: SLF001
         monkeypatch.setattr(oracle_runtime, "get_oracle_pool_manager", lambda: manager)
 
         service = Nl2SqlService(store=MemoryNl2SqlStore())
@@ -743,7 +728,6 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., Harness]]
         service._persistence_writable = True  # noqa: SLF001
         service._catalog = MemoryIncrementalNl2SqlRepository.load_catalog(repository)  # noqa: SLF001
         service._enterprise_ai_client = _EnterpriseAiClient()  # noqa: SLF001
-        service._deepsec_enabled = settings.oracle_deepsec_enabled  # noqa: SLF001
         monkeypatch.setattr(
             ontology_router,
             "ontology_runtime",
@@ -759,7 +743,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callable[..., Harness]]
             state=state,
             runtime_admin=runtime_admin,
             runtime_user=runtime_user,
-            deepsec=deepsec,
+            control=control,
         )
 
     try:
@@ -787,20 +771,18 @@ def _chat_turn(engine: Nl2SqlEngine, previous_job_id: str | None) -> JobCreateRe
 
 
 # 定常（pool があり、キャッシュが温まった 2 回目以降）の 1 ジョブの上限（#904 の修正後の値）。
-# 修正前（main）: SQL 生成の worker は Select AI で新しい接続 2・往復 54、Enterprise AI で
-# 新しい接続 1・往復 60。チャットの投入は 2 ターン目で往復 14 から 1 ターンごとに 5 増えていた。
+# 修正前（main）: SQL 生成の worker は Enterprise AI で新しい接続 1・往復 60。チャットの投入は
+# 2 ターン目で往復 14 から 1 ターンごとに 5 増えていた。
 # 業務データの SELECT は、session の時間帯を設定の時間帯にする・UTC に戻すの 2 往復を含む
 # （#3265。設定が UTC なら 0）。
 _SQL_JOB_LIMITS = {
     # engine: (投入の往復, worker の往復)
-    Nl2SqlEngine.SELECT_AI: (2, 28),
     Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (2, 36),
 }
 _CHAT_TURN_LIMITS = {
-    Nl2SqlEngine.SELECT_AI: (4, 28),
     Nl2SqlEngine.ENTERPRISE_AI_DIRECT: (4, 36),
 }
-_ENGINE_IDS = ["select_ai", "enterprise_ai_direct"]
+_ENGINE_IDS = ["enterprise_ai_direct"]
 
 
 @pytest.mark.parametrize("engine", list(_SQL_JOB_LIMITS), ids=_ENGINE_IDS)
@@ -817,12 +799,12 @@ def test_sql_generation_job_db_round_trips(
     print(f"[{engine.value}] SQL 生成 定常 worker: {run.describe()}")
 
     submit_limit, run_limit = _SQL_JOB_LIMITS[engine]
-    # 定常では新しい接続を張らない（業務データ・Select AI も pool から借りる）。
+    # 定常では新しい接続を張らない（業務データも pool から借りる）。
     assert submit.total_new_connections == 0
     assert run.total_new_connections == 0
     assert submit.total_round_trips <= submit_limit
     assert run.total_round_trips <= run_limit
-    # 1 回目でも、業務データ・Select AI の新しい接続は pool の 1 本だけ。
+    # 1 回目でも、業務データの新しい接続は pool の 1 本だけ。
     assert cold_run.new_connections.get("app-connect", 0) == 0
     assert cold_run.new_connections.get("runtime-admin", 0) <= 1
     calls = h.recorder.window(0)
@@ -894,24 +876,12 @@ def test_chat_turn_db_round_trips_do_not_grow_with_turns(
 # --- 接続の使い分け（Issue #904 の必須の要件） ---------------------------------------------------
 
 _BUSINESS_SQL = "SELECT ID FROM APP.ORDERS"
-_SET_CONTEXT = "NL2SQL_DEEPSEC_CTX_PKG.SET_APP_USER_UUID"
-_CLEAR_CONTEXT = "NL2SQL_DEEPSEC_CTX_PKG.CLEAR_APP_USER"
 
 
 @pytest.mark.parametrize(
-    ("deepsec_enabled", "is_system_admin", "business_plane"),
-    [
-        (False, True, "runtime-admin"),
-        (False, False, "runtime-user"),
-        (True, True, "runtime-admin"),
-        (True, False, "deepsec-data"),
-    ],
-    ids=[
-        "deepsec_off-system_admin",
-        "deepsec_off-user",
-        "deepsec_on-system_admin",
-        "deepsec_on-user",
-    ],
+    ("is_system_admin", "business_plane"),
+    [(True, "runtime-admin"), (False, "runtime-user")],
+    ids=["system_admin", "user"],
 )
 @pytest.mark.parametrize("engine", list(_SQL_JOB_LIMITS), ids=_ENGINE_IDS)
 # チャットのターンも SQL 生成のジョブと同じくジョブの中で実行する（#1176）。接続の分離も同じ。
@@ -919,23 +889,18 @@ _CLEAR_CONTEXT = "NL2SQL_DEEPSEC_CTX_PKG.CLEAR_APP_USER"
 def test_business_sql_connection_follows_job_actor(
     harness: Callable[..., Harness],
     engine: Nl2SqlEngine,
-    deepsec_enabled: bool,
     is_system_admin: bool,
     business_plane: str,
     chat: bool,
 ) -> None:
-    """業務データの SQL の接続は、ジョブの actor（system_admin か・user_uuid）と DeepSec で決まる。
+    """業務データの SQL の接続は、ジョブの actor（system_admin か）で決まる。
 
-    - system_admin（DeepSec 有効・無効）: アプリの接続の system_admin 用の pool
-      （`nl2sql-runtime-admin`）
-    - DeepSec 無効の非 system_admin: アプリの接続の非 system_admin 用の pool
-      （`nl2sql-runtime-user`）。資格情報は同じでも、system_admin と pool・接続を共有しない
-    - DeepSec 有効の非 system_admin: DeepSec の DATA USER の pool。借りるたびにジョブの利用者の
-      context を設定し、SQL の後に消す（別の利用者のジョブに context を残さない）
-    - 状態の保存先の SQL は状態の pool だけ。業務データの SQL・Select AI と混ぜない
+    - system_admin: アプリの接続の system_admin 用の pool（`nl2sql-runtime-admin`）
+    - 非 system_admin: アプリの接続の非 system_admin 用の pool（`nl2sql-runtime-user`）。
+      資格情報は同じでも、system_admin と pool・接続を共有しない
+    - 状態の保存先の SQL は状態の pool だけ。業務データの SQL と混ぜない
     """
-    h = harness(oracle_deepsec_enabled=deepsec_enabled)
-    app_plane = "runtime-admin" if is_system_admin else "runtime-user"
+    h = harness()
     connections_by_kind: dict[bool, set[int]] = {True: set(), False: set()}
     job = _sql_job(engine).model_copy(update={"chat": True}) if chat else _sql_job(engine)
     for actor in ("user-a", "user-b"):  # 同じ worker が 2 人の利用者のジョブを続けて処理する
@@ -946,34 +911,13 @@ def test_business_sql_connection_follows_job_actor(
         business = [c for c in calls if c.op == "execute" and c.detail == _BUSINESS_SQL]
         assert [c.plane for c in business] == [business_plane]
         connections_by_kind[is_system_admin].update(c.connection_id for c in business)
-        if engine == Nl2SqlEngine.SELECT_AI:
-            # Select AI の生成は今までどおりアプリの接続（利用者の context を使わない）。actor の
-            # 種類ごとに別の pool。
-            generate = [c for c in calls if "DBMS_CLOUD_AI.GENERATE" in c.detail]
-            assert [c.plane for c in generate] == [app_plane]
         state_sql = [c for c in calls if c.op == "execute" and "NL2SQL_" in c.detail]
         assert state_sql
         assert {c.plane for c in state_sql} == {"state-pool"}
         assert not [c for c in calls if c.plane == "state-pool" and c.detail == _BUSINESS_SQL]
 
-        deepsec_calls = [
-            (c.op, c.detail)
-            for c in calls
-            if c.plane.startswith("deepsec")
-            and (c.op == "callproc" or (c.op == "execute" and not c.detail.startswith("ALTER")))
-        ]
-        if business_plane == "deepsec-data":
-            assert deepsec_calls == [
-                ("callproc", _SET_CONTEXT),
-                ("execute", _BUSINESS_SQL),
-                ("callproc", _CLEAR_CONTEXT),
-            ]
-            # アプリの接続の pool（admin 用・user 用）では業務データの SQL を実行しない。
-            assert not [
-                c for c in calls if c.plane.startswith("runtime-") and c.detail == _BUSINESS_SQL
-            ]
-        else:
-            assert deepsec_calls == []
+        # 業務データの SQL は control pool（システムの表の DDL 用）では実行しない。
+        assert not [c for c in calls if c.plane == "control"]
 
     # 同じ worker が、続けてもう一方の種類の actor のジョブを処理しても、業務データの SQL の接続は
     # 交わらない（system_admin 用と非 system_admin 用で同じ接続を使い回さない）。
@@ -989,19 +933,7 @@ def test_business_sql_connection_follows_job_actor(
     user_ids = {id(c) for c in h.runtime_user.created_connections()}
     assert admin_ids.isdisjoint(user_ids)
     assert connections_by_kind[True] <= admin_ids
-
-    if business_plane == "deepsec-data":
-        # 2 人の利用者は DATA USER の pool の同じ接続を使い回すが、借りるたびにその人の UUID を
-        # 設定し、返す前に消す。
-        data_connections = h.deepsec.created_connections()
-        assert len(data_connections) == 1
-        assert data_connections[0].callprocs == [
-            (_SET_CONTEXT, ["user-a"]),
-            (_CLEAR_CONTEXT, []),
-            (_SET_CONTEXT, ["user-b"]),
-            (_CLEAR_CONTEXT, []),
-        ]
-    # アプリの接続の pool では DeepSec の context を一度も設定しない。
+    # アプリの接続の pool では session の context を一度も設定しない。
     assert all(
         not connection.callprocs
         for connection in [
@@ -1012,34 +944,22 @@ def test_business_sql_connection_follows_job_actor(
 
 
 @pytest.mark.parametrize(
-    ("deepsec_enabled", "is_system_admin", "business_plane"),
-    [
-        (False, True, "runtime-admin"),
-        (False, False, "runtime-user"),
-        (True, True, "runtime-admin"),
-        (True, False, "deepsec-data"),
-    ],
-    ids=[
-        "deepsec_off-system_admin",
-        "deepsec_off-user",
-        "deepsec_on-system_admin",
-        "deepsec_on-user",
-    ],
+    ("is_system_admin", "business_plane"),
+    [(True, "runtime-admin"), (False, "runtime-user")],
+    ids=["system_admin", "user"],
 )
 def test_chat_execution_connection_follows_requesting_actor(
     harness: Callable[..., Harness],
-    deepsec_enabled: bool,
     is_system_admin: bool,
     business_plane: str,
 ) -> None:
     """チャットのターンの SQL の実行（#1154）も、SQL 生成のジョブと同じ接続の使い分けにする。
 
-    実行は要求の利用者（system_admin か・user_uuid）で接続を選ぶ。system_admin はアプリの接続の
-    system_admin 用の pool、非 system_admin は非 system_admin 用の pool（DeepSec 有効なら
-    DATA USER の pool で、借りるたびに利用者の context を設定し、SQL の後に消す）。状態の保存
+    実行は要求の利用者（system_admin か）で接続を選ぶ。system_admin はアプリの接続の
+    system_admin 用の pool、非 system_admin は非 system_admin 用の pool。状態の保存
     （要約・実行履歴）は状態の pool だけ。
     """
-    h = harness(oracle_deepsec_enabled=deepsec_enabled)
+    h = harness()
     _submit, _run, turn = h.measure(
         _chat_turn(Nl2SqlEngine.ENTERPRISE_AI_DIRECT, None),
         actor="user-a",
@@ -1053,7 +973,6 @@ def test_chat_execution_connection_follows_requesting_actor(
 
     assert data.status == "done", data.error_message
     assert [list(row.values()) for row in data.results.rows] == [[1], [2]]
-    assert data.results.vpd_context_enforced is (business_plane == "deepsec-data")
     business = [c for c in calls if c.op == "execute" and c.detail == _BUSINESS_SQL]
     assert [c.plane for c in business] == [business_plane]
     state_sql = [c for c in calls if c.op == "execute" and "NL2SQL_" in c.detail]
@@ -1077,25 +996,9 @@ def test_chat_execution_connection_follows_requesting_actor(
         _BUSINESS_SQL,
         "ALTER SESSION SET TIME_ZONE = '+00:00'",
     ]
-    deepsec_calls = [
-        (c.op, c.detail)
-        for c in calls
-        if c.plane.startswith("deepsec")
-        and (c.op == "callproc" or (c.op == "execute" and not c.detail.startswith("ALTER")))
-    ]
-    if business_plane == "deepsec-data":
-        assert deepsec_calls == [
-            ("callproc", _SET_CONTEXT),
-            ("execute", _BUSINESS_SQL),
-            ("callproc", _CLEAR_CONTEXT),
-        ]
-        assert h.deepsec.created_connections()[0].callprocs[-2:] == [
-            (_SET_CONTEXT, ["user-a"]),
-            (_CLEAR_CONTEXT, []),
-        ]
-    else:
-        assert deepsec_calls == []
-    # アプリの接続の pool では DeepSec の context を設定しない。
+    # 業務データの SQL は control pool では実行せず、アプリの接続の pool では session の
+    # context を設定しない。
+    assert not [c for c in calls if c.plane == "control"]
     assert all(
         not connection.callprocs
         for connection in [
@@ -1103,25 +1006,6 @@ def test_chat_execution_connection_follows_requesting_actor(
             *h.runtime_user.created_connections(),
         ]
     )
-
-
-def test_deepsec_context_that_cannot_be_cleared_drops_the_connection(
-    harness: Callable[..., Harness],
-) -> None:
-    from app.features.nl2sql.oracle_adapter import OracleAdapterError
-    from app.security.request_actor import actor_scope
-
-    h = harness(oracle_deepsec_enabled=True)
-    h.deepsec.fail_procs.add(_CLEAR_CONTEXT)
-    adapter = h.service._oracle_adapter  # noqa: SLF001
-
-    with actor_scope("user-a", is_system_admin=False), pytest.raises(OracleAdapterError):
-        adapter.execute_select(_BUSINESS_SQL, 10)
-
-    calls = [(c.plane, c.op) for c in h.recorder.window(0)]
-    assert ("deepsec-data", "drop") in calls
-    # 消せなかった接続は pool に戻さない（次の利用者に context を残さない）。
-    assert all(not pool.idle for pool in h.deepsec.pools)
 
 
 @pytest.mark.parametrize(

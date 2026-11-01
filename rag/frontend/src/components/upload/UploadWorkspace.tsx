@@ -18,7 +18,6 @@ import {
 } from "@production-ready/ui";
 import {
   AlertTriangle,
-  Cloud,
   Database,
   FileText,
   HardDrive,
@@ -532,15 +531,11 @@ function UploadStorageNotice() {
     <div className="flex flex-col gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm text-fg md:flex-row md:items-center md:justify-between">
       <div className="flex items-start gap-3">
         <div data-surface-tint="info" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-info-subtle text-info-fg">
-          {query.data.backend === "oci" ? (
-            <Cloud size={20} aria-hidden />
-          ) : (
-            <HardDrive size={20} aria-hidden />
-          )}
+          <HardDrive size={20} aria-hidden />
         </div>
         <div>
           <p className="font-medium">
-            {t("upload.storageNotice.title")}: {storageBackendLabel(query.data.backend)}
+            {t("upload.storageNotice.title")}: {t("settings.uploadStorage.backend.local")}
           </p>
           <p className="mt-1 break-all text-xs text-fg-muted">
             {storageTarget(query.data)}
@@ -552,17 +547,6 @@ function UploadStorageNotice() {
   );
 }
 
-function storageBackendLabel(backend: UploadStorageSettingsData["backend"]): string {
-  return backend === "oci"
-    ? t("settings.uploadStorage.backend.oci")
-    : t("settings.uploadStorage.backend.local");
-}
-
 function storageTarget(settings: UploadStorageSettingsData): string {
-  if (settings.backend === "oci") {
-    return settings.object_storage_namespace && settings.object_storage_bucket
-      ? `${settings.object_storage_namespace}/${settings.object_storage_bucket}`
-      : t("upload.storageNotice.unset");
-  }
   return settings.local_storage_dir || t("upload.storageNotice.unset");
 }

@@ -65,7 +65,7 @@ run_initialization_case degraded-system nl2sql_system_schema
 test "$(cat "${TEST_TMP_DIR}/degraded-system/ready")" = "false"
 
 run_systemd_case workers-enabled true
-grep -q '^enable --now production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service$' \
+grep -q '^enable --now production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service$' \
   "${TEST_TMP_DIR}/workers-enabled/systemctl.log"
 if grep -q '^disable --now .*worker' "${TEST_TMP_DIR}/workers-enabled/systemctl.log"; then
   echo "初期化成功時に worker が disable されました。" >&2
@@ -73,7 +73,7 @@ if grep -q '^disable --now .*worker' "${TEST_TMP_DIR}/workers-enabled/systemctl.
 fi
 
 run_systemd_case workers-degraded false
-grep -q '^disable --now production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service$' \
+grep -q '^disable --now production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service$' \
   "${TEST_TMP_DIR}/workers-degraded/systemctl.log"
 if grep -q '^enable --now .*worker' "${TEST_TMP_DIR}/workers-degraded/systemctl.log"; then
   echo "degraded mode で worker が enable されました。" >&2

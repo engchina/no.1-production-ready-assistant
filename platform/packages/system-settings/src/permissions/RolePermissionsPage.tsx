@@ -42,8 +42,8 @@ import {
 
 import { formatMessage } from "../auth/messages";
 import { useUnsavedChangesGuard } from "../guards/useUnsavedChangesGuard";
-import { fieldActionRowWidthClasses } from "../oci/InputActionField";
-import { useRequestScope } from "../oci/useRequestScope";
+import { fieldActionRowWidthClasses } from "../shared/InputActionField";
+import { useRequestScope } from "../shared/useRequestScope";
 import { RoleListStatusBadge, RoleStatusBadges } from "../users-roles/RoleManagementPage";
 import { RoleNameRowTitleButton, roleDisplayName } from "../users-roles/RoleNameBadges";
 import {

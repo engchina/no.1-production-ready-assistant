@@ -132,7 +132,7 @@ export function formatDbObjectPart(value: string | null | undefined): string {
 }
 
 /**
- * DeepSec のデータ権限で保存・送信する識別子 1 部分（owner / object / column）を正規化する。
+ * DB の object の識別子 1 部分（owner / object / column）を正規化する。
  *
  * backend `canonical_object_part` と同じ規則: `"..."` は大文字小文字を保ち、引用されていない値は
  * Oracle と同じく大文字として扱う。保存済みの値はすでに canonical token なので変わらない。
@@ -208,27 +208,6 @@ export function splitDbObjectName(value: string): { owner: string; name: string 
   } catch {
     return null;
   }
-}
-
-/**
- * DeepSec のデータ権限（`target_owner` / `target_object` / `resource_code`）の表示名・比較キー。
- * backend は各部を canonical token（引用が必要な名前だけ `"..."`）で保存するので、各部を
- * `normalizeDbIdentifierToken` で揃えて単純連結する。引用が不要な名前は従来のキー（大文字の
- * `OWNER.OBJECT`）と一致し、引用名は大文字化しないため大文字の同名表と取り違えない。
- */
-export function formatEntitlementTargetName(entitlement: {
-  target_owner?: string | null;
-  target_object?: string | null;
-  resource_code?: string | null;
-}): string {
-  const owner = normalizeDbIdentifierToken(entitlement.target_owner);
-  const object = normalizeDbIdentifierToken(entitlement.target_object);
-  if (owner && object) return `${owner}.${object}`;
-  const resource = (entitlement.resource_code ?? "").trim();
-  if (!resource) return "";
-  const parts = splitDbObjectName(resource);
-  if (parts) return `${parts.owner}.${parts.name}`;
-  return resource.includes('"') ? resource : resource.toUpperCase();
 }
 
 export function parseDbAdminObjectTarget(value: string, owner = ""): DbAdminObjectTarget {

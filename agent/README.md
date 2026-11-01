@@ -13,7 +13,7 @@ Skill（SKILL.md・references/・宣言・画面）→ Skill Registry
        └─ Run → 組み込み Runtime（OpenAI Agents SDK + OCI Enterprise AI）→ 承認・監査・成果物
 ```
 
-第三者の部品のライセンスの通知（OCI SDK の依存の LGPL の部品・Apache-2.0 の NOTICE・書体など）は root の [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) にあります。
+第三者の部品のライセンスの通知（Apache-2.0 の NOTICE・書体など）は root の [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) にあります。
 
 ## 主要機能
 
@@ -44,7 +44,7 @@ no.1-production-ready-assistant/
 
 | ファイル | 内容 | 雛形 |
 |---|---|---|
-| `../platform/.env` | 3製品共通の設定（`PLATFORM_*`）。OCI 認証・アップロード保存先・モデル・データベース・構成管理者（`PLATFORM_ADMIN_*`）と認証ポリシー（`PLATFORM_AUTH_*`）。システム設定画面の保存先 | [`../platform/.env.example`](../platform/.env.example) |
+| `../platform/.env` | 3製品共通の設定（`PLATFORM_*`）。アップロード保存先・モデル・データベース・構成管理者（`PLATFORM_ADMIN_*`）と認証ポリシー（`PLATFORM_AUTH_*`）。システム設定画面の保存先 | [`../platform/.env.example`](../platform/.env.example) |
 | `backend/.env` | Agent 固有の設定（`AGENT_*`） | [`backend/.env.example`](backend/.env.example) |
 | `../platform/model-settings.json` | モデル設定（画面から保存。3製品で共有） | — |
 

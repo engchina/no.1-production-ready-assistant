@@ -1,15 +1,9 @@
 import { expectLocalUiFonts } from "./_helpers/local-fonts";
 import { expect, test, type Locator, type Page, type Route } from "./_helpers/test";
-import { expectedControlHeight } from "./_helpers/control-height";
 import { openSidebarNav } from "./_helpers/sidebar-nav";
 import { mockDatabaseGateReady } from "./_helpers/database-gate";
 import { dropFiles } from "./_helpers/file-dropzone";
 import { expectLargeActionButton } from "./_helpers/action-button";
-import {
-  findClippedPlaceholders,
-  findFieldsOffWidthScale,
-  measureHorizontalOverflow,
-} from "../../../../platform/packages/ui/e2e/layout-checks";
 
 function settingsEnvelope(data: unknown) {
   return {
@@ -34,8 +28,6 @@ function databaseSettingsFixture(overrides: Record<string, unknown> = {}) {
     readiness: "ok",
     embedding_dimension: 1024,
     vector_column: "VECTOR(1024, FLOAT32)",
-    adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-    region: "ap-osaka-1",
     config_source: "runtime",
     ...overrides,
   };
@@ -100,11 +92,7 @@ function modelSettingsFixture(overrides: Record<string, unknown> = {}) {
 
 function uploadStorageFixture(overrides: Record<string, unknown> = {}) {
   return {
-    backend: "local",
     local_storage_dir: "/u01/data/production-ready-nl2sql",
-    object_storage_region: "ap-osaka-1",
-    object_storage_namespace: "exampletenancy",
-    object_storage_bucket: "nl2sql-originals",
     readiness: "ok",
     max_upload_bytes: 104857600,
     config_source: "runtime",
@@ -128,118 +116,12 @@ function createRequestGate() {
   return { promise, release };
 }
 
-function ociSettingsFixture() {
-  return {
-    config_file: "~/.oci/config",
-    profile: "DEFAULT",
-    user: "ocid1.user.oc1..example",
-    fingerprint: "12:34:56:78:90:ab:cd:ef",
-    tenancy: "ocid1.tenancy.oc1..example",
-    region: "ap-osaka-1",
-    key_file: "~/.oci/oci_api_key.pem",
-    key_file_exists: true,
-    config_file_exists: true,
-    config_source: "runtime",
-  };
-}
-
-type OciStageStatus = "success" | "failed" | "skipped";
-const OCI_STAGE_KEYS = ["config_format", "key_file", "region", "authentication"] as const;
-
-function ociStages(statuses: readonly OciStageStatus[], failure?: { message: string; action: string }) {
-  return OCI_STAGE_KEYS.map((key, index) => {
-    const status = statuses[index] ?? "skipped";
-    return {
-      key,
-      status,
-      message:
-        status === "failed" && failure
-          ? failure.message
-          : status === "skipped"
-            ? "前の段階が失敗したため実施していません。"
-            : `${key} を確認しました。`,
-      action: status === "failed" && failure ? failure.action : null,
-    };
-  });
-}
-
-function ociConfigTestFixture(overrides: Record<string, unknown> = {}) {
-  return {
-    status: "success",
-    profile: "DEFAULT",
-    config_file: "~/.oci/config",
-    key_file: "~/.oci/oci_api_key.pem",
-    config_file_exists: true,
-    key_file_exists: true,
-    missing_fields: [],
-    permission_issues: [],
-    oci_directory_mode: "0700",
-    config_file_mode: "0600",
-    key_file_mode: "0600",
-    message: "OCI へ認証付きで接続できました（Object Storage GetNamespace）。",
-    elapsed_ms: 7,
-    checked_at: "2026-06-21T10:00:00.000Z",
-    error_type: null,
-    stages: ociStages(["success", "success", "success", "success"]),
-    region: "ap-osaka-1",
-    auth_check_operation: "Object Storage GetNamespace",
-    http_status: null,
-    service_code: null,
-    request_id: null,
-    ...overrides,
-  };
-}
-
 async function mockNl2sqlSettingsApi(page: Page) {
-  const ociSettings = ociSettingsFixture();
-
   const uploadStorage = uploadStorageFixture();
 
   const modelSettings = modelSettingsFixture();
 
   const databaseSettings = databaseSettingsFixture();
-  let selectAiCredential: {
-    credential_name: "NL2SQL_OCI_CRED";
-    schema_name: string;
-    exists: boolean;
-    region: "ap-osaka-1" | "us-chicago-1";
-    oci_auth_ready: boolean;
-    missing_fields: string[];
-    operation: "created" | "recreated" | null;
-  } = {
-    credential_name: "NL2SQL_OCI_CRED" as const,
-    schema_name: "ADMIN",
-    exists: false,
-    region: "us-chicago-1",
-    oci_auth_ready: true,
-    missing_fields: [] as string[],
-    operation: null as "created" | "recreated" | null,
-  };
-
-  await page.route("**/api/settings/oci", (route) => fulfillJson(route, ociSettings));
-  await page.route("**/api/settings/oci/config/test", (route) =>
-    fulfillJson(route, ociConfigTestFixture())
-  );
-  await page.route("**/api/settings/oci/object-storage", (route) =>
-    fulfillJson(route, uploadStorage)
-  );
-  await page.route("**/api/settings/oci/object-storage/namespace", (route) =>
-    fulfillJson(route, { namespace: "exampletenancy" })
-  );
-  await page.route("**/api/settings/oci/config/read", (route) =>
-    fulfillJson(route, {
-      profile: "DEFAULT",
-      user: ociSettings.user,
-      fingerprint: ociSettings.fingerprint,
-      tenancy: ociSettings.tenancy,
-      region: ociSettings.region,
-      key_file: ociSettings.key_file,
-      applied_fields: ["user", "fingerprint", "tenancy", "region", "key_file"],
-    })
-  );
-  await page.route("**/api/settings/oci/key-file", (route) =>
-    fulfillJson(route, { key_file: "~/.oci/oci_api_key.pem", saved: true })
-  );
 
   await page.route("**/api/settings/upload-storage", (route) =>
     fulfillJson(route, uploadStorage)
@@ -275,21 +157,6 @@ async function mockNl2sqlSettingsApi(page: Page) {
   await page.route("**/api/settings/database", (route) =>
     fulfillJson(route, databaseSettings)
   );
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") {
-      const request = route.request().postDataJSON() as {
-        region: "ap-osaka-1" | "us-chicago-1";
-        recreate: boolean;
-      };
-      selectAiCredential = {
-        ...selectAiCredential,
-        exists: true,
-        region: request.region,
-        operation: request.recreate ? "recreated" : "created",
-      };
-    }
-    await fulfillJson(route, selectAiCredential);
-  });
   await page.route("**/api/settings/database/password/reveal", (route) =>
     fulfillJson(route, { password: "database-secret-fixture" })
   );
@@ -345,9 +212,6 @@ async function mockNl2sqlSettingsApi(page: Page) {
   );
   await page.route("**/api/settings/database/wallet", (route) =>
     fulfillJson(route, databaseSettings)
-  );
-  await page.route("**/api/settings/database/wallet/download", (route) =>
-    fulfillJson(route, { status: "already_configured", settings: databaseSettings })
   );
 }
 
@@ -501,40 +365,6 @@ async function expectNoExcessBottomWhitespace(page: Page) {
   expect(metrics.bottomWhitespace).toBeLessThanOrEqual(96);
 }
 
-async function expectOciConfigFieldsAboveOcidFields(page: Page) {
-  const configFile = page.getByLabel("OCI 設定ファイルのパス");
-  const configProfile = page.getByLabel("OCI プロファイル");
-  const userOcid = page.getByLabel("ユーザー OCID");
-  const tenancyOcid = page.getByLabel("テナンシ OCID");
-
-  await expect(configFile).toBeVisible();
-  await expect(configProfile).toBeVisible();
-  await expect(userOcid).toBeVisible();
-  await expect(tenancyOcid).toBeVisible();
-
-  const boxes = await Promise.all([
-    configFile.boundingBox(),
-    configProfile.boundingBox(),
-    userOcid.boundingBox(),
-    tenancyOcid.boundingBox(),
-  ]);
-
-  if (boxes.some((box) => box === null)) {
-    throw new Error("OCI 認証フォームの入力欄位置を取得できません。");
-  }
-
-  const [configFileBox, configProfileBox, userOcidBox, tenancyOcidBox] = boxes as [
-    NonNullable<(typeof boxes)[number]>,
-    NonNullable<(typeof boxes)[number]>,
-    NonNullable<(typeof boxes)[number]>,
-    NonNullable<(typeof boxes)[number]>,
-  ];
-  const configFieldsBottomRow = Math.max(configFileBox.y, configProfileBox.y);
-  const ocidFieldsTopRow = Math.min(userOcidBox.y, tenancyOcidBox.y);
-
-  expect(configFieldsBottomRow).toBeLessThan(ocidFieldsTopRow);
-}
-
 async function expectWalletAboveServiceDsn(page: Page) {
   const wallet = page.getByTestId("oracle-wallet-upload");
   const service = page.getByRole("combobox", { name: /サービス名 \/ DSN/ });
@@ -568,76 +398,11 @@ test.beforeEach(async ({ page }) => {
   await mockDatabaseGateReady(page);
 });
 
-test("OCI 認証設定はブラウザ草稿のダミー値を runtime 空値で上書きする", async ({ page }) => {
-  await page.addInitScript(() => {
-    const staleDraft = JSON.stringify({
-      userOcid: "ocid1.user.oc1..aaaaaaaa",
-      fingerprint: "12:34:56:78:90:ab:cd:ef",
-      tenancyOcid: "ocid1.tenancy.oc1..aaaaaaaa",
-      region: "us-chicago-1",
-      objectStorageRegion: "ap-osaka-1",
-      objectStorageNamespace: "fake-namespace",
-    });
-    window.localStorage.setItem("production-ready-rag.oci-settings.v1", staleDraft);
-    window.localStorage.setItem("production-ready-nl2sql.oci-settings.v1", staleDraft);
-  });
-  await page.route("**/api/settings/oci", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, {
-      config_file: "~/.oci/config",
-      profile: "DEFAULT",
-      user: "",
-      fingerprint: "",
-      tenancy: "",
-      region: "",
-      key_file: "~/.oci/oci_api_key.pem",
-      key_file_exists: false,
-      config_file_exists: false,
-      config_source: "runtime",
-    });
-  });
-  await page.route("**/api/settings/upload-storage", async (route) => {
-    await fulfillJson(route, {
-      backend: "local",
-      local_storage_dir: "/u01/data/production-ready-nl2sql",
-      object_storage_region: "",
-      object_storage_namespace: "",
-      object_storage_bucket: "nl2sql-originals",
-      readiness: "ok",
-      max_upload_bytes: 104857600,
-      config_source: "runtime",
-    });
-  });
-
-  await page.goto("/settings/oci");
-
-  await expect(page.getByLabel("ユーザー OCID")).toHaveValue("");
-  await expect(page.getByLabel("フィンガープリント")).toHaveValue("");
-  await expect(page.getByLabel("テナンシ OCID")).toHaveValue("");
-  await expect(
-    page.getByRole("textbox", { name: /Object Storage ネームスペース/ })
-  ).toHaveValue("");
-  await expect(page.getByRole("heading", { name: "設定チェック" })).toHaveCount(0);
-  await expect(page.getByLabel(".env プレビュー")).toHaveCount(0);
-});
-
 test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive" }, async ({ page }) => {
+  // OCI 認証設定の画面は削除した（#11）。旧 URL は既定の画面へ戻す。
   await page.goto("/settings/oci");
-  await expect(page.getByRole("heading", { name: "OCI 認証設定" }).first()).toBeVisible();
-  await expect(page.getByLabel("ユーザー OCID")).toBeVisible();
-  await expect(page.getByRole("button", { name: "OCI 設定を保存" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "接続テスト" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "設定チェック" })).toHaveCount(0);
-  await expect(page.getByLabel(".env プレビュー")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: ".env をコピー" })).toHaveCount(0);
-  await expectNoOperationsMemoOrReadiness(page);
-  await expectOciConfigFieldsAboveOcidFields(page);
-  await expectNl2sqlShellFillsViewport(page);
-  await expectNoExcessBottomWhitespace(page);
-  await expectNoHorizontalOverflow(page);
+  await expect(page).not.toHaveURL(/\/settings\/oci$/);
+  await expect(page.getByRole("heading", { name: "OCI 認証設定" })).toHaveCount(0);
 
   await page.goto("/settings/upload-storage");
   await expect(page.getByRole("heading", { name: "アップロード保存先" }).first()).toBeVisible();
@@ -649,10 +414,9 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
     "/u01/data/production-ready-nl2sql"
   );
   await expectNoOperationsMemoOrReadiness(page);
-  await page.getByRole("radio", { name: /OCI Object Storage/ }).check();
-  await expect(page.getByLabel("Object Storage リージョン")).toContainText("ap-osaka-1");
-  await expect(page.getByLabel("Object Storage ネームスペース")).toHaveValue("exampletenancy");
-  await expect(page.getByLabel("Object Storage バケット")).toHaveValue("nl2sql-originals");
+  // 保存先はローカルのディレクトリだけ（OCI Object Storage は #11 で削除）。
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await expect(page.getByText("OCI Object Storage")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByRole("heading", { name: "保存先状態" })).toHaveCount(0);
@@ -680,6 +444,8 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   await expect(page.locator("#enterprise-retries")).toHaveCount(0);
   await expectNoOperationsMemoOrReadiness(page);
   await expectModelPreviewPanelsAbsent(page);
+  await expectNl2sqlShellFillsViewport(page);
+  await expectNoExcessBottomWhitespace(page);
   const modelSavedSecretBadgeStyle = await getSavedSecretBadgeStyle(
     page,
     "enterprise-api-key"
@@ -706,131 +472,6 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
     "success"
   );
   await expectNoOperationsMemoOrReadiness(page);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("OCI 認証設定は保存前に必須値と形式を検証する", async ({ page }) => {
-  let authPatchRequests = 0;
-  let storagePatchRequests = 0;
-
-  await page.unroute("**/api/settings/oci");
-  await page.route("**/api/settings/oci", async (route) => {
-    if (route.request().method() === "PATCH") {
-      authPatchRequests += 1;
-    }
-    await fulfillJson(route, {
-      config_file: "~/.oci/config",
-      profile: "DEFAULT",
-      user: "",
-      fingerprint: "",
-      tenancy: "",
-      region: "",
-      key_file: "~/.oci/oci_api_key.pem",
-      key_file_exists: false,
-      config_file_exists: false,
-      config_source: "runtime",
-    });
-  });
-  await page.unroute("**/api/settings/upload-storage");
-  await page.route("**/api/settings/upload-storage", (route) =>
-    fulfillJson(
-      route,
-      uploadStorageFixture({
-        object_storage_region: "",
-        object_storage_namespace: "",
-      })
-    )
-  );
-  await page.unroute("**/api/settings/oci/object-storage");
-  await page.route("**/api/settings/oci/object-storage", async (route) => {
-    if (route.request().method() === "PATCH") {
-      storagePatchRequests += 1;
-    }
-    await fulfillJson(
-      route,
-      uploadStorageFixture({
-        object_storage_region: "",
-        object_storage_namespace: "",
-      })
-    );
-  });
-
-  await page.goto("/settings/oci");
-  await page.getByRole("button", { name: "OCI 認証設定: OCI 設定を保存" }).click();
-
-  await expect(page.getByLabel("ユーザー OCID")).toHaveAttribute("aria-invalid", "true");
-  // 未入力の文言は欄のラベルを主語にする（「〇〇を入力してください。」。#541）。
-  await expect(page.getByText("ユーザー OCID を入力してください。")).toBeVisible();
-  expect(authPatchRequests).toBe(0);
-
-  await page.getByLabel("ユーザー OCID").fill("not-a-user-ocid");
-  await page.getByLabel("フィンガープリント").fill("not-a-fingerprint");
-  await page.getByLabel("テナンシ OCID").fill("not-a-tenancy-ocid");
-  await page.getByRole("button", { name: "OCI 認証設定: OCI 設定を保存" }).click();
-
-  await expect(page.getByText(/ユーザー OCID は ocid1\.user\./)).toBeVisible();
-  await expect(page.getByText(/fingerprint は 16 進数/)).toBeVisible();
-  await expect(page.getByText(/テナンシ OCID は ocid1\.tenancy\./)).toBeVisible();
-  expect(authPatchRequests).toBe(0);
-
-  await page.getByRole("button", { name: "Object Storage: 保存" }).click();
-
-  await expect(page.getByLabel("Object Storage リージョン")).toHaveAttribute(
-    "aria-invalid",
-    "true"
-  );
-  await expect(
-    page.getByRole("textbox", { name: /Object Storage ネームスペース/ })
-  ).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText("Object Storage リージョンを選択してください。")).toBeVisible();
-  await expect(page.getByText("Object Storage ネームスペースを入力してください。")).toBeVisible();
-  expect(storagePatchRequests).toBe(0);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("アップロード保存先は OCI の region と namespace 不足を保存前に止める", async ({
-  page,
-}) => {
-  let uploadStoragePatchRequests = 0;
-
-  await page.unroute("**/api/settings/upload-storage");
-  await page.route("**/api/settings/upload-storage", async (route) => {
-    if (route.request().method() === "PATCH") {
-      uploadStoragePatchRequests += 1;
-    }
-    await fulfillJson(
-      route,
-      uploadStorageFixture({
-        object_storage_region: "",
-        object_storage_namespace: "",
-      })
-    );
-  });
-
-  await page.goto("/settings/upload-storage");
-  await page.getByRole("radio", { name: /OCI Object Storage/ }).check();
-
-  await expect(page.getByLabel("Object Storage リージョン")).toBeVisible();
-  await expect(page.getByLabel("Object Storage ネームスペース")).toHaveValue("");
-  await expect(
-    page.getByText(
-      "OCI Object Storage を使うには、リージョンとネームスペースの設定が必要です。"
-    )
-  ).toBeVisible();
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-
-  await expect(
-    page.getByText("OCI 認証設定で Object Storage リージョンを選択してください。")
-  ).toBeVisible();
-  await expect(
-    page.getByText("OCI 認証設定で Object Storage ネームスペースを設定してください。")
-  ).toBeVisible();
-  expect(uploadStoragePatchRequests).toBe(0);
-  await expectNoHorizontalOverflow(page);
-
-  await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.getByLabel("Object Storage リージョン")).toBeVisible();
-  await expect(page.getByLabel("Object Storage ネームスペース")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -875,31 +516,6 @@ async function routeModelSettingsWithEmbeddingRerank(page: Page) {
 
 test("システム設定のテスト成功結果を共通パネルで表示する", async ({ page }, testInfo) => {
   await routeModelSettingsWithEmbeddingRerank(page);
-  await page.goto("/settings/oci");
-  const ociTestButton = page.getByRole("button", { name: /接続テスト/ });
-  await ociTestButton.focus();
-  await expect(ociTestButton).toBeFocused();
-  await ociTestButton.press("Enter");
-
-  const ociResult = page.getByTestId("settings-oci-test-result");
-  await expect(ociResult.getByRole("status")).toBeVisible();
-  await expect(ociResult).toHaveAttribute("data-tone", "success");
-  await expect(ociResult).toContainText(
-    "OCI へ認証付きで接続できました（Object Storage GetNamespace）。"
-  );
-  await expect(ociResult).toContainText("所要時間: 7 ms");
-  const ociStagesList = ociResult.getByRole("list", { name: "確認段階" });
-  await expect(ociStagesList.getByRole("listitem")).toHaveCount(4);
-  await expect(ociStagesList.locator('[data-stage-status="success"]')).toHaveCount(4);
-  for (const label of ["設定の形式", "鍵の読み取り", "リージョン到達", "認証（API 応答）"]) {
-    await expect(ociStagesList).toContainText(label);
-  }
-  await expect(ociResult).toContainText("Object Storage GetNamespace");
-  await expect(ociResult).toContainText("config_file_mode");
-  await expectNoHorizontalOverflow(page);
-  await page.locator("#oci-user-ocid").fill("ocid1.user.oc1..changed");
-  await expect(ociResult).toHaveCount(0);
-
   await page.goto("/settings/model");
   await page
     .getByRole("button", { name: "enterprise-nl2sql-vlm をテスト", exact: true })
@@ -968,37 +584,6 @@ test("システム設定のテスト成功結果を共通パネルで表示す�
 
 test("システム設定の失敗と API エラーを共通 danger パネルで表示する", async ({ page }) => {
   await routeModelSettingsWithEmbeddingRerank(page);
-  await page.unroute("**/api/settings/oci/config/test");
-  await page.route("**/api/settings/oci/config/test", (route) =>
-    fulfillJson(
-      route,
-      ociConfigTestFixture({
-        status: "failed",
-        key_file_exists: false,
-        missing_fields: ["fingerprint"],
-        permission_issues: ["OCI config ファイルは 0600 にしてください。"],
-        config_file_mode: "0644",
-        key_file_mode: null,
-        message: "OCI config の必須項目が不足しています。",
-        elapsed_ms: 4,
-        error_type: "InvalidOciConfig",
-        stages: ociStages(["failed"], {
-          message: "OCI config の必須項目が不足しています。",
-          action: "不足している項目を入力して認証設定を保存してください。",
-        }),
-        auth_check_operation: null,
-      })
-    )
-  );
-  await page.goto("/settings/oci");
-  await page.getByRole("button", { name: /接続テスト/ }).click();
-  const ociResult = page.getByTestId("settings-oci-test-result");
-  await expect(ociResult.getByRole("alert")).toBeVisible();
-  await expect(ociResult).toHaveAttribute("data-tone", "danger");
-  await expect(ociResult).toContainText("確認ポイント");
-  await expect(ociResult).toContainText("不足項目: fingerprint");
-  await expectNoHorizontalOverflow(page);
-
   await page.unroute("**/api/settings/model/test");
   await page.route("**/api/settings/model/test", (route) =>
     fulfillJson(route, {
@@ -1044,106 +629,6 @@ test("システム設定の失敗と API エラーを共通 danger パネルで�
   await expect(databaseResult).toContainText("再試行してください。");
   await expectNoHorizontalOverflow(page);
 });
-
-const OCI_CONNECTIVITY_FAILURES = [
-  {
-    name: "形式不正",
-    statuses: ["failed", "skipped", "skipped", "skipped"],
-    message: "OCI config の形式が正しくありません（fingerprint）。",
-    action: "fingerprint は OCI コンソールの API キーに表示される 16 バイトのコロン区切りを設定してください。",
-    extra: { error_type: null, auth_check_operation: null },
-    detail: null,
-  },
-  {
-    name: "認証失敗",
-    statuses: ["success", "success", "success", "failed"],
-    message: "OCI が認証を拒否しました（401 NotAuthenticated）。",
-    action: "fingerprint が OCI コンソールの API キーと一致しているかを確認してください。",
-    extra: {
-      error_type: "ServiceError",
-      http_status: 401,
-      service_code: "NotAuthenticated",
-      request_id: "E2EREQUEST401",
-    },
-    detail: "E2EREQUEST401",
-  },
-  {
-    name: "権限不足",
-    statuses: ["success", "success", "success", "failed"],
-    message: "OCI がアクセスを許可しませんでした（404 NotAuthorizedOrNotFound）。",
-    action: "IAM ポリシーでこのユーザーのグループに必要な権限が付与されているかを確認してください。",
-    extra: {
-      error_type: "ServiceError",
-      http_status: 404,
-      service_code: "NotAuthorizedOrNotFound",
-      request_id: "E2EREQUEST404",
-    },
-    detail: "NotAuthorizedOrNotFound",
-  },
-  {
-    name: "タイムアウト",
-    statuses: ["success", "success", "failed", "skipped"],
-    message: "ap-osaka-1 の OCI endpoint への接続が 5 秒以内に完了しませんでした。",
-    action: "リージョン名（ap-osaka-1）と、バックエンドから OCI への HTTPS 通信を確認してください。",
-    extra: { error_type: "ConnectTimeout" },
-    detail: null,
-  },
-] as const;
-
-for (const failure of OCI_CONNECTIVITY_FAILURES) {
-  test(`OCI 接続テストの${failure.name}を段階・次の対処つきで表示する`, async ({ page }) => {
-    const gate = createRequestGate();
-    let testRequests = 0;
-    await page.unroute("**/api/settings/oci/config/test");
-    await page.route("**/api/settings/oci/config/test", async (route) => {
-      testRequests += 1;
-      expect(route.request().method()).toBe("POST");
-      expect(route.request().postData() ?? "").toBe("");
-      await gate.promise;
-      await fulfillJson(
-        route,
-        ociConfigTestFixture({
-          status: "failed",
-          message: failure.message,
-          stages: ociStages(failure.statuses, { message: failure.message, action: failure.action }),
-          ...failure.extra,
-        })
-      );
-    });
-
-    await page.goto("/settings/oci");
-    const testButton = page.getByRole("button", { name: /接続テスト/ });
-    await testButton.click();
-    // loading 中もラベルは「接続テスト」のまま（先頭アイコンだけがスピナーになる）。
-    await expect(testButton).toHaveAccessibleName(/接続テスト$/);
-    await expect(testButton).not.toContainText("テスト中");
-    gate.release();
-
-    const ociResult = page.getByTestId("settings-oci-test-result");
-    await expect(ociResult.getByRole("alert")).toBeVisible();
-    await expect(ociResult).toHaveAttribute("data-tone", "danger");
-    await expect(ociResult.getByRole("alert")).toContainText(failure.message);
-    const stagesList = ociResult.getByRole("list", { name: "確認段階" });
-    for (const [index, key] of OCI_STAGE_KEYS.entries()) {
-      await expect(stagesList.locator(`[data-stage="${key}"]`)).toHaveAttribute(
-        "data-stage-status",
-        failure.statuses[index]
-      );
-    }
-    const failedStage = stagesList.locator('[data-stage-status="failed"]');
-    await expect(failedStage).toContainText("失敗");
-    if ((failure.statuses as readonly OciStageStatus[]).includes("skipped")) {
-      await expect(stagesList.locator('[data-stage-status="skipped"]').first()).toContainText(
-        "未実施"
-      );
-    }
-    await expect(ociResult).toContainText("確認ポイント");
-    await expect(ociResult).toContainText(failure.action);
-    if (failure.detail) await expect(ociResult).toContainText(failure.detail);
-    expect(testRequests).toBe(1);
-    await expectNoHorizontalOverflow(page);
-  });
-}
 
 test("データベース設定は Wallet ZIP の下にサービス名を置き、保存済みパスワードを明示表示する", { tag: "@responsive" }, async ({
   page,
@@ -1375,49 +860,18 @@ test("データベース設定は右側情報カラムを表示しない", { tag
   await expectNoHorizontalOverflow(page);
 });
 
-test("OCI 秘密鍵と Wallet ZIP をドラッグ＆ドロップで即時アップロードできる", { tag: "@responsive" }, async ({
+test("Wallet ZIP をドラッグ＆ドロップで即時アップロードできる", { tag: "@responsive" }, async ({
   page,
 }) => {
-  let keyUploadCount = 0;
   let walletUploadCount = 0;
-  let keyUploadBody = "";
   let walletUploadBody = "";
-  const keyUploadGate = createRequestGate();
 
-  await page.unroute("**/api/settings/oci/key-file");
-  await page.route("**/api/settings/oci/key-file", async (route) => {
-    keyUploadCount += 1;
-    keyUploadBody = route.request().postDataBuffer()?.toString("utf8") ?? "";
-    await keyUploadGate.promise;
-    await fulfillJson(route, { key_file: "~/.oci/oci_api_key.pem", saved: true });
-  });
   await page.unroute("**/api/settings/database/wallet");
   await page.route("**/api/settings/database/wallet", async (route) => {
     walletUploadCount += 1;
     walletUploadBody = route.request().postDataBuffer()?.toString("utf8") ?? "";
     await fulfillJson(route, databaseSettingsFixture());
   });
-
-  await page.goto("/settings/oci");
-  const keyDropzone = page.getByTestId("oci-key-file-upload-dropzone");
-  // ファイルの選択は入力欄と同じ md（タッチ端末は 44px。#613）。
-  await expect(keyDropzone).toHaveCSS("height", `${await expectedControlHeight(page)}px`);
-  await dropFiles(page, keyDropzone, [
-    {
-      name: "private.pem",
-      type: "application/x-pem-file",
-      content: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-    },
-  ]);
-  try {
-    await expect(keyDropzone).toHaveAttribute("aria-busy", "true");
-    await expect(page.getByTestId("oci-key-file-upload-input")).toBeDisabled();
-  } finally {
-    keyUploadGate.release();
-  }
-  await expect(page.getByText("秘密鍵ファイルをアップロードしました。")).toBeVisible();
-  await expect.poll(() => keyUploadCount).toBe(1);
-  expect(keyUploadBody).toContain('filename="private.pem"');
 
   await page.goto("/settings/database");
   const walletInput = page.getByTestId("oracle-wallet-upload-input");
@@ -1464,11 +918,7 @@ test("非正常な readiness 値も設定画面には表示しない", async ({ 
   await page.unroute("**/api/settings/upload-storage");
   await page.route("**/api/settings/upload-storage", (route) =>
     fulfillJson(route, {
-      backend: "local",
       local_storage_dir: "/u01/data/production-ready-nl2sql",
-      object_storage_region: "ap-osaka-1",
-      object_storage_namespace: "exampletenancy",
-      object_storage_bucket: "nl2sql-originals",
       readiness: "missing_credentials",
       max_upload_bytes: 104857600,
       config_source: "runtime",
@@ -2013,494 +1463,9 @@ test("legacy JSON の原因と復旧方法を表示し、保存時に既存 Key 
   await expect(page.getByText("保存済み", { exact: true })).toBeVisible();
 });
 
-test("Wallet 不足時はページ表示ごとに OCI 自動取得を一度だけ実行する", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  const incompleteSettings = databaseSettingsFixture({
-    wallet_uploaded: false,
-    available_services: [],
-    readiness: "wallet_not_found",
-  });
-  const downloadedSettings = databaseSettingsFixture();
-  let downloadCount = 0;
-  let notifyStarted: (() => void) | undefined;
-  let releaseDownload: (() => void) | undefined;
-  const started = new Promise<void>((resolve) => {
-    notifyStarted = resolve;
-  });
-  const downloadGate = new Promise<void>((resolve) => {
-    releaseDownload = resolve;
-  });
-
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(route, incompleteSettings)
-  );
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    downloadCount += 1;
-    notifyStarted?.();
-    await downloadGate;
-    await fulfillJson(route, { status: "downloaded", settings: downloadedSettings });
-  });
-
-  await page.goto("/settings/database");
-  await started;
-  const pendingStatus = page
-    .getByRole("status")
-    .filter({ hasText: "OCI から Wallet を取得し、サーバーへ安全に設定しています…" });
-  await expect(pendingStatus).toBeVisible();
-  await expect(page.getByTestId("oracle-wallet-upload-input")).toBeDisabled();
-  await expect(page.getByTestId("oracle-wallet-upload-dropzone")).toContainText(
-    "ドラッグ＆ドロップまたは選択"
-  );
-
-  releaseDownload?.();
-
-  const successToast = page.getByText(
-    "Oracle Wallet を OCI から取得し、サーバーへ設定しました。"
-  );
-  await expect(successToast).toBeVisible();
-  await expect(
-    successToast.locator("xpath=ancestor::*[@aria-live='polite'][1]")
-  ).toBeVisible();
-  expect(
-    await page.evaluate(() => document.activeElement?.closest("[aria-live]") != null)
-  ).toBe(false);
-  await expect(page.getByText("設定済み", { exact: true })).toBeVisible();
-  await expect.poll(() => downloadCount).toBe(1);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Wallet 自動取得の失敗を保持し、キーボードで再取得できる", async ({ page }) => {
-  const incompleteSettings = databaseSettingsFixture({
-    wallet_uploaded: false,
-    available_services: [],
-    readiness: "wallet_not_found",
-  });
-  let downloadCount = 0;
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(route, incompleteSettings)
-  );
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    downloadCount += 1;
-    if (downloadCount === 1) {
-      await route.fulfill({
-        status: 502,
-        contentType: "application/json",
-        body: JSON.stringify({
-          detail:
-            "OCI から Wallet を取得できませんでした。IAM 権限を確認して再試行するか、Wallet ZIP を手動アップロードしてください。",
-        }),
-      });
-      return;
-    }
-    await fulfillJson(route, {
-      status: "downloaded",
-      settings: databaseSettingsFixture(),
-    });
-  });
-
-  await page.goto("/settings/database");
-
-  const retry = page.getByRole("button", { name: "OCI から Wallet を再取得" });
-  await expect(retry).toBeVisible();
-  await expect(
-    page.getByRole("alert").filter({ hasText: /IAM 権限を確認して再試行/ })
-  ).toBeVisible();
-  await expect(page.getByTestId("oracle-wallet-upload-dropzone")).toContainText(
-    "ドラッグ＆ドロップまたは選択"
-  );
-  await retry.focus();
-  await expect(retry).toBeFocused();
-  await expect
-    .poll(() => retry.evaluate((element) => getComputedStyle(element).outlineStyle))
-    .not.toBe("none");
-  await retry.press("Enter");
-
-  await expect(
-    page.getByText("Oracle Wallet を OCI から取得し、サーバーへ設定しました。")
-  ).toBeVisible();
-  await expect.poll(() => downloadCount).toBe(2);
-  await expect(retry).toHaveCount(0);
-});
-
-test("有効な Wallet がある場合は OCI 自動取得を呼ばない", async ({ page }) => {
-  let downloadCount = 0;
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    downloadCount += 1;
-    await fulfillJson(route, {
-      status: "already_configured",
-      settings: databaseSettingsFixture(),
-    });
-  });
-
-  await page.goto("/settings/database");
-
-  await expect(page.getByText("設定済み", { exact: true })).toBeVisible();
-  await expect.poll(() => downloadCount).toBe(0);
-  await expect(
-    page.getByText("OCI から Wallet を取得し、サーバーへ安全に設定しています…")
-  ).toHaveCount(0);
-});
-
-test("ADB OCID がない場合は自動取得せず手動アップロードを案内する", async ({ page }) => {
-  let downloadCount = 0;
-  await page.route("**/api/settings/database", (route) =>
-    fulfillJson(
-      route,
-      databaseSettingsFixture({
-        wallet_uploaded: false,
-        available_services: [],
-        readiness: "wallet_not_found",
-        adb_ocid: "",
-      })
-    )
-  );
-  await page.route("**/api/settings/database/wallet/download", async (route) => {
-    downloadCount += 1;
-    await fulfillJson(route, {
-      status: "downloaded",
-      settings: databaseSettingsFixture(),
-    });
-  });
-
-  await page.goto("/settings/database");
-
-  await expect(page.getByText(/ADB OCID が未設定のため自動取得は行いません/)).toBeVisible();
-  await expect(page.getByTestId("oracle-wallet-upload-dropzone")).toContainText(
-    "ドラッグ＆ドロップまたは選択"
-  );
-  await expect.poll(() => downloadCount).toBe(0);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Select AI Credential を明示確認で作成し、成功状態だけを表示する", async ({
-  page,
-}) => {
-  let posted: Record<string, unknown> | null = null;
-  let credential = {
-    credential_name: "NL2SQL_OCI_CRED",
-    schema_name: "ADMIN",
-    exists: false,
-    region: "ap-osaka-1",
-    oci_auth_ready: true,
-    missing_fields: [],
-    operation: null as string | null,
-  };
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") {
-      posted = route.request().postDataJSON() as Record<string, unknown>;
-      credential = { ...credential, exists: true, region: "us-chicago-1", operation: "created" };
-    }
-    await fulfillJson(route, credential);
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  await expect(card.getByRole("heading", { name: "Select AI Credential" })).toBeVisible();
-  await expect(card.getByText("NL2SQL_OCI_CRED", { exact: true })).toBeVisible();
-  await expect(card.getByText("ADMIN", { exact: true })).toBeVisible();
-  await card.getByRole("combobox", { name: "Select AI 既定リージョン" }).click();
-  await page.getByRole("option", { name: "us-chicago-1" }).click();
-  const confirmation = card.getByTestId("execution-confirmation-field").getByRole("textbox");
-  const create = card.getByRole("button", { name: "Credential を作成" });
-  await expect(create).toBeDisabled();
-  await confirmation.fill("ADMIN_EXECUTE");
-  await expect(create).toBeEnabled();
-  await create.click();
-
-  await expect.poll(() => posted).not.toBeNull();
-  expect(posted).toEqual({
-    region: "us-chicago-1",
-    confirmation: "ADMIN_EXECUTE",
-    recreate: false,
-  });
-  expect(posted).not.toHaveProperty("private_key");
-  const success = card.getByTestId("select-ai-credential-success");
-  await expect(success).toContainText("Select AI Credential を作成");
-  await expect(success.getByRole("link")).toHaveCount(0);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Select AI Credential のリージョンは短い選択の幅で、placeholder が欄に収まる（#1891）", { tag: "@responsive" }, async ({ page }) => {
-  // 2 つの幅を 1 つの test で回る。
-  test.setTimeout(90_000);
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", (route) =>
-    fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "ap-osaka-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: null,
-    })
-  );
-  const projectWidth = page.viewportSize()?.width ?? 1280;
-  const height = page.viewportSize()?.height ?? 900;
-  // 375px の project は 375px だけ、desktop は 1280px と 1920px。
-  const widths = projectWidth < 640 ? [projectWidth] : [1280, 1920];
-  for (const width of widths) {
-    await page.setViewportSize({ width, height });
-    const where = `${width}px`;
-    await page.goto("/settings/select-ai-credential");
-    const region = page.getByTestId("select-ai-credential-card").getByRole("combobox", { name: "Select AI 既定リージョン" });
-    await expect(region).toBeVisible();
-    expect(await measureHorizontalOverflow(page), where).toBeLessThanOrEqual(1);
-    expect(await findClippedPlaceholders(page), where).toEqual([]);
-    if (width < 640) continue;
-    expect(await findFieldsOffWidthScale(page), where).toEqual([]);
-    // リージョンは短い選択（sm 12rem = 168px）。
-    expect(Math.abs((await region.boundingBox())!.width - 168), where).toBeLessThanOrEqual(1);
-  }
-});
-
-test("既存 Select AI Credential の再作成は確認語だけで直接実行する", async ({
-  page,
-}) => {
-  let recreateRequest: Record<string, unknown> | null = null;
-  const existing = {
-    credential_name: "NL2SQL_OCI_CRED",
-    schema_name: "ADMIN",
-    exists: true,
-    region: "ap-osaka-1",
-    oci_auth_ready: true,
-    missing_fields: [],
-    operation: null,
-  };
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") {
-      recreateRequest = route.request().postDataJSON() as Record<string, unknown>;
-      await fulfillJson(route, { ...existing, operation: "recreated" });
-      return;
-    }
-    await fulfillJson(route, existing);
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  await expect(card.getByText("作成済み", { exact: true })).toBeVisible();
-  await card.getByTestId("execution-confirmation-field").getByRole("textbox").fill(
-    "ADMIN_EXECUTE"
-  );
-  await card.getByRole("button", { name: "Credential を再作成" }).click();
-  await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect.poll(() => recreateRequest).not.toBeNull();
-  expect(recreateRequest).toEqual({
-    region: "ap-osaka-1",
-    confirmation: "ADMIN_EXECUTE",
-    recreate: true,
-  });
-  await expect(card.getByTestId("select-ai-credential-success")).toBeVisible();
-});
-
-test("OCI 認証材料不足を 375px で案内し、作成操作を無効化する", async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  let statusRequests = 0;
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", (route) => {
-    statusRequests += 1;
-    return fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "ap-osaka-1",
-      oci_auth_ready: false,
-      missing_fields: ["fingerprint", "key_file_permissions"],
-      operation: null,
-    });
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  const readinessStatus = card
-    .getByRole("status")
-    .filter({ hasText: "OCI 認証材料を準備できません" });
-  await expect(readinessStatus).toContainText("Fingerprint");
-  await expect(readinessStatus).toContainText("秘密鍵のファイル権限 (0600)");
-  await expect(readinessStatus).toContainText(
-    "OCI 認証設定を確認して、修正後に状態を再取得してください。"
-  );
-  await expect(card.getByRole("link", { name: "OCI 認証設定を開く" })).toHaveCount(0);
-  const initialStatusRequests = statusRequests;
-  expect(initialStatusRequests).toBeGreaterThan(0);
-  await card.getByRole("button", { name: "最新情報を取得" }).click();
-  await expect.poll(() => statusRequests).toBe(initialStatusRequests + 1);
-  await expect(card.getByRole("button", { name: "Credential を作成" })).toBeDisabled();
-  await expect(card.getByTestId("execution-confirmation-field").getByRole("textbox")).toBeDisabled();
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Select AI Credential 状態の取得中は経過時間付きの読み込み表示と Skeleton を出す", async ({
-  page,
-}) => {
-  let release!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    await pending;
-    await fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "us-chicago-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: null,
-    });
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  const loading = card.getByRole("region", { name: "Select AI Credential の状態を読み込んでいます" });
-  await expect(loading).toBeVisible();
-  await expect(loading.getByRole("timer")).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-  release();
-  await expect(loading).toHaveCount(0);
-  await expect(card.getByText("NL2SQL_OCI_CRED", { exact: true })).toBeVisible();
-});
-
-test("Select AI Credential 状態の初回取得失敗は標準 ErrorState で再取得できる", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  const apiError =
-    "Select AI Credential の状態を Oracle から取得できませんでした。データベース接続を確認して再試行してください。";
-  let statusRequests = 0;
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", (route) => {
-    statusRequests += 1;
-    return route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: null,
-        error_messages: [apiError],
-        warning_messages: [],
-        error_code: "SELECT_AI_CREDENTIAL_STATUS_FAILED",
-        request_id: "req-select-ai-status-initial",
-      }),
-    });
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  const alert = card.getByRole("alert");
-  await expect(alert).toHaveCount(1);
-  await expect(alert).toContainText(apiError);
-  await expect(alert).toContainText("req-select-ai-status-initial");
-  const retry = card.getByRole("button", { name: "再試行" });
-  await expect(retry).toBeVisible();
-  await retry.click();
-  await expect.poll(() => statusRequests).toBeGreaterThanOrEqual(2);
-  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Select AI Credential 状態の再取得失敗は標準 Banner で知らせ、旧データを保持する", async ({
-  page,
-}) => {
-  const apiError =
-    "Select AI Credential の状態を Oracle から取得できませんでした。データベース接続を確認して再試行してください。";
-  let statusRequests = 0;
-  let failNextRequest = false;
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", (route) => {
-    statusRequests += 1;
-    if (failNextRequest) {
-      failNextRequest = false;
-      return route.fulfill({
-        status: 500,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: null,
-          error_messages: [apiError],
-          warning_messages: [],
-          error_code: "SELECT_AI_CREDENTIAL_STATUS_FAILED",
-          request_id: "req-select-ai-status-refresh",
-        }),
-      });
-    }
-    return fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "ap-osaka-1",
-      oci_auth_ready: false,
-      missing_fields: ["fingerprint"],
-      operation: null,
-    });
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  await expect(card.getByText("NL2SQL_OCI_CRED", { exact: true })).toBeVisible();
-  await expect(card.getByText("ADMIN", { exact: true })).toBeVisible();
-  const initialStatusRequests = statusRequests;
-  failNextRequest = true;
-  await card.getByRole("button", { name: "最新情報を取得" }).click();
-  await expect.poll(() => statusRequests).toBeGreaterThan(initialStatusRequests);
-  const alert = card.getByRole("alert");
-  await expect(alert).toHaveCount(1);
-  await expect(alert).toContainText(apiError);
-  await expect(alert).toContainText("req-select-ai-status-refresh");
-  await expect(card.getByText("NL2SQL_OCI_CRED", { exact: true })).toBeVisible();
-  await expect(card.getByText("ADMIN", { exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "再試行" })).toHaveCount(1);
-  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Select AI Credential API 失敗は固定 alert だけに表示し Toast を重複させない", async ({
-  page,
-}) => {
-  const apiError = "Select AI Credential を Oracle に作成できませんでした。";
-  await page.unroute("**/api/settings/database/select-ai-credential");
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") {
-      await route.fulfill({
-        status: 502,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: null,
-          error_messages: [apiError],
-          warning_messages: [],
-          error_code: "SELECT_AI_CREDENTIAL_CREATE_FAILED",
-        }),
-      });
-      return;
-    }
-    await fulfillJson(route, {
-      credential_name: "NL2SQL_OCI_CRED",
-      schema_name: "ADMIN",
-      exists: false,
-      region: "ap-osaka-1",
-      oci_auth_ready: true,
-      missing_fields: [],
-      operation: null,
-    });
-  });
-
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  await card.getByTestId("execution-confirmation-field").getByRole("textbox").fill(
-    "ADMIN_EXECUTE"
-  );
-  await card.getByRole("button", { name: "Credential を作成" }).click();
-
-  await expect(card.getByRole("alert").filter({ hasText: apiError })).toBeVisible();
-  await expect(card.getByRole("link", { name: "OCI 認証設定を開く" })).toHaveCount(0);
-  await expect(page.getByText(apiError, { exact: true })).toHaveCount(1);
-  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
-});
-
 test("配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
-  await page.goto("/settings/oci");
-  await expect(page.locator("#oci-user-ocid")).toBeVisible();
+  await page.goto("/settings/upload-storage");
+  await expect(page.locator("#upload-storage-local-dir")).toBeVisible();
   const html = page.locator("html");
   // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
   // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
@@ -2523,7 +1488,7 @@ test("配色は OS の設定にかかわらずライトに固定する (#17)", a
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.reload();
-    await expect(page.locator("#oci-user-ocid")).toBeVisible();
+    await expect(page.locator("#upload-storage-local-dir")).toBeVisible();
     await expect(html).toHaveCSS("color-scheme", "light");
     await expect(html).not.toHaveAttribute("data-theme");
     expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
@@ -2532,36 +1497,6 @@ test("配色は OS の設定にかかわらずライトに固定する (#17)", a
     expect(await tokenVar("--color-accent-emphasis")).toBe(hexToRgb("#0d7469"));
     expect(await tokenVar("--color-sidebar")).toBe(hexToRgb("#0f2c2a"));
   }
-});
-
-test("OCI 初期取得失敗は編集を許可せず、再試行後の遅延保存中も入力と重複操作を防ぐ", async ({ page }) => {
-  let failLoad = true;
-  let saves = 0;
-  const gate = createRequestGate();
-  await page.route("**/api/settings/oci", async (route) => {
-    if (route.request().method() === "PATCH") {
-      saves += 1;
-      await gate.promise;
-      await fulfillJson(route, { ...ociSettingsFixture(), ...route.request().postDataJSON() });
-    } else if (failLoad) {
-      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "OCI 設定取得失敗" }) });
-    } else await fulfillJson(route, ociSettingsFixture());
-  });
-  await page.goto("/settings/oci");
-  await expect(page.getByText("OCI 設定取得失敗")).toBeVisible();
-  await expect(page.locator("#oci-user-ocid")).toHaveCount(0);
-  failLoad = false;
-  await page.getByRole("button", { name: /再試行/ }).click();
-  const user = page.locator("#oci-user-ocid");
-  await user.fill("ocid1.user.oc1..edited");
-  await page.getByRole("button", { name: "OCI 認証設定: OCI 設定を保存" }).click();
-  await expect.poll(() => saves).toBe(1);
-  await expect(user).toBeDisabled();
-  await expect(page.locator("#oci-object-storage-region")).toBeDisabled();
-  gate.release();
-  await expect(user).toBeEnabled();
-  await expect(user).toHaveValue("ocid1.user.oc1..edited");
-  await expectNoHorizontalOverflow(page);
 });
 
 test("アップロード保存先は保存中の編集と重複要求を止め、成功後の入力を保持する", async ({ page }) => {
@@ -2594,7 +1529,6 @@ test("アップロード保存先は保存中の編集と重複要求を止め�
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect.poll(() => saves).toBe(1);
   await expect(path).toBeDisabled();
-  await expect(page.locator("#upload-storage-oci")).toBeDisabled();
   gate.release();
   await expect(path).toBeEnabled();
   await expect(path).toHaveValue("/tmp/review-draft");
@@ -2658,55 +1592,6 @@ test("Wallet 更新は未保存 DB ユーザーとパスワードを保持し、
   await user.fill("NEXT_DRAFT_USER");
   await expect(page.getByText("編集済み接続の確認成功")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
-});
-
-test("Credential 確認は region 変更と実行失敗で解除し、処理中は region を固定する", async ({ page }) => {
-  const gate = createRequestGate();
-  let creates = 0;
-  await page.route("**/api/settings/database/select-ai-credential", async (route) => {
-    if (route.request().method() === "POST") {
-      creates += 1;
-      await gate.promise;
-      await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "Credential 操作失敗" }) });
-    } else await fulfillJson(route, { credential_name: "NL2SQL_OCI_CRED", schema_name: "ADMIN", exists: false,
-      region: "us-chicago-1", oci_auth_ready: true, missing_fields: [], operation: null });
-  });
-  await page.goto("/settings/select-ai-credential");
-  const card = page.getByTestId("select-ai-credential-card");
-  const field = card.getByRole("textbox", { name: "実行確認語" });
-  const region = card.getByRole("combobox", { name: "Select AI 既定リージョン" });
-  const create = card.getByRole("button", { name: "Credential を作成" });
-  await field.fill("ADMIN_EXECUTE");
-  await region.click();
-  await page.getByRole("option", { name: "ap-osaka-1" }).click();
-  await expect(field).toHaveValue("");
-  await expect(create).toBeDisabled();
-  await field.fill("ADMIN_EXECUTE");
-  await create.click();
-  await expect.poll(() => creates).toBe(1);
-  await expect(region).toBeDisabled();
-  gate.release();
-  await expect(card.getByText("Credential 操作失敗", { exact: true })).toBeVisible();
-  await expect(field).toHaveValue("");
-  await expect(create).toBeDisabled();
-});
-
-test("レビュー補完: OCI config 反映・namespace 取得・保存の action を確認する", async ({ page }) => {
-  let saved: Record<string, unknown> | null = null;
-  await page.route("**/api/settings/oci/object-storage", async (route) => {
-    saved = route.request().postDataJSON();
-    await fulfillJson(route, uploadStorageFixture(saved ?? {}));
-  });
-  await page.goto("/settings/oci");
-  await page.locator("#oci-user-ocid").fill("ocid1.user.oc1..draft");
-  await page.getByRole("button", { name: /config から反映/ }).click();
-  await expect(page.locator("#oci-user-ocid")).toHaveValue("ocid1.user.oc1..example");
-  await page.getByRole("button", { name: /Object Storage ネームスペース: 取得/ }).click();
-  await expect(page.locator("#oci-object-storage-namespace")).toHaveValue("exampletenancy");
-  await expect(page.locator("#oci-object-storage-namespace")).toHaveAttribute("readonly", "");
-  await page.getByRole("button", { name: "Object Storage: 保存", exact: true }).click();
-  await expect.poll(() => saved).toEqual({ object_storage_region: "ap-osaka-1", object_storage_namespace: "exampletenancy" });
-  await expect(page.getByText("Object Storage 設定を保存しました。", { exact: true })).toBeVisible();
 });
 
 test("レビュー補完: モデル追加・既定のモデル 2 つ・Vision・削除確認を保存 payload まで確認する", { tag: "@responsive" }, async ({ page }) => {
@@ -2790,9 +1675,9 @@ test("レビュー補完: モデル追加・既定のモデル 2 つ・Vision・
   expect(writes[1].enterprise_ai.default_text_model_id).toBe("enterprise-nl2sql-llm");
 });
 
-test("レビュー補完: 保存先の失敗再試行と OCI への離脱確認を確認する", async ({ page }) => {
+test("レビュー補完: 保存先の失敗再試行を確認する", async ({ page }) => {
   let failSave = true;
-  let persisted = uploadStorageFixture({ object_storage_namespace: "" });
+  let persisted = uploadStorageFixture();
   await page.route("**/api/settings/upload-storage", async (route) => {
     if (route.request().method() === "PATCH") {
       if (failSave) {
@@ -2812,48 +1697,42 @@ test("レビュー補完: 保存先の失敗再試行と OCI への離脱確認�
   failSave = false;
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(page.getByText("保存先の書込失敗", { exact: true })).toHaveCount(0);
-  await page.getByRole("radio", { name: /OCI Object Storage/ }).check();
-  await page.getByRole("button", { name: "OCI 認証設定を開く", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "キャンセル", exact: true }).click();
-  await expect(page).toHaveURL(/settings\/upload-storage$/);
-  await page.getByRole("button", { name: "OCI 認証設定を開く", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "破棄して移動", exact: true }).click();
-  await expect(page).toHaveURL(/settings\/oci$/);
+  await expect.poll(() => persisted.local_storage_dir).toBe("/tmp/review-retry");
+  await expect(page.getByRole("button", { name: "OCI 認証設定を開く" })).toHaveCount(0);
 });
 
 test("未保存の変更があるときはブラウザの戻る操作でも破棄を確認する（#138）", async ({ page }) => {
-  await page.goto("/settings/upload-storage");
-  await expect(page.locator("#upload-storage-local-dir")).toBeEditable();
+  await page.goto("/settings/model");
+  await expect(page.locator("#enterprise-endpoint")).toBeVisible();
   // 変更がなければ確認なしで移動できる（SPA 内の PUSH で履歴を 1 つ積む）。
-  await (await openSidebarNav(page)).getByRole("link", { name: "OCI 認証" }).click();
-  await expect(page).toHaveURL(/settings\/oci$/);
+  await (await openSidebarNav(page)).getByRole("link", { name: "アップロード保存先" }).click();
+  await expect(page).toHaveURL(/settings\/upload-storage$/);
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
-  const userOcid = page.locator("#oci-user-ocid");
-  await expect(userOcid).toBeEditable();
-  await userOcid.fill("ocid1.user.oc1..back-guard");
+  const localDir = page.locator("#upload-storage-local-dir");
+  await expect(localDir).toBeEditable();
+  await localDir.fill("/tmp/back-guard");
 
   // 戻る → 確認。キャンセルすると URL と入力が残る。
   await page.goBack();
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "キャンセル", exact: true }).click();
-  await expect(page).toHaveURL(/settings\/oci$/);
-  await expect(userOcid).toHaveValue("ocid1.user.oc1..back-guard");
+  await expect(page).toHaveURL(/settings\/upload-storage$/);
+  await expect(localDir).toHaveValue("/tmp/back-guard");
 
   // もう一度戻る → 破棄して移動。
   await page.goBack();
   await dialog.getByRole("button", { name: "破棄して移動", exact: true }).click();
-  await expect(page).toHaveURL(/settings\/upload-storage$/);
+  await expect(page).toHaveURL(/settings\/model$/);
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
-test("レビュー補完: システム設定5画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
-  for (const slug of ["oci", "upload-storage", "model", "database", "system-tables"]) {
+test("レビュー補完: システム設定4画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
+  for (const slug of ["upload-storage", "model", "database", "system-tables"]) {
     await page.goto(`/settings/${slug}`);
     await expect(page.locator("main")).toBeVisible();
-    const ready = slug === "oci" ? page.locator("#oci-user-ocid")
-      : slug === "upload-storage" ? page.locator("#upload-storage-local-dir")
+    const ready = slug === "upload-storage" ? page.locator("#upload-storage-local-dir")
       : slug === "model" ? page.locator("#enterprise-endpoint")
       : slug === "database" ? page.locator("#oracle-user")
       : page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" });

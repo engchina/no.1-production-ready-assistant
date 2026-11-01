@@ -73,7 +73,7 @@ Agent 独自の header / JWT / 外部 policy の認可（旧 `AGENT_RBAC_*`）�
 | セキュリティ設定 | `menu.security_permissions` |
 | ユーザーとロール（3 製品共通） | `menu.security_users` / `menu.security_roles` |
 | 運用設定 | `menu.settings_system_tables` / `menu.runtimes`（実行環境）/ `menu.settings_external_mcp`（MCP 接続） |
-| システム設定（3 製品共通） | `menu.settings_oci` / `menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database` |
+| システム設定（3 製品共通） | `menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database` |
 
 権限コードは保存値なので、ナビの名前・グループを変えてもコードは変えません（#791 で「Control Plane」グループを分けたときも同じ）。
 
@@ -109,7 +109,7 @@ API は `(method, route template)` ごとに登録し、登録のない API は�
 | `GET /agents` | `menu.agents` / `menu.runs` | 利用できるエージェントだけ |
 | `GET /runtime/status` | `menu.runtimes` / `menu.agents` | 組み込み Runtime の状態（API key は出さない） |
 | 業務 Agent・スキル・Agent 固有の設定（MCP 接続）の変更 | `agent.admin` | admin |
-| システム設定（OCI 認証・アップロード保存先・モデル・データベース）の保存・接続テスト・ADB 操作 | 各メニュー（`menu.settings_oci` / `menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database`。RAG / NL2SQL と同じ割り当て） | 同じメニュー権限（`require_system_settings_write`） |
+| システム設定（アップロード保存先・モデル・データベース）の保存・接続テスト・Wallet のアップロード | 各メニュー（`menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database`。RAG / NL2SQL と同じ割り当て） | 同じメニュー権限（`require_system_settings_write`） |
 | 設定の GET（MCP 接続（Skill の画面からも読む）・ツールの取得、システム設定） | 各メニュー（MCP 接続は `menu.settings_external_mcp`。`menu.settings_external_rag` / `menu.settings_external_nl2sql` は #757 で廃止し、migration 004 が既存ロールから消す） | — |
 | `GET /tools` | `menu.audit` / `agent.admin` | — |
 | `GET /observability/status`・`GET /settings/trace-policy` | `menu.audit`（画面からは使わない。運用スクリプトの確認用） | — |
@@ -228,6 +228,10 @@ Run は RAG から受け取った根拠（ツールの結果・`tool.completed` 
    プラグイン（`AGENT_CONTROL_PLANE_ITEMS` の `ITEM_KIND = 'plugin'`）とメニュー権限 `menu.plugins` を消す破壊的な
    migration なので、「運用設定 > システムテーブル」で内容を確認して承認する（CLI は `--allow-destructive`）。
    プラグインが配っていたスキル・MCP 接続を使い続けるなら、先にスキル（`AGENT_SKILLS_DIR` か画面）と MCP 接続として登録し直す。
+11. （#11 以降に更新する環境）削除したシステム設定の「OCI 認証」のメニュー権限 `menu.settings_oci` は、既存ロールに
+   残っていても読まない（migration で消さない）。`platform/.env` に残る OCI 認証の `PLATFORM_OCI_*`
+   （`PLATFORM_OCI_ENTERPRISE_AI_*` は除く）/ `PLATFORM_UPLOAD_STORAGE_BACKEND` / `PLATFORM_OBJECT_STORAGE_*` /
+   `PLATFORM_ORACLE_ADB_*` は読まれない（アップロードは `PLATFORM_LOCAL_STORAGE_DIR` だけに保存する）ので削除してよい。
 
 ## 9. 既知の制約
 

@@ -1027,7 +1027,6 @@ async def test_system_table_post_requires_csrf_and_sql_execute_permission(
             force_password_change=False,
             role_codes=["DB_VIEWER"],
             permissions=permissions,
-            data_entitlements=[],
             allowed_profile_ids=set(),
             session_id="session-1",
             csrf_token_hash="hash",
@@ -1259,14 +1258,13 @@ def test_control_pool_strips_descriptor_retry_only_in_cli(
     monkeypatch.setattr(
         oracle_runtime, "oracle_connect_kwargs", lambda *_a, **_k: dict(base_kwargs)
     )
-    monkeypatch.setattr(oracle_runtime, "ensure_deepsec_thin_mode", lambda _settings: None)
     manager = oracle_runtime.OraclePoolManager(get_settings())
     monkeypatch.setattr(manager, "_load_oracledb", lambda: _Oracledb())
     monkeypatch.setattr(manager, "_initialize_driver", lambda _oracledb: None)
     if cli:
         enable_cli_connect_mode()
 
-    manager._get_pool(data_plane=False)
+    manager._get_pool()
 
     kwargs = created[0]
     assert kwargs["getmode"] == 3 and kwargs["max"] == 4

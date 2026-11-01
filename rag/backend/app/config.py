@@ -103,7 +103,6 @@ from app.parser_settings_store import ParserSettingsStore
 from app.rag.language_pack_store import LANGUAGE_PACK_STORE
 from app.search_defaults import SEARCH_TOP_K_DEFAULT, SEARCH_TOP_K_MAX
 
-UploadStorageBackend = Literal["local", "oci"]
 AuditPersistence = Literal["log", "oracle", "both"]
 ParserAdapterBackend = Literal[
     # 廃止済みの in-process baseline。validator は local を正規化せず保持する(advanced
@@ -510,12 +509,6 @@ class Settings(
     # CORS 許可オリジン（フロントエンド）
     cors_origins: list[str] = Field(default=["http://localhost:3100"])
 
-    # --- OCI 共通 ---
-    oci_config_file: str = Field(default="~/.oci/config")
-    oci_config_profile: str = Field(default="DEFAULT")
-    oci_region: str = Field(default="")
-    oci_compartment_id: str = Field(default="")
-
     # --- OCI Enterprise AI（LLM / Vision-capable LLM）---
     # 注意: OCI Generative AI の chat 推論 API ではなく Enterprise AI を使う
     oci_enterprise_ai_endpoint: str = Field(default="")
@@ -648,20 +641,6 @@ class Settings(
         ),
     )
     oracle_wallet_password: str = Field(default="")
-    oracle_adb_ocid: str = Field(
-        default="",
-        description=(
-            "Autonomous Database 操作対象の OCID。起動 / 停止 / 情報取得に使う。"
-            "ベクトル検索とは別経路の OCI Database 制御プレーン操作用。"
-        ),
-    )
-    oracle_adb_region: str = Field(
-        default="",
-        description=(
-            "OCI から ADB の Wallet を取得するときの OCI region。"
-            "未設定なら PLATFORM_OCI_REGION を使う。"
-        ),
-    )
     oracle_tcp_connect_timeout_seconds: float = Field(
         default=10.0,
         gt=0.0,
@@ -699,18 +678,6 @@ class Settings(
         ge=1,
         le=100,
         description="Oracle AI Vector Search の FETCH APPROX target accuracy。",
-    )
-
-    # --- OCI Object Storage ---
-    object_storage_region: str = Field(default="")
-    object_storage_namespace: str = Field(default="")
-    object_storage_bucket: str = Field(default="production-ready")
-    upload_storage_backend: UploadStorageBackend = Field(
-        default="local",
-        description=(
-            "アップロード原本の保存先。local は PLATFORM_LOCAL_STORAGE_DIR、"
-            "oci は OCI Object Storage。"
-        ),
     )
 
     # --- ローカルアップロード保存先 ---
@@ -1951,32 +1918,6 @@ class Settings(
             "その件を「説明できなかった」などとして記録し、取込を続ける。"
         ),
     )
-    rag_guardrails_input_enabled: bool = Field(
-        default=False, description="OCI Guardrails で質問を検査する。無効時は質問を送信しない。"
-    )
-    rag_guardrails_output_enabled: bool = Field(
-        default=False, description="OCI Guardrails で回答を検査する。無効時は回答を送信しない。"
-    )
-    oci_guardrails_compartment_id: str = Field(
-        default="",
-        description="OCI Guardrails の compartment OCID。空欄時は oci_compartment_id を使う。",
-    )
-    oci_guardrails_endpoint: str = Field(
-        default="",
-        description="OCI Generative AI Inference のサービスエンドポイント上書き(空欄は SDK 既定)。",
-    )
-    oci_guardrails_prompt_injection_threshold: float = Field(
-        default=0.5,
-        ge=0.0,
-        le=1.0,
-        description="prompt injection の risk score をブロック扱いにする閾値(0.0–1.0)。",
-    )
-    oci_guardrails_timeout_seconds: float = Field(
-        default=5.0,
-        gt=0.0,
-        le=30.0,
-        description="OCI Guardrails 検査の接続・読取 timeout 秒。",
-    )
     rag_evaluation_job_timeout_seconds: int = Field(
         default=3600,
         ge=60,
@@ -2508,11 +2449,6 @@ class Settings(
         if client_lib_dir:
             return str(Path(client_lib_dir).expanduser() / "network" / "admin")
         return self.oracle_wallet_dir.strip()
-
-    @property
-    def resolved_oracle_adb_region(self) -> str:
-        """ADB 管理専用 region。旧設定互換のため PLATFORM_OCI_REGION へ fallback する。"""
-        return self.oracle_adb_region.strip() or self.oci_region.strip()
 
 
 @lru_cache

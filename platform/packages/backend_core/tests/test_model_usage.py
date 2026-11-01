@@ -30,10 +30,10 @@ def _llm_call(model: str, usage: dict[str, object] | None) -> None:
             record_genai_usage(span, usage)
 
 
-def _unmeasured_call(source: str = "select_ai") -> None:
-    """アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ Select AI など）。"""
+def _unmeasured_call(source: str = "db_model") -> None:
+    """アプリが利用量を受け取れない呼び出し（DB の中でモデルを呼ぶ呼び出しなど）。"""
     with observed_span(
-        "oracle.select_ai", kind="client", attributes={UNMEASURED_SOURCE_ATTRIBUTE: source}
+        "oracle.db_model", kind="client", attributes={UNMEASURED_SOURCE_ATTRIBUTE: source}
     ):
         pass
 
@@ -68,7 +68,7 @@ def test_unmeasured_calls_alone_are_unmeasured_without_numbers() -> None:
     usage = collector.summary()
     assert usage is not None
     assert usage.measurement == "unmeasured"
-    assert usage.unmeasured_sources == ["select_ai"]
+    assert usage.unmeasured_sources == ["db_model"]
     assert (usage.requests, usage.measured_requests) == (0, 0)
     assert run_usage_summary_fields(usage) == (None, "unmeasured")
 
@@ -78,12 +78,12 @@ def test_unmeasured_calls_with_llm_calls_are_partial() -> None:
     collector = ModelUsageCollector()
     with operation_trace("run", operation_id="usage-mixed", listener=collector.observe):
         _llm_call("model-a", {"input_tokens": 10, "output_tokens": 2})
-        _unmeasured_call("select_ai_agent")
+        _unmeasured_call("db_model_agent")
 
     usage = collector.summary()
     assert usage is not None
     assert usage.measurement == "partial"
-    assert usage.unmeasured_sources == ["select_ai_agent"]
+    assert usage.unmeasured_sources == ["db_model_agent"]
     assert (usage.requests, usage.measured_requests, usage.total_tokens) == (1, 1, 12)
     assert run_usage_summary_fields(usage) == (12, "partial")
 
@@ -137,7 +137,7 @@ def test_run_usage_totals(
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ({"requests": 2, "measurement": "unmeasured", "unmeasured_sources": ["select_ai"]}, 2),
+        ({"requests": 2, "measurement": "unmeasured", "unmeasured_sources": ["db_model"]}, 2),
         ({"models": ["m"], "requests": 1}, 1),
         (None, None),
         ("broken", None),
@@ -231,7 +231,7 @@ def test_add_run_usage_sums_two_requests_of_one_run() -> None:
 def test_add_run_usage_measurement(left: str, right: str, expected: str) -> None:
     def usage(measurement: str) -> RunModelUsage:
         if measurement == "unmeasured":
-            return RunModelUsage(measurement="unmeasured", unmeasured_sources=["select_ai"])
+            return RunModelUsage(measurement="unmeasured", unmeasured_sources=["db_model"])
         return RunModelUsage.model_validate(
             {
                 "requests": 1,
@@ -245,4 +245,4 @@ def test_add_run_usage_measurement(left: str, right: str, expected: str) -> None
 
     total = add_run_usage(usage(left), usage(right))
     assert total is not None and total.measurement == expected
-    assert total.unmeasured_sources == (["select_ai"] if "unmeasured" in (left, right) else [])
+    assert total.unmeasured_sources == (["db_model"] if "unmeasured" in (left, right) else [])

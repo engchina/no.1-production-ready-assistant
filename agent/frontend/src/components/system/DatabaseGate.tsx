@@ -33,7 +33,7 @@ export function databaseGateMessages(): Partial<DatabaseGateMessages> {
 
 /**
  * 業務画面を開く前にデータベースの利用可否を確認する（3製品共通の部品。#325）。
- * ゲートを通さない画面は共通の既定（システム設定の 5 画面とシステムテーブル）。ローカル認証でも
+ * ゲートを通さない画面は共通の既定（システム設定の 4 画面とシステムテーブル）。ローカル認証でも
  * ユーザー・ロールは共通 DB にあるため、DB を確かめる（#750 / #751）。
  */
 export function DatabaseGate({ children }: { children: ReactNode }) {

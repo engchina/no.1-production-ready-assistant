@@ -5,7 +5,7 @@ name: Oracle integration
 # 呼ぶ（それ以外の PR では実行しない。対象のファイルは ci.yml の changes の <製品>_oracle）。
 #   - Oracle AI Database Free の container に、system schema の migration（配備の init_script.sh と同じ CLI）を
 #     2 回当てる（2 回目で冪等を確かめる）。
-#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（Select AI・DBMS_CLOUD・Wallet・DeepSec）は Free に無いので、
+#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（DBMS_CLOUD・Wallet）は Free に無いので、
 #     それを使うテストは実行しない（下の各 step）。
 #   - skip の監視: 実 Oracle のテストは DB に届かないと skip するので、skip のまま成功にしない（RAG は
 #     RAG_TEST_REQUIRE_ORACLE=1 で fixture が失敗にし、どの製品も .github/scripts/pytest-skip-gate.py が許可の一覧に
@@ -103,18 +103,13 @@ jobs:
           uv run pytest -n auto -rs --junitxml="${RUNNER_TEMP}/junit.xml" "${files[@]}"
           python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml"
 
-      # NL2SQL: Oracle の明示 opt-in のテスト。Free に無い ADB の機能を使うもの（Select AI の
-      # test_select_ai_quoted_object_list_oracle_live.py・DeepSec の test_deepsec_real_oracle_integration.py）は
-      # 実行しない。LLM の Select AI の test_select_ai_generates_into_staging_only（NL2SQL_SYNTHETIC_LLM_LIVE_TEST）と、
-      # DBMS_CLOUD の DBA_LOAD_OPERATIONS を読む test_capture_session_reads_adb_load_operations
-      # （NL2SQL_SYNTHETIC_ADB_LIVE_TEST）は skip を許す。
+      # NL2SQL: Oracle の明示 opt-in のテスト。
       # 3 製品のテストは手元の .env を読まない（#1972）ので、接続の設定を環境変数で渡す（PLATFORM_ORACLE_USER は
       # conftest が APP に固定する）。
       - name: Oracle integration tests (NL2SQL)
         if: inputs.product == 'nl2sql'
         env:
           NL2SQL_RUN_ORACLE_INTEGRATION: "1"
-          NL2SQL_SYNTHETIC_LIVE_TEST: "1"
         run: |
           set -a
           # shellcheck source=/dev/null
@@ -126,12 +121,8 @@ jobs:
             tests/test_nl2sql_db_admin_chat_history_oracle_live.py \
             tests/test_nl2sql_history_sort_oracle_live.py \
             tests/test_nl2sql_profile_delete_oracle_live.py \
-            tests/test_nl2sql_synthetic_oracle_live.py \
-            tests/test_nl2sql_synthetic_preview_oracle_live.py \
             tests/test_system_schema_columns_oracle_live.py
-          python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml" \
-            --allow "test_nl2sql_synthetic_preview_oracle_live::test_select_ai_generates_into_staging_only" \
-            --allow "test_nl2sql_synthetic_oracle_live::test_capture_session_reads_adb_load_operations"
+          python3 ../../.github/scripts/pytest-skip-gate.py "${RUNNER_TEMP}/junit.xml"
 
       # Agent: migration の後の状態を読み、ready（管理対象がそろっている）を確かめる
       # （--status は ready でなくても 0 で終わる）。

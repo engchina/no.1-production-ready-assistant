@@ -4,7 +4,6 @@
 実行履歴の行（`usage`）に残すことと、一覧・詳細の API が合計と計測の状態を返すことを確かめる。
 
 - Enterprise AI Direct: OCI Enterprise AI の実の client を httpx の mock で動かす（usage は合成）。
-- Select AI: DB の中でモデルを呼ぶので数を作らず「未計測」（DB は fake の接続）。
 - 利用量の記録の無い行（この機能より前）は、一覧・詳細とも未計測（0 にしない）。
 """
 
@@ -16,12 +15,6 @@ import httpx
 import pytest
 from pr_backend_core.observability.model_usage import RunModelUsage
 from test_enterprise_ai_client import _direct_settings, _mock_http
-from test_health import (
-    _FakeOracleDb,
-    _FakeRuntimeOracleAdapter,
-    _OracleRuntimeNl2SqlService,
-    _wait_for_job,
-)
 from test_nl2sql_history_paging import (  # noqa: F401 - fixture
     _history,
     _incremental_service,
@@ -37,10 +30,7 @@ from app.features.nl2sql import enterprise_ai_client
 from app.features.nl2sql import router as nl2sql_router
 from app.features.nl2sql.models import (
     HistoryItem,
-    JobCreateRequest,
     JobStatus,
-    Nl2SqlEngine,
-    Nl2SqlProfile,
 )
 from app.features.nl2sql.service import Nl2SqlService
 from app.settings import get_settings
@@ -121,28 +111,6 @@ def test_direct_job_with_a_failed_attempt_is_partial(monkeypatch: pytest.MonkeyP
     assert (item.usage.total_tokens, item.usage.measurement) == (15, "partial")
 
 
-def test_select_ai_job_is_unmeasured_without_numbers() -> None:
-    """Select AI は DB の中でモデルを呼ぶので、数を作らず未計測（出どころを残す）にする。"""
-    service = _OracleRuntimeNl2SqlService(_FakeRuntimeOracleAdapter(_FakeOracleDb()))
-    profile = service.create_profile(
-        Nl2SqlProfile(id="usage_select_ai", name="プロファイル A", allowed_tables=["INVOICES"])
-    )
-
-    created = service.start_job(
-        JobCreateRequest(
-            question="合成の質問", engine=Nl2SqlEngine.SELECT_AI, profile_id=profile.id
-        )
-    )
-    job = _wait_for_job(service, created.job_id)
-
-    assert job is not None and job.status == JobStatus.DONE, job
-    [item] = service.list_history().items
-    assert item.usage is not None
-    assert item.usage.measurement == "unmeasured"
-    assert item.usage.unmeasured_sources == ["select_ai"]
-    assert (item.usage.requests, item.usage.total_tokens) == (0, 0)
-
-
 def _with_usage(item: HistoryItem, usage: dict[str, Any] | None) -> HistoryItem:
     payload = item.model_dump(mode="json")
     payload["usage"] = usage
@@ -169,7 +137,7 @@ _USAGE_ITEMS = [
     ),
     _with_usage(
         _history(4, "user-1"),
-        {"measurement": "unmeasured", "unmeasured_sources": ["select_ai"]},
+        {"measurement": "unmeasured", "unmeasured_sources": ["external"]},
     ),
     # LLM を呼ばなかった実行（チャットの「SQL を実行」）は実測の 0。
     _with_usage(_history(5, "user-1"), {}),
@@ -179,7 +147,7 @@ _USAGE_ITEMS = [
 def test_history_route_returns_total_tokens_and_measurement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """一覧の「token」の列: 合計と計測の状態。記録の無い行・Select AI だけの行は数を返さない。"""
+    """一覧の「token」の列: 合計と計測の状態。記録の無い行・未計測の行は数を返さない。"""
     service = _incremental_service(_USAGE_ITEMS)
     monkeypatch.setattr(nl2sql_router, "nl2sql_service", service)
 

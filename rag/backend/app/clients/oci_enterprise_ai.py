@@ -79,7 +79,6 @@ def config_from_settings(
         vision_oci_enterprise_ai_endpoint=vision.base_url if separate_vision else None,
         vision_oci_enterprise_ai_api_key=vision.api_key if separate_vision else None,
         vision_oci_enterprise_ai_project_ocid=vision.project_ocid if separate_vision else None,
-        oci_compartment_id=settings.oci_compartment_id,
         vision_model_id=vision_model_id,
         default_model_id=text_model_id,
         oci_enterprise_ai_llm_path=settings.oci_enterprise_ai_llm_path,

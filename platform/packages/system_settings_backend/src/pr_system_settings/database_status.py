@@ -350,7 +350,7 @@ def build_database_status_router(
 
     - `test_connection(settings)`：bounded な接続確認。失敗なら例外を送出する
       （接続 pool は製品が持つ）
-    - `extra_readiness(settings)`：製品固有の設定の判定（NL2SQL の DeepSec）。システム設定画面の
+    - `extra_readiness(settings)`：製品固有の設定の判定。システム設定画面の
       `build_database_router` と同じものを渡す
     - `schema_probe(settings)`：製品の準備状態の確認
       （RAG の system schema、NL2SQL の incremental store）

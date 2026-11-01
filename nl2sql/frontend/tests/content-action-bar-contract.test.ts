@@ -26,10 +26,6 @@ const metadataSqlSource = readFileSync(
   new URL("../src/features/nl2sql/pages/MetadataSqlManagementPage.tsx", import.meta.url),
   "utf8"
 );
-const dataManagementSource = readFileSync(
-  new URL("../src/features/nl2sql/pages/DataManagementPage.tsx", import.meta.url),
-  "utf8"
-);
 
 test("ContentActionBar は内容内ツール操作を右寄せし、ARIA group を持つ", () => {
   assert.match(componentSource, /export function ContentActionBar/u);
@@ -77,38 +73,6 @@ test("NL2SQL の局所実行 CTA は対象内容の後ろに置く", () => {
   assert.ok(
     metadataSqlSource.indexOf('t("metadataSql.action.generate")') >
       metadataSqlSource.indexOf('t("metadataSql.input.extra")')
-  );
-
-  assert.match(dataManagementSource, /testId="data-synthetic-refresh-tables-actions"/u);
-  assert.match(dataManagementSource, /data-testid="data-synthetic-results-actions"/u);
-  assert.doesNotMatch(dataManagementSource, /testId="data-synthetic-status-actions"/u);
-  assert.doesNotMatch(dataManagementSource, /headingId="synthetic-status-heading"/u);
-  assert.ok(
-    dataManagementSource.indexOf('t("dataTools.syntheticData.refreshTables")') >
-      dataManagementSource.indexOf('t("dataTools.syntheticData.selectedCount"')
-  );
-  assert.ok(
-    dataManagementSource.indexOf('t("dataTools.syntheticData.refreshTables")') <
-      dataManagementSource.indexOf('id="data-synthetic-table-picker"')
-  );
-  assert.ok(
-    dataManagementSource.indexOf('t("dataTools.syntheticData.results")') >
-      dataManagementSource.indexOf('value={syntheticResultLimitInput}')
-  );
-  assert.ok(
-    dataManagementSource.indexOf('data-testid="synthetic-result-table-select"') <
-      dataManagementSource.indexOf('value={syntheticResultLimitInput}')
-  );
-
-  const syntheticTargetHeaderStart = dataManagementSource.indexOf('headingId="synthetic-target-heading"');
-  const syntheticTargetHeaderEnd = dataManagementSource.indexOf("<FormGrid>", syntheticTargetHeaderStart);
-  const syntheticResultsHeaderStart = dataManagementSource.indexOf('headingId="synthetic-results-heading"');
-  const syntheticResultsHeaderEnd = dataManagementSource.indexOf('<div className="border-t border-border pt-3"', syntheticResultsHeaderStart);
-  assert.doesNotMatch(dataManagementSource.slice(syntheticTargetHeaderStart, syntheticTargetHeaderEnd), /action=\{/u);
-  assert.doesNotMatch(dataManagementSource.slice(syntheticResultsHeaderStart, syntheticResultsHeaderEnd), /action=\{/u);
-  assert.doesNotMatch(
-    dataManagementSource.slice(syntheticResultsHeaderStart, dataManagementSource.indexOf('data-testid="data-synthetic-results-actions"', syntheticResultsHeaderStart)),
-    /<ContentActionBar/u
   );
 });
 

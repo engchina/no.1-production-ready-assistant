@@ -130,7 +130,7 @@ export const MODEL_MESSAGES = {
   "settings.model.enterprise.reasoningEffort": "推論の量",
   "settings.model.enterprise.reasoningEffortOfModel": "モデル {number} の推論の量",
   "settings.model.enterprise.reasoningEffortHelp":
-    "推論に対応するモデルへ、回答の生成に使う推論の程度を指定します。対応する値や効果はモデル・API により異なり、応答時間や品質を保証する設定ではありません。このシステムの none は指定を送らず、モデル側の既定を使います。選択した接続と値は「テスト」で確認してください。NL2SQL の Select AI・Select AI Agent には、この画面の推論の量は送信しません。",
+    "推論に対応するモデルへ、回答の生成に使う推論の程度を指定します。対応する値や効果はモデル・API により異なり、応答時間や品質を保証する設定ではありません。このシステムの none は指定を送らず、モデル側の既定を使います。選択した接続と値は「テスト」で確認してください。",
   "settings.model.enterprise.reasoningEffort.none": "none（送らない）",
   "settings.model.enterprise.maxInputTokens": "入力の上限（tokens）",
   "settings.model.enterprise.maxInputTokensOfModel": "モデル {number} の入力の上限（tokens）",

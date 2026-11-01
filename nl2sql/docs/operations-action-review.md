@@ -27,24 +27,20 @@
 |---|---|
 | 最新情報を取得 | 一覧・参照情報を再取得。エラー通知は再描画で消えず再試行可能 |
 | DB 構造を再取得 | schema 更新 job の進行、完了、エラーを表示 |
-| DB profile 情報を取得 | DBMS_CLOUD_AI profile の参照更新と処理表示 |
 | 一覧検索 | API 検索結果と total を採用。打鍵ごとの不要な再送なし |
 | 列見出しで並べ替え | サーバー順と方向を保持、キーボード操作を確認 |
 | 追加読込・追加取得の再試行 | cursor と取得済み一覧を保持 |
-| 新規作成 | 空フォームと credential region の初期値。未編集では破棄確認を出さない |
+| 新規作成 | 空フォームの初期値。未編集では破棄確認を出さない |
 | 行の編集・深い URL | 指定 Profile を取得。#404 で失敗時も URL を保持し再試行可能 |
 | 一覧に戻る | dirty 時に確認、取消で草稿保持。保存・一括選択中は固定 |
-| 名称・カテゴリ・Select AI 設定 | 必須、重複、識別子、大文字化、狭い幅の表示を確認 |
+| 名称・カテゴリ | 必須、重複、識別子、大文字化、狭い幅の表示を確認 |
 | オブジェクト検索 | owner/object 名の範囲で表・ビューを絞り込む |
 | schema 展開・追加取得 | catalog の対象を表示。別の管理用 schema 一覧を混在させない |
 | 表・ビュー個別選択 | 同名の別 owner を分離し、引用符付き保存値も解除可能 |
 | schema のすべて選択 | 表示対象の snapshot を取得。#403 で取得中の保存・対象切替を固定 |
 | schema の選択解除 | 絞り込み時は該当 object のみに作用する |
-| Oracle 実行確認語の入力・クリア | 保存成功後に確認語を解除し、次回実行を再ゲート |
 | 保存 | 入力検証、許可 object と設定 payload、失敗時の草稿保持。#403 で競合編集を停止 |
-| Oracle 反映の再試行 | 失敗を明示し、必要な確認を保持して再試行。Ontology を更新しない |
-| Credential 不足の設定リンク | DB 設定へ案内。戻っただけでは以前の job を自動再送しない |
-| 一覧・編集画面から削除 | 標準 Profile を含め確認ダイアログ。cleanup 警告と対象消失を表示 |
+| 一覧・編集画面から削除 | 標準 Profile を含め確認ダイアログ。対象消失を表示 |
 | 削除・離脱確認の取消 | mutation を送らず、選択と草稿を保持 |
 
 ### オントロジー構築 `/ontology-build`
@@ -83,20 +79,13 @@
 | 操作 | 確認内容・結果 |
 |---|---|
 | 最新情報を取得 | 参照データ再取得。#406 で草稿・設定・現在ページを保持 |
-| 4 種の tab 切替 | アプリ内、Select AI feedback、Select AI ベクトル、類似検索設定を切替 |
-| DBMS_CLOUD_AI profile 選択 | 対象 Profile の Select AI feedback を取得 |
-| エントリの最新情報を取得 | entries の再取得、空・読込・エラーからの復旧 |
-| Select AI feedback 行選択 | CONTENT と SQL_TEXT の選択・詳細表示 |
-| 選択 SQL のコピー | 選択中の SQL のみ clipboard に出力 |
-| 選択 feedback の削除・取消 | 確認後に Profile/SQL を送信。executed=false は成功扱いにしない |
-| Select AI ベクトルインデックス更新 | Profile、閾値、件数を送信し warnings を表示 |
+| tab 切替 | アプリ内、類似検索設定を切替 |
 | 履歴検索・評価フィルター・Profile フィルター | API 条件と一覧・件数の更新。#406 で未保存変更を確認、取消で条件維持 |
 | アプリ内履歴の前後移動 | cursor と現在ページ。保存後も現在ページを再取得 |
 | 履歴行・対象履歴の選択 | 管理者レビューと利用者評価を分離。未保存変更は確認 |
 | 利用者コメントを反映 | 利用者コメントを管理者レビュー草稿へ明示コピー |
 | 管理者レビュー結果 | 「違う」はコメント必須。必要な field にフォーカス |
-| Select AI feedback に登録する | 明示チェックと SQL の入力を登録 payload に反映 |
-| フィードバック保存 | 管理者レビュー保存・類似検索公開・任意 Select AI 登録を区別。#406 で待機中編集を固定 |
+| フィードバック保存 | 管理者レビュー保存・類似検索公開を区別。#406 で待機中編集を固定 |
 | フィードバックを解除・取消 | 確認後に履歴 ID を削除。解除成功後の baseline と確認状態を更新 |
 | 学習候補で確認 | history_id のリンク、#406 の未保存離脱確認と取消 |
 | 最低スコア・最大候補数の変更 | slider / number と設定値の連動。未保存の既定は最低スコア 0.9・最大候補数 3（#1721） |
@@ -164,7 +153,7 @@ frontend ディレクトリで実行：
 
 ```bash
 npm run test:e2e -- tests/e2e/profile-allowed-objects.spec.ts tests/e2e/profile-archive-reset.spec.ts tests/e2e/nl2sql-ontology-build.spec.ts tests/e2e/nl2sql-ontology-graph.spec.ts tests/e2e/quality-evaluation.spec.ts --workers=2
-npm run test:e2e -- tests/e2e/nl2sql-workflows.spec.ts --workers=2 --grep 'feedback management|Select AI feedback|app feedback|admin good feedback|feedback missing-table|question classifier|learning candidate|feedback refresh|classifier training save|classifier refresh|分類結果|フィードバックの前ページ|フィードバック保存成功'
+npm run test:e2e -- tests/e2e/nl2sql-workflows.spec.ts --workers=2 --grep 'feedback management|app feedback|admin good feedback|feedback missing-table|question classifier|learning candidate|feedback refresh|classifier training save|classifier refresh|分類結果|フィードバックの前ページ|フィードバック保存成功'
 npm run test:logic
 npm run build
 ```
@@ -172,7 +161,7 @@ npm run build
 backend ディレクトリで実行：
 
 ```bash
-UV_CACHE_DIR=/tmp/nl2sql-uv-cache uv run --no-sync pytest tests/test_nl2sql_profile_lifecycle.py tests/test_nl2sql_profile_sync.py tests/test_nl2sql_ontology_build.py tests/test_nl2sql_ontology_access.py tests/test_nl2sql_feedback_classifier_learning.py tests/test_nl2sql_quality_evaluation.py tests/test_nl2sql_operation_profile_access.py -q
+UV_CACHE_DIR=/tmp/nl2sql-uv-cache uv run --no-sync pytest tests/test_nl2sql_profile_lifecycle.py tests/test_nl2sql_ontology_build.py tests/test_nl2sql_ontology_access.py tests/test_nl2sql_feedback_classifier_learning.py tests/test_nl2sql_quality_evaluation.py tests/test_nl2sql_operation_profile_access.py -q
 UV_CACHE_DIR=/tmp/nl2sql-uv-cache uv run --no-sync pytest tests/test_nl2sql_legacy_absorption.py -k 'classifier_training_data' -q
 ```
 
@@ -188,6 +177,6 @@ UV_CACHE_DIR=/tmp/nl2sql-uv-cache uv run --no-sync pytest tests/test_nl2sql_lega
 
 ## 制約
 
-- 実 OCI Enterprise AI、Oracle、Select AI の運用資格情報での新規生成・公開・評価は実行していない。backend は InMemory/store・client fixture を含む回帰テストで検証した。
+- 実 OCI Enterprise AI、Oracle の運用資格情報での新規生成・公開・評価は実行していない。backend は InMemory/store・client fixture を含む回帰テストで検証した。
 - 未保存離脱の共通 hook は内部リンクと beforeunload を保護する。browser back/forward の完全なガードは既存 BrowserRouter の制約として対象外。
 - このレビューは列挙した action と回帰ケースの範囲であり、全入力・全ネットワーク障害の無欠陥を保証するものではない。

@@ -100,20 +100,6 @@ async function expectNoPageHorizontalOverflow(page: Page) {
   expect(hasPageHorizontalScroll).toBe(false);
 }
 
-const selectAiConfig = {
-  profile_name: "NL2SQL_ACCOUNTING_PROFILE",
-  region: "ap-osaka-1",
-  model: "cohere.command-r-plus",
-  embedding_model: "cohere.embed-v4.0",
-  max_tokens: 32000,
-  enforce_object_list: true,
-  comments: true,
-  annotations: false,
-  constraints: false,
-  role: "Oracle SQL アシスタント",
-  additional_instructions: "",
-};
-
 function profile(id: string, name: string, archived = false) {
   return {
     id,
@@ -127,15 +113,11 @@ function profile(id: string, name: string, archived = false) {
     default_row_limit: 100,
     safety_policy: "select_only",
     few_shot_examples: [],
-    select_ai_config: selectAiConfig,
     archived,
   };
 }
 
-async function mockProfileManagement(
-  page: Page,
-  options: { oracleCleanupWarning?: boolean } = {}
-) {
+async function mockProfileManagement(page: Page) {
   let deleteRequests = 0;
   const deleteIfMatchHeaders: string[] = [];
   let profiles = [
@@ -210,13 +192,6 @@ async function mockProfileManagement(
   await page.route("**/api/nl2sql/db-admin/views", (route) =>
     fulfillJson(route, { runtime: "deterministic", items: [], warnings: [] })
   );
-  await page.route(
-    "**/api/nl2sql/select-ai/db-profiles?business_profiles_only=true&include_archived_business_profiles=true",
-    (route) => fulfillJson(route, { runtime: "deterministic", profiles: [], warnings: [] })
-  );
-  await page.route("**/api/nl2sql/select-ai/db-profiles?include_detail=true", (route) =>
-    fulfillJson(route, { runtime: "deterministic", profiles: [], warnings: [] })
-  );
   // 編集画面マウント時の ontology 系 GET を高速 mock(未 mock だと dev proxy の
   // 失敗待ちが発生し、負荷時に flake の原因になる)
   await page.route("**/api/nl2sql/profiles/*/ontology-view", (route) => fulfillJson(route, {}));
@@ -285,22 +260,7 @@ async function mockProfileManagement(
       return;
     }
     profiles = profiles.filter((item) => item.id !== profileId);
-    const oracleCleanup = options.oracleCleanupWarning
-      ? [
-          {
-            engine: "select_ai",
-            executed: false,
-            status: "skipped",
-            cleaned_at: "2026-07-11T00:00:00Z",
-            profile_name: target.select_ai_config.profile_name,
-            team_name: "",
-            warning: "cleanup の実行には NL2SQL_RUNTIME_MODE=oracle が必要です。",
-            asset_names: { profile: target.select_ai_config.profile_name },
-            engine_meta: { runtime: "deterministic" },
-          },
-        ]
-      : [];
-    await fulfillJson(route, { profile: target, oracle_cleanup: oracleCleanup });
+    await fulfillJson(route, { profile: target });
   });
   return {
     deleteRequests: () => deleteRequests,
@@ -655,7 +615,7 @@ test("編集画面からプロファイルを確認付きで削除できる", { 
   await expect(dialog.getByText("プロファイルを削除しますか")).toBeVisible();
   await expect(
     dialog.getByText(
-      "「営業プロファイル」とそのすべてのオントロジー範囲設定、Oracle DBMS_CLOUD_AI Profile、Select AI Agent 関連アセットを完全に削除します。監査履歴は削除されません。"
+      "「営業プロファイル」とそのすべてのオントロジー範囲設定を完全に削除します。監査履歴は削除されません。"
     )
   ).toBeVisible();
   await dialog.getByRole("button", { name: "キャンセル", exact: true }).click();
@@ -692,32 +652,6 @@ test("編集画面からプロファイルを確認付きで削除できる", { 
 
   await page.setViewportSize({ width: 375, height: 900 });
   await expectNoPageHorizontalOverflow(page);
-});
-
-test("プロファイル削除時に Oracle 資産 cleanup の警告を表示する", { tag: "@responsive" }, async ({ page }) => {
-  await mockProfileManagement(page, { oracleCleanupWarning: true });
-  await page.goto("/profiles");
-
-  const grid = page.getByTestId("profile-management-grid");
-  await expect(grid.getByRole("columnheader", { name: "操作", exact: true })).toHaveCount(0);
-  await expect(grid.getByRole("button", { name: /操作:/ })).toHaveCount(0);
-  await expectProfileListNoHorizontalOverflow(page);
-
-  await page.getByRole("row").filter({ hasText: "営業プロファイル" }).locator("td").nth(0).click();
-  await expect(
-    page.getByRole("heading", { name: "プロファイル編集: 営業プロファイル" })
-  ).toBeVisible();
-  await page.getByTestId("profile-editor-actions").getByRole("button", { name: "その他の操作" }).click();
-  await page.getByRole("menuitem", { name: "削除", exact: true }).click();
-  await page
-    .getByRole("alertdialog", { name: "プロファイルを削除しますか" })
-    .getByRole("button", { name: "削除", exact: true })
-    .click();
-
-  await expect(page.getByText("「営業プロファイル」を削除しました。")).toBeVisible();
-  await expect(
-    page.getByText("Oracle 資産の削除結果に警告があります。1 件を確認してください。")
-  ).toBeVisible();
 });
 
 // 各主要導線の最終状態で全テキスト・入力欄の字体継承を確認する。

@@ -45,13 +45,6 @@ async function expectVerticalOrder(locators: Locator[]) {
 
 const capabilities = {
   engines: [
-    { engine: "select_ai", label: "Select AI", available: true, reason: "" },
-    {
-      engine: "select_ai_agent",
-      label: "Select AI Agent",
-      available: true,
-      reason: "",
-    },
     {
       engine: "enterprise_ai_direct",
       label: "Enterprise AI Direct",
@@ -71,18 +64,6 @@ const capabilities = {
 };
 
 const summary = [
-  {
-    engine: "select_ai",
-    total_attempts: 2,
-    generation_successes: 2,
-    generation_success_rate: 1,
-    correct: 1,
-    incorrect: 1,
-    uncertain: 0,
-    not_analyzed: 0,
-    normalized_sql_consistency: 0.5,
-    error_count: 0,
-  },
   {
     engine: "enterprise_ai_direct",
     total_attempts: 2,
@@ -142,7 +123,7 @@ function job(
     profile_id: "default",
     profile_name: overrides.profile_name ?? "標準プロファイル",
     profile_category: overrides.profile_category ?? "SQL生成評価",
-    engines: ["select_ai", "enterprise_ai_direct"],
+    engines: ["enterprise_ai_direct"],
     repeat_count: 2,
     case_count: 1,
     total_attempts: 4,
@@ -151,7 +132,7 @@ function job(
     error_count: terminal ? 1 : 0,
     status,
     current_case_id: status === "running" ? "CASE-001" : "",
-    current_engine: status === "running" ? "select_ai" : null,
+    current_engine: status === "running" ? "enterprise_ai_direct" : null,
     current_repetition: status === "running" ? 2 : 0,
     current_attempt_started_at:
       overrides.current_attempt_started_at ??
@@ -166,7 +147,7 @@ function job(
             {
               case_no: 1,
               case_id: "CASE-001",
-              engine: "select_ai",
+              engine: "enterprise_ai_direct",
               repetition_no: 2,
               started_at: overrides.current_attempt_started_at ?? "2026-07-22T08:00:01Z",
               deadline_at: overrides.current_attempt_deadline_at ?? "2026-07-22T08:10:01Z",
@@ -211,7 +192,7 @@ const results = [
     excel_row: 2,
     question: longEvaluationQuestion,
     expected_sql: "SELECT TOTAL_AMOUNT FROM INVOICES WHERE STATUS = 'UNPAID'",
-    engine: "select_ai",
+    engine: "enterprise_ai_direct",
     repetition_no: 1,
     generated_sql: "SELECT TOTAL_AMOUNT FROM INVOICES WHERE STATUS = 'UNPAID'",
     normalized_sql: "SELECT TOTAL_AMOUNT FROM INVOICES WHERE STATUS = 'UNPAID'",
@@ -327,19 +308,6 @@ async function mockQualityApi(
           default_row_limit: 100,
           safety_policy: "select_only",
           few_shot_examples: [],
-          select_ai_config: {
-            profile_name: "",
-            region: "",
-            model: "",
-            embedding_model: "",
-            max_tokens: 32000,
-            enforce_object_list: true,
-            comments: true,
-            annotations: false,
-            constraints: false,
-            role: "",
-            additional_instructions: "",
-          },
           archived: false,
         },
       ],
@@ -512,7 +480,6 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
   const inputRow = page.getByTestId("quality-evaluation-input-row");
   const profileField = page.getByTestId("quality-evaluation-profile-field");
   const fileField = page.getByTestId("quality-evaluation-file");
-  const engineFieldset = page.getByTestId("quality-evaluation-engine-fieldset");
   const repeatLabel = page.getByTestId("quality-evaluation-repeat-field").locator("label");
   const repeatInput = page.getByLabel("繰り返し回数");
   const estimateSummary = page.getByTestId("quality-evaluation-estimate-summary");
@@ -523,7 +490,6 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
     inputRowBox,
     profileBox,
     fileBox,
-    engineBox,
     repeatLabelBox,
     repeatInputBox,
     estimateBox,
@@ -535,7 +501,6 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
       visibleBox(inputRow),
       visibleBox(profileField),
       visibleBox(fileField),
-      visibleBox(engineFieldset),
       visibleBox(repeatLabel),
       visibleBox(repeatInput),
       visibleBox(estimateSummary),
@@ -544,7 +509,9 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
       visibleBox(actionFooter),
     ]);
   expect(Math.abs(profileBox.y - fileBox.y)).toBeLessThanOrEqual(3);
-  expect(engineBox.y).toBeGreaterThanOrEqual(inputRowBox.y + inputRowBox.height - 1);
+  // SQL の生成の方式は 1 つだけなので、方式を選ぶ欄は出さない。
+  await expect(page.getByTestId("quality-evaluation-engine-fieldset")).toHaveCount(0);
+  expect(repeatLabelBox.y).toBeGreaterThanOrEqual(inputRowBox.y + inputRowBox.height - 1);
   expect(Math.abs(repeatLabelBox.y - estimateLabelBox.y)).toBeLessThanOrEqual(3);
   expect(Math.abs(repeatInputBox.y - estimateValueBox.y)).toBeLessThanOrEqual(3);
   expect(estimateValueBox.height).toBeLessThanOrEqual(repeatInputBox.height + 8);
@@ -572,35 +539,6 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
     page.getByText("標準プロファイル（SQL生成評価）").filter({ visible: true }).first()
   ).toBeVisible();
   await expect(page.getByRole("tab")).toHaveCount(0);
-  const checkboxes = page.getByRole("checkbox");
-  const engineBulkActions = page.getByTestId("quality-evaluation-engine-selection-actions");
-  const engineGrid = page.getByTestId("quality-evaluation-engine-grid");
-  await expect
-    .poll(async () => {
-      const [actionsBox, gridBox] = await Promise.all([
-        engineBulkActions.boundingBox(),
-        engineGrid.boundingBox(),
-      ]);
-      if (!actionsBox || !gridBox) return Number.POSITIVE_INFINITY;
-      return Math.abs(actionsBox.x - gridBox.x);
-    })
-    .toBeLessThanOrEqual(1);
-  await expect(engineBulkActions.getByRole("button", { name: "すべて選択" })).toBeEnabled();
-  await expect(engineBulkActions.getByRole("button", { name: "選択をすべて解除" })).toBeDisabled();
-  await engineBulkActions.getByRole("button", { name: "すべて選択" }).click();
-  await expect(checkboxes.nth(0)).toBeChecked();
-  await expect(checkboxes.nth(1)).toBeEnabled();
-  await expect(checkboxes.nth(1)).toBeChecked();
-  await expect(checkboxes.nth(2)).toBeChecked();
-  await expect(engineBulkActions.getByRole("button", { name: "選択をすべて解除" })).toBeEnabled();
-  await engineBulkActions.getByRole("button", { name: "選択をすべて解除" }).click();
-  await expect(checkboxes.nth(0)).not.toBeChecked();
-  await expect(checkboxes.nth(1)).not.toBeChecked();
-  await expect(checkboxes.nth(2)).not.toBeChecked();
-  await checkboxes.nth(0).focus();
-  await page.keyboard.press("Space");
-  await checkboxes.nth(2).check();
-  await expect(checkboxes.nth(1)).toBeEnabled();
   await page.getByLabel("繰り返し回数").fill("2");
   await dropFiles(page, page.getByTestId("quality-evaluation-file-dropzone"), [
     {
@@ -648,7 +586,6 @@ test("desktop executes two engines twice, restores the job URL and downloads Exc
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
   ).toBe(true);
-  expect(state.submittedBody()).toContain("select_ai");
   expect(state.submittedBody()).toContain("enterprise_ai_direct");
   expect(state.submittedBody()).toContain("repeat_count");
 
@@ -1060,7 +997,6 @@ test("start validation errors stay in the action footer", { tag: "@responsive" }
   await mockQualityApi(page, { startValidationErrors: [validationError] });
   await page.goto("/evaluation");
 
-  await page.getByRole("checkbox").nth(0).check();
   await dropFiles(page, page.getByTestId("quality-evaluation-file-dropzone"), [
     {
       name: "quality-cases.xlsx",
@@ -1087,27 +1023,6 @@ test("start validation errors stay in the action footer", { tag: "@responsive" }
   expect(noHorizontalOverflow).toBe(true);
 });
 
-test("unavailable engines remain disabled when capabilities mark them unavailable", async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "desktop unavailable engine state");
-  await mockQualityApi(page, {
-    engines: capabilities.engines.map((engine) =>
-      engine.engine === "select_ai_agent"
-        ? { ...engine, available: false, reason: "Agent team が未構成です。" }
-        : engine
-    ),
-  });
-  await page.goto("/evaluation");
-
-  const checkboxes = page.getByRole("checkbox");
-  await expect(checkboxes.nth(0)).toBeEnabled();
-  await expect(checkboxes.nth(1)).toBeDisabled();
-  await expect(checkboxes.nth(2)).toBeEnabled();
-  await expect(page.getByText("Agent team が未構成です。")).toBeVisible();
-  await expect(page.getByText("利用不可")).toBeVisible();
-});
-
 test("mobile restores completed results as cards without page overflow", { tag: "@responsive" }, async ({
   page,
 }, testInfo) => {
@@ -1115,23 +1030,9 @@ test("mobile restores completed results as cards without page overflow", { tag: 
   await mockQualityApi(page, { fixedStatus: "completed_with_errors" });
   await page.goto("/evaluation?job=job-001");
 
-  const engineBulkActions = page.getByTestId("quality-evaluation-engine-selection-actions");
-  const engineGrid = page.getByTestId("quality-evaluation-engine-grid");
-  await expect
-    .poll(async () => {
-      const [actionsBox, gridBox] = await Promise.all([
-        engineBulkActions.boundingBox(),
-        engineGrid.boundingBox(),
-      ]);
-      if (!actionsBox || !gridBox) return Number.POSITIVE_INFINITY;
-      return Math.abs(actionsBox.x - gridBox.x);
-    })
-    .toBeLessThanOrEqual(1);
-
   await expectVerticalOrder([
     page.getByTestId("quality-evaluation-profile-field"),
     page.getByTestId("quality-evaluation-file"),
-    page.getByTestId("quality-evaluation-engine-fieldset"),
     page.getByTestId("quality-evaluation-repeat-field"),
     page.getByTestId("quality-evaluation-estimate-summary"),
     page.getByTestId("quality-evaluation-judge-note"),
@@ -1216,7 +1117,6 @@ test("form errors, unavailable engines, Judge readiness and failed jobs are expl
   await page.goto("/evaluation");
   await page.getByRole("button", { name: "評価を開始" }).click();
   await expect(page.getByText(".xlsx ファイルを選択してください。")).toBeVisible();
-  await expect(page.getByText("利用可能な実行エンジンを1つ以上選択してください。")).toBeVisible();
   await expect(page.getByTestId("quality-evaluation-file-input")).toHaveAttribute(
     "accept",
     ".xlsx"
@@ -1259,12 +1159,10 @@ test("evaluation submission locks conditions and preserves them after rejection"
     name: "pending-cases.xlsx", type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     content: "mock xlsx",
   }]);
-  await page.getByTestId("quality-evaluation-engine-fieldset").getByRole("checkbox").first().check();
   const start = page.getByRole("button", { name: "評価を開始", exact: true });
   await start.click();
   await expect(repeat).toBeDisabled();
   await expect(page.getByTestId("quality-evaluation-profile-field").getByRole("combobox")).toBeDisabled();
-  await expect(page.getByTestId("quality-evaluation-engine-fieldset").getByRole("checkbox").first()).toBeDisabled();
   await expect(page.getByTestId("quality-evaluation-file-input")).toBeDisabled();
   await expect(start).toBeDisabled();
   gate.release();
@@ -1307,7 +1205,6 @@ test("業務プロファイルを切り替えても評価条件のフォーム�
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     content: "mock xlsx",
   }]);
-  await page.getByTestId("quality-evaluation-engine-fieldset").getByRole("checkbox").first().check();
   const start = page.getByRole("button", { name: "評価を開始", exact: true });
   await expect(start).toBeEnabled();
 
@@ -1322,7 +1219,6 @@ test("業務プロファイルを切り替えても評価条件のフォーム�
   salesGate.release();
   await expect(start).toBeEnabled();
   await expect(page.getByText("cases.xlsx", { exact: false }).first()).toBeVisible();
-  await expect(page.getByTestId("quality-evaluation-engine-fieldset").getByRole("checkbox").first()).toBeChecked();
 });
 
 test("job の削除・中止の失敗は backend の理由を起点の近くに残す (#995)", async ({ page }, testInfo) => {
@@ -1376,51 +1272,4 @@ test("job の削除・中止の失敗は backend の理由を起点の近くに�
   // 次の操作を始めたので、一覧の削除の失敗は消す。
   await expect(page.getByText("他のユーザーのSQL生成評価 job を操作する権限がありません。")).toHaveCount(0);
   await progress.screenshot({ path: testInfo.outputPath("evaluation-cancel-failure.png") });
-});
-
-test("Select AI Credential が無いと Select AI の評価の開始を止めて事前条件を示し、Enterprise AI だけなら開始できる (#1688)", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  const state = await mockQualityApi(page);
-  const readiness = { exists: false };
-  await page.route("**/api/nl2sql/select-ai/credential-readiness", (route) =>
-    envelope(route, {
-      credential_required: true,
-      credential_name: "NL2SQL_OCI_CRED",
-      credential_exists: readiness.exists,
-    })
-  );
-  await page.goto("/evaluation");
-  await dropFiles(page, page.getByTestId("quality-evaluation-file-dropzone"), [
-    {
-      name: "quality-cases.xlsx",
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      content: "mock xlsx",
-    },
-  ]);
-  const precondition = page.getByTestId("quality-evaluation-credential-precondition");
-  const start = page.getByRole("button", { name: "評価を開始" });
-  // Select AI を選ぶまでは出さない（選んだ方式が Credential を使うときだけ）。
-  await expect(precondition).toHaveCount(0);
-  await page.getByRole("checkbox").nth(0).check();
-  await expect(precondition).toContainText("Select AI Credential が作成されていません");
-  await expect(precondition).toContainText("作成するまで評価を開始できません。");
-  await expect(start).toBeDisabled();
-  await expect(start).toHaveAttribute("aria-describedby", "quality-evaluation-credential-precondition");
-  // 開始の操作の行（区切り線の上）の直前に出す。
-  const noticeBox = await visibleBox(precondition);
-  const footerBox = await visibleBox(page.getByTestId("quality-evaluation-action-footer"));
-  expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(footerBox.y);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
-  ).toBe(true);
-  await precondition.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("evaluation-credential-missing.png") });
-
-  // Enterprise AI だけなら Credential を使わないので開始できる。
-  await page.getByRole("checkbox").nth(0).uncheck();
-  await page.getByRole("checkbox").nth(2).check();
-  await expect(precondition).toHaveCount(0);
-  await expect(start).toBeEnabled();
-  await start.click();
-  await expect.poll(() => state.submittedBody()).toContain("enterprise_ai_direct");
-  expect(state.submittedBody()).not.toContain('name="engines"\r\n\r\nselect_ai\r\n');
 });

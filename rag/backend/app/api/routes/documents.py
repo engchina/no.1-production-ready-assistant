@@ -34,7 +34,7 @@ from rag_parser_core.structured_records import RecordBoundaryError, record_bound
 
 from app.api.errors import DocumentFileMissingError
 from app.clients.document_cleanup_store import DocumentCleanupStore, DocumentCleanupTargets
-from app.clients.object_storage import ObjectStorageClient, describe_upload_storage_error
+from app.clients.file_storage import FileStorageClient
 from app.clients.oci_genai import EMBEDDING_INPUT_MAX_CHARS
 from app.clients.oracle import (
     DocumentDeleteBlockedByRunningIngestionError,
@@ -435,7 +435,7 @@ async def _store_uploaded_document(
     if not data:
         raise HTTPException(status_code=400, detail="空のファイルはアップロードできません。")
 
-    storage = ObjectStorageClient()
+    storage = FileStorageClient()
     oracle = OracleClient()
     content_sha256 = _sha256_hex(data)
     duplicate = await oracle.find_document_by_content_hash(content_sha256)
@@ -461,9 +461,7 @@ async def _store_uploaded_document(
             "upload_storage_put_failed",
             extra={"file_name": file_name, "exception_type": type(exc).__name__},
         )
-        # OCI の bucket が無い・権限が無い・届かないときは、直す場所の分かる文言にする（#2093）。
-        message = describe_upload_storage_error(exc) or UPLOAD_STORAGE_FAILED_MESSAGE
-        raise HTTPException(status_code=503, detail=message) from exc
+        raise HTTPException(status_code=503, detail=UPLOAD_STORAGE_FAILED_MESSAGE) from exc
     try:
         detail = await oracle.create_document(
             file_name=file_name,
@@ -529,7 +527,7 @@ async def _default_recipe_settings(oracle: OracleClient, document_id: str) -> Se
     return settings
 
 
-async def _delete_orphan_upload_object(storage: ObjectStorageClient, object_path: str) -> None:
+async def _delete_orphan_upload_object(storage: FileStorageClient, object_path: str) -> None:
     """文書行を作れなかったアップロードの原本を best-effort で削除する。"""
     try:
         await storage.delete(object_path)
@@ -2225,7 +2223,7 @@ async def _materialize_experiment_candidate(
                     "処理後ファイルが見つかりません。ファイル準備から再処理してください。"
                 )
             try:
-                data = await ObjectStorageClient().get(prepared_artifact.object_storage_path)
+                data = await FileStorageClient().get(prepared_artifact.object_storage_path)
             except (FileNotFoundError, ValueError) as exc:
                 raise IngestionUserError("処理後ファイルを読み込めませんでした。") from exc
             source_profile = _source_profile_for_detail(detail)
@@ -2823,15 +2821,10 @@ async def delete_document(document_id: str) -> ApiResponse[DocumentDeleteResult]
             detail="取込ジョブが実行中のため削除できません。先にキャンセルしてください。",
         )
     artifact_paths = await _document_artifact_paths(oracle, detail)
-    has_oci_reference = any(
-        path.strip().startswith("oci://")
-        for path in (detail.object_storage_path or "", *artifact_paths)
-    )
     targets = DocumentCleanupTargets(
         source_uri=detail.object_storage_path or None,
         artifact_uris=tuple(artifact_paths),
         prefixes=tuple(document_artifact_prefixes(get_settings(), document_id)),
-        include_oci=has_oci_reference,
     )
 
     try:
@@ -2850,7 +2843,7 @@ async def delete_document(document_id: str) -> ApiResponse[DocumentDeleteResult]
     if task is None:
         raise HTTPException(status_code=404, detail="ドキュメントが見つかりません。")
 
-    outcome = await run_document_cleanup(cleanup_store, ObjectStorageClient(), task)
+    outcome = await run_document_cleanup(cleanup_store, FileStorageClient(), task)
     return _document_delete_response(
         document_id=detail.id,
         file_name=detail.file_name,
@@ -2866,7 +2859,7 @@ async def _retry_document_cleanup(
     task = await cleanup_store.find_for_document(document_id)
     if task is None:
         raise HTTPException(status_code=404, detail="ドキュメントが見つかりません。")
-    outcome = await run_document_cleanup(cleanup_store, ObjectStorageClient(), task)
+    outcome = await run_document_cleanup(cleanup_store, FileStorageClient(), task)
     return _document_delete_response(
         document_id=task.document_id,
         file_name=task.file_name,
@@ -3408,7 +3401,7 @@ async def _load_source_bytes(
             await oracle.update_document_status(document_id, FileStatus.ERROR, message)
 
     try:
-        data = await ObjectStorageClient().get(detail.object_storage_path)
+        data = await FileStorageClient().get(detail.object_storage_path)
     except FileNotFoundError as exc:
         await mark_error("原本ファイルが見つかりません。")
         raise HTTPException(status_code=409, detail="原本ファイルが見つかりません。") from exc
@@ -3449,7 +3442,7 @@ async def _load_prepared_source_bytes(
             detail="処理後ファイルが見つかりません。ファイル準備から再処理してください。",
         )
     try:
-        data = await ObjectStorageClient().get(artifact.object_storage_path)
+        data = await FileStorageClient().get(artifact.object_storage_path)
     except FileNotFoundError as exc:
         await oracle.update_document_status(
             document_id,
@@ -5988,7 +5981,7 @@ async def load_document_content(
         not_found_message = "原本ファイルが保存先にありません。文書をアップロードし直してください。"
         bad_path_message = "原本ファイルの参照パスが不正です。"
     try:
-        data = await ObjectStorageClient().get(path)
+        data = await FileStorageClient().get(path)
     except FileNotFoundError as exc:
         raise DocumentFileMissingError(not_found_message) from exc
     except ValueError as exc:

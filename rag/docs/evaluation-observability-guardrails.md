@@ -134,34 +134,22 @@ production（`PLATFORM_AUTH_MODE=authenticated`）では client の `X-Tenant-ID
 
 ## ガードレール
 
-「取込・検索・回答設定 > 安全チェック」で入力と出力の検査を個別に選びます。
-全体の設定であり、検索・回答プロファイルでは上書きしません。
-`RAG_GUARDRAILS_INPUT_ENABLED` と `RAG_GUARDRAILS_OUTPUT_ENABLED` の既定は両方 `false` です。
+OCI Guardrails の安全チェック（「取込・検索・回答設定 > 安全チェック」の画面、`/api/settings/guardrail`、
+`RAG_GUARDRAILS_INPUT_ENABLED` / `RAG_GUARDRAILS_OUTPUT_ENABLED`）は #11 で削除しました。
+`.env` に残った `RAG_GUARDRAILS_*` は読みません。
 
-選択した側だけ、質問または回答のテキストを OCI Generative AI の `ApplyGuardrails` API に送り、
-PII・プロンプト攻撃・不適切な内容を検出します。API は検出結果を返し、アプリが PII の位置を
-マスクし、攻撃・不適切な内容を検出したときは処理・回答の表示を止めます。
-検査を完了できないときも停止します。無効時は OCI を呼ばず、ローカル検査も行いません。
+質問と回答の安全チェックの段（`app/rag/guardrails.py` の `GuardrailPolicy`）は外部の検査を持たない
+通過で、常に許可し、指摘を返しません（工程は「無効のため省略」）。pipeline・チャット・MCP の
+応答の `guardrail_warnings` などの形は互換のため残しています（段を外すのは別の Issue）。
 
 ローカルの機微情報検査・攻撃パターン検査・秘密文字列検査と、根拠との一致数・一致率による
 安全方針は使いません。引用の整合性の確認や評価専用の指標は、別の目的の処理です。
 
-OCI 認証と compartment はシステム設定で設定します。検出した PII の原値は診断へ残さず、
-位置・長さ・種類だけを扱います。現在の実装はテキストを検査し、画像は送りません。
-
-[Oracle 公式: Guardrails for OCI Generative AI](https://docs.oracle.com/en-us/iaas/Content/generative-ai/guardrails.htm)
-
 ### 既存環境の更新
 
-backend の更新前に設定ファイルを安全な場所へバックアップし、更新と合わせて実行します。
+以前の `app.rag.guardrail_settings_migration`（旧単一スイッチの移行）は #11 で削除しました。
 
-```bash
-cd rag/backend
-uv run python -m app.rag.guardrail_settings_migration --env-file .env
-```
-
-再配備でもサービスの起動前に同じ移行を行います。旧単一スイッチの値を入力・出力の両方へ移し、旧 OCI 選択は両方有効、旧 Local 選択は両方無効へ移します。すでに新しいスイッチを明示した場合は
-その値を保持します。旧方針・ローカル検査の環境変数は削除し、実行時に互換読み込みしません。
+旧方針・ローカル検査の環境変数は削除し、実行時に互換読み込みしません。
 保存済みプロファイルの旧 `guardrail_policy` は読み捨て、次に保存すると除外します。
 独立した旧ステージのサービス基盤は残しますが、RAG の安全チェックからは呼びません。
 

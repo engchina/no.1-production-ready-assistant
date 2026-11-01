@@ -36,7 +36,6 @@ from rag_engine.resources.tracing import CallObservation, bind_trace_observer
 
 from app.clients.oci_enterprise_ai import OciEnterpriseAiClient
 from app.clients.oci_genai import OciGenAiClient
-from app.clients.oci_snapshot import oci_call_snapshot
 from app.clients.oracle import OracleClient
 from app.clients.oracle_read_stats import track_db_calls
 from app.config import Settings, get_settings
@@ -294,12 +293,10 @@ def _observe_engine_call(operation: str, model: str) -> Iterator[CallObservation
             capture_enabled = span.call_content_enabled
 
             def request(self, value: object, *, schema: object = None) -> None:
-                span.set_call_input(
-                    lambda: oci_call_snapshot(value), schema=schema, restricted=True
-                )
+                span.set_call_input(lambda: value, schema=schema, restricted=True)
 
             def response(self, value: object) -> None:
-                span.set_call_output(lambda: oci_call_snapshot(value))
+                span.set_call_output(lambda: value)
 
             def usage(self, value: object) -> None:
                 record_genai_usage(span, value)

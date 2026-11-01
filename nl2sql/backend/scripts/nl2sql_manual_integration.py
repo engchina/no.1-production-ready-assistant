@@ -1,11 +1,10 @@
-"""Manual Oracle Select AI / Select AI Agent integration smoke test.
+"""Manual NL2SQL integration smoke test (Oracle runtime + OCI Enterprise AI Direct).
 
 Run from `backend/`:
 
-    uv run python scripts/nl2sql_manual_integration.py --require-oracle --refresh-assets
+    uv run python scripts/nl2sql_manual_integration.py --require-oracle --require-enterprise-ai
 
-The script intentionally prints only non-secret summaries. Asset refresh is opt-in because it
-creates/replaces Select AI / Select AI Agent objects in Oracle.
+The script intentionally prints only non-secret summaries. Steps that mutate Oracle are opt-in.
 """
 
 from __future__ import annotations
@@ -24,12 +23,9 @@ from typing import Any, cast
 from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 
 from app.features.nl2sql.models import (
-    AgentTeamRunRequest,
     AllowedObjects,
     AnnotationApplyItem,
     AnnotationApplyRequest,
-    AssetCleanupData,
-    AssetRefreshData,
     ClassifierPredictRequest,
     ClassifierTrainRequest,
     CommentApplyItem,
@@ -47,7 +43,6 @@ from app.features.nl2sql.models import (
     SampleDataStep,
     SchemaRefreshJobStatus,
     SimilarHistoryRequest,
-    SyntheticDataGenerateRequest,
 )
 from app.features.nl2sql.service import nl2sql_service
 from app.settings import get_settings
@@ -97,17 +92,11 @@ def _status_line(result: StepResult) -> str:
     return f"[{prefix}] {result.name}: {result.message}"
 
 
-def _rename_result(result: StepResult, name: str) -> StepResult:
-    return StepResult(name=name, ok=result.ok, message=result.message)
-
-
 def _diagnostics(
     require_oracle: bool,
     require_enterprise_ai: bool = False,
     require_feedback_embedding: bool = False,
     require_oracle_persistence: bool = False,
-    require_refreshed_assets: bool = False,
-    engines: Iterable[Nl2SqlEngine] | None = None,
 ) -> StepResult:
     settings = get_settings()
     diagnostics = nl2sql_service.diagnostics()
@@ -151,8 +140,7 @@ def _diagnostics(
             check.name
             for check in diagnostics.checks
             if (
-                check.name in {"PLATFORM_OCI_REGION", "PLATFORM_OCI_COMPARTMENT_ID"}
-                or check.name.startswith("OCI_GENAI")
+                check.name.startswith("OCI_GENAI")
                 or check.name == "NL2SQL_FEEDBACK_EMBEDDING_ENABLED"
             )
             and check.status != "ok"
@@ -177,20 +165,6 @@ def _diagnostics(
             ok=False,
             message=f"Oracle persistence is not ready: {detail}",
         )
-    if require_refreshed_assets:
-        readiness_by_area = {item.area: item for item in diagnostics.readiness}
-        required_areas = _required_asset_readiness_areas(engines)
-        missing_assets = [
-            f"{area}:{item.status if (item := readiness_by_area.get(area)) else 'missing'}"
-            for area in required_areas
-            if readiness_by_area.get(area) is None or readiness_by_area[area].status != "ok"
-        ]
-        if missing_assets:
-            return StepResult(
-                name="diagnostics",
-                ok=False,
-                message=f"Select AI assets are not ready: {','.join(missing_assets)}",
-            )
     warning_text = ",".join(warnings) if warnings else "none"
     return StepResult(
         name="diagnostics",
@@ -199,25 +173,11 @@ def _diagnostics(
     )
 
 
-def _required_asset_readiness_areas(
-    engines: Iterable[Nl2SqlEngine] | None,
-) -> list[str]:
-    concrete = list(engines or [Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT])
-    areas: list[str] = []
-    if Nl2SqlEngine.SELECT_AI in concrete:
-        areas.append("select_ai")
-    if Nl2SqlEngine.SELECT_AI_AGENT in concrete:
-        areas.append("select_ai_agent")
-    return areas
-
-
 def _diagnostics_worker(
     require_oracle: bool,
     require_enterprise_ai: bool,
     require_feedback_embedding: bool,
     require_oracle_persistence: bool,
-    require_refreshed_assets: bool,
-    engine_values: list[str],
     queue: Any,
 ) -> None:
     try:
@@ -227,8 +187,6 @@ def _diagnostics_worker(
                 require_enterprise_ai,
                 require_feedback_embedding,
                 require_oracle_persistence,
-                require_refreshed_assets,
-                [Nl2SqlEngine(value) for value in engine_values],
             )
         )
     except Exception as exc:  # pragma: no cover - subprocess safety boundary
@@ -241,8 +199,6 @@ def _diagnostics_with_timeout(
     require_enterprise_ai: bool = False,
     require_feedback_embedding: bool = False,
     require_oracle_persistence: bool = False,
-    require_refreshed_assets: bool = False,
-    engines: Iterable[Nl2SqlEngine] | None = None,
 ) -> StepResult:
     if not require_oracle or timeout_seconds <= 0:
         return _diagnostics(
@@ -250,8 +206,6 @@ def _diagnostics_with_timeout(
             require_enterprise_ai,
             require_feedback_embedding,
             require_oracle_persistence,
-            require_refreshed_assets,
-            engines,
         )
     method = "fork" if "fork" in mp.get_all_start_methods() else "spawn"
     context: Any = mp.get_context(method)
@@ -263,8 +217,6 @@ def _diagnostics_with_timeout(
             require_enterprise_ai,
             require_feedback_embedding,
             require_oracle_persistence,
-            require_refreshed_assets,
-            [engine.value for engine in (engines or [])],
             queue,
         ),
     )
@@ -360,7 +312,7 @@ def _prepare_profile(
     profile = Nl2SqlProfile(
         id=resolved_profile_id,
         name="Manual integration",
-        description="Manual Oracle Select AI / Agent integration profile",
+        description="Manual NL2SQL integration profile",
         allowed_tables=allowed_tables,
         glossary={},
         sql_rules=["SELECT/WITH のみ", "Oracle runtime manual integration"],
@@ -388,67 +340,6 @@ def _prepare_profile(
     )
 
 
-def _refresh_asset(engine: Nl2SqlEngine, profile_id: str | None) -> StepResult:
-    try:
-        if engine == Nl2SqlEngine.SELECT_AI:
-            data = nl2sql_service.refresh_select_ai_profile(profile_id)
-        elif engine == Nl2SqlEngine.SELECT_AI_AGENT:
-            data = nl2sql_service.refresh_select_ai_agent_assets(profile_id)
-        else:
-            return StepResult(
-                name=f"refresh_{engine.value}",
-                ok=True,
-                message="no Oracle asset refresh is required for this engine",
-            )
-    except Exception as exc:
-        return StepResult(name=f"refresh_{engine.value}", ok=False, message=str(exc))
-    return _asset_result(engine, data)
-
-
-def _asset_result(engine: Nl2SqlEngine, data: AssetRefreshData) -> StepResult:
-    asset_names = ", ".join(f"{kind}={name}" for kind, name in sorted(data.asset_names.items()))
-    message = f"status={data.status}; refreshed={data.refreshed}; {asset_names or 'assets=-'}"
-    if data.warning:
-        message = f"{message}; warning={data.warning}"
-    return StepResult(
-        name=f"refresh_{engine.value}",
-        ok=data.refreshed and data.status != "error",
-        message=message,
-    )
-
-
-def _cleanup_assets(
-    *, engines: list[Nl2SqlEngine], profile_id: str | None, confirm: bool
-) -> list[StepResult]:
-    if not confirm:
-        return [
-            StepResult(
-                name="cleanup_assets",
-                ok=True,
-                message="skipped; --confirm-cleanup is required",
-            )
-        ]
-    cleanup_results = nl2sql_service.cleanup_select_ai_assets(
-        profile_id=profile_id,
-        engines=engines,
-        confirmation="ADMIN_EXECUTE",
-        reason="manual-integration-cleanup",
-    )
-    return [_cleanup_result(data) for data in cleanup_results]
-
-
-def _cleanup_result(data: AssetCleanupData) -> StepResult:
-    asset_names = ", ".join(f"{kind}={name}" for kind, name in sorted(data.asset_names.items()))
-    message = f"status={data.status}; executed={data.executed}; {asset_names or 'assets=-'}"
-    if data.warning:
-        message = f"{message}; warning={data.warning}"
-    return StepResult(
-        name=f"cleanup_{data.engine.value}",
-        ok=data.status != "error",
-        message=message,
-    )
-
-
 def _preview(
     *,
     engine: Nl2SqlEngine,
@@ -473,8 +364,6 @@ def _preview(
         return StepResult(name=f"preview_{engine.value}", ok=False, message=str(exc)), None
     runtime = str(data.engine_meta.get("runtime") or "deterministic")
     ok = data.is_safe
-    if require_oracle and engine in {Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT}:
-        ok = ok and runtime == "oracle" and not data.fallback_reason
     if require_enterprise_ai and engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT:
         ok = ok and runtime == "oci_enterprise_ai" and not data.fallback_reason
     message = (
@@ -528,8 +417,6 @@ def _job(
         str(data.result.engine_meta.get("runtime") or "deterministic") if data.result else "-"
     )
     ok = data.status == JobStatus.DONE and data.result is not None and data.result.safety.is_safe
-    if require_oracle and engine in {Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT}:
-        ok = ok and result_runtime == "oracle" and not (data.result and data.result.fallback_reason)
     if require_enterprise_ai and engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT:
         ok = (
             ok
@@ -651,11 +538,8 @@ def _legacy_absorption_checks(
     profile_id: str | None,
     question: str,
     allowed_tables: list[str],
-    db_profile_drop_name: str,
-    execute_db_profile_drop: bool,
     execute_comments: bool,
     execute_annotations: bool,
-    execute_synthetic_data: bool,
     execute_feedback_index: bool,
     require_classifier_oracle_state: bool,
 ) -> list[StepResult]:
@@ -667,18 +551,9 @@ def _legacy_absorption_checks(
             require_oracle_state=require_classifier_oracle_state,
         ),
     ]
-    results.extend(_legacy_db_profile_smoke(execute_drop=False, drop_name=db_profile_drop_name))
-    results.extend(_legacy_agent_smoke(profile_id=profile_id, question=question))
     results.append(_legacy_comments_smoke(execute=execute_comments, allowed_tables=allowed_tables))
     results.append(
         _legacy_annotations_smoke(execute=execute_annotations, allowed_tables=allowed_tables)
-    )
-    results.append(
-        _legacy_synthetic_data_smoke(
-            profile_id=profile_id,
-            allowed_tables=allowed_tables,
-            execute=execute_synthetic_data,
-        )
     )
     results.extend(
         _legacy_feedback_vector_smoke(
@@ -734,97 +609,6 @@ def _legacy_classifier_smoke(*, question: str, require_oracle_state: bool) -> St
             f"version={trained.classifier_version or '-'}"
         ),
     )
-
-
-def _legacy_db_profile_smoke(*, execute_drop: bool, drop_name: str) -> list[StepResult]:
-    try:
-        profiles = nl2sql_service.list_select_ai_db_profiles()
-        list_result = StepResult(
-            name="legacy_db_profile_list",
-            ok=True,
-            message=(
-                f"runtime={profiles.runtime}; profiles={len(profiles.profiles)}; "
-                f"warnings={len(profiles.warnings)}"
-            ),
-        )
-        if not execute_drop:
-            return [list_result]
-        if not profiles.profiles:
-            drop_result = StepResult(
-                name="legacy_db_profile_drop",
-                ok=True,
-                message=f"skipped; execute={execute_drop}; profiles=0",
-            )
-        else:
-            target = drop_name.strip() or profiles.profiles[0].name
-            dropped = nl2sql_service.drop_select_ai_db_profile(
-                target,
-                confirmation=target,
-                reason="manual-integration-profile-drop",
-            )
-            drop_result = StepResult(
-                name="legacy_db_profile_drop",
-                ok=dropped.status != "error",
-                message=(
-                    f"profile={target}; explicit_target={bool(drop_name.strip())}; "
-                    f"execute={execute_drop}; "
-                    f"executed={dropped.executed}; status={dropped.status}; "
-                    f"warning={_one_line(dropped.warning, 180) if dropped.warning else '-'}"
-                ),
-            )
-        return [list_result, drop_result]
-    except Exception as exc:
-        return [StepResult(name="legacy_db_profile_list", ok=False, message=str(exc))]
-
-
-def _legacy_agent_smoke(*, profile_id: str | None, question: str) -> list[StepResult]:
-    results: list[StepResult] = []
-    try:
-        privileges = nl2sql_service.check_select_ai_agent_privileges()
-        results.append(
-            StepResult(
-                name="legacy_agent_privileges",
-                ok=privileges.status != "error",
-                message=(
-                    f"runtime={privileges.runtime}; status={privileges.status}; "
-                    f"checks={len(privileges.checks)}; warnings={len(privileges.warnings)}"
-                ),
-            )
-        )
-    except Exception as exc:
-        results.append(StepResult(name="legacy_agent_privileges", ok=False, message=str(exc)))
-    try:
-        run = nl2sql_service.run_select_ai_agent_team(
-            AgentTeamRunRequest(prompt=question, profile_id=profile_id)
-        )
-        results.append(
-            StepResult(
-                name="legacy_agent_run_team",
-                ok=bool(run.generated_sql or run.warnings),
-                message=(
-                    f"runtime={run.runtime}; team={run.team_name}; "
-                    f"conversation={run.conversation_id or '-'}; "
-                    f"sql={_one_line(run.generated_sql, 120)}; warnings={len(run.warnings)}"
-                ),
-            )
-        )
-    except Exception as exc:
-        results.append(StepResult(name="legacy_agent_run_team", ok=False, message=str(exc)))
-    try:
-        conversations = nl2sql_service.list_select_ai_agent_conversations(limit=3)
-        results.append(
-            StepResult(
-                name="legacy_agent_conversations",
-                ok=True,
-                message=(
-                    f"runtime={conversations.runtime}; items={len(conversations.items)}; "
-                    f"warnings={len(conversations.warnings)}"
-                ),
-            )
-        )
-    except Exception as exc:
-        results.append(StepResult(name="legacy_agent_conversations", ok=False, message=str(exc)))
-    return results
 
 
 def _legacy_comments_smoke(*, execute: bool, allowed_tables: list[str]) -> StepResult:
@@ -924,42 +708,6 @@ def _legacy_annotations_smoke(*, execute: bool, allowed_tables: list[str]) -> St
     )
 
 
-def _legacy_synthetic_data_smoke(
-    *, profile_id: str | None, allowed_tables: list[str], execute: bool
-) -> StepResult:
-    if not execute:
-        return StepResult(
-            name="legacy_synthetic_data",
-            ok=True,
-            message="skipped; explicit execute flag required",
-        )
-    try:
-        catalog = nl2sql_service.get_catalog()
-        table_name = allowed_tables[0] if allowed_tables else catalog.tables[0].table_name
-        profile = nl2sql_service.get_profile(profile_id)
-        profile_name = nl2sql_service._select_ai_profile_name(profile)
-        operation = nl2sql_service.generate_synthetic_data(
-            SyntheticDataGenerateRequest(
-                table_name=table_name,
-                row_count=1,
-                profile_name=profile_name,
-                confirmation=table_name,
-                reason="manual-integration-synthetic-data",
-            )
-        )
-    except Exception as exc:
-        return StepResult(name="legacy_synthetic_data", ok=False, message=str(exc))
-    return StepResult(
-        name="legacy_synthetic_data",
-        ok=operation.status != "error" and operation.executed,
-        message=(
-            f"table={operation.table_name}; execute={execute}; "
-            f"executed={operation.executed}; runtime={operation.runtime}; "
-            f"status={operation.status}; warnings={len(operation.warnings)}"
-        ),
-    )
-
-
 def _legacy_feedback_vector_smoke(
     *, question: str, profile_id: str | None, execute_index: bool
 ) -> list[StepResult]:
@@ -1002,223 +750,6 @@ def _legacy_feedback_vector_smoke(
     return results
 
 
-def _debug_raw_preview(*, profile_id: str | None, question: str) -> list[StepResult]:
-    """Print truncated raw Oracle package responses without exposing env values."""
-    results: list[StepResult] = []
-    try:
-        profile = nl2sql_service.get_profile(profile_id)
-        profile_name = nl2sql_service._select_ai_profile_name(profile)
-        asset_names = nl2sql_service._select_ai_agent_asset_names(profile)
-        asset_meta = nl2sql_service._asset_meta.get(Nl2SqlEngine.SELECT_AI_AGENT)
-        if asset_meta and asset_meta.profile_name == profile_name and asset_meta.team_name:
-            asset_names["team"] = asset_meta.team_name
-        adapter = nl2sql_service._oracle_adapter
-    except Exception as exc:
-        return [StepResult(name="debug_raw_preview_setup", ok=False, message=str(exc))]
-
-    try:
-        raw = _select_ai_generate_raw(
-            adapter=adapter,
-            profile_name=profile_name,
-            question=question,
-        )
-        results.append(
-            StepResult(
-                name="debug_select_ai_generate_raw",
-                ok=True,
-                message=f"profile={profile_name}; {_raw_summary(raw)}",
-            )
-        )
-    except Exception as exc:
-        results.append(
-            StepResult(
-                name="debug_select_ai_generate_raw",
-                ok=True,
-                message=f"profile={profile_name}; warning={_one_line(str(exc), 600)}",
-            )
-        )
-
-    try:
-        raw, conversation_id, signature = _agent_run_team_raw(
-            adapter=adapter,
-            team_name=asset_names["team"],
-            question=question,
-        )
-        results.append(
-            StepResult(
-                name="debug_select_ai_agent_run_team_raw",
-                ok=True,
-                message=(
-                    f"team={asset_names['team']}; conversation_id={conversation_id or '-'}; "
-                    f"signature={signature}; {_raw_summary(raw)}"
-                ),
-            )
-        )
-    except Exception as exc:
-        results.append(
-            StepResult(
-                name="debug_select_ai_agent_run_team_raw",
-                ok=True,
-                message=f"team={asset_names['team']}; warning={_one_line(str(exc), 600)}",
-            )
-        )
-
-    try:
-        raw = _agent_run_tool_raw(
-            adapter=adapter,
-            tool_name=asset_names["tool"],
-            question=question,
-        )
-        results.append(
-            StepResult(
-                name="debug_select_ai_agent_run_tool_raw",
-                ok=True,
-                message=f"tool={asset_names['tool']}; {_raw_summary(raw)}",
-            )
-        )
-    except Exception as exc:
-        results.append(
-            StepResult(
-                name="debug_select_ai_agent_run_tool_raw",
-                ok=True,
-                message=f"tool={asset_names['tool']}; warning={_one_line(str(exc), 600)}",
-            )
-        )
-
-    return results
-
-
-def _select_ai_generate_raw(*, adapter: Any, profile_name: str, question: str) -> str:
-    with adapter.connection() as conn, conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT DBMS_CLOUD_AI.GENERATE(
-                prompt => :prompt,
-                profile_name => :profile_name,
-                action => :action
-            )
-            FROM DUAL
-            """,
-            {"prompt": question, "profile_name": profile_name, "action": "showsql"},
-        )
-        row = cursor.fetchone()
-        return _db_text(row[0] if row else "")
-
-
-def _agent_run_team_raw(*, adapter: Any, team_name: str, question: str) -> tuple[str, str, str]:
-    conversation_id = ""
-    try:
-        conversation_id = adapter.create_agent_conversation()
-    except Exception:
-        conversation_id = ""
-    params = json.dumps(
-        {"conversation_id": conversation_id} if conversation_id else {},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    candidates = [
-        (
-            "named_conversation_params",
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(
-                team_name => :team_name,
-                user_prompt => :user_prompt,
-                conversation_id => :conversation_id,
-                params => :params
-            )
-            FROM DUAL
-            """,
-            {
-                "team_name": team_name,
-                "user_prompt": question,
-                "conversation_id": conversation_id,
-                "params": params,
-            },
-        ),
-        (
-            "named_params",
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(
-                team_name => :team_name,
-                user_prompt => :user_prompt,
-                params => :params
-            )
-            FROM DUAL
-            """,
-            {"team_name": team_name, "user_prompt": question, "params": params},
-        ),
-        (
-            "positional_params",
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(:team_name, :user_prompt, :params)
-            FROM DUAL
-            """,
-            {"team_name": team_name, "user_prompt": question, "params": params},
-        ),
-        (
-            "positional_conversation_params",
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(
-                :team_name,
-                :user_prompt,
-                :conversation_id,
-                :params
-            )
-            FROM DUAL
-            """,
-            {
-                "team_name": team_name,
-                "user_prompt": question,
-                "conversation_id": conversation_id,
-                "params": params,
-            },
-        ),
-        (
-            "positional_prompt",
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TEAM(:team_name, :user_prompt)
-            FROM DUAL
-            """,
-            {"team_name": team_name, "user_prompt": question},
-        ),
-    ]
-    errors: list[str] = []
-    with adapter.connection() as conn, conn.cursor() as cursor:
-        for signature, sql, bindings in candidates:
-            try:
-                cursor.execute(sql, bindings)
-                row = cursor.fetchone()
-                return _db_text(row[0] if row else ""), conversation_id, signature
-            except Exception as exc:
-                message = str(exc)
-                if adapter._looks_like_signature_error(message):
-                    errors.append(f"{signature}: {message}")
-                    continue
-                raise
-    raise RuntimeError("; ".join(errors) if errors else "RUN_TEAM did not return a row")
-
-
-def _agent_run_tool_raw(*, adapter: Any, tool_name: str, question: str) -> str:
-    payload = json.dumps(
-        {"TOOL_NAME": tool_name, "QUERY": question, "ACTION": "SHOWSQL"},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    with adapter.connection() as conn, conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT DBMS_CLOUD_AI_AGENT.RUN_TOOL(
-                tool_name => :tool_name,
-                input => :input
-            )
-            FROM DUAL
-            """,
-            {"tool_name": tool_name, "input": payload},
-        )
-        row = cursor.fetchone()
-        return _db_text(row[0] if row else "")
-
-
 def _wait_for_job(job_id: str, timeout_seconds: float) -> JobData | None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -1238,17 +769,6 @@ def _iso_z(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
-def _db_text(value: Any) -> str:
-    read = getattr(value, "read", None)
-    if callable(read):
-        return str(read())
-    return "" if value is None else str(value)
-
-
-def _raw_summary(value: str, max_len: int = 1200) -> str:
-    return f"len={len(value)}; raw={_one_line(value, max_len)!r}"
-
-
 def _readiness_summary(items: object) -> str:
     if not isinstance(items, list) or not items:
         return "-"
@@ -1266,9 +786,6 @@ def _engine_meta_summary(meta: dict[str, object]) -> str:
         "provider",
         "mode",
         "model",
-        "select_ai_profile",
-        "team_name",
-        "conversation_id",
     ]
     parts = [f"{key}={_one_line(str(meta[key]), 80)}" for key in keys if meta.get(key)]
     return ",".join(parts) if parts else "-"
@@ -1356,15 +873,15 @@ def _write_json_report(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Manual NL2SQL Select AI / Select AI Agent integration smoke test.",
+        description="Manual NL2SQL integration smoke test (OCI Enterprise AI Direct).",
     )
     parser.add_argument("--profile-id", default=None, help="NL2SQL profile id. Default: default")
     parser.add_argument("--question", default=DEFAULT_QUESTION, help="Natural language question.")
     parser.add_argument(
         "--engines",
         type=_parse_engines,
-        default=_parse_engines("select_ai,select_ai_agent"),
-        help="Comma-separated concrete engines. Default: select_ai,select_ai_agent",
+        default=_parse_engines("enterprise_ai_direct"),
+        help="Comma-separated concrete engines. Default: enterprise_ai_direct",
     )
     parser.add_argument(
         "--allowed-table",
@@ -1387,24 +904,6 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--refresh-assets",
-        action="store_true",
-        help="Create/replace Select AI profile and Select AI Agent assets. Mutates Oracle.",
-    )
-    parser.add_argument(
-        "--cleanup-assets",
-        action="store_true",
-        help=(
-            "Drop Select AI / Agent assets. Requires --confirm-cleanup and exits "
-            "before query preview."
-        ),
-    )
-    parser.add_argument(
-        "--confirm-cleanup",
-        action="store_true",
-        help="Actually drop assets listed by --cleanup-assets. Mutates Oracle.",
-    )
-    parser.add_argument(
         "--execute",
         action="store_true",
         help="Run async NL2SQL jobs and execute generated SELECT SQL. Mutates history.",
@@ -1419,25 +918,8 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Run no.1-sql-assist legacy absorption smoke checks: classifier, "
-            "Select AI profile list/drop, Agent ops, comments, annotations, "
-            "synthetic DB data, and feedback vector search. Destructive DB "
+            "comments, annotations, and feedback vector search. Destructive DB "
             "steps are skipped unless their --execute-* flag is passed."
-        ),
-    )
-    parser.add_argument(
-        "--execute-db-profile-drop",
-        action="store_true",
-        help=(
-            "Actually drop the DB profile named by --db-profile-drop-name during "
-            "--check-legacy-absorption. Mutates Oracle."
-        ),
-    )
-    parser.add_argument(
-        "--db-profile-drop-name",
-        default="",
-        help=(
-            "Exact Select AI DB profile name used by --check-legacy-absorption. "
-            "Required with --execute-db-profile-drop."
         ),
     )
     parser.add_argument(
@@ -1457,28 +939,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--execute-synthetic-data",
-        action="store_true",
-        help=(
-            "Actually call DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA during "
-            "--check-legacy-absorption. Mutates Oracle data."
-        ),
-    )
-    parser.add_argument(
         "--full-smoke",
         action="store_true",
-        help=(
-            "Run asset refresh, post-refresh diagnostics, previews, execute jobs, "
-            "supporting checks in one command."
-        ),
+        help=("Run previews, execute jobs, and supporting checks in one command."),
     )
     parser.add_argument(
         "--release-gate",
         action="store_true",
         help=(
-            "Production gate alias for --full-smoke plus --require-oracle "
-            "and --require-oracle-persistence. Requires ready Select AI / Agent "
-            "assets after refresh."
+            "Production gate alias for --full-smoke plus --require-oracle, "
+            "--require-oracle-persistence, and --require-enterprise-ai."
         ),
     )
     parser.add_argument(
@@ -1505,9 +975,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-oracle",
         action="store_true",
-        help=(
-            "Fail if runtime is not Oracle or if an Oracle engine falls back to deterministic mode."
-        ),
+        help=("Fail if runtime is not Oracle."),
     )
     parser.add_argument(
         "--require-enterprise-ai",
@@ -1538,14 +1006,6 @@ def _build_parser() -> argparse.ArgumentParser:
             "classifier artifact state store is Oracle-backed."
         ),
     )
-    parser.add_argument(
-        "--require-refreshed-assets",
-        action="store_true",
-        help=(
-            "Fail if selected Select AI / Select AI Agent assets are not marked ready. "
-            "Use after --refresh-assets to verify Oracle-persisted asset metadata."
-        ),
-    )
     parser.add_argument("--timeout", type=float, default=20.0, help="Job polling timeout seconds.")
     parser.add_argument(
         "--diagnostics-timeout",
@@ -1558,15 +1018,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Run only the initial diagnostics and exit. Useful for config checklists "
-            "and CI artifacts; does not refresh assets, preview SQL, or execute jobs."
-        ),
-    )
-    parser.add_argument(
-        "--debug-raw-preview",
-        action="store_true",
-        help=(
-            "Print truncated raw DBMS_CLOUD_AI / DBMS_CLOUD_AI_AGENT preview responses. "
-            "Does not print env values."
+            "and CI artifacts; does not preview SQL or execute jobs."
         ),
     )
     return parser
@@ -1576,33 +1028,17 @@ def main(argv: list[str] | None = None) -> int:
     started_at = datetime.now(UTC)
     parser = _build_parser()
     args = parser.parse_args(argv)
-    if args.confirm_cleanup and not args.cleanup_assets:
-        parser.error("--confirm-cleanup requires --cleanup-assets")
-    if args.cleanup_assets and not args.confirm_cleanup:
-        parser.error("--cleanup-assets requires --confirm-cleanup")
-    if args.execute_db_profile_drop and not args.check_legacy_absorption:
-        parser.error("--execute-db-profile-drop requires --check-legacy-absorption")
-    if args.db_profile_drop_name and not args.check_legacy_absorption:
-        parser.error("--db-profile-drop-name requires --check-legacy-absorption")
-    if args.execute_db_profile_drop and not args.db_profile_drop_name.strip():
-        parser.error("--execute-db-profile-drop requires --db-profile-drop-name")
     release_gate = args.release_gate
-    refresh_assets = args.refresh_assets or args.full_smoke or release_gate
     execute_jobs = args.execute or args.full_smoke or release_gate
     check_supporting = args.check_supporting_features or args.full_smoke or release_gate
     check_legacy_absorption = args.check_legacy_absorption
     require_oracle = args.require_oracle or release_gate
     require_oracle_persistence = args.require_oracle_persistence or release_gate
-    require_refreshed_assets = args.require_refreshed_assets or args.full_smoke or release_gate
+    require_enterprise_ai = args.require_enterprise_ai or release_gate
     allowed = AllowedObjects(table_names=_parse_tables(args.allowed_table), columns={})
-    execute_table_mutation = (
-        args.execute_comments or args.execute_annotations or args.execute_synthetic_data
-    )
+    execute_table_mutation = args.execute_comments or args.execute_annotations
     if execute_table_mutation and not args.check_legacy_absorption:
-        parser.error(
-            "--execute-comments/--execute-annotations/--execute-synthetic-data "
-            "require --check-legacy-absorption"
-        )
+        parser.error("--execute-comments/--execute-annotations require --check-legacy-absorption")
     if execute_table_mutation and not allowed.table_names:
         parser.error("table mutation smoke requires --allowed-table NL2SQL_<DISPOSABLE_TABLE>")
     unsafe_tables = [table for table in allowed.table_names if not _is_disposable_table_name(table)]
@@ -1614,11 +1050,9 @@ def main(argv: list[str] | None = None) -> int:
     diagnostics_result = _diagnostics_with_timeout(
         require_oracle,
         args.diagnostics_timeout,
-        args.require_enterprise_ai,
+        require_enterprise_ai,
         args.require_feedback_embedding,
         require_oracle_persistence,
-        require_refreshed_assets and not refresh_assets,
-        args.engines,
     )
     results: list[StepResult] = [diagnostics_result]
     if args.diagnostics_only:
@@ -1633,10 +1067,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if (
         require_oracle
-        or args.require_enterprise_ai
+        or require_enterprise_ai
         or args.require_feedback_embedding
         or require_oracle_persistence
-        or (require_refreshed_assets and not refresh_assets)
     ) and not diagnostics_result.ok:
         return _print_results(
             results,
@@ -1660,42 +1093,6 @@ def main(argv: list[str] | None = None) -> int:
     if profile_result:
         results.append(profile_result)
 
-    if args.cleanup_assets:
-        results.extend(
-            _cleanup_assets(
-                engines=args.engines,
-                profile_id=profile_id,
-                confirm=args.confirm_cleanup,
-            )
-        )
-        return _print_results(
-            results,
-            json_report_path=args.json_report,
-            release_gate=release_gate,
-            engines=args.engines,
-            profile_id=profile_id,
-            allowed_tables=allowed.table_names,
-            started_at=started_at,
-        )
-
-    if refresh_assets:
-        for engine in args.engines:
-            results.append(_refresh_asset(engine, profile_id))
-        results.append(
-            _rename_result(
-                _diagnostics_with_timeout(
-                    require_oracle,
-                    args.diagnostics_timeout,
-                    args.require_enterprise_ai,
-                    args.require_feedback_embedding,
-                    require_oracle_persistence,
-                    require_refreshed_assets,
-                    args.engines,
-                ),
-                "diagnostics_after_refresh",
-            )
-        )
-
     if args.seed_demo_learning:
         results.append(_seed_demo_learning())
 
@@ -1708,11 +1105,8 @@ def main(argv: list[str] | None = None) -> int:
                 profile_id=profile_id,
                 question=args.question,
                 allowed_tables=allowed.table_names,
-                db_profile_drop_name=args.db_profile_drop_name,
-                execute_db_profile_drop=args.execute_db_profile_drop,
                 execute_comments=args.execute_comments,
                 execute_annotations=args.execute_annotations,
-                execute_synthetic_data=args.execute_synthetic_data,
                 execute_feedback_index=args.execute_feedback_index,
                 require_classifier_oracle_state=args.require_classifier_oracle_state,
             )
@@ -1720,9 +1114,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.execute_feedback_index:
         results.append(_feedback_index_smoke(include_bad=True))
-
-    if args.debug_raw_preview:
-        results.extend(_debug_raw_preview(profile_id=profile_id, question=args.question))
 
     for engine in args.engines:
         result, _preview_data = _preview(
@@ -1732,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
             allowed=allowed,
             row_limit=args.row_limit,
             require_oracle=require_oracle,
-            require_enterprise_ai=args.require_enterprise_ai,
+            require_enterprise_ai=require_enterprise_ai,
         )
         results.append(result)
 
@@ -1747,20 +1138,9 @@ def main(argv: list[str] | None = None) -> int:
                     row_limit=args.row_limit,
                     timeout_seconds=args.timeout,
                     require_oracle=require_oracle,
-                    require_enterprise_ai=args.require_enterprise_ai,
+                    require_enterprise_ai=require_enterprise_ai,
                 )
             )
-
-    if args.execute_db_profile_drop:
-        drop_results = _legacy_db_profile_smoke(
-            execute_drop=True,
-            drop_name=args.db_profile_drop_name,
-        )
-        final_drop_results = drop_results[1:] or drop_results
-        results.extend(
-            _rename_result(result, "legacy_db_profile_drop_execute")
-            for result in final_drop_results
-        )
 
     return _print_results(
         results,

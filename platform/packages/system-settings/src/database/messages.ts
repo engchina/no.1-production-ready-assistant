@@ -85,16 +85,6 @@ export const DATABASE_MESSAGES = {
   "settings.database.validation.serviceDsnRequired": "サービス名 / DSN を入力してください。",
   "settings.database.validation.serviceDsnSelectRequired": "サービス名 / DSN を選択してください。",
   "settings.database.validation.userRequired": "データベースユーザーを入力してください。",
-  "settings.database.wallet.autoDownload.error":
-    "OCI から Wallet を取得できませんでした。OCI 認証、ADB OCID、IAM 権限を確認して再試行するか、Wallet ZIP を手動アップロードしてください。",
-  "settings.database.wallet.autoDownload.missingOcid":
-    "ADB OCID が未設定のため自動取得は行いません。platform/.env に ADB OCID を設定するか、下の領域から Wallet ZIP を手動アップロードしてください。",
-  "settings.database.wallet.autoDownload.pending":
-    "OCI から Wallet を取得し、サーバーへ安全に設定しています…",
-  "settings.database.wallet.autoDownload.retry": "OCI から再取得",
-  "settings.database.wallet.autoDownload.retryAria": "OCI から Wallet を再取得",
-  "settings.database.wallet.autoDownload.success":
-    "Oracle Wallet を OCI から取得し、サーバーへ設定しました。",
   "settings.database.wallet.help":
     "Oracle Autonomous Database の Wallet ZIP をアップロードしてください。",
   "settings.database.wallet.location": "Wallet保存先",

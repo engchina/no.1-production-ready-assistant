@@ -302,13 +302,8 @@ def oracle_db(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     """mutable runtime settings をテスト既定値へ戻す。"""
-    settings.upload_storage_backend = "local"
-    settings.object_storage_namespace = ""
-    settings.object_storage_bucket = ""
     settings.oracle_client_lib_dir = str(tmp_path / "instantclient_23_26")
     settings.oracle_wallet_dir = ""
-    settings.oracle_adb_ocid = ""
-    settings.oracle_adb_region = ""
     settings.local_storage_dir = str(tmp_path / "storage")
     settings.max_upload_bytes = 200 * 1024 * 1024
     settings.rate_limit_enabled = True
@@ -384,34 +379,6 @@ def _fresh_dropped_llm_parameters() -> Iterator[None]:
     reset_dropped_parameters()
     yield
     reset_dropped_parameters()
-
-
-@pytest.fixture(autouse=True)
-def _stub_upload_storage_object_storage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """アップロード保存先の保存の前の確認（#2101）で、実の OCI を呼ばない（既定は成功）。
-
-    失敗を確かめるテストは `default_object_storage_client` をさらに差し替える。
-    """
-    from pr_system_settings import upload_storage_check
-
-    class _ObjectStorageStub:
-        def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def put_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def get_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def delete_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _ObjectStorageStub(),
-    )
 
 
 @pytest.fixture(autouse=True)

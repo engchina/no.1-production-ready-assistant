@@ -1,5 +1,6 @@
 """staging smoke CLI の境界テスト。"""
 
+import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,8 +19,8 @@ async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """smoke 検索は新規 document を一意 marker と document filter で確認する。"""
-    FakeObjectStorageClient.put_body = b""
-    FakeObjectStorageClient.deleted_objects = []
+    FakeFileStorageClient.put_body = b""
+    FakeFileStorageClient.deleted_objects = []
     FakeOracleClient.deleted_documents = []
     FakeRagPipeline.last_request = None
     FakeRagPipeline.answer_template = None
@@ -29,7 +30,7 @@ async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
         nonlocal closed
         closed = True
 
-    monkeypatch.setattr(staging_smoke, "ObjectStorageClient", FakeObjectStorageClient)
+    monkeypatch.setattr(staging_smoke, "FileStorageClient", FakeFileStorageClient)
     monkeypatch.setattr(staging_smoke, "OracleClient", FakeOracleClient)
     monkeypatch.setattr(staging_smoke, "IngestionPipeline", FakeIngestionPipeline)
     monkeypatch.setattr(staging_smoke, "RagPipeline", FakeRagPipeline)
@@ -41,11 +42,11 @@ async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
     assert result.document_id == "doc-smoke"
     assert result.marker.startswith("SMOKE-")
     assert result.marker in result.query
-    assert result.marker.encode() in FakeObjectStorageClient.put_body
+    assert result.marker.encode() in FakeFileStorageClient.put_body
     assert result.answer_contains_marker is True
     assert result.cleanup == {"document": "skipped", "object": "skipped"}
     assert closed is True
-    assert FakeObjectStorageClient.deleted_objects == []
+    assert FakeFileStorageClient.deleted_objects == []
     assert FakeOracleClient.deleted_documents == []
 
     assert FakeRagPipeline.last_request is not None
@@ -57,12 +58,12 @@ async def test_staging_smoke_cleanup_deletes_created_resources(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """cleanup 指定時は成功後に Oracle document/chunk と Object Storage object を消す。"""
-    FakeObjectStorageClient.put_body = b""
-    FakeObjectStorageClient.deleted_objects = []
+    FakeFileStorageClient.put_body = b""
+    FakeFileStorageClient.deleted_objects = []
     FakeOracleClient.deleted_documents = []
     FakeRagPipeline.answer_template = None
 
-    monkeypatch.setattr(staging_smoke, "ObjectStorageClient", FakeObjectStorageClient)
+    monkeypatch.setattr(staging_smoke, "FileStorageClient", FakeFileStorageClient)
     monkeypatch.setattr(staging_smoke, "OracleClient", FakeOracleClient)
     monkeypatch.setattr(staging_smoke, "IngestionPipeline", FakeIngestionPipeline)
     monkeypatch.setattr(staging_smoke, "RagPipeline", FakeRagPipeline)
@@ -75,8 +76,8 @@ async def test_staging_smoke_cleanup_deletes_created_resources(
 
     assert result.cleanup == {"document": "deleted", "object": "deleted"}
     assert FakeOracleClient.deleted_documents == ["doc-smoke"]
-    assert len(FakeObjectStorageClient.deleted_objects) == 1
-    assert FakeObjectStorageClient.deleted_objects[0].startswith(
+    assert len(FakeFileStorageClient.deleted_objects) == 1
+    assert FakeFileStorageClient.deleted_objects[0].startswith(
         "oci://namespace/bucket/staging-smoke/"
     )
 
@@ -85,12 +86,12 @@ async def test_staging_smoke_requires_answer_marker_for_default_query(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """既定 query では Enterprise AI LLM が marker を回答へ戻すことも確認する。"""
-    FakeObjectStorageClient.put_body = b""
-    FakeObjectStorageClient.deleted_objects = []
+    FakeFileStorageClient.put_body = b""
+    FakeFileStorageClient.deleted_objects = []
     FakeOracleClient.deleted_documents = []
     FakeRagPipeline.answer_template = "smoke ok without marker"
 
-    monkeypatch.setattr(staging_smoke, "ObjectStorageClient", FakeObjectStorageClient)
+    monkeypatch.setattr(staging_smoke, "FileStorageClient", FakeFileStorageClient)
     monkeypatch.setattr(staging_smoke, "OracleClient", FakeOracleClient)
     monkeypatch.setattr(staging_smoke, "IngestionPipeline", FakeIngestionPipeline)
     monkeypatch.setattr(staging_smoke, "RagPipeline", FakeRagPipeline)
@@ -111,12 +112,12 @@ async def test_staging_smoke_cleanup_runs_after_marker_failure(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """本実行で失敗しても cleanup 指定時は作成済み resource を best-effort で消す。"""
-    FakeObjectStorageClient.put_body = b""
-    FakeObjectStorageClient.deleted_objects = []
+    FakeFileStorageClient.put_body = b""
+    FakeFileStorageClient.deleted_objects = []
     FakeOracleClient.deleted_documents = []
     FakeRagPipeline.answer_template = "marker を返さない回答"
 
-    monkeypatch.setattr(staging_smoke, "ObjectStorageClient", FakeObjectStorageClient)
+    monkeypatch.setattr(staging_smoke, "FileStorageClient", FakeFileStorageClient)
     monkeypatch.setattr(staging_smoke, "OracleClient", FakeOracleClient)
     monkeypatch.setattr(staging_smoke, "IngestionPipeline", FakeIngestionPipeline)
     monkeypatch.setattr(staging_smoke, "RagPipeline", FakeRagPipeline)
@@ -137,7 +138,7 @@ async def test_staging_smoke_cleanup_runs_after_marker_failure(
         FakeRagPipeline.answer_template = None
 
     assert FakeOracleClient.deleted_documents == ["doc-smoke"]
-    assert len(FakeObjectStorageClient.deleted_objects) == 1
+    assert len(FakeFileStorageClient.deleted_objects) == 1
 
 
 def test_format_smoke_query_keeps_custom_query_without_marker() -> None:
@@ -145,11 +146,10 @@ def test_format_smoke_query_keeps_custom_query_without_marker() -> None:
     assert staging_smoke._format_smoke_query("固定クエリ", "SMOKE-1") == "固定クエリ"
 
 
-def test_staging_smoke_preflight_reports_missing_oci_config_without_secrets() -> None:
+def test_staging_smoke_preflight_reports_missing_config_without_secrets(tmp_path: Path) -> None:
     """preflight は未設定グループだけを返し、secret 値は出さない。"""
     result = staging_smoke.staging_smoke_preflight(
         settings=Settings(
-            oci_compartment_id="",
             oci_enterprise_ai_endpoint="",
             oci_enterprise_ai_project_ocid="",
             oci_enterprise_ai_api_key="",
@@ -157,38 +157,30 @@ def test_staging_smoke_preflight_reports_missing_oci_config_without_secrets() ->
             oci_enterprise_ai_default_text_model="",
             oracle_user="",
             oracle_dsn="",
-            object_storage_namespace="",
-            object_storage_bucket="",
-            upload_storage_backend="oci",
+            local_storage_dir=str(tmp_path / "storage"),
             oracle_password="super-secret-password",
         )
     )
 
     assert result.ok is False
     assert result.checks == {
-        "oci_common": "missing",
         "enterprise_ai": "missing",
         "genai": "ok",
         "oracle": "missing",
-        "object_storage": "missing",
+        "local_storage": "ok",
     }
     assert "super-secret-password" not in str(asdict(result))
 
 
-def test_staging_smoke_preflight_requires_oci_object_storage_for_real_smoke(
-    tmp_path: Path,
-) -> None:
-    """実 staging smoke は AI/Oracle だけでなく OCI Object Storage も必須にする。"""
+def test_staging_smoke_preflight_accepts_local_storage(tmp_path: Path) -> None:
+    """保存先はローカルだけ（OCI Object Storage は #11 で削除）。ローカルで smoke を通す。"""
     result = staging_smoke.staging_smoke_preflight(
-        settings=_complete_oci_settings(
-            upload_storage_backend="local",
-            local_storage_dir=str(tmp_path / "storage"),
-        )
+        settings=_complete_oci_settings(local_storage_dir=str(tmp_path / "storage"))
     )
 
-    assert result.ok is False
+    assert result.ok is True
     assert result.checks["local_storage"] == "ok"
-    assert result.checks["smoke_object_storage_backend"] == "invalid"
+    assert "smoke_object_storage_backend" not in result.checks
 
 
 async def test_staging_smoke_stops_before_external_clients_when_preflight_fails(
@@ -199,7 +191,7 @@ async def test_staging_smoke_stops_before_external_clients_when_preflight_fails(
     def fail_object_storage(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("external client must not be constructed")
 
-    monkeypatch.setattr(staging_smoke, "ObjectStorageClient", fail_object_storage)
+    monkeypatch.setattr(staging_smoke, "FileStorageClient", fail_object_storage)
 
     try:
         await staging_smoke.run_staging_smoke(settings=Settings())
@@ -278,8 +270,6 @@ def test_error_payload_includes_preflight_checks_without_raw_values() -> None:
 def _complete_oci_settings(**overrides: Any) -> Settings:
     """staging smoke preflight を通す OCI 設定を作る。"""
     values: dict[str, Any] = {
-        "oci_region": "ap-osaka-1",
-        "oci_compartment_id": "ocid1.compartment.oc1..example",
         "oci_enterprise_ai_endpoint": "https://enterprise-ai.example.com",
         "oci_enterprise_ai_project_ocid": "ocid1.generativeaiproject.oc1..example",
         "oci_enterprise_ai_api_key": "sk-test-secret",
@@ -290,16 +280,13 @@ def _complete_oci_settings(**overrides: Any) -> Settings:
         "oracle_dsn": "adb.example.com/rag",
         # Wallet mTLS の Wallet がそろっていないと Oracle の readiness は ok にならない（#325）。
         "oracle_wallet_dir": shared_thin_wallet_dir(),
-        "object_storage_region": "ap-osaka-1",
-        "object_storage_namespace": "namespace",
-        "object_storage_bucket": "bucket",
-        "upload_storage_backend": "oci",
+        "local_storage_dir": tempfile.mkdtemp(prefix="rag-staging-smoke-"),
     }
     values.update(overrides)
     return Settings(**values)
 
 
-class FakeObjectStorageClient:
+class FakeFileStorageClient:
     """Object Storage fake。"""
 
     put_body = b""
@@ -366,7 +353,7 @@ class FakeIngestionPipeline:
     ) -> SimpleNamespace:
         _ = source_profile, chunk_set_id
         assert document_id == "doc-smoke"
-        assert image_bytes == FakeObjectStorageClient.put_body
+        assert image_bytes == FakeFileStorageClient.put_body
         assert "OCR" in prompt
         assert content_type == "text/plain"
         return SimpleNamespace(status=FileStatus.INDEXED)

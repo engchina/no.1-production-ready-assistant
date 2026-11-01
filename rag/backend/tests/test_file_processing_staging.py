@@ -2,6 +2,7 @@
 
 import json
 import re
+import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1485,7 +1486,6 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
         file_processing_staging_cli,
         "get_settings",
         lambda: Settings(
-            oci_compartment_id="",
             oci_enterprise_ai_endpoint="",
             oci_enterprise_ai_project_ocid="",
             oci_enterprise_ai_api_key="",
@@ -1493,9 +1493,7 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
             oci_enterprise_ai_default_text_model="",
             oracle_user="",
             oracle_dsn="",
-            object_storage_namespace="",
-            object_storage_bucket="",
-            upload_storage_backend="oci",
+            local_storage_dir=str(tmp_path / "storage"),
             oracle_password="super-secret-password",
             rag_parser_adapter_backend="local",
             rag_parser_docling_enabled=False,
@@ -1512,7 +1510,7 @@ def test_file_processing_staging_cli_preflight_only_reports_safe_config_gap(
     assert payload["passed"] is False
     assert payload["preflight"]["ok"] is False
     assert payload["preflight"]["checks"]["oracle"] == "missing"
-    assert payload["preflight"]["checks"]["object_storage"] == "missing"
+    assert payload["preflight"]["checks"]["local_storage"] == "ok"
     assert payload["parser_adapters"]["adapter_backend"] == "local"
     assert payload["parser_adapters"]["effective_order"] == []
     assert payload["parser_adapter_preflight"]["ok"] is True
@@ -3065,8 +3063,6 @@ def _contract_passed_case(
 
 def _complete_oci_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "oci_region": "ap-osaka-1",
-        "oci_compartment_id": "ocid1.compartment.oc1..example",
         "oci_enterprise_ai_endpoint": "https://enterprise-ai.example.com",
         "oci_enterprise_ai_project_ocid": "ocid1.generativeaiproject.oc1..example",
         "oci_enterprise_ai_api_key": "sk-test-secret",
@@ -3077,10 +3073,7 @@ def _complete_oci_settings(**overrides: Any) -> Settings:
         "oracle_dsn": "adb.example.com/rag",
         # Wallet mTLS の Wallet がそろっていないと Oracle の readiness は ok にならない（#325）。
         "oracle_wallet_dir": shared_thin_wallet_dir(),
-        "object_storage_region": "ap-osaka-1",
-        "object_storage_namespace": "namespace",
-        "object_storage_bucket": "bucket",
-        "upload_storage_backend": "oci",
+        "local_storage_dir": tempfile.mkdtemp(prefix="rag-file-processing-staging-"),
     }
     values.update(overrides)
     return Settings(**values)

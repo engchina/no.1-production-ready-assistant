@@ -43,7 +43,7 @@ Oracle AI Database の業務データに、自然言語で SQL を生成・検�
 
 - LLM / VLM と embedding / rerank は別クライアント（`app/clients/oci_enterprise_ai.py` / `app/clients/oci_genai.py`）に抽象化する。
 - **Oracle AI Database** が業務データと NL2SQL の状態（業務プロファイル・オントロジー・履歴・job 等）の正本。ベクトル列は **`VECTOR(1024, FLOAT32)`**。アップロード保存先は local / OCI Object Storage を共通のシステム設定で選ぶ。
-- Backend: SDK は `oci` / `python-oracledb`、SQL の解析は **sqlglot**、オントロジーは **rdflib** / **pyshacl**、サーバは Uvicorn（本番は + Gunicorn）。
+- Backend: DB の接続は `python-oracledb`、SQL の解析は **sqlglot**、オントロジーは **rdflib** / **pyshacl**、サーバは Uvicorn（本番は + Gunicorn）。
 - Frontend: Tailwind CSS v4 と共有 UI、関係グラフは `@xyflow/react`、通信は REST（時間のかかる処理は永続 job のポーリング）。
 - 観測は構造化ログ + Prometheus（`prometheus-client`）。品質は pytest / pytest-cov / ruff / mypy / bandit / pip-audit / `node --test`（ロジックテスト）/ Playwright。
 - 配備は root の [docs/agents/deploy.md](../docs/agents/deploy.md)（1 台の Compute。NL2SQL の手順は `init_script.sh`）。
@@ -74,7 +74,7 @@ npx playwright test tests/e2e/<対象>.spec.ts               # e2e（関係す�
 ```
 
 - CI の job は `NL2SQL / Backend`・`NL2SQL / Frontend`・`NL2SQL / E2E smoke`。backend は pytest、frontend のロジックは `node --test`（`frontend/tests/*.test.ts`）、UI とユーザー操作は Playwright。
-- 時間のかかる処理（DB 構造の再取得・SQL 生成評価・オントロジー構築・合成データ生成）は永続 job にし、API は job を投入して返す。本番では `init_script.sh` が作る systemd の worker（`production-ready-nl2sql-{schema-refresh,quality-evaluation,ontology,synthetic}-worker`）が処理する（[docs/compute-operations.md](./docs/compute-operations.md)）。
+- 時間のかかる処理（DB 構造の再取得・SQL 生成評価・オントロジー構築）は永続 job にし、API は job を投入して返す。本番では `init_script.sh` が作る systemd の worker（`production-ready-nl2sql-{schema-refresh,quality-evaluation,ontology}-worker`）が処理する（[docs/compute-operations.md](./docs/compute-operations.md)）。
 
 ## 横断的な保守・セキュリティ契約
 

@@ -182,7 +182,6 @@ const profiles = [
     default_row_limit: 100,
     safety_policy: "select_only",
     few_shot_examples: [],
-    select_ai_config: null,
     archived: false,
   },
 ];
@@ -510,9 +509,6 @@ async function mockApi(page: Page) {
   await page.route("**/api/nl2sql/db-admin/views", (route) =>
     fulfillJson(route, { runtime: "deterministic", items: [], warnings: [] })
   );
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfillJson(route, { runtime: "deterministic", profiles: [], warnings: [] })
-  );
   await page.route("**/api/nl2sql/profiles", (route) => fulfillJson(route, profiles));
   await page.route("**/api/nl2sql/profiles/search?*", (route) =>
     fulfillJson(route, {
@@ -697,7 +693,6 @@ const profileScopedProfiles = [
     default_row_limit: 100,
     safety_policy: "select_only",
     few_shot_examples: [],
-    select_ai_config: null,
     archived: false,
   },
   {
@@ -712,7 +707,6 @@ const profileScopedProfiles = [
     default_row_limit: 100,
     safety_policy: "select_only",
     few_shot_examples: [],
-    select_ai_config: null,
     archived: false,
   },
 ];
@@ -799,9 +793,6 @@ async function mockProfileScopedApi(page: Page) {
   );
   await page.route("**/api/nl2sql/db-admin/views", (route) =>
     fulfillJson(route, { runtime: "deterministic", items: [], warnings: [] })
-  );
-  await page.route("**/api/nl2sql/select-ai/db-profiles**", (route) =>
-    fulfillJson(route, { runtime: "deterministic", profiles: [], warnings: [] })
   );
   await page.route("**/api/nl2sql/profiles", (route) => fulfillJson(route, profileScopedProfiles));
   await page.route("**/api/nl2sql/profiles/search?*", (route) =>

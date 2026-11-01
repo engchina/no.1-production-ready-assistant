@@ -1,18 +1,15 @@
 import type { FullConfig } from "@playwright/test";
 import { stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERMETIC_MARKER = "e2e unmocked API";
 
-// 実 backend が書き込む、利用者の実環境の設定ファイル（platform の pr_system_settings が書く
-// OCI 設定・秘密鍵、3製品共通の platform/.env と model-settings.json（#211）、Agent の backend/.env）。
+// 実 backend が書き込む、利用者の実環境の設定ファイル（3製品共通の platform/.env と
+// model-settings.json（#211）、Agent の backend/.env）。
 const backendDir = fileURLToPath(new URL("../../backend/", import.meta.url));
 const platformDir = fileURLToPath(new URL("../../../platform/", import.meta.url));
 const PROTECTED_FILES = [
-  join(homedir(), ".oci", "config"),
-  join(homedir(), ".oci", "oci_api_key.pem"),
   join(platformDir, ".env"),
   join(platformDir, "model-settings.json"),
   join(backendDir, ".env"),

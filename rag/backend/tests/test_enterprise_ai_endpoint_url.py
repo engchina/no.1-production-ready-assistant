@@ -34,7 +34,6 @@ ENDPOINT_CASE_IDS = ["oci-openai-v1", "compatible-with-path", "compatible-withou
 
 def _settings(endpoint: str) -> Settings:
     values: dict[str, Any] = {
-        "oci_compartment_id": "ocid1.compartment.oc1..example",
         "oci_enterprise_ai_endpoint": endpoint,
         "oci_enterprise_ai_project_ocid": "",
         "oci_enterprise_ai_api_key": "sk-test",

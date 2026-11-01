@@ -1,6 +1,6 @@
 """3製品共通の `.env` と、環境変数名の規則（#211）。
 
-- 3製品共通の設定（システム設定画面の OCI 認証・アップロード保存先・モデル・データベースと、
+- 3製品共通の設定（システム設定画面のアップロード保存先・モデル・データベースと、
   共通認証の構成管理者・認証ポリシー）は platform の共通 `.env` に置き、`PLATFORM_` で始める。
 - 製品固有の設定は製品の `backend/.env` に置き、製品の接頭辞（`RAG_` / `NL2SQL_` / `AGENT_`）で
   始める。
@@ -50,22 +50,8 @@ PLATFORM_SETTING_FIELDS = frozenset(
         "trace_store_flush_seconds",
         "trace_store_batch_size",
         "trace_store_queue_size",
-        # OCI 認証
-        "oci_config_file",
-        "oci_config_profile",
-        "oci_region",
-        "oci_compartment_id",
-        "oci_auth_mode",
-        "oci_user_ocid",
-        "oci_fingerprint",
-        "oci_tenancy_ocid",
-        "oci_key_file",
         # アップロード保存先
-        "upload_storage_backend",
         "local_storage_dir",
-        "object_storage_region",
-        "object_storage_namespace",
-        "object_storage_bucket",
         # モデル
         "model_settings_file",
         "oci_enterprise_ai_endpoint",
@@ -107,8 +93,6 @@ PLATFORM_SETTING_FIELDS = frozenset(
         "oracle_client_lib_dir",
         "oracle_wallet_dir",
         "oracle_wallet_password",
-        "oracle_adb_ocid",
-        "oracle_adb_region",
         "oracle_tcp_connect_timeout_seconds",
         "oracle_db_test_timeout_seconds",
         # 共通認証（構成管理者・認証ポリシー・ログインの Cookie 名。環境と認証方式も共通）。

@@ -46,7 +46,6 @@ def local_debug_principal() -> Principal:
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE],
         permissions=set(ALL_PERMISSION_CODES),
-        data_entitlements=[],
         allowed_profile_ids=set(),
         session_id="local-debug",
         csrf_token_hash="",  # nosec B106

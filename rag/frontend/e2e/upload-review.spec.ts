@@ -85,11 +85,7 @@ async function mockUploadPage(
   await page.route("**/api/settings/upload-storage", (route) =>
     route.fulfill({
       json: apiEnvelope({
-        backend: "local",
         local_storage_dir: "/tmp/rag-uploads",
-        object_storage_namespace: null,
-        object_storage_bucket: null,
-        object_storage_region: null,
         readiness: "ready",
         source: "runtime",
         max_upload_bytes: maxUploadBytes,

@@ -1,7 +1,3 @@
 {
-  "backend": "local",
-  "local_storage_dir": "/u01/data/production-ready-nl2sql/uploads",
-  "object_storage_namespace": "exampletenancy",
-  "object_storage_bucket": "nl2sql-originals"
+  "local_storage_dir": "/u01/data/production-ready-nl2sql/uploads"
 }
-

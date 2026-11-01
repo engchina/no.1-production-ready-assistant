@@ -22,14 +22,8 @@ from rag_engine.retrieval.text_search_tokenizer import (
 ENTERPRISE_AI_LLM_PROVIDER = "enterprise-ai"
 ENTERPRISE_AI_VISION_LLM_PROVIDER = "enterprise-ai-vision"
 DEFAULT_LLM_PROVIDER = ENTERPRISE_AI_LLM_PROVIDER
-DEFAULT_CHICAGO_REGION = "us-chicago-1"
-DEFAULT_OSAKA_REGION = "ap-osaka-1"
-DEFAULT_OCI_CONFIG_FILE = "~/.oci/config"
-DEFAULT_OCI_PROFILE = "DEFAULT"
 # 「今日」(検索の基準日の既定)を決める時間帯(#3249)。backend の共通の設定 `PLATFORM_TIMEZONE` の既定と同じ。
 DEFAULT_TIMEZONE = "UTC"
-OCI_INFERENCE_ENDPOINT_TEMPLATE = "https://inference.generativeai.{region}.oci.oraclecloud.com"
-DEFAULT_OCI_VISION_ENDPOINT = OCI_INFERENCE_ENDPOINT_TEMPLATE.format(region=DEFAULT_CHICAGO_REGION)
 OPENAI_RESPONSES_LLM_API_MODE = "openai_responses"
 DEFAULT_LLM_API_MODE = OPENAI_RESPONSES_LLM_API_MODE
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v4"
@@ -53,11 +47,6 @@ DEFAULT_TEXT_SEARCH_QUERY_VARIANT_LIMIT = 6
 DEFAULT_RERANK_MIN_RELEVANCE_SCORE = 0.0
 # Reciprocal Rank Fusion の平滑化定数。ADB の hybrid 検索と回答側の順位融合で同じ値を使う。
 RRF_K = 60
-
-
-def oci_inference_endpoint(region: str) -> str:
-    """region の OCI Generative AI inference endpoint（root URL）を返します。"""
-    return OCI_INFERENCE_ENDPOINT_TEMPLATE.format(region=region)
 
 
 def llm_provider_label(location: str, model: str) -> str:
@@ -203,10 +192,6 @@ class Settings:
     docling_do_ocr: bool
     docling_do_table_structure: bool
     docling_keep_picture_child_text: bool
-    oci_config_file: str
-    oci_profile: str
-    oci_compartment_id: str
-    oci_vision_endpoint: str
     llm_request_timeout_seconds: int
     llm_retries: int
     llm_retry_initial_wait_seconds: float
@@ -497,10 +482,6 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         docling_do_ocr=_env_bool(env, "DOCLING_DO_OCR", True),
         docling_do_table_structure=_env_bool(env, "DOCLING_DO_TABLE_STRUCTURE", True),
         docling_keep_picture_child_text=_env_bool(env, "DOCLING_KEEP_PICTURE_CHILD_TEXT", False),
-        oci_config_file=env.get("OCI_CONFIG_FILE", DEFAULT_OCI_CONFIG_FILE),
-        oci_profile=env.get("OCI_PROFILE", DEFAULT_OCI_PROFILE),
-        oci_compartment_id=env.get("OCI_COMPARTMENT_ID", "").strip(),
-        oci_vision_endpoint=env.get("OCI_VISION_ENDPOINT", DEFAULT_OCI_VISION_ENDPOINT).strip(),
         # 旧名 VISION_* は Vision 限定に見えるため改名した。リポジトリ外の既存 .env が黙って既定値へ
         # 戻らないよう、新しい名前が未設定のときだけ旧名を読む (#912)。
         llm_request_timeout_seconds=_env_int(env, "LLM_REQUEST_TIMEOUT_SECONDS", _env_int(env, "VISION_REQUEST_TIMEOUT_SECONDS", 90)),
@@ -622,7 +603,7 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         timezone=env.get("PLATFORM_TIMEZONE", "").strip() or DEFAULT_TIMEZONE,
     )
 
-    if "adb_settings" not in overrides and all(env.get(key) for key in ("ADB_OCID", "ADB_WALLET_PASSWORD", "ADB_DB_PASSWORD")):
+    if "adb_settings" not in overrides and all(env.get(key) for key in ("ADB_WALLET_PASSWORD", "ADB_DB_PASSWORD")):
         from rag_engine.adapters.oracle.connection import load_adb_settings
 
         settings = replace(settings, adb_settings=load_adb_settings(environ=env, env_path=dotenv_path or ".env"))

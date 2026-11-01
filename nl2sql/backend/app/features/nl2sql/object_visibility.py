@@ -11,7 +11,7 @@ from .models import SchemaCatalog, SchemaObjectPage
 _SYSTEM_OBJECT_NAME_MARKERS = ("$", "#")
 # 3 製品は同じ schema を共有する（#212）。共通基盤（PLATFORM_: 認証テーブルなど）と他製品の
 # テーブル（RAG_ / AGENT_）も業務データではないため、業務ユーザーの対象一覧に出さない。
-# 一覧を SQL で絞る呼び出し側（Deep Data Security の対象の一覧など）も同じ接頭辞を使う（#1708）。
+# 一覧を SQL で絞る呼び出し側も同じ接頭辞を使う（#1708）。
 SYSTEM_OBJECT_NAME_PREFIXES = ("NL2SQL_", "PLATFORM_", "RAG_", "AGENT_")
 # 上の判定で拒否したときの文言。NL2SQL の表だけでなく共通基盤・他製品の表と Oracle の内部 object も
 # 対象なので、「NL2SQL のシステム object」とだけ書かない（#933）。

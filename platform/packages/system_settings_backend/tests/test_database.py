@@ -14,7 +14,6 @@ from pydantic import BaseModel
 
 from pr_system_settings import database as shared_db
 from pr_system_settings.database import build_database_router
-from pr_system_settings.oci_database import AutonomousDatabaseInfo
 
 PEM = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n"
 TNSNAMES = "ragdb_high = (description=(address=(protocol=tcps)(port=1522)(host=adb.example)))\n"
@@ -31,17 +30,11 @@ class FakeSettings(BaseModel):
     oracle_client_lib_dir: str = ""
     oracle_wallet_dir: str = ""
     oracle_wallet_password: str = ""
-    oracle_adb_ocid: str = ""
-    oracle_adb_region: str = ""
     oracle_db_test_timeout_seconds: float = 15.0
 
     @property
     def resolved_oracle_wallet_dir(self) -> str:
         return self.oracle_wallet_dir
-
-    @property
-    def resolved_oracle_adb_region(self) -> str:
-        return self.oracle_adb_region
 
 
 def wallet_zip(files: dict[str, str] | None = None, *, prefix: str = "") -> bytes:
@@ -297,26 +290,6 @@ def test_password_reveal_only_when_enabled(tmp_path: Path) -> None:
     assert resp.headers["cache-control"] == "no-store"
 
 
-class FakeOciDatabaseClient:
-    state = "STOPPED"
-    fail = False
-
-    def __init__(self, settings: Any) -> None:
-        self.settings = settings
-
-    async def get_autonomous_database(self, adb_ocid: str) -> AutonomousDatabaseInfo:
-        if self.fail:
-            raise RuntimeError("ServiceError: secret-looking OCI detail")
-        return AutonomousDatabaseInfo(
-            id=adb_ocid,
-            display_name="ragdb",
-            lifecycle_state=self.state,
-            db_name="RAGDB",
-            cpu_core_count=2,
-            data_storage_size_in_tbs=1.0,
-        )
-
-
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -333,81 +306,13 @@ def test_adb_control_routes_are_removed(tmp_path: Path, method: str, path: str) 
     assert h.client.request(method, path).status_code in {404, 405}
 
 
-class FakeOciServiceError(Exception):
-    """oci.exceptions.ServiceError と同じ属性を持つ失敗（SDK を import しない）。"""
-
-    def __init__(self) -> None:
-        super().__init__("Authorization failed: wallet-password-must-not-be-logged")
-        self.status = 404
-        self.code = "NotAuthorizedOrNotFound"
-        self.operation_name = "generate_autonomous_database_wallet"
-        self.headers = {"opc-request-id": "req-123"}
-
-
-def _log_extra(record: Any, key: str) -> Any:
-    return getattr(record, key, None)
-
-
-def _no_wallet_precheck(*_args: Any, **_kwargs: Any) -> None:
-    """OCI 認証設定の確認を省き、OCI からの取得へ進める。"""
-    return None
-
-
-def test_wallet_download_failure_is_logged_without_secrets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """OCI からの Wallet の取得の失敗は、画面には一般的な文言、ログには切り分けの項目を出す。"""
-
-    class FailingWalletClient(FakeOciDatabaseClient):
-        async def download_autonomous_database_wallet(self, *args: Any) -> bytes:
-            raise FakeOciServiceError()
-
-    monkeypatch.setattr(shared_db, "OciDatabaseClient", FailingWalletClient)
-    monkeypatch.setattr(shared_db, "prepare_database_wallet_download", _no_wallet_precheck)
+def test_wallet_download_route_is_removed(tmp_path: Path) -> None:
+    """OCI からの Wallet の自動取得は持たない（#11。Wallet はアップロードだけ）。"""
     h = Harness(tmp_path)
-    h.settings.oracle_adb_ocid = "ocid1.autonomousdatabase.oc1..x"
-    h.settings.oracle_adb_region = "ap-osaka-1"
-    h.settings.oracle_password = "db-secret-Pass1"
-
-    with caplog.at_level("WARNING", logger=shared_db.logger.name):
-        resp = h.client.post("/api/settings/database/wallet/download")
-
-    assert resp.status_code == 502
-    assert "NotAuthorizedOrNotFound" not in resp.text
-    records = [r for r in caplog.records if r.getMessage() == "database_wallet_download_failed"]
-    assert len(records) == 1
-    record = records[0]
-    assert _log_extra(record, "exception_type") == "FakeOciServiceError"
-    assert _log_extra(record, "oci_status") == 404
-    assert _log_extra(record, "oci_code") == "NotAuthorizedOrNotFound"
-    assert _log_extra(record, "oci_operation") == "generate_autonomous_database_wallet"
-    assert _log_extra(record, "opc_request_id") == "req-123"
-    assert _log_extra(record, "region") == "ap-osaka-1"
-    logged = " ".join(f"{key}={value}" for key, value in vars(record).items())
-    assert "db-secret-Pass1" not in logged
-    assert "wallet-password-must-not-be-logged" not in logged
+    assert h.client.post("/api/settings/database/wallet/download").status_code in {404, 405}
 
 
-def test_wallet_download_invalid_zip_is_logged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """OCI から取得した Wallet が検証で落ちた理由（自前の文言）をログに残す。"""
-
-    class BrokenWalletClient(FakeOciDatabaseClient):
-        async def download_autonomous_database_wallet(self, *args: Any) -> bytes:
-            return wallet_zip({"README": "x"})
-
-    monkeypatch.setattr(shared_db, "OciDatabaseClient", BrokenWalletClient)
-    monkeypatch.setattr(shared_db, "prepare_database_wallet_download", _no_wallet_precheck)
-    h = Harness(tmp_path)
-    h.settings.oracle_adb_ocid = "ocid1.autonomousdatabase.oc1..x"
-    h.settings.oracle_password = "db-secret-Pass1"
-
-    with caplog.at_level("WARNING", logger=shared_db.logger.name):
-        resp = h.client.post("/api/settings/database/wallet/download")
-
-    assert resp.status_code == 502
-    records = [r for r in caplog.records if r.getMessage() == "database_wallet_download_invalid"]
-    assert len(records) == 1
-    assert _log_extra(records[0], "status_code") == 400
-    assert "Wallet ZIP" in _log_extra(records[0], "reason")
+def test_settings_data_has_no_adb_fields(tmp_path: Path) -> None:
+    data = Harness(tmp_path).client.get("/api/settings/database").json()["data"]
+    assert "adb_ocid" not in data
+    assert "region" not in data

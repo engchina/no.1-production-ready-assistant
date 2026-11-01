@@ -107,23 +107,6 @@ def test_audit_reports_unknown_duplicate_malformed_and_security_combinations(
     assert "INVALID_RUNTIME_SETTINGS" in codes
 
 
-def test_audit_rejects_deepsec_with_thick_driver(tmp_path: Path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("NL2SQL_ORACLE_DEEPSEC_ENABLED=true\n", encoding="utf-8")
-    env_file.chmod(0o600)
-    platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_ORACLE_DRIVER_MODE=thick\n", encoding="utf-8")
-    platform_env.chmod(0o600)
-
-    result = audit_configuration(
-        _paths(tmp_path, env_path=env_file, platform_env_path=platform_env)
-    )
-    codes = {item.code for item in result.findings}
-
-    assert result.ok is False
-    assert "DEEPSEC_REQUIRES_THIN_DRIVER" in codes
-
-
 def test_audit_detects_legacy_json_without_disclosing_secret(tmp_path: Path) -> None:
     model_settings = tmp_path / "model-settings.json"
     model_settings.write_text(

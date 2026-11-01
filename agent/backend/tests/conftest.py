@@ -114,31 +114,3 @@ def _storage_loaded() -> Iterator[None]:
 def _no_mcp_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     """MCP の再試行の待ち（#854）はテストでは待たない。"""
     monkeypatch.setattr(tools, "_retry_sleep", lambda _seconds: None)
-
-
-@pytest.fixture(autouse=True)
-def _stub_upload_storage_object_storage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """アップロード保存先の保存の前の確認（#2101）で、実の OCI を呼ばない（既定は成功）。
-
-    失敗を確かめるテストは `default_object_storage_client` をさらに差し替える。
-    """
-    from pr_system_settings import upload_storage_check
-
-    class _ObjectStorageStub:
-        def head_bucket(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def put_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def get_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-        def delete_object(self, *_args: object, **_kwargs: object) -> None:
-            return None
-
-    monkeypatch.setattr(
-        upload_storage_check,
-        "default_object_storage_client",
-        lambda _settings: _ObjectStorageStub(),
-    )

@@ -1,16 +1,12 @@
 """adb の挙動を保護するテスト。"""
 
-import io
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from rag_engine.adapters.oracle.connection import connect_adb_thin, download_adb_wallet, load_adb_settings, validate_mtls_wallet
-
-ADB_OCID = "ocid1.autonomousdatabase.oc1.ap-osaka-1.example"
+from rag_engine.adapters.oracle.connection import connect_adb_thin, load_adb_settings, validate_mtls_wallet
 
 
 class AdbTests(unittest.TestCase):
@@ -31,7 +27,6 @@ class AdbTests(unittest.TestCase):
                     }
                 )
                 self.assertFalse(settings.uses_wallet)
-                self.assertEqual(settings.ocid, "")
                 driver = Mock()
                 result = connect_adb_thin(settings, oracledb_module=driver)
                 driver.ConnectParams.assert_called_once_with(
@@ -53,7 +48,7 @@ class AdbTests(unittest.TestCase):
                 )
                 self.assertIs(result, driver.connect.return_value)
 
-    def test_local_settings_without_cloud_credentials_and_wallet_download_guard(self):
+    def test_local_settings_without_wallet_password(self):
         settings = load_adb_settings(
             environ={
                 "ADB_TNS_ALIAS": "localhost:1521/FREEPDB1",
@@ -61,27 +56,22 @@ class AdbTests(unittest.TestCase):
             }
         )
         self.assertEqual(settings.wallet_password, "")
-        with self.assertRaisesRegex(RuntimeError, "ADB_OCID and ADB_WALLET_PASSWORD"):
-            download_adb_wallet(settings, oci_module=Mock())
         with self.assertRaisesRegex(RuntimeError, "ADB_DB_PASSWORD"):
             load_adb_settings(environ={"ADB_TNS_ALIAS": "localhost:1521/FREEPDB1"})
 
     def test_tcps_and_descriptors_keep_wallet_requirements(self):
         for dsn in ("tcps://adb.example.test:1522/service", "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)))"):
-            with self.subTest(dsn=dsn), self.assertRaisesRegex(RuntimeError, "ADB_OCID"):
+            with self.subTest(dsn=dsn), self.assertRaisesRegex(RuntimeError, "ADB_WALLET_PASSWORD"):
                 load_adb_settings(environ={"ADB_TNS_ALIAS": dsn, "ADB_DB_PASSWORD": "test"})
 
-    def test_load_adb_settings_resolves_defaults_and_region(self):
+    def test_load_adb_settings_resolves_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / ".env"
             settings = load_adb_settings(
                 env_path,
                 {
-                    "ADB_OCID": ADB_OCID,
                     "ADB_WALLET_PASSWORD": "wallet-password",
                     "ADB_DB_PASSWORD": "db-password",
-                    "OCI_CONFIG_FILE": "/home/opc/.oci/config",
-                    "OCI_PROFILE": "DEFAULT",
                 },
             )
 
@@ -89,86 +79,16 @@ class AdbTests(unittest.TestCase):
             self.assertEqual(settings.tns_alias, "AIRAGADB_medium")
             self.assertEqual(settings.wallet_dir, Path(tmp) / ".wallets" / "airagadb")
             self.assertEqual(settings.db_user, "admin")
-            self.assertEqual(settings.oci_region, "ap-osaka-1")
             self.assertEqual(settings.tcp_connect_timeout, 10.0)
             self.assertEqual(settings.connect_retry_count, 0)
             self.assertEqual(settings.connect_retry_delay, 0)
 
-    def test_load_adb_settings_requires_ocid_and_db_password(self):
-        with self.assertRaisesRegex(RuntimeError, "ADB_OCID"):
+    def test_load_adb_settings_requires_wallet_and_db_password(self):
+        with self.assertRaisesRegex(RuntimeError, "ADB_WALLET_PASSWORD"):
             load_adb_settings(environ={"ADB_DB_PASSWORD": "db-password"})
 
-        with self.assertRaisesRegex(RuntimeError, "ADB_WALLET_PASSWORD"):
-            load_adb_settings(environ={"ADB_OCID": ADB_OCID, "ADB_DB_PASSWORD": "db-password"})
-
         with self.assertRaisesRegex(RuntimeError, "ADB_DB_PASSWORD"):
-            load_adb_settings(environ={"ADB_OCID": ADB_OCID, "ADB_WALLET_PASSWORD": "wallet-password"})
-
-    def test_download_wallet_uses_oci_client_and_extracts_stream(self):
-        zip_bytes = io.BytesIO()
-        with zipfile.ZipFile(zip_bytes, "w") as archive:
-            archive.writestr("tnsnames.ora", "AIRAGADB_medium = descriptor")
-            archive.writestr("ewallet.pem", "pem")
-
-        class FakeStream:
-            closed = False
-
-            def iter_content(self, chunk_size):
-                data = zip_bytes.getvalue()
-                yield data[:10]
-                yield data[10:]
-
-            def close(self):
-                self.closed = True
-
-        class FakeDetails:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        calls = {}
-        stream = FakeStream()
-
-        class FakeDatabaseClient:
-            def __init__(self, config):
-                calls["config"] = config
-
-            def generate_autonomous_database_wallet(self, **kwargs):
-                calls["wallet_request"] = kwargs
-                return SimpleNamespace(data=stream)
-
-        fake_oci = SimpleNamespace(
-            config=SimpleNamespace(from_file=lambda **kwargs: {"region": "us-chicago-1", **kwargs}),
-            database=SimpleNamespace(
-                DatabaseClient=FakeDatabaseClient,
-                models=SimpleNamespace(GenerateAutonomousDatabaseWalletDetails=FakeDetails),
-            ),
-        )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            settings = load_adb_settings(
-                Path(tmp) / ".env",
-                {
-                    "ADB_OCID": ADB_OCID,
-                    "ADB_WALLET_DIR": "wallet",
-                    "ADB_WALLET_PASSWORD": "wallet-password",
-                    "ADB_DB_PASSWORD": "db-password",
-                    "OCI_CONFIG_FILE": "/home/opc/.oci/config",
-                    "OCI_PROFILE": "DEFAULT",
-                },
-            )
-            wallet_zip = download_adb_wallet(settings, oci_module=fake_oci)
-
-            self.assertTrue(wallet_zip.exists())
-            self.assertEqual((settings.wallet_dir / "tnsnames.ora").read_text(), "AIRAGADB_medium = descriptor")
-            self.assertEqual((settings.wallet_dir / "ewallet.pem").read_text(), "pem")
-
-        self.assertEqual(calls["config"]["region"], "ap-osaka-1")
-        self.assertEqual(calls["wallet_request"]["autonomous_database_id"], ADB_OCID)
-        details = calls["wallet_request"]["generate_autonomous_database_wallet_details"]
-        self.assertEqual(details.kwargs["password"], "wallet-password")
-        self.assertEqual(details.kwargs["generate_type"], "SINGLE")
-        self.assertFalse(details.kwargs["is_regional"])
-        self.assertTrue(stream.closed)
+            load_adb_settings(environ={"ADB_WALLET_PASSWORD": "wallet-password"})
 
     def test_connect_adb_thin_passes_wallet_parameters(self):
         calls = {}
@@ -196,7 +116,6 @@ class AdbTests(unittest.TestCase):
             settings = load_adb_settings(
                 Path(tmp) / ".env",
                 {
-                    "ADB_OCID": ADB_OCID,
                     "ADB_WALLET_DIR": "wallet",
                     "ADB_WALLET_PASSWORD": "wallet-password",
                     "ADB_DB_USER": "admin",
@@ -279,7 +198,6 @@ class AdbTests(unittest.TestCase):
             settings = load_adb_settings(
                 Path(tmp) / ".env",
                 {
-                    "ADB_OCID": ADB_OCID,
                     "ADB_WALLET_DIR": "wallet",
                     "ADB_WALLET_PASSWORD": "wallet-password",
                     "ADB_DB_PASSWORD": "db-password",
@@ -298,7 +216,6 @@ class AdbTests(unittest.TestCase):
             settings = load_adb_settings(
                 Path(tmp) / ".env",
                 {
-                    "ADB_OCID": ADB_OCID,
                     "ADB_WALLET_DIR": "wallet",
                     "ADB_WALLET_PASSWORD": "wallet-password",
                     "ADB_DB_PASSWORD": "db-password",

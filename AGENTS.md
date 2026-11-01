@@ -48,7 +48,7 @@
 - **CI はエージェント自身が待ち、merge の可否は `scripts/pr-merge-check.sh <PR>` で判定する**（`gh pr checks --watch --required` は使わない）。検証と PR 本文の更新が済み、最新 commit の `CI OK` が成功したら、ユーザーの確認を求めず `gh pr merge <PR> --merge` で merge する（報告だけで終わらない）。main の取り込みは、main の変更が PR と重なるか全体に効くときだけ。
 - CI の失敗・conflict は直して再検証してから merge する。ruleset を迂回した強制 merge はしない。**main が赤（label `ci-failure` の Issue）なら、ほかの作業より先に直す。**
 - **merge 後は `main` へ fast-forward し、その作業の worktree とローカルのブランチを消してから完了を報告する**（`reset --hard` 等で未保存の変更を破棄しない）。他のセッションの未コミット変更・stash・worktree を確認なしに破棄・上書きしない。
-- **開発の ADB（`platform/.env` の `PLATFORM_ORACLE_ADB_OCID`）が停止していたら、利用者に聞かずに起動する**（停止は指示が無い限りしない。起動したことは報告に書く）。
+- **開発の ADB（`platform/.env` の `PLATFORM_ORACLE_DSN` の接続先）が停止していたら、利用者に聞かずに起動する**（停止は指示が無い限りしない。起動したことは報告に書く）。
 - **一時ファイルは `/tmp` ではなく repo の直下の `./tmp/<作業の名前>/` に置き、commit しない**（作業用の worktree は `.claude/worktrees/`）。
 
 ## Issue / PR の書き方

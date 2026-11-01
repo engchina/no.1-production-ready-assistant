@@ -58,7 +58,7 @@ PLATFORM_ENV_FILE = platform_env_file(BACKEND_DIR)
 class Settings(ModelSecretStateMixin, BaseServiceSettings):
     """サービス固有設定。
 
-    環境変数名は属性名から決まる（#211）。3製品共通の属性（OCI 認証・アップロード保存先・
+    環境変数名は属性名から決まる（#211）。3製品共通の属性（アップロード保存先・
     モデル・データベース）は共通 `.env` の `PLATFORM_*`、それ以外は `backend/.env` の `AGENT_*`。
     """
 
@@ -97,14 +97,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # reverse proxy の URL を利用者が書き、API キーの画面の接続先に出す（#1870・#19）。
     app_public_base_url: str = ""
     # システム設定（3製品共通）。
-    oci_config_file: str = "~/.oci/config"
-    oci_config_profile: str = "DEFAULT"
-    oci_compartment_id: str = ""
-    oci_region: str = ""
-    object_storage_region: str = ""
-    object_storage_namespace: str = ""
-    object_storage_bucket: str = "production-ready"
-    upload_storage_backend: str = "local"
     local_storage_dir: str = "/u01/data/production-ready-agent"
     max_upload_bytes: int = 100 * 1024 * 1024
     model_settings_file: str = "model-settings.json"
@@ -185,8 +177,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_client_lib_dir: str = "/u01/aipoc/instantclient_23_26"
     oracle_wallet_dir: str | None = None
     oracle_wallet_password: str | None = None
-    oracle_adb_ocid: str | None = None
-    oracle_adb_region: str | None = None
     oracle_tcp_connect_timeout_seconds: float = 10.0
     oracle_db_test_timeout_seconds: float = 15.0
     # PLATFORM_ORACLE_* の接続 pool の大きさ（Agent 固有。`app.oracle_connection`。#793）。
@@ -215,7 +205,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # `agent_nl2sql_job_wait_seconds` まで続きを取って待つ（#848 / #1430）。
     agent_external_nl2sql_timeout_seconds: float = 600.0
     # NL2SQL のジョブが pending / running のまま返ったとき、ツールの中で完了を待つ合計の上限
-    # （秒。#848）。既定の SQL の生成（Select AI の 1 回）と実行は、それぞれ NL2SQL の DB の
+    # （秒。#848）。SQL の生成（LLM の 1 回）と実行は、それぞれ NL2SQL の DB の
     # 呼び出しの上限（`NL2SQL_ORACLE_CALL_TIMEOUT_SECONDS`、既定 120 秒）で打ち切られるため、
     # 300 秒で足りる。
     # nl2sql_get_job を wait_seconds 付きで繰り返し呼ぶ。0 なら待たずにそのまま返す。
@@ -350,11 +340,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         return "wallet_mtls"
 
     @property
-    def resolved_oracle_adb_region(self) -> str:
-        """ADB 管理用の region。未設定なら PLATFORM_OCI_REGION を使う。"""
-        return (self.oracle_adb_region or self.oci_region or "").strip()
-
-    @property
     def resolved_oracle_wallet_dir(self) -> str:
         """参照実装と同じく PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin を Wallet 配置先にする。"""
         client_lib_dir = self.oracle_client_lib_dir.strip()
@@ -378,7 +363,7 @@ MODEL_SETTINGS_STORE = ModelSettingsStore(
 )
 
 
-# 3 製品共通の設定（OCI 認証・アップロード保存先・モデル・データベース・認証ポリシーなど）は
+# 3 製品共通の設定（アップロード保存先・モデル・データベース・認証ポリシーなど）は
 # `platform/.env`。別の製品・別の worker の画面で保存した値を、再起動なしで次のリクエストから
 # 使う（#2092・#2102）。テストが差し替えられるよう、呼出時に値を引く。
 def _env_files() -> tuple[Path, Path]:

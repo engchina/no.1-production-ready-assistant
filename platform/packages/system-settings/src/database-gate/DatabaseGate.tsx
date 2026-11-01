@@ -22,7 +22,7 @@ import { useDatabaseStatus, type DatabaseContextChangeHandler } from "./useDatab
 export const DATABASE_GATE_LOADING_TEST_ID = "database-gate-loading";
 
 /**
- * ゲートを通さない画面（#325。3 製品で同じ）。システム設定の 5 画面（OCI 認証・アップロード保存先・
+ * ゲートを通さない画面（#325。3 製品で同じ）。システム設定の 3 画面（アップロード保存先・
  * モデル・データベース）と、その入口の `/settings` だけ。DB の復旧に使う画面なので塞がない。
  * ユーザー管理・ロール管理・製品固有の設定は DB にデータを持つため、ゲートを通す（#214）。
  */

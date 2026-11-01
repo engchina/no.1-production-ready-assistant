@@ -102,20 +102,6 @@ def test_unknown_chunking_strategy_is_rejected() -> None:
         Settings(rag_chunking_strategy="semantic_double_pass")
 
 
-def test_guardrail_default_matches_current_behavior() -> None:
-    """Guardrail アダプターの既定は現行挙動と一致させる。"""
-    settings = Settings()
-    assert settings.rag_guardrails_input_enabled is False
-
-
-def test_unknown_guardrail_policy_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        Settings(
-            rag_guardrails_input_enabled="not-a-boolean",
-            rag_guardrails_output_enabled="not-a-boolean",
-        )
-
-
 def test_vector_index_profile_defaults_to_accurate() -> None:
     """Vector Index アダプターの既定は高精度（accurate。検索時 target accuracy 98。#272）。"""
     assert Settings().rag_vector_index_profile == "accurate"
@@ -269,7 +255,7 @@ def test_settings_do_not_read_legacy_env_names(
     settings = Settings(_env_file=backend_env)
 
     assert settings.oracle_dsn == ""
-    assert settings.object_storage_namespace == ""
+    assert not hasattr(settings, "object_storage_namespace")
     assert settings.log_level == "INFO"
     assert settings.oracle_user == ""
     # 属性名での生成（テストや設定画面の候補作成）は引き続き使える。
@@ -282,15 +268,15 @@ def test_settings_read_platform_env_then_backend_env(
 ) -> None:
     """共通 .env と backend/.env の両方を読む（環境変数が最優先）。"""
     platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_OCI_REGION=ap-osaka-1\n", encoding="utf-8")
+    platform_env.write_text("PLATFORM_ORACLE_DSN=platform_high\n", encoding="utf-8")
     backend_env = tmp_path / "backend.env"
     backend_env.write_text("RAG_CHUNK_SIZE=900\n", encoding="utf-8")
-    monkeypatch.delenv("PLATFORM_OCI_REGION", raising=False)
+    monkeypatch.delenv("PLATFORM_ORACLE_DSN", raising=False)
     monkeypatch.delenv("RAG_CHUNK_SIZE", raising=False)
 
     settings = Settings(_env_file=(platform_env, backend_env))
 
-    assert settings.oci_region == "ap-osaka-1"
+    assert settings.oracle_dsn == "platform_high"
     assert settings.rag_chunk_size == 900
 
 
@@ -821,13 +807,34 @@ def test_chunking_accepts_product_maximums_and_rejects_larger_values() -> None:
         Settings(rag_chunk_overlap=CHUNK_OVERLAP_MAX_CHARS + 1)
 
 
-def test_upload_storage_backend_is_local_or_oci() -> None:
-    """アップロード原本の保存先は local / oci のみ許可する。"""
-    assert Settings().upload_storage_backend == "local"
-    assert Settings(upload_storage_backend="oci").upload_storage_backend == "oci"
+def test_removed_oci_platform_settings_are_not_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """共通 .env・RAG の .env に残った OCI 認証・Object Storage・ADB の値は読まない（#11）。"""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text(
+        "PLATFORM_UPLOAD_STORAGE_BACKEND=oci\n"
+        "PLATFORM_OBJECT_STORAGE_NAMESPACE=legacy-namespace\n"
+        "PLATFORM_OCI_REGION=legacy-region\n"
+        "PLATFORM_ORACLE_ADB_OCID=ocid1.autonomousdatabase.oc1..legacy\n",
+        encoding="utf-8",
+    )
+    for name in (
+        "PLATFORM_UPLOAD_STORAGE_BACKEND",
+        "PLATFORM_OBJECT_STORAGE_NAMESPACE",
+        "PLATFORM_OCI_REGION",
+        "PLATFORM_ORACLE_ADB_OCID",
+        "RAG_OBJECT_STORAGE_NAMESPACE",
+        "RAG_OCI_REGION",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(ValidationError):
-        Settings(upload_storage_backend="s3")
+    settings = Settings(_env_file=(platform_env,))
+
+    assert not hasattr(settings, "upload_storage_backend")
+    assert not hasattr(settings, "oracle_adb_ocid")
+    assert not hasattr(settings, "object_storage_namespace")
+    assert not hasattr(settings, "oci_region")
 
 
 def test_local_storage_dir_defaults_to_u01_persistent_path() -> None:
@@ -1010,7 +1017,7 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     from app import config as app_config
 
     for name in (
-        "PLATFORM_OCI_REGION",
+        "PLATFORM_LOCAL_STORAGE_DIR",
         "PLATFORM_ORACLE_DSN",
         "PLATFORM_ORACLE_USER",
         "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES",
@@ -1019,18 +1026,18 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     platform_env = app_config.PLATFORM_ENV_FILE
     write_env_values(
         platform_env,
-        {"PLATFORM_OCI_REGION": "region-a", "PLATFORM_ORACLE_DSN": "db-a_high"},
+        {"PLATFORM_LOCAL_STORAGE_DIR": "/data/a", "PLATFORM_ORACLE_DSN": "db-a_high"},
         section_comment="# test",
     )
     app_config.reset_settings_cache()
     settings = app_config.get_settings()
-    assert (settings.oci_region, settings.oracle_dsn) == ("region-a", "db-a_high")
+    assert (settings.local_storage_dir, settings.oracle_dsn) == ("/data/a", "db-a_high")
 
     # 別の製品の保存と同じ書き方（`write_env_values`）で共通 `.env` を書き換える。
     write_env_values(
         platform_env,
         {
-            "PLATFORM_OCI_REGION": "region-b",
+            "PLATFORM_LOCAL_STORAGE_DIR": "/data/b",
             "PLATFORM_ORACLE_DSN": "db-b_high",
             "PLATFORM_ORACLE_USER": "APP_B",
             "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES": "17",
@@ -1043,7 +1050,7 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     reloaded = app_config.get_settings()
 
     assert reloaded is settings
-    assert reloaded.oci_region == "region-b"
+    assert reloaded.local_storage_dir == "/data/b"
     assert (reloaded.oracle_dsn, reloaded.oracle_user) == ("db-b_high", "APP_B")
     assert reloaded.app_auth_idle_timeout_minutes == 17
     app_config.reset_settings_cache()

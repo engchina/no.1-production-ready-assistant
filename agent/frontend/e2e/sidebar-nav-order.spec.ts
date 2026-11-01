@@ -73,8 +73,8 @@ for (const viewport of [
     await expect(operations.getByRole("link").nth(3)).toHaveAttribute("href", "/settings/answer-notice");
     await expect(userRoles.getByRole("link")).toHaveCount(3);
     await expect(userRoles.getByRole("link").last()).toHaveAttribute("href", "/settings/security/api-keys");
-    // システム設定は 3 製品で共通の 4 項目（外観と証明書は #19 で削除）（回答の注意書きは運用設定。#2449）。
-    await expect(settings.getByRole("link")).toHaveCount(4);
+    // システム設定は 3 製品で共通の 3 項目（OCI 認証は #11、外観と証明書は #19 で削除）（回答の注意書きは運用設定。#2449）。
+    await expect(settings.getByRole("link")).toHaveCount(3);
     for (const href of [
       "/settings/system-tables",
       "/settings/trace-recording",
@@ -95,12 +95,13 @@ for (const viewport of [
     );
     expect(new Set(iconSignatures).size).toBe(iconSignatures.length);
     for (const href of [
-      "/settings/oci",
       "/settings/upload-storage",
       "/settings/model",
       "/settings/database",
     ]) {
       await expect(settings.locator(`a[href="${href}"]`)).toHaveCount(1);
     }
+    // OCI 認証の画面は持たない（#11）。
+    await expect(sidebar.locator('a[href="/settings/oci"]')).toHaveCount(0);
   });
 }

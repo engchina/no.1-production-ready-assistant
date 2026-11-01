@@ -20,7 +20,6 @@ function currentUser(overrides: Partial<CurrentUser>): CurrentUser {
     role_display_names: [],
     is_system_admin: false,
     permissions: [],
-    data_entitlements: [],
     allowed_profile_ids: [],
     debug_mode: false,
     password_change_allowed: true,
@@ -80,7 +79,7 @@ test("廃止した外観と証明書の権限（#19）は正規化で落とし�
     "menu.settings_appearance",
     "dashboard.view",
     "settings.appearance.view",
-    MENU_PERMISSIONS.settingsOci,
+    MENU_PERMISSIONS.settingsModel,
   ]);
-  assert.deepEqual([...normalized], [MENU_PERMISSIONS.settingsOci]);
+  assert.deepEqual([...normalized], [MENU_PERMISSIONS.settingsModel]);
 });

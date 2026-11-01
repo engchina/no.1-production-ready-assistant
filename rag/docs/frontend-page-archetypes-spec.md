@@ -1,7 +1,7 @@
 # ページの型の割り当て（RAG の差分）
 
 > ページの型（A〜D）と共有プリミティブの共通規約は platform の [UX 契約 page-archetypes.md](../../platform/docs/ux-contracts/page-archetypes.md)、対象の操作の置き場所は [buttons.md §5.1](../../platform/docs/ux-contracts/buttons.md#51-オブジェクト操作一覧行--詳細)が正本。RAG の離脱ガードと作業状態の保持の割り当ては [frontend-workspace-state-spec.md](./frontend-workspace-state-spec.md) に書く。
-> 本書には RAG の各ページがどの型に属するかと、RAG 固有の補足・例外だけを書く（Issue #131）。システム設定（OCI 認証 / アップロード保存先 / モデル / データベース）は共有パッケージの画面なので対象外。
+> 本書には RAG の各ページがどの型に属するかと、RAG 固有の補足・例外だけを書く（Issue #131）。システム設定（アップロード保存先 / モデル / データベース）は共有パッケージの画面なので対象外。
 
 ## 1. 割り当て
 

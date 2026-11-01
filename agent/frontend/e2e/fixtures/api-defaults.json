@@ -275,30 +275,12 @@
     "readiness": "missing",
     "embedding_dimension": 1024,
     "vector_column": "VECTOR(1024, FLOAT32)",
-    "adb_ocid": "",
-    "region": "",
     "config_source": "runtime"
   },
   "uploadStorage": {
-    "backend": "local",
     "local_storage_dir": "/u01/data/production-ready-agent",
-    "object_storage_region": "",
-    "object_storage_namespace": "",
-    "object_storage_bucket": "",
     "readiness": "ok",
     "max_upload_bytes": 104857600,
-    "config_source": "runtime"
-  },
-  "ociSettings": {
-    "config_file": "~/.oci/config",
-    "profile": "DEFAULT",
-    "user": "",
-    "fingerprint": "",
-    "tenancy": "",
-    "region": "",
-    "key_file": "~/.oci/oci_api_key.pem",
-    "key_file_exists": false,
-    "config_file_exists": false,
     "config_source": "runtime"
   },
   "mcpConnections": {

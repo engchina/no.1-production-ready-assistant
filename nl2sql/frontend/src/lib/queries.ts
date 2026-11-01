@@ -5,17 +5,13 @@ import {
   useDatabaseStatus as useSharedDatabaseStatus,
 } from "@production-ready/system-settings";
 
-import {
-  api,
-  type SelectAiCredentialCreateRequest,
-} from "@/lib/api";
+import { api } from "@/lib/api";
 
 export const queryKeys = {
   databaseStatus: DATABASE_STATUS_QUERY_KEY,
   persistenceStatus: ["nl2sql", "persistence"] as const,
   modelSettings: ["settings", "model"] as const,
   databaseSettings: ["settings", "database"] as const,
-  selectAiCredential: ["settings", "database", "select-ai-credential"] as const,
   systemTables: SYSTEM_TABLES_QUERY_KEY,
   schemaOwners: ["schema", "owners"] as const,
   uploadStorageSettings: ["settings", "upload-storage"] as const,
@@ -58,25 +54,6 @@ export function useRecoverPersistence() {
   return useMutation({
     mutationFn: api.recoverPersistence,
     onSuccess: (data) => qc.setQueryData(queryKeys.persistenceStatus, data),
-  });
-}
-
-export function useSelectAiCredential() {
-  return useQuery({
-    queryKey: queryKeys.selectAiCredential,
-    queryFn: ({ signal }) => api.getSelectAiCredential({ signal }),
-    retry: false,
-  });
-}
-
-export function useCreateSelectAiCredential() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: SelectAiCredentialCreateRequest) =>
-      api.createSelectAiCredential(payload),
-    onSuccess: (data) => qc.setQueryData(queryKeys.selectAiCredential, data),
-    onError: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.selectAiCredential }),
   });
 }
 

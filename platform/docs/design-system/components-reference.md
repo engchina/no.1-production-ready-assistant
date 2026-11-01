@@ -1111,7 +1111,7 @@ export declare const toast: {
       <Button variant="secondary" icon={RefreshCw} onClick={retry}>再試行</Button>
     </>
   }
-  footer="OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。"
+  footer="アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。"
 />
 ```
 
@@ -2323,14 +2323,14 @@ messaging.md §9.1）。製品は自分の失敗の情報を `ProcessFailure` �
 
 ```tsx
 <PreconditionBanner
-  id="profile-save-credential-precondition"
-  title="Select AI Credential が作成されていません"
-  message="業務プロファイルの保存（DBMS_CLOUD_AI Profile への反映）には Select AI Credential（NL2SQL_OCI_CRED）が必要です。作成するまで保存できません。運用設定の「Select AI Credential」で作成してから、再試行してください。"
-  settingsLink={canOpen ? { to: "/settings/select-ai-credential", label: "Select AI Credential を開く", icon: FileKey, linkComponent: Link } : undefined}
+  id="save-oci-precondition"
+  title="OCI 認証が設定されていません"
+  message="この操作には OCI 認証の設定が必要です。設定するまで保存できません。システム設定の「OCI 認証」で設定してから、再試行してください。"
+  settingsLink={canOpen ? { to: "/settings/oci", label: "OCI 認証を開く", icon: KeyRound, linkComponent: Link } : undefined}
   onRetry={recheck}
   retrying={rechecking}
 />
-<Button disabled={blocked} aria-describedby={blocked ? "profile-save-credential-precondition" : undefined}>保存</Button>
+<Button disabled={blocked} aria-describedby={blocked ? "save-oci-precondition" : undefined}>保存</Button>
 ```
 
 ### PreconditionBanner の props
@@ -2373,7 +2373,7 @@ type PreconditionBannerProps = {
 | 「再試行」の `loading` は押したときだけ | 画面のフォーカスでの取り直しで回さない（buttons.md §8） |
 
 - 単体テストは `packages/ui/tests/precondition-banner.test.tsx`。
-- 使う画面: NL2SQL の Select AI Credential の事前条件（業務プロファイルの保存・SQL 生成・チャット・合成データ・SQL 生成評価。`SelectAiCredentialPrecondition`）。
+- 使う画面: 今は無い（最初に使った NL2SQL の事前条件の画面は、その機能とともに削除した。#7）。
 
 ---
 

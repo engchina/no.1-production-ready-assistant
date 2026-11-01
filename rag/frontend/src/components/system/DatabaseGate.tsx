@@ -33,7 +33,7 @@ export function useDatabaseGatePermissions(): { canManageDatabase: boolean; canM
 }
 
 /**
- * ゲートを通さない画面（3製品共通。#325）。システム設定の 5 画面だけで、RAG 固有の設定
+ * ゲートを通さない画面（3製品共通。#325）。システム設定の 4 画面だけで、RAG 固有の設定
  * （取込・検索・回答の設定など）やユーザー・ロール・権限管理は DB を使うのでゲートを通す。
  */
 export const isDatabaseGateExempt = isDatabaseGateExemptPath;

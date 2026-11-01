@@ -69,8 +69,6 @@ class DocumentCleanupTargets:
     source_uri: str | None = None
     artifact_uris: tuple[str, ...] = ()
     prefixes: tuple[str, ...] = ()
-    # 成果物の prefix を OCI でも消すか（文書が OCI の参照を持つ。#2093）。
-    include_oci: bool = False
 
     @property
     def is_empty(self) -> bool:
@@ -81,7 +79,6 @@ class DocumentCleanupTargets:
             "source_uri": self.source_uri,
             "artifact_uris": list(self.artifact_uris),
             "prefixes": list(self.prefixes),
-            "include_oci": self.include_oci,
         }
 
     @classmethod
@@ -92,7 +89,6 @@ class DocumentCleanupTargets:
             source_uri=source_uri if isinstance(source_uri, str) and source_uri else None,
             artifact_uris=_str_tuple(payload.get("artifact_uris")),
             prefixes=_str_tuple(payload.get("prefixes")),
-            include_oci=payload.get("include_oci") is True,
         )
 
 

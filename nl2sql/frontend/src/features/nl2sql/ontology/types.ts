@@ -841,7 +841,7 @@ export interface QuerySessionPreview {
   is_safe: boolean;
   row_limit: number;
   note?: string;
-  engine?: "select_ai" | "select_ai_agent" | "enterprise_ai_direct";
+  engine?: "enterprise_ai_direct";
   engine_meta?: Record<string, OntologyJsonValue>;
   fallback_reason?: string;
   rewritten_question?: string;
@@ -910,7 +910,7 @@ export interface QuerySessionCreateRequest {
   };
   profile_confirmation_token?: string;
   row_limit?: number;
-  engine?: "select_ai" | "select_ai_agent" | "enterprise_ai_direct";
+  engine?: "enterprise_ai_direct";
   clarification_mode?: ClarificationMode;
   /**
    * チャットの回答前の確認（#1442。guided だけ）。業務プロファイルは画面で選んでいるので推薦の確認は無い。

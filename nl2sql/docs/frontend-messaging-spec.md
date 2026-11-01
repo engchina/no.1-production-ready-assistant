@@ -7,7 +7,6 @@
 
 ## 3.1 Toast（NL2SQL 固有）
 
-- **合成データ生成の終了通知**: 終端遷移を観測したときだけ、終了状態と対象表名を共通 Toast に表示する。結果画面へ遷移する action は付けず、4 秒で自動消去し、閉じるボタンも利用できる。ページ上部に終了履歴の Banner を表示せず、初回取得・再読込・同一状態の再取得では通知を再送しない。履歴と詳細はデータ管理画面で確認する。
 - `danger` の Toast は共有 UI の `toast.error()` をそのまま使う（既定で利用者が閉じるまで残る。自動消滅の時間を上書きしない）。以前の `src/lib/toast.ts` の `toastError()` は、共有 UI の既定が UX 契約に合ったため削除した（#351）。`<Toaster/>` は `src/main.tsx` で一度だけ描画する。
 
 ## 3.3 FormStatus（NL2SQL 固有）
@@ -100,11 +99,11 @@ src/main.tsx                         <ConfirmProvider labels navigationKey> + <T
 
 - ✅ モデル設定のモデル削除に `useConfirm()` の確認ゲートを導入(`ModelSettingsClient`)。
 - ✅ `ModelSettingsClient` のローカル `Notice` を撤廃し、通知/エラー/検証を共通 `<Banner>` へ統合。
-- ✅ `OciSettingsClient` / `DatabaseSettingsClient` / `UploadStorageSettingsClient` の保存結果インライン表示を `<FormStatus>` へ統一。
+- ✅ `DatabaseSettingsClient` / `UploadStorageSettingsClient` の保存結果インライン表示を `<FormStatus>` へ統一（OCI 認証の画面は #11 で削除）。
 - ✅ `SearchClient`(エラー・ガードレール警告)・`DocumentWorkspace`(重複/エラー/索引完了)の手書き tone ボックスを `<Banner>` へ統一。
 - ✅ spec 準拠監査(全画面)を実施し、手書き tone ボックスを統一:
   - `<Banner>` 化: ログインエラー、文書抽出の警告、評価の閾値失敗/検証/実行エラー。
-  - `<FieldError>` 化: `SelectField` 本体および OCI/アップロード保存先の各フィールドエラー(`aria-describedby` 連携を維持)。
+  - `<FieldError>` 化: `SelectField` 本体および アップロード保存先の各フィールドエラー(`aria-describedby` 連携を維持)。
   - `<FormStatus>` 化: コピー失敗などのアクション結果。
 - ✅ `problem` 契約と JSON Pointer field binding を導入。ユーザーID/ロールコード競合は FieldError へ結び付け、
   入力変更時の局所クリア、最初のエラーへのフォーカス、FormStatus との重複抑止を実装。
@@ -126,7 +125,3 @@ src/main.tsx                         <ConfirmProvider labels navigationKey> + <T
 - 公開成功はトースト、公開前チェックと取得失敗は対応する操作の近くに表示する。Markdown の編集で準備済み確認を失効させ、草稿は保持する。
 - 公開成功後の再取得は本文が同じでも新しい草稿 ETag を受理する。公開 snapshot と草稿 revision の ID が異なる場合も、次の編集を保存可能にし、未保存入力は保持する。
 - 応答喪失時は保存した冪等キーで公開結果を照会し、自動再実行しない。構築結果・公開能力の独立パネルは使用しない。
-
-### 合成データの事前確認（Issue #510）
-
-新規生成の完了は「準備が完了しました（未適用）」と通知する。確認用データの読込は結果領域内で示し、表切替のたびに成功 Toast を積み重ねない。適用・破棄は画面内で独立した状態を表示し、適用には確認語と共通 ConfirmDialog を使う。適用エラーは確認領域の FormStatus に表示して確認語を解除する。詳細は [合成データの事前確認と適用](./synthetic-data-preview.md) を参照。

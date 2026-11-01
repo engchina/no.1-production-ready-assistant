@@ -629,8 +629,8 @@ def test_execute_sql_error_without_oracle_code_is_classified(
     [
         (
             OracleAdapterError(
-                "Select AI の生成に失敗しました: ORA-04027: self-deadlock during automatic "
-                "validation for object DBMS_CLOUD_AI"
+                "Oracle の呼び出しに失敗しました: ORA-04027: self-deadlock during automatic "
+                "validation for object APP.SAMPLE_PKG"
             ),
             "ORA-04027",
         ),
@@ -803,7 +803,6 @@ def test_enterprise_ai_authorization_failure_explains_settings_not_retry(
     assert "HTTP 404" in message
     assert "IAM" in message
     assert "既定のテキストモデル" in message
-    assert "業務プロファイルの Region・LLM Model は Select AI・Select AI Agent 用" in message
     assert job.error_detail is not None and "Authorization failed" in job.error_detail
     steps = {step.stage: step.status for step in job.steps}
     assert steps["generate_sql"] == JobStepStatus.ERROR

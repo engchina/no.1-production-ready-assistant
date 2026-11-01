@@ -64,19 +64,6 @@ const profile = {
   default_row_limit: 100,
   safety_policy: "select_only",
   few_shot_examples: [],
-  select_ai_config: {
-    profile_name: "",
-    region: "",
-    model: "",
-    embedding_model: "cohere.embed-v4.0",
-    max_tokens: 32000,
-    enforce_object_list: true,
-    comments: true,
-    annotations: false,
-    constraints: true,
-    role: "",
-    additional_instructions: "",
-  },
   archived: false,
 };
 
@@ -449,7 +436,6 @@ async function mockApi(
     const path = url.pathname;
     // 共通 helper の認証 mock を優先し、catch-all で CurrentUser を空 object にしない。
     if (path === "/api/auth/me") return route.fallback();
-    if (path === "/api/nl2sql/synthetic-data/runs") return fulfill(route, []);
     // profile-access 一覧(配列)は共通 helper の mock([])へ委譲する。
     if (path === "/api/security/profile-access/profiles") return route.fallback();
     if (path === "/api/nl2sql/rewrite") {
@@ -531,7 +517,6 @@ async function mockApi(
         default_row_limit: profile.default_row_limit,
         safety_policy: profile.safety_policy,
         few_shot_examples: profile.few_shot_examples,
-        select_ai_config: profile.select_ai_config,
         allowed_table_count: profile.allowed_tables.length,
         allowed_view_count: profile.allowed_views.length,
         glossary_count: Object.keys(profile.glossary).length,
@@ -617,7 +602,6 @@ async function mockApi(
         confirmation_token: "profile-confirmation-token",
       });
     }
-    if (path === "/api/nl2sql/synthetic-data/runs") return fulfill(route, []);
     if (path === "/api/nl2sql/jobs" && request.method() === "POST") {
       payloads.job = request.postDataJSON();
       return fulfill(route, {
@@ -662,7 +646,7 @@ async function mockApi(
         },
         result: {
           history_id: "hist-ontology-1",
-          engine: "select_ai",
+          engine: "enterprise_ai_direct",
           engine_meta: { profile: "NL2SQL_DEFAULT_PROFILE" },
           fallback_reason: "",
           original_question: question,
@@ -816,9 +800,6 @@ async function mockApi(
     }
     if (path === "/api/nl2sql/db-admin/views") {
       return fulfill(route, { runtime: "deterministic", items: [], warnings: [] });
-    }
-    if (path === "/api/nl2sql/select-ai/db-profiles") {
-      return fulfill(route, { runtime: "deterministic", profiles: [], warnings: [] });
     }
     return fulfill(route, {});
   });

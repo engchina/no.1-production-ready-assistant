@@ -31,9 +31,9 @@ export const DATABASE_GATE_MESSAGES = {
   "dbGate.openDatabaseSettings": "データベース設定を開く",
   "dbGate.openSystemTables": "システムテーブルを開く",
   "dbGate.settingsHint":
-    "OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。",
+    "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。",
   "dbGate.setupRequired.settingsHint":
-    "OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。",
+    "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。",
   "dbGate.contactAdmin.footer":
     "データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。",
   "dbGate.reasonCode": "診断コード: {code}",

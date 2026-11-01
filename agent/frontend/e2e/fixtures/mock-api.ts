@@ -2,7 +2,7 @@
  * e2e 用の API mock（hermetic）。
  *
  * e2e は実 backend を起動しない。実 backend は設定保存で利用者の実環境のファイル
- * （~/.oci/config、backend/.env、backend/model-settings.json 等）へ書き込むため、
+ * （platform/.env、backend/.env、model-settings.json 等）へ書き込むため、
  * すべての /api をこの fixture の page.route で応答する。
  *
  * - 既定値 `api-defaults.json` は backend の GET 応答（初期状態）と同じ形。
@@ -821,7 +821,6 @@ function createState() {
     // チャットの添付を使うか（#2517。既定は無効）。
     chatAttachmentsEnabled: false,
     traceRecordingEnabled: false,
-    ociSettings: d.ociSettings as Json,
     // システムテーブルの状態（#751）。既定は旧版の DB（検索・回答プロファイルの表の削除を承認する前）。
     systemTables: clone(SYSTEM_TABLES_LEGACY) as Json,
     // 作成・更新の結果の、再起動が要るプロセス（#1844。spec が設定する）。
@@ -2893,10 +2892,6 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
         return state.databaseSettings;
       }
     }
-    if (method === "POST" && at("settings", "database", "wallet", "download")) {
-      // 共有画面（#108）は Wallet が無く ADB OCID があれば OCI から Wallet の取得を試みる。
-      return { status: "already_configured", settings: state.databaseSettings };
-    }
     if (at("settings", "answer-notice")) {
       if (method === "PUT") {
         state.answerNotice = { enabled: Boolean(body.enabled), text: (body.text as string | null) ?? null };
@@ -2930,26 +2925,6 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
         Object.assign(state.uploadStorage, body);
         return state.uploadStorage;
       }
-    }
-    if (at("settings", "oci")) {
-      if (method === "GET") return state.ociSettings;
-      if (method === "PATCH") {
-        Object.assign(state.ociSettings, {
-          user: body.user ?? "",
-          fingerprint: body.fingerprint ?? "",
-          tenancy: body.tenancy ?? "",
-          region: body.region ?? "",
-          config_file_exists: true,
-        });
-        return state.ociSettings;
-      }
-    }
-    if (method === "PATCH" && at("settings", "oci", "object-storage")) {
-      Object.assign(state.uploadStorage, body);
-      return state.uploadStorage;
-    }
-    if (method === "POST" && at("settings", "oci", "object-storage", "namespace")) {
-      return { namespace: "mocktenancynamespace" };
     }
   }
 

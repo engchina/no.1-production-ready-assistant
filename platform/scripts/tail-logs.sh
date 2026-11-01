@@ -11,7 +11,6 @@ case "${TAIL_LOGS_PRODUCT}" in
   agent) WORKER_SERVICES=() ;;
   nl2sql) WORKER_SERVICES=(
     "production-ready-nl2sql-schema-refresh-worker.service"
-    "production-ready-nl2sql-synthetic-worker.service"
     "production-ready-nl2sql-quality-evaluation-worker.service"
     "production-ready-nl2sql-ontology-worker.service"
   ) ;;
@@ -125,7 +124,6 @@ resolve_unit() {
   case "$1" in
     backend) printf '%s\n' "${BACKEND_SERVICE}" ;;
     schema | schema-refresh) printf '%s\n' "production-ready-nl2sql-schema-refresh-worker.service" ;;
-    synthetic) printf '%s\n' "production-ready-nl2sql-synthetic-worker.service" ;;
     quality | quality-evaluation) printf '%s\n' "production-ready-nl2sql-quality-evaluation-worker.service" ;;
     ontology) printf '%s\n' "production-ready-nl2sql-ontology-worker.service" ;;
     ingestion | ingestion-worker) printf '%s\n' "production-ready-rag-ingestion-worker.service" ;;

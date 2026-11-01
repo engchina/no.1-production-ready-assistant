@@ -78,9 +78,8 @@ test("table import wizard clear action resets import form, result, and dropzone 
   );
 });
 
-test("data management CSV and synthetic guarded actions expose clear buttons", () => {
-  const csvWorkspace = section(dataManagementPage, "function CsvUploadWorkspace", "function SyntheticWorkspace");
-  const syntheticWorkspace = section(dataManagementPage, "function SyntheticWorkspace", "function syntheticTablePickerItem");
+test("data management CSV guarded action exposes a clear button", () => {
+  const csvWorkspace = section(dataManagementPage, "function CsvUploadWorkspace", "function csvModeLabel");
 
   assert.match(dataManagementPage, /import \{[^}]*\bClearActionButton\b[^}]*\} from "@production-ready\/ui"/u);
   assert.match(csvWorkspace, /resetSignal=\{fileResetSignal\}/u);
@@ -92,45 +91,17 @@ test("data management CSV and synthetic guarded actions expose clear buttons", (
     dataManagementPage,
     /const clearCsvUpload = \(\) => \{[\s\S]*clearCsvFile\(\);[\s\S]*setCsvMode\("insert"\);[\s\S]*setCsvConfirmation\(""\);[\s\S]*setCsvUploadError\(""\);[\s\S]*\};/u,
   );
-  // 生成条件のリセットは入力だけを戻す。表示中の結果（表示件数・結果をリセット）と生成状況（破棄）は対象外（#553）。
-  const canClearSyntheticGeneration = section(dataManagementPage, "const canClearSyntheticGeneration = Boolean(", "  );");
-  assert.match(canClearSyntheticGeneration, /syntheticSelectedTables[\s\S]*syntheticConfirmation/u);
-  assert.doesNotMatch(canClearSyntheticGeneration, /syntheticDataResults|syntheticResultLimitInput|syntheticData \|\|/u);
-  assert.match(
-    syntheticWorkspace,
-    /<ClearActionButton[\s\S]*label=\{t\("dataTools\.syntheticData\.actions\.clear"\)\}[\s\S]*!canClearSyntheticGeneration[\s\S]*onClick=\{onClearSyntheticGeneration\}/u,
-  );
-  const clearSyntheticGeneration = section(dataManagementPage, "const clearSyntheticGeneration = () => {", "\n  };");
-  assert.match(
-    clearSyntheticGeneration,
-    /setSyntheticSelectedTables\(\[\]\);[\s\S]*setSyntheticPrompt\(""\);[\s\S]*setSyntheticConfirmation\(""\);[\s\S]*setSyntheticRows\(1\);/u,
-  );
-  assert.doesNotMatch(clearSyntheticGeneration, /clearSyntheticResultState|setSyntheticData\(null\)|setSyntheticResultTable/u);
 });
 
-test("business profile clear action resets only the Oracle execution gate and job state", () => {
-  const editor = section(profileManagementPage, "function ProfileEditor", "function ProfileSaveResultRegion");
-  const clearOracleExecution = section(
-    profileManagementPage,
-    "const clearOracleExecution = () => {",
-    "  const editor = (",
-  );
+test("business profile editor saves and discards with the shared FormActionBar", () => {
+  const editor = section(profileManagementPage, "function ProfileEditor", "export function ProfileManagementPage");
+  const discardChanges = section(profileManagementPage, "const discardChanges = () => {", "\n  };");
 
-  assert.match(profileManagementPage, /import \{[^}]*\bClearActionButton\b[^}]*\} from "@production-ready\/ui"/u);
-  assert.match(editor, /canClearOracleExecution: boolean/u);
-  assert.match(editor, /onOracleExecutionClear: \(\) => void/u);
-  assert.match(
-    editor,
-    /<ClearActionButton[\s\S]*label=\{t\("profiles\.oracle\.actions\.clear"\)\}[\s\S]*size="lg"[\s\S]*disabled=\{!canClearOracleExecution \|\| saving\}[\s\S]*onClick=\{onOracleExecutionClear\}/u,
-  );
-  assert.match(profileManagementPage, /const canClearOracleExecution = Boolean\([\s\S]*oracleConfirmation[\s\S]*syncJobParam/u);
-  assert.match(
-    profileManagementPage,
-    /const clearOracleExecution = \(\) => \{[\s\S]*setOracleConfirmation\(""\);[\s\S]*setOracleSyncJobId\(""\);[\s\S]*nextParams\.delete\("syncJobId"\);/u,
-  );
-  assert.doesNotMatch(clearOracleExecution, /setProfileName\(""\)/u);
-  // 「保存時に Select AI Agent アセットも再構築する」は業務プロファイルの設定で、リセットしない（#1690）。
-  assert.doesNotMatch(clearOracleExecution, /setRebuildAgentAssets/u);
+  assert.match(profileManagementPage, /import \{[^}]*\bFormActionBar\b[^}]*\} from "@production-ready\/ui"/u);
+  assert.match(editor, /<FormActionBar[\s\S]*id: "save"[\s\S]*id: "discard"[\s\S]*disabled: !dirty \|\| saving/u);
+  // 保存に確認語は要らない（業務プロファイルの保存は表への保存だけ）。
+  assert.doesNotMatch(editor, /ExecutionConfirmationField|ADMIN_EXECUTE/u);
+  assert.match(discardChanges, /setForm\(selectedProfile \? profileToForm\(selectedProfile\) : emptyProfileForm\(\)\)/u);
 });
 
 test("file dropzone reset signal clears local validation errors for external clear actions", () => {

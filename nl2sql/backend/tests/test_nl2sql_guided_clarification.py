@@ -2200,7 +2200,7 @@ class _McpJobs:
             created_at="2026-10-11T00:00:00+00:00",
             result=Nl2SqlResult(
                 history_id="history-1",
-                engine=Nl2SqlEngine.SELECT_AI,
+                engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
                 original_question=request.question,
                 rewritten_question=request.question,
                 generated_sql="SELECT SUM(AMOUNT) FROM APP.ORDERS WHERE STATUS = 'SHIPPED'",

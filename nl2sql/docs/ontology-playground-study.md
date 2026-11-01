@@ -76,7 +76,7 @@
 | Azure OpenAI 抽出(`generate-ontology`) | `OntologyBuildService`(OCI Enterprise AI)+ `OntologyBuildExtraction`(Pydantic 検証) | 抽出ルールを取り込み(§5 Gap 4) |
 | `queryEngine.ts`(決定論 NL マッピング) | 本複製の `queryPlayground.ts`(frontend 純関数) | §5 Gap 3 |
 | Cytoscape.js | ReactFlow(`OntologyGraphCanvas.tsx`) | 既存 canvas へ highlight props 追加 |
-| Fabric IQ エクスポート | **非対象**。代わりに `build_semantic_artifacts().llm_markdown` が Select AI `additional_instructions` / Ontology クエリセッションの SQL 生成文脈へ流れる | §6 |
+| Fabric IQ エクスポート | **非対象**。代わりに `build_semantic_artifacts().llm_markdown` が Ontology クエリセッションの SQL 生成文脈へ流れる | §6 |
 | 人手確認なし(即時編集) | draft → proposal(人手承認)→ publish revision | 相違点・本プロジェクトの強み |
 | 推論・検証なし | OWL2RL 推論 + SHACL 検証(`ontology_reasoning.py` / `ontology_semantics.py`) | 本プロジェクトが先行 |
 
@@ -103,11 +103,9 @@ flowchart LR
     subgraph NL2SQL 消費
         O --> M[build_semantic_artifacts<br/>llm_markdown + Mermaid ER]
         M --> Q[Ontology クエリセッション<br/>_compile_sql_generation_context → SQL 生成]
-        O --> G[glossary / aliases]
-        G --> A[Select AI<br/>build_select_ai_additional_instructions]
+        O --> G[glossary / aliases] --> Q
     end
 ```
 
-- **経路 1(Select AI)**: `service.py` の `build_select_ai_additional_instructions` が業務用語集(glossary)・SQL 生成ルールを DBMS_CLOUD_AI プロファイルの `additional_instructions` へ注入。
-- **経路 2(Ontology クエリセッション)**: `ontology_router.py` の `_compile_sql_generation_context` が許可オブジェクト・承認済み結合パス(join_conditions)・指標定義・`llm_markdown`・Mermaid ER を束ねて SQL 生成文脈を構築。
-- 決定論 NL Playground(Gap 3)は経路 2 の `_interpret_question` の**前段の可視化・デバッグ手段**として機能する(質問がどのノード/エッジに接地するかを LLM なしで確認できる)。
+- **Ontology クエリセッション**: `ontology_router.py` の `_compile_sql_generation_context` が許可オブジェクト・承認済み結合パス(join_conditions)・指標定義・`llm_markdown`・Mermaid ER を束ねて SQL 生成文脈を構築。
+- 決定論 NL Playground(Gap 3)はこの経路の `_interpret_question` の**前段の可視化・デバッグ手段**として機能する(質問がどのノード/エッジに接地するかを LLM なしで確認できる)。

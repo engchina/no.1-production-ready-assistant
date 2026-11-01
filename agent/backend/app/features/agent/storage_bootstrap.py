@@ -55,7 +55,6 @@ STORAGE_INDEPENDENT_PATHS = (
     "/api/auth",
     "/api/settings/database",
     "/api/settings/model",
-    "/api/settings/oci",
     "/api/settings/upload-storage",
     "/api/security/users",
     "/api/security/roles",

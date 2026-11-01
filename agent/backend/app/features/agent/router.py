@@ -101,7 +101,6 @@ from pr_system_settings.model_test_input import (
     model_test_text_context,
     rerank_test_details,
 )
-from pr_system_settings.oci import build_oci_router
 from pr_system_settings.trace_recording import build_trace_recording_router
 from pr_system_settings.upload_storage import (
     build_upload_storage_router,
@@ -623,7 +622,7 @@ async def require_agent_builder(request: Request) -> None:
 
 
 async def require_system_settings_write(request: Request) -> None:
-    """共通のシステム設定の保存・操作（OCI 認証・アップロード保存先・モデル・データベース。#215）。
+    """共通のシステム設定の保存・操作（アップロード保存先・モデル・データベース。#215）。
 
     RAG / NL2SQL と同じくメニュー権限（manifest の同じ判定）で許可する。local のローカル利用者は
     全権限を持つ。
@@ -683,17 +682,6 @@ router.include_router(
         get_settings=lambda: get_settings(),
         env_file=lambda: app_settings.PLATFORM_ENV_FILE,
         write_dependencies=[Depends(require_system_settings_write)],
-    ),
-    prefix="/settings",
-)
-# OCI 認証も3製品共通の実装（pr_system_settings.oci。#100）。
-# config 読込・接続テスト・namespace 取得もローカルの認証ファイルを読むため管理者に限定する。
-router.include_router(
-    build_oci_router(
-        get_settings=lambda: get_settings(),
-        env_file=lambda: app_settings.PLATFORM_ENV_FILE,
-        write_dependencies=[Depends(require_system_settings_write)],
-        action_dependencies=[Depends(require_system_settings_write)],
     ),
     prefix="/settings",
 )

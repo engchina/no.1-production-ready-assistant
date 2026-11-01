@@ -7,7 +7,7 @@ const NOTICE_TITLE = "データベースに接続できません";
 const NOTICE_MESSAGE =
   "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
 const NOTICE_HINT =
-  "OCI 認証・アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
+  "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 const RAW_DATABASE_ERROR = "Oracle に接続できませんでした (ORA-12514)。";
 
 function envelope(data: unknown) {
@@ -101,20 +101,6 @@ type Scenario = {
 
 const databaseIndependentScenarios: Scenario[] = [
   {
-    name: "OCI 認証設定",
-    path: "/settings/oci",
-    heading: "OCI 認証設定",
-    setup: async (page, countRequest) => {
-      await page.route("**/api/settings/oci", (route) => {
-        countRequest();
-        return fulfill(route, "OCI 設定を読み込めませんでした。", 500);
-      });
-      await page.route("**/api/settings/upload-storage", (route) =>
-        fulfill(route, "保存先設定を読み込めませんでした。", 500)
-      );
-    },
-  },
-  {
     name: "アップロード保存先",
     path: "/settings/upload-storage",
     heading: "アップロード保存先",
@@ -179,55 +165,6 @@ const databaseDependentScenarios: Scenario[] = [
   );
     },
   },
-  {
-    name: "Deep Data Security",
-    path: "/settings/security/deepsec",
-    heading: "Deep Data Security",
-    setup: async (page, countRequest) => {
-      await page.route("**/api/security/deepsec/status", (route) => {
-        countRequest();
-        return fulfill(route, {
-          configured: false,
-          driver_mode: "thin",
-          connection_security: "wallet_mtls",
-          deepsec_enabled: false,
-          data_user: "DEEPSEC_DATA_USER",
-          has_data_user_password: false,
-          objects: {},
-          message: "未適用です。",
-        });
-      });
-      await page.route("**/api/security/deepsec/plan", (route) =>
-        fulfill(route, {
-          version: "V001",
-          driver_mode: "thin",
-          connection_security: "wallet_mtls",
-          deepsec_enabled: false,
-          data_user: "DEEPSEC_DATA_USER",
-          has_data_user_password: false,
-          steps: [],
-        })
-      );
-      await page.route("**/api/security/deepsec/data-entitlements", (route) =>
-        fulfill(route, [])
-      );
-      await page.route("**/api/nl2sql/db-admin/objects**", (route) =>
-        fulfill(route, {
-          runtime: "oracle",
-          owner: "",
-          items: [],
-          total: 0,
-          table_count: 0,
-          view_count: 0,
-          counts_included: false,
-          next_cursor: null,
-          refreshed_at: "2026-07-19T00:00:00Z",
-          catalog_version: 0,
-          warnings: [],
-        })
-      );
-    },
-  },
 ];
 
 for (const scenario of databaseIndependentScenarios) {
@@ -257,20 +194,17 @@ for (const scenario of databaseIndependentScenarios) {
   });
 }
 
-test("設定入口はDB未到達でもOCI認証設定へ遷移する", async ({ page }) => {
+test("設定入口はDB未到達でもアップロード保存先へ遷移する", async ({ page }) => {
   await mockAuthenticatedGate(page, () => true);
-  await page.route("**/api/settings/oci", (route) =>
-    fulfill(route, "OCI 設定を読み込めませんでした。", 500)
-  );
   await page.route("**/api/settings/upload-storage", (route) =>
     fulfill(route, "保存先設定を読み込めませんでした。", 500)
   );
 
   await page.goto("/settings");
 
-  await expect(page).toHaveURL(/\/settings\/oci$/);
+  await expect(page).toHaveURL(/\/settings\/upload-storage$/);
   await expect(
-    page.getByRole("heading", { name: "OCI 認証設定", exact: true, level: 1 })
+    page.getByRole("heading", { name: "アップロード保存先", exact: true, level: 1 })
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: NOTICE_TITLE })).toHaveCount(0);
 });

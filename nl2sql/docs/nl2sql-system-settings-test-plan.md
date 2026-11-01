@@ -8,10 +8,9 @@
 
 | メニュー | 画面 URL | 主な対象 |
 | --- | --- | --- |
-| OCI 認証 | `/settings/oci` | OCI config 読込、秘密鍵アップロード、認証保存、接続確認、Object Storage namespace 取得 |
-| アップロード保存先 | `/settings/upload-storage` | local / OCI Object Storage 保存先切替、保存、入力検証 |
+| アップロード保存先 | `/settings/upload-storage` | ローカルの保存ディレクトリの保存、入力検証 |
 | モデル | `/settings/model` | 接続（プライマリ / セカンダリ / ターシャリ）、登録モデル（種類: テキスト / 埋め込み / 再ランク）、既定のモデル、接続テスト、テンプレート検証 |
-| データベース | `/settings/database` | Oracle 接続設定、wallet upload / 自動取得、ADB start / stop、接続テスト |
+| データベース | `/settings/database` | Oracle 接続設定、wallet upload、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
 
 テストデータ配置先:
@@ -22,17 +21,17 @@
 
 - UI 表示言語は日本語を前提にする。
 - 管理者ロール `SYSTEM_ADMIN` または同等の権限で検証する。
-- 実 OCI OCID、秘密鍵、DB パスワード、wallet は使用しない。本文書の fixture はすべてダミー値である。
-- 実接続テストは、検証環境の `.env` / OCI / Oracle ADB が設定済みの場合のみ成功を期待する。未設定環境では失敗メッセージと復旧導線を確認する。
+- 実 DB パスワード、wallet は使用しない。本文書の fixture はすべてダミー値である。
+- 実接続テストは、検証環境の `.env` / Oracle AI Database が設定済みの場合のみ成功を期待する。未設定環境では失敗メッセージと復旧導線を確認する。
 - 設定保存系 API は環境設定ファイルや runtime 設定へ反映されるため、ローカルまたは検証用環境で実施する。
 - Playwright では `docs/test-data/nl2sql-system-settings/mock-responses/` の JSON を API mock として使用できる。
-- ファイルアップロード試験では `oci/` と `database/` 配下の fixture を使用する。
+- ファイルアップロード試験では `database/` 配下の fixture を使用する。
 
 ## 3. 共通 UI / 非機能テスト
 
 | ID | 観点 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| SYS-COM-001 | サイドナビ導線 | システム設定を展開し、6 メニューを順にクリックする | 各ページタイトル、パンくず、選択状態が正しく表示される | - |
+| SYS-COM-001 | サイドナビ導線 | システム設定を展開し、各メニューを順にクリックする | 各ページタイトル、パンくず、選択状態が正しく表示される | - |
 | SYS-COM-002 | ローディング | API 応答を遅延させる | スケルトンまたは読込状態が表示され、ボタンが多重実行されない | `mock-responses/*.json` |
 | SYS-COM-003 | API エラー | 各 GET API を 500 応答にする | エラー文言、再読込/再試行導線が表示される | `mock-responses/system-tables-failed.json` |
 | SYS-COM-004 | 権限制御 | 閲覧権限のみでアクセスする | 保存/実行系ボタンが非表示または disabled になり、状態は閲覧できる | - |
@@ -41,32 +40,7 @@
 | SYS-COM-007 | キーボード操作 | Tab / Shift+Tab / Enter / Space で操作する | フォーカス順が自然で、主要ボタン・toggle がキーボードで操作できる | - |
 | SYS-COM-008 | モバイル幅 | 375px 幅で各ページを開く | 横スクロールが必要な表以外で文字やボタンが重ならない | - |
 
-## 4. OCI 認証
-
-対象 API:
-
-- `GET /api/settings/oci`
-- `PATCH /api/settings/oci`
-- `POST /api/settings/oci/config/read`
-- `POST /api/settings/oci/config/test`
-- `POST /api/settings/oci/key-file`
-- `POST /api/settings/oci/object-storage/namespace`
-- `PATCH /api/settings/oci/object-storage`
-
-| ID | 機能 | 手順 | 期待結果 | テストデータ |
-| --- | --- | --- | --- | --- |
-| OCI-001 | 初期表示 | OCI 認証ページを開く | config path、profile、user、tenancy、fingerprint、region、key 状態が表示される | `mock-responses/oci-settings.success.json` |
-| OCI-002 | config 読込成功 | `OCI 設定ファイルを読み込む` を実行 | `~/.oci/config` / `DEFAULT` から user, tenancy, fingerprint, region が反映される | `oci/config.valid`、`api/oci-config-read.request.json` |
-| OCI-003 | config 欠落 | 欠落 config を読み込ませる | 欠落フィールドがエラー表示され、既存値は不用意に消えない | `oci/config.missing-fields` |
-| OCI-004 | 秘密鍵アップロード成功 | `.pem` ファイルを選択する | アップロード成功 toast、key 存在状態、key path が更新される | `oci/oci_api_key.pem` |
-| OCI-005 | 秘密鍵拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `oci/oci_api_key.invalid.txt` |
-| OCI-006 | 認証設定保存 | user / fingerprint / tenancy / region を変更して保存 | PATCH payload が送信され、保存成功後に再取得値が表示される | `api/oci-settings.patch.json` |
-| OCI-007 | 接続確認成功 | config/key ありの状態で接続確認 | success 状態、region / tenancy 確認結果が表示される | `mock-responses/oci-config-test.success.json` |
-| OCI-008 | 接続確認失敗 | key 不正または OCID 不正で接続確認 | failed 状態、原因メッセージ、修正対象が表示される | `mock-responses/oci-config-test.failed.json` |
-| OCI-009 | Namespace 取得 | Object Storage namespace 取得を実行 | namespace が入力欄へ反映される | `api/oci-namespace.request.json` |
-| OCI-010 | Object Storage 共通設定保存 | region / namespace を変更して保存 | `PATCH /api/settings/oci/object-storage` が送信され、アップロード保存先画面でも同値が参照できる | `api/oci-object-storage.patch.json` |
-
-## 5. アップロード保存先
+## 4. アップロード保存先
 
 対象 API:
 
@@ -75,15 +49,11 @@
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| UPL-001 | local 初期表示 | ページを開く | backend が `local`、local path、最大アップロードサイズが表示される | `mock-responses/upload-storage-local.success.json` |
-| UPL-002 | local 保存 | local backend を選択し保存 | local path が保存され、bucket 未設定でも成功する | `api/upload-storage-local.patch.json` |
-| UPL-003 | OCI 保存 | OCI backend を選択し namespace / bucket を入力して保存 | namespace / bucket が保存され、保存先説明が OCI 表示になる | `api/upload-storage-oci.patch.json` |
-| UPL-004 | bucket 名検証 | 不正文字を含む bucket 名で保存 | 保存が止まり、bucket 名エラーが表示される | `upload-storage/invalid-bucket.json` |
-| UPL-005 | namespace 名検証 | 空または不正 namespace で OCI 保存 | 保存が止まり、namespace エラーが表示される | `api/upload-storage-oci-invalid-namespace.patch.json` |
-| UPL-006 | backend 切替保持 | local → OCI → local に切り替える | 各入力値が不必要に消えず、保存 payload は選択 backend に対応する | `api/*.json` |
-| UPL-007 | DB/OCI 未設定時 | OCI 認証が未設定の mock で表示する | 保存先設定画面自体は開け、必要情報の不足が分かる | `mock-responses/upload-storage-local.success.json` |
+| UPL-001 | 初期表示 | ページを開く | ローカル保存ディレクトリと最大アップロードサイズが表示される。保存先の選択肢（OCI Object Storage）は無い（#11） | `mock-responses/upload-storage-local.success.json` |
+| UPL-002 | 保存 | ローカル保存ディレクトリを変更して保存 | `PLATFORM_LOCAL_STORAGE_DIR` が保存される | `api/upload-storage-local.patch.json` |
+| UPL-003 | 必須入力 | ローカル保存ディレクトリを空にして保存 | 保存が止まり、欄のエラーが表示される | - |
 
-## 6. モデル
+## 5. モデル
 
 対象 API:
 
@@ -109,7 +79,7 @@
 | MOD-014 | Embedding test | 種類が埋め込みの登録モデルの行でテストを実行 | 設定の次元（`oci_genai_embedding_dim`）のベクトルが返ることを確認できる | `api/model-test-embedding.request.json` |
 | MOD-015 | Rerank test | 種類が再ランクの登録モデルの行でテストを実行 | 2 文書の並び順と最上位のスコア（success / failed）が表示される | `api/model-test-rerank.request.json` |
 
-## 7. データベース
+## 6. データベース
 
 対象 API:
 
@@ -117,7 +87,6 @@
 - `PATCH /api/settings/database`
 - `POST /api/settings/database/test`
 - `POST /api/settings/database/wallet`
-- `POST /api/settings/database/wallet/download`
 - `GET /api/schema/owners`
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
@@ -130,11 +99,10 @@
 | DB-006 | wallet upload 成功 | ZIP wallet を選択する | wallet_dir / wallet_uploaded / service list が更新される | `database/wallet-valid.zip` |
 | DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
 | DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
-| DB-009 | wallet 自動取得 | ADB OCID と region がある状態で自動取得 | 成功時 wallet が更新され、失敗時は OCI/ADB 設定不足が表示される | `mock-responses/database-settings.success.json` |
 | DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1024, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
 
-## 8. システムテーブル
+## 7. システムテーブル
 
 対象 API:
 
@@ -154,7 +122,7 @@
 | ST-009 | 実行権限なし | `settings.database.sql_execute` なしで開く | 状態は閲覧可、初期化/再作成は disabled または非表示 | `mock-responses/system-tables-ready.json` |
 | ST-010 | DB 未接続 | GET が DB unavailable を返す | 画面全体が落ちず、DB 設定ページへの導線が表示される | `mock-responses/system-tables-failed.json` |
 
-## 9. 配色
+## 8. 配色
 
 配色はライトの 1 種類だけで、テーマの選択は無い（#17）。共有 UI の CSS は `html` を常に `color-scheme: light` にし、class・属性・OS の配色設定に反応しない。サイドバーの暗いスラブ（`[data-surface="inverted"]`）とコードの面（`[data-surface="code"]`）はテーマではなく、常に暗い面である。「外観と証明書」の画面は #19 で削除した。
 
@@ -162,7 +130,7 @@
 | --- | --- | --- | --- | --- |
 | APP-001 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）OCI 設定のページを開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
 
-## 10. 推奨 Playwright fixture 利用例
+## 9. 推奨 Playwright fixture 利用例
 
 ```ts
 import { test, expect } from "@playwright/test";
@@ -181,7 +149,7 @@ test("モデル設定を表示できる", async ({ page }) => {
 
 ## 10. 後片付け
 
-- 実 DB / OCI 接続を使った場合は、検証後にダミー secret が runtime 設定へ残っていないことを確認する。
+- 実 DB 接続を使った場合は、検証後にダミー secret が runtime 設定へ残っていないことを確認する。
 - `wallet-valid.zip` をアップロードした検証環境では、wallet 配置ディレクトリを検証用に限定する。
 - ADB stop/start は共有環境では実行しない。mock または専用 ADB で検証する。
 - システムテーブル再作成は既存データを削除または上書きする可能性があるため、必ず空の検証 DB で実行する。

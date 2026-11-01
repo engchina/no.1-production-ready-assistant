@@ -6,36 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import { UploadStorageSettingsPage, validateUploadStorageForm } from "../src";
 
-const base = {
-  backend: "oci" as const,
-  localStorageDir: "",
-  objectStorageRegion: "us-chicago-1",
-  objectStorageNamespace: "ns",
-  objectStorageBucket: "originals",
-};
-
 describe("validateUploadStorageForm", () => {
-  it("local は保存ディレクトリだけを必須にする", () => {
-    expect(validateUploadStorageForm({ ...base, backend: "local" })).toEqual({
+  it("保存ディレクトリを必須にする", () => {
+    expect(validateUploadStorageForm({ localStorageDir: " " })).toEqual({
       localStorageDir: "ローカル保存ディレクトリを入力してください。",
     });
-    expect(validateUploadStorageForm({ ...base, backend: "local", localStorageDir: "/x" })).toEqual({});
-  });
-
-  it("OCI は region / namespace / bucket を必須にし、名前の文字種を検査する（backend と同じ規則）", () => {
-    expect(validateUploadStorageForm(base)).toEqual({});
-    const errors = validateUploadStorageForm({
-      ...base,
-      objectStorageRegion: " ",
-      objectStorageNamespace: "",
-      objectStorageBucket: "bad bucket",
-    });
-    expect(Object.keys(errors).sort()).toEqual([
-      "objectStorageBucket",
-      "objectStorageNamespace",
-      "objectStorageRegion",
-    ]);
-    expect(errors.objectStorageBucket).toBe("英数字、ハイフン、アンダースコア、ドットで入力してください。");
+    expect(validateUploadStorageForm({ localStorageDir: "/x" })).toEqual({});
   });
 });
 
@@ -49,9 +25,7 @@ describe("UploadStorageSettingsPage", () => {
               api={{
                 get: () => new Promise(() => undefined),
                 update: async () => Promise.reject(),
-                test: async () => Promise.reject(),
               }}
-              onOpenOciSettings={() => undefined}
             />
           </ConfirmProvider>
         </QueryClientProvider>
@@ -61,5 +35,7 @@ describe("UploadStorageSettingsPage", () => {
     expect(html).toContain("アップロード保存先設定を読み込んでいます。");
     expect(html).toContain('data-skeleton="form"');
     expect(html).toContain('data-processing-placement="panel"');
+    // OCI Object Storage の選択肢は無い（#11）
+    expect(html).not.toContain("Object Storage");
   });
 });

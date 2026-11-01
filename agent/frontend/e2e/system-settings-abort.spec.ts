@@ -7,7 +7,6 @@ import { openSidebarNav } from "./fixtures/nav";
  */
 const CASES = [
   { path: "/settings/upload-storage", api: "/api/settings/upload-storage", link: "アップロード保存先" },
-  { path: "/settings/oci", api: "/api/settings/oci", link: "OCI 認証設定" },
   { path: "/settings/model", api: "/api/settings/model", link: "モデル設定" },
   { path: "/settings/database", api: "/api/settings/database", link: "データベース設定" },
 ] as const;

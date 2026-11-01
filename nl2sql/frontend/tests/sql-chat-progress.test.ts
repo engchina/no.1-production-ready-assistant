@@ -107,7 +107,7 @@ test("工程の span に名前を付け、実行の全体は行にしない（�
     events({
       queue: { status: "done" },
       prepare_context: { status: "done" },
-      generate_sql: { status: "running", params: { engine: "select_ai" } },
+      generate_sql: { status: "running", params: { engine: "enterprise_ai_direct" } },
     }),
   );
   assert.deepEqual(
@@ -115,7 +115,7 @@ test("工程の span に名前を付け、実行の全体は行にしない（�
     ["処理を開始しました", "質問と参照できる表を整理しました", "SQL を生成しています"],
   );
   assert.equal(running[2].status, "running");
-  assert.equal(running[2].detail, "Select AI");
+  assert.equal(running[2].detail, "Enterprise AI");
   // 始まっていない段の行は無い（span は始まったときに出る）。
   assert.ok(!running.some((step) => step.status === "pending"));
 });
@@ -201,7 +201,7 @@ test("失敗した段は「〜できませんでした」で、後の段は始�
       {
         queue: { status: "done" },
         prepare_context: { status: "done" },
-        generate_sql: { status: "failed", params: { engine: "select_ai" } },
+        generate_sql: { status: "failed", params: { engine: "enterprise_ai_direct" } },
       },
       "failed",
     ),
@@ -209,29 +209,6 @@ test("失敗した段は「〜できませんでした」で、後の段は始�
   assert.equal(steps.length, 3);
   assert.equal(steps[2].label, "SQL を生成できませんでした");
   assert.equal(steps[2].name, "SQL の生成");
-});
-
-test("Select AI / Agent の SQL で省略した安全性の確認は、未実行と省略の理由（#1523）", () => {
-  const steps = view(
-    events(
-      {
-        queue: { status: "done" },
-        prepare_context: { status: "done" },
-        generate_sql: { status: "done", params: { engine: "select_ai" } },
-        safety_check: {
-          status: "skipped",
-          params: { tables: "APP.A", table_count: 1, safety_check_skipped: true },
-        },
-        execute_sql: { status: "done", params: { rows: 3 } },
-        format_results: { status: "done" },
-      },
-      "done",
-    ),
-  );
-  assert.equal(steps[3].status, "skipped");
-  assert.equal(steps[3].label, "SQL の種類と参照範囲を検査する");
-  assert.equal(steps[3].detail, "Select AI が生成した SELECT 文のため省略しました");
-  assert.equal(steps[4].status, "done");
 });
 
 test("止めた段（停止の span）は未実行と停止の文言", () => {

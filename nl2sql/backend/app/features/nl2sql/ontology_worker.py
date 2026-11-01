@@ -12,6 +12,9 @@ from app.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
+# 以前の版にあり、今は処理しない job の種類（#7）。
+_REMOVED_JOB_TYPES = frozenset({"profile_sync"})
+
 # 実行前に失敗した job を即時に再 claim できる回数。超えたら claim 期限切れの回収に任せる。
 _MAX_IMMEDIATE_RECLAIMS = 3
 
@@ -24,12 +27,10 @@ class OntologyWorker:
         runtime: Any,
         build_service: Any,
         publish_service: Any,
-        profile_sync_service: Any | None = None,
     ) -> None:
         self.runtime = runtime
         self.build_service = build_service
         self.publish_service = publish_service
-        self.profile_sync_service = profile_sync_service
         self.worker_id = f"{socket.gethostname()}:{id(self)}"
 
     def claim_next(self) -> dict[str, Any] | None:
@@ -97,8 +98,17 @@ class OntologyWorker:
             from .ontology_definition_data_validation import run_validation_job
 
             run_validation_job(self.runtime, job_id)
-        elif job_type == "profile_sync" and self.profile_sync_service is not None:
-            self.profile_sync_service.run_persisted(job_id)
+        elif job_type in _REMOVED_JOB_TYPES:
+            # 削除した機能（業務プロファイルの DB 側の AI profile への反映。#7）の job が
+            # 以前の版から残っていても、claim と失敗を繰り返さないよう取り消して終える。
+            self.runtime.store.save_job(
+                {
+                    **document,
+                    "status": "cancelled",
+                    "error_message_ja": "この処理は提供を終了しました。",
+                },
+                expected_etag=str(document["etag"]),
+            )
         else:
             raise RuntimeError(f"未対応の Ontology job type です: {job_type}")
 
@@ -158,13 +168,11 @@ def main() -> None:
         ontology_publish_service,
         ontology_runtime,
     )
-    from .profile_sync import profile_sync_service
 
     worker = OntologyWorker(
         ontology_runtime,
         ontology_build_service,
         ontology_publish_service,
-        profile_sync_service,
     )
     if args.once:
         worker.process_one()

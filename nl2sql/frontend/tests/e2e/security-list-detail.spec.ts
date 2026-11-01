@@ -16,7 +16,6 @@ const ROLE = {
   archived: false,
   version: 1,
   permissions: ["menu.query"],
-  data_entitlements: [],
   allowed_profile_ids: [],
 };
 

@@ -58,7 +58,6 @@ def _principal(user_uuid: str, *, admin: bool = False, permissions: set[str] | N
         force_password_change=False,
         role_codes=[SYSTEM_ADMIN_ROLE_CODE] if admin else ["ANALYST"],
         permissions={QUERY_GENERATE_PERMISSION, SQL_EXECUTE_PERMISSION, *(permissions or set())},
-        data_entitlements=[],
         allowed_profile_ids={_PROFILE_ID},
         session_id=f"session-{user_uuid}",
         csrf_token_hash="csrf",  # nosec B106 - テスト用
@@ -564,7 +563,7 @@ def _cancelled(index: int, **record: str) -> HistoryItem:
     return HistoryItem(
         id=f"cancelled-{index}",
         question="合成の質問",
-        engine=Nl2SqlEngine.SELECT_AI,
+        engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
         generated_sql="",
         created_at=f"2026-10-26T00:00:0{index}+00:00",
         profile_id=_PROFILE_ID,
@@ -596,7 +595,7 @@ def test_history_cancellation_shows_who_and_the_key_visible_to_the_viewer(
         HistoryItem(
             id="done",
             question="合成の質問",
-            engine=Nl2SqlEngine.SELECT_AI,
+            engine=Nl2SqlEngine.ENTERPRISE_AI_DIRECT,
             generated_sql="SELECT 1 FROM DUAL",
             created_at="2026-10-26T00:00:00+00:00",
             actor_user_uuid="alice",

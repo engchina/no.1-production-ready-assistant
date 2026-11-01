@@ -11,7 +11,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from pr_system_settings import oci as shared_oci
+from pr_system_settings import upload_storage as shared_upload_storage
 
 from app.api import health as health_routes
 from app.features.nl2sql import router as nl2sql_router
@@ -34,7 +34,6 @@ SYNC_SERVICE_ROOTS = {
 }
 SYNC_FACTORY_ROOTS = {
     "get_security_service",
-    "get_deepsec_service",
 }
 SYNC_MODULE_ROOTS = {
     "oracledb",
@@ -44,13 +43,8 @@ SYNC_MODULE_ROOTS = {
 }
 SYNC_LOCAL_HELPERS = {
     "_install_database_wallet",
-    "_install_downloaded_database_wallet",
-    "_install_oci_private_key",
     "_install_uploaded_database_wallet",
-    "_prepare_database_wallet_download",
     "_persist_adb_settings",
-    "_read_object_storage_namespace",
-    "_test_oci_config",
 }
 FILE_METHODS = {
     "glob",
@@ -306,7 +300,6 @@ def test_blocked_database_ready_route_does_not_block_security_api(
     monkeypatch.setattr(settings, "oracle_password", "secret")
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.oraclecloud.com:1522/service_high")
     monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
-    monkeypatch.setattr(settings, "oracle_deepsec_enabled", False)
 
     async def async_oracle_probe(_settings: object) -> None:
         return None
@@ -330,27 +323,24 @@ def test_blocked_database_ready_route_does_not_block_security_api(
     )
 
 
-def test_blocked_settings_namespace_route_does_not_block_security_api(
-    monkeypatch: pytest.MonkeyPatch,
+def test_blocked_settings_upload_storage_route_does_not_block_security_api(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     block = _new_block()
     _enable_local_debug_auth(monkeypatch)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "local_storage_dir", settings.local_storage_dir)
 
-    def blocking_namespace(_payload: object, **_config: object) -> str:
+    def blocking_persist(_settings: object, _env_file: object) -> None:
         _block_until_released(block.entered, block.release)
-        return "testnamespace"
 
-    monkeypatch.setattr(shared_oci, "_read_object_storage_namespace", blocking_namespace)
+    monkeypatch.setattr(shared_upload_storage, "persist_upload_storage", blocking_persist)
 
     asyncio.run(
         _assert_permissions_return_while_blocked(
-            "/api/settings/oci/object-storage/namespace",
+            "/api/settings/upload-storage",
             block,
-            method="POST",
-            json={
-                "config_file": "~/.oci/config",
-                "profile": "DEFAULT",
-                "region": "ap-tokyo-1",
-            },
+            method="PATCH",
+            json={"local_storage_dir": str(tmp_path)},
         )
     )

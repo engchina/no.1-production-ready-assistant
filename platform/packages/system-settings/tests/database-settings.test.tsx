@@ -16,7 +16,6 @@ const api: DatabaseSettingsApi = {
   getDatabaseSettings: pending,
   updateDatabaseSettings: pending,
   uploadDatabaseWallet: pending,
-  downloadDatabaseWallet: pending,
   testDatabaseSettings: pending,
 };
 
@@ -63,8 +62,6 @@ describe("DatabaseSettingsPage", () => {
       readiness: "ok",
       embedding_dimension: 1024,
       vector_column: "EMBEDDING",
-      adb_ocid: "",
-      region: "ap-osaka-1",
       config_source: "runtime",
     };
     const client = new QueryClient();
@@ -107,8 +104,6 @@ describe("DatabaseSettingsPage", () => {
       readiness: "ok",
       embedding_dimension: 1024,
       vector_column: "EMBEDDING",
-      adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-      region: "ap-osaka-1",
       config_source: "runtime",
     };
     const client = new QueryClient();
@@ -121,6 +116,8 @@ describe("DatabaseSettingsPage", () => {
     expect(html).not.toContain('id="adb-ocid"');
     expect(html).not.toContain("Autonomous Database 管理");
     expect(html).not.toMatch(/<button\b[^>]*>[\s\S]*?(起動|停止)<\/button>/);
+    // Wallet は ZIP のアップロードだけ（OCI からの自動取得は持たない。#11）。
+    expect(html).not.toContain("OCI から");
     // Wallet が未設定のときは warning の StatusBadge（#722）。
     const missingWallet = new QueryClient();
     missingWallet.setQueryData(DATABASE_SETTINGS_QUERY_KEY, { ...settings, wallet_uploaded: false });
@@ -143,8 +140,6 @@ describe("DatabaseSettingsPage", () => {
       readiness: "ok",
       embedding_dimension: 1024,
       vector_column: "EMBEDDING",
-      adb_ocid: "",
-      region: "ap-osaka-1",
       config_source: "runtime",
     };
     const client = new QueryClient();

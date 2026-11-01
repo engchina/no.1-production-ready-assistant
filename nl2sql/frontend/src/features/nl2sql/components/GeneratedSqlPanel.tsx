@@ -1,11 +1,10 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { FileText, ListOrdered, Network, Play } from "lucide-react";
+import { ListOrdered, Network, Play } from "lucide-react";
 
 import {
   CopyButton,
   Button,
   Banner,
-  Disclosure,
   StatusBadge,
   ContentActionBar,
   Skeleton,
@@ -26,7 +25,6 @@ import { OntologySelectionDetailsPanel } from "../ontology/OntologySelectionDeta
 import type {
   GeneratedSqlPanelData,
   Nl2SqlInterpretationArtifact,
-  Nl2SqlShowPromptArtifact,
 } from "../types";
 
 const LazyOntologyGraphCanvas = lazy(() => import("../ontology/OntologyGraphCanvas"));
@@ -383,40 +381,6 @@ function SqlLogicalStepsPanel({
   );
 }
 
-function ShowPromptArtifactPanel({
-  artifact,
-}: {
-  artifact?: Nl2SqlShowPromptArtifact | null;
-}) {
-  if (!artifact) return null;
-  if (!artifact.available) {
-    return (
-      <Banner severity="info" title={t("nl2sql.showPrompt.title")}>
-        {artifact.unavailable_reason || artifact.warnings.join(" ") || t("nl2sql.showPrompt.unavailable")}
-      </Banner>
-    );
-  }
-
-  return (
-    <Disclosure
-      surface="sunken"
-      icon={FileText}
-      summary={t("nl2sql.showPrompt.title")}
-      data-testid="nl2sql-show-prompt-panel"
-    >
-      {/* スクロール領域はキーボードでも操作できるよう focus 可能にする(WCAG 2.1.1)。 */}
-      <pre data-surface="code"
-        tabIndex={0}
-        role="region"
-        aria-label={t("nl2sql.showPrompt.title")}
-        className="max-h-96 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-xs leading-5 text-fg"
-      >
-        <code>{artifact.prompt}</code>
-      </pre>
-    </Disclosure>
-  );
-}
-
 /**
  * 生成 SQL のサマリ部（安全/エンジンバッジ・コピー/実行ボタン・SQL コード・説明文）。
  * タイムライン `generate_sql` ステップ内に埋め込めるよう Card に包まない。
@@ -500,7 +464,6 @@ export function GeneratedSqlSummary({
       <p className="text-sm leading-6 text-fg">{result.explanation}</p>
       <InterpretationArtifactPanel artifact={result.interpretation} profileId={profileId} />
       <SqlLogicalStepsPanel artifact={result.interpretation} />
-      <ShowPromptArtifactPanel artifact={result.show_prompt} />
     </div>
   );
 }

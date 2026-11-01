@@ -4,7 +4,6 @@
 
 | 機能 | 記事 |
 |---|---|
-| OCI 認証 | [OCI 認証設定を使ってみる](oci-authentication/README.md) |
 | アップロード保存先 | [アップロード保存先を使ってみる](upload-storage/README.md) |
 | モデル | [モデル設定を使ってみる](model-settings/README.md) |
 | データベース | [データベース設定を使ってみる](database-settings/README.md) |

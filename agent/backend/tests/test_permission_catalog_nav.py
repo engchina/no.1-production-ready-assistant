@@ -28,7 +28,6 @@ SHARED_NAV_ITEMS: dict[str, tuple[tuple[str, str], ...]] = {
         ("nav.securityRoles", "securityRoles"),
     ),
     "SYSTEM_SETTINGS_NAV_ITEMS": (
-        ("nav.settingsOci.sidebar", "settingsOci"),
         ("nav.settingsUploadStorage", "settingsUploadStorage"),
         ("nav.settingsModel.sidebar", "settingsModel"),
         ("nav.settingsDatabase.sidebar", "settingsDatabase"),

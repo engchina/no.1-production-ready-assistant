@@ -17,9 +17,9 @@
 - 情報設計・画面構成・ナビ導線・状態遷移・文言設計は、`frontend/src` と `src/lib/i18n` / `src/lib/routes` を正本として整備する（見た目と共有部品は platform の `docs/design-system/`）。
 - サイドナビ（折りたたみ可）の構成の正本は `frontend/src/components/layout/nav-config.ts`:
   - **AI 活用** / **データ準備** / **改善・運用**: NL2SQL の業務機能。
-  - **セキュリティ設定**: 権限管理（ロールごとの機能権限・業務プロファイル利用権限）/ Deep Data Security。
-  - **ユーザーとロール** / **システム設定**（OCI 認証 / アップロード保存先 / モデル / データベース）: 3 製品で共通（platform の共有パッケージ）。
-  - **運用設定**: システムテーブル管理 / Select AI Credential（データベース設定から分けた）。
+  - **セキュリティ設定**: 権限管理（ロールごとの機能権限・業務プロファイル利用権限）。
+  - **ユーザーとロール** / **システム設定**（アップロード保存先 / モデル / データベース）: 3 製品で共通（platform の共有パッケージ）。
+  - **運用設定**: システムテーブル管理。
 - サイドナビのラベルは日本語第一。正式名が長い項目だけ短縮形（`sidebarLabelKey`）で表示し（例: `システムテーブル管理` → `システムテーブル`）、**ページタイトル / `aria-label` は正式名を維持**する（`nav.*` と `nav.*.sidebar` の二段管理）。
 - ページネーション・確認ダイアログ・トースト・一括選択（全選択 / 選択件数）は共通の部品を使い、データ取得・通知・ページングは hooks に集約する。
 - NL2SQL 固有の画面の差分は [docs/frontend-messaging-spec.md](../../docs/frontend-messaging-spec.md) / [docs/frontend-button-spec.md](../../docs/frontend-button-spec.md) / [docs/frontend-page-archetypes-spec.md](../../docs/frontend-page-archetypes-spec.md) に書く。メッセージは UX 契約の 6 チャネル / 4 トーン / i18n 規約に従う。アクションは共通の `Button` で、類似機能は同じ size・variant にする。

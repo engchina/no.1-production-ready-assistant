@@ -111,16 +111,6 @@ async function mockMainScreens(page: Page) {
 
 /** 設定の画面（選んだカード = accent の淡い面、方針のチップ、状態の表示）と、フィードバックの一覧・詳細。 */
 async function mockSettingsAndFeedback(page: Page) {
-  await page.route("**/api/settings/guardrail", (route) =>
-    route.fulfill({
-      json: apiEnvelope({
-        enabled: true,
-        oci_configured: false,
-        oci_warning_code: null,
-        config_source: "runtime",
-      }),
-    }),
-  );
   const strategies = ["structure_aware", "recursive_character", "small_to_big", "fixed_size"];
   await page.route("**/api/settings/chunking", (route) =>
     route.fulfill({
@@ -334,7 +324,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/graph" },
   { path: "/settings/retrieval" },
   { path: "/settings/prompts" },
-  { path: "/settings/guardrail" },
   { path: "/settings/evaluation" },
   { path: "/evaluation" },
   { path: "/feedback" },
@@ -348,7 +337,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/answer-notice" },
   { path: "/settings/huggingface" },
   { path: "/settings/services" },
-  { path: "/settings/oci" },
   { path: "/settings/upload-storage" },
   { path: "/settings/model" },
   { path: "/settings/database" },
@@ -379,20 +367,6 @@ const STATES: (Screen & { name: string })[] = [
       for (const tint of ["success", "warning", "danger"]) {
         await expect(page.locator(`[data-surface-tint="${tint}"]`).first()).toBeVisible();
       }
-    },
-  },
-  {
-    name: "安全チェックの OCI Guardrails と未設定の注意",
-    path: "/settings/guardrail",
-    setup: async (page) => {
-      await page.route("**/api/settings/guardrail", (route) => route.fulfill({
-        json: apiEnvelope({ input_enabled: true, output_enabled: true, oci_configured: false, oci_warning_code: "oci_credentials_invalid" }),
-      }));
-    },
-    act: async (page) => {
-      await expect(page.getByRole("checkbox", { name: "入力を検査する", exact: true })).toBeChecked();
-      await expect(page.getByRole("checkbox", { name: "出力を検査する", exact: true })).toBeChecked();
-      await expect(page.getByRole("status").filter({ hasText: "OCI API キー認証を利用できません" })).toBeVisible();
     },
   },
 ];

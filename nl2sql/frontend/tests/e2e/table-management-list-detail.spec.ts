@@ -36,7 +36,6 @@ async function mockTableManagement(page: Page, options: { tableCount?: number; c
     : COLUMN_TYPES;
   const detailRequests: string[] = [];
   await mockDatabaseGateReady(page);
-  await page.route("**/api/nl2sql/synthetic-data/runs", (route) => fulfillJson(route, []));
   await page.route("**/api/nl2sql/db-admin/objects?*", (route) =>
     fulfillJson(route, {
       runtime: "oracle",

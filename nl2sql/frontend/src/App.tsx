@@ -22,7 +22,6 @@ import { useDatabaseStatus } from "@/lib/queries";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { PageHeader, AppShell, PageBody, PageLoadingState } from "@production-ready/ui";
 import { DatabaseGate } from "@/components/system/DatabaseGate";
-import { SyntheticRunNotifications } from "@/features/nl2sql/syntheticRuns";
 import { SchemaRefreshCoordinator } from "@/features/nl2sql/SchemaRefreshCoordinator";
 import { APP_ROUTES } from "@/lib/routes";
 import { t } from "@/lib/i18n";
@@ -143,11 +142,6 @@ const EvaluationPage = lazy(() =>
     default: module.EvaluationPage,
   }))
 );
-const OciSettingsClient = lazy(() =>
-  import("@/components/settings/OciSettingsClient").then((module) => ({
-    default: module.OciSettingsClient,
-  }))
-);
 const UploadStorageSettingsClient = lazy(() =>
   import("@/components/settings/UploadStorageSettingsClient").then((module) => ({
     default: module.UploadStorageSettingsClient,
@@ -166,11 +160,6 @@ const DatabaseSettingsClient = lazy(() =>
 const SystemTablesCard = lazy(() =>
   import("@/components/settings/SystemTablesCard").then((module) => ({
     default: module.SystemTablesCard,
-  }))
-);
-const SelectAiCredentialCard = lazy(() =>
-  import("@/components/settings/SelectAiCredentialCard").then((module) => ({
-    default: module.SelectAiCredentialCard,
   }))
 );
 const TraceRecordingSettingsClient = lazy(() =>
@@ -214,11 +203,6 @@ const DbAdminChatPage = lazy(() =>
 const SecurityPermissionsPage = lazy(() =>
   import("@/features/security/SecurityPermissionsPage").then((module) => ({
     default: module.SecurityPermissionsPage,
-  }))
-);
-const SecurityDeepSecPage = lazy(() =>
-  import("@/features/security/SecurityDeepSecPage").then((module) => ({
-    default: module.SecurityDeepSecPage,
   }))
 );
 
@@ -303,7 +287,7 @@ function AuthorizedApplication() {
   const auth = useAuth();
 
   return (
-    <AppLayout key={JSON.stringify([auth.user?.user_uuid, auth.user?.permissions, auth.user?.data_entitlements, auth.user?.allowed_profile_ids])}>
+    <AppLayout key={JSON.stringify([auth.user?.user_uuid, auth.user?.permissions, auth.user?.allowed_profile_ids])}>
       <DatabaseGate>
         <SchemaRefreshCoordinator
           discoveryEnabled={auth.hasPermission("nl2sql.schema.read")}
@@ -311,7 +295,6 @@ function AuthorizedApplication() {
           <ScopedWorkspace>
           <Suspense fallback={<RouteLoadingFallback />}>
             <WorkspaceDraftWarning />
-            <SyntheticRunNotifications />
             <KeepAlivePages />
             <Routes>
             <Route path={APP_ROUTES.home} element={<Navigate to={auth.hasPermission(ROUTE_PERMISSIONS[APP_ROUTES.query]) ? APP_ROUTES.query : firstAllowedRoute(auth.hasPermission)} replace />} />
@@ -336,7 +319,6 @@ function AuthorizedApplication() {
             <Route path={APP_ROUTES.questionClassifierModels} element={<QuestionClassifierModelsPage />} />
             <Route path={APP_ROUTES.history} element={<HistoryPage />} />
             <Route path={APP_ROUTES.evaluation} element={<EvaluationPage />} />
-            <Route path={APP_ROUTES.settingsOci} element={<SettingsOciRoute />} />
             <Route
               path={APP_ROUTES.settingsUploadStorage}
               element={<SettingsUploadStorageRoute />}
@@ -347,10 +329,6 @@ function AuthorizedApplication() {
               path={APP_ROUTES.settingsSystemTables}
               element={<SettingsSystemTablesRoute />}
             />
-            <Route
-              path={APP_ROUTES.settingsSelectAiCredential}
-              element={<SettingsSelectAiCredentialRoute />}
-            />
             <Route path={APP_ROUTES.settingsAnswerNotice} element={<SettingsAnswerNoticeRoute />} />
             <Route path={APP_ROUTES.settingsTraceRecording} element={<SettingsTraceRecordingRoute />} />
             <Route path={APP_ROUTES.settingsChatAttachments} element={<SettingsChatAttachmentsRoute />} />
@@ -359,12 +337,11 @@ function AuthorizedApplication() {
             <Route path={APP_ROUTES.securityApiKeys} element={<SecurityApiKeysPage />} />
             <Route path={APP_ROUTES.account} element={<AccountRoute />} />
             <Route path={APP_ROUTES.securityPermissions} element={<SecurityPermissionsPage />} />
-            <Route path={APP_ROUTES.securityDeepSec} element={<SecurityDeepSecPage />} />
             <Route
               path={APP_ROUTES.legacyNl2sqlModelLearning}
-              element={<Navigate to={`${APP_ROUTES.profiles}#profile-select-ai`} replace />}
+              element={<Navigate to={APP_ROUTES.profiles} replace />}
             />
-            <Route path="/settings" element={<Navigate to={APP_ROUTES.settingsOci} replace />} />
+            <Route path="/settings" element={<Navigate to={APP_ROUTES.settingsUploadStorage} replace />} />
             <Route path="*" element={<Navigate to={defaultEntryRoute(auth.hasPermission)} replace />} />
             </Routes>
           </Suspense>
@@ -509,15 +486,6 @@ function decodeHashId(hash: string) {
   }
 }
 
-function SettingsOciRoute() {
-  return (
-    <>
-      <PageHeader wide title={t("nav.settingsOci")} subtitle={t("settings.oci.subtitle")} />
-      <OciSettingsClient />
-    </>
-  );
-}
-
 function SettingsTraceRecordingRoute() {
   return (
     <>
@@ -562,21 +530,6 @@ function SettingsDatabaseRoute() {
     <>
       <PageHeader wide title={t("nav.settingsDatabase")} subtitle={t("settings.database.subtitle")} />
       <DatabaseSettingsClient />
-    </>
-  );
-}
-
-/** Select AI Credential（運用設定。構成はシステムテーブル管理と同じ。#658）。 */
-function SettingsSelectAiCredentialRoute() {
-  return (
-    <>
-      <PageHeader wide
-        title={t("nav.settingsSelectAiCredential")}
-        subtitle={t("settings.selectAiCredential.subtitle")}
-      />
-      <PageBody wide>
-        <SelectAiCredentialCard />
-      </PageBody>
     </>
   );
 }

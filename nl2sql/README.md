@@ -77,7 +77,7 @@ database migration、サービス再起動、health check も含まれます。
 
 NL2SQL の質問から SQL の生成・実行は MCP（`POST /nl2sql/api/mcp`。開発は `http://localhost:8110/api/mcp`）で公開しています。
 画面の左下のアカウントのメニュー →「API キー」で自分のキーを発行し、`Authorization: Bearer <API キー>` を付けて接続します。
-キーは発行した利用者として動き、その利用者のロールの権限・業務プロファイル・Deep Data Security の範囲で答えます。
+キーは発行した利用者として動き、その利用者のロールの権限・業務プロファイルの範囲で答えます。
 
 ```bash
 claude mcp add --scope user --transport http nl2sql https://<host>/nl2sql/api/mcp \

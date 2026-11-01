@@ -90,7 +90,7 @@ def storage(monkeypatch: MonkeyPatch, clock: _Clock) -> _Storage:
         ("/api/settings/database", False),
         ("/api/settings/database/system-tables/initialize", False),
         ("/api/settings/model/test", False),
-        ("/api/settings/oci/config/read", False),
+        ("/api/settings/upload-storage", False),
         ("/api/security/users", False),
         ("/api/security/roles/role_1/access", False),
     ],

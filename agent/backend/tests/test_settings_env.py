@@ -16,7 +16,6 @@ def test_settings_env_names_split_platform_and_agent() -> None:
     names = settings_env_names(Settings)
 
     assert names["oracle_dsn"] == "PLATFORM_ORACLE_DSN"
-    assert names["oci_region"] == "PLATFORM_OCI_REGION"
     assert names["local_storage_dir"] == "PLATFORM_LOCAL_STORAGE_DIR"
     assert names["model_settings_file"] == "PLATFORM_MODEL_SETTINGS_FILE"
     assert names["oci_enterprise_ai_api_key"] == "PLATFORM_OCI_ENTERPRISE_AI_API_KEY"
@@ -26,6 +25,18 @@ def test_settings_env_names_split_platform_and_agent() -> None:
     assert names["max_upload_bytes"] == "AGENT_MAX_UPLOAD_BYTES"
     # 既に AGENT_ で始まる属性は接頭辞を重ねない。
     assert names["agent_runtime_repository_backend"] == "AGENT_RUNTIME_REPOSITORY_BACKEND"
+    # OCI 認証・Object Storage・ADB の OCID の設定は持たない（#11。`.env` の旧 key は読まない）。
+    for removed in (
+        "oci_config_file",
+        "oci_config_profile",
+        "oci_region",
+        "oci_compartment_id",
+        "upload_storage_backend",
+        "object_storage_bucket",
+        "oracle_adb_ocid",
+        "oracle_adb_region",
+    ):
+        assert removed not in names
     # Run の保存先は共通の PLATFORM_ORACLE_* で接続する（旧 AGENT_RUNTIME_ORACLE_* は無い。#764）。
     assert not [name for name in names.values() if name.startswith("AGENT_RUNTIME_ORACLE_")]
     assert all(name.startswith(("PLATFORM_", "AGENT_")) for name in names.values())
@@ -48,15 +59,15 @@ def test_settings_reads_platform_env_then_backend_env(
 
 
 def test_legacy_env_names_are_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("PLATFORM_OCI_REGION", "AGENT_LOG_LEVEL", "LOG_LEVEL"):
+    for name in ("PLATFORM_LOCAL_STORAGE_DIR", "AGENT_LOG_LEVEL", "LOG_LEVEL"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("OCI_REGION", "ap-osaka-1")
+    monkeypatch.setenv("LOCAL_STORAGE_DIR", "/legacy/uploads")
     legacy_env = tmp_path / "legacy.env"
     legacy_env.write_text("LOG_LEVEL=DEBUG\n", encoding="utf-8")
 
     settings = Settings(_env_file=legacy_env)
 
-    assert settings.oci_region == ""
+    assert settings.local_storage_dir == "/u01/data/production-ready-agent"
     assert settings.log_level == "INFO"
 
 
@@ -149,32 +160,34 @@ def test_get_settings_picks_up_upload_storage_saved_by_another_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """別の製品・worker が共通 `.env` に保存したアップロード保存先を、再起動なしで使う（#2092）。"""
-    for name in ("PLATFORM_UPLOAD_STORAGE_BACKEND", "PLATFORM_OBJECT_STORAGE_BUCKET"):
+    for name in ("PLATFORM_LOCAL_STORAGE_DIR", "PLATFORM_UPLOAD_STORAGE_BACKEND"):
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_UPLOAD_STORAGE_BACKEND=local\n", encoding="utf-8")
+    platform_env.write_text("PLATFORM_LOCAL_STORAGE_DIR=/data/a\n", encoding="utf-8")
     monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", platform_env)
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert settings.upload_storage_backend == "local"
+        assert settings.local_storage_dir == "/data/a"
 
+        # 旧版が保存した Object Storage の key が残っていても読まない（#11）。
         platform_env.write_text(
+            "PLATFORM_LOCAL_STORAGE_DIR=/data/b\n"
             "PLATFORM_UPLOAD_STORAGE_BACKEND=oci\nPLATFORM_OBJECT_STORAGE_BUCKET=example-bucket\n",
             encoding="utf-8",
         )
         reloaded = app_settings.get_settings()
 
         assert reloaded is settings
-        assert reloaded.upload_storage_backend == "oci"
-        assert reloaded.object_storage_bucket == "example-bucket"
+        assert reloaded.local_storage_dir == "/data/b"
+        assert not hasattr(reloaded, "upload_storage_backend")
+        assert not hasattr(reloaded, "object_storage_bucket")
     finally:
         app_settings.reset_settings_cache()
 
 
 _SHARED_ENV_NAMES = (
-    "PLATFORM_OCI_REGION",
-    "PLATFORM_OCI_CONFIG_PROFILE",
+    "PLATFORM_LOCAL_STORAGE_DIR",
     "PLATFORM_ORACLE_DSN",
     "PLATFORM_ORACLE_USER",
     "PLATFORM_ORACLE_WALLET_DIR",
@@ -186,14 +199,14 @@ _SHARED_ENV_NAMES = (
 def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RAG・NL2SQL の画面で保存した共通の設定（OCI 認証・DB・認証）を再起動なしで使う（#2102）。"""
+    """RAG・NL2SQL の画面で保存した共通の設定（保存先・DB・認証）を再起動なしで使う（#2102）。"""
     for name in _SHARED_ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
     write_env_values(
         platform_env,
         {
-            "PLATFORM_OCI_REGION": "region-a",
+            "PLATFORM_LOCAL_STORAGE_DIR": "/data/a",
             "PLATFORM_ORACLE_DSN": "db-a_high",
             "PLATFORM_ORACLE_USER": "APP_A",
         },
@@ -203,14 +216,13 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert (settings.oci_region, settings.oracle_dsn) == ("region-a", "db-a_high")
+        assert (settings.local_storage_dir, settings.oracle_dsn) == ("/data/a", "db-a_high")
 
         # 別の製品の保存と同じ書き方（`write_env_values`）で共通 `.env` を書き換える。
         write_env_values(
             platform_env,
             {
-                "PLATFORM_OCI_REGION": "region-b",
-                "PLATFORM_OCI_CONFIG_PROFILE": "OTHER",
+                "PLATFORM_LOCAL_STORAGE_DIR": "/data/b",
                 "PLATFORM_ORACLE_DSN": "db-b_high",
                 "PLATFORM_ORACLE_USER": "APP_B",
                 "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES": "17",
@@ -220,8 +232,7 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
         reloaded = app_settings.get_settings()
 
         assert reloaded is settings
-        assert reloaded.oci_region == "region-b"
-        assert reloaded.oci_config_profile == "OTHER"
+        assert reloaded.local_storage_dir == "/data/b"
         assert (reloaded.oracle_dsn, reloaded.oracle_user) == ("db-b_high", "APP_B")
         assert reloaded.app_auth_idle_timeout_minutes == 17
         # 接続 pool（`SharedOraclePool`）は接続引数の指紋で作り直す。接続引数が新しい値になる。
@@ -239,7 +250,7 @@ def test_platform_env_reload_keeps_model_settings_file_values(
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text(
-        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_OCI_REGION=region-a\n",
+        "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_LOCAL_STORAGE_DIR=/data/a\n",
         encoding="utf-8",
     )
     (tmp_path / "model-settings.json").write_text(
@@ -264,12 +275,12 @@ def test_platform_env_reload_keeps_model_settings_file_values(
 
         platform_env.write_text(
             "PLATFORM_OCI_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
-            "PLATFORM_OCI_REGION=region-b\n",
+            "PLATFORM_LOCAL_STORAGE_DIR=/data/b\n",
             encoding="utf-8",
         )
         reloaded = app_settings.get_settings()
 
-        assert reloaded.oci_region == "region-b"
+        assert reloaded.local_storage_dir == "/data/b"
         assert reloaded.oci_enterprise_ai_default_text_model == "json-model"
     finally:
         app_settings.reset_settings_cache()

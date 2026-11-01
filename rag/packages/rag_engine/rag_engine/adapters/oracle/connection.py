@@ -1,39 +1,32 @@
-"""Oracle Database の直接接続、ADB mTLS 接続、Wallet 取得を扱う。"""
+"""Oracle Database の直接接続と ADB mTLS 接続（配置済みの Wallet）を扱う。"""
 
 from __future__ import annotations
 
 import os
 import threading
-import zipfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from rag_engine.config import DEFAULT_OCI_CONFIG_FILE, DEFAULT_OCI_PROFILE, load_dotenv
+from rag_engine.config import load_dotenv
 
 DEFAULT_ADB_DB_NAME = "AIRAGADB"
 DEFAULT_ADB_DB_USER = "admin"
 DEFAULT_ADB_TNS_SERVICE = "medium"
-WALLET_ZIP_NAME = "wallet.zip"
-STREAM_CHUNK_SIZE = 1024 * 1024
 REQUIRED_MTLS_WALLET_FILES = ("tnsnames.ora", "ewallet.pem")
 
 
 @dataclass(frozen=True)
 class AdbSettings:
-    """Oracle 接続設定。TCP Easy Connect では OCID と Wallet は不要です。"""
+    """Oracle 接続設定。TCP Easy Connect では Wallet は不要です。"""
 
-    ocid: str
     db_name: str
     tns_alias: str
     wallet_dir: Path
     wallet_password: str
     db_user: str
     db_password: str
-    oci_config_file: str
-    oci_profile: str
-    oci_region: str
     tcp_connect_timeout: float
     connect_retry_count: int
     connect_retry_delay: int
@@ -56,7 +49,7 @@ def load_adb_settings(
     env_path: str | Path = ".env",
     environ: Mapping[str, str] | None = None,
 ) -> AdbSettings:
-    """接続設定を読み込み、TCP Easy Connect 以外は OCID と Wallet を必須とします。"""
+    """接続設定を読み込み、TCP Easy Connect 以外は Wallet のパスワードを必須とします。"""
     env_file = Path(env_path).expanduser()
     base_dir = env_file.resolve().parent
     if environ is None:
@@ -68,7 +61,6 @@ def load_adb_settings(
     db_name = env.get("ADB_DB_NAME", DEFAULT_ADB_DB_NAME).strip() or DEFAULT_ADB_DB_NAME
     tns_alias = env.get("ADB_TNS_ALIAS", f"{db_name}_{DEFAULT_ADB_TNS_SERVICE}").strip()
     direct = _is_tcp_easy_connect(tns_alias)
-    ocid = env.get("ADB_OCID", "").strip() if direct else _required(env, "ADB_OCID")
     wallet_dir = _resolve_path(
         env.get("ADB_WALLET_DIR", f".wallets/{db_name.lower()}"),
         base_dir,
@@ -76,65 +68,23 @@ def load_adb_settings(
     wallet_password = env.get("ADB_WALLET_PASSWORD", "").strip() if direct else _required(env, "ADB_WALLET_PASSWORD")
     db_user = env.get("ADB_DB_USER", DEFAULT_ADB_DB_USER).strip() or DEFAULT_ADB_DB_USER
     db_password = _required(env, "ADB_DB_PASSWORD")
-    oci_config_file = env.get("OCI_CONFIG_FILE", DEFAULT_OCI_CONFIG_FILE).strip() or DEFAULT_OCI_CONFIG_FILE
-    oci_profile = env.get("OCI_PROFILE", DEFAULT_OCI_PROFILE).strip() or DEFAULT_OCI_PROFILE
-    oci_region = env.get("ADB_REGION", "").strip() or _region_from_ocid(ocid)
     tcp_connect_timeout = _env_float(env, "ADB_CONNECT_TIMEOUT_SECONDS", 10.0)
     connect_retry_count = _env_int(env, "ADB_CONNECT_RETRY_COUNT", 0)
     connect_retry_delay = _env_int(env, "ADB_CONNECT_RETRY_DELAY_SECONDS", 0)
     pool_max = max(0, _env_int(env, "ADB_POOL_MAX", 4))
 
     return AdbSettings(
-        ocid=ocid,
         db_name=db_name,
         tns_alias=tns_alias,
         wallet_dir=wallet_dir,
         wallet_password=wallet_password,
         db_user=db_user,
         db_password=db_password,
-        oci_config_file=oci_config_file,
-        oci_profile=oci_profile,
-        oci_region=oci_region,
         tcp_connect_timeout=tcp_connect_timeout,
         connect_retry_count=connect_retry_count,
         connect_retry_delay=connect_retry_delay,
         pool_max=pool_max,
     )
-
-
-def download_adb_wallet(settings: AdbSettings, oci_module: Any | None = None) -> Path:
-    """OCI Database API から ADB Wallet zip を取得し展開します。"""
-    if not settings.ocid or not settings.wallet_password:
-        raise RuntimeError("ADB_OCID and ADB_WALLET_PASSWORD are required to download an ADB wallet.")
-    if oci_module is None:
-        try:
-            import oci as oci_module
-        except ImportError as exc:
-            raise RuntimeError("The oci package is required to download the ADB wallet.") from exc
-
-    config = oci_module.config.from_file(
-        file_location=settings.oci_config_file,
-        profile_name=settings.oci_profile,
-    )
-    if settings.oci_region:
-        config["region"] = settings.oci_region
-
-    client = oci_module.database.DatabaseClient(config)
-    details = oci_module.database.models.GenerateAutonomousDatabaseWalletDetails(
-        password=settings.wallet_password,
-        generate_type="SINGLE",
-        is_regional=False,
-    )
-    response = client.generate_autonomous_database_wallet(
-        autonomous_database_id=settings.ocid,
-        generate_autonomous_database_wallet_details=details,
-    )
-
-    settings.wallet_dir.mkdir(parents=True, exist_ok=True)
-    wallet_zip = settings.wallet_dir / WALLET_ZIP_NAME
-    _write_response_stream(response.data, wallet_zip)
-    _extract_wallet_zip(wallet_zip, settings.wallet_dir)
-    return wallet_zip
 
 
 _POOLS: dict[tuple[AdbSettings, int], Any] = {}
@@ -226,7 +176,7 @@ def validate_mtls_wallet(settings: AdbSettings) -> None:
         missing_files = ", ".join(missing)
         raise RuntimeError(
             f"ADB mTLS wallet is not ready in {settings.wallet_dir}: missing {missing_files}. "
-            "Run scripts/download_adb_wallet.py before connecting."
+            "Upload the ADB wallet files to the wallet directory before connecting."
         )
 
 
@@ -266,47 +216,3 @@ def _resolve_path(value: str, base_dir: Path) -> Path:
     if path.is_absolute():
         return path
     return base_dir / path
-
-
-def _region_from_ocid(ocid: str) -> str:
-    parts = ocid.split(".")
-    if len(parts) >= 4 and parts[3]:
-        return parts[3]
-    return ""
-
-
-def _write_response_stream(data: Any, target: Path) -> None:
-    temp_target = target.with_suffix(target.suffix + ".tmp")
-    try:
-        with temp_target.open("wb") as handle:
-            if isinstance(data, bytes):
-                handle.write(data)
-            elif hasattr(data, "iter_content"):
-                for chunk in data.iter_content(chunk_size=STREAM_CHUNK_SIZE):
-                    if chunk:
-                        handle.write(chunk)
-            elif hasattr(data, "read"):
-                while True:
-                    chunk = data.read(STREAM_CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    handle.write(chunk)
-            else:
-                raise TypeError("Unsupported wallet response stream type.")
-        temp_target.replace(target)
-    finally:
-        close = getattr(data, "close", None)
-        if callable(close):
-            close()
-        if temp_target.exists():
-            temp_target.unlink()
-
-
-def _extract_wallet_zip(wallet_zip: Path, wallet_dir: Path) -> None:
-    target_root = wallet_dir.resolve()
-    with zipfile.ZipFile(wallet_zip) as archive:
-        for member in archive.infolist():
-            member_path = (wallet_dir / member.filename).resolve()
-            if not member_path.is_relative_to(target_root):
-                raise RuntimeError(f"Unsafe wallet zip member path: {member.filename}")
-        archive.extractall(wallet_dir)

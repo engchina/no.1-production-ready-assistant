@@ -26,7 +26,6 @@ import {
   type DatabaseStatusData as SharedDatabaseStatusData,
 } from "@production-ready/system-settings";
 
-// OCI 認証 API の型は platform の共有パッケージが正本（#100）。
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
@@ -36,14 +35,12 @@ export type {
   DatabasePasswordRevealData,
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
-  DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 import type {
   DatabaseConnectionTestResult,
   DatabasePasswordRevealData,
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
-  DatabaseWalletDownloadData,
   SystemTableColumnRef,
 } from "@production-ready/system-settings";
 export type {
@@ -65,34 +62,6 @@ import type {
   ModelSettingsTestRequest,
   ModelSettingsTestResult,
 } from "@production-ready/system-settings";
-export type {
-  OciConfigField,
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciConfigTestStage,
-  OciConfigTestStageKey,
-  OciConfigTestStageStatus,
-  OciConfigTestStatus,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
-import type {
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
-
 // 回答の注意書き API の型は platform の共有パッケージが正本（#2405）。
 import type {
   AnswerNoticeSettingsData,
@@ -104,13 +73,10 @@ import type { ChatAttachmentApiItem, ChatAttachmentApiLimits } from "@production
 
 // アップロード保存先 API の型は platform の共有パッケージが正本（#97）。
 export type {
-  UploadStorageBackend,
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
 import type {
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
@@ -570,26 +536,6 @@ export interface SettingsApiResponse<T> {
   request_id?: string;
 }
 
-export type SelectAiCredentialRegion = "ap-osaka-1" | "us-chicago-1";
-export type SelectAiCredentialOperation =
-  "created" | "recreated" | "already_exists";
-
-export interface SelectAiCredentialData {
-  credential_name: "NL2SQL_OCI_CRED";
-  schema_name: string;
-  exists: boolean;
-  region: SelectAiCredentialRegion;
-  oci_auth_ready: boolean;
-  missing_fields: string[];
-  operation: SelectAiCredentialOperation | null;
-}
-
-export interface SelectAiCredentialCreateRequest {
-  region: SelectAiCredentialRegion;
-  confirmation: string;
-  recreate: boolean;
-}
-
 export type SystemTableSchemaStatus =
   "missing" | "partial" | "outdated" | "ready";
 export type SystemTableOperationStatus = "idle" | "running" | "failed";
@@ -900,16 +846,6 @@ export const api = {
     settingsRequest<DatabaseSettingsData>("/api/settings/database", {
       signal: options.signal,
     }),
-  getSelectAiCredential: (options: ApiRequestOptions = {}) =>
-    settingsRequest<SelectAiCredentialData>(
-      "/api/settings/database/select-ai-credential",
-      { signal: options.signal },
-    ),
-  createSelectAiCredential: (body: SelectAiCredentialCreateRequest) =>
-    settingsRequest<SelectAiCredentialData>(
-      "/api/settings/database/select-ai-credential",
-      jsonBody(body),
-    ),
   getSystemTablesStatus: (options: ApiRequestOptions = {}) =>
     settingsRequest<SystemTablesStatusData>(
       "/api/settings/database/system-tables",
@@ -943,11 +879,6 @@ export const api = {
       },
     );
   },
-  downloadDatabaseWallet: () =>
-    settingsRequest<DatabaseWalletDownloadData>(
-      "/api/settings/database/wallet/download",
-      { method: "POST" },
-    ),
   revealDatabasePassword: () =>
     settingsRequest<DatabasePasswordRevealData>(
       "/api/settings/database/password/reveal",
@@ -1008,56 +939,4 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  // 入力中の値で OCI Object Storage の bucket と権限を確かめる（保存しない。#2101）。
-  testUploadStorageSettings: (body: UploadStorageSettingsUpdate) =>
-    settingsRequest<UploadStorageCheckResult>("/api/settings/upload-storage/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-
-  getOciSettings: (options: ApiRequestOptions = {}) =>
-    settingsRequest<OciSettingsData>("/api/settings/oci", {
-      signal: options.signal,
-    }),
-  updateOciSettings: (body: OciSettingsUpdate) =>
-    settingsRequest<OciSettingsData>("/api/settings/oci", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  updateOciObjectStorageSettings: (body: OciObjectStorageSettingsUpdate) =>
-    settingsRequest<UploadStorageSettingsData>(
-      "/api/settings/oci/object-storage",
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-    ),
-  readOciConfig: (body: OciConfigReadRequest) =>
-    settingsRequest<OciConfigReadData>(
-      "/api/settings/oci/config/read",
-      jsonBody(body),
-    ),
-  testOciConfig: () =>
-    settingsRequest<OciConfigTestResult>("/api/settings/oci/config/test", {
-      method: "POST",
-    }),
-  readOciObjectStorageNamespace: (body: OciObjectStorageNamespaceRequest) =>
-    settingsRequest<OciObjectStorageNamespaceData>(
-      "/api/settings/oci/object-storage/namespace",
-      jsonBody(body),
-    ),
-  uploadOciPrivateKey: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return settingsRequest<OciPrivateKeyUploadData>(
-      "/api/settings/oci/key-file",
-      {
-        method: "POST",
-        body: form,
-      },
-    );
-  },
 };

@@ -2,7 +2,7 @@
 
 > root の [AGENTS.md](../../AGENTS.md) から移した詳細（#2276）。root の規則と同じ強さで守る。規則を変えるときはこのファイルを直し、root には規則の要約と案内だけを書く。
 
-- **3 製品で同じ機能は platform に 1 セットだけ置く。** システム設定（OCI 認証・アップロード保存先・モデル・データベース）・回答の注意書きとユーザー / ロール管理は、画面を `packages/system-settings`、API を `packages/system_settings_backend` に置き、製品は `api` や権限判定を渡す薄いラッパーだけを持つ。製品固有の機能は製品固有のセクションに置く（例: NL2SQL の権限管理・Deep Data Security は「セキュリティ設定」）。
+- **3 製品で同じ機能は platform に 1 セットだけ置く。** システム設定（アップロード保存先・モデル・データベース）・回答の注意書きとユーザー / ロール管理は、画面を `packages/system-settings`、API を `packages/system_settings_backend` に置き、製品は `api` や権限判定を渡す薄いラッパーだけを持つ。製品固有の機能は製品固有のセクションに置く（例: NL2SQL の権限管理・Deep Data Security は「セキュリティ設定」）。
 - **サイドナビの下部は 3 製品で同じ並びと名前**: 業務のセクション →「改善・運用」（あれば）→「セキュリティ設定」→「ユーザーとロール」→「運用設定」（システムテーブルが先頭、その下に軌跡の記録・チャットの添付・回答の注意書き）→「システム設定」。backend の権限カタログの `group` と並びもそろえる。
 - **外部の MCP クライアント向けの API キーは 3 製品で共通**（使える製品は RAG / NL2SQL / Agent。発行の既定は 3 つとも。#1805・#1874）。Agent のキーは使える業務 Agent を絞れ（共通の表の `RESOURCE_SCOPES`）、キーごとに呼び出しの回数（`PLATFORM_API_KEY_CALLS_PER_MINUTE`）と Agent の Run の数（`PLATFORM_API_KEY_RUNS_PER_DAY`）の上限がある。仕組みは platform の共通（表 `PLATFORM_API_KEYS`・`authorize_request` の `api_key_paths`・`build_auth_router(api_keys=True)`・画面 `MyApiKeysPanel` / `ApiKeysAdminPage`）。キーは各利用者がアカウントの画面（下の「アカウントの画面」）の「API キー」のタブから自分で発行し（メニュー権限を要しない）、全員のキーの一覧と削除は「ユーザーとロール」の末尾の「API キー」（`menu.security_api_keys`）。キーは MCP の入口（`POST /api/mcp`）だけで使え、画面用の Cookie / CSRF の API には使わせない。
 - **アカウントの画面は 3 製品で同じ**（`/account`。共通の `AccountPage`。#1873）: サイドナビの下部のアカウントの欄（名前・ロール）の行全体がこの画面へのリンクで、タブ「API キー」「パスワード変更」（`?tab=api-keys` / `?tab=password`）を持つ。個人の操作（API キー・パスワード変更）はサイドナビの行に置かない。初回・リセット後のパスワードの強制の変更は単独の画面（`/password/change`）のまま。ログインの画面の「パスワードを忘れた場合」は管理者に一時パスワードの発行を依頼する案内（メールの送信は無い）。

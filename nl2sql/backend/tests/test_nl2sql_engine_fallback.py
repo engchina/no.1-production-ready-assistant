@@ -1,7 +1,7 @@
 """明示選択したエンジンの失敗境界に関する回帰テスト。
 
-本番(oracle runtime)では、Select AI / Enterprise AI の失敗を質問を無視したテンプレート
-SQL で埋めず、別エンジンへ暗黙 fallback しない。
+本番(oracle runtime)では、Enterprise AI の失敗を質問を無視したテンプレート
+SQL で埋めない。
 local/CI の deterministic runtime は従来どおりテンプレート SQL でデモできる。
 """
 
@@ -19,7 +19,6 @@ from app.features.nl2sql.models import (
     SchemaColumn,
     SchemaTable,
 )
-from app.features.nl2sql.oracle_adapter import OracleAdapterError
 from app.features.nl2sql.service import Nl2SqlService
 from app.features.nl2sql.store import MemoryNl2SqlStore
 
@@ -93,22 +92,12 @@ def _oracle_runtime_service(
     *,
     direct: _FakeEnterpriseAiClient,
 ) -> Nl2SqlService:
-    """Oracle 呼び出しが必ず失敗する oracle runtime 相当の service。"""
+    """oracle runtime 相当の service。"""
 
     service = Nl2SqlService(store=MemoryNl2SqlStore())
     service._catalog = _catalog()  # noqa: SLF001 - white-box contract test
     service._enterprise_ai_client = direct  # noqa: SLF001
     monkeypatch.setattr(service, "_use_oracle_runtime", lambda: True)
-    monkeypatch.setattr(service, "_assert_select_ai_scope_ready", lambda _profile: None)
-
-    def _select_ai_down(**_kwargs: Any) -> str:
-        raise OracleAdapterError("Select AI: ORA-20000 profile unavailable")
-
-    def _agent_down(**_kwargs: Any) -> tuple[str, str]:
-        raise OracleAdapterError("Select AI Agent: team execution failed")
-
-    monkeypatch.setattr(service._oracle_adapter, "generate_select_ai_sql", _select_ai_down)  # noqa: SLF001
-    monkeypatch.setattr(service._oracle_adapter, "run_select_ai_agent_team", _agent_down)  # noqa: SLF001
     return service
 
 
@@ -120,16 +109,6 @@ def _generate(service: Nl2SqlService, engine: Nl2SqlEngine) -> Any:
         allowed=AllowedObjects(),
         row_limit=10,
     )
-
-
-def test_explicit_select_ai_failure_is_an_error_in_oracle_runtime(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    service = _oracle_runtime_service(monkeypatch, direct=_FakeEnterpriseAiClient(_DIRECT_SQL))
-
-    # 旧実装はテンプレート SQL を engine=select_ai の成功結果として返していた。
-    with pytest.raises(RuntimeError, match="ORA-20000"):
-        _generate(service, Nl2SqlEngine.SELECT_AI)
 
 
 def test_explicit_enterprise_ai_failure_is_an_error_in_oracle_runtime(
@@ -180,10 +159,10 @@ def test_deterministic_runtime_keeps_template_fallback_for_demo() -> None:
         _DIRECT_SQL, configured=False
     )
 
-    generated = _generate(service, Nl2SqlEngine.SELECT_AI)
+    generated = _generate(service, Nl2SqlEngine.ENTERPRISE_AI_DIRECT)
 
-    # local/CI では Oracle を呼ばずにテンプレート SQL でデモできる(従来どおり)。
-    assert generated.engine == Nl2SqlEngine.SELECT_AI
+    # local/CI では LLM を呼ばずにテンプレート SQL でデモできる(従来どおり)。
+    assert generated.engine == Nl2SqlEngine.ENTERPRISE_AI_DIRECT
     assert generated.generated_sql.upper().startswith("SELECT")
     assert generated.fallback_reason == ""
     assert generated.engine_meta["engine_timings"] == [
@@ -196,29 +175,10 @@ def test_deterministic_runtime_keeps_template_fallback_for_demo() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [Nl2SqlEngine.SELECT_AI, Nl2SqlEngine.SELECT_AI_AGENT],
-    ids=["select-ai", "select-ai-agent"],
-)
-def test_select_ai_engines_never_call_enterprise_ai(
-    monkeypatch: pytest.MonkeyPatch, engine: Nl2SqlEngine
-) -> None:
-    """Select AI / Select AI Agent は失敗しても Enterprise AI へ切り替えない（#1684）。"""
-    direct = _FakeEnterpriseAiClient(_DIRECT_SQL)
-    service = _oracle_runtime_service(monkeypatch, direct=direct)
-
-    with pytest.raises(RuntimeError):
-        _generate(service, engine)
-
-    assert direct.calls == 0
-
-
-def test_direct_engine_ignores_profile_select_ai_model_and_region(
+def test_direct_engine_uses_system_default_text_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Enterprise AI Direct は、業務プロファイルの Select AI 用の LLM Model・Region ではなく、
-    システム設定の既定のテキストモデルとその接続で呼ぶ（#1684）。"""
+    """Enterprise AI Direct は、システム設定の既定のテキストモデルとその接続で呼ぶ（#1684）。"""
     import json
 
     import httpx
@@ -248,13 +208,6 @@ def test_direct_engine_ignores_profile_select_ai_model_and_region(
     service = _oracle_runtime_service(monkeypatch, direct=_FakeEnterpriseAiClient(_DIRECT_SQL))
     service._enterprise_ai_client = OciEnterpriseAiDirectClient(settings)  # noqa: SLF001
     profile = service.get_profile(None)
-    profile = profile.model_copy(
-        update={
-            "select_ai_config": profile.select_ai_config.model_copy(
-                update={"model": "xai.grok-4.6", "region": "ap-osaka-1"}
-            )
-        }
-    )
 
     generated = service._generate_sql(  # noqa: SLF001
         Nl2SqlEngine.ENTERPRISE_AI_DIRECT,

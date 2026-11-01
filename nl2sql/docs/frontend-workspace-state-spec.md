@@ -27,14 +27,13 @@
 | SQL から質問を生成 | Tab、Profile、Profile ごとの SQL、用語利用設定 |
 | コメント / アノテーション / ドメイン管理 | Tab、生成対象、追加指示、サンプル件数、検索・所有者・種類・ソート、実行用 SQL 草稿 |
 | テーブル / ビュー管理 | Tab、検索・所有者・ソート、詳細の選択対象と表示 Tab、共通 SQL runner の入力 |
-| データ管理 | 表示 Tab、プレビュー対象と検索・種類・ソート・件数、生成用の指示・件数等 |
+| データ管理 | 表示 Tab、プレビュー対象と検索・種類・ソート・件数 |
 | 実行履歴 | 検索と絞り込み（状態・種類・期間・実行者。`filters`）・一覧のページ番号と表示件数（`listPaging`。#1764 / #1891）・最後に開いた実行（`selectedId`。一覧へ戻ったときの `aria-current`）。詳細は URL の `?id=<run_id>`（#1955） |
-| フィードバック管理 | アプリ内フィードバック: 履歴の検索・利用者評価・業務プロファイルの絞り込み、一覧のページ番号と表示件数（`appFeedbackPaging`）。Select AI feedback の一覧のページ番号と表示件数（`selectAiFeedbackEntriesPaging`。#1764 / #1891） |
+| フィードバック管理 | アプリ内フィードバック: 履歴の検索・利用者評価・業務プロファイルの絞り込み、一覧のページ番号と表示件数（`appFeedbackPaging`。#1764 / #1891） |
 | 質問分類モデル管理 | 学習データの検索・ページ番号と表示件数（`trainingSearch` / `trainingPaging`）、学習候補の検索・状態・業務プロファイルの絞り込みとページ番号・表示件数（`candidateSearch` / `candidateStatus` / `candidateProfileId` / `candidatePaging`。#1891） |
 | SQL生成評価 | 最近の job と結果明細のページ番号・表示件数（`recentJobsPaging` / `resultsPaging`。結果明細は開いている job（`resultsJobId`）が変わったら 1 ページ目。#1891） |
 | 用語・同義語 / 共通ルール | 一覧のページ番号と表示件数（#1891） |
 | 業務プロファイル | 一覧の検索（`profileSearch`。#1933） |
-| Deep Data Security | 対象ロールの一覧の検索（`entitlementSearch`。#1933） |
 
 その他の編集画面は既存の保存・未保存変更 guard を継続する。新たに保存する field は `useWorkspaceState` 呼び出しとして明示登録し、機密性・所有 context・再検証方法を確認する。画面 component 全体の state serialization は行わない。
 

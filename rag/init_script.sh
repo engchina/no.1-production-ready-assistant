@@ -668,9 +668,6 @@ install_service_venvs() {
 # system schema の migration が移す。
 migrate_saved_settings() {
   log "Migrating saved RAG settings (idempotent)."
-  # 入出力のチェックを分ける前の値を、サービスの起動前に一度だけ移す。
-  run_as_service_user_in_dir "${BACKEND_DIR}" \
-    ".venv/bin/python -m app.rag.guardrail_settings_migration --env-file .env"
   if ! run_as_service_user_in_dir "${BACKEND_DIR}" \
     ".venv/bin/python -m app.rag.structured_records_settings_migration --apply"; then
     log "WARNING: The saved RAG settings could not be migrated. See docs/deployment.md (#2457)."

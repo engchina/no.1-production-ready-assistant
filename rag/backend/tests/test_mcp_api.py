@@ -1555,9 +1555,9 @@ def test_original_question_guardrail_blocks_mcp_before_engine(
     auth: ProductionAuth, monkeypatch: MonkeyPatch, tool: str
 ) -> None:
     from app.rag.pipeline import RagPipeline
-    from tests.guardrail_support import enable_oci_stub
+    from tests.guardrail_support import enable_scripted_guardrails
 
-    enable_oci_stub(monkeypatch)
+    enable_scripted_guardrails(monkeypatch)
 
     async def run_pipeline(request: SearchRequest, **kwargs: Any) -> SearchResponse:
         return await RagPipeline(settings=get_settings()).run(request)
@@ -1574,7 +1574,7 @@ def test_original_question_guardrail_blocks_mcp_before_engine(
         },
         _token(user.user_uuid),
     )["structuredContent"]
-    assert body["guardrail_warnings"] == ["OCI Guardrails がプロンプト攻撃を検出しました。"]
+    assert body["guardrail_warnings"] == ["合成の停止"]
     assert body["evidence"] == []
 
 
@@ -3114,7 +3114,7 @@ def figure_source(monkeypatch: MonkeyPatch) -> type[_FigureSourceOracle]:
     _FigureStorage.files = {"docs/d1/r-1/prepared.pdf": _figure_pdf()}
     _FigureStorage.reads = []
     monkeypatch.setattr(mcp_tools, "OracleClient", _FigureSourceOracle)
-    monkeypatch.setattr(document_crop, "ObjectStorageClient", _FigureStorage)
+    monkeypatch.setattr(document_crop, "FileStorageClient", _FigureStorage)
     return _FigureSourceOracle
 
 

@@ -2749,7 +2749,7 @@ def _with_details(head: str, details: str, description: str = "") -> str:
 
 
 def render_llm_context(definitions: Iterable[BusinessDefinition], qa_markdown: str = "") -> str:
-    """Select AI / Select AI Agent / LLM に業務の知識として渡すオントロジーの Markdown（#1720）。
+    """LLM に業務の知識として渡すオントロジーの Markdown（#1720）。
 
     読み手は LLM。SQL の生成に効く業務の知識（オブジェクトと表、プロパティと列、関係の結合条件、
     指標の式、業務ルール、用語と同義語）だけを簡潔に書く。根拠・検証の状態・不足情報・書き方の

@@ -25,7 +25,7 @@ docling = [
 ]
 pdf = ["pypdfium2>=5.0,<6.0", "pillow>=10.0"]
 japanese = ["PyStemmer==3.1.0", "sudachidict_full==20260723", "sudachipy==0.6.11"]
-oracle = ["oci>=2.185.0", "oracledb>=2.5.0"]
+oracle = ["oracledb>=2.5.0"]
 excel = ["openpyxl>=3.1", "xlrd>=2.0", "pandas>=2.0"]
 
 [tool.uv.sources]

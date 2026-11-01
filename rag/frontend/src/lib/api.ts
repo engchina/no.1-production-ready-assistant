@@ -35,13 +35,11 @@ export type {
   DatabasePasswordRevealData,
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
-  DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 import type {
   DatabaseConnectionTestResult,
   DatabaseSettingsData,
   DatabaseSettingsUpdate,
-  DatabaseWalletDownloadData,
 } from "@production-ready/system-settings";
 export type {
   EnterpriseAiConfiguredModel,
@@ -62,33 +60,6 @@ import type {
   ModelSettingsTestRequest,
   ModelSettingsTestResult,
 } from "@production-ready/system-settings";
-export type {
-  OciConfigField,
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciConfigTestStage,
-  OciConfigTestStageKey,
-  OciConfigTestStageStatus,
-  OciConfigTestStatus,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
-import type {
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "@production-ready/system-settings";
 
 // 回答の注意書き API の型は platform の共有パッケージが正本（#2405）。
 import type {
@@ -105,13 +76,10 @@ import type {
 
 // アップロード保存先 API の型は platform の共有パッケージが正本（#97）。
 export type {
-  UploadStorageBackend,
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
 import type {
-  UploadStorageCheckResult,
   UploadStorageSettingsData,
   UploadStorageSettingsUpdate,
 } from "@production-ready/system-settings";
@@ -2739,7 +2707,6 @@ export interface AnswerRecordSettingsData {
   config_source: "runtime";
 }
 
-// --- 設定: Guardrail アダプター ---
 /** メタデータ/項目抽出のスキーマ定義(取込・検索・回答設定)。 */
 export type ExtractionFieldValueType = "string" | "number" | "date" | "bool";
 
@@ -2764,19 +2731,6 @@ export interface SearchExtractionFieldsData {
 export interface KnowledgeBaseExtractionFieldsData {
   inherits_default: boolean;
   fields: ExtractionFieldDefinition[];
-}
-
-export interface GuardrailSettingsData {
-  input_enabled: boolean;
-  output_enabled: boolean;
-  oci_configured: boolean;
-  oci_warning_code: string | null;
-  config_source: "runtime";
-}
-
-export interface GuardrailSettingsUpdate {
-  input_enabled: boolean;
-  output_enabled: boolean;
 }
 
 // --- 設定: Vector Index アダプター ---
@@ -4292,13 +4246,6 @@ export const api = {
       body: form,
     });
   },
-  downloadDatabaseWallet: () =>
-    request<DatabaseWalletDownloadData>(
-      "/api/settings/database/wallet/download",
-      {
-        method: "POST",
-      },
-    ),
   testDatabaseSettings: (body: DatabaseSettingsUpdate) =>
     request<DatabaseConnectionTestResult>(
       "/api/settings/database/test",
@@ -4375,13 +4322,6 @@ export const api = {
   updateUploadStorageSettings: (body: UploadStorageSettingsUpdate) =>
     request<UploadStorageSettingsData>("/api/settings/upload-storage", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  // 入力中の値で OCI Object Storage の bucket と権限を確かめる（保存しない。#2101）。
-  testUploadStorageSettings: (body: UploadStorageSettingsUpdate) =>
-    request<UploadStorageCheckResult>("/api/settings/upload-storage/test", {
-      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
@@ -4466,7 +4406,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  // 設定: Guardrail アダプター
   getExtractionFieldsSettings: () =>
     request<ExtractionFieldsSettingsData>("/api/settings/extraction-fields"),
   updateExtractionFieldsSettings: (body: { fields: ExtractionFieldDefinition[] }) =>
@@ -4485,15 +4424,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  getGuardrailSettings: () =>
-    request<GuardrailSettingsData>("/api/settings/guardrail"),
-  updateGuardrailSettings: (body: GuardrailSettingsUpdate) =>
-    request<GuardrailSettingsData>("/api/settings/guardrail", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-
   // 設定: Vector Index アダプター
   getVectorIndexSettings: () =>
     request<VectorIndexSettingsData>("/api/settings/vector-index"),
@@ -4529,41 +4459,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-
-  // 設定: OCI config
-  getOciSettings: (options: SettingsRequestOptions = {}) =>
-    request<OciSettingsData>("/api/settings/oci", { signal: options.signal }),
-  updateOciSettings: (body: OciSettingsUpdate) =>
-    request<OciSettingsData>("/api/settings/oci", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  updateOciObjectStorageSettings: (body: OciObjectStorageSettingsUpdate) =>
-    request<UploadStorageSettingsData>("/api/settings/oci/object-storage", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  readOciConfig: (body: OciConfigReadRequest) =>
-    request<OciConfigReadData>("/api/settings/oci/config/read", jsonBody(body)),
-  testOciConfig: () =>
-    request<OciConfigTestResult>("/api/settings/oci/config/test", {
-      method: "POST",
-    }),
-  readOciObjectStorageNamespace: (body: OciObjectStorageNamespaceRequest) =>
-    request<OciObjectStorageNamespaceData>(
-      "/api/settings/oci/object-storage/namespace",
-      jsonBody(body),
-    ),
-  uploadOciPrivateKey: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return request<OciPrivateKeyUploadData>("/api/settings/oci/key-file", {
-      method: "POST",
-      body: form,
-    });
-  },
 };
 
 // --- 検索・回答プロファイルの知識: ドメインキーワード(rag_poc 由来) ---

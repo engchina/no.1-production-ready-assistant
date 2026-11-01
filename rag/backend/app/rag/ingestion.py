@@ -47,7 +47,7 @@ from rag_parser_core.structured_records import (
 from rag_pipeline_core.raptor import build_raptor_summaries
 
 from app.clients.ai_calls import attach_ingestion_progress, ingestion_ai_calls, make_ai_caller
-from app.clients.object_storage import ObjectStorageClient
+from app.clients.file_storage import FileStorageClient
 from app.clients.oci_enterprise_ai import (
     EnterpriseAiIncompleteResponseError,
     EnterpriseAiTimeoutError,
@@ -583,7 +583,7 @@ class IngestionPipeline:
         vlm: OciEnterpriseAiClient | None = None,
         genai: OciGenAiClient | None = None,
         oracle: OracleClient | None = None,
-        object_storage: ObjectStorageClient | None = None,
+        object_storage: FileStorageClient | None = None,
         settings: Settings | None = None,
         recipe_id: str | None = None,
         recipe_revision: int | None = None,
@@ -597,7 +597,7 @@ class IngestionPipeline:
         self._vlm = vlm or OciEnterpriseAiClient(settings=self._settings)
         self._genai = genai or OciGenAiClient(settings=self._settings)
         self._oracle = oracle or OracleClient(settings=self._settings)
-        self._object_storage = object_storage or ObjectStorageClient(settings=self._settings)
+        self._object_storage = object_storage or FileStorageClient(settings=self._settings)
         # 外部 adapter は同一プロセスで import せず parser マイクロサービスへ HTTP 委譲する。
         self._parser_service = ParserServiceClient(settings=self._settings)
         # 前処理(parse 前の原本変換)。軽量正規化は in-process、重い変換はサービスへ委譲。
@@ -2523,7 +2523,6 @@ class IngestionPipeline:
                 extra={
                     "document_id": document_id,
                     "key": key,
-                    "backend": getattr(self._settings, "upload_storage_backend", "unknown"),
                     "error_type": type(exc).__name__,
                     **safe_exception_fields(exc),
                 },

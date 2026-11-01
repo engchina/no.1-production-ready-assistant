@@ -9,40 +9,29 @@
 | 完整数据库管理 | `utils/management_util.py` の table/view/DDL/comment/drop/general SQL | `/api/nl2sql/db-admin/tables`, `/views`, `/execute`, `/drop-table`, `/import-tabular`, `/tables/{name}/export.xlsx` | Data Tools: Database Admin / Excel 運用 | extended |
 | Excel 运维流程 | `samples/*.xlsx`, training/terms/rules import/export | CSV/XLSX import preview/execute、training data XLSX/JSONL export、profile learning material import/export | Data Tools, Learning, Glossary Rules | extended |
 | 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | OCI GenAI 1024 embedding + sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
-| Select AI Profile 低层管理 | `utils/selectai_util.py` profile create/drop/set/list/detail | DB profile list/detail/create/update/drop、attributes JSON import/export、confirmation/audit | Engine Operations: DB profile JSON editor | extended |
 | SQL 深度分析/逆生成 | `utils/query_util.py` SQL 分析・逆生成 | `/analyze` deterministic deep fields + optional OCI Enterprise AI structured JSON、`/reverse/deep` fallback付き逆生成 | SQL Analysis | extended |
-| DBMS_CLOUD_AI 合成数据 | `DBMS_CLOUD_AI.GENERATE_SYNTHETIC_DATA` | single object / object_list、profile_name/profile_id、prompt/sample/comment options、operation status/results | Data Tools: DBMS_CLOUD_AI Synthetic Data | extended |
-| Select AI Agent 独立操作 | `utils/selectai_agent_util.py` asset/tool/team/conversation | assets list、run-team、run-tool、create conversation、history、privilege check、cleanup | Engine Operations: Agent low-level panel | extended |
-| OCI/ADB Wallet 運用 | `utils/oci_util.py` の4ファイル確認・ADB Wallet生成・自動配置 | `POST /api/settings/database/wallet/download`、Database SDK の上限付きストリーミング取得、検証済み原子的配置、手動アップロード fallback | Database Settings: 欠損時の自動取得・状態表示・再取得 | secured remap |
+| OCI/ADB Wallet 運用 | `utils/oci_util.py` の4ファイル確認・ADB Wallet生成・自動配置 | Wallet ZIP の手動アップロード（`POST /api/settings/database/wallet`）だけ。OCI Database API からの自動取得は削除した（#11） | Database Settings: Wallet ZIP のアップロード・状態表示 | removed |
 
 質問分類 model は単一 current artifact に収斂した。version 一覧・activate・個別 delete API は削除し、
 artifact import は `POST /classifier/model/import` で上書きする。旧
 `POST /classifier/models/import` は `activate=true` の上書きだけを受理する互換 alias として残す。
 
-## Wallet 自動取得の安全な再マッピング
+## Wallet の OCI からの自動取得（削除）
 
-旧 `utils/oci_util.py` の「必須4ファイルが不足していれば画面表示時に取得する」動作は維持するが、
-固定 password、共通 `/tmp/wallet.zip`、無制限の `extractall`、既存 Wallet への直接展開は継承しない。
-現実装は保存・返却・ログ出力をしない32文字の一時 password を生成し、Serverless はインスタンス
-Wallet (`generate_type=SINGLE`)、Dedicated は `generate_type` 省略で OCI Database API を呼ぶ。
-20 MB のダウンロード上限、100 MB の展開上限、Zip Slip / symlink / 必須4ファイル検証、worker 間
-file lock を通過した内容だけを `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin` へ原子的に配置する。Wallet
-directory は `0700`、配下ファイルは `0600` とし、有効な既存 Wallet は自動上書き・自動輪換しない。
-
-実行 identity には対象 Autonomous AI Database を読める policy が必要で、Wallet 生成には少なくとも
-`read autonomous-databases`（permission: `AUTONOMOUS_DATABASE_CONTENT_READ`）を許可する。
-OCI config、region、ADB OCID、IAM policy のいずれかが不足する場合は、Database Settings に常設した
-Wallet ZIP の手動アップロードを復旧経路として使う。
+旧 `utils/oci_util.py` の「必須4ファイルが不足していれば OCI Database API で Wallet を生成して配置する」動作は、
+OCI に依存しない構成へ移すために削除した（#11）。Wallet は Database Settings から ZIP をアップロードする
+（Zip Slip / symlink / 必須ファイルの検証と原子的な配置は共通の `pr_system_settings.database` が持つ）。
 
 ## 実行境界
 
-通常の `/api/nl2sql/execute` は従来どおり SELECT/WITH のみです。DB 管理系の DML/DDL/PLSQL/COMMENT、profile drop、comment/annotation apply、synthetic data execute は管理 UI 専用 API に分離し、`execute=true` に加えて `confirmation` が対象名または `ADMIN_EXECUTE` と一致する場合のみ実行します。
+通常の `/api/nl2sql/execute` は従来どおり SELECT/WITH のみです。DB 管理系の DML/DDL/PLSQL/COMMENT、comment/annotation apply は管理 UI 専用 API に分離し、`execute=true` に加えて `confirmation` が対象名または `ADMIN_EXECUTE` と一致する場合のみ実行します。
 
 ## 意図的に除外
 
 - 旧 Gradio UI。
 - 外部 LLM provider。
 - 外部 vector DB。
+- 旧版の DB 内 AI profile の管理・Agent の操作・DB 内のデータ生成（ADB 専用の package を前提にするため。SQL の生成は OCI Enterprise AI を直接呼ぶ。#7）。
 - `.xls` legacy import。実 fixture 受領後に `xlrd` 導入可否を判断します。
 
 ## Blocked-by-env
@@ -51,9 +40,6 @@ Wallet ZIP の手動アップロードを復旧経路として使う。
 
 - OCI GenAI embedding 実 training。
 - OCI Enterprise AI direct structured output。
-- Oracle DBMS_CLOUD_AI profile create/drop/set/generate。
-- Select AI Agent package/tool/team/conversation 実行。
-- DBMS_CLOUD_AI synthetic data 実 execute/status/result。
 - OCI Database API による実 ADB Wallet 生成（対象環境の IAM policy と永続 Wallet volume が必要）。
 
 ## SQL 論理構造からの往復生成（Issue #321）

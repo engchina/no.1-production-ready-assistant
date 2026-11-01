@@ -53,8 +53,8 @@ import {
 } from "lucide-react";
 
 import { useUnsavedChangesGuard } from "../guards/useUnsavedChangesGuard";
-import { fieldActionRowWidthClasses } from "../oci/InputActionField";
-import { useRequestScope } from "../oci/useRequestScope";
+import { fieldActionRowWidthClasses } from "../shared/InputActionField";
+import { useRequestScope } from "../shared/useRequestScope";
 import { t } from "./messages";
 import { roleDisplayName } from "./RoleNameBadges";
 import { userDisplayName } from "./userDisplayName";

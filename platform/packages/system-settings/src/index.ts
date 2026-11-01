@@ -69,9 +69,8 @@ export {
 // 確認ダイアログを閉じる画面遷移の識別子（ConfirmProvider の navigationKey。#833）
 export { useConfirmNavigationKey } from "./guards/useConfirmNavigationKey";
 
-// アップロード保存先（#97）
+// アップロード保存先（#97。ローカルのディレクトリだけ。#11）
 export {
-  DEFAULT_OCI_REGION_OPTIONS,
   UploadStorageSettingsPage,
   validateUploadStorageForm,
   type UploadStorageSettingsPageProps,
@@ -80,42 +79,9 @@ export { UPLOAD_STORAGE_MESSAGES, type UploadStorageMessages } from "./upload-st
 export {
   UPLOAD_STORAGE_QUERY_KEY,
   type UploadStorageApi,
-  type UploadStorageBackend,
-  type UploadStorageCheckResult,
-  type UploadStorageCheckStage,
   type UploadStorageSettingsData,
   type UploadStorageSettingsUpdate,
 } from "./upload-storage/types";
-
-// OCI 認証（#100）
-export { OciSettingsPage, type OciSettingsPageProps } from "./oci/OciSettingsPage";
-export { OCI_MESSAGES, type OciMessageKey } from "./oci/messages";
-export type {
-  OciConfigField,
-  OciConfigReadData,
-  OciConfigReadRequest,
-  OciConfigTestResult,
-  OciConfigTestStage,
-  OciConfigTestStageKey,
-  OciConfigTestStageStatus,
-  OciConfigTestStatus,
-  OciObjectStorageNamespaceData,
-  OciObjectStorageNamespaceRequest,
-  OciObjectStorageSettingsUpdate,
-  OciPrivateKeyUploadData,
-  OciSettingsApi,
-  OciSettingsData,
-  OciSettingsUpdate,
-} from "./oci/types";
-export {
-  DEFAULT_OCI_SETTINGS,
-  normalizeOciSettingsDraft,
-  validateOciSettingsDraft,
-  type OciSettingsDraft,
-  type OciSettingsField,
-  type OciValidationCode,
-  type OciValidationResult,
-} from "./oci/ociSettings";
 
 // テスト・接続確認の結果パネル（UX 契約 messaging.md §10。製品の接続テストも同じ部品で出す。#705）
 export {
@@ -125,7 +91,7 @@ export {
   type SettingsTestResultPanelProps,
   type SettingsTestResultTone,
   type SettingsTestResultValue,
-} from "./oci/SettingsTestResultPanel";
+} from "./shared/SettingsTestResultPanel";
 
 // モデル設定（#103）
 export { ModelSettingsPage, type ModelSettingsPageProps } from "./model/ModelSettingsPage";
@@ -174,7 +140,6 @@ export {
   type DatabaseSettingsApi,
   type DatabaseSettingsData,
   type DatabaseSettingsUpdate,
-  type DatabaseWalletDownloadData,
 } from "./database/types";
 
 // DB ゲート（DB の状態 API・全画面の案内・banner。RAG / NL2SQL から共通化。#325）

@@ -85,7 +85,7 @@ test("権限のない URL を直接開くと権限なしの画面を出し、利
   await mockAuthUser(page, { permissions: ["menu.chat", "menu.feedback"] });
 
   // 実行履歴（一覧・詳細。#1890）も menu.history が無ければ開けない。
-  for (const path of ["/settings/oci", "/settings/security/permissions", "/knowledge-bases/kb-1", "/history", "/history/run-1"]) {
+  for (const path of ["/settings/upload-storage", "/settings/security/permissions", "/knowledge-bases/kb-1", "/history", "/history/run-1"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/forbidden$/);
     await expect(page.getByRole("heading", { name: "この機能を利用する権限がありません" })).toBeVisible();

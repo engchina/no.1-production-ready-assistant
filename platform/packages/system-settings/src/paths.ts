@@ -1,9 +1,8 @@
 import {
   Waypoints,
   BrainCog,
-  Cloud,
   Database,
-  KeyRound,
+  HardDrive,
   KeySquare,
   MessageSquareWarning,
   Paperclip,
@@ -17,7 +16,6 @@ import {
  * 各製品の lib/routes.ts はこの値を参照する。
  */
 export const SYSTEM_SETTINGS_PATHS = {
-  oci: "/settings/oci",
   uploadStorage: "/settings/upload-storage",
   model: "/settings/model",
   database: "/settings/database",
@@ -35,22 +33,15 @@ export interface SystemSettingsNavItem {
 }
 
 /**
- * サイドナビ「システム設定」の共通4項目（#116。「外観と証明書」は #19 で削除）。項目・並び順・アイコンは共有パッケージが決め、
+ * サイドナビ「システム設定」の共通3項目（#116。OCI 認証は #11、「外観と証明書」は #19 で削除）。項目・並び順・アイコンは共有パッケージが決め、
  * 各製品の nav config はこれをそのまま使う（NL2SQL は各項目に menu 権限を付ける）。
  */
 export const SYSTEM_SETTINGS_NAV_ITEMS = [
   {
-    key: "oci",
-    href: SYSTEM_SETTINGS_PATHS.oci,
-    labelKey: "nav.settingsOci",
-    sidebarLabelKey: "nav.settingsOci.sidebar",
-    icon: KeyRound,
-  },
-  {
     key: "uploadStorage",
     href: SYSTEM_SETTINGS_PATHS.uploadStorage,
     labelKey: "nav.settingsUploadStorage",
-    icon: Cloud,
+    icon: HardDrive,
   },
   {
     key: "model",
@@ -143,7 +134,6 @@ export const API_KEY_PATHS = {
 
 /**
  * サイドナビ「ユーザーとロール」の末尾に置く「API キー」（管理の画面。RAG / NL2SQL / Agent 共通。#1805・#1874・#3123）。
- * KeyRound は共通の OCI 認証が使うため、別のアイコンにする（#658）。
  */
 export const API_KEY_ADMIN_NAV_ITEM = {
   key: "apiKeys",

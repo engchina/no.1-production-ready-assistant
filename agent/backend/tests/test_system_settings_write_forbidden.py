@@ -12,7 +12,7 @@ from starlette.requests import Request
 
 from app.features.agent.router import require_system_settings_write
 from app.security.domain import Principal
-from app.security.permissions import MENU_SETTINGS_OCI
+from app.security.permissions import MENU_SETTINGS_MODEL
 from app.security.service import set_security_service
 
 FORBIDDEN_MESSAGE = "この機能を利用する権限がありません。"
@@ -50,7 +50,7 @@ def _request(method: str, path: str, principal: Principal | None) -> Request:
 
 async def test_require_system_settings_write_denies_in_japanese_without_login_id() -> None:
     """権限の無い保存の 403 は日本語の文で、ログインユーザー ID や英語の内部の文を出さない。"""
-    request = _request("PATCH", "/api/settings/upload-storage", _principal({MENU_SETTINGS_OCI}))
+    request = _request("PATCH", "/api/settings/upload-storage", _principal({MENU_SETTINGS_MODEL}))
 
     with pytest.raises(HTTPException) as exc:
         await require_system_settings_write(request)
@@ -62,12 +62,12 @@ async def test_require_system_settings_write_denies_in_japanese_without_login_id
 
 def test_settings_write_without_permission_returns_japanese_403(auth: ProductionAuth) -> None:
     """画面から呼んだときも、保存の権限が無ければ日本語の 403 を返す。"""
-    auth.user_with_permissions("settings-viewer", [MENU_SETTINGS_OCI])
+    auth.user_with_permissions("settings-viewer", [MENU_SETTINGS_MODEL])
     headers = login("settings-viewer")
 
     response = client.patch(
         "/api/settings/upload-storage",
-        json={"upload_storage_backend": "local", "local_storage_dir": "/tmp/x"},  # nosec B108
+        json={"local_storage_dir": "/tmp/x"},  # nosec B108
         headers=headers,
     )
 

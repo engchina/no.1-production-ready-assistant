@@ -9,12 +9,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DATABASE_SETTINGS_QUERY_KEY,
   DatabaseSettingsPage,
-  OciSettingsPage,
   RoleManagementPage,
   UserManagementPage,
   type DatabaseSettingsApi,
   type DatabaseSettingsData,
-  type OciSettingsApi,
   type RoleManagementApi,
   type SecurityRole,
   type SecurityUser,
@@ -100,8 +98,6 @@ const DB_SETTINGS: DatabaseSettingsData = {
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "EMBEDDING",
-  adb_ocid: "ocid1.autonomousdatabase.oc1.ap-osaka-1.example",
-  region: "ap-osaka-1",
   config_source: "runtime",
 };
 
@@ -110,7 +106,6 @@ function databaseApi(overrides: Partial<DatabaseSettingsApi> = {}): DatabaseSett
     getDatabaseSettings: () => Promise.resolve(DB_SETTINGS),
     updateDatabaseSettings: never,
     uploadDatabaseWallet: never,
-    downloadDatabaseWallet: never,
     testDatabaseSettings: never,
     ...overrides,
   };
@@ -165,52 +160,6 @@ describe("データベース設定: 押したボタンがフォーカスを保�
     expectPressedKeepsFocus(pending);
     expect(host.querySelector<HTMLInputElement>("#oracle-password")?.matches(":disabled")).toBe(true);
     expectDisabledOnly(databaseFormButton("save"));
-  });
-});
-
-describe("OCI 認証: 押したボタンがフォーカスを保つ（#835）", () => {
-  it("「接続テスト」の処理中は接続テストのボタンにフォーカスが残り、保存と入力欄は無効になる", async () => {
-    const api: OciSettingsApi = {
-      getOciSettings: () =>
-        Promise.resolve({
-          config_file: "~/.oci/config",
-          profile: "DEFAULT",
-          user: "ocid1.user.oc1..example",
-          fingerprint: "12:34:56:78:90:ab:cd:ef:12:34:56:78:90:ab:cd:ef",
-          tenancy: "ocid1.tenancy.oc1..example",
-          region: "ap-osaka-1",
-          key_file: "~/.oci/key.pem",
-          key_file_exists: true,
-          config_file_exists: true,
-          config_source: "runtime",
-        }),
-      getUploadStorageSettings: () =>
-        Promise.resolve({
-          backend: "local",
-          local_storage_dir: "/data",
-          object_storage_region: "ap-osaka-1",
-          object_storage_namespace: "",
-          object_storage_bucket: "",
-          readiness: "ok",
-          max_upload_bytes: 1,
-          config_source: "runtime",
-        }),
-      updateOciSettings: never,
-      updateOciObjectStorageSettings: never,
-      readOciConfig: never,
-      testOciConfig: never,
-      readOciObjectStorageNamespace: never,
-      uploadOciPrivateKey: never,
-    };
-    await render(<OciSettingsPage api={api} />);
-    await act(async () => undefined);
-
-    await press(buttonByText("接続テスト"));
-
-    expectPressedKeepsFocus(buttonByText("接続テスト"));
-    expectDisabledOnly(buttonByText("OCI 設定を保存"));
-    expect(host.querySelector<HTMLInputElement>("#oci-user-ocid")?.matches(":disabled")).toBe(true);
-    expect(host.querySelectorAll('button[aria-busy="true"]')).toHaveLength(1);
   });
 });
 
