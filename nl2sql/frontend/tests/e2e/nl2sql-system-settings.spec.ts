@@ -1488,7 +1488,7 @@ test("配色は OS の設定にかかわらずライトに固定する (#17)", a
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.reload();
-    await expect(page.locator("#oci-user-ocid")).toBeVisible();
+    await expect(page.locator("#upload-storage-local-dir")).toBeVisible();
     await expect(html).toHaveCSS("color-scheme", "light");
     await expect(html).not.toHaveAttribute("data-theme");
     expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
