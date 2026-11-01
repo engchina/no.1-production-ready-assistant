@@ -165,6 +165,21 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 
 `system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
 
+### 開発用 worktree の準備
+
+新しい git worktree（または clone）では、`scripts/setup-worktree.sh <製品…>` で触る製品だけを準備できます（共有 UI の `platform` の `npm ci` と build、製品の `frontend` の `npm ci`）。製品を省略すると rag / nl2sql / agent のすべてを準備します。
+
+```bash
+scripts/setup-worktree.sh rag              # rag だけ
+scripts/setup-worktree.sh nl2sql agent     # 複数の製品
+BACKEND=1 scripts/setup-worktree.sh rag    # backend の uv sync --locked --dev も行う
+```
+
+- 主の checkout で dev server を動かしたまま worktree で Playwright を流すときは、`PLAYWRIGHT_PORT` で e2e の port をずらします（例: `PLAYWRIGHT_PORT=3242 npx playwright test`。既定の port は「ローカル開発の port」の表）。
+- worktree の backend を主の `platform/.env` のまま起動しません（主の dev server と同じ DB に書きます）。確かめるのは pytest で行い、起動が要るときは別の DB の `PLATFORM_ENV_FILE` か `AGENT_RUNTIME_REPOSITORY_BACKEND=memory`（Agent）にします。
+
+詳細は [docs/agents/ci.md](./docs/agents/ci.md) を参照してください。
+
 ## 配備
 
 OCI Resource Manager の Terraform stack（「Deploy to Oracle Cloud」ボタン）による配備は廃止しました（#12）。
