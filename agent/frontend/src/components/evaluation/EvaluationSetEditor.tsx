@@ -50,6 +50,7 @@ import {
   type AgentOutputField,
   type AgentProfile,
   type EvaluationCase,
+  type EvaluationCaseLabels,
   type EvaluationSet,
   type EvaluationSetInput,
   type EvaluationTarget,
@@ -77,6 +78,10 @@ interface CaseDraft {
   sourceRunId: string | null;
   /** 期待する出力の項目（#2558）。 */
   output: ExpectedOutputRowDraft[];
+  /** 能力分類・禁止するツール・完了を示す語（#63。ツールと語はカンマ区切り）。 */
+  capability: string;
+  forbiddenTools: string;
+  completionClaims: string;
 }
 
 interface SetDraft {
@@ -92,7 +97,7 @@ function nextKey() {
   return `case-draft-${draftKey}`;
 }
 
-function caseDraft(item?: EvaluationCase): CaseDraft {
+function caseDraft(item?: EvaluationCase & EvaluationCaseLabels): CaseDraft {
   return {
     key: nextKey(),
     id: item?.id ?? "",
@@ -104,7 +109,18 @@ function caseDraft(item?: EvaluationCase): CaseDraft {
     answers: (item?.clarification_answers ?? []).map((answer) => clarificationAnswerDraft(answer)),
     sourceRunId: item?.source_run_id ?? null,
     output: expectedOutputDrafts(item?.expected_output),
+    capability: item?.capability ?? "",
+    forbiddenTools: (item?.forbidden_tools ?? []).join(", "),
+    completionClaims: (item?.completion_claims ?? []).join(", "),
   };
+}
+
+/** カンマ・読点で区切った欄の値（空は除く）。 */
+function listOf(text: string): string[] {
+  return text
+    .split(/[,、]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function draftOf(set: EvaluationSet | undefined, agentId: string): SetDraft {
@@ -187,6 +203,10 @@ function toPayload(draft: SetDraft, fields: AgentOutputField[]): EvaluationSetIn
       source_run_id: item.sourceRunId,
       // 期待する出力は書いたときだけ送る（#2558）。
       ...((output) => (output.length ? { expected_output: output } : {}))(toExpectedOutput(item.output, fields)),
+      // 能力分類と安全の期待も書いたときだけ送る（#63）。
+      ...(item.capability.trim() ? { capability: item.capability.trim() } : {}),
+      ...(listOf(item.forbiddenTools).length ? { forbidden_tools: listOf(item.forbiddenTools) } : {}),
+      ...(listOf(item.completionClaims).length ? { completion_claims: listOf(item.completionClaims) } : {}),
     })),
   };
 }
@@ -592,6 +612,33 @@ export function EvaluationSetEditor({
                           className="col-span-full"
                           value={item.tools}
                           onValueChange={(value) => updateCase(item.key, { tools: value })}
+                        />
+                        {/* 能力分類と安全の期待（#63）。分類の語は評価データで決める。 */}
+                        <TextField
+                          id={`${item.key}-capability`}
+                          label={t("evaluation.set.capability")}
+                          helper={t("evaluation.set.capabilityHelper")}
+                          width="full"
+                          maxLength={50}
+                          value={item.capability}
+                          onValueChange={(value) => updateCase(item.key, { capability: value })}
+                        />
+                        <TextField
+                          id={`${item.key}-forbidden-tools`}
+                          label={t("evaluation.set.forbiddenTools")}
+                          helper={t("evaluation.set.forbiddenToolsHelper")}
+                          width="full"
+                          value={item.forbiddenTools}
+                          onValueChange={(value) => updateCase(item.key, { forbiddenTools: value })}
+                        />
+                        <TextField
+                          id={`${item.key}-completion-claims`}
+                          label={t("evaluation.set.completionClaims")}
+                          helper={t("evaluation.set.completionClaimsHelper")}
+                          width="full"
+                          className="col-span-full"
+                          value={item.completionClaims}
+                          onValueChange={(value) => updateCase(item.key, { completionClaims: value })}
                         />
                       </FormGrid>
                       {/* 期待するツールの順（先頭が最初に呼ぶツール。#1845）。説明は aria-describedby で結ぶ。 */}

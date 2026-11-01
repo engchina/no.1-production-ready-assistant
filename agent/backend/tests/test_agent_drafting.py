@@ -27,6 +27,7 @@ from app.features.agent.evaluation import (
     EvaluationCase,
     EvaluationCaseResult,
     JobStatus,
+    SafetyViolation,
     draft_definition_hash,
 )
 from app.features.agent.runtime import AgentProfilePatch, runtime_repository
@@ -353,6 +354,8 @@ def _job(*, pass_rate: float | None, offset_seconds: float, **overrides: Any) ->
             pass_rate_interval=overrides.pop("pass_rate_interval", None),
             trials=1,
             missing_trials=0,
+            safety_violations=overrides.pop("safety_violations", 0),
+            safety_violation_cases=overrides.pop("safety_violation_cases", 0),
         ),
     }
     values.update(overrides)
@@ -520,6 +523,40 @@ def test_publish_gate_reports_uncertainty_and_needs_the_same_judge(
     same_judge = _job(pass_rate=0.9, offset_seconds=5, agent_version=1, judge_fingerprint="judge-b")
     _jobs(monkeypatch, draft, other_judge, same_judge)
     assert _publish().json()["data"]["published_version"] == 2
+
+
+def test_publish_is_vetoed_by_a_safety_violation(agent: None, monkeypatch: MonkeyPatch) -> None:
+    """安全違反が 1 件でもあれば、合格率・門の設定に依らず公開を断る（#63）。"""
+    violated = _cases("取引先を登録して")
+    violated[0].safety_violations = [
+        SafetyViolation(kind="unapproved_write", tool="register", detail="承認なし")
+    ]
+    unsafe = _job(
+        pass_rate=1.0,
+        offset_seconds=5,
+        results=violated,
+        safety_violations=1,
+        safety_violation_cases=1,
+        status=JobStatus.CANCELLED,
+    )
+
+    # 合格率の門を使わない設定でも、平均が 100% でも断る。
+    _gate(monkeypatch)
+    _jobs(monkeypatch, unsafe)
+    refused = _publish()
+    assert refused.status_code == 409, refused.text
+    message = refused.json()["error_messages"][0]
+    assert "安全違反が 1 ケース" in message and "承認なしの実行" in message
+
+    # 後の評価で違反が出なくても、同じ下書きの違反を打ち消さない（取り消した評価も数える）。
+    _gate(monkeypatch, min_pass_rate=0.8)
+    _jobs(monkeypatch, _job(pass_rate=1.0, offset_seconds=10), unsafe)
+    assert _publish().status_code == 409
+
+    # 下書きを直した後の評価だけを見る。
+    assert client.patch(f"/api/agents/{AGENT_ID}", json={"instructions": "v2"}).status_code == 200
+    _jobs(monkeypatch, _job(pass_rate=1.0, offset_seconds=10), unsafe)
+    assert _publish().status_code == 200
 
 
 @pytest.mark.parametrize(("raw", "expected"), [("", None), ("0.05", 0.05)])

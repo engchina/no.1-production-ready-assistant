@@ -58,6 +58,7 @@ import {
   agentApi,
   type AgentProfile,
   type EvaluationCaseResult,
+  type EvaluationCapabilitySummary,
   type EvaluationCaseTrials,
   type EvaluationFieldResult,
   type EvaluationInterval,
@@ -769,6 +770,18 @@ function JobView({
         </CardContent>
       </Card>
 
+      {summary.capabilities?.length ? (
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>{t("evaluation.capability.title")}</CardTitle>
+            <CardDescription>{t("evaluation.capability.description")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CapabilityTable items={summary.capabilities} jobId={job.id} />
+          </CardContent>
+        </Card>
+      ) : null}
+
       {(summary.trials ?? 1) > 1 && job.case_trials ? (
         <Card className="min-w-0">
           <CardHeader>
@@ -887,6 +900,15 @@ function SummaryMetrics({ summary, previous }: { summary: EvaluationSummary; pre
           />
         </>
       ) : null}
+      {/* 安全違反（#63。合格率とは別に数え、1 件でもあれば公開前の評価の門が断る）。 */}
+      <Metric
+        label={t("evaluation.summary.safetyViolations")}
+        value={formatNumber(summary.safety_violation_cases ?? 0)}
+        detail={t("evaluation.summary.safetyDetail", {
+          trials: summary.safety_violations ?? 0,
+          blocked: summary.blocked_attempts ?? 0,
+        })}
+      />
       {summary.approval_blocked ? <Metric label={t("evaluation.summary.approvalBlocked")} value={formatNumber(summary.approval_blocked)} detail={t("evaluation.summary.approvalBlockedDetail", { count: summary.approval_blocked })} /> : null}
       <Metric label={t("evaluation.summary.correct")} value={formatNumber(summary.correct)} detail={ofTotal} />
       <Metric
@@ -961,6 +983,7 @@ function ResultsTable({
       render: (result) => (
         <span className="flex flex-col items-start gap-1">
           <CaseBadge result={result} />
+          <SafetyBadge result={result} />
           <ClarificationNote result={result} />
         </span>
       ),
@@ -1007,6 +1030,73 @@ function ResultsTable({
         getRowKey={resultKey}
         ariaLabel={t("evaluation.results.label")}
         tableClassName="w-full min-w-[54rem]"
+        resetKey={jobId}
+      />
+    </div>
+  );
+}
+
+/** 能力分類の表示名（分類の無いケースは「未分類」）。 */
+function capabilityLabel(capability: string): string {
+  return capability || t("evaluation.capability.none");
+}
+
+/** 能力分類ごとの母数・判定・欠測・合格率（区間）・安全違反（#63）。 */
+function CapabilityTable({ items, jobId }: { items: EvaluationCapabilitySummary[]; jobId: string }) {
+  const columns: DataTableColumn<EvaluationCapabilitySummary>[] = [
+    {
+      key: "capability",
+      header: t("evaluation.capability.column"),
+      rowHeader: true,
+      className: "min-w-40 break-words font-medium text-fg",
+      render: (item) => capabilityLabel(item.capability),
+    },
+    {
+      key: "cases",
+      header: t("evaluation.jobs.cases"),
+      align: "right",
+      className: "whitespace-nowrap tabular-nums text-fg",
+      render: (item) => formatNumber(item.cases),
+    },
+    {
+      key: "passRate",
+      header: t("evaluation.summary.passRate"),
+      className: "whitespace-nowrap tabular-nums text-fg",
+      render: (item) => (
+        <span className="flex flex-col">
+          <span>{formatRate(item.pass_rate)}</span>
+          <span className="text-xs text-fg-muted">{intervalText(item.pass_rate_interval)}</span>
+        </span>
+      ),
+    },
+    {
+      key: "judged",
+      header: t("evaluation.capability.judged"),
+      align: "right",
+      className: "whitespace-nowrap tabular-nums text-fg",
+      render: (item) => t("evaluation.capability.judgedValue", { judged: item.judged_trials, missing: item.missing_trials }),
+    },
+    {
+      key: "safety",
+      header: t("evaluation.summary.safetyViolations"),
+      render: (item) =>
+        item.safety_violations ? (
+          <StatusBadge variant="danger" label={t("evaluation.safety.count", { count: item.safety_violations })} />
+        ) : (
+          <StatusBadge variant="success" label={t("evaluation.safety.none")} />
+        ),
+    },
+  ];
+  return (
+    <div className="grid min-w-0 gap-2">
+      <ListToolbar count={listTotal(items.length)} testId="evaluation-capability-toolbar" />
+      <PagedDataTable<EvaluationCapabilitySummary>
+        pageKey="evaluationCapabilities"
+        rows={items}
+        columns={columns}
+        getRowKey={(item) => item.capability}
+        ariaLabel={t("evaluation.capability.label")}
+        tableClassName="w-full min-w-[40rem]"
         resetKey={jobId}
       />
     </div>
@@ -1222,6 +1312,12 @@ function caseStatusKey(result: EvaluationCaseResult): string {
   return result.status === "judged" && result.judgement ? result.judgement.verdict : result.status;
 }
 
+/** 安全違反（#63。合否とは別のバッジ。違反が無ければ出さない）。 */
+function SafetyBadge({ result }: { result: EvaluationCaseResult }) {
+  const count = result.safety_violations?.length ?? 0;
+  return count ? <StatusBadge variant="danger" label={t("evaluation.safety.count", { count })} /> : null;
+}
+
 function CaseBadge({ result }: { result: EvaluationCaseResult }) {
   const key = caseStatusKey(result);
   return <StatusBadge variant={caseVariant(key)} label={t(`evaluation.status.${key}` as I18nKey)} />;
@@ -1249,6 +1345,10 @@ function CaseDetail({ result }: { result: EvaluationCaseResult }) {
     <div className="space-y-4 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <CaseBadge result={result} />
+        <SafetyBadge result={result} />
+        {result.case.capability ? (
+          <span className="text-xs text-fg-muted">{t("evaluation.detail.capability", { capability: result.case.capability })}</span>
+        ) : null}
         {judgement ? (
           <span className="tabular-nums text-fg">{`${t("evaluation.column.score")} ${judgement.score.toFixed(2)}`}</span>
         ) : null}
@@ -1312,6 +1412,32 @@ function CaseDetail({ result }: { result: EvaluationCaseResult }) {
           <p className="text-fg-muted">{t("evaluation.detail.dryRunNote")}</p>
         </div>
       </DetailSection>
+      {result.safety_violations?.length || result.blocked_attempts?.length || result.case.forbidden_tools?.length || result.case.completion_claims?.length ? (
+        <DetailSection title={t("evaluation.detail.safety")}>
+          <div className="space-y-1 text-xs" data-testid="evaluation-safety-detail">
+            {result.safety_violations?.length ? (
+              <ul className="list-disc space-y-1 pl-5 text-danger-fg">
+                {result.safety_violations.map((violation, index) => (
+                  <li key={`${violation.kind}-${violation.tool}-${index}`} className="break-words">
+                    {t(`evaluation.safety.kind.${violation.kind}` as I18nKey, { tool: violation.tool })}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-fg">{t("evaluation.safety.none")}</p>
+            )}
+            {result.blocked_attempts?.length ? (
+              <p className="text-fg-muted">{t("evaluation.safety.blocked", { tools: result.blocked_attempts.join(", ") })}</p>
+            ) : null}
+            {result.case.forbidden_tools?.length ? (
+              <p className="text-fg-muted">{t("evaluation.safety.forbidden", { tools: result.case.forbidden_tools.join(", ") })}</p>
+            ) : null}
+            {result.case.completion_claims?.length ? (
+              <p className="text-fg-muted">{t("evaluation.safety.claims", { claims: result.case.completion_claims.join("、") })}</p>
+            ) : null}
+          </div>
+        </DetailSection>
+      ) : null}
       {result.error ? (
         <DetailSection title={t("evaluation.detail.error")}>
           <p className="break-words text-fg">{result.error}</p>

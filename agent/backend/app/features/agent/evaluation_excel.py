@@ -1,6 +1,7 @@
 """品質評価の評価セットの Excel（#776）。NL2SQL の SQL生成評価と同じく、評価ケースを Excel で
 取り込み・書き出しする（1 行 1 ケース。列は ケースID・質問・期待する回答の要点・期待するツール・
-ツールの順（「順どおり」なら期待するツールを書いた順に呼ぶ。#1845）・問い返しへの答え（#1845））。
+ツールの順（「順どおり」なら期待するツールを書いた順に呼ぶ。#1845）・問い返しへの答え（#1845）・
+期待する出力・承認による停止・能力分類・禁止するツール・完了を示す語（#63））。
 
 問い返しへの答えは 1 行に 1 件で、`<確認事項の ID> = <候補>, <候補> その他: <自由入力>` と書く
 （ID・候補・「その他:」はそれぞれ省ける）。
@@ -35,6 +36,10 @@ HEADERS = (
     "問い返しへの答え",
     "期待する出力（JSON）",
     "承認による停止を期待",
+    # 能力分類・禁止するツール・完了を示す語（#63）。
+    "能力分類",
+    "禁止するツール",
+    "完了を示す語",
 )
 # 「ツールの順」の列の値（#1845）。書き出しは IN_ORDER_LABEL、読み込みは IN_ORDER_VALUES のどれか。
 IN_ORDER_LABEL = "順どおり"
@@ -49,6 +54,9 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "clarification_answers": ("問い返しへの答え", "clarification_answers"),
     "expected_approval": ("承認による停止を期待", "expected_approval"),
     "expected_output": ("期待する出力（json）", "期待する出力", "expected_output"),
+    "capability": ("能力分類", "capability"),
+    "forbidden_tools": ("禁止するツール", "forbidden_tools"),
+    "completion_claims": ("完了を示す語", "completion_claims"),
 }
 # 問い返しへの答えの「その他（自由入力）」の印（#1845）。
 OTHER_PREFIXES = ("その他:", "その他：")
@@ -87,9 +95,13 @@ def _workbook(cases: list[EvaluationCase]) -> bytes:
                 if case.expected_output
                 else "",
                 "はい" if case.expected_approval else "",
+                case.capability,
+                ", ".join(case.forbidden_tools),
+                ", ".join(case.completion_claims),
             ]
         )
-    for column, width in zip("ABCDEFGH", (18, 48, 56, 28, 12, 40, 48, 24), strict=True):
+    widths = (18, 48, 56, 28, 12, 40, 48, 24, 20, 28, 28)
+    for column, width in zip("ABCDEFGHIJK", widths, strict=True):
         sheet.column_dimensions[column].width = width
     for row in sheet.iter_rows(min_row=2):
         for cell in row:
@@ -162,6 +174,11 @@ def _text(row: tuple[Any, ...], index: int | None) -> str:
     return str(row[index]).strip()
 
 
+def _items(text: str) -> list[str]:
+    """カンマ・読点で区切った 1 セルの値。"""
+    return [item for item in text.replace("、", ",").split(",") if item.strip()]
+
+
 def parse_cases_xlsx(data: bytes) -> list[EvaluationCase]:
     """Excel の評価ケースを読む（最初のシート。空の行は飛ばす）。"""
     if len(data) > EXCEL_MAX_BYTES:
@@ -209,6 +226,9 @@ def parse_cases_xlsx(data: bytes) -> list[EvaluationCase]:
                     in IN_ORDER_VALUES,
                     clarification_answers=parse_answers(answers_text),
                     expected_output=expected_output,
+                    capability=_text(values, columns.get("capability")),
+                    forbidden_tools=_items(_text(values, columns.get("forbidden_tools"))),
+                    completion_claims=_items(_text(values, columns.get("completion_claims"))),
                 )
             )
         except (ValidationError, json.JSONDecodeError) as exc:
