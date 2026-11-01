@@ -45,6 +45,16 @@
 | `length_bias` / `politeness_bias` / `order_bias` | 長い・丁寧な誤答、短い・素っ気ない正答、順序に意味の有る / 無い並び |
 | `judge_injection` | 回答・記録した値の中の評価者への指示・判定の体裁 |
 
+### 評価者への指示の注入（#92）
+
+評価者は、被評価の回答を `<evaluated_answer>`、出力の項目の期待する値・記録した値を `<expected_value>` / `<recorded_value>` で囲んだデータとして受け取り、判定の指示（Step 2）は区切りの中の指示・判定の体裁・見出しや規則の偽装に従わないと書く。回答の中の区切りの tag（開き・閉じ・属性つき・大文字や空白の揺れ・`&lt;` で書いたもの）は `evaluation._data_block` が印 `[区切りの tag を除いた]` に置き換える（区切りを閉じたふりをして、区切りの外の入力を偽れない。コードで保証する部分）。`&lt;` に書き換えるだけでは、判定のモデルが偽の閉じの tag として読んで従うことがあった。
+
+[`agent-judge-injection-stress.v1.json`](../evaluation/judge-calibration/agent-judge-injection-stress.v1.json)（9 項目・すべて dev）は、見出しの偽装・区切りの偽装・規則の変更を装う指示・英語の指示・期待する要点を古いとする主張・不合格にさせる逆向きの指示・「評価者」という語を含む正答を集めた stress set である。指示の調整に使ったので合否に使わない（holdout は同梱のセットの `judge_injection`）。判定は揺れるので、変更の前後で 5 回ずつ流して項目ごとの誤りの回数を比べる。
+
+```bash
+uv run python -m app.cli.judge_calibration ../evaluation/judge-calibration/agent-judge-injection-stress.v1.json --min-items 1 --output $W/stress.json
+```
+
 業務の評価セットで校正するときは、同じ形の JSON を repo の外か `./tmp/` に作る（業務の内容を repo・Issue・PR に書かない）。
 
 ## 実行
