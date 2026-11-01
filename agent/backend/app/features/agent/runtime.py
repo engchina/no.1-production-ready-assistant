@@ -51,7 +51,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.features.agent import call_abort, run_claim, storage_backend
+from app.features.agent import call_abort, external_writes, run_claim, storage_backend
 from app.features.agent import runtime_checkpoint_store as checkpoint_store
 from app.features.agent.chat_progress import note_run_span
 from app.features.agent.clarification_cancel import (
@@ -2960,6 +2960,11 @@ class AgentRuntimeRepository:
                 step.tool_call = step.tool_call.model_copy(
                     update={"arguments": call.arguments, "data_scope": call.data_scope}
                 )
+            if step.tool_call is not None and call.operation_key:
+                # 承認済みの step にも、送る論理操作の ID を残す（#72）。
+                step.tool_call = step.tool_call.model_copy(
+                    update={"operation_key": call.operation_key}
+                )
             step.status = StepStatus.RUNNING
             step.started_at = _now()
             self._append_event(
@@ -2970,6 +2975,7 @@ class AgentRuntimeRepository:
             )
             context = self._tool_invocation_context_locked(run, call, approval_id=step.approval_id)
             self._persist_locked()
+
             return step.id, context
 
     def finish_builtin_tool_step(self, run_id: str, step_id: str, result: ToolResult) -> None:
@@ -3071,6 +3077,8 @@ class AgentRuntimeRepository:
                     },
                 )
             for call in calls:
+                # 結果不明の書き込みと同じ操作の送り直しは、照合を求める理由にする（#72）。
+                unknown = external_writes.unresolved_unknown(run.steps, call.name, call.arguments)
                 step = RunStep(
                     run_id=run_id,
                     status=StepStatus.WAITING_APPROVAL,
@@ -3081,7 +3089,9 @@ class AgentRuntimeRepository:
                     run_id=run_id,
                     step_id=step.id,
                     tool_call=call,
-                    reason=f"{call.name} は承認が必要です。",
+                    reason=external_writes.approval_reason(call.name)
+                    if unknown is not None
+                    else f"{call.name} は承認が必要です。",
                 )
                 step.approval_id = approval.id
                 run.steps.append(step)
@@ -3188,6 +3198,14 @@ class AgentRuntimeRepository:
         previous_status = run.status.value
         for step in run.steps:
             if step.status in {StepStatus.PENDING, StepStatus.RUNNING}:
+                if (
+                    step.status == StepStatus.RUNNING
+                    and step.tool_result is None
+                    and step.tool_call is not None
+                    and step.tool_call.operation_key
+                ):
+                    # 送ったかもしれない書き込みは、未実行と断定せず結果不明にする（#72）。
+                    step.tool_result = external_writes.interrupted_result(step)
                 step.status = StepStatus.FAILED
                 step.completed_at = step.completed_at or now
         run.pending_tool_calls.clear()
@@ -4081,6 +4099,7 @@ class AgentRuntimeRepository:
         return ToolInvocationContext(
             approval_id=approval_id,
             trace_id=call.trace_id,
+            operation_key=call.operation_key,
             agent_id=run.agent_id,
             run_id=run.id,
             user_uuid=run.created_by_user_uuid,

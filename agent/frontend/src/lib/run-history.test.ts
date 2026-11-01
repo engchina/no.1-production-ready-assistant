@@ -20,7 +20,9 @@ import {
   agentProgressDefinitions,
   progressRunSteps,
   runConversationHref,
+  runOutcomeUnknownWrites,
   runProgressIsLegacy,
+
   runTimelineSteps,
   runProgressSteps,
   runToolTitles,
@@ -292,5 +294,35 @@ describe("runConversationHref（会話を開く。Issue 2343）", () => {
     expect(runConversationHref(run({ thread_id: "t1", owned_by_me: false }), { seesAllUsers: true, canOpenChat: true })).toBe(
       "/chat?agent_id=default&thread_id=t1"
     );
+  });
+});
+
+describe("runOutcomeUnknownWrites（結果不明の外部への書き込み。Issue 72）", () => {
+  const call = { name: "ext__create_ticket", arguments: {}, operation_key: "op_1" };
+  const unknownResult = {
+    name: "ext__create_ticket",
+    success: false,
+    error_details: { outcome: "unknown" },
+  };
+
+  it("届いた後の失敗と、終わった Run の実行中の書き込みを拾う", () => {
+    const steps = [
+      { id: "s1", run_id: "run-1", kind: "tool", status: "failed", tool_call: call, tool_result: unknownResult },
+      { id: "s2", run_id: "run-1", kind: "tool", status: "running", tool_call: { ...call, operation_key: "op_2" } },
+    ];
+    expect(runOutcomeUnknownWrites(run({ status: "cancelled", steps } as Partial<RunState>))).toEqual([
+      { stepId: "s1", toolName: "ext__create_ticket", operationKey: "op_1" },
+      { stepId: "s2", toolName: "ext__create_ticket", operationKey: "op_2" },
+    ]);
+    // 実行中の Run の実行中の書き込みは、まだ結果を待っている（結果不明ではない）。
+    expect(runOutcomeUnknownWrites(run({ status: "running", steps } as Partial<RunState>))).toHaveLength(1);
+  });
+
+  it("操作の ID の無い呼び出し・送る前の失敗は拾わない", () => {
+    const steps = [
+      { id: "s1", run_id: "run-1", kind: "tool", status: "failed", tool_call: { name: "rag_search", arguments: {} }, tool_result: unknownResult },
+      { id: "s2", run_id: "run-1", kind: "tool", status: "failed", tool_call: call, tool_result: { ...unknownResult, error_details: {} } },
+    ];
+    expect(runOutcomeUnknownWrites(run({ steps } as Partial<RunState>))).toEqual([]);
   });
 });

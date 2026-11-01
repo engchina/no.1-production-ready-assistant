@@ -11,6 +11,7 @@
 | `aggregate` | 測れたケースだけの平均と分母（`MetricAggregate`）、閾値の判定（`threshold_failures`）、合否（`overall_passed`） |
 | `agreement` | 人手の判定と評価器の判定の一致（`agreement`: 一致率・Cohen の κ・混同行列・誤合格 / 誤不合格）と、評価器の校正の合否（`CalibrationThresholds`・`calibration_failures`: holdout の件数・判定率・κ・誤合格の率）。suite の LLM による判定と RAG の回答の評価器が同じ基準で校正する（#3418） |
 | `labeling` | 人手の判定を集める部品（区分 `assign_splits`・誤りの型と目標 `ERROR_TYPES`・記入者の間の一致 `agreed_label` / `pairwise_agreement`・判定の揺れ `label_variance`・LabelSet の項目の名前）。suite の記入用のブックと RAG の判定の校正の画面が共有する（#3578） |
+| `paired` | 同じケースを 2 条件で評価した対応のある比較（`paired_bootstrap_interval`: ケースごとの差の平均の配対 bootstrap の percentile 区間。ケースを単位に復元抽出し、`seed`・反復数で再現できる。`exact_sign_test`: 改善・悪化の件数の両側の正確な二項検定〔二値の指標では McNemar の正確検定〕）。RAG の評価の比較が使う（#60） |
 | `perturbation` | 故意に壊した回答（合成の対照）の壊し方と選び方（`perturb_items`） |
 | `trials` | ケースの反復試行の集計（`case_trials`・`summarize_trials`: 成功・失敗・欠測から Pass@k〔どれか 1 回成功〕と Pass^k〔k 回すべて成功〕・安定 / 不安定・欠測のあるケース）と、成功率の Wilson の score 区間（`wilson_interval`。小標本・0% / 100% でも幅を持つ）・同じケースを 2 条件で評価した対応のある差の MOVER 区間（`paired_difference`）。区間の単位はケースで、同じケースの反復を独立した問題に数えない。欠測のある k 回は Pass@k / Pass^k の分母に入れない（成功扱いしない） |
 | `rubric` | 回答の判定の基準（同梱の `rubrics/answer_quality_v1.json`）と、観点の基準の文・判定する観点 |

@@ -110,6 +110,7 @@ from pr_system_settings.model import (
 from app.features.agent import (
     call_abort,
     data_scope,
+    external_writes,
     run_budget,
     run_claim,
     run_config,
@@ -1332,6 +1333,12 @@ def tool_failure_payload(result: ToolResult) -> dict[str, Any]:
         "error_code": result.error_code,
     }
     details = result.error_details if isinstance(result.error_details, dict) else {}
+    if external_writes.is_outcome_unknown(result):
+        # 届いた後の失敗（#72）: 未実行と扱わせず、繰り返さずに確かめる案内を足す。
+        operation = details.get("operation_key") or result.audit_metadata.get("operation_key")
+        key = operation if isinstance(operation, str) else None
+        payload.update(external_writes.unknown_outcome_payload(key))
+
     callee_code = details.get("error_code")
     if isinstance(callee_code, str) and _CALLEE_ERROR_CODE.fullmatch(callee_code):
         payload["tool_error_code"] = callee_code
@@ -1627,7 +1634,20 @@ class _ToolRecorder:
             return True
         if self.prepare_arguments(name, parsed).errors:
             return False
+        # 結果不明の書き込みと同じ操作は、自動実行のツールでも人の照合を求める（#72。承認の記録と
+        # 同じく、データの範囲を当てた引数で照合する）。
+        scoped = _scoped_call(ToolCall(name=name, arguments=dict(parsed)), self.data_scopes)
+        if self.unknown_origin(name, entry.definition, scoped.arguments) is not None:
+            return True
         return _active_policy().decide(entry.definition) == ToolPolicyDecision.ASK
+
+    def unknown_origin(
+        self, name: str, contract: ToolDefinition | None, arguments: dict[str, Any]
+    ) -> Any | None:
+        """同じツール・同じ引数の、結果不明のまま解消していない書き込みの step（#72）。"""
+        if contract is None or name == CONFIRMATION_TOOL or not external_writes.guarded(contract):
+            return None
+        return external_writes.unresolved_unknown(_run_steps(self.run_id), name, arguments)
 
     def authorize(self, call: ToolCall, model_arguments: Mapping[str, Any]) -> _Authorization:
         """ツール権限と承認を、呼び先へ送る直前の最新のポリシーで確かめる（#2610）。
@@ -1645,7 +1665,8 @@ class _ToolRecorder:
         contract = entry.definition if entry is not None else tool_registry.get(call.name)
         if call.name == CONFIRMATION_TOOL:
             return _Authorization(policy, force=True, reason="confirmation")
-        if contract is None or policy.decide(contract) != ToolPolicyDecision.ASK:
+        resend = self.unknown_origin(call.name, contract, call.arguments) is not None
+        if contract is None or (policy.decide(contract) != ToolPolicyDecision.ASK and not resend):
             return _Authorization(policy, force=False, reason="policy")
         approval = runtime_repository.approved_builtin_call(
             self.run_id, call.trace_id or "", call.name
@@ -1820,6 +1841,12 @@ class _ToolRecorder:
         if scoped is not None and scoped.error is not None:
             # 範囲外は呼び先へ送らない（予算にも数えない）。step には拒否を残す。
             return self.reject_out_of_scope(call, scoped)
+        contract = entry.definition if entry is not None else tool_registry.get(name)
+        if contract is not None and name != CONFIRMATION_TOOL and external_writes.guarded(contract):
+            # 同じ call ID の書き込みを既に送った（同じ承認の再開など。#72）: 送り直さない。
+            sent = external_writes.sent_step(_run_steps(self.run_id), call_id)
+            if sent is not None:
+                return self.already_sent_result(sent)
         # 3. ツール権限・承認: 実行の直前の最新のポリシーで確かめる（#2610）。
         authorization = self.authorize(call, parsed)
         if authorization.refused:
@@ -1834,6 +1861,13 @@ class _ToolRecorder:
             )
         # 予算は await の前に数える（同じ応答の並列の呼び出しでも上限を超えない）。
         exceeded = self.budget.reserve(name) if self.budget is not None else None
+        if (
+            exceeded is None
+            and contract is not None
+            and name != CONFIRMATION_TOOL
+            and external_writes.has_side_effects(contract)
+        ):
+            call = call.model_copy(update={"operation_key": self.operation_key_for(call, contract)})
         try:
             step_id, context = runtime_repository.start_builtin_tool_step(self.run_id, call)
         except RunNotActiveError:
@@ -1855,6 +1889,25 @@ class _ToolRecorder:
                 {"error": message, "error_code": BUDGET_EXCEEDED_CODE, "budget": exceeded},
                 ensure_ascii=False,
             )
+        if call.operation_key and contract is not None and external_writes.guarded(contract):
+            # 送る前に、実行を始めた記録（step と ID）を保存先に書き切る（#72）。書けなければ
+            # 送らない（落ちた後に、送ったかもしれない書き込みを見分けられなくなるため）。
+            try:
+                await asyncio.to_thread(runtime_repository.flush_writes)
+            except Exception:  # noqa: BLE001 - 保存先の失敗の種類に依らず送らない
+                logger.warning(
+                    "builtin_runtime_tool_intent_not_persisted",
+                    extra={"run_id": self.run_id, "tool_name": name},
+                    exc_info=True,
+                )
+                not_sent = ToolResult(
+                    name=name,
+                    success=False,
+                    error=external_writes.INTENT_NOT_PERSISTED_MESSAGE,
+                    error_code=external_writes.INTENT_NOT_PERSISTED_CODE,
+                )
+                runtime_repository.finish_builtin_tool_step(self.run_id, step_id, not_sent)
+                return json.dumps(tool_failure_payload(not_sent), ensure_ascii=False)
         base = mcp_base_tool_name(name)
         guide_note: dict[str, Any] | None = None
 
@@ -1950,6 +2003,37 @@ class _ToolRecorder:
         return json.dumps(
             self.with_loop_notice(tool_failure_payload(result), step_id), ensure_ascii=False
         )
+
+    def operation_key_for(self, call: ToolCall, contract: ToolDefinition) -> str:
+        """送る呼び出しの論理操作の ID（#72）。結果不明の操作の送り直しは、最初の ID を引き継ぐ。"""
+        origin = self.unknown_origin(call.name, contract, call.arguments)
+        if origin is not None:
+            return str(origin.tool_call.operation_key)
+        from app.features.agent.runtime import runtime_repository
+
+        return external_writes.operation_key(
+            run_id=self.run_id,
+            user_uuid=runtime_repository.get_run(self.run_id).created_by_user_uuid,
+            tool_name=call.name,
+            arguments=call.arguments,
+            call_id=call.trace_id or "",
+        )
+
+    def already_sent_result(self, step: Any) -> str:
+        """同じ call ID で既に送った書き込み（#72）。記録した結果を返し、呼び先へは送らない。"""
+        logger.info(
+            "builtin_runtime_tool_call_already_sent",
+            extra={"run_id": self.run_id, "tool_name": step.tool_call.name, "step_id": step.id},
+        )
+        result = step.tool_result
+        if result is not None and result.success:
+            return json.dumps(
+                {**(result.output or {}), "already_executed": True},
+                ensure_ascii=False,
+                default=str,
+            )
+        unknown = result if result is not None else external_writes.interrupted_result(step)
+        return json.dumps(tool_failure_payload(unknown), ensure_ascii=False)
 
     def reject_out_of_scope(self, call: ToolCall, scoped: data_scope.ScopeEnforcement) -> str:
         """範囲の外のプロファイルの呼び出しを、呼び先へ送らずにツールのエラーにする（#1378）。"""

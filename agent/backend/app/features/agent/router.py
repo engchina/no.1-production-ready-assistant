@@ -112,6 +112,7 @@ import app.settings as app_settings
 from app.features.agent import (
     builtin_runtime,
     control_plane_store,
+    external_writes,
     run_facts_store,
 )
 from app.features.agent.chat_attachments import chat_attachment_service
@@ -3480,9 +3481,33 @@ async def resume_run(
 async def replay_run(
     run_id: str,
     request: Request,
+    confirm_outcome_unknown: bool = False,
     _: None = Depends(require_operator),
 ) -> ApiResponse[RunState]:
     run = _readable_run(request, run_id)
+    # 再実行は新しい論理操作（新しい操作の ID）なので、元の Run の結果不明の書き込みは重複を
+    # 防げない（#72）。相手で照合したと明示した（`confirm_outcome_unknown=true`）ときだけ始める。
+    # 実行中の書き込み（まだ結果が届いていない）も、再実行から見れば結果不明として扱う。
+    unknown = external_writes.unknown_steps(run.steps, run_ended=True)
+    if unknown and not confirm_outcome_unknown:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "run_outcome_unknown",
+                "message": "元の実行に、結果が不明な外部への書き込みがあります。相手のシステムで"
+                "反映されたかを確かめてから、確認のうえで再実行してください（同じ操作が"
+                "重複する可能性があります）。",
+                "steps": [
+                    {
+                        "step_id": step.id,
+                        "tool_name": step.tool_call.name,
+                        "operation_key": step.tool_call.operation_key,
+                    }
+                    for step in unknown
+                ],
+            },
+        )
+
     # 再実行は利用者の Run（公開中の版で実行する）。`POST /runs` と同じく、無効・移行が要る・
     # 公開した版の無い業務 Agent は理由を返す（500 にしない。#911）。
     try:

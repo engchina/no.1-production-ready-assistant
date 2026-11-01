@@ -149,6 +149,10 @@ uv run python -m app.rag.answer_judge_calibration ../../tmp/judge-calibration/la
 
 - 項目ごとに RAG の評価器（画面の品質評価と同じ `evaluate_answer_payload` と指標の計算。接続とモデルは RAG の設定）を動かし、指標の値が `--pass-at`（既定 1.0）以上を pass として、同じ一致の集計・同じ閾値（platform の `pr_evaluation_scoring`）で合否を出す。`--evaluations <前の結果>` でモデルを呼ばずに集計だけやり直す。
 
+### Agent の品質評価の評価者
+
+Agent の回答の要点の判定・出力の項目の意味の判定は、LabelSet と同じ名前の項目に観点（`perspective`）と人の根拠（`note`）を足した校正セットで、同じ閾値・同じ結果の形で校正する（`agent/backend` の `python -m app.cli.judge_calibration`。#66）。手順は [agent/docs/agent-judge-calibration.md](../../../agent/docs/agent-judge-calibration.md)。
+
 ### 記録する
 
 結果のファイルは `./tmp/` に置いたまま、#3418（RAG の評価器は #2577）にコメントで次を残す（回答・根拠・質問の本文、業務の内容、endpoint・Project ID などの実環境の情報は書かない）:

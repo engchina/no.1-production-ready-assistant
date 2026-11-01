@@ -62,8 +62,10 @@ import {
   runDurationMs,
   runConversationHref,
   runFinishedAt,
+  runOutcomeUnknownWrites,
   runStatusLabel,
   runTimelineSteps,
+  runToolTitles,
 } from "@/lib/run-history";
 import { useRunTraceProgress } from "@/lib/run-trace-progress";
 import { runSourceLabelOf } from "@/lib/run-source";
@@ -166,6 +168,9 @@ export function RunDetail({
   const failure = runFailure(run, timelineSteps, "detail");
   const usage = run.usage;
   const cancellation = runCancellation(run);
+  // 結果不明の外部への書き込み（#72）。失敗の文とは別に、照合を求める警告を出す（未実行とは扱わない）。
+  const unknownWrites = runOutcomeUnknownWrites(run);
+  const toolTitles = runToolTitles(run);
 
   return (
     <section className="min-w-0" aria-label={t("run.detail")}>
@@ -253,6 +258,24 @@ export function RunDetail({
                   // 失敗は 3 製品共通の失敗のカード（チャットと同じ 1 文目・「詳細」。#2342）。
                   <ProcessFailureNotice failure={failure} labels={processFailureLabels()} testId="run-failure" />
                 ) : null}
+                {unknownWrites.length > 0 ? (
+                  <div data-testid="run-outcome-unknown">
+                    <Banner severity="warning" title={t("run.outcomeUnknown.title")}>
+                      <p>{t("run.outcomeUnknown.detail")}</p>
+                      <ul>
+                        {unknownWrites.map((item) => (
+                          <li key={item.stepId}>
+                            {t("run.outcomeUnknown.item", {
+                              tool: toolTitles[item.toolName] ?? item.toolName,
+                              key: item.operationKey,
+                            })}
+                          </li>
+                        ))}
+                      </ul>
+                    </Banner>
+                  </div>
+                ) : null}
+
               </>
             }
             testId="run-summary"
