@@ -663,6 +663,79 @@ def test_summarize_answer_judgement_normalizes_coverage() -> None:
     assert judgement.missing_content is False
 
 
+def _scoped_judgement(
+    statuses: tuple[str, ...], relevances: tuple[str, ...], *, requirement_coverage: float
+) -> dict[str, object]:
+    """比較範囲（relevance 付き）と、項目の番号付きの網羅の判定を持つ判定の記録（#105）。"""
+    return {
+        **_completed_judgement(requirement_coverage=requirement_coverage),
+        "standard_answer_scope": {
+            "requirements": [
+                {
+                    "standard_answer_unit_ids": [f"u{index}"],
+                    "requirement": f"項目{index}",
+                    "relevance": relevance,
+                }
+                for index, relevance in enumerate(relevances, 1)
+            ],
+            "excluded_case_data": [],
+        },
+        "coverage_checks": [
+            {"requirement_index": index, "status": status, "answer_quote": ""}
+            for index, status in enumerate(statuses, 1)
+        ],
+    }
+
+
+def test_missing_follow_up_item_is_not_missing_content() -> None:
+    """追加相談（follow_up）の項目の欠落は失敗理由にせず、参考として別に残す（#105）。"""
+    judgement = summarize_answer_judgement(
+        _scoped_judgement(
+            ("addressed", "missing"), ("required", "follow_up"), requirement_coverage=1
+        )
+    )
+    assert judgement.requirement_coverage == 1
+    assert judgement.missing_content is False
+    assert judgement.missing_follow_up_content is True
+
+
+def test_missing_required_item_is_missing_content() -> None:
+    """原質問に必要な項目（required）の欠落は従来どおり missing_content（#105）。"""
+    judgement = summarize_answer_judgement(
+        _scoped_judgement(
+            ("missing", "addressed"), ("required", "follow_up"), requirement_coverage=0
+        )
+    )
+    assert judgement.missing_content is True
+    assert judgement.missing_follow_up_content is False
+
+
+async def test_passed_case_with_missing_follow_up_has_no_failure_reason() -> None:
+    """網羅 1.0・合格のケースに、follow_up の欠落で missing_content を付けない（#105 の再現）。"""
+    judge = FakeJudge(
+        _scoped_judgement(
+            ("addressed", "missing"), ("required", "follow_up"), requirement_coverage=1
+        )
+    )
+    metrics = await EvaluationRunner(pipeline=StubPipeline(), answer_judge=judge).run(
+        cases=[
+            EvaluationCase(
+                id="case-hotel",
+                query="宿泊費の上限",
+                relevant_document_ids=["doc-1"],
+                standard_answer="一般社員は1泊12,000円（課長以上は15,000円）。",
+            )
+        ],
+        top_k=5,
+        thresholds=resolve_evaluation_suite("strict"),
+    )
+    result = metrics.case_results[0]
+    assert result.answer_evaluation is not None and result.answer_evaluation.passed is True
+    assert result.requirement_coverage == 1
+    assert result.failure_reasons == []
+    assert "missing_content" not in metrics.failure_reason_counts
+
+
 def test_saved_legacy_metrics_still_validate() -> None:
     """新規の結果 schema は六指標だけを出力する。"""
     from app.schemas.evaluation import EVALUATION_METRIC_NAMES
