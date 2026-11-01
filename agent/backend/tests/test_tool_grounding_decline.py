@@ -482,3 +482,62 @@ def test_evaluation_counts_refusals_before_and_after_tools(
     )
     summary = finished.summary
     assert (summary.refused_before_tools, summary.refused_after_tools) == (1, 1)
+
+
+# 範囲の内外をモデルが調べる前に決めてよいと読める指示（#58。検索の前の拒答を指示が認めていた）。
+_PRE_SEARCH_SCOPE_REFUSAL = (
+    "業務の範囲外の質問のときは",
+    "範囲外・確かめられない質問は確認せずに",
+)
+
+
+def _assert_search_first(instructions: str) -> None:
+    for phrase in _PRE_SEARCH_SCOPE_REFUSAL:
+        assert phrase not in instructions, phrase
+    assert tool_grounding.SEARCH_FIRST_INSTRUCTION in instructions
+
+
+def test_model_is_told_to_search_before_judging_scope(
+    monkeypatch: MonkeyPatch, mcp: FakeProductMcp
+) -> None:
+    """資料のツールを渡した Run の system の指示は、範囲の内外を調べる前に決めさせない（#58）。
+
+    範囲外の質問は答えられないと答える、という指示がツールで調べる前の判断を認めていたため、
+    範囲内で索引済みの根拠がある質問も、モデルが調べずに範囲外と拒答した（lesson06: 先に検索し、
+    根拠が無いときだけ拒答する）。チャット（確認のツールあり）・品質評価（確認しない）の両方で
+    同じ指示にする。
+    """
+    for metadata in ({}, {EVALUATION_DRY_RUN_KEY: True}):
+        model = _script(
+            monkeypatch,
+            ModelStep(output=[function_call(SEARCH, {"query": IN_SCOPE}, call_id="call-1")]),
+            ModelStep(output=[assistant_message("契約の期間は 2 年です。")]),
+        )
+
+        run = _run(IN_SCOPE, metadata=metadata)
+
+        assert run.status == RunStatus.COMPLETED, run.events[-1].message
+        instructions = model.calls[0].system_instructions or ""
+        _assert_search_first(instructions)
+
+
+def test_builtin_skills_do_not_allow_refusing_before_search() -> None:
+    """組み込みのスキルの指示も、範囲外かを調べる前に決めてよいと書かない（#58）。"""
+    from app.features.agent.skills import BUILTIN_SKILL_IDS, resolve_skill
+
+    for skill_id in BUILTIN_SKILL_IDS:
+        skill = resolve_skill(skill_id)
+        assert skill is not None, skill_id
+        for phrase in _PRE_SEARCH_SCOPE_REFUSAL:
+            assert phrase not in skill.instructions, (skill_id, phrase)
+        # 根拠が無いときの拒答（#1835）は残す。
+        assert "確かめられないため答えられないと答える" in skill.instructions, skill_id
+
+
+def test_agent_without_grounding_tools_keeps_the_refusal_instruction() -> None:
+    """根拠・データのツールを持たない Agent は、調べる手段が無いので範囲外は拒答のまま（#1835）。"""
+    instructions = builtin_runtime.compose_instructions("", [], ["echo"])
+    assert tool_grounding.SEARCH_FIRST_INSTRUCTION not in instructions
+    assert "確かめられないため答えられないと答えてください。" in instructions
+    grounded = builtin_runtime.compose_instructions("", [], [SEARCH])
+    _assert_search_first(grounded)
