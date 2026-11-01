@@ -488,8 +488,12 @@ def _max_input_bytes(settings: Any) -> int:
     return int(value) if isinstance(value, int) and value > 0 else MAX_EVALUATION_INPUT_BYTES
 
 
-def _passage_check(passages: Sequence[Mapping[str, str]], answer_text: str):
-    """モデルが返した段落の ID が渡した段落にあり、記録する原文が回答の中にあることを確かめる。"""
+def _passage_check(passages: Sequence[Mapping[str, str]], answer_text: str, *, drop_invalid: bool = False):
+    """モデルが返した段落の ID が渡した段落にあり、記録する原文が回答の中にあることを確かめる。
+
+    ``drop_invalid`` は最後の試行の検査（``_parse_checked`` の ``final_check``。#121）。違反した判定だけを外して
+    残りを採る（外した段落は監査が返されなかった段落になる）。違反の 1 件でツール全体を失敗させない。
+    """
     texts = {item["id"]: item["text"] for item in passages}
     headers = table_header_lines(answer_text)
     headings = list_heading_lines(answer_text)
@@ -504,13 +508,24 @@ def _passage_check(passages: Sequence[Mapping[str, str]], answer_text: str):
         output.claim_checks = [
             claim for claim in output.claim_checks if claim.answer_passage_id or claim.answer_quote.strip() not in non_claims
         ]
+        kept = []
         for claim in output.claim_checks:
-            if claim.answer_passage_id:
-                if claim.answer_passage_id not in texts:
-                    raise EvaluationContractError("回答段落IDが存在しません")
-                claim.answer_quote = texts[claim.answer_passage_id]
-            if not claim.answer_quote.strip() or claim.answer_quote not in answer_text:
-                raise EvaluationContractError("主張監査に回答外の引用")
+            violation = ""
+            if claim.answer_passage_id and claim.answer_passage_id not in texts:
+                violation = "回答段落IDが存在しません"
+            else:
+                if claim.answer_passage_id:
+                    claim.answer_quote = texts[claim.answer_passage_id]
+                if not claim.answer_quote.strip() or claim.answer_quote not in answer_text:
+                    violation = "主張監査に回答外の引用"
+            if not violation:
+                kept.append(claim)
+            elif not drop_invalid:
+                raise EvaluationContractError(violation)
+            else:
+                # 回答・根拠の本文は出さず、契約の違反の種類だけを残す。
+                logger.warning("answer validation dropped a claim violating the contract: %s", violation)
+        output.claim_checks = kept
 
     return check
 
@@ -975,6 +990,7 @@ def _recheck_unreferenced_passages(
             ClaimAuditOutput,
             provider_id,
             _passage_check(targets, str(fixed.get("answer_text") or "")),
+            final_check=_passage_check(targets, str(fixed.get("answer_text") or ""), drop_invalid=True),
             max_input_bytes=_max_input_bytes(settings),
             purpose="answer.recheck",
         )
@@ -1041,6 +1057,7 @@ def _reaudit_misclassified_passages(
             ClaimAuditOutput,
             provider_id,
             _passage_check(targets, str(fixed.get("answer_text") or "")),
+            final_check=_passage_check(targets, str(fixed.get("answer_text") or ""), drop_invalid=True),
             max_input_bytes=_max_input_bytes(settings),
             attempts=1,
             purpose="answer.recheck",
@@ -1172,6 +1189,7 @@ def _reaudit_reference_failures(
             ClaimAuditOutput,
             provider_id,
             _passage_check(targets, answer_text),
+            final_check=_passage_check(targets, answer_text, drop_invalid=True),
             max_input_bytes=_max_input_bytes(settings),
             attempts=1,
             purpose="answer.recheck",
@@ -1278,6 +1296,7 @@ def _audit_batch(
                 ClaimAuditOutput,
                 provider_id,
                 _passage_check(batch, str(fixed.get("answer_text") or "")),
+                final_check=_passage_check(batch, str(fixed.get("answer_text") or ""), drop_invalid=True),
                 max_input_bytes=max_input_bytes,
                 purpose="answer.validate",
             )
@@ -1383,6 +1402,7 @@ def _recheck_figure_supported(
             ClaimAuditOutput,
             provider_id,
             _passage_check(targets, str(fixed.get("answer_text") or "")),
+            final_check=_passage_check(targets, str(fixed.get("answer_text") or ""), drop_invalid=True),
             max_input_bytes=_max_input_bytes(settings),
             attempts=1,
             purpose="answer.recheck",

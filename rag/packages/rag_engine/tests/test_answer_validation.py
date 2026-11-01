@@ -80,6 +80,32 @@ def test_claims_are_bound_to_passages_and_evidence() -> None:
     assert result["evidence_ids"] == ["c1"] and result["evidence_truncated"] is False
 
 
+def test_claims_violating_the_contract_on_the_last_attempt_are_dropped_not_failed() -> None:
+    """最後の試行でも契約に違反した判定（無い段落の ID・回答外の引用）だけを外し、ツール全体を失敗させない (#121)。"""
+    calls = []
+
+    def parse(system, inputs, settings, schema, provider_id=None):
+        ids, _ = _passages(inputs)
+        calls.append(inputs)
+        claim = {"status": "unsupported", "evidence_id": "", "source_id": "", "evidence_quote": "", "reason": "記載が無い"}
+        return ClaimAuditOutput.model_validate(
+            {
+                "claim_checks": [
+                    {**claim, "answer_quote": "段落", "answer_passage_id": ids[1]},
+                    {**claim, "answer_quote": "段落", "answer_passage_id": "P999"},
+                    {**claim, "answer_quote": "回答に無い文", "answer_passage_id": ""},
+                ]
+            }
+        )
+
+    with patch("rag_engine.evaluation.answer_eval.parse_text_response", side_effect=parse):
+        result = validate_answer_claims("有効期限は？", ANSWER, EVIDENCE, settings=None)
+    # 最初の試行は違反を指摘して再試行し、最後の試行で違反した判定だけを外す。
+    assert len(calls) == 2 and "validation_feedback" in calls[1]
+    assert result["status"] == "completed"
+    assert result["counts"] == {"unsupported": 1, "unassessed": 1}
+
+
 def test_missing_passages_are_unassessed_and_empty_answers_are_not_audited() -> None:
     def parse(system, inputs, settings, schema, provider_id=None):
         ids, _ = _passages(inputs)
