@@ -1,0 +1,7 @@
+{
+  "items": [
+    {"external_id": "rules/kinmu", "path": "kinmu.txt", "version": "2025-04-01"},
+    {"external_id": "procedures/keihi", "path": "keihi.txt"}
+  ],
+  "deleted": []
+}

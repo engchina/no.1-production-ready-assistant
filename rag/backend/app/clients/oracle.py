@@ -4881,6 +4881,24 @@ class OracleClient:
         """
         return await self._get_ingestion_job_lease_with_oracle(job_id)
 
+    async def find_document_id_by_object_storage_path(self, object_storage_path: str) -> str | None:
+        """原本の保存先の path で文書の ID を返す(知識源の同期の再開で同じ文書を使う。#77)。"""
+        where_sql, binds = _oracle_document_where()
+        binds["object_storage_path"] = object_storage_path
+        rows = await self._fetch_all(
+            _render_sql(
+                """
+            SELECT document_id FROM rag_documents
+            WHERE {where_sql} AND object_storage_path = :object_storage_path
+            ORDER BY uploaded_at ASC, document_id ASC
+            FETCH FIRST 1 ROWS ONLY
+            """,
+                where_sql=where_sql,
+            ),
+            binds,
+        )
+        return str(rows[0]["document_id"]) if rows else None
+
     async def find_document_by_content_hash(self, content_sha256: str) -> DocumentSummary | None:
         """同一 content hash の既存ドキュメントを返す。"""
         return await self._find_document_by_content_hash_with_oracle(content_sha256)
