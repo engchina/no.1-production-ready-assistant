@@ -224,6 +224,89 @@ async def test_validate_answer_rereads_evidence_and_reports_unreadable(
 
 
 @pytest.mark.usefixtures("auth")
+def test_mcp_validate_answer_returns_reference_failure_diagnostics(
+    auth: Any,  # noqa: F811
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """監査の応答の参照の誤りの判定だけ、監査が写した原文と返した ID を上限の字数で返し、
+    監査し直しの結果を返す（#112）。"""
+    long_quote = "一般社員の宿泊費の上限は\n1泊12,000円" + "あ" * 300
+
+    async def fake_validate(
+        question: str, answer: str, refs: list[EvidenceRef], settings: Any, **kwargs: Any
+    ) -> AnswerValidation:
+        return AnswerValidation(
+            status="completed",
+            valid=False,
+            counts={"citation_error": 1, "supported": 2},
+            claim_checks=[
+                {
+                    "answer_quote": "上限は 12,000円。",
+                    "status": "citation_error",
+                    "source_id": "c1",
+                    "reason": "裏付けとして写した原文が、結び付けた根拠に見当たりません。",
+                    "audit_status": "supported",
+                    "reference_check": "quote_unmatched",
+                    "support_check": "quote_unmatched",
+                    "support_quote": long_quote,
+                    "audit_evidence_id": "E02284da54382ec31f90d",
+                    "reference_reaudit": "rejected",
+                },
+                # 監査し直しで照合を通った判定は、誤りではないので診断を返さない。
+                {
+                    "answer_quote": "課長以上は 15,000円。",
+                    "status": "supported",
+                    "source_id": "c1",
+                    "reason": "表に記載",
+                    "audit_status": "supported",
+                    "reference_check": "resolved",
+                    "support_quote": "課長以上 15,000円",
+                    "audit_evidence_id": "E02284da54382ec31f90d",
+                    "reference_reaudit": "adopted",
+                },
+                {
+                    "answer_quote": "日当は 2,000円。",
+                    "status": "supported",
+                    "source_id": "c1",
+                    "reason": "表に記載",
+                    "audit_status": "supported",
+                    "reference_check": "resolved",
+                    "support_quote": "一般社員 2,000円",
+                },
+            ],
+        )
+
+    monkeypatch.setattr(mcp_tools, "validate_answer", fake_validate)
+    user = auth.user_with_permissions("searcher", ["menu.search"])
+    body = _call(
+        "rag_validate_answer",
+        {
+            "query": "q",
+            "answer": "上限は 12,000円。課長以上は 15,000円。日当は 2,000円。",
+            "evidence": [{"document_id": "d1", "chunk_id": "c1"}],
+        },
+        _token(user.user_uuid),
+    )["structuredContent"]
+    failed, adopted, plain = body["claims"]
+    assert (
+        failed["support_quote"]
+        == ("一般社員の宿泊費の上限は 1泊12,000円" + "あ" * 300)[: mcp_tools.CLAIM_DIAGNOSTIC_CHARS]
+    )
+    assert len(failed["support_quote"]) == mcp_tools.CLAIM_DIAGNOSTIC_CHARS == 200
+    assert (failed["audit_evidence_id"], failed["reference_reaudit"]) == (
+        "E02284da54382ec31f90d",
+        "rejected",
+    )
+    assert (adopted["support_quote"], adopted["audit_evidence_id"]) == (None, None)
+    assert adopted["reference_reaudit"] == "adopted"
+    assert (plain["support_quote"], plain["audit_evidence_id"], plain["reference_reaudit"]) == (
+        None,
+        None,
+        None,
+    )
+
+
+@pytest.mark.usefixtures("auth")
 def test_mcp_validate_answer(auth: Any, monkeypatch: MonkeyPatch) -> None:  # noqa: F811
     async def fake_validate(
         question: str, answer: str, refs: list[EvidenceRef], settings: Any, **kwargs: Any

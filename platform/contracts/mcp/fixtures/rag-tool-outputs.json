@@ -1,9 +1,9 @@
 {
   "description": "RAG の MCP のツールの出力の合成の例（ツールごとに 1 つ。#3240）。契約（rag-tools.json）の outputSchema の項目だけを持ち、内容は合成。Agent の fake の RAG（agent/backend/tests/mcp_support.py）が既定の出力に使い、Agent のテストが契約の outputSchema に合う（契約に無い項目を持たない）ことを、RAG のテストが RAG の出力の型で読めることを確かめる。契約を変えたら同じ PR で直す。",
-  "schema_version": 39,
+  "schema_version": 40,
   "outputs": {
     "rag_list_search_answer_profiles": {
-      "schema_version": 39,
+      "schema_version": 40,
       "search_answer_profiles": [
         {
           "id": "bv-sales",
@@ -17,7 +17,7 @@
       "next_step": null
     },
     "rag_lookup_guides": {
-      "schema_version": 39,
+      "schema_version": 40,
       "guides": [
         {
           "guide_id": "guide-1",
@@ -76,7 +76,7 @@
       ]
     },
     "rag_outline": {
-      "schema_version": 39,
+      "schema_version": 40,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -119,7 +119,7 @@
       "lines": []
     },
     "rag_read_document": {
-      "schema_version": 39,
+      "schema_version": 40,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -172,7 +172,7 @@
       "superseded": false
     },
     "rag_read_section": {
-      "schema_version": 39,
+      "schema_version": 40,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -241,7 +241,7 @@
       "superseded": false
     },
     "rag_read_source": {
-      "schema_version": 39,
+      "schema_version": 40,
       "evidence_id": "chunk-1",
       "document_id": "doc-1",
       "chunk_id": "chunk-1",
@@ -289,13 +289,13 @@
       "references": []
     },
     "rag_readable_documents": {
-      "schema_version": 39,
+      "schema_version": 40,
       "readable_document_ids": [
         "doc-1"
       ]
     },
     "rag_recommend_search_answer_profile": {
-      "schema_version": 39,
+      "schema_version": 40,
       "recommended_profile_id": "bv-sales",
       "candidates": [
         {
@@ -311,7 +311,7 @@
       ]
     },
     "rag_retrieve_evidence": {
-      "schema_version": 39,
+      "schema_version": 40,
       "trace_id": "rag-trace-2",
       "degraded_steps": [],
       "zero_evidence": null,
@@ -395,7 +395,7 @@
       "profile_knowledge": null
     },
     "rag_search": {
-      "schema_version": 39,
+      "schema_version": 40,
       "answer": "根拠付き回答",
       "trace_id": "rag-trace-1",
       "outcome": "answered",
@@ -496,7 +496,7 @@
       "notice": null
     },
     "rag_validate_answer": {
-      "schema_version": 39,
+      "schema_version": 40,
       "valid": true,
       "status": "completed",
       "counts": {
@@ -518,7 +518,10 @@
           "reference_check": null,
           "classification_check": null,
           "support_check": null,
-          "revised_text": null
+          "revised_text": null,
+          "support_quote": null,
+          "audit_evidence_id": null,
+          "reference_reaudit": null
         }
       ],
       "missing_evidence": [],

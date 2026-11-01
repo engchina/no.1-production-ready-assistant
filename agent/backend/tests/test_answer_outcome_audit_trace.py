@@ -276,6 +276,40 @@ def test_audit_returning_a_file_name_as_evidence_id_is_not_a_refusal() -> None:
     assert (content["value"], content["basis"]) == ("conditional", "answer_passages")
 
 
+def test_reference_failure_diagnostics_are_kept_in_the_validation_artifact() -> None:
+    # #112: RAG が返す監査の応答の参照の誤りの診断（監査が写した原文・返した ID）と監査し直しの
+    # 結果を、Run の「資料との照合」の成果物にそのまま残す（根本原因を Run から確かめられるように
+    # する）。
+    failed = {
+        **_quote_unmatched(HOTEL_LEAD),
+        "support_quote": "一般社員の宿泊費の上限は1泊12,000円",
+        "audit_evidence_id": "E02284da54382ec31f90d",
+        "reference_reaudit": "rejected",
+    }
+    adopted = {**_supported(HOTEL_NOTE), "reference_reaudit": "adopted"}
+    validation = _validated(HOTEL_ANSWER, failed, _supported(HOTEL_SOURCE, CHUNK_HEADER), adopted)
+    for result in (validation["result"], validation["connections"][0]["result"]):
+        claims = {claim["answer_quote"]: claim for claim in result["claims"]}
+        assert (
+            claims[HOTEL_LEAD]["support_quote"],
+            claims[HOTEL_LEAD]["audit_evidence_id"],
+            claims[HOTEL_LEAD]["reference_reaudit"],
+        ) == ("一般社員の宿泊費の上限は1泊12,000円", "E02284da54382ec31f90d", "rejected")
+        assert claims[HOTEL_NOTE]["reference_reaudit"] == "adopted"
+    content = answer_outcome(HOTEL_ANSWER, steps=_retrieval_steps(), validation=validation)
+    assert (content["value"], content["signals"]) == ("conditional", ["unverified_passages"])
+    # 監査し直しですべての段落が照合を通れば、印の無い answered。
+    validation = _validated(
+        HOTEL_ANSWER,
+        {**_supported(HOTEL_LEAD), "reference_reaudit": "adopted"},
+        _supported(HOTEL_SOURCE, CHUNK_HEADER),
+        adopted,
+    )
+    assert validation["passage_marks"] == []
+    content = answer_outcome(HOTEL_ANSWER, steps=_retrieval_steps(), validation=validation)
+    assert (content["value"], content["basis"]) == ("answered", "answer_passages")
+
+
 @pytest.mark.parametrize(
     ("lead", "case"),
     [
