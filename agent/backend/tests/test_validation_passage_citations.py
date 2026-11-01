@@ -121,14 +121,46 @@ def test_passage_citations_bind_each_claim_to_the_evidence_the_answer_used() -> 
     # 段落が書いた章節（第3条）に当たる根拠を先にする（共通の文書名で当たる根拠も含む。裏付けは
     # RAG が根拠の本文で確かめるので、出典の集合が広くても誤った段落は supported にならない）。
     assert cited[LEAD][0] == CHUNKS["art3"]
+    # 表の行の値（12,000円）は、その値を持つ根拠に結び付く（#115）。
+    assert cited[ROW_STAFF] == [CHUNKS["art3"]]
     # 段落そのものに結び付く根拠の無い表の行は、回答全体が出典にした根拠（出典の行の文書と頁・
     # 他の段落の根拠）。
-    assert cited[ROW_STAFF] == cited[ROW_MANAGER]
-    assert CHUNKS["art3"] in cited[ROW_STAFF]
-    assert set(cited[ROW_STAFF]) >= set(cited[LEAD])
+    assert CHUNKS["art3"] in cited[ROW_MANAGER]
+    assert set(cited[ROW_MANAGER]) >= set(cited[LEAD])
     # 位置は RAG の answer_range と同じ数え方（回答の中の段落の原文の位置）。
     for citation in validation_passage_citations(answer, ITEMS):
         assert set(citation) == {"answer_range", "chunk_ids"}
+
+
+def test_table_values_bind_to_the_table_not_to_the_quoted_document_title() -> None:
+    # Run run_26c4db54… の形: 段落が文書の題名を『』で引き、値は表のセルにある。題名の chunk だけに
+    # 結び付くと、RAG は「メタ情報のみで数値を含まない」と unsupported にしていた（#115）。
+    title = "株式会社サンプル 勤務・出張・経費規程"
+    items = [
+        {
+            "document_id": DOC,
+            "chunk_id": CHUNKS["title"],
+            "file_name": "社内規程サンプル.pdf",
+            "excerpt": f"{title}\n規程番号 HR-2026-07 ／ 第3版 ／ 施行日 2026年10月1日",
+            "locator": {"section_path": [title], "page_start": 1, "page_end": 1},
+        },
+        _item(
+            "art3",
+            "第3条（出張旅費）",
+            "第3条（出張旅費）\n<table><tbody><tr><td>区分</td><td>宿泊費の上限（1泊）</td>"
+            "<td>日当</td></tr><tr><td>一般社員</td><td>12,000円</td><td>2,000円</td></tr>"
+            "<tr><td>課長以上</td><td>15,000円</td><td>3,000円</td></tr></tbody></table>",
+        ),
+        *ITEMS[1:],
+    ]
+    staff = (
+        f"社内規程（『{title}』）では、**一般社員の出張宿泊費の上限は 1 泊 12,000 円**です"
+        "（日当は 2,000 円）。"
+    )
+    manager = "参考までに、同表には課長以上が 1 泊 15,000 円（日当 3,000 円）と定められています。"
+    cited = _cited(f"{staff}\n\n{manager}", items)
+    assert CHUNKS["art3"] in cited[staff]
+    assert cited[manager] == [CHUNKS["art3"]]
 
 
 def test_no_passage_citations_without_any_binding() -> None:

@@ -470,8 +470,17 @@ def test_run_output_sources_use_the_rag_tool_results_checked_by_the_validation()
         ("経費精算規程.pdf", "p.1 · 第2条（精算の期限）")
     ]
     assert output.tools_used == ["rag__rag_retrieve_evidence"]
+    # 検証が無ければ回答の本文で照合する（「10日」は c1 の値。#115）。当たらなければ全件。
     unvalidated = run.model_copy(update={"artifacts": run.artifacts[:1]})
-    assert len(mcp_server.run_output(unvalidated).sources) == 2
+    assert [item.chunk_id for item in mcp_server.run_output(unvalidated).sources] == ["c1"]
+    unmatched = run.model_copy(
+        update={
+            "artifacts": [
+                Artifact(name="回答", kind="answer", content={"text": "期限は月末です。"})
+            ]
+        }
+    )
+    assert len(mcp_server.run_output(unmatched).sources) == 2
 
 
 def test_run_output_sources_list_one_document_at_a_time() -> None:

@@ -9,6 +9,8 @@
 - 回答の引用（「…」『…』）が根拠の本文にあるか
 - 章節の見出し・シート名が回答にあるか（「第 1 章」だけの短い見出しは数えない）
 - 根拠の本文と回答が同じ長い文字の並び（表の行の値の書き写しなど）を持つか
+- 単位付きの数値（`12,000円`・`45時間`）が根拠の本文にあるか（表のセルで区切られた値は同じ長い
+  並びにならない。#115）
 - 回答の章節の参照（「組織規程 第 4 章」のような文書名＋番号）が根拠の章節（`section_path`）と
   文書名に当たるか（見出しの名前を書かず番号だけで参照する回答。#1451）
 """
@@ -25,6 +27,11 @@ _MIN_CODE_CHARS = 3
 # 回答の引用の括弧。
 _QUOTE_PATTERN = re.compile(r"「([^「」]+)」|『([^『』]+)』|“([^“”]+)”")
 _MIN_QUOTE_CHARS = 3
+# 単位付きの数値（2 桁以上。桁区切り・小数可）。単位は直後の 1 文字（文字か %）。「1泊」「第3条」の
+# ような 1 桁の数は多くの文に現れ、根拠を見分けないので数えない。
+_VALUE_PATTERN = re.compile(
+    r"(?<![0-9.,])([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{2,})(\.[0-9]+)?([^\W\d_]|%)"
+)
 # 見出し・シート名として数える最小の文字数と、番号だけの見出し（「第 22 章」「3.1」）。
 _MIN_LABEL_CHARS = 4
 _NUMBER_ONLY_LABEL = re.compile(r"^(第?[0-9.]+[章節条項部編]?|[0-9.]+)$")
@@ -58,6 +65,14 @@ def _codes(normalized: str) -> set[str]:
         code
         for code in _CODE_PATTERN.findall(normalized)
         if len(code) >= _MIN_CODE_CHARS and any(char.isdigit() for char in code)
+    }
+
+
+def _values(normalized: str) -> set[str]:
+    """単位付きの数値（桁区切りを除く。`12,000円` と `12000円` を同じにする）。"""
+    return {
+        number.replace(",", "") + fraction + unit
+        for number, fraction, unit in _VALUE_PATTERN.findall(normalized)
     }
 
 
@@ -110,6 +125,7 @@ class AnswerFeatures:
     quotes: tuple[str, ...]
     runs: frozenset[str]
     sections: tuple[SectionRef, ...] = ()
+    values: frozenset[str] = frozenset()
 
     @property
     def empty(self) -> bool:
@@ -132,6 +148,7 @@ def answer_features(answer: str) -> AnswerFeatures:
         quotes=tuple(quotes),
         runs=runs,
         sections=_section_refs(text),
+        values=frozenset(_values(text)),
     )
 
 
@@ -202,7 +219,7 @@ def _section_keys(features: AnswerFeatures, evidence: EvidenceText) -> set[str]:
 def matched_features(features: AnswerFeatures, evidence: EvidenceText) -> frozenset[str]:
     """根拠の特徴のうち回答の本文に現れたもの（空なら回答と当たらない）。
 
-    鍵は特徴の種類と値（`code:SYS-157`・`quote:…`・`label:…`・`run:<同じ並び>`・
+    鍵は特徴の種類と値（`code:SYS-157`・`quote:…`・`value:12000円`・`label:…`・`run:<同じ並び>`・
     `section:<回答の章節の参照の順>`）。同じ鍵を持つ
     根拠の数で重みを決める（`order_weights`）。
     """
@@ -211,6 +228,7 @@ def matched_features(features: AnswerFeatures, evidence: EvidenceText) -> frozen
     text = normalize("\n".join(evidence.texts))
     found = {f"code:{code}" for code in _codes(text) & features.codes}
     found.update(f"quote:{quote}" for quote in features.quotes if quote in text)
+    found.update(f"value:{value}" for value in _values(text) & features.values)
     for label in evidence.labels:
         normalized = normalize(label)
         if (
