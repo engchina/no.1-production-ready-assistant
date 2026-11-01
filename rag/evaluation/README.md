@@ -178,6 +178,10 @@ uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json
 - 取込の前置き・分割の比較は同じ chunk の集合の検索の切替ではないため扱いません（別の文書レシピの成果物を比べます）。
   費用は単価の出典を持たないため出さず、呼び出しの数と token だけを出します。
 
+### 注入の疑いの根拠の扱いの比較（#73）
+
+`injection-quarantine/cases.json` に、根拠の中の注入（日本語・英語・画像の文字・補助の文脈・規則に当たらない言い回し）と、規則に当たる正当な文（引用した攻撃の文面など）の合成の質問 15 問を置いています。`python -m app.rag.injection_quarantine_experiment`（`--record` / `--replay`）で、警告して続ける扱いと隔離する扱いを比べます。測定の結果と判断は [注入の疑いの根拠の扱い](../docs/injection-quarantine.md)。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・
