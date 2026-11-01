@@ -70,6 +70,7 @@ from app.rag.evaluation_jobs import (
     get_evaluation_job_service,
 )
 from app.rag.evaluation_manifest import build_run_manifest, with_run_check
+from app.rag.evaluation_paired import compare_paired
 from app.rag.evaluation_process import guide_process_row, process_draft
 from app.rag.evaluation_results_excel import evaluation_results_xlsx
 from app.rag.rate_limit import enforce_rate_limit
@@ -558,6 +559,8 @@ async def _execute_run(
                     "comparison": EvaluationComparison(
                         search_answer_profile_id=request.compare_search_answer_profile_id,
                         metrics=compared.model_copy(update={"evaluation_suite": suite_name}),
+                        # 同じケースの対応のある差と区間（#60。全体の既定 → プロファイル）。
+                        paired=compare_paired(metrics, compared),
                     )
                 }
             )

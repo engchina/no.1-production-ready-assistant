@@ -9,6 +9,7 @@
   評価器の校正の合否（holdout の件数・判定率・κ・誤合格の率）。
 - `labeling`: 人手の判定を集める部品（区分の決め方・誤りの型と目標・記入者の間の一致・判定の揺れ・
   LabelSet の項目の名前）。suite の記入用のブックと RAG の判定の校正の画面が共有する（#3578）。
+- `paired`: 同じケースを 2 条件で評価した差の、seed を固定した配対 bootstrap の区間と符号検定。
 - `perturbation`: 故意に壊した回答（合成の対照）の壊し方と選び方。
 - `rubric`: 回答の判定の基準（同梱の JSON）と、観点の基準の文・判定する観点。
 
@@ -68,6 +69,7 @@ from pr_evaluation_scoring.outcomes import (
     response_decision,
     skips_retrieval,
 )
+from pr_evaluation_scoring.paired import exact_sign_test, paired_bootstrap_interval
 from pr_evaluation_scoring.retrieval import document_hits, reciprocal_rank, unique_in_order
 from pr_evaluation_scoring.rubric import (
     applicable_aspects,
@@ -108,6 +110,8 @@ __all__ = [
     "NO_RETRIEVAL_OUTCOMES",
     "OUTCOMES",
     "Decision",
+    "exact_sign_test",
+    "paired_bootstrap_interval",
     "EvidenceCriteria",
     "MetricAggregate",
     "ThresholdFailure",
