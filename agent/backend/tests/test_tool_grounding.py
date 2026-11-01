@@ -229,6 +229,33 @@ def test_answer_after_the_retry_with_a_tool_is_kept(
     assert (run.usage.requests, run.usage.input_tokens, run.usage.output_tokens) == (3, 600, 60)
 
 
+def test_retry_shares_the_run_budget(monkeypatch: MonkeyPatch, mcp: FakeProductMcp) -> None:
+    """差し戻しの SDK 実行も Run 全体の実行予算に積む（#68）。差し戻しで残量を戻さない。"""
+    monkeypatch.setattr(get_settings(), "agent_run_max_model_calls", 2)
+    model = _script(
+        monkeypatch,
+        ModelStep(output=[assistant_message("締め日は毎月 25 日です。")], usage=_usage(1, 100, 10)),
+        ModelStep(
+            output=[function_call(SEARCH, {"query": "経費精算 締め日"}, call_id="call-1")],
+            usage=_usage(1, 200, 20),
+        ),
+        ModelStep(output=[assistant_message("締め日は毎月 20 日です。")], usage=_usage(1, 300, 30)),
+    )
+
+    run = _run("経費精算の締め日は？")
+
+    assert run.status == RunStatus.FAILED
+    [failed] = [event for event in run.events if event.type == "runtime.failed"]
+    assert failed.payload["error_code"] == "runtime.run_budget_exceeded"
+    # 差し戻しの応答の検索は、結果を読むモデルの呼び出しが残らないので呼び先へ送らない。
+    assert mcp.calls_of("rag_search") == []
+    assert len(model.calls) == 2
+    recorded = run.metadata["run_budget"]
+    assert recorded["consumed"]["model_calls"] == 2
+    assert recorded["consumed"]["measured_tokens"] == 330
+    assert recorded["operations"]["not_executed"] == 1
+
+
 @pytest.mark.parametrize(
     "metadata",
     [
