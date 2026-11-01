@@ -22,7 +22,7 @@ from collections import deque
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal
 
 import httpx
 
@@ -30,7 +30,6 @@ RECORDING_FORMAT = "rag-external-calls/v1"
 # 再生の HTTP の応答に戻す header（SDK が使うもの。ほかの header・認証情報は残さない）。
 _KEPT_HEADERS = ("content-type", "retry-after", "retry-after-ms")
 _ERROR_MESSAGE_CHARS = 500
-T = TypeVar("T")
 Mode = Literal["record", "replay"]
 ErrorBuilder = Callable[[Mapping[str, Any]], BaseException]
 
@@ -69,7 +68,7 @@ class ExternalCallSession:
             indexes = sorted(index for queue in self._pending.values() for index in queue)
         return [self.entries[index] for index in indexes]
 
-    def exchange(
+    def exchange[T](
         self,
         kind: str,
         request: object,
@@ -126,7 +125,7 @@ def external_call_mode() -> str:
     return "live" if session is None else session.mode
 
 
-def external_call(
+def external_call[T](
     kind: str,
     request: object,
     live: Callable[[], T],
