@@ -418,3 +418,14 @@ def test_digit_group_commas_do_not_split_values_or_clauses() -> None:
     # 取り違えは今までどおり見つける（別の行・別の列の値）。
     assert unbound_table_values("課長以上は1泊12,000円、日当3,000円です。", [LODGING_TABLE]) == [("12,000円", "課長以上")]
     assert unbound_table_values("一般社員の日当は12,000円です。", [LODGING_TABLE]) == [("12,000円", "日当")]
+
+
+def test_other_column_header_counts_only_right_before_the_value() -> None:
+    # #127（synthetic-test-8）: 値の列の見出しを縮めて書き（「宿泊費」）、後ろの値の見出し（「日当」）があっても疑わない。
+    from rag_engine.generation.table_binding import unbound_table_values
+
+    assert unbound_table_values("参考：課長以上は宿泊費 15,000円・日当 3,000円です。", [LODGING_TABLE]) == []
+    assert unbound_table_values("課長以上は1泊15,000円で、日当は3,000円です。", [LODGING_TABLE]) == []
+    # 見出しが値の直前にある取り違えは今までどおり見つける。
+    assert unbound_table_values("課長以上の日当は15,000円です。", [LODGING_TABLE]) == [("15,000円", "日当")]
+    assert unbound_table_values("課長以上は日当 15,000円です。", [LODGING_TABLE]) == [("15,000円", "日当")]
