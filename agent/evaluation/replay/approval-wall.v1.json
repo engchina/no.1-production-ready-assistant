@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "description": "合成の記録: 照会（読み取り）の後に登録（書き込み）を求め、承認してから完了する。承認の壁（ツール権限）と、書き込みを再送しないことを再生で確かめる。",
+  "agent": {
+    "name": "記録再生の業務 Agent",
+    "instructions": "照会してから、利用者の求める登録を行う。",
+    "skills": [
+      {
+        "id": "replay-ops",
+        "name": "照会と登録",
+        "instructions": "品目は照会してから登録する。登録は承認を待つ。",
+        "mcp_requirements": [
+          {
+            "server_id": "ops",
+            "tool_names": [
+              "lookup_item",
+              "register_item"
+            ]
+          }
+        ],
+        "references": []
+      }
+    ]
+  },
+  "connections": [
+    {
+      "server_id": "ops",
+      "label": "業務 API（合成）",
+      "tools": [
+        {
+          "name": "lookup_item",
+          "description": "品目を照会する。",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true
+        },
+        {
+          "name": "register_item",
+          "description": "品目を登録する（書き込み）。",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string"
+              },
+              "quantity": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "item_id",
+              "quantity"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": false
+        }
+      ]
+    }
+  ],
+  "model": {
+    "model_id": "replay-model",
+    "reasoning_effort": "",
+    "max_output_tokens": 32768,
+    "max_input_tokens": 128000
+  },
+  "tool_policy": {
+    "default_mode": "approval",
+    "allow": [],
+    "ask": [],
+    "deny": []
+  },
+  "goal": "品目 A-1 を 3 個登録して",
+  "model_turns": [
+    [
+      {
+        "type": "function_call",
+        "name": "ops__lookup_item",
+        "arguments": {
+          "item_id": "A-1"
+        },
+        "call_id": "call-lookup",
+        "text": ""
+      }
+    ],
+    [
+      {
+        "type": "function_call",
+        "name": "ops__register_item",
+        "arguments": {
+          "item_id": "A-1",
+          "quantity": 3
+        },
+        "call_id": "call-register",
+        "text": ""
+      }
+    ],
+    [
+      {
+        "type": "message",
+        "name": "",
+        "arguments": {},
+        "call_id": "",
+        "text": "品目 A-1 を 3 個登録しました。"
+      }
+    ]
+  ],
+  "tool_results": [
+    {
+      "server_id": "ops",
+      "tool": "lookup_item",
+      "arguments": {
+        "item_id": "A-1"
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"item_id\": \"A-1\", \"stock\": 10}"
+          }
+        ],
+        "structuredContent": {
+          "item_id": "A-1",
+          "stock": 10
+        },
+        "isError": false
+      }
+    },
+    {
+      "server_id": "ops",
+      "tool": "register_item",
+      "arguments": {
+        "item_id": "A-1",
+        "quantity": 3
+      },
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"registered\": true}"
+          }
+        ],
+        "structuredContent": {
+          "registered": true
+        },
+        "isError": false
+      }
+    }
+  ],
+  "approvals": [
+    {
+      "tool": "ops__register_item",
+      "approved": true
+    }
+  ],
+  "expected": {
+    "run_config": {
+      "schema_version": 1,
+      "instructions": {
+        "static_sha256": "54141785cfb881e3f711d951eb76d4fea08ed02eaf8c7b95b361521e38987e74"
+      },
+      "tools": {
+        "sha256": "4b7c6b98eb942e7475a4923724c8bc7b9e8ea1b97e05fb9bdeeedead5624bc0b",
+        "names": [
+          "ask_user_confirmation",
+          "ops__lookup_item",
+          "ops__register_item"
+        ]
+      },
+      "skills": [
+        {
+          "id": "replay-ops",
+          "sha256": "59d934f55c13e1f232ed16050e6238813e70282ae30ce0de829ea9db0219b920",
+          "references": []
+        }
+      ],
+      "mcp": {
+        "ops": {
+          "tools_sha256": "73be7087867f6579d923f7cac050b9b2658e507149fd4f7cfedeeb9410ea2111",
+          "tools": [
+            "lookup_item",
+            "register_item"
+          ]
+        }
+      },
+      "model": {
+        "model_id": "replay-model",
+        "reasoning_effort": "",
+        "max_output_tokens": 32768,
+        "max_input_tokens": 128000,
+        "vision_enabled": false,
+        "snapshot": "unverified"
+      },
+      "data_scopes": {
+        "sha256": null
+      },
+      "sdk_version": "0.24.0",
+      "fingerprint": "8ffcb436a7282c65"
+    },
+    "outcome": {
+      "status": "completed",
+      "steps": [
+        {
+          "tool": "ops__lookup_item",
+          "status": "completed",
+          "decision": "allow",
+          "success": true,
+          "error_code": null
+        },
+        {
+          "tool": "ops__register_item",
+          "status": "completed",
+          "decision": "ask",
+          "success": true,
+          "error_code": null
+        }
+      ],
+      "approvals": [
+        {
+          "tool": "ops__register_item",
+          "status": "approved"
+        }
+      ],
+      "delivered": [
+        "ops/lookup_item",
+        "ops/register_item"
+      ],
+      "artifacts": [
+        "answer",
+        "answer_validation",
+        "support_task"
+      ],
+      "answer": "品目 A-1 を 3 個登録しました。"
+    }
+  }
+}

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from app.features.agent.skills import resolve_skill, skill_registry
@@ -57,6 +58,8 @@ def reference_tool(keys: list[tuple[str, str]]) -> tuple[ToolDefinition, ToolHan
             "path": path,
             "content": content,
             "next_offset": end if end < len(reference.content) else None,
+            # 読んだ時点の本文の hash（#67。Run の間に本文が変わったかを実行構成と照らす）。
+            "sha256": hashlib.sha256(reference.content.encode("utf-8")).hexdigest(),
         }
 
     return ToolDefinition(
