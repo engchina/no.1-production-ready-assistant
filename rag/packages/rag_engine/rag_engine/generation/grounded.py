@@ -1267,6 +1267,10 @@ def _compact(value: str) -> str:
 
 
 _MARKUP_TAG = re.compile(r"<[^<>]{1,40}>")
+# Markdown の表の区切りの行（「|---|---|」「| :--- | ---: |」）。表の根拠は HTML で渡るがモデルは Markdown の表に
+# 写して引用することがあり、区切りの行は HTML の tag と同じく表の形だけで語を持たない（#108）。セルの区切り（縦棒）を
+# 含む行に限る（単独の「---」は文の記号として残す）。
+_MARKDOWN_TABLE_RULE = re.compile(r"(?m)^[ \t]*\|?(?:[ \t]*:?-{3,}:?[ \t]*\|)+(?:[ \t]*:?-{3,}:?[ \t]*)?$")
 # 対になった Markdown の表示記法だけを除き、単独の演算記号は原文として残す。
 _QUOTE_EMPHASIS = re.compile(r"(?P<mark>\*\*|__|`)(?=\S)(?P<body>[^\n]*?\S)(?P=mark)")
 # 意味を変えない表記の違い。表のセル区切り（HTML tag は別に除く）、句読点、コロン、中点、矢印、括弧・引用符の種類。
@@ -1276,7 +1280,7 @@ _QUOTE_EMPHASIS = re.compile(r"(?P<mark>\*\*|__|`)(?=\S)(?P<body>[^\n]*?\S)(?P=m
 def _canonical(value: str) -> tuple[str, list[int]]:
     """引用照合用の文字列と、各文字の元の位置を返します。
 
-    空白、表のセル区切り（HTML tag・縦棒）、読点を除き、全角 / 半角を同一視する。表の根拠は HTML で
+    空白、表のセル区切り（HTML tag・縦棒・Markdown の表の区切りの行）、読点を除き、全角 / 半角を同一視する。表の根拠は HTML で
     渡るがモデルは tag を外して引用し、図内の文字は OCR で1語ごとに改行・読点が揺れるため。
     文字・数字・記号の並びは変えないので、照合は決定的なまま。
     文字の形は全文検索の索引と同じ ``fold_text``（NFKC・波線とダッシュ）でそろえる。モデルは根拠を全角・半角を
@@ -1284,6 +1288,8 @@ def _canonical(value: str) -> tuple[str, list[int]]:
     """
     masked: set[int] = set()
     for match in _MARKUP_TAG.finditer(value):
+        masked.update(range(match.start(), match.end()))
+    for match in _MARKDOWN_TABLE_RULE.finditer(value):
         masked.update(range(match.start(), match.end()))
     for match in _QUOTE_EMPHASIS.finditer(value):
         masked.update(range(match.start(), match.start("body")))

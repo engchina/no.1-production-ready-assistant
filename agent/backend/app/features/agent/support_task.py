@@ -61,6 +61,21 @@ BUDGET_EXCEEDED_CODE = "budget_exceeded"
 # 評価の Run（#776）で実行しなかったツールの step の error_code（消費に数えない）。
 _DRY_RUN_CODE = "evaluation.dry_run"
 
+# 根拠・データを確かめないツール（業務プロファイル・検索・回答プロファイルの一覧と推薦）と、
+# Control Plane が自分で呼ぶツール（最終の検証・SQL の生成前の確認の取り消し）。拒答が調べる前か後か
+# （`tool_grounding.refusal_stage`。#2608）と、回答の対応の現場のデータの確認
+# （`answer_outcome` の `environment_tools`。#108）が同じ定義を使う。
+NON_GROUNDING_TOOLS = frozenset(
+    {
+        "rag_list_search_answer_profiles",
+        "rag_recommend_search_answer_profile",
+        "rag_validate_answer",
+        "nl2sql_list_profiles",
+        "nl2sql_recommend_profile",
+        "nl2sql_cancel_requirement",
+        "nl2sql_cancel_job",
+    }
+)
 RAG_SEARCH = "rag_search"
 RAG_RETRIEVE_EVIDENCE = "rag_retrieve_evidence"
 RAG_LOOKUP_GUIDES = "rag_lookup_guides"
@@ -238,6 +253,17 @@ def is_environment_tool(name: str) -> bool:
         return False
     base = mcp_base_tool_name(name)
     return bool(base) and not base.startswith("rag_")
+
+
+def is_environment_data_tool(name: str) -> bool:
+    """現場のデータを確かめた呼び出しに数える道具か（回答の対応の `environment_tools`。#108）。
+
+    現場のデータの道具（`is_environment_tool`）のうち、業務プロファイルの一覧・推薦
+    （`nl2sql_list_profiles` など。使える業務データを探すだけで、値・記録を確かめない）と
+    Control Plane が呼ぶ取り消し（`NON_GROUNDING_TOOLS`）を除く。空の一覧が成功しても、
+    現場のデータを確かめたことにはならない。
+    """
+    return is_environment_tool(name) and mcp_base_tool_name(name) not in NON_GROUNDING_TOOLS
 
 
 def _questions(clarifications: object) -> list[JsonObject]:
