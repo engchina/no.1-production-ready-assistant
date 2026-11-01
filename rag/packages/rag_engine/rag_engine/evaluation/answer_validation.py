@@ -1088,8 +1088,8 @@ REFERENCE_REAUDIT_FEEDBACK = (
     "answer_passages の段落は、前回の監査が supported と判定しましたが、返した evidence_quote が evidence_items の text に"
     "見つからない、または evidence_id が evidence_items の evidence_id に決まらなかった段落です。根拠に照らして判定し直して"
     "ください。supported / contradicted の evidence_quote は evidence_items の text から 1 字も変えずにそのまま写し"
-    "（言い換え・要約・表の書き直し・記号や括弧の付け替えをしない。離れた 2 か所は「…」でつなぐ）、evidence_id は"
-    "evidence_items の evidence_id（E で始まる値）を省かずにそのまま書いてください。ファイル名・chunk の id・回答の文を"
+    "（言い換え・要約・表の書き直し・記号や括弧の付け替えをしない。離れた 2 か所は「…」でつなぐ）、evidence_id は "
+    "evidence_items の evidence_id（E で始まる値）を省かずにそのまま書いてください。ファイル名・chunk の id・回答の文を "
     "evidence_id・source_id に書かないでください。\n前回の誤り:"
 )
 
