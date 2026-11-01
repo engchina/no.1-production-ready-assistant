@@ -14,8 +14,8 @@
 日付・条件・長さや丁寧さの偏り・回答の中の評価者への指示など）ごとの内訳も出す。
 
 安全・状態の遷移（未実行の完了報告・禁止ツールの実行・承認の迂回）は品質評価のコードの判定
-（`evaluation.safety_check`）が正本で、ここで測る LLM の判定はそれを上書きしない（`unexecuted_completion` の観点は、評価者が
-未実行の完了報告を誤って合格にする率を見るためのもの）。
+（`evaluation.safety_check`）が正本で、ここで測る LLM の判定はそれを上書きしない
+（`unexecuted_completion` の観点は、評価者が未実行の完了報告を誤って合格にする率を見るためのもの）。
 
     cd agent/backend
     SET=../evaluation/judge-calibration/agent-judge-calibration.v1.json
