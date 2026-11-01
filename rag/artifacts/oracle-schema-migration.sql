@@ -3865,7 +3865,19 @@ EXCEPTION
 END;
 /
 
--- migration: 20261031_001_embedding_dimensions_1024
+-- migration: 20261031_001_retire_appearance_permission
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions WHERE permission_code = ''menu.settings_appearance''';
+    END IF;
+END;
+/
+
+-- migration: 20261031_002_embedding_dimensions_1024
 DECLARE
     v_vector_info VARCHAR2(256);
     v_count NUMBER;

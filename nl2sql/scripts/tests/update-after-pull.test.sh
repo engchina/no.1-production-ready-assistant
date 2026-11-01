@@ -21,7 +21,7 @@ assert_before() {
 }
 
 assert_old_frontend() {
-  grep -Fq 'old frontend' "$1/no.1-production-ready-suite/nl2sql/frontend/dist/index.html" || \
+  grep -Fq 'old frontend' "$1/no.1-production-ready-assistant/nl2sql/frontend/dist/index.html" || \
     fail_test "old frontend was not preserved for $1"
 }
 
@@ -143,9 +143,6 @@ url="${*: -1}"
 if [ "${FAIL_STAGE:-}" = "backend-health" ] && [ "${url}" = "${BACKEND_HEALTH_URL}" ]; then
   exit 1
 fi
-if [ "${FAIL_STAGE:-}" = "public-health" ] && [ "${url}" = "${PUBLIC_HEALTH_URL}" ]; then
-  exit 1
-fi
 exit 0
 EOF
 
@@ -156,8 +153,8 @@ EOF
 make_case() {
   local scenario="$1"
   local case_dir="${TEST_TMP_DIR}/${scenario}"
-  local app_dir="${case_dir}/no.1-production-ready-suite/nl2sql"
-  local platform_dir="${case_dir}/no.1-production-ready-suite/platform"
+  local app_dir="${case_dir}/no.1-production-ready-assistant/nl2sql"
+  local platform_dir="${case_dir}/no.1-production-ready-assistant/platform"
 
   mkdir -p \
     "${app_dir}/backend/app" \
@@ -196,8 +193,8 @@ make_case() {
 
 run_case() {
   local case_dir="$1" action="${2:-}" fail_stage="${3:-}"
-  local app_dir="${case_dir}/no.1-production-ready-suite/nl2sql"
-  local platform_dir="${case_dir}/no.1-production-ready-suite/platform"
+  local app_dir="${case_dir}/no.1-production-ready-assistant/nl2sql"
+  local platform_dir="${case_dir}/no.1-production-ready-assistant/platform"
   local args=()
   [ -z "${action}" ] || args+=("${action}")
 
@@ -215,7 +212,6 @@ run_case() {
     FAIL_STAGE="${fail_stage}" \
     LOCK_FILE="${case_dir}/update.lock" \
     BACKEND_HEALTH_URL="http://backend.test/api/health" \
-    PUBLIC_HEALTH_URL="http://public.test/api/health" \
     HEALTHCHECK_TIMEOUT_SECONDS=0 \
     HEALTHCHECK_INTERVAL_SECONDS=0 \
     "${UPDATE_SCRIPT}" "${args[@]}"
@@ -282,8 +278,8 @@ test_passwordless_sudo_reexecs_update_actions() (
   mkdir -p "${case_dir}"
   export UPDATE_AFTER_PULL_TEST_MODE=true
   export APP_ROOT="${case_dir}"
-  export APP_REPO_DIR="${case_dir}/no.1-production-ready-suite/nl2sql"
-  export PLATFORM_REPO_DIR="${case_dir}/no.1-production-ready-suite/platform"
+  export APP_REPO_DIR="${case_dir}/no.1-production-ready-assistant/nl2sql"
+  export PLATFORM_REPO_DIR="${case_dir}/no.1-production-ready-assistant/platform"
   export WALLET_DIR="${case_dir}/wallet"
   export RECOVERY_ROOT="${case_dir}/recovery"
   export UPDATE_LOG_PATH="${case_dir}/update.log"
@@ -471,7 +467,7 @@ test_health_retry_logging() (
   esac
 )
 
-for health_label in backend public; do
+for health_label in backend; do
   for health_scenario in immediate recovering refused http-error request-timeout; do
     test_health_retry_logging "${health_label}" "${health_scenario}"
   done
@@ -510,35 +506,36 @@ fi
 grep -Fq 'uv|' "${repair_log}"
 grep -Fq 'nl2sql_system_schema --initialize' "${repair_log}"
 grep -Fq 'app_security_migrate --apply --skip-bootstrap' "${repair_log}"
-grep -Fq 'curl|-fsS --max-time 5 http://public.test/api/health' "${repair_log}"
+grep -Fq 'curl|-fsS --max-time 5 http://backend.test/api/health' "${repair_log}"
+if grep -Fq 'public.test' "${repair_log}"; then
+  fail_test "--repair-only checked a reverse proxy"
+fi
 test -f "$(find "${repair_case}/recovery" -name backend.env -print -quit)"
 test -f "$(find "${repair_case}/recovery" -name platform.env -print -quit)"
 test "$(stat -c %a "${repair_case}")" = 775
 test "$(stat -c %a "${repair_case}/wallet")" = 700
 test "$(stat -c %a "${repair_case}/wallet/cwallet.sso")" = 600
 test "$(stat -c %a "${repair_case}/.wallet.install.lock")" = 600
-test "$(stat -c %a "${repair_case}/no.1-production-ready-suite/nl2sql/backend/.env")" = 600
-test "$(stat -c %a "${repair_case}/no.1-production-ready-suite/platform/.env")" = 600
+test "$(stat -c %a "${repair_case}/no.1-production-ready-assistant/nl2sql/backend/.env")" = 600
+test "$(stat -c %a "${repair_case}/no.1-production-ready-assistant/platform/.env")" = 600
 test ! -e "${repair_case}/must-not-run"
 
 success_case="$(make_case success)"
 run_case "${success_case}"
 success_log="${success_case}/commands.log"
-grep -Fq 'new frontend' "${success_case}/no.1-production-ready-suite/nl2sql/frontend/dist/index.html"
+grep -Fq 'new frontend' "${success_case}/no.1-production-ready-assistant/nl2sql/frontend/dist/index.html"
 grep -Fq 'systemctl|enable production-ready-nl2sql-backend.service' "${success_log}"
 grep -Fq 'systemctl|restart production-ready-nl2sql-backend.service' "${success_log}"
 grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' "${success_log}"
 grep -Fq 'curl|-fsS --max-time 5 http://backend.test/api/health' "${success_log}"
-grep -Fq 'curl|-fsS --max-time 5 http://public.test/api/health' "${success_log}"
 assert_before '^uv\|.*sync --locked --no-dev' '^uv\|.*compileall -q app' "${success_log}"
-assert_before 'compileall -q app' '^npm\|.*no.1-production-ready-suite/platform.*\|ci$' "${success_log}"
-assert_before '^npm\|.*no.1-production-ready-suite/nl2sql/frontend.*run build' '^sudo\|-n -- mktemp -d .*/recovery/' "${success_log}"
+assert_before 'compileall -q app' '^npm\|.*no.1-production-ready-assistant/platform.*\|ci$' "${success_log}"
+assert_before '^npm\|.*no.1-production-ready-assistant/nl2sql/frontend.*run build' '^sudo\|-n -- mktemp -d .*/recovery/' "${success_log}"
 assert_before '^sudo\|-n -- mktemp -d .*/recovery/' '^systemctl\|stop .*worker' "${success_log}"
 assert_before '^systemctl\|stop production-ready-nl2sql-backend.service' \
   "^sudo\\|-n -- chown root:$(id -gn) ${success_case}$" "${success_log}"
 assert_before 'nl2sql_system_schema --initialize' 'systemctl\|restart production-ready-nl2sql-backend.service' "${success_log}"
 assert_before 'curl\|.*backend.test' 'systemctl\|restart .*worker' "${success_log}"
-assert_before 'systemctl\|is-active --quiet production-ready-nl2sql-ontology-worker.service' 'curl\|.*public.test' "${success_log}"
 test ! -e "${success_case}/must-not-run"
 
 for failure_stage in backend-sync frontend-build; do
@@ -561,23 +558,12 @@ for failure_stage in system-migration security-migration backend-health worker-r
   assert_degraded "${failure_case}/commands.log"
 done
 
-public_health_case="$(make_case public-health)"
-if run_case "${public_health_case}" "" public-health; then
-  fail_test "public-health unexpectedly succeeded"
-fi
-assert_old_frontend "${public_health_case}"
-if grep -Fq 'systemctl|disable --now' "${public_health_case}/commands.log"; then
-  fail_test "public health failure disabled healthy workers"
-fi
-grep -Fq 'systemctl|restart production-ready-nl2sql-schema-refresh-worker.service production-ready-nl2sql-synthetic-worker.service production-ready-nl2sql-quality-evaluation-worker.service production-ready-nl2sql-ontology-worker.service' \
-  "${public_health_case}/commands.log"
-
 wallet_override_case="$(make_case wallet-override)"
 printf 'PLATFORM_ORACLE_WALLET_DIR=%s/other-wallet\n' "${wallet_override_case}" > \
-  "${wallet_override_case}/no.1-production-ready-suite/platform/.env"
+  "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
 printf 'PLATFORM_ORACLE_PASSWORD=$(touch %s/must-not-run)\n' "${wallet_override_case}" >> \
-  "${wallet_override_case}/no.1-production-ready-suite/platform/.env"
-chmod 0600 "${wallet_override_case}/no.1-production-ready-suite/platform/.env"
+  "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
+chmod 0600 "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
 if run_case "${wallet_override_case}" --check; then
   fail_test "an overridden Wallet path was accepted"
 fi

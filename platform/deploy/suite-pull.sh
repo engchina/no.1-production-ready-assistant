@@ -9,7 +9,7 @@
 set -euo pipefail
 
 APP_ROOT="${APP_ROOT:-/u01/aipoc}"
-SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-suite}"
+SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-assistant}"
 SUITE_GIT_REF="${SUITE_GIT_REF:-main}"
 
 pull_log() { printf '[suite-pull] %s\n' "$*"; }
@@ -22,13 +22,13 @@ pull_usage() {
   cat <<'EOF'
 Usage: platform/deploy/suite-pull.sh
 
-suite の repository（既定 /u01/aipoc/no.1-production-ready-suite）を origin の main の最新にします。
+suite の repository（既定 /u01/aipoc/no.1-production-ready-assistant）を origin の main の最新にします。
 opc でも sudo でも実行できます（git は repository の所有者で実行します）。
 追跡ファイルに変更があるときは中止します。取得したコードは、sudo で suite-restart.sh を実行すると
 build・再起動されて反映されます（suite-update.sh は取得から build・再起動までをまとめて行います）。
 
 Environment overrides:
-  SUITE_REPO_DIR  repository（既定 /u01/aipoc/no.1-production-ready-suite）
+  SUITE_REPO_DIR  repository（既定 /u01/aipoc/no.1-production-ready-assistant）
   SUITE_GIT_REF   取得する branch（既定 main）
 EOF
 }

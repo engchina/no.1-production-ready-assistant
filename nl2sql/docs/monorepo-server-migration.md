@@ -1,6 +1,6 @@
 # 既存の OCI Compute を monorepo 構成へ移行する手順書
 
-対象: `engchina/no.1-production-ready-suite#71`（4 repo を monorepo に統合）の切替後に、
+対象: `engchina/no.1-production-ready-assistant#71`（4 repo を monorepo に統合）の切替後に、
 **既に稼働している** NL2SQL の OCI Compute を新しい配置へ1回だけ移す手順。
 新規に作る Compute は最初から新しい配置で配備するため、この手順は不要。
 
@@ -8,10 +8,10 @@
 
 | | 旧構成（〜v0.1.31） | 新構成（nl2sql-v0.1.32〜） |
 |---|---|---|
-| NL2SQL | `/u01/aipoc/no.1-production-ready-nl2sql`（単独 repository） | `/u01/aipoc/no.1-production-ready-suite/nl2sql` |
-| 共有 platform | `/u01/aipoc/no.1-production-ready-platform`（単独 repository） | `/u01/aipoc/no.1-production-ready-suite/platform` |
+| NL2SQL | `/u01/aipoc/no.1-production-ready-nl2sql`（単独 repository） | `/u01/aipoc/no.1-production-ready-assistant/nl2sql` |
+| 共有 platform | `/u01/aipoc/no.1-production-ready-platform`（単独 repository） | `/u01/aipoc/no.1-production-ready-assistant/platform` |
 | Git 操作 | 2つの repository をそれぞれ pull | suite を1回 pull |
-| 更新コマンド | `cd /u01/aipoc/no.1-production-ready-nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` | `cd /u01/aipoc/no.1-production-ready-suite/nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` |
+| 更新コマンド | `cd /u01/aipoc/no.1-production-ready-nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` | `cd /u01/aipoc/no.1-production-ready-assistant/nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` |
 
 変わらないもの: `/u01/aipoc/wallet`、`/u01/aipoc/props`、`/u01/aipoc/recovery`、`/u01/data/production-ready-nl2sql`、
 systemd unit 名、Nginx の site 名、DB スキーマ、`backend/.env` の中身。
@@ -39,7 +39,7 @@ systemd unit 名、Nginx の site 名、DB スキーマ、`backend/.env` の中�
 ```bash
 OLD_APP=/u01/aipoc/no.1-production-ready-nl2sql
 OLD_PLATFORM=/u01/aipoc/no.1-production-ready-platform
-SUITE=/u01/aipoc/no.1-production-ready-suite
+SUITE=/u01/aipoc/no.1-production-ready-assistant
 NEW_APP="${SUITE}/nl2sql"
 BACKUP_DIR="/u01/aipoc/recovery/monorepo-migration-$(date +%Y%m%d%H%M%S)"
 ```
@@ -79,7 +79,7 @@ sudo cp -a "${OLD_APP}/backend/.env" "${BACKUP_DIR}/backend.env"
 
 ```bash
 # 5-1. suite を clone する（/u01/aipoc は root:ubuntu 0775 なので ubuntu で作成できる）
-git clone --branch main https://github.com/engchina/no.1-production-ready-suite.git "${SUITE}"
+git clone --branch main https://github.com/engchina/no.1-production-ready-assistant.git "${SUITE}"
 git -C "${SUITE}" log -1 --format='%h %cs %s'
 
 # 5-2. backend/.env を持ち越す（権限は 0600、所有者は ubuntu）
@@ -141,7 +141,7 @@ cd "${NEW_APP}" && ./scripts/update-after-pull.sh --check
 以後の更新は次のコマンドで行う。
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite/nl2sql &&
+cd /u01/aipoc/no.1-production-ready-assistant/nl2sql &&
 ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh
 ```
 

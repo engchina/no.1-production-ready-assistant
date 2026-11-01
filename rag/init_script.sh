@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # OCI Resource Manager の統合 stack（terraform/stack、#217）の cloud-init から呼ばれる rag の Compute 初期化スクリプト。
-# RAG は Docker を使わず、NL2SQL / Agent と同じくネイティブ（uv の venv + systemd + Nginx）で動かす（#286）。
+# RAG は Docker を使わず、NL2SQL / Agent と同じくネイティブ（uv の venv + systemd）で動かす（#286）。
 #   - backend / ingestion-worker: rag/backend の venv。backend は 127.0.0.1:8000 だけで listen する
 #   - 前処理 / CPU parser: サービスごとの venv（rag/services/*/*/.venv）と systemd の unit。127.0.0.1:<port>
 #     （unit の定義は rag/scripts/rag-systemd.sh。開発環境の rag/scripts/rag-services.sh と共通）
-#   - frontend: host の Node.js で静的 build する。配信と /rag/api/ の proxy は suite の Nginx（platform/deploy）
+#   - frontend: host の Node.js で静的 build する。配信と /rag/api/ の proxy は配備しない（前段の reverse proxy は
+#     利用者が置く。#19）
 # アプリのプロセスは専用のユーザー（SERVICE_USER）で動かし、backend にはサービス管理画面から操作する
 # unit の systemctl / journalctl だけを sudoers で許可する。
 # 前処理 / parser の起動 / 停止は利用者が最後に操作した状態（systemd の enable / disable）を保ち、
 # 再配備・再起動でもその状態に戻す。初めて配備する unit は起動する（既定は停止のサービスを除く）。
 # ADB の DDL は持たない。RAG の system schema はアプリの CLI（app.rag.system_schema_cli）で適用する。
 # 3 製品は 1 台の Compute にセットで配備する（#1316。単独では配備しない）。platform/deploy/suite-init.sh が呼び、
-# Nginx の site は suite が 1 つだけ書く（ここでは書かない）。frontend は FRONTEND_BASE_PATH（/rag/）を base に build し、
+# reverse proxy の site は書かない（#19）。frontend は FRONTEND_BASE_PATH（/rag/）を base に build し、
 # プロセスは NL2SQL / Agent と同じユーザー（SERVICE_USER=opc。suite が渡す）で動かす（共通の platform/.env・Wallet を共有するため）。
 set -euo pipefail
 
@@ -37,8 +38,8 @@ APP_GROUP="${APP_GROUP:-${APP_USER}}"
 SERVICE_USER="${SERVICE_USER:-ragsvc}"
 SERVICE_GROUP="${SERVICE_GROUP:-${SERVICE_USER}}"
 SERVICE_HOME="${SERVICE_HOME:-/var/lib/production-ready-rag}"
-# RAG と共有 platform は monorepo（no.1-production-ready-suite）の rag/ と platform/ にある。
-SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-suite"
+# RAG と共有 platform は monorepo（no.1-production-ready-assistant）の rag/ と platform/ にある。
+SUITE_REPO_DIR="${APP_ROOT}/no.1-production-ready-assistant"
 APP_REPO_DIR="${SUITE_REPO_DIR}/rag"
 BACKEND_DIR="${APP_REPO_DIR}/backend"
 # 3製品共通の設定（PLATFORM_*）の共通 .env（#211）。システム設定画面の保存先（model-settings.json も同じ場所）。
@@ -53,7 +54,7 @@ WALLET_DIR="${APP_ROOT}/wallet"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${PROPS_DIR}/backend.env}"
-# frontend の base（Vite の base・React Router の basename）。Nginx の /rag/ の下で配信する（#1316）。
+# frontend の base（Vite の base・React Router の basename）。reverse proxy の /rag/ の下で配信する前提（#1316）。
 FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/rag/}"
 # true なら共有 UI（platform）を build し直さない（suite で先の製品が build したとき）。
 PR_SUITE_SKIP_PLATFORM_UI_BUILD="${PR_SUITE_SKIP_PLATFORM_UI_BUILD:-false}"
@@ -281,7 +282,7 @@ service_os_packages() {
   esac
 }
 
-# RAG が使う OS の package（Nginx・firewalld は platform/deploy/suite-init.sh が入れる）。gcc・make は wheel の
+# RAG が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。gcc・make は wheel の
 # 無い Python の依存を build するため。curl は image にある。
 BASE_SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl sudo tar unzip)
 
@@ -885,7 +886,7 @@ wait_for_backend() {
 }
 
 main() {
-  log "Starting Compute initialization (native: uv + systemd + Nginx)."
+  log "Starting Compute initialization (native: uv + systemd)."
   load_rag_services
   install_system_packages
   install_nodejs

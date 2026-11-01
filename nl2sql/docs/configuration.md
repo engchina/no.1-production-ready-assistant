@@ -76,7 +76,7 @@ stable JSON を返す。設定値は出力しない。終了コードが 0 以�
 ## 既存環境の更新手順（#211）
 
 旧名は読まないため、#211 を含む版へ更新するときは `backend/.env` の共通設定を共通 `.env` へ移す。
-OCI Compute（`platform/deploy` で配備した環境）での手順を示す。パスは `<suite>` = `/u01/aipoc/no.1-production-ready-suite`。
+OCI Compute（`platform/deploy` で配備した環境）での手順を示す。パスは `<suite>` = `/u01/aipoc/no.1-production-ready-assistant`。
 
 1. backend と worker を停止する。
 

@@ -83,7 +83,7 @@
 - **保持**: チャットと同じく期限で消さない（利用者が削除するまで残る。保持期間の設定は無い）。
 - **監査**: 監査の表（migration 023）の意味は変えない。会話を消しても監査の行は残る。
 
-生成と分析は LLM を同期で呼ぶので、Nginx の長い待ち時間の API（`platform/deploy/suite-nginx.sh` の `SUITE_NL2SQL_LONG_API_PATHS`）に入れる。画面の待ち時間は `API_TIMEOUT_MS.longRunningJob`。
+生成と分析は LLM を同期で呼ぶので、前段に reverse proxy を置くときは長い待ち時間の API として扱う（配備は reverse proxy を作らない。#19）。画面の待ち時間は `API_TIMEOUT_MS.longRunningJob`。
 
 ## 画面
 

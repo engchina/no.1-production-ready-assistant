@@ -14,7 +14,7 @@ fail_test() { printf 'git-pull test failed: %s\n' "$*" >&2; exit 1; }
 # suite repository（nl2sql/ と platform/ を含む monorepo）を1つ用意する。
 setup_case() {
   CASE_DIR="${TEST_TMP_DIR}/$1"
-  SUITE_DIR="${CASE_DIR}/no.1-production-ready-suite"
+  SUITE_DIR="${CASE_DIR}/no.1-production-ready-assistant"
   SEED_DIR="${CASE_DIR}/suite-seed"
   mkdir -p "${CASE_DIR}"
   git init --bare --quiet --initial-branch=main "${CASE_DIR}/suite.git"

@@ -521,7 +521,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261031_001"
+    assert manifest["migration_artifact_version"] == "20261031_002"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -607,7 +607,8 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261028_001_language_pack_releases",
         "20261028_002_language_pack_artifacts",
         "20261029_001_retire_query_history",
-        "20261031_001_embedding_dimensions_1024",
+        "20261031_001_retire_appearance_permission",
+        "20261031_002_embedding_dimensions_1024",
     ]
 
 

@@ -16,12 +16,11 @@ prepare_case() {
   local case_dir="$1"
   mkdir -p \
     "${case_dir}/app/props" \
-    "${case_dir}/app/no.1-production-ready-suite/agent/backend" \
+    "${case_dir}/app/no.1-production-ready-assistant/agent/backend" \
     "${case_dir}/units"
   export APP_ROOT="${case_dir}/app"
   export AGENT_INIT_TEST_MODE=true
   export SYSTEMD_UNIT_DIR="${case_dir}/units"
-  export NGINX_LOGGING_CONF_DIR="${case_dir}/conf.d"
 }
 
 run_initialization_case() (
@@ -62,7 +61,7 @@ run_systemd_case() (
 run_install_env_case() (
   local case_dir="${TEST_TMP_DIR}/install-env"
   prepare_case "${case_dir}"
-  mkdir -p "${case_dir}/app/no.1-production-ready-suite/platform"
+  mkdir -p "${case_dir}/app/no.1-production-ready-assistant/platform"
   APP_USER="$(id -un)"
   APP_GROUP="$(id -gn)"
   export APP_USER APP_GROUP
@@ -105,7 +104,7 @@ done
 
 # --- 共通 .env（platform/.env）と Agent の backend/.env（#211） ---
 run_install_env_case
-install_suite="${TEST_TMP_DIR}/install-env/app/no.1-production-ready-suite"
+install_suite="${TEST_TMP_DIR}/install-env/app/no.1-production-ready-assistant"
 grep -qx 'PLATFORM_ORACLE_DSN=agentdb_high' "${install_suite}/platform/.env" \
   || fail "共通 .env が platform/.env に置かれていない"
 test "$(stat -c '%a' "${install_suite}/platform/.env")" = "600" || fail "platform/.env の permission が 0600 ではない"
@@ -149,7 +148,7 @@ if grep -q 'dispatcher' "${unit}"; then
   fail "stack は外部 dispatcher を起動しない"
 fi
 
-# --- Nginx: Agent は単独では配備しない（#1316）。site は platform/deploy/suite-nginx.sh の 1 つだけ ---
+# --- reverse proxy: Agent は単独では配備せず（#1316）、suite も reverse proxy（Nginx）を配備しない（#19） ---
 for unexpected in configure_nginx sites-available proxy_pass APPLICATION_PORT; do
   if grep -Fq "${unexpected}" "${REPO_DIR}/init_script.sh"; then
     fail "単独の配備の Nginx の設定（${unexpected}）が残っている"

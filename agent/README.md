@@ -32,10 +32,10 @@ Skill（SKILL.md・references/・宣言・画面）→ Skill Registry
 
 ## ローカル開発
 
-monorepo `no.1-production-ready-suite` の `agent/` で作業します。共有 package は同じ repository の `../platform/` を相対パスで参照します。
+monorepo `no.1-production-ready-assistant` の `agent/` で作業します。共有 package は同じ repository の `../platform/` を相対パスで参照します。
 
 ```text
-no.1-production-ready-suite/
+no.1-production-ready-assistant/
   platform/
   agent/
 ```
@@ -145,7 +145,7 @@ FULL=1 scripts/check-all.sh                                 # CI と同じく全
    - （#754 以降は外部 Runtime を使わないため、compose の `agent/.env` と Binding の token の改名は不要です。）
 5. 再配備または再起動する。
    - Compute に配備した instance: 手順 1〜4 を instance 上の
-     `/u01/aipoc/no.1-production-ready-suite` で（`git pull` と `agent/backend` の `uv sync --locked --no-dev` の後に）
+     `/u01/aipoc/no.1-production-ready-assistant` で（`git pull` と `agent/backend` の `uv sync --locked --no-dev` の後に）
      行い、`sudo systemctl restart production-ready-agent-backend` を実行する。
    - 開発: backend（と dispatcher）を `uv run` で起動し直す。
 
@@ -209,4 +209,4 @@ npm run test:e2e
 
 ## 共通ログ（JST）
 
-API / worker の stderr、Nginx JSON access、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。既存 Compute の Nginx は共有 template の反映と `nginx -t` が必要。実ホストの保持値は変更前に確認する。
+API / worker の stderr、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。実ホストの保持値は変更前に確認する。

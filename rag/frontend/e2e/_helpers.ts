@@ -40,7 +40,6 @@ export const MENU_PERMISSION_CODES = [
   "menu.settings_upload_storage",
   "menu.settings_model",
   "menu.settings_database",
-  "menu.settings_appearance",
 ] as const;
 
 export const CAPABILITY_PERMISSION_CODES = [

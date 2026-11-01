@@ -16,10 +16,10 @@ test.describe("サイドナビのセクション折りたたみ", { tag: "@respo
   test("保存値が無いときは AI 活用と今のページのセクションだけを開き、開閉は再読み込み後も保つ（#1563）", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
 
     const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
-    // 業務の入口の「AI 活用」と、今のページ（外観と証明書）を含む「システム設定」だけが開いている。
+    // 業務の入口の「AI 活用」と、今のページ（データベース）を含む「システム設定」だけが開いている。
     await expect(sidebar.getByRole("button", { name: "AI 活用 を折りたたむ" })).toHaveAttribute("aria-expanded", "true");
     await expect(sidebar.getByRole("button", { name: "システム設定 を折りたたむ" })).toHaveAttribute(
       "aria-expanded",
@@ -47,7 +47,7 @@ test.describe("サイドナビのセクション折りたたみ", { tag: "@respo
   test("キーボード（Enter / Space）で開閉でき aria-expanded が反映される", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
 
     const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
     const ragItem = sidebar.getByText("RAG 検索", { exact: true });
@@ -71,7 +71,7 @@ test.describe("サイドナビのセクション折りたたみ", { tag: "@respo
   test("折りたたんだセクションの項目はアクセシビリティツリー / タブ順から除外される", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
 
     const sidebar = page.getByRole("complementary", { name: "サイドナビゲーション" });
     const evalLink = sidebar
@@ -93,7 +93,7 @@ test.describe("サイドナビのセクション折りたたみ", { tag: "@respo
   test("狭幅（375px）のドロワーの中でもセクションを開閉できる（#367）", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await mockApi(page);
-    await page.goto("/settings/appearance");
+    await page.goto("/settings/database");
 
     // md 未満はドロワーの中に展開した幅で描くため、desktop と同じくセクションの開閉ボタンを出す。
     const sidebar = await openSidebarNav(page);

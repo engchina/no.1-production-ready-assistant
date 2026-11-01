@@ -87,7 +87,7 @@ Backend は常に OCI Enterprise AI、OCI Generative AI、Oracle AI Database を
 ## 配備
 
 OCI Resource Manager の Terraform stack による配備は廃止しました（#12）。RAG は NL2SQL / Agent と同じ 1 台の Compute に、
-ネイティブ配備（uv の venv + systemd + Nginx。Docker は使わない。#286）で入れます（`platform/deploy/` の配備のスクリプト。
+ネイティブ配備（uv の venv + systemd。Docker は使わない。#286。reverse proxy は利用者の選択。#19）で入れます（`platform/deploy/` の配備のスクリプト。
 仕組みは [platform/docs/deployment.md](../platform/docs/deployment.md)）。以前の Docker Compose で配備した環境の移行は
 [docs/deployment.md](./docs/deployment.md) を参照してください。
 

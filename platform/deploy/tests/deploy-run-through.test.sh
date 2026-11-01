@@ -37,7 +37,7 @@ expect "接続の失敗（ORA のコード）も DB に繋がらない" true 1 \
 expect "終了 0 は DB に繋がらないではない" false 0 "${unreachable}"
 expect "時間切れ（124）は DB に繋がらないではない" false 124 "${unreachable}"
 expect "要約が無い（module が無い・CLI が何も出さない）" false 1 ""
-expect "venv が無い" false 1 'backend の venv がありません（/u01/aipoc/no.1-production-ready-suite/rag/backend/.venv）'
+expect "venv が無い" false 1 'backend の venv がありません（/u01/aipoc/no.1-production-ready-assistant/rag/backend/.venv）'
 expect "確認の方法が無い" false 1 '確認の方法がありません（rag）'
 expect "import の失敗（印に続けて例外の型）" false 1 \
   '状態を読めません（SCHEMA_STATUS_UNAVAILABLE: ModuleNotFoundError: No module named '"'"'oracledb'"'"'）'

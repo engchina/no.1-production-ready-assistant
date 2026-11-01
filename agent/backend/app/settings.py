@@ -93,8 +93,8 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 回数（MCP の入口）と、直近 24 時間に MCP で作れる Run の数（キーごと）。
     app_api_key_calls_per_minute: int = Field(default=60, ge=0, le=100_000)
     app_api_key_runs_per_day: int = Field(default=200, ge=0, le=1_000_000)
-    # 公開の基底の URL（共通 `.env` の PLATFORM_PUBLIC_BASE_URL。例 `https://<公開 IP>`）。配備の
-    # suite-init.sh が書き、API キーの画面の接続先に出す（#1870）。
+    # 公開の基底の URL（共通 `.env` の PLATFORM_PUBLIC_BASE_URL。例 `https://<公開 IP>`）。前段の
+    # reverse proxy の URL を利用者が書き、API キーの画面の接続先に出す（#1870・#19）。
     app_public_base_url: str = ""
     # システム設定（3製品共通）。
     oci_config_file: str = "~/.oci/config"

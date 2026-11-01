@@ -2498,14 +2498,9 @@ test("Select AI Credential API 失敗は固定 alert だけに表示し Toast �
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
 });
 
-test("外観と証明書にテーマの選択は無く、配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
-  await page.goto("/settings/appearance");
-  await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
-  await expect(page.getByText("HTTPS の接続に使う証明書を取得します。配色はライトの 1 種類で、切り替えはありません。")).toBeVisible();
-  await expect(page.getByTestId("appearance-theme-toggle")).toHaveCount(0);
-  for (const name of ["ライト", "ダーク", "自動（OS 設定）"]) {
-    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
-  }
+test("配色は OS の設定にかかわらずライトに固定する (#17)", async ({ page }) => {
+  await page.goto("/settings/oci");
+  await expect(page.locator("#oci-user-ocid")).toBeVisible();
   const html = page.locator("html");
   // 変数の文字列ではなく、実際に解決された色（body の背景色 / 変数を塗ったプローブ要素の background-color）を検証する。
   // 期待値は packages/ui/src/styles/tokens/palette.css の neutral / teal スケール由来（#18）。
@@ -2528,7 +2523,7 @@ test("外観と証明書にテーマの選択は無く、配色は OS の設定�
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "外観と証明書" })).toBeVisible();
+    await expect(page.locator("#oci-user-ocid")).toBeVisible();
     await expect(html).toHaveCSS("color-scheme", "light");
     await expect(html).not.toHaveAttribute("data-theme");
     expect(await html.evaluate((node) => node.className)).not.toMatch(/\bdark\b/);
@@ -2853,20 +2848,15 @@ test("未保存の変更があるときはブラウザの戻る操作でも破�
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });
 
-test("レビュー補完: システム設定6画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
-  // 外観と証明書はテーマの選択が無い（#17）ので、CA の証明書を配る状態にしてダウンロードのリンクへフォーカスする。
-  await page.route("**/platform/ca.crt", (route) =>
-    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-  );
-  for (const slug of ["oci", "upload-storage", "model", "database", "system-tables", "appearance"]) {
+test("レビュー補完: システム設定5画面の表示とキーボード・横幅を記録する", async ({ page }, testInfo) => {
+  for (const slug of ["oci", "upload-storage", "model", "database", "system-tables"]) {
     await page.goto(`/settings/${slug}`);
     await expect(page.locator("main")).toBeVisible();
     const ready = slug === "oci" ? page.locator("#oci-user-ocid")
       : slug === "upload-storage" ? page.locator("#upload-storage-local-dir")
       : slug === "model" ? page.locator("#enterprise-endpoint")
       : slug === "database" ? page.locator("#oracle-user")
-      : slug === "system-tables" ? page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" })
-      : page.getByRole("link", { name: "CA の証明書をダウンロード" });
+      : page.locator("#system-tables").getByRole("button", { name: "最新情報を取得" });
     await expect(ready).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await ready.focus();
@@ -2879,37 +2869,4 @@ test("レビュー補完: システム設定6画面の表示とキーボード�
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === "skipped") return;
   await expectLocalUiFonts(page);
-});
-
-// HTTPS の証明書（#1316）: 1 台の Compute の Nginx が /platform/ca.crt で CA の証明書を配る。製品は /<製品>/ の下でも
-// サイトの root の /platform/ca.crt を見る。ローカルの開発（Vite）は配っていないので説明だけを出す。
-test("外観と証明書の HTTPS の証明書", async ({ page }) => {
-  await page.goto("/settings/appearance");
-
-  const card = page.getByTestId("appearance-ca-certificate");
-  await expect(card.getByText("HTTPS の証明書", { exact: true })).toBeVisible();
-  await expect(card.getByText("この環境では HTTPS の自己署名の証明書を使っていません。")).toBeVisible();
-  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveCount(0);
-
-  await page.route("**/platform/ca.crt", (route) =>
-    route.fulfill({ status: 200, headers: { "Content-Type": "application/x-x509-ca-cert" }, body: "" }),
-  );
-  await page.reload();
-  await expect(card.getByRole("link", { name: "CA の証明書をダウンロード" })).toHaveAttribute("href", "/platform/ca.crt");
-  await card.getByText("端末への取り込み方").click();
-  // OS の見出しは使うブラウザを添え、ブラウザの項は Edge → Chrome → Firefox の順（#1662）。
-  await expect(card.getByTestId("appearance-ca-certificate-steps").locator("dt")).toHaveText([
-    "Windows（Edge・Chrome）",
-    "macOS（Safari・Chrome・Edge）",
-    "iPhone / iPad（すべてのブラウザ）",
-    "Android（Chrome）",
-    "Edge",
-    "Chrome",
-    "Firefox",
-  ]);
-  await expect(card.getByText("Firefox", { exact: true })).toBeVisible();
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
 });

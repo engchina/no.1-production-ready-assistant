@@ -4,7 +4,7 @@ import { defineConfig, type Connect } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
 /**
- * 画面の配信の基点（Vite の `base`。#1316）。1 台の Compute に 3 製品を置く配備では、Nginx が `/agent/` で
+ * 画面の配信の基点（Vite の `base`。#1316）。1 台の Compute に 3 製品を置く配備では、前段の reverse proxy（利用者が置く。#19）が `/agent/` で
  * Agent を分けるため、build の時だけ `FRONTEND_BASE_PATH=/agent/` を渡す。未指定・空は `/`（ローカルの開発・e2e は今までどおり）。
  * 前後の `/` はそろえる（`agent` → `/agent/`）。
  */

@@ -9,7 +9,7 @@ platform/deploy/suite-init.sh が、製品の配備（各製品の system schema
 
 - 冪等: ユーザーが無ければ CREATE USER、あれば profile・quota を合わせ、アプリのパスワードで接続できなければ
   パスワードを合わせて lock を外す。grant は毎回付け直す（付いていれば何も変わらない）。
-- 付ける権限は APP_USER_GRANTS（理由は terraform/README.md「アプリ用の DB ユーザー」と #1668 の調査）。
+- 付ける権限は APP_USER_GRANTS（理由は platform/docs/deployment.md「アプリ用の DB ユーザー」と #1668 の調査）。
   Autonomous AI Database では ADMIN が DBA を持たず、GRANT DBA は PDB_DBA に読み替えられるため、PDB_DBA を付ける。
   PDB_DBA に無い Deep Data Security の 3 つの system privilege（Data Grant の作成・DATA ROLE の付与・
   USE DATA GRANTS ONLY）を足す。表領域は QUOTA UNLIMITED ON DATA。

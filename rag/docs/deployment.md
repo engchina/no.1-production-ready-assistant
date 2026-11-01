@@ -422,7 +422,7 @@ uv run python -m rag_engine.knowledge.answer_migration /path/to/answer.json --ap
 
 ## 既存環境の更新手順（#46 埋め込みの次元を 1024 に）
 
-`rag_chunks.embedding` を `VECTOR(1536, FLOAT32)` から `VECTOR(1024, FLOAT32)` に作り直す migration `20261031_001_embedding_dimensions_1024`
+`rag_chunks.embedding` を `VECTOR(1536, FLOAT32)` から `VECTOR(1024, FLOAT32)` に作り直す migration `20261031_002_embedding_dimensions_1024`
 （データを削除する migration。保存済みのベクトルが消える）を足した。共通 `.env` の書き換え・承認して更新する手順・全文書の再取込は
 [platform/README.md](../../platform/README.md)「既存環境の更新手順（#46 埋め込みの次元を 1536 から 1024 に）」。
 
@@ -440,7 +440,7 @@ uv run python -m rag_engine.knowledge.answer_migration /path/to/answer.json --ap
 3. 承認して更新する。CLI は `--allow-destructive` を付ける。画面は「作成・更新」の確認ダイアログで「削除して更新」を押す。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -821,7 +821,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 2. `backend/.env` の旧名の行を改名し、値の旧名（`RAG_CHUNKING_STRATEGY=docrag_small_to_big`）も書き換える（バックアップを取ってから編集する。値が旧名のままだと backend が起動時の検証で止まる。#624）。Compute では、`init_script.sh` が配備の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
 
    ```bash
-   for env_file in /u01/aipoc/no.1-production-ready-suite/rag/backend/.env /u01/aipoc/props/backend.env; do
+   for env_file in /u01/aipoc/no.1-production-ready-assistant/rag/backend/.env /u01/aipoc/props/backend.env; do
      [ -f "${env_file}" ] || continue
      sudo cp -p "${env_file}" "${env_file}.bak-599"
      sudo sed -i -E \
@@ -845,7 +845,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
    ```bash
    # OCI Compute（手で行う場合）
-   cd /u01/aipoc/no.1-production-ready-suite/rag
+   cd /u01/aipoc/no.1-production-ready-assistant/rag
    sudo -u opc bash -c 'cd backend && uv sync --locked --no-dev --python 3.12'
    sudo -u opc bash -c 'cd services/parsers/docling && uv sync --locked --no-dev --python 3.12'
 
@@ -857,7 +857,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 5. システムテーブルを更新する（#599 の migration だけが未適用なら承認は要らない）。画面の「システム設定 > データベース > RAG システムテーブル」の「作成・更新」でもよい。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize
    ```
 
@@ -898,7 +898,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
    ```bash
    # OCI Compute
-   cd /u01/aipoc/no.1-production-ready-suite/rag
+   cd /u01/aipoc/no.1-production-ready-assistant/rag
    sudo -u opc bash -c 'cd backend && uv sync --locked --no-dev --python 3.12'
 
    # ローカル
@@ -908,7 +908,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 4. サービスを止めたまま、システムテーブルを承認付きで更新する（006 と 007 を当てる）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -967,7 +967,7 @@ systemd の unit に移した。サービス管理画面は docker compose で�
 拒否するので、そのときは `compose_services.txt` に `parser-docling` を足す。
 
 ```bash
-cd /u01/aipoc/no.1-production-ready-suite
+cd /u01/aipoc/no.1-production-ready-assistant
 sudo -u opc git fetch --depth 1 origin <suite-v の tag> && sudo -u opc git checkout -f FETCH_HEAD
 # 既定の解析エンジン（Docling）と、画面からの起動 / 停止を有効にする（stack の新しい既定と同じ）
 sudo sed -i -e 's/^RAG_PARSER_ADAPTER_BACKEND=.*/RAG_PARSER_ADAPTER_BACKEND=docling/' \
@@ -1047,7 +1047,7 @@ sudo ls /u01/data/production-ready-rag /var/lib/production-ready-rag/.oci
 
    ```bash
    # OCI Compute（init_script.sh で配備した環境）
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc mkdir -p /var/lib/production-ready-rag/exports
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.legacy_export \
      --table rag_agent_memories --output /var/lib/production-ready-rag/exports/rag_agent_memories.jsonl
@@ -1062,7 +1062,7 @@ sudo ls /u01/data/production-ready-rag /var/lib/production-ready-rag/.oci
 4. システムテーブルを更新する。データを削除する migration なので承認を付ける（#619）。画面の「システム設定 > データベース > RAG システムテーブル」からでもよい（「作成・更新」の確認ダイアログで「削除して更新」を押す）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
    ```
 
@@ -1230,7 +1230,7 @@ RAG のログインは、`.env` の単一アカウント（`RAG_AUTH_USERNAME` /
 2. 更新した版で起動し、システムテーブルを初期化する（`PLATFORM_*` がなければ作り、`RAG_ROLE_*` を追加する。冪等）。
 
    ```bash
-   cd /u01/aipoc/no.1-production-ready-suite/rag/backend
+   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
    sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize
    ```
 
@@ -1689,17 +1689,16 @@ cv2 の headless 版は各サービスの `uv.lock` に固定されている（v
 ## 本番構成
 
 配備（`platform/deploy/`。仕組みは [platform/docs/deployment.md](../../platform/docs/deployment.md)）は、選んだ製品を 1 台の Compute に入れ
-（#1316）、NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd + Nginx。#286）を作る。Docker は使わない。
+（#1316）、NL2SQL / Agent と同じネイティブ配備（uv の venv + systemd。#286）を作る。Docker は使わない。reverse proxy（Nginx など）と TLS の証明書は作らない（#19。前段に置くかは利用者の選択。[README](../../README.md#各製品の公開reverse-proxy-は利用者の選択)）。
 OCI Resource Manager の Terraform stack（以前の `terraform/`）による配備は #12 で削除した。
 
 3 製品は 1 台の Compute にセットで配備する（`platform/deploy/suite-init.sh` が `rag/init_script.sh` を呼ぶ。#1316。単独では配備しない）。下の表と次の点が違う。
 
-- Compute の OS は Oracle Linux 9（#1611）。OS の package は dnf、firewall は firewalld、SELinux は enforcing のまま（repository は `usr_t`、
-  frontend の dist は `httpd_sys_content_t`。`platform/deploy/suite-init.sh` の `configure_selinux`。[platform/docs/deployment.md](../../platform/docs/deployment.md)）。
+- Compute の OS は Oracle Linux 9（#1611）。OS の package は dnf、SELinux は enforcing のまま（repository は `usr_t`。`platform/deploy/suite-init.sh` の `configure_selinux`。[platform/docs/deployment.md](../../platform/docs/deployment.md)）。
 - 実行ユーザーは NL2SQL / Agent と同じ `opc`（共通の `platform/.env`・Wallet・`~/.oci/config` を 3 製品で読み書きするため）。`ragsvc` は作らない
   （下の表と手順の `sudo -u ragsvc HOME=/var/lib/production-ready-rag` は `sudo -u opc` に読み替える）。sudoers は `opc` に同じ unit の操作を許可する。
-- frontend は `FRONTEND_BASE_PATH=/rag/` で build し、Nginx の 1 つの site（suite）が `/rag/` で配信して `/rag/api/` を prefix を外して backend へ proxy する
-  （SSE・MCP の長い timeout・ログインの上限・upload の上限は同じ）。RAG の `init_script.sh` は Nginx の site を書かない。
+- frontend は `FRONTEND_BASE_PATH=/rag/` で build する。配信と `/rag/api/` の proxy（prefix を外して backend へ）は、利用者が前段に置く reverse proxy が行う
+  （SSE の buffering を切る・回答と MCP の長い待ち時間・upload の上限を backend に合わせる）。RAG の `init_script.sh` は reverse proxy の site を書かない。
 ADB（Oracle Autonomous AI Database）と Wallet は配備の外で用意し（NL2SQL / Agent と共有する）、RAG の system schema はアプリの CLI（`app.rag.system_schema_cli initialize`）で適用する。
 
 | 構成要素 | 内容 |
@@ -1709,8 +1708,8 @@ ADB（Oracle Autonomous AI Database）と Wallet は配備の外で用意し（N
 | backend | `production-ready-rag-backend.service`（gunicorn + UvicornWorker、`127.0.0.1:8000`、workers 2、`PLATFORM_ENVIRONMENT=production`、in-process の取込 worker は無効） |
 | 取込 worker | `production-ready-rag-ingestion-worker.service`（`python -m app.rag.ingestion_worker`、`KillMode=mixed`、`RAG_INGESTION_QUEUE_SHUTDOWN_GRACE_SECONDS=60`、`TimeoutStopSec=90`。停止は下の「取込 worker の lease と停止」） |
 | 前処理 / parser | `production-ready-rag-<service>.service`（サービスごとの venv の gunicorn、`127.0.0.1:<port>`）。対象は stack の `rag_services`（前処理 4 つ・parser-docling と、選べば parser-unstructured）。GPU の parser は配備しない |
-| frontend | host の Node.js 24 で `platform` と `rag/frontend` を build し、Nginx が `rag/frontend/dist` を配信して `/api/` を backend へ proxy する |
-| upload の上限 | Nginx の `client_max_body_size` は backend の `RAG_MAX_UPLOAD_BYTES`（`backend/.env`。既定 200 MiB）+ 10 MiB（MiB で切り上げ。Refs #306） |
+| frontend | host の Node.js 24 で `platform` と `rag/frontend` を build する（`rag/frontend/dist` の配信と `/api/` の proxy は利用者が置く reverse proxy。#19） |
+| upload の上限 | backend の `RAG_MAX_UPLOAD_BYTES`（`backend/.env`。既定 200 MiB）。前段に reverse proxy を置くときは、その本文の上限をこれより大きくする（Refs #306） |
 | 設定 | `platform/.env`（`PLATFORM_*`）と `rag/backend/.env`（`RAG_*`）。どちらも `ragsvc` だけが読める 0600。OCI parser の unit は両方を EnvironmentFile で読む |
 | サービス実行用 env | `rag/backend/service-runtime.env`（0600）。サービス管理が起動 / 再起動の前に HuggingFace 設定と実効 OCI Enterprise AI 設定を書き、前処理 / parser の unit が EnvironmentFile で読む |
 | ログ | `/var/log/rag-init.log`、`journalctl -u production-ready-rag-<service>.service` |
@@ -1748,7 +1747,7 @@ sudo systemctl status production-ready-rag-backend.service
 
 規模が大きくなった場合の推奨:
 
-- Frontend / Backend: 同じネイティブ配備（uv の venv + systemd + Nginx）の Compute を増やし、OCI Load Balancer で振り分ける
+- Frontend / Backend: 同じネイティブ配備（uv の venv + systemd）の Compute を増やし、OCI Load Balancer で振り分ける
   （自前のコードの Docker イメージは作らない。#286 / #356）。取込 worker は row lock で二重実行しないので、別の Compute に並べてよい。
 - Storage: OCI Object Storage。
 - DB: Oracle AI Database（対応バージョンは [platform/docs/deployment.md](../../platform/docs/deployment.md) の「Autonomous AI Database（全製品で共有）」）。RAG チャンクは `VECTOR(1024, FLOAT32)`。
@@ -1868,10 +1867,10 @@ uv run python -m app.rag.file_processing_staging_cli \
 - `RAG_RRF_K`: hybrid retrieval の Reciprocal Rank Fusion 定数。小さいほど上位 rank を強く優先する。golden set で keyword/vector の寄与と citation 安定性を確認して調整する。
 - `RAG_EMBEDDING_CACHE_ENABLED` / `RAG_EMBEDDING_CACHE_MAX_ENTRIES` / `RAG_EMBEDDING_BATCH_SIZE`: backend process 内で OCI Generative AI embedding 結果を LRU cache する。cache key は本文そのものではなく、model id、input type、dimension、本文 SHA-256 から作る。batch 内や連続検索で同じ query/chunk が出た場合は miss だけを OCI へ送る。miss は最大 96 件かつ合計 100,000 文字の先に達した単位で OCI embedding request に分割し、返却順を元入力順へ戻す。単一入力は 100,000 文字を超えると拒否し、本文を暗黙に切り詰めない。[Cohere Embed 4](https://docs.oracle.com/en-us/iaas/Content/generative-ai/cohere-embed-4.htm) の 128k token は、実 API の応答では入力 1 件ごとの上限として検証される（超えると HTTP 400 の `inputs[i] is too long`。#2467）。文字数の予算はこれとは別の保守的な保護値である。OCI はサービスの高負荷を HTTP 400（`high load`）でも返すため、embedding はこれを一時的な不可用として再試行し、再試行ではバッチを最大 8 分割して小さい要求で送る。空の入力（OCI は HTTP 400 で拒否する）は送る前に止める。再試行しても失敗したら、応答本文・入力本文を残さずに、HTTP status・サービスのエラーコード・理由・バッチの位置・件数・文字数・UTF-8 の byte 数（token 数の上限の見積もり）を job のエラーと構造化ログ `embedding_request_failed` に残す。worker 間共有はしないため、容量と batch size は worker 数、メモリ、OCI payload limit、p95 latency を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
 - `RAG_RERANK_CACHE_ENABLED` / `RAG_RERANK_CACHE_MAX_ENTRIES`: backend process 内で OCI Generative AI rerank 結果を LRU cache する。cache key は query/document 原文ではなく SHA-256、model id、top_n、document 順序から作る。候補順や top_n が変わると別 cache entry になる。頻出 FAQ / 評価実行 / 再検索の p95 latency と OCI 呼び出し数を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
-- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、Nginx（`platform/deploy/suite-nginx.sh` が生成する回答生成・評価・MCP・業務ガイドを試すの `location`。#1597）は 660 秒待つ（backend の 504 と理由が画面に届くよう、外側ほど長くする）。
+- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、前段に reverse proxy を置くときは回答生成・評価・MCP・業務ガイドを試すの path を 660 秒以上待たせる（配備は reverse proxy を作らない。#19。backend の 504 と理由が画面に届くよう、外側ほど長くする）。
 - 品質評価（golden set）は job（`/api/evaluation/jobs/run`。#390）で動く。1 ケースを `RAG_ANSWER_TIMEOUT_SECONDS` で打ち切り、時間切れになった工程をケースの結果（`error_stage` と `error_message`）に残して次のケースへ進む。job 全体は、投入時の回答の回数（ケース × 往復）× `RAG_ANSWER_TIMEOUT_SECONDS` と `RAG_EVALUATION_JOB_TIMEOUT_SECONDS`（最小値。既定 3600 秒、60〜86400）の大きいほうで打ち切り（86400 秒を超えない。#1430。推論型のモデルでは 1 回の回答が数分かかるため、固定の上限では問の数に応じて打ち切られる）、残りのケースは実行せずに失敗（`error_type=EvaluationTimeBudgetExceeded`）として結果を返す。job の上限は job の `time_limit_seconds` で返し、画面は「全体の上限 N 分」として出す。画面は job の状態を 2 秒ごとに取得して進捗（終わったケースの数 / 全体・実行中のケース・経過時間）を出し、取り消しもできる。評価 CLI は job の終わりを `RAG_EVALUATION_TIMEOUT_SECONDS`（未指定なら job の上限 + 300 秒）まで待ち、超えたら job を取り消す。
   - job は投入を受けた backend のプロセスの中で動き、状態は `rag_evaluation_jobs` に保存する（Gunicorn の別の worker に状態の取得・取り消しが届いても同じ結果になる）。backend の停止・再起動では実行中の job を失敗にし（別のプロセスは引き継がない）、プロセスが落ちて heartbeat が 120 秒途絶えた job も、次の状態の取得で失敗にする。同時に実行できる job は 2 件まで（全プロセスの合計）。終わった job は自動では消さない（#3235。以前は 7 日で消していた。結果は評価 artifact の `rag_evaluation_runs` にも残る）。
-  - 以前の同期の `/api/evaluation/run` は、外部から直接呼ぶ利用のために残している。評価全体を 600 秒で打ち切り、Nginx は 660 秒待つ（#383）。
+  - 以前の同期の `/api/evaluation/run` は、外部から直接呼ぶ利用のために残している。評価全体を 600 秒で打ち切る（#383。前段の reverse proxy の待ち時間はこれより長くする）。
 - `RAG_SEARCH_TIMEOUT_SECONDS`（品質評価の 1 ケースの上限、既定 30 秒）は #383 で削除した。品質評価の 1 ケースも `RAG_ANSWER_TIMEOUT_SECONDS` で打ち切る。既存の `rag/backend/.env` に残っていても読まれない（害はない）ので、次に編集するときに消す。
 - `RAG_OCI_GUARDRAILS_TIMEOUT_SECONDS`: OCI Guardrails 検査の timeout。既定 5 秒。障害時は `regulated` が fail-closed、その他はローカル検査へ縮退し、非機密 warning と metrics / audit code を残す。
 - `RAG_ORACLE_VECTOR_TARGET_ACCURACY`: Oracle AI Vector Search の問い合わせ側 `FETCH APPROX ... WITH TARGET ACCURACY`。既定は 95。staging / golden set で召回率とレイテンシを見ながら調整する。
@@ -1972,7 +1971,7 @@ uv run python -m app.rag.file_processing_staging_cli \
 
 ## 共通ログ（JST）
 
-API / worker の stderr、Nginx JSON access、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。既存 Compute の Nginx は共有 template の反映と `nginx -t` が必要。実ホストの保持値は変更前に確認する。
+API / worker の stderr、共有 tail / export の契約と保持・権限確認は [共通ログ仕様](../../platform/docs/logging-standard.md) に従う（#858）。`scripts/tail-logs.sh` で製品の unit を読む。実ホストの保持値は変更前に確認する。
 
 ### 回答テンプレートの placeholder の改名（#2859）
 

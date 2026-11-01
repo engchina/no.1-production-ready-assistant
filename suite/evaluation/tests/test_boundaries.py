@@ -50,7 +50,7 @@ ENTERPRISE_AI_ALLOWED = {"pr_enterprise_ai"}
 PRODUCT_PATH = re.compile(r"""["'](?:\.\./)*(?:rag|nl2sql|agent)/(?:backend|frontend|packages)""")
 # suite の依存に入ってよい自分たちの package（suite 自身と、platform の公開の package）。
 OWN_PACKAGES_ALLOWED = {
-    "production-ready-suite-evaluation",
+    "production-ready-assistant-evaluation",
     "production-ready-evaluation-scoring",
     "production-ready-enterprise-ai",
 }
@@ -186,7 +186,7 @@ def test_products_and_platform_do_not_depend_on_the_suite() -> None:
         *(REPO / product / "backend" / "pyproject.toml" for product in ("rag", "nl2sql", "agent")),
     ]
     for path in manifests:
-        assert "production-ready-suite-evaluation" not in path.read_text(encoding="utf-8"), path
+        assert "production-ready-assistant-evaluation" not in path.read_text(encoding="utf-8"), path
 
 
 def test_suite_does_not_install_fastapi() -> None:

@@ -1,12 +1,12 @@
 # platform — No.1 Production Ready 共通基盤
 
-monorepo `no.1-production-ready-suite` の `platform/`。No.1 Production Ready 製品群（**RAG / NL2SQL / Agent**）が共有する **前後端の single source of truth**。
+monorepo `no.1-production-ready-assistant` の `platform/`。No.1 Production Ready 製品群（**RAG / NL2SQL / Agent**）が共有する **前後端の single source of truth**。
 1 回の変更（トークン・コンポーネント / ログ・metrics・エラー envelope・app factory）で 3 プロジェクトを同時に底上げする。
 
 ```
 packages/
   ui/             @production-ready/ui    — 共有フロント UI/UX（Vite library / React 19 / Tailwind v4）
-  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（外観と証明書ほか。#70）とユーザー管理・ロール管理画面（#206）
+  system-settings/ @production-ready/system-settings — 3製品共通のシステム設定画面（OCI 認証・アップロード保存先・モデル・データベース。#70。外観と証明書は #19 で削除）とユーザー管理・ロール管理画面（#206）
   backend_core/   production-ready-backend-core    — 共有 FastAPI インフラ（Python 3.12 / pydantic v2 / uv）
   system_settings_backend/ production-ready-system-settings-backend — 3製品共通のシステム設定 API と、共通認証基盤（ユーザー・ロール・セッション・ログイン。PLATFORM_* テーブル。pr_system_settings。#70 / #206 / #212）
 templates/
@@ -143,7 +143,7 @@ SQL の migration のファイル）は同じ値を書き、一致をテスト�
 
 ### 既存の DB の更新（ベクトルを削除する migration）
 
-ベクトルの列は次元を変えられないため、列と HNSW 索引を作り直す migration（RAG は `20261031_001_embedding_dimensions_1024`、NL2SQL は
+ベクトルの列は次元を変えられないため、列と HNSW 索引を作り直す migration（RAG は `20261031_002_embedding_dimensions_1024`、NL2SQL は
 `025_embedding_dimensions_1024`）を足した。**保存済みのベクトルはすべて消える**ので、データを削除する migration として明示の承認が要る
 （[rag/docs/deployment.md](../rag/docs/deployment.md)「既存環境の更新手順の共通の注意」）。次元が既に 1024 の列（新しい環境）は何もしない。
 Agent はベクトルの列を持たないので、`.env` の書き換えだけでよい。
@@ -332,7 +332,7 @@ API は 422 で「既定のテキストモデルを選択してください。�
 - `max_output_tokens` は思考の token も含むので、推論の量を減らすと出力上限での未完了（#987）も減る。
 - 推論型のモデルの 1 回の呼び出しが数十秒になるため、RAG の回答の上限 `RAG_ANSWER_TIMEOUT_SECONDS` の既定を 600 秒（上限と同じ）にし、
   Agent の接続 `rag` の待ち時間 `AGENT_EXTERNAL_RAG_TIMEOUT_SECONDS` の既定を 630 秒（MCP のタイムアウト秒の上限は 900 秒）にした。
-  画面（630 秒）と Nginx（660 秒）は前から回答の上限より長い。
+  画面（630 秒）は前から回答の上限より長い（前段に reverse proxy を置くときは、その待ち時間も回答の上限より長くする。#19）。
 
 ## LLM / VLM の呼び出しの seed は送らない（#3529）
 

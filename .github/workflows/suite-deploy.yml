@@ -1,12 +1,11 @@
 name: Suite / Deploy
 
 # 1 台の Compute の配備の検証（#1592）。ci.yml の `suite-deploy` job から呼ぶ（workflow_call）。
-# 以前は製品ごと・配備の層ごとの小さな job に分かれ、それぞれ runner の枠を使い、
-# 2 つの job がそれぞれ nginx を apt で入れていた。
+# 以前は製品ごと・配備の層ごとの小さな job に分かれ、それぞれ runner の枠を使っていた。
 #   - 各製品の init_script.sh と配備・更新のスクリプト（systemctl 等は fake。生成した sudoers は visudo で検査）
-#   - Nginx のログの契約・frontend の起動スクリプト（隔離した Nginx）
-#   - 1 台の Compute の配備（platform/deploy。suite-init・自作の CA と IP の証明書・Nginx の site。#1316）と、
-#     起動の待ち方・配備全体の確認（suite-health。#1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）
+#   - frontend の起動スクリプト
+#   - 1 台の Compute の配備（platform/deploy。suite-init。#1316）と、起動の待ち方・配備全体の確認（suite-health。
+#     #1642）・アプリ用の DB ユーザーの作成（suite-db-user。#1668）。reverse proxy（Nginx）と TLS は配備しない（#19）。
 # 実テナンシーへの配備確認は手動で行う。
 
 on:
@@ -38,13 +37,7 @@ jobs:
         with:
           enable-cache: false
 
-      # NL2SQL の Nginx のログの契約と platform/deploy の Nginx の site の検証が使う（1 回だけ入れる）。
-      - name: Install nginx and openssl
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends nginx openssl
-
-      # ネイティブ配備（uv の venv + systemd + Nginx。#286）。
+      # ネイティブ配備（uv の venv + systemd。#286）。
       - name: RAG init script
         working-directory: rag
         run: |
@@ -63,11 +56,9 @@ jobs:
           bash scripts/tests/tail-logs.test.sh
           bash ../platform/scripts/tests/log-viewer.test.sh
 
-      # ログインの上限（#1173）の実 HTTP の確認は、下の platform/deploy/tests/suite-nginx.test.sh（#1316）。
-      - name: Nginx logging contract and frontend start scripts
+      - name: Frontend start scripts
         working-directory: nl2sql
         run: |
-          bash ../platform/scripts/tests/nginx-logging.test.sh
           bash scripts/tests/start-frontend.test.sh
           bash scripts/tests/start-frontend.test.sh ../rag/scripts/start-frontend.sh
           bash scripts/tests/start-frontend.test.sh ../agent/scripts/start-frontend.sh
@@ -78,19 +69,16 @@ jobs:
           bash -n init_script.sh scripts/tests/init-script-deployment.test.sh
           bash scripts/tests/init-script-deployment.test.sh
 
-      # 1 台の Compute の配備（platform/deploy。#1316）: suite-init の振る舞い、自作の CA と IP の証明書（openssl）、
-      # Nginx の site（prefix・SSE・MCP・login の上限・/ → /agent/・HTTPS on / off）を隔離した Nginx で検証する。
+      # 1 台の Compute の配備（platform/deploy。#1316）: suite-init の振る舞い（reverse proxy と TLS は配備しない。#19）。
       - name: Single-Compute deployment (platform/deploy)
         run: |
-          bash -n platform/deploy/suite-init.sh platform/deploy/suite-nginx.sh platform/deploy/suite-tls.sh \
+          bash -n platform/deploy/suite-init.sh platform/deploy/suite-products.sh \
             platform/deploy/suite-pull.sh platform/deploy/suite-restart.sh platform/deploy/suite-update.sh \
             platform/deploy/suite-health.sh \
             platform/deploy/tests/deploy-run-through.test.sh .github/scripts/deploy-run-through.sh
-          bash platform/deploy/tests/suite-tls.test.sh
           bash platform/deploy/tests/suite-init.test.sh
           # backend の起動の待ち方・配備全体の確認・各製品の install_uv の SELinux の context（#1642）。
           bash platform/deploy/tests/suite-health.test.sh
-          bash platform/deploy/tests/suite-nginx.test.sh
           bash platform/deploy/tests/suite-ops.test.sh
           # 配備で ADMIN からアプリ用の DB ユーザーを作る script（python-oracledb は stub。#1668）。
           bash platform/deploy/tests/suite-db-user.test.sh

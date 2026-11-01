@@ -79,7 +79,7 @@ unlock_shared_ui() {
 prepare_shared_ui() {
   if [ ! -f "${SHARED_UI_DIR}/package.json" ]; then
     echo "[frontend] 共有 UI パッケージが見つかりません: ${SHARED_UI_DIR}" >&2
-    echo "[frontend] monorepo(no.1-production-ready-suite)の platform/ が rag/ と同じ階層にあることを確認してください。" >&2
+    echo "[frontend] monorepo(no.1-production-ready-assistant)の platform/ が rag/ と同じ階層にあることを確認してください。" >&2
     echo "[frontend] 別の場所に配置した場合は SHARED_PLATFORM_DIR または SHARED_UI_DIR を指定してください。" >&2
     return 1
   fi

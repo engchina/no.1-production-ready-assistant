@@ -13,7 +13,6 @@
 | モデル | `/settings/model` | 接続（プライマリ / セカンダリ / ターシャリ）、登録モデル（種類: テキスト / 埋め込み / 再ランク）、既定のモデル、接続テスト、テンプレート検証 |
 | データベース | `/settings/database` | Oracle 接続設定、wallet upload / 自動取得、ADB start / stop、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
-| 外観と証明書 | `/settings/appearance` | HTTPS の CA 証明書の取得。テーマの選択は無い（配色はライトだけ。#17） |
 
 テストデータ配置先:
 
@@ -155,15 +154,13 @@
 | ST-009 | 実行権限なし | `settings.database.sql_execute` なしで開く | 状態は閲覧可、初期化/再作成は disabled または非表示 | `mock-responses/system-tables-ready.json` |
 | ST-010 | DB 未接続 | GET が DB unavailable を返す | 画面全体が落ちず、DB 設定ページへの導線が表示される | `mock-responses/system-tables-failed.json` |
 
-## 9. 外観と証明書
+## 9. 配色
 
-配色はライトの 1 種類だけで、テーマの選択は無い（#17）。共有 UI の CSS は `html` を常に `color-scheme: light` にし、class・属性・OS の配色設定に反応しない。サイドバーの暗いスラブ（`[data-surface="inverted"]`）とコードの面（`[data-surface="code"]`）はテーマではなく、常に暗い面である。
+配色はライトの 1 種類だけで、テーマの選択は無い（#17）。共有 UI の CSS は `html` を常に `color-scheme: light` にし、class・属性・OS の配色設定に反応しない。サイドバーの暗いスラブ（`[data-surface="inverted"]`）とコードの面（`[data-surface="code"]`）はテーマではなく、常に暗い面である。「外観と証明書」の画面は #19 で削除した。
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| APP-001 | 初期表示 | 外観と証明書のページを開く | HTTPS の証明書のカードだけを表示する。テーマの選択（`appearance-theme-toggle`、「ライト」「ダーク」「自動（OS 設定）」）は無く、`html` の `color-scheme` は `light` | - |
-| APP-002 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
-| APP-003 | 旧い保存値の読み捨て | 旧い `theme` を含む保存値（`production-ready-nl2sql.ui`）で開く | 配色はライトのまま。sidebarCollapsed / collapsedSections は維持し、`theme` は読み捨てる | `appearance/legacy-theme.localstorage.json` |
+| APP-001 | OS の配色設定に反応しない | OS の配色設定をダークにして（Playwright の `emulateMedia`）OCI 設定のページを開く | 配色はライトのまま（`html` は `color-scheme: light`、class・`data-theme` を持たない、canvas は neutral-50） | - |
 
 ## 10. 推奨 Playwright fixture 利用例
 
@@ -182,7 +179,7 @@ test("モデル設定を表示できる", async ({ page }) => {
 });
 ```
 
-## 11. 後片付け
+## 10. 後片付け
 
 - 実 DB / OCI 接続を使った場合は、検証後にダミー secret が runtime 設定へ残っていないことを確認する。
 - `wallet-valid.zip` をアップロードした検証環境では、wallet 配置ディレクトリを検証用に限定する。

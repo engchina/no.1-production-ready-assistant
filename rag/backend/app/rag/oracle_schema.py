@@ -60,7 +60,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261031_001"
+MIGRATION_ARTIFACT_VERSION = "20261031_002"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -599,6 +599,18 @@ END;
     )
     sections.append(
         OracleSchemaSection(
+            name="20261031_001_retire_appearance_permission",
+            table_name="rag_role_permissions",
+            sql=retire_appearance_permission_sql(),
+            destructive_note=(
+                "ロールに付いた、廃止済みのメニュー権限 menu.settings_appearance"
+                "（「外観と証明書」の画面。#19 で削除）の行を削除します。"
+                "ロールのほかの権限と対象範囲は削除しません。"
+            ),
+        )
+    )
+    sections.append(
+        OracleSchemaSection(
             name=EMBEDDING_DIMENSIONS_MIGRATION,
             table_name="rag_chunks",
             sql=embedding_dimensions_migration_sql(),
@@ -617,7 +629,7 @@ END;
 
 
 # 埋め込みの次元を 1536 から EMBEDDING_DIMENSIONS（1024）へ変える migration（#46）。
-EMBEDDING_DIMENSIONS_MIGRATION = "20261031_001_embedding_dimensions_1024"
+EMBEDDING_DIMENSIONS_MIGRATION = "20261031_002_embedding_dimensions_1024"
 
 
 def embedding_dimensions_migration_sql() -> str:
@@ -655,6 +667,22 @@ BEGIN
     END IF;
 END;
 /"""
+
+
+def retire_appearance_permission_sql() -> str:
+    """「外観と証明書」の画面（#19 で削除）のメニュー権限の行だけを消す。表が無くても適用する。"""
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions WHERE permission_code = ''menu.settings_appearance''';
+    END IF;
+END;
+/
+""".strip()
 
 
 def retire_query_history_sql() -> str:

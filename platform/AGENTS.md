@@ -74,4 +74,4 @@ uv run ruff format --check . && uv run ruff check . && uv run mypy src
 uv run pytest --cov=pr_backend_core && uv run bandit -r src && uv run pip-audit
 ```
 
-- 1 台の Compute の配備（`deploy/`）のテストは `for t in deploy/tests/*.test.sh; do bash "$t"; done`（nginx と openssl が要る。CI は `Suite / Deploy`）。
+- 1 台の Compute の配備（`deploy/`）のテストは `for t in deploy/tests/*.test.sh; do bash "$t"; done`（CI は `Suite / Deploy`）。

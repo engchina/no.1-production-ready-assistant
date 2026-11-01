@@ -23,7 +23,7 @@ export const DATABASE_GATE_LOADING_TEST_ID = "database-gate-loading";
 
 /**
  * ゲートを通さない画面（#325。3 製品で同じ）。システム設定の 5 画面（OCI 認証・アップロード保存先・
- * モデル・データベース・外観と証明書）と、その入口の `/settings` だけ。DB の復旧に使う画面なので塞がない。
+ * モデル・データベース）と、その入口の `/settings` だけ。DB の復旧に使う画面なので塞がない。
  * ユーザー管理・ロール管理・製品固有の設定は DB にデータを持つため、ゲートを通す（#214）。
  */
 export function isDatabaseGateExemptPath(pathname: string): boolean {

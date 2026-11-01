@@ -26,7 +26,7 @@ from pr_suite_evaluation.targets import agent_mcp, rag_mcp
 from pr_suite_evaluation.views import CaseView
 
 RECORD_SCHEMA_VERSION = 1
-PACKAGE_NAME = "production-ready-suite-evaluation"
+PACKAGE_NAME = "production-ready-assistant-evaluation"
 
 
 class Target(Protocol):

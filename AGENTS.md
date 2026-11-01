@@ -1,4 +1,4 @@
-# AGENTS.md — No.1 Production Ready Suite（monorepo 共通ルール）
+# AGENTS.md — No.1 Production Ready Assistant（monorepo 共通ルール）
 
 > monorepo 全体の共通ルールの正本（Claude Code と Codex が直接読む。`CLAUDE.md` は置かない）。作業対象のディレクトリの `AGENTS.md` もあわせて適用し、矛盾する場合は製品固有のルールを優先する（GitHub 運用と CI は本ファイルが優先）。
 > 本ファイルには守る規則と、作業ごとに読む文書の案内だけを書く。詳細は下の表の文書にあり、**その作業を始める前に読む**（本ファイルと同じ強さで守る）。詳細を足すときは表の文書に書き、本ファイルには規則の要約と案内だけを足す。Codex は repo の直下から起動したディレクトリまでの `AGENTS.md` を合計 32 KiB で切るため、本ファイルは 20 KB 以下、製品の `AGENTS.md` との合計は 32 KB 以下に保つ（`scripts/check-agents-md-size.sh`）。`@path` の import は使わない。
@@ -12,7 +12,7 @@
 | CI の job・workflow・テストの書き方・ローカルの検証の範囲 | [docs/agents/ci.md](./docs/agents/ci.md) |
 | UI（画面・部品・lint・e2e） | [docs/agents/ui.md](./docs/agents/ui.md) と [ARCHITECTURE.md](./platform/docs/design-system/ARCHITECTURE.md) |
 | LLM への指示・`skills/`・MCP の instructions とツールの説明・Runtime の指示 | [docs/agents/prompts.md](./docs/agents/prompts.md) |
-| 配備（Compute・Nginx・DB ユーザー） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
+| 配備（Compute・DB ユーザー） | [docs/agents/deploy.md](./docs/agents/deploy.md) |
 | 3 製品で同じ機能（システム設定・ナビ・API キー・アカウント・データの見え方・権限管理） | [docs/agents/shared-features.md](./docs/agents/shared-features.md) |
 | `.env` の変数・DB の object の名前 | [docs/agents/naming.md](./docs/agents/naming.md) |
 | backend の実装の標準 | [platform/docs/backend-standard.md](./platform/docs/backend-standard.md) |
@@ -97,9 +97,9 @@
 
 詳細は [docs/agents/deploy.md](./docs/agents/deploy.md)。
 
-- 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd + Nginx。Dockerfile・compose は持たない）。
+- 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd。Dockerfile・compose は持たない）。reverse proxy（Nginx など）と TLS の証明書は配備しない（置くかは利用者の選択。#19）。
 - **再配備は repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。**
-- 選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。Nginx の location は `platform/deploy/suite-nginx.sh` だけに書く。OCI Resource Manager の Terraform stack は持たない（#12）。
+- 選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。OCI Resource Manager の Terraform stack は持たない（#12）。
 - 3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない）で接続する。DB の新しい機能を使うときは付ける権限で足りるかを確かめる。
 
 ## 共通の仕組みと設定・命名
