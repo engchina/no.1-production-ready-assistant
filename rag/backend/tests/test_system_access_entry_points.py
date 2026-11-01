@@ -75,6 +75,9 @@ OTHER_ENTRY_POINTS: dict[str, str] = {
     "app.rag.representation_experiment": (
         "同梱の合成の資料を手元で分割・検索して比べるだけ。DB は読まない（設定だけ。#75）"
     ),
+    "app.rag.rerank_context_experiment": (
+        "同梱の合成の資料を手元で検索・回答・判定して比べるだけ。DB は読まない（設定だけ。#101）"
+    ),
     "app.rag.injection_quarantine_experiment": (
         "同梱の合成の根拠で回答の生成を比べるだけ。DB は読まない（設定だけ。#73）"
     ),

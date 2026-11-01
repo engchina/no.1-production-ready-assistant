@@ -41,6 +41,7 @@ PROMPT_NAME = re.compile(
 
 # 一覧に載せないプロンプトの定数と、その理由。
 EDITABLE_DEFAULT = "編集できるプロンプトの既定値(画面は編集欄で示す)"
+RERANK_CONTEXT_EXPERIMENT = "再ランクの文脈の実験 CLI だけ（#101）"
 PROBE_ONLY = "Enterprise AI の契約の確認の CLI だけ"
 UNUSED_SCREEN_JUDGE = "現行の六指標の品質評価から呼ばれない画面専用の補助判定"
 NOT_LISTED = {
@@ -59,6 +60,9 @@ NOT_LISTED = {
     "app.rag.file_processing_staging:FILE_PROCESSING_STAGING_PROMPT": "staging の確認だけ",
     "app.rag.representation_experiment:CONTEXT_PROMPT": "検索表現の比較の実験 CLI だけ（#75）",
     "app.rag.representation_experiment:QUESTIONS_PROMPT": "検索表現の比較の実験 CLI だけ（#75）",
+    "app.rag.rerank_context_experiment:DISTRACTOR_PROMPT": RERANK_CONTEXT_EXPERIMENT,
+    "app.rag.rerank_context_experiment:CONTEXT_BATCH_PROMPT": RERANK_CONTEXT_EXPERIMENT,
+    "app.rag.rerank_context_experiment:ANSWER_PROMPT": RERANK_CONTEXT_EXPERIMENT,
     # 解析の指示(ExtractionStrategy.prompt)は組み立てるが、Vision の解析を
     # 削除した後(#2042)はどのモデルにも渡していない。
     "app.rag.ingestion_strategy:BASE_EXTRACTION_REQUIREMENTS": "モデルに渡していない",

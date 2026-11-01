@@ -1,0 +1,37 @@
+{
+  "enterprise_ai": {
+    "api_path": "/responses",
+    "connections": [
+      {
+        "connection_id": "primary",
+        "endpoint": "https://api.deepseek.com",
+        "project_ocid": ""
+      }
+    ],
+    "default_embedding_model_id": "",
+    "default_judge_model_id": "deepseek-flash",
+    "default_rerank_model_id": "",
+    "default_text_model_id": "deepseek-flash",
+    "default_vision_model_id": "",
+    "max_retries": 3,
+    "models": [
+      {
+        "connection_id": "primary",
+        "display_name": "DeepSeek Flash",
+        "kind": "text",
+        "max_input_tokens": 128000,
+        "max_output_tokens": 32768,
+        "model_id": "deepseek-flash",
+        "reasoning_effort": "low",
+        "vision_enabled": false
+      }
+    ],
+    "text_payload_template": "",
+    "text_response_path": "",
+    "timeout_seconds": 600.0,
+    "vision_payload_template": "",
+    "vision_response_path": "",
+    "vlm_input_mode": "files_api"
+  },
+  "version": 7
+}
