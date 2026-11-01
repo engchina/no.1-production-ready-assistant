@@ -6532,26 +6532,11 @@ class OracleClient:
         self, embedding_bind: object, *, top_k: int, filters: dict[str, str]
     ) -> list[dict[str, object]]:
         """vector の検索 1 本の行(``_SEARCH_HIT_COLUMNS`` と ``score``。近い順)。"""
-        document_sql, chunk_sql, binds = _oracle_retrieval_where_split(filters)
-        binds.update(
-            {"embedding": embedding_bind, "min_similarity": self._settings.rag_min_similarity}
-        )
-        # backend の中の決定論の解決(メモ化した値。#828・#3218)。
-        vector_index = resolve_vector_index_adapter(self._settings)
-        fetch_clause = _oracle_vector_fetch_clause(
-            top_k=top_k, target_accuracy=vector_index.target_accuracy
+        statement, binds = vector_search_statement(
+            self._settings, embedding_bind, top_k=top_k, filters=filters
         )
         with read_rows_per_round_trip(_SEARCH_FETCH_ROWS):
-            return await self._fetch_all(
-                _vector_search_sql(
-                    select_list=f"{_SEARCH_HIT_COLUMNS}, {_vector_score_sql('embedding')} AS score",
-                    embedding_bind="embedding",
-                    document_sql=document_sql,
-                    chunk_sql=chunk_sql,
-                    fetch_clause=fetch_clause,
-                ),
-                binds,
-            )
+            return await self._fetch_all(statement, binds)
 
     async def _vector_search_with_oracle(
         self, embedding: list[float], top_k: int, filters: dict[str, str]
@@ -12970,7 +12955,7 @@ _CHUNK_SIDE_CLAUSE = re.compile(r"(?<![\w.$])(?:c|cs|r)\.")
 
 
 def _oracle_retrieval_where_split(
-    filters: dict[str, str], *, effective_period: bool = True
+    filters: dict[str, str], *, effective_period: bool = True, vector_prefilter: bool = False
 ) -> tuple[str, str, dict[str, object]]:
     """``_oracle_retrieval_where`` と同じ条件を、文書の側（``d`` だけ）と chunk の側に
     分ける(#2800)。
@@ -12980,21 +12965,61 @@ def _oracle_retrieval_where_split(
     並べると、文書の側の副問い合わせ（ナレッジベースの所属と重複の文書の正本・有効期間）を
     optimizer が行ごとの FILTER にし、近傍の検索が chunk の全件の走査になっていた(検証環境で
     1 回 9 秒 → 分けて 0.7 秒。上位の結果は同じ)。
+
+    ``vector_prefilter=True`` は active な chunk_set の条件を、vector の索引の前で絞れる形
+    (``_ACTIVE_CHUNK_PREFILTER_SQL``)にする(vector の検索だけ。#74)。
     """
-    clauses, binds = _oracle_retrieval_clauses(filters, effective_period=effective_period)
+    clauses, binds = _oracle_retrieval_clauses(
+        filters, effective_period=effective_period, vector_prefilter=vector_prefilter
+    )
     chunk = [clause for clause in clauses if _CHUNK_SIDE_CLAUSE.search(clause)]
     document = [clause for clause in clauses if not _CHUNK_SIDE_CLAUSE.search(clause)]
     return " AND ".join(document) or "1 = 1", " AND ".join(chunk) or "1 = 1", binds
 
 
+# 検索する chunk(各レシピの active な chunk_set と、レシピの無い文書の未タグの chunk)を、
+# vector の索引の前で絞れる形にした条件(vector の検索だけが使う。#74)。下の EXISTS ... OR ... と
+# 同じ行を選ぶ。相関の副問い合わせを OR で結ぶと、Oracle は条件を vector の索引の前の絞り込み
+# (PRE-FILTER)に入れられず、索引が近い順に k 件を返した後で捨てる。再取込の途中の chunk_set
+# (active でない)が問に近いと k 件のうち数件しか残らない(合成の 5 千 chunk で、索引を使った
+# 計画の再現率は文書 1 件の範囲で 0.72、絞り込みなしで最小 0.7)。
+# OR を使わず、1 つの列だけの式の IN / NOT IN にする(2 つの列を使う式・OR は PRE-FILTER に
+# 入らない。Oracle Database 23.9 で確かめた):
+# - active な chunk_set か、未タグ(印の値 ``_UNTAGGED_CHUNK_SET``。生成される chunk_set の ID は
+#   ``#`` を含まない)。
+# - レシピのある文書に残った未タグの chunk(旧 schema の残り)ではない。
+_UNTAGGED_CHUNK_SET = "#untagged"
+_ACTIVE_CHUNK_PREFILTER_SQL = f"""
+            NVL(c.chunk_set_id, '{_UNTAGGED_CHUNK_SET}') IN (
+                SELECT active_cs.chunk_set_id
+                FROM rag_chunk_sets active_cs
+                JOIN rag_document_recipes active_r
+                  ON active_r.recipe_id = active_cs.recipe_id
+                WHERE active_cs.is_active = 1
+                  AND active_cs.status = 'INDEXED'
+                UNION ALL
+                SELECT '{_UNTAGGED_CHUNK_SET}' FROM dual
+            )
+            AND c.chunk_id NOT IN (
+                SELECT residue_c.chunk_id
+                FROM rag_chunks residue_c
+                JOIN rag_document_recipes residue_r
+                  ON residue_r.document_id = residue_c.document_id
+                WHERE residue_c.chunk_set_id IS NULL
+            )
+            """
+
+
 def _oracle_retrieval_clauses(
-    filters: dict[str, str], *, effective_period: bool = True
+    filters: dict[str, str], *, effective_period: bool = True, vector_prefilter: bool = False
 ) -> tuple[list[str], dict[str, object]]:
     clauses = ["d.status = 'INDEXED'", *_oracle_access_predicates(alias="d")]
     binds = _with_tenant_bind({}, alias="d")
     # 実験: chunk_set_id を明示すると is_serving に関係なくその chunk_set だけを検索する。
     explicit_chunk_set_id = (filters.get("chunk_set_id") or "").strip()
-    if not explicit_chunk_set_id:
+    if not explicit_chunk_set_id and vector_prefilter:
+        clauses.append(_ACTIVE_CHUNK_PREFILTER_SQL)
+    elif not explicit_chunk_set_id:
         # 1 文書 1〜3 レシピ: 各レシピの直近成功出力だけを常に融合検索する。
         # 旧 schema の未タグ chunk はレシピ行がまだ無い文書に限り後方互換で採用する。
         clauses.append("""
@@ -13636,6 +13661,41 @@ def _oracle_vector_fetch_clause(*, top_k: int, target_accuracy: int) -> str:
         f"FETCH APPROX FIRST {top_k_literal} ROWS ONLY "
         f"WITH TARGET ACCURACY {target_accuracy_literal}"
     )
+
+
+def vector_search_statement(
+    settings: Settings,
+    embedding_bind: object,
+    *,
+    top_k: int,
+    filters: dict[str, str],
+    exact: bool = False,
+) -> tuple[str, dict[str, object]]:
+    """回答の検索の vector 検索 1 本の SQL と bind(``_vector_rows`` が実行するもの)。
+
+    ``exact=True`` は同じ条件・並び・類似度の下限で、近似の句だけを ``FETCH EXACT`` にした
+    基準の SQL(近似の検索の再現率を測る評価の比較用。#74)。target accuracy 100 は exact の
+    検索そのものではないため、基準には使わない。
+    """
+    document_sql, chunk_sql, binds = _oracle_retrieval_where_split(filters, vector_prefilter=True)
+    binds.update({"embedding": embedding_bind, "min_similarity": settings.rag_min_similarity})
+    if exact:
+        top_k_literal = _bounded_int_literal(top_k, name="top_k", minimum=1, maximum=1000)
+        fetch_clause = f"FETCH EXACT FIRST {top_k_literal} ROWS ONLY"
+    else:
+        # backend の中の決定論の解決(メモ化した値。#828・#3218)。
+        vector_index = resolve_vector_index_adapter(settings)
+        fetch_clause = _oracle_vector_fetch_clause(
+            top_k=top_k, target_accuracy=vector_index.target_accuracy
+        )
+    statement = _vector_search_sql(
+        select_list=f"{_SEARCH_HIT_COLUMNS}, {_vector_score_sql('embedding')} AS score",
+        embedding_bind="embedding",
+        document_sql=document_sql,
+        chunk_sql=chunk_sql,
+        fetch_clause=fetch_clause,
+    )
+    return statement, binds
 
 
 # 回答の検索の候補の列(本文・metadata と、文書・レシピの列。``_retrieved_chunk_from_row`` が読む)。
