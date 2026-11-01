@@ -26,6 +26,7 @@ import {
   useTraceDetailsLabels,
   ChatAnswer,
   ChatAnswerBody,
+  DEFAULT_CHAT_ANSWER_BODY_LABELS,
   ChatPendingTurn,
   ChatTurn,
   EmptyState,
@@ -74,7 +75,7 @@ import {
   runAnswerPassages,
 } from "@/lib/answer-review";
 import { runAnswerEvidence } from "@/lib/answer-evidence";
-import { answerStructureTitles, noticeHeading, structureAnswer } from "@/lib/answer-structure";
+import { answerStructureTitles, noticeHeading, structureAnswer, withoutFrameHeading } from "@/lib/answer-structure";
 import { chatSubmitProgressSteps } from "@/lib/chat-progress";
 import { AnswerFeedback } from "@/components/chat/AnswerFeedback";
 import { useAgentChatAttachments } from "@/components/chat/useAgentChatAttachments";
@@ -1388,7 +1389,8 @@ function clarificationBusyAction(action: ConfirmationAction): ClarificationBusyA
 function answerText(artifacts: Artifact[]): string | null {
   for (const artifact of [...artifacts].reverse()) {
     if (artifact.kind === "answer" && typeof artifact.content.text === "string") {
-      return artifact.content.text;
+      // 本文の先頭の「## 回答」は枠の見出し（ChatAnswerBody）と重なるので除く（#133）。
+      return withoutFrameHeading(artifact.content.text, DEFAULT_CHAT_ANSWER_BODY_LABELS.heading);
     }
   }
   return null;

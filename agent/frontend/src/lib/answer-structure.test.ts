@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { answerEvidenceData } from "@/lib/answer-evidence";
 import { validationReview } from "@/lib/answer-review";
-import { noticeHeading, structureAnswer, type StructuredBlock } from "@/lib/answer-structure";
+import { noticeHeading, structureAnswer, withoutFrameHeading, type StructuredBlock } from "@/lib/answer-structure";
 
 // #2328: Agent の回答を RAG のチャットと同じ節に組み立てる（表示だけ。本文の文は書き換えない）。内容は合成のデータ。
 
@@ -394,5 +394,21 @@ describe("structureAnswer の区切り線と箇条書き", () => {
     expect(kinds("期限は 30 日です。\n\n**対象**\n- 一般社員")).toEqual(["paragraph", "section:対象"]);
     // `・` は Markdown の箇条書きではない（段落の文のまま）。
     expect(kinds("期限は 30 日です。\n\n対象:\n・一般社員")).toEqual(["paragraph", "paragraph"]);
+  });
+});
+
+describe("withoutFrameHeading", () => {
+  // #133: LLM が本文を「## 回答」で始めると、枠の見出し「回答」と二重に出る。
+  it("本文の先頭の見出しが枠の見出しと同じなら、その行と続く空行を除く", () => {
+    expect(withoutFrameHeading("\n\n## 回答\n\n上限は 12,000 円です。\n\n### 根拠\n- 文書 A.pdf", "回答")).toBe(
+      "上限は 12,000 円です。\n\n### 根拠\n- 文書 A.pdf"
+    );
+    expect(withoutFrameHeading("**回答**\n上限は 12,000 円です。", "回答")).toBe("上限は 12,000 円です。");
+  });
+
+  it("文言の違う見出し・途中の見出し・見出しでない先頭の文は残す", () => {
+    expect(withoutFrameHeading("## 回答の要約\n本文", "回答")).toBe("## 回答の要約\n本文");
+    expect(withoutFrameHeading("本文\n\n## 回答\n続き", "回答")).toBe("本文\n\n## 回答\n続き");
+    expect(withoutFrameHeading("回答は次のとおりです。", "回答")).toBe("回答は次のとおりです。");
   });
 });
