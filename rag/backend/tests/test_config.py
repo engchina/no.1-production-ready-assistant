@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from pr_backend_core.config import settings_env_names
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pydantic import ValidationError
 from rag_pipeline_core.chunking import CHUNK_OVERLAP_MAX_CHARS, CHUNK_SIZE_MAX_CHARS
 
@@ -184,11 +185,14 @@ def test_oracle_client_lib_dir_switches_to_thick_mode() -> None:
 
 
 def test_embedding_dimension_is_fixed_to_oracle_vector_width() -> None:
-    """embedding 次元は Oracle VECTOR(1536, FLOAT32) と一致させる。"""
-    assert Settings().oci_genai_embedding_dim == 1536
+    """embedding 次元は Oracle のベクトル列（`EMBEDDING_DIMENSIONS`）と一致させる。
+
+    #46 より前の既定（1536）は拒否する。
+    """
+    assert Settings().oci_genai_embedding_dim == EMBEDDING_DIMENSIONS
 
     with pytest.raises(ValidationError):
-        Settings(oci_genai_embedding_dim=1024)
+        Settings(oci_genai_embedding_dim=1536)
 
 
 def test_model_settings_file_defaults_to_relative_env_sibling_path(

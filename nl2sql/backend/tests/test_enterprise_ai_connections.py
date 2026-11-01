@@ -188,7 +188,7 @@ def test_model_settings_test_calls_connection_of_tested_model(
                 },
                 "generative_ai": {
                     "embedding_model": "cohere.embed-v4.0",
-                    "embedding_dim": 1536,
+                    "embedding_dim": 1024,
                     "rerank_model": "cohere.rerank-v4.0-fast",
                 },
             },

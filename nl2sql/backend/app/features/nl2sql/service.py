@@ -79,6 +79,7 @@ from pr_system_settings.auth.visibility import (
     OTHERS_CONTENT_FORBIDDEN_MESSAGE,
     RunExecutorFilter,
 )
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_COLUMN_TYPE
 from pydantic import BaseModel, ValidationError
 from pydantic import Field as PydanticField
 
@@ -464,7 +465,11 @@ from .trace_spans import (
 logger = logging.getLogger(__name__)
 
 _CLASSIFIER_MODEL_FORMAT = "logistic_regression_coefficients_v1"
-_CLASSIFIER_VECTOR_DIMENSION = 1536
+# 分類器の特徴量は質問の埋め込み（Oracle のベクトル列と同じ次元。#46）。
+_CLASSIFIER_VECTOR_DIMENSION = EMBEDDING_DIMENSIONS
+# 埋め込みが使えないときの決定論の埋め込みの名前。次元を名前に含め、旧い次元の分類器と
+# 取り違えない。
+_DETERMINISTIC_EMBEDDING_MODEL = f"deterministic-hash-{EMBEDDING_DIMENSIONS}"
 _CLASSIFIER_COUNT_METRICS = frozenset(
     {"training_examples", "source_example_count", "category_count"}
 )
@@ -11512,7 +11517,7 @@ class Nl2SqlService:
             embedding_model=str(
                 artifact.get("embedding_model")
                 or get_settings().oci_genai_embed_model_id
-                or "deterministic-hash-1536"
+                or _DETERMINISTIC_EMBEDDING_MODEL
             ),
             vector_dimension=vector_dimension,
             persistence_mode=self._store.mode,
@@ -12183,10 +12188,10 @@ class Nl2SqlService:
             _vectors, warnings, embedding_model = self._classifier_vectors([""])
         except Exception as exc:  # pragma: no cover - defensive embedding boundary
             return (
-                "deterministic-hash-1536",
+                _DETERMINISTIC_EMBEDDING_MODEL,
                 [f"現在の classifier embedding model 判定に失敗しました: {exc}"],
             )
-        return embedding_model or "deterministic-hash-1536", list(warnings)
+        return embedding_model or _DETERMINISTIC_EMBEDDING_MODEL, list(warnings)
 
     def _classifier_probabilities(
         self, payload: Mapping[str, Any], vector: Sequence[float]
@@ -12291,7 +12296,7 @@ class Nl2SqlService:
                 "source_example_count": len(examples),
                 "category_count": len(categories),
                 "training_accuracy": round(score, 4),
-                "embedding_fallback": embedding_model == "deterministic-hash-1536",
+                "embedding_fallback": embedding_model == _DETERMINISTIC_EMBEDDING_MODEL,
             },
         }
         self._replace_classifier_artifact(artifact)
@@ -12323,7 +12328,7 @@ class Nl2SqlService:
         raw_embedding_model = meta.get("embedding_model") or meta.get("embed_model")
         embedding_model = str(raw_embedding_model or runtime_embedding_model).strip()
         if not embedding_model:
-            embedding_model = "deterministic-hash-1536"
+            embedding_model = _DETERMINISTIC_EMBEDDING_MODEL
         if raw_embedding_model:
             if embedding_model != runtime_embedding_model:
                 warnings.extend(embedding_warnings)
@@ -12421,9 +12426,9 @@ class Nl2SqlService:
     ) -> ClassifierModelInfo:
         categories = [str(item) for item in artifact.get("categories", [])]
         try:
-            vector_dimension = int(artifact.get("vector_dimension") or 1536)
+            vector_dimension = int(artifact.get("vector_dimension") or _CLASSIFIER_VECTOR_DIMENSION)
         except (TypeError, ValueError):
-            vector_dimension = 1536
+            vector_dimension = _CLASSIFIER_VECTOR_DIMENSION
         return ClassifierModelInfo(
             version=version,
             active=version == active_version,
@@ -12458,7 +12463,7 @@ class Nl2SqlService:
         try:
             model_payload = self._cached_classifier_model_payload_from_artifact(artifact)
             artifact_embedding_model = str(artifact.get("embedding_model") or "")
-            if artifact_embedding_model == "deterministic-hash-1536":
+            if artifact_embedding_model == _DETERMINISTIC_EMBEDDING_MODEL:
                 vectors = [self._deterministic_embedding(question)]
                 embedding_model = artifact_embedding_model
             else:
@@ -12902,7 +12907,7 @@ class Nl2SqlService:
                         "OCI GenAI embedding に失敗したため deterministic fallback "
                         f"を使いました: {exc}"
                     ],
-                    "deterministic-hash-1536",
+                    _DETERMINISTIC_EMBEDDING_MODEL,
                 )
             except Exception as exc:  # pragma: no cover - defensive SDK boundary
                 return (
@@ -12911,16 +12916,16 @@ class Nl2SqlService:
                         "OCI GenAI embedding に失敗したため deterministic fallback "
                         f"を使いました: {exc}"
                     ],
-                    "deterministic-hash-1536",
+                    _DETERMINISTIC_EMBEDDING_MODEL,
                 )
         return (
             [self._deterministic_embedding(text) for text in texts],
             ["OCI GenAI embedding が未設定のため deterministic fallback を使いました。"],
-            "deterministic-hash-1536",
+            _DETERMINISTIC_EMBEDDING_MODEL,
         )
 
     def _deterministic_embedding(self, text: str) -> list[float]:
-        vector = [0.0] * 1536
+        vector = [0.0] * _CLASSIFIER_VECTOR_DIMENSION
         tokens = _similarity_tokens(text)
         if not tokens:
             tokens = {text.strip() or "empty"}
@@ -13154,7 +13159,7 @@ class Nl2SqlService:
                 "HISTORY_ID VARCHAR2(64) PRIMARY KEY, "
                 "PROFILE_ID VARCHAR2(128), "
                 "QUESTION CLOB, GENERATED_SQL CLOB, FEEDBACK_RATING VARCHAR2(32), "
-                "EMBEDDING VECTOR(1536, FLOAT32), CREATED_AT TIMESTAMP WITH TIME ZONE)"
+                f"EMBEDDING {EMBEDDING_VECTOR_COLUMN_TYPE}, CREATED_AT TIMESTAMP WITH TIME ZONE)"
             ),
             (
                 f"CREATE VECTOR INDEX {index_name} "
@@ -16231,7 +16236,7 @@ class Nl2SqlService:
                 endpoint="/api/nl2sql/feedback-index/rebuild",
                 request_hint='{"execute":true}',
                 expected=(
-                    "executed=true, VECTOR(1536, FLOAT32) index が Oracle AI Database に"
+                    f"executed=true, {EMBEDDING_VECTOR_COLUMN_TYPE} index が Oracle AI Database に"
                     "作成されること。"
                 ),
                 next_action=next_action(
@@ -16444,7 +16449,7 @@ class Nl2SqlService:
         embedding_summary = (
             (
                 f"Feedback 学習は {settings.oci_genai_embed_model_id} で "
-                "1536 次元 embedding を作成できます。"
+                f"{EMBEDDING_DIMENSIONS} 次元 embedding を作成できます。"
             )
             if embedding_ready
             else (

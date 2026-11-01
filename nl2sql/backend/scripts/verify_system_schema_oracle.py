@@ -11,6 +11,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from pr_system_settings.embedding import EMBEDDING_VECTOR_COLUMN_TYPE
+
 from app.clients.oracle_runtime import get_oracle_pool_manager
 from app.features.nl2sql.oracle_adapter import oracle_connect_kwargs
 from app.features.settings.system_schema import (
@@ -82,7 +84,7 @@ def main() -> int:
             )
             cursor.execute(
                 "CREATE TABLE NL2SQL_FEEDBACK_VECTORS "
-                "(ID NUMBER PRIMARY KEY, EMBEDDING VECTOR(1536, FLOAT32))"
+                f"(ID NUMBER PRIMARY KEY, EMBEDDING {EMBEDDING_VECTOR_COLUMN_TYPE})"
             )
             cursor.execute("INSERT INTO NL2SQL_FEEDBACK_VECTORS (ID) VALUES (1)")
             connection.commit()

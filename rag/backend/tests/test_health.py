@@ -275,7 +275,7 @@ def test_readiness_oci_invalid_embedding_dim_is_degraded(
     monkeypatch: MonkeyPatch, wallet_dir: Path
 ) -> None:
     _configure_oci_readiness(
-        monkeypatch, oci_genai_embedding_dim=1024, oracle_wallet_dir=str(wallet_dir)
+        monkeypatch, oci_genai_embedding_dim=1536, oracle_wallet_dir=str(wallet_dir)
     )
 
     resp = client.get("/api/ready")
@@ -576,7 +576,7 @@ def _configure_oci_readiness(
     oracle_password: str = "oracle-password",
     oracle_client_lib_dir: str = "",
     oracle_wallet_dir: str,
-    oci_genai_embedding_dim: int = 1536,
+    oci_genai_embedding_dim: int = 1024,
     environment: str = "local",
     audit_context_hash_salt: str = "",
 ) -> None:

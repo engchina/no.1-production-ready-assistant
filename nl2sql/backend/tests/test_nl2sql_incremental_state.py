@@ -130,8 +130,8 @@ class _FeedbackEmbeddingClient:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
         for index, _text in enumerate(texts):
-            vector = [0.0] * 1536
-            vector[index % 1536] = 1.0
+            vector = [0.0] * 1024
+            vector[index % 1024] = 1.0
             vectors.append(vector)
         return vectors
 

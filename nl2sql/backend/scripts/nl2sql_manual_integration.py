@@ -20,6 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
+
 from app.features.nl2sql.models import (
     AllowedObjects,
     AnnotationApplyItem,
@@ -482,7 +484,7 @@ def _supporting_features() -> list[StepResult]:
         results.append(
             StepResult(
                 name="support_feedback_index",
-                ok=not status.executed and status.vector_dimension == 1536,
+                ok=not status.executed and status.vector_dimension == EMBEDDING_DIMENSIONS,
                 message=(
                     f"status={status.status}; indexable={status.indexable_count}; "
                     f"backend={status.vector_backend}; ddl={len(status.ddl)}"
@@ -515,7 +517,7 @@ def _feedback_index_smoke(*, include_bad: bool) -> StepResult:
     except Exception as exc:
         return StepResult(name="feedback_index_rebuild", ok=False, message=str(exc))
     ok = (
-        data.vector_dimension == 1536
+        data.vector_dimension == EMBEDDING_DIMENSIONS
         and data.vector_backend == "oracle_26ai"
         and data.executed
         and not data.warnings
@@ -720,7 +722,8 @@ def _legacy_feedback_vector_smoke(
         results.append(
             StepResult(
                 name="legacy_feedback_rebuild",
-                ok=rebuild.vector_dimension == 1536 and rebuild.vector_backend == "oracle_26ai",
+                ok=rebuild.vector_dimension == EMBEDDING_DIMENSIONS
+                and rebuild.vector_backend == "oracle_26ai",
                 message=(
                     f"execute={execute_index}; executed={rebuild.executed}; "
                     f"runtime={rebuild.runtime}; status={rebuild.status}; "

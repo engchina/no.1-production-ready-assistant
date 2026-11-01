@@ -1,7 +1,7 @@
 """埋め込み / 再ランクのクライアント（設定画面のモデルのテスト用。#8）。
 
 接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の `text-embedding-v4`
-（Oracle の `VECTOR(1536, FLOAT32)` に合わせ `dimensions=1536` を必ず送る）と `qwen3-rerank`。
+（Oracle のベクトル列に合わせ `dimensions=EMBEDDING_DIMENSIONS` を必ず送る。#46）と `qwen3-rerank`。
 既定の埋め込み / 再ランクのモデル（登録モデルの種類 embedding / rerank。#45）の接続の endpoint と
 API key で呼び、再ランクは `/compatible-mode/` を `/compatible-api/` に読み替える。
 LLM/VLM には使わない。
@@ -53,7 +53,7 @@ class OciGenAiClient:
         *,
         input_type: EmbeddingInputType = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
-        """テキストを `oci_genai_embedding_dim`（1536）次元のベクトルに埋め込む。
+        """テキストを `oci_genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元のベクトルに埋め込む。
 
         `input_type` は呼び出し側の互換のために受け取るだけ（OpenAI 互換の `/embeddings`
         に query / document の区別は無い）。

@@ -1,6 +1,6 @@
 """Oracle AI Database クライアント。
 
-AI Vector Search によるベクトル検索（VECTOR(1536, FLOAT32)）と
+AI Vector Search によるベクトル検索（`EMBEDDING_VECTOR_COLUMN_TYPE`。#46）と
 Oracle Text による keyword retrieval を担う。外部ベクトル DB は使わない。
 """
 
@@ -35,6 +35,7 @@ from pr_backend_core.oracle_pool import (
     recover_pool_error,
 )
 from pr_backend_core.oracle_session import init_oracle_session
+from pr_system_settings.embedding import EMBEDDING_VECTOR_COLUMN_TYPE
 from pydantic import ValidationError
 from rag_engine.resources.tracing import observe_call
 from rag_engine.retrieval.search_stages import TEXT_SEARCH_STAGE, VECTOR_SEARCH_STAGE
@@ -10567,7 +10568,7 @@ class OracleClient:
         return _SHARED_ORACLE_POOL
 
     def _validate_embedding_width(self, embedding: list[float], label: str) -> None:
-        """Oracle VECTOR(1536, FLOAT32) に保存/検索できる幅か検証する。"""
+        """Oracle の `EMBEDDING_VECTOR_COLUMN_TYPE` の列に保存/検索できる幅か検証する。"""
         expected_dim = self._settings.oci_genai_embedding_dim
         if len(embedding) != expected_dim:
             raise ValueError(
@@ -15802,7 +15803,7 @@ def oracle_vector_index_create_sql(
 
 
 def oracle_vector_schema_sql(table_name: str = "rag_chunks") -> str:
-    """Oracle AI Database VECTOR(1536, FLOAT32) + HNSW index の DDL を返す。
+    """Oracle AI Database の `EMBEDDING_VECTOR_COLUMN_TYPE` の列 + HNSW index の DDL を返す。
 
     HNSW 索引は既定の検索精度の推奨ビルドで作る(#1990)。既存の環境の索引は作り直さない
     (システムテーブルの更新は無い索引だけを作る。再作成は画面の SQL を DBA が適用する)。"""
@@ -15817,7 +15818,7 @@ CREATE TABLE {table_name} (
     chunk_text      CLOB NOT NULL,
     search_text     CLOB NOT NULL,
     metadata_json   JSON,
-    embedding       VECTOR(1536, FLOAT32),
+    embedding       {EMBEDDING_VECTOR_COLUMN_TYPE},
     chunk_set_id    VARCHAR2(64),
     created_at      TIMESTAMP DEFAULT SYSTIMESTAMP
 );

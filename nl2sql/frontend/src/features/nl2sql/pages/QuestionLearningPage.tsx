@@ -1207,7 +1207,7 @@ function ModelTrainPanel({
       <div className="grid gap-3 lg:grid-cols-3">
         <CompactFact label={t("learning.classifier.examples")} value={formatNumber(trainingData?.total_examples ?? status?.example_count ?? 0)} />
         <CompactFact label={t("learning.classifier.model")} value={status?.embedding_model || "cohere.embed-v4.0"} />
-        <CompactFact label={t("learning.classifier.dimension")} value={formatNumber(status?.vector_dimension ?? 1536)} />
+        <CompactFact label={t("learning.classifier.dimension")} value={status ? formatNumber(status.vector_dimension) : "-"} />
       </div>
       {/* 埋め込みモデルは固定（表示だけ）。選べないことを無効の選択欄で示す。モデル名が入る幅（#613）。 */}
       <SelectField

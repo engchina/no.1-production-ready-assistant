@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_COLUMN_TYPE
 from pr_system_settings.system_schema import (
     IGNORED_APPLY_CODES,
     IGNORED_DROP_CODES,
@@ -56,9 +57,22 @@ _ADD_CONSTRAINT_PATTERN = re.compile(
 
 @dataclass(frozen=True, slots=True)
 class MigrationArtifact:
+    """版ごとの migration の SQL ファイル。
+
+    `destructive_note` は、データを消す migration の印と、消えるデータ・適用の前にすることの説明
+    （#46。RAG / Agent の #619 と同じ）。空でない migration が未適用なら、作成・更新（画面・
+    `nl2sql_system_schema --initialize`）は明示の承認（`allow_destructive`）が無ければ止まる。
+    checksum（ファイルの中身だけから作る）には含めない。
+    """
+
     version: int
     filename: str
     description: str
+    destructive_note: str = ""
+
+    @property
+    def destructive(self) -> bool:
+        return bool(self.destructive_note)
 
     @property
     def path(self) -> Path:
@@ -143,6 +157,19 @@ MIGRATIONS: tuple[MigrationArtifact, ...] = (
     MigrationArtifact(23, "023_admin_audit_log.sql", "durable DB admin execution audit"),
     MigrationArtifact(
         24, "024_db_admin_chat_conversations.sql", "DB admin chat conversation history"
+    ),
+    MigrationArtifact(
+        25,
+        "025_embedding_dimensions_1024.sql",
+        "embedding vector columns rebuilt for 1024 dimensions",
+        destructive_note=(
+            f"埋め込みのベクトルの列の次元が {EMBEDDING_DIMENSIONS} でなければ、"
+            "NL2SQL_ONTOLOGY_NODES.EMBEDDING の列と索引（IX_NL2SQL_ONT_NODE_EMBED）を削除して"
+            f"{EMBEDDING_VECTOR_COLUMN_TYPE} で作り直し、feedback の学習の索引の表"
+            "（NL2SQL_FEEDBACK_VECTORS）を削除します。保存済みのベクトルはすべて消えます。"
+            "オントロジーのノード・業務プロファイル・履歴は削除しません。適用の後に、"
+            "オントロジーを構築し直して公開し、feedback の学習を使うなら索引を再構築してください。"
+        ),
     ),
 )
 
@@ -419,6 +446,25 @@ def managed_columns_from_migrations() -> dict[str, tuple[str, ...]]:
 MANAGED_COLUMNS: dict[str, tuple[str, ...]] = managed_columns_from_migrations()
 
 
+def pending_destructive_migrations(
+    status: str, pending_versions: Sequence[int]
+) -> list[dict[str, str]]:
+    """未適用の、データを消す migration（#46）。
+
+    未初期化（`missing`）の DB は表が空のため、消えるデータは無い。それ以外で未適用・checksum
+    不一致のものを、作成・更新の前に承認させる。
+    """
+
+    if status == "missing":
+        return []
+    pending = set(pending_versions)
+    return [
+        {"name": migration.filename.removesuffix(".sql"), "description": migration.destructive_note}
+        for migration in MIGRATIONS
+        if migration.destructive and migration.version in pending
+    ]
+
+
 def classify_system_schema_status(
     objects: set[tuple[str, str]],
     applied_checksums: dict[int, str],
@@ -447,6 +493,8 @@ class SystemSchemaManager(SystemSchemaManagerBase):
     migration_key_column = "VERSION_NO"
     managed_tables = MANAGED_TABLES
     managed_columns = MANAGED_COLUMNS
+    # データを消す未適用の migration は、承認が無ければ作成・更新で当てない（#46）。
+    guards_destructive_migrations = True
     recreate_confirmation = RECREATE_CONFIRMATION
     log_prefix = "nl2sql"
     lock_timeout_guidance = (
@@ -633,6 +681,9 @@ class SystemSchemaManager(SystemSchemaManagerBase):
             "schema_head": MIGRATIONS[-1].version,
             "applied_versions": sorted(matching_versions),
             "pending_versions": pending_versions,
+            "pending_destructive_migrations": pending_destructive_migrations(
+                status, pending_versions
+            ),
             "expected_object_count": len(expected),
             "existing_object_count": len(existing),
             "expected_table_count": len(MANAGED_TABLES),

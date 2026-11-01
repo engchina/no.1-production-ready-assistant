@@ -32,8 +32,8 @@
 
 ## 2. 不変条件(壊してはいけない)
 
-1. **Camp B**: 文書↔KB は N:N、chunk は共有(不要に複製しない)、**embedding は OCI Cohere v4 / 1536 グローバル固定**。
-   チャンク構成は **同一 1536 空間内**で chunk 集合を増やすだけ。per-KB embedding / per-KB 物理表(Camp A)にしない。
+1. **Camp B**: 文書↔KB は N:N、chunk は共有(不要に複製しない)、**embedding は 1024 次元でグローバル固定**（#46 より前は Cohere v4 / 1536）。
+   チャンク構成は **同一 1024 空間内**で chunk 集合を増やすだけ。per-KB embedding / per-KB 物理表(Camp A)にしない。
 2. **確定スタック**: OCI Enterprise AI / OCI GenAI Cohere / Oracle AI Database。外部ベクトル DB・別 LLM provider を入れない。
 3. **VECTOR 索引は単一・共有**: `rag_chunks.embedding` の HNSW は 1 本のまま。`chunk_set_id` は**フィルタ列**であって索引を分割しない。
 4. **版管理 DDL は自動変更しない**: スキーマ追加は DDL artifact(下記)へ明示追加し、`requires_reprovision` 扱い。
@@ -166,7 +166,7 @@ CREATE INDEX rag_kb_cs_bind_cs_idx ON rag_kb_chunk_set_bindings (chunk_set_id);
 - 同一取込設定の複数 KB に属する文書 → chunk_set を**共有**(複製ゼロ・refcount=KB 数)。
 - chunk 軸が違う KB → **別 chunk_set**(差分複製)、各 KB は自分の chunk_set を検索。
 - KB を 1 つ外しても、他 KB 参照中の chunk_set は **GC されない**。参照 0 で初めて GC。
-- embedding は 1536 固定・索引は単一のまま。検索品質ゲートが劣化しない。
+- embedding は 1024 固定・索引は単一のまま。検索品質ゲートが劣化しない。
 - VLM parse はキャッシュ再利用で二重実行しない。
 - すべて確定スタック内・外部ベクトル DB なし。決定論ユニットは CI 緑のまま。
 

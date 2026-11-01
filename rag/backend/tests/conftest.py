@@ -337,7 +337,7 @@ def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     settings.rag_parser_docling_enabled = False
     settings.rag_parser_unstructured_enabled = True
     settings.oci_genai_embedding_model = "cohere.embed-v4.0"
-    settings.oci_genai_embedding_dim = 1536
+    settings.oci_genai_embedding_dim = 1024
     settings.oci_genai_rerank_model = "cohere.rerank-v4.0-fast"
     settings.rag_pdf_segmentation_enabled = True
     settings.rag_pdf_max_pages_per_segment = 10

@@ -26,8 +26,8 @@ function databaseSettingsFixture(overrides: Record<string, unknown> = {}) {
     has_password: true,
     has_wallet_password: false,
     readiness: "ok",
-    embedding_dimension: 1536,
-    vector_column: "VECTOR(1536, FLOAT32)",
+    embedding_dimension: 1024,
+    vector_column: "VECTOR(1024, FLOAT32)",
     config_source: "runtime",
     ...overrides,
   };
@@ -134,7 +134,7 @@ async function mockNl2sqlSettingsApi(page: Page) {
     };
     const details =
       request.target_type === "embedding"
-        ? { vector_dim: 1536, input_count: 1 }
+        ? { vector_dim: 1024, input_count: 1 }
         : request.target_type === "rerank"
           ? { ranked_count: 1, top_score: 0.78962326 }
           : request.target_type === "enterprise_vision"
@@ -534,7 +534,7 @@ test("システム設定のテスト成功結果を共通パネルで表示す�
     .getByText("text-embedding-v4 の設定を確認しました。", { exact: true })
     .locator("xpath=ancestor::*[@data-settings-test-result][1]");
   await expect(embeddingResult).toContainText("vector_dim");
-  await expect(embeddingResult).toContainText("1536");
+  await expect(embeddingResult).toContainText("1024");
 
   await page
     .getByRole("button", { name: "qwen3-rerank をテスト", exact: true })

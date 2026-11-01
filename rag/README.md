@@ -13,8 +13,8 @@ A production-ready RAG reference implementation covering data ingestion, chunkin
 | レイヤー | 採用 |
 |---|---|
 | LLM / VLM | **OCI Enterprise AI**（OCI Generative AI の chat API は使わない） |
-| 埋め込み / リランク | **OCI Generative AI**（Cohere Embed v4 = 1536次元 / Rerank v4 fast） |
-| ベクトル検索 / DB | **Oracle AI Database** / Oracle AI Vector Search（`VECTOR(1536, FLOAT32)`）+ Oracle Text |
+| 埋め込み / リランク | **OCI Generative AI**（既定は `text-embedding-v4` の 1024 次元。次元は `pr_system_settings.embedding` の `EMBEDDING_DIMENSIONS` が正本。#46） |
+| ベクトル検索 / DB | **Oracle AI Database** / Oracle AI Vector Search（`VECTOR(1024, FLOAT32)`）+ Oracle Text |
 | バックエンド | Python 3.12 + **FastAPI** + Pydantic v2 + uv |
 | フロントエンド | **Vite + React Router** + TypeScript + Tailwind v4 + shadcn/ui + TanStack Query + Zustand |
 | ストレージ | OCI Object Storage |

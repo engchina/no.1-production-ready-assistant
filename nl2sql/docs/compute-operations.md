@@ -85,6 +85,19 @@ HTTP を使うローカルの構成では `PLATFORM_ENVIRONMENT=local` を明示
 
 ## Updating an Existing Compute Deployment
 
+### Rebuilding the embedding vector columns for 1024 dimensions (#46)
+
+Migration `025_embedding_dimensions_1024` rebuilds `NL2SQL_ONTOLOGY_NODES.EMBEDDING`
+(and its HNSW index) as `VECTOR(1024, FLOAT32)` and drops `NL2SQL_FEEDBACK_VECTORS`
+when their dimension is not 1024. It deletes the stored vectors, so
+`nl2sql_system_schema --initialize` stops until it is approved with
+`--allow-destructive` (or the confirmation dialog of the system table screen).
+After it, rebuild and publish the ontology of each business profile, rebuild the
+feedback index if it is used, and retrain the question classifier. The full
+procedure (including the `PLATFORM_OCI_GENAI_EMBEDDING_DIM` change in
+`platform/.env`) is in [platform/README.md](../../platform/README.md)
+「既存環境の更新手順（#46 埋め込みの次元を 1536 から 1024 に）」.
+
 ### SQL generation by OCI Enterprise AI only (#7)
 
 NL2SQL now generates SQL only by calling OCI Enterprise AI directly

@@ -248,7 +248,7 @@ class _FakeOntologyEmbeddingClient:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         return [
-            [1.0 if index == (len(text) % 8) else 0.0 for index in range(1536)] for text in texts
+            [1.0 if index == (len(text) % 8) else 0.0 for index in range(1024)] for text in texts
         ]
 
 
@@ -1502,7 +1502,7 @@ def test_ontology_embedding_uses_oci_boundary_and_is_persisted_with_nodes(
     nodes = store.list_nodes(created.session.ontology_revision_id)
     embedded = [item for item in nodes if item.get("embedding")]
     assert embedded
-    assert all(len(item["embedding"]) == 1536 for item in embedded)
+    assert all(len(item["embedding"]) == 1024 for item in embedded)
 
 
 def test_profile_view_patch_only_updates_business_metadata_and_checks_etag(

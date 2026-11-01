@@ -26,7 +26,7 @@
 
 - Oracle AI Vector Search
   - 参考点: relational metadata と vector index を同一 Oracle DB 内に置き、権限・監査・検索を統合する。
-  - 本プロジェクトでの採用: ontology node embedding は `VECTOR(1536, FLOAT32)` に保存し、`VECTOR_DISTANCE(..., COSINE)` で profile-scoped retrieval を行う。
+  - 本プロジェクトでの採用: ontology node embedding は `VECTOR(1024, FLOAT32)` に保存し、`VECTOR_DISTANCE(..., COSINE)` で profile-scoped retrieval を行う。
   - 導入しないもの: pgvector、Qdrant、Milvus、Pinecone などの外部 vector DB。
 
 ## Agentic / Query Planning

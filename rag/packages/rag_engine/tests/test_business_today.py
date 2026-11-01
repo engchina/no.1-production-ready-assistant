@@ -93,7 +93,7 @@ def test_search_decides_as_of_once_for_every_downstream_query(timezone: str, req
     settings = replace(
         get_settings(environ={}, dotenv_path=None),
         timezone=timezone,
-        embedding_output_dimensions=1536,
+        embedding_output_dimensions=1024,
         image_embedding_enabled=False,
     )
     seen: list[str] = []
@@ -123,7 +123,7 @@ def test_search_decides_as_of_once_for_every_downstream_query(timezone: str, req
             chunk_run_id="run-1",
             retrieval_queries=["質問"],
             settings=settings,
-            query_embedder=lambda *_: [0.1] * 1536,
+            query_embedder=lambda *_: [0.1] * 1024,
             classification_filter=classification_filter_from_values(as_of=requested),
         )
 

@@ -30,7 +30,6 @@ class FakeSettings(BaseModel):
     oracle_client_lib_dir: str = ""
     oracle_wallet_dir: str = ""
     oracle_wallet_password: str = ""
-    oci_genai_embedding_dim: int = 1536
     oracle_db_test_timeout_seconds: float = 15.0
 
     @property

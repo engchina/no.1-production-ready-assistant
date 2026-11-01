@@ -80,7 +80,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         self.assertFalse(candidates[0].reserved_by)
 
     def test_search_result_includes_reserved_candidates_with_their_reason(self):
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         pool = [_stored_chunk(f"uid-{i}", f"chunk-{i}", page_start=i, chunk_seq=i) for i in range(1, 8)]
         common = [(f"uid-{i}", 0.1 + i * 0.01) for i in range(1, 6)]
         rankings = iter([common, common, [("uid-7", 0.05), ("uid-6", 0.06)] + common])
@@ -97,7 +97,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 chunk_run_id="run-1",
                 retrieval_queries=["原質問", "派生1", "派生2"],
                 settings=settings,
-                query_embedder=lambda *_: [0.1] * 1536,
+                query_embedder=lambda *_: [0.1] * 1024,
                 candidate_limit=5,
             )
         ids = {c.chunk_id: c for c in result.child_chunks}
@@ -107,7 +107,7 @@ class AdbVectorStoreTests(unittest.TestCase):
 
     def test_vector_only_queries_skip_text_search_but_keep_vector_search(self):
         # HyDE の仮説文は embedding だけに使い、Oracle Text の CONTAINS には使わない (#911)。
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         pool = [_stored_chunk("uid-1", "chunk-1", page_start=1, chunk_seq=1)]
         with (
             patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value="adb"),
@@ -123,7 +123,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 retrieval_queries=["原質問 出力", "仮説文 出力 条件", "派生 出力"],
                 vector_only_queries=["仮説文 出力 条件"],
                 settings=settings,
-                query_embedder=lambda *_: [0.1] * 1536,
+                query_embedder=lambda *_: [0.1] * 1024,
                 candidate_limit=5,
             )
         self.assertEqual(vector.call_count, 3)
@@ -145,14 +145,14 @@ class AdbVectorStoreTests(unittest.TestCase):
             yield object()
             observed.append(("end", operation, name))
 
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         pool = [_stored_chunk("uid-1", "chunk-1", page_start=1, chunk_seq=1)]
 
         def search(**kwargs):
             return search_adb_hybrid_chunks(
                 chunk_run_id="run-1",
                 settings=settings,
-                query_embedder=lambda *_: [0.1] * 1536,
+                query_embedder=lambda *_: [0.1] * 1024,
                 candidate_limit=5,
                 **kwargs,
             )
@@ -193,7 +193,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_text_search_limit_counts_only_text_candidates(self):
         # 上限は vector 専用の検索文を除いてから数える (#921)。
         settings = replace(
-            get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False, text_search_query_variant_limit=2
+            get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False, text_search_query_variant_limit=2
         )
         pool = [_stored_chunk("uid-1", "chunk-1", page_start=1, chunk_seq=1)]
         with (
@@ -210,14 +210,14 @@ class AdbVectorStoreTests(unittest.TestCase):
                 retrieval_queries=["原質問 出力", "仮説文 出力 条件", "派生 出力 手順"],
                 vector_only_queries=["仮説文 出力 条件"],
                 settings=settings,
-                query_embedder=lambda *_: [0.1] * 1536,
+                query_embedder=lambda *_: [0.1] * 1024,
                 candidate_limit=5,
             )
         self.assertEqual(text.call_count, 2)
         self.assertTrue(any("派生" in call.args[2] for call in text.call_args_list))
 
     def test_repeated_search_in_same_scope_loads_chunks_and_checks_embeddings_once(self):
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         pool = [_stored_chunk("uid-1", "chunk-1", page_start=1, chunk_seq=1)]
         with (
             patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value="adb"),
@@ -230,11 +230,11 @@ class AdbVectorStoreTests(unittest.TestCase):
         ):
             for query in ("質問", "書き換えた質問"):
                 result = search_adb_hybrid_chunks(
-                    chunk_run_id="run-1", retrieval_queries=[query], settings=settings, query_embedder=lambda *_: [0.1] * 1536
+                    chunk_run_id="run-1", retrieval_queries=[query], settings=settings, query_embedder=lambda *_: [0.1] * 1024
                 )
                 self.assertEqual([c.chunk_id for c in result.child_chunks], ["chunk-1"])
             search_adb_hybrid_chunks(
-                chunk_run_id="run-2", retrieval_queries=["質問"], settings=settings, query_embedder=lambda *_: [0.1] * 1536
+                chunk_run_id="run-2", retrieval_queries=["質問"], settings=settings, query_embedder=lambda *_: [0.1] * 1024
             )
         self.assertEqual((load.call_count, count.call_count), (2, 2))  # run-1 で1回、run-2 で1回
 
@@ -311,7 +311,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_hybrid_search_uses_all_queries_for_vector_and_text_with_limit(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             image_embedding_enabled=False,
             text_search_tokenizer_latin_stemmer="none",
             text_search_query_variant_limit=2,
@@ -321,7 +321,7 @@ class AdbVectorStoreTests(unittest.TestCase):
 
         def query_embedder(query, settings_value):
             embedded_queries.append(query)
-            return [0.1] * 1536
+            return [0.1] * 1024
 
         with (
             patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value=object()),
@@ -365,7 +365,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         """組み立て済みの Oracle Text 式（対象語の部分語）は質問文の変種とは別に検索し、派生と同じ重みで融合する (#730)。"""
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             image_embedding_enabled=False,
             text_search_tokenizer_latin_stemmer="none",
         )
@@ -392,7 +392,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 retrieval_queries=["original question"],
                 settings=settings,
                 candidate_limit=5,
-                query_embedder=lambda query, settings_value: [0.1] * 1536,
+                query_embedder=lambda query, settings_value: [0.1] * 1024,
                 extra_text_queries=("{基準月}", "{基準月}"),
             )
 
@@ -403,7 +403,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_hybrid_search_adds_optional_image_vector_channel(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             image_embedding_enabled=True,
             image_embedding_rrf_weight=0.5,
             text_search_tokenizer_latin_stemmer="none",
@@ -411,7 +411,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         connection = object()
 
         def query_embedder(query, settings_value):
-            return [0.1] * 1536
+            return [0.1] * 1024
 
         with (
             patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value=object()),
@@ -450,7 +450,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_metadata_filter_sql_is_applied_before_vector_row_limit(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
         conditions = parse_inquiry_conditions("販売管理操作説明書.pdf の拠点名を変更する方法を教えてください。")
         connection = _CaptureConnection()
@@ -465,7 +465,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         adb_vector_store._vector_search(
             connection,
             "abcdef-1234567890ab",
-            [0.1] * 1536,
+            [0.1] * 1024,
             settings,
             ["docling"],
             5,
@@ -536,7 +536,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         """業務語に一致する chunk は channel の加点で上位に寄り、一致しない chunk も候補に残る (#848)。"""
         from rag_engine.retrieval.inquiry_conditions import InquiryConditionParse
 
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         plain = _stored_chunk("uid-1", "chunk-1", page_start=1, chunk_seq=1)
         matched = _stored_chunk(
             "uid-2", "chunk-2", page_start=2, chunk_seq=2, metadata={"retrieval_profile": {"business_domains": ["販売管理"]}}
@@ -559,7 +559,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 chunk_run_id="run-1",
                 retrieval_queries=["質問"],
                 settings=settings,
-                query_embedder=lambda *_: [0.1] * 1536,
+                query_embedder=lambda *_: [0.1] * 1024,
                 inquiry_conditions=conditions,
             )
         self.assertEqual([c.chunk_id for c in result.child_chunks], ["chunk-2", "chunk-1"])
@@ -628,7 +628,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_knowledge_base_scope_searches_latest_active_documents_with_classification_filter(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
         connection = _CaptureConnection()
         classification_filter = classification_filter_from_values(large_category="販売管理")
@@ -636,7 +636,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         adb_vector_store._vector_search(
             connection,
             "",
-            [0.1] * 1536,
+            [0.1] * 1024,
             settings,
             ["docling"],
             5,
@@ -652,14 +652,14 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_image_vector_search_filters_by_embedding_modality(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
         connection = _CaptureConnection()
 
         adb_vector_store._vector_search(
             connection,
             "abcdef-1234567890ab",
-            [0.1] * 1536,
+            [0.1] * 1024,
             settings,
             ["docling"],
             5,
@@ -673,7 +673,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_knowledge_base_scope_does_not_bind_chunk_run_id_without_placeholder(self):
         settings = replace(
             get_settings(),
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
         classification_filter = classification_filter_from_values(large_category="販売管理")
 
@@ -682,7 +682,7 @@ class AdbVectorStoreTests(unittest.TestCase):
             count_connection,
             "",
             settings.embedding_model,
-            1536,
+            1024,
             ["docling"],
             retrieval_scope=RETRIEVAL_SCOPE_KNOWLEDGE_BASE,
             classification_filter=classification_filter,
@@ -691,7 +691,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         adb_vector_store._vector_search(
             vector_connection,
             "",
-            [0.1] * 1536,
+            [0.1] * 1024,
             settings,
             ["docling"],
             5,
@@ -775,14 +775,14 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             embedding_batch_size=1,
         )
         embed_calls = []
 
         def embedder(texts, settings_value, *, input_type):
             embed_calls.append((list(texts), settings_value, input_type))
-            return [[float(len(embed_calls))] * 1536 for _ in texts]
+            return [[float(len(embed_calls))] * 1024 for _ in texts]
 
         result = save_chunk_run_embeddings(
             chunk_run,
@@ -814,7 +814,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         )
         self.assertEqual(len(connection.chunk_rows), 3)
         self.assertEqual(len(connection.embedding_rows), 1)
-        self.assertEqual(connection.embedding_rows[0]["embedding_dimensions"], 1536)
+        self.assertEqual(connection.embedding_rows[0]["embedding_dimensions"], 1024)
 
     def test_default_query_embedder_batches_all_queries_in_one_call(self):
         # 既定の embed_query のままなら検索文をまとめて 1 回で embedding する (#876)。
@@ -880,7 +880,7 @@ class AdbVectorStoreTests(unittest.TestCase):
 
     def test_save_chunk_run_embeddings_rejects_engine_without_active_children(self):
         connection = _FakeConnection()
-        settings = replace(get_settings(), embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_output_dimensions=1024)
 
         result = save_chunk_run_embeddings(
             _chunk_run(),
@@ -920,17 +920,17 @@ class AdbVectorStoreTests(unittest.TestCase):
                 get_settings(),
                 output_dir=Path(tmp),
                 embedding_model="cohere.embed-v4.0",
-                embedding_output_dimensions=1536,
+                embedding_output_dimensions=1024,
                 embedding_batch_size=4,
                 image_embedding_enabled=True,
             )
 
             def embedder(texts, settings_value, *, input_type):
-                return [[1.0] * 1536 for _ in texts]
+                return [[1.0] * 1024 for _ in texts]
 
             def image_embedder(paths, settings_value, *, texts, input_type):
                 image_calls.append((list(paths), list(texts), input_type))
-                return [[2.0] * 1536 for _ in paths]
+                return [[2.0] * 1024 for _ in paths]
 
             result = save_chunk_run_embeddings(
                 chunk_run,
@@ -1001,7 +1001,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
 
         def failing_embedder(texts, settings_value, *, input_type):
@@ -1029,7 +1029,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             embedding_batch_size=1,
         )
         embedded = []
@@ -1038,7 +1038,7 @@ class AdbVectorStoreTests(unittest.TestCase):
             if "new retrieval" in texts:
                 raise TimeoutError("embedding timeout")
             embedded.extend(texts)
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         result = save_chunk_run_embeddings(chunk_run, settings, embedder=flaky_embedder, connection=connection)
 
@@ -1061,7 +1061,7 @@ class AdbVectorStoreTests(unittest.TestCase):
 
         def embedder(texts, settings_value, *, input_type):
             calls.append(list(texts))
-            return [[0.2] * 1536 for _ in texts]
+            return [[0.2] * 1024 for _ in texts]
 
         result = save_chunk_run_embeddings(chunk_run, settings, embedder=embedder, connection=resumed)
 
@@ -1078,14 +1078,14 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             embedding_batch_size=8,
         )
 
         def embedder(texts, settings_value, *, input_type):
             if "new retrieval" in texts:
                 raise ValueError("input is too long")
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         result = save_chunk_run_embeddings(chunk_run, settings, embedder=embedder, connection=connection)
 
@@ -1105,10 +1105,10 @@ class AdbVectorStoreTests(unittest.TestCase):
         # MERGE だけでは、外した engine の chunk が active のまま検索に残り、古い hash の vector も消えない (#462)。
         chunk_run = _chunk_run()
         connection = _FakeConnection()
-        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1024)
 
         def embedder(texts, settings_value, *, input_type):
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         result = save_chunk_run_embeddings(chunk_run, settings, preferred_engine_ids=["docling"], embedder=embedder, connection=connection)
 
@@ -1132,11 +1132,11 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_save_clears_chunk_cache_after_commit_and_after_partial_failure(self):
         # 冒頭の clear だけでは、commit までに走った検索が保存前の chunk 一覧を 120 秒 cache し直す (#465)。
         chunk_run = _chunk_run()
-        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1024)
 
         def searching_embedder(texts, settings_value, *, input_type):
             adb_vector_store._pool_cache["concurrent-search"] = (0.0, [])
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         def failing_embedder(texts, settings_value, *, input_type):
             adb_vector_store._pool_cache["concurrent-search"] = (0.0, [])
@@ -1173,12 +1173,12 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
             image_embedding_enabled=False,
         )
 
         def embedder(texts, settings_value, *, input_type):
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         for has_column, expected in ((True, "text"), (False, None)):
             with self.subTest(has_modality_column=has_column):
@@ -1206,10 +1206,10 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_resaving_an_older_chunk_run_keeps_the_newer_published_run(self):
         # 保存のたびに latest を上書きすると、古い run の再保存で検索対象が黙って巻き戻る (#460)。
         chunk_run = _chunk_run()
-        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1024)
 
         def embedder(texts, settings_value, *, input_type):
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         cases = {
             "newer run stays published": (("newer-run", "9999-01-01T00:00:00+00:00"), "newer-run", [0]),
@@ -1236,10 +1236,10 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_save_deactivates_the_documents_other_chunk_runs(self):
         # 公開中 run 以外が active のまま残ると、active が公開状態を表さなくなる (#1062)。
         chunk_run = _chunk_run()
-        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_model="cohere.embed-v4.0", embedding_output_dimensions=1024)
 
         def embedder(texts, settings_value, *, input_type):
-            return [[0.1] * 1536 for _ in texts]
+            return [[0.1] * 1024 for _ in texts]
 
         cases = {
             "保存した run を公開": (None, chunk_run.chunk_run_id),
@@ -1287,7 +1287,7 @@ class AdbVectorStoreTests(unittest.TestCase):
             settings = replace(
                 get_settings(),
                 output_dir=Path(tmp),
-                embedding_output_dimensions=1536,
+                embedding_output_dimensions=1024,
                 image_embedding_enabled=True,
             )
             result = save_chunk_run_embeddings(
@@ -1309,13 +1309,14 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1024,
+            # Oracle の列（1024）と違う次元。#46 より前の既定の 1536 で設定したまま。
+            embedding_output_dimensions=1536,
         )
         embed_calls = []
 
         def embedder(texts, settings_value, *, input_type):
             embed_calls.append(texts)
-            return [[0.0] * 1024 for _ in texts]
+            return [[0.0] * 1536 for _ in texts]
 
         result = save_chunk_run_embeddings(
             chunk_run,
@@ -1329,7 +1330,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         self.assertEqual(result.error_count, 2)
         self.assertEqual(embed_calls, [])
         self.assertEqual(connection.rollback_count, 1)
-        self.assertIn("expects 1536 dimensions", result.errors[0])
+        self.assertIn("expects 1024 dimensions", result.errors[0])
 
     def test_format_embedding_save_result_lists_created_skipped_and_errors(self):
         result = adb_vector_store.EmbeddingSaveResult(
@@ -1364,10 +1365,10 @@ class AdbVectorStoreTests(unittest.TestCase):
             error_count=0,
             published=True,
             embedding_model="cohere.embed-v4.0",
-            embedding_dimensions=1536,
+            embedding_dimensions=1024,
         )
         text = format_embedding_save_result(published)
-        self.assertIn("embedding モデル（model）: cohere.embed-v4.0 / 1536 次元（dimensions）", text)
+        self.assertIn("embedding モデル（model）: cohere.embed-v4.0 / 1024 次元（dimensions）", text)
         self.assertIn("knowledge base 公開（published）: この run を検索対象として公開しました", text)
         kept = adb_vector_store.EmbeddingSaveResult(
             source_run_id="abcdef",
@@ -1395,7 +1396,7 @@ class AdbVectorStoreTests(unittest.TestCase):
         settings = replace(
             get_settings(),
             embedding_model="cohere.embed-v4.0",
-            embedding_output_dimensions=1536,
+            embedding_output_dimensions=1024,
         )
 
         status = load_chunk_embedding_status(
@@ -1420,7 +1421,7 @@ class AdbVectorStoreTests(unittest.TestCase):
     def test_load_chunk_embedding_status_reports_legacy_schema_rows(self):
         # v4 移行後、旧 schema のまま残る ADB 行は検索対象外。件数と案内を出し ready にしない (#819)。
         chunk_run = _chunk_run()
-        settings = replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False)
+        settings = replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False)
         uid = _chunk_uid(chunk_run.chunk_run_id, chunk_run.chunks[1].chunk_id)
         connection = _FakeConnection(existing_hashes={uid: _retrieval_text_hash(chunk_run.chunks[1])})
         connection.legacy_rows = 2
@@ -1469,7 +1470,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 get_settings(),
                 output_dir=Path(tmp),
                 embedding_model="cohere.embed-v4.0",
-                embedding_output_dimensions=1536,
+                embedding_output_dimensions=1024,
                 image_embedding_enabled=True,
             )
 
@@ -1531,7 +1532,7 @@ class AdbVectorStoreTests(unittest.TestCase):
                 get_settings(),
                 output_dir=Path(tmp),
                 embedding_model="cohere.embed-v4.0",
-                embedding_output_dimensions=1536,
+                embedding_output_dimensions=1024,
                 image_embedding_enabled=True,
             )
 
@@ -1968,7 +1969,7 @@ def test_profile_channel_can_be_switched_off_for_ablation():
     from rag_engine.adapters.oracle import store
 
     store._pool_cache.clear()
-    settings = _replace(get_settings(), embedding_output_dimensions=1536, image_embedding_enabled=False, profile_channel_enabled=False)
+    settings = _replace(get_settings(), embedding_output_dimensions=1024, image_embedding_enabled=False, profile_channel_enabled=False)
     with (
         patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value="adb-profile"),
         patch("rag_engine.adapters.oracle.store.connect_adb_thin", side_effect=lambda *_: _ConnectionContext(object())),
@@ -1983,7 +1984,7 @@ def test_profile_channel_can_be_switched_off_for_ablation():
         patch("rag_engine.adapters.oracle.store.profile_channel_rankings") as profile,
     ):
         result = search_adb_hybrid_chunks(
-            chunk_run_id="run-p", retrieval_queries=["質問"], settings=settings, query_embedder=lambda *_: [0.1] * 1536
+            chunk_run_id="run-p", retrieval_queries=["質問"], settings=settings, query_embedder=lambda *_: [0.1] * 1024
         )
     profile.assert_not_called()
     assert [c.chunk_id for c in result.child_chunks] == ["chunk-1"]
@@ -2012,7 +2013,7 @@ class LegacySchemaDocumentCountTests(unittest.TestCase):
         self.assertEqual(connection.cursor_obj.binds["chunk_run_id"], "run-1")
 
     def test_ready_check_returns_the_legacy_document_count_without_raising(self):
-        settings = replace(get_settings(), embedding_output_dimensions=1536)
+        settings = replace(get_settings(), embedding_output_dimensions=1024)
         with (
             patch("rag_engine.adapters.oracle.store.load_adb_settings", return_value="adb"),
             patch("rag_engine.adapters.oracle.store.connect_adb_thin", side_effect=lambda *_: _ConnectionContext(object())),

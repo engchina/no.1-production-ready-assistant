@@ -13,7 +13,7 @@ from app.rag.chunking import Chunk
 from app.schemas.document import DocumentClassification, FileStatus
 from app.schemas.extraction import StructuredExtraction
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 
 
 async def _indexed_document(

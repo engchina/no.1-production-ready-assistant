@@ -40,7 +40,7 @@ def test_oracle_schema_sql_contains_required_rag_tables() -> None:
     assert "-- section: ingestion_segments" in sql
     assert "CREATE TABLE rag_ingestion_segments" in sql
     assert "CREATE TABLE rag_chunks" in sql
-    assert "embedding       VECTOR(1536, FLOAT32)" in sql
+    assert "embedding       VECTOR(1024, FLOAT32)" in sql
     assert "chunk_set_id    VARCHAR2(64)" in sql
     assert "CREATE VECTOR INDEX rag_chunks_embedding_hnsw_idx" in sql
     assert "CTX_DDL.CREATE_PREFERENCE('RAG_TEXT_WORLD_LEXER', 'WORLD_LEXER')" in sql
@@ -95,7 +95,7 @@ def test_oracle_schema_manifest_is_deterministic() -> None:
     assert "generated_at" not in manifest
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
-    assert manifest["vector_contract"] == "VECTOR(1536, FLOAT32)"
+    assert manifest["vector_contract"] == "VECTOR(1024, FLOAT32)"
     assert manifest["vector_index"] == {
         "distance": "COSINE",
         "efconstruction": 800,
@@ -503,7 +503,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 125
+    assert len(statements) == 126
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -521,7 +521,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261009_001"
+    assert manifest["migration_artifact_version"] == "20261031_002"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -608,6 +608,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261028_002_language_pack_artifacts",
         "20261029_001_retire_query_history",
         "20261031_001_retire_appearance_permission",
+        "20261031_002_embedding_dimensions_1024",
     ]
 
 
@@ -673,7 +674,7 @@ def test_oracle_schema_cli_manifest_only_prints_json(
     assert captured.err == ""
     assert "CREATE TABLE" not in captured.out
     manifest = json.loads(captured.out)
-    assert manifest["vector_contract"] == "VECTOR(1536, FLOAT32)"
+    assert manifest["vector_contract"] == "VECTOR(1024, FLOAT32)"
 
 
 def test_oracle_schema_cli_migration_manifest_only_prints_json(

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from pr_system_settings.database import database_readiness
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 
 from app.config import (
     DEFAULT_LOCAL_STORAGE_DIR,
@@ -101,7 +102,7 @@ def _genai_check(settings: Settings) -> str:
     )
     if required_status != READINESS_OK:
         return required_status
-    if settings.oci_genai_embedding_dim != 1536:
+    if settings.oci_genai_embedding_dim != EMBEDDING_DIMENSIONS:
         return READINESS_INVALID
     return READINESS_OK
 

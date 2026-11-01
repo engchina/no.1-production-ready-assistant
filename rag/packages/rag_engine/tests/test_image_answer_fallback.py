@@ -77,7 +77,7 @@ def test_vision_off_keeps_image_through_parsing_chunking_and_embedding(tmp_path)
         get_settings(environ={}, dotenv_path=None),
         output_dir=tmp_path / "runs",
         image_embedding_enabled=True,
-        embedding_output_dimensions=1536,
+        embedding_output_dimensions=1024,
     )
     with (
         patch("rag_engine.parsing.analysis.build_adapters", return_value={"docling": adapter}),
@@ -96,12 +96,12 @@ def test_vision_off_keeps_image_through_parsing_chunking_and_embedding(tmp_path)
     assert child.metadata["schema_version"] == 4
     assert child.metadata["image_evidence"][0]["crop_path"] == parsed.records[0].raw["crop_path"]
     connection = _FakeConnection()
-    image_embedder = Mock(return_value=[[2.0] * 1536])
+    image_embedder = Mock(return_value=[[2.0] * 1024])
     saved = save_chunk_run_embeddings(
         restored,
         settings,
         connection=connection,
-        embedder=lambda texts, *args, **kwargs: [[1.0] * 1536 for _ in texts],
+        embedder=lambda texts, *args, **kwargs: [[1.0] * 1024 for _ in texts],
         image_embedder=image_embedder,
     )
     assert saved.ok and saved.image_created_count == 1

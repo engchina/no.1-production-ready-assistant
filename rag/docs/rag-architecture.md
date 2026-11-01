@@ -49,13 +49,13 @@
 
 4. 埋め込み
    - 実装: `backend/app/clients/oci_genai.py`
-   - 本番は OCI Generative AI Inference の `embed_text` で Cohere Embed v4、1536 次元を使う。
+   - 本番は OCI Generative AI Inference の 埋め込み（既定 `text-embedding-v4`）で 1024 次元（`EMBEDDING_DIMENSIONS`。#46）を使う。
    - query embedding は `SEARCH_QUERY`、文書 chunk embedding は `SEARCH_DOCUMENT` の input type を使う。
-   - OCI embedding の返却件数と 1536 次元幅を検証し、不一致なら Oracle へ渡す前に fail fast する。
+   - OCI embedding の返却件数と 1024 次元幅を検証し、不一致なら Oracle へ渡す前に fail fast する。
 
 5. 索引
    - 実装: `backend/app/clients/oracle.py`
-   - 本番は Oracle AI Vector Search。ベクトル列は `VECTOR(1536, FLOAT32)`。
+   - 本番は Oracle AI Vector Search。ベクトル列は `VECTOR(1024, FLOAT32)`。
    - スキーマ成果物は HNSW 索引(`COSINE`、目標精度 `95`、neighbors `32`、efconstruction `500`)を作成する。
    - ベクトル検索は `FETCH APPROX ... WITH TARGET ACCURACY` を使い、問い合わせ側の精度は `RAG_ORACLE_VECTOR_TARGET_ACCURACY` で調整する。
    - 検索精度は **Vector Index アダプター(`rag_vector_index_profile`)** で手動選択する。`app/rag/vector_index_adapter.py` が profile を解決し、`balanced`(`RAG_ORACLE_VECTOR_TARGET_ACCURACY` をそのまま使用)/ `accurate`(98、既定。#272)/ `fast`(85)で検索時 target accuracy を runtime 即時に切り替える([oracle.py](backend/app/clients/oracle.py) の vector fetch clause へ反映)。推奨 HNSW ビルドパラメータ(neighbors/efconstruction/distance)は `GET/PATCH /api/settings/vector-index` と専用設定画面に参考表示し、適用には索引再作成(`requires_reprovision`)が必要。版管理された schema DDL artifact は自動変更しない。profile は `SearchDiagnostics.config_fingerprint` に反映する（`SearchDiagnostics.vector_index_profile` は #595 で削除した）。
@@ -174,7 +174,7 @@ CREATE TABLE rag_chunks (
     chunk_index     NUMBER NOT NULL,
     chunk_text      CLOB NOT NULL,
     metadata_json   JSON,
-    embedding       VECTOR(1536, FLOAT32),
+    embedding       VECTOR(1024, FLOAT32),
     created_at      TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 

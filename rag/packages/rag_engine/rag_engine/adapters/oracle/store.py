@@ -32,7 +32,7 @@ from rag_engine.chunking import (
     DocumentChunk,
     load_latest_or_source_chunk_run,
 )
-from rag_engine.config import DEFAULT_TIMEZONE, RRF_K, Settings
+from rag_engine.config import DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS, DEFAULT_TIMEZONE, RRF_K, Settings
 from rag_engine.knowledge.classification import (
     DEFAULT_CATEGORY_VALUE,
     ClassificationFilter,
@@ -84,7 +84,7 @@ DERIVED_QUERY_TOTAL_WEIGHT = 1.0
 # 版番号をキーに含める形へ置き換える。
 POOL_CACHE_TTL_SECONDS = 120.0
 _pool_cache: dict[tuple[Any, ...], tuple[float, list[StoredChunk]]] = {}
-ADB_EMBEDDING_DIMENSIONS = 1536
+ADB_EMBEDDING_DIMENSIONS = DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS
 MAX_ORACLE_TEXT_TERMS = MAX_TEXT_SEARCH_TOKENS
 EMBEDDING_MODALITY_TEXT = "text"
 EMBEDDING_MODALITY_IMAGE = "image"

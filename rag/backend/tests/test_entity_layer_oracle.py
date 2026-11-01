@@ -22,7 +22,7 @@ from app.schemas.extraction import StructuredExtraction
 from app.schemas.search import RetrievedChunk
 from tests.entity_layer_support import business_support_corpus, multi_hop_corpus
 
-_EMBEDDING = [0.1] * 1536
+_EMBEDDING = [0.1] * 1024
 
 
 async def _indexed_document(

@@ -24,6 +24,7 @@ from pr_backend_core.oracle_dsn import dsn_without_tns_retry
 from pr_backend_core.oracle_pool import OraclePoolSize, SharedOraclePool
 from pr_backend_core.oracle_session import init_oracle_session, local_session_time_zone
 from pr_backend_core.timezones import session_time_zone_offset
+from pr_system_settings.embedding import EMBEDDING_VECTOR_COLUMN_TYPE
 
 from app.clients.oracle_diagnostics import oracle_connection_diagnostics
 from app.settings import Settings
@@ -2442,7 +2443,7 @@ class OracleNl2SqlAdapter:
             "QUESTION CLOB, "
             "GENERATED_SQL CLOB, "
             "FEEDBACK_RATING VARCHAR2(32), "
-            "EMBEDDING VECTOR(1536, FLOAT32), "
+            f"EMBEDDING {EMBEDDING_VECTOR_COLUMN_TYPE}, "
             "CREATED_AT TIMESTAMP WITH TIME ZONE)"
         )
 

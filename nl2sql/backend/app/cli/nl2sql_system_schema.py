@@ -15,6 +15,7 @@ from typing import Any
 from pr_backend_core.logging import configure_cli_logging
 from pr_backend_core.oracle_dsn import apply_cli_connect_mode, enable_cli_connect_mode
 from pr_system_settings.system_schema import (
+    DESTRUCTIVE_MIGRATIONS_CONFIRMATION_REQUIRED,
     deployment_check_error_summary,
     deployment_check_summary,
     operation_failure_fields,
@@ -44,6 +45,13 @@ def main() -> int:
     actions.add_argument("--initialize", action="store_true", help="create or migrate")
     actions.add_argument("--recreate", action="store_true", help="drop core allowlist and recreate")
     parser.add_argument("--confirmation", default=None, help="required confirmation for --recreate")
+    # データを消す未適用の migration（status の pending_destructive_migrations）は、これが無ければ
+    # 適用せずに止める（#46）。先に削除されるデータを確かめてから付ける。
+    parser.add_argument(
+        "--allow-destructive",
+        action="store_true",
+        help="approve pending destructive migrations listed in pending_destructive_migrations",
+    )
     args = parser.parse_args()
     if args.check:
         return _check()
@@ -55,17 +63,17 @@ def main() -> int:
             result = system_schema_manager.initialize(
                 recreate=bool(args.recreate),
                 confirmation=args.confirmation,
+                allow_destructive=bool(args.allow_destructive),
             )
             reset_system_schema_runtime(schema_epoch=int(result["operation_state"]["schema_epoch"]))
     except SystemSchemaError as exc:
-        print(  # noqa: T201
-            _stable_json(
-                {
-                    "error": {"code": exc.code, "message": exc.public_message},
-                    "ok": False,
-                }
+        schema_error: dict[str, Any] = {"code": exc.code, "message": exc.public_message}
+        if exc.code == DESTRUCTIVE_MIGRATIONS_CONFIRMATION_REQUIRED:
+            schema_error["hint"] = (
+                "--status の pending_destructive_migrations で削除されるデータを確認してから、"
+                "--initialize --allow-destructive で再実行してください。"
             )
-        )
+        print(_stable_json({"error": schema_error, "ok": False}))  # noqa: T201
         return 2
     except Exception as exc:
         # 権限の不足などは ORA コードを出す（配備の log から辿れる。#1648）。ORA でない失敗

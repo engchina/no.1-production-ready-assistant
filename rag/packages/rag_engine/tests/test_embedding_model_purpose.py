@@ -65,3 +65,14 @@ def test_image_embedding_is_not_supported(tmp_path: Path) -> None:
     path.write_bytes(b"synthetic")
     with pytest.raises(RuntimeError, match="画像の埋め込みは未対応です"):
         oci._embed_image_once(path, "", SimpleNamespace(), input_type="IMAGE")
+
+
+def test_default_embedding_dimensions_match_oracle_schema() -> None:
+    """rag_engine の既定の次元は Oracle の列（ADB_EMBEDDING_DIMENSIONS）と同じ（#46）。"""
+    from rag_engine.adapters.oci import SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS
+    from rag_engine.adapters.oracle.store import ADB_EMBEDDING_DIMENSIONS
+    from rag_engine.config import DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS
+
+    assert DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS == 1024
+    assert ADB_EMBEDDING_DIMENSIONS == DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS
+    assert DEFAULT_EMBEDDING_OUTPUT_DIMENSIONS in SUPPORTED_EMBEDDING_OUTPUT_DIMENSIONS

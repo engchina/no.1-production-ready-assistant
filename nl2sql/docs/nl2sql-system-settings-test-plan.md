@@ -99,7 +99,7 @@
 | DB-006 | wallet upload 成功 | ZIP wallet を選択する | wallet_dir / wallet_uploaded / service list が更新される | `database/wallet-valid.zip` |
 | DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
 | DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
-| DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1536, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
+| DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1024, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
 
 ## 7. システムテーブル

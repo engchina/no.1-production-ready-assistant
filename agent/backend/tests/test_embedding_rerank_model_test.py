@@ -166,3 +166,13 @@ def test_rerank_endpoint_without_compatible_mode_is_used_as_is(
 def test_rerank_test_requires_index_and_score(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="index と relevance_score"):
         _run(monkeypatch, _request("rerank", "qwen3-rerank"), {"results": []})
+
+
+def test_embedding_dim_is_the_platform_constant() -> None:
+    """Agent の設定の次元は 3 製品の正本（#46）。旧い既定（1536）は起動で拒否する。"""
+    from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
+    from pydantic import ValidationError
+
+    assert DIM == EMBEDDING_DIMENSIONS
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, oci_genai_embedding_dim=1536)

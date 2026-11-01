@@ -33,6 +33,7 @@ from fastapi.concurrency import run_in_threadpool
 from pr_backend_core.schemas import ApiResponse
 from pydantic import BaseModel, Field, field_validator
 
+from .embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_COLUMN_TYPE
 from .env_file import write_env_values
 
 logger = logging.getLogger(__name__)
@@ -186,7 +187,6 @@ def database_settings_data(
         wallet_path
         and _database_wallet_is_configured(wallet_path, driver_mode=driver_mode(settings))
     )
-    embedding_dim = int(getattr(settings, "oci_genai_embedding_dim", 1536) or 1536)
     return DatabaseSettingsData(
         user=_s(settings, "oracle_user"),
         dsn=_s(settings, "oracle_dsn"),
@@ -203,8 +203,9 @@ def database_settings_data(
         has_password=bool(_s(settings, "oracle_password")),
         has_wallet_password=bool(_s(settings, "oracle_wallet_password")),
         readiness=database_readiness(settings, extra_readiness),
-        embedding_dimension=embedding_dim,
-        vector_column=f"VECTOR({embedding_dim}, FLOAT32)",
+        # ベクトル列の型はコードの正本（#46）。設定の値ではなく DDL と同じ値を出す。
+        embedding_dimension=EMBEDDING_DIMENSIONS,
+        vector_column=EMBEDDING_VECTOR_COLUMN_TYPE,
         config_source="runtime",
     )
 

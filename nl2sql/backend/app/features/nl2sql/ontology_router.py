@@ -3984,7 +3984,7 @@ class OntologyApiRuntime:
             return []
         candidate_list = list(candidates)
         # revision 単位の埋め込みキャッシュは graph cache と同じ上限で LRU 破棄する
-        # (1536 float × node 数 × revision 数の無制限成長を防ぐ)。
+        # (`EMBEDDING_DIMENSIONS` 個の float × node 数 × revision 数の無制限成長を防ぐ)。
         max_revisions = max(1, int(get_settings().nl2sql_ontology_graph_cache_max_revisions))
         if revision_id in self._embeddings:
             self._embeddings[revision_id] = self._embeddings.pop(revision_id)

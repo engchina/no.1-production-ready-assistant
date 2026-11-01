@@ -664,8 +664,10 @@ def test_update_retires_graph_claims_community_tables_with_approval() -> None:
         assert (name, "TABLE") in database.objects
 
 
-# データを消す SQL（テーブルの DROP・行の DELETE・TRUNCATE）。`ON DELETE CASCADE` は含めない。
-_DATA_LOSS_SQL = re.compile(r"\b(DROP\s+TABLE|DELETE\s+FROM|TRUNCATE\s+TABLE)\b", re.IGNORECASE)
+# データを消す SQL（テーブル・列の DROP・行の DELETE・TRUNCATE）。`ON DELETE CASCADE` は含めない。
+_DATA_LOSS_SQL = re.compile(
+    r"\b(DROP\s+TABLE|DROP\s+COLUMN|DELETE\s+FROM|TRUNCATE\s+TABLE)\b", re.IGNORECASE
+)
 
 
 def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
@@ -691,6 +693,7 @@ def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
         "20261016_001_retire_evaluation_compare",
         "20261029_001_retire_query_history",
         "20261031_001_retire_appearance_permission",
+        "20261031_002_embedding_dimensions_1024",
     } == marked
     assert all(migration.destructive_note for migration in MIGRATIONS if migration.destructive)
     # 印は checksum（SQL だけ）に影響しない（適用済みの DB を outdated にしない）。

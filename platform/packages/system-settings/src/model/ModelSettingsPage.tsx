@@ -1571,7 +1571,7 @@ const MODEL_KIND_OPTIONS: readonly SelectFieldOption<EnterpriseAiModelKind>[] =
 
 /**
  * 登録モデルの行の「テスト」の対象（#45）。テキストは画像対応ならチャットの画像の呼び出し、それ以外は
- * テキストの呼び出し。埋め込みは `/embeddings`（次元 1536 の確認）、再ランクは `/reranks`（並び順とスコア）。
+ * テキストの呼び出し。埋め込みは `/embeddings`（設定の次元 `embedding_dim` の確認）、再ランクは `/reranks`（並び順とスコア）。
  */
 function modelTestTargetType(
   model: EnterpriseAiConfiguredModel,

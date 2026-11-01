@@ -14,6 +14,7 @@ from pr_backend_core.llm_request_params import note_dropped_parameters
 from pydantic import Field
 
 from pr_system_settings import model as shared_model
+from pr_system_settings.embedding import EMBEDDING_DIMENSIONS
 from pr_system_settings.model import (
     ENTERPRISE_AI_API_KEY_ENV,
     ENTERPRISE_AI_SECONDARY_API_KEY_ENV,
@@ -53,7 +54,7 @@ class FakeSettings(ModelSecretStateMixin):
     oci_enterprise_ai_timeout_seconds: float = 600.0
     oci_enterprise_ai_max_retries: int = 3
     oci_genai_embedding_model: str = "cohere.embed-v4.0"
-    oci_genai_embedding_dim: int = 1536
+    oci_genai_embedding_dim: int = EMBEDDING_DIMENSIONS
     oci_genai_rerank_model: str = "cohere.rerank-v4.0-fast"
 
 
@@ -821,3 +822,22 @@ def test_shared_document_keeps_unknown_keys_and_loads_without_product_sections(
     assert document["other"] == {"keep": True}
     platform_env = (tmp_path / "platform.env").read_text(encoding="utf-8")
     assert f"{ENTERPRISE_AI_API_KEY_ENV}=sk-new" in platform_env
+
+
+def test_saved_embedding_dim_is_ignored_and_code_constant_is_used(tmp_path: Path) -> None:
+    """#46 より前に保存した次元（1536）があっても読み込みを失敗させず、コードの次元を使う。"""
+    (tmp_path / "model-settings.json").write_text(
+        json.dumps(
+            {
+                "version": 5,
+                "enterprise_ai": {"models": []},
+                "generative_ai": {"embedding_model": "text-embedding-v4", "embedding_dim": 1536},
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = FakeSettings()
+    make_store(tmp_path).load(settings)
+
+    assert settings.oci_genai_embedding_model == "text-embedding-v4"
+    assert settings.oci_genai_embedding_dim == EMBEDDING_DIMENSIONS

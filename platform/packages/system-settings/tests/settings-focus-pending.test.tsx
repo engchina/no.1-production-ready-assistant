@@ -96,7 +96,7 @@ const DB_SETTINGS: DatabaseSettingsData = {
   has_password: true,
   has_wallet_password: false,
   readiness: "ok",
-  embedding_dimension: 1536,
+  embedding_dimension: 1024,
   vector_column: "EMBEDDING",
   config_source: "runtime",
 };

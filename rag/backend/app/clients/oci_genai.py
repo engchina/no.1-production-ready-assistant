@@ -1,7 +1,7 @@
 """埋め込み / 再ランクのクライアント（#8）。
 
 接続先は OpenAI 互換の API。既定は Aliyun 百煉（DashScope）の `text-embedding-v4`
-（1536 次元）と `qwen3-rerank`。LLM/VLM には使わない。
+（`EMBEDDING_DIMENSIONS` 次元。#46）と `qwen3-rerank`。LLM/VLM には使わない。
 """
 
 import asyncio
@@ -101,7 +101,7 @@ class OciGenAiClient:
         *,
         input_type: EmbeddingInputType = "SEARCH_DOCUMENT",
     ) -> list[list[float]]:
-        """テキストを 1536 次元ベクトルに埋め込む（Cohere Embed v4）。"""
+        """テキストを `oci_genai_embedding_dim`（`EMBEDDING_DIMENSIONS`）次元に埋め込む。"""
         if input_type not in EMBEDDING_INPUT_TYPES:
             raise ValueError(f"embedding input_type が不正です。input_type={input_type}")
         if not texts:
