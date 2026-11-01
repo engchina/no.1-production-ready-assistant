@@ -310,7 +310,7 @@ ADB Free(Oracle Database 23.9、`vector_memory_size` 約 45 MB)での結果(Reca
 - optimizer の選んだ計画の時間(p50)は 5 千 chunk で約 30 ms → 約 40 ms(全件走査のまま、条件の
   副問い合わせの分)。
 - target accuracy・HNSW のビルドの値は変えない(索引を使う計画でも Recall@10 が 1.0 のため)。
-- 未確認: Vector Pool が約 45 MB の ADB Free では 1024 次元で約 5 千 vector までしか測れない。10 万件を超える
+- 未確認: この ADB Free コンテナでは Vector Pool が約 45〜60 MB しか割り当てられず（`V$VECTOR_MEMORY_POOL` の実測。ADB Free の公式文書に Vector Pool の上限の記載は無く、Autonomous では HNSW の索引に要る分を自動で確保する）、公式の目安 `1.3 × 件数 × 次元数 × 4 バイト`（[Size the Vector Pool](https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/size-vector-pool.html)）では 1024 次元の 5 千件で約 27 MB を使うため、約 5 千 vector までしか測れなかった（公式の上限ではなく、この環境での実測）。10 万件を超える
   規模の計画と時間は、実際の ADB で同じ CLI を流して確かめる。
 
 ## 運用上の注意
