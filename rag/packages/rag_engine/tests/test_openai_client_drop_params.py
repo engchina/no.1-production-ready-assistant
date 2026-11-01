@@ -58,10 +58,12 @@ def test_openai_client_drops_temperature_and_remembers(monkeypatch: pytest.Monke
             return httpx.Response(400, json=UNSUPPORTED_TEMPERATURE)
         return httpx.Response(200, json=_RESPONSE)
 
+    client_class = model_api._ModelApiClient
+    assert issubclass(client_class, ParameterDroppingClient)
     monkeypatch.setattr(
         model_api,
-        "ParameterDroppingClient",
-        lambda **kwargs: ParameterDroppingClient(transport=httpx.MockTransport(handler), **kwargs),
+        "_ModelApiClient",
+        lambda **kwargs: client_class(transport=httpx.MockTransport(handler), **kwargs),
     )
     # provider ごとの cache を通さずに作る（テストの間で client を持ち越さない）。
     client = model_api._openai_client.__wrapped__("provider-a", ENDPOINT, "test-key", "", 30, 0)

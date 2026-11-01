@@ -71,6 +71,51 @@ uv run python -m app.rag.evaluation_cli \
   --output ../evaluation/evaluation-result.json
 ```
 
+### 実行条件の固定と、外部の AI の応答の記録・再生（#59）
+
+評価の結果（`data.run_manifest`）に、その評価の実行条件を残します。評価の開始時と終了時に作って比べ、実行中に変わった
+条件を `changed_during_run` に出します（変わったら `comparable: false`。比べてはいけない結果）。#59 より前の結果は
+`run_manifest` が無く、そのまま読めます。
+
+| 項目 | 内容 |
+|---|---|
+| `as_of` / `as_of_source` | 検索の基準日。`filters.as_of` が無ければ評価の開始時の今日（`run_start`）にし、評価の間は固定する（日付を跨いでも全ケースが同じ日。通常の質問は今日のまま） |
+| `evaluation_set` | 評価セット（ケース）の sha256 と件数 |
+| `request` | top_k・条件の key と値の hash・ナレッジベース・検索・回答プロファイル・`rag_overrides` |
+| `settings` | 設定の fingerprint（`rag_config_fingerprint`）・プロンプトの版（`answer_prompt_version`） |
+| `models` | 回答・判定・埋め込み（次元）・再ランクのモデル。提供側の重みの版は API で取れないため `snapshot: unverified` |
+| `profiles` | 検索・回答プロファイルの更新時刻・設定の sha256・用語と回答ルール・ドメインキーワードの sha256・参照 KB |
+| `corpus` | 検索に出る（配信中の）chunk_set の id・件数と、レシピの版・抽出の元の hash と更新時刻を含む行の sha256。active の切替・抽出の更新・削除・権限の剥奪で変わる |
+| `code_version` / `external_calls` | backend の git の commit（手元の変更は `+dirty`）と、外部の AI の応答の扱い（`live` / `record` / `replay`）。この 2 つは条件の比較に入れない |
+
+秘密（API キー）・質問と根拠の原文は入れません（条件の値は hash）。読めなかった条件は `unverified` にします。
+
+評価を backend の process の中で流す CLI（`evaluation_run_cli`。job と同じ処理）で、生成・判定・質問の拡張・埋め込み・
+再ランクの応答を記録し、API キー・外部のネットワーク無しで同じ評価を再生できます。Oracle は設定どおりに接続します
+（検索の結果は固定しない）。
+
+```bash
+cd backend
+# 1. 実の API で流し、応答を記録する（記録は実データの応答を含む。リポジトリの外か /tmp/ など git に入らない所へ。権限 0600）
+uv run python -m app.rag.evaluation_run_cli run ../evaluation/golden-set.json \
+  --record ../../tmp/eval/recording.json --output ../../tmp/eval/live.json
+# 2. API キー無しで再生する（記録の日を「今日」にする。入力・呼び出しの数・条件が違えば終了コード 2）
+uv run python -m app.rag.evaluation_run_cli run ../evaluation/golden-set.json \
+  --replay ../../tmp/eval/recording.json --output ../../tmp/eval/replay.json
+# 3. 2 つの結果の実行条件の差（job の CLI の出力も読める。差・実行中の変化があれば終了コード 1）
+uv run python -m app.rag.evaluation_run_cli diff ../../tmp/eval/live.json ../../tmp/eval/replay.json
+```
+
+- 再生は、入力（種類・path・本文の正規化した JSON）の hash ごとに記録の順で応答を返します。記録に無い入力・同じ入力の
+  余分な呼び出しは失敗し、**実の API へ fallback しません**。使わなかった記録（呼び出しの不足）も失敗にします。
+  並行の呼び出しがあるため、順は同じ入力の中で照合します。記録・再生ではケースを 1 件ずつ流します。
+- 時間切れ・接続の失敗・HTTP の失敗（429 など）も記録し、再生で同じ例外を起こします（再試行・時間切れの経路の回帰）。
+  不正な構造化出力・拒否・引用も応答の本文として同じに戻ります。
+- 記録には入力の本文と API キーを残しません。応答の本文（回答・埋め込み）は残るため、実データの記録は明示した保存先だけに
+  置き、公開の場所・GitHub に置かないでください。公開のテストの記録は合成のものだけです。
+- 再生は制御の回帰の確認です。今のモデルの能力・実サービスの速さの証明には使いません（結果の
+  `run_manifest.external_calls.mode` が `replay`）。
+
 ### 業務支援の合成の評価セット（#1231）
 
 `business-support/` に、架空の「サンプル業務ポータル」の資料（PDF 4 件・xlsx 1 件）と、5 分類（資料で答えられる・
