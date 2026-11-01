@@ -1,6 +1,6 @@
 """実行履歴（チャット・RAG 検索の 1 回の実行。#1890）の記録。
 
-チャットと RAG 検索の画面の実行（回答を作った・作らなかった・安全チェックで止めた・失敗した）を、
+チャットと RAG 検索の画面の実行（回答を作った・作らなかった・失敗した）を、
 `RunRecorder` が 1 行の要約として `rag_run_history` に残す。回答を作った実行の回答・引用・診断は回
 答の記録（`rag_answer_records`）が正本で、ここには一覧の絞り込みと詳細の「処理の経過」に使う値だけ
 を持つ。詳細の「処理の経過」は共通の span の表の実行の trace で、ここには表を引く trace id と工程
@@ -173,7 +173,7 @@ class RunRecorder:
     conditions: Mapping[str, object] | None = None
     # 終わった段（止まった段を決める。保存しない）。
     stages: list[dict[str, object]] = field(default_factory=list)
-    # 安全チェックの後の質問（pipeline が受け取った時点で入れる。失敗の記録に使う）。
+    # pipeline が受け取った質問（受け取った時点で入れる。失敗の記録に使う）。
     question: str | None = None
     # 最後に保存した記録（後から保存の失敗を足して保存し直す。#2342）。
     _last_record: dict[str, object] | None = field(default=None, repr=False)

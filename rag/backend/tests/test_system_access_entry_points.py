@@ -56,7 +56,6 @@ SYSTEM_ACCESS_ENTRY_POINTS: dict[str, tuple[str, ...]] = {
     "app.rag.system_schema_cli": (),
     "app.rag.oracle_schema": (),
     # 運用の CLI（全件を読む・書き直す）。
-    "app.rag.chat_history_sanitization": (),
     "app.rag.classification_normalization": (),
     "app.rag.text_search_index_cli": (),
     "app.rag.staging_smoke": (),

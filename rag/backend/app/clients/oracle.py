@@ -329,7 +329,6 @@ class StoredMessage:
     reply_to_message_id: str | None = None
     model: str | None = None
     citations: list[dict[str, object]] = field(default_factory=list)
-    guardrail_warnings: list[str] = field(default_factory=list)
     trace_id: str | None = None
     status: str = "COMPLETE"
     elapsed_ms: float | None = None
@@ -4144,7 +4143,6 @@ class OracleClient:
             model=message.model,
             content=message.content,
             citations=message.citations,
-            guardrail_warnings=message.guardrail_warnings,
             trace_id=message.trace_id,
             status=message.status,
             elapsed_ms=message.elapsed_ms,
@@ -4176,7 +4174,6 @@ class OracleClient:
                     model,
                     content,
                     citations_json,
-                    guardrail_warnings,
                     trace_id,
                     status,
                     elapsed_ms,
@@ -4197,7 +4194,6 @@ class OracleClient:
                     :model,
                     :content,
                     :citations_json,
-                    :guardrail_warnings,
                     :trace_id,
                     :status,
                     :elapsed_ms,
@@ -4281,7 +4277,6 @@ class OracleClient:
                 m.model,
                 m.content,
                 m.citations_json,
-                m.guardrail_warnings,
                 m.trace_id,
                 m.status,
                 m.elapsed_ms,
@@ -4388,7 +4383,6 @@ class OracleClient:
                 SET content = :content,
                     model = :model,
                     citations_json = :citations_json,
-                    guardrail_warnings = :guardrail_warnings,
                     trace_id = :trace_id,
                     status = :status,
                     elapsed_ms = :elapsed_ms,
@@ -4522,87 +4516,6 @@ class OracleClient:
             ),
         )
         return None if row is None else _stored_message_from_row(row)
-
-    async def list_conversations_for_guardrail_migration(
-        self, *, limit: int, offset: int
-    ) -> list[StoredConversation]:
-        """運用 CLI 用に全 tenant の会話をページングする(API からは使用しない)。"""
-        rows = await self._fetch_all(
-            f"""
-            SELECT conversation_id, search_answer_profile_id, tenant_id_hash, user_id_hash,
-                   title, status, message_count, created_at, updated_at
-            FROM rag_conversations
-            ORDER BY created_at ASC, conversation_id ASC
-            {offset_fetch_clause()}
-            """,
-            offset_fetch_binds(offset=offset, limit=limit),
-        )
-        return [_stored_conversation_from_row(row) for row in rows]
-
-    async def list_messages_for_guardrail_migration(
-        self, conversation_id: str
-    ) -> list[StoredMessage]:
-        """運用 CLI 用に 1 会話の全メッセージを返す(API からは使用しない)。"""
-        rows = await self._fetch_all(
-            """
-            SELECT message_id, conversation_id, reply_to_message_id, tenant_id_hash,
-                   user_id_hash, role, model, content, citations_json,
-                   guardrail_warnings, trace_id, status, elapsed_ms, created_at
-            FROM rag_messages
-            WHERE conversation_id = :conversation_id
-            ORDER BY created_at ASC, message_id ASC
-            """,
-            {"conversation_id": conversation_id},
-        )
-        return [_stored_message_from_row(row) for row in rows]
-
-    async def get_search_answer_profile_config_for_guardrail_migration(
-        self, search_answer_profile_id: str
-    ) -> SearchAnswerProfileConfig | None:
-        """運用 CLI 用に tenant scope を越えて検索・回答プロファイル設定だけを読む。"""
-        row = await self._fetch_one(
-            """
-            SELECT profile_config
-            FROM rag_search_answer_profiles
-            WHERE search_answer_profile_id = :search_answer_profile_id
-            """,
-            {"search_answer_profile_id": search_answer_profile_id},
-        )
-        return (
-            None
-            if row is None
-            else parse_search_answer_profile_config(_json_loads(row["profile_config"]))
-        )
-
-    async def update_message_for_guardrail_migration(
-        self,
-        *,
-        message_id: str,
-        content: str,
-        status: str,
-        guardrail_warnings: list[str],
-    ) -> None:
-        """運用 CLI 用に sanitized 値だけを上書きする。原文を別領域へ退避しない。"""
-
-        def operation(connection: OracleConnectionProtocol) -> None:
-            _execute(
-                connection,
-                """
-                UPDATE rag_messages
-                SET content = :content,
-                    status = :status,
-                    guardrail_warnings = :guardrail_warnings
-                WHERE message_id = :message_id
-                """,
-                {
-                    "message_id": message_id,
-                    "content": content,
-                    "status": status,
-                    "guardrail_warnings": _json_dumps(guardrail_warnings),
-                },
-            )
-
-        await self._run_transaction(operation)
 
     async def create_ingestion_job(
         self, job: IngestionJob, *, expected_current_release_id: str | None = None
@@ -5575,8 +5488,6 @@ class OracleClient:
                     top_k,
                     rerank_top_n,
                     query_variant_count,
-                    guardrail_codes,
-                    guardrail_severities,
                     retrieved_count,
                     reranked_count,
                     deduplicated_count,
@@ -5620,8 +5531,6 @@ class OracleClient:
                     :top_k,
                     :rerank_top_n,
                     :query_variant_count,
-                    :guardrail_codes,
-                    :guardrail_severities,
                     :retrieved_count,
                     :reranked_count,
                     :deduplicated_count,
@@ -6120,7 +6029,6 @@ class OracleClient:
                     a.retrieved_count,
                     a.reranked_count,
                     a.citation_count,
-                    a.guardrail_codes,
                     a.config_fingerprint
                 FROM rag_citation_feedback f
                 LEFT JOIN rag_feedback_details fd ON fd.feedback_id = f.feedback_id
@@ -6183,7 +6091,6 @@ class OracleClient:
             "retrieved_count": result.pop("retrieved_count", None),
             "reranked_count": result.pop("reranked_count", None),
             "citation_count": result.pop("citation_count", None),
-            "guardrail_codes": _json_string_list(result.pop("guardrail_codes", None)),
             "config_fingerprint": result.pop("config_fingerprint", None),
         }
         return result
@@ -11180,8 +11087,6 @@ def _search_audit_binds(event: Mapping[str, object]) -> dict[str, object]:
         "top_k": _audit_optional_int(event, "top_k"),
         "rerank_top_n": _audit_optional_int(event, "rerank_top_n"),
         "query_variant_count": _audit_int(event, "query_variant_count", default=1),
-        "guardrail_codes": _audit_json(event.get("guardrail_codes", [])),
-        "guardrail_severities": _audit_json(event.get("guardrail_severities", [])),
         "retrieved_count": _audit_int(event, "retrieved_count"),
         "reranked_count": _audit_int(event, "reranked_count"),
         "deduplicated_count": _audit_int(event, "deduplicated_count"),
@@ -14215,7 +14120,6 @@ def _message_binds(message: StoredMessage) -> dict[str, object]:
         "model": message.model,
         "content": message.content,
         "citations_json": _json_dumps(message.citations),
-        "guardrail_warnings": _json_dumps(message.guardrail_warnings),
         "trace_id": message.trace_id,
         "status": message.status,
         "elapsed_ms": message.elapsed_ms,
@@ -14401,7 +14305,6 @@ def _stored_message_from_row(row: Mapping[str, object]) -> StoredMessage:
         model=_optional_str(row.get("model")),
         content=_optional_str(row.get("content")) or "",
         citations=_json_object_list(row.get("citations_json")),
-        guardrail_warnings=_json_string_list(row.get("guardrail_warnings")),
         trace_id=_optional_str(row.get("trace_id")),
         status=str(row.get("status") or "COMPLETE"),
         elapsed_ms=_optional_float(row.get("elapsed_ms")),
@@ -15442,7 +15345,7 @@ def oracle_search_answer_profile_schema_sql(
     """Oracle search answer profile(検索・回答プロファイル)table の DDL 例を返す。
 
     参照 KB は ``profile_config`` JSON 内に ID 群として保持する(多対多。link table 不要で
-    DDL を最小化する)。検索・回答と安全チェックの上書きも同 JSON へ束ねる。
+    DDL を最小化する)。検索・回答の上書きも同 JSON へ束ねる。
     """
     return f"""
 CREATE TABLE {table_name} (
@@ -15576,7 +15479,6 @@ CREATE TABLE {table_name} (
     model                VARCHAR2(160),
     content              CLOB,
     citations_json       JSON,
-    guardrail_warnings   JSON,
     trace_id             VARCHAR2(64),
     status               VARCHAR2(16) DEFAULT 'COMPLETE' NOT NULL,
     elapsed_ms           NUMBER(12, 3),
@@ -16073,8 +15975,6 @@ CREATE TABLE {table_name} (
     top_k                 NUMBER(10),
     rerank_top_n          NUMBER(10),
     query_variant_count   NUMBER(10) DEFAULT 1 NOT NULL,
-    guardrail_codes       JSON,
-    guardrail_severities  JSON,
     retrieved_count       NUMBER(10) DEFAULT 0 NOT NULL,
     reranked_count        NUMBER(10) DEFAULT 0 NOT NULL,
     deduplicated_count    NUMBER(10) DEFAULT 0 NOT NULL,

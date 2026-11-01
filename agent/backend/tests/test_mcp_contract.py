@@ -137,7 +137,7 @@ def test_run_observation_uses_the_names_of_the_rag_contract() -> None:
     assert _enum(call["zero_evidence_stage"]) == _enum(
         rag["$defs"]["ZeroEvidence"]["properties"]["stage"]
     )
-    for field in ("degraded_steps", "guardrail_degraded"):
-        assert field in call and field in rag["properties"], field
+    assert "degraded_steps" in call and "degraded_steps" in rag["properties"]
+    assert "guardrail_degraded" not in call and "guardrail_degraded" not in rag["properties"]
     # スコアは出さない（内部の算法に依存させない）。
     assert not {"score", "rerank_score"} & set(evidence)

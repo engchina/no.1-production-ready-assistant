@@ -157,7 +157,6 @@ export type EvaluationFailureReason =
   | "missing_content"
   | "answer_failed"
   | "answer_evaluation_error"
-  | "guardrail_warning"
   | "unexpected_handling"
   | "step_missing"
   | "forbidden_action"
@@ -1373,7 +1372,6 @@ export interface ChatMessage {
   citations: RetrievedChunk[];
   /** 保存した根拠のうち、見ている利用者が今の権限で見られない根拠の数（抜粋・文書は届かない。#3252）。 */
   withheld_evidence_count?: number;
-  guardrail_warnings: string[];
   trace_id: string | null;
   status: MessageStatus;
   reply_to_message_id: string | null;
@@ -1527,11 +1525,8 @@ export interface CompareModel {
 export interface SearchDiagnostics {
   /** 回答エンジンの名前（"grounded"）。 */
   retrieval_strategy: string;
-  /** "grounded"（回答）/ "retrieval_only"（検索だけ）/ "blocked"（安全チェックで止めた）。 */
+  /** "grounded"（回答）/ "retrieval_only"（検索だけ）。 */
   retrieval_strategy_adapter?: string;
-  guardrails_input_enabled?: boolean;
-  guardrails_output_enabled?: boolean;
-  guardrail_degraded?: boolean;
   filter_keys: string[];
   knowledge_base_count: number;
   search_answer_profile_applied?: string | null;
@@ -1542,11 +1537,8 @@ export interface SearchDiagnostics {
 
 export interface SearchResponse {
   answer: string;
-  /** 安全チェックが回答を差し替えたか（backend の `answer_replaced`）。 */
-  answer_replaced?: boolean;
   citations: RetrievedChunk[];
   trace_id: string;
-  guardrail_warnings: string[];
   elapsed_ms: number;
   diagnostics: SearchDiagnostics;
   /** 回答の注意書き（システム設定の文。backend が回答の確定の後に付ける。確認の質問・無効のときは null / 未指定。#2405）。 */
@@ -1636,7 +1628,6 @@ export interface FeedbackExecutionInfo {
   retrieved_count: number | null;
   reranked_count: number | null;
   citation_count: number | null;
-  guardrail_codes: string[];
   config_fingerprint: string | null;
 }
 
@@ -1938,7 +1929,7 @@ export interface EvaluationCaseResult extends Partial<Record<EvaluationMetricNam
   retrieved_document_ids: string[]; relevant_document_ids:string[]; hit_document_ids:string[];
   expected_decisions?: string[]; observed_outcome?: EvaluationOutcome|null; outcome_source?:string|null;
   missing_evidence?:string[]; answer_evaluation?:EvaluationAnswerJudgement|null;
-  guardrail_warnings:string[]; failure_reasons:string[]; diagnostics:SearchDiagnostics;
+  failure_reasons:string[]; diagnostics:SearchDiagnostics;
   elapsed_ms:number; error_type:string|null; error_stage?:string|null; error_message:string|null;
 }
 

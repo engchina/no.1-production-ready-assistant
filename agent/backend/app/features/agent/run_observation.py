@@ -35,7 +35,6 @@ from app.features.agent.data_scope import NL2SQL_CONNECTION_ID
 from app.features.agent.rag_figures import RAG_CONNECTION_ID
 from app.features.agent.rag_retrieval_state import (
     degraded_steps,
-    guardrail_degraded,
     table_binding,
     zero_evidence_stage,
 )
@@ -125,7 +124,6 @@ class ObservedToolCallItem:
     evidence_documents: list[str] | None = None
     # RAG の根拠のツールの縮退（#3546）。ほかのツール・失敗した呼び出しは None。
     degraded_steps: list[dict[str, Any]] | None = None
-    guardrail_degraded: bool | None = None
     zero_evidence_stage: str | None = None
 
 
@@ -368,7 +366,6 @@ def observe_run(run: RunState) -> RunObservationData:
         rows_truncated: bool | None = None
         documents: list[str] | None = None
         degraded: list[dict[str, Any]] | None = None
-        guardrail: bool | None = None
         zero_stage: str | None = None
         pieces: list[_Piece] = []
         source: EvidenceSource = "search"
@@ -378,7 +375,6 @@ def observe_run(run: RunState) -> RunObservationData:
             documents = [piece.document_id for piece in pieces]
             if output is not None:
                 degraded = degraded_steps(output)
-                guardrail = guardrail_degraded(output)
                 zero_stage = zero_evidence_stage(output)
         elif rag and tool in READ_TOOLS:
             pieces = _read_pieces(tool, output) if output is not None else []
@@ -406,7 +402,6 @@ def observe_run(run: RunState) -> RunObservationData:
                     rows_truncated=rows_truncated,
                     evidence_documents=documents,
                     degraded_steps=degraded,
-                    guardrail_degraded=guardrail,
                     zero_evidence_stage=zero_stage,
                 )
             )

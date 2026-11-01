@@ -151,7 +151,7 @@ async function mockSearchPage(page: Page) {
       status: 200,
       headers: { "content-type": "text/event-stream" },
       body: [
-        'event: metadata\ndata: {"trace_id":"t-1","elapsed_ms":10,"guardrail_warnings":[],"diagnostics":{}}',
+        'event: metadata\ndata: {"trace_id":"t-1","elapsed_ms":10,"diagnostics":{}}',
         "event: citations\ndata: []",
         'event: delta\ndata: {"text":"回答"}',
         'event: done\ndata: {"trace_id":"t-1"}',

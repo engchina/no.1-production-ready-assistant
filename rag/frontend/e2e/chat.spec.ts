@@ -54,7 +54,6 @@ const userMessage = {
   content: "経費の上限は？",
   model: null,
   citations: [],
-  guardrail_warnings: [],
   trace_id: null,
   status: "COMPLETE",
   reply_to_message_id: null,
@@ -68,7 +67,6 @@ const assistantMessage = {
   content: "経費の上限は 10 万円です。",
   model: "m1",
   citations: [citationChunk],
-  guardrail_warnings: [],
   trace_id: "t1",
   status: "COMPLETE",
   reply_to_message_id: "u1",
@@ -108,7 +106,7 @@ const sseStart = `event: start\ndata: ${JSON.stringify({
 const sseBody = [
   sseStart,
   `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "経費の上限は 10 万円です。" })}\n\n`,
-  `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [] })}\n\n`,
+  `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5 })}\n\n`,
   `event: citations\ndata: ${JSON.stringify({ model_id: "m1", citations: [citationChunk] })}\n\n`,
   `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
   `event: all_done\ndata: ${JSON.stringify({ conversation_id: "conv-1" })}\n\n`,
@@ -423,23 +421,6 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 800 },
   { name: "mobile", width: 375, height: 812 },
 ]) {
-  test(`チャットは安全チェック警告を表示する (${viewport.name})`, async ({ page }) => {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await mockChat(page, "ready", [
-      { ...userMessage, guardrail_warnings: ["機微情報をマスクしました。"] },
-      { ...assistantMessage, guardrail_warnings: ["根拠を確認してください。"] },
-    ]);
-
-    await page.goto("/chat");
-    await selectSearchAnswerProfile(page, "経理アシスタント");
-    const history = await openChatHistory(page);
-    await history.getByRole("button", { name: /^経費の上限は？ 2件/ }).click();
-
-    await expect(page.getByText(/機微情報をマスクしました/)).toBeVisible();
-    await expect(page.getByText(/根拠を確認してください/)).toBeVisible();
-    await expectNoPageOverflow(page);
-  });
-
   test(
     `AI に渡した件数と、回答で引用・参考の区別を出す (${viewport.name})`,
     { tag: "@responsive" },
@@ -502,8 +483,8 @@ for (const viewport of [
   test(`回答のカードは 本文 → 注意書き → 根拠の一覧 → 評価 の順に出す (${viewport.name})`, { tag: "@responsive" }, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const streamBody = sseBody.replace(
-      '"guardrail_warnings":[]}',
-      `"guardrail_warnings":[],"notice":${JSON.stringify(NOTICE)}}`
+      '"elapsed_ms":5}',
+      `"elapsed_ms":5,"notice":${JSON.stringify(NOTICE)}}`
     );
     expect(streamBody).toContain('"notice"');
     await mockChat(page, "ready", [], {
@@ -1031,7 +1012,7 @@ for (const viewport of [
       const streamBody = [
         sseStart,
         `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text })}\n\n`,
-        `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], answer_diagnostics: answerDiagnostics })}\n\n`,
+        `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, answer_diagnostics: answerDiagnostics })}\n\n`,
         `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
       ].join("");
       await mockChat(page, "ready", [], { streamBody });
@@ -1084,7 +1065,7 @@ for (const viewport of [
     const streamBody = [
       sseStart,
       `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text })}\n\n`,
-      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [] })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5 })}\n\n`,
       `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
     ].join("");
     await mockChat(page, "ready", [], { streamBody });
@@ -1156,7 +1137,7 @@ for (const viewport of [
     const streamBody = [
       sseStart,
       `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text })}\n\n`,
-      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], answer_diagnostics: answerDiagnostics })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, answer_diagnostics: answerDiagnostics })}\n\n`,
       `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
     ].join("");
     await mockChat(page, "ready", [], { streamBody });
@@ -1399,7 +1380,7 @@ test("回答の根拠は Agent と同じ一覧（まとまりの表示・タブ�
   const streamBody = [
     sseStart,
     `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "経費の上限は 10 万円です。" })}\n\n`,
-    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], answer_diagnostics: answerDiagnostics })}\n\n`,
+    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, answer_diagnostics: answerDiagnostics })}\n\n`,
     `event: citations\ndata: ${JSON.stringify({ model_id: "m1", citations })}\n\n`,
     `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
   ].join("");
@@ -1490,7 +1471,7 @@ test("回答フローの回答ではチャットにも根拠パネルと会話�
   const streamBody = [
     sseStart,
     `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "経費の上限は 10 万円です。\n\n資料により確認できた事項\n\n・1 回の申請の上限は 10 万円です。\n根拠：経費規程.pdf p.2" })}\n\n`,
-    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], answer_diagnostics: answerDiagnostics })}\n\n`,
+    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, answer_diagnostics: answerDiagnostics })}\n\n`,
     `event: citations\ndata: ${JSON.stringify({
       model_id: "m1",
       citations: [
@@ -1887,7 +1868,7 @@ for (const viewport of [
     const streamBody = [
       sseStart,
       `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "上限は 10 万円です。\n\n（出典: 登録済みQ&A「経費精算の上限はいくらですか？」）" })}\n\n`,
-      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, guardrail_warnings: [], answer_diagnostics: answerDiagnostics })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "t1", elapsed_ms: 5, answer_diagnostics: answerDiagnostics })}\n\n`,
       `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
     ].join("");
     await mockChat(page, "ready", [], { streamBody });
@@ -2416,7 +2397,6 @@ const unsavedStreamBody = [
     message_id: "a1",
     trace_id: "t1",
     elapsed_ms: 5,
-    guardrail_warnings: [],
     storage_failures: [
       { step: "answer_record_save", error_type: "DatabaseError", error_code: "ORA-03146" },
       { step: "chat_message_save", error_type: "DatabaseError", error_code: "ORA-40441" },
@@ -2673,7 +2653,7 @@ test("処理の経過は回答の trace の span の木で、2 つ目の「ト�
     // 処理の経過は表へ書いた span（回答の trace の API が返す。#3226）。
     traceSse(progress),
     `event: delta\ndata: ${JSON.stringify({ model_id: "m1", text: "合成の回答です。" })}\n\n`,
-    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "synthetic-a", elapsed_ms: 2000, guardrail_warnings: [], answer_diagnostics: { outcome: "answered", execution_steps: [{ name: "合成の処理", status: "完了", elapsed_seconds: 2 }] } })}\n\n`,
+    `event: metadata\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1", trace_id: "synthetic-a", elapsed_ms: 2000, answer_diagnostics: { outcome: "answered", execution_steps: [{ name: "合成の処理", status: "完了", elapsed_seconds: 2 }] } })}\n\n`,
     `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,
   ].join("");
   await mockChat(page, "ready", [], { streamBody });
@@ -2815,7 +2795,6 @@ for (const viewport of [
         message_id: "a1",
         trace_id: "t1",
         elapsed_ms: 5,
-        guardrail_warnings: [],
         answer_diagnostics: { models: { llm, attached_images: 1, embedding: "", rerank: "" } },
       })}\n\n`,
       `event: done\ndata: ${JSON.stringify({ model_id: "m1", message_id: "a1" })}\n\n`,

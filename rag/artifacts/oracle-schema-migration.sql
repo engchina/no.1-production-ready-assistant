@@ -3908,3 +3908,28 @@ BEGIN
     END IF;
 END;
 /
+
+-- migration: 20261101_001_retire_guardrail_columns
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_MESSAGES' AND column_name = 'GUARDRAIL_WARNINGS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_messages DROP COLUMN guardrail_warnings';
+    END IF;
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_SEARCH_AUDIT' AND column_name = 'GUARDRAIL_CODES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_search_audit DROP COLUMN guardrail_codes';
+    END IF;
+    SELECT COUNT(*) INTO v_count
+    FROM user_tab_columns
+    WHERE table_name = 'RAG_SEARCH_AUDIT' AND column_name = 'GUARDRAIL_SEVERITIES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_search_audit DROP COLUMN guardrail_severities';
+    END IF;
+END;
+/

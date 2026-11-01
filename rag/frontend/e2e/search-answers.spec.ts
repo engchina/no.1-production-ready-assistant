@@ -230,7 +230,6 @@ function chatMessage(role: "USER" | "ASSISTANT", id: string, traceId: string | n
     content: role === "USER" ? "経費の上限は？" : "経費の上限は 10 万円です。",
     model: role === "USER" ? null : "m1",
     citations: role === "USER" ? [] : [citationChunk],
-    guardrail_warnings: [],
     trace_id: traceId,
     status: "COMPLETE",
     reply_to_message_id: role === "USER" ? null : "u1",

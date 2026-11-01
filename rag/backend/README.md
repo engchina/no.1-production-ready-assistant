@@ -177,7 +177,7 @@ uv run python -m app.rag.oracle_schema --migration \
 
 孤立した行の削除（#511）は、利用者が件数を確認してから明示的に実行する操作です。画面では「参照先のない行があります」の警告の各 FK の「参照先のない行を削除」から、確認ダイアログ（表・FK・件数）で承認して実行します。CLI は `uv run python -m app.rag.system_schema_cli delete-orphans --constraint <FK> --expected-rows <status で確認した件数>` です。権限は作成・更新と同じ `rag.system_tables.manage` です。実行時の件数が確認した件数より多いときは削除しません（409）。削除の後に FK を `VALIDATE`（検査済み）にします。削除規則が `ON DELETE CASCADE` の FK の先に行があれば、それらも一緒に削除されます。削除した行は復元できません。
 
-監査 table は query 本文や OCR 原文を保存せず、`query_hash`、`source_sha256`、件数、guardrail code、trace id、error type などの運用メタデータだけを永続化する設計です。
+監査 table は query 本文や OCR 原文を保存せず、`query_hash`、`source_sha256`、件数、trace id、error type などの運用メタデータだけを永続化する設計です。
 
 ## アップロード制限
 
@@ -219,11 +219,11 @@ Hybrid retrieval は Reciprocal Rank Fusion を使います。`RAG_RRF_K` で RR
 
 旧 standard の回答エンジンの検索前後の処理（業務同義語の query expansion・本文 hash の重複除去・MMR の多様化・同じ group / 前後の chunk の追加・圧縮・context window と、`RAG_QUERY_EXPANSION_*`・`RAG_CONTEXT_WINDOW_CHARS`・`RAG_CONTEXT_DIVERSITY_LAMBDA`・`RAG_CONTEXT_GROUP_EXPANSION_ENABLED`・`RAG_CONTEXT_NEIGHBOR_WINDOW`・`RAG_CONTEXT_COMPRESSION_*` などの設定）は #595 で削除しました。`backend/.env` に残っていても読みません（`docs/deployment.md` の「既存環境の更新手順（#595）」）。
 
-検索レスポンスの `diagnostics` は、`retrieval_strategy`（常に `hybrid`）、`retrieval_strategy_adapter`（`grounded` / `retrieval_only` / `blocked`）、`answer`（回答フローの診断。工程ごとの実行記録 `execution_steps` など）、安全チェックの `guardrails_input_enabled` / `guardrail_degraded`、filter key、ナレッジベースの件数、適用した KB / 検索・回答プロファイルの設定、非機密の RAG 設定 fingerprint を返します。query 本文や secret は含めず、評価回帰の原因調査に使います（検索の内訳・候補・context の件数などの旧 standard の診断は #595 で削除しました）。
+検索レスポンスの `diagnostics` は、`retrieval_strategy`（常に `hybrid`）、`retrieval_strategy_adapter`（`grounded` / `retrieval_only`）、`answer`（回答フローの診断。工程ごとの実行記録 `execution_steps` など）、filter key、ナレッジベースの件数、適用した KB / 検索・回答プロファイルの設定、非機密の RAG 設定 fingerprint を返します。query 本文や secret は含めず、評価回帰の原因調査に使います（検索の内訳・候補・context の件数などの旧 standard の診断は #595 で削除しました）。
 
 `RAG_ANSWER_TIMEOUT_SECONDS`（既定 600 秒で上限と同じ。#1425）で、LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP の `rag_search`・品質評価の 1 ケース）の pipeline 実行時間を制限します（#375 / #383）。回答フローが質問の理解・根拠の評価（CRAG）・回答の生成・監査で LLM を複数回呼ぶためです（以前の検索だけの上限 `RAG_SEARCH_TIMEOUT_SECONDS` は #383 で削除しました）。品質評価はケースの時間切れを工程とともにケースの結果に残して評価を続け、評価全体を job の上限（回答の回数 × `RAG_ANSWER_TIMEOUT_SECONDS` と `RAG_EVALUATION_JOB_TIMEOUT_SECONDS`〔最小値。既定 3600 秒〕の大きいほうで、86400 秒まで。#1430。同期の API は 600 秒）で打ち切ります（`docs/evaluation-observability-guardrails.md`）。timeout 時は `ApiResponse` 形式の 504（SSE は `error` event、チャットは ERROR の回答として保存）を返し、文言には時間切れになった工程（例: 回答フローの「文書検索（1回目）」）と再試行の案内を含めます。`rag_search_audit` には `outcome=error` / `error_stage=timeout` を残します。
 
-安全チェック（OCI Guardrails）と設定 `RAG_GUARDRAILS_*` は #11 で削除しました。質問と回答の安全チェックの段は外部の検査を持たない通過（常に許可・指摘なし）で、応答の `guardrail_warnings` などの形は残しています。詳しくは `docs/evaluation-observability-guardrails.md` を参照してください。
+安全チェック（OCI Guardrails）と設定 `RAG_GUARDRAILS_*` は #11 で削除しました。常に通るだけになった質問と回答の安全チェックの段は #37 で外し、応答の `guardrail_warnings` などの項目も削除しました。詳しくは `docs/evaluation-observability-guardrails.md` を参照してください。
 
 ## 評価
 
@@ -248,13 +248,11 @@ uv run python -m app.rag.staging_smoke --query "確認用キーワード {marker
 
 ## 検索ストリーミング
 
-`POST /api/search/stream` は `text/event-stream` を返します。進捗の `stage`（`history_rewrite`・`answer` と入れ子の `answer_step:<工程名>`、検索だけの経路の `retrieval`）を流し、回答を完全生成し、機微情報マスク・回答検査が完了した後だけ `metadata`、`delta`、`citations`、`done` を返します。`RAG_STREAM_REALTIME_ENABLED` は #595 で削除しました（検査前の token は配信しません）。フロントエンドは旧サービスの `replace` event を引き続き解析できますが、新 backend は使用しません。
-
-既存チャット履歴は、まず `uv run python -m app.rag.chat_history_sanitization --dry-run` で件数だけを確認し、Oracle バックアップ後に `--apply` を実行します。出力は会話・走査・更新・マスク・阻止・失敗件数だけで、原文や検出値を記録しません。
+`POST /api/search/stream` は `text/event-stream` を返します。進捗の `stage`（`history_rewrite`・`answer` と入れ子の `answer_step:<工程名>`、検索だけの経路の `retrieval`）を流し、回答を完全生成した後だけ `metadata`、`delta`、`citations`、`done` を返します。`RAG_STREAM_REALTIME_ENABLED` は #595 で削除しました（検査前の token は配信しません）。フロントエンドは旧サービスの `replace` event を引き続き解析できますが、新 backend は使用しません。
 
 ## 監査ログ
 
-Prometheus metrics は `/metrics` で公開します。RAG 全体の latency は `rag_search_duration_seconds`、stage 別 latency（`history_rewrite`・`answer`・検索だけの経路の `retrieval`）は `rag_search_stage_duration_seconds{mode,stage,outcome}` で確認できます。回答フローの中の工程ごとの時間は `diagnostics.answer.execution_steps` に残ります。stage outcome は `success` / `error` / `cancelled` です。評価 case は `rag_evaluation_cases_total{mode,status}` と `rag_evaluation_case_duration_seconds{mode,status}` で記録します。guardrail finding は `rag_guardrail_findings_total{surface,code,severity,action}` で記録し、label に query 本文や回答本文は含めません。
+Prometheus metrics は `/metrics` で公開します。RAG 全体の latency は `rag_search_duration_seconds`、stage 別 latency（`history_rewrite`・`answer`・検索だけの経路の `retrieval`）は `rag_search_stage_duration_seconds{mode,stage,outcome}` で確認できます。回答フローの中の工程ごとの時間は `diagnostics.answer.execution_steps` に残ります。stage outcome は `success` / `error` / `cancelled` です。評価 case は `rag_evaluation_cases_total{mode,status}` と `rag_evaluation_case_duration_seconds{mode,status}` で記録します。
 
 RAG 検索は `app.audit` logger に `rag_search_audit` を構造化ログとして出します。`trace_id`、`request_id`、`outcome`、guardrail code、filter key、検索件数・citation 件数、設定 fingerprint、引用 document id を含みます（旧 standard の検索・context の内訳の列は #595 以降は既定値。既存の監査の行を変えないため列は残す。#596）。`X-Tenant-ID` / `X-User-ID` がある場合は raw 値ではなく `tenant_id_hash` / `user_id_hash` として記録します。`RAG_AUDIT_CONTEXT_HASH_SALT` を `.env` から注入すると hash に salt を加えられます。`outcome=error` では `error_stage` と `error_type` だけを記録します。query/回答本文/例外 message は保存せず、query は SHA-256 hash と文字数だけを記録します。
 

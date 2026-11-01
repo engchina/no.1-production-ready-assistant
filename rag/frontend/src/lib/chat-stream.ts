@@ -47,7 +47,6 @@ export interface ChatStreamHandlers {
     message_id: string;
     trace_id: string;
     elapsed_ms: number;
-    guardrail_warnings: string[];
     /** 回答の根拠・実行記録(無い回答では null / 未指定)。 */
     answer_diagnostics?: unknown;
     /** 作ったが保存できなかった記録（回答の記録・会話の回答。#2342）。 */

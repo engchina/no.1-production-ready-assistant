@@ -37,7 +37,6 @@ def test_search_load_cli_passes_and_writes_redacted_artifacts(
                 "trace_id": f"trace-{len(observed_payloads)}",
                 "elapsed_ms": elapsed_ms,
                 "citations": [],
-                "guardrail_warnings": [],
                 "diagnostics": {
                     "answer": {
                         "execution_steps": [

@@ -16,7 +16,7 @@
 
 ## 保証すること
 
-- **採点**: ケースの結果のうち Agent の Run の ID と本文を含まない項目（六指標・引用の文書・正解の文書・取れなかった根拠・対応と出所・往復ごとの判断・失敗の理由・失敗の種類と段・時間）。段 2 の結果にあった RAG の評価だけの項目（`answer_evaluation`・`guardrail_warnings`。Agent の経路ではいつも空）は suite に無い。
+- **採点**: ケースの結果のうち Agent の Run の ID と本文を含まない項目（六指標・引用の文書・正解の文書・取れなかった根拠・対応と出所・往復ごとの判断・失敗の理由・失敗の種類と段・時間）。段 2 の結果にあった RAG の評価だけの項目（`answer_evaluation`。Agent の経路ではいつも空）は suite に無い。
 - **集計**: 六指標の平均（成功したケースのうち測れたものだけ）、`metric_case_counts`、`error_count`、区分・分類・種類・段の数・期待する判断ごとの内訳、閾値の判定（`threshold_failures`・`passed`）、採点の版。段 2 の結果にあった RAG の評価だけの項目（`evaluation_suite`・`comparison`）は suite に無い。
 - **分母**: 段 2 の形（ケースの数・失敗の数・最後の往復の観測の種類ごとの数・指標ごとの測れた数と測れなかった数）と、suite の形（`denominators`: 最後の往復の状態・失敗の種類・指標ごとの測れた / 対象外 / 評価不能の数と評価不能の理由）。失敗は指標の分母に入らず、失敗が 1 つでもあれば `passed=false`。どの指標も測れなければ `passed=null`。
 - **失敗の扱い**: failed・cancelled・waiting_approval・時間切れ（取り消す）・承認の要るツールを呼ばずに完了した Run（`skipped_approval_tools`・観測の `tool_calls[].status=approval_skipped`。#3240 の Q7）・Run を作れない（HTTP の失敗・ツールのエラー・知らない `schema_version`）は、どれもケースの失敗（`case_error`）。複数往復の途中で失敗したら、それまでの往復を採点せずケースの失敗にする（`error_stage=turn_<n>`、時間は往復の和）。

@@ -27,7 +27,7 @@ class RunSummary(BaseModel):
     search_answer_profile_id: str | None = None
     # 検索・回答プロファイルの名前（削除・読めないときは None。画面は ID を出さない）。
     search_answer_profile_name: str | None = None
-    # 安全チェックの後の質問。安全チェックで止めた質問は保存しないので None。
+    # pipeline が受け取った質問。pipeline の前に失敗した実行は None。
     question: str | None = None
     # 回答を作った実行か（RAG 検索の既定は回答を作らない。#649）。
     answer_generated: bool

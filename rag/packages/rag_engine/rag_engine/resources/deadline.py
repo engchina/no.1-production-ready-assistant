@@ -14,7 +14,7 @@
 期限が無い文脈（取込・単体の CLI など）では何もしない（従来どおりの timeout と再試行）。
 
 回答の時間の配分（#1516）: 回答フローの工程（章節の拡張・抽出、生成と監査の是正の round）は同じ期限を見て、
-回答の確定（引用の照合・本文の組み立て・安全チェック・記録の保存）の分（`ANSWER_FINALIZE_RESERVE_SECONDS`）を
+回答の確定（引用の照合・本文の組み立て・記録の保存）の分（`ANSWER_FINALIZE_RESERVE_SECONDS`）を
 残す。工程の中の LLM の呼び出しには、その分を引いた子の期限（`Deadline(left, parent=...)`）を渡し、子の期限で
 切れた（外側の期限はまだ残る）ことを `deadline_cut_short()` で見分けて、確かめ終わった分で回答を確定する。
 """
@@ -27,7 +27,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-# 回答の確定（引用の照合・本文の組み立て・回答の安全チェック・記録の保存）に残す秒数（#1516）。
+# 回答の確定（引用の照合・本文の組み立て・記録の保存）に残す秒数（#1516）。
 ANSWER_FINALIZE_RESERVE_SECONDS = 30.0
 # 生成と監査の 1 組（grounded の round）の見積もりの既定（秒）。実測が無いとき（章節の拡張が生成に残す分・
 # 是正の round の最初の見積もり）に使う。長い根拠の列挙の問で、推論するモデル（DeepSeek）は 1 組 125〜344 秒

@@ -174,7 +174,6 @@ function searchStreamBody(): string {
     `event: metadata\ndata: ${JSON.stringify({
       trace_id: "trace-kb",
       elapsed_ms: 10,
-      guardrail_warnings: [],
       diagnostics: {},
     })}\n\n`,
     `event: delta\ndata: ${JSON.stringify({ text: "承認フローを確認しました。" })}\n\n`,

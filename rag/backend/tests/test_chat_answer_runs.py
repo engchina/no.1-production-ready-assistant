@@ -55,7 +55,6 @@ class _GatedPipeline(_FakePipeline):
         token_callback=None,
         *,
         history=None,
-        query_guardrail_result=None,
         trace=None,
     ):
         assert progress_callback is not None

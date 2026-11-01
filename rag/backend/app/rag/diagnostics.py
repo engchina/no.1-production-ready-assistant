@@ -12,8 +12,8 @@ from app.schemas.common import JsonValue
 from app.schemas.search import SearchDiagnostics, SearchRequest
 
 # 回答の経路。grounded は根拠付き回答、retrieval_only は検索だけ
-# (KB の検索テスト・レシピの検索比較。#593)、blocked は質問の安全チェックで止めたもの。
-RetrievalPath = Literal["grounded", "retrieval_only", "blocked"]
+# (KB の検索テスト・レシピの検索比較。#593)。
+RetrievalPath = Literal["grounded", "retrieval_only"]
 
 
 def _effective_vector_target_accuracy(settings: Settings) -> int:
@@ -33,7 +33,6 @@ def build_search_diagnostics(
     *,
     settings: Settings | None = None,
     retrieval_strategy_adapter: RetrievalPath,
-    guardrail_degraded: bool = False,
     answer: Mapping[str, JsonValue] | None = None,
 ) -> SearchDiagnostics:
     """検索実行の再現・調査に使う非機密メタデータを作る。"""
@@ -41,10 +40,6 @@ def build_search_diagnostics(
     return SearchDiagnostics(
         retrieval_strategy="hybrid",
         retrieval_strategy_adapter=retrieval_strategy_adapter,
-        # 安全チェックは外部の検査を持たない通過（#11）。応答の項目は互換のため false で残す。
-        guardrails_input_enabled=False,
-        guardrails_output_enabled=False,
-        guardrail_degraded=guardrail_degraded,
         filter_keys=sorted(request.filters),
         knowledge_base_count=len(request.knowledge_base_ids),
         config_fingerprint=rag_config_fingerprint(resolved_settings),

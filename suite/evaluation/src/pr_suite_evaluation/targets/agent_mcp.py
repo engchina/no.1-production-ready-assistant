@@ -57,7 +57,8 @@ MAX_OBSERVATION_PAGES = 1000
 RUN_OUTPUT_SCHEMA_VERSION = 4
 # 5: ツールの呼び出しに RAG の縮退（degraded_steps・guardrail_degraded・zero_evidence_stage）を、
 # 根拠に table_binding を足した（#3546）。
-OBSERVATION_SCHEMA_VERSION = 5
+# 6: RAG の契約から外した guardrail_degraded をツールの呼び出しから削除した（#37）。
+OBSERVATION_SCHEMA_VERSION = 6
 CANCEL_SCHEMA_VERSION = 1
 # 確認への答えの上限（契約の answers の maxItems）。
 MAX_CONFIRMATION_ANSWERS = 5

@@ -390,12 +390,9 @@ class SearchDiagnostics(BaseModel):
 
     # 回答の経路は常に回答フロー。保存済みの評価結果などの古い値も読めるよう str のままにする。
     retrieval_strategy: str = "hybrid"
-    # grounded(根拠付き回答)/ retrieval_only(検索だけ)/ blocked(質問の安全チェック)
+    # grounded(根拠付き回答)/ retrieval_only(検索だけ)
     retrieval_strategy_adapter: str = "grounded"
     answer: dict[str, JsonValue] | None = None
-    guardrails_input_enabled: bool = False
-    guardrails_output_enabled: bool = False
-    guardrail_degraded: bool = False
     filter_keys: list[str] = Field(default_factory=list)
     knowledge_base_count: int = 0
     kb_adapter_config_applied: str | None = None
@@ -424,12 +421,8 @@ class SearchResponse(BaseModel):
     answer: str
     citations: list[RetrievedChunk] = Field(default_factory=list)
     trace_id: str
-    guardrail_warnings: list[str] = Field(default_factory=list)
     elapsed_ms: float
     diagnostics: SearchDiagnostics = Field(default_factory=SearchDiagnostics)
-    # 回答側ガードレールが本文をマスク/差し替えしたか。realtime stream 時に
-    # マスク済み本文を再送(置換)するかの判定に使う内部フラグ。
-    answer_replaced: bool = False
     # 作った回答を保存できなかった記録（回答は返し、画面が「保存できなかった」ことを出す。#2342）。
     storage_failures: list[StorageFailure] = Field(default_factory=list)
     # 回答の注意書き（システム設定の文。#2405）。backend が回答の確定の後に付け、
@@ -448,12 +441,6 @@ class SearchResponse(BaseModel):
         """標準回答による評価の入力を持たせて返す(同じ object を変更する)。"""
         self._evaluation_input = dict(value) if value is not None else None
         return self
-
-    @field_validator("guardrail_warnings")
-    @classmethod
-    def _dedup_warnings(cls, value: list[str]) -> list[str]:
-        """クエリ側/回答側で同一文言が重複するため順序保持で重複除去する。"""
-        return list(dict.fromkeys(value))
 
 
 def include_superseded_filter_value(value: str | None) -> bool:

@@ -41,7 +41,6 @@
       "missing_evidence": [],
       "turn_results": [],
       "answer_evaluation": null,
-      "guardrail_warnings": [],
       "failure_reasons": [],
       "elapsed_ms": 250.0,
       "error_type": null,

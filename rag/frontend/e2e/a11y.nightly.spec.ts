@@ -221,7 +221,6 @@ async function mockSettingsAndFeedback(page: Page) {
             retrieved_count: 20,
             reranked_count: 5,
             citation_count: 1,
-            guardrail_codes: [],
             config_fingerprint: "9f3a57a3d91bdaf0",
           },
         }),

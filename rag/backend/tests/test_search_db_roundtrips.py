@@ -171,7 +171,7 @@ async def test_observe_stage_adds_db_metrics_to_span(monkeypatch: pytest.MonkeyP
         return "ok"
 
     await pipeline_module._observe_stage("trace-1", "retrieval", with_sql())
-    await pipeline_module._observe_stage("trace-1", "answer_guardrail", without_sql())
+    await pipeline_module._observe_stage("trace-1", "answer_record_save", without_sql())
 
     assert spans[0]["attributes"] == {
         "db_execute_count": 1,

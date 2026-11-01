@@ -175,7 +175,6 @@ interface LiveColumn {
   failure?: ColumnFailureDetail | null;
   /** 作ったが保存できなかった記録（#2342）。 */
   storageFailures?: StorageFailure[];
-  guardrailWarnings: string[];
   /** 回答の根拠・実行記録(無い回答では null)。 */
   answerDiagnostics: unknown;
   /** 回答の注意書き（#2405。届くまで・無いときは null）。 */
@@ -306,7 +305,6 @@ function AssistantColumn({
   errorMessage,
   failure = null,
   storageFailures,
-  guardrailWarnings,
   answerDiagnostics = null,
   passageSource = null,
   notice = null,
@@ -331,7 +329,6 @@ function AssistantColumn({
   failure?: ColumnFailureDetail | null;
   /** 作ったが保存できなかった記録（回答は出したまま warning を出す。#2342）。 */
   storageFailures?: StorageFailure[];
-  guardrailWarnings: string[];
   answerDiagnostics?: unknown;
   /**
    * 段落の印の記録（#2738）を読む、診断の無い保存した回答の会話のメッセージ（会話を開き直したとき）。診断があれば
@@ -474,12 +471,6 @@ function AssistantColumn({
           ) : null}
         </>
       )}
-      {guardrailWarnings.length > 0 ? (
-        <Banner severity="warning">
-          <span className="font-medium">{t("chat.guardrail")}: </span>
-          {guardrailWarnings.join(" / ")}
-        </Banner>
-      ) : null}
       {citations.length > 0 ||
       withheldCount > 0 ||
       (finished && (traceId || answerDiagnostics || progress || notice)) ? (
@@ -531,7 +522,7 @@ function MessageTurn({
   readOnly = false,
   testId,
 }: {
-  user: Pick<ChatMessage, "content" | "guardrail_warnings" | "clarification"> &
+  user: Pick<ChatMessage, "content" | "clarification"> &
     Partial<Pick<ChatMessage, "sent_by_owner" | "sender_display_name" | "attachments">>;
   /** 送る前（`start` の前）の質問の添付（#2517）。保存した質問は `user.attachments`。 */
   liveAttachments?: ChatAttachmentItem[];
@@ -559,7 +550,6 @@ function MessageTurn({
     errorMessage: string | null;
     failure?: ColumnFailureDetail | null;
     storageFailures?: StorageFailure[];
-    guardrailWarnings: string[];
     answerDiagnostics?: unknown;
     passageSource?: unknown;
     notice?: string | null;
@@ -607,14 +597,6 @@ function MessageTurn({
           testId="chat-clarification-record"
         />
       ) : null}
-      {user.guardrail_warnings.length > 0 ? (
-        <div className="ml-auto max-w-[85%]">
-          <Banner severity="warning">
-            <span className="font-medium">{t("chat.guardrail")}: </span>
-            {user.guardrail_warnings.join(" / ")}
-          </Banner>
-        </div>
-      ) : null}
       {columns.length > 0 ? (
         <div
           className="grid grid-cols-1 gap-3"
@@ -638,7 +620,6 @@ function MessageTurn({
               errorMessage={column.errorMessage}
               failure={column.failure}
               storageFailures={column.storageFailures}
-              guardrailWarnings={column.guardrailWarnings}
               answerDiagnostics={column.answerDiagnostics}
               passageSource={column.passageSource}
               notice={column.notice}
@@ -1037,7 +1018,6 @@ export function ChatClient() {
       status: "streaming",
       traceId: null,
       errorMessage: null,
-      guardrailWarnings: [],
       answerDiagnostics: null,
       messageId: null,
       startedAtMs,
@@ -1273,7 +1253,6 @@ export function ChatClient() {
                   status: "streaming",
                   traceId: null,
                   errorMessage: null,
-                  guardrailWarnings: [],
                   answerDiagnostics: null,
                   messageId: column.message_id ?? null,
                   startedAtMs: current.pending.sentAtMs,
@@ -1293,10 +1272,9 @@ export function ChatClient() {
           };
         });
       },
-      onMetadata: ({ model_id, message_id, trace_id, guardrail_warnings, answer_diagnostics, storage_failures, notice }) => {
+      onMetadata: ({ model_id, message_id, trace_id, answer_diagnostics, storage_failures, notice }) => {
         updateColumn(model_id, {
           traceId: trace_id,
-          guardrailWarnings: guardrail_warnings,
           answerDiagnostics: answer_diagnostics ?? null,
           storageFailures: storage_failures ?? [],
           notice: notice ?? null,
@@ -1474,7 +1452,6 @@ export function ChatClient() {
         failure: column.status === "error" ? (column.failure ?? null) : null,
         storageFailures: column.storageFailures,
         stoppedMessage: column.status === "stopped" ? column.errorMessage : null,
-        guardrailWarnings: column.guardrailWarnings,
         answerDiagnostics: column.answerDiagnostics,
         notice: column.status === "done" ? (column.notice ?? null) : null,
         progressSource: {
@@ -1786,7 +1763,6 @@ export function ChatClient() {
                         failure: reply.status === "ERROR" ? (answerOutcomes[reply.message_id]?.failure ?? null) : null,
                         storageFailures: answerOutcomes[reply.message_id]?.storageFailures,
                         stoppedMessage: reply.status === "CANCELLED" ? reply.content : null,
-                        guardrailWarnings: reply.guardrail_warnings,
                         notice: reply.status === "COMPLETE" ? (reply.notice ?? null) : null,
                         // 段落の印の記録（#2738）。会話のメッセージに記録があるときだけ読む（無ければ今までの表示）。
                         passageSource: reply.status === "COMPLETE" ? reply : null,
@@ -1808,7 +1784,7 @@ export function ChatClient() {
                 {liveTurn ? (
                   // 送った質問はサーバーの応答を待たずに出し、失敗・停止のときも残す（#907）。
                   <MessageTurn
-                    user={liveTurn.user ?? { content: liveTurn.pending.content, guardrail_warnings: [] }}
+                    user={liveTurn.user ?? { content: liveTurn.pending.content }}
                     userStatus={
                       liveTurn.pending.status === "sending"
                         ? liveTurn.user

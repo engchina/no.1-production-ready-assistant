@@ -65,7 +65,7 @@ export interface SpanSpec {
   root?: boolean;
 }
 
-const PIPELINE_STEP_KINDS = new Set(["history_rewrite", "field_filter", "answer_guardrail", "answer_record_save"]);
+const PIPELINE_STEP_KINDS = new Set(["history_rewrite", "field_filter", "answer_record_save"]);
 
 /** RAG の span（backend の pipeline と同じ名前・種類・属性）。 */
 export const ragSpan = {
@@ -229,13 +229,12 @@ export function savedSpanProgress(
   return events;
 }
 
-/** よく使う回答の span の木（実行の全体・回答の段・工程・回答の安全チェック）。 */
-export function answerSpans(steps: string[], options: { guardrail?: boolean } = {}): SavedSpan[] {
+/** よく使う回答の span の木（実行の全体・回答の段・工程）。 */
+export function answerSpans(steps: string[]): SavedSpan[] {
   return [
     { key: "root", spec: ragSpan.root() },
     { key: "answer", spec: ragSpan.stage("answer") },
     ...steps.map((name, index) => ({ key: `step-${index}`, spec: ragSpan.step(name) })),
-    ...(options.guardrail ? [{ key: "guardrail", spec: ragSpan.stage("answer_guardrail") }] : []),
   ];
 }
 

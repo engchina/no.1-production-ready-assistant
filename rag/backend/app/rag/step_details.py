@@ -1,7 +1,7 @@
 """処理の経過の段の詳細（回答の記録の工程・パイプラインの工程。#2294 / #2341）。
 
 `rag_engine` の工程の記録（``execution_steps[].details``）と、パイプラインの工程
-（会話を踏まえた質問の書き換え・検索条件の抽出・回答の安全チェック）の詳細を、
+（会話を踏まえた質問の書き換え・検索条件の抽出）の詳細を、
 3 製品共通の詳細の形（``pr_backend_core.chat_progress`` の ``ChatProgressStepDetails``
 = 画面の ``RunStepDetails``: 見出しと値 ``fields``・行 ``lines``・``truncated``）にそろえる。
 上限で切り、秘密らしい値を伏せる（共通の規則）。旧い記録の行の list（#2294）は行として読む。
@@ -77,41 +77,3 @@ def field_filter_details(conditions: Iterable[Any]) -> dict[str, Any] | None:
     ]
     summary = f"{len(items)} 件" if items else "なし（条件で絞らずに検索します）"
     return pipeline_step_details(fields=[("読み取った条件", summary)], lines=lines)
-
-
-def answer_guardrail_details(result: Any, answer: str) -> dict[str, Any] | None:
-    """回答の安全チェックの結果（止めた・警告の件数・指摘・伏せた箇所）。"""
-
-    findings = list(getattr(result, "findings", ()) or ())
-    allowed = bool(getattr(result, "allowed", True))
-    unavailable = bool(getattr(result, "backend_degraded", False))
-    errors = sum(1 for item in findings if getattr(item, "severity", "") == "error")
-    skipped_reason = getattr(result, "skipped_reason", None)
-    if skipped_reason is not None:
-        verdict = {
-            "disabled": "無効のため省略",
-            "empty_text": "検査する回答がないため省略",
-            "client_unavailable": "検査の接続がないため省略",
-        }.get(skipped_reason, "省略")
-    elif unavailable:
-        verdict = "安全検査を完了できず、回答を止めました"
-    elif not allowed:
-        verdict = "回答を止めました"
-    elif findings:
-        verdict = f"警告 {len(findings)} 件（回答は出します）"
-    else:
-        verdict = "問題なし"
-    fields: list[tuple[str, object]] = [("結果", verdict)]
-    if errors and allowed:
-        fields.append(("重大な指摘", f"{errors} 件"))
-    if (
-        allowed
-        and not unavailable
-        and any(getattr(item, "code", "") == "oci_pii_detected" for item in findings)
-        and getattr(result, "sanitized_text", answer) != answer
-    ):
-        fields.append(("回答の書き換え", "機密らしい箇所を伏せました"))
-    if unavailable:
-        fields.append(("外部の検査", "OCI Guardrails を利用できませんでした"))
-    messages = dict.fromkeys(str(getattr(item, "message", "") or "") for item in findings)
-    return pipeline_step_details(fields=fields, lines=[message for message in messages if message])

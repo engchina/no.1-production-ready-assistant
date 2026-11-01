@@ -133,7 +133,6 @@ const slowSearchStream: TimedChunk[] = [
       sse("metadata", {
         trace_id: "trace-1",
         elapsed_ms: 3600,
-        guardrail_warnings: [],
         diagnostics: {
           retrieval_strategy: "hybrid",
           retrieval_strategy_adapter: "grounded",
@@ -196,7 +195,6 @@ const knowledgeStepsSearchStream: TimedChunk[] = [
       sse("metadata", {
         trace_id: "trace-1",
         elapsed_ms: 1600,
-        guardrail_warnings: [],
         diagnostics: {
           retrieval_strategy: "hybrid",
           retrieval_strategy_adapter: "grounded",
@@ -240,7 +238,6 @@ const retrievalOnlySearchStream: TimedChunk[] = [
       sse("metadata", {
         trace_id: "trace-1",
         elapsed_ms: 400,
-        guardrail_warnings: [],
         diagnostics: {
           retrieval_strategy: "hybrid",
           retrieval_strategy_adapter: "grounded",
@@ -638,7 +635,6 @@ const userMessage = {
   content: "自分の銀行の得点はなんですか",
   model: null,
   citations: [],
-  guardrail_warnings: [],
   trace_id: null,
   status: "COMPLETE",
   reply_to_message_id: null,
@@ -652,7 +648,6 @@ const errorReply = {
   content: TIMEOUT_MESSAGE,
   model: "m1",
   citations: [],
-  guardrail_warnings: [],
   trace_id: "t1",
   status: "ERROR",
   reply_to_message_id: "u1",
@@ -755,8 +750,8 @@ const okChatStream: TimedChunk[] = [
       // LLM の回数・結果の説明は値で届き、画面が i18n で補足にする。
       okProgress.finish("search", "done", { params: { llm_calls: 1, note: "根拠 1 件" } }),
       okProgress.finish("answer"),
-      okProgress.start("guardrail", ragSpan.stage("answer_guardrail")),
-      okProgress.finish("guardrail"),
+      okProgress.start("record_save", ragSpan.stage("answer_record_save")),
+      okProgress.finish("record_save"),
       okProgress.finish("root"),
       okProgress.terminal("done"),
       sse("metadata", {
@@ -764,7 +759,6 @@ const okChatStream: TimedChunk[] = [
         message_id: "a2",
         trace_id: "t2",
         elapsed_ms: 500,
-        guardrail_warnings: [],
       }),
       sse("delta", { model_id: "m1", text: okReply.content }),
       sse("citations", { model_id: "m1", citations: [citation] }),
@@ -1044,7 +1038,7 @@ test("リランクの論理要求は新規配信と保存したtraceで同じ名
   const content = "合成の回答です。";
   const stream: TimedChunk[] = [
     { afterMs: 0, text: sse("run", { trace_id: "trace-rerank" }) + traceSse(begin) },
-    { afterMs: 1200, text: traceSse(finish) + sse("metadata", { trace_id: "trace-rerank", elapsed_ms: 1200, guardrail_warnings: [], diagnostics: {} }) + sse("delta", { text: content }) + sse("done", { answer: content, citations: [] }) },
+    { afterMs: 1200, text: traceSse(finish) + sse("metadata", { trace_id: "trace-rerank", elapsed_ms: 1200, diagnostics: {} }) + sse("delta", { text: content }) + sse("done", { answer: content, citations: [] }) },
   ];
   await mockSearchPage(page, [stream]);
   await enableSearchAnswer(page);
@@ -1083,7 +1077,7 @@ test("リランクの論理要求は新規配信と保存したtraceで同じ名
 
   // 同じ保存済みイベントを会話のtrace APIから再読込する。記録は書き換えない。
   await page.route("**/api/chat/models", route => route.fulfill({ json: { data: [], error_messages: [], warning_messages: [] } }));
-  const base = { conversation_id: "conv-rerank", model: null, citations: [], guardrail_warnings: [], status: "COMPLETE", created_at: new Date().toISOString() };
+  const base = { conversation_id: "conv-rerank", model: null, citations: [], status: "COMPLETE", created_at: new Date().toISOString() };
   const conversation = { id: "conv-rerank", search_answer_profile_id: "bv-1", title: "合成の質問", status: "ACTIVE", message_count: 2, created_at: base.created_at, updated_at: base.created_at, messages: [
     { ...base, message_id: "user-rerank", role: "USER", content: "合成の質問", reply_to_message_id: null, trace_id: null },
     { ...base, message_id: "trace-rerank", role: "ASSISTANT", content, reply_to_message_id: "user-rerank", trace_id: "0123456789abcdef0123456789abcdef" },

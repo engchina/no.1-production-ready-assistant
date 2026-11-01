@@ -314,7 +314,6 @@ async function mockAnswerStream(page: Page, graphExpansion?: Record<string, unkn
         `event: metadata\ndata: ${JSON.stringify({
           trace_id: "trace-answer",
           elapsed_ms: 20,
-          guardrail_warnings: [],
           diagnostics: { search_answer_profile_applied: "bv-1", retrieval_strategy: "hybrid", answer: answerDiagnostics },
         })}\n\n`,
         `event: delta\ndata: ${JSON.stringify({ text: "受注一覧で取消を押します。" })}\n\n`,
@@ -660,7 +659,7 @@ test("検索の回答は同頁の説明と全確定根拠の対応を保つ", { 
   await page.route("**/api/search/stream", route => route.fulfill({
     headers: { "content-type": "text/event-stream" },
     body: [
-      `event: metadata\ndata: ${JSON.stringify({ trace_id: "trace-items", elapsed_ms: 20, guardrail_warnings: [], diagnostics: {} })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ trace_id: "trace-items", elapsed_ms: 20, diagnostics: {} })}\n\n`,
       `event: delta\ndata: ${JSON.stringify({ text: itemCitationText })}\n\n`,
       `event: citations\ndata: ${JSON.stringify(itemCitationChunks)}\n\n`,
       `event: done\ndata: ${JSON.stringify({ trace_id: "trace-items" })}\n\n`,

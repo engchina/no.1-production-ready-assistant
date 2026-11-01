@@ -60,7 +60,6 @@ def _response(answer: str, details: dict[str, Any]) -> SearchResponse:
         answer=answer,
         citations=[RetrievedChunk(chunk_id="doc-1:0", document_id="doc-1", text=answer, score=1.0)],
         trace_id="trace-1",
-        guardrail_warnings=[],
         elapsed_ms=1.0,
         diagnostics=SearchDiagnostics(answer=details),
     )

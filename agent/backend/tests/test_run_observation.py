@@ -207,7 +207,6 @@ def _full_run(setup: Setup) -> RunState:
         "outcome": "answered",
         # 縮退した任意の補助の処理（#3546）。形の合わない項目は写さない。
         "degraded_steps": [{"kind": "rerank", "count": 2}, {"kind": "", "count": 1}],
-        "guardrail_degraded": False,
         "evidence": [
             _evidence("doc-a", "a:1", "文書 A の合成の本文。", retrieval_rank=1),
             # RAG が 1 件の上限で切った根拠（生成には一部だけを渡した）。
@@ -459,14 +458,12 @@ def test_observation_returns_the_run_metadata_tool_calls_and_all_evidence(setup:
     )
     assert calls[0]["started_at"].startswith("2026-10-25T01:00:00")
     # RAG の根拠のツールの縮退（#3546）。失敗した呼び出し・ほかのツールは null。
-    assert [
-        (call["degraded_steps"], call["guardrail_degraded"], call["zero_evidence_stage"])
-        for call in calls[:3]
-    ] == [
-        ([{"kind": "rerank", "count": 2}], False, None),
-        (None, None, None),
-        (None, None, None),
+    assert [(call["degraded_steps"], call["zero_evidence_stage"]) for call in calls[:3]] == [
+        ([{"kind": "rerank", "count": 2}], None),
+        (None, None),
+        (None, None),
     ]
+    assert all("guardrail_degraded" not in call for call in calls)
 
     evidence = output["evidence"]
     assert (output["evidence_total"], output["withheld_evidence_count"]) == (4, 0)
@@ -794,30 +791,24 @@ def test_observation_copies_the_row_basis_of_rag(
                 "degraded_steps": [{"kind": "reference_load", "count": 1}],
                 "zero_evidence": {"stage": "retrieval", "candidate_count": 0, "rejected_count": 0},
             },
-            ([{"kind": "reference_load", "count": 1}], False, "retrieval"),
-        ),
-        # 安全チェックを完了できず止めた。
-        (
-            {"evidence": [], "guardrail_degraded": True, "zero_evidence": None},
-            ([], True, None),
+            ([{"kind": "reference_load", "count": 1}], "retrieval"),
         ),
         # 知らない段・壊れた記録は写さない。
         (
             {
                 "evidence": [],
                 "degraded_steps": "rerank",
-                "guardrail_degraded": "yes",
                 "zero_evidence": {"stage": "unknown"},
             },
-            ([], False, None),
+            ([], None),
         ),
     ],
-    ids=["degraded-zero", "guardrail", "unknown"],
+    ids=["degraded-zero", "unknown"],
 )
 def test_observation_copies_the_degraded_retrieval_of_rag(
-    output: dict[str, Any], expected: tuple[object, object, object]
+    output: dict[str, Any], expected: tuple[object, object]
 ) -> None:
-    """RAG の根拠のツールの縮退・安全チェックの未完了・根拠 0 件の段を写す（#3546）。"""
+    """RAG の根拠のツールの縮退・根拠 0 件の段を写す（#3546）。"""
     run_id = f"run3546obs-{uuid4().hex[:8]}"
     run = RunState(
         id=run_id,
@@ -829,4 +820,4 @@ def test_observation_copies_the_degraded_retrieval_of_rag(
         created_at=T0,
     )
     (call,) = run_observation.observe_run(run).tool_calls
-    assert (call.degraded_steps, call.guardrail_degraded, call.zero_evidence_stage) == expected
+    assert (call.degraded_steps, call.zero_evidence_stage) == expected

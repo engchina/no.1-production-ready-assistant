@@ -56,7 +56,7 @@ describe("streamSearch", () => {
   it("metadata/delta/citations/done を順に解析する", async () => {
     const body = [
       `event: stage\ndata: ${JSON.stringify({ trace_id: "t1", stage: "embedding", outcome: "started", elapsed_ms: 0, attributes: { input_count: 1 } })}\n\n`,
-      `event: metadata\ndata: ${JSON.stringify({ trace_id: "t1", elapsed_ms: 12, guardrail_warnings: [], diagnostics: {} })}\n\n`,
+      `event: metadata\ndata: ${JSON.stringify({ trace_id: "t1", elapsed_ms: 12, diagnostics: {} })}\n\n`,
       `event: delta\ndata: ${JSON.stringify({ text: "請求" })}\n\n`,
       `event: delta\ndata: ${JSON.stringify({ text: "金額" })}\n\n`,
       `event: citations\ndata: ${JSON.stringify([{ chunk_id: "c1" }])}\n\n`,

@@ -72,8 +72,7 @@ def test_answer_timeout_message_names_stage_and_retry() -> None:
 
 
 def test_stage_labels_cover_answer_stages() -> None:
-    """進捗の工程は回答の工程・回答側の安全チェック(#1146)・保存(#2342)・会話の添付からの根拠の
-    選択(#3475)と検索だけの工程。
+    """進捗の工程は回答の工程・保存(#2342)・会話の添付からの根拠の選択(#3475)と検索だけの工程。
 
     旧 standard の工程は #595 で削除した。
     """
@@ -85,7 +84,6 @@ def test_stage_labels_cover_answer_stages() -> None:
         "answer",
         # 回答を作らない RAG 検索の全体（#3506）。
         "evidence",
-        "answer_guardrail",
         "answer_record_save",
         "chat_message_save",
     }
@@ -167,10 +165,10 @@ async def test_search_reports_started_stages_as_mcp_progress(
     await search_route._report_tool_progress(_progress("answer", "started"))
     await search_route._report_tool_progress(_progress("answer_step:根拠確認（1回目）", "started"))
     await search_route._report_tool_progress(_progress("answer_step:根拠確認（1回目）", "success"))
-    await search_route._report_tool_progress(_progress("answer_guardrail", "started"))
+    await search_route._report_tool_progress(_progress("answer_record_save", "started"))
     # 終わった工程は知らせない。名前は時間切れの文言と同じ（answer_stage_label）。
     assert reported == [
         "質問の条件を整理して回答を作る",
         "要求に答える根拠があるか判定する（1 回目）",
-        "回答に安全上の問題がないか検査する",
+        "質問と回答と根拠の記録を保存する",
     ]

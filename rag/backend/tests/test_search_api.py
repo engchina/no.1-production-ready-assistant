@@ -274,18 +274,6 @@ def test_stream_search_api_buffers_answer_after_answer_check(
     assert "event: done" in response.text
 
 
-def test_search_response_dedupes_guardrail_warnings() -> None:
-    """クエリ側/回答側で重複する warning は順序保持で 1 件に畳む。"""
-    response = SearchResponse(
-        answer="ok",
-        trace_id="trace-1",
-        elapsed_ms=1.0,
-        guardrail_warnings=["A をマスクしました。", "B 検出。", "A をマスクしました。"],
-    )
-
-    assert response.guardrail_warnings == ["A をマスクしました。", "B 検出。"]
-
-
 def test_stream_search_api_never_emits_precheck_answer_bytes(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -511,7 +499,6 @@ class RealtimeMaskingPipeline:
             citations=[],
             trace_id=trace_id,
             elapsed_ms=1.0,
-            answer_replaced=True,
             diagnostics=build_search_diagnostics(
                 request, settings=get_settings(), retrieval_strategy_adapter="grounded"
             ),
@@ -540,9 +527,8 @@ class AuditingPipeline:
         record_rag_search_audit(
             trace_id=trace_id,
             outcome="no_results",
-            sanitized_query=request.query,
+            query=request.query,
             filters=request.filters,
-            findings=[],
             retrieved_count=0,
             citations=[],
             elapsed_ms=1.0,

@@ -862,9 +862,8 @@ async def _run_search_with_timeout(
         record_rag_search_audit(
             trace_id=trace_id,
             outcome="error",
-            sanitized_query=request.query,
+            query=request.query,
             filters=request.filters,
-            findings=[],
             retrieved_count=0,
             citations=[],
             elapsed_ms=elapsed,
@@ -937,9 +936,8 @@ def _record_cancelled_search(
     record_rag_search_audit(
         trace_id=trace_id,
         outcome="error",
-        sanitized_query=request.query,
+        query=request.query,
         filters=request.filters,
-        findings=[],
         retrieved_count=0,
         citations=[],
         elapsed_ms=elapsed,
@@ -965,8 +963,8 @@ async def _record_failed_run(
         return
     await run_recorder.record(
         run_id=trace_id,
-        # 安全チェックの後の質問（pipeline が受け取った時点で recorder に残す）。チェックの前に
-        # 失敗したときは保存しない（原文には機微な値が残っている）。
+        # pipeline が受け取った時点で recorder に残した質問。pipeline の前に失敗したときは
+        # 保存しない。
         question=run_recorder.question,
         search_answer_profile_id=request.search_answer_profile_id,
         answer_generated=request.generate_answer,
@@ -1066,9 +1064,8 @@ async def _stream_search_events_with_timeout(
             record_rag_search_audit(
                 trace_id=trace_id,
                 outcome="error",
-                sanitized_query=request.query,
+                query=request.query,
                 filters=request.filters,
-                findings=[],
                 retrieved_count=0,
                 citations=[],
                 elapsed_ms=elapsed,
@@ -1131,7 +1128,6 @@ async def _search_events(
         {
             "trace_id": result.trace_id,
             "elapsed_ms": result.elapsed_ms,
-            "guardrail_warnings": result.guardrail_warnings,
             "diagnostics": diagnostics,
             # 回答の注意書き（#2405）。画面は回答の本文と根拠の後に出す。
             "notice": result.notice,
