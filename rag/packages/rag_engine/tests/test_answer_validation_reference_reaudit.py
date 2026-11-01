@@ -230,3 +230,22 @@ def test_reference_reaudit_diagnostics_are_not_in_the_audit_schema() -> None:
     """監査が返した ID・監査し直しの結果はシステムが付ける診断で、監査モデルの schema に出さない（#112）。"""
     schema = json.dumps(ClaimAuditOutput.model_json_schema())
     assert "audit_evidence_id" not in schema and "reference_reaudit" not in schema
+
+
+@pytest.mark.parametrize(
+    ("quote", "status"),
+    [
+        # 写せる原文の代わりに書いた注記（不足の結論の形。#131）。
+        ("（全 evidence_items に記載なし）", "supported"),
+        # 原文の後ろに根拠の項目の欄を括弧で足した引用（#131）。
+        (VERBATIM[STAFF] + "（page_start: 1, page_end: 1）", "supported"),
+        # 原文に無い文は今までどおり通さない。
+        ("一般社員 99,000円 2,000円", "citation_error"),
+        ("（全 evidence_items に記載なし）一般社員 99,000円", "citation_error"),
+    ],
+)
+def test_audit_notes_in_the_support_quote_are_not_matched_as_quotes(quote: str, status: str) -> None:
+    answers = {STAFF: ("supported", TABLE, quote), MANAGER: ("supported", TABLE, VERBATIM[MANAGER])}
+    result = _validate(answers, answers)
+    assert _statuses(result)[STAFF][0] == status
+    assert _statuses(result)[MANAGER][0] == "supported"
