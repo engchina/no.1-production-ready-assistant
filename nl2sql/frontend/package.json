@@ -42,12 +42,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "jiti": "2.7.0",
     "oxlint": "1.89.0",
-    "postcss": "8.5.31",
+    "postcss": "8.5.32",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vite": "^8.0.16"
   },
   "overrides": {
-    "postcss": "8.5.31"
+    "postcss": "8.5.32"
   }
 }
