@@ -77,7 +77,9 @@ explicit = true
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3",
+    # pytest 9.2 は Node.nodeid を _id から作り、pytest-xdist 3.8.0 の loadgroup（item._nodeid に @group を
+    # 付ける）が効かない。実 Oracle のテストが並列に走り互いの行を消す（#143）。xdist が対応したら外す。
+    "pytest>=8.3,<9.2",
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "pytest-xdist>=3.8",

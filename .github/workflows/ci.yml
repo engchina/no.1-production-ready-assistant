@@ -416,6 +416,8 @@ jobs:
               - "platform/packages/system_settings_backend/src/pr_system_settings/auth/store.py"
               - "platform/packages/system_settings_backend/src/pr_system_settings/trace_recording.py"
             rag_oracle:
+              # 依存の更新（oracledb・pytest・pytest-xdist など）も実 Oracle のテストで確かめる（#143）。
+              - "rag/backend/uv.lock"
               - "rag/artifacts/oracle-schema-migration.*"
               - "rag/packages/rag_engine/rag_engine/retrieval/text_search_tokenizer.py"
               - "rag/backend/app/rag/system_schema*.py"
@@ -434,6 +436,8 @@ jobs:
               - "rag/backend/app/clients/support_guide_store.py"
               - "rag/backend/app/clients/language_pack_release_store.py"
             nl2sql_oracle:
+              # 依存の更新（oracledb・pytest・pytest-xdist など）も実 Oracle のテストで確かめる（#143）。
+              - "nl2sql/backend/uv.lock"
               - "nl2sql/backend/migrations/**"
               - "nl2sql/backend/app/cli/nl2sql_system_schema.py"
               - "nl2sql/backend/app/cli/app_security_migrate.py"
@@ -444,6 +448,8 @@ jobs:
               - "nl2sql/backend/tests/*oracle_live*.py"
               - "nl2sql/backend/app/features/nl2sql/db_admin_chat_columns.py"
             agent_oracle:
+              # 依存の更新（oracledb・pytest・pytest-xdist など）も実 Oracle のテストで確かめる（#143）。
+              - "agent/backend/uv.lock"
               - "agent/backend/app/system_schema.py"
               - "agent/backend/app/oracle_connection.py"
               - "agent/backend/app/cli/agent_system_schema.py"
