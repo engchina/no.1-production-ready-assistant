@@ -116,7 +116,7 @@ async def test_formal_answer_entry_passes_mode_and_observes_real_generation_audi
 def test_backend_settings_override_engine_default_for_every_valid_mode(
     mode: str, tmp_path: Any
 ) -> None:
-    assert Settings().rag_answer_audit_mode == "none"
+    assert Settings().rag_answer_audit_mode == "standard"
     converted = build_engine_settings(
         Settings(rag_answer_audit_mode=cast(Any, mode)), output_dir=tmp_path
     )

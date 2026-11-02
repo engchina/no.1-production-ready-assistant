@@ -2126,6 +2126,7 @@ def _section_engine(oracle: ReferenceOracle) -> AnswerEngine:
         rag_answer_flow="crag",
         rag_query_strategy="auto_routing",
         rag_section_expansion_enabled=True,
+        rag_answer_audit_mode="none",
     )
 
 

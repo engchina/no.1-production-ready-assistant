@@ -423,6 +423,7 @@ async def test_request_coverage_re_search_keeps_user_conditions_after_relaxation
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",
+            rag_answer_audit_mode="none",
             rag_answer_flow="standard_rag",
             rag_rerank_enabled=False,
             rag_request_coverage_retrieval_enabled=True,
