@@ -823,7 +823,9 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
         monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
 
     outcome = await _engine(
-        rag_answer_flow="standard_rag", rag_request_coverage_retrieval_enabled=True
+        rag_answer_flow="standard_rag",
+        rag_request_coverage_retrieval_enabled=True,
+        rag_answer_audit_mode="none",
     ).run(SearchRequest(query="登録方法は？"))
     assert [key for key, _ in section_map.reads] == ["s1", "s2"]
     assert outcome.diagnostics["section_expansion"]["minimum_scope_complete"]

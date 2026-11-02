@@ -332,7 +332,7 @@ async def test_answer_diagnostics_keep_llm_usage_and_round_budget(
 
     monkeypatch.setattr(engine_api, "parse_text_response", fake_with_usage)
     engine = AnswerEngine(
-        Settings(rag_domain_keywords=["受注番号"]),
+        Settings(rag_domain_keywords=["受注番号"], rag_answer_audit_mode="none"),
         oracle=FakeOracle(),  # type: ignore[arg-type]
         genai=FakeGenAi(),  # type: ignore[arg-type]
     )
@@ -424,7 +424,7 @@ async def test_pipeline_delegates_to_answer_engine(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
     pipeline = RagPipeline(
-        settings=Settings(),
+        settings=Settings(rag_answer_audit_mode="none"),
         oracle=FakeOracle(),  # type: ignore[arg-type]
         genai=FakeGenAi(),  # type: ignore[arg-type]
     )
@@ -3366,6 +3366,8 @@ async def _answer_with_coverage(
 
     monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
     settings.setdefault("rag_request_coverage_retrieval_enabled", True)
+    # 監査なしの振る舞いを確かめる（既定は standard。#135）。
+    settings.setdefault("rag_answer_audit_mode", "none")
     engine = AnswerEngine(
         Settings(
             rag_query_strategy="simple_retrieval",
