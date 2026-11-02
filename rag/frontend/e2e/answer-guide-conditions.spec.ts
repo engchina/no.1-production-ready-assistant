@@ -195,6 +195,9 @@ test("診断の照合・CRAG の情報は処理の詳細に出さず、識別子
   const panel = await ask(page);
   await expect(panel.getByTestId("answer-crag-details")).toHaveCount(0);
   await expect(panel.getByTestId("answer-validation-status")).toHaveCount(0);
+  // 照合の状態は処理の詳細ではなく、回答の本文の下の「資料との照合」の行に共通の 5 状態で出す（#141）。印が無い完了の
+  // 照合は、valid に関わらず「照合済み」。
+  await expect(page.getByTestId("answer-check-badge")).toHaveText("照合済み");
   await expect(panel.locator("[data-process-identifier]")).toHaveCount(3);
   await expect(panel.locator("[data-run-used-models]")).toBeVisible();
   await expectNoPageOverflow(page);

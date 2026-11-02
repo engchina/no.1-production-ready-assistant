@@ -6,7 +6,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from app.config import Settings
-from app.rag.run_history import RunRecorder, answer_validation_execution
+from app.rag.run_history import RunRecorder, answer_check_state, answer_validation_execution
 from tests.security_support import enable_production_auth, login
 from tests.test_run_history import (
     OWNER_CONVERSATION_PREDICATE,
@@ -178,3 +178,30 @@ def test_detail_uses_saved_diagnostics_only_when_stages_status_is_absent(
     response = client.get("/api/history/runs/run-1", headers=login(client, "viewer"))
     assert response.status_code == 200, response.text
     assert response.json()["data"]["validation_execution"] == expected
+
+
+MARK = {"text": "段落。", "state": "unverified", "reasons": []}
+
+
+@pytest.mark.parametrize(
+    ("diagnostics", "expected"),
+    [
+        ({}, None),
+        ({"answer_validation": {"status": "not_run", "reason": "audit_disabled"}}, "off"),
+        ({"answer_validation": {"status": "not_run", "reason": "empty_answer"}}, "skipped"),
+        ({"answer_validation": {"status": "error"}}, "failed"),
+        ({"answer_validation": {"status": "timed_out"}}, "failed"),
+        ({"answer_validation": {"status": "input_too_large"}}, "failed"),
+        # 照合が完了した回答は valid ではなく段落の印の有無で決める（#141）。
+        ({"answer_validation": {"status": "completed", "valid": None}}, "verified"),
+        (
+            {"answer_validation": {"status": "completed", "valid": True}, "passage_marks": [MARK]},
+            "flagged",
+        ),
+        ({"answer_validation": {"status": "new_status"}}, None),
+    ],
+)
+def test_answer_check_state_follows_the_shared_rule(
+    diagnostics: dict[str, Any], expected: str | None
+) -> None:
+    assert answer_check_state(diagnostics) == expected

@@ -73,3 +73,38 @@ def test_chat_message_carries_the_number_of_attached_images() -> None:
         _stored_message_from_row({**row, "status": "STREAMING"})
     )
     assert streaming.answer_attached_images == 0
+
+
+def test_chat_message_carries_the_answer_validation_state() -> None:
+    """資料との照合の状態と理由を返し、会話を開き直しても照合の行を出せるようにする（#141）。"""
+    row = {
+        "message_id": "m1",
+        "conversation_id": "c1",
+        "role": "ASSISTANT",
+        "status": "COMPLETE",
+        "created_at": datetime.now(UTC),
+        "answer_validation_status": "not_run",
+        "answer_validation_reason": "audit_disabled",
+    }
+    stored = _stored_message_from_row(row)
+    expected = {"status": "not_run", "reason": "audit_disabled"}
+    assert chat_route._to_chat_message(stored).answer_validation == expected
+    # 理由の無い状態は空の理由。照合の記録の無い回答（この機能より前・記録の無い回答）は None。
+    completed = _stored_message_from_row(
+        {**row, "answer_validation_status": "completed"} | {"answer_validation_reason": None}
+    )
+    assert completed.answer_validation == {"status": "completed", "reason": ""}
+    assert (
+        _stored_message_from_row({**row, "answer_validation_status": None}).answer_validation
+        is None
+    )
+    # 作成中の回答には出さない。
+    streaming = chat_route._to_chat_message(
+        _stored_message_from_row({**row, "status": "STREAMING"})
+    )
+    assert streaming.answer_validation is None
+    # 保存する回答は、診断から状態と理由だけを取り出す。
+    assert chat_route._answer_validation_state(
+        {"answer_validation": {"status": "completed", "valid": None, "claim_checks": [1]}}
+    ) == {"status": "completed", "reason": ""}
+    assert chat_route._answer_validation_state({}) is None

@@ -1,6 +1,6 @@
-import { AnswerPassageBadges, Banner, RunUsedModels, type AnswerPassageRecords } from "@production-ready/ui";
+import { AnswerCheckPanel, Banner, RunUsedModels } from "@production-ready/ui";
+import { ragAnswerCheck } from "@/lib/answer-check";
 import { parseAnswerDiagnostics, type AnswerDiagnostics } from "@/lib/answer-diagnostics";
-import { answerPassageLabels, answerPassages } from "@/lib/answer-passages";
 import { t } from "@/lib/i18n";
 
 /** 処理の詳細に出す、回答時点のモデルの記録。 */
@@ -15,34 +15,32 @@ export function AnswerDetailsPanel({ diagnostics, recordedModels = [] }: { diagn
 }
 
 /**
- * 回答を読むときに要る案内（段落の印の数のバッジ・公開の業務ガイドを読めなかった・資料では決まらない値がある）。
- * 回答の本文の下に出す（「詳細」に畳まない。#2096）。段落の印の記録（#2738）は回答の記録の診断から読み、診断の無い
- * 保存した回答（会話を開き直したとき）は `passageSource`（会話のメッセージ）から読む。
+ * 資料との照合の行（RAG・Agent 共通の 5 状態と部品。#141）。回答の本文の直下に出す（回答 → 資料との照合 → 回答の
+ * 注意書き → 出典 → 評価。page-archetypes.md §6.1）。照合の記録は回答の記録の診断から読み、診断の無い保存した回答
+ * （会話を開き直したとき）は `passageSource`（会話のメッセージ。照合の状態と段落の印を持つ）から読む。照合の記録の
+ * 無い過去の回答には出さない。
  */
-export function AnswerNotices({ diagnostics, passageSource }: { diagnostics: unknown; passageSource?: unknown }) {
+export function AnswerCheckRow({ diagnostics, passageSource }: { diagnostics: unknown; passageSource?: unknown }) {
+  return <AnswerCheckPanel check={ragAnswerCheck(diagnostics) ?? ragAnswerCheck(passageSource)} testId="answer-check" />;
+}
+
+/**
+ * 回答を読むときに要る案内（公開の業務ガイドを読めなかった・資料では決まらない値がある）。回答の本文の下に出す
+ * （「詳細」に畳まない。#2096）。段落の印の数は資料との照合の行（`AnswerCheckRow`）に出す（#141）。
+ */
+export function AnswerNotices({ diagnostics }: { diagnostics: unknown }) {
   const data = parseAnswerDiagnostics(diagnostics);
-  const passages = answerPassages(diagnostics) ?? answerPassages(passageSource);
-  const notices = data && (data.guideLoadFailed || data.externalDataRequired || data.externalDataItems.length > 0);
-  if (!notices && !passages) return null;
+  if (!data || !(data.guideLoadFailed || data.externalDataRequired || data.externalDataItems.length > 0)) return null;
   return (
     <div className="space-y-2">
-      {data ? <AnswerNoticeBanners data={data} passages={passages} /> : <PassageBadges passages={passages} />}
+      <AnswerNoticeBanners data={data} />
     </div>
   );
 }
 
-/**
- * 段落の印の数のバッジ（「未確認 N 件」「要注意 N 件」「矛盾で除外 N 件」。0 件は出さない。Agent の「資料との照合」と
- * 同じ共有の部品。#2738）。
- */
-function PassageBadges({ passages }: { passages: AnswerPassageRecords | null }) {
-  return <AnswerPassageBadges records={passages} labels={answerPassageLabels()} testId="answer-passage-badges" />;
-}
-
-function AnswerNoticeBanners({ data, passages }: { data: AnswerDiagnostics; passages: AnswerPassageRecords | null }) {
+function AnswerNoticeBanners({ data }: { data: AnswerDiagnostics }) {
   return (
     <>
-      <PassageBadges passages={passages} />
       {data.guideLoadFailed ? (
         // 公開の業務ガイドを読めず、使わずに答えた（ガイドが無かったときと区別する。#1278 / #1287）。
         <div data-testid="answer-guide-load-failed">

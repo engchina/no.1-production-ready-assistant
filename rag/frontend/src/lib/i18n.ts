@@ -4004,15 +4004,6 @@ export const ja = {
   "search.answerDetails.crag.coverage.missing": "不足あり",
   "search.answerDetails.crag.coverage.unknown": "未確認",
   "search.answerDetails.crag.execution.partial": "判定結果の一部が不足しており、全体の充足は未確認です。",
-  "search.answerDetails.validation.title": "最終回答の資料照合",
-  "search.answerDetails.validation.disabled": "設定で無効",
-  "search.answerDetails.validation.not_run": "未実行",
-  "search.answerDetails.validation.error": "確認処理でエラー",
-  "search.answerDetails.validation.timed_out": "確認が時間切れ",
-  "search.answerDetails.validation.passed": "確認完了・問題なし",
-  "search.answerDetails.validation.failed": "確認完了・問題あり",
-  "search.answerDetails.validation.partial": "一部のみ確認",
-  "search.answerDetails.validation.unknown": "確認状態が不明",
   "search.answerDetails.crag.execution.not_run": "観点の判定は未実行です。生成の利用可否とは別に扱います。",
   "search.answerDetails.crag.execution.error": "観点の判定に失敗しました。充足は未確認です。",
   "search.answerDetails.crag.missing": "不足が確認された観点: {items}",
@@ -4209,6 +4200,11 @@ export const ja = {
   // 回答（チャット・RAG 検索）の処理の経過（#2096。3 製品共通の ChatProgress と、その下の「詳細」）。
   "answer.process.title": "処理の経過",
   // 回答の注意書き（3 製品で共通の文。#2405）
+  // 資料との照合の理由（RAG・Agent 共通の 5 状態の部品 AnswerCheckPanel に渡す。#141）。
+  "answer.check.reason.emptyAnswer": "回答が空のため",
+  "answer.check.reason.error": "エラーが発生しました",
+  "answer.check.reason.timedOut": "時間内に終わりませんでした",
+  "answer.check.reason.inputTooLarge": "回答が長すぎて照合できませんでした",
   "answer.notice.label": "回答の注意書き",
   "answer.process.details": "処理の詳細",
   // 回答の工程の利用者向けの名前（backend の工程名 → 画面の名前。#2096。lib/answer-process.ts）。
@@ -5021,9 +5017,6 @@ export const ja = {
   "history.outcome.answered": "回答",
   "history.outcome.searchOnly": "回答なし（検索のみ）",
   "history.outcome.none": "回答なし",
-  "history.verification.verified": "照合済み",
-  "history.verification.partial": "一部未確認",
-  "history.verification.unverified": "未照合",
   "history.verification.help":
     "最終回答の資料照合について、設定で無効・未実行・エラー・時間切れ・確認完了の結果を区別します。古い記録の「一部未確認」は答えられていない・確かめられなかった要求があり、「未照合」は照合の記録がない状態です。未実行や失敗を、確認済みとは扱いません。",
   "history.verification.helpLabel": "資料との照合の説明",

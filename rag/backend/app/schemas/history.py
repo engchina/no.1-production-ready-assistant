@@ -17,6 +17,8 @@ RunVerification = Literal["verified", "partial", "unverified"]
 ValidationExecution = Literal[
     "disabled", "not_run", "error", "timed_out", "passed", "failed", "partial", "unknown"
 ]
+# 資料との照合の状態（RAG・Agent 共通の 5 状態。#141。照合済み・印あり・対象外・照合オフ・失敗）。
+AnswerCheckState = Literal["verified", "flagged", "skipped", "off", "failed"]
 
 
 class RunSummary(BaseModel):
@@ -37,6 +39,9 @@ class RunSummary(BaseModel):
     # 回答の検証（回答の監査で要求ごとに根拠で答えられたか）。回答を作らない実行は None。
     verification: RunVerification | None = None
     validation_execution: ValidationExecution | None = None
+    # 資料との照合の状態（#141）。この項目より前の実行は None
+    # （画面は validation_execution から読む）。
+    answer_check: AnswerCheckState | None = None
     confidence: str | None = None
     needs_human_review: bool | None = None
     citation_count: int = 0

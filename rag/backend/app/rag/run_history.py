@@ -27,8 +27,8 @@ from pr_backend_core.observability.tracing import finish_operation_trace
 from app.config import Settings
 from app.rag.answer_failure import answer_error_identity
 from app.rag.semantic_audit_policy import semantic_audit_is_diagnostic_only
-from app.rag.stored_answer import stored_citations
-from app.schemas.history import ValidationExecution
+from app.rag.stored_answer import passage_mark_record, stored_citations
+from app.schemas.history import AnswerCheckState, ValidationExecution
 from app.schemas.search import (
     EXTRACTION_FIELD_FILTER_KEY,
     SUPPORTED_SEARCH_CLASSIFICATION_FILTERS,
@@ -114,6 +114,30 @@ def answer_validation_execution(
         if validation.get("valid") is False:
             return "failed"
     return "unknown"
+
+
+def answer_check_state(diagnostics: Mapping[str, Any] | None) -> AnswerCheckState | None:
+    """資料との照合の状態（RAG・Agent 共通の 5 状態。#141）。
+
+    照合が完了した回答は ``valid`` ではなく段落の印の有無で決める（standard の意味監査は未校正で
+    ``valid`` を持たないため）。印・外した段落・回答全体の注意が 1 つでもあれば flagged。画面の
+    ``ragAnswerCheck``（rag/frontend の lib/answer-check.ts）と同じ規則。
+    """
+    validation = diagnostics.get("answer_validation") if diagnostics is not None else None
+    if not isinstance(validation, Mapping):
+        return None
+    status = str(validation.get("status") or "")
+    reason = validation.get("reason")
+    if status == "disabled" or reason == "audit_disabled":
+        return "off"
+    if reason == "empty_answer":
+        return "skipped"
+    if status in {"error", "timed_out", "timeout", "partial", "input_too_large"}:
+        return "failed"
+    if status in {"completed", "ok", "validated", "no_claims"}:
+        marked = any(passage_mark_record(diagnostics).values())
+        return "flagged" if marked else "verified"
+    return None
 
 
 def answer_verification(diagnostics: Mapping[str, Any] | None) -> RunVerification | None:
@@ -257,6 +281,11 @@ class RunRecorder:
                     {"validation_execution": validation_execution}
                     if (validation_execution := answer_validation_execution(diagnostics))
                     is not None
+                    else {}
+                ),
+                **(
+                    {"answer_check": answer_check}
+                    if (answer_check := answer_check_state(diagnostics)) is not None
                     else {}
                 ),
                 # 詳細の処理の経過（共通の span の表の trace id と工程の詳細。#3226）。

@@ -1133,6 +1133,8 @@ for (const viewport of [
         { text: "合成の変更は翌月から反映されます。", reasons: [{ code: "contradicted", label: "根拠と矛盾", detail: "合成の理由 B。" }] },
       ],
       answer_warnings: [{ code: "off_goal", label: "質問からずれている可能性", detail: "" }],
+      // standard の意味監査（未校正で valid を持たない）。照合の状態は段落の印の有無で決める（#141）。
+      answer_validation: { status: "completed", valid: null },
     };
     const streamBody = [
       sseStart,
@@ -1182,11 +1184,16 @@ for (const viewport of [
     await points.getByTestId("answer-marked-passage-link").nth(1).click();
     await expect(marked.nth(1)).toBeFocused();
 
-    // 印の数のバッジは本文の下（Agent の「資料との照合」と同じ部品・文言）。
-    const badges = page.getByTestId("answer-passage-badges").locator("[data-status-variant]");
-    await expect(badges).toHaveText(["未確認 1 件", "要注意 1 件", "矛盾で除外 1 件"]);
-    await expect(badges.nth(0)).toHaveAttribute("data-status-variant", "warning");
-    await expect(badges.nth(2)).toHaveAttribute("data-status-variant", "danger");
+    // 印の数は本文の下の「資料との照合」の行（Agent と同じ共通の部品・文言。#141）。旧い印のバッジ群は出さない。
+    const check = page.getByTestId("answer-check");
+    await expect(check.locator("[data-status-variant]")).toHaveText(["照合で要確認 3 か所"]);
+    await expect(check.locator("[data-status-variant]")).toHaveAttribute("data-status-variant", "warning");
+    await expect(page.getByTestId("answer-check-badge-note")).toHaveText("（未確認 1・要注意 1・矛盾で除外 1）");
+    await expect(page.getByTestId("answer-passage-badges")).toHaveCount(0);
+    // 並びは 回答の本文 → 資料との照合（page-archetypes.md §6.1）。
+    const answerBox = await answer.boundingBox();
+    const checkBox = await check.boundingBox();
+    expect(checkBox!.y).toBeGreaterThan(answerBox!.y);
     await expectNoPageOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`answer-marks-rag-chat-${viewport.name}.png`), fullPage: true });
   });

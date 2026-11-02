@@ -353,6 +353,15 @@ export {
   type ChatAnswerBodyLabels,
   type ChatAnswerBodyProps,
 } from "./components/chat/answer-heading";
+// 資料との照合の行（RAG・Agent 共通の 5 状態。#141）
+export {
+  AnswerCheckBadge,
+  AnswerCheckPanel,
+  DEFAULT_ANSWER_CHECK_LABELS,
+  type AnswerCheck,
+  type AnswerCheckLabels,
+  type AnswerCheckState,
+} from "./components/chat/answer-check";
 // 回答の段落の印・外した段落・回答全体の注意（RAG・Agent 共通。#2738）
 export {
   ANSWER_PASSAGE_STATE_ICON,

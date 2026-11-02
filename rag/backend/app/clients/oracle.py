@@ -353,6 +353,9 @@ class StoredMessage:
     # 保存せず、回答の記録（rag_answer_records の diagnostics_json）から trace_id で読む。
     # 記録の無い回答（保存の失敗・保存期間の経過・この機能より前の回答）は None。
     passage_record: dict[str, Any] | None = None
+    # 資料との照合の状態（ASSISTANT の回答だけ。#141）。回答の記録の診断の ``answer_validation`` の
+    # ``status`` / ``reason`` だけを、段落の印と同じく trace_id で読む。記録の無い回答は None。
+    answer_validation: dict[str, str] | None = None
     # 回答のモデルへ添付した根拠の画像の件数（ASSISTANT の回答だけ。回答の記録の診断の
     # ``models.attached_images``。#3444）。画像を添付しなかった回答・記録の無い回答は 0。
     answer_attached_images: int = 0
@@ -4334,7 +4337,11 @@ class OracleClient:
                 JSON_QUERY(r.diagnostics_json, '$.answer_warnings' RETURNING CLOB)
                     AS answer_warnings_json,
                 JSON_VALUE(r.diagnostics_json, '$.models.attached_images' RETURNING NUMBER)
-                    AS answer_attached_images
+                    AS answer_attached_images,
+                JSON_VALUE(r.diagnostics_json, '$.answer_validation.status')
+                    AS answer_validation_status,
+                JSON_VALUE(r.diagnostics_json, '$.answer_validation.reason')
+                    AS answer_validation_reason
             FROM rag_messages m
             JOIN rag_conversations c
               ON c.conversation_id = m.conversation_id
@@ -14442,6 +14449,7 @@ def _stored_message_from_row(row: Mapping[str, object]) -> StoredMessage:
             else None
         ),
         passage_record=_message_passage_record(row),
+        answer_validation=_message_answer_validation(row),
         answer_attached_images=max(0, _optional_int(row.get("answer_attached_images")) or 0),
     )
 
@@ -14451,6 +14459,14 @@ _MESSAGE_PASSAGE_COLUMNS = (
     ("removed_passages", "removed_passages_json"),
     ("answer_warnings", "answer_warnings_json"),
 )
+
+
+def _message_answer_validation(row: Mapping[str, object]) -> dict[str, str] | None:
+    """回答の記録から読んだ資料との照合の状態（#141）。照合の記録の無い回答は None。"""
+    status = _optional_str(row.get("answer_validation_status"))
+    if not status:
+        return None
+    return {"status": status, "reason": _optional_str(row.get("answer_validation_reason")) or ""}
 
 
 def _message_passage_record(row: Mapping[str, object]) -> dict[str, Any] | None:

@@ -9,12 +9,12 @@ file)配下に置く。メッセージ送信は既存 RAG パイプラインを
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import suppress
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -267,6 +267,8 @@ def _to_chat_message(
         answer_attached_images=(
             message.answer_attached_images if message.status == "COMPLETE" else 0
         ),
+        # 資料との照合の状態（終わった回答だけ。#141）。
+        answer_validation=(message.answer_validation if message.status == "COMPLETE" else None),
         # 段落の印（終わった回答だけ。#2738）。契約の項目だけを返す。
         **(
             passage_mark_record(message.passage_record)
@@ -274,6 +276,14 @@ def _to_chat_message(
             else {}
         ),
     )
+
+
+def _answer_validation_state(diagnostics: Mapping[str, Any] | None) -> dict[str, str] | None:
+    """回答の診断の資料との照合から、画面が使う状態と理由だけを取り出す（#141）。"""
+    validation = (diagnostics or {}).get("answer_validation")
+    if not isinstance(validation, Mapping) or not validation.get("status"):
+        return None
+    return {"status": str(validation["status"]), "reason": str(validation.get("reason") or "")}
 
 
 def _saved_attachments(message: StoredMessage) -> list[ChatAttachmentReference]:
@@ -1089,6 +1099,7 @@ async def _generate_chat_answer(
             answer_notice=result.notice,
             # 段落の印（#2738）。列には保存せず、回答の記録（diagnostics_json）から読み直す。
             passage_record=passage_mark_record(result.diagnostics.answer),
+            answer_validation=_answer_validation_state(result.diagnostics.answer),
         )
     except Exception as exc:
         await run_recorder.record(

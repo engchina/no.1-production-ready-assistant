@@ -49,6 +49,7 @@ interface RunRow {
   answer_outcome: string | null;
   verification: "verified" | "partial" | "unverified" | null;
   validation_execution?: string | null;
+  answer_check?: string | null;
   confidence: string | null;
   needs_human_review: boolean | null;
   citation_count: number;
@@ -100,6 +101,8 @@ function run(index: number, overrides: Partial<RunRow> = {}): RunRow {
     status: "success",
     answer_outcome: chat ? "answered" : null,
     verification: chat ? "verified" : null,
+    // 資料との照合の状態（RAG・Agent 共通の 5 状態。#141）。
+    answer_check: chat ? "verified" : null,
     confidence: chat ? "high" : null,
     needs_human_review: chat ? false : null,
     citation_count: 2,
@@ -1379,20 +1382,38 @@ test("実行履歴の主一覧は高い画面へ拡張してページ送りを�
 });
 
 
-test("資料照合の実行状態は未照合にまとめず、一覧と詳細で区別する", { tag: "@responsive" }, async ({ page }, testInfo) => {
+// #141: 照合の状態は RAG・Agent 共通の 5 状態。answer_check の無い過去の実行は照合の実行状態から読み、
+// 合否を決めていない（unknown）実行は「—」。
+test("資料との照合は共通の 5 状態で一覧と詳細に出し、過去の実行は照合の実行状態から読む", { tag: "@responsive" }, async ({ page }, testInfo) => {
   await mockLocalAuth(page);
-  const states = [
-    ["disabled", "設定で無効"], ["not_run", "未実行"], ["error", "確認処理でエラー"],
-    ["timed_out", "確認が時間切れ"], ["passed", "確認完了・問題なし"], ["failed", "確認完了・問題あり"],
+  const states: [Partial<RunRow>, string][] = [
+    [{ validation_execution: "disabled" }, "照合オフ"],
+    [{ validation_execution: "not_run" }, "照合の対象外"],
+    [{ validation_execution: "error" }, "照合に失敗"],
+    [{ validation_execution: "timed_out" }, "照合に失敗"],
+    [{ validation_execution: "passed" }, "照合済み"],
+    [{ validation_execution: "failed" }, "照合で要確認あり"],
+    [{ answer_check: "flagged", validation_execution: "passed" }, "照合で要確認あり"],
+    [{ validation_execution: "unknown" }, "—"],
   ];
-  const rows = states.map(([execution], index) => run(index + 1, { answer_generated: true, verification: "unverified", validation_execution: execution }));
+  const rows = states.map(([fields], index) =>
+    run(index + 1, { answer_generated: true, verification: "unverified", answer_check: null, ...fields })
+  );
   await mockRuns(page, rows);
   await page.goto("/history");
   if (testInfo.project.name === "desktop") {
     for (const [index, [, label]] of states.entries()) {
-      await expect(page.getByTestId(`run-history-row-run-${index + 1}`)).toContainText(label);
+      const row = page.getByTestId(`run-history-row-run-${index + 1}`);
+      if (label === "—") await expect(row.getByTestId(`run-answer-check-run-${index + 1}`)).toHaveCount(0);
+      else await expect(row.getByTestId(`run-answer-check-run-${index + 1}`)).toHaveText(label);
     }
   }
+  // 詳細は回答の節の本文の直下に「資料との照合」の行（チャットと同じ共通の部品。理由もバッジの横に出す）。
+  await page.goto("/history/run-1");
+  const check = page.getByTestId("run-history-answer").getByTestId("run-answer-check");
+  await expect(check).toContainText("資料との照合");
+  await expect(check.getByTestId("run-answer-check-badge")).toHaveText("照合オフ");
+  await expect(check.getByTestId("run-answer-check-badge-note")).toHaveText("設定で照合を無効にしています");
   for (const [index] of states.entries()) {
     await page.goto(`/history/run-${index + 1}`);
     await page.getByTestId("run-history-timeline-summary").click();
