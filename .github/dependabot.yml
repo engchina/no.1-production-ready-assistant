@@ -89,6 +89,11 @@ updates:
       # major は Issue を立て、起動の契約を更新する PR で個別に上げる。
       - dependency-name: gunicorn
         update-types: ["version-update:semver-major"]
+      # rag/backend は pyproject で pytest を <9.2 に固定している。pytest 9.2 は Node.nodeid を _id から作り、
+      # pytest-xdist 3.8.0 の loadgroup（item._nodeid に @group を付ける）が効かず、実 Oracle のテストが並列に走って
+      # 互いの行を消す（#143）。xdist が pytest 9.2 に対応したら、この ignore と pyproject の上限を外す。
+      - dependency-name: pytest
+        versions: [">=9.2"]
 
   # platform の backend の package（#1588）。3 製品の uv.lock が path で入れて依存を書き写しているので、
   # lock だけを上げる（lockfile-only。冒頭の「対象範囲」）。版の範囲を超える更新は Issue を立てて 3 製品の lock と上げる。
