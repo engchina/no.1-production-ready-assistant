@@ -62,6 +62,9 @@ FILE_PREFIX = "ann-eval-"
 INDEX_NAME = "RAG_CHUNKS_EMBEDDING_HNSW_IDX"
 # exact の境界の距離と同じとみなす差(float32 の距離の丸め)。
 TIE_EPSILON = 1e-6
+# ``DBMS_XPLAN.DISPLAY_CURSOR`` が計画を読めなかったときの文言と、実行し直す上限。
+PLAN_NOT_IN_CURSOR_CACHE = "cannot fetch plan"
+PLAN_READ_ATTEMPTS = 5
 
 
 # ----------------------------------------------------------------- 決定論の評価(DB を使わない)
@@ -132,15 +135,19 @@ _FIRST_INNER_SELECT = re.compile(r"^\s*SELECT \* FROM \(\s*SELECT\b")
 FORCE_VECTOR_INDEX_HINT = f"/*+ VECTOR_INDEX_TRANSFORM(c {INDEX_NAME.lower()}) */"
 
 
-def force_vector_index_hint(statement: str) -> str:
+def force_vector_index_hint(statement: str, *, filter_type: str | None = None) -> str:
     """近似の検索の SQL に、vector の索引を使わせる hint を足す(測定だけ。本番の SQL は変えない)。
 
     optimizer は chunk の少ない DB では索引を使わずに全件の距離を計算する(結果は exact と同じ)。
     行が増えて索引を選んだときの計画(索引の前で絞る条件・後で絞る条件)を、少ない行で再現する。
+    ``filter_type`` は絞り込みの方法を固定する(省くと optimizer が選び、run によって変わる。#147)。
     """
-    hinted, count = _FIRST_INNER_SELECT.subn(
-        f"SELECT * FROM ( SELECT {FORCE_VECTOR_INDEX_HINT}", statement, count=1
+    hint = (
+        FORCE_VECTOR_INDEX_HINT
+        if filter_type is None
+        else f"/*+ VECTOR_INDEX_TRANSFORM(c {INDEX_NAME.lower()} {filter_type}) */"
     )
+    hinted, count = _FIRST_INNER_SELECT.subn(f"SELECT * FROM ( SELECT {hint}", statement, count=1)
     if count != 1:
         raise ValueError("vector 検索の SQL の形が想定と違います。")
     return hinted
@@ -436,35 +443,43 @@ class ScenarioReport:
     approx_plan: list[str]
 
 
+def _last_statement_plan(connection: OracleConnectionProtocol) -> list[str]:
+    # 直前の文(この検索)の SQL_ID と子カーソル。子は 0 とは限らない(bind の型・
+    # 適応の計画で増える)ので、番号を読んでから計画を読む。
+    cursor_rows = _fetch_all(
+        connection,
+        "SELECT prev_sql_id, prev_child_number FROM v$session "
+        "WHERE sid = SYS_CONTEXT('USERENV', 'SID')",
+        {},
+    )
+    plan_rows = _fetch_all(
+        connection,
+        "SELECT plan_table_output FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR("
+        ":sql_id, :child_number, 'BASIC +PREDICATE'))",
+        {
+            "sql_id": cursor_rows[0]["prev_sql_id"],
+            "child_number": cursor_rows[0]["prev_child_number"],
+        },
+    )
+    return [str(row.get("plan_table_output") or "") for row in plan_rows]
+
+
 def _run_statement(
     statement: str, binds: dict[str, object], *, with_plan: bool
 ) -> Callable[[OracleConnectionProtocol], tuple[list[dict[str, object]], float, list[str]]]:
     def operation(
         connection: OracleConnectionProtocol,
     ) -> tuple[list[dict[str, object]], float, list[str]]:
-        started = time.perf_counter()
-        rows = _fetch_all(connection, statement, binds)
-        elapsed = (time.perf_counter() - started) * 1000
-        plan: list[str] = []
-        if with_plan:
-            # 直前の文(この検索)の SQL_ID と子カーソル。子は 0 とは限らない(bind の型・
-            # 適応の計画で増える)ので、番号を読んでから計画を読む。
-            cursor_rows = _fetch_all(
-                connection,
-                "SELECT prev_sql_id, prev_child_number FROM v$session "
-                "WHERE sid = SYS_CONTEXT('USERENV', 'SID')",
-                {},
-            )
-            plan_rows = _fetch_all(
-                connection,
-                "SELECT plan_table_output FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR("
-                ":sql_id, :child_number, 'BASIC +PREDICATE'))",
-                {
-                    "sql_id": cursor_rows[0]["prev_sql_id"],
-                    "child_number": cursor_rows[0]["prev_child_number"],
-                },
-            )
-            plan = [str(row.get("plan_table_output") or "") for row in plan_rows]
+        # 実行した直後でも、カーソルの計画の領域だけが共有 pool から解放されて読めないことがある
+        # (v$sql の行は VALID のまま。#147)。実行し直すと計画が読み込まれるので、行と計画を
+        # 同じ実行のものにしたまま読み直す。上限まで読めなければ、その文言を計画として返す。
+        for _ in range(PLAN_READ_ATTEMPTS if with_plan else 1):
+            started = time.perf_counter()
+            rows = _fetch_all(connection, statement, binds)
+            elapsed = (time.perf_counter() - started) * 1000
+            plan = _last_statement_plan(connection) if with_plan else []
+            if not any(PLAN_NOT_IN_CURSOR_CACHE in line for line in plan):
+                break
         return rows, elapsed, plan
 
     return operation
