@@ -25,7 +25,7 @@ from app.api.routes.search import _stored_citation_rows
 from app.clients.oracle import OracleClient
 from app.clients.oracle_run_history import RunHistoryStore, owner_user_uuids
 from app.rag.request_context import current_audit_request_context
-from app.rag.run_history import answer_validation_execution
+from app.rag.run_history import answer_check_state, answer_validation_execution
 from app.rag.saved_evidence import withhold_saved_answer
 from app.rag.trace_store import TraceSnapshot, run_trace_snapshot
 from app.schemas.common import ApiResponse, Page
@@ -130,6 +130,8 @@ async def get_run(run_id: str) -> ApiResponse[RunDetail]:
     stages: dict[str, Any] = raw_stages if isinstance(raw_stages, dict) else {}
     if fields.get("validation_execution") is None:
         fields["validation_execution"] = stages.get("validation_execution")
+    if fields.get("answer_check") is None:
+        fields["answer_check"] = stages.get("answer_check")
     detail: dict[str, Any] = {
         **{key: value for key, value in fields.items() if not key.endswith("_json")},
         "error_code": _text_or_none(stages.get("error_code")),
@@ -156,6 +158,8 @@ async def get_run(run_id: str) -> ApiResponse[RunDetail]:
             detail["answer_diagnostics"] = diagnostics if isinstance(diagnostics, dict) else None
             if detail.get("validation_execution") is None and isinstance(diagnostics, dict):
                 detail["validation_execution"] = answer_validation_execution(diagnostics)
+            if detail.get("answer_check") is None and isinstance(diagnostics, dict):
+                detail["answer_check"] = answer_check_state(diagnostics)
     # 保存した根拠と診断は、見る人の今の権限で確かめ直す（見られない根拠は数だけ。#3252）。
     (
         detail["citations"],

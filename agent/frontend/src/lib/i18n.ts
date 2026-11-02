@@ -740,7 +740,6 @@ const agentJa = {
   "evidence.previewTextFailed": "原文の本文を読み込めませんでした。URL の期限が切れたか、資料が更新された可能性があります。",
   // 資料との照合（回答の文を AI に渡した資料と照らし合わせた結果と、支援タスクの状態を業務の言葉で出す。#1286・#2361）。
   // 3 製品で同じ概念は「資料との照合」と呼ぶ。内部の語（予算・reason の値）は出さない。
-  "chat.review.title": "資料との照合",
   "chat.review.conditions": "確かめた条件",
   "chat.review.clarifications": "確認待ちの質問",
   "chat.review.guide": "使った業務ガイド",
@@ -753,13 +752,6 @@ const agentJa = {
   "chat.review.options": "選択肢：{options}",
   "chat.review.guideUntitled": "名前の無い業務ガイド",
   "chat.review.guideRevision": "（第 {revision} 版）",
-  "chat.review.state.verified": "照合済み",
-  // 段落の印の記録の無い過去の Run（#2738 より前）。件数は回答の本文の節「資料から確認できなかった事項」の項目の数
-  // （節と一致させる。#2361）。今の Run は印の数のバッジ（chat.answer.passage.badge*）。
-  "chat.review.state.unverifiedPoints": "確かめられない点 {count} 件",
-  "chat.review.state.unverifiedPointsNoCount": "確かめられない点あり",
-  "chat.review.state.unvalidated": "照合できませんでした",
-  "chat.review.state.skipped": "照合の対象外",
   // 回答の対応（#1314）。RAG の回答の詳細の対応のバッジ（search.answerDetails.outcome.*。#1252）と同じ文言。
   "chat.review.outcome.conditional": "条件付きの回答",
   "chat.review.outcome.needsClarification": "確認が必要",

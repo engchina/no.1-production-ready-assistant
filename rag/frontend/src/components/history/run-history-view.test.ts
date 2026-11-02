@@ -18,7 +18,6 @@ import {
   runStatusParam,
   runTimeline,
   runUsageView,
-  runVerificationView,
   RUN_STATUS_OPTIONS,
   toRunStatus,
 } from "./run-history-view";
@@ -54,23 +53,6 @@ describe("実行履歴の表示の対応表", () => {
     expect(
       runOutcomeView({ answer_generated: true, status: "success", answer_outcome: "insufficient_evidence" })
     ).toEqual({ variant: "danger", label: "根拠不足" });
-  });
-
-  it("資料との照合は 3 段階で、回答が無ければ出さない", () => {
-    expect(runVerificationView("verified")?.label).toBe("照合済み");
-    expect(runVerificationView("unverified")?.label).toBe("未照合");
-    expect(runVerificationView("partial")?.variant).toBe("warning");
-    expect(runVerificationView("unverified")?.variant).toBe("neutral");
-    expect(runVerificationView(null)).toBeNull();
-  });
-
-  it.each([
-    ["disabled", "設定で無効"], ["not_run", "未実行"], ["error", "確認処理でエラー"],
-    ["timed_out", "確認が時間切れ"], ["passed", "確認完了・問題なし"],
-    ["failed", "確認完了・問題あり"], ["partial", "一部のみ確認"], ["unknown", "確認状態が不明"],
-  ])("照合の実行状態%sは旧集約値より優先する", (execution, label) => {
-    expect(runVerificationView("unverified", execution)?.label).toBe(label);
-    expect(runVerificationView("verified", execution)?.label).toBe(label);
   });
 
   it("所要時間は共通の書式（記録なしは「—」）", () => {

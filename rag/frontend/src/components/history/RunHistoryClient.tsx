@@ -46,6 +46,8 @@ import {
   RunTimelineSection,
   SearchField,
   StatusBadge,
+  AnswerCheckBadge,
+  AnswerCheckPanel,
   TableSkeleton,
   TimedLoadingState,
   ClearActionButton,
@@ -60,6 +62,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/security/AuthProvider";
 import { ApiErrorState, EmptyState } from "@/components/StateViews";
 import { AnswerDetailsPanel } from "@/components/search/AnswerDetailsPanel";
+import { ragAnswerCheck, runAnswerCheck } from "@/lib/answer-check";
 import { AnswerText } from "@/components/search/AnswerText";
 import { AnswerCitations, CitationList } from "@/components/search/CitationList";
 import { api, type RunDetail, type RunFeedback, type RunSummary } from "@/lib/api";
@@ -90,7 +93,6 @@ import {
   runSurfaceLabel,
   runTimeline,
   runUsageView,
-  runVerificationView,
   toRunStatus,
   type RunSurfaceFilter,
 } from "./run-history-view";
@@ -380,8 +382,12 @@ function runExtraColumns(): DataTableColumn<RunSummary>[] {
       ),
       className: "whitespace-nowrap",
       render: (run) => {
-        const view = runVerificationView(run.verification, run.validation_execution);
-        return view ? <StatusBadge {...view} /> : <span className="text-fg-muted">{t("history.notRecorded")}</span>;
+        const check = runAnswerCheck(run.answer_check, run.validation_execution);
+        return check ? (
+          <AnswerCheckBadge check={check} compact testId={`run-answer-check-${run.run_id}`} />
+        ) : (
+          <span className="text-fg-muted">{t("history.notRecorded")}</span>
+        );
       },
     },
   ];
@@ -465,7 +471,8 @@ function RunDetailView({ run }: { run: RunDetail }) {
       : null;
   // 「RAG 検索で開く」（#3309）: 本人の RAG 検索の実行を、質問と条件を入れて RAG 検索の画面に開く（検索はしない）。
   const searchHref = runSearchHref(run, { canOpenSearch: hasPermission(MENU_PERMISSIONS.search) });
-  const verification = runVerificationView(run.verification, run.validation_execution);
+  // 照合の状態は回答の記録の診断（印の内訳まで分かる）を先に読み、無ければ実行の記録から読む（#141）。
+  const answerCheck = ragAnswerCheck(run.answer_diagnostics) ?? runAnswerCheck(run.answer_check, run.validation_execution);
   const statusLabels = runStatusLabels();
   const traceLabels = useTraceDetailsLabels();
   const succeeded = run.status === "success";
@@ -512,7 +519,6 @@ function RunDetailView({ run }: { run: RunDetail }) {
           badges={
             <>
               <StatusBadge {...runOutcomeView(run)} />
-              {verification ? <StatusBadge {...verification} /> : null}
             </>
           }
           question={run.question || t("history.question.withheld")}
@@ -572,6 +578,8 @@ function RunDetailView({ run }: { run: RunDetail }) {
                   citations={canPreview ? run.citations : []}
                   diagnostics={run.answer_diagnostics}
                 />
+                {/* 資料との照合の行（チャット・RAG 検索と同じ位置・同じ部品。#141）。 */}
+                <AnswerCheckPanel check={answerCheck} testId="run-answer-check" />
                 {/* 回答に付けた注意書き（そのときの文。#2405）。 */}
                 <AnswerNotice notice={run.answer_notice} label={t("answer.notice.label")} />
               </div>

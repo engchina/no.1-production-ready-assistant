@@ -4942,6 +4942,8 @@ export interface RunSummary {
   answer_outcome: string | null;
   verification: RunVerification | null;
   validation_execution?: string | null;
+  /** 資料との照合の状態（RAG・Agent 共通の 5 状態。#141 より前の実行は無い）。 */
+  answer_check?: string | null;
   confidence: string | null;
   needs_human_review: boolean | null;
   citation_count: number;

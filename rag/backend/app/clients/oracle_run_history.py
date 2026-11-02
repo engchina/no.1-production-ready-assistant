@@ -203,6 +203,8 @@ _LIST_COLUMNS = f"""
     rc.user_id_hash AS conversation_owner_hash,
     JSON_VALUE(r.stages_json, '$.validation_execution' RETURNING VARCHAR2(16) NULL ON ERROR)
         AS validation_execution,
+    JSON_VALUE(r.stages_json, '$.answer_check' RETURNING VARCHAR2(16) NULL ON ERROR)
+        AS answer_check,
     JSON_VALUE(r.stages_json, '$.usage.total_tokens' RETURNING NUMBER(19) NULL ON ERROR)
         AS usage_total_tokens,
     JSON_VALUE(r.stages_json, '$.usage.measurement' RETURNING VARCHAR2(16) NULL ON ERROR)

@@ -56,7 +56,7 @@ import {
   useSearchExtractionFields,
 } from "@/lib/queries";
 import { isNullableString, useWorkspaceState } from "@/lib/workspace-state";
-import { AnswerNotices } from "./AnswerDetailsPanel";
+import { AnswerCheckRow, AnswerNotices } from "./AnswerDetailsPanel";
 import { AnswerProcess } from "./AnswerProcess";
 import { answerAttachedImages, answerModelHeading, parseAnswerDiagnostics, unreadSectionLinks } from "@/lib/answer-diagnostics";
 import { canOpenDocumentDetail } from "@/lib/route-permissions";
@@ -825,8 +825,16 @@ export function SearchClient() {
                         ) : null
                       }
                     />
-                    {/* 回答を読むときに要る案内（資料では決まらない値など）は回答の本文の直下（「詳細」に畳まない。#2096）。 */}
-                    {meta && phase === "done" ? <AnswerNotices diagnostics={meta.diagnostics?.answer} /> : null}
+                    {/*
+                      回答の本文の直下に資料との照合の行（チャット・Agent と同じ共通の部品。#141）、その下に回答を読むときに
+                      要る案内（資料では決まらない値など。「詳細」に畳まない。#2096）。
+                    */}
+                    {meta && phase === "done" ? (
+                      <>
+                        <AnswerCheckRow diagnostics={meta.diagnostics?.answer} />
+                        <AnswerNotices diagnostics={meta.diagnostics?.answer} />
+                      </>
+                    ) : null}
                     {/*
                       回答の下は 3 製品のチャットと同じ共通の並び（#2707）: 回答の注意書き（#2405）→ 根拠の一覧 → 評価
                       （評価は回答の枠の最後。根拠を確かめてから評価できるよう、その後に置く。#1202 / #1420。

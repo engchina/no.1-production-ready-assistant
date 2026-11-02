@@ -1,58 +1,30 @@
 import { useId, type ReactNode } from "react";
-import { Info, ShieldCheck } from "lucide-react";
-import { AnswerPassageBadges, Disclosure, StatusBadge, TEXT_ICON_SIZE, type StatusVariant } from "@production-ready/ui";
+import { Info } from "lucide-react";
+import { AnswerCheckPanel, StatusBadge, TEXT_ICON_SIZE, type AnswerCheck, type StatusVariant } from "@production-ready/ui";
 
 import type { AnswerReview, ConditionSource, ReviewOutcome, ReviewValidation } from "@/lib/answer-review";
-import { answerPassageLabels } from "@/lib/answer-structure";
 import { t, type I18nKey } from "@/lib/i18n";
 
 /**
- * 資料との照合（#1286・#2361）。回答の下に、照合の結果（回答の対応と照合のバッジ）を 1 行で出す。確かめた条件・
- * 確認待ちの質問・使った業務ガイド・足りない情報、照合できなかった・対象外の理由があるときだけ、同じ行を開いて
- * 見られるようにする（出典と同じ plain の Disclosure）。印の付いた段落・外した段落の一覧は回答の本文の節
- * 「確認が必要な点」「根拠と矛盾し除いた内容」（段落の印の記録の無い過去の Run は「資料から確認できなかった事項」）の
- * 1 か所だけに出し、ここには件数のバッジだけを出す（#2738）。
+ * 資料との照合（#1286・#2361・#141）。回答の下に、照合の結果（回答の対応と照合のバッジ）を 1 行で出す。行の器・
+ * 照合の 5 状態のバッジは RAG と共通の `AnswerCheckPanel`。確かめた条件・確認待ちの質問・使った業務ガイド・
+ * 足りない情報があるときだけ、同じ行を開いて見られるようにする。印の付いた段落・外した段落の一覧は回答の本文の節
+ * 「確認が必要な点」「根拠と矛盾し除いた内容」の 1 か所だけに出し、ここには件数のバッジだけを出す（#2738）。
  * 成果物の JSON・内部の語は出さない（handoff §13。元の JSON は実行の詳細の監査ログで、監査の閲覧の権限のある利用者だけが見る。#2403）。
  */
 export function AnswerReviewPanel({ review, testId }: { review: AnswerReview; testId: string }) {
   const hasDetails =
-    (review.validation !== null && validationMessage(review.validation) !== null) ||
-    review.conditions.length > 0 ||
-    review.clarifications.length > 0 ||
-    review.guide !== null ||
-    review.gaps.length > 0;
-  // 見出しとバッジは同じ行に置き、狭い幅ではバッジを次の行へ折り返す（見出しの文字を縦に潰さない）。
-  // バッジは上下にはみ出させて行の高さを文字の行の高さに保つ（見出しのアイコンを文字の 1 行目の中心にそろえる。#2371）。
-  const heading = (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 [&_[data-status-variant]]:-my-0.5">
-      <span className="whitespace-nowrap">{t("chat.review.title")}</span>
-      {review.outcome ? <OutcomeBadge outcome={review.outcome} testId={`${testId}-outcome`} /> : null}
-      {review.validation ? <ValidationBadge validation={review.validation} /> : null}
-    </span>
-  );
+    review.conditions.length > 0 || review.clarifications.length > 0 || review.guide !== null || review.gaps.length > 0;
   return (
     <>
       {review.limitReached ? <LimitNote testId={`${testId}-limit`} /> : null}
-      {hasDetails ? (
-        <Disclosure
-          variant="plain"
-          size="sm"
-          icon={ShieldCheck}
-          summary={heading}
-          summaryProps={{ "data-testid": `${testId}-summary` }}
-          data-testid={testId}
-        >
-          <AnswerReviewSections review={review} />
-        </Disclosure>
-      ) : review.outcome || review.validation ? (
-        // 開いても中身が無い（対応と照合のバッジだけ）ときは、畳まずに見出しだけを出す（⌄ を出さない）。
-        <p className="flex items-start gap-1.5 text-xs font-medium text-fg" data-testid={testId}>
-          <span className="pr-icon-line text-fg-muted">
-            <ShieldCheck size={TEXT_ICON_SIZE.xs} aria-hidden="true" />
-          </span>
-          <span className="min-w-0 break-words">{heading}</span>
-        </p>
-      ) : null}
+      <AnswerCheckPanel
+        check={review.validation ? answerCheck(review.validation) : null}
+        badges={review.outcome ? <OutcomeBadge outcome={review.outcome} testId={`${testId}-outcome`} /> : null}
+        testId={testId}
+      >
+        {hasDetails ? <AnswerReviewSections review={review} /> : null}
+      </AnswerCheckPanel>
     </>
   );
 }
@@ -123,7 +95,6 @@ function AnswerReviewSections({ review }: { review: AnswerReview }) {
         </ReviewGroup>
       ) : null}
 
-      {review.validation ? <ValidationGroup validation={review.validation} /> : null}
     </div>
   );
 }
@@ -137,20 +108,6 @@ function ReviewGroup({ title, testId, children }: { title: string; testId: strin
       </p>
       {children}
     </div>
-  );
-}
-
-/**
- * 照合の結果の説明（照合できなかった・対象外の理由だけ。#2361）。見出しのバッジと同じ内容（小見出し・バッジ）と、
- * 回答の本文の節にある除いた内容・その説明は出し直さない。
- */
-function ValidationGroup({ validation }: { validation: ReviewValidation }) {
-  const message = validationMessage(validation);
-  if (message === null) return null;
-  return (
-    <p className="break-words text-fg" data-testid="answer-review-validation">
-      {message}
-    </p>
   );
 }
 
@@ -193,60 +150,32 @@ export function OutcomeBadge({ outcome, testId }: { outcome: ReviewOutcome; test
   );
 }
 
-/**
- * 照合の結果のバッジ（状態の対応表。色だけに頼らず StatusBadge のアイコンを付ける）。段落の印の記録のある Run（#2738）は
- * 「未確認 N 件」「要注意 N 件」「矛盾で除外 N 件」（0 件は出さない。RAG と同じ共有の部品）。
- */
-function ValidationBadge({ validation }: { validation: ReviewValidation }) {
-  if (validation.state === "marked") {
-    return <AnswerPassageBadges records={validation.passages} labels={answerPassageLabels()} testId="answer-review-passages" />;
-  }
-  const { variant, label } = validationBadge(validation);
-  return <StatusBadge variant={variant} label={label} />;
-}
-
-function validationBadge(validation: ReviewValidation): { variant: StatusVariant; label: string } {
+/** 成果物「資料との照合」の結果 → 共通の照合の 5 状態（#141）。Agent は設定で照合を止めないので off は無い。 */
+export function answerCheck(validation: ReviewValidation): AnswerCheck {
   switch (validation.state) {
     case "verified":
-      return { variant: "success", label: t("chat.review.state.verified") };
+      return { state: "verified" };
     case "marked":
-      // 印の数のバッジ（ValidationBadge が出す）。ここには来ない。
-      return { variant: "warning", label: t("chat.review.state.unverifiedPointsNoCount") };
-    case "withheld": {
+      return { state: "flagged", passages: validation.passages };
+    case "withheld":
       // 段落の印の記録の無い過去の Run（#2738）。件数は本文の節の項目の数（節と一致させる。#2361）。節の記録が無い
       // 古い Run は外した段落の数。本文を載せなかった Run は件数なし。
-      const count = validation.withheldAll ? 0 : validation.listedItems || validation.withheldClaims;
-      return count > 0
-        ? { variant: "warning", label: t("chat.review.state.unverifiedPoints", { count }) }
-        : { variant: "warning", label: t("chat.review.state.unverifiedPointsNoCount") };
-    }
+      return { state: "flagged", count: validation.withheldAll ? 0 : validation.listedItems || validation.withheldClaims };
     case "unvalidated":
-      return { variant: "warning", label: t("chat.review.state.unvalidated") };
+      return {
+        state: "failed",
+        reason: validation.cause === "noEvidence" ? t("chat.review.message.noEvidence") : t("chat.review.message.unvalidated"),
+      };
     case "skipped":
-      return { variant: "neutral", label: t("chat.review.state.skipped") };
+      return { state: "skipped", reason: skippedReason(validation) };
   }
 }
 
-/**
- * 開いた中に出す説明。照合できなかった・対象外の理由だけで、照合済み・除いた内容があるとき（バッジと本文の節で
- * 分かる）は null。
- */
-function validationMessage(validation: ReviewValidation): string | null {
-  switch (validation.state) {
-    case "verified":
-    case "marked":
-    case "withheld":
-      return null;
-    case "unvalidated":
-      return validation.cause === "noEvidence"
-        ? t("chat.review.message.noEvidence")
-        : t("chat.review.message.unvalidated");
-    case "skipped":
-      if (validation.cause === "emptyAnswer") return t("chat.review.message.skippedEmpty");
-      if (validation.cause === "clarification") return t("chat.review.message.skippedClarification");
-      if (validation.cause === "absenceOnly") return t("chat.review.message.skippedAbsenceOnly");
-      if (validation.cause === "ragDeclined") return t("chat.review.message.skippedRagDeclined");
-      if (validation.cause === "noToolGrounding") return t("chat.review.message.skippedNoToolGrounding");
-      return t("chat.review.message.skipped");
-  }
+function skippedReason(validation: ReviewValidation): string {
+  if (validation.cause === "emptyAnswer") return t("chat.review.message.skippedEmpty");
+  if (validation.cause === "clarification") return t("chat.review.message.skippedClarification");
+  if (validation.cause === "absenceOnly") return t("chat.review.message.skippedAbsenceOnly");
+  if (validation.cause === "ragDeclined") return t("chat.review.message.skippedRagDeclined");
+  if (validation.cause === "noToolGrounding") return t("chat.review.message.skippedNoToolGrounding");
+  return t("chat.review.message.skipped");
 }

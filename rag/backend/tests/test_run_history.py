@@ -1266,9 +1266,10 @@ def test_list_api_returns_the_usage_totals_without_reading_the_stages(
     list_sql = pool.connection.calls[0].statement
     assert "JSON_VALUE(r.stages_json, '$.usage.total_tokens'" in list_sql
     assert "JSON_VALUE(r.stages_json, '$.usage.measurement'" in list_sql
-    # 処理の段・trace 全体を読まず、利用量2値と照合実行状態だけを取り出す。
+    # 処理の段・trace 全体を読まず、利用量2値と照合実行状態・照合の状態（#141）だけを取り出す。
     assert "JSON_VALUE(r.stages_json, '$.validation_execution'" in list_sql
-    assert list_sql.count("stages_json") == 3
+    assert "JSON_VALUE(r.stages_json, '$.answer_check'" in list_sql
+    assert list_sql.count("stages_json") == 4
     # ページ（並べ替えと件数の切り出し）は run_id だけで決め、列はページの行だけで読む。
     assert "WITH run_page AS ( SELECT r.run_id FROM rag_run_history r WHERE" in list_sql
     assert "JOIN run_page pg ON pg.run_id = r.run_id" in list_sql

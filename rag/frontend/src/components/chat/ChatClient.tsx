@@ -48,7 +48,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { FeedbackControls } from "@/components/feedback/FeedbackControls";
 import { SearchAnswerProfileSelect, SearchAnswerProfileSelectSkeleton } from "@/components/search-answer-profiles/SearchAnswerProfileSelect";
 import { AnswerCitations } from "@/components/search/CitationList";
-import { AnswerNotices } from "@/components/search/AnswerDetailsPanel";
+import { AnswerCheckRow, AnswerNotices } from "@/components/search/AnswerDetailsPanel";
 import { AnswerProcess } from "@/components/search/AnswerProcess";
 import { AnswerText } from "@/components/search/AnswerText";
 import { useAuth } from "@/components/security/AuthProvider";
@@ -465,9 +465,15 @@ function AssistantColumn({
             ChatAnswerBody。#3433）。本文の届く前（カーソルだけ）は出さない。
           */}
           {answer.trim() ? <ChatAnswerBody testId="chat-answer-body">{answerBody}</ChatAnswerBody> : answerBody}
-          {/* 回答を読むときに要る案内（資料では決まらない値など）は回答の本文の直下に出す（#2096）。 */}
+          {/*
+            回答の本文の直下に資料との照合の行（Agent と同じ共通の部品。#141）、その下に回答を読むときに要る案内
+            （資料では決まらない値など。#2096）。
+          */}
           {finished && (answerDiagnostics || passageSource) ? (
-            <AnswerNotices diagnostics={answerDiagnostics} passageSource={passageSource} />
+            <>
+              <AnswerCheckRow diagnostics={answerDiagnostics} passageSource={passageSource} />
+              <AnswerNotices diagnostics={answerDiagnostics} />
+            </>
           ) : null}
         </>
       )}

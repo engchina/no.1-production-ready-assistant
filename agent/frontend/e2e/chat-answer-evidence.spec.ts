@@ -296,7 +296,7 @@ for (const viewport of VIEWPORTS) {
 
     // 「資料との照合」は件数のバッジだけ（節の項目の数と一致）。開いて見るものが無いので ⌄ を出さない。
     const review = turn.getByTestId(`chat-review-${RUN_ID}`);
-    await expect(review).toHaveText("資料との照合確かめられない点 1 件");
+    await expect(review).toHaveText("資料との照合照合で要確認 1 か所");
     await expect(turn.getByTestId(`chat-review-${RUN_ID}-summary`)).toHaveCount(0);
     await expect(review.getByTestId("answer-review-unverified")).toHaveCount(0);
 
@@ -307,7 +307,7 @@ for (const viewport of VIEWPORTS) {
 
 // #2738: 根拠と矛盾した段落だけを本文から外し、確かめられない段落（未確認）と規則の検査の段落（要注意）は本文に
 // 残して印を付ける。印を押すと理由を開き、「確認が必要な点」から本文の段落へ移る。回答全体の注意は本文の上。
-// 「資料との照合」と実行の詳細は「未確認 N 件」「要注意 N 件」「矛盾で除外 N 件」のバッジ（RAG と同じ共有の部品）。
+// 「資料との照合」は印の合計のバッジ「照合で要確認 N か所」と内訳（RAG と同じ共通の部品。#141）。
 const MARKED_UNVERIFIED = "申請後の手続きは自動で通知されます。";
 const MARKED_ANSWER = [
   "合成の質問 A の答えは次のとおりです。",
@@ -429,14 +429,13 @@ for (const viewport of VIEWPORTS) {
     await expect(turn.getByTestId(`chat-answer-${RUN_ID}`).getByTestId("answer-citation-link").first()).toHaveText(
       "根拠：文書 0.pdf p.3"
     );
-    // 「資料との照合」は印の数のバッジ（0 件は出さない）。「一部を確かめられず省略」は出さない。
+    // 「資料との照合」は印の合計のバッジ 1 つと内訳（RAG と同じ共通の部品。#141）。「一部を確かめられず省略」は出さない。
     const review = turn.getByTestId(`chat-review-${RUN_ID}`);
     const badges = review.locator("[data-status-variant]");
-    await expect(badges).toHaveText(["未確認 1 件", "要注意 1 件", "矛盾で除外 1 件"]);
+    await expect(badges).toHaveText(["照合で要確認 3 か所"]);
     await expect(badges.nth(0)).toHaveAttribute("data-status-variant", "warning");
-    await expect(badges.nth(1)).toHaveAttribute("data-status-variant", "neutral");
-    await expect(badges.nth(2)).toHaveAttribute("data-status-variant", "danger");
-    for (const badge of await badges.all()) await expect(badge.locator("svg")).toHaveCount(1);
+    await expect(badges.nth(0).locator("svg")).toHaveCount(1);
+    await expect(turn.getByTestId(`chat-review-${RUN_ID}-badge-note`)).toHaveText("（未確認 1・要注意 1・矛盾で除外 1）");
     await expect(turn).not.toContainText("省略");
     await expectNoHorizontalOverflow(page);
     await turn.getByTestId("answer-marked-passages").scrollIntoViewIfNeeded();
@@ -896,7 +895,7 @@ for (const viewport of VIEWPORTS) {
     const toggle = section.getByTestId("answer-section-toggle");
     await expect(toggle).toHaveText(`すべて表示（全 ${quotes.length} 件）`);
     await expect(turn.getByTestId(`chat-review-${RUN_ID}`).locator("[data-status-variant]")).toHaveText(
-      `確かめられない点 ${quotes.length} 件`
+      `照合で要確認 ${quotes.length} か所`
     );
     await page.screenshot({ path: testInfo.outputPath(`answer-withheld-collapsed-${viewport.name}.png`), fullPage: true });
     await toggle.click();

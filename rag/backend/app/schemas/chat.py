@@ -96,6 +96,9 @@ class ChatMessage(BaseModel):
     # platform/contracts/answer-passages/passage-marks.json）。記録の無い回答は空。
     passage_marks: list[dict[str, Any]] = Field(default_factory=list)
     removed_passages: list[dict[str, Any]] = Field(default_factory=list)
+    # 資料との照合の状態（ASSISTANT の回答だけ。#141。回答の記録の ``answer_validation`` の
+    # ``status`` / ``reason``）。会話を開き直しても照合の行を出すために返す。記録の無い回答は None。
+    answer_validation: dict[str, str] | None = None
     answer_warnings: list[dict[str, Any]] = Field(default_factory=list)
     # 回答のモデル（``model``）へ添付した根拠の画像の件数（ASSISTANT の終わった回答だけ。回答の
     # 記録の診断の ``models.attached_images``。#3444）。1 件以上なら回答の見出しに「画像も参照」を
