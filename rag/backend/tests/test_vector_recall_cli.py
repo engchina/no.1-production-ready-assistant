@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from app.clients.oracle import (
@@ -16,7 +18,9 @@ from app.clients.oracle import (
 from app.config import Settings
 from app.rag.vector_recall_cli import (
     FORCE_VECTOR_INDEX_HINT,
+    PLAN_READ_ATTEMPTS,
     Hit,
+    _run_statement,
     compare_hits,
     force_vector_index_hint,
     main,
@@ -152,9 +156,63 @@ def test_exact_statement_differs_only_in_the_fetch_clause() -> None:
 
 
 @pytest.mark.usefixtures("system_access")
+def _plan_reads(monkeypatch: pytest.MonkeyPatch, plans: list[str]) -> list[dict[str, object]]:
+    """検索の結果に実行の番号を入れ、計画は ``plans`` を順に返す ``_fetch_all`` に差し替える。"""
+    executed: list[dict[str, object]] = []
+    remaining = iter(plans)
+
+    def fetch_all(_connection: object, statement: str, _binds: object) -> list[dict[str, object]]:
+        if "v$session" in statement:
+            return [{"prev_sql_id": "sql", "prev_child_number": 0}]
+        if "DISPLAY_CURSOR" in statement:
+            return [{"plan_table_output": next(remaining)}]
+        executed.append({"run": len(executed) + 1})
+        return [executed[-1]]
+
+    monkeypatch.setattr("app.rag.vector_recall_cli._fetch_all", fetch_all)
+    return executed
+
+
+def test_run_statement_reexecutes_when_the_plan_left_the_cursor_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing = "NOTE: cannot fetch plan for SQL_ID: sql, CHILD_NUMBER: 0"
+    executed = _plan_reads(monkeypatch, [missing, missing, "the plan"])
+
+    rows, _elapsed, plan = _run_statement("SELECT 1", {}, with_plan=True)(cast(Any, None))
+
+    assert plan == ["the plan"]
+    assert len(executed) == 3
+    # 行は計画を読めた実行のもの。
+    assert rows == [{"run": 3}]
+
+
+def test_run_statement_returns_the_note_when_the_plan_stays_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing = "NOTE: cannot fetch plan for SQL_ID: sql, CHILD_NUMBER: 0"
+    executed = _plan_reads(monkeypatch, [missing] * PLAN_READ_ATTEMPTS)
+
+    _rows, _elapsed, plan = _run_statement("SELECT 1", {}, with_plan=True)(cast(Any, None))
+
+    assert plan == [missing]
+    assert len(executed) == PLAN_READ_ATTEMPTS
+
+
+def test_run_statement_without_plan_runs_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    executed = _plan_reads(monkeypatch, [])
+
+    _rows, _elapsed, plan = _run_statement("SELECT 1", {}, with_plan=False)(cast(Any, None))
+
+    assert plan == []
+    assert len(executed) == 1
+
+
 def test_force_vector_index_hint_targets_the_inner_query() -> None:
     hinted = force_vector_index_hint(_statement())
     assert hinted.lstrip().startswith(f"SELECT * FROM ( SELECT {FORCE_VECTOR_INDEX_HINT}")
+    pinned = force_vector_index_hint(_statement(), filter_type="pre_filter_without_join_back")
+    assert "rag_chunks_embedding_hnsw_idx pre_filter_without_join_back) */" in pinned
     with pytest.raises(ValueError):
         force_vector_index_hint("SELECT 1 FROM dual")
 

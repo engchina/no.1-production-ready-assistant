@@ -184,15 +184,21 @@ async def test_vector_search_with_the_index_is_not_starved_by_inactive_chunk_set
 
     exact = await _ids(client, exact_sql, binds)
     approx = await _ids(client, approx_sql, binds)
-    forced_sql = force_vector_index_hint(approx_sql)
-    forced = await _ids(client, forced_sql, binds)
-    _rows, _elapsed, plan = await client._run_transaction(
-        _run_statement(forced_sql, binds, with_plan=True)
+    # 索引の前で絞る計画に固定し、その計画で実行した行を確かめる(#147)。filter type を省くと
+    # optimizer が run によって PRE-FILTER / IN-FILTER を選ぶ。``with_join_back`` は、active の
+    # 条件が索引の前で絞れない形でも k 件を返すので、#74 の不具合を検出できない。
+    forced_rows, _elapsed, plan = await client._run_transaction(
+        _run_statement(
+            force_vector_index_hint(approx_sql, filter_type="pre_filter_without_join_back"),
+            binds,
+            with_plan=True,
+        )
     )
+    assert "VECTOR INDEX HNSW SCAN PRE-FILTER" in vector_plan_operations(plan), "\n".join(plan)
     assert set(exact) == set(reference)
     assert set(approx) == set(reference)
-    assert set(forced) == set(reference)
-    # 索引を使う計画でも、active でない chunk に k 件を取られない(従来の条件では 2 件だった)。
+    assert {str(row["chunk_id"]) for row in forced_rows} == set(reference)
+    # 索引を使う計画でも、active でない chunk に k 件を取られない(従来の条件では k 件に満たない)。
     # 従来の条件と同じく、レシピの無い文書の未タグの chunk は使う。
     rows = await client._fetch_all(
         exact_sql.replace(f"FIRST {_TOP_K} ROWS", "FIRST 50 ROWS"), binds
@@ -201,7 +207,3 @@ async def test_vector_search_with_the_index_is_not_starved_by_inactive_chunk_set
     assert legacy_id in documents
     chunk_sets = {row["chunk_set_id"] for row in rows if str(row["document_id"]) == residue_id}
     assert None not in chunk_sets
-    # hint を付けても optimizer が HNSW を選ばない回があり(CI の Oracle Free で観測)、その回は
-    # 結果の一致だけを確かめ、索引の計画の前提が満たされないことを skip で明示する。
-    if not any("VECTOR INDEX HNSW SCAN" in op for op in vector_plan_operations(plan)):
-        pytest.skip("optimizer が HNSW の索引を使わなかった:\n" + "\n".join(plan))
