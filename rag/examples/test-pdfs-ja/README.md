@@ -53,7 +53,7 @@ uv run --project rag/backend python -m app.rag.test_resources_cli \
 
 既存の一式を使わず別のテスト一式を作るには `--namespace <英数字等の区分>` を追加します。KB・プロファイル・アップロード時のファイル名を `テスト_<区分>_…` とし、PDF の内容・checksum は変えません。区分は state に残り、次の Agent の命令が業務 Agent の名前に同じ区分を付けます。論理キー A / B と各ファイルの実 ID は state で確認できます。
 
-終了コード 0 と state の `complete: true` が RAG の段の完了です。
+終了コード 0 と state の `complete: true` が RAG の段の完了です。再実行が途中で止まったときは、前回の ID を残したまま `complete: false` になります。
 
 ### 2. Agent: 業務 Agent の作成・公開
 

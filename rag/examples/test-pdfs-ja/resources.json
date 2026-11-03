@@ -20,8 +20,7 @@
     "chunk_table_child_target_chars": 3000,
     "chunk_parent_target_chars": 6000,
     "chunk_parent_max_pages": 3,
-    "chunk_parent_max_children": 12,
-    "chunk_context_header_enabled": true
+    "chunk_parent_max_children": 12
   },
   "groups": {
     "A": {
