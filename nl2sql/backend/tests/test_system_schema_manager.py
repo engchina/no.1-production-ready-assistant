@@ -268,12 +268,14 @@ def test_system_schema_status_has_four_deterministic_states() -> None:
     checksums = {migration.version: migration.checksum for migration in MIGRATIONS}
     one_domain_table = next(
         item
-        for item in expected
+        for item in MANAGED_OBJECTS
         if item[1] == "TABLE" and item[0] not in {CONTROL_TABLE, "NL2SQL_SCHEMA_MIGRATIONS"}
     )
 
     assert classify_system_schema_status(set(), {}) == "missing"
     assert classify_system_schema_status({one_domain_table}, {}) == "partial"
+    # 認証・権限の表だけがある schema は、業務の表が無いので未初期化のまま。
+    assert classify_system_schema_status(set(SECURITY_OBJECTS), {}) == "missing"
     assert classify_system_schema_status(expected, {**checksums, 6: "stale"}) == "outdated"
     assert classify_system_schema_status(expected, checksums) == "ready"
     # 権限の表が無ければ、管理対象がそろっていても ready にしない（#150）。
