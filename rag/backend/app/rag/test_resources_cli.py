@@ -38,7 +38,10 @@ def read_fixture(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     resources = json.loads((root / "resources.json").read_text(encoding="utf-8"))
     if manifest.get("synthetic") is not True or resources.get("version") != 1:
         raise RebuildError("合成資料の manifest / 構成の版を確認してください。")
-    DocumentProcessingConfig.model_validate(resources["recipe"])
+    # API が読み捨てる項目があると、再実行の比較が必ず不一致になる（#155）。
+    recipe = DocumentProcessingConfig.model_validate(resources["recipe"])
+    if not _matches(recipe.model_dump(mode="json"), resources["recipe"]):
+        raise RebuildError("文書レシピに API が保存しない項目があります。構成を確認してください。")
     # グループは RAG が持つもの（KB・検索・回答プロファイル）だけを定義する。業務 Agent の定義は
     # Agent の側に置く（#3545）。知らない項目は黙って無視せずに止める。
     if any(set(group) != {"knowledge_base", "profile"} for group in resources["groups"].values()):
@@ -161,6 +164,20 @@ class Rebuilder:
         temporary.chmod(0o600)
         temporary.replace(self.state_path)
 
+    def _restore_saved_ids(self, files: set[str]) -> None:
+        """再実行が途中で止まっても、前回の ID を失わない（完了の印は外す。#155）。"""
+        try:
+            saved = json.loads(self.state_path.read_text())
+        except (OSError, ValueError):
+            return
+        if not isinstance(saved, dict) or saved.get("namespace") != self.namespace:
+            return
+        groups, documents = saved.get("groups"), saved.get("documents")
+        if isinstance(groups, dict):
+            self.state["groups"] = groups
+        if isinstance(documents, dict):
+            self.state["documents"] = {k: v for k, v in documents.items() if k in files}
+
     def named(self, api: ManagementApi, path: str, definition: dict[str, Any]) -> dict[str, Any]:
         found = _only(api.rows(path), definition["name"])
         if found is None:
@@ -264,6 +281,7 @@ class Rebuilder:
                     )
             for row in manifest["documents"]:
                 row["remote_file"] = prefix + row["file"].removeprefix("テスト_")
+        self._restore_saved_ids({row["file"] for row in manifest["documents"]})
         self.save()
         for key, definition in config["groups"].items():
             kb = self.named(self.rag, "/knowledge-bases", definition["knowledge_base"])

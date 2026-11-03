@@ -307,6 +307,46 @@ def test_repository_fixtures_are_valid() -> None:
     assert all(set(group) == {"knowledge_base", "profile"} for group in config["groups"].values())
 
 
+def test_recipe_field_dropped_by_api_is_rejected(corpus: Path) -> None:
+    """API が読み捨てる項目は再実行の比較で必ず不一致になるので、変更の前に止める（#155）。"""
+    path = corpus / "resources.json"
+    config = json.loads(path.read_text())
+    config["recipe"]["chunk_context_header_enabled"] = True
+    path.write_text(json.dumps(config))
+
+    with pytest.raises(RebuildError, match="保存しない項目"):
+        read_fixture(corpus)
+
+
+def test_stopped_rerun_keeps_saved_ids_and_clears_complete(corpus: Path) -> None:
+    """再実行が止まっても前回の ID は残し、完了の印だけを外す（#155）。"""
+    service = Service(corpus)
+    saved = rebuilder(service, corpus).run()
+    next(iter(service.recipes.values()))["effective_processing_config"] = {
+        "parser_adapter_backend": "other"
+    }
+
+    with pytest.raises(RebuildError, match="処理設定が異なります"):
+        rebuilder(service, corpus).run()
+
+    state = json.loads((corpus / "state.json").read_text())
+    assert state["complete"] is False
+    assert state["groups"] == saved["groups"]
+    assert set(state["documents"]) == set(saved["documents"])
+
+
+def test_saved_ids_of_other_namespace_or_broken_state_are_not_reused(corpus: Path) -> None:
+    state_path = corpus / "state.json"
+    state_path.write_text(json.dumps({"namespace": "other", "groups": {"A": {"kb_id": "old"}}}))
+    target = rebuilder(Service(corpus), corpus)
+    target._restore_saved_ids(set())
+    assert target.state["groups"] == {}
+
+    state_path.write_text("{broken")
+    target._restore_saved_ids(set())
+    assert target.state["groups"] == {}
+
+
 def test_group_with_unknown_definition_is_rejected(corpus: Path) -> None:
     """業務 Agent などの RAG が持たない定義は、黙って無視せずに書き込みの前に止める（#3545）。"""
     resources = json.loads((corpus / "resources.json").read_text())
