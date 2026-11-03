@@ -8,18 +8,10 @@ DB は docker の **Oracle Autonomous Database Free**（ADB Free）コンテナ�
 
 ### 1. コンテナを起動する
 
-イメージは Oracle Container Registry から**ログインなしで** pull できます（約 5 GB）。
+イメージは Oracle Container Registry から**ログインなしで** pull できます（展開後で約 7 GB）。タグなし（`:latest`）は対応していないバージョンのイメージなので、必ずタグを付けます（対応バージョンは [deployment.md](./platform/docs/deployment.md)）。
 
 ```bash
-docker pull container-registry.oracle.com/database/adb-free:latest-23ai
-```
-
-データを残す volume を作り、コンテナの中の `oracle` ユーザー（uid 1001）が書けるようにしておきます。所有者が root のままだと、起動時に `PermissionError: [Errno 13] Permission denied: '/u01/data/MYATP.pdb.partial'` で止まります。
-
-```bash
-docker volume create adb-free-data
-docker run --rm -u 0 -v adb-free-data:/u01/data --entrypoint chown \
-  container-registry.oracle.com/database/adb-free:latest-23ai -R 1001:1001 /u01/data
+docker pull container-registry.oracle.com/database/adb-free:latest-26ai
 ```
 
 ```bash
@@ -29,8 +21,7 @@ docker run -d --name adb-free \
   -e ADMIN_PASSWORD='<ADMIN のパスワード>' \
   -e WALLET_PASSWORD='<Wallet のパスワード>' \
   --cap-add SYS_ADMIN --device /dev/fuse \
-  -v adb-free-data:/u01/data \
-  container-registry.oracle.com/database/adb-free:latest-23ai
+  container-registry.oracle.com/database/adb-free:latest-26ai
 ```
 
 | host の port | コンテナの port | 用途 |
@@ -40,6 +31,8 @@ docker run -d --name adb-free \
 
 - 初回は PDB の展開で 2〜3 分かかります。`docker ps` の STATUS が `(healthy)` になったら使えます。
 - `ADMIN_PASSWORD` と `WALLET_PASSWORD` は **12〜30 文字で、大文字・小文字・数字を含め、`admin` と二重引用符を含めない**必要があります（ADB の mandatory profile が強制し、満たさないと `ORA-28219` になります）。
+- データはコンテナの中（`/u01/app/oracle/oradata`）にあります。`docker stop` / `docker start` では残りますが、**`docker rm` やイメージの入れ替えで DB の中身はすべて消えます**（[コンテナを作り直すとき](#コンテナを作り直すとき)）。
+- `docker logs` に `Exception encountered during PDB create:ORA-01031` と `ORA-12012`（`PLUG_CONTAINER_PDB_JOB`）が出ます。イメージの中のジョブのエラーで、新しいコンテナでも起動のたびに出ます。`Successfully plugged` が続き `(healthy)` になれば使えます。
 - 起動・停止・状態は docker で行います（画面からは操作しません）。
 
 ```bash
@@ -75,7 +68,7 @@ GRANT PDB_DBA TO ASSISTANT;
 - `PDB_DBA` に `CTXAPP`（Oracle Text）・`DB_DEVELOPER_ROLE`（表・sequence・view・procedure・job の作成）が含まれます。
 
 ```bash
-cd rag/backend && uv run python - <<'PY'
+uv run --project rag/backend python - <<'PY'
 import oracledb
 W = "/u01/workspace/adb-free-wallet"
 c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>", dsn="myatp_low",
@@ -124,22 +117,35 @@ AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8110/api/mcp
 
 ### 5. システムの表を作る（初期化）
 
-どれも冪等で、何度実行してもかまいません。
+アプリの起動時には DDL を実行しません。CLI か、起動した後の画面（「運用設定 › システムテーブル」）から作成・更新します。どちらも冪等で、何度実行してもかまいません。作るのは空の表だけで、データは取り込みません。
+
+#### A. CLI で作る（起動の前でも実行できます）
+
+repo の直下で実行します。
 
 ```bash
-cd rag/backend    && uv sync --locked --dev && uv run python -m app.rag.system_schema_cli initialize
-cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize \
-                  && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap
-cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize
+(cd rag/backend    && uv sync --locked --dev && uv run python -m app.rag.system_schema_cli initialize)
+(cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize \
+                   && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap)
+(cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize)
 ```
 
 できているかの確認（ready なら 0 で終わります）:
 
 ```bash
-cd rag/backend    && uv run python -m app.rag.system_schema_cli check
-cd nl2sql/backend && uv run python -m app.cli.nl2sql_system_schema --check
-cd agent/backend  && uv run python -m app.cli.agent_system_schema --check
+(cd rag/backend    && uv run python -m app.rag.system_schema_cli check)
+(cd nl2sql/backend && uv run python -m app.cli.nl2sql_system_schema --check)
+(cd agent/backend  && uv run python -m app.cli.agent_system_schema --check)
 ```
+
+#### B. 画面（「運用設定 › システムテーブル」）から作る・更新する
+
+システムの表を作る前でも 3 製品の backend は起動でき、`system_admin` でログインできます。手順 6 で起動した後、**RAG・NL2SQL・Agent のそれぞれで**次の操作を行います。
+
+1. `system_admin` でログインし、左のナビの「運用設定 › システムテーブル」（`/settings/system-tables`）を開きます（DB に接続できているかは「システム設定 › データベース」の接続テストで確かめられます）。
+2. 状態が `未初期化` / `一部不足` / `更新必要` なら、**「作成・更新」** を押します（状態が `初期化済み` になれば完了です。既存のデータを保ったまま不足分の表・索引・migration を適用します）。
+   - **NL2SQL は `初期化済み` になっても権限の表（`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`）がまだありません。** 初回だけ、repo の直下で `(cd nl2sql/backend && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap)` を実行し、上の `--check` が 0 で終わることを確かめます（共通の `PLATFORM_*` の表も作られます。RAG / Agent は「作成・更新」で作られます）。
+   - すべての管理対象の表を消して最初から作り直すときは、「破壊的な再作成」に確認語（RAG: `RECREATE_RAG_SYSTEM_TABLES`、NL2SQL: `RECREATE_NL2SQL_SYSTEM_TABLES`、Agent: `RECREATE_AGENT_SYSTEM_TABLES`）を入れて **「すべて再作成」** を押します（保存済みのデータは消えます。共通の `PLATFORM_*` の表と NL2SQL の権限の表は残ります）。
 
 ### 6. 起動する
 
@@ -149,7 +155,7 @@ cd agent/backend  && uv run python -m app.cli.agent_system_schema --check
 cd platform && npm ci && npm run build
 ```
 
-製品ごとに backend と frontend をまとめて起動します（Ctrl+C で両方止まります）。
+製品ごとに、repo の直下から別のターミナルで backend と frontend をまとめて起動します（Ctrl+C で両方止まります）。
 
 ```bash
 cd rag    && (cd frontend && npm ci) && bash scripts/start-all.sh
@@ -163,7 +169,16 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 | NL2SQL | http://localhost:3101 | http://localhost:8110/api/health |
 | Agent | http://localhost:3102 | http://localhost:8120/api/health |
 
-`system_admin` でログインし、「設定 › データベース」の接続テストが成功すれば DB に届いています。
+`system_admin` でログインし、「システム設定 › データベース」の接続テストが成功すれば DB に届いています。
+
+### コンテナを作り直すとき
+
+イメージを入れ替えるときなどの手順です。**DB の中身はすべて消え、新しいコンテナには移りません**（残すデータは先に取り出します）。
+
+1. 古いコンテナを消します（`docker rm -f adb-free`）。手順 1 の `docker run` で新しいコンテナを起動し、`(healthy)` を待ちます。
+2. Wallet はコンテナごとに作られます。手順 2 の `docker cp` の前に古い Wallet を消します（`rm -rf /u01/workspace/adb-free-wallet`）。残したままだと、その下に `tls_wallet` ができます。
+3. 手順 3 でアプリ用の DB ユーザーを作り直します。パスワードを変えたら `platform/.env` も直します。
+4. 手順 5 でシステムの表を作ります。動いている backend は再起動しなくても新しい DB に接続できます。
 
 ### 開発用 worktree の準備
 
