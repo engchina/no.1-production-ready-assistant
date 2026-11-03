@@ -38,8 +38,8 @@ Ontology query-session 系も同じ境界に従う。`/api/nl2sql/query-sessions
 `PLATFORM_ADMIN_LOGIN_USER_ID=system_admin` / `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` を共通 `.env`（`platform/.env`。#211）に設定すると、その構成管理者で
 アプリケーションへログインできる。この `SYSTEM_ADMIN` ログインは `PLATFORM_USERS` /
 `PLATFORM_AUTH_SESSIONS` を読まず、認証 table が未作成でも利用できる。通常の application user を追加して
-使う場合は、DB 接続後に次を一度実行する。
-処理は幂等であり、再実行できる。
+使う場合は、DB 接続後に次を一度実行する（システムテーブルの画面の「作成・更新」と `nl2sql_system_schema --initialize` でも
+同じ表が作られる。#150）。処理は幂等であり、再実行できる。
 
 ```bash
 cd backend

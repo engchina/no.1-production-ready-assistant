@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from pr_system_settings.auth.migrations import apply_platform_auth_schema
+from pr_system_settings.auth.store import OracleAuthStore
 from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_COLUMN_TYPE
 from pr_system_settings.system_schema import (
     IGNORED_APPLY_CODES,
@@ -33,6 +35,7 @@ from pr_system_settings.system_schema import (
 
 from app.clients.oracle_runtime import get_oracle_pool_manager
 from app.features.nl2sql.object_identity import qualified_object_name
+from app.security.store import SECURITY_SCHEMA_OBJECT_NAMES
 from app.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -278,6 +281,12 @@ PRESERVED_TABLES = frozenset(
     }
 )
 
+# 認証と権限の表（#150）。全再作成で消さないが、無ければ NL2SQL は ready にしない。
+SECURITY_OBJECTS: tuple[tuple[str, str], ...] = tuple(
+    (name, "TABLE") for name in sorted(SECURITY_SCHEMA_OBJECT_NAMES)
+)
+SECURITY_MIGRATION_FILE = "004_app_security_rbac.sql"
+
 MANAGED_FOREIGN_KEYS: tuple[ManagedForeignKey, ...] = (
     ManagedForeignKey(
         name="FK_NL2SQL_ONT_VIEW_REV_PROFILE",
@@ -476,7 +485,7 @@ def classify_system_schema_status(
     return classify_schema_status(
         objects,
         domain_tables=DOMAIN_TABLES,
-        managed_objects=MANAGED_OBJECTS,
+        managed_objects=(*MANAGED_OBJECTS, *SECURITY_OBJECTS),
         migrations_current=all(
             applied_checksums.get(migration.version) == migration.checksum
             for migration in MIGRATIONS
@@ -545,12 +554,14 @@ class SystemSchemaManager(SystemSchemaManagerBase):
     def _initialize_on(self, connection: Any, owner: str, *, recreate: bool) -> dict[str, Any]:
         applied_versions: list[int] = []
         dropped_count = 0
+        self._configure_ddl_lock_timeout(connection)
+        # 権限の表は PLATFORM_ROLES を参照するため、共通認証の表を先に作る（冪等）。
+        self._apply_security_schema(connection)
         before = self._status_on(connection)
         if before["status"] == "ready" and not recreate:
             result = self._no_op_result(connection, owner)
             self._purge_orphan_ontology_records(connection)
             return result
-        self._configure_ddl_lock_timeout(connection)
         if recreate:
             self._assert_no_active_jobs(connection)
             dropped_count = self._drop_managed_objects(connection, owner)
@@ -593,6 +604,25 @@ class SystemSchemaManager(SystemSchemaManagerBase):
                 )
             ),
         }
+
+    @staticmethod
+    def _apply_security_schema(connection: Any) -> None:
+        """共通認証の PLATFORM_*・SYSTEM_ADMIN ロール・NL2SQL の権限の表を冪等に用意する。
+
+        ユーザーは作らない（最初は構成管理者 `system_admin` でログインする）。既存の表は変えない。
+        """
+
+        apply_platform_auth_schema(connection)
+        migration = Path(__file__).resolve().parents[3] / "migrations" / SECURITY_MIGRATION_FILE
+        with connection.cursor() as cursor:
+            OracleAuthStore._merge_system_admin_role(cursor)
+            for statement in split_migration_sql(migration.read_text(encoding="utf-8")):
+                try:
+                    cursor.execute(statement)
+                except Exception as exc:
+                    if oracle_error_code(exc) not in IGNORED_APPLY_CODES:
+                        raise
+        connection.commit()
 
     def _purge_orphan_ontology_records(self, connection: Any) -> None:
         """存在しない業務プロファイルのオントロジーの成果物・終わったジョブの記録を消す（#1758）。
@@ -657,7 +687,7 @@ class SystemSchemaManager(SystemSchemaManagerBase):
         missing = sorted(
             (
                 {"name": name, "object_type": object_type}
-                for name, object_type in expected - existing
+                for name, object_type in (expected | set(SECURITY_OBJECTS)).difference(objects)
             ),
             key=lambda item: (item["object_type"], item["name"]),
         )
@@ -696,7 +726,9 @@ class SystemSchemaManager(SystemSchemaManagerBase):
         }
 
     def _load_objects(self, connection: Any) -> dict[tuple[str, str], Any]:
-        names = tuple(dict.fromkeys(name for name, _object_type in MANAGED_OBJECTS))
+        names = tuple(
+            dict.fromkeys(name for name, _object_type in (*MANAGED_OBJECTS, *SECURITY_OBJECTS))
+        )
         placeholders, binds = bind_list("object_name_", names)
         with connection.cursor() as cursor:
             cursor.execute(

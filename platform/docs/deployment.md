@@ -265,7 +265,7 @@ Agent `-m app.cli.agent_system_schema --check`。
 - DB が使えない（接続できない・テーブルが無い）ときは、プロセス内の記録に自動で切り替えて制限を続け、ログ
   `auth_login_throttle_shared_store_unavailable`（`error_code`・`hint` 付き）を出します。30 秒ごとに DB を試し直し、戻れば DB で数えます
   （停止中にプロセス内で数えた失敗も、窓の中なら合わせて数える）。ログインは止まりません（構成管理者は DB の停止中もログインできる）。
-- テーブルは各製品のシステムテーブルの初期化（RAG `app.rag.system_schema_cli initialize`・NL2SQL `app.cli.app_security_migrate --apply`・
+- テーブルは各製品のシステムテーブルの初期化（RAG `app.rag.system_schema_cli initialize`・NL2SQL `app.cli.nl2sql_system_schema --initialize` と `app.cli.app_security_migrate --apply`・
   Agent `app.cli.agent_system_schema --initialize`。どれも `init_script.sh` が実行する）が、`PLATFORM_USERS` などと一緒に冪等に作ります。
 - reverse proxy: 配備は reverse proxy を作らないので、ログインの API（`/api/auth/login`）の送信元 IP ごとの上限は backend だけが持ちます（#19）。
   前段に reverse proxy を置くときは、backend が利用者の IP を見られるように（`X-Forwarded-For` と uvicorn の proxy headers など）してください
