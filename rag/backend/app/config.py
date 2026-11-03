@@ -1740,7 +1740,8 @@ class Settings(
     )
     rag_embedding_cache_max_entries: int = Field(default=4096, ge=0, le=200000)
     rag_embedding_batch_size: int = Field(
-        default=96,
+        # 既定の埋め込みモデル text-embedding-v4 の上限（11 件以上は HTTP 400。#153）。
+        default=10,
         ge=1,
         le=96,
         description=(
