@@ -26,6 +26,7 @@ from app.features.settings.system_schema import (
     MANAGED_TABLES,
     MIGRATIONS,
     PRESERVED_TABLES,
+    SECURITY_OBJECTS,
     SystemSchemaActiveJobsError,
     SystemSchemaBusyError,
     SystemSchemaError,
@@ -263,18 +264,22 @@ def test_manifest_checksums_are_actual_sha256_values() -> None:
 
 
 def test_system_schema_status_has_four_deterministic_states() -> None:
-    expected = set(MANAGED_OBJECTS)
+    expected = {*MANAGED_OBJECTS, *SECURITY_OBJECTS}
     checksums = {migration.version: migration.checksum for migration in MIGRATIONS}
     one_domain_table = next(
         item
-        for item in expected
+        for item in MANAGED_OBJECTS
         if item[1] == "TABLE" and item[0] not in {CONTROL_TABLE, "NL2SQL_SCHEMA_MIGRATIONS"}
     )
 
     assert classify_system_schema_status(set(), {}) == "missing"
     assert classify_system_schema_status({one_domain_table}, {}) == "partial"
+    # 認証・権限の表だけがある schema は、業務の表が無いので未初期化のまま。
+    assert classify_system_schema_status(set(SECURITY_OBJECTS), {}) == "missing"
     assert classify_system_schema_status(expected, {**checksums, 6: "stale"}) == "outdated"
     assert classify_system_schema_status(expected, checksums) == "ready"
+    # 権限の表が無ければ、管理対象がそろっていても ready にしない（#150）。
+    assert classify_system_schema_status(set(MANAGED_OBJECTS), checksums) == "partial"
 
 
 def test_splitter_ignores_comments_and_keeps_multiline_statements() -> None:
@@ -483,6 +488,10 @@ class _WorkflowManager(SystemSchemaManager):
         return _status_payload("ready" if self.ready else self.initial_status, existing=0)
 
     def _configure_ddl_lock_timeout(self, connection: Any) -> None:
+        return None
+
+    @staticmethod
+    def _apply_security_schema(connection: Any) -> None:
         return None
 
     def _apply_migration(self, connection: Any, migration: Any) -> None:
@@ -1284,9 +1293,10 @@ def test_control_pool_strips_descriptor_retry_only_in_cli(
 class _ColumnsCursor:
     """状態の取得に要る dictionary・台帳だけを返す fake（表は `removed` の列だけを欠く）。"""
 
-    def __init__(self, removed: dict[str, set[str]], executed: list[str]) -> None:
+    def __init__(self, removed: dict[str, set[str]], executed: list[str], absent: set[str]) -> None:
         self._removed = removed
         self._executed = executed
+        self._absent = absent
         self._rows: list[tuple[Any, ...]] = []
         self._row: tuple[Any, ...] | None = None
         self.rowcount = 0
@@ -1301,8 +1311,16 @@ class _ColumnsCursor:
         upper = " ".join(sql.split()).upper()
         self._executed.append(upper)
         self._rows, self._row, self.rowcount = [], None, 0
-        if upper.startswith("SELECT OBJECT_NAME, OBJECT_TYPE, CREATED FROM USER_OBJECTS"):
-            self._rows = [(name, object_type, None) for name, object_type in MANAGED_OBJECTS]
+        created = re.match(r"CREATE TABLE (\w+)", upper)
+        if created:
+            # 実 DB と同じく、作った表は次の状態の取得から見える。
+            self._absent.discard(created.group(1))
+        elif upper.startswith("SELECT OBJECT_NAME, OBJECT_TYPE, CREATED FROM USER_OBJECTS"):
+            self._rows = [
+                (name, object_type, None)
+                for name, object_type in (*MANAGED_OBJECTS, *SECURITY_OBJECTS)
+                if name not in self._absent
+            ]
         elif upper.startswith("SELECT VERSION_NO, CHECKSUM FROM NL2SQL_SCHEMA_MIGRATIONS"):
             self._rows = [(migration.version, migration.checksum) for migration in MIGRATIONS]
         elif upper.startswith("SELECT TABLE_NAME, COLUMN_NAME FROM USER_TAB_COLUMNS"):
@@ -1328,12 +1346,18 @@ class _ColumnsCursor:
 
 
 class _ColumnsConnection:
-    def __init__(self, removed: dict[str, set[str]] | None = None) -> None:
+    def __init__(
+        self,
+        removed: dict[str, set[str]] | None = None,
+        *,
+        absent: set[str] | None = None,
+    ) -> None:
         self.removed = removed or {}
+        self.absent = absent or set()
         self.executed: list[str] = []
 
     def cursor(self) -> _ColumnsCursor:
-        return _ColumnsCursor(self.removed, self.executed)
+        return _ColumnsCursor(self.removed, self.executed, self.absent)
 
     def commit(self) -> None:
         return None
@@ -1394,7 +1418,69 @@ def test_initialize_stops_with_column_names_when_columns_stay_missing() -> None:
 
     assert raised.value.code == "SCHEMA_POSTCONDITION_FAILED"
     assert "NL2SQL_SCHEMA_REFRESH_JOBS.WORKER_ID" in raised.value.public_message
-    # 適用する migration は無い（DDL を流していない）。
+    # 適用する migration は無い（冪等な認証・権限の表の DDL のほかに流していない）。
     assert not any(
-        statement.startswith(("CREATE ", "ALTER TABLE")) for statement in connection.executed
+        statement.startswith(("CREATE ", "ALTER TABLE"))
+        and "PLATFORM_" not in statement
+        and "NL2SQL_APP_ROLE" not in statement
+        for statement in connection.executed
     )
+
+
+def test_status_is_not_ready_without_security_tables() -> None:
+    """権限の表が無ければ、画面の状態を ready にせず不足の名前を返す（#150）。"""
+
+    connection = _ColumnsConnection(absent={"NL2SQL_APP_ROLE_PROFILES"})
+
+    status = _columns_manager()._status_on(connection)
+
+    assert status["status"] == "partial"
+    assert status["missing_objects"] == [
+        {"name": "NL2SQL_APP_ROLE_PROFILES", "object_type": "TABLE"}
+    ]
+
+
+def test_initialize_creates_security_tables_and_reaches_ready() -> None:
+    """作成・更新だけで権限の表までそろう。migration の再実行はしない（#150）。"""
+
+    connection = _ColumnsConnection(absent={"NL2SQL_APP_ROLE_PROFILES"})
+
+    result = _columns_manager()._initialize_on(connection, "owner-1", recreate=False)
+
+    assert result["status"] == "ready"
+    assert result["missing_objects"] == []
+    assert any("MERGE INTO PLATFORM_ROLES" in statement for statement in connection.executed)
+    create_platform = next(
+        index
+        for index, statement in enumerate(connection.executed)
+        if statement.startswith("CREATE TABLE PLATFORM_ROLES")
+    )
+    create_permissions = next(
+        index
+        for index, statement in enumerate(connection.executed)
+        if statement.startswith("CREATE TABLE NL2SQL_APP_ROLE_PERMISSIONS")
+    )
+    assert create_platform < create_permissions
+
+
+def test_security_schema_ignores_existing_tables_and_raises_other_errors() -> None:
+    class _FailingConnection(_ColumnsConnection):
+        def __init__(self, code: str) -> None:
+            super().__init__()
+            self.code = code
+
+        def cursor(self) -> _ColumnsCursor:
+            outer = self
+
+            class _Cursor(_ColumnsCursor):
+                def execute(self, sql: str, binds: dict[str, Any] | None = None) -> None:
+                    if sql.lstrip().upper().startswith("CREATE TABLE NL2SQL_APP_ROLE"):
+                        raise RuntimeError(f"{outer.code}: synthetic failure")
+                    super().execute(sql, binds)
+
+            return _Cursor(self.removed, self.executed, self.absent)
+
+    SystemSchemaManager._apply_security_schema(_FailingConnection("ORA-00955"))
+
+    with pytest.raises(RuntimeError, match="ORA-01031"):
+        SystemSchemaManager._apply_security_schema(_FailingConnection("ORA-01031"))

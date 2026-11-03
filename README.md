@@ -125,8 +125,7 @@ repo の直下で実行します。
 
 ```bash
 (cd rag/backend    && uv sync --locked --dev && uv run python -m app.rag.system_schema_cli initialize)
-(cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize \
-                   && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap)
+(cd nl2sql/backend && uv sync --locked --dev && uv run python -m app.cli.nl2sql_system_schema --initialize)
 (cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize)
 ```
 
@@ -144,7 +143,7 @@ repo の直下で実行します。
 
 1. `system_admin` でログインし、左のナビの「運用設定 › システムテーブル」（`/settings/system-tables`）を開きます（DB に接続できているかは「システム設定 › データベース」の接続テストで確かめられます）。
 2. 状態が `未初期化` / `一部不足` / `更新必要` なら、**「作成・更新」** を押します（状態が `初期化済み` になれば完了です。既存のデータを保ったまま不足分の表・索引・migration を適用します）。
-   - **NL2SQL は `初期化済み` になっても権限の表（`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`）がまだありません。** 初回だけ、repo の直下で `(cd nl2sql/backend && uv run python -m app.cli.app_security_migrate --apply --skip-bootstrap)` を実行し、上の `--check` が 0 で終わることを確かめます（共通の `PLATFORM_*` の表も作られます。RAG / Agent は「作成・更新」で作られます）。
+   - 共通の `PLATFORM_*` の表と NL2SQL の権限の表（`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`）も「作成・更新」で作られます。
    - すべての管理対象の表を消して最初から作り直すときは、「破壊的な再作成」に確認語（RAG: `RECREATE_RAG_SYSTEM_TABLES`、NL2SQL: `RECREATE_NL2SQL_SYSTEM_TABLES`、Agent: `RECREATE_AGENT_SYSTEM_TABLES`）を入れて **「すべて再作成」** を押します（保存済みのデータは消えます。共通の `PLATFORM_*` の表と NL2SQL の権限の表は残ります）。
 
 ### 6. 起動する
