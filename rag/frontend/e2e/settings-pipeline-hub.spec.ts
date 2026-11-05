@@ -203,7 +203,7 @@ test(`取込の流れは検索インデックスと 12 項目の全体の既定�
     items.getByRole("link", { name: "見出しの階層の推定（AI） を設定する画面を開く" })
   ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-heading-levels");
   await expect(items.locator('[data-config-field="heading_level_inference_enabled"]')).toContainText("無効");
-  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(11);
+  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(10);
   // 索引構築の全体の既定は OFF。専用の設定画面から変更できる。
   const entityIndex = items.locator('[data-config-field="entity_index_enabled"]');
   await expect(entityIndex).toContainText("無効");
@@ -320,7 +320,7 @@ test("概要の設定リンクは常時識別でき、章節のカードには�
   await page.goto("/settings/pipeline");
   const items = page.getByTestId("pipeline-recipe-defaults");
   const links = items.getByRole("link");
-  await expect(links).toHaveCount(11);
+  await expect(links).toHaveCount(10);
   for (const link of await links.all()) {
     expect(await link.evaluate((element) => getComputedStyle(element).textDecorationLine)).toContain("underline");
     const colors = await link.evaluate((element) => ({
@@ -393,10 +393,10 @@ test("サブパス配備でも全工程の設定リンクと hash を保持す�
   test.skip(!basePath, "RAG_E2E_BASE_PATH を指定した配備経路の検証で実行する");
   await page.goto(`${basePath}/settings/pipeline`);
   const links = page.getByTestId("pipeline-recipe-defaults").getByRole("link");
-  await expect(links).toHaveCount(11);
+  await expect(links).toHaveCount(10);
   for (const link of await links.all()) await expect(link).toHaveAttribute("href", new RegExp(`^${basePath}/settings/`));
   const vision = links.filter({ hasText: "設定画面へ" }).filter({ has: page.locator("span") });
-  await expect(vision).toHaveCount(11);
+  await expect(vision).toHaveCount(10);
   const target = page.getByRole("link", { name: "章節の要約 を設定する画面を開く", exact: true });
   await expect(target).toHaveAttribute("href", `${basePath}/settings/parser-adapters#post-parse-navigation-summary`);
   await target.scrollIntoViewIfNeeded();
