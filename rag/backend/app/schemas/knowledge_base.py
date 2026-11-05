@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -176,31 +175,3 @@ def _unique_clean_ids(values: list[str]) -> list[str]:
     if not cleaned_values:
         raise ValueError("ID を 1 件以上指定してください。")
     return cleaned_values
-
-
-class KnowledgeBaseGraphNode(BaseModel):
-    """文書構造グラフのノード(KG entity)。"""
-
-    id: str
-    name: str
-    type: str | None = None
-    confidence: float = 1.0
-
-
-class KnowledgeBaseGraphEdge(BaseModel):
-    """文書構造グラフのエッジ(KG relationship)。"""
-
-    id: str
-    source: str
-    target: str
-    type: str | None = None
-    confidence: float = 1.0
-
-
-class KnowledgeBaseGraphData(BaseModel):
-    """KB の文書構造グラフ可視化用 subgraph。"""
-
-    status: Literal["ok", "empty"] = "empty"
-    nodes: list[KnowledgeBaseGraphNode] = Field(default_factory=list)
-    edges: list[KnowledgeBaseGraphEdge] = Field(default_factory=list)
-    truncated: bool = False

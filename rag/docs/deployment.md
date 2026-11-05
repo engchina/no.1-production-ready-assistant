@@ -207,6 +207,15 @@ ln -s "${NEW}" "${OLD}"
 readiness の確認は `/api/ready` を使う。`enterprise_ai`、`genai`、`oracle`、`local_storage` の設定グループを確認する（`oci_common`・`object_storage` は #11 で削除）。
 `PLATFORM_ENVIRONMENT=production` では `audit_context_salt` も確認し、`RAG_AUDIT_CONTEXT_HASH_SALT` を必須にする。すべて `ok` のときだけ 200 になり、`missing`、`invalid`、`missing_credentials`、`wallet_not_found` が含まれる場合は 503 になる。
 
+## 既存環境の更新手順（#159 文書構造索引の削除）
+
+文書と章・節・表・図の見出しを原文の断片と結び付ける「文書構造索引」を削除した。設定の「文書構造索引」、ナレッジベースの「文書構造グラフ」、検索方法の「文書構造による検索拡張」、処理レシピの上書き、取込の索引の構築、回答の検索での利用が無くなる。実体・別名索引は変わらない。
+
+- **migration `20261105_001_retire_document_graph` は承認が要る**（CLI の `--allow-destructive`・画面の確認ダイアログ。下の「共通の注意」）。表 `rag_graph_entities`・`rag_graph_relationships`・`rag_graph_entity_chunks` を削除し、`rag_artifact_layers` の `layer_kind = 'graph'` の行とメニュー権限 `menu.settings_graph` の行を消す。どの表も文書から作れた派生データで、文書・chunk・実体の索引は消えない。
+- **設定**: `backend/.env` に残った `RAG_GRAPH_PROFILE`・`RAG_GRAPH_EXPANSION_ENABLED`・`RAG_GRAPH_EXPANSION_MAX_CHUNKS` は読まない（消してよい）。文書・文書レシピ・ジョブに保存した `graph_profile` と、検索・回答プロファイルに保存した `graph_expansion_*` は読み込むときに捨て、次の保存で消える。
+- **回答**: 検索拡張を有効にしていた環境では、足していた根拠が無くなるため、回答の根拠が変わることがある。
+- **順序**: 新しい版のコードは表を読まないので、backend の更新と migration の順序は問わない。
+
 ## 既存環境の更新手順（#42 XML ツリー JSON の構造に依存する機能の削除）
 
 #21 で XML ツリー JSON の解析エンジンを削除したのに続き、その構造（条・項・号）と metadata（`xml_tree_*`）に依存する下流の
@@ -396,7 +405,7 @@ PyMuPDF）を削除した。スキャンの PDF は既定の解析エンジン D
 
 ## 既存環境の更新手順（#3218 pipeline の段のサービスへの委譲を削除）
 
-検索インデックス・文書構造索引の構築・安全チェック・評価の基準の段は、backend の中で実行する（`rag_pipeline_core` の決定論の解決）。段のサービス（`services/pipeline/{vector_index,graphrag,guardrail,evaluation}`）と、そこへ HTTP で委譲する仕組み（`app/clients/pipeline_stage.py`）を削除し、サービス管理の一覧からも外した。これらのサービスは配備の対象ではなく（systemd の unit も無い）、委譲の許可の既定が有効だったため、Chunk 作成の job ごとに接続に失敗して WARNING「pipeline stage service unavailable; falling back to in-process」を出していた。
+検索インデックス・安全チェック・評価の基準の段は、backend の中で実行する（`rag_pipeline_core` の決定論の解決）。段のサービス（`services/pipeline/{vector_index,graphrag,guardrail,evaluation}`）と、そこへ HTTP で委譲する仕組み（`app/clients/pipeline_stage.py`）を削除し、サービス管理の一覧からも外した。これらのサービスは配備の対象ではなく（systemd の unit も無い）、委譲の許可の既定が有効だったため、Chunk 作成の job ごとに接続に失敗して WARNING「pipeline stage service unavailable; falling back to in-process」を出していた。
 
 - **環境変数**: 次は読まない（`backend/.env` に残っていても無視する。消さなくてもよい）。
   - `RAG_VECTOR_INDEX_SERVICE_ENABLED`・`RAG_VECTOR_INDEX_SERVICE_URL`・`RAG_GRAPH_SERVICE_ENABLED`・`RAG_GRAPH_SERVICE_URL`・`RAG_GUARDRAIL_SERVICE_ENABLED`・`RAG_GUARDRAIL_SERVICE_URL`・`RAG_EVALUATION_SERVICE_ENABLED`・`RAG_EVALUATION_SERVICE_URL`・`RAG_PIPELINE_STAGE_TIMEOUT_SECONDS`
@@ -699,14 +708,6 @@ backend と取込 worker を更新して再起動する。旧 `RAG_CHUNKING_SERV
    `rag_evaluation_jobs` を書き出す。
 2. backend の更新との順序は問わない（更新の前のコードも、消す列・値を使っていない）。
 
-## 既存環境の更新手順（#2055 関係情報を回答の検索に使う）
-
-#2055 で、文書構造索引の構築（`RAG_GRAPH_PROFILE=entities`）で作った章節・表 / 図の見出しの entity と chunk の対応を、回答の検索の候補を広げるのにも使えるようにした。既定は OFF で、更新しただけでは回答は変わらない。
-
-- **schema の変更は無い。** 既存の表（`rag_graph_entities`・`rag_graph_entity_chunks`）を読むだけで、migration は要らない。
-- **新しい設定**: `RAG_GRAPH_EXPANSION_ENABLED`（既定 `false`。検索方法の画面の「文書構造による検索拡張」が書く）と `RAG_GRAPH_EXPANSION_MAX_CHUNKS`（既定 `6`。1〜20）。どちらも全体設定だけで決め、検索・回答プロファイルでは上書きしない（`RAG_GRAPH_EXPANSION_MAX_CHUNKS` は #3523 から。保存済みのプロファイルの `graph_expansion_max_chunks` は適用せず、次の保存で消える）。
-- **関係情報の無い文書には効かない。** 文書構造索引の構築を「構築しない」で取り込んだ文書は、文書の詳細の処理レシピで「文書構造索引の構築」を「構築する」にして「再処理」するまで、何も足さない。
-
 ## 既存環境の更新手順（#2042 OCI Vision / ASR の parser とファイル準備の 2 つの変換方式の削除）
 
 OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）と GPU の ASR の parser（`parser-asr`、18026）を削除した（音声の文字起こしは
@@ -760,7 +761,7 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
 ## 既存環境の更新手順（#599 rag_poc から移したときの名前の改名）
 
-#599 で、rag_poc から移したときの名前（`docrag`）を、コードの識別子・設定（環境変数）・API・DB の名前から外し、RAG の標準の名前にした。回答・分割の挙動は変わらない。旧名との互換は持たない（旧名の環境変数は読まず、保存値と表は migration で書き換える）。#599 の migration はデータを削除しないので、承認（`--allow-destructive`）は要らない（#621 の `20260930_007_retire_graph_claims_community` などデータを削除する migration が未適用なら、そちらの承認が要る。下の「既存環境の更新手順（#621）」と上の「共通の注意」）。
+#599 で、rag_poc から移したときの名前（`docrag`）を、コードの識別子・設定（環境変数）・API・DB の名前から外し、RAG の標準の名前にした。回答・分割の挙動は変わらない。旧名との互換は持たない（旧名の環境変数は読まず、保存値と表は migration で書き換える）。#599 の migration はデータを削除しないので、承認（`--allow-destructive`）は要らない（データを削除する migration が未適用なら、そちらの承認が要る。上の「共通の注意」）。
 
 ### 名前の対照
 
@@ -874,61 +875,6 @@ OCI Generative AI（Vision）の parser（`parser-oci-genai-vision`、18027）�
 
    - 取込・検索・回答設定の「検索方法」「文書分割」と検索・回答プロファイルの「検索・回答設定」に、更新の前の値が出る。RAG 検索で回答し、「回答の根拠と実行記録」が出る。
 
-## 既存環境の更新手順（#621 文書構造索引の構築の選択肢を 2 つにする）
-
-#621 で、設定の「文書構造索引の構築」の選択肢を「構築しない」（`off`。既定）と「構築する」（`entities`）の 2 つにした。構築するのは、文書全体と章・節の見出し（表・図を含む）の「含む」のつながりで、LLM は使わない。ナレッジベースの「文書構造グラフ」で見るためのもので、回答の検索には使わない（#595）。
-
-- **`full` を削除した。** `full` が追加で作っていた claims（`rag_graph_claims`）と community summary（`rag_graph_community_summaries`）は、どの画面・API・検索も読んでいなかった。`full` と `entities` が作る文書構造グラフの中身（`rag_graph_entities`・`rag_graph_relationships`・`rag_graph_entity_chunks`）は同じ。
-- **legacy の `RAG_GRAPH_ENABLED` を削除した。** 読まない（`true` でも `full` に読み替えない）。設定画面の保存も書かない。
-- **backend/.env の `RAG_GRAPH_PROFILE=full` は起動を止める。** 読み替えず、書き換え先（`entities` か `off`）を示すエラーで止まる。
-- **保存済みの上書きの `full` は、migration `20260930_006_graph_profile_entities` が `entities` に書き換える**（文書・文書レシピの `processing_config`、ナレッジベースの `retrieval_config.ingestion`、取込ジョブの `settings_overrides.processing_config`、chunk_set に刻んだレシピ `recipe_subset`）。データを削除しない migration。
-- **migration `20260930_007_retire_graph_claims_community` が `rag_graph_claims`・`rag_graph_community_summaries` を削除する。** データを削除する migration なので、承認（CLI の `--allow-destructive`・画面の確認ダイアログ）が要る（上の「既存環境の更新手順の共通の注意」）。どちらも文書から作り直せる派生データで、読む経路が無かったため、書き出しは要らない。
-- **旧値との互換は持たない（#629）。** 保存値に `full` が残っていると、ほかの不正な値と同じ扱いになる（文書・文書レシピの処理設定などは読み込みが検証エラーになり、ナレッジベースの構築設定は警告を出して空の設定（すべて既定を継承）に戻る）。旧 `full` で構築した文書に残る `rag_graph_claims` の行も消さないので、表が残ったままだと再取込・削除が FK で失敗する。**新しい版の backend と取込 worker を起動する前に、2 つの migration（006・007）を当てる。** 2 つは同時に未適用になり、007 の承認が無いとどちらも当たらない。
-
-### 手順
-
-1. #621 の版のコードを取得する（`git pull` など）。backend・取込 worker・前処理 / parser は止める（migration の前に新しい版が保存値 `full` を読むと検証エラーになり、取込が関係情報の表に書き込まないようにする）。
-
-   ```bash
-   sudo systemctl stop 'production-ready-rag-*'
-   ```
-
-2. `backend/.env` に `RAG_GRAPH_PROFILE=full` があれば `RAG_GRAPH_PROFILE=entities` に書き換える（構築しない場合は `off`。`full` のままだと起動時の検証で止まる）。`RAG_GRAPH_ENABLED` の行があれば消す（残っても読まないが、`true` だった環境は、以前は `full` で構築していた。同じものを作り続けるなら `RAG_GRAPH_PROFILE=entities` にする）。Compute では、`init_script.sh` が配備の入力（`/u01/aipoc/props/backend.env`）から `backend/.env` を作り直すので、両方を直す。
-3. backend の venv を新しい版に合わせる（リポジトリの所有者で実行する。`init_script.sh` は、システムテーブルの更新の後の手順 5 で再実行する）。
-
-   ```bash
-   # OCI Compute
-   cd /u01/aipoc/no.1-production-ready-assistant/rag
-   sudo -u opc bash -c 'cd backend && uv sync --locked --no-dev --python 3.12'
-
-   # ローカル
-   cd rag/backend && uv sync --locked
-   ```
-
-4. サービスを止めたまま、システムテーブルを承認付きで更新する（006 と 007 を当てる）。
-
-   ```bash
-   cd /u01/aipoc/no.1-production-ready-assistant/rag/backend
-   sudo -u ragsvc HOME=/var/lib/production-ready-rag .venv/bin/python -m app.rag.system_schema_cli initialize --allow-destructive
-   ```
-
-   画面の「システム設定 > データベース > RAG システムテーブル」の「作成・更新」の確認ダイアログ（「削除して更新」）で行う場合は、backend だけを起動し（取込 worker と前処理 / parser は止めたまま）、ほかの操作をせずに更新する。当てるまでは、保存値に `full` が残る設定が上のとおり読めない（この間にナレッジベースの構築設定を画面から保存すると、既定に戻った設定のまま保存される）。
-5. backend・worker・前処理 / parser と frontend を起動し直す（`sudo systemctl start 'production-ready-rag-*'`。Compute では `init_script.sh` の再実行でもよい。migration は当たっているので、承認なしの更新で止まらない）。
-6. 確かめる。
-   - `system_schema_cli status` が `ready` で、`retired_objects`・`pending_versions`・`pending_destructive_migrations` が空。
-   - 保存値に `full` が残っていない（0 件）。
-
-     ```sql
-     SELECT COUNT(*) FROM rag_documents WHERE JSON_VALUE(processing_config, '$.graph_profile') = 'full';
-     SELECT COUNT(*) FROM rag_document_recipes WHERE JSON_VALUE(processing_config, '$.graph_profile') = 'full';
-     SELECT COUNT(*) FROM rag_knowledge_bases WHERE JSON_VALUE(retrieval_config, '$.ingestion.graph_profile') = 'full';
-     ```
-
-### 旧 `full` で構築した文書
-
-- ナレッジベースの「文書構造グラフ」は、再取込しなくても今までどおり表示される（残す表の中身は `entities` と同じ）。
-- 文書詳細の関係情報の層は、再取込するまで「構築計画に含まれていますが、まだ実体化していません」と出る。層の ID は構築の設定値から作るため、`full` で記録した層と `entities` の層が別の ID になる。気になる文書は再取込する。`off` と `entities` の文書の層・chunk_set・索引は変わらない（層の ID の算法 `KEY_VERSION` は変えていない）。
-
 ## 既存環境の更新手順（#286: Docker Compose からネイティブ配備への移行）
 
 #286 で、RAG の backend・ingestion-worker・前処理・parser を Docker Compose から、サービスごとの uv の venv と
@@ -1036,7 +982,7 @@ sudo ls /u01/data/production-ready-rag /var/lib/production-ready-rag/.oci
 
 - **`rag_answer_records.answer_engine` の列**: 保存済みの回答の記録（履歴）が、どの回答の方式で作られたかを表す。新しい記録には常に同じ値を書く。
 - **監査 `rag_search_audit` の標準の回答フローの内訳の列**（`memory_plan_id`・`agent_memory_*` など）: 既存の監査の行を変えないため残し、今は既定値を書く。
-- **文書構造索引の構築（`rag_graph_*`）と navigation の要約の取り込み**: ナレッジベースの関係図と文書詳細が使い、関係情報は `RAG_GRAPH_EXPANSION_ENABLED`（既定 OFF。#2055）を ON にしたときに回答の検索も読む（関係情報のうち、読む経路の無かった claims / community summary の表は #621 で削除した）。
+- **navigation の要約の取り込み**: 文書詳細が使う。
 
 ### 手順
 
@@ -1936,7 +1882,7 @@ uv run python -m app.rag.file_processing_staging_cli \
   - 失敗の文言（job と文書の `error_message`。画面に出る）は、停滞（「取込の進捗が … 進まなかったため止めました」）と全体の上限（「取込が全体の上限（…）を超えたため止めました」）を分け、
     最後に進んだ段・件数（例「図・表の説明 120 / 232 件」）と、長くする設定の名前を出す。
   - worker が SIGKILL などで後始末できずに止まった場合は、lease の TTL 後に他の（または再起動した）worker が回復する。
-- `RAG_INGESTION_QUEUE_DEDICATED_WORKER_ENABLED` / `RAG_INGESTION_QUEUE_INPROCESS_WORKER_ENABLED` / `RAG_INGESTION_QUEUE_POLL_INTERVAL_SECONDS`: 取込実行を API の event loop から切り離す専用ワーカー機構。`DEDICATED_WORKER_ENABLED=false`(既定)では従来どおりリクエスト後のバックグラウンドタスクで取込を実行する。`true` にすると API はキュー投入のみ行い、`app.rag.ingestion_worker.IngestionQueueWorker` がキュー(`rag_ingestion_jobs`)を `claim_ingestion_job` の row lock 付きで消費する。`INPROCESS_WORKER_ENABLED=true`(既定)なら同じ API プロセスの lifespan 内でワーカーを起動するため単一プロセスでも完結する。**ただし in-process ワーカーは Gunicorn worker プロセスごとに 1 つ起動するため、`WEB_CONCURRENCY>1` だと実効同時取込数が `WEB_CONCURRENCY × RAG_INGESTION_QUEUE_WORKER_CONCURRENCY` まで増え、モデルの API / Oracle を過負荷にし得る**(row lock で二重実行はしないが総並行数が乗算される)。in-process ワーカーを使う場合は `WEB_CONCURRENCY=1` にするか、API では `INPROCESS_WORKER_ENABLED=false` にして取込を別プロセスへ切り出すこと。別プロセスへ切り出す場合は `python -m app.rag.ingestion_worker` を別途起動する(本番は systemd の `production-ready-rag-ingestion-worker.service`)。起動時には `ingestion_inprocess_worker_enabled` warning ログで多重化の注意を出す。重い解析・PDF 分割・base64・チャンク・graph index・埋め込みなどの CPU/同期処理は取込・検索とも `asyncio.to_thread` でワーカースレッドへ退避し、event loop を塞がない。ワーカーは複数同時起動しても row lock により同一 job の二重実行が起きないため、worker のプロセスを増やして水平スケールできる。`POLL_INTERVAL_SECONDS` は QUEUED ジョブのポーリング間隔で、同一プロセス内の enqueue は即時起床通知で待たずに拾う。
+- `RAG_INGESTION_QUEUE_DEDICATED_WORKER_ENABLED` / `RAG_INGESTION_QUEUE_INPROCESS_WORKER_ENABLED` / `RAG_INGESTION_QUEUE_POLL_INTERVAL_SECONDS`: 取込実行を API の event loop から切り離す専用ワーカー機構。`DEDICATED_WORKER_ENABLED=false`(既定)では従来どおりリクエスト後のバックグラウンドタスクで取込を実行する。`true` にすると API はキュー投入のみ行い、`app.rag.ingestion_worker.IngestionQueueWorker` がキュー(`rag_ingestion_jobs`)を `claim_ingestion_job` の row lock 付きで消費する。`INPROCESS_WORKER_ENABLED=true`(既定)なら同じ API プロセスの lifespan 内でワーカーを起動するため単一プロセスでも完結する。**ただし in-process ワーカーは Gunicorn worker プロセスごとに 1 つ起動するため、`WEB_CONCURRENCY>1` だと実効同時取込数が `WEB_CONCURRENCY × RAG_INGESTION_QUEUE_WORKER_CONCURRENCY` まで増え、モデルの API / Oracle を過負荷にし得る**(row lock で二重実行はしないが総並行数が乗算される)。in-process ワーカーを使う場合は `WEB_CONCURRENCY=1` にするか、API では `INPROCESS_WORKER_ENABLED=false` にして取込を別プロセスへ切り出すこと。別プロセスへ切り出す場合は `python -m app.rag.ingestion_worker` を別途起動する(本番は systemd の `production-ready-rag-ingestion-worker.service`)。起動時には `ingestion_inprocess_worker_enabled` warning ログで多重化の注意を出す。重い解析・PDF 分割・base64・チャンク・埋め込みなどの CPU/同期処理は取込・検索とも `asyncio.to_thread` でワーカースレッドへ退避し、event loop を塞がない。ワーカーは複数同時起動しても row lock により同一 job の二重実行が起きないため、worker のプロセスを増やして水平スケールできる。`POLL_INTERVAL_SECONDS` は QUEUED ジョブのポーリング間隔で、同一プロセス内の enqueue は即時起床通知で待たずに拾う。
 - `PLATFORM_ENTERPRISE_AI_LLM_PAYLOAD_TEMPLATE` / `PLATFORM_ENTERPRISE_AI_VLM_PAYLOAD_TEMPLATE`: 接続先の API ごとの request shape が標準 payload と異なる場合にだけ設定する JSON object template。文字列 placeholder は `${prompt}` / `${context}` / `${mime_type}` / `${data_base64}`、object placeholder は `"${messages}"` / `"${parameters}"` / `"${response_format}"` / `"${structured_extraction_schema}"` のように完全な文字列値として置く。未設定なら標準 payload を使い、VLM には upload metadata の MIME type を渡す。
 - `PLATFORM_ENTERPRISE_AI_LLM_RESPONSE_PATH` / `PLATFORM_ENTERPRISE_AI_VLM_RESPONSE_PATH`: 接続先の API の response が既知 envelope ではなく独自の深い JSON 構造に包まれる場合だけ指定する JSON Pointer。例: `/payload/results/0/generated/text`、`/payload/results/0/document`。未設定なら既知 envelope を自動判定する。
 - backend の Gunicorn の worker 数・timeout: `init_script.sh` が作る unit（`production-ready-rag-backend.service`）の

@@ -762,9 +762,6 @@ class EvaluationRagOverrides(BaseModel):
     # 実体の 1 段の拡張(#1362)。実体の抽出を選んだ文書で、拡張の有り / 無しを比べる。
     entity_expansion_enabled: bool | None = None
     entity_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
-    # 関係情報で検索の候補を足す(#2055)。関係情報を作った文書で、有り / 無しを比べる。
-    graph_expansion_enabled: bool | None = None
-    graph_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
     # 章節の拡張(#1436)。拡張の有り / 無し・上限を比べる。
     section_expansion_enabled: bool | None = None
     section_expansion_max_levels: int | None = Field(default=None, ge=1, le=8)

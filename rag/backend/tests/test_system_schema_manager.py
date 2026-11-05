@@ -624,9 +624,6 @@ def test_update_retires_standard_engine_tables_and_runs_migration() -> None:
     assert _RETIRE_STANDARD_ENGINE_MIGRATION in database.migrations
     assert any("MENU.SETTINGS_GROUNDING" in statement for statement in database.executed)
     assert not any((name, "TABLE") in database.objects for name in _RETIRED_STANDARD_ENGINE_TABLES)
-    # 回答の記録（answer_engine の列）と知識グラフの表は残す。
-    assert ("RAG_ANSWER_RECORDS", "TABLE") in database.objects
-    assert ("RAG_GRAPH_ENTITIES", "TABLE") in database.objects
 
 
 _RETIRED_GRAPH_TABLES = ("RAG_GRAPH_CLAIMS", "RAG_GRAPH_COMMUNITY_SUMMARIES")
@@ -659,9 +656,6 @@ def test_update_retires_graph_claims_community_tables_with_approval() -> None:
     assert result["status"] == "ready"
     assert _RETIRE_GRAPH_CLAIMS_MIGRATION in database.migrations
     assert not any((name, "TABLE") in database.objects for name in _RETIRED_GRAPH_TABLES)
-    # 文書構造グラフが読む表は残す。
-    for name in ("RAG_GRAPH_ENTITIES", "RAG_GRAPH_RELATIONSHIPS", "RAG_GRAPH_ENTITY_CHUNKS"):
-        assert (name, "TABLE") in database.objects
 
 
 # データを消す SQL（テーブル・列の DROP・行の DELETE・TRUNCATE）。`ON DELETE CASCADE` は含めない。
@@ -695,6 +689,7 @@ def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
         "20261031_001_retire_appearance_permission",
         "20261031_002_embedding_dimensions_1024",
         "20261101_001_retire_guardrail_columns",
+        "20261105_001_retire_document_graph",
     } == marked
     assert all(migration.destructive_note for migration in MIGRATIONS if migration.destructive)
     # 印は checksum（SQL だけ）に影響しない（適用済みの DB を outdated にしない）。

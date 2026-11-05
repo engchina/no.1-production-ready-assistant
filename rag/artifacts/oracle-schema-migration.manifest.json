@@ -596,10 +596,17 @@
       "sha256": "a0502f242c19ec269ab786e94a54e555a5f0f5e03eb7f88e319fa6b39fcca9b6",
       "statement_count": 1,
       "table_name": "rag_messages"
+    },
+    {
+      "destructive": true,
+      "name": "20261105_001_retire_document_graph",
+      "sha256": "db2d82c50464327cac6dbc2ea448bb74c9486de935b007451da9e8ffd4a1544c",
+      "statement_count": 1,
+      "table_name": "rag_graph_entities"
     }
   ],
   "schema_name": "production-ready-rag-oracle-26ai",
   "schema_version": "3",
-  "sha256": "e3d5e2472af512d61dabed5fa2a234d33b335ca210373d319ed7c9429308cc8a",
-  "statement_count": 127
+  "sha256": "dd7f61be05cbe9ebc8e09fddc2e8f6a281b3e03c02db7b52ff6134be23cdab7b",
+  "statement_count": 128
 }

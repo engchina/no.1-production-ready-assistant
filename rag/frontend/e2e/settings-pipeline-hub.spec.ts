@@ -21,7 +21,6 @@ const RECIPE_DEFAULTS = {
   chunk_size: 800,
   chunk_overlap: 120,
   chunk_min_chars: 120,
-  graph_profile: "off",
   // 実体・別名索引の全体の既定は OFF（#3008）。
   entity_index_enabled: false,
   entity_name_columns: [],
@@ -104,18 +103,11 @@ test("取込・検索・回答設定の概要ハブが工程をフェーズ別�
     "href",
     "/settings/retrieval"
   );
-  // 関係情報の工程は取込時の構築の設定なので「文書構造索引」の名前でナレッジ構築フェーズに並ぶ(#301)。
-  await expect(
-    page
-      .getByRole("region", { name: "ナレッジ構築" })
-      .getByRole("link", { name: "文書構造索引 の設定を開く" })
-  ).toHaveAttribute("href", "/settings/graph");
 
   const ingestion = page.getByRole("region", { name: "ナレッジ構築" });
   await expect(ingestion.getByRole("link", { name: "実体・別名索引 の設定を開く" })).toContainText("5.");
-  await expect(ingestion.getByRole("link", { name: "文書構造索引 の設定を開く" })).toContainText("6.");
-  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("7.");
-  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("9.");
+  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("6.");
+  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("8.");
 
   // カードから実際に詳細設定へ遷移できる。
   await page.getByRole("link", { name: "文書分割 の設定を開く" }).click();
@@ -155,7 +147,7 @@ test("サイドバーの取込・検索・回答設定の名前と順番は設�
   expect(sidebarNames).toEqual(cardNames);
 });
 
-// #528: レシピ 13 項目を、選択中レシピの設定と同じ処理順で出す（実体・別名索引は #1388）。
+// #528: レシピ 12 項目を、選択中レシピの設定と同じ処理順で出す（実体・別名索引は #1388）。
 const PROCESSING_ORDER = [
   "preprocess_profile",
   "auto_parse_after_preprocess_enabled",
@@ -170,10 +162,9 @@ const PROCESSING_ORDER = [
   "auto_index_after_chunk_enabled",
   "vector_index",
   "entity_index_enabled",
-  "graph_profile",
 ];
 
-test(`取込の流れは検索インデックスと 13 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
+test(`取込の流れは検索インデックスと 12 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
   page,
 }, testInfo) => {
   const patches = await mockPipelineSettings(page, {

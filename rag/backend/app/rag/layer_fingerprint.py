@@ -11,7 +11,7 @@
   当たる)、
   ナビゲーション要約の上限数(``navigation_summary_max_nodes``)。モデルの切り替えは入れない
   (すべての文書が一斉に「作り直しが必要」になり、定義の変更と区別できなくなるため)。
-  レイヤーの有効・無効や関係情報の方式は、レイヤー ID(``variant_keys``)に入っているため、
+  レイヤーの有効・無効は、レイヤー ID(``variant_keys``)に入っているため、
   変わると別のレイヤーとして扱われ、ここでは比べない。
 - **作ったときに実際に使った値を記録する**: 項目の定義とナビ要約の上限数は、抽出の工程で
   抽出結果の ``parser_artifacts`` に刻み(``*_ARTIFACT_KEY``)、レイヤーを記録するときはそれを読む。
@@ -114,7 +114,6 @@ def recorded_layer_fingerprint(
         max_nodes = artifacts.get(NAVIGATION_SUMMARY_MAX_NODES_ARTIFACT_KEY)
         if isinstance(max_nodes, int) and not isinstance(max_nodes, bool):
             fingerprint[NAVIGATION_SUMMARY_MAX_NODES_INPUT] = max_nodes
-    # 関係情報(graph)は実体化しない(計画だけ)ため、比べる入力を持たない。
     return fingerprint or None
 
 

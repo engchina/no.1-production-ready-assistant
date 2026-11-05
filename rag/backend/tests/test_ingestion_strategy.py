@@ -21,7 +21,6 @@ from app.config import Settings
 from app.rag import ingestion as ingestion_module
 from app.rag.audit import record_rag_ingestion_audit
 from app.rag.chunking import Chunk
-from app.rag.graph_index import GraphIndex
 from app.rag.ingestion import (
     IngestionCancelledError,
     IngestionPipeline,
@@ -54,8 +53,6 @@ class FakeOracle:
         self.saved_extraction: StructuredExtraction | None = None
         self.saved_chunk_count = 0
         self.atomic_index_save_count = 0
-        self.saved_graph_index: GraphIndex | None = None
-        self.graph_document_id: str | None = None
         self.statuses: list[FileStatus] = []
         self.error_messages: list[str | None] = []
         self.segments: dict[str, IngestionSegment] = {}
@@ -156,20 +153,8 @@ class FakeOracle:
         return [KnowledgeBaseRef(id="kb-1", name="社内規程")]
 
     async def get_document(self, document_id: str) -> Any:
-        # 関係情報の文書の節点の名前に使うファイル名(#2051)。
         _ = document_id
         return SimpleNamespace(file_name="policy.pdf")
-
-    async def replace_document_graph_index(
-        self,
-        document_id: str,
-        graph_index: GraphIndex,
-        *,
-        chunk_set_id: str | None = None,
-    ) -> None:
-        _ = chunk_set_id
-        self.graph_document_id = document_id
-        self.saved_graph_index = graph_index
 
     async def replace_ingestion_segments(
         self,
@@ -457,7 +442,7 @@ def _stub_parser_service(monkeypatch: pytest.MonkeyPatch) -> None:
 
     `IngestionPipeline._partition_source` は選択 backend を `ParserServiceClient.runner` へ
     HTTP 委譲する。本 fixture はその runner を決定論スタブへ差し替え、実サービス未起動でも
-    pipeline(chunk/embedding/index/graph)を検証できるようにする。
+    pipeline(chunk/embedding/index)を検証できるようにする。
     """
 
     def _runner(
@@ -1290,51 +1275,6 @@ async def test_ingestion_pipeline_cancel_before_review_does_not_write_review(
         assert "active_extraction_recipe_id" not in row
 
 
-async def test_ingestion_pipeline_writes_graph_index_when_enabled() -> None:
-    """関係情報を構築する設定(entities)のときは、取込結果から関係情報を保存する。"""
-    oracle = FakeOracle()
-    settings = Settings.model_construct(
-        # 項目抽出は対象外(stub の VLM は応答しないため、有効なら取込が止まる。#2481)。
-        rag_field_extraction_enabled=False,
-        rag_parser_adapter_backend="local",
-        rag_review_gate_enabled=False,
-        rag_auto_parse_after_preprocess_enabled=True,
-        rag_graph_profile="entities",
-        rag_chunk_size=800,
-        rag_chunk_overlap=120,
-        genai_embedding_model="cohere.embed-v4.0",
-        enterprise_ai_models=[],
-        enterprise_ai_default_text_model="",
-        enterprise_ai_default_vision_model="enterprise-vlm",
-    )
-    pipeline = IngestionPipeline(
-        vlm=CapturingVlm(),
-        genai=FakeEmbeddingClient(),
-        oracle=cast(Any, oracle),
-        object_storage=cast(Any, FakeObjectStorage()),
-        settings=settings,
-    )
-
-    detail = await pipeline.ingest(
-        "doc-graph",
-        b"pdfdata",
-        "本文を抽出してください。",
-        content_type="application/pdf",
-        source_profile=_pdf_source_profile(file_size_bytes=7),
-    )
-
-    assert detail.status == FileStatus.INDEXED
-    assert oracle.graph_document_id == "doc-graph"
-    assert oracle.saved_graph_index is not None
-    assert {entity.knowledge_base_id for entity in oracle.saved_graph_index.entities} == {"kb-1"}
-    assert oracle.saved_graph_index.relationships
-    assert oracle.saved_graph_index.entity_chunk_links
-    # 文書の節点はファイル名で区別できる(#2051)。
-    assert "文書全体: policy.pdf" in {
-        entity.canonical_name for entity in oracle.saved_graph_index.entities
-    }
-
-
 def test_checkpoint_parser_profile_prefers_external_adapter_lineage() -> None:
     """外部 parser 成功時の checkpoint 表示は Enterprise AI profile へ戻さない。"""
     extraction = StructuredExtraction.model_validate(
@@ -1627,7 +1567,6 @@ async def test_index_chunked_rebuilds_context_header_without_document_lookup() -
         settings=Settings(
             rag_chunk_context_header_enabled=True,
             rag_entity_index_enabled=True,
-            rag_graph_profile="off",
         ),
         recipe_id="recipe-1",
         recipe_revision=1,
@@ -1669,7 +1608,7 @@ async def test_recipe_index_chunked_records_single_success_audit_with_document_s
         genai=FakeEmbeddingClient(),
         oracle=cast(Any, _ResumeOracle()),
         object_storage=cast(Any, FakeObjectStorage()),
-        settings=Settings(rag_graph_profile="off"),
+        settings=Settings(),
         recipe_id="recipe-1",
         recipe_revision=1,
     )
@@ -1714,7 +1653,7 @@ def _resume_pipeline(
         genai=FakeEmbeddingClient(),
         oracle=cast(Any, oracle),
         object_storage=cast(Any, FakeObjectStorage()),
-        settings=Settings(rag_graph_profile="off"),
+        settings=Settings(),
         recipe_id="recipe-1",
         recipe_revision=1,
     )

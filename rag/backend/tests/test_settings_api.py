@@ -961,65 +961,6 @@ def test_update_evaluation_settings_rejects_unknown_suite() -> None:
     assert resp.status_code == 422
 
 
-def test_graph_settings_reports_runtime_profile(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_graph_profile", "entities")
-
-    resp = client.get("/api/settings/graph")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body == {
-        "profile": "entities",
-        "enabled": True,
-        # 選択肢は「構築しない」「構築する」の 2 つ(#621)。
-        "profiles": [
-            {"name": "off", "selected": False},
-            {"name": "entities", "selected": True},
-        ],
-        "config_source": "runtime",
-    }
-
-
-def test_graph_settings_off_disables_build(monkeypatch: MonkeyPatch) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_graph_profile", "off")
-
-    resp = client.get("/api/settings/graph")
-
-    body = resp.json()["data"]
-    assert body["profile"] == "off"
-    assert body["enabled"] is False
-
-
-def test_update_graph_settings_persists_env_and_mutates_runtime(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "rag_graph_profile", "off")
-    env_file = _settings_env_file(monkeypatch, tmp_path)
-
-    resp = client.patch("/api/settings/graph", json={"profile": "entities"})
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["profile"] == "entities"
-    assert resp.json()["data"]["enabled"] is True
-    assert settings.rag_graph_profile == "entities"
-    env_text = env_file.read_text(encoding="utf-8")
-    assert "RAG_GRAPH_PROFILE=entities" in env_text
-    # legacy の RAG_GRAPH_ENABLED は #621 で廃止した(書かない)。
-    assert "RAG_GRAPH_ENABLED" not in env_text
-
-
-def test_update_graph_settings_rejects_unknown_profile() -> None:
-    resp = client.patch("/api/settings/graph", json={"profile": "neo4j"})
-    assert resp.status_code == 422
-    # claims / community summary まで作る full は #621 で削除した。
-    resp = client.patch("/api/settings/graph", json={"profile": "full"})
-    assert resp.status_code == 422
-
-
 def test_get_model_settings_returns_runtime_values(monkeypatch: MonkeyPatch) -> None:
     settings = get_settings()
     monkeypatch.setattr(settings, "enterprise_ai_endpoint", "https://enterprise-ai.example")
@@ -2356,7 +2297,6 @@ def test_answering_settings_round_trip_to_env(monkeypatch: MonkeyPatch, tmp_path
     monkeypatch.setattr(settings, "rag_screen_linking_enabled", False)
     monkeypatch.setattr(settings, "rag_request_coverage_retrieval_enabled", True)
     monkeypatch.setattr(settings, "rag_auto_field_filter_enabled", False)
-    monkeypatch.setattr(settings, "rag_graph_expansion_enabled", False)
     expansion_defaults = {
         "entity_expansion_enabled": True,
         "entity_expansion_max_chunks": 6,
@@ -2379,7 +2319,6 @@ def test_answering_settings_round_trip_to_env(monkeypatch: MonkeyPatch, tmp_path
         "screen_linking_enabled": False,
         "request_coverage_retrieval_enabled": True,
         "auto_field_filter_enabled": False,
-        "graph_expansion_enabled": False,
         **expansion_defaults,
         "config_source": "runtime",
     }
@@ -2392,7 +2331,6 @@ def test_answering_settings_round_trip_to_env(monkeypatch: MonkeyPatch, tmp_path
             "rerank_enabled": False,
             "request_coverage_retrieval_enabled": False,
             "auto_field_filter_enabled": True,
-            "graph_expansion_enabled": True,
             "entity_expansion_enabled": False,
             "entity_expansion_max_chunks": 9,
             "section_expansion_enabled": False,
@@ -2423,10 +2361,6 @@ def test_answering_settings_round_trip_to_env(monkeypatch: MonkeyPatch, tmp_path
     assert data["request_coverage_retrieval_enabled"] is False
     assert settings.rag_request_coverage_retrieval_enabled is False
     assert "RAG_REQUEST_COVERAGE_RETRIEVAL_ENABLED=false" in env_text
-    # 関係情報で検索の候補を足す(#2055。既定 OFF)。
-    assert data["graph_expansion_enabled"] is True
-    assert settings.rag_graph_expansion_enabled is True
-    assert "RAG_GRAPH_EXPANSION_ENABLED=true" in env_text
 
     reloaded = Settings(_env_file=env_file)
     for name, expected in {

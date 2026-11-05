@@ -92,7 +92,7 @@ def test_checker_detects_override_claims_and_accepts_global_only_notes() -> None
     assert _claims_profile_override("検索・回答プロファイルで上書きできる。")
     assert _claims_profile_override("検索・回答プロファイルで選ぶ(環境変数は持たない)。")
     assert _claims_profile_override(
-        "検索方法と検索・回答プロファイルの graph_expansion_enabled で選ぶ。"
+        "検索方法と検索・回答プロファイルの entity_expansion_enabled で選ぶ。"
     )
     assert not _claims_profile_override(
         "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"

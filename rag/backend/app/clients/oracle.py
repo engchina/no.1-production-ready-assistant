@@ -55,12 +55,6 @@ from app.rag.extraction_field_adapter import (
     FieldSchemaStore,
     field_schema_from_json,
 )
-from app.rag.graph_index import (
-    GraphEntity,
-    GraphEntityChunkLink,
-    GraphIndex,
-    GraphRelationship,
-)
 from app.rag.ingestion_language import ingestion_release_job_id
 from app.rag.kb_adapter_config import (
     KnowledgeBaseAdapterConfig,
@@ -637,88 +631,6 @@ class OracleClient:
                 **retrieval_metadata[chunk_id],
             )
             for chunk_id in ranked_ids
-        ]
-
-    async def fetch_knowledge_base_subgraph(
-        self,
-        knowledge_base_id: str,
-        *,
-        limit: int,
-    ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-        """KG の entity(node)/relationship(edge) を KB scope で可視化用に取得する。
-
-        confidence 降順で node/edge を上限件数まで取り、端点が node 集合に含まれる
-        edge のみ返す(部分グラフの整合)。グラフ未構築なら空を返す。
-        """
-        # entity / relationship の knowledge_base_id は取込時の所属のスナップショットなので、
-        # KB から外した文書の要素を出さないよう、今も所属している文書の行だけに絞る(#274)。
-        node_rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT * FROM (
-                SELECT
-                    e.entity_id,
-                    e.canonical_name,
-                    e.entity_type,
-                    NVL(e.confidence, 1) AS confidence
-                FROM rag_graph_entities e
-                WHERE e.knowledge_base_id = :kb
-                  AND {membership_sql}
-                  AND {active_sql}
-                ORDER BY NVL(e.confidence, 1) DESC, e.canonical_name ASC, e.entity_id ASC
-            ) WHERE ROWNUM <= :limit
-            """,
-                membership_sql=_graph_current_membership_predicate("e"),
-                active_sql=_graph_active_chunk_set_predicate("e"),
-            ),
-            {"kb": knowledge_base_id, "limit": limit},
-        )
-        nodes: list[dict[str, object]] = [
-            {
-                "id": _optional_str(row.get("entity_id")) or "",
-                "name": _optional_str(row.get("canonical_name")) or "",
-                "type": _optional_str(row.get("entity_type")),
-                "confidence": round(_float_value(row.get("confidence")), 6),
-            }
-            for row in node_rows
-        ]
-        node_ids = {node["id"] for node in nodes if node["id"]}
-        if not node_ids:
-            return nodes, []
-        edge_rows = await self._fetch_all(
-            _render_sql(
-                """
-            SELECT * FROM (
-                SELECT
-                    r.relationship_id,
-                    r.source_entity_id,
-                    r.target_entity_id,
-                    r.relationship_type,
-                    NVL(r.confidence, 1) AS confidence
-                FROM rag_graph_relationships r
-                WHERE r.knowledge_base_id = :kb
-                  AND {membership_sql}
-                  AND {active_sql}
-                ORDER BY NVL(r.confidence, 1) DESC, r.relationship_id ASC
-            ) WHERE ROWNUM <= :limit
-            """,
-                membership_sql=_graph_current_membership_predicate("r"),
-                active_sql=_graph_active_chunk_set_predicate("r"),
-            ),
-            {"kb": knowledge_base_id, "limit": limit},
-        )
-        edges: list[dict[str, object]] = [
-            {
-                "id": _optional_str(row.get("relationship_id")) or "",
-                "source": _optional_str(row.get("source_entity_id")) or "",
-                "target": _optional_str(row.get("target_entity_id")) or "",
-                "type": _optional_str(row.get("relationship_type")),
-                "confidence": round(_float_value(row.get("confidence")), 6),
-            }
-            for row in edge_rows
-        ]
-        return nodes, [
-            edge for edge in edges if edge["source"] in node_ids and edge["target"] in node_ids
         ]
 
     async def context_group_siblings(
@@ -2238,23 +2150,6 @@ class OracleClient:
                 "SELECT COUNT(*) AS cnt FROM rag_chunk_sets WHERE recipe_id = :recipe_id",
                 {"recipe_id": recipe_id},
             )
-            stale_sets = _fetch_all(
-                connection,
-                "SELECT chunk_set_id FROM rag_chunk_sets WHERE recipe_id = :recipe_id",
-                {"recipe_id": recipe_id},
-            )
-            for stale_set in stale_sets:
-                stale_chunk_set_id = str(stale_set["chunk_set_id"])
-                entity_rows = _fetch_all(
-                    connection,
-                    "SELECT entity_id FROM rag_graph_entities WHERE chunk_set_id = :chunk_set_id",
-                    {"chunk_set_id": stale_chunk_set_id},
-                )
-                _delete_graph_rows_for_chunk_set(
-                    connection,
-                    chunk_set_id=stale_chunk_set_id,
-                    entity_ids=[str(row["entity_id"]) for row in entity_rows],
-                )
             _execute(
                 connection,
                 """
@@ -2410,26 +2305,6 @@ class OracleClient:
                     "materialized_revision": materialized_revision,
                 },
             )
-            stale_sets = _fetch_all(
-                connection,
-                """
-                SELECT chunk_set_id FROM rag_chunk_sets
-                WHERE recipe_id = :recipe_id AND chunk_set_id <> :chunk_set_id
-                """,
-                {"recipe_id": recipe_id, "chunk_set_id": chunk_set_id},
-            )
-            for stale_set in stale_sets:
-                stale_chunk_set_id = str(stale_set["chunk_set_id"])
-                entity_rows = _fetch_all(
-                    connection,
-                    "SELECT entity_id FROM rag_graph_entities WHERE chunk_set_id = :chunk_set_id",
-                    {"chunk_set_id": stale_chunk_set_id},
-                )
-                _delete_graph_rows_for_chunk_set(
-                    connection,
-                    chunk_set_id=stale_chunk_set_id,
-                    entity_ids=[str(row["entity_id"]) for row in entity_rows],
-                )
             _execute(
                 connection,
                 """
@@ -3131,20 +3006,6 @@ class OracleClient:
             )
 
         await self._run_transaction(operation)
-
-    async def graph_entity_counts_for_chunk_sets(
-        self, chunk_set_ids: Sequence[str]
-    ) -> dict[str, int]:
-        """一覧の関係情報の状態を、指定した集合ごとにまとめて読む。"""
-        if not chunk_set_ids:
-            return {}
-        predicate, binds = _oracle_in_predicate("chunk_set_id", "graph_sets", chunk_set_ids)
-        rows = await self._fetch_all(
-            f"SELECT chunk_set_id, COUNT(*) AS entity_count FROM rag_graph_entities "
-            f"WHERE {predicate} GROUP BY chunk_set_id",
-            binds,
-        )
-        return {str(row["chunk_set_id"]): int(str(row["entity_count"])) for row in rows}
 
     async def count_chunk_set_chunks(self, chunk_set_id: str) -> int:
         """指定 chunk_set の chunk 行数(chunk_set 単位の件数記録用)。"""
@@ -5516,20 +5377,6 @@ class OracleClient:
             chunk_set_id=chunk_set_id,
             chunks=chunks,
             embeddings=embeddings,
-        )
-
-    async def replace_document_graph_index(
-        self,
-        document_id: str,
-        graph_index: GraphIndex,
-        *,
-        chunk_set_id: str | None = None,
-    ) -> None:
-        """指定 chunk_set（legacy は document）の GraphRAG-lite index を置換する。"""
-        await self._replace_document_graph_index_with_oracle(
-            document_id,
-            graph_index,
-            chunk_set_id=chunk_set_id,
         )
 
     async def save_search_audit_event(self, event: Mapping[str, object]) -> None:
@@ -9630,12 +9477,6 @@ class OracleClient:
             if existing is None:
                 raise KeyError(f"document_id={document_id} は存在しません。")
 
-            graph_entity_ids = _select_graph_entity_ids_for_document(connection, document_id)
-            _delete_graph_rows_for_document(
-                connection,
-                document_id=document_id,
-                entity_ids=graph_entity_ids,
-            )
             _execute(
                 connection,
                 _render_sql(
@@ -9767,12 +9608,6 @@ class OracleClient:
             if existing is None:
                 raise KeyError(f"document_id={document_id} は存在しません。")
 
-            graph_entity_ids = _select_graph_entity_ids_for_document(connection, document_id)
-            _delete_graph_rows_for_document(
-                connection,
-                document_id=document_id,
-                entity_ids=graph_entity_ids,
-            )
             _execute(
                 connection,
                 _render_sql(
@@ -9859,12 +9694,6 @@ class OracleClient:
             if existing is None:
                 raise KeyError(f"document_id={document_id} は存在しません。")
 
-            graph_entity_ids = _select_graph_entity_ids_for_document(connection, document_id)
-            _delete_graph_rows_for_document(
-                connection,
-                document_id=document_id,
-                entity_ids=graph_entity_ids,
-            )
             _execute(
                 connection,
                 _render_sql(
@@ -10197,139 +10026,6 @@ class OracleClient:
             return self._retrieved_chunks_from_insert_rows(document_id, document, rows)
 
         return await self._run_transaction(operation)
-
-    async def _replace_document_graph_index_with_oracle(
-        self,
-        document_id: str,
-        graph_index: GraphIndex,
-        *,
-        chunk_set_id: str | None = None,
-    ) -> None:
-        """関係情報の表の chunk_set scope を置換する。"""
-
-        def operation(connection: OracleConnectionProtocol) -> None:
-            if _select_document_state(connection, document_id) is None:
-                raise KeyError(f"document_id={document_id} は存在しません。")
-            if chunk_set_id is not None:
-                rows = _fetch_all(
-                    connection,
-                    "SELECT entity_id FROM rag_graph_entities WHERE chunk_set_id = :chunk_set_id",
-                    {"chunk_set_id": chunk_set_id},
-                )
-                existing_entity_ids = [
-                    str(row["entity_id"]) for row in rows if row.get("entity_id")
-                ]
-                _delete_graph_rows_for_chunk_set(
-                    connection,
-                    chunk_set_id=chunk_set_id,
-                    entity_ids=existing_entity_ids,
-                )
-            else:
-                existing_entity_ids = _select_graph_entity_ids_for_document(connection, document_id)
-                _delete_graph_rows_for_document(
-                    connection,
-                    document_id=document_id,
-                    entity_ids=existing_entity_ids,
-                )
-            if graph_index.entities:
-                _executemany(
-                    connection,
-                    """
-                    INSERT INTO rag_graph_entities (
-                        entity_id,
-                        chunk_set_id,
-                        tenant_id_hash,
-                        knowledge_base_id,
-                        canonical_name,
-                        entity_type,
-                        description,
-                        confidence,
-                        source_document_ids
-                    ) VALUES (
-                        :entity_id,
-                        :chunk_set_id,
-                        :tenant_id_hash,
-                        :knowledge_base_id,
-                        :canonical_name,
-                        :entity_type,
-                        :description,
-                        :confidence,
-                        :source_document_ids
-                    )
-                    """,
-                    [
-                        {**_graph_entity_binds(entity), "chunk_set_id": chunk_set_id}
-                        for entity in graph_index.entities
-                    ],
-                    input_sizes=_json_input_sizes("source_document_ids"),
-                )
-            if graph_index.relationships:
-                _executemany(
-                    connection,
-                    """
-                    INSERT INTO rag_graph_relationships (
-                        relationship_id,
-                        chunk_set_id,
-                        tenant_id_hash,
-                        knowledge_base_id,
-                        source_entity_id,
-                        target_entity_id,
-                        relationship_type,
-                        description,
-                        confidence,
-                        source_document_ids
-                    ) VALUES (
-                        :relationship_id,
-                        :chunk_set_id,
-                        :tenant_id_hash,
-                        :knowledge_base_id,
-                        :source_entity_id,
-                        :target_entity_id,
-                        :relationship_type,
-                        :description,
-                        :confidence,
-                        :source_document_ids
-                    )
-                    """,
-                    [
-                        {
-                            **_graph_relationship_binds(relationship),
-                            "chunk_set_id": chunk_set_id,
-                        }
-                        for relationship in graph_index.relationships
-                    ],
-                    input_sizes=_json_input_sizes("source_document_ids"),
-                )
-            if graph_index.entity_chunk_links:
-                _executemany(
-                    connection,
-                    """
-                    INSERT INTO rag_graph_entity_chunks (
-                        entity_id,
-                        chunk_id,
-                        chunk_set_id,
-                        document_id,
-                        tenant_id_hash,
-                        relevance_score
-                    ) VALUES (
-                        :entity_id,
-                        :chunk_id,
-                        :chunk_set_id,
-                        :document_id,
-                        :tenant_id_hash,
-                        :relevance_score
-                    )
-                    """,
-                    [
-                        {
-                            **_graph_entity_chunk_link_binds(link),
-                            "chunk_set_id": chunk_set_id,
-                        }
-                        for link in graph_index.entity_chunk_links
-                    ],
-                )
-
-        await self._run_transaction(operation)
 
     async def _fetch_one(
         self, statement: str, binds: Mapping[str, object] | None = None
@@ -10827,7 +10523,7 @@ def _executemany(
 
 
 def delete_document_rows(connection: OracleConnectionProtocol, document_id: str) -> bool:
-    """文書と関連 chunk/graph/ingestion 行を、呼び出し側の transaction の中で削除する。
+    """文書と関連 chunk/ingestion 行を、呼び出し側の transaction の中で削除する。
 
     文書が無ければ False。実行中の取込 job があれば
     ``DocumentDeleteBlockedByRunningIngestionError``。
@@ -10859,12 +10555,6 @@ def delete_document_rows(connection: OracleConnectionProtocol, document_id: str)
     )
     if not any(str(row.get("document_id")) == document_id for row in locked):
         return False
-    graph_entity_ids = _select_graph_entity_ids_for_document(connection, document_id)
-    _delete_graph_rows_for_document(
-        connection,
-        document_id=document_id,
-        entity_ids=graph_entity_ids,
-    )
     _execute(
         connection,
         _render_sql(
@@ -10971,153 +10661,6 @@ def delete_document_rows(connection: OracleConnectionProtocol, document_id: str)
         _with_tenant_bind({"document_id": document_id}),
     )
     return True
-
-
-def _select_graph_entity_ids_for_document(
-    connection: OracleConnectionProtocol,
-    document_id: str,
-) -> list[str]:
-    """指定 document に紐づく既存 graph entity id を取得する。"""
-    rows = _fetch_all(
-        connection,
-        _render_sql(
-            """
-        SELECT DISTINCT entity_id
-        FROM (
-            SELECT entity_id
-            FROM rag_graph_entity_chunks
-            WHERE document_id = :document_id
-              AND {graph_access_sql}
-            UNION
-            SELECT entity_id
-            FROM rag_graph_entities
-            WHERE JSON_EXISTS(
-                      source_document_ids,
-                      '$[*]?(@ == $document_id)'
-                      PASSING :document_id AS "document_id"
-                  )
-              AND {graph_access_sql}
-        )
-        """,
-            graph_access_sql=_oracle_tenant_predicate(),
-        ),
-        _with_tenant_bind({"document_id": document_id}),
-    )
-    return [str(row["entity_id"]) for row in rows if row.get("entity_id")]
-
-
-def _delete_graph_rows_for_chunk_set(
-    connection: OracleConnectionProtocol,
-    *,
-    chunk_set_id: str,
-    entity_ids: Sequence[str],
-) -> None:
-    """指定 chunk_set の関係情報の行だけを FK 順に削除する。"""
-    binds = _with_tenant_bind({"chunk_set_id": chunk_set_id})
-    for table in (
-        "rag_graph_relationships",
-        "rag_graph_entity_chunks",
-    ):
-        _execute(
-            connection,
-            _render_sql(
-                f"""
-                DELETE FROM {table}
-                WHERE chunk_set_id = :chunk_set_id
-                  AND {{graph_access_sql}}
-                """,
-                graph_access_sql=_oracle_tenant_predicate(),
-            ),
-            binds,
-        )
-    unique_entity_ids = _unique_optional_sequence(entity_ids)
-    if not unique_entity_ids:
-        return
-    entity_sql, entity_binds = _oracle_in_predicate(
-        "entity_id",
-        "graph_entity_id",
-        unique_entity_ids,
-    )
-    _execute(
-        connection,
-        _render_sql(
-            """
-            DELETE FROM rag_graph_entities
-            WHERE chunk_set_id = :chunk_set_id
-              AND {entity_sql}
-              AND {graph_access_sql}
-            """,
-            entity_sql=entity_sql,
-            graph_access_sql=_oracle_tenant_predicate(),
-        ),
-        _with_tenant_bind({"chunk_set_id": chunk_set_id, **entity_binds}),
-    )
-
-
-def _delete_graph_rows_for_document(
-    connection: OracleConnectionProtocol,
-    *,
-    document_id: str,
-    entity_ids: Sequence[str],
-) -> None:
-    """指定 document の関係情報の行を FK 順に削除する。"""
-    unique_entity_ids = _unique_optional_sequence(entity_ids)
-    if unique_entity_ids:
-        source_sql, source_binds = _oracle_in_predicate(
-            "source_entity_id",
-            "graph_source_entity_id",
-            unique_entity_ids,
-        )
-        target_sql, target_binds = _oracle_in_predicate(
-            "target_entity_id",
-            "graph_target_entity_id",
-            unique_entity_ids,
-        )
-        _execute(
-            connection,
-            _render_sql(
-                """
-            DELETE FROM rag_graph_relationships
-            WHERE {graph_access_sql}
-              AND ({source_sql} OR {target_sql})
-            """,
-                graph_access_sql=_oracle_tenant_predicate(),
-                source_sql=source_sql,
-                target_sql=target_sql,
-            ),
-            _with_tenant_bind({**source_binds, **target_binds}),
-        )
-    _execute(
-        connection,
-        _render_sql(
-            """
-        DELETE FROM rag_graph_entity_chunks
-        WHERE document_id = :document_id
-          AND {graph_access_sql}
-        """,
-            graph_access_sql=_oracle_tenant_predicate(),
-        ),
-        _with_tenant_bind({"document_id": document_id}),
-    )
-    if unique_entity_ids:
-        entity_sql, entity_binds = _oracle_in_predicate(
-            "entity_id",
-            "graph_entity_id",
-            unique_entity_ids,
-        )
-        _execute(
-            connection,
-            _render_sql(
-                """
-            DELETE FROM rag_graph_entities
-            WHERE {entity_sql}
-              AND {graph_access_sql}
-            """,
-                entity_sql=entity_sql,
-                graph_access_sql=_oracle_tenant_predicate(),
-            ),
-            _with_tenant_bind(entity_binds),
-        )
 
 
 def _search_audit_binds(event: Mapping[str, object]) -> dict[str, object]:
@@ -11385,43 +10928,6 @@ def _evaluation_artifact_binds(
         "result_json": result_json,
         "result_sha256": hashlib.sha256(result_json.encode("utf-8")).hexdigest(),
         "passed": 1 if bool(artifact.get("passed")) else 0,
-    }
-
-
-def _graph_entity_binds(entity: GraphEntity) -> dict[str, object]:
-    return {
-        "entity_id": entity.entity_id,
-        "tenant_id_hash": _current_tenant_id_hash(),
-        "knowledge_base_id": entity.knowledge_base_id,
-        "canonical_name": entity.canonical_name,
-        "entity_type": entity.entity_type,
-        "description": entity.description,
-        "confidence": entity.confidence,
-        "source_document_ids": _audit_json(entity.source_document_ids),
-    }
-
-
-def _graph_relationship_binds(relationship: GraphRelationship) -> dict[str, object]:
-    return {
-        "relationship_id": relationship.relationship_id,
-        "tenant_id_hash": _current_tenant_id_hash(),
-        "knowledge_base_id": relationship.knowledge_base_id,
-        "source_entity_id": relationship.source_entity_id,
-        "target_entity_id": relationship.target_entity_id,
-        "relationship_type": relationship.relationship_type,
-        "description": relationship.description,
-        "confidence": relationship.confidence,
-        "source_document_ids": _audit_json(relationship.source_document_ids),
-    }
-
-
-def _graph_entity_chunk_link_binds(link: GraphEntityChunkLink) -> dict[str, object]:
-    return {
-        "entity_id": link.entity_id,
-        "chunk_id": link.chunk_id,
-        "document_id": link.document_id,
-        "tenant_id_hash": _current_tenant_id_hash(),
-        "relevance_score": link.relevance_score,
     }
 
 
@@ -13642,35 +13148,6 @@ def _parse_filter_datetime(value: str, *, end_of_day: bool) -> datetime:
     if end_of_day and len(raw) == 10:
         parsed = parsed + timedelta(days=1) - timedelta(microseconds=1)
     return parsed
-
-
-def _graph_active_chunk_set_predicate(alias: str) -> str:
-    """成功して有効化された chunk_set だけを表示し、未タグの行は所属で判定する。"""
-    return (
-        f"({alias}.chunk_set_id IS NULL OR EXISTS ("
-        "SELECT 1 FROM rag_chunk_sets graph_cs "
-        f"WHERE graph_cs.chunk_set_id = {alias}.chunk_set_id "
-        "AND graph_cs.is_active = 1))"
-    )
-
-
-def _graph_current_membership_predicate(alias: str) -> str:
-    """graph 行の KB(取込時のスナップショット)に、元文書が今も所属しているかの predicate。
-
-    元文書は ``source_document_ids``(JSON 配列)で判定する。chunk_set を持たない旧来の行にも
-    効くよう、chunk_set 経由では判定しない。knowledge_base_id が NULL の行(取込時にどの KB にも
-    所属していなかった文書)は KB scope を持たないため、従来どおり KB 指定なしの検索だけが対象に
-    する(KB 指定・KB 権限の predicate が NULL を除外する)。
-    """
-    return (
-        f"({alias}.knowledge_base_id IS NULL OR EXISTS ("
-        "SELECT 1 FROM rag_document_knowledge_bases member_dkb "
-        f"WHERE member_dkb.knowledge_base_id = {alias}.knowledge_base_id "
-        f"AND JSON_EXISTS({alias}.source_document_ids, "
-        "'$[*]?(@ == $member_document_id)' "
-        'PASSING member_dkb.document_id AS "member_document_id")'
-        "))"
-    )
 
 
 def _oracle_vector_fetch_clause(*, top_k: int, target_accuracy: int) -> str:
@@ -16029,7 +15506,7 @@ CREATE TABLE rag_artifact_layers (
         FOREIGN KEY (document_id) REFERENCES rag_documents (document_id) ON DELETE CASCADE,
     CONSTRAINT rag_artifact_layers_requested_ck CHECK (requested IN (0, 1)),
     CONSTRAINT rag_artifact_layers_kind_ck
-        CHECK (layer_kind IN ('metadata', 'graph', 'navigation')),
+        CHECK (layer_kind IN ('metadata', 'navigation')),
     CONSTRAINT rag_artifact_layers_status_ck
         CHECK (
             status IN ('not_requested', 'planned_only', 'materialized', 'needs_reingest', 'error')
@@ -16208,74 +15685,6 @@ CREATE INDEX {table_name}_parser_created_idx
 
 CREATE INDEX {table_name}_source_sha256_idx
     ON {table_name} (source_sha256);
-""".strip()
-
-
-def oracle_knowledge_graph_schema_sql() -> str:
-    """関係情報(文書と章・節の見出しのつながり)の table DDL を返す。"""
-    return """
-CREATE TABLE rag_graph_entities (
-    entity_id          VARCHAR2(64) PRIMARY KEY,
-    chunk_set_id       VARCHAR2(64),
-    tenant_id_hash     CHAR(64),
-    knowledge_base_id  VARCHAR2(64),
-    canonical_name     VARCHAR2(512) NOT NULL,
-    entity_type        VARCHAR2(128),
-    description        CLOB,
-    confidence         NUMBER(6, 5),
-    source_document_ids JSON,
-    created_at         TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    updated_at         TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL
-);
-
-CREATE INDEX rag_graph_entities_chunk_set_idx
-    ON rag_graph_entities (chunk_set_id);
-
-CREATE INDEX rag_graph_entities_tenant_name_idx
-    ON rag_graph_entities (tenant_id_hash, canonical_name);
-
-CREATE TABLE rag_graph_relationships (
-    relationship_id    VARCHAR2(64) PRIMARY KEY,
-    chunk_set_id       VARCHAR2(64),
-    tenant_id_hash     CHAR(64),
-    knowledge_base_id  VARCHAR2(64),
-    source_entity_id   VARCHAR2(64) NOT NULL,
-    target_entity_id   VARCHAR2(64) NOT NULL,
-    relationship_type  VARCHAR2(128) NOT NULL,
-    description        CLOB,
-    confidence         NUMBER(6, 5),
-    source_document_ids JSON,
-    created_at         TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT rag_graph_rel_source_fk
-        FOREIGN KEY (source_entity_id) REFERENCES rag_graph_entities (entity_id),
-    CONSTRAINT rag_graph_rel_target_fk
-        FOREIGN KEY (target_entity_id) REFERENCES rag_graph_entities (entity_id)
-);
-
-CREATE INDEX rag_graph_rel_source_idx
-    ON rag_graph_relationships (tenant_id_hash, source_entity_id);
-
-CREATE INDEX rag_graph_rel_target_idx
-    ON rag_graph_relationships (tenant_id_hash, target_entity_id);
-
-CREATE TABLE rag_graph_entity_chunks (
-    entity_id          VARCHAR2(64) NOT NULL,
-    chunk_id           VARCHAR2(128) NOT NULL,
-    chunk_set_id       VARCHAR2(64),
-    document_id        VARCHAR2(64) NOT NULL,
-    tenant_id_hash     CHAR(64),
-    relevance_score    NUMBER(8, 6) DEFAULT 1 NOT NULL,
-    created_at         TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT rag_graph_entity_chunks_pk PRIMARY KEY (entity_id, chunk_id),
-    CONSTRAINT rag_graph_entity_chunks_entity_fk
-        FOREIGN KEY (entity_id) REFERENCES rag_graph_entities (entity_id)
-);
-
-CREATE INDEX rag_graph_entity_chunks_chunk_idx
-    ON rag_graph_entity_chunks (tenant_id_hash, chunk_id);
-
-CREATE INDEX rag_graph_entity_chunks_chunk_set_idx
-    ON rag_graph_entity_chunks (chunk_set_id);
 """.strip()
 
 

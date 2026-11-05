@@ -3,7 +3,6 @@ import type { SelectFieldOption } from "@production-ready/ui";
 import type {
   ChunkingStrategyName,
   DocumentProcessingConfig,
-  GraphProfileName,
   ParserAdapterBackend,
   PreprocessProfileName,
   SectionRulesMode,
@@ -52,11 +51,6 @@ export const CHUNKING_OPTIONS: SelectFieldOption<ChunkingStrategyName>[] = CHUNK
   (value) => ({ value, label: t(`settings.chunking.strategy.${value}` as I18nKey) })
 );
 
-const GRAPH_VALUES = ["off", "entities"] as const;
-export const GRAPH_OPTIONS: SelectFieldOption<GraphProfileName>[] = GRAPH_VALUES.map(
-  (value) => ({ value, label: t(`settings.graph.profile.${value}` as I18nKey) })
-);
-
 export const SECTION_RULES_VALUES = ["parser", "legal", "official", "numbered", "custom"] as const;
 export const SECTION_RULES_OPTIONS: SelectFieldOption<SectionRulesMode>[] = SECTION_RULES_VALUES.map(
   (value) => ({ value, label: t(`sectionRules.mode.${value}` as I18nKey) })
@@ -89,8 +83,6 @@ export function recipeConfigValueLabel(item: RecipeConfigItem, effective: Docume
       return parserOptionLabel(effective.parser_adapter_backend);
     case "chunking_strategy":
       return optionLabel(effective.chunking_strategy, CHUNKING_OPTIONS);
-    case "graph_profile":
-      return optionLabel(effective.graph_profile, GRAPH_OPTIONS);
     case "section_rules_mode":
       return optionLabel(effective.section_rules_mode ?? null, SECTION_RULES_OPTIONS);
     default:
