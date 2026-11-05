@@ -49,7 +49,6 @@ import { RetrievalSettingsClient } from "@/components/settings/RetrievalSettings
 import { AnswerPromptSettingsClient } from "@/components/settings/AnswerPromptSettingsClient";
 import { VectorIndexSettingsClient } from "@/components/settings/VectorIndexSettingsClient";
 import { EvaluationSettingsClient } from "@/components/settings/EvaluationSettingsClient";
-import { EntityIndexSettingsClient } from "@/components/settings/EntityIndexSettingsClient";
 import { GraphSettingsClient } from "@/components/settings/GraphSettingsClient";
 import { PipelineHubClient } from "@/components/settings/PipelineHubClient";
 import { UploadStorageSettingsClient } from "@/components/settings/UploadStorageSettingsClient";
@@ -142,7 +141,6 @@ export function App() {
         <Route path={APP_ROUTES.settingsPrompts} element={<SettingsPromptsRoute />} />
         <Route path={APP_ROUTES.settingsVectorIndex} element={<SettingsVectorIndexRoute />} />
         <Route path={APP_ROUTES.settingsEvaluation} element={<SettingsEvaluationRoute />} />
-        <Route path={APP_ROUTES.settingsEntityIndex} element={<SettingsEntityIndexRoute />} />
         <Route path={APP_ROUTES.settingsGraph} element={<SettingsGraphRoute />} />
         <Route path={APP_ROUTES.settingsModel} element={<ModelSettingsClient />} />
         <Route path={APP_ROUTES.settingsDatabase} element={<SettingsDatabaseRoute />} />
@@ -519,15 +517,6 @@ function SettingsEvaluationRoute() {
         subtitle={t("settings.evaluation.subtitle")}
       />
       <EvaluationSettingsClient />
-    </div>
-  );
-}
-
-function SettingsEntityIndexRoute() {
-  return (
-    <div>
-      <PageHeader wide title={t("nav.settingsEntityIndex")} subtitle={t("settings.entityIndex.subtitle")} />
-      <EntityIndexSettingsClient />
     </div>
   );
 }

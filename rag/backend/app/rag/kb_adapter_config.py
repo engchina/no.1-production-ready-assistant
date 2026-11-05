@@ -22,13 +22,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    StringConstraints,
     field_validator,
     model_validator,
 )
@@ -65,11 +64,6 @@ logger = logging.getLogger(__name__)
 
 ADAPTER_CONFIG_VERSION = 2
 
-# 実体の抽出で名前・属性にする列名（文書レシピの選択肢。#1362）。
-EntityColumnName = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
-]
-
 AdapterConfigScope = Literal["ingestion", "query"]
 
 # KB 設定フィールド -> Settings フィールドのマッピング(scope ごとの allowlist)。
@@ -100,10 +94,6 @@ _INGESTION_FIELD_MAP: dict[str, str] = {
     # 取込側の高度軸(現状グローバルのみだった adapter を KB 上書き対象へ拡張)。
     # いずれも取込パイプラインが self._settings から読むため、KB 上書きが取込に効く。
     "graph_profile": "rag_graph_profile",
-    # 実体の層（#1362。既定 ON。#1388）。索引の保存の後に実体と「実体と chunk の関連」を作る。
-    "entity_index_enabled": "rag_entity_index_enabled",
-    "entity_name_columns": "rag_entity_name_columns",
-    "entity_attribute_columns": "rag_entity_attribute_columns",
     "field_extraction_enabled": "rag_field_extraction_enabled",
     "navigation_summary_enabled": "rag_navigation_summary_enabled",
     "auto_parse_after_preprocess_enabled": "rag_auto_parse_after_preprocess_enabled",
@@ -122,9 +112,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
     "guide_step_max_queries": "rag_guide_step_max_queries",
     "guide_step_deadline_seconds": "rag_guide_step_deadline_seconds",
     "auto_field_filter_enabled": "rag_auto_field_filter_enabled",
-    # 実体の 1 段の拡張(#1388)。None は Settings の既定(拡張は on。#1402 / 上限は 6)。
-    "entity_expansion_enabled": "rag_entity_expansion_enabled",
-    "entity_expansion_max_chunks": "rag_entity_expansion_max_chunks",
     # 関係情報で検索の候補を足す(#2055)。None は全体の既定(OFF / 上限 6)。
     "graph_expansion_enabled": "rag_graph_expansion_enabled",
     "graph_expansion_max_chunks": "rag_graph_expansion_max_chunks",
@@ -162,6 +149,10 @@ class KbAdapterConfigError(ValueError):
 _REMOVED_PARSER_FLAG_FIELDS = frozenset(
     f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS
 )
+# 削除した実体・別名索引(#160)の文書レシピの項目。保存値は読み込み時に捨て、次回保存で消える。
+_REMOVED_ENTITY_INDEX_FIELDS = frozenset(
+    {"entity_index_enabled", "entity_name_columns", "entity_attribute_columns"}
+)
 # Vision を解析エンジンに依存しない ``vision_enabled`` へ統合した(#497)ときの旧 key。
 # 読み込むときに ``vision_enabled`` へ移す。優先は新しい key の明示値 > Docling の Vision >
 # 図表 VLM 要約。
@@ -192,7 +183,7 @@ def _clean_persisted_ingestion_config(data: object) -> object:
     cleaned = {
         key: value
         for key, value in _migrate_legacy_vision_fields(data).items()
-        if key not in _REMOVED_PARSER_FLAG_FIELDS
+        if key not in _REMOVED_PARSER_FLAG_FIELDS and key not in _REMOVED_ENTITY_INDEX_FIELDS
     }
     backend = cleaned.get("parser_adapter_backend")
     if isinstance(backend, str) and backend.strip().casefold() in REMOVED_PARSER_ADAPTER_BACKENDS:
@@ -260,10 +251,6 @@ class KnowledgeBaseIngestionConfig(BaseModel):
     )
     # 取込側の高度軸(KB 上書き対象へ拡張)。None はグローバル継承。
     graph_profile: GraphProfile | None = None
-    # 実体の層（#1362）。None はグローバル継承（既定 ON。#1388）。列名は表の行の名前・属性にする列。
-    entity_index_enabled: bool | None = None
-    entity_name_columns: list[EntityColumnName] | None = Field(default=None, max_length=20)
-    entity_attribute_columns: list[EntityColumnName] | None = Field(default=None, max_length=40)
     heading_level_inference_enabled: bool | None = None
     field_extraction_enabled: bool | None = None
     navigation_summary_enabled: bool | None = None
@@ -345,12 +332,6 @@ class KnowledgeBaseQueryConfig(BaseModel):
     guide_step_deadline_seconds: float | None = Field(default=None, ge=0, le=60)
     # 質問から抽出項目の条件を読み取る(#652)。LLM の呼び出しが 1 回増える。
     auto_field_filter_enabled: bool | None = None
-    # 質問と上位の候補の実体から、実体の表との SQL の join で関連する chunk を 1 段だけ足す
-    # (#1362 / #1388)。LLM は呼ばない。実体・別名索引を作った文書だけが対象。
-    # 検索方法の全体設定(既定 OFF)だけで決め、プロファイルでは保存・適用しない。
-    entity_expansion_enabled: bool | None = None
-    # 1 回の検索で足す chunk 数の上限。None は既定(6)。
-    entity_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
     # 関係情報(文書構造索引の構築で作った章節・表の見出しの entity と chunk の対応)で検索の候補を
     # 足す(#2055)。LLM は呼ばない。None は全体の既定(OFF。検索方法の画面)。
     graph_expansion_enabled: bool | None = None

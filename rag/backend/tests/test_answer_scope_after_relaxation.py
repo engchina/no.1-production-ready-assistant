@@ -130,10 +130,9 @@ class PlanRecorder:
 
 @pytest.fixture
 def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
-    entity, graph = PlanRecorder(), PlanRecorder()
-    monkeypatch.setattr(answer_engine, "plan_entity_expansion", entity)
+    graph = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
-    yield entity, graph
+    yield graph
 
 
 def _crag_llm(system: str, prompt: str, settings: Any, schema: type, **options: Any) -> Any:
@@ -163,14 +162,12 @@ def _engine(oracle: FakeOracle, **settings: Any) -> AnswerEngine:
         Settings(
             rag_answer_flow="crag",
             rag_reference_expansion_enabled=True,
-            rag_entity_expansion_enabled=True,
             rag_graph_expansion_enabled=True,
             **settings,
         ),
         oracle=cast(Any, oracle),
         genai=cast(Any, FakeGenAi()),
         auto_field_conditions=[AUTO_SAME_FIELD, AUTO_FIELD],
-        entity_store=cast(Any, object()),
         graph_store=cast(Any, object()),
     )
 
@@ -249,13 +246,13 @@ async def test_relaxation_keeps_user_conditions_as_of_and_access_in_every_search
         }
         assert (MANUAL_FIELD.name, MANUAL_FIELD.value) in _field_values(item)
     # 実体・関係情報の拡張は、主の検索と同じ利用者の範囲の中で広げる(文書名・分類・項目も残す)。
-    entity, graph = plans
-    assert entity.scopes and graph.scopes
-    assert all(scope == expected for scope in [*entity.scopes, *graph.scopes])
+    graph = plans
+    assert graph.scopes
+    assert all(scope == expected for scope in graph.scopes)
     # 認可の範囲は、すべての検索と拡張で同じ監査 context の述語で当たる。
     assert oracle.contexts
     assert set(oracle.contexts) == {access}
-    assert set(entity.contexts) == set(graph.contexts) == {access}
+    assert set(graph.contexts) == {access}
     # その context で組む検索の SQL は、文書・分類・ナレッジベースの認可の述語を持つ。
     assert {"access_document_id_0", "access_category_name_0", "access_knowledge_base_id_0"} <= set(
         _access_binds(searches_after[-1])
@@ -316,7 +313,7 @@ def _reference_corpus() -> ContextReferenceOracle:
     return ContextReferenceOracle([anchor], [referenced])
 
 
-async def test_reference_expansion_crosses_the_file_name_but_entity_and_graph_do_not(
+async def test_reference_expansion_crosses_the_file_name_but_graph_does_not(
     access: AuditRequestContext, plans: tuple[PlanRecorder, PlanRecorder]
 ) -> None:
     """本文が明記した参照は利用者の文書名の外へも辿る(#1280)。実体・関係情報の拡張は文書名を残す。
@@ -327,12 +324,10 @@ async def test_reference_expansion_crosses_the_file_name_but_entity_and_graph_do
     engine = AnswerEngine(
         Settings(
             rag_reference_expansion_enabled=True,
-            rag_entity_expansion_enabled=True,
             rag_graph_expansion_enabled=True,
         ),
         oracle=cast(Any, oracle),
         genai=cast(Any, ReferenceGenAi()),
-        entity_store=cast(Any, object()),
         graph_store=cast(Any, object()),
     )
     filters = {
@@ -356,13 +351,12 @@ async def test_reference_expansion_crosses_the_file_name_but_entity_and_graph_do
     kept = {"knowledge_base_id": "kb-a", "include_superseded": "true", "as_of": "2020-06-30"}
     assert all(item == kept for item in reference_filters)
     # 実体・関係情報の拡張は、利用者が指定した文書名・分類を残す。
-    entity, graph = plans
-    assert entity.scopes == [filters]
+    graph = plans
     assert graph.scopes == [filters]
     # 認可の範囲は、参照を辿るときも同じ監査 context の述語で当たる。
     assert oracle.contexts
     assert set(oracle.contexts) == {access}
-    assert set(entity.contexts) == set(graph.contexts) == {access}
+    assert set(graph.contexts) == {access}
 
 
 class RelaxedCoverageOracle(CoverageOracle):

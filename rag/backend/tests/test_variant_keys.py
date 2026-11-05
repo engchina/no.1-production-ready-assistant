@@ -292,9 +292,7 @@ def test_chunk_set_id_uses_legacy_chunking_names_with_current_docling_text_contr
     改名の hash 入力は維持し、解析の内容が変わった場合は別の抽出・Chunk 集合にする。
     """
     # 改名時の明示設定で比較し、その後の既定値変更から独立させる。
-    base = Settings(
-        _env_file=None, rag_chunk_context_header_enabled=True, rag_entity_index_enabled=True
-    )
+    base = Settings(_env_file=None, rag_chunk_context_header_enabled=True)
     small_to_big = base.model_copy(update={"rag_chunking_strategy": "small_to_big"})
     tuned = small_to_big.model_copy(
         update={"rag_chunk_child_target_chars": 600, "rag_chunk_parent_max_pages": 2}

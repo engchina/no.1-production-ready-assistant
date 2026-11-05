@@ -16,12 +16,7 @@
    `--keep-superseded-active` を渡すと登録せず、旧版も今有効な文書のまま検索させる
    （旧版の紛らわしさの測定）。
 5. `file:` の参照を文書 ID に置き換え、`knowledge_base_ids` を入れた評価セットを `--output` に書く。
-6. 実体・別名索引は文書レシピの ``entity_index_enabled`` で選ぶ（全体の既定は OFF）。
-   `--entity-index` は索引の構築を明示し、比較用の評価セットの `rag_overrides` に
-   `entity_expansion_enabled: true` を入れる（既存の明示値は変えない）。
-   `--no-entity-index` は構築を無効にし、未指定は全体の既定に従う。
-   検索・回答プロファイルには拡張の個別設定を保存しない。
-7. `--document-map-output` を渡したとき（#3240）は、取り込んだファイル名 → 文書 ID の対応表
+6. `--document-map-output` を渡したとき（#3240）は、取り込んだファイル名 → 文書 ID の対応表
    （`{"documents": {"<ファイル名>": "<document_id>"}}`）を書く。製品横断の
    評価（`suite-evaluation run --document-map`）が評価セットの `file:` を解決する。
 8. `--guides` を渡したとき（#1289）は、そのナレッジベースを参照する検索・回答プロファイルを作り、
@@ -75,15 +70,9 @@ class CorpusError(RuntimeError):
     """利用者へ返す失敗（exit code 2）。"""
 
 
-def recipe_for(path: Path, *, entity_index: bool | None = None) -> dict[str, Any]:
-    """ファイルの文書レシピ（拡張子ごとの前処理と、指定したときは実体の抽出の有無。#1362）。
-
-    ``entity_index`` が None ならレシピに書かず、全体の既定（ON。#1388）に従う。
-    """
-    recipe: dict[str, Any] = dict(RECIPE_BY_EXTENSION.get(path.suffix.lower(), {}))
-    if entity_index is not None:
-        recipe["entity_index_enabled"] = entity_index
-    return recipe
+def recipe_for(path: Path) -> dict[str, Any]:
+    """ファイルの文書レシピ（拡張子ごとの前処理）。"""
+    return dict(RECIPE_BY_EXTENSION.get(path.suffix.lower(), {}))
 
 
 def _file_reference_name(entry: object, key: str) -> str:
@@ -181,21 +170,6 @@ def resolve_golden_set(
     return resolved
 
 
-def with_entity_expansion(golden_set: Mapping[str, Any]) -> dict[str, Any]:
-    """実体の 1 段の拡張を選んだ評価セット（#1388）。
-
-    拡張は検索方法の全体設定（`RAG_ENTITY_EXPANSION_ENABLED`。既定 OFF）で決め、検索・回答
-    プロファイルでは上書きしない。全体設定に頼らず、評価（A）は評価の `rag_overrides` で
-    明示する。評価セットが明示した `entity_expansion_enabled` は変えない。
-    """
-    resolved: dict[str, Any] = json.loads(json.dumps(dict(golden_set)))
-    overrides = resolved.get("rag_overrides")
-    overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
-    overrides.setdefault("entity_expansion_enabled", True)
-    resolved["rag_overrides"] = overrides
-    return resolved
-
-
 def resolve_guides(
     guides: Sequence[Mapping[str, Any]], document_ids: Mapping[str, str]
 ) -> list[dict[str, Any]]:
@@ -247,11 +221,8 @@ class CorpusLoader:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         log: Callable[[str], None] = print,
-        entity_index: bool | None = None,
     ) -> None:
         self._client = client
-        # すべての文書のレシピで実体の抽出を有効 / 無効にする（#1362。None は全体の既定）。
-        self._entity_index = entity_index
         self._api = api_base_url.rstrip("/") + "/api"
         self._timeout = timeout_seconds
         self._interval = poll_interval_seconds
@@ -336,7 +307,7 @@ class CorpusLoader:
                 "（このナレッジベースの文書として索引を作ります）"
             )
         recipe_id = self._recipe(document_id)["recipe_id"]
-        recipe = recipe_for(path, entity_index=self._entity_index)
+        recipe = recipe_for(path)
         if recipe:
             self._data(
                 self._client.put(
@@ -440,16 +411,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=f"業務支援の評価 業務ガイドあり {time.strftime('%Y%m%d-%H%M%S')}",
     )
     parser.add_argument(
-        "--entity-index",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help=(
-            "すべての文書のレシピで実体・別名索引の構築を明示して取り込み、評価セットと"
-            "作る検索・回答プロファイルで実体の 1 段の拡張を選ぶ（#1388）。--no-entity-index は"
-            "実体・別名索引の構築を無効にする。省略時は全体の既定（OFF）に従う"
-        ),
-    )
-    parser.add_argument(
         "--keep-superseded-active",
         action="store_true",
         help=(
@@ -493,7 +454,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 client,
                 args.api_base_url,
                 timeout_seconds=args.timeout,
-                entity_index=args.entity_index,
             )
             knowledge_base_id = args.knowledge_base_id or loader.create_knowledge_base(
                 args.knowledge_base_name
@@ -521,8 +481,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             knowledge_base_id,
             versions_registered=register_versions,
         )
-        if args.entity_index is True:
-            resolved = with_entity_expansion(resolved)
         _write(args.output, resolved)
         if args.document_map_output:
             _write(args.document_map_output, {"documents": dict(documents)})

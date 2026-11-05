@@ -1,10 +1,5 @@
-"""MCP の根拠の並びで、当たった chunk の章の参照の先・前後の文脈を、実体の拡張の根拠より
-先に確保する（#1390）。
-
-#1362 の評価（D の実体のレシピあり・拡張 on）で、拡張の根拠（上限の 3 割）が質問と関係の
-薄い属性の chunk で枠を埋め、当たった chunk の章の参照の先・すぐ前の chunk が evidence_limit
-20 の外（20〜96 位）へ押された（``ir-room-booking-maintenance`` は共通の保守枠が 54 位で
-誤答）。評価の検索の結果（citations）の並びの形を、決定論の根拠の列で確かめる。
+"""MCP の根拠の並びで、当たった chunk の章の参照の先・前後の文脈を evidence_limit の内に確保する
+（#1390）。評価の検索の結果（citations）の並びの形を、決定論の根拠の列で確かめる。
 """
 
 from __future__ import annotations
@@ -13,18 +8,14 @@ import json
 from typing import Any
 
 from app.mcp.tools import (
-    ENTITY_EXPANSION_LIMIT_SHARE,
     LINKED_CONTEXT_LIMIT_SHARE,
     mcp_evidence_order,
 )
 from app.rag.cross_references import REFERENCE_FROM_KEY, REFERENCE_LABEL_KEY, REFERENCE_RANK_KEY
-from app.rag.entity_expansion import ENTITY_EXPANSION_KEY, ENTITY_EXPANSION_ROLE
 from app.schemas.search import RetrievedChunk
 
 MAINTENANCE = "maintenance-plan"
 OPERATIONS = "operations-guide"
-LEDGER = "system-ledger"
-ORG = "organization-rules"
 INCIDENT = "incident-rules"
 
 
@@ -38,8 +29,6 @@ def _chunk(
     rerank: float | None = None,
     section: str = "",
     targets: list[str] | None = None,
-    expansion: bool = False,
-    seed: str = "question",
     group: str | None = None,
 ) -> RetrievedChunk:
     metadata: dict[str, Any] = {
@@ -60,8 +49,6 @@ def _chunk(
             ],
             ensure_ascii=False,
         )
-    if expansion:
-        metadata[ENTITY_EXPANSION_KEY] = {"entity": chunk_id, "hop": 1, "seed": seed}
     return RetrievedChunk(
         document_id=document,
         chunk_id=chunk_id,
@@ -82,9 +69,7 @@ def _room_booking_citations() -> list[RetrievedChunk]:
     当たった上位は運用要領の第 7 章（会議室予約システム）と定期保守計画の第 1 章（個別の
     保守枠。「この章に無いシステムは、第 2 章の共通の保守枠で保守します」）。答えの共通の
     保守枠（第 2 章）は第 1 章と同じ親の前後の文脈で、citations では運用要領の多くの章の
-    後ろにある。拡張の根拠は、質問の「会議室予約システム」の台帳の行から 1 段でたどった
-    組織規程（担当部署の略号・承認者）・障害連絡規程（重要度 C）と、第 1 章の HRM・OMS の
-    台帳の行で、どれも質問（定期保守）とは関係が薄い（rerank の関連度が低い）。
+    後ろにある。
     """
     plan = "定期保守計画 2026年度"
     ops = [_chunk("ops-ch7", "retrieved_anchor", document=OPERATIONS, index=7, rank=1, rerank=0.92)]
@@ -100,25 +85,6 @@ def _room_booking_citations() -> list[RetrievedChunk]:
             targets=[f"{plan} > 第 2 章 共通の保守枠"],
         ),
         _chunk("mt-title", "retrieved_anchor", document=MAINTENANCE, index=0, rank=3, section=plan),
-    ]
-    # 関連度の低い拡張の根拠（rag_engine は位置を保たず、分数の順に並べた）。
-    weak_expansions = [
-        _chunk(
-            f"weak-{name}",
-            ENTITY_EXPANSION_ROLE,
-            document=document,
-            index=index,
-            rank=rank,
-            rerank=score,
-            expansion=True,
-        )
-        for name, document, index, rank, score in (
-            ("org-codes", ORG, 2, 40, 0.06),
-            ("org-approvers", ORG, 3, 41, 0.05),
-            ("incident-first-contact", INCIDENT, 1, 42, 0.04),
-            ("ledger-hrm", LEDGER, 3, 43, 0.08),
-            ("ledger-oms", LEDGER, 4, 44, 0.07),
-        )
     ]
     other_hits = [
         _chunk(
@@ -151,7 +117,6 @@ def _room_booking_citations() -> list[RetrievedChunk]:
         *ops_context,
         *maintenance_hits,
         *maintenance_context,
-        *weak_expansions,
         *other_hits,
     ]
 
@@ -166,43 +131,12 @@ def test_room_booking_keeps_the_referenced_chapter_inside_the_limit() -> None:
     assert "mt-ch2-common" in head
     # 当たった上位の chunk は動かない。
     assert head[:3] == ["ops-ch7", "mt-ch1", "mt-title"]
-    # 関連度の低い拡張の根拠は確保しない（関連度の順位のまま上限の外）。
-    assert not [cid for cid in head if cid.startswith("weak-")]
     # 章の参照の先を、すぐ前・すぐ後の chunk より先に確保する。
     linked = [
         cid for cid in head if cid in {"mt-ch2-common", "ops-ch6", "ops-ch8", "mt-ch3-change"}
     ]
     assert linked[0] == "mt-ch2-common"
     assert len(ordered) == len(citations)
-
-
-def test_room_booking_still_reserves_a_relevant_expansion_after_the_linked_context() -> None:
-    """関連度の高い拡張の根拠（質問のシステムの台帳の行）は、章の参照の先と一緒に上限の内に残る。"""
-    citations = _room_booking_citations()
-    ledger_row = _chunk(
-        "ledger-room-booking",
-        ENTITY_EXPANSION_ROLE,
-        document=LEDGER,
-        index=6,
-        rank=45,
-        rerank=0.45,
-        expansion=True,
-        group="ledger-p1",
-    )
-    # 台帳の行と同じ親の前後の文脈（同じ表の続き）。
-    ledger_next = _chunk(
-        "ledger-room-booking-next", "neighbor_context", document=LEDGER, index=7, group="ledger-p1"
-    )
-
-    ordered = mcp_evidence_order([*citations, ledger_row, ledger_next], 20)
-    head = _ids(ordered[:20])
-
-    assert "mt-ch2-common" in head
-    assert "ledger-room-booking" in head
-    assert "ledger-room-booking-next" in head
-    # 章の参照の先（前後の文脈の枠）を先に、拡張の根拠（拡張の枠）を後に置く。
-    assert head.index("mt-ch2-common") < head.index("ledger-room-booking")
-    assert not [cid for cid in head if cid.startswith("weak-")]
 
 
 def test_incoming_reference_and_previous_chunk_of_the_hit_are_reserved() -> None:
@@ -284,60 +218,6 @@ def test_linked_context_share_is_capped_and_other_documents_are_not_linked() -> 
     # 起点の順（1 位のすぐ前・すぐ後から）。
     assert reserved == ["near-1-4", "near-1-6", "near-2-4", "near-2-6", "near-3-4", "near-3-6"]
     assert "other-doc" not in head
-
-
-def test_expansion_without_relevance_after_rerank_is_not_reserved_alone() -> None:
-    """rerank を実行した検索で、関連度の無い拡張の根拠（起点にならず前後の文脈に入った
-    もの）は単独では確保しない。rerank を実行しなかった検索では今までどおり確保する（#1362）。
-    """
-    hits = [
-        _chunk(f"hit-{rank}", "retrieved_anchor", document=f"doc-{rank}", index=0, rank=rank)
-        for rank in range(1, 24)
-    ]
-    stray = _chunk("stray-expansion", "neighbor_context", document=LEDGER, index=9, expansion=True)
-    scored = [hits[0].model_copy(update={"rerank_score": 0.9}), *hits[1:]]
-
-    assert "stray-expansion" not in _ids(mcp_evidence_order([*scored, stray], 20)[:20])
-    assert "stray-expansion" in _ids(mcp_evidence_order([*hits, stray], 20)[:20])
-    assert ENTITY_EXPANSION_LIMIT_SHARE == 0.3
-
-
-def test_expansion_from_top_chunk_entities_needs_hit_level_relevance() -> None:
-    """上位の chunk の実体から足した根拠（保守計画の章に並ぶ別のシステムの台帳の行など）は、検索で
-    当たった chunk と同じ程度の関連度が無ければ確保しない。質問の実体から足した根拠は低い関連度でも
-    確保する（橋渡しの行）。
-    """
-    hits = [
-        _chunk(f"hit-{rank}", "retrieved_anchor", document=f"doc-{rank}", index=0, rank=rank)
-        for rank in range(1, 24)
-    ]
-    hits[0] = hits[0].model_copy(update={"rerank_score": 0.9})
-    question_row = _chunk(
-        "ledger-named",
-        ENTITY_EXPANSION_ROLE,
-        document=LEDGER,
-        index=1,
-        rank=30,
-        rerank=0.3,
-        expansion=True,
-        group="ledger-a",
-    )
-    chunk_row = _chunk(
-        "ledger-listed",
-        ENTITY_EXPANSION_ROLE,
-        document=LEDGER,
-        index=5,
-        rank=31,
-        rerank=0.4,
-        expansion=True,
-        seed="chunk",
-        group="ledger-b",
-    )
-
-    head = _ids(mcp_evidence_order([*hits, question_row, chunk_row], 20)[:20])
-
-    assert "ledger-named" in head
-    assert "ledger-listed" not in head
 
 
 def _named(

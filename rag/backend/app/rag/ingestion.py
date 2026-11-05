@@ -80,7 +80,6 @@ from app.rag.chunking_small_to_big import (
 )
 from app.rag.chunking_strategy import resolve_chunking_params
 from app.rag.cross_references import annotate_cross_references
-from app.rag.entity_index import EntityIndex, EntityIndexOptions, build_entity_index
 from app.rag.extraction_field_adapter import (
     FIELD_EXTRACTION_OUTCOME_ARTIFACT_KEY,
     FIELD_EXTRACTION_RESPONSE_SCHEMA,
@@ -3645,9 +3644,6 @@ class IngestionPipeline:
             document_id, extraction, chunks, vectors, chunk_set_id=chunk_set_id
         )
         await _raise_if_cancelled(cancel_checker)
-        await self._save_entity_index_if_enabled(
-            trace_id, document_id, extraction, chunks, chunk_set_id=chunk_set_id
-        )
         if not resolve_graph_adapter(self._settings).enabled:
             return
         try:
@@ -3695,9 +3691,6 @@ class IngestionPipeline:
             embeddings=vectors,
         )
         await _raise_if_cancelled(cancel_checker)
-        await self._save_entity_index_if_enabled(
-            trace_id, document_id, extraction, chunks, chunk_set_id=chunk_set_id
-        )
         if not resolve_graph_adapter(self._settings).enabled:
             return
         try:
@@ -3725,70 +3718,6 @@ class IngestionPipeline:
                 "文書構造索引の構築に失敗しました。別経路には切り替えずに取込を停止しました。"
                 "文書構造索引の構築の設定、抽出結果、データベース保存先を確認してから再実行してください。"
             ) from exc
-
-    async def _save_entity_index_if_enabled(
-        self,
-        trace_id: str,
-        document_id: str,
-        extraction: StructuredExtraction,
-        chunks: list[Chunk],
-        *,
-        chunk_set_id: str | None,
-    ) -> None:
-        """実体・別名索引の構築が有効なとき、実体と chunk の関連を保存する。
-
-        文書レシピで無効にした文書は何もしない(SQL も実行しない)。実体は chunk_set ごとに
-        置き換える。
-        chunk_set の無い旧い保存(未タグの chunk)は対象にしない。
-        """
-        if not self._settings.rag_entity_index_enabled or chunk_set_id is None:
-            return
-        try:
-            await _observe_ingestion_stage(
-                trace_id,
-                "entity_indexing",
-                self._save_entity_index(document_id, extraction, chunks, chunk_set_id=chunk_set_id),
-                attributes={"chunk_count": len(chunks)},
-                result_attributes=_entity_index_result_attributes,
-            )
-        except Exception as exc:
-            logger.info(
-                "entity_indexing_failed",
-                extra={"document_id": document_id, "error_type": type(exc).__name__},
-            )
-            raise IngestionUserError(
-                "実体・別名索引の保存に失敗しました。別経路には切り替えずに取込を停止しました。"
-                "システムテーブル(実体の層の表)が作成済みか、データベース保存先を確認してから"
-                "再実行してください。"
-            ) from exc
-
-    async def _save_entity_index(
-        self,
-        document_id: str,
-        extraction: StructuredExtraction,
-        chunks: list[Chunk],
-        *,
-        chunk_set_id: str,
-    ) -> EntityIndex:
-        """chunk から実体を決定的に抜き出し、Oracle の実体の表へ保存する(#1362)。"""
-        from app.clients.entity_store import EntityStore
-
-        title = "\n".join(element.text for element in extraction.elements[:3])
-        index = await asyncio.to_thread(
-            build_entity_index,
-            document_id=document_id,
-            chunks=chunks,
-            chunk_set_id=chunk_set_id,
-            document_title=title,
-            options=EntityIndexOptions(
-                name_columns=tuple(self._settings.rag_entity_name_columns),
-                attribute_columns=tuple(self._settings.rag_entity_attribute_columns),
-            ),
-        )
-        await EntityStore(self._oracle).replace_chunk_set_entity_index(
-            document_id, chunk_set_id, index
-        )
-        return index
 
     async def _save_graph_index(
         self,
@@ -4862,14 +4791,6 @@ def _record_ingestion_stage(
         attributes=dict(attributes),
         error=error,
     )
-
-
-def _entity_index_result_attributes(index: EntityIndex) -> Mapping[str, object]:
-    return {
-        "entity_count": len(index.entities),
-        "entity_alias_count": index.alias_count,
-        "entity_chunk_link_count": len(index.links),
-    }
 
 
 def _graph_index_result_attributes(graph_index: GraphIndex) -> Mapping[str, object]:

@@ -15,8 +15,6 @@ from app.db_degradation import load_or_degrade
 from app.rag.search_answer_profile_config import validate_profile_answer_model
 from app.schemas.common import ApiResponse, Page
 from app.schemas.search_answer_profile import (
-    EntityIndexCoverageData,
-    EntityIndexCoverageRequest,
     InheritedAnswerContactData,
     SearchAnswerProfileCreateRequest,
     SearchAnswerProfileDetail,
@@ -82,23 +80,6 @@ async def profile_answer_models() -> ApiResponse[list[dict[str, str]]]:
     from app.api.routes.search import registered_answer_model_choices
 
     return ApiResponse(data=registered_answer_model_choices(get_settings()))
-
-
-@router.post("/entity-index-coverage", response_model=ApiResponse[EntityIndexCoverageData])
-async def entity_index_coverage(
-    request: EntityIndexCoverageRequest,
-) -> ApiResponse[EntityIndexCoverageData]:
-    """参照するナレッジベースで、実体の索引を持つ文書の数を返す（#1388）。
-
-    実体の 1 段の拡張（プロファイルの ``query.entity_expansion_enabled``）は、文書レシピで実体の
-    索引を選んだ文書にだけ効く。画面は保存前の選択（下書き）でも案内できるよう、ナレッジベースを
-    request で受け取る。見え方は回答の検索と同じ（利用者が見られない文書・ナレッジベースは
-    数えない）。
-    """
-    from app.clients.entity_store import EntityStore
-
-    count = await EntityStore(OracleClient()).count_entity_documents(request.knowledge_base_ids)
-    return ApiResponse(data=EntityIndexCoverageData(document_count=count))
 
 
 @router.get("/inherited-contact", response_model=ApiResponse[InheritedAnswerContactData])

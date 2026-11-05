@@ -319,7 +319,6 @@ def _engine(store: InMemoryGraphStore, hits: list[RetrievedChunk], **settings: A
         Settings(
             **{
                 "rag_graph_expansion_enabled": True,
-                "rag_entity_expansion_enabled": False,
                 **settings,
             }
         ),

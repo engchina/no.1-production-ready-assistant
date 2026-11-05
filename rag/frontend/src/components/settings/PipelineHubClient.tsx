@@ -17,7 +17,6 @@ const INGESTION_HREFS = new Set<string>([
   APP_ROUTES.settingsParserAdapters,
   APP_ROUTES.settingsChunking,
   APP_ROUTES.settingsVectorIndex,
-  APP_ROUTES.settingsEntityIndex,
   APP_ROUTES.settingsGraph,
 ]);
 

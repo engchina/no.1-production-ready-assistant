@@ -1017,13 +1017,6 @@ export interface KnowledgeBaseIngestionConfig {
   chunk_parent_max_pages?: number | null;
   chunk_parent_max_children?: number | null;
   graph_profile: GraphProfileName | null;
-  /**
-   * 実体・別名索引（#1362 / #1388）。索引の保存の後に、表の行・本文の定義の形から実体を作る。null は全体の
-   * 既定（無効）に従う。列名は表の行の名前・属性にする列（空は列名で決める）。
-   */
-  entity_index_enabled?: boolean | null;
-  entity_name_columns?: string[] | null;
-  entity_attribute_columns?: string[] | null;
   field_extraction_enabled: boolean | null;
   navigation_summary_enabled: boolean | null;
   auto_parse_after_preprocess_enabled: boolean | null;
@@ -1051,13 +1044,6 @@ export interface KnowledgeBaseQueryConfig {
   guide_step_deadline_seconds?: number | null;
   // 質問から抽出項目の条件を読み取る(LLM の呼び出しが 1 回増える。#652)。
   auto_field_filter_enabled?: boolean | null;
-  /**
-   * 実体・別名による検索拡張(LLM は呼ばない)。検索方法の全体設定だけで決め、プロファイルでは保存しない。
-   * 文書レシピで実体・別名索引を有効にした文書にだけ効く。
-   */
-  entity_expansion_enabled?: boolean | null;
-  /** 1 回の検索で加える根拠の上限(1〜20)。null は既定(6)。 */
-  entity_expansion_max_chunks?: number | null;
   /**
    * 文書構造索引で根拠の候補を広げる(AI は呼ばない)。検索方法の全体設定だけで決める。
    * null / 未指定は全体の既定(検索方法の画面。既定は使わない)。
@@ -1095,11 +1081,6 @@ export interface KnowledgeBaseQueryConfig {
 export interface InheritedAnswerContactData {
   enabled: boolean;
   contact: string;
-}
-
-/** 参照するナレッジベースで実体・別名索引を持つ文書の数(#1388)。 */
-export interface EntityIndexCoverageData {
-  document_count: number;
 }
 
 export type QueryStrategyName =
@@ -2681,8 +2662,6 @@ export interface AnsweringSettingsData {
   auto_field_filter_enabled: boolean;
   /** 関係情報で根拠の候補を広げる(#2055。既定 false)。 */
   graph_expansion_enabled: boolean;
-  entity_expansion_enabled: boolean;
-  entity_expansion_max_chunks: number;
   section_expansion_enabled: boolean;
   section_expansion_max_levels: number;
   section_expansion_input_token_percent: number;
@@ -2790,10 +2769,6 @@ export type GraphProfileName = "off" | "entities";
 export interface GraphProfileStatusData {
   name: GraphProfileName;
   selected: boolean;
-}
-
-export interface EntityIndexSettingsData {
-  enabled: boolean;
 }
 
 export interface GraphSettingsData {
@@ -3728,12 +3703,6 @@ export const api = {
   /** 継承するシステム設定の窓口（プロファイルの画面の権限で読む。#2683）。 */
   getInheritedAnswerContact: () =>
     request<InheritedAnswerContactData>("/api/search-answer-profiles/inherited-contact"),
-  /** 参照するナレッジベースで実体・別名索引を持つ文書の数(拡張の開閉の案内。#1388)。 */
-  entityIndexCoverage: (knowledgeBaseIds: string[]) =>
-    request<EntityIndexCoverageData>(
-      "/api/search-answer-profiles/entity-index-coverage",
-      jsonBody({ knowledge_base_ids: knowledgeBaseIds }),
-    ),
   createSearchAnswerProfile: (body: SearchAnswerProfileCreateRequest) =>
     request<SearchAnswerProfileDetail>("/api/search-answer-profiles", jsonBody(body)),
   updateSearchAnswerProfile: (id: string, body: SearchAnswerProfileUpdateRequest) =>
@@ -4433,13 +4402,6 @@ export const api = {
     }),
 
   // 設定: 文書構造索引の構築
-  getEntityIndexSettings: () => request<EntityIndexSettingsData>("/api/settings/entity-index"),
-  updateEntityIndexSettings: (body: EntityIndexSettingsData) =>
-    request<EntityIndexSettingsData>("/api/settings/entity-index", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
   getGraphSettings: () => request<GraphSettingsData>("/api/settings/graph"),
   updateGraphSettings: (body: GraphSettingsUpdate) =>
     request<GraphSettingsData>("/api/settings/graph", {

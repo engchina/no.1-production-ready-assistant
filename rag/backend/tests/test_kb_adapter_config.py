@@ -390,3 +390,15 @@ def test_query_overlay_step_deadline_is_bounded_and_does_not_mutate_defaults(
 def test_query_overlay_step_deadline_rejects_out_of_range(value: float) -> None:
     with pytest.raises(ValueError):
         KnowledgeBaseQueryConfig(guide_step_deadline_seconds=value)
+
+
+def test_stored_entity_index_recipe_fields_are_dropped() -> None:
+    """削除した実体・別名索引（#160）のレシピの項目は、保存値に残っても読み捨てる。"""
+    config = KnowledgeBaseIngestionConfig.model_validate(
+        {
+            "entity_index_enabled": True,
+            "entity_name_columns": ["合成の列"],
+            "entity_attribute_columns": ["合成の列"],
+        }
+    )
+    assert "entity_index_enabled" not in config.model_dump()

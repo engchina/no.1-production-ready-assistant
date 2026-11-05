@@ -256,12 +256,6 @@ DOCUMENT_PROCESSING_OUTPUT_GROUPS: dict[str, tuple[str, ...]] = {
         *SMALL_TO_BIG_PROCESSING_CONFIG_FIELDS,
     ),
     "graph_profile": ("graph_profile",),
-    # 実体の層（#1362）。索引の保存の後に作るため、変えると索引からやり直す。
-    "entity_index_enabled": (
-        "entity_index_enabled",
-        "entity_name_columns",
-        "entity_attribute_columns",
-    ),
     "field_extraction_enabled": ("field_extraction_enabled",),
     "navigation_summary_enabled": ("navigation_summary_enabled",),
 }

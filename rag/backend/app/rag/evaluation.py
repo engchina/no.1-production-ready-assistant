@@ -850,8 +850,6 @@ def evaluation_settings(
             "context_group_max_chunks": "rag_context_group_max_chunks",
             "reference_expansion_enabled": "rag_reference_expansion_enabled",
             "reference_expansion_max_chunks": "rag_reference_expansion_max_chunks",
-            "entity_expansion_enabled": "rag_entity_expansion_enabled",
-            "entity_expansion_max_chunks": "rag_entity_expansion_max_chunks",
             "graph_expansion_enabled": "rag_graph_expansion_enabled",
             "graph_expansion_max_chunks": "rag_graph_expansion_max_chunks",
             "section_expansion_enabled": "rag_section_expansion_enabled",

@@ -128,7 +128,6 @@ def auth(monkeypatch: MonkeyPatch) -> ProductionAuth:
         "rag_answer_flow": "crag",
         "rag_auto_field_filter_enabled": True,
         "rag_reference_expansion_enabled": True,
-        "rag_entity_expansion_enabled": True,
         "rag_graph_expansion_enabled": True,
     }.items():
         monkeypatch.setattr(settings, name, value)
@@ -139,10 +138,9 @@ def auth(monkeypatch: MonkeyPatch) -> ProductionAuth:
 
 @pytest.fixture
 def plans(monkeypatch: MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
-    entity, graph = PlanRecorder(), PlanRecorder()
-    monkeypatch.setattr(answer_engine, "plan_entity_expansion", entity)
+    graph = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
-    yield entity, graph
+    yield graph
 
 
 def _install(monkeypatch: MonkeyPatch, oracle: Any, genai: Any) -> None:
@@ -306,16 +304,16 @@ def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
         assert AUTO_SAME_FIELD.value not in [value for _name, value in _field_values(item)]
     assert all(AUTO_FIELD.name not in _field_names(item) for item in oracle.filters[start:])
     # 実体・関係情報の拡張は、主の検索と同じ呼び出し元の範囲の中で広げる。
-    entity, graph = plans
-    assert entity.scopes and graph.scopes
-    assert all(scope == expected for scope in [*entity.scopes, *graph.scopes])
+    graph = plans
+    assert graph.scopes
+    assert all(scope == expected for scope in graph.scopes)
     # 認可の範囲は、すべての検索と拡張で、トークンの範囲に絞った監査 context の述語で当たる。
-    _assert_token_scope([*oracle.contexts, *entity.contexts, *graph.contexts])
+    _assert_token_scope([*oracle.contexts, *graph.contexts])
     assert _access_knowledge_bases(oracle.contexts[-1], expected) == set(SCOPED_KNOWLEDGE_BASES)
 
 
 @pytest.mark.parametrize("tool,extra", TOOLS)
-def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_and_graph_do_not(
+def test_mcp_reference_expansion_crosses_caller_file_name_but_graph_does_not(
     auth: ProductionAuth,
     monkeypatch: MonkeyPatch,
     plans: tuple[PlanRecorder, PlanRecorder],
@@ -357,11 +355,11 @@ def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_and_graph_d
     kept = {"knowledge_base_id": "kb-1,kb-2", "include_superseded": "true", "as_of": "2020-06-30"}
     assert all(item == kept for item in reference_filters)
     # 実体・関係情報の拡張は、呼び出し元の文書名・分類を残す(自動の項目の条件は含めない)。
-    entity, graph = plans
+    graph = plans
     expected = {**filters, **kept}
-    assert entity.scopes and graph.scopes
-    assert all(scope == expected for scope in [*entity.scopes, *graph.scopes])
-    _assert_token_scope([*oracle.contexts, *entity.contexts, *graph.contexts])
+    assert graph.scopes
+    assert all(scope == expected for scope in graph.scopes)
+    _assert_token_scope([*oracle.contexts, *graph.contexts])
 
 
 class SectionReadRecorder(SectionMapStub):
@@ -461,7 +459,6 @@ def test_mcp_section_expansion_reads_reference_target_outside_caller_file_name(
     for name, value in {
         "rag_query_strategy": "auto_routing",
         "rag_section_expansion_enabled": True,
-        "rag_entity_expansion_enabled": False,
         "rag_graph_expansion_enabled": False,
     }.items():
         monkeypatch.setattr(get_settings(), name, value)

@@ -108,7 +108,6 @@ def test_missing_version_is_not_retroactively_assigned_from_equal_hash() -> None
     [
         ("markers", "bullet_chars", ["EXTRACT", "CHUNK", "INDEX"], False, False),
         ("inquiry_cues", "operation_trigger_terms", ["CHUNK", "INDEX"], True, False),
-        ("entity_cues", "alias_column_words", ["INDEX"], True, True),
     ],
 )
 def test_impact_uses_reading_stage_and_checks_reused_earlier_artifacts(

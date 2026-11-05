@@ -142,7 +142,7 @@ export const LANGUAGE_PACK_GROUPS: readonly { id: string; sections: readonly str
       "search_labels",
     ],
   },
-  { id: "index", sections: ["entity_cues", "field_value_cues"] },
+  { id: "index", sections: ["field_value_cues"] },
   {
     id: "question",
     sections: ["search_terms", "question_cues", "inquiry_cues", "enumeration_cues", "definition_cues", "evidence_cues"],

@@ -161,7 +161,7 @@ async def test_search_adds_attachment_evidence_once_even_without_hits() -> None:
         metadata={ATTACHMENT_METADATA_KEY: "x", "section_title": "第二章"},
     )
     engine = AnswerEngine(
-        Settings(rag_entity_expansion_enabled=False, rag_graph_expansion_enabled=False),
+        Settings(rag_graph_expansion_enabled=False),
         oracle=cast(Any, ReferenceOracle([], [])),
         genai=cast(Any, FakeGenAi()),
         attachment_chunks=[evidence],

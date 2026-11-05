@@ -61,12 +61,6 @@ class FakeOracle:
         self.segments: dict[str, IngestionSegment] = {}
         self.extraction_artifacts: dict[str, dict[str, object]] = {}
         self.recipe_rows: dict[str, dict[str, object]] = {}
-        # 実体の索引（既定 ON。#1388）の保存の transaction の数。SQL は実行しない。
-        self.entity_transactions = 0
-
-    async def _run_transaction(self, operation: object) -> None:
-        _ = operation
-        self.entity_transactions += 1
 
     async def update_document_status(
         self,
@@ -1626,7 +1620,6 @@ async def test_index_chunked_rebuilds_context_header_without_document_lookup() -
         object_storage=cast(Any, FakeObjectStorage()),
         settings=Settings(
             rag_chunk_context_header_enabled=True,
-            rag_entity_index_enabled=True,
             rag_graph_profile="off",
         ),
         recipe_id="recipe-1",
@@ -1638,8 +1631,6 @@ async def test_index_chunked_rebuilds_context_header_without_document_lookup() -
     expected = "製品マニュアル.pdf > 第1章 > 概要"
     assert embedding.texts == [f"{expected}\n本文です。"]
     assert oracle.updated_chunks[0].metadata["context_header"] == expected
-    # 索引の構築を明示した場合、保存済み Chunk の索引の後にも 1 回保存する。
-    assert oracle.entity_transactions == 1
 
 
 async def test_recipe_index_chunked_records_single_success_audit_with_document_source(

@@ -17,7 +17,7 @@ local search（当たった chunk の entity から、その entity の他の ch
 
 足す chunk は検索と同じ見え方の条件（tenant・ナレッジベースの範囲・利用者の権限・有効な chunk_set・
 旧版の扱い）の中だけで、1 回の検索で ``rag_graph_expansion_max_chunks`` 件まで（名前の一致と広げで
-半分ずつ。片方が余れば他方に回す）。すでに候補・前後の文脈・交差参照・実体の拡張にある chunk は足さ
+半分ずつ。片方が余れば他方に回す）。すでに候補・前後の文脈・交差参照にある chunk は足さ
 ない（二重に数えない）。章節の拡張は文脈にある chunk を読み直さない（#1504）ので、ここで足した
 chunk を章節の拡張が二重に読むことも無い。関係情報を作っていないナレッジベースでは表が空で、何も足
 さない。
@@ -31,14 +31,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from rag_engine.retrieval.character_forms import fold_text
 from rag_parser_core.language import current_pack
 from rag_parser_core.language.markers import marker_patterns
 from rag_parser_core.language.text import numbered, text_patterns
 
-from app.rag.entity_index import entity_key
 from app.schemas.search import RetrievedChunk
 
-# 起点にする検索の上位の chunk の数（RRF の上位から。実体の拡張と同じ）。
+# 起点にする検索の上位の chunk の数（RRF の上位から）。
 GRAPH_SEED_ANCHORS = 5
 # 当たった chunk から広げる entity の chunk の数の上限（これより広い章節は章節の拡張に任せる）。
 GRAPH_NEIGHBOR_MAX_ENTITY_CHUNKS = 8
@@ -57,6 +57,11 @@ GRAPH_KIND_NEIGHBOR = "neighbor"
 GRAPH_KIND_NAME = "name"
 # 検索に使う entity の種類（文書全体の entity は chunk を持たないので使わない）。
 GRAPH_SECTION_ENTITY_TYPES = ("section", "table_section", "figure_section")
+
+
+def _match_key(text: object) -> str:
+    """見出しと質問を照合する形（NFKC・波線とダッシュの同一視・大文字小文字と空白の無視）。"""
+    return "".join(fold_text(text).casefold().split())
 
 
 # 見出しが無い chunk をまとめた entity の名前（graph_index の既定）。広すぎるので使わない。
@@ -179,7 +184,7 @@ async def plan_graph_expansion(
     """
     if max_chunks <= 0:
         return []
-    question_key = entity_key(question)
+    question_key = _match_key(question)
     seeds = list(seed_chunks[:GRAPH_SEED_ANCHORS])
     seed_rows = (
         await store.graph_seed_entities(filters, seed_chunk_ids=[chunk.chunk_id for chunk in seeds])
@@ -268,7 +273,7 @@ def _name_matches(
         if not _usable_entity(row):
             continue
         label = heading_label(row.canonical_name)
-        key = entity_key(label)
+        key = _match_key(label)
         if len(key) >= GRAPH_NAME_MIN_CHARS and key in question_key:
             matched.append((row, label, key))
     # より長い一致（「権限の見直しの期限」）の一部だけの見出し（「権限の見直し」）は外す。

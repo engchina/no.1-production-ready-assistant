@@ -690,7 +690,6 @@ async def test_embedding_save_commit_failure_keeps_original_and_does_not_return_
 
     monkeypatch.setattr(pool.connection, "commit", fail_commit)
     client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-    entity_save = AsyncMock()
     pipeline = IngestionPipeline(
         vlm=cast(Any, object()),
         genai=cast(Any, object()),
@@ -698,7 +697,6 @@ async def test_embedding_save_commit_failure_keeps_original_and_does_not_return_
         object_storage=cast(Any, object()),
         settings=_llm_settings(),
     )
-    monkeypatch.setattr(pipeline, "_save_entity_index_if_enabled", entity_save)
     chunk = Chunk(
         text="合成の本文",
         index=0,
@@ -718,6 +716,5 @@ async def test_embedding_save_commit_failure_keeps_original_and_does_not_return_
     assert caught.value is error
     assert pool.acquire_calls == 1
     assert pool.connection.rollbacks == pool.connection.closes == 1
-    entity_save.assert_not_awaited()
     assert pool.connection.calls[-1].statement.startswith("SELECT COUNT(*)")
     assert "oracle_transaction_failed" in caplog.text

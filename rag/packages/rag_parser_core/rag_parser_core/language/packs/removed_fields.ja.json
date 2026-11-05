@@ -1,0 +1,153 @@
+{
+  "entity_cues": {
+    "id_column_words": [
+      "ID",
+      "番号",
+      "コード",
+      "No.",
+      "No",
+      "code"
+    ],
+    "alias_column_words": [
+      "略称",
+      "略号",
+      "別表記",
+      "別名",
+      "通称",
+      "愛称",
+      "英字名",
+      "英語名"
+    ],
+    "name_column_words": [
+      "正式名",
+      "名称",
+      "名前",
+      "氏名",
+      "件名",
+      "名"
+    ],
+    "skip_column_words": [
+      "説明",
+      "備考",
+      "内容",
+      "メモ",
+      "概要",
+      "注意",
+      "理由",
+      "手順",
+      "URL",
+      "日付",
+      "日時",
+      "期限",
+      "期間",
+      "金額",
+      "件数",
+      "数量",
+      "時刻",
+      "時間帯",
+      "連絡先"
+    ],
+    "value_separators": [
+      "、",
+      ",",
+      "，",
+      ";",
+      "；",
+      "／"
+    ],
+    "numeric_value_chars": [
+      "年",
+      "月",
+      "日",
+      "時",
+      "分",
+      "秒",
+      "%",
+      "％",
+      "円"
+    ],
+    "code_definition_words": [
+      "略号",
+      "略称",
+      "通称",
+      "コード",
+      "記号"
+    ],
+    "definition_separators": [
+      ":",
+      "は"
+    ],
+    "paren_alias_words": [
+      "略称",
+      "略号",
+      "通称",
+      "以下"
+    ],
+    "nickname_words": [
+      "通称"
+    ],
+    "organization_suffixes": [
+      "システム",
+      "ポータル",
+      "本部",
+      "部",
+      "課",
+      "室",
+      "センター"
+    ],
+    "company_scope_suffixes": [
+      "社"
+    ],
+    "generic_company_words": [
+      "会社",
+      "子会社",
+      "親会社",
+      "本社",
+      "当社",
+      "弊社",
+      "自社",
+      "他社",
+      "各社",
+      "全社",
+      "貴社",
+      "御社"
+    ],
+    "subject_link_particles": [
+      "の"
+    ],
+    "subject_topic_particles": [
+      "は"
+    ],
+    "sentence_marks": [
+      "。"
+    ],
+    "clause_marks": [
+      "、"
+    ],
+    "entity_script_chars": [
+      "぀-ヿ",
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ",
+      "ー"
+    ],
+    "entity_kana_kanji_chars": [
+      "゠-ヿ",
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ",
+      "ー"
+    ],
+    "entity_kanji_chars": [
+      "㐀-鿿",
+      "豈-﫿",
+      "々",
+      "〆",
+      "ヶ"
+    ]
+  }
+}

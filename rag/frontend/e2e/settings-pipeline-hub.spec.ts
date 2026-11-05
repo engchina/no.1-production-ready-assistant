@@ -22,10 +22,6 @@ const RECIPE_DEFAULTS = {
   chunk_overlap: 120,
   chunk_min_chars: 120,
   graph_profile: "off",
-  // 実体・別名索引の全体の既定は OFF（#3008）。
-  entity_index_enabled: false,
-  entity_name_columns: [],
-  entity_attribute_columns: [],
   heading_level_inference_enabled: false,
   field_extraction_enabled: false,
   navigation_summary_enabled: false,
@@ -112,10 +108,9 @@ test("取込・検索・回答設定の概要ハブが工程をフェーズ別�
   ).toHaveAttribute("href", "/settings/graph");
 
   const ingestion = page.getByRole("region", { name: "ナレッジ構築" });
-  await expect(ingestion.getByRole("link", { name: "実体・別名索引 の設定を開く" })).toContainText("5.");
-  await expect(ingestion.getByRole("link", { name: "文書構造索引 の設定を開く" })).toContainText("6.");
-  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("7.");
-  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("9.");
+  await expect(ingestion.getByRole("link", { name: "文書構造索引 の設定を開く" })).toContainText("5.");
+  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("6.");
+  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("8.");
 
   // カードから実際に詳細設定へ遷移できる。
   await page.getByRole("link", { name: "文書分割 の設定を開く" }).click();
@@ -155,7 +150,7 @@ test("サイドバーの取込・検索・回答設定の名前と順番は設�
   expect(sidebarNames).toEqual(cardNames);
 });
 
-// #528: レシピ 13 項目を、選択中レシピの設定と同じ処理順で出す（実体・別名索引は #1388）。
+// #528: レシピ 12 項目を、選択中レシピの設定と同じ処理順で出す。
 const PROCESSING_ORDER = [
   "preprocess_profile",
   "auto_parse_after_preprocess_enabled",
@@ -169,11 +164,10 @@ const PROCESSING_ORDER = [
   "chunking_strategy",
   "auto_index_after_chunk_enabled",
   "vector_index",
-  "entity_index_enabled",
   "graph_profile",
 ];
 
-test(`取込の流れは検索インデックスと 13 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
+test(`取込の流れは検索インデックスと 12 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
   page,
 }, testInfo) => {
   const patches = await mockPipelineSettings(page, {
@@ -212,11 +206,7 @@ test(`取込の流れは検索インデックスと 13 項目の全体の既定�
     items.getByRole("link", { name: "見出しの階層の推定（AI） を設定する画面を開く" })
   ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-heading-levels");
   await expect(items.locator('[data-config-field="heading_level_inference_enabled"]')).toContainText("無効");
-  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(11);
-  // 索引構築の全体の既定は OFF。専用の設定画面から変更できる。
-  const entityIndex = items.locator('[data-config-field="entity_index_enabled"]');
-  await expect(entityIndex).toContainText("無効");
-  await expect(entityIndex.getByRole("link")).toHaveAttribute("href", "/settings/entity-index");
+  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(10);
   await expect(items.locator('[data-config-field="vector_index"]').getByRole("link")).toHaveAttribute("href", "/settings/vector-index");
 
   // 工程の間の 3 つのスイッチ。

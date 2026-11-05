@@ -41,7 +41,6 @@ export const APP_ROUTES = {
   settingsRetrieval: "/settings/retrieval",
   settingsVectorIndex: "/settings/vector-index",
   settingsEvaluation: "/settings/evaluation",
-  settingsEntityIndex: "/settings/entity-index",
   settingsGraph: "/settings/graph",
   settingsModel: SYSTEM_SETTINGS_PATHS.model,
   settingsDatabase: SYSTEM_SETTINGS_PATHS.database,

@@ -146,7 +146,7 @@ uv run python -m app.rag.evaluation_run_cli compare ../../tmp/eval/before.json .
 
 `ablate` は、全部の工程を使う構成（full）と、工程を 1 つずつ無効にした構成（評価の上書き `rag_overrides`）を、
 同じ評価セット・基準日・範囲・索引で順に流し、full との差を表にします。工程は `rerank`・`neighbor_children`・
-`reference_expansion`・`entity_expansion`・`graph_expansion`・`section_expansion`（`--stages` で選ぶ）です。
+`reference_expansion`・`graph_expansion`・`section_expansion`（`--stages` で選ぶ）です。
 
 ```bash
 cd backend
@@ -200,8 +200,7 @@ uv run python -m app.rag.evaluation_run_cli ablate ../evaluation/golden-set.json
 `multi-hop/` に、架空の「サンプル社」（と子会社）の業務文書（PDF 13 件・xlsx 2 件。旧版・別の会社・似た規程を含む
 子 chunk 約 240）と、資料をまたいで実体をたどる質問 69 問（`multi-hop.json`。dev 40 問・holdout 29 問。種類
 `reasoning_type` と段の数 `hops`、段ごとの必要な根拠つき）を置いています。資料と評価セットは
-`rag/scripts/multi_hop_corpus.py` が実体のデータから作ります。RAG の内部に実体の層を入れるかを、検索・回答（A）と業務 Agent（D）の必要な根拠の取得率などで確かめる
-ための評価セットです。資料の作り方・取り込み方・実行の手順は [multi-hop/README.md](./multi-hop/README.md) を
+`rag/scripts/multi_hop_corpus.py` が実体のデータから作ります。検索・回答（A）と業務 Agent（D）の必要な根拠の取得率などを確かめるための評価セットです。資料の作り方・取り込み方・実行の手順は [multi-hop/README.md](./multi-hop/README.md) を
 見てください。`evaluation_cli` の `--split dev` で、区分のケースだけを流せます。評価セットの文書の版
 （`document_versions`。#1366）は、`evaluation_corpus_cli` が取り込みのときに旧版を新しい版に置き換えた文書として
 登録します（`--keep-superseded-active` で登録しない）。

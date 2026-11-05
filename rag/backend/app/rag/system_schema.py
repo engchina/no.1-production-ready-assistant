@@ -144,10 +144,6 @@ MANAGED_TABLES: tuple[str, ...] = (
     "RAG_GRAPH_ENTITIES",
     "RAG_GRAPH_RELATIONSHIPS",
     "RAG_GRAPH_ENTITY_CHUNKS",
-    # 実体の層（#1362）。RAG_CHUNK_SETS・RAG_DOCUMENTS・RAG_CHUNKS を参照する。
-    "RAG_ENTITIES",
-    "RAG_ENTITY_ALIASES",
-    "RAG_ENTITY_CHUNKS",
     # 章節と chunk の対応（#1438）。RAG_DOCUMENTS・RAG_CHUNKS を参照する。
     "RAG_CHUNK_SET_SECTIONS",
     "RAG_SECTION_CHUNKS",
@@ -243,10 +239,6 @@ MANAGED_INDEXES: tuple[str, ...] = (
     "RAG_GRAPH_REL_TARGET_IDX",
     "RAG_GRAPH_ENTITY_CHUNKS_CHUNK_IDX",
     "RAG_GRAPH_ENTITY_CHUNKS_CHUNK_SET_IDX",
-    "RAG_ENTITIES_CHUNK_SET_IDX",
-    "RAG_ENTITIES_DOCUMENT_IDX",
-    "RAG_ENTITY_ALIASES_KEY_IDX",
-    "RAG_ENTITY_CHUNKS_CHUNK_IDX",
     "RAG_CHUNK_SET_SECTIONS_DOCUMENT_IDX",
     "RAG_SECTION_CHUNKS_CHUNK_IDX",
     "RAG_SECTION_CHUNKS_DOCUMENT_IDX",
@@ -304,6 +296,12 @@ RETIRED_MANAGED_OBJECTS: tuple[tuple[str, str], ...] = (
     # `20260930_008_answer_prompts_table` が改名するか、行を `RAG_ANSWER_PROMPTS` へ写してから、
     # ここで消す（行は消えない）。
     ("RAG_DOCRAG_PROMPTS", "TABLE"),
+    # 実体・別名索引の表（#160 で削除）。更新では migration
+    # `20261105_003_retire_entity_index` が消す。全再作成のためにここにも載せる。
+    # 親を先に書く（削除は逆順）。
+    ("RAG_ENTITIES", "TABLE"),
+    ("RAG_ENTITY_ALIASES", "TABLE"),
+    ("RAG_ENTITY_CHUNKS", "TABLE"),
 )
 
 DOMAIN_TABLES = frozenset(MANAGED_TABLES) - {CONTROL_TABLE, MIGRATION_TABLE}

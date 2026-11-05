@@ -2062,8 +2062,12 @@ async def test_pending_index_cross_release_clones_before_build_and_preserves_old
 
     from app.rag.ingestion_language import ingestion_release_scope
 
+    from app.rag import language_pack_releases
+
+    # 組み込みの節には索引だけに効くものが無いので、合成の依存で索引だけの変更を作る。
+    monkeypatch.setitem(language_pack_releases._STAGE_DEPENDENCIES, "inquiry_cues", ("INDEX",))
     before = install_language_release_stub(monkeypatch)
-    pack = resolve(builtin_pack(), {"entity_cues": {"alias_column_words": ["合成の別名"]}})
+    pack = resolve(builtin_pack(), {"inquiry_cues": {"operation_trigger_terms": ["合成の別名"]}})
     after = before.model_copy(
         update={
             "id": "synthetic-new-release",
