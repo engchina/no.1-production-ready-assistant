@@ -141,9 +141,6 @@ MANAGED_TABLES: tuple[str, ...] = (
     "RAG_ARTIFACT_LAYERS",
     "RAG_SEARCH_AUDIT",
     "RAG_INGESTION_AUDIT",
-    "RAG_GRAPH_ENTITIES",
-    "RAG_GRAPH_RELATIONSHIPS",
-    "RAG_GRAPH_ENTITY_CHUNKS",
     # 実体の層（#1362）。RAG_CHUNK_SETS・RAG_DOCUMENTS・RAG_CHUNKS を参照する。
     "RAG_ENTITIES",
     "RAG_ENTITY_ALIASES",
@@ -232,12 +229,6 @@ MANAGED_INDEXES: tuple[str, ...] = (
     "RAG_INGESTION_AUDIT_SOURCE_SHA256_IDX",
     "RAG_INGESTION_AUDIT_TENANT_CREATED_IDX",
     "RAG_INGESTION_AUDIT_TRACE_IDX",
-    "RAG_GRAPH_ENTITIES_CHUNK_SET_IDX",
-    "RAG_GRAPH_ENTITIES_TENANT_NAME_IDX",
-    "RAG_GRAPH_REL_SOURCE_IDX",
-    "RAG_GRAPH_REL_TARGET_IDX",
-    "RAG_GRAPH_ENTITY_CHUNKS_CHUNK_IDX",
-    "RAG_GRAPH_ENTITY_CHUNKS_CHUNK_SET_IDX",
     "RAG_ENTITIES_CHUNK_SET_IDX",
     "RAG_ENTITIES_DOCUMENT_IDX",
     "RAG_ENTITY_ALIASES_KEY_IDX",
@@ -291,6 +282,11 @@ RETIRED_MANAGED_OBJECTS: tuple[tuple[str, str], ...] = (
     # `20260930_007_retire_graph_claims_community` が消す。全再作成のためにここにも載せる。
     ("RAG_GRAPH_CLAIMS", "TABLE"),
     ("RAG_GRAPH_COMMUNITY_SUMMARIES", "TABLE"),
+    # 文書構造索引の表（#159）。更新では migration `20261106_001_retire_document_graph` が消す。
+    # 全再作成のためにここにも載せる（index・制約は表と一緒に消える）。
+    ("RAG_GRAPH_ENTITIES", "TABLE"),
+    ("RAG_GRAPH_RELATIONSHIPS", "TABLE"),
+    ("RAG_GRAPH_ENTITY_CHUNKS", "TABLE"),
     # 回答生成のプロンプトの表の旧名（#599）。更新では migration
     # `20260930_008_answer_prompts_table` が改名するか、行を `RAG_ANSWER_PROMPTS` へ写してから、
     # ここで消す（行は消えない）。

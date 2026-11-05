@@ -66,7 +66,7 @@ export function EntityIndexSettingsClient() {
         <CardContent className="space-y-5">
           <div className="space-y-2">
             <div className="text-sm font-medium text-fg" id="entity-index-build-label">
-              {t("settings.graph.profile")}
+              {t("settings.entityIndex.buildLabel")}
             </div>
             <div role="radiogroup" aria-labelledby="entity-index-build-label" className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {[false, true].map((value) => {
@@ -82,8 +82,8 @@ export function EntityIndexSettingsClient() {
                         selected ? "border-accent-emphasis bg-accent-subtle text-fg" : "border-border bg-surface text-fg peer-hover:bg-surface-hover")}>
                       <span className="flex items-center justify-between gap-2">
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold">{t(value ? "settings.graph.profile.entities" : "settings.graph.profile.off")}</span>
-                          {!value ? <span className="inline-flex min-h-5 items-center rounded border border-border px-1.5 text-xs text-fg-muted">{t("settings.graph.defaultTag")}</span> : null}
+                          <span className="text-sm font-semibold">{t(value ? "settings.entityIndex.on" : "settings.entityIndex.off")}</span>
+                          {!value ? <span className="inline-flex min-h-5 items-center rounded border border-border px-1.5 text-xs text-fg-muted">{t("settings.entityIndex.defaultTag")}</span> : null}
                         </span>
                         {selected ? <CheckCircle2 size={16} className="shrink-0 text-accent-fg" aria-hidden /> : null}
                       </span>
@@ -98,16 +98,16 @@ export function EntityIndexSettingsClient() {
           <FormActionBar
             ariaLabel={t("settings.entityIndex.actions")}
             primaryActions={[{
-              id: "save", label: t("settings.graph.actions.save"), icon: Save,
+              id: "save", label: t("settings.entityIndex.save"), icon: Save,
               loading: save.isPending, disabled: !dirty,
               onClick: () => save.mutate({ enabled }, { onSuccess: () => toast.success(t("settings.entityIndex.saved")) }),
             }]}
             secondaryActions={[{
-              id: "reset", label: t("settings.graph.actions.reset"), icon: RotateCcw,
+              id: "reset", label: t("settings.entityIndex.reset"), icon: RotateCcw,
               disabled: !dirty || save.isPending,
               onClick: () => { save.reset(); setEnabled(query.data?.enabled ?? false); },
             }]}
-            status={save.isError ? <FormStatus tone="danger" message={save.error instanceof ApiError ? save.error.message : t("settings.entityIndex.error")} /> : dirty ? <FormStatus tone="warning" message={t("settings.graph.actions.unsaved")} /> : null}
+            status={save.isError ? <FormStatus tone="danger" message={save.error instanceof ApiError ? save.error.message : t("settings.entityIndex.error")} /> : dirty ? <FormStatus tone="warning" message={t("settings.entityIndex.unsaved")} /> : null}
           />
         </CardContent>
       </Card>

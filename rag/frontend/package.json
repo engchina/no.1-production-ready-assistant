@@ -20,7 +20,6 @@
     "@production-ready/system-settings": "file:../../platform/packages/system-settings",
     "@production-ready/ui": "file:../../platform/packages/ui",
     "@tanstack/react-query": "^5.103.2",
-    "@xyflow/react": "^12.12.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",

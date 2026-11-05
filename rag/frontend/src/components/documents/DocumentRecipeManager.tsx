@@ -637,7 +637,6 @@ function RecipeStatusBadge({ recipe, spin = true }: { recipe: DocumentRecipeView
 
 const LAYER_LABEL_KEYS: Record<RecipeLayerStatusView["layer"], I18nKey> = {
   metadata: "knowledgeBases.variant.layer.metadata",
-  graph: "knowledgeBases.variant.layer.graph",
   navigation: "knowledgeBases.variant.layer.navigation",
 };
 
@@ -657,7 +656,7 @@ const LAYER_STATUS_TONES: Record<DocumentLayerStatusName, string> = {
   error: "bg-danger-subtle text-danger-fg",
 };
 
-/** 派生 layer(項目抽出/関係情報/ナビ)の実体化状態チップ。reason は title で開示する。 */
+/** 派生 layer(項目抽出/ナビ)の実体化状態チップ。reason は title で開示する。 */
 function RecipeLayerStatusChips({ statuses }: { statuses: RecipeLayerStatusView[] }) {
   if (!statuses.length) return null;
   return (

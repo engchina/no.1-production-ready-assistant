@@ -20,5 +20,5 @@ frontend/                 Vite + React Router + TypeScript
   src/App.tsx             React Router ルート定義
   src/components/         layout / search / knowledge-bases / search-answer-profiles / settings
   src/lib/                api / queries / routes / i18n / utils
-services/                 parser / preprocess / pipeline(graphrag / vector_index / guardrail / evaluation)などのローカル実行単位
+services/                 parser / preprocess / pipeline(vector_index / guardrail / evaluation)などのローカル実行単位
 ```

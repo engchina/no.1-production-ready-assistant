@@ -41,7 +41,6 @@ class MaterializationPlan:
     chunk_sets: dict[str, frozenset[str]]
     chunk_set_recipes: dict[str, str]
     metadata_layers: dict[str, frozenset[str]]
-    graph_layers: dict[str, frozenset[str]]
     nav_layers: dict[str, frozenset[str]]
     truncated_extractions: frozenset[str] = frozenset()
 
@@ -52,7 +51,6 @@ class MaterializationPlan:
             self.extraction_recipes,
             self.chunk_sets,
             self.metadata_layers,
-            self.graph_layers,
             self.nav_layers,
         ):
             ids.update(layer)
@@ -64,7 +62,6 @@ class MaterializationPlan:
             self.extraction_recipes,
             self.chunk_sets,
             self.metadata_layers,
-            self.graph_layers,
             self.nav_layers,
         ):
             if layer_id in layer:
@@ -91,7 +88,6 @@ class MaterializationPlan:
         kb_ids = self.chunk_sets.get(chunk_set_id, frozenset())
         layer_map = {
             "metadata": self.metadata_layers,
-            "graph": self.graph_layers,
             "navigation": self.nav_layers,
         }.get(layer)
         if not kb_ids or layer_map is None:
@@ -137,7 +133,6 @@ def plan_materializations(
     chunk_sets: dict[str, set[str]] = defaultdict(set)
     chunk_set_recipes: dict[str, str] = {}
     metadata_layers: dict[str, set[str]] = defaultdict(set)
-    graph_layers: dict[str, set[str]] = defaultdict(set)
     nav_layers: dict[str, set[str]] = defaultdict(set)
 
     for kb_id, ids in per_consumer.items():
@@ -148,7 +143,6 @@ def plan_materializations(
         chunk_sets[ids["chunk_set_id"]].add(kb_id)
         chunk_set_recipes[ids["chunk_set_id"]] = extraction_recipe_id
         metadata_layers[ids["metadata_layer_id"]].add(kb_id)
-        graph_layers[ids["graph_layer_id"]].add(kb_id)
         nav_layers[ids["nav_layer_id"]].add(kb_id)
 
     return MaterializationPlan(
@@ -156,7 +150,6 @@ def plan_materializations(
         chunk_sets=_freeze(chunk_sets),
         chunk_set_recipes=dict(sorted(chunk_set_recipes.items())),
         metadata_layers=_freeze(metadata_layers),
-        graph_layers=_freeze(graph_layers),
         nav_layers=_freeze(nav_layers),
         truncated_extractions=frozenset(truncated),
     )

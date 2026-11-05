@@ -18,9 +18,6 @@ from app.schemas.knowledge_base import (
     KnowledgeBaseCreateRequest,
     KnowledgeBaseDetail,
     KnowledgeBaseDocumentAssignmentRequest,
-    KnowledgeBaseGraphData,
-    KnowledgeBaseGraphEdge,
-    KnowledgeBaseGraphNode,
     KnowledgeBaseStatus,
     KnowledgeBaseSummary,
     KnowledgeBaseUpdateRequest,
@@ -132,38 +129,6 @@ async def get_knowledge_base(
     if detail is None:
         raise HTTPException(status_code=404, detail="ナレッジベースが見つかりません。")
     return ApiResponse(data=detail)
-
-
-@router.get(
-    "/{knowledge_base_id}/graph",
-    response_model=ApiResponse[KnowledgeBaseGraphData],
-)
-async def get_knowledge_base_graph(
-    knowledge_base_id: str,
-    limit: int = Query(default=80, ge=1, le=300),
-) -> ApiResponse[KnowledgeBaseGraphData]:
-    """KB の関係情報(GraphRAG)を可視化用 subgraph で返す。DB 停止時は空で縮退する。"""
-    oracle = OracleClient()
-    settings = get_settings()
-    if await oracle.get_knowledge_base(knowledge_base_id) is None:
-        raise HTTPException(status_code=404, detail="ナレッジベースが見つかりません。")
-
-    async def _load() -> KnowledgeBaseGraphData:
-        nodes, edges = await oracle.fetch_knowledge_base_subgraph(knowledge_base_id, limit=limit)
-        return KnowledgeBaseGraphData(
-            status="ok" if nodes else "empty",
-            nodes=[KnowledgeBaseGraphNode(**node) for node in nodes],
-            edges=[KnowledgeBaseGraphEdge(**edge) for edge in edges],
-            truncated=len(nodes) >= limit,
-        )
-
-    data, degraded = await load_or_degrade(
-        _load,
-        timeout_seconds=settings.db_read_timeout_seconds,
-        fallback=KnowledgeBaseGraphData(),
-        log_label="knowledge_base_graph",
-    )
-    return ApiResponse(data=data, warning_messages=[degraded.message] if degraded else [])
 
 
 @router.patch("/{knowledge_base_id}", response_model=ApiResponse[KnowledgeBaseDetail])

@@ -73,8 +73,8 @@ def test_oracle_schema_sql_contains_required_rag_tables() -> None:
     assert "parser_backend         VARCHAR2(80)" in sql
     assert "segment_count          NUMBER(10) DEFAULT 0 NOT NULL" in sql
     assert "failed_segment_count   NUMBER(10) DEFAULT 0 NOT NULL" in sql
-    assert "-- section: knowledge_graph" in sql
-    assert "CREATE TABLE rag_graph_entities" in sql
+    assert "-- section: knowledge_graph" not in sql
+    assert "CREATE TABLE rag_graph_" not in sql
     assert "-- section: citation_feedback" in sql
     assert "CREATE TABLE rag_citation_feedback" in sql
     assert "-- section: feedback_details" in sql
@@ -130,7 +130,6 @@ def test_oracle_schema_manifest_is_deterministic() -> None:
         "chunk_sets",
         "search_audit",
         "ingestion_audit",
-        "knowledge_graph",
         "entities",
         "section_map",
         "citation_feedback",
@@ -409,9 +408,14 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     for table in ("RAG_GRAPH_CLAIMS", "RAG_GRAPH_COMMUNITY_SUMMARIES"):
         assert f"table_name = '{table}'" in graph_migration
         assert f"'DROP TABLE {table.lower()} CASCADE CONSTRAINTS PURGE'" in graph_migration
-    # 文書構造グラフが読む表は残す。
-    for table in ("rag_graph_entities", "rag_graph_relationships", "rag_graph_entity_chunks"):
-        assert table not in graph_migration
+    # 文書構造索引（#159）の表・派生層の行・メニュー権限を、あるときだけ消す（冪等）。
+    retire_graph = sql.split("-- migration: 20261106_001_retire_document_graph", 1)[1]
+    for table in ("RAG_GRAPH_RELATIONSHIPS", "RAG_GRAPH_ENTITY_CHUNKS", "RAG_GRAPH_ENTITIES"):
+        assert f"table_name = '{table}'" in retire_graph
+        assert f"'DROP TABLE {table.lower()} CASCADE CONSTRAINTS PURGE'" in retire_graph
+    assert "layer_kind = ''graph''" in retire_graph
+    assert "CHECK (layer_kind IN (''metadata'', ''navigation''))" in retire_graph
+    assert "permission_code = ''menu.settings_graph''" in retire_graph
     # 取込 job の抽出の段の進捗の列を足すだけ（#1999）。JSON 型ではなく CLOB で持つ。
     progress_migration = sql.split("-- migration: 20261015_004_ingestion_job_progress", 1)[1].split(
         "-- migration: ", 1
@@ -502,7 +506,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 128
+    assert len(statements) == 129
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -520,7 +524,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261105_001"
+    assert manifest["migration_artifact_version"] == "20261106_001"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -610,6 +614,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261031_002_embedding_dimensions_1024",
         "20261101_001_retire_guardrail_columns",
         "20261105_001_retire_evaluation_calibration",
+        "20261106_001_retire_document_graph",
     ]
 
 

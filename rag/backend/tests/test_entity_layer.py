@@ -793,11 +793,7 @@ async def test_recipe_without_entity_index_does_not_touch_the_entity_tables(
     explicit: bool,
 ) -> None:
     """未指定・明示 OFF はいずれも実体の表に触らない（SQL も実行しない）。"""
-    settings = (
-        Settings(rag_graph_profile="off", rag_entity_index_enabled=False)
-        if explicit
-        else Settings(rag_graph_profile="off")
-    )
+    settings = Settings(rag_entity_index_enabled=False) if explicit else Settings()
     oracle = await _save_index(settings)
 
     assert oracle.saved == [ORG]
@@ -806,7 +802,7 @@ async def test_recipe_without_entity_index_does_not_touch_the_entity_tables(
 
 async def test_enabled_recipe_saves_the_entity_index_after_the_index() -> None:
     """構築を選んだときだけ、列の指定が無くても索引を保存する。"""
-    oracle = await _save_index(Settings(rag_graph_profile="off", rag_entity_index_enabled=True))
+    oracle = await _save_index(Settings(rag_entity_index_enabled=True))
 
     assert oracle.saved == [ORG]
     assert oracle.transactions == 1

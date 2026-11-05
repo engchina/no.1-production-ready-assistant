@@ -146,7 +146,7 @@ uv run python -m app.rag.evaluation_run_cli compare ../../tmp/eval/before.json .
 
 `ablate` は、全部の工程を使う構成（full）と、工程を 1 つずつ無効にした構成（評価の上書き `rag_overrides`）を、
 同じ評価セット・基準日・範囲・索引で順に流し、full との差を表にします。工程は `rerank`・`neighbor_children`・
-`reference_expansion`・`entity_expansion`・`graph_expansion`・`section_expansion`（`--stages` で選ぶ）です。
+`reference_expansion`・`entity_expansion`・`section_expansion`（`--stages` で選ぶ）です。
 
 ```bash
 cd backend

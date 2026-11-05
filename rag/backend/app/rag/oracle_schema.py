@@ -36,7 +36,6 @@ from app.clients.oracle import (
     oracle_ingestion_job_schema_sql,
     oracle_ingestion_segment_schema_sql,
     oracle_knowledge_base_schema_sql,
-    oracle_knowledge_graph_schema_sql,
     oracle_message_schema_sql,
     oracle_role_access_schema_sql,
     oracle_search_answer_profile_knowledge_schema_sql,
@@ -59,7 +58,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261105_001"
+MIGRATION_ARTIFACT_VERSION = "20261106_001"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -291,11 +290,6 @@ def oracle_schema_sections() -> list[OracleSchemaSection]:
             name="ingestion_audit",
             table_name="rag_ingestion_audit",
             sql=oracle_ingestion_audit_schema_sql(),
-        ),
-        OracleSchemaSection(
-            name="knowledge_graph",
-            table_name="rag_graph_entities",
-            sql=oracle_knowledge_graph_schema_sql(),
         ),
         # 実体の層（#1362）。実体・別名・実体と chunk の関連。rag_chunk_sets / rag_chunks
         # を参照する。
@@ -647,7 +641,60 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261106_001_retire_document_graph",
+            table_name="rag_graph_entities",
+            sql=retire_document_graph_sql(),
+            destructive_note=(
+                "廃止する文書構造索引（#159）の表 RAG_GRAPH_ENTITIES・RAG_GRAPH_RELATIONSHIPS・"
+                "RAG_GRAPH_ENTITY_CHUNKS と全行、同表の索引・制約を削除し、"
+                "RAG_ARTIFACT_LAYERS の layer_kind = 'graph' の行と、ロールに付いたメニュー権限 "
+                "menu.settings_graph の行を削除します。"
+                "文書・chunk・実体の索引・ロールのほかの権限は削除しません。"
+                "必要なら適用前に同表を export してください。削除後は復元できません。"
+            ),
+        )
+    )
     return sections
+
+
+def retire_document_graph_sql() -> str:
+    """文書構造索引（#159）の表・派生層の行・メニュー権限を消す。あるものだけ扱い、何度当てても同じ。"""
+    drops = "\n".join(
+        f"""    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = '{table}';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP TABLE {table.lower()} CASCADE CONSTRAINTS PURGE';
+    END IF;"""
+        for table in ("RAG_GRAPH_RELATIONSHIPS", "RAG_GRAPH_ENTITY_CHUNKS", "RAG_GRAPH_ENTITIES")
+    )
+    return f"""
+DECLARE
+    v_count NUMBER;
+BEGIN
+{drops}
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ARTIFACT_LAYERS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DELETE FROM rag_artifact_layers WHERE layer_kind = ''graph''';
+        SELECT COUNT(*) INTO v_count FROM user_constraints
+        WHERE table_name = 'RAG_ARTIFACT_LAYERS'
+            AND constraint_name = 'RAG_ARTIFACT_LAYERS_KIND_CK';
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE
+                'ALTER TABLE rag_artifact_layers DROP CONSTRAINT rag_artifact_layers_kind_ck';
+        END IF;
+        EXECUTE IMMEDIATE 'ALTER TABLE rag_artifact_layers ADD CONSTRAINT '
+            || 'rag_artifact_layers_kind_ck '
+            || 'CHECK (layer_kind IN (''metadata'', ''navigation''))';
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions WHERE permission_code = ''menu.settings_graph''';
+    END IF;
+END;
+/
+""".strip()
 
 
 def retire_guardrail_columns_sql() -> str:

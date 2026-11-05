@@ -39,7 +39,7 @@ chunk_set_id  = hash(source_sha256, preprocess, parser, chunking…) # 既存の
 
 - 不変条件: **chunk_set の preprocess+parser から extraction_id が一意に決まる**
   (chunk_set_id ⊃ extraction_id の入力)。chunk_set は「自分の親抽出」を計算可能。
-- 派生層(metadata/graph/nav)の keying は変更不要(chunk_set_id に重ねる現行のまま)。
+- 派生層(metadata/nav)の keying は変更不要(chunk_set_id に重ねる現行のまま)。
   ただし将来 metadata(field 抽出)が抽出由来なら extraction 層へ寄せる余地あり(別件)。
 
 ## 4. ストレージ
@@ -150,5 +150,5 @@ reconcile(plan)                                              # extraction/chunk_
 ## 13. 非ゴール(この #6 では扱わない)
 
 - routed 配信(別件・要 Router 新設)。
-- graph/nav dedup(moot)。
+- nav dedup(moot)。
 - 派生層 keying の抽出層への寄せ替え(metadata field 抽出が抽出由来なら別件で検討)。

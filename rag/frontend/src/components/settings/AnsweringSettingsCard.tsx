@@ -69,7 +69,6 @@ function formFromSettings(settings: AnsweringSettingsData): AnsweringDraft {
     screen_linking_enabled: settings.screen_linking_enabled,
     request_coverage_retrieval_enabled: settings.request_coverage_retrieval_enabled,
     auto_field_filter_enabled: settings.auto_field_filter_enabled,
-    graph_expansion_enabled: settings.graph_expansion_enabled,
     entity_expansion_enabled: settings.entity_expansion_enabled,
     entity_expansion_max_chunks: settings.entity_expansion_max_chunks,
     section_expansion_enabled: settings.section_expansion_enabled,
@@ -206,14 +205,6 @@ function AnsweringForm({ saved }: { saved: AnsweringSettingsData }) {
               onValueChange={(value) => update({ entity_expansion_max_chunks: Number(value) })} />
           </FormGrid> : null}
         </div>
-        <SwitchRow
-          id="answering-graph-expansion"
-          label={t("settings.answering.graphExpansion")}
-          description={t("settings.answering.graphExpansionHint")}
-          checked={form.graph_expansion_enabled}
-          disabled={disabled}
-          onChange={(checked) => update({ graph_expansion_enabled: checked })}
-        />
         <SwitchRow
           id="answering-screen-linking"
           label={t("settings.answering.screenLinking")}
