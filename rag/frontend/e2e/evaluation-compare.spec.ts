@@ -319,7 +319,6 @@ test("比べないときは比べる表とタブを出さず、下書きは使�
   expect((payload.cases as Record<string, unknown>[])[0]).not.toHaveProperty("required_conditions");
   await expect(page.getByTestId("evaluation-perspective-retrieval")).toBeVisible();
   await expect(page.getByTestId("evaluation-compare-table")).toHaveCount(0);
-  // ページのタブ（評価の実行 / 判定の校正。#3578）のほかに、比べる結果のタブは出さない。
-  await expect(page.getByRole("tab")).toHaveCount(2);
-  await expect(page.getByRole("tab", { name: "評価の実行" })).toHaveAttribute("aria-selected", "true");
+  // 比べる結果のタブは出さない。
+  await expect(page.getByRole("tab")).toHaveCount(0);
 });

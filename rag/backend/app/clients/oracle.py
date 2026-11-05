@@ -15841,7 +15841,7 @@ CREATE TABLE {table_name} (
     started_at              TIMESTAMP WITH TIME ZONE,
     finished_at             TIMESTAMP WITH TIME ZONE,
     updated_at              TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
-    CONSTRAINT {table_name}_kind_ck CHECK (kind IN ('run', 'calibration')),
+    CONSTRAINT {table_name}_kind_ck CHECK (kind IN ('run')),
     CONSTRAINT {table_name}_status_ck
         CHECK (status IN ('RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'))
 );

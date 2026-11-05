@@ -483,7 +483,7 @@ def test_label_import_rejects_mismatched_or_malformed_workbooks(
 
 
 def test_label_set_fields_match_shared_contract() -> None:
-    """LabelSet の形は platform の共有の名前と同じ（RAG の判定の校正の画面と往復する。#3578）。"""
+    """LabelSet の形は platform の共有の名前と同じ（#3578）。"""
     from pr_evaluation_scoring.labeling import LABEL_SET_FIELDS, LABEL_SET_ITEM_FIELDS
 
     from pr_suite_evaluation.judge.calibration import LabeledItem

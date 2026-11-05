@@ -136,7 +136,6 @@ def test_oracle_schema_manifest_is_deterministic() -> None:
         "feedback_details",
         "evaluation_artifacts",
         "evaluation_jobs",
-        "evaluation_calibration",
         "role_access",
     ]
     assert all(section["statement_count"] > 0 for section in manifest["sections"])
@@ -410,7 +409,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
         assert f"table_name = '{table}'" in graph_migration
         assert f"'DROP TABLE {table.lower()} CASCADE CONSTRAINTS PURGE'" in graph_migration
     # 文書構造索引（#159）の表・派生層の行・メニュー権限を、あるときだけ消す（冪等）。
-    retire_graph = sql.split("-- migration: 20261105_001_retire_document_graph", 1)[1]
+    retire_graph = sql.split("-- migration: 20261106_001_retire_document_graph", 1)[1]
     for table in ("RAG_GRAPH_RELATIONSHIPS", "RAG_GRAPH_ENTITY_CHUNKS", "RAG_GRAPH_ENTITIES"):
         assert f"table_name = '{table}'" in retire_graph
         assert f"'DROP TABLE {table.lower()} CASCADE CONSTRAINTS PURGE'" in retire_graph
@@ -507,7 +506,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 128
+    assert len(statements) == 129
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -525,7 +524,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261031_002"
+    assert manifest["migration_artifact_version"] == "20261106_001"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -614,7 +613,8 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261031_001_retire_appearance_permission",
         "20261031_002_embedding_dimensions_1024",
         "20261101_001_retire_guardrail_columns",
-        "20261105_001_retire_document_graph",
+        "20261105_001_retire_evaluation_calibration",
+        "20261106_001_retire_document_graph",
     ]
 
 
@@ -746,28 +746,44 @@ def test_migration_artifact_separates_unterminated_sql_from_plsql() -> None:
     assert statements[1].endswith("END;")
 
 
-def test_oracle_schema_migration_sql_adds_evaluation_calibration() -> None:
-    """判定の校正の表と索引は無いときだけ作り、job の kind に calibration を足す（#3578）。"""
+def test_retired_evaluation_calibration_keeps_applied_checksums() -> None:
+    """判定の校正を消しても、適用済みの旧 migration の checksum は変えない（#158）。"""
+    checksums = {
+        migration["name"]: migration["sha256"]
+        for migration in oracle_schema.oracle_schema_migration_manifest()["migrations"]
+    }
+    assert (
+        checksums["20261026_001_evaluation_calibration"]
+        == "d7e64a9fa6dff654e76a85c2205a9dab1b2aecb16eebfae12c986de7be7b389d"
+    )
+    assert (
+        checksums["20261026_002_evaluation_job_calibration_kind"]
+        == "84f9d16a11369d45caf734c59d24a1a7af4652ca4e759de4acc1713ce70057a3"
+    )
+
+
+def test_oracle_schema_migration_sql_retires_evaluation_calibration() -> None:
+    """判定の校正の表・校正の job・権限の行だけを消し、job の kind を run に戻す（#158）。"""
     sql = oracle_schema.oracle_schema_migration_sql()
-    tables = sql.split("-- migration: 20261026_001_evaluation_calibration", 1)[1].split(
+    retire = sql.split("-- migration: 20261105_001_retire_evaluation_calibration", 1)[1].split(
         "-- migration: ", 1
     )[0]
     for table in (
-        "RAG_EVALUATION_LABEL_SETS",
-        "RAG_EVALUATION_LABEL_ITEMS",
-        "RAG_EVALUATION_LABELS",
         "RAG_EVALUATION_CALIBRATIONS",
+        "RAG_EVALUATION_LABELS",
+        "RAG_EVALUATION_LABEL_ITEMS",
+        "RAG_EVALUATION_LABEL_SETS",
     ):
-        assert f"table_name = '{table}'" in tables
-    assert "index_name = 'RAG_EVALUATION_LABELS_ANNOTATOR_IDX'" in tables
-    assert "DROP" not in tables
-    assert "DELETE FROM" not in tables
-    kind = sql.split("-- migration: 20261026_002_evaluation_job_calibration_kind", 1)[1].split(
-        "-- migration: ", 1
-    )[0]
-    assert "constraint_name = 'RAG_EVALUATION_JOBS_KIND_CK'" in kind
-    assert "'CHECK (kind IN (''run'', ''calibration''))'" in kind
-    assert "DELETE" not in kind
+        assert f"'{table}'" in retire
+    assert "'DROP TABLE ' || item.table_name || ' CASCADE CONSTRAINTS PURGE'" in retire
+    assert "DELETE FROM rag_evaluation_jobs WHERE kind = ''calibration''" in retire
+    assert "'CHECK (kind IN (''run''))'" in retire
+    assert "WHERE permission_code = ''rag.evaluation_calibration.manage''" in retire
+    # 新規の DB には表を作らず、job の kind は run だけ。
+    base = oracle_schema.oracle_schema_sql()
+    assert "rag_evaluation_label" not in base
+    assert "rag_evaluation_calibrations" not in base
+    assert "CHECK (kind IN ('run'))" in base
 
 
 def test_fresh_base_contains_release_tables_and_all_artifact_provenance_columns() -> None:

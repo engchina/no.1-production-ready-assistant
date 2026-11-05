@@ -33,9 +33,8 @@ for (const viewport of [
       await page.goto("/evaluation");
 
       await expect(page.getByRole("heading", { name: "品質評価", level: 1 })).toBeVisible();
-      // 評価の実行と判定の校正（#3578）のタブ。既定は評価の実行。
-      await expect(page.getByRole("tab", { name: "評価の実行" })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("tab", { name: "判定の校正" })).toHaveAttribute("aria-selected", "false");
+      // 品質評価は評価の実行だけで、ページのタブは無い。
+      await expect(page.getByRole("tab")).toHaveCount(0);
       // 評価の基準は表示だけ（#2065）。選択欄・ラベルは無く、設定の既定と閾値と設定へのリンクを出す。
       const suite = page.getByTestId("evaluation-suite");
       await expect(suite.getByRole("combobox")).toHaveCount(0);

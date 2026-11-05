@@ -1,16 +1,16 @@
 """人手の判定（ラベル）を集める部品（#3418・#2577・#3578）。
 
 評価器（LLM による判定）を校正する人手の判定の、記入の項目の区分・誤りの型と目標・記入者の間の
-一致・判定の揺れを、suite の `label-template` / `label-import` / `calibrate` と RAG の判定の校正の
-画面で共有する。人の判定はコードで作らない（ここは区分の決め方と一致の集計だけ）。
+一致・判定の揺れを、suite の `label-template` / `label-import` / `calibrate` で
+使う。人の判定はコードで作らない（ここは区分の決め方と一致の集計だけ）。
 
 - `assign_splits`: 単位（ケース）ごとの dev / holdout。層（category）の中を sha256 の順に並べ、
   先頭の `1 - holdout_ratio` を dev にする（決定的）。
 - `ERROR_TYPES`: #2577 の判定器の誤りの型と、誤合格・誤不合格を分ける対照（holdout の目標の件数）。
 - `agreed_label` / `pairwise_agreement`: 記入者の間の一致（全員一致のラベル・組ごとの Cohen の κ）。
 - `label_variance`: 同じ項目を複数回判定したときの、回の間でラベルが変わった項目の率。
-- `LABEL_SET_FIELDS` / `LABEL_SET_ITEM_FIELDS`: 人手の判定の JSON（LabelSet）の項目の名前（suite と
-  RAG が同じ形を読み書きすることをテストで確かめる）。
+- `LABEL_SET_FIELDS` / `LABEL_SET_ITEM_FIELDS`: 人手の判定の JSON（LabelSet）の項目の名前（suite が
+  同じ形を読み書きすることをテストで確かめる）。
 """
 
 from __future__ import annotations

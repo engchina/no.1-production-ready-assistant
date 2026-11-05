@@ -211,7 +211,7 @@ readiness の確認は `/api/ready` を使う。`enterprise_ai`、`genai`、`ora
 
 文書と章・節・表・図の見出しを原文の断片と結び付ける「文書構造索引」を削除した。設定の「文書構造索引」、ナレッジベースの「文書構造グラフ」、検索方法の「文書構造による検索拡張」、処理レシピの上書き、取込の索引の構築、回答の検索での利用が無くなる。実体・別名索引は変わらない。
 
-- **migration `20261105_001_retire_document_graph` は承認が要る**（CLI の `--allow-destructive`・画面の確認ダイアログ。下の「共通の注意」）。表 `rag_graph_entities`・`rag_graph_relationships`・`rag_graph_entity_chunks` を削除し、`rag_artifact_layers` の `layer_kind = 'graph'` の行とメニュー権限 `menu.settings_graph` の行を消す。どの表も文書から作れた派生データで、文書・chunk・実体の索引は消えない。
+- **migration `20261106_001_retire_document_graph` は承認が要る**（CLI の `--allow-destructive`・画面の確認ダイアログ。下の「共通の注意」）。表 `rag_graph_entities`・`rag_graph_relationships`・`rag_graph_entity_chunks` を削除し、`rag_artifact_layers` の `layer_kind = 'graph'` の行とメニュー権限 `menu.settings_graph` の行を消す。どの表も文書から作れた派生データで、文書・chunk・実体の索引は消えない。
 - **設定**: `backend/.env` に残った `RAG_GRAPH_PROFILE`・`RAG_GRAPH_EXPANSION_ENABLED`・`RAG_GRAPH_EXPANSION_MAX_CHUNKS` は読まない（消してよい）。文書・文書レシピ・ジョブに保存した `graph_profile` と、検索・回答プロファイルに保存した `graph_expansion_*` は読み込むときに捨て、次の保存で消える。
 - **回答**: 検索拡張を有効にしていた環境では、足していた根拠が無くなるため、回答の根拠が変わることがある。
 - **順序**: 新しい版のコードは表を読まないので、backend の更新と migration の順序は問わない。
@@ -1948,6 +1948,12 @@ OCI Guardrails の安全チェックと移行の CLI（`app.rag.guardrail_settin
 
 公開する API / MCP の省略時の値は現在の設定から生成し、静的な契約ファイルは標準の設定 50 で照合します。別製品や外部クライアントが件数を明示して呼ぶ場合、その値を変更しません。不正な環境値は Settings の検証エラーです。稼働中の `.env` 再読込に失敗したときは、既存の設定更新の規則どおり警告を記録し、最後に成功した設定を保ちます。
 
+
+### 判定の校正の退役（#158）
+
+品質評価の判定の校正（タブ・API・権限）は廃止した。新規の schema の正本は `RAG_EVALUATION_LABEL_SETS`・`RAG_EVALUATION_LABEL_ITEMS`・`RAG_EVALUATION_LABELS`・`RAG_EVALUATION_CALIBRATIONS` を含まない。過去の migration は変更せず、
+`20261105_001_retire_evaluation_calibration` が 4 表と全行・索引、校正の job（`RAG_EVALUATION_JOBS` の `kind = 'calibration'` の行）、権限 `rag.evaluation_calibration.manage` の行を削除する。品質評価の実行の job と結果は残る。
+データを消すので、現在の schema 管理の `initialize --allow-destructive` で明示的に適用する。人手の判定が必要な環境は先に同表を export する。
 
 ### 質問履歴と候補の退役（#3762）
 
