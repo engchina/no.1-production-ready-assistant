@@ -63,7 +63,7 @@ def _pool(fake: _FakeOracledb, **kwargs: Any) -> SharedOraclePool:
     return SharedOraclePool(name="test", oracledb_loader=lambda: fake, **kwargs)
 
 
-KWARGS = {"user": "APP", "password": "secret", "dsn": "db_high", "wallet_location": "/w"}
+KWARGS = {"user": "APP", "password": "secret", "dsn": "db.example.com:1521/app_svc"}
 
 
 def test_pool_is_created_once_and_reused() -> None:
@@ -77,7 +77,7 @@ def test_pool_is_created_once_and_reused() -> None:
     assert len(fake.pools) == 1
     created = fake.pools[0].kwargs
     assert created["user"] == "APP"
-    assert created["wallet_location"] == "/w"
+    assert created["dsn"] == KWARGS["dsn"]
     assert (created["min"], created["max"], created["increment"]) == (1, 6, 1)
     assert created["getmode"] == _FakeOracledb.POOL_GETMODE_TIMEDWAIT
     assert created["wait_timeout"] > 0
@@ -109,7 +109,7 @@ def test_busy_pool_is_closed_later_and_on_shutdown() -> None:
     fake.busy_next = False
 
     # 貸し出し中の接続がある古い pool は、処理を止めずに後で閉じる。
-    with pool.connection({**KWARGS, "dsn": "other_high"}):
+    with pool.connection({**KWARGS, "dsn": "db.example.com:1521/other_svc"}):
         pass
     assert fake.pools[0].closed == []
 

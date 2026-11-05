@@ -105,35 +105,6 @@ describe("parseAnswerDiagnostics", () => {
     ).toEqual({ question: "Q", answer: "" });
   });
 
-  // 関係情報で加えた根拠（Issue 2055）。
-  it("関係情報で加えた根拠の数と使った見出しを読む", () => {
-    expect(
-      parseAnswerDiagnostics({
-        graph_expansion: {
-          added_count: 3,
-          entities: [
-            { entity: "手順書 > 第 2 章 作業の準備", added_count: 2 },
-            { entity: "", added_count: 1 },
-            { entity: "手順書 > 第 4 章 作業の記録", added_count: 1 },
-          ],
-        },
-      })?.graphExpansion,
-    ).toEqual({
-      status: "completed",
-      graphAvailable: null,
-      plannedCount: 3,
-      skippedExistingCount: 0,
-      addedCount: 3,
-      entities: [
-        { name: "手順書 > 第 2 章 作業の準備", addedCount: 2 },
-        { name: "手順書 > 第 4 章 作業の記録", addedCount: 1 },
-      ],
-    });
-    // 0 件でも実行の記録は残し、記録のない回答と区別する。
-    expect(parseAnswerDiagnostics({ graph_expansion: { added_count: 0 } })?.graphExpansion).toMatchObject({ addedCount: 0, status: "completed" });
-    expect(parseAnswerDiagnostics({})?.graphExpansion).toBeNull();
-  });
-
   it("回答フローの診断が無ければ null、信頼度を variant に写す", () => {
     expect(parseAnswerDiagnostics(null)).toBeNull();
     // モデルを持たない古い回答の記録でも壊れない。

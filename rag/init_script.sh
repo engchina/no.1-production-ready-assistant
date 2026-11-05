@@ -13,7 +13,7 @@
 # ADB の DDL は持たない。RAG の system schema はアプリの CLI（app.rag.system_schema_cli）で適用する。
 # 3 製品は 1 台の Compute にセットで配備する（#1316。単独では配備しない）。platform/deploy/suite-init.sh が呼び、
 # reverse proxy の site は書かない（#19）。frontend は FRONTEND_BASE_PATH（/rag/）を base に build し、
-# プロセスは NL2SQL / Agent と同じユーザー（SERVICE_USER=opc。suite が渡す）で動かす（共通の platform/.env・Wallet を共有するため）。
+# プロセスは NL2SQL / Agent と同じユーザー（SERVICE_USER=opc。suite が渡す）で動かす（共通の platform/.env を共有するため）。
 set -euo pipefail
 
 if [ "${RAG_INIT_TEST_MODE:-false}" != "true" ]; then
@@ -50,7 +50,6 @@ FRONTEND_DIR="${APP_REPO_DIR}/frontend"
 DATA_DIR="${DATA_DIR:-/u01/data/production-ready-rag}"
 # サービス管理が起動 / 再起動の前に書く、マイクロサービスの実行用 env（backend の RAG_SERVICE_RUNTIME_ENV_FILE の既定値）。
 SERVICE_RUNTIME_ENV_FILE="${BACKEND_DIR}/service-runtime.env"
-WALLET_DIR="${APP_ROOT}/wallet"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${PROPS_DIR}/backend.env}"
@@ -284,7 +283,7 @@ service_os_packages() {
 
 # RAG が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。gcc・make は wheel の
 # 無い Python の依存を build するため。curl は image にある。
-BASE_SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl sudo tar unzip)
+BASE_SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl sudo tar)
 
 # 入れる package（基本のものと、配備する前処理 / parser が使うもの）。1 行に 1 つ。
 system_packages() {
@@ -633,16 +632,6 @@ install_runtime_env() {
   fi
 }
 
-install_wallet() {
-  log "Installing wallet for ${SERVICE_USER}."
-  rm -rf -- "${WALLET_DIR:?}"
-  install -d -m 0700 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${WALLET_DIR}"
-  unzip -oq "${PROPS_DIR}/wallet.zip" -d "${WALLET_DIR}"
-  chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${WALLET_DIR}"
-  find "${WALLET_DIR}" -type d -exec chmod 0700 {} \;
-  find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;
-}
-
 # backend と前処理 / parser の venv をサービスごとに作る（uv の lock どおり。Python 3.12）。
 install_service_venvs() {
   local service dir model_command
@@ -891,7 +880,6 @@ main() {
   prepare_filesystem
   migrate_from_docker_compose
   install_runtime_env
-  install_wallet
   install_service_venvs
   migrate_saved_settings
   initialize_database_schema

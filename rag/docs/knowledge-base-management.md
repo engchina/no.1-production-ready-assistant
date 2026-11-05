@@ -78,7 +78,6 @@
 - ナレッジベースごとの外部 vector store。
 - 人手承認ゲート付きの取込ワークフロー。
 - ACL / RBAC の完全なユーザー管理 UI。
-- GraphRAG 専用のグラフ管理 UI。
 
 これらは将来拡張として扱う。
 
@@ -772,11 +771,10 @@ Local store も Oracle adapter と同じ契約で更新し、単体テストが�
 実装（`frontend/src/components/knowledge-bases/`）:
 
 - `KnowledgeBaseManagementClient.tsx`: 一覧（検索・状態の絞り込み・ページング）と作成フォーム
-- `KnowledgeBaseDetailClient.tsx`: 詳細（所属文書の追加・解除、アーカイブ、検索テスト、関係情報）
+- `KnowledgeBaseDetailClient.tsx`: 詳細（所属文書の追加・解除、アーカイブ、検索テスト）
 - `KnowledgeBaseScopePicker.tsx` / `KnowledgeBaseMultiSelect.tsx`: 評価・検索・回答プロファイル・アップロード・文書詳細で使う複数選択と、文書インデックスの絞り込みの選択肢・文言（共有の `SearchableMultiSelect` / `SearchableSelectField`。200 件以下は画面側、超えるとサーバー側の検索。#302 / #578）
 - `KnowledgeBaseStatusPill.tsx`: 状態のバッジ（一覧・詳細で共有）
 - `KnowledgeBaseSearchTestPanel.tsx`: 詳細の検索テスト
-- `KnowledgeBaseGraphView.tsx`: 関係情報の読み取り専用の図（高度な診断。取込パイプラインの図は #2113 で削除）
 
 既存変更:
 

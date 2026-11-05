@@ -31,7 +31,6 @@ describe("選択中レシピの設定の項目と並び順", () => {
       "文書分割",
       "Chunk 後に Embedding / 索引へ進む",
       "実体・別名索引",
-      "文書構造索引の構築",
     ]);
   });
 
@@ -56,7 +55,7 @@ describe("選択中レシピの設定の項目と並び順", () => {
       "auto_parse_after_preprocess_enabled",
       "auto_chunk_after_extract_enabled",
       "auto_index_after_chunk_enabled",
-      "graph_profile",
+      "entity_index_enabled",
     ]);
   });
 
@@ -87,7 +86,6 @@ describe("グローバル設定を開くリンク", () => {
       auto_index_after_chunk_enabled: "/settings/pipeline#pipeline-gate-auto-index",
       // 実体・別名索引も全体の既定を設定画面で選ぶ。
       entity_index_enabled: "/settings/entity-index",
-      graph_profile: "/settings/graph",
     });
   });
 });

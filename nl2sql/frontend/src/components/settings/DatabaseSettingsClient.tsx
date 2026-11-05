@@ -19,7 +19,6 @@ export function DatabaseSettingsClient() {
       errorMessage={(error) =>
         error instanceof ApiError ? error.message : undefined
       }
-      connectionSecurity
       onDatabaseChanged={() =>
         queryClient.invalidateQueries({ queryKey: queryKeys.databaseStatus })
       }
@@ -31,7 +30,7 @@ export function DatabaseSettingsClient() {
           testId="settings-database-loading"
         >
           <Skeleton className="h-20 w-full rounded-lg" />
-          <Skeleton className="h-[33rem] w-full rounded-lg" />
+          <Skeleton className="h-[28rem] w-full rounded-lg" />
         </TimedLoadingState>
       }
     />

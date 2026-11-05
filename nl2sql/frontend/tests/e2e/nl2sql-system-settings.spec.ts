@@ -2,7 +2,6 @@ import { expectLocalUiFonts } from "./_helpers/local-fonts";
 import { expect, test, type Locator, type Page, type Route } from "./_helpers/test";
 import { openSidebarNav } from "./_helpers/sidebar-nav";
 import { mockDatabaseGateReady } from "./_helpers/database-gate";
-import { dropFiles } from "./_helpers/file-dropzone";
 import { expectLargeActionButton } from "./_helpers/action-button";
 
 function settingsEnvelope(data: unknown) {
@@ -16,15 +15,10 @@ function settingsEnvelope(data: unknown) {
 function databaseSettingsFixture(overrides: Record<string, unknown> = {}) {
   return {
     user: "NL2SQL_APP",
-    dsn: "nl2sqldb_high",
+    dsn: "127.0.0.1:1525/nl2sqldb_low",
     driver_mode: "thin",
-    connection_security: "wallet_mtls",
     client_lib_dir: "",
-    wallet_dir: "/u01/aipoc/wallet",
-    wallet_uploaded: true,
-    available_services: ["nl2sqldb_high", "nl2sqldb_low"],
     has_password: true,
-    has_wallet_password: false,
     readiness: "ok",
     embedding_dimension: 1024,
     vector_column: "VECTOR(1024, FLOAT32)",
@@ -210,9 +204,6 @@ async function mockNl2sqlSettingsApi(page: Page) {
       error_type: null,
     })
   );
-  await page.route("**/api/settings/database/wallet", (route) =>
-    fulfillJson(route, databaseSettings)
-  );
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -365,23 +356,9 @@ async function expectNoExcessBottomWhitespace(page: Page) {
   expect(metrics.bottomWhitespace).toBeLessThanOrEqual(96);
 }
 
-async function expectWalletAboveServiceDsn(page: Page) {
-  const wallet = page.getByTestId("oracle-wallet-upload");
-  const service = page.getByRole("combobox", { name: /サービス名 \/ DSN/ });
-
-  await expect(wallet).toBeVisible();
-  await expect(service).toBeVisible();
-
-  const [walletBox, serviceBox] = await Promise.all([
-    wallet.boundingBox(),
-    service.boundingBox(),
-  ]);
-
-  if (!walletBox || !serviceBox) {
-    throw new Error("データベース設定フォームの Wallet / DSN 位置を取得できません。");
-  }
-
-  expect(walletBox.y).toBeLessThan(serviceBox.y);
+async function expectDsnFieldVisible(page: Page) {
+  await expect(page.locator("#oracle-dsn")).toBeVisible();
+  await expect(page.getByText(/127\.0\.0\.1:1525\/myatp_low\.adb\.oraclecloud\.com/)).toBeVisible();
 }
 
 async function expectNoAdbManagementPanel(page: Page) {
@@ -460,7 +437,7 @@ test("NL2SQL のシステム設定画面を表示できる", { tag: "@responsive
   await expect(page.getByRole("heading", { name: "データベース設定" }).first()).toBeVisible();
   await expect(page.getByLabel("データベースユーザー")).toBeVisible();
   await expectNoAdbManagementPanel(page);
-  await expectWalletAboveServiceDsn(page);
+  await expectDsnFieldVisible(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
   const databaseSavedSecretBadgeStyle = await getSavedSecretBadgeStyle(page, "oracle-password");
   expect(databaseSavedSecretBadgeStyle).toEqual(modelSavedSecretBadgeStyle);
@@ -630,7 +607,7 @@ test("システム設定の失敗と API エラーを共通 danger パネルで�
   await expectNoHorizontalOverflow(page);
 });
 
-test("データベース設定は Wallet ZIP の下にサービス名を置き、保存済みパスワードを明示表示する", { tag: "@responsive" }, async ({
+test("データベース設定は DSN の欄を出し、保存済みパスワードを明示表示する", { tag: "@responsive" }, async ({
   page,
 }) => {
   let revealCount = 0;
@@ -643,7 +620,7 @@ test("データベース設定は Wallet ZIP の下にサービス名を置き�
   await page.goto("/settings/database");
   await expect.poll(() => revealCount).toBe(0);
 
-  await expectWalletAboveServiceDsn(page);
+  await expectDsnFieldVisible(page);
   await expectNoAdbManagementPanel(page);
 
   const password = page.getByLabel("データベースパスワード");
@@ -676,64 +653,8 @@ test("データベース設定は Wallet ZIP の下にサービス名を置き�
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expectNoAdbManagementPanel(page);
-  await expectWalletAboveServiceDsn(page);
+  await expectDsnFieldVisible(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("データベース設定は Wallet パスワードを保存し、保存済み値を削除できる", async ({
-  page,
-}) => {
-  const savedRequests: Array<Record<string, unknown>> = [];
-  await page.unroute("**/api/settings/database");
-  await page.route("**/api/settings/database", async (route) => {
-    if (route.request().method() === "PATCH") {
-      savedRequests.push(route.request().postDataJSON() as Record<string, unknown>);
-      await fulfillJson(route, databaseSettingsFixture({ has_wallet_password: true }));
-      return;
-    }
-    await fulfillJson(route, databaseSettingsFixture({ has_wallet_password: true }));
-  });
-
-  await page.goto("/settings/database");
-
-  const walletPassword = page.getByLabel("Wallet パスワード", { exact: true });
-  await expect(walletPassword).toBeVisible();
-  await expect(walletPassword).toHaveValue("");
-  await expect(walletPassword).toHaveAttribute("type", "password");
-  const walletSavedSecretBadgeStyle = await getSavedSecretBadgeStyle(
-    page,
-    "oracle-wallet-password"
-  );
-  expect(walletSavedSecretBadgeStyle.text).toBe("保存済み");
-  await expect(
-    page.getByText("保存済み Wallet パスワードがあります。", { exact: false })
-  ).toBeVisible();
-
-  await walletPassword.fill("wallet-secret-fixture");
-  await page.getByRole("button", { name: "Wallet パスワードを表示", exact: true }).click();
-  await expect(walletPassword).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "Wallet パスワードを隠す", exact: true }).click();
-  await expect(walletPassword).toHaveAttribute("type", "password");
-
-  await page.getByRole("button", { name: "DB設定を保存" }).click();
-  await expect.poll(() => savedRequests.length).toBe(1);
-  expect(savedRequests[0]).toMatchObject({
-    connection_security: "wallet_mtls",
-    wallet_password: "wallet-secret-fixture",
-  });
-  expect(savedRequests[0]).not.toHaveProperty("clear_wallet_password");
-
-  const clearWalletPassword = page.getByLabel("保存済み Wallet パスワードを削除する");
-  await clearWalletPassword.check();
-  await expect(walletPassword).toBeDisabled();
-  await page.getByRole("button", { name: "DB設定を保存" }).click();
-  await expect.poll(() => savedRequests.length).toBe(2);
-  expect(savedRequests[1]).toMatchObject({
-    connection_security: "wallet_mtls",
-    clear_wallet_password: true,
-  });
-  expect(savedRequests[1]).not.toHaveProperty("wallet_password");
   await expectNoHorizontalOverflow(page);
 });
 
@@ -789,27 +710,6 @@ test("DB パスワード表示ボタンの取得中 icon は上下に浮動し�
   await expectNoHorizontalOverflow(page);
 });
 
-test("データベース設定は接続セキュリティで Wallet mTLS と Walletless TLS を切り替える", async ({
-  page,
-}) => {
-  await page.goto("/settings/database");
-
-  const securityMode = page.getByRole("combobox", { name: "接続セキュリティ" });
-  await expect(securityMode).toBeVisible();
-  await expect(securityMode).toContainText("Wallet mTLS");
-  await expect(page.getByTestId("oracle-wallet-upload")).toBeVisible();
-  await expect(page.getByLabel("Wallet パスワード", { exact: true })).toBeVisible();
-
-  await securityMode.click();
-  await page.getByRole("option", { name: /Walletless TLS/ }).click();
-
-  await expect(page.getByText("Walletless TLS では Wallet", { exact: false })).toBeVisible();
-  await expect(page.getByTestId("oracle-wallet-upload")).toHaveCount(0);
-  await expect(page.getByLabel("Wallet パスワード", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("接続 DSN")).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-});
-
 test("アップロード保存先は右側情報カラムを表示しない", async ({
   page,
 }) => {
@@ -842,7 +742,6 @@ test("データベース設定は右側情報カラムを表示しない", { tag
       databaseSettingsFixture({
         driver_mode: "thin",
         client_lib_dir: "",
-        wallet_dir: "/u01/aipoc/wallet",
       })
     )
   );
@@ -851,42 +750,12 @@ test("データベース設定は右側情報カラムを表示しない", { tag
 
   await expect(page.getByRole("heading", { name: "データベース設定" }).first()).toBeVisible();
   await expectNoAdbManagementPanel(page);
-  await expectWalletAboveServiceDsn(page);
+  await expectDsnFieldVisible(page);
   await expectDatabaseSupplementalPanelsAbsent(page);
   await expectNoHorizontalOverflow(page);
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expectDatabaseSupplementalPanelsAbsent(page);
-  await expectNoHorizontalOverflow(page);
-});
-
-test("Wallet ZIP をドラッグ＆ドロップで即時アップロードできる", { tag: "@responsive" }, async ({
-  page,
-}) => {
-  let walletUploadCount = 0;
-  let walletUploadBody = "";
-
-  await page.unroute("**/api/settings/database/wallet");
-  await page.route("**/api/settings/database/wallet", async (route) => {
-    walletUploadCount += 1;
-    walletUploadBody = route.request().postDataBuffer()?.toString("utf8") ?? "";
-    await fulfillJson(route, databaseSettingsFixture());
-  });
-
-  await page.goto("/settings/database");
-  const walletInput = page.getByTestId("oracle-wallet-upload-input");
-  await walletInput.focus();
-  await expect(walletInput).toBeFocused();
-  await dropFiles(page, page.getByTestId("oracle-wallet-upload-dropzone"), [
-    {
-      name: "wallet.zip",
-      type: "application/zip",
-      content: "PK\u0003\u0004test",
-    },
-  ]);
-  await expect(page.getByText("Wallet ZIP をアップロードしました: wallet.zip")).toBeVisible();
-  await expect.poll(() => walletUploadCount).toBe(1);
-  expect(walletUploadBody).toContain('filename="wallet.zip"');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -945,7 +814,7 @@ test("非正常な readiness 値も設定画面には表示しない", async ({ 
       readiness: "error",
       message: "接続設定を確認してください。",
       elapsed_ms: 3,
-      troubleshooting: ["DSN と Wallet を確認してください。"],
+      troubleshooting: ["DSN を確認してください。"],
       details: { network_call: false },
       checked_at: "2026-06-21T10:00:00.000Z",
       error_type: "InvalidConfiguration",
@@ -1543,7 +1412,7 @@ test("モデルのテスト中は編集・削除・別テスト・保存を止�
   await expectNoHorizontalOverflow(page);
 });
 
-test("Wallet 更新は未保存 DB ユーザーとパスワードを保持し、接続テスト中は入力を固定する", async ({ page }) => {
+test("接続テスト中は入力を固定し、未保存の DB ユーザーとパスワードを保持する", async ({ page }) => {
   const gate = createRequestGate();
   let tests = 0;
   await page.route("**/api/settings/database/test", async (route) => {
@@ -1557,12 +1426,6 @@ test("Wallet 更新は未保存 DB ユーザーとパスワードを保持し、
   const password = page.getByLabel("データベースパスワード", { exact: true });
   await user.fill("REVIEW_DRAFT_USER");
   await password.fill("new-draft-secret-fixture");
-  await page.getByTestId("oracle-wallet-upload").locator('input[type="file"]').setInputFiles({
-    name: "review.zip", mimeType: "application/zip", buffer: Buffer.from("fixture-wallet"),
-  });
-  await expect(page.getByText(/review.zip.*アップロード|Wallet.*アップロードしました/)).toBeVisible();
-  await expect(user).toHaveValue("REVIEW_DRAFT_USER");
-  await expect(password).toHaveValue("new-draft-secret-fixture");
   await page.getByRole("button", { name: "DB接続テスト", exact: true }).click();
   await expect.poll(() => tests).toBe(1);
   await expect(user).toBeDisabled();
@@ -1570,6 +1433,8 @@ test("Wallet 更新は未保存 DB ユーザーとパスワードを保持し、
   gate.release();
   await expect(page.getByText("編集済み接続の確認成功")).toBeVisible();
   await expect(user).toBeEnabled();
+  await expect(user).toHaveValue("REVIEW_DRAFT_USER");
+  await expect(password).toHaveValue("new-draft-secret-fixture");
   await user.fill("NEXT_DRAFT_USER");
   await expect(page.getByText("編集済み接続の確認成功")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);

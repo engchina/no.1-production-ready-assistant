@@ -1496,7 +1496,7 @@ def test_operation_failure_fields_probe_real_cause_of_pool_timeout(
 
     fake = _ProbeOracledb(RuntimeError("ORA-28000: The account is locked. password=hunter22"))
     monkeypatch.setattr(oracle_connect_diagnosis, "_default_oracledb_loader", lambda: fake)
-    kwargs = {"user": "APP", "password": "hunter22", "dsn": "db_high", "min": 1}
+    kwargs = {"user": "APP", "password": "hunter22", "dsn": "db.example.com:1521/app_svc", "min": 1}
 
     fields = operation_failure_fields(
         RuntimeError("DPY-4005: timed out waiting for the connection pool to return a connection"),

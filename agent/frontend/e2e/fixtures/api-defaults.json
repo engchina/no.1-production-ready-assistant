@@ -267,11 +267,7 @@
   "databaseSettings": {
     "user": "",
     "dsn": "",
-    "wallet_dir": "/u01/aipoc/instantclient_23_26/network/admin",
-    "wallet_uploaded": false,
-    "available_services": [],
     "has_password": false,
-    "has_wallet_password": false,
     "readiness": "missing",
     "embedding_dimension": 1024,
     "vector_column": "VECTOR(1024, FLOAT32)",

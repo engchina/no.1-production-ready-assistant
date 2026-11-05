@@ -33,7 +33,7 @@ describe("設定概要の配備基点", () => {
           createElement(PipelineRecipeDefaultsSection))
       );
       const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((match) => match[1]);
-      expect(hrefs).toHaveLength(11);
+      expect(hrefs).toHaveLength(10);
       expect(hrefs.every((href) => href.startsWith(`${path}/settings/`))).toBe(true);
       expect(hrefs).toContain(`${path}/settings/parser-adapters#post-parse-navigation-summary`);
       expect(hrefs).toContain(`${path}/settings/vector-index`);

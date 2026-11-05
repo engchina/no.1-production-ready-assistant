@@ -53,8 +53,6 @@ PROFILE_GLOBAL_QUERY_FIELDS = frozenset(
         "neighbor_child_count",
         "rerank_enabled",
         "auto_field_filter_enabled",
-        "graph_expansion_enabled",
-        "graph_expansion_max_chunks",
         "screen_linking_enabled",
         "request_coverage_retrieval_enabled",
         "entity_expansion_enabled",

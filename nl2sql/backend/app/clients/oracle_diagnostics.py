@@ -14,15 +14,13 @@ _DIAGNOSTICS = (
         "要求したデータベースサービスが listener に登録されていません。",
         "データベース（ADB）が起動しているか確認し、"
         "PLATFORM_ORACLE_DSN のサービス名を現在の接続文字列と"
-        "照合してください。Wallet 利用時は tnsnames.ora が対象 ADB のものか確認してください。",
+        "照合してください。",
     ),
     (
         {"ORA-01017"},
         "invalid_credentials",
         "データベースのユーザー名またはパスワードが拒否されました。",
-        "PLATFORM_ORACLE_USER と PLATFORM_ORACLE_PASSWORD を確認してください。"
-        "DB パスワードと Wallet "
-        "パスワードは別の設定です。",
+        "PLATFORM_ORACLE_USER と PLATFORM_ORACLE_PASSWORD を確認してください。",
     ),
     (
         {"ORA-28000", "ORA-28001"},
@@ -34,8 +32,7 @@ _DIAGNOSTICS = (
         {"ORA-12154", "DPY-4000"},
         "dsn_resolution_failed",
         "接続先サービス名を解決できませんでした。",
-        "PLATFORM_ORACLE_DSN と PLATFORM_ORACLE_WALLET_DIR の tnsnames.ora を確認してください。"
-        "Walletless TLS では host:port/service_name または接続記述子を指定してください。",
+        "PLATFORM_ORACLE_DSN を host:port/service_name または接続記述子で指定してください。",
     ),
     (
         {"ORA-12506"},
@@ -58,7 +55,7 @@ _DIAGNOSTICS = (
         "connection_closed",
         "データベースまたはネットワークによって接続が切断されました。",
         "DB の再起動・障害とネットワーク経路を確認してください。"
-        "接続確立時の失敗なら TLS / Wallet とサーバー側の接続設定も確認してください。",
+        "接続確立時の失敗ならサーバー側の接続設定も確認してください。",
     ),
 )
 

@@ -1,32 +1,27 @@
 """adb の挙動を保護するテスト。"""
 
-import tempfile
 import unittest
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from rag_engine.adapters.oracle.connection import connect_adb_thin, load_adb_settings, validate_mtls_wallet
+from rag_engine.adapters.oracle.connection import connect_adb_thin, load_adb_settings
 
 
 class AdbTests(unittest.TestCase):
-    def test_local_easy_connect_does_not_require_or_pass_wallet_settings(self):
-        for dsn in ("localhost:1521/FREEPDB1", "tcp://localhost:1521/FREEPDB1"):
+    def test_connect_passes_only_credentials_and_connect_settings(self):
+        for dsn in ("localhost:1521/FREEPDB1", "tcp://localhost:1521/FREEPDB1", "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)))"):
             with self.subTest(dsn=dsn):
                 settings = load_adb_settings(
                     environ={
-                        "ADB_TNS_ALIAS": dsn,
+                        "ADB_DSN": dsn,
                         "ADB_DB_USER": "admin",
                         "ADB_DB_PASSWORD": "test-only-password",
                         "ADB_CONNECT_TIMEOUT_SECONDS": "4",
                         "ADB_CONNECT_RETRY_COUNT": "2",
                         "ADB_CONNECT_RETRY_DELAY_SECONDS": "1",
                         "ADB_POOL_MAX": "0",  # 直接 connect の経路を検証する (#887)
-                        "ADB_WALLET_DIR": "/nonexistent/local-db-wallet",
-                        "ADB_WALLET_PASSWORD": "unused-wallet-password",
                     }
                 )
-                self.assertFalse(settings.uses_wallet)
                 driver = Mock()
                 result = connect_adb_thin(settings, oracledb_module=driver)
                 driver.ConnectParams.assert_called_once_with(
@@ -48,49 +43,28 @@ class AdbTests(unittest.TestCase):
                 )
                 self.assertIs(result, driver.connect.return_value)
 
-    def test_local_settings_without_wallet_password(self):
+    def test_load_adb_settings_resolves_defaults(self):
         settings = load_adb_settings(
             environ={
-                "ADB_TNS_ALIAS": "localhost:1521/FREEPDB1",
-                "ADB_DB_PASSWORD": "test-only-password",
+                "ADB_DSN": "localhost:1521/FREEPDB1",
+                "ADB_DB_PASSWORD": "db-password",
             }
         )
-        self.assertEqual(settings.wallet_password, "")
-        with self.assertRaisesRegex(RuntimeError, "ADB_DB_PASSWORD"):
-            load_adb_settings(environ={"ADB_TNS_ALIAS": "localhost:1521/FREEPDB1"})
 
-    def test_tcps_and_descriptors_keep_wallet_requirements(self):
-        for dsn in ("tcps://adb.example.test:1522/service", "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)))"):
-            with self.subTest(dsn=dsn), self.assertRaisesRegex(RuntimeError, "ADB_WALLET_PASSWORD"):
-                load_adb_settings(environ={"ADB_TNS_ALIAS": dsn, "ADB_DB_PASSWORD": "test"})
+        self.assertEqual(settings.dsn, "localhost:1521/FREEPDB1")
+        self.assertEqual(settings.db_user, "admin")
+        self.assertEqual(settings.tcp_connect_timeout, 10.0)
+        self.assertEqual(settings.connect_retry_count, 0)
+        self.assertEqual(settings.connect_retry_delay, 0)
 
-    def test_load_adb_settings_resolves_defaults(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            env_path = Path(tmp) / ".env"
-            settings = load_adb_settings(
-                env_path,
-                {
-                    "ADB_WALLET_PASSWORD": "wallet-password",
-                    "ADB_DB_PASSWORD": "db-password",
-                },
-            )
-
-            self.assertEqual(settings.db_name, "AIRAGADB")
-            self.assertEqual(settings.tns_alias, "AIRAGADB_medium")
-            self.assertEqual(settings.wallet_dir, Path(tmp) / ".wallets" / "airagadb")
-            self.assertEqual(settings.db_user, "admin")
-            self.assertEqual(settings.tcp_connect_timeout, 10.0)
-            self.assertEqual(settings.connect_retry_count, 0)
-            self.assertEqual(settings.connect_retry_delay, 0)
-
-    def test_load_adb_settings_requires_wallet_and_db_password(self):
-        with self.assertRaisesRegex(RuntimeError, "ADB_WALLET_PASSWORD"):
+    def test_load_adb_settings_requires_dsn_and_db_password(self):
+        with self.assertRaisesRegex(RuntimeError, "ADB_DSN"):
             load_adb_settings(environ={"ADB_DB_PASSWORD": "db-password"})
 
         with self.assertRaisesRegex(RuntimeError, "ADB_DB_PASSWORD"):
-            load_adb_settings(environ={"ADB_WALLET_PASSWORD": "wallet-password"})
+            load_adb_settings(environ={"ADB_DSN": "localhost:1521/FREEPDB1"})
 
-    def test_connect_adb_thin_passes_wallet_parameters(self):
+    def test_connect_adb_thin_sets_dsn_and_retry_parameters(self):
         calls = {}
 
         class FakeConnectParams:
@@ -108,39 +82,26 @@ class AdbTests(unittest.TestCase):
             connect=lambda **kwargs: calls.setdefault("connect", kwargs) or object(),
             defaults=SimpleNamespace(fetch_lobs=True),
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            wallet_dir = Path(tmp) / "wallet"
-            wallet_dir.mkdir()
-            (wallet_dir / "tnsnames.ora").write_text("AIRAGADB_medium = descriptor", encoding="utf-8")
-            (wallet_dir / "ewallet.pem").write_text("pem", encoding="utf-8")
-            settings = load_adb_settings(
-                Path(tmp) / ".env",
-                {
-                    "ADB_WALLET_DIR": "wallet",
-                    "ADB_WALLET_PASSWORD": "wallet-password",
-                    "ADB_DB_USER": "admin",
-                    "ADB_DB_PASSWORD": "db-password",
-                    "ADB_TNS_ALIAS": "AIRAGADB_medium",
-                    "ADB_CONNECT_TIMEOUT_SECONDS": "7.5",
-                    "ADB_CONNECT_RETRY_COUNT": "2",
-                    "ADB_CONNECT_RETRY_DELAY_SECONDS": "1",
-                    "ADB_POOL_MAX": "0",
-                },
-            )
-            connection = connect_adb_thin(settings, oracledb_module=fake_oracledb)
+        settings = load_adb_settings(
+            environ={
+                "ADB_DB_USER": "admin",
+                "ADB_DB_PASSWORD": "db-password",
+                "ADB_DSN": "localhost:1521/FREEPDB1",
+                "ADB_CONNECT_TIMEOUT_SECONDS": "7.5",
+                "ADB_CONNECT_RETRY_COUNT": "2",
+                "ADB_CONNECT_RETRY_DELAY_SECONDS": "1",
+                "ADB_POOL_MAX": "0",
+            }
+        )
+        connection = connect_adb_thin(settings, oracledb_module=fake_oracledb)
 
         self.assertIsNotNone(connection)
         self.assertEqual(calls["connect"]["user"], "admin")
         self.assertEqual(calls["connect"]["password"], "db-password")
         self.assertNotIn("dsn", calls["connect"])
         self.assertIsInstance(calls["connect"]["params"], FakeConnectParams)
-        self.assertEqual(calls["params_init"]["config_dir"], str(settings.wallet_dir))
-        self.assertEqual(calls["params_init"]["wallet_location"], str(settings.wallet_dir))
-        self.assertEqual(calls["params_init"]["wallet_password"], "wallet-password")
-        self.assertEqual(calls["params_init"]["tcp_connect_timeout"], 7.5)
-        self.assertEqual(calls["params_init"]["retry_count"], 2)
-        self.assertEqual(calls["params_init"]["retry_delay"], 1)
-        self.assertEqual(calls["parse_connect_string"], "AIRAGADB_medium")
+        self.assertEqual(calls["params_init"], {"tcp_connect_timeout": 7.5, "retry_count": 2, "retry_delay": 1})
+        self.assertEqual(calls["parse_connect_string"], "localhost:1521/FREEPDB1")
         self.assertEqual(calls["params_set"]["tcp_connect_timeout"], 7.5)
         self.assertEqual(calls["params_set"]["retry_count"], 2)
         self.assertEqual(calls["params_set"]["retry_delay"], 1)
@@ -176,7 +137,7 @@ class AdbTests(unittest.TestCase):
             connect=lambda **kwargs: self.fail("pool があるときは connect しない"),
             defaults=SimpleNamespace(fetch_lobs=True),
         )
-        environ = {"ADB_TNS_ALIAS": "localhost:1521/freepdb1", "ADB_DB_PASSWORD": "db-password"}
+        environ = {"ADB_DSN": "localhost:1521/freepdb1", "ADB_DB_PASSWORD": "db-password"}
         settings = load_adb_settings(environ=environ)
         self.assertEqual(settings.pool_max, 4)
         connect_adb_thin(settings, oracledb_module=fake_oracledb)
@@ -191,38 +152,6 @@ class AdbTests(unittest.TestCase):
         other = load_adb_settings(environ={**environ, "ADB_POOL_MAX": "2"})
         connect_adb_thin(other, oracledb_module=fake_oracledb)
         self.assertEqual(len(calls["create_pool"]), 2)
-
-    def test_connect_adb_thin_requires_mtls_wallet_files(self):
-        fake_oracledb = SimpleNamespace(connect=lambda **kwargs: object())
-        with tempfile.TemporaryDirectory() as tmp:
-            settings = load_adb_settings(
-                Path(tmp) / ".env",
-                {
-                    "ADB_WALLET_DIR": "wallet",
-                    "ADB_WALLET_PASSWORD": "wallet-password",
-                    "ADB_DB_PASSWORD": "db-password",
-                },
-            )
-
-            with self.assertRaisesRegex(RuntimeError, "ADB mTLS wallet is not ready"):
-                connect_adb_thin(settings, oracledb_module=fake_oracledb)
-
-    def test_validate_mtls_wallet_accepts_required_thin_wallet_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            wallet_dir = Path(tmp) / "wallet"
-            wallet_dir.mkdir()
-            (wallet_dir / "tnsnames.ora").write_text("AIRAGADB_medium = descriptor", encoding="utf-8")
-            (wallet_dir / "ewallet.pem").write_text("pem", encoding="utf-8")
-            settings = load_adb_settings(
-                Path(tmp) / ".env",
-                {
-                    "ADB_WALLET_DIR": "wallet",
-                    "ADB_WALLET_PASSWORD": "wallet-password",
-                    "ADB_DB_PASSWORD": "db-password",
-                },
-            )
-
-            validate_mtls_wallet(settings)
 
 
 if __name__ == "__main__":

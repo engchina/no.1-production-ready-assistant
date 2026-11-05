@@ -3,11 +3,11 @@
 
 ``rag_search``(回答あり。CRAG の補正検索を含む)と ``rag_retrieve_evidence``(planning=rag /
 caller。#2651)を、サービストークン(claim ``profile_ids``。#1379)で呼ぶ。検索 API の解決・
-``RagPipeline``・``AnswerEngine`` は本物を動かし、Oracle・embedding・LLM と実体・関係情報の拡張の
+``RagPipeline``・``AnswerEngine`` は本物を動かし、Oracle・embedding・LLM と実体の拡張の
 計画だけを決定論の代役にする(内容は合成)。
 
 - 自動の条件(質問から読み取った抽出項目の条件・質問が名指しした文書名とページ)を外した後の検索、
-  実体・関係情報の拡張の範囲、章節の拡張の読み取りに、呼び出し元の条件と基準日が残る。
+  実体の拡張の範囲、章節の拡張の読み取りに、呼び出し元の条件と基準日が残る。
 - どの検索・拡張も、トークンの範囲に絞った監査 context(認可の述語)で Oracle を読む。
 - 本文が明記した参照を辿る交差参照(#1280)は、呼び出し元の文書名の外へも辿る(利用者の判断 B)。
   参照で足した文書の章節の拡張も、参照先と同じ範囲で読む(#3325)。
@@ -129,7 +129,6 @@ def auth(monkeypatch: MonkeyPatch) -> ProductionAuth:
         "rag_auto_field_filter_enabled": True,
         "rag_reference_expansion_enabled": True,
         "rag_entity_expansion_enabled": True,
-        "rag_graph_expansion_enabled": True,
     }.items():
         monkeypatch.setattr(settings, name, value)
     monkeypatch.setattr(profile_scope, "OracleClient", lambda *_a, **_k: ScopedViewOracle(VIEWS))
@@ -138,11 +137,10 @@ def auth(monkeypatch: MonkeyPatch) -> ProductionAuth:
 
 
 @pytest.fixture
-def plans(monkeypatch: MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
-    entity, graph = PlanRecorder(), PlanRecorder()
+def plans(monkeypatch: MonkeyPatch) -> Iterator[PlanRecorder]:
+    entity = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_entity_expansion", entity)
-    monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
-    yield entity, graph
+    yield entity
 
 
 def _install(monkeypatch: MonkeyPatch, oracle: Any, genai: Any) -> None:
@@ -237,13 +235,13 @@ def _access_knowledge_bases(context: AuditRequestContext, filters: dict[str, str
 def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
     auth: ProductionAuth,
     monkeypatch: MonkeyPatch,
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
     tool: str,
     extra: dict[str, Any],
     caller_filters: dict[str, str],
     as_of: str,
 ) -> None:
-    """自動の条件を外した後のすべての検索と、実体・関係情報の拡張に、呼び出し元の条件が残る。
+    """自動の条件を外した後のすべての検索と、実体の拡張に、呼び出し元の条件が残る。
 
     呼び出し元の条件は文書名・ページ・分類・手の項目の条件・旧版の扱い(include_superseded)・
     基準日。ナレッジベースはトークンの範囲のプロファイルの参照先。
@@ -305,27 +303,27 @@ def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
         assert manual in _field_values(item)
         assert AUTO_SAME_FIELD.value not in [value for _name, value in _field_values(item)]
     assert all(AUTO_FIELD.name not in _field_names(item) for item in oracle.filters[start:])
-    # 実体・関係情報の拡張は、主の検索と同じ呼び出し元の範囲の中で広げる。
-    entity, graph = plans
-    assert entity.scopes and graph.scopes
-    assert all(scope == expected for scope in [*entity.scopes, *graph.scopes])
+    # 実体の拡張は、主の検索と同じ呼び出し元の範囲の中で広げる。
+    entity = plans
+    assert entity.scopes
+    assert all(scope == expected for scope in entity.scopes)
     # 認可の範囲は、すべての検索と拡張で、トークンの範囲に絞った監査 context の述語で当たる。
-    _assert_token_scope([*oracle.contexts, *entity.contexts, *graph.contexts])
+    _assert_token_scope([*oracle.contexts, *entity.contexts])
     assert _access_knowledge_bases(oracle.contexts[-1], expected) == set(SCOPED_KNOWLEDGE_BASES)
 
 
 @pytest.mark.parametrize("tool,extra", TOOLS)
-def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_and_graph_do_not(
+def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_does_not(
     auth: ProductionAuth,
     monkeypatch: MonkeyPatch,
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
     tool: str,
     extra: dict[str, Any],
 ) -> None:
     """本文が明記した参照は、呼び出し元の文書名の外の文書へも辿る(#1280。利用者の判断 B)。
 
     参照先を探す範囲は文書名・分類を外し、KB・旧版の扱い・基準日とトークンの範囲は残す。同じ
-    呼び出しの実体・関係情報の拡張は、呼び出し元の文書名・分類を残す。
+    呼び出しの実体の拡張は、呼び出し元の文書名・分類を残す。
     """
     import rag_engine.adapters.model_api as engine_api
 
@@ -356,12 +354,12 @@ def test_mcp_reference_expansion_crosses_caller_file_name_but_entity_and_graph_d
     assert reference_filters
     kept = {"knowledge_base_id": "kb-1,kb-2", "include_superseded": "true", "as_of": "2020-06-30"}
     assert all(item == kept for item in reference_filters)
-    # 実体・関係情報の拡張は、呼び出し元の文書名・分類を残す(自動の項目の条件は含めない)。
-    entity, graph = plans
+    # 実体の拡張は、呼び出し元の文書名・分類を残す(自動の項目の条件は含めない)。
+    entity = plans
     expected = {**filters, **kept}
-    assert entity.scopes and graph.scopes
-    assert all(scope == expected for scope in [*entity.scopes, *graph.scopes])
-    _assert_token_scope([*oracle.contexts, *entity.contexts, *graph.contexts])
+    assert entity.scopes
+    assert all(scope == expected for scope in entity.scopes)
+    _assert_token_scope([*oracle.contexts, *entity.contexts])
 
 
 class SectionReadRecorder(SectionMapStub):
@@ -462,7 +460,6 @@ def test_mcp_section_expansion_reads_reference_target_outside_caller_file_name(
         "rag_query_strategy": "auto_routing",
         "rag_section_expansion_enabled": True,
         "rag_entity_expansion_enabled": False,
-        "rag_graph_expansion_enabled": False,
     }.items():
         monkeypatch.setattr(get_settings(), name, value)
     stub = SectionScopeMap(_section_corpus(), {"kb-1": {"doc-a", "doc-b", "doc-c"}})

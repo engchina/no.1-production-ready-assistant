@@ -944,7 +944,7 @@ Playwright では、`data-testid` の `nav-drawer-bar` / `nav-drawer-trigger` / 
 
 ## SecretField — **新規**（#296）
 
-API key・パスワード・token など、**保存済みの値を画面に出さない** secret の入力欄です。システム設定のモデル設定（API key）・データベース設定（DB パスワード / Wallet パスワード）・RAG の HuggingFace 設定（token）が別々に持っていた実装を `packages/ui` にまとめました。製品で secret の入力欄を再実装しないでください。
+API key・パスワード・token など、**保存済みの値を画面に出さない** secret の入力欄です。システム設定のモデル設定（API key）・データベース設定（DB パスワード）・RAG の HuggingFace 設定（token）が別々に持っていた実装を `packages/ui` にまとめました。製品で secret の入力欄を再実装しないでください。
 
 | 決めたこと | 理由 |
 |---|---|
@@ -1103,8 +1103,8 @@ export declare const toast: {
   title="データベースに接続できません"
   titleId="database-unavailable-title"
   icon={Unplug}
-  message="データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。"
-  details={<p role="status">診断コード: wallet_not_found</p>}
+  message="データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）を確認してから、再試行してください。"
+  details={<p role="status">診断コード: missing_credentials</p>}
   actions={
     <>
       <ButtonLink to="/settings/database" linkComponent={Link} variant="primary" icon={Settings} trailingIcon={ArrowRight}>データベース設定を開く</ButtonLink>

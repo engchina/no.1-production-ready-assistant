@@ -25,7 +25,6 @@ const emptyConfig: DocumentProcessingConfig = {
   chunk_size: null,
   chunk_overlap: null,
   chunk_min_chars: null,
-  graph_profile: null,
   field_extraction_enabled: null,
   navigation_summary_enabled: null,
   auto_parse_after_preprocess_enabled: null,
@@ -125,7 +124,6 @@ function chunkSet(
     serving_knowledge_base_ids: [],
     layer_statuses: {
       metadata: notRequested,
-      graph: notRequested,
       navigation: notRequested,
       ...layers,
     },
@@ -138,16 +136,16 @@ describe("recipeLayerStatuses", () => {
     target.active_chunk_set_id = "cs-1";
     const sets = [
       chunkSet("cs-other", {
-        graph: { layer_id: "gl-x", requested: true, status: "materialized", reason: null },
+        navigation: { layer_id: "gl-x", requested: true, status: "materialized", reason: null },
       }),
       chunkSet("cs-1", {
-        graph: { layer_id: "gl-1", requested: true, status: "planned_only", reason: "未実体化" },
+        metadata: { layer_id: "gl-1", requested: true, status: "planned_only", reason: "未実体化" },
         navigation: { layer_id: "nv-1", requested: true, status: "materialized", reason: null },
       }),
     ];
     expect(recipeLayerStatuses(target, sets)).toEqual([
       {
-        layer: "graph",
+        layer: "metadata",
         status: "planned_only",
         reason: "未実体化",
         rebuildRequired: false,
@@ -195,13 +193,11 @@ describe("recipeLayerRebuildSummary", () => {
           rebuild_required: true,
           rebuild_inputs: ["field_schema_hash"],
         },
-        graph: { layer_id: "gl-1", requested: true, status: "planned_only", reason: null },
       }),
     ]);
 
     expect(statuses.map((entry) => [entry.layer, entry.rebuildRequired])).toEqual([
       ["metadata", true],
-      ["graph", false],
       ["navigation", true],
     ]);
     expect(recipeLayerRebuildSummary(statuses)).toEqual({

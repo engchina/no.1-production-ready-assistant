@@ -11,7 +11,7 @@ import {
 
 const GLOBAL_QUERY_FIELDS = [
   "query_strategy", "answer_flow", "neighbor_child_count", "rerank_enabled", "auto_field_filter_enabled",
-  "graph_expansion_enabled", "graph_expansion_max_chunks", "screen_linking_enabled", "request_coverage_retrieval_enabled",
+  "screen_linking_enabled", "request_coverage_retrieval_enabled",
 ];
 
 // #3719: 空・単一ページでも表示し、4一覧のページ操作と作業状態を確かめる。
@@ -256,13 +256,13 @@ test("個別設定は残した項目だけを保存する", { tag: "@responsive"
   for (const key of [...GLOBAL_QUERY_FIELDS, "entity_expansion_enabled", "entity_expansion_max_chunks", "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in (config.query ?? {})).toBe(false);
 });
 
-// #3053・#3523: 実体・章節・関係情報の拡張は全体設定だけで決め、
+// #3053・#3523: 実体・章節の拡張は全体設定だけで決め、
 // 検索・回答プロファイルは表示も保存もしない。
 test("検索方法の全体設定の項目は表示せず、古い個別設定を保存しない", { tag: "@responsive" }, async ({ page }, testInfo) => {
   let body = null as Record<string, unknown> | null;
   await mockDefaultSearchAnswerProfile(page, (value) => { body = value; }, {
     query_strategy: "hyde", answer_flow: "crag", neighbor_child_count: 0,
-    rerank_enabled: false, auto_field_filter_enabled: true, graph_expansion_enabled: true, graph_expansion_max_chunks: 3,
+    rerank_enabled: false, auto_field_filter_enabled: true,
     screen_linking_enabled: true, request_coverage_retrieval_enabled: false,
     entity_expansion_enabled: false, entity_expansion_max_chunks: 2, section_expansion_enabled: false, section_expansion_max_levels: 2, section_expansion_input_token_percent: 30,
   });
@@ -270,7 +270,7 @@ test("検索方法の全体設定の項目は表示せず、古い個別設定�
   for (const name of ["質問の拡張", "回答の生成方式", "根拠の前後から加える数", "回答の検索のオプション"]) {
     await expect(page.getByRole("heading", { name, exact: true })).toHaveCount(0);
   }
-  for (const name of ["Rerank で検索候補を並べ替える", "質問から項目の条件を読み取る", "文書構造による検索拡張", "画面目録で操作画面を探す", "根拠の無い要求を探し直す"]) {
+  for (const name of ["Rerank で検索候補を並べ替える", "質問から項目の条件を読み取る", "画面目録で操作画面を探す", "根拠の無い要求を探し直す"]) {
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(0);
   }
   for (const name of ["実体・別名による検索拡張", "章節で広げる根拠"]) {

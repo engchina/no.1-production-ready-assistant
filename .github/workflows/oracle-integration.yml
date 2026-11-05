@@ -5,7 +5,7 @@ name: Oracle integration
 # 呼ぶ（それ以外の PR では実行しない。対象のファイルは ci.yml の changes の <製品>_oracle）。
 #   - Oracle AI Database Free の container に、system schema の migration（配備の init_script.sh と同じ CLI）を
 #     2 回当てる（2 回目で冪等を確かめる）。
-#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（DBMS_CLOUD・Wallet）は Free に無いので、
+#   - 実 Oracle の結合テストを実行する。ADB 固有の機能（DBMS_CLOUD）は Free に無いので、
 #     それを使うテストは実行しない（下の各 step）。
 #   - skip の監視: 実 Oracle のテストは DB に届かないと skip するので、skip のまま成功にしない（RAG は
 #     RAG_TEST_REQUIRE_ORACLE=1 で fixture が失敗にし、どの製品も .github/scripts/pytest-skip-gate.py が許可の一覧に

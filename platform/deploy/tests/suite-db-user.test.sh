@@ -89,8 +89,6 @@ def connect(user, password, dsn, **kwargs):
         {
             "user": user,
             "dsn": dsn,
-            "wallet": kwargs.get("wallet_location"),
-            "wallet_password": kwargs.get("wallet_password"),
             "retry_count": kwargs.get("retry_count"),
             "retry_delay": kwargs.get("retry_delay"),
             "tcp_connect_timeout": kwargs.get("tcp_connect_timeout"),
@@ -120,8 +118,8 @@ write_case() {
   mkdir -p "${dir}"
   printf "SUITE_DB_ADMIN_USER=ADMIN\nSUITE_DB_ADMIN_PASSWORD='%s'\nSUITE_DB_APP_USER='%s'\n" "${admin_pass}" "${app_user}" \
     > "${dir}/admin.env"
-  printf "PLATFORM_ORACLE_USER='%s'\nPLATFORM_ORACLE_PASSWORD='%s'\nPLATFORM_ORACLE_DSN='suiteadb_high'\nPLATFORM_ORACLE_WALLET_PASSWORD='%s'\n" \
-    "${env_user}" "${app_pass}" "${app_pass}" > "${dir}/platform.env"
+  printf "PLATFORM_ORACLE_USER='%s'\nPLATFORM_ORACLE_PASSWORD='%s'\nPLATFORM_ORACLE_DSN='db.example.com:1521/suiteadb_svc'\n" \
+    "${env_user}" "${app_pass}" > "${dir}/platform.env"
 }
 
 # $1: case の directory、$2: stub の初期状態（JSON）、残り: suite-db-user.py apply の追加の引数。
@@ -130,7 +128,7 @@ run_apply() {
   shift 2
   printf '%s\n' "${state}" > "${dir}/state.json"
   STUB_ORACLE_STATE="${dir}/state.json" PYTHONPATH="${task_dir}/stub" "${python_bin}" "${script}" apply \
-    --admin-env "${dir}/admin.env" --app-env "${dir}/platform.env" --wallet-dir "${dir}/wallet" \
+    --admin-env "${dir}/admin.env" --app-env "${dir}/platform.env" \
     --connect-wait-seconds 0 "$@" > "${dir}/out.log" 2>&1
 }
 
@@ -173,10 +171,7 @@ tail -n 1 "${case_dir}/out.log" | grep -qF "[suite-db-user] OK: ADB_APP_USER で
 import json, sys
 state = json.load(open(sys.argv[1] + "/state.json"))
 first = state["connects"][0]
-assert first["user"] == "ADMIN" and first["dsn"] == "suiteadb_high", first
-assert first["wallet"] == sys.argv[1] + "/wallet", first
-# Wallet のパスワードは platform.env の PLATFORM_ORACLE_WALLET_PASSWORD（ADMIN のパスワードではない）。
-assert first["wallet_password"] == "Stub-App-Pass-22", first
+assert first["user"] == "ADMIN" and first["dsn"] == "db.example.com:1521/suiteadb_svc", first
 assert state["connects"][-1]["user"] == "ADB_APP_USER", state["connects"]
 PY
 assert_no_secret "${case_dir}"
@@ -235,14 +230,13 @@ run_apply "${case_dir}" "${state}" --connect-attempts 2 || status=$?
 [ "${status}" -eq 1 ] || fail "繋がらないのに成功した"
 grep -qF "NG（DPY-6005）" "${case_dir}/out.log" || fail "接続の NG の行: $(cat "${case_dir}/out.log")"
 
-# 7b. Wallet の別名の TNS の再試行（retry_count=20）は外して接続する（DB の停止中に 1 回の接続で長く待たない。
-#     試し直しは connect_admin の間隔に任せる。#1779）。記述子の DSN も同じ。log には元の DSN を出す。
+# 7b. 接続記述子の DSN の TNS の再試行（retry_count=20）は外して接続する（DB の停止中に 1 回の接続で長く待たない。
+#     試し直しは connect_admin の間隔に任せる。#1779）。log には元の DSN を出す。
 case_dir="${task_dir}/tns-retry"
 write_case "${case_dir}"
-mkdir -p "${case_dir}/wallet"
-printf 'suiteadb_high = (description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.example.com))(connect_data=(service_name=x_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=yes)))\n' \
-  > "${case_dir}/wallet/tnsnames.ora"
-run_apply "${case_dir}" "${base_state}" || fail "TNS の再試行を外すと失敗した: $(cat "${case_dir}/out.log")"
+printf "PLATFORM_ORACLE_USER='ADB_APP_USER'\nPLATFORM_ORACLE_PASSWORD='%s'\nPLATFORM_ORACLE_DSN='(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.example.com))(connect_data=(service_name=suiteadb_svc.example.com)))'\n" \
+  "${app_pass}" > "${case_dir}/platform.env"
+run_apply "${case_dir}" "${base_state}" || fail "記述子の DSN で失敗した: $(cat "${case_dir}/out.log")"
 "${python_bin}" - "${case_dir}" <<'PY' || fail "TNS の再試行を外した接続の引数"
 import json, sys
 state = json.load(open(sys.argv[1] + "/state.json"))
@@ -253,13 +247,7 @@ for connect in state["connects"]:
     assert connect["retry_count"] == 0 and connect["retry_delay"] == 0, connect
     assert connect["tcp_connect_timeout"] == 10.0, connect
 PY
-grep -qF "（DSN suiteadb_high）" "${case_dir}/out.log" || fail "log の DSN: $(cat "${case_dir}/out.log")"
-printf "PLATFORM_ORACLE_USER='ADB_APP_USER'\nPLATFORM_ORACLE_PASSWORD='%s'\nPLATFORM_ORACLE_DSN='(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.example.com))(connect_data=(service_name=x_high.adb.oraclecloud.com)))'\n" \
-  "${app_pass}" > "${case_dir}/platform.env"
-rm -rf "${case_dir}/wallet"
-run_apply "${case_dir}" "${base_state}" || fail "記述子の DSN で失敗した: $(cat "${case_dir}/out.log")"
-"${python_bin}" -c 'import json,sys; c=json.load(open(sys.argv[1]))["connects"][0]; assert "retry_count" not in c["dsn"] and "host=adb.example.com" in c["dsn"], c' \
-  "${case_dir}/state.json" || fail "記述子の DSN の TNS の再試行を外さない"
+grep -qF "（DSN (description=(retry_count=20)" "${case_dir}/out.log" || fail "log の DSN: $(cat "${case_dir}/out.log")"
 assert_no_secret "${case_dir}"
 
 # 8. 設定の誤り: props のユーザーが食い違う・使えない名前・Oracle の管理のユーザー・grant の失敗・権限が効いていない。
@@ -296,7 +284,7 @@ run_apply "${case_dir}" "${base_state%\}}, \"session_privs\": []}" || status=$?
   "${case_dir}/out.log" || fail "権限の不足を検出しない: $(cat "${case_dir}/out.log")"
 case_dir="${task_dir}/password-has-user"
 write_case "${case_dir}"
-printf "PLATFORM_ORACLE_USER='ADB_APP_USER'\nPLATFORM_ORACLE_PASSWORD='Xadb_app_user-Pass-1'\nPLATFORM_ORACLE_DSN='suiteadb_high'\n" > "${case_dir}/platform.env"
+printf "PLATFORM_ORACLE_USER='ADB_APP_USER'\nPLATFORM_ORACLE_PASSWORD='Xadb_app_user-Pass-1'\nPLATFORM_ORACLE_DSN='db.example.com:1521/suiteadb_svc'\n" > "${case_dir}/platform.env"
 status=0
 run_apply "${case_dir}" "${base_state}" || status=$?
 [ "${status}" -eq 1 ] && grep -qF "ユーザー名（ADB_APP_USER）を含めないでください" "${case_dir}/out.log" || fail "ユーザー名を含むパスワード"

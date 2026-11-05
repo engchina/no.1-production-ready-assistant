@@ -29,7 +29,6 @@ PLATFORM_REPO_DIR="${SUITE_REPO_DIR}/platform"
 BACKEND_DIR="${APP_REPO_DIR}/backend"
 FRONTEND_DIR="${APP_REPO_DIR}/frontend"
 DATA_DIR="${DATA_DIR:-/u01/data/production-ready-agent}"
-WALLET_DIR="${APP_ROOT}/wallet"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 # backend/.env の元（suite では製品ごとの <製品>.backend.env）。
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-${PROPS_DIR}/backend.env}"
@@ -96,7 +95,7 @@ run_as_app_user_in_dir() {
 
 # Agent が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。
 # gcc・make は wheel の無い Python の依存を build するため。curl は image にある。
-SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl tar unzip)
+SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make openssl tar)
 
 install_system_packages() {
   log "Installing system packages: ${SYSTEM_PACKAGES[*]}"
@@ -309,14 +308,13 @@ prepare_filesystem() {
   chmod 0775 "${APP_ROOT}"
   install -d -m 0755 -o "${APP_USER}" -g "${APP_GROUP}" \
     "${DATA_DIR}" "${DATA_DIR}/bindings" "${DATA_DIR}/artifacts"
-  install -d -m 0700 -o "${APP_USER}" -g "${APP_GROUP}" "${WALLET_DIR}"
   # 開発の worktree・一時ファイルは辿らない（配備の途中で消えると chown が失敗する。#2307）。
   suite_chown_repo "${APP_USER}:${APP_GROUP}" "${SUITE_REPO_DIR}"
-  chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}" "${WALLET_DIR}"
+  chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
 }
 
 install_runtime_env() {
-  log "Installing platform/backend environment and wallet."
+  log "Installing platform/backend environment."
   # 3製品共通の設定（PLATFORM_*）はリポジトリの platform/.env、Agent 固有（AGENT_*）は backend/.env（#211）。
   # platform/.env はシステム設定画面の保存先でもあるため、既にあれば上書きしない（画面で保存した値を消さない）。
   if [ -e "${PLATFORM_REPO_DIR}/.env" ]; then
@@ -325,13 +323,6 @@ install_runtime_env() {
     install -m 0600 -o "${APP_USER}" -g "${APP_GROUP}" "${PROPS_DIR}/platform.env" "${PLATFORM_REPO_DIR}/.env"
   fi
   install -m 0600 -o "${APP_USER}" -g "${APP_GROUP}" "${BACKEND_ENV_SOURCE}" "${BACKEND_DIR}/.env"
-
-  rm -rf "${WALLET_DIR}"
-  install -d -m 0700 -o "${APP_USER}" -g "${APP_GROUP}" "${WALLET_DIR}"
-  unzip -oq "${PROPS_DIR}/wallet.zip" -d "${WALLET_DIR}"
-  chown -R "${APP_USER}:${APP_GROUP}" "${WALLET_DIR}"
-  find "${WALLET_DIR}" -type d -exec chmod 0700 {} \;
-  find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;
 }
 
 # 組み込みのスキル（Agent Skills の形式。repo 直下の skills/<name>/SKILL.md）は backend が起動時に読む。

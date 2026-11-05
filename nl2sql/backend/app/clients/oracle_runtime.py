@@ -64,9 +64,6 @@ class OraclePoolManager:
             settings.oracle_user,
             settings.oracle_password,
             settings.oracle_dsn,
-            settings.oracle_connection_security,
-            settings.resolved_oracle_wallet_dir,
-            settings.oracle_wallet_password,
             settings.nl2sql_oracle_connect_timeout_seconds,
         )
         return hashlib.sha256(repr(values).encode("utf-8")).hexdigest()

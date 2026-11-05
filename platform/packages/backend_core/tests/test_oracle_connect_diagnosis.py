@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -19,7 +18,6 @@ from pr_backend_core.oracle_connect_diagnosis import (
 )
 
 PASSWORD = "S3cret-Passw0rd#1"
-WALLET_PASSWORD = "Wa11et-Passw0rd#2"
 POOL_TIMEOUT = "DPY-4005: timed out waiting for the connection pool to return a connection"
 
 
@@ -62,8 +60,7 @@ def _kwargs(**extra: object) -> dict[str, object]:
     return {
         "user": "APP_USER",
         "password": PASSWORD,
-        "dsn": "mydb_high",
-        "wallet_password": WALLET_PASSWORD,
+        "dsn": "adb.example.com:1521/mydb_svc",
         **extra,
     }
 
@@ -91,7 +88,7 @@ def _all_text(diagnosis: Any, caplog: pytest.LogCaptureFixture) -> str:
         (
             "DPY-6005: cannot connect to database (CONNECTION_ID=abc).\n"
             "[SSL] PEM lib (_ssl.c:3900)",
-            "wallet",
+            "tls",
             "DPY-6005",
         ),
         (
@@ -107,7 +104,7 @@ def _all_text(diagnosis: Any, caplog: pytest.LogCaptureFixture) -> str:
             "ORA-12506",
         ),
         (
-            'DPY-6001: Service "x_high.adb.oraclecloud.com" is not registered with the listener '
+            'DPY-6001: Service "app_svc.example.com" is not registered with the listener '
             'at host "adb.example.com" port 1522. (Similar to ORA-12514)',
             "service_unavailable",
             "DPY-6001",
@@ -117,14 +114,14 @@ def _all_text(diagnosis: Any, caplog: pytest.LogCaptureFixture) -> str:
             "service_unavailable",
             "ORA-12514",
         ),
-        ('DPY-4000: unable to find "nodb_high" in /wallet/tnsnames.ora', "dsn", "DPY-4000"),
-        ("DPY-4027: no configuration directory specified", "wallet", "DPY-4027"),
-        ("ORA-29024: Certificate validation failure", "wallet", "ORA-29024"),
+        ('DPY-4000: unable to find "nodb" in the configuration', "dsn", "DPY-4000"),
+        ("DPY-4027: no configuration directory specified", "tls", "DPY-4027"),
+        ("ORA-29024: Certificate validation failure", "tls", "ORA-29024"),
     ],
     ids=[
         "timeout",
         "refused",
-        "wallet-pem",
+        "tls-pem",
         "ora-01017",
         "ora-28000",
         "ora-28001",
@@ -166,22 +163,19 @@ def test_stopped_adb_hint_tells_how_to_start_it() -> None:
 
 
 def test_pool_timeout_probes_one_direct_connect_and_reports_real_cause(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    (tmp_path / "tnsnames.ora").write_text(
-        "mydb_high = (description= (retry_count=20)(retry_delay=3)"
-        "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
-        "(connect_data=(service_name=x_high.adb.oraclecloud.com)))\n",
-        encoding="utf-8",
-    )
     fake = _FakeOracledb(_OracleError("ORA-01017: invalid credential or not authorized"))
     caplog.set_level(logging.DEBUG)
 
     diagnosis = diagnose_oracle_connect_failure(
         _OracleError(POOL_TIMEOUT),
         connect_kwargs=lambda: _kwargs(
-            config_dir=str(tmp_path),
-            wallet_location=str(tmp_path),
+            dsn=(
+                "(description= (retry_count=20)(retry_delay=3)"
+                "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
+                "(connect_data=(service_name=mydb_svc.example.com)))"
+            ),
             min=1,
             max=4,
             getmode=3,
@@ -257,8 +251,8 @@ def test_non_pool_connection_error_is_explained_without_probe() -> None:
     "probe_message",
     [
         f"ORA-01017: logon denied for APP_USER/{PASSWORD}@adb.example.com",
-        f"DPY-6005: cannot connect (password={PASSWORD})\n[SSL] wallet_password={WALLET_PASSWORD}",
-        f"DPY-6005: cannot connect {PASSWORD} {WALLET_PASSWORD}\ntimed out",
+        f"DPY-6005: cannot connect (password={PASSWORD})\n[SSL] handshake failed",
+        f"DPY-6005: cannot connect {PASSWORD}\ntimed out",
         f"DPY-4000: unable to find tcps://APP_USER:{PASSWORD}@adb.example.com",
     ],
     ids=["easy-connect", "assignment", "raw-values", "url-credential"],
@@ -277,7 +271,6 @@ def test_secrets_never_appear_in_diagnosis_or_logs(
     assert diagnosis.detail
     text = _all_text(diagnosis, caplog)
     assert PASSWORD not in text
-    assert WALLET_PASSWORD not in text
 
 
 def test_redact_connect_secrets_masks_values_and_credentials() -> None:

@@ -83,7 +83,7 @@ test("DB 接続済みでも schema 未作成ならシステムテーブルへ案
   await expect(page.locator('section[aria-labelledby="database-unavailable-title"]')).toHaveCount(0);
 });
 
-test("DB 接続不可時、機能ページはエラーではなく接続設定と Wallet の確認の案内を表示する", async ({ page }) => {
+test("DB 接続不可時、機能ページはエラーではなく接続設定の確認の案内を表示する", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
     route.fulfill({ json: dbStatus("unreachable") })
@@ -104,20 +104,20 @@ test("DB 接続不可時、機能ページはエラーではなく接続設定�
   await expect(page.getByRole("button", { name: "再試行" })).toBeFocused();
 });
 
-test("DB 未設定時も再試行を出し、Wallet の不備は診断コードと補足で示す", async ({ page }) => {
+test("DB 未設定時も再試行を出し、接続設定の不備は診断コードと補足で示す", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
-    route.fulfill({ json: dbStatus("not_configured", "wallet_password_invalid") })
+    route.fulfill({ json: dbStatus("not_configured", "missing_credentials") })
   );
 
   await page.goto("/file-list");
 
   await expectGate(page, { title: "データベースの接続情報が未設定です", actionHref: "/settings/database" });
   await expect(page.getByText(/RAG 機能\(取込・検索・索引\)を使うには/)).toBeVisible();
-  await expect(page.getByText("診断コード: wallet_password_invalid", { exact: true })).toBeVisible();
+  await expect(page.getByText("診断コード: missing_credentials", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
-      "暗号化された Wallet を現在の Wallet パスワードで復号できません。Wallet パスワードを確認してください。",
+      "DB パスワードが設定されていません。",
       { exact: true }
     )
   ).toBeVisible();
@@ -318,7 +318,7 @@ test("DB 利用可能時は本来のページを表示する", async ({ page }) 
   ).toHaveCount(0);
 });
 
-test("接続できないときは ADB の状態を出さず、接続設定と Wallet の確認を案内する（#10）", async ({ page }) => {
+test("接続できないときは ADB の状態を出さず、接続設定の確認を案内する（#10）", async ({ page }) => {
   await routeAuth(page);
   await page.route("**/api/ready/database", (route) =>
     route.fulfill({ json: dbStatus("unreachable", "ok") })
@@ -327,7 +327,7 @@ test("接続できないときは ADB の状態を出さず、接続設定と Wa
   await page.goto("/file-list");
 
   await expectGate(page, { title: "データベースに接続できません" });
-  await expect(page.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
+  await expect(page.getByText(/DSN を確認してから、再試行してください。$/)).toBeVisible();
   await expect(page.getByText(/Autonomous Database/)).toHaveCount(0);
 });
 
@@ -340,7 +340,7 @@ test("設定を開けない利用者には導線を出さず、システム管�
 
   const card = page.locator('section[aria-labelledby="database-unavailable-title"]');
   await expect(card.getByRole("heading", { level: 1, name: "データベースに接続できません" })).toBeVisible();
-  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/)).toBeVisible();
+  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定の確認を依頼してください。$/)).toBeVisible();
   await expect(card.getByRole("link")).toHaveCount(0);
   await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();
   await expectNoPageOverflow(page);

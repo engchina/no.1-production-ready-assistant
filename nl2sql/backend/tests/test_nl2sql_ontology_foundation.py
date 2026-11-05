@@ -275,13 +275,12 @@ def test_connection_wraps_connect_failure_as_oracle_adapter_error(
         def connect(self, **_kwargs: Any) -> Any:
             raise RuntimeError("ORA-12541: TNS:no listener")
 
-    # CI には .env / Wallet が無いため、接続情報は明示して wallet 不要モードで組み立てる。
+    # CI には .env が無いため、接続情報は明示して組み立てる。
     adapter = OracleNl2SqlAdapter(
         Settings(
             oracle_user="APP",
             oracle_password="password",
             oracle_dsn="localhost/FREEPDB1",
-            oracle_connection_security="walletless_tls",
         )
     )
     monkeypatch.setattr(adapter, "_load_oracledb", lambda: _FailingOracledb())

@@ -11,7 +11,6 @@ from app.settings import Settings
 READINESS_OK = "ok"
 READINESS_MISSING = "missing"
 READINESS_MISSING_CREDENTIALS = "missing_credentials"
-READINESS_WALLET_NOT_FOUND = "wallet_not_found"
 
 
 def uses_oracle(settings: Settings) -> bool:

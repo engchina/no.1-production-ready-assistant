@@ -67,7 +67,7 @@ const DESCRIPTION_FIELD_ID = "knowledge-base-description";
  * - `PageHeader`: パンくず（ナレッジベース › 対象名）・状態・件数、`一覧へ戻る`（secondary）と
  *   `保存する` / `作成する`（primary）。
  * - 本文: 「基本情報」のカード（名前・説明。見出しに対象の操作の `ObjectActionBar`）→ `children`
- *   （詳細だけ。所属文書・検索テスト・関係情報・構築フロー）。
+ *   （詳細だけ。所属文書・検索テスト・構築フロー）。
  * - 未保存の名前・説明は下書きとしてこのタブに残し、離脱を確認する（検索・回答プロファイルと同じ部品）。
  */
 export function KnowledgeBaseEditor({

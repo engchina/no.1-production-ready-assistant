@@ -10,17 +10,10 @@
 | Excel 运维流程 | `samples/*.xlsx`, training/terms/rules import/export | CSV/XLSX import preview/execute、training data XLSX/JSONL export、profile learning material import/export | Data Tools, Learning, Glossary Rules | extended |
 | 分类模型训练 | `models/*.joblib`, `*.meta.json`, embedding + LogisticRegression | 埋め込みモデル（1024 次元）+ sklearn LogisticRegression、Oracle state に current artifact 1 件だけを保存、学習/legacy artifact import は上書き | Learning: training data / train / test / assist | implemented |
 | SQL 深度分析/逆生成 | `utils/query_util.py` SQL 分析・逆生成 | `/analyze` deterministic deep fields + optional モデルの API structured JSON、`/reverse/deep` fallback付き逆生成 | SQL Analysis | extended |
-| OCI/ADB Wallet 運用 | `utils/oci_util.py` の4ファイル確認・ADB Wallet生成・自動配置 | Wallet ZIP の手動アップロード（`POST /api/settings/database/wallet`）だけ。OCI Database API からの自動取得は削除した（#11） | Database Settings: Wallet ZIP のアップロード・状態表示 | removed |
 
 質問分類 model は単一 current artifact に収斂した。version 一覧・activate・個別 delete API は削除し、
 artifact import は `POST /classifier/model/import` で上書きする。旧
 `POST /classifier/models/import` は `activate=true` の上書きだけを受理する互換 alias として残す。
-
-## Wallet の OCI からの自動取得（削除）
-
-旧 `utils/oci_util.py` の「必須4ファイルが不足していれば OCI Database API で Wallet を生成して配置する」動作は、
-OCI に依存しない構成へ移すために削除した（#11）。Wallet は Database Settings から ZIP をアップロードする
-（Zip Slip / symlink / 必須ファイルの検証と原子的な配置は共通の `pr_system_settings.database` が持つ）。
 
 ## 実行境界
 

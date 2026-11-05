@@ -133,7 +133,6 @@ export { DATABASE_MESSAGES, type DatabaseMessageKey } from "./database/messages"
 export type { DatabaseChangedHandler } from "./database/hooks";
 export {
   DATABASE_SETTINGS_QUERY_KEY,
-  type DatabaseConnectionSecurity,
   type DatabaseConnectionTestResult,
   type DatabaseConnectionTestStatus,
   type DatabasePasswordRevealData,

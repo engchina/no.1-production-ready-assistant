@@ -8,10 +8,8 @@
 - ``rag_entity_chunks``: 実体と chunk の関連（定義する行 / 属性 / 言及）。実体と chunk の削除で消
   える（再索引で chunk を作り直すと、その chunk の関連も消える）。
 
-既存の関係情報（``rag_graph_*``。#621）は文書と章・節の見出しのつながりを表示するための表で、ナレ
-ッジベースの ID を取込の時点で持ち（ナレッジベースの出し入れで変わらない）、chunk の削除と FK でつ
-ながっていない。実体の層は回答の検索の join に使うため、ナレッジベースの範囲を検索のときに chunk
-と文書の条件（``_oracle_retrieval_where``）で決め、削除を FK で連動させる別の表にした。
+ナレッジベースの範囲は検索のときに chunk と文書の条件（``_oracle_retrieval_where``）で決め、削除は
+FK で連動させる。
 
 検索の SQL は ``app.rag.entity_expansion.EntityExpansionStore`` の 3 つ（起点の別名・名寄せ・1 段）
 。どれも chunk と文書を検索と同じ見え方の条件で join し、範囲の外の chunk を返さない（途中の chunk

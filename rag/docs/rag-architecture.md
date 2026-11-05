@@ -83,8 +83,8 @@
 
 7. 構造化・関係検索境界
    - RAG repo では SQL 生成 endpoint を公開しない。SQL 専用の自然言語問い合わせは 同じ monorepo の `nl2sql/` の責務とする。
-   - 集計・関係・横断要約のような query も、回答フローの hybrid retrieval の範囲で扱う（GraphRAG-lite を回答の検索で使う経路は #595 で削除した。構築と KB のグラフ表示は残す）。
-   - GraphRAG/navigation/metadata layer が未 materialize の場合は diagnostics と KB 詳細で `planned_only` / `needs_reingest` を表示し、構築済みと見せない。
+   - 集計・関係・横断要約のような query も、回答フローの hybrid retrieval の範囲で扱う。
+   - navigation/metadata layer が未 materialize の場合は diagnostics と KB 詳細で `planned_only` / `needs_reingest` を表示し、構築済みと見せない。
 
 8. リランク
    - 本番は再ランクのモデル（モデル設定の既定の再ランクモデル）。回答フローは融合した検索候補を rerank で並べ替える（`RAG_RERANK_ENABLED`。既定は有効）。
@@ -92,13 +92,11 @@
    - 根拠の child と同じ `chunk_group_id` の兄弟 chunk（上限 `RAG_CONTEXT_GROUP_MAX_CHUNKS`）と親本文（`parent_text`）で親子を復元し（small-to-big）、根拠の child の前後の child（`RAG_NEIGHBOR_CHILD_COUNT`、既定 3）を文脈に足す。
    - 上位の候補の本文が参照する節（「第3章を参照」など。取込で解決して chunk の metadata に保存）の chunk を、上限付き（`RAG_REFERENCE_EXPANSION_MAX_CHUNKS`、既定 4）で参照元の直後に rerank の候補として足す（#1280。[rag-engine.md の設定一覧](./rag-engine.md#設定一覧)）。文書名だけで別の文書を指す文（「時間帯は定期保守計画で確かめます」）は、検索範囲の文書のタイトル・文書名で文書を決め、その文書の質問に関連の高い chunk（文書の中の検索と rerank）を足す（#1400）。参照先が下位の候補・前後の文脈にあるときも参照元の直後へ移す。参照の書き方の語（手がかりの語・章や条の単位・漢数字・記号など）は言語資源（取込・検索・回答設定 >「言語資源」。[language-resources.md](./language-resources.md)。#2181）。
    - 実体・別名索引: 文書中の対象（実体）を名称・ID・別名で識別し、表の行や本文の定義と原文の chunk を関連づける。構築は全体の既定（OFF）を文書レシピで上書きできる。検索方法の全体設定「実体・別名による検索拡張」（既定 OFF）を有効にすると、質問と上位の検索候補を起点に、同じ対象の定義（名寄せ）と属性で結び付く対象の根拠を 1 段だけ追加する。追加数の上限も全体設定で決め、検索・回答プロファイルでは上書きしない。Oracle の `rag_entities` / `rag_entity_aliases` / `rag_entity_chunks` を使い、外部のグラフ DB や LLM の抽出は使わない（[rag-engine.md の設定一覧](./rag-engine.md#設定一覧)）。
-   - 文書構造索引: 文書と章・節・表・図の見出し、および原文の chunk の関連を記録する。検索方法の全体設定「文書構造による検索拡張」（既定 OFF）を有効にすると、上位候補と同じ狭い構造の根拠と、質問の語が見出しに一致する根拠を候補に加える。実体・別名による検索拡張の後に実行し、追加済みの chunk は除外する。両者は併用でき、どちらも LLM の呼び出しを増やさない。構築した索引はナレッジベースの「文書構造グラフ」で確認できる。
    - 旧 standard の検索後処理（本文 hash の重複除去・MMR の多様化・近傍 / 依存 chunk の追加・圧縮と、`RAG_CONTEXT_WINDOW_CHARS` などの設定）は #595 で削除した。
 
 9. AIDB Memory Engineering
    - 検索 request ごとに Business Context Pack（検索範囲）を作る。tenant/user/role は raw 値を保存せず hash だけを持ち、document/category/knowledge base scope、`source_acl`、`document_version` を検索条件に固定する。
    - 回答の生成方式の既定は標準 RAG（`RAG_ANSWER_FLOW=standard_rag`。補正検索をしない）。CRAG（`RAG_ANSWER_FLOW=crag`）は明示して選んだときだけ使い、検索結果の根拠を AI で評価し、足りなければ質問を補正して再検索する（評価の LLM の呼び出しと時間が増える。`rag_engine` の `answer_flow` を省いた呼び出しも標準 RAG。#3509）。回答の生成方式は全体設定だけで決め、検索・回答プロファイルでは上書きしない。回答文の生成後にも根拠との整合を確かめ（監査）、根拠が足りないときは理由（`insufficient_reason`）と人手確認の要否を付ける。
-   - 文書構造索引の構築は `rag_graph_profile`(`app/rag/graph_adapter.py`)で選ぶ。`off`(既定。構築しない)/ `entities`(構築する)の 2 つで、`entities` は文書全体と章・節の見出し(表・図を含む)を「含む」でつないだ entity / relationship を LLM を使わずに作る(`app/rag/graph_index.py`)。claims / community summary まで作る `full` と legacy の `RAG_GRAPH_ENABLED` は、読む経路が無かったため #621 で削除した(表 `rag_graph_claims`・`rag_graph_community_summaries` は migration で削除)。ingest の graph gate は `resolve_graph_adapter(...).enabled`。構築判定・文書の実効設定の表示・文書レシピの上書きの正本は `rag_graph_profile` 1 つ。graph の行の `knowledge_base_id` は取込時の所属のスナップショットなので、KB のグラフ表示は今もその KB に所属している文書の行だけを返す。回答の検索は、`rag_graph_expansion_enabled`（既定 OFF。検索方法の画面で選ぶ。全体設定だけで決め、検索・回答プロファイルでは上書きしない）を ON にしたときだけ graph を読む（#2055。`app/rag/graph_expansion.py` と `app/clients/oracle_graph_store.py`）。検索の上位 5 件の chunk が対応する章節・表 / 図の entity のうち chunk が 2〜8 の最も狭いものの他の chunk（近い順）と、質問に見出しの語（番号を除いた 4 文字以上）が含まれる entity の chunk（章節の先頭から 3 件・見出し 4 つまで）を、検索と同じ見え方の条件の中で 1 回の検索に `rag_graph_expansion_max_chunks`（既定 6）件まで候補に足し、rerank で並べる。すでに候補・前後の文脈・参照先・実体の拡張にある chunk は足さない。広い章節は回答の生成の段の章節の拡張（#1436）に任せる。足した chunk は回答の診断の `graph_expansion`（使った entity と足した数）に残し、回答の詳細の実行記録に出す。LLM は呼ばない。設定 API `GET/PATCH /api/settings/graph` と専用設定画面で切替する。変更は次回以降の取込に適用され、既存文書への反映には再取込が必要。外部グラフ DB は導入しない。
    - Memory Router / Retrieval Plan・Resolver / Verifier・Context Builder・Agent Memory（`rag_agent_memories` への検索と writeback）は #595 で削除し、テーブルは #596 で削除した。監査の列は既存の監査の行を変えないため残す。
 
 10. 回答生成

@@ -1,19 +1,19 @@
 """DB に接続できないときの本当の原因の診断（3 製品共通。#1744）。
 
 接続 pool（`POOL_GETMODE_TIMEDWAIT`）は、接続の作成の失敗を背景のスレッドで握り、`acquire` には
-時間切れ（`DPY-4005`）しか返さない。ADB の停止・password の誤り・account lock・network・Wallet の
+時間切れ（`DPY-4005`）しか返さない。ADB の停止・password の誤り・account lock・network・TLS の
 どれでも同じ `DPY-4005` になり、本当の原因が分からない。
 
 - `diagnose_oracle_connect_failure(exc, connect_kwargs=…)`：接続の失敗なら、ORA / DPY のコードから
   平易な日本語の理由と対処を返す。pool の時間切れのときは、pool を使わずに 1 回だけ直接 `connect`
   して（`probe_oracle_connect`）、本当の例外から判定する。接続の失敗でなければ None
-- `probe_oracle_connect(connect_kwargs)`：pool を使わない 1 回だけの接続。Wallet の別名の長い再試行
+- `probe_oracle_connect(connect_kwargs)`：pool を使わない 1 回だけの接続。接続記述子の長い再試行
   （`(retry_count=20)(retry_delay=3)`）を外し（`dsn_without_retry`）、`tcp_connect_timeout`
   を付ける（DB の停止中に 1 分以上待たない）
 - `install_oracledb_thread_excepthook()`：python-oracledb の pool の背景のスレッドの例外を、
   traceback ではなく 1 行の log にまとめる（CLI だけで使う。`configure_cli_logging` から）
 
-secret（password・Wallet の password・DSN の資格情報）は、結果・log に出さない。接続引数の値と
+secret（password・DSN の資格情報）は、結果・log に出さない。接続引数の値と
 `password=…` のような代入・`user/password@host` の資格情報は伏せる。
 
 python-oracledb に直接依存しない（`oracledb` は使うときに import する。テストは loader で
@@ -52,7 +52,7 @@ OracleConnectCategory = Literal[
     "invalid_credentials",
     "account_locked",
     "password_expired",
-    "wallet",
+    "tls",
     "dsn",
     "pool_timeout",
     "unknown",
@@ -140,7 +140,7 @@ _RULES: tuple[_Rule, ...] = (
         f"入っていれば ADB の状態を確かめてください。{_START_ADB_ACTION}",
     ),
     _Rule(
-        "wallet",
+        "tls",
         frozenset(
             {
                 "ORA-28759",
@@ -156,19 +156,16 @@ _RULES: tuple[_Rule, ...] = (
                 "DPY-6006",
             }
         ),
-        "Wallet（mTLS の証明書）で DB に接続できません（Wallet のファイルの不足・"
-        "別の ADB の Wallet・Wallet の password の誤り・証明書の期限切れ）。",
-        "PLATFORM_ORACLE_WALLET_DIR に、接続先の ADB からダウンロードした Wallet "
-        "（tnsnames.ora・ewallet.pem・cwallet.sso など）があるか、"
-        "PLATFORM_ORACLE_WALLET_PASSWORD が Wallet の password と同じかを確かめてください。"
-        "ADB の Wallet を作り直した（rotate した）ときは、新しい Wallet に置き換えてください。",
+        "TLS の証明書を確かめられず、DB に接続できません。",
+        "platform/.env の PLATFORM_ORACLE_DSN のプロトコルと port が接続先に合っているかを"
+        "確かめてください。",
     ),
     _Rule(
         "dsn",
         frozenset({"DPY-4000", "DPY-4017", "DPY-4018", "DPY-4021", "ORA-12154", "ORA-12262"}),
-        "DSN（接続先の指定）が読めないか、Wallet の tnsnames.ora に見つかりません。",
-        "platform/.env の PLATFORM_ORACLE_DSN が、Wallet の tnsnames.ora の別名（例: "
-        "<DB 名>_high）と同じかを確かめてください。",
+        "DSN（接続先の指定）が読めません。",
+        "platform/.env の PLATFORM_ORACLE_DSN が host:port/service_name か接続記述子かを"
+        "確かめてください。",
     ),
     _Rule(
         "service_unavailable",
@@ -218,14 +215,14 @@ _RULES: tuple[_Rule, ...] = (
         ),
         "ADB が停止しているか、この接続元から DB に届きません。",
         f"{_START_ADB_ACTION}起動している場合は、ADB のネットワーク（ACL・プライベート"
-        "エンドポイント・NSG / セキュリティリスト）、DSN のホスト名、接続元からの外向きの通信"
-        "（port 1522）を確かめてください。",
+        "エンドポイント・NSG / セキュリティリスト）、DSN の host と port、接続元からの外向きの通信"
+        "を確かめてください。",
     ),
 )
 
-# `DPY-6005`（接続の失敗）の下の原因の文に、これがあれば Wallet / TLS の失敗とみなす。
+# `DPY-6005`（接続の失敗）の下の原因の文に、これがあれば TLS の失敗とみなす。
 # ただし時間切れ・拒否・名前の解決の失敗は、TLS の途中でも「届かない」とする。
-_WALLET_TEXT_RE = re.compile(r"\bssl\b|certificate|\bpem\b|wallet|pkcs|decrypt", re.IGNORECASE)
+_TLS_TEXT_RE = re.compile(r"\bssl\b|certificate|\bpem\b|pkcs|decrypt", re.IGNORECASE)
 _NETWORK_TEXT_RE = re.compile(
     r"timed out|timeout|refused|unreachable|no route|name or service not known|"
     r"nodename nor servname|getaddrinfo|temporary failure in name resolution",
@@ -247,10 +244,10 @@ _POOL_TIMEOUT_UNPROBED_ACTION = (
 _UNKNOWN_REASON = "DB に接続できませんでした。"
 _UNKNOWN_ACTION = (
     f"{_START_ADB_ACTION}起動している場合は、platform/.env の PLATFORM_ORACLE_* "
-    "（ユーザー・password・DSN・Wallet）を確かめてください。"
+    "（ユーザー・password・DSN）を確かめてください。"
 )
 
-# 伏せる代入（`password=…` / `wallet_password: …`）と、`user/password@host` の資格情報。
+# 伏せる代入（`password=…`）と、`user/password@host` の資格情報。
 _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b([a-z_]*(?:password|passwd|pwd|secret|token)[a-z_]*)(\s*[=:]\s*)"
     r"(\"[^\"]*\"|'[^']*'|[^\s,;)\"']+)"
@@ -258,7 +255,7 @@ _SECRET_ASSIGNMENT_RE = re.compile(
 _EASY_CONNECT_CREDENTIAL_RE = re.compile(r"(?<![\w/])([\w.$#-]+)/[^\s@/]+@")
 _URL_CREDENTIAL_RE = re.compile(r"(\b[a-z][a-z0-9+.-]*://)[^\s/@]+@", re.IGNORECASE)
 # 接続引数のうち、値そのものを伏せるもの。
-_SECRET_KWARGS = ("password", "wallet_password", "newpassword", "access_token", "token")
+_SECRET_KWARGS = ("password", "newpassword", "access_token", "token")
 _MIN_SECRET_LENGTH = 3
 
 
@@ -340,13 +337,11 @@ def explain_oracle_connect_error(
         full_text = _full_text(exc)
         if (
             category == "unreachable"
-            and _WALLET_TEXT_RE.search(full_text)
+            and _TLS_TEXT_RE.search(full_text)
             and not _NETWORK_TEXT_RE.search(full_text)
         ):
-            wallet = next(item for item in _RULES if item.category == "wallet")
-            return OracleConnectDiagnosis(
-                "wallet", matched, wallet.reason, wallet.action, detail, probed
-            )
+            tls = next(item for item in _RULES if item.category == "tls")
+            return OracleConnectDiagnosis("tls", matched, tls.reason, tls.action, detail, probed)
         return OracleConnectDiagnosis(category, matched, rule.reason, rule.action, detail, probed)
     if is_oracle_pool_wait_timeout(exc):
         return OracleConnectDiagnosis(
@@ -389,8 +384,7 @@ def probe_connect_kwargs(
     kwargs = {key: value for key, value in connect_kwargs.items() if key not in pool_only}
     dsn = kwargs.get("dsn")
     if isinstance(dsn, str) and dsn.strip():
-        wallet_dir = kwargs.get("config_dir") or kwargs.get("wallet_location")
-        kwargs["dsn"] = dsn_without_retry(dsn, wallet_dir if isinstance(wallet_dir, str) else None)
+        kwargs["dsn"] = dsn_without_retry(dsn)
     kwargs["retry_count"] = 0
     kwargs["retry_delay"] = 0
     timeout = kwargs.get("tcp_connect_timeout")

@@ -11,7 +11,7 @@
 #
 # 配備の前に /u01/aipoc/props に置くもの:
 #   products.txt（配備する製品。空白区切り）
-#   platform.env（3 製品で共通の platform/.env）・<製品>.backend.env（各製品の backend/.env）・rag_services.txt・wallet.zip など
+#   platform.env（3 製品で共通の platform/.env）・<製品>.backend.env（各製品の backend/.env）・rag_services.txt など
 #   adb_admin.env（アプリ用の DB ユーザーを使うときだけ。ADMIN のパスワードとアプリ用のユーザーの名前。root の 0600。#1668）
 #
 # アプリ用の DB ユーザー（#1668）: adb_admin.env があれば、製品の配備（各製品の system schema の初期化）の前に、
@@ -41,7 +41,7 @@ source "${SUITE_DEPLOY_DIR}/suite-repo.sh"
 source "${SUITE_DEPLOY_DIR}/suite-health.sh"
 
 APP_ROOT="${APP_ROOT:-/u01/aipoc}"
-# 3 製品のプロセスは同じユーザーで動かす（共通の platform/.env・model-settings.json・Wallet を
+# 3 製品のプロセスは同じユーザーで動かす（共通の platform/.env・model-settings.json を
 # 画面から読み書きするため。#1316。製品ごとの Compute では RAG だけ専用の ragsvc で動かしていた）。
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-${APP_USER}}"
@@ -50,7 +50,7 @@ SUITE_REPO_DIR="${SUITE_REPO_DIR:-${APP_ROOT}/no.1-production-ready-assistant}"
 PROPS_DIR="${PROPS_DIR:-${APP_ROOT}/props}"
 SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 # suite-init.sh が dnf で入れる OS の package（製品の init_script.sh は製品が使うものだけを入れる）。
-SUITE_OS_PACKAGES=(git policycoreutils-python-utils tar unzip)
+SUITE_OS_PACKAGES=(git policycoreutils-python-utils tar)
 # 時間帯（#3255）: PLATFORM_TIMEZONE が無いときの既定（backend の pr_backend_core.timezones と同じ）。
 SUITE_DEFAULT_TIMEZONE="UTC"
 SUITE_ZONEINFO_DIR="${SUITE_ZONEINFO_DIR:-/usr/share/zoneinfo}"
@@ -269,31 +269,23 @@ suite_install_uv() {
 }
 
 # アプリ用の DB ユーザー（#1668）。props の adb_admin.env が無ければ（adb_app_user_enabled=false。新規の ADB は
-# ADMIN、既存の ADB は existing_oracle_user で接続する）何もしない。Wallet は製品の配備の前なので、props の
-# wallet.zip を root だけが読める一時の directory に展開して使い、終わったら消す。失敗しても 0 以外を返すだけで、
+# ADMIN、既存の ADB は existing_oracle_user で接続する）何もしない。失敗しても 0 以外を返すだけで、
 # main は製品の配備と起動を続ける（#1756。ユーザーが無ければ製品は DB に接続できないが、画面は開ける）。
 # log の最後の行（[suite-db-user] OK / NG）が結果。
 provision_db_app_user() {
-  local admin_env="${PROPS_DIR}/adb_admin.env" wallet_dir status=0
+  local admin_env="${PROPS_DIR}/adb_admin.env" status=0
   if [ ! -f "${admin_env}" ]; then
     log "db user: ${admin_env} がありません。アプリ用の DB ユーザーは作りません（platform/.env の PLATFORM_ORACLE_USER で接続します）。"
     return 0
   fi
   chmod 0600 "${admin_env}"
   suite_install_uv
-  wallet_dir="$(mktemp -d "${PROPS_DIR}/.db-user-wallet.XXXXXX")"
-  chmod 0700 "${wallet_dir}"
-  if [ -f "${PROPS_DIR}/wallet.zip" ]; then
-    unzip -oq "${PROPS_DIR}/wallet.zip" -d "${wallet_dir}"
-  fi
   UV_PYTHON_INSTALL_DIR="${SUITE_UV_PYTHON_INSTALL_DIR}" uv run --no-project --python "${SUITE_DB_USER_PYTHON_VERSION}" \
     --with "oracledb==${SUITE_DB_USER_ORACLEDB_VERSION}" \
     python "${SUITE_DEPLOY_DIR}/suite-db-user.py" apply \
     --admin-env "${admin_env}" \
     --app-env "${PROPS_DIR}/platform.env" \
-    --current-env "${SUITE_REPO_DIR}/platform/.env" \
-    --wallet-dir "${wallet_dir}" || status=$?
-  rm -rf -- "${wallet_dir}"
+    --current-env "${SUITE_REPO_DIR}/platform/.env" || status=$?
   if [ "${status}" -ne 0 ]; then
     log "check: db user NG（ADMIN でアプリ用の DB ユーザーを作れませんでした。上の [suite-db-user] NG の行を見てください）。"
     return "${status}"

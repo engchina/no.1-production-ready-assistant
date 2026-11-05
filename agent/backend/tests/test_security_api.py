@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -226,12 +225,11 @@ def test_manifest_key_assignments() -> None:
     assert _perm("POST", "/agents/{agent_id}/share-request/approve") == {"agent.admin"}
     assert _perm("GET", "/settings/upload-storage") == {"menu.settings_upload_storage"}
     assert _perm("PATCH", "/settings/upload-storage") == {"menu.settings_upload_storage"}
-    # OCI 認証・Object Storage の確認・Wallet の OCI からの取得の API は持たない（#11）。
+    # OCI 認証・Object Storage の確認の API は持たない（#11）。
     assert not any(path.startswith("/settings/oci") for _method, path in ROUTE_PERMISSIONS)
     assert ("POST", "/settings/upload-storage/test") not in ROUTE_PERMISSIONS
-    assert ("POST", "/settings/database/wallet/download") not in ROUTE_PERMISSIONS
     assert _perm("PATCH", "/settings/model") == {"menu.settings_model"}
-    assert _perm("POST", "/settings/database/wallet") == {"menu.settings_database"}
+    assert _perm("POST", "/settings/database/test") == {"menu.settings_database"}
     # ADB の起動・停止・情報取得の API は持たない（#10）。
     assert not any(path.startswith("/settings/database/adb") for _method, path in ROUTE_PERMISSIONS)
     assert _perm("PATCH", "/settings/mcp-connections/{server_id}") == {"agent.admin"}
@@ -370,7 +368,7 @@ def test_production_public_paths_do_not_require_login(
     monkeypatch.setattr(
         agent_router,
         "get_settings",
-        lambda: SimpleNamespace(oracle_user="", oracle_dsn="", oracle_wallet_dir=""),
+        lambda: SimpleNamespace(oracle_user="", oracle_dsn=""),
     )
     response = client.get("/api/ready/database")
     assert response.status_code == 200
@@ -1047,7 +1045,7 @@ def test_platform_oracle_connection_reuses_one_pool(monkeypatch: MonkeyPatch) ->
         _env_file=None,
         oracle_user="ADMIN",
         oracle_password="secret",  # nosec B106 - テスト用
-        oracle_dsn="suiteadb_high",
+        oracle_dsn="db.example.com:1521/suiteadb_svc",
         oracle_client_lib_dir="",
         oracle_pool_max_connections=6,
     )
@@ -1076,47 +1074,14 @@ def test_platform_oracle_connection_uses_platform_settings() -> None:
         _env_file=None,
         oracle_user="ADMIN",
         oracle_password="secret",  # nosec B106 - テスト用
-        oracle_dsn="suiteadb_high",
-        oracle_client_lib_dir="/opt/instantclient",
-        oracle_wallet_password="wallet-secret",  # nosec B106 - テスト用
+        oracle_dsn="db.example.com:1521/suiteadb_svc",
     )
     kwargs = platform_oracle_connect_kwargs(settings)
     assert kwargs["user"] == "ADMIN"
-    assert kwargs["dsn"] == "suiteadb_high"
-    assert kwargs["wallet_location"] == "/opt/instantclient/network/admin"
-    assert kwargs["wallet_password"] == "wallet-secret"  # nosec B105 - テスト用
+    assert kwargs["dsn"] == "db.example.com:1521/suiteadb_svc"
+    assert kwargs["password"] == "secret"  # nosec B105 - テスト用
     with pytest.raises(RuntimeError, match="PLATFORM_ORACLE_DSN"):
         platform_oracle_connect_kwargs(Settings(_env_file=None, oracle_dsn="", oracle_user=""))
-
-
-def test_wallet_alias_is_connected_without_the_descriptor_retry(tmp_path: Path) -> None:
-    """Wallet の別名の `(retry_count=20)(retry_delay=3)` で、DB の停止中に長く待たない（#1212）。"""
-    from app.oracle_connection import oracle_connect_kwargs
-
-    (tmp_path / "tnsnames.ora").write_text(
-        "suiteadb_high = (description= (retry_count=20)(retry_delay=3)"
-        "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
-        "(connect_data=(service_name=x_suiteadb_high.adb.oraclecloud.com)))\n",
-        encoding="utf-8",
-    )
-    kwargs = oracle_connect_kwargs(
-        SimpleNamespace(
-            oracle_user="ADMIN",
-            oracle_dsn="suiteadb_high",
-            oracle_password="",
-            oracle_wallet_dir=str(tmp_path),
-            oracle_wallet_password="",
-            oracle_tcp_connect_timeout_seconds=10.0,
-        )
-    )
-
-    dsn = str(kwargs["dsn"])
-    assert dsn.startswith("(description=")
-    assert "retry_count" not in dsn
-    assert "retry_delay" not in dsn
-    assert "service_name=x_suiteadb_high.adb.oraclecloud.com" in dsn
-    assert (kwargs["retry_count"], kwargs["retry_delay"]) == (0, 0)
-    assert kwargs["config_dir"] == str(tmp_path)
 
 
 @pytest.mark.parametrize("cli", [False, True], ids=["server", "cli"])
@@ -1134,7 +1099,7 @@ def test_pool_kwargs_strip_descriptor_retry_only_in_cli(cli: bool) -> None:
     descriptor = (
         "(description= (retry_count=20)(retry_delay=3)"
         "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
-        "(connect_data=(service_name=x_suiteadb_high.adb.oraclecloud.com)))"
+        "(connect_data=(service_name=suiteadb_svc.example.com)))"
     )
     settings = Settings(
         _env_file=None,
@@ -1142,7 +1107,6 @@ def test_pool_kwargs_strip_descriptor_retry_only_in_cli(cli: bool) -> None:
         oracle_password="secret",  # nosec B106 - テスト用
         oracle_dsn=descriptor,
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
         oracle_tcp_connect_timeout_seconds=10.0,
     )
     if cli:

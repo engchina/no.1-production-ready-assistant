@@ -45,7 +45,6 @@ from app.schemas.search import (
     SearchRequest,
     SearchResponse,
 )
-from tests.support import shared_thin_wallet_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -3069,8 +3068,6 @@ def _complete_llm_settings(**overrides: Any) -> Settings:
         "oracle_user": "rag_user",
         "oracle_password": "oracle-password",
         "oracle_dsn": "adb.example.com/rag",
-        # Wallet mTLS の Wallet がそろっていないと Oracle の readiness は ok にならない（#325）。
-        "oracle_wallet_dir": shared_thin_wallet_dir(),
         "local_storage_dir": tempfile.mkdtemp(prefix="rag-file-processing-staging-"),
     }
     values.update(overrides)

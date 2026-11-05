@@ -4,7 +4,7 @@
 
 - `pr_system_settings.env_file`：`.env` の排他付き部分更新（`locked_env_file` / `replace_env_file` / `write_env_values`）
 - `pr_system_settings.upload_storage`：アップロード保存先 API（`build_upload_storage_router`。ローカルのディレクトリだけ。#11）
-- `pr_system_settings.database`：データベース設定 API（`build_database_router`。接続設定・Wallet ZIP のアップロード・接続テスト）
+- `pr_system_settings.database`：データベース設定 API（`build_database_router`。接続設定・接続テスト）
 - `pr_system_settings.auth`：3製品共通の認証基盤（#212）。ユーザー・ロール・ユーザーとロールの割り当て・セッションは `PLATFORM_*` テーブルで 3 製品が共有する
   - `store`（`InMemoryAuthStore` / `OracleAuthStore(connection_factory)`。ユーザーの一覧・ロールの一覧・principal のロールは、件数によらず一括で読む。製品のロールのデータは一括の hook `_roles_details`（`values_by_role_id` / `in_list_binds` で `ROLE_ID IN (...)`）で読む。#793）、`service`（`AuthService`：ログイン・ロック・セッション・CSRF・パスワード変更・構成管理者・ユーザー / ロール操作・最後の管理者の保護・製品をまたぐ権限昇格の防止）、`dependencies`（`authorize_request`）、`router`（`build_auth_router`）、`migrations`（`PLATFORM_AUTH_DDL` / `apply_platform_auth_schema`）
   - 製品は `AuthService` / `OracleAuthStore` を継承し、実効権限の組み立て（`_role_permissions` / `_build_principal`）と、ロールの製品データの読み書き（`_role_details` / `_replace_role_details` / `_before_delete_role`）を実装する。製品ごとの権限コードのテーブル（`NL2SQL_APP_ROLE_PERMISSIONS` / `RAG_ROLE_PERMISSIONS` / `AGENT_ROLE_PERMISSIONS`）は `PRODUCT_ROLE_PERMISSION_TABLES` に登録し、SYSTEM_ADMIN 以外のロール割り当てでは他製品の権限も操作者に収まることを確認する

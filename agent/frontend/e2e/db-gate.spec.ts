@@ -61,7 +61,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 async function expectGate(page: Page, title: string, href = "/settings/database") {
   const card = gateCard(page);
   await expect(card.getByRole("heading", { level: 1, name: title })).toBeVisible();
-  // 未設定・接続できないときはデータベース設定へ（接続設定と Wallet を確かめる。#10）。
+  // 未設定・接続できないときはデータベース設定へ（接続設定を確かめる。#10）。
   const link = card.getByRole("link", { name: "データベース設定を開く" });
   await expect(link).toHaveAttribute("href", href);
   await expect(card.getByRole("link", { name: "システムテーブルを開く" })).toHaveCount(0);
@@ -86,7 +86,7 @@ for (const viewport of VIEWPORTS) {
     });
 
     test("DB 未設定なら Agent の案内・診断コード・再試行を出し、業務 API を呼ばない", async ({ page, mockApi }) => {
-      setDatabaseStatus(mockApi, "not_configured", "wallet_not_found");
+      setDatabaseStatus(mockApi, "not_configured", "missing_credentials");
 
       await page.goto("/runs");
 
@@ -94,10 +94,10 @@ for (const viewport of VIEWPORTS) {
       await expect(
         gateCard(page).getByText(/^Agent の機能（業務 Agent・実行・承認・監査など）を使うには/)
       ).toBeVisible();
-      await expect(page.getByText("診断コード: wallet_not_found", { exact: true })).toBeVisible();
+      await expect(page.getByText("診断コード: missing_credentials", { exact: true })).toBeVisible();
       await expect(
         page.getByText(
-          "Wallet の保存先に接続用のファイルがそろっていません。Wallet をアップロードし直してください。",
+          "DB パスワードが設定されていません。",
           { exact: true }
         )
       ).toBeVisible();
@@ -179,14 +179,14 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("heading", { level: 1, name: "データベース設定" })).toBeVisible();
     });
 
-    test(`接続できなければ接続設定と Wallet の確認を案内し、ADB の状態は出さない`, async ({ page, mockApi }) => {
+    test(`接続できなければ接続設定の確認を案内し、ADB の状態は出さない`, async ({ page, mockApi }) => {
       setDatabaseStatus(mockApi, "unreachable", "ok");
 
       await page.goto("/runs");
 
       await expectGate(page, "データベースに接続できません", "/settings/database");
       const card = gateCard(page);
-      await expect(card.getByText(/Wallet を確認してから、再試行してください。$/)).toBeVisible();
+      await expect(card.getByText(/DSN を確認してから、再試行してください。$/)).toBeVisible();
       await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
       await saveScreenshot(page, `agent-${viewport.name}-db-unreachable-admin`);
       expect(businessRequests(mockApi)).toEqual([]);
@@ -226,7 +226,7 @@ for (const viewport of VIEWPORTS) {
         {
           status: "unreachable" as const,
           title: "データベースに接続できません",
-          message: /システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/,
+          message: /システム管理者に連絡して、データベースの稼働と接続設定の確認を依頼してください。$/,
         },
         {
           status: "setup_required" as const,

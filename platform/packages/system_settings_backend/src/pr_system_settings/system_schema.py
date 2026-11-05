@@ -266,7 +266,7 @@ def operation_failure_fields(
 
     DB に接続できない失敗は、理由と対処を日本語で返す（`diagnose_oracle_connect_failure`。#1744）。
     pool の時間切れ（`DPY-4005`）なら、`connect_kwargs` で pool を使わずに 1 回だけ直接接続して、
-    本当の原因（ADB の停止・password の誤り・account lock・Wallet など）を確かめる。それ以外は
+    本当の原因（ADB の停止・password の誤り・account lock など）を確かめる。それ以外は
     ORA コードと、ORA でない失敗の手がかり（`operation_failure_hint`）を返す。
     """
 

@@ -109,7 +109,7 @@ API は `(method, route template)` ごとに登録し、登録のない API は�
 | `GET /agents` | `menu.agents` / `menu.runs` | 利用できるエージェントだけ |
 | `GET /runtime/status` | `menu.runtimes` / `menu.agents` | 組み込み Runtime の状態（API key は出さない） |
 | 業務 Agent・スキル・Agent 固有の設定（MCP 接続）の変更 | `agent.admin` | admin |
-| システム設定（アップロード保存先・モデル・データベース）の保存・接続テスト・Wallet のアップロード | 各メニュー（`menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database`。RAG / NL2SQL と同じ割り当て） | 同じメニュー権限（`require_system_settings_write`） |
+| システム設定（アップロード保存先・モデル・データベース）の保存・接続テスト | 各メニュー（`menu.settings_upload_storage` / `menu.settings_model` / `menu.settings_database`。RAG / NL2SQL と同じ割り当て） | 同じメニュー権限（`require_system_settings_write`） |
 | 設定の GET（MCP 接続（Skill の画面からも読む）・ツールの取得、システム設定） | 各メニュー（MCP 接続は `menu.settings_external_mcp`。`menu.settings_external_rag` / `menu.settings_external_nl2sql` は #757 で廃止し、migration 004 が既存ロールから消す） | — |
 | `GET /tools` | `menu.audit` / `agent.admin` | — |
 | `GET /observability/status`・`GET /settings/trace-policy` | `menu.audit`（画面からは使わない。運用スクリプトの確認用） | — |

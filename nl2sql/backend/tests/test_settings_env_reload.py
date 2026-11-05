@@ -84,7 +84,6 @@ _SHARED_ENV_NAMES = (
     "PLATFORM_ORACLE_USER",
     "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES",
     "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
-    "PLATFORM_ORACLE_CONNECTION_SECURITY",
 )
 
 
@@ -98,10 +97,8 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     write_env_values(
         platform_env,
         {
-            "PLATFORM_ORACLE_DSN": "db-a_high",
+            "PLATFORM_ORACLE_DSN": "db-a.example.com:1521/svc_a",
             "PLATFORM_ORACLE_USER": "APP_A",
-            # 接続引数を Wallet のファイルなしで作れるようにする
-            "PLATFORM_ORACLE_CONNECTION_SECURITY": "walletless_tls",
         },
         section_comment="# test",
     )
@@ -109,13 +106,13 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert settings.oracle_dsn == "db-a_high"
+        assert settings.oracle_dsn == "db-a.example.com:1521/svc_a"
 
         # 別の製品の保存と同じ書き方（`write_env_values`）で共通 `.env` を書き換える。
         write_env_values(
             platform_env,
             {
-                "PLATFORM_ORACLE_DSN": "db-b_high",
+                "PLATFORM_ORACLE_DSN": "db-b.example.com:1521/svc_b",
                 "PLATFORM_ORACLE_USER": "APP_B",
                 "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES": "17",
             },
@@ -124,11 +121,14 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
         reloaded = app_settings.get_settings()
 
         assert reloaded is settings
-        assert (reloaded.oracle_dsn, reloaded.oracle_user) == ("db-b_high", "APP_B")
+        assert (reloaded.oracle_dsn, reloaded.oracle_user) == (
+            "db-b.example.com:1521/svc_b",
+            "APP_B",
+        )
         assert reloaded.app_auth_idle_timeout_minutes == 17
         # 接続 pool（`SharedOraclePool`）は接続引数の指紋で作り直す。接続引数が新しい値になる。
         kwargs = oracle_connect_kwargs(reloaded)
-        assert (kwargs["dsn"], kwargs["user"]) == ("db-b_high", "APP_B")
+        assert (kwargs["dsn"], kwargs["user"]) == ("db-b.example.com:1521/svc_b", "APP_B")
     finally:
         app_settings.reset_settings_cache()
 
@@ -141,7 +141,7 @@ def test_platform_env_reload_keeps_model_settings_file_values(
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text(
-        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_ORACLE_DSN=db-a_high\n",
+        "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model\nPLATFORM_ORACLE_DSN=db-a.example.com:1521/svc_a\n",
         encoding="utf-8",
     )
     (tmp_path / "model-settings.json").write_text(
@@ -166,12 +166,12 @@ def test_platform_env_reload_keeps_model_settings_file_values(
 
         platform_env.write_text(
             "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL=env-model-2\n"
-            "PLATFORM_ORACLE_DSN=db-b_high\n",
+            "PLATFORM_ORACLE_DSN=db-b.example.com:1521/svc_b\n",
             encoding="utf-8",
         )
         reloaded = app_settings.get_settings()
 
-        assert reloaded.oracle_dsn == "db-b_high"
+        assert reloaded.oracle_dsn == "db-b.example.com:1521/svc_b"
         assert reloaded.enterprise_ai_default_text_model == "json-model"
     finally:
         app_settings.reset_settings_cache()

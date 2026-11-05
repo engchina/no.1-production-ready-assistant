@@ -17,7 +17,7 @@
 7. 監査: 有効時の生成後の監査 → 補助の規則の当てはめとその監査。
 8. 評価: 範囲の固定 → 網羅性・忠実性 → 正確性。MCP の資料との照合は独立した呼び出し。
 
-[設定の概要](../frontend/src/components/settings/PipelineHubClient.tsx)の取込 → 検索・回答 → 評価に沿い、取込内は同じ[レシピの項目順](../frontend/src/components/documents/DocumentProcessingConfigPanel.logic.ts)を使う。ファイル準備・通常の分割・埋め込み・文書構造索引の構築・OCI Guardrails は LLM 指示を持たないため、架空のプロンプトを追加しない。図の先読みは解析と並行し得る。FAQ は通常の生成・監査と直列には実行しない。
+[設定の概要](../frontend/src/components/settings/PipelineHubClient.tsx)の取込 → 検索・回答 → 評価に沿い、取込内は同じ[レシピの項目順](../frontend/src/components/documents/DocumentProcessingConfigPanel.logic.ts)を使う。ファイル準備・通常の分割・埋め込み・OCI Guardrails は LLM 指示を持たないため、架空のプロンプトを追加しない。図の先読みは解析と並行し得る。FAQ は通常の生成・監査と直列には実行しない。
 
 ## 各段の照合結果
 

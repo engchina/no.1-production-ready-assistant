@@ -101,10 +101,10 @@ describe("databaseGateView（状態ごとの分岐）", () => {
       reasonCode: null,
     });
     expect(databaseGateView({ ...base, data: snapshot("ok") })).toEqual({ kind: "children" });
-    expect(databaseGateView({ ...base, data: snapshot("not_configured", "wallet_not_found") })).toEqual({
+    expect(databaseGateView({ ...base, data: snapshot("not_configured", "missing_credentials") })).toEqual({
       kind: "notice",
       status: "not_configured",
-      reasonCode: "wallet_not_found",
+      reasonCode: "missing_credentials",
     });
     expect(databaseGateView({ ...base, data: snapshot("unreachable", "ok") })).toEqual({
       kind: "notice",
@@ -172,9 +172,9 @@ describe("DatabaseGate（表示）", () => {
     expect(failed).toMatch(/<button[^>]*type="button"[^>]*>.*再試行/);
   });
 
-  it("接続できないときは接続設定と Wallet の確認を案内し、ADB の状態と ORA コードは出さない（#10・#320）", () => {
+  it("接続できないときは接続設定の確認を案内し、ADB の状態と ORA コードは出さない（#10・#320）", () => {
     const html = renderGate("/profiles", clientWith(snapshot("unreachable")), <p>業務画面</p>, admin);
-    expect(html).toContain("Wallet を確認");
+    expect(html).toContain("DSN を確認");
     expect(html).not.toContain("Autonomous Database");
     expect(html).not.toContain("database-gate-adb-state");
     expect(html).not.toContain("adb-management");
@@ -270,10 +270,7 @@ describe("診断コード", () => {
     for (const code of [
       "missing",
       "missing_credentials",
-      "wallet_not_found",
-      "wallet_password_invalid",
       "invalid",
-      "walletless_tls_dsn_required",
       "invalid_configuration",
       "schema_check_failed",
       "migration_required",
@@ -287,17 +284,17 @@ describe("診断コード", () => {
     expect(databaseCheckMessageKey("toString")).toBeUndefined();
     expect(databaseReasonCode("ok")).toBeNull();
     expect(databaseReasonCode(" ")).toBeNull();
-    expect(databaseReasonCode("wallet_not_found")).toBe("wallet_not_found");
+    expect(databaseReasonCode("missing_credentials")).toBe("missing_credentials");
   });
 
   it("補足のあるコードは補足とコードを出し、無いコードはコードだけを出す", () => {
     const known = renderToStaticMarkup(
       <MemoryRouter>
-        <DatabaseUnavailableNotice routes={routes} status="not_configured" reasonCode="wallet_password_invalid" onRetry={() => undefined} />
+        <DatabaseUnavailableNotice routes={routes} status="not_configured" reasonCode="missing_credentials" onRetry={() => undefined} />
       </MemoryRouter>,
     );
-    expect(known).toContain(DATABASE_GATE_MESSAGES["dbGate.check.wallet_password_invalid"]);
-    expect(known).toContain('<p role="status">診断コード: wallet_password_invalid</p>');
+    expect(known).toContain(DATABASE_GATE_MESSAGES["dbGate.check.missing_credentials"]);
+    expect(known).toContain('<p role="status">診断コード: missing_credentials</p>');
     const unknown = renderToStaticMarkup(
       <MemoryRouter>
         <DatabaseUnavailableNotice routes={routes} status="unreachable" reasonCode="custom_code" onRetry={() => undefined} />

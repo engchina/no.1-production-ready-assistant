@@ -38,8 +38,6 @@ def apply_real_oracle_settings(settings: Settings) -> None:
     settings.oracle_password = _REAL_SETTINGS.oracle_password
     settings.oracle_dsn = _REAL_SETTINGS.oracle_dsn
     settings.oracle_client_lib_dir = _REAL_SETTINGS.oracle_client_lib_dir
-    settings.oracle_wallet_dir = _REAL_SETTINGS.oracle_wallet_dir
-    settings.oracle_wallet_password = _REAL_SETTINGS.oracle_wallet_password
 
 
 def _connect() -> Any:
@@ -153,7 +151,6 @@ def capture_baseline() -> None:
 # 表がなければ飛ばす）。
 _DOCUMENT_CHILD_TABLES = (
     "rag_artifact_layers",
-    "rag_graph_entity_chunks",
     "rag_ingestion_segments",
     "rag_ingestion_jobs",
     "rag_chunks",

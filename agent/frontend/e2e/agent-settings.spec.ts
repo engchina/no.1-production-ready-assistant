@@ -58,17 +58,6 @@ async function expectTextBeforeVision(text: Locator, vision: Locator) {
   expect(sameRow ? textBox!.x < visionBox!.x : textBox!.y < visionBox!.y).toBe(true);
 }
 
-async function fillOrSelectDsn(page: Page, value: string) {
-  const dsnControl = page.getByLabel("サービス名 / DSN");
-  const tagName = await dsnControl.evaluate((element) => element.tagName.toLowerCase());
-  if (tagName === "button") {
-    await dsnControl.click();
-    await page.getByRole("option", { name: value }).click();
-    return;
-  }
-  await dsnControl.fill(value);
-}
-
 async function mockRuntimeSettings(page: Page) {
   await page.route("**/api/settings/upload-storage", async (route) => {
     if (route.request().method() !== "GET") {
@@ -104,12 +93,8 @@ async function mockRuntimeSettings(page: Page) {
       body: JSON.stringify({
         data: {
           user: body.user ?? "",
-          dsn: body.dsn ?? "ragdb_high",
-          wallet_dir: "/u01/aipoc/instantclient_23_26/network/admin",
-          wallet_uploaded: true,
-          available_services: ["ragdb_high"],
+          dsn: body.dsn ?? "127.0.0.1:1525/ragdb_low",
           has_password: method === "PATCH",
-          has_wallet_password: false,
           readiness: "ok",
           embedding_dimension: 1024,
           vector_column: "VECTOR(1024, FLOAT32)",
@@ -198,7 +183,7 @@ test.describe("Agent Runtime settings", () => {
     await page.goto("/settings/database");
     await expect(page.getByRole("heading", { name: "データベース設定", level: 1 })).toBeVisible();
     await page.getByLabel("データベースユーザー").fill("rag_app");
-    await fillOrSelectDsn(page, "ragdb_high");
+    await page.locator("#oracle-dsn").fill("127.0.0.1:1525/ragdb_low");
     await page.getByLabel("データベースパスワード").fill("secret-password");
     await page.getByRole("button", { name: /DB設定を保存/ }).click();
     await expect(page.getByText("保存しました")).toBeVisible();

@@ -285,7 +285,7 @@ done
 )
 
 # アプリ用の DB ユーザー（#1668）: props の adb_admin.env があるときだけ、製品の配備の前に suite-db-user.py を
-# uv run（固定の python-oracledb）で実行する。無ければ何もしない。失敗したら 0 以外を返し、Wallet の一時の展開を消す。
+# uv run（固定の python-oracledb）で実行する。無ければ何もしない。失敗したら 0 以外を返す。
 # main は失敗しても製品の配備と起動を続け、最後に失敗として返す（#1756。ADB に接続できなくてもアプリケーションは起動する）。
 (
   case_dir="${task_dir}/db-user"
@@ -296,15 +296,6 @@ done
   selinux_enabled() { return 1; }
   uv() {
     printf '%s\n' "$*" >> "${calls}"
-    local arg previous=""
-    for arg in "$@"; do
-      if [ "${previous}" = "--wallet-dir" ]; then
-        [ -d "${arg}" ] || fail "Wallet の一時の directory が無い"
-        [ "$(stat -c %a "${arg}")" = "700" ] || fail "Wallet の一時の directory は 0700"
-        printf '%s\n' "${arg}" > "${case_dir}/wallet-dir"
-      fi
-      previous="${arg}"
-    done
     return "${UV_STATUS:-0}"
   }
   out="${case_dir}/out.log"
@@ -323,14 +314,12 @@ done
     "--current-env ${SUITE_REPO_DIR}/platform/.env"; do
     printf '%s\n' "${call}" | grep -qF -- "${expected}" || fail "uv の引数に ${expected} が無い: ${call}"
   done
-  [ ! -e "$(cat "${case_dir}/wallet-dir")" ] || fail "Wallet の一時の directory を消していない"
   grep -qxF "[suite-init] check: db user OK" "${out}" || fail "OK の行: $(cat "${out}")"
-  # 失敗: 0 以外で返し、NG の行を出し、一時の directory を消す。
+  # 失敗: 0 以外で返し、NG の行を出す。
   status=0
   UV_STATUS=1 provision_db_app_user > "${out}" 2>&1 || status=$?
   [ "${status}" -eq 1 ] || fail "失敗を返さない（${status}）"
   grep -qF "[suite-init] check: db user NG" "${out}" || fail "NG の行: $(cat "${out}")"
-  [ ! -e "$(cat "${case_dir}/wallet-dir")" ] || fail "失敗しても Wallet の一時の directory を消す"
 
   # main: DB ユーザーの準備が失敗しても（ADB に接続できない）、製品の配備・確認まで進み、最後に失敗として返す。
   steps="${case_dir}/steps.log"

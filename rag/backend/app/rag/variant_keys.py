@@ -9,7 +9,6 @@ byte 単位の chunk 比較ではなく、artifact 層を「効く軸だけ」�
     extraction_recipe (preprocess/parser)
         -> chunk_set (+ chunking) <- embedding は chunk text 従属で自動共有
         -> metadata 層 (+ field_extraction)
-        -> graph 層    (+ graph_profile)
         -> nav 層      (+ navigation_summary / raptor)
 
 すべて決定論(canonical JSON + SHA1)で、CI で実 Oracle なしに検証できる。実際の
@@ -89,7 +88,6 @@ _CHUNK_SET_HASH_STRATEGY_VALUES: dict[str, str] = {_SMALL_TO_BIG_STRATEGY: "docr
 
 # 各派生層が「追加で」依存する軸(chunk_set_id に重ねて hash する)。
 _METADATA_FIELDS: tuple[str, ...] = ("rag_field_extraction_enabled",)
-_GRAPH_FIELDS: tuple[str, ...] = ("rag_graph_profile",)
 _NAV_FIELDS: tuple[str, ...] = ("rag_navigation_summary_enabled", "rag_raptor_enabled")
 
 _HASH_HEX_LEN = 16
@@ -233,11 +231,6 @@ def compute_metadata_layer_id(chunk_set_id: str, settings: Settings) -> str:
     )
 
 
-def compute_graph_layer_id(chunk_set_id: str, settings: Settings) -> str:
-    """GraphRAG 層の ID(chunk_set に graph_profile を重ねる)。"""
-    return _digest("gr", {"v": KEY_VERSION, "cs": chunk_set_id, **_fields(settings, _GRAPH_FIELDS)})
-
-
 def compute_nav_layer_id(chunk_set_id: str, settings: Settings) -> str:
     """ナビゲーション/RAPTOR 層の ID(chunk_set に nav 軸を重ねる)。"""
     return _digest("nv", {"v": KEY_VERSION, "cs": chunk_set_id, **_fields(settings, _NAV_FIELDS)})
@@ -251,6 +244,5 @@ def compute_layer_ids(source_sha256: str, settings: Settings) -> dict[str, str]:
         "extraction_recipe_id": extraction_recipe_id,
         "chunk_set_id": chunk_set_id,
         "metadata_layer_id": compute_metadata_layer_id(chunk_set_id, settings),
-        "graph_layer_id": compute_graph_layer_id(chunk_set_id, settings),
         "nav_layer_id": compute_nav_layer_id(chunk_set_id, settings),
     }

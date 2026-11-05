@@ -24,7 +24,7 @@ grep -q '^VERSION_ID="9\.' /etc/os-release || fail "Oracle Linux 9 ではない:
 # ---------------------------------------------------------------- 1. package の名前
 
 # 配備の前に Compute に入れておく package（以前の Terraform stack の cloud-init が入れていたもの。#12）。
-base_packages=(ca-certificates dos2unix firewalld git openssl policycoreutils-python-utils tar tmux unzip)
+base_packages=(ca-certificates dos2unix firewalld git openssl policycoreutils-python-utils tar tmux)
 
 # 各スクリプトの package の一覧（test mode で source して変数・関数から取る。実行はしない）。
 mapfile -t suite_packages < <(

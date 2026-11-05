@@ -43,7 +43,7 @@ async def test_oracle_connection(
     except TimeoutError as exc:
         raise OracleConnectionTimeoutError(
             f"Oracle AI Database の接続テストが {timeout_seconds:g} 秒でタイムアウトしました。"
-            "データベースの起動状態、Wallet サービス名、ネットワーク到達性を確認してください。"
+            "データベースの起動状態、DSN のサービス名、ネットワーク到達性を確認してください。"
         ) from exc
 
 

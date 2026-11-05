@@ -113,8 +113,8 @@ OCI Compute（`platform/deploy` で配備した環境）での手順を示す。
    sudo chown opc:opc <suite>/platform/.env && sudo chmod 0600 <suite>/platform/.env
    ```
 
-5. `nl2sql/scripts/update-after-pull.sh` を実行して再配備・再起動する（`platform/.env` の存在・権限と
-   `PLATFORM_ORACLE_WALLET_DIR` を確認し、recovery snapshot に `platform.env` も保存する）。
+5. `nl2sql/scripts/update-after-pull.sh` を実行して再配備・再起動する（`platform/.env` の存在・権限を
+   確認し、recovery snapshot に `platform.env` も保存する）。
 6. `cd <suite>/nl2sql/backend && .venv/bin/python -m app.cli.config_audit` が `"ok":true` になることを確認する。
 
 - 新規の配備では、`init_script.sh` が `/u01/aipoc/props/platform.env` を `platform/.env`

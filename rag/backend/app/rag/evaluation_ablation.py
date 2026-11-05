@@ -46,7 +46,6 @@ ABLATIONS: dict[str, tuple[str, dict[str, object]]] = {
         {"reference_expansion_enabled": False},
     ),
     "entity_expansion": ("rag_entity_expansion_enabled", {"entity_expansion_enabled": False}),
-    "graph_expansion": ("rag_graph_expansion_enabled", {"graph_expansion_enabled": False}),
     "section_expansion": ("rag_section_expansion_enabled", {"section_expansion_enabled": False}),
 }
 # 評価の上書きで無効にできず、ここでは測らない工程（成功を装わずに表示する）。

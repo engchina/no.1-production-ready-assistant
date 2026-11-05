@@ -23,7 +23,6 @@ from rag_engine.retrieval.search_stages import (
     DERIVED_SOURCE_STAGE,
     DOCUMENT_INFO_STAGE,
     ENTITY_EXPANSION_STAGE,
-    GRAPH_EXPANSION_STAGE,
     IMAGE_EVIDENCE_STAGE,
     REFERENCE_EXPANSION_STAGE,
     TEXT_SEARCH_STAGE,
@@ -523,10 +522,8 @@ def test_pool_max_uses_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
         oracle_pool_max=16,
     )
 
@@ -731,10 +728,8 @@ def _pool_settings(**values: Any) -> Settings:
     return Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
         **values,
     )
 
@@ -961,7 +956,7 @@ async def test_injected_search_reports_db_search_stages_and_channels(
     result = await asyncio.to_thread(in_answer_thread)
 
     # vector と keyword の検索は並行に読み、それぞれ 1 つの段になる(段は重なる)。続く前後の文脈・
-    # 文書の分類と背景も段になる(#3464)。参照先・実体・関係情報は広げない検索なので段を出さない。
+    # 文書の分類と背景も段になる(#3464)。参照先・実体は広げない検索なので段を出さない。
     started = [entry[2] for entry in observed if entry[0] == "start"]
     assert sorted(started[:2]) == sorted([VECTOR_SEARCH_STAGE, TEXT_SEARCH_STAGE])
     assert started[2:] == [CONTEXT_SIBLINGS_STAGE, DOCUMENT_INFO_STAGE]
@@ -990,13 +985,12 @@ async def test_injected_search_reports_db_search_stages_and_channels(
 async def test_injected_search_reports_stages_after_db_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """回答に注入する検索は、DB の検索の後の工程(前後の文脈・参照先・実体・関係情報・図の切り出し・
+    """回答に注入する検索は、DB の検索の後の工程(前後の文脈・参照先・実体・図の切り出し・
     文書の分類と背景)を「文書の検索」の子の段にする(#3464)。各工程の処理は段の中で行う。"""
     client = _SearchOracle()
     settings = Settings(
         rag_reference_expansion_enabled=True,
         rag_entity_expansion_enabled=True,
-        rag_graph_expansion_enabled=True,
     )
     engine = AnswerEngine(settings, oracle=client, genai=_GenAi())  # type: ignore[arg-type]
     observed: list[tuple[str, str]] = []
@@ -1023,7 +1017,6 @@ async def test_injected_search_reports_stages_after_db_search(
     monkeypatch.setattr(client, "context_group_siblings", recording("siblings", []))
     monkeypatch.setattr(engine, "_reference_expansion", recording("references", {}))
     monkeypatch.setattr(engine, "_entity_expansion", recording("entities", []))
-    monkeypatch.setattr(engine, "_graph_expansion", recording("graph", []))
     monkeypatch.setattr(engine, "_attach_images", True)
     monkeypatch.setattr(engine, "_materialize_image_evidence", recording("images", None))
     monkeypatch.setattr(client, "chunk_set_first_page_contexts", recording("first_pages", {}))
@@ -1067,7 +1060,6 @@ async def test_injected_search_reports_stages_after_db_search(
         CONTEXT_SIBLINGS_STAGE,
         REFERENCE_EXPANSION_STAGE,
         ENTITY_EXPANSION_STAGE,
-        GRAPH_EXPANSION_STAGE,
         IMAGE_EVIDENCE_STAGE,
         DOCUMENT_INFO_STAGE,
     ]
@@ -1078,7 +1070,6 @@ async def test_injected_search_reports_stages_after_db_search(
         "siblings": CONTEXT_SIBLINGS_STAGE,
         "references": REFERENCE_EXPANSION_STAGE,
         "entities": ENTITY_EXPANSION_STAGE,
-        "graph": GRAPH_EXPANSION_STAGE,
         "images": IMAGE_EVIDENCE_STAGE,
         "first_pages": DOCUMENT_INFO_STAGE,
     }
@@ -1099,7 +1090,6 @@ async def test_search_stages_are_skipped_when_there_is_nothing_to_do() -> None:
     settings = Settings(
         rag_reference_expansion_enabled=False,
         rag_entity_expansion_enabled=False,
-        rag_graph_expansion_enabled=False,
     )
     engine = AnswerEngine(settings, oracle=client, genai=_GenAi())  # type: ignore[arg-type]
     state = _SearchState()

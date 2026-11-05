@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
 @with_system_access
 def main(argv: Sequence[str] | None = None) -> int:
     configure_cli_logging("rag")
-    # DB の停止中・届かないときに、Wallet の別名の TNS の再試行（retry_count=20）で 1〜2 分待たずに
+    # DB の停止中・届かないときに、接続記述子の TNS の再試行（retry_count=20）で 1〜2 分待たずに
     # 失敗を返す（配備が retry する。#1779）。常駐の server の共有 pool は変えない。
     enable_cli_connect_mode()
     args = build_parser().parse_args(argv)

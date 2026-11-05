@@ -19,7 +19,6 @@ import app.clients.oracle as oracle_module
 from app.clients.oracle import (
     DocumentDeleteBlockedByRunningIngestionError,
     OracleClient,
-    OracleWalletPasswordRequiredError,
     _datetime_value,
     _test_oracle_connection_sync,
     oracle_document_schema_sql,
@@ -30,19 +29,12 @@ from app.clients.oracle import (
     oracle_ingestion_job_schema_sql,
     oracle_ingestion_segment_schema_sql,
     oracle_knowledge_base_schema_sql,
-    oracle_knowledge_graph_schema_sql,
     oracle_search_audit_schema_sql,
     oracle_text_terms,
     oracle_vector_schema_sql,
 )
 from app.config import Settings
 from app.rag.chunking import Chunk
-from app.rag.graph_index import (
-    GraphEntity,
-    GraphEntityChunkLink,
-    GraphIndex,
-    GraphRelationship,
-)
 from app.rag.request_context import (
     AuditRequestContext,
     reset_audit_request_context,
@@ -128,10 +120,8 @@ def test_shared_pool_created_while_db_down_recovers_after_start(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
     client = OracleClient(settings=settings)
     client.connection_pool()  # 停止中に作られた pool
@@ -164,21 +154,22 @@ def test_shared_pool_is_recreated_when_database_settings_change(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
     client = OracleClient(settings=settings)
     first = client.connection_pool()
     assert client.connection_pool() is first
 
     # `get_settings()` が `.env` を読み直すと、同じ Settings の値が書き換わる。
-    settings.oracle_dsn = "otherdb_high"
+    settings.oracle_dsn = "other.example.test:1521/otherdb"
     second = client.connection_pool()
 
     assert second is not first
-    assert [kwargs["dsn"] for kwargs in db.kwargs] == ["ragdb_high", "otherdb_high"]
+    assert [kwargs["dsn"] for kwargs in db.kwargs] == [
+        "adb.example.test:1521/ragdb",
+        "other.example.test:1521/otherdb",
+    ]
     assert db.pools[0].closed == 1
     assert client.connection_pool() is second
 
@@ -442,52 +433,10 @@ async def test_append_message_binds_clarification_json(
     assert json.loads(cast(str, insert.parameters["clarification_json"])) == clarification
 
 
-def test_oracle_connection_refuses_password_wallet_without_prompt(
+def test_oracle_connection_passes_only_user_password_and_dsn(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    """パスワード必須 Wallet は SDK の対話入力へ進む前に止める。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "ewallet.p12").write_bytes(b"encrypted-wallet")
-    called = False
-
-    def fake_connect(**kwargs: object) -> object:
-        nonlocal called
-        called = True
-        return FakeOracleConnection([[{"ok": 1}]])
-
-    monkeypatch.setattr(
-        "app.clients.oracle.importlib.import_module",
-        lambda name: SimpleNamespace(connect=fake_connect),
-    )
-    settings = Settings.model_construct(
-        oracle_user="rag_app",
-        oracle_password="",
-        oracle_dsn="ragdb_high",
-        oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
-    )
-
-    with pytest.raises(OracleWalletPasswordRequiredError, match="Wallet パスワード"):
-        _test_oracle_connection_sync(settings)
-
-    assert called is False
-
-
-def test_oracle_connection_uses_auto_login_wallet_without_wallet_password(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """cwallet.sso がある Wallet は Wallet パスワードなしで接続 kwargs を作る。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
+    """接続の引数は、ユーザー・パスワード・DSN と接続の待ち時間・再試行だけ。"""
     captured: dict[str, object] = {}
 
     def fake_connect(**kwargs: object) -> object:
@@ -500,19 +449,21 @@ def test_oracle_connection_uses_auto_login_wallet_without_wallet_password(
     )
     settings = Settings.model_construct(
         oracle_user="rag_app",
-        oracle_password="",
-        oracle_dsn="ragdb_high",
+        oracle_password="db-secret",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)
 
-    assert captured["config_dir"] == str(wallet_dir)
-    assert captured["wallet_location"] == str(wallet_dir)
-    assert captured["tcp_connect_timeout"] == 10.0
-    assert "wallet_password" not in captured
+    assert captured == {
+        "user": "rag_app",
+        "password": "db-secret",
+        "dsn": "adb.example.test:1521/ragdb",
+        "retry_count": 0,
+        "retry_delay": 0,
+        "tcp_connect_timeout": 10.0,
+    }
 
 
 def test_oracle_connection_initializes_instant_client_when_configured(
@@ -520,11 +471,6 @@ def test_oracle_connection_initializes_instant_client_when_configured(
     tmp_path: Path,
 ) -> None:
     """RAG も nl2sql と同じく PLATFORM_ORACLE_CLIENT_LIB_DIR があれば thick client を使う。"""
-    wallet_dir = tmp_path / "instantclient_23_26" / "network" / "admin"
-    wallet_dir.mkdir(parents=True)
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
     calls: list[tuple[str, object]] = []
 
     def fake_init_oracle_client(*, lib_dir: str) -> None:
@@ -545,37 +491,34 @@ def test_oracle_connection_initializes_instant_client_when_configured(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir=str(tmp_path / "instantclient_23_26"),
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)
 
     assert calls[0] == ("init", str(tmp_path / "instantclient_23_26"))
-    assert calls[1] == ("connect", "ragdb_high")
+    assert calls[1] == ("connect", "adb.example.test:1521/ragdb")
 
 
-_WALLET_HIGH = (
+_RETRY_DESCRIPTOR = (
     "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)"
-    "(host=adb.example.com))(connect_data=(service_name=x_ragdb_high.adb.oraclecloud.com))"
+    "(host=adb.example.com))(connect_data=(service_name=x_ragdb.adb.oraclecloud.com))"
     "(security=(ssl_server_dn_match=yes)))"
 )
 
 
 @pytest.mark.parametrize("cli", [False, True], ids=["server", "cli"])
 def test_shared_pool_keeps_tns_retry_only_for_the_server(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cli: bool
+    monkeypatch: pytest.MonkeyPatch, cli: bool
 ) -> None:
-    """常駐の server の共有 pool は Wallet の別名の DSN のまま（TNS の再試行で一時の切断に強い）。
+    """常駐の server の共有 pool は接続記述子の DSN のまま（TNS の再試行で一時の切断に強い）。
 
     CLI（`enable_cli_connect_mode`）だけ、TNS の再試行を外した記述子・`retry_count=0`・短い
     `tcp_connect_timeout` で作る（DB の停止中に 1〜2 分待たない。#1779）。
     """
     from pr_backend_core.oracle_dsn import CLI_TCP_CONNECT_TIMEOUT_SECONDS, enable_cli_connect_mode
 
-    (tmp_path / "tnsnames.ora").write_text(f"ragdb_high = {_WALLET_HIGH}\n", encoding="utf-8")
     created: list[dict[str, object]] = []
     pool = FakeOraclePool()
 
@@ -591,10 +534,8 @@ def test_shared_pool_keeps_tns_retry_only_for_the_server(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn=_RETRY_DESCRIPTOR,
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(tmp_path),
-        oracle_wallet_password="",
         oracle_tcp_connect_timeout_seconds=10.0,
         oracle_pool_max=4,
     )
@@ -604,13 +545,13 @@ def test_shared_pool_keeps_tns_retry_only_for_the_server(
     assert OracleClient(settings=settings).connection_pool() is pool
 
     kwargs = created[0]
-    assert kwargs["config_dir"] == str(tmp_path) and kwargs["getmode"] == 3
+    assert kwargs["getmode"] == 3
     if cli:
-        assert kwargs["dsn"] == _WALLET_HIGH.replace("(retry_count=20)(retry_delay=3)", "")
+        assert kwargs["dsn"] == _RETRY_DESCRIPTOR.replace("(retry_count=20)(retry_delay=3)", "")
         assert kwargs["retry_count"] == 0 and kwargs["retry_delay"] == 0
         assert kwargs["tcp_connect_timeout"] == CLI_TCP_CONNECT_TIMEOUT_SECONDS
     else:
-        assert kwargs["dsn"] == "ragdb_high"
+        assert kwargs["dsn"] == _RETRY_DESCRIPTOR
         assert "retry_count" not in kwargs and "retry_delay" not in kwargs
         assert kwargs["tcp_connect_timeout"] == 10.0
     # 診断の直接の接続も、その pool と同じ接続先を使う（#1744）。
@@ -646,35 +587,23 @@ def test_oracle_pool_initializes_instant_client_when_configured(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir=str(tmp_path / "instantclient_23_26"),
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
 
     client = OracleClient(settings=settings)
 
     assert client.connection_pool() is pool
     assert calls[0] == ("init", str(tmp_path / "instantclient_23_26"))
-    assert calls[1] == ("create_pool", "ragdb_high")
+    assert calls[1] == ("create_pool", "adb.example.test:1521/ragdb")
     # 新しい接続ごとに result cache を無効にする（ADB の内部エラーを避ける。#333）。
     assert calls[2] == ("session_callback", init_oracle_session)
 
 
-def test_oracle_connection_uses_database_password_as_wallet_password(
+def test_oracle_connection_test_strips_descriptor_retry(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    """Wallet パスワード未入力時は DB password を wallet_password に使う。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
-    (wallet_dir / "ewallet.pem").write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
+    """接続テストは接続記述子の長い retry 設定を外して即時診断しやすくする。"""
     captured: dict[str, object] = {}
 
     def fake_connect(**kwargs: object) -> object:
@@ -688,50 +617,8 @@ def test_oracle_connection_uses_database_password_as_wallet_password(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn=_RETRY_DESCRIPTOR,
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
-    )
-
-    _test_oracle_connection_sync(settings)
-
-    assert captured["wallet_password"] == "db-secret"
-    assert captured["tcp_connect_timeout"] == 10.0
-
-
-def test_oracle_connection_test_strips_wallet_retry_descriptor(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """接続テストは ADB Wallet alias の長い retry 設定を外して即時診断しやすくする。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text(
-        "ragdb_high = (description=(retry_count=20)(retry_delay=3)"
-        "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
-        "(connect_data=(service_name=ragdb_high.adb.oraclecloud.com)))",
-        encoding="utf-8",
-    )
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
-    captured: dict[str, object] = {}
-
-    def fake_connect(**kwargs: object) -> object:
-        captured.update(kwargs)
-        return FakeOracleConnection([[{"ok": 1}]])
-
-    monkeypatch.setattr(
-        "app.clients.oracle.importlib.import_module",
-        lambda name: SimpleNamespace(connect=fake_connect),
-    )
-    settings = Settings.model_construct(
-        oracle_user="rag_app",
-        oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
-        oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)
@@ -2022,44 +1909,6 @@ async def test_oracle_vector_search_applies_chunk_metadata_filters() -> None:
     assert call.parameters["filter_section_path"] == "%経費申請%"
 
 
-async def test_oracle_knowledge_base_subgraph_requires_current_kb_membership() -> None:
-    """KB のグラフ表示も、KB から外した文書の entity / relationship を出さない(#274)。"""
-    pool = FakeOraclePool(
-        execute_results=[
-            [{"entity_id": "ent-1", "canonical_name": "承認条件", "confidence": 0.9}],
-            [],
-        ]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    nodes, edges = await client.fetch_knowledge_base_subgraph("kb-1", limit=10)
-
-    assert [node["id"] for node in nodes] == ["ent-1"]
-    assert edges == []
-    node_sql, edge_sql = (" ".join(call.statement.split()) for call in pool.connection.calls[:2])
-    assert "{membership_sql}" not in node_sql
-    assert "member_dkb.knowledge_base_id = e.knowledge_base_id" in node_sql
-    assert "JSON_EXISTS(e.source_document_ids," in node_sql
-    assert "member_dkb.knowledge_base_id = r.knowledge_base_id" in edge_sql
-    assert "JSON_EXISTS(r.source_document_ids," in edge_sql
-
-
-async def test_oracle_knowledge_base_subgraph_requires_active_chunk_sets() -> None:
-    """成功前の処理結果を node / edge のどちらにも表示しない。"""
-    pool = FakeOraclePool(
-        execute_results=[[{"entity_id": "entity-active", "canonical_name": "section"}], []]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    await client.fetch_knowledge_base_subgraph("kb-active", limit=10)
-
-    for call, alias in zip(pool.connection.calls, ("e", "r"), strict=True):
-        sql = " ".join(call.statement.split())
-        assert f"{alias}.chunk_set_id IS NULL OR EXISTS" in sql
-        assert f"graph_cs.chunk_set_id = {alias}.chunk_set_id" in sql
-        assert "graph_cs.is_active = 1" in sql
-
-
 async def test_upsert_extraction_artifact_preserves_existing_payload_when_omitted() -> None:
     """後段 status 更新では大きい抽出 JSON を再 bind せず、既存 payload を保持する。"""
     pool = FakeOraclePool()
@@ -2242,89 +2091,6 @@ async def test_update_recipe_status_coalesces_preprocess_artifact_as_json() -> N
         mode="json"
     )
     assert call.input_sizes == oracle_module._json_input_sizes("preprocess_artifact")
-
-
-async def test_oracle_replace_document_graph_index_replaces_document_scope() -> None:
-    """GraphRAG-lite index 保存は対象 document の旧 KG rows を置換する。"""
-    graph_index = GraphIndex(
-        entities=[
-            GraphEntity(
-                entity_id="ent-doc",
-                knowledge_base_id="kb-1",
-                canonical_name="文書全体: 社内規程",
-                entity_type="document",
-                description="社内規程全体",
-                confidence=0.95,
-                source_document_ids=["doc-1"],
-            ),
-            GraphEntity(
-                entity_id="ent-section",
-                knowledge_base_id="kb-1",
-                canonical_name="承認条件",
-                entity_type="section",
-                description="承認条件の章節",
-                confidence=0.9,
-                source_document_ids=["doc-1"],
-            ),
-        ],
-        relationships=[
-            GraphRelationship(
-                relationship_id="rel-doc-section",
-                knowledge_base_id="kb-1",
-                source_entity_id="ent-doc",
-                target_entity_id="ent-section",
-                relationship_type="contains",
-                description="文書全体は承認条件を含みます。",
-                confidence=1.0,
-                source_document_ids=["doc-1"],
-            )
-        ],
-        entity_chunk_links=[
-            GraphEntityChunkLink(
-                entity_id="ent-section",
-                chunk_id="doc-1:0",
-                document_id="doc-1",
-                relevance_score=0.8,
-            )
-        ],
-    )
-    pool = FakeOraclePool(
-        execute_results=[
-            [_oracle_document_row()],
-            [{"entity_id": "ent-doc"}, {"entity_id": "ent-old"}, {"entity_id": "ent-stale"}],
-        ]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    await client.replace_document_graph_index("doc-1", graph_index)
-
-    assert pool.connection.commits == 1
-    statements = [call.statement for call in pool.connection.calls]
-    assert any("DELETE FROM rag_graph_relationships" in statement for statement in statements)
-    assert any(
-        "FROM rag_graph_entities" in statement and "source_document_ids" in statement
-        for statement in statements
-    )
-    assert any("source_entity_id IN" in statement for statement in statements)
-    assert any("target_entity_id IN" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entity_chunks" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entities" in statement for statement in statements)
-    # claims / community summary は #621 で廃止し、表は migration 007 で消した。
-    assert not any("rag_graph_claims" in statement for statement in statements)
-    assert not any("FROM user_tables" in statement for statement in statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in statements)
-    many_statements = [call.statement for call in pool.connection.many_calls]
-    assert any("INSERT INTO rag_graph_entities" in statement for statement in many_statements)
-    assert any("INSERT INTO rag_graph_relationships" in statement for statement in many_statements)
-    assert not any("rag_graph_claims" in statement for statement in many_statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in many_statements)
-    assert any("INSERT INTO rag_graph_entity_chunks" in statement for statement in many_statements)
-    entity_insert = next(
-        call
-        for call in pool.connection.many_calls
-        if "INSERT INTO rag_graph_entities" in call.statement
-    )
-    assert json.loads(str(entity_insert.rows[0]["source_document_ids"])) == ["doc-1"]
 
 
 async def test_oracle_save_evaluation_artifact_redacts_query_text() -> None:
@@ -2710,11 +2476,6 @@ async def test_oracle_delete_document_removes_chunks_and_document_with_access_sc
     assert "ORDER BY document_id" in statements[0]
     assert "FOR UPDATE" in statements[0]
     assert "duplicate_of_document_id = :document_id" in statements[0]
-    assert any("FROM rag_graph_entity_chunks" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entity_chunks" in statement for statement in statements)
-    # 関係情報の entity が無い文書は、#621 で廃止した表を見に行かない。
-    assert not any("rag_graph_claims" in statement for statement in statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in statements)
     duplicate_clear = next(
         call
         for call in pool.connection.calls
@@ -2759,7 +2520,6 @@ async def test_oracle_delete_document_rolls_back_when_running_job_appears() -> N
     pool = FakeOraclePool(
         execute_results=[
             [_oracle_document_row()],
-            [],
             [{"job_id": "job-running"}],
         ]
     )
@@ -3131,19 +2891,13 @@ async def test_oracle_ingestion_audit_persists_file_processing_metrics() -> None
     assert pool.connection.commits == 1
 
 
-def test_oracle_graph_feedback_and_eval_artifact_schema_use_oracle_tables() -> None:
-    """GraphRAG-lite / feedback / eval artifact は Oracle table と JSON で表現する。"""
-    graph_ddl = oracle_knowledge_graph_schema_sql()
+def test_oracle_feedback_and_eval_artifact_schema_use_oracle_tables() -> None:
+    """feedback / eval artifact は Oracle table と JSON で表現する。"""
     feedback_ddl = oracle_feedback_schema_sql()
     feedback_details_ddl = oracle_feedback_details_schema_sql()
     artifact_ddl = oracle_evaluation_artifact_schema_sql()
 
-    assert "CREATE TABLE rag_graph_entities" in graph_ddl
-    assert "CREATE TABLE rag_graph_relationships" in graph_ddl
     # claims / community summary は #621 で廃止した(読む経路が無かった)。
-    assert "rag_graph_claims" not in graph_ddl
-    assert "rag_graph_community_summaries" not in graph_ddl
-    assert "CREATE TABLE rag_graph_entity_chunks" in graph_ddl
     assert "CREATE TABLE rag_citation_feedback" in feedback_ddl
     assert "target_type       VARCHAR2(16)" in feedback_ddl
     assert "source_surface    VARCHAR2(16)" in feedback_ddl
@@ -3166,7 +2920,7 @@ def test_oracle_graph_feedback_and_eval_artifact_schema_use_oracle_tables() -> N
     assert "result_json       JSON NOT NULL" in artifact_ddl
     assert "result_sha256     CHAR(64) NOT NULL" in artifact_ddl
     assert "rag_evaluation_runs_result_hash_idx" in artifact_ddl
-    assert "NEO4J" not in (graph_ddl + feedback_ddl + artifact_ddl).upper()
+    assert "NEO4J" not in (feedback_ddl + artifact_ddl).upper()
 
 
 @pytest.mark.anyio

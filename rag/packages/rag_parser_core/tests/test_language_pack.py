@@ -434,7 +434,7 @@ def test_saved_pack_with_removed_display_fields_keeps_stored_hash() -> None:
         for section, fields in legacy.items()
         if isinstance(fields, dict)
         for key, value in fields.items()
-    ] + [["labels", "xml_tree_document_type", "XML ツリー"]]
+    ] + [[section, key, value] for (section, key), value in REMOVED_FIELDS.items()]
     canonical = json.dumps(sorted(entries, key=lambda e: (e[0], e[1])), ensure_ascii=False)
     expected = hashlib.sha256(f"{legacy['locale']}\n{canonical}".encode()).hexdigest()[:16]
     assert stored_pack_hash(legacy, loaded) == expected

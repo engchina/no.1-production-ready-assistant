@@ -24,7 +24,7 @@ interface CardErrorBoundaryState {
  *
  * React は boundary が無いと、throw したコンポーネントの祖先をルートまで unmount する。
  * 設定ページは独立した API と責務を持つカードを兄弟として並べているため、boundary が無いと
- * 1 枚の描画例外でページ全体が空になる（実例: SystemTablesCard の例外で ADB 管理・Wallet が
+ * 1 枚の描画例外でページ全体が空になる（実例: SystemTablesCard の例外で他のカードが
  * まとめて消えた #63）。カードごとに失敗を閉じ込め、他のカードの描画を継続させる。
  *
  * 対象は **描画中の例外**。API エラーは各カードが従来どおり自前のエラー表示で扱う。

@@ -46,7 +46,6 @@ from app.features.nl2sql.service import (
     nl2sql_service,
 )
 from app.features.nl2sql.trace_spans import start_trace_span_store, stop_trace_span_store
-from app.features.settings.errors import DatabaseWalletOperationError
 from app.readiness import readiness_checks
 from app.security.permissions import UNCLASSIFIED_PERMISSION, permission_for_route
 from app.security.service import SecurityApiError, get_security_service
@@ -82,7 +81,7 @@ class ServiceContainer:
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     # Startup is intentionally DB-free. A fresh Compute can boot before the
-    # database, wallet, or any application table is ready; those failures belong
+    # database or any application table is ready; those failures belong
     # to readiness probes or the first operation that actually needs them.
     with tracing_lifecycle(
         get_settings(),
@@ -290,31 +289,6 @@ async def security_migration_required_handler(
         ),
         code="SECURITY_SCHEMA_MIGRATION_REQUIRED",
         retryable=False,
-    )
-
-
-@app.exception_handler(DatabaseWalletOperationError)
-async def database_wallet_operation_error_handler(
-    request: Request,
-    exc: DatabaseWalletOperationError,
-) -> JSONResponse:
-    """Wallet install の 500 を安全な理由・復旧手順・問題コードで返す。"""
-
-    logger.error(
-        "database_wallet_operation_failed",
-        extra={
-            "request_id": request_id_for(request),
-            "error_code": exc.code,
-            "wallet_stage": exc.stage,
-            "exception_type": type(exc.__cause__).__name__ if exc.__cause__ else None,
-        },
-    )
-    return api_problem_response(
-        request,
-        status_code=500,
-        detail=exc.public_message,
-        code=exc.code,
-        retryable=exc.retryable,
     )
 
 

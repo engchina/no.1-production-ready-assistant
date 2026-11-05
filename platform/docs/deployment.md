@@ -46,7 +46,7 @@ ADMIN を常用しないためです（アプリの不具合・NL2SQL の管理 
 
 - 配備の props の `/u01/aipoc/props/adb_admin.env`（root の 0600。ADMIN のパスワードとユーザー名）があれば、`platform/deploy/suite-init.sh` が
   製品の配備（各製品の system schema の初期化）の前に、**Compute から** ADMIN で ADB に接続して `platform/deploy/suite-db-user.py` を実行します
-  （Wallet・mTLS は製品と同じ。`uv run --no-project --with oracledb==<版>`）。
+  （接続は製品と同じ DSN。`uv run --no-project --with oracledb==<版>`）。
 - ADB はプライベート・エンドポイント・ACL で Compute からしか接続できないため、Compute の外からは DB に接続しません。
 - **冪等**: ユーザーが無ければ `CREATE USER`、あれば profile・quota を合わせます。アプリのパスワードで接続できなければ（`ORA-01017` など）
   パスワードを合わせて lock を外します。パスワードは `platform/.env`（画面の「システム設定 > データベース」で保存した値）を優先し、無ければ配備の props の値です。
@@ -54,7 +54,7 @@ ADMIN を常用しないためです（アプリの不具合・NL2SQL の管理 
 - **失敗したとき**: ORA の番号と手がかりを `/var/log/suite-init.log` に出し（`[suite-db-user] NG（ORA-01017）: …`・`[suite-init] check: db user NG`）、
   warning を出して製品の配備と起動を続け、最後に失敗（0 以外）を返します（ADB に接続できなくてもアプリケーションは起動する。#1756）。
   ユーザーが無い間は 3 製品とも DB に接続できません。直したら `sudo .../platform/deploy/suite-restart.sh` でやり直します。
-- **ADMIN のパスワードの置き場所**: `platform/.env`・各製品の `backend/.env`・Wallet のパスワード（`PLATFORM_ORACLE_WALLET_PASSWORD` はアプリ用のユーザーのパスワード）には書きません。
+- **ADMIN のパスワードの置き場所**: `platform/.env`・各製品の `backend/.env` には書きません。
   `/u01/aipoc/props/adb_admin.env`（root の 0600）にだけ置き、配備の再実行（`suite-restart.sh` / `suite-update.sh`）のたびに、新しい版が要る権限を付け直します
   （使った後に消すと、再配備で権限を足せなくなるため残します）。ほかの secret と同じく機密として扱ってください。不要になったら `sudo rm /u01/aipoc/props/adb_admin.env` で消せます（その後の再配備はユーザーの準備を飛ばします）。
 
@@ -166,7 +166,7 @@ SELECT COUNT(*) FROM DBA_TABLES WHERE OWNER = 'ADB_APP_USER' AND TABLE_NAME LIKE
   127.0.0.1 なので、security list は要りません。
 - ログインのセッションは 3 製品で共通です（#1565。下の「ログインのセッションの共有（#1565）」）。`/`（Agent、無ければ最初の製品）を含め、
   どの製品の `/login` でログインしても全製品を使えます。
-- Wallet は `/u01/aipoc/wallet`、ログは `/var/log/suite-init.log`（全体）・`/var/log/<製品>-init.log`。
+- ログは `/var/log/suite-init.log`（全体）・`/var/log/<製品>-init.log`。
 
 ### Compute の OS（Oracle Linux 9。#1611）
 
@@ -202,7 +202,7 @@ SELinux の設定（`semanage` は `policycoreutils-python-utils`）:
 - `suite-init.sh` は props（`/u01/aipoc/props/`）から、各製品の `backend/.env` を作り直す。
   - そのため `suite-restart.sh` は、build の前に今の `backend/.env` を `/u01/aipoc/props/<製品>.backend.env` へ写す（画面で保存した値を保つ）。
   - 元の props は `/u01/aipoc/recovery/<時刻>/` に退避する。
-  - `platform/.env`・Wallet は、`suite-init.sh` がそのまま保つ。
+  - `platform/.env` は、`suite-init.sh` がそのまま保つ。
 - 画面の「運用設定 › システムテーブル」の「作成・更新」で、保存済みのデータを書き換える migration（Agent の
   業務 Agent のスキルの ID の改名など）を適用したとき、Agent の backend は同じプロセスのメモリを保存先から読み直す
   （再起動は要らない。#1844）。結果に「再起動が必要なプロセスがあります」と出たら、挙げたプロセス（別に動かす

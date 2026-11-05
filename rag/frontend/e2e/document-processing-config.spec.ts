@@ -45,7 +45,6 @@ function config(): DocumentProcessingConfig {
     chunk_size: 800,
     chunk_overlap: null,
     chunk_min_chars: null,
-    graph_profile: null,
     field_extraction_enabled: null,
     vision_enabled: null,
     heading_level_inference_enabled: null,
@@ -61,7 +60,6 @@ const effectiveBase: DocumentProcessingConfig = {
   preprocess_profile: "office_to_pdf",
   parser_adapter_backend: "docling",
   chunking_strategy: "page_level",
-  graph_profile: "off",
   // 全体で明示的に有効にした設定の継承・上書きを確かめる。
   entity_index_enabled: true,
   entity_name_columns: [],
@@ -559,7 +557,6 @@ const PROCESSING_ORDER = [
   "chunking_strategy",
   "auto_index_after_chunk_enabled",
   "entity_index_enabled",
-  "graph_profile",
 ];
 // 実体・別名索引も専用画面への導線を持つ。
 const GLOBAL_LINK_COUNT = PROCESSING_ORDER.length;
@@ -645,9 +642,6 @@ test("グローバル設定に従う行に、全体の既定を変える画面�
   await expect(
     editor.getByRole("link", { name: "図・画像を AI で読み取る のグローバル設定を開く" })
   ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-vision");
-  await expect(
-    editor.getByRole("link", { name: "文書構造索引の構築 のグローバル設定を開く" })
-  ).toHaveAttribute("href", "/settings/graph");
   const visionRow = editor.locator('[data-config-field="vision_enabled"]');
   await expect(visionRow).toContainText("グローバル設定に従う: 無効");
   await expect(visionRow.getByRole("link", { name: /グローバル設定を開く/ })).toHaveText(
@@ -836,12 +830,6 @@ test("派生レイヤー状態チップ・項目の定義が 0 件の警告・�
           serving_knowledge_base_ids: ["kb-1"],
           layer_statuses: {
             metadata: { layer_id: null, requested: false, status: "not_requested", reason: null },
-            graph: {
-              layer_id: "gl-1",
-              requested: true,
-              status: "planned_only",
-              reason: "文書構造索引は構築計画に含まれていますが、まだ実体化していません。",
-            },
             navigation: {
               layer_id: "nv-1",
               requested: true,
@@ -894,7 +882,6 @@ test("派生レイヤー状態チップ・項目の定義が 0 件の警告・�
 
   // レシピヘッダに派生 layer 状態チップ(not_requested は出さない)。
   const layerChips = page.getByTestId("recipe-layer-statuses");
-  await expect(layerChips.getByTestId("recipe-layer-graph")).toContainText("計画のみ");
   await expect(layerChips.getByTestId("recipe-layer-navigation")).toContainText("構築済み");
   await expect(layerChips.getByTestId("recipe-layer-metadata")).toHaveCount(0);
 
@@ -1025,7 +1012,6 @@ test(`作成後に項目の定義が変わったレイヤーに作り直しの�
               rebuild_required: true,
               rebuild_inputs: ["field_schema_hash"],
             },
-            graph: { layer_id: null, requested: false, status: "not_requested", reason: null },
             navigation: {
               layer_id: "nv-1",
               requested: true,

@@ -135,11 +135,6 @@ def test_unknown_evaluation_suite_is_rejected() -> None:
         Settings(rag_evaluation_suite="autorag_tuner")
 
 
-def test_graph_profile_defaults_to_off() -> None:
-    """文書構造索引の構築の既定は off(構築しない)。"""
-    assert Settings().rag_graph_profile == "off"
-
-
 def test_automatic_document_stage_progression_is_enabled_by_default() -> None:
     settings = Settings()
     assert settings.rag_auto_parse_after_preprocess_enabled is True
@@ -147,41 +142,17 @@ def test_automatic_document_stage_progression_is_enabled_by_default() -> None:
     assert settings.rag_auto_index_after_chunk_enabled is True
 
 
-def test_unknown_graph_profile_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        Settings(rag_graph_profile="neo4j")
-
-
-def test_removed_full_graph_profile_stops_startup_with_guidance() -> None:
-    """削除した full(#621)は読み替えず、書き換え先を示して止める。"""
-    with pytest.raises(ValidationError) as error:
-        Settings(rag_graph_profile="full")
-    assert "RAG_GRAPH_PROFILE=full は廃止しました" in str(error.value)
-    assert "entities" in str(error.value)
-
-
-def test_legacy_graph_enabled_flag_is_not_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    """legacy の RAG_GRAPH_ENABLED は #621 で廃止した(読まず、profile を変えない)。"""
-    monkeypatch.setenv("RAG_GRAPH_ENABLED", "true")
-    settings = Settings()
-    assert "rag_graph_enabled" not in Settings.model_fields
-    assert settings.rag_graph_profile == "off"
-
-
 def test_oracle_defaults_to_thin_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """既定は Thin mode で、Wallet は PLATFORM_ORACLE_WALLET_DIR（NL2SQL と同じ）。"""
+    """既定は Thin mode（NL2SQL と同じ）。"""
     monkeypatch.delenv("PLATFORM_ORACLE_CLIENT_LIB_DIR", raising=False)
-    monkeypatch.delenv("PLATFORM_ORACLE_WALLET_DIR", raising=False)
     settings = Settings(_env_file=None)
     assert settings.oracle_driver_mode == "thin"
-    assert settings.resolved_oracle_wallet_dir == "/u01/aipoc/wallet"
 
 
 def test_oracle_client_lib_dir_switches_to_thick_mode() -> None:
-    """PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode と <lib_dir>/network/admin。"""
+    """PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode。"""
     settings = Settings(_env_file=None, oracle_client_lib_dir="/opt/oracle/instantclient_23_26")
     assert settings.oracle_driver_mode == "thick"
-    assert settings.resolved_oracle_wallet_dir == "/opt/oracle/instantclient_23_26/network/admin"
 
 
 def test_embedding_dimension_is_fixed_to_oracle_vector_width() -> None:

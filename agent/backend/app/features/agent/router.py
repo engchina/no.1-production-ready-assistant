@@ -697,7 +697,7 @@ router.include_router(
         get_settings=lambda: get_settings(),
         env_file=lambda: app_settings.PLATFORM_ENV_FILE,
         test_connection=lambda candidate: _test_database_connection(candidate),
-        # 接続先・Wallet を変えたら、古い設定の接続 pool を閉じる（RAG / NL2SQL と同じ。#793）。
+        # 接続先を変えたら、古い設定の接続 pool を閉じる（RAG / NL2SQL と同じ。#793）。
         on_saved=lambda _settings: close_platform_oracle_pool(),
         write_dependencies=[Depends(require_system_settings_write)],
         action_dependencies=[Depends(require_system_settings_write)],
@@ -1247,8 +1247,6 @@ async def _test_database_connection(candidate: Any) -> None:
             oracle_user=_settings_str_from(candidate, "oracle_user"),
             oracle_dsn=_settings_str_from(candidate, "oracle_dsn"),
             oracle_password=_settings_str_from(candidate, "oracle_password"),
-            oracle_wallet_dir=_settings_str_from(candidate, "resolved_oracle_wallet_dir"),
-            oracle_wallet_password=_settings_str_from(candidate, "oracle_wallet_password"),
             oracle_tcp_connect_timeout_seconds=getattr(
                 candidate, "oracle_tcp_connect_timeout_seconds", 10.0
             ),
@@ -1263,7 +1261,7 @@ async def _test_oracle_connection(settings: SimpleNamespace) -> None:
     timeout_seconds = float(settings.oracle_db_test_timeout_seconds)
     try:
         with fail_after(timeout_seconds):
-            # 時間切れで待つのをやめる（スレッドの接続の待ちは打ち切れない。wallet の接続記述子の
+            # 時間切れで待つのをやめる（スレッドの接続の待ちは打ち切れない。接続記述子の
             # 再試行で 1 分以上かかることがある。NL2SQL の asyncio.wait_for と同じ。#1212）。
             await anyio_to_thread.run_sync(
                 _test_oracle_connection_sync, settings, abandon_on_cancel=True
@@ -1271,7 +1269,7 @@ async def _test_oracle_connection(settings: SimpleNamespace) -> None:
     except TimeoutError as exc:
         raise OracleConnectionTimeoutError(
             f"Oracle AI Database の接続テストが {timeout_seconds:g} 秒でタイムアウトしました。"
-            "データベースの起動状態、Wallet サービス名、ネットワーク到達性を確認してください。"
+            "データベースの起動状態、DSN のサービス名、ネットワーク到達性を確認してください。"
         ) from exc
 
 
@@ -1291,7 +1289,7 @@ async def _test_database_status_connection(settings: Any) -> None:
     except TimeoutError as exc:
         raise OracleConnectionTimeoutError(
             f"Oracle AI Database の接続確認が {timeout_seconds:g} 秒でタイムアウトしました。"
-            "データベースの起動状態、Wallet サービス名、ネットワーク到達性を確認してください。"
+            "データベースの起動状態、DSN のサービス名、ネットワーク到達性を確認してください。"
         ) from exc
 
 
