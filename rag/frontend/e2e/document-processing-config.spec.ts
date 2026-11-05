@@ -529,7 +529,6 @@ test("要約と上書きの一覧は、同じ項目を取込の処理順に並�
     "1. ファイル準備",
     "2. 抽出",
     "3. Chunk 作成",
-    "4. Embedding / 索引",
   ]);
 
   await panel.getByRole("button", { name: "処理設定を編集" }).click();
