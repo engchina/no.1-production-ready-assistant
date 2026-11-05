@@ -80,7 +80,6 @@ from app.config import (
     AnswerFlow,
     ChunkingStrategy,
     EvaluationSuite,
-    GraphProfile,
     ParserAdapterBackend,
     PreprocessProfile,
     QueryStrategy,
@@ -618,11 +617,9 @@ class AnsweringSettingsData(BaseModel):
     screen_linking_enabled: bool
     request_coverage_retrieval_enabled: bool
     auto_field_filter_enabled: bool
-    # 関係情報(章節・表の見出しの entity と chunk の対応)で検索の候補を足す(#2055。既定 OFF)。
     section_expansion_enabled: bool
     section_expansion_max_levels: int
     section_expansion_input_token_percent: int
-    graph_expansion_enabled: bool
     config_source: Literal["runtime"] = "runtime"
 
 
@@ -638,8 +635,6 @@ class AnsweringSettingsUpdate(BaseModel):
     screen_linking_enabled: bool | None = None
     request_coverage_retrieval_enabled: bool | None = None
     auto_field_filter_enabled: bool | None = None
-    graph_expansion_enabled: bool | None = None
-
     section_expansion_enabled: bool | None = None
     section_expansion_max_levels: int | None = Field(default=None, ge=1, le=8)
     section_expansion_input_token_percent: int | None = Field(default=None, ge=10, le=90)
@@ -798,28 +793,3 @@ class EvaluationSettingsUpdate(BaseModel):
     """品質評価設定の更新 payload。"""
 
     suite: EvaluationSuiteName
-
-
-GraphProfileName = GraphProfile
-
-
-class GraphProfileStatusData(BaseModel):
-    """文書構造索引の構築の 1 プロファイル(off = 構築しない / entities = 構築する)の選択状態。"""
-
-    name: GraphProfileName
-    selected: bool
-
-
-class GraphSettingsData(BaseModel):
-    """関係情報設定の非機密 runtime snapshot。"""
-
-    profile: GraphProfileName
-    enabled: bool
-    profiles: list[GraphProfileStatusData] = Field(default_factory=list)
-    config_source: Literal["runtime"]
-
-
-class GraphSettingsUpdate(BaseModel):
-    """関係情報設定の更新 payload。"""
-
-    profile: GraphProfileName

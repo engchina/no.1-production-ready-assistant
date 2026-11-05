@@ -83,8 +83,6 @@ import {
   type VectorIndexSettingsUpdate,
   type EvaluationSettingsData,
   type EvaluationSettingsUpdate,
-  type GraphSettingsData,
-  type GraphSettingsUpdate,
   type ApprovedFaqListData,
   type ApprovedFaqMutationData,
   type RuntimeKnowledgeEditRequest,
@@ -155,7 +153,6 @@ export const queryKeys = {
   knowledgeBaseSearch: (params: { status?: KnowledgeBaseStatus; q?: string }) =>
     ["knowledge-bases", "search", params] as const,
   knowledgeBase: (id: string) => ["knowledge-bases", id] as const,
-  knowledgeBaseGraph: (id: string) => ["knowledge-bases", id, "graph"] as const,
   knowledgeBaseExtractionFields: (id: string) =>
     ["knowledge-bases", id, "extraction-fields"] as const,
   searchExtractionFields: (searchAnswerProfileId: string) =>
@@ -194,7 +191,6 @@ export const queryKeys = {
   pipelineSettings: ["settings", "pipeline"] as const,
   vectorIndexSettings: ["settings", "vector-index"] as const,
   evaluationSettings: ["settings", "evaluation-suite"] as const,
-  graphSettings: ["settings", "graph"] as const,
   services: ["services"] as const,
   serviceCatalog: ["services", "catalog"] as const,
   serviceStatus: (serviceId: string) =>
@@ -1001,14 +997,6 @@ export function useSearchExtractionFields(searchAnswerProfileId: string | null, 
     queryFn: () => api.getSearchExtractionFields(searchAnswerProfileId ?? ""),
     enabled: enabled && Boolean(searchAnswerProfileId),
     retry: false,
-  });
-}
-
-export function useKnowledgeBaseGraph(id: string | null) {
-  return useQuery({
-    queryKey: queryKeys.knowledgeBaseGraph(id ?? ""),
-    queryFn: () => api.getKnowledgeBaseGraph(id as string),
-    enabled: id != null,
   });
 }
 
@@ -2029,27 +2017,6 @@ export function useParserAdapterSettings(enabled = true) {
     queryFn: api.getParserAdapterSettings,
     enabled,
     retry: false,
-  });
-}
-
-/** 文書構造索引の構築（構築する / しない）の設定。 */
-export function useGraphSettings() {
-  return useQuery<GraphSettingsData>({
-    queryKey: queryKeys.graphSettings,
-    queryFn: api.getGraphSettings,
-    retry: false,
-  });
-}
-
-/** 文書構造索引の構築の設定をランタイム保存。 */
-export function useUpdateGraphSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: GraphSettingsUpdate) =>
-      api.updateGraphSettings(payload),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.graphSettings, data);
-    },
   });
 }
 

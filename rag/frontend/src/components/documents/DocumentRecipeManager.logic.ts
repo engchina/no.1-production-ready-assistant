@@ -30,7 +30,7 @@ export function canDeleteRecipe(recipeCount: number, active: boolean) {
   return recipeCount > 1 && !active;
 }
 
-const LAYER_ORDER = ["metadata", "graph", "navigation"] as const;
+const LAYER_ORDER = ["metadata", "navigation"] as const;
 
 export type RecipeLayerName = (typeof LAYER_ORDER)[number];
 
@@ -43,7 +43,7 @@ export interface RecipeLayerStatusView {
   rebuildInputs: string[];
 }
 
-/** 選択レシピの active chunk_set から派生 layer(項目抽出/関係情報/ナビ)の状態を引く。 */
+/** 選択レシピの active chunk_set から派生 layer(項目抽出/ナビ)の状態を引く。 */
 export function recipeLayerStatuses(
   recipe: DocumentRecipeView,
   chunkSets: DocumentChunkSet[] | undefined

@@ -213,14 +213,12 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
             "rag_neighbor_child_count": 3,
             "rag_rerank_enabled": True,
             "rag_auto_field_filter_enabled": False,
-            "rag_graph_expansion_enabled": False,
             "rag_screen_linking_enabled": False,
             "rag_request_coverage_retrieval_enabled": True,
             "rag_guide_step_retrieval_enabled": True,
             "rag_section_expansion_enabled": True,
             "rag_section_expansion_max_levels": 4,
             "rag_section_expansion_input_token_percent": 50,
-            "rag_graph_expansion_max_chunks": 5,
             "rag_guide_step_max_queries": 2,
             "rag_guide_step_deadline_seconds": 20.0,
         }
@@ -231,15 +229,13 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
         "neighbor_child_count": 0,
         "rerank_enabled": False,
         "auto_field_filter_enabled": True,
-        "graph_expansion_enabled": True,
         "screen_linking_enabled": True,
         "request_coverage_retrieval_enabled": False,
         "guide_step_retrieval_enabled": False,
         "section_expansion_enabled": False,
         "section_expansion_max_levels": 2,
         "section_expansion_input_token_percent": 40,
-        # 関係情報の拡張の上限と業務ガイドの手順ごとの検索の上限・期限も全体設定だけ(#3523)。
-        "graph_expansion_max_chunks": 3,
+        # 業務ガイドの手順ごとの検索の上限・期限も全体設定だけ(#3523)。
         "guide_step_max_queries": 7,
         "guide_step_deadline_seconds": 37.5,
     }
@@ -260,7 +256,6 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
         assert getattr(merged, f"rag_{key}") == getattr(settings, f"rag_{key}")
     assert merged.rag_max_anchors_per_document == 2
     # 全体の値が効く(プロファイルの保存値は重ねない)。
-    assert merged.rag_graph_expansion_max_chunks == 5
     assert merged.rag_guide_step_max_queries == 2
     assert merged.rag_guide_step_deadline_seconds == 20.0
     saved = dump_search_answer_profile_config(config)

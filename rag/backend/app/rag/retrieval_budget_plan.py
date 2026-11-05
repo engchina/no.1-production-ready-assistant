@@ -15,7 +15,6 @@ from app.schemas.evaluation import EvaluationRagOverrides, EvaluationRunRequest
 # 実行時の設定経路を持つ項目だけ。文書選択の無効化はbackendから指定できない。
 _REQUEST_STAGES = {
     "reference": "reference_expansion_enabled",
-    "structure": "graph_expansion_enabled",
     "section": "section_expansion_enabled",
 }
 _ENV_STAGES = {

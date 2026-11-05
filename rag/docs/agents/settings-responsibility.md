@@ -14,7 +14,7 @@
 - ファイル準備（preprocess）。旧形式・マクロ付きの Office（.doc / .ppt / .xls・.docm / .pptm / .xlsm）と ODT・RTF（.odt / .rtf。#3351）は原本のままでは解析せず、文書レシピで変換を選んだときだけ取り込む（Word・PowerPoint・ODT・RTF は Office→PDF（Word は Word→JSONL も可）、Excel は Excel→JSONL。Office→PDF は Excel を変換しない。マクロは実行しない。判定は `backend/app/rag/parser_source_guard.py`。#2470）。
 - 文書解析（parser / OCR engine）と、図・画像の読み取り（Vision。解析エンジンに関係なく解析の後に backend の共通の段で読み取る。切り替えはレシピだけ）。global の既定エンジンは Docling（PDF と画像だけ）。それ以外の形式は取込前に止めて処理レシピで Unstructured などを選ぶよう案内し、自動では振り分けない（判定は `backend/app/rag/parser_source_guard.py` の 1 か所。Unstructured のサービスは統合 stack の既定で配備する。#1559）。構造化レコードの JSONL（前処理 csv_to_jsonl / excel_to_jsonl / word_to_jsonl の成果物）は、選んだ解析エンジン（Docling・Unstructured）のサービスが外部の parser に渡さず共通の契約で読み、文書レシピの分割方式「固定分割」と組み合わせると記録の境界で 1 記録 1 chunk になる（解析と分割はどちらも文書レシピの層。#2457。専用の解析エンジンと XML ツリー JSON の解析エンジンは #21 で削除した）。画面でファイル準備に CSV→JSONL・Excel→JSONL・Word→JSONL を選ぶと、分割（固定分割符・既定の分割符 `<<<JSONL_RECORD_BOUNDARY>>>`）を見える上書きとして入れて保存する（解析エンジンは変えない。実行時に隠れて切り替えない）。
 - 文書分割（chunking strategy、chunk size、overlap、parent-child）。
-- 索引構築（vector index build、GraphRAG、navigation summary、field extraction）。
+- 索引構築（vector index build、navigation summary、field extraction）。
 - 品質 gate（解析品質、chunk 品質、公開前チェック）。
 
 レシピの既定値は **global（「取込・検索・回答設定」配下の ファイル準備 / 文書解析 / 文書分割 など）** から解決し、各レシピが選んだ値で上書きする。**KB からは解決しない**。embedding / HNSW は単一固定。同じ文書のジョブは直列実行し、異なる文書のジョブは並行実行できる。
@@ -43,13 +43,13 @@ Search Answer Profile は **検索・回答に使う設定だけ**を持つ。
 
 | 設定群 | グローバル既定 | 文書レシピ上書き | Search Answer Profile 上書き |
 |---|---|---|---|
-| ファイル準備 / 文書解析 / 文書分割 / GraphRAG | 可 | 可 | 不可 |
+| ファイル準備 / 文書解析 / 文書分割 | 可 | 可 | 不可 |
 | 検索インデックス | 可 | 不可 | 不可 |
 | 検索方法 / 安全チェック | 可 | 不可 | 一部（検索方法の質問の拡張・回答の生成方式・rerank・各種の拡張などは全体設定だけ。下の「業務ガイドの使用」の末尾と `PROFILE_GLOBAL_QUERY_FIELDS` が正本） |
 | 回答プロンプト | 可 | 不可 | 不可 |
 | 品質評価 | 可 | 不可 | 不可 |
 
-文書構造索引の構築（構築する / しない。文書と章・節の見出しのつながり）は文書レシピで選ぶ（ナレッジベースの文書構造グラフで見られる。回答の検索で使うか〔当たった根拠と同じ狭い章節・表の根拠と、質問に見出しの語が含まれる章節の根拠を候補に足す。既定 OFF〕は検索方法の全体設定の「文書構造による検索拡張」〔`graph_expansion_enabled`。#2055。件数の上限 `graph_expansion_max_chunks` も含め、検索・回答プロファイルでは上書きしない〕で選ぶ。LLM で意味の entity を抜き出す取込と claims / community summary の構築は持たない）。共有 Oracle 索引の設定は Search Answer Profile へ保存しない。
+共有 Oracle 索引の設定は Search Answer Profile へ保存しない。
 
 検索時の解決順は **request 明示 > Published Search Answer Profile > global defaults**。KB の legacy query override は使わない（保存時にも新規保存しない）。
 
@@ -59,7 +59,7 @@ Search Answer Profile は **検索・回答に使う設定だけ**を持つ。
 
 レシピ追加・削除は親文書行をロックして **最少 1 件・最大 3 件**を保証する。活動中ジョブのあるレシピは編集・削除できない。成功時だけ新 chunk_set を active に原子切替し、失敗時は他レシピと旧 active 出力を変更しない。
 
-GraphRAG、navigation summary、field extraction が planning のみで実 materialize 未完の場合は、UI / API diagnostics にその状態を表示する。
+navigation summary、field extraction が planning のみで実 materialize 未完の場合は、UI / API diagnostics にその状態を表示する。
 
 ### 章節の抽出規則と章節の要約
 
@@ -93,7 +93,7 @@ GraphRAG、navigation summary、field extraction が planning のみで実 mater
 
 OFF は検索・チャット送信前の確認・MCP の `rag_lookup_guides` で同じく適用し、ガイドの読み込み・選択・条件の確認・回答への適用・手順別検索を行わない。通常の検索と用語・同義語・回答ルールは継続する。意味の照合と近い候補の確認の既存4パラメータと保存値は内部設定として維持し、総合 ON のときだけ従う。公開・編集は引き続き可能。管理画面で明示的に実行する下書き試答は、その回答だけガイドを有効にして監査する。プロファイルの保存値と通常の回答は変更しない。
 
-検索方法の質問拡張・回答フロー・前後の chunk 数・rerank・項目条件・文書構造による検索拡張と件数・画面目録・章節の拡張と段数と入力割合・不足要求の再検索・業務ガイドの手順ごとの検索と回数・時間の上限は全体設定で管理する。検索・回答プロファイルの保存済みの同名の値は適用せず、再保存にも含めない。表示順は初回の呼出順（項目条件 → 関係情報 → 画面目録 → rerank → 章節 → 不足要求）に合わせる。追加検索でも同じ拡張・rerank・章節補完を再利用するため、一度しか実行しない意味ではない。
+検索方法の質問拡張・回答フロー・前後の chunk 数・rerank・項目条件・画面目録・章節の拡張と段数と入力割合・不足要求の再検索・業務ガイドの手順ごとの検索と回数・時間の上限は全体設定で管理する。検索・回答プロファイルの保存済みの同名の値は適用せず、再保存にも含めない。表示順は初回の呼出順（項目条件 → 画面目録 → rerank → 章節 → 不足要求）に合わせる。追加検索でも同じ拡張・rerank・章節補完を再利用するため、一度しか実行しない意味ではない。
 
 章節の抽出規則は「解析済みの見出し」「番号の規則」「独自の規則」として対象を明示する。既存5方式の識別子は維持し、法令型・公用文型・小数番号型は対応する番号構造が異なるため別のプリセットとして残す。保存前の候補確認は、利用者が見られる文書と既存レシピの保存済み抽出だけを読み、指定した未保存の方式・規則を適用する。レシピ作成・設定保存・取込・モデル呼出は行わない。人が編集した最終章節とは区別し、レシピによる方式の上書きがあるときは明示する。
 

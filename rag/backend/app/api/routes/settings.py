@@ -78,10 +78,6 @@ from app.rag.extraction_field_adapter import (
     save_field_schema,
     standard_field_definitions,
 )
-from app.rag.graph_adapter import (
-    graph_adapter_runtime_settings,
-    normalize_graph_profile,
-)
 from app.rag.oracle_schema import vector_index_reindex_sql
 from app.rag.parser_adapter_readiness import parser_adapter_runtime_settings
 from app.rag.parser_adapter_scorecard import (
@@ -127,9 +123,6 @@ from app.schemas.settings import (
     ExtractionFieldsSettingsData,
     ExtractionFieldsSettingsUpdate,
     FieldDefinitionData,
-    GraphProfileStatusData,
-    GraphSettingsData,
-    GraphSettingsUpdate,
     HuggingFaceSettingsData,
     HuggingFaceSettingsUpdate,
     ModelSettingsTestRequest,
@@ -441,7 +434,6 @@ async def update_answering_settings(
                 payload.request_coverage_retrieval_enabled,
             ),
             ("rag_auto_field_filter_enabled", payload.auto_field_filter_enabled),
-            ("rag_graph_expansion_enabled", payload.graph_expansion_enabled),
             ("rag_section_expansion_enabled", payload.section_expansion_enabled),
             ("rag_section_expansion_max_levels", payload.section_expansion_max_levels),
             (
@@ -480,9 +472,6 @@ async def update_answering_settings(
                 "RAG_AUTO_FIELD_FILTER_ENABLED": _format_env_bool(
                     candidate.rag_auto_field_filter_enabled
                 ),
-                "RAG_GRAPH_EXPANSION_ENABLED": _format_env_bool(
-                    candidate.rag_graph_expansion_enabled
-                ),
             },
             section_comment="# 回答の検索と生成",
             error_detail="回答の検索と生成の設定を backend/.env へ保存できませんでした。",
@@ -503,7 +492,6 @@ def _answering_settings_data(settings: Settings) -> AnsweringSettingsData:
         screen_linking_enabled=settings.rag_screen_linking_enabled,
         request_coverage_retrieval_enabled=settings.rag_request_coverage_retrieval_enabled,
         auto_field_filter_enabled=settings.rag_auto_field_filter_enabled,
-        graph_expansion_enabled=settings.rag_graph_expansion_enabled,
         section_expansion_enabled=settings.rag_section_expansion_enabled,
         section_expansion_max_levels=settings.rag_section_expansion_max_levels,
         section_expansion_input_token_percent=settings.rag_section_expansion_input_token_percent,
@@ -792,26 +780,6 @@ async def update_evaluation_settings(
     _persist_evaluation_settings(candidate)
     settings.rag_evaluation_suite = candidate.rag_evaluation_suite
     return ApiResponse(data=_evaluation_settings_data(settings))
-
-
-@router.get("/graph", response_model=ApiResponse[GraphSettingsData])
-async def get_graph_settings() -> ApiResponse[GraphSettingsData]:
-    """文書構造索引の構築の選択(構築する / しない)を返す。"""
-    return ApiResponse(data=_graph_settings_data(get_settings()))
-
-
-@router.patch("/graph", response_model=ApiResponse[GraphSettingsData])
-async def update_graph_settings(
-    payload: GraphSettingsUpdate,
-) -> ApiResponse[GraphSettingsData]:
-    """文書構造索引の設定を backend/.env と現在プロセスへ反映する。"""
-    settings = get_settings()
-    candidate = settings.model_copy(
-        update={"rag_graph_profile": normalize_graph_profile(payload.profile)}
-    )
-    _persist_graph_settings(candidate)
-    settings.rag_graph_profile = candidate.rag_graph_profile
-    return ApiResponse(data=_graph_settings_data(settings))
 
 
 async def _run_model_settings_test(
@@ -1113,30 +1081,6 @@ def _parser_adapter_settings_candidate(
 
 def _optional_bool(value: bool | None, fallback: bool) -> bool:
     return fallback if value is None else value
-
-
-def _graph_settings_data(settings: Settings) -> GraphSettingsData:
-    """Settings から文書構造索引の設定の表示用データを作る。"""
-    runtime = graph_adapter_runtime_settings(settings)
-    return GraphSettingsData(
-        profile=runtime.profile,
-        enabled=runtime.enabled,
-        profiles=[
-            GraphProfileStatusData(name=status.name, selected=status.selected)
-            for status in runtime.profiles
-        ],
-        config_source="runtime",
-    )
-
-
-def _persist_graph_settings(settings: Settings) -> None:
-    """文書構造索引の設定を backend/.env へ永続化する。"""
-    _write_env_values(
-        BACKEND_ENV_FILE,
-        {"RAG_GRAPH_PROFILE": settings.rag_graph_profile},
-        section_comment="# 文書構造索引の構築",
-        error_detail="文書構造索引の設定を backend/.env へ保存できませんでした。",
-    )
 
 
 def _evaluation_settings_data(settings: Settings) -> EvaluationSettingsData:

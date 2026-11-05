@@ -51,7 +51,6 @@ import {
 } from "./DocumentProcessingConfigPanel.logic";
 import {
   CHUNKING_OPTIONS,
-  GRAPH_OPTIONS,
   SECTION_RULES_OPTIONS,
   PARSER_OPTIONS,
   PARSER_VALUES,
@@ -76,7 +75,6 @@ function emptyConfig(): DocumentProcessingConfig {
     chunk_overlap: null,
     chunk_min_chars: null,
     chunk_delimiter: null,
-    graph_profile: null,
     section_rules_mode: null,
     field_extraction_enabled: null,
     navigation_summary_enabled: null,
@@ -102,7 +100,6 @@ const EDITOR_ID_SUFFIX: Record<RecipeConfigField, string> = {
   auto_chunk_after_extract_enabled: "auto-chunk",
   chunking_strategy: "chunking",
   auto_index_after_chunk_enabled: "auto-index",
-  graph_profile: "graph",
   section_rules_mode: "section-rules",
 };
 
@@ -261,22 +258,6 @@ export function DocumentProcessingConfigPanel({
             defaultValue="small_to_big"
             disabled={disabled}
             onChange={(value) => update({ chunking_strategy: value })}
-          />
-        );
-      case "graph_profile":
-        return (
-          <SelectRow
-            key={item.field}
-            field={item.field}
-            id={id}
-            label={label}
-            globalHref={globalHref}
-            value={form.graph_profile}
-            effectiveValue={configs.effective.graph_profile}
-            options={GRAPH_OPTIONS}
-            defaultValue="off"
-            disabled={disabled}
-            onChange={(value) => update({ graph_profile: value })}
           />
         );
       case "section_rules_mode":

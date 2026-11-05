@@ -75,9 +75,6 @@ def rag_config_fingerprint(settings: Settings | None = None) -> str:
         "extra_retrieval_max_queries": resolved_settings.rag_extra_retrieval_max_queries,
         "reference_expansion_enabled": resolved_settings.rag_reference_expansion_enabled,
         "reference_expansion_max_chunks": resolved_settings.rag_reference_expansion_max_chunks,
-        # 関係情報で検索の候補を足す(#2055)。
-        "graph_expansion_enabled": resolved_settings.rag_graph_expansion_enabled,
-        "graph_expansion_max_chunks": resolved_settings.rag_graph_expansion_max_chunks,
         # 章節の拡張(#1436)。検索方法の全体設定で選ぶ。
         "section_expansion_enabled": resolved_settings.rag_section_expansion_enabled,
         "section_expansion_max_levels": resolved_settings.rag_section_expansion_max_levels,

@@ -22,7 +22,6 @@ import {
   TableProperties,
   ThumbsUp,
   Upload,
-  Waypoints,
   type LucideIcon,
 } from "lucide-react";
 
@@ -174,12 +173,6 @@ export const NAV_SECTIONS: NavSection[] = [
         sidebarLabelKey: "nav.settingsVectorIndex.sidebar",
         icon: Layers3,
         permission: MENU_PERMISSIONS.settingsVectorIndex,
-      },
-      {
-        href: APP_ROUTES.settingsGraph,
-        labelKey: "nav.settingsGraph",
-        icon: Waypoints,
-        permission: MENU_PERMISSIONS.settingsGraph,
       },
       {
         href: APP_ROUTES.settingsRetrieval,

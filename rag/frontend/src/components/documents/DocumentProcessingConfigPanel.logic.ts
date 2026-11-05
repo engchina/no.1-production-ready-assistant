@@ -24,15 +24,13 @@ import { SETTINGS_ANCHORS } from "@/lib/settings-anchors";
  * - CHUNK: 文書分割 → 文脈ヘッダ（`_chunks_with_context_headers` は分割の直後に chunk metadata へ付ける）
  *   → 「Chunk 後に Embedding / 索引へ進む」のゲート（CHUNKED で止まり、
  *   `rag_auto_index_after_chunk_enabled` なら INDEX の job を積む）
- * - INDEX: embedding と索引の保存の後に関係情報（`_save_index` / `_save_embeddings_for_chunk_set` の
- *   `graph_indexing`）を作る
+ * - INDEX: embedding と索引の保存
  */
 
 type SelectConfigField =
   | "preprocess_profile"
   | "parser_adapter_backend"
   | "chunking_strategy"
-  | "graph_profile"
   | "section_rules_mode";
 
 type BooleanConfigField =
@@ -160,13 +158,6 @@ export const RECIPE_CONFIG_ITEMS = [
     label: "knowledgeBases.adapter.field.autoIndexAfterChunk",
     phase: "CHUNK",
     globalSettings: { route: APP_ROUTES.settingsPipeline, anchor: SETTINGS_ANCHORS.autoIndexGate },
-  },
-  {
-    field: "graph_profile",
-    kind: "select",
-    label: "knowledgeBases.adapter.field.graphProfile",
-    phase: "INDEX",
-    globalSettings: { route: APP_ROUTES.settingsGraph },
   },
 ] as const satisfies readonly RecipeConfigItem[];
 

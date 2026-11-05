@@ -99,8 +99,6 @@ from app.rag.field_extraction_units import (
     FieldValueCandidate,
     field_extraction_text_budget,
 )
-from app.rag.graph_adapter import resolve_graph_adapter
-from app.rag.graph_index import GraphIndex, build_graph_index
 from app.rag.heading_levels import (
     HEADING_LEVELS_RESPONSE_SCHEMA,
     HeadingLevelOptions,
@@ -3644,33 +3642,6 @@ class IngestionPipeline:
             document_id, extraction, chunks, vectors, chunk_set_id=chunk_set_id
         )
         await _raise_if_cancelled(cancel_checker)
-        if not resolve_graph_adapter(self._settings).enabled:
-            return
-        try:
-            await _observe_ingestion_stage(
-                trace_id,
-                "graph_indexing",
-                self._save_graph_index(
-                    document_id,
-                    extraction,
-                    chunks,
-                    chunk_set_id=chunk_set_id,
-                ),
-                attributes={
-                    "chunk_count": len(chunks),
-                    "element_count": len(extraction.elements),
-                },
-                result_attributes=_graph_index_result_attributes,
-            )
-        except Exception as exc:
-            logger.info(
-                "graph_indexing_failed",
-                extra={"document_id": document_id, "error_type": type(exc).__name__},
-            )
-            raise IngestionUserError(
-                "文書構造索引の構築に失敗しました。別経路には切り替えずに取込を停止しました。"
-                "文書構造索引の構築の設定、抽出結果、データベース保存先を確認してから再実行してください。"
-            ) from exc
 
     async def _save_embeddings_for_chunk_set(
         self,
@@ -3691,60 +3662,6 @@ class IngestionPipeline:
             embeddings=vectors,
         )
         await _raise_if_cancelled(cancel_checker)
-        if not resolve_graph_adapter(self._settings).enabled:
-            return
-        try:
-            await _observe_ingestion_stage(
-                trace_id,
-                "graph_indexing",
-                self._save_graph_index(
-                    document_id,
-                    extraction,
-                    chunks,
-                    chunk_set_id=chunk_set_id,
-                ),
-                attributes={
-                    "chunk_count": len(chunks),
-                    "element_count": len(extraction.elements),
-                },
-                result_attributes=_graph_index_result_attributes,
-            )
-        except Exception as exc:
-            logger.info(
-                "graph_indexing_failed",
-                extra={"document_id": document_id, "error_type": type(exc).__name__},
-            )
-            raise IngestionUserError(
-                "文書構造索引の構築に失敗しました。別経路には切り替えずに取込を停止しました。"
-                "文書構造索引の構築の設定、抽出結果、データベース保存先を確認してから再実行してください。"
-            ) from exc
-
-    async def _save_graph_index(
-        self,
-        document_id: str,
-        extraction: StructuredExtraction,
-        chunks: list[Chunk],
-        *,
-        chunk_set_id: str | None = None,
-    ) -> GraphIndex:
-        """構造化抽出から関係情報(文書と章・節の見出しのつながり)を作り Oracle へ保存する。"""
-        knowledge_bases = await self._oracle.list_document_knowledge_bases(document_id)
-        document = await self._oracle.get_document(document_id)
-        graph_index = await asyncio.to_thread(
-            build_graph_index,
-            document_id=document_id,
-            knowledge_base_ids=[knowledge_base.id for knowledge_base in knowledge_bases],
-            extraction=extraction,
-            chunks=chunks,
-            chunk_set_id=chunk_set_id,
-            document_name=document.file_name if document is not None else None,
-        )
-        await self._oracle.replace_document_graph_index(
-            document_id,
-            graph_index,
-            chunk_set_id=chunk_set_id,
-        )
-        return graph_index
 
 
 def _safe_persistent_error_message(error: Exception) -> str:
@@ -4791,15 +4708,6 @@ def _record_ingestion_stage(
         attributes=dict(attributes),
         error=error,
     )
-
-
-def _graph_index_result_attributes(graph_index: GraphIndex) -> Mapping[str, object]:
-    """文書構造索引の構築結果から件数だけを trace attribute にする。"""
-    return {
-        "graph_entity_count": len(graph_index.entities),
-        "graph_relationship_count": len(graph_index.relationships),
-        "graph_entity_chunk_link_count": len(graph_index.entity_chunk_links),
-    }
 
 
 def _extraction_structure_attributes(

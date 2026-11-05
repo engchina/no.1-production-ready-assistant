@@ -252,7 +252,6 @@ def test_pipeline_settings_report_auto_advance_and_recipe_defaults(settings: Set
         "auto_chunk_after_extract_enabled",
         "chunking_strategy",
         "auto_index_after_chunk_enabled",
-        "graph_profile",
     ):
         assert defaults[field] is not None, field
     assert defaults["vision_enabled"] is True

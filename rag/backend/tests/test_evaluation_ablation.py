@@ -84,7 +84,6 @@ async def test_stage_switch_reaches_production_pipeline_settings(monkeypatch: Mo
         rag_rerank_enabled=True,
         rag_neighbor_child_count=2,
         rag_reference_expansion_enabled=True,
-        rag_graph_expansion_enabled=True,
         rag_section_expansion_enabled=True,
     )
     configs = ablation_configs(
@@ -94,7 +93,6 @@ async def test_stage_switch_reaches_production_pipeline_settings(monkeypatch: Mo
             "rerank",
             "neighbor_children",
             "reference_expansion",
-            "graph_expansion",
             "section_expansion",
         ],
     )
@@ -110,9 +108,8 @@ async def test_stage_switch_reaches_production_pipeline_settings(monkeypatch: Mo
         ablated[0].rag_rerank_enabled,
         ablated[1].rag_neighbor_child_count,
         ablated[2].rag_reference_expansion_enabled,
-        ablated[3].rag_graph_expansion_enabled,
-        ablated[4].rag_section_expansion_enabled,
-    ] == [False, 0, False, False, False]
+        ablated[3].rag_section_expansion_enabled,
+    ] == [False, 0, False, False]
     # 無効にした工程のほかは full と同じ。
     assert ablated[0].rag_section_expansion_enabled is True
 
@@ -206,7 +203,7 @@ def test_report_shows_quality_evidence_time_and_calls() -> None:
 def test_report_marks_no_effect_skip_and_unexpected_conditions() -> None:
     cases = [_case(f"c{i}", mrr=1.0, rerank=True) for i in range(12)]
     full = _run(FULL, None, cases, [])
-    same = _run("no-graph_expansion", "graph_expansion", cases, [])
+    same = _run("no-rerank", "rerank", cases, [])
     drifted = _run("no-reference_expansion", "reference_expansion", cases, [])
     assert drifted.metrics.run_manifest is not None
     drifted.metrics.run_manifest["corpus"] = {"sha256": "other"}
@@ -219,7 +216,7 @@ def test_report_marks_no_effect_skip_and_unexpected_conditions() -> None:
     )
 
     by_stage = {item["stage"]: item for item in report["stages"]}
-    assert by_stage["graph_expansion"]["observed_effect"] is False
+    assert by_stage["rerank"]["observed_effect"] is False
     assert by_stage["reference_expansion"]["status"] == "not_comparable"
     assert by_stage["reference_expansion"]["reasons"] == ["condition_differs:corpus.sha256"]
     assert by_stage["section_expansion"]["status"] == "already_off"

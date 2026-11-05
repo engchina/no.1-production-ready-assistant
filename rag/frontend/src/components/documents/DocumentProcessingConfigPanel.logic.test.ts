@@ -30,7 +30,6 @@ describe("選択中レシピの設定の項目と並び順", () => {
       "抽出後に Chunk 作成へ進む",
       "文書分割",
       "Chunk 後に Embedding / 索引へ進む",
-      "文書構造索引の構築",
     ]);
   });
 
@@ -55,7 +54,6 @@ describe("選択中レシピの設定の項目と並び順", () => {
       "auto_parse_after_preprocess_enabled",
       "auto_chunk_after_extract_enabled",
       "auto_index_after_chunk_enabled",
-      "graph_profile",
     ]);
   });
 
@@ -84,7 +82,6 @@ describe("グローバル設定を開くリンク", () => {
       auto_chunk_after_extract_enabled: "/settings/pipeline#pipeline-gate-auto-chunk",
       chunking_strategy: "/settings/chunking",
       auto_index_after_chunk_enabled: "/settings/pipeline#pipeline-gate-auto-index",
-      graph_profile: "/settings/graph",
     });
   });
 });

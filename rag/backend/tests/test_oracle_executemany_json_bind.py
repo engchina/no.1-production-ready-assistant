@@ -49,7 +49,6 @@ def test_executemany_binds_json_columns_as_clob() -> None:
 
 
 def test_json_column_writes_pass_clob_input_sizes() -> None:
-    """JSON 型の列（metadata_json・関係情報の source_document_ids）を書く executemany。"""
+    """JSON 型の列（metadata_json）を書く executemany。"""
     source = inspect.getsource(oracle_module)
     assert source.count('input_sizes=_json_input_sizes("metadata_json")') >= 2  # INSERT と UPDATE
-    assert source.count('input_sizes=_json_input_sizes("source_document_ids")') >= 2

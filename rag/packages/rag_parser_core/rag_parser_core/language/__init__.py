@@ -257,10 +257,6 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         "labels",
         _T,
         "default_document_type",
-        "whole_document",
-        "graph_contains",
-        "graph_document",
-        "graph_section",
         "main_part",
         "original_supplement",
         "remarks",
@@ -961,6 +957,14 @@ def _removed_entity_cues() -> dict[tuple[str, str], tuple[str, ...]]:
         for key, words in json.loads(text)["entity_cues"].items()
     }
 
+REMOVED_FIELDS: Mapping[tuple[str, str], str] = {
+    ("labels", "xml_tree_document_type"): "XML ツリー",
+    # 文書構造索引（#159）だけが使った文言。
+    ("labels", "whole_document"): "文書全体",
+    ("labels", "graph_contains"): "{whole}は {target} を含みます。",
+    ("labels", "graph_document"): "{document_type} 全体を表す entity。",
+    ("labels", "graph_section"): "{name} に関する {kind} chunk。",
+}
 
 # 削除した項目（節, 項目）→ 削除する前の組み込みの値（#42: XML ツリー JSON の文書の種類。
 # #160: 実体・別名索引の手がかり）。保存済みの公開版・下書き・上書きに残った値は読み捨てる。hash は削除する前と

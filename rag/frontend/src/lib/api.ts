@@ -840,7 +840,6 @@ export interface DocumentMaterializationLayerStatus {
 
 export interface DocumentChunkSetLayerStatuses {
   metadata: DocumentMaterializationLayerStatus;
-  graph: DocumentMaterializationLayerStatus;
   navigation: DocumentMaterializationLayerStatus;
 }
 
@@ -1016,7 +1015,6 @@ export interface KnowledgeBaseIngestionConfig {
   chunk_parent_target_chars?: number | null;
   chunk_parent_max_pages?: number | null;
   chunk_parent_max_children?: number | null;
-  graph_profile: GraphProfileName | null;
   field_extraction_enabled: boolean | null;
   navigation_summary_enabled: boolean | null;
   auto_parse_after_preprocess_enabled: boolean | null;
@@ -1044,13 +1042,6 @@ export interface KnowledgeBaseQueryConfig {
   guide_step_deadline_seconds?: number | null;
   // 質問から抽出項目の条件を読み取る(LLM の呼び出しが 1 回増える。#652)。
   auto_field_filter_enabled?: boolean | null;
-  /**
-   * 文書構造索引で根拠の候補を広げる(AI は呼ばない)。検索方法の全体設定だけで決める。
-   * null / 未指定は全体の既定(検索方法の画面。既定は使わない)。
-   */
-  graph_expansion_enabled?: boolean | null;
-  /** 1 回の検索で加える根拠の上限(1〜20)。全体設定だけで決め、検索・回答プロファイルでは保存しない(#3523)。 */
-  graph_expansion_max_chunks?: number | null;
   /**
    * 当たった根拠の章節から親の章節へ段階的に広げる(#1436。段ごとに AI の呼び出しが 1 回増える)。
    * null / 未指定は既定(使う)、false は使わない。上限は null が既定(4 段 / 50%)。
@@ -1109,28 +1100,6 @@ export interface KnowledgeBaseDetail extends KnowledgeBaseSummary {
 }
 
 export const DEFAULT_KNOWLEDGE_BASE_NAME = "DEFAULT";
-
-export interface KnowledgeBaseGraphNode {
-  id: string;
-  name: string;
-  type: string | null;
-  confidence: number;
-}
-
-export interface KnowledgeBaseGraphEdge {
-  id: string;
-  source: string;
-  target: string;
-  type: string | null;
-  confidence: number;
-}
-
-export interface KnowledgeBaseGraphData {
-  status: "ok" | "empty";
-  nodes: KnowledgeBaseGraphNode[];
-  edges: KnowledgeBaseGraphEdge[];
-  truncated: boolean;
-}
 
 export interface KnowledgeBaseCreateRequest {
   name: string;
@@ -2435,8 +2404,6 @@ export interface AnsweringSettingsData {
   screen_linking_enabled: boolean;
   request_coverage_retrieval_enabled: boolean;
   auto_field_filter_enabled: boolean;
-  /** 関係情報で根拠の候補を広げる(#2055。既定 false)。 */
-  graph_expansion_enabled: boolean;
   section_expansion_enabled: boolean;
   section_expansion_max_levels: number;
   section_expansion_input_token_percent: number;
@@ -2537,24 +2504,6 @@ export interface EvaluationSettingsUpdate {
   suite: EvaluationSuiteName;
 }
 
-// --- 設定: 文書構造索引の構築 ---
-/** off = 構築しない(既定)、entities = 文書と章・節の見出しのつながりを構築する(#621)。 */
-export type GraphProfileName = "off" | "entities";
-
-export interface GraphProfileStatusData {
-  name: GraphProfileName;
-  selected: boolean;
-}
-
-export interface GraphSettingsData {
-  profile: GraphProfileName;
-  enabled: boolean;
-  profiles: GraphProfileStatusData[];
-  config_source: "runtime";
-}
-
-export interface GraphSettingsUpdate {
-  profile: GraphProfileName;
 }
 
 /** API 由来のエラー。`messages` は日本語のユーザー向け文言。 */
@@ -3382,11 +3331,6 @@ export const api = {
     request<KnowledgeBaseDetail>(
       `/api/knowledge-bases/${encodeURIComponent(id)}`,
     ),
-  // DB が止まっていると backend は空の図と warning_messages で縮退するため、warning も返す（空と区別する）。
-  getKnowledgeBaseGraph: (id: string, limit = 80) =>
-    requestDegradable<KnowledgeBaseGraphData>(
-      `/api/knowledge-bases/${encodeURIComponent(id)}/graph?limit=${limit}`,
-    ),
   // KB ごとの項目抽出の定義（#548）。fields: null で全体の既定に戻す。
   getKnowledgeBaseExtractionFields: (id: string) =>
     request<KnowledgeBaseExtractionFieldsData>(
@@ -4107,14 +4051,6 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  // 設定: 文書構造索引の構築
-  getGraphSettings: () => request<GraphSettingsData>("/api/settings/graph"),
-  updateGraphSettings: (body: GraphSettingsUpdate) =>
-    request<GraphSettingsData>("/api/settings/graph", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
 };
 
 // --- 検索・回答プロファイルの知識: ドメインキーワード(rag_poc 由来) ---

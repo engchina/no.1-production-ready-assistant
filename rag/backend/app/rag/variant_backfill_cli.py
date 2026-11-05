@@ -223,7 +223,7 @@ WHERE l.requested = 1
         BackfillCheck(
             name="requested_layers_planned_only",
             severity="warning",
-            expected="issue_count may be > 0 only for explicitly planned GraphRAG/navigation work",
+            expected="issue_count may be > 0 only for explicitly planned navigation work",
             sql="""
 SELECT COUNT(*) AS issue_count
 FROM rag_artifact_layers l
@@ -325,13 +325,12 @@ def variant_backfill_phases() -> tuple[BackfillPhase, ...]:
             phase_id="05_record_layer_readiness",
             title="派生 layer の状態を記録する",
             objective=(
-                "metadata / graph / navigation を完了と誤表示せず、"
+                "metadata / navigation を完了と誤表示せず、"
                 "実体化済み・計画のみ・再取込必要を区別する。"
             ),
             commands=(
                 "GET /api/documents/{id}/chunk-sets の layer_statuses を sampling する。",
-                "GraphRAG / navigation builder が未接続の環境では planned_only を"
-                "受け入れ条件に明記する。",
+                "navigation builder が未接続の環境では planned_only を受け入れ条件に明記する。",
             ),
             acceptance=(
                 "`requested_layers_needing_action` が 0。",

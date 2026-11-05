@@ -847,10 +847,6 @@
   },
   "labels": {
     "default_document_type": "ドキュメント",
-    "whole_document": "文書全体",
-    "graph_contains": "{whole}は {target} を含みます。",
-    "graph_document": "{document_type} 全体を表す entity。",
-    "graph_section": "{name} に関する {kind} chunk。",
     "main_part": "本則",
     "original_supplement": "制定時",
     "remarks": "備考",

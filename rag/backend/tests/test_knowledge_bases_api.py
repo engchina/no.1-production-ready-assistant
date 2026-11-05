@@ -41,7 +41,6 @@ class FakeKnowledgeBaseOracle:
             )
         }
         self.memberships: set[tuple[str, str]] = set()
-        self.subgraphs: dict[str, tuple[list[dict[str, object]], list[dict[str, object]]]] = {}
         self.extraction_fields: dict[str, list[FieldDefinition]] = {}
 
     async def create_knowledge_base(
@@ -130,12 +129,6 @@ class FakeKnowledgeBaseOracle:
             self.extraction_fields.pop(knowledge_base_id, None)
         else:
             self.extraction_fields[knowledge_base_id] = fields
-
-    async def fetch_knowledge_base_subgraph(
-        self, knowledge_base_id: str, *, limit: int
-    ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-        nodes, edges = self.subgraphs.get(knowledge_base_id, ([], []))
-        return nodes[:limit], edges[:limit]
 
     async def update_knowledge_base(
         self,
@@ -445,35 +438,6 @@ def test_knowledge_base_without_description_still_loads(
     )
     assert updated.status_code == 200
     assert updated.json()["data"]["description"] == "旧の就業規則"
-
-
-def test_knowledge_base_graph_endpoint(fake_oracle: FakeKnowledgeBaseOracle) -> None:
-    """文書構造グラフ endpoint が空/データ/404 を返す。"""
-    detail = client.post(
-        "/api/knowledge-bases", json={"name": "社内規程", "description": "説明"}
-    ).json()["data"]
-    kb_id = detail["id"]
-
-    empty = client.get(f"/api/knowledge-bases/{kb_id}/graph")
-    assert empty.status_code == 200
-    assert empty.json()["data"]["status"] == "empty"
-    assert empty.json()["data"]["nodes"] == []
-
-    fake_oracle.subgraphs[kb_id] = (
-        [
-            {"id": "e1", "name": "就業規則", "type": "concept", "confidence": 0.9},
-            {"id": "e2", "name": "有給休暇", "type": "concept", "confidence": 0.8},
-        ],
-        [{"id": "r1", "source": "e1", "target": "e2", "type": "relates_to", "confidence": 0.7}],
-    )
-    resp = client.get(f"/api/knowledge-bases/{kb_id}/graph")
-    data = resp.json()["data"]
-    assert data["status"] == "ok"
-    assert [node["name"] for node in data["nodes"]] == ["就業規則", "有給休暇"]
-    assert data["edges"][0]["source"] == "e1"
-    assert data["edges"][0]["target"] == "e2"
-
-    assert client.get("/api/knowledge-bases/does-not-exist/graph").status_code == 404
 
 
 def test_update_and_archive_knowledge_base(fake_oracle: FakeKnowledgeBaseOracle) -> None:

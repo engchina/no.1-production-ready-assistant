@@ -19,7 +19,7 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 |---|---|---|
 | `DS` | 回答の診断の `degraded_steps`（処理の種類・回数・例外の型の名前。#3259）。根拠 0 件のときは `zero_evidence.degraded_steps` にも入る。回答エンジンの前の段（`pipeline.py`）の縮退も、同じ記録を回答エンジンへ渡して入れる（承認済み FAQ からの回答にも入る。#3286） | `rag/backend/app/rag/degraded_steps.py::DegradedSteps`・`rag/backend/app/rag/answer_engine.py::_SearchState.record_degraded`・`rag/packages/rag_engine/rag_engine/dependencies.py::report_degraded` |
 | `ZE` | 根拠 0 件の診断 `zero_evidence`（0 件になった段・検索の記録・外した自動の条件） | `rag/backend/app/rag/answer_engine.py::_zero_evidence_diagnostics` |
-| `DX` | 回答の診断のその能力の項目（`graph_expansion`・`section_expansion`・`request_coverage`・`answer_validation`・`strategy` など） | `rag/backend/app/rag/answer_engine.py::_outcome_from_result` |
+| `DX` | 回答の診断のその能力の項目（`section_expansion`・`request_coverage`・`answer_validation`・`strategy` など） | `rag/backend/app/rag/answer_engine.py::_outcome_from_result` |
 | `ST` | 回答の診断の `execution_steps`（rag_engine の工程の `status` の文言と詳細の行）。rag_engine の工程の span（`rag.engine.stage`）の表示にも同じ値が出る。span の状態は例外のときだけ失敗で、縮退の文言だけでは成功のまま | `rag/packages/rag_engine/rag_engine/generation/execution_record.py::_execution_step` |
 | `SP` | backend の工程の span（`rag.<stage>`）と工程の結果（`success` / `skipped` / `error`） | `rag/backend/app/rag/pipeline.py::_observe_stage` |
 | `RT` | rag_engine の結果の trace だけ（backend の診断に写していない） | `rag/packages/rag_engine/rag_engine/generation/answering.py` |
@@ -68,7 +68,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| 関係情報の拡張（#2055） | 任意（`RAG_GRAPH_EXPANSION_ENABLED`。既定 off） | 読めない → 足さずに続ける | `DS`（`graph_expansion`）・`DX`（`graph_expansion.attempts` の `status: error`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._graph_expansion` |
 | 交差参照の参照先の解決・読み込み（#1280・#1400） | 任意（`RAG_REFERENCE_EXPANSION_ENABLED`） | 解決・読み込みの失敗 → その参照を辿らない / 足さない | `DS`（`reference_resolve`・`reference_load`）・`DX`（`reference_expansion.searches`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | 参照先の文書の先読み | 任意 | 失敗 → 辿るときに 1 つずつ照合する | `DS`（`reference_prefetch`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._prefetch_reference_documents` |
 | 参照先の文書の中の rerank | 任意 | 失敗 → 検索の順のまま足す | `DS`（`reference_rerank`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._document_reference_chunks` |
@@ -135,7 +134,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | `query_overflow` | 全文検索の超限補完に使う語の抽出（失敗は未検索として保存し、既存根拠を維持する） | `rag/packages/rag_engine/rag_engine/retrieval/query_overflow.py::search_overflow_requests` |
 | `prompt_overrides` | 編集した回答のプロンプトの読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._run` |
 | `business_names` | 業務の名前の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._business_names` |
-| `graph_expansion` | 関係情報の拡張 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._graph_expansion` |
 | `reference_resolve` | 参照先の解決 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | `reference_load` | 参照先の chunk の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | `reference_prefetch` | 参照先の文書の先読み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._prefetch_reference_documents` |

@@ -21,7 +21,6 @@
 | `reasoning_tree_search`(PageIndex 型) | 検索方式 | PageIndex-lite の実装(navigation 要約から LLM が section を選ぶ)と検索モードの選択は #595 で削除した。回答フローでは、画面目録で操作画面を探す(`RAG_SCREEN_LINKING_ENABLED`。番号付きの見出しの目録から LLM が画面を選ぶ)が近い役割を持つ |
 | `colpali_visual_retrieval`(ColPali 型) | 検索方式 | 戦略の登録ごと #595 で削除した。未着手 |
 | `self_reflective`(Self-RAG) | 回答生成 | 未着手。回答フローの回答文の生成後の根拠確認(監査)が近い役割を持つ |
-| Temporal GraphRAG | 文書構造索引の構築/検索 | 未着手(未実装だった設定 `RAG_GRAPH_TEMPORAL_ENABLED` は #301 で削除) |
 | RAPTOR 検索時昇格 | 検索 | 取込側で summary node を索引済。通常の検索が summary node にヒットする |
 
 ---
@@ -74,11 +73,6 @@ cosine 類似度ではなく **LLM が章節 tree を navigation** して関連 
   `{"answer":..., "confidence":0-1, "grounded_in_context":bool}` を出力し、`confidence<閾値` or
   `grounded_in_context==false` で **1 回だけ再検索**する。回答フローの CRAG(根拠の評価と補正検索)と
   回答文の生成後の根拠確認が同じ役割を持つため、足すならその中で扱う。
-- **Temporal GraphRAG**: 取込時に entity / relationship へ timestamp(`valid_from/valid_to`)を付与し、
-  検索時に query の時間文脈(「最新の」「2024 年時点」)を抽出して Oracle の条件でフィルタする。
-  回答の検索で graph を使う経路は #595 で削除したため、検索時の利用から設計し直す。設定は実装と同時に
-  追加する(未実装の設定は置かない。#301)。今の文書構造索引の構築(`entities`)は文書と章・節の見出しの
-  つながりだけを作る(読む経路の無かった claims / community summary は #621 で削除した)。
 - **RAPTOR 検索時昇格**: 既に summary node を索引済。leaf hit 時に対応する summary node を回答の文脈へ
   昇格する経路を、回答フローの small-to-big(親本文・前後の child)と合わせて追加する(opt-in)。
 

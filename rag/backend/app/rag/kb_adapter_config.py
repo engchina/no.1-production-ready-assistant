@@ -50,7 +50,6 @@ from app.config import (
     REMOVED_PARSER_ADAPTER_BACKENDS,
     AnswerFlow,
     ChunkingStrategy,
-    GraphProfile,
     ParserAdapterBackend,
     PreprocessProfile,
     QueryStrategy,
@@ -93,7 +92,6 @@ _INGESTION_FIELD_MAP: dict[str, str] = {
     "chunk_parent_max_children": "rag_chunk_parent_max_children",
     # 取込側の高度軸(現状グローバルのみだった adapter を KB 上書き対象へ拡張)。
     # いずれも取込パイプラインが self._settings から読むため、KB 上書きが取込に効く。
-    "graph_profile": "rag_graph_profile",
     "field_extraction_enabled": "rag_field_extraction_enabled",
     "navigation_summary_enabled": "rag_navigation_summary_enabled",
     "auto_parse_after_preprocess_enabled": "rag_auto_parse_after_preprocess_enabled",
@@ -112,9 +110,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
     "guide_step_max_queries": "rag_guide_step_max_queries",
     "guide_step_deadline_seconds": "rag_guide_step_deadline_seconds",
     "auto_field_filter_enabled": "rag_auto_field_filter_enabled",
-    # 関係情報で検索の候補を足す(#2055)。None は全体の既定(OFF / 上限 6)。
-    "graph_expansion_enabled": "rag_graph_expansion_enabled",
-    "graph_expansion_max_chunks": "rag_graph_expansion_max_chunks",
     # 章節の拡張(#1436)。None は Settings の既定(拡張は on / 4 段 / 50%)。
     "section_expansion_enabled": "rag_section_expansion_enabled",
     "section_expansion_max_levels": "rag_section_expansion_max_levels",
@@ -144,14 +139,17 @@ class KbAdapterConfigError(ValueError):
     """KB 構築設定がグローバル設定と整合しないときに送出する。"""
 
 
-# 削除した文書解析エンジン(#270・#22・#21)の有効化フラグ。保存済みの KB 構築設定・文書レシピ・
-# 取込ジョブの snapshot に残っていても読めるよう、検証前に取り除く。
-_REMOVED_PARSER_FLAG_FIELDS = frozenset(
-    f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS
-)
-# 削除した実体・別名索引(#160)の文書レシピの項目。保存値は読み込み時に捨て、次回保存で消える。
-_REMOVED_ENTITY_INDEX_FIELDS = frozenset(
-    {"entity_index_enabled", "entity_name_columns", "entity_attribute_columns"}
+# 削除した項目(文書解析エンジンの有効化フラグ #270・#22・#21、文書構造索引の構築 #159、実体・
+# 別名索引 #160)。保存済みの KB 構築設定・文書レシピ・取込ジョブの snapshot に残っていても
+# 読めるよう、検証前に取り除く。
+_REMOVED_INGESTION_FIELDS = frozenset(
+    {
+        *(f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS),
+        "graph_profile",
+        "entity_index_enabled",
+        "entity_name_columns",
+        "entity_attribute_columns",
+    }
 )
 # Vision を解析エンジンに依存しない ``vision_enabled`` へ統合した(#497)ときの旧 key。
 # 読み込むときに ``vision_enabled`` へ移す。優先は新しい key の明示値 > Docling の Vision >
@@ -183,7 +181,7 @@ def _clean_persisted_ingestion_config(data: object) -> object:
     cleaned = {
         key: value
         for key, value in _migrate_legacy_vision_fields(data).items()
-        if key not in _REMOVED_PARSER_FLAG_FIELDS and key not in _REMOVED_ENTITY_INDEX_FIELDS
+        if key not in _REMOVED_INGESTION_FIELDS
     }
     backend = cleaned.get("parser_adapter_backend")
     if isinstance(backend, str) and backend.strip().casefold() in REMOVED_PARSER_ADAPTER_BACKENDS:
@@ -250,7 +248,6 @@ class KnowledgeBaseIngestionConfig(BaseModel):
         default=None, ge=CHUNK_PARENT_MAX_CHILDREN_MIN, le=CHUNK_PARENT_MAX_CHILDREN_MAX
     )
     # 取込側の高度軸(KB 上書き対象へ拡張)。None はグローバル継承。
-    graph_profile: GraphProfile | None = None
     heading_level_inference_enabled: bool | None = None
     field_extraction_enabled: bool | None = None
     navigation_summary_enabled: bool | None = None
@@ -332,12 +329,6 @@ class KnowledgeBaseQueryConfig(BaseModel):
     guide_step_deadline_seconds: float | None = Field(default=None, ge=0, le=60)
     # 質問から抽出項目の条件を読み取る(#652)。LLM の呼び出しが 1 回増える。
     auto_field_filter_enabled: bool | None = None
-    # 関係情報(文書構造索引の構築で作った章節・表の見出しの entity と chunk の対応)で検索の候補を
-    # 足す(#2055)。LLM は呼ばない。None は全体の既定(OFF。検索方法の画面)。
-    graph_expansion_enabled: bool | None = None
-    # 1 回の検索で足す chunk 数の上限。None は全体の既定(6)。ON / OFF と同じく、検索・回答
-    # プロファイルでは保存・適用しない(PROFILE_GLOBAL_QUERY_FIELDS)。
-    graph_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
     # 当たった chunk の章節から親の章節へ段階的に広げる(#1436)。None は既定(on)、false は使わない。
     # 段ごとに CRAG の判定(LLM)が 1 回増える。上限(段・根拠の入力 token の割合・秒)も選べる。
     section_expansion_enabled: bool | None = None

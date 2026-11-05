@@ -21,7 +21,6 @@ const RECIPE_DEFAULTS = {
   chunk_size: 800,
   chunk_overlap: 120,
   chunk_min_chars: 120,
-  graph_profile: "off",
   heading_level_inference_enabled: false,
   field_extraction_enabled: false,
   navigation_summary_enabled: false,
@@ -100,15 +99,11 @@ test("取込・検索・回答設定の概要ハブが工程をフェーズ別�
     "href",
     "/settings/retrieval"
   );
-  // 関係情報の工程は取込時の構築の設定なので「文書構造索引」の名前でナレッジ構築フェーズに並ぶ(#301)。
-  await expect(
-    page
-      .getByRole("region", { name: "ナレッジ構築" })
-      .getByRole("link", { name: "文書構造索引 の設定を開く" })
-  ).toHaveAttribute("href", "/settings/graph");
 
   const ingestion = page.getByRole("region", { name: "ナレッジ構築" });
   await expect(ingestion.getByRole("link", { name: "文書構造索引 の設定を開く" })).toContainText("5.");
+  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("6.");
+  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("8.");
   await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("6.");
   await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("8.");
 
@@ -164,7 +159,6 @@ const PROCESSING_ORDER = [
   "chunking_strategy",
   "auto_index_after_chunk_enabled",
   "vector_index",
-  "graph_profile",
 ];
 
 test(`取込の流れは検索インデックスと 12 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({

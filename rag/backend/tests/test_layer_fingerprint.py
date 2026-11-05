@@ -68,8 +68,6 @@ def test_recorded_fingerprint_uses_values_stamped_at_extraction() -> None:
     assert recorded_layer_fingerprint("navigation", extraction, settings) == {
         NAVIGATION_SUMMARY_MAX_NODES_INPUT: 7
     }
-    # 関係情報は実体化しないため、比べる入力を持たない。
-    assert recorded_layer_fingerprint("graph", extraction, settings) is None
 
 
 def test_recorded_fingerprint_adds_chunk_contract_only_for_small_to_big() -> None:

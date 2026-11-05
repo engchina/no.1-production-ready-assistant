@@ -175,7 +175,7 @@ const MAX_ANCHORS_PER_DOCUMENT_OPTIONS: SelectFieldOption<string>[] = Array.from
  */
 const PROFILE_GLOBAL_QUERY_FIELDS = [
   "query_strategy", "answer_flow", "neighbor_child_count", "rerank_enabled", "auto_field_filter_enabled",
-  "graph_expansion_enabled", "graph_expansion_max_chunks", "screen_linking_enabled", "request_coverage_retrieval_enabled",
+  "screen_linking_enabled", "request_coverage_retrieval_enabled",
   "guide_step_retrieval_enabled", "guide_step_max_queries", "guide_step_deadline_seconds",
   "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent",
 ] as const satisfies readonly (keyof KnowledgeBaseQueryConfig)[];
