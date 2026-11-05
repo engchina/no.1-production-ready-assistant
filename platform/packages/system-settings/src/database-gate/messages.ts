@@ -11,12 +11,12 @@ export const DATABASE_GATE_MESSAGES = {
     "この画面を利用するには、まずデータベースの接続情報を設定してください。設定が完了すると、この画面は自動的に利用できるようになります。",
   "dbGate.notConfigured.contactAdmin":
     "この画面を利用するには、データベースの接続情報の設定が必要です。システム管理者に連絡して、設定を依頼してください。",
-  // 接続できない（unreachable）。DB の起動・停止は画面では扱わないため、接続設定と Wallet の確認へ案内する（#10）。
+  // 接続できない（unreachable）。DB の起動・停止は画面では扱わないため、接続設定の確認へ案内する（#10）。
   "dbGate.unreachable.title": "データベースに接続できません",
   "dbGate.unreachable.message":
-    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。",
+    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・DSN を確認してから、再試行してください。",
   "dbGate.unreachable.contactAdmin":
-    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。",
+    "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。システム管理者に連絡して、データベースの稼働と接続設定の確認を依頼してください。",
   // 初期化が必要（setup_required）
   "dbGate.setupRequired.title": "システムテーブルの作成・更新が必要です",
   "dbGate.setupRequired.message":
@@ -38,16 +38,10 @@ export const DATABASE_GATE_MESSAGES = {
     "データベースの接続の設定とシステムテーブルの作成・更新は、システム管理者が行います。",
   "dbGate.reasonCode": "診断コード: {code}",
   // 診断コード（`check`）ごとの補足。無いコードは診断コードだけを出す。
-  "dbGate.check.missing": "接続ユーザーまたはサービス名（DSN）が設定されていません。",
+  "dbGate.check.missing": "接続ユーザーまたは DSN が設定されていません。",
   "dbGate.check.missing_credentials": "DB パスワードが設定されていません。",
-  "dbGate.check.wallet_not_found":
-    "Wallet の保存先に接続用のファイルがそろっていません。Wallet をアップロードし直してください。",
-  "dbGate.check.wallet_password_invalid":
-    "暗号化された Wallet を現在の Wallet パスワードで復号できません。Wallet パスワードを確認してください。",
   "dbGate.check.invalid":
-    "サービス名（DSN）が現在の Wallet の tnsnames.ora にありません。サービス名を選び直してください。",
-  "dbGate.check.walletless_tls_dsn_required":
-    "Walletless TLS では、Wallet のサービス名ではなく ADB の TCPS 接続文字列または Easy Connect の DSN を指定してください。",
+    "DSN は host:port/service_name か接続記述子で指定してください。",
   "dbGate.check.invalid_configuration":
     "接続設定の組み合わせがこの製品で使えません。バックエンドの設定を確認してください。",
   "dbGate.check.schema_check_failed":

@@ -1,8 +1,7 @@
 """データベース設定の API（3製品共通。NL2SQL の実装を基準に移設。#108）。
 
 - Oracle AI Database の接続設定（`.env` へ保存。secret はレスポンスに返さない）
-- Wallet ZIP の安全な展開と差し替え（権限 0700 / 0600、失敗時は元に戻す、同時実行は 409）
-- readiness（Wallet のファイル・Wallet パスワード・DSN の別名）と接続テストの結果
+- readiness（ユーザー・パスワード・DSN の形式）と接続テストの結果
 
 実際の DB 接続（python-oracledb の使い方）と保存後の後始末（接続 pool を閉じる等）は
 製品ごとに違うため、`build_database_router` の hook で受け取る。共有パッケージは
@@ -11,25 +10,15 @@ oracledb に依存しない。
 
 from __future__ import annotations
 
-import fcntl
-import io
 import logging
-import os
 import re
-import shutil
-import stat
 import time
-from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, suppress
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath
-from typing import Annotated, Any, Literal
-from uuid import uuid4
-from zipfile import BadZipFile, ZipFile
+from pathlib import Path
+from typing import Any, Literal
 
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile, params
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, HTTPException, Response, params
 from pr_backend_core.schemas import ApiResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -38,20 +27,10 @@ from .env_file import write_env_values
 
 logger = logging.getLogger(__name__)
 
-ORACLE_WALLET_MAX_BYTES = 20 * 1024 * 1024
-ORACLE_WALLET_MAX_EXTRACTED_BYTES = 100 * 1024 * 1024
-ORACLE_WALLET_DIRECTORY_MODE = 0o700
-ORACLE_WALLET_FILE_MODE = 0o600
-ORACLE_WALLET_THIN_REQUIRED_FILES = frozenset({"tnsnames.ora", "ewallet.pem"})
-ORACLE_WALLET_THICK_REQUIRED_FILES = frozenset({"tnsnames.ora", "sqlnet.ora", "cwallet.sso"})
-ORACLE_WALLET_SKIPPED_FILES = frozenset(
-    {"readme", "keystore.jks", "truststore.jks", "ojdbc.properties", "ewallet.p12"}
-)
 ORACLE_ERROR_CODE_RE = re.compile(r"\b(?:ORA|DPY|DPI)-\d{4,5}\b", re.IGNORECASE)
 SECRET_REVEAL_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 
 DatabaseConnectionTestStatus = Literal["success", "failed"]
-DatabaseConnectionSecurity = Literal["wallet_mtls", "walletless_tls"]
 
 
 # --------------------------------------------------------------------------- schemas
@@ -63,13 +42,8 @@ class DatabaseSettingsData(BaseModel):
     user: str
     dsn: str
     driver_mode: Literal["thin", "thick"]
-    connection_security: DatabaseConnectionSecurity
     client_lib_dir: str
-    wallet_dir: str
-    wallet_uploaded: bool
-    available_services: list[str]
     has_password: bool
-    has_wallet_password: bool
     readiness: str
     embedding_dimension: int
     vector_column: str
@@ -85,20 +59,16 @@ class DatabasePasswordRevealData(BaseModel):
 class DatabaseSettingsUpdate(BaseModel):
     """Oracle AI Database の接続設定の更新 payload。
 
-    password / wallet_password は未指定または空文字なら既存値を保持する。
-    clear_* が true の場合だけ保存済み secret を削除する。
+    password は未指定または空文字なら既存値を保持する。
+    clear_password が true の場合だけ保存済み secret を削除する。
     """
 
     user: str = Field(default="", max_length=256)
     dsn: str = Field(default="", max_length=1024)
-    connection_security: DatabaseConnectionSecurity | None = None
-    wallet_dir: str = Field(default="", max_length=1024)
     password: str | None = Field(default=None, max_length=4096)
-    wallet_password: str | None = Field(default=None, max_length=4096)
     clear_password: bool = False
-    clear_wallet_password: bool = False
 
-    @field_validator("user", "dsn", "wallet_dir")
+    @field_validator("user", "dsn")
     @classmethod
     def strip_text(cls, value: str) -> str:
         """前後空白を設定値へ混入させない。"""
@@ -118,28 +88,6 @@ class DatabaseConnectionTestResult(BaseModel):
     error_type: str | None = None
 
 
-class DatabaseWalletOperationError(HTTPException):
-    """Wallet の server-side install が失敗した段階を API 境界へ伝える。
-
-    HTTPException（500）なので、製品が専用の handler を登録していなければ
-    `public_message` をそのまま返す。
-    """
-
-    def __init__(
-        self,
-        *,
-        code: str,
-        public_message: str,
-        stage: str,
-        retryable: bool = True,
-    ) -> None:
-        super().__init__(status_code=500, detail=public_message)
-        self.code = code
-        self.public_message = public_message
-        self.stage = stage
-        self.retryable = retryable
-
-
 # --------------------------------------------------------------------------- Settings access
 
 
@@ -151,11 +99,6 @@ def _s(settings: Any, name: str) -> str:
 def driver_mode(settings: Any) -> str:
     """python-oracledb の driver mode（`oracle_driver_mode`。既定 thin）。"""
     return _s(settings, "oracle_driver_mode").strip().lower() or "thin"
-
-
-def connection_security(settings: Any) -> str:
-    """接続セキュリティ（`oracle_connection_security`。既定 wallet_mtls）。"""
-    return _s(settings, "oracle_connection_security").strip().lower() or "wallet_mtls"
 
 
 def _has_field(settings: Any, name: str) -> bool:
@@ -179,95 +122,18 @@ ExtraReadiness = Callable[[Any], str | None]
 def database_settings_data(
     settings: Any, extra_readiness: ExtraReadiness | None = None
 ) -> DatabaseSettingsData:
-    wallet_dir = _s(settings, "resolved_oracle_wallet_dir")
-    wallet_path = Path(wallet_dir).expanduser() if wallet_dir else None
-    if wallet_path is not None:
-        _sanitize_database_wallet_dir(wallet_path)
-    wallet_configured = bool(
-        wallet_path
-        and _database_wallet_is_configured(wallet_path, driver_mode=driver_mode(settings))
-    )
     return DatabaseSettingsData(
         user=_s(settings, "oracle_user"),
         dsn=_s(settings, "oracle_dsn"),
         driver_mode="thick" if driver_mode(settings) == "thick" else "thin",
-        connection_security=(
-            "walletless_tls" if connection_security(settings) == "walletless_tls" else "wallet_mtls"
-        ),
         client_lib_dir=_s(settings, "oracle_client_lib_dir"),
-        wallet_dir=wallet_dir,
-        wallet_uploaded=wallet_configured,
-        available_services=(
-            _extract_wallet_services(wallet_path) if wallet_path and wallet_configured else []
-        ),
         has_password=bool(_s(settings, "oracle_password")),
-        has_wallet_password=bool(_s(settings, "oracle_wallet_password")),
         readiness=database_readiness(settings, extra_readiness),
         # ベクトル列の型はコードの正本（#46）。設定の値ではなく DDL と同じ値を出す。
         embedding_dimension=EMBEDDING_DIMENSIONS,
         vector_column=EMBEDDING_VECTOR_COLUMN_TYPE,
         config_source="runtime",
     )
-
-
-def _sanitize_database_wallet_dir(wallet_path: Path) -> None:
-    if not wallet_path.is_dir():
-        return
-    for file_name in ORACLE_WALLET_SKIPPED_FILES:
-        try:
-            path = wallet_path / file_name
-            if path.is_file():
-                path.unlink()
-        except OSError:
-            continue
-
-
-def database_wallet_required_files(mode: str) -> frozenset[str]:
-    """driver mode に応じた mTLS Wallet の必須ファイルを返す。"""
-    if mode.strip().lower() == "thin":
-        return ORACLE_WALLET_THIN_REQUIRED_FILES
-    return ORACLE_WALLET_THICK_REQUIRED_FILES
-
-
-def _database_wallet_is_configured(wallet_path: Path, *, driver_mode: str = "thin") -> bool:
-    """接続に必須の mTLS Wallet ファイルが通常ファイルとして揃っているか判定する。"""
-    required_files = database_wallet_required_files(driver_mode)
-    return wallet_path.is_dir() and all(
-        (wallet_path / file_name).is_file() for file_name in required_files
-    )
-
-
-def pem_file_is_encrypted(path: Path) -> bool:
-    """PEM の代表的な暗号化 marker を少量だけ読んで検出する。"""
-    try:
-        head = path.read_bytes()[:4096]
-    except OSError:
-        return False
-    text = head.decode("utf-8", errors="ignore").upper()
-    return "BEGIN ENCRYPTED PRIVATE KEY" in text or "PROC-TYPE: 4,ENCRYPTED" in text
-
-
-def _database_wallet_password_is_usable(
-    wallet_path: Path,
-    wallet_password: str,
-    *,
-    driver_mode: str = "thin",
-) -> bool:
-    """mTLS Wallet の認証ファイルが保存済み password で使えるか判定する。"""
-    if driver_mode.strip().lower() != "thin":
-        return (wallet_path / "cwallet.sso").is_file()
-    pem_path = wallet_path / "ewallet.pem"
-    if not pem_path.is_file():
-        return False
-    if not pem_file_is_encrypted(pem_path):
-        return True
-    if not wallet_password:
-        return False
-    try:
-        load_pem_private_key(pem_path.read_bytes(), password=wallet_password.encode("utf-8"))
-    except (OSError, TypeError, ValueError):
-        return False
-    return True
 
 
 def database_readiness(settings: Any, extra_readiness: ExtraReadiness | None = None) -> str:
@@ -278,70 +144,27 @@ def database_readiness(settings: Any, extra_readiness: ExtraReadiness | None = N
             return extra
     if not _s(settings, "oracle_user").strip() or not _s(settings, "oracle_dsn").strip():
         return "missing"
-    mode = driver_mode(settings)
-    wallet_dir = _s(settings, "resolved_oracle_wallet_dir").strip()
-    wallet_path = Path(wallet_dir).expanduser() if wallet_dir else None
-    wallet_configured = bool(
-        wallet_path and _database_wallet_is_configured(wallet_path, driver_mode=mode)
-    )
-    dsn = _s(settings, "oracle_dsn")
-    if connection_security(settings) == "walletless_tls":
-        if _database_dsn_uses_wallet_alias(dsn):
-            return "walletless_tls_dsn_required"
-        return "ok" if _s(settings, "oracle_password").strip() else "missing_credentials"
-    if not wallet_path or not wallet_configured:
-        return "wallet_not_found"
-    if not _database_wallet_password_is_usable(
-        wallet_path,
-        _s(settings, "oracle_wallet_password").strip() or _s(settings, "oracle_password").strip(),
-        driver_mode=mode,
-    ):
-        return "wallet_password_invalid"
-    if _database_dsn_uses_wallet_alias(dsn) and not _database_wallet_service_exists(
-        wallet_path, dsn
-    ):
+    if not _s(settings, "oracle_password").strip():
+        return "missing_credentials"
+    # 記号の無い文字列は接続先を解決できないので、host:port/service か接続記述子だけを受け付ける。
+    if re.fullmatch(r"[A-Za-z0-9_.-]+", _s(settings, "oracle_dsn").strip()):
         return "invalid"
     return "ok"
-
-
-def _database_dsn_uses_wallet_alias(dsn: str) -> bool:
-    """TNS alias らしい短い DSN だけを Wallet service 検査の対象にする。"""
-    return bool(re.fullmatch(r"[A-Za-z0-9_.-]+", dsn.strip()))
-
-
-def _database_wallet_service_exists(wallet_path: Path, dsn: str) -> bool:
-    """tnsnames.ora に DSN alias が登録されているかを大小無視で判定する。"""
-    normalized = dsn.strip().lower()
-    return any(service.lower() == normalized for service in _extract_wallet_services(wallet_path))
 
 
 def database_readiness_message(readiness: str) -> str:
     if readiness == "invalid_configuration":
         return (
             "接続設定の組み合わせがこの製品で使えません。"
-            "PLATFORM_ORACLE_DRIVER_MODE と Wallet の設定を確認してください。"
+            "PLATFORM_ORACLE_DRIVER_MODE の設定を確認してください。"
         )
     if readiness == "invalid":
         return (
             "Oracle AI Database の接続設定を確認してください。"
-            "サービス名 / DSN が現在の Wallet の tnsnames.ora に存在しません。"
+            "DSN は host:port/service_name か接続記述子で指定してください。"
         )
-    if readiness == "wallet_not_found":
-        return (
-            "Oracle AI Database への接続に必要な Wallet を確認してください。"
-            "現在の Wallet 保存先に接続用ファイルが揃っていません。"
-        )
-    if readiness == "wallet_password_invalid":
-        return (
-            "Oracle AI Database への接続に必要な Wallet パスワードを確認してください。"
-            "暗号化 Wallet の ewallet.pem を現在の "
-            "PLATFORM_ORACLE_WALLET_PASSWORD で復号できません。"
-        )
-    if readiness == "walletless_tls_dsn_required":
-        return (
-            "Walletless TLS では Wallet サービス名ではなく、"
-            "ADB の TCPS 接続文字列または Easy Connect DSN を指定してください。"
-        )
+    if readiness == "missing_credentials":
+        return "Oracle AI Database への接続に必要な DB パスワードを設定してください。"
     return "Oracle AI Database への接続に必要な設定が不足しています。"
 
 
@@ -363,24 +186,21 @@ def database_connection_error_message(exc: Exception, error_codes: list[str]) ->
     prefix = f"Oracle AI Database へ接続できませんでした{code_label}。"
     if "ORA-01017" in code_set:
         return prefix + "ユーザー名または DB パスワードを確認してください。"
-    if "ORA-12154" in code_set:
-        return prefix + "Wallet サービス名が tnsnames.ora に存在するか確認してください。"
+    if "ORA-12154" in code_set or "DPY-4000" in code_set:
+        return prefix + "DSN が host:port/service_name か接続記述子か確認してください。"
     if "ORA-12506" in code_set:
         return (
             prefix + "ADB のアクセス制御リストまたは network ACL が"
             "この接続元を許可しているか確認してください。"
         )
     if code_set & {"ORA-12514", "ORA-12505"}:
-        return prefix + "Wallet サービス名と ADB の稼働状態を確認してください。"
+        return prefix + "DSN のサービス名とデータベースの稼働状態を確認してください。"
     if code_set & {"ORA-12541", "DPY-6005", "DPY-6000"}:
-        return prefix + "ADB の listener と TCPS 1522 への到達性を確認してください。"
-    if "DPY-4011" in code_set:
-        return prefix + "Wallet ZIP と Wallet パスワードを確認してください。"
-    if "DPY-4000" in code_set:
         return (
-            prefix
-            + "サービス名 / DSN が現在の Wallet の tnsnames.ora に存在するか確認してください。"
+            prefix + "データベースの稼働状態と、DSN の host と port への到達性を確認してください。"
         )
+    if "DPY-4011" in code_set:
+        return prefix + "DSN の port とプロトコルが接続先に合っているか確認してください。"
     if code_set & {"DPI-1047", "DPI-1072"}:
         return (
             prefix + "標準の Thin mode では Oracle Instant Client は不要です。"
@@ -404,57 +224,37 @@ def database_connection_troubleshooting(
     """Oracle 接続テストの結果から次に確認するポイントを返す。"""
     tips: list[str] = []
     if readiness == "missing":
-        tips.append(
-            "ユーザー名、Wallet サービス名、Wallet ZIP が入力・アップロード済みか確認してください。"
-        )
+        tips.append("ユーザー名と DSN が入力済みか確認してください。")
     if readiness == "missing_credentials":
-        tips.append("DB パスワードまたは Wallet パスワードが保存済みか確認してください。")
-    if readiness == "wallet_not_found":
-        tips.append("ADB からダウンロードした Wallet ZIP をアップロードし直してください。")
-    if readiness == "wallet_password_invalid":
-        tips.append(
-            "Wallet パスワードが一致していません。"
-            "現在の Wallet ZIP 作成時に指定した Wallet パスワードを保存してください。"
-        )
+        tips.append("DB パスワードが保存済みか確認してください。")
     if readiness == "invalid_configuration":
-        tips.append(
-            "PLATFORM_ORACLE_DRIVER_MODE=thin とし、"
-            "Thin mTLS 用の tnsnames.ora と ewallet.pem を "
-            "PLATFORM_ORACLE_WALLET_DIR に配置してください。"
-        )
+        tips.append("PLATFORM_ORACLE_DRIVER_MODE=thin を指定してください。")
     if readiness == "invalid":
-        tips.append("Wallet の tnsnames.ora とサービス名の形式を確認してください。")
-    if readiness == "walletless_tls_dsn_required":
-        tips.append(
-            "Walletless TLS の DSN は Wallet alias ではなく、ADB の TCPS 接続文字列または "
-            "host:port/service_name 形式で指定してください。"
-        )
+        tips.append("DSN を host:port/service_name か接続記述子で指定してください。")
 
     combined = f"{error_text} {error_type}".lower()
     if any(token in combined for token in ("timeout", "timed out", "oracleconnectiontimeouterror")):
         tips.append(
-            "接続テストがタイムアウトしました。ADB が起動中か、VCN/VPN/プロキシ経路から "
-            "TCPS 1522 に到達できるか確認してください。"
+            "接続テストがタイムアウトしました。データベースが起動中か、"
+            "DSN の host と port に到達できるか確認してください。"
         )
     if "ora-01017" in combined:
         tips.append("ユーザー名または DB パスワードが正しいか確認してください。")
     if "ora-12154" in combined or "dpy-4000" in combined or "tns" in combined:
-        tips.append("Wallet サービス名が tnsnames.ora に存在するか確認してください。")
+        tips.append("DSN が host:port/service_name か接続記述子か確認してください。")
     if "ora-12506" in combined:
         tips.append(
             "ADB の Network Access / ACL で、この実行ホストの public IP または VCN 経路を"
             "許可してください。"
         )
     if "ora-12514" in combined or "ora-12505" in combined:
-        tips.append("Wallet サービス名が ADB の接続文字列として有効か確認してください。")
+        tips.append("DSN のサービス名が接続先で有効か確認してください。")
     if "ora-12541" in combined or "dpy-6005" in combined or "dpy-6000" in combined:
         tips.append(
-            "データベースが停止していないか、ADB の listener に到達できるか確認してください。"
+            "データベースが停止していないか、DSN の host と port に到達できるか確認してください。"
         )
-    if "wallet" in combined or "dpy-4011" in combined:
-        tips.append(
-            "Wallet ZIP の内容、Wallet パスワード、PLATFORM_ORACLE_WALLET_DIR を確認してください。"
-        )
+    if "dpy-4011" in combined:
+        tips.append("DSN の port とプロトコルが接続先に合っているか確認してください。")
     if "dpi-1047" in combined or "dpi-1072" in combined:
         tips.append(
             "PLATFORM_ORACLE_DRIVER_MODE=thin の標準構成へ戻してください。"
@@ -464,13 +264,12 @@ def database_connection_troubleshooting(
     if "operationalerror" in combined and not tips:
         tips.append(
             "backend ログに出ている ORA/DPY/DPI エラーコードを確認し、"
-            "Wallet、サービス名、認証情報、ネットワーク経路を切り分けてください。"
+            "DSN、認証情報、ネットワーク経路を切り分けてください。"
         )
 
     if not tips:
         tips.append(
-            "バックエンドログの Oracle エラーコードと Wallet / DSN /"
-            "ネットワーク設定を確認してください。"
+            "バックエンドログの Oracle エラーコードと DSN・ネットワークの設定を確認してください。"
         )
     return list(dict.fromkeys(tips))
 
@@ -494,77 +293,25 @@ def _timeout_details(settings: Any) -> dict[str, str | int | float | bool | None
 # --------------------------------------------------------------------------- persistence
 
 
-def _same_path(requested: str, configured: str) -> bool:
-    """利用者が送った path が、server の設定の path と同じか。
-
-    利用者の path は filesystem を参照せず、字句だけで正規化して比べる（`~` の展開・絶対 path 化・
-    `..` の解消）。symlink を辿る `resolve()` は server の設定の path にだけ使う（#1646）。
-    """
-    if not requested or not configured:
-        return False
-    requested_path = os.path.normpath(os.path.abspath(os.path.expanduser(requested)))
-    configured_path = Path(configured).expanduser()
-    return requested_path in {
-        os.path.normpath(os.path.abspath(configured_path)),
-        str(configured_path.resolve()),
-    }
-
-
-def _requested_wallet_dir(base: Any, payload: DatabaseSettingsUpdate) -> str:
-    """payload の Wallet の保存先は、今の保存先と同じときだけ受け取る。
-
-    Wallet の設置（アップロード）は保存先の既存のディレクトリを置き換えて削除する
-    ため、API から任意の path を保存させない（画面は今の保存先を送るだけで、変更する欄は無い）。
-    保存先は platform/.env の PLATFORM_ORACLE_WALLET_DIR（Thick は CLIENT_LIB_DIR）で決める。
-    """
-    requested = payload.wallet_dir.strip()
-    current = _s(base, "oracle_wallet_dir").strip()
-    resolved = _s(base, "resolved_oracle_wallet_dir").strip()
-    if not requested or _same_path(requested, current):
-        return current or resolved
-    if _same_path(requested, resolved):
-        return resolved
-    raise HTTPException(
-        status_code=422,
-        detail=(
-            "Wallet の保存先は画面・API からは変更できません。"
-            "platform/.env の PLATFORM_ORACLE_WALLET_DIR で設定してください。"
-        ),
+def database_settings_candidate(base: Any, payload: DatabaseSettingsUpdate) -> Any:
+    return base.model_copy(
+        update={
+            "oracle_user": payload.user.strip(),
+            "oracle_dsn": payload.dsn.strip(),
+            "oracle_password": secret_value(
+                current=_s(base, "oracle_password"),
+                update=payload.password,
+                clear=payload.clear_password,
+            ),
+        }
     )
-
-
-def database_settings_candidate(
-    base: Any, payload: DatabaseSettingsUpdate, *, connection_security_enabled: bool
-) -> Any:
-    wallet_dir = _requested_wallet_dir(base, payload)
-    updates: dict[str, Any] = {
-        "oracle_user": payload.user.strip(),
-        "oracle_dsn": payload.dsn.strip(),
-        "oracle_wallet_dir": wallet_dir,
-        "oracle_password": secret_value(
-            current=_s(base, "oracle_password"),
-            update=payload.password,
-            clear=payload.clear_password,
-        ),
-        "oracle_wallet_password": secret_value(
-            current=_s(base, "oracle_wallet_password"),
-            update=payload.wallet_password,
-            clear=payload.clear_wallet_password,
-        ),
-    }
-    if connection_security_enabled and payload.connection_security:
-        updates["oracle_connection_security"] = payload.connection_security
-    return base.model_copy(update=updates)
 
 
 _DATABASE_FIELDS = (
     "oracle_user",
     "oracle_password",
     "oracle_dsn",
-    "oracle_connection_security",
     "oracle_client_lib_dir",
-    "oracle_wallet_dir",
-    "oracle_wallet_password",
 )
 
 
@@ -580,14 +327,10 @@ def _persist_database_settings(settings: Any, env_file: Path) -> None:
         "PLATFORM_ORACLE_PASSWORD": _s(settings, "oracle_password"),
         "PLATFORM_ORACLE_DSN": _s(settings, "oracle_dsn"),
         "PLATFORM_ORACLE_CLIENT_LIB_DIR": _s(settings, "oracle_client_lib_dir"),
-        "PLATFORM_ORACLE_WALLET_DIR": _s(settings, "oracle_wallet_dir"),
-        "PLATFORM_ORACLE_WALLET_PASSWORD": _s(settings, "oracle_wallet_password"),
     }
-    # driver mode / 接続セキュリティを設定項目として持つ製品（NL2SQL）だけ保存する。
+    # driver mode を設定項目として持つ製品（NL2SQL）だけ保存する。
     if _has_field(settings, "oracle_driver_mode"):
         values["PLATFORM_ORACLE_DRIVER_MODE"] = driver_mode(settings)
-    if _has_field(settings, "oracle_connection_security"):
-        values["PLATFORM_ORACLE_CONNECTION_SECURITY"] = connection_security(settings)
     _write_env(
         env_file,
         values,
@@ -609,337 +352,6 @@ def _write_env(
         raise HTTPException(status_code=500, detail=error_detail) from exc
 
 
-# --------------------------------------------------------------------------- wallet
-
-
-def _wallet_storage_root(settings: Any) -> Path:
-    """アップロード Wallet の固定保存先（製品の `resolved_oracle_wallet_dir`）。"""
-    wallet_dir = _s(settings, "resolved_oracle_wallet_dir").strip()
-    if not wallet_dir:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PLATFORM_ORACLE_WALLET_DIR または PLATFORM_ORACLE_CLIENT_LIB_DIR が未設定のため "
-                "Wallet 保存先を決定できません。"
-            ),
-        )
-    return Path(wallet_dir).expanduser().resolve()
-
-
-@contextmanager
-def database_wallet_install_lock(settings: Any) -> Iterator[None]:
-    """複数 worker の Wallet 設置を非ブロッキング排他する。"""
-    target = _wallet_storage_root(settings)
-    lock_path = target.parent / f".{target.name}.install.lock"
-    try:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_file = lock_path.open("a+b")
-        lock_path.chmod(ORACLE_WALLET_FILE_MODE)
-    except OSError as exc:
-        logger.exception(
-            "database_wallet_install_stage_failed",
-            extra={"wallet_stage": "lock_open", "wallet_error_code": "WALLET_STORAGE_UNAVAILABLE"},
-        )
-        raise DatabaseWalletOperationError(
-            code="WALLET_STORAGE_UNAVAILABLE",
-            public_message=(
-                "Wallet 保存領域を使用できません。"
-                "管理者に保存領域の書き込み権限を確認するよう依頼してから再試行してください。"
-            ),
-            stage="lock_open",
-        ) from exc
-
-    try:
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "別の Wallet 取得またはアップロードを処理中です。"
-                    "完了後にもう一度お試しください。"
-                ),
-            ) from exc
-        logger.info(
-            "database_wallet_install_stage_completed", extra={"wallet_stage": "lock_acquired"}
-        )
-        yield
-    finally:
-        with suppress(OSError):
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-        lock_file.close()
-
-
-def install_database_wallet(
-    settings: Any,
-    data: bytes,
-    file_name: str | None,
-    *,
-    post_install: Callable[[Path], None] | None = None,
-) -> Path:
-    """Wallet ZIP を `resolved_oracle_wallet_dir` へ展開し、元の Wallet と原子的に差し替える。"""
-    safe_name = _safe_wallet_filename(file_name)
-    if not safe_name.lower().endswith(".zip"):
-        raise HTTPException(
-            status_code=415, detail="Oracle Wallet は ZIP ファイルを選択してください。"
-        )
-    if not data:
-        raise HTTPException(status_code=400, detail="空の Wallet ZIP はアップロードできません。")
-
-    target = _wallet_storage_root(settings)
-    tmp_dir = target.parent / f".{target.name}.tmp-{uuid4().hex}"
-    backup = target.parent / f".{target.name}.backup-{uuid4().hex}"
-    previous_moved = False
-    target_installed = False
-    try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        wallet_dir = extract_wallet_zip(data, tmp_dir, driver_mode=driver_mode(settings))
-        if target.exists():
-            target.replace(backup)
-            previous_moved = True
-        wallet_dir.replace(target)
-        target_installed = True
-        _secure_database_wallet(target)
-        if post_install is not None:
-            post_install(target)
-        _remove_wallet_path(backup)
-        logger.info(
-            "database_wallet_install_stage_completed", extra={"wallet_stage": "atomic_replace"}
-        )
-        return target
-    except HTTPException:
-        _rollback_database_wallet_install(
-            target, backup, previous_moved=previous_moved, target_installed=target_installed
-        )
-        raise
-    except OSError as exc:
-        _rollback_database_wallet_install(
-            target, backup, previous_moved=previous_moved, target_installed=target_installed
-        )
-        logger.exception(
-            "database_wallet_install_stage_failed",
-            extra={"wallet_stage": "atomic_replace", "wallet_error_code": "WALLET_INSTALL_FAILED"},
-        )
-        raise DatabaseWalletOperationError(
-            code="WALLET_INSTALL_FAILED",
-            public_message=(
-                "Wallet を安全に設置できませんでした。"
-                "Wallet は変更前の状態に戻されています。"
-                "管理者に保存領域の空き容量と書き込み権限を確認するよう依頼してから再試行してください。"
-            ),
-            stage="atomic_replace",
-        ) from exc
-    finally:
-        _remove_tmp_wallet_dir(tmp_dir)
-
-
-def _rollback_database_wallet_install(
-    target: Path,
-    backup: Path,
-    *,
-    previous_moved: bool,
-    target_installed: bool,
-) -> None:
-    """atomic install 失敗時だけ今回の変更を戻す。rollback 失敗は server log に残す。"""
-    try:
-        if target_installed:
-            _remove_wallet_path(target)
-        if previous_moved and backup.exists():
-            backup.replace(target)
-        logger.info("database_wallet_install_stage_completed", extra={"wallet_stage": "rollback"})
-    except OSError:
-        logger.exception(
-            "database_wallet_install_rollback_failed",
-            extra={"wallet_stage": "rollback", "wallet_error_code": "WALLET_INSTALL_FAILED"},
-        )
-
-
-def _secure_database_wallet(wallet_dir: Path) -> None:
-    """Wallet 配下を所有者だけが読める権限へ補正する。"""
-    wallet_dir.chmod(ORACLE_WALLET_DIRECTORY_MODE)
-    for path in wallet_dir.rglob("*"):
-        if path.is_dir():
-            path.chmod(ORACLE_WALLET_DIRECTORY_MODE)
-        elif path.is_file():
-            path.chmod(ORACLE_WALLET_FILE_MODE)
-
-
-def _remove_wallet_path(path: Path) -> None:
-    """今回の atomic install が管理する path だけを削除する。"""
-    if path.is_dir() and not path.is_symlink():
-        shutil.rmtree(path)
-    elif path.exists() or path.is_symlink():
-        path.unlink()
-
-
-def extract_wallet_zip(data: bytes, target_dir: Path, *, driver_mode: str = "thin") -> Path:
-    """ZIP を検証しながら展開し、config_dir として使うディレクトリを返す。"""
-    extracted_files: list[Path] = []
-    total_uncompressed = 0
-    try:
-        target_dir.mkdir(mode=ORACLE_WALLET_DIRECTORY_MODE, parents=False, exist_ok=False)
-        target_dir.chmod(ORACLE_WALLET_DIRECTORY_MODE)
-        with ZipFile(io.BytesIO(data)) as archive:
-            members = [member for member in archive.infolist() if not member.is_dir()]
-            if not members:
-                raise HTTPException(
-                    status_code=400, detail="Wallet ZIP にファイルが含まれていません。"
-                )
-            for member in members:
-                total_uncompressed += member.file_size
-                if total_uncompressed > ORACLE_WALLET_MAX_EXTRACTED_BYTES:
-                    raise HTTPException(
-                        status_code=413, detail="Wallet ZIP の展開後サイズが上限を超えています。"
-                    )
-                destination = _wallet_member_destination(target_dir, member.filename)
-                if destination.name.lower() in ORACLE_WALLET_SKIPPED_FILES:
-                    continue
-                if _zip_member_is_symlink(member.external_attr):
-                    raise HTTPException(
-                        status_code=400, detail="Wallet ZIP にシンボリックリンクは含められません。"
-                    )
-                destination.parent.mkdir(
-                    mode=ORACLE_WALLET_DIRECTORY_MODE, parents=True, exist_ok=True
-                )
-                destination.parent.chmod(ORACLE_WALLET_DIRECTORY_MODE)
-                with archive.open(member) as src, destination.open("wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                destination.chmod(ORACLE_WALLET_FILE_MODE)
-                extracted_files.append(destination)
-    except (BadZipFile, NotImplementedError, RuntimeError) as exc:
-        raise HTTPException(
-            status_code=400, detail="Wallet ZIP の形式を確認してください。"
-        ) from exc
-
-    required_files = database_wallet_required_files(driver_mode)
-    wallet_dir = _find_wallet_config_dir(extracted_files, required_files=required_files)
-    if wallet_dir is None:
-        required = ", ".join(sorted(required_files))
-        raise HTTPException(
-            status_code=400,
-            detail=f"Wallet ZIP に {required} が含まれているか確認してください。",
-        )
-    return wallet_dir
-
-
-def _wallet_member_destination(root: Path, member_name: str) -> Path:
-    """Zip Slip を防ぎながら member の展開先を決める。"""
-    path = PurePosixPath(member_name.replace("\\", "/"))
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        raise HTTPException(
-            status_code=400, detail="Wallet ZIP に安全でないファイルパスが含まれています。"
-        )
-    destination = (root.joinpath(*path.parts)).resolve()
-    resolved_root = root.resolve()
-    if resolved_root != destination and resolved_root not in destination.parents:
-        raise HTTPException(
-            status_code=400, detail="Wallet ZIP に安全でないファイルパスが含まれています。"
-        )
-    return destination
-
-
-def _find_wallet_config_dir(
-    extracted_files: list[Path],
-    *,
-    required_files: frozenset[str] = ORACLE_WALLET_THIN_REQUIRED_FILES,
-) -> Path | None:
-    """driver mode に必要な Oracle Net / 認証ファイルが揃うディレクトリを探す。"""
-    candidates = {path.parent for path in extracted_files}
-    for candidate in sorted(candidates, key=lambda path: len(path.parts)):
-        names = {path.name.lower() for path in extracted_files if path.parent == candidate}
-        if required_files.issubset(names):
-            return candidate
-    return None
-
-
-_TNS_RESERVED_NAMES = frozenset(
-    {
-        "ADDRESS",
-        "ADDRESS_LIST",
-        "CONNECT_DATA",
-        "DESCRIPTION",
-        "DESCRIPTION_LIST",
-        "HOST",
-        "PORT",
-        "PROTOCOL",
-        "SECURITY",
-        "SERVICE_NAME",
-        "SSL_SERVER_CERT_DN",
-    }
-)
-
-
-def _extract_wallet_services(wallet_dir: Path) -> list[str]:
-    """tnsnames.ora からトップレベルの TNS alias を抽出する。"""
-    tnsnames = wallet_dir / "tnsnames.ora"
-    if not tnsnames.is_file():
-        return []
-    try:
-        content = tnsnames.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return []
-    services: list[str] = []
-    seen: set[str] = set()
-    for match in re.finditer(r"(?m)^([A-Za-z0-9_.-]+)\s*=", content):
-        service = match.group(1)
-        normalized = service.upper()
-        if normalized in _TNS_RESERVED_NAMES or normalized in seen:
-            continue
-        seen.add(normalized)
-        services.append(service)
-    return services
-
-
-def _zip_member_is_symlink(external_attr: int) -> bool:
-    """ZIP metadata 上の symlink を拒否する。"""
-    mode = external_attr >> 16
-    return bool(mode and stat.S_ISLNK(mode))
-
-
-def _safe_wallet_filename(file_name: str | None) -> str:
-    """表示名由来の ZIP ファイル名を basename に丸める。"""
-    name = PurePosixPath((file_name or "wallet.zip").replace("\\", "/")).name.strip()
-    name = re.sub(r"[\x00-\x1f\x7f]+", "_", name).strip(" .")
-    return name[:255] if name else "wallet.zip"
-
-
-def _remove_tmp_wallet_dir(path: Path) -> None:
-    """失敗時に今回作成した一時展開先だけを片付ける。"""
-    if path.exists():
-        shutil.rmtree(path, ignore_errors=True)
-
-
-async def _read_upload_file(file: UploadFile, max_bytes: int) -> bytes:
-    """アップロードファイルを 1 MB ずつ、上限を確認しながら読み込む。"""
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        chunk = await file.read(1024 * 1024)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise HTTPException(status_code=413, detail="Wallet ZIP のサイズが上限を超えています。")
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-def install_uploaded_database_wallet(
-    settings: Any,
-    content: bytes,
-    file_name: str | None,
-    *,
-    on_saved: Callable[[Any], None],
-    extra_readiness: ExtraReadiness | None = None,
-) -> DatabaseSettingsData:
-    """アップロードされた Wallet ZIP を設置し、runtime の Wallet 保存先を更新する。"""
-    with database_wallet_install_lock(settings):
-        wallet_dir = install_database_wallet(settings, content, file_name)
-    settings.oracle_wallet_dir = str(wallet_dir)
-    on_saved(settings)
-    return database_settings_data(settings, extra_readiness)
-
-
 # --------------------------------------------------------------------------- router
 
 TestConnection = Callable[[Any], Awaitable[None]]
@@ -953,7 +365,6 @@ def build_database_router(
     on_saved: Callable[[Any], None] = lambda _settings: None,
     extra_readiness: ExtraReadiness | None = None,
     connection_failure_log_extra: Callable[[Exception], Mapping[str, Any]] | None = None,
-    connection_security_enabled: bool = False,
     password_reveal_enabled: bool = False,
     write_dependencies: Sequence[params.Depends] = (),
     action_dependencies: Sequence[params.Depends] = (),
@@ -961,11 +372,10 @@ def build_database_router(
     """`/database*` の router を作る。製品側で `/settings` 配下に include する。
 
     - `test_connection(candidate)`：保存前の値で Oracle に接続し、失敗なら例外を送出する
-    - `on_saved(settings)`：接続設定・Wallet を変えたあとに呼ぶ（接続 pool を閉じる等）
+    - `on_saved(settings)`：接続設定を変えたあとに呼ぶ（接続 pool を閉じる等）
     - `extra_readiness(settings)`：製品固有の readiness。問題がなければ None
-    - `connection_security_enabled`：Walletless TLS を選べるか（接続処理が対応している製品だけ）
     - `password_reveal_enabled`：保存済み DB パスワードの表示（`write_dependencies` を付ける）
-    - `write_dependencies`：設定を書き換える操作（保存・Wallet）
+    - `write_dependencies`：設定を書き換える操作（保存）
     - `action_dependencies`：接続テスト
     """
     router = APIRouter()
@@ -993,9 +403,7 @@ def build_database_router(
     ) -> ApiResponse[DatabaseSettingsData]:
         settings = get_settings()
         # 保存に成功してから runtime へ反映する。
-        candidate = database_settings_candidate(
-            settings, payload, connection_security_enabled=connection_security_enabled
-        )
+        candidate = database_settings_candidate(settings, payload)
         _persist_database_settings(candidate, env_file())
         _apply_database_settings(settings, candidate)
         saved(settings)
@@ -1025,25 +433,6 @@ def build_database_router(
             return ApiResponse(data=DatabasePasswordRevealData(password=password))
 
     @router.post(
-        "/database/wallet", response_model=ApiResponse[DatabaseSettingsData], dependencies=write
-    )
-    async def upload_database_wallet(
-        file: Annotated[UploadFile, File(...)],
-    ) -> ApiResponse[DatabaseSettingsData]:
-        settings = get_settings()
-        content = await _read_upload_file(file, ORACLE_WALLET_MAX_BYTES)
-        return ApiResponse(
-            data=await run_in_threadpool(
-                install_uploaded_database_wallet,
-                settings,
-                content,
-                file.filename,
-                on_saved=saved,
-                extra_readiness=extra_readiness,
-            )
-        )
-
-    @router.post(
         "/database/test",
         response_model=ApiResponse[DatabaseConnectionTestResult],
         dependencies=action,
@@ -1053,13 +442,7 @@ def build_database_router(
     ) -> ApiResponse[DatabaseConnectionTestResult]:
         started = time.perf_counter()
         base = get_settings()
-        candidate = (
-            database_settings_candidate(
-                base, payload, connection_security_enabled=connection_security_enabled
-            )
-            if payload is not None
-            else base
-        )
+        candidate = database_settings_candidate(base, payload) if payload is not None else base
         readiness = database_readiness(candidate, extra_readiness)
         if readiness != "ok":
             return ApiResponse(

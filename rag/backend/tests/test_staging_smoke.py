@@ -12,7 +12,6 @@ from app.config import Settings
 from app.rag import staging_smoke
 from app.schemas.document import FileStatus
 from app.schemas.search import RetrievedChunk, SearchDiagnostics, SearchResponse
-from tests.support import shared_thin_wallet_dir
 
 
 async def test_staging_smoke_uses_unique_marker_query_and_document_filter(
@@ -276,8 +275,6 @@ def _complete_llm_settings(**overrides: Any) -> Settings:
         "oracle_user": "rag_user",
         "oracle_password": "oracle-password",
         "oracle_dsn": "adb.example.com/rag",
-        # Wallet mTLS の Wallet がそろっていないと Oracle の readiness は ok にならない（#325）。
-        "oracle_wallet_dir": shared_thin_wallet_dir(),
         "local_storage_dir": tempfile.mkdtemp(prefix="rag-staging-smoke-"),
     }
     values.update(overrides)

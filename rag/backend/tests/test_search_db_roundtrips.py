@@ -521,10 +521,8 @@ def test_pool_max_uses_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
         oracle_pool_max=16,
     )
 
@@ -729,10 +727,8 @@ def _pool_settings(**values: Any) -> Settings:
     return Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
         **values,
     )
 

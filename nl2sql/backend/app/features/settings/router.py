@@ -86,7 +86,6 @@ router.include_router(
         test_connection=lambda candidate: test_oracle_connection(candidate),
         on_saved=lambda _settings: close_oracle_pool(),
         connection_failure_log_extra=lambda exc: oracle_connection_diagnostics(exc),
-        connection_security_enabled=True,
         password_reveal_enabled=True,
     )
 )

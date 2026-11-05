@@ -663,8 +663,6 @@ test ! -e "${REPO_DIR}/frontend/nginx.conf.template" \
 
 # --- 静的な不変条件 ---
 init_script="${REPO_DIR}/init_script.sh"
-grep -Fq 'WALLET_DIR="${APP_ROOT}/wallet"' "${init_script}" || fail "Wallet の配置先が変わった"
-grep -Fq 'find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;' "${init_script}" || fail "Wallet の file が 0600 ではない"
 if grep -Eiq '^\s*[^#]*\b(CREATE|ALTER|DROP)\s+(TABLE|INDEX|USER)\b' "${init_script}"; then
   fail "init_script.sh に DDL を埋め込んでいる"
 fi
@@ -726,7 +724,7 @@ os_packages="$(
 )"
 base_packages="${os_packages%%---*}"
 all_packages="${os_packages#*---}"
-for package in gcc make git sudo unzip; do
+for package in gcc make git sudo; do
   printf '%s\n' "${base_packages}" | grep -qx "${package}" || fail "基本の package に ${package} が無い"
 done
 for package in libreoffice-core google-noto-sans-cjk-ttc-fonts poppler-utils tesseract tesseract-langpack-jpn; do

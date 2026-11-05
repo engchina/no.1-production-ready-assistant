@@ -175,8 +175,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_user: str | None = None
     oracle_password: str | None = None
     oracle_client_lib_dir: str = "/u01/aipoc/instantclient_23_26"
-    oracle_wallet_dir: str | None = None
-    oracle_wallet_password: str | None = None
     oracle_tcp_connect_timeout_seconds: float = 10.0
     oracle_db_test_timeout_seconds: float = 15.0
     # PLATFORM_ORACLE_* の接続 pool の大きさ（Agent 固有。`app.oracle_connection`。#793）。
@@ -339,24 +337,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     agent_opentelemetry_endpoint: str | None = None
     agent_artifact_storage_backend: str = "inline"
     agent_artifact_storage_path: str = ".agent-artifacts"
-
-    @property
-    def oracle_driver_mode(self) -> str:
-        """Agent は python-oracledb の Thin mode だけで接続する（Wallet の判定用）。"""
-        return "thin"
-
-    @property
-    def oracle_connection_security(self) -> str:
-        """Agent は Wallet mTLS だけに対応する。"""
-        return "wallet_mtls"
-
-    @property
-    def resolved_oracle_wallet_dir(self) -> str:
-        """参照実装と同じく PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin を Wallet 配置先にする。"""
-        client_lib_dir = self.oracle_client_lib_dir.strip()
-        if client_lib_dir:
-            return str(Path(client_lib_dir).expanduser() / "network" / "admin")
-        return (self.oracle_wallet_dir or "").strip()
 
 
 def resolve_model_settings_file(path_value: str) -> Path:

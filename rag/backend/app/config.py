@@ -627,19 +627,11 @@ class Settings(
             "指定したときだけ Thick mode（Instant Client）で接続する。既定は空で Thin mode。"
         ),
     )
-    oracle_wallet_dir: str = Field(
-        default="/u01/aipoc/wallet",
-        description=(
-            "Thin mode の Wallet 配置先。"
-            "Thick mode では PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin を使う。"
-        ),
-    )
-    oracle_wallet_password: str = Field(default="")
     oracle_tcp_connect_timeout_seconds: float = Field(
         default=10.0,
         gt=0.0,
         le=120.0,
-        description="Oracle TCP 接続の待機秒数。ADB/Wallet 疎通確認を長時間ブロックしない。",
+        description="Oracle TCP 接続の待機秒数。DB の疎通確認を長時間ブロックしない。",
     )
     oracle_db_test_timeout_seconds: float = Field(
         default=15.0,
@@ -2342,27 +2334,8 @@ class Settings(
 
     @property
     def oracle_driver_mode(self) -> str:
-        """既定は Thin mode。PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode。
-
-        Wallet の判定にも使う。
-        """
+        """既定は Thin mode。PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode。"""
         return "thick" if self.oracle_client_lib_dir.strip() else "thin"
-
-    @property
-    def oracle_connection_security(self) -> str:
-        """RAG は Wallet mTLS だけに対応する（Walletless TLS は接続処理が未対応）。"""
-        return "wallet_mtls"
-
-    @property
-    def resolved_oracle_wallet_dir(self) -> str:
-        """Wallet 配置先。
-
-        Thin は PLATFORM_ORACLE_WALLET_DIR、Thick は <CLIENT_LIB_DIR>/network/admin。
-        """
-        client_lib_dir = self.oracle_client_lib_dir.strip()
-        if client_lib_dir:
-            return str(Path(client_lib_dir).expanduser() / "network" / "admin")
-        return self.oracle_wallet_dir.strip()
 
 
 @lru_cache

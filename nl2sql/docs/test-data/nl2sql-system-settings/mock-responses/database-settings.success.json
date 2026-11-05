@@ -1,18 +1,10 @@
 {
   "data": {
     "user": "NL2SQL_APP",
-    "dsn": "nl2sqldb_high",
+    "dsn": "db.example.com:1521/nl2sqldb_high",
     "driver_mode": "thin",
-    "connection_security": "wallet_mtls",
     "client_lib_dir": "",
-    "wallet_dir": "/u01/aipoc/wallet",
-    "wallet_uploaded": true,
-    "available_services": [
-      "nl2sqldb_high",
-      "nl2sqldb_low"
-    ],
     "has_password": true,
-    "has_wallet_password": false,
     "readiness": "ok",
     "embedding_dimension": 1024,
     "vector_column": "VECTOR(1024, FLOAT32)",

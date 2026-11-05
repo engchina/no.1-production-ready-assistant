@@ -80,11 +80,7 @@ if grep -q '^enable --now .*worker' "${TEST_TMP_DIR}/workers-degraded/systemctl.
   exit 1
 fi
 
-grep -Fq 'WALLET_DIR="${APP_ROOT}/wallet"' "${REPO_DIR}/init_script.sh"
 grep -Fq 'chown "root:${APP_GROUP}" "${APP_ROOT}"' "${REPO_DIR}/init_script.sh"
 grep -Fq 'chmod 0775 "${APP_ROOT}"' "${REPO_DIR}/init_script.sh"
-grep -Fq 'install -d -m 0700 -o "${APP_USER}" -g "${APP_GROUP}" "${WALLET_DIR}"' \
-  "${REPO_DIR}/init_script.sh"
-grep -Fq 'find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;' "${REPO_DIR}/init_script.sh"
 
 echo "init_script deployment behavior verified."

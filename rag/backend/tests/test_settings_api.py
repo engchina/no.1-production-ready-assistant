@@ -5,10 +5,8 @@ import copy
 import json
 import stat
 from collections.abc import Sequence
-from io import BytesIO
 from pathlib import Path
 from typing import Any
-from zipfile import ZipFile
 
 import pytest
 from dotenv import dotenv_values
@@ -19,11 +17,7 @@ from pytest import MonkeyPatch
 
 from app import config as app_config
 from app.api.routes import settings as settings_routes
-from app.clients.oracle import (
-    OracleClient,
-    OracleConnectionTimeoutError,
-    OracleWalletPasswordRequiredError,
-)
+from app.clients.oracle import OracleClient, OracleConnectionTimeoutError
 from app.config import (
     MODEL_SETTINGS_STORE,
     PARSER_SETTINGS_STORE,
@@ -1456,8 +1450,6 @@ def test_get_database_settings_masks_secrets(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "oracle_user", "rag_app")
     monkeypatch.setattr(settings, "oracle_password", "super-secret-password")
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.com/rag")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "wallet-secret")
 
     resp = client.get("/api/settings/database")
 
@@ -1465,16 +1457,10 @@ def test_get_database_settings_masks_secrets(monkeypatch: MonkeyPatch) -> None:
     body = resp.json()["data"]
     assert body["user"] == "rag_app"
     assert body["dsn"] == "adb.example.com/rag"
-    assert body["wallet_dir"] == settings.resolved_oracle_wallet_dir
     assert body["has_password"] is True
-    assert body["has_wallet_password"] is True
-    assert body["wallet_uploaded"] is False
-    assert body["available_services"] == []
-    # #108 から readiness は NL2SQL と同じく Wallet のファイルも確認する。
-    assert body["readiness"] == "wallet_not_found"
+    assert body["readiness"] == "ok"
     assert body["vector_column"] == "VECTOR(1024, FLOAT32)"
     assert "super-secret-password" not in resp.text
-    assert "wallet-secret" not in resp.text
 
 
 def test_update_database_settings_mutates_runtime_without_echoing_secret(
@@ -1486,8 +1472,6 @@ def test_update_database_settings_mutates_runtime_without_echoing_secret(
     monkeypatch.setattr(settings, "oracle_password", "old-secret")
     monkeypatch.setattr(settings, "oracle_dsn", "old-dsn")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", "/opt/oracle/instantclient_23_26")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
     env_file = _database_env_file(
         monkeypatch,
         tmp_path,
@@ -1502,36 +1486,18 @@ def test_update_database_settings_mutates_runtime_without_echoing_secret(
         ),
     )
 
-    # 別の Wallet の保存先は受け取らない（Wallet の設置がその場所を置き換えるため）。
-    rejected = client.patch(
-        "/api/settings/database",
-        json={
-            "user": "rag_app",
-            "dsn": "adb.example.com/rag",
-            "wallet_dir": "/opt/oracle/wallet",
-        },
-    )
-    assert rejected.status_code == 422
-    assert "PLATFORM_ORACLE_WALLET_DIR" in rejected.text
-
-    # 画面は今の保存先（resolved_oracle_wallet_dir）を送る。
     resp = client.patch(
         "/api/settings/database",
         json={
             "user": "rag_app",
             "dsn": "adb.example.com/rag",
-            "wallet_dir": "/opt/oracle/instantclient_23_26/network/admin",
         },
     )
 
     assert resp.status_code == 200
     assert settings.oracle_user == "rag_app"
     assert settings.oracle_dsn == "adb.example.com/rag"
-    # RAG が実際に使う保存先は PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin のまま変わらない。
-    assert settings.oracle_wallet_dir == "/opt/oracle/instantclient_23_26/network/admin"
-    assert settings.resolved_oracle_wallet_dir == "/opt/oracle/instantclient_23_26/network/admin"
     assert settings.oracle_password == "old-secret"
-    assert resp.json()["data"]["wallet_dir"] == settings.resolved_oracle_wallet_dir
     assert resp.json()["data"]["has_password"] is True
     assert "old-secret" not in resp.text
     persisted = env_file.read_text(encoding="utf-8")
@@ -1541,7 +1507,6 @@ def test_update_database_settings_mutates_runtime_without_echoing_secret(
     assert "PLATFORM_ORACLE_PASSWORD=old-secret" in persisted
     assert "PLATFORM_ORACLE_DSN=adb.example.com/rag" in persisted
     assert "PLATFORM_ORACLE_CLIENT_LIB_DIR=/opt/oracle/instantclient_23_26" in persisted
-    assert "PLATFORM_ORACLE_WALLET_PASSWORD=" in persisted
 
 
 def test_update_database_settings_does_not_mutate_runtime_when_env_write_fails(
@@ -1552,8 +1517,6 @@ def test_update_database_settings_does_not_mutate_runtime_when_env_write_fails(
     monkeypatch.setattr(settings, "oracle_user", "old_user")
     monkeypatch.setattr(settings, "oracle_password", "old-secret")
     monkeypatch.setattr(settings, "oracle_dsn", "old-dsn")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "old-wallet-secret")
     monkeypatch.setattr(app_config, "PLATFORM_ENV_FILE", tmp_path)
 
     resp = client.patch(
@@ -1561,9 +1524,7 @@ def test_update_database_settings_does_not_mutate_runtime_when_env_write_fails(
         json={
             "user": "rag_app",
             "dsn": "adb.example.com/rag",
-            "wallet_dir": "",
             "password": "new-secret",
-            "wallet_password": "new-wallet-secret",
         },
     )
 
@@ -1571,7 +1532,6 @@ def test_update_database_settings_does_not_mutate_runtime_when_env_write_fails(
     assert settings.oracle_user == "old_user"
     assert settings.oracle_password == "old-secret"
     assert settings.oracle_dsn == "old-dsn"
-    assert settings.oracle_wallet_password == "old-wallet-secret"
 
 
 def test_update_database_settings_clears_saved_secrets(
@@ -1581,9 +1541,7 @@ def test_update_database_settings_clears_saved_secrets(
     settings = get_settings()
     monkeypatch.setattr(settings, "oracle_user", "rag_app")
     monkeypatch.setattr(settings, "oracle_password", "old-secret")
-    monkeypatch.setattr(settings, "oracle_dsn", "ragdb_high")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "old-wallet-secret")
+    monkeypatch.setattr(settings, "oracle_dsn", "adb.example.test:1521/ragdb")
     env_file = _database_env_file(
         monkeypatch,
         tmp_path,
@@ -1591,8 +1549,7 @@ def test_update_database_settings_clears_saved_secrets(
             [
                 "PLATFORM_ORACLE_USER=rag_app",
                 "PLATFORM_ORACLE_PASSWORD=old-secret",
-                "PLATFORM_ORACLE_DSN=ragdb_high",
-                "PLATFORM_ORACLE_WALLET_PASSWORD=old-wallet-secret",
+                "PLATFORM_ORACLE_DSN=adb.example.test:1521/ragdb",
                 "",
             ]
         ),
@@ -1602,24 +1559,18 @@ def test_update_database_settings_clears_saved_secrets(
         "/api/settings/database",
         json={
             "user": "rag_app",
-            "dsn": "ragdb_high",
-            "wallet_dir": settings.resolved_oracle_wallet_dir,
+            "dsn": "adb.example.test:1521/ragdb",
             "clear_password": True,
-            "clear_wallet_password": True,
         },
     )
 
     assert resp.status_code == 200
     body = resp.json()["data"]
     assert body["has_password"] is False
-    assert body["has_wallet_password"] is False
     assert settings.oracle_password == ""
-    assert settings.oracle_wallet_password == ""
     persisted = env_file.read_text(encoding="utf-8")
     assert "PLATFORM_ORACLE_PASSWORD=" in persisted
     assert "PLATFORM_ORACLE_PASSWORD=old-secret" not in persisted
-    assert "PLATFORM_ORACLE_WALLET_PASSWORD=" in persisted
-    assert "PLATFORM_ORACLE_WALLET_PASSWORD=old-wallet-secret" not in persisted
 
 
 def test_database_connection_test_uses_candidate_without_mutating_runtime(
@@ -1629,15 +1580,12 @@ def test_database_connection_test_uses_candidate_without_mutating_runtime(
     monkeypatch.setattr(settings, "oracle_user", "")
     monkeypatch.setattr(settings, "oracle_password", "")
     monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
 
     async def fake_test_oracle_connection(candidate: Settings) -> None:
         assert candidate.oracle_user == "rag_app"
         assert candidate.oracle_password == "candidate-secret"
         assert candidate.oracle_dsn == "adb.example.com/rag"
 
-    _write_thick_wallet(Path(settings.resolved_oracle_wallet_dir))
     monkeypatch.setattr(settings_routes, "test_oracle_connection", fake_test_oracle_connection)
 
     resp = client.post(
@@ -1645,7 +1593,6 @@ def test_database_connection_test_uses_candidate_without_mutating_runtime(
         json={
             "user": "rag_app",
             "dsn": "adb.example.com/rag",
-            "wallet_dir": "",
             "password": "candidate-secret",
         },
     )
@@ -1661,42 +1608,6 @@ def test_database_connection_test_uses_candidate_without_mutating_runtime(
     assert "candidate-secret" not in resp.text
 
 
-def test_database_connection_test_returns_wallet_password_guidance(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "oracle_user", "")
-    monkeypatch.setattr(settings, "oracle_password", "")
-    monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_client_lib_dir", str(tmp_path / "instantclient_23_26"))
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
-    _write_thick_wallet(Path(settings.resolved_oracle_wallet_dir))
-
-    async def fake_test_oracle_connection(candidate: Settings) -> None:
-        raise OracleWalletPasswordRequiredError("Wallet パスワードを入力してください。")
-
-    monkeypatch.setattr(settings_routes, "test_oracle_connection", fake_test_oracle_connection)
-
-    resp = client.post(
-        "/api/settings/database/test",
-        json={
-            "user": "rag_app",
-            "dsn": "ragdb_high",
-            "wallet_dir": "",
-        },
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["status"] == "failed"
-    assert body["message"] == "Wallet パスワードを入力してください。"
-    assert body["error_type"] == "OracleWalletPasswordRequiredError"
-    assert body["elapsed_ms"] >= 0
-    assert body["troubleshooting"]
-
-
 def test_database_connection_test_returns_timeout_guidance(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -1704,23 +1615,19 @@ def test_database_connection_test_returns_timeout_guidance(
     monkeypatch.setattr(settings, "oracle_user", "")
     monkeypatch.setattr(settings, "oracle_password", "")
     monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
 
     async def fake_test_oracle_connection(candidate: Settings) -> None:
         raise OracleConnectionTimeoutError(
             "Oracle AI Database の接続テストが 15 秒でタイムアウトしました。"
         )
 
-    _write_thick_wallet(Path(settings.resolved_oracle_wallet_dir))
     monkeypatch.setattr(settings_routes, "test_oracle_connection", fake_test_oracle_connection)
 
     resp = client.post(
         "/api/settings/database/test",
         json={
             "user": "rag_app",
-            "dsn": "ragdb_high",
-            "wallet_dir": "",
+            "dsn": "adb.example.test:1521/ragdb",
             "password": "candidate-secret",
         },
     )
@@ -1730,7 +1637,7 @@ def test_database_connection_test_returns_timeout_guidance(
     assert body["status"] == "failed"
     assert body["error_type"] == "OracleConnectionTimeoutError"
     assert "タイムアウト" in body["message"]
-    assert any("TCPS 1522" in tip for tip in body["troubleshooting"])
+    assert any("タイムアウト" in tip for tip in body["troubleshooting"])
     assert (
         body["details"]["tcp_connect_timeout_seconds"]
         == settings.oracle_tcp_connect_timeout_seconds
@@ -1744,8 +1651,6 @@ def test_database_connection_test_classifies_oracle_operational_error(
     monkeypatch.setattr(settings, "oracle_user", "")
     monkeypatch.setattr(settings, "oracle_password", "")
     monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
 
     class FakeOperationalError(Exception):
         """python-oracledb OperationalError 相当のテスト用例外。"""
@@ -1755,15 +1660,13 @@ def test_database_connection_test_classifies_oracle_operational_error(
             "ORA-01017: invalid username/password; logon denied candidate-secret"
         )
 
-    _write_thick_wallet(Path(settings.resolved_oracle_wallet_dir))
     monkeypatch.setattr(settings_routes, "test_oracle_connection", fake_test_oracle_connection)
 
     resp = client.post(
         "/api/settings/database/test",
         json={
             "user": "rag_app",
-            "dsn": "ragdb_high",
-            "wallet_dir": "",
+            "dsn": "adb.example.test:1521/ragdb",
             "password": "candidate-secret",
         },
     )
@@ -1786,8 +1689,6 @@ def test_database_connection_test_classifies_adb_acl_rejection(
     monkeypatch.setattr(settings, "oracle_user", "")
     monkeypatch.setattr(settings, "oracle_password", "")
     monkeypatch.setattr(settings, "oracle_dsn", "")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
 
     class FakeOperationalError(Exception):
         """python-oracledb OperationalError 相当のテスト用例外。"""
@@ -1798,15 +1699,13 @@ def test_database_connection_test_classifies_adb_acl_rejection(
             "ORA-12506: listener rejected connection based on service ACL filtering"
         )
 
-    _write_thick_wallet(Path(settings.resolved_oracle_wallet_dir))
     monkeypatch.setattr(settings_routes, "test_oracle_connection", fake_test_oracle_connection)
 
     resp = client.post(
         "/api/settings/database/test",
         json={
             "user": "rag_app",
-            "dsn": "ragdb_high",
-            "wallet_dir": "",
+            "dsn": "adb.example.test:1521/ragdb",
             "password": "candidate-secret",
         },
     )
@@ -1817,122 +1716,6 @@ def test_database_connection_test_classifies_adb_acl_rejection(
     assert "アクセス制御リスト" in body["message"]
     assert body["details"]["oracle_error_codes"] == "DPY-6005, DPY-6000, ORA-12506"
     assert any("Network Access / ACL" in tip for tip in body["troubleshooting"])
-
-
-def test_upload_database_wallet_zip_updates_runtime(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path))
-    monkeypatch.setattr(settings, "oracle_user", "rag_app")
-    monkeypatch.setattr(settings, "oracle_password", "")
-    monkeypatch.setattr(settings, "oracle_dsn", "ragdb_high")
-    monkeypatch.setattr(settings, "oracle_wallet_dir", "")
-    wallet_dir = Path(settings.resolved_oracle_wallet_dir)
-    wallet_dir.mkdir(parents=True)
-    (wallet_dir / "old-wallet-file").write_text("old", encoding="utf-8")
-
-    resp = client.post(
-        "/api/settings/database/wallet",
-        files={"file": ("Wallet_RAGDB.zip", _wallet_zip(), "application/zip")},
-    )
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    wallet_dir = Path(settings.oracle_wallet_dir)
-    assert wallet_dir.is_dir()
-    assert (wallet_dir / "tnsnames.ora").read_text(encoding="utf-8") == "ragdb_high = ..."
-    assert (wallet_dir / "ewallet.pem").is_file()
-    assert not (wallet_dir / "ewallet.p12").exists()
-    assert not (wallet_dir / "keystore.jks").exists()
-    assert not (wallet_dir / "old-wallet-file").exists()
-    assert body["wallet_dir"] == str(wallet_dir)
-    assert body["wallet_uploaded"] is True
-    assert body["available_services"] == ["ragdb_high"]
-    assert body["readiness"] == "ok"
-    assert "ewallet-secret" not in resp.text
-
-
-def test_get_database_settings_extracts_available_services_from_wallet_dir(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    wallet_dir = Path(settings.resolved_oracle_wallet_dir)
-    wallet_dir.mkdir(parents=True)
-    (wallet_dir / "ewallet.p12").write_text("legacy-password-wallet", encoding="utf-8")
-    (wallet_dir / "keystore.jks").write_text("legacy-java-keystore", encoding="utf-8")
-    (wallet_dir / "tnsnames.ora").write_text(
-        "\n".join(
-            [
-                "ragdb_high = (DESCRIPTION = ...)",
-                "  (ADDRESS = (PROTOCOL = tcps)(HOST = example.oraclecloud.com)(PORT = 1522))",
-                "ragdb_low = (DESCRIPTION = ...)",
-                "ragdb_high = (DESCRIPTION = duplicate)",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    _write_thick_wallet(wallet_dir)
-
-    resp = client.get("/api/settings/database")
-
-    assert resp.status_code == 200
-    body = resp.json()["data"]
-    assert body["wallet_uploaded"] is True
-    assert body["available_services"] == ["ragdb_high", "ragdb_low"]
-    assert not (wallet_dir / "ewallet.p12").exists()
-    assert not (wallet_dir / "keystore.jks").exists()
-
-
-def test_upload_database_wallet_zip_rejects_unsafe_member_path(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    settings = get_settings()
-    wallet_dir = Path(settings.resolved_oracle_wallet_dir)
-    wallet_dir.mkdir(parents=True)
-    sentinel = wallet_dir / "keep.txt"
-    sentinel.write_text("keep", encoding="utf-8")
-
-    resp = client.post(
-        "/api/settings/database/wallet",
-        files={
-            "file": (
-                "Wallet_BAD.zip",
-                _wallet_zip(
-                    {
-                        "../tnsnames.ora": "bad",
-                        "sqlnet.ora": "...",
-                        "cwallet.sso": "...",
-                        "ewallet.pem": "...",
-                    }
-                ),
-                "application/zip",
-            )
-        },
-    )
-
-    assert resp.status_code == 400
-    assert sentinel.read_text(encoding="utf-8") == "keep"
-    assert not (wallet_dir / "tnsnames.ora").exists()
-
-
-def _write_thick_wallet(wallet_dir: Path, services: Sequence[str] = ("ragdb_high",)) -> None:
-    """RAG の既定（Thick mode）で必要な Wallet ファイルを置く。
-
-    #108 から接続テスト前の readiness が NL2SQL と同じく Wallet のファイルを確認する。
-    """
-    wallet_dir.mkdir(parents=True, exist_ok=True)
-    tnsnames = wallet_dir / "tnsnames.ora"
-    if not tnsnames.exists():
-        tnsnames.write_text(
-            "".join(f"{service} = (DESCRIPTION = ...)\n" for service in services),
-            encoding="utf-8",
-        )
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...\n", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"sso")
 
 
 @pytest.mark.parametrize(
@@ -2033,11 +1816,10 @@ def test_update_upload_storage_settings_does_not_mutate_runtime_when_env_write_f
         ("PATCH", "/api/settings/oci"),
         ("POST", "/api/settings/oci/config/test"),
         ("POST", "/api/settings/oci/key-file"),
-        ("POST", "/api/settings/database/wallet/download"),
     ],
 )
 def test_removed_oci_settings_routes_are_not_routed(method: str, path: str) -> None:
-    """OCI 認証・Object Storage の確認・Wallet の OCI からの取得の API は持たない（#11）。"""
+    """OCI 認証・Object Storage の確認の API は持たない（#11）。"""
     response = client.request(method, path)
     assert response.status_code in {404, 405}
 
@@ -2233,22 +2015,6 @@ def test_update_huggingface_settings_rejects_removed_download_dir() -> None:
         json={"download_dir": "/u01/models/huggingface", "endpoint": ""},
     )
     assert resp.status_code == 422
-
-
-def _wallet_zip(entries: dict[str, str] | None = None) -> bytes:
-    wallet_entries = entries or {
-        "tnsnames.ora": "ragdb_high = ...",
-        "sqlnet.ora": "WALLET_LOCATION = ...",
-        "cwallet.sso": "ewallet-secret",
-        "ewallet.pem": "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n",
-        "ewallet.p12": "password-wallet",
-        "keystore.jks": "java-keystore",
-    }
-    buffer = BytesIO()
-    with ZipFile(buffer, "w") as archive:
-        for name, content in wallet_entries.items():
-            archive.writestr(name, content)
-    return buffer.getvalue()
 
 
 def test_update_answer_record_settings_persists_retention_and_purges(

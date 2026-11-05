@@ -629,7 +629,6 @@ def _settings(**overrides: Any) -> Settings:
         "oracle_user": "APP",
         "oracle_password": "AppPass!123",  # nosec B106 - テスト用
         "oracle_dsn": "adb.example.oraclecloud.com:1522/app_high",
-        "oracle_connection_security": "walletless_tls",
         "oracle_driver_mode": "thin",
         "nl2sql_runtime_mode": "oracle",
         "nl2sql_persistence_mode": "oracle",

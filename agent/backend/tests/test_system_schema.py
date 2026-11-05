@@ -866,7 +866,7 @@ def test_cli_reports_real_cause_of_pool_timeout_without_secrets(
     monkeypatch.setattr(
         agent_system_schema,
         "_connect_kwargs",
-        lambda: {"user": "APP", "password": "Pa55-word-x", "dsn": "db_high"},
+        lambda: {"user": "APP", "password": "Pa55-word-x", "dsn": "db.example.com:1521/app_svc"},
     )
     monkeypatch.setattr(agent_system_schema, "system_schema_manager", _Timeout())
 

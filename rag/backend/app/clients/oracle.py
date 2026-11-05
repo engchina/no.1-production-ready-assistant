@@ -20,13 +20,12 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from time import perf_counter
 from typing import Any, Protocol, TypeVar, cast
 from uuid import uuid4
 
 from pr_backend_core.api import offset_fetch_binds, offset_fetch_clause
-from pr_backend_core.oracle_dsn import apply_cli_connect_mode, dsn_without_tns_retry
+from pr_backend_core.oracle_dsn import apply_cli_connect_mode, dsn_without_retry
 from pr_backend_core.oracle_errors import ORACLE_ERROR_CODE_RE, oracle_error_codes
 from pr_backend_core.oracle_pool import (
     DEFAULT_WAIT_TIMEOUT_MS,
@@ -167,12 +166,6 @@ def _to_vector_bind(embedding: Sequence[float]) -> "array[float]":
     array('f', ...) として渡す必要がある。
     """
     return array("f", (float(value) for value in embedding))
-
-
-WALLET_PASSWORD_REQUIRED_ERROR = (  # nosec B105 - パスワードではなくエラーメッセージ定数
-    "Oracle Wallet に自動ログイン用の cwallet.sso がないため、Wallet パスワードが必要です。"
-    " Wallet パスワードを入力するか、cwallet.sso を含む Wallet ZIP をアップロードしてください。"
-)
 
 
 class OracleCursorProtocol(Protocol):
@@ -377,10 +370,6 @@ class DocumentDeleteBlockedByRunningIngestionError(RuntimeError):
     """実行中 ingestion job があるため document 削除を止めた。"""
 
     safe_for_user = True
-
-
-class OracleWalletPasswordRequiredError(RuntimeError):
-    """パスワード必須 Wallet を対話プロンプトなしで止める。"""
 
     safe_for_user = True
 
@@ -14577,17 +14566,13 @@ def close_oracle_pool() -> None:
 def _shared_pool_settings_key(settings: Settings) -> str:
     """共有 pool の接続の設定の指紋（資格情報を含むため、生値は保持・出力しない。#2102）。
 
-    `get_settings()` が `.env` を読み直して接続先・資格情報・Wallet が変わったら、pool を
-    作り直す。接続引数（`shared_pool_connect_kwargs`）は Wallet のファイルを見るので、借りるたびに
-    作らず、元の設定の値で比べる。
+    `get_settings()` が `.env` を読み直して接続先・資格情報が変わったら、pool を作り直す。
     """
     payload = json.dumps(
         [
             settings.oracle_user,
             settings.oracle_password,
             settings.oracle_dsn,
-            settings.resolved_oracle_wallet_dir,
-            settings.oracle_wallet_password,
             settings.oracle_client_lib_dir,
             getattr(settings, "oracle_tcp_connect_timeout_seconds", None),
             settings.oracle_pool_max,
@@ -14655,7 +14640,7 @@ async def test_oracle_connection(
     except TimeoutError as exc:
         raise OracleConnectionTimeoutError(
             f"Oracle AI Database の接続テストが {timeout_seconds:g} 秒でタイムアウトしました。"
-            "データベースの起動状態、Wallet サービス名、ネットワーク到達性を確認してください。"
+            "データベースの起動状態、DSN、ネットワーク到達性を確認してください。"
         ) from exc
 
 
@@ -14666,7 +14651,7 @@ def _test_oracle_connection_sync(settings: Settings) -> None:
     connect_kwargs = _oracle_connect_kwargs(
         settings,
         extra={
-            "dsn": _oracle_connection_test_dsn(settings),
+            "dsn": dsn_without_retry(settings.oracle_dsn),
             "retry_count": 0,
             "retry_delay": 0,
         },
@@ -14687,7 +14672,7 @@ def _test_oracle_connection_sync(settings: Settings) -> None:
 def shared_pool_connect_kwargs(settings: Settings | None = None) -> dict[str, object]:
     """共有 pool の接続引数（pool の引数を除く）。接続の失敗の診断の直接の接続も使う（#1744）。
 
-    常駐の server は設定の DSN のまま（Wallet の別名の TNS の再試行を持ち、一時の切断に強い）。
+    常駐の server は設定の DSN のまま（接続記述子の TNS の再試行を持ち、一時の切断に強い）。
     CLI（`enable_cli_connect_mode` を呼んだプロセス）は、TNS の再試行を外し、短い
     `tcp_connect_timeout` にする（DB の停止中に 1〜2 分待たない。#1779）。
     資格情報を含むため、ログ・応答に出さない。
@@ -14712,7 +14697,6 @@ def _oracle_connect_kwargs(
         kwargs["tcp_connect_timeout"] = tcp_connect_timeout
     if settings.oracle_password.strip():
         kwargs["password"] = settings.oracle_password
-    _add_wallet_kwargs(settings, kwargs)
     return kwargs
 
 
@@ -14737,66 +14721,6 @@ def _oracle_connection_configured(client: OracleClient) -> bool:
         or bool(settings.oracle_user.strip() and settings.oracle_dsn.strip())
         or _SHARED_ORACLE_POOL is not None
     )
-
-
-def _oracle_connection_test_dsn(settings: Settings) -> str:
-    """接続テストでは Wallet alias の長い retry 設定を外した descriptor を使う（#1214）。"""
-    return dsn_without_tns_retry(
-        settings.oracle_dsn, settings.resolved_oracle_wallet_dir.strip() or None
-    )
-
-
-def _add_wallet_kwargs(settings: Settings, kwargs: dict[str, object]) -> None:
-    """Wallet 設定を kwargs に追加する。パスワード要求プロンプトは事前に防ぐ。"""
-    wallet_dir = settings.resolved_oracle_wallet_dir.strip()
-    if not wallet_dir:
-        return
-
-    wallet_path = Path(wallet_dir).expanduser()
-    if not wallet_path.is_dir():
-        return
-
-    wallet_password = _oracle_wallet_password(settings)
-    if not wallet_password and _wallet_requires_password(wallet_path):
-        raise OracleWalletPasswordRequiredError(WALLET_PASSWORD_REQUIRED_ERROR)
-
-    resolved_wallet_path = str(wallet_path)
-    kwargs["config_dir"] = resolved_wallet_path
-    kwargs["wallet_location"] = resolved_wallet_path
-    if wallet_password:
-        kwargs["wallet_password"] = wallet_password
-
-
-def _oracle_wallet_password(settings: Settings) -> str:
-    """Wallet password は専用値がなければ DB password を使う。"""
-    return settings.oracle_wallet_password.strip() or settings.oracle_password.strip()
-
-
-def _wallet_requires_password(wallet_path: Path) -> bool:
-    """自動ログイン Wallet がなく、秘密鍵が暗号化されていればパスワード必須。"""
-    try:
-        files = [path for path in wallet_path.iterdir() if path.is_file()]
-    except OSError:
-        return False
-    names = {path.name.lower() for path in files}
-    if "ewallet.p12" in names:
-        return True
-    encrypted_pem_exists = any(
-        path.suffix.lower() == ".pem" and _pem_file_is_encrypted(path) for path in files
-    )
-    if encrypted_pem_exists:
-        return True
-    return "cwallet.sso" not in names
-
-
-def _pem_file_is_encrypted(path: Path) -> bool:
-    """暗号化 PEM の代表的な marker だけを少量読み取って判定する。"""
-    try:
-        head = path.read_bytes()[:4096]
-    except OSError:
-        return False
-    text = head.decode("utf-8", errors="ignore").upper()
-    return "BEGIN ENCRYPTED PRIVATE KEY" in text or "PROC-TYPE: 4,ENCRYPTED" in text
 
 
 def oracle_search_answer_profile_knowledge_schema_sql(

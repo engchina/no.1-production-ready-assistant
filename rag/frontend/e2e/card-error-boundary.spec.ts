@@ -12,12 +12,8 @@ import { SYSTEM_TABLES_STATUS_OK, mockLocalAuth } from "./_helpers";
 
 const databaseSettings = {
   user: "rag_app",
-  dsn: "adb.ap-osaka-1.oraclecloud.com/ragdb_high",
-  wallet_dir: "/u01/aipoc/instantclient_23_26/network/admin",
-  wallet_uploaded: true,
-  available_services: ["ragdb_high"],
+  dsn: "127.0.0.1:1525/ragdb_low",
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "VECTOR(1024, FLOAT32)",

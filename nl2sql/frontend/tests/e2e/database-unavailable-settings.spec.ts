@@ -5,7 +5,7 @@ import { systemAdminMe } from "./_helpers/database-gate";
 
 const NOTICE_TITLE = "データベースに接続できません";
 const NOTICE_MESSAGE =
-  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
+  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・DSN を確認してから、再試行してください。";
 const NOTICE_HINT =
   "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 const RAW_DATABASE_ERROR = "Oracle に接続できませんでした (ORA-12514)。";

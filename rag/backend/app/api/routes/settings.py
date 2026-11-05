@@ -174,8 +174,8 @@ router.include_router(
     )
 )
 # データベース設定も3製品共通の実装（pr_system_settings.database。#108）。
-# 接続そのものと接続 pool の後始末は RAG のものを渡す。Walletless TLS と
-# パスワードの表示は、RAG の接続処理と権限が対応していないため有効にしない。
+# 接続そのものと接続 pool の後始末は RAG のものを渡す。パスワードの表示は、
+# RAG の権限が対応していないため有効にしない。
 router.include_router(
     build_database_router(
         get_settings=lambda: get_settings(),

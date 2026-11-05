@@ -128,7 +128,7 @@ def test_audit_detects_legacy_json_without_disclosing_secret(tmp_path: Path) -> 
     assert "do-not-disclose" not in output
 
 
-def test_init_script_keeps_thin_mtls_without_instant_client() -> None:
+def test_init_script_keeps_thin_without_instant_client() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     init_script = (repo_root / "init_script.sh").read_text(encoding="utf-8").lower()
 

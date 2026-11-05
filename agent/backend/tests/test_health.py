@@ -10,7 +10,6 @@ import stat
 import sys
 import threading
 import time
-import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -97,9 +96,6 @@ class _AsgiTestClient:
 client = _AsgiTestClient()
 
 
-TEST_WALLET_PEM = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n"
-
-
 def _settings_fixture(**overrides: object) -> SimpleNamespace:
     defaults: dict[str, object] = {
         "local_storage_dir": "/u01/data/production-ready-agent",
@@ -110,8 +106,6 @@ def _settings_fixture(**overrides: object) -> SimpleNamespace:
         "oracle_password": "",
         "oracle_dsn": "",
         "oracle_client_lib_dir": "",
-        "oracle_wallet_dir": "",
-        "oracle_wallet_password": "",
         "oracle_tcp_connect_timeout_seconds": 10.0,
         "oracle_db_test_timeout_seconds": 15.0,
         "agent_runtime_oracle_password": "",
@@ -619,19 +613,14 @@ def test_ready() -> None:
     assert resp.json()["data"]["status"] == "ok"
 
 
-def _database_status_settings(wallet_dir: str = "", **overrides: object) -> SimpleNamespace:
+def _database_status_settings(**overrides: object) -> SimpleNamespace:
     """DB の状態 API（#325）が読む属性だけを持つ Settings。"""
     values: dict[str, object] = {
         # 共通認証（production）。ローカル認証は DB を使わないため状態 API が short circuit する。
         "app_auth_enabled": True,
         "oracle_user": "AGENT_APP",
         "oracle_password": "db-secret-password",
-        "oracle_dsn": "agentdb_high",
-        "oracle_wallet_dir": wallet_dir,
-        "resolved_oracle_wallet_dir": wallet_dir,
-        "oracle_wallet_password": "",
-        "oracle_driver_mode": "thin",
-        "oracle_connection_security": "wallet_mtls",
+        "oracle_dsn": "agentdb.example.com:1521/agentdb_svc",
         "oracle_tcp_connect_timeout_seconds": 1.0,
         "oracle_db_test_timeout_seconds": 1.0,
     }
@@ -639,26 +628,16 @@ def _database_status_settings(wallet_dir: str = "", **overrides: object) -> Simp
     return SimpleNamespace(**values)
 
 
-def _write_agent_wallet(wallet_dir: Path) -> str:
-    wallet_dir.mkdir(parents=True, exist_ok=True)
-    (wallet_dir / "tnsnames.ora").write_text(
-        "agentdb_high = (description=(address=(protocol=tcps)(port=1522)(host=adb)))\n",
-        encoding="utf-8",
-    )
-    (wallet_dir / "ewallet.pem").write_text(
-        "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n", encoding="utf-8"
-    )
-    return str(wallet_dir)
-
-
 def test_database_status_not_configured_skips_connection(monkeypatch: MonkeyPatch) -> None:
-    """Wallet が無ければ、パスワードがあっても接続を試さず not_configured（共通の判定）。"""
+    """パスワードが無ければ接続を試さず not_configured（共通の判定）。"""
     called: list[object] = []
 
     async def must_not_connect(candidate: object) -> None:
         called.append(candidate)
 
-    monkeypatch.setattr(agent_router, "get_settings", lambda: _database_status_settings())
+    monkeypatch.setattr(
+        agent_router, "get_settings", lambda: _database_status_settings(oracle_password="")
+    )
     monkeypatch.setattr(agent_router, "_test_database_status_connection", must_not_connect)
 
     resp = client.get("/api/ready/database")
@@ -666,7 +645,7 @@ def test_database_status_not_configured_skips_connection(monkeypatch: MonkeyPatc
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["status"] == "not_configured"
-    assert data["check"] == "wallet_not_found"
+    assert data["check"] == "missing_credentials"
     assert data["schema_status"] is None
     assert called == []
 
@@ -684,9 +663,9 @@ class _SchemaStatus:
         return self.payload
 
 
-def test_database_status_ok_after_connection(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_database_status_ok_after_connection(monkeypatch: MonkeyPatch) -> None:
     """設定がそろい接続でき、システムテーブルが最新なら ok（RAG / NL2SQL と同じ。#751）。"""
-    settings = _database_status_settings(_write_agent_wallet(tmp_path / "wallet"))
+    settings = _database_status_settings()
     called: list[object] = []
 
     async def connect(candidate: object) -> None:
@@ -756,7 +735,7 @@ def test_database_status_connection_uses_the_pool(monkeypatch: MonkeyPatch) -> N
         _env_file=None,
         oracle_user="ADMIN",
         oracle_password="secret",
-        oracle_dsn="agentdb_high",
+        oracle_dsn="agentdb.example.com:1521/agentdb_svc",
         oracle_client_lib_dir="",
     )
     try:
@@ -774,7 +753,7 @@ def test_database_status_check_stops_waiting_at_the_timeout(monkeypatch: MonkeyP
     release = threading.Event()
 
     def slow_ping(_settings: object) -> None:
-        # wallet の接続記述子の再試行で、1 回の接続に 1 分以上かかる状態を模す。
+        # 接続記述子の再試行で、1 回の接続に 1 分以上かかる状態を模す。
         release.wait(10)
 
     monkeypatch.setattr(agent_router, "_ping_platform_oracle_sync", slow_ping)
@@ -791,14 +770,13 @@ def test_database_status_check_stops_waiting_at_the_timeout(monkeypatch: MonkeyP
 
 def test_database_status_unreachable_does_not_leak_connection_details(
     monkeypatch: MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    settings = _database_status_settings(_write_agent_wallet(tmp_path / "wallet"))
+    settings = _database_status_settings()
 
     async def fail(_candidate: object) -> None:
         raise RuntimeError(
             "ORA-12506: listener at adb.example.oraclecloud.com:1522 rejected AGENT_APP "
-            "for service agentdb_high"
+            "for service agentdb_svc"
         )
 
     monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
@@ -809,13 +787,13 @@ def test_database_status_unreachable_does_not_leak_connection_details(
     assert body["data"]["status"] == "unreachable"
     assert body["data"]["detail"] == "Oracle connection probe failed (ORA-12506)."
     text = json.dumps(body)
-    for secret in ("adb.example.oraclecloud.com", "AGENT_APP", "agentdb_high", str(tmp_path)):
+    for secret in ("adb.example.oraclecloud.com", "AGENT_APP", "agentdb_svc"):
         assert secret not in text
 
 
-def test_database_status_requires_system_tables(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_database_status_requires_system_tables(monkeypatch: MonkeyPatch) -> None:
     """接続できてもシステムテーブルが最新でない・操作中なら setup_required（#751）。"""
-    settings = _database_status_settings(_write_agent_wallet(tmp_path / "wallet"))
+    settings = _database_status_settings()
 
     async def connect(_candidate: object) -> None:
         return None
@@ -874,65 +852,25 @@ def test_upload_storage_defaults_are_local_only(monkeypatch: MonkeyPatch) -> Non
         "max_upload_bytes": 100 * 1024 * 1024,
         "config_source": "runtime",
     }
-    # OCI 認証・Object Storage・Wallet の OCI からの取得の API は持たない（#11）。
+    # OCI 認証・Object Storage の API は持たない（#11）。
     paths = set(app.openapi()["paths"])
     assert "/api/settings/upload-storage" in paths
     assert not {path for path in paths if path.startswith("/api/settings/oci")}
     assert "/api/settings/upload-storage/test" not in paths
-    assert "/api/settings/database/wallet/download" not in paths
 
 
-def test_upload_database_wallet_extracts_zip_like_rag(
+def test_database_save_writes_env_like_rag(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    wallet_dir = tmp_path / "wallet"
-    env_file = tmp_path / ".env"
-    monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
-    settings = Settings(_env_file=None, oracle_client_lib_dir="", oracle_wallet_dir=str(wallet_dir))
-    monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
-    archive = io.BytesIO()
-    with zipfile.ZipFile(archive, "w") as wallet:
-        wallet.writestr("tnsnames.ora", "mydb_high = (DESCRIPTION=(ADDRESS=(HOST=db)))\n")
-        wallet.writestr("sqlnet.ora", "WALLET_LOCATION=(SOURCE=(METHOD=file))\n")
-        wallet.writestr("cwallet.sso", "wallet")
-        wallet.writestr("ewallet.pem", "wallet")
-
-    resp = client.post(
-        "/api/settings/database/wallet",
-        files={"file": ("wallet.zip", archive.getvalue(), "application/zip")},
-    )
-
-    assert resp.status_code == 200
-    assert (wallet_dir / "tnsnames.ora").is_file()
-    assert not env_file.exists()
-    data = resp.json()["data"]
-    assert data["wallet_uploaded"] is True
-    assert data["wallet_dir"] == str(wallet_dir)
-    assert data["available_services"] == ["mydb_high"]
-
-
-def test_database_save_preserves_uploaded_wallet_and_writes_env_like_rag(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text(
-        "mydb_high = (DESCRIPTION=(ADDRESS=(HOST=db)))\n",
-        encoding="utf-8",
-    )
-    # Agent は Thin mode なので tnsnames.ora と ewallet.pem が必要（NL2SQL と同じ判定。#108）。
-    (wallet_dir / "ewallet.pem").write_text(TEST_WALLET_PEM, encoding="utf-8")
     env_file = tmp_path / ".env"
     monkeypatch.setattr(app_settings, "PLATFORM_ENV_FILE", env_file)
     settings = Settings(
         _env_file=None,
         oracle_user="OLD",
         oracle_password="old-password",
-        oracle_dsn="old_dsn",
+        oracle_dsn="old.example.com:1521/old_svc",
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
     )
     monkeypatch.setattr(agent_router, "get_settings", lambda: settings)
 
@@ -940,12 +878,9 @@ def test_database_save_preserves_uploaded_wallet_and_writes_env_like_rag(
         "/api/settings/database",
         json={
             "user": "ADMIN",
-            "dsn": "mydb_high",
-            "wallet_dir": "",
+            "dsn": "db.example.com:1521/mydb_svc",
             "password": "",
-            "wallet_password": "",
             "clear_password": False,
-            "clear_wallet_password": False,
         },
     )
 
@@ -953,18 +888,13 @@ def test_database_save_preserves_uploaded_wallet_and_writes_env_like_rag(
     env_text = env_file.read_text(encoding="utf-8")
     assert "PLATFORM_ORACLE_USER=ADMIN" in env_text
     assert "PLATFORM_ORACLE_PASSWORD=old-password" in env_text
-    assert "PLATFORM_ORACLE_DSN=mydb_high" in env_text
+    assert "PLATFORM_ORACLE_DSN=db.example.com:1521/mydb_svc" in env_text
     assert "PLATFORM_ORACLE_CLIENT_LIB_DIR=" in env_text
-    assert f"PLATFORM_ORACLE_WALLET_DIR={wallet_dir}" in env_text
-    assert settings.oracle_wallet_dir == str(wallet_dir)
-    data = resp.json()["data"]
-    assert data["wallet_dir"] == str(wallet_dir)
-    assert data["wallet_uploaded"] is True
+    assert resp.json()["data"]["readiness"] == "ok"
 
 
 def test_database_connection_test_uses_oracledb_like_rag(
     monkeypatch: MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
 
@@ -997,17 +927,12 @@ def test_database_connection_test_uses_oracledb_like_rag(
         raise AssertionError(name)
 
     monkeypatch.setattr(agent_router, "import_module", fake_import_module)
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("mydb_high = (DESCRIPTION=...)\n", encoding="utf-8")
-    (wallet_dir / "ewallet.pem").write_text(TEST_WALLET_PEM, encoding="utf-8")
     settings = Settings(
         _env_file=None,
         oracle_user="ADMIN",
         oracle_password="secret",
-        oracle_dsn="mydb_high",
+        oracle_dsn="db.example.com:1521/mydb_svc",
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
         oracle_tcp_connect_timeout_seconds=3.0,
         oracle_db_test_timeout_seconds=5.0,
     )
@@ -1015,7 +940,7 @@ def test_database_connection_test_uses_oracledb_like_rag(
 
     resp = client.post(
         "/api/settings/database/test",
-        json={"user": "ADMIN", "dsn": "mydb_high"},
+        json={"user": "ADMIN", "dsn": "db.example.com:1521/mydb_svc"},
     )
 
     assert resp.status_code == 200
@@ -1027,15 +952,11 @@ def test_database_connection_test_uses_oracledb_like_rag(
     assert captured["connection_closed"] is True
     assert captured["connect_kwargs"] == {
         "user": "ADMIN",
-        # Wallet の別名は、再試行の設定を外した接続記述子にする（RAG の接続テストと同じ。#1212）。
-        "dsn": "(DESCRIPTION=...)",
+        "dsn": "db.example.com:1521/mydb_svc",
         "retry_count": 0,
         "retry_delay": 0,
         "tcp_connect_timeout": 3.0,
         "password": "secret",
-        # readiness が Wallet を確認するため、接続にも Wallet を渡す（#108）。
-        "config_dir": str(wallet_dir),
-        "wallet_location": str(wallet_dir),
     }
 
 

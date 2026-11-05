@@ -1,6 +1,6 @@
 # システム設定のボタン別レビュー（2026-09-11）
 
-> OCI 認証の画面、アップロード保存先の OCI Object Storage、Wallet の OCI からの自動取得、ADB の起動・停止は
+> OCI 認証の画面、アップロード保存先の OCI Object Storage、ADB の起動・停止は
 > 後に削除した（#10・#11）。以下の該当の行は、レビューした時点の記録として残す。
 
 対象は OCI 認証、アップロード保存先、モデル、データベース、システムテーブルの5画面（外観と証明書の画面は #19 で削除）。UI の event handler → API payload → backend の認可・状態更新・永続化を確認し、下表の action を desktop 1280×900 / mobile-375 で検証した。
@@ -13,7 +13,6 @@
 |[#376](https://github.com/engchina/no.1-production-ready-nl2sql/issues/376)|OCI Object Storage / ADB 永続化失敗時にも runtime が変わる|[#379](https://github.com/engchina/no.1-production-ready-nl2sql/pull/379)|
 |[#378](https://github.com/engchina/no.1-production-ready-nl2sql/issues/378)|アップロード保存先の背景再取得・保存応答が草稿を消す|[#381](https://github.com/engchina/no.1-production-ready-nl2sql/pull/381)|
 |[#380](https://github.com/engchina/no.1-production-ready-nl2sql/issues/380)|モデルの旧テスト結果と変更後入力の混在、保存中編集の消失|[#384](https://github.com/engchina/no.1-production-ready-nl2sql/pull/384)|
-|[#382](https://github.com/engchina/no.1-production-ready-nl2sql/issues/382)|Wallet と再取得が未保存 DB ユーザー名・パスワードを消す|[#385](https://github.com/engchina/no.1-production-ready-nl2sql/pull/385)|
 |[#383](https://github.com/engchina/no.1-production-ready-nl2sql/issues/383)|状態変更・失敗後の古い実行確認語の再利用|[#387](https://github.com/engchina/no.1-production-ready-nl2sql/pull/387)|
 |[#388](https://github.com/engchina/no.1-production-ready-nl2sql/issues/388)|OCI-only 権限では画面に必要な共有設定 GET が403|[#389](https://github.com/engchina/no.1-production-ready-nl2sql/pull/389)|
 
@@ -60,13 +59,10 @@
 
 |操作|確認した挙動|
 |---|---|
-|ADB 情報を再取得・保存|情報更新に続く Wallet 確認、各段階の進行・失敗表示。永続化失敗時は runtime を変更しない。|
+|ADB 情報を再取得・保存|情報更新、各段階の進行・失敗表示。永続化失敗時は runtime を変更しない。|
 |ADB 起動・停止|lifecycle に応じた実行可否と進行状態、成功・API 失敗。対象不明・情報エラー時は起動停止不可。|
-|Wallet upload / drag&drop|形式検証・即時 upload。成功後も未保存 DB ユーザー名・password を保持。|
-|Wallet 自動取得・再試行|必要条件を満たす未設定 Wallet をページ表示ごとに一度確認。失敗の保持とキーボードによる再試行、有効 Wallet 時は取得しない。|
-|TLS / mTLS・サービス DSN|接続方式に応じた入力、サービス選択、必要項目の検証。|
+|DSN|必要項目の検証。|
 |DB password 表示 / 非表示・削除|明示 reveal、重複取得防止、取得中表示、平文の不要な表示なし、削除 payload。|
-|Wallet password 表示 / 非表示・削除|入力状態・保存済み状態の区別、削除指定の永続化。|
 |DB 保存・接続テスト|送信中入力固定、草稿保持、保存成功後 baseline 更新、編集後の旧テスト結果解除、診断失敗表示。|
 |Credential 状態再取得|失敗時に旧情報を明示し再試行を提供。未確認状態で mutation 不可。|
 |Credential region・作成・再作成|region 変更時の再確認、実行開始時に確認を消費、処理中 region 固定、失敗後も再確認必須。backend の認可・CSRF・確認語検証を維持。|
@@ -92,5 +88,5 @@
 - `npm run test:e2e -- tests/e2e/nl2sql-system-settings.spec.ts tests/e2e/system-tables.spec.ts tests/e2e/database-unavailable-settings.spec.ts` — 146 passed（desktop / mobile-375、1.3分）。
 - 当時の6画面（削除済みの外観と証明書を含む）×2 viewport のスクリーンショットを取得。OCI / モデル desktop とモデル / DB mobile を目視し、幅・入力ラベル・focus 表示を確認。全画面の横幅・focus は Playwright でも確認。
 - `git diff --check` — pass。
-- UI 検証は隔離 API fixture、backend は一時ファイル・InMemory/モックを使用。実 OCI lifecycle、鍵、Wallet、DB credential、実 schema DDL の変更は行っていない。
+- UI 検証は隔離 API fixture、backend は一時ファイル・InMemory/モックを使用。実 OCI lifecycle、鍵、DB credential、実 schema DDL の変更は行っていない。
 - 共通未保存ガードは内部 link・画面内遷移・reload/tab close が対象。BrowserRouter の既存制約により browser back/forward の完全ブロックは含まない。秘密情報を新たに browser storage に保存しない。

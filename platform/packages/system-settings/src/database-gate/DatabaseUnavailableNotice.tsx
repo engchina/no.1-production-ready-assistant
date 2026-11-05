@@ -61,7 +61,7 @@ export interface DatabaseNoticeContentInput {
   canManageSystemTables: boolean;
 }
 
-/** データベース設定の URL（hash は付けない。接続設定と Wallet は同じカードにある）。 */
+/** データベース設定の URL（hash は付けない）。 */
 export function databaseSettingsHref(path: string): string {
   return path.split("#", 1)[0];
 }
@@ -69,7 +69,7 @@ export function databaseSettingsHref(path: string): string {
 /**
  * 状態ごとに見出し・本文・アイコン・導線を分ける（#820。単体テストのため純粋関数）。
  * - 未設定 → データベース設定（接続情報）
- * - 接続できない → データベース設定（接続設定と Wallet を確かめる。DB の起動・停止は画面では扱わない。#10）
+ * - 接続できない → データベース設定（接続設定を確かめる。DB の起動・停止は画面では扱わない。#10）
  * - 初期化が必要 → システムテーブル（`systemTables` が無い製品はデータベース設定）
  * - 状態を確認できない → 導線なし（再試行だけ）
  * - その画面を開けない利用者 → 導線を出さず、システム管理者への連絡を案内する

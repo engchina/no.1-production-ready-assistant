@@ -159,12 +159,10 @@ make_case() {
     "${app_dir}/backend/app" \
     "${app_dir}/frontend/dist/assets" \
     "${platform_dir}/packages/ui" \
-    "${case_dir}/wallet/nested" \
     "${case_dir}/fake-bin"
   printf 'PLATFORM_AUTH_MODE=authenticated\n' > "${app_dir}/backend/.env"
-  # 共通の設定（Wallet の場所を含む）は platform/.env（#211）。
-  printf 'PLATFORM_ORACLE_WALLET_DIR=%s\n' "${case_dir}/wallet" > "${platform_dir}/.env"
-  printf 'PLATFORM_ORACLE_PASSWORD=$(touch %s/must-not-run)\n' "${case_dir}" >> "${platform_dir}/.env"
+  # 共通の設定は platform/.env（#211）。
+  printf 'PLATFORM_ORACLE_PASSWORD=$(touch %s/must-not-run)\n' "${case_dir}" > "${platform_dir}/.env"
   : > "${app_dir}/backend/pyproject.toml"
   : > "${app_dir}/backend/uv.lock"
   : > "${app_dir}/frontend/package.json"
@@ -172,18 +170,11 @@ make_case() {
   : > "${platform_dir}/package.json"
   : > "${platform_dir}/package-lock.json"
   : > "${platform_dir}/packages/ui/package.json"
-  printf 'wallet\n' > "${case_dir}/wallet/cwallet.sso"
-  printf 'nested\n' > "${case_dir}/wallet/nested/tnsnames.ora"
-  printf 'lock\n' > "${case_dir}/.wallet.install.lock"
   printf 'old frontend\n' > "${app_dir}/frontend/dist/index.html"
   printf 'old asset\n' > "${app_dir}/frontend/dist/assets/app.js"
   : > "${case_dir}/commands.log"
   chmod 0775 "${case_dir}"
-  chmod 0700 "${case_dir}/wallet" "${case_dir}/wallet/nested"
   chmod 0600 \
-    "${case_dir}/wallet/cwallet.sso" \
-    "${case_dir}/wallet/nested/tnsnames.ora" \
-    "${case_dir}/.wallet.install.lock" \
     "${app_dir}/backend/.env" \
     "${platform_dir}/.env"
   make_fake_commands "${case_dir}/fake-bin"
@@ -204,7 +195,6 @@ run_case() {
     PLATFORM_REPO_DIR="${platform_dir}" \
     APP_USER="$(id -un)" \
     APP_GROUP="$(id -gn)" \
-    WALLET_DIR="${case_dir}/wallet" \
     RECOVERY_ROOT="${case_dir}/recovery" \
     UPDATE_LOG_PATH="${case_dir}/update.log" \
     COMMAND_LOG="${case_dir}/commands.log" \
@@ -225,12 +215,12 @@ test_check_dispatch_is_non_mutating() (
   preflight() { printf '%s\n' preflight >> "${case_dir}/events"; }
   report_deployment_state() { printf '%s\n' report >> "${case_dir}/events"; }
   check_system_schema_status() { printf '%s\n' status >> "${case_dir}/events"; }
-  verify_wallet_permissions() { printf '%s\n' verify >> "${case_dir}/events"; }
+  verify_deploy_permissions() { printf '%s\n' verify >> "${case_dir}/events"; }
   acquire_lock() { printf '%s\n' forbidden-lock >> "${case_dir}/events"; return 1; }
   setup_update_log() { printf '%s\n' forbidden-log >> "${case_dir}/events"; return 1; }
   create_recovery_snapshot() { printf '%s\n' forbidden-backup >> "${case_dir}/events"; return 1; }
   enter_maintenance() { printf '%s\n' forbidden-stop >> "${case_dir}/events"; return 1; }
-  repair_wallet_permissions() { printf '%s\n' forbidden-repair >> "${case_dir}/events"; return 1; }
+  repair_deploy_permissions() { printf '%s\n' forbidden-repair >> "${case_dir}/events"; return 1; }
   run_database_migrations() { printf '%s\n' forbidden-migration >> "${case_dir}/events"; return 1; }
 
   main --check
@@ -239,19 +229,6 @@ test_check_dispatch_is_non_mutating() (
   grep -Fxq status "${case_dir}/events"
   grep -Fxq verify "${case_dir}/events"
   ! grep -q '^forbidden-' "${case_dir}/events"
-)
-
-test_wallet_env_parser_does_not_source_secrets() (
-  local case_dir="${TEST_TMP_DIR}/env-parser"
-  mkdir -p "${case_dir}"
-  export UPDATE_AFTER_PULL_TEST_MODE=true
-  # shellcheck source=/dev/null
-  source "${UPDATE_SCRIPT}"
-  PLATFORM_ENV_FILE="${case_dir}/platform.env"
-  printf 'PLATFORM_ORACLE_PASSWORD=$(touch %s/must-not-run)\n' "${case_dir}" > "${PLATFORM_ENV_FILE}"
-  printf '%s\n' 'PLATFORM_ORACLE_WALLET_DIR="/u01/aipoc/wallet"' >> "${PLATFORM_ENV_FILE}"
-  test "$(wallet_env_value)" = "/u01/aipoc/wallet"
-  test ! -e "${case_dir}/must-not-run"
 )
 
 test_noninteractive_privilege_failure() (
@@ -279,7 +256,6 @@ test_passwordless_sudo_reexecs_update_actions() (
   export APP_ROOT="${case_dir}"
   export APP_REPO_DIR="${case_dir}/no.1-production-ready-assistant/nl2sql"
   export PLATFORM_REPO_DIR="${case_dir}/no.1-production-ready-assistant/platform"
-  export WALLET_DIR="${case_dir}/wallet"
   export RECOVERY_ROOT="${case_dir}/recovery"
   export UPDATE_LOG_PATH="${case_dir}/update.log"
   export LOCK_FILE="${case_dir}/update.lock"
@@ -473,7 +449,6 @@ for health_label in backend; do
 done
 
 test_check_dispatch_is_non_mutating
-test_wallet_env_parser_does_not_source_secrets
 test_noninteractive_privilege_failure
 test_passwordless_sudo_reexecs_update_actions
 test_auto_sudo_failure_does_not_continue
@@ -512,9 +487,6 @@ fi
 test -f "$(find "${repair_case}/recovery" -name backend.env -print -quit)"
 test -f "$(find "${repair_case}/recovery" -name platform.env -print -quit)"
 test "$(stat -c %a "${repair_case}")" = 775
-test "$(stat -c %a "${repair_case}/wallet")" = 700
-test "$(stat -c %a "${repair_case}/wallet/cwallet.sso")" = 600
-test "$(stat -c %a "${repair_case}/.wallet.install.lock")" = 600
 test "$(stat -c %a "${repair_case}/no.1-production-ready-assistant/nl2sql/backend/.env")" = 600
 test "$(stat -c %a "${repair_case}/no.1-production-ready-assistant/platform/.env")" = 600
 test ! -e "${repair_case}/must-not-run"
@@ -557,24 +529,8 @@ for failure_stage in system-migration security-migration backend-health worker-r
   assert_degraded "${failure_case}/commands.log"
 done
 
-wallet_override_case="$(make_case wallet-override)"
-printf 'PLATFORM_ORACLE_WALLET_DIR=%s/other-wallet\n' "${wallet_override_case}" > \
-  "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
-printf 'PLATFORM_ORACLE_PASSWORD=$(touch %s/must-not-run)\n' "${wallet_override_case}" >> \
-  "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
-chmod 0600 "${wallet_override_case}/no.1-production-ready-assistant/platform/.env"
-if run_case "${wallet_override_case}" --check; then
-  fail_test "an overridden Wallet path was accepted"
-fi
-test ! -e "${wallet_override_case}/must-not-run"
-if grep -q '^sudo|' "${wallet_override_case}/commands.log"; then
-  fail_test "invalid Wallet path caused a mutation"
-fi
-
-grep -Fq '[ "${WALLET_DIR}" = "/u01/aipoc/wallet" ]' "${UPDATE_SCRIPT}"
 grep -Fq 'run_privileged chown "root:${APP_GROUP}" "${APP_ROOT}"' "${UPDATE_SCRIPT}"
 grep -Fq 'chmod 0775 "${APP_ROOT}"' "${UPDATE_SCRIPT}"
-grep -Fq 'find "${WALLET_DIR}" -type f -exec chmod 0600 {} +' "${UPDATE_SCRIPT}"
 grep -Fq 'app.cli.nl2sql_system_schema --initialize' "${UPDATE_SCRIPT}"
 grep -Fq 'app.cli.app_security_migrate' "${UPDATE_SCRIPT}"
 grep -Fq -- '--apply --skip-bootstrap' "${UPDATE_SCRIPT}"

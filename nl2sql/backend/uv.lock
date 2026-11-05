@@ -1068,7 +1068,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "charset-normalizer" },
-    { name = "cryptography" },
     { name = "fastapi" },
     { name = "gunicorn" },
     { name = "httpx" },
@@ -1115,7 +1114,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "charset-normalizer", specifier = ">=3.4" },
-    { name = "cryptography", specifier = ">=50.0.0" },
     { name = "fastapi", specifier = ">=0.121,<1.0" },
     { name = "gunicorn", specifier = ">=23,<24" },
     { name = "httpx", specifier = "==0.28.1" },

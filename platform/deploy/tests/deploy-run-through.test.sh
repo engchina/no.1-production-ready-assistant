@@ -99,7 +99,7 @@ check_real "DB が無い（DPY-6005）" true database \
 check_real "listener が無い（ORA-12541）" true database \
   "DPY-6005: cannot connect to database. ORA-12541: Cannot connect. No listener at host 127.0.0.1 port 1"
 check_real "サービスが受け付けない（DPY-6001）" true database \
-  "DPY-6001: Service \"db_high\" is not registered with the listener"
+  "DPY-6001: Service \"app_svc\" is not registered with the listener"
 check_real "権限の不足（ORA-01031）" false database "ORA-01031: insufficient privileges; ${secret}"
 check_real "設定の不備（ValueError）" false value "password=${secret}"
 check_real "import の失敗" false import "No module named 'oracledb'"

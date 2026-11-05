@@ -86,15 +86,10 @@ function expectDisabledOnly(element: HTMLElement) {
 
 const DB_SETTINGS: DatabaseSettingsData = {
   user: "app",
-  dsn: "db_high",
+  dsn: "127.0.0.1:1525/db_low",
   driver_mode: "thin",
-  connection_security: "wallet_mtls",
   client_lib_dir: "",
-  wallet_dir: "/wallet",
-  wallet_uploaded: true,
-  available_services: ["db_high"],
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "EMBEDDING",
@@ -105,7 +100,6 @@ function databaseApi(overrides: Partial<DatabaseSettingsApi> = {}): DatabaseSett
   return {
     getDatabaseSettings: () => Promise.resolve(DB_SETTINGS),
     updateDatabaseSettings: never,
-    uploadDatabaseWallet: never,
     testDatabaseSettings: never,
     ...overrides,
   };

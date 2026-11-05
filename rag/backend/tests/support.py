@@ -1,9 +1,7 @@
 """ASGI アプリを httpx transport 経由で同期的にテストする補助。"""
 
-import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any
 
 import anyio
@@ -24,28 +22,6 @@ TEST_REQUEST_HEADERS = {
     "X-Tenant-ID": TEST_TENANT_ID,
     "X-User-ID": TEST_USER_ID,
 }
-TEST_WALLET_TNSNAMES = "ragdb_high = (description=(address=(protocol=tcps)(port=1522)(host=adb)))\n"
-TEST_WALLET_PEM = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n"
-_SHARED_WALLET: tempfile.TemporaryDirectory[str] | None = None
-
-
-def write_thin_wallet(wallet_dir: Path) -> Path:
-    """Thin mode の mTLS 接続に必要な Wallet のファイル（tnsnames.ora / ewallet.pem）を置く。
-
-    Oracle の readiness（platform の `database_readiness`。#325）を ok にするための偽物。
-    """
-    wallet_dir.mkdir(parents=True, exist_ok=True)
-    (wallet_dir / "tnsnames.ora").write_text(TEST_WALLET_TNSNAMES, encoding="utf-8")
-    (wallet_dir / "ewallet.pem").write_text(TEST_WALLET_PEM, encoding="utf-8")
-    return wallet_dir
-
-
-def shared_thin_wallet_dir() -> str:
-    """読むだけのテストで共有する Wallet の配置先（プロセス終了時に削除する）。"""
-    global _SHARED_WALLET
-    if _SHARED_WALLET is None:
-        _SHARED_WALLET = tempfile.TemporaryDirectory(prefix="rag-test-wallet-")
-    return str(write_thin_wallet(Path(_SHARED_WALLET.name)))
 
 
 @contextmanager

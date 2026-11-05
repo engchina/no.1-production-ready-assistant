@@ -21,16 +21,11 @@ from app.config import (
 from app.main import UNHANDLED_ERROR_MESSAGE, app, create_app
 from app.rag.system_schema import system_schema_manager
 from app.readiness import pending_legacy_local_storage_dir
-from tests.support import AsgiTestClient, write_thin_wallet
+from tests.support import AsgiTestClient
 
 client = AsgiTestClient(app)
 LLM_TEMPLATE = '{"input":"${user_message}"}'
 VLM_TEMPLATE = '{"input":"${data_base64}"}'
-
-
-@pytest.fixture
-def wallet_dir(tmp_path: Path) -> Path:
-    return write_thin_wallet(tmp_path / "wallet")
 
 
 async def _run_inline(
@@ -80,7 +75,6 @@ def test_readiness_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
         "oracle_user",
         "oracle_password",
         "oracle_dsn",
-        "oracle_wallet_dir",
     ):
         monkeypatch.setattr(settings, field, "")
     monkeypatch.setattr(settings, "enterprise_ai_models", [])
@@ -98,11 +92,10 @@ def test_readiness_missing_config_is_degraded(monkeypatch: MonkeyPatch) -> None:
     }
 
 
-def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch) -> None:
     _configure_llm_readiness(
         monkeypatch,
         oracle_password="super-secret-password",
-        oracle_wallet_dir=str(wallet_dir),
     )
 
     resp = client.get("/api/ready")
@@ -119,9 +112,9 @@ def test_readiness_complete_config_is_ok(monkeypatch: MonkeyPatch, wallet_dir: P
     assert "super-secret-password" not in str(body)
 
 
-def test_readiness_does_not_require_project_id(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+def test_readiness_does_not_require_project_id(monkeypatch: MonkeyPatch) -> None:
     """Project ID は任意（#9）。無い接続（DeepSeek・Aliyun など）でも ready にする（#81）。"""
-    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    _configure_llm_readiness(monkeypatch)
     monkeypatch.setattr(get_settings(), "enterprise_ai_project_id", "")
 
     resp = client.get("/api/ready")
@@ -133,9 +126,8 @@ def test_readiness_does_not_require_project_id(monkeypatch: MonkeyPatch, wallet_
 def test_readiness_with_local_upload_storage_checks_local_storage(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,
-    wallet_dir: Path,
 ) -> None:
-    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    _configure_llm_readiness(monkeypatch)
     settings = get_settings()
     monkeypatch.setattr(settings, "local_storage_dir", str(tmp_path / "upload-storage"))
 
@@ -153,9 +145,8 @@ def test_readiness_with_local_upload_storage_checks_local_storage(
 
 def test_readiness_requires_enterprise_ai_model_catalog(
     monkeypatch: MonkeyPatch,
-    wallet_dir: Path,
 ) -> None:
-    _configure_llm_readiness(monkeypatch, oracle_wallet_dir=str(wallet_dir))
+    _configure_llm_readiness(monkeypatch)
     settings = get_settings()
     monkeypatch.setattr(settings, "enterprise_ai_models", [])
     monkeypatch.setattr(settings, "enterprise_ai_default_text_model", "")
@@ -171,13 +162,12 @@ def test_readiness_requires_enterprise_ai_model_catalog(
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_readiness_production_requires_audit_salt(
-    monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
+    monkeypatch: MonkeyPatch, environment: str
 ) -> None:
     _configure_llm_readiness(
         monkeypatch,
         environment=environment,
         audit_context_hash_salt="",
-        oracle_wallet_dir=str(wallet_dir),
     )
 
     resp = client.get("/api/ready")
@@ -196,13 +186,12 @@ def test_readiness_production_requires_audit_salt(
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
 def test_readiness_production_complete_config_is_ok(
-    monkeypatch: MonkeyPatch, wallet_dir: Path, environment: str
+    monkeypatch: MonkeyPatch, environment: str
 ) -> None:
     _configure_llm_readiness(
         monkeypatch,
         environment=environment,
         audit_context_hash_salt="production-audit-salt",
-        oracle_wallet_dir=str(wallet_dir),
     )
 
     resp = client.get("/api/ready")
@@ -220,74 +209,22 @@ def test_readiness_production_complete_config_is_ok(
     assert "production-audit-salt" not in str(body)
 
 
-def test_readiness_password_without_wallet_is_degraded(
+def test_readiness_without_password_is_degraded(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """DB パスワードがあっても Wallet が無ければ ok にしない（システム設定画面と同じ判定。#325）。
-
-    旧 RAG の判定はパスワードがあれば ok を返していた。
-    """
-    _configure_llm_readiness(
-        monkeypatch,
-        oracle_password="oracle-password",
-        oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-    )
+    """DB パスワードが無ければ ok にしない（システム設定画面と同じ判定。#325）。"""
+    _configure_llm_readiness(monkeypatch, oracle_password="")
 
     resp = client.get("/api/ready")
 
     assert resp.status_code == 503
     body = resp.json()
     assert body["data"]["status"] == "degraded"
-    assert body["data"]["checks"]["oracle"] == "wallet_not_found"
+    assert body["data"]["checks"]["oracle"] == "missing_credentials"
 
 
-def test_readiness_encrypted_wallet_without_password_is_degraded(
-    monkeypatch: MonkeyPatch,
-    wallet_dir: Path,
-) -> None:
-    """暗号化 Wallet を復号できる Wallet パスワード / DB パスワードが無ければ ok にしない。"""
-    (wallet_dir / "ewallet.pem").write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIB\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
-    _configure_llm_readiness(
-        monkeypatch,
-        oracle_password="",
-        oracle_wallet_dir=str(wallet_dir),
-    )
-    monkeypatch.setattr(get_settings(), "oracle_wallet_password", "")
-
-    resp = client.get("/api/ready")
-
-    assert resp.status_code == 503
-    assert resp.json()["data"]["checks"]["oracle"] == "wallet_password_invalid"
-
-
-def test_readiness_missing_wallet_dir_is_degraded(
-    monkeypatch: MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _configure_llm_readiness(
-        monkeypatch,
-        oracle_password="",
-        oracle_wallet_dir=str(tmp_path / "missing-wallet"),
-    )
-
-    resp = client.get("/api/ready")
-
-    assert resp.status_code == 503
-    body = resp.json()
-    assert body["data"]["status"] == "degraded"
-    assert body["data"]["checks"]["oracle"] == "wallet_not_found"
-
-
-def test_readiness_invalid_embedding_dim_is_degraded(
-    monkeypatch: MonkeyPatch, wallet_dir: Path
-) -> None:
-    _configure_llm_readiness(
-        monkeypatch, genai_embedding_dim=1536, oracle_wallet_dir=str(wallet_dir)
-    )
+def test_readiness_invalid_embedding_dim_is_degraded(monkeypatch: MonkeyPatch) -> None:
+    _configure_llm_readiness(monkeypatch, genai_embedding_dim=1536)
 
     resp = client.get("/api/ready")
 
@@ -300,7 +237,6 @@ def test_readiness_invalid_embedding_dim_is_degraded(
 def _configure_oracle_only(
     monkeypatch: MonkeyPatch,
     *,
-    wallet_dir: Path | None,
     password: str = "oracle-password",
     dsn: str = "adb.example.com/rag",
 ) -> None:
@@ -309,8 +245,6 @@ def _configure_oracle_only(
     monkeypatch.setattr(settings, "oracle_user", "rag_app")
     monkeypatch.setattr(settings, "oracle_dsn", dsn)
     monkeypatch.setattr(settings, "oracle_password", password)
-    monkeypatch.setattr(settings, "oracle_wallet_dir", str(wallet_dir) if wallet_dir else "")
-    monkeypatch.setattr(settings, "oracle_wallet_password", "")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", "")
 
 
@@ -340,9 +274,9 @@ def test_database_status_not_configured_skips_probe(monkeypatch: MonkeyPatch) ->
     assert body["data"]["check"] == "missing"
 
 
-def test_database_status_ok_when_probe_succeeds(monkeypatch: MonkeyPatch, wallet_dir: Path) -> None:
+def test_database_status_ok_when_probe_succeeds(monkeypatch: MonkeyPatch) -> None:
     """設定済み + 実接続成功なら ok を返す。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
 
     async def _probe_ok(*_args: object, **_kwargs: object) -> None:
         return None
@@ -362,11 +296,9 @@ def test_database_status_ok_when_probe_succeeds(monkeypatch: MonkeyPatch, wallet
     assert body["data"]["check"] == "ok"
 
 
-def test_database_status_uses_oracle_probe_timeout(
-    monkeypatch: MonkeyPatch, wallet_dir: Path
-) -> None:
+def test_database_status_uses_oracle_probe_timeout(monkeypatch: MonkeyPatch) -> None:
     """閲覧 API 用 timeout ではなく Oracle 接続テスト側の timeout に委ねる。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
     settings = get_settings()
     monkeypatch.setattr(settings, "db_read_timeout_seconds", 0.001)
 
@@ -387,11 +319,9 @@ def test_database_status_uses_oracle_probe_timeout(
     assert body["data"]["status"] == "ok"
 
 
-def test_database_status_requires_system_schema_setup(
-    monkeypatch: MonkeyPatch, wallet_dir: Path
-) -> None:
+def test_database_status_requires_system_schema_setup(monkeypatch: MonkeyPatch) -> None:
     """接続成功でも RAG table が不足していれば setup_required を返す。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
 
     async def _probe_ok(*_args: object, **_kwargs: object) -> None:
         return None
@@ -411,11 +341,9 @@ def test_database_status_requires_system_schema_setup(
     assert body["data"]["schema_status"] == "missing"
 
 
-def test_database_status_unreachable_when_probe_fails(
-    monkeypatch: MonkeyPatch, wallet_dir: Path
-) -> None:
+def test_database_status_unreachable_when_probe_fails(monkeypatch: MonkeyPatch) -> None:
     """設定済みでも起動していなければ unreachable を返す。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
 
     async def _probe_fail(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("listener does not currently know of service")
@@ -432,10 +360,9 @@ def test_database_status_unreachable_when_probe_fails(
 
 def test_database_status_unreachable_does_not_leak_connection_details(
     monkeypatch: MonkeyPatch,
-    wallet_dir: Path,
 ) -> None:
     """ログイン不要の path なので、接続先・サービス名を含む例外の文字列を返さない(#320)。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
 
     async def _probe_fail(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError(
@@ -454,14 +381,11 @@ def test_database_status_unreachable_does_not_leak_connection_details(
         assert secret not in json.dumps(body, ensure_ascii=False)
 
 
-def test_database_status_password_without_wallet_is_not_configured(
+def test_database_status_without_password_is_not_configured(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """パスワードがあっても Wallet が無ければ接続を試さず not_configured（#325）。
-
-    旧 RAG の判定はパスワードがあれば接続を試し、unreachable を返していた。
-    """
-    _configure_oracle_only(monkeypatch, wallet_dir=None)
+    """パスワードが無ければ接続を試さず not_configured（#325）。"""
+    _configure_oracle_only(monkeypatch, password="")
 
     async def _must_not_probe(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("設定が不足しているときは実接続を試さない")
@@ -471,15 +395,14 @@ def test_database_status_password_without_wallet_is_not_configured(
     body = client.get("/api/ready/database").json()
 
     assert body["data"]["status"] == "not_configured"
-    assert body["data"]["check"] == "wallet_not_found"
+    assert body["data"]["check"] == "missing_credentials"
 
 
-def test_database_status_unknown_wallet_service_is_not_configured(
+def test_database_status_alias_dsn_is_not_configured(
     monkeypatch: MonkeyPatch,
-    wallet_dir: Path,
 ) -> None:
-    """DSN の別名が Wallet の tnsnames.ora に無ければ not_configured（システム設定画面と同じ）。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir, dsn="otherdb_high")
+    """DSN が別名の形なら接続を試さず not_configured（システム設定画面と同じ）。"""
+    _configure_oracle_only(monkeypatch, dsn="otherdb_high")
 
     async def _must_not_probe(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("設定が不足しているときは実接続を試さない")
@@ -494,10 +417,9 @@ def test_database_status_unknown_wallet_service_is_not_configured(
 
 def test_database_status_schema_status_failure_is_setup_required(
     monkeypatch: MonkeyPatch,
-    wallet_dir: Path,
 ) -> None:
     """system schema の状態を読めなければ setup_required（接続先は返さない）。"""
-    _configure_oracle_only(monkeypatch, wallet_dir=wallet_dir)
+    _configure_oracle_only(monkeypatch)
 
     async def _probe_ok(*_args: object, **_kwargs: object) -> None:
         return None
@@ -586,7 +508,6 @@ def _configure_llm_readiness(
     *,
     oracle_password: str = "oracle-password",
     oracle_client_lib_dir: str = "",
-    oracle_wallet_dir: str,
     genai_embedding_dim: int = 1024,
     environment: str = "local",
     audit_context_hash_salt: str = "",
@@ -625,7 +546,6 @@ def _configure_llm_readiness(
     monkeypatch.setattr(settings, "oracle_password", oracle_password)
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.com/rag")
     monkeypatch.setattr(settings, "oracle_client_lib_dir", oracle_client_lib_dir)
-    monkeypatch.setattr(settings, "oracle_wallet_dir", oracle_wallet_dir)
     monkeypatch.setattr(settings, "audit_context_hash_salt", audit_context_hash_salt)
 
 
