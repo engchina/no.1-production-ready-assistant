@@ -2504,8 +2504,6 @@ export interface EvaluationSettingsUpdate {
   suite: EvaluationSuiteName;
 }
 
-}
-
 /** API 由来のエラー。`messages` は日本語のユーザー向け文言。 */
 /** 入力項目に結び付く API の問題（JSON Pointer と表示文言）。 */
 export interface ApiFieldError {

@@ -196,11 +196,13 @@ export interface RecipeConfigGroup {
 
 /** 項目を工程ごとに分ける。工程の順と、工程の中の項目の順は RECIPE_CONFIG_ITEMS のまま。 */
 export function recipeConfigGroups(
-  items: readonly RecipeConfigItem[] = RECIPE_CONFIG_ITEMS
+  items: readonly RecipeConfigItem[] = RECIPE_CONFIG_ITEMS,
+  // 項目が無くても見出しを出す工程（設定の概要の「Embedding / 索引」は検索インデックスを出す）。
+  keepEmpty: readonly IngestionJobPhase[] = []
 ): RecipeConfigGroup[] {
   return PHASE_ORDER.flatMap((phase, position) => {
     const phaseItems = items.filter((item) => item.phase === phase);
-    if (!phaseItems.length) return [];
+    if (!phaseItems.length && !keepEmpty.includes(phase)) return [];
     return [{ phase, index: position + 1, label: PHASE_LABELS[phase], items: phaseItems }];
   });
 }

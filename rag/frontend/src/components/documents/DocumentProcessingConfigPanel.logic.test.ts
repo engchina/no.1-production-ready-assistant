@@ -46,7 +46,6 @@ describe("選択中レシピの設定の項目と並び順", () => {
       [1, "ファイル準備"],
       [2, "抽出"],
       [3, "Chunk 作成"],
-      [4, "Embedding / 索引"],
     ]);
     expect(groups.flatMap((group) => group.items)).toEqual([...RECIPE_CONFIG_ITEMS]);
     // 各ゲートは、その前の工程の最後に置く。
@@ -58,10 +57,8 @@ describe("選択中レシピの設定の項目と並び順", () => {
   });
 
   it("項目の無い工程は見出しを出さない", () => {
-    const groups = recipeConfigGroups(
-      RECIPE_CONFIG_ITEMS.filter((item) => item.phase !== "INDEX")
-    );
-    expect(groups.map((group) => group.phase)).toEqual(["PREPROCESS", "EXTRACT", "CHUNK"]);
+    // 文書レシピの上書きに INDEX の工程の項目は無い。
+    expect(recipeConfigGroups().map((group) => group.phase)).toEqual(["PREPROCESS", "EXTRACT", "CHUNK"]);
   });
 });
 
