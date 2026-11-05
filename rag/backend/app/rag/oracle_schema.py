@@ -19,7 +19,6 @@ from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_
 from app.clients.document_category_store import oracle_document_category_schema_sql
 from app.clients.document_cleanup_store import oracle_document_cleanup_schema_sql
 from app.clients.entity_store import oracle_entity_schema_sql
-from app.clients.evaluation_calibration_store import oracle_evaluation_calibration_schema_sql
 from app.clients.language_pack_release_store import language_pack_release_statements
 from app.clients.oracle import (
     oracle_answer_prompt_schema_sql,
@@ -60,7 +59,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261031_002"
+MIGRATION_ARTIFACT_VERSION = "20261105_001"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -331,12 +330,6 @@ def oracle_schema_sections() -> list[OracleSchemaSection]:
             name="evaluation_jobs",
             table_name="rag_evaluation_jobs",
             sql=oracle_evaluation_job_schema_sql(),
-        ),
-        # 品質評価の判定の校正（記入の集合・項目・判定・校正の結果。#3578）。
-        OracleSchemaSection(
-            name="evaluation_calibration",
-            table_name="rag_evaluation_label_sets",
-            sql=oracle_evaluation_calibration_schema_sql(),
         ),
         # ロールの RAG 権限と対象範囲（#214）。
         # PLATFORM_ROLES と検索・回答プロファイル・KB を参照する。
@@ -639,6 +632,21 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261105_001_retire_evaluation_calibration",
+            table_name="rag_evaluation_jobs",
+            sql=retire_evaluation_calibration_sql(),
+            destructive_note=(
+                "廃止する判定の校正の表（RAG_EVALUATION_LABEL_SETS・RAG_EVALUATION_LABEL_ITEMS・"
+                "RAG_EVALUATION_LABELS・RAG_EVALUATION_CALIBRATIONS）と全行・索引、校正の job"
+                "（RAG_EVALUATION_JOBS の kind が calibration の行）、ロールに付いた権限"
+                " rag.evaluation_calibration.manage の行を削除します。"
+                "品質評価の実行の job と結果、ロールのほかの権限は削除しません。"
+                "人手の判定が必要なら、適用前に同表を export してください。削除後は復元できません。"
+            ),
+        )
+    )
     return sections
 
 
@@ -715,6 +723,53 @@ END;
 /"""
 
 
+def retire_evaluation_calibration_sql() -> str:
+    """判定の校正の表・校正の job・権限の行を消し、job の kind を run だけに戻す。
+
+    子の表から順に消す。表が無い環境でも適用する（冪等）。
+    """
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    FOR item IN (
+        SELECT table_name
+        FROM user_tables
+        WHERE table_name IN (
+            'RAG_EVALUATION_CALIBRATIONS',
+            'RAG_EVALUATION_LABELS',
+            'RAG_EVALUATION_LABEL_ITEMS',
+            'RAG_EVALUATION_LABEL_SETS'
+        )
+    ) LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || item.table_name || ' CASCADE CONSTRAINTS PURGE';
+    END LOOP;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_EVALUATION_JOBS';
+    IF v_count > 0 THEN
+        SELECT COUNT(*) INTO v_count
+        FROM user_constraints
+        WHERE table_name = 'RAG_EVALUATION_JOBS'
+          AND constraint_name = 'RAG_EVALUATION_JOBS_KIND_CK';
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE
+                'ALTER TABLE rag_evaluation_jobs DROP CONSTRAINT rag_evaluation_jobs_kind_ck';
+        END IF;
+        EXECUTE IMMEDIATE 'DELETE FROM rag_evaluation_jobs WHERE kind = ''calibration''';
+        EXECUTE IMMEDIATE
+            'ALTER TABLE rag_evaluation_jobs ADD CONSTRAINT rag_evaluation_jobs_kind_ck '
+            || 'CHECK (kind IN (''run''))';
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions '
+            || 'WHERE permission_code = ''rag.evaluation_calibration.manage''';
+    END IF;
+END;
+/
+""".strip()
+
+
 def retire_appearance_permission_sql() -> str:
     """「外観と証明書」の画面（#19 で削除）のメニュー権限の行だけを消す。表が無くても適用する。"""
     return """
@@ -777,13 +832,107 @@ WHERE prompt_key = 'raptor_summary';
 """.strip()
 
 
-def evaluation_calibration_migration_sql() -> str:
-    """判定の校正の表（記入の集合・項目・判定・校正の結果）と索引を無ければ作る（#3578）。
+# 適用済みの migration の checksum を変えないために凍結した DDL。表は
+# ``20261105_001_retire_evaluation_calibration`` が消す。ここを変えない。
+_RETIRED_EVALUATION_CALIBRATION_DDL = """
+CREATE TABLE rag_evaluation_label_sets (
+    label_set_id    VARCHAR2(64) PRIMARY KEY,
+    tenant_id_hash  VARCHAR2(64),
+    name            VARCHAR2(200 CHAR) NOT NULL,
+    origin          VARCHAR2(16) NOT NULL,
+    rubric_id       VARCHAR2(80) NOT NULL,
+    rubric_version  VARCHAR2(40),
+    rubric_sha256   VARCHAR2(64),
+    items_sha256    VARCHAR2(64) NOT NULL,
+    item_count      NUMBER(10) DEFAULT 0 NOT NULL,
+    split_policy    JSON,
+    sources         JSON,
+    created_by_hash VARCHAR2(64),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT rag_evaluation_label_sets_origin_ck CHECK (origin IN ('jobs', 'import'))
+);
 
-    表と索引を足すだけでデータは変えない。DDL は正本
-    （``oracle_evaluation_calibration_schema_sql``）から作る。
+CREATE INDEX rag_evaluation_label_sets_tenant_created_idx
+    ON rag_evaluation_label_sets (tenant_id_hash, created_at DESC);
+
+CREATE TABLE rag_evaluation_label_items (
+    label_set_id    VARCHAR2(64) NOT NULL,
+    item_id         VARCHAR2(200 CHAR) NOT NULL,
+    item_order      NUMBER(10) NOT NULL,
+    split           VARCHAR2(16) NOT NULL,
+    origin          VARCHAR2(16) NOT NULL,
+    excluded        NUMBER(1) DEFAULT 0 NOT NULL,
+    item_json       JSON NOT NULL,
+    CONSTRAINT rag_evaluation_label_items_pk PRIMARY KEY (label_set_id, item_id),
+    CONSTRAINT rag_evaluation_label_items_set_fk FOREIGN KEY (label_set_id)
+        REFERENCES rag_evaluation_label_sets (label_set_id) ON DELETE CASCADE,
+    CONSTRAINT rag_evaluation_label_items_split_ck CHECK (split IN ('dev', 'holdout')),
+    CONSTRAINT rag_evaluation_label_items_origin_ck CHECK (origin IN ('human', 'synthetic')),
+    CONSTRAINT rag_evaluation_label_items_excluded_ck CHECK (excluded IN (0, 1))
+);
+
+CREATE TABLE rag_evaluation_labels (
+    label_set_id    VARCHAR2(64) NOT NULL,
+    item_id         VARCHAR2(200 CHAR) NOT NULL,
+    aspect          VARCHAR2(80) NOT NULL,
+    role            VARCHAR2(16) NOT NULL,
+    annotator_code  VARCHAR2(40) NOT NULL,
+    annotator_hash  VARCHAR2(64),
+    label           VARCHAR2(16) NOT NULL,
+    error_type      VARCHAR2(40),
+    note            VARCHAR2(2000 CHAR),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT rag_evaluation_labels_pk
+        PRIMARY KEY (label_set_id, item_id, aspect, role, annotator_code),
+    CONSTRAINT rag_evaluation_labels_item_fk FOREIGN KEY (label_set_id, item_id)
+        REFERENCES rag_evaluation_label_items (label_set_id, item_id) ON DELETE CASCADE,
+    CONSTRAINT rag_evaluation_labels_role_ck CHECK (role IN ('annotation', 'adjudication')),
+    CONSTRAINT rag_evaluation_labels_label_ck CHECK (label IN ('pass', 'fail', 'cannot_judge'))
+);
+
+CREATE INDEX rag_evaluation_labels_annotator_idx
+    ON rag_evaluation_labels (label_set_id, annotator_hash);
+
+CREATE TABLE rag_evaluation_calibrations (
+    calibration_id       VARCHAR2(64) PRIMARY KEY,
+    label_set_id         VARCHAR2(64) NOT NULL,
+    tenant_id_hash       VARCHAR2(64),
+    user_id_hash         VARCHAR2(64),
+    status               VARCHAR2(16) NOT NULL,
+    repeats              NUMBER(2) DEFAULT 1 NOT NULL,
+    judge_model_id       VARCHAR2(200 CHAR),
+    judge_rubric_version VARCHAR2(40),
+    prompt_sha256        VARCHAR2(64),
+    labels_sha256        VARCHAR2(64),
+    passed               NUMBER(1),
+    error_message        VARCHAR2(2000 CHAR),
+    summary_json         JSON,
+    report_json          JSON,
+    created_at           TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    finished_at          TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT rag_evaluation_calibrations_set_fk FOREIGN KEY (label_set_id)
+        REFERENCES rag_evaluation_label_sets (label_set_id) ON DELETE CASCADE,
+    CONSTRAINT rag_evaluation_calibrations_status_ck
+        CHECK (status IN ('RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    CONSTRAINT rag_evaluation_calibrations_passed_ck CHECK (passed IN (0, 1))
+);
+
+CREATE INDEX rag_evaluation_calibrations_set_created_idx
+    ON rag_evaluation_calibrations (label_set_id, created_at DESC);
+
+CREATE INDEX rag_evaluation_calibrations_judge_idx
+    ON rag_evaluation_calibrations (tenant_id_hash, judge_model_id, prompt_sha256, status)
+""".strip()
+
+
+def evaluation_calibration_migration_sql() -> str:
+    """判定の校正の表と索引を無ければ作っていた migration の SQL（#3578。今は廃止）。
+
+    台帳の checksum を保つために残す。古い DB ではこの後の migration が表を消す。
     """
-    return _create_missing_objects_sql(oracle_evaluation_calibration_schema_sql(), "判定の校正")
+    return _create_missing_objects_sql(_RETIRED_EVALUATION_CALIBRATION_DDL, "判定の校正")
 
 
 def evaluation_job_calibration_kind_migration_sql() -> str:
