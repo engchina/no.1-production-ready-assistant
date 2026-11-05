@@ -24,8 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-# 区分の決め方・誤りの型と目標・記入者の間の一致は platform の共有の部品（RAG の判定の校正の画面と
-# 同じ。#3578）。CLI・テストが使う名前はここからも読めるようにする。
+# 区分の決め方・誤りの型と目標・記入者の間の一致は platform の共有の部品（#3578）。
+# CLI・テストが使う名前はここからも読めるようにする。
 from pr_evaluation_scoring.labeling import (
     ANNOTATOR_ID,
     CANNOT_JUDGE,

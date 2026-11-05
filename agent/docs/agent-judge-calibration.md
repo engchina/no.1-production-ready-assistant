@@ -77,7 +77,7 @@ uv run python -m app.cli.judge_calibration $SET --judgements $W/agent.json --out
 
 ## 結果の読み方
 
-形は RAG の回答の評価器の校正（`rag/backend/app/rag/answer_judge_calibration.py`）にそろえ、観点の内訳を足した。
+形は製品横断の評価の校正（`suite/evaluation/docs/judge-calibration.md`）にそろえ、観点の内訳を足した。
 
 | key | 内容 |
 |---|---|

@@ -37,27 +37,19 @@ export function EvaluationJobPanel({
   job,
   onCancel,
   cancelling,
-  title = t("evaluation.job.title.run"),
-  testPrefix = "evaluation-run-job",
-  currentLabel,
 }: {
   job: EvaluationJob;
   onCancel: (job: EvaluationJob) => void;
   cancelling: boolean;
-  /** 見出し（判定の校正の job は「校正の実行状況」。#3578）。 */
-  title?: string;
-  testPrefix?: string;
-  /** 実行中の対象の文言（省略時は評価のケースの行。null なら出さない）。 */
-  currentLabel?: string | null;
 }) {
   const active = isEvaluationJobActive(job);
-  const currentCase = currentLabel === undefined ? evaluationJobCurrentCaseLabel(job) : currentLabel;
+  const currentCase = evaluationJobCurrentCaseLabel(job);
   return (
-    <Card className="min-w-0" data-testid={testPrefix}>
+    <Card className="min-w-0" data-testid="evaluation-run-job">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <ListChecks size={16} className="text-accent-fg" aria-hidden />
-          {title}
+          {t("evaluation.job.title.run")}
         </CardTitle>
       </CardHeader>
       <CardContent className="grid min-w-0 gap-4">
@@ -69,7 +61,7 @@ export function EvaluationJobPanel({
             />
             <span
               className="tnum text-sm font-semibold text-fg"
-              data-testid={`${testPrefix}-count`}
+              data-testid="evaluation-run-job-count"
             >
               {evaluationJobCountLabel(job)}
             </span>
@@ -92,7 +84,7 @@ export function EvaluationJobPanel({
         {currentCase ? (
           <p
             className="min-w-0 break-words text-sm text-fg"
-            data-testid={`${testPrefix}-current-case`}
+            data-testid="evaluation-run-job-current-case"
           >
             {currentCase}
           </p>
@@ -106,7 +98,7 @@ export function EvaluationJobPanel({
           finalLabel={evaluationJobStatusLabel(job.status)}
           showSlowMessage={active}
           placement="job"
-          testId={`${testPrefix}-timing`}
+          testId="evaluation-run-job-timing"
           // 「中止」の要求中は、そのボタンの loading がスピナーを出す（同じ処理のスピナーは 1 つ。#416）。
           activityIcon={cancelling ? "none" : "spinner"}
         />

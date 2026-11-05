@@ -1,8 +1,8 @@
 """判定の基準（rubric）: LLM による判定の観点・ラベル・指示（版と hash を記録する。#3418）。
 
 rubric は JSON のファイルで、判定の指示（`instructions`）・観点（`aspects`）・ラベル（`labels`）を
-持つ。既定は platform の `pr_evaluation_scoring` に同梱の `rubrics/answer_quality_v1.json`（RAG の
-判定の校正の画面と同じ基準。#3578）。内容の sha256 を判定の結果と校正の結果に記録し、
+持つ。既定は platform の `pr_evaluation_scoring` に同梱の `rubrics/answer_quality_v1.json`
+（#3578）。内容の sha256 を判定の結果と校正の結果に記録し、
 rubric を変えたら校正をやり直す（hash が違う校正の結果では、判定を合否に使わない）。
 """
 

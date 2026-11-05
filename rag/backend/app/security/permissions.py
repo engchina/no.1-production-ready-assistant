@@ -99,8 +99,6 @@ SEARCH_ANSWER_PROFILES_MANAGE = "rag.search_answer_profiles.manage"
 KNOWLEDGE_BASES_MANAGE = "rag.knowledge_bases.manage"
 FEEDBACK_MANAGE = "rag.feedback.manage"
 SYSTEM_TABLES_MANAGE = "rag.system_tables.manage"
-# 品質評価の判定の校正の管理（全員の判定・一致・裁定・校正・LabelSet の入出力。#3578）。
-EVALUATION_CALIBRATION_MANAGE = "rag.evaluation_calibration.manage"
 
 # グループ・名前・並び順は左のナビ（frontend の nav-config.ts と、i18n の
 # サイドナビの表示名）と同じにする（#567 / #580。一致は
@@ -200,15 +198,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
         "扱えるのは SYSTEM_ADMIN だけ）。フィードバックの表示と、他の利用者の"
         "保存済みの回答の表示・評価・削除も含みます。",
         implies=(MENU_FEEDBACK,),
-    ),
-    _permission(
-        EVALUATION_CALIBRATION_MANAGE,
-        _GROUP_MANAGE,
-        "判定の校正の管理",
-        "「品質評価」の「判定の校正」で、記入の集合の作成・削除、すべての記入者の判定と記入者の間の"
-        "一致の表示、裁定、校正の実行、人手の判定（LabelSet の JSON）の書き出し・取り込みができます"
-        "（記入は「品質評価」の権限だけでできます。記入者は自分の判定だけを見ます）。",
-        implies=(MENU_EVALUATION,),
     ),
     _permission(
         SYSTEM_TABLES_MANAGE,
@@ -519,40 +508,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/evaluation/jobs/{job_id}/results.xlsx"): _any(MENU_EVALUATION),
     ("GET", "/evaluation/jobs/{job_id}"): _any(MENU_EVALUATION),
     ("POST", "/evaluation/jobs/{job_id}/cancel"): _any(MENU_EVALUATION),
-    # 判定の校正（#3578）。記入（自分の判定だけ）は品質評価の権限、全員の判定・一致・裁定・校正・
-    # 書き出し・取り込みは判定の校正の管理。校正の進捗・取り消しは上の job の API。
-    ("GET", "/evaluation/calibration/status"): _any(MENU_EVALUATION),
-    ("GET", "/evaluation/calibration/label-sets"): _any(MENU_EVALUATION),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}"): _any(MENU_EVALUATION),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}/rows"): _any(MENU_EVALUATION),
-    ("PUT", "/evaluation/calibration/label-sets/{label_set_id}/labels"): _any(MENU_EVALUATION),
-    ("GET", "/evaluation/calibration/sources"): _any(EVALUATION_CALIBRATION_MANAGE),
-    ("POST", "/evaluation/calibration/label-sets"): _any(EVALUATION_CALIBRATION_MANAGE),
-    ("POST", "/evaluation/calibration/label-sets/import"): _any(EVALUATION_CALIBRATION_MANAGE),
-    ("DELETE", "/evaluation/calibration/label-sets/{label_set_id}"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}/agreement"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("PUT", "/evaluation/calibration/label-sets/{label_set_id}/adjudications"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}/synthetic"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("PUT", "/evaluation/calibration/label-sets/{label_set_id}/synthetic/{item_id}"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}/calibrations"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("POST", "/evaluation/calibration/label-sets/{label_set_id}/calibrations"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
-    ("GET", "/evaluation/calibration/label-sets/{label_set_id}/export"): _any(
-        EVALUATION_CALIBRATION_MANAGE
-    ),
     # ---- 検索・回答プロファイル: フィードバック ----
     ("POST", "/feedback"): _ANSWER_USE,
     ("GET", "/feedback/current"): _ANSWER_USE,

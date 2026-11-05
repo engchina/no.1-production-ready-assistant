@@ -695,6 +695,7 @@ def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
         "20261031_001_retire_appearance_permission",
         "20261031_002_embedding_dimensions_1024",
         "20261101_001_retire_guardrail_columns",
+        "20261105_001_retire_evaluation_calibration",
         "20261105_003_retire_entity_index",
     } == marked
     assert all(migration.destructive_note for migration in MIGRATIONS if migration.destructive)
@@ -1262,6 +1263,41 @@ def test_language_release_fresh_schema_and_incremental_upgrade_share_complete_co
     assert upgraded["status"] == "ready"
     assert upgraded["missing_columns"] == []
     assert not any(statement.startswith("DROP") for statement in database.executed[start:])
+
+
+_RETIRED_CALIBRATION_TABLES = (
+    "RAG_EVALUATION_LABEL_SETS",
+    "RAG_EVALUATION_LABEL_ITEMS",
+    "RAG_EVALUATION_LABELS",
+    "RAG_EVALUATION_CALIBRATIONS",
+)
+
+
+def test_retired_evaluation_calibration_requires_approval_and_keeps_evaluation_jobs() -> None:
+    """判定の校正の表は承認の後に消え、評価の job の表は残る（#158）。"""
+    database = _FakeDatabase()
+    manager = SystemSchemaManager(database.connection)
+    manager.initialize()
+    for table in _RETIRED_CALIBRATION_TABLES:
+        assert (table, "TABLE") not in database.objects
+        assert table not in MANAGED_TABLES
+        assert (table, "TABLE") in RETIRED_MANAGED_OBJECTS
+    name = "20261105_001_retire_evaluation_calibration"
+    database.migrations.pop(name)
+    for table in _RETIRED_CALIBRATION_TABLES:
+        database.objects[(table, "TABLE")] = datetime.now(UTC)
+    before = manager.status()
+    assert [item["name"] for item in before["pending_destructive_migrations"]] == [name]
+    with pytest.raises(SystemSchemaError) as error:
+        manager.initialize()
+    assert error.value.code == DESTRUCTIVE_MIGRATIONS_CONFIRMATION_REQUIRED
+    assert ("RAG_EVALUATION_LABELS", "TABLE") in database.objects
+    manager.initialize(allow_destructive=True)
+    for table in _RETIRED_CALIBRATION_TABLES:
+        assert (table, "TABLE") not in database.objects
+    assert ("RAG_EVALUATION_JOBS", "TABLE") in database.objects
+    assert ("RAG_EVALUATION_RUNS", "TABLE") in database.objects
+    assert manager.initialize()["status"] == "ready"
 
 
 def test_retired_query_history_requires_explicit_migration_and_keeps_chat_records() -> None:

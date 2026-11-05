@@ -599,6 +599,13 @@
     },
     {
       "destructive": true,
+      "name": "20261105_001_retire_evaluation_calibration",
+      "sha256": "6ae7a48619d636400f30d40c24a22518fbff8f276b91e863b57294072d032c03",
+      "statement_count": 1,
+      "table_name": "rag_evaluation_jobs"
+    },
+    {
+      "destructive": true,
       "name": "20261105_003_retire_entity_index",
       "sha256": "fccb919f7cc97fd86ed13de92f92439f26fb296b26f33580143924b658c8dc46",
       "statement_count": 1,
@@ -607,6 +614,6 @@
   ],
   "schema_name": "production-ready-rag-oracle-26ai",
   "schema_version": "3",
-  "sha256": "3199ca935a15387bfd9a2be19d2be8990d967bcb1434b8d9619a283661c551af",
-  "statement_count": 128
+  "sha256": "cf63869f93ad36583a9721e0eb4706668fcf99d8c1fa6762c57bf3daa332a0c4",
+  "statement_count": 129
 }
