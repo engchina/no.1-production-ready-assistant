@@ -1014,13 +1014,6 @@ export interface KnowledgeBaseIngestionConfig {
   chunk_parent_target_chars?: number | null;
   chunk_parent_max_pages?: number | null;
   chunk_parent_max_children?: number | null;
-  /**
-   * 実体・別名索引（#1362 / #1388）。索引の保存の後に、表の行・本文の定義の形から実体を作る。null は全体の
-   * 既定（無効）に従う。列名は表の行の名前・属性にする列（空は列名で決める）。
-   */
-  entity_index_enabled?: boolean | null;
-  entity_name_columns?: string[] | null;
-  entity_attribute_columns?: string[] | null;
   field_extraction_enabled: boolean | null;
   navigation_summary_enabled: boolean | null;
   auto_parse_after_preprocess_enabled: boolean | null;
@@ -1044,13 +1037,6 @@ export interface KnowledgeBaseQueryConfig {
   // 質問から抽出項目の条件を読み取る(LLM の呼び出しが 1 回増える。#652)。
   auto_field_filter_enabled?: boolean | null;
   /**
-   * 実体・別名による検索拡張(LLM は呼ばない)。検索方法の全体設定だけで決め、プロファイルでは保存しない。
-   * 文書レシピで実体・別名索引を有効にした文書にだけ効く。
-   */
-  entity_expansion_enabled?: boolean | null;
-  /** 1 回の検索で加える根拠の上限(1〜20)。null は既定(6)。 */
-  entity_expansion_max_chunks?: number | null;
-  /**
    * 当たった根拠の章節から親の章節へ段階的に広げる(#1436。段ごとに AI の呼び出しが 1 回増える)。
    * null / 未指定は既定(使う)、false は使わない。上限は null が既定(4 段 / 50%)。
    */
@@ -1071,11 +1057,6 @@ export interface KnowledgeBaseQueryConfig {
 export interface InheritedAnswerContactData {
   enabled: boolean;
   contact: string;
-}
-
-/** 参照するナレッジベースで実体・別名索引を持つ文書の数(#1388)。 */
-export interface EntityIndexCoverageData {
-  document_count: number;
 }
 
 export type QueryStrategyName =
@@ -2408,8 +2389,6 @@ export interface AnsweringSettingsData {
   screen_linking_enabled: boolean;
   request_coverage_retrieval_enabled: boolean;
   auto_field_filter_enabled: boolean;
-  entity_expansion_enabled: boolean;
-  entity_expansion_max_chunks: number;
   section_expansion_enabled: boolean;
   section_expansion_max_levels: number;
   section_expansion_input_token_percent: number;
@@ -2508,10 +2487,6 @@ export interface EvaluationSettingsData {
 
 export interface EvaluationSettingsUpdate {
   suite: EvaluationSuiteName;
-}
-
-export interface EntityIndexSettingsData {
-  enabled: boolean;
 }
 
 /** API 由来のエラー。`messages` は日本語のユーザー向け文言。 */
@@ -3418,12 +3393,6 @@ export const api = {
   /** 継承するシステム設定の窓口（プロファイルの画面の権限で読む。#2683）。 */
   getInheritedAnswerContact: () =>
     request<InheritedAnswerContactData>("/api/search-answer-profiles/inherited-contact"),
-  /** 参照するナレッジベースで実体・別名索引を持つ文書の数(拡張の開閉の案内。#1388)。 */
-  entityIndexCoverage: (knowledgeBaseIds: string[]) =>
-    request<EntityIndexCoverageData>(
-      "/api/search-answer-profiles/entity-index-coverage",
-      jsonBody({ knowledge_base_ids: knowledgeBaseIds }),
-    ),
   createSearchAnswerProfile: (body: SearchAnswerProfileCreateRequest) =>
     request<SearchAnswerProfileDetail>("/api/search-answer-profiles", jsonBody(body)),
   updateSearchAnswerProfile: (id: string, body: SearchAnswerProfileUpdateRequest) =>
@@ -3960,14 +3929,6 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  // 設定: 実体・別名索引の構築
-  getEntityIndexSettings: () => request<EntityIndexSettingsData>("/api/settings/entity-index"),
-  updateEntityIndexSettings: (body: EntityIndexSettingsData) =>
-    request<EntityIndexSettingsData>("/api/settings/entity-index", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
 };
 
 // --- 検索・回答プロファイルの知識: ドメインキーワード(rag_poc 由来) ---

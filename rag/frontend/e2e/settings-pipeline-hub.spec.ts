@@ -21,10 +21,6 @@ const RECIPE_DEFAULTS = {
   chunk_size: 800,
   chunk_overlap: 120,
   chunk_min_chars: 120,
-  // 実体・別名索引の全体の既定は OFF（#3008）。
-  entity_index_enabled: false,
-  entity_name_columns: [],
-  entity_attribute_columns: [],
   heading_level_inference_enabled: false,
   field_extraction_enabled: false,
   navigation_summary_enabled: false,
@@ -104,10 +100,8 @@ test("取込・検索・回答設定の概要ハブが工程をフェーズ別�
     "/settings/retrieval"
   );
 
-  const ingestion = page.getByRole("region", { name: "ナレッジ構築" });
-  await expect(ingestion.getByRole("link", { name: "実体・別名索引 の設定を開く" })).toContainText("5.");
-  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("6.");
-  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("8.");
+  await expect(page.getByRole("link", { name: "検索方法 の設定を開く" })).toContainText("5.");
+  await expect(page.getByRole("link", { name: "評価の基準 の設定を開く" })).toContainText("7.");
 
   // カードから実際に詳細設定へ遷移できる。
   await page.getByRole("link", { name: "文書分割 の設定を開く" }).click();
@@ -147,7 +141,7 @@ test("サイドバーの取込・検索・回答設定の名前と順番は設�
   expect(sidebarNames).toEqual(cardNames);
 });
 
-// #528: レシピ 12 項目を、選択中レシピの設定と同じ処理順で出す（実体・別名索引は #1388）。
+// #528: レシピ 11 項目を、選択中レシピの設定と同じ処理順で出す。
 const PROCESSING_ORDER = [
   "preprocess_profile",
   "auto_parse_after_preprocess_enabled",
@@ -161,10 +155,9 @@ const PROCESSING_ORDER = [
   "chunking_strategy",
   "auto_index_after_chunk_enabled",
   "vector_index",
-  "entity_index_enabled",
 ];
 
-test(`取込の流れは検索インデックスと 12 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
+test(`取込の流れは検索インデックスと 11 項目の全体の既定を処理順に出し、工程の間のスイッチで自動進行を保存する`, async ({
   page,
 }, testInfo) => {
   const patches = await mockPipelineSettings(page, {
@@ -203,11 +196,7 @@ test(`取込の流れは検索インデックスと 12 項目の全体の既定�
     items.getByRole("link", { name: "見出しの階層の推定（AI） を設定する画面を開く" })
   ).toHaveAttribute("href", "/settings/parser-adapters#post-parse-heading-levels");
   await expect(items.locator('[data-config-field="heading_level_inference_enabled"]')).toContainText("無効");
-  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(10);
-  // 索引構築の全体の既定は OFF。専用の設定画面から変更できる。
-  const entityIndex = items.locator('[data-config-field="entity_index_enabled"]');
-  await expect(entityIndex).toContainText("無効");
-  await expect(entityIndex.getByRole("link")).toHaveAttribute("href", "/settings/entity-index");
+  await expect(items.getByRole("link", { name: / を設定する画面を開く$/ })).toHaveCount(9);
   await expect(items.locator('[data-config-field="vector_index"]').getByRole("link")).toHaveAttribute("href", "/settings/vector-index");
 
   // 工程の間の 3 つのスイッチ。
@@ -320,7 +309,7 @@ test("概要の設定リンクは常時識別でき、章節のカードには�
   await page.goto("/settings/pipeline");
   const items = page.getByTestId("pipeline-recipe-defaults");
   const links = items.getByRole("link");
-  await expect(links).toHaveCount(10);
+  await expect(links).toHaveCount(9);
   for (const link of await links.all()) {
     expect(await link.evaluate((element) => getComputedStyle(element).textDecorationLine)).toContain("underline");
     const colors = await link.evaluate((element) => ({
@@ -393,10 +382,10 @@ test("サブパス配備でも全工程の設定リンクと hash を保持す�
   test.skip(!basePath, "RAG_E2E_BASE_PATH を指定した配備経路の検証で実行する");
   await page.goto(`${basePath}/settings/pipeline`);
   const links = page.getByTestId("pipeline-recipe-defaults").getByRole("link");
-  await expect(links).toHaveCount(10);
+  await expect(links).toHaveCount(9);
   for (const link of await links.all()) await expect(link).toHaveAttribute("href", new RegExp(`^${basePath}/settings/`));
   const vision = links.filter({ hasText: "設定画面へ" }).filter({ has: page.locator("span") });
-  await expect(vision).toHaveCount(10);
+  await expect(vision).toHaveCount(9);
   const target = page.getByRole("link", { name: "章節の要約 を設定する画面を開く", exact: true });
   await expect(target).toHaveAttribute("href", `${basePath}/settings/parser-adapters#post-parse-navigation-summary`);
   await target.scrollIntoViewIfNeeded();

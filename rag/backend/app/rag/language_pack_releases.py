@@ -26,7 +26,7 @@ _ACTIVE_RELEASE: ContextVar[LanguagePackRelease | None] = ContextVar(
 )
 
 # 読み取り元: parser_core の text/markers、抽出項目の型変換、
-# chunk の問い合わせ情報、索引保存後の entity_index。前工程からの再実行は後工程も更新する。
+# chunk の問い合わせ情報。前工程からの再実行は後工程も更新する。
 _STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     **dict.fromkeys(
         (
@@ -45,7 +45,6 @@ _STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
         ("EXTRACT", "CHUNK", "INDEX"),
     ),
     "inquiry_cues": ("CHUNK", "INDEX"),
-    "entity_cues": ("INDEX",),
 }
 _STAGE_ORDER = ("PREPROCESS", "EXTRACT", "CHUNK", "INDEX")
 

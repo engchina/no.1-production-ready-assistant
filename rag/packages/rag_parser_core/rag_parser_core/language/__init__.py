@@ -787,32 +787,6 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         ingest=False,
     ),
     FieldSpec("grounding_cues", "amount_scale_units", FieldKind.CHAR_VALUES, ingest=False),
-    # 実体の索引（システム・部署・属性の値と別名。#1362）の手がかり。取込で chunk から実体を抜き出す
-    # （変えたら文書の分割し直しが要る）。
-    *_fields(
-        "entity_cues",
-        _W,
-        "id_column_words",
-        "alias_column_words",
-        "name_column_words",
-        "skip_column_words",
-        "value_separators",
-        "numeric_value_chars",
-        "code_definition_words",
-        "definition_separators",
-        "paren_alias_words",
-        "nickname_words",
-        "organization_suffixes",
-        "company_scope_suffixes",
-        "generic_company_words",
-        "subject_link_particles",
-        "subject_topic_particles",
-        "sentence_marks",
-        "clause_marks",
-    ),
-    *_fields(
-        "entity_cues", _CR, "entity_script_chars", "entity_kana_kanji_chars", "entity_kanji_chars"
-    ),
     # 評価のケースの「回答の過程」の文を節に分けるときの、節の見出しの語と項目
     # （「見出し=項目」。項目は手順・確認事項・資料と頁・検索の語・補足）。
     FieldSpec(
@@ -956,17 +930,27 @@ def _builtin_data(locale: str = DEFAULT_LOCALE) -> dict[str, Any]:
     return data
 
 
-# 削除した項目（節, 項目）→ 削除する前の組み込みの値（#42: XML ツリー JSON の文書の種類）。
-# 保存済みの公開版・下書き・上書きに残った値は読み捨てる。hash は削除する前と同じ値になるよう、
-# 残った値（無ければ削除する前の組み込みの値）を含めて計算する（公開版の照合を壊さず、
-# 取込済みの文書を作り直しにしない）。
-REMOVED_FIELDS: Mapping[tuple[str, str], str] = {
+def _removed_entity_cues() -> dict[tuple[str, str], tuple[str, ...]]:
+    """削除した実体・別名索引の手がかり（#160）の、削除する前の組み込みの値。"""
+    packs = resources.files(__package__).joinpath("packs")
+    text = packs.joinpath("removed_fields.ja.json").read_text("utf-8")
+    return {
+        ("entity_cues", key): tuple(words) for key, words in json.loads(text)["entity_cues"].items()
+    }
+
+
+# 削除した項目（節, 項目）→ 削除する前の組み込みの値（#42: XML ツリー JSON の文書の種類。
+# #159: 文書構造索引の文言。#160: 実体・別名索引の手がかり）。保存済みの公開版・下書き・上書きに
+# 残った値は読み捨てる。hash は削除する前と同じ値になるよう、残った値（無ければ削除する前の
+# 組み込みの値）を含めて計算する（公開版の照合を壊さず、取込済みの文書を作り直しにしない）。
+REMOVED_FIELDS: Mapping[tuple[str, str], str | tuple[str, ...]] = {
     ("labels", "xml_tree_document_type"): "XML ツリー",
     # 文書構造索引（#159）だけが使った文言。
     ("labels", "whole_document"): "文書全体",
     ("labels", "graph_contains"): "{whole}は {target} を含みます。",
     ("labels", "graph_document"): "{document_type} 全体を表す entity。",
     ("labels", "graph_section"): "{name} に関する {kind} chunk。",
+    **_removed_entity_cues(),
 }
 
 # 削除した、取込に影響しない項目（節, 項目）。保存済みの公開版・下書き・上書きに残った値は読み捨て、
@@ -1046,12 +1030,15 @@ def _hash_sections(
     return result
 
 
-def _removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], str]:
+def _removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], str | list[str]]:
     """hash に含める削除した項目の値（保存内容に残った値、無ければ削除する前の組み込みの値）。"""
-    values: dict[tuple[str, str], str] = {}
+    values: dict[tuple[str, str], str | list[str]] = {}
     for (section, key), default in REMOVED_FIELDS.items():
         fields = data.get(section)
         raw = fields.get(key) if isinstance(fields, Mapping) else None
+        if isinstance(default, tuple):
+            values[(section, key)] = list(_clean_words(raw) if raw is not None else default)
+            continue
         text = str(raw).strip() if raw is not None else ""
         values[(section, key)] = text or default
     return values
@@ -1064,6 +1051,9 @@ def complete_compatible_pack(data: Mapping[str, Any]) -> dict[str, Any]:
         fields = result.get(section)
         if isinstance(fields, Mapping) and key in fields:
             result[section] = {name: value for name, value in fields.items() if name != key}
+    # 節ごと削除した実体・別名索引の手がかり（#160）は、空になった節も残さない。
+    if not result.get("entity_cues"):
+        result.pop("entity_cues", None)
     for name in ("guide_check_cues", "guide_import_cues"):
         if not result.get(name):
             result.pop(name, None)

@@ -128,7 +128,6 @@ def test_oracle_schema_manifest_is_deterministic() -> None:
         "chunk_sets",
         "search_audit",
         "ingestion_audit",
-        "entities",
         "section_map",
         "citation_feedback",
         "feedback_details",
@@ -454,7 +453,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS'" in embeddings_migration
     assert "DROP" not in embeddings_migration
     # 廃止した 3 表を FK の子から順に消す。無い表では失敗しない（冪等）。
-    retired = sql.split("-- migration: 20261106_002_retire_support_guides", 1)[1]
+    retired = sql.split("-- migration: 20261106_003_retire_support_guides", 1)[1]
     drops = re.findall(r"DROP TABLE (\w+) PURGE", retired)
     assert drops == [
         "rag_support_guide_embeddings",
@@ -514,7 +513,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 130
+    assert len(statements) == 131
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -532,7 +531,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261106_002"
+    assert manifest["migration_artifact_version"] == "20261106_003"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -623,7 +622,8 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261101_001_retire_guardrail_columns",
         "20261105_001_retire_evaluation_calibration",
         "20261106_001_retire_document_graph",
-        "20261106_002_retire_support_guides",
+        "20261106_002_retire_entity_index",
+        "20261106_003_retire_support_guides",
     ]
 
 

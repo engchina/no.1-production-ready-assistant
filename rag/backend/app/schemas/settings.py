@@ -617,8 +617,6 @@ class AnsweringSettingsData(BaseModel):
     screen_linking_enabled: bool
     request_coverage_retrieval_enabled: bool
     auto_field_filter_enabled: bool
-    entity_expansion_enabled: bool
-    entity_expansion_max_chunks: int
     section_expansion_enabled: bool
     section_expansion_max_levels: int
     section_expansion_input_token_percent: int
@@ -637,8 +635,6 @@ class AnsweringSettingsUpdate(BaseModel):
     screen_linking_enabled: bool | None = None
     request_coverage_retrieval_enabled: bool | None = None
     auto_field_filter_enabled: bool | None = None
-    entity_expansion_enabled: bool | None = None
-    entity_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
     section_expansion_enabled: bool | None = None
     section_expansion_max_levels: int | None = Field(default=None, ge=1, le=8)
     section_expansion_input_token_percent: int | None = Field(default=None, ge=10, le=90)
@@ -797,15 +793,3 @@ class EvaluationSettingsUpdate(BaseModel):
     """品質評価設定の更新 payload。"""
 
     suite: EvaluationSuiteName
-
-
-class EntityIndexSettingsData(BaseModel):
-    """実体・別名索引を構築する全体の既定。"""
-
-    enabled: bool
-
-
-class EntityIndexSettingsUpdate(BaseModel):
-    """文書レシピで上書きできる索引構築の既定。"""
-
-    enabled: bool

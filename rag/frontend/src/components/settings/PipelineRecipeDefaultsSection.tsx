@@ -34,7 +34,8 @@ import { toast } from "@/lib/toast";
 
 import { isAutoAdvanceItem, splitGateItems, type AutoAdvanceForm } from "./PipelineRecipeDefaults.logic";
 
-const GROUPS = recipeConfigGroups();
+// 「Embedding / 索引」はレシピの項目が無くても、検索インデックスの既定を出す。
+const GROUPS = recipeConfigGroups(undefined, ["INDEX"]);
 
 function formFromSettings(data: PipelineSettingsData): AutoAdvanceForm {
   return {
@@ -55,7 +56,7 @@ function sameForm(left: AutoAdvanceForm, right: AutoAdvanceForm) {
 /**
  * 設定の概要の「取込の流れと全体の既定」（#528）。
  *
- * レシピ 11 項目を、選択中レシピの設定と同じ定義・同じ処理順（RECIPE_CONFIG_ITEMS。#523）で出す。
+ * レシピの項目を、選択中レシピの設定と同じ定義・同じ処理順（RECIPE_CONFIG_ITEMS。#523）で出す。
  * 工程（ファイル準備 → 抽出 → Chunk 作成 → Embedding / 索引）を上から下へ並べ、工程の間の
  * 自動進行のゲートはここで切り替えて保存する。ほかの項目は全体の既定の値と、変える画面へのリンクを出す。
  */

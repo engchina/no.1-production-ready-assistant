@@ -4016,7 +4016,28 @@ BEGIN
 END;
 /
 
--- migration: 20261106_002_retire_support_guides
+-- migration: 20261106_002_retire_entity_index
+DECLARE
+    v_count NUMBER;
+BEGIN
+    FOR item IN (
+        SELECT table_name
+        FROM user_tables
+        WHERE table_name IN ('RAG_ENTITY_CHUNKS', 'RAG_ENTITY_ALIASES', 'RAG_ENTITIES')
+        ORDER BY DECODE(table_name, 'RAG_ENTITIES', 2, 1)
+    ) LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || item.table_name || ' CASCADE CONSTRAINTS PURGE';
+    END LOOP;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions '
+            || 'WHERE permission_code = ''menu.settings_entity_index''';
+    END IF;
+END;
+/
+
+-- migration: 20261106_003_retire_support_guides
 
 DECLARE
     v_count NUMBER;

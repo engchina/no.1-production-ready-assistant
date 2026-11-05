@@ -83,7 +83,6 @@ import {
   type VectorIndexSettingsUpdate,
   type EvaluationSettingsData,
   type EvaluationSettingsUpdate,
-  type EntityIndexSettingsData,
   type ApprovedFaqListData,
   type ApprovedFaqMutationData,
   type RuntimeKnowledgeEditRequest,
@@ -163,8 +162,6 @@ export const queryKeys = {
     offset?: number;
   }) => ["search-answer-profiles", params] as const,
   searchAnswerProfile: (id: string) => ["search-answer-profiles", id] as const,
-  entityIndexCoverage: (knowledgeBaseIds: readonly string[]) =>
-    ["search-answer-profiles", "entity-index-coverage", ...knowledgeBaseIds] as const,
   inheritedAnswerContact: () => ["search-answer-profiles", "inherited-contact"] as const,
   conversations: (params: {
     search_answer_profile_id?: string;
@@ -192,7 +189,6 @@ export const queryKeys = {
   pipelineSettings: ["settings", "pipeline"] as const,
   vectorIndexSettings: ["settings", "vector-index"] as const,
   evaluationSettings: ["settings", "evaluation-suite"] as const,
-  entityIndexSettings: ["settings", "entity-index"] as const,
   services: ["services"] as const,
   serviceCatalog: ["services", "catalog"] as const,
   serviceStatus: (serviceId: string) =>
@@ -1228,20 +1224,6 @@ export function useSearchAnswerProfile(id: string | null) {
 }
 
 /**
- * 参照するナレッジベースで実体の索引を持つ文書の数(#1388)。実体の 1 段の拡張を選んだときだけ引き、
- * 0 件なら開閉の横に「文書レシピで実体の索引を有効にすると効きます」と案内する。
- */
-export function useEntityIndexCoverage(knowledgeBaseIds: readonly string[], enabled: boolean) {
-  const ids = [...knowledgeBaseIds].sort();
-  return useQuery({
-    queryKey: queryKeys.entityIndexCoverage(ids),
-    queryFn: () => api.entityIndexCoverage(ids),
-    enabled: enabled && ids.length > 0,
-    staleTime: 30_000,
-  });
-}
-
-/**
  * プロファイルの窓口の上書きが継承する、システム設定の窓口（#2683）。
  * 空の欄の placeholder と「有効な窓口」の出どころに使う（値は入力欄にコピーしない）。
  */
@@ -1902,26 +1884,6 @@ export function useParserAdapterSettings(enabled = true) {
     queryFn: api.getParserAdapterSettings,
     enabled,
     retry: false,
-  });
-}
-
-/** 実体・別名索引を構築する全体の既定。 */
-export function useEntityIndexSettings() {
-  return useQuery({
-    queryKey: queryKeys.entityIndexSettings,
-    queryFn: api.getEntityIndexSettings,
-    retry: false,
-  });
-}
-
-export function useUpdateEntityIndexSettings() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: EntityIndexSettingsData) => api.updateEntityIndexSettings(payload),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.entityIndexSettings, data);
-      void qc.invalidateQueries({ queryKey: queryKeys.pipelineSettings });
-    },
   });
 }
 

@@ -395,6 +395,27 @@ def test_invalid_abstention_labels_are_not_defaulted(key: str, value: object) ->
         build_pack(raw)
 
 
+def test_removed_entity_cues_are_dropped_without_changing_hashes() -> None:
+    """削除した実体・別名索引の手がかり（#160）は、節ごと読み捨て、hash は削除の前のまま。"""
+    pack = builtin_pack()
+    # 組み込みのパックの hash。取込の hash は削除する前のまま（文書を作り直しにしない）。
+    assert (pack.hash, pack.ingest_hash) == ("44988eefaf8d5296", "cb126fa12406042d")
+    removed = {
+        key: list(value)
+        for (section, key), value in REMOVED_FIELDS.items()
+        if section == "entity_cues"
+    }
+    legacy = {**pack.to_dict(), "entity_cues": removed}
+    loaded = build_pack(legacy)
+    assert "entity_cues" not in loaded.sections
+    assert (loaded.hash, loaded.ingest_hash) == (pack.hash, pack.ingest_hash)
+    assert stored_pack_hash(legacy, loaded) == pack.hash
+    assert resolve(pack, {"entity_cues": {"nickname_words": ["合成の語"]}}).hash == pack.hash
+    # 保存した値が組み込みと違えば、削除の前と同じく別の hash のまま（公開版の照合を壊さない）。
+    custom = {**pack.to_dict(), "entity_cues": {**removed, "nickname_words": ["合成の語"]}}
+    assert build_pack(custom).hash != pack.hash
+
+
 def test_removed_xml_tree_label_is_dropped_without_changing_hashes() -> None:
     """削除した XML ツリーの文書の種類（#42）は、保存済みの版に残っても読み捨てる。"""
     pack = builtin_pack()

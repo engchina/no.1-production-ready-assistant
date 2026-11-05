@@ -14,7 +14,6 @@ CHUNK_POOL_LOAD_STAGE = "検索対象のチャンクの読み込み"
 DERIVED_SOURCE_STAGE = "要約・抽出値の原文の読み込み"
 CONTEXT_SIBLINGS_STAGE = "前後の文脈の読み込み"
 REFERENCE_EXPANSION_STAGE = "参照先の根拠の追加"
-ENTITY_EXPANSION_STAGE = "実体・別名による検索拡張"
 IMAGE_EVIDENCE_STAGE = "根拠の図の切り出し"
 # 短い読み取り（文書の分類・文書の背景〔1 ページ目の本文〕）は 1 つの段にまとめる。
 DOCUMENT_INFO_STAGE = "文書の分類と背景の読み込み"

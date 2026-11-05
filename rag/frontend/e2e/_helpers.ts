@@ -24,7 +24,6 @@ export const MENU_PERMISSION_CODES = [
   "menu.settings_retrieval",
   "menu.settings_prompts",
   "menu.settings_evaluation",
-  "menu.settings_entity_index",
   "menu.security_permissions",
   "menu.security_users",
   "menu.security_roles",

@@ -1,4 +1,4 @@
-"""検索の基準日(as_of)を、主検索と交差参照・実体の拡張で同じにする(#2602)。
+"""検索の基準日(as_of)を、主検索と交差参照で同じにする(#2602)。
 
 有効期間の判定は ``OracleClient`` の述語(開始日 <= 基準日 < 終了日。終了日は排他的。基準日が無ければ
 今日)で行う。代役の Oracle は、実際の SQL の bind(``_oracle_retrieval_where`` の ``filter_as_of``)を
@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import date
 from typing import Any, cast
 
@@ -81,33 +80,13 @@ class PeriodOracle(ReferenceOracle):
         ]
 
 
-class PlanRecorder:
-    """実体の拡張の計画の代役。渡された範囲を記録し、何も足さない。"""
-
-    def __init__(self) -> None:
-        self.scopes: list[dict[str, str]] = []
-
-    async def __call__(self, store: Any, filters: dict[str, str], **_: Any) -> list[Any]:
-        self.scopes.append(dict(filters))
-        return []
-
-
-@pytest.fixture
-def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[PlanRecorder]:
-    entity = PlanRecorder()
-    monkeypatch.setattr(answer_engine, "plan_entity_expansion", entity)
-    yield entity
-
-
 def _engine(oracle: PeriodOracle) -> AnswerEngine:
     return AnswerEngine(
         Settings(
             rag_reference_expansion_enabled=True,
-            rag_entity_expansion_enabled=True,
         ),
         oracle=cast(Any, oracle),
         genai=cast(Any, FakeGenAi()),
-        entity_store=cast(Any, object()),
     )
 
 
@@ -153,9 +132,7 @@ def _corpus() -> PeriodOracle:
     ],
     ids=["before-start", "start-day", "inside", "last-day", "end-day-exclusive", "future"],
 )
-async def test_main_search_and_expansions_use_the_same_as_of(
-    plans: PlanRecorder, as_of: str, effective: bool
-) -> None:
+async def test_main_search_and_expansions_use_the_same_as_of(as_of: str, effective: bool) -> None:
     """指定した基準日で、主検索と参照先の有効期間の判定が一致する(開始日は含み、終了日は含まない)。"""
     oracle = _corpus()
     request = SearchRequest(
@@ -179,31 +156,11 @@ async def test_main_search_and_expansions_use_the_same_as_of(
     # 主検索と参照先の読み取りは、すべて指定した基準日で SQL を組む(今日で補わない)。
     assert {_bound_as_of(filters) for filters in oracle.all_filters()} == {as_of}
     assert oracle.reference_calls or not effective
-    # 実体の拡張の範囲は、利用者が指定した条件(文書名も)をすべて保つ(#3260)。
-    entity = plans
-    assert entity.scopes == [request.filters]
     # 交差参照は KB・旧版の扱い・基準日だけを保ち、文書名の絞り込みは外す(#1280)。
     expected = {"as_of": as_of, "knowledge_base_id": "kb-a", "include_superseded": "true"}
     assert {frozenset(call["filters"].items()) for call in oracle.document_batch_calls} <= {
         frozenset(expected.items())
     }
-
-
-async def test_expansion_plans_are_not_reused_across_as_of(
-    plans: PlanRecorder,
-) -> None:
-    """同じ起点でも基準日が違えば、実体の拡張の計画を使い回さない。"""
-    entity = plans
-    engine = _engine(_corpus())
-    state = _SearchState()
-    seeds = [_corpus().hits[0]]
-
-    for as_of in ("2020-01-01", "2021-01-01", "2020-01-01"):
-        request = SearchRequest(query="q", filters={"as_of": as_of, "knowledge_base_id": "kb-a"})
-        await engine._entity_expansion(request, state, seeds)
-
-    assert [scope["as_of"] for scope in entity.scopes] == ["2020-01-01", "2021-01-01"]
-    assert len(state.entity_plans) == 2
 
 
 class _NextDay(date):
@@ -215,7 +172,7 @@ class _NextDay(date):
 
 
 async def test_missing_as_of_is_resolved_once_even_when_the_date_changes(
-    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """基準日の無い要求は最初に 1 回だけ今日に決め、途中で日付が変わっても全検索で同じ日を使う。"""
     days = iter([date(2026, 4, 1), date(2026, 4, 2)])
@@ -232,8 +189,6 @@ async def test_missing_as_of_is_resolved_once_even_when_the_date_changes(
     assert request.filters["as_of"] == "2026-04-01"
     assert oracle.all_filters()
     assert {_bound_as_of(filters) for filters in oracle.all_filters()} == {"2026-04-01"}
-    entity = plans
-    assert [scope["as_of"] for scope in entity.scopes] == ["2026-04-01"]
 
 
 def test_explicit_as_of_is_kept() -> None:
@@ -243,7 +198,7 @@ def test_explicit_as_of_is_kept() -> None:
 
 
 async def test_answer_run_searches_with_the_resolved_as_of_and_keeps_the_request(
-    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """回答は検索の条件に今日の基準日を補い、回答の分類の条件と要求そのものは変えない。"""
     import rag_engine.generation.answering as answering
@@ -267,9 +222,7 @@ async def test_answer_run_searches_with_the_resolved_as_of_and_keeps_the_request
     assert request.filters == {"knowledge_base_id": "kb-a"}
 
 
-async def test_retrieve_searches_with_the_resolved_as_of(
-    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_retrieve_searches_with_the_resolved_as_of(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(answer_engine, "_today", lambda: date(2026, 4, 1))
     oracle = _corpus()
 

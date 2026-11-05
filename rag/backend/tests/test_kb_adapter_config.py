@@ -368,3 +368,15 @@ def test_small_to_big_params_overlay_ingestion_settings() -> None:
     assert merged.rag_chunk_parent_target_chars == get_settings().rag_chunk_parent_target_chars
     with pytest.raises(ValueError):
         KnowledgeBaseIngestionConfig(chunk_child_target_chars=2000)
+
+
+def test_stored_entity_index_recipe_fields_are_dropped() -> None:
+    """削除した実体・別名索引（#160）のレシピの項目は、保存値に残っても読み捨てる。"""
+    config = KnowledgeBaseIngestionConfig.model_validate(
+        {
+            "entity_index_enabled": True,
+            "entity_name_columns": ["合成の列"],
+            "entity_attribute_columns": ["合成の列"],
+        }
+    )
+    assert "entity_index_enabled" not in config.model_dump()

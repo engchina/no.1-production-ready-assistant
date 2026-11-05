@@ -75,7 +75,6 @@ MENU_SETTINGS_VECTOR_INDEX = "menu.settings_vector_index"
 MENU_SETTINGS_RETRIEVAL = "menu.settings_retrieval"
 MENU_SETTINGS_PROMPTS = "menu.settings_prompts"
 MENU_SETTINGS_EVALUATION = "menu.settings_evaluation"
-MENU_SETTINGS_ENTITY_INDEX = "menu.settings_entity_index"
 MENU_SETTINGS_SYSTEM_TABLES = "menu.settings_system_tables"
 MENU_SETTINGS_HUGGINGFACE = "menu.settings_huggingface"
 MENU_SETTINGS_SERVICES = "menu.settings_services"
@@ -136,7 +135,6 @@ PERMISSION_CATALOG: tuple[PermissionDefinition, ...] = (
     _menu_permission(MENU_SETTINGS_PARSER_ADAPTERS, _GROUP_PIPELINE, "文書解析"),
     _menu_permission(MENU_SETTINGS_CHUNKING, _GROUP_PIPELINE, "文書分割"),
     _menu_permission(MENU_SETTINGS_VECTOR_INDEX, _GROUP_PIPELINE, "検索インデックス"),
-    _menu_permission(MENU_SETTINGS_ENTITY_INDEX, _GROUP_PIPELINE, "実体・別名索引"),
     _menu_permission(MENU_SETTINGS_RETRIEVAL, _GROUP_PIPELINE, "検索方法"),
     _menu_permission(MENU_SETTINGS_PROMPTS, _GROUP_PIPELINE, "回答プロンプト"),
     _menu_permission(MENU_SETTINGS_EVALUATION, _GROUP_PIPELINE, "評価の基準"),
@@ -409,8 +407,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # ---- 検索・回答プロファイル ----
     ("GET", "/search-answer-profiles"): _SEARCH_ANSWER_PROFILE_READ,
     ("POST", "/search-answer-profiles"): _any(SEARCH_ANSWER_PROFILES_MANAGE),
-    # 実体の索引を持つ文書の数（拡張の開閉の案内。#1388）。
-    ("POST", "/search-answer-profiles/entity-index-coverage"): _any(MENU_SEARCH_ANSWER_PROFILES),
     # プロファイルが継承するシステム設定の窓口（読み取りだけ。#2683）。
     ("GET", "/search-answer-profiles/inherited-contact"): _any(MENU_SEARCH_ANSWER_PROFILES),
     ("GET", "/search-answer-profiles/answer-models"): _any(MENU_SEARCH_ANSWER_PROFILES),
@@ -616,8 +612,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     # 品質評価の画面は評価設定（既定値）を読む。
     ("GET", "/settings/evaluation-suite"): _any(MENU_SETTINGS_EVALUATION, MENU_EVALUATION),
     ("PATCH", "/settings/evaluation-suite"): _any(MENU_SETTINGS_EVALUATION),
-    ("GET", "/settings/entity-index"): _any(MENU_SETTINGS_ENTITY_INDEX),
-    ("PATCH", "/settings/entity-index"): _any(MENU_SETTINGS_ENTITY_INDEX),
     # ---- ユーザーとロール（platform の共通 router。NL2SQL と同じ割り当て）----
     # 前方一致で割り当てず、route ごとに登録する（新しい route は登録するまで拒否。#476）。
     ("GET", "/security/users"): _any(MENU_SECURITY_USERS),

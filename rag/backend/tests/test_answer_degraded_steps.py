@@ -7,7 +7,7 @@
 """
 
 import json
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Iterator
 from typing import Any, cast
 
 import pytest
@@ -179,42 +179,6 @@ async def test_section_chunks_failure_is_recorded_with_the_read_error(
     _assert_degraded(state, "section_chunks")
 
 
-@pytest.mark.parametrize(
-    ("planner", "kind", "call"),
-    [
-        (
-            "plan_entity_expansion",
-            "entity_expansion",
-            lambda engine, request, state, seeds: engine._entity_expansion(request, state, seeds),
-        ),
-    ],
-    ids=["entity"],
-)
-@pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
-async def test_expansion_planner_failure_is_recorded(
-    monkeypatch: pytest.MonkeyPatch,
-    planner: str,
-    kind: str,
-    call: Callable[..., Awaitable[list[RetrievedChunk]]],
-    fail: bool,
-) -> None:
-    async def empty(*args: Any, **kwargs: Any) -> list[Any]:
-        return []
-
-    monkeypatch.setattr(answer_engine_module, planner, _aboom if fail else empty)
-    engine = _engine(FakeOracle(), rag_entity_expansion_enabled=True)
-    state = _SearchState()
-    request = SearchRequest(query="q", filters={"knowledge_base_id": "kb-1"})
-
-    added = await call(engine, request, state, [_chunk("doc-1:c1", "本文", 1)])
-
-    assert added == []
-    if fail:
-        _assert_degraded(state, kind)
-    else:
-        assert state.degraded_steps() == []
-
-
 # ---- 参照先(解決・読み取り・先読み・並べ替え) ----
 
 
@@ -338,11 +302,9 @@ async def _run(monkeypatch: pytest.MonkeyPatch, oracle: FakeOracle) -> Any:
     import rag_engine.adapters.model_api as engine_api
 
     monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
-    # 実体の拡張は、この試験の外(FakeOracle に無い SQL を読む。処理ごとの試験は
-    # 上にある)。章節の拡張は既定のまま(FakeOracle の文書は章節の対応を持たず、広げない)。
+    # 章節の拡張は既定のまま(FakeOracle の文書は章節の対応を持たず、広げない)。
     engine = _engine(
         oracle,
-        rag_entity_expansion_enabled=False,
     )
     return await engine.run(
         SearchRequest(query="登録の手順は？", filters={"knowledge_base_id": "kb-1"})

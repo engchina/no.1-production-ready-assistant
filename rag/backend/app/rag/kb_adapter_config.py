@@ -22,13 +22,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    StringConstraints,
     field_validator,
     model_validator,
 )
@@ -64,11 +63,6 @@ logger = logging.getLogger(__name__)
 
 ADAPTER_CONFIG_VERSION = 2
 
-# 実体の抽出で名前・属性にする列名（文書レシピの選択肢。#1362）。
-EntityColumnName = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
-]
-
 AdapterConfigScope = Literal["ingestion", "query"]
 
 # KB 設定フィールド -> Settings フィールドのマッピング(scope ごとの allowlist)。
@@ -98,10 +92,6 @@ _INGESTION_FIELD_MAP: dict[str, str] = {
     "chunk_parent_max_children": "rag_chunk_parent_max_children",
     # 取込側の高度軸(現状グローバルのみだった adapter を KB 上書き対象へ拡張)。
     # いずれも取込パイプラインが self._settings から読むため、KB 上書きが取込に効く。
-    # 実体の層（#1362。既定 ON。#1388）。索引の保存の後に実体と「実体と chunk の関連」を作る。
-    "entity_index_enabled": "rag_entity_index_enabled",
-    "entity_name_columns": "rag_entity_name_columns",
-    "entity_attribute_columns": "rag_entity_attribute_columns",
     "field_extraction_enabled": "rag_field_extraction_enabled",
     "navigation_summary_enabled": "rag_navigation_summary_enabled",
     "auto_parse_after_preprocess_enabled": "rag_auto_parse_after_preprocess_enabled",
@@ -116,9 +106,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
     "screen_linking_enabled": "rag_screen_linking_enabled",
     "request_coverage_retrieval_enabled": "rag_request_coverage_retrieval_enabled",
     "auto_field_filter_enabled": "rag_auto_field_filter_enabled",
-    # 実体の 1 段の拡張(#1388)。None は Settings の既定(拡張は on。#1402 / 上限は 6)。
-    "entity_expansion_enabled": "rag_entity_expansion_enabled",
-    "entity_expansion_max_chunks": "rag_entity_expansion_max_chunks",
     # 章節の拡張(#1436)。None は Settings の既定(拡張は on / 4 段 / 50%)。
     "section_expansion_enabled": "rag_section_expansion_enabled",
     "section_expansion_max_levels": "rag_section_expansion_max_levels",
@@ -142,12 +129,16 @@ class KbAdapterConfigError(ValueError):
     """KB 構築設定がグローバル設定と整合しないときに送出する。"""
 
 
-# 削除した項目(文書解析エンジンの有効化フラグ #270・#22・#21、文書構造索引の構築 #159)。保存済みの
-# KB 構築設定・文書レシピ・取込ジョブの snapshot に残っていても読めるよう、検証前に取り除く。
+# 削除した項目(文書解析エンジンの有効化フラグ #270・#22・#21、文書構造索引の構築 #159、実体・
+# 別名索引 #160)。保存済みの KB 構築設定・文書レシピ・取込ジョブの snapshot に残っていても
+# 読めるよう、検証前に取り除く。
 _REMOVED_INGESTION_FIELDS = frozenset(
     {
         *(f"parser_{backend}_enabled" for backend in REMOVED_PARSER_ADAPTER_BACKENDS),
         "graph_profile",
+        "entity_index_enabled",
+        "entity_name_columns",
+        "entity_attribute_columns",
     }
 )
 # Vision を解析エンジンに依存しない ``vision_enabled`` へ統合した(#497)ときの旧 key。
@@ -247,10 +238,6 @@ class KnowledgeBaseIngestionConfig(BaseModel):
         default=None, ge=CHUNK_PARENT_MAX_CHILDREN_MIN, le=CHUNK_PARENT_MAX_CHILDREN_MAX
     )
     # 取込側の高度軸(KB 上書き対象へ拡張)。None はグローバル継承。
-    # 実体の層（#1362）。None はグローバル継承（既定 ON。#1388）。列名は表の行の名前・属性にする列。
-    entity_index_enabled: bool | None = None
-    entity_name_columns: list[EntityColumnName] | None = Field(default=None, max_length=20)
-    entity_attribute_columns: list[EntityColumnName] | None = Field(default=None, max_length=40)
     heading_level_inference_enabled: bool | None = None
     field_extraction_enabled: bool | None = None
     navigation_summary_enabled: bool | None = None
@@ -325,12 +312,6 @@ class KnowledgeBaseQueryConfig(BaseModel):
     request_coverage_retrieval_enabled: bool | None = None
     # 質問から抽出項目の条件を読み取る(#652)。LLM の呼び出しが 1 回増える。
     auto_field_filter_enabled: bool | None = None
-    # 質問と上位の候補の実体から、実体の表との SQL の join で関連する chunk を 1 段だけ足す
-    # (#1362 / #1388)。LLM は呼ばない。実体・別名索引を作った文書だけが対象。
-    # 検索方法の全体設定(既定 OFF)だけで決め、プロファイルでは保存・適用しない。
-    entity_expansion_enabled: bool | None = None
-    # 1 回の検索で足す chunk 数の上限。None は既定(6)。
-    entity_expansion_max_chunks: int | None = Field(default=None, ge=1, le=20)
     # 当たった chunk の章節から親の章節へ段階的に広げる(#1436)。None は既定(on)、false は使わない。
     # 段ごとに CRAG の判定(LLM)が 1 回増える。上限(段・根拠の入力 token の割合・秒)も選べる。
     section_expansion_enabled: bool | None = None

@@ -700,7 +700,8 @@ def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
         "20261101_001_retire_guardrail_columns",
         "20261105_001_retire_evaluation_calibration",
         "20261106_001_retire_document_graph",
-        "20261106_002_retire_support_guides",
+        "20261106_002_retire_entity_index",
+        "20261106_003_retire_support_guides",
     } == marked
     assert all(migration.destructive_note for migration in MIGRATIONS if migration.destructive)
     # 印は checksum（SQL だけ）に影響しない（適用済みの DB を outdated にしない）。
@@ -1332,7 +1333,7 @@ def test_retired_support_guides_require_explicit_migration_and_keep_profiles() -
     manager.initialize()
     # 新規の DB には表が無い（過去の migration は記録だけ）。
     assert not any((name, "TABLE") in database.objects for name in _RETIRED_SUPPORT_GUIDE_TABLES)
-    name = "20261106_002_retire_support_guides"
+    name = "20261106_003_retire_support_guides"
     assert name in database.migrations
     database.migrations.pop(name)
     for table in _RETIRED_SUPPORT_GUIDE_TABLES:

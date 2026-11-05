@@ -68,7 +68,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 
 | 能力 | (a) | (b) 使えない・失敗のとき | (c) 記録 | (d) 精密に見せるか | コード |
 |---|---|---|---|---|---|
-| 実体の拡張（#1362） | 任意（検索・回答プロファイルの `entity_expansion_enabled`。既定 on） | 読めない → 足さずに続ける | `DS`（`entity_expansion`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._entity_expansion` |
 | 交差参照の参照先の解決・読み込み（#1280・#1400） | 任意（`RAG_REFERENCE_EXPANSION_ENABLED`） | 解決・読み込みの失敗 → その参照を辿らない / 足さない | `DS`（`reference_resolve`・`reference_load`）・`DX`（`reference_expansion.searches`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | 参照先の文書の先読み | 任意 | 失敗 → 辿るときに 1 つずつ照合する | `DS`（`reference_prefetch`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._prefetch_reference_documents` |
 | 参照先の文書の中の rerank | 任意 | 失敗 → 検索の順のまま足す | `DS`（`reference_rerank`） | 見せない | `rag/backend/app/rag/answer_engine.py::AnswerEngine._document_reference_chunks` |
@@ -133,7 +132,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | `query_overflow` | 全文検索の超限補完に使う語の抽出（失敗は未検索として保存し、既存根拠を維持する） | `rag/packages/rag_engine/rag_engine/retrieval/query_overflow.py::search_overflow_requests` |
 | `prompt_overrides` | 編集した回答のプロンプトの読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._run` |
 | `business_names` | 業務の名前の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._business_names` |
-| `entity_expansion` | 実体の拡張 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._entity_expansion` |
 | `reference_resolve` | 参照先の解決 | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | `reference_load` | 参照先の chunk の読み込み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._reference_expansion` |
 | `reference_prefetch` | 参照先の文書の先読み | `rag/backend/app/rag/answer_engine.py::AnswerEngine._prefetch_reference_documents` |
