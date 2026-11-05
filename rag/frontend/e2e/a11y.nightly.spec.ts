@@ -319,7 +319,6 @@ const SCREENS: Screen[] = [
   { path: "/settings/parser-adapters" },
   { path: "/settings/chunking" },
   { path: "/settings/vector-index" },
-  { path: "/settings/entity-index" },
   { path: "/settings/retrieval" },
   { path: "/settings/prompts" },
   { path: "/settings/evaluation" },

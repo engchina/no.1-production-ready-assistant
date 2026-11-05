@@ -20,7 +20,6 @@ import {
   Search,
   Server,
   TableProperties,
-  Tags,
   ThumbsUp,
   Upload,
   type LucideIcon,
@@ -174,12 +173,6 @@ export const NAV_SECTIONS: NavSection[] = [
         sidebarLabelKey: "nav.settingsVectorIndex.sidebar",
         icon: Layers3,
         permission: MENU_PERMISSIONS.settingsVectorIndex,
-      },
-      {
-        href: APP_ROUTES.settingsEntityIndex,
-        labelKey: "nav.settingsEntityIndex",
-        icon: Tags,
-        permission: MENU_PERMISSIONS.settingsEntityIndex,
       },
       {
         href: APP_ROUTES.settingsRetrieval,

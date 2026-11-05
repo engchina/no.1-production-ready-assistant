@@ -148,7 +148,6 @@ from rag_engine.generation.answer_records import (
     _bool_metadata_value,
     _chunk_answer_record,
     _context_neighbors,
-    _keep_entity_expansion_positions,
     _merge_text_rerank_candidates,
     _preferred_chunk_records,
     _records_by_rerank_ranks,
@@ -158,7 +157,6 @@ from rag_engine.generation.answer_records import (
     _search_terms_for_queries,
     _split_text_rerank_candidates,
     _stored_chunk_answer_record,
-    is_reserved_entity_expansion,
     load_answer_records,
     preferred_records,
     rank_records,
@@ -641,8 +639,6 @@ def _rerank_records(
         cast(Settings, settings),
         candidate_indices=rerankable_indices,
     )
-    # 関連度が下限以上の実体の拡張の根拠は、backend が置いた候補の位置へ戻す（#1362・#1390）。
-    protected_candidates, reranked_candidates = _keep_entity_expansion_positions(protected_candidates, reranked_candidates)
     return _merge_text_rerank_candidates(candidates, protected_candidates, reranked_candidates) + remainder
 
 
@@ -809,11 +805,9 @@ def select_documents(
             "hits": hits[key],
         }
         trace["deferred" if key in excluded else "selected"].append(entry)
-    # 実体の 1 段の拡張で足した根拠（#1362）は、文書の分数が低くても後回しにしない（橋渡しの行）。関連度が
-    # 下限未満の拡張の根拠は、印の無い候補と同じに扱う（#1390）。
     # 参照元の直後へ置いた交差参照の参照先（#1549）も、参照元に従うので後回しにしない。
     # 会話の添付（#3100）も、利用者が明示した入力なので後回しにしない。
-    reserved = [is_reserved_entity_expansion(r) or is_followed_reference(r) or is_attachment_evidence(r) for r in ranked_children]
+    reserved = [is_followed_reference(r) or is_attachment_evidence(r) for r in ranked_children]
     kept = [r for r, keep in zip(ranked_children, reserved, strict=False) if document_context_key(r) not in excluded or keep]
     deferred = [r for r, keep in zip(ranked_children, reserved, strict=False) if document_context_key(r) in excluded and not keep]
     if step is not None:
@@ -861,7 +855,7 @@ def cap_anchors_per_document(
 
     rerank の上位は、章の多い 1 つの文書の似た節で占められやすく、分数の近い別の文書の候補が起点（上位 top_k）から
     押し出される（検索エンジンの host crowding と同じ）。超えた child は落とさず順位を保って後ろへ置く（起点が
-    足りなければ使われる）。実体の拡張・交差参照で足した child は位置を保ち、数えない（参照元の直後に置くため）。
+    足りなければ使われる）。交差参照で足した child は位置を保ち、数えない（参照元の直後に置くため）。
     0 は上限なし。
     """
     from rag_engine.retrieval.metadata_context import document_context_key  # 循環 import を避けて関数内で読む
@@ -874,7 +868,7 @@ def cap_anchors_per_document(
     later: list[AnswerRecord] = []
     for record in ranked_children:
         # 会話の添付（#3100）は数えない。
-        if is_reserved_entity_expansion(record) or is_followed_reference(record) or is_attachment_evidence(record):
+        if is_followed_reference(record) or is_attachment_evidence(record):
             kept.append(record)
             continue
         key = document_context_key(record)

@@ -5,7 +5,6 @@
     "parser_adapter_backend": "docling",
     "vision_enabled": true,
     "chunking_strategy": "small_to_big",
-    "entity_index_enabled": true,
     "heading_level_inference_enabled": false,
     "field_extraction_enabled": false,
     "navigation_summary_enabled": false,

@@ -22,7 +22,6 @@ from rag_engine.retrieval.search_stages import (
     CONTEXT_SIBLINGS_STAGE,
     DERIVED_SOURCE_STAGE,
     DOCUMENT_INFO_STAGE,
-    ENTITY_EXPANSION_STAGE,
     IMAGE_EVIDENCE_STAGE,
     REFERENCE_EXPANSION_STAGE,
     TEXT_SEARCH_STAGE,
@@ -990,7 +989,6 @@ async def test_injected_search_reports_stages_after_db_search(
     client = _SearchOracle()
     settings = Settings(
         rag_reference_expansion_enabled=True,
-        rag_entity_expansion_enabled=True,
     )
     engine = AnswerEngine(settings, oracle=client, genai=_GenAi())  # type: ignore[arg-type]
     observed: list[tuple[str, str]] = []
@@ -1016,7 +1014,6 @@ async def test_injected_search_reports_stages_after_db_search(
 
     monkeypatch.setattr(client, "context_group_siblings", recording("siblings", []))
     monkeypatch.setattr(engine, "_reference_expansion", recording("references", {}))
-    monkeypatch.setattr(engine, "_entity_expansion", recording("entities", []))
     monkeypatch.setattr(engine, "_attach_images", True)
     monkeypatch.setattr(engine, "_materialize_image_evidence", recording("images", None))
     monkeypatch.setattr(client, "chunk_set_first_page_contexts", recording("first_pages", {}))
@@ -1059,7 +1056,6 @@ async def test_injected_search_reports_stages_after_db_search(
     expected = [
         CONTEXT_SIBLINGS_STAGE,
         REFERENCE_EXPANSION_STAGE,
-        ENTITY_EXPANSION_STAGE,
         IMAGE_EVIDENCE_STAGE,
         DOCUMENT_INFO_STAGE,
     ]
@@ -1069,7 +1065,6 @@ async def test_injected_search_reports_stages_after_db_search(
     stage_of = {
         "siblings": CONTEXT_SIBLINGS_STAGE,
         "references": REFERENCE_EXPANSION_STAGE,
-        "entities": ENTITY_EXPANSION_STAGE,
         "images": IMAGE_EVIDENCE_STAGE,
         "first_pages": DOCUMENT_INFO_STAGE,
     }
@@ -1089,7 +1084,6 @@ async def test_search_stages_are_skipped_when_there_is_nothing_to_do() -> None:
     client = _SearchOracle()
     settings = Settings(
         rag_reference_expansion_enabled=False,
-        rag_entity_expansion_enabled=False,
     )
     engine = AnswerEngine(settings, oracle=client, genai=_GenAi())  # type: ignore[arg-type]
     state = _SearchState()

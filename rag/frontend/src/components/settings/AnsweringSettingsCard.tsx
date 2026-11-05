@@ -69,8 +69,6 @@ function formFromSettings(settings: AnsweringSettingsData): AnsweringDraft {
     screen_linking_enabled: settings.screen_linking_enabled,
     request_coverage_retrieval_enabled: settings.request_coverage_retrieval_enabled,
     auto_field_filter_enabled: settings.auto_field_filter_enabled,
-    entity_expansion_enabled: settings.entity_expansion_enabled,
-    entity_expansion_max_chunks: settings.entity_expansion_max_chunks,
     section_expansion_enabled: settings.section_expansion_enabled,
     section_expansion_max_levels: settings.section_expansion_max_levels,
     section_expansion_input_token_percent: settings.section_expansion_input_token_percent,
@@ -195,16 +193,6 @@ function AnsweringForm({ saved }: { saved: AnsweringSettingsData }) {
           disabled={disabled}
           onChange={(checked) => update({ auto_field_filter_enabled: checked })}
         />
-        <div>
-          <SwitchRow id="answering-entity-expansion" label={t("settings.answering.entityExpansion")}
-            description={t("settings.answering.entityExpansionHint")} checked={form.entity_expansion_enabled}
-            disabled={disabled} onChange={(checked) => update({ entity_expansion_enabled: checked })} />
-          {form.entity_expansion_enabled ? <FormGrid className="px-3 pb-3">
-            <SelectField id="answering-entity_expansion_max_chunks" label={t("settings.answering.entity_expansion_max_chunks")} width="xs"
-              value={String(form.entity_expansion_max_chunks)} disabled={disabled} options={Array.from({ length: 20 }, (_, n) => { const value = n + 1; return { value: String(value), label: String(value) }; })}
-              onValueChange={(value) => update({ entity_expansion_max_chunks: Number(value) })} />
-          </FormGrid> : null}
-        </div>
         <SwitchRow
           id="answering-screen-linking"
           label={t("settings.answering.screenLinking")}

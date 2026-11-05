@@ -262,7 +262,7 @@ test("個別設定は残した項目だけを保存する", { tag: "@responsive"
   expect(config.answer_model_id).toBe("model-b");
   expect(config.query?.max_anchors_per_document).toBe(0);
   expect(config.query?.support_guide_enabled).toBe(true);
-  for (const key of [...GLOBAL_QUERY_FIELDS, "entity_expansion_enabled", "entity_expansion_max_chunks", "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in (config.query ?? {})).toBe(false);
+  for (const key of [...GLOBAL_QUERY_FIELDS, "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in (config.query ?? {})).toBe(false);
 });
 
 test("業務ガイドは既定 OFF の単一スイッチで保存・再表示する", { tag: "@responsive" }, async ({ page }, testInfo) => {
@@ -296,7 +296,7 @@ test("検索方法の全体設定の項目は表示せず、古い個別設定�
     query_strategy: "hyde", answer_flow: "crag", neighbor_child_count: 0,
     rerank_enabled: false, auto_field_filter_enabled: true,
     screen_linking_enabled: true, request_coverage_retrieval_enabled: false,
-    entity_expansion_enabled: false, entity_expansion_max_chunks: 2, section_expansion_enabled: false, section_expansion_max_levels: 2, section_expansion_input_token_percent: 30,
+    section_expansion_enabled: false, section_expansion_max_levels: 2, section_expansion_input_token_percent: 30,
     guide_step_retrieval_enabled: false, guide_step_max_queries: 0, guide_step_deadline_seconds: 10,
   });
   await page.goto("/search-answer-profiles?id=bv-default");
@@ -306,14 +306,14 @@ test("検索方法の全体設定の項目は表示せず、古い個別設定�
   for (const name of ["Rerank で検索候補を並べ替える", "質問から項目の条件を読み取る", "画面目録で操作画面を探す", "根拠の無い要求を探し直す", "業務ガイドの手順ごとに探す"]) {
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(0);
   }
-  for (const name of ["実体・別名による検索拡張", "章節で広げる根拠"]) {
+  for (const name of ["章節で広げる根拠"]) {
     await expect(page.getByText(name, { exact: true })).toHaveCount(0);
   }
   await page.getByRole("textbox", { name: "説明", exact: true }).fill("合成の設定の検証用");
   await page.getByRole("group", { name: "確定の操作" }).getByRole("button", { name: "保存", exact: true }).click();
   await expect.poll(() => body).not.toBeNull();
   const query = (body?.config as { query?: Record<string, unknown> })?.query ?? {};
-  for (const key of [...GLOBAL_QUERY_FIELDS, "entity_expansion_enabled", "entity_expansion_max_chunks", "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in query).toBe(false);
+  for (const key of [...GLOBAL_QUERY_FIELDS, "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in query).toBe(false);
   await page.reload();
   await page.getByTestId("search-answer-profile-guide-matching").scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("global-search-options.png") });

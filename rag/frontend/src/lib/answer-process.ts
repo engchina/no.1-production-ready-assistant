@@ -68,7 +68,6 @@ const ANSWER_STEP_NAME: Readonly<Record<string, I18nKey>> = {
   "要約・抽出値の原文の読み込み": "answer.step.loadDerivedSource",
   "前後の文脈の読み込み": "answer.step.loadSiblings",
   "参照先の根拠の追加": "answer.step.expandReferences",
-  "実体・別名による検索拡張": "answer.step.expandEntities",
   "根拠の図の切り出し": "answer.step.prepareFigures",
   "文書の分類と背景の読み込み": "answer.step.loadDocumentInfo",
 };

@@ -1,8 +1,7 @@
 # 多段の質問（multi-hop）の合成の評価セット（#1335・#1352）
 
 複数の根拠をつないで初めて答えられる質問（多段の質問）を、日本語の業務文書（規程・手順書・表）で測るための合成の
-評価セットです。RAG の内部に実体（システム・部署・役職・規程）の層と検索時の 1 段の拡張を入れるべきか、それとも
-業務 Agent が RAG の MCP で多段に読めば足りるかを、この評価の結果で決めます（下の「実体の層を入れるかの判断」）。
+評価セットです。検索・回答（A）と、業務 Agent が RAG の MCP で多段に読む経路（D）で、必要な根拠が取れるかを確かめます。
 資料はすべて架空の「サンプル社」（と子会社の「サンプル物流社」）の内容で、実在の顧客・製品の内容は入れていません。
 
 資料（原稿）と評価セットは、実体（部署・システム・保守枠など）のデータから
@@ -201,8 +200,8 @@ D 2 件あった）。
   ケース（`missed_case_ids`）を出します（Run ごとの回数は `runs[].superseded_searches`）。
 - **旧版を除かない評価（紛らわしさの測定）**: `evaluation_corpus_cli` に `--keep-superseded-active` を渡すと、版を
   登録せずに取り込み、旧版も今有効な文書のまま検索させます（書き出す評価セットから `document_versions` を外す）。
-  版の登録が無い運用（旧版を置き換えずに残した資料）で、旧版に検索が引かれる度合いを見るためのもので、判断の基準
-  （下の「実体の層を入れるかの判断」）は既定（版を登録する）の結果で決めます。両方を流すときは、別のナレッジベース
+  版の登録が無い運用（旧版を置き換えずに残した資料）で、旧版に検索が引かれる度合いを見るためのもので、結果の判断は
+  既定（版を登録する）の結果で行います。両方を流すときは、別のナレッジベース
   に取り込みます（同じナレッジベースに 2 回取り込むと、同じ内容の文書が 2 組入るため。`--knowledge-base-id` で
   既存のナレッジベースを渡さない）。
 - **前の評価のナレッジベースとの分離（#1381）**: 前の評価と同じ資料を別のナレッジベースに取り込むと、文書は前の
@@ -238,46 +237,6 @@ uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop
 出します。閾値を下回ると終了コード 1 を返しますが、結果の JSON は書きます。質問ごとに回答（モデルの呼び出し
 3〜5 回）を作るため、dev の 40 問で 40 分前後かかります（#1335 の 33 問の実測から見積もり）。
 
-## 実体の層の有り / 無しで比べる（#1362）
-
-実体の層（文書レシピの「実体の抽出」（既定 on。#1388）と、回答の検索の 1 段の拡張（既定 on。#1402）。
-[../../docs/rag-engine.md](../../docs/rag-engine.md) の `RAG_ENTITY_INDEX_ENABLED`）の効果は、同じ資料を
-**別のナレッジベース**に、レシピの有り / 無しで取り込んで A を流して比べます（同じ文書を両方に入れると、
-実体を持つ文書が両方の検索範囲に入るため）。拡張は検索方法の全体設定（`RAG_ENTITY_EXPANSION_ENABLED`。既定 OFF）で選び、
-検索・回答プロファイルでは上書きしない（#1388 / #3053）。`--entity-index` で書き出す評価セットには、既定に頼らず `rag_overrides` の
-`entity_expansion_enabled: true` が入ります（評価の実行だけの上書きで、全体設定は変わりません）。実体の抽出は全体の既定で on のため、
-無しの側は `--no-entity-index` でレシピの実体の抽出を無効にします。実体を持たないナレッジベースでは何も
-足しません。
-
-```bash
-cd rag/backend
-# レシピ無し（すべての文書のレシピで実体の抽出を無効にする。実体の抽出は全体の既定で on。#1388）
-uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8100 --knowledge-base-name "評価: 多段 実体なし" --no-entity-index \
-  --output /tmp/multi-hop.plain.json
-# レシピ有り（すべての文書のレシピで実体の抽出を選ぶ）
-uv run python -m app.rag.evaluation_corpus_cli ../evaluation/multi-hop/multi-hop.json \
-  --api-base-url http://127.0.0.1:8100 --knowledge-base-name "評価: 多段 実体あり" --entity-index \
-  --output /tmp/multi-hop.entity.json
-for variant in plain entity; do
-  for split in dev holdout; do
-    uv run python -m app.rag.evaluation_cli /tmp/multi-hop.$variant.json --split $split \
-      --api-base-url http://127.0.0.1:8100 --output /tmp/multi-hop.a.$variant.$split.json
-  done
-done
-```
-
-- 見る値: dev の `bridge` の `required_evidence_recall`（選んだ評価の基準の閾値で判定）と、1 段の対照
-  （`single_hop`）が下がらないこと。足した根拠は回答の診断の `entity_expansion`（足した chunk・実体・段・起点・
-  `ambiguous`）で確かめます。
-- 同じ実体のナレッジベースで拡張だけを外して比べるときは、品質評価の `rag_overrides` の
-  `entity_expansion_enabled: false` を使います。
-- 決定論の確認（CI）: `rag/backend/tests/test_entity_layer.py` が、この資料の原稿から作った chunk で、bridge の
-  全問の台帳の行・組織規程の略号と承認者の根拠が 1 段の拡張で足されることを確かめます（上位の候補には、台帳・
-  組織規程以外の必要な根拠の chunk を置く）。取れないのは、運用要領の連携元から 2 段たどる 1 件
-  （`br-wms-link-department` の受発注管理システムの行）です。組織規程の第 4 章（承認者の代理）は実体では
-  つながらない（同じ文書の中の参照）ため、実体の層の対象にしていません。
-
 ## 業務 Agent と比べる（D）
 
 D は、同じナレッジベースを参照する検索・回答プロファイルを使う業務 Agent（スキル `business-rag-research`）の Run です。
@@ -310,22 +269,6 @@ uv run suite-evaluation compare A=/tmp/multi-hop.suite-a.json D=/tmp/multi-hop.d
   本文そのものなので、必要な根拠はその本文で照合します（業務支援の評価と同じ）。
 - 文書の構成・続きを読む MCP のツール（#1332）がある Agent では、ツールの有る / 無いの 2 回を流して D と D' として
   比べます。
-
-## 実体の層を入れるかの判断
-
-この評価の結果で、別の Issue として決めます（#1335 に記録する）。#1335 の 1 回目の評価（33 問・31 chunk）では、A の
-文脈が資料の全部になって天井だったため判断せず、先に MCP の根拠の並び（#1348）・Excel の 1 行 1 chunk（#1349）・
-全角 / 半角の名寄せ（#1336・#1350）・評価セットを大きくする（#1352。この資料）を行ってから、同じ評価で判断し直す
-ことにしました。
-
-- **判断し直す条件**: 上の後に、この大きさの資料（241 chunk）で dev の `bridge` の `required_evidence_recall` が
-  A（既定の `top_k` = 20）と D の両方で選んだ基準の閾値未満で、欠けた根拠（`missing_evidence`）の過半が、同じ質問のかけ直しで
-  「検索の結果（citations）に出ない」（`evidence_limit` で切れたのではない）ものなら、実体の層の Issue を作ります。
-- 資料の全部が文脈に入らないため、A の `bridge` が 1.00 にならないことを先に確かめます（1.00 なら資料がまだ小さい）。
-- #1335 の 33 問だけの値（先頭の 33 問）も出し、1 回目の評価と比べます。増えた資料で #1335 の問だけが下がったなら、
-  まぎらわしい実体（似た名前・略称の衝突・旧版）に検索が引かれています。
-- 1 段の対照（`single_hop`）も低いときは、多段ではなく検索そのものの問題として先に切り分けます。表記ゆれ（全角 /
-  半角・略称）を含むケースだけが低いときは、名寄せ（NFKC・別名）の効果を見込めます。
 
 ## nightly で流さない理由
 

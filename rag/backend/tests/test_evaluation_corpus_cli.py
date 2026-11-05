@@ -20,7 +20,6 @@ from app.rag.evaluation_corpus_cli import (
     referenced_files,
     resolve_golden_set,
     resolve_guides,
-    with_entity_expansion,
 )
 
 GOLDEN_SET: dict[str, Any] = {
@@ -267,89 +266,12 @@ def test_main_requires_guides_and_guided_output_together(
     assert "一緒に渡してください" in capsys.readouterr().err
 
 
-def test_loader_selects_entity_index_recipe_for_every_document(tmp_path: Path) -> None:
-    """``--entity-index``（#1362）はすべての文書のレシピで実体の抽出を選ぶ（Excel は前処理も）。
-
-    実体の層の有り / 無しは、別のナレッジベースに取り込んで比べる。
-    """
-    (tmp_path / "manual.pdf").write_bytes(b"%PDF-1.4")
-    (tmp_path / "params.xlsx").write_bytes(b"PK")
-    api = FakeApi({"manual.pdf": ["UPLOADED"], "params.xlsx": ["UPLOADED"]})
-    client = httpx.Client(transport=httpx.MockTransport(api), base_url="http://test")
-    loader = CorpusLoader(
-        client,
-        "http://test",
-        poll_interval_seconds=0,
-        sleep=lambda _: None,
-        log=lambda _: None,
-        entity_index=True,
-    )
-
-    for name in ("manual.pdf", "params.xlsx"):
-        loader.ingest(tmp_path / name, "kb-1")
-
-    puts = [call for call in api.calls if call[0] == "PUT"]
-    assert puts == [
-        ("PUT", "/documents/doc-manual.pdf/recipes/r1", {"entity_index_enabled": True}),
-        (
-            "PUT",
-            "/documents/doc-params.xlsx/recipes/r1",
-            {"preprocess_profile": "excel_to_jsonl", "entity_index_enabled": True},
-        ),
-    ]
-
-
-def test_entity_index_selects_expansion_in_the_golden_set_and_the_profile() -> None:
-    """評価の明示値は保持する。指南を使うプロファイルは使用だけ ON にし、拡張は全体を使う。"""
-    resolved = resolve_golden_set(GOLDEN_SET, {"manual.pdf": "d1", "params.xlsx": "d2"}, "kb-1")
-    selected = with_entity_expansion(resolved)
-    assert selected["rag_overrides"] == {"entity_expansion_enabled": True}
-    assert "rag_overrides" not in resolved
-    explicit = with_entity_expansion(
-        {**resolved, "rag_overrides": {"entity_expansion_enabled": False, "rerank_enabled": True}}
-    )
-    assert explicit["rag_overrides"] == {"entity_expansion_enabled": False, "rerank_enabled": True}
-
-    bodies: list[Any] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        bodies.append(json.loads(request.content or b"{}"))
-        return httpx.Response(200, json={"data": {"id": "sap-1"}})
-
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://test")
-    loader = CorpusLoader(client, "http://test", log=lambda _: None, entity_index=True)
-    assert loader.create_search_answer_profile("評価", "kb-1") == "sap-1"
-    assert bodies[0]["config"] == {
-        "knowledge_base_ids": ["kb-1"],
-        "query": {"support_guide_enabled": True},
-    }
-
-
-@pytest.mark.parametrize(
-    ("entity_index", "expected"),
-    [
-        (None, {".pdf": None, ".xlsx": {"preprocess_profile": "excel_to_jsonl"}}),
-        (False, {".pdf": {"entity_index_enabled": False}, ".xlsx": None}),
-    ],
-    ids=["default", "no-entity-index"],
-)
-def test_recipe_follows_the_global_default_or_disables_entity_index(
-    entity_index: bool | None, expected: dict[str, Any]
-) -> None:
-    """実体の抽出は全体の既定で ON（#1388）。
-
-    省略時はレシピに書かず、``--no-entity-index`` は無効にする。
-    """
+def test_recipe_follows_the_extension() -> None:
+    """文書レシピは拡張子ごとの前処理だけを書く。"""
     from app.rag.evaluation_corpus_cli import recipe_for
 
-    pdf = recipe_for(Path("manual.pdf"), entity_index=entity_index)
-    xlsx = recipe_for(Path("params.xlsx"), entity_index=entity_index)
-    assert pdf == (expected[".pdf"] or {})
-    assert xlsx == (
-        expected[".xlsx"]
-        if expected[".xlsx"] is not None
-        else {"preprocess_profile": "excel_to_jsonl", "entity_index_enabled": False}
-    )
+    assert recipe_for(Path("manual.pdf")) == {}
+    assert recipe_for(Path("params.xlsx")) == {"preprocess_profile": "excel_to_jsonl"}
 
 
 # ---- 文書の版（旧版の登録。#1366） ------------------------------------------------------

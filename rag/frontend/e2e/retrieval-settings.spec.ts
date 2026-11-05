@@ -108,8 +108,6 @@ const ANSWERING_SETTINGS = {
   request_coverage_retrieval_enabled: false,
   auto_field_filter_enabled: false,
   config_source: "runtime",
-  entity_expansion_enabled: true,
-  entity_expansion_max_chunks: 6,
   section_expansion_enabled: true,
   section_expansion_max_levels: 4,
   section_expansion_input_token_percent: 50,
@@ -154,9 +152,9 @@ for (const viewport of [
     // 画面の文言に移植元の呼び名（DocRAG）を出さない（#593）。
     const card = page.getByTestId("answering-settings-card");
     await expect(card).not.toContainText("DocRAG");
-    await expect(card.getByRole("switch")).toHaveCount(6);
+    await expect(card.getByRole("switch")).toHaveCount(5);
     expect(await card.getByRole("switch").evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label"))))
-      .toEqual(["質問から項目の条件を読み取る", "実体・別名による検索拡張", "画面目録で操作画面を探す", "Rerank で検索候補を並べ替える", "章節で広げる根拠", "根拠の無い要求を探し直す"]);
+      .toEqual(["質問から項目の条件を読み取る", "画面目録で操作画面を探す", "Rerank で検索候補を並べ替える", "章節で広げる根拠", "根拠の無い要求を探し直す"]);
     const strategy = page.getByRole("combobox", { name: "質問の拡張", exact: true });
     await expect(strategy).toContainText("自動ルーティング");
     // 回答の生成方式の既定は標準 RAG。先頭に「（既定）」付きで並べ、CRAG は任意で AI の呼び出しが増えると説明する（#3509）。
@@ -181,7 +179,7 @@ for (const viewport of [
     await expect(screenLinking).toHaveAccessibleDescription(/目録がない場合.*省略/);
     const autoFieldFilter = page.getByRole("switch", { name: "質問から項目の条件を読み取る" });
     await expect(autoFieldFilter).not.toBeChecked();
-    await expect(page.getByRole("switch", { name: "実体・別名による検索拡張" })).toHaveAccessibleDescription(/名称・ID・別名.*1 段/);
+    await page.screenshot({ path: test.info().outputPath("structure-expansion.png") });
     const save = page.getByRole("button", { name: "回答の設定を保存", exact: true });
     await expect(save).toBeDisabled();
 
@@ -215,8 +213,6 @@ for (const viewport of [
         screen_linking_enabled: true,
         request_coverage_retrieval_enabled: true,
         auto_field_filter_enabled: true,
-        entity_expansion_enabled: true,
-        entity_expansion_max_chunks: 6,
         section_expansion_enabled: true,
         section_expansion_max_levels: 4,
         section_expansion_input_token_percent: 50,

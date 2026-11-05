@@ -62,7 +62,6 @@ async function mockRetrieval(page: Page) {
         screen_linking_enabled: false,
         request_coverage_retrieval_enabled: false,
         auto_field_filter_enabled: false,
-        entity_expansion_enabled: true, entity_expansion_max_chunks: 6,
         section_expansion_enabled: true, section_expansion_max_levels: 4,
         section_expansion_input_token_percent: 50,
         config_source: "runtime",
@@ -372,9 +371,6 @@ async function mockDocumentWith(page: Page, status: "REVIEW" | "INDEXED") {
     preprocess_profile: "excel_to_jsonl",
     parser_adapter_backend: "docling",
     chunking_strategy: "page_level",
-    entity_index_enabled: true,
-    entity_name_columns: [],
-    entity_attribute_columns: [],
     field_extraction_enabled: false,
     vision_enabled: false,
     navigation_summary_enabled: false,
@@ -484,9 +480,6 @@ async function openDocumentRecipe(page: Page) {
   const excel = panel.getByTestId("document-excel-options");
   await excel.getByText("上書き", { exact: true }).click();
   await expect(excel.getByRole("combobox", { name: "読み方" })).toBeVisible();
-  const columns = panel.getByTestId("document-entity-columns");
-  await columns.getByText("上書き", { exact: true }).click();
-  await expect(columns.getByRole("textbox", { name: "名前の列" })).toBeVisible();
   await panel.getByRole("button", { name: "検索結果を横並びで比較" }).click();
   await expect(panel.getByRole("textbox", { name: /比較する質問/ })).toBeVisible();
 }
@@ -642,7 +635,6 @@ const SCREENS: FormScreen[] = [
       await expect(page.getByRole("combobox", { name: "質問の拡張", exact: true })).toBeVisible();
       await expect(page.getByRole("combobox", { name: "広げる段の上限", exact: true })).toBeVisible();
       await expect(page.getByRole("combobox", { name: "根拠の入力の上限（%）", exact: true })).toBeVisible();
-      await expect(page.getByRole("combobox", { name: "1 回の検索で加える根拠の上限", exact: true })).toBeVisible();
       await expect(page.getByRole("textbox", { name: /保存・表示しない語/ })).toHaveCount(0);
     },
   },

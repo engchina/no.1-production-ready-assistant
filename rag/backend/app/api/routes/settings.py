@@ -117,8 +117,6 @@ from app.schemas.settings import (
     ChunkingSettingsData,
     ChunkingSettingsUpdate,
     ChunkingStrategyStatusData,
-    EntityIndexSettingsData,
-    EntityIndexSettingsUpdate,
     EvaluationSettingsData,
     EvaluationSettingsUpdate,
     EvaluationSuiteStatusData,
@@ -436,8 +434,6 @@ async def update_answering_settings(
                 payload.request_coverage_retrieval_enabled,
             ),
             ("rag_auto_field_filter_enabled", payload.auto_field_filter_enabled),
-            ("rag_entity_expansion_enabled", payload.entity_expansion_enabled),
-            ("rag_entity_expansion_max_chunks", payload.entity_expansion_max_chunks),
             ("rag_section_expansion_enabled", payload.section_expansion_enabled),
             ("rag_section_expansion_max_levels", payload.section_expansion_max_levels),
             (
@@ -452,10 +448,6 @@ async def update_answering_settings(
         _write_env_values(
             BACKEND_ENV_FILE,
             {
-                "RAG_ENTITY_EXPANSION_ENABLED": _format_env_bool(
-                    candidate.rag_entity_expansion_enabled
-                ),
-                "RAG_ENTITY_EXPANSION_MAX_CHUNKS": str(candidate.rag_entity_expansion_max_chunks),
                 "RAG_SECTION_EXPANSION_ENABLED": _format_env_bool(
                     candidate.rag_section_expansion_enabled
                 ),
@@ -500,8 +492,6 @@ def _answering_settings_data(settings: Settings) -> AnsweringSettingsData:
         screen_linking_enabled=settings.rag_screen_linking_enabled,
         request_coverage_retrieval_enabled=settings.rag_request_coverage_retrieval_enabled,
         auto_field_filter_enabled=settings.rag_auto_field_filter_enabled,
-        entity_expansion_enabled=settings.rag_entity_expansion_enabled,
-        entity_expansion_max_chunks=settings.rag_entity_expansion_max_chunks,
         section_expansion_enabled=settings.rag_section_expansion_enabled,
         section_expansion_max_levels=settings.rag_section_expansion_max_levels,
         section_expansion_input_token_percent=settings.rag_section_expansion_input_token_percent,
@@ -790,30 +780,6 @@ async def update_evaluation_settings(
     _persist_evaluation_settings(candidate)
     settings.rag_evaluation_suite = candidate.rag_evaluation_suite
     return ApiResponse(data=_evaluation_settings_data(settings))
-
-
-@router.get("/entity-index", response_model=ApiResponse[EntityIndexSettingsData])
-async def get_entity_index_settings() -> ApiResponse[EntityIndexSettingsData]:
-    """実体・別名索引を構築する全体の既定を返す。"""
-    return ApiResponse(
-        data=EntityIndexSettingsData(enabled=get_settings().rag_entity_index_enabled)
-    )
-
-
-@router.patch("/entity-index", response_model=ApiResponse[EntityIndexSettingsData])
-async def update_entity_index_settings(
-    payload: EntityIndexSettingsUpdate,
-) -> ApiResponse[EntityIndexSettingsData]:
-    """保存に成功した場合だけ現在プロセスの設定も更新する。"""
-    settings = get_settings()
-    _write_env_values(
-        BACKEND_ENV_FILE,
-        {"RAG_ENTITY_INDEX_ENABLED": str(payload.enabled).lower()},
-        section_comment="# 実体・別名索引",
-        error_detail="実体・別名索引の設定を保存できませんでした。",
-    )
-    settings.rag_entity_index_enabled = payload.enabled
-    return ApiResponse(data=EntityIndexSettingsData(enabled=payload.enabled))
 
 
 async def _run_model_settings_test(

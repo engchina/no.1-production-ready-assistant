@@ -45,7 +45,7 @@ def test_draft_comparison_is_read_only_and_bound_to_both_revisions() -> None:
     saved = client.put(
         "/api/settings/language-pack/draft",
         json={
-            "overrides": {"entity_cues": {"alias_column_words": ["合成の語"]}},
+            "overrides": {"inquiry_cues": {"operation_trigger_terms": ["合成の語"]}},
             "expected_revision": 1,
         },
     )
@@ -54,7 +54,7 @@ def test_draft_comparison_is_read_only_and_bound_to_both_revisions() -> None:
     query = {"expected_revision": 2, "expected_current_id": "synthetic-1"}
     comparison = client.get(url, params=query)
     assert comparison.status_code == 200
-    assert comparison.json()["data"]["affected_stages"] == ["INDEX"]
+    assert comparison.json()["data"]["affected_stages"] == ["CHUNK", "INDEX"]
     assert comparison.json()["data"]["after_id"] == "draft:2"
     assert (
         client.get("/api/settings/language-pack").json()["data"]["current_release"]["version"] == 1

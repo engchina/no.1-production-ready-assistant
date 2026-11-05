@@ -18,10 +18,6 @@ from rag_engine.models.storage import StoredChunk
 from rag_engine.parsing.content_labels import content_labels
 from rag_engine.retrieval.attachment_evidence import is_attachment_evidence
 from rag_engine.retrieval.context_builder import context_bundle_from_records
-from rag_engine.retrieval.entity_expansion import (  # noqa: F401  is_entity_expansion_record はここからも参照できる
-    is_entity_expansion_record,
-    is_reserved_entity_expansion,
-)
 
 RUN_ID_PATTERN = re.compile(r"[0-9a-f]{6,64}\Z")
 
@@ -404,35 +400,9 @@ def _split_text_rerank_candidates(
                 reason="image_vector_only",
             )
             continue
-        # 実体の 1 段の拡張で足した根拠（#1362）も rerank にかける。関連度の分かった後に、下限以上のものだけ
-        # 候補の位置へ戻す（``_keep_entity_expansion_positions``。#1390）。
         rerankable.append(record)
         rerankable_indices.append(index)
     return protected, rerankable, rerankable_indices
-
-
-def _keep_entity_expansion_positions(
-    protected: dict[int, AnswerRecord],
-    reranked: Sequence[AnswerRecord],
-) -> tuple[dict[int, AnswerRecord], list[AnswerRecord]]:
-    """rerank した候補のうち、関連度が下限以上の実体の拡張の根拠を、元の候補の位置へ戻す（#1390）。
-
-    拡張の根拠（台帳の行・略号の表）は質問の語と重ならない橋渡しの行で、分数の順では context に入る順位まで
-    上がらないため、関連度が ``ENTITY_EXPANSION_MIN_RELEVANCE`` 以上なら backend が置いた位置を保つ。下限
-    未満の拡張の根拠は印の無い候補と同じく分数の順のまま（質問と関係の薄い属性の chunk を前に置かない）。
-    """
-    kept = dict(protected)
-    rest: list[AnswerRecord] = []
-    for record in reranked:
-        rerank = record.metadata.get("rerank") if isinstance(record.metadata, dict) else None
-        index = rerank.get("candidate_index") if isinstance(rerank, dict) else None
-        if is_reserved_entity_expansion(record) and isinstance(index, int) and index not in kept:
-            metadata = dict(record.metadata)
-            metadata["rerank"] = {**cast(dict[str, Any], rerank), "kept_position": "entity_expansion"}
-            kept[index] = replace(record, metadata=metadata)
-            continue
-        rest.append(record)
-    return kept, rest
 
 
 def _merge_text_rerank_candidates(

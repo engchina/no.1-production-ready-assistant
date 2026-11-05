@@ -17,7 +17,6 @@ from rag_engine.parsing.decorative_pictures import (
 )
 from rag_engine.parsing.picture_text import fold_picture_ocr_entries
 from rag_engine.retrieval.attachment_evidence import is_attachment_evidence
-from rag_engine.retrieval.entity_expansion import is_reserved_entity_expansion
 from rag_engine.retrieval.evidence_cues import evidence_cues
 from rag_engine.retrieval.metadata_context import answer_metadata_context, document_context_key, with_child_contexts
 from rag_engine.retrieval.operation_context import operation_labels
@@ -362,7 +361,7 @@ def build_chunk_context_bundle(request: ContextBuildRequest) -> ContextBundle:
         )
 
     # 起点は Rerank 順を保つ。親子分割では親本文だけを使い、隣接親・同一ページ・子全体を補完しない。
-    primary = _reserve_entity_expansion_groups(sorted(groups, key=_parent_group_sort_key), request.max_records)
+    primary = _reserve_reference_groups(sorted(groups, key=_parent_group_sort_key), request.max_records)
     selected = list(primary)
     selected_groups = {id(group) for group in selected}
     added_children = [(rank, child, "conversation_attachment") for rank, child in attachment_children]
@@ -415,11 +414,6 @@ def build_chunk_context_bundle(request: ContextBuildRequest) -> ContextBundle:
     return _context_bundle_from_parent_evidence(evidence_tree, max_chars=request.max_chars)
 
 
-def _group_has_entity_expansion(group: _ParentEvidenceBuilder) -> bool:
-    """枠を確保する実体の 1 段の拡張の根拠（#1362。関連度が下限以上。#1390）を起点に持つ親か。"""
-    return any(child.role == "retrieved_anchor" and is_reserved_entity_expansion(child.record) for child in group.children.values())
-
-
 def _group_follows_reference(group: _ParentEvidenceBuilder, sources: set[str]) -> bool:
     """参照元の直後へ置いた交差参照の参照先（#1549）を起点に持ち、その参照元が枠の内の起点の親か。"""
     return any(
@@ -428,18 +422,12 @@ def _group_follows_reference(group: _ParentEvidenceBuilder, sources: set[str]) -
     )
 
 
-def _reserve_entity_expansion_groups(ranked_groups: Sequence[_ParentEvidenceBuilder], max_records: int) -> list[_ParentEvidenceBuilder]:
-    """context の親の枠（``max_records``）に、実体の 1 段の拡張の根拠の親を確保する（#1362）。
+def _reserve_reference_groups(ranked_groups: Sequence[_ParentEvidenceBuilder], max_records: int) -> list[_ParentEvidenceBuilder]:
+    """context の親の枠（``max_records``）に、交差参照の参照先（参照元の直後へ置いたもの。#1549）の親を確保する。
 
-    拡張の根拠（台帳の行・略号の表）は質問の語と重ならず rerank の分数が低いため、分数の順で切ると落ちる。枠の
-    外に落ちた拡張の親を、枠の後ろ（拡張でない親の分数の低い側）と入れ替える。入れ替えるのは枠の半分まで（検索
-    で当たった主根拠を半分より多くは落とさない）。確保するのは関連度が下限（``ENTITY_EXPANSION_MIN_RELEVANCE``）
-    以上の拡張の根拠の親だけで、質問と関係の薄い属性の chunk の親で、検索で当たった親（前後の文脈・章の参照の先
-    を持つ）を入れ替えない（#1390）。拡張の根拠が無ければ今までと同じ。
-
-    交差参照の参照先（参照元の直後へ置いたもの。#1549）の親も、参照元の親が枠の内にあれば同じ枠で確保する
-    （参照先は質問の語と重ならない橋渡しの根拠で、親を分数の順に並べると枠の外に落ちる。kb1517 の定期保守計画の
-    第 1 章「この章に無いシステムは、第 2 章の共通の保守枠で保守します」）。
+    参照先は質問の語と重ならない橋渡しの根拠で、親を分数の順に並べると枠の外に落ちる。参照元の親が枠の内にあれば、枠の外の
+    参照先の親を枠の後ろ（参照先でない親の分数の低い側）と入れ替える。入れ替えるのは枠の半分まで（検索で当たった
+    主根拠を半分より多くは落とさない）。
     """
     primary = list(ranked_groups[:max_records])
     sources = {
@@ -450,7 +438,7 @@ def _reserve_entity_expansion_groups(ranked_groups: Sequence[_ParentEvidenceBuil
     }
 
     def bridge(group: _ParentEvidenceBuilder) -> bool:
-        return _group_has_entity_expansion(group) or _group_follows_reference(group, sources)
+        return _group_follows_reference(group, sources)
 
     reserved = [group for group in ranked_groups[max_records:] if bridge(group)]
     if not reserved:

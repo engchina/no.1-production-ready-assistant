@@ -57,7 +57,6 @@ from rag_engine.retrieval.search_stages import (
     CONTEXT_SIBLINGS_STAGE,
     DERIVED_SOURCE_STAGE,
     DOCUMENT_INFO_STAGE,
-    ENTITY_EXPANSION_STAGE,
     IMAGE_EVIDENCE_STAGE,
     REFERENCE_EXPANSION_STAGE,
 )
@@ -116,14 +115,6 @@ from app.rag.derived_evidence import (
 )
 from app.rag.document_crop import DocumentSourceNotFoundError, crop_png, load_parsed_source
 from app.rag.element_locator import chunk_element_ids
-from app.rag.entity_expansion import (
-    ENTITY_EXPANSION_KEY,
-    ENTITY_EXPANSION_ROLE,
-    ENTITY_SEED_ANCHORS,
-    EntityExpansionStore,
-    expansion_metadata,
-    plan_entity_expansion,
-)
 from app.rag.field_filter_reader import merge_field_conditions
 from app.rag.semantic_audit_policy import semantic_audit_is_diagnostic_only
 from app.rag.span_display import ANSWER_STEP_KIND, answer_step_details, answer_step_params
@@ -190,7 +181,7 @@ _DOCUMENT_REFERENCE_CANDIDATES = 8
 # 交差参照: 参照先を探す範囲に残す検索条件(ナレッジベース・旧版の扱い・基準日だけ)。文書名・
 # ページ・分類・項目などの絞り込みは参照を辿るときには使わない(業務の絞り込みで正当な参照を
 # 止めない。§7.2)。本文に明記された参照(「第 5 条を参照」など)は、利用者が指定した文書名の外の
-# 文書へも辿る(引用を辿る一般的なやり方と同じ。#1280)。実体の拡張(``_expansion_scope``)
+# 文書へも辿る(引用を辿る一般的なやり方と同じ。#1280)。拡張の範囲(``_expansion_scope``)
 # と違い、意図して利用者の絞り込みを越える(#3260)。基準日(as_of)は時点の境界なので外さない
 # (主検索と同じ日で有効期間を判定する。#2602)。利用者の権限(認可の範囲)は検索条件ではなく
 # SQL の述語で当たるので、ここでも外れない。
@@ -199,11 +190,8 @@ _REFERENCE_SCOPE_FILTER_KEYS = ("knowledge_base_id", "include_superseded", AS_OF
 _REFERENCE_DIAGNOSTICS_LIMIT = 10
 # 診断に出す交差参照の起点の記録の、検索の回数の上限(CRAG の各回・要求ごとの再検索)。
 _REFERENCE_DIAGNOSTICS_SEARCHES = 4
-# 実体の 1 段の拡張(#1362)で足した chunk を置く候補の位置(先頭からこの件数の後ろ)。rag_engine は
-# この chunk を rerank で並べ替えず(位置を保つ)、文書の選択で後回しにしない。
-_ENTITY_INSERT_AFTER = 3
-# 実体の拡張の chunk の RRF の点(起点の点に掛ける。rerank が無効なときの並びに使う)。
-_ENTITY_SCORE_DECAY = 0.5
+# 関係情報(#2055)で足した chunk を置く候補の位置(先頭からこの件数の後ろ)。
+# 位置は rerank が決め直す(位置を保つ枠は持たない)。
 
 # 回答の記録の工程(execution_steps)に残す、工程の中の SQL の計測値(#1490。DbCallStats.snapshot)。
 _STEP_DB_METRIC_KEYS = frozenset(
@@ -369,10 +357,6 @@ class _SearchState:
     # 回答の検索の統合(RRF)の順位と点(chunk_id → (順位, 点)。複数回の検索では最も上の順位。
     # #1549)。根拠の木に出す。
     fused_ranks: dict[str, tuple[int, float]] = field(default_factory=dict)
-    # 実体の 1 段の拡張(#1362)で足した chunk の記録(診断に出す。chunk_id → 実体・段・起点)と、
-    # 同じ起点での計画(CRAG の各回で同じ起点なら SQL を読み直さない)。
-    entity_expansions: dict[str, dict[str, object]] = field(default_factory=dict)
-    entity_plans: dict[tuple[str, ...], list[Any]] = field(default_factory=dict)
     # 取込で参照先を解決していない chunk の参照先(#1382。chunk_id ごと)と、その解決に使う
     # 文書の見出しの列((document_id, chunk_set_id) ごと。1 回の回答で 1 回だけ読む)。
     query_reference_targets: dict[str, list[ReferenceTarget]] = field(default_factory=dict)
@@ -482,7 +466,7 @@ def _section_chain(sections: Sequence[Any], owner_section_id: str) -> list[str]:
 
 
 def _expansion_scope(filters: Mapping[str, str]) -> dict[str, str]:
-    """実体の拡張の範囲: 利用者が指定した検索条件をすべて残す(#3260)。
+    """拡張の範囲: 利用者が指定した検索条件をすべて残す(#3260)。
 
     ``filters`` は利用者が指定した条件(画面・検索・回答プロファイル・呼び出し元の
     ``request.filters``)で、ナレッジベース・旧版の扱い・基準日に加えて文書名・ページ・分類・項目の
@@ -605,9 +589,6 @@ def build_engine_settings(
                 else 0,
                 "reference": settings.rag_reference_expansion_max_chunks
                 if settings.rag_reference_expansion_enabled
-                else 0,
-                "entity": settings.rag_entity_expansion_max_chunks
-                if settings.rag_entity_expansion_enabled
                 else 0,
             }
         ),
@@ -826,7 +807,6 @@ class AnswerEngine:
         auto_field_conditions: Sequence[ExtractionFieldCondition] = (),
         approved_faq: tuple[str, str] | None = None,
         scope: AnswerScope | None = None,
-        entity_store: EntityExpansionStore | None = None,
         attachment_chunks: Sequence[RetrievedChunk] = (),
         caller_queries: Sequence[str] | None = None,
         degraded: DegradedSteps | None = None,
@@ -840,7 +820,7 @@ class AnswerEngine:
         # 呼び出し元（業務 Agent）が作った検索文（#2651）。None 以外なら、回答を作らない検索で、
         # 質問に応じた推論の LLM（検索戦略の判定・質問拡張・画面目録の連携）と根拠の
         # 画像の切り出しを設定に関わらず使わない。決定的な工程（規則の質問の理解・用語の別名・
-        # hybrid search・rerank・親子と前後の文脈・交差参照・実体の拡張）は通常の検索と同じ。
+        # hybrid search・rerank・親子と前後の文脈・交差参照）は通常の検索と同じ。
         self._caller_queries = tuple(caller_queries) if caller_queries is not None else None
         if self._caller_queries is not None:
             settings = settings.model_copy(
@@ -856,8 +836,6 @@ class AnswerEngine:
         # チャットの会話の添付から選んだ根拠の候補（#2517。`app.rag.chat_attachments`）。検索の
         # 結果の先頭に足し、rerank・文脈・引用は検索の chunk と同じに扱う。
         self._attachment_chunks = list(attachment_chunks)
-        # 実体の表を読む SQL(#1362)。None は Oracle(``EntityStore``)。テストは同じ規則の表を渡す。
-        self._entity_store = entity_store
         self._genai = genai
         self._runtime_knowledge_payload = runtime_knowledge_payload
         # 回答のモデル(チャットのモデル比較の列のモデル。#593)。None は既定のモデル。
@@ -965,12 +943,6 @@ class AnswerEngine:
         outcome.diagnostics.setdefault("provenance", {})["prompt_version"] = answer_prompt_version(
             overrides
         )
-        if state.entity_expansions:
-            outcome.diagnostics["entity_expansion"] = {
-                "added_count": len(state.entity_expansions),
-                "max_chunks": self._settings.rag_entity_expansion_max_chunks,
-                "chunks": list(state.entity_expansions.values())[:_REFERENCE_DIAGNOSTICS_LIMIT],
-            }
         if state.reference_expansions or any(
             search.get("sources") for search in state.reference_sources
         ):
@@ -1413,7 +1385,7 @@ class AnswerEngine:
     ) -> Any:
         """回答の検索。``page_ranges``(業務ガイドの手順の参照の頁。#2395)は、その頁に絞って検索する。
 
-        頁に絞った検索は、参照の頁の外の chunk(交差参照・実体の拡張)を足さない。利用者の確認で
+        頁に絞った検索は、参照の頁の外の chunk(交差参照)を足さない。利用者の確認で
         検索の範囲がすでに頁に絞られていれば、その範囲と重なる頁だけを検索する(範囲を広げない)。
         """
         from rag_engine.models.storage import HybridSearchResult
@@ -1620,14 +1592,8 @@ class AnswerEngine:
                 )
         referenced = [chunk for chunks in references.values() for chunk in chunks]
         promoted = {chunk.chunk_id for chunk in referenced}
-        # 質問と上位の候補の実体から、実体の表との join で関連する chunk を 1 段だけ足す(#1362)。
-        entity_chunks: list[RetrievedChunk] = []
-        if expand_references and self._settings.rag_entity_expansion_enabled:
-            with _search_stage(ENTITY_EXPANSION_STAGE, active=bool(anchors)):
-                entity_chunks = await self._entity_expansion(request, state, anchors)
-        entity_ids = {chunk.chunk_id for chunk in entity_chunks}
         if self._attach_images and not defer_context:
-            evidence = [*anchors, *siblings, *referenced, *entity_chunks]
+            evidence = [*anchors, *siblings, *referenced]
             with _search_stage(
                 IMAGE_EVIDENCE_STAGE,
                 active=any(_needs_image_materialization(chunk, state) for chunk in evidence),
@@ -1640,8 +1606,7 @@ class AnswerEngine:
                 anchor_id: [state.chunks.get(chunk.chunk_id, chunk) for chunk in chunks]
                 for anchor_id, chunks in references.items()
             }
-            entity_chunks = [state.chunks.get(chunk.chunk_id, chunk) for chunk in entity_chunks]
-        added = [*referenced, *entity_chunks]
+        added = list(referenced)
         evidence = [*anchors, *siblings, *added]
         # 文書の分類(足した根拠の文書)と文書の背景(1 ページ目の本文)は短い読み取りなので 1 つの段に
         # まとめる。読むものが無ければ段を出さない(#3464)。
@@ -1658,9 +1623,6 @@ class AnswerEngine:
         classifications = state.classifications
         children = []
         for chunk in anchors:
-            if chunk.chunk_id in entity_ids:
-                # 実体の拡張で足す chunk は、拡張の位置に置く(下)。
-                continue
             if chunk.chunk_id in promoted:
                 # 参照先として起点の直後へ移した候補は、元の位置に置かない。
                 continue
@@ -1682,27 +1644,11 @@ class AnswerEngine:
                     retrieval_channels=state.retrieval_channels.get(reference.chunk_id),
                 )
                 for reference in references.get(chunk.chunk_id, ())
-                if reference.chunk_id not in entity_ids
             )
-        if entity_chunks:
-            insert_at = min(len(children), _ENTITY_INSERT_AFTER)
-            base_score = fused.get(anchors[0].chunk_id, 0.0) if anchors else 0.0
-            children[insert_at:insert_at] = [
-                _stored_child(
-                    chunk,
-                    rrf_score=base_score * _ENTITY_SCORE_DECAY,
-                    classification=classifications.get(chunk.document_id),
-                    first_page_context=_first_page_context(chunk, state),
-                    retrieval_channels=state.retrieval_channels.get(chunk.chunk_id),
-                )
-                for chunk in entity_chunks
-            ]
         for child in children:
             stage = (
                 "reference"
                 if child.chunk_uid in promoted
-                else "entity"
-                if child.chunk_uid in entity_ids
                 else "fusion"
                 if child.chunk_uid in fusion_ids
                 else "diversity"
@@ -1953,7 +1899,7 @@ class AnswerEngine:
     ) -> None:
         """元の質問の検索を、質問拡張の LLM と並行に先に読む(#1499)。
 
-        検索文ごとの検索の結果(``state.search_hits``)に入れるだけで、融合・参照先・実体の拡張・条件の
+        検索文ごとの検索の結果(``state.search_hits``)に入れるだけで、融合・参照先・条件の
         緩和はしない。続く ``_search`` が同じ検索文・方式・条件・件数の結果を読むので、回答の検索の
         結果は先読みしないときと同じ(条件の緩和は ``_search`` が全検索文の結果で決める)。
         """
@@ -2015,73 +1961,6 @@ class AnswerEngine:
                 ]
             state.search_hits.update(zip(missing, found, strict=True))
         return [state.search_hits[key] for key in keys]
-
-    async def _entity_expansion(
-        self,
-        request: SearchRequest,
-        state: _SearchState,
-        anchors: Sequence[RetrievedChunk],
-    ) -> list[RetrievedChunk]:
-        """質問と上位の候補の実体から、関連する chunk を 1 段だけ足す(#1362)。
-
-        実体は文書レシピで実体の抽出を選んだ文書にだけある。足す chunk は主の検索と同じ範囲
-        (利用者が指定した条件と権限。``_expansion_scope``)の中だけで、合計
-        ``rag_entity_expansion_max_chunks`` 件まで。
-        上位の候補(起点)は足さない(すでに候補の先頭にある)。読めないとき(実体の表が無い古い
-        schema など)は足さずに回答を続ける。LLM は呼ばない。
-        """
-        if not self._settings.rag_entity_expansion_enabled:
-            # 検索方法の全体設定で選ぶ(既定 OFF)。評価では rag_overrides で比較できる。
-            return []
-        scope = _expansion_scope(request.filters)
-        seeds = list(anchors[:ENTITY_SEED_ANCHORS])
-        key = (
-            request.query,
-            json.dumps(scope, ensure_ascii=False, sort_keys=True),
-            *(chunk.chunk_id for chunk in seeds),
-        )
-        plan = state.entity_plans.get(key)
-        if plan is None:
-            try:
-                plan = await plan_entity_expansion(
-                    self._entity_store_or_default(),
-                    scope,
-                    question=request.query,
-                    seed_chunks=seeds,
-                    exclude_chunk_ids={chunk.chunk_id for chunk in seeds},
-                    max_chunks=self._settings.rag_entity_expansion_max_chunks,
-                )
-            except Exception as exc:  # noqa: BLE001 - 実体の拡張は補助。足さずに回答を続ける。
-                logger.warning("entity expansion failed", exc_info=True)
-                state.record_degraded("entity_expansion", exc)
-                plan = []
-            state.entity_plans[key] = plan
-        added: list[RetrievedChunk] = []
-        for item in plan:
-            if is_derived_chunk(item.chunk):
-                # 派生の chunk(要約・項目の値)は原文ではないので足さない(#2641)。
-                continue
-            marked = expansion_metadata(
-                state.chunks.get(item.chunk.chunk_id, item.chunk), item.info
-            )
-            state.chunks[item.chunk.chunk_id] = marked
-            state.entity_expansions.setdefault(
-                item.chunk.chunk_id,
-                {
-                    "chunk_id": item.chunk.chunk_id,
-                    "document_id": item.chunk.document_id,
-                    **item.info,
-                },
-            )
-            added.append(marked)
-        return added
-
-    def _entity_store_or_default(self) -> EntityExpansionStore:
-        if self._entity_store is None:
-            from app.clients.entity_store import EntityStore
-
-            self._entity_store = EntityStore(self._oracle)
-        return self._entity_store
 
     async def _reference_expansion(
         self,
@@ -3110,7 +2989,7 @@ def _with_effective_as_of(request: SearchRequest) -> SearchRequest:
     """検索の基準日(as_of)を決めた要求(#2602)。
 
     基準日の無い要求は今日にする(``OracleClient`` の有効期間の判定の既定と同じ日)。主検索・先読み・
-    交差参照・実体の拡張・画面目録・章節の読み取りはこの要求の条件を使うので、回答の途中で
+    交差参照・画面目録・章節の読み取りはこの要求の条件を使うので、回答の途中で
     日付が変わっても、すべての検索が同じ日で有効期間を判定する。明示した基準日は変えない。
     """
     if (request.filters.get(AS_OF_FILTER_KEY) or "").strip():
@@ -3343,10 +3222,6 @@ def _stored_child(
     if element_ids := chunk_element_ids(chunk.metadata):
         # 解析の要素の ID。複数レシピ融合で元の文書の範囲が同じ根拠を 1 つにまとめる(#1331)。
         metadata["element_ids"] = element_ids
-    if isinstance(expansion := chunk.metadata.get(ENTITY_EXPANSION_KEY), dict):
-        # 実体の 1 段の拡張で足した chunk(#1362)。rag_engine は rerank で位置を変えず、文書の選択で
-        # 後回しにせず、文脈の親の枠を確保する。
-        metadata["entity_expansion"] = dict(expansion)
     if source := str(chunk.metadata.get(REFERENCE_FROM_KEY) or ""):
         # 交差参照で足した参照先(#1280・#1400)。rag_engine は rerank の後に参照元の直後へ置き、
         # 文書の選択で後回しにしない(質問で並べると橋渡しの参照先が下がり、文脈に入らなかった。
@@ -3805,12 +3680,6 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
         if evidence.get("parent_used"):
             # 回答が親（まとまり）だけを参照した子（#2710）。「回答で引用」とは分けて数える。
             metadata[EVIDENCE_PARENT_USED_KEY] = True
-        if ENTITY_EXPANSION_KEY in chunk.metadata and evidence["role"] in {
-            "retrieved_anchor",
-            "",
-        }:
-            # 実体の 1 段の拡張で足した chunk は、検索で当たった chunk と分ける(#1362)。
-            metadata["evidence_role"] = ENTITY_EXPANSION_ROLE
         if retrieval_rank > 0:
             # MCP の根拠は当たった子を関連度の順に先にする（画面の並びは変えない。#1348）。
             metadata["evidence_retrieval_rank"] = retrieval_rank

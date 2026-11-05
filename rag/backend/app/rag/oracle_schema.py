@@ -18,7 +18,6 @@ from pr_system_settings.embedding import EMBEDDING_DIMENSIONS, EMBEDDING_VECTOR_
 
 from app.clients.document_category_store import oracle_document_category_schema_sql
 from app.clients.document_cleanup_store import oracle_document_cleanup_schema_sql
-from app.clients.entity_store import oracle_entity_schema_sql
 from app.clients.language_pack_release_store import language_pack_release_statements
 from app.clients.oracle import (
     oracle_answer_prompt_schema_sql,
@@ -58,7 +57,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261106_001"
+MIGRATION_ARTIFACT_VERSION = "20261106_002"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -290,13 +289,6 @@ def oracle_schema_sections() -> list[OracleSchemaSection]:
             name="ingestion_audit",
             table_name="rag_ingestion_audit",
             sql=oracle_ingestion_audit_schema_sql(),
-        ),
-        # 実体の層（#1362）。実体・別名・実体と chunk の関連。rag_chunk_sets / rag_chunks
-        # を参照する。
-        OracleSchemaSection(
-            name="entities",
-            table_name="rag_entities",
-            sql=oracle_entity_schema_sql(),
         ),
         # 章節と chunk の対応（#1438）。rag_chunks を参照する。
         OracleSchemaSection(
@@ -656,6 +648,19 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261106_002_retire_entity_index",
+            table_name="rag_entities",
+            sql=retire_entity_index_sql(),
+            destructive_note=(
+                "廃止する実体・別名索引の表（RAG_ENTITIES・RAG_ENTITY_ALIASES・RAG_ENTITY_CHUNKS）と"
+                "全行・索引、ロールに付いた権限 menu.settings_entity_index の行を削除します。"
+                "文書・chunk・検索索引、ロールのほかの権限は削除しません。"
+                "必要なら適用前に同表を export してください。削除後は復元できません。"
+            ),
+        )
+    )
     return sections
 
 
@@ -811,6 +816,31 @@ BEGIN
         EXECUTE IMMEDIATE
             'DELETE FROM rag_role_permissions '
             || 'WHERE permission_code = ''rag.evaluation_calibration.manage''';
+    END IF;
+END;
+/
+""".strip()
+
+
+def retire_entity_index_sql() -> str:
+    """実体・別名索引の表と権限の行を消す。子の表から順に消し、表が無い環境でも適用する(#160)。"""
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    FOR item IN (
+        SELECT table_name
+        FROM user_tables
+        WHERE table_name IN ('RAG_ENTITY_CHUNKS', 'RAG_ENTITY_ALIASES', 'RAG_ENTITIES')
+        ORDER BY DECODE(table_name, 'RAG_ENTITIES', 2, 1)
+    ) LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || item.table_name || ' CASCADE CONSTRAINTS PURGE';
+    END LOOP;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions '
+            || 'WHERE permission_code = ''menu.settings_entity_index''';
     END IF;
 END;
 /
@@ -1425,13 +1455,66 @@ END;
 /"""
 
 
-def entity_layer_migration_sql() -> str:
-    """実体の層の表(rag_entities / rag_entity_aliases /
-    rag_entity_chunks)と索引を無ければ作る(#1362)。
+# 適用済みの migration の checksum を変えないために凍結した DDL。表は
+# ``20261106_002_retire_entity_index`` が消す。ここを変えない。
+_RETIRED_ENTITY_LAYER_DDL = """
+CREATE TABLE rag_entities (
+    entity_id       VARCHAR2(64) PRIMARY KEY,
+    chunk_set_id    VARCHAR2(64) NOT NULL,
+    document_id     VARCHAR2(64) NOT NULL,
+    tenant_id_hash  CHAR(64),
+    entity_key      VARCHAR2(400 CHAR) NOT NULL,
+    display_name    VARCHAR2(400 CHAR) NOT NULL,
+    entity_type     VARCHAR2(16) NOT NULL,
+    scope_label     VARCHAR2(200 CHAR),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT rag_entities_document_fk
+        FOREIGN KEY (document_id) REFERENCES rag_documents (document_id) ON DELETE CASCADE,
+    CONSTRAINT rag_entities_type_ck
+        CHECK (entity_type IN ('record', 'defined', 'value', 'term'))
+);
 
-    表と索引を足すだけでデータは変えない。DDL は正本(``oracle_entity_schema_sql``)から作る。
-    """
-    return _create_missing_objects_sql(oracle_entity_schema_sql(), "実体の層")
+CREATE INDEX rag_entities_chunk_set_idx
+    ON rag_entities (chunk_set_id);
+
+CREATE INDEX rag_entities_document_idx
+    ON rag_entities (document_id);
+
+CREATE TABLE rag_entity_aliases (
+    entity_id   VARCHAR2(64) NOT NULL,
+    alias_key   VARCHAR2(400 CHAR) NOT NULL,
+    alias_text  VARCHAR2(400 CHAR) NOT NULL,
+    alias_kind  VARCHAR2(16) NOT NULL,
+    CONSTRAINT rag_entity_aliases_pk PRIMARY KEY (entity_id, alias_key),
+    CONSTRAINT rag_entity_aliases_entity_fk
+        FOREIGN KEY (entity_id) REFERENCES rag_entities (entity_id) ON DELETE CASCADE
+);
+
+CREATE INDEX rag_entity_aliases_key_idx
+    ON rag_entity_aliases (alias_key, entity_id);
+
+CREATE TABLE rag_entity_chunks (
+    entity_id       VARCHAR2(64) NOT NULL,
+    chunk_id        VARCHAR2(128) NOT NULL,
+    chunk_role      VARCHAR2(16) NOT NULL,
+    attribute_name  VARCHAR2(200 CHAR),
+    CONSTRAINT rag_entity_chunks_pk PRIMARY KEY (entity_id, chunk_id),
+    CONSTRAINT rag_entity_chunks_entity_fk
+        FOREIGN KEY (entity_id) REFERENCES rag_entities (entity_id) ON DELETE CASCADE,
+    CONSTRAINT rag_entity_chunks_chunk_fk
+        FOREIGN KEY (chunk_id) REFERENCES rag_chunks (chunk_id) ON DELETE CASCADE,
+    CONSTRAINT rag_entity_chunks_role_ck
+        CHECK (chunk_role IN ('definition', 'attribute', 'mention'))
+);
+
+CREATE INDEX rag_entity_chunks_chunk_idx
+    ON rag_entity_chunks (chunk_id, chunk_role);
+""".strip()
+
+
+def entity_layer_migration_sql() -> str:
+    """実体の層の表と索引を無ければ作る(#1362)。``20261106_002`` が消す(#160)。"""
+    return _create_missing_objects_sql(_RETIRED_ENTITY_LAYER_DDL, "実体の層")
 
 
 def section_chunk_map_migration_sql() -> str:

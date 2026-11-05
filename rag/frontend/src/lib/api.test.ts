@@ -64,22 +64,6 @@ describe("api.request envelope", () => {
     expect(result.profile).toBe("office_to_pdf");
   });
 
-  it.each([true, false])("実体・別名索引の保存は JSON の Content-Type と構築の選択 %s を送る", async (enabled) => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ data: { enabled }, error_messages: [], warning_messages: [] })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await api.updateEntityIndexSettings({ enabled });
-
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(path).toBe("/api/settings/entity-index");
-    expect(init.method).toBe("PATCH");
-    expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
-    expect(JSON.parse(init.body as string)).toEqual({ enabled });
-    expect(result.enabled).toBe(enabled);
-  });
-
   it("エラー時は error_messages を持つ ApiError を投げる", async () => {
     vi.stubGlobal(
       "fetch",

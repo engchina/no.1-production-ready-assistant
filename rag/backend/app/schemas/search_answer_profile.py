@@ -10,7 +10,6 @@ from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator
 
 from app.rag.search_answer_profile_config import (
-    MAX_SEARCH_ANSWER_PROFILE_KNOWLEDGE_BASES,
     SearchAnswerProfileConfig,
 )
 from app.schemas.knowledge_base import (
@@ -146,24 +145,6 @@ def _search_answer_profile_name(value: str) -> str:
     if cleaned.casefold() == DEFAULT_SEARCH_ANSWER_PROFILE_NAME.casefold():
         raise ValueError("DEFAULT は予約名のため使用できません。")
     return cleaned
-
-
-class EntityIndexCoverageRequest(BaseModel):
-    """参照するナレッジベースで、実体の索引を持つ文書を数える（#1388）。"""
-
-    knowledge_base_ids: list[str] = Field(
-        default_factory=list, max_length=MAX_SEARCH_ANSWER_PROFILE_KNOWLEDGE_BASES
-    )
-
-
-class EntityIndexCoverageData(BaseModel):
-    """実体の索引を持つ文書の数（回答の検索と同じ見え方の条件）。
-
-    検索・回答プロファイルの画面は、0 件のとき実体の 1 段の拡張の開閉の横に「文書レシピで実体の
-    索引を有効にすると効きます」と案内する。
-    """
-
-    document_count: int = Field(ge=0)
 
 
 class InheritedAnswerContactData(BaseModel):

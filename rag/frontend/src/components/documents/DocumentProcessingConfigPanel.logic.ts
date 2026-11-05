@@ -24,7 +24,7 @@ import { SETTINGS_ANCHORS } from "@/lib/settings-anchors";
  * - CHUNK: 文書分割 → 文脈ヘッダ（`_chunks_with_context_headers` は分割の直後に chunk metadata へ付ける）
  *   → 「Chunk 後に Embedding / 索引へ進む」のゲート（CHUNKED で止まり、
  *   `rag_auto_index_after_chunk_enabled` なら INDEX の job を積む）
- * - INDEX: embedding と索引の保存の後に実体・別名索引（`_save_entity_index_if_enabled`。#1362）を作る
+ * - INDEX: embedding と索引の保存
  */
 
 type SelectConfigField =
@@ -40,8 +40,7 @@ type BooleanConfigField =
   | "field_extraction_enabled"
   | "navigation_summary_enabled"
   | "auto_chunk_after_extract_enabled"
-  | "auto_index_after_chunk_enabled"
-  | "entity_index_enabled";
+  | "auto_index_after_chunk_enabled";
 
 /**
  * 全体の既定（グローバル設定）を変える画面（#528）。レシピの「グローバル設定を開く」と、
@@ -160,15 +159,6 @@ export const RECIPE_CONFIG_ITEMS = [
     phase: "CHUNK",
     globalSettings: { route: APP_ROUTES.settingsPipeline, anchor: SETTINGS_ANCHORS.autoIndexGate },
   },
-  // 実体・別名索引（#1362 / #1388）。索引の保存の後に作る。検索方法の全体設定の「実体・別名による検索拡張」が使う。
-  // 名前・属性の列は、この項目が有効なときに下の行で選ぶ。
-  {
-    field: "entity_index_enabled",
-    kind: "boolean",
-    label: "knowledgeBases.adapter.field.entityIndex",
-    phase: "INDEX",
-    globalSettings: { route: APP_ROUTES.settingsEntityIndex },
-  },
 ] as const satisfies readonly RecipeConfigItem[];
 
 /**
@@ -206,11 +196,13 @@ export interface RecipeConfigGroup {
 
 /** 項目を工程ごとに分ける。工程の順と、工程の中の項目の順は RECIPE_CONFIG_ITEMS のまま。 */
 export function recipeConfigGroups(
-  items: readonly RecipeConfigItem[] = RECIPE_CONFIG_ITEMS
+  items: readonly RecipeConfigItem[] = RECIPE_CONFIG_ITEMS,
+  // 項目が無くても見出しを出す工程（設定の概要の「Embedding / 索引」は検索インデックスを出す）。
+  keepEmpty: readonly IngestionJobPhase[] = []
 ): RecipeConfigGroup[] {
   return PHASE_ORDER.flatMap((phase, position) => {
     const phaseItems = items.filter((item) => item.phase === phase);
-    if (!phaseItems.length) return [];
+    if (!phaseItems.length && !keepEmpty.includes(phase)) return [];
     return [{ phase, index: position + 1, label: PHASE_LABELS[phase], items: phaseItems }];
   });
 }

@@ -58,8 +58,6 @@ PROFILE_GLOBAL_QUERY_FIELDS = frozenset(
         "guide_step_retrieval_enabled",
         "guide_step_max_queries",
         "guide_step_deadline_seconds",
-        "entity_expansion_enabled",
-        "entity_expansion_max_chunks",
         "section_expansion_enabled",
         "section_expansion_max_levels",
         "section_expansion_input_token_percent",
