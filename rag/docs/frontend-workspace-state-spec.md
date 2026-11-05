@@ -43,7 +43,6 @@
 | 検索・回答プロファイルの業務ガイドの一覧の表示（アーカイブを除く / 含む） | `supportGuides.includeArchived`（#1933） | sessionStorage |
 | ナレッジベース | 作成 / 詳細の名前・説明の未保存の下書き | sessionStorage の `knowledgeBases.draft:<new または KB の ID>`。同じ対象を開き直すと復元する。新規の下書きは一覧の「下書きを開く」から再開する。`変更を元に戻す`・保存の成功で消す（#555） |
 | 品質評価 | 検索・回答プロファイル（`evaluation.profileId`）、実行時の主条件の名前（`evaluation.runProfileName`）、結果の出力に使う実行時の入力（`evaluation.runInput`。保存上限は取込と同じ）、検証した評価リクエストの Excel の結果（ケース・プレビュー・ファイル名。`evaluation.import`。200,000 文字を超えると保存しない。選んだファイルそのものはメモリだけ）、読み込んだケースのページ（`evaluation.previewPaging`）、評価の job id（`evaluation.runJobId`。戻ったらこの id でサーバーの状態を確かめる。#390）と、その評価のケースの見出し（質問・期待する根拠。`evaluation.runCaseLabels`。#2065） | sessionStorage |
-| 品質評価 › 判定の校正（#3578） | 集合一覧のページ番号と表示件数（`evaluation.calibration.setsPaging`。既定 25 件）、選んだ記入の集合（`evaluation.calibration.labelSetId`）、手順のタブ（`evaluation.calibration.step`）、記入の観点と状態の絞り込み（`evaluation.calibration.aspect`・`evaluation.calibration.rowFilter`）、校正の job id（`evaluation.calibration.jobId`。戻ったらこの id でサーバーの状態を確かめる）。タブ（評価の実行 / 判定の校正）は URL の `?tab=calibration` | sessionStorage |
 | 実行履歴（#1890・#1955） | 検索・状態・種類・期間・実行者の絞り込み・ページ・表示件数・最後に開いた行（`history.view`。#1891）。詳細はパスの `:runId` | sessionStorage |
 | フィードバック | 期間・絞り込み・検索・並べ替え・ページ・表示件数（`size`。10 / 25 / 50 / 100、既定 25。#1891・#1952）・選んだ行（`feedback`） | URL の検索パラメータ。サイドナビでパラメータなしの URL に戻ったときは `RememberedSearchParams` が直前の URL を復元 |
 

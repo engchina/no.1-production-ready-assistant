@@ -2003,6 +2003,12 @@ OCI Guardrails の安全チェックと移行の CLI（`app.rag.guardrail_settin
 公開する API / MCP の省略時の値は現在の設定から生成し、静的な契約ファイルは標準の設定 50 で照合します。別製品や外部クライアントが件数を明示して呼ぶ場合、その値を変更しません。不正な環境値は Settings の検証エラーです。稼働中の `.env` 再読込に失敗したときは、既存の設定更新の規則どおり警告を記録し、最後に成功した設定を保ちます。
 
 
+### 判定の校正の退役（#158）
+
+品質評価の判定の校正（タブ・API・権限）は廃止した。新規の schema の正本は `RAG_EVALUATION_LABEL_SETS`・`RAG_EVALUATION_LABEL_ITEMS`・`RAG_EVALUATION_LABELS`・`RAG_EVALUATION_CALIBRATIONS` を含まない。過去の migration は変更せず、
+`20261105_001_retire_evaluation_calibration` が 4 表と全行・索引、校正の job（`RAG_EVALUATION_JOBS` の `kind = 'calibration'` の行）、権限 `rag.evaluation_calibration.manage` の行を削除する。品質評価の実行の job と結果は残る。
+データを消すので、現在の schema 管理の `initialize --allow-destructive` で明示的に適用する。人手の判定が必要な環境は先に同表を export する。
+
 ### 質問履歴と候補の退役（#3762）
 
 質問を候補として集計する設定・保存処理・候補 API は廃止した。会話・メッセージ・回答の記録・実行履歴は継続する。

@@ -7,8 +7,7 @@
 - `output_meaning`: 比べ方が「意味が同じ」の文字の項目の判定（`evaluation.judge_output_meaning`）。
   same → pass、別 → fail。判定に失敗した項目は判定できなかった件。
 
-一致の集計・校正の合否の閾値は、RAG の回答の評価器の校正
-（`rag/backend/app/rag/answer_judge_calibration.py`）と同じ platform の `pr_evaluation_scoring`
+一致の集計・校正の合否の閾値は、suite の評価の校正と同じ platform の `pr_evaluation_scoring`
 （`agreement`・`CalibrationThresholds`・`calibration_failures`）で、結果の形（`aspects.<観点>.splits.<dev|holdout>`・`passed`・`failures`・`provenance`）もそろえる。
 合否は holdout の人手の判定だけで決め、dev は指示の調整に使う。観点（`perspective`。否定・数値・
 日付・条件・長さや丁寧さの偏り・回答の中の評価者への指示など）ごとの内訳も出す。

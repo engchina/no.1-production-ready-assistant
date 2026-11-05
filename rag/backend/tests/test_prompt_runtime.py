@@ -10,8 +10,8 @@ from rag_engine.resources.runtime import (
 )
 
 from app.api.routes.settings import _answer_prompts_data
-from app.rag.answer_judge_calibration import judge_prompt_sha256
 from app.rag.answer_prompts import STAGE_PROMPT_REFS, default_prompt, validate_prompt
+from app.rag.rerank_context_experiment import judge_prompt_sha256
 
 
 def test_stage_editor_displays_saved_instruction_and_builtin_default() -> None:

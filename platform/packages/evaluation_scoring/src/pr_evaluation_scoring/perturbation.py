@@ -12,10 +12,9 @@
 - `reverse_steps`: 番号つきの手順の並びを逆にする（手順の前後関係の誤り）。
 
 合成の fail は「壊したので不合格のはず」というコードの仮定で、人の判定ではない。壊した結果が誤りに
-ならない回答もあり得るので、記入用のブック・RAG の判定の校正の画面で人が除外できる。
+ならない回答もあり得るので、記入用のブックで人が除外できる。
 
-suite の `label-template` と RAG の判定の校正の画面が、同じ壊し方と選び方（`perturb_items`）を
-使う。
+suite の `label-template` が、この壊し方と選び方（`perturb_items`）を使う。
 """
 
 from __future__ import annotations

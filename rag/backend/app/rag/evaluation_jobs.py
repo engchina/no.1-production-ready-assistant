@@ -488,10 +488,9 @@ def _record_from_row(
     row: Mapping[str, object], *, tenant_id_hash: str | None, user_id_hash: str | None
 ) -> EvaluationJobRecord:
     result = row.get("result_json")
-    kind: EvaluationJobKind = "calibration" if row.get("kind") == "calibration" else "run"
     return EvaluationJobRecord(
         job_id=str(row["job_id"]),
-        kind=kind,
+        kind="run",
         status=_STATUSES.get(str(row.get("status") or ""), "FAILED"),
         total_cases=int(str(row.get("total_cases") or 0)),
         completed_cases=int(str(row.get("completed_cases") or 0)),
@@ -513,7 +512,7 @@ def _record_from_row(
 def evaluation_job_response(record: EvaluationJobRecord) -> EvaluationJob:
     """API の応答に変換する。結果は成功のときだけ返す。"""
     run_result: EvaluationMetrics | None = None
-    if record.kind == "run" and record.status == "SUCCEEDED" and record.result is not None:
+    if record.status == "SUCCEEDED" and record.result is not None:
         run_result = EvaluationMetrics.model_validate(record.result)
     return EvaluationJob(
         job_id=record.job_id,
@@ -602,12 +601,10 @@ class EvaluationJobService:
         total_cases: int,
         time_limit_seconds: int,
         executor: EvaluationJobExecutor,
-        job_id: str | None = None,
     ) -> EvaluationJob:
         """job を作り、このプロセスの task で実行を始める。
 
-        task は呼び出し元（request）の文脈（利用者・対象範囲）を引き継ぐ。``job_id`` は、job の
-        結果を別の表に書く呼び出し（判定の校正。#3578）が先に決めた ID。
+        task は呼び出し元（request）の文脈（利用者・対象範囲）を引き継ぐ。
         """
         store = self._resolve_store()
         await store.fail_stale(
@@ -623,7 +620,7 @@ class EvaluationJobService:
             )
         tenant_id_hash, user_id_hash = self._owner()
         record = EvaluationJobRecord(
-            job_id=job_id or uuid.uuid4().hex,
+            job_id=uuid.uuid4().hex,
             kind=kind,
             status="RUNNING",
             total_cases=total_cases,

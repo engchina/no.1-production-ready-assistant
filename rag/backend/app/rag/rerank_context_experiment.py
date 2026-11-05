@@ -24,7 +24,7 @@ child の原文）。索引が同じなので候補の集合は 2 つで同じ�
 - ``retrieve``: 小さい KB（#75 の 215 child）と大きい KB（+ 妨害の文書）で検索し、
   候補の集合・再ランクの後の順位・最終の上位 5 件・配対の比較・再ランクの時間を出す。
   埋め込みの記録が大きい（数十 MB）ので repo に入れない。
-- ``answer``: ``retrieve`` の結果の最終の上位 5 件から回答を生成し、#65 で校正した評価器
+- ``answer``: ``retrieve`` の結果の最終の上位 5 件から回答を生成し、回答の評価器
   （``evaluate_answer_record`` → ``evaluate_answer_payload``）で判定して、配対で比べる。
   記録は小さいので、講義の再生用に同梱する。
 
@@ -1053,10 +1053,75 @@ def run_answers(
     }
 
 
-def _short_reasons(evaluation: Mapping[str, Any]) -> dict[str, list[str]]:
-    """読み返し用の観点ごとの理由（#65 の校正と同じ ``aspect_reasons``）。"""
-    from app.rag.answer_judge_calibration import ASPECT_METRICS, aspect_reasons
+ASPECT_METRICS: dict[str, str] = {
+    "requirement_coverage": "requirement_coverage",
+    "answer_correctness": "answer_correctness",
+    "claim_support": "claim_support_rate",
+}
+_UNSUPPORTED_CLAIMS = {"unsupported", "contradicted", "citation_error", "unassessed"}
 
+
+def aspect_reasons(evaluation: Mapping[str, Any] | None, aspect_id: str) -> list[str]:
+    """評価器が観点をその判定にした理由。
+
+    正しさは判定の理由、網羅は対応しなかった比較項目、根拠は裏付けられなかった主張と理由。
+    完了しない評価は status と例外の型だけ（例外の本文は接続の情報を含み得るので出さない）。
+    """
+    if not evaluation:
+        return ["評価がありません"]
+    status = evaluation.get("status")
+    if status != "completed":
+        error_type = evaluation.get("error_type")
+        return [f"評価が完了しませんでした（{status}{f'・{error_type}' if error_type else ''}）"]
+    if aspect_id == "answer_correctness":
+        reason = evaluation.get("correctness_reason")
+        return [str(reason)] if reason else []
+    if aspect_id == "requirement_coverage":
+        scope = evaluation.get("standard_answer_scope") or {}
+        requirements = scope.get("requirements") or []
+        reasons = []
+        for check in evaluation.get("coverage_checks") or []:
+            if check.get("status") == "addressed":
+                continue
+            index = int(check.get("requirement_index") or 0)
+            requirement = requirements[index - 1] if 0 < index <= len(requirements) else {}
+            reasons.append(f"{check.get('status')}: {requirement.get('requirement', index)}")
+        return reasons
+    if aspect_id == "claim_support":
+        return [
+            f"{claim.get('status')}: {str(claim.get('answer_quote') or '')[:80]}"
+            f" — {claim.get('reason')}"
+            for claim in evaluation.get("claim_checks") or []
+            if claim.get("status") in _UNSUPPORTED_CLAIMS
+        ]
+    return []
+
+
+def judge_prompt_sha256() -> str:
+    """評価器の指示（``answer_eval`` の ``*_PROMPT``）の sha256（記録の照合に使う）。
+
+    指示の名前・数が変わっても、module の大文字の ``*_PROMPT`` の文字列を名前の順に hash する。
+    """
+    from rag_engine.evaluation import answer_eval
+    from rag_engine.resources.runtime import resolve_prompt
+
+    keys = {
+        "SCOPE_PROMPT": "scope",
+        "COVERAGE_PROMPT": "coverage",
+        "CLAIM_PROMPT": "claim",
+        "CORRECTNESS_PROMPT": "correctness",
+    }
+    prompts = sorted(
+        (name, resolve_prompt(f"evaluation.{keys[name]}", value) if name in keys else value)
+        for name, value in vars(answer_eval).items()
+        if name.isupper() and name.endswith("PROMPT") and isinstance(value, str)
+    )
+    payload = json.dumps(prompts, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _short_reasons(evaluation: Mapping[str, Any]) -> dict[str, list[str]]:
+    """読み返し用の観点ごとの理由。"""
     return {aspect: aspect_reasons(evaluation, aspect) for aspect in ASPECT_METRICS}
 
 
@@ -1208,10 +1273,9 @@ def _write_json(path: Path, value: Any) -> None:
 
 
 def backend_dependencies() -> tuple[Embedder, Generate, Evaluate, dict[str, Any]]:
-    """RAG の設定の埋め込み・再ランクの client、既定のテキストモデルの生成、校正した評価器。"""
+    """RAG の設定の埋め込み・再ランクの client、既定のテキストモデルの生成、回答の評価器。"""
     from app.config import enterprise_ai_judge_model_id, get_settings
     from app.rag.answer_engine import evaluate_answer_record
-    from app.rag.answer_judge_calibration import judge_prompt_sha256
     from app.rag.representation_experiment import backend_dependencies as base_dependencies
     from app.schemas.search import RetrievedChunk
 
