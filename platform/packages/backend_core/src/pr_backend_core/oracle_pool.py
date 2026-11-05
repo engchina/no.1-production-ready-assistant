@@ -3,7 +3,7 @@
 python-oracledb に直接依存しない（`oracledb` は使うときに import する。テストは loader で
 差し替える）。
 
-- 接続引数（DSN・ユーザー・パスワード・Wallet / TLS の引数を含む）の指紋ごとに pool を 1 つだけ
+- 接続引数（DSN・ユーザー・パスワードを含む）の指紋ごとに pool を 1 つだけ
   持ち、最初に借りるときに作る。引数が変わったら（DB の設定を保存したとき等）作り直す
 - 新しい接続ごとに `init_oracle_session`（session_callback）を当てる
 - 借りた接続は、例外のときは rollback してから返す。返すと python-oracledb が未コミットの変更を
@@ -13,7 +13,7 @@ python-oracledb に直接依存しない（`oracledb` は使うときに import 
   捨てて新しい pool で 1 回だけやり直す。接続できない（`DPY-6005`・`ORA-125xx` など）ときは pool を
   捨てて（次の要求は新しい pool から始める）その例外を返す（#820。`recover_pool_error`）
 
-接続のたびに Wallet / mTLS の handshake と認証をやり直さないためのもの。DB が未設定かどうかの判定は
+接続のたびに handshake と認証をやり直さないためのもの。DB が未設定かどうかの判定は
 呼び出し側（製品）が持ち、未設定なら pool を作らない。
 """
 

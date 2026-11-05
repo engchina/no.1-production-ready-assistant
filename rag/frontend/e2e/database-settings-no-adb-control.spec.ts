@@ -3,23 +3,18 @@ import { expect, test } from "./fixtures/test";
 import { SYSTEM_TABLES_STATUS_OK, expectNoPageOverflow, mockLocalAuth } from "./_helpers";
 
 // DB の起動・停止・状態の取得は画面で扱わない（#10。DB は ADB Free コンテナで、起動・停止は docker 側の責務）。
-// データベース設定には接続設定・Wallet・接続テストだけを出し、ADB の情報取得・起動・停止の API を呼ばない。
+// データベース設定には接続設定・接続テストだけを出し、ADB の情報取得・起動・停止の API を呼ばない。
 
 const databaseSettings = {
   user: "rag_app",
-  dsn: "ragdb_high",
-  wallet_dir: "/u01/aipoc/instantclient_23_26/network/admin",
-  wallet_uploaded: true,
-  available_services: ["ragdb_high"],
+  dsn: "127.0.0.1:1525/ragdb_low",
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "VECTOR(1024, FLOAT32)",
   adb_ocid: "",
   region: "",
   driver_mode: "thick" as const,
-  connection_security: "wallet_mtls" as const,
   client_lib_dir: "/u01/aipoc/instantclient_23_26",
   config_source: "runtime" as const,
 };

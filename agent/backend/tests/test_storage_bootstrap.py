@@ -162,7 +162,7 @@ def test_corrupt_checkpoint_returns_how_to_fix_it(storage: _Storage) -> None:
 
 
 def test_unexpected_errors_point_to_the_log(storage: _Storage) -> None:
-    storage.repository_error = ValueError("wallet=/secret/path")
+    storage.repository_error = ValueError("dsn=/secret/path")
 
     with pytest.raises(AgentRuntimeStorageUnavailableError) as caught:
         storage_bootstrap.ensure_ready()

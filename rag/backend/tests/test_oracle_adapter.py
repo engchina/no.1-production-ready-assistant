@@ -19,7 +19,6 @@ import app.clients.oracle as oracle_module
 from app.clients.oracle import (
     DocumentDeleteBlockedByRunningIngestionError,
     OracleClient,
-    OracleWalletPasswordRequiredError,
     _datetime_value,
     _test_oracle_connection_sync,
     oracle_document_schema_sql,
@@ -128,10 +127,8 @@ def test_shared_pool_created_while_db_down_recovers_after_start(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
     client = OracleClient(settings=settings)
     client.connection_pool()  # 停止中に作られた pool
@@ -164,21 +161,22 @@ def test_shared_pool_is_recreated_when_database_settings_change(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
     client = OracleClient(settings=settings)
     first = client.connection_pool()
     assert client.connection_pool() is first
 
     # `get_settings()` が `.env` を読み直すと、同じ Settings の値が書き換わる。
-    settings.oracle_dsn = "otherdb_high"
+    settings.oracle_dsn = "other.example.test:1521/otherdb"
     second = client.connection_pool()
 
     assert second is not first
-    assert [kwargs["dsn"] for kwargs in db.kwargs] == ["ragdb_high", "otherdb_high"]
+    assert [kwargs["dsn"] for kwargs in db.kwargs] == [
+        "adb.example.test:1521/ragdb",
+        "other.example.test:1521/otherdb",
+    ]
     assert db.pools[0].closed == 1
     assert client.connection_pool() is second
 
@@ -442,52 +440,10 @@ async def test_append_message_binds_clarification_json(
     assert json.loads(cast(str, insert.parameters["clarification_json"])) == clarification
 
 
-def test_oracle_connection_refuses_password_wallet_without_prompt(
+def test_oracle_connection_passes_only_user_password_and_dsn(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    """パスワード必須 Wallet は SDK の対話入力へ進む前に止める。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "ewallet.p12").write_bytes(b"encrypted-wallet")
-    called = False
-
-    def fake_connect(**kwargs: object) -> object:
-        nonlocal called
-        called = True
-        return FakeOracleConnection([[{"ok": 1}]])
-
-    monkeypatch.setattr(
-        "app.clients.oracle.importlib.import_module",
-        lambda name: SimpleNamespace(connect=fake_connect),
-    )
-    settings = Settings.model_construct(
-        oracle_user="rag_app",
-        oracle_password="",
-        oracle_dsn="ragdb_high",
-        oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
-    )
-
-    with pytest.raises(OracleWalletPasswordRequiredError, match="Wallet パスワード"):
-        _test_oracle_connection_sync(settings)
-
-    assert called is False
-
-
-def test_oracle_connection_uses_auto_login_wallet_without_wallet_password(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """cwallet.sso がある Wallet は Wallet パスワードなしで接続 kwargs を作る。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
+    """接続の引数は、ユーザー・パスワード・DSN と接続の待ち時間・再試行だけ。"""
     captured: dict[str, object] = {}
 
     def fake_connect(**kwargs: object) -> object:
@@ -500,19 +456,21 @@ def test_oracle_connection_uses_auto_login_wallet_without_wallet_password(
     )
     settings = Settings.model_construct(
         oracle_user="rag_app",
-        oracle_password="",
-        oracle_dsn="ragdb_high",
+        oracle_password="db-secret",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)
 
-    assert captured["config_dir"] == str(wallet_dir)
-    assert captured["wallet_location"] == str(wallet_dir)
-    assert captured["tcp_connect_timeout"] == 10.0
-    assert "wallet_password" not in captured
+    assert captured == {
+        "user": "rag_app",
+        "password": "db-secret",
+        "dsn": "adb.example.test:1521/ragdb",
+        "retry_count": 0,
+        "retry_delay": 0,
+        "tcp_connect_timeout": 10.0,
+    }
 
 
 def test_oracle_connection_initializes_instant_client_when_configured(
@@ -520,11 +478,6 @@ def test_oracle_connection_initializes_instant_client_when_configured(
     tmp_path: Path,
 ) -> None:
     """RAG も nl2sql と同じく PLATFORM_ORACLE_CLIENT_LIB_DIR があれば thick client を使う。"""
-    wallet_dir = tmp_path / "instantclient_23_26" / "network" / "admin"
-    wallet_dir.mkdir(parents=True)
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
     calls: list[tuple[str, object]] = []
 
     def fake_init_oracle_client(*, lib_dir: str) -> None:
@@ -545,37 +498,34 @@ def test_oracle_connection_initializes_instant_client_when_configured(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir=str(tmp_path / "instantclient_23_26"),
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)
 
     assert calls[0] == ("init", str(tmp_path / "instantclient_23_26"))
-    assert calls[1] == ("connect", "ragdb_high")
+    assert calls[1] == ("connect", "adb.example.test:1521/ragdb")
 
 
-_WALLET_HIGH = (
+_RETRY_DESCRIPTOR = (
     "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)"
-    "(host=adb.example.com))(connect_data=(service_name=x_ragdb_high.adb.oraclecloud.com))"
+    "(host=adb.example.com))(connect_data=(service_name=x_ragdb.adb.oraclecloud.com))"
     "(security=(ssl_server_dn_match=yes)))"
 )
 
 
 @pytest.mark.parametrize("cli", [False, True], ids=["server", "cli"])
 def test_shared_pool_keeps_tns_retry_only_for_the_server(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cli: bool
+    monkeypatch: pytest.MonkeyPatch, cli: bool
 ) -> None:
-    """常駐の server の共有 pool は Wallet の別名の DSN のまま（TNS の再試行で一時の切断に強い）。
+    """常駐の server の共有 pool は接続記述子の DSN のまま（TNS の再試行で一時の切断に強い）。
 
     CLI（`enable_cli_connect_mode`）だけ、TNS の再試行を外した記述子・`retry_count=0`・短い
     `tcp_connect_timeout` で作る（DB の停止中に 1〜2 分待たない。#1779）。
     """
     from pr_backend_core.oracle_dsn import CLI_TCP_CONNECT_TIMEOUT_SECONDS, enable_cli_connect_mode
 
-    (tmp_path / "tnsnames.ora").write_text(f"ragdb_high = {_WALLET_HIGH}\n", encoding="utf-8")
     created: list[dict[str, object]] = []
     pool = FakeOraclePool()
 
@@ -591,10 +541,8 @@ def test_shared_pool_keeps_tns_retry_only_for_the_server(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn=_RETRY_DESCRIPTOR,
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(tmp_path),
-        oracle_wallet_password="",
         oracle_tcp_connect_timeout_seconds=10.0,
         oracle_pool_max=4,
     )
@@ -604,13 +552,13 @@ def test_shared_pool_keeps_tns_retry_only_for_the_server(
     assert OracleClient(settings=settings).connection_pool() is pool
 
     kwargs = created[0]
-    assert kwargs["config_dir"] == str(tmp_path) and kwargs["getmode"] == 3
+    assert kwargs["getmode"] == 3
     if cli:
-        assert kwargs["dsn"] == _WALLET_HIGH.replace("(retry_count=20)(retry_delay=3)", "")
+        assert kwargs["dsn"] == _RETRY_DESCRIPTOR.replace("(retry_count=20)(retry_delay=3)", "")
         assert kwargs["retry_count"] == 0 and kwargs["retry_delay"] == 0
         assert kwargs["tcp_connect_timeout"] == CLI_TCP_CONNECT_TIMEOUT_SECONDS
     else:
-        assert kwargs["dsn"] == "ragdb_high"
+        assert kwargs["dsn"] == _RETRY_DESCRIPTOR
         assert "retry_count" not in kwargs and "retry_delay" not in kwargs
         assert kwargs["tcp_connect_timeout"] == 10.0
     # 診断の直接の接続も、その pool と同じ接続先を使う（#1744）。
@@ -646,35 +594,23 @@ def test_oracle_pool_initializes_instant_client_when_configured(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn="adb.example.test:1521/ragdb",
         oracle_client_lib_dir=str(tmp_path / "instantclient_23_26"),
-        oracle_wallet_dir="",
-        oracle_wallet_password="",
     )
 
     client = OracleClient(settings=settings)
 
     assert client.connection_pool() is pool
     assert calls[0] == ("init", str(tmp_path / "instantclient_23_26"))
-    assert calls[1] == ("create_pool", "ragdb_high")
+    assert calls[1] == ("create_pool", "adb.example.test:1521/ragdb")
     # 新しい接続ごとに result cache を無効にする（ADB の内部エラーを避ける。#333）。
     assert calls[2] == ("session_callback", init_oracle_session)
 
 
-def test_oracle_connection_uses_database_password_as_wallet_password(
+def test_oracle_connection_test_strips_descriptor_retry(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    """Wallet パスワード未入力時は DB password を wallet_password に使う。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("ragdb_high = ...", encoding="utf-8")
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
-    (wallet_dir / "ewallet.pem").write_text(
-        "-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----\n",
-        encoding="utf-8",
-    )
+    """接続テストは接続記述子の長い retry 設定を外して即時診断しやすくする。"""
     captured: dict[str, object] = {}
 
     def fake_connect(**kwargs: object) -> object:
@@ -688,50 +624,8 @@ def test_oracle_connection_uses_database_password_as_wallet_password(
     settings = Settings.model_construct(
         oracle_user="rag_app",
         oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
+        oracle_dsn=_RETRY_DESCRIPTOR,
         oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
-    )
-
-    _test_oracle_connection_sync(settings)
-
-    assert captured["wallet_password"] == "db-secret"
-    assert captured["tcp_connect_timeout"] == 10.0
-
-
-def test_oracle_connection_test_strips_wallet_retry_descriptor(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """接続テストは ADB Wallet alias の長い retry 設定を外して即時診断しやすくする。"""
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text(
-        "ragdb_high = (description=(retry_count=20)(retry_delay=3)"
-        "(address=(protocol=tcps)(port=1522)(host=adb.example.com))"
-        "(connect_data=(service_name=ragdb_high.adb.oraclecloud.com)))",
-        encoding="utf-8",
-    )
-    (wallet_dir / "sqlnet.ora").write_text("WALLET_LOCATION = ...", encoding="utf-8")
-    (wallet_dir / "cwallet.sso").write_bytes(b"auto-login-wallet")
-    captured: dict[str, object] = {}
-
-    def fake_connect(**kwargs: object) -> object:
-        captured.update(kwargs)
-        return FakeOracleConnection([[{"ok": 1}]])
-
-    monkeypatch.setattr(
-        "app.clients.oracle.importlib.import_module",
-        lambda name: SimpleNamespace(connect=fake_connect),
-    )
-    settings = Settings.model_construct(
-        oracle_user="rag_app",
-        oracle_password="db-secret",
-        oracle_dsn="ragdb_high",
-        oracle_client_lib_dir="",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_wallet_password="",
     )
 
     _test_oracle_connection_sync(settings)

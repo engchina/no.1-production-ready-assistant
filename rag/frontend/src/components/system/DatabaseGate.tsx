@@ -14,7 +14,7 @@ import { canOpenRoute } from "@/lib/route-permissions";
 import { APP_ROUTES } from "@/lib/routes";
 
 /**
- * DB ゲートの導線。接続設定と Wallet の確認はデータベース設定（DB の起動・停止は画面では扱わない。#10）、
+ * DB ゲートの導線。接続設定の確認はデータベース設定（DB の起動・停止は画面では扱わない。#10）、
  * システムテーブルの作成・更新は運用設定のシステムテーブル（NL2SQL と
  * 同じ。#658 / #820）。システムテーブルの画面は未初期化でも開ける。
  */

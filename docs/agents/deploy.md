@@ -4,7 +4,7 @@
 > 正本: `platform/deploy/`・[platform/docs/deployment.md](../../platform/docs/deployment.md)。
 
 - 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd。Dockerfile・compose は持たない。Agent も組み込み Runtime で、Docker の Runtime は持たない）。
-- **再配備は、配備済み Compute の repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。** `origin/main` を取得し、保存済みの設定・Wallet を保って build・サービス再起動・health 確認を行う。`-n` はパスワード入力を待たずに実行する指定。
+- **再配備は、配備済み Compute の repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。** `origin/main` を取得し、保存済みの設定を保って build・サービス再起動・health 確認を行う。`-n` はパスワード入力を待たずに実行する指定。
 - OCI Resource Manager の Terraform stack（以前の `terraform/`）による配備は持たない（#12）。ADB と Compute は配備の外で用意し、配備の入力は Compute の `/u01/aipoc/props/`（`suite-init.sh` の冒頭のコメント）に置く。
 - Compute の上では `platform/deploy/suite-init.sh` が各製品の `init_script.sh`（製品は単独では配備しない）を順に呼ぶ。**reverse proxy（Nginx など）・TLS の証明書・公開の port は配備しない**（#19。前段に置くかは利用者の選択。各製品は backend を `127.0.0.1` の製品の port で、frontend は `dist/` を build するだけ。手順は [README](../../README.md)「各製品の公開」）。frontend の base は build の `FRONTEND_BASE_PATH`（未指定は `/`。配備は `/<製品>/`）。
 - **3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない。既定の名前 `ADB_APP_USER`）で接続する**（#1668・#1675）。ユーザーの作成と grant は Compute の `suite-init.sh` が製品の配備の前に ADMIN で行い（`platform/deploy/suite-db-user.py`）、Compute の外からは DB に接続しない（ADB は Compute からしか届かない）。DB の新しい機能を使うときは、付ける権限（`PDB_DBA`）で足りるかを確かめ、[platform/docs/deployment.md](../../platform/docs/deployment.md)「アプリ用の DB ユーザー」の表を更新する。

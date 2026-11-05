@@ -5,7 +5,7 @@
 # 既定（build して再起動）:
 #   1. 各製品の今の backend/.env を props（配備の入力）へ写す。suite-init.sh は props から backend/.env を
 #      作り直すため、写さないと画面で保存した値（RAG の HuggingFace・解析後の処理
-#      など）が消える。元の props は recovery/<時刻>/ に退避する。platform/.env・Wallet は
+#      など）が消える。元の props は recovery/<時刻>/ に退避する。platform/.env は
 #      suite-init.sh がそのまま保つ。
 #   2. suite-init.sh を再実行する（依存の同期・共有 UI と各製品の frontend の build・DB の初期化と migration・
 #      systemd の unit・サービスの再起動）。suite-pull.sh で取得した最新のコードは、ここで使われる。
@@ -54,7 +54,7 @@ Usage: sudo platform/deploy/suite-restart.sh [--no-build | --status]
 --no-build  build せず、有効な production-ready-* の service だけを再起動します。
 --status    再起動せず、配備の確認（service の状態・各製品の backend の health）だけを 1 回行います。
 
-画面で保存した値（各製品の backend/.env・platform/.env）と Wallet は保ちます。
+画面で保存した値（各製品の backend/.env・platform/.env）は保ちます。
 log は /var/log/suite-ops.log（再配備の詳細は /var/log/suite-init.log）。
 
 DB（ADB Free コンテナ）の起動・停止はしません。DB が止まっていれば、docker start で起動してから実行してください。

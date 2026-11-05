@@ -14,7 +14,7 @@ def test_moves_common_keys_and_prefixes_product_keys(tmp_path: Path) -> None:
     backend_env = tmp_path / ".env"
     backend_env.write_text(
         "# アプリ\nLOG_LEVEL=INFO\nNL2SQL_RUNTIME_MODE=oracle\n"
-        "ORACLE_DSN=db_high\nAPP_ADMIN_LOGIN_USER_PASSWORD='Secret#1'\n"
+        "ORACLE_DSN=db.example.com:1521/app_svc\nAPP_ADMIN_LOGIN_USER_PASSWORD='Secret#1'\n"
         "ORACLE_USER=app_old\nAPP_ADMIN_USERNAME=old\n",
         encoding="utf-8",
     )
@@ -37,7 +37,7 @@ def test_moves_common_keys_and_prefixes_product_keys(tmp_path: Path) -> None:
         "# アプリ\nNL2SQL_LOG_LEVEL=INFO\nNL2SQL_RUNTIME_MODE=oracle\n"
     )
     platform_text = platform_env.read_text(encoding="utf-8")
-    assert "PLATFORM_ORACLE_DSN=db_high" in platform_text
+    assert "PLATFORM_ORACLE_DSN=db.example.com:1521/app_svc" in platform_text
     assert "PLATFORM_ADMIN_LOGIN_USER_PASSWORD='Secret#1'" in platform_text
     # 競合は共通 .env の値を残す。
     assert "PLATFORM_ORACLE_USER=app_new" in platform_text

@@ -5,7 +5,7 @@
   （`features/agent/runtime.py`）・定義の保存（`features/agent/control_plane_store.py`）が使う。
   Run の repository の別の接続設定（旧 `AGENT_RUNTIME_ORACLE_*`）は #764 で削除した。
 - 接続テスト以外は、プロセスで 1 つの接続 pool（`pr_backend_core.oracle_pool`）から借りる（#793）。
-  Wallet / mTLS の ADB へ要求のたびに接続し直すと、1 回ごとに handshake と認証の往復がかかるため。
+  要求のたびに接続し直すと、1 回ごとに handshake と認証の往復がかかるため。
   pool は接続引数が変わると作り直し、DB 設定の保存時と終了時に閉じる。大きさは
   `AGENT_ORACLE_POOL_MIN_CONNECTIONS` / `AGENT_ORACLE_POOL_MAX_CONNECTIONS`。
 - システム設定 > データベース の接続テストは、保存前の候補の値を試すため pool を使わない。
@@ -15,11 +15,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from pr_backend_core.oracle_dsn import apply_cli_connect_mode, dsn_without_tns_retry
+from pr_backend_core.oracle_dsn import apply_cli_connect_mode
 from pr_backend_core.oracle_pool import OraclePoolSize, SharedOraclePool
 
 DEFAULT_POOL_MIN_CONNECTIONS = 1
@@ -34,16 +33,10 @@ _PLATFORM_POOL = SharedOraclePool(
 
 
 def oracle_connect_kwargs(settings: Any) -> dict[str, object]:
-    """`oracledb.connect` の引数（Thin mode。Wallet があれば mTLS）。
-
-    再試行しない（`retry_count=0`）。Wallet の別名の接続記述子の `(retry_count=20)(retry_delay=3)`
-    は引数より優先されるため、別名を再試行の設定を外した記述子に置き換える（DB の停止中に 1 回の
-    接続で 1 分以上待たない。RAG / NL2SQL の接続テストと同じ。#1212）。
-    """
-    wallet_dir = str(settings.oracle_wallet_dir or "").strip()
+    """`oracledb.connect` の引数（Thin mode）。再試行しない（`retry_count=0`。#1212）。"""
     kwargs: dict[str, object] = {
         "user": settings.oracle_user,
-        "dsn": dsn_without_tns_retry(str(settings.oracle_dsn or ""), wallet_dir or None),
+        "dsn": str(settings.oracle_dsn or ""),
         "retry_count": 0,
         "retry_delay": 0,
     }
@@ -52,16 +45,11 @@ def oracle_connect_kwargs(settings: Any) -> dict[str, object]:
         kwargs["tcp_connect_timeout"] = tcp_connect_timeout
     if str(settings.oracle_password or "").strip():
         kwargs["password"] = settings.oracle_password
-    if wallet_dir:
-        kwargs["config_dir"] = str(Path(wallet_dir).expanduser())
-        kwargs["wallet_location"] = str(Path(wallet_dir).expanduser())
-    if str(settings.oracle_wallet_password or "").strip():
-        kwargs["wallet_password"] = settings.oracle_wallet_password
     return kwargs
 
 
 def platform_oracle_connect_kwargs(settings: Any) -> dict[str, object]:
-    """Settings（`PLATFORM_ORACLE_*`）から接続引数を作る。Wallet は解決済みの配置先を使う。"""
+    """Settings（`PLATFORM_ORACLE_*`）から接続引数を作る。"""
     dsn = str(settings.oracle_dsn or "").strip()
     user = str(settings.oracle_user or "").strip()
     if not dsn or not user:
@@ -74,8 +62,6 @@ def platform_oracle_connect_kwargs(settings: Any) -> dict[str, object]:
             oracle_user=user,
             oracle_dsn=dsn,
             oracle_password=settings.oracle_password,
-            oracle_wallet_dir=settings.resolved_oracle_wallet_dir,
-            oracle_wallet_password=settings.oracle_wallet_password,
             oracle_tcp_connect_timeout_seconds=settings.oracle_tcp_connect_timeout_seconds,
         )
     )

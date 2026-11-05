@@ -24,7 +24,7 @@ JST = ZoneInfo("Asia/Tokyo")
 _EVENT = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _SENSITIVE = re.compile(
     r"authorization|cookie|password|passwd|secret|token(?!s$|_count$)|api.?key|credential|private.?key|"
-    r"wallet|dsn|prompt|question|query(?!_count|_id)|sql(?!_count|_id)|answer|content|"
+    r"dsn|prompt|question|query(?!_count|_id)|sql(?!_count|_id)|answer|content|"
     r"payload|raw.?text|component.?stack|exception.?text",
     re.IGNORECASE,
 )

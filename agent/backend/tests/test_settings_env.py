@@ -48,13 +48,15 @@ def test_settings_reads_platform_env_then_backend_env(
     for name in ("PLATFORM_ORACLE_DSN", "AGENT_LOG_LEVEL", "ORACLE_DSN", "LOG_LEVEL"):
         monkeypatch.delenv(name, raising=False)
     platform_env = tmp_path / "platform.env"
-    platform_env.write_text("PLATFORM_ORACLE_DSN=shared_high\n", encoding="utf-8")
+    platform_env.write_text(
+        "PLATFORM_ORACLE_DSN=shared.example.com:1521/shared_svc\n", encoding="utf-8"
+    )
     backend_env = tmp_path / "backend.env"
     backend_env.write_text("AGENT_LOG_LEVEL=DEBUG\n", encoding="utf-8")
 
     settings = Settings(_env_file=(platform_env, backend_env))
 
-    assert settings.oracle_dsn == "shared_high"
+    assert settings.oracle_dsn == "shared.example.com:1521/shared_svc"
     assert settings.log_level == "DEBUG"
 
 
@@ -190,7 +192,6 @@ _SHARED_ENV_NAMES = (
     "PLATFORM_LOCAL_STORAGE_DIR",
     "PLATFORM_ORACLE_DSN",
     "PLATFORM_ORACLE_USER",
-    "PLATFORM_ORACLE_WALLET_DIR",
     "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES",
     "PLATFORM_ENTERPRISE_AI_DEFAULT_TEXT_MODEL",
 )
@@ -207,7 +208,7 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
         platform_env,
         {
             "PLATFORM_LOCAL_STORAGE_DIR": "/data/a",
-            "PLATFORM_ORACLE_DSN": "db-a_high",
+            "PLATFORM_ORACLE_DSN": "db-a.example.com:1521/app_svc",
             "PLATFORM_ORACLE_USER": "APP_A",
         },
         section_comment="# test",
@@ -216,14 +217,17 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
     app_settings.reset_settings_cache()
     try:
         settings = app_settings.get_settings()
-        assert (settings.local_storage_dir, settings.oracle_dsn) == ("/data/a", "db-a_high")
+        assert (settings.local_storage_dir, settings.oracle_dsn) == (
+            "/data/a",
+            "db-a.example.com:1521/app_svc",
+        )
 
         # 別の製品の保存と同じ書き方（`write_env_values`）で共通 `.env` を書き換える。
         write_env_values(
             platform_env,
             {
                 "PLATFORM_LOCAL_STORAGE_DIR": "/data/b",
-                "PLATFORM_ORACLE_DSN": "db-b_high",
+                "PLATFORM_ORACLE_DSN": "db-b.example.com:1521/app_svc",
                 "PLATFORM_ORACLE_USER": "APP_B",
                 "PLATFORM_AUTH_IDLE_TIMEOUT_MINUTES": "17",
             },
@@ -233,11 +237,14 @@ def test_get_settings_picks_up_shared_settings_saved_by_another_product(
 
         assert reloaded is settings
         assert reloaded.local_storage_dir == "/data/b"
-        assert (reloaded.oracle_dsn, reloaded.oracle_user) == ("db-b_high", "APP_B")
+        assert (reloaded.oracle_dsn, reloaded.oracle_user) == (
+            "db-b.example.com:1521/app_svc",
+            "APP_B",
+        )
         assert reloaded.app_auth_idle_timeout_minutes == 17
         # 接続 pool（`SharedOraclePool`）は接続引数の指紋で作り直す。接続引数が新しい値になる。
         kwargs = oracle_connect_kwargs(reloaded)
-        assert (kwargs["dsn"], kwargs["user"]) == ("db-b_high", "APP_B")
+        assert (kwargs["dsn"], kwargs["user"]) == ("db-b.example.com:1521/app_svc", "APP_B")
     finally:
         app_settings.reset_settings_cache()
 

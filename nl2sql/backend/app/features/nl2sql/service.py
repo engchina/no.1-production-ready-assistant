@@ -16455,7 +16455,7 @@ class Nl2SqlService:
                     else (
                         "NL2SQL_RUNTIME_MODE=oracle と "
                         "PLATFORM_ORACLE_DSN / PLATFORM_ORACLE_USER / "
-                        "Wallet 設定を確認してください。"
+                        "PLATFORM_ORACLE_PASSWORD を確認してください。"
                     )
                 ),
                 related_checks=[

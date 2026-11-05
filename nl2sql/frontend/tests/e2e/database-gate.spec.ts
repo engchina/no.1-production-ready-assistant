@@ -60,15 +60,10 @@ test.beforeEach(async ({ page }) => {
 
 const databaseSettings = {
   user: "NL2SQL_APP",
-  dsn: "nl2sqldb_high",
+  dsn: "127.0.0.1:1525/nl2sqldb_low",
   driver_mode: "thin",
-  connection_security: "wallet_mtls",
   client_lib_dir: "",
-  wallet_dir: "/wallet",
-  wallet_uploaded: true,
-  available_services: ["nl2sqldb_high"],
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "VECTOR(1024, FLOAT32)",
@@ -176,7 +171,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 const DATABASE_UNAVAILABLE_MESSAGE =
-  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。";
+  "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・DSN を確認してから、再試行してください。";
 const DATABASE_SETTINGS_HINT =
   "アップロード保存先・モデル・データベースの各設定ページは引き続き利用できます。";
 
@@ -392,7 +387,6 @@ test("DB 到達不可でも設定画面にはサービス利用状態と ADB の
   await page.goto("/settings/database");
 
   await expect(page.getByRole("button", { name: "DB設定を保存" })).toBeVisible();
-  await expect(page.getByText(/Wallet のサービス名、DSN、認証情報/)).toHaveCount(0);
   await expect(page.getByText("サービス利用状態")).toHaveCount(0);
   await expect(page.getByText("Oracle SQL 接続")).toHaveCount(0);
   await expect(page.getByText("NL2SQL 保存領域")).toHaveCount(0);
@@ -479,7 +473,7 @@ test("明示 memory モードでは利用を許可し再起動で失う警告を
 });
 
 test("接続設定の不備は診断コードと補足を示し、ok の診断コードは出さない", async ({ page }) => {
-  let check = "walletless_tls_dsn_required";
+  let check = "invalid";
   await page.route("**/api/ready/database", (route) =>
     fulfill(route, check === "ok"
       ? { status: "unreachable", check, detail: "Oracle connection probe failed (ORA-12514)." }
@@ -493,10 +487,10 @@ test("接続設定の不備は診断コードと補足を示し、ok の診断�
       "NL2SQL の各機能（SQL 生成・データ準備・改善・運用）を利用するには、まずデータベースの接続情報を設定してください。設定が完了すると、この画面は自動的に利用できるようになります。",
     actionHref: "/settings/database",
   });
-  await expect(page.getByText("診断コード: walletless_tls_dsn_required", { exact: true })).toBeVisible();
+  await expect(page.getByText("診断コード: invalid", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
-      "Walletless TLS では、Wallet のサービス名ではなく ADB の TCPS 接続文字列または Easy Connect の DSN を指定してください。",
+      "DSN は host:port/service_name か接続記述子で指定してください。",
       { exact: true }
     )
   ).toBeVisible();
@@ -633,7 +627,7 @@ test("設定を開けない利用者には導線を出さず、システム管�
 
   const card = page.locator('section[aria-labelledby="database-unavailable-title"]');
   await expect(card.getByRole("heading", { name: "データベースに接続できません" })).toBeVisible();
-  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定・Wallet の確認を依頼してください。$/)).toBeVisible();
+  await expect(card.getByText(/システム管理者に連絡して、データベースの稼働と接続設定の確認を依頼してください。$/)).toBeVisible();
   await expect(card.getByText(/Autonomous Database/)).toHaveCount(0);
   await expect(card.getByRole("link")).toHaveCount(0);
   await expect(card.getByRole("button", { name: "再試行" })).toBeVisible();

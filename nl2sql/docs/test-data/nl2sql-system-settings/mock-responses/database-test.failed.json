@@ -5,8 +5,8 @@
     "message": "Oracle AI Database への接続に失敗しました。",
     "elapsed_ms": 1200,
     "troubleshooting": [
-      "DSN が tnsnames.ora の service 名と一致していることを確認してください。",
-      "wallet_dir に tnsnames.ora と cwallet.sso が存在することを確認してください。"
+      "DSN が host:port/service_name か接続記述子か確認してください。",
+      "DSN のサービス名が接続先で有効か確認してください。"
     ],
     "details": {
       "service": "nl2sqldb_high",

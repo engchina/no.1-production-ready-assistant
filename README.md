@@ -16,20 +16,22 @@ docker pull container-registry.oracle.com/database/adb-free:latest-26ai
 
 ```bash
 docker run -d --name adb-free \
-  -p 1525:1522 -p 8543:8443 \
+  -p 127.0.0.1:1525:1521 -p 127.0.0.1:8543:8443 \
   -e WORKLOAD_TYPE=ATP \
   -e ADMIN_PASSWORD='<ADMIN のパスワード>' \
-  -e WALLET_PASSWORD='<Wallet のパスワード>' \
+  -e WALLET_PASSWORD='<コンテナの起動に要るパスワード>' \
   --cap-add SYS_ADMIN --device /dev/fuse \
   container-registry.oracle.com/database/adb-free:latest-26ai
 ```
 
 | host の port | コンテナの port | 用途 |
 |---|---|---|
-| `1525` | `1522` | SQL*Net（mTLS。Wallet で接続） |
+| `1525` | `1521` | SQL*Net（ユーザーとパスワードで接続） |
 | `8543` | `8443` | ORDS / Database Actions（`https://localhost:8543/ords/`） |
 
 - 初回は PDB の展開で 2〜3 分かかります。`docker ps` の STATUS が `(healthy)` になったら使えます。
+- `1521` は暗号化しない接続です。PC の外から届かないよう、host の `127.0.0.1` だけに公開します。
+- `WALLET_PASSWORD` はコンテナの起動に必須ですが、製品の接続では使いません。
 - `ADMIN_PASSWORD` と `WALLET_PASSWORD` は **12〜30 文字で、大文字・小文字・数字を含め、`admin` と二重引用符を含めない**必要があります（ADB の mandatory profile が強制し、満たさないと `ORA-28219` になります）。
 - データはコンテナの中（`/u01/app/oracle/oradata`）にあります。`docker stop` / `docker start` では残りますが、**`docker rm` やイメージの入れ替えで DB の中身はすべて消えます**（[コンテナを作り直すとき](#コンテナを作り直すとき)）。
 - `docker logs` に `Exception encountered during PDB create:ORA-01031` と `ORA-12012`（`PLUG_CONTAINER_PDB_JOB`）が出ます。イメージの中のジョブのエラーで、新しいコンテナでも起動のたびに出ます。`Successfully plugged` が続き `(healthy)` になれば使えます。
@@ -42,19 +44,7 @@ docker ps -a --filter name=adb-free   # 状態
 docker logs --tail 50 adb-free        # ログ
 ```
 
-### 2. Wallet を取り出す
-
-Wallet はコンテナの中で作られます。host に取り出し、`tnsnames.ora` の port をコンテナの `1522` から host の `1525` に書き換えます。repository の外に置いてください。
-
-```bash
-docker cp adb-free:/u01/app/oracle/wallets/tls_wallet /u01/workspace/adb-free-wallet
-sed -i 's/(port=1522)/(port=1525)/g' /u01/workspace/adb-free-wallet/tnsnames.ora
-chmod 700 /u01/workspace/adb-free-wallet
-```
-
-サービス名は `myatp_low` / `myatp_medium` / `myatp_high` / `myatp_tp` / `myatp_tpurgent` です（mTLS。末尾が `_tls` のものは host に公開していない port を使うので使えません）。
-
-### 3. アプリ用の DB ユーザーを作る
+### 2. アプリ用の DB ユーザーを作る
 
 3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。
 
@@ -70,9 +60,8 @@ GRANT PDB_DBA TO ASSISTANT;
 ```bash
 uv run --project rag/backend python - <<'PY'
 import oracledb
-W = "/u01/workspace/adb-free-wallet"
-c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>", dsn="myatp_low",
-                     config_dir=W, wallet_location=W, wallet_password="<Wallet のパスワード>")
+c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>",
+                     dsn="127.0.0.1:1525/myatp_low.adb.oraclecloud.com")
 cur = c.cursor()
 cur.execute('CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>" '
             'DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE')
@@ -80,7 +69,7 @@ cur.execute("GRANT PDB_DBA TO ASSISTANT")
 PY
 ```
 
-### 4. `.env` を置く
+### 3. `.env` を置く
 
 ```bash
 cp platform/.env.example platform/.env
@@ -97,10 +86,7 @@ PLATFORM_AUTH_COOKIE_SECURE=false            # http://localhost で動かすた�
 PLATFORM_ADMIN_LOGIN_USER_PASSWORD=<system_admin のパスワード>
 PLATFORM_ORACLE_USER=ASSISTANT
 PLATFORM_ORACLE_PASSWORD=<アプリのパスワード>
-PLATFORM_ORACLE_DSN=myatp_low
-PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls
-PLATFORM_ORACLE_WALLET_DIR=/u01/workspace/adb-free-wallet
-PLATFORM_ORACLE_WALLET_PASSWORD=<Wallet のパスワード>
+PLATFORM_ORACLE_DSN=127.0.0.1:1525/myatp_low.adb.oraclecloud.com
 PLATFORM_SERVICE_TOKEN_SECRET=<32 文字以上のランダムな値>   # 例: openssl rand -base64 48
 ```
 
@@ -115,7 +101,7 @@ AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8110/api/mcp
 
 `system_admin` のパスワードにも同じ規則（12〜30 文字・大文字/小文字/数字・`admin` を含まない）があり、満たさないと「構成管理者の認証情報が設定されていません」（503）になります。
 
-### 5. システムの表を作る（初期化）
+### 4. システムの表を作る（初期化）
 
 アプリの起動時には DDL を実行しません。CLI か、起動した後の画面（「運用設定 › システムテーブル」）から作成・更新します。どちらも冪等で、何度実行してもかまいません。作るのは空の表だけで、データは取り込みません。
 
@@ -139,14 +125,14 @@ repo の直下で実行します。
 
 #### B. 画面（「運用設定 › システムテーブル」）から作る・更新する
 
-システムの表を作る前でも 3 製品の backend は起動でき、`system_admin` でログインできます。手順 6 で起動した後、**RAG・NL2SQL・Agent のそれぞれで**次の操作を行います。
+システムの表を作る前でも 3 製品の backend は起動でき、`system_admin` でログインできます。手順 5 で起動した後、**RAG・NL2SQL・Agent のそれぞれで**次の操作を行います。
 
 1. `system_admin` でログインし、左のナビの「運用設定 › システムテーブル」（`/settings/system-tables`）を開きます（DB に接続できているかは「システム設定 › データベース」の接続テストで確かめられます）。
 2. 状態が `未初期化` / `一部不足` / `更新必要` なら、**「作成・更新」** を押します（状態が `初期化済み` になれば完了です。既存のデータを保ったまま不足分の表・索引・migration を適用します）。
    - 共通の `PLATFORM_*` の表と NL2SQL の権限の表（`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`）も「作成・更新」で作られます。
    - すべての管理対象の表を消して最初から作り直すときは、「破壊的な再作成」に確認語（RAG: `RECREATE_RAG_SYSTEM_TABLES`、NL2SQL: `RECREATE_NL2SQL_SYSTEM_TABLES`、Agent: `RECREATE_AGENT_SYSTEM_TABLES`）を入れて **「すべて再作成」** を押します（保存済みのデータは消えます。共通の `PLATFORM_*` の表と NL2SQL の権限の表は残ります）。
 
-### 6. 起動する
+### 5. 起動する
 
 先に共有の UI を build します（各製品の frontend は `file:` で参照します）。
 
@@ -175,9 +161,8 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 イメージを入れ替えるときなどの手順です。**DB の中身はすべて消え、新しいコンテナには移りません**（残すデータは先に取り出します）。
 
 1. 古いコンテナを消します（`docker rm -f adb-free`）。手順 1 の `docker run` で新しいコンテナを起動し、`(healthy)` を待ちます。
-2. Wallet はコンテナごとに作られます。手順 2 の `docker cp` の前に古い Wallet を消します（`rm -rf /u01/workspace/adb-free-wallet`）。残したままだと、その下に `tls_wallet` ができます。
-3. 手順 3 でアプリ用の DB ユーザーを作り直します。パスワードを変えたら `platform/.env` も直します。
-4. 手順 5 でシステムの表を作ります。動いている backend は再起動しなくても新しい DB に接続できます。
+2. 手順 2 でアプリ用の DB ユーザーを作り直します。パスワードを変えたら `platform/.env` も直します。
+3. 手順 4 でシステムの表を作ります。動いている backend は再起動しなくても新しい DB に接続できます。
 
 ### 開発用 worktree の準備
 
@@ -251,7 +236,7 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 - build は、依存の同期・共有 UI と各製品の frontend・DB の migration・systemd まで行います。build せずに再起動だけするときは `--no-build`、状態だけを見るときは `--status`。
 - 2 つのスクリプトは DB の起動・停止を行いません。DB（ADB Free コンテナ）は `docker start adb-free` などで別に動かしておきます（[ローカルで動かす](#ローカルで動かすoracle-autonomous-database-free-コンテナ)）。DB に接続できなくてもアプリケーションは起動し、`system_admin` はログインできます。
 - 取得だけを行うときは `platform/deploy/suite-pull.sh`（追跡ファイルに変更があると中止します）。
-- 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）と Wallet は保たれます。
+- 画面で保存した設定（各製品の `backend/.env`・`platform/.env`）は保たれます。
 - 時間がかかるので `tmux` の中で実行すると、SSH が切れても止まりません。log は `/var/log/suite-ops.log`。
 - OS を再起動すると、各製品のサービスは自動で起動します。
 

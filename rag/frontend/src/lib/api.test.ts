@@ -677,8 +677,7 @@ describe("api.request envelope", () => {
   it("testDatabaseSettings は timeout 診断付きの結果を返す", async () => {
     const payload = {
       user: "rag_app",
-      dsn: "ragdb_high",
-      wallet_dir: "/u01/aipoc/instantclient_23_26/network/admin",
+      dsn: "127.0.0.1:1525/ragdb_low",
     };
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({

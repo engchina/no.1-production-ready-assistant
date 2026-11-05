@@ -21,7 +21,7 @@
 5. `ok`
 
 `unreachable` のときもクラウドの制御 API へ DB の状態を問い合わせない（#10。DB は ADB Free
-コンテナで、起動・停止は docker 側の責務）。画面は接続設定と Wallet の確認を案内する。
+コンテナで、起動・停止は docker 側の責務）。画面は接続設定の確認を案内する。
 
 `ok` の結果だけを、接続先と資格情報の指紋ごとに短時間（既定 30 秒）サーバー側で cache する（#793）。
 画面の cache（15 秒）は全画面の再読み込みで消えるため、そのたびに接続確認とシステムテーブルの確認を
@@ -29,7 +29,7 @@
 cache しない（直したらすぐ通す）。システムテーブルの操作と DB 設定の保存で cache を捨てる
 （`clear_database_status_cache`）。DB が止まったことに気づくのは最大で cache の時間だけ遅れる。
 
-ログイン不要の path なので、`detail` には接続先・資格情報・Wallet の path を含めない
+ログイン不要の path なので、`detail` には接続先・資格情報を含めない
 （ORA / DPY / DPI のコードだけ。#320）。共有パッケージは oracledb に依存しないため、
 接続確認と準備状態の確認は製品から注入する。
 """
@@ -47,7 +47,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import APIRouter
-from fastapi.concurrency import run_in_threadpool
 from pr_backend_core.oracle_errors import is_oracle_connection_error, oracle_error_codes
 from pr_backend_core.schemas import ApiResponse
 from pydantic import BaseModel
@@ -96,11 +95,8 @@ ContextFields = Callable[[Any], Sequence[object]]
 
 
 def default_context_fields(settings: Any) -> list[object]:
-    """接続先を表す設定（DSN・ユーザー・Wallet の配置先）。"""
-    return [
-        str(getattr(settings, name, "") or "")
-        for name in ("oracle_dsn", "oracle_user", "resolved_oracle_wallet_dir")
-    ]
+    """接続先を表す設定（DSN・ユーザー）。"""
+    return [str(getattr(settings, name, "") or "") for name in ("oracle_dsn", "oracle_user")]
 
 
 def database_context_id(fields: Sequence[object]) -> str:
@@ -117,9 +113,6 @@ _CONNECTION_FINGERPRINT_FIELDS = (
     "oracle_user",
     "oracle_dsn",
     "oracle_password",
-    "resolved_oracle_wallet_dir",
-    "oracle_wallet_password",
-    "oracle_connection_security",
     "oracle_driver_mode",
     "oracle_client_lib_dir",
 )
@@ -244,8 +237,7 @@ async def database_status(
                 shortcut = shortcut.model_copy(update={"context_id": context_id})
             return shortcut
 
-    # Wallet のファイル読込と暗号化 PEM の復号確認を含むため、event loop を塞がない。
-    check = await run_in_threadpool(database_readiness, settings, extra_readiness)
+    check = database_readiness(settings, extra_readiness)
     if check != READINESS_OK:
         # 設定が不足している：接続を試さない。
         return DatabaseStatusData(status="not_configured", check=check, context_id=context_id)
@@ -355,7 +347,7 @@ def build_database_status_router(
     - `schema_probe(settings)`：製品の準備状態の確認
       （RAG の system schema、NL2SQL の incremental store）
     - `short_circuit(settings)`：DB を使わない構成なら応答を返す（NL2SQL の memory モード）
-    - `context_fields(settings)`：`context_id` の元にする接続先の値（既定は DSN・ユーザー・Wallet）
+    - `context_fields(settings)`：`context_id` の元にする接続先の値（既定は DSN・ユーザー）
     - `connection_failure_log_extra(exc)`：接続確認の失敗をログに出すときの追加項目
     - `ok_cache_seconds`：`ok` の結果を cache する秒数（0 で cache しない。#793）
 

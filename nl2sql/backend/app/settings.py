@@ -86,10 +86,7 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     oracle_password: str = ""
     oracle_dsn: str = ""
     oracle_driver_mode: str = "thin"
-    oracle_connection_security: str = "wallet_mtls"
     oracle_client_lib_dir: str = ""
-    oracle_wallet_dir: str = "/u01/aipoc/wallet"
-    oracle_wallet_password: str = ""
     genai_embedding_model: str = "cohere.embed-v4.0"
     # Oracle のベクトル列の次元（`EMBEDDING_DIMENSIONS`）に固定する。旧い既定（1536）は
     # 起動で拒否する（#46）。
@@ -338,19 +335,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
     # 外部の MCP クライアントの API キーの 1 分あたりの呼び出しの回数（#1874。0 は上限なし）。
     app_api_key_calls_per_minute: int = Field(default=60, ge=0, le=100_000)
 
-    @property
-    def resolved_oracle_wallet_dir(self) -> str:
-        """明示 Wallet 配置先を優先し、未指定時だけ Thick の既定位置を返す。"""
-        wallet_dir = self.oracle_wallet_dir.strip()
-        if wallet_dir:
-            return wallet_dir
-        if self.oracle_driver_mode.strip().lower() == "thin":
-            return ""
-        client_lib_dir = self.oracle_client_lib_dir.strip()
-        if client_lib_dir:
-            return str(Path(client_lib_dir).expanduser() / "network" / "admin")
-        return ""
-
     @field_validator("model_settings_file")
     @classmethod
     def normalize_model_settings_file(cls, value: str) -> str:
@@ -364,17 +348,6 @@ class Settings(ModelSecretStateMixin, BaseServiceSettings):
         if normalized not in {"thin", "thick"}:
             raise ValueError(
                 "PLATFORM_ORACLE_DRIVER_MODE は thin または thick を指定してください。"
-            )
-        return normalized
-
-    @field_validator("oracle_connection_security")
-    @classmethod
-    def validate_oracle_connection_security(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in {"wallet_mtls", "walletless_tls"}:
-            raise ValueError(
-                "PLATFORM_ORACLE_CONNECTION_SECURITY は wallet_mtls または "
-                "walletless_tls を指定してください。"
             )
         return normalized
 

@@ -169,19 +169,16 @@ def test_legacy_graph_enabled_flag_is_not_read(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_oracle_defaults_to_thin_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """既定は Thin mode で、Wallet は PLATFORM_ORACLE_WALLET_DIR（NL2SQL と同じ）。"""
+    """既定は Thin mode（NL2SQL と同じ）。"""
     monkeypatch.delenv("PLATFORM_ORACLE_CLIENT_LIB_DIR", raising=False)
-    monkeypatch.delenv("PLATFORM_ORACLE_WALLET_DIR", raising=False)
     settings = Settings(_env_file=None)
     assert settings.oracle_driver_mode == "thin"
-    assert settings.resolved_oracle_wallet_dir == "/u01/aipoc/wallet"
 
 
 def test_oracle_client_lib_dir_switches_to_thick_mode() -> None:
-    """PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode と <lib_dir>/network/admin。"""
+    """PLATFORM_ORACLE_CLIENT_LIB_DIR を指定したときだけ Thick mode。"""
     settings = Settings(_env_file=None, oracle_client_lib_dir="/opt/oracle/instantclient_23_26")
     assert settings.oracle_driver_mode == "thick"
-    assert settings.resolved_oracle_wallet_dir == "/opt/oracle/instantclient_23_26/network/admin"
 
 
 def test_embedding_dimension_is_fixed_to_oracle_vector_width() -> None:

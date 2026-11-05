@@ -1187,7 +1187,7 @@ def test_cli_reports_real_cause_of_pool_timeout_without_secrets(
     monkeypatch.setattr(
         nl2sql_system_schema,
         "_connect_kwargs",
-        lambda: {"user": "APP", "password": "Pa55-word-x", "dsn": "db_high"},
+        lambda: {"user": "APP", "password": "Pa55-word-x", "dsn": "db.example.com:1521/svc"},
     )
     monkeypatch.setattr(nl2sql_system_schema, "system_schema_manager", _Manager())
 
@@ -1241,8 +1241,8 @@ def test_control_pool_strips_descriptor_retry_only_in_cli(
 ) -> None:
     """常駐の server の control の pool は接続引数を変えない（#1779）。
 
-    Wallet の別名の再試行は #1214 で外し済みで、記述子の DSN はそのまま。CLI だけ、記述子の
-    再試行も外し、短い tcp_connect_timeout にする。
+    server の記述子の DSN はそのまま。CLI だけ、記述子の再試行を外し、短い tcp_connect_timeout に
+    する。
     """
     from pr_backend_core.oracle_dsn import CLI_TCP_CONNECT_TIMEOUT_SECONDS, enable_cli_connect_mode
 

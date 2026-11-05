@@ -25,11 +25,11 @@ from app.settings import Settings
             "service_not_registered",
             "PLATFORM_ORACLE_DSN",
         ),
-        (RuntimeError("DPY-6001"), "service_not_registered", "tnsnames.ora"),
+        (RuntimeError("DPY-6001"), "service_not_registered", "サービス名"),
         (RuntimeError("ORA-01017"), "invalid_credentials", "PLATFORM_ORACLE_PASSWORD"),
         (RuntimeError("ORA-28000"), "account_unavailable", "DB 管理者"),
         (RuntimeError("ORA-28001"), "account_unavailable", "有効期限"),
-        (RuntimeError("DPY-4000"), "dsn_resolution_failed", "PLATFORM_ORACLE_WALLET_DIR"),
+        (RuntimeError("DPY-4000"), "dsn_resolution_failed", "host:port/service_name"),
         (RuntimeError("ORA-12506"), "network_access_denied", "ACL"),
         (RuntimeError("DPI-1047"), "client_unavailable", "PLATFORM_ORACLE_DRIVER_MODE"),
         (RuntimeError("DPY-4011"), "connection_closed", "切断"),
@@ -50,7 +50,7 @@ def test_diagnostics(error: Exception, category: str, action: str) -> None:
 
 
 def test_diagnostics_extract_codes_from_chain_without_raw_values() -> None:
-    inner = RuntimeError("dpy-6001: secret-host /private/wallet secret-password (ORA-12514)")
+    inner = RuntimeError("dpy-6001: secret-host /private/path secret-password (ORA-12514)")
     outer = OracleAdapterError("DPY-6005: secret-user secret-dsn DPY-6005")
     outer.__cause__ = inner
     inner.__cause__ = outer  # 不正な循環チェーンでも終了する。
@@ -58,7 +58,7 @@ def test_diagnostics_extract_codes_from_chain_without_raw_values() -> None:
     assert result["oracle_error_codes"] == ["DPY-6005", "DPY-6001", "ORA-12514"]
     assert result["diagnostic_category"] == "service_not_registered"
     assert "secret" not in json.dumps(result)
-    assert "/private/wallet" not in json.dumps(result)
+    assert "/private/path" not in json.dumps(result)
 
 
 def test_suppressed_context_does_not_override_current_error() -> None:
@@ -78,7 +78,6 @@ def test_connect_logs_only_final_failure(
             oracle_user="APP",
             oracle_password="fixture-secret",
             oracle_dsn="localhost/FREEPDB1",
-            oracle_connection_security="walletless_tls",
         ),
         connect_attempts=2,
     )
