@@ -129,7 +129,7 @@ class PlanRecorder:
 
 
 @pytest.fixture
-def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
+def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[PlanRecorder]:
     graph = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
     yield graph
@@ -206,7 +206,7 @@ def _engine(oracle: FakeOracle, **settings: Any) -> AnswerEngine:
 async def test_relaxation_keeps_user_conditions_as_of_and_access_in_every_search(
     monkeypatch: pytest.MonkeyPatch,
     access: AuditRequestContext,
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
     question: str,
     user_filters: dict[str, str],
     relaxed: list[str],
@@ -314,7 +314,7 @@ def _reference_corpus() -> ContextReferenceOracle:
 
 
 async def test_reference_expansion_crosses_the_file_name_but_graph_does_not(
-    access: AuditRequestContext, plans: tuple[PlanRecorder, PlanRecorder]
+    access: AuditRequestContext, plans: PlanRecorder
 ) -> None:
     """本文が明記した参照は利用者の文書名の外へも辿る(#1280)。実体・関係情報の拡張は文書名を残す。
 

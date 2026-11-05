@@ -137,7 +137,7 @@ def auth(monkeypatch: MonkeyPatch) -> ProductionAuth:
 
 
 @pytest.fixture
-def plans(monkeypatch: MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
+def plans(monkeypatch: MonkeyPatch) -> Iterator[PlanRecorder]:
     graph = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
     yield graph
@@ -235,7 +235,7 @@ def _access_knowledge_bases(context: AuditRequestContext, filters: dict[str, str
 def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
     auth: ProductionAuth,
     monkeypatch: MonkeyPatch,
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
     tool: str,
     extra: dict[str, Any],
     caller_filters: dict[str, str],
@@ -316,7 +316,7 @@ def test_mcp_relaxation_keeps_caller_conditions_as_of_and_token_scope(
 def test_mcp_reference_expansion_crosses_caller_file_name_but_graph_does_not(
     auth: ProductionAuth,
     monkeypatch: MonkeyPatch,
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
     tool: str,
     extra: dict[str, Any],
 ) -> None:

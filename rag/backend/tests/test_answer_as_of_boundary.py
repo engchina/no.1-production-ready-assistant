@@ -93,7 +93,7 @@ class PlanRecorder:
 
 
 @pytest.fixture
-def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[PlanRecorder, PlanRecorder]]:
+def plans(monkeypatch: pytest.MonkeyPatch) -> Iterator[PlanRecorder]:
     graph = PlanRecorder()
     monkeypatch.setattr(answer_engine, "plan_graph_expansion", graph)
     yield graph
@@ -154,7 +154,7 @@ def _corpus() -> PeriodOracle:
     ids=["before-start", "start-day", "inside", "last-day", "end-day-exclusive", "future"],
 )
 async def test_main_search_and_expansions_use_the_same_as_of(
-    plans: tuple[PlanRecorder, PlanRecorder], as_of: str, effective: bool
+    plans: PlanRecorder, as_of: str, effective: bool
 ) -> None:
     """指定した基準日で、主検索と参照先の有効期間の判定が一致する(開始日は含み、終了日は含まない)。"""
     oracle = _corpus()
@@ -190,7 +190,7 @@ async def test_main_search_and_expansions_use_the_same_as_of(
 
 
 async def test_expansion_plans_are_not_reused_across_as_of(
-    plans: tuple[PlanRecorder, PlanRecorder],
+    plans: PlanRecorder,
 ) -> None:
     """同じ起点でも基準日が違えば、実体・関係情報の拡張の計画を使い回さない。"""
     graph = plans
@@ -215,7 +215,7 @@ class _NextDay(date):
 
 
 async def test_missing_as_of_is_resolved_once_even_when_the_date_changes(
-    plans: tuple[PlanRecorder, PlanRecorder], monkeypatch: pytest.MonkeyPatch
+    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """基準日の無い要求は最初に 1 回だけ今日に決め、途中で日付が変わっても全検索で同じ日を使う。"""
     days = iter([date(2026, 4, 1), date(2026, 4, 2)])
@@ -243,7 +243,7 @@ def test_explicit_as_of_is_kept() -> None:
 
 
 async def test_answer_run_searches_with_the_resolved_as_of_and_keeps_the_request(
-    plans: tuple[PlanRecorder, PlanRecorder], monkeypatch: pytest.MonkeyPatch
+    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """回答は検索の条件に今日の基準日を補い、回答の分類の条件と要求そのものは変えない。"""
     import rag_engine.generation.answering as answering
@@ -268,7 +268,7 @@ async def test_answer_run_searches_with_the_resolved_as_of_and_keeps_the_request
 
 
 async def test_retrieve_searches_with_the_resolved_as_of(
-    plans: tuple[PlanRecorder, PlanRecorder], monkeypatch: pytest.MonkeyPatch
+    plans: PlanRecorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(answer_engine, "_today", lambda: date(2026, 4, 1))
     oracle = _corpus()
