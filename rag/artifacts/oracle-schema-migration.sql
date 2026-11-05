@@ -3933,3 +3933,43 @@ BEGIN
     END IF;
 END;
 /
+
+-- migration: 20261105_001_retire_evaluation_calibration
+DECLARE
+    v_count NUMBER;
+BEGIN
+    FOR item IN (
+        SELECT table_name
+        FROM user_tables
+        WHERE table_name IN (
+            'RAG_EVALUATION_CALIBRATIONS',
+            'RAG_EVALUATION_LABELS',
+            'RAG_EVALUATION_LABEL_ITEMS',
+            'RAG_EVALUATION_LABEL_SETS'
+        )
+    ) LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || item.table_name || ' CASCADE CONSTRAINTS PURGE';
+    END LOOP;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_EVALUATION_JOBS';
+    IF v_count > 0 THEN
+        SELECT COUNT(*) INTO v_count
+        FROM user_constraints
+        WHERE table_name = 'RAG_EVALUATION_JOBS'
+          AND constraint_name = 'RAG_EVALUATION_JOBS_KIND_CK';
+        IF v_count > 0 THEN
+            EXECUTE IMMEDIATE
+                'ALTER TABLE rag_evaluation_jobs DROP CONSTRAINT rag_evaluation_jobs_kind_ck';
+        END IF;
+        EXECUTE IMMEDIATE 'DELETE FROM rag_evaluation_jobs WHERE kind = ''calibration''';
+        EXECUTE IMMEDIATE
+            'ALTER TABLE rag_evaluation_jobs ADD CONSTRAINT rag_evaluation_jobs_kind_ck '
+            || 'CHECK (kind IN (''run''))';
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_ROLE_PERMISSIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE
+            'DELETE FROM rag_role_permissions '
+            || 'WHERE permission_code = ''rag.evaluation_calibration.manage''';
+    END IF;
+END;
+/

@@ -1,8 +1,8 @@
 """回答の判定の基準（rubric）の共有の定義（#3418・#3578）。
 
 rubric は JSON（指示 `instructions`・観点 `aspects`・ラベル `labels`）で、suite の LLM による判定
-（`suite-evaluation judge` / `calibrate`）と、人手の判定の記入（suite の記入用のブック・RAG の判定の
-校正の画面）が同じ観点の基準を使う。ここは同梱の JSON を読むことと、観点の基準の文・判定する観点を
+（`suite-evaluation judge` / `calibrate`）と、人手の判定の記入（suite の記入用のブック）が
+同じ観点の基準を使う。ここは同梱の JSON を読むことと、観点の基準の文・判定する観点を
 取り出すことだけをする（形の検証と sha256 は suite の `Rubric`）。
 """
 
