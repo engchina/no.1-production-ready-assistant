@@ -175,36 +175,6 @@ def test_removed_guardrail_policy_cannot_override_or_be_saved() -> None:
     assert "guardrail_policy" not in config.model_dump()["query"]
 
 
-def test_support_guide_switch_round_trip_preserves_internal_matching_settings() -> None:
-    settings = get_settings().model_copy(update={"rag_support_guide_enabled": True})
-    old = {
-        "support_guide_semantic_match_enabled": True,
-        "support_guide_close_match_clarification_enabled": True,
-    }
-    for enabled in [None, False, True]:
-        config = parse_search_answer_profile_config(
-            {"query": {**old, "support_guide_enabled": enabled}}
-        )
-        reloaded = parse_search_answer_profile_config(dump_search_answer_profile_config(config))
-        resolved, _ = resolve_search_answer_profile_settings(settings, reloaded)
-        assert resolved.rag_support_guide_enabled is (enabled is True)
-        assert resolved.rag_support_guide_semantic_match_enabled is True
-        assert resolved.rag_support_guide_close_match_clarification_enabled is True
-        assert (
-            resolved.rag_support_guide_semantic_threshold
-            == settings.rag_support_guide_semantic_threshold
-        )
-        assert (
-            resolved.rag_support_guide_close_match_margin
-            == settings.rag_support_guide_close_match_margin
-        )
-    missing, _ = resolve_search_answer_profile_settings(
-        settings, parse_search_answer_profile_config({"query": old})
-    )
-    assert missing.rag_support_guide_enabled is False
-    assert settings.rag_support_guide_enabled is True
-
-
 def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_save() -> None:
     settings = get_settings().model_copy(
         update={
@@ -216,15 +186,12 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
             "rag_graph_expansion_enabled": False,
             "rag_screen_linking_enabled": False,
             "rag_request_coverage_retrieval_enabled": True,
-            "rag_guide_step_retrieval_enabled": True,
             "rag_entity_expansion_enabled": True,
             "rag_entity_expansion_max_chunks": 6,
             "rag_section_expansion_enabled": True,
             "rag_section_expansion_max_levels": 4,
             "rag_section_expansion_input_token_percent": 50,
             "rag_graph_expansion_max_chunks": 5,
-            "rag_guide_step_max_queries": 2,
-            "rag_guide_step_deadline_seconds": 20.0,
         }
     )
     old = {
@@ -236,16 +203,13 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
         "graph_expansion_enabled": True,
         "screen_linking_enabled": True,
         "request_coverage_retrieval_enabled": False,
-        "guide_step_retrieval_enabled": False,
         "entity_expansion_enabled": False,
         "entity_expansion_max_chunks": 3,
         "section_expansion_enabled": False,
         "section_expansion_max_levels": 2,
         "section_expansion_input_token_percent": 40,
-        # 関係情報の拡張の上限と業務ガイドの手順ごとの検索の上限・期限も全体設定だけ(#3523)。
+        # 関係情報の拡張の上限も全体設定だけ(#3523)。
         "graph_expansion_max_chunks": 3,
-        "guide_step_max_queries": 7,
-        "guide_step_deadline_seconds": 37.5,
     }
     assert set(old) == set(PROFILE_GLOBAL_QUERY_FIELDS)
     config = parse_search_answer_profile_config(
@@ -254,7 +218,6 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
             "query": {
                 **old,
                 "max_anchors_per_document": 2,
-                "support_guide_enabled": True,
             },
         }
     )
@@ -265,12 +228,9 @@ def test_global_search_options_ignore_legacy_profile_values_and_drop_them_on_sav
     assert merged.rag_max_anchors_per_document == 2
     # 全体の値が効く(プロファイルの保存値は重ねない)。
     assert merged.rag_graph_expansion_max_chunks == 5
-    assert merged.rag_guide_step_max_queries == 2
-    assert merged.rag_guide_step_deadline_seconds == 20.0
     saved = dump_search_answer_profile_config(config)
     assert saved["knowledge_base_ids"] == ["kb-1"]
     query = saved["query"]
     assert isinstance(query, dict)
     assert not set(old) & set(query)
-    assert query["support_guide_enabled"] is True
     assert query["max_anchors_per_document"] == 2

@@ -24,7 +24,6 @@ function supportTask(runId: string, pending: Record<string, unknown>[]) {
       goal: GOAL,
       known_conditions: {},
       pending_clarifications: pending,
-      guide: null,
       outcome: "needs_clarification",
       gaps: [],
       evidence: [],

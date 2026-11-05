@@ -89,10 +89,6 @@ class Model:
                     "reason": "合成の未校正材料観察",
                 }
             ],
-            "guide_requirement_reviews": [
-                {"requirement_id": identity, "answer_state": "not_mentioned", "item_indexes": [], "reason": "合成の未校正欠落観察"}
-                for identity in schema.expected_requirement_ids
-            ],
             "summary_supported": not self.negative,
             "goal_alignment": "off_target" if self.negative else "aligned",
         }
@@ -110,8 +106,6 @@ def run(model: Model, *, mode: str = "standard") -> grounded.Round:
         parse_text=model,
         parse_images=model,
         audit_mode=mode,
-        guide_steps=[("save", "保存の説明", ["child-a"])],
-        guide_step_contracts=[{"step_id": "save", "requirements": [{"id": "save:0", "text": SAVE}], "depends_on": []}],
     )
 
 
@@ -131,7 +125,7 @@ def test_uncalibrated_negative_observation_does_not_remove_or_reclassify_the_bod
     assert len(model.calls) == 2 and result.audit_calls == 1
 
 
-def test_uncalibrated_missing_material_and_guide_or_off_target_do_not_start_more_generation() -> None:
+def test_uncalibrated_missing_material_or_off_target_do_not_start_more_generation() -> None:
     record = AnswerRecord(
         id="p",
         engine="docling",
@@ -153,17 +147,6 @@ def test_uncalibrated_missing_material_and_guide_or_off_target_do_not_start_more
         original_question=QUESTION,
         expanded_question=QUESTION,
         path=Path("unused.json"),
-        guide_steps=(("save", "保存の説明", ("run:p",)),),
-        guide_step_contracts=({"step_id": "save", "requirements": [{"id": "save:0", "text": SAVE}], "depends_on": []},),
-        guide_task_scope=(
-            {
-                "step_id": "save",
-                "title": "保存の説明",
-                "required": True,
-                "requirements": [{"id": "save:0", "text": SAVE}],
-                "depends_on": [],
-            },
-        ),
     )
 
     def unused(*args: Any, **kwargs: Any) -> Any:
@@ -216,7 +199,6 @@ def test_raw_negative_observation_remains_available_without_becoming_the_effecti
     assert raw["reviews"][0]["reason"] == "合成の未校正意味観察"
     assert raw["request_reviews"][0]["evidence_status"] == "missing"
     assert raw["request_reviews"][0]["reason"] == "合成の未校正材料観察"
-    assert raw["guide_requirement_reviews"][0]["answer_state"] == "not_mentioned"
     assert raw["goal_alignment"] == "off_target"
     assert result.timing["semantic_audit_policy"] == {"mode": "diagnostic_only", "calibration": "not_calibrated"}
     assert all(row.review_assessment["effective_support"] == "unknown" for row in result.checked)

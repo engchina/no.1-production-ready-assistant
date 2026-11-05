@@ -1,7 +1,6 @@
 """評価の Excel の「案内すべき画面」「回答の過程」と、回答の過程から作る期待の下書き（#2402）。
 
-内容は合成の例（架空の画面・資料の名前）だけを使う。回答の過程の構造化は業務ガイドの取り込み
-（#2397）と同じ部品で、LLM はスタブ（#2397 の録画した応答）。
+内容は合成の例（架空の画面・資料の名前）だけを使う。LLM はスタブ（#2397 の録画した応答）。
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from typing import Any
 import pytest
 from openpyxl import Workbook  # type: ignore[import-untyped]
 from pytest import MonkeyPatch
+from rag_parser_core.language import builtin_pack
 
 from app.api.routes import evaluation as evaluation_route
 from app.clients import ai_calls
@@ -26,16 +26,25 @@ from app.rag.evaluation_excel import (
     parse_evaluation_workbook,
     parse_screen_line,
 )
-from app.rag.evaluation_process import page_range, process_draft
-from app.rag.support_guide_process_import import KnowledgeDocument, build_item, parse_draft_output
+from app.rag.evaluation_process import (
+    KnowledgeDocument,
+    draft_context,
+    failed_draft,
+    page_range,
+    parse_draft_output,
+    process_draft,
+    process_headings,
+    readable_as_pages,
+    resolve_document_name,
+    split_process_sections,
+)
 from app.schemas.document import DocumentSummary
 from app.schemas.evaluation import EvaluationProcessRow, EvaluationScreen
-from app.schemas.support_guide import SupportGuideProcessRow
 from tests.support import AsgiTestClient
 
 client = AsgiTestClient(app)
 RECORDED = (
-    Path(__file__).parent / "fixtures" / "support_guide_process_import" / "draft_response.json"
+    Path(__file__).parent / "fixtures" / "evaluation_process" / "draft_response.json"
 ).read_text(encoding="utf-8")
 PROCESS_TEXT = "【回答の手順】\n1. 設定画面Aを開く\n【検索する資料】\n01_操作手順書A.pdf p.12-14"
 
@@ -142,15 +151,11 @@ def test_page_range_reads_written_pages() -> None:
     assert page_range("") is None
 
 
-def test_process_draft_maps_guide_draft_to_evaluation_expectations() -> None:
-    """業務ガイドの下書き（録画の応答）を、手順・条件・対応・根拠の期待にする。"""
-    item = build_item(
-        SupportGuideProcessRow(row=2, question="画面Aで通知が出ない", process=PROCESS_TEXT),
-        parse_draft_output(RECORDED),
-        [KnowledgeDocument("doc-a", "操作手順書A.pdf")],
+def test_process_draft_maps_recorded_response_to_evaluation_expectations() -> None:
+    """録画の応答を、手順・条件・対応・根拠の期待にする。"""
+    draft = process_draft(
+        _row(), parse_draft_output(RECORDED), [KnowledgeDocument("doc-a", "操作手順書A.pdf")]
     )
-
-    draft = process_draft(_row(), item)
 
     assert draft.error is None
     # 手順は検索の手がかり（画面名・機能名）の先頭。
@@ -176,8 +181,8 @@ def test_process_draft_does_not_turn_spreadsheet_rows_into_pages() -> None:
         {"document_name": "設定一覧D.xlsx", "sheet_name": "シートA", "rows": "42"},
         {"document_name": "操作手順書A.pdf", "pages": "行42"},
     ]
-    item = build_item(
-        SupportGuideProcessRow(row=2, question="画面Aで通知が出ない", process=PROCESS_TEXT),
+    draft = process_draft(
+        _row(),
         parse_draft_output(json.dumps(recorded)),
         [
             KnowledgeDocument("doc-a", "操作手順書A.pdf"),
@@ -185,19 +190,13 @@ def test_process_draft_does_not_turn_spreadsheet_rows_into_pages() -> None:
         ],
     )
 
-    draft = process_draft(_row(), item)
-
     assert draft.relevant_document_ids == ["doc-s", "doc-a"]
     assert draft.required_evidence == []
     assert any("頁の範囲として読めません" in warning for warning in draft.warnings)
 
 
 def test_process_draft_reports_failed_rows() -> None:
-    from app.rag.support_guide_process_import import failed_item
-
-    draft = process_draft(
-        _row(), failed_item(SupportGuideProcessRow(row=2, question="q", process="p"), "失敗")
-    )
+    draft = failed_draft(_row(), "失敗")
 
     assert draft.error == "失敗"
     assert draft.required_answer_points == []
@@ -217,7 +216,7 @@ class _Llm:
         return response
 
 
-def test_process_drafts_api_uses_the_guide_import_structuring(monkeypatch: MonkeyPatch) -> None:
+def test_process_drafts_api_structures_each_row(monkeypatch: MonkeyPatch) -> None:
     async def no_sleep(_seconds: float) -> None:
         return None
 
@@ -245,8 +244,8 @@ def test_process_drafts_api_uses_the_guide_import_structuring(monkeypatch: Monke
     ]
     assert first["required_evidence"][0]["document_id"] == "doc-a"
     assert second["case_id"] == "row-3" and second["error"]
-    # 業務ガイドの取り込みと同じ構造化（構造化出力の schema・見出しで分けた節）。
-    assert llm.calls[0]["response_schema_name"] == "support_guide_draft"
+    # 構造化出力の schema・見出しで分けた節。
+    assert llm.calls[0]["response_schema_name"] == "evaluation_process_draft"
     assert json.loads(llm.calls[0]["context"])["sections"][0]["field"] == "steps"
 
 
@@ -263,3 +262,171 @@ def test_process_drafts_api_requires_fields(field: str) -> None:
     body: dict[str, Any] = {"knowledge_base_ids": ["kb-1"], "rows": [_row().model_dump()]}
     body.pop(field)
     assert client.post("/api/evaluation/cases/process-drafts", json=body).status_code == 422
+
+
+# ---- 節に分ける（見出しの語は言語資源）------------------------------------------------------
+
+_SECTIONED_PROCESS = """【回答の手順】
+1. 設定画面Aを開く
+【必要な確認事項】
+利用者が管理者か。
+検索する資料：01_操作手順書A.pdf p.12-14
+■検索の語
+設定画面A、通知
+補足:
+言い切らない。手順書を開いて確かめる。"""
+_HEADINGS = process_headings(builtin_pack())
+
+
+def test_process_text_is_split_by_language_pack_headings() -> None:
+    sections = split_process_sections(_SECTIONED_PROCESS, _HEADINGS)
+    assert [section.field for section in sections] == [
+        "steps",
+        "conditions",
+        "references",
+        "search_terms",
+        "notes",
+    ]
+    # 見出しの後ろの内容（「検索する資料：…」）は節の本文にする。
+    assert sections[2].text.startswith("01_操作手順書A.pdf")
+    # 本文の中の「手順書を開いて」は見出しにしない。
+    assert "手順書を開いて確かめる" in sections[4].text
+    context = json.loads(draft_context(_row(answer_process=_SECTIONED_PROCESS), _HEADINGS))
+    assert context["question"] == "画面Aで通知が出ない"
+    assert [item["heading"] for item in context["sections"]][:2] == ["回答の手順", "必要な確認事項"]
+
+
+def test_text_without_headings_is_one_section_and_headings_are_configurable() -> None:
+    sections = split_process_sections("設定画面Aを開いて通知を有効にする", _HEADINGS)
+    assert [(section.field, section.text) for section in sections] == [
+        (None, "設定画面Aを開いて通知を有効にする")
+    ]
+    custom = split_process_sections("[やること]\n画面を開く", {"やること": "steps"})
+    assert [(section.field, section.text) for section in custom] == [("steps", "画面を開く")]
+
+
+# ---- 資料名の解決 ---------------------------------------------------------------------------
+
+_DOCUMENTS = [
+    KnowledgeDocument("doc-a", "操作手順書A.pdf"),
+    KnowledgeDocument("doc-c", "別の資料C.xlsx"),
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("操作手順書A.pdf", "doc-a"),
+        ("操作手順書A", "doc-a"),
+        ("01_操作手順書A.pdf", "doc-a"),
+        ("別の資料C", "doc-c"),
+    ],
+    ids=["same", "no-extension", "prefixed", "other"],
+)
+def test_reference_names_resolve_to_knowledge_base_documents(name: str, expected: str) -> None:
+    found, candidates = resolve_document_name(name, _DOCUMENTS)
+    assert found is not None and found.document_id == expected
+    assert candidates == []
+
+
+def test_unresolved_and_ambiguous_reference_names() -> None:
+    assert resolve_document_name("未登録の資料B.pdf", _DOCUMENTS) == (None, [])
+    twins = [KnowledgeDocument("d1", "手順書A.pdf"), KnowledgeDocument("d2", "手順書A.docx")]
+    found, candidates = resolve_document_name("手順書A", twins)
+    assert found is None
+    assert [item.document_id for item in candidates] == ["d1", "d2"]
+
+
+def test_duplicate_uploads_of_one_canonical_resolve_to_the_canonical() -> None:
+    canonical = KnowledgeDocument("doc-a", "手順書A.pdf")
+    duplicate = KnowledgeDocument("doc-b", "手順書A.pdf", duplicate_of="doc-a")
+    for documents in ([canonical, duplicate], [duplicate, canonical]):
+        found, candidates = resolve_document_name("01_手順書A.pdf", documents)
+        assert found == canonical
+        assert candidates == []
+    # 名前が重複のファイル名にだけ当たっても、見える正本の文書にする（chunk は正本にある）。
+    renamed = KnowledgeDocument("doc-b", "手順書A_写し.pdf", duplicate_of="doc-a")
+    assert resolve_document_name("手順書A_写し", [canonical, renamed]) == (canonical, [])
+
+
+def test_same_name_with_other_content_or_invisible_canonical_stays_ambiguous() -> None:
+    # 同じ名前でも別の内容（重複でない）の文書は、どちらかに決めない。
+    other = [KnowledgeDocument("doc-a", "手順書A.pdf"), KnowledgeDocument("doc-c", "手順書A.pdf")]
+    found, candidates = resolve_document_name("手順書A.pdf", other)
+    assert found is None
+    assert [item.document_id for item in candidates] == ["doc-a", "doc-c"]
+    # 正本が選んだ文書に無い（範囲の外・見られない・無い）重複は、まとめない。
+    hidden = [
+        KnowledgeDocument("doc-b", "手順書A.pdf", duplicate_of="doc-x"),
+        KnowledgeDocument("doc-d", "手順書A.pdf", duplicate_of="doc-x"),
+    ]
+    found, candidates = resolve_document_name("手順書A.pdf", hidden)
+    assert found is None
+    assert [item.document_id for item in candidates] == ["doc-b", "doc-d"]
+    # 1 件だけなら、その文書のまま（見えない正本の id を参照にしない）。
+    found, _ = resolve_document_name("手順書A.pdf", hidden[:1])
+    assert found is not None and found.document_id == "doc-b"
+
+
+# ---- 資料の位置（#2663）----------------------------------------------------------------------
+
+
+def test_readable_as_pages_uses_page_words_only() -> None:
+    for text in ("12-14", "p.12〜14、20", "ｐ．３～５", "12頁", "12〜14ページ", "pp. 3-5", ""):
+        assert readable_as_pages(text), text
+    for text in ("行42", "42行目", "A1:C3", "シートA 3"):
+        assert not readable_as_pages(text), text
+
+
+@pytest.mark.parametrize(
+    ("reference", "message"),
+    [
+        # 表計算の資料の頁の欄の行の番号は頁にしない。
+        ({"document_name": "設定一覧D.xlsx", "pages": "42"}, "根拠の位置にできません"),
+        # シートの名前の無い行は、どのシートの行か決まらない。
+        ({"document_name": "設定一覧D.xlsx", "rows": "42"}, "読めません"),
+        # 読めないセルの範囲。
+        (
+            {"document_name": "設定一覧D.xlsx", "sheet_name": "シートA", "cells": "どこか"},
+            "読めません",
+        ),
+        # 頁の資料にシート・行は使えない。
+        (
+            {"document_name": "操作手順書A.pdf", "sheet_name": "シートA", "rows": "3"},
+            "根拠の位置に",
+        ),
+    ],
+)
+def test_location_problems_are_warnings_and_never_pages(
+    reference: dict[str, str], message: str
+) -> None:
+    draft = process_draft(
+        _row(),
+        parse_draft_output(json.dumps({"references": [reference]})),
+        [
+            KnowledgeDocument("doc-a", "操作手順書A.pdf"),
+            KnowledgeDocument("doc-s", "設定一覧D.xlsx", spreadsheet=True),
+        ],
+    )
+    assert any(message in warning for warning in draft.warnings), draft.warnings
+    assert draft.required_evidence == []
+
+
+def test_readable_sheet_location_has_no_warning() -> None:
+    references = [
+        {"document_name": "設定一覧D.xlsx", "sheet_name": "シートA", "rows": "42"},
+        {"document_name": "設定一覧D.xlsx", "sheet_name": "シートA", "cells": "ｂ３：ｄ１０"},
+    ]
+    draft = process_draft(
+        _row(),
+        parse_draft_output(json.dumps({"references": references})),
+        [KnowledgeDocument("doc-s", "設定一覧D.xlsx", spreadsheet=True)],
+    )
+    assert draft.warnings == []
+    assert draft.relevant_document_ids == ["doc-s"]
+
+
+def test_unparsable_response_is_rejected() -> None:
+    for raw in ("応答なし", '{"steps": "手順"}'):
+        with pytest.raises(ValueError):
+            parse_draft_output(raw)

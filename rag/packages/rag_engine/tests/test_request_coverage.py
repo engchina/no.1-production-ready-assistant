@@ -210,7 +210,7 @@ def test_select_new_parents_round_robin_skips_existing_and_caps() -> None:
     assert [(rid, p.record.chunk_uid) for rid, p in selected] == [("Q1", "run:a1"), ("Q2", "run:b1"), ("Q1", "run:a2")]
 
 
-def test_hints_come_from_aliases_and_guide_triggers_sharing_request_terms() -> None:
+def test_hints_come_from_aliases_and_rule_triggers_sharing_request_terms() -> None:
     target = RequestTarget("Q2", "request", "請求書の再発行方法は？", ("請求書", "再発行"))
     knowledge = RuntimeKnowledgeContext(
         original_question=QUESTION,
@@ -426,12 +426,12 @@ def test_cover_missing_requests_counts_in_the_shared_extra_retrieval_budget(monk
             unanswered_requests=[{"request_id": "Q2", "status": "missing"}],
         )[1]
 
-    used = ExtraRetrievalBudget(max_queries=2, used={"guide_steps": 2})
+    used = ExtraRetrievalBudget(max_queries=2, used={"crag": 2})
     assert cover(used)["re_retrieval"] == {"applied": False, "skipped": "no_budget"}
     assert calls == []
-    left = ExtraRetrievalBudget(max_queries=3, used={"guide_steps": 2})
+    left = ExtraRetrievalBudget(max_queries=3, used={"crag": 2})
     assert cover(left)["re_retrieval"]["applied"] is True
-    assert left.used == {"guide_steps": 2, "request_coverage": 1} and left.remaining == 0
+    assert left.used == {"crag": 2, "request_coverage": 1} and left.remaining == 0
 
 
 # #2665 の合成の事例: 番号つきの 3 要求の元の質問と、呼び出し元が検索用に言い換えた検索文（番号を除いた文・

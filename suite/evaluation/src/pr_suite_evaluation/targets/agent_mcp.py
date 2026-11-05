@@ -13,7 +13,7 @@ rag の比較評価の CLI（段 2 まで）から移した。
   確認は「利用者に条件を確かめた」対応（needs_clarification）として採点する。次の返答が無ければ
   確認で終わったケースとして Run を取り消す。
 - ケースの既知の条件（`conditions`）は、Agent に構造化して渡す口が無いため、最初の質問の後ろに
-  「既知の条件」の文として足す（業務ガイドを渡すと条件の名前で書く）。
+  「既知の条件」の文として足す（条件の id で書く）。
 - 時間内に終わらない Run は `agent_cancel_run` で取り消し、結果（`result`）を観測に残す。承認待ちで
   止まった Run は画面で判断されうるので取り消さない。
 
@@ -202,17 +202,17 @@ class AgentMcp:
 # ---- 送る発話 ---------------------------------------------------------------------------------
 
 
-def known_conditions_text(conditions: Mapping[str, str], labels: Mapping[str, str]) -> str:
+def known_conditions_text(conditions: Mapping[str, str]) -> str:
     """ケースの既知の条件を、質問に足す文にする（Agent には構造化して渡す口が無い）。"""
-    parts = [f"{labels.get(key, key)}は「{value}」" for key, value in conditions.items()]
+    parts = [f"{key}は「{value}」" for key, value in conditions.items()]
     return f"（既知の条件: {'、'.join(parts)}）" if parts else ""
 
 
-def case_utterances(case: Case, labels: Mapping[str, str]) -> list[tuple[str, dict[str, str]]]:
+def case_utterances(case: Case) -> list[tuple[str, dict[str, str]]]:
     """送る発話と、その発話までに分かった条件（確認への答えの選択肢を選ぶのに使う）。"""
     first = case.query
     if case.conditions:
-        first = f"{first}\n{known_conditions_text(case.conditions, labels)}"
+        first = f"{first}\n{known_conditions_text(case.conditions)}"
     conditions = dict(case.conditions)
     utterances = [(first, dict(conditions))]
     for turn in case.turns:
@@ -285,13 +285,11 @@ class AgentMcpTarget:
         api: AgentMcp,
         config: AgentTargetConfig,
         *,
-        labels: Mapping[str, str] | None = None,
         clock: Callable[[], float] = time.monotonic,
         api_clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._api = api
         self._config = config
-        self._labels = dict(labels or {})
         self._clock = clock
         self._api_clock = api_clock
 
@@ -299,7 +297,7 @@ class AgentMcpTarget:
         observation = CaseObservation(case_id=case.id, target_kind=TARGET_KIND)
         thread_id: str | None = None
         pending: Mapping[str, Any] | None = None
-        utterances = case_utterances(case, self._labels)
+        utterances = case_utterances(case)
         for index, (text, conditions) in enumerate(utterances):
             turn, run = self._turn(index, text, conditions, thread_id=thread_id, pending=pending)
             observation.turns.append(turn)

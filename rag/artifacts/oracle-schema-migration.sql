@@ -3303,6 +3303,10 @@ END;
 DECLARE
     v_count NUMBER;
 BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
+    IF v_count = 0 THEN
+        RETURN;
+    END IF;
     SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS';
     IF v_count = 0 THEN
         EXECUTE IMMEDIATE
@@ -3973,3 +3977,22 @@ BEGIN
     END IF;
 END;
 /
+
+-- migration: 20261106_001_retire_support_guides
+
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP TABLE rag_support_guide_embeddings PURGE';
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP TABLE rag_support_guide_revisions PURGE';
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP TABLE rag_support_guides PURGE';
+    END IF;
+END;

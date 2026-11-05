@@ -24,17 +24,12 @@
 7. `--document-map-output` を渡したとき（#3240）は、取り込んだファイル名 → 文書 ID の対応表
    （`{"documents": {"<ファイル名>": "<document_id>"}}`）を書く。製品横断の
    評価（`suite-evaluation run --document-map`）が評価セットの `file:` を解決する。
-8. `--guides` を渡したとき（#1289）は、そのナレッジベースを参照する検索・回答プロファイルを作り、
-   業務ガイド（`support-guides.json`。参照の `file:` も文書 ID に置き換える）を取り込んで公開し、
-   `search_answer_profile_id` を入れた評価セット（業務ガイドあり = C）を `--guided-output` に書く。
 
 書き出した評価セットは `python -m app.rag.evaluation_cli <output> --api-base-url …` で実行できる。
 
     uv run python -m app.rag.evaluation_corpus_cli \\
         ../evaluation/business-support/business-support.json \\
-        --api-base-url http://127.0.0.1:8100 --output /tmp/business-support.resolved.json \\
-        --guides ../evaluation/business-support/support-guides.json \\
-        --guided-output /tmp/business-support.guided.json
+        --api-base-url http://127.0.0.1:8100 --output /tmp/business-support.resolved.json
 """
 
 from __future__ import annotations
@@ -196,44 +191,6 @@ def with_entity_expansion(golden_set: Mapping[str, Any]) -> dict[str, Any]:
     return resolved
 
 
-def resolve_guides(
-    guides: Sequence[Mapping[str, Any]], document_ids: Mapping[str, str]
-) -> list[dict[str, Any]]:
-    """業務ガイドの参照（`references[].document_id`）の `file:` を文書 ID に置き換える（#1289）。"""
-    resolved: list[dict[str, Any]] = json.loads(json.dumps(list(guides)))
-    for guide in resolved:
-        for reference in guide.get("references", []):
-            if isinstance(reference, dict) and "document_id" in reference:
-                reference["document_id"] = _resolve_reference(
-                    reference["document_id"], document_ids
-                )
-    return resolved
-
-
-def guide_referenced_files(guides: Sequence[Mapping[str, Any]]) -> list[str]:
-    """業務ガイドが `file:` で参照するファイル名（出てきた順・重複なし）。"""
-    names: list[str] = []
-    for guide in guides:
-        for reference in guide.get("references", []):
-            value = reference.get("document_id") if isinstance(reference, Mapping) else None
-            if isinstance(value, str) and value.startswith(FILE_REFERENCE_PREFIX):
-                name = value.removeprefix(FILE_REFERENCE_PREFIX)
-                if name and name not in names:
-                    names.append(name)
-    return names
-
-
-def guided_golden_set(resolved: Mapping[str, Any], search_answer_profile_id: str) -> dict[str, Any]:
-    """検索・回答プロファイル（参照 KB と業務ガイド）で評価する評価セット（C。#1249 / #1289）。
-
-    参照 KB はプロファイルが決めるため、`knowledge_base_ids` は外す。
-    """
-    guided: dict[str, Any] = json.loads(json.dumps(dict(resolved)))
-    guided.pop("knowledge_base_ids", None)
-    guided["search_answer_profile_id"] = search_answer_profile_id
-    return guided
-
-
 class CorpusLoader:
     """API を呼んで資料を取り込む。HTTP の client と待ち方を差し替えられる（テスト用）。"""
 
@@ -275,45 +232,6 @@ class CorpusLoader:
             )
         )
         return str(data["id"])
-
-    def create_search_answer_profile(self, name: str, knowledge_base_id: str) -> str:
-        # --guides で明示的に作る評価用プロファイルだけ、ガイドの使用を ON にする。
-        config: dict[str, Any] = {
-            "knowledge_base_ids": [knowledge_base_id],
-            "query": {"support_guide_enabled": True},
-        }
-        data = self._data(
-            self._client.post(
-                f"{self._api}/search-answer-profiles",
-                json={
-                    "name": name,
-                    "description": "業務支援の評価の業務ガイドあり（評価用）",
-                    "config": config,
-                },
-            )
-        )
-        return str(data["id"])
-
-    def import_guides(
-        self, search_answer_profile_id: str, guides: Sequence[Mapping[str, Any]]
-    ) -> list[str]:
-        """業務ガイドを下書きとして取り込み、検証して公開する。公開した guide_id を返す。"""
-        base = f"{self._api}/search-answer-profiles/{search_answer_profile_id}/support-guides"
-        created = self._data(
-            self._client.post(f"{base}/import", json={"guides": [dict(g) for g in guides]})
-        )
-        published: list[str] = []
-        for summary in created.get("created", []):
-            guide_id = str(summary["guide_id"])
-            self._data(
-                self._client.post(
-                    f"{base}/{guide_id}/publish",
-                    json={"base_revision": int(summary["draft_revision"])},
-                )
-            )
-            self._log(f"published guide {summary.get('title') or guide_id}")
-            published.append(guide_id)
-        return published
 
     def ingest(self, path: Path, knowledge_base_id: str) -> str:
         """1 ファイルをアップロードして取込を始め、文書 ID を返す。"""
@@ -420,32 +338,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="取り込んだファイル名 → 文書 ID の対応表の出力先（製品横断の評価が使う。#3240）",
     )
     parser.add_argument(
-        "--guides",
-        type=Path,
-        help=(
-            '業務ガイド（{"guides": [...]}）。渡すと検索・回答プロファイルを作って'
-            "取り込み、公開する"
-        ),
-    )
-    parser.add_argument(
-        "--guided-output",
-        type=Path,
-        help=(
-            "検索・回答プロファイルで評価する評価セット（業務ガイドあり）の出力先"
-            "（--guides と一緒に）"
-        ),
-    )
-    parser.add_argument(
-        "--search-answer-profile-name",
-        default=f"業務支援の評価 業務ガイドあり {time.strftime('%Y%m%d-%H%M%S')}",
-    )
-    parser.add_argument(
         "--entity-index",
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "すべての文書のレシピで実体・別名索引の構築を明示して取り込み、評価セットと"
-            "作る検索・回答プロファイルで実体の 1 段の拡張を選ぶ（#1388）。--no-entity-index は"
+            "すべての文書のレシピで実体・別名索引の構築を明示して取り込み、評価セットで"
+            "実体の 1 段の拡張を選ぶ（#1388）。--no-entity-index は"
             "実体・別名索引の構築を無効にする。省略時は全体の既定（OFF）に従う"
         ),
     )
@@ -468,18 +366,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.user_id:
         headers["X-User-ID"] = args.user_id
     try:
-        if bool(args.guides) != bool(args.guided_output):
-            raise CorpusError("--guides と --guided-output は一緒に渡してください。")
         golden_set = json.loads(args.golden_set.read_text(encoding="utf-8"))
-        guides: list[Mapping[str, Any]] = []
-        if args.guides:
-            guides = list(json.loads(args.guides.read_text(encoding="utf-8")).get("guides", []))
-            if not guides:
-                raise CorpusError(f"業務ガイドがありません: {args.guides}")
         corpus_dir = args.corpus_dir or args.golden_set.parent
         versions = document_versions(golden_set)
         names = referenced_files(golden_set)
-        names += [name for name in guide_referenced_files(guides) if name not in names]
         for name in (name for pair in versions for name in pair):
             if name not in names:
                 names.append(name)
@@ -508,13 +398,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for old, new in versions:
                     loader.register_document_version(documents[old], documents[new])
                     print(f"superseded {old} by {new}")
-            profile_id: str | None = None
-            if guides:
-                profile_id = loader.create_search_answer_profile(
-                    args.search_answer_profile_name, knowledge_base_id
-                )
-                print(f"search answer profile {profile_id}")
-                loader.import_guides(profile_id, resolve_guides(guides, documents))
         resolved = resolve_golden_set(
             golden_set,
             documents,
@@ -526,8 +409,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         _write(args.output, resolved)
         if args.document_map_output:
             _write(args.document_map_output, {"documents": dict(documents)})
-        if profile_id is not None:
-            _write(args.guided_output, guided_golden_set(resolved, profile_id))
         return 0
     except (CorpusError, OSError, json.JSONDecodeError, httpx.HTTPError) as error:
         print(f"error: {error}", file=sys.stderr)

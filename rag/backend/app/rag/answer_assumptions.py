@@ -16,7 +16,6 @@ def with_answer_assumptions(
     policy: str,
     question: str,
     conditions: Mapping[str, str],
-    guide: Mapping[str, Any],
     answered_rule_ids: Sequence[str] = (),
     confirmed_answers: Sequence[ClarificationAnswer] = (),
 ) -> dict[str, Any]:
@@ -42,6 +41,5 @@ def with_answer_assumptions(
                 "options": [option.label for option in clarification.options],
             }
         )
-    pending.extend(item for item in guide.get("clarifications", []) if isinstance(item, dict))
     result.update(assume_unconfirmed=True, unconfirmed_conditions=pending)
     return result

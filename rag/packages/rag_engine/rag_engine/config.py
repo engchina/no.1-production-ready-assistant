@@ -282,27 +282,18 @@ class Settings:
     # 丸数字・(1) などで並べた小問ごとの検索をする小問の数と、小問ごとに確保する根拠の数 (#2399)。
     request_coverage_max_subquestions: int = 5
     request_coverage_chunks_per_subquestion: int = 2
-    # 主の検索の後に足す検索（業務ガイドの手順ごとの検索・小問ごとの検索・根拠の無い要求の再検索）の回数の
+    # 主の検索の後に足す検索（小問ごとの検索・根拠の無い要求の再検索）の回数の
     # 合計の枠 (#2395)。種類ごとの上限はこの枠の中で数える（`retrieval.extra_retrieval`）。
     extra_retrieval_max_queries: int = 8
     # 章節の拡張で入力の上限に入らない章節を LLM で抜き出す(#1437)。False なら rerank の順で上限まで入れ、残りは
     # 「回答に未反映の関連章節」に示す(#2800。backend の既定は False)。
     section_extraction_enabled: bool = True
-    # 業務ガイドの手順ごとに検索し、手順が参照する資料の頁の根拠を回答の材料に入れる (#2395)。LLM は呼ばない。
-    # 必須対象は追加検索の合計枠を先に確保する。回数はその後の補助検索、参照数は最低1件以外の追加候補を制限する。
-    guide_step_retrieval_enabled: bool = True
-    guide_step_max_queries: int = 4
-    guide_step_chunks_per_step: int = 2
-    guide_reference_max_chunks: int = 4
-    guide_step_deadline_seconds: float = 60.0
     # 当たった chunk の章節から親の章節へ段階的に広げて文脈に入れる (#1436)。章節と chunk の対応を注入した
     # 呼び出し元（`AnswerDependencies.section_outline` / `section_chunks`）でだけ動く。上限は、根拠の入力 token
     # （モデルの入力の上限に対する割合）・上がる段の数。期限は回答全体のものを使う。
     section_expansion_enabled: bool = True
     section_expansion_max_levels: int = 4
     section_expansion_input_token_percent: int = 50
-    # 業務ガイドの手順ごとの検索の後に広げる段のために、最初の段で使わずに残す入力の割合（上の入力の上限に対する %。#2816）。
-    section_expansion_followup_reserve_percent: int = 20
     # 回答のモデルの入力の上限（tokens。#1437）。backend が共通のモデル設定の登録モデルの値を
     # `ENTERPRISE_AI_MAX_INPUT_TOKENS` で渡す（platform の enterprise_ai_max_input_tokens。既定 128000）。
     # 章節の拡張の根拠の入力の上限と、抽出してから統合の 1 回分の大きさをこの割合で決める。
@@ -363,18 +354,9 @@ class Settings:
     section_skip_regrade_at_scope: bool = False
     # 質問拡張で LLM が作る検索文の本数の上限(#1499。既定は従来の値 MAX_GENERATED_QUERY_COUNT と同じ 5)。
     query_expansion_max_queries: int = 5
-    # 分かっている条件（業務ガイドの条件の名前と値。MCP の conditions・質問で決まった条件。#1492）。backend が
-    # 業務ガイドの照合の結果から渡す。回答の確認の項目のうち、これを確かめる項目を決定的に除く。
-    known_conditions: tuple[tuple[str, str], ...] = ()
     # backendが利用者の確定した回答・質問から選別した前提。設定保存や環境変数からは読み込まない。
     confirmed_premises: tuple[tuple[str, str], ...] = ()
     confirmed_premise_sources: tuple[tuple[str, str, str], ...] = ()
-    # 業務ガイドの照合で分からなかった選択の条件（#2404）。(条件の id, 名前, ((選択肢, (言い換え, ...)), ...))。
-    # 選択肢が項目の種類に対応する条件だけを、根拠の画面の図の項目の種類で決める（generation.form_field_kinds）。
-    evidence_conditions: tuple[tuple[str, str, tuple[tuple[str, tuple[str, ...]], ...]], ...] = ()
-    # 根拠で条件が決まったときの業務ガイドの手順の計画（#2689）。backend が決まり方ごとに前もって作る。
-    # (決まった条件の (id, 値) の列, 残る手順の (id, 必須か) の列, 業務ガイドのルールの id, そのルールの本文)。
-    evidence_plans: tuple[tuple[tuple[tuple[str, str], ...], tuple[tuple[str, bool], ...], str, str], ...] = ()
     # 「今日」(検索の基準日の既定)を決める IANA の時間帯(#3249。`PLATFORM_TIMEZONE`)。OS の時間帯は使わない。
     timezone: str = DEFAULT_TIMEZONE
 
@@ -543,17 +525,9 @@ def get_settings(*, environ: Mapping[str, str] | None = None, dotenv_path: str |
         request_coverage_chunks_per_subquestion=max(0, _env_int(env, "RAG_ENGINE_REQUEST_COVERAGE_CHUNKS_PER_SUBQUESTION", 2)),
         extra_retrieval_max_queries=max(0, _env_int(env, "RAG_ENGINE_EXTRA_RETRIEVAL_MAX_QUERIES", 8)),
         section_extraction_enabled=_env_bool(env, "RAG_ENGINE_SECTION_EXTRACTION_ENABLED", True),
-        guide_step_retrieval_enabled=_env_bool(env, "RAG_ENGINE_GUIDE_STEP_RETRIEVAL", True),
-        guide_step_max_queries=max(0, _env_int(env, "RAG_ENGINE_GUIDE_STEP_MAX_QUERIES", 4)),
-        guide_step_chunks_per_step=max(1, _env_int(env, "RAG_ENGINE_GUIDE_STEP_CHUNKS_PER_STEP", 2)),
-        guide_reference_max_chunks=max(0, _env_int(env, "RAG_ENGINE_GUIDE_REFERENCE_MAX_CHUNKS", 4)),
-        guide_step_deadline_seconds=max(0.0, _env_float(env, "RAG_ENGINE_GUIDE_STEP_DEADLINE_SECONDS", 60.0)),
         section_expansion_enabled=_env_bool(env, "RAG_ENGINE_SECTION_EXPANSION", True),
         section_expansion_max_levels=max(0, _env_int(env, "RAG_ENGINE_SECTION_EXPANSION_MAX_LEVELS", 4)),
         section_expansion_input_token_percent=max(1, min(100, _env_int(env, "RAG_ENGINE_SECTION_EXPANSION_INPUT_TOKEN_PERCENT", 50))),
-        section_expansion_followup_reserve_percent=max(
-            0, min(50, _env_int(env, "RAG_ENGINE_SECTION_EXPANSION_FOLLOWUP_RESERVE_PERCENT", 20))
-        ),
         answer_max_input_tokens=max(1, _env_int(env, "ENTERPRISE_AI_MAX_INPUT_TOKENS", 128_000)),
         section_extraction_concurrency=max(1, _env_int(env, "RAG_ENGINE_SECTION_EXTRACTION_CONCURRENCY", 4)),
         answer_validation_max_input_bytes=max(16_000, _env_int(env, "RAG_ENGINE_ANSWER_VALIDATION_MAX_INPUT_BYTES", 96_000)),

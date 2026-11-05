@@ -2,19 +2,19 @@ import { useId, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import { AnswerCheckPanel, StatusBadge, TEXT_ICON_SIZE, type AnswerCheck, type StatusVariant } from "@production-ready/ui";
 
-import type { AnswerReview, ConditionSource, ReviewOutcome, ReviewValidation } from "@/lib/answer-review";
+import type { AnswerReview, ReviewOutcome, ReviewValidation } from "@/lib/answer-review";
 import { t, type I18nKey } from "@/lib/i18n";
 
 /**
  * 資料との照合（#1286・#2361・#141）。回答の下に、照合の結果（回答の対応と照合のバッジ）を 1 行で出す。行の器・
- * 照合の 5 状態のバッジは RAG と共通の `AnswerCheckPanel`。確かめた条件・確認待ちの質問・使った業務ガイド・
+ * 照合の 5 状態のバッジは RAG と共通の `AnswerCheckPanel`。確かめた条件・確認待ちの質問・
  * 足りない情報があるときだけ、同じ行を開いて見られるようにする。印の付いた段落・外した段落の一覧は回答の本文の節
  * 「確認が必要な点」「根拠と矛盾し除いた内容」の 1 か所だけに出し、ここには件数のバッジだけを出す（#2738）。
  * 成果物の JSON・内部の語は出さない（handoff §13。元の JSON は実行の詳細の監査ログで、監査の閲覧の権限のある利用者だけが見る。#2403）。
  */
 export function AnswerReviewPanel({ review, testId }: { review: AnswerReview; testId: string }) {
   const hasDetails =
-    review.conditions.length > 0 || review.clarifications.length > 0 || review.guide !== null || review.gaps.length > 0;
+    review.conditions.length > 0 || review.clarifications.length > 0 || review.gaps.length > 0;
   return (
     <>
       {review.limitReached ? <LimitNote testId={`${testId}-limit`} /> : null}
@@ -42,7 +42,7 @@ function AnswerReviewSections({ review }: { review: AnswerReview }) {
                 {t("chat.review.separator")}
                 {condition.value}
                 {condition.source ? (
-                  <span className="text-fg-muted">{t("chat.review.sourceWrap", { source: sourceLabel(condition.source) })}</span>
+                  <span className="text-fg-muted">{t("chat.review.sourceWrap", { source: t("chat.review.source.user") })}</span>
                 ) : null}
                 {condition.previousValue ? (
                   <span className="block text-fg-muted">
@@ -69,17 +69,6 @@ function AnswerReviewSections({ review }: { review: AnswerReview }) {
               </li>
             ))}
           </ul>
-        </ReviewGroup>
-      ) : null}
-
-      {review.guide ? (
-        <ReviewGroup title={t("chat.review.guide")} testId="answer-review-guide">
-          <p className="break-words text-fg">
-            {review.guide.title || t("chat.review.guideUntitled")}
-            {review.guide.revision ? (
-              <span className="text-fg-muted">{t("chat.review.guideRevision", { revision: review.guide.revision })}</span>
-            ) : null}
-          </p>
         </ReviewGroup>
       ) : null}
 
@@ -122,10 +111,6 @@ function LimitNote({ testId }: { testId: string }) {
       <span className="min-w-0 break-words">{t("chat.review.limitReached")}</span>
     </p>
   );
-}
-
-function sourceLabel(source: Exclude<ConditionSource, null>): string {
-  return source === "user" ? t("chat.review.source.user") : t("chat.review.source.question");
 }
 
 /**

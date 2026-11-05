@@ -57,9 +57,6 @@ PROFILE_GLOBAL_QUERY_FIELDS = frozenset(
         "graph_expansion_max_chunks",
         "screen_linking_enabled",
         "request_coverage_retrieval_enabled",
-        "guide_step_retrieval_enabled",
-        "guide_step_max_queries",
-        "guide_step_deadline_seconds",
         "entity_expansion_enabled",
         "entity_expansion_max_chunks",
         "section_expansion_enabled",
@@ -101,16 +98,15 @@ class SearchAnswerProfileConfig(BaseModel):
     def _serialize_query(self, value: KnowledgeBaseQueryConfig) -> dict[str, object]:
         return value.model_dump(mode="json", exclude=set(PROFILE_GLOBAL_QUERY_FIELDS))
 
-    # 回答前の確認（#1839）の方針。confirm = 曖昧な質問を確認してから回答する（ルールごとの確認・
-    # 業務ガイドの条件の確認を出す）/ assume = 確認せずに前提を示して回答する
-    # （チャットに確認を出さない）。
+    # 回答前の確認（#1839）の方針。confirm = 曖昧な質問を確認してから回答する（ルールごとの確認を
+    # 出す）/ assume = 確認せずに前提を示して回答する（チャットに確認を出さない）。
     # 1 つの質問で聞き返すのは 1 回だけ（#717）なので、確認の上限（往復）は持たない。
     clarification_policy: Literal["confirm", "assume"] = "confirm"
     # 言語資源の上書き（#2181。全体の言語資源に重ねる「節 → 項目 → 値」）。検索・回答で使う項目
     # （ingest=False）だけを持てる。取込の項目は文書の分割と食い違うので持たない。
     language_pack: dict[str, dict[str, object]] = Field(default_factory=dict)
     # 回答の注意書きの窓口の上書き（#2400。業務ごとに窓口が違うとき。窓口の名前・連絡の方法の
-    # 1 行）。空ならシステム設定の窓口。業務ガイドの人への引き継ぎの窓口（handoff.contact）が優先。
+    # 1 行）。空ならシステム設定の窓口。
     contact_override: str = Field(default="", max_length=CONTACT_OVERRIDE_MAX_CHARS * 2)
 
     @field_validator("contact_override")
@@ -195,11 +191,6 @@ def resolve_search_answer_profile_settings(
         validate_profile_answer_model(global_settings, config)
     overlays = [config.query.model_copy(update={key: None for key in PROFILE_GLOBAL_QUERY_FIELDS})]
     settings, applied = compose_query_settings(global_settings, overlays)
-    # 使用の意思を持たない既存プロファイルは、全体の値にかかわらず OFF。
-    guide_enabled = config.query.support_guide_enabled is True
-    if settings.rag_support_guide_enabled != guide_enabled:
-        settings = settings.model_copy(update={"rag_support_guide_enabled": guide_enabled})
-        applied = True
     if apply_answer_model and config.answer_model_id:
         settings = settings.model_copy(
             update={"enterprise_ai_default_text_model": config.answer_model_id}

@@ -1,9 +1,9 @@
 {
   "description": "RAG の MCP のツールの出力の合成の例（ツールごとに 1 つ。#3240）。契約（rag-tools.json）の outputSchema の項目だけを持ち、内容は合成。Agent の fake の RAG（agent/backend/tests/mcp_support.py）が既定の出力に使い、Agent のテストが契約の outputSchema に合う（契約に無い項目を持たない）ことを、RAG のテストが RAG の出力の型で読めることを確かめる。契約を変えたら同じ PR で直す。",
-  "schema_version": 40,
+  "schema_version": 41,
   "outputs": {
     "rag_list_search_answer_profiles": {
-      "schema_version": 40,
+      "schema_version": 41,
       "search_answer_profiles": [
         {
           "id": "bv-sales",
@@ -16,67 +16,8 @@
       "query_matched": true,
       "next_step": null
     },
-    "rag_lookup_guides": {
-      "schema_version": 40,
-      "guides": [
-        {
-          "guide_id": "guide-1",
-          "revision": 1,
-          "title": "契約の更新",
-          "decision": "clarify",
-          "known_conditions": [],
-          "unknown_conditions": [
-            {
-              "id": "kind",
-              "label": "契約の種類",
-              "state": "unknown",
-              "value": null,
-              "source": null,
-              "handling": "ask",
-              "candidates": []
-            }
-          ],
-          "applicability": {},
-          "expected_result": "契約を更新できる",
-          "score": 2,
-          "clarifications": [
-            {
-              "condition_id": "kind",
-              "label": "契約の種類",
-              "question": "契約の種類は何ですか？",
-              "options": [
-                "年間",
-                "月額"
-              ],
-              "multiple": false
-            }
-          ],
-          "steps": [
-            {
-              "id": "s1",
-              "title": "契約を開く",
-              "purpose": "",
-              "depends_on": [],
-              "allowed_tools": [],
-              "retrieval_hints": [],
-              "references": [],
-              "evidence_requirements": [],
-              "done_when": ""
-            }
-          ],
-          "branches": [],
-          "references": [],
-          "completion": [],
-          "impact_scope": "individual",
-          "approval_required": false,
-          "impact_steps": [],
-          "impact_applies": true,
-          "handoff_contact": ""
-        }
-      ]
-    },
     "rag_outline": {
-      "schema_version": 40,
+      "schema_version": 41,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -119,7 +60,7 @@
       "lines": []
     },
     "rag_read_document": {
-      "schema_version": 40,
+      "schema_version": 41,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -172,7 +113,7 @@
       "superseded": false
     },
     "rag_read_section": {
-      "schema_version": 40,
+      "schema_version": 41,
       "document_id": "doc-1",
       "file_name": "契約書.pdf",
       "chunk_set_id": "cs-1",
@@ -241,7 +182,7 @@
       "superseded": false
     },
     "rag_read_source": {
-      "schema_version": 40,
+      "schema_version": 41,
       "evidence_id": "chunk-1",
       "document_id": "doc-1",
       "chunk_id": "chunk-1",
@@ -289,13 +230,13 @@
       "references": []
     },
     "rag_readable_documents": {
-      "schema_version": 40,
+      "schema_version": 41,
       "readable_document_ids": [
         "doc-1"
       ]
     },
     "rag_recommend_search_answer_profile": {
-      "schema_version": 40,
+      "schema_version": 41,
       "recommended_profile_id": "bv-sales",
       "candidates": [
         {
@@ -311,7 +252,7 @@
       ]
     },
     "rag_retrieve_evidence": {
-      "schema_version": 40,
+      "schema_version": 41,
       "trace_id": "rag-trace-2",
       "degraded_steps": [],
       "zero_evidence": null,
@@ -395,7 +336,7 @@
       "profile_knowledge": null
     },
     "rag_search": {
-      "schema_version": 40,
+      "schema_version": 41,
       "answer": "根拠付き回答",
       "trace_id": "rag-trace-1",
       "outcome": "answered",
@@ -410,7 +351,6 @@
       "gaps": [],
       "confirmations": [],
       "clarifications": [],
-      "guide": null,
       "insufficient_reason": null,
       "needs_human_review": false,
       "passage_marks": [],
@@ -496,7 +436,7 @@
       "notice": null
     },
     "rag_validate_answer": {
-      "schema_version": 40,
+      "schema_version": 41,
       "valid": true,
       "status": "completed",
       "counts": {
@@ -529,8 +469,6 @@
       "evidence_truncated": false,
       "checks": [],
       "findings": [],
-      "guide_revision": null,
-      "guide_steps": [],
       "reused_claims": 0,
       "premise_checks": []
     }

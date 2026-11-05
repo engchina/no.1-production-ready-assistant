@@ -236,7 +236,6 @@ from app.features.agent.context_window import (
     tools_text,
 )
 from app.features.agent.evaluation_aids import aid_enabled
-from app.features.agent.guide_steps import unresolved_guide_steps, unresolved_guide_steps_message
 from app.features.agent.job_cancel import (
     NL2SQL_CANCEL_JOB_TOOL,
     RUN_CANCEL_TRACE_PREFIX,
@@ -271,11 +270,9 @@ from app.features.agent.support_task import (
     ADJUSTED_LIMITS_HINT,
     BUDGET_EXCEEDED_CODE,
     DATA_LOOKUP_HINT,
-    GUIDE_CHECK_TRACE_PREFIX,
     NL2SQL_NEEDS_CLARIFICATION,
     NL2SQL_QUERY,
     RAG_BUDGET_TOOLS,
-    RAG_LOOKUP_GUIDES,
     RAG_READ_DOCUMENT,
     RAG_READ_SECTION,
     RAG_READ_SOURCE,
@@ -290,7 +287,6 @@ from app.features.agent.support_task import (
     caller_planned_arguments,
     caller_planned_schema,
     evidence_clarification_step,
-    guide_check_note,
     has_support_task_activity,
     is_environment_tool,
     missing_data_lookup,
@@ -1237,11 +1233,6 @@ def _strict_schema(schema: dict[str, Any]) -> bool:
     return schema.get("additionalProperties") is False and required == set(properties)
 
 
-# 業務ガイドの照合（#1322）に渡す条件・質問の上限（`rag_lookup_guides` の契約の上限）。
-GUIDE_CHECK_MAX_CONDITIONS = 30
-GUIDE_CHECK_MAX_QUERY_CHARS = 8000
-
-
 def _connection_prefix(function_name: str) -> str | None:
     """`<接続>__<ツール>` の接続の部分（MCP 接続のツールでなければ None）。"""
     if MCP_TOOL_SEPARATOR not in function_name:
@@ -1249,55 +1240,16 @@ def _connection_prefix(function_name: str) -> str | None:
     return function_name[: -len(mcp_base_tool_name(function_name)) - len(MCP_TOOL_SEPARATOR)]
 
 
-def _guide_consulted(steps: list[Any], prefix: str) -> bool:
-    """この Run で、その接続の業務ガイドを引いた（`rag_lookup_guides`・`rag_search` が成功）か。"""
-    for step in steps:
-        call, result = step.tool_call, step.tool_result
-        if call is None or result is None or not result.success:
-            continue
-        if _connection_prefix(call.name) != prefix:
-            continue
-        if mcp_base_tool_name(call.name) in {RAG_LOOKUP_GUIDES, RAG_SEARCH}:
-            return True
-    return False
-
-
-def guide_check_query(goal: str, query: object) -> str:
-    """業務ガイドの照合の質問（利用者の質問と、モデルが根拠を集めた質問。同じなら 1 つ）。
-
-    条件の語（例: 検証用アカウント → 個別）は利用者の質問に、業務ガイドの語はモデルの質問に出る
-    ことがあるので両方を渡す。
-    """
-    parts = [" ".join(goal.split())]
-    if isinstance(query, str) and " ".join(query.split()) not in parts:
-        parts.append(" ".join(query.split()))
-    return "\n".join(part for part in parts if part)[:GUIDE_CHECK_MAX_QUERY_CHARS]
-
-
 def support_task_goal(goal: str, previous: Mapping[str, Any] | None) -> str:
-    """業務ガイドの照合の質問に使う利用者の質問（#1322）。
+    """ツールに渡す `original_question` と案内の照合に使う利用者の質問（#1322）。
 
-    前の Run で問いを確かめ中なら、利用者の新しい発言は問いへの答え（「個別の利用者に付けます」）
-    なので、前の質問（目的）も含める（業務ガイドの語は前の質問に出る）。
+    前の Run で問いを確かめ中なら、利用者の新しい発言は問いへの答えなので、前の質問も含める。
     """
     if isinstance(previous, Mapping) and previous.get("pending_clarifications"):
         before = previous.get("goal")
         if isinstance(before, str) and before.strip() and before.strip() != goal.strip():
             return f"{before.strip()}\n{goal}"
     return goal
-
-
-def support_task_known_conditions(previous: Mapping[str, Any] | None) -> dict[str, str]:
-    """前の Run までに分かった条件（条件の id → 値）。"""
-    known = previous.get("known_conditions") if isinstance(previous, Mapping) else None
-    if not isinstance(known, Mapping):
-        return {}
-    conditions: dict[str, str] = {}
-    for key, entry in known.items():
-        value = entry.get("value") if isinstance(entry, Mapping) else None
-        if isinstance(key, str) and isinstance(value, str) and value:
-            conditions[key] = value
-    return conditions
 
 
 def _run_tool_context(run: Any) -> ToolInvocationContext:
@@ -1456,33 +1408,19 @@ class _ToolRecorder:
     接続のツール）。`rag_search` が回答を確定できないと返したら、モデルへの結果に次の手
     （`next_step`）を足す（#1283。記録する step の結果は RAG の結果のまま）。
 
-    モデルが自分で `rag_lookup_guides` を呼んだときも、最上位の業務ガイドの判断から次の手
-    （`next_step`。答える判断なら資料の根拠を集めてから答える）を結果に足す（#1322）。
-
-    業務ガイドの照合（#1322）: モデルが業務ガイド（`rag_lookup_guides`・`rag_search`）を引かずに
-    `rag_retrieve_evidence` で根拠を集めたら、Control Plane が同じ接続の `rag_lookup_guides` を
-    1 回呼び（step に残す。予算には数えない）、最上位の業務ガイドと次の手（条件が分からなければ
-    確認の質問）を根拠の結果に `guide_check` として足す。根拠を集める道具は業務ガイドの条件・分岐を
-    見ないため、確かめる条件があってもモデルが分岐ごとに答えてしまう（#1317 の実環境の評価）。
-    `guide_tools` はモデルに渡した `rag_lookup_guides`（接続の接頭辞 → 定義・handler）、
-    `goal` は利用者の質問（前の Run で問いを確かめ中なら、その質問も含む）、`known_conditions` は
-    前の Run までに分かった条件。
+    `goal` は利用者の質問（前の Run で問いを確かめ中なら、その質問も含む）。
     """
 
     def __init__(self, run_id: str, budget: SupportTaskBudget | None = None) -> None:
         self.run_id = run_id
         self.budget = budget
         self.environment_tools: list[str] = []
-        self.guide_tools: dict[str, tuple[ToolDefinition, ToolHandler | None]] = {}
         self.goal = ""
-        self.known_conditions: dict[str, str] = {}
         # 業務 Agent のデータの範囲（#1378。接続 → 使えるプロファイル）。空は範囲なし。
         self.data_scopes: data_scope.AgentDataScopes = {}
         # 根拠の取得の検索文をモデルが作ると宣言したスキルの接続（#2651。`agent_caller_planned_
         # connections`）。この接続の `rag_retrieve_evidence` だけに planning=caller を付ける。
         self.caller_planned_connections: frozenset[str] = frozenset()
-        # 照合した（する）接続。並列の呼び出しでも 1 回だけにする。
-        self._guide_checked: set[str] = set()
         # 回答前の確認（#1839）。利用者に確認しない Run では、RAG の確認の次の手を「前提を示して
         # 答える」に変える。
         self.confirmation: ConfirmationBudget | None = None
@@ -1911,19 +1849,6 @@ class _ToolRecorder:
                 runtime_repository.finish_builtin_tool_step(self.run_id, step_id, not_sent)
                 return json.dumps(tool_failure_payload(not_sent), ensure_ascii=False)
         base = mcp_base_tool_name(name)
-        guide_note: dict[str, Any] | None = None
-
-        async def check_guides(result: ToolResult) -> None:
-            # 根拠の取得の結果に足す業務ガイドの照合（#1322）は、根拠の取得の一部なので、その
-            # ツールの span の中で呼ぶ（処理の経過で根拠の取得の行の子になる。#3471）。
-            nonlocal guide_note
-            if (
-                result.success
-                and base == RAG_RETRIEVE_EVIDENCE
-                and isinstance(result.output or {}, dict)
-            ):
-                guide_note = await self.check_guides(name, call.arguments)
-
         # 4. handler（呼び先へ送る。ツールの span は `execute` が測る）。
         result = await self.execute(
             step_id,
@@ -1933,7 +1858,6 @@ class _ToolRecorder:
             handler=handler,
             scoped=scoped,
             authorization=authorization,
-            follow_up=check_guides,
         )
         if result.success:
             output = result.output or {}
@@ -1974,19 +1898,6 @@ class _ToolRecorder:
                         "builtin_runtime_profile_knowledge_passed",
                         extra={"run_id": self.run_id, "tool_name": name, **knowledge},
                     )
-                if guide_note is not None:
-                    output = {**output, "guide_check": guide_note}
-            if base == RAG_LOOKUP_GUIDES and isinstance(output, dict):
-                # モデルが自分で引いた業務ガイドにも次の手を足す（業務ガイドだけで答えさせない）。
-                note = guide_check_note(
-                    output,
-                    evidence_gathered=False,
-                    rag_calls_remaining=self.budget.rag_calls_remaining
-                    if self.budget is not None
-                    else None,
-                )
-                if note is not None:
-                    output = {**output, "next_step": self._without_asking(note["next_step"])}
             if base in RAG_BUDGET_TOOLS and isinstance(output, dict):
                 # 根拠 0 件が資料の不在を意味しない（安全チェックの未完了・補助の処理の縮退）とき
                 # の案内（#3546）。
@@ -2145,66 +2056,6 @@ class _ToolRecorder:
             output = {**output, "rag_calls_remaining": remaining}
         return output
 
-    async def check_guides(
-        self, evidence_tool: str, arguments: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        """根拠を集めた接続の業務ガイドを照合し、モデルへの案内を返す（#1322。しなければ None）。
-
-        この Run でその接続の業務ガイドを引いていない（`rag_lookup_guides`・`rag_search` を呼んで
-        いない）ときに 1 回だけ呼ぶ。照合の失敗は根拠の結果を変えない（案内を足さないだけ）。
-        """
-        from app.features.agent.runtime import runtime_repository
-
-        prefix = _connection_prefix(evidence_tool)
-        tool = self.guide_tools.get(prefix) if prefix is not None else None
-        profile = arguments.get("search_answer_profile_id")
-        if prefix is None or tool is None or prefix in self._guide_checked:
-            return None
-        if not isinstance(profile, str) or not profile.strip():
-            return None
-        self._guide_checked.add(prefix)
-        if _guide_consulted(runtime_repository.get_run(self.run_id).steps, prefix):
-            return None
-        query = guide_check_query(self.goal, arguments.get("query"))
-        if not query:
-            return None
-        provided = arguments.get("conditions")
-        conditions = dict(self.known_conditions)
-        if isinstance(provided, dict):
-            conditions.update(
-                {
-                    key: value
-                    for key, value in provided.items()
-                    if isinstance(key, str) and isinstance(value, str) and value.strip()
-                }
-            )
-        definition, handler = tool
-        _step_id, result = await self.call(
-            ToolCall(
-                name=definition.name,
-                arguments={
-                    "query": query,
-                    "search_answer_profile_id": profile,
-                    "conditions": dict(list(conditions.items())[:GUIDE_CHECK_MAX_CONDITIONS]),
-                    "limit": 1,
-                },
-                trace_id=f"{GUIDE_CHECK_TRACE_PREFIX}{self.run_id}_{prefix}",
-            ),
-            definition=definition,
-            handler=handler,
-        )
-        if not result.success or not isinstance(result.output, dict):
-            return None
-        note = guide_check_note(
-            result.output,
-            rag_calls_remaining=self.budget.rag_calls_remaining
-            if self.budget is not None
-            else None,
-        )
-        if note is not None:
-            note = {**note, "next_step": self._without_asking(note.get("next_step"))}
-        return note
-
     async def call(
         self,
         call: ToolCall,
@@ -2259,14 +2110,11 @@ class _ToolRecorder:
         scoped: data_scope.ScopeEnforcement | None = None,
         authorization: _Authorization,
         abortable: bool = True,
-        follow_up: Callable[[ToolResult], Awaitable[None]] | None = None,
     ) -> ToolResult:
         """handler を呼び、結果を step に記録する。
 
         `abortable` の呼び出しは、Run の取消・終了で実行中の呼び先への送信を打ち切る（#2691。
         `_invoke_abortable`）。打ち切った呼び出しは失敗ではなく取消として step に残す。
-        `follow_up` は、このツールの結果に続けて Runtime が行う処理（根拠の取得の後の業務ガイドの
-        照合など）で、ツールの span の中で呼ぶ（その中の span はこのツールの子になる。#3471）。
         """
         from app.features.agent.runtime import runtime_repository
 
@@ -2332,8 +2180,6 @@ class _ToolRecorder:
                     tool_span.set_call_output(result)
                 else:
                     tool_span.set_display(details=details)
-            if follow_up is not None:
-                await follow_up(result)
         return result
 
     async def _execute_handler(
@@ -2633,7 +2479,6 @@ def build_function_tools(
     budget: SupportTaskBudget | None = None,
     *,
     goal: str = "",
-    known_conditions: Mapping[str, str] | None = None,
     data_scopes: data_scope.AgentDataScopes | None = None,
     declined: Collection[str] = (),
     confirmation: ConfirmationBudget | None = None,
@@ -2749,24 +2594,13 @@ def build_function_tools(
         confirmation.tools_consulted = lambda: _tools_consulted(run_id)
     if confirmation is not None and CONFIRMATION_TOOL in exposed:
         # ツール（NL2SQL・RAG）の確認事項を聞き直させない（#1934）。
-        confirmation.tool_clarification_pending = lambda: _tool_clarification_pending(
-            run_id, recorder.known_conditions
-        )
+        confirmation.tool_clarification_pending = lambda: _tool_clarification_pending(run_id)
         # ツールのエラーの直後の確認を差し戻す（#2234）。
         confirmation.last_tool_failed = lambda: _last_tool_failed(run_id)
         if any(mcp_base_tool_name(name) == NL2SQL_QUERY for name in exposed):
             # 業務データの表・列を利用者に聞かせず、先に nl2sql_query を呼ばせる（#2223）。
             confirmation.nl2sql_unqueried = lambda: _nl2sql_unqueried(run_id)
-    for definition, handler in entries:
-        prefix = _connection_prefix(definition.name)
-        if (
-            prefix is not None
-            and definition.name in exposed
-            and mcp_base_tool_name(definition.name) == RAG_LOOKUP_GUIDES
-        ):
-            recorder.guide_tools.setdefault(prefix, (definition, handler))
     recorder.goal = goal
-    recorder.known_conditions = dict(known_conditions or {})
     return tools
 
 
@@ -2794,7 +2628,6 @@ def build_sdk_agent(
     budget: SupportTaskBudget | None = None,
     support_task: str = "",
     goal: str = "",
-    known_conditions: Mapping[str, str] | None = None,
     data_scopes: data_scope.AgentDataScopes | None = None,
     cancellations: list[dict[str, Any]] | None = None,
     confirmation: ConfirmationBudget | None = None,
@@ -2855,7 +2688,6 @@ def build_sdk_agent(
         reference_keys=skill_reference_keys(skill_ids),
         budget=budget,
         goal=goal,
-        known_conditions=known_conditions,
         data_scopes=data_scopes,
         declined=declined_kinds({CANCEL_METADATA_KEY: cancellations or []}),
         confirmation=confirmation,
@@ -3641,10 +3473,6 @@ class _SupportTaskRun:
     response: dict[str, Any] | None = None
     answered_conditions: dict[str, str] | None = None
 
-    def known_conditions(self) -> dict[str, str]:
-        """前の Run までに分かった条件と、この Run で利用者がカードで答えた条件。"""
-        return {**support_task_known_conditions(self.previous), **(self.answered_conditions or {})}
-
 
 def confirmation_budget(run: Any, agent: Any) -> ConfirmationBudget:
     """この Run の回答前の確認の往復（業務 Agent の方針・上限、無人の Run、確認せずに回答）。"""
@@ -3910,7 +3738,6 @@ async def execute_run(run_id: str, *, claim: RunClaim | None = None) -> None:
                     budget=task.budget,
                     support_task=task.instructions,
                     goal=support_task_goal(run.goal, task.previous),
-                    known_conditions=task.known_conditions(),
                     data_scopes=agent.data_scopes,
                     cancellations=cancellations,
                     confirmation=task.confirmation,
@@ -4012,7 +3839,6 @@ async def resume_run(run_id: str, *, claim: RunClaim | None = None) -> None:
                     budget=task.budget,
                     support_task=task.instructions,
                     goal=support_task_goal(run.goal, task.previous),
-                    known_conditions=task.known_conditions(),
                     data_scopes=agent.data_scopes,
                     cancellations=cancellations,
                     confirmation=task.confirmation,
@@ -4531,9 +4357,6 @@ async def _require_hops(
     同じ 1 回の枠で、業務データのツールを持つのに引かずに資料に無いとして答えた回答
     （`support_task.missing_data_lookup`。#1979）も差し戻す（利用者が業務データの確認を取り消した
     Run は除く。経過には `data_retry`）。略号・別名が残っていれば、そちらを先にする（重ねない）。
-    同じ枠で、照合した業務ガイドの手順のうち根拠を集めていない手順
-    （`guide_steps.unresolved_guide_steps`。#2396。経過には `guide_step_retry`）も差し戻す
-    （略号・別名と両方なら 1 つの差し戻しにまとめる）。
     同じ枠で、手順・一覧・条件のまとまりを求める質問で、回答に使った章節の続きを読んでいない
     （`section_coverage`。#2492。経過には `section_retry`）回答も差し戻す（ほかの差し戻しと両方なら
     1 つにまとめる）。この実行のツールの呼び出しが上限に達していれば差し戻さない（読めないので、
@@ -4550,9 +4373,6 @@ async def _require_hops(
     if is_clarification_only(answer):
         return result
     pending = unresolved_hops(current.steps, answer, str(getattr(current, "goal", "") or ""))
-    # 業務ガイドの手順のうち根拠を集めていない手順（#2396）。略号・別名と同じ 1 回の枠で、両方あれば
-    # 1 つの差し戻しにまとめる。
-    guide_pending = unresolved_guide_steps(current.steps)
     # 回答に使った章節の未読の続き（#2492）。予算が残っていて、読み直せるものだけ。
     sections = [
         item
@@ -4561,23 +4381,12 @@ async def _require_hops(
     ]
     if pending:
         head = unresolved_hops_message(pending)
-        if guide_pending:
-            head += "\n\n" + unresolved_guide_steps_message(guide_pending)
         if sections:
             head += "\n\n" + unread_sections_message(sections)
         runtime_repository.record_tool_grounding(run.id, "hop_retry", answer)
         logger.info(
             "builtin_runtime_unresolved_hops_retry",
             extra={"run_id": run.id, "values": [item["value"] for item in pending]},
-        )
-    elif guide_pending:
-        head = unresolved_guide_steps_message(guide_pending)
-        if sections:
-            head += "\n\n" + unread_sections_message(sections)
-        runtime_repository.record_tool_grounding(run.id, "guide_step_retry", answer)
-        logger.info(
-            "builtin_runtime_unresolved_guide_steps_retry",
-            extra={"run_id": run.id, "steps": [item["id"] for item in guide_pending]},
         )
     elif sections:
         head = unread_sections_message(sections)
@@ -5046,16 +4855,11 @@ def _nl2sql_unqueried(run_id: str) -> bool:
     )
 
 
-def _tool_clarification_pending(run_id: str, known: Mapping[str, str] | None = None) -> bool:
-    """この Run の最後の NL2SQL・RAG の結果が確認事項を返して止まっているか（#1934）。
-
-    `known` は分かっている条件（業務ガイドが確かめる問いのうち、答えたものは数えない。#2726）。
-    """
+def _tool_clarification_pending(run_id: str) -> bool:
+    """この Run の最後の NL2SQL・RAG の結果が確認事項を返して止まっているか（#1934）。"""
     from app.features.agent.runtime import runtime_repository
 
-    return tool_clarification_pending(
-        list(runtime_repository.get_run(run_id).steps), set(known or {})
-    )
+    return tool_clarification_pending(list(runtime_repository.get_run(run_id).steps))
 
 
 def _agent_confirmation(
@@ -5369,7 +5173,7 @@ async def _validate_with_connection(
                 "query": run.goal[:MAX_QUERY_CHARS],
                 "answer": answer,
                 "evidence": refs,
-                # 要求の充足・業務ガイドの手順と影響範囲の決定的な検査（#1276）。
+                # 要求の充足の決定的な検査（#1276）。
                 **connection_check_inputs(run.steps, evidence_tool),
                 **({"premises": premises} if premises else {}),
                 **({"data_results": data_results} if data_results else {}),

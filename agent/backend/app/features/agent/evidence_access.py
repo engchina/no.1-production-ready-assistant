@@ -29,7 +29,6 @@ from app.features.agent.answer_evidence import (
     ATTACHMENT_DOCUMENT_PREFIX,
     passed_evidence,
 )
-from app.features.agent.answer_validation_view import project_validation_artifacts
 from app.features.agent.rag_figures import (
     EVIDENCE_ARTIFACT_KINDS,
     RAG_CONNECTION_ID,
@@ -258,7 +257,7 @@ def withheld_count(
 def withhold_run(run: RunState, unreadable: frozenset[str]) -> RunState:
     """見る人が今見られない根拠を除いた Run の写し（保存した Run は変えない）。"""
     if not unreadable:
-        return run.model_copy(update={"artifacts": project_validation_artifacts(run.artifacts)})
+        return run
     return run.model_copy(
         update={
             "span_details": {
@@ -271,17 +270,11 @@ def withhold_run(run: RunState, unreadable: frozenset[str]) -> RunState:
             },
             "steps": [_withhold_step(step, unreadable) for step in run.steps],
             "events": [_withhold_event(event, unreadable) for event in run.events],
-            "artifacts": project_validation_artifacts(
-                [_withhold_artifact(item, unreadable) for item in run.artifacts],
-                allow_history_notice=False,
-            ),
+            "artifacts": [_withhold_artifact(item, unreadable) for item in run.artifacts],
         }
     )
 
 
 def withhold_artifacts(artifacts: Iterable[Artifact], unreadable: frozenset[str]) -> list[Artifact]:
     """成果物の一覧・1 件の応答から見られない根拠を除く。"""
-    return project_validation_artifacts(
-        [_withhold_artifact(item, unreadable) if unreadable else item for item in artifacts],
-        allow_history_notice=not bool(unreadable),
-    )
+    return [_withhold_artifact(item, unreadable) if unreadable else item for item in artifacts]

@@ -11,9 +11,8 @@ RAG の MCP `rag_validate_answer` を呼ぶ。呼ぶのはモデルではなく 
 - 結果は Run の成果物（kind=`answer_validation`・「資料との照合」）に残す（接続ごとの結果は
   `connections`）。状態は `completed`（判定が出た）/ `unvalidated`（確かめられなかった）/
   `skipped`（確かめる対象が無い）。
-- 接続ごとに、その接続の最も新しい `rag_search` の `requests`・`gaps`・`guide`（無ければ
-  `rag_lookup_guides` の最上位の業務ガイド）も渡し、RAG の決定的な検査（要求の充足・手順の順序と
-  分岐・影響範囲・承認。#1276）を動かす。その接続の `rag_search` の `trace_id`
+- 接続ごとに、その接続の最も新しい `rag_search` の `requests`・`gaps` も渡し、RAG の決定的な検査
+  （要求の充足。#1276）を動かす。その接続の `rag_search` の `trace_id`
   （`answer_trace_ids`）も渡し、RAG の回答の監査を通った説明と本文・根拠が同じ段落は、RAG が
   その判定を使ってモデルに渡さない（#1527。根拠は RAG が今の権限と版で読み直す。すべての段落が
   当たればモデルを呼ばない）。
@@ -28,9 +27,8 @@ RAG の MCP `rag_validate_answer` を呼ぶ。呼ぶのはモデルではなく 
   （別の対象・表の行の対応）は警告（`warning`）の印を付ける。番号つきの手順で、外した操作・未確認
   の操作に続く操作は本文に残して警告の印を付ける（#2604・#2735 の続く手順）。外した操作を名前だけで
   示す番号つきの項目と、中身をすべて外した見出しは外し、残った項目の番号を詰める（#2692）。
-  決定的な検査の error（要求・業務ガイドの手順・影響範囲・版）・本文の検査で不足を確認した
-  業務ガイドの必須の手順・根拠を 1 件も読めない（`no_evidence`。すべての段落を未確認にする）は本文を
-  置き換えず、回答全体の警告（`answer_warnings`）にする。印と回答の警告は節「確認が必要な点」に
+  決定的な検査の error（要求）・根拠を 1 件も読めない（`no_evidence`。すべての段落を未確認にする）は
+  本文を置き換えず、回答全体の警告（`answer_warnings`）にする。印と回答の警告は節「確認が必要な点」に
   並べる（本文だけを読む MCP の利用者にも分かるように）。warning の指摘は出さない。
 - 検証そのもの（呼び出し・接続・応答）が失敗したら `unvalidated` にし、回答は消さずに
   「この回答は資料との照合を終えられず、本質問の条件への該当は確認できていません。」を足す
@@ -129,16 +127,13 @@ STATUS_SKIPPED = "skipped"
 # 確かめられなかった（検証の失敗・RAG の根拠を使わなかった回答）。回答に注記を足す。
 STATUS_UNVALIDATED = "unvalidated"
 
-# 決定的な検査の入力（`requests`・`gaps`・`guide.conditions`）の件数の上限（契約の maxItems）。
+# 決定的な検査の入力（`requests`・`gaps`）の件数の上限（契約の maxItems）。
 MAX_CHECK_ITEMS = 30
 # 監査の判定を再利用する `rag_search` の回答の記録（`answer_trace_ids`）の上限と、
 # trace_id の長さ（契約）。
 MAX_ANSWER_TRACE_IDS = 10
 MAX_TRACE_ID_CHARS = 64
-RAG_LOOKUP_GUIDES = "rag_lookup_guides"
 REQUEST_STATUSES = frozenset({"addressed", "partial", "missing", "unknown"})
-# 回答に手順を書く業務ガイドの判断（手順・影響範囲を確かめる）。
-GUIDE_DECISIONS = frozenset({"answer", "branch"})
 
 REASON_NO_RAG_EVIDENCE = "no_rag_evidence"
 # 資料（RAG）の根拠ではなく、利用者が添付したファイルを読んで答えた（#2517）。資料と照らし合わせる
@@ -216,10 +211,8 @@ PASSAGE_REASONS: dict[str, tuple[str, str]] = {
 }
 # 本文から外した段落の理由。
 REMOVED_REASONS = {"contradicted": "根拠と矛盾"}
-# 回答全体の警告の理由（決定的な検査の error・説明を確かめられない業務ガイドの手順・
-# 根拠を読めない）。
+# 回答全体の警告の理由（決定的な検査の error・根拠を読めない）。
 ANSWER_WARNING_REASONS = {
-    "guide_check": "業務ガイドの手順の確認で問題が見つかった",
     "no_evidence": "根拠を読めず、すべての段落が未確認",
     "requests": "質問の要求の一部に答えていない",
 }
@@ -234,22 +227,6 @@ _STATUS_REASONS = {
     "unassessed": "unassessed",
     FIGURE_ONLY: "figure_not_read",
 }
-# 業務ガイドの手順の説明の充足（#2708）。`rag_validate_answer` の `guide_steps` の状態の強さの順
-# （接続をまたいでは最も良い状態を採る）と、説明の無い必須の手順の finding（warning。文は RAG の
-# 回答の不足の行と同じ）。
-GUIDE_STEP_STATUS_ORDER = (
-    "explained",
-    "partial",
-    "reference_only",
-    "unused",
-    "unknown",
-    "not_searched",
-    "no_evidence",
-)
-GUIDE_STEP_UNEXPLAINED = "guide_step_unexplained"
-# 業務ガイドの手順・影響範囲・版の検査（error は回答全体の警告 `guide_check`。回答の対応は
-# 人の確認）。
-GUIDE_CHECKS = frozenset({"guide", "guide_steps", "impact"})
 # RAG が時間の上限までに一部の段落だけを確かめた結果の status（#2700。確かめ終わらなかった
 # 段落は `unassessed`）と、どの段落も確かめ終わらなかった結果の status（判定として使えない）。
 RESULT_PARTIAL = "partial"
@@ -937,57 +914,18 @@ def validation_data_results(steps: list[RunStep]) -> list[JsonObject]:
     return results[-MAX_DATA_RESULTS:]
 
 
-def _guide_input(guide: object, profile_id: object, conditions: object) -> JsonObject | None:
-    """`rag_validate_answer` の `guide`（手順を示す判断の業務ガイドで、プロファイルが分かるとき）。
-
-    確かめる質問・担当への引き継ぎの判断（`clarify` / `handoff`）では回答に手順が無いので渡さない
-    （影響範囲・承認の検査が、手順を書かない回答を誤って止めるため）。
-    """
-    if not isinstance(guide, dict) or guide.get("decision", "answer") not in GUIDE_DECISIONS:
-        return None
-    guide_id = _text_value(guide.get("guide_id"), 64)
-    revision = guide.get("revision")
-    profile = _text_value(profile_id, 128)
-    if guide_id is None or profile is None or not isinstance(revision, int) or revision < 1:
-        return None
-    known: dict[str, str] = {}
-    if isinstance(conditions, dict):
-        known.update(
-            {
-                key: value
-                for key, value in conditions.items()
-                if isinstance(key, str) and isinstance(value, str)
-            }
-        )
-    for item in guide.get("known_conditions") or []:
-        if isinstance(item, dict) and isinstance(item.get("id"), str):
-            value = item.get("value")
-            if isinstance(value, str) and value:
-                known[item["id"]] = value
-    content: JsonObject = {
-        "search_answer_profile_id": profile,
-        "guide_id": guide_id,
-        "revision": revision,
-    }
-    if known:
-        content["conditions"] = dict(list(known.items())[:MAX_CHECK_ITEMS])
-    return content
-
-
 def connection_check_inputs(steps: list[RunStep], evidence_tool: str) -> JsonObject:
-    """`rag_validate_answer` の決定的な検査の入力（`requests`・`gaps`・`guide`。#1276・#1277）と、
+    """`rag_validate_answer` の決定的な検査の入力（`requests`・`gaps`。#1276・#1277）と、
     監査の判定を再利用する回答の記録（`answer_trace_ids`。#1527）。
 
-    根拠を返した接続の最も新しい `rag_search` の要求ごとの充足・不足・業務ガイドを渡す。
+    根拠を返した接続の最も新しい `rag_search` の要求ごとの充足・不足を渡す。
     `answer_trace_ids` はその接続の `rag_search` の `trace_id`（新しい順、最大 10 件）。
-    `rag_search` が業務ガイドを返さなければ、同じ接続の最も新しい `rag_lookup_guides` の最上位の
-    業務ガイドを使う。分からない項目は渡さない（その検査は RAG が行わない）。
+    分からない項目は渡さない（その検査は RAG が行わない）。
     """
     prefix = _connection_prefix(evidence_tool)
     if prefix is None:
         return {}
     inputs: JsonObject = {}
-    guide: JsonObject | None = None
     searches = _completed_outputs(steps, prefix, RAG_SEARCH)
     # RAG の回答の監査を通った説明と本文・根拠が同じ段落は、RAG がその判定を使いモデルに
     # 渡さない（#1527）。
@@ -1000,7 +938,7 @@ def connection_check_inputs(steps: list[RunStep], evidence_tool: str) -> JsonObj
     if trace_ids:
         inputs["answer_trace_ids"] = list(dict.fromkeys(trace_ids))[:MAX_ANSWER_TRACE_IDS]
     if searches:
-        arguments, output = searches[0]
+        output = searches[0][1]
         requests = [
             {
                 "id": request_id,
@@ -1017,24 +955,6 @@ def connection_check_inputs(steps: list[RunStep], evidence_tool: str) -> JsonObj
         gaps = [gap for item in output.get("gaps") or [] if (gap := _text_value(item, 2000))]
         if gaps:
             inputs["gaps"] = gaps[:MAX_CHECK_ITEMS]
-        provenance = output.get("provenance")
-        profile = (
-            provenance.get("search_answer_profile_id") if isinstance(provenance, dict) else None
-        ) or arguments.get("search_answer_profile_id")
-        guide = _guide_input(output.get("guide"), profile, arguments.get("conditions"))
-    if guide is None:
-        lookups = _completed_outputs(steps, prefix, RAG_LOOKUP_GUIDES)
-        if lookups:
-            arguments, output = lookups[0]
-            guides = output.get("guides")
-            if isinstance(guides, list) and guides:
-                guide = _guide_input(
-                    guides[0],
-                    arguments.get("search_answer_profile_id"),
-                    arguments.get("conditions"),
-                )
-    if guide is not None:
-        inputs["guide"] = guide
     return inputs
 
 
@@ -1193,15 +1113,6 @@ def merge_results(results: list[JsonObject]) -> JsonObject:
                 seen_findings.add(finding_key)
                 findings.append(item)
     checks = sorted({str(item) for result in results for item in result.get("checks") or []})
-    guide_steps = merge_guide_steps(results)
-    if guide_steps:
-        # 接続のどれかで説明を確かめた手順は、ほかの接続の「説明が無い」を残さない。
-        explained = {str(step["step_id"]) for step in guide_steps if step["status"] == "explained"}
-        findings = [
-            item
-            for item in findings
-            if item.get("code") != GUIDE_STEP_UNEXPLAINED or item.get("step_id") not in explained
-        ]
     valid = (
         status == "completed"
         and not stale
@@ -1222,42 +1133,7 @@ def merge_results(results: list[JsonObject]) -> JsonObject:
         "missing_evidence": missing,
         "stale_evidence": stale,
         "evidence_truncated": any(bool(result.get("evidence_truncated")) for result in results),
-        "guide_steps": guide_steps,
     }
-
-
-def merge_guide_steps(results: list[JsonObject]) -> list[JsonObject]:
-    """接続ごとの業務ガイドの手順の充足（`guide_steps`）を、手順ごとに最も良い状態にまとめる（#2708）。"""
-    merged: dict[str, JsonObject] = {}
-    for result in results:
-        for step in result.get("guide_steps") or []:
-            if not isinstance(step, dict) or step.get("status") not in GUIDE_STEP_STATUS_ORDER:
-                continue
-            step_id = str(step.get("step_id") or "")
-            current = merged.get(step_id)
-            if current is None or GUIDE_STEP_STATUS_ORDER.index(
-                step["status"]
-            ) < GUIDE_STEP_STATUS_ORDER.index(current["status"]):
-                merged[step_id] = dict(step)
-    return list(merged.values())
-
-
-def unexplained_guide_steps(result: JsonObject) -> list[JsonObject]:
-    """本文の検査が完了し、不足を確認した必須の手順。
-
-    未実行や候補の対応だけでは不足としない。旧結果の実行状態の欠落も未確認として残す。
-    """
-    return [
-        step
-        for step in result.get("guide_steps") or []
-        if isinstance(step, dict)
-        and step.get("required")
-        and step.get("status") in {"partial", "reference_only", "unused"}
-        and isinstance(validation := step.get("validation"), dict)
-        and isinstance(coverage := validation.get("body_coverage"), dict)
-        and coverage.get("execution") == "completed"
-        and coverage.get("status") in {"missing", "partial"}
-    ]
 
 
 # 前の段落を受ける接続の語（#1833）。その前の段落を外すと受ける先が無くなる（「したがって、…」
@@ -1663,13 +1539,10 @@ def without_lookup_notes(answer: str) -> str:
 
 def error_findings(result: JsonObject) -> list[JsonObject]:
     """決定的な検査の error の指摘（valid にしない。回答全体の警告にする。warning は出さない）。"""
-    missing = {str(step.get("step_id")) for step in unexplained_guide_steps(result)}
     return [
         item
         for item in result.get("findings") or []
-        if isinstance(item, dict)
-        and item.get("severity") == "error"
-        and (item.get("code") != GUIDE_STEP_UNEXPLAINED or str(item.get("step_id")) in missing)
+        if isinstance(item, dict) and item.get("severity") == "error"
     ]
 
 
@@ -1748,9 +1621,7 @@ def mark_state(reasons: list[JsonObject]) -> str:
 def answer_warnings(result: JsonObject) -> list[JsonObject]:
     """回答全体の警告（契約の `answer_warnings`。本文は置き換えない。#2738）。
 
-    根拠を 1 件も読めなかった（`no_evidence`）、決定的な検査の error（要求の不足は `requests`、
-    業務ガイドの手順・影響範囲・版は `guide_check`）、本文の検査で不足を確認した業務ガイドの必須の
-    手順（`guide_check`）。未実行・未確認の充足は診断に残す。
+    根拠を 1 件も読めなかった（`no_evidence`）、決定的な検査の error（要求の不足は `requests`）。
     `detail` は RAG の指摘の文。同じ理由と文は 1 つにする。
     """
     warnings: list[JsonObject] = []
@@ -1766,16 +1637,7 @@ def answer_warnings(result: JsonObject) -> list[JsonObject]:
     if result.get("status") == RESULT_NO_EVIDENCE:
         add("no_evidence")
     for item in error_findings(result):
-        add("requests" if item.get("check") == "requests" else "guide_check", item.get("message"))
-    missing = {str(step.get("step_id")) for step in unexplained_guide_steps(result)}
-    for item in result.get("findings") or []:
-        if (
-            isinstance(item, dict)
-            and item.get("code") == GUIDE_STEP_UNEXPLAINED
-            and str(item.get("step_id")) in missing
-            and item.get("message")
-        ):
-            add("guide_check", item["message"])
+        add("requests", item.get("message"))
     return warnings
 
 
@@ -1962,7 +1824,7 @@ def publish_answer(answer: str, result: JsonObject) -> PublishedAnswer:
       対応）は警告（`warning`）の印にする（`claim_reason`）。
     - 番号つきの手順で、外した操作・未確認の操作に続く操作の段落は本文に残し、警告の印
       （`after_contradicted_step` / `after_unverified_step`）を付ける（`dependent_steps`）。
-    - 決定的な検査の error・説明を確かめられない業務ガイドの手順・根拠を読めない（`no_evidence`。
+    - 決定的な検査の error・根拠を読めない（`no_evidence`。
       すべての主張の段落を未確認にする）は本文を置き換えず、回答全体の警告（`answer_warnings`）に
       する。
     - 印・回答の警告・読めない根拠は節「確認が必要な点」に並べる（本文だけを読む MCP の利用者にも

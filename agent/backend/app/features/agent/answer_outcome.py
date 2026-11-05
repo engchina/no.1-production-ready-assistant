@@ -27,10 +27,7 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
 2. `nl2sql_clarification`: 最後の `nl2sql_query` が SQL の生成前の確認の項目を返した（SQL を作らずに
    利用者に確かめた。#1441）→ needs_clarification
    `clarification_question`: 確認の質問だけの回答（`is_clarification_only`）→ needs_clarification
-3. `validation_guide_check`: 最終の検証が、業務ガイドの手順・影響範囲・版の検査の error を
-   回答全体の警告にした（どの段落の手順が誤りかを決められない。本文は出す）→ needs_human（人が
-   手順を確かめる。#1491・#2738）
-   `validation_nothing_confirmed`: 最終の検証が、残った主張の段落をすべて未確認とした（根拠で
+3. `validation_nothing_confirmed`: 最終の検証が、残った主張の段落をすべて未確認とした（根拠で
    確かめた段落が 1 つも無い。根拠を読めない `no_evidence` を含む）か、主張の段落をすべて根拠と
    矛盾するとして外した → insufficient_evidence（本文は出す。#2738）。未確認の理由が「確かめが
    終わっていない」（`unassessed`。監査が終わらない・段落の出典が無い）か、監査は根拠で裏付けた
@@ -44,9 +41,7 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
    MCP 接続のツール。#1283。業務プロファイルの一覧・推薦は除く。#108）で確かめたら answered /
    conditional（`environment_tools`）、確認の質問を求められたが質問だけで答えなかったら
    conditional、answered でも回答が不足を示していれば（下の「不足の印」）conditional にする。
-5. `guide_handoff`: `rag_search` に拠らず、最も新しい `rag_lookup_guides` の最上位の業務ガイドの
-   判断が人への引き継ぎ（handoff）→ needs_human
-6. `absence_conclusion`: 現場のデータの道具を使っておらず（業務プロファイルの一覧・推薦だけの
+5. `absence_conclusion`: 現場のデータの道具を使っておらず（業務プロファイルの一覧・推薦だけの
    成功は使ったことにしない。空の一覧で業務データが無いと分かっただけの拒答を含む。#108）、
    Run のどれかの `rag_search` が insufficient_evidence を返した（または `rag_search` を使わずに
    `rag_retrieve_evidence` で根拠を集めた。根拠を集めるだけのツールは対応を返さない。#104）
@@ -73,15 +68,8 @@ A / C（RAG の回答の記録の `outcome`）と同じ尺度で採点するた�
 （`data_confirmation`。RAG の `rag_validate_answer` の判定か、利用者に現場のデータ・記録の確認を
 求める段落の決定的な判定 `environment_check_passages`。#1317。外した段落は数えない）・分岐ごとに
 答えた印（`branches`。「…の場合」の見出し・ラベルが 2 つ以上。利用者の条件を確かめずに分岐
-ごとに答えた。#1317）・業務ガイドの条件が分からないまま答えた印（`guide_conditions`。最後の
-`rag_search` の後の、最も新しい `rag_lookup_guides`（モデルか Control Plane の照合。#1322）の
-最上位の業務ガイドの判断が、条件を確かめる（clarify）・条件ごとに答える（branch）なのに、確認の質問だけで答えなかった。回答の前提が
-利用者の分かっていない条件に拠るので、条件付きの回答（conditional）にする。`rag_search` が確認を
-求めたのに答えたときと同じ扱い。#1321・#1322）・回答に使った章節を終わりまで読めず、
-「読み切れていない章節」を示した印（`unread_sections`。#2492）・最終の検証が、業務ガイドの
-必須の手順の説明を回答で確かめられなかった印（`guide_steps`。RAG の `rag_validate_answer` の
-手順ごとの充足〔RAG の回答と同じ規則〕。共有の根拠の共通の文だけを述べた手順・根拠を集めていない
-手順。#2708）。最終の検証が警告の印（規則の検査・続く手順）だけを付けたときは不足の印にせず、
+ごとに答えた。#1317）・回答に使った章節を終わりまで読めず、
+「読み切れていない章節」を示した印（`unread_sections`。#2492）。最終の検証が警告の印（規則の検査・続く手順）だけを付けたときは不足の印にせず、
 記録の `rule_warnings` だけを付ける（answered のまま。#2738）。
 
 記録だけのシグナル（対応の値を変えない。#3546）: RAG の根拠のツールが縮退した検索の結果を返した
@@ -111,12 +99,10 @@ from app.features.agent.answer_passages import (
     supplement_passages,
 )
 from app.features.agent.answer_validation import (
-    GUIDE_CHECKS,
     MARK_UNVERIFIED,
     MARK_WARNING,
     STATUS_COMPLETED,
     error_findings,
-    unexplained_guide_steps,
 )
 from app.features.agent.clarification_cancel import CANCEL_TRACE_PREFIX
 from app.features.agent.job_cancel import RUN_CANCEL_TRACE_PREFIX
@@ -164,12 +150,8 @@ BASIS_CLARIFICATION = "clarification_question"
 BASIS_NL2SQL_CLARIFICATION = "nl2sql_clarification"
 # 最終の検証が、残った主張の段落をすべて未確認とした・すべて矛盾として外した（#2738）。
 BASIS_NOTHING_CONFIRMED = "validation_nothing_confirmed"
-# 業務ガイドの手順・影響範囲・版の検査の error を、最終の検証が回答全体の警告にした
-# （#1491・#2738）。
-BASIS_GUIDE_CHECK = "validation_guide_check"
 BASIS_RAG_SEARCH = "rag_search"
 BASIS_ENVIRONMENT_TOOLS = "environment_tools"
-BASIS_GUIDE_HANDOFF = "guide_handoff"
 BASIS_ANSWER_PASSAGES = "answer_passages"
 # 回答の結論（最初の段落）が「資料から確かめられない」で、rag_search が insufficient_evidence を
 # 返した（#1454）。
@@ -187,11 +169,8 @@ SIGNAL_CHECK_ERRORS = "check_errors"
 SIGNAL_DATA_CONFIRMATION = "data_confirmation"
 SIGNAL_ENVIRONMENT_TOOLS = "environment_tools"
 SIGNAL_BRANCHES = "branches"
-SIGNAL_GUIDE_CONDITIONS = "guide_conditions"
 # 回答に使った章節を終わりまで読めず、回答に「読み切れていない章節」を示した（#2492）。
 SIGNAL_UNREAD_SECTIONS = "unread_sections"
-# 最終の検証が、業務ガイドの必須の手順の説明を回答で確かめられなかった（#2708）。
-SIGNAL_GUIDE_STEPS = "guide_steps"
 # 結論の段落で答えた後の、補足の段落だけの不足の文（不足の印にしない記録。#1475）。
 SIGNAL_SUPPLEMENT_ABSENCE = "supplement_absence"
 # RAG の根拠のツールが縮退した検索の結果を返した（不足の印にしない記録。#3546）。
@@ -206,9 +185,7 @@ SIGNAL_SUPPLEMENT_UNVERIFIED = "supplement_unverified"
 _GAP_SIGNALS = frozenset(
     {
         SIGNAL_BRANCHES,
-        SIGNAL_GUIDE_CONDITIONS,
         SIGNAL_UNREAD_SECTIONS,
-        SIGNAL_GUIDE_STEPS,
         SIGNAL_ABSENCE,
         SIGNAL_QUESTION,
         SIGNAL_UNVERIFIED_SECTION,
@@ -218,9 +195,6 @@ _GAP_SIGNALS = frozenset(
         SIGNAL_DATA_CONFIRMATION,
     }
 )
-_RAG_LOOKUP_GUIDES = "rag_lookup_guides"
-# 業務ガイドの判断のうち、利用者の分かっていない条件に答えが拠るもの（#1321・#1322）。
-_GUIDE_CONDITIONAL_DECISIONS = frozenset({"clarify", "branch"})
 # 最終の検証の印の理由「確かめが終わっていない」（#104。根拠が無いことを示さない）。
 _UNASSESSED = "unassessed"
 # 監査の応答の側の照合の誤りで付く印の理由（引用の原文が根拠に見当たらない・出典を確かめられない。
@@ -307,22 +281,6 @@ def environment_tool_calls(steps: list[RunStep]) -> int:
     （回答の対応の `environment_tools` と同じ判定）。
     """
     return sum(1 for step in steps if _environment_call(step))
-
-
-def _guide_decision(steps: list[RunStep]) -> str | None:
-    """最も新しい `rag_lookup_guides` の最上位の業務ガイドの判断。"""
-    for step in reversed(steps):
-        if not _succeeded(step) or step.tool_call is None or step.tool_result is None:
-            continue
-        if mcp_base_tool_name(step.tool_call.name) != _RAG_LOOKUP_GUIDES:
-            continue
-        output = step.tool_result.output
-        guides = output.get("guides") if isinstance(output, dict) else None
-        if not isinstance(guides, list) or not guides or not isinstance(guides[0], dict):
-            return None
-        decision = guides[0].get("decision")
-        return decision if isinstance(decision, str) else None
-    return None
 
 
 def _texts(value: object, state: str | None = None) -> set[str]:
@@ -477,30 +435,12 @@ def _only_in_supplement(
     return any(text in answered for text in claims if text not in supplement)
 
 
-def _guide_errors(validation: JsonObject | None) -> bool:
-    """最終の検証が、業務ガイドの手順・影響範囲・版の検査の error を出したか（#1491）。"""
-    if not isinstance(validation, dict) or validation.get("status") != STATUS_COMPLETED:
-        return False
-    result = validation.get("result")
-    return isinstance(result, dict) and any(
-        item.get("check") in GUIDE_CHECKS for item in error_findings(result)
-    )
-
-
 def _check_errors(validation: JsonObject | None) -> bool:
     """最終の検証が、決定的な検査の error（要求の不足など）を出したか。"""
     if not isinstance(validation, dict) or validation.get("status") != STATUS_COMPLETED:
         return False
     result = validation.get("result")
     return isinstance(result, dict) and bool(error_findings(result))
-
-
-def _guide_steps_unexplained(validation: JsonObject | None) -> bool:
-    """最終の検証が、業務ガイドの必須の手順の説明を確かめられなかったか（判定が出たときだけ。#2708）。"""
-    if not isinstance(validation, dict) or validation.get("status") != STATUS_COMPLETED:
-        return False
-    result = validation.get("result")
-    return isinstance(result, dict) and bool(unexplained_guide_steps(result))
 
 
 def _rag_insufficient(steps: list[RunStep]) -> bool:
@@ -657,11 +597,6 @@ def answer_outcome(
     removed, unverified, warned, confirmations = _validation_parts(validation)
     claims, signals, absences = _passages(answer)
     signals |= _record_signals(steps, validation)
-    if _guide_errors(validation):
-        # 業務ガイドの手順・影響範囲の検査の error: どの段落の手順が誤りかを決められない。本文は
-        # 出し、人が業務ガイドと照らして確かめる（#1491・#2738）。
-        signals.add(SIGNAL_CHECK_ERRORS)
-        return _content(NEEDS_HUMAN, BASIS_GUIDE_CHECK, rag_outcome=rag_outcome, signals=signals)
     # 利用者に現場のデータ・記録の確認を求める段落（検証の判定が supported でも。#1317）。
     # 外した段落は利用者に見えないので数えない。
     confirmations |= environment_check_passages(answer) - removed
@@ -705,19 +640,12 @@ def answer_outcome(
     # 利用者の条件を確かめずに、分岐ごとに答えた（rag_search の確認の求めに分岐で答えたのと同じ）。
     if len(case_labels(answer)) >= 2:
         signals.add(SIGNAL_BRANCHES)
-    # 業務ガイドが条件を確かめる・条件ごとに答えると判断したのに、確認の質問だけで答えなかった
-    # （最後の rag_search の後の照合だけを見る。rag_search の対応は下で扱う。#1321・#1322）。
-    after_search = last_search[0] + 1 if last_search is not None else 0
-    if _guide_decision(steps[after_search:]) in _GUIDE_CONDITIONAL_DECISIONS:
-        signals.add(SIGNAL_GUIDE_CONDITIONS)
     if _check_errors(validation):
         signals.add(SIGNAL_CHECK_ERRORS)
     if confirmations:
         signals.add(SIGNAL_DATA_CONFIRMATION)
     if isinstance(coverage, dict) and coverage.get("status") == "incomplete":
         signals.add(SIGNAL_UNREAD_SECTIONS)
-    if _guide_steps_unexplained(validation):
-        signals.add(SIGNAL_GUIDE_STEPS)
     gaps = bool(signals & _GAP_SIGNALS)
 
     if last_search is not None and not _retrieved_after(steps, last_search[0]):
@@ -737,9 +665,6 @@ def answer_outcome(
         elif outcome == ANSWERED and gaps:
             outcome = CONDITIONAL
         return _content(outcome, BASIS_RAG_SEARCH, rag_outcome=rag_outcome, signals=signals)
-
-    if last_search is None and _guide_decision(steps) == "handoff":
-        return _content(NEEDS_HUMAN, BASIS_GUIDE_HANDOFF, rag_outcome=rag_outcome, signals=signals)
 
     environment = _environment_resolved(steps)
     if environment:

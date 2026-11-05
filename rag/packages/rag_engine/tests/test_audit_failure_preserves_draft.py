@@ -2,7 +2,6 @@
 
 import asyncio
 from concurrent.futures import CancelledError
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -41,22 +40,6 @@ def run_failed_audit(monkeypatch, error, *, deadline=None):
         parse_images=None,
     )
     return current, model, calls
-
-
-@pytest.mark.parametrize("review", [None, SimpleNamespace(answer_state="unknown")])
-def test_unassessed_requirement_is_unknown_not_missing(review):
-    assert grounded.requirement_status(review, {"kind": "completion"}, []) == "unknown"
-
-
-def test_unknown_requirement_cannot_complete_a_guide_step():
-    steps = grounded.apply_guide_contracts(
-        [{"step_id": "s1", "status": grounded.GUIDE_STEP_EXPLAINED, "required": True}],
-        [],
-        [{"step_id": "s1", "requirements": [{"id": "r1", "text": "対象Aを確認", "kind": "completion"}]}],
-        None,
-    )
-    assert steps[0]["requirements"][0]["status"] == "unknown"
-    assert steps[0]["status"] != grounded.GUIDE_STEP_EXPLAINED
 
 
 @pytest.mark.parametrize("error", [ValueError("invalid structured output"), RuntimeError("provider failed")])
@@ -160,30 +143,3 @@ def test_normal_audit_none_without_a_verdict_still_allows_an_explicit_generated_
 
     [decision] = request_recovery_plan([], ["Q1"], set())
     assert decision["action"] == "retrieval" and decision["cause"] == "evidence_missing"
-
-
-@pytest.mark.parametrize(
-    ("states", "order_errors", "expected"),
-    [
-        (["unknown"], [], False),
-        (["addressed", "unknown"], [], False),
-        (["missing"], [], False),
-        (["partial", "unknown"], [], False),
-        (["unknown"], ["s0"], False),
-        ([], [], False),
-    ],
-)
-def test_failed_untrusted_guide_observations_never_trigger_semantic_correction(monkeypatch, states, order_errors, expected):
-    current, _, _ = run_failed_audit(monkeypatch, ValueError("audit failed"))
-    current.guide_steps = [
-        {
-            "step_id": "s1",
-            "title": "対象A",
-            "required": True,
-            "status": grounded.GUIDE_STEP_UNUSED,
-            "evidence_refs": [{"evidence_id": "E1"}],
-            "requirements": [{"id": f"r{i}", "text": "操作の確認", "status": state} for i, state in enumerate(states)],
-            "order_errors": order_errors,
-        }
-    ]
-    assert bool(current.feedback().get("guide_steps_unexplained")) is expected

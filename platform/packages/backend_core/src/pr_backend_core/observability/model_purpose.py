@@ -6,7 +6,6 @@ from contextvars import ContextVar
 
 MODEL_CALL_PURPOSES = frozenset(
     {
-        "guide.draft",
         "answer.validate",
         "answer.recheck",
         "answer.premise_consistency",

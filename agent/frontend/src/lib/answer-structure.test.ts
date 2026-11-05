@@ -299,7 +299,7 @@ describe("段落の印の記録のある回答", () => {
         status: "completed",
         valid: false,
         claims: [{ answer_quote: "承認は部署が行います。", status: "unsupported", reason: "" }],
-        findings: [{ check: "guide", severity: "error", message: "手順の順序" }],
+        findings: [{ check: "requests", severity: "error", message: "要求の不足" }],
       },
       withheld: { removed: 1, unverified: 1, warnings: 0, all: false, listed: 2 },
       ...marks,

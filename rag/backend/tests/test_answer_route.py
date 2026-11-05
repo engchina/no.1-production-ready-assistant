@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from app.config import Settings
 from app.rag.answer_route import answer_route
 
 
@@ -67,30 +66,3 @@ def test_route_has_no_reference_to_other_products() -> None:
         "requires_environment_data",
     }
     assert "agent" not in str(route).lower()
-
-
-async def test_pipeline_records_route_for_guide_clarification() -> None:
-    """業務ガイドの確認の質問（モデルを呼ばない回答）にも経路を記録する。"""
-    from app.rag.pipeline import RagPipeline
-    from app.schemas.search import SearchRequest
-
-    settings = Settings(
-        _env_file=None,
-        rag_support_guide_enabled=True,
-        rag_support_guide={
-            "guide_id": "g-1",
-            "revision": 1,
-            "title": "権限の付与",
-            "decision": "clarify",
-            "short_answer": "対象は個別ですか、グループですか。",
-        },
-    )
-    pipeline = RagPipeline(
-        settings=settings,
-        oracle=object(),  # type: ignore[arg-type]
-        genai=object(),  # type: ignore[arg-type]
-    )
-    response = await pipeline.run(SearchRequest(query="権限を付与したい"))
-    assert response.diagnostics.answer is not None
-    route = cast(dict[str, Any], response.diagnostics.answer["route"])
-    assert (route["reason"], route["requires_environment_data"]) == ("needs_clarification", False)

@@ -30,8 +30,6 @@
   拒答の文（「…示すことはできません」「回答はできません」。#1317）。数量・逆接・操作を含む文は除く。
 - 確かめきれない点・除いた内容の節（最終の検証が足す「根拠と矛盾し除いた内容」「確認が必要な点」
   など）: その見出しと、その節の行（操作の指示を除く）。
-- 作業の経過: 業務ガイドが見つからなかったことだけを述べる文（#1452。前置きに主張・数字を含む文と
-  操作の指示を含む文は除く）。不足の印にはしない（業務ガイドが無いことは回答の不足ではない）。
 
 補足の段落（見出しが「補足」「注記」「備考」などの節の行と、「なお、」「補足：」で始まる段落）は
 `supplement_passages` で判定する（#1475）。主張かどうかは変えず、回答の対応（`answer_outcome`）が、
@@ -63,8 +61,6 @@ KIND_QUESTION = "question"
 KIND_ABSENCE = "absence"
 KIND_UNVERIFIED = "unverified_section"
 KIND_TABLE = "table"
-# 作業の経過だけを述べる文（「業務ガイドは見つかりませんでした。」。#1452）。不足の印にはしない。
-KIND_PROCESS = "process_note"
 
 # ---- 段落の分け方（事例は RAG と共有の契約） ------------------------------------
 
@@ -268,10 +264,10 @@ _ABSENCE_END = re.compile(
 )
 # 文末の補足の括弧（「…含まれていませんでした（取得した全証拠の抜粋を参照）。」。#1317）。
 _TRAILING_NOTE = re.compile(r"\s*[（(][^（()）\n]{1,60}[）)](?=\s*[。．]?\s*$)")
-# 検索の結果・資料に該当が無かった文（#1317。「検索結果でも、該当する業務ガイドは返ってきません
+# 検索の結果・資料に該当が無かった文（#1317。「検索結果でも、該当する文書は返ってきません
 # でした。」）。画面の検索の振る舞い（「利用者を検索してもヒットしません」）と区別するため、主語を
 # 検索の結果・資料に限る。
-_NOT_FOUND_SUBJECT = re.compile(r"検索結果|業務ガイド|資料|文書|根拠|証拠|ナレッジ")
+_NOT_FOUND_SUBJECT = re.compile(r"検索結果|資料|文書|根拠|証拠|ナレッジ")
 _NOT_FOUND_END = re.compile(r"(?:返って(?:き|こ)|返され|ヒットし|得られ)ません(?:でした)?[。．]?$")
 # 答えられないと言い切る拒答の文（#1317。「推測で金額を示すことはできません。」「根拠のある回答は
 # できません。」）。答える・示す動詞に限る（「削除することはできません」のような事実の主張は除く）。
@@ -288,19 +284,6 @@ _ABSENCE_CLAIM = re.compile(
     _QUANTITY + r"|ますが|ですが|ものの|けれど|けど|ただし"
     r"|(?:は|が)[^。、]{1,20}(?:で|であり|となり)、"
 )
-# 業務ガイドが見つからなかったことだけを述べる文（#1452。「補足：この内容に当たる公開の
-# 業務ガイドは見つかりませんでした（`rag_lookup_guides` の結果は0件）。」）。業務ガイドの検索の
-# 結果は検証の根拠に無いので、主張として確かめると必ず外れる。前置きは、業務ガイドを修飾する
-# だけの語（は・が・を・数字・引用を含まない）に限る（「部門長の承認が要る業務ガイドはありません」は
-# 主張）。RAG の `operation_audit.is_guide_not_found` と同じ規則で、両方のテストが
-# platform/contracts/answer-passages/process-notes.json の同じ事例で確かめる。
-_GUIDE_NOT_FOUND = re.compile(
-    rf"(?:[^。:：\n]{{1,8}}[:：]\s*)?(?:なお|また|ただし)?[、,]?\s*(?P<lead>[^。\n]{{0,30}}?){_v('guide_words')}"
-    rf"(?:は|が|も)[、,]?(?:まだ)?{_v('guide_not_found_endings')}(?:でした)?[。．]?"
-)
-_GUIDE_NOT_FOUND_LEAD = re.compile(r"[はがを0-9０-９「」『』]")
-# 文末の、ツールの名前を挙げた作業の経過の括弧（「（rag_lookup_guides の結果は0件）」）。
-_TOOL_NOTE = re.compile(r"\s*[（(][^（()）\n]*\brag_[a-z_]+[^（()）\n]*[）)](?=\s*[。．]?\s*$)")
 # 分岐の見出し・ラベル（#1317。「個別利用者に付与する場合」「原因 A の場合の対処：」）。
 _CASE_LABEL = re.compile(
     r"(?P<label>[^。\n]{1,40}?(?:場合|とき)(?:の(?:手順|対処|操作|対応|方法))?)\s*(?:は)?\s*[:：]?"
@@ -972,20 +955,6 @@ def is_absence(text: str) -> bool:
     return not _ABSENCE_CLAIM.search(value) and not _OPERATION.search(value)
 
 
-def is_guide_not_found(text: str) -> bool:
-    """業務ガイドが見つからなかったことだけを述べる文か（#1452。作業の経過で、資料の主張ではない）。
-
-    文末のツールの名前を挙げた括弧は外して照らす。前置きに主張（は・が・を・数字・引用）を含む文と、
-    操作の指示を含む文は除く。
-    """
-    value = _EMPHASIS.sub("", _strip_bullet(text)).strip()
-    value = _TOOL_NOTE.sub("", value)
-    match = _GUIDE_NOT_FOUND.fullmatch(value)
-    if not match or _GUIDE_NOT_FOUND_LEAD.search(match.group("lead")):
-        return False
-    return not _OPERATION.search(value)
-
-
 # 調べ方の行（#2328）の内部の識別子: 「ID: …」のラベル、英字（a〜f）と数字を含む 8 文字以上の 16 進
 # （UUID の区切りを含む）、ツールの名前（`rag_search`・`<接続>__<ツール>`）。
 _INTERNAL_ID = re.compile(
@@ -1161,8 +1130,6 @@ def passage_kind(text: str) -> str | None:
         return KIND_QUESTION
     if is_absence(text):
         return KIND_ABSENCE
-    if is_guide_not_found(text):
-        return KIND_PROCESS
     return None
 
 
@@ -1565,7 +1532,6 @@ __all__ = [
     "KIND_ABSENCE",
     "KIND_CITATION",
     "KIND_HEADING",
-    "KIND_PROCESS",
     "KIND_QUESTION",
     "KIND_TABLE",
     "KIND_UNVERIFIED",
@@ -1583,7 +1549,6 @@ __all__ = [
     "is_citation",
     "is_clarification_only",
     "is_greeting_only",
-    "is_guide_not_found",
     "is_heading",
     "is_lead_in",
     "is_operation_step",

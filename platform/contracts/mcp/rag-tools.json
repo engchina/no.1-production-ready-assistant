@@ -82,7 +82,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -118,598 +118,6 @@
           "search_answer_profiles"
         ],
         "title": "ListSearchAnswerProfilesOutput",
-        "type": "object"
-      }
-    },
-    {
-      "name": "rag_lookup_guides",
-      "title": "業務ガイドの照会",
-      "description": "質問に当たる公開の業務ガイド（目的・確かめる条件と状態・手順の順と各手順の検索の手がかり・参照の資料と頁・分岐・完了の条件・影響範囲・引き継ぎ先）を返します。回答は作りません。",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "質問に当たる業務ガイドを引く条件。",
-        "properties": {
-          "query": {
-            "description": "質問文（利用者の目的）。",
-            "maxLength": 8000,
-            "minLength": 1,
-            "title": "Query",
-            "type": "string"
-          },
-          "search_answer_profile_id": {
-            "description": "検索・回答プロファイルの id。",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Search Answer Profile Id",
-            "type": "string"
-          },
-          "conditions": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "分かっている条件の値（条件の id → 値）。",
-            "maxProperties": 30,
-            "title": "Conditions",
-            "type": "object"
-          },
-          "limit": {
-            "default": 3,
-            "description": "返す業務ガイドの最大件数。",
-            "maximum": 10,
-            "minimum": 1,
-            "title": "Limit",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "query",
-          "search_answer_profile_id"
-        ],
-        "title": "LookupGuidesInput",
-        "type": "object"
-      },
-      "annotations": {
-        "readOnlyHint": true
-      },
-      "outputSchema": {
-        "$defs": {
-          "GuideBranchItem": {
-            "properties": {
-              "id": {
-                "title": "Id",
-                "type": "string"
-              },
-              "condition_id": {
-                "title": "Condition Id",
-                "type": "string"
-              },
-              "operator": {
-                "enum": [
-                  "equals",
-                  "in",
-                  "unknown"
-                ],
-                "title": "Operator",
-                "type": "string"
-              },
-              "values": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Values",
-                "type": "array"
-              },
-              "goto_step": {
-                "description": "条件に当たるときに進む手順の id。",
-                "title": "Goto Step",
-                "type": "string"
-              },
-              "applies": {
-                "anyOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "分かっている条件に当たるか（true=当たる / null=条件が分からず決まらない）。当たらない分岐は返さない。",
-                "title": "Applies"
-              },
-              "note": {
-                "default": "",
-                "title": "Note",
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "condition_id",
-              "operator",
-              "goto_step",
-              "applies"
-            ],
-            "title": "GuideBranchItem",
-            "type": "object"
-          },
-          "GuideClarification": {
-            "properties": {
-              "condition_id": {
-                "description": "条件の id（conditions に値を入れて呼び直す）。",
-                "title": "Condition Id",
-                "type": "string"
-              },
-              "label": {
-                "description": "条件の名前。",
-                "title": "Label",
-                "type": "string"
-              },
-              "question": {
-                "description": "利用者に確かめる問い。",
-                "title": "Question",
-                "type": "string"
-              },
-              "options": {
-                "description": "選択肢（無ければ自由に答える）。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Options",
-                "type": "array"
-              },
-              "multiple": {
-                "default": false,
-                "description": "選択肢を複数選べるか。",
-                "title": "Multiple",
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "condition_id",
-              "label",
-              "question"
-            ],
-            "title": "GuideClarification",
-            "type": "object"
-          },
-          "GuideCompletionItem": {
-            "properties": {
-              "id": {
-                "title": "Id",
-                "type": "string"
-              },
-              "description": {
-                "title": "Description",
-                "type": "string"
-              },
-              "check_method": {
-                "default": "",
-                "title": "Check Method",
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "description"
-            ],
-            "title": "GuideCompletionItem",
-            "type": "object"
-          },
-          "GuideCondition": {
-            "properties": {
-              "id": {
-                "title": "Id",
-                "type": "string"
-              },
-              "label": {
-                "title": "Label",
-                "type": "string"
-              },
-              "state": {
-                "default": "unknown",
-                "description": "条件の状態（known=分かっている / unknown=分からない / conflicting=質問に複数の値が出ていて決められない。値は candidates）。",
-                "enum": [
-                  "known",
-                  "unknown",
-                  "conflicting"
-                ],
-                "title": "State",
-                "type": "string"
-              },
-              "value": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Value"
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "user=利用者が答えた / question=質問の文から読んだ / document=回答の根拠の画面の図から決めた。",
-                "title": "Source"
-              },
-              "handling": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "不明のときの扱い（ask=確かめる / branch=分岐 / handoff=人へ）。",
-                "title": "Handling"
-              },
-              "candidates": {
-                "description": "state=conflicting のとき、質問に出た値。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Candidates",
-                "type": "array"
-              }
-            },
-            "required": [
-              "id",
-              "label"
-            ],
-            "title": "GuideCondition",
-            "type": "object"
-          },
-          "GuidePageRangeItem": {
-            "properties": {
-              "page_start": {
-                "title": "Page Start",
-                "type": "integer"
-              },
-              "page_end": {
-                "title": "Page End",
-                "type": "integer"
-              }
-            },
-            "required": [
-              "page_start",
-              "page_end"
-            ],
-            "title": "GuidePageRangeItem",
-            "type": "object"
-          },
-          "GuideReferenceItem": {
-            "properties": {
-              "document_id": {
-                "title": "Document Id",
-                "type": "string"
-              },
-              "title": {
-                "default": "",
-                "description": "表示名（参照の正本は document_id）。",
-                "title": "Title",
-                "type": "string"
-              },
-              "section_path": {
-                "description": "節の見出しの列。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Section Path",
-                "type": "array"
-              },
-              "page_ranges": {
-                "description": "根拠の頁の範囲（両端を含む。空なら文書の全体）。rag_read_document に document_id と page（page_start）を渡すと、その頁から読める。",
-                "items": {
-                  "$ref": "#/$defs/GuidePageRangeItem"
-                },
-                "title": "Page Ranges",
-                "type": "array"
-              },
-              "sheet_ranges": {
-                "description": "表計算の資料の根拠のシートと行の範囲（両端を含む。頁ではない）。",
-                "items": {
-                  "$ref": "#/$defs/GuideSheetRangeItem"
-                },
-                "title": "Sheet Ranges",
-                "type": "array"
-              }
-            },
-            "required": [
-              "document_id"
-            ],
-            "title": "GuideReferenceItem",
-            "type": "object"
-          },
-          "GuideSheetRangeItem": {
-            "properties": {
-              "sheet_name": {
-                "title": "Sheet Name",
-                "type": "string"
-              },
-              "row_start": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "始まりの行（無ければシートの全体）。",
-                "title": "Row Start"
-              },
-              "row_end": {
-                "anyOf": [
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Row End"
-              },
-              "cell_range": {
-                "default": "",
-                "description": "A1 形式のセルの範囲（書いてあれば）。",
-                "title": "Cell Range",
-                "type": "string"
-              }
-            },
-            "required": [
-              "sheet_name"
-            ],
-            "title": "GuideSheetRangeItem",
-            "type": "object"
-          },
-          "GuideStepItem": {
-            "properties": {
-              "id": {
-                "title": "Id",
-                "type": "string"
-              },
-              "title": {
-                "title": "Title",
-                "type": "string"
-              },
-              "purpose": {
-                "default": "",
-                "title": "Purpose",
-                "type": "string"
-              },
-              "depends_on": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Depends On",
-                "type": "array"
-              },
-              "allowed_tools": {
-                "items": {
-                  "type": "string"
-                },
-                "title": "Allowed Tools",
-                "type": "array"
-              },
-              "retrieval_hints": {
-                "description": "この手順の根拠を引く検索の手がかり（語・画面名など）。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Retrieval Hints",
-                "type": "array"
-              },
-              "references": {
-                "description": "この手順の根拠がある資料と頁。",
-                "items": {
-                  "$ref": "#/$defs/GuideReferenceItem"
-                },
-                "title": "References",
-                "type": "array"
-              },
-              "evidence_requirements": {
-                "description": "この手順で示すべき根拠。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Evidence Requirements",
-                "type": "array"
-              },
-              "done_when": {
-                "default": "",
-                "description": "この手順の終わりの条件。",
-                "title": "Done When",
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "title"
-            ],
-            "title": "GuideStepItem",
-            "type": "object"
-          },
-          "LookupGuideItem": {
-            "properties": {
-              "guide_id": {
-                "title": "Guide Id",
-                "type": "string"
-              },
-              "revision": {
-                "description": "使った公開の版。",
-                "title": "Revision",
-                "type": "integer"
-              },
-              "title": {
-                "title": "Title",
-                "type": "string"
-              },
-              "decision": {
-                "description": "answer=条件がそろった / branch=分岐で答えた / clarify=確かめる / handoff=人へ。",
-                "enum": [
-                  "answer",
-                  "branch",
-                  "clarify",
-                  "handoff"
-                ],
-                "title": "Decision",
-                "type": "string"
-              },
-              "known_conditions": {
-                "items": {
-                  "$ref": "#/$defs/GuideCondition"
-                },
-                "title": "Known Conditions",
-                "type": "array"
-              },
-              "unknown_conditions": {
-                "description": "確かめる・分岐する・引き継ぐ条件（不明・矛盾）。",
-                "items": {
-                  "$ref": "#/$defs/GuideCondition"
-                },
-                "title": "Unknown Conditions",
-                "type": "array"
-              },
-              "applicability": {
-                "additionalProperties": {
-                  "enum": [
-                    "matched",
-                    "unverified"
-                  ],
-                  "type": "string"
-                },
-                "description": "値のある適用範囲の項目（business_domains / object_types / versions）ごとの状態。matched=質問・絞り込みの手がかりと合った / unverified=手がかりが無く確かめていない。空の項目は制限なし（出さない）。手がかりと合わないガイドは返さない。",
-                "title": "Applicability",
-                "type": "object"
-              },
-              "expected_result": {
-                "title": "Expected Result",
-                "type": "string"
-              },
-              "score": {
-                "description": "質問との照合の点（大きいほど合う）。",
-                "title": "Score",
-                "type": "integer"
-              },
-              "clarifications": {
-                "items": {
-                  "$ref": "#/$defs/GuideClarification"
-                },
-                "title": "Clarifications",
-                "type": "array"
-              },
-              "steps": {
-                "description": "手順（確かめる順。分かっている条件で外れた分岐の手順は含めない）。",
-                "items": {
-                  "$ref": "#/$defs/GuideStepItem"
-                },
-                "title": "Steps",
-                "type": "array"
-              },
-              "branches": {
-                "description": "当たる・決まらない分岐（当たらない分岐は含めない）。",
-                "items": {
-                  "$ref": "#/$defs/GuideBranchItem"
-                },
-                "title": "Branches",
-                "type": "array"
-              },
-              "references": {
-                "description": "全手順に共通の資料と頁。",
-                "items": {
-                  "$ref": "#/$defs/GuideReferenceItem"
-                },
-                "title": "References",
-                "type": "array"
-              },
-              "completion": {
-                "description": "回答を終えてよい条件。",
-                "items": {
-                  "$ref": "#/$defs/GuideCompletionItem"
-                },
-                "title": "Completion",
-                "type": "array"
-              },
-              "impact_scope": {
-                "enum": [
-                  "individual",
-                  "group",
-                  "all"
-                ],
-                "title": "Impact Scope",
-                "type": "string"
-              },
-              "approval_required": {
-                "title": "Approval Required",
-                "type": "boolean"
-              },
-              "impact_steps": {
-                "description": "影響範囲と承認が係る手順の id（空なら業務ガイドのすべての場合に係る）。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Impact Steps",
-                "type": "array"
-              },
-              "impact_applies": {
-                "default": true,
-                "description": "分かっている条件の場合に影響範囲・承認が係るか（false なら、外れた分岐の手順だけに係るので、回答に影響範囲・承認を書かない。#1320）。",
-                "title": "Impact Applies",
-                "type": "boolean"
-              },
-              "handoff_contact": {
-                "default": "",
-                "title": "Handoff Contact",
-                "type": "string"
-              }
-            },
-            "required": [
-              "guide_id",
-              "revision",
-              "title",
-              "decision",
-              "expected_result",
-              "score",
-              "impact_scope",
-              "approval_required"
-            ],
-            "title": "LookupGuideItem",
-            "type": "object"
-          }
-        },
-        "properties": {
-          "schema_version": {
-            "default": 40,
-            "description": "出力の形の版（変わったら上がる）。",
-            "title": "Schema Version",
-            "type": "integer"
-          },
-          "guides": {
-            "description": "質問に当たり、適用範囲の手がかりと合う公開の業務ガイド（照合の点の高い順）。無ければ空。",
-            "items": {
-              "$ref": "#/$defs/LookupGuideItem"
-            },
-            "title": "Guides",
-            "type": "array"
-          }
-        },
-        "required": [
-          "guides"
-        ],
-        "title": "LookupGuidesOutput",
         "type": "object"
       }
     },
@@ -862,7 +270,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1274,7 +682,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -1728,7 +1136,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2515,7 +1923,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2764,7 +2172,7 @@
       "outputSchema": {
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -2898,7 +2306,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -3123,6 +2531,46 @@
               "method"
             ],
             "title": "AutoSelectedProfile",
+            "type": "object"
+          },
+          "Clarification": {
+            "properties": {
+              "condition_id": {
+                "description": "条件の id（conditions に値を入れて呼び直す）。",
+                "title": "Condition Id",
+                "type": "string"
+              },
+              "label": {
+                "description": "条件の名前。",
+                "title": "Label",
+                "type": "string"
+              },
+              "question": {
+                "description": "利用者に確かめる問い。",
+                "title": "Question",
+                "type": "string"
+              },
+              "options": {
+                "description": "選択肢（無ければ自由に答える）。",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Options",
+                "type": "array"
+              },
+              "multiple": {
+                "default": false,
+                "description": "選択肢を複数選べるか。",
+                "title": "Multiple",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "condition_id",
+              "label",
+              "question"
+            ],
+            "title": "Clarification",
             "type": "object"
           },
           "DegradedStep": {
@@ -3660,46 +3108,6 @@
               "end"
             ],
             "title": "ExcerptRange",
-            "type": "object"
-          },
-          "GuideClarification": {
-            "properties": {
-              "condition_id": {
-                "description": "条件の id（conditions に値を入れて呼び直す）。",
-                "title": "Condition Id",
-                "type": "string"
-              },
-              "label": {
-                "description": "条件の名前。",
-                "title": "Label",
-                "type": "string"
-              },
-              "question": {
-                "description": "利用者に確かめる問い。",
-                "title": "Question",
-                "type": "string"
-              },
-              "options": {
-                "description": "選択肢（無ければ自由に答える）。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Options",
-                "type": "array"
-              },
-              "multiple": {
-                "default": false,
-                "description": "選択肢を複数選べるか。",
-                "title": "Multiple",
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "condition_id",
-              "label",
-              "question"
-            ],
-            "title": "GuideClarification",
             "type": "object"
           },
           "OlderVersion": {
@@ -4268,7 +3676,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -4362,7 +3770,7 @@
           "clarifications": {
             "description": "planning=caller で、検索・回答プロファイルのルールが検索の前に利用者に確かめる条件（あれば検索せず、evidence は空）。利用者の答えを conditions の condition_id に入れて呼び直す。",
             "items": {
-              "$ref": "#/$defs/GuideClarification"
+              "$ref": "#/$defs/Clarification"
             },
             "title": "Clarifications",
             "type": "array"
@@ -4482,7 +3890,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "業務ガイドの条件と、検索・回答プロファイルのルールの確認（rule: で始まる id）の値（条件の id → 値）。outcome=needs_clarification の clarifications に利用者が答えた値（選んだ選択肢の表示名・自由入力。複数は「、」で区切る）を入れて呼び直すと、分かっている条件は聞き直さない。",
+            "description": "検索・回答プロファイルのルールの確認（rule: で始まる id）の値（条件の id → 値）。outcome=needs_clarification の clarifications に利用者が答えた値（選んだ選択肢の表示名・自由入力。複数は「、」で区切る）を入れて呼び直すと、分かっている条件は聞き直さない。",
             "maxProperties": 30,
             "title": "Conditions",
             "type": "object"
@@ -4566,12 +3974,12 @@
           "AnswerRequest": {
             "properties": {
               "id": {
-                "description": "質問の要求単位の ID（Q1 など）。業務ガイドの手順は guide:<手順の id>。",
+                "description": "質問の要求単位の ID（Q1 など）。",
                 "title": "Id",
                 "type": "string"
               },
               "text": {
-                "description": "要求の原文（業務ガイドの手順は手順の名前）。",
+                "description": "要求の原文。",
                 "title": "Text",
                 "type": "string"
               },
@@ -4635,6 +4043,46 @@
               "method"
             ],
             "title": "AutoSelectedProfile",
+            "type": "object"
+          },
+          "Clarification": {
+            "properties": {
+              "condition_id": {
+                "description": "条件の id（conditions に値を入れて呼び直す）。",
+                "title": "Condition Id",
+                "type": "string"
+              },
+              "label": {
+                "description": "条件の名前。",
+                "title": "Label",
+                "type": "string"
+              },
+              "question": {
+                "description": "利用者に確かめる問い。",
+                "title": "Question",
+                "type": "string"
+              },
+              "options": {
+                "description": "選択肢（無ければ自由に答える）。",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Options",
+                "type": "array"
+              },
+              "multiple": {
+                "default": false,
+                "description": "選択肢を複数選べるか。",
+                "title": "Multiple",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "condition_id",
+              "label",
+              "question"
+            ],
+            "title": "Clarification",
             "type": "object"
           },
           "DegradedStep": {
@@ -5174,184 +4622,6 @@
             "title": "ExcerptRange",
             "type": "object"
           },
-          "GuideClarification": {
-            "properties": {
-              "condition_id": {
-                "description": "条件の id（conditions に値を入れて呼び直す）。",
-                "title": "Condition Id",
-                "type": "string"
-              },
-              "label": {
-                "description": "条件の名前。",
-                "title": "Label",
-                "type": "string"
-              },
-              "question": {
-                "description": "利用者に確かめる問い。",
-                "title": "Question",
-                "type": "string"
-              },
-              "options": {
-                "description": "選択肢（無ければ自由に答える）。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Options",
-                "type": "array"
-              },
-              "multiple": {
-                "default": false,
-                "description": "選択肢を複数選べるか。",
-                "title": "Multiple",
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "condition_id",
-              "label",
-              "question"
-            ],
-            "title": "GuideClarification",
-            "type": "object"
-          },
-          "GuideCondition": {
-            "properties": {
-              "id": {
-                "title": "Id",
-                "type": "string"
-              },
-              "label": {
-                "title": "Label",
-                "type": "string"
-              },
-              "state": {
-                "default": "unknown",
-                "description": "条件の状態（known=分かっている / unknown=分からない / conflicting=質問に複数の値が出ていて決められない。値は candidates）。",
-                "enum": [
-                  "known",
-                  "unknown",
-                  "conflicting"
-                ],
-                "title": "State",
-                "type": "string"
-              },
-              "value": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Value"
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "user=利用者が答えた / question=質問の文から読んだ / document=回答の根拠の画面の図から決めた。",
-                "title": "Source"
-              },
-              "handling": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "不明のときの扱い（ask=確かめる / branch=分岐 / handoff=人へ）。",
-                "title": "Handling"
-              },
-              "candidates": {
-                "description": "state=conflicting のとき、質問に出た値。",
-                "items": {
-                  "type": "string"
-                },
-                "title": "Candidates",
-                "type": "array"
-              }
-            },
-            "required": [
-              "id",
-              "label"
-            ],
-            "title": "GuideCondition",
-            "type": "object"
-          },
-          "GuideRef": {
-            "properties": {
-              "guide_id": {
-                "title": "Guide Id",
-                "type": "string"
-              },
-              "revision": {
-                "description": "使った公開の版。",
-                "title": "Revision",
-                "type": "integer"
-              },
-              "title": {
-                "title": "Title",
-                "type": "string"
-              },
-              "decision": {
-                "description": "answer=条件がそろった / branch=分岐で答えた / clarify=確かめる / handoff=人へ。",
-                "enum": [
-                  "answer",
-                  "branch",
-                  "clarify",
-                  "handoff"
-                ],
-                "title": "Decision",
-                "type": "string"
-              },
-              "known_conditions": {
-                "items": {
-                  "$ref": "#/$defs/GuideCondition"
-                },
-                "title": "Known Conditions",
-                "type": "array"
-              },
-              "unknown_conditions": {
-                "description": "確かめる・分岐する・引き継ぐ条件（不明・矛盾）。",
-                "items": {
-                  "$ref": "#/$defs/GuideCondition"
-                },
-                "title": "Unknown Conditions",
-                "type": "array"
-              },
-              "applicability": {
-                "additionalProperties": {
-                  "enum": [
-                    "matched",
-                    "unverified"
-                  ],
-                  "type": "string"
-                },
-                "description": "値のある適用範囲の項目（business_domains / object_types / versions）ごとの状態。matched=質問・絞り込みの手がかりと合った / unverified=手がかりが無く確かめていない。空の項目は制限なし（出さない）。手がかりと合わないガイドは返さない。",
-                "title": "Applicability",
-                "type": "object"
-              }
-            },
-            "required": [
-              "guide_id",
-              "revision",
-              "title",
-              "decision"
-            ],
-            "title": "GuideRef",
-            "type": "object"
-          },
           "OlderVersion": {
             "description": "検索で当たった文書を置き換えた旧版（#1405）。",
             "properties": {
@@ -5832,7 +5102,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -5891,24 +5161,12 @@
             "type": "array"
           },
           "clarifications": {
-            "description": "outcome=needs_clarification のとき、利用者に確かめる条件と問い（業務ガイドと、検索・回答プロファイルのルールの確認。ルールの確認は検索・回答をせずに返す）。",
+            "description": "outcome=needs_clarification のとき、利用者に確かめる条件と問い（検索・回答プロファイルのルールの確認。検索・回答をせずに返す）。",
             "items": {
-              "$ref": "#/$defs/GuideClarification"
+              "$ref": "#/$defs/Clarification"
             },
             "title": "Clarifications",
             "type": "array"
-          },
-          "guide": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/GuideRef"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "回答に使った業務ガイド（公開の版）。使わなければ null。"
           },
           "insufficient_reason": {
             "anyOf": [
@@ -6052,7 +5310,7 @@
     {
       "name": "rag_validate_answer",
       "title": "資料との照合",
-      "description": "回答の段落ごとの主張を、渡した根拠（今の権限と版で読み直す）で監査します。公開する前の最終の検証に使います。見出し・出典の行・利用者への質問の段落は主張ではないので監査せず、claims に含めません。requests（要求の充足）・guide（業務ガイド）を渡すと、要求の漏れ・手順ごとの説明と順序・分岐・影響範囲も確かめます。",
+      "description": "回答の段落ごとの主張を、渡した根拠（今の権限と版で読み直す）で監査します。公開する前の最終の検証に使います。見出し・出典の行・利用者への質問の段落は主張ではないので監査せず、claims に含めません。requests（要求の充足）を渡すと、要求の漏れも確かめます。",
       "inputSchema": {
         "$defs": {
           "AnswerRangeInput": {
@@ -6169,48 +5427,6 @@
             "title": "ValidateDataResultInput",
             "type": "object"
           },
-          "ValidateGuideInput": {
-            "additionalProperties": false,
-            "description": "回答が沿った業務ガイド（rag_search の guide・rag_lookup_guides の guides の 1 件）。",
-            "properties": {
-              "search_answer_profile_id": {
-                "description": "業務ガイドの検索・回答プロファイルの id。",
-                "maxLength": 128,
-                "minLength": 1,
-                "title": "Search Answer Profile Id",
-                "type": "string"
-              },
-              "guide_id": {
-                "description": "業務ガイドの id。",
-                "maxLength": 64,
-                "minLength": 1,
-                "title": "Guide Id",
-                "type": "string"
-              },
-              "revision": {
-                "description": "回答に使った公開の版。",
-                "minimum": 1,
-                "title": "Revision",
-                "type": "integer"
-              },
-              "conditions": {
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "description": "分かっている条件の値（条件の id → 値）。当たらない分岐の手順を見分けるのに使う。",
-                "maxProperties": 30,
-                "title": "Conditions",
-                "type": "object"
-              }
-            },
-            "required": [
-              "search_answer_profile_id",
-              "guide_id",
-              "revision"
-            ],
-            "title": "ValidateGuideInput",
-            "type": "object"
-          },
           "ValidatePremiseInput": {
             "additionalProperties": false,
             "description": "利用者が回答の前の確認で答えた前提 1 件（確認の質問と答え）。",
@@ -6275,7 +5491,7 @@
           }
         },
         "additionalProperties": false,
-        "description": "回答の最終の検証の条件（requests・guide は渡したときだけ確かめる）。",
+        "description": "回答の最終の検証の条件（requests は渡したときだけ確かめる）。",
         "properties": {
           "query": {
             "description": "利用者の質問。",
@@ -6327,18 +5543,6 @@
             "maxItems": 30,
             "title": "Gaps",
             "type": "array"
-          },
-          "guide": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ValidateGuideInput"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "回答が沿った業務ガイド。渡すと公開の版を読み直し、手順ごとの説明の有無・手順の順序・依存・分岐と影響範囲・承認の記載を確かめる。"
           },
           "answer_trace_ids": {
             "description": "回答に使った rag_search の trace_id。渡すと、その回答で監査を通った段落の判定を使う（速くなる）。",
@@ -6432,99 +5636,6 @@
               "end"
             ],
             "title": "ExcerptRange",
-            "type": "object"
-          },
-          "GuideBodyCoverageValidation": {
-            "properties": {
-              "execution": {
-                "enum": [
-                  "completed",
-                  "not_run",
-                  "error",
-                  "timed_out",
-                  "partial",
-                  "unknown"
-                ],
-                "title": "Execution",
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "explained",
-                  "missing",
-                  "partial",
-                  "unknown"
-                ],
-                "title": "Status",
-                "type": "string"
-              },
-              "reason": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Reason"
-              }
-            },
-            "required": [
-              "execution",
-              "status"
-            ],
-            "title": "GuideBodyCoverageValidation",
-            "type": "object"
-          },
-          "GuideSourceAssociationValidation": {
-            "properties": {
-              "execution": {
-                "enum": [
-                  "completed",
-                  "not_run",
-                  "error",
-                  "timed_out",
-                  "partial",
-                  "unknown"
-                ],
-                "title": "Execution",
-                "type": "string"
-              },
-              "linked": {
-                "title": "Linked",
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "execution",
-              "linked"
-            ],
-            "title": "GuideSourceAssociationValidation",
-            "type": "object"
-          },
-          "GuideStepValidation": {
-            "properties": {
-              "body_coverage": {
-                "$ref": "#/$defs/GuideBodyCoverageValidation"
-              },
-              "source_association": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/GuideSourceAssociationValidation"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              }
-            },
-            "required": [
-              "body_coverage"
-            ],
-            "title": "GuideStepValidation",
             "type": "object"
           },
           "PremiseConsistencyResult": {
@@ -6770,73 +5881,16 @@
             "title": "ValidatedClaim",
             "type": "object"
           },
-          "ValidatedGuideStep": {
-            "description": "業務ガイドの手順 1 つの、回答での説明の充足（#2708）。",
-            "properties": {
-              "step_id": {
-                "title": "Step Id",
-                "type": "string"
-              },
-              "title": {
-                "title": "Title",
-                "type": "string"
-              },
-              "required": {
-                "description": "回答の充足で必須の手順か（分かっている条件で決まらない分岐の手順は false）。",
-                "title": "Required",
-                "type": "boolean"
-              },
-              "validation": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/GuideStepValidation"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "出典の対応と本文の充足の検査状態。未実行・未完了は不足や誤りの確認を意味しない。古い結果では省略。"
-              },
-              "status": {
-                "description": "explained=必須の操作・対象・条件・順序を、根拠で裏付けた説明として確認した / partial=手順の一部だけ説明を確認した / unknown=説明の充足を検証できていない / reference_only=根拠の原文を参考として示しただけ / unused=手順の根拠は渡した根拠にあるが、手順を説明した段落が無い / no_evidence=手順の根拠が渡した根拠に無い（その手順の根拠を集めていない）/ not_searched=上限で検索を打ち切り、充足を検証していない。",
-                "enum": [
-                  "explained",
-                  "partial",
-                  "unknown",
-                  "reference_only",
-                  "unused",
-                  "no_evidence",
-                  "not_searched"
-                ],
-                "title": "Status",
-                "type": "string"
-              }
-            },
-            "required": [
-              "step_id",
-              "title",
-              "required",
-              "status"
-            ],
-            "title": "ValidatedGuideStep",
-            "type": "object"
-          },
           "ValidationFinding": {
             "properties": {
               "check": {
-                "description": "検査（requests=要求の充足 / guide=業務ガイドの版 / guide_steps=手順 / impact=影響範囲）。",
-                "enum": [
-                  "requests",
-                  "guide",
-                  "guide_steps",
-                  "impact"
-                ],
+                "const": "requests",
+                "description": "検査（requests=要求の充足）。",
                 "title": "Check",
                 "type": "string"
               },
               "code": {
-                "description": "request_missing / request_partial / request_unverified / guide_unavailable / guide_revision_stale / guide_steps_unmatched / guide_step_unexplained / step_order / step_wrong_branch / step_dependency_missing / step_following_missing / impact_scope_missing / approval_missing",
+                "description": "request_missing / request_partial / request_unverified",
                 "title": "Code",
                 "type": "string"
               },
@@ -6864,31 +5918,6 @@
                 ],
                 "default": null,
                 "title": "Request Id"
-              },
-              "step_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "title": "Step Id"
-              },
-              "related_step_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null,
-                "description": "関係する手順（前の手順・後の手順）。",
-                "title": "Related Step Id"
               }
             },
             "required": [
@@ -6903,7 +5932,7 @@
         },
         "properties": {
           "schema_version": {
-            "default": 40,
+            "default": 41,
             "description": "出力の形の版（変わったら上がる）。",
             "title": "Schema Version",
             "type": "integer"
@@ -6956,14 +5985,9 @@
             "type": "boolean"
           },
           "checks": {
-            "description": "行った決定的な検査（requests・guide を渡したときだけ。モデルは呼ばない）。",
+            "description": "行った決定的な検査（requests を渡したときだけ。モデルは呼ばない）。",
             "items": {
-              "enum": [
-                "requests",
-                "guide",
-                "guide_steps",
-                "impact"
-              ],
+              "const": "requests",
               "type": "string"
             },
             "title": "Checks",
@@ -6975,27 +5999,6 @@
               "$ref": "#/$defs/ValidationFinding"
             },
             "title": "Findings",
-            "type": "array"
-          },
-          "guide_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "検査に使った業務ガイドの今の公開の版。",
-            "title": "Guide Revision"
-          },
-          "guide_steps": {
-            "description": "guide の手順ごとの説明の充足（分かっている条件で外れた分岐の手順は含めない。guide を渡さないか、段落の判定が出なければ空）。本文の充足検査が完了し、不足を確認した必須の手順だけを guide_step_unexplained の finding にする。未実行・未確認は validation に残る。",
-            "items": {
-              "$ref": "#/$defs/ValidatedGuideStep"
-            },
-            "title": "Guide Steps",
             "type": "array"
           },
           "reused_claims": {

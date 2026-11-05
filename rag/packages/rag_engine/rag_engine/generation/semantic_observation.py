@@ -22,7 +22,6 @@ def unverified_projection(audit: GroundedAudit) -> GroundedAudit:
         update={
             "reviews": [],
             "application_reviews": [],
-            "guide_requirement_reviews": [],
             "unused_evidence_ids": [],
             "request_reviews": [
                 review.model_copy(

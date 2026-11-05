@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from importlib import resources
 
@@ -9,6 +10,7 @@ import pytest
 
 from rag_parser_core.language import (
     FIELD_SPECS,
+    REMOVED_DISPLAY_FIELDS,
     REMOVED_FIELDS,
     LanguagePackError,
     bind_pack,
@@ -327,36 +329,33 @@ def test_other_missing_language_fields_still_fail() -> None:
         build_pack(raw)
 
 
-def test_legacy_pack_fills_acquisition_label_without_changing_saved_values() -> None:
+def test_legacy_pack_fills_display_label_without_changing_saved_values() -> None:
     raw = builtin_pack().to_dict()
-    del raw["answer_labels"]["guide_acquisition_incomplete_template"]
+    del raw["answer_labels"]["crag_quote_only_note"]
     raw["answer_labels"]["cause_gap"] = "合成の保存済み表示"
     original = json.dumps(raw, ensure_ascii=False)
     pack = build_pack(raw)
-    assert pack.text(
-        "answer_labels", "guide_acquisition_incomplete_template"
-    ) == builtin_pack().text("answer_labels", "guide_acquisition_incomplete_template")
+    assert pack.text("answer_labels", "crag_quote_only_note") == builtin_pack().text(
+        "answer_labels", "crag_quote_only_note"
+    )
     assert pack.text("answer_labels", "cause_gap") == "合成の保存済み表示"
     assert pack.ingest_hash == builtin_pack().ingest_hash
     assert json.dumps(raw, ensure_ascii=False) == original
 
 
-def test_acquisition_label_preserves_custom_text_and_only_changes_display_hash() -> None:
+def test_display_label_preserves_custom_text_and_only_changes_display_hash() -> None:
     raw = builtin_pack().to_dict()
-    raw["answer_labels"]["guide_acquisition_incomplete_template"] = "合成の取得未完了: {steps}"
+    raw["answer_labels"]["crag_quote_only_note"] = "合成の注記"
     pack = build_pack(raw)
-    assert (
-        pack.text("answer_labels", "guide_acquisition_incomplete_template")
-        == "合成の取得未完了: {steps}"
-    )
+    assert pack.text("answer_labels", "crag_quote_only_note") == "合成の注記"
     assert pack.hash != builtin_pack().hash
     assert pack.ingest_hash == builtin_pack().ingest_hash
 
 
 @pytest.mark.parametrize("value", [None, ""])
-def test_acquisition_label_explicit_invalid_value_is_not_defaulted(value: object) -> None:
+def test_display_label_explicit_invalid_value_is_not_defaulted(value: object) -> None:
     raw = builtin_pack().to_dict()
-    raw["answer_labels"]["guide_acquisition_incomplete_template"] = value
+    raw["answer_labels"]["crag_quote_only_note"] = value
     with pytest.raises(LanguagePackError):
         build_pack(raw)
 
@@ -407,3 +406,36 @@ def test_removed_xml_tree_label_is_dropped_without_changing_hashes() -> None:
     assert (loaded.hash, loaded.ingest_hash) == (pack.hash, pack.ingest_hash)
     assert stored_pack_hash(legacy, loaded) == pack.hash
     assert resolve(pack, {"labels": {"xml_tree_document_type": "別の名前"}}).hash == pack.hash
+
+
+def test_saved_pack_with_removed_display_fields_keeps_stored_hash() -> None:
+    """削除した表示の項目・理由の値が残る保存済みの版も読め、保存時の hash で照合できる。
+
+    取込の hash は変わらない。
+    """
+    pack = builtin_pack()
+    legacy = pack.to_dict()
+    del legacy["evaluation_process_cues"]
+    legacy["guide_check_cues"] = {"approval_terms": ["合成の語"]}
+    legacy["answer_labels"] = {
+        **legacy["answer_labels"],
+        "guide_notes_section": "合成の節",
+        "passage_reason_labels": [
+            *legacy["answer_labels"]["passage_reason_labels"],
+            "合成の理由=guide_text",
+        ],
+    }
+    loaded = build_pack(legacy)
+    assert ("guide_check_cues", "approval_terms") in REMOVED_DISPLAY_FIELDS
+    assert loaded.to_dict() == pack.to_dict()
+    assert loaded.ingest_hash == pack.ingest_hash
+    entries = [
+        [section, key, value]
+        for section, fields in legacy.items()
+        if isinstance(fields, dict)
+        for key, value in fields.items()
+    ] + [["labels", "xml_tree_document_type", "XML ツリー"]]
+    canonical = json.dumps(sorted(entries, key=lambda e: (e[0], e[1])), ensure_ascii=False)
+    expected = hashlib.sha256(f"{legacy['locale']}\n{canonical}".encode()).hexdigest()[:16]
+    assert stored_pack_hash(legacy, loaded) == expected
+    assert resolve(pack, {"guide_check_cues": {"approval_terms": ["別の語"]}}).hash == pack.hash

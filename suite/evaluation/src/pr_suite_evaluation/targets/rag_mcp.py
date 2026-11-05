@@ -1,7 +1,7 @@
 """Target: RAG の検索・回答を公開の RAG MCP（`rag_search`）で呼ぶ adapter（#3417）。
 
 業務 Agent の Target（`agent_mcp`）と同じ Dataset・Observation・Evaluator・Report で、RAG の
-A（業務ガイドなし。ナレッジベースを指定）と C（業務ガイドあり。検索・回答プロファイルを指定）を
+A（ナレッジベースを指定）と C（検索・回答プロファイルを指定）を
 採点する（1 つの採点器を複数の Target に当てる）。
 
 - 呼ぶのは公開の MCP（`POST /api/mcp`。契約は `platform/contracts/mcp/rag-tools.json`）の
@@ -42,8 +42,9 @@ TOOL = "rag_search"
 # rag_validate_answer の段落の位置・top_k の既定・失敗の code の一覧を足して 37（rag_search の
 # 出力の形は 36 と同じ）、#3546 で安全チェックの未完了 guardrail_degraded と根拠 0 件の段
 # zero_evidence を足して 38、#37 で guardrail_warnings・guardrail_degraded を外して 39、#112 で
-# rag_validate_answer の判定の診断を足して 40〔rag_search の出力の形は 39 と同じ〕）。
-RAG_SEARCH_SCHEMA_VERSION = 40
+# rag_validate_answer の判定の診断を足して 40〔rag_search の出力の形は 39 と同じ〕、
+# rag_search の出力の項目を減らして 41）。
+RAG_SEARCH_SCHEMA_VERSION = 41
 # 返す根拠の上限（契約の evidence_limit の maximum）。
 DEFAULT_EVIDENCE_LIMIT = 50
 MAX_EVIDENCE_LIMIT = 50

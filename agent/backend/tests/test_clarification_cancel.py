@@ -238,7 +238,7 @@ def test_cancel_by_message_is_detected_only_for_pending_kinds(
 def test_declined_tools_and_nl2sql_next_step() -> None:
     assert is_declined_tool("nl2sql__nl2sql_query", {"nl2sql"})
     assert not is_declined_tool("rag__rag_search", {"nl2sql"})
-    assert is_declined_tool("crm__rag_lookup_guides", {"rag"})
+    assert is_declined_tool("crm__rag_read_source", {"rag"})
     assert not is_declined_tool("skill_reference_read", {"rag", "nl2sql"})
 
     step = nl2sql_next_step(

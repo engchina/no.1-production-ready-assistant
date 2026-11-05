@@ -79,7 +79,6 @@ from app.rag.search_answer_profile_config import (
     parse_search_answer_profile_config,
 )
 from app.rag.source_profile import build_source_profile
-from app.rag.support_guide_runtime import GUIDE_PREVIEW_TRACE_PREFIX
 from app.rag.vector_index_adapter import default_vector_index_build, resolve_vector_index_adapter
 from app.schemas.classification import CLASSIFICATION_CATEGORY_KEYS, category_label
 from app.schemas.common import JsonValue
@@ -14030,14 +14029,8 @@ def _with_answer_record_scope_bind(binds: Mapping[str, object]) -> dict[str, obj
 def _answer_record_list_where(
     *, search_answer_profile_id: str | None, trace_ids: Sequence[str] | None
 ) -> tuple[str, dict[str, object]]:
-    """回答履歴の一覧・件数の WHERE と bind（範囲・持ち主・検索・回答プロファイル・trace_id）。
-
-    業務ガイドの下書きで試した回答（trace_id の接頭辞。#1288）は利用者の回答の履歴に出さない。
-    """
-    clauses = [
-        _answer_record_scope_sql(),
-        f"trace_id NOT LIKE '{GUIDE_PREVIEW_TRACE_PREFIX}%'",
-    ]
+    """回答履歴の一覧・件数の WHERE と bind（範囲・持ち主・検索・回答プロファイル・trace_id）。"""
+    clauses = [_answer_record_scope_sql()]
     binds = _with_answer_record_scope_bind({})
     if search_answer_profile_id:
         clauses.append("search_answer_profile_id = :search_answer_profile_id")

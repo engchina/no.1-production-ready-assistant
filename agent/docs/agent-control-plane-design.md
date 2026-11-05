@@ -39,7 +39,7 @@ flowchart TD
   無ければ 400（`agent_data_scope_forbidden`）、一覧を取れなければ 409 / 502（保存しない）。既に範囲にある ID と範囲を
   外す変更は確かめない（別の編集者が加えた ID を残したまま、ほかの項目を保存できる）。
 - 組み込み Runtime の強制（`features/agent/data_scope.py`。tool handler で、モデルの指示に頼らない）:
-  - 1 つ: `nl2sql_query` の `profile_id`・`rag_search` / `rag_retrieve_evidence` / `rag_lookup_guides` の
+  - 1 つ: `nl2sql_query` の `profile_id`・`rag_search` / `rag_retrieve_evidence` の
     `search_answer_profile_id` を Runtime が埋め、モデルが渡した値は上書きする。モデルに見せる schema からその引数を除く
     （`tool_registry.invoke` に渡す定義は呼び先の契約のまま）。
   - 複数: 範囲外の値はツールのエラー（`agent_data_scope_violation`。使える ID と既定を返す）で、呼び先へ送らず予算にも
@@ -348,11 +348,6 @@ false〕・`listed`〔節の項目の数〕）で件数を出す。MCP の `agen
 段落が根拠の表の別の行・列の値を結び付けた（表が否定した対応）ときは、RAG が `contradicted`（`support_check=value_unbound`。理由に
 表の正しい対応）で返し、Agent は矛盾として外す（#2998）。RAG が表の正しい値に直せた段落（`support_check=table_corrected`・
 `revised_text`。#3005）は外さず、本文の段落を直した文に置き換えて「根拠の表の値に直した」（`table_corrected`。警告）の印を付ける。
-業務ガイドの手順の説明は、RAG の `rag_validate_answer` の `guide_steps`（RAG の回答と同じ規則の手順ごとの充足。#2708）で
-確かめる。説明を確かめられなかった必須の手順は、本文を残したまま回答全体の警告（`answer_warnings` の `guide_check`。`detail` は
-RAG の finding の文）にして節「確認が必要な点」に示し、回答の対応の不足の印 `guide_steps`（conditional）にする。接続をまたいでは手順ごとに
-最も良い状態を採る。支援タスクの状態の `guide.steps[].shared` は、手順の根拠がほかの手順と共有の chunk だけかを示す
-（根拠の有無 `evidence` は共有の chunk でも true になるので、説明の確かめには使わない）。
 
 ツール権限（`/settings/tool-policy`）は `<接続>__<ツール>` の名前で allow / ask / deny を上書きできる。
 画面の一覧は `GET /api/settings/tool-policy/tools`（#1814。`tool_policy_catalog`）で、組み込みのツールに、URL を設定した
@@ -430,7 +425,7 @@ NL2SQL の SQL に書き込みの文があれば `nl2sql.non_readonly_sql_return
   指示の「データベース（NL2SQL）の確かめ中の問い」に従い `requirement_session_id` と `answer` を付けて呼び直す。確認の要るものが
   無くなり SELECT・FROM が明確になると、NL2SQL が要件を反映してジョブで SQL を作る（確認が要らなければ聞かずに進む）。
   Agent のチャットに「SQL の生成前の確認」のボタンは置かない。回答の対応は `needs_clarification`（`basis=nl2sql_clarification`）。
-- **確認の取り消し（#1441・#1445）**: 確かめ中の確認（NL2SQL の SQL の生成前の確認・RAG の `needs_clarification` / 業務ガイドの clarify）は、
+- **確認の取り消し（#1441・#1445）**: 確かめ中の確認（NL2SQL の SQL の生成前の確認・RAG の `needs_clarification`）は、
   チャットの「データベースの検索は不要」「資料の検索は不要」（`POST /api/runs` の `clarification_cancel`。同じ部品）か、確かめ中の問いへの
   取り消しの文（「データベースは関係ない」「資料は関係ない」「確認はやめて」など。`clarification_cancel.message_cancel_kinds` の
   決定的な判定）で取り消せる。取り消した Run は、その種類のツール（`nl2sql_*` / `rag_*`）をモデルに渡さず、ほかの手段で続けるか
@@ -440,8 +435,8 @@ NL2SQL の SQL に書き込みの文があれば `nl2sql.non_readonly_sql_return
   （`{kind, trigger, run_id, at, questions, requirement_sessions}`）で残す。
 - **回答前の確認（#1839）**: 3 製品共通の UX 契約（`platform/docs/ux-contracts/confirm-before-answer.md`）と部品
   （`ClarificationCard` / `ClarificationRecord`）で、Agent の確認を 2 つの出所から出す（実装は `features/agent/confirmation.py`）。
-  - **ツールの結果の確認**（NL2SQL の SQL の生成前の確認・RAG の `needs_clarification`〔業務ガイドの条件と、検索・回答プロファイルの
-    ルールの確認（`condition_id` が `rule:<id>`。RAG のチャットと同じ判定。#2117）〕/ 業務ガイドの clarify）: 確認事項・選択肢は呼び先が
+  - **ツールの結果の確認**（NL2SQL の SQL の生成前の確認・RAG の `needs_clarification`〔検索・回答プロファイルの
+    ルールの確認（`condition_id` が `rule:<id>`。RAG のチャットと同じ判定。#2117）〕）: 確認事項・選択肢は呼び先が
     作ったまま受け渡す（Agent で二重に定義しない）。この Run で新しく確かめ中になった問いを、完了した Run の `confirmations`
     （`source=nl2sql` / `rag`）に出す。答え・スキップ（`POST /api/runs/{run_id}/confirmations/{confirmation_id}`。Run を作った利用者
     だけ）で同じ会話に次の Run を作り、metadata `clarification_response`（確認事項・選んだ選択肢の名前と ID・自由入力）と
@@ -471,10 +466,9 @@ NL2SQL の SQL に書き込みの文があれば `nl2sql.non_readonly_sql_return
     「先に調べる」を返すと、モデルは確認を出したと取り違え、答えを待つと述べるだけの回答で完了した。#3352）。拒答のガード
     （`AGENT_TOOL_GROUNDING_REQUIRED`）と同じ設定で切れる。
     **ツールの確認に任せる**（#1934・#2726）: この Run のツールの結果が確認事項を返して止まっている（NL2SQL・`rag_search` の
-    `needs_clarification`・根拠の取得のルールの確認と、最も新しい業務ガイドの判断（`rag_lookup_guides`・`rag_search` の
-    `guide`）が条件を確かめる `clarify`。答えた条件の問いは数えない）ときは中断せず、`status=tool_confirmation_pending` を返す。
-    確認事項は条件の id 付きのカードになり、答えは次の Run の分かっている条件として業務ガイドの照合・最終の検証の `guide` に渡る
-    （Agent 自身の確認で聞くと、答えが業務ガイドの条件に渡らず、同じ条件の確認が確かめ中のまま残る）。
+    `needs_clarification`・根拠の取得のルールの確認。答えた条件の問いは数えない）ときは中断せず、`status=tool_confirmation_pending` を返す。
+    確認事項は条件の id 付きのカードになり、答えは次の Run の分かっている条件として渡る
+    （Agent 自身の確認で聞くと、答えが条件に渡らず、同じ条件の確認が確かめ中のまま残る）。
   - **やめる**（API の `action: "cancel"`。画面は #2311 から出さず、確認を終えるのは「確認せずに回答」だけ。質問を取り消すのは入力欄の「停止」）: 確認を出した Run と、同じ質問の確認の往復の Run に metadata `clarification_withdrawn` を付けて会話・履歴・支援タスクの
     状態から外し、最初の質問を返す。Agent 自身の確認で待っている Run は取り消し、NL2SQL の session は
     `nl2sql_cancel_requirement` で閉じる。
@@ -848,8 +842,8 @@ Run の最初の区間（`agent.execute`）は、Run を受け付けた要求（
 境目の行に製品名（「RAG · 文書の検索」）を添える（Agent の工程の定義では訳さない。#3272）。
 支援タスクの状態（#1243）: 組み込み Runtime は Run の終わり（承認待ちで止めるときも）に、ツールの呼び出しから
 支援タスクの状態を成果物（`kind="support_task"`・「支援タスクの状態」、`schema_version` 1）に残す。項目は会話・持ち主・
-目的（会話の最初の質問）、分かっている条件（`rag_search` に渡した `conditions` と出力の `guide.known_conditions`。
-値・出所・時刻、上書きした古い値）、確かめ中の問い（`clarifications`）、使った業務ガイド（id・版）、残った不足（`gaps`）、
+目的（会話の最初の質問）、分かっている条件（`rag_search` に渡した `conditions`。
+値・出所・時刻、上書きした古い値）、確かめ中の問い（`clarifications`）、残った不足（`gaps`）、
 根拠の参照（document_id・chunk_id・chunk_set_id・ファイル名。本文は持たない）、予算の消費（Run と会話の通しの
 ツール・RAG の呼び出しの回数と時間）。同じ会話の次の Run は、同じ持ち主の前の完了した Run の状態を読み、短い
 「支援タスクの状態」として指示の末尾に足す（条件は聞き直さず `conditions` に入れ、新しい発言の値で上書きする）。
@@ -942,17 +936,7 @@ Run は対象外）。
 （西暦の年・和暦の年・第 N 版。NFKC で比べる）が当たる旧版があれば（質問が「旧版」「改定前」などを尋ねるなら全部）、
 モデルへの結果に旧版も含めた検索し直しの案内（`superseded_versions`。旧版・当たった語と `next_step`。5 件まで。
 `superseded_versions_note`）を足す。今の版の年度だけを尋ねる質問には出さない。案内だけで、旧版を既定で検索に含めない。
-業務ガイドの照合（#1321・#1322）: 根拠を集めるだけの `rag_retrieve_evidence` は業務ガイド（確かめる条件・分岐・影響範囲）を
-見ないため、モデルが業務ガイドを引かずに根拠を集めると、確かめる条件があっても分岐ごとに答えてしまう（#1317 の実環境の
-評価）。モデルがその Run でその接続の `rag_lookup_guides`・`rag_search` を呼ばずに `rag_retrieve_evidence` を呼んだら、
-Control Plane が同じ接続の `rag_lookup_guides` を 1 回呼ぶ（質問は利用者の質問と根拠を集めた質問。前の Run で問いを
-確かめ中なら前の質問も含める。条件は前の Run までに分かった条件と、根拠を集めた呼び出しの `conditions`。検索・回答
-プロファイルは根拠を集めた呼び出しのもの。モデルのツールと同じ境界を通し、step に残す〔trace_id は `guide_check_` で
-始まる〕。予算・消費には数えない）。最上位の業務ガイドと次の手を、モデルへの根拠の結果に `guide_check` として足す
-（`guide_check_note`。判断が `clarify` なら `ask_clarification`、`handoff` なら引き継ぎ、`branch` なら条件ごとに答える、
-`answer` なら分かっている条件に当たる場合の手順だけを答え、係るときだけ影響範囲・承認を示す）。照合の結果
-（業務ガイド・分かった条件・確かめ中の問い）は支援タスクの状態にも残す。モデルが自分で `rag_lookup_guides` を呼んだときも、同じ次の手を結果に `next_step` として足す（答える判断なら、業務ガイドは資料の根拠ではないので、根拠を集めて確かめてから答えるよう添える）。
-業務ガイドの手順を段として引く（#2396。動的な多段）: `rag_lookup_guides` は手順の中身（目的・検索の手がかり`retrieval_hints`・参照の資料と頁 `references`・必要な根拠・終わりの条件）・当たる分岐・共通の資料・完了の条件を返し、分かっている条件で外れた分岐の手順は返さない。判断が `answer` / `branch` で手順があれば、次の手に手順ごとの検索の語（手がかり、無ければ題名）と参照の資料・頁（`steps`）と「手順を段として順に引く」を足す（`guide_steps.guide_steps_next_step`。この実行で残る検索の回数が手順の数より少なければ、手順の語をまとめて `rag_retrieve_evidence` を 1 回呼び、参照の頁は予算の外の `rag_read_document` で読む案内にする）。この Run の根拠（根拠を集める・読むツールの結果）が手順に紐づくかは決定的に判定する（参照の文書で頁が重なる・呼び出しの query に手順の手がかりが出る・根拠の本文に手がかりが出る）。回答を確定する前に、根拠で確かめられる手順（手がかりか参照を持つ手順）のうち根拠の無い手順があれば、略号・別名と同じ 1 回の枠で、手順と検索の手がかり・参照の頁を挙げて差し戻す（`guide_steps.unresolved_guide_steps`。経過の`tool_grounding` の `guide_step_retry`。略号・別名も残っていれば 1 つの差し戻しにまとめる）。手順ごとの根拠の有無は支援タスクの状態の `guide.steps` に残す。根拠の `references` に別の文書（`document_title`）があれば、同じ文書の参照（`text_references`）と同じ形で、参照先の文書名と表記で引く手がかりを結果の `references` に足す。
+根拠の `references` に別の文書（`document_title`）があれば、同じ文書の参照（`text_references`）と同じ形で、参照先の文書名と表記で引く手がかりを結果の `references` に足す。
 回答の最終の検証（#1246・#1277）: `AGENT_FINAL_VALIDATION_ENABLED`（既定 true）が true のとき、RAG の根拠を使った Run の
 回答を保存する前に、Control Plane が（モデルではなく）根拠を返した MCP 接続ごとに `rag_validate_answer` を呼ぶ。渡すのは
 その Run の質問・回答と、その接続の `rag_search` / `rag_retrieve_evidence` が返した根拠と `rag_read_source` / `rag_read_document` /
@@ -962,9 +946,7 @@ Control Plane が同じ接続の `rag_lookup_guides` を 1 回呼ぶ（質問は
 新しい呼び出しから順で、`rag_read_document` / `rag_read_section` でまとめて読んだ chunk のうち回答に当たらないものは
 検索の根拠の後ろ。重複なし、接続ごとに 30 件まで。前の段の根拠を上限で落とさない。会話の続きでは、同じ会話の前のターン〔モデルに渡す往復の数まで〕の最終の検証で回答の段落を裏付けた〔`supported`〕根拠も、その Run で根拠を返した接続に 10 件まで入れ、回答に当たる根拠の後ろ・残りの根拠の前に置く。前のターンの事実を言い直した段落を今のターンの根拠だけで外さないため。本文は RAG が今の権限・データの範囲・版で読み直す。#1837）と、その接続の `rag_search` の `trace_id`
 （`answer_trace_ids`。新しい順・10 件まで。#1527。RAG の回答の監査を通った説明と本文・根拠が同じ段落は、RAG がその判定を使って
-モデルに渡さない。根拠は RAG が今の権限と版で読み直す）と、その接続の最も新しい `rag_search` の `requests`・`gaps`・業務ガイド（`guide`。
-無ければ同じ接続の最も新しい `rag_lookup_guides` の最上位。判断が `answer` / `branch` で、検索・回答プロファイルが
-分かるときだけ。分かっている条件を `conditions` に入れる）で、RAG の決定的な検査（要求の充足・手順の順序と分岐・
+モデルに渡さない。根拠は RAG が今の権限と版で読み直す）と、その接続の最も新しい `rag_search` の `requests`・`gaps` で、RAG の決定的な検査（要求の充足・
 影響範囲・承認。#1276）も動かす。利用者が回答前の確認で答えた内容（この Run で答えた `ask_user_confirmation` と、前の Run の
 確認に答えて作った Run の `clarification_response`。「確認せずに回答」は除く）は、確認事項の文と答えを前提（`premises`。10 件まで。
 #1898）として渡し、RAG は資料ではない前提として根拠と並べて、答えをそのまま述べた段落と、資料の規則を答えに当てはめた結論を
@@ -997,7 +979,7 @@ Control Plane が同じ接続の `rag_lookup_guides` を 1 回呼ぶ（質問は
 箇条書き・一覧の外の段落・名前だけの項目には付けない。項目の行に中身を書いた一覧と、名前の項目（「1. **確認**」）の下に中身が
 1 行ずつの一覧は順の手順として後の項目へ広げ、名前の項目の下に中身が複数の行ある一覧（並列の方法・場合分け）は、各項目を
 Markdown の見出しで切った節と同じく独立させ、同じ項目の中だけで付ける（語ではなく一覧の構造で決める。#2735）。決定的な
-検査の error（要求の不足は `requests`、手順・影響範囲・業務ガイドの版は `guide_check`）と、根拠を 1 件も読めない
+検査の error（要求の不足は `requests`）と、根拠を 1 件も読めない
 （`no_evidence`。すべての主張の段落を未確認にする）は本文を置き換えず、回答全体の警告（`answer_warnings`）にする（warning の
 指摘は出さない）。RAG もモデルが省いて書いた根拠の ID を、1 つの根拠に決まるときは結び付ける（モデルの ID で決まらないときは段落そのものが書いた「【証拠 ID …】」で結び付け、引用した ID がすべて根拠に決まる段落はモデルが `citation_error` を返しても出典の誤りにしない〔`unassessed`〕。#1404。根拠の ID を書かない結論・まとめの段落の出典が決まらないときは、回答の他の段落が引いた根拠だけで確かめ直し、裏付けられれば `supported` にする。#1412。質問・回答が対象〔会社・台帳・版・年度・部署〕を限定しているときは、範囲の外の根拠との違いを `contradicted` にしない。#1413）。検証そのもの（接続・呼び出し・応答）が失敗したら、または
 接続が検証を提供しなければ、`unvalidated` にして回答は消さずに「この回答は資料との照合を終えられず、本質問の条件への該当は確認できていません。」を足す（RAG の「参考情報」の説明と同じ言い方。#2707）。RAG が時間の上限
@@ -1010,7 +992,7 @@ Markdown の見出しで切った節と同じく独立させ、同じ項目の�
 資料の主張を含まないので `skipped`（`clarification_only`）にして注記しない（#1306。質問の前置き〔「条件を 1 つ確かめさせてください。」「その点がまだ分かっていません。」〕と、答え方の案内・確かめる理由の括弧〔「（「個別」または「グループ」でお答えください。…）」〕も質問の一部として扱う。操作・数量・逆接を含む文は除く。#1454。あいさつ・お礼の決まった文〔「こんにちは。」「お疲れさまです。」「ありがとうございます。」。語を固定する〕も前置きとして扱い、「こんにちは。ご用件をお知らせください。」は確認の質問にする。あいさつだけで質問・依頼の無い回答は確認の質問にしない。#1879。お礼への返事〔「どういたしまして。」「お役に立ててよかったです。」〕と、くだけたあいさつ〔「よろしくお願いします。」〕も前置きにする。#1929）。資料に無い・答えられないことだけを述べる回答〔すべての段落が資料に記載が無い・答えられないと述べる文〔前に調べたことだけを述べる節が付いたものを含む〕・拒答に添える結びの決まった文〔「ご了承ください。」「申し訳ありません。」〕・見出しのどれかで、不足の文が 1 つ以上あるもの。数量・逆接・操作を含む文は除く。`answer_passages.is_absence_only`〕も、資料の主張を含まないので `skipped`（`absence_only`）にして注記しない（#1879。画面の「資料で確かめた結果」は「検証の対象外」と答えられないことだけを伝えた旨を出す。Run の事実の検証の結果は `skipped` で、「根拠を使わずに答えた」に数えない）。会話の続きで、今のターンのモデルが根拠・データのツールで結果を得ずに答えた（「前の回答を表にして」などの整形・言い換え）ときは、前のターンの検証で回答の段落を裏付けた根拠（#1837 の引き継ぎの根拠）があれば、その根拠だけで検証する（#1879。`answer_validation.carried_evidence_groups`。接続は前のターンの検証の接続〔`<接続>__rag_search` の名前で引く〕。前のターンの事実を言い直した段落は裏付けられ、新しい主張は確かめられない段落として印が付く。引き継ぐ根拠が無ければ今までどおり `no_rag_evidence`）。主張ではない段落（見出し〔句点で終わらない短い名詞句〔「1. 人事評価システムの重要度」「補足（資料の記載）」「根拠」。項目・区分・資料の名前か「…とき」「…か」で終わり、述語・操作・数量・言い切りの「は」を含まないもの〕と、以降の箇条書きを導くだけの導入の文〔「根拠は次のとおりです。」〕・礼と締めくくりの定型の文〔「以上、資料に基づく回答です。」。語の組み合わせを固定する。#1833〕を含む。「1. 運行管理課長」「重要度は A です」は主張のまま。#1469。番号つきの行は段落だけでは決めず、次の行がその下の内容〔字下げした行・箇条書き〕のときだけ見出しにし、番号の行が続く一覧の項目〔「1. 変更の内容と理由」〕は主張のまま。#1481 / #1482。箇条書きの行〔「- 」「・」〕も同じく、次の行が下位の内容〔より深く字下げした行・「→」の行〕のときだけ見出しにし、同じ字下げの箇条書きの行が続く一覧の項目〔「ご確認いただきたい点」の「- 組織規程（ご担当部署の承認者）」〕は主張のまま。`list_heading_lines`。#1486。両方のテストが `platform/contracts/answer-passages/headings.json` の同じ事例で確かめる〕・
 出典の行〔「セクション:」「ページ:」などの位置のラベル・根拠の ID の括弧を含む。#1317。要素の定位子（`*Locator*: …`）・〔証拠 ID: …〕・文書名と場所の括弧だけの行〔「**システム変更手順書**（第 2章 申請）」〕も。場所の後に本文が続く行は主張のまま。#1370。「場所：」「該当箇所：」などの場所のラベルの行は、値が文書の場所〔章・節・頁・ファイル名と節の題〕だけのときに限る〔「- 場所：第 2 章「締め日と支払日」」。「場所：本社 3 階の会議室」は主張〕。#1833。規則は RAG と同じで、両方のテストが `platform/contracts/answer-passages/citation-lines.json` の同じ事例で確かめる〕・Markdown の表の区切りと
 見出しの行〔#1317。表の本文の行は主張のまま〕・利用者への質問・資料に記載が無いことだけを述べる文と答えられないと
-言い切る拒答の文〔#1317〕・業務ガイドが見つからなかったことだけを述べる文〔作業の経過。前置きに主張・数字・引用を含む文と操作の指示を含む文は除く。不足の印にはしない。規則は RAG と同じで、両方のテストが `platform/contracts/answer-passages/process-notes.json` の同じ事例で確かめる。#1452〕・最終の検証が足す節）は、RAG の判定にかかわらず外さず、印も付けない（#1306。`answer_passages`
+言い切る拒答の文〔#1317〕・最終の検証が足す節）は、RAG の判定にかかわらず外さず、印も付けない（#1306。`answer_passages`
 が決定的に判定し、成果物の段落に `non_claim` を付ける。迷うもの・数量や操作を抱き合わせた文は主張として扱う）。RAG の
 `rag_validate_answer` も、見出し・出典の行・表の区切りと見出し・質問は監査せず `claims` に含めない。矛盾の段落を外した後に
 見出し・出典・表の形だけが残れば、それも消す。利用者に現場のデータ・記録（ログ・設定値・明細など）の確認を求める段落
@@ -1023,24 +1005,20 @@ Markdown の見出しで切った節と同じく独立させ、同じ項目の�
 （AnswerEnvelope）と同じ語彙の対応（`answered` / `conditional` / `needs_clarification` / `needs_environment_data` /
 `needs_human` / `insufficient_evidence`）を、モデルを呼ばずに決めて残す（`answer_outcome`。内容は `value`・決めた手がかりの
 `basis`・最後の `rag_search` の対応 `rag_outcome`・不足の印 `signals`）。決め方は上から順に、空の回答 → 拒答、確認の質問
-だけの回答 → `needs_clarification`、最終の検証が業務ガイドの手順・影響範囲・版の検査の error を回答全体の警告にした → `needs_human`（`basis` は `validation_guide_check`。どの段落の手順が誤りかを決められないので人が確かめる。本文は出す。#1491・#2738）、最終の検証が残った主張の段落をすべて未確認とした（根拠で確かめた段落が 1 つも無い。`no_evidence` を含む）か主張の段落をすべて矛盾で外した → 拒答（`basis` は `validation_nothing_confirmed`。本文と印は出す。#2738。未確認の理由が確かめが終わっていない〔`unassessed`〕か、監査は根拠で裏付けた〔`audit_status=supported`〕のに監査が写した原文・返した根拠の ID を根拠に結び付けられなかっただけ〔監査の応答の側の照合の誤り。`reference_check` が `quote_unmatched`・`audit_id_invalid` など。回答が書いた ID の誤り `answer_id_invalid` は含めない〕の段落しか無いときは、根拠が無いことを示さないので拒答に数えず、未確認の印つきの回答として下の規則で決める。#104・#108。RAG はその段落を誤りを差し戻して 1 回だけ監査し直し、同じ照合を通れば `supported`〔`reference_reaudit: adopted`〕にする。照合に失敗した判定の、監査が写した原文 `support_quote` と返した ID `audit_evidence_id` は、成果物の `result.claims` に残す。#112）、回答が最後の `rag_search` に拠る（その後に
+だけの回答 → `needs_clarification`、最終の検証が残った主張の段落をすべて未確認とした（根拠で確かめた段落が 1 つも無い。`no_evidence` を含む）か主張の段落をすべて矛盾で外した → 拒答（`basis` は `validation_nothing_confirmed`。本文と印は出す。#2738。未確認の理由が確かめが終わっていない〔`unassessed`〕か、監査は根拠で裏付けた〔`audit_status=supported`〕のに監査が写した原文・返した根拠の ID を根拠に結び付けられなかっただけ〔監査の応答の側の照合の誤り。`reference_check` が `quote_unmatched`・`audit_id_invalid` など。回答が書いた ID の誤り `answer_id_invalid` は含めない〕の段落しか無いときは、根拠が無いことを示さないので拒答に数えず、未確認の印つきの回答として下の規則で決める。#104・#108。RAG はその段落を誤りを差し戻して 1 回だけ監査し直し、同じ照合を通れば `supported`〔`reference_reaudit: adopted`〕にする。照合に失敗した判定の、監査が写した原文 `support_quote` と返した ID `audit_evidence_id` は、成果物の `result.claims` に残す。#112）、回答が最後の `rag_search` に拠る（その後に
 根拠を集め直していない）ならその対応（`needs_environment_data` の後に現場のデータの道具が成功したら `answered` /
 `conditional`、確認を求められたが質問だけでなく答えたら `conditional`、`answered` でも回答が不足を示せば `conditional`）、
-`rag_search` に拠らず業務ガイドの判断が人への引き継ぎなら `needs_human`、それ以外は Agent が自分で組み立てた回答として
+それ以外は Agent が自分で組み立てた回答として
 段落で決める（現場のデータの道具〔業務プロファイルの一覧・推薦 `nl2sql_list_profiles` などは、使える業務データを探すだけで値・記録を確かめないので数えない。拒答の段階 `refusal_stage` と同じ定義。#108〕を使っておらず、Run のどれかの `rag_search` が `insufficient_evidence` を返し、回答の最初の段落〔結論。見出し・出典を除く〕が質問の対象を資料から確かめられないと述べたら、調べた資料の一覧・近い規定の紹介が続いても `insufficient_evidence`〔`basis` は `absence_conclusion`。参考の説明は本文に残す。#1454〕。それ以外は、主張の段落〔最終の検証が矛盾で外した段落と、実データの確認を促す段落〔RAG の判定 `data_confirmation` か、
 外していない `environment_check` の段落。#1317〕を除く〕が無ければ、実データの確認を促していれば `needs_environment_data`、
 それ以外は拒答。主張があり、不足の印〔資料に記載が無い文・拒答の文〔結論の段落が質問に答え〔補足の外の主張に、最終の検証が根拠で確かめた段落がある〕、不足の文が補足の段落〔見出しが「補足」「注記」などの節と「なお、」で始まる段落〕にだけあるときは、質問が求めない周辺の事柄の不足として印にせず、記録の `supplement_absence` だけを付ける。#1475〕・主張に添えた質問・モデルが書いた確かめられない点の節・
-最終の検証が矛盾で外した段落〔`contradicted_removed`〕・未確認の印の段落〔`unverified_passages`。#2738〕〔外した段落・未確認の段落が補足の段落にだけあり、結論の段落に最終の検証が根拠で確かめた段落があるときは印にせず、記録の `supplement_withheld` / `supplement_unverified` だけを付ける。#1491〕・決定的な検査の error・実データの確認・業務ガイドの条件が分からないまま答えた〔`guide_conditions`。
-最後の `rag_search` の後の最も新しい `rag_lookup_guides`〔モデルか Control Plane の照合〕の最上位の業務ガイドの判断が
-`clarify` / `branch` なのに、確認の質問だけで答えなかった。#1321・#1322〕〕があれば `conditional`、無ければ `answered`。警告の印〔規則の検査・続く手順〕だけなら不足の印にせず、記録の `rule_warnings` だけを付ける。#2738）。決められなければ `outcome` を付けずに回答を保存する。業務支援の評価（#1289 の D）は
+最終の検証が矛盾で外した段落〔`contradicted_removed`〕・未確認の印の段落〔`unverified_passages`。#2738〕〔外した段落・未確認の段落が補足の段落にだけあり、結論の段落に最終の検証が根拠で確かめた段落があるときは印にせず、記録の `supplement_withheld` / `supplement_unverified` だけを付ける。#1491〕・決定的な検査の error・実データの確認〕があれば `conditional`、無ければ `answered`。警告の印〔規則の検査・続く手順〕だけなら不足の印にせず、記録の `rule_warnings` だけを付ける。#2738）。決められなければ `outcome` を付けずに回答を保存する。業務支援の評価（#1289 の D）は
 これで採点する（`rag/evaluation/business-support/README.md`）。モデルに対応を申告させる（構造化出力）方式は、回答の形が
 Agent ごとに変わり、申告と本文の食い違いの扱いも要るため採らない。
 根拠・データのツールを呼ばずに作った回答の拒答（#1835）: `AGENT_TOOL_GROUNDING_REQUIRED`（既定 true）が true のとき、
 その Run でモデルに根拠・データのツール（MCP 接続のツール。一覧・推薦の `rag_list_search_answer_profiles` /
 `nl2sql_list_profiles` / `nl2sql_recommend_profile` と Control Plane が呼ぶ `rag_validate_answer` /
-`nl2sql_cancel_requirement` を除く。Control Plane のツールは数えない。業務ガイドの照合 `rag_lookup_guides` は当たる業務
-ガイドを返したときだけ数える〔業務ガイドが無いことは資料が無いことではない。0 件の結果には資料の根拠を集める次の手
-`NO_GUIDE_HINT` を足す。#2504〕）を渡した Run で、モデルがどれも呼ばずに最終の回答を
+`nl2sql_cancel_requirement` を除く。Control Plane のツールは数えない）を渡した Run で、モデルがどれも呼ばずに最終の回答を
 作ったら、回答を確定する前に（最終の検証の前に）1 回だけ「業務の事実はツールで確かめてから答える。曖昧なら確認の質問だけを
 返してよい。ツールで調べても確かめられないなら答えられないと答える」を利用者のメッセージとしてモデルへ返して Run を続ける
 （差し戻しは調べていない回答にだけ行うので、範囲外かを調べずに決めてよいとは書かない。回答の結論が範囲外・答えられないと
@@ -1056,7 +1034,7 @@ SDK の Agent・ツール・予算。利用量は前の分に積む。差し戻�
 `before_tools` / `after_tools`）を持ち、集計は `refused_before_tools` / `refused_after_tools` で数える（調べた結果として根拠が
 無かった拒答と、調べずに拒答したものを分ける）。差し戻し・拒答と元の回答は Run の経過（イベントの
 `tool_grounding`）にだけ残す。呼んだかは Run の step で数え（失敗・承認の却下・評価の dry-run・無人の Run で承認が要るため
-呼ばなかったものも数える）、Control Plane が自分で呼んだもの（確認の取り消し・業務ガイドの照合）は数えない。対象外は、
+呼ばなかったものも数える）、Control Plane が自分で呼んだもの（確認の取り消し）は数えない。対象外は、
 確認のツールを渡さない Run（上限に達した Run）の確認の質問だけの回答・NL2SQL の SQL の生成前の確認で止まった Run・利用者が確認を取り消した Run（#1441・#1445）・根拠・データの
 ツールを持たない Agent・同じ会話の前の Run（会話の履歴の上限 `PLATFORM_CHAT_HISTORY_MAX_TURNS` の中。#1818）のどれかが
 根拠・データのツールを呼んで結果を得て答えた Run（「前の回答を表にして」「もっと短く」などの言い換え・整形。前のターンの事実の
@@ -1067,7 +1045,7 @@ SDK の Agent・ツール・予算。利用量は前の分に積む。差し戻�
 ツールが返した理由に「資料・業務データに根拠が無いという意味ではありません」を添える）にする（`tool_grounding.grounding_failure`）。
 検索を終えられなかった回答を、資料を調べた結果の根拠の不足と読ませないため。確認の質問だけの回答・NL2SQL の SQL の生成前の確認で
 止まった Run・承認で止まった Run は対象外。RAG は回答の pipeline の AI の API の失敗を、汎用の内部エラーではなく種類つきの
-5xx（`RAG_ANSWER_AI_API_FAILED`。`details` は種類・例外の型・呼び先の status と error code・工程・呼び先が示した待ちの秒数だけ）で返す（REST の検索・業務ガイドの下書きの試答も同じ分類の status と文。#2667）。
+5xx（`RAG_ANSWER_AI_API_FAILED`。`details` は種類・例外の型・呼び先の status と error code・工程・呼び先が示した待ちの秒数だけ）で返す（REST の検索も同じ分類の status と文。#2667）。
 差し戻しの文と本文の確認の質問は Run で分ける（`tool_grounding.retry_message`）: 確認のツール（`ask_user_confirmation`）を渡した
 Run は「先に資料・業務データのツールで調べ、決まらなければ確認のツールで聞く。本文に確認の質問を書かない」（#1881）、利用者に
 確認しない Run（方針 `assume` と「確認せずに回答」を選んだ Run と、無人の Run〔品質評価。利用者に聞けない。#1959〕。#1903）は

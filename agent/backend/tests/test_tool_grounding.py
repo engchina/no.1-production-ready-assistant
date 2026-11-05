@@ -728,9 +728,6 @@ def test_grounding_tools_and_attempts() -> None:
     assert not tool_grounding.grounding_attempted(
         [_step("nl2sql__nl2sql_query", trace_id="clarification_cancel_run-1_0")]
     )
-    assert not tool_grounding.grounding_attempted(
-        [_step("rag__rag_lookup_guides", trace_id="guide_check_run-1")]
-    )
 
 
 def test_refusal_text_examples_follow_the_tools() -> None:

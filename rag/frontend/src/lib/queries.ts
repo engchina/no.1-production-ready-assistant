@@ -89,8 +89,6 @@ import {
   type ApprovedFaqListData,
   type ApprovedFaqMutationData,
   type RuntimeKnowledgeEditRequest,
-  type SupportGuideContent,
-  type SupportGuideDetail,
 } from "./api";
 import { t } from "./i18n";
 import {
@@ -1091,18 +1089,12 @@ export const DOCUMENT_CANDIDATE_PAGE_SIZE = 100;
 /**
  * 文書を選ぶ一覧の候補（文書名のサーバー側検索 + ページング。#600）。数千〜数万件の文書を一度に読まず、
  * `fetchNextPage` で続きを積む。検索語を変えている間は直前の候補を出したままにする。
- * `knowledgeBaseIds` を渡すと、そのナレッジベースのどれかに所属する文書に絞る（業務ガイドの資料。#2749）。
  */
-export function useDocumentCandidates(
-  params: { q?: string; knowledgeBaseIds?: readonly string[] },
-  options: { enabled?: boolean } = {},
-) {
-  const knowledgeBaseId = params.knowledgeBaseIds ? [...params.knowledgeBaseIds].sort().join(",") : undefined;
+export function useDocumentCandidates(params: { q?: string }, options: { enabled?: boolean } = {}) {
   return useInfiniteQuery({
     queryKey: [
       ...queryKeys.documents({
         q: params.q,
-        knowledge_base_id: knowledgeBaseId,
         limit: DOCUMENT_CANDIDATE_PAGE_SIZE,
       }),
       "candidates",
@@ -1110,7 +1102,6 @@ export function useDocumentCandidates(
     queryFn: ({ pageParam }) =>
       api.listDocuments({
         q: params.q,
-        knowledge_base_id: knowledgeBaseId,
         limit: DOCUMENT_CANDIDATE_PAGE_SIZE,
         offset: pageParam,
       }),
@@ -1263,7 +1254,7 @@ export function useEntityIndexCoverage(knowledgeBaseIds: readonly string[], enab
 }
 
 /**
- * プロファイルの窓口の上書きと業務ガイドの引き継ぎ先が継承する、システム設定の窓口（#2683）。
+ * プロファイルの窓口の上書きが継承する、システム設定の窓口（#2683）。
  * 空の欄の placeholder と「有効な窓口」の出どころに使う（値は入力欄にコピーしない）。
  */
 export function useInheritedAnswerContact() {
@@ -1379,130 +1370,6 @@ export function useEditRuntimeKnowledge(searchAnswerProfileId: string) {
         ["search-answer-profiles", searchAnswerProfileId, "runtime-knowledge"],
         data,
       );
-    },
-  });
-}
-
-// --- 業務ガイド（#1237） ---
-
-function supportGuideKeys(searchAnswerProfileId: string) {
-  const root = ["search-answer-profiles", searchAnswerProfileId, "support-guides"] as const;
-  return {
-    root,
-    list: (includeArchived: boolean) => [...root, "list", includeArchived] as const,
-    detail: (guideId: string) => [...root, "detail", guideId] as const,
-    revision: (guideId: string, revision: number) =>
-      [...root, "revision", guideId, revision] as const,
-  };
-}
-
-/** 業務ガイドの一覧（アーカイブを含めるかを選べる）。 */
-export function useSupportGuides(
-  searchAnswerProfileId: string,
-  includeArchived: boolean,
-  options: { enabled?: boolean } = {},
-) {
-  return useQuery({
-    enabled: options.enabled ?? true,
-    queryKey: supportGuideKeys(searchAnswerProfileId).list(includeArchived),
-    queryFn: () => api.listSupportGuides(searchAnswerProfileId, includeArchived),
-  });
-}
-
-/** 業務ガイドの下書き・公開の版・履歴。 */
-export function useSupportGuide(searchAnswerProfileId: string, guideId: string | null) {
-  return useQuery({
-    queryKey: supportGuideKeys(searchAnswerProfileId).detail(guideId ?? ""),
-    queryFn: () => api.getSupportGuide(searchAnswerProfileId, guideId as string),
-    enabled: guideId != null,
-  });
-}
-
-/** 公開した版の内容（「この版を見る」）。 */
-export function useSupportGuideRevision(
-  searchAnswerProfileId: string,
-  guideId: string | null,
-  revision: number | null,
-) {
-  return useQuery({
-    queryKey: supportGuideKeys(searchAnswerProfileId).revision(guideId ?? "", revision ?? 0),
-    queryFn: () =>
-      api.getSupportGuideRevision(searchAnswerProfileId, guideId as string, revision as number),
-    enabled: guideId != null && revision != null,
-  });
-}
-
-/**
- * 業務ガイドを変える操作（作成・下書きの保存・公開・ロールバック・アーカイブ）。
- * 返った詳細を詳細の cache に入れ、一覧を読み直す。
- */
-export function useSupportGuideMutation<TArgs>(
-  searchAnswerProfileId: string,
-  mutationFn: (args: TArgs) => Promise<SupportGuideDetail>,
-) {
-  const qc = useQueryClient();
-  const keys = supportGuideKeys(searchAnswerProfileId);
-  return useMutation({
-    mutationFn,
-    onSuccess: (data) => {
-      qc.setQueryData(keys.detail(data.guide_id), data);
-      void qc.invalidateQueries({ queryKey: [...keys.root, "list"] });
-    },
-  });
-}
-
-/** 下書きの保存（guideId が無ければ作成）。 */
-export function useSaveSupportGuide(searchAnswerProfileId: string) {
-  return useSupportGuideMutation(
-    searchAnswerProfileId,
-    ({
-      guideId,
-      draft,
-      baseRevision,
-    }: {
-      guideId: string | null;
-      draft: SupportGuideContent;
-      baseRevision: number | null;
-    }) =>
-      guideId && baseRevision != null
-        ? api.saveSupportGuideDraft(searchAnswerProfileId, guideId, draft, baseRevision)
-        : api.createSupportGuide(searchAnswerProfileId, draft),
-  );
-}
-
-/** 保存した下書きを公開の前と同じ規則で検証する（参照する資料も確かめる）。 */
-export function useValidateSupportGuide(searchAnswerProfileId: string) {
-  return useMutation({
-    mutationFn: (guideId: string) => api.validateSupportGuide(searchAnswerProfileId, guideId),
-  });
-}
-
-/** 取り込み（検証を通ったガイドを下書きとして作る）。 */
-/**
- * 保存した下書きで試しに答える（#1288）。公開の版・一覧は変わらないので、キャッシュは無効にしない。
- */
-export function useTrySupportGuideDraft(searchAnswerProfileId: string) {
-  return useMutation({
-    mutationFn: (args: {
-      guideId: string;
-      query: string;
-      draftRevision: number;
-      conditions: Record<string, string>;
-    }) =>
-      api.trySupportGuideDraft(searchAnswerProfileId, args.guideId, {
-        query: args.query,
-        draft_revision: args.draftRevision,
-        conditions: args.conditions,
-      }),
-  });
-}
-
-export function useImportSupportGuides(searchAnswerProfileId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (guides: unknown[]) => api.importSupportGuides(searchAnswerProfileId, guides),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [...supportGuideKeys(searchAnswerProfileId).root, "list"] });
     },
   });
 }

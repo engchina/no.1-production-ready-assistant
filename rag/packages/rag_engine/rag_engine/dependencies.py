@@ -8,12 +8,9 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pr_backend_core.observability.model_purpose import model_call_purpose
-
-if TYPE_CHECKING:
-    from rag_engine.ports import Embedder
 
 
 @dataclass(frozen=True)
@@ -39,9 +36,6 @@ class AnswerDependencies:
     inquiry_conditions・settings を keyword で受け取り、続く search が同じ検索文の結果を読めるよう呼び出し元の
     cache に入れる（戻り値は使わない）。結果を変えない（search の結果は並行にしないときと同じ）実装だけを渡す。
     省略時は先に読まない。
-    embedder は業務ガイドの手順の充足で、根拠を共有する手順のどれを item が説明したかを語で決められないときに、
-    意味の近さで決める embedding（`ports.Embedder`。索引と同じ 埋め込みモデル。#2649）。省略時は
-    語の判定だけで決める。
     report_degraded は補助の処理（画面の選択など）が失敗して空のまま続けたことを、処理の種類と例外を受け取って
     呼び出し元の診断に残す（#3259。例外の文は呼び出し元が残さない）。省略時は残さない。
     """
@@ -57,7 +51,6 @@ class AnswerDependencies:
     section_outline: Callable[..., Any] | None = None
     section_chunks: Callable[..., Sequence[Any]] | None = None
     prefetch_search: Callable[..., Any] | None = None
-    embedder: "Embedder | None" = None
     report_degraded: Callable[[str, BaseException], None] | None = None
     # 精排・起点選択の後に親/近傍を読む。未指定の SDK は取得済みの原文だけで構築する。
     context_chunks: Callable[..., Sequence[Any]] | None = None
@@ -124,12 +117,6 @@ def section_dependencies() -> tuple[Callable[..., Any], Callable[..., Sequence[A
     if current is None or current.section_outline is None or current.section_chunks is None:
         return None
     return current.section_outline, current.section_chunks
-
-
-def injected_embedder() -> "Embedder | None":
-    """注入された embedding（#2649）。注入が無ければ None（業務ガイドの手順の充足を語の判定だけで決める）。"""
-    current = _active.get()
-    return None if current is None else current.embedder
 
 
 def report_degraded(kind: str, exc: BaseException) -> None:

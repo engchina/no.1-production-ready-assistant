@@ -1104,7 +1104,7 @@ class _DraftArrayRepetition:
         self.buffer += text
         while self.cursor < len(self.buffer):
             if not self.in_array:
-                match = re.search(r'(?<!\\)"(?:request_coverage|guide_coverage|items)"\s*:\s*\[', self.buffer[self.cursor :])
+                match = re.search(r'(?<!\\)"(?:request_coverage|items)"\s*:\s*\[', self.buffer[self.cursor :])
                 if match is None:
                     return False
                 self.cursor += match.end()

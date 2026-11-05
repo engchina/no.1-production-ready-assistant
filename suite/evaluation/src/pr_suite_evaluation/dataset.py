@@ -362,15 +362,3 @@ def load_dataset(path: Path, *, documents: Mapping[str, str] | None = None) -> L
         name=path.name,
         sha256=canonical_sha256(dataset.model_dump(mode="json")),
     )
-
-
-def condition_labels(guides: Mapping[str, Any]) -> dict[str, str]:
-    """業務ガイド（`{"guides": [...]}`）の条件の id → 名前（既知の条件を質問の文に書くため）。"""
-    labels: dict[str, str] = {}
-    for guide in guides.get("guides") or []:
-        if not isinstance(guide, Mapping):
-            continue
-        for condition in guide.get("conditions") or []:
-            if isinstance(condition, Mapping) and condition.get("id") and condition.get("label"):
-                labels[str(condition["id"])] = str(condition["label"])
-    return labels

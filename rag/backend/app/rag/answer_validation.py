@@ -3,10 +3,9 @@
 呼び出し側（Agent など）が渡した根拠の参照（document_id・chunk_id）を、今の利用者の権限と今の版で
 読み直し（呼び出し側の本文は信じない）、回答の主張を rag_engine の監査（モデル 1 回）で確かめる。
 
-呼び出し側が AnswerEnvelope の要求や業務ガイドの参照を渡したときは、決定的な検査（`answer_checks`。
-モデルは呼ばない）も行い、結果を findings として主張の監査と並べて返す（#1276）。業務ガイドは
-呼び出し側の内容を信じず、今の利用者の権限で検索・回答プロファイルを確かめ、公開の版をストアから読み直す。
-error の finding があれば valid にしない。
+呼び出し側が AnswerEnvelope の要求を渡したときは、決定的な検査（`answer_checks`。モデルは呼ばない）
+も行い、結果を findings として主張の監査と並べて返す（#1276）。error の finding があれば valid に
+しない。
 
 呼び出し側が `rag_search` の回答の記録（trace_id）を渡したときは、その記録を今の利用者の範囲で
 読み、監査を通った説明と本文が同じ段落は、根拠を今の権限と版で読み直して本文が変わって
@@ -44,7 +43,6 @@ from typing import Any
 
 from rag_engine.evaluation.answer_validation import MAX_DATA_RESULTS, MAX_PREMISES, is_premise_id
 from rag_engine.generation.table_records import TABLE_RECORD_KEY
-from rag_engine.resources.deadline import remaining_seconds
 from rag_engine.resources.runtime import bind_prompt_overrides, saved_prompt_overrides
 from rag_engine.resources.tracing import bind_trace_observer, observe_call
 from rag_parser_core.sheet_records import (
@@ -57,18 +55,13 @@ from rag_parser_core.sheet_records import (
 )
 
 from app.clients.oracle import OracleClient
-from app.clients.support_guide_store import SupportGuideStore
 from app.config import (
     Settings,
     enterprise_ai_connection_for_model,
     enterprise_ai_default_model_id,
     enterprise_ai_reasoning_effort_to_send,
 )
-from app.rag.answer_checks import (
-    AnswerFinding,
-    check_impact,
-    check_requests,
-)
+from app.rag.answer_checks import AnswerFinding, check_requests
 from app.rag.answer_engine import (
     ANSWER_CITATION_LINES_KEY,
     _sheet_location,
@@ -81,9 +74,7 @@ from app.rag.answer_threads import (
     validation_executor,
 )
 from app.rag.figure_region import figure_evidence_type
-from app.rag.guide_step_validation import guide_step_embed, guide_step_findings
 from app.rag.semantic_audit_policy import semantic_audit_is_diagnostic_only
-from app.schemas.support_guide import SupportGuideContent
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +84,7 @@ logger = logging.getLogger(__name__)
 _TABLE_RECORD_BASES = frozenset({ROW_BASIS_SHEET, ROW_BASIS_CSV})
 
 # 期限の後、thread が確かめ終わった組の判定をまとめて返すまでに待つ秒数（#2700。
-# LLM は呼ばない処理だけ）。業務ガイドの手順の意味の判定の embedding（1 回）は、期限の残りが
-# これより短ければ呼ばない。
+# LLM は呼ばない処理だけ）。
 VALIDATION_FINALIZE_SECONDS = 5.0
 # どの段落も監査し終わらなかった（`rag_engine` の STATUS_TIMED_OUT と同じ値）。
 STATUS_TIMED_OUT = "timed_out"
@@ -115,20 +105,6 @@ class EvidenceRef:
     chunk_id: str
 
 
-@dataclass(frozen=True)
-class GuideCheckRef:
-    """回答が沿った業務ガイド（検索・回答プロファイル・guide_id・公開の版・分かっている条件）。"""
-
-    search_answer_profile_id: str
-    guide_id: str
-    revision: int
-    conditions: Mapping[str, str] = field(default_factory=dict)
-
-
-class GuideProfileNotFoundError(LookupError):
-    """業務ガイドの検索・回答プロファイルが無いか、利用できる範囲の外。"""
-
-
 @dataclass
 class AnswerValidation:
     status: str
@@ -138,20 +114,14 @@ class AnswerValidation:
     missing_evidence: list[EvidenceRef] = field(default_factory=list)
     stale_evidence: list[EvidenceRef] = field(default_factory=list)
     evidence_truncated: bool = False
-    # 決定的な検査（#1276）。checks は行った検査（requests / guide_steps / impact）。
+    # 決定的な検査（#1276）。checks は行った検査（requests）。
     findings: list[AnswerFinding] = field(default_factory=list)
     checks: list[str] = field(default_factory=list)
-    # 検査に使った業務ガイドの公開の版（業務ガイドを渡さなければ None）。
-    guide_revision: int | None = None
     # RAG の回答の監査の判定を再利用した段落の数（#1527。モデルに渡さなかった段落）。
     reused_claims: int = 0
     # 時間の上限までに監査し終わらなかった段落の数（#2700。status=partial のときの
     # unassessed の段落）。
     timed_out_claims: int = 0
-    # 業務ガイドの手順ごとの充足（#2708。`guide_step_validation`）と、意味の判定の embedding の
-    # 呼び出し。
-    guide_steps: list[dict[str, Any]] = field(default_factory=list)
-    guide_step_embedding: dict[str, Any] | None = None
     llm_usage: dict[str, Any] = field(default_factory=dict)
     reuse_context: str = ""
     # 原質問・確認の答えとの両立の比較（#3800。`premise_consistency_checks`）の、段落ごとの採否。
@@ -255,51 +225,6 @@ def is_valid(status: str, counts: dict[str, int], *, unreadable: int) -> bool:
     return counts.get("supported", 0) > 0
 
 
-async def _guide_findings(
-    oracle: OracleClient, answer: str, guide: GuideCheckRef
-) -> tuple[list[AnswerFinding], list[str], int | None, SupportGuideContent | None]:
-    """業務ガイドの公開の版を読み直し、影響範囲を確かめる（手順は主張の監査の後に確かめる。#2708）。
-
-    ストアの障害は例外のまま上げる（「業務ガイドが無い」と区別する。handoff §10）。
-    """
-    view = await oracle.get_search_answer_profile(guide.search_answer_profile_id)
-    if view is None:
-        raise GuideProfileNotFoundError(guide.search_answer_profile_id)
-    published = await SupportGuideStore(oracle).published_contents(view.id)
-    found = next(
-        ((revision, content) for gid, revision, content in published if gid == guide.guide_id),
-        None,
-    )
-    if found is None:
-        return (
-            [
-                AnswerFinding(
-                    "guide",
-                    "guide_unavailable",
-                    "error",
-                    "業務ガイドが公開されていないか、アーカイブされています。",
-                )
-            ],
-            ["guide"],
-            None,
-            None,
-        )
-    revision, content = found
-    findings: list[AnswerFinding] = []
-    if revision != guide.revision:
-        # 今の公開の版で確かめ、版が変わったことを示す（回答は作り直しが要る）。
-        findings.append(
-            AnswerFinding(
-                "guide",
-                "guide_revision_stale",
-                "error",
-                f"業務ガイドの版 {guide.revision} は古い版です（今の公開の版は {revision}）。",
-            )
-        )
-    findings += check_impact(answer, content, guide.conditions)
-    return findings, ["guide", "guide_steps", "impact"], revision, content
-
-
 # 監査の判定を再利用する回答の記録の数の上限（契約の maxItems）。
 MAX_ANSWER_TRACE_IDS = 10
 
@@ -313,7 +238,6 @@ def validation_reuse_context(
     evidence: Sequence[Mapping[str, Any]],
     premises: Sequence[Mapping[str, Any]],
     data_results: Sequence[Mapping[str, Any]],
-    guide: GuideCheckRef | None,
     requests: Sequence[Mapping[str, str]] | None,
     gaps: Sequence[str],
 ) -> str:
@@ -347,14 +271,6 @@ def validation_reuse_context(
             "evidence": list(evidence),
             "premises": list(premises),
             "data_results": list(data_results),
-            "guide": {
-                "profile": guide.search_answer_profile_id,
-                "id": guide.guide_id,
-                "revision": guide.revision,
-                "conditions": dict(guide.conditions),
-            }
-            if guide
-            else None,
             "requests": list(requests) if requests is not None else None,
             "gaps": list(gaps),
         }
@@ -449,7 +365,6 @@ async def audited_answer_lines(
 
 # 資料との照合の中の工程の名前（処理の経過の段。#3470）。名前は利用者向けの名詞（画面に
 # そのまま出る）。
-GUIDE_LOAD_STAGE = "業務ガイドの読み込み"
 EVIDENCE_LOAD_STAGE = "根拠の本文の読み込み"
 CLAIM_AUDIT_STAGE = "回答の段落の監査"
 
@@ -463,7 +378,6 @@ async def validate_answer(
     oracle: OracleClient | None = None,
     requests: Sequence[Mapping[str, str]] | None = None,
     gaps: Sequence[str] = (),
-    guide: GuideCheckRef | None = None,
     answer_trace_ids: Sequence[str] = (),
     premises: Sequence[Mapping[str, str]] = (),
     data_results: Sequence[Mapping[str, str]] = (),
@@ -471,7 +385,7 @@ async def validate_answer(
 ) -> AnswerValidation:
     """回答の本文を根拠と照合する（MCP の `rag_validate_answer` と回答フローの「資料との照合」）。
 
-    中の工程（業務ガイドの読み込み・根拠の本文の読み込み・回答の段落の監査）とモデルの呼び出し
+    中の工程（根拠の本文の読み込み・回答の段落の監査）とモデルの呼び出し
     は、検索・回答と同じ回答エンジンの観測（`_observe_engine_call`）で span にする（#3470。MCP の
     呼び出しはパイプラインを通らないので、ここで結ぶ）。
     """
@@ -486,7 +400,6 @@ async def validate_answer(
             oracle=oracle,
             requests=requests,
             gaps=gaps,
-            guide=guide,
             answer_trace_ids=answer_trace_ids,
             premises=premises,
             data_results=data_results,
@@ -503,7 +416,6 @@ async def _validate_answer(
     oracle: OracleClient | None,
     requests: Sequence[Mapping[str, str]] | None,
     gaps: Sequence[str],
-    guide: GuideCheckRef | None,
     answer_trace_ids: Sequence[str],
     premises: Sequence[Mapping[str, str]],
     data_results: Sequence[Mapping[str, str]],
@@ -512,31 +424,18 @@ async def _validate_answer(
     started = time.monotonic()
     limit = float(settings.rag_answer_validation_timeout_seconds)
     oracle = oracle or OracleClient()
-    # 決定的な検査を先に行う（業務ガイドを読めなければ、モデルを呼ぶ前に止める）。
+    # 決定的な検査を先に行う。
     findings: list[AnswerFinding] = []
     checks: list[str] = []
-    guide_revision: int | None = None
     if requests is not None:
         findings += check_requests(answer, requests, gaps)
         checks.append("requests")
-    guide_content: SupportGuideContent | None = None
-    if guide is not None:
-        with observe_call("stage", GUIDE_LOAD_STAGE):
-            guide_items, guide_checks, guide_revision, guide_content = await _guide_findings(
-                oracle, answer, guide
-            )
-        findings += guide_items
-        checks += guide_checks
     deterministic: dict[str, Any] = {
         "findings": findings,
         "checks": checks,
-        "guide_revision": guide_revision,
     }
     items: list[dict[str, Any]] = []
     evidence_versions: dict[str, dict[str, Any]] = {}
-    # 根拠の chunk の id → 文書の id（業務ガイドの手順の参照の照合に使う。監査のモデルには
-    # 渡さない）。
-    documents: dict[str, str] = {}
     reuse_context = ""
     missing: list[EvidenceRef] = []
     stale: list[EvidenceRef] = []
@@ -560,7 +459,6 @@ async def _validate_answer(
             }
             # 図の根拠には種類を付ける（図の見た目だけで決まる主張を本文の照合と分ける。#2678）。
             figure = figure_evidence_type(metadata)
-            documents[chunk.chunk_id] = chunk.document_id
             # 表の 1 行の記録の根拠は、検査が同じ表に組み直すための位置を持つ（#2594。
             # モデルには渡さない）。
             record = table_record(chunk.document_id, metadata)
@@ -591,7 +489,6 @@ async def _validate_answer(
                 ],
                 premises=premises,
                 data_results=data_results,
-                guide=guide,
                 requests=requests,
                 gaps=gaps,
             )
@@ -609,12 +506,7 @@ async def _validate_answer(
             if answer_trace_ids and items
             else {}
         )
-    conditions = dict(guide.conditions) if guide is not None else {}
     if not items:
-        if guide_content is not None:
-            findings += guide_step_findings(
-                answer, guide_content, conditions, None, [], embed=None
-            )[0]
         return AnswerValidation(
             status="no_evidence",
             valid=False,
@@ -624,7 +516,6 @@ async def _validate_answer(
         )
 
     usage: dict[str, Any] = {}
-    loop = asyncio.get_running_loop()
 
     def run() -> dict[str, Any]:
         from rag_engine.evaluation.answer_validation import validate_answer_claims
@@ -653,22 +544,6 @@ async def _validate_answer(
                 )
             finally:
                 usage.update(calls.snapshot())
-        if guide_content is not None:
-            # 業務ガイドの手順ごとの充足（#2708）。主張の監査で裏付けた段落と、手順の主の操作の
-            # 文を対応付ける。意味の判定の embedding は、期限の残りが短ければ呼ばない（#2700）。
-            completed = result.get("status") == "completed"
-            remaining = remaining_seconds()
-            room = remaining is None or remaining > VALIDATION_FINALIZE_SECONDS
-            result["guide_step_results"] = guide_step_findings(
-                answer,
-                guide_content,
-                conditions,
-                list(result.get("claim_checks") or []) if completed else None,
-                [{**item, "document_id": documents.get(item["id"], "")} for item in items],
-                embed=guide_step_embed(settings, loop)
-                if completed and room and guide_content.steps
-                else None,
-            )
         return result
 
     # 上限の残り（根拠の読み直しの分を引く）を thread の期限にし、LLM 1 回の timeout と
@@ -693,13 +568,6 @@ async def _validate_answer(
                 result = {"status": STATUS_TIMED_OUT}
     counts = {str(key): int(value) for key, value in (result.get("counts") or {}).items()}
     status = str(result.get("status") or "error")
-    if "guide_step_results" not in result and guide_content is not None:
-        # 監査が上限までに返らなかった: 手順の名前の一致で順序だけを確かめる（モデルは呼ばない）。
-        result["guide_step_results"] = guide_step_findings(
-            answer, guide_content, conditions, None, [], embed=None
-        )
-    step_findings, guide_steps, step_embedding = result.get("guide_step_results") or ([], [], None)
-    findings += step_findings
     blocking = any(item.severity == "error" for item in findings)
     timed_out = len(result.get("timed_out_passage_ids") or ())
     # 監査の応答の参照の誤りの監査し直し（#112。status と、対象・採った段落の数）。
@@ -718,7 +586,6 @@ async def _validate_answer(
             "validation_reference_reaudit": str(reaudit.get("status") or "not_run"),
             "validation_reference_reaudit_targets": len(reaudit.get("target_passage_ids") or ()),
             "validation_reference_reaudit_adopted": len(reaudit.get("adopted_passage_ids") or ()),
-            "validation_guide_step_embedding": step_embedding is not None,
             **{
                 f"validation_llm_{key}": round(float(usage.get(key) or 0), 1)
                 for key in _USAGE_LOG_KEYS
@@ -735,8 +602,6 @@ async def _validate_answer(
         evidence_truncated=bool(result.get("evidence_truncated")),
         reused_claims=len(result.get("reused_passage_ids") or ()),
         timed_out_claims=timed_out,
-        guide_steps=guide_steps,
-        guide_step_embedding=step_embedding,
         llm_usage=dict(usage),
         reuse_context=reuse_context,
         premise_consistency_checks=premise_check_records(result.get("premise_consistency_checks")),
@@ -749,8 +614,6 @@ __all__ = [
     "MAX_PREMISES",
     "AnswerValidation",
     "EvidenceRef",
-    "GuideCheckRef",
-    "GuideProfileNotFoundError",
     "evidence_location",
     "is_premise_id",
     "is_valid",

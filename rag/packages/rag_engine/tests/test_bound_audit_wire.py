@@ -15,19 +15,15 @@ from rag_engine.models.audit_wire import (
     canonical_audit_result,
     decode_audit_wire,
 )
-from rag_engine.models.llm import GroundedAudit, GroundedFactAudit, GroundedItemReview, GroundedRequestReview, GuideRequirementReview
+from rag_engine.models.llm import GroundedAudit, GroundedFactAudit, GroundedItemReview, GroundedRequestReview
 
 
 def sample_wire(*, fact: bool = False) -> tuple[type[Any], dict[str, Any]]:
     base = GroundedFactAudit if fact else GroundedAudit
-    schema = audit_wire_schema(base, ("Q1", "Q2"), ("step:0", "step:1"))
+    schema = audit_wire_schema(base, ("Q1", "Q2"))
     audit = GroundedAudit(
         reviews=[GroundedItemReview(index=0, support="supported", applicability="matched", reason="原文の操作")],
         request_reviews=[GroundedRequestReview(request_id=name, status="unknown", reason="未確認") for name in ["Q1", "Q2"]],
-        guide_requirement_reviews=[
-            GuideRequirementReview(requirement_id=name, answer_state="not_mentioned", item_indexes=[], reason="未説明")
-            for name in ["step:0", "step:1"]
-        ],
         summary_supported=False,
         goal_alignment="partial",
     )
@@ -43,52 +39,43 @@ def decode(value: dict[str, Any], schema: type[Any]) -> AuditWireResult:
 
 
 @pytest.mark.parametrize("fact", [False, True])
-def test_sdk_strict_schema_binds_both_id_sets_and_does_not_ask_for_child_ids(fact: bool) -> None:
+def test_sdk_strict_schema_binds_the_id_set_and_does_not_ask_for_child_ids(fact: bool) -> None:
     schema, payload = sample_wire(fact=fact)
     wire = cast(dict[str, Any], type_to_text_format_param(schema))["schema"]
-    for field, ids, absent in [
-        ("request_reviews", ["Q1", "Q2"], "request_id"),
-        ("guide_requirement_reviews", ["step:0", "step:1"], "requirement_id"),
-    ]:
-        node = deref(wire, wire["properties"][field])
-        assert node["required"] == ids and node["additionalProperties"] is False
-        value = deref(wire, node["properties"][ids[0]])
-        assert absent not in value["properties"]
-        assert set(value["required"]) == set(value["properties"])
+    ids = ["Q1", "Q2"]
+    node = deref(wire, wire["properties"]["request_reviews"])
+    assert node["required"] == ids and node["additionalProperties"] is False
+    value = deref(wire, node["properties"][ids[0]])
+    assert "request_id" not in value["properties"]
+    assert set(value["required"]) == set(value["properties"])
     result = decode(payload, schema)
     assert result.validation["strict_wire_validation"] == "passed"
     assert [row.request_id for row in result.audit.request_reviews] == ["Q1", "Q2"]
-    assert [row.requirement_id for row in result.audit.guide_requirement_reviews] == ["step:0", "step:1"]
-    assert audit_wire_schema(GroundedFactAudit if fact else GroundedAudit, ("Q1", "Q2"), ("step:0", "step:1")) is schema
+    assert audit_wire_schema(GroundedFactAudit if fact else GroundedAudit, ("Q1", "Q2")) is schema
 
 
-@pytest.mark.parametrize(
-    "field, key, state", [("request_reviews", "Q1", "requests"), ("guide_requirement_reviews", "step:0", "requirements")]
-)
 @pytest.mark.parametrize("failure", ["missing", "enum", "missing_detail", "extra_identity"])
-def test_bad_bound_value_isolated_without_discarding_other_results(field: str, key: str, state: str, failure: str) -> None:
+def test_bad_bound_value_isolated_without_discarding_other_results(failure: str) -> None:
+    field, key = "request_reviews", "Q1"
     schema, payload = sample_wire()
     if failure == "missing":
         payload[field].pop(key)
     elif failure == "enum":
-        payload[field][key]["status" if state == "requests" else "answer_state"] = "invalid"
+        payload[field][key]["status"] = "invalid"
     elif failure == "missing_detail":
         payload[field][key].pop("reason")
     else:
-        payload[field][key]["request_id" if state == "requests" else "requirement_id"] = key
+        payload[field][key]["request_id"] = key
     result = decode(payload, schema)
     assert result.validation["strict_wire_validation"] == "failed"
-    assert result.validation[state][key] == ("missing" if failure == "missing" else "invalid")
+    assert result.validation["requests"][key] == ("missing" if failure == "missing" else "invalid")
     assert len(result.audit.reviews) == 1
-    assert len(result.audit.request_reviews) == (1 if state == "requests" else 2)
-    assert len(result.audit.guide_requirement_reviews) == (1 if state == "requirements" else 2)
+    assert len(result.audit.request_reviews) == 1
 
 
-@pytest.mark.parametrize(
-    "field,key,states", [("request_reviews", "Q1", "requests"), ("guide_requirement_reviews", "step:0", "requirements")]
-)
 @pytest.mark.parametrize("reverse", [False, True])
-def test_raw_duplicate_key_never_last_wins(field: str, key: str, states: str, reverse: bool) -> None:
+def test_raw_duplicate_key_never_last_wins(reverse: bool) -> None:
+    field, key = "request_reviews", "Q1"
     schema, payload = sample_wire()
     original = json.dumps(payload[field][key])
     other = deepcopy(payload[field][key])
@@ -101,8 +88,8 @@ def test_raw_duplicate_key_never_last_wins(field: str, key: str, states: str, re
     assert token in encoded
     raw = encoded.replace(token, json.dumps(key) + ": " + values[0] + ", " + json.dumps(key) + ": " + values[1], 1)
     result = decode_audit_wire(raw, schema)
-    assert result.validation[states][key] == "duplicate"
-    binding = result.validation["request_binding" if states == "requests" else "requirement_binding"]
+    assert result.validation["requests"][key] == "duplicate"
+    binding = result.validation["request_binding"]
     assert binding["raw_key_sequence"].count(key) == 2 and key not in binding["adopted_ids"]
     assert len(result.audit.reviews) == 1
 
@@ -112,7 +99,6 @@ def test_nested_duplicate_isolates_only_its_request() -> None:
     raw = json.dumps(payload, ensure_ascii=False).replace('"reason": "未確認"', '"reason": "未確認", "reason": "別の判定"', 1)
     result = decode_audit_wire(raw, schema)
     assert result.validation["requests"] == {"Q1": "invalid", "Q2": "valid"}
-    assert len(result.audit.guide_requirement_reviews) == 2
 
 
 def test_unknown_key_is_not_rebound_or_disclosed() -> None:
@@ -132,7 +118,7 @@ def test_invalid_claim_row_preserves_other_claims_and_bound_results() -> None:
     assert result.validation["fields"]["reviews"] == "unverified"
     assert [row.index for row in result.audit.reviews] == [0]
     assert result.validation["field_rows"]["reviews"] == {"valid_indices": [0], "invalid_indices": [1]}
-    assert len(result.audit.request_reviews) == 2 and len(result.audit.guide_requirement_reviews) == 2
+    assert len(result.audit.request_reviews) == 2
 
 
 def test_duplicate_top_container_is_local_not_global_or_last_wins() -> None:
@@ -143,7 +129,7 @@ def test_duplicate_top_container_is_local_not_global_or_last_wins() -> None:
     result = decode_audit_wire(raw, schema)
     assert result.validation["requests"] == {"Q1": "duplicate", "Q2": "duplicate"}
     assert not result.audit.request_reviews
-    assert len(result.audit.reviews) == 1 and len(result.audit.guide_requirement_reviews) == 2
+    assert len(result.audit.reviews) == 1
 
 
 def test_canonical_legacy_lists_are_never_a_silent_runtime_wire_fallback() -> None:
@@ -160,9 +146,9 @@ def test_canonical_legacy_lists_are_never_a_silent_runtime_wire_fallback() -> No
 
 
 def test_empty_expected_sets_are_required_empty_objects() -> None:
-    schema = audit_wire_schema(GroundedAudit, (), ())
+    schema = audit_wire_schema(GroundedAudit, ())
     payload = legacy_audit_to_wire_fixture(GroundedAudit(reviews=[], summary_supported=False, goal_alignment="partial"), schema)
-    assert payload["request_reviews"] == payload["guide_requirement_reviews"] == {}
+    assert payload["request_reviews"] == {}
     assert decode(payload, schema).validation["strict_wire_validation"] == "passed"
 
 

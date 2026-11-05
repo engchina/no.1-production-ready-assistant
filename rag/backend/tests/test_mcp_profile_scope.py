@@ -305,29 +305,6 @@ def test_claim_limits_reading_tools_to_scoped_knowledge_bases(
     )
 
 
-def test_claim_limits_guides_and_answer_validation(auth: ProductionAuth) -> None:
-    user = auth.user_with_permissions(
-        "searcher", ["menu.search"], search_answer_profile_ids=["bv-1", "bv-2"]
-    )
-    scoped = _headers(user.user_uuid, ["bv-1"])
-
-    _forbidden(
-        _call("rag_lookup_guides", {"query": "精算", "search_answer_profile_id": "bv-2"}, scoped)
-    )
-    _forbidden(
-        _call(
-            "rag_validate_answer",
-            {
-                "query": "精算",
-                "answer": "期限は月末です。",
-                "evidence": [{"document_id": "d1", "chunk_id": "c1"}],
-                "guide": {"search_answer_profile_id": "bv-2", "guide_id": "g-1", "revision": 1},
-            },
-            scoped,
-        )
-    )
-
-
 def test_scope_that_cannot_be_loaded_is_not_treated_as_no_scope(
     auth: ProductionAuth, monkeypatch: MonkeyPatch
 ) -> None:
@@ -463,9 +440,6 @@ def test_claim_disjoint_from_user_profiles_denies_everything(
         _forbidden(_call(tool, {"query": "規程", "search_answer_profile_id": "bv-1"}, disjoint))
         _forbidden(_call(tool, {"query": "規程"}, disjoint))
     assert RecordingPipeline.captured_request is None
-    _forbidden(
-        _call("rag_lookup_guides", {"query": "精算", "search_answer_profile_id": "bv-1"}, disjoint)
-    )
 
     listed = _call("rag_list_search_answer_profiles", {"limit": 10}, disjoint)
     assert listed["structuredContent"]["search_answer_profiles"] == []

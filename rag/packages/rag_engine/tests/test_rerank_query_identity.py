@@ -63,13 +63,13 @@ def test_original_and_max_comparison_uses_all_frozen_candidates_without_extra_ca
             ["本文A", "本文B"],
             None,
             SimpleNamespace(add=lambda text: None),
-            rerank_phase="guide_step",
+            rerank_phase="request_coverage",
             candidate_ids=["A", "B"],
         )
     assert len(contexts) == 2
     assert [row["question_index"] for row in contexts] == [0, 1]
     assert [row["query_role"] for row in contexts] == ["original", "supplement"]
-    assert {row["phase"] for row in contexts} == {"guide_step"}
+    assert {row["phase"] for row in contexts} == {"request_coverage"}
     assert len({row["batch_id"] for row in contexts}) == 1
     assert all(row["candidate_count"] == 2 and len(row["candidate_hash"]) == 64 for row in contexts)
     assert len({row["candidate_hash"] for row in contexts}) == 1

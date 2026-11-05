@@ -119,7 +119,6 @@ KNOWLEDGE_MISSING = {
         AUTO_DISABLE,
         AUTO_DISABLE_WITHHELD,
         [
-            "rag_lookup_guides",
             "rag_search",
             "rag_retrieve_evidence",
             "rag_retrieve_evidence",
@@ -145,7 +144,6 @@ def _steps(tools: list[str], search_outcome: str = "insufficient_evidence") -> l
         "rag_search": {"outcome": search_outcome, "evidence": EVIDENCE},
         "rag_retrieve_evidence": {"evidence": EVIDENCE},
         "rag_read_document": {"document_id": "doc-1", "chunks": [{"chunk_id": "chunk-1"}]},
-        "rag_lookup_guides": {"guides": []},
         "rag_outline": {"document_id": "doc-1"},
     }
     return [_step(tool, outputs[tool]) for tool in tools]

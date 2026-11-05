@@ -414,7 +414,7 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/search-answer-profiles"): _any(SEARCH_ANSWER_PROFILES_MANAGE),
     # 実体の索引を持つ文書の数（拡張の開閉の案内。#1388）。
     ("POST", "/search-answer-profiles/entity-index-coverage"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    # プロファイルとガイドが継承するシステム設定の窓口（読み取りだけ。#2683）。
+    # プロファイルが継承するシステム設定の窓口（読み取りだけ。#2683）。
     ("GET", "/search-answer-profiles/inherited-contact"): _any(MENU_SEARCH_ANSWER_PROFILES),
     ("GET", "/search-answer-profiles/answer-models"): _any(MENU_SEARCH_ANSWER_PROFILES),
     ("GET", _BV): _SEARCH_ANSWER_PROFILE_READ,
@@ -447,27 +447,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
         MENU_SEARCH_ANSWER_PROFILES
     ),
     ("POST", f"{_BV}/clarifications/suggest"): _any(MENU_CHAT, MENU_SEARCH_ANSWER_PROFILES),
-    # 業務ガイド（#1237）。他の知識と同じく、プロファイルの管理の画面の権限で扱う。
-    ("GET", f"{_BV}/support-guides"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("GET", f"{_BV}/support-guides/export"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/import/preview"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/import"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    # 回答の過程の表から下書きを作る（#2397）。
-    ("POST", f"{_BV}/support-guides/import/process/workbook"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/import/process/preview"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("GET", f"{_BV}/support-guides/{{guide_id}}"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("PUT", f"{_BV}/support-guides/{{guide_id}}"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/validate"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/publish"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("GET", f"{_BV}/support-guides/{{guide_id}}/revisions/{{revision}}"): _any(
-        MENU_SEARCH_ANSWER_PROFILES
-    ),
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/rollback"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/archive"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/restore"): _any(MENU_SEARCH_ANSWER_PROFILES),
-    # 下書きで試す（#1288）。回答を作るが、業務ガイドの管理者だけ（検索の権限では使えない）。
-    ("POST", f"{_BV}/support-guides/{{guide_id}}/try"): _any(MENU_SEARCH_ANSWER_PROFILES),
     # ---- 検索・回答プロファイル: チャット ----
     ("GET", "/chat/models"): _any(MENU_CHAT),
     ("GET", "/chat/conversations"): _any(MENU_CHAT),

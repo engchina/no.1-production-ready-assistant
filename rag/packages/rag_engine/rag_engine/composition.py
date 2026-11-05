@@ -34,7 +34,7 @@ class OracleApplication:
         artifact_store: ArtifactStore | None = None,
         embedder: Embedder | None = None,
     ):
-        from rag_engine.adapters.sdk import ApiEmbedder, ApiGenerator, DocumentParser, OracleIndexer, OracleRetriever
+        from rag_engine.adapters.sdk import ApiGenerator, DocumentParser, OracleIndexer, OracleRetriever
         from rag_engine.chunking.service import ChunkingService
         from rag_engine.generation.application import AnswerService
         from rag_engine.knowledge.service import KnowledgeService
@@ -50,8 +50,7 @@ class OracleApplication:
         self.ingestion = IngestionPipeline(self.parser, self.chunker, self.indexer)
         self.query = QueryPipeline(self.retriever, self.generator)
         if dependencies is None:
-            # 業務ガイドの手順の充足を意味の近さで決める embedding も、索引と同じ embedder にする（#2649）。
-            dependencies = replace(oracle_answer_dependencies(), embedder=embedder or ApiEmbedder(settings))
+            dependencies = oracle_answer_dependencies()
             if embedder is not None:
                 # advanced answer の検索 query も索引と同じ embedder で vector 化する。
                 dependencies = replace(

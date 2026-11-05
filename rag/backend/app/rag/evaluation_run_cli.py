@@ -169,7 +169,7 @@ def _run(args: argparse.Namespace) -> int:
     if session is not None:
         # 呼び出しの順（埋め込み・再ランクの cache の当たり方も）を記録と再生で揃える。
         settings.rag_evaluation_concurrency = 1
-    # 再生は記録の日を「今日」にする（基準日・業務ガイドの期間・LLM に渡す今日を記録と揃える）。
+    # 再生は記録の日を「今日」にする（基準日・LLM に渡す今日を記録と揃える）。
     recorded_as_of = recorded_manifest.get("as_of")
     metrics, evaluation_run_id, _ = _execute(
         request, session, today=date.fromisoformat(recorded_as_of) if recorded_as_of else None

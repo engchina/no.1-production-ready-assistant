@@ -103,7 +103,7 @@ def test_clarification_question_without_rag_search_is_needs_clarification() -> N
     validation = validation_content(STATUS_SKIPPED, reason=REASON_CLARIFICATION_ONLY)
     content = answer_outcome(
         CLARIFICATION,
-        steps=[_step("rag__rag_lookup_guides", {"guides": []})],
+        steps=[_retrieve()],
         validation=validation,
     )
     assert (content["value"], content["basis"]) == ("needs_clarification", "clarification_question")
@@ -237,14 +237,6 @@ def test_data_confirmation_paragraphs_need_environment_data() -> None:
         answer, _claim(cause, "supported"), _claim(confirm, "data_confirmation")
     )
     assert _outcome(answer, [_retrieve()], validation) == ("conditional", "answer_passages")
-
-
-def test_guide_handoff_without_rag_search_is_needs_human() -> None:
-    lookup = _step("rag__rag_lookup_guides", {"guides": [{"guide_id": "g", "decision": "handoff"}]})
-    answer = "この操作は情報システム部の担当者が行います。担当者に依頼してください。"
-    assert _outcome(answer, [lookup]) == ("needs_human", "guide_handoff")
-    # rag_search に拠る回答は、rag_search の対応を使う。
-    assert _outcome(answer, [lookup, _search("answered")]) == ("answered", "rag_search")
 
 
 def test_environment_tools_without_rag_answer_the_question() -> None:
@@ -413,7 +405,7 @@ LICENSE_FEE_REFUSAL = "\n".join(
         "**根拠**  ",
         "- rag__rag_retrieve_evidence で取得した証拠は、アクセス権限の付与手順や検証用アカウントの"
         "登録などの運用手順に関する内容であり、金額や費用に関する記述は含まれていませんでした。  ",
-        "- rag__rag_lookup_guides の検索結果でも、今回の質問に該当する業務ガイドは"
+        "- rag__rag_retrieve_evidence の検索結果でも、今回の質問に該当する文書は"
         "返ってきませんでした。",
         "",
         "**結論**  ",
@@ -434,7 +426,7 @@ PASSWORD_REFUSAL = (
         (
             LICENSE_FEE_REFUSAL,
             {
-                "- rag__rag_lookup_guides の検索結果でも、今回の質問に該当する業務ガイドは"
+                "- rag__rag_retrieve_evidence の検索結果でも、今回の質問に該当する文書は"
                 "返ってきませんでした。": "unsupported",
                 "現場の契約書や価格表など、別途確認できる情報が必要です。": "unassessed",
             },
@@ -657,7 +649,7 @@ def test_clarification_question_with_an_annotation_is_needs_clarification() -> N
     # cr-grant-permission（2 回目の実行）: 質問の後ろの「【clarification: target】」の注記で、
     # 確認の質問と見なかった。
     answer = "権限の付与先は、個別の利用者ですか、グループですか？【clarification: target】"
-    assert _outcome(answer, [_step("rag__rag_lookup_guides", {"guides": []})]) == (
+    assert _outcome(answer, [_retrieve()]) == (
         "needs_clarification",
         "clarification_question",
     )
@@ -714,125 +706,12 @@ def test_a_claim_with_a_file_citation_is_still_a_claim() -> None:
     assert _outcome(answer, [_retrieve()], validation) == ("answered", "answer_passages")
 
 
-# ---- 業務ガイドの条件が分からないまま答えた（#1321・#1322） ---------------------------------
-
-
-def _lookup(decision: str, *, unknown: list[dict[str, Any]] | None = None) -> RunStep:
-    return _step(
-        "rag__rag_lookup_guides",
-        {
-            "guides": [
-                {
-                    "guide_id": "g-1",
-                    "revision": 1,
-                    "title": "アカウントの削除",
-                    "decision": decision,
-                    "known_conditions": [],
-                    "unknown_conditions": unknown or [],
-                }
-            ]
-        },
-    )
-
-
-_APPROVAL_UNKNOWN = [{"id": "approved", "label": "部門長の承認", "handling": "ask"}]
-_TARGET_UNKNOWN = [{"id": "target", "label": "付与先", "handling": "ask"}]
-
-# #1317 の実環境の D（run3）の cr-delete-account の回答（承認を前提の条件として答えた）。
-_DELETE_ANSWER = "\n".join(
-    [
-        "不要になったアカウントは **削除して構いません**，ただし **所属部署の部門長の承認を"
-        "得た場合のみ** 行ってください。",
-        "",
-        "- 「削除したアカウントは 30 日後に完全に消去され、復元できません。",
-        "削除の前に、所属部署の部門長の承認を得てください。",
-        "承認の無い削除は行いません」【portal‑operations‑manual.pdf, 6. アカウントの削除, p.2】",
-        "",
-        "したがって、部門長の承認があることを確認したうえで削除手順を実施してください。"
-        "承認が得られない場合は削除は行わないでください。",
-    ]
-)
-
-# #1317 の実環境の D（run3）の cr-grant-permission の回答（付与先を確かめずに両方の分岐で答えた。
-# 見出しに「…の場合」が無いので branches の印は付かない）。
-_GRANT_ANSWER = "\n".join(
-    [
-        "**アクセス権限の付与手順**",
-        "",
-        "1. **個別の利用者へ付与**",
-        "   - 利用者の詳細画面を開き、**「権限」タブ**で付与したい権限を選択し、"
-        "**「付与」** ボタンを押す。",
-        "",
-        "2. **グループへ付与**",
-        "   - グループの詳細画面を開き、**「権限」タブ**で同様に権限を選択し付与する。",
-        "   - グループに付与した権限はそのグループに所属する全員に適用される。",
-        "   - 影響範囲が広いため、**付与前に部門長の承認**を得ること。",
-        "",
-        "> **注意**：権限が反映されるまで最大 **15 分** かかることがあります。",
-    ]
-)
-
-
-def test_answer_on_an_unconfirmed_guide_condition_is_conditional() -> None:
-    # 業務ガイドが承認の有無を確かめると判断したのに、承認を前提にして答えた（cr-delete-account）。
-    content = answer_outcome(
-        _DELETE_ANSWER,
-        steps=[_retrieve(), _lookup("clarify", unknown=_APPROVAL_UNKNOWN)],
-        validation=None,
-    )
-    assert (content["value"], content["basis"]) == ("conditional", "answer_passages")
-    assert "guide_conditions" in content["signals"]
-    # 条件ごとに答えると判断した業務ガイドも同じ。
-    branch = answer_outcome(
-        _DELETE_ANSWER,
-        steps=[_lookup("branch", unknown=_APPROVAL_UNKNOWN), _retrieve()],
-        validation=None,
-    )
-    assert branch["value"] == "conditional" and "guide_conditions" in branch["signals"]
-
-
-def test_answer_split_into_branches_after_the_guide_asked_is_conditional() -> None:
-    # 確かめずにすべての分岐を答えた（cr-grant-permission。見出しに「場合」が無い）。
-    assert not case_labels(_GRANT_ANSWER)
-    content = answer_outcome(
-        _GRANT_ANSWER,
-        steps=[_retrieve(), _lookup("clarify", unknown=_TARGET_UNKNOWN)],
-        validation=None,
-    )
-    assert content["value"] == "conditional"
-    assert "guide_conditions" in content["signals"] and "branches" not in content["signals"]
-    # 業務ガイドを照合していなければ、今までどおり answered（決定的な手がかりが無い）。
-    assert _outcome(_GRANT_ANSWER, [_retrieve()]) == ("answered", "answer_passages")
-
-
-def test_answer_without_guide_conditions_stays_answered() -> None:
-    # 条件が分かって（answer）答えた・業務ガイドが当たらない回答は answered のまま。
-    for steps in (
-        [_retrieve(), _lookup("answer")],
-        [_retrieve(), _step("rag__rag_lookup_guides", {"guides": []})],
-        [_retrieve()],
-    ):
-        content = answer_outcome(_DELETE_ANSWER, steps=steps, validation=None)
-        assert content["value"] == "answered", steps
-        assert "guide_conditions" not in content["signals"]
-
-
-def test_clarification_after_the_guide_asked_is_needs_clarification() -> None:
-    question = "所属部署の部門長の承認は得ていますか？（はい／いいえ）"
-    content = answer_outcome(
-        question, steps=[_retrieve(), _lookup("clarify", unknown=_APPROVAL_UNKNOWN)]
-    )
-    assert (content["value"], content["basis"]) == ("needs_clarification", "clarification_question")
-
-
 def test_clarification_with_an_options_line_is_needs_clarification() -> None:
     # #1320 の実環境の D の cr-grant-permission の回答（問いの後に「選択肢: …」の行）。
     question = (
         "権限の付与先は、個別の利用者ですか、グループですか？  \n選択肢: **個別**、**グループ**"
     )
-    content = answer_outcome(
-        question, steps=[_retrieve(), _lookup("clarify", unknown=_TARGET_UNKNOWN)]
-    )
+    content = answer_outcome(question, steps=[_retrieve()])
     assert (content["value"], content["basis"]) == ("needs_clarification", "clarification_question")
     # 回答を求める依頼を添えた確認の質問（#1320 の実環境の D の run2 の cr-grant-permission）。
     asked = (
@@ -857,18 +736,6 @@ def test_clarification_with_an_options_line_is_needs_clarification() -> None:
         "権限の付与先は、個別の利用者ですか？\n候補: 個別には詳細画面の権限タブで付与します。",
     ):
         assert answer_outcome(text, steps=[_retrieve()])["value"] != "needs_clarification", text
-
-
-def test_guide_decision_before_a_later_rag_search_is_not_used() -> None:
-    # 照合の後に条件を渡して rag_search で答えたら、rag_search の対応で決める。
-    answer = "承認を得たアカウントは、詳細画面の「削除」から削除します。"
-    content = answer_outcome(
-        answer,
-        steps=[_lookup("clarify", unknown=_APPROVAL_UNKNOWN), _search("answered")],
-        validation=None,
-    )
-    assert (content["value"], content["basis"]) == ("answered", "rag_search")
-    assert "guide_conditions" not in content["signals"]
 
 
 # ---- 利用者に聞けば分かる条件は現場のデータではない（#1453） ------------------------------

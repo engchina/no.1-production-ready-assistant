@@ -1,4 +1,4 @@
-"""根拠計画の evidence_ids に、送った根拠のどれにも当たらない ID（業務ガイドの要件 ID の形）がある草稿（#3825）。
+"""根拠計画の evidence_ids に、送った根拠のどれにも当たらない ID がある草稿（#3825）。
 
 保存した実応答と同じ形を匿名の文で作る: 計画の evidence_ids に `<要件>:<番号>` の形の ID を書く。照合を足しても
 直らないので、根拠の ID でないことを指摘して作り直させ、残っても計画に正しく載った根拠の説明を未確認にしない。
@@ -11,7 +11,7 @@ from rag_engine.models.llm import GroundedDraft
 
 OPEN = "メニューから設定を選び、設定タブの登録画面を開きます。"
 STEPS = "(1)設定タブより割当画面を開きます。(2)名前を一覧から選択します。"
-GUIDE_IDS = ["step:0", "step:1"]
+UNKNOWN_IDS = ["step:0", "step:1"]
 
 SPANS = [
     {"evidence_id": "id-open", "label": "E1", "text": OPEN},
@@ -39,16 +39,13 @@ def plan_draft(evidence_ids, scopes, items):
 
 
 def unknown_error(label):
-    return (
-        f"Q1: {label} は Evidence の ID ではありません。"
-        "evidence_ids には [E1] 形式の根拠の番号だけを書き、業務ガイドの要件は guide_coverage の requirement_id に書いてください。"
-    )
+    return f"Q1: {label} は Evidence の ID ではありません。evidence_ids には [E1] 形式の根拠の番号だけを書いてください。"
 
 
 def test_a_label_that_names_no_sent_evidence_is_reported_as_not_an_evidence_id():
-    draft = plan_draft(["E1", *GUIDE_IDS, "E9"], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN))])
+    draft = plan_draft(["E1", *UNKNOWN_IDS, "E9"], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN))])
     errors = _request_plan_errors(draft, SPANS)
-    assert errors == [unknown_error(label) for label in [*GUIDE_IDS, "E9"]]
+    assert errors == [unknown_error(label) for label in [*UNKNOWN_IDS, "E9"]]
     assert not any("対象の照合は1件必要" in error for error in errors)
     # 計画の内外の判定を未決にする不整合だけを数えるときは、根拠でない ID の指摘を含めない。
     assert _request_plan_errors(draft, SPANS, unknown_labels=False) == []
@@ -56,15 +53,15 @@ def test_a_label_that_names_no_sent_evidence_is_reported_as_not_an_evidence_id()
 
 
 def test_a_sent_evidence_label_without_a_scope_decision_keeps_the_scope_error():
-    draft = plan_draft(["E1", "E2", GUIDE_IDS[0]], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN))])
-    assert _request_plan_errors(draft, SPANS) == [unknown_error(GUIDE_IDS[0]), "Q1: E2 の対象の照合は1件必要です。"]
+    draft = plan_draft(["E1", "E2", UNKNOWN_IDS[0]], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN))])
+    assert _request_plan_errors(draft, SPANS) == [unknown_error(UNKNOWN_IDS[0]), "Q1: E2 の対象の照合は1件必要です。"]
     assert _request_plan_errors(draft, SPANS, unknown_labels=False) == ["Q1: E2 の対象の照合は1件必要です。"]
 
 
 def test_unknown_labels_alone_do_not_mark_a_properly_planned_item_unassessed():
     # 説明は計画に載った E1 と、計画に無い E2 を引く。根拠でない ID だけを理由に未決にしなければ、
     # 計画の外の出典（E2）は外れ、計画の内の出典（E1）で説明が残る。
-    draft = plan_draft(["E1", *GUIDE_IDS], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN), ("E2", STEPS))])
+    draft = plan_draft(["E1", *UNKNOWN_IDS], [scope("E1", OPEN)], [cited(OPEN, ("E1", OPEN), ("E2", STEPS))])
     unsettled = [*_request_plan_errors(draft, SPANS, unknown_labels=False), *_plan_undecided_errors(draft, SPANS)]
     assert unsettled == []
     checked, _ = verify("設定の手順は？", draft, SPANS, plan_unsettled=unsettled)
@@ -75,7 +72,7 @@ def test_unknown_labels_alone_do_not_mark_a_properly_planned_item_unassessed():
 
 def test_an_item_whose_evidence_is_outside_the_plan_is_still_undecided():
     # 根拠でない ID を無視しても、計画に載っていない根拠だけを引く説明は今までどおり未決として印を付けて残す。
-    draft = plan_draft(["E1", *GUIDE_IDS], [scope("E1", OPEN)], [cited(STEPS, ("E2", STEPS))])
+    draft = plan_draft(["E1", *UNKNOWN_IDS], [scope("E1", OPEN)], [cited(STEPS, ("E2", STEPS))])
     unsettled = [*_request_plan_errors(draft, SPANS, unknown_labels=False), *_plan_undecided_errors(draft, SPANS)]
     assert unsettled == ["Q1: E2 の対象を計画で照合できませんでした。"]
     checked, _ = verify("設定の手順は？", draft, SPANS, plan_unsettled=unsettled)
@@ -120,7 +117,7 @@ def test_the_repair_names_the_unknown_label_and_an_unfixed_one_does_not_mark_the
         "request_coverage": [
             {
                 "request_id": "Q1",
-                "evidence_ids": [open_label, *GUIDE_IDS],
+                "evidence_ids": [open_label, *UNKNOWN_IDS],
                 "evidence_scope": [{"evidence_id": open_label, "target": "登録画面", "relation": "direct", "link_quote": OPEN}],
             }
         ],
@@ -140,11 +137,11 @@ def test_the_repair_names_the_unknown_label_and_an_unfixed_one_does_not_mark_the
     assert result.generation_trace["llm_calls"] == 2
     repair = model.prompts[1][1]
     assert "invalid_request_plan" in repair
-    for label in GUIDE_IDS:
+    for label in UNKNOWN_IDS:
         assert f"{label} は Evidence の ID ではありません。" in repair
         assert f"{label} の対象の照合は1件必要" not in repair
     timing = result.generation_trace["rounds"][0]["timing"]
-    assert timing["request_plan_ignored"] == [unknown_error(label) for label in GUIDE_IDS]
+    assert timing["request_plan_ignored"] == [unknown_error(label) for label in UNKNOWN_IDS]
     assert "request_plan_unsettled" not in timing
     assert OPEN in result.answer_text
     assert not any(reason["code"] == "unassessed" for mark in result.envelope["passage_marks"] for reason in mark["reasons"])

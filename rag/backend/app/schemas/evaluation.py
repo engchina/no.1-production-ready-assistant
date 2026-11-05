@@ -15,11 +15,6 @@ from app.schemas.search import (
     normalize_search_id_list,
     parse_search_id_filter,
 )
-from app.schemas.support_guide import (
-    PROCESS_IMPORT_QUESTION_MAX_CHARS,
-    PROCESS_IMPORT_TEXT_MAX_CHARS,
-    SupportGuideProcessReference,
-)
 from app.search_defaults import search_top_k_default, search_top_k_schema
 
 EvaluationSuiteName = EvaluationSuite
@@ -46,7 +41,7 @@ EvaluationCaseCategory = Literal[
 ]
 EVALUATION_UNCATEGORIZED = "uncategorized"
 
-# 評価のケースの区分（#1284。handoff §14.1）。dev は設定・業務ガイドの調整に使ってよいケース、
+# 評価のケースの区分（#1284。handoff §14.1）。dev は設定の調整に使ってよいケース、
 # holdout は調整に使わず最後の確認だけに使うケース。同じ業務の流れ・資料の族のケースは同じ区分に
 # する（言い換えの漏れを防ぐ）。区分の無いケースは内訳で unassigned にする。
 EvaluationCaseSplit = Literal["dev", "holdout"]
@@ -366,8 +361,8 @@ class EvaluationCase(EvaluationHandlingExpectation):
     # 区分（任意。#1284）。結果の区分ごとの内訳に使う。採点の方法は変えない。
     split: EvaluationCaseSplit | None = None
     # 質問と一緒に渡す既知の条件の値（条件の id → 値。#1284）。チャットの確認の答え・MCP の
-    # conditions と同じく SearchRequest.conditions に渡す。業務ガイドの条件の id に合わせて書き、
-    # 業務ガイドを使わない評価（検索・回答プロファイルを指定しない評価）では回答に影響しない。
+    # conditions と同じく SearchRequest.conditions に渡す。検索・回答プロファイルのルールの確認の
+    # id（`rule:<id>`）に合わせて書き、プロファイルを指定しない評価では回答に影響しない。
     conditions: dict[str, str] = Field(default_factory=dict, max_length=EVALUATION_MAX_CONDITIONS)
     # 確認の質問への返答の列（#1284）。最初の質問の後に順に送る。
     turns: list[EvaluationTurn] = Field(default_factory=list, max_length=EVALUATION_MAX_TURNS)
@@ -945,6 +940,8 @@ class EvaluationImportRow(BaseModel):
 
 # 1 回の下書きの API で構造化する行の数の上限（#2402。画面は行を分けて順に送る）。
 EVALUATION_PROCESS_MAX_REQUEST_ROWS = 10
+EVALUATION_PROCESS_QUESTION_MAX_CHARS = 2000
+EVALUATION_PROCESS_TEXT_MAX_CHARS = 8000
 
 
 class EvaluationProcessRow(BaseModel):
@@ -954,9 +951,9 @@ class EvaluationProcessRow(BaseModel):
 
     case_id: str = Field(..., min_length=1, max_length=EVALUATION_CASE_ID_MAX_CHARS)
     row: int = Field(..., ge=1)
-    question: str = Field(..., min_length=1, max_length=PROCESS_IMPORT_QUESTION_MAX_CHARS)
-    answer_process: str = Field(..., min_length=1, max_length=PROCESS_IMPORT_TEXT_MAX_CHARS)
-    standard_answer: str = Field(default="", max_length=PROCESS_IMPORT_TEXT_MAX_CHARS)
+    question: str = Field(..., min_length=1, max_length=EVALUATION_PROCESS_QUESTION_MAX_CHARS)
+    answer_process: str = Field(..., min_length=1, max_length=EVALUATION_PROCESS_TEXT_MAX_CHARS)
+    standard_answer: str = Field(default="", max_length=EVALUATION_PROCESS_TEXT_MAX_CHARS)
 
 
 class EvaluationProcessDraftRequest(BaseModel):
@@ -979,6 +976,20 @@ class EvaluationProcessDraftRequest(BaseModel):
         return normalize_search_id_list(values)
 
 
+class EvaluationProcessReference(BaseModel):
+    """回答の過程に書いた資料と、ナレッジベースの文書との対応。"""
+
+    name: str = Field(description="回答の過程に書いた資料の名前。")
+    pages: str = Field(default="", description="回答の過程に書いた頁（書いたまま）。")
+    section: str = Field(default="", description="回答の過程に書いた章節（書いたまま）。")
+    status: Literal["resolved", "unresolved", "ambiguous"]
+    document_id: str | None = None
+    file_name: str | None = None
+    candidates: list[str] = Field(
+        default_factory=list, description="ambiguous のとき、当たった文書の名前。"
+    )
+
+
 class EvaluationProcessDraft(BaseModel):
     """1 行の回答の過程から作った評価の期待の下書き（#2402。保存しない）。
 
@@ -994,7 +1005,7 @@ class EvaluationProcessDraft(BaseModel):
     expected_outcomes: list[EvaluationOutcome] = Field(default_factory=list)
     relevant_document_ids: list[str] = Field(default_factory=list)
     required_evidence: list[EvaluationEvidence] = Field(default_factory=list)
-    references: list[SupportGuideProcessReference] = Field(default_factory=list)
+    references: list[EvaluationProcessReference] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
 

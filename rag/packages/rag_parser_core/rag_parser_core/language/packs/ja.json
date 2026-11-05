@@ -2424,11 +2424,6 @@
     "unsourced_section_note": "次の説明は検索した資料の原文と照合できないため、資料の記載としては示していません。",
     "marked_rules_section": "根拠で確かめきれていない事項",
     "marked_rules_section_note": "次の説明は根拠で確かめきれていないか、注意が必要です。理由は「確認が必要な点」に示します。",
-    "guide_notes_section": "業務ガイドの案内",
-    "guide_notes_note_template": "次は業務ガイド「{title}」の案内で、資料の記載ではありません。",
-    "guide_handoff_template": "次の場合は{contact}へお問い合わせください: {conditions}",
-    "guide_approval_template": "実施の前に承認が必要です。{note}",
-    "guide_acquisition_incomplete_template": "必須の参照範囲について、取得または回答材料への保持を確認できていません（手順: {steps}）。資料に記載がないことや、回答の誤りを意味しません。",
     "passage_note_template": "{reasons}: 「{text}」",
     "answer_warning_template": "{reasons}",
     "predicate_endings": [
@@ -2467,7 +2462,6 @@
       "引用原文を抽出できない=citation_extraction_failed",
       "引用した範囲が見出しだけ=citation_heading_only",
       "引用が区切り線・書式のみ=citation_content_unusable",
-      "ガイドIDは資料根拠でない=citation_id_namespace",
       "引用元の版を確認できない=citation_version_mismatch",
       "確かめが終わっていない=unassessed",
       "図の画像を読めておらず確かめられない=figure_not_read",
@@ -2480,9 +2474,7 @@
       "前提の手順が未確認=after_unverified_step",
       "要約を根拠で確かめていない=summary_unaudited",
       "条件への当てはめを確かめていない=application_unaudited",
-      "資料に無い業務ガイドの文=guide_text",
       "根拠と矛盾=contradicted",
-      "業務ガイドの手順の確認で問題が見つかった=guide_check",
       "根拠を読めず、すべての段落が未確認=no_evidence",
       "質問からずれている可能性=off_goal",
       "質問の要求の一部に答えていない=requests",
@@ -3372,51 +3364,7 @@
       "ヶ"
     ]
   },
-  "guide_check_cues": {
-    "impact_group_terms": [
-      "グループ"
-    ],
-    "impact_all_terms": [
-      "全体",
-      "全員",
-      "すべての",
-      "全ての"
-    ],
-    "approval_terms": [
-      "承認"
-    ],
-    "premise_met_markers": [
-      "満たしています",
-      "満たしている",
-      "満たされています",
-      "満たされている",
-      "済み",
-      "済んでいます",
-      "済んでいる",
-      "完了しています",
-      "完了している"
-    ],
-    "guide_list_marks": [
-      "-",
-      "*",
-      "・",
-      "•"
-    ],
-    "guide_number_closers": [
-      ".",
-      ")",
-      "．",
-      "、",
-      "）"
-    ],
-    "boolean_aliases": [
-      "true=はい",
-      "yes=はい",
-      "false=いいえ",
-      "no=いいえ"
-    ]
-  },
-  "guide_import_cues": {
+  "evaluation_process_cues": {
     "process_headings": [
       "回答の手順=steps",
       "回答手順=steps",

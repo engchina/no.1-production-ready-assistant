@@ -5,8 +5,7 @@
 曖昧な質問に答える前に、利用者に確認事項を確かめる。Agent の確認は 2 つの出所がある。
 
 - ツールの結果（`nl2sql` / `rag`）: NL2SQL の `nl2sql_query` の SQL の生成前の確認・RAG の
-  `rag_search` の `needs_clarification`・業務ガイドの `clarify`（支援タスクの状態の
-  `pending_clarifications`）。
+  `rag_search` の `needs_clarification`（支援タスクの状態の `pending_clarifications`）。
   確認事項と選択肢は呼び先が作ったものをそのまま受け渡し、Agent では二重に定義しない。Run は
   確認事項を返した回答で完了し、利用者の答え（確認事項の ID・選んだ選択肢の ID・自由入力）を
   構造化して次の Run に渡す（NL2SQL は `nl2sql_query` の `answer`、RAG は `rag_search` の
@@ -532,7 +531,7 @@ def policy_instructions(budget: ConfirmationBudget, *, tool_exposed: bool) -> st
             [
                 "- 業務の手順・規程・業務データに当たる質問は、曖昧に見えても "
                 f"{CONFIRMATION_TOOL} を呼ぶ前に、先に資料・業務データのツールで調べてください"
-                "（業務ガイド・NL2SQL が確認事項を返したら、それが利用者への確認のカードに"
+                "（資料・NL2SQL が確認事項を返したら、それが利用者への確認のカードに"
                 "なります）。ツールの結果を見ても決まらないときだけ "
                 f"{CONFIRMATION_TOOL} で聞いてください。",
                 "- 質問の解釈が割れ（2 つ以上の読み方が同じくらいあり得る）、誤りの代償が大きい"
@@ -546,7 +545,7 @@ def policy_instructions(budget: ConfirmationBudget, *, tool_exposed: bool) -> st
                 f"{CONFIRMATION_TOOL} や本文で聞き返さず、利用者の質問のまま nl2sql_query・"
                 "資料の検索を呼んでください。",
                 f"- {CONFIRMATION_TOOL} の選択肢は、この質問で呼んだツールの結果（推薦の候補・"
-                "当たった文書・業務ガイドの選択肢・データの値）にあるものだけにしてください。"
+                "当たった文書・データの値）にあるものだけにしてください。"
                 "結果から選択肢を作れないときは options を空にして、自由入力で聞いてください。",
                 "- 検索・回答プロファイル・業務プロファイルの推薦"
                 "（rag_recommend_search_answer_profile・nl2sql_recommend_profile）が"

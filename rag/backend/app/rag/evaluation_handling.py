@@ -110,7 +110,7 @@ def forbidden_hits(answer: str, phrases: Sequence[str]) -> list[str]:
 
 
 def asked_condition_ids(answer_details: Mapping[str, object] | None) -> list[str]:
-    """回答が確認の質問で聞いた業務ガイドの条件の id（回答の記録の clarifications。#1284）。"""
+    """回答が確認の質問で聞いた条件の id（回答の記録の clarifications。#1284）。"""
     details = answer_details or {}
     envelope = details.get("envelope")
     sources: list[object] = [details.get("clarifications")]

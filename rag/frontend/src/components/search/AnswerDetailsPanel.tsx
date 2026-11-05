@@ -25,12 +25,12 @@ export function AnswerCheckRow({ diagnostics, passageSource }: { diagnostics: un
 }
 
 /**
- * 回答を読むときに要る案内（公開の業務ガイドを読めなかった・資料では決まらない値がある）。回答の本文の下に出す
+ * 回答を読むときに要る案内（資料では決まらない値がある）。回答の本文の下に出す
  * （「詳細」に畳まない。#2096）。段落の印の数は資料との照合の行（`AnswerCheckRow`）に出す（#141）。
  */
 export function AnswerNotices({ diagnostics }: { diagnostics: unknown }) {
   const data = parseAnswerDiagnostics(diagnostics);
-  if (!data || !(data.guideLoadFailed || data.externalDataRequired || data.externalDataItems.length > 0)) return null;
+  if (!data || !(data.externalDataRequired || data.externalDataItems.length > 0)) return null;
   return (
     <div className="space-y-2">
       <AnswerNoticeBanners data={data} />
@@ -41,14 +41,6 @@ export function AnswerNotices({ diagnostics }: { diagnostics: unknown }) {
 function AnswerNoticeBanners({ data }: { data: AnswerDiagnostics }) {
   return (
     <>
-      {data.guideLoadFailed ? (
-        // 公開の業務ガイドを読めず、使わずに答えた（ガイドが無かったときと区別する。#1278 / #1287）。
-        <div data-testid="answer-guide-load-failed">
-          <Banner severity="warning" title={t("search.answerDetails.guideLoadFailed.title")}>
-            <p>{t("search.answerDetails.guideLoadFailed.body")}</p>
-          </Banner>
-        </div>
-      ) : null}
       {data.externalDataRequired || data.externalDataItems.length ? (
         // 資料では決まらない値（rag_poc の「外部データ確認」。#651）。
         <Banner severity="warning" title={t("search.answerDetails.externalData.title")}>

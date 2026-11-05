@@ -14,12 +14,9 @@ from app.rag.evaluation_corpus_cli import (
     CorpusError,
     CorpusLoader,
     document_versions,
-    guide_referenced_files,
-    guided_golden_set,
     main,
     referenced_files,
     resolve_golden_set,
-    resolve_guides,
     with_entity_expansion,
 )
 
@@ -188,85 +185,6 @@ def test_required_evidence_file_references_are_collected_and_resolved() -> None:
         resolve_golden_set(golden_set, {"manual.pdf": "d1"}, "kb-1")
 
 
-# ---- 業務ガイドの取込（C の再現。#1289） ------------------------------------------------
-
-GUIDES: list[dict[str, Any]] = [
-    {
-        "title": "権限の付与",
-        "references": [
-            {"document_id": "file:manual.pdf", "title": "手順書"},
-            {"document_id": "doc-fixed"},
-        ],
-    }
-]
-
-
-def test_guide_references_are_collected_and_resolved() -> None:
-    assert guide_referenced_files(GUIDES) == ["manual.pdf"]
-    resolved = resolve_guides(GUIDES, {"manual.pdf": "d1"})
-    assert [ref["document_id"] for ref in resolved[0]["references"]] == ["d1", "doc-fixed"]
-    # 元のガイドは変えない。
-    assert GUIDES[0]["references"][0]["document_id"] == "file:manual.pdf"
-    with pytest.raises(CorpusError):
-        resolve_guides(GUIDES, {})
-
-
-def test_guided_golden_set_uses_profile_instead_of_knowledge_bases() -> None:
-    resolved = resolve_golden_set(GOLDEN_SET, {"manual.pdf": "d1", "params.xlsx": "d2"}, "kb-1")
-    guided = guided_golden_set(resolved, "sap-1")
-    assert guided["search_answer_profile_id"] == "sap-1"
-    assert "knowledge_base_ids" not in guided
-    assert resolved["knowledge_base_ids"] == ["kb-1"]
-
-
-def test_loader_creates_profile_imports_and_publishes_guides() -> None:
-    calls: list[tuple[str, str, Any]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        path = request.url.path.removeprefix("/api")
-        body = json.loads(request.content or b"{}")
-        calls.append((request.method, path, body))
-        if path == "/search-answer-profiles":
-            return httpx.Response(200, json={"data": {"id": "sap-1"}})
-        if path.endswith("/support-guides/import"):
-            created = [
-                {"guide_id": f"g{index}", "title": guide["title"], "draft_revision": 1}
-                for index, guide in enumerate(body["guides"])
-            ]
-            return httpx.Response(200, json={"data": {"created": created}})
-        return httpx.Response(200, json={"data": {}})
-
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://test")
-    loader = CorpusLoader(client, "http://test", log=lambda _: None)
-    profile_id = loader.create_search_answer_profile("評価", "kb-1")
-    published = loader.import_guides(profile_id, resolve_guides(GUIDES, {"manual.pdf": "d1"}))
-
-    assert profile_id == "sap-1"
-    assert published == ["g0"]
-    assert calls[0][2]["config"] == {
-        "knowledge_base_ids": ["kb-1"],
-        "query": {"support_guide_enabled": True},
-    }
-    assert calls[1][2]["guides"][0]["references"][0]["document_id"] == "d1"
-    assert calls[2] == (
-        "POST",
-        "/search-answer-profiles/sap-1/support-guides/g0/publish",
-        {"base_revision": 1},
-    )
-
-
-def test_main_requires_guides_and_guided_output_together(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    golden = tmp_path / "set.json"
-    golden.write_text(json.dumps(GOLDEN_SET), encoding="utf-8")
-    guides = tmp_path / "guides.json"
-    guides.write_text(json.dumps({"guides": GUIDES}), encoding="utf-8")
-    code = main([str(golden), "--output", str(tmp_path / "out.json"), "--guides", str(guides)])
-    assert code == 2
-    assert "一緒に渡してください" in capsys.readouterr().err
-
-
 def test_loader_selects_entity_index_recipe_for_every_document(tmp_path: Path) -> None:
     """``--entity-index``（#1362）はすべての文書のレシピで実体の抽出を選ぶ（Excel は前処理も）。
 
@@ -299,8 +217,8 @@ def test_loader_selects_entity_index_recipe_for_every_document(tmp_path: Path) -
     ]
 
 
-def test_entity_index_selects_expansion_in_the_golden_set_and_the_profile() -> None:
-    """評価の明示値は保持する。指南を使うプロファイルは使用だけ ON にし、拡張は全体を使う。"""
+def test_entity_index_selects_expansion_in_the_golden_set() -> None:
+    """評価の明示値は保持する。"""
     resolved = resolve_golden_set(GOLDEN_SET, {"manual.pdf": "d1", "params.xlsx": "d2"}, "kb-1")
     selected = with_entity_expansion(resolved)
     assert selected["rag_overrides"] == {"entity_expansion_enabled": True}
@@ -309,20 +227,6 @@ def test_entity_index_selects_expansion_in_the_golden_set_and_the_profile() -> N
         {**resolved, "rag_overrides": {"entity_expansion_enabled": False, "rerank_enabled": True}}
     )
     assert explicit["rag_overrides"] == {"entity_expansion_enabled": False, "rerank_enabled": True}
-
-    bodies: list[Any] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        bodies.append(json.loads(request.content or b"{}"))
-        return httpx.Response(200, json={"data": {"id": "sap-1"}})
-
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://test")
-    loader = CorpusLoader(client, "http://test", log=lambda _: None, entity_index=True)
-    assert loader.create_search_answer_profile("評価", "kb-1") == "sap-1"
-    assert bodies[0]["config"] == {
-        "knowledge_base_ids": ["kb-1"],
-        "query": {"support_guide_enabled": True},
-    }
 
 
 @pytest.mark.parametrize(

@@ -17,7 +17,7 @@ from rag_engine.models.llm import GroundedDraft, GroundedItem
 OPEN = "メニューから設定を選び、設定タブの登録画面を開きます。"
 STEPS = "(1)設定タブより割当画面を開きます。(2)名前を一覧から選択します。"
 AFTER = "割当画面の登録が終わったら、登録画面に戻って保存します。"
-GUIDE_IDS = ["step:0", "step:1"]
+UNKNOWN_IDS = ["step:0", "step:1"]
 
 SPANS = [
     {"evidence_id": "id-open", "label": "E1", "text": OPEN},
@@ -60,7 +60,7 @@ def unassessed(draft):
 
 
 def test_a_label_the_scope_judges_direct_is_in_the_plan_without_being_in_evidence_ids():
-    draft = plan_draft(GUIDE_IDS, [scope("E1"), scope("E2")], [cited(OPEN, "E1"), cited(STEPS, "E2")])
+    draft = plan_draft(UNKNOWN_IDS, [scope("E1"), scope("E2")], [cited(OPEN, "E1"), cited(STEPS, "E2")])
     assert not outside(draft, "E1") and not outside(draft, "E2")
     # 計画に無い根拠は今までどおり計画の外。
     assert outside(draft, "E3")
@@ -97,7 +97,7 @@ def test_conflicting_scope_decisions_still_do_not_authorize_a_label():
 
 
 def test_a_scope_row_that_names_no_sent_evidence_authorizes_nothing():
-    draft = plan_draft(["E1"], [scope("E1"), scope(GUIDE_IDS[0])], [cited(STEPS, "E2")])
+    draft = plan_draft(["E1"], [scope("E1"), scope(UNKNOWN_IDS[0])], [cited(STEPS, "E2")])
     assert outside(draft, "E2") and outside(draft, "E3")
     assert not outside(draft, "E1")
 
@@ -113,11 +113,11 @@ def test_a_cited_scope_only_row_is_checked_for_a_quote_from_another_evidence():
     assert not _request_plan_errors(plan_draft(["E1"], scopes, [cited(OPEN, "E1")]), SPANS)
 
 
-def test_the_ignored_label_record_of_a_scope_only_plan_does_not_point_to_guide_coverage():
-    draft = plan_draft(GUIDE_IDS, [scope("E1")], [cited(OPEN, "E1")])
+def test_the_ignored_label_record_of_a_scope_only_plan_does_not_ask_for_a_rewrite():
+    draft = plan_draft(UNKNOWN_IDS, [scope("E1")], [cited(OPEN, "E1")])
     for error in _unknown_plan_label_errors(draft, SPANS, scope_plan=True):
-        assert "は Evidence の ID ではありません。" in error and "guide_coverage" not in error
-    assert all("guide_coverage" in error for error in _unknown_plan_label_errors(draft, SPANS))
+        assert "は Evidence の ID ではありません。" in error and "計画の根拠として扱いません" in error
+    assert all("書いてください" in error for error in _unknown_plan_label_errors(draft, SPANS))
 
 
 def test_a_recovered_plan_with_only_scope_decisions_keeps_the_explanations_unmarked():
@@ -130,7 +130,7 @@ def test_a_recovered_plan_with_only_scope_decisions_keeps_the_explanations_unmar
             {
                 "request_id": "Q1",
                 "evidence_scope": [scope(labels[INTRO]), scope(labels[OUTLINE])],
-                "evidence_ids": GUIDE_IDS,
+                "evidence_ids": UNKNOWN_IDS,
             }
         ]
     }
@@ -140,5 +140,5 @@ def test_a_recovered_plan_with_only_scope_decisions_keeps_the_explanations_unmar
     timing = result.generation_trace["rounds"][0]["timing"]
     assert timing["request_plan_recovery"] == "planned"
     assert "request_plan_unsettled" not in timing
-    assert len(timing["request_plan_ignored"]) == len(GUIDE_IDS)
-    assert not any("guide_coverage" in error for error in timing["request_plan_ignored"])
+    assert len(timing["request_plan_ignored"]) == len(UNKNOWN_IDS)
+    assert all("計画の根拠として扱いません" in error for error in timing["request_plan_ignored"])

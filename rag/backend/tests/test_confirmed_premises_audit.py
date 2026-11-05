@@ -29,33 +29,25 @@ VALUE = "担当A"
 QUESTION = "登録方法は?"
 
 
-def guide_settings(source: str, state: str, *, mode: str = "standard") -> Settings:
+def answer_settings(*, mode: str = "standard") -> Settings:
     return Settings(
-        rag_support_guide_enabled=True,
-        rag_support_guide={
-            "known_conditions": [{"label": LABEL, "value": VALUE, "source": source, "state": state}]
-        },
         rag_answer_audit_mode=cast(Any, mode),
         rag_query_strategy="simple_retrieval",
         rag_section_expansion_enabled=False,
     )
 
 
-@pytest.mark.parametrize(
-    "source,state,expected",
-    [
-        ("user", "known", True),
-        ("question", "known", True),
-        ("assumption", "known", False),
-        ("user", "unknown", False),
-    ],
-)
 def test_settings_keep_confirmed_sources_and_preserve_them_for_model_purpose(
-    source: str, state: str, expected: bool, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
-    settings = build_engine_settings(guide_settings(source, state), output_dir=tmp_path)
-    assert settings.confirmed_premises == (((LABEL, VALUE),) if expected else ())
-    assert settings.confirmed_premise_sources == (((LABEL, VALUE, source),) if expected else ())
+    scope = AnswerScope(
+        context="表示用",
+        confirmed_premises=((LABEL, VALUE),),
+        confirmed_premise_sources=((LABEL, VALUE, "question"),),
+    )
+    settings = build_engine_settings(answer_settings(), output_dir=tmp_path, scope=scope)
+    assert settings.confirmed_premises == ((LABEL, VALUE),)
+    assert settings.confirmed_premise_sources == ((LABEL, VALUE, "question"),)
     assert (
         settings_for_llm_purpose(settings, LLM_PURPOSE_AUDIT).confirmed_premise_sources
         == settings.confirmed_premise_sources
@@ -94,7 +86,7 @@ def test_scope_source_is_preserved_without_promoting_untrusted_source(
     )
     settings = build_engine_settings(Settings(), output_dir=tmp_path, scope=scope)
     assert settings.confirmed_premise_sources == (((LABEL, VALUE, source),) if accepted else ())
-    assert _confirmed_validation_premises(Settings(), scope) == (
+    assert _confirmed_validation_premises(scope) == (
         [{"question": LABEL, "answer": VALUE}] if accepted else []
     )
 
@@ -157,7 +149,7 @@ async def test_formal_answer_forwards_confirmed_premises_and_does_not_leak_to_ne
     validator = AsyncMock(return_value=AnswerValidation(status="completed", valid=True))
     monkeypatch.setattr("app.rag.answer_validation.validate_answer", validator)
     first = AnswerEngine(
-        guide_settings("user", "known", mode=mode),
+        answer_settings(mode=mode),
         oracle=cast(Any, FakeOracle()),
         genai=cast(Any, FakeGenAi()),
         scope=AnswerScope(
@@ -165,7 +157,7 @@ async def test_formal_answer_forwards_confirmed_premises_and_does_not_leak_to_ne
         ),
     )
     second = AnswerEngine(
-        guide_settings("assumption", "unknown", mode=mode),
+        answer_settings(mode=mode),
         oracle=cast(Any, FakeOracle()),
         genai=cast(Any, FakeGenAi()),
         scope=AnswerScope(context=f"仮定: {LABEL}={VALUE}"),

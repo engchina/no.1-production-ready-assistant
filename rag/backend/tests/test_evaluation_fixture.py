@@ -110,39 +110,3 @@ def test_business_support_set_has_splits_turns_and_evidence_from_its_corpus() ->
         source = corpus / "sources" / f"{Path(item.document_id.removeprefix('file:')).stem}.html"
         text = re.sub(r"<[^>]+>", "", source.read_text(encoding="utf-8"))
         assert contains_normalized(text, item.text), item.id
-
-
-def test_business_support_guides_are_valid_and_match_the_set() -> None:
-    """C（業務ガイドあり）の業務ガイド（#1289）は、検証を通り、同梱の資料だけを参照する。
-
-    評価セットの条件の id（`target` / `approved`）と値は、業務ガイドの条件の選択肢にある。
-    """
-    from app.rag.support_guide import has_errors, validate_content
-    from app.schemas.support_guide import SupportGuideContent
-
-    corpus = Path(__file__).resolve().parents[2] / "evaluation/business-support"
-    payload = json.loads((corpus / "support-guides.json").read_text(encoding="utf-8"))
-    guides = [SupportGuideContent.model_validate(raw) for raw in payload["guides"]]
-    assert guides
-    for guide in guides:
-        assert not has_errors(validate_content(guide)), guide.title
-        for reference in guide.references:
-            assert reference.document_id.startswith("file:")
-            assert (corpus / reference.document_id.removeprefix("file:")).is_file()
-    allowed = {
-        condition.id: set(condition.allowed_values)
-        for guide in guides
-        for condition in guide.conditions
-    }
-    cases = EvaluationRunRequest.model_validate(
-        json.loads((corpus / "business-support.json").read_text(encoding="utf-8"))
-    ).cases
-    used = [
-        (condition_id, value)
-        for case in cases
-        for conditions in [case.conditions, *(turn.conditions for turn in case.turns)]
-        for condition_id, value in conditions.items()
-    ]
-    assert used
-    for condition_id, value in used:
-        assert value in allowed[condition_id], (condition_id, value)

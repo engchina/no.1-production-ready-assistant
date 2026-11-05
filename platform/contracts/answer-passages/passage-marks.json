@@ -12,7 +12,6 @@
     "citation_range_out_of_bounds": {"kind": "passage", "state": "unverified", "label": "引用行が根拠の範囲外"},
     "citation_extraction_failed": {"kind": "passage", "state": "unverified", "label": "引用原文を抽出できない"},
     "citation_heading_only": {"kind": "passage", "state": "unverified", "label": "引用した範囲が見出しだけ"},
-    "citation_id_namespace": {"kind": "passage", "state": "unverified", "label": "ガイドIDは資料根拠でない"},
     "citation_content_unusable": {"kind": "passage", "state": "unverified", "label": "引用が区切り線・書式のみ"},
     "citation_version_mismatch": {"kind": "passage", "state": "unverified", "label": "引用元の版を確認できない"},
     "unassessed": {"kind": "passage", "state": "unverified", "label": "確かめが終わっていない"},
@@ -26,9 +25,7 @@
     "after_unverified_step": {"kind": "passage", "state": "warning", "label": "前提の手順が未確認"},
     "summary_unaudited": {"kind": "passage", "state": "warning", "label": "要約を根拠で確かめていない"},
     "application_unaudited": {"kind": "passage", "state": "warning", "label": "条件への当てはめを確かめていない"},
-    "guide_text": {"kind": "passage", "state": "unverified", "label": "資料に無い業務ガイドの文"},
     "contradicted": {"kind": "removed", "label": "根拠と矛盾"},
-    "guide_check": {"kind": "answer", "label": "業務ガイドの手順の確認で問題が見つかった"},
     "no_evidence": {"kind": "answer", "label": "根拠を読めず、すべての段落が未確認"},
     "off_goal": {"kind": "answer", "label": "質問からずれている可能性"},
     "requests": {"kind": "answer", "label": "質問の要求の一部に答えていない"},
@@ -56,8 +53,8 @@
       "answer_warnings": []
     },
     {
-      "id": "guide-error-keeps-body",
-      "note": "合成の回答。業務ガイドの手順の error でも本文を残し、回答全体の警告を出す。根拠に無い段落は残して印を付ける。",
+      "id": "request-error-keeps-body",
+      "note": "合成の回答。要求の不足の error でも本文を残し、回答全体の警告を出す。根拠に無い段落は残して印を付ける。",
       "answer": "画面で対象を開き、値を上書きして登録します【証拠 1】。\n\n登録後は自動で通知されます。",
       "published": "画面で対象を開き、値を上書きして登録します【証拠 1】。\n\n登録後は自動で通知されます。",
       "passage_marks": [
@@ -69,7 +66,7 @@
       ],
       "removed_passages": [],
       "answer_warnings": [
-        {"code": "guide_check", "label": "業務ガイドの手順の確認で問題が見つかった", "detail": "必須の手順『終了日の入力』の説明がありません。"}
+        {"code": "requests", "label": "質問の要求の一部に答えていない", "detail": "要求『終了日の入力』の説明がありません。"}
       ]
     }
   ]

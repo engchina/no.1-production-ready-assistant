@@ -1,7 +1,7 @@
 """支援タスクの状態とタスクの予算（#1243）の決定論テスト。
 
 モデルは SDK の `ScriptedModel`、RAG は契約どおりの fake の MCP（`mcp_support`）にする。
-状態の生成（条件・確かめ中の問い・業務ガイド・根拠の参照）、同じ会話・同じ持ち主の次の Run への
+状態の生成（条件・確かめ中の問い・根拠の参照）、同じ会話・同じ持ち主の次の Run への
 引き継ぎ、予算（Run ごとの RAG・会話の通し・承認後の再開）を確かめる。
 """
 
@@ -20,7 +20,7 @@ from mcp_support import DEFAULT_OUTPUTS, FakeProductMcp, fake_product_mcp
 from pytest import MonkeyPatch
 
 from app.features.agent import builtin_runtime
-from app.features.agent.builtin_runtime import ModelTarget
+from app.features.agent.builtin_runtime import ModelTarget, support_task_goal
 from app.features.agent.data_scope import AgentDataScope
 from app.features.agent.runtime import (
     AgentProfile,
@@ -35,12 +35,14 @@ from app.features.agent.runtime import (
 )
 from app.features.agent.skills import AgentSkillDefinition, SkillMcpRequirement, skill_registry
 from app.features.agent.support_task import (
-    GUIDE_CHECK_TRACE_PREFIX,
+    DOCUMENT_REFERENCE_READ_HINT,
     SUPPORT_TASK_KIND,
     SUPPORT_TASK_NAME,
     abandoned_run_consumption,
     build_support_task,
+    rag_next_step,
     support_task_instructions,
+    text_references,
 )
 from app.features.agent.tools import (
     ToolCall,
@@ -74,38 +76,22 @@ def _evidence(chunk_id: str) -> dict[str, Any]:
     return evidence
 
 
-def _guided_search(argument: Any) -> dict[str, Any]:
-    """業務ガイドを使う rag_search（#1238 の出力）。契約の種類が分からなければ確かめる。"""
+def _clarifying_search(argument: Any) -> dict[str, Any]:
+    """条件を確かめる rag_search。契約の種類が分からなければ確かめる。"""
     conditions = dict(argument.conditions or {})
     output: dict[str, Any] = deepcopy(DEFAULT_OUTPUTS["rag_search"])
-    region = {"id": "region", "label": "地域", "value": "東日本", "source": "question"}
-    guide: dict[str, Any] = {
-        "guide_id": "guide-1",
-        "revision": 2,
-        "title": "契約の更新",
-        "known_conditions": [region],
-        "unknown_conditions": [],
-    }
     if "kind" not in conditions:
-        guide.update(
-            decision="clarify",
-            unknown_conditions=[{"id": "kind", "label": "契約の種類", "handling": "ask"}],
-        )
         output.update(
             answer="契約の種類を確かめてください。",
             outcome="needs_clarification",
             clarifications=[_CLARIFICATION],
-            guide=guide,
             gaps=["更新の期限"],
             evidence=[_evidence("chunk-1")],
         )
     else:
-        kind = {"id": "kind", "label": "契約の種類", "value": conditions["kind"], "source": "user"}
-        guide.update(decision="answer", known_conditions=[region, kind])
         output.update(
             outcome="answered",
             clarifications=[],
-            guide=guide,
             gaps=[],
             evidence=[_evidence("chunk-2"), _evidence("chunk-1")],
         )
@@ -121,7 +107,7 @@ class _Env:
 @pytest.fixture
 def env(monkeypatch: MonkeyPatch) -> Iterator[_Env]:
     """RAG（fake の MCP）と、Control Plane の読み取り・書き込みのツールを使う業務 Agent。"""
-    mcp = fake_product_mcp(monkeypatch, outputs={"rag_search": _guided_search})
+    mcp = fake_product_mcp(monkeypatch, outputs={"rag_search": _clarifying_search})
     recorded = _Env(mcp=mcp)
 
     def handler(name: str) -> Any:
@@ -253,16 +239,6 @@ def test_state_is_built_from_rag_search_and_carried_to_the_next_run(
     assert state["outcome"] == "needs_clarification"
     # 確かめ中の問いは種類（RAG の確認）を持つ（NL2SQL の SQL の生成前の確認と分ける。#1441）。
     assert state["pending_clarifications"] == [{**_CLARIFICATION, "kind": "rag"}]
-    assert state["guide"] == {
-        "guide_id": "guide-1",
-        "revision": 2,
-        "title": "契約の更新",
-        "decision": "clarify",
-    }
-    # RAG が質問の文から読んだ条件。
-    assert state["known_conditions"]["region"]["value"] == "東日本"
-    assert state["known_conditions"]["region"]["source"] == "rag_guide"
-    assert state["known_conditions"]["region"]["label"] == "地域"
     assert state["gaps"] == ["更新の期限"]
     # 根拠は参照だけ（本文・抜粋を持たない）。
     assert state["evidence"] == [
@@ -281,13 +257,11 @@ def test_state_is_built_from_rag_search_and_carried_to_the_next_run(
 
     second = _run("年間です", thread_id=first.thread_id)
     assert second.status == RunStatus.COMPLETED, second.events[-1].message
-    # 2 回目の指示に、目的・分かっている条件・確かめ中の問い・ガイド・予算を足す。
+    # 2 回目の指示に、目的・分かっている条件・確かめ中の問い・予算を足す。
     instructions = str(model.calls[2].system_instructions)
     assert STATE_HEADING in instructions
     assert "目的: 「契約を更新したい」" in instructions
-    assert "地域（region） = 「東日本」" in instructions
     assert "kind: 「契約の種類は何ですか？」 選択肢: 「年間」 / 「月額」" in instructions
-    assert "guide_id=guide-1、版 2" in instructions
     assert "「更新の期限」" in instructions
     assert "残り 59 回（上限 60 回）" in instructions
     assert "rag_search の conditions" in instructions
@@ -301,7 +275,6 @@ def test_state_is_built_from_rag_search_and_carried_to_the_next_run(
     # 答えた問いは確かめ終え、不足も残らない。
     assert state["pending_clarifications"] == []
     assert state["gaps"] == []
-    assert state["guide"]["decision"] == "answer"
     assert state["outcome"] == "answered"
     # 同じ根拠は 1 つにまとめ、最後に使った順に並べる。
     assert [item["chunk_id"] for item in state["evidence"]] == ["chunk-2", "chunk-1"]
@@ -391,8 +364,6 @@ def test_rag_calls_over_the_run_budget_return_budget_exceeded(
     assert state["budget"]["run"]["rag_calls"] == 1
     assert state["budget"]["run"]["budget_exceeded"] == 1
     assert state["budget"]["limits"] == {"rag_calls_per_run": 1, "tool_calls_per_task": 60}
-    # 業務ガイドの項目の無い（#1238 より前の）RAG の出力でも状態を作る。
-    assert state["guide"] is None
     assert state["pending_clarifications"] == []
     assert state["outcome"] == "answered"
 
@@ -618,17 +589,11 @@ def test_profiles_keep_the_last_successful_profile_per_connection() -> None:
             _tool_step(
                 "rag__rag_retrieve_evidence", {"query": "締め日", "search_answer_profile_id": "p-2"}
             ),
-            # 失敗した呼び出し・Control Plane の業務ガイドの照合・プロファイルの無い呼び出しは
-            # 残さない。
+            # 失敗した呼び出し・プロファイルの無い呼び出しは残さない。
             _tool_step(
                 "rag__rag_search",
                 {"query": "x", "search_answer_profile_id": "p-bad"},
                 success=False,
-            ),
-            _tool_step(
-                "rag__rag_lookup_guides",
-                {"question": "x", "search_answer_profile_id": "p-guide"},
-                trace_id=f"{GUIDE_CHECK_TRACE_PREFIX}1",
             ),
             _tool_step("rag__rag_search", {"query": "x"}),
             _tool_step("nl2sql__nl2sql_query", {"question": "件数", "profile_id": "sales"}),
@@ -729,3 +694,50 @@ def test_profile_is_not_shown_when_the_data_scope_fixes_it(
     assert STATE_HEADING in instructions
     assert FOLLOW_UP_RULE not in instructions
     assert "「prof-expense」に決まっている" in instructions
+
+
+def test_rag_search_asking_a_clarification_gets_the_question_first() -> None:
+    question = {
+        "condition_id": "target",
+        "label": "付与先",
+        "question": "付与先はどちらですか？",
+        "options": ["個別", "グループ"],
+    }
+    output = {"outcome": "needs_clarification", "clarifications": [question]}
+    step = rag_next_step(output, [])
+    assert step is not None
+    assert (step["action"], step["reason"]) == ("ask_clarification", "needs_clarification")
+    assert step["questions"] == [question]
+    assert rag_next_step({"outcome": "answered"}, []) is None
+
+
+def test_support_task_goal_includes_the_previous_question_while_asking() -> None:
+    goal = "アクセス権限を付与したい"
+    pending = {"goal": goal, "pending_clarifications": [{"condition_id": "target"}]}
+    assert support_task_goal("個別の利用者です。", pending) == f"{goal}\n個別の利用者です。"
+    assert support_task_goal("別の質問", {"goal": goal}) == "別の質問"
+    assert support_task_goal(goal, None) == goal
+
+
+def test_text_references_add_other_document_references() -> None:
+    item: dict[str, Any] = {
+        "document_id": "doc-a",
+        "file_name": "文書 A.pdf",
+        "references": [
+            {"label": "第 2 章", "document_title": "文書 B", "section_path": [], "resolved": False},
+            {"label": "第 3 章", "document_title": None, "section_path": ["3"], "resolved": True},
+        ],
+    }
+
+    references = text_references("rag_retrieve_evidence", {"evidence": [item]})
+
+    assert references == [
+        {
+            "document_id": "doc-a",
+            "file_name": "文書 A.pdf",
+            "reference": "第 2 章",
+            "document_title": "文書 B",
+            "how_to_read": DOCUMENT_REFERENCE_READ_HINT,
+        }
+    ]
+    assert text_references("rag_search", {"evidence": [item]})[0]["document_title"] == "文書 B"

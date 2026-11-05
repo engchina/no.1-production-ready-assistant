@@ -59,7 +59,6 @@ ALL_TOOLS = [
     "rag_list_search_answer_profiles",
     "rag_recommend_search_answer_profile",
     "rag_search",
-    "rag_lookup_guides",
     "rag_retrieve_evidence",
     "rag_validate_answer",
     "rag_read_source",
@@ -161,7 +160,6 @@ def test_initialize_and_tools_list_follow_user_permissions(auth: ProductionAuth)
         "rag_list_search_answer_profiles",
         "rag_recommend_search_answer_profile",
         "rag_search",
-        "rag_lookup_guides",
         "rag_retrieve_evidence",
         "rag_validate_answer",
         "rag_read_source",
@@ -246,54 +244,6 @@ def test_list_search_answer_profiles_returns_all_usable_when_query_matches_nothi
     assert content["query_matched"] is False
     assert content["next_step"] == mcp_tools.QUERY_UNMATCHED_NEXT_STEP
     assert "rag_recommend_search_answer_profile" in content["next_step"]
-
-
-def test_unknown_search_answer_profile_error_tells_the_next_step(
-    auth: ProductionAuth, monkeypatch: MonkeyPatch
-) -> None:
-    """業務ガイドの照会の見つからない・使えない id は、次の手の付いたエラーにする（#2355）。
-
-    使えるプロファイルが 1 つだけならその id を案内し、ほかの利用者のプロファイルは出さない。
-    """
-    _install_search(monkeypatch)
-    fake = ScopedFakeOracle()
-    monkeypatch.setattr(search_answer_profiles_route, "OracleClient", lambda *_a, **_k: fake)
-    single = auth.user_with_permissions(
-        "single", ["menu.search"], search_answer_profile_ids=["bv-1"], knowledge_base_ids=["kb-1"]
-    )
-    several = auth.user_with_permissions(
-        "several",
-        ["menu.search"],
-        search_answer_profile_ids=["bv-1", "bv-3"],
-        knowledge_base_ids=["kb-1"],
-    )
-    arguments = {"query": "規程", "search_answer_profile_id": "default"}
-    tool = "rag_lookup_guides"
-
-    only = _call(tool, arguments, _token(single.user_uuid))
-    assert only["isError"] is True
-    error = only["structuredContent"]
-    assert error["error_code"] == mcp_tools.SEARCH_ANSWER_PROFILE_NOT_FOUND_CODE
-    assert error["status"] == 404
-    assert "「default」" in error["message"]
-    assert "（id: bv-1）" in error["message"]
-    assert error["details"]["suggested_search_answer_profile_id"] == "bv-1"
-    assert error["details"]["next_tools"] == [
-        "rag_recommend_search_answer_profile",
-        "rag_list_search_answer_profiles",
-    ]
-
-    many = _call(tool, arguments, _token(several.user_uuid))["structuredContent"]
-    assert many["error_code"] == mcp_tools.SEARCH_ANSWER_PROFILE_NOT_FOUND_CODE
-    assert "suggested_search_answer_profile_id" not in many["details"]
-    assert "rag_recommend_search_answer_profile に質問を渡して" in many["message"]
-    assert "bv-1" not in many["message"]
-    # 利用者が使えない（ほかの利用者の）プロファイルも、無いものと同じ案内にする。
-    other = _call(
-        tool, {**arguments, "search_answer_profile_id": "bv-2"}, _token(single.user_uuid)
-    )["structuredContent"]
-    assert other["error_code"] == mcp_tools.SEARCH_ANSWER_PROFILE_NOT_FOUND_CODE
-    assert "bv-3" not in other["message"]
 
 
 def _recommend(
@@ -1591,7 +1541,7 @@ def test_retrieve_evidence_with_caller_planning_returns_rule_clarifications(
             trace_id="trace-rule",
             outcome="needs_clarification",
             clarifications=[
-                mcp_tools.GuideClarification(
+                mcp_tools.Clarification(
                     condition_id="rule:r1", label="対象", question="どの対象ですか", options=["A"]
                 )
             ],
@@ -3194,61 +3144,6 @@ def test_read_source_image_errors_are_distinguishable(
 # ---------------------------------------------------------------------------
 # チャット（MCP では提供しない。#787）
 # ---------------------------------------------------------------------------
-
-
-class _GuideProfileOracle:
-    """rag_lookup_guides 用の検索・回答プロファイルだけを返す fake（状態を変えられる）。"""
-
-    def __init__(self, status: str) -> None:
-        self.status = status
-
-    async def get_search_answer_profile(self, profile_id: str) -> Any:
-        if profile_id != "bv-1":
-            return None
-        return SimpleNamespace(
-            id="bv-1",
-            status=SimpleNamespace(value=self.status),
-            config=SearchAnswerProfileConfig.model_validate(
-                {"knowledge_base_ids": ["kb-1"], "query": {"support_guide_enabled": True}}
-            ),
-        )
-
-    async def get_search_answer_profile_knowledge(self, _profile_id: str, _kind: str) -> None:
-        return None
-
-
-def test_lookup_guides_refuses_archived_profile_and_reports_load_failure(
-    auth: ProductionAuth, monkeypatch: MonkeyPatch
-) -> None:
-    """アーカイブ済みのプロファイルは 409、ガイドを読めなければ 503（0 件と区別する。#1278）。"""
-    loaded: list[str] = []
-    failed = {"value": False}
-
-    async def published(_oracle: object, profile_id: str) -> tuple[list[Any], bool]:
-        loaded.append(profile_id)
-        return [], failed["value"]
-
-    monkeypatch.setattr(search_route, "load_published_guides", published)
-    headers = _token(auth.user_with_permissions("searcher", ["menu.search"]).user_uuid)
-    arguments = {"query": "権限を付与したい", "search_answer_profile_id": "bv-1"}
-
-    monkeypatch.setattr(mcp_tools, "OracleClient", lambda: _GuideProfileOracle("ARCHIVED"))
-    archived = _call("rag_lookup_guides", arguments, headers)
-    assert archived["isError"] is True
-    assert archived["structuredContent"]["status"] == 409
-    assert "アーカイブ済み" in archived["structuredContent"]["message"]
-    assert loaded == []
-
-    monkeypatch.setattr(mcp_tools, "OracleClient", lambda: _GuideProfileOracle("ACTIVE"))
-    ok = _call("rag_lookup_guides", arguments, headers)
-    assert ok["isError"] is False
-    assert ok["structuredContent"]["guides"] == []
-
-    failed["value"] = True
-    unavailable = _call("rag_lookup_guides", arguments, headers)
-    assert unavailable["isError"] is True
-    assert unavailable["structuredContent"]["status"] == 503
-    assert unavailable["structuredContent"]["message"] == mcp_tools.GUIDES_UNAVAILABLE_MESSAGE
 
 
 @pytest.mark.parametrize("name", ["rag_chat_send_message", "rag_chat_get_conversation"])

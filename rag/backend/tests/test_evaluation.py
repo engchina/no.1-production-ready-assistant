@@ -1527,7 +1527,7 @@ async def test_business_support_cases_score_handling_metrics_and_reasons() -> No
 async def test_profile_evaluation_resolves_each_case_through_the_profile() -> None:
     seen: list[tuple[str | None, str]] = []
 
-    async def resolver(request: Any, settings: Any, guide_context: Any) -> tuple[Any, Any]:
+    async def resolver(request: Any, settings: Any, user_context: Any) -> tuple[Any, Any]:
         seen.append((request.search_answer_profile_id, request.query))
         return request.model_copy(update={"knowledge_base_ids": ["kb-profile"]}), settings
 
@@ -1547,7 +1547,7 @@ async def test_profile_evaluation_resolves_each_case_through_the_profile() -> No
 async def test_profile_resolution_failure_fails_only_that_case() -> None:
     from fastapi import HTTPException
 
-    async def resolver(request: Any, settings: Any, guide_context: Any) -> tuple[Any, Any]:
+    async def resolver(request: Any, settings: Any, user_context: Any) -> tuple[Any, Any]:
         raise HTTPException(status_code=409, detail="アーカイブ済み")
 
     runner = EvaluationRunner(pipeline=StubPipeline(), profile_resolver=resolver)
@@ -1893,11 +1893,11 @@ async def test_runner_turn_failure_fails_the_case() -> None:
     assert (result.status, result.split, result.failure_reasons) == ("error", "dev", ["case_error"])
 
 
-async def test_profile_evaluation_passes_prior_questions_as_guide_context() -> None:
+async def test_profile_evaluation_passes_prior_questions_as_user_context() -> None:
     seen: list[tuple[str, list[str], dict[str, str]]] = []
 
-    async def resolver(request: Any, settings: Any, guide_context: Any) -> tuple[Any, Any]:
-        seen.append((request.query, list(guide_context), dict(request.conditions)))
+    async def resolver(request: Any, settings: Any, user_context: Any) -> tuple[Any, Any]:
+        seen.append((request.query, list(user_context), dict(request.conditions)))
         return request, settings
 
     runner = EvaluationRunner(pipeline=ConversationPipeline(), profile_resolver=resolver)

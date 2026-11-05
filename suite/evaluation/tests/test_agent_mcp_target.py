@@ -282,7 +282,6 @@ def _evaluate(
     fake: FakeAgentMcp,
     cases: list[dict[str, Any]],
     *,
-    labels: dict[str, str] | None = None,
     timeout: float = 60,
     api_clock: Callable[[], float] | None = None,
     infer_missing_outcome: bool = False,
@@ -292,7 +291,6 @@ def _evaluate(
     target = AgentMcpTarget(
         AgentMcp(_mcp(fake), **clock_kwargs),
         config,
-        labels=labels,
         **({"api_clock": api_clock} if api_clock else {}),
     )
     return run_experiment(
@@ -492,7 +490,7 @@ def test_superseded_cases_record_whether_the_agent_searched_old_versions() -> No
     }
 
 
-def test_known_conditions_are_added_to_the_first_question_with_guide_labels() -> None:
+def test_known_conditions_are_added_to_the_first_question() -> None:
     case = {
         "id": "known",
         "query": "権限を付与したいです。どの画面で操作しますか？",
@@ -504,10 +502,10 @@ def test_known_conditions_are_added_to_the_first_question_with_guide_labels() ->
         "run-1", evidence=[_evidence("doc-manual", "c2", "承認を得てください")]
     )
     fake = FakeAgentMcp([([run], observation)])
-    record = _evaluate(fake, [case], labels={"target": "付与先"})
+    record = _evaluate(fake, [case])
     chat = next(args for tool, args in fake.calls if tool == "agent_chat")
-    assert chat["question"].endswith("（既知の条件: 付与先は「グループ」）")
-    assert known_conditions_text({"approved": "はい"}, {}) == "（既知の条件: approvedは「はい」）"
+    assert chat["question"].endswith("（既知の条件: targetは「グループ」）")
+    assert known_conditions_text({"approved": "はい"}) == "（既知の条件: approvedは「はい」）"
     # outcome の無い完了の Run は、既定では推定せず判断の正しさを評価不能にする。
     result = record.report.case_results[0]
     assert (result.observed_outcome, result.outcome_source) == (None, None)

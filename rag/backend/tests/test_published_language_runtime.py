@@ -21,7 +21,6 @@ from app.api.routes import (
     mcp,
     search,
     search_answer_profile_knowledge,
-    support_guides,
 )
 from app.rag import published_language_runtime as runtime
 from app.rag.language_pack_releases import active_release
@@ -50,7 +49,6 @@ def test_runtime_dependency_is_on_model_entrypoints_but_not_health_or_auth() -> 
         mcp.router,
         evaluation.router,
         search_answer_profile_knowledge.router,
-        support_guides.router,
     ):
         assert id(router) in bound
     assert id(health.router) not in bound

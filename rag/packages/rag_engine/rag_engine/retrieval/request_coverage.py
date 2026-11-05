@@ -13,7 +13,7 @@ from rag_engine.dependencies import report_degraded
 from rag_engine.retrieval.task_contract import task_contract
 
 COVERAGE_SCHEMA_VERSION = 2
-# 1 要求の再検索に足す手がかり（用語の別名・業務ガイドの検索の手がかり）の上限。
+# 1 要求の再検索に足す手がかり（用語の別名・規則の手がかり）の上限。
 MAX_HINTS = 3
 # 要求単位の文の中の「原文: …」以降は判定に使わない（親の要求の原文の写し）。
 _FACET_TARGET = re.compile(r"対象「(.+?)」の(.+?)を個別に回答する")
@@ -230,7 +230,7 @@ def re_retrieval_skip_reason(rows: Sequence[Mapping[str, Any]], budget: Coverage
 
 
 def request_hints(target: RequestTarget, runtime_knowledge: Any, tokenize: Callable[[str], Sequence[str]]) -> list[str]:
-    """要求の再検索に足す手がかり。要求の語を含む用語の別名と、要求の語を共有する規則（業務ガイド）の手がかり。"""
+    """要求の再検索に足す手がかり。要求の語を含む用語の別名と、要求の語を共有する規則の手がかり。"""
     if runtime_knowledge is None:
         return []
     focus = _normalize(target.text)

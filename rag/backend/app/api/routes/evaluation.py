@@ -71,15 +71,14 @@ from app.rag.evaluation_jobs import (
 )
 from app.rag.evaluation_manifest import build_run_manifest, with_run_check
 from app.rag.evaluation_paired import compare_paired
-from app.rag.evaluation_process import guide_process_row, process_draft
-from app.rag.evaluation_results_excel import evaluation_results_xlsx
-from app.rag.rate_limit import enforce_rate_limit
-from app.rag.support_guide_process_import import (
-    GuideDraftLlm,
-    draft_guides,
+from app.rag.evaluation_process import (
+    ProcessDraftLlm,
+    draft_process_expectations,
     list_knowledge_documents,
     process_headings,
 )
+from app.rag.evaluation_results_excel import evaluation_results_xlsx
+from app.rag.rate_limit import enforce_rate_limit
 from app.schemas.common import ApiResponse
 from app.schemas.evaluation import (
     EvaluationCase,
@@ -92,11 +91,11 @@ from app.schemas.evaluation import (
     EvaluationMetrics,
     EvaluationProcessDraftData,
     EvaluationProcessDraftRequest,
+    EvaluationProcessRow,
     EvaluationResultExportRequest,
     EvaluationRunRequest,
 )
 from app.schemas.search import normalize_search_id_list
-from app.schemas.support_guide import SupportGuideProcessRow
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -290,8 +289,8 @@ async def import_evaluation_cases(
     return ApiResponse(data=result)
 
 
-def evaluation_process_llm(settings: Settings) -> GuideDraftLlm:
-    """回答の過程を構造化する LLM（業務ガイドの取り込みと同じ呼び出し。テストで差し替える）。"""
+def evaluation_process_llm(settings: Settings) -> ProcessDraftLlm:
+    """回答の過程を構造化する LLM（テストで差し替える）。"""
     return EnterpriseAiClient(settings=settings)
 
 
@@ -302,23 +301,21 @@ async def draft_evaluation_process_expectations(
 ) -> ApiResponse[EvaluationProcessDraftData]:
     """評価のケースの回答の過程から、期待（手順・条件・根拠・対応）の下書きを作る（#2402。保存しない）。
 
-    構造化は業務ガイドの取り込み（#2397）と同じ部品で、1 行でモデルの API を 1 回呼ぶ（上限
-    つき並行。``RAG_SUPPORT_GUIDE_IMPORT_CONCURRENCY``）。見出しの語は言語資源
-    （``guide_import_cues.process_headings``）、資料の名前は選んだナレッジベースの文書で解決する。
+    1 行でモデルの API を 1 回呼ぶ（上限つき並行。``RAG_EVALUATION_PROCESS_CONCURRENCY``）。
+    見出しの語は言語資源、資料の名前は選んだナレッジベースの文書で解決する。
     画面は行を ``EVALUATION_PROCESS_MAX_REQUEST_ROWS`` 行ずつに分けて送る。
     """
     enforce_rate_limit("evaluation", http_request)
     settings = get_settings()
     documents = await list_knowledge_documents(OracleClient(), body.knowledge_base_ids)
     llm = evaluation_process_llm(settings)
-    caller = make_ai_caller(settings, "guide_import")
-    rows = [guide_process_row(row) for row in body.rows]
+    caller = make_ai_caller(settings, "evaluation_process")
 
     async def run(
-        targets: Sequence[SupportGuideProcessRow],
-        fn: Callable[[SupportGuideProcessRow, Attempt], Awaitable[str]],
+        targets: Sequence[EvaluationProcessRow],
+        fn: Callable[[EvaluationProcessRow, Attempt], Awaitable[str]],
     ) -> list[tuple[str | None, str | None]]:
-        async def call(row: SupportGuideProcessRow, attempt: Attempt) -> str:
+        async def call(row: EvaluationProcessRow, attempt: Attempt) -> str:
             with sdk_retries_disabled():
                 return await fn(row, attempt)
 
@@ -331,8 +328,8 @@ async def draft_evaluation_process_expectations(
         ]
 
     try:
-        items = await draft_guides(
-            rows,
+        drafts = await draft_process_expectations(
+            body.rows,
             documents,
             llm=llm,
             headings=process_headings(current_pack()),
@@ -342,11 +339,7 @@ async def draft_evaluation_process_expectations(
         raise HTTPException(
             status_code=503, detail=f"回答の過程から期待の下書きを作れませんでした。{exc}"
         ) from exc
-    return ApiResponse(
-        data=EvaluationProcessDraftData(
-            drafts=[process_draft(row, item) for row, item in zip(body.rows, items, strict=True)]
-        )
-    )
+    return ApiResponse(data=EvaluationProcessDraftData(drafts=drafts))
 
 
 def _with_issues(
@@ -504,7 +497,7 @@ async def _execute_run(
         else resolve_evaluation_suite(suite_name)
     )
     # 評価の実行条件（#59）。基準日は明示が無ければ開始時の今日にし、評価の間は固定する
-    # （日付を跨いでも全ケースが同じ日で検索・業務ガイドの期間を判定する。通常の質問は変えない）。
+    # （日付を跨いでも全ケースが同じ日で検索の期間を判定する。通常の質問は変えない）。
     explicit_as_of = (request.filters.get(AS_OF_FILTER_KEY) or "").strip()
     as_of = date.fromisoformat(explicit_as_of) if explicit_as_of else settings_today()
     settings = get_settings()
@@ -537,7 +530,7 @@ async def _execute_run(
         )
         metrics = metrics.model_copy(update={"evaluation_suite": suite_name})
         if request.compare_search_answer_profile_id:
-            # 同じケースを検索・回答プロファイルの範囲（参照 KB・業務ガイド・ルール）でも流す
+            # 同じケースを検索・回答プロファイルの範囲（参照 KB・ルール）でも流す
             # （#2402）。範囲はプロファイルが決めるため、ナレッジベースの指定は渡さない。
             compared = await EvaluationRunner().run(
                 cases=request.cases,

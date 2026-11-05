@@ -66,7 +66,6 @@ def context_setup(monkeypatch: pytest.MonkeyPatch) -> tuple[ContextOracle, Setti
         return "対象 A の手順は？ 条件 B との違いは？"
 
     monkeypatch.setattr(chat, "load_runtime_knowledge_payload", empty)
-    monkeypatch.setattr(chat, "_published_guides", empty)
     monkeypatch.setattr(chat, "_ensure_caller_owns", lambda _conversation: None)
     monkeypatch.setattr(RagPipeline, "_rewrite_query_with_history", rewrite)
     return oracle, settings, calls
@@ -229,8 +228,6 @@ async def test_clarification_api_matches_resolved_question(
     from app.schemas.search_answer_profile_knowledge import ClarificationSuggestRequest
 
     oracle, settings, calls = context_setup
-    settings.rag_support_guide_enabled = False
-    oracle.view.config.query.support_guide_enabled = False
     matched: list[str] = []
     monkeypatch.setattr(route, "OracleClient", lambda: oracle)
     monkeypatch.setattr(route, "get_settings", lambda: settings)
@@ -368,9 +365,7 @@ async def test_confirmation_api_keeps_unknown_and_shares_positive_choice(
     from tests.test_rule_selection import PAYLOAD
 
     oracle, settings, _calls = context_setup
-    settings.rag_support_guide_enabled = False
     settings.rag_history_rewrite_enabled = False
-    oracle.view.config.query.support_guide_enabled = False
     payload = deepcopy(PAYLOAD)
     text = "設定はモードAを選びます" if known else "設定はモードAではない。まだ未定です"
     captured = []

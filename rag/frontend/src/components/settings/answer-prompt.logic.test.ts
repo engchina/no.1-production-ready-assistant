@@ -56,13 +56,11 @@ describe("各段のプロンプトの区分ごとのまとめ", () => {
 
 
 describe("プロンプトの表示先", () => {
-  it("条件認識だけを回答プロンプトに置き、他の質問解釈は検索方法に残す", () => {
-    expect(isRetrievalPromptStage({ id: "support_guide_conditions", phase: "question" })).toBe(false);
-    for (const id of ["history_rewrite", "field_filter", "routing", "expansion"]) {
-      expect(isRetrievalPromptStage({ id, phase: "question" })).toBe(true);
+  it("質問の解釈から根拠の判定までを検索方法に置く", () => {
+    for (const phase of ["question", "retrieval", "grounding"]) {
+      expect(isRetrievalPromptStage({ phase })).toBe(true);
     }
-    expect(isRetrievalPromptStage({ id: "audit", phase: "audit" })).toBe(false);
-    expect(isRetrievalPromptStage({ id: "retrieval", phase: "retrieval" })).toBe(true);
+    expect(isRetrievalPromptStage({ phase: "audit" })).toBe(false);
   });
 });
 

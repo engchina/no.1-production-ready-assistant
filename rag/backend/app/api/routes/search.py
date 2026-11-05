@@ -16,7 +16,6 @@ from pr_system_settings.auth.errors import SecurityApiError
 
 from app.clients.oracle import OracleClient
 from app.clients.oracle_run_history import RunHistoryStore
-from app.clients.support_guide_store import SupportGuideStore
 from app.config import (
     Settings,
     enterprise_ai_default_model_id,
@@ -34,7 +33,7 @@ from app.rag.answer_failure import (
     describe_answer_failure,
     find_incomplete_response,
 )
-from app.rag.answer_notice import GUIDE_HANDOFF_CONTACT_KEY, current_answer_notice
+from app.rag.answer_notice import current_answer_notice
 from app.rag.answer_provenance import search_answer_profile_revision
 from app.rag.answer_timeout import (
     AnswerTimeoutError,
@@ -72,33 +71,6 @@ from app.rag.search_answer_profile_knowledge import (
     load_domain_keywords,
 )
 from app.rag.stored_answer import stored_citation_metadata
-from app.rag.support_guide_conditions import (
-    resolve_answered_conditions,
-    resolve_text_conditions,
-)
-from app.rag.support_guide_evidence import (
-    EVIDENCE_CONDITIONS_KEY,
-    EVIDENCE_PLANS_KEY,
-    evidence_condition_candidates,
-    evidence_plans,
-)
-from app.rag.support_guide_query import build_guide_query
-from app.rag.support_guide_runtime import (
-    GUIDE_LOAD_FAILED_KEY,
-    GUIDE_PREVIEW_TRACE_PREFIX,
-    GuideChoice,
-    GuideContext,
-    GuidePreview,
-    build_guide_context,
-    clarification_questions,
-    guide_notices,
-    guide_step_plan,
-    query_summary,
-    select_guide,
-    short_circuit_answer,
-    with_draft,
-    with_guide_rule,
-)
 from app.rag.trace_store import AnswerTrace, TraceSnapshot, run_trace_snapshot, trace_snapshot
 from app.schemas.common import ApiResponse, Page
 from app.schemas.search import (
@@ -111,7 +83,6 @@ from app.schemas.search import (
 from app.schemas.search_answer_profile import SearchAnswerProfileDetail
 from app.schemas.search_answer_profile_knowledge import ClarificationAnswer
 from app.schemas.settings import FieldDefinitionData, SearchExtractionFieldsData
-from app.schemas.support_guide import SupportGuideContent
 from app.security.permissions import SCOPE_FORBIDDEN_CODE
 
 router = APIRouter()
@@ -311,9 +282,7 @@ async def _resolve_query_context(
     request: SearchRequest,
     global_settings: Settings,
     *,
-    guide_context: Sequence[str] = (),
-    interactive: bool = False,
-    guide_preview: GuidePreview | None = None,
+    user_context: Sequence[str] = (),
     answered_rule_ids: Sequence[str] = (),
     confirmed_rule_answers: Sequence[ClarificationAnswer] = (),
 ) -> tuple[SearchRequest, Settings, str | None, str | None]:
@@ -324,11 +293,7 @@ async def _resolve_query_context(
     KB はナレッジ構築設定だけを持つため、KB query legacy 値は検索 runtime へ反映しない。
     戻り値は (有効 request, 有効 Settings, 適用 KB id, 適用 Search Answer Profile id)。
 
-    業務ガイド（#1238）は ``guide_context``（チャットの前の発話）と質問で選ぶ。``interactive``
-    （チャット）は送信の前に確認の質問を出すので、残った不明の条件は分岐で答える。
-
-    ``guide_preview``（下書きで試す。#1288）は、そのガイドの公開の版の代わりに下書きを、この
-    1 回の回答の照合にだけ使う（保存・公開の版は変えない）。回答の記録に印を残す。
+    ルールの選択の認識は ``user_context``（チャットの前の発話）と質問を読む。
     """
     oracle = OracleClient()
     settings = global_settings
@@ -409,7 +374,7 @@ async def _resolve_query_context(
                     request.query,
                     settings,
                     source_text="\n".join(
-                        [*guide_context, request.original_question or request.query]
+                        [*user_context, request.original_question or request.query]
                     ),
                     answers=recognized_answers,
                     usage=selection_usage,
@@ -452,185 +417,22 @@ async def _resolve_query_context(
                     )
                 }
             )
-            if guide_preview is not None:
-                # 管理画面から明示した下書きの試答だけ、この回答に限って有効にする。
-                settings = settings.model_copy(update={"rag_support_guide_enabled": True})
-            if not settings.rag_support_guide_enabled:
-                runtime_knowledge = await asyncio.to_thread(
-                    with_answer_assumptions,
-                    runtime_knowledge,
-                    policy=profile_config.clarification_policy,
-                    question=request.query,
-                    conditions=request.conditions,
-                    guide={},
-                    answered_rule_ids=answered_rule_ids,
-                    confirmed_answers=recognized_answers,
-                )
-                settings = settings.model_copy(
-                    update={
-                        "rag_support_guide": {},
-                        "rag_runtime_knowledge": runtime_knowledge or {},
-                    }
-                )
-                return effective_request, settings, None, view.id if (applied or kb_ids) else None
-            # 公開した業務ガイドのうち、質問に合う 1 つを選ぶ（#1238）。適用範囲は質問と検索の
-            # 絞り込みの手がかりで確かめる（#1278）。
-            guides, guides_failed = await load_published_guides(oracle, view.id)
-            if guide_preview is not None:
-                guides = with_draft(guides, guide_preview)
-                # 下書きの試答は業務ガイドの要件ごとの充足まで詳しく監査する(#2795)。
-                settings = settings.model_copy(
-                    update={
-                        "rag_guide_preview": guide_preview.marker(),
-                        "rag_answer_audit_mode": "detailed",
-                    }
-                )
-            guide_text = "\n".join([*guide_context, request.query])
-            # 照合の前に用語の別名で展開し、ON なら意味の照合の埋め込みを作る（#2398）。
-            query = await build_guide_query(
-                oracle,
-                settings,
-                view.id,
-                guides,
-                guide_text,
-                runtime_knowledge,
-                unsaved=frozenset({guide_preview.guide_id})
-                if guide_preview is not None
-                else frozenset(),
-            )
-            # 上位のガイドが近いときに確かめるのは、回答を作る検索・MCP だけ（チャットは送信の前の
-            # 確認の判定で確かめる）。
-            close_margin = (
-                settings.rag_support_guide_close_match_margin
-                if settings.rag_support_guide_close_match_clarification_enabled
-                and request.generate_answer
-                and not interactive
-                else None
-            )
-            selected = select_guide(
-                guides,
-                query,
-                request.conditions,
-                interactive=interactive,
-                context=await support_guide_context(
-                    oracle, guides, guide_text, effective_request.filters
-                ),
-                close_margin=close_margin,
-            )
-            # 確認に自由入力で答えた選択式の条件は、答えの文が選んだ選択肢に決める（#2726）。
-            selected = await resolve_answered_conditions(
-                selected, request.conditions, settings, interactive=interactive
-            )
-            if request.generate_answer:
-                selected = await resolve_text_conditions(
-                    selected, guide_text, settings, interactive=interactive
-                )
-            if guides_failed:
-                # 読めなかったことを回答の診断に残す（ガイドを使わずに答える。#1278）。
-                settings = settings.model_copy(
-                    update={"rag_support_guide": {GUIDE_LOAD_FAILED_KEY: True}}
-                )
-            if isinstance(selected, GuideChoice):
-                settings = settings.model_copy(
-                    update={
-                        "rag_support_guide": {
-                            **selected.summary(),
-                            **query_summary(query),
-                            "clarifications": selected.clarifications(),
-                            "short_answer": selected.short_answer(),
-                        }
-                    }
-                )
-            elif selected is not None:
-                match = selected
-                runtime_knowledge = with_guide_rule(runtime_knowledge, match)
-                settings = settings.model_copy(
-                    update={
-                        "rag_support_guide": {
-                            **match.summary(),
-                            **query_summary(query),
-                            **(
-                                {"draft": True}
-                                if guide_preview is not None
-                                and match.guide_id == guide_preview.guide_id
-                                else {}
-                            ),
-                            "clarifications": clarification_questions(match),
-                            # 回答の根拠で決められる条件の候補（#2404。画面の図の項目の種類）。
-                            EVIDENCE_CONDITIONS_KEY: evidence_condition_candidates(match),
-                            # 根拠で条件が決まったときの手順の計画（#2689）。
-                            EVIDENCE_PLANS_KEY: evidence_plans(match),
-                            # 手順ごとの検索（#2395）。回答フローだけが使う。
-                            "step_plan": guide_step_plan(match),
-                            # 業務ガイドの窓口・引き継ぐ条件・承認（#2792。資料と分けて出す）。
-                            "notices": guide_notices(match),
-                            "short_answer": (
-                                short_circuit_answer(match)
-                                if match.decision in {"clarify", "handoff"}
-                                else ""
-                            ),
-                            # 引き継ぎの窓口（#2400。回答の注意書きで同じ窓口の案内を重ねない）。
-                            GUIDE_HANDOFF_CONTACT_KEY: (
-                                match.content.handoff.contact if match.decision == "handoff" else ""
-                            ),
-                        }
-                    }
-                )
             runtime_knowledge = await asyncio.to_thread(
                 with_answer_assumptions,
                 runtime_knowledge,
                 policy=profile_config.clarification_policy,
                 question=request.query,
                 conditions=request.conditions,
-                guide=settings.rag_support_guide or {},
                 answered_rule_ids=answered_rule_ids,
                 confirmed_answers=recognized_answers,
             )
-            if (
-                profile_config.clarification_policy == "assume"
-                and settings.rag_support_guide.get("decision") == "clarify"
-            ):
-                # 確認カードの代わりに、未確定の条件を示して根拠に基づく回答を生成する。
-                settings = settings.model_copy(
-                    update={
-                        "rag_support_guide": {
-                            **settings.rag_support_guide,
-                            "decision": "branch",
-                            "short_answer": "",
-                        }
-                    }
-                )
-            if runtime_knowledge:
-                settings = settings.model_copy(update={"rag_runtime_knowledge": runtime_knowledge})
-            applied_view = view.id if (applied or kb_ids) else None
-            return effective_request, settings, None, applied_view
+            settings = settings.model_copy(
+                update={"rag_runtime_knowledge": runtime_knowledge or {}}
+            )
+            return effective_request, settings, None, view.id if (applied or kb_ids) else None
 
     request = _scope_request_knowledge_bases(request)
     return request, settings, None, None
-
-
-async def load_published_guides(
-    oracle: OracleClient, search_answer_profile_id: str
-) -> tuple[list[tuple[str, int, SupportGuideContent]], bool]:
-    """公開した業務ガイドと、読めなかったか。
-
-    読めなければ（表をまだ作っていない環境など）使わずに答え、呼び出し元が失敗を回答の診断・MCP の
-    エラーに出す（#1278）。
-    """
-    try:
-        guides = await SupportGuideStore(oracle).published_contents(search_answer_profile_id)
-    except Exception:  # noqa: BLE001 - 業務ガイドは補助。読めなくても検索・回答は続ける。
-        logger.warning("support guides load failed", exc_info=True)
-        return [], True
-    return guides, False
-
-
-async def _published_guides(
-    oracle: OracleClient, search_answer_profile_id: str
-) -> list[tuple[str, int, SupportGuideContent]]:
-    """公開した業務ガイド（読めなければ空。確認の質問の候補・チャットの答えの引き直しに使う）。"""
-    guides, _ = await load_published_guides(oracle, search_answer_profile_id)
-    return guides
 
 
 def profile_scope_filters(view: SearchAnswerProfileDetail) -> dict[str, str] | None:
@@ -639,28 +441,6 @@ def profile_scope_filters(view: SearchAnswerProfileDetail) -> dict[str, str] | N
     permitted = permitted_knowledge_base_ids(knowledge_base_ids)
     scoped = knowledge_base_ids if permitted is None else permitted
     return {"knowledge_base_id": format_search_id_filter(scoped)} if scoped else None
-
-
-async def support_guide_context(
-    oracle: OracleClient,
-    guides: Sequence[tuple[str, int, SupportGuideContent]],
-    text: str,
-    filters: Mapping[str, str] | None,
-) -> GuideContext:
-    """業務ガイドの適用範囲の手がかり（#1278）。
-
-    業務の名指しは、検索範囲（``filters``。KB の範囲を含む）の文書の大分類の語でも探す（#553 と同じ
-    一覧）。ガイドに業務の指定が無い・範囲が無いときは読まない。読めなければガイドの語だけで探す。
-    """
-    vocabulary: list[str] = []
-    if filters is not None and any(
-        content.applicability.business_domains for _, _, content in guides
-    ):
-        try:
-            vocabulary = await oracle.retrieval_large_categories(dict(filters))
-        except Exception:  # noqa: BLE001 - 手がかりは補助。読めなければガイドの語だけで探す。
-            logger.warning("business names load failed for support guides", exc_info=True)
-    return build_guide_context(text, guides, filters=filters, business_vocabulary=vocabulary)
 
 
 def ensure_search_answer_profile_not_archived(view: object, search_answer_profile_id: str) -> None:
@@ -682,7 +462,7 @@ SEARCH_ANSWER_PROFILE_KNOWLEDGE_BASES_FORBIDDEN_MESSAGE = (
     "る権限がありません。管理者に権限を依頼してください。"
 )
 # 指定した検索・回答プロファイルが無い（利用者が使えないものを含む）404 の文の頭。MCP はこの文で
-# 見分けて、次の手の付いたツールのエラーにする（app.mcp.tools.profile_not_found_error）。
+# 見分けて、検索・回答プロファイルを選び直す（app.mcp.tools._with_profile_selection）。
 SEARCH_ANSWER_PROFILE_NOT_FOUND_PREFIX = "指定した検索・回答プロファイルが見つかりません: "
 REQUEST_KNOWLEDGE_BASES_FORBIDDEN_MESSAGE = (
     "指定したナレッジベースを利用する権限がありません。管理者に権限を依頼してください。"
@@ -788,7 +568,6 @@ async def _report_tool_progress(progress: SearchStageProgress) -> None:
 async def _run_search_with_timeout(
     request: SearchRequest,
     *,
-    guide_preview: GuidePreview | None = None,
     run_recorder: RunRecorder | None = None,
     scope: AnswerScope | None = None,
     caller_queries: Sequence[str] | None = None,
@@ -797,8 +576,7 @@ async def _run_search_with_timeout(
     """検索・回答の pipeline を回答生成の上限（`rag_answer_timeout_seconds`。#375）付きで実行する。
 
     pipeline は回答を LLM で生成するため、LLM を何度か呼んでも収まる回答生成の上限を使う。
-    ``guide_preview`` は業務ガイドの下書きで試す回答（#1288。trace_id に接頭辞を付ける）。
-    ``run_recorder`` は RAG 検索の画面の実行を実行履歴に残す（#1890。MCP・下書きは渡さない）。
+    ``run_recorder`` は RAG 検索の画面の実行を実行履歴に残す（#1890。MCP は渡さない）。
     ``scope`` は回答前の確認の答え（MCP の rag_search のルールの確認。#2117）。
     ``caller_queries`` は呼び出し元（業務 Agent）が作った検索文（MCP の rag_retrieve_evidence の
     planning=caller。#2651）。渡すと質問に応じた推論の LLM を呼ばずに検索する（`RagPipeline`）。
@@ -807,12 +585,10 @@ async def _run_search_with_timeout(
     チャットと同じ流れで根拠を集めて回答の生成の手前で止める。
     """
     request, settings, applied_kb, applied_view = await _resolve_query_context(
-        request, get_settings(), guide_preview=guide_preview
+        request, get_settings()
     )
     started_at = perf_counter()
     trace_id = new_trace_id()
-    if guide_preview is not None:
-        trace_id = GUIDE_PREVIEW_TRACE_PREFIX + trace_id
     answer_model_id = _answer_model_id(request, settings)
     # 処理の経過（共通の span の表に書く。MCP の要求の中では Agent の trace の下に入る。#3226）。
     trace = AnswerTrace(trace_id, owner_user_uuid=current_audit_request_context().user_uuid)
@@ -973,15 +749,6 @@ async def _record_failed_run(
         error=error,
         error_stage=((error.stage or "timeout") if isinstance(error, AnswerTimeoutError) else None),
     )
-
-
-async def run_guide_preview(request: SearchRequest, preview: GuidePreview) -> SearchResponse:
-    """業務ガイドの下書きで試す回答（#1288）。
-
-    通常の検索・回答と同じ pipeline で 1 回だけ答える（モデルの呼び出しは通常の回答と同じ）。
-    公開の版・保存した下書きは変えず、回答の記録には ``guide_preview`` の印を残す。
-    """
-    return await _run_search_with_timeout(request, guide_preview=preview)
 
 
 async def _stream_search_events_with_timeout(

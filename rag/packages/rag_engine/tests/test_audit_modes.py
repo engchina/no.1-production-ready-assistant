@@ -15,7 +15,7 @@ from rag_engine.config import get_settings
 from rag_engine.dependencies import AnswerDependencies, bind_dependencies
 from rag_engine.generation import grounded
 from rag_engine.generation.answering import synthesize_grounded_answer
-from rag_engine.models.llm import GroundedAudit, GroundedCitation, GroundedFactAudit, GroundedItem, GuideRequirementReview
+from rag_engine.models.llm import GroundedAudit, GroundedCitation, GroundedFactAudit, GroundedItem
 
 STEP = "一覧表を選択し、処理を選択します。"
 
@@ -50,7 +50,7 @@ def test_standard_prompt_drops_only_the_completeness_rules():
     assert detailed == grounded.AUDIT_SYSTEM_PROMPT
     removed = [line for line in detailed.splitlines() if line not in standard.splitlines()]
     assert removed and all(line.startswith(grounded._DETAILED_AUDIT_LINES) for line in removed)
-    # 主張の信頼性（支持・矛盾・適用・要約・目的）と、要求・業務ガイドの要件の充足の規則は残す。
+    # 主張の信頼性（支持・矛盾・適用・要約・目的）と、要求の充足の規則は残す。
     for kept in (
         "## Step 2: 各主張を原文と照合する（support）",
         "contradicted",
@@ -58,7 +58,6 @@ def test_standard_prompt_drops_only_the_completeness_rules():
         "summary_supported",
         "goal_alignment",
         "request_reviews",
-        "guide_requirement_reviews",
     ):
         assert kept in standard
     assert "unused_evidence" not in standard
@@ -73,7 +72,7 @@ def test_standard_does_not_regenerate_for_an_unanswered_request_only():
     result = _run(standard, ctx, grounded.AUDIT_MODE_STANDARD).response
     assert len(_drafts(standard)) == 1
     inputs = _audit_inputs(standard)[0]
-    assert "unused_evidence" not in inputs and "guide_contracts" not in inputs
+    assert "unused_evidence" not in inputs
     assert [name for name, _prompt in standard.prompts if name != "GroundedDraftWire"] == ["GroundedFactAudit"]
     assert result.generation_trace["audit_mode"] == "standard"
     # 不足は本文に残る（答えた範囲は示す）。
@@ -125,7 +124,6 @@ def test_correction_feedback_keeps_factual_problems_only():
         "dropped_items": [{"evidence_id": "E1"}],
         "unanswered_requests": [{"request_id": "Q1"}],
         "unused_evidence_ids": [{"evidence_id": "E2"}],
-        "guide_steps_unexplained": [{"step_id": "s1"}],
         "goal_alignment": "partial",
         "supported_items": [{"text": "t"}],
     }
@@ -220,30 +218,6 @@ def test_deterministic_requests_follow_the_explanations():
     assert statuses([gap]) == {"missing"}
     confirmed.mark("item_check", "検査")
     assert statuses([confirmed]) == {"partial"}
-
-
-def test_requirement_status_decides_unavailable_scope_by_the_requirement_kind():
-    gap = grounded.CheckedItem(GroundedItem(kind="gap", text="対応は資料に記載がありません。"))
-    step = grounded.CheckedItem(
-        GroundedItem(kind="operation", text=STEP, citations=[GroundedCitation(quote=STEP, evidence_id="E1")]),
-        span={"evidence_id": "E1"},
-    )
-    checked = [step, gap]
-
-    def review(state, indexes):
-        return GuideRequirementReview(requirement_id="a:0", answer_state=state, item_indexes=indexes, answer_quote="", reason="")
-
-    completion, evidence = {"kind": "completion"}, {"kind": "evidence"}
-    # 資料に無いことを gap で示したのは、完了条件の充足（製品の規則）。必要な根拠の充足ではない。
-    assert grounded.requirement_status(review("stated_unavailable", [1]), completion, checked) == "addressed"
-    assert grounded.requirement_status(review("stated_unavailable", [1]), evidence, checked) == "missing"
-    # 「無い」と言いながら gap も案内の行も引かないなら、一部だけ。
-    assert grounded.requirement_status(review("stated_unavailable", [0]), completion, checked) == "partial"
-    assert grounded.requirement_status(review("stated_unavailable", [2]), completion, checked, ["窓口へ"]) == "addressed"
-    assert grounded.requirement_status(review("explained", [0]), evidence, checked) == "addressed"
-    assert grounded.requirement_status(review("partly_explained", [0]), completion, checked) == "partial"
-    assert grounded.requirement_status(review("not_mentioned", []), completion, checked) == "missing"
-    assert grounded.requirement_status(None, completion, checked) == "unknown"
 
 
 # ---- 前提を示して回答する（未回答の確認事項。#3069） ------------------------------------

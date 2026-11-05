@@ -13,7 +13,6 @@
 | システム設定（アップロード保存先 / モデル / データベース） | 共有パッケージの画面が持つ判定。RAG は `draftGuardMessages` で文言を渡す |
 | 検索・回答プロファイル（作成・編集のエディタ） | 名前・説明・設定の差分（KB は集合として比べる）。下書きはこのタブに残るため、確認は「移動する」。パンくず・サイドナビに加え、エディタの `一覧へ戻る` も同じ確認を通す |
 | 検索・回答プロファイル（ドメインキーワード / 承認済み FAQ の追加入力 / ランタイム知識） | 保存済みの値、または読み込んだ行との差分 |
-| 検索・回答プロファイル（業務ガイドの編集・取り込みの入力。#1237） | 読み込んだ下書きとの差分（内容に変えた形で比べる）。別のガイドへ移る・閉じる・知識のタブを離れる前も同じ確認を出す |
 | ナレッジベース（作成の画面 `?id=new`・詳細の基本情報） | 名前・説明の差分（前後の空白は除いて比べる）。検索・回答プロファイルと同じ部品（`useEntityEditorDraft`）で、下書きはこのタブに残るため確認は「移動する」。パンくず・サイドナビに加え、`一覧へ戻る` も同じ確認を通す（#555） |
 | 文書詳細（KB 所属 / 分類と有効期間 / 版（#1248） / レシピの処理設定 / 抽出確認の編集） | 集合としての所属の差分、分類と有効期間・選んだ新しい版と保存値の差分、レシピ設定の差分、抽出確認の未保存編集（抽出確認は画面固有の文言） |
 
@@ -38,9 +37,8 @@
 | 文書インデックス | 状態の絞り込み・KB の絞り込み・検索・ページ・表示件数（#1891） | sessionStorage |
 | ナレッジベース | 状態の絞り込み・検索・ページ・表示件数（#1891） | sessionStorage |
 | ナレッジベースの所属文書 | 検索・ページ（ナレッジベースごと）・表示件数（別のナレッジベースでも保つ。#1891）（`knowledgeBases.documentsPage`） | sessionStorage |
-| 検索・回答プロファイルの業務ガイド・用語 / ルール・類似問、業務ガイドの公開の履歴、品質評価のケースごとの結果（クライアント側で全件を持つ一覧） | ページと表示件数（`supportGuides.listPaging` / `runtimeKnowledge.listPaging` / `approvedFaqs.listPaging` / `supportGuides.revisionsPaging` / `evaluation.casesPaging` / `evaluation.previewPaging`。対象（検索・回答プロファイル・絞り込み・評価の結果）が変わったら 1 ページ目から、表示件数は保つ。`lib/list-paging.ts` の `useClientListPaging`。#1891） | sessionStorage |
+| 検索・回答プロファイルの用語 / ルール・類似問、品質評価のケースごとの結果（クライアント側で全件を持つ一覧） | ページと表示件数（`runtimeKnowledge.listPaging` / `approvedFaqs.listPaging` / `evaluation.casesPaging` / `evaluation.previewPaging`。対象（検索・回答プロファイル・絞り込み・評価の結果）が変わったら 1 ページ目から、表示件数は保つ。`lib/list-paging.ts` の `useClientListPaging`。#1891） | sessionStorage |
 | 文書の分類（#2141） | 選んだ大分類・中分類（URL の `?large=` / `?middle=`。共有・再読込で同じ位置を開く。一覧に無い ID は選んでいないものとして扱う）と、検索の結果のページと表示件数（`documentCategories.searchPaging`。検索語が変わったら 1 ページ目から） | URL / sessionStorage |
-| 検索・回答プロファイルの業務ガイドの一覧の表示（アーカイブを除く / 含む） | `supportGuides.includeArchived`（#1933） | sessionStorage |
 | ナレッジベース | 作成 / 詳細の名前・説明の未保存の下書き | sessionStorage の `knowledgeBases.draft:<new または KB の ID>`。同じ対象を開き直すと復元する。新規の下書きは一覧の「下書きを開く」から再開する。`変更を元に戻す`・保存の成功で消す（#555） |
 | 品質評価 | 検索・回答プロファイル（`evaluation.profileId`）、実行時の主条件の名前（`evaluation.runProfileName`）、結果の出力に使う実行時の入力（`evaluation.runInput`。保存上限は取込と同じ）、検証した評価リクエストの Excel の結果（ケース・プレビュー・ファイル名。`evaluation.import`。200,000 文字を超えると保存しない。選んだファイルそのものはメモリだけ）、読み込んだケースのページ（`evaluation.previewPaging`）、評価の job id（`evaluation.runJobId`。戻ったらこの id でサーバーの状態を確かめる。#390）と、その評価のケースの見出し（質問・期待する根拠。`evaluation.runCaseLabels`。#2065） | sessionStorage |
 | 実行履歴（#1890・#1955） | 検索・状態・種類・期間・実行者の絞り込み・ページ・表示件数・最後に開いた行（`history.view`。#1891）。詳細はパスの `:runId` | sessionStorage |

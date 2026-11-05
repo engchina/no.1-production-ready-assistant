@@ -1135,7 +1135,7 @@ def test_judge_retry_widens_the_output_limit(monkeypatch: MonkeyPatch) -> None:
     ("calls", "in_order", "selection", "order"),
     [
         (
-            ["rag__rag_retrieve_evidence", "rag__rag_lookup_guides", "rag__rag_search"],
+            ["rag__rag_retrieve_evidence", "rag__rag_read_source", "rag__rag_search"],
             True,
             True,
             True,

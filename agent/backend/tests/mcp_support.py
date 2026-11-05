@@ -65,13 +65,6 @@ class RagRetrieveEvidenceIn(RagSearchIn):
     request_id: str | None = Field(default=None, max_length=128)
 
 
-class RagLookupGuidesIn(_ContractInput):
-    query: str
-    search_answer_profile_id: str
-    conditions: dict[str, str] | None = None
-    limit: int = Field(default=3, ge=1, le=10)
-
-
 class RagReadSourceIn(_ContractInput):
     document_id: str
     # chunk_id か要素の定位子（locator。#1330）のどちらかで読む。
@@ -127,13 +120,6 @@ class RagValidateRequestIn(_ContractInput):
     status: Literal["addressed", "partial", "missing", "unknown"]
 
 
-class RagValidateGuideIn(_ContractInput):
-    search_answer_profile_id: str = Field(min_length=1, max_length=128)
-    guide_id: str = Field(min_length=1, max_length=64)
-    revision: int = Field(ge=1)
-    conditions: dict[str, str] | None = None
-
-
 class RagValidatePremiseIn(_ContractInput):
     # 利用者が回答前の確認で答えた前提（#1898）。
     question: str = Field(default="", max_length=1000)
@@ -166,7 +152,6 @@ class RagValidateAnswerIn(_ContractInput):
     # 決定的な検査の任意の入力（#1276）。
     requests: list[RagValidateRequestIn] | None = Field(default=None, max_length=30)
     gaps: list[str] | None = Field(default=None, max_length=30)
-    guide: RagValidateGuideIn | None = None
     # 監査の判定を再利用する rag_search の回答の記録（#1527）。
     answer_trace_ids: list[str] = Field(default_factory=list, max_length=10)
     premises: list[RagValidatePremiseIn] = Field(default_factory=list, max_length=10)
@@ -444,7 +429,6 @@ class FakeProductMcp:
                         "rag_recommend_search_answer_profile", RagRecommendSearchAnswerProfileIn
                     ),
                     self._tool("rag_read_source", RagReadSourceIn),
-                    self._tool("rag_lookup_guides", RagLookupGuidesIn),
                     self._tool("rag_retrieve_evidence", RagRetrieveEvidenceIn),
                     self._tool("rag_outline", RagOutlineIn),
                     self._tool("rag_read_document", RagReadDocumentIn),

@@ -39,7 +39,6 @@ EVIDENCE = [
 TOOLS = [
     "rag__rag_recommend_search_answer_profile",
     "rag__rag_retrieve_evidence",
-    "rag__rag_lookup_guides",
 ]
 
 
@@ -55,14 +54,13 @@ def _step(
 
 
 def _retrieval_steps() -> list[RunStep]:
-    """rag-research / default の Agent の調べ方（推薦 → 根拠を集める → 業務ガイドの照合）。"""
+    """rag-research / default の Agent の調べ方（推薦 → 根拠を集める）。"""
     return [
         _step(
             "rag__rag_recommend_search_answer_profile",
             {"recommended_profile_id": "p1", "candidates": [{"id": "p1"}]},
         ),
         _step("rag__rag_retrieve_evidence", {"degraded_steps": [], "evidence": EVIDENCE}),
-        _step("rag__rag_lookup_guides", {"guides": []}),
     ]
 
 
@@ -206,7 +204,6 @@ def _menu_steps() -> list[RunStep]:
             {"recommended_profile_id": "p1", "candidates": [{"id": "p1"}]},
         ),
         _step("rag__rag_retrieve_evidence", {"degraded_steps": [], "evidence": EVIDENCE}),
-        _step("rag__rag_lookup_guides", {"guides": []}, trace_id="guide_check_run-1_rag"),
         _step("nl2sql__nl2sql_list_profiles", {"schema_version": 2, "profiles": []}),
         _step(
             "rag__rag_list_search_answer_profiles",

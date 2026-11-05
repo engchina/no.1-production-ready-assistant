@@ -482,14 +482,6 @@ class ExternalDataItem(_StrictModel):
         return value
 
 
-class GuideRequirementCoverage(_StrictModel):
-    requirement_id: str = Field(description="guide_contracts の要件 id。")
-    evidence_ids: list[str] = Field(
-        max_length=8, description="この要件の説明を支える Evidence の id。ガイドの要件そのものは文書の仕様を示す根拠にしない。"
-    )
-    gap: str = Field(description="根拠が不足するとき、確認できない操作・条件と確認先。根拠があれば空文字。")
-
-
 class GroundedDraft(_StrictModel):
     """主張と引用の対で構成する回答草稿。本文の体裁は render が決定的に組み立てる。"""
 
@@ -500,11 +492,6 @@ class GroundedDraft(_StrictModel):
 
     request_coverage: list[RequestCoverage] = Field(
         default_factory=list, max_length=64, description="要求単位ごとに使う根拠の計画。items より先に書く。"
-    )
-    guide_coverage: list[GuideRequirementCoverage] = Field(
-        default_factory=list,
-        max_length=200,
-        description="guide_contracts の各要件に使う根拠の計画。全 id を1回ずつ、前提の手順から並べる。kind=evidence は引用元と主張の対応を検査する要件で、その指示の復唱は不要。kind=completion は items で説明する操作・条件・除外・確認先。どちらも足りなければ gap に残す。",
     )
     items: list[GroundedItem] = Field(max_length=40, description="主張と原文引用の対。機能・前提ごとに分け、見出しは書かない。")
     applications: list[GroundedApplication] = Field(
@@ -547,11 +534,10 @@ class GroundedDraft(_StrictModel):
         collapsed: dict[str, int] = {}
         if isinstance(data, Mapping):
             data = dict(data)
-            for field in ("request_coverage", "guide_coverage"):
-                kept, _index, removed = _collapse_identical(data.get(field))
-                if removed:
-                    data[field] = kept
-                    collapsed[field] = removed
+            kept, _index, removed = _collapse_identical(data.get("request_coverage"))
+            if removed:
+                data["request_coverage"] = kept
+                collapsed["request_coverage"] = removed
             kept, index, removed = _collapse_identical(data.get("items"))
             if removed:
                 data["items"] = kept
@@ -666,12 +652,9 @@ class GroundedItemReview(_StrictModel):
     )
     source_applicability: Literal["matched", "conditional", "not_applicable", "unknown"] | None = Field(
         default=None,
-        description="実際の引用資料の対象・前提が、この操作と確認済み条件へ適用できるか。業務ガイドで決まった必須範囲を再裁定しない。matched=適合、conditional=原文条件が未確認、not_applicable=原文が別対象へ限定、unknown=判断不能、null=未検証。",
+        description="実際の引用資料の対象・前提が、この操作と確認済み条件へ適用できるか。matched=適合、conditional=原文条件が未確認、not_applicable=原文が別対象へ限定、unknown=判断不能、null=未検証。",
     )
     source_condition: str = Field(default="", description="source_applicability=conditional のとき実際の引用原文にある条件。")
-    business_scope: SkipJsonSchema[dict[str, Any]] = Field(
-        default_factory=dict, description="コードが確定したガイド範囲。モデルの判定ではない。"
-    )
     condition: str = Field(default="", description="conditional のとき原文の条件。")
     reason: str = Field(description="判定の根拠を短く。")
     support_quote: str = Field(
@@ -761,40 +744,14 @@ class GroundedRequestReview(_StrictModel):
     )
 
 
-class GuideRequirementReview(_StrictModel):
-    answer_quote: str = Field(
-        default="",
-        max_length=2400,
-        description="要件を説明している回答 items の text の原文。複数の item を使う場合は該当の text を改変せず改行でつなぐ。説明がなければ空文字。資料から引用しない。",
-    )
-    requirement_id: str = Field(description="guide_contracts の requirements の id。")
-    answer_state: Literal["explained", "partly_explained", "stated_unavailable", "not_mentioned"] = Field(
-        description=(
-            "回答が要件の内容をどう扱ったか（観察した事実だけ。充足かはシステムが決める）。explained=items の text が要件の内容を"
-            "すべて述べた。partly_explained=一部だけ述べた。stated_unavailable=要件の内容が資料に無い・確認できないことを"
-            "gap_items か guide_notes で明示した。not_mentioned=触れていない。"
-        )
-    )
-    item_indexes: list[int] = Field(
-        max_length=40,
-        description="要件を扱った回答の items / gap_items / guide_notes の index。",
-    )
-    reason: str = Field(max_length=600, description="不足している操作・条件。充足なら空文字。")
-
-
 class GroundedFactAudit(_StrictModel):
-    """通常の回答の監査（#2795）。主張の支持・適用、summary、目的との一致、要求と業務ガイドの要件の充足を判定する。
+    """通常の回答の監査（#2795）。主張の支持・適用、summary、目的との一致、要求の充足を判定する。
 
     未使用の根拠は列挙しない（詳しい監査 ``GroundedAudit`` の項目）。受け取った後は ``GroundedAudit`` に写して使う
     （判定しない項目は空）。
     """
 
     reviews: list[GroundedItemReview] = Field(max_length=40, description="各 item の局所監査。")
-    guide_requirement_reviews: list[GuideRequirementReview] = Field(
-        default_factory=list,
-        max_length=200,
-        description="guide_contracts の要件ごとの充足。全 id を1回ずつ判定する。設定の要件は回答の評価基準であり、文書の仕様の根拠ではない。",
-    )
     application_reviews: list[GroundedApplicationReview] = Field(
         default_factory=list, max_length=6, description="各 application（当てはめ）の監査。"
     )
@@ -815,11 +772,6 @@ class GroundedAudit(_StrictModel):
     _wire_validation: dict[str, Any] = PrivateAttr(default_factory=dict)
 
     reviews: list[GroundedItemReview] = Field(max_length=40, description="各 item の局所監査。")
-    guide_requirement_reviews: list[GuideRequirementReview] = Field(
-        default_factory=list,
-        max_length=200,
-        description="guide_contracts の要件ごとの充足。全 id を1回ずつ判定する。設定の要件は回答の評価基準であり、文書の仕様の根拠ではない。",
-    )
     application_reviews: list[GroundedApplicationReview] = Field(
         default_factory=list, max_length=6, description="各 application（当てはめ）の監査。"
     )

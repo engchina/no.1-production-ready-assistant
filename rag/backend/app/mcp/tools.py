@@ -111,7 +111,6 @@ from app.clients.section_map_store import SectionChunkRow, SectionMapStore
 from app.config import get_settings
 from app.mcp.profile_scope import (
     ProfileScope,
-    check_profile,
     check_search,
     within_profile_scope,
 )
@@ -126,8 +125,6 @@ from app.rag.answer_validation import (
     MAX_DATA_RESULTS,
     MAX_PREMISES,
     EvidenceRef,
-    GuideCheckRef,
-    GuideProfileNotFoundError,
     is_premise_id,
     validate_answer,
 )
@@ -207,15 +204,6 @@ from app.rag.stored_answer import (
     passage_mark_record,
     stored_citation_metadata,
 )
-from app.rag.support_guide_conditions import resolve_answered_conditions
-from app.rag.support_guide_query import build_guide_query
-from app.rag.support_guide_runtime import (
-    GuideMatch,
-    clarification_questions,
-    impact_applies,
-    rank_guides,
-    visible_plan,
-)
 from app.schemas.document import DocumentPreprocessArtifact
 from app.schemas.search import (
     INCLUDE_SUPERSEDED_FILTER_KEY,
@@ -230,7 +218,6 @@ from app.schemas.search_answer_profile import (
     SearchAnswerProfileStatus,
     SearchAnswerProfileSummary,
 )
-from app.schemas.support_guide import SupportGuideReference
 from app.search_defaults import search_top_k_default, search_top_k_schema
 from app.security.permissions import MENU_SEARCH, ROUTE_PERMISSIONS
 
@@ -258,9 +245,6 @@ MCP_SERVER_NAME = "production-ready-rag"
 #     足した（#2355）。
 # 17: rag_search に回答の注意書き（notice。API キーで呼んだ外部のクライアントだけ）を足した
 #     （#2405）。
-# 18: rag_lookup_guides の手順に目的・検索の手がかり・参照の資料と頁・必要な根拠・終わりの条件を、
-#     ガイドに分岐（branches）・共通の資料（references）・完了の条件（completion）を足し、
-#     分かっている条件で外れた分岐の手順を返さないようにした（#2396）。
 # 19: rag_validate_answer の claims に、監査が返した判定（audit_status）と根拠の ID の照合の結果
 #     （reference_check）を足し、ID を照合できない矛盾を矛盾のまま返すようにした（#2622）。
 # 20: rag_validate_answer の claims に、段落の分類の照合の結果（classification_check）を
@@ -271,13 +255,8 @@ MCP_SERVER_NAME = "production-ready-rag"
 # 22: rag_validate_answer の claims に、裏付けを採らなかった理由（support_check）を足した（#2659）。
 # 23: rag_retrieve_evidence に、元の質問に当たる検索・回答プロファイルの承認済みのルールと用語の
 #     説明（profile_knowledge）を足した（#2701）。
-# 24: rag_validate_answer に、業務ガイドの手順ごとの説明の充足（guide_steps）と、説明の無い
-#     必須の手順の finding（guide_step_unexplained）を足し、手順の名前の一致だけで
-#     guide_steps_unmatched にしないようにした（#2708）。
 # 25: rag_validate_answer の status に、時間の上限までに一部の段落の監査が終わらなかった
 #     partial と、どの段落も終わらなかった timed_out を足した（#2700）。
-# 26: rag_lookup_guides の参照（references）に、表計算の資料のシートと行の範囲（sheet_ranges）を
-#     足した（#2663）。
 # 27: rag_validate_answer の claims の status に、図の見た目だけで決まる主張（figure_only）を、
 #     reference_check に not_figure・single_figure を、support_check に figure_recheck を
 #     足した（#2678）。
@@ -285,9 +264,7 @@ MCP_SERVER_NAME = "production-ready-rag"
 #     回答全体の警告（answer_warnings）を足した。answer の末尾に「根拠と矛盾し除いた内容」
 #     「確認が必要な点」の節が付く（#2738）。
 # 29: rag_validate_answer の claims の support_check に、段落が勧める内容が利用者の確認の答えの
-#     条件・制約と両立しない premise_conflict（status は contradicted）を足した。rag_lookup_guides・
-#     rag_search の conditions で、選択式の条件に選択肢そのものでない答えを渡すと、答えが選んだ
-#     選択肢に決めるようにした（#2726）。
+#     条件・制約と両立しない premise_conflict（status は contradicted）を足した（#2726）。
 # 30: rag_validate_answer の claims で、段落が根拠の表の別の行・列の値を結び付けた
 #     （value_unbound）とき、status を unsupported から contradicted にし、理由に表の正しい対応を
 #     書くようにした（#2998）。
@@ -323,7 +300,9 @@ MCP_SERVER_NAME = "production-ready-rag"
 # 40: rag_validate_answer の claims に、監査の応答の参照の誤りの診断（監査が写した原文
 #     support_quote・返した根拠の ID audit_evidence_id）と、その誤りの監査し直しの結果
 #     （reference_reaudit）を足した（#112）。
-MCP_OUTPUT_SCHEMA_VERSION = 40
+# 41: rag_search の出力と rag_validate_answer の入出力から手順の照合の欄を外し、手順の照会の
+#     ツールを外した。
+MCP_OUTPUT_SCHEMA_VERSION = 41
 # rag_validate_answer の判定の診断（監査が写した原文・返した根拠の ID。#112）の上限の文字数。
 CLAIM_DIAGNOSTIC_CHARS = 200
 # 根拠の本文の 1 件の上限と、応答の根拠の合計の予算（token の見積もり。3 製品で共通の規則。
@@ -444,7 +423,6 @@ SOURCE_PREVIEW_PATH_PREFIX = "/api/source-previews"
 EvidenceType = Literal["text", "table", "figure_description", "ocr"]
 # rag_search の conditions のうち、検索・回答プロファイルのルールの確認の答え（#2117）。
 RULE_CONDITION_PREFIX = "rule:"
-GUIDES_UNAVAILABLE_MESSAGE = "業務ガイドを読み込めませんでした。時間をおいて再度お試しください。"
 
 SEARCH_ANSWER_PROFILE_READ_PERMISSIONS = ROUTE_PERMISSIONS[("GET", "/search-answer-profiles")]
 SEARCH_PERMISSIONS = frozenset({MENU_SEARCH})
@@ -457,7 +435,7 @@ INSTRUCTIONS = (
     "質問を渡して選び（recommended_profile_id が null で候補が複数なら、候補の名前を示して利用者に"
     "確かめる）、その id を rag_search に渡してください。名前で探すときは"
     " rag_list_search_answer_profiles を使います。\n\n"
-    # 回答前の確認（業務ガイドの条件・検索・回答プロファイルのルールの確認。#2117）。
+    # 回答前の確認（検索・回答プロファイルのルールの確認。#2117）。
     # 引数の組み立ては conditions・skip_clarification の説明にある。
     "## Step 2: 回答前の確認に答える\n"
     "rag_search が outcome=needs_clarification を返したら、clarifications の問いと選択肢を"
@@ -616,7 +594,7 @@ class SearchInput(BaseModel):
         default_factory=dict,
         max_length=30,
         description=(
-            "業務ガイドの条件と、検索・回答プロファイルのルールの確認（rule: で始まる id）の値"
+            "検索・回答プロファイルのルールの確認（rule: で始まる id）の値"
             "（条件の id → 値）。outcome=needs_clarification の clarifications に利用者が答えた値"
             "（選んだ選択肢の表示名・自由入力。複数は「、」で区切る）を入れて呼び直すと、"
             "分かっている条件は聞き直さない。"
@@ -728,21 +706,6 @@ class RetrieveEvidenceInput(SearchInput):
         return self
 
 
-class LookupGuidesInput(BaseModel):
-    """質問に当たる業務ガイドを引く条件。"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    query: str = Field(..., min_length=1, max_length=8000, description="質問文（利用者の目的）。")
-    search_answer_profile_id: str = Field(
-        ..., min_length=1, max_length=128, description="検索・回答プロファイルの id。"
-    )
-    conditions: dict[str, str] = Field(
-        default_factory=dict, max_length=30, description="分かっている条件の値（条件の id → 値）。"
-    )
-    limit: int = Field(default=3, ge=1, le=10, description="返す業務ガイドの最大件数。")
-
-
 class EvidenceRefInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -803,25 +766,6 @@ class ValidateRequestInput(BaseModel):
     )
 
 
-class ValidateGuideInput(BaseModel):
-    """回答が沿った業務ガイド（rag_search の guide・rag_lookup_guides の guides の 1 件）。"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    search_answer_profile_id: str = Field(
-        ..., min_length=1, max_length=128, description="業務ガイドの検索・回答プロファイルの id。"
-    )
-    guide_id: str = Field(..., min_length=1, max_length=64, description="業務ガイドの id。")
-    revision: int = Field(..., ge=1, description="回答に使った公開の版。")
-    conditions: dict[str, str] = Field(
-        default_factory=dict,
-        max_length=30,
-        description=(
-            "分かっている条件の値（条件の id → 値）。当たらない分岐の手順を見分けるのに使う。"
-        ),
-    )
-
-
 class ValidatePremiseInput(BaseModel):
     """利用者が回答の前の確認で答えた前提 1 件（確認の質問と答え）。"""
 
@@ -861,9 +805,9 @@ class ValidateDataResultInput(BaseModel):
 
 
 class ValidateAnswerInput(BaseModel):
-    """回答の最終の検証の条件（requests・guide は渡したときだけ確かめる）。"""
+    """回答の最終の検証の条件（requests は渡したときだけ確かめる）。"""
 
-    # #1246。requests・guide の決定的な確認は #1276。
+    # #1246。requests の決定的な確認は #1276。
 
     model_config = ConfigDict(extra="forbid")
 
@@ -890,13 +834,6 @@ class ValidateAnswerInput(BaseModel):
         default_factory=list,
         max_length=30,
         description="回答に示した資料から確かめられない点（AnswerEnvelope の gaps）。",
-    )
-    guide: ValidateGuideInput | None = Field(
-        default=None,
-        description=(
-            "回答が沿った業務ガイド。渡すと公開の版を読み直し、手順ごとの説明の有無・手順の順序・"
-            "依存・分岐と影響範囲・承認の記載を確かめる。"
-        ),
     )
     answer_trace_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
         default_factory=list,
@@ -1762,10 +1699,8 @@ AnswerOutcome = Literal[
 
 
 class AnswerRequest(BaseModel):
-    id: str = Field(
-        description="質問の要求単位の ID（Q1 など）。業務ガイドの手順は guide:<手順の id>。"
-    )
-    text: str = Field(description="要求の原文（業務ガイドの手順は手順の名前）。")
+    id: str = Field(description="質問の要求単位の ID（Q1 など）。")
+    text: str = Field(description="要求の原文。")
     status: Literal["addressed", "partial", "missing", "unknown"] = Field(
         description=(
             "充足（addressed=答えた / partial=一部 / missing=答えていない / unknown=未確認）。"
@@ -1792,61 +1727,12 @@ class RemovedPassage(BaseModel):
     reasons: list[PassageReason] = Field(default_factory=list, description="除いた理由。")
 
 
-class GuideClarification(BaseModel):
+class Clarification(BaseModel):
     condition_id: str = Field(description="条件の id（conditions に値を入れて呼び直す）。")
     label: str = Field(description="条件の名前。")
     question: str = Field(description="利用者に確かめる問い。")
     options: list[str] = Field(default_factory=list, description="選択肢（無ければ自由に答える）。")
     multiple: bool = Field(default=False, description="選択肢を複数選べるか。")
-
-
-class GuideCondition(BaseModel):
-    id: str
-    label: str
-    state: Literal["known", "unknown", "conflicting"] = Field(
-        default="unknown",
-        description=(
-            "条件の状態（known=分かっている / unknown=分からない / conflicting=質問に複数の値が"
-            "出ていて決められない。値は candidates）。"
-        ),
-    )
-    value: str | None = None
-    source: str | None = Field(
-        default=None,
-        description=(
-            "user=利用者が答えた / question=質問の文から読んだ / document=回答の根拠の画面の図から"
-            "決めた。"
-        ),
-    )
-    handling: str | None = Field(
-        default=None, description="不明のときの扱い（ask=確かめる / branch=分岐 / handoff=人へ）。"
-    )
-    candidates: list[str] = Field(
-        default_factory=list, description="state=conflicting のとき、質問に出た値。"
-    )
-
-
-class GuideRef(BaseModel):
-    guide_id: str
-    revision: int = Field(description="使った公開の版。")
-    title: str
-    decision: Literal["answer", "branch", "clarify", "handoff"] = Field(
-        description=(
-            "answer=条件がそろった / branch=分岐で答えた / clarify=確かめる / handoff=人へ。"
-        )
-    )
-    known_conditions: list[GuideCondition] = Field(default_factory=list)
-    unknown_conditions: list[GuideCondition] = Field(
-        default_factory=list, description="確かめる・分岐する・引き継ぐ条件（不明・矛盾）。"
-    )
-    applicability: dict[str, Literal["matched", "unverified"]] = Field(
-        default_factory=dict,
-        description=(
-            "値のある適用範囲の項目（business_domains / object_types / versions）ごとの状態。"
-            "matched=質問・絞り込みの手がかりと合った / unverified=手がかりが無く確かめていない。"
-            "空の項目は制限なし（出さない）。手がかりと合わないガイドは返さない。"
-        ),
-    )
 
 
 class AnswerProvenance(BaseModel):
@@ -1949,15 +1835,12 @@ class SearchOutput(VersionedOutput):
     confirmations: list[str] = Field(
         default_factory=list, description="回答を確定するために確かめる現場のデータ・別の資料。"
     )
-    clarifications: list[GuideClarification] = Field(
+    clarifications: list[Clarification] = Field(
         default_factory=list,
         description=(
-            "outcome=needs_clarification のとき、利用者に確かめる条件と問い（業務ガイドと、"
-            "検索・回答プロファイルのルールの確認。ルールの確認は検索・回答をせずに返す）。"
+            "outcome=needs_clarification のとき、利用者に確かめる条件と問い（検索・回答"
+            "プロファイルのルールの確認。検索・回答をせずに返す）。"
         ),
-    )
-    guide: GuideRef | None = Field(
-        default=None, description="回答に使った業務ガイド（公開の版）。使わなければ null。"
     )
     insufficient_reason: str | None = Field(
         default=None, description="根拠が足りず答えきれなかった理由（無ければ null）。"
@@ -2005,116 +1888,6 @@ class SearchOutput(VersionedOutput):
     # トークンで呼んだときは返さず、Agent の回答の末尾には Agent が付ける 1 つだけを出す）。
     notice: str | None = Field(
         default=None, description="利用者に回答を示すときは、末尾にこの文をそのまま添える。"
-    )
-
-
-class GuidePageRangeItem(BaseModel):
-    page_start: int
-    page_end: int
-
-
-class GuideSheetRangeItem(BaseModel):
-    sheet_name: str
-    row_start: int | None = Field(default=None, description="始まりの行（無ければシートの全体）。")
-    row_end: int | None = None
-    cell_range: str = Field(default="", description="A1 形式のセルの範囲（書いてあれば）。")
-
-
-class GuideReferenceItem(BaseModel):
-    document_id: str
-    title: str = Field(default="", description="表示名（参照の正本は document_id）。")
-    section_path: list[str] = Field(default_factory=list, description="節の見出しの列。")
-    page_ranges: list[GuidePageRangeItem] = Field(
-        default_factory=list,
-        description=(
-            "根拠の頁の範囲（両端を含む。空なら文書の全体）。rag_read_document に document_id と "
-            "page（page_start）を渡すと、その頁から読める。"
-        ),
-    )
-    sheet_ranges: list[GuideSheetRangeItem] = Field(
-        default_factory=list,
-        description="表計算の資料の根拠のシートと行の範囲（両端を含む。頁ではない）。",
-    )
-
-
-class GuideStepItem(BaseModel):
-    id: str
-    title: str
-    purpose: str = ""
-    depends_on: list[str] = Field(default_factory=list)
-    allowed_tools: list[str] = Field(default_factory=list)
-    retrieval_hints: list[str] = Field(
-        default_factory=list, description="この手順の根拠を引く検索の手がかり（語・画面名など）。"
-    )
-    references: list[GuideReferenceItem] = Field(
-        default_factory=list, description="この手順の根拠がある資料と頁。"
-    )
-    evidence_requirements: list[str] = Field(
-        default_factory=list, description="この手順で示すべき根拠。"
-    )
-    done_when: str = Field(default="", description="この手順の終わりの条件。")
-
-
-class GuideBranchItem(BaseModel):
-    id: str
-    condition_id: str
-    operator: Literal["equals", "in", "unknown"]
-    values: list[str] = Field(default_factory=list)
-    goto_step: str = Field(description="条件に当たるときに進む手順の id。")
-    applies: bool | None = Field(
-        description=(
-            "分かっている条件に当たるか（true=当たる / null=条件が分からず決まらない）。"
-            "当たらない分岐は返さない。"
-        )
-    )
-    note: str = ""
-
-
-class GuideCompletionItem(BaseModel):
-    id: str
-    description: str
-    check_method: str = ""
-
-
-class LookupGuideItem(GuideRef):
-    expected_result: str
-    score: int = Field(description="質問との照合の点（大きいほど合う）。")
-    clarifications: list[GuideClarification] = Field(default_factory=list)
-    steps: list[GuideStepItem] = Field(
-        default_factory=list,
-        description="手順（確かめる順。分かっている条件で外れた分岐の手順は含めない）。",
-    )
-    branches: list[GuideBranchItem] = Field(
-        default_factory=list, description="当たる・決まらない分岐（当たらない分岐は含めない）。"
-    )
-    references: list[GuideReferenceItem] = Field(
-        default_factory=list, description="全手順に共通の資料と頁。"
-    )
-    completion: list[GuideCompletionItem] = Field(
-        default_factory=list, description="回答を終えてよい条件。"
-    )
-    impact_scope: Literal["individual", "group", "all"]
-    approval_required: bool
-    impact_steps: list[str] = Field(
-        default_factory=list,
-        description="影響範囲と承認が係る手順の id（空なら業務ガイドのすべての場合に係る）。",
-    )
-    impact_applies: bool = Field(
-        default=True,
-        description=(
-            "分かっている条件の場合に影響範囲・承認が係るか（false なら、外れた分岐の手順だけに"
-            "係るので、回答に影響範囲・承認を書かない。#1320）。"
-        ),
-    )
-    handoff_contact: str = ""
-
-
-class LookupGuidesOutput(VersionedOutput):
-    guides: list[LookupGuideItem] = Field(
-        description=(
-            "質問に当たり、適用範囲の手がかりと合う公開の業務ガイド（照合の点の高い順）。"
-            "無ければ空。"
-        )
     )
 
 
@@ -2199,7 +1972,7 @@ class RetrieveEvidenceOutput(VersionedOutput):
         default="rag", description="検索文を作った主体（入力の planning）。"
     )
     request_id: str | None = Field(default=None, description="入力の request_id。")
-    clarifications: list[GuideClarification] = Field(
+    clarifications: list[Clarification] = Field(
         default_factory=list,
         description=(
             "planning=caller で、検索・回答プロファイルのルールが検索の前に利用者に確かめる条件"
@@ -2329,71 +2102,13 @@ class ValidatedClaim(BaseModel):
 
 
 class ValidationFinding(BaseModel):
-    check: Literal["requests", "guide", "guide_steps", "impact"] = Field(
-        description=(
-            "検査（requests=要求の充足 / guide=業務ガイドの版 / guide_steps=手順 / "
-            "impact=影響範囲）。"
-        )
-    )
-    code: str = Field(
-        description=(
-            "request_missing / request_partial / request_unverified / guide_unavailable / "
-            "guide_revision_stale / guide_steps_unmatched / guide_step_unexplained / step_order / "
-            "step_wrong_branch / step_dependency_missing / step_following_missing / "
-            "impact_scope_missing / approval_missing"
-        )
-    )
+    check: Literal["requests"] = Field(description="検査（requests=要求の充足）。")
+    code: str = Field(description="request_missing / request_partial / request_unverified")
     severity: Literal["error", "warning"] = Field(
         description="error は valid にしない。warning は確かめたい点。"
     )
     message: str
     request_id: str | None = None
-    step_id: str | None = None
-    related_step_id: str | None = Field(
-        default=None, description="関係する手順（前の手順・後の手順）。"
-    )
-
-
-class GuideBodyCoverageValidation(BaseModel):
-    execution: Literal["completed", "not_run", "error", "timed_out", "partial", "unknown"]
-    status: Literal["explained", "missing", "partial", "unknown"]
-    reason: str | None = None
-
-
-class GuideSourceAssociationValidation(BaseModel):
-    execution: Literal["completed", "not_run", "error", "timed_out", "partial", "unknown"]
-    linked: bool
-
-
-class GuideStepValidation(BaseModel):
-    body_coverage: GuideBodyCoverageValidation
-    source_association: GuideSourceAssociationValidation | None = None
-
-
-class ValidatedGuideStep(BaseModel):
-    """業務ガイドの手順 1 つの、回答での説明の充足（#2708）。"""
-
-    step_id: str
-    title: str
-    required: bool = Field(
-        description="回答の充足で必須の手順か（分かっている条件で決まらない分岐の手順は false）。"
-    )
-    validation: GuideStepValidation | None = Field(
-        default=None,
-        description="出典の対応と本文の充足の検査状態。未実行・未完了は不足や誤りの確認を意味しない。古い結果では省略。",
-    )
-    status: Literal[
-        "explained", "partial", "unknown", "reference_only", "unused", "no_evidence", "not_searched"
-    ] = Field(
-        description=(
-            "explained=必須の操作・対象・条件・順序を、根拠で裏付けた説明として確認した / "
-            "partial=手順の一部だけ説明を確認した / unknown=説明の充足を検証できていない / "
-            "reference_only=根拠の原文を参考として示しただけ / "
-            "unused=手順の根拠は渡した根拠にあるが、手順を説明した段落が無い / "
-            "no_evidence=手順の根拠が渡した根拠に無い（その手順の根拠を集めていない）/ "
-            "not_searched=上限で検索を打ち切り、充足を検証していない。"
-        )
-    )
 
 
 class PremiseConsistencyResult(BaseModel):
@@ -2457,24 +2172,12 @@ class ValidateAnswerOutput(VersionedOutput):
     evidence_truncated: bool = Field(
         default=False, description="根拠が多く、後ろの根拠を監査に渡しきれなかったか。"
     )
-    checks: list[Literal["requests", "guide", "guide_steps", "impact"]] = Field(
+    checks: list[Literal["requests"]] = Field(
         default_factory=list,
-        description="行った決定的な検査（requests・guide を渡したときだけ。モデルは呼ばない）。",
+        description="行った決定的な検査（requests を渡したときだけ。モデルは呼ばない）。",
     )
     findings: list[ValidationFinding] = Field(
         default_factory=list, description="決定的な検査で見つけた点。"
-    )
-    guide_revision: int | None = Field(
-        default=None, description="検査に使った業務ガイドの今の公開の版。"
-    )
-    guide_steps: list[ValidatedGuideStep] = Field(
-        default_factory=list,
-        description=(
-            "guide の手順ごとの説明の充足（分かっている条件で外れた分岐の手順は含めない。guide を"
-            "渡さないか、段落の判定が出なければ空）。本文の充足検査が完了し、不足を確認した必須の"
-            "手順だけを guide_step_unexplained の finding にする。"
-            "未実行・未確認は validation に残る。"
-        ),
     )
     reused_claims: int = Field(
         default=0,
@@ -3297,7 +3000,6 @@ def _answer_fields(result: SearchResponse, evidence_limit: int) -> dict[str, Any
         "clarifications": [
             item for item in envelope.get("clarifications", []) if isinstance(item, dict)
         ],
-        "guide": _guide_ref(answer.get("guide")),
         "insufficient_reason": reason.strip() or None if isinstance(reason, str) else None,
         "needs_human_review": answer.get("needs_human_review") is True,
         # 段落の印・外した段落・回答全体の警告（#2738）。古い記録は envelope から読み、無ければ空。
@@ -3369,26 +3071,6 @@ def _provenance(value: object) -> dict[str, Any] | None:
         "search_answer_profile_updated_at": text(profile.get("updated_at")),
         "search_answer_profile_config_sha256": text(profile.get("config_sha256")),
         "prompt_version": text(value.get("prompt_version")),
-    }
-
-
-def _guide_conditions(value: object) -> list[dict[str, Any]]:
-    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
-
-
-def _guide_ref(value: object) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or not value.get("guide_id"):
-        return None
-    return {
-        "guide_id": str(value["guide_id"]),
-        "revision": int(value.get("revision") or 0),
-        "title": str(value.get("title") or ""),
-        "decision": value.get("decision") or "answer",
-        "known_conditions": _guide_conditions(value.get("known_conditions")),
-        "unknown_conditions": _guide_conditions(value.get("unknown_conditions")),
-        "applicability": (
-            dict(value["applicability"]) if isinstance(value.get("applicability"), dict) else {}
-        ),
     }
 
 
@@ -4241,14 +3923,6 @@ def _search_request(arguments: SearchInput) -> SearchRequest:
         payload["search_answer_profile_id"] = arguments.search_answer_profile_id
     if "top_k" in arguments.model_fields_set and arguments.top_k is not None:
         payload["top_k"] = arguments.top_k
-    # ルールの確認の答え（rule:）は業務ガイドの条件ではない（rag_search が前提にする。#2117）。
-    conditions = {
-        key: value
-        for key, value in arguments.conditions.items()
-        if not key.startswith(RULE_CONDITION_PREFIX)
-    }
-    if conditions:
-        payload["conditions"] = conditions
     try:
         return SearchRequest.model_validate(payload)
     except ValidationError as exc:
@@ -4346,7 +4020,7 @@ async def rule_clarification_step(
             trace_id=new_trace_id(),
             outcome="needs_clarification",
             clarifications=[
-                GuideClarification(
+                Clarification(
                     condition_id=f"{RULE_CONDITION_PREFIX}{rule_id}",
                     label=str(rule.get("title", "") or rule_id),
                     question=clarification.question,
@@ -4518,80 +4192,6 @@ def _profile_knowledge_log(knowledge: ProfileKnowledge | None) -> dict[str, obje
     }
 
 
-def _guide_reference(reference: SupportGuideReference) -> GuideReferenceItem:
-    return GuideReferenceItem(
-        document_id=reference.document_id,
-        title=reference.title,
-        section_path=list(reference.section_path),
-        page_ranges=[
-            GuidePageRangeItem(
-                page_start=item.page_start, page_end=item.page_end or item.page_start
-            )
-            for item in reference.page_ranges
-        ],
-        sheet_ranges=[
-            GuideSheetRangeItem(
-                sheet_name=item.sheet_name,
-                row_start=item.row_start,
-                row_end=item.row_end,
-                cell_range=item.cell_range,
-            )
-            for item in reference.sheet_ranges
-        ],
-    )
-
-
-def _lookup_item(match: GuideMatch) -> LookupGuideItem:
-    summary = match.summary()
-    content = match.content
-    # 分かっている条件で外れた分岐の手順は返さない（回答の材料と同じ。#2396）。
-    steps, branches = visible_plan(match)
-    return LookupGuideItem(
-        **summary,
-        expected_result=content.goal.expected_result,
-        score=match.score,
-        clarifications=[GuideClarification(**item) for item in clarification_questions(match)],
-        steps=[
-            GuideStepItem(
-                id=step.id,
-                title=step.title,
-                purpose=step.purpose,
-                depends_on=list(step.depends_on),
-                allowed_tools=list(step.allowed_tools),
-                retrieval_hints=list(step.retrieval_hints),
-                references=[_guide_reference(item) for item in step.references],
-                evidence_requirements=list(step.evidence_requirements),
-                done_when=step.done_when,
-            )
-            for step in steps
-        ],
-        branches=[
-            GuideBranchItem(
-                id=branch.id,
-                condition_id=branch.when.condition_id,
-                operator=branch.when.operator,
-                values=list(branch.when.values),
-                goto_step=branch.goto_step,
-                applies=applies,
-                note=branch.note,
-            )
-            for branch, applies in branches
-        ],
-        references=[_guide_reference(item) for item in content.references],
-        completion=[
-            GuideCompletionItem(
-                id=item.id, description=item.description, check_method=item.check_method
-            )
-            for item in content.completion
-        ],
-        impact_scope=content.impact.scope,
-        approval_required=content.impact.approval_required,
-        impact_steps=list(content.impact.steps),
-        impact_applies=impact_applies(match),
-        handoff_contact=content.handoff.contact,
-    )
-
-
 def called_with_api_key(http_request: Request) -> bool:
     """利用者の API キー（`prak_…`）で呼んだ外部の MCP クライアントか（#2405）。
 
@@ -4626,10 +4226,6 @@ def _check_search_scope(scope: ProfileScope | None, arguments: SearchInput) -> N
     check_search(scope, arguments.search_answer_profile_id, arguments.knowledge_base_ids)
 
 
-def _check_guides_scope(scope: ProfileScope | None, arguments: LookupGuidesInput) -> None:
-    check_profile(scope, arguments.search_answer_profile_id)
-
-
 def _reference_diagnostic(claim: Mapping[str, Any], key: str) -> str | None:
     """監査の応答の参照の誤り（`AUDIT_REFERENCE_FAILURES`）の判定の診断の値（上限で切る。#112）。
 
@@ -4646,11 +4242,6 @@ def _claim_chunk_id(source_id: object) -> str | None:
     """判定の根拠の chunk_id（利用者の前提〔premise:…〕だけで裏付けた段落は None。#1898）。"""
     value = str(source_id or "")
     return value if value and not is_premise_id(value) else None
-
-
-def _check_validate_scope(scope: ProfileScope | None, arguments: ValidateAnswerInput) -> None:
-    if arguments.guide is not None:
-        check_profile(scope, arguments.guide.search_answer_profile_id)
 
 
 LIST_PROFILES_TOOL = "rag_list_search_answer_profiles"
@@ -4676,39 +4267,6 @@ async def _active_profiles(query: str | None, limit: int) -> list[SearchAnswerPr
         raise HTTPException(status_code=503, detail=response.warning_messages[0])
     page = response.data
     return list(page.items) if page is not None else []
-
-
-async def profile_not_found_error(search_answer_profile_id: str) -> McpToolError:
-    """見つからない・使えない検索・回答プロファイルの id のエラー（次の手つき。#2355）。
-
-    使えるプロファイルは今の監査 context（利用者の権限とデータの範囲）の中だけを数えるので、
-    ほかの利用者のプロファイルは案内に出ない。1 つだけならその id を案内する。
-    """
-    try:
-        usable = await _active_profiles(None, 2)
-    except HTTPException:
-        usable = None  # 一覧を読めなくても、id の誤りと次の手は返す
-    message = f"検索・回答プロファイル「{search_answer_profile_id}」は見つからないか、使えません。"
-    details: dict[str, Any] = {
-        "search_answer_profile_id": search_answer_profile_id,
-        "next_tools": [RECOMMEND_PROFILE_TOOL, LIST_PROFILES_TOOL],
-    }
-    if usable is not None and len(usable) == 1:
-        only = usable[0]
-        details["suggested_search_answer_profile_id"] = only.id
-        message += (
-            f"使える検索・回答プロファイルは「{only.name}」（id: {only.id}）だけです。"
-            "この id を search_answer_profile_id に渡して呼び直してください。"
-        )
-    elif usable is not None and not usable:
-        details["next_tools"] = []
-        message += NO_PROFILES_NEXT_STEP
-    else:
-        message += (
-            f"{RECOMMEND_PROFILE_TOOL} に質問を渡して選ぶか、{LIST_PROFILES_TOOL}（query なし）の"
-            "一覧の id を search_answer_profile_id に渡して呼び直してください。"
-        )
-    return McpToolError(SEARCH_ANSWER_PROFILE_NOT_FOUND_CODE, message, status=404, details=details)
 
 
 async def _run_search(request: SearchRequest, **options: Any) -> SearchResponse:
@@ -4965,49 +4523,6 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
             update={"evidence": evidence, "evidence_text_omitted": text_omitted}
         )
 
-    async def lookup_guides(arguments: LookupGuidesInput) -> LookupGuidesOutput:
-        oracle = OracleClient()
-        view = await oracle.get_search_answer_profile(arguments.search_answer_profile_id)
-        if view is None:
-            raise await profile_not_found_error(arguments.search_answer_profile_id)
-        # rag_search と同じく、アーカイブ済みのプロファイルは使わない（409。#1278）。
-        search_route.ensure_search_answer_profile_not_archived(
-            view, arguments.search_answer_profile_id
-        )
-        settings, _ = resolve_search_answer_profile_settings(get_settings(), view.config)
-        with profile_language_scope(settings):
-            if not settings.rag_support_guide_enabled:
-                return LookupGuidesOutput(guides=[])
-            guides, failed = await search_route.load_published_guides(oracle, view.id)
-            if failed:
-                # 読めなかったことを「当たるガイドが無い」（0 件）と区別する（#1278）。
-                raise HTTPException(status_code=503, detail=GUIDES_UNAVAILABLE_MESSAGE)
-            context = await search_route.support_guide_context(
-                oracle, guides, arguments.query, search_route.profile_scope_filters(view)
-            )
-            # 検索と同じく、用語の別名で展開し、ON なら意味の照合を使う（#2398）。
-            query = await build_guide_query(
-                oracle,
-                settings,
-                view.id,
-                guides,
-                arguments.query,
-                await load_runtime_knowledge_payload(oracle, view.id),
-            )
-            matches = rank_guides(
-                guides, query, arguments.conditions, limit=arguments.limit, context=context
-            )
-            if arguments.conditions:
-                # 確認に自由入力で答えた選択式の条件は、答えの文が選んだ選択肢に決める（#2726）。
-                resolved = await asyncio.gather(
-                    *(
-                        resolve_answered_conditions(match, arguments.conditions, settings)
-                        for match in matches
-                    )
-                )
-                matches = [item for item in resolved if isinstance(item, GuideMatch)]
-            return LookupGuidesOutput(guides=[_lookup_item(match) for match in matches])
-
     async def retrieve_evidence(arguments: RetrieveEvidenceInput) -> RetrieveEvidenceOutput:
         # planning=rag: 検索の画面・チャットと同じ流れで質問の理解・拡張・文書の検索（rerank
         # を含む）まで行い、その後の根拠の補い（CRAG・章節の拡張・要求ごとの探し直し）と回答の
@@ -5093,47 +4608,32 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
 
     async def validate(arguments: ValidateAnswerInput) -> ValidateAnswerOutput:
         enforce_rate_limit("search", http_request)
-        guide = arguments.guide
-        try:
-            # 回答フローの「資料との照合」と同じ工程の span で包む（呼び出し元の Agent の
-            # 処理の経過で、MCP の呼び出しの下に RAG の工程として出る。#3470）。
-            with _answer_step_span(ANSWER_VALIDATION_STEP):
-                result = await validate_answer(
-                    arguments.query,
-                    arguments.answer,
-                    [EvidenceRef(item.document_id, item.chunk_id) for item in arguments.evidence],
-                    get_settings(),
-                    requests=(
-                        [item.model_dump() for item in arguments.requests]
-                        if arguments.requests is not None
-                        else None
-                    ),
-                    gaps=arguments.gaps,
-                    answer_trace_ids=arguments.answer_trace_ids,
-                    premises=[item.model_dump() for item in arguments.premises],
-                    data_results=[item.model_dump() for item in arguments.data_results],
-                    passage_citations=[
-                        {
-                            "start": item.answer_range.start,
-                            "end": item.answer_range.end,
-                            "chunk_ids": list(item.chunk_ids),
-                        }
-                        for item in arguments.passage_citations
-                    ],
-                    guide=(
-                        GuideCheckRef(
-                            guide.search_answer_profile_id,
-                            guide.guide_id,
-                            guide.revision,
-                            dict(guide.conditions),
-                        )
-                        if guide is not None
-                        else None
-                    ),
-                )
-        except GuideProfileNotFoundError as exc:
-            assert guide is not None  # 業務ガイドを渡したときだけ起きる
-            raise await profile_not_found_error(guide.search_answer_profile_id) from exc
+        # 回答フローの「資料との照合」と同じ工程の span で包む（呼び出し元の Agent の
+        # 処理の経過で、MCP の呼び出しの下に RAG の工程として出る。#3470）。
+        with _answer_step_span(ANSWER_VALIDATION_STEP):
+            result = await validate_answer(
+                arguments.query,
+                arguments.answer,
+                [EvidenceRef(item.document_id, item.chunk_id) for item in arguments.evidence],
+                get_settings(),
+                requests=(
+                    [item.model_dump() for item in arguments.requests]
+                    if arguments.requests is not None
+                    else None
+                ),
+                gaps=arguments.gaps,
+                answer_trace_ids=arguments.answer_trace_ids,
+                premises=[item.model_dump() for item in arguments.premises],
+                data_results=[item.model_dump() for item in arguments.data_results],
+                passage_citations=[
+                    {
+                        "start": item.answer_range.start,
+                        "end": item.answer_range.end,
+                        "chunk_ids": list(item.chunk_ids),
+                    }
+                    for item in arguments.passage_citations
+                ],
+            )
         passage_ranges = {
             passage_id: (start, end)
             for passage_id, start, end in answer_passage_ranges(arguments.answer)
@@ -5177,8 +4677,6 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
             evidence_truncated=result.evidence_truncated,
             checks=result.checks,
             findings=[ValidationFinding.model_validate(item.as_dict()) for item in result.findings],
-            guide_revision=result.guide_revision,
-            guide_steps=[ValidatedGuideStep.model_validate(step) for step in result.guide_steps],
             reused_claims=result.reused_claims,
             premise_checks=[
                 PremiseConsistencyResult(
@@ -5242,19 +4740,6 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
                 permissions=(SEARCH_PERMISSIONS,),
             ),
             McpTool(
-                name="rag_lookup_guides",
-                title="業務ガイドの照会",
-                description=(
-                    "質問に当たる公開の業務ガイド（目的・確かめる条件と状態・手順の順と各手順の"
-                    "検索の手がかり・参照の資料と頁・分岐・完了の条件・影響範囲・引き継ぎ先）を"
-                    "返します。回答は作りません。"
-                ),
-                input_model=LookupGuidesInput,
-                handler=scoped(lookup_guides, _check_guides_scope),
-                output_model=LookupGuidesOutput,
-                permissions=(SEARCH_PERMISSIONS,),
-            ),
-            McpTool(
                 name="rag_retrieve_evidence",
                 title="根拠の取得",
                 description=(
@@ -5273,11 +4758,10 @@ def build_rag_mcp_server(http_request: Request) -> McpServer:
                     "回答の段落ごとの主張を、渡した根拠（今の権限と版で読み直す）で監査します。"
                     "公開する前の最終の検証に使います。見出し・出典の行・"
                     "利用者への質問の段落は主張ではないので監査せず、claims に含めません。"
-                    "requests（要求の充足）・guide（業務ガイド）を渡すと、要求の漏れ・手順ごとの"
-                    "説明と順序・分岐・影響範囲も確かめます。"
+                    "requests（要求の充足）を渡すと、要求の漏れも確かめます。"
                 ),
                 input_model=ValidateAnswerInput,
-                handler=scoped(validate, _check_validate_scope),
+                handler=scoped(validate),
                 output_model=ValidateAnswerOutput,
                 permissions=(SEARCH_PERMISSIONS,),
             ),

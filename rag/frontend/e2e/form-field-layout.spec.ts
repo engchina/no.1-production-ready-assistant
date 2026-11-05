@@ -501,112 +501,6 @@ async function openDocumentChunkPreview(page: Page) {
   await expect(page.getByRole("heading", { name: "文書の分類と有効期間" })).toBeVisible();
 }
 
-// ---- 業務ガイドの編集・下書きで試す ----
-
-function supportGuideContent() {
-  return {
-    schema_version: 1,
-    title: "パスワードの再設定",
-    description: "",
-    goal: { expected_result: "手順を終えられる", intent_examples: ["パスワードを忘れた"], match_terms: [] },
-    applicability: { business_domains: [], object_types: [], versions: [], effective_from: null, effective_to: null },
-    conditions: [
-      {
-        id: "account",
-        label: "アカウントの種類",
-        type: "enum",
-        allowed_values: ["社員", "派遣"],
-        required: true,
-        source: "user",
-        unknown_handling: "ask",
-        question: "社員ですか、派遣ですか？",
-        value_aliases: {},
-      },
-    ],
-    steps: [
-      {
-        id: "step1",
-        title: "本人を確かめる",
-        purpose: "",
-        depends_on: [],
-        retrieval_hints: [],
-        evidence_requirements: [],
-        allowed_tools: ["rag_search"],
-        done_when: "",
-      },
-    ],
-    branches: [
-      { id: "branch1", when: { condition_id: "account", operator: "equals", values: ["社員"] }, goto_step: "step1", note: "" },
-    ],
-    references: [{ document_id: "doc-1", title: "運用手順書", section_path: [], version: "" }],
-    completion: [{ id: "done1", description: "再設定できた", check_method: "" }],
-    impact: { scope: "individual", approval_required: false, approval_note: "", steps: [] },
-    handoff: { conditions: [], contact: "" },
-  };
-}
-
-async function mockSupportGuides(page: Page) {
-  const profile = { ...PROFILES[0], id: "bv-1", name: "受注サポート" };
-  const draft = supportGuideContent();
-  const detail = {
-    guide_id: "guide-1",
-    search_answer_profile_id: "bv-1",
-    status: "active",
-    title: draft.title,
-    draft_revision: 2,
-    published_revision: 1,
-    has_unpublished_changes: true,
-    updated_at: "2026-10-07T01:00:00Z",
-    updated_by: "管理者",
-    draft,
-    published: draft,
-    revisions: [
-      {
-        revision: 1,
-        title: draft.title,
-        content_sha256: "sha-1",
-        published_at: "2026-10-01T02:00:00Z",
-        published_by: "管理者",
-        rollback_from: null,
-      },
-    ],
-    issues: [],
-  };
-  const { draft: _draft, published: _published, revisions: _revisions, issues: _issues, ...summary } = detail;
-  await page.route("**/api/knowledge-bases**", (route) =>
-    route.fulfill({ json: apiEnvelope({ items: [], total: 0, limit: 50, offset: 0, has_next: false }) })
-  );
-  await page.route("**/api/search-answer-profiles**", (route: Route) => {
-    const path = new URL(route.request().url()).pathname;
-    const base = "/api/search-answer-profiles/bv-1/support-guides";
-    if (path === base) return route.fulfill({ json: apiEnvelope([summary]) });
-    if (path === `${base}/guide-1`) return route.fulfill({ json: apiEnvelope(detail) });
-    if (path.endsWith("/approved-faq")) {
-      return route.fulfill({ json: apiEnvelope({ search_answer_profile_id: "bv-1", enabled: true, records: [] }) });
-    }
-    if (path.endsWith("/bv-1")) {
-      return route.fulfill({
-        json: apiEnvelope({
-          ...profile,
-          config: { version: 1, knowledge_base_ids: ["kb-1"], query: { guardrail_policy: null } },
-          knowledge_bases: [{ id: "kb-1", name: "受注マニュアル" }],
-        }),
-      });
-    }
-    return route.fulfill({
-      json: apiEnvelope({ items: [profile], total: 1, limit: 50, offset: 0, has_next: false }),
-    });
-  });
-}
-
-async function openSupportGuideEditor(page: Page) {
-  await page.getByRole("tab", { name: "業務ガイド" }).click();
-  await page.getByRole("button", { name: "パスワードの再設定 を編集" }).click();
-  const editor = page.getByTestId("support-guide-editor");
-  await expect(editor.getByRole("textbox", { name: /^タイトル/ })).toBeVisible();
-  await expect(editor.getByTestId("support-guide-try-conditions")).toBeVisible();
-}
-
 // ---- 文書アップロード ----
 
 async function mockUpload(page: Page) {
@@ -727,14 +621,6 @@ const SCREENS: FormScreen[] = [
     path: "/documents/doc-1",
     mock: mockDocument("REVIEW"),
     open: openDocumentChunkPreview,
-  },
-  {
-    name: "support-guide-editor",
-    path: "/search-answer-profiles?id=bv-1",
-    mock: mockSupportGuides,
-    open: openSupportGuideEditor,
-    widthRoots: ['[data-testid="support-guide-editor"]'],
-    screenshotTarget: '[data-testid="support-guide-editor"]',
   },
   {
     name: "upload",

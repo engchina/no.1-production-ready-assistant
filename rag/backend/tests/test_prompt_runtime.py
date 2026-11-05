@@ -71,57 +71,6 @@ def test_stage_template_requires_original_input_tokens() -> None:
         validate_prompt(key, "## Step 1: 入力の差し込み口を削除した指示")
 
 
-def test_only_confirmed_branch_notes_are_rendered_from_the_guide() -> None:
-    from rag_engine.generation.grounded import guide_notice_lines
-    from rag_engine.retrieval.guide_steps import GuidePlan
-
-    from app.rag.support_guide_runtime import guide_notices, match_guide
-    from app.schemas.support_guide import SupportGuideContent
-
-    content = SupportGuideContent.model_validate(
-        {
-            "title": "操作 A の進め方",
-            "goal": {"match_terms": ["操作 A"], "expected_result": "操作を完了する"},
-            "conditions": [
-                {
-                    "id": "mode",
-                    "label": "区分",
-                    "allowed_values": ["区分甲", "区分乙"],
-                    "required": True,
-                    "question": "区分は A と B のどちらですか。",
-                }
-            ],
-            "steps": [{"id": "a", "title": "設定を開く"}, {"id": "b", "title": "担当者と確認する"}],
-            "branches": [
-                {
-                    "id": "a",
-                    "when": {"condition_id": "mode", "operator": "equals", "values": ["区分甲"]},
-                    "goto_step": "a",
-                    "note": "操作を実施してください。",
-                },
-                {
-                    "id": "b",
-                    "when": {"condition_id": "mode", "operator": "equals", "values": ["区分乙"]},
-                    "goto_step": "b",
-                    "note": "担当者に確認を依頼してください。",
-                },
-            ],
-        }
-    )
-    for conditions, expected in [
-        ({}, []),
-        ({"mode": "区分甲"}, ["操作を実施してください。"]),
-        ({"mode": "区分乙"}, ["担当者に確認を依頼してください。"]),
-    ]:
-        match = match_guide([("g", 1, content)], "操作 A を行いたい", conditions)
-        assert match is not None
-        notices = guide_notices(match)
-        assert notices["branch_notes"] == expected
-        plan = GuidePlan.from_payload("g", 1, [{"id": "a", "title": "設定を開く"}], notices=notices)
-        assert plan is not None
-        assert guide_notice_lines("", [], branch_notes=plan.branch_notes) == expected
-
-
 def test_saved_search_template_is_used_by_runtime_prompt_builder() -> None:
     from rag_engine.generation.query_prompts import _build_query_routing_prompt
 

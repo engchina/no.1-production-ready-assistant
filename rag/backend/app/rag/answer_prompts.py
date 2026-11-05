@@ -63,11 +63,10 @@ def validate_prompt(key: str, content: str) -> None:
         raise ValueError(f"必須の placeholder がありません: {', '.join(missing)}")
 
 
-# 設定の概要の順を土台に、独立した知識の準備と、検索・回答の実行順を区別する。
+# 設定の概要の順を土台に、検索・回答の実行順を区別する。
 PROMPT_PHASES = (
     "ingestion",
     "indexing",
-    "knowledge",
     "question",
     "retrieval",
     "grounding",
@@ -124,24 +123,6 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
         "raptor_summary",
         "indexing",
         (("system", "app.rag.ingestion_prompts:RAPTOR_SUMMARY_SYSTEM_PROMPT"),),
-    ),
-    # 回答の過程の表から業務ガイドの下書きを作る(#2397。検索・回答プロファイルの知識の作成)。
-    PromptStage(
-        "support_guide_draft",
-        "knowledge",
-        (
-            ("system", "app.rag.support_guide_process_import:GUIDE_DRAFT_SYSTEM_PROMPT"),
-            ("instruction", "app.rag.support_guide_process_import:GUIDE_DRAFT_PROMPT"),
-        ),
-    ),
-    PromptStage(
-        "support_guide_conditions",
-        "question",
-        (
-            ("system", "app.rag.support_guide_conditions:CONDITION_SYSTEM_PROMPT"),
-            # 確認に自由入力で答えた選択式の条件の選択肢を決める（#2726）。
-            ("answerChoice", "app.rag.support_guide_conditions:ANSWER_SYSTEM_PROMPT"),
-        ),
     ),
     PromptStage(
         "rule_selection",
@@ -246,6 +227,15 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
             ),
         ),
     ),
+    # 評価のケースの回答の過程から期待の下書きを作る(#2397)。
+    PromptStage(
+        "evaluation_process_draft",
+        "evaluation",
+        (
+            ("system", "app.rag.evaluation_process:PROCESS_DRAFT_SYSTEM_PROMPT"),
+            ("instruction", "app.rag.evaluation_process:PROCESS_DRAFT_PROMPT"),
+        ),
+    ),
     PromptStage(
         "evaluation",
         "evaluation",
@@ -288,11 +278,7 @@ def stage_prompt_permission(key: str) -> str | None:
             return "menu.settings_parser_adapters"
         if stage.phase == "evaluation":
             return "menu.settings_evaluation"
-        if stage.id != "support_guide_conditions" and stage.phase in {
-            "question",
-            "retrieval",
-            "grounding",
-        }:
+        if stage.phase in {"question", "retrieval", "grounding"}:
             return "menu.settings_retrieval"
         return "menu.settings_prompts"
     return None

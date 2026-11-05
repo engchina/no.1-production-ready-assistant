@@ -230,7 +230,6 @@ async def test_shared_resolution_reuses_recognition_and_deducts_elapsed_once(
                     "config": SearchAnswerProfileConfig(
                         knowledge_base_ids=["kb-1"],
                         clarification_policy="assume",
-                        query={"support_guide_enabled": False},
                     )
                 }
             )
@@ -255,13 +254,10 @@ async def test_shared_resolution_reuses_recognition_and_deducts_elapsed_once(
     effective, settings, *_ = await route._resolve_query_context(
         request,
         Settings(rag_answer_timeout_seconds=30),
-        interactive=True,
     )
     assert settings.rag_answer_timeout_seconds == 26
     assert "モードB" in effective._rule_selection_scope["context"]
-    repeated, settings, *_ = await route._resolve_query_context(
-        effective, settings, interactive=True
-    )
+    repeated, settings, *_ = await route._resolve_query_context(effective, settings)
     assert settings.rag_answer_timeout_seconds == 26
     assert len(calls) == 1
     assert repeated._rule_selection_state["elapsed_seconds"] == 4

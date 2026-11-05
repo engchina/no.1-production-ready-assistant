@@ -1095,7 +1095,7 @@ def test_usage_is_retained_when_postcheck_fails_after_resume(
 
 BUSINESS_AGENT_ID = "test1303-business-agent"
 _BARE_RAG_TOOL = re.compile(
-    r"(?<![A-Za-z0-9_-])rag_(search|retrieve_evidence|lookup_guides|read_source"
+    r"(?<![A-Za-z0-9_-])rag_(search|retrieve_evidence|read_source"
     r"|list_search_answer_profiles)(?![A-Za-z0-9_-])"
 )
 
@@ -1108,7 +1108,7 @@ def business_agent(monkeypatch: MonkeyPatch) -> Iterator[Any]:
         AgentProfile(
             id=BUSINESS_AGENT_ID,
             name="業務支援の Agent",
-            instructions="rag_retrieve_evidence と rag_lookup_guides には profile を必ず渡す。",
+            instructions="rag_retrieve_evidence と rag_read_section には profile を必ず渡す。",
             skill_ids=["business-rag-research"],
         )
     )
@@ -1142,7 +1142,7 @@ def test_skill_instructions_name_the_tools_given_to_the_model(
     tools = {tool.name for tool in model.calls[0].tools}
     assert {
         "rag__rag_retrieve_evidence",
-        "rag__rag_lookup_guides",
+        "rag__rag_read_section",
         "rag__rag_read_source",
         "rag__rag_list_search_answer_profiles",
     } <= tools
@@ -1150,8 +1150,8 @@ def test_skill_instructions_name_the_tools_given_to_the_model(
     # Skill の指示も業務の指示も、モデルが呼べる名前で書いてある（素の名前は残らない）。
     # Markdown の `code` の中の素の名前も書き直す（#1795）。
     assert "`rag__rag_retrieve_evidence` で集め" in instructions
-    assert "rag__rag_retrieve_evidence と rag__rag_lookup_guides には profile" in instructions
-    assert "rag__rag_lookup_guides" in instructions
+    assert "rag__rag_retrieve_evidence と rag__rag_read_section には profile" in instructions
+    assert "rag__rag_read_section" in instructions
     assert _BARE_RAG_TOOL.search(instructions) is None, instructions
     # 定義の指示は素の名前のまま（Run のときだけ書き直す）。
     skill = skill_registry.get("business-rag-research")

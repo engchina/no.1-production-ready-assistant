@@ -456,41 +456,22 @@ def test_read_failure_of_a_sibling_is_still_reported():
     assert "s3-3" not in [item.section_id for item in result.omitted]
 
 
-def test_reserve_tokens_leaves_input_for_a_later_phase():
-    stub, grader = SectionStub(), Grader(needs=None)
-    settings = _settings(answer_max_input_tokens=2400)
-
-    result = _expand(_seed_context("c31a"), settings, grader, stub, reserve_tokens=600)
-
-    # 上限 1,200 のうち 600 を残す: 3.1（600）を読んだ後、第3章の子の章節（600 ずつ）は読まない。
-    assert sections.context_tokens(result.context) <= 600
-    assert result.trace["reserved_tokens"] == 600 and result.trace["input_token_limit"] == 1200
-    assert "c33a" not in _child_ids(result.context) and "c32a" not in _child_ids(result.context)
-
-
 def test_later_phase_expands_new_seeds_before_retrying_earlier_ones():
     # 上限 1,000（モデルの入力の上限 2,000 × 50%）。後の段は、前の段で起点にしなかった起点の章節を先に広げる（#2816）。
     stub, grader = SectionStub(), Grader(needs=None)
     settings = _settings(answer_max_input_tokens=2000, section_expansion_max_levels=1)
     reader = sections.SectionReader(read_chunks=stub.chunks, known_ids=set())
 
-    # 前の段: 700 を残すので、3.1 の残り（300）も入らない。
-    first = _expand(_seed_context("c31a"), settings, grader, stub, reader=reader, reserve_tokens=700)
+    # 前の段: 上限 300 なので、3.1 の残り（300）も入らない。
+    first = _expand(
+        _seed_context("c31a"), _settings(answer_max_input_tokens=600, section_expansion_max_levels=1), grader, stub, reader=reader
+    )
     assert "c31b" not in _child_ids(first.context)
 
     # 後の段: 新しい起点（第4章の c4a）の章節を先に読み、残り 100 では 3.1 の残りは入らない。
     second = _expand(_seed_context("c31a", "c4a"), settings, grader, stub, reader=reader)
     assert "c4b" in _child_ids(second.context) and "c31b" not in _child_ids(second.context)
     assert [item.section_id for item in second.unread] == ["s3-1"]
-
-
-def test_followup_reserve_is_share_of_the_input_limit():
-    limits = sections.SectionExpansionLimits.from_settings(_settings(section_expansion_followup_reserve_percent=25))
-    assert limits.input_tokens == 64_000 and limits.followup_reserve_tokens == 16_000
-    assert sections.SectionExpansionLimits.from_settings(_settings()).followup_reserve_tokens == 12_800
-    assert (
-        sections.SectionExpansionLimits.from_settings(_settings(section_expansion_followup_reserve_percent=0)).followup_reserve_tokens == 0
-    )
 
 
 def test_large_section_handler_receives_sections_that_do_not_fit():
@@ -730,41 +711,6 @@ def test_engine_settings_read_section_expansion_environment():
     assert defaults.section_expansion_enabled and defaults.section_expansion_max_levels == 4
 
 
-def test_engine_settings_read_followup_reserve_environment():
-    assert get_settings(environ={}, dotenv_path=None).section_expansion_followup_reserve_percent == 20
-    settings = get_settings(environ={"RAG_ENGINE_SECTION_EXPANSION_FOLLOWUP_RESERVE_PERCENT": "80"}, dotenv_path=None)
-    # 上限は 50%（後の段のために先の段を止めすぎない）。
-    assert settings.section_expansion_followup_reserve_percent == 50
-
-
-@pytest.mark.parametrize("reserve", [True, False])
-def test_answer_section_phase_passes_the_followup_reserve(reserve):
-    from rag_engine.generation.answering import _expand_context_by_sections
-
-    stub = SectionStub()
-    unused = lambda *a, **k: (_ for _ in ()).throw(AssertionError("unexpected I/O"))  # noqa: E731
-    settings = replace(get_settings(environ={}, dotenv_path=None), section_extraction_enabled=False)
-    with bind_dependencies(
-        AnswerDependencies(unused, unused, unused, unused, unused, section_outline=stub.outline, section_chunks=stub.chunks)
-    ):
-        _context, result = _expand_context_by_sections(
-            QUESTION,
-            _seed_context("c31a"),
-            settings,
-            (),
-            answer_llm_provider=None,
-            rerank_enabled=False,
-            started_at=0.0,
-            use_grader=False,
-            phase="main",
-            reserve=reserve,
-        )
-
-    expected = sections.SectionExpansionLimits.from_settings(settings).followup_reserve_tokens
-    assert expected > 0
-    assert result.trace.get("reserved_tokens", 0) == (expected if reserve else 0)
-
-
 def test_unread_siblings_are_reported_when_no_sibling_was_read():
     # より上の兄弟の章節を 1 つも読めなければ、起点を含まない兄弟の章節も回答に出す（欠けの手がかりを消さない）。
     stub, grader = SectionStub(), Grader(needs=None)
@@ -775,181 +721,24 @@ def test_unread_siblings_are_reported_when_no_sibling_was_read():
     assert {item.section_id for item in result.unread} == {"s3-2", "s3-3"} and result.omitted == []
 
 
-# 別の文書（業務ガイドの手順が参照しない文書。#2828）: 文書全体 > 1 章（p.1）・2 章（p.2）。leaf は 2 chunk ずつ。
+# 別の文書（#2828）。
 OTHER_DOC = "doc-2"
 OTHER_FILE = "別の文書.pdf"
 OTHER_LEAVES = {"o1": ["o1a", "o1b"], "o2": ["o2a", "o2b"]}
-
-
-def _other_sections() -> tuple[sections.SectionInfo, ...]:
-    def info(section_id, title, level, parent, members, page):
-        return sections.SectionInfo(
-            section_id=section_id,
-            title=title,
-            level=level,
-            parent_section_id=parent,
-            page_start=page,
-            page_end=page if section_id != "document" else 2,
-            chunk_count=len(members),
-            chars=len(members) * CHUNK_CHARS,
-        )
-
-    every = [chunk for members in OTHER_LEAVES.values() for chunk in members]
-    return (
-        info("document", OTHER_FILE, 0, None, every, 1),
-        info("o1", "1章 別の操作", 1, "document", OTHER_LEAVES["o1"], 1),
-        info("o2", "2章 別の設定", 1, "document", OTHER_LEAVES["o2"], 2),
-    )
-
-
-def _other_chunk(chunk_id: str, *, parent: bool = False) -> StoredChunk:
-    owner = next(section for section, members in OTHER_LEAVES.items() if chunk_id in members)
-    child = replace(
-        _child("c31a"),
-        chunk_uid=chunk_id,
-        chunk_id=chunk_id,
-        parent_chunk_uid=f"{OTHER_DOC}:{chunk_id}",
-        parent_chunk_id=f"{OTHER_DOC}:{chunk_id}",
-        text=_text(chunk_id),
-        retrieval_text=_text(chunk_id),
-        source_file_name=OTHER_FILE,
-        page_start=int(owner[1:]),
-        page_end=int(owner[1:]),
-        metadata={"section_path": [owner], "document_id": OTHER_DOC},
-    )
-    if not parent:
-        return child
-    return replace(
-        child,
-        chunk_uid=f"{OTHER_DOC}:{chunk_id}",
-        chunk_id=f"{OTHER_DOC}:{chunk_id}",
-        chunk_level="parent",
-        parent_chunk_uid="",
-        parent_chunk_id="",
-        child_chunk_ids=(chunk_id,),
-    )
-
-
-class TwoDocumentStub(SectionStub):
-    """業務ガイドが参照する文書（DOC）と別の文書（OTHER_DOC）の 2 つの文書のスタブ。"""
-
-    def outline(self, *, chunk_uid: str, **options: object) -> sections.SectionOutline | None:
-        if chunk_uid not in {chunk for members in OTHER_LEAVES.values() for chunk in members}:
-            return super().outline(chunk_uid=chunk_uid, **options)
-        self.outline_calls.append(chunk_uid)
-        owner = next(section for section, members in OTHER_LEAVES.items() if chunk_uid in members)
-        return sections.SectionOutline(
-            document_id=OTHER_DOC, chunk_set_id=CHUNK_SET, owner_section_id=owner, sections=_other_sections(), file_name=OTHER_FILE
-        )
-
-    def chunks(self, *, document_id: str, chunk_set_id: str, section_id: str, **options: object) -> list[StoredChunk]:
-        if document_id != OTHER_DOC:
-            return super().chunks(document_id=document_id, chunk_set_id=chunk_set_id, section_id=section_id, **options)
-        self.read_calls.append(f"{OTHER_DOC}/{section_id}")
-        members = (
-            [chunk for members in OTHER_LEAVES.values() for chunk in members] if section_id == "document" else OTHER_LEAVES[section_id]
-        )
-        return [*(_other_chunk(chunk) for chunk in members), *(_other_chunk(chunk, parent=True) for chunk in members)]
-
-
-def _two_document_context(*chunk_ids: str) -> AnswerContext:
-    """2 つの文書の当たった chunk を、渡した順（関連度の順）に持つ文脈。"""
-    tree = tuple(
-        ContextParentEvidence(
-            record=_stored_chunk_answer_record(_other_chunk(chunk_id, parent=True) if chunk_id.startswith("o") else _parent(chunk_id)),
-            role="synthesis_parent",
-            reason="retrieved",
-            children=(
-                ContextChildEvidence(
-                    record=_stored_chunk_answer_record(_other_chunk(chunk_id) if chunk_id.startswith("o") else _child(chunk_id)),
-                    role="retrieved_anchor",
-                    reason="retrieved",
-                    retrieval_rank=rank,
-                ),
-            ),
-        )
-        for rank, chunk_id in enumerate(chunk_ids, 1)
-    )
-    bundle = context_bundle_from_parent_evidence(tree, max_chars=24000)
-    return AnswerContext(records=list(bundle.records), text=bundle.text, evidence=bundle.evidence, evidence_tree=bundle.evidence_tree)
-
-
-# 業務ガイドの手順が参照する頁（第3章 p.5〜7）。
-GUIDE_PAGES = (sections.PriorityRange(DOC, 5, 7),)
-
-
-def test_without_priority_the_other_document_takes_the_budget_first():
-    # 先に読む範囲が無いと、関連度の順で先の別の文書の章節を先に読み、参照の文書の第3章は予算で読み切れない（#2828 の事象）。
-    stub, grader = TwoDocumentStub(), Grader(needs=set(_members("s3")))
-
-    result = _expand(_two_document_context("o1a", "c31a"), _settings(answer_max_input_tokens=4400), grader, stub)
-
-    assert stub.read_calls[:2] == [f"{OTHER_DOC}/o1", "s3-1"]
-    assert not set(_members("s3")) <= set(_child_ids(result.context))
-
-
-def test_guide_reference_sections_are_read_before_other_documents():
-    # 上限 2,200。参照の頁（第3章）に重なる起点を先に広げ、別の文書の起点は段の外に置く（親へ上がらない）。
-    stub, grader = TwoDocumentStub(), Grader(needs=set(_members("s3")))
-
-    result = _expand(_two_document_context("o1a", "c31a"), _settings(answer_max_input_tokens=4400), grader, stub, priority=GUIDE_PAGES)
-
-    assert result.stop_reason == sections.STOP_SUFFICIENT
-    assert stub.read_calls[:2] == ["s3-1", "s3"]
-    assert set(_members("s3")) <= set(_child_ids(result.context))
-    assert result.trace["deferred_seeds"] == [{"document_id": OTHER_DOC, "chunk_set_id": CHUNK_SET, "section_id": "o1"}]
-    # 別の文書の所有の章節は、止めた後に残りの予算（100）で読めない。回答には出さず、診断にだけ残す。
-    assert "o1b" not in _child_ids(result.context)
-    assert result.unread == [] and result.gap_lines == []
-    assert [(item.document_id, item.section_id) for item in result.omitted] == [(OTHER_DOC, "o1")]
-    assert result.trace["deferred"] == [{"section_id": "o1", "title": "1章 別の操作", "read": "skipped"}]
-    assert not any(call == f"{OTHER_DOC}/document" for call in stub.read_calls)
-
-
-def test_other_document_owner_section_is_read_with_the_remaining_budget():
-    stub, grader = TwoDocumentStub(), Grader(needs=set(_members("s3")))
-
-    result = _expand(_two_document_context("o1a", "c31a"), _settings(), grader, stub, priority=GUIDE_PAGES)
-
-    # 予算が残れば、別の文書の起点の所有の章節（最低範囲）だけを最後に読む。親の章節（文書全体）へは上がらない。
-    assert stub.read_calls == ["s3-1", "s3", f"{OTHER_DOC}/o1"]
-    assert "o1b" in _child_ids(result.context) and "o2a" not in _child_ids(result.context)
-    assert result.trace["deferred"][0]["read"] == "whole" and result.omitted == []
-
-
-def test_enumeration_question_does_not_defer_other_documents():
-    # 読む範囲が文書全体（列挙の問）なら、どの起点も読む範囲なので段の外に置かない。
-    stub, grader = TwoDocumentStub(), Grader(needs=None)
-    question = "点検要領で、作業者がしないと決められていることをすべて挙げてください。"
-
-    result = _expand(_two_document_context("o1a", "c31a"), _settings(), grader, stub, question=question, priority=GUIDE_PAGES)
-
-    assert "deferred_seeds" not in result.trace
-    assert f"{OTHER_DOC}/o1" in stub.read_calls
-
-
-def test_priority_rank_prefers_referenced_pages_then_the_document():
-    outline = SectionStub().outline(chunk_uid="c4a")
-    assert outline is not None
-    # 第4章（p.8）は参照の頁（p.5〜7）の外だが、参照の文書の起点。頁の無い参照は文書の全体。
-    assert sections._priority_rank(outline, GUIDE_PAGES) == sections._RANK_DOCUMENT
-    assert sections._priority_rank(replace(outline, owner_section_id="s3-2"), GUIDE_PAGES) == sections._RANK_PAGES
-    assert sections._priority_rank(outline, (sections.PriorityRange(DOC),)) == sections._RANK_PAGES
-    assert sections._priority_rank(outline, (sections.PriorityRange(OTHER_DOC, 1, 2),)) == sections._RANK_OTHER
 
 
 def _unread(document_id: str, section_id: str) -> sections.UnreadSection:
     return sections.UnreadSection(document_id, section_id, f"「{document_id}」の「{section_id}」", sections.STOP_TOKEN_BUDGET, 1)
 
 
-def test_answer_unread_view_keeps_cited_and_guide_documents_only():
+def test_answer_unread_view_keeps_cited_documents_only():
     unread = [_unread(DOC, "s3-2"), _unread(OTHER_DOC, "o1"), _unread("doc-3", "x1"), "文の行。"]
 
-    view = sections.answer_unread_view(unread, {DOC}, {"doc-3"})
+    view = sections.answer_unread_view(unread, {DOC})
 
-    assert view.lines == (unread[0].gap_line(), unread[2].gap_line(), "文の行。")
-    assert [item.section_id for item in view.hidden] == ["o1"] and view.overflow == 0
-    # 回答が根拠にした文書も参照の文書も無ければ（根拠を示せなかった回答）絞らない。
+    assert view.lines == (unread[0].gap_line(), "文の行。")
+    assert [item.section_id for item in view.hidden] == ["o1", "x1"] and view.overflow == 0
+    # 回答が根拠にした文書が無ければ（根拠を示せなかった回答）絞らない。
     assert len(sections.answer_unread_view(unread, set()).lines) == 4
 
 
@@ -993,9 +782,6 @@ def test_answer_hides_unread_sections_of_documents_it_does_not_cite():
     with bind_dependencies(AnswerDependencies(unused, unused, model, unused, unused)):
         only_other = synthesize_grounded_answer("質問", context, get_settings(), image_prompt_mode="text_only", unread_sections=[other])
         both = synthesize_grounded_answer("質問", context, get_settings(), image_prompt_mode="text_only", unread_sections=[cited, other])
-        guided = synthesize_grounded_answer(
-            "質問", context, get_settings(), image_prompt_mode="text_only", unread_sections=[other], unread_documents={OTHER_DOC}
-        )
 
     # 回答が根拠にしない別の文書の章節は出さず、条件つきにもしない。診断に残す。
     assert only_other.response.envelope["outcome"] == "conditional"
@@ -1003,52 +789,6 @@ def test_answer_hides_unread_sections_of_documents_it_does_not_cite():
     assert only_other.response.generation_trace["unread_sections"]["hidden"][0]["document_id"] == OTHER_DOC
     assert both.response.envelope["outcome"] == "conditional"
     assert cited.gap_line() in both.response.answer_text and other.gap_line() not in both.response.answer_text
-    # 業務ガイドの手順の参照の文書の章節は、回答が根拠にしていなくても出す。
-    assert other.gap_line() in guided.response.answer_text
-
-
-def test_guide_plan_reference_ranges():
-    from rag_engine.retrieval.guide_steps import GuidePageRange, GuidePlan, GuideStep, GuideStepReference
-
-    plan = GuidePlan(
-        guide_id="g",
-        revision=1,
-        steps=(
-            GuideStep("1", "手順1", references=(GuideStepReference(DOC, page_ranges=(GuidePageRange(5, 7),)),)),
-            GuideStep(
-                "2", "手順2", references=(GuideStepReference(OTHER_DOC), GuideStepReference(DOC, page_ranges=(GuidePageRange(5, 7),)))
-            ),
-        ),
-    )
-
-    assert plan.reference_ranges == ((DOC, 5, 7), (OTHER_DOC, None, None))
-
-
-def test_answer_section_phase_passes_the_guide_priority():
-    from time import monotonic
-
-    from rag_engine.generation.answering import _expand_context_by_sections
-
-    stub = TwoDocumentStub()
-    unused = lambda *a, **k: (_ for _ in ()).throw(AssertionError("unexpected I/O"))  # noqa: E731
-    settings = replace(get_settings(environ={}, dotenv_path=None), section_extraction_enabled=False)
-    with bind_dependencies(
-        AnswerDependencies(unused, unused, unused, unused, unused, section_outline=stub.outline, section_chunks=stub.chunks)
-    ):
-        _context, result = _expand_context_by_sections(
-            QUESTION,
-            _two_document_context("o1a", "c31a"),
-            settings,
-            (),
-            answer_llm_provider=None,
-            rerank_enabled=False,
-            started_at=monotonic(),
-            use_grader=False,
-            priority=((DOC, 5, 7),),
-        )
-
-    assert [seed["document_id"] for seed in result.trace["deferred_seeds"]] == [OTHER_DOC]
-    assert stub.read_calls[0] == "s3-1"
 
 
 def test_unavailable_extraction_is_explicitly_identified_as_disabled_setting():

@@ -33,7 +33,6 @@ MAX_TEXT_CHARS = 800
 # 処理の経過の段の名前にそろえる（#3451・#3490）。
 TERMS_SOURCE_LABEL = "用語・同義語"
 RULES_SOURCE_LABEL = "確認・回答ルール"
-GUIDE_SOURCE_LABEL = "業務ガイド"
 SCOPE_SOURCE_LABEL = "確認で選んだ条件"
 ORIGINAL_QUESTION_SOURCE_LABEL = "原質問"
 
@@ -186,27 +185,8 @@ class RuntimeKnowledgeContext:
     rule_applications: tuple[dict[str, Any], ...] = ()
     # 利用者が確認の質問で選んだ条件と対象範囲(チャットの確認。#717)。
     scope_context: str = ""
-    # 業務ガイドの手順ごとの根拠(#2395)。(手順 id, 題名, 根拠の chunk_uid の列) の列。手順ごとの検索の後に入る。
-    guide_steps: tuple[tuple[str, str, tuple[str, ...]], ...] = ()
     # 読み込みの失敗の例外（`RuntimeKnowledge.failure`。表示・payload には出さない）。
     failure: BaseException | None = field(default=None, repr=False, compare=False)
-    # 業務ガイドの手順のうち、回答の充足で必須に数えない手順の id(条件が決まらない分岐の行き先とその後続。#2491)。
-    guide_optional_steps: tuple[str, ...] = ()
-    # 業務ガイドの手順ごとの検索の手がかり(手順 id, 手がかりの列)。共有の根拠の item を手順に対応付ける語(#2649)。
-    guide_step_terms: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    # 業務ガイドの手順のうち、手順ごとの検索を期限・回数の上限で打ち切って検索しなかった手順の id(#2706)。
-    guide_unsearched_steps: tuple[str, ...] = ()
-    guide_step_contracts: tuple[dict[str, Any], ...] = ()
-    # 分岐を確定したガイドの回答範囲。検索の成否や引用の支持状態から推定しない。
-    guide_task_scope: tuple[dict[str, Any], ...] = ()
-    # 必須範囲の取得機会と原文候補。意味支持や全範囲の読了とは別の状態。
-    guide_acquisition: tuple[dict[str, Any], ...] = ()
-    guide_acquisition_notices: tuple[str, ...] = ()
-    # 業務ガイドの題名と案内の行（窓口・引き継ぐ条件・承認。#2792）。本文の「業務ガイドの案内」の節に資料とは分けて出す。
-    guide_title: str = ""
-    guide_notices: tuple[str, ...] = ()
-    # guide_notices のうち、分かっている条件で選んだ分岐の補足（#3769）。あれば「業務ガイドの案内」の節を要約の直後に置く。
-    guide_condition_notices: tuple[str, ...] = ()
     # 確認の質問で利用者が選んだ条件のうち、検索文に足した語(with_scope)。出どころの表示に使う。
     scope_search_terms: tuple[str, ...] = ()
 
@@ -246,7 +226,7 @@ class RuntimeKnowledgeContext:
 
     @property
     def expansion_sources(self) -> tuple[str, ...]:
-        """原質問に語を足した出どころの表示名（用語・同義語 / 回答ルール / 業務ガイド / 確認で選んだ条件）。
+        """原質問に語を足した出どころの表示名（用語・同義語 / 回答ルール / 確認で選んだ条件）。
 
         実際に語を足したものだけを、足した順に返す。足していなければ空。
         """
@@ -331,7 +311,6 @@ class RuntimeKnowledgeContext:
             "scope_context": self.scope_context,
             "assume_unconfirmed": self.assume_unconfirmed,
             "unconfirmed_conditions": list(self.unconfirmed_conditions),
-            "guide_acquisition": list(self.guide_acquisition),
         }
 
 
@@ -594,10 +573,7 @@ def _parse_rules(payload: Any) -> list[RuntimeRule]:
             :MAX_TRIGGERS_PER_RULE
         ]
         tags = _text_list(item.get("tags"))
-        # 業務ガイドのルールはシステムが組み立てる文で、長さはガイドの項目の上限で決まる。利用者が登録する
-        # ルールの上限（MAX_TEXT_CHARS）で切ると、末尾の完了・引き継ぐ条件・制約の行が落ちるので切らない（#3838）。
-        content_limit = None if SUPPORT_GUIDE_RULE_TAG in tags else MAX_TEXT_CHARS
-        content = _first_text(item, "content", "body", "text", "rule", max_chars=content_limit)
+        content = _first_text(item, "content", "body", "text", "rule", max_chars=MAX_TEXT_CHARS)
         source = _first_text(item, "source", "document", "path")
         status = _first_text(item, "status", "lifecycle_status", max_chars=80)
         updated_at = _first_text(item, "updated_at", max_chars=80)
@@ -656,12 +632,6 @@ def _matched_terms(question: str, terms: Sequence[RuntimeTerm], limit: int) -> l
     return [term for _, _, term in sorted(scored, key=lambda item: (-item[0], item[1]))[: max(1, limit)]]
 
 
-# 呼び出し元が質問に合うと決めて渡したルール（業務ガイド。#1238）。語の一致に関係なく必ず使う。
-PINNED_RULE_TAG = "pinned"
-# 業務ガイドから作ったルールの印（pinned と一緒に付く）。
-SUPPORT_GUIDE_RULE_TAG = "support_guide"
-
-
 def _matched_rules(question: str, rules: Sequence[RuntimeRule], limit: int) -> list[RuntimeRule]:
     return list(rank_rules(question, rules, limit, tokens=_tokens).selected)
 
@@ -676,11 +646,6 @@ def _expansion_additions(
     for term in matched_terms:
         additions.extend((label, TERMS_SOURCE_LABEL) for label in term.labels())
     for rule in matched_rules:
-        if PINNED_RULE_TAG in rule.tags:
-            # 業務ガイドの trigger は手順の検索の手がかり。検索文に足す（#1238）。
-            source = GUIDE_SOURCE_LABEL if SUPPORT_GUIDE_RULE_TAG in rule.tags else RULES_SOURCE_LABEL
-            additions.extend((trigger, source) for trigger in rule.triggers)
-            continue
         # trigger は別名ではない。ある条件の一致だけで他条件や業務IDを検索へ流さない。
         additions.extend((label, RULES_SOURCE_LABEL) for label in rule.labels() if _matches(question, label))
         if any(_matches(rule.title, label) for label in rule.labels() if _matches(question, label)) and not re.search(

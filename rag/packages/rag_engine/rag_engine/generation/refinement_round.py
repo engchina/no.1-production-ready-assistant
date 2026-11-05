@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
-from rag_engine.generation.evidence_refinement import RefinementStrategy, evidence_source_keys, select_refinement_evidence
+from rag_engine.generation.evidence_refinement import RefinementStrategy, select_refinement_evidence
 
 
 @dataclass(frozen=True)
@@ -42,18 +42,10 @@ def citation_observations(current: Any) -> list[dict[str, Any]]:
     return result
 
 
-def protected_sources(
-    current: Any, knowledge: Any, known_gaps: Sequence[str]
-) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]], list[str]]:
-    """明示された必須・不明の対応を保持する。未引用だから不要とは推定しない。"""
+def protected_sources(current: Any, known_gaps: Sequence[str]) -> tuple[list[tuple[str, ...]], list[str]]:
+    """明示された必須の対応を保持する。未引用だから不要とは推定しない。"""
     required: list[tuple[str, ...]] = []
-    uncertain: list[tuple[str, ...]] = []
     unresolved: list[str] = []
-    optional = set(knowledge.guide_optional_steps) if knowledge else set()
-    for step_id, _title, sources in knowledge.guide_steps if knowledge else ():
-        (uncertain if step_id in optional else required).append(tuple(sources))
-        if not sources:
-            unresolved.append(step_id)
     coverage = {row.request_id: row for row in current.draft.request_coverage}
     for request in current.requests:
         if request.get("kind") == "context":
@@ -73,7 +65,7 @@ def protected_sources(
             unresolved.append(request["id"])
     if known_gaps:
         unresolved.extend(str(gap) for gap in known_gaps)
-    return required, uncertain, unresolved
+    return required, unresolved
 
 
 def review_feedback(current: Any) -> dict[str, Any]:
@@ -143,9 +135,6 @@ def _deterministic_counts(round_: Any) -> dict[str, int]:
         + sum(1 for entry in round_.dropped if not entry.get("ignored") and not entry.get("kept")),
         "citation_range_errors": len(grounded.citation_range_issues(round_.checked, round_.dropped)),
         "plan_errors": len(round_.timing.get("request_plan_errors") or ()),
-        "required_guide_steps_explained": sum(
-            bool(step.get("required")) and step.get("status") == grounded.GUIDE_STEP_EXPLAINED for step in round_.guide_steps
-        ),
     }
 
 
@@ -158,11 +147,7 @@ def adoption_check(candidate: Any, current: Any, selection: Mapping[str, Any]) -
     from rag_engine.generation import grounded
 
     reasons: list[str] = []
-    if (
-        selection.get("candidate_missing_required_groups")
-        or selection.get("candidate_missing_uncertain_groups")
-        or selection.get("unresolved_requirement_ids")
-    ):
+    if selection.get("candidate_missing_required_groups") or selection.get("unresolved_requirement_ids"):
         reasons.append("required_evidence_not_preserved")
     if candidate.audit_cut:
         reasons.append("review_incomplete")
@@ -185,8 +170,6 @@ def adoption_check(candidate: Any, current: Any, selection: Mapping[str, Any]) -
     ):
         if after[key] > before[key]:
             reasons.append(code)
-    if after["required_guide_steps_explained"] < before["required_guide_steps_explained"]:
-        reasons.append("required_guide_step_lost")
     if current.addressed - candidate.addressed - candidate.withdrawn_requests:
         reasons.append("addressed_request_lost")
     unchanged = {
@@ -249,7 +232,6 @@ def refine_answer(
     spans: Sequence[dict[str, Any]],
     *,
     strategy: str,
-    knowledge: Any,
     known_gaps: Sequence[str],
     next_round: int,
     max_rounds: int,
@@ -277,13 +259,12 @@ def refine_answer(
         return skipped("correction_limit")
     if images_present:
         return skipped("image_selection_unverified")
-    required, uncertain, unresolved = protected_sources(current, knowledge, known_gaps)
+    required, unresolved = protected_sources(current, known_gaps)
     selection = select_refinement_evidence(
         spans,
         citation_observations(current),
         strategy=cast(RefinementStrategy, strategy),
         required_source_groups=required,
-        uncertain_source_groups=uncertain,
         unresolved_requirement_ids=unresolved,
     )
     trace["selection"] = selection.diagnostics
@@ -336,19 +317,6 @@ def prompt_context_for(context: Any, spans: Sequence[dict[str, Any]]) -> Any:
     ]
     return replace(
         context, records=records, text="", evidence=(), evidence_tree=(), expansion_records=(), ranked_candidates=(), deferred_records=()
-    )
-
-
-def project_knowledge(knowledge: Any, spans: Sequence[dict[str, Any]]) -> Any:
-    """業務の指示は保持し、根拠対応だけを今回提示する集合へ束縛する。"""
-    if knowledge is None:
-        return None
-    keys = set().union(*(evidence_source_keys(span) for span in spans))
-    return replace(
-        knowledge,
-        guide_steps=tuple(
-            (step_id, title, tuple(source for source in sources if source in keys)) for step_id, title, sources in knowledge.guide_steps
-        ),
     )
 
 

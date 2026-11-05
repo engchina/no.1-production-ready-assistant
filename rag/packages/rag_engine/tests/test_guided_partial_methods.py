@@ -22,10 +22,6 @@ METHOD_B = "文字列Yは一覧の既存行を選択し、内容を変更して�
 CONDITION_C = "機能Zを備える対象に限り、記号を表示しないよう制御できます。"
 UNCONDITIONAL_C = "対象Tの記号を表示しないよう制御できます。"
 TEXTS = (METHOD_A, METHOD_B, CONDITION_C)
-CONTRACTS = [
-    {"step_id": key, "requirements": [{"id": f"{key}:0", "text": text}], "depends_on": []}
-    for key, text in zip(("a", "b", "c"), TEXTS, strict=True)
-]
 
 
 def spans() -> list[dict[str, Any]]:
@@ -118,18 +114,6 @@ def run(*, omit_methods: bool = False, unconditional: bool = False, unknown_c: b
                     evidence_support=[{"evidence_id": f"stable-{key}", "source": f"document_{key}.pdf", "quote": TEXTS[index]}],
                 )
             requests.append(row)
-        observations = []
-        for i, key in enumerate(("a", "b", "c")):
-            indexes = [] if omit_methods and i < 2 else [0 if omit_methods else i]
-            observations.append(
-                {
-                    "requirement_id": f"{key}:0",
-                    "answer_state": "explained" if indexes else "not_mentioned",
-                    "answer_quote": draft.items[indexes[0]].text if indexes else "",
-                    "item_indexes": indexes,
-                    "reason": "",
-                }
-            )
         reviews = [
             {
                 "index": i,
@@ -143,7 +127,6 @@ def run(*, omit_methods: bool = False, unconditional: bool = False, unknown_c: b
         payload = {
             "reviews": reviews,
             "request_reviews": requests,
-            "guide_requirement_reviews": observations,
             "summary_supported": False,
             "goal_alignment": "partial",
             "unused_evidence_ids": ["stable-a", "stable-b"] if omit_methods else [],
@@ -161,8 +144,6 @@ def run(*, omit_methods: bool = False, unconditional: bool = False, unknown_c: b
         parse_images=parser,
         audit_mode="detailed",
         assume_unconfirmed=True,
-        guide_steps=[(key, TEXTS[i], [f"source-{key}"]) for i, key in enumerate(("a", "b", "c"))],
-        guide_step_contracts=CONTRACTS,
     )
     assert len(calls) == 3 and calls[0] == "RequestScopePlan" and len(audit_inputs) == 1 and result.audit_calls == 1
     return result, audit_inputs
@@ -184,11 +165,8 @@ def test_unknown_current_values_do_not_discard_supported_general_methods() -> No
     assert "機能Zを備える対象に限り" in rendered
     assert "資料: 対象Tが機能Zを備えるか" in rendered
     assert "実データ: 項目Xと文字列Yの現在値および相違の原因" in rendered
-    assert all(step["status"] == "unknown" for step in result.guide_steps[:2])
-    raw = result.timing["semantic_audit_observation"]["audit"]
-    assert all(row["answer_state"] == "explained" for row in raw["guide_requirement_reviews"][:2])
     assert not result.unused
-    assert inputs[0]["guide_contracts"]
+    assert inputs[0]["items"]
     plan = request_recovery_plan(result.unanswered, (), {"stable-a", "stable-b", "stable-c"})
     assert len(plan) == 3 and all(row["action"] == "retain" for row in plan)
     assert all(row["evidence_status"] == "unknown" for row in result.unanswered)
@@ -220,4 +198,3 @@ def test_unknown_target_capability_does_not_certify_unconditional_application(un
     assert target.review_assessment["effective_support"] == "unknown"
     assert target.review_assessment["observed_support"] == ("unknown" if unknown_c else "unsupported")
     assert result.verified == 0
-    assert result.guide_steps[2]["status"] != "explained"

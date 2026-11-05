@@ -159,25 +159,3 @@ def test_span_page_end_covers_the_parent_range_until_the_page_is_pinned():
     pinned = evidence_spans("ユーザ登録の操作手順", [parent], budget=2400, anchors=[child])
 
     assert any(s["page"] == 5 and s["page_end"] == 5 for s in pinned)
-
-
-def test_required_guide_sources_receive_budget_before_optional_unit_expansion():
-    first = _native(1, ["（１）設定"], "設定画面で値を入力します。", source="操作説明 A.pdf")
-    second = _native(2, ["（２）反映"], "反映画面で対象を選び変更を反映します。", source="操作説明 B.pdf")
-    noise = [_native(10 + i, ["（１）設定"], f"設定の補足 {i}。" * 30) for i in range(12)]
-    records = [first, *noise, second]
-    groups = [(first.chunk_uid,), (second.chunk_uid,)]
-    spans = evidence_spans("設定画面で変更したい", records, budget=900, priority_source_groups=groups)
-    assert any("設定画面で値を入力" in span["text"] for span in spans)
-    assert any("反映画面で対象を選び" in span["text"] for span in spans)
-    assert len("".join(span["text"] for span in spans)) <= 900
-
-
-def test_guide_budget_priority_keeps_deduplicated_source_aliases():
-    first = _parent(1, ["概要"], text="同じ操作の原文です。")
-    first.metadata["document_id"] = "synthetic-document"
-    duplicate = replace(first, id="duplicate", chunk_id="duplicate", chunk_uid="uid:duplicate")
-    noise = [_parent(10 + i, ["補足"], text=f"別の説明 {i}。" * 40) for i in range(6)]
-    spans = evidence_spans("操作の確認", [*noise, first, duplicate], budget=1000, priority_source_groups=[("uid:duplicate",)])
-    linked_sources = {spans[0]["source_id"], *spans[0].get("source_aliases", ())}
-    assert {first.chunk_uid, duplicate.chunk_uid} <= linked_sources

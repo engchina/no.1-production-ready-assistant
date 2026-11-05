@@ -433,7 +433,6 @@ jobs:
               - "rag/backend/tests/test_*oracle*.py"
               - "rag/backend/tests/test_query_history_retirement.py"
               - "rag/backend/tests/test_document_categories.py"
-              - "rag/backend/app/clients/support_guide_store.py"
               - "rag/backend/app/clients/language_pack_release_store.py"
             nl2sql_oracle:
               # 依存の更新（oracledb・pytest・pytest-xdist など）も実 Oracle のテストで確かめる（#143）。

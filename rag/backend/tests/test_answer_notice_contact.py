@@ -1,6 +1,6 @@
 """検索・回答プロファイルの窓口の上書きと固定した窓口の案内。
 
-回答の注意書き（#2405）の窓口の案内の 1 行を、プロファイルの上書き・業務ガイドの引き継ぎで決める。
+回答の注意書き（#2405）の窓口の案内の 1 行を、プロファイルの上書きで決める。
 同じ窓口の案内を 2 度出さない。外部 I/O はスタブ（`tests.test_answer_surfaces` と同じ）。
 """
 
@@ -20,7 +20,6 @@ from pytest import MonkeyPatch
 
 from app.config import Settings
 from app.rag.answer_notice import (
-    GUIDE_HANDOFF_CONTACT_KEY,
     compose_rag_answer_notice,
 )
 from app.rag.search_answer_profile_config import (
@@ -61,34 +60,6 @@ def test_override_replaces_the_contact_line_once() -> None:
     # システムの窓口の案内を重ねない。
     assert notice is not None and "システムの窓口" not in notice
     assert notice.count("お問い合わせください") == 1
-
-
-@pytest.mark.parametrize(
-    ("guide_contact", "expected_line"),
-    [
-        ("窓口 C", None),
-        ("", "解決しない場合は、窓口 Bへお問い合わせください。"),
-    ],
-    ids=["guide-contact", "guide-without-contact"],
-)
-def test_guide_handoff_contact_takes_priority(
-    guide_contact: str, expected_line: str | None
-) -> None:
-    """業務ガイドの引き継ぎの窓口があれば、回答の本文がそれを案内するので注意書きに重ねない。"""
-    guide = {"decision": "handoff", GUIDE_HANDOFF_CONTACT_KEY: guide_contact}
-    notice = compose_rag_answer_notice(
-        PARTS, {"outcome": "needs_human"}, contact_override="窓口 B", guide=guide
-    )
-    assert notice == (
-        "本文の 1 行目" if expected_line is None else f"本文の 1 行目\n{expected_line}"
-    )
-
-
-def test_guide_contact_is_ignored_when_the_answer_is_not_the_handoff() -> None:
-    """引き継ぎでない回答（モデルの回答）では、ガイドの窓口を案内しないので窓口の行を出す。"""
-    guide = {"decision": "proceed", GUIDE_HANDOFF_CONTACT_KEY: "窓口 C"}
-    notice = compose_rag_answer_notice(PARTS, {"outcome": "answered"}, guide=guide)
-    assert notice == f"本文の 1 行目\n{SYSTEM_LINE}"
 
 
 @pytest.mark.parametrize(

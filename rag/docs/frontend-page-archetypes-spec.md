@@ -21,7 +21,7 @@
 - `src/lib/editor-route.ts` の `useEditorRoute` が `?id=` を読む。なし = 一覧 / `new` = 新規 / `<id>` = その検索・回答プロファイルの編集。ほかの検索パラメータは残す。
 - 一覧は `DataTable`。行の操作以外の領域のクリックと、先頭セルの名前のボタン（`{name} を編集`）でエディタを開く。アーカイブ済みの行は開かない。「新規作成」は `PageHeader` の primary。
 - 開く・一覧へ戻るは履歴に積む（再読込・ブラウザの戻る / 進むで同じ対象が開く）。作成に成功したら作成した検索・回答プロファイルの `?id=` へ、エディタからアーカイブしたら一覧へ、どちらも `replace` で移る（戻るで空の新規フォームや消えた対象へ戻さない）。
-- エディタの上部は パンくず（`検索・回答プロファイル › 名前`、共有 `Breadcrumbs`）+ `一覧へ戻る`（secondary）+ `保存する` / `作成する`（primary）。375px では共有 `PageHeader` の規則で `一覧へ戻る` が「その他の操作」に入る。対象の操作（アーカイブ）は「基本情報と検索・回答設定」の見出しの `ObjectActionBar`、知識パネル（Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルール / 業務ガイドのタブ。回答フローで使う順。#682 / #1237）はその下に積む。
+- エディタの上部は パンくず（`検索・回答プロファイル › 名前`、共有 `Breadcrumbs`）+ `一覧へ戻る`（secondary）+ `保存する` / `作成する`（primary）。375px では共有 `PageHeader` の規則で `一覧へ戻る` が「その他の操作」に入る。対象の操作（アーカイブ）は「基本情報と検索・回答設定」の見出しの `ObjectActionBar`、知識パネル（Approved FAQ / 用語・同義語 / ドメインキーワード / 回答ルールのタブ。回答フローで使う順。#682）はその下に積む。
 - `?id=` の検索・回答プロファイルが無い（404）ときは「対象が見つかりません」と `一覧へ戻る` を出し、別の対象へ置き換えない。取得の失敗（404 以外）は再試行を出す。直接 URL で開いたアーカイブ済みの検索・回答プロファイルは警告を出し、保存を無効にする。
 - 共通の部品（`EditorBreadcrumbs` / `RowTitleButton` / `MissingEditorTarget` / `EditorTargetState` / `EditorDraftNotice`）と、一覧 + 詳細の保存 key の前置き（`RAG_LIST_DETAIL_STORAGE_PREFIX`）は `src/components/layout/EntityLayout.tsx`、下書きと離脱の確認は `src/components/layout/use-entity-editor-draft.ts` の `useEntityEditorDraft`（ナレッジベースと共有。#555）。
 - エディタの `PageHeader` は、編集のときに状態（`StatusBadge`）と件数・更新日時（`meta`）を出す。アーカイブ済みは警告を出し、保存を無効にしたうえで入力欄も読み取り専用・無効にする（入力しても保存できない欄を出さない。#555）。
@@ -58,7 +58,6 @@
 | 検索・回答プロファイル | 検索・回答プロファイル | アーカイブ（danger。DEFAULT は理由付きで無効） | エディタの「基本情報と検索・回答設定」の見出しに同じ定義 | `SearchAnswerProfileManagementClient.tsx` の `useSearchAnswerProfileActions` |
 | 検索・回答プロファイル（知識パネル） | 承認済み FAQ | 削除（danger。確認ダイアログを通す） | — | `ApprovedFaqManager.tsx` |
 | 検索・回答プロファイル（用語・同義語 / 回答ルール。タブごと。#682） | 用語・同義語 / 回答ルール | —（行は選択専用。名前のボタンと行のクリックで編集フォームへ読み込む） | フォームの 保存 / 削除（danger。確認ダイアログを通す） | `RuntimeKnowledgeManager.tsx` |
-| 検索・回答プロファイル（業務ガイド。#1237） | 業務ガイド / 公開の履歴 | 業務ガイドは —（行は選択専用。名前のボタンと行のクリックで一覧の下の編集フォームへ読み込む）。公開の履歴は行のメニューに「この版を見る」「この版に戻す」（確認ダイアログを通す） | 編集フォームの見出しの `ObjectActionBar` に アーカイブ（確認ダイアログを通す）/ アーカイブから戻す。フォーム末尾の操作行は 保存（primary）→ 検証 → 公開（確認ダイアログを通す）、反対の端に 閉じる | `SupportGuideManager.tsx` / `SupportGuideEditor.tsx` |
 | フィードバック | 回答のフィードバック | —（行は選択専用） | Approved FAQ に登録（確認ダイアログを通す。同じ質問の FAQ は置き換える）、品質評価のケースを書き出す（評価リクエストの Excel の 1 行をダウンロードする。#2065）。詳細の見出しの下の行に置く。引用のフィードバックには出さない | `FeedbackClient.tsx` の `FeedbackPromotionActions` |
 | サービス管理 | サービス（`deployable` の行） | ログを表示 / 閉じる、起動（一部異常のときだけ）、ビルド、削除（danger。確認ダイアログを通す）。行には別に状態に応じた起動 / 停止を 1 つだけ出す（§3.1） | — | `ServicesManagementClient.tsx` の `ServiceRow`（`servicePrimaryAction`） |
 | 文書詳細（処理レシピ） | 選択中のレシピ | —（レシピのカードは選択専用） | 処理を開始 / 再開 / 再試行 / 再処理、レシピを削除（danger。最後の 1 件と処理中は無効） | `DocumentRecipeManager.tsx` の `recipeActions` |
@@ -123,4 +122,4 @@ NL2SQL のチャットの SQL の実行結果と Agent のツールの結果は�
 
 ## プロファイルの知識のページング（#3719）
 
-登録済みQ&A・用語と同義語・確認と回答ルール・業務ガイドの4一覧は、空・単一ページでもページングできる一覧であることを示すため、`PagedDataTable` の `showSinglePagePagination` を指定する。範囲とページ番号を常に表示し、移動先のない前後の操作は無効にする。表示件数の選択と複数ページの操作は共有部品の規則に従う。
+登録済みQ&A・用語と同義語・確認と回答ルールの3一覧は、空・単一ページでもページングできる一覧であることを示すため、`PagedDataTable` の `showSinglePagePagination` を指定する。範囲とページ番号を常に表示し、移動先のない前後の操作は無効にする。表示件数の選択と複数ページの操作は共有部品の規則に従う。

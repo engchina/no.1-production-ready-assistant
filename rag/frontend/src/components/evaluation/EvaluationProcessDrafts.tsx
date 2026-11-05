@@ -23,8 +23,8 @@ export const EVALUATION_PROCESS_BATCH_ROWS = 10;
 const CONFIRM_SWITCH_ID = "evaluation-process-confirm";
 
 /**
- * 回答の過程から作る評価の期待の下書き（#2402）。Excel の「回答の過程」のある行を、業務ガイドの取り込みと
- * 同じ構造化で手順・条件・根拠・対応の下書きにし、行ごとに確かめてから「評価に使う」をオンにした
+ * 回答の過程から作る評価の期待の下書き（#2402）。Excel の「回答の過程」のある行を、手順・条件・根拠・対応の
+ * 下書きにし、行ごとに確かめてから「評価に使う」をオンにした
  * ときだけ評価のケースに足す（下書きは保存しない）。行は 10 行ずつ順に送り、進み具合を出す。
  */
 export function EvaluationProcessDrafts({

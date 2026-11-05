@@ -63,12 +63,10 @@ def test_cited_required_keeps_uncited_dependency_completion_exception_and_unknow
         inputs,
         [observed(1)],
         strategy="cited_required",
-        required_source_groups=[("source-2",), ("alias-3",)],
-        uncertain_source_groups=[("source-4",)],
+        required_source_groups=[("source-2",), ("alias-3",), ("source-4",)],
     )
     assert [row["evidence_id"] for row in result.spans] == ["stable-1", "stable-2", "stable-3", "stable-4"]
     assert result.diagnostics["candidate_missing_required_groups"] == []
-    assert result.diagnostics["candidate_missing_uncertain_groups"] == []
 
 
 def test_cited_only_reports_missing_protection_without_turning_into_required_strategy() -> None:
@@ -77,18 +75,16 @@ def test_cited_only_reports_missing_protection_without_turning_into_required_str
         [observed(1)],
         strategy="cited_only",
         required_source_groups=[("source-2",)],
-        uncertain_source_groups=[("unlocated",)],
         unresolved_requirement_ids=["requirement-unknown"],
     )
     assert [row["evidence_id"] for row in result.spans] == ["stable-1"]
     assert result.diagnostics["candidate_missing_required_groups"] == [["source-2"]]
-    assert result.diagnostics["candidate_missing_uncertain_groups"] == [["unlocated"]]
     assert result.diagnostics["unresolved_requirement_ids"] == ["requirement-unknown"]
 
 
 @pytest.mark.parametrize(
     "protection",
-    [{"required_source_groups": [("unknown",)]}, {"uncertain_source_groups": [()]}, {"unresolved_requirement_ids": ["required-unknown"]}],
+    [{"required_source_groups": [("unknown",)]}, {"required_source_groups": [()]}, {"unresolved_requirement_ids": ["required-unknown"]}],
 )
 def test_required_strategy_falls_back_when_preservation_cannot_be_resolved(protection: dict[str, Any]) -> None:
     inputs = [evidence(1), evidence(2)]

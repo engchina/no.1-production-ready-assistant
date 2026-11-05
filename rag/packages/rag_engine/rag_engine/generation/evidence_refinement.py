@@ -52,14 +52,13 @@ def select_refinement_evidence(
     *,
     strategy: RefinementStrategy = "legacy",
     required_source_groups: Sequence[Sequence[str]] = (),
-    uncertain_source_groups: Sequence[Sequence[str]] = (),
     unresolved_requirement_ids: Sequence[str] = (),
 ) -> EvidenceSelection:
     """初回の基本引用検査と、呼出元が明示した保全関係だけで候補を選ぶ。
 
     citation_validity=valid は引用位置の確認だけを表す。claim_support・applicabilityは観察記録であり、
     採否には使わない。cited_only は保全漏れも記録する比較用候補で、最終採用は呼出元が判断する。
-    cited_required は未定位の必須・不明関係があれば元集合を保つ。
+    cited_required は未定位の必須関係があれば元集合を保つ。
     """
     original = tuple(spans)
     diagnostics: dict[str, Any] = {
@@ -68,7 +67,6 @@ def select_refinement_evidence(
         "original_evidence_ids": [span.get("evidence_id", "") for span in spans],
         "citation_observations": [],
         "candidate_missing_required_groups": [],
-        "candidate_missing_uncertain_groups": [],
         "unresolved_requirement_ids": list(unresolved_requirement_ids),
         "semantic_support_adopted": False,
     }
@@ -105,15 +103,14 @@ def select_refinement_evidence(
         if not cited:
             return unchanged("no_valid_citations")
         selected_ids = set(cited)
-        groups = [("required", group) for group in required_source_groups] + [("uncertain", group) for group in uncertain_source_groups]
         group_matches = [
-            (kind, list(group), {str(span["evidence_id"]) for span in spans if evidence_source_keys(span) & set(group)})
-            for kind, group in groups
+            (list(group), {str(span["evidence_id"]) for span in spans if evidence_source_keys(span) & set(group)})
+            for group in required_source_groups
         ]
         if strategy == "cited_required":
-            if unresolved_requirement_ids or any(not matches for _kind, _group, matches in group_matches):
+            if unresolved_requirement_ids or any(not matches for _group, matches in group_matches):
                 return unchanged("unresolved_preservation_scope")
-            for _kind, _group, matches in group_matches:
+            for _group, matches in group_matches:
                 selected_ids.update(matches)
         selected = [span for span in spans if span["evidence_id"] in selected_ids]
         excluded = [span for span in spans if span["evidence_id"] not in selected_ids]
@@ -121,12 +118,10 @@ def select_refinement_evidence(
             *(_identity(span) for span in selected)
         )
         candidate = tuple(_clean_context(span, excluded_ids) for span in selected)
-        for kind, group, _matches in group_matches:
+        for group, _matches in group_matches:
             if not any(evidence_source_keys(span) & set(group) for span in candidate):
-                diagnostics[f"candidate_missing_{kind}_groups"].append(group)
-        if strategy == "cited_required" and (
-            diagnostics["candidate_missing_required_groups"] or diagnostics["candidate_missing_uncertain_groups"]
-        ):
+                diagnostics["candidate_missing_required_groups"].append(group)
+        if strategy == "cited_required" and diagnostics["candidate_missing_required_groups"]:
             return unchanged("preservation_reference_removed")
         diagnostics.update(
             status="selected",

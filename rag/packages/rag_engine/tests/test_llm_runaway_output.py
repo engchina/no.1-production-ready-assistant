@@ -189,7 +189,7 @@ def _audit_wire_text() -> tuple[type, str]:
     from rag_engine.models.audit_wire import audit_wire_schema
     from rag_engine.models.llm import GroundedAudit, GroundedRequestReview
 
-    schema = audit_wire_schema(GroundedAudit, ("Q1",), ())
+    schema = audit_wire_schema(GroundedAudit, ("Q1",))
     audit = GroundedAudit(
         reviews=[],
         request_reviews=[GroundedRequestReview(request_id="Q1", status="addressed", reason="説明あり")],

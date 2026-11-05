@@ -101,14 +101,14 @@ async def test_disabled_cache_and_ordered_candidate_identity(
 ) -> None:
     adapter = client(Sdk(), enabled=False)
     with bind_rerank_context(
-        phase="guide_step", batch_id="batch-1", query_index=2, query_role="supplement"
+        phase="section_step", batch_id="batch-1", query_index=2, query_role="supplement"
     ) as context:
         await adapter.rerank("synthetic question", ["first", "second"], 1)
     await adapter.rerank("synthetic question", ["second", "first"], 1)
     first, second = receipt(captured, 0), receipt(captured)
     assert first["candidate_hash"] != second["candidate_hash"]
     assert first["question_index"] == 2 and first["query_role"] == "supplement"
-    assert first["phase"] == "guide_step" and first["batch_id"] == "batch-1"
+    assert first["phase"] == "section_step" and first["batch_id"] == "batch-1"
     assert first["cache_state"] == second["cache_state"] == "disabled"
     assert context.to_dict()["sdk_attempt_count"] == second["sdk_attempt_count"] == 1
 

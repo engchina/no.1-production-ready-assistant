@@ -399,8 +399,8 @@ def test_search_limit_schema_tells_the_model_to_omit_the_limits() -> None:
     assert SEARCH_LIMIT_SCHEMA_NOTE not in schema["properties"]["top_k"]["description"]
     assert search_limit_schema("rag__rag_retrieve_evidence", shown) == shown
     # 根拠のツール以外は元のまま。
-    guides = _contract_schema("rag_lookup_guides")
-    assert search_limit_schema("rag__rag_lookup_guides", guides) is guides
+    outline = _contract_schema("rag_outline")
+    assert search_limit_schema("rag__rag_outline", outline) is outline
 
 
 def _step(name: str, arguments: dict[str, Any], *, success: bool = True) -> RunStep:
@@ -624,11 +624,11 @@ def test_business_rag_research_instructions_cover_hop_queries() -> None:
 
 
 def test_business_rag_research_instructions_do_not_report_the_work() -> None:
-    """回答に作業の経過（ツール名・検索の状態・業務ガイドの有無・旧版の有無）を書かない（#1452）。
+    """回答に作業の経過（ツール名・検索の状態・旧版の有無）を書かない（#1452）。
 
     #1362 の評価で、これらの段落が最終の検証で「根拠で確かめられない」になって外れ、資料の答えは
-    正しいのに回答が conditional になっていた（`da-regional-report-export` の「業務ガイドは
-    見つかりませんでした」、`km-license-fee` の「rag_search の結果は insufficient_evidence」、
+    正しいのに回答が conditional になっていた（`km-license-fee` の「rag_search の結果は
+    insufficient_evidence」、
     `ir-emergency-change` の「旧版もあることが確認できました」、`br-crm-retention` の
     「確かめられなかった点はありません」）。"""
     skill = skill_registry.get("business-rag-research")
@@ -639,7 +639,6 @@ def test_business_rag_research_instructions_do_not_report_the_work() -> None:
         "回答には、資料の内容と、資料で確かめられなかった点だけを書く。",
         "ツールの名前（rag_retrieve_evidence・rag_outline など）",
         "ツールの結果の項目の値（role・origin など）",
-        "業務ガイドが見つかった・見つからなかったこと",
         "検索の結果に旧版（older_versions）があったこと",
         "自分の作業の経過は回答に書かない",
         "「確かめられなかった点はありません」のような作業の報告",

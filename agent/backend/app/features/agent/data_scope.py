@@ -3,8 +3,8 @@
 業務 Agent の定義に、標準の MCP 接続ごとの「使えるプロファイルの一覧と既定」を持つ。
 
 - ``nl2sql``: 業務プロファイル（``nl2sql_query`` の ``profile_id``）。
-- ``rag``: 検索・回答プロファイル（``rag_search`` / ``rag_retrieve_evidence`` /
-  ``rag_lookup_guides`` の ``search_answer_profile_id``）。
+- ``rag``: 検索・回答プロファイル（``rag_search`` / ``rag_retrieve_evidence`` の
+  ``search_answer_profile_id``）。
 
 範囲を設定していない（一覧が空の）接続は今までどおり、Run の利用者が使えるすべてのプロファイルから
 モデルが選ぶ（範囲の検査はしない）。範囲を設定した接続は、組み込み Runtime の tool handler が
@@ -86,7 +86,6 @@ _PROFILE_ARGUMENTS: dict[str, dict[str, str]] = {
     RAG_CONNECTION_ID: {
         "rag_search": "search_answer_profile_id",
         "rag_retrieve_evidence": "search_answer_profile_id",
-        "rag_lookup_guides": "search_answer_profile_id",
     },
 }
 # RAG の、ナレッジベースを直接指定できるツール（範囲を設定したら使わない）。

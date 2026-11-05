@@ -1,6 +1,6 @@
 """前置き・答え方の案内つきの確認の質問（#1454）の決定論テスト。
 
-#1362 の deepseek-flash の全量の評価で、`rag_lookup_guides` だけを呼んで確認の質問を返した回答に、
+#1362 の deepseek-flash の全量の評価で、根拠を集めて確認の質問を返した回答に、
 前置きの文（「その点がまだ分かっていません。」）と答え方の案内の括弧が付き、確認の質問だけの回答と
 認められずに「この回答は資料の根拠を使っておらず…」の注記が足されていた。回答はその Run の
 回答そのもの（注記を足す前の本文）。
@@ -37,8 +37,7 @@ GRANT_PERMISSION = (
 DELETE_ACCOUNT = (
     "ご質問に答える前に、条件を 1 つ確かめさせてください。\n\n"
     "**所属部署の部門長の承認は得ていますか？**（はい／いいえ）\n\n"
-    "（業務ガイド「アカウントの削除」では、この条件によって手順・答えが変わるため、"
-    "まず確認しています。）"
+    "（この条件によって手順・答えが変わるため、まず確認しています。）"
 )
 # cr-grant-permission（e1467、run_2dc5eb2909e547ebb3c3d3fd29823ff2）: 答えが分かった後の案内の結び。
 GRANT_PERMISSION_CLOSING = (
@@ -53,13 +52,13 @@ CLARIFICATIONS = {
 }
 
 
-def _lookup_guides() -> RunStep:
-    name = "rag__rag_lookup_guides"
+def _retrieve() -> RunStep:
+    name = "rag__rag_retrieve_evidence"
     return RunStep(
         run_id="run-1454",
         status=StepStatus.COMPLETED,
         tool_call=ToolCall(name=name, arguments={"query": "権限の付与"}),
-        tool_result=ToolResult(name=name, success=True, output={"guides": []}),
+        tool_result=ToolResult(name=name, success=True, output={"evidence": []}),
     )
 
 
@@ -67,7 +66,7 @@ def _lookup_guides() -> RunStep:
 def test_question_with_preface_and_answer_guidance_is_clarification_only(answer: str) -> None:
     assert is_clarification_only(answer)
     validation = validation_content(STATUS_SKIPPED, reason=REASON_CLARIFICATION_ONLY)
-    content = answer_outcome(answer, steps=[_lookup_guides()], validation=validation)
+    content = answer_outcome(answer, steps=[_retrieve()], validation=validation)
     assert (content["value"], content["basis"]) == ("needs_clarification", "clarification_question")
 
 

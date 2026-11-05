@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { dbUser } from "./fixtures/auth";
 import { MOCK_NOW, expect, test, type MockApi } from "./fixtures/mock-api";
 
-// #1286: チャットの回答の下に、支援タスクの状態（確かめた条件・確認待ちの質問・使った業務ガイド）と
+// #1286: チャットの回答の下に、支援タスクの状態（確かめた条件・確認待ちの質問）と
 // 資料との照合の結果を業務の言葉で出す。成果物の JSON・内部の語（budget_exceeded など）は業務の利用者に見せない。
 // #2361: 除いた内容の一覧は回答の本文の節 1 か所に全件を出し、「資料との照合」の行は件数のバッジだけ（節の項目の数と
 // 一致させる）。行を開いた中に小見出し「資料で確かめた結果」・同じバッジ・除いた内容を出し直さない。
@@ -21,8 +21,6 @@ const INTERNAL_WORDS = [
   "budget_exceeded",
   "budget",
   "user_answer",
-  "rag_guide",
-  "guide_id",
   "condition_id",
   "no_rag_evidence",
   "no_tool_grounding",
@@ -65,9 +63,9 @@ function supportTask(overrides: Record<string, unknown> = {}) {
           label: "経費の種類",
           source: "user_answer",
           updated_at: MOCK_NOW,
-          previous: [{ value: "交際費", source: "rag_guide", updated_at: MOCK_NOW }],
+          previous: [{ value: "交際費", source: "user_answer", updated_at: MOCK_NOW }],
         },
-        amount_band: { value: "5 万円未満", label: "金額", source: "rag_guide", updated_at: MOCK_NOW },
+        amount_band: { value: "5 万円未満", label: "金額", source: "user_answer", updated_at: MOCK_NOW },
       },
       pending_clarifications: [
         {
@@ -77,7 +75,6 @@ function supportTask(overrides: Record<string, unknown> = {}) {
           options: ["ある", "ない"],
         },
       ],
-      guide: { guide_id: "guide-expense", revision: 3, title: "経費精算ガイド", decision: "answer" },
       outcome: "needs_clarification",
       gaps: ["精算の締め日"],
       evidence: [{ document_id: "doc-1", chunk_id: "chunk-1", chunk_set_id: "", file_name: "経費規程.pdf" }],
@@ -219,7 +216,7 @@ async function openSeedThread(page: Page) {
 }
 
 for (const viewport of VIEWPORTS) {
-  test(`回答の下に確かめた条件・確認待ち・業務ガイドを出し、除いた内容は本文の節の 1 か所に件数と一致させて出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
+  test(`回答の下に確かめた条件・確認待ちを出し、除いた内容は本文の節の 1 か所に件数と一致させて出す (${viewport.name})`, async ({ page, mockApi }, testInfo) => {
     seedRun(mockApi, "run-review-1", [answer(WITHHELD_ANSWER), supportTask(), WITHHELD]);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/chat");
@@ -246,14 +243,11 @@ for (const viewport of VIEWPORTS) {
     const conditions = panel.getByRole("group", { name: "確かめた条件" });
     await expect(conditions.getByRole("listitem")).toHaveText([
       "経費の種類：出張（あなたの答えから）前の値：交際費",
-      "金額：5 万円未満（質問の文から）",
+      "金額：5 万円未満（あなたの答えから）",
     ]);
     const clarifications = panel.getByRole("group", { name: "確認待ちの質問" });
     await expect(clarifications).toContainText("領収書はありますか？");
     await expect(clarifications).toContainText("選択肢：ある / ない");
-    await expect(panel.getByRole("group", { name: "使った業務ガイド" })).toHaveText(
-      "使った業務ガイド経費精算ガイド（第 3 版）"
-    );
     await expect(panel.getByRole("group", { name: "まだ足りない情報" })).toContainText("精算の締め日");
     // 開いた中に、小見出し「資料で確かめた結果」・同じバッジ・除いた内容（とその説明）を出し直さない。
     await expect(panel.getByRole("group", { name: "資料で確かめた結果" })).toHaveCount(0);
@@ -375,7 +369,6 @@ test("確認待ちの質問だけがある回答は、見出しにバッジを�
     answer("領収書はありますか？"),
     supportTask({
       known_conditions: {},
-      guide: null,
       gaps: [],
       budget: { run: { budget_exceeded: 0 }, task: {}, limits: {} },
     }),

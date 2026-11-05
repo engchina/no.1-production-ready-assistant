@@ -327,7 +327,7 @@ def gate_record(view: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def refusal_response(question: str, view: Mapping[str, Any] | None, *, runtime_knowledge: Any = None) -> Any:
+def refusal_response(question: str, view: Mapping[str, Any] | None) -> Any:
     """評価が回答できる部分は無いと返したときだけ、生成を呼ばず未確認の範囲を返す。
 
     写しを確かめられない・評価が終わっていない・評価の後に根拠が変わったときは、不足を確かめていないので None
@@ -340,12 +340,6 @@ def refusal_response(question: str, view: Mapping[str, Any] | None, *, runtime_k
     lines = gap_lines(question, view)
     labels = answer_labels()
     answer = labels.crag_refusal_summary + ("\n\n" + "\n".join(labels.item_bullet + line for line in lines) if lines else "")
-    # 解決済みガイドの案内を、文献の根拠とは分けて既存rendererで示す。分岐を推定しない。
-    notices = tuple(getattr(runtime_knowledge, "guide_notices", ()) or ())
-    if notices:
-        from rag_engine.generation import grounded
-
-        answer = grounded.render_answer(answer, (), guide_notes=(str(getattr(runtime_knowledge, "guide_title", "")), notices)).text
     return AnswerResponse(
         answer_text=answer,
         confidence="low",

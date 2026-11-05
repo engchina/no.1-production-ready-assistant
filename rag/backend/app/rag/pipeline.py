@@ -75,12 +75,6 @@ from app.rag.step_details import (
     step_details_model,
 )
 from app.rag.stored_answer import stored_citations, warn_if_large_answer_record
-from app.rag.support_guide_evidence import with_evidence_conditions
-from app.rag.support_guide_runtime import (
-    GUIDE_PREVIEW_KEY,
-    apply_guide_to_diagnostics,
-    guide_short_circuit_outcome,
-)
 from app.rag.trace_store import AnswerTrace, operation_trace_parent
 from app.schemas.common import JsonValue
 from app.schemas.search import (
@@ -349,8 +343,6 @@ class RagPipeline:
         complete_evidence: bool = True,
     ) -> None:
         self._settings = settings or get_settings()
-        if not self._settings.rag_support_guide_enabled:
-            self._settings = self._settings.model_copy(update={"rag_support_guide": {}})
         self._genai = genai or GenAiClient(settings=self._settings)
         self._oracle = oracle or OracleClient(settings=self._settings)
         self._llm = llm or EnterpriseAiClient(settings=self._settings)
@@ -591,7 +583,6 @@ class RagPipeline:
                 progress_callback=stage_callback,
                 result_details=field_filter_details,
             )
-        guide = dict(self._settings.rag_support_guide or {})
         attachment_chunks = []
         if self._attachment_conversation_id and self._approved_faq is None:
             from app.rag.chat_attachments import attachment_evidence, chat_attachment_service
@@ -652,34 +643,18 @@ class RagPipeline:
         # 進捗には全体を 1 工程（#375）とし、その中の各工程（質問の理解・文書検索など）も
         # 入れ子の工程として出す（#593）。回答を作らない RAG 検索は同じ流れを回答の生成の手前で
         # 止め、全体の工程を「質問の理解から根拠の検索まで」（evidence）にする（#649・#3506）。
-        if request.generate_answer and guide.get("short_answer") and self._approved_faq is None:
-            # 業務ガイドの必要な条件が分からず、確かめるか人へ引き継ぐ（#1238）。
-            # 回答（モデル）は作らない。
-            outcome = guide_short_circuit_outcome(guide)
-        else:
-            outcome = await _observe_stage(
-                trace_id,
-                "answer" if request.generate_answer else EVIDENCE_STAGE,
-                engine.run(
-                    request, step_callback=emit_step if progress_callback is not None else None
-                ),
-                progress_callback=stage_callback,
-            )
-            if guide and request.generate_answer:
-                # 回答の根拠（画面の図の項目の種類）で決まった条件を、分かっている条件にする
-                # （#2404）。
-                guide = with_evidence_conditions(guide, outcome.diagnostics)
-                apply_guide_to_diagnostics(outcome.diagnostics, guide)
+        outcome = await _observe_stage(
+            trace_id,
+            "answer" if request.generate_answer else EVIDENCE_STAGE,
+            engine.run(request, step_callback=emit_step if progress_callback is not None else None),
+            progress_callback=stage_callback,
+        )
         profile_revision = self._settings.rag_search_answer_profile_revision
         if profile_revision:
             # 回答を作った検索・回答プロファイルの版（#1276）。
             outcome.diagnostics.setdefault("provenance", {})["search_answer_profile"] = dict(
                 profile_revision
             )
-        guide_preview = self._settings.rag_guide_preview
-        if guide_preview:
-            # 業務ガイドの下書きで試した回答（#1288）。回答の記録に残し、履歴・評価から外す。
-            outcome.diagnostics[GUIDE_PREVIEW_KEY] = dict(guide_preview)
         if request.generate_answer:
             # 回答の経路（固定の RAG）と理由、現場のデータの確認の要否を記録する（#1283）。
             route = answer_route(outcome.diagnostics)
@@ -689,13 +664,12 @@ class RagPipeline:
         if outcome.evaluation_input is not None:
             outcome.evaluation_input["answer_text"] = final_answer
         # 回答の注意書き（#2405）。回答の確定の後に、本文とは別の項目として付ける。
-        # 窓口の案内は検索・回答プロファイルの上書きと業務ガイドの引き継ぎで決める（#2400）。
+        # 窓口の案内は検索・回答プロファイルの上書きで決める（#2400）。
         notice = (
             compose_rag_answer_notice(
                 await asyncio.to_thread(self._answer_notice),
                 outcome.diagnostics,
                 contact_override=self._settings.rag_answer_contact_override,
-                guide=guide,
             )
             if request.generate_answer and self._answer_notice is not None
             else None

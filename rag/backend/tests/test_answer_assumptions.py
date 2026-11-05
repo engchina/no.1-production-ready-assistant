@@ -17,7 +17,6 @@ from app.rag.answer_engine import AnswerEngine
 from app.rag.search_answer_profile_config import SearchAnswerProfileConfig
 from app.schemas.search import SearchRequest
 from app.schemas.search_answer_profile_knowledge import ClarificationAnswer
-from app.schemas.support_guide import SupportGuideContent
 from tests.test_answer_engine import FakeGenAi, FakeOracle, _fake_llm
 from tests.test_search_answer_profile_domain_keywords import FakeKnowledgeOracle
 
@@ -46,7 +45,7 @@ PAYLOAD: dict[str, Any] = {
 
 def prepared(policy: str = "assume", **kwargs: Any) -> dict[str, Any]:
     return with_answer_assumptions(
-        PAYLOAD, policy=policy, question=QUESTION, conditions={}, guide={}, **kwargs
+        PAYLOAD, policy=policy, question=QUESTION, conditions={}, **kwargs
     )
 
 
@@ -76,9 +75,9 @@ def test_assumptions_are_scoped_and_do_not_choose_unknown_options(tmp_path: Path
     )
     assert prepared(answered_rule_ids=("r1",))["unconfirmed_conditions"] == []
     assert (
-        with_answer_assumptions(
-            result, policy="confirm", question=QUESTION, conditions={}, guide={}
-        ).get("assume_unconfirmed")
+        with_answer_assumptions(result, policy="confirm", question=QUESTION, conditions={}).get(
+            "assume_unconfirmed"
+        )
         is None
     )
 
@@ -94,7 +93,6 @@ def test_answered_conditions_are_not_marked_unknown(
         policy="assume",
         question=question,
         conditions=conditions,
-        guide={},
         confirmed_answers=(ClarificationAnswer(rule_id="r1", option_ids=["a"]),)
         if not conditions
         else (),
@@ -104,9 +102,8 @@ def test_answered_conditions_are_not_marked_unknown(
 
 @pytest.mark.usefixtures("system_access")
 @pytest.mark.parametrize("policy", ["confirm", "assume"])
-@pytest.mark.parametrize("with_guide", [False, True])
-async def test_search_chat_mcp_shared_context_forwards_rule_and_guide_questions(
-    monkeypatch: pytest.MonkeyPatch, policy: str, with_guide: bool
+async def test_search_chat_mcp_shared_context_forwards_rule_questions(
+    monkeypatch: pytest.MonkeyPatch, policy: str
 ) -> None:
     class Oracle(FakeKnowledgeOracle):
         async def get_search_answer_profile(self, profile_id: str) -> Any:
@@ -117,7 +114,6 @@ async def test_search_chat_mcp_shared_context_forwards_rule_and_guide_questions(
                     "config": SearchAnswerProfileConfig(
                         knowledge_base_ids=["kb-1"],
                         clarification_policy=policy,
-                        query={"support_guide_enabled": with_guide},
                     )
                 }
             )
@@ -125,44 +121,15 @@ async def test_search_chat_mcp_shared_context_forwards_rule_and_guide_questions(
     oracle = Oracle()
     oracle.payloads[("bv-1", "runtime_knowledge")] = PAYLOAD
     monkeypatch.setattr(search_route, "OracleClient", lambda: oracle)
-    guide = SupportGuideContent.model_validate(
-        {
-            "title": "設定ガイド A",
-            "goal": {"expected_result": "設定を更新する", "match_terms": ["設定"]},
-            "conditions": [
-                {
-                    "id": "target",
-                    "label": "対象",
-                    "question": "対象を教えてください",
-                    "allowed_values": ["対象 A", "対象 B"],
-                }
-            ],
-            "steps": [{"id": "open", "title": "設定画面を開く"}],
-        }
-    )
-
-    async def load(*args: Any) -> Any:
-        return ([("guide-a", 1, guide)] if with_guide else []), False
-
-    async def context(*args: Any) -> Any:
-        return None
-
-    monkeypatch.setattr(search_route, "load_published_guides", load)
-    monkeypatch.setattr(search_route, "support_guide_context", context)
     _, settings, _, profile = await search_route._resolve_query_context(
         SearchRequest(query=QUESTION, search_answer_profile_id="bv-1"),
-        Settings(rag_support_guide_semantic_match_enabled=False),
-        interactive=True,
+        Settings(),
     )
     assert profile == "bv-1"
     result = settings.rag_runtime_knowledge
     assert result.get("assume_unconfirmed", False) is (policy == "assume")
     if policy == "assume":
-        pending = result["unconfirmed_conditions"]
-        assert isinstance(pending, list)
-        assert pending[0] == PENDING
-        assert len(pending) == (2 if with_guide else 1)
-        assert not settings.rag_support_guide.get("short_answer")
+        assert result["unconfirmed_conditions"] == [PENDING]
 
 
 @pytest.mark.parametrize("policy", ["confirm", "assume"])

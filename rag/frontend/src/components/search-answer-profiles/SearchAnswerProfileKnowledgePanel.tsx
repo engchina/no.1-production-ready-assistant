@@ -31,9 +31,8 @@ import { QuestionUnderstandingPanel } from "./QuestionUnderstandingPanel";
 import { DomainKeywordExcelImport } from "./DomainKeywordExcelImport";
 import { ApprovedFaqManager } from "./ApprovedFaqManager";
 import { RuntimeKnowledgeManager, runtimeKindLabel } from "./RuntimeKnowledgeManager";
-import { SupportGuideManager } from "./SupportGuideManager";
 
-type KnowledgeTab = "approvedFaq" | "questionUnderstanding" | "terms" | "domainKeywords" | "rules" | "supportGuides";
+type KnowledgeTab = "approvedFaq" | "questionUnderstanding" | "terms" | "domainKeywords" | "rules";
 
 /** 検索・回答プロファイル単位の知識(ドメインキーワード等)。編集中の検索・回答プロファイルにだけ表示する。 */
 export function SearchAnswerProfileKnowledgePanel({
@@ -59,7 +58,7 @@ export function SearchAnswerProfileKnowledgePanel({
           ariaLabel={t("searchAnswerProfiles.knowledge.title")}
           value={tab}
           onChange={async (value) => {
-            // 業務ガイドは編集中の入力が多いので、タブを離れる前に未保存の変更を確かめる。
+            // タブを離れる前に未保存の変更を確かめる。
             if (!(await confirmPendingLeave())) return;
             setTab(value as KnowledgeTab);
           }}
@@ -69,7 +68,6 @@ export function SearchAnswerProfileKnowledgePanel({
             { id: "questionUnderstanding", label: t("searchAnswerProfiles.questionUnderstanding.title") },
             { id: "terms", label: runtimeKindLabel("terms") },
             { id: "rules", label: runtimeKindLabel("rules") },
-            { id: "supportGuides", label: t("supportGuides.title") },
             { id: "domainKeywords", label: t("searchAnswerProfiles.domainKeywords.title") },
           ]}
         />
@@ -84,8 +82,6 @@ export function SearchAnswerProfileKnowledgePanel({
             <DomainKeywordsEditor searchAnswerProfileId={searchAnswerProfileId} />
           ) : tab === "approvedFaq" ? (
             <ApprovedFaqManager searchAnswerProfileId={searchAnswerProfileId} />
-          ) : tab === "supportGuides" ? (
-            <SupportGuideManager searchAnswerProfileId={searchAnswerProfileId} />
           ) : (
             // 種類ごとに編集中の入力を持つので、タブを切り替えたら作り直す。
             <RuntimeKnowledgeManager key={tab} searchAnswerProfileId={searchAnswerProfileId} kind={tab} />

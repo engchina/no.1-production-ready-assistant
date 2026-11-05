@@ -147,29 +147,21 @@ def test_none_opt_in_sends_only_selected_evidence_and_never_audits(monkeypatch: 
     assert prepared
 
 
-def test_required_uncited_original_guide_rules_and_confirmed_condition_reach_second_input() -> None:
+def test_rules_and_confirmed_condition_reach_second_input() -> None:
     knowledge = RuntimeKnowledgeContext(
         original_question=QUESTION,
         expanded_question=QUESTION,
         path=Path("unused.json"),
         matched_rules=(RuntimeRule(rule_id="rule-a", title="合成回答ルール", content=RULE, purpose="generation"),),
-        guide_steps=(("open", "画面を開く", ("run:open",)), ("save", "変更を保存する", ("run:save",))),
-        guide_task_scope=(
-            {"step_id": "open", "required": True},
-            {"step_id": "save", "required": True, "depends_on": ["open"]},
-        ),
-        guide_step_contracts=(
-            {"step_id": "save", "purpose": "変更を保存する", "requirements": [{"id": "save:0", "text": "保存して確定する"}]},
-        ),
     )
     parser = Parser()
     result = run(parser, mode="cited_required", knowledge=knowledge)
     assert len(parser.calls) == 2
     second = parser.calls[1]["prompt"]
-    assert OPEN in second and SAVE in second and NOISE not in second
-    assert RULE in second and "保存して確定する" in second
+    assert OPEN in second and NOISE not in second
+    assert RULE in second
     assert '"answer": "権限あり"' in second and '"source": "user"' in second
-    assert "[E1]" in second and "[E2]" in second and "[E3]" not in second
+    assert "[E1]" in second
     selection = result.response.generation_trace["evidence_refinement"]["selection"]
     assert selection["label_policy"] == "preserved"
     assert selection["candidate_missing_required_groups"] == []
@@ -523,40 +515,6 @@ def test_audited_candidate_is_not_marked_again() -> None:
     assert decision.adopted and decision.checks["audit_mode"] == "audited"
     assert decision.checks["unassessed_marked"] == 0
     assert all(entry.confirmed for entry in decision.candidate.checked)
-
-
-def test_none_adopts_added_guide_step_with_unassessed_mark_end_to_end() -> None:
-    knowledge = RuntimeKnowledgeContext(
-        original_question=QUESTION,
-        expanded_question=QUESTION,
-        path=Path("unused.json"),
-        guide_steps=(("open", "画面を開く", ("run:open",)), ("save", "変更を保存する", ("run:save",))),
-        guide_task_scope=({"step_id": "open", "required": True}, {"step_id": "save", "required": True, "depends_on": ["open"]}),
-    )
-    refined = payload()
-    refined["summary"] = "画面を開いて保存する方法です。"
-    refined["request_coverage"][0]["evidence_ids"].append("E2")
-    refined["request_coverage"][0]["evidence_scope"].append({"evidence_id": "E2", "target": "対象A", "relation": "direct"})
-    refined["items"].append(
-        {"kind": "operation", "text": SAVE, "request_id": "Q1", "citations": [{"evidence_id": "E2", "line_start": 1, "line_end": 1}]}
-    )
-    parser = Parser([payload(), refined])
-    result = run(parser, mode="cited_required", knowledge=knowledge)
-    assert len(parser.calls) == 2
-    trace = result.response.generation_trace["evidence_refinement"]
-    assert trace["adopted"] is True and trace["adoption"] == "deterministic_checks_improved"
-    assert trace["adoption_checks"]["audit_mode"] == "none"
-    assert trace["adoption_checks"]["previous_confirmed_claims_lost"] == 0
-    assert trace["adoption_checks"]["new_or_reworded_claims"] == trace["adoption_checks"]["unassessed_marked"] == 1
-    assert trace["adoption_checks"]["after"]["confirmed"] > trace["adoption_checks"]["before"]["confirmed"]
-    assert OPEN in result.response.answer_text and SAVE in result.response.answer_text
-    assert "確かめが終わっていない" in result.response.answer_text
-    adopted = next(
-        row for row in result.response.generation_trace["rounds"] if row.get("remedy", {}).get("remedy") == "evidence_refinement"
-    )
-    assert adopted["accepted"] is True
-    marks = {row["text"]: [mark["code"] for mark in row.get("marks", ())] for row in adopted["items"]}
-    assert marks[OPEN] == [] and marks[SAVE] == ["unassessed"]
 
 
 @pytest.mark.parametrize("adopted", [False, True])

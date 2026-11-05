@@ -31,7 +31,7 @@ export interface PublishedVersionColumnsOptions<T> {
 }
 
 /**
- * 公開した版の履歴（Agent の業務 Agent・RAG の業務ガイド）の表の列（#2356）。
+ * 公開した版の履歴（Agent の業務 Agent）の表の列（#2356）。
  *
  * 版（公開中のバッジ）→ 公開日時 → 公開者 → 製品の列 → メモ → 操作 の順を 2 製品でそろえる。表そのものは
  * 製品の `PagedDataTable`（ページ送りの文言・表示件数の作業状態）に渡す。保存する版の数の案内
