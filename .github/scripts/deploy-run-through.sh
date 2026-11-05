@@ -65,7 +65,7 @@ build_image() {
   "${docker_cmd}" build -t "${image}" -f - . <<EOF
 FROM ${base_image}
 RUN dnf -y install systemd procps-ng sudo hostname iproute ca-certificates dos2unix git openssl \\
-      policycoreutils-python-utils tar tmux unzip \\
+      policycoreutils-python-utils tar tmux \\
     && dnf clean all \\
     && useradd --create-home opc \\
     && echo 'opc ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-opc
@@ -81,16 +81,13 @@ write_props() {
   secret="$(openssl rand -hex 32)"
   echo "::add-mask::${admin_password}"
   echo "::add-mask::${secret}"
-  in_container "install -d -m 0755 ${props} /u01/aipoc/wallet"
+  in_container "install -d -m 0755 ${props}"
   "${docker_cmd}" exec -i "${container}" bash -c "umask 077; cat > ${props}/platform.env" <<EOF
 PLATFORM_ORACLE_USER='ADMIN'
 PLATFORM_ORACLE_PASSWORD='${admin_password}'
 PLATFORM_ORACLE_DSN='127.0.0.1:1599/NOT_DEPLOYED'
 PLATFORM_ORACLE_DRIVER_MODE=thin
-PLATFORM_ORACLE_CONNECTION_SECURITY=walletless_tls
 PLATFORM_ORACLE_CLIENT_LIB_DIR=
-PLATFORM_ORACLE_WALLET_DIR=/u01/aipoc/wallet
-PLATFORM_ORACLE_WALLET_PASSWORD=''
 
 PLATFORM_ADMIN_LOGIN_USER_ID=system_admin
 PLATFORM_ADMIN_LOGIN_USER_PASSWORD=${admin_password}
@@ -149,14 +146,6 @@ EOF
     printf '%s\n' '${products}' > ${props}/products.txt
     printf '%s\n' 'preprocess-office-to-pdf preprocess-csv-to-jsonl preprocess-excel-to-jsonl preprocess-word-to-jsonl parser-docling' > ${props}/rag_services.txt
   "
-  # walletless_tls でも RAG の init_script.sh は wallet.zip を展開する（中身は使わない。空の zip は unzip が失敗する）。
-  # zip は host の python3 で作る（container の image に python3 が無いことがある）。
-  python3 -c 'import io, sys, zipfile
-buffer = io.BytesIO()
-with zipfile.ZipFile(buffer, "w") as archive:
-    archive.writestr("README.txt", "CI deploy run-through (no Oracle)\n")
-sys.stdout.buffer.write(buffer.getvalue())' \
-    | "${docker_cmd}" exec -i "${container}" bash -c "umask 077; cat > ${props}/wallet.zip"
 }
 
 up() {

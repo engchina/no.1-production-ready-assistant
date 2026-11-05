@@ -180,7 +180,7 @@ ORA-01017: invalid credential or not authorized; logon denied
 
 ### Context
 - ローカル `oracle-database` へ schema migration artifact を適用しようとした。
-- backend の実 DSN は Wallet alias `aiomladb0121_high` で、ローカル Free DB ではなかった。
+- backend の実 DSN はリモートの ADB で、ローカル Free DB ではなかった。
 - 認証で停止したため、ローカルコンテナへの DDL は実行されていない。
 
 ### Suggested Fix

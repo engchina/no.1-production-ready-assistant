@@ -42,8 +42,6 @@ SYNC_MODULE_ROOTS = {
     "subprocess",
 }
 SYNC_LOCAL_HELPERS = {
-    "_install_database_wallet",
-    "_install_uploaded_database_wallet",
     "_persist_adb_settings",
 }
 FILE_METHODS = {
@@ -295,11 +293,10 @@ def test_blocked_database_ready_route_does_not_block_security_api(
     settings = get_settings()
     monkeypatch.setattr(settings, "nl2sql_runtime_mode", "oracle")
     monkeypatch.setattr(settings, "nl2sql_persistence_mode", "oracle")
-    # platform の database_readiness（#325）が ok になる Walletless TLS の設定。
+    # platform の database_readiness（#325）が ok になる設定。
     monkeypatch.setattr(settings, "oracle_user", "APP")
     monkeypatch.setattr(settings, "oracle_password", "secret")
     monkeypatch.setattr(settings, "oracle_dsn", "adb.example.oraclecloud.com:1522/service_high")
-    monkeypatch.setattr(settings, "oracle_connection_security", "walletless_tls")
 
     async def async_oracle_probe(_settings: object) -> None:
         return None

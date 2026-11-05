@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | アップロード保存先 | `/settings/upload-storage` | ローカルの保存ディレクトリの保存、入力検証 |
 | モデル | `/settings/model` | 接続（プライマリ / セカンダリ / ターシャリ）、登録モデル（種類: テキスト / 埋め込み / 再ランク）、既定のモデル、接続テスト、テンプレート検証 |
-| データベース | `/settings/database` | Oracle 接続設定、wallet upload、接続テスト |
+| データベース | `/settings/database` | Oracle 接続設定、接続テスト |
 | システムテーブル | `/settings/system-tables` | NL2SQL system table 状態確認、初期化、再作成、実行権限制御 |
 
 テストデータ配置先:
@@ -21,11 +21,10 @@
 
 - UI 表示言語は日本語を前提にする。
 - 管理者ロール `SYSTEM_ADMIN` または同等の権限で検証する。
-- 実 DB パスワード、wallet は使用しない。本文書の fixture はすべてダミー値である。
+- 実 DB パスワードは使用しない。本文書の fixture はすべてダミー値である。
 - 実接続テストは、検証環境の `.env` / Oracle AI Database が設定済みの場合のみ成功を期待する。未設定環境では失敗メッセージと復旧導線を確認する。
 - 設定保存系 API は環境設定ファイルや runtime 設定へ反映されるため、ローカルまたは検証用環境で実施する。
 - Playwright では `docs/test-data/nl2sql-system-settings/mock-responses/` の JSON を API mock として使用できる。
-- ファイルアップロード試験では `database/` 配下の fixture を使用する。
 
 ## 3. 共通 UI / 非機能テスト
 
@@ -35,7 +34,7 @@
 | SYS-COM-002 | ローディング | API 応答を遅延させる | スケルトンまたは読込状態が表示され、ボタンが多重実行されない | `mock-responses/*.json` |
 | SYS-COM-003 | API エラー | 各 GET API を 500 応答にする | エラー文言、再読込/再試行導線が表示される | `mock-responses/system-tables-failed.json` |
 | SYS-COM-004 | 権限制御 | 閲覧権限のみでアクセスする | 保存/実行系ボタンが非表示または disabled になり、状態は閲覧できる | - |
-| SYS-COM-005 | 秘密情報マスク | 設定取得後に画面と DevTools log を確認する | API key、DB password、wallet password、private key 本文が表示されない | `mock-responses/*.json` |
+| SYS-COM-005 | 秘密情報マスク | 設定取得後に画面と DevTools log を確認する | API key、DB password、private key 本文が表示されない | `mock-responses/*.json` |
 | SYS-COM-006 | 入力保持 | 入力途中にバリデーションエラーを発生させる | 入力値が消えず、エラー箇所が特定できる | `api/*.json` |
 | SYS-COM-007 | キーボード操作 | Tab / Shift+Tab / Enter / Space で操作する | フォーカス順が自然で、主要ボタン・toggle がキーボードで操作できる | - |
 | SYS-COM-008 | モバイル幅 | 375px 幅で各ページを開く | 横スクロールが必要な表以外で文字やボタンが重ならない | - |
@@ -86,19 +85,14 @@
 - `GET /api/settings/database`
 - `PATCH /api/settings/database`
 - `POST /api/settings/database/test`
-- `POST /api/settings/database/wallet`
 - `GET /api/schema/owners`
 
 | ID | 機能 | 手順 | 期待結果 | テストデータ |
 | --- | --- | --- | --- | --- |
-| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、wallet_dir、wallet 状態、接続状態が表示され、ADB の起動・停止・状態は表示されない（#10） | `mock-responses/database-settings.success.json` |
+| DB-001 | 初期表示 | データベース設定ページを開く | user、dsn、接続状態が表示され、ADB の起動・停止・状態は表示されない（#10） | `mock-responses/database-settings.success.json` |
 | DB-002 | 必須入力 | user / dsn を空にして保存 | 保存されず必須エラーが表示される | `api/database-settings.patch.json` |
 | DB-003 | password 保存 | password を入力して保存 | password 本文は応答に出ず、has_password が true になる | `api/database-settings.patch.json` |
 | DB-004 | password clear | clear_password を有効にして保存 | 保存後 has_password が false になる | `api/database-settings-clear-password.patch.json` |
-| DB-005 | wallet password 保存/clear | wallet_password を保存し、次に clear_wallet_password | has_wallet_password の true/false が切り替わる | `api/database-settings.patch.json` |
-| DB-006 | wallet upload 成功 | ZIP wallet を選択する | wallet_dir / wallet_uploaded / service list が更新される | `database/wallet-valid.zip` |
-| DB-007 | wallet 拡張子エラー | `.txt` を選択する | クライアント側で拒否され、API が呼ばれない | `database/not-wallet.txt` |
-| DB-008 | wallet 内容不足 | 必須ファイル不足 ZIP をアップロード | サーバー側エラーが表示される | `database/wallet-missing-required.zip` |
 | DB-010 | DB 接続成功 | 接続テストを実行 | success、サービス名、vector column `VECTOR(1024, FLOAT32)` 等が表示される | `mock-responses/database-test.success.json` |
 | DB-011 | DB 接続失敗 | 不正 dsn / password で接続テスト | failed、Oracle エラー要約、修正導線が表示される | `mock-responses/database-test.failed.json` |
 
@@ -150,6 +144,5 @@ test("モデル設定を表示できる", async ({ page }) => {
 ## 10. 後片付け
 
 - 実 DB 接続を使った場合は、検証後にダミー secret が runtime 設定へ残っていないことを確認する。
-- `wallet-valid.zip` をアップロードした検証環境では、wallet 配置ディレクトリを検証用に限定する。
 - ADB stop/start は共有環境では実行しない。mock または専用 ADB で検証する。
 - システムテーブル再作成は既存データを削除または上書きする可能性があるため、必ず空の検証 DB で実行する。

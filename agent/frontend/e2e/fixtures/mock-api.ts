@@ -2886,10 +2886,9 @@ function handle(state: MockApiState, method: string, path: string, query: URLSea
     if (at("settings", "database")) {
       if (method === "GET") return state.databaseSettings;
       if (method === "PATCH") {
-        const { password, wallet_password: walletPassword, ...rest } = body;
+        const { password, ...rest } = body;
         Object.assign(state.databaseSettings, rest, {
           has_password: Boolean(password) || state.databaseSettings.has_password,
-          has_wallet_password: Boolean(walletPassword) || state.databaseSettings.has_wallet_password,
         });
         return state.databaseSettings;
       }

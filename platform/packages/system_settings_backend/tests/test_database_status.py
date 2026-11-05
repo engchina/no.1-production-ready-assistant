@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -23,9 +22,6 @@ from pr_system_settings.database_status import (
     safe_connection_error_detail,
 )
 
-PEM = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n"
-TNSNAMES = "ragdb_high = (description=(address=(protocol=tcps)(port=1522)(host=adb.example)))\n"
-
 
 class FakeSettings(BaseModel):
     """製品の Settings のうち DB の状態 API が読む属性だけを持つ。"""
@@ -34,13 +30,6 @@ class FakeSettings(BaseModel):
     oracle_password: str = "db-secret-password"
     oracle_dsn: str = "adb.example.oraclecloud.com:1522/secret_service_high"
     oracle_driver_mode: str = "thin"
-    oracle_connection_security: str = "walletless_tls"
-    oracle_wallet_dir: str = ""
-    oracle_wallet_password: str = ""
-
-    @property
-    def resolved_oracle_wallet_dir(self) -> str:
-        return self.oracle_wallet_dir
 
 
 class Harness:
@@ -124,35 +113,19 @@ def test_not_configured_skips_connection() -> None:
     assert harness.calls == []
 
 
-def test_not_configured_uses_the_same_readiness_as_system_settings(tmp_path: Path) -> None:
-    """Wallet mTLS でパスワードがあっても、Wallet が不備なら接続を試さない（RAG の変更点）。"""
+def test_not_configured_uses_the_same_readiness_as_system_settings() -> None:
+    """パスワードが無い・DSN が別名の形なら、接続を試さない。"""
     harness = Harness()
-    harness.settings.oracle_connection_security = "wallet_mtls"
-    harness.settings.oracle_dsn = "ragdb_high"
-    harness.settings.oracle_wallet_dir = str(tmp_path / "wallet")
-
-    assert harness.get()["check"] == "wallet_not_found"
-    assert harness.get()["status"] == "not_configured"
-
-    wallet = tmp_path / "wallet"
-    wallet.mkdir()
-    (wallet / "tnsnames.ora").write_text(TNSNAMES, encoding="utf-8")
-    (wallet / "ewallet.pem").write_text(PEM, encoding="utf-8")
-    assert harness.get()["status"] == "ok"
-
-    harness.settings.oracle_dsn = "otherdb_high"
-    assert harness.get()["check"] == "invalid"
-    assert harness.calls == ["connect", "probe"]
-
-
-def test_walletless_tls_rejects_wallet_alias_dsn() -> None:
-    harness = Harness()
-    harness.settings.oracle_dsn = "service_high"
-
+    harness.settings.oracle_password = ""
     data = harness.get()
-
     assert data["status"] == "not_configured"
-    assert data["check"] == "walletless_tls_dsn_required"
+    assert data["check"] == "missing_credentials"
+
+    harness.settings.oracle_password = "db-secret-password"
+    harness.settings.oracle_dsn = "other_alias"
+    data = harness.get()
+    assert data["status"] == "not_configured"
+    assert data["check"] == "invalid"
     assert harness.calls == []
 
 

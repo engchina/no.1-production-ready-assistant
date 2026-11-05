@@ -29,7 +29,6 @@ import {
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
-  DatabaseConnectionSecurity,
   DatabaseConnectionTestResult,
   DatabaseConnectionTestStatus,
   DatabasePasswordRevealData,
@@ -607,8 +606,6 @@ export interface SystemTablesOperationData extends SystemTablesStatusData {
   created_object_count: number;
 }
 
-export type DatabaseWalletDownloadStatus = "downloaded" | "already_configured";
-
 export interface SchemaOwnersData {
   current_owner: string;
   owners: Array<{
@@ -868,17 +865,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  uploadDatabaseWallet: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return settingsRequest<DatabaseSettingsData>(
-      "/api/settings/database/wallet",
-      {
-        method: "POST",
-        body: form,
-      },
-    );
-  },
   revealDatabasePassword: () =>
     settingsRequest<DatabasePasswordRevealData>(
       "/api/settings/database/password/reveal",

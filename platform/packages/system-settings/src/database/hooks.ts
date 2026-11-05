@@ -31,22 +31,6 @@ export function useUpdateDatabaseSettings(
   });
 }
 
-export function useUploadDatabaseWallet(
-  api: DatabaseSettingsApi,
-  onChanged?: DatabaseChangedHandler,
-) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (file: File) => api.uploadDatabaseWallet(file),
-    onSuccess: () => {
-      // Wallet を置き換えると接続の可否が変わる。DB ゲートの状態（製品の query）も確かめ直す
-      // （接続設定の保存と同じ。戻った画面で古い「未設定」の案内を出さない）。
-      void onChanged?.();
-      void qc.invalidateQueries({ queryKey: DATABASE_SETTINGS_QUERY_KEY });
-    },
-  });
-}
-
 export function useRevealDatabasePassword(api: DatabaseSettingsApi) {
   return useMutation({
     mutationFn: async () => {

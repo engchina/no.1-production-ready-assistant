@@ -23,7 +23,6 @@ BACKEND_DIR="${APP_REPO_DIR}/backend"
 FRONTEND_DIR="${APP_REPO_DIR}/frontend"
 DATA_DIR="/u01/data/production-ready-nl2sql"
 LEGACY_DATA_DIR="/u01/production-ready-nl2sql"
-WALLET_DIR="${APP_ROOT}/wallet"
 BACKEND_HOST="127.0.0.1"
 # 1 台の Compute に RAG（8000）・Agent（8020）と
 # 一緒に置くため、以前の 8000 から変えた（#1316）。ローカルの開発の port（8110。#25）とは別。
@@ -87,7 +86,7 @@ run_as_app_user_in_dir() {
 
 # NL2SQL が使う OS の package（suite 共通の package は platform/deploy/suite-init.sh が入れる）。
 # gcc・make は wheel の無い Python の依存を build するため。curl は image にある。
-SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make tar unzip)
+SYSTEM_PACKAGES=(ca-certificates gcc gcc-c++ git make tar)
 
 install_system_packages() {
   log "Installing system packages: ${SYSTEM_PACKAGES[*]}"
@@ -350,22 +349,20 @@ prepare_filesystem() {
     return 1
   fi
 
-  # Wallet の lock/tmp/backup は Wallet 自身ではなく APP_ROOT 直下に作る。
   # root 所有を維持しつつ app group にだけ書き込みを許可する。
   chown "root:${APP_GROUP}" "${APP_ROOT}"
   chmod 0775 "${APP_ROOT}"
   install -d -m 0755 -o "${APP_USER}" -g "${APP_GROUP}" "${DATA_DIR}"
   migrate_legacy_data_dir
-  install -d -m 0700 -o "${APP_USER}" -g "${APP_GROUP}" "${WALLET_DIR}"
   # git-pull.sh を APP_USER で実行できるよう、.git を含む suite 全体を APP_USER の所有にする。
   # 開発の worktree・一時ファイルは辿らない（配備の途中で消えると chown が失敗する。#2307）。
   suite_chown_repo "${APP_USER}:${APP_GROUP}" "${SUITE_REPO_DIR}"
-  chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}" "${WALLET_DIR}"
+  chown -R "${APP_USER}:${APP_GROUP}" "${DATA_DIR}"
   chown -h "${APP_USER}:${APP_GROUP}" "${LEGACY_DATA_DIR}" 2>/dev/null || true
 }
 
 install_runtime_env() {
-  log "Installing backend environment, platform environment and wallet."
+  log "Installing backend environment and platform environment."
   install -m 0600 -o "${APP_USER}" -g "${APP_GROUP}" "${BACKEND_ENV_SOURCE}" "${BACKEND_DIR}/.env"
   # 3製品共通の設定（PLATFORM_*）は platform の共通 .env（#211）。システム設定画面の保存先でもあるため、
   # 既にあれば上書きしない（画面で保存した値を消さない）。
@@ -374,13 +371,6 @@ install_runtime_env() {
   else
     install -m 0600 -o "${APP_USER}" -g "${APP_GROUP}" "${APP_ROOT}/props/platform.env" "${PLATFORM_REPO_DIR}/.env"
   fi
-
-  rm -rf "${WALLET_DIR}"
-  install -d -m 0700 -o "${APP_USER}" -g "${APP_GROUP}" "${WALLET_DIR}"
-  unzip -oq "${APP_ROOT}/props/wallet.zip" -d "${WALLET_DIR}"
-  chown -R "${APP_USER}:${APP_GROUP}" "${WALLET_DIR}"
-  find "${WALLET_DIR}" -type d -exec chmod 0700 {} \;
-  find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;
 }
 
 install_backend() {

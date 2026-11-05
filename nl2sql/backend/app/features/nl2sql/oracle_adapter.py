@@ -16,11 +16,10 @@ import time
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext, suppress
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from pr_backend_core.oracle_dsn import dsn_without_tns_retry
+from pr_backend_core.oracle_dsn import dsn_without_retry
 from pr_backend_core.oracle_pool import OraclePoolSize, SharedOraclePool
 from pr_backend_core.oracle_session import init_oracle_session, local_session_time_zone
 from pr_backend_core.timezones import session_time_zone_offset
@@ -91,25 +90,11 @@ _VIEW_VISIBLE_SQL = user_visible_object_sql_predicate(
     object_column="v.view_name", owner_column="v.owner"
 )
 
-WALLET_PASSWORD_REQUIRED_ERROR = (
-    "Oracle Wallet がパスワードを必要としています。"  # nosec B105
-    "PLATFORM_ORACLE_WALLET_PASSWORD または PLATFORM_ORACLE_PASSWORD を設定してください。"
-)
-THIN_WALLET_MTLS_REQUIRED_FILES = frozenset({"tnsnames.ora", "ewallet.pem"})
-THICK_WALLET_MTLS_REQUIRED_FILES = frozenset({"tnsnames.ora", "sqlnet.ora", "cwallet.sso"})
-WALLET_MTLS_REQUIRED_FILES = THIN_WALLET_MTLS_REQUIRED_FILES
 FEEDBACK_VECTOR_DB_LOCK_ID = (
     int(hashlib.sha256(b"nl2sql_feedback_vector_index").hexdigest()[:12], 16) % 1_073_741_823
 ) + 1
 FEEDBACK_VECTOR_DB_LOCK_TIMEOUT_SECONDS = 60
 SELECT_FETCH_BATCH_SIZE = 1000
-
-
-def wallet_mtls_required_files(settings: Settings) -> frozenset[str]:
-    """driver mode に応じた mTLS Wallet の必須ファイルを返す。"""
-    if getattr(settings, "oracle_driver_mode", "thin").strip().lower() == "thin":
-        return THIN_WALLET_MTLS_REQUIRED_FILES
-    return THICK_WALLET_MTLS_REQUIRED_FILES
 
 
 def _coerce_text(value: Any) -> str:
@@ -276,13 +261,12 @@ def oracle_connect_kwargs(
     """python-oracledb connect に渡す共通 kwargs を作る。"""
     kwargs: dict[str, object] = {
         "user": user if user is not None else settings.oracle_user,
-        "dsn": _oracle_connection_test_dsn(settings),
+        "dsn": dsn_without_retry(settings.oracle_dsn),
         "tcp_connect_timeout": settings.nl2sql_oracle_connect_timeout_seconds,
     }
     resolved_password = password if password is not None else settings.oracle_password
     if resolved_password.strip():
         kwargs["password"] = resolved_password
-    _add_wallet_kwargs(settings, kwargs)
     return kwargs
 
 
@@ -291,95 +275,8 @@ def _oracle_connect_kwargs(settings: Settings) -> dict[str, object]:
     return oracle_connect_kwargs(settings)
 
 
-def _oracle_connection_test_dsn(settings: Settings) -> str:
-    """Wallet alias の descriptor が取れれば、長い retry 設定を外して接続テストする（#1214）。"""
-    if _oracle_connection_security(settings) == "walletless_tls":
-        return settings.oracle_dsn
-    return dsn_without_tns_retry(
-        settings.oracle_dsn, settings.resolved_oracle_wallet_dir.strip() or None
-    )
-
-
-def _add_wallet_kwargs(settings: Settings, kwargs: dict[str, object]) -> None:
-    """Wallet 設定を kwargs に追加する。"""
-    if _oracle_connection_security(settings) == "walletless_tls":
-        return
-
-    wallet_dir = settings.resolved_oracle_wallet_dir.strip()
-    if not wallet_dir:
-        raise OracleAdapterError(
-            "PLATFORM_ORACLE_CONNECTION_SECURITY=wallet_mtls では "
-            "PLATFORM_ORACLE_WALLET_DIR が必要です。"
-        )
-
-    wallet_path = Path(wallet_dir).expanduser()
-    if not wallet_path.is_dir():
-        raise OracleAdapterError(f"Oracle Wallet ディレクトリが見つかりません: {wallet_dir}")
-    required_files = wallet_mtls_required_files(settings)
-    if not _wallet_mtls_files_exist(wallet_path, required_files=required_files):
-        required = ", ".join(sorted(required_files))
-        raise OracleAdapterError(
-            f"Oracle Wallet に mTLS 接続ファイルが揃っていません。必要ファイル: {required}"
-        )
-
-    wallet_password = settings.oracle_wallet_password.strip() or settings.oracle_password.strip()
-    if not wallet_password and _wallet_requires_password(wallet_path):
-        raise OracleAdapterError(WALLET_PASSWORD_REQUIRED_ERROR)
-
-    resolved_wallet_path = str(wallet_path)
-    kwargs["config_dir"] = resolved_wallet_path
-    kwargs["wallet_location"] = resolved_wallet_path
-    if wallet_password:
-        kwargs["wallet_password"] = wallet_password
-
-
-def _oracle_connection_security(settings: Settings) -> str:
-    mode = getattr(settings, "oracle_connection_security", "wallet_mtls").strip().lower()
-    return mode if mode in {"wallet_mtls", "walletless_tls"} else "wallet_mtls"
-
-
-def _wallet_dir_exists(settings: Settings) -> bool:
-    wallet_dir = settings.resolved_oracle_wallet_dir.strip()
-    return bool(wallet_dir and Path(wallet_dir).expanduser().is_dir())
-
-
-def _wallet_mtls_files_exist(
-    wallet_path: Path,
-    *,
-    required_files: frozenset[str] = WALLET_MTLS_REQUIRED_FILES,
-) -> bool:
-    return wallet_path.is_dir() and all(
-        (wallet_path / file_name).is_file() for file_name in required_files
-    )
-
-
-def _wallet_requires_password(wallet_path: Path) -> bool:
-    """自動ログイン Wallet がなく、秘密鍵が暗号化されていればパスワード必須。"""
-    try:
-        files = [path for path in wallet_path.iterdir() if path.is_file()]
-    except OSError:
-        return False
-    names = {path.name.lower() for path in files}
-    if "ewallet.p12" in names:
-        return True
-    encrypted_pem_exists = any(
-        path.suffix.lower() == ".pem" and _pem_file_is_encrypted(path) for path in files
-    )
-    return bool(encrypted_pem_exists)
-
-
-def _pem_file_is_encrypted(path: Path) -> bool:
-    """暗号化 PEM の代表的な marker だけを少量読み取って判定する。"""
-    try:
-        head = path.read_bytes()[:4096]
-    except OSError:
-        return False
-    text = head.decode("utf-8", errors="ignore").upper()
-    return "BEGIN ENCRYPTED PRIVATE KEY" in text or "PROC-TYPE: 4,ENCRYPTED" in text
-
-
 # 共通認証（PLATFORM_*）の store が使う接続 pool（#793）。認証は要求のたびに通るため、毎回
-# Wallet / mTLS の handshake と認証をやり直さない。接続引数が変わると作り直し、DB 設定の保存時・
+# 接続の確立と認証をやり直さない。接続引数が変わると作り直し、DB 設定の保存時・
 # 終了時に `close_auth_connection_pool`（`close_oracle_pools` から）で閉じる。
 _AUTH_CONNECTION_POOL = SharedOraclePool(name="nl2sql-auth")
 
@@ -391,13 +288,13 @@ def close_auth_connection_pool() -> None:
 
 # NL2SQL の状態の保存先（業務プロファイル・ジョブ・履歴・オントロジー・評価。`NL2SQL_*` の表）が使う
 # 接続 pool（#830）。1 回の問い合わせのジョブは状態を数十回読み書きするため、そのたびに
-# Wallet / mTLS の handshake と認証をやり直さない。業務データの SQL の
+# 接続の確立と認証をやり直さない。業務データの SQL の
 # 接続はこの pool に混ぜない（業務データの読み取りは下の
 # `nl2sql-runtime-admin` / `nl2sql-runtime-user` の pool、それ以外は単発の接続 `connection()`）。
 _STATE_CONNECTION_POOL = SharedOraclePool(name="nl2sql-state")
 # アプリの接続（DB の利用者は `PLATFORM_ORACLE_USER`）で業務データを読む（SELECT の実行）
 # ときに借りる接続 pool（#904）。1 回のジョブで
-# 1〜2 回使い、そのたびに Wallet / mTLS の handshake と認証（遅延の大きいネットワークで約 3 秒）を
+# 1〜2 回使い、そのたびに接続の確立と認証（遅延の大きいネットワークで約 3 秒）を
 # やり直さない。
 # 使うのは session の状態を変えない処理だけ（`OracleNl2SqlAdapter.runtime_connection`）。
 # - system_admin 用と非 system_admin 用で pool を分け、同じ pool・同じ接続を共有しない
@@ -509,18 +406,10 @@ class OracleNl2SqlAdapter:
         self._client_initialized = False
 
     def is_configured(self) -> bool:
-        if not self.settings.oracle_user.strip() or not self.settings.oracle_dsn.strip():
-            return False
-        if _oracle_connection_security(self.settings) == "walletless_tls":
-            return bool(self.settings.oracle_password.strip())
-        wallet_dir = self.settings.resolved_oracle_wallet_dir.strip()
-        wallet_path = Path(wallet_dir).expanduser() if wallet_dir else None
         return bool(
-            wallet_path
-            and _wallet_mtls_files_exist(
-                wallet_path,
-                required_files=wallet_mtls_required_files(self.settings),
-            )
+            self.settings.oracle_user.strip()
+            and self.settings.oracle_dsn.strip()
+            and self.settings.oracle_password.strip()
         )
 
     def module_available(self) -> bool:

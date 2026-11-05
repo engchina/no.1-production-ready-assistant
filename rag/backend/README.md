@@ -134,8 +134,7 @@ RAG のチャット（会話の作成・送信・取得）は画面の機能で�
 
 `GET /api/ready` は外部 API へ ping せず、デプロイ時に注入される設定を依存グループ単位で検証します。
 
-checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロード保存先のディレクトリを作成・書き込みできるか）です（OCI 認証の `oci_common` と OCI 保存先の `object_storage` は #11 で削除しました）。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_DSN` に加え、`PLATFORM_ORACLE_WALLET_DIR`（Thick mode では `PLATFORM_ORACLE_CLIENT_LIB_DIR/network/admin`）に接続用の Wallet ファイル（Thin: `tnsnames.ora` / `ewallet.pem`、Thick: `tnsnames.ora` / `sqlnet.ora` / `cwallet.sso`）がそろい、暗号化された `ewallet.pem` を `PLATFORM_ORACLE_WALLET_PASSWORD`（無ければ `PLATFORM_ORACLE_PASSWORD`）で復号でき、DSN が Wallet の別名なら `tnsnames.ora` にあることを要求します。値は `ok` / `missing` / `wallet_not_found` / `wallet_password_invalid` / `invalid` です。
-以前の RAG は DB パスワードがあれば Wallet を見ずに `ok` としていましたが、#325 からは **DB パスワードがあっても Wallet が不備なら `wallet_not_found`（DB の状態 API では `not_configured`）** になります。既存環境で `/api/ready` が 503 になった場合は、システム設定 > データベースで Wallet を登録し直してください。
+checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロード保存先のディレクトリを作成・書き込みできるか）です（OCI 認証の `oci_common` と OCI 保存先の `object_storage` は #11 で削除しました）。`PLATFORM_ENVIRONMENT=production` では追加で `audit_context_salt` を返し、`RAG_AUDIT_CONTEXT_HASH_SALT` の注入を必須にします。すべて `ok` のときだけ HTTP 200 になり、`ok` 以外の値が含まれる場合は HTTP 503 / `status=degraded` を返します。Oracle の判定はシステム設定 > データベースと同じ platform の `database_readiness` です（#325）。`PLATFORM_ORACLE_USER` / `PLATFORM_ORACLE_PASSWORD` / `PLATFORM_ORACLE_DSN` がそろい、DSN が `host:port/service_name` か接続記述子であることを要求します。値は `ok` / `missing` / `missing_credentials`（パスワード無し）/ `invalid`（DSN が別名の形）/ `invalid_configuration` です。
 レスポンスには設定値や secret は含めません。
 
 ## DB の状態（`GET /api/ready/database`）
@@ -147,7 +146,7 @@ checks は `enterprise_ai`、`genai`、`oracle`、`local_storage`（アップロ
 3. RAG の system schema が `ready` でない（または作成・更新の実行中）なら `setup_required`（`schema_status` に `missing` / `partial` / `outdated`）。状態を読めなければ `setup_required`（`check=schema_check_failed`）
 4. それ以外は `ok`
 
-ログイン不要の path なので、`detail` には接続先・資格情報・Wallet の path を含めず、ORA / DPY / DPI のコードだけを返します（#320）。
+ログイン不要の path なので、`detail` には接続先・資格情報を含めず、ORA / DPY / DPI のコードだけを返します（#320）。
 
 ## Oracle AI Database schema
 

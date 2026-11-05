@@ -4,7 +4,7 @@
 #   1b. VECTOR_MEMORY_SIZE を設定して instance を再起動する（ベクトル索引に要る）。
 #   2. PDB（FREEPDB1）にテストの利用者 APP を作る（NL2SQL の tests/conftest.py が PLATFORM_ORACLE_USER=APP に
 #      固定するので、3 製品とも APP を使う）。
-#   3. 接続の設定（PLATFORM_ORACLE_*。Wallet なし）を platform/.env に書く。環境変数（GITHUB_ENV）には書かず、
+#   3. 接続の設定（PLATFORM_ORACLE_*）を platform/.env に書く。環境変数（GITHUB_ENV）には書かず、
 #      migration の CLI はこのファイルを読む。3 製品のテストは platform/.env を読まない（#1972）ので、
 #      実 Oracle のテストの step だけで環境変数に読み込む（oracle-integration.yml）。
 #
@@ -90,10 +90,7 @@ settings=(
   "PLATFORM_ORACLE_PASSWORD=${ORACLE_CI_PASSWORD}"
   "PLATFORM_ORACLE_DSN=localhost:${port}/FREEPDB1"
   "PLATFORM_ORACLE_DRIVER_MODE=thin"
-  "PLATFORM_ORACLE_CONNECTION_SECURITY=walletless_tls"
   "PLATFORM_ORACLE_CLIENT_LIB_DIR="
-  "PLATFORM_ORACLE_WALLET_DIR="
-  "PLATFORM_ORACLE_WALLET_PASSWORD="
 )
 mkdir -p "$(dirname "${env_file}")"
 printf '%s\n' "${settings[@]}" > "${env_file}"

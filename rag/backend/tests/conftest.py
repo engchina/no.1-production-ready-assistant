@@ -303,7 +303,6 @@ def oracle_db(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def _reset_runtime_settings(settings: Settings, tmp_path: Path) -> None:
     """mutable runtime settings をテスト既定値へ戻す。"""
     settings.oracle_client_lib_dir = str(tmp_path / "instantclient_23_26")
-    settings.oracle_wallet_dir = ""
     settings.local_storage_dir = str(tmp_path / "storage")
     settings.max_upload_bytes = 200 * 1024 * 1024
     settings.rate_limit_enabled = True

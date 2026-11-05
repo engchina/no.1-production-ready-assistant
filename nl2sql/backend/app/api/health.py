@@ -42,7 +42,6 @@ def _context_fields(settings: Settings) -> list[object]:
         settings.nl2sql_persistence_mode,
         settings.oracle_dsn,
         settings.oracle_user,
-        settings.oracle_wallet_dir,
     ]
 
 

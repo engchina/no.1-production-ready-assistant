@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -23,7 +22,6 @@ from app.features.nl2sql.service import (
 from app.main import app
 from app.readiness import (
     READINESS_OK,
-    READINESS_WALLET_NOT_FOUND,
     oracle_readiness_check,
     readiness_checks,
 )
@@ -56,8 +54,7 @@ class _ControllableStore:
         return (not self.fail_load, "ok" if not self.fail_load else "unreachable")
 
 
-# Walletless TLS の DSN は Wallet の別名ではなく TCPS 接続文字列 / Easy Connect にする（#325）。
-WALLETLESS_DSN = "adb.example.oraclecloud.com:1522/service_high"
+ORACLE_DSN = "adb.example.oraclecloud.com:1522/service_high"
 
 
 def _settings(**updates: Any) -> Any:
@@ -143,42 +140,13 @@ async def test_database_ready_reports_not_configured_without_probe(
     assert called is False
 
 
-def test_generic_readiness_wallet_mtls_requires_wallet_files_even_with_password(
-    tmp_path: Path,
-) -> None:
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("nl2sqldb_high=(DESCRIPTION=...)\n", encoding="utf-8")
-    settings = _settings(
-        nl2sql_runtime_mode="oracle",
-        nl2sql_persistence_mode="oracle",
-        oracle_user="APP",
-        oracle_password="secret",
-        oracle_dsn="nl2sqldb_high",
-        oracle_connection_security="wallet_mtls",
-        oracle_wallet_dir=str(wallet_dir),
-        oracle_driver_mode="thin",
-    )
-
-    assert oracle_readiness_check(settings) == READINESS_WALLET_NOT_FOUND
-    assert readiness_checks(settings) == {"oracle": READINESS_WALLET_NOT_FOUND}
-
-    (wallet_dir / "ewallet.pem").write_text("dummy", encoding="utf-8")
-
-    assert oracle_readiness_check(settings) == READINESS_OK
-
-
-def test_generic_readiness_walletless_tls_allows_password_without_wallet(
-    tmp_path: Path,
-) -> None:
+def test_generic_readiness_ok_with_user_password_and_dsn() -> None:
     settings = _settings(
         nl2sql_runtime_mode="oracle",
         nl2sql_persistence_mode="oracle",
         oracle_user="APP",
         oracle_password="secret",
         oracle_dsn="adb.example.oraclecloud.com:1522/nl2sqldb_high",
-        oracle_connection_security="walletless_tls",
-        oracle_wallet_dir=str(tmp_path / "missing-wallet"),
     )
 
     assert oracle_readiness_check(settings) == READINESS_OK
@@ -186,55 +154,11 @@ def test_generic_readiness_walletless_tls_allows_password_without_wallet(
 
 
 @pytest.mark.asyncio
-async def test_database_ready_wallet_mtls_missing_files_skips_probe(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    called = False
-    wallet_dir = tmp_path / "wallet"
-    wallet_dir.mkdir()
-    (wallet_dir / "tnsnames.ora").write_text("nl2sqldb_high=(DESCRIPTION=...)\n", encoding="utf-8")
-
-    async def probe(_settings: Any) -> None:
-        nonlocal called
-        called = True
-
-    monkeypatch.setattr(
-        health_routes,
-        "get_settings",
-        lambda: _settings(
-            nl2sql_runtime_mode="oracle",
-            nl2sql_persistence_mode="oracle",
-            oracle_user="APP",
-            oracle_password="secret",
-            oracle_dsn="nl2sqldb_high",
-            oracle_connection_security="wallet_mtls",
-            oracle_wallet_dir=str(wallet_dir),
-            oracle_driver_mode="thin",
-        ),
-    )
-    monkeypatch.setattr(health_routes, "test_oracle_connection", probe)
-
-    response = await _get_database_status()
-
-    assert response.status_code == 200
-    assert _status_fields(response.json()["data"]) == {
-        "status": "not_configured",
-        "check": READINESS_WALLET_NOT_FOUND,
-        "detail": None,
-    }
-    assert called is False
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("updates", "check"),
     [
-        # システム設定画面と同じ判定（#325）: Walletless TLS で Wallet の別名は使えない。
-        (
-            {"oracle_connection_security": "walletless_tls", "oracle_dsn": "service_high"},
-            "walletless_tls_dsn_required",
-        ),
+        # システム設定画面と同じ判定（#325）: DSN に別名は使えない。
+        ({"oracle_dsn": "service_high"}, "invalid"),
     ],
 )
 async def test_database_ready_uses_system_settings_readiness(
@@ -302,8 +226,7 @@ async def test_database_ready_redacts_probe_failures(
             nl2sql_persistence_mode="oracle",
             oracle_user="APP",
             oracle_password="secret",
-            oracle_dsn=WALLETLESS_DSN,
-            oracle_connection_security="walletless_tls",
+            oracle_dsn=ORACLE_DSN,
         ),
     )
     monkeypatch.setattr(health_routes, "test_oracle_connection", probe)
@@ -338,8 +261,7 @@ async def test_database_ready_reports_successful_oracle_probe(
             nl2sql_persistence_mode="oracle",
             oracle_user="APP",
             oracle_password="secret",
-            oracle_dsn=WALLETLESS_DSN,
-            oracle_connection_security="walletless_tls",
+            oracle_dsn=ORACLE_DSN,
         ),
     )
     monkeypatch.setattr(health_routes, "test_oracle_connection", probe)
@@ -374,8 +296,7 @@ async def test_database_ready_distinguishes_pending_migration_from_connection_se
             nl2sql_persistence_mode="oracle",
             oracle_user="APP",
             oracle_password="secret",
-            oracle_dsn=WALLETLESS_DSN,
-            oracle_connection_security="walletless_tls",
+            oracle_dsn=ORACLE_DSN,
         ),
     )
     monkeypatch.setattr(health_routes, "test_oracle_connection", probe)
@@ -429,8 +350,7 @@ async def test_database_ready_classifies_incremental_store_check_errors(
             nl2sql_persistence_mode="oracle",
             oracle_user="APP",
             oracle_password="secret",
-            oracle_dsn=WALLETLESS_DSN,
-            oracle_connection_security="walletless_tls",
+            oracle_dsn=ORACLE_DSN,
         ),
     )
     monkeypatch.setattr(health_routes, "test_oracle_connection", probe)

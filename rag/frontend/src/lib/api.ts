@@ -28,7 +28,6 @@ import type { BaseCurrentUser } from "@production-ready/system-settings";
 // モデル設定の API 型は3製品共通（platform の共有パッケージ。#103）。
 // データベース設定の API 型は3製品共通（platform の共有パッケージ。#108）。
 export type {
-  DatabaseConnectionSecurity,
   DatabaseConnectionTestResult,
   DatabaseConnectionTestStatus,
   DatabasePasswordRevealData,
@@ -3874,14 +3873,6 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  uploadDatabaseWallet: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return request<DatabaseSettingsData>("/api/settings/database/wallet", {
-      method: "POST",
-      body: form,
-    });
-  },
   testDatabaseSettings: (body: DatabaseSettingsUpdate) =>
     request<DatabaseConnectionTestResult>(
       "/api/settings/database/test",

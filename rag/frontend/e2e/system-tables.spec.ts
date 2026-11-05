@@ -5,12 +5,8 @@ type SchemaStatus = "missing" | "partial" | "outdated" | "ready";
 
 const databaseSettings = {
   user: "rag_app",
-  dsn: "ragdb_high",
-  wallet_dir: "/wallet",
-  wallet_uploaded: true,
-  available_services: ["ragdb_high"],
+  dsn: "127.0.0.1:1525/ragdb_low",
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "VECTOR(1024, FLOAT32)",

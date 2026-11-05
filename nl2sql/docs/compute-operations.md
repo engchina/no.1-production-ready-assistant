@@ -63,17 +63,12 @@ to exist. Application-local users are checked from `PLATFORM_USERS`. The
 configured administrator password can be changed from the application password
 change screen; the backend writes the new value back to `platform/.env`.
 
-The deployment does not create any ADB resource. The wallet of the existing ADB
-and the database values come from the deployment inputs and are written into
-`platform/.env`:
+The deployment does not create any ADB resource. The database values come from
+the deployment inputs and are written into `platform/.env`:
 
 - `PLATFORM_ORACLE_USER`
 - `PLATFORM_ORACLE_PASSWORD`
-- `PLATFORM_ORACLE_DSN` (`existing_oracle_dsn`, or `<selected ADB db_name lowercased>_high`
-  when left blank)
-- `PLATFORM_ORACLE_CONNECTION_SECURITY` (`wallet_mtls` when mTLS is required,
-  otherwise `walletless_tls`)
-- `PLATFORM_ORACLE_WALLET_PASSWORD` (reuses `existing_oracle_password`)
+- `PLATFORM_ORACLE_DSN` (`host:port/service_name` or a connect descriptor)
 
 実行環境は3製品共通の `PLATFORM_ENVIRONMENT` です。
 共通 `.env` に `PLATFORM_ENVIRONMENT` と `PLATFORM_AUTH_MODE=authenticated` を設定します。
@@ -136,7 +131,7 @@ existing root-capable path with `sudo ./scripts/update-after-pull.sh`. In root
 mode, dependency synchronization, frontend builds, and database CLIs are still
 executed as `opc`; only systemd, snapshots, logging, and permission repair
 retain root privileges. The script does not run Git commands and does not
-rewrite `backend/.env`, `platform/.env`, the Wallet contents, or systemd units.
+rewrite `backend/.env`, `platform/.env`, or systemd units.
 
 ```bash
 cd /u01/aipoc/no.1-production-ready-assistant/nl2sql
@@ -154,7 +149,7 @@ sudo ./scripts/update-after-pull.sh --repair-only
 sudo ./scripts/update-after-pull.sh
 ```
 
-`--check` only inspects the fixed paths, Wallet and `.env` permissions, systemd
+`--check` only inspects the fixed paths, `.env` permissions, systemd
 units, and system schema status. It does not create a lock, log, snapshot, stop a
 service, or run a migration. `--repair-only` skips dependency synchronization
 and frontend building, then snapshots and repairs the deployed instance,
@@ -164,13 +159,10 @@ frontend into a staging directory while the current services remain available.
 Only after those steps succeed does it enter the maintenance window.
 
 Before stopping services, mutating modes create a root-only snapshot below
-`/u01/aipoc/recovery`. They then enforce `/u01/aipoc` as `root:opc 0775`,
-`/u01/aipoc/wallet` as `opc:opc 0700`, and Wallet files, the install lock,
-`backend/.env`, and `platform/.env` as `0600`. `PLATFORM_ORACLE_WALLET_DIR` in
-`platform/.env` remains fixed at `/u01/aipoc/wallet`; the `.env` file is parsed
-without sourcing secret values.
-System and security migrations are idempotent. The script never deletes
-`.wallet.tmp-*` or `.wallet.backup-*` and never recreates the schema.
+`/u01/aipoc/recovery`. They then enforce `/u01/aipoc` as `root:opc 0775`, and
+`backend/.env` and `platform/.env` as `0600`.
+System and security migrations are idempotent. The script never recreates the
+schema.
 
 If a migration, backend health check, or worker restart fails, all external
 workers are disabled and the script makes a best-effort attempt to restore the
@@ -239,7 +231,7 @@ sudo journalctl \
   --since "-15 min" --no-pager -o short-iso
 ```
 
-Then confirm Wallet refresh, application user management, and completion of any
+Then confirm application user management and completion of any
 previously pending schema refresh job from the UI. Docker is not part of this recovery path.
 
 For a permanent rollout to a replacement Compute instance, keep the repaired old
@@ -252,16 +244,13 @@ The deployment (`platform/deploy/suite-init.sh` and `nl2sql/init_script.sh`):
    Oracle Linux 9; SELinux is configured by
    `platform/deploy/suite-init.sh`. #1611).
 2. Clones the suite monorepo (NL2SQL and the shared platform) once.
-3. Extracts the ADB wallet to `/u01/aipoc/wallet`.
-4. Writes the runtime `backend/.env` and the shared `platform/.env`.
-5. Installs backend dependencies with `uv sync --locked --no-dev --python 3.12`.
-6. Keeps `/u01/aipoc/wallet` at `opc:opc 0700` with files at `0600`, and
-   sets `/u01/aipoc` to `root:opc 0775` for Wallet install locks and atomic
-   temporary/backup directories.
-7. Runs `nl2sql_system_schema --initialize` and
+3. Writes the runtime `backend/.env` and the shared `platform/.env`.
+4. Installs backend dependencies with `uv sync --locked --no-dev --python 3.12`.
+5. Sets `/u01/aipoc` to `root:opc 0775`.
+6. Runs `nl2sql_system_schema --initialize` and
    `app_security_migrate --apply --skip-bootstrap` with retries.
-8. Builds the shared UI package and `frontend/dist`.
-9. Starts the backend service with systemd and starts external workers only
+7. Builds the shared UI package and `frontend/dist`.
+8. Starts the backend service with systemd and starts external workers only
    when both schema commands succeeded.
 10. Does not install a reverse proxy; serving the SPA at `/nl2sql/` and
     proxying `/nl2sql/api/` is left to the operator (#1316, #19).

@@ -707,7 +707,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("PUT", "/settings/chat-attachments"): _allowed("menu.settings_chat_attachments"),
     ("POST", "/settings/database/password/reveal"): _SETTINGS_DATABASE,
     ("POST", "/settings/database/test"): _SETTINGS_DATABASE,
-    ("POST", "/settings/database/wallet"): _SETTINGS_DATABASE,
     # ---- DB 構造（schema catalog） ----
     ("GET", "/schema/catalog"): _SCHEMA_READ,
     ("GET", "/schema/catalog/head"): _SCHEMA_READ,

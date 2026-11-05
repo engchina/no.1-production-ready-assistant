@@ -142,8 +142,7 @@ def _oracle_check(settings: Settings) -> str:
     """Oracle AI Database の接続設定を確認する。
 
     システム設定画面・DB の状態 API（`/api/ready/database`）と同じ platform の判定を使う（#325）。
-    Wallet mTLS では DB パスワードがあっても、Wallet のファイル・Wallet パスワード・
-    サービス名（tnsnames.ora）がそろっていなければ ok にしない。
+    ユーザー・パスワード・DSN（`host:port/service_name` か接続記述子）がそろうまで ok にしない。
     """
     return database_readiness(settings)
 

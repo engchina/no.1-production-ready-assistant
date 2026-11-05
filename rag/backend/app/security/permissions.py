@@ -527,7 +527,6 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], frozenset[str]] = {
     ("POST", "/settings/model/test"): _any(MENU_SETTINGS_MODEL),
     ("GET", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
     ("PATCH", "/settings/database"): _any(MENU_SETTINGS_DATABASE),
-    ("POST", "/settings/database/wallet"): _any(MENU_SETTINGS_DATABASE),
     ("POST", "/settings/database/test"): _any(MENU_SETTINGS_DATABASE),
     # 回答の注意書き（設定は製品ごと。#2449）。
     ("GET", "/settings/answer-notice"): _any(MENU_SETTINGS_ANSWER_NOTICE),

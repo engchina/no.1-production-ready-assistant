@@ -4,7 +4,7 @@ platform/deploy/suite-init.sh が、製品の配備（各製品の system schema
 3 製品は platform/.env の PLATFORM_ORACLE_USER（このユーザー）で接続し、システムの表はこのユーザーの schema に作る。
 
   python suite-db-user.py apply --admin-env <props/adb_admin.env> --app-env <props/platform.env> \
-      --wallet-dir <Wallet を展開した directory> [--current-env <repository の platform/.env>]
+      [--current-env <repository の platform/.env>]
   python suite-db-user.py plan [--app-user ADB_APP_USER]   # 実行する SQL を表示する（パスワードは出さない。DB に繋がない）
 
 - 冪等: ユーザーが無ければ CREATE USER、あれば profile・quota を合わせ、アプリのパスワードで接続できなければ
@@ -47,7 +47,6 @@ REQUIRED_SESSION_PRIVS = ("CREATE TABLE",)
 # 1 回の接続の TCP の接続の上限（秒）。DB の停止中・届かないときに長く待たない（#1779）。待てば直りうる失敗は
 # connect_admin が connect_wait_seconds の間隔で試し直す。
 CONNECT_TCP_TIMEOUT_SECONDS = 10.0
-_TNS_ALIAS_RE = re.compile(r"(?im)^\s*([A-Za-z0-9_.-]+)\s*=\s*")
 _TNS_RETRY_RE = re.compile(r"\(\s*retry_(?:count|delay)\s*=\s*\d+\s*\)", re.IGNORECASE)
 # 接続の失敗のうち、待てば直りうるもの（ADB の起動の直後・network の一時の失敗）。
 RETRYABLE_CONNECT_ERRORS = ("DPY-6005", "DPY-6000", "DPY-4011", "ORA-12506", "ORA-12514", "ORA-12541", "ORA-12170")
@@ -62,7 +61,7 @@ HINTS = {
     "ORA-28007": "以前に使ったパスワードは使えません。adb_app_user_password を変えてください。",
     "ORA-01950": "表領域 DATA の quota がありません。",
     "ORA-00959": "表領域 DATA がありません（Autonomous AI Database ではない DB です）。",
-    "DPY-6005": "ADB に接続できません。ADB が起動しているか、ACL・プライベート・エンドポイント（TCP 1522）で Compute から到達できるか確かめてください。",
+    "DPY-6005": "ADB に接続できません。ADB が起動しているか、PLATFORM_ORACLE_DSN の host と port に Compute から到達できるか確かめてください。",
 }
 
 
@@ -135,42 +134,16 @@ def mask(sql: str, *secrets: str) -> str:
     return sql
 
 
-def dsn_without_tns_retry(dsn: str, wallet_dir: str) -> str:
-    """Wallet の別名・接続記述子から、TNS の再試行（`(retry_count=20)(retry_delay=3)`）を外す（#1779）。
+def dsn_without_retry(dsn: str) -> str:
+    """接続記述子の DSN から、TNS の再試行（`(retry_count=20)(retry_delay=3)`）を外す（#1779）。
 
     python-oracledb は記述子の値を `connect()` の `retry_count` より優先するため、外さないと DB の停止中に
     1 回の接続が 1 分以上（届かないときは数分）続く。`pr_backend_core.oracle_dsn.dsn_without_retry` と同じ
-    規則（この script は製品の venv を使わずに動くため、ここに持つ）。別名が無ければ元の DSN のまま。
+    規則（この script は製品の venv を使わずに動くため、ここに持つ）。簡易接続の文字列はそのまま。
     """
-    descriptor = dsn
-    if not dsn.lstrip().startswith("(") and wallet_dir:
-        descriptor = _tns_alias_descriptor(Path(wallet_dir) / "tnsnames.ora", dsn) or dsn
-    if descriptor.lstrip().startswith("("):
-        return _TNS_RETRY_RE.sub("", descriptor)
-    return descriptor
-
-
-def _tns_alias_descriptor(tnsnames: Path, alias: str) -> str | None:
-    try:
-        content = tnsnames.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-    for match in _TNS_ALIAS_RE.finditer(content):
-        if match.group(1).lower() != alias.strip().lower():
-            continue
-        start = content.find("(", match.end())
-        if start < 0:
-            return None
-        depth = 0
-        for index in range(start, len(content)):
-            if content[index] == "(":
-                depth += 1
-            elif content[index] == ")":
-                depth -= 1
-                if depth == 0:
-                    return content[start : index + 1]
-        return None
-    return None
+    if dsn.lstrip().startswith("("):
+        return _TNS_RETRY_RE.sub("", dsn)
+    return dsn
 
 
 def plan_statements(user: str, *, create: bool, profile: str = APP_PROFILE) -> list[str]:
@@ -195,35 +168,25 @@ class Provisioner:
         oracledb: Any,
         *,
         dsn: str,
-        wallet_dir: str,
-        wallet_password: str,
         connect_attempts: int = 5,
         connect_wait_seconds: float = 20.0,
     ) -> None:
         self.oracledb = oracledb
         self.dsn = dsn
-        self.wallet_dir = wallet_dir
-        self.wallet_password = wallet_password
         self.connect_attempts = connect_attempts
         self.connect_wait_seconds = connect_wait_seconds
         # 試し直しは connect_admin の間隔に任せ、1 回の接続では TNS の再試行をしない（#1779）。
-        self.connect_dsn = dsn_without_tns_retry(dsn, wallet_dir)
+        self.connect_dsn = dsn_without_retry(dsn)
 
     def connect(self, user: str, password: str) -> Any:
-        kwargs: dict[str, Any] = {
-            "user": user,
-            "password": password,
-            "dsn": self.connect_dsn,
-            "retry_count": 0,
-            "retry_delay": 0,
-            "tcp_connect_timeout": CONNECT_TCP_TIMEOUT_SECONDS,
-        }
-        if self.wallet_dir:
-            kwargs["config_dir"] = self.wallet_dir
-            kwargs["wallet_location"] = self.wallet_dir
-        if self.wallet_password:
-            kwargs["wallet_password"] = self.wallet_password
-        return self.oracledb.connect(**kwargs)
+        return self.oracledb.connect(
+            user=user,
+            password=password,
+            dsn=self.connect_dsn,
+            retry_count=0,
+            retry_delay=0,
+            tcp_connect_timeout=CONNECT_TCP_TIMEOUT_SECONDS,
+        )
 
     def connect_admin(self, user: str, password: str) -> Any:
         """ADMIN で接続する。ADB の起動の直後などの一時の失敗は待って試し直す。"""
@@ -304,8 +267,6 @@ def apply(args: argparse.Namespace, oracledb: Any) -> int:
     provisioner = Provisioner(
         oracledb,
         dsn=dsn,
-        wallet_dir=args.wallet_dir,
-        wallet_password=app_env.get("PLATFORM_ORACLE_WALLET_PASSWORD", "") or app_password,
         connect_attempts=args.connect_attempts,
         connect_wait_seconds=args.connect_wait_seconds,
     )
@@ -382,7 +343,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     apply_parser.add_argument("--admin-env", required=True, help="SUITE_DB_ADMIN_USER / _PASSWORD / SUITE_DB_APP_USER")
     apply_parser.add_argument("--app-env", required=True, help="PLATFORM_ORACLE_*（props の platform.env）")
     apply_parser.add_argument("--current-env", default="", help="repository の platform/.env（画面で保存した値）")
-    apply_parser.add_argument("--wallet-dir", default="", help="Wallet（tnsnames.ora・ewallet.pem）の directory")
     apply_parser.add_argument("--connect-attempts", type=int, default=5)
     apply_parser.add_argument("--connect-wait-seconds", type=float, default=20.0)
     plan_parser = sub.add_parser("plan", help="実行する SQL を表示する（DB に繋がない）")

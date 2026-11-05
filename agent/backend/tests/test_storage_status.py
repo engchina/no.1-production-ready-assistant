@@ -98,7 +98,7 @@ def test_file_without_snapshot_path_is_memory(tmp_path: Path, monkeypatch: Monke
 
 def test_readiness_failure_is_reported_as_not_configured(monkeypatch: MonkeyPatch) -> None:
     def broken(_settings: object) -> str:
-        raise OSError("wallet")
+        raise OSError("settings")
 
     monkeypatch.setattr(storage_backend, "database_readiness", broken)
     assert storage_status.database_configured() is False

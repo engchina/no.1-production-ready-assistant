@@ -13,7 +13,7 @@
 | Git 操作 | 2つの repository をそれぞれ pull | suite を1回 pull |
 | 更新コマンド | `cd /u01/aipoc/no.1-production-ready-nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` | `cd /u01/aipoc/no.1-production-ready-assistant/nl2sql && ./scripts/git-pull.sh && sudo ./scripts/update-after-pull.sh` |
 
-変わらないもの: `/u01/aipoc/wallet`、`/u01/aipoc/props`、`/u01/aipoc/recovery`、`/u01/data/production-ready-nl2sql`、
+変わらないもの: `/u01/aipoc/props`、`/u01/aipoc/recovery`、`/u01/data/production-ready-nl2sql`、
 systemd unit 名、Nginx の site 名、DB スキーマ、`backend/.env` の中身。
 
 > #211 以降の版では、3製品共通の設定（`PLATFORM_*`）を `platform/.env` に置き、旧名は読まない。

@@ -68,10 +68,8 @@ run_install_env_case() (
   # shellcheck source=/dev/null
   source "${REPO_DIR}/init_script.sh"
 
-  printf 'PLATFORM_ORACLE_DSN=agentdb_high\nPLATFORM_ENVIRONMENT=staging\nPLATFORM_AUTH_MODE=authenticated\n' > "${PROPS_DIR}/platform.env"
+  printf 'PLATFORM_ORACLE_DSN=db.example.com:1521/agentdb_svc\nPLATFORM_ENVIRONMENT=staging\nPLATFORM_AUTH_MODE=authenticated\n' > "${PROPS_DIR}/platform.env"
   printf 'AGENT_LOG_LEVEL=INFO\n' > "${PROPS_DIR}/backend.env"
-  python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1], "w").writestr("tnsnames.ora", "agentdb_high=\n")' \
-    "${PROPS_DIR}/wallet.zip"
 
   install_runtime_env
 )
@@ -105,7 +103,7 @@ done
 # --- 共通 .env（platform/.env）と Agent の backend/.env（#211） ---
 run_install_env_case
 install_suite="${TEST_TMP_DIR}/install-env/app/no.1-production-ready-assistant"
-grep -qx 'PLATFORM_ORACLE_DSN=agentdb_high' "${install_suite}/platform/.env" \
+grep -qx 'PLATFORM_ORACLE_DSN=db.example.com:1521/agentdb_svc' "${install_suite}/platform/.env" \
   || fail "共通 .env が platform/.env に置かれていない"
 test "$(stat -c '%a' "${install_suite}/platform/.env")" = "600" || fail "platform/.env の permission が 0600 ではない"
 grep -qx 'AGENT_LOG_LEVEL=INFO' "${install_suite}/agent/backend/.env" \
@@ -161,8 +159,6 @@ grep -Fq 'FRONTEND_BASE_PATH="${FRONTEND_BASE_PATH:-/agent/}"' "${REPO_DIR}/init
 if grep -Eq 'configure_basic_auth|basic_auth_(user|password)|htpasswd' "${REPO_DIR}/init_script.sh"; then
   fail "Basic 認証の設定が残っている"
 fi
-grep -Fq 'WALLET_DIR="${APP_ROOT}/wallet"' "${REPO_DIR}/init_script.sh"
-grep -Fq 'find "${WALLET_DIR}" -type f -exec chmod 0600 {} \;' "${REPO_DIR}/init_script.sh"
 if grep -Eq '^\s*(docker|docker-compose)\b' "${REPO_DIR}/init_script.sh"; then
   fail "直接配備に Docker を要求している"
 fi

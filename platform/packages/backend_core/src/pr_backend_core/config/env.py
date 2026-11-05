@@ -89,10 +89,7 @@ PLATFORM_SETTING_FIELDS = frozenset(
         "oracle_password",
         "oracle_dsn",
         "oracle_driver_mode",
-        "oracle_connection_security",
         "oracle_client_lib_dir",
-        "oracle_wallet_dir",
-        "oracle_wallet_password",
         "oracle_tcp_connect_timeout_seconds",
         "oracle_db_test_timeout_seconds",
         # 共通認証（構成管理者・認証ポリシー・ログインの Cookie 名。環境と認証方式も共通）。

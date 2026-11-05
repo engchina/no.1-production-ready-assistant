@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compute 上で手動のソース更新後に、安全な修復と再デプロイを行う。
-# ソース管理、.env の内容、Wallet の内容、systemd unit は変更しない。
+# ソース管理、.env の内容、systemd unit は変更しない。
 set -Eeuo pipefail
 
 # uv と Node.js の公式 tarball は /usr/local/bin にある（Oracle Linux の sudo の secure_path には無い。#1611）。
@@ -17,11 +17,10 @@ BACKEND_DIR="${APP_REPO_DIR}/backend"
 BACKEND_ENV_FILE="${BACKEND_DIR}/.env"
 FRONTEND_DIR="${APP_REPO_DIR}/frontend"
 PLATFORM_REPO_DIR="${PLATFORM_REPO_DIR:-${SUITE_REPO_DIR}/platform}"
-# 3製品共通の設定（PLATFORM_*。Wallet の場所を含む）は platform の共通 .env（#211）。
+# 3製品共通の設定（PLATFORM_*）は platform の共通 .env（#211）。
 PLATFORM_ENV_FILE="${PLATFORM_REPO_DIR}/.env"
 APP_USER="${APP_USER:-opc}"
 APP_GROUP="${APP_GROUP:-opc}"
-WALLET_DIR="${WALLET_DIR:-${APP_ROOT}/wallet}"
 RECOVERY_ROOT="${RECOVERY_ROOT:-${APP_ROOT}/recovery}"
 UPDATE_LOG_PATH="${UPDATE_LOG_PATH:-/var/log/nl2sql-update.log}"
 
@@ -41,7 +40,6 @@ SUDO_REEXEC_ENV_VARS=(
   PLATFORM_REPO_DIR
   APP_USER
   APP_GROUP
-  WALLET_DIR
   RECOVERY_ROOT
   UPDATE_LOG_PATH
   BACKEND_HEALTH_URL
@@ -86,7 +84,6 @@ test_mode_enabled() {
     *) return 1 ;;
   esac
   [ "${APP_REPO_DIR}" = "${APP_ROOT}/no.1-production-ready-assistant/nl2sql" ] && \
-    [ "${WALLET_DIR}" = "${APP_ROOT}/wallet" ] && \
     [ "${RECOVERY_ROOT}" = "${APP_ROOT}/recovery" ] && \
     [ "${UPDATE_LOG_PATH}" = "${APP_ROOT}/update.log" ] && \
     [ "${LOCK_FILE}" = "${APP_ROOT}/update.lock" ]
@@ -160,7 +157,7 @@ usage() {
 Usage: ./scripts/update-after-pull.sh [--check | --repair-only]
 
 引数なし       ソース更新後の build、配備先の修復、migration、再起動、frontend 公開を行います。
---check        固定パス、Wallet 権限、systemd、system schema を読み取り専用で確認します。
+--check        固定パス、配備先の権限、systemd、system schema を読み取り専用で確認します。
 --repair-only  build と frontend 公開を省略し、配備先の修復、migration、再起動だけを行います。
 
 このスクリプト自身は Git 操作と schema --recreate を行いません。
@@ -220,24 +217,12 @@ validate_non_negative_integer() {
   [[ "${value}" =~ ^[0-9]+$ ]] || fail "${name} は 0 以上の整数で指定してください: ${value}"
 }
 
-wallet_env_value() {
-  local line value
-  line="$(awk -F= '$1 == "PLATFORM_ORACLE_WALLET_DIR" {print; found=1} END {if (!found) exit 1}' "${PLATFORM_ENV_FILE}")" || return 1
-  line="$(printf '%s\n' "${line}" | tail -n 1)"
-  value="${line#*=}"
-  value="${value#\"}"
-  value="${value%\"}"
-  value="${value#\'}"
-  value="${value%\'}"
-  printf '%s\n' "${value}"
-}
-
 service_exists() {
   systemctl cat "$1" >/dev/null 2>&1
 }
 
 validate_fixed_deploy_layout() {
-  local configured_wallet resolved_root
+  local resolved_root
   if ! test_mode_enabled; then
     [ "${APP_USER}" = "opc" ] || fail "実行ユーザー設定は opc である必要があります。"
     [ "${APP_GROUP}" = "opc" ] || fail "実行グループ設定は opc である必要があります。"
@@ -248,7 +233,6 @@ validate_fixed_deploy_layout() {
       fail "backend/.env が配備先の固定パスではありません。"
     [ "${PLATFORM_ENV_FILE}" = "/u01/aipoc/no.1-production-ready-assistant/platform/.env" ] || \
       fail "platform/.env が配備先の固定パスではありません。"
-    [ "${WALLET_DIR}" = "/u01/aipoc/wallet" ] || fail "Wallet path は /u01/aipoc/wallet 固定です。"
     [ "${RECOVERY_ROOT}" = "/u01/aipoc/recovery" ] || fail "recovery path は /u01/aipoc/recovery 固定です。"
     [ "${UPDATE_LOG_PATH}" = "/var/log/nl2sql-update.log" ] || \
       fail "更新ログは /var/log/nl2sql-update.log 固定です。"
@@ -266,15 +250,6 @@ validate_fixed_deploy_layout() {
   [ ! -L "${BACKEND_ENV_FILE}" ] || fail "backend/.env は symbolic link にできません。"
   require_file "${PLATFORM_ENV_FILE}"
   [ ! -L "${PLATFORM_ENV_FILE}" ] || fail "platform/.env は symbolic link にできません。"
-  [ -d "${WALLET_DIR}" ] || fail "Wallet directory が存在しません: ${WALLET_DIR}"
-  [ ! -L "${WALLET_DIR}" ] || fail "Wallet directory は symbolic link にできません。"
-  configured_wallet="$(wallet_env_value)" || fail "platform/.env に PLATFORM_ORACLE_WALLET_DIR がありません。"
-  if test_mode_enabled; then
-    [ "${configured_wallet}" = "${WALLET_DIR}" ] || fail "test Wallet path が一致しません。"
-  else
-    [ "${configured_wallet}" = "/u01/aipoc/wallet" ] || \
-      fail "PLATFORM_ORACLE_WALLET_DIR は /u01/aipoc/wallet 固定です。"
-  fi
   for service in "${ALL_SERVICES[@]}"; do
     service_exists "${service}" || fail "systemd unit がありません: ${service}"
   done
@@ -331,22 +306,9 @@ unit_state() {
 }
 
 report_deployment_state() {
-  local service stale_paths
+  local service
   log "時刻: $(date -Is)"
-  stat -c '%U:%G %a %n' "${APP_ROOT}" "${WALLET_DIR}" "${BACKEND_ENV_FILE}" "${PLATFORM_ENV_FILE}"
-  if [ -e "${APP_ROOT}/.wallet.install.lock" ]; then
-    stat -c '%U:%G %a %n' "${APP_ROOT}/.wallet.install.lock"
-  else
-    warn "Wallet install lock はまだ存在しません。"
-  fi
-  stale_paths="$(
-    find "${APP_ROOT}" -maxdepth 1 -mindepth 1 -type d \
-      \( -name '.wallet.tmp-*' -o -name '.wallet.backup-*' \) -print
-  )"
-  if [ -n "${stale_paths}" ]; then
-    warn "Wallet の一時/backup path を検出しました。自動削除しません:"
-    printf '%s\n' "${stale_paths}" >&2
-  fi
+  stat -c '%U:%G %a %n' "${APP_ROOT}" "${BACKEND_ENV_FILE}" "${PLATFORM_ENV_FILE}"
   for service in "${ALL_SERVICES[@]}"; do
     log "${service}: $(unit_state "${service}")"
   done
@@ -361,34 +323,16 @@ expect_stat() {
   fi
 }
 
-verify_wallet_permissions() {
-  local app_root_owner=root failed=false invalid_wallet_path
+verify_deploy_permissions() {
+  local app_root_owner=root failed=false
   if test_mode_enabled; then
     app_root_owner="${APP_USER}"
   fi
   expect_stat "${APP_ROOT}" "${app_root_owner}" "${APP_GROUP}" 775 || failed=true
-  expect_stat "${WALLET_DIR}" "${APP_USER}" "${APP_GROUP}" 700 || failed=true
   expect_stat "${BACKEND_ENV_FILE}" "${APP_USER}" "${APP_GROUP}" 600 || failed=true
   expect_stat "${PLATFORM_ENV_FILE}" "${APP_USER}" "${APP_GROUP}" 600 || failed=true
-  if [ -L "${APP_ROOT}/.wallet.install.lock" ]; then
-    warn "Wallet install lock は symbolic link にできません。"
-    failed=true
-  elif [ -e "${APP_ROOT}/.wallet.install.lock" ]; then
-    expect_stat "${APP_ROOT}/.wallet.install.lock" "${APP_USER}" "${APP_GROUP}" 600 || failed=true
-  else
-    failed=true
-  fi
   if ! run_as_app_user test -w "${APP_ROOT}"; then
-    warn "${APP_USER} は Wallet 親 directory に書き込めません。"
-    failed=true
-  fi
-  invalid_wallet_path="$(
-    find "${WALLET_DIR}" \
-      \( -type d ! -perm 0700 -o -type f ! -perm 0600 \
-      -o ! -user "${APP_USER}" -o ! -group "${APP_GROUP}" \) -print -quit
-  )"
-  if [ -n "${invalid_wallet_path}" ]; then
-    warn "Wallet 内に owner/mode が不正な path があります: ${invalid_wallet_path}"
+    warn "${APP_USER} は ${APP_ROOT} に書き込めません。"
     failed=true
   fi
   [ "${failed}" = "false" ]
@@ -406,11 +350,11 @@ check_system_schema_status() {
 run_check() {
   report_deployment_state
   check_system_schema_status || warn "system schema status を取得できませんでした。"
-  if verify_wallet_permissions; then
-    log "Wallet storage permissions は正常です。"
+  if verify_deploy_permissions; then
+    log "配備先の権限は正常です。"
     return 0
   fi
-  fail "Wallet storage permissions の修復が必要です。--repair-only を実行してください。"
+  fail "配備先の権限の修復が必要です。--repair-only を実行してください。"
 }
 
 acquire_lock() {
@@ -572,7 +516,7 @@ create_recovery_snapshot() {
     run_privileged systemctl cat "${service}" | \
       run_privileged tee "${RECOVERY_DIR}/${service}.txt" >/dev/null
   done
-  stat -c '%U:%G %a %n' "${APP_ROOT}" "${WALLET_DIR}" "${BACKEND_ENV_FILE}" "${PLATFORM_ENV_FILE}" | \
+  stat -c '%U:%G %a %n' "${APP_ROOT}" "${BACKEND_ENV_FILE}" "${PLATFORM_ENV_FILE}" | \
     run_privileged tee "${RECOVERY_DIR}/permissions-before.txt" >/dev/null
   log "復旧 snapshot: ${RECOVERY_DIR}"
 }
@@ -585,27 +529,21 @@ enter_maintenance() {
   run_privileged systemctl stop "${BACKEND_SERVICE}"
 }
 
-repair_wallet_permissions() {
-  local lock_path="${APP_ROOT}/.wallet.install.lock" test_path
-  log "Wallet 親 directory、Wallet、lock、backend/.env、platform/.env の権限を修復します。"
+repair_deploy_permissions() {
+  local test_path
+  log "APP_ROOT、backend/.env、platform/.env の権限を修復します。"
   run_privileged chown "root:${APP_GROUP}" "${APP_ROOT}"
   run_privileged chmod 0775 "${APP_ROOT}"
-  run_privileged chown -R "${APP_USER}:${APP_GROUP}" "${WALLET_DIR}"
-  run_privileged find "${WALLET_DIR}" -type d -exec chmod 0700 {} +
-  run_privileged find "${WALLET_DIR}" -type f -exec chmod 0600 {} +
-  run_privileged test ! -L "${lock_path}" || \
-    fail "Wallet install lock は symbolic link にできません。"
-  run_privileged install -m 0600 -o "${APP_USER}" -g "${APP_GROUP}" /dev/null "${lock_path}"
   run_privileged chown "${APP_USER}:${APP_GROUP}" "${BACKEND_ENV_FILE}"
   run_privileged chmod 0600 "${BACKEND_ENV_FILE}"
   run_privileged chown "${APP_USER}:${APP_GROUP}" "${PLATFORM_ENV_FILE}"
   run_privileged chmod 0600 "${PLATFORM_ENV_FILE}"
-  test_path="${APP_ROOT}/.wallet.permission-test.$$"
+  test_path="${APP_ROOT}/.permission-test.$$"
   trap 'rm -f -- "${test_path}"' RETURN
   run_as_app_user touch "${test_path}"
   run_as_app_user rm -f -- "${test_path}"
   trap - RETURN
-  verify_wallet_permissions
+  verify_deploy_permissions
 }
 
 run_database_migrations() {
@@ -703,8 +641,8 @@ run_maintenance() {
   create_recovery_snapshot
   CURRENT_STAGE="maintenance mode への移行"
   enter_maintenance
-  CURRENT_STAGE="Wallet storage 権限の修復"
-  repair_wallet_permissions
+  CURRENT_STAGE="配備先の権限の修復"
+  repair_deploy_permissions
   CURRENT_STAGE="データベース migration"
   run_database_migrations
   CURRENT_STAGE="systemd service の再起動"

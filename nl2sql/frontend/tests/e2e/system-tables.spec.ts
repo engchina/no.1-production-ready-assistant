@@ -29,15 +29,10 @@ async function fulfill(
 
 const databaseSettings = {
   user: "NL2SQL_APP",
-  dsn: "nl2sqldb_high",
+  dsn: "127.0.0.1:1525/nl2sqldb_low",
   driver_mode: "thin",
-  connection_security: "wallet_mtls",
   client_lib_dir: "",
-  wallet_dir: "/wallet",
-  wallet_uploaded: true,
-  available_services: ["nl2sqldb_high"],
   has_password: true,
-  has_wallet_password: false,
   readiness: "ok",
   embedding_dimension: 1024,
   vector_column: "VECTOR(1024, FLOAT32)",
@@ -713,7 +708,7 @@ test("接続・操作失敗を操作領域で通知し、復旧方法を提示�
   await expect(card.getByText("データベースに接続できません", { exact: true })).toBeVisible();
   await expect(
     card.getByText(
-      "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・サービス名（DSN）と Wallet を確認してから、再試行してください。",
+      "データベースにネットワーク経由で到達できないか、接続設定が正しくありません。データベース設定で接続ユーザー・パスワード・DSN を確認してから、再試行してください。",
       { exact: true }
     )
   ).toHaveCount(0);

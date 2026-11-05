@@ -1804,9 +1804,9 @@ def test_route_permissions_cover_every_mounted_route() -> None:
     # （#2405）は menu.settings_answer_notice。チャットの添付（#2517）は生成の権限、使うかの設定は
     # menu.settings_chat_attachments。軌跡の本文記録は menu.settings_trace_recording。
     # Select AI（#7）・Deep Data Security（#23）と、OCI 認証の 7 route・アップロード保存先の確認・
-    # Wallet の OCI からの取得・ADB の管理（#11）は削除した。
-    assert len(mounted) == 241
-    assert len(ROUTE_PERMISSIONS) == 229
+    # ADB の管理（#11）は削除した。
+    assert len(mounted) == 240
+    assert len(ROUTE_PERMISSIONS) == 228
     for path in ("/nl2sql/chats", "/nl2sql/chats/{conversation_id}"):
         assert ROUTE_PERMISSIONS[("GET", path)] == frozenset({QUERY_GENERATE_PERMISSION})
     # 処理の経過（#3226 の案 A）は記録と同じ権限。
@@ -1835,7 +1835,6 @@ _LEGACY_PREFIX_RULE_RESULTS: tuple[tuple[str, str, set[str]], ...] = (
     ("PATCH", "/settings/upload-storage", {"menu.settings_upload_storage"}),
     ("POST", "/settings/model/test", {"menu.settings_model"}),
     ("POST", "/settings/database/system-tables/initialize", {"menu.settings_system_tables"}),
-    ("POST", "/settings/database/wallet", {"menu.settings_database"}),
     ("POST", "/schema/refresh-jobs", {"nl2sql.schema.refresh"}),
     ("GET", "/schema/refresh-jobs/{job_id}", {"nl2sql.schema.read"}),
     ("GET", "/schema/owners", {"nl2sql.schema.read"}),
