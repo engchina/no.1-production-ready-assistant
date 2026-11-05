@@ -63,6 +63,10 @@ class _FakeCursor:
         self.rowcount = 0
         self.database.executed.append(upper)
 
+        if "EXECUTE IMMEDIATE 'DROP TABLE RAG_SUPPORT_GUIDES PURGE'" in upper:
+            for table in _RETIRED_SUPPORT_GUIDE_TABLES:
+                self.database.objects.pop((table, "TABLE"), None)
+            return
         if "EXECUTE IMMEDIATE 'DROP TABLE RAG_QUERY_HISTORY PURGE'" in upper:
             self.database.objects.pop(("RAG_QUERY_HISTORY", "TABLE"), None)
             self.database.objects.pop(("RAG_QUERY_HISTORY_PROFILE_IDX", "INDEX"), None)
@@ -592,6 +596,11 @@ def test_initialize_replaces_only_explicit_retired_index() -> None:
     assert ("RAG_INGESTION_SEGMENTS_RECIPE_STATUS_IDX", "INDEX") in database.objects
 
 
+_RETIRED_SUPPORT_GUIDE_TABLES = (
+    "RAG_SUPPORT_GUIDES",
+    "RAG_SUPPORT_GUIDE_REVISIONS",
+    "RAG_SUPPORT_GUIDE_EMBEDDINGS",
+)
 _RETIRED_STANDARD_ENGINE_TABLES = (
     "RAG_PROMPT_VERSIONS",
     "RAG_GENERATION_SETTINGS",
@@ -692,6 +701,7 @@ def test_migrations_that_drop_or_delete_data_are_marked_destructive() -> None:
         "20261105_001_retire_evaluation_calibration",
         "20261106_001_retire_document_graph",
         "20261106_002_retire_entity_index",
+        "20261106_003_retire_support_guides",
     } == marked
     assert all(migration.destructive_note for migration in MIGRATIONS if migration.destructive)
     # 印は checksum（SQL だけ）に影響しない（適用済みの DB を outdated にしない）。
@@ -1315,3 +1325,36 @@ def test_retired_query_history_requires_explicit_migration_and_keeps_chat_record
     for table in ("RAG_CONVERSATIONS", "RAG_MESSAGES", "RAG_ANSWER_RECORDS", "RAG_RUN_HISTORY"):
         assert (table, "TABLE") in database.objects
     assert manager.initialize()["status"] == "ready"
+
+
+def test_retired_support_guides_require_explicit_migration_and_keep_profiles() -> None:
+    database = _FakeDatabase()
+    manager = SystemSchemaManager(database.connection)
+    manager.initialize()
+    # 新規の DB には表が無い（過去の migration は記録だけ）。
+    assert not any((name, "TABLE") in database.objects for name in _RETIRED_SUPPORT_GUIDE_TABLES)
+    name = "20261106_003_retire_support_guides"
+    assert name in database.migrations
+    database.migrations.pop(name)
+    for table in _RETIRED_SUPPORT_GUIDE_TABLES:
+        database.objects[(table, "TABLE")] = datetime.now(UTC)
+    before = manager.status()
+    assert [item["name"] for item in before["pending_destructive_migrations"]] == [name]
+    with pytest.raises(SystemSchemaError) as error:
+        manager.initialize()
+    assert error.value.code == DESTRUCTIVE_MIGRATIONS_CONFIRMATION_REQUIRED
+    assert ("RAG_SUPPORT_GUIDES", "TABLE") in database.objects
+    manager.initialize(allow_destructive=True)
+    assert not any((table, "TABLE") in database.objects for table in _RETIRED_SUPPORT_GUIDE_TABLES)
+    assert ("RAG_SEARCH_ANSWER_PROFILES", "TABLE") in database.objects
+    assert manager.initialize()["status"] == "ready"
+
+
+def test_recreate_drops_retired_support_guide_tables() -> None:
+    database = _FakeDatabase()
+    manager = SystemSchemaManager(database.connection)
+    manager.initialize()
+    for table in _RETIRED_SUPPORT_GUIDE_TABLES:
+        database.objects[(table, "TABLE")] = datetime.now(UTC)
+    manager.initialize(recreate=True, confirmation=RECREATE_CONFIRMATION)
+    assert not any((table, "TABLE") in database.objects for table in _RETIRED_SUPPORT_GUIDE_TABLES)

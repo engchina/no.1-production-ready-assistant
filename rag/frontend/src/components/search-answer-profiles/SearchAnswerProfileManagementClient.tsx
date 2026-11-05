@@ -25,7 +25,6 @@ import {
   FormSkeleton,
   TimedLoadingState,
   ToggleChip,
-  Switch,
   FilterChipGroup,
   isFilterActive,
   DEFAULT_PAGE_SIZE,
@@ -176,7 +175,6 @@ const MAX_ANCHORS_PER_DOCUMENT_OPTIONS: SelectFieldOption<string>[] = Array.from
 const PROFILE_GLOBAL_QUERY_FIELDS = [
   "query_strategy", "answer_flow", "neighbor_child_count", "rerank_enabled", "auto_field_filter_enabled",
   "screen_linking_enabled", "request_coverage_retrieval_enabled",
-  "guide_step_retrieval_enabled", "guide_step_max_queries", "guide_step_deadline_seconds",
   "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent",
 ] as const satisfies readonly (keyof KnowledgeBaseQueryConfig)[];
 
@@ -962,30 +960,6 @@ function SearchAnswerProfileEditor({
                     disabled={locked || (!config.answer_model_id && !registeredModels.length)}
                     onChange={(value) => setConfig((current) => ({ ...current, answer_model_id: value || null }))}
                   />
-                  <div
-                    className="flex items-start justify-between gap-4 rounded-lg border border-border p-3"
-                    data-testid="search-answer-profile-guide-matching"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <h3 className="text-sm font-medium text-fg">
-                        {t("searchAnswerProfiles.field.guideEnabled")}
-                      </h3>
-                      <p id="search-answer-profile-guide-enabled-helper" className="text-xs leading-relaxed text-fg-muted">
-                        {t("searchAnswerProfiles.field.guideEnabledHelper")}
-                      </p>
-                      <p className="text-sm font-medium text-fg" aria-live="polite">
-                        {config.query.support_guide_enabled === true ? t("searchAnswerProfiles.field.guideEnabledOn") : t("searchAnswerProfiles.field.guideEnabledOff")}
-                      </p>
-                    </div>
-                    <Switch
-                      aria-label={t("searchAnswerProfiles.field.guideEnabled")}
-                      aria-describedby="search-answer-profile-guide-enabled-helper"
-                      checked={config.query.support_guide_enabled === true}
-                      disabled={locked}
-                      onCheckedChange={(value) => updateQuery({ support_guide_enabled: value })}
-                      className="shrink-0"
-                    />
-                  </div>
                 </div>
               </fieldset>
               {/* 回答前の確認（#1839。3 製品で業務の単位に置く設定）。ルールごとの確認は下の「プロファイルの知識」。 */}

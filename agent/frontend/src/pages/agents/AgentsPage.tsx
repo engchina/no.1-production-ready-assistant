@@ -325,7 +325,7 @@ export function AgentVersionsSection({ agent, readOnly }: { agent: AgentProfile;
   const rows = [...(agent.versions ?? [])].reverse();
   // 版の履歴は直近 N 版（AGENT_MAX_PUBLISHED_VERSIONS。公開中の版は常に残る。#2356）。N は API の値。
   const maxVersions = agents.data?.max_published_versions;
-  // 列の並びとバッジは RAG の業務ガイドの公開の履歴と同じ共通の列（#2356）。
+  // 列の並びとバッジは共通の列（#2356）。
   const columns = publishedVersionColumns<AgentVersion>({
     getVersion: (version) => version.version,
     currentVersion: agent.published_version,

@@ -240,7 +240,7 @@ def deterministic_parse_text_response(
         return text_format.model_validate(
             {"summary": "決定論スタブの回答", "items": items, "confidence": "high"}
         )
-    # 監査は要求・ガイド要件の id を固定のキーにした wire の schema で呼ぶ。
+    # 監査は要求の id を固定のキーにした wire の schema で呼ぶ。
     # キーはすべて埋め、要求の判定は保留にする。
     # 監査は項目があるときだけ呼ばれ、上の生成は項目を 1 つだけ返すので、index 0 を支持ありとする。
     if is_audit_wire(text_format):
@@ -255,16 +255,12 @@ def deterministic_parse_text_response(
             }
         ]
         request = {"status": "unknown", "reason": "決定論スタブ", "evidence_status": "unknown"}
-        requirement = {"answer_state": "not_mentioned", "reason": ""}
         return text_format.model_validate(
             {
                 "goal_alignment": "aligned",
                 "summary_supported": True,
                 "reviews": reviews,
                 "request_reviews": dict.fromkeys(wire.expected_request_ids, request),
-                "guide_requirement_reviews": dict.fromkeys(
-                    wire.expected_requirement_ids, requirement
-                ),
             }
         )
     # 通常の回答の監査（#2795）は事実の監査の schema で呼ぶ。

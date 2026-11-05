@@ -36,7 +36,6 @@ from starlette.concurrency import run_in_threadpool
 from app.api.routes.search import (
     STREAM_ERROR_MESSAGE,
     _answer_chunks,
-    _published_guides,
     _resolve_query_context,
     _sse_event,
     answer_model_choices,
@@ -101,11 +100,6 @@ from app.rag.search_answer_profile_knowledge import (
 )
 from app.rag.signed_url import SignedUrlUnavailableError
 from app.rag.stored_answer import passage_mark_record, stored_citation, stored_citations
-from app.rag.support_guide_runtime import (
-    GUIDE_CLARIFICATION_PREFIX,
-    guide_clarification_record,
-    resolve_guide_clarification,
-)
 from app.rag.trace_store import AnswerTrace, TraceSnapshot, TraceTerminal, trace_snapshot
 from app.schemas.chat import (
     ChatAnswerCancelResult,
@@ -128,8 +122,8 @@ from app.security.user_names import display_names_by_user_hash
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-# 業務ガイドを選ぶときに含める、前の利用者の発話の数（#1238）。
-GUIDE_CONTEXT_TURNS = 3
+# 確認の選択の認識に含める、前の利用者の発話の数（#1238）。
+USER_CONTEXT_TURNS = 3
 
 CHAT_DISABLED_MESSAGE = "チャット機能は現在無効です。"
 CONVERSATION_NOT_FOUND_MESSAGE = "会話が見つかりません。"
@@ -327,10 +321,10 @@ def _saved_clarification(message: StoredMessage) -> ChatClarificationRecord | No
     return None
 
 
-def _guide_user_context(messages: list[StoredMessage]) -> list[str]:
-    """利用者の発話と確認に答えた値を、ガイドの条件認識へ引き継ぐ。"""
+def _user_turn_context(messages: list[StoredMessage]) -> list[str]:
+    """利用者の発話と確認に答えた値を、続きの確認の認識と履歴へ引き継ぐ。"""
     contexts: list[str] = []
-    for message in [item for item in messages if item.role == "USER"][-GUIDE_CONTEXT_TURNS:]:
+    for message in [item for item in messages if item.role == "USER"][-USER_CONTEXT_TURNS:]:
         lines = [message.content]
         record = _saved_clarification(message)
         if record is not None and record.outcome == "answered":
@@ -615,7 +609,7 @@ async def _build_history(messages: list[StoredMessage]) -> list[ChatTurn]:
                 continue
             completed_user_ids.add(message.id)
             # 確認への明示的な回答だけを利用者の履歴へ足す。スキップ・前提は足さない。
-            content = _guide_user_context([message])[0]
+            content = _user_turn_context([message])[0]
             facts: list[HistoryConfirmation] = []
             resets: list[str] = []
             record = _saved_clarification(message)
@@ -714,7 +708,6 @@ async def prepare_chat_question(
                     language_pack.hash,
                     view.model_dump(mode="json") if view else None,
                     await load_runtime_knowledge_payload(oracle, search_answer_profile_id),
-                    await _published_guides(oracle, search_answer_profile_id),
                 ]
             ),
         }
@@ -793,70 +786,19 @@ async def _prepare_chat_turn(
                 detail="選んだ類似問が見つかりません。もう一度送信して選び直してください。",
             )
         approved_faq = (record.question, record.approved_answer)
-    guide_reply = request.clarification is not None and request.clarification.rule_id.startswith(
-        GUIDE_CLARIFICATION_PREFIX
-    )
-    guide_skip = bool(request.clarification_skipped_rule_id) and str(
-        request.clarification_skipped_rule_id
-    ).startswith(GUIDE_CLARIFICATION_PREFIX)
-    if guide_reply or guide_skip:
-        view = await oracle.get_search_answer_profile(search_answer_profile_id)
-        if view is None or view.config.query.support_guide_enabled is not True:
-            # スイッチを切る前の確認への回答は、ガイドの条件や検索範囲へ反映しない。
-            request = request.model_copy(
-                update={
-                    "clarification": None if guide_reply else request.clarification,
-                    "clarification_skipped_rule_id": None
-                    if guide_skip
-                    else request.clarification_skipped_rule_id,
-                }
-            )
     scope: AnswerScope | None = None
     filters: dict[str, str] = {}
-    conditions: dict[str, str] = {}
     # 会話に残す「回答前に確認した内容」（#1839）。答え・飛ばしたことを、確認事項と一緒に USER の
     # メッセージに保存する（選択肢の名前は答えた時点のもの）。
     clarification_log: dict[str, object] | None = None
     skipped_rule_id = request.clarification_skipped_rule_id
     if request.clarification is None and skipped_rule_id:
-        if skipped_rule_id.startswith(GUIDE_CLARIFICATION_PREFIX):
-            clarification_log = guide_clarification_record(
-                await _published_guides(oracle, search_answer_profile_id), skipped_rule_id, None
-            )
-        else:
-            clarification_log = clarification_record(
-                await load_runtime_knowledge_payload(oracle, search_answer_profile_id),
-                skipped_rule_id,
-                None,
-            )
-    if request.clarification is not None and request.clarification.rule_id.startswith(
-        GUIDE_CLARIFICATION_PREFIX
-    ):
-        guides = await _published_guides(oracle, search_answer_profile_id)
-        guide_answer = resolve_guide_clarification(
-            guides,
-            request.clarification.rule_id,
-            request.clarification.option_ids,
-            request.clarification.other_text,
+        clarification_log = clarification_record(
+            await load_runtime_knowledge_payload(oracle, search_answer_profile_id),
+            skipped_rule_id,
+            None,
         )
-        # 業務ガイドの条件の確認（#1238）。答えは既知の条件として回答に渡す。
-        if guide_answer is None:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "選んだ確認の答えが見つかりません。業務ガイドが変わった可能性があります。"
-                    "もう一度送信して選び直してください。"
-                ),
-            )
-        conditions, context = guide_answer
-        scope = AnswerScope(context=context, search_terms=(), label="")
-        clarification_log = guide_clarification_record(
-            guides,
-            request.clarification.rule_id,
-            request.clarification.option_ids,
-            request.clarification.other_text,
-        )
-    elif request.clarification is not None:
+    if request.clarification is not None:
         payload = await load_runtime_knowledge_payload(oracle, search_answer_profile_id)
         resolved = resolve_clarification(
             payload,
@@ -898,19 +840,6 @@ async def _prepare_chat_turn(
         prepared_question = request.content
         inherited_facts = []
     # 同輪の明示回答は履歴より優先する。設定文や展示用 context は読み取らない。
-    if scope is not None and guide_reply and clarification_log is not None:
-        current_confirmation = ChatClarificationRecord.model_validate(clarification_log)
-        scope = replace(
-            scope,
-            confirmed_premises=tuple(
-                (
-                    entry.prompt,
-                    "、".join([*entry.selected, *([entry.other_text] if entry.other_text else [])]),
-                )
-                for entry in current_confirmation.entries
-                if entry.selected or entry.other_text
-            ),
-        )
     reset_questions: set[str] = set()
     if clarification_log is not None and clarification_log.get("outcome") == "skipped":
         reset_questions = {
@@ -928,7 +857,6 @@ async def _prepare_chat_turn(
         top_k=request.top_k,
         search_answer_profile_id=search_answer_profile_id,
         filters=filters,
-        conditions=conditions,
     )
     if request.question_context_token:
         base_request._rule_selection_state["prepared"] = True
@@ -945,11 +873,10 @@ async def _prepare_chat_turn(
     ) = await _resolve_query_context(
         base_request,
         settings,
-        # 業務ガイドは前の発話も含めて選ぶ（短い返答だけで照合が外れないように。#1238）。
-        guide_context=()
+        # ルールの選択は前の発話も含めて読む（短い返答だけで照合が外れないように。#1238）。
+        user_context=()
         if request.question_context_token and settings.rag_history_rewrite_enabled
-        else _guide_user_context(prior_messages),
-        interactive=True,
+        else _user_turn_context(prior_messages),
         confirmed_rule_answers=tuple(
             ClarificationAnswer.model_validate(value)
             for value in read_rule_selection_answers(
@@ -960,7 +887,6 @@ async def _prepare_chat_turn(
         else (),
         answered_rule_ids=(request.clarification.rule_id,)
         if request.clarification is not None
-        and not request.clarification.rule_id.startswith(GUIDE_CLARIFICATION_PREFIX)
         else (),
     )
     if request.client_message_id and any(

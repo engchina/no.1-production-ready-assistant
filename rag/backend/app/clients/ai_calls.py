@@ -37,7 +37,7 @@ AiCallStage = Literal[
     "embedding",
     "rerank",
     "evaluation",
-    "guide_import",
+    "evaluation_process",
 ]
 
 STAGE_LABELS: dict[str, str] = {
@@ -49,7 +49,7 @@ STAGE_LABELS: dict[str, str] = {
     "embedding": "埋め込み（Embedding）",
     "rerank": "リランク",
     "evaluation": "品質評価",
-    "guide_import": "業務ガイドの下書きの作成",
+    "evaluation_process": "評価の期待の下書きの作成",
 }
 
 # 空の応答・件数の食い違いは「出力の形の誤り」（今の schema の再試行と同じく回数を絞って再試行）。
@@ -112,7 +112,7 @@ def _concurrency(settings: object, stage: str) -> int:
         "raptor_summary": "rag_raptor_concurrency",
         "embedding": "rag_embedding_concurrency",
         "evaluation": "rag_evaluation_concurrency",
-        "guide_import": "rag_support_guide_import_concurrency",
+        "evaluation_process": "rag_evaluation_process_concurrency",
     }.get(stage)
     if name is None:
         return 1

@@ -658,26 +658,3 @@ class FakeFeedbackClient:
 
     async def feedback_exists(self, feedback_id: str) -> bool:
         return feedback_id == "feedback-1" and self.detail is not None
-
-
-def test_feedback_on_guide_preview_answers_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """業務ガイドの下書きで試した回答には、フィードバックを送れない（#1288）。"""
-    from app.rag.support_guide_runtime import GUIDE_PREVIEW_TRACE_PREFIX
-
-    fake = FakeFeedbackClient()
-    monkeypatch.setattr(feedback_route, "OracleClient", lambda: fake)
-
-    response = client.post(
-        "/api/feedback",
-        json={
-            "trace_id": GUIDE_PREVIEW_TRACE_PREFIX + "0" * 32,
-            "search_answer_profile_id": "bv-1",
-            "target_type": "answer",
-            "source_surface": "search",
-            "rating": "helpful",
-        },
-    )
-
-    assert response.status_code == 409
-    assert "下書きで試した回答" in response.json()["error_messages"][0]
-    assert fake.saved == []

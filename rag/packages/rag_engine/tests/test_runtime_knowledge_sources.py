@@ -1,7 +1,7 @@
 """原質問に語を足した検索文の出どころの表示名（#3490）。
 
 段「検索文と検索語の確定」の検索文の出どころ・回答の記録の ``query_source`` は、実際に語を足したもの
-（用語・同義語 / 回答ルール / 業務ガイド / 確認で選んだ条件）の名前を並べる。旧名「用語・ルール」は出さない。
+（用語・同義語 / 回答ルール / 確認で選んだ条件）の名前を並べる。旧名「用語・ルール」は出さない。
 """
 
 from __future__ import annotations
@@ -13,9 +13,7 @@ from typing import Any
 import pytest
 
 from rag_engine.knowledge.runtime_knowledge import (
-    PINNED_RULE_TAG,
     RUNTIME_KNOWLEDGE_FILE_NAME,
-    SUPPORT_GUIDE_RULE_TAG,
     RuntimeKnowledgeContext,
     build_runtime_knowledge_context,
 )
@@ -36,15 +34,8 @@ def _context(tmp_path: Path, question: str, *, terms: list[Any], rules: list[Any
         ("略称A の期限は？", [_TERM], [], ("用語・同義語",)),
         ("条件B の期限は？", [], [_RULE], ("確認・回答ルール",)),
         ("略称A で条件B の期限は？", [_TERM], [_RULE], ("用語・同義語", "確認・回答ルール")),
-        (
-            "期限は？",
-            [],
-            [{**_RULE, "id": "guide-1", "triggers": ["手がかりC"], "tags": [PINNED_RULE_TAG, SUPPORT_GUIDE_RULE_TAG]}],
-            ("業務ガイド",),
-        ),
-        ("期限は？", [], [{**_RULE, "triggers": ["手がかりC"], "tags": [PINNED_RULE_TAG]}], ("確認・回答ルール",)),
     ],
-    ids=["terms", "rules", "terms-and-rules", "support-guide", "pinned-rule"],
+    ids=["terms", "rules", "terms-and-rules"],
 )
 def test_query_source_names_what_added_words(
     tmp_path: Path, question: str, terms: list[Any], rules: list[Any], expected: tuple[str, ...]

@@ -17,7 +17,6 @@ from app.rag.evaluation_excel import XLSX_MEDIA_TYPE, evaluation_cases_xlsx, evi
 from app.rag.rate_limit import enforce_rate_limit
 from app.rag.request_context import caller_owns, current_audit_request_context
 from app.rag.search_answer_profile_knowledge import import_approved_faq
-from app.rag.support_guide_runtime import is_guide_preview_trace
 from app.schemas.common import ApiResponse
 from app.schemas.evaluation import STANDARD_ANSWER_MAX_CHARS
 from app.schemas.feedback import (
@@ -49,12 +48,6 @@ async def submit_feedback(
 ) -> ApiResponse[FeedbackSubmissionResponse]:
     """回答または引用 feedback を追記する。"""
     enforce_rate_limit("search", http_request)
-    if is_guide_preview_trace(request.trace_id):
-        # 業務ガイドの下書きで試した回答は、利用者のフィードバックに混ぜない（#1288）。
-        raise HTTPException(
-            status_code=409,
-            detail="業務ガイドの下書きで試した回答にはフィードバックを送れません。",
-        )
     oracle = OracleClient()
     if await oracle.get_search_answer_profile(request.search_answer_profile_id) is None:
         raise HTTPException(status_code=404, detail="検索・回答プロファイルが見つかりません。")

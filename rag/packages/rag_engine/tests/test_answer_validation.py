@@ -367,30 +367,6 @@ CITATION_CASES = json.loads(
 )
 
 
-# 作業の経過の文の事例（業務ガイドが見つからなかった。RAG と Agent の両方のテストが読む。#1452）。
-PROCESS_CASES = json.loads(
-    (Path(__file__).resolve().parents[4] / "platform/contracts/answer-passages/process-notes.json").read_text("utf-8")
-)
-
-
-@pytest.mark.parametrize("case", PROCESS_CASES["process_passages"], ids=lambda case: case["id"])
-def test_guide_not_found_passages_are_not_claims(case: dict) -> None:
-    """業務ガイドが見つからなかったことだけを述べる文は、主張として監査しない (#1452)。"""
-    from rag_engine.generation.operation_audit import is_guide_not_found, is_non_claim_passage
-
-    assert is_guide_not_found(case["passage"])
-    assert is_non_claim_passage(case["passage"])
-
-
-@pytest.mark.parametrize("case", PROCESS_CASES["claim_passages"], ids=lambda case: case["id"])
-def test_guide_passages_with_content_stay_claims(case: dict) -> None:
-    """業務ガイドの内容・条件・数量・操作を含む文と、検索の状態の文は主張のまま監査する (#1452)。"""
-    from rag_engine.generation.operation_audit import is_guide_not_found, is_non_claim_passage
-
-    assert not is_guide_not_found(case["passage"])
-    assert not is_non_claim_passage(case["passage"])
-
-
 @pytest.mark.parametrize("case", CITATION_CASES["citation_passages"], ids=lambda case: case["id"])
 def test_citation_only_passages_are_not_claims(case: dict) -> None:
     """定位子・根拠の ID・文書名と場所だけの行は出典の行で、主張として監査しない (#1370)。"""

@@ -370,25 +370,6 @@ def test_small_to_big_params_overlay_ingestion_settings() -> None:
         KnowledgeBaseIngestionConfig(chunk_child_target_chars=2000)
 
 
-@pytest.mark.parametrize("value", [0, 15.5, 60])
-def test_query_overlay_step_deadline_is_bounded_and_does_not_mutate_defaults(
-    value: float,
-) -> None:
-    settings = get_settings()
-    original = settings.rag_guide_step_deadline_seconds
-    query = KnowledgeBaseQueryConfig(guide_step_deadline_seconds=value)
-    merged, applied = compose_query_settings(settings, [query])
-    assert merged.rag_guide_step_deadline_seconds == value
-    assert settings.rag_guide_step_deadline_seconds == original
-    assert applied
-
-
-@pytest.mark.parametrize("value", [-1, 61])
-def test_query_overlay_step_deadline_rejects_out_of_range(value: float) -> None:
-    with pytest.raises(ValueError):
-        KnowledgeBaseQueryConfig(guide_step_deadline_seconds=value)
-
-
 def test_stored_entity_index_recipe_fields_are_dropped() -> None:
     """削除した実体・別名索引（#160）のレシピの項目は、保存値に残っても読み捨てる。"""
     config = KnowledgeBaseIngestionConfig.model_validate(

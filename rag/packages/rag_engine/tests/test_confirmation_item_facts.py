@@ -18,7 +18,6 @@ from rag_engine.dependencies import AnswerDependencies, bind_dependencies
 from rag_engine.generation import grounded
 from rag_engine.generation.answer_envelope import (
     EXCLUDED_ALREADY_KNOWN,
-    EXCLUDED_KNOWN_CONDITION,
     EXCLUDED_NOT_DECISIVE,
     EXCLUDED_VERSION_SETTLED,
     build_envelope,
@@ -65,16 +64,6 @@ class SettleConfirmationItemsTest(unittest.TestCase):
         self.assertEqual(confirmation_item_facts({"text": "ログ", "kind": "environment"})["who_can_answer"], "system")
         self.assertEqual(confirmation_item_facts({"text": "x"})["who_can_answer"], "system")
 
-    def test_known_conditions_remove_the_items_that_ask_them_again(self):
-        # mt-delete-account-approved: conditions={approved: はい}（業務ガイドの条件「部門長の承認」）を聞き直さない。
-        items = [fact(APPROVAL, "user"), fact(ROLE, "user")]
-        settled = settle_confirmation_items(items, known_conditions=[("部門長の承認", "はい")])
-        self.assertEqual(settled.user, (ROLE,))
-        self.assertEqual([entry["reason"] for entry in settled.excluded], [EXCLUDED_KNOWN_CONDITION])
-        # 値の無い条件・1 文字の名前では外さない。
-        self.assertEqual(settle_confirmation_items(items, known_conditions=[("部門長の承認", " ")]).user, (APPROVAL, ROLE))
-        self.assertEqual(settle_confirmation_items(items, known_conditions=[("承", "はい")]).user, (APPROVAL, ROLE))
-
     def test_version_items_are_removed_only_when_the_evidence_settles_the_version(self):
         items = [fact(VERSION, "system"), fact(AUTH_LOG, "system")]
         self.assertEqual(settle_confirmation_items(items).system, (VERSION, AUTH_LOG))
@@ -119,7 +108,6 @@ class EnvelopeFromFactsTest(unittest.TestCase):
     def test_known_or_indecisive_items_do_not_decide_the_outcome(self):
         self.assertEqual(self.outcome_of([fact(AUTH_LOG, "system", known=True)]), "answered")
         self.assertEqual(self.outcome_of([fact(AUTH_LOG, "system", decides=False)]), "answered")
-        self.assertEqual(self.outcome_of([fact(APPROVAL, "user")], known_conditions=[("部門長の承認", "はい")]), "answered")
         self.assertEqual(self.outcome_of([fact(VERSION, "system")], version_settled=True), "answered")
 
 
@@ -299,23 +287,6 @@ class GroundedConfirmationFactsTest(unittest.TestCase):
         self.assertEqual(structure["superseded_withheld"], 1)
         self.assertEqual(structure["settled_confirmations"]["excluded"][0]["reason"], EXCLUDED_VERSION_SETTLED)
         self.assertEqual(structure["confirmation_items"], [fact(VERSION, "system")])
-
-    def test_known_condition_is_not_asked_again(self):
-        # mt-delete-account-approved と同じ形（承認は conditions で分かっている）。削除の検査に掛からない操作にする。
-        question = "利用者アカウントを無効にしたいです。所属部署の部門長の承認はもらっています。"
-        text = "無効にする前に、所属部署の部門長の承認を得てください。"
-        ctx = context(versioned(0, text, "アカウントの無効化", "portal-operations-manual.pdf"))
-        eids = ids(ctx, question)
-        value = {
-            **draft(rule(eids[text], text), summary=""),
-            "external_data_required": True,
-            "external_data_items": [fact(APPROVAL, "system")],
-        }
-        model = lambda: FakeModel([value], [audit((0, "supported", "matched", ""), requests=[("Q1", "addressed")])])  # noqa: E731
-        self.assertEqual(_run(model(), ctx, question).envelope["outcome"], "needs_environment_data")
-        response = _run(model(), ctx, question, known_conditions=(("部門長の承認", "はい"),))
-        self.assertEqual(response.envelope["outcome"], "conditional")
-        self.assertNotIn("実データ", response.answer_text)
 
 
 if __name__ == "__main__":

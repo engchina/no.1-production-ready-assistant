@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from pytest import CaptureFixture
@@ -118,9 +119,6 @@ def test_oracle_schema_manifest_is_deterministic() -> None:
         "document_categories",
         "document_cleanups",
         "search_answer_profile_knowledge",
-        "support_guides",
-        "support_guide_revisions",
-        "support_guide_embeddings",
         "document_sections",
         "conversations",
         "messages",
@@ -446,13 +444,23 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "'ALTER TABLE rag_evaluation_runs DROP COLUMN best_experiment_id'" in compare_migration
     # 評価の結果の行は消さない。
     assert "DELETE FROM rag_evaluation_runs" not in compare_migration
-    # 業務ガイドの質問の例の埋め込みの表を無いときだけ作る（#2398）。
+    # 過去の migration: 親の表があり、埋め込みの表が無いときだけ作る。
     embeddings_migration = sql.split("-- migration: 20261018_001_support_guide_embeddings", 1)[
         1
     ].split("-- migration: ", 1)[0]
     assert "CREATE TABLE rag_support_guide_embeddings" in embeddings_migration
+    assert "table_name = 'RAG_SUPPORT_GUIDE_REVISIONS'" in embeddings_migration
     assert "table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS'" in embeddings_migration
     assert "DROP" not in embeddings_migration
+    # 廃止した 3 表を FK の子から順に消す。無い表では失敗しない（冪等）。
+    retired = sql.split("-- migration: 20261106_003_retire_support_guides", 1)[1]
+    drops = re.findall(r"DROP TABLE (\w+) PURGE", retired)
+    assert drops == [
+        "rag_support_guide_embeddings",
+        "rag_support_guide_revisions",
+        "rag_support_guides",
+    ]
+    assert retired.count("IF v_count > 0 THEN") == 3
     # 回答に付けた注意書きの列を無いときだけ足す（#2405。会話の回答と回答の記録）。
     for name, table in (
         ("20261018_002_message_answer_notice", "rag_messages"),
@@ -467,7 +475,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "'ALTER TABLE rag_messages ADD (attachments_json CLOB)'" in attachments_migration
     assert "column_name = 'ATTACHMENTS_JSON'" in attachments_migration
     assert "DROP" not in attachments_migration.split("-- migration:", 1)[0]
-    # 業務ガイドの内容の形の版を 2 にする（#2395）。schema_version だけを書き換える。
+    # 過去の migration: schema_version だけを書き換える。
     guide_migration = sql.split("-- migration: 20261018_004_support_guide_schema_v2", 1)[1].split(
         "-- migration: ", 1
     )[0]
@@ -505,7 +513,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 130
+    assert len(statements) == 131
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -523,7 +531,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261106_002"
+    assert manifest["migration_artifact_version"] == "20261106_003"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -615,6 +623,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261105_001_retire_evaluation_calibration",
         "20261106_001_retire_document_graph",
         "20261106_002_retire_entity_index",
+        "20261106_003_retire_support_guides",
     ]
 
 

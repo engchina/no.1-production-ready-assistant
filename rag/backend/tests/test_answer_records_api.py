@@ -21,7 +21,6 @@ RECORD: dict[str, Any] = {
     "rewritten_question": None,
     "created_at": datetime(2026, 9, 25, tzinfo=UTC),
 }
-PREVIEW_TRACE_ID = "guide-preview-" + "0" * 32
 
 
 class FakeAnswerOracle:
@@ -48,15 +47,6 @@ class FakeAnswerOracle:
         return True
 
     async def get_answer_record(self, trace_id: str) -> dict[str, Any] | None:
-        if trace_id == PREVIEW_TRACE_ID:
-            return {
-                **RECORD,
-                "trace_id": trace_id,
-                "answer": "回答",
-                "citations_json": [],
-                "diagnostics_json": {"guide_preview": {"guide_id": "g-1", "draft_revision": 2}},
-                "evaluation_input_json": {"question": "受注の登録方法は？", "answer_text": "回答"},
-            }
         if trace_id == "legacy":
             return {
                 **RECORD,
@@ -181,11 +171,3 @@ def test_oracle_rows_turn_json_decimals_into_numbers() -> None:
     # NUMBER 列の値はそのまま。
     assert row["score"] == Decimal("1.5")
     json.dumps([row["payload_json"], row["items_json"]])
-
-
-def test_guide_preview_answers_are_kept_out_of_history() -> None:
-    from app.clients.oracle import _answer_record_list_where
-    from app.rag.support_guide_runtime import GUIDE_PREVIEW_TRACE_PREFIX
-
-    where, _ = _answer_record_list_where(search_answer_profile_id="bv-1", trace_ids=None)
-    assert f"trace_id NOT LIKE '{GUIDE_PREVIEW_TRACE_PREFIX}%'" in where

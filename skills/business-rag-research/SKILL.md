@@ -1,11 +1,11 @@
 ---
 name: business-rag-research
-description: "業務 RAG（MCP サーバー rag。Production Ready RAG）で社内の規程・手順書・台帳・業務ガイドなどの資料から根拠を集め、根拠（文書名と節・頁）を示して答える。複数の資料をつないで答える多段の質問（例: システムの担当部署 → その部署の承認者 → 承認の期限）、2 つの対象の比較、旧版・年度ごとの違い、手順の案内、図の中の値を確かめる質問にも使う。社内の規則・手続き・システム台帳・業務の進め方を尋ねられたら、資料という言葉が無くてもこのスキルを使う。件数・金額など業務データの値は structured-data-query、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
+description: "業務 RAG（MCP サーバー rag。Production Ready RAG）で社内の規程・手順書・台帳などの資料から根拠を集め、根拠（文書名と節・頁）を示して答える。複数の資料をつないで答える多段の質問（例: システムの担当部署 → その部署の承認者 → 承認の期限）、2 つの対象の比較、旧版・年度ごとの違い、手順の案内、図の中の値を確かめる質問にも使う。社内の規則・手続き・システム台帳・業務の進め方を尋ねられたら、資料という言葉が無くてもこのスキルを使う。件数・金額など業務データの値は structured-data-query、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
 compatibility: "MCP サーバー rag（Production Ready RAG の POST /api/mcp）に接続していること。"
 license: MIT
 metadata:
   production-ready-display-name: "業務 RAG 調査"
-  production-ready-mcp-tools: "rag:rag_retrieve_evidence rag:rag_recommend_search_answer_profile rag:rag_list_search_answer_profiles rag:rag_read_source rag:rag_lookup_guides rag:rag_outline rag:rag_read_document rag:rag_read_section"
+  production-ready-mcp-tools: "rag:rag_retrieve_evidence rag:rag_recommend_search_answer_profile rag:rag_list_search_answer_profiles rag:rag_read_source rag:rag_outline rag:rag_read_document rag:rag_read_section"
   production-ready-evidence-planning: "rag:caller"
   production-ready-tags: "rag research business-data"
 ---
@@ -36,8 +36,6 @@ metadata:
   - `recommended_profile_id` が null で `candidates` が 2 件以上なら、候補の名前（と `documents` の資料名）を選択肢にして、どれで調べるかを利用者に確かめる（推測で選ばない・全部を検索しない）。
   - 候補が無ければ `rag_list_search_answer_profiles` の名前・説明で選び、それでも決まらなければ利用者に確かめる。
   - 質問や利用者がプロファイルの名前を示したら、推薦を使わずに `rag_list_search_answer_profiles` の `query` で名前から id を引く。
-- 手順を案内する依頼では、先に `rag_lookup_guides` で業務ガイド（確かめる条件・手順の順・影響範囲・引き継ぎ先）を確かめ、影響範囲が広い操作や承認が要る操作はその旨を示す。
-  - 業務ガイドの `steps` は、それぞれを 1 つの段として順に引く。手順ごとに、その段の実体に手順の `retrieval_hints`（無ければ `title`）を足した `query` で `rag_retrieve_evidence` を呼び、手順の `references` の頁は `rag_read_document`（`document_id` と `page`）で読む。手順の `done_when` と `completion` を満たす根拠がそろったら Step 4 へ進み、根拠の無い手順は確かめられなかった手順として示す。
 - 旧版・変更点・改定前との違いを尋ねる質問と、旧版の年度・版を名指しする質問（「2025 年度と 2026 年度では」）では、`include_superseded: true` を渡して旧版も検索する。
 - `query` は質問全体や問いの文ではなく、その段の実体（前の段で分かった正式名・略号・ID・役職名を根拠の表記のまま）と引く属性だけにする。RAG は `query` を言い換えない。
   - 例: 「経費精算ポータル 担当部署」
@@ -85,6 +83,7 @@ metadata:
 - 回答には、資料の内容と、資料で確かめられなかった点だけを書く。答えに使った根拠ごとに、文書名と場所（`locator` の節・頁）を示す。
 - 多段の質問は、段ごとに確かめた文書と場所を示す。小問を段にした質問は、小問ごとの見出しで答え、根拠の無い小問だけを確かめられなかった点にする。
 - 質問で特定されていない対象（どのシステム・どの申請か）や、利用者のロール・権限・承認の有無で答えが分かれるときは、利用者に確かめる条件として示し、条件ごとに分けて答える。
+- 手順を案内するときは、影響範囲が広い操作や承認が要る操作はその旨を示す。
 - 答えが資料に無い現場の値・記録（設定値・ログ・件数・処理の状態）に依るときは、利用者が確かめる点として挙げ、推測で断定しない。
 - 質問に答えるのに要る点が資料で確かめられなかったときは、無いと断定せず、確かめられなかった点として書く。
 - 質問が全件を求めるとき（台帳で条件に当たる行はどれか・いくつか など）は、読んだ範囲（例: 台帳の SYS-101〜SYS-180 の 80 行を読んだ）を結論に書き、補足で繰り返さない。
@@ -97,7 +96,6 @@ metadata:
 - 自分の作業の経過は回答に書かない（資料に無いことは根拠で確かめられない）。
   - ツールの名前（`rag_retrieve_evidence`・`rag_outline` など）
   - ツールの結果の項目の値（`role`・`origin` など）
-  - 業務ガイドが見つかった・見つからなかったこと
   - 検索の結果に旧版（`older_versions`）があったこと
   - 「確かめられなかった点はありません」のような作業の報告
   - 旧版・改定前との違いを尋ねる質問で、旧版の内容を書くのは除く。

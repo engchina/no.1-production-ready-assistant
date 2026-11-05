@@ -313,7 +313,7 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         choices=VISION_FIELDS,
     ),
     # 画面の図の項目の種類（Vision の form_fields の kind。#2404）の表示の語。最初の語を chunk の
-    # 本文に出し、どの語も業務ガイドの条件の選択肢との照合に使う。unknown は表示しない。
+    # 本文に出す。unknown は表示しない。
     FieldSpec(
         "content_labels",
         "form_field_kinds",
@@ -611,11 +611,6 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         "unsourced_section_note",
         "marked_rules_section",
         "marked_rules_section_note",
-        "guide_notes_section",
-        "guide_notes_note_template",
-        "guide_handoff_template",
-        "guide_approval_template",
-        "guide_acquisition_incomplete_template",
         "passage_note_template",
         "answer_warning_template",
         ingest=False,
@@ -648,7 +643,6 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
             "citation_error",
             "quote_unmatched",
             "citation_id_invalid",
-            "citation_id_namespace",
             "citation_id_ambiguous",
             "citation_range_missing",
             "citation_range_invalid",
@@ -668,9 +662,7 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
             "after_unverified_step",
             "summary_unaudited",
             "application_unaudited",
-            "guide_text",
             "contradicted",
-            "guide_check",
             "no_evidence",
             "off_goal",
             "requests",
@@ -795,24 +787,10 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
         ingest=False,
     ),
     FieldSpec("grounding_cues", "amount_scale_units", FieldKind.CHAR_VALUES, ingest=False),
-    # 業務ガイドの手順と回答の照らし合わせの手がかり（影響範囲・承認・満たした前提・
-    # 見出しと箇条の行）。
-    *_fields(
-        "guide_check_cues",
-        _W,
-        "impact_group_terms",
-        "impact_all_terms",
-        "approval_terms",
-        "premise_met_markers",
-        "guide_list_marks",
-        "guide_number_closers",
-        ingest=False,
-    ),
-    FieldSpec("guide_check_cues", "boolean_aliases", FieldKind.WORD_MAP, ingest=False),
-    # 回答の過程を書いた表から業務ガイドの下書きを作るときの、節の見出しの語と業務ガイドの項目
+    # 評価のケースの「回答の過程」の文を節に分けるときの、節の見出しの語と項目
     # （「見出し=項目」。項目は手順・確認事項・資料と頁・検索の語・補足）。
     FieldSpec(
-        "guide_import_cues",
+        "evaluation_process_cues",
         "process_headings",
         FieldKind.ENUM_MAP,
         choices=("steps", "conditions", "references", "search_terms", "notes"),
@@ -936,8 +914,12 @@ _COMPATIBLE_ANSWER_LABELS = frozenset(
         "crag_unknown_aspect_template",
         "crag_quote_only_note",
         "crag_definition_aspect_template",
-        "guide_acquisition_incomplete_template",
     }
+)
+# 既存の公開版に無くても組み込みの値で補える、索引に影響しない追加の項目（節, 項目）。
+_COMPATIBLE_FIELDS = frozenset(
+    {("answer_labels", key) for key in _COMPATIBLE_ANSWER_LABELS}
+    | {("evaluation_process_cues", "process_headings")}
 )
 
 
@@ -971,6 +953,82 @@ REMOVED_FIELDS: Mapping[tuple[str, str], str | tuple[str, ...]] = {
     **_removed_entity_cues(),
 }
 
+# 削除した、取込に影響しない項目（節, 項目）。保存済みの公開版・下書き・上書きに残った値は読み捨て、
+# 全体の hash だけに残った値を含める（公開版の照合を壊さない。取込の hash は変えない）。
+REMOVED_DISPLAY_FIELDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        *(
+            ("guide_check_cues", key)
+            for key in (
+                "impact_group_terms",
+                "impact_all_terms",
+                "approval_terms",
+                "premise_met_markers",
+                "guide_list_marks",
+                "guide_number_closers",
+                "boolean_aliases",
+            )
+        ),
+        ("guide_import_cues", "process_headings"),
+        *(
+            ("answer_labels", key)
+            for key in (
+                "guide_notes_section",
+                "guide_notes_note_template",
+                "guide_handoff_template",
+                "guide_approval_template",
+                "guide_acquisition_incomplete_template",
+            )
+        ),
+    }
+)
+
+# 「語=決まった値」の項目から削除した値。保存済みの「語=値」は読み捨て、全体の hash は保存した語の
+# 並びのまま計算する（公開版の照合を壊さない）。
+REMOVED_CHOICES: Mapping[tuple[str, str], frozenset[str]] = {
+    ("answer_labels", "passage_reason_labels"): frozenset(
+        {"citation_id_namespace", "guide_text", "guide_check"}
+    )
+}
+
+
+def _without_removed_choices(key: tuple[str, str], value: Any) -> Any:
+    removed = REMOVED_CHOICES.get(key)
+    if not removed or value is None:
+        return value
+    return [
+        word
+        for word in _clean_words(value)
+        if word.partition(MAP_SEPARATOR)[2].strip() not in removed
+    ]
+
+
+def _display_removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], Any]:
+    """全体の hash に含める、保存内容に残った削除した表示の項目の値。"""
+    values: dict[tuple[str, str], Any] = {}
+    for section, key in REMOVED_DISPLAY_FIELDS:
+        fields = data.get(section)
+        raw = fields.get(key) if isinstance(fields, Mapping) else None
+        if raw is None:
+            continue
+        values[(section, key)] = (
+            str(raw).strip() if isinstance(raw, str) else list(_clean_words(raw))
+        )
+    return values
+
+
+def _hash_sections(
+    sections: Mapping[str, Mapping[str, Any]], data: Mapping[str, Any]
+) -> Mapping[str, Mapping[str, Any]]:
+    """全体の hash に使う値（削除した値を含む保存内容の語の並びは、そのまま使う）。"""
+    result = {section: dict(fields) for section, fields in sections.items()}
+    for section, key in REMOVED_CHOICES:
+        fields = data.get(section)
+        raw = fields.get(key) if isinstance(fields, Mapping) else None
+        if raw is not None and section in result and key in result[section]:
+            result[section][key] = _clean_words(raw)
+    return result
+
 
 def _removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], str | list[str]]:
     """hash に含める削除した項目の値（保存内容に残った値、無ければ削除する前の組み込みの値）。"""
@@ -989,21 +1047,25 @@ def _removed_values(data: Mapping[str, Any]) -> dict[tuple[str, str], str | list
 def complete_compatible_pack(data: Mapping[str, Any]) -> dict[str, Any]:
     """追加した表示文言の欠けだけを補い、削除した項目を除く。呼び出し元の保存内容は変更しない。"""
     result = dict(data)
-    for section, key in REMOVED_FIELDS:
+    for section, key in (*REMOVED_FIELDS, *REMOVED_DISPLAY_FIELDS):
         fields = result.get(section)
         if isinstance(fields, Mapping) and key in fields:
             result[section] = {name: value for name, value in fields.items() if name != key}
     # 節ごと削除した実体・別名索引の手がかり（#160）は、空になった節も残さない。
     if not result.get("entity_cues"):
         result.pop("entity_cues", None)
-    labels = data.get("answer_labels")
-    if isinstance(labels, Mapping):
-        completed = dict(labels)
-        defaults = _builtin_data()["answer_labels"]
-        for key in _COMPATIBLE_ANSWER_LABELS:
-            if key not in completed:
-                completed[key] = defaults[key]
-        result["answer_labels"] = completed
+    for name in ("guide_check_cues", "guide_import_cues"):
+        if not result.get(name):
+            result.pop(name, None)
+    for section, key in REMOVED_CHOICES:
+        fields = result.get(section)
+        if isinstance(fields, Mapping) and key in fields:
+            result[section] = {**fields, key: _without_removed_choices((section, key), fields[key])}
+    defaults = _builtin_data()
+    for section, key in _COMPATIBLE_FIELDS:
+        fields = result.get(section)
+        if fields is None or isinstance(fields, Mapping) and key not in fields:
+            result[section] = {**(fields or {}), key: defaults[section][key]}
     return result
 
 
@@ -1011,22 +1073,23 @@ def stored_pack_hash(data: Mapping[str, Any], pack: LanguagePack) -> str:
     """保存時の項目集合で照合する。許可した欠け以外の正規化は受け入れない。"""
     if complete_compatible_pack(data) != pack.to_dict():
         raise ValueError("言語資源は全項目を含む完全な設定で保存してください。")
-    labels = data.get("answer_labels") or {}
     specs = tuple(
         spec
         for spec in FIELD_SPECS
         if not (
-            spec.section == "answer_labels"
-            and spec.key in _COMPATIBLE_ANSWER_LABELS
-            and spec.key not in labels
+            (spec.section, spec.key) in _COMPATIBLE_FIELDS
+            and spec.key not in (data.get(spec.section) or {})
         )
     )
-    return _digest(pack.locale, pack.sections, specs, _removed_values(data))
+    removed = {**_removed_values(data), **_display_removed_values(data)}
+    return _digest(pack.locale, _hash_sections(pack.sections, data), specs, removed)
 
 
 def build_pack(data: Mapping[str, Any]) -> LanguagePack:
     """追加表示文言の欠けを補い、削除した項目を除き、それ以外の欠け・余り・形の誤りを拒否する。"""
     removed = _removed_values(data)
+    display_removed = _display_removed_values(data)
+    hash_source = data
     data = complete_compatible_pack(data)
     errors: dict[str, str] = {}
     sections: dict[str, dict[str, Any]] = {section: {} for section in SECTIONS}
@@ -1051,7 +1114,12 @@ def build_pack(data: Mapping[str, Any]) -> LanguagePack:
     return LanguagePack(
         locale=locale,
         sections=sections,
-        hash=_digest(locale, sections, FIELD_SPECS, removed),
+        hash=_digest(
+            locale,
+            _hash_sections(sections, hash_source),
+            FIELD_SPECS,
+            {**removed, **display_removed},
+        ),
         ingest_hash=_digest(
             locale, sections, tuple(spec for spec in FIELD_SPECS if spec.ingest), removed
         ),
@@ -1062,7 +1130,7 @@ def _digest(
     locale: str,
     sections: Mapping[str, Mapping[str, Any]],
     specs: tuple[FieldSpec, ...],
-    removed: Mapping[tuple[str, str], str | list[str]],
+    removed: Mapping[tuple[str, str], Any],
 ) -> str:
     # 削除した項目は取込の項目だった（全体の hash と取込の hash の両方に含める）。
     entries = [
@@ -1093,7 +1161,7 @@ def resolve(base: LanguagePack, *overrides: Mapping[str, Mapping[str, Any]] | No
     for override in overrides:
         for section, fields in (override or {}).items():
             for key, value in (fields or {}).items():
-                if (section, key) in REMOVED_FIELDS:
+                if (section, key) in REMOVED_FIELDS or (section, key) in REMOVED_DISPLAY_FIELDS:
                     continue
                 if (section, key) not in _SPECS:
                     unknown[f"{section}.{key}"] = "知らない項目です。"
@@ -1183,6 +1251,7 @@ def bind_pack(pack: LanguagePack | None) -> Iterator[None]:
 
 
 __all__ = [
+    "REMOVED_DISPLAY_FIELDS",
     "REMOVED_FIELDS",
     "DEFAULT_LOCALE",
     "LANGUAGE_PACK_HASH_KEY",

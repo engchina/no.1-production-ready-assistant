@@ -137,16 +137,6 @@ async def test_final_validation_uses_original_question_and_confirmed_conditions_
 ) -> None:
     settings = Settings(
         rag_answer_audit_mode="standard",
-        rag_support_guide_enabled=True,
-        rag_support_guide={
-            "known_conditions": [
-                {"label": "対象", "value": "合成 A", "source": "user", "state": "known"},
-                {"label": "状態", "value": "合成 B", "source": "question", "state": "known"},
-                {"label": "未確定", "value": "仮定", "source": "user", "state": "unknown"},
-                {"label": "資料の値", "value": "合成 C", "source": "evidence", "state": "known"},
-            ],
-            "unknown_conditions": [{"label": "未確認", "value": "使用しない"}],
-        },
         rag_runtime_knowledge={
             "assume_unconfirmed": True,
             "unconfirmed_conditions": [{"question": "未確認", "options": ["仮定"]}],
@@ -171,8 +161,6 @@ async def test_final_validation_uses_original_question_and_confirmed_conditions_
     assert validator.await_args.args[0] == "元の質問のすべての要求"
     assert validator.await_args.kwargs["premises"] == [
         {"question": "対象は？", "answer": "合成選択肢"},
-        {"question": "対象", "answer": "合成 A"},
-        {"question": "状態", "answer": "合成 B"},
     ]
 
 
@@ -254,18 +242,10 @@ async def test_resolved_rule_answer_reaches_final_validation_without_configured_
     ]
 
 
-def test_disabled_guide_and_unstructured_scope_do_not_create_confirmed_facts() -> None:
+def test_unstructured_scope_does_not_create_confirmed_facts() -> None:
     from app.rag.answer_engine import _confirmed_validation_premises
 
-    settings = Settings(
-        rag_support_guide_enabled=False,
-        rag_support_guide={
-            "known_conditions": [
-                {"label": "条件", "value": "値", "source": "user", "state": "known"},
-            ]
-        },
-    )
-    assert _confirmed_validation_premises(settings, AnswerScope(context="前提: 推測の文章")) == []
+    assert _confirmed_validation_premises(AnswerScope(context="前提: 推測の文章")) == []
 
 
 async def test_final_validation_records_the_premise_consistency_decisions(

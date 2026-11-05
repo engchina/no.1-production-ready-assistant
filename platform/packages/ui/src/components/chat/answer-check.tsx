@@ -125,7 +125,7 @@ export function AnswerCheckBadge({
 /**
  * 資料との照合の行（回答の下。並びは 回答 → 資料との照合 → 回答の注意書き → 出典 → 評価）。見出し・製品固有の
  * バッジ（`badges`。Agent の回答の対応など）・照合の状態のバッジを 1 行に置く。`children` があるときだけ、
- * 同じ行を開いて中身（Agent の確かめた条件・業務ガイドなど）を見られるようにする。
+ * 同じ行を開いて中身（Agent の確かめた条件など）を見られるようにする。
  * `check` も `badges` も `children` も無ければ何も出さない（照合の記録の無い過去の回答）。
  */
 export function AnswerCheckPanel({

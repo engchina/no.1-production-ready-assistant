@@ -350,7 +350,7 @@ def test_mcp_search_uses_the_rule_answer_as_scope_and_page_ranges(
     assert json.loads(call["request"].filters["page_ranges"]) == [
         {"document_id": "doc-travel", "page_start": 2, "page_end": 3}
     ]
-    # ルールの答えは業務ガイドの条件として渡さない。
+    # ルールの答えは検索の条件として渡さない。
     assert call["request"].conditions == {}
 
 
@@ -414,9 +414,7 @@ def test_disabled_rule_stops_generation_and_clarification_without_losing_setting
 ) -> None:
     from app.config import Settings
 
-    monkeypatch.setattr(
-        knowledge_route, "get_settings", lambda: Settings(rag_support_guide_enabled=False)
-    )
+    monkeypatch.setattr(knowledge_route, "get_settings", lambda: Settings())
     created = client.post(
         f"{BASE}/runtime-knowledge/edit",
         json={

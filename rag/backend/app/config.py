@@ -1295,54 +1295,8 @@ class Settings(
         ge=0,
         le=20,
         description=(
-            "1 回の回答で、主の検索の後に足す検索(業務ガイドの手順ごとの検索・小問ごとの検索・"
-            "根拠の無い要求の再検索)の回数の合計の上限(#2395)。種類ごとの上限はこの枠の中で数え、"
-            "必須のガイド参照の取得分を先に確保し、その他の追加検索は残りから取る。"
-        ),
-    )
-    rag_guide_step_retrieval_enabled: bool = Field(
-        default=True,
-        description=(
-            "照合した業務ガイドの手順(分岐で残った手順)ごとに「質問 + 手順の検索の手がかり」で"
-            "検索し、手順が参照する資料の頁の根拠を回答の材料に入れる(#2395)。LLM は呼ばない"
-            "(検索が手順ごとに増える)。全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
-        ),
-    )
-    rag_guide_step_max_queries: int = Field(
-        default=4,
-        ge=0,
-        le=10,
-        description=(
-            "必須のガイド参照を取得した後に行う補助検索・任意手順の検索の回数の上限。"
-            "0 でも必須参照の取得は行う(#3795)。"
-            "追加の検索の枠(RAG_EXTRA_RETRIEVAL_MAX_QUERIES)の残りも超えない。"
-            "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
-        ),
-    )
-    rag_guide_step_chunks_per_step: int = Field(
-        default=2,
-        ge=1,
-        le=5,
-        description="業務ガイドの手順ごとの検索で、1 手順に確保する根拠(親 chunk)の数(#2395)。",
-    )
-    rag_guide_reference_max_chunks: int = Field(
-        default=4,
-        ge=0,
-        le=12,
-        description=(
-            "業務ガイドの手順が参照する資料の頁から、検索の順位に関係なく回答の材料に入れる根拠"
-            "(親 chunk)の追加数の上限。必須の取得対象ごとの最低1件は別に確保し、"
-            "全体の本文予算は増やさない(#3795)。"
-        ),
-    )
-    rag_guide_step_deadline_seconds: float = Field(
-        default=60.0,
-        ge=0,
-        le=60,
-        description=(
-            "業務ガイドの手順ごとの検索の期限(秒。既定 60。#2826)。"
-            "過ぎたら次の検索を始めない(#2395)。"
-            "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
+            "1 回の回答で、主の検索の後に足す検索(小問ごとの検索・根拠の無い要求の再検索)の"
+            "回数の合計の上限(#2395)。種類ごとの上限はこの枠の中で数える。"
         ),
     )
     rag_strategy_reasoning_effort: ReasoningEffortOverride = Field(
@@ -1436,10 +1390,9 @@ class Settings(
         description=(
             "(#2795・#2800・#135)回答の監査の型。none は生成の後の LLM の監査と作り直しをせず、"
             "原文との照合と規則の検査(決定的)だけで印を付ける(WeKnora と同じく生成の後に確認の"
-            " LLM を呼ばない)。要求の充足は説明の有無、業務ガイドの手順の充足は決定的な対応付けで"
-            "決める。standard(既定)は 1 回の監査(主張・要求・要件)と事実の問題の作り直し 1 組まで。"
-            "detailed は未使用の根拠も列挙させ、完全性の不足でも最大 3 組まで作り直す"
-            "(業務ガイドの下書きの試答は常に detailed)。"
+            " LLM を呼ばない)。要求の充足は説明の有無で決める。"
+            "standard(既定)は 1 回の監査(主張・要求・要件)と事実の問題の作り直し 1 組まで。"
+            "detailed は未使用の根拠も列挙させ、完全性の不足でも最大 3 組まで作り直す。"
         ),
     )
     rag_llm_stall_detection_enabled: bool = Field(
@@ -1493,16 +1446,6 @@ class Settings(
             "streaming しない呼び出しも、出力の上限で未完了の応答に同じ暴走があれば、"
             "上限を広げずに同じ送り直しにする(#3835)。"
             "正当な長い出力(表・一覧)は行ごとに値が変わるので打ち切らない。"
-        ),
-    )
-    rag_section_expansion_followup_reserve_percent: int = Field(
-        default=20,
-        ge=0,
-        le=50,
-        description=(
-            "業務ガイドの手順ごとの検索が後に来る回答で、最初の章節の拡張が使わずに残す入力の割合"
-            "(#2816。章節の拡張の根拠の入力の上限に対する %。既定 20、0 は残さない)。"
-            "手順の根拠から広げる章節の分を残す。"
         ),
     )
     rag_section_skip_regrade_at_scope: bool = Field(
@@ -1561,48 +1504,6 @@ class Settings(
             "正の値にすると、回答保存時と設定変更時に期限切れを削除する。"
         ),
     )
-    rag_support_guide_max_published_revisions: int = Field(
-        default=5,
-        ge=1,
-        le=100,
-        description=(
-            "業務ガイドの公開の履歴に残す版の数（#2356）。公開・前の版に戻すときに、公開日時の"
-            "新しい順に超えた版を消す（公開中の版は残す。版の番号は振り直さない）。"
-        ),
-    )
-    rag_support_guide_enabled: bool = Field(
-        default=False,
-        description="業務ガイドを質問への回答に使う。既定は OFF。検索・回答プロファイルで選ぶ。",
-    )
-    rag_support_guide_semantic_match_enabled: bool = Field(
-        default=False,
-        description=(
-            "業務ガイドの照合で、質問と質問の例（intent_examples）の埋め込み"
-            "の近さを点に足す（#2398）。質問ごとに埋め込みの呼び出しが 1 回増える。質問の例の"
-            "埋め込みは公開のときに作って持つ。検索・回答プロファイルで上書きできる。"
-        ),
-    )
-    rag_support_guide_semantic_threshold: float = Field(
-        default=0.6,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "意味の照合で、質問と質問の例の cosine の近さがこの値以上なら点を足す（#2398）。"
-        ),
-    )
-    rag_support_guide_close_match_clarification_enabled: bool = Field(
-        default=False,
-        description=(
-            "業務ガイドの照合で上位の 2 つの点が近いとき、どのガイドに沿うかを確認の問い（選択肢は"
-            "ガイドの題名）で確かめる（#2398）。検索・回答プロファイルで上書きできる。"
-        ),
-    )
-    rag_support_guide_close_match_margin: int = Field(
-        default=1,
-        ge=0,
-        le=10,
-        description="上位の 2 つの業務ガイドの点の差がこの値以下なら「近い」とみなす（#2398）。",
-    )
 
     rag_runtime_knowledge: dict[str, object] = Field(
         default_factory=dict,
@@ -1610,20 +1511,6 @@ class Settings(
             "リクエスト単位で検索・回答プロファイルから解決する用語・同義語と回答ルール"
             "(rag_poc runtime knowledge payload)。"
             "回答フローだけが使う。"
-        ),
-    )
-    rag_support_guide: dict[str, object] = Field(
-        default_factory=dict,
-        description=(
-            "リクエスト単位で検索・回答プロファイルの公開した業務ガイドから選んだ 1 つの要約"
-            "（guide_id・版・判断・既知 / 不明の条件・確認の質問。#1238）。回答フローだけが使う。"
-        ),
-    )
-    rag_guide_preview: dict[str, object] = Field(
-        default_factory=dict,
-        description=(
-            "リクエスト単位で、業務ガイドの下書きで試す回答の印（guide_id・下書きの版。#1288）。"
-            "回答の記録に残し、利用者の回答の履歴・質問の履歴に入れない。"
         ),
     )
     rag_answer_contact_override: str = Field(
@@ -1803,21 +1690,13 @@ class Settings(
             "下げ（最小 1）、送り直す。1 は 1 件ずつ（#2004 より前と同じ）。"
         ),
     )
-    rag_support_guide_import_concurrency: int = Field(
+    rag_evaluation_process_concurrency: int = Field(
         default=4,
         ge=1,
         le=8,
         description=(
-            "回答の過程の表から業務ガイドの下書きを作るとき、同時に送る LLM の呼び出しの数の上限"
-            "（#2397。1 行で 1 回）。"
-        ),
-    )
-    rag_support_guide_import_max_rows: int = Field(
-        default=30,
-        ge=1,
-        le=100,
-        description=(
-            "回答の過程の表から 1 回で下書きにする行の数の上限（#2397。1 行で LLM を 1 回呼ぶ）。"
+            "評価のケースの回答の過程から期待の下書きを作るとき、同時に送る LLM の呼び出しの数の"
+            "上限（#2397。1 行で 1 回）。"
         ),
     )
     rag_ai_call_backoff_max_seconds: float = Field(
@@ -2370,7 +2249,7 @@ _FIXED_TODAY: ContextVar[date | None] = ContextVar("rag_fixed_today", default=No
 def settings_today() -> date:
     """共通の設定の時間帯（`PLATFORM_TIMEZONE`。既定 UTC）の今日（#3255）。
 
-    OS の時間帯に左右されない。検索の基準日（`as_of`）・業務ガイドの期間・LLM に渡す
+    OS の時間帯に左右されない。検索の基準日（`as_of`）・LLM に渡す
     「今日の日付」の既定に使う。評価の実行の中（``fixed_today``）は、評価の開始時に決めた日（#59）。
     """
     return _FIXED_TODAY.get() or local_today(get_settings())
@@ -2380,7 +2259,7 @@ def settings_today() -> date:
 def fixed_today(day: date) -> Iterator[None]:
     """この文脈（thread・task は引き継ぐ）の ``settings_today`` を ``day`` に固定する（#59）。
 
-    評価が日付を跨いでも、全ケースの検索の基準日・業務ガイドの期間・LLM に渡す今日を同じ日にする。
+    評価が日付を跨いでも、全ケースの検索の基準日・LLM に渡す今日を同じ日にする。
     """
     token = _FIXED_TODAY.set(day)
     try:

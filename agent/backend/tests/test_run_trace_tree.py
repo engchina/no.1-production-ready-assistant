@@ -7,7 +7,6 @@
   下に順に並ぶ（ツールは求めたモデルの呼び出しの後に動くので兄弟）。
 - MCP の呼び出し（`mcp.request`）はツールの span の子で、呼び先の製品の server の span
   （`mcp.server`）は送った `tools/call` の `mcp.request` の子（`params._meta` の traceparent）。
-- 根拠の取得の後に Runtime が足す業務ガイドの照合（#1322）は、根拠の取得のツールの子（#3471）。
 - NL2SQL のジョブの続きの取得（#848）は、ジョブを作ったツールの span の子。
 
 組み込み Runtime は SDK の `ScriptedModel` で台本にし、RAG / NL2SQL は契約どおりの fake の MCP
@@ -192,7 +191,7 @@ class _Tree:
 def rag(monkeypatch: MonkeyPatch) -> Iterator[FakeProductMcp]:
     fake = fake_product_mcp(monkeypatch)
     fake.outputs["rag_retrieve_evidence"] = _rag_server(fake, "rag_retrieve_evidence")
-    with _agent({"rag": ["rag_retrieve_evidence", "rag_lookup_guides", "rag_validate_answer"]}):
+    with _agent({"rag": ["rag_retrieve_evidence", "rag_validate_answer"]}):
         yield fake
 
 
@@ -233,17 +232,9 @@ def test_tool_call_with_mcp_to_rag_nests_each_step_under_its_owner(
         (TOOL, "tool", "rag__rag_validate_answer"),
     ]
     evidence = tree.tool("rag__rag_retrieve_evidence")
-    # 業務ガイドの照合（#1322）は根拠の取得の一部なので、根拠の取得のツールの子（#3471）。
-    guides = tree.tool("rag__rag_lookup_guides")
-    assert tree.parent(guides) == evidence
-    assert guides.started_at >= evidence.started_at
-    assert evidence.finished_at is not None and guides.finished_at is not None
-    assert guides.finished_at <= evidence.finished_at
     # MCP の呼び出しは、それを送ったツールの span の子（ツールの thread でも）。
     [evidence_call] = tree.tools_call("rag_retrieve_evidence")
     assert tree.parent(evidence_call) == evidence
-    [guides_call] = tree.tools_call("rag_lookup_guides")
-    assert tree.parent(guides_call) == guides
     [validate_call] = tree.tools_call("rag_validate_answer")
     assert tree.parent(validate_call) == tree.tool("rag__rag_validate_answer")
     # 呼び先（RAG）の server の span は、送った `tools/call` の `mcp.request` の子で、RAG の工程は

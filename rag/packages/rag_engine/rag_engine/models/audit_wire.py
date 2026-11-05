@@ -12,7 +12,7 @@ from typing import Any, ClassVar, cast, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, create_model
 
-from rag_engine.models.llm import GroundedAudit, GroundedFactAudit, GroundedItemReview, GroundedRequestReview, GuideRequirementReview
+from rag_engine.models.llm import GroundedAudit, GroundedFactAudit, GroundedItemReview, GroundedRequestReview
 from rag_engine.resources.structured_failures import structured_failure_details
 
 
@@ -41,8 +41,6 @@ class _AuditWire(BaseModel):
     canonical_schema: ClassVar[type[GroundedAudit] | type[GroundedFactAudit]]
     expected_request_ids: ClassVar[tuple[str, ...]]
     request_value_schema: ClassVar[type[BaseModel]]
-    requirement_value_schema: ClassVar[type[BaseModel]]
-    expected_requirement_ids: ClassVar[tuple[str, ...]]
 
 
 def is_audit_wire(schema: object) -> bool:
@@ -79,34 +77,24 @@ def _keys_schema(ids: tuple[str, ...], value: type[BaseModel], name: str) -> typ
 def audit_wire_schema(
     canonical: type[GroundedAudit] | type[GroundedFactAudit],
     expected_ids: tuple[str, ...],
-    requirement_ids: tuple[str, ...] = (),
 ) -> type[_AuditWire]:
     if canonical not in {GroundedAudit, GroundedFactAudit}:
         raise AuditWireContractError("invalid_canonical_schema")
-    for ids, maximum in [(expected_ids, 64), (requirement_ids, 200)]:
-        if len(ids) > maximum or len(set(ids)) != len(ids) or any(not key for key in ids):
-            raise AuditWireContractError("invalid_expected_ids")
-    suffix = sha256(json.dumps([expected_ids, requirement_ids], ensure_ascii=False).encode()).hexdigest()[:16]
+    if len(expected_ids) > 64 or len(set(expected_ids)) != len(expected_ids) or any(not key for key in expected_ids):
+        raise AuditWireContractError("invalid_expected_ids")
+    suffix = sha256(json.dumps([expected_ids], ensure_ascii=False).encode()).hexdigest()[:16]
     request_value = _value_schema(GroundedRequestReview, "request_id", "BoundRequestValue")
-    requirement_value = _value_schema(GuideRequirementReview, "requirement_id", "BoundRequirementValue")
     fields: dict[str, Any] = {
-        key: (info.annotation, deepcopy(info))
-        for key, info in canonical.model_fields.items()
-        if key not in {"request_reviews", "guide_requirement_reviews"}
+        key: (info.annotation, deepcopy(info)) for key, info in canonical.model_fields.items() if key != "request_reviews"
     }
     fields["reviews"] = (GenericAlias(list, _review_wire_schema()), deepcopy(canonical.model_fields["reviews"]))
     fields["request_reviews"] = (
         _keys_schema(expected_ids, request_value, "BoundRequestKeys_" + suffix),
         Field(..., description="固定された要求キーの判定内容。キーのIDを値に重ねて書かない。"),
     )
-    fields["guide_requirement_reviews"] = (
-        _keys_schema(requirement_ids, requirement_value, "BoundRequirementKeys_" + suffix),
-        Field(..., description="固定されたガイド要件キーの観察。キーのIDを値に重ねて書かない。"),
-    )
     wire = cast(type[_AuditWire], create_model(canonical.__name__ + "Bound_" + suffix, __base__=_AuditWire, **fields))
     wire.canonical_schema, wire.expected_request_ids = canonical, expected_ids
-    wire.expected_requirement_ids = requirement_ids
-    wire.request_value_schema, wire.requirement_value_schema = request_value, requirement_value
+    wire.request_value_schema = request_value
     return wire
 
 
@@ -242,9 +230,8 @@ def decode_audit_wire(text: str, schema: type[BaseModel]) -> AuditWireResult:
     unknown_top = set(value.key_sequence) - set(canonical.model_fields)
     if unknown_top:
         errors.append({"code": "extra_audit_fields", "count": len(unknown_top)})
-    bound_fields = {"request_reviews", "guide_requirement_reviews"}
     for name in canonical.model_fields:
-        if name in bound_fields:
+        if name == "request_reviews":
             continue
         try:
             if name in value.duplicates:
@@ -284,12 +271,8 @@ def decode_audit_wire(text: str, schema: type[BaseModel]) -> AuditWireResult:
     requests, request_meta, request_errors = _bound_rows(
         value, "request_reviews", schema.expected_request_ids, schema.request_value_schema, "request_id"
     )
-    requirements, requirement_meta, requirement_errors = _bound_rows(
-        value, "guide_requirement_reviews", schema.expected_requirement_ids, schema.requirement_value_schema, "requirement_id"
-    )
-    normalized.update(request_reviews=requests, guide_requirement_reviews=requirements)
+    normalized.update(request_reviews=requests)
     errors.extend(request_errors)
-    errors.extend(requirement_errors)
     normalized["reviews"] = [
         {
             **row.model_dump(),
@@ -305,9 +288,7 @@ def decode_audit_wire(text: str, schema: type[BaseModel]) -> AuditWireResult:
         "fields": fields,
         "field_rows": field_rows,
         "requests": request_meta["states"],
-        "requirements": requirement_meta["states"],
         "request_binding": request_meta,
-        "requirement_binding": requirement_meta,
         "errors": errors[:128],
         "error_count": len(errors),
         "errors_truncated": len(errors) > 128,

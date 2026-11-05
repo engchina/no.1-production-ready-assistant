@@ -31,7 +31,6 @@ PASSAGE_REASON_STATES: dict[str, PassageState] = {
     "citation_error": UNVERIFIED,
     "quote_unmatched": UNVERIFIED,
     "citation_id_invalid": UNVERIFIED,
-    "citation_id_namespace": UNVERIFIED,
     "citation_id_ambiguous": UNVERIFIED,
     "citation_range_missing": UNVERIFIED,
     "citation_range_invalid": UNVERIFIED,
@@ -52,12 +51,10 @@ PASSAGE_REASON_STATES: dict[str, PassageState] = {
     "after_unverified_step": WARNING,
     "summary_unaudited": WARNING,
     "application_unaudited": WARNING,
-    # 説明が引いた根拠に無く、業務ガイドの文から来た（資料の記載ではない。#2792）。
-    "guide_text": UNVERIFIED,
 }
 # 本文から外した段落の理由（kind=removed）と、回答全体の警告の理由（kind=answer）。
 REMOVED_REASONS = frozenset({"contradicted"})
-ANSWER_WARNING_REASONS = frozenset({"guide_check", "no_evidence", "off_goal", "requests", "correction_failed"})
+ANSWER_WARNING_REASONS = frozenset({"no_evidence", "off_goal", "requests", "correction_failed"})
 REASON_CODES = frozenset({*PASSAGE_REASON_STATES, *REMOVED_REASONS, *ANSWER_WARNING_REASONS})
 
 # 本文の末尾の節（「根拠と矛盾し除いた内容」「確認が必要な点」）に出す段落の引用と、回答全体の警告の理由の長さの

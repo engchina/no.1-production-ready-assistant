@@ -164,7 +164,7 @@ def run_validation_result(run: RunState) -> str | None:
     """最終の検証の結果（成果物「資料との照合」。#1246・#1277・#1822）。
 
     判定が出た（`completed`）検証は、根拠と矛盾する段落を外した・未確認の段落がある・回答全体の
-    警告（決定的な検査の error・説明を確かめられない業務ガイドの手順・根拠を読めない）がある・
+    警告（決定的な検査の error・根拠を読めない）がある・
     読めない根拠があったら不合格、警告の印（規則の検査・続く手順）だけなら合格にする（#2738。
     `answer_validation.publish_answer` の `withheld`・`answer_warnings` と結果の根拠）。
     """

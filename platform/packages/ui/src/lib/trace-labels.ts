@@ -18,7 +18,6 @@ export const TRACE_DETAILS_JA = {
   "trace.details.unknown": "未計測",
   "trace.details.notReported": "不明",
   "trace.details.legacy": "この実行は古い形式の記録のため、処理の経過を表示できません。",
-  "trace.purpose.guide.draft": "回答の過程からガイドの下書きを作る",
   "trace.purpose.answer.validate": "回答の段落を取得した資料と照合する",
   "trace.purpose.answer.recheck": "未確認の段落を根拠と照合し直す",
   "trace.purpose.answer.premise_consistency": "確認済みの利用者条件と回答を照合する",
@@ -98,7 +97,6 @@ export const TRACE_DETAILS_JA = {
 } as const;
 
 const MODEL_PURPOSE_LABEL_KEYS = {
-  "guide.draft": "trace.purpose.guide.draft",
   "answer.validate": "trace.purpose.answer.validate",
   "answer.recheck": "trace.purpose.answer.recheck",
   "answer.premise_consistency": "trace.purpose.answer.premise_consistency",

@@ -40,7 +40,7 @@ from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, TypeVar
 
 import httpx
 from fastapi import HTTPException
@@ -120,7 +120,6 @@ from app.rag.semantic_audit_policy import semantic_audit_is_diagnostic_only
 from app.rag.span_display import ANSWER_STEP_KIND, answer_step_details, answer_step_params
 from app.rag.step_details import step_details_payload
 from app.rag.stored_answer import passage_mark_record, stored_evaluation_input
-from app.rag.support_guide_evidence import guide_evidence_conditions, guide_evidence_plans
 from app.schemas.classification import category_label, normalize_category_value
 from app.schemas.search import (
     MAX_PAGE_RANGES,
@@ -618,19 +617,12 @@ def build_engine_settings(
         "RAG_ENGINE_REQUEST_COVERAGE_CHUNKS_PER_SUBQUESTION": str(
             settings.rag_request_coverage_chunks_per_subquestion
         ),
-        # 追加の検索の枠と、業務ガイドの手順ごとの検索(#2395)。
+        # 追加の検索の枠(#2395)。
         "RAG_ENGINE_EXTRA_RETRIEVAL_MAX_QUERIES": str(settings.rag_extra_retrieval_max_queries),
         # 章節の抜き出しの LLM(#2800)。
         "RAG_ENGINE_SECTION_EXTRACTION_ENABLED": "1"
         if settings.rag_section_extraction_enabled
         else "0",
-        "RAG_ENGINE_GUIDE_STEP_RETRIEVAL": "1"
-        if settings.rag_support_guide_enabled and settings.rag_guide_step_retrieval_enabled
-        else "0",
-        "RAG_ENGINE_GUIDE_STEP_MAX_QUERIES": str(settings.rag_guide_step_max_queries),
-        "RAG_ENGINE_GUIDE_STEP_CHUNKS_PER_STEP": str(settings.rag_guide_step_chunks_per_step),
-        "RAG_ENGINE_GUIDE_REFERENCE_MAX_CHUNKS": str(settings.rag_guide_reference_max_chunks),
-        "RAG_ENGINE_GUIDE_STEP_DEADLINE_SECONDS": str(settings.rag_guide_step_deadline_seconds),
         # 当たった chunk の章節から親の章節へ段階的に広げる(#1436。検索方法の全体設定で選ぶ)。
         "RAG_ENGINE_SECTION_EXPANSION": "1" if settings.rag_section_expansion_enabled else "0",
         "RAG_ENGINE_SECTION_EXPANSION_MAX_LEVELS": str(settings.rag_section_expansion_max_levels),
@@ -680,10 +672,6 @@ def build_engine_settings(
         "RAG_ENGINE_LLM_RUNAWAY_DETECTION": "1"
         if settings.rag_llm_runaway_detection_enabled
         else "0",
-        # 業務ガイドの手順の段のために最初の章節の拡張が残す入力の割合(#2816)。
-        "RAG_ENGINE_SECTION_EXPANSION_FOLLOWUP_RESERVE_PERCENT": str(
-            settings.rag_section_expansion_followup_reserve_percent
-        ),
         "RAG_ENGINE_SECTION_SKIP_REGRADE_AT_SCOPE": (
             "1" if settings.rag_section_skip_regrade_at_scope else "0"
         ),
@@ -693,7 +681,7 @@ def build_engine_settings(
     if runtime_knowledge_path is not None:
         environ["RUNTIME_KNOWLEDGE_PATH"] = str(runtime_knowledge_path)
     engine_settings = engine_get_settings(environ=environ, dotenv_path=None)
-    premises = _confirmed_premise_records(settings, scope)
+    premises = _confirmed_premise_records(scope)
     return replace(
         engine_settings,
         domain_keywords_override=tuple(settings.rag_domain_keywords),
@@ -701,36 +689,7 @@ def build_engine_settings(
         confirmed_premise_sources=tuple(
             (item["question"], item["answer"], item["source"]) for item in premises
         ),
-        known_conditions=guide_known_conditions(
-            settings.rag_support_guide if settings.rag_support_guide_enabled else {}
-        ),
-        evidence_conditions=guide_evidence_conditions(
-            settings.rag_support_guide if settings.rag_support_guide_enabled else {}
-        ),
-        evidence_plans=guide_evidence_plans(
-            settings.rag_support_guide if settings.rag_support_guide_enabled else {}
-        ),
     )
-
-
-def guide_known_conditions(guide: Mapping[str, object] | None) -> tuple[tuple[str, str], ...]:
-    """業務ガイドの照合で分かっている条件(名前と値。#1492)。
-
-    MCP の ``conditions``・質問の文で決まった条件で、回答の確認の項目のうちこれを確かめる項目を
-    rag_engine が決定的に除く(分かっている条件を聞き直さない)。
-    """
-    known = (guide or {}).get("known_conditions")
-    if not isinstance(known, list):
-        return ()
-    pairs: list[tuple[str, str]] = []
-    for item in known:
-        if not isinstance(item, Mapping):
-            continue
-        label = str(item.get("label") or "").strip()
-        value = str(item.get("value") or "").strip()
-        if label and value:
-            pairs.append((label, value))
-    return tuple(pairs)
 
 
 @dataclass(frozen=True)
@@ -748,9 +707,7 @@ class AnswerScope:
     confirmed_premise_sources: tuple[tuple[str, str, str], ...] = ()
 
 
-def _confirmed_premise_records(
-    settings: Settings, scope: AnswerScope | None
-) -> list[dict[str, str]]:
+def _confirmed_premise_records(scope: AnswerScope | None) -> list[dict[str, str]]:
     """利用者の確定した前提の出所を保持する。展示用の自由文から事実を作らない。"""
     records: dict[tuple[str, str], dict[str, str]] = {}
     if scope is not None:
@@ -764,32 +721,16 @@ def _confirmed_premise_records(
                 records.setdefault(
                     (question, answer), {"question": question, "answer": answer, "source": source}
                 )
-    known = (settings.rag_support_guide or {}).get("known_conditions")
-    if settings.rag_support_guide_enabled and isinstance(known, list):
-        for item in known:
-            if (
-                not isinstance(item, Mapping)
-                or item.get("source") not in {"user", "question"}
-                or item.get("state") != "known"
-            ):
-                continue
-            question = str(item.get("label") or "").strip()
-            answer = str(item.get("value") or "").strip()
-            if question and answer:
-                records.setdefault(
-                    (question, answer),
-                    {"question": question, "answer": answer, "source": str(item["source"])},
-                )
     return list(records.values())
 
 
 def _confirmed_validation_premises(
-    settings: Settings, scope: AnswerScope | None
+    scope: AnswerScope | None,
 ) -> list[dict[str, str]]:
     """最終照合の既存の質問・回答契約へ、同じ確定前提だけを写す。"""
     return [
         {"question": item["question"], "answer": item["answer"]}
-        for item in _confirmed_premise_records(settings, scope)
+        for item in _confirmed_premise_records(scope)
     ]
 
 
@@ -829,8 +770,6 @@ class AnswerEngine:
                     "rag_screen_linking_enabled": False,
                 }
             )
-        if not settings.rag_support_guide_enabled:
-            settings = settings.model_copy(update={"rag_support_guide": {}})
         self._settings = settings
         self._oracle = oracle
         # チャットの会話の添付から選んだ根拠の候補（#2517。`app.rag.chat_attachments`）。検索の
@@ -1021,7 +960,7 @@ class AnswerEngine:
         # 回答フローの工程と同じ工程の span にする（処理の経過の行。#3226）。
         with _answer_step_span(name) as span:
             try:
-                premises = _confirmed_validation_premises(self._settings, self._scope)
+                premises = _confirmed_validation_premises(self._scope)
                 if len(premises) > MAX_PREMISES:
                     # 一部の確定条件を黙って省いて「確認済み」にしない。
                     result = AnswerValidation(status="input_too_large", valid=False)
@@ -1311,8 +1250,6 @@ class AnswerEngine:
             prefetch_search=lambda **kwargs: run_async(
                 lambda: self._prefetch_query_hits(request, state, **kwargs)
             ),
-            # 業務ガイドの手順の充足を意味の近さで決める embedding(#2649)。検索と同じ Cohere Embed。
-            embedder=_LoopEmbedder(self._genai, loop),
             # rag_engine の中の補助の処理(画面の選択など)の失敗を、同じ記録に残す(#3259)。
             report_degraded=state.record_degraded,
         )
@@ -1361,7 +1298,6 @@ class AnswerEngine:
                     if self._scope is not None
                     else None
                 ),
-                guide_plan=guide_step_plan(self._settings.rag_support_guide),
                 caller_queries=self._caller_queries,
                 # 呼び出し元が検索文を言い換えたときの元の質問(#2665)。回答の要求の単位・要求ごとの
                 # 根拠の確認・回答の生成と検査に使い、検索は request.query で行う。
@@ -1380,14 +1316,9 @@ class AnswerEngine:
         settings: Any = None,
         expand_references: bool = True,
         defer_context: bool = False,
-        page_ranges: Sequence[Mapping[str, Any]] = (),
         **_: object,
     ) -> Any:
-        """回答の検索。``page_ranges``(業務ガイドの手順の参照の頁。#2395)は、その頁に絞って検索する。
-
-        頁に絞った検索は、参照の頁の外の chunk(交差参照)を足さない。利用者の確認で
-        検索の範囲がすでに頁に絞られていれば、その範囲と重なる頁だけを検索する(範囲を広げない)。
-        """
+        """回答の検索。"""
         from rag_engine.models.storage import HybridSearchResult
 
         queries = [query for query in dict.fromkeys(q.strip() for q in retrieval_queries) if query]
@@ -1395,10 +1326,6 @@ class AnswerEngine:
             return HybridSearchResult(child_chunks=[], all_chunks=[])
         await self._ensure_search_filters(request, state, inquiry_conditions)
         assert state.filters is not None
-        if page_ranges:
-            expand_references = False
-            if not _with_page_ranges(state.filters, page_ranges):
-                return HybridSearchResult(child_chunks=[], all_chunks=[])
         vector_only = {query.strip() for query in vector_only_queries}
         depth = self._read_depth(candidate_limit)
         embeddings = await self._genai.embed(queries, input_type="SEARCH_QUERY")
@@ -1422,9 +1349,7 @@ class AnswerEngine:
                     for query, embedding in zip(queries, embeddings, strict=False)
                 ],
                 candidate_limit=depth,
-                filters=_with_page_ranges(state.filters, page_ranges) or {}
-                if page_ranges
-                else dict(state.filters),
+                filters=dict(state.filters),
             )
             for index, hits in enumerate(all_hits):
                 rankings.append([hit.chunk_id for hit in hits])
@@ -1447,8 +1372,7 @@ class AnswerEngine:
             # 自動で足した条件(質問から読み取った抽出項目の条件 #652・質問が名指しした文書のページと
             # 文書名 #546)で 0 件なら、その条件を段ごとに外して検索し直す(#2401。以降の検索(CRAG の
             # 補正検索など)も外したまま)。
-            # 参照の頁に絞った検索(#2395)の 0 件では外さない(ほかの検索の条件を変えない)。
-            if fused or page_ranges or not self._relax_filters(state):
+            if fused or not self._relax_filters(state):
                 break
         if len(state.search_log) < _ZERO_EVIDENCE_SEARCH_LOG_LIMIT:
             state.search_log.append(
@@ -1528,18 +1452,14 @@ class AnswerEngine:
         selected_fused_ids = set(ranked)
         # 当たった派生の chunk(要約・項目抽出の値)は検索の手がかり。回答の根拠には、その chunk が
         # 指す原文の chunk を同じ位置に置く(原文が読めなければ根拠に渡さない。#2641)。
-        context_scope = (
-            (_with_page_ranges(state.filters, page_ranges) or {}) if page_ranges else state.filters
-        ).get(PAGE_RANGES_FILTER_KEY, "")
+        context_scope = state.filters.get(PAGE_RANGES_FILTER_KEY, "")
         if context_scope:
             expand_references = False
         anchors = await self._original_anchors(
             state,
             [state.chunks[chunk_id] for chunk_id in ranked],
             fused,
-            filters=(_with_page_ranges(state.filters, page_ranges) or {})
-            if page_ranges
-            else dict(state.filters),
+            filters=dict(state.filters),
         )
         anchors = [
             chunk
@@ -2760,24 +2680,6 @@ class AnswerEngine:
         return [RerankTextRank(index=index, relevance_score=score) for index, score in ranked]
 
 
-@dataclass(frozen=True)
-class _LoopEmbedder:
-    """回答の thread から event loop の 埋め込みモデル を呼ぶ Embedder(#2649)。
-
-    ``rag_engine.ports.Embedder`` を満たす。業務ガイドの手順の充足で、根拠を共有する手順の
-    どれを item が説明したかを語で決められないときに使う。
-    """
-
-    genai: GenAiClient
-    loop: asyncio.AbstractEventLoop
-
-    def embed(self, texts: Sequence[str], *, query: bool = False) -> list[list[float]]:
-        input_type: Literal["SEARCH_QUERY", "SEARCH_DOCUMENT"] = (
-            "SEARCH_QUERY" if query else "SEARCH_DOCUMENT"
-        )
-        return _run_on_loop(lambda: self.genai.embed(list(texts), input_type=input_type), self.loop)
-
-
 def _run_on_loop[R](factory: Callable[[], Awaitable[R]], loop: asyncio.AbstractEventLoop) -> R:
     """回答の thread から、非同期 I/O を event loop で実行して待つ。
 
@@ -3770,15 +3672,6 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
             for row in (result.generation_trace or {}).get("rounds", ())
             if isinstance(row, Mapping) and isinstance(row.get("request_recovery"), Mapping)
         ],
-        # 業務ガイドの手順ごとの検索(#2395)。業務ガイドの記録(diagnostics.guide)に移す。
-        **(
-            {"guide_step_retrieval": dict(trace)}
-            if isinstance(trace := (result.generation_trace or {}).get("guide_steps"), Mapping)
-            else {}
-        ),
-        # 業務ガイドの手順ごとの充足(#2491)と、手順の対応付けの embedding の呼び出し(#2649)。
-        # 業務ガイドの記録(diagnostics.guide)に移す(#2686)。
-        **_guide_step_diagnostics(result.generation_trace),
         # 当たった chunk の章節から親の章節へ広げた記録(#1436。段・読んだ章節・止めた理由・
         # 読めなかった章節)。
         "section_expansion": _section_expansion_diagnostics(result.generation_trace),
@@ -3802,7 +3695,7 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
         "evidence_refinement": dict(
             (result.generation_trace or {}).get("evidence_refinement") or {}
         ),
-        # 質問に名前が出た根拠の画面の図の項目の種類と、それで決まった業務ガイドの条件(#2404)。
+        # 質問に名前が出た根拠の画面の図の項目の種類(#2404)。
         "form_field_kinds": dict((result.generation_trace or {}).get("form_field_kinds") or {}),
         # 採用した草稿の監査の目的との合い方(#2402。aligned / partial / off_target)。品質評価が
         # 目的外の割合を集計する。
@@ -3830,40 +3723,6 @@ def _outcome_from_result(result: Any, state: _SearchState) -> AnswerOutcome:
         diagnostics=diagnostics,
         evaluation_input=_evaluation_input(result),
     )
-
-
-_GUIDE_STEP_COVERAGE_FIELDS = ("step_id", "status", "required")
-_GUIDE_STEP_EMBEDDING_FIELDS = ("calls", "texts", "elapsed_ms", "failed")
-
-
-def _guide_step_diagnostics(generation_trace: object) -> dict[str, Any]:
-    """回答の記録に残す業務ガイドの手順の充足と embedding の呼び出し(#2686)。
-
-    手順は id・状態・必須かと、対応の方法・item の index・各段の根拠 ID を残す。手順の題名・
-    根拠の本文・引用は記録に増やさない。業務ガイドに沿わない回答・呼ばなかった回答では空。
-    """
-    trace = generation_trace if isinstance(generation_trace, Mapping) else {}
-    diagnostics: dict[str, Any] = {}
-    coverage = trace.get("guide_step_coverage")
-    if isinstance(coverage, list) and coverage:
-        diagnostics["guide_step_coverage"] = [
-            {
-                **{key: step.get(key) for key in _GUIDE_STEP_COVERAGE_FIELDS},
-                **{
-                    key: step[key]
-                    for key in ("assignment", "evidence_flow")
-                    if isinstance(step.get(key), Mapping)
-                },
-            }
-            for step in coverage
-            if isinstance(step, Mapping)
-        ]
-    embedding = trace.get("guide_step_embedding")
-    if isinstance(embedding, Mapping):
-        diagnostics["guide_step_embedding"] = {
-            key: embedding.get(key) for key in _GUIDE_STEP_EMBEDDING_FIELDS
-        }
-    return diagnostics
 
 
 def adopted_review_contract(generation_trace: object) -> dict[str, Any]:
@@ -3921,24 +3780,6 @@ def adopted_goal_alignment(generation_trace: object) -> str | None:
     audit = adopted.get("audit") if adopted is not None else None
     value = audit.get("goal_alignment") if isinstance(audit, Mapping) else None
     return value if isinstance(value, str) and value else None
-
-
-def guide_step_plan(guide: Mapping[str, Any] | None) -> Any:
-    """回答に使う業務ガイドの手順(#2395。手順ごとの検索の材料)。答えるときだけ。無ければ None。"""
-    from rag_engine.retrieval.guide_steps import GuidePlan
-
-    guide = guide or {}
-    if guide.get("decision") not in {"answer", "branch"} or not guide.get("step_plan"):
-        return None
-    steps = guide.get("step_plan")
-    notices = guide.get("notices")
-    return GuidePlan.from_payload(
-        str(guide.get("guide_id") or ""),
-        int(cast(Any, guide.get("revision") or 0)),
-        steps if isinstance(steps, list) else [],
-        title=str(guide.get("title") or ""),
-        notices=notices if isinstance(notices, Mapping) else None,
-    )
 
 
 def _with_page_ranges(

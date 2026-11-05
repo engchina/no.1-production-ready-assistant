@@ -56,7 +56,6 @@ def test_rag_tools_used_by_agent_are_in_the_contract() -> None:
     used = {
         support_task.RAG_SEARCH,
         support_task.RAG_RETRIEVE_EVIDENCE,
-        support_task.RAG_LOOKUP_GUIDES,
         support_task.RAG_READ_SOURCE,
         support_task.RAG_READ_DOCUMENT,
         support_task.RAG_READ_SECTION,

@@ -12,7 +12,7 @@ BLOCK と同じ考え方）。
   ツールが残らない Run は対象外（ガードをすり抜けた回答は #1834 の「根拠を使わずに答えた」に出る）。
 - 数える呼び出し: モデルが根拠・データのツールを呼んだ step（成功・失敗・承認の却下・評価の
   dry-run・無人の Run で承認が要るため呼ばなかったものも、モデルが確かめようとしたので数える）。
-  Control Plane が自分で呼んだもの（確認の取り消し・業務ガイドの照合・最終の検証）は数えない。
+  Control Plane が自分で呼んだもの（確認の取り消し・最終の検証）は数えない。
 - 除外: 同じ会話の前の Run（会話の履歴の上限 `PLATFORM_CHAT_HISTORY_MAX_TURNS` の中）が根拠・
   データのツールで答えた Run（前の回答の言い換え・整形。事実の確かめは #1837 の最終の検証）と、
   利用者が確認を取り消した Run（「資料の検索は不要」など。#1441・#1445）と、
@@ -31,7 +31,7 @@ BLOCK と同じ考え方）。
   `answer_outcome` の `absence_conclusion` など）。品質評価は両者を `refusal_stage` で分けて数える。
 - 差し戻しの文の曖昧な質問の扱いは、その Run でモデルに回答前の確認のツール
   （`ask_user_confirmation`）を渡したかで分ける（#1881）。渡したときは、まず資料・業務データの
-  ツールで調べる（業務ガイド・NL2SQL が確認事項を返せば、それが確認のカードになる）か、
+  ツールで調べる（RAG・NL2SQL が確認事項を返せば、それが確認のカードになる）か、
   `ask_user_confirmation` で確かめるよう伝え、本文に確認の質問を書かせない。渡していない（確認の
   上限）ときは、ツールを呼ばずに確認の質問だけを返して
   よいと伝える。差し戻しの後も、確認のツールを渡したのに本文で確認の質問だけを返した回答は、
@@ -75,7 +75,6 @@ from app.features.agent.clarification_cancel import CANCEL_TRACE_PREFIX
 from app.features.agent.confirmation import CONFIRMATION_TOOL
 from app.features.agent.job_cancel import RUN_CANCEL_TRACE_PREFIX
 from app.features.agent.support_task import (
-    GUIDE_CHECK_TRACE_PREFIX,
     NON_GROUNDING_TOOLS,
     nl2sql_clarification_pending,
 )
@@ -108,7 +107,6 @@ _NON_GROUNDING_TOOLS = NON_GROUNDING_TOOLS
 _CONTROL_PLANE_TRACE_PREFIXES = (
     CANCEL_TRACE_PREFIX,
     RUN_CANCEL_TRACE_PREFIX,
-    GUIDE_CHECK_TRACE_PREFIX,
     "answer_validation_",
 )
 
@@ -163,7 +161,7 @@ _CLARIFY_ASSUME = (
 # 回答前の確認のツール（ask_user_confirmation）を渡した Run（#1881）。本文で聞き返させず、資料・
 # 業務データのツールの確認事項か、確認のツールのカードで確かめさせる。
 _CLARIFY_CONFIRMABLE = (
-    "質問が曖昧に見えるときも、まず資料・業務データのツールで調べてください（業務ガイド・資料・"
+    "質問が曖昧に見えるときも、まず資料・業務データのツールで調べてください（資料・"
     "業務データのツールが確認事項を返せば、それが利用者への確認のカードになります）。"
     "ツールの結果を見ても対象（文書・システム・期間など）が決まらないときと、プロファイルの推薦の"
     "候補が割れたときだけ、"
@@ -180,23 +178,6 @@ REFUSAL_HEAD = (
 _RAG_EXAMPLE = "「経費精算規程の締め日は？」"
 _DATA_EXAMPLE = "「先月の部門別の受注金額は？」"
 _SCOPE_DESCRIPTION_MAX_CHARS = 200
-
-
-# 結果が空なら根拠・データを調べた呼び出しに数えないツールと、その結果の一覧の項目（#2504）。業務
-# ガイドの照合は、当たる業務ガイドを返したときだけ数える（業務ガイドが無いことは資料が無いことでは
-# ないので、それだけで「資料に無い」と答えた回答を差し戻す）。
-_EMPTY_RESULT_ITEMS = {"rag_lookup_guides": "guides"}
-
-
-def _empty_result(step: RunStep) -> bool:
-    """結果が空なら数えないツールで、成功して空を返した呼び出しか（#2504）。"""
-    call, result = step.tool_call, step.tool_result
-    key = _EMPTY_RESULT_ITEMS.get(mcp_base_tool_name(call.name)) if call is not None else None
-    if key is None or result is None or not result.success:
-        return False
-    output = result.output
-    items = output.get(key) if isinstance(output, dict) else None
-    return isinstance(items, list) and not items
 
 
 def is_grounding_tool(name: str) -> bool:
@@ -220,13 +201,10 @@ def grounding_tools(tool_names: Iterable[str]) -> list[str]:
 
 
 def grounding_attempted(steps: list[RunStep]) -> bool:
-    """モデルがこの Run で根拠・データのツールを呼んだ（呼ぼうとした）か。
-
-    当たる業務ガイドが無かった業務ガイドの照合は数えない（#2504。`_empty_result`）。
-    """
+    """モデルがこの Run で根拠・データのツールを呼んだ（呼ぼうとした）か。"""
     for step in steps:
         call = step.tool_call
-        if call is None or not is_grounding_tool(call.name) or _empty_result(step):
+        if call is None or not is_grounding_tool(call.name):
             continue
         if (call.trace_id or "").startswith(_CONTROL_PLANE_TRACE_PREFIXES):
             continue
@@ -240,7 +218,7 @@ def tools_consulted(steps: list[RunStep]) -> bool:
 
     回答前の確認（`ask_user_confirmation`）の前に資料・業務データを調べたかの判定に使う。
     プロファイルの推薦の候補が割れたときの確認は推薦を呼んだ後なので、推薦も数える。
-    Control Plane が自分で呼んだもの（確認の取り消し・業務ガイドの照合・最終の検証）は数えない。
+    Control Plane が自分で呼んだもの（確認の取り消し・最終の検証）は数えない。
     """
     for step in steps:
         call = step.tool_call
@@ -274,7 +252,7 @@ def tool_output_texts(steps: list[RunStep]) -> list[str]:
     """この Run でモデルが呼んで成功した MCP 接続のツールの結果（JSON の文。#1934）。
 
     回答前の確認の選択肢がツールの結果にあるかを確かめるのに使う。Control Plane が自分で
-    呼んだもの（確認の取り消し・業務ガイドの照合・最終の検証）は入れない。
+    呼んだもの（確認の取り消し・最終の検証）は入れない。
     """
     texts: list[str] = []
     for step in steps:
@@ -289,13 +267,10 @@ def tool_output_texts(steps: list[RunStep]) -> list[str]:
 
 
 def grounding_used(steps: list[RunStep]) -> bool:
-    """モデルが根拠・データのツールを呼んで結果を得たか（成功した呼び出しだけ。当たる業務ガイドが
-    無かった業務ガイドの照合は数えない。#2504）。"""
+    """モデルが根拠・データのツールを呼んで結果を得たか（成功した呼び出しだけ）。"""
     for step in steps:
         call, result = step.tool_call, step.tool_result
         if call is None or result is None or not is_grounding_tool(call.name):
-            continue
-        if _empty_result(step):
             continue
         if (call.trace_id or "").startswith(_CONTROL_PLANE_TRACE_PREFIXES):
             continue
@@ -498,18 +473,14 @@ def hops_retried(metadata: object) -> bool:
 def hop_original_answer(events: Sequence[Any]) -> str | None:
     """差し戻しの前の回答（経過に残したもの。無ければ None）。
 
-    差し戻しは略号・別名（`hop_retry`。#1958）か業務データ（`data_retry`。#1979）か業務ガイドの
-    手順（`guide_step_retry`。#2396）の 1 回だけ。章節の続きの差し戻し（`section_retry`。#2492）は
+    差し戻しは略号・別名（`hop_retry`。#1958）か業務データ（`data_retry`。#1979）の 1 回だけ。
+    章節の続きの差し戻し（`section_retry`。#2492）は
     含めない（前の回答は手順・条件の後半を欠くと分かっているので、前の回答に戻さない）。
     """
     for event in reversed(list(events)):
         payload = getattr(event, "payload", None)
         record = payload.get("tool_grounding") if isinstance(payload, dict) else None
-        if isinstance(record, dict) and record.get("action") in {
-            "hop_retry",
-            "data_retry",
-            "guide_step_retry",
-        }:
+        if isinstance(record, dict) and record.get("action") in {"hop_retry", "data_retry"}:
             original = record.get("original_answer")
             return original if isinstance(original, str) else None
     return None

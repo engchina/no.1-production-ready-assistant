@@ -71,7 +71,6 @@ READ_ONLY = {
     "rag_list_search_answer_profiles": True,
     "rag_recommend_search_answer_profile": True,
     "rag_read_source": True,
-    "rag_lookup_guides": True,
     "rag_retrieve_evidence": True,
     "rag_outline": True,
     "rag_read_document": True,

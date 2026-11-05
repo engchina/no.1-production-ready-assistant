@@ -125,9 +125,6 @@ def test_single_scope_hides_the_profile_argument_from_the_model() -> None:
         },
         "required": ["query", "search_answer_profile_id"],
     }
-    single = scoped_input_schema("rag__rag_lookup_guides", schema, {"rag": _scope("bv-sales")})
-    assert set(single["properties"]) == {"query", "knowledge_base_ids"}
-    assert single["required"] == ["query"]
     searched = scoped_input_schema("rag__rag_search", schema, {"rag": _scope("bv-sales")})
     assert set(searched["properties"]) == {"query"}
     many = scoped_input_schema(

@@ -84,17 +84,14 @@ def response_bytes(raw: str, streamed: bool) -> tuple[bytes, dict[str, str]]:
 
 
 @pytest.mark.parametrize("streamed", [False, True])
-@pytest.mark.parametrize("fault", ["none", "missing", "duplicate_request", "duplicate_requirement"])
+@pytest.mark.parametrize("fault", ["none", "missing", "duplicate_request"])
 def test_actual_sdk_request_and_partial_decode_preserve_raw_contract(streamed: bool, fault: str, monkeypatch: pytest.MonkeyPatch) -> None:
     schema, payload = sample_wire()
     if fault == "missing":
-        payload["guide_requirement_reviews"].pop("step:0")
+        payload["request_reviews"].pop("Q2")
     raw = json.dumps(payload)
-    if fault.startswith("duplicate"):
-        key = "Q1" if fault == "duplicate_request" else "step:0"
-        field = "request_reviews" if key == "Q1" else "guide_requirement_reviews"
-        encoded = json.dumps(payload[field][key])
-        token = json.dumps(key) + ": " + encoded
+    if fault == "duplicate_request":
+        token = json.dumps("Q1") + ": " + json.dumps(payload["request_reviews"]["Q1"])
         raw = raw.replace(token, token + ", " + token, 1)
     sent: list[dict[str, Any]] = []
 
@@ -132,20 +129,16 @@ def test_actual_sdk_request_and_partial_decode_preserve_raw_contract(streamed: b
     assert len(sent) == 1
     actual = sent[0]["text"]["format"]
     assert actual["strict"] is True and actual["type"] == "json_schema"
-    for field, keys in [("request_reviews", {"Q1", "Q2"}), ("guide_requirement_reviews", {"step:0", "step:1"})]:
-        node = deref(actual["schema"], actual["schema"]["properties"][field])
-        assert set(node["required"]) == keys and node["additionalProperties"] is False
+    node = deref(actual["schema"], actual["schema"]["properties"]["request_reviews"])
+    assert set(node["required"]) == {"Q1", "Q2"} and node["additionalProperties"] is False
     assert result.raw_text == raw
     assert len(result.audit.reviews) == 1
     if fault == "none":
         assert result.validation["strict_wire_validation"] == "passed"
     elif fault == "missing":
-        assert result.validation["requirements"]["step:0"] == "missing"
-        assert len(result.audit.request_reviews) == 2
-    elif fault == "duplicate_request":
+        assert result.validation["requests"]["Q2"] == "missing"
+        assert len(result.audit.request_reviews) == 1
+    else:
         assert result.validation["requests"]["Q1"] == "duplicate"
         assert result.validation["request_binding"]["raw_key_sequence"].count("Q1") == 2
         assert [row.request_id for row in result.audit.request_reviews] == ["Q2"]
-    else:
-        assert result.validation["requirements"]["step:0"] == "duplicate"
-        assert len(result.audit.guide_requirement_reviews) == 1 and len(result.audit.request_reviews) == 2

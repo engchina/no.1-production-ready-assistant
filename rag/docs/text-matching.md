@@ -62,17 +62,15 @@ UI の検索欄や認可の filter、SQL の文法解析を同じ照合器で置
 | RAG `_matched_terms` | 最大 1000 用語、各 32 別名、通常 8 候補 | 正式名と別名で重みが異なる。検索語の展開が目的 | **正規化キーだけ共通化**。順位の移行は別評価が必要。`test_runtime_knowledge*` |
 | RAG `domain_keywords._keyword_matches` | 管理語最大 1000、抽出上限 16 | 語境界・長い語優先、包含語の抑制 | **保留**。抽出契約をルールの候補順位へ変えない。`test_domain_keywords` |
 | RAG `approved_faq._best_question_match` / `_similarity_score` | 質問と FAQ 質問群、候補数と閾値は既存設定 | lower・空白除去・末尾句読点・包含比・n-gram。任意の embedding と scope の寄与は別層 | **保留**。直接回答の閾値と意味照合を維持。`test_approved_faq*` |
-| RAG `support_guide_runtime.score_guide` / `support_guide_query` | 許可された公開ガイドの語・別名・質問例と質問。例の類似度・任意の embedding | 空白除去の NFKC・casefold。公開版・条件・分岐・既知条件で最終決定 | **保留**。空白除去と例の類似度を同じ語照合に置換しない。`test_support_guide_matching` |
 | RAG `search_answer_profile_knowledge._already_answered` / `rule_selection` | 現在の選択肢 ID と構造化した回答、必要時は自由文 | 候補の語照合と分離。構造化回答・単独の表示名、または一括認識後に原文照合した選択だけを確定 | **専用の final decision**。否定・未定・比較を語の包含だけで肯定しない。`test_rule_selection` / `test_search_answer_profile_clarification` |
 | RAG `text_search_tokenizer` / `OracleClient` | 検索文・言語資源から Oracle Text の問い合わせと順位付き chunk | 既存 Sudachi / stemming / 検索文 escaping、ACL・KB・active chunk_set の絞り込み | **変更なし**。DB 索引と検索文は既存基盤。`test_text_search_tokenizer` / Oracle の統合テスト |
 | Agent `evidence_match.matched_features` / `order_weights` | 回答の ID・コード・引用・章節と、今回許可された根拠 | NFKC・空白除去、型別に特徴を集めて出典の順を決める | **対象外**。ルール候補と異なる証拠契約。`test_answer_evidence` / `test_validation_evidence_order` |
-| Agent `guide_steps` / `support_task` | RAG MCP のガイド・手順・確認結果と現在の Run | 条件・版・構造化した選択肢の対応。自由文の取消も専用処理 | **対象外**。MCP の境界・既知条件・承認を維持。`test_guide_steps` / `test_clarification_cancel` |
 | Agent `output_fields.output_value_matches` | 型付きの期待値と実際の出力 | 日付・数値・文字列の型別の正規化 | **対象外**。出力評価を単語の命中に変えない。`test_agent_output_fields` |
 | NL2SQL `object_identity.object_match_key` / `catalog_match_key` | 引用付き owner / object / column の名前とカタログ | 引用符・大文字小文字の区別。権限とは別 | **対象外**。破壊的な正規化は不可。`test_nl2sql_object_identity` |
 | NL2SQL `service._profile_recommendation_tokens` / 類似履歴 | 利用可能なプロファイルと質問、所有者で絞った履歴 | NFKC・n-gram・template 除去と相対スコア。候補提示だけ | **保留**。既存の精度評価が先。`test_recommend_confidence` / `test_nl2sql_similar_history_pool` |
 | 各製品 security router / 一覧 filter | 利用可能な対象の ID・状態・検索欄 | 名前の部分一致は UI の絞込。ACL・所有者・状態の判定は backend | **統合対象外**。候補照合を認可へ昇格させない。各製品の security テスト |
 
-ガイド・FAQ の任意のモデルによる意味照合は残します。この移行で無断停止・非モデルへの fallback の成功扱いをしません。
+FAQ の任意のモデルによる意味照合は残します。この移行で無断停止・非モデルへの fallback の成功扱いをしません。
 今後同じ契約を必要とする製品が増えた時点で、必要な公開型だけ platform に抽出します。製品同士を import しません。
 
 ## 基線・評価・性能

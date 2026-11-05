@@ -6,7 +6,7 @@ export const DEFAULT_STAGES: StageFixture[] = [
   { id: "audit", phase: "audit", prompts: [{ id: "system", content: "監査の system\n\n## 手順\n\n1. `quote` を照合する。\n2. 不足なら指摘する。\n\n<script>window.promptInjected = true</script>" }] },
 ];
 
-// 9 つの区分にまたがる段（backend の PROMPT_STAGES の一部。内容は合成）。
+// 8 つの区分にまたがる段（backend の PROMPT_STAGES の一部。内容は合成）。
 export const FLOW_STAGES: StageFixture[] = [
   {
     id: "picture_description",
@@ -20,8 +20,6 @@ export const FLOW_STAGES: StageFixture[] = [
   { id: "heading_levels", phase: "ingestion", prompts: [{ id: "instruction", content: "階層の指示" }] },
   { id: "field_extraction", phase: "ingestion", prompts: [{ id: "instruction", content: "項目の指示" }] },
   { id: "raptor_summary", phase: "indexing", prompts: [{ id: "system", content: "索引要約の指示" }] },
-  { id: "support_guide_draft", phase: "knowledge", prompts: [{ id: "system", content: "下書きの指示" }] },
-  { id: "support_guide_conditions", phase: "question", prompts: [{ id: "system", content: "## Step 1: 質問と条件を読む\n合成の条件。\n\n## Step 2: 原文から値を抜き出す\n合成の原文。\n\n## Step 3: 条件の状態を判定する\nknown / unknown / conflicting。\n\n## Step 4: 結果を返す\nJSON のみ。" }] },
   { id: "history_rewrite", phase: "question", prompts: [{ id: "system", content: "書き換えの system" }] },
   { id: "field_filter", phase: "question", prompts: [{ id: "system", content: "条件の指示" }] },
   { id: "routing", phase: "question", prompts: [{ id: "system", content: "ルーティングの system" }] },

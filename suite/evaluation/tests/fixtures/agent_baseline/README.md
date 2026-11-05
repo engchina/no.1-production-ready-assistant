@@ -31,7 +31,7 @@
 - 時間切れの上限は 2 秒（`RUN_TIMEOUT_SECONDS`）。時間切れの Run（`observation=timeout`）の `agent_get_run` は running（`in_progress=true`）のまま返し、待ちの時計は読むたびに 1 秒進む。期限を過ぎたら `agent_cancel_run` を送る。
 - `observation=api_error` の往復は `agent_chat` が `http_status` の HTTP の失敗を返す。
 - 観測は 1 回（`limit=100`）で全件を返す（ページのたどり方は `tests/test_agent_mcp_target.py`）。
-- 業務ガイドの条件の名前は渡さない（既知の条件は条件の id で書く）。
+- 既知の条件は条件の id で書く。
 - 回答の前の確認・本文を省かれた根拠・見られない根拠は共有の fixture に無いため、`tests/test_agent_mcp_target.py` の合成の出力で確かめる。
 
 ## 公開の Agent MCP の項目

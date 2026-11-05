@@ -46,7 +46,6 @@ from pydantic import ValidationError
 from pr_suite_evaluation.dataset import (
     DatasetError,
     LoadedDataset,
-    condition_labels,
     load_dataset,
     load_document_map,
 )
@@ -134,7 +133,6 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output", type=Path, required=True, help="結果（JSON）の出力先")
     agent = run.add_argument_group("agent-mcp（業務 Agent）")
     agent.add_argument("--agent-id", help="使う業務 Agent（公開済み。agent_list の id）")
-    agent.add_argument("--guides", type=Path, help="既知の条件の名前に使う業務ガイド（JSON）")
     agent.add_argument("--run-timeout", type=float, default=agent_mcp.DEFAULT_RUN_TIMEOUT_SECONDS)
     agent.add_argument(
         "--infer-missing-outcome",
@@ -301,16 +299,13 @@ def _agent_target(
 ) -> tuple[Target, dict[str, Any], ScorerConfig]:
     if not args.agent_id:
         raise CliError("--target agent-mcp には --agent-id を渡してください。")
-    labels = (
-        condition_labels(json.loads(args.guides.read_text(encoding="utf-8"))) if args.guides else {}
-    )
     config = agent_mcp.AgentTargetConfig(
         mcp_url=url, agent_id=args.agent_id, run_timeout_seconds=args.run_timeout
     )
     mcp = McpClient(
         client, url, api_key=api_key, label="Agent", error_class=agent_mcp.AgentEvaluationError
     )
-    target = agent_mcp.AgentMcpTarget(agent_mcp.AgentMcp(mcp), config, labels=labels)
+    target = agent_mcp.AgentMcpTarget(agent_mcp.AgentMcp(mcp), config)
     scorer = ScorerConfig(
         target_kind=agent_mcp.TARGET_KIND,
         infer_missing_outcome=args.infer_missing_outcome,

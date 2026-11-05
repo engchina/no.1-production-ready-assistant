@@ -81,7 +81,7 @@ describe("parseAnswerPassageRecords", () => {
       warning: 1,
       removed: 1,
     });
-    expect(answerPassageCounts(parseAnswerPassageRecords(example("guide-error-keeps-body")))).toEqual({
+    expect(answerPassageCounts(parseAnswerPassageRecords(example("request-error-keeps-body")))).toEqual({
       unverified: 1,
       warning: 0,
       removed: 0,
@@ -155,7 +155,7 @@ describe("AnswerSections の段落の印", () => {
   });
 
   it("確認が必要な点の項目を押すと、本文の段落へ移ってフォーカスする", () => {
-    const item = example("guide-error-keeps-body");
+    const item = example("request-error-keeps-body");
     const scrollIntoView = vi.fn();
     (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView = scrollIntoView;
     act(() => root.render(<AnswerSections blocks={paragraphs(item.published)} passages={parseAnswerPassageRecords(item)} />));
@@ -169,8 +169,8 @@ describe("AnswerSections の段落の印", () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     // 回答全体の注意は本文の上の warning の Banner。
     const warnings = host.querySelector('[data-testid="answer-passage-warnings"]')!;
-    expect(warnings.textContent).toContain("業務ガイドの手順の確認で問題が見つかった");
-    expect(warnings.textContent).toContain("必須の手順『終了日の入力』の説明がありません。");
+    expect(warnings.textContent).toContain("質問の要求の一部に答えていない");
+    expect(warnings.textContent).toContain("要求『終了日の入力』の説明がありません。");
     expect(host.querySelector('[data-testid="answer-text"]')?.firstElementChild).toBe(warnings);
   });
 

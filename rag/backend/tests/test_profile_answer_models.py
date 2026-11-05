@@ -136,12 +136,8 @@ async def test_query_resolution_applies_request_then_profile_then_defaults(
                 detail.config.answer_model_id = profile_model
             return detail
 
-    async def no_guides(_oracle: object, _profile: str) -> tuple[list[object], bool]:
-        return [], False
-
     fake = Oracle()
     monkeypatch.setattr(search_route, "OracleClient", lambda: fake)
-    monkeypatch.setattr(search_route, "load_published_guides", no_guides)
     request = SearchRequest(
         query="操作方法",
         search_answer_profile_id="bv-1",

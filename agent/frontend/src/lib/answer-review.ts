@@ -39,12 +39,12 @@ const REVIEW_OUTCOMES = new Set<string>([
   "insufficient_evidence",
 ]);
 
-/** 条件の出所（`user_answer` = 利用者の答え、`rag_guide` = RAG が質問の文から読んだ）。 */
-export type ConditionSource = "user" | "question" | null;
+/** 条件の出所（`user_answer` = 利用者の答え）。 */
+export type ConditionSource = "user" | null;
 
 export interface ReviewCondition {
   key: string;
-  /** 条件の名前（業務ガイドのラベル。無ければ条件の id）。 */
+  /** 条件の名前（確認のラベル。無ければ条件の id）。 */
   label: string;
   value: string;
   source: ConditionSource;
@@ -58,12 +58,6 @@ export interface ReviewClarification {
   kind: ClarificationKind;
   question: string;
   options: string[];
-}
-
-export interface ReviewGuide {
-  title: string;
-  /** 業務ガイドの版。分からなければ null。 */
-  revision: number | null;
 }
 
 /**
@@ -109,7 +103,6 @@ export interface ReviewValidation {
 export interface AnswerReview {
   conditions: ReviewCondition[];
   clarifications: ReviewClarification[];
-  guide: ReviewGuide | null;
   gaps: string[];
   /** この回答で、資料を調べる回数の上限に達して調べなかった呼び出しがあったか。 */
   limitReached: boolean;
@@ -136,9 +129,7 @@ function count(value: unknown): number {
 }
 
 function conditionSource(value: unknown): ConditionSource {
-  if (value === "user_answer") return "user";
-  if (value === "rag_guide") return "question";
-  return null;
+  return value === "user_answer" ? "user" : null;
 }
 
 /** 最も新しい成果物（承認の後の再開で上書きされる成果物は 1 つだが、念のため最後のものを使う）。 */
@@ -177,13 +168,6 @@ function clarifications(state: Record<string, unknown>): ReviewClarification[] {
     const kind: ClarificationKind = item.kind === "nl2sql" ? "nl2sql" : "rag";
     return [{ key: `${kind}:${text(item.condition_id)}:${index}`, kind, question, options }];
   });
-}
-
-function guide(state: Record<string, unknown>): ReviewGuide | null {
-  const value = record(state.guide);
-  if (!value || !text(value.guide_id)) return null;
-  const revision = count(value.revision);
-  return { title: text(value.title), revision: revision > 0 ? revision : null };
 }
 
 function limitReached(state: Record<string, unknown>): boolean {
@@ -317,7 +301,6 @@ export function answerReview(artifacts: Artifact[]): AnswerReview | null {
   const review: AnswerReview = {
     conditions: state ? conditions(state) : [],
     clarifications: state ? clarifications(state) : [],
-    guide: state ? guide(state) : null,
     gaps: state && Array.isArray(state.gaps) ? state.gaps.map(text).filter(Boolean) : [],
     limitReached: state ? limitReached(state) : false,
     validation: validationContent ? validationReview(validationContent) : null,
@@ -326,7 +309,6 @@ export function answerReview(artifacts: Artifact[]): AnswerReview | null {
   const empty =
     review.conditions.length === 0 &&
     review.clarifications.length === 0 &&
-    review.guide === null &&
     review.gaps.length === 0 &&
     !review.limitReached &&
     review.validation === null &&

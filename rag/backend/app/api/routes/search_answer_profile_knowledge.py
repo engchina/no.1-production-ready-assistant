@@ -5,16 +5,11 @@ KB・文書レシピには持たせず、検索時は検索・回答プロファ
 """
 
 import asyncio
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from rag_engine.knowledge.approved_faq import ApprovedFaqImportRow, ApprovedFaqRecord
 
-from app.api.routes.search import (
-    _published_guides,
-    profile_scope_filters,
-    support_guide_context,
-)
 from app.clients.genai import GenAiClient
 from app.clients.oracle import OracleClient
 from app.config import get_settings
@@ -48,14 +43,6 @@ from app.rag.search_answer_profile_knowledge import (
     suggest_approved_faq,
     suggest_clarification,
     suggest_domain_keywords,
-)
-from app.rag.support_guide_conditions import resolve_text_conditions
-from app.rag.support_guide_query import build_guide_query
-from app.rag.support_guide_runtime import (
-    GuideChoice,
-    guide_choice_clarification,
-    guide_clarification,
-    select_guide,
 )
 from app.schemas.common import ApiResponse
 from app.schemas.search_answer_profile import SearchAnswerProfileDetail
@@ -550,7 +537,7 @@ async def post_clarification_suggest(
     """質問に出す確認(一致したルールのうち確認を持つ最初の 1 件。#717)。"""
     oracle = OracleClient()
     view = await _require_search_answer_profile(oracle, search_answer_profile_id)
-    from app.api.routes.chat import _guide_user_context, prepare_chat_question
+    from app.api.routes.chat import _user_turn_context, prepare_chat_question
 
     settings, _ = resolve_search_answer_profile_settings(get_settings(), view.config)
     with profile_language_scope(settings):
@@ -587,7 +574,7 @@ async def post_clarification_suggest(
         source_text = "\n".join(
             [
                 *(
-                    _guide_user_context(await oracle.list_messages(request.conversation_id))
+                    _user_turn_context(await oracle.list_messages(request.conversation_id))
                     if request.conversation_id
                     else ()
                 ),
@@ -604,53 +591,7 @@ async def post_clarification_suggest(
             answers=recognized_answers if context_token else (),
         )
         if found is None:
-            # 業務ガイドの不明・矛盾の条件（選択肢付き）を、ルールの確認と同じ形で聞く（#1238）。
-            # 適用範囲は検索と同じ手がかりで確かめる（#1278）。
-            settings, _ = resolve_search_answer_profile_settings(get_settings(), view.config)
-            if not settings.rag_support_guide_enabled:
-                return response(ClarificationSuggestionsData())
-            guides = await _published_guides(oracle, search_answer_profile_id)
-            # 文面の補完を OFF にしても、ガイドの既存の利用者履歴の照合は維持する。
-            if request.conversation_id and not settings.rag_history_rewrite_enabled:
-                query = "\n".join(
-                    [
-                        *_guide_user_context(await oracle.list_messages(request.conversation_id)),
-                        query,
-                    ]
-                )
-            # 検索と同じく、用語の別名で展開し、ON なら意味の照合を使う（#2398）。
-            guide_query = await build_guide_query(
-                oracle, settings, search_answer_profile_id, guides, query, payload
-            )
-            selected = select_guide(
-                guides,
-                guide_query,
-                {},
-                context=await support_guide_context(
-                    oracle, guides, query, profile_scope_filters(view)
-                ),
-                close_margin=(
-                    settings.rag_support_guide_close_match_margin
-                    if settings.rag_support_guide_close_match_clarification_enabled
-                    else None
-                ),
-            )
-            selected = await resolve_text_conditions(selected, query, settings)
-            guide: tuple[str, str, Any] | None = None
-            if isinstance(selected, GuideChoice):
-                guide = guide_choice_clarification(selected)
-            elif selected is not None:
-                guide = guide_clarification(selected)
-            if guide is None:
-                return response(ClarificationSuggestionsData())
-            rule_id, title, guide_question = guide
-            return response(
-                ClarificationSuggestionsData(
-                    suggestion=ClarificationSuggestionData(
-                        rule_id=rule_id, rule_title=title, clarification=guide_question
-                    )
-                )
-            )
+            return response(ClarificationSuggestionsData())
         rule, clarification = found
         return response(
             ClarificationSuggestionsData(

@@ -13,7 +13,7 @@ import { useDocumentCandidates } from "@/lib/queries";
 export type DocumentPickerSelection = { deselect: (documentIds: readonly string[]) => void };
 
 /**
- * 文書を選ぶ（ナレッジベースの「文書を追加」#600、業務ガイドの資料 #2749）。
+ * 文書を選ぶ（ナレッジベースの「文書を追加」#600）。
  * 数千〜数万件の文書から、文書名で検索して複数を選ぶ。候補はサーバー側の検索（`q`）と追加読み込み（100 件ずつ）で取り、
  * `unavailableReason` が理由を返す文書は選べなくする。選んだ文書は検索語を変えても残り、「選択中だけ表示」で確かめられる。
  */
@@ -21,7 +21,6 @@ export function DocumentPicker({
   id,
   testId,
   description,
-  knowledgeBaseIds,
   unavailableReason,
   maxSelection,
   submitting = false,
@@ -31,8 +30,6 @@ export function DocumentPicker({
   id: string;
   testId: string;
   description: string;
-  /** 候補をこのナレッジベースの文書に絞る（空なら候補は無い）。未指定なら全文書。 */
-  knowledgeBaseIds?: readonly string[];
   /** 選べない文書の理由（「追加済み」など）。選べるなら undefined。 */
   unavailableReason?: (document: DocumentSummary) => string | undefined;
   /** 一度に選べる数の上限。 */
@@ -42,11 +39,7 @@ export function DocumentPicker({
   onClose: () => void;
 }) {
   const [candidateQuery, setCandidateQuery] = useState("");
-  const scoped = knowledgeBaseIds !== undefined;
-  const candidates = useDocumentCandidates(
-    { q: candidateQuery || undefined, knowledgeBaseIds },
-    { enabled: !scoped || knowledgeBaseIds.length > 0 },
-  );
+  const candidates = useDocumentCandidates({ q: candidateQuery || undefined });
   // 選んだ文書（検索語を変えても残す。名前を出すために文書ごと持つ）。
   const [selected, setSelected] = useState<Map<string, DocumentSummary>>(() => new Map());
 
@@ -151,7 +144,7 @@ export function DocumentPicker({
       labels={listPickerLabels({
         loading: t("documentPicker.loading"),
         emptyTitle: t("documentPicker.noOptions"),
-        emptyHint: scoped ? t("documentPicker.noOptionsInKnowledgeBasesHint") : t("documentPicker.noOptionsHint"),
+        emptyHint: t("documentPicker.noOptionsHint"),
         noResultsTitle: t("documentPicker.noResults"),
         noResultsHint: t("documentPicker.noResultsHint"),
       })}

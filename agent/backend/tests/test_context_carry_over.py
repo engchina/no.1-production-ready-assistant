@@ -79,20 +79,6 @@ SEARCH = {
             "options": ["上期", "下期"],
         }
     ],
-    "guide": {
-        "id": "guide-maintenance",
-        "title": "定期保守の案内",
-        "conditions": [
-            {
-                "id": "building",
-                "label": "対象の棟",
-                "state": "known",
-                "value": "A棟",
-                "source": "user",
-            },
-            {"id": "season", "label": "時期", "state": "unknown", "handling": "ask"},
-        ],
-    },
     "evidence": [
         {
             "evidence_id": f"chunk-{index}",
@@ -143,20 +129,6 @@ CHECKS: dict[str, tuple[dict[str, Any], Check]] = {
     "結論（確認が要る）": (SEARCH, lambda d: d.get("outcome") == "needs_clarification"),
     "分かった条件の文": (SEARCH, lambda d: d.get("conditions") == ["対象の棟: A棟"]),
     "確かめられない点": (SEARCH, lambda d: d.get("gaps") == ["B棟の点検周期は資料に無い"]),
-    "分かった条件の値と出典": (
-        SEARCH,
-        lambda d: (
-            {"id": "building", "state": "known", "value": "A棟", "source": "user"}.items()
-            <= d["guide"]["conditions"][0].items()
-        ),
-    ),
-    "不明な条件と扱い": (
-        SEARCH,
-        lambda d: (
-            {"id": "season", "label": "時期", "state": "unknown", "handling": "ask"}.items()
-            <= d["guide"]["conditions"][1].items()
-        ),
-    ),
     "確かめる問いの条件": (
         SEARCH,
         lambda d: (

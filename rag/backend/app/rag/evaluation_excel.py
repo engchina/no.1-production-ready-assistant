@@ -23,6 +23,7 @@ from openpyxl.worksheet.datavalidation import DataValidation  # type: ignore[imp
 from pydantic import ValidationError
 
 from app.schemas.evaluation import (
+    EVALUATION_PROCESS_TEXT_MAX_CHARS,
     EVIDENCE_LABEL_MAX_CHARS,
     EVIDENCE_SECTION_MAX_CHARS,
     EVIDENCE_TEXT_MAX_CHARS,
@@ -32,7 +33,6 @@ from app.schemas.evaluation import (
     EvaluationImportIssue,
     EvaluationScreen,
 )
-from app.schemas.support_guide import PROCESS_IMPORT_TEXT_MAX_CHARS
 
 # アップロードの上限。評価は 1 行ごとに回答を生成するため、行数は job の時間の上限
 # （`evaluation_job_time_limit_seconds`）に収まる量にする。
@@ -436,10 +436,10 @@ def _parse_row(
             f"（{len(standard_answer)} 文字）。",
         )
     answer_process = cells.get("answer_process", "") or None
-    if answer_process is not None and len(answer_process) > PROCESS_IMPORT_TEXT_MAX_CHARS:
+    if answer_process is not None and len(answer_process) > EVALUATION_PROCESS_TEXT_MAX_CHARS:
         issue(
             "answer_process",
-            f"回答の過程は {PROCESS_IMPORT_TEXT_MAX_CHARS} 文字以内にしてください"
+            f"回答の過程は {EVALUATION_PROCESS_TEXT_MAX_CHARS} 文字以内にしてください"
             f"（{len(answer_process)} 文字）。",
         )
     screen_lines = [line.strip() for line in cells.get("screens", "").split("\n") if line.strip()]
@@ -983,7 +983,7 @@ _GUIDE_ROWS: tuple[tuple[str, ...], ...] = (
         PROCESS_HEADER,
         "任意",
         "担当者が書いた回答の過程（回答の手順・必要な確認事項・検索する資料と頁・検索の語・補足）。",
-        f"{PROCESS_IMPORT_TEXT_MAX_CHARS} 文字まで。取り込んだ後、画面で期待の下書きを作り、"
+        f"{EVALUATION_PROCESS_TEXT_MAX_CHARS} 文字まで。取り込んだ後、画面で期待の下書きを作り、"
         "確かめてから評価に使います。入力しただけでは評価の期待に追加されません。",
     ),
     (),
@@ -1046,7 +1046,7 @@ _GUIDE_ROWS: tuple[tuple[str, ...], ...] = (
         "比較の範囲",
         "",
         "同じケースを、選んだナレッジベースの範囲と、選んだ検索・回答プロファイルの範囲でそれぞれ評価します。",
-        "同じ六指標・閾値で比較します。プロファイル側は参照ナレッジベースと設定された業務ガイド・ルールを使います。",
+        "同じ六指標・閾値で比較します。プロファイル側は参照ナレッジベースと設定されたルールを使います。",
     ),
     (
         "実行時間",

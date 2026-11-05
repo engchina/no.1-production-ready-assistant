@@ -44,7 +44,6 @@ export function groupStagesByPhase<T extends { phase: string }>(stages: readonly
 }
 
 /** 検索方法に配置する、質問の解釈から根拠の判定までの区分。 */
-export function isRetrievalPromptStage(stage: { id?: string; phase: string }): boolean {
-  // 条件認識だけは回答前の確認の指示として「回答プロンプト」に置く。
-  return stage.id !== "support_guide_conditions" && ["question", "retrieval", "grounding"].includes(stage.phase);
+export function isRetrievalPromptStage(stage: { phase: string }): boolean {
+  return ["question", "retrieval", "grounding"].includes(stage.phase);
 }

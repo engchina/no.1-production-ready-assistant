@@ -350,7 +350,7 @@ function seedMarkedRun(mockApi: MockApi) {
         { text: WITHHELD_QUOTE, reasons: [{ code: "contradicted", label: "根拠と矛盾", detail: "合成の理由 D。" }] },
       ],
       answer_warnings: [
-        { code: "guide_check", label: "業務ガイドの手順の確認で問題が見つかった", detail: "合成の手順の説明がありません。" },
+        { code: "requests", label: "質問の要求の一部に答えていない", detail: "合成の手順の説明がありません。" },
       ],
     };
     return { ...artifact, content };
@@ -360,7 +360,7 @@ function seedMarkedRun(mockApi: MockApi) {
 async function expectMarkedAnswer(page: Page, body: ReturnType<Page["getByTestId"]>, viewportWidth: number) {
   // 回答全体の注意は本文の上の warning の Banner。
   const warnings = body.getByTestId("answer-passage-warnings");
-  await expect(warnings).toContainText("業務ガイドの手順の確認で問題が見つかった");
+  await expect(warnings).toContainText("質問の要求の一部に答えていない");
   await expect(warnings).toContainText("合成の手順の説明がありません。");
   await expect(warnings.getByRole("status")).toBeVisible();
   // 印の段落は本文に残る（外さない）。印を付けた段落は「資料により確認できた事項」の見出しの下に入れない。

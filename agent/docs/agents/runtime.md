@@ -60,7 +60,7 @@
    - 宣言はモデルに渡す候補を決めるだけ。ツール権限（「承認」「拒否」）・承認・呼び先のデータの認可は、実行の直前に別に効く。
    - ツールの層（`tools.py` とそこから import する module）は、スキル・業務 Agent・Run の module を import しない。Run の終わりの判定は上の層が差し込む（`tools.set_run_finished_check`）。スキルの一覧のツール `agent_skill_list` は、この向きに反するので削除した。
    - スキルの追加・変更・削除は、ツールの登録・MCP 接続・ツール権限を変えない。使用中のスキルの削除を 409 にするのは上の層の整合の検査で、下の層からの逆依存ではない。
-   - 実行環境が足すツールは能力の宣言ではない。`skill_reference_read`（その Run のスキルの参照文書）・`ask_user_confirmation`・`record_output`（業務 Agent の出力の項目）・会話の添付を読むツールは、Run 自身の業務 Agent・スキル・会話から組み込み Runtime が作り、外部の MCP のツールを足さない。Control Plane が自分で呼ぶ後始末（`nl2sql_cancel_job` など）と業務ガイドの照合も、モデルに渡すツールを広げない。どれも `tool_registry.invoke` を通す。
+   - 実行環境が足すツールは能力の宣言ではない。`skill_reference_read`（その Run のスキルの参照文書）・`ask_user_confirmation`・`record_output`（業務 Agent の出力の項目）・会話の添付を読むツールは、Run 自身の業務 Agent・スキル・会話から組み込み Runtime が作り、外部の MCP のツールを足さない。Control Plane が自分で呼ぶ後始末（`nl2sql_cancel_job` など）も、モデルに渡すツールを広げない。どれも `tool_registry.invoke` を通す。
    - MCP の resources / prompts は使わない（使うのは `tools/list` と `tools/call` だけ）。スキルの `references/` はスキル自身の参照文書。
    - テスト: `test_skill_tool_boundary.py`（`test_agent_api_rejects_direct_tool_fields`・`test_directly_listed_tool_is_not_exposed_to_the_run`・`test_tool_layer_does_not_import_skills`・`test_skill_changes_do_not_change_tool_provision`）、`test_builtin_runtime.py::test_instructions_and_tools_come_from_agent_and_skills`、`test_mcp_tool_safety.py::test_skill_allowlist_is_not_widened_by_a_colliding_name`、`test_skill_editor_api.py::test_skill_used_by_agent_draft_cannot_be_deleted`。
 2. **明示の構成を解決できなければ、暗黙に切り替えずに失敗する。**

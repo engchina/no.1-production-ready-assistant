@@ -117,88 +117,11 @@ describe("parseAnswerDiagnostics", () => {
   });
 });
 
-describe("回答の対応と業務ガイド（issue 1252）", () => {
-  it("回答の対応と業務ガイドを読み、未知の値・欠けた値は null にする", () => {
-    const parsed = parseAnswerDiagnostics({
-      outcome: "needs_clarification",
-      guide: { guide_id: "g1", title: "権限の付与", revision: 2 },
-    });
-    expect(parsed?.outcome).toBe("needs_clarification");
-    // 条件を持たない古い記録（#1238）も、名前と版だけで読む。
-    expect(parsed?.guide).toEqual({
-      guideId: "g1",
-      title: "権限の付与",
-      revision: 2,
-      known: [],
-      unresolved: [],
-      applicability: [],
-    });
-    expect(parsed?.guideLoadFailed).toBe(false);
-    expect(parseAnswerDiagnostics({ outcome: "other", guide: { title: "x" } })).toMatchObject({
-      outcome: null,
-      guide: null,
-    });
-    expect(parseAnswerDiagnostics({})).toMatchObject({ outcome: null, guide: null });
-  });
-
-  it("業務ガイドの条件の状態（分かっている・分からない・候補が複数）と適用範囲を読む（issue 1287）", () => {
-    const parsed = parseAnswerDiagnostics({
-      outcome: "conditional",
-      guide: {
-        guide_id: "g1",
-        revision: 3,
-        title: "権限の付与",
-        decision: "branch",
-        known_conditions: [
-          { id: "role", label: "ロール", value: "管理者", source: "question", state: "known" },
-          { id: "tenant", label: "テナント", value: "本社", source: "user", state: "known" },
-          { id: "kind", label: "項目の種類", value: "選択", source: "document", state: "known" },
-          { id: "", label: "", value: "x" },
-        ],
-        unknown_conditions: [
-          { id: "plan", label: "契約プラン", handling: "branch", state: "unknown", candidates: [] },
-          {
-            id: "version",
-            label: "製品の版",
-            handling: "ask",
-            state: "conflicting",
-            candidates: ["v1", "v2"],
-          },
-          // 古い記録（#1238）は state を持たない。候補が 1 つだけの矛盾も「分からない」に寄せる。
-          { id: "region", label: "地域" },
-          { id: "os", label: "OS", handling: "other", state: "conflicting", candidates: ["Linux"] },
-        ],
-        applicability: { business_domains: "matched", versions: "unverified", other: "matched" },
-      },
-    });
-    expect(parsed?.guide).toEqual({
-      guideId: "g1",
-      title: "権限の付与",
-      revision: 3,
-      known: [
-        { id: "role", label: "ロール", value: "管理者", source: "question" },
-        { id: "tenant", label: "テナント", value: "本社", source: "user" },
-        { id: "kind", label: "項目の種類", value: "選択", source: "document" },
-      ],
-      unresolved: [
-        { id: "plan", label: "契約プラン", state: "unknown", candidates: [], handling: "branch" },
-        { id: "version", label: "製品の版", state: "conflicting", candidates: ["v1", "v2"], handling: "ask" },
-        { id: "region", label: "地域", state: "unknown", candidates: [], handling: null },
-        { id: "os", label: "OS", state: "unknown", candidates: [], handling: null },
-      ],
-      applicability: [
-        { key: "business_domains", state: "matched" },
-        { key: "versions", state: "unverified" },
-      ],
-    });
-  });
-
-  it("公開の業務ガイドを読み込めなかった記録を読む（issue 1287）", () => {
-    expect(parseAnswerDiagnostics({ guide_load_failed: true })).toMatchObject({
-      guide: null,
-      guideLoadFailed: true,
-    });
-    expect(parseAnswerDiagnostics({ guide_load_failed: "true" })?.guideLoadFailed).toBe(false);
+describe("回答の対応（issue 1252）", () => {
+  it("回答の対応を読み、未知の値・欠けた値は null にする", () => {
+    expect(parseAnswerDiagnostics({ outcome: "needs_clarification" })?.outcome).toBe("needs_clarification");
+    expect(parseAnswerDiagnostics({ outcome: "other" })?.outcome).toBeNull();
+    expect(parseAnswerDiagnostics({})?.outcome).toBeNull();
   });
 
   it("「答えた」以外の対応だけをバッジにする", () => {

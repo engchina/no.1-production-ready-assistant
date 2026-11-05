@@ -12,7 +12,6 @@ import {
 const GLOBAL_QUERY_FIELDS = [
   "query_strategy", "answer_flow", "neighbor_child_count", "rerank_enabled", "auto_field_filter_enabled",
   "screen_linking_enabled", "request_coverage_retrieval_enabled",
-  "guide_step_retrieval_enabled", "guide_step_max_queries", "guide_step_deadline_seconds",
 ];
 
 // #3719: 空・単一ページでも表示し、4一覧のページ操作と作業状態を確かめる。
@@ -20,7 +19,6 @@ for (const [tab, paginationId, kind] of [
   ["登録済みQ&A", "approved-faq-pagination", "faq"],
   ["用語・同義語", "runtime-knowledge-terms-pagination", "terms"],
   ["確認・回答ルール", "runtime-knowledge-rules-pagination", "rules"],
-  ["業務ガイド", "support-guides-pagination", "guides"],
 ]) {
   test(`知識一覧のページング: ${tab}`, { tag: "@responsive" }, async ({ page }, testInfo) => {
     await mockDefaultSearchAnswerProfile(page, () => {});
@@ -30,9 +28,8 @@ for (const [tab, paginationId, kind] of [
       return {
         id: `item-${index}`, question: name, answer: "合成の回答", alternate_questions: [],
         term: name, aliases: [], description: "合成の説明", title: name, content: "合成の指示",
-        triggers: [], status: kind === "guides" ? "active" : "approved",
-        guide_id: `guide-${index}`, published_revision: null, draft_revision: 1,
-        has_unpublished_changes: true, updated_at: "2026-10-01T00:00:00Z", updated_by: null,
+        triggers: [], status: "approved",
+        updated_at: "2026-10-01T00:00:00Z", updated_by: null,
       };
     });
     const response = (data: unknown) => ({ json: { data, error_messages: [], warning_messages: [] } });
@@ -40,8 +37,6 @@ for (const [tab, paginationId, kind] of [
       route.fulfill(response({ records: kind === "faq" ? rows() : [], enabled: true })));
     await page.route("**/api/search-answer-profiles/bv-default/runtime-knowledge", (route) =>
       route.fulfill(response({ terms: kind === "terms" ? rows() : [], rules: kind === "rules" ? rows() : [] })));
-    await page.route("**/api/search-answer-profiles/bv-default/support-guides**", (route) =>
-      route.fulfill(response(rows())));
     const open = async () => { await page.getByRole("tab", { name: tab, exact: true }).click(); };
     await page.goto("/search-answer-profiles?id=bv-default");
     await open();
@@ -164,7 +159,6 @@ for (const viewport of [
     await expect(settings.getByRole("heading", { level: 3 })).toHaveText([
       "1 つの文書から採る根拠の上限",
       "回答モデル",
-      "業務ガイドを使用する",
     ]);
     await expect(settings.getByRole("heading", { name: "検索インデックス" })).toHaveCount(0);
     // 品質評価は検索・回答プロファイルで上書きしない(評価はグローバル設定だけで決まる。#301)。
@@ -236,7 +230,7 @@ test("検索・回答プロファイルを作成すると参照 KB と方針を�
   await expect(page.getByRole("button", { name: "新規作成" })).toBeVisible();
 });
 
-test("個別設定は残した項目だけを保存する", { tag: "@responsive" }, async ({ page }, testInfo) => {
+test("個別設定は残した項目だけを保存する", { tag: "@responsive" }, async ({ page }) => {
   let body = null as Record<string, unknown> | null;
   await mockSearchAnswerProfiles(page, [], (value) => { body = value; });
   await page.goto("/search-answer-profiles?id=new");
@@ -254,41 +248,15 @@ test("個別設定は残した項目だけを保存する", { tag: "@responsive"
   await model.getByRole("button", { name: "検索・回答プロファイルで上書き" }).click();
   await model.getByRole("combobox").click();
   await page.getByRole("option", { name: "モデル B", exact: true }).click();
-  await page.getByRole("switch", { name: "業務ガイドを使用する" }).click();
-  await page.getByTestId("search-answer-profile-guide-matching").screenshot({ path: testInfo.outputPath("guide-usage-switch.png") });
   await page.getByRole("group", { name: "確定の操作" }).getByRole("button", { name: "作成", exact: true }).click();
   await expect.poll(() => body?.name).toBe("プロファイル A");
   const config = body?.config as { answer_model_id?: string; query?: Record<string, unknown> };
   expect(config.answer_model_id).toBe("model-b");
   expect(config.query?.max_anchors_per_document).toBe(0);
-  expect(config.query?.support_guide_enabled).toBe(true);
   for (const key of [...GLOBAL_QUERY_FIELDS, "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in (config.query ?? {})).toBe(false);
 });
 
-test("業務ガイドは既定 OFF の単一スイッチで保存・再表示する", { tag: "@responsive" }, async ({ page }, testInfo) => {
-  let body = null as Record<string, unknown> | null;
-  await mockDefaultSearchAnswerProfile(page, (value) => { body = value; });
-  await page.goto("/search-answer-profiles?id=bv-default");
-  const panel = page.getByTestId("search-answer-profile-guide-matching");
-  const toggle = panel.getByRole("switch", { name: "業務ガイドを使用する" });
-  const save = page.getByRole("group", { name: "確定の操作" }).getByRole("button", { name: "保存", exact: true });
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await expect(panel).toContainText("既定値は OFF です");
-  await expect(panel.getByRole("switch")).toHaveCount(1);
-  await expect(page.getByRole("group", { name: "業務ガイドの手順ごとに探す", exact: true })).toHaveCount(0);
-  await page.getByRole("textbox", { name: "説明", exact: true }).fill("合成の設定の検証用");
-  for (const enabled of [true, false]) {
-    await toggle.click();
-    await save.click();
-    await expect.poll(() => (body?.config as { query?: { support_guide_enabled?: boolean } })?.query?.support_guide_enabled).toBe(enabled);
-    await page.reload();
-    await expect(toggle).toHaveAttribute("aria-checked", String(enabled));
-    await panel.screenshot({ path: testInfo.outputPath(`guide-usage-${enabled ? "on" : "off"}.png`) });
-    await expectNoPageOverflow(page);
-  }
-});
-
-// #3053・#3523: 実体・章節の拡張と業務ガイドの手順ごとの検索（上限・期限を含む）は全体設定だけで決め、
+// #3053・#3523: 実体・章節の拡張は全体設定だけで決め、
 // 検索・回答プロファイルは表示も保存もしない。
 test("検索方法の全体設定の項目は表示せず、古い個別設定を保存しない", { tag: "@responsive" }, async ({ page }, testInfo) => {
   let body = null as Record<string, unknown> | null;
@@ -297,13 +265,12 @@ test("検索方法の全体設定の項目は表示せず、古い個別設定�
     rerank_enabled: false, auto_field_filter_enabled: true,
     screen_linking_enabled: true, request_coverage_retrieval_enabled: false,
     section_expansion_enabled: false, section_expansion_max_levels: 2, section_expansion_input_token_percent: 30,
-    guide_step_retrieval_enabled: false, guide_step_max_queries: 0, guide_step_deadline_seconds: 10,
   });
   await page.goto("/search-answer-profiles?id=bv-default");
-  for (const name of ["質問の拡張", "回答の生成方式", "根拠の前後から加える数", "回答の検索のオプション", "手順ごとの検索の上限", "手順ごとの検索の時間上限（秒）"]) {
+  for (const name of ["質問の拡張", "回答の生成方式", "根拠の前後から加える数", "回答の検索のオプション"]) {
     await expect(page.getByRole("heading", { name, exact: true })).toHaveCount(0);
   }
-  for (const name of ["Rerank で検索候補を並べ替える", "質問から項目の条件を読み取る", "画面目録で操作画面を探す", "根拠の無い要求を探し直す", "業務ガイドの手順ごとに探す"]) {
+  for (const name of ["Rerank で検索候補を並べ替える", "質問から項目の条件を読み取る", "画面目録で操作画面を探す", "根拠の無い要求を探し直す"]) {
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(0);
   }
   for (const name of ["章節で広げる根拠"]) {
@@ -315,7 +282,7 @@ test("検索方法の全体設定の項目は表示せず、古い個別設定�
   const query = (body?.config as { query?: Record<string, unknown> })?.query ?? {};
   for (const key of [...GLOBAL_QUERY_FIELDS, "section_expansion_enabled", "section_expansion_max_levels", "section_expansion_input_token_percent"]) expect(key in query).toBe(false);
   await page.reload();
-  await page.getByTestId("search-answer-profile-guide-matching").scrollIntoViewIfNeeded();
+  await page.getByTestId("search-answer-profile-clarification").scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath("global-search-options.png") });
   await expectNoPageOverflow(page);
 });
@@ -1434,7 +1401,7 @@ test("質問の理解は段階順の独立 Tab で差分を保存し、認識結
   });
   await page.goto("/search-answer-profiles?id=bv-default");
   const tabs = page.getByRole("tablist", { name: "プロファイルの知識", exact: true });
-  await expect(tabs.getByRole("tab")).toHaveText(["登録済みQ&A", "質問の理解", "用語・同義語", "確認・回答ルール", "業務ガイド", "ドメインキーワード"]);
+  await expect(tabs.getByRole("tab")).toHaveText(["登録済みQ&A", "質問の理解", "用語・同義語", "確認・回答ルール", "ドメインキーワード"]);
   await tabs.getByRole("tab", { name: "質問の理解", exact: true }).click();
   const panel = page.getByTestId("question-understanding-panel");
   const cause = panel.getByRole("textbox", { name: "原因を尋ねる語", exact: true });

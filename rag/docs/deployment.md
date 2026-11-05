@@ -616,21 +616,6 @@ migration は値の書き換えだけで、データを消さない（承認は�
    `SELECT document_id, effective_period FROM rag_documents WHERE effective_period IS NOT NULL AND classification IS NULL`
    で分かるので、要るなら文書の詳細で有効期間を入れ直す。
 
-## 既存環境の更新手順（#2395 業務ガイドの手順ごとの検索と参照の頁）
-
-業務ガイドの資料に頁の範囲（`references[].page_ranges`）を、手順に参照（`steps[].references`）を足し、内容の形の版
-（`schema_version`）を 2 にした。版 1 の内容・取り込みの JSON は受け付けない（取り込む JSON の `schema_version` を 2 にする）。
-回答では、照合した業務ガイドの手順（分岐で残った手順）ごとに「質問 + 手順の検索の手がかり」で検索し、手順の参照の頁に絞った
-検索の根拠を順位に関係なく回答の材料に入れる。
-
-1. システムテーブルを更新する（migration `20261018_004_support_guide_schema_v2`）。保存済みの下書きと公開の版の
-   `schema_version` を 1 から 2 に書き換える（ほかの値は変えない。データは消えない。承認は要らない）。
-2. 設定（`rag/backend/.env`。どれも任意で既定のままでよい）: `RAG_GUIDE_STEP_RETRIEVAL_ENABLED`（既定 true）・
-   `RAG_GUIDE_STEP_MAX_QUERIES`（4）・`RAG_GUIDE_STEP_CHUNKS_PER_STEP`（2）・`RAG_GUIDE_REFERENCE_MAX_CHUNKS`（4）・
-   `RAG_GUIDE_STEP_DEADLINE_SECONDS`（60。#2826）と、追加の検索（手順ごとの検索・小問ごとの検索・根拠の無い要求の再検索）の回数の合計の枠
-   `RAG_EXTRA_RETRIEVAL_MAX_QUERIES`（8）。手順ごとの検索の ON / OFF と回数・時間の上限は全体設定だけで決め、検索・回答プロファイルでは上書きしない（上限は #3523 から）。
-3. backend を再起動する。
-
 ## 既存環境の更新手順（#2847 文書分割を backend 内で実行）
 
 すべての文書分割方式を backend 内で直接実行する。分割用の HTTP 委譲、専用サービスと HTTP 契約を削除し、
@@ -1339,7 +1324,7 @@ PDF（2 段以上。既定 11 ページ以上）を段（既定 10 ページ）�
    `clarification_json`（CLOB）を無ければ足す。データを削除しないので承認は要らない）。**更新するまで、チャットの送信は
    列が無くて失敗する**ので、backend の更新と同時に行う。
 2. backend を再起動する。検索・回答プロファイルの設定「曖昧な質問の扱い」は既定が「確認してから回答する」で、今までと同じに
-   ルールの確認・業務ガイドの条件の確認を出す。
+   ルールの確認を出す。
 
 ## 既存環境の更新手順（#1438 章節と chunk の対応・MCP の章節の読み取り）
 
@@ -1761,7 +1746,7 @@ uv run python -m app.rag.file_processing_staging_cli \
 - `RAG_RRF_K`: hybrid retrieval の Reciprocal Rank Fusion 定数。小さいほど上位 rank を強く優先する。golden set で keyword/vector の寄与と citation 安定性を確認して調整する。
 - `RAG_EMBEDDING_CACHE_ENABLED` / `RAG_EMBEDDING_CACHE_MAX_ENTRIES` / `RAG_EMBEDDING_BATCH_SIZE`: backend process 内で埋め込みの結果を LRU cache する。cache key は本文そのものではなく、model id、input type、dimension、本文 SHA-256 から作る。batch 内や連続検索で同じ query/chunk が出た場合は miss だけを OCI へ送る。miss は最大 96 件かつ合計 100,000 文字の先に達した単位で OCI embedding request に分割し、返却順を元入力順へ戻す。単一入力は 100,000 文字を超えると拒否し、本文を暗黙に切り詰めない。[Cohere Embed 4](https://docs.oracle.com/en-us/iaas/Content/generative-ai/cohere-embed-4.htm) の 128k token は、実 API の応答では入力 1 件ごとの上限として検証される（超えると HTTP 400 の `inputs[i] is too long`。#2467）。文字数の予算はこれとは別の保守的な保護値である。OCI はサービスの高負荷を HTTP 400（`high load`）でも返すため、embedding はこれを一時的な不可用として再試行し、再試行ではバッチを最大 8 分割して小さい要求で送る。空の入力（OCI は HTTP 400 で拒否する）は送る前に止める。再試行しても失敗したら、応答本文・入力本文を残さずに、HTTP status・サービスのエラーコード・理由・バッチの位置・件数・文字数・UTF-8 の byte 数（token 数の上限の見積もり）を job のエラーと構造化ログ `embedding_request_failed` に残す。worker 間共有はしないため、容量と batch size は worker 数、メモリ、OCI payload limit、p95 latency を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
 - `RAG_RERANK_CACHE_ENABLED` / `RAG_RERANK_CACHE_MAX_ENTRIES`: backend process 内で再ランクの結果を LRU cache する。cache key は query/document 原文ではなく SHA-256、model id、top_n、document 順序から作る。候補順や top_n が変わると別 cache entry になる。頻出 FAQ / 評価実行 / 再検索の p95 latency と OCI 呼び出し数を見て調整する。`MAX_ENTRIES=0` は無効化と同じ。
-- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、前段に reverse proxy を置くときは回答生成・評価・MCP・業務ガイドを試すの path を 660 秒以上待たせる（配備は reverse proxy を作らない。#19。backend の 504 と理由が画面に届くよう、外側ほど長くする）。
+- `RAG_ANSWER_TIMEOUT_SECONDS`: LLM を呼ぶ回答生成（`/api/search`・`/api/search/stream`・チャットの送信・MCP・品質評価の 1 ケース）の通しの timeout（既定 600 秒で、上限の LLM 1 回の timeout の上限と同じ。#375 / #383 / #1425。推論の量の既定 medium で推論型のモデルの 1 回の呼び出しが数十秒になるため 300 秒から広げた）。agentic（検索の計画・multi_hop の再分解）を使う検索・回答プロファイルでは LLM を最大 3 回呼ぶため、推論型のモデルの p95 latency × 呼び出し回数より長くする。画面は SSE を打ち切らず、`/api/search` の非ストリームは 630 秒、前段に reverse proxy を置くときは回答生成・評価・MCP の path を 660 秒以上待たせる（配備は reverse proxy を作らない。#19。backend の 504 と理由が画面に届くよう、外側ほど長くする）。
 - 品質評価（golden set）は job（`/api/evaluation/jobs/run`。#390）で動く。1 ケースを `RAG_ANSWER_TIMEOUT_SECONDS` で打ち切り、時間切れになった工程をケースの結果（`error_stage` と `error_message`）に残して次のケースへ進む。job 全体は、投入時の回答の回数（ケース × 往復）× `RAG_ANSWER_TIMEOUT_SECONDS` と `RAG_EVALUATION_JOB_TIMEOUT_SECONDS`（最小値。既定 3600 秒、60〜86400）の大きいほうで打ち切り（86400 秒を超えない。#1430。推論型のモデルでは 1 回の回答が数分かかるため、固定の上限では問の数に応じて打ち切られる）、残りのケースは実行せずに失敗（`error_type=EvaluationTimeBudgetExceeded`）として結果を返す。job の上限は job の `time_limit_seconds` で返し、画面は「全体の上限 N 分」として出す。画面は job の状態を 2 秒ごとに取得して進捗（終わったケースの数 / 全体・実行中のケース・経過時間）を出し、取り消しもできる。評価 CLI は job の終わりを `RAG_EVALUATION_TIMEOUT_SECONDS`（未指定なら job の上限 + 300 秒）まで待ち、超えたら job を取り消す。
   - job は投入を受けた backend のプロセスの中で動き、状態は `rag_evaluation_jobs` に保存する（Gunicorn の別の worker に状態の取得・取り消しが届いても同じ結果になる）。backend の停止・再起動では実行中の job を失敗にし（別のプロセスは引き継がない）、プロセスが落ちて heartbeat が 120 秒途絶えた job も、次の状態の取得で失敗にする。同時に実行できる job は 2 件まで（全プロセスの合計）。終わった job は自動では消さない（#3235。以前は 7 日で消していた。結果は評価 artifact の `rag_evaluation_runs` にも残る）。
   - 以前の同期の `/api/evaluation/run` は、外部から直接呼ぶ利用のために残している。評価全体を 600 秒で打ち切る（#383。前段の reverse proxy の待ち時間はこれより長くする）。
@@ -1884,7 +1869,7 @@ OCI Guardrails の安全チェックと移行の CLI（`app.rag.guardrail_settin
 
 `RAG_ENGINE_DOMAIN_PROFILE_FILE` と作業ディレクトリの `domain_profile.json` を読む機能、および `RAG_ANSWER_PROFILE` / `RAG_ENGINE_PROFILE` の選択を廃止した。これらの変数は別名で受け付けず、残っていても実行には使わない。backend の `.env`、起動 shell、systemd の drop-in に残る定義は運用者が削除する。`DOCRAG_DOMAIN_PROFILE_FILE` の旧定義も新しい名前へ改名しない。
 
-ファイル自体や保存済みデータは自動削除しない。別名や判定に必要な設定は、内容を確認したうえで検索・回答プロファイルのページ管理の「用語・同義語」「ドメインキーワード」「回答ルール」「業務ガイド」へ必要な分だけ登録する。文書分類は保存済み metadata と手入力が正本となり、外部 taxonomy による名前の補正やパスからの大分類・中分類の推定は行わない。既存の chunk の分類と検索範囲は保持する。文書の再取込・DB migration は不要。
+ファイル自体や保存済みデータは自動削除しない。別名や判定に必要な設定は、内容を確認したうえで検索・回答プロファイルのページ管理の「用語・同義語」「ドメインキーワード」「回答ルール」へ必要な分だけ登録する。文書分類は保存済み metadata と手入力が正本となり、外部 taxonomy による名前の補正やパスからの大分類・中分類の推定は行わない。既存の chunk の分類と検索範囲は保持する。文書の再取込・DB migration は不要。
 
 一般的な日本語の質問理解は設定に依存せず維持する。SDK から `profile=` を渡していた場合は引数を除き、Prompt 上書きだけが必要なら Runtime の `prompt_overrides` を使う。Prompt の本文や保存済みの Prompt 設定は変更しない。
 

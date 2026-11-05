@@ -742,16 +742,12 @@ const agentJa = {
   // 3 製品で同じ概念は「資料との照合」と呼ぶ。内部の語（予算・reason の値）は出さない。
   "chat.review.conditions": "確かめた条件",
   "chat.review.clarifications": "確認待ちの質問",
-  "chat.review.guide": "使った業務ガイド",
   "chat.review.gaps": "まだ足りない情報",
   "chat.review.separator": "：",
   "chat.review.sourceWrap": "（{source}）",
   "chat.review.source.user": "あなたの答えから",
-  "chat.review.source.question": "質問の文から",
   "chat.review.previousValue": "前の値：{value}",
   "chat.review.options": "選択肢：{options}",
-  "chat.review.guideUntitled": "名前の無い業務ガイド",
-  "chat.review.guideRevision": "（第 {revision} 版）",
   // 回答の対応（#1314）。RAG の回答の詳細の対応のバッジ（search.answerDetails.outcome.*。#1252）と同じ文言。
   "chat.review.outcome.conditional": "条件付きの回答",
   "chat.review.outcome.needsClarification": "確認が必要",

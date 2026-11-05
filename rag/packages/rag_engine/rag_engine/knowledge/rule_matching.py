@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 # 既存の用途別方針を維持する。信頼度・管理者が定めた優先度ではない。
 LABEL_WEIGHT = 3.0
 CONTENT_WEIGHT = 1.0
-CALLER_SELECTED_WEIGHT = 1000.0
 
 
 @dataclass(frozen=True)
@@ -37,15 +36,10 @@ def rank_rules(
     text = analyze(question)
     question_tokens = set(tokens(question))
     candidates: list[CandidateMatch] = []
-    pinned: list[tuple[float, int, RuntimeRule]] = []
     by_key: dict[str, RuntimeRule] = {}
     labels_by_key: dict[str, list[str]] = {}
     for index, rule in enumerate(rules):
         if not rule.active:
-            continue
-        if "pinned" in rule.tags:
-            # 既存の呼出側で選択済みのルール。単語の命中・同意の証拠を捏造しない。
-            pinned.append((CALLER_SELECTED_WEIGHT, index, rule))
             continue
         clauses = tuple(
             Clause(
@@ -81,7 +75,7 @@ def rank_rules(
     eligible = [
         (item.candidate.score, item.candidate.order, by_key[item.candidate.key]) for item in ranked if item.candidate.condition.eligible
     ]
-    ordered = sorted([*pinned, *eligible], key=lambda item: (-item[0], item[1]))
+    ordered = sorted(eligible, key=lambda item: (-item[0], item[1]))
     ranks = {rule.rule_id: index + 1 for index, (_, _, rule) in enumerate(ordered)}
     selected = tuple(rule for _, _, rule in ordered[: max(1, limit)])
     selected_ids = {rule.rule_id for rule in selected}
@@ -104,24 +98,6 @@ def rank_rules(
                 "reason": reason,
                 "rank": ranks.get(candidate.key),
                 "offset_source": "question_input",
-            }
-        )
-    for _, _, rule in pinned:
-        decisions.append(
-            {
-                "source": "rule",
-                "key": rule.rule_id,
-                "matched_labels": [],
-                "accepted": rule.rule_id in selected_ids,
-                "selected": rule.rule_id in selected_ids,
-                "reason": "caller_selected" if rule.rule_id in selected_ids else "limit",
-                "score_kind": "ranking_only",
-                "score": CALLER_SELECTED_WEIGHT,
-                "rank": ranks[rule.rule_id],
-                "contributions": [],
-                "conditions": [],
-                "unmet": [],
-                "analysis_version": text.version,
             }
         )
     return RuleMatches(selected, tuple(decisions))

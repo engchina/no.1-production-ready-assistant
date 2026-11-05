@@ -1294,7 +1294,6 @@ _SECTION_KINDS = (
     ("quote_only_section", ""),
     ("unsourced_section", ""),
     ("marked_rules_section", ""),
-    ("guide_notes_section", ""),
     ("gaps_section", "not_a_claim"),
     ("unverified_section", "not_a_claim"),
     ("deadline_section", "not_a_claim"),

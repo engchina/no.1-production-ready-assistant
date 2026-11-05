@@ -105,10 +105,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
     "rerank_enabled": "rag_rerank_enabled",
     "screen_linking_enabled": "rag_screen_linking_enabled",
     "request_coverage_retrieval_enabled": "rag_request_coverage_retrieval_enabled",
-    # 業務ガイドの手順ごとの検索(#2395)。None は全体の既定(on / 上限 4)。
-    "guide_step_retrieval_enabled": "rag_guide_step_retrieval_enabled",
-    "guide_step_max_queries": "rag_guide_step_max_queries",
-    "guide_step_deadline_seconds": "rag_guide_step_deadline_seconds",
     "auto_field_filter_enabled": "rag_auto_field_filter_enabled",
     # 章節の拡張(#1436)。None は Settings の既定(拡張は on / 4 段 / 50%)。
     "section_expansion_enabled": "rag_section_expansion_enabled",
@@ -118,12 +114,6 @@ _QUERY_FIELD_MAP: dict[str, str] = {
     ),
     # rerank の後、起点に採る同じ文書の chunk の上限(#2167)。None は Settings の既定(5)。
     "max_anchors_per_document": "rag_max_anchors_per_document",
-    # 業務ガイドの照合(#2398)。None は Settings の既定(どちらも OFF)。
-    "support_guide_enabled": "rag_support_guide_enabled",
-    "support_guide_semantic_match_enabled": "rag_support_guide_semantic_match_enabled",
-    "support_guide_close_match_clarification_enabled": (
-        "rag_support_guide_close_match_clarification_enabled"
-    ),
 }
 
 # 外部 parser adapter backend -> その有効化 feature flag(Settings フィールド名)。
@@ -320,13 +310,6 @@ class KnowledgeBaseQueryConfig(BaseModel):
     screen_linking_enabled: bool | None = None
     # 根拠の無い要求だけを再検索する(#1279)。LLM は呼ばない(検索が 1 要求 1 回増える)。
     request_coverage_retrieval_enabled: bool | None = None
-    # 照合した業務ガイドの手順ごとに検索し、手順の参照の頁の根拠を入れる(#2395)。LLM は呼ばない
-    # (検索が手順ごとに増える)。None は全体の既定(on)。
-    guide_step_retrieval_enabled: bool | None = None
-    # 手順ごとの検索の回数の上限(参照の頁に絞った検索を含む)と期限(秒)。None は全体の既定(4 / 60)。
-    # ON / OFF と同じく、検索・回答プロファイルでは保存・適用しない(PROFILE_GLOBAL_QUERY_FIELDS)。
-    guide_step_max_queries: int | None = Field(default=None, ge=0, le=10)
-    guide_step_deadline_seconds: float | None = Field(default=None, ge=0, le=60)
     # 質問から抽出項目の条件を読み取る(#652)。LLM の呼び出しが 1 回増える。
     auto_field_filter_enabled: bool | None = None
     # 当たった chunk の章節から親の章節へ段階的に広げる(#1436)。None は既定(on)、false は使わない。
@@ -337,13 +320,6 @@ class KnowledgeBaseQueryConfig(BaseModel):
     # rerank の後、起点(上位 top_k 件)に採る同じ文書の chunk の上限(#2167)。None は既定(5)、
     # 0 は上限なし。LLM は呼ばない。
     max_anchors_per_document: int | None = Field(default=None, ge=0, le=20)
-    # 業務ガイドの意味の照合(#2398)。質問ごとに埋め込みの呼び出しが 1 回増える。None は全体の既定
-    # (OFF)。
-    # 未指定・null は OFF。既存プロファイルを自動的に有効へ変更しない。
-    support_guide_enabled: bool | None = None
-    support_guide_semantic_match_enabled: bool | None = None
-    # 上位の 2 つの業務ガイドの点が近いとき、どのガイドかを確かめる(#2398)。None は全体の既定(OFF)。
-    support_guide_close_match_clarification_enabled: bool | None = None
 
 
 class KnowledgeBaseAdapterConfig(BaseModel):

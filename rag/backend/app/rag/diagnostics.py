@@ -69,9 +69,7 @@ def rag_config_fingerprint(settings: Settings | None = None) -> str:
         "request_coverage_retrieval_enabled": (
             resolved_settings.rag_request_coverage_retrieval_enabled
         ),
-        # 業務ガイドの手順ごとの検索と追加の検索の枠(#2395)。
-        "guide_step_retrieval_enabled": resolved_settings.rag_guide_step_retrieval_enabled,
-        "guide_step_max_queries": resolved_settings.rag_guide_step_max_queries,
+        # 追加の検索の枠(#2395)。
         "extra_retrieval_max_queries": resolved_settings.rag_extra_retrieval_max_queries,
         "reference_expansion_enabled": resolved_settings.rag_reference_expansion_enabled,
         "reference_expansion_max_chunks": resolved_settings.rag_reference_expansion_max_chunks,

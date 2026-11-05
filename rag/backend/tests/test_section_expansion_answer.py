@@ -674,7 +674,7 @@ async def test_incomplete_or_unreadable_sections_never_count_as_complete(
     assert outcome.diagnostics["outcome"] == "conditional"
 
 
-@pytest.mark.parametrize("stage", ["guide", "coverage", "coverage_same_parent"])
+@pytest.mark.parametrize("stage", ["coverage", "coverage_same_parent"])
 @pytest.mark.usefixtures("stub_llm")
 async def test_supplemental_searches_complete_new_sections_before_generation(
     stage: str, section_map: SectionMapStub, monkeypatch: pytest.MonkeyPatch
@@ -685,7 +685,6 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
     from rag_engine.generation.answer_models import AnswerContext
     from rag_engine.generation.crag_support import _merge_crag_evidence
     from rag_engine.retrieval.context_builder import ContextChildEvidence, ContextParentEvidence
-    from rag_engine.retrieval.guide_steps import GuidePlan, GuideStep
 
     import app.rag.answer_engine as backend
 
@@ -771,56 +770,38 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
     monkeypatch.setattr(section_map_service, "chunk_section", owner)
     monkeypatch.setattr(section_map_service, "read_section", read)
     monkeypatch.setattr(backend.AnswerEngine, "_section_outline", engine_outline)
-    if stage == "guide":
-        monkeypatch.setattr(
-            backend,
-            "guide_step_plan",
-            lambda _: GuidePlan("guide-a", 1, (GuideStep("step-a", "設定"),)),
-        )
-        monkeypatch.setattr(
-            answering,
-            "_cover_guide_steps",
-            lambda question, context, *args, **kw: (
-                add_anchor(context),
-                {"steps": [], "added_chunk_ids": ["doc-1:c5"]},
-                (),
-            ),
-        )
-    else:
-        original = answering._cover_missing_requests
+    original = answering._cover_missing_requests
 
-        def cover(question: str, context: Any, *args: Any, **kwargs: Any) -> Any:
-            _, trace = original(question, context, *args, **kwargs)
-            trace["re_retrieval"] = {"applied": True, "added_chunk_ids": ["doc-1:c5"]}
-            return add_anchor(context), trace
+    def cover(question: str, context: Any, *args: Any, **kwargs: Any) -> Any:
+        _, trace = original(question, context, *args, **kwargs)
+        trace["re_retrieval"] = {"applied": True, "added_chunk_ids": ["doc-1:c5"]}
+        return add_anchor(context), trace
 
-        monkeypatch.setattr(answering, "_cover_missing_requests", cover)
-        import rag_engine.adapters.model_api as engine_api
-        from rag_engine.models.llm import GroundedDraft
+    monkeypatch.setattr(answering, "_cover_missing_requests", cover)
+    import rag_engine.adapters.model_api as engine_api
+    from rag_engine.models.llm import GroundedDraft
 
-        def explicit_gap(
-            system: str, prompt: str, config: Any, schema: type, **options: Any
-        ) -> Any:
-            if schema in (GroundedDraft, generation_draft_wire_model()):
-                generated_prompts.append(prompt)
-            result = _fake_llm(system, prompt, config, schema, **options)
-            if (
-                schema in (GroundedDraft, generation_draft_wire_model())
-                and "変更後に確認を実行します。" not in prompt
-            ):
-                data = result.model_dump(exclude_unset=True)
-                data["items"].append(
-                    {
-                        "kind": "gap",
-                        "text": "確認の根拠がありません。",
-                        "request_id": "Q1",
-                        "citations": [],
-                    }
-                )
-                return GroundedDraft.model_validate(data)
-            return result
+    def explicit_gap(system: str, prompt: str, config: Any, schema: type, **options: Any) -> Any:
+        if schema in (GroundedDraft, generation_draft_wire_model()):
+            generated_prompts.append(prompt)
+        result = _fake_llm(system, prompt, config, schema, **options)
+        if (
+            schema in (GroundedDraft, generation_draft_wire_model())
+            and "変更後に確認を実行します。" not in prompt
+        ):
+            data = result.model_dump(exclude_unset=True)
+            data["items"].append(
+                {
+                    "kind": "gap",
+                    "text": "確認の根拠がありません。",
+                    "request_id": "Q1",
+                    "citations": [],
+                }
+            )
+            return GroundedDraft.model_validate(data)
+        return result
 
-        monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
+    monkeypatch.setattr(engine_api, "parse_text_response", explicit_gap)
 
     outcome = await _engine(
         rag_answer_flow="standard_rag",
@@ -829,9 +810,6 @@ async def test_supplemental_searches_complete_new_sections_before_generation(
     ).run(SearchRequest(query="登録方法は？"))
     assert [key for key, _ in section_map.reads] == ["s1", "s2"]
     assert outcome.diagnostics["section_expansion"]["minimum_scope_complete"]
-    if stage == "guide":
-        assert "doc-1:c6" in {citation.chunk_id for citation in outcome.citations}
-    else:
-        # 追加原文は再生成へ渡る。新資料を使わない代役の回答は採用を強制しない。
-        assert len(generated_prompts) >= 2
-        assert "設定を変更します。" in generated_prompts[1]
+    # 追加原文は再生成へ渡る。新資料を使わない代役の回答は採用を強制しない。
+    assert len(generated_prompts) >= 2
+    assert "設定を変更します。" in generated_prompts[1]

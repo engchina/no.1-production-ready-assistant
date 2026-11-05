@@ -156,17 +156,3 @@ def test_generation_gate_binds_the_grader_verified_part_after_preparation():
     assert [part["status"] for part in view["answerable_parts"]] == ["supported"]
     assert view["aspect_checks"][0]["status"] == "supported"
     assert sum(len(span["text"]) for span in after) <= BUDGET
-
-
-def test_verified_quote_is_kept_when_the_parent_is_cut_to_guide_step_children():
-    # 業務ガイドの手順の根拠（priority_source_groups）では、親から子の本文だけを切り出す。
-    child = record("c1", 1, RELEVANT.strip())
-    options = {"anchors": [child], "scope_records": [child], "priority_source_groups": [["run:c1"]], "budget": BUDGET}
-    before = evidence_spans(QUESTION, [parent()], **options)
-    assert holds(before, RELEVANT.strip()) and not holds(before, QUOTE)
-
-    diagnostics: list[dict] = []
-    after = evidence_spans(QUESTION, [parent()], verified_quotes={"run:p1": [QUOTE]}, diagnostics=diagnostics, **options)
-    assert holds(after, RELEVANT.strip()) and holds(after, QUOTE)
-    assert [entry["status"] for entry in quote_entries(diagnostics)] == ["included"]
-    assert sum(len(span["text"]) for span in after) <= BUDGET

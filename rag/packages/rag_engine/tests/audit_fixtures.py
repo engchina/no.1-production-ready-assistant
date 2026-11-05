@@ -25,7 +25,6 @@ def legacy_audit_result(value: Mapping[str, Any] | BaseModel, schema: type[BaseM
     }
     for field, identity, expected, key, binding in [
         ("request_reviews", "request_id", wire.expected_request_ids, "requests", "request_binding"),
-        ("guide_requirement_reviews", "requirement_id", wire.expected_requirement_ids, "requirements", "requirement_binding"),
     ]:
         ids = [row[identity] for row in raw.get(field, [])]
         states = {name: "valid" if ids.count(name) == 1 else "duplicate" if ids.count(name) > 1 else "missing" for name in expected}
@@ -53,7 +52,7 @@ def legacy_audit_to_wire_fixture(value: Mapping[str, Any] | BaseModel, schema: t
         if row.get("source_applicability") is None:
             row["source_applicability"] = row["applicability"]
             row["source_condition"] = row["condition"]
-    for field, identity in [("request_reviews", "request_id"), ("guide_requirement_reviews", "requirement_id")]:
+    for field, identity in [("request_reviews", "request_id")]:
         rows = result[field]
         ids = [row[identity] for row in rows]
         if len(set(ids)) != len(ids):

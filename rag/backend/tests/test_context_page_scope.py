@@ -128,10 +128,12 @@ async def test_search_propagates_effective_page_scope(defer: bool) -> None:
     engine = AnswerEngine(Settings(), oracle=cast(Any, oracle), genai=cast(Any, FakeGenAi()))
     state = _SearchState()
     result = await engine._search(
-        SearchRequest(query="合成の質問"),
+        SearchRequest(
+            query="合成の質問",
+            filters={"page_ranges": '[{"document_id":"doc-1","page_start":2,"page_end":2}]'},
+        ),
         state,
         retrieval_queries=["合成の質問"],
-        page_ranges=[{"document_id": "doc-1", "page_start": 2, "page_end": 2}],
         defer_context=defer,
     )
     assert result.child_chunks

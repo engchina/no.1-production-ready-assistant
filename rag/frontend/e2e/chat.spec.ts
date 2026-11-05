@@ -1455,9 +1455,8 @@ test("回答フローの回答ではチャットにも根拠パネルと会話�
     reasoning_summary: "引用照合済みの説明 1 件、原文のみ提示 0 件、原文と一致せず除外 0 件。",
     external_data_required: true,
     external_data_items: ["申請者の役職"],
-    // 回答の対応と業務ガイド（#1252）。
+    // 回答の対応（#1252）。
     outcome: "needs_environment_data",
-    guide: { guide_id: "g1", title: "経費の上限を確かめる", revision: 3 },
     question_type: ["規則"],
     auto_field_filter: {
       conditions: [{ name: "金額", value_type: "number", op: "gte", value: "100000" }],
@@ -1525,7 +1524,6 @@ test("回答フローの回答ではチャットにも根拠パネルと会話�
   await expect(panel.getByText("会話の流れから補った質問: 経費精算の上限額は？")).toHaveCount(0);
   await expect(panel.getByText("信頼度: high")).toHaveCount(0);
   await expect(panel.getByTestId("answer-outcome-badge")).toHaveCount(0);
-  await expect(panel.getByTestId("answer-guide-badge")).toHaveCount(0);
   // 1 列（既定のモデル）でも、どのモデルの回答か・使ったモデルを出す（#649）。
   // 回答モデルへ根拠の画像を添付した回答（診断の models.attached_images）は、見出しにそのことを添える（#3444）。
   await expect(page.getByRole("heading", { name: "回答モデル: MODEL 1（画像も参照）", exact: true })).toBeVisible();
@@ -2485,8 +2483,8 @@ for (const viewport of [
   });
 }
 
-// 自由入力の条件は選択肢なしでも確認し、送信した値を会話へ引き継ぐ。
-test("業務ガイドの自由入力条件だけを確認して回答へ進める", { tag: "@responsive" }, async ({ page }) => {
+// 選択肢の無いルールの確認は自由入力で答え、送信した値を会話へ引き継ぐ。
+test("選択肢の無いルールの確認に自由入力で答えて回答へ進める", { tag: "@responsive" }, async ({ page }) => {
   await mockChat(page);
   await page.route("**/api/search-answer-profiles/*/approved-faq/suggest", (route) =>
     route.fulfill({ json: { data: { suggestions: [] }, error_messages: [], warning_messages: [] } })
@@ -2496,7 +2494,7 @@ test("業務ガイドの自由入力条件だけを確認して回答へ進め�
       json: {
         data: {
           suggestion: {
-            rule_id: "guide:g-text:target",
+            rule_id: "rule:rule-text",
             rule_title: "資料の項目を確認する",
             clarification: {
               question: "対象の資料と項目を教えてください。",
@@ -2534,11 +2532,11 @@ test("業務ガイドの自由入力条件だけを確認して回答へ進め�
   await expect(confirm).toBeEnabled();
   await expectNoPageOverflow(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await card.screenshot({ path: test.info().outputPath("guide-text.png") });
+  await card.screenshot({ path: test.info().outputPath("free-text-clarification.png") });
   await confirm.click();
   await expect.poll(() => bodies.length).toBe(1);
   expect(bodies[0]).toMatchObject({
-    clarification: { rule_id: "guide:g-text:target", option_ids: [], other_text: "資料 A の項目 B" },
+    clarification: { rule_id: "rule:rule-text", option_ids: [], other_text: "資料 A の項目 B" },
   });
   await expect(card).toHaveCount(0);
 });

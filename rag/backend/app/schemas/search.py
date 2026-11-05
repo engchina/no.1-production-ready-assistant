@@ -269,7 +269,7 @@ class SearchRequest(BaseModel):
         default_factory=dict,
         max_length=30,
         description=(
-            "業務ガイドの条件の値（条件の id → 値。#1238）。利用者が確認の質問に答えた値や、"
+            "確認の条件の値（条件の id → 値。#1238）。利用者が確認の質問に答えた値や、"
             "Agent が聞いた値を渡す。分かっている条件は聞き直さない。"
         ),
     )

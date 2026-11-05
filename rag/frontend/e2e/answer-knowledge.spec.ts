@@ -127,7 +127,6 @@ for (const viewport of [
       "質問の理解",
       "用語・同義語",
       "確認・回答ルール",
-      "業務ガイド",
       "ドメインキーワード",
     ]);
     await expect(page.getByRole("tab", { name: "登録済みQ&A" })).toHaveAttribute(

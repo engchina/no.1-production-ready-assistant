@@ -8,7 +8,7 @@
 で、失敗しても検索・回答は止めない。
 
 記録しない実行: 根拠の検索だけ（`retrieval_only`。ナレッジベースの検索テスト・レシピの検索比較）、
-業務ガイドの下書きで試した回答、品質評価、MCP（Agent が呼ぶ `rag_search`。Agent の実行履歴に残る）。
+品質評価、MCP（Agent が呼ぶ `rag_search`。Agent の実行履歴に残る）。
 """
 
 from __future__ import annotations

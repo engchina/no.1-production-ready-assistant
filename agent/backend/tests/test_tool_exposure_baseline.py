@@ -109,8 +109,8 @@ def test_standard_agents_stay_below_the_progressive_disclosure_threshold(
 
     # Skill の許可の範囲だけを渡している（全接続の全ツールではない）。
     assert {agent_id: count for agent_id, count, _, _ in rows} == {
-        "default": 13,
-        "rag-research": 9,
+        "default": 12,
+        "rag-research": 8,
         "data-query": 5,
     }
     for agent_id, _count, definitions, _instructions in rows:

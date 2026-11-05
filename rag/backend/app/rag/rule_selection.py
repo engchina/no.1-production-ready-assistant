@@ -15,13 +15,13 @@ from pr_backend_core.observability.tracing import observed_span
 from pydantic import BaseModel, ConfigDict, Field
 from rag_engine.resources.runtime import resolve_prompt
 
+from app.clients.enterprise_ai import EnterpriseAiClient
 from app.config import Settings
 from app.rag.search_answer_profile_knowledge import (
     SectionPages,
     _already_answered,
     unanswered_rule_clarifications,
 )
-from app.rag.support_guide_conditions import condition_client
 from app.schemas.search import SearchRequest
 from app.schemas.search_answer_profile_knowledge import ClarificationAnswer
 
@@ -56,6 +56,10 @@ class RuleSelection(BaseModel):
 class RuleSelections(BaseModel):
     model_config = ConfigDict(extra="forbid")
     conditions: list[RuleSelection] = Field(max_length=MAX_RULE_SELECTIONS)
+
+
+def condition_client(settings: Settings) -> EnterpriseAiClient:
+    return EnterpriseAiClient(settings=settings)
 
 
 def _exact(value: str) -> str:

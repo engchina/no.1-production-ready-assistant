@@ -79,30 +79,10 @@ def test_unverified_conclusion_is_still_conditional() -> None:
     assert "unverified_passages" in content["signals"]
 
 
-def test_guide_step_error_keeps_the_answer_and_needs_a_human() -> None:
-    # mt-delete-account-approved（2 回目の発言）: 業務ガイドの手順の検査の error
-    # （step_wrong_branch）。本文は置き換えず回答全体の警告にする（#2738）。資料が無いのでは
-    # ないので needs_human。
-    case = FIXTURE["mt-delete-account-approved"]
-    published = publish_answer(case["answer"], case["validation"]["result"])
-    assert published.body == case["answer"]
-    assert "guide_check" in [item["code"] for item in published.answer_warnings]
-    content = _outcome("mt-delete-account-approved")
-    assert (content["value"], content["basis"]) == ("needs_human", "validation_guide_check")
-    assert "check_errors" in content["signals"]
-
-
-def test_without_the_false_step_error_the_body_is_kept() -> None:
-    # RAG の手順の照合が満たした前提の言及を数えなくなると（#1491）、残る error は要求の不足だけで、
-    # 本文は外さず、内側の rag_search の対応に拠る。
-    case = FIXTURE["mt-delete-account-approved"]
-    result = json.loads(json.dumps(case["validation"]["result"]))
-    result["findings"] = [item for item in result["findings"] if item["check"] != "guide_steps"]
-    validation = {**case["validation"], "result": result}
+def test_request_error_keeps_the_body_and_uses_the_rag_search_outcome() -> None:
+    # 残る error が要求の不足だけなら、本文は外さず、内側の rag_search の対応に拠る。
     # #1453 の後の RAG は、承認・ロールを利用者の条件にして conditional を返す。
-    content = _outcome(
-        "mt-delete-account-approved", validation=validation, rag_outcome="conditional"
-    )
+    content = _outcome("mt-delete-account-approved", rag_outcome="conditional")
     assert (content["value"], content["basis"]) == ("conditional", "rag_search")
 
 

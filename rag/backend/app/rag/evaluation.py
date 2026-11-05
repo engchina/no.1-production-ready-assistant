@@ -114,9 +114,9 @@ ANSWER_JUDGE_UNAVAILABLE_MESSAGE = (
 )
 ANSWER_JUDGE_TIMEOUT_MESSAGE = "標準回答による評価が時間内に終わりませんでした。"
 ANSWER_JUDGE_ERROR_MESSAGE = "標準回答による評価を完了できませんでした。"
-# 返答の往復で、業務ガイドの照合に足す前の質問の数
-# （チャットの GUIDE_CONTEXT_TURNS と同じ。#1238 / #1284）。
-EVALUATION_GUIDE_CONTEXT_TURNS = 3
+# 返答の往復で、ルールの選択の認識に足す前の質問の数
+# （チャットの USER_CONTEXT_TURNS と同じ。#1238 / #1284）。
+EVALUATION_USER_CONTEXT_TURNS = 3
 logger = logging.getLogger(__name__)
 
 
@@ -239,24 +239,24 @@ class _TurnRun:
     conditions: Mapping[str, str] = field(default_factory=dict)
 
 
-# (検索・回答の request, Settings, 業務ガイドの照合に足す前の質問) → 解決した request と Settings。
+# (検索・回答の request, Settings, ルールの選択の認識に足す前の質問) → 解決した request と
+# Settings。
 ProfileResolver = Callable[
     [SearchRequest, Settings, Sequence[str]], Awaitable[tuple[SearchRequest, Settings]]
 ]
 
 
 async def _resolve_profile_context(
-    request: SearchRequest, settings: Settings, guide_context: Sequence[str] = ()
+    request: SearchRequest, settings: Settings, user_context: Sequence[str] = ()
 ) -> tuple[SearchRequest, Settings]:
-    """検索・回答と同じ解決で、プロファイルの KB・回答の設定・業務ガイドを当てる（#1249）。
+    """検索・回答と同じ解決で、プロファイルの KB・回答の設定を当てる（#1249）。
 
-    返答の往復（#1284）では、チャットと同じく前の質問も業務ガイドの照合に使う。確認の質問は回答として
-    測るため、検索の API と同じく ``interactive`` にしない（不明の条件は確認の質問になる）。
+    返答の往復（#1284）では、チャットと同じく前の質問もルールの選択の認識に使う。
     """
     from app.api.routes.search import _resolve_query_context
 
     resolved, resolved_settings, _kb, _view = await _resolve_query_context(
-        request, settings, guide_context=guide_context
+        request, settings, user_context=user_context
     )
     return resolved, resolved_settings
 
@@ -318,7 +318,7 @@ class EvaluationRunner:
         前と最後のケースの後に進捗を渡す（評価 job。#390）。
 
         `search_answer_profile_id` を渡すと、ケースごとに検索・回答と同じ解決（参照 KB・回答の
-        設定・用語・同義語・回答ルール・業務ガイド）をしてから回答する（#1249）。渡さなければ全体の既定（#301）。
+        設定・用語・同義語・回答ルール）をしてから回答する（#1249）。渡さなければ全体の既定（#301）。
 
         標準回答の比較範囲は、同じ評価の中（比較の pass を含む）で質問・標準回答・判定のモデルごとに
         1 回だけ固定する（#3570）。
@@ -431,7 +431,7 @@ class EvaluationRunner:
             return _case_skipped_result(case=case, trace_id=trace_id)
         case_started_at = perf_counter()
         # 最初の質問と、確認の質問への返答（#1284）を順に送る。返答はチャットと同じく、
-        # 前の往復を会話の履歴と業務ガイドの照合の文脈にし、分かった条件を足して渡す。
+        # 前の往復を会話の履歴とルールの選択の認識の文脈にし、分かった条件を足して渡す。
         turn_runs: list[_TurnRun] = []
         history: list[ChatTurn] = []
         prior_queries: list[str] = []
@@ -461,14 +461,14 @@ class EvaluationRunner:
             try:
                 case_pipeline: Any = pipeline
                 if search_answer_profile_id:
-                    # プロファイルの解決（KB・回答の設定・業務ガイド）。
+                    # プロファイルの解決（KB・回答の設定）。
                     # 失敗はケースの失敗にする。
                     request, case_settings = await self._profile_resolver(
                         request.model_copy(
                             update={"search_answer_profile_id": search_answer_profile_id}
                         ),
                         effective_settings,
-                        prior_queries[-EVALUATION_GUIDE_CONTEXT_TURNS:],
+                        prior_queries[-EVALUATION_USER_CONTEXT_TURNS:],
                     )
                     case_pipeline = self._pipeline or RagPipeline(settings=case_settings)
                     answer_settings = case_settings

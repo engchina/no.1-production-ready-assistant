@@ -97,8 +97,6 @@ RAG の検索・回答の経路（`POST /api/search`・チャット・MCP の `r
 | 要求ごとの根拠の探し直し（#1279） | 任意（`RAG_REQUEST_COVERAGE_RETRIEVAL_ENABLED`） | 再検索の失敗 → 既存の根拠で回答する | `DS`（`request_coverage_retrieval`）・`DX`（`request_coverage.re_retrieval.queries[].error`。例外の型の名前だけ。#3284） | 見せない | `rag/packages/rag_engine/rag_engine/retrieval/request_coverage.py::run_targeted_retrievals` |
 | 生成後の未回答の要求の探し直し（#2730） | 任意（`RAG_REQUEST_COVERAGE_RETRIEVAL_ENABLED`。生成前と予算を共有） | 検索・章節補完の失敗 → 採用済みの回答を維持 | `DS`（`unanswered_request_retrieval`）・`DX`（`request_coverage.after_generation`、round の `request_retrieval`。例外は型だけ） | 見せない | `rag/packages/rag_engine/rag_engine/generation/answering.py::synthesize_grounded_answer` |
 | 要求の分かち書き | 任意 | 失敗 → その要求を判定しない（unassessed） | なし（判定の結果が unassessed になる） | 見せない | `rag/packages/rag_engine/rag_engine/retrieval/request_coverage.py::coverage_targets` |
-| 業務ガイドの手順ごとの検索（#2395） | 任意（`RAG_GUIDE_STEP_RETRIEVAL_ENABLED`） | 失敗 → 既存の根拠で回答する | `DX`（`guide_step_retrieval` の `error`。型の名前だけ） | 見せない | `rag/packages/rag_engine/rag_engine/retrieval/guide_steps.py::run_step_searches` |
-| 業務ガイドの手順の充足の embedding（#2649） | 任意 | 失敗 → 語の判定（安全側）に戻る | `DX`（業務ガイドの記録の embedding の `failed`） | 見せない | `rag/packages/rag_engine/rag_engine/generation/grounded.py::GuideStepSemantics.lookup` |
 
 ### 生成・検証（rag_engine と backend）
 

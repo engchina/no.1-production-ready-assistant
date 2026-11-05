@@ -23,55 +23,10 @@ const ANSWER_OUTCOMES: readonly AnswerOutcome[] = [
   "insufficient_evidence",
 ];
 
-/** 業務ガイドの条件の、分からないときの扱い（backend の unknown_handling）。 */
-export type GuideConditionHandling = "ask" | "branch" | "handoff";
-
-/** 業務ガイドの適用範囲の項目（値のある項目だけ backend が出す。#1278）。 */
-export type GuideApplicabilityKey = "business_domains" | "object_types" | "versions";
-
-const GUIDE_APPLICABILITY_KEYS: readonly GuideApplicabilityKey[] = [
-  "business_domains",
-  "object_types",
-  "versions",
-];
-
-/** 回答に使った業務ガイドと、条件の状態（#1238 / #1278。backend の diagnostics.answer.guide）。 */
-export type AnswerGuide = {
-  guideId: string;
-  title: string;
-  /** 公開の版。 */
-  revision: number;
-  /**
-   * 分かっていた条件（値と出所）。source は user=確認の質問への答え / question=質問の文から読んだ /
-   * document=回答の根拠（画面の図の項目の種類。#2404）で決めた。
-   */
-  known: { id: string; label: string; value: string; source: "user" | "question" | "document" | null }[];
-  /**
-   * 分からなかった条件。state=conflicting は質問から複数の値（candidates）が読み取れて決められなかった
-   * 条件。handling は分からないときの扱い（古い記録など、無ければ null）。
-   */
-  unresolved: {
-    id: string;
-    label: string;
-    state: "unknown" | "conflicting";
-    candidates: string[];
-    handling: GuideConditionHandling | null;
-  }[];
-  /**
-   * 適用範囲の確かめ方（matched=質問・絞り込みの手がかりと合った / unverified=手がかりが無く
-   * 確かめていない）。制限の無い項目は出ない。
-   */
-  applicability: { key: GuideApplicabilityKey; state: "matched" | "unverified" }[];
-};
-
 export type AnswerDiagnostics = {
   crag: CragDiagnostics | null;
   /** 回答の対応（#1235）。古い記録など、無ければ null。 */
   outcome: AnswerOutcome | null;
-  /** 回答に使った業務ガイド（#1238）。使っていなければ null。 */
-  guide: AnswerGuide | null;
-  /** 公開の業務ガイドを読み込めず、業務ガイドを使わずに回答したか（#1278）。 */
-  guideLoadFailed: boolean;
   confidence: string;
   needsHumanReview: boolean | null;
   insufficientReason: string;
@@ -180,8 +135,6 @@ export function parseAnswerDiagnostics(
       ? (outcome as AnswerOutcome)
       : null,
     crag: parseCragDiagnostics(raw.crag_attempts),
-    guide: parseGuide(raw.guide),
-    guideLoadFailed: raw.guide_load_failed === true,
     confidence: String(raw.confidence ?? ""),
     needsHumanReview:
       typeof raw.needs_human_review === "boolean"
@@ -238,57 +191,6 @@ export function parseAnswerDiagnostics(
         }),
       };
     }),
-  };
-}
-
-function oneOf<T extends string>(value: unknown, values: readonly T[]): T | null {
-  return typeof value === "string" && (values as readonly string[]).includes(value)
-    ? (value as T)
-    : null;
-}
-
-function parseGuide(value: unknown): AnswerGuide | null {
-  const raw = record(value);
-  const revision = num(raw.revision);
-  if (typeof raw.title !== "string" || !raw.title || revision === null) return null;
-  const known = list(raw.known_conditions).flatMap((item): AnswerGuide["known"] => {
-    const entry = record(item);
-    const label = String(entry.label ?? "");
-    if (!label) return [];
-    const source = oneOf(entry.source, ["user", "question", "document"] as const);
-    return [{ id: String(entry.id ?? label), label, value: String(entry.value ?? ""), source }];
-  });
-  const unresolved = list(raw.unknown_conditions).flatMap((item): AnswerGuide["unresolved"] => {
-    const entry = record(item);
-    const label = String(entry.label ?? "");
-    if (!label) return [];
-    const candidates = list(entry.candidates).map(String).filter(Boolean);
-    // 矛盾は候補が 2 つ以上あるときだけ（候補が読めない古い記録などは「分からない」に寄せる）。
-    const state: "unknown" | "conflicting" =
-      entry.state === "conflicting" && candidates.length > 1 ? "conflicting" : "unknown";
-    const handling = oneOf(entry.handling, ["ask", "branch", "handoff"] as const);
-    return [
-      {
-        id: String(entry.id ?? label),
-        label,
-        state,
-        candidates: state === "conflicting" ? candidates : [],
-        handling,
-      },
-    ];
-  });
-  const scope = record(raw.applicability);
-  const applicability = GUIDE_APPLICABILITY_KEYS.flatMap((key): AnswerGuide["applicability"] => {
-    const state = oneOf(scope[key], ["matched", "unverified"] as const);
-    return state ? [{ key, state }] : [];
-  });
-  return {
-    guideId: String(raw.guide_id ?? ""),
-    title: raw.title,
-    revision,
-    known,
-    unresolved,
-    applicability,
   };
 }
 

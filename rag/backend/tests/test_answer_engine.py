@@ -3592,49 +3592,6 @@ def test_search_answer_profile_ignores_legacy_request_coverage() -> None:
     assert Settings().rag_request_coverage_retrieval_enabled is False
 
 
-async def test_guide_preview_is_recorded_without_extra_model_calls(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """下書きで試す回答（#1288）: 記録に印を残す。モデルの呼び出しは同じ。"""
-    import rag_engine.adapters.model_api as engine_api
-
-    from app.rag.pipeline import RagPipeline
-    from app.rag.support_guide_runtime import GUIDE_PREVIEW_KEY
-
-    calls: list[str] = []
-
-    def counting_llm(system: str, prompt: str, settings: Any, schema: type, **options: Any) -> Any:
-        calls.append(schema.__name__)
-        return _fake_llm(system, prompt, settings, schema, **options)
-
-    monkeypatch.setattr(engine_api, "parse_text_response", counting_llm)
-    request = SearchRequest(query="受注の登録方法は？", search_answer_profile_id="bv-1")
-
-    normal_oracle = SavingOracle()
-    await RagPipeline(
-        settings=Settings(),
-        oracle=normal_oracle,  # type: ignore[arg-type]
-        genai=FakeGenAi(),  # type: ignore[arg-type]
-    ).run(request, trace_id="trace-normal")
-    normal_calls = list(calls)
-    calls.clear()
-
-    marker = {"guide_id": "g-1", "draft_revision": 3, "published_revision": 2}
-    preview_oracle = SavingOracle()
-    response = await RagPipeline(
-        settings=Settings(rag_guide_preview=marker),
-        oracle=preview_oracle,  # type: ignore[arg-type]
-        genai=FakeGenAi(),  # type: ignore[arg-type]
-    ).run(request, trace_id="guide-preview-trace")
-
-    assert calls == normal_calls
-    saved = preview_oracle.saved[0]
-    assert saved["diagnostics"][GUIDE_PREVIEW_KEY] == marker
-    assert GUIDE_PREVIEW_KEY not in normal_oracle.saved[0]["diagnostics"]
-    assert response.diagnostics.answer is not None
-    assert response.diagnostics.answer[GUIDE_PREVIEW_KEY] == marker
-
-
 def test_diverse_candidates_adds_each_document_tail_without_changing_the_head() -> None:
     """融合の上位は変えず、上位に無い文書は上位 N 件、ある文書は続きの M 件を足す(#2228)。"""
     from app.rag.answer_engine import _diverse_candidates

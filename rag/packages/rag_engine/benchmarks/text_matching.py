@@ -37,9 +37,6 @@ def legacy_rules(question: str, rules: Sequence[RuntimeRule], limit: int) -> tup
     for index, rule in enumerate(rules):
         if not rule.active:
             continue
-        if "pinned" in rule.tags:
-            scored.append((1000, index, rule))
-            continue
         score = sum(3 for label in rule.labels() if _legacy_hit(question, label))
         if score and set(_tokens(question)) & set(_tokens(rule.content)):
             score += 1
@@ -73,7 +70,6 @@ def cases() -> tuple[Case, ...]:
         Case("chinese", "请删除项目", (RuntimeRule("zh", "合成 B", ("删除",)),), ("zh",)),
         Case("normalization-dedup", "alpha", (RuntimeRule("x", "alpha", ("ＡＬＰＨＡ", "alpha")),), ("x",)),
         Case("inactive", "alpha", (RuntimeRule("x", "alpha", status="deprecated"),), ()),
-        Case("pinned", "alpha", (*simple, RuntimeRule("p", "合成 P", tags=("pinned",))), ("p", "a")),
         Case("large-ties", "alpha", tuple(RuntimeRule(str(i), "alpha", (f"term_{i}",)) for i in range(1000)), tuple(map(str, range(6)))),
         Case(
             "large-label-set",

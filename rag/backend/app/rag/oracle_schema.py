@@ -45,11 +45,6 @@ from app.clients.oracle import (
 )
 from app.clients.oracle_run_history import oracle_run_history_schema_sql
 from app.clients.section_map_store import oracle_section_map_schema_sql
-from app.clients.support_guide_store import (
-    oracle_support_guide_embedding_schema_sql,
-    oracle_support_guide_revision_schema_sql,
-    oracle_support_guide_schema_sql,
-)
 from app.rag.ingestion_language import language_pack_artifact_statements
 from app.rag.request_context import with_system_access
 from app.rag.search_answer_profile_migration import rename_sql as search_answer_profile_rename_sql
@@ -57,7 +52,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261106_002"
+MIGRATION_ARTIFACT_VERSION = "20261106_003"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -227,23 +222,6 @@ def oracle_schema_sections() -> list[OracleSchemaSection]:
             name="search_answer_profile_knowledge",
             table_name="rag_search_answer_profile_knowledge",
             sql=oracle_search_answer_profile_knowledge_schema_sql(),
-        ),
-        # 業務ガイド（#1237）。頭（下書き）と公開の版。
-        OracleSchemaSection(
-            name="support_guides",
-            table_name="rag_support_guides",
-            sql=oracle_support_guide_schema_sql(),
-        ),
-        OracleSchemaSection(
-            name="support_guide_revisions",
-            table_name="rag_support_guide_revisions",
-            sql=oracle_support_guide_revision_schema_sql(),
-        ),
-        # 業務ガイドの公開の版の質問の例の埋め込み（意味の照合。#2398）。
-        OracleSchemaSection(
-            name="support_guide_embeddings",
-            table_name="rag_support_guide_embeddings",
-            sql=oracle_support_guide_embedding_schema_sql(),
         ),
         OracleSchemaSection(
             name="document_sections",
@@ -661,6 +639,19 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261106_003_retire_support_guides",
+            table_name="rag_support_guides",
+            sql=retire_support_guides_sql(),
+            destructive_note=(
+                "廃止する RAG_SUPPORT_GUIDES・RAG_SUPPORT_GUIDE_REVISIONS・"
+                "RAG_SUPPORT_GUIDE_EMBEDDINGS と全行、各表の索引・制約を削除します。"
+                "検索・回答プロファイル・ルール・回答の記録は削除しません。"
+                "必要なら適用前に各表を export してください。削除後は復元できません。"
+            ),
+        )
+    )
     return sections
 
 
@@ -700,6 +691,31 @@ BEGIN
 END;
 /
 """.strip()
+
+
+def retire_support_guides_sql() -> str:
+    """廃止した 3 表を FK の子から順に消す。
+
+    表があるときだけ消し、何度当てても同じ結果になる（冪等）。
+    """
+    drops = "".join(
+        f"""
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = '{table.upper()}';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'DROP TABLE {table} PURGE';
+    END IF;"""
+        for table in (
+            "rag_support_guide_embeddings",
+            "rag_support_guide_revisions",
+            "rag_support_guides",
+        )
+    )
+    return f"""
+DECLARE
+    v_count NUMBER;
+BEGIN{drops}
+END;
+"""
 
 
 def retire_guardrail_columns_sql() -> str:
@@ -1260,14 +1276,35 @@ END;
 
 
 def support_guide_embeddings_migration_sql() -> str:
-    """業務ガイドの質問の例の埋め込みの表（rag_support_guide_embeddings）を無ければ作る（#2398）。
+    """適用済みの環境の履歴を保つ過去の migration（表は `20261105_001` が消す）。
 
-    表を足すだけでデータは変えない。DDL は正本（``oracle_support_guide_embedding_schema_sql``）から
-    作る。埋め込みは意味の照合を使うときに作るので、既存の公開の版の行は足さない。
+    基準の schema にこの表の親が無いので、親の表があるときだけ作る（古い環境の更新でも失敗しない）。
     """
-    return _create_missing_objects_sql(
-        oracle_support_guide_embedding_schema_sql(), "業務ガイドの埋め込み"
-    )
+    return """DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
+    IF v_count = 0 THEN
+        RETURN;
+    END IF;
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS';
+    IF v_count = 0 THEN
+        EXECUTE IMMEDIATE
+            'CREATE TABLE rag_support_guide_embeddings ( '
+            || 'guide_id         VARCHAR2(64) NOT NULL, '
+            || 'revision         NUMBER(19) NOT NULL, '
+            || 'model_id         VARCHAR2(256) NOT NULL, '
+            || 'dimension        NUMBER(10) NOT NULL, '
+            || 'examples_sha256  CHAR(64) NOT NULL, '
+            || 'vectors_json     CLOB NOT NULL, '
+            || 'created_at       TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL, '
+            || 'CONSTRAINT rag_support_guide_embeddings_pk PRIMARY KEY (guide_id, revision), '
+            || 'CONSTRAINT rag_support_guide_embeddings_rev_fk FOREIGN KEY (guide_id, revision) '
+            || 'REFERENCES rag_support_guide_revisions (guide_id, revision) ON DELETE CASCADE '
+            || ')';
+    END IF;
+END;
+/"""
 
 
 def message_attachments_migration_sql() -> str:
@@ -1308,13 +1345,7 @@ END;
 
 
 def support_guide_schema_v2_migration_sql() -> str:
-    """業務ガイドの内容の形の版を 1 から 2 にする（#2395）。
-
-    版 2 は資料の頁の範囲（``references[].page_ranges``）と手順の参照（``steps[].references``）
-    を足しただけで、版 1 の内容はそのまま版 2 として読める。下書きと公開の版の
-    ``schema_version`` だけを書き換え、ほかの値・内容の指紋の列は変えない（冪等。表が無ければ
-    何もしない）。
-    """
+    """適用済みの環境の履歴を保つ過去の migration（表が無ければ何もしない。SQL は変えない）。"""
     updates = (
         ("RAG_SUPPORT_GUIDES", "rag_support_guides", "draft_json"),
         ("RAG_SUPPORT_GUIDE_REVISIONS", "rag_support_guide_revisions", "content_json"),

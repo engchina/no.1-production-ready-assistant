@@ -225,11 +225,9 @@ test("言語資源は使い道の組と節の 2 段のタブで開き、項目�
     { section: "search_terms", key: "stopwords", kind: "words", choices: [], ingest: false, max_chars: 40 },
     { section: "answer_labels", key: "citation_prefix", kind: "text", choices: [], ingest: false, max_chars: 200 },
     { section: "answer_labels", key: "missing_request_template", kind: "text", choices: [], ingest: false, max_chars: 200 },
-    { section: "answer_labels", key: "guide_acquisition_incomplete_template", kind: "text", choices: [], ingest: false, max_chars: 200 },
   ];
   const missingRequest = "『{text}』については、根拠付きの説明を十分に示せていません。";
-  const acquisitionNotice = "必須の参照を確認できていません（手順: {steps}）。";
-  const builtin = { ...BUILTIN, search_terms: { stopwords: ["こと"] }, answer_labels: { citation_prefix: "根拠：", missing_request_template: missingRequest, guide_acquisition_incomplete_template: acquisitionNotice } };
+  const builtin = { ...BUILTIN, search_terms: { stopwords: ["こと"] }, answer_labels: { citation_prefix: "根拠：", missing_request_template: missingRequest } };
   await mockLanguagePack(page, builtin);
   await page.route("**/api/settings/language-pack", (route) =>
     route.fulfill({ json: envelope({ fields, builtin, overrides: {}, effective: builtin, hash: "a" }) }),
@@ -252,13 +250,6 @@ test("言語資源は使い道の組と節の 2 段のタブで開き、項目�
   await expect(page.getByLabel("要求の説明が不足したときの案内", { exact: true })).toHaveValue(missingRequest);
   await expectNoPageOverflow(page);
   await page.screenshot({ path: test.info().outputPath("missing-request-template.png"), fullPage: true });
-  const acquisitionLabel = t("settings.language.field.guide_acquisition_incomplete_template");
-  await page.getByRole("searchbox", { name: "項目を探す" }).fill(acquisitionLabel);
-  const acquisition = page.getByLabel(acquisitionLabel, { exact: true });
-  await expect(acquisition).toHaveValue(acquisitionNotice);
-  await expect(acquisition).toHaveAccessibleDescription(t("settings.language.field.guide_acquisition_incomplete_template.help"));
-  await expectNoPageOverflow(page);
-  await page.screenshot({ path: test.info().outputPath("required-acquisition-template.png"), fullPage: true });
   await page.getByRole("searchbox", { name: "項目を探す" }).fill("見つからない語");
   await expect(page.getByText("検索語に当たる項目はありません。")).toBeVisible();
   await expectNoPageOverflow(page);

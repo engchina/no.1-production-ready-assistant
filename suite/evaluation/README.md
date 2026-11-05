@@ -30,7 +30,7 @@
 
 ## 使い方
 
-A（RAG。業務ガイドなし＝ナレッジベースを指定）・C（RAG。業務ガイドあり＝検索・回答プロファイルを指定）・D（業務 Agent）を、同じ評価セット・同じ Evaluator で採点して比べる（#3417）。
+A（RAG。ナレッジベースを指定）・C（RAG。検索・回答プロファイルを指定）・D（業務 Agent）を、同じ評価セット・同じ Evaluator で採点して比べる（#3417）。
 
 ```bash
 cd suite/evaluation
@@ -38,11 +38,10 @@ uv sync --dev
 export SUITE_EVALUATION_API_KEY=prak_...   # 使える製品に rag と agent を含む API キー（引数に書かない）
 
 # 1. 評価の資料を RAG に取り込み、文書の対応表を書く（RAG の評価の取り込みの CLI。rag/backend で）。
-#    ナレッジベースの ID と（--guides を渡したときは）検索・回答プロファイルの ID が出力に出る。
+#    ナレッジベースの ID が出力に出る。C の検索・回答プロファイルは、そのナレッジベースを対象に作っておく。
 #    uv run python -m app.rag.evaluation_corpus_cli ../evaluation/business-support/business-support.json \
 #        --api-base-url http://127.0.0.1:8100 --output ../../tmp/eval/bs.resolved.json \
-#        --document-map-output ../../tmp/eval/document-map.json \
-#        --guides ../evaluation/business-support/support-guides.json --guided-output ../../tmp/eval/bs.guided.json
+#        --document-map-output ../../tmp/eval/document-map.json
 
 SET=../../rag/evaluation/business-support/business-support.json
 MAP=../../tmp/eval/document-map.json
@@ -53,8 +52,7 @@ uv run suite-evaluation run "$SET" --document-map "$MAP" --target rag-mcp \
     --mcp-url http://127.0.0.1:8100/api/mcp --search-answer-profile-id <検索・回答プロファイル> \
     --output ../../tmp/eval/c.json
 uv run suite-evaluation run "$SET" --document-map "$MAP" --target agent-mcp \
-    --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> \
-    --guides ../../rag/evaluation/business-support/support-guides.json --output ../../tmp/eval/d.json
+    --mcp-url http://127.0.0.1:8120/api/mcp --agent-id <公開済みの業務 Agent> --output ../../tmp/eval/d.json
 
 # 3. 保存した観測を採点し直す（規則・期待を直したとき。モデル・製品を呼ばない）
 uv run suite-evaluation score ../../tmp/eval/d.json --dataset "$SET" --document-map "$MAP" \

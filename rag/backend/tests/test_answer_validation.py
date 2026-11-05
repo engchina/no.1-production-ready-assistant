@@ -11,34 +11,18 @@ import pytest
 from opentelemetry import trace as otel_trace
 from pytest import MonkeyPatch
 
-from app.clients import support_guide_store
 from app.config import get_settings
 from app.mcp import tools as mcp_tools
-from app.rag.answer_checks import (
-    AnswerFinding,
-    check_guide_steps,
-    check_impact,
-    check_requests,
-    excluded_steps,
-    impact_applies,
-    instruction_text,
-)
+from app.rag.answer_checks import AnswerFinding, check_requests
 from app.rag.answer_validation import (
     AnswerValidation,
     EvidenceRef,
-    GuideCheckRef,
-    GuideProfileNotFoundError,
     is_valid,
     validate_answer,
     validation_reuse_context,
 )
 from app.schemas.search import RetrievedChunk
-from app.schemas.support_guide import SupportGuideContent
 from tests.test_mcp_api import _call, _token, auth  # noqa: F401 - fixture を使う
-
-SUPPORT_GUIDES = (
-    Path(__file__).resolve().parents[2] / "evaluation/business-support/support-guides.json"
-)
 
 
 def test_validity_rules() -> None:
@@ -316,7 +300,7 @@ def test_mcp_validate_answer(auth: Any, monkeypatch: MonkeyPatch) -> None:  # no
         current = otel_trace.get_current_span()
         assert getattr(current, "attributes", {}).get("pr.stage") == "資料との照合"
         # 任意の入力が無ければ、決定的な検査はしない（#1276）。
-        assert (kwargs["requests"], kwargs["gaps"], kwargs["guide"]) == (None, [], None)
+        assert (kwargs["requests"], kwargs["gaps"]) == (None, [])
         return AnswerValidation(
             status="completed",
             valid=False,
@@ -379,7 +363,7 @@ def test_mcp_validate_answer(auth: Any, monkeypatch: MonkeyPatch) -> None:  # no
     )["structuredContent"]
     assert body["valid"] is False
     assert body["schema_version"] == mcp_tools.MCP_OUTPUT_SCHEMA_VERSION
-    assert (body["checks"], body["findings"], body["guide_revision"]) == ([], [], None)
+    assert (body["checks"], body["findings"]) == ([], [])
     assert [claim["status"] for claim in body["claims"]] == [
         "supported",
         "unsupported",
@@ -421,44 +405,7 @@ def test_mcp_validate_answer(auth: Any, monkeypatch: MonkeyPatch) -> None:  # no
     assert denied["isError"] is True
 
 
-# ---- 決定的な検査（#1276）。業務ガイドは架空の「サンプル業務ポータル」の例だけを使う。----
-
-
-def _guide(**overrides: Any) -> SupportGuideContent:
-    payload: dict[str, Any] = {
-        "title": "アクセス権限を付与する",
-        "goal": {"expected_result": "対象の利用者が機能を使える", "match_terms": ["権限を付与"]},
-        "conditions": [
-            {
-                "id": "target",
-                "label": "付与先",
-                "allowed_values": ["個別", "グループ"],
-                "question": "権限は個別の利用者とグループのどちらに付けますか？",
-            }
-        ],
-        "steps": [
-            {"id": "open", "title": "権限タブを開く"},
-            {"id": "user", "title": "利用者を選ぶ", "depends_on": ["open"]},
-            {"id": "group", "title": "グループを選ぶ", "depends_on": ["open"]},
-            {"id": "group_save", "title": "グループの設定を保存する", "depends_on": ["group"]},
-            {"id": "verify", "title": "付与結果を確認する", "depends_on": ["user", "group_save"]},
-        ],
-        "branches": [
-            {
-                "id": "b1",
-                "when": {"condition_id": "target", "values": ["個別"]},
-                "goto_step": "user",
-            },
-            {
-                "id": "b2",
-                "when": {"condition_id": "target", "values": ["グループ"]},
-                "goto_step": "group",
-            },
-        ],
-        "impact": {"scope": "individual"},
-    }
-    payload.update(overrides)
-    return SupportGuideContent.model_validate(payload)
+# ---- 決定的な検査（#1276）。----
 
 
 def _codes(findings: list[AnswerFinding]) -> list[tuple[str, str]]:
@@ -489,178 +436,6 @@ def test_check_requests_reports_silent_and_disclosed_gaps() -> None:
     assert check_requests("答え", []) == []
 
 
-def test_excluded_steps_follow_known_branch_conditions() -> None:
-    guide = _guide()
-    # 条件が分からなければ、どの分岐も除かない。
-    assert excluded_steps(guide, {}) == set()
-    # 個別なら、グループの分岐の手順とそれだけに依存する手順を除く（確認は利用者の分岐にも依存）。
-    assert excluded_steps(guide, {"target": "個別"}) == {"group", "group_save"}
-    assert excluded_steps(guide, {"target": " ｸﾞﾙｰﾌﾟ "}) == {"user"}
-    # どの分岐にも当たらない値では分岐を決められないので、除かない（#1320）。
-    assert excluded_steps(guide, {"target": "全員"}) == set()
-
-
-def test_check_guide_steps_order_branch_and_omissions() -> None:
-    guide = _guide()
-    ordered = "1. 権限タブを開く\n2. 利用者を選ぶ\n3. 付与結果を確認する"
-    assert check_guide_steps(ordered, guide, {"target": "個別"}) == []
-
-    reversed_order = "1. 利用者を選ぶ\n2. 権限タブを開く\n3. 付与結果を確認する"
-    findings = check_guide_steps(reversed_order, guide, {"target": "個別"})
-    assert _codes(findings) == [("step_order", "error")]
-    assert (findings[0].step_id, findings[0].related_step_id) == ("user", "open")
-
-    wrong = "1. 権限タブを開く\n2. グループを選ぶ\n3. 付与結果を確認する"
-    findings = check_guide_steps(wrong, guide, {"target": "個別"})
-    assert ("step_wrong_branch", "error") in _codes(findings)
-    assert [item.step_id for item in findings if item.code == "step_wrong_branch"] == ["group"]
-
-    # 前の手順・後の手順の欠落は warning。
-    missing = check_guide_steps("利用者を選ぶ", guide, {"target": "個別"})
-    assert _codes(missing) == [
-        ("step_dependency_missing", "warning"),
-        ("step_following_missing", "warning"),
-    ]
-    assert [item.step_id for item in missing] == ["user", "verify"]
-
-    unmatched = check_guide_steps("設定画面で操作してください。", guide, {})
-    assert _codes(unmatched) == [("guide_steps_unmatched", "warning")]
-    assert check_guide_steps("何か", _guide(steps=[], branches=[]), {}) == []
-
-
-def _delete_guide() -> SupportGuideContent:
-    """評価セットの業務ガイド「アカウントの削除」（承認を得ていなければ承認の手順へ分岐）。"""
-    data = json.loads(SUPPORT_GUIDES.read_text(encoding="utf-8"))
-    payload = next(item for item in data["guides"] if item["title"] == "アカウントの削除")
-    return SupportGuideContent.model_validate(payload)
-
-
-# 評価 e1467 の D の mt-delete-account-approved（2 回目の発言「承認はもらっています」）の
-# 回答の一部。
-_DELETE_APPROVED_ANSWER = """部門長の承認は得ている、という前提で、資料に沿ってお示しします。
-
-**削除の前提（満たしている条件）**
-- 削除の前に、所属部署の部門長の承認を得る必要があり、承認の無い削除は行いません。\
-→ 承認は得ているとのことなので、この前提は満たしています。
-- 削除したアカウントは 30 日後に完全に消去され、復元できません。
-
-**資料で確かめられなかった点**
-- 実際にアカウントを削除する操作そのものの手順は、資料には記載が見当たらず、\
-確認できません。"""
-
-
-def test_check_guide_steps_ignores_a_premise_that_is_already_met() -> None:
-    # 「承認を得る」を満たした前提として述べただけで、承認の手順を実行させていない。承認済みの
-    # 条件に当たらない分岐の手順（step_wrong_branch の error）にしない（#1491）。
-    guide = _delete_guide()
-    findings = check_guide_steps(_DELETE_APPROVED_ANSWER, guide, {"approved": "はい"})
-    assert _codes(findings) == [("guide_steps_unmatched", "warning")]
-    # 見出しの無い行でも、前提を満たしたと述べた行は数えない。
-    line = "所属部署の部門長の承認を得る（承認済み）。続いて削除を依頼してください。"
-    codes = [item.code for item in check_guide_steps(line, guide, {"approved": "はい"})]
-    assert "step_wrong_branch" not in codes
-
-
-def test_check_guide_steps_still_flags_an_instruction_of_the_wrong_branch() -> None:
-    # 承認済みなのに承認の手順を実行させる指示は、今までどおり error。
-    guide = _delete_guide()
-    answer = "1. まず所属部署の部門長の承認を得る\n2. 承認後に削除してください。"
-    findings = check_guide_steps(answer, guide, {"approved": "はい"})
-    assert ("step_wrong_branch", "error") in _codes(findings)
-    # 満たした前提の節は、空行の後の箇条書きではない行で終わる（その後の指示は数える）。
-    sectioned = (
-        "**前提（満たしている条件）**\n- 部門長の承認\n\n"
-        "所属部署の部門長の承認を得るよう依頼してください。"
-    )
-    assert ("step_wrong_branch", "error") in _codes(
-        check_guide_steps(sectioned, guide, {"approved": "はい"})
-    )
-    assert instruction_text(sectioned) == "所属部署の部門長の承認を得るよう依頼してください。"
-
-
-def test_check_impact_requires_scope_and_approval() -> None:
-    assert check_impact("権限タブを開く", _guide()) == []
-    group = _guide(impact={"scope": "group", "approval_required": True})
-    assert _codes(check_impact("権限タブを開く", group)) == [
-        ("impact_scope_missing", "error"),
-        ("approval_missing", "error"),
-    ]
-    assert check_impact("グループ全員に効きます。部門長の承認を得てから行います。", group) == []
-    everyone = _guide(impact={"scope": "all"})
-    assert _codes(check_impact("権限タブを開く", everyone)) == [("impact_scope_missing", "error")]
-    assert check_impact("すべての利用者に反映されます。", everyone) == []
-
-
-def _access_guide() -> SupportGuideContent:
-    """評価セットの業務ガイド「アクセス権限の付与」（承認はグループに付与する分岐だけ）。"""
-    data = json.loads(SUPPORT_GUIDES.read_text(encoding="utf-8"))
-    payload = next(item for item in data["guides"] if item["title"] == "アクセス権限の付与")
-    return SupportGuideContent.model_validate(payload)
-
-
-# #1317 の実環境の D（run3）の da-trial-account-setup の回答（個別の利用者の分岐で答えた）。
-_TRIAL_SETUP_ANSWER = """**検証用アカウントの登録 → アクセス権限付与 → 通知設定の手順**
-
-1. **検証用アカウントを登録**
-   - 管理画面で「利用者」メニューを開き「追加」ボタンを押す。
-   - 「利用者種別」から **「検証用」** を選択。
-   - 有効期限（最長30日）を入力し、保存する。
-
-2. **アクセス権限を付与**
-   - 登録した検証用アカウントの詳細画面を開き、タブから **「権限」** を選択。
-   - 必要な権限をチェックし、「付与」ボタンを押す。
-
-3. **通知を設定**
-   - 同じ詳細画面の **「通知」** タブを開く。
-   - 通知先メールアドレスを入力して保存する。
-   - 「テスト送信」ボタンを押し、テストメールが届くことを確認する。"""
-
-
-def test_check_impact_skips_the_approval_of_a_branch_that_does_not_apply() -> None:
-    guide = _access_guide()
-    assert guide.impact.steps == ["group-approval", "group"]
-    # 個別の利用者の分岐で答えた回答に、グループへの付与の影響範囲・承認を求めない（#1320）。
-    assert impact_applies(guide, {"target": "個別"}) is False
-    assert check_impact(_TRIAL_SETUP_ANSWER, guide, {"target": "個別"}) == []
-    # グループの分岐なら、今までどおり影響範囲と承認を求める。
-    assert impact_applies(guide, {"target": "グループ"}) is True
-    assert _codes(check_impact(_TRIAL_SETUP_ANSWER, guide, {"target": "グループ"})) == [
-        ("impact_scope_missing", "error"),
-        ("approval_missing", "error"),
-    ]
-
-
-def test_check_impact_stays_strict_when_the_branch_is_unknown() -> None:
-    guide = _access_guide()
-    # 付与先が分からない（分岐を決められない）ときは、今までどおり一律に確かめる（安全側）。
-    for conditions in ({}, None, {"target": "不明な値"}, {"other": "個別"}):
-        assert _codes(check_impact(_TRIAL_SETUP_ANSWER, guide, conditions)) == [
-            ("impact_scope_missing", "error"),
-            ("approval_missing", "error"),
-        ], conditions
-    # 係る手順を決めていない業務ガイドは、条件が分かっていてもすべての場合に確かめる。
-    whole = _guide(impact={"scope": "group", "approval_required": True})
-    assert impact_applies(whole, {"target": "個別"}) is True
-    assert _codes(check_impact("権限タブを開く", whole, {"target": "個別"})) == [
-        ("impact_scope_missing", "error"),
-        ("approval_missing", "error"),
-    ]
-    # 係る手順の一部でも当たる分岐に残れば確かめる（共通の手順に係るとき）。
-    shared = _guide(
-        impact={"scope": "group", "approval_required": True, "steps": ["group", "verify"]}
-    )
-    assert impact_applies(shared, {"target": "個別"}) is True
-
-
-class _GuideOracle(_Oracle):
-    def __init__(self, profiles: set[str]) -> None:
-        super().__init__()
-        self.profiles = profiles
-
-    async def get_search_answer_profile(self, profile_id: str) -> Any:
-        return type("View", (), {"id": profile_id})() if profile_id in self.profiles else None
-
-
 def _supported(monkeypatch: MonkeyPatch) -> list[str]:
     calls: list[str] = []
 
@@ -680,435 +455,6 @@ def _supported(monkeypatch: MonkeyPatch) -> list[str]:
 
     monkeypatch.setattr(engine_validation, "validate_answer_claims", fake_claims)
     return calls
-
-
-def _published(monkeypatch: MonkeyPatch, revision: int = 2) -> list[str]:
-    seen: list[str] = []
-
-    async def published_contents(self: Any, profile_id: str) -> list[Any]:
-        seen.append(profile_id)
-        return [("guide-1", revision, _guide(impact={"scope": "group"}))]
-
-    monkeypatch.setattr(
-        support_guide_store.SupportGuideStore, "published_contents", published_contents
-    )
-    return seen
-
-
-async def test_validate_answer_runs_deterministic_checks(monkeypatch: MonkeyPatch) -> None:
-    calls = _supported(monkeypatch)
-    seen = _published(monkeypatch)
-    oracle = cast(Any, _GuideOracle({"sap-1"}))
-    refs = [EvidenceRef("d1", "c1")]
-    good = (
-        "1. 権限タブを開く\n2. グループを選ぶ\n3. グループの設定を保存する\n4. 付与結果を確認する"
-    )
-    result = await validate_answer(
-        "q",
-        good,
-        refs,
-        get_settings(),
-        oracle=oracle,
-        requests=[{"id": "Q1", "text": "手順", "status": "addressed"}],
-        guide=GuideCheckRef("sap-1", "guide-1", 2, {"target": "グループ"}),
-    )
-    # 手順の題名が回答にあっても、手順の根拠（参照の頁・検索の手がかり）が渡した根拠に無い手順は、
-    # 本文の充足は未実行として診断に保ち、不足の発見にはしない。条件で外れた分岐は確かめない。
-    assert result.valid is True
-    assert result.findings == []
-    assert all(
-        step["validation"]["body_coverage"]["execution"] == "not_run" for step in result.guide_steps
-    )
-    assert [(step["step_id"], step["status"]) for step in result.guide_steps] == [
-        ("open", "no_evidence"),
-        ("group", "no_evidence"),
-        ("group_save", "no_evidence"),
-        ("verify", "no_evidence"),
-    ]
-    assert result.checks == ["requests", "guide", "guide_steps", "impact"]
-    assert result.guide_revision == 2
-    assert seen == ["sap-1"]
-
-    # 主張が裏付けられていても、error の finding があれば valid にしない。
-    bad = "1. 権限タブを開く\n2. 利用者を選ぶ"
-    result = await validate_answer(
-        "q",
-        bad,
-        refs,
-        get_settings(),
-        oracle=oracle,
-        requests=[{"id": "Q2", "text": "確認方法", "status": "missing"}],
-        guide=GuideCheckRef("sap-1", "guide-1", 1, {"target": "グループ"}),
-    )
-    assert result.status == "completed" and result.counts == {"supported": 1}
-    assert result.valid is False
-    codes = {item.code for item in result.findings if item.severity == "error"}
-    assert codes == {
-        "request_missing",
-        "guide_revision_stale",
-        "step_wrong_branch",
-        "impact_scope_missing",
-    }
-    assert len(calls) == 2
-
-    # 根拠が読めなくても、決定的な検査の結果は返す。
-    unreadable = await validate_answer(
-        "q",
-        bad,
-        [EvidenceRef("d9", "x")],
-        get_settings(),
-        oracle=oracle,
-        requests=[{"id": "Q2", "text": "確認方法", "status": "missing"}],
-    )
-    assert unreadable.status == "no_evidence"
-    assert [item.code for item in unreadable.findings] == ["request_missing"]
-
-
-async def test_validate_answer_guide_unavailable_and_profile_scope(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    calls = _supported(monkeypatch)
-    _published(monkeypatch)
-    oracle = cast(Any, _GuideOracle({"sap-1"}))
-    refs = [EvidenceRef("d1", "c1")]
-    archived = await validate_answer(
-        "q",
-        "権限タブを開く",
-        refs,
-        get_settings(),
-        oracle=oracle,
-        guide=GuideCheckRef("sap-1", "guide-gone", 1),
-    )
-    assert archived.valid is False
-    assert [item.code for item in archived.findings] == ["guide_unavailable"]
-    assert (archived.checks, archived.guide_revision) == (["guide"], None)
-    # 利用できない検索・回答プロファイルは、モデルを呼ぶ前に止める。
-    before = len(calls)
-    with pytest.raises(GuideProfileNotFoundError):
-        await validate_answer(
-            "q",
-            "a",
-            refs,
-            get_settings(),
-            oracle=oracle,
-            guide=GuideCheckRef("sap-other", "guide-1", 1),
-        )
-    assert len(calls) == before
-
-
-# 業務ガイドの手順の充足（#2708）。2 つの手順が同じ頁の 1 つの chunk（手順 1・2 の主の操作と
-# 共通の末尾の操作）を参照し、手順の題名は根拠の原文と言い回しが違う。
-_MAIN_1 = "設定画面で設定 A の値を入力します。"
-_MAIN_2 = "反映画面で反映ボタンを押して変更を反映します。"
-_COMMON = "最後に保存ボタンを押して画面を閉じます。"
-_STEP_VECTORS = (
-    ("値の登録", (1.0, 0.0, 0.0)),
-    ("内容の確定", (0.0, 1.0, 0.0)),
-    ("設定 A の値", (1.0, 0.0, 0.3)),
-    ("反映ボタンを押", (0.0, 1.0, 0.3)),
-    ("保存ボタンを押", (0.5, 0.5, 1.0)),
-)
-
-
-def _shared_guide() -> SupportGuideContent:
-    reference = [{"document_id": "d2", "page_ranges": [{"page_start": 3, "page_end": 3}]}]
-    return _guide(
-        conditions=[],
-        branches=[],
-        steps=[
-            {"id": "s1", "title": "値の登録", "references": reference},
-            {"id": "s2", "title": "内容の確定", "depends_on": ["s1"], "references": reference},
-        ],
-    )
-
-
-class _SharedOracle(_GuideOracle):
-    def __init__(self) -> None:
-        super().__init__({"sap-1"})
-        self.chunks[("d2", "c2")] = RetrievedChunk(
-            document_id="d2",
-            chunk_id="c2",
-            text=_MAIN_1 + _MAIN_2 + _COMMON,
-            score=0.5,
-            file_name="manual.pdf",
-            metadata={"page_start": 3, "page_end": 3},
-        )
-
-
-def _paragraph_claims(monkeypatch: MonkeyPatch, quotes: dict[str, str]) -> None:
-    """段落（行）ごとに、裏付けとして写した原文を返す主張の監査のスタブ（すべて supported）。"""
-
-    def fake_claims(
-        question: str, answer: str, items: list[dict[str, Any]], settings: Any, **_options: Any
-    ) -> dict[str, Any]:
-        lines = [line for line in answer.split("\n") if line.strip()]
-        return {
-            "status": "completed",
-            "counts": {"supported": len(lines)},
-            "claim_checks": [
-                {
-                    "answer_quote": line,
-                    "status": "supported",
-                    "source_id": "c2",
-                    "support_quote": next(q for key, q in quotes.items() if key in line),
-                    "reason": "記載",
-                }
-                for line in lines
-            ],
-        }
-
-    import rag_engine.evaluation.answer_validation as engine_validation
-
-    monkeypatch.setattr(engine_validation, "validate_answer_claims", fake_claims)
-
-
-def _stub_embed(monkeypatch: MonkeyPatch) -> list[list[str]]:
-    calls: list[list[str]] = []
-
-    def embed(texts: Any) -> list[list[float]]:
-        calls.append(list(texts))
-        return [
-            next(list(vector) for key, vector in _STEP_VECTORS if key in text) for text in texts
-        ]
-
-    import app.rag.answer_validation as validation
-
-    monkeypatch.setattr(validation, "guide_step_embed", lambda settings, loop: embed)
-    return calls
-
-
-async def test_validate_answer_checks_each_guide_step_by_its_main_operation(
-    monkeypatch: MonkeyPatch,
-) -> None:
-    """主張の支持と説明候補を保ち、手順全体の未検証を充足に昇格させない。"""
-
-    async def published_contents(self: Any, profile_id: str) -> list[Any]:
-        return [("guide-1", 2, _shared_guide())]
-
-    monkeypatch.setattr(
-        support_guide_store.SupportGuideStore, "published_contents", published_contents
-    )
-    calls = _stub_embed(monkeypatch)
-    _paragraph_claims(
-        monkeypatch, {"設定 A に": _MAIN_1, "反映ボタンで": _MAIN_2, "保存ボタン": _COMMON}
-    )
-    oracle = cast(Any, _SharedOracle())
-    guide = GuideCheckRef("sap-1", "guide-1", 2)
-    refs = [EvidenceRef("d2", "c2")]
-
-    # 手順の題名（値の登録・内容の確定）は回答に出ない。
-    reworded = (
-        "1. 設定画面を開き、設定 A に値を入れてください。\n"
-        "2. 続いて反映画面の反映ボタンで変更を反映させます。\n"
-        "最後は保存ボタンで画面を閉じます。"
-    )
-    result = await validate_answer("q", reworded, refs, get_settings(), oracle=oracle, guide=guide)
-    assert [(step["step_id"], step["status"]) for step in result.guide_steps] == [
-        ("s1", "unknown"),
-        ("s2", "unknown"),
-    ]
-    # 主張の支持・引用は確認済みでも、手順の全必須要件はこの検査では監査していない。
-    assert result.counts["supported"] == 3
-    assert all(
-        check["status"] == "supported" and check["source_id"] == "c2"
-        for check in result.claim_checks
-    )
-    assert result.missing_evidence == []
-    assert result.findings == []
-    assert all(
-        step["validation"]["body_coverage"]["status"] == "unknown" for step in result.guide_steps
-    )
-    assert result.valid is True
-    assert len(calls) == 1
-
-    common = "保存ボタンを押して画面を閉じれば完了です。"
-    result = await validate_answer("q", common, refs, get_settings(), oracle=oracle, guide=guide)
-    assert [(step["step_id"], step["status"]) for step in result.guide_steps] == [
-        ("s1", "unknown"),
-        ("s2", "unknown"),
-    ]
-    assert result.counts["supported"] == 1
-    assert result.missing_evidence == []
-    assert result.findings == []
-    assert all(
-        step["validation"]["body_coverage"]["execution"] == "not_run" for step in result.guide_steps
-    )
-
-    # 説明の段落の順が手順の依存と逆なら、題名が回答に無くても順序の誤りにする。
-    swapped = (
-        "1. 反映画面の反映ボタンで変更を反映させます。\n"
-        "2. 設定画面を開き、設定 A に値を入れてください。"
-    )
-    result = await validate_answer("q", swapped, refs, get_settings(), oracle=oracle, guide=guide)
-    assert [(item.code, item.severity) for item in result.findings] == [
-        ("step_order", "error"),
-    ]
-    assert result.valid is False
-
-
-def test_check_guide_steps_uses_the_located_paragraphs() -> None:
-    guide = _guide()
-    answer = "1. タブを開きます。\n2. 対象のグループを指定します。"
-    located = {"open": "1. タブを開きます。", "group": "2. 対象のグループを指定します。"}
-    assert check_guide_steps(answer, guide, {"target": "グループ"}, located) == [
-        AnswerFinding(
-            "guide_steps",
-            "step_following_missing",
-            "warning",
-            "手順「グループを選ぶ」の後の手順「グループの設定を保存する」が回答にありません。",
-            step_id="group_save",
-            related_step_id="group",
-        )
-    ]
-    # 充足の判定がどの手順も説明にしなかったときは、題名の不一致を unmatched にしない。
-    assert check_guide_steps("設定画面で操作します。", guide, {}, {}) == []
-
-
-def test_conclusion_first_paragraph_order_is_a_warning_not_an_error() -> None:
-    """結論を先に書く回答の段落の並びは実行の順を表さない（#2732）。
-
-    番号つきの手順の列の中の逆は error のまま。
-    """
-    guide = _guide()
-    conditions = {"target": "グループ"}
-    conclusion_first = "対象のグループを指定すれば変更できます。\n1. タブを開きます。"
-    located = {"open": "1. タブを開きます。", "group": "対象のグループを指定すれば変更できます。"}
-    order = [
-        item
-        for item in check_guide_steps(conclusion_first, guide, conditions, located)
-        if item.code == "step_order"
-    ]
-    assert [(item.severity, item.step_id) for item in order] == [("warning", "group")]
-
-    numbered_reverse = "1. 対象のグループを指定します。\n2. タブを開きます。"
-    located = {"open": "2. タブを開きます。", "group": "1. 対象のグループを指定します。"}
-    order = [
-        item
-        for item in check_guide_steps(numbered_reverse, guide, conditions, located)
-        if item.code == "step_order"
-    ]
-    assert [(item.severity, item.step_id) for item in order] == [("error", "group")]
-
-
-@pytest.mark.usefixtures("auth")
-def test_mcp_validate_answer_passes_requests_and_guide(
-    auth: Any,  # noqa: F811
-    monkeypatch: MonkeyPatch,
-) -> None:
-    captured: dict[str, Any] = {}
-
-    async def fake_validate(
-        question: str, answer: str, refs: list[EvidenceRef], settings: Any, **kwargs: Any
-    ) -> AnswerValidation:
-        captured.update(kwargs)
-        if kwargs["guide"].search_answer_profile_id == "sap-other":
-            raise GuideProfileNotFoundError("sap-other")
-        return AnswerValidation(
-            status="completed",
-            valid=False,
-            counts={"supported": 1},
-            checks=["requests", "guide", "guide_steps", "impact"],
-            findings=[
-                AnswerFinding(
-                    "guide_steps",
-                    "step_order",
-                    "error",
-                    "順序が逆です。",
-                    step_id="user",
-                    related_step_id="open",
-                )
-            ],
-            guide_revision=3,
-            guide_steps=[
-                {
-                    "step_id": "open",
-                    "title": "権限タブを開く",
-                    "required": True,
-                    "status": "explained",
-                },
-                {
-                    "step_id": "user",
-                    "title": "利用者を選ぶ",
-                    "required": True,
-                    "status": "unknown",
-                    "validation": {
-                        "source_association": {"execution": "completed", "linked": True},
-                        "body_coverage": {
-                            "execution": "not_run",
-                            "status": "unknown",
-                            "reason": "candidate_association_only",
-                        },
-                    },
-                },
-            ],
-        )
-
-    monkeypatch.setattr(mcp_tools, "validate_answer", fake_validate)
-    user = auth.user_with_permissions("searcher", ["menu.search"])
-    arguments: dict[str, Any] = {
-        "query": "q",
-        "answer": "a",
-        "evidence": [{"document_id": "d1", "chunk_id": "c1"}],
-        "requests": [{"id": "Q1", "text": "手順", "status": "missing"}],
-        "gaps": ["確認方法"],
-        "guide": {
-            "search_answer_profile_id": "sap-1",
-            "guide_id": "guide-1",
-            "revision": 3,
-            "conditions": {"target": "個別"},
-        },
-    }
-    body = _call("rag_validate_answer", arguments, _token(user.user_uuid))["structuredContent"]
-    assert captured["requests"] == [{"id": "Q1", "text": "手順", "status": "missing"}]
-    assert captured["gaps"] == ["確認方法"]
-    assert captured["guide"] == GuideCheckRef("sap-1", "guide-1", 3, {"target": "個別"})
-    assert body["valid"] is False
-    assert body["checks"] == ["requests", "guide", "guide_steps", "impact"]
-    assert body["guide_revision"] == 3
-    assert body["guide_steps"] == [
-        {
-            "step_id": "open",
-            "title": "権限タブを開く",
-            "required": True,
-            "status": "explained",
-            "validation": None,
-        },
-        {
-            "step_id": "user",
-            "title": "利用者を選ぶ",
-            "required": True,
-            "status": "unknown",
-            "validation": {
-                "source_association": {"execution": "completed", "linked": True},
-                "body_coverage": {
-                    "execution": "not_run",
-                    "status": "unknown",
-                    "reason": "candidate_association_only",
-                },
-            },
-        },
-    ]
-    assert body["findings"] == [
-        {
-            "check": "guide_steps",
-            "code": "step_order",
-            "severity": "error",
-            "message": "順序が逆です。",
-            "request_id": None,
-            "step_id": "user",
-            "related_step_id": "open",
-        }
-    ]
-    # 範囲の外の検索・回答プロファイルは、業務ガイドが無いのと区別できるエラーにする。
-    arguments["guide"]["search_answer_profile_id"] = "sap-other"
-    denied = _call("rag_validate_answer", arguments, _token(user.user_uuid))
-    assert denied["isError"] is True
-    invalid = _call(
-        "rag_validate_answer",
-        {**arguments, "requests": [{"id": "Q1", "status": "done"}]},
-        _token(user.user_uuid),
-    )
-    assert invalid["isError"] is True
 
 
 # #1450: deepseek-flash の評価の dev `cmp-pms-severity`（run_aeda6990aad14955bb88d957deb2b6e2）が
@@ -1372,7 +718,6 @@ class _RecordOracle(_Oracle):
             ],
             premises=[],
             data_results=[],
-            guide=None,
             requests=None,
             gaps=[],
         )
@@ -1713,7 +1058,6 @@ def test_engine_settings_pass_the_validation_input_budget(tmp_path: Path) -> Non
         "data_results",
         "requests",
         "gaps",
-        "guide",
         "model",
         "profile",
         "runtime",
@@ -1732,7 +1076,6 @@ def test_review_reuse_invalidates_changed_dependencies(changed: str) -> None:
         data_results=[],
         requests=None,
         gaps=[],
-        guide=None,
     )
     original = validation_reuse_context(**arguments)
     replacements: dict[str, Any] = {
@@ -1744,7 +1087,6 @@ def test_review_reuse_invalidates_changed_dependencies(changed: str) -> None:
         "data_results": [{"id": "r1", "text": "結果A"}],
         "requests": [{"id": "r1", "text": "要求A"}],
         "gaps": ["不足A"],
-        "guide": GuideCheckRef("profile-a", "guide-a", 2),
     }
     if changed in {"profile", "runtime"}:
         name = (
@@ -1960,3 +1302,106 @@ def test_mcp_validate_answer_returns_the_premise_checks(
         (None, "unknown_passage_id", None),
         (None, "check_failed", "failed"),
     ]
+
+
+async def test_validate_answer_runs_deterministic_checks(monkeypatch: MonkeyPatch) -> None:
+    calls = _supported(monkeypatch)
+    oracle = cast(Any, _Oracle())
+    refs = [EvidenceRef("d1", "c1")]
+    result = await validate_answer(
+        "q",
+        "回答",
+        refs,
+        get_settings(),
+        oracle=oracle,
+        requests=[{"id": "Q1", "text": "手順", "status": "addressed"}],
+    )
+    assert result.valid is True
+    assert result.findings == []
+    assert result.checks == ["requests"]
+
+    # 主張が裏付けられていても、error の finding があれば valid にしない。
+    result = await validate_answer(
+        "q",
+        "回答",
+        refs,
+        get_settings(),
+        oracle=oracle,
+        requests=[{"id": "Q2", "text": "確認方法", "status": "missing"}],
+    )
+    assert result.status == "completed" and result.counts == {"supported": 1}
+    assert result.valid is False
+    assert {item.code for item in result.findings if item.severity == "error"} == {
+        "request_missing"
+    }
+    assert len(calls) == 2
+
+    # 根拠が読めなくても、決定的な検査の結果は返す。
+    unreadable = await validate_answer(
+        "q",
+        "回答",
+        [EvidenceRef("d9", "x")],
+        get_settings(),
+        oracle=oracle,
+        requests=[{"id": "Q2", "text": "確認方法", "status": "missing"}],
+    )
+    assert unreadable.status == "no_evidence"
+    assert [item.code for item in unreadable.findings] == ["request_missing"]
+
+
+@pytest.mark.usefixtures("auth")
+def test_mcp_validate_answer_passes_requests(
+    auth: Any,  # noqa: F811
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_validate(
+        question: str, answer: str, refs: list[EvidenceRef], settings: Any, **kwargs: Any
+    ) -> AnswerValidation:
+        captured.update(kwargs)
+        return AnswerValidation(
+            status="completed",
+            valid=False,
+            counts={"supported": 1},
+            checks=["requests"],
+            findings=[
+                AnswerFinding(
+                    "requests",
+                    "request_missing",
+                    "error",
+                    "答えていません。",
+                    request_id="Q1",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(mcp_tools, "validate_answer", fake_validate)
+    user = auth.user_with_permissions("searcher", ["menu.search"])
+    arguments: dict[str, Any] = {
+        "query": "q",
+        "answer": "a",
+        "evidence": [{"document_id": "d1", "chunk_id": "c1"}],
+        "requests": [{"id": "Q1", "text": "手順", "status": "missing"}],
+        "gaps": ["確認方法"],
+    }
+    body = _call("rag_validate_answer", arguments, _token(user.user_uuid))["structuredContent"]
+    assert captured["requests"] == [{"id": "Q1", "text": "手順", "status": "missing"}]
+    assert captured["gaps"] == ["確認方法"]
+    assert body["valid"] is False
+    assert body["checks"] == ["requests"]
+    assert body["findings"] == [
+        {
+            "check": "requests",
+            "code": "request_missing",
+            "severity": "error",
+            "message": "答えていません。",
+            "request_id": "Q1",
+        }
+    ]
+    invalid = _call(
+        "rag_validate_answer",
+        {**arguments, "requests": [{"id": "Q1", "status": "done"}]},
+        _token(user.user_uuid),
+    )
+    assert invalid["isError"] is True

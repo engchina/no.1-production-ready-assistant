@@ -4,7 +4,7 @@ Agent のチャットで、確かめ中の確認を利用者がいつでも取�
 
 - NL2SQL の SQL の生成前の確認（`nl2sql_query` の `needs_clarification`）: 取り消しの操作は
   「データベースの検索は不要」。
-- RAG の確認（`rag_search` の `needs_clarification` の `clarifications`・業務ガイドの clarify。
+- RAG の確認（`rag_search` の `needs_clarification` の `clarifications`。
   どの画面・機能・業務か など）: 取り消しの操作は「資料の検索は不要」。
 
 取り消しの出所（`trigger`）:

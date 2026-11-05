@@ -557,8 +557,7 @@ async def list_documents(
     paging: Annotated[OffsetParams, Depends(offset_params(default=50, max_limit=200))],
     status: FileStatus | None = None,
     q: str | None = Query(default=None, min_length=1, max_length=200),
-    # カンマ区切りで複数を受ける（どれかに所属する文書）。業務ガイドの資料の選択は、
-    # 検索・回答プロファイルのナレッジベース（上限 200 件）をまとめて渡す(#2749)。
+    # カンマ区切りで複数を受ける（どれかに所属する文書。上限 200 件。#2749）。
     knowledge_base_id: str | None = Query(
         default=None, min_length=1, max_length=_KNOWLEDGE_BASE_FILTER_MAX_LENGTH
     ),
