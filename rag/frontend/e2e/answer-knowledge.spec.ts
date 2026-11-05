@@ -238,7 +238,6 @@ test("類似問を使わない場合は回答と根拠パネルを表示する",
   const card = citations.getByTestId("evidence-card");
   await expect(card.getByText("回答で引用", { exact: true })).toBeVisible();
   await expect(panel.getByText(/^根拠の構成/)).toHaveCount(0);
-  await expect(panel.getByTestId("answer-graph-expansion")).toHaveCount(0);
   // 「詳細」はチャットと同じ回答の記録の詳細だけ（開始・トレース ID・旧「処理時間: …」の行は出さない。#2118）。
   await expect(process.getByText("トレース ID")).toHaveCount(0);
   await expect(page.getByText(/^処理時間:/)).toHaveCount(0);
@@ -275,7 +274,6 @@ for (const viewport of [
     });
     await selectSearchAnswerProfileAndAsk(page, "合成の質問");
     await openAnswerProcessDetails(page, "search-run-progress");
-    await expect(page.getByTestId("answer-graph-expansion")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "標準回答による評価" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "標準回答で評価" })).toHaveCount(0);
     await expect(page.getByLabel("標準回答", { exact: true })).toHaveCount(0);
@@ -285,18 +283,13 @@ for (const viewport of [
   });
 }
 
-async function mockAnswerStream(page: Page, graphExpansion?: Record<string, unknown>) {
+async function mockAnswerStream(page: Page) {
   const answerDiagnostics = {
     confidence: "high",
     needs_human_review: true,
     insufficient_reason: "",
     generated_queries: ["受注 取消 手順"],
     execution_steps: [{ name: "質問の理解", status: "complete", elapsed_seconds: 0.3, llm_calls: 1 }],
-    // 文書構造による検索拡張で加えた根拠（#2055）。処理の経過の「詳細」に件数と使った見出しを出す。
-    graph_expansion: graphExpansion ?? {
-      added_count: 2,
-      entities: [{ entity: "manual.pdf > 第 3 章 取消の手順", added_count: 2 }],
-    },
     evidence_tree: [
       {
         parent_id: "doc-1:p1",
@@ -521,24 +514,6 @@ test("確認・回答ルールに回答前の確認と章節を設定して保�
   await page.screenshot({ path: test.info().outputPath("rule-clarification-form.png") });
 });
 
-
-for (const graph of [
-  { status: "completed", graph_available: true, added_count: 0, skipped_existing_count: 3 },
-  { status: "completed", graph_available: false, added_count: 0 },
-]) {
-  test(`関係情報の追加0件でも処理の詳細に理由を表示する (${graph.graph_available})`, { tag: "@responsive" }, async ({ page }) => {
-    await mockCommon(page);
-    await mockSearchAnswerProfileApi(page, { suggestions: [faqSuggestion] });
-    await mockAnswerStream(page, graph);
-    await selectSearchAnswerProfileAndAsk(page, "合成の操作方法を確認する");
-    await page.getByRole("button", { name: "どれでもない（資料を検索する）" }).click();
-    const panel = await openAnswerProcessDetails(page, "search-run-progress");
-    const diagnostic = panel.getByTestId("answer-graph-expansion");
-    await expect(diagnostic).toHaveCount(0);
-    await expect(panel.locator("[data-run-used-models]")).toBeVisible();
-    await page.screenshot({ path: test.info().outputPath("graph-zero-diagnostic.png") });
-  });
-}
 
 test("キーワードの Excel 取込はプレビュー・未保存保護・追加・全置換を共通の構成で扱う", { tag: "@responsive" }, async ({ page }, testInfo) => {
   await mockCommon(page);

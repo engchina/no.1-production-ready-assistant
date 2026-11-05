@@ -8,7 +8,7 @@
 最終更新: 2026-06-22 / 対象ブランチ: RAG V3 cleanup
 
 > V3 状態: chunk_set / extraction_recipe / 派生 layer の永続状態は実装済み。
-> 本文の Phase A 記述は設計経緯として残し、現在の残作業は GraphRAG / navigation など
+> 本文の Phase A 記述は設計経緯として残し、現在の残作業は navigation など
 > 個別 layer builder の実体化拡張と staging 運用検証に絞る。
 
 ---
@@ -22,7 +22,7 @@
 |---|---|---|
 | `variant_keys` | 層別 keying。`compute_extraction_recipe_id(source_sha256, settings)` / `compute_chunk_set_id(...)` / `compute_layer_ids(...)`。抽出 recipe → `er_*`、chunk 軸 → `cs_*`、派生層 → `gr_*`/`md_*`/`nv_*`。 | [variant_keys.py](../backend/app/rag/variant_keys.py) |
 | `variant_planner` | dedup/refcount/GC の計画。`plan_document_materializations(source, global_settings, kb_configs)` → `MaterializationPlan`(層 ID→参照 KB 群=refcount、chunk_set→extraction_recipe)。`diff_plan(existing_ids, plan)` → `to_create` / `to_collect`(GC)。 | [variant_planner.py](../backend/app/rag/variant_planner.py) |
-| KB 取込上書き | `_INGESTION_FIELD_MAP` に preprocess/parser/vision/chunking(+params)/graph/field/nav(図表 VLM 要約の asset は #497 で Vision に統合)。`apply_adapter_config_or_global(scope="ingestion")` で effective 取込 settings を解決。 | [kb_adapter_config.py](../backend/app/rag/kb_adapter_config.py) |
+| KB 取込上書き | `_INGESTION_FIELD_MAP` に preprocess/parser/vision/chunking(+params)/field/nav(図表 VLM 要約の asset は #497 で Vision に統合)。`apply_adapter_config_or_global(scope="ingestion")` で effective 取込 settings を解決。 | [kb_adapter_config.py](../backend/app/rag/kb_adapter_config.py) |
 | query per-field merge | **配線済み**(`compose_query_settings` + `resolve_search_answer_profile_settings(kb_query=…)`)。query 側はこの引き継ぎ範囲外。 | [search.py](../backend/app/api/routes/search.py) |
 
 ユニットテスト済み:`tests/test_variant_keys.py` / `tests/test_variant_planner.py` / `tests/test_kb_adapter_config.py`。
@@ -45,7 +45,7 @@
 
 ### Phase A — chunk_set レベルの共有 + GC(最大の御利益)
 
-派生層(graph/nav)は後回しにし、まず **chunk text + embedding の共有**を実装する。
+派生層(nav)は後回しにし、まず **chunk text + embedding の共有**を実装する。
 V3 時点ではこの Phase A は完了済み。
 
 **A-1. DDL 追加**(版管理 artifact へ)
@@ -126,11 +126,11 @@ CREATE INDEX rag_kb_cs_bind_cs_idx ON rag_kb_chunk_set_bindings (chunk_set_id);
   (`global < KB 既定 variant < … ` の解決順、`multi-recipe-variants-decision` 参照)。
 - citation metadata に `chunk_set_id`(variant バッジ用)を低機密で付与。
 
-### Phase B — 派生層の層別共有(graph / nav / metadata)
-- `compute_graph_layer_id` / `compute_nav_layer_id` / `compute_metadata_layer_id` を使い、
-  chunk_set を共有したまま graph/nav/metadata だけ別 artifact に。`rag_artifact_layers`(layer_id, layer_kind,
+### Phase B — 派生層の層別共有(nav / metadata)
+- `compute_nav_layer_id` / `compute_metadata_layer_id` を使い、
+  chunk_set を共有したまま nav/metadata だけ別 artifact に。`rag_artifact_layers`(layer_id, layer_kind,
   parent_chunk_set_id, …)+ `rag_kb_layer_bindings` で同型に refcount/GC。`variant_planner.MaterializationPlan` は
-  既に `graph_layers` / `nav_layers` / `metadata_layers` を返すのでそのまま流用。
+  既に `nav_layers` / `metadata_layers` を返すのでそのまま流用。
 
 ### Phase C — 配信モード(検索・回答プロファイル層)
 - **実装済み(配信モードは持たない)**: 文書の全 active レシピを常に RRF 融合する。配信モードの設定
@@ -180,11 +180,11 @@ A だけで「1 文書 × 複数 chunk_set の共有」という中核価値が�
 - **A-1 DDL 適用済**(`79152e7`)、**A-2 永続化メソッド**(`a0affb5`)、**A-2 取込 reconcile 配線**(`490b015`)、**A-4 検索 chunk_set フィルタ**(`53eb9d9`)。
   単一 materialization(所属 KB 全部を 1 chunk_set に bind)で「取込→記録→検索 is_serving 尊重」が実 DB で一貫動作。
 - **V2 で追加済み**: `extraction_recipe_id` と `chunk_set_id` を分離。chunking 差分は extraction を共有し、preprocess/parser 差分は原本 bytes 経路で再抽出、review-only では再取込要求にする。
-- **V3 で追加済み**: `rag_document_extractions` / `rag_artifact_layers` に extraction と layer 状態を永続化。`GET /api/documents/{id}/chunk-sets` は `extraction_recipe_id`、`extraction_status`、metadata / graph / navigation の `planned_only` / `materialized` / `needs_reingest` などの実状態を返す。
+- **V3 で追加済み**: `rag_document_extractions` / `rag_artifact_layers` に extraction と layer 状態を永続化。`GET /api/documents/{id}/chunk-sets` は `extraction_recipe_id`、`extraction_status`、metadata / navigation の `planned_only` / `materialized` / `needs_reingest` などの実状態を返す。
 - **V3 で除去済み**: RAG repo の Select AI 公開面(`/api/search/select-ai`、frontend panel/API/hook、設定値、schema)を削除。SQL 専用能力は sibling repo `../no.1-production-ready-nl2sql` の責務。
 - **V4-0 で追加済み**: [oracle-variant-backfill-runbook.md](./oracle-variant-backfill-runbook.md) と `app.rag.variant_backfill_cli` により、schema migration 後の read-only validation SQL / JSON manifest / Markdown runbook を生成できる。実データの回填は staging でレビュー済み手順として実行し、CLI は production data を変更しない。
 - **V4-1 で追加済み**: navigation layer は保存済み extraction から決定論的に章節 tree を作れる場合、`materialized` として永続化し `navigation_node_count` を metrics に残す。
-- **残り = 個別 layer builder の拡張**。metadata は保存済み extraction に実 payload があれば `materialized`、GraphRAG は実 builder が未接続なら `planned_only` と表示する。
+- **残り = 個別 layer builder の拡張**。metadata は保存済み extraction に実 payload があれば `materialized` と表示する。
 
 ### per-recipe 複数 materialization の実装計画(コード調査済・要注意の深い変更)
 **重要な前提**: parse(`StructuredExtraction`)は **extract 相で実行され文書に保存**、index 相([`ingestion._run_index_phase`](../backend/app/rag/ingestion.py))が再利用する。

@@ -1,6 +1,6 @@
 """回答の検索の補助の処理の失敗を、診断で「当たらなかった」と分ける(#3259)。
 
-補助の処理(業務の名前・実体・関係情報・参照先・画面目録・章節・編集したプロンプト)は、
+補助の処理(業務の名前・実体・参照先・画面目録・章節・編集したプロンプト)は、
 失敗しても空のまま回答を続ける。失敗は ``_SearchState.degraded`` に処理の種類・回数・例外の型の
 名前だけを残し、回答の診断(``degraded_steps``)と根拠 0 件の診断(``zero_evidence``)に出す。
 例外の文・SQL・本文・識別子は出さない。外部 I/O はすべてスタブ。
@@ -187,15 +187,8 @@ async def test_section_chunks_failure_is_recorded_with_the_read_error(
             "entity_expansion",
             lambda engine, request, state, seeds: engine._entity_expansion(request, state, seeds),
         ),
-        (
-            "plan_graph_expansion",
-            "graph_expansion",
-            lambda engine, request, state, seeds: engine._graph_expansion(
-                request, state, seeds, exclude=set()
-            ),
-        ),
     ],
-    ids=["entity", "graph"],
+    ids=["entity"],
 )
 @pytest.mark.parametrize("fail", [True, False], ids=["error", "empty"])
 async def test_expansion_planner_failure_is_recorded(
@@ -209,9 +202,7 @@ async def test_expansion_planner_failure_is_recorded(
         return []
 
     monkeypatch.setattr(answer_engine_module, planner, _aboom if fail else empty)
-    engine = _engine(
-        FakeOracle(), rag_entity_expansion_enabled=True, rag_graph_expansion_enabled=True
-    )
+    engine = _engine(FakeOracle(), rag_entity_expansion_enabled=True)
     state = _SearchState()
     request = SearchRequest(query="q", filters={"knowledge_base_id": "kb-1"})
 
@@ -347,12 +338,11 @@ async def _run(monkeypatch: pytest.MonkeyPatch, oracle: FakeOracle) -> Any:
     import rag_engine.adapters.model_api as engine_api
 
     monkeypatch.setattr(engine_api, "parse_text_response", _fake_llm)
-    # 実体・関係情報の拡張は、この試験の外(FakeOracle に無い SQL を読む。処理ごとの試験は
+    # 実体の拡張は、この試験の外(FakeOracle に無い SQL を読む。処理ごとの試験は
     # 上にある)。章節の拡張は既定のまま(FakeOracle の文書は章節の対応を持たず、広げない)。
     engine = _engine(
         oracle,
         rag_entity_expansion_enabled=False,
-        rag_graph_expansion_enabled=False,
     )
     return await engine.run(
         SearchRequest(query="登録の手順は？", filters={"knowledge_base_id": "kb-1"})

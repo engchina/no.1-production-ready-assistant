@@ -151,7 +151,6 @@ def capture_baseline() -> None:
 # 表がなければ飛ばす）。
 _DOCUMENT_CHILD_TABLES = (
     "rag_artifact_layers",
-    "rag_graph_entity_chunks",
     "rag_ingestion_segments",
     "rag_ingestion_jobs",
     "rag_chunks",

@@ -83,7 +83,7 @@ staging では代表的な Search Answer Profile で検索し、diagnostics を 
 
 ## 5. 派生 layer の状態を記録する
 
-`GET /api/documents/{id}/chunk-sets` で、metadata / graph / navigation の状態を sampling します。
+`GET /api/documents/{id}/chunk-sets` で、metadata / navigation の状態を sampling します。
 
 状態の扱い:
 
@@ -93,7 +93,7 @@ staging では代表的な Search Answer Profile で検索し、diagnostics を 
 - `error`: 生成に失敗した。
 - `not_requested`: その layer は要求されていない。
 
-GraphRAG の builder が未接続の環境では、`planned_only` が残ること自体は許容できます。navigation は保存済み抽出結果から章節 tree を作れる場合だけ `materialized` になり、章節構造が無い文書では `planned_only` のままです。いずれの場合も、完了表示にしてはいけない状態は運用メモに件数と対象 layer を残します。
+navigation は保存済み抽出結果から章節 tree を作れる場合だけ `materialized` になり、章節構造が無い文書では `planned_only` のままです。いずれの場合も、完了表示にしてはいけない状態は運用メモに件数と対象 layer を残します。
 
 次の check を確認します。
 

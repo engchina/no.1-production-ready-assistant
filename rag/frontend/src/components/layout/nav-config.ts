@@ -23,7 +23,6 @@ import {
   Tags,
   ThumbsUp,
   Upload,
-  Waypoints,
   type LucideIcon,
 } from "lucide-react";
 
@@ -181,12 +180,6 @@ export const NAV_SECTIONS: NavSection[] = [
         labelKey: "nav.settingsEntityIndex",
         icon: Tags,
         permission: MENU_PERMISSIONS.settingsEntityIndex,
-      },
-      {
-        href: APP_ROUTES.settingsGraph,
-        labelKey: "nav.settingsGraph",
-        icon: Waypoints,
-        permission: MENU_PERMISSIONS.settingsGraph,
       },
       {
         href: APP_ROUTES.settingsRetrieval,

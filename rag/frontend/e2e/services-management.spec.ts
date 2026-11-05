@@ -171,9 +171,9 @@ for (const viewport of [
     // 工程の見出しはサイドナビ（取込・検索・回答設定）と同じ並び・名前（#638）。
     // ナビのリンクと区別するため heading role で限定する。
     await expect(page.getByTestId("service-row-pipeline-chunking")).toHaveCount(0);
-    // backend の中で動く段（文書分割・検索インデックス・文書構造索引・安全チェック・評価の基準）は
+    // backend の中で動く段（文書分割・検索インデックス・安全チェック・評価の基準）は
     // サービスを持たない（#3218）。
-    for (const internal of ["文書分割", "検索インデックス", "文書構造索引", "安全チェック", "評価の基準"]) {
+    for (const internal of ["文書分割", "検索インデックス", "安全チェック", "評価の基準"]) {
       await expect(page.getByRole("heading", { name: internal, exact: true })).toHaveCount(0);
     }
     await expect(page.getByText("backend 内処理", { exact: false })).toHaveCount(0);

@@ -31,7 +31,7 @@
 | 埋め込み / 再ランク | 埋め込みモデル・再ランクのモデル（モデル設定の登録モデル。既定は `text-embedding-v4` の 1024 次元） | 埋め込みの次元数を Oracle AI Vector Search とそろえる |
 | 画像・文書理解 | 画像対応モデル（VLM。モデルの API。OCI Document Understanding は #22 で削除） | OCR・ページ解析・VLM 入力 |
 
-- データ: Oracle Autonomous AI Database / Oracle AI Vector Search（チャンク・引用・文書構造・評価結果・監査ログ・ベクトル検索の正本）と、ローカルのディレクトリ（`PLATFORM_LOCAL_STORAGE_DIR`。原本・変換済み artifact・レビュー済み文書・評価 artifact）。
+- データ: Oracle Autonomous AI Database / Oracle AI Vector Search（チャンク・引用・章節・評価結果・監査ログ・ベクトル検索の正本）と、ローカルのディレクトリ（`PLATFORM_LOCAL_STORAGE_DIR`。原本・変換済み artifact・レビュー済み文書・評価 artifact）。
 - SDK は `python-oracledb`。Frontend は共有 UI に加えて shadcn/ui、通信は REST + SSE / WebSocket。
 - 観測は Langfuse + Prometheus + OpenTelemetry。品質は pytest / pytest-cov / ruff / mypy / bandit / pip-audit / Vitest / Playwright。
 - **配備**: backend・取込 worker・前処理・parser はサービスごとの uv の venv（`uv sync --locked --no-dev --python 3.12`）と systemd の unit で動かす。unit の定義は `scripts/rag-systemd.sh`（本番の `init_script.sh` と開発の `scripts/rag-services.sh` が共通で使う）。Compute には root の [docs/agents/deploy.md](../docs/agents/deploy.md) のとおり他の製品と同じ 1 台に入る（CPU parser のみ）。Dockerfile・compose は作り直さない。開発の起動は backend が `uv run uvicorn`、前処理 / parser が `scripts/rag-services.sh`、frontend が `npm run dev`（docs/deployment.md「ローカル開発」）。

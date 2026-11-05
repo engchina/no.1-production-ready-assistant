@@ -7,5 +7,4 @@ pipeline の段の決定論ロジックの共有パッケージ。backend の中
 - `vector_index.py` — 索引・検索の精度のプリセットの解決(`app.rag.vector_index_adapter`)。
 - `guardrail.py` — groundedness の閾値の静的な解決(`app.rag.guardrail_adapter`)。
 - `evaluation.py` — 評価の suite から閾値への解決。
-- `graph.py` — 文書構造索引の構築のプロファイルの解決(`app.rag.graph_adapter`)。
 - `raptor.py` — RAPTOR の再帰要約索引の決定論の部分(クラスタリングと summary chunk の構築)。

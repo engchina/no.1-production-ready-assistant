@@ -29,19 +29,12 @@ from app.clients.oracle import (
     oracle_ingestion_job_schema_sql,
     oracle_ingestion_segment_schema_sql,
     oracle_knowledge_base_schema_sql,
-    oracle_knowledge_graph_schema_sql,
     oracle_search_audit_schema_sql,
     oracle_text_terms,
     oracle_vector_schema_sql,
 )
 from app.config import Settings
 from app.rag.chunking import Chunk
-from app.rag.graph_index import (
-    GraphEntity,
-    GraphEntityChunkLink,
-    GraphIndex,
-    GraphRelationship,
-)
 from app.rag.request_context import (
     AuditRequestContext,
     reset_audit_request_context,
@@ -1916,44 +1909,6 @@ async def test_oracle_vector_search_applies_chunk_metadata_filters() -> None:
     assert call.parameters["filter_section_path"] == "%経費申請%"
 
 
-async def test_oracle_knowledge_base_subgraph_requires_current_kb_membership() -> None:
-    """KB のグラフ表示も、KB から外した文書の entity / relationship を出さない(#274)。"""
-    pool = FakeOraclePool(
-        execute_results=[
-            [{"entity_id": "ent-1", "canonical_name": "承認条件", "confidence": 0.9}],
-            [],
-        ]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    nodes, edges = await client.fetch_knowledge_base_subgraph("kb-1", limit=10)
-
-    assert [node["id"] for node in nodes] == ["ent-1"]
-    assert edges == []
-    node_sql, edge_sql = (" ".join(call.statement.split()) for call in pool.connection.calls[:2])
-    assert "{membership_sql}" not in node_sql
-    assert "member_dkb.knowledge_base_id = e.knowledge_base_id" in node_sql
-    assert "JSON_EXISTS(e.source_document_ids," in node_sql
-    assert "member_dkb.knowledge_base_id = r.knowledge_base_id" in edge_sql
-    assert "JSON_EXISTS(r.source_document_ids," in edge_sql
-
-
-async def test_oracle_knowledge_base_subgraph_requires_active_chunk_sets() -> None:
-    """成功前の処理結果を node / edge のどちらにも表示しない。"""
-    pool = FakeOraclePool(
-        execute_results=[[{"entity_id": "entity-active", "canonical_name": "section"}], []]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    await client.fetch_knowledge_base_subgraph("kb-active", limit=10)
-
-    for call, alias in zip(pool.connection.calls, ("e", "r"), strict=True):
-        sql = " ".join(call.statement.split())
-        assert f"{alias}.chunk_set_id IS NULL OR EXISTS" in sql
-        assert f"graph_cs.chunk_set_id = {alias}.chunk_set_id" in sql
-        assert "graph_cs.is_active = 1" in sql
-
-
 async def test_upsert_extraction_artifact_preserves_existing_payload_when_omitted() -> None:
     """後段 status 更新では大きい抽出 JSON を再 bind せず、既存 payload を保持する。"""
     pool = FakeOraclePool()
@@ -2136,89 +2091,6 @@ async def test_update_recipe_status_coalesces_preprocess_artifact_as_json() -> N
         mode="json"
     )
     assert call.input_sizes == oracle_module._json_input_sizes("preprocess_artifact")
-
-
-async def test_oracle_replace_document_graph_index_replaces_document_scope() -> None:
-    """GraphRAG-lite index 保存は対象 document の旧 KG rows を置換する。"""
-    graph_index = GraphIndex(
-        entities=[
-            GraphEntity(
-                entity_id="ent-doc",
-                knowledge_base_id="kb-1",
-                canonical_name="文書全体: 社内規程",
-                entity_type="document",
-                description="社内規程全体",
-                confidence=0.95,
-                source_document_ids=["doc-1"],
-            ),
-            GraphEntity(
-                entity_id="ent-section",
-                knowledge_base_id="kb-1",
-                canonical_name="承認条件",
-                entity_type="section",
-                description="承認条件の章節",
-                confidence=0.9,
-                source_document_ids=["doc-1"],
-            ),
-        ],
-        relationships=[
-            GraphRelationship(
-                relationship_id="rel-doc-section",
-                knowledge_base_id="kb-1",
-                source_entity_id="ent-doc",
-                target_entity_id="ent-section",
-                relationship_type="contains",
-                description="文書全体は承認条件を含みます。",
-                confidence=1.0,
-                source_document_ids=["doc-1"],
-            )
-        ],
-        entity_chunk_links=[
-            GraphEntityChunkLink(
-                entity_id="ent-section",
-                chunk_id="doc-1:0",
-                document_id="doc-1",
-                relevance_score=0.8,
-            )
-        ],
-    )
-    pool = FakeOraclePool(
-        execute_results=[
-            [_oracle_document_row()],
-            [{"entity_id": "ent-doc"}, {"entity_id": "ent-old"}, {"entity_id": "ent-stale"}],
-        ]
-    )
-    client = OracleClient(settings=_llm_settings(), pool=pool, db_call_runner=_run_inline)
-
-    await client.replace_document_graph_index("doc-1", graph_index)
-
-    assert pool.connection.commits == 1
-    statements = [call.statement for call in pool.connection.calls]
-    assert any("DELETE FROM rag_graph_relationships" in statement for statement in statements)
-    assert any(
-        "FROM rag_graph_entities" in statement and "source_document_ids" in statement
-        for statement in statements
-    )
-    assert any("source_entity_id IN" in statement for statement in statements)
-    assert any("target_entity_id IN" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entity_chunks" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entities" in statement for statement in statements)
-    # claims / community summary は #621 で廃止し、表は migration 007 で消した。
-    assert not any("rag_graph_claims" in statement for statement in statements)
-    assert not any("FROM user_tables" in statement for statement in statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in statements)
-    many_statements = [call.statement for call in pool.connection.many_calls]
-    assert any("INSERT INTO rag_graph_entities" in statement for statement in many_statements)
-    assert any("INSERT INTO rag_graph_relationships" in statement for statement in many_statements)
-    assert not any("rag_graph_claims" in statement for statement in many_statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in many_statements)
-    assert any("INSERT INTO rag_graph_entity_chunks" in statement for statement in many_statements)
-    entity_insert = next(
-        call
-        for call in pool.connection.many_calls
-        if "INSERT INTO rag_graph_entities" in call.statement
-    )
-    assert json.loads(str(entity_insert.rows[0]["source_document_ids"])) == ["doc-1"]
 
 
 async def test_oracle_save_evaluation_artifact_redacts_query_text() -> None:
@@ -2604,11 +2476,6 @@ async def test_oracle_delete_document_removes_chunks_and_document_with_access_sc
     assert "ORDER BY document_id" in statements[0]
     assert "FOR UPDATE" in statements[0]
     assert "duplicate_of_document_id = :document_id" in statements[0]
-    assert any("FROM rag_graph_entity_chunks" in statement for statement in statements)
-    assert any("DELETE FROM rag_graph_entity_chunks" in statement for statement in statements)
-    # 関係情報の entity が無い文書は、#621 で廃止した表を見に行かない。
-    assert not any("rag_graph_claims" in statement for statement in statements)
-    assert not any("rag_graph_community_summaries" in statement for statement in statements)
     duplicate_clear = next(
         call
         for call in pool.connection.calls
@@ -2653,7 +2520,6 @@ async def test_oracle_delete_document_rolls_back_when_running_job_appears() -> N
     pool = FakeOraclePool(
         execute_results=[
             [_oracle_document_row()],
-            [],
             [{"job_id": "job-running"}],
         ]
     )
@@ -3025,19 +2891,13 @@ async def test_oracle_ingestion_audit_persists_file_processing_metrics() -> None
     assert pool.connection.commits == 1
 
 
-def test_oracle_graph_feedback_and_eval_artifact_schema_use_oracle_tables() -> None:
-    """GraphRAG-lite / feedback / eval artifact は Oracle table と JSON で表現する。"""
-    graph_ddl = oracle_knowledge_graph_schema_sql()
+def test_oracle_feedback_and_eval_artifact_schema_use_oracle_tables() -> None:
+    """feedback / eval artifact は Oracle table と JSON で表現する。"""
     feedback_ddl = oracle_feedback_schema_sql()
     feedback_details_ddl = oracle_feedback_details_schema_sql()
     artifact_ddl = oracle_evaluation_artifact_schema_sql()
 
-    assert "CREATE TABLE rag_graph_entities" in graph_ddl
-    assert "CREATE TABLE rag_graph_relationships" in graph_ddl
     # claims / community summary は #621 で廃止した(読む経路が無かった)。
-    assert "rag_graph_claims" not in graph_ddl
-    assert "rag_graph_community_summaries" not in graph_ddl
-    assert "CREATE TABLE rag_graph_entity_chunks" in graph_ddl
     assert "CREATE TABLE rag_citation_feedback" in feedback_ddl
     assert "target_type       VARCHAR2(16)" in feedback_ddl
     assert "source_surface    VARCHAR2(16)" in feedback_ddl
@@ -3060,7 +2920,7 @@ def test_oracle_graph_feedback_and_eval_artifact_schema_use_oracle_tables() -> N
     assert "result_json       JSON NOT NULL" in artifact_ddl
     assert "result_sha256     CHAR(64) NOT NULL" in artifact_ddl
     assert "rag_evaluation_runs_result_hash_idx" in artifact_ddl
-    assert "NEO4J" not in (graph_ddl + feedback_ddl + artifact_ddl).upper()
+    assert "NEO4J" not in (feedback_ddl + artifact_ddl).upper()
 
 
 @pytest.mark.anyio

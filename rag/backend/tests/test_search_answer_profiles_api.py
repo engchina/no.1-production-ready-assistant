@@ -238,7 +238,6 @@ def test_profile_api_does_not_accept_or_return_global_only_query_fields(
                 "knowledge_base_ids": ["kb-1"],
                 "query": {
                     "max_anchors_per_document": 3,
-                    "graph_expansion_max_chunks": 3,
                     "guide_step_max_queries": 7,
                     "guide_step_deadline_seconds": 37.5,
                 },

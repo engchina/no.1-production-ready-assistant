@@ -279,13 +279,6 @@ EvaluationSuite = Literal[
     "standard",
     "strict",
 ]
-# 文書構造索引の構築(#621)。off = 構築しない、entities = 文書と章・節の見出しのつながりを構築する。
-GraphProfile = Literal[
-    "off",
-    "entities",
-]
-# #621 で削除した文書構造索引の構築の値。backend/.env に残っていると起動を止めて書き換えを促す。
-REMOVED_GRAPH_PROFILES = frozenset({"full"})
 EnterpriseAiVlmInputMode = Literal["files_api", "inline_image"]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # RAG 固有の設定（`RAG_*`）を置く `backend/.env`。
@@ -1000,25 +993,6 @@ class Settings(
         description=(
             "実体の 1 段の拡張で 1 回の検索に足す chunk 数の上限（#1362）。検索方法の"
             "全体設定で選ぶ（#1388）。"
-        ),
-    )
-    rag_graph_expansion_enabled: bool = Field(
-        default=False,
-        description=(
-            "回答の検索で、文書構造索引の構築（rag_graph_profile=entities）で作った章節・表 / 図の"
-            "見出しの entity と chunk の対応から候補を足す（#2055。既定 OFF。LLM の呼び出しは"
-            "増えない）。検索の上位の chunk と同じ狭い章節・表の chunk と、質問に見出しの語が"
-            "含まれる章節の chunk を足す。検索方法の画面で選ぶ（全体設定だけで決め、"
-            "検索・回答プロファイルでは上書きしない）。文書構造索引の無い文書では何もしない。"
-        ),
-    )
-    rag_graph_expansion_max_chunks: int = Field(
-        default=6,
-        ge=1,
-        le=20,
-        description=(
-            "文書構造による検索拡張で 1 回の検索に足す chunk 数の上限（#2055）。"
-            "全体設定だけで決め、検索・回答プロファイルでは上書きしない。"
         ),
     )
     rag_section_expansion_enabled: bool = Field(
@@ -1931,14 +1905,6 @@ class Settings(
             "request の thresholds が最優先。閾値は、そのケースの集合で測れた指標だけに適用する。"
         ),
     )
-    rag_graph_profile: GraphProfile = Field(
-        default="off",
-        description=(
-            "文書構造索引の構築。off(既定)は構築しない、entities は文書と章・節の見出しのつながりを"
-            "構築する(LLM は使わない)。ナレッジベースの文書構造グラフで見られ、"
-            "rag_graph_expansion_enabled を ON にすると回答の検索の候補を広げるのにも使う(#2055)。"
-        ),
-    )
     rag_vector_index_profile: VectorIndexProfile = Field(
         default="accurate",
         description=(
@@ -2290,17 +2256,6 @@ class Settings(
         """廃止済み旧値は起動互換のため files_api へ寄せる。"""
         if str(value).strip().casefold() == "auto":
             return "files_api"
-        return value
-
-    @field_validator("rag_graph_profile", mode="before")
-    @classmethod
-    def reject_removed_graph_profile(cls, value: object) -> object:
-        """削除した full(#621)は読み替えず、書き換え先を示して起動を止める。"""
-        if str(value).strip().casefold() in REMOVED_GRAPH_PROFILES:
-            raise ValueError(
-                "RAG_GRAPH_PROFILE=full は廃止しました(#621)。backend/.env の値を entities"
-                "(構築する)か off(構築しない)に書き換えてください。"
-            )
         return value
 
     @field_validator(

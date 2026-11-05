@@ -83,7 +83,7 @@ def test_catalog_ids_unique_and_url_fields_resolve() -> None:
 
 def test_catalog_covers_preprocess_and_parser_without_gpu() -> None:
     categories = {entry.category for entry in SERVICE_CATALOG}
-    # 文書分割・検索インデックス・文書構造索引の構築・安全チェック・評価の基準は backend 内だけで
+    # 文書分割・検索インデックス・安全チェック・評価の基準は backend 内だけで
     # 実行し、独立サービスのカテゴリには含めない(#3218)。
     assert categories == {"preprocess", "parser"}
     # GPU のサービスは持たない(ASR は削除した。#2042)。
@@ -115,7 +115,7 @@ def test_catalog_execution_policies_mark_fallback_boundaries() -> None:
 def test_catalog_has_no_backend_internal_stages() -> None:
     """backend の中で動く段はサービスを持たない(サービスの実装も無い)。
 
-    旧 standard の回答エンジンだけのステージは #595、検索インデックス・文書構造索引の構築・
+    旧 standard の回答エンジンだけのステージは #595、検索インデックス・
     安全チェック・評価の基準の段は #3218 で削除した。
     """
     ids = {entry.service_id for entry in SERVICE_CATALOG}

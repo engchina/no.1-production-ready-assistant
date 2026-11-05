@@ -49,13 +49,12 @@ import { toast } from "@/lib/toast";
 import { useWorkspaceState } from "@/lib/workspace-state";
 import { KnowledgeBaseEditor } from "./KnowledgeBaseEditor";
 import { KnowledgeBaseExtractionFields } from "./KnowledgeBaseExtractionFields";
-import { KnowledgeBaseGraphView } from "./KnowledgeBaseGraphView";
 import { KnowledgeBaseSearchTestPanel } from "./KnowledgeBaseSearchTestPanel";
 
 /**
  * ナレッジベース詳細ページ（`/knowledge-bases/:id`）。検索・回答プロファイルのエディタと同じ構成にする（#555）:
  * PageHeader（パンくず・状態・件数・一覧へ戻る・保存する）→ 基本情報（名前・説明）→ 所属文書
- * → 検索テスト → 関係情報 → 抽出する項目 → 構築フロー（文書の追加 → 確認 → 構築設定の順）。
+ * → 検索テスト → 抽出する項目 → 構築フロー（文書の追加 → 確認 → 構築設定の順）。
  */
 export function KnowledgeBaseDetailClient({ knowledgeBaseId }: { knowledgeBaseId: string }) {
   const detail = useKnowledgeBase(knowledgeBaseId);
@@ -119,10 +118,7 @@ export function KnowledgeBaseDetailClient({ knowledgeBaseId }: { knowledgeBaseId
       {/* 項目抽出で取り出す項目の定義。無ければ全体の既定を使う。 */}
       <KnowledgeBaseExtractionFields knowledgeBaseId={kb.id} editable={isActive} />
 
-      {/* 項目の定義の後に文書の構造を確認する。展開時のみ subgraph を取得。 */}
-      <KnowledgeBaseGraphView knowledgeBaseId={kb.id} />
-
-      {/* このナレッジ単体で検索の手応えを確認する(検索・回答プロファイル不要)。構築の設定(関係情報・抽出する項目)を
+      {/* このナレッジ単体で検索の手応えを確認する(検索・回答プロファイル不要)。構築の設定(抽出する項目)を
           見た後に、最後に検索で確かめる流れにするため、いちばん下に置く(#616)。 */}
       <KnowledgeBaseSearchTestPanel
         knowledgeBaseId={kb.id}
