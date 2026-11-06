@@ -90,6 +90,16 @@ repo の直下で実行します。
 (cd agent/backend  && uv sync --locked --dev && uv run python -m app.cli.agent_system_schema --initialize)
 ```
 
+PyPI のミラー（国内のミラーなど）を uv に設定したマシン（環境変数 `UV_INDEX_URL`、または `~/.config/uv/uv.toml` の `[[index]]`）では、`uv sync --locked` が `The lockfile at uv.lock needs to be updated, but --locked was provided.` で止まります。`uv.lock` がパッケージの取得先を PyPI として記録しているためです。同じターミナルで次を実行してから、上のコマンドをもう一度実行します（そのターミナルの中だけ PyPI を使います。ミラーの設定そのものは変えません）。
+
+```bash
+unset UV_INDEX_URL
+export UV_DEFAULT_INDEX=https://pypi.org/simple
+git checkout -- '*uv.lock'   # --locked なしで同期して uv.lock が書き換わっていたら元に戻す
+```
+
+PyPI に届かないマシンでは、`--locked` を外して `uv sync --dev` で同期します。`uv.lock` がミラーに合わせて書き換わるので、その変更は commit しません。
+
 できているかの確認（ready なら 0 で終わります）:
 
 ```bash
