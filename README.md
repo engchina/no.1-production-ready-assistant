@@ -46,12 +46,12 @@ docker logs --tail 50 adb-free        # ログ
 
 ### 2. アプリ用の DB ユーザーを作る
 
-3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。
+3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。ユーザーの名前は、本番の配備（Compute）が作るアプリ用のユーザーと同じ `ADB_APP_USER` にします（作る SQL も `platform/deploy/suite-db-user.py` と同じです）。
 
 ```sql
-CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>"
+CREATE USER ADB_APP_USER IDENTIFIED BY "<アプリのパスワード>"
   DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
-GRANT PDB_DBA TO ASSISTANT;
+GRANT PDB_DBA TO ADB_APP_USER;
 ```
 
 - パスワードの規則は ADMIN と同じです（ADB の mandatory profile。`PASSWORD_VERIFY_FUNCTION NULL` の profile を作っても回避できません）。
@@ -63,9 +63,9 @@ import oracledb
 c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>",
                      dsn="127.0.0.1:1525/myatp_low.adb.oraclecloud.com")
 cur = c.cursor()
-cur.execute('CREATE USER ASSISTANT IDENTIFIED BY "<アプリのパスワード>" '
+cur.execute('CREATE USER ADB_APP_USER IDENTIFIED BY "<アプリのパスワード>" '
             'DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE')
-cur.execute("GRANT PDB_DBA TO ASSISTANT")
+cur.execute("GRANT PDB_DBA TO ADB_APP_USER")
 PY
 ```
 
@@ -84,7 +84,7 @@ cp agent/backend/.env.example agent/backend/.env
 PLATFORM_ENVIRONMENT=local
 PLATFORM_AUTH_COOKIE_SECURE=false            # http://localhost で動かすため
 PLATFORM_ADMIN_LOGIN_USER_PASSWORD=<system_admin のパスワード>
-PLATFORM_ORACLE_USER=ASSISTANT
+PLATFORM_ORACLE_USER=ADB_APP_USER
 PLATFORM_ORACLE_PASSWORD=<アプリのパスワード>
 PLATFORM_ORACLE_DSN=127.0.0.1:1525/myatp_low.adb.oraclecloud.com
 PLATFORM_SERVICE_TOKEN_SECRET=<32 文字以上のランダムな値>   # 例: openssl rand -base64 48
