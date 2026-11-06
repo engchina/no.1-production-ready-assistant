@@ -22,6 +22,9 @@ RAG と業務 Agent の検索・回答を確かめるための合成資料です
 - [questions.md](questions.md)：日本語の質問 30 件と期待する回答、PDF のページへのリンク。
 - [questions.json](questions.json)：同じ質問の構造化データ。回答の要点、判断、出典と引用断片を含みます。
 - [manifest.json](manifest.json)：PDF の名前、グループ、形式、ページ数、SHA-256。
+- [evaluation/](evaluation/)：品質評価（改善・運用 › 品質評価）の評価リクエストの Excel の例。テンプレートと同じ形で、ケースの値は PDF の本文と照合済みです。
+  - [lesson12-rag-eval.xlsx](evaluation/lesson12-rag-eval.xlsx)：テスト_01_運用手順書.pdf の 3 件（受付時間と定期保守・バックアップと復元確認・完了の条件）。
+  - [lesson12-rag-eval-with-table.xlsx](evaluation/lesson12-rag-eval-with-table.xlsx)：上の 3 件に、テスト_03_月次稼働報告.pdf の表の質問 1 件を足した 4 件。
 - [resources.json](resources.json)：論理キー A / B ごとの KB・検索・回答プロファイルの定義と文書レシピ。環境固有の ID・URL は含みません。
 - [agent/examples/test-pdfs-ja/agents.json](../../../agent/examples/test-pdfs-ja/agents.json)：論理キー A / B ごとの業務 Agent の定義（Agent の側に置きます。RAG は Agent を呼ばないため。#3545）。
 
