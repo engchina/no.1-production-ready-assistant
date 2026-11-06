@@ -3,6 +3,8 @@
 同じ親（まとまり）・同じ頁に、見出し・注意の子 H と図の説明の子 F がある合成の文書で確かめる。
 """
 
+import hashlib
+
 from audit_fixtures import legacy_audit_result
 
 from rag_engine.config import get_settings
@@ -198,3 +200,33 @@ def test_parent_only_reference_marks_children_as_parent_context_not_as_cited() -
     assert children["doc:c-h"]["parent_model_used"] is False
     # 子を引用すれば、その親のまとまりも回答に使った。
     assert items[0]["is_model_used"] is True
+
+
+def _extracted(span: dict, start: int, end: int) -> dict[str, str]:
+    """ID と行の範囲で抽出した引用の記録（抽出時の座標）。"""
+    return {
+        "status": "extracted",
+        "source_id": span["source_id"],
+        "resolved_evidence_id": span["evidence_id"],
+        "content_sha256": hashlib.sha256(span["text"].encode()).hexdigest(),
+        "char_start": str(start),
+        "char_end": str(end),
+    }
+
+
+def test_extracted_coordinates_locate_the_child_without_searching_the_quote() -> None:
+    """抽出時の座標があれば、引用の文字列が本文に見つからなくても、座標に重なる子を確定にする。"""
+    span = _parent_span()
+    proof = _extracted(span, len(HEADING) + 1, len(span["text"]))
+    assert grounded.citation_children(span, "根拠に無い文", citation_resolution=proof) == (["doc:c-f"], [])
+    assert grounded.citation_children(span, "根拠に無い文") == ([], ["doc:c-h", "doc:c-f"])
+    # 本文が変わった（hash が合わない）記録や、抽出に失敗した記録の座標は使わない。
+    changed = dict(span, text=span["text"] + "改版")
+    assert grounded.citation_children(changed, "根拠に無い文", citation_resolution=proof) == ([], ["doc:c-h", "doc:c-f"])
+    failed = {**proof, "status": "failed"}
+    assert grounded.citation_children(span, "根拠に無い文", citation_resolution=failed) == ([], ["doc:c-h", "doc:c-f"])
+    entry = _entry("根拠に無い文", span)
+    entry.citation_resolution = proof
+    _body, refs = grounded.render_with_citations("", [entry])
+    assert refs[0]["scope_source_ids"] == ["doc:c-f"]
+    assert refs[0]["candidate_source_ids"] == []
