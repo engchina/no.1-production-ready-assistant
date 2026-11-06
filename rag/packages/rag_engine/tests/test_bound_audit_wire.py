@@ -161,3 +161,41 @@ def test_typed_wire_fixture_is_not_misreported_as_observed_raw_success() -> None
     assert result.validation["transport_not_observed"] is True
     assert result.validation["strict_wire_validation"] == "not_observed"
     assert decode(payload, schema).validation["requests"]["Q1"] == "invalid"
+
+
+def _any_of_branches(node: Any) -> list[dict[str, Any]]:
+    if isinstance(node, list):
+        return [branch for child in node for branch in _any_of_branches(child)]
+    if not isinstance(node, dict):
+        return []
+    return [*node.get("anyOf", []), *(branch for child in node.values() for branch in _any_of_branches(child))]
+
+
+@pytest.mark.parametrize("fact", [False, True])
+def test_sent_schema_gives_every_any_of_branch_a_type(fact: bool) -> None:
+    """Optional[Model] の $ref だけの枝を参照先で展開し、枝ごとに type を送る（#168）。codec の検査は変わらない。"""
+    from rag_engine.adapters.model_api import _send_request
+
+    schema, payload = sample_wire(fact=fact)
+    sdk = cast(dict[str, Any], type_to_text_format_param(schema))["schema"]
+    assert any("type" not in branch for branch in _any_of_branches(sdk))
+    request = _send_request({"model": "synthetic-model", "input": [], "text_format": schema})
+    assert "text_format" not in request
+    sent = request["text"]["format"]["schema"]
+    branches = _any_of_branches(sent)
+    assert branches and all("type" in branch for branch in branches)
+    review = sent["$defs"]["SourceItemReview"]
+    expanded = next(branch for branch in review["properties"]["output_fields"]["anyOf"] if branch["type"] != "null")
+    assert expanded == sdk["$defs"][expanded["title"]]
+    assert expanded["additionalProperties"] is False and set(expanded["required"]) == set(expanded["properties"])
+    assert decode(payload, schema).validation["strict_wire_validation"] == "passed"
+
+
+def test_self_reference_expands_once_without_recursing() -> None:
+    from rag_engine.adapters.model_api import _typed_any_of
+
+    defs = {"Node": {"type": "object", "properties": {"child": {"anyOf": [{"$ref": "#/$defs/Node"}, {"type": "null"}]}}}}
+    out = _typed_any_of({"$defs": defs, "$ref": "#/$defs/Node"}, defs)
+    inner = out["$defs"]["Node"]["properties"]["child"]["anyOf"][0]
+    assert inner["type"] == "object"
+    assert inner["properties"]["child"]["anyOf"][0] == {"$ref": "#/$defs/Node"}
