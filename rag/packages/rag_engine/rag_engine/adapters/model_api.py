@@ -470,21 +470,55 @@ def is_invalid_structured_output(exc: Exception) -> bool:
     return isinstance(exc, ValidationError)
 
 
-def _audit_wire_request(request: dict[str, Any]) -> dict[str, Any]:
-    """固定キー監査だけはraw JSONをcodecで検査する。同じstrict schemaをSDKで送る。"""
-    if not is_audit_wire(request.get("text_format")):
-        return request
-    return _response_wire_request(request)
+def _send_request(request: dict[str, Any]) -> dict[str, Any]:
+    """送る要求。固定キー監査は raw JSON を codec で検査するので schema を直接送る。
+
+    ほかは SDK が ``text_format`` で応答を parse し、送る schema だけを ``extra_body`` の正規化した schema で上書きする
+    （extra_body は SDK が組んだ本文より優先される）。
+    """
+    wire = _response_wire_request(request)
+    if is_audit_wire(request.get("text_format")):
+        return wire
+    return {**request, "extra_body": {"text": wire["text"]}}
 
 
 def _response_wire_request(request: dict[str, Any]) -> dict[str, Any]:
     """SDK が送る structured output の schema を JSON にそろえる。"""
     from openai.lib._parsing._responses import type_to_text_format_param
 
+    text_format = type_to_text_format_param(request["text_format"])
+    schema = cast(dict[str, Any], text_format["schema"])
     return {
         **{key: value for key, value in request.items() if key != "text_format"},
-        "text": {"format": type_to_text_format_param(request["text_format"])},
+        "text": {"format": {**text_format, "schema": _typed_any_of(schema, schema.get("$defs", {}))}},
     }
+
+
+def _typed_any_of(node: Any, defs: Mapping[str, Any], seen: tuple[str, ...] = ()) -> Any:
+    """``anyOf`` の ``$ref`` だけの枝を参照先の定義で置き換え、枝ごとに ``type`` を持たせる（#168）。
+
+    ``Optional[Model]`` は ``anyOf: [{"$ref"}, {"type": "null"}]`` になり、枝に ``type`` を求める API が schema を退ける。
+    参照先の定義をそのまま写すので、必須・``additionalProperties``・enum の意味は変わらない。
+    """
+    # ponytail: 自身を参照する定義は 1 段だけ展開し、その先の枝は $ref のまま残す（無限の展開を避ける）。
+    if isinstance(node, list):
+        return [_typed_any_of(child, defs, seen) for child in node]
+    if not isinstance(node, dict):
+        return node
+    out: dict[str, Any] = {}
+    for key, value in node.items():
+        if key != "anyOf" or not isinstance(value, list):
+            out[key] = _typed_any_of(value, defs, seen)
+            continue
+        branches = []
+        for branch in value:
+            name = str(branch.get("$ref", "")).removeprefix("#/$defs/") if isinstance(branch, dict) and len(branch) == 1 else ""
+            if name in defs and name not in seen:
+                branches.append(_typed_any_of(defs[name], defs, (*seen, name)))
+            else:
+                branches.append(_typed_any_of(branch, defs, seen))
+        out[key] = branches
+    return out
 
 
 def _parse_text_once[StructuredOutputT: BaseModel](
@@ -794,7 +828,7 @@ def _openai_parsed[StructuredOutputT: BaseModel](
                     observation.request(snapshot, schema=snapshot["text"]["format"])
                 else:
                     observation.request(None)
-                wire_request = _audit_wire_request(request)
+                wire_request = _send_request(request)
                 capture = (
                     CallStreamCapture(observation.response, enabled=getattr(observation, "capture_enabled", True)) if streamed else None
                 )
@@ -809,7 +843,8 @@ def _openai_parsed[StructuredOutputT: BaseModel](
                     )
                 else:
                     client = _openai_client_with_deadline(_openai_client_for_provider(provider, settings), settings)
-                    response = client.responses.create(**wire_request) if is_audit_wire(text_format) else client.responses.parse(**request)
+                    send = client.responses.create if is_audit_wire(text_format) else client.responses.parse
+                    response = send(**wire_request)
                 if capture is None or not capture.has_terminal:
                     observation.response(response)
                 usage = _value(response, "usage")

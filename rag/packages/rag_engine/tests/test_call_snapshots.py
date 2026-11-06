@@ -68,6 +68,8 @@ def test_sdk_boundary_records_private_request_schema_and_response(monkeypatch, s
     assert request["text"]["format"] == schema
     assert schema["strict"] is True and schema["schema"]["properties"]["text"]["type"] == "string"
     assert sent[0]["text_format"] is TextOutput
+    # SDK は text_format で parse し、送る schema は記録と同じ正規化した schema で上書きする（#168）。
+    assert sent[0]["extra_body"] == {"text": request["text"]}
     if not failed:
         assert recorded[1][1] is response
 
