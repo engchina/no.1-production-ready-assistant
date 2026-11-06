@@ -769,3 +769,37 @@ test("実行条件の変更で無効になった評価を合格と表示しな�
   await page.getByTestId("evaluation-summary").scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath("evaluation-definition-changed.png"), fullPage: true });
 });
+
+test("評価セットの作成の画面を直接開いても、業務 Agent を読み込んでから既定の業務 Agent で作成する（#205）", async ({
+  page,
+  mockApi,
+}) => {
+  // 業務 Agent の一覧の応答を止めておき、読み込み中の表示を確かめてから返す。
+  let releaseAgents: () => void = () => {};
+  const agentsReleased = new Promise<void>((resolve) => {
+    releaseAgents = resolve;
+  });
+  await page.route("**/api/agents", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    await agentsReleased;
+    await route.fallback();
+  });
+
+  await page.goto("/evaluation?id=new");
+  await expect(page.getByTestId("evaluation-set-agents-loading")).toBeVisible();
+  await expect(page.getByLabel("名前")).toHaveCount(0);
+  releaseAgents();
+  await expect(page.getByTestId("evaluation-set-agents-loading")).toHaveCount(0);
+
+  await page.getByLabel("名前").fill("評価セット A");
+  const first = page.getByTestId("evaluation-case-1");
+  await first.getByLabel("質問").fill("質問 A");
+  await first.getByLabel("期待する回答の要点").fill("要点 A");
+  await page.getByRole("button", { name: "作成", exact: true }).first().click();
+
+  await expect(page.getByText("評価セットを作成しました")).toBeVisible();
+  expect(mockApi.lastRequest("POST", "/api/evaluation-sets")?.body).toMatchObject({
+    agent_id: "default",
+    name: "評価セット A",
+  });
+});

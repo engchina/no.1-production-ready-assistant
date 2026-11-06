@@ -169,6 +169,17 @@ export function EvaluationPage() {
   });
 
   if (editorTarget.kind === "new") {
+    // 編集の部品は最初の描画の既定の業務 Agent で下書きを作るので、一覧を読み込むまでは描かない
+    // （#205。URL で直接開くと、空の業務 Agent のまま下書きができて作成できなかった）。
+    if (agents.isLoading) {
+      return (
+        <PageBody wide>
+          <TimedLoadingState label={t("loading.agents")} testId="evaluation-set-agents-loading">
+            <ListSkeleton rows={4} />
+          </TimedLoadingState>
+        </PageBody>
+      );
+    }
     return (
       <EvaluationSetEditor
         agents={usableAgents}
