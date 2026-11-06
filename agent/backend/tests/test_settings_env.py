@@ -104,6 +104,9 @@ def test_platform_and_product_env_examples_load(monkeypatch: pytest.MonkeyPatch)
     assert all(origin.startswith("http://") for origin in settings.cors_origins)
     assert settings.enterprise_ai_models == []
     assert settings.oracle_password in ("", None)
+    # ローカル開発の MCP の接続先（scripts/start-all.sh の backend の port。#184）。
+    assert settings.agent_external_rag_mcp_url == "http://127.0.0.1:8100/api/mcp"
+    assert settings.agent_external_nl2sql_mcp_url == "http://127.0.0.1:8110/api/mcp"
 
 
 def test_product_mcp_timeouts_are_explicit_in_env_example() -> None:

@@ -67,7 +67,7 @@ PLATFORM_SERVICE_TOKEN_SECRET=<32 文字以上のランダムな値>   # 例: op
 
 `PLATFORM_SERVICE_TOKEN_SECRET` は、Agent が RAG / NL2SQL の MCP（`POST /api/mcp`）を呼ぶサービストークンの署名鍵です。空だと MCP は 503 を返します。
 
-Agent から RAG / NL2SQL を呼ぶには、`agent/backend/.env` に呼び先の MCP の URL（ローカル開発の backend の port）を書きます。書かないと Agent の画面で MCP の接続が「未設定」になります。
+Agent から呼ぶ RAG / NL2SQL の MCP の URL（ローカル開発の backend の port）は、`agent/backend/.env.example` に入っているので、コピーした `agent/backend/.env` のままで使えます。port を変えて起動したときだけ、次の 2 行を書き換えます。
 
 ```dotenv
 AGENT_EXTERNAL_RAG_MCP_URL=http://127.0.0.1:8100/api/mcp
