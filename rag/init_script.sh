@@ -750,7 +750,7 @@ configure_systemd() {
   log "Writing systemd units."
   write_backend_unit \
     "${SYSTEMD_UNIT_DIR}/${BACKEND_UNIT}" \
-    "Production Ready RAG backend" \
+    "Private RAG backend" \
     "${BACKEND_DIR}/.venv/bin/gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind ${BACKEND_HOST}:${BACKEND_PORT} --workers 2 --timeout 60 --graceful-timeout 30 --keep-alive 5 --error-logfile - --no-control-socket" \
     "Environment=RAG_INGESTION_QUEUE_INPROCESS_WORKER_ENABLED=false
 Environment=RAG_PARSER_READINESS_PROBE_ENABLED=true
@@ -761,7 +761,7 @@ RestartSec=5
   # SIGTERM は main process だけに送り、子プロセスは worker が後始末する（#305 / #357）。
   write_backend_unit \
     "${SYSTEMD_UNIT_DIR}/${WORKER_UNIT}" \
-    "Production Ready RAG ingestion worker" \
+    "Private RAG ingestion worker" \
     "${BACKEND_DIR}/.venv/bin/python -m app.rag.ingestion_worker" \
     "Environment=RAG_INGESTION_QUEUE_SHUTDOWN_GRACE_SECONDS=${WORKER_SHUTDOWN_GRACE_SECONDS}
 KillMode=mixed

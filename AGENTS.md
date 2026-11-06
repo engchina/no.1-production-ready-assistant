@@ -22,7 +22,7 @@
 | ディレクトリ | 内容 |
 |---|---|
 | `platform/` | 3 製品の共通基盤: `packages/ui`（`@production-ready/ui`）、`packages/system-settings`（`@production-ready/system-settings`。共通のシステム設定・ユーザー / ロール管理の画面）、`packages/backend_core`（`pr_backend_core`）、`packages/system_settings_backend`（`pr_system_settings`。共通の設定 API と認証基盤）、`packages/evaluation_scoring`（`pr_evaluation_scoring`。製品と suite の評価が共有する採点の部品）、`packages/enterprise_ai`（`pr_enterprise_ai`。モデルの API（OpenAI 互換）の URL の規則と失敗の分類。標準 library だけ）、`docs/design-system/`、`deploy/`（1 台の Compute の配備） |
-| `rag/` | Production Ready RAG |
+| `rag/` | Private RAG |
 | `nl2sql/` | Production Ready NL2SQL（SQL 専用の自然言語問い合わせ） |
 | `agent/` | Production Control Plane for AI Agents |
 | `suite/` | 製品をまたぐスイートのアプリケーション（独立の uv project。常駐のサービスは持たない）。`evaluation/`（`pr_suite_evaluation`）は製品横断の評価の CLI で、製品を公開の MCP と API キーだけで呼ぶ（[README](./suite/evaluation/README.md)。#3240） |

@@ -1,4 +1,4 @@
-# AGENTS.md — Production Ready RAG
+# AGENTS.md — Private RAG
 
 > RAG（`rag/`）固有のルール。GitHub 運用・Issue / PR 規約・CI・デザインシステム・共通の技術方針（言語・AI / DB の分担・シークレット・LLM 出力の検証・ローカルの検証の範囲）は、root の [../AGENTS.md](../AGENTS.md) と、そこから案内する root の `docs/agents/` を先に適用する。ルールを変えるときはこのファイル（共通ルールは root）を編集し、詳細は下の表の文書に書く。
 > Issue の label は `product:rag`、PR title の scope は `rag`。

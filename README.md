@@ -270,7 +270,7 @@ sudo /u01/aipoc/no.1-production-ready-assistant/platform/deploy/suite-restart.sh
 | ディレクトリ | 内容 |
 |---|---|
 | [`platform/`](./platform/) | 共通基盤。共有 UI `@production-ready/ui`、共有のシステム設定（`@production-ready/system-settings` / `pr_system_settings`）、共有 backend `pr_backend_core`、デザインシステム、3 製品共通の UX 契約（[`platform/docs/ux-contracts/`](./platform/docs/ux-contracts/README.md)） |
-| [`rag/`](./rag/) | Production Ready RAG — 文書のナレッジ構築と、検索・回答プロファイルからの検索・回答 |
+| [`rag/`](./rag/) | Private RAG — 文書のナレッジ構築と、検索・回答プロファイルからの検索・回答 |
 | [`nl2sql/`](./nl2sql/) | Production Ready NL2SQL — SQL 専用の自然言語問い合わせ |
 | [`agent/`](./agent/) | Production Control Plane for AI Agents — Business Agent・Skill・Runtime の管理 |
 | [`suite/`](./suite/evaluation/README.md) | 製品をまたぐスイートのアプリケーション。`suite/evaluation` は製品の公開の MCP だけで業務 Agent などを評価する CLI |

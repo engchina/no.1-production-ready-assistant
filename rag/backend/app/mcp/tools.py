@@ -428,7 +428,7 @@ SEARCH_PERMISSIONS = frozenset({MENU_SEARCH})
 
 # 処理順の Step 形式（docs/agents/prompts.md。#3830）。
 INSTRUCTIONS = (
-    "Production Ready RAG の検索・回答のツールです。\n\n"
+    "Private RAG の検索・回答のツールです。\n\n"
     "## Step 1: 検索・回答プロファイルを選ぶ\n"
     "検索・回答プロファイルが決まっていなければ、まず rag_recommend_search_answer_profile に"
     "質問を渡して選び（recommended_profile_id が null で候補が複数なら、候補の名前を示して利用者に"

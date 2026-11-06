@@ -79,7 +79,7 @@ MODEL_TEST_IMAGE_BYTES: Final = base64.b64decode(
 
 
 def model_test_text_context(product_name: str) -> str:
-    """テキストのテストに添えるコンテキスト（例: `Production Ready RAG`）。"""
+    """テキストのテストに添えるコンテキスト（例: `Private RAG`）。"""
     return f"これは {product_name} のモデル接続テスト用コンテキストです。"
 
 

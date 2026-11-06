@@ -1,7 +1,7 @@
 ---
 name: business-rag-research
-description: "業務 RAG（MCP サーバー rag。Production Ready RAG）で社内の規程・手順書・台帳などの資料から根拠を集め、根拠（文書名と節・頁）を示して答える。複数の資料をつないで答える多段の質問（例: システムの担当部署 → その部署の承認者 → 承認の期限）、2 つの対象の比較、旧版・年度ごとの違い、手順の案内、図の中の値を確かめる質問にも使う。社内の規則・手続き・システム台帳・業務の進め方を尋ねられたら、資料という言葉が無くてもこのスキルを使う。件数・金額など業務データの値は structured-data-query、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
-compatibility: "MCP サーバー rag（Production Ready RAG の POST /api/mcp）に接続していること。"
+description: "業務 RAG（MCP サーバー rag。Private RAG）で社内の規程・手順書・台帳などの資料から根拠を集め、根拠（文書名と節・頁）を示して答える。複数の資料をつないで答える多段の質問（例: システムの担当部署 → その部署の承認者 → 承認の期限）、2 つの対象の比較、旧版・年度ごとの違い、手順の案内、図の中の値を確かめる質問にも使う。社内の規則・手続き・システム台帳・業務の進め方を尋ねられたら、資料という言葉が無くてもこのスキルを使う。件数・金額など業務データの値は structured-data-query、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
+compatibility: "MCP サーバー rag（Private RAG の POST /api/mcp）に接続していること。"
 license: MIT
 metadata:
   production-ready-display-name: "業務 RAG 調査"

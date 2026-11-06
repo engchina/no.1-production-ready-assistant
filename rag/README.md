@@ -1,4 +1,4 @@
-# Production Ready RAG
+# Private RAG
 
 A production-ready RAG reference implementation covering data ingestion, chunking, indexing, hybrid retrieval, reranking, evaluation, observability, guardrails, and deployment best practices.
 

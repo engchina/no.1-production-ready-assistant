@@ -634,7 +634,16 @@ function SkillReadOnlyDetail({ skill }: { skill: AgentSkill }) {
             {/* 指示は Markdown（手順・結果ごとの対応）として表示する（#1795）。 */}
             {skill.instructions.trim() ? (
               // 共有の MarkdownText（#1808）。Section（h2）の下なので最上位の見出しは h3。
-              <MarkdownText text={skill.instructions} headingLevel={3} testId="skill-instructions-view" />
+              // 長い指示はページを伸ばさず、この枠の中だけを縦にスクロールする。
+              <div
+                className="max-h-[30rem] overflow-y-auto pr-1"
+                tabIndex={0}
+                role="region"
+                aria-label={t("skills.instructions")}
+                data-testid="skill-instructions-scroll"
+              >
+                <MarkdownText text={skill.instructions} headingLevel={3} testId="skill-instructions-view" />
+              </div>
             ) : (
               <p className="text-sm text-fg">-</p>
             )}
