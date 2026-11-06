@@ -453,7 +453,7 @@ def test_ingestion_job_overall_timeout_allows_up_to_seven_days() -> None:
 
 
 def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> None:
-    """既定 backend は Docling(#286)。既定エンジンの flag だけ有効で、他の adapter は無効。"""
+    """既定 backend は Docling(#286)。Docling と Unstructured の flag は既定で有効。"""
     for key in (
         "RAG_PARSER_ADAPTER_BACKEND",
         "RAG_PARSER_DOCLING_ENABLED",
@@ -465,7 +465,7 @@ def test_parser_adapter_default_is_docling(monkeypatch: pytest.MonkeyPatch) -> N
     assert DEFAULT_PARSER_ADAPTER_BACKEND == "docling"
     assert settings.rag_parser_adapter_backend == "docling"
     assert settings.rag_parser_docling_enabled is True
-    assert settings.rag_parser_unstructured_enabled is False
+    assert settings.rag_parser_unstructured_enabled is True
     # auto(旧既定)は既定 docling へ。local_partition は baseline 値 local へ。
     # local は正規化せず baseline 値として残す(runtime は ingestion で既定エンジンへマップ)。
     assert Settings(rag_parser_adapter_backend="auto").rag_parser_adapter_backend == "docling"
@@ -597,7 +597,7 @@ def test_saved_parser_settings_without_backend_load_as_docling() -> None:
 
     assert settings.rag_parser_adapter_backend == "docling"
     assert settings.rag_parser_docling_enabled is True
-    assert settings.rag_parser_unstructured_enabled is False
+    assert settings.rag_parser_unstructured_enabled is True
 
     settings = Settings(_env_file=None, rag_parser_adapter_backend="unstructured")
     config_module._load_parser_adapters(settings, {"adapter_backend": "auto"})

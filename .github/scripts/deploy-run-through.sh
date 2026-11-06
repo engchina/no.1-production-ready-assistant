@@ -108,7 +108,7 @@ RAG_AUDIT_CONTEXT_HASH_SALT=
 
 RAG_PARSER_ADAPTER_BACKEND=docling
 RAG_PARSER_DOCLING_ENABLED=true
-RAG_PARSER_UNSTRUCTURED_ENABLED='false'
+RAG_PARSER_UNSTRUCTURED_ENABLED=true
 RAG_SERVICE_CONTROL_ENABLED=true
 EOF
   "${docker_cmd}" exec -i "${container}" bash -c "umask 077; cat > ${props}/nl2sql.backend.env" <<'EOF'
