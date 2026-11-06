@@ -1,3 +1,4 @@
+import { expectChatTargetNextToNewConversation } from "../../../platform/packages/ui/e2e/chat-toolbar-layout";
 import { expect, type Page, test } from "./fixtures/test";
 
 import { mockLocalAuth, selectSearchAnswerProfile } from "./_helpers";
@@ -96,7 +97,7 @@ async function holdProfiles(page: Page) {
   return () => release();
 }
 
-test(`検索・回答プロファイルの読み込み中は空の状態を出さず、Skeleton と無効の入力を出す`, async ({
+test(`検索・回答プロファイルの読み込み中は空の状態を出さず、Skeleton と無効の入力を出す`, { tag: "@responsive" }, async ({
   page,
 }, testInfo) => {
   await setup(page);
@@ -134,6 +135,8 @@ test(`検索・回答プロファイルの読み込み中は空の状態を出�
 
   const toolbarTarget = page.locator("[data-chat-toolbar] #chat-search-answer-profile");
   await expect(toolbarTarget).toBeVisible();
+  await expectChatTargetNextToNewConversation(page, expect);
+  await page.screenshot({ path: testInfo.outputPath("chat-target-ready.png") });
   expect(await toolbarTarget.evaluate(node => node.closest("[data-chat-target-selector]") !== null)).toBe(true);
 
   await expect(page.getByTestId("chat-messages-skeleton")).toHaveCount(0);

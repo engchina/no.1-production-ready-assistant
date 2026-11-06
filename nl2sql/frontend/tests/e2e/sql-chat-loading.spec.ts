@@ -1,3 +1,4 @@
+import { expectChatTargetNextToNewConversation } from "../../../../platform/packages/ui/e2e/chat-toolbar-layout";
 import { expect, test, type Page } from "./_helpers/test";
 import { mockDatabaseGateReady } from "./_helpers/database-gate";
 import { mockChatRequirement } from "./_helpers/chat-requirement";
@@ -48,7 +49,7 @@ async function holdProfiles(page: Page) {
   return () => release();
 }
 
-test(`業務プロファイルの読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す`, async ({
+test(`業務プロファイルの読み込み中は会話の欄に空の状態を出さず、Skeleton と無効の入力を出す`, { tag: "@responsive" }, async ({
   page,
 }, testInfo) => {
   await setup(page);
@@ -87,6 +88,8 @@ test(`業務プロファイルの読み込み中は会話の欄に空の状態�
   release();
   await expect(page.getByTestId("sql-chat-profiles-loading")).toHaveCount(0);
   await expect(page.locator("[data-chat-toolbar] #sql-chat-profile")).toBeVisible();
+  await expectChatTargetNextToNewConversation(page, expect);
+  await page.screenshot({ path: testInfo.outputPath("chat-target-ready.png") });
   await expect(page.getByTestId("sql-chat-conversation-skeleton")).toHaveCount(0);
   await expect(
     page.getByText("質問を入力して会話を始めます", { exact: true }),
