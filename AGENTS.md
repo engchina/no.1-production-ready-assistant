@@ -100,7 +100,7 @@
 - 自前のコードは Docker を使わずネイティブで動かす（開発は `uv run` / `npm run dev`、本番は systemd。Dockerfile・compose は持たない）。reverse proxy（Nginx など）と TLS の証明書は配備しない（置くかは利用者の選択。#19）。
 - **再配備は repo の直下で `sudo -n ./platform/deploy/suite-update.sh` を実行する。**
 - 選んだ製品を 1 台の Compute（Oracle Linux 9、ユーザー `opc`）に入れ、`platform/deploy/suite-init.sh` が各製品の `init_script.sh` を呼ぶ（製品は単独では配備しない）。OCI Resource Manager の Terraform stack は持たない（#12）。
-- 3 製品は既定で ADB のアプリ用の DB ユーザー（ADMIN ではない）で接続する。DB の新しい機能を使うときは付ける権限で足りるかを確かめる。
+- 3 製品は ADB の `ADMIN` で接続する（`platform/.env` の `PLATFORM_ORACLE_USER=ADMIN`。配備は DB のユーザーを作らない。#182）。
 
 ## 共通の仕組みと設定・命名
 

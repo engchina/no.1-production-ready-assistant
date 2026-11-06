@@ -6,15 +6,15 @@ DB・更新・確認の仕組みです。中身は [`platform/deploy/`](../deplo
 
 > OCI Resource Manager の Terraform stack（以前の `terraform/`）による配備は #12 で削除しました。この文書は、その README のうち
 > `platform/deploy/` と 3 製品に共通する部分を移したものです。配備の入力（`/u01/aipoc/props/` の `platform.env`・
-> `<製品>.backend.env`・`products.txt`・`adb_admin.env` など）は `platform/deploy/suite-init.sh` の冒頭のコメントにあります。
+> `<製品>.backend.env`・`products.txt` など）は `platform/deploy/suite-init.sh` の冒頭のコメントにあります。
 
 ## Autonomous AI Database（全製品で共有）
 
 - **対応バージョン**: 3製品とも Oracle AI Database 26ai 以降が前提です（`VECTOR` 型と Oracle AI Vector Search を使うため）。ADB は 26ai で作ってください。
   NL2SQL の SQL ドメインと annotation は旧 Oracle Database 23ai で入った機能で、それより前のバージョンでは NL2SQL がその機能を使いません。
   リポジトリの文書・画面・コメントでは製品名にバージョンを入れず（#564）、対応バージョンはここだけに書きます。
-- **3 製品は既定で、アプリ用の DB ユーザー（ADMIN ではないユーザー。既定の名前は `ADB_APP_USER`）で接続し、システムの表もそのユーザーの schema に作ります**
-  （下の「[アプリ用の DB ユーザー](#アプリ用の-db-ユーザー16681675)」。#1668）。
+- **3 製品は Autonomous AI Database の `ADMIN` で接続し、システムの表も `ADMIN` の schema に作ります**
+  （下の「[DB の接続のユーザー](#db-の接続のユーザー182)」。#182）。
   製品のテーブルは `RAG_` / `NL2SQL_` / `AGENT_`、3製品で共有するユーザー・ロール・セッションのテーブルは `PLATFORM_` の接頭辞で分かれているため、同じスキーマでも衝突しません（#212）。
 - DB の password / user / DSN に single quote は使えません（共通 `.env` では値を single quote で囲むため）。
 - **時間帯（#3255・#3274）**: 時刻は UTC で保存します（3 製品の DB の session の時間帯は、Compute の OS の時間帯に関わらず
@@ -36,100 +36,55 @@ DB・更新・確認の仕組みです。中身は [`platform/deploy/`](../deplo
 - ADB の DDL は配備のスクリプトに持ちません。各製品の `init_script.sh` がアプリの CLI（冪等）で作成・更新します。
   作成・更新に失敗しても backend は起動します（画面の システムテーブル から直せる）が、配備の最後の確認が `check: <製品> schema NG` で失敗します（[配備が正常かの確認](#配備が正常かの確認1642)）。
 
-### アプリ用の DB ユーザー（#1668・#1675）
+### DB の接続のユーザー（#182）
 
-3 製品が ADB に接続するユーザーです。**既定（推奨）では、ADMIN ではないアプリ用のユーザー（既定の名前 `ADB_APP_USER`）を作って使います。**
-ADMIN を常用しないためです（アプリの不具合・NL2SQL の管理 SQL の誤りを DB 全体の管理者の権限で実行させない。ADMIN のパスワードを `opc` が読む `.env` に置かない）。
-配備の props に `adb_admin.env`（ADMIN のパスワードとアプリ用のユーザーの名前）があるときに作ります。無ければ、`platform/.env` の `PLATFORM_ORACLE_USER` でそのまま接続します（下の「[アプリ用の DB ユーザーを使わないとき](#アプリ用の-db-ユーザーを使わないとき自分で用意したユーザー1648)」）。
+3 製品は、配備の props の `/u01/aipoc/props/platform.env`（Compute の `platform/.env` になる）の `PLATFORM_ORACLE_USER=ADMIN` と
+`PLATFORM_ORACLE_PASSWORD=<ADMIN のパスワード>` で ADB に接続します。研修とプロジェクトの環境をそろえるための方針です（ローカル開発の手順も同じ。[README](../../README.md)）。
 
-#### 作り方（Compute の上で行う）
-
-- 配備の props の `/u01/aipoc/props/adb_admin.env`（root の 0600。ADMIN のパスワードとユーザー名）があれば、`platform/deploy/suite-init.sh` が
-  製品の配備（各製品の system schema の初期化）の前に、**Compute から** ADMIN で ADB に接続して `platform/deploy/suite-db-user.py` を実行します
-  （接続は製品と同じ DSN。`uv run --no-project --with oracledb==<版>`）。
-- ADB はプライベート・エンドポイント・ACL で Compute からしか接続できないため、Compute の外からは DB に接続しません。
-- **冪等**: ユーザーが無ければ `CREATE USER`、あれば profile・quota を合わせます。アプリのパスワードで接続できなければ（`ORA-01017` など）
-  パスワードを合わせて lock を外します。パスワードは `platform/.env`（画面の「システム設定 > データベース」で保存した値）を優先し、無ければ配備の props の値です。
-  grant は毎回付け直し、最後にアプリ用のユーザーで接続して権限が効いていることを確かめます。
-- **失敗したとき**: ORA の番号と手がかりを `/var/log/suite-init.log` に出し（`[suite-db-user] NG（ORA-01017）: …`・`[suite-init] check: db user NG`）、
-  warning を出して製品の配備と起動を続け、最後に失敗（0 以外）を返します（ADB に接続できなくてもアプリケーションは起動する。#1756）。
-  ユーザーが無い間は 3 製品とも DB に接続できません。直したら `sudo .../platform/deploy/suite-restart.sh` でやり直します。
-- **ADMIN のパスワードの置き場所**: `platform/.env`・各製品の `backend/.env` には書きません。
-  `/u01/aipoc/props/adb_admin.env`（root の 0600）にだけ置き、配備の再実行（`suite-restart.sh` / `suite-update.sh`）のたびに、新しい版が要る権限を付け直します
-  （使った後に消すと、再配備で権限を足せなくなるため残します）。ほかの secret と同じく機密として扱ってください。不要になったら `sudo rm /u01/aipoc/props/adb_admin.env` で消せます（その後の再配備はユーザーの準備を飛ばします）。
-
-#### 付ける権限
-
-`python3 platform/deploy/suite-db-user.py plan` で表示できます。
-
-```sql
-CREATE USER ADB_APP_USER IDENTIFIED BY "<password>" DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
-GRANT PDB_DBA TO ADB_APP_USER;                       -- Autonomous AI Database の DBA 相当
-```
-
-- **`DBA` ではなく `PDB_DBA`**: Autonomous AI Database の ADMIN は `DBA` を `WITH ADMIN OPTION` で持たず、他のユーザーに grant できません
-  （[ADMIN User Roles and Privileges](https://docs.oracle.com/en/cloud/paas/autonomous-database/serverless/adbsb/autonomous-admin-user-roles.html)）。
-  実 ADB では `GRANT DBA TO <user>` はエラーにならず、`PDB_DBA` と `UNLIMITED TABLESPACE` が付きました。ADMIN は `PDB_DBA` を `WITH ADMIN OPTION` で持ちます。
-- **表領域**: `PDB_DBA` に `UNLIMITED TABLESPACE` が無いため `QUOTA UNLIMITED ON DATA` にします。
-- **profile は `ORA_APP_PROFILE`**（`PASSWORD_LIFE_TIME UNLIMITED`・`FAILED_LOGIN_ATTEMPTS UNLIMITED`）。既定の `DEFAULT` だと 360 日でパスワードが切れて
-  3 製品が接続できなくなり、10 回の失敗で lock されます。`ORA_APP_PROFILE` は `PASSWORD_ROLLOVER_TIME`（90 日）のあいだ古いパスワードでも接続できるため、
-  パスワードを合わせた後は `ALTER USER … EXPIRE PASSWORD ROLLOVER PERIOD` で新しいパスワードだけにします。profile が無い DB では `DEFAULT` のままにし、log に出します。
-
-この権限で 3 製品の機能が動くことを、実 ADB（26ai）で一時のアプリ用のユーザーに同じ権限を付けて、そのユーザーで実行して確かめました（#1668・#1675。
-コードの `DBMS_*`・`CTX_*`・`UTL_*`・dictionary view・DDL・`GRANT` の使い方を網羅的に洗い出した上で、使っているものをすべて実行した。
-業務データは別の schema の表・view・materialized view で確かめた）。
-
-| 製品・機能 | 実行して確かめたもの | 結果 |
-|---|---|---|
-| 3 製品の system schema（初期化・確認） | RAG `system_schema_cli check / initialize`、NL2SQL `nl2sql_system_schema --check / --initialize` と `app_security_migrate --apply`、Agent `agent_system_schema --check / --initialize`（表・index・sequence・IDENTITY・`IS JSON`・SQL ドメイン・package（`AUTHID DEFINER`）・`ALTER SESSION`） | すべて ready |
-| RAG の検索 | `VECTOR` 列・HNSW の vector index・`VECTOR_DISTANCE`・`V$VECTOR_GRAPH_INDEX`、Oracle Text（`CTX_DDL.CREATE_PREFERENCE` / `CREATE_STOPLIST`・`CTXSYS.CONTEXT` の索引・`CONTAINS`・`CTX_USER_PREFERENCES`） | OK |
-| NL2SQL の DB 構造の取得 | 他の schema の `ALL_TABLES` / `ALL_TAB_COLS`（`DOMAIN_NAME`）/ `ALL_TAB_COMMENTS` / `ALL_COL_COMMENTS` / `ALL_CONSTRAINTS` / `ALL_DEPENDENCIES` / `ALL_DOMAINS` / `ALL_DOMAIN_COLS` / `ALL_ANNOTATIONS_USAGE` / `ALL_TRIGGERS` / `ALL_MVIEWS` / `ALL_USERS`、業務表の `SELECT`、`EXPLAIN PLAN`（他の schema）と `PLAN_TABLE`、`DBMS_METADATA.GET_DDL`（他の schema の view・MV） | OK |
-| NL2SQL のデータ準備（コメント・アノテーション・ドメイン・DB 管理・CSV） | 他の schema への `COMMENT ON TABLE / COLUMN / MATERIALIZED VIEW`、`ALTER TABLE / VIEW / MATERIALIZED VIEW … ANNOTATIONS`（列も）、`CREATE DOMAIN IF NOT EXISTS`・`ALTER DOMAIN`・`ALTER TABLE MODIFY … ADD / DROP DOMAIN`・`DROP DOMAIN FORCE`、`CREATE TABLE` / `CREATE VIEW`（管理 SQL・AI の DDL）、`INSERT` / `UPDATE` / `DELETE`、`TRUNCATE TABLE`・`DROP TABLE PURGE`・`DROP VIEW` | OK |
-| NL2SQL のフィードバック | `DBMS_LOCK.REQUEST / RELEASE`（無名 block。フィードバックのベクトルの再構築） | OK |
-| NL2SQL のオントロジーの操作 | 業務表への `SELECT … FOR UPDATE WAIT 5` と `UPDATE`（他の schema） | OK |
-| Agent・platform | 自分の schema の表・`MERGE`・`LOCK TABLE`・`SELECT … FOR UPDATE SKIP LOCKED`・`USER_*` の参照だけ（上の system schema の初期化で確かめた） | OK |
-
-- **使っていないもの**（コードを grep して確かめた）: `DBMS_SCHEDULER`・`DBMS_VECTOR` / `DBMS_VECTOR_CHAIN`（DB の中の embedding）・`DBMS_CLOUD` の Object Storage
-  （`COPY_DATA`・`PUT_OBJECT`・外部表）・`DBMS_CLOUD_PIPELINE`・`UTL_*`・PUBLIC SYNONYM・DIRECTORY・DATABASE LINK・
-  `ALTER SYSTEM`・`CREATE USER`（アプリのコードとして）・resource principal（`DBMS_CLOUD_ADMIN.ENABLE_RESOURCE_PRINCIPAL`）。
-- **stored PL/SQL の注意**: role 経由の権限は definer-rights の stored PL/SQL では効きません（例: package の中の `DBMS_LOCK` は `PLS-00201`）。
-  今のコードが作る package（`NL2SQL_ONT_ACTION_TX`）は自分の表と `DBMS_SESSION`（PUBLIC）だけを参照するため問題ありません。
-  今後 package の中から `DBMS_*` や `DBA_*` を使うときは、`EXECUTE` / `SELECT` を直接 grant する必要があります（`suite-db-user.py` の `APP_USER_GRANTS` に足す）。
-- **NL2SQL の管理 SQL**: 確認語を入れた管理者は、アプリ用のユーザーの権限（`PDB_DBA` を含む）で任意の SQL を実行できます。画面の権限（`menu.db_admin` など）を絞ってください。
-
-#### 配備の後の確認
-
-ADMIN で接続して実行します。
-
-```sql
-SELECT USERNAME, ACCOUNT_STATUS, PROFILE, DEFAULT_TABLESPACE FROM DBA_USERS WHERE USERNAME = 'ADB_APP_USER';
-SELECT GRANTED_ROLE FROM DBA_ROLE_PRIVS WHERE GRANTEE = 'ADB_APP_USER';          -- PDB_DBA
-SELECT PRIVILEGE FROM DBA_SYS_PRIVS WHERE GRANTEE = 'ADB_APP_USER' ORDER BY 1;   -- 足した 3 つ
-SELECT TABLESPACE_NAME, MAX_BYTES FROM DBA_TS_QUOTAS WHERE USERNAME = 'ADB_APP_USER';  -- DATA / -1
-SELECT COUNT(*) FROM DBA_TABLES WHERE OWNER = 'ADB_APP_USER' AND TABLE_NAME LIKE 'PLATFORM\_%' ESCAPE '\';
-```
-
-`/var/log/suite-init.log` に `[suite-db-user] OK: ADB_APP_USER で接続でき、権限が付いています（profile ORA_APP_PROFILE、quota UNLIMITED ON DATA）。` と
-`[suite-init] check: db user OK` が出て、最後の `check:` の行で 3 製品の schema が `ready` になります。
-
-#### ADMIN で配備していた環境
-
-表は移しません（未リリースのため移行の仕組みは持ちません）。アプリ用のユーザーで配備し直すと、新しい schema に空の表を作ります
-（ADMIN の schema の `PLATFORM_*` などは残ります。要らなければ ADMIN で消してください）。
-
-#### アプリ用の DB ユーザーを使わないとき（自分で用意したユーザー。#1648）
-
-配備の props に `adb_admin.env` を置かず、`platform/.env` の `PLATFORM_ORACLE_USER` に ADMIN 以外の自分で用意したユーザーを指定する場合です。
-
-- **3 製品の専用の DB ユーザー（schema）を作ることを推奨します。** 3 製品は同じ schema に `PLATFORM_` / `RAG_` / `NL2SQL_` / `AGENT_` の表・索引・sequence・package を作ります。
-  業務データや別のアプリケーション（旧版の単独の製品を含む）と同じ schema（とくに `ADMIN`）に入れると、同じ名前の表と衝突し、
-  NL2SQL の業務プロファイル・管理 SQL の対象にも 3 製品以外の object が並びます。
+- 配備は DB のユーザーを作りません。`platform/.env` のユーザーでそのまま接続し、各製品の `init_script.sh` がその schema にシステムの表を作ります。
+  以前の `adb_admin.env` と `platform/deploy/suite-db-user.py`（アプリ用の DB ユーザー `ADB_APP_USER` を作っていた。#1668）は #182 で削除しました。
+  props に `adb_admin.env` が残っていても読みません（`sudo rm /u01/aipoc/props/adb_admin.env` で消してください）。
+- `platform/.env` は `opc` の 0600 で、ADMIN のパスワードを含みます。ほかの secret と同じく機密として扱ってください。
+- 製品の表は `PLATFORM_` / `RAG_` / `NL2SQL_` / `AGENT_` の接頭辞で分かれますが、`ADMIN` の schema に業務データや別のアプリケーション（旧版の単独の製品を含む）の
+  表があると、同じ名前の表と衝突し、NL2SQL の業務プロファイル・管理 SQL の対象にも 3 製品以外の object が並びます。3 製品の専用の ADB を推奨します。
 - 初期化は、旧名の表（統合の前の `RAG_APP_*` / `NL2SQL_APP_*` など）を改名・削除しません（NL2SQL はその名前を log に出して残します）。
   RAG / Agent の初期化は、台帳（`RAG_SCHEMA_MIGRATIONS` / `AGENT_SCHEMA_MIGRATIONS`）に記録の無い schema に残る廃止した表を、
   承認（`--allow-destructive`、画面では削除の確認）が無ければ削除せずに止めます。
-- 権限は、上の「付ける権限」の一式（`PDB_DBA` と `QUOTA UNLIMITED ON DATA`）を ADMIN で付けるのが確実です
-  （上の表で全機能を確かめた構成）。最小にしたいときは、CI の実 Oracle の結合テスト（`.github/scripts/oracle-free-ci.sh`）と同じ次の構成に、
-  使う機能の分を足します。
+- **NL2SQL の管理 SQL**: 確認語を入れた管理者は、ADMIN の権限で任意の SQL を実行できます。画面の権限（`menu.db_admin` など）を絞ってください。
+- **stored PL/SQL の注意**: role 経由の権限は definer-rights の stored PL/SQL では効きません（例: package の中の `DBMS_LOCK` は `PLS-00201`）。
+  今のコードが作る package（`NL2SQL_ONT_ACTION_TX`）は自分の表と `DBMS_SESSION`（PUBLIC）だけを参照するため問題ありません。
+
+#### 配備の後の確認
+
+最後の `check:` の行で 3 製品の schema が `ready` になります（[配備が正常かの確認](#配備が正常かの確認1642)）。ADMIN で次を実行すると、表の数を確かめられます。
+
+```sql
+SELECT COUNT(*) FROM USER_TABLES WHERE TABLE_NAME LIKE 'PLATFORM\_%' ESCAPE '\';
+```
+
+#### `ADB_APP_USER` で動いている環境（#1668 の配備）
+
+- **そのままでも動きます。** 配備（`suite-update.sh` / `suite-restart.sh`）は既存の `platform/.env` を上書きせず、そのユーザーで接続し続けます。
+  権限（`PDB_DBA`・`QUOTA UNLIMITED ON DATA`）は付いたままですが、配備は今後、権限を付け直しません。
+- **ADMIN へ移すとき**: 「システム設定 › データベース」（または Compute の `platform/.env`）のユーザーを `ADMIN`、パスワードを ADMIN のものに変えて保存し、
+  `sudo -n ./platform/deploy/suite-restart.sh`（または画面の「運用設定 › システムテーブル」）で ADMIN の schema にシステムの表を作ります。
+  **表は移しません**（ADMIN の schema の表は空から始まります。`system_admin` は `PLATFORM_ADMIN_LOGIN_USER_PASSWORD` でログインできます）。
+  移し終えて要らなくなったら、ADMIN で `DROP USER ADB_APP_USER CASCADE` を実行し、`/u01/aipoc/props/adb_admin.env` を消します。
+
+#### ADMIN 以外のユーザーで接続するとき（#1648）
+
+`platform/.env` の `PLATFORM_ORACLE_USER` に自分で用意したユーザーを指定することもできます（配備はそのユーザーを作らず、権限も付けません）。
+
+- 権限は ADMIN で `PDB_DBA` と `QUOTA UNLIMITED ON DATA` を付けるのが確実です（#1668・#1675 で、実 ADB で 3 製品の機能が動くことを確かめた構成。
+  Autonomous AI Database の ADMIN は `DBA` を grant できず、`GRANT DBA` は `PDB_DBA` に読み替えられます）。
+
+  ```sql
+  CREATE USER <user> IDENTIFIED BY "<password>" DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
+  GRANT PDB_DBA TO <user>;
+  ```
+
+  `ORA_APP_PROFILE`（`PASSWORD_LIFE_TIME UNLIMITED`・`FAILED_LOGIN_ATTEMPTS UNLIMITED`）にしないと、`DEFAULT` の 360 日でパスワードが切れて 3 製品が接続できなくなります。
+- 最小にしたいときは、CI の実 Oracle の結合テスト（`.github/scripts/oracle-free-ci.sh`）と同じ次の構成に、使う機能の分を足します。
 
   ```sql
   CREATE USER <user> IDENTIFIED BY "<password>" DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA;

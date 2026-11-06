@@ -12,15 +12,10 @@
 # 配備の前に /u01/aipoc/props に置くもの:
 #   products.txt（配備する製品。空白区切り）
 #   platform.env（3 製品で共通の platform/.env）・<製品>.backend.env（各製品の backend/.env）・rag_services.txt など
-#   adb_admin.env（アプリ用の DB ユーザーを使うときだけ。ADMIN のパスワードとアプリ用のユーザーの名前。root の 0600。#1668）
 #
-# アプリ用の DB ユーザー（#1668）: adb_admin.env があれば、製品の配備（各製品の system schema の初期化）の前に、
-# この Compute から ADMIN で ADB に接続し、アプリ用のユーザーを作って権限を付ける（platform/deploy/suite-db-user.py）。
-# 失敗しても（ADB に接続できない・ADMIN のパスワードの誤りなど）製品の配備と起動は続け、最後に失敗として返す
-# （DB が使えなくてもアプリケーションは起動する。製品の system schema の初期化の失敗と同じ扱い。#1756）。
-# ADB は Compute からしか接続できない（プライベート・エンドポイント・ACL）ため、Compute の外からは
-# 行わない。3 製品は platform/.env の PLATFORM_ORACLE_USER（このユーザー）で接続する。ADMIN のパスワードは
-# platform/.env・各製品の backend/.env に書かない。
+# DB の接続（#182）: 3 製品は platform.env（platform/.env）の PLATFORM_ORACLE_USER（ADMIN）と PLATFORM_ORACLE_PASSWORD で
+# ADB に接続し、システムの表もそのユーザーの schema に作る。配備は DB のユーザーを作らない（以前の adb_admin.env と
+# suite-db-user.py は #182 で削除。props に adb_admin.env が残っていても読まない）。
 #
 # Compute の OS は Oracle Linux 9（#1611）。package は dnf、SELinux は enforcing のまま、次の設定で動かす
 # （configure_selinux）:
@@ -55,15 +50,8 @@ SUITE_OS_PACKAGES=(git policycoreutils-python-utils tar)
 SUITE_DEFAULT_TIMEZONE="UTC"
 SUITE_ZONEINFO_DIR="${SUITE_ZONEINFO_DIR:-/usr/share/zoneinfo}"
 SUITE_LOCALTIME_PATH="${SUITE_LOCALTIME_PATH:-/etc/localtime}"
-# アプリ用の DB ユーザーを作る script（suite-db-user.py）を動かす python-oracledb と Python（#1668）。製品の venv の
-# 前に動かすため、uv run --no-project で一時の環境に入れる。Python は製品と同じ場所（/opt/uv/python）に入れる。
-SUITE_DB_USER_ORACLEDB_VERSION="4.0.2"
-SUITE_DB_USER_PYTHON_VERSION="3.12"
-SUITE_UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/opt/uv/python}"
 SUITE_PRODUCTS=()
 SUITE_FAILED_PRODUCTS=()
-# アプリ用の DB ユーザーの準備が失敗したか（#1756。配備は続け、最後に失敗として返す）。
-SUITE_DB_USER_FAILED=false
 
 PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}"
 
@@ -245,54 +233,6 @@ configure_selinux() {
   restorecon -R "${excludes[@]}" "${SUITE_REPO_DIR}"
 }
 
-# uv（製品の init_script.sh の install_uv と同じ入れ方。後の製品は入っていれば入れ直さない）。SELinux が有効なら
-# /usr/local/bin/uv の context を bin_t に戻す（#1642）。
-suite_install_uv() {
-  local attempt
-  if ! command -v uv >/dev/null 2>&1; then
-    log "Installing uv."
-    for attempt in 1 2 3; do
-      if curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh; then
-        break
-      fi
-      if [ "${attempt}" -eq 3 ]; then
-        log "Failed to install uv."
-        return 1
-      fi
-      sleep $((attempt * 5))
-    done
-    chmod 0755 /usr/local/bin/uv
-  fi
-  if selinux_enabled; then
-    restorecon -v /usr/local/bin/uv /usr/local/bin/uvx 2>/dev/null || true
-  fi
-}
-
-# アプリ用の DB ユーザー（#1668）。props の adb_admin.env が無ければ（adb_app_user_enabled=false。新規の ADB は
-# ADMIN、既存の ADB は existing_oracle_user で接続する）何もしない。失敗しても 0 以外を返すだけで、
-# main は製品の配備と起動を続ける（#1756。ユーザーが無ければ製品は DB に接続できないが、画面は開ける）。
-# log の最後の行（[suite-db-user] OK / NG）が結果。
-provision_db_app_user() {
-  local admin_env="${PROPS_DIR}/adb_admin.env" status=0
-  if [ ! -f "${admin_env}" ]; then
-    log "db user: ${admin_env} がありません。アプリ用の DB ユーザーは作りません（platform/.env の PLATFORM_ORACLE_USER で接続します）。"
-    return 0
-  fi
-  chmod 0600 "${admin_env}"
-  suite_install_uv
-  UV_PYTHON_INSTALL_DIR="${SUITE_UV_PYTHON_INSTALL_DIR}" uv run --no-project --python "${SUITE_DB_USER_PYTHON_VERSION}" \
-    --with "oracledb==${SUITE_DB_USER_ORACLEDB_VERSION}" \
-    python "${SUITE_DEPLOY_DIR}/suite-db-user.py" apply \
-    --admin-env "${admin_env}" \
-    --app-env "${PROPS_DIR}/platform.env" \
-    --current-env "${SUITE_REPO_DIR}/platform/.env" || status=$?
-  if [ "${status}" -ne 0 ]; then
-    log "check: db user NG（ADMIN でアプリ用の DB ユーザーを作れませんでした。上の [suite-db-user] NG の行を見てください）。"
-    return "${status}"
-  fi
-  log "check: db user OK"
-}
-
 # 製品の init_script.sh に渡す環境変数（1 行に 1 つ）。
 product_init_env() {
   local product="$1"
@@ -356,26 +296,14 @@ main() {
   grow_root_filesystem
   install_os_packages
   configure_selinux
-  # ADB の接続のユーザー（製品の初期化の前。#1668）。失敗しても製品の配備と起動は続ける（#1756）。
-  SUITE_DB_USER_FAILED=false
-  if ! provision_db_app_user; then
-    SUITE_DB_USER_FAILED=true
-    log "WARNING: アプリ用の DB ユーザーを準備できませんでした。製品の配備と起動は続けます（DB に接続できるようになったら sudo ${SUITE_DEPLOY_DIR}/suite-restart.sh を実行してください）。"
-  fi
   deploy_products
   log "Deployment finished. Log in as system_admin (PLATFORM_ADMIN_LOGIN_USER_PASSWORD)."
   report_urls
   # 配備全体の確認（service・backend の health。#1642）。log の最後の check の行が結果。
   local check_status=0
   suite_check_deployment "${SUITE_PRODUCTS[@]}" || check_status=$?
-  if [ "${SUITE_DB_USER_FAILED}" = "true" ]; then
-    log "check: db user NG（上の [suite-db-user] NG の行を見てください）"
-  fi
   if [ "${#SUITE_FAILED_PRODUCTS[@]}" -gt 0 ]; then
     log "Failed products: ${SUITE_FAILED_PRODUCTS[*]}"
-    return 1
-  fi
-  if [ "${SUITE_DB_USER_FAILED}" = "true" ]; then
     return 1
   fi
   return "${check_status}"

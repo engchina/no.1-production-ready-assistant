@@ -44,32 +44,7 @@ docker ps -a --filter name=adb-free   # 状態
 docker logs --tail 50 adb-free        # ログ
 ```
 
-### 2. アプリ用の DB ユーザーを作る
-
-3 製品は ADMIN ではなくアプリ用のユーザーで接続し、システムの表はそのユーザーの schema に作ります。ADMIN で接続して作成します（例は python-oracledb。`sqlplus` / SQLcl / Database Actions でも同じ SQL です）。ユーザーの名前は、本番の配備（Compute）が作るアプリ用のユーザーと同じ `ADB_APP_USER` にします（作る SQL も `platform/deploy/suite-db-user.py` と同じです）。
-
-```sql
-CREATE USER ADB_APP_USER IDENTIFIED BY "<アプリのパスワード>"
-  DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE;
-GRANT PDB_DBA TO ADB_APP_USER;
-```
-
-- パスワードの規則は ADMIN と同じです（ADB の mandatory profile。`PASSWORD_VERIFY_FUNCTION NULL` の profile を作っても回避できません）。
-- `PDB_DBA` に `CTXAPP`（Oracle Text）・`DB_DEVELOPER_ROLE`（表・sequence・view・procedure・job の作成）が含まれます。
-
-```bash
-uv run --project rag/backend python - <<'PY'
-import oracledb
-c = oracledb.connect(user="ADMIN", password="<ADMIN のパスワード>",
-                     dsn="127.0.0.1:1525/myatp_low.adb.oraclecloud.com")
-cur = c.cursor()
-cur.execute('CREATE USER ADB_APP_USER IDENTIFIED BY "<アプリのパスワード>" '
-            'DEFAULT TABLESPACE DATA QUOTA UNLIMITED ON DATA PROFILE ORA_APP_PROFILE')
-cur.execute("GRANT PDB_DBA TO ADB_APP_USER")
-PY
-```
-
-### 3. `.env` を置く
+### 2. `.env` を置く
 
 ```bash
 cp platform/.env.example platform/.env
@@ -84,8 +59,8 @@ cp agent/backend/.env.example agent/backend/.env
 PLATFORM_ENVIRONMENT=local
 PLATFORM_AUTH_COOKIE_SECURE=false            # http://localhost で動かすため
 PLATFORM_ADMIN_LOGIN_USER_PASSWORD=<system_admin のパスワード>
-PLATFORM_ORACLE_USER=ADB_APP_USER
-PLATFORM_ORACLE_PASSWORD=<アプリのパスワード>
+PLATFORM_ORACLE_USER=ADMIN
+PLATFORM_ORACLE_PASSWORD=<ADMIN のパスワード>
 PLATFORM_ORACLE_DSN=127.0.0.1:1525/myatp_low.adb.oraclecloud.com
 PLATFORM_SERVICE_TOKEN_SECRET=<32 文字以上のランダムな値>   # 例: openssl rand -base64 48
 ```
@@ -101,7 +76,7 @@ AGENT_EXTERNAL_NL2SQL_MCP_URL=http://127.0.0.1:8110/api/mcp
 
 `system_admin` のパスワードにも同じ規則（12〜30 文字・大文字/小文字/数字・`admin` を含まない）があり、満たさないと「構成管理者の認証情報が設定されていません」（503）になります。
 
-### 4. システムの表を作る（初期化）
+### 3. システムの表を作る（初期化）
 
 アプリの起動時には DDL を実行しません。CLI か、起動した後の画面（「運用設定 › システムテーブル」）から作成・更新します。どちらも冪等で、何度実行してもかまいません。作るのは空の表だけで、データは取り込みません。
 
@@ -125,14 +100,14 @@ repo の直下で実行します。
 
 #### B. 画面（「運用設定 › システムテーブル」）から作る・更新する
 
-システムの表を作る前でも 3 製品の backend は起動でき、`system_admin` でログインできます。手順 5 で起動した後、**RAG・NL2SQL・Agent のそれぞれで**次の操作を行います。
+システムの表を作る前でも 3 製品の backend は起動でき、`system_admin` でログインできます。手順 4 で起動した後、**RAG・NL2SQL・Agent のそれぞれで**次の操作を行います。
 
 1. `system_admin` でログインし、左のナビの「運用設定 › システムテーブル」（`/settings/system-tables`）を開きます（DB に接続できているかは「システム設定 › データベース」の接続テストで確かめられます）。
 2. 状態が `未初期化` / `一部不足` / `更新必要` なら、**「作成・更新」** を押します（状態が `初期化済み` になれば完了です。既存のデータを保ったまま不足分の表・索引・migration を適用します）。
    - 共通の `PLATFORM_*` の表と NL2SQL の権限の表（`NL2SQL_APP_ROLE_PERMISSIONS` / `NL2SQL_APP_ROLE_PROFILES`）も「作成・更新」で作られます。
    - すべての管理対象の表を消して最初から作り直すときは、「破壊的な再作成」に確認語（RAG: `RECREATE_RAG_SYSTEM_TABLES`、NL2SQL: `RECREATE_NL2SQL_SYSTEM_TABLES`、Agent: `RECREATE_AGENT_SYSTEM_TABLES`）を入れて **「すべて再作成」** を押します（保存済みのデータは消えます。共通の `PLATFORM_*` の表と NL2SQL の権限の表は残ります）。
 
-### 5. 起動する
+### 4. 起動する
 
 先に共有の UI を build します（各製品の frontend は `file:` で参照します）。
 
@@ -161,8 +136,8 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 イメージを入れ替えるときなどの手順です。**DB の中身はすべて消え、新しいコンテナには移りません**（残すデータは先に取り出します）。
 
 1. 古いコンテナを消します（`docker rm -f adb-free`）。手順 1 の `docker run` で新しいコンテナを起動し、`(healthy)` を待ちます。
-2. 手順 2 でアプリ用の DB ユーザーを作り直します。パスワードを変えたら `platform/.env` も直します。
-3. 手順 4 でシステムの表を作ります。動いている backend は再起動しなくても新しい DB に接続できます。
+2. ADMIN のパスワードを変えたら `platform/.env` も直します。
+3. 手順 3 でシステムの表を作ります。動いている backend は再起動しなくても新しい DB に接続できます。
 
 ### 開発用 worktree の準備
 
