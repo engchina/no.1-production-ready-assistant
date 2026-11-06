@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -885,3 +886,15 @@ def test_excel_scope_comes_from_selected_profile(
         assert response.status_code == 200, response.text
         assert response.json()["data"]["knowledge_base_ids"] == ["kb-profile"]
         assert response.json()["data"]["search_answer_profile_id"] == "profile-a"
+
+
+def test_example_evaluation_requests_parse_without_issues() -> None:
+    """examples の評価リクエストの Excel（合成 PDF の例）は、取込で指摘なく読める。"""
+    root = Path(__file__).resolve().parents[2] / "examples/test-pdfs-ja/evaluation"
+    counts = {}
+    for path in sorted(root.glob("*.xlsx")):
+        parsed = parse_evaluation_workbook(path.read_bytes())
+        assert parsed.issues == [], path.name
+        assert all(row.response_decision == "answer" and row.evidence for row in parsed.rows)
+        counts[path.name] = len(parsed.rows)
+    assert counts == {"lesson12-rag-eval-with-table.xlsx": 4, "lesson12-rag-eval.xlsx": 3}
