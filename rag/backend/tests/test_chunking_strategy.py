@@ -115,7 +115,7 @@ def test_page_level_applies_overlap_only_inside_page() -> None:
     assert not page_two.text.startswith(page_one[-1].text[-2:].strip())
 
 
-def _page_chunk_sections(extraction: StructuredExtraction) -> dict[int, tuple[str, str]]:
+def _page_chunk_sections(extraction: StructuredExtraction) -> dict[object, tuple[object, object]]:
     chunks = chunk_extraction_with_strategy(
         extraction,
         strategy="page_level",
