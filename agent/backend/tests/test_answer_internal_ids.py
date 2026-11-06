@@ -146,3 +146,49 @@ def test_the_run_answer_has_no_internal_ids(
     assert published == ANSWER
     for value in (DOC, CHUNK, "section_complete", "document_id"):
         assert value not in published
+
+
+def test_work_report_section_with_chunk_numbers_is_removed() -> None:
+    """作業の報告の節（中身がすべて識別子を述べる節）は見出しごと外す（#175）。"""
+    ids = {f"{DOC}:cs-a:0": "chunk_id", f"{DOC}:cs-a:29": "chunk_id", DOC: "document_id"}
+    body = "## 回答\n\n資料には担当者の連絡先の記載が無く、確認できませんでした。"
+    answer = (
+        f"{body}\n\n---\n\n"
+        "### 使った資料（回答とは別）\n"
+        "- 根拠箇所：文書 A.pdf 1〜5 頁の各「対象と条件」（chunk 0〜29）"
+    )
+    assert without_lookup_notes(answer, ids) == body
+    # 主張の段落の補足なら、括弧だけを消して主張は残す。
+    claim = "## 回答\n\n受付は平日 9 時からです（chunk 0）。\n- 復元は月 1 回です。"
+    assert (
+        without_lookup_notes(claim, ids)
+        == "## 回答\n\n受付は平日 9 時からです。\n- 復元は月 1 回です。"
+    )
+    # Run に無い番号・Run の事実が無いときは、本文の語と数として残す。
+    for kept, given in (("受付は平日 9 時からです（chunk 99）。", ids), ("chunk 0 を使う。", {})):
+        assert without_lookup_notes(kept, given) == kept
+
+
+def test_the_run_answer_has_no_work_report_section(
+    monkeypatch: MonkeyPatch,
+    mcp: FakeProductMcp,  # noqa: F811 - fixture
+) -> None:
+    output = deepcopy(RAG_OUTPUTS["rag_search"])
+    output["evidence"][0].update(document_id=DOC, chunk_id=CHUNK, evidence_id=CHUNK)
+    mcp.outputs["rag_search"] = output
+    answer = f"{ANSWER}\n\n---\n\n### 使用ツールと根拠\n- 根拠箇所：契約書.pdf の第 1 章（chunk 7）"
+    _script(
+        monkeypatch,
+        [function_call("rag__rag_search", {"query": "合成の質問"}, call_id="call-1")],
+        [assistant_message(answer)],
+    )
+    run = runtime_repository.create_builtin_run(
+        RunCreateRequest(goal="合成の質問", agent_id=AGENT_ID),
+        created_by_user_uuid=USER_UUID,
+    )
+    anyio.run(builtin_runtime.execute_run, run.id)
+    run = runtime_repository.get_run(run.id)
+
+    [call] = mcp.calls_of("rag_validate_answer")
+    assert call["arguments"]["answer"] == ANSWER
+    assert run_answer_text(run) == ANSWER
