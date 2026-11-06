@@ -115,6 +115,122 @@ def test_page_level_applies_overlap_only_inside_page() -> None:
     assert not page_two.text.startswith(page_one[-1].text[-2:].strip())
 
 
+def _page_chunk_sections(extraction: StructuredExtraction) -> dict[int, tuple[str, str]]:
+    chunks = chunk_extraction_with_strategy(
+        extraction,
+        strategy="page_level",
+        chunk_size=2000,
+        overlap=0,
+    )
+    return {
+        chunk.metadata["page_start"]: (
+            chunk.metadata.get("section_path", ""),
+            chunk.metadata.get("section_title", ""),
+        )
+        for chunk in chunks
+    }
+
+
+def test_page_level_section_comes_from_first_body_element_after_recurring_heading() -> None:
+    """ページの先頭の繰り返しの見出しが前のページの階層でも、ページの本文の階層を使う(#204)。"""
+    extraction = StructuredExtraction(
+        elements=[
+            DocumentElement(kind="title", text="文書A", page_number=1, section_path=["文書A"]),
+            DocumentElement(
+                kind="title", text="第1章", page_number=1, section_path=["文書A", "第1章"]
+            ),
+            DocumentElement(
+                kind="title", text="節X", page_number=1, section_path=["文書A", "第1章", "節X"]
+            ),
+            DocumentElement(
+                kind="text",
+                text="第1章の本文です。",
+                page_number=1,
+                section_path=["文書A", "第1章", "節X"],
+            ),
+            # 繰り返しの見出しは階層を変えないため、前のページの階層のまま。
+            DocumentElement(
+                kind="title", text="文書A", page_number=2, section_path=["文書A", "第1章", "節X"]
+            ),
+            DocumentElement(
+                kind="title", text="第2章", page_number=2, section_path=["文書A", "第2章"]
+            ),
+            DocumentElement(
+                kind="text",
+                text="第2章の本文です。",
+                page_number=2,
+                section_path=["文書A", "第2章"],
+            ),
+        ]
+    )
+
+    sections = _page_chunk_sections(extraction)
+
+    assert sections[1] == ("文書A > 第1章 > 節X", "節X")
+    assert sections[2] == ("文書A > 第2章", "第2章")
+
+
+def test_page_level_heading_only_page_keeps_first_element_section() -> None:
+    """見出しの要素しか無いページは、今までどおり先頭の要素の階層を使う(#204)。"""
+    extraction = StructuredExtraction(
+        elements=[
+            DocumentElement(
+                kind="text",
+                text="第1章の本文です。",
+                page_number=1,
+                section_path=["文書A", "第1章"],
+            ),
+            DocumentElement(
+                kind="title", text="文書A", page_number=2, section_path=["文書A", "第1章"]
+            ),
+            DocumentElement(
+                kind="title", text="第2章", page_number=2, section_path=["文書A", "第2章"]
+            ),
+        ]
+    )
+
+    sections = _page_chunk_sections(extraction)
+
+    assert sections[2] == ("文書A > 第1章", "第1章")
+
+
+def test_page_level_page_starting_with_body_keeps_its_section() -> None:
+    """ページの先頭が前の章の続きの本文なら、その本文の階層を使う(#204)。"""
+    extraction = StructuredExtraction(
+        elements=[
+            DocumentElement(
+                kind="title", text="第1章", page_number=1, section_path=["文書A", "第1章"]
+            ),
+            DocumentElement(
+                kind="text",
+                text="第1章の本文です。",
+                page_number=1,
+                section_path=["文書A", "第1章"],
+            ),
+            DocumentElement(
+                kind="text",
+                text="第1章の本文の続きです。",
+                page_number=2,
+                section_path=["文書A", "第1章"],
+            ),
+            DocumentElement(
+                kind="title", text="第2章", page_number=2, section_path=["文書A", "第2章"]
+            ),
+            DocumentElement(
+                kind="text",
+                text="第2章の本文です。",
+                page_number=2,
+                section_path=["文書A", "第2章"],
+            ),
+        ]
+    )
+
+    sections = _page_chunk_sections(extraction)
+
+    assert sections[1] == ("文書A > 第1章", "第1章")
+    assert sections[2] == ("文書A > 第1章", "第1章")
+
+
 def test_page_level_falls_back_without_pages() -> None:
     """ページ情報がない文書では章節単位へ fallback する。"""
     extraction = StructuredExtraction(

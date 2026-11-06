@@ -157,6 +157,9 @@ TEXT_CHUNK_PROFILE = "text_v1"
 TABLE_PRESERVE_ROWS_TEMPLATE = "table_preserve_rows"
 NON_INDEXED_ELEMENT_KINDS = {"header", "footer"}
 FIGURE_ELEMENT_KINDS = {"figure", "figure_caption"}
+# 見出しの要素の種類（解析エンジンの別名は rag_parser_core.extraction.ELEMENT_KIND_ALIASES で
+# "title" にそろう）。
+HEADING_ELEMENT_KINDS = frozenset({"title"})
 # 表計算の行の記録（前処理 excel_to_jsonl。rag_parser_core.sheet_records の content_kind）。
 # 1 記録（表の 1 行・手順書の 1 手順）を 1 chunk にし、他の記録・要素と結合せず、途中で切らない
 # （#1349。engchina/no.1-rag の「1 行 = 1 chunk」に合わせる）。
@@ -686,6 +689,26 @@ def _chunk_markdown_heading(
     )
 
 
+def _apply_page_section(chunks: list[Chunk], group: list[_ElementSpan]) -> None:
+    """ページの chunk の見出しの階層を、ページの中で見出し以外の最初の要素から決める（#204）。
+
+    ページの先頭の繰り返しの見出しは階層を変えないため、前のページの階層を持つ。見出しの要素
+    しか無いページは、共通の規則（先頭の要素の階層）のままにする。
+    """
+    anchor = next((span for span in group if span.kind not in HEADING_ELEMENT_KINDS), None)
+    if anchor is None or anchor is group[0]:
+        return
+    for chunk in chunks:
+        metadata = chunk.metadata
+        metadata["section_level"] = anchor.section_level
+        metadata.pop("section_title", None)
+        metadata.pop("section_path", None)
+        if anchor.section_title:
+            metadata["section_title"] = anchor.section_title
+        if anchor.section_path:
+            metadata["section_path"] = " > ".join(anchor.section_path)
+
+
 def _chunk_page_level(
     extraction: StructuredExtraction,
     *,
@@ -711,14 +734,14 @@ def _chunk_page_level(
         nonlocal buffer, buffer_page
         if not buffer:
             return
-        chunks.extend(
-            _chunk_span_group(
-                buffer,
-                chunk_size=chunk_size,
-                overlap=overlap,
-                start_index=len(chunks),
-            )
+        page_chunks = _chunk_span_group(
+            buffer,
+            chunk_size=chunk_size,
+            overlap=overlap,
+            start_index=len(chunks),
         )
+        _apply_page_section(page_chunks, buffer)
+        chunks.extend(page_chunks)
         buffer = []
         buffer_page = None
 
