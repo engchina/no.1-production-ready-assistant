@@ -192,37 +192,14 @@ test("文書詳細の見出しは PageHeader に一覧へ戻る（左上）・�
 });
 
 
-test("索引の使用版・構築中の対象版を区別し、固定した公開版で再処理を確認する", { tag: "@responsive" }, async ({ page }) => {
-  await mockWorkspace(page, "INDEXED", "言語資源の現在版が変わりました。再確認してください。");
-  const recipe = { ...recipeView("INDEXED"), active_chunk_set_id: "chunks-old", searchable: true };
-  const used = { recipe_id: "recipe-1", chunk_set_id: "chunks-old", release_id: "release-1", version: 1, ingest_hash: "hash-old", relation: "different", built_at: "2026-10-17T00:00:00Z", job_id: "job-old", target_release_id: "release-2" };
-  await page.route(`**/api/documents/${DOC_ID}/recipes`, route => route.fulfill(ok([recipe])));
+test("文書の詳細に言語資源の使用版を表示しない", { tag: "@responsive" }, async ({ page }) => {
+  await mockWorkspace(page, "INDEXED", "");
+  const used = { recipe_id: "recipe-1", chunk_set_id: "chunks-old", release_id: "release-1", version: 1, ingest_hash: "hash-old", relation: "different", built_at: "2026-10-17T00:00:00Z", job_id: "job-old", target_release_id: null };
   await page.route(`**/api/documents/${DOC_ID}`, route => route.fulfill(ok({ ...documentDetail("INDEXED"), file_name: "sample.txt", language_pack: { current_release_id: "release-2", current_version: 2, recipes: [used] } })));
-  await page.route("**/api/settings/language-pack/releases/release-1", route => route.fulfill(ok({ id: "release-1", version: 1, effective: { numbers: { article_units: ["条"] } }, hash: "old", ingest_hash: "old", published_at: "2026-10-17T00:00:00Z", published_by: null, previous_id: null, restored_from: null, change_note: "" })));
-  await page.route("**/api/settings/language-pack/releases/compare?*", route => route.fulfill(ok({ before_id: "release-1", after_id: "release-2", differences: [{ section: "numbers", key: "article_units", before: ["条"], after: ["条", "款"], ingest: true }], ingest_changed: true, impact_requires_review: true, affected_stages: [] })));
-  let submitted: URL | null = null;
-  await page.route(`**/api/documents/${DOC_ID}/recipes/recipe-1/ingestion-jobs?*`, async route => {
-    submitted = new URL(route.request().url());
-    await route.fulfill({ status: 409, json: { data: null, error_messages: ["言語資源の現在版が変わりました。再確認してください。"], warning_messages: [] } });
-  });
   await page.goto(`/documents/${DOC_ID}`);
-  const panel = page.getByTestId("document-language-pack");
-  await expect(panel).toContainText("現在の検索に使用している版 v1");
-  await expect(panel).toContainText("別の版で構築中");
-  await panel.getByRole("button", { name: "公開時の完全な設定", exact: true }).click();
-  await expect(panel.getByLabel("公開時の完全な設定 v1")).toHaveAttribute("readonly");
-  await page.route(`**/api/documents/${DOC_ID}`, route => route.fulfill(ok({ ...documentDetail("INDEXED"), file_name: "sample.txt", language_pack: { current_release_id: "release-2", current_version: 2, recipes: [{ ...used, target_release_id: null }] } })));
-  await page.reload();
-  await panel.getByRole("button", { name: "差分と影響を確認する" }).click();
-  await panel.getByRole("combobox", { name: "再処理を始める工程" }).click();
-  await page.getByRole("option", { name: "Chunk 作成", exact: true }).click();
-  await panel.getByRole("button", { name: "再処理する", exact: true }).click();
-  const dialog = page.getByRole("alertdialog");
-  await expect(dialog).toContainText("言語資源 v2");
-  await expect(dialog).toContainText("レシピ1");
-  await dialog.getByRole("button", { name: "再処理する", exact: true }).click();
-  await expect.poll(() => submitted?.searchParams.get("expected_language_pack_release_id")).toBe("release-2");
-  expect(submitted!.searchParams.get("expected_config_revision")).toBe("1");
-  await expect(panel.getByText("言語資源の現在版が変わりました。再確認してください。", { exact: true })).toBeVisible();
-  await expect(panel).toContainText("現在の検索に使用している版 v1");
+  await expect(page.getByRole("heading", { name: "sample.txt" })).toBeVisible();
+  await expect(page.getByTestId("document-language-pack")).toHaveCount(0);
+  await expect(page.getByText("言語資源の使用版")).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("document-without-language-pack.png"), fullPage: true });
 });
+
