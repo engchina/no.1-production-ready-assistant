@@ -255,7 +255,7 @@ fake_sleep() {
     "[suite-init] check: nl2sql の初期化の log（${SUITE_PRODUCT_LOG_DIR}/nl2sql-init.log）の最後のエラー: ORA-01031"; do
     grep -qxF "${expected}" "${out}" || fail "schema の NG の行（${expected}）: $(cat "${out}")"
   done
-  grep -qF 'check: nl2sql の DB ユーザー（PLATFORM_ORACLE_USER）の権限が足りない可能性があります。README.md「ローカルで動かす」' "${out}" \
+  grep -qF 'check: nl2sql の DB ユーザー（PLATFORM_ORACLE_USER）の権限が足りない可能性があります。platform.env の PLATFORM_ORACLE_USER が ADMIN か' "${out}" \
     || fail "権限の不足の手がかり: $(cat "${out}")"
   if grep -qF 'check: rag の DB ユーザー' "${out}"; then fail "OK の製品に手がかりを出した"; fi
   tail -n 1 "${out}" | grep -q "check: NG" || fail "最後の行が NG ではない: $(tail -n 1 "${out}")"

@@ -9,7 +9,7 @@
 | 権限 | メニュー権限 `menu.db_admin_chat`（「DB 管理チャット」。含む権限は DB 構造の参照・再取得）。既定はどのロールにも付けない（system_admin だけが使える）。ほかのロールへの付与は「自分の持つ権限だけを付与できる」規則（[agents/security-contracts.md](./agents/security-contracts.md)「role の権限昇格の防止」）で越権を防ぐ。「管理 SQL を実行」の権限（`menu.admin_sql`）では代わりにしない |
 | 生成 | Enterprise AI Direct だけ（システム設定 › モデルの既定のテキストモデル）。業務プロファイルで限らず DB 全体が対象。**質問には必ず SQL で答える**（#2333）: 構造化出力（`DbAdminChatSqlOutput`）の `sql` に 1 文以上、`explanation` は SQL が何をするかの短い説明。SQL の無い応答（文章だけの答え・文の種類が分からない文だけ）は、理由を添えて 1 回だけ作り直させ、それでも無ければ生成の失敗（502「SQL を生成できませんでした…」。ターンは保存せず、画面は質問を残して「再送信」）にする。文章を回答として出さない。方針で止める作業を頼まれたときも、今の設定・状態を読む SELECT を作る |
 | 生成の文脈 | DB 構造の cache から質問（と画面の中の前の質問）に関係する表を最大 12 件選び、列（1 表 40 列まで）を渡す。ほかの表は名前だけ（80 件まで）。Oracle のシステムの schema と製品の表は cache の段階で外れている。DB の管理の質問（版・表領域・セッション・ロック・権限・無効な object など）は、LLM への指示（`backend/app/features/nl2sql/prompts/db_admin_chat/system.txt`）にデータ辞書と動的性能ビュー（`V$VERSION`・`PRODUCT_COMPONENT_VERSION`・`DBA_TABLESPACE_USAGE_METRICS`・`DBA_DATA_FILES`・`DBA_FREE_SPACE`・`V$SESSION`・`V$LOCKED_OBJECT`・`DBA_OBJECTS`・`DBA_ROLE_PRIVS` など）の使い方を書いて答えられるようにする。Autonomous AI Database で見えないビュー（`ORA-00942` / `ORA-01031`）は、エラーの分析で `USER_` / `ALL_` ビューの代わりを示す。生成した文の列は、生成の後に参照する object の実際の列で確かめる（下の「列の検査」） |
-| 接続 | system_admin と同じく、アプリ用の DB ユーザーのネイティブの接続だけ（SELECT も `OracleNl2SqlAdapter.execute_select(admin_control_plane=True)` で `connection()` を使い、業務の実行の pool を使わない） |
+| 接続 | system_admin と同じく、DB の接続のユーザー（`PLATFORM_ORACLE_USER`。ADMIN）のネイティブの接続だけ（SELECT も `OracleNl2SqlAdapter.execute_select(admin_control_plane=True)` で `connection()` を使い、業務の実行の pool を使わない） |
 | 実行 | 生成した SQL を必ず表示し、自動では実行しない。サーバーが文に分け（PL/SQL のブロックは 1 文）、文ごとに分類・実行する（#2333。下の「複数の文」）。読み取り専用の SELECT / WITH…SELECT の文は「実行」で実行する（確認語は要らない）。データ・構造を変える文は実行確認語 `ADMIN_EXECUTE`（1 つの対象を消す `DROP` / `TRUNCATE` の文は対象の名前。例 `APP.T1`）を入力したときだけ実行する。確認は 1 回ごと（実行したら消える）で、SQL が変わる（AI のエラー分析で直した SQL を使う）と確認からやり直す |
 | 分類 | 生成エンジンに関係なく、実行の前にサーバーで必ず分類する（`_split_sql_statements`・`_admin_statement_type`・`is_select_only`）。生成の応答（`plan`）も実行の前に作り直す（画面の値を信じない） |
 | 実行の実装 | 1 文の実行は「管理 SQL を実行」の `_execute_db_admin_sql` にその文だけを `chat=True` で渡す（PL/SQL・暗黙の commit の警告・DB 構造の再取得は同じ。DML も部分の commit の経路（`data_dml`）へ渡さない）。「すべて実行」は `OracleNl2SqlAdapter.execute_admin_script` が 1 つの管理の接続とトランザクションで上から順に実行し（SELECT は同じ cursor から読むので、前の文の commit 前の変更が見える）、最初のエラーで止め、**全部成功したときだけ commit**、失敗したら rollback する（DDL は Oracle の暗黙の commit で戻らない。その前の成功した DML も commit される） |
@@ -36,7 +36,7 @@
 
 - **対象**: 方針で止めない SELECT と DML（INSERT・UPDATE・DELETE・MERGE）の文。方針で止める文（製品の object など）は調べない。同じターンの前の文（SELECT・DML 以外。DDL・GRANT など）に名前が出る object を参照する文は、実行の前は object が無い・列が違うので確かめない。Oracle の実行環境（`NL2SQL_RUNTIME_MODE=oracle`）だけで確かめる。
 - **取り出し**: sqlglot（Oracle の方言）で参照する object と列を取り出す（別名・`*`・関数・副問い合わせ / CTE・引用識別子・`SERIAL#` のような名前。相関副問い合わせは外側の参照先、ORDER BY の別名・疑似列（`ROWNUM`・`SYSDATE` など）は列にしない）。表関数・`JSON_TABLE`・DB link・`*` の副問い合わせ・PIVOT など、列を確かめられない参照は確かめない。
-- **調べ方**: 実行と同じ管理の接続（アプリ用の DB ユーザー）で、`SELECT * FROM <object> WHERE 1 = 0` を `cursor.parse`（実行しない解析）して `cursor.description` の列を読む。データは読まない。調べた列は process ごとに cache する（10 分。調べられない object は 1 分。DDL・権限の変更を実行したら捨てる）。
+- **調べ方**: 実行と同じ管理の接続（`PLATFORM_ORACLE_USER`）で、`SELECT * FROM <object> WHERE 1 = 0` を `cursor.parse`（実行しない解析）して `cursor.description` の列を読む。データは読まない。調べた列は process ごとに cache する（10 分。調べられない object は 1 分。DDL・権限の変更を実行したら捨てる）。
 - **止めるかどうか**: 文そのものを `cursor.parse`（実行しない）し、Oracle が `ORA-00904` を返したときだけ止める。sqlglot の静的な検査は、存在しない列の一覧とどの object の列かの説明に使う（静的な検査が誤る文を止めないため）。
 - **直させる**: 存在しない列（`ORA-00904`）か、Oracle の解析で見つからない object（`ORA-00942` など）を参照する文は、文の番号・SQL・エラー・参照する object の実際の列を渡して、**1 回だけ**モデルに直させる（指示は `prompts/db_admin_chat/repair.txt`、構造化出力は `DbAdminChatRepairOutput`）。直した文だけを置き換えて分類し直す。
 - **直らなかったら**: 文は残し、`blocked_reason` に「列が存在しません: X（<object> の列: …）」、`unknown_columns` に列を入れ、その文の実行と「すべて実行」を止める（API の実行も止めて、止めた文として監査に残す）。画面はその文の区画に理由と「AI でエラーを分析」を出し、直した SQL に置き換えると分類し直す（`PUT …/plan` も同じ検査をする）。
@@ -96,9 +96,9 @@
 - 結果はその文の区画の直下に出す。SELECT の結果はチャットと同じ `ChatQueryResult`（共通の `ChatResultTable`。要約・プレビュー・すべての行・CSV）。更新系の結果・失敗は「管理 SQL を実行」と同じ `DbAdminExecutionResult`（状態・影響行数・commit / rollback。SQL はすぐ上にあるので繰り返さない）。「すべて実行」で実行しなかった文は「実行しなかった」。DDL の後の DB 構造の同期の案内はターンの末尾。開き直した会話の SELECT は、結果の行を保存しないので前回の実行の要約（チャットと共通の `ChatLastExecutionText`）と「もう一度実行」を出す。
 - 2 文以上のターンは、文の区画の上に「すべて実行」の区画を出す（文の数と「1 文ずつ実行するか、すべて実行で上から順に実行（最初のエラーで止める）」の案内）。SELECT だけならボタンだけ（確認語なし）。変える文を含むなら、トランザクションの扱いの警告と、確認語の欄（1 回だけ入れる）の横に「すべて実行」。止める文を含むなら「すべて実行」は押せず、ボタンの直下に止める文の番号と理由を出す。結果の要約（すべて成功 / 文 N で停止・commit / rollback・成功と実行しなかった文の数・警告）はこの区画に、文ごとの結果は各文の区画に出す。
 
-## アプリ用の DB ユーザーの権限
+## DB の接続のユーザーの権限
 
-データ辞書・動的性能ビューは `PDB_DBA` の範囲で読む（[platform/docs/deployment.md](../../platform/docs/deployment.md)「アプリ用の DB ユーザー」）。開発の ADB（ADMIN の接続）では `V$VERSION`・`PRODUCT_COMPONENT_VERSION`・`DBA_TABLESPACE_USAGE_METRICS`・`DBA_DATA_FILES`・`DBA_FREE_SPACE`・`V$SESSION`・`DBA_OBJECTS`・`DBA_ROLE_PRIVS`・`DBA_USERS`・`V$LOCKED_OBJECT`・`DBA_SEGMENTS`・`V$PARAMETER` が読めた。アプリ用の DB ユーザー（`ADB_APP_USER`）での確認は検証環境で行う（読めないビューは実行の失敗として分析が代わりのビューを示す）。監査の表（migration 023）と会話の履歴の表（migration 024）は製品の migration が作るので、追加の grant は要らない。
+データ辞書・動的性能ビューは DB の接続のユーザー（ADMIN。[platform/docs/deployment.md](../../platform/docs/deployment.md)「DB の接続のユーザー」）の権限で読む。開発の ADB（ADMIN の接続）では `V$VERSION`・`PRODUCT_COMPONENT_VERSION`・`DBA_TABLESPACE_USAGE_METRICS`・`DBA_DATA_FILES`・`DBA_FREE_SPACE`・`V$SESSION`・`DBA_OBJECTS`・`DBA_ROLE_PRIVS`・`DBA_USERS`・`V$LOCKED_OBJECT`・`DBA_SEGMENTS`・`V$PARAMETER` が読めた。ADMIN 以外のユーザーで接続して読めないビューは、実行の失敗として分析が代わりのビューを示す。監査の表（migration 023）と会話の履歴の表（migration 024）は製品の migration が作るので、追加の grant は要らない。
 
 
 ## 修正を繰り返す場合（#2950）

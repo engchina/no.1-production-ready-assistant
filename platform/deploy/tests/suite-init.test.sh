@@ -118,17 +118,19 @@ prepare_case() {
   [ ! -s "${calls}" ] || fail "SELinux が無効なのに設定した: $(cat "${calls}")"
   # main の順: package → SELinux → 製品の配備（venv・unit の前に context の規則を置く）。
   main_body="$(sed -n '/^main() {$/,/^}$/p' "${repo}/platform/deploy/suite-init.sh")"
-  # アプリ用の DB ユーザー（#1668）は、製品の配備（system schema の初期化）の前に作る。
-  # provision_db_app_user は失敗しても続ける（#1756）ため、`if ! provision_db_app_user; then` の形。
-  printf '%s\n' "${main_body}" | sed -E 's/^  if ! (provision_db_app_user); then$/  \1/' \
-    | grep -E '^  (configure_timezone|grow_root_filesystem|install_os_packages|configure_selinux|provision_db_app_user|deploy_products)$' \
+  printf '%s\n' "${main_body}" \
+    | grep -E '^  (configure_timezone|grow_root_filesystem|install_os_packages|configure_selinux|deploy_products)$' \
     | awk '{printf "%s ", $1}' \
-    | grep -qx 'configure_timezone grow_root_filesystem install_os_packages configure_selinux provision_db_app_user deploy_products ' \
+    | grep -qx 'configure_timezone grow_root_filesystem install_os_packages configure_selinux deploy_products ' \
     || fail "main の順が違う"
   # 最後に配備全体を確かめる（#1642。log の最後の check の行が結果）。完了の log の後、失敗の判定の前。
   printf '%s\n' "${main_body}" | grep -E '^  (deploy_products|report_urls|suite_check_deployment .*)$' \
     | awk '{printf "%s ", $1}' | grep -qx 'deploy_products report_urls suite_check_deployment ' \
     || fail "main の最後に配備の確認が無い"
+  # 配備は DB のユーザーを作らない（#182。platform/.env の PLATFORM_ORACLE_USER=ADMIN でそのまま接続する）。
+  if grep -vE '^\s*#' "${repo}/platform/deploy/suite-init.sh" | grep -qE 'adb_admin|suite-db-user|provision_db_app_user'; then
+    fail "suite-init.sh に DB のユーザーを作る段が残っている"
+  fi
   # Nginx・firewalld・証明書の段は無い（#19）。
   if grep -vE '^\s*#' "${repo}/platform/deploy/suite-init.sh" | grep -qiE 'nginx|firewall-cmd|suite-tls|tls-renew|configure_tls|configure_public_base_url'; then
     fail "suite-init.sh に Nginx・firewalld・証明書の段が残っている"
@@ -282,62 +284,6 @@ done
   suite_run_schema_check() { printf 'status=ready\n'; }
   main > "${out}" 2>&1 || fail "すべて OK なのに失敗した: $(cat "${out}")"
   tail -n 1 "${out}" | grep -q 'check: OK' || fail "最後の行が OK ではない: $(tail -n 1 "${out}")"
-)
-
-# アプリ用の DB ユーザー（#1668）: props の adb_admin.env があるときだけ、製品の配備の前に suite-db-user.py を
-# uv run（固定の python-oracledb）で実行する。無ければ何もしない。失敗したら 0 以外を返す。
-# main は失敗しても製品の配備と起動を続け、最後に失敗として返す（#1756。ADB に接続できなくてもアプリケーションは起動する）。
-(
-  case_dir="${task_dir}/db-user"
-  prepare_case "${case_dir}"
-  # shellcheck source=../suite-init.sh
-  source "${repo}/platform/deploy/suite-init.sh"
-  calls="${case_dir}/uv.calls"
-  selinux_enabled() { return 1; }
-  uv() {
-    printf '%s\n' "$*" >> "${calls}"
-    return "${UV_STATUS:-0}"
-  }
-  out="${case_dir}/out.log"
-  # adb_admin.env が無い: 作らない（uv も呼ばない）。
-  provision_db_app_user > "${out}" 2>&1 || fail "adb_admin.env が無いのに失敗した: $(cat "${out}")"
-  [ ! -e "${calls}" ] || fail "adb_admin.env が無いのに uv を呼んだ"
-  grep -q "アプリ用の DB ユーザーは作りません" "${out}" || fail "作らない旨の log: $(cat "${out}")"
-  # adb_admin.env がある: suite-db-user.py apply を固定の oracledb で実行し、0600 にする。
-  printf "SUITE_DB_ADMIN_USER=ADMIN\nSUITE_DB_ADMIN_PASSWORD='stub'\nSUITE_DB_APP_USER='ADB_APP_USER'\n" > "${PROPS_DIR}/adb_admin.env"
-  chmod 0644 "${PROPS_DIR}/adb_admin.env"
-  provision_db_app_user > "${out}" 2>&1 || fail "成功するはず: $(cat "${out}")"
-  [ "$(stat -c %a "${PROPS_DIR}/adb_admin.env")" = "600" ] || fail "adb_admin.env は 0600"
-  call="$(cat "${calls}")"
-  for expected in "run --no-project --python 3.12 --with oracledb==${SUITE_DB_USER_ORACLEDB_VERSION}" \
-    "suite-db-user.py apply" "--admin-env ${PROPS_DIR}/adb_admin.env" "--app-env ${PROPS_DIR}/platform.env" \
-    "--current-env ${SUITE_REPO_DIR}/platform/.env"; do
-    printf '%s\n' "${call}" | grep -qF -- "${expected}" || fail "uv の引数に ${expected} が無い: ${call}"
-  done
-  grep -qxF "[suite-init] check: db user OK" "${out}" || fail "OK の行: $(cat "${out}")"
-  # 失敗: 0 以外で返し、NG の行を出す。
-  status=0
-  UV_STATUS=1 provision_db_app_user > "${out}" 2>&1 || status=$?
-  [ "${status}" -eq 1 ] || fail "失敗を返さない（${status}）"
-  grep -qF "[suite-init] check: db user NG" "${out}" || fail "NG の行: $(cat "${out}")"
-
-  # main: DB ユーザーの準備が失敗しても（ADB に接続できない）、製品の配備・確認まで進み、最後に失敗として返す。
-  steps="${case_dir}/steps.log"
-  for step in load_products grow_root_filesystem install_os_packages configure_selinux \
-    deploy_products report_urls suite_check_deployment; do
-    eval "${step}() { printf '%s\\n' ${step} >> \"\${steps}\"; }"
-  done
-  status=0
-  UV_STATUS=1 main > "${out}" 2>&1 || status=$?
-  [ "${status}" -eq 1 ] || fail "DB ユーザーの失敗を最後に返さない（${status}）: $(cat "${out}")"
-  [ "$(tr '\n' ' ' < "${steps}")" = "load_products grow_root_filesystem install_os_packages configure_selinux deploy_products report_urls suite_check_deployment " ] \
-    || fail "DB ユーザーの失敗で配備を止めた: $(tr '\n' ' ' < "${steps}")"
-  grep -qF "WARNING: アプリ用の DB ユーザーを準備できませんでした。製品の配備と起動は続けます" "${out}" || fail "warning: $(cat "${out}")"
-  tail -n 1 "${out}" | grep -qF "[suite-init] check: db user NG" || fail "最後の行: $(tail -n 1 "${out}")"
-  # 成功すれば確認の結果を返す。
-  : > "${steps}"
-  main > "${out}" 2>&1 || fail "DB ユーザーが成功したのに失敗した: $(cat "${out}")"
-  if grep -qF "WARNING: アプリ用の DB ユーザー" "${out}"; then fail "成功したのに warning を出した"; fi
 )
 
 # root の filesystem を広げる（#1984）: oci-growfs を -y で呼ぶ・無ければ飛ばす・失敗しても続ける、空きが少なければ警告。
