@@ -218,7 +218,7 @@ export function ChatLayout({
             ) : conversationTitleLoading ? (
               <Skeleton className="h-4 w-40" />
             ) : null}
-            {targetSelector ? <div className="min-w-0 flex-1 @2xl/chat-toolbar:max-w-[28rem]" data-chat-target-selector="">{targetSelector}</div> : null}
+            {targetSelector ? <div className="min-w-0 flex-1 @2xl/chat-toolbar:ml-auto @2xl/chat-toolbar:max-w-[28rem]" data-chat-target-selector="">{targetSelector}</div> : null}
           </div>
           <Button
             type="button"
