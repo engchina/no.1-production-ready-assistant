@@ -154,6 +154,9 @@ async function mockSettingsAndFeedback(page: Page) {
     }),
   );
   await page.route("**/api/settings/database/system-tables", (route) => route.fulfill({ json: SYSTEM_TABLES_STATUS_OK }));
+  await page.route("**/api/settings/trace-recording", (route) =>
+    route.fulfill({ json: apiEnvelope({ enabled: false, updated_at: null }) }),
+  );
 
   const feedbackItem = (id: string, rating: "helpful" | "not_helpful", targetType: "answer" | "citation") => ({
     feedback_id: id,
@@ -329,7 +332,8 @@ const SCREENS: Screen[] = [
   { path: "/settings/security/roles" },
   { path: "/settings/security/api-keys" },
   { path: "/settings/system-tables" },
-  // 運用設定のシステムテーブルの下（#2449・#2517。3 製品の共通のサイドナビの順）。
+  // 運用設定のシステムテーブルの下（#2449・#2517・#165。3 製品の共通のサイドナビの順）。
+  { path: "/settings/trace-recording" },
   { path: "/settings/chat-attachments" },
   { path: "/settings/answer-notice" },
   { path: "/settings/huggingface" },
