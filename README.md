@@ -141,6 +141,32 @@ cd agent  && (cd frontend && npm ci) && bash scripts/start-all.sh
 
 `system_admin` でログインし、「システム設定 › データベース」の接続テストが成功すれば DB に届いています。
 
+RAG は、backend と画面のほかに、ファイル準備（前処理）と解析エンジンを独立したサービスとして動かします（`start-all.sh` は起動しません）。起動していないと、「運用設定 › サービス」の画面で「未登録」と出ます。
+
+| 画面での名前 | サービス | port |
+|---|---|---|
+| Office→PDF | `preprocess-office-to-pdf` | 18010 |
+| CSV→JSONL | `preprocess-csv-to-jsonl` | 18012 |
+| Excel→JSONL | `preprocess-excel-to-jsonl` | 18013 |
+| Word→JSONL | `preprocess-word-to-jsonl` | 18017 |
+| Docling | `parser-docling` | 18020 |
+| Unstructured | `parser-unstructured` | 18022 |
+
+Office→PDF と Word→JSONL は LibreOffice を使います。systemd が動いている環境（WSL2 は `/etc/wsl.conf` の `[boot]` に `systemd=true`）では、`rag/` で `install --all` を実行します。各サービスの venv を作り、systemd の unit を登録して起動し、画面から起動・停止できるように sudoers を置きます。PC を再起動しても、最後に操作した状態に戻ります。
+
+```bash
+sudo apt install -y --no-install-recommends libreoffice-core libreoffice-writer libreoffice-impress libreoffice-calc fonts-noto-cjk
+cd rag && scripts/rag-services.sh install --all && scripts/rag-services.sh status
+```
+
+systemd が無い環境では、使うサービスごとに別のターミナルで前面に起動します（Ctrl+C で停止。画面からの起動・停止は使えません）。
+
+```bash
+cd rag && scripts/rag-services.sh run preprocess-office-to-pdf
+```
+
+詳細（OCR の部品・unit の中身・削除）は [rag/docs/deployment.md](./rag/docs/deployment.md) の開発環境の節を参照してください。
+
 ### コンテナを作り直すとき
 
 イメージを入れ替えるときなどの手順です。**DB の中身はすべて消え、新しいコンテナには移りません**（残すデータは先に取り出します）。
