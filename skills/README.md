@@ -1,6 +1,6 @@
 # 組み込みのスキル（Agent Skills）
 
-Production Ready RAG・NL2SQL の MCP を使って調べるスキル。組み込みの Agent が読み、Claude Code・Codex などの外部の Agent にも入れられる（形式は [Agent Skills](https://agentskills.io) の `<name>/SKILL.md`）。
+Private RAG・NL2SQL の MCP を使って調べるスキル。組み込みの Agent が読み、Claude Code・Codex などの外部の Agent にも入れられる（形式は [Agent Skills](https://agentskills.io) の `<name>/SKILL.md`）。
 
 | スキル | 使う MCP サーバー | 使う場面 |
 |---|---|---|

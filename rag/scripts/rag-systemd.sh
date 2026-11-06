@@ -101,7 +101,7 @@ rag_write_microservice_unit() {
   cat > "${unit_path}" <<EOF
 # rag/scripts/rag-systemd.sh が生成する（手で編集しない）。#286
 [Unit]
-Description=Production Ready RAG ${id}
+Description=Private RAG ${id}
 After=network-online.target
 Wants=network-online.target
 

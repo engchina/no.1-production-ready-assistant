@@ -176,7 +176,7 @@ async def _run_model_settings_test(
             "connection.check",
             EnterpriseAiClient(settings=settings).generate,
             MODEL_TEST_TEXT_PROMPT,
-            model_test_text_context("Production Ready NL2SQL"),
+            model_test_text_context("Private NL2SQL"),
         )
         return {"response_chars": len(text), "surface": "llm"}
     if request.target_type == "enterprise_vision":

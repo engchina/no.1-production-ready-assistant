@@ -462,22 +462,22 @@ configure_systemd() {
   write_systemd_unit \
     "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-backend.service" \
     "/usr/local/bin/uv run gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind ${BACKEND_HOST}:${BACKEND_PORT} --workers 2 --timeout 300" \
-    "Production Ready NL2SQL backend"
+    "Private NL2SQL backend"
 
   write_systemd_unit \
     "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-schema-refresh-worker.service" \
     "/usr/local/bin/uv run python -m app.cli.nl2sql_schema_refresh_worker --poll-seconds 1" \
-    "Production Ready NL2SQL schema refresh worker"
+    "Private NL2SQL schema refresh worker"
 
   write_systemd_unit \
     "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-quality-evaluation-worker.service" \
     "/usr/local/bin/uv run python -m app.cli.nl2sql_quality_evaluation_worker" \
-    "Production Ready NL2SQL quality evaluation worker"
+    "Private NL2SQL quality evaluation worker"
 
   write_systemd_unit \
     "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-ontology-worker.service" \
     "/usr/local/bin/uv run python -m app.features.nl2sql.ontology_worker" \
-    "Production Ready NL2SQL ontology worker"
+    "Private NL2SQL ontology worker"
 
   # 合成データの worker は機能ごと削除した（#7）。以前の配備の unit が残っていれば止めて消す。
   if [ -f "${SYSTEMD_UNIT_DIR}/production-ready-nl2sql-synthetic-worker.service" ]; then

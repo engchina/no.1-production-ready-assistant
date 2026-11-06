@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { measureHorizontalOverflow } from "../../../platform/packages/ui/e2e/layout-checks";
 import { expect, test } from "./fixtures/mock-api";
 
 // #1795: 組み込みのスキルの指示は手順で進める Markdown。詳細画面で共有の MarkdownText（#1808）が見出し・箇条書き・`code` として表示し、
@@ -49,5 +50,29 @@ test.describe("スキルの指示の表示", { tag: "@responsive" }, () => {
     expect(viewBox && codeBox).toBeTruthy();
     if (viewBox && codeBox) expect(codeBox.x + codeBox.width).toBeLessThanOrEqual(viewBox.x + viewBox.width + 1);
     await expectNoHorizontalOverflow(page);
+  });
+
+  test("説明が長くても書き出しのボタンが画面に収まり、長い指示は枠の中で縦にスクロールする", async ({ page, mockApi }) => {
+    const skill = mockApi.state.skills.find((item) => item.id === "business-rag-research");
+    expect(skill).toBeTruthy();
+    Object.assign(skill!, {
+      description: "合成の説明です。".repeat(40),
+      instructions: Array.from({ length: 60 }, (_, index) => `- 合成の手順 ${index + 1}`).join("\n"),
+    });
+    await page.goto("/skills?id=business-rag-research");
+    const exportButton = page.getByTestId("skill-object-actions").getByRole("button", { name: "Agent Skills の形で書き出す" });
+    await expect(exportButton).toBeVisible();
+    const box = await exportButton.boundingBox();
+    const width = page.viewportSize()?.width ?? 0;
+    expect(box && box.x + box.width).toBeLessThanOrEqual(width);
+    expect(await measureHorizontalOverflow(page)).toBeLessThanOrEqual(1);
+
+    const scroll = page.getByTestId("skill-instructions-scroll");
+    const sizes = await scroll.evaluate((node) => ({ scroll: node.scrollHeight, client: node.clientHeight }));
+    expect(sizes.scroll).toBeGreaterThan(sizes.client);
+    await scroll.focus();
+    await page.keyboard.press("End");
+    await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    await page.screenshot({ path: test.info().outputPath("skill-long-description.png") });
   });
 });

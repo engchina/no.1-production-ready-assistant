@@ -1,6 +1,6 @@
-# Production Ready NL2SQL
+# Private NL2SQL
 
-Production Ready NL2SQL is a production-oriented NL2SQL reference implementation
+Private NL2SQL is a production-oriented NL2SQL reference implementation
 for deploying an Oracle AI Database-backed application that calls OpenAI-compatible
 model APIs (LLM / embedding / rerank).
 

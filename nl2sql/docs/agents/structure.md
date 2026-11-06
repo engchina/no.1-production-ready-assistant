@@ -4,7 +4,7 @@
 
 ## プロジェクト概要
 
-> **製品名と固有 namespace は `Production Ready NL2SQL` / `NL2SQL` を正とする。**
+> **製品名と固有 namespace は `Private NL2SQL` / `NL2SQL` を正とする。**
 > 新規 DB object、cookie、storage key、context、UI の製品ラベルへ汎用 `RAG` prefix を使用しない。
 > `GraphRAG`、`RAGAS`、`RAGFlow` など技術・製品の固有名詞はこの置換対象外とする。
 

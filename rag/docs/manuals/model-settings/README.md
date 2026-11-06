@@ -1,4 +1,4 @@
-# Production Ready RAG のモデル設定を使ってみる
+# Private RAG のモデル設定を使ってみる
 
 ## はじめに
 

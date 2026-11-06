@@ -183,7 +183,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     # API ドキュメント（/docs・/redoc・/openapi.json）は公開しない（#748）。
     app = FastAPI(
-        title="Production Ready RAG API",
+        title="Private RAG API",
         version=settings.app_version,
         lifespan=lifespan,
         docs_url=None,

@@ -1,7 +1,7 @@
 # Ontology-Playground 学習ノートと本プロジェクトへの複製方針
 
 > 調査対象: [microsoft/Ontology-Playground](https://github.com/microsoft/Ontology-Playground)(MIT、TypeScript 静的 Web アプリ)
-> 本書の目的: Playground の**構築過程・構築方法・graph 表現**を整理し、その手法を **Production Ready NL2SQL の既存 Ontology 機能へ複製(再マップ)する方針**を示す。
+> 本書の目的: Playground の**構築過程・構築方法・graph 表現**を整理し、その手法を **Private NL2SQL の既存 Ontology 機能へ複製(再マップ)する方針**を示す。
 > 重要: Playground 自体は **SQL を生成しない**。NL2SQL のグラウンディング対象となるセマンティックレイヤー(オントロジー)の**オーサリング/学習ツール**であり、実クエリ変換は Microsoft Fabric IQ 側へ委譲される。
 
 ---

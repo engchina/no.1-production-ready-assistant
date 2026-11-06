@@ -1,8 +1,8 @@
-# Production Ready NL2SQLの「DB 構造を再取得」を支える差分同期と永続ジョブ設計
+# Private NL2SQLの「DB 構造を再取得」を支える差分同期と永続ジョブ設計
 
 ## はじめに
 
-[Production Ready NL2SQL](https://github.com/engchina/no.1-production-ready-nl2sql) は、Oracle AI Database と OpenAI 互換のモデルの API を使った、本番運用を意識した NL2SQL の参照実装です。
+[Private NL2SQL](https://github.com/engchina/no.1-production-ready-nl2sql) は、Oracle AI Database と OpenAI 互換のモデルの API を使った、本番運用を意識した NL2SQL の参照実装です。
 
 このプロジェクトのテーブル管理、ビュー管理、SQL 生成などの画面には、次の二つの似た操作があります。
 
@@ -442,7 +442,7 @@ Coordinator は次を一元管理します。
 
 ## まとめ
 
-Production Ready NL2SQL の「DB 構造を再取得」は、単なる reload button ではありません。
+Private NL2SQL の「DB 構造を再取得」は、単なる reload button ではありません。
 
 - 軽量 manifest で変更を検出する
 - changed/deleted object だけを反映する

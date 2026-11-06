@@ -44,12 +44,13 @@ export function Section({
   return (
     <section {...props} className={cn("grid min-w-0 gap-3", className)}>
       {title || actions ? (
-        <div className="flex min-w-0 items-start justify-between gap-4">
-          <div className="min-w-0">
+        // 説明が長くても操作を押し出さない。幅が足りなければ操作を次の行へ折り返す（#200）。
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 basis-80">
             {title ? <h2 className="text-base font-semibold text-fg">{title}</h2> : null}
             {description ? <p className="mt-1 text-sm text-fg-muted">{description}</p> : null}
           </div>
-          {actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
+          {actions ? <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </div>
       ) : null}
       {children}

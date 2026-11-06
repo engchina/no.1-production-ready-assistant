@@ -1,6 +1,6 @@
 # ナレッジベース管理設計
 
-> 本ドキュメントは、Production Ready RAG に「ナレッジベース管理」を追加するための設計メモである。
+> 本ドキュメントは、Private RAG に「ナレッジベース管理」を追加するための設計メモである。
 > Dify / RAGFlow / AnythingLLM / FastGPT / MaxKB / R2R などのプロダクト級 RAG が持つ
 > dataset / knowledge base / collection の考え方を参考にしつつ、実装は本プロジェクトの確定スタック
 > (モデルの API〔OpenAI 互換の API。LLM・埋め込み・再ランク〕/ Oracle AI Database / Vite + React Router) へ再マッピングする。
