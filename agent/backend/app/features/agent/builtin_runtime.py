@@ -155,6 +155,7 @@ from app.features.agent.answer_validation import (
     carried_evidence_groups,
     combine_validations,
     connection_check_inputs,
+    internal_id_values,
     run_evidence_groups,
     usable_result,
     validation_content,
@@ -4660,8 +4661,12 @@ async def _finish(
         # 確認のツールの引数の JSON を本文に書いた（#2236）。カードの問いの文にする。
         answer = card_answer(tool_confirmations)
     # 調べるのに使ったツール・プロファイル・内部の ID だけを述べる行は、資料の主張ではないので
-    # 検証の前に外す（#2328。使ったツールと根拠は画面と MCP の sources が別に示す）。
-    answer = without_lookup_notes(answer)
+    # 検証の前に外す（#2328。使ったツールと根拠は画面と MCP の sources が別に示す）。内部の
+    # 識別子の値・項目名も外す（#169）。回答が書いた根拠の id は、検証に渡す根拠を選ぶのにだけ使う。
+    cited_answer = answer
+    answer = without_lookup_notes(
+        answer, internal_id_values(runtime_repository.get_run(run_id).steps)
+    )
     if output_recorded(runtime_repository.get_run(run_id).artifacts):
         answer = without_output_record_sections(
             answer, get_settings().agent_output_record_section_titles
@@ -4674,7 +4679,11 @@ async def _finish(
     if aid_enabled(run_id, "final_validation"):
         try:
             answer, validation = await _validate_final_answer(
-                run_id, answer, rag_tools=rag_tools, data_scopes=data_scopes
+                run_id,
+                answer,
+                rag_tools=rag_tools,
+                data_scopes=data_scopes,
+                cited_answer=cited_answer,
             )
             reverted = await _answer_before_hop_retry(
                 run_id, model_answer, validation, rag_tools=rag_tools, data_scopes=data_scopes
@@ -4807,13 +4816,17 @@ async def _answer_before_hop_retry(
     if after is None or after == (0, 0, 0):
         return None
     original = tool_grounding.hop_original_answer(runtime_repository.get_run(run_id).events)
-    original = without_lookup_notes(original) if original else original
+    cited_answer = original
+    if original:
+        original = without_lookup_notes(
+            original, internal_id_values(runtime_repository.get_run(run_id).steps)
+        )
     if not original or original.strip() == answer.strip() or is_clarification_only(original):
         return None
     identifiers = identifier_index(runtime_repository.get_run(run_id).steps).answer(original)
     original = identifiers.text
     published, before = await _validate_final_answer(
-        run_id, original, rag_tools=rag_tools, data_scopes=data_scopes
+        run_id, original, rag_tools=rag_tools, data_scopes=data_scopes, cited_answer=cited_answer
     )
     rank = _withheld_rank(before)
     if rank is not None and rank < after:
@@ -5027,6 +5040,7 @@ async def _validate_final_answer(
     *,
     rag_tools: bool = False,
     data_scopes: data_scope.AgentDataScopes | None = None,
+    cited_answer: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """回答の最終の検証（#1246・#1277）。検証の結果を成果物に残し、利用者に見せる回答と、
     成果物の内容（回答の対応を決めるのに使う。#1305）を返す。
@@ -5038,6 +5052,7 @@ async def _validate_final_answer(
     （#2738）、検証が失敗したら
     照合を終えられなかったことを足す（回答は消さない。`answer_validation.combine_validations`）。
     `rag_tools` は Agent が RAG の根拠のツールを持つか（根拠の無い回答に注記するか）。
+    `cited_answer` は内部の識別子を外す前の回答（#169。回答が書いた根拠の id で根拠を選ぶ）。
 
     今のターンに根拠が無いとき（#1879）: 資料に無い・答えられないことだけを述べる回答は注記せずに
     `skipped`（`absence_only`）。会話の続きで、今のターンが資料の根拠を得ずに答えた（前の回答の
@@ -5059,7 +5074,7 @@ async def _validate_final_answer(
     previous = runtime_repository.thread_answer_validations(run_id) if max_turns > 0 else []
     carried = carried_evidence(previous[-max_turns:] if max_turns > 0 else [])
     # 回答が引用した根拠を先にして、上限で切っても検証に入れる（#1364）。
-    groups = run_evidence_groups(run.steps, answer, carried=carried)
+    groups = run_evidence_groups(run.steps, cited_answer or answer, carried=carried)
     if not groups:
         if KIND_RAG in declined_kinds(run.metadata):
             # 利用者が「資料の検索は不要」とした（#1445）。資料と照らし合わせない（注記しない）。
