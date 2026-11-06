@@ -1,7 +1,7 @@
 ---
 name: structured-data-query
-description: "業務データの照会（MCP サーバー nl2sql。Production Ready NL2SQL）で、自然言語の質問から SQL を作って実行し、表形式の結果（件数・金額・一覧・推移・集計）を返す。売上・受注・顧客・在庫など業務データの数値や一覧を尋ねられたら、SQL という言葉が無くてもこのスキルを使う。足りない条件（期間・対象など）は NL2SQL が利用者への問いとして返す。規程・手順など資料の内容は business-rag-research、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
-compatibility: "MCP サーバー nl2sql（Production Ready NL2SQL の POST /api/mcp）に接続していること。"
+description: "業務データの照会（MCP サーバー nl2sql。Private NL2SQL）で、自然言語の質問から SQL を作って実行し、表形式の結果（件数・金額・一覧・推移・集計）を返す。売上・受注・顧客・在庫など業務データの数値や一覧を尋ねられたら、SQL という言葉が無くてもこのスキルを使う。足りない条件（期間・対象など）は NL2SQL が利用者への問いとして返す。規程・手順など資料の内容は business-rag-research、資料と業務データの両方が要る調査は rag-and-structured-data を使う。"
+compatibility: "MCP サーバー nl2sql（Private NL2SQL の POST /api/mcp）に接続していること。"
 license: MIT
 metadata:
   production-ready-display-name: "構造化データ照会"

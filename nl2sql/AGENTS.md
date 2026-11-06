@@ -1,4 +1,4 @@
-# AGENTS.md — Production Ready NL2SQL
+# AGENTS.md — Private NL2SQL
 
 > NL2SQL（`nl2sql/`）固有のルール。GitHub 運用・Issue / PR 規約・CI・デザインシステム・共通の技術方針（言語・AI / DB の分担・シークレット・LLM 出力の検証・ローカルの検証の範囲・UI 変更の検証）は、root の [../AGENTS.md](../AGENTS.md) と、そこから案内する root の `docs/agents/` を先に適用する。ルールを変えるときはこのファイル（共通ルールは root）を編集し、詳細は下の表の文書に書く。
 > Issue の label は `product:nl2sql`、PR title の scope は `nl2sql`。NL2SQL の docs・コメントの `#N` のうち、2026-09-25 の monorepo 統合より前のものは旧 repo `engchina/no.1-production-ready-nl2sql` の番号。
@@ -15,7 +15,7 @@
 
 ## プロジェクト概要
 
-> **製品名と固有 namespace は `Production Ready NL2SQL` / `NL2SQL` を正とする。**
+> **製品名と固有 namespace は `Private NL2SQL` / `NL2SQL` を正とする。**
 > 新規 DB object、cookie、storage key、context、UI の製品ラベルへ汎用 `RAG` prefix を使用しない。
 > `GraphRAG`、`RAGAS`、`RAGFlow` など技術・製品の固有名詞はこの置換対象外とする。
 

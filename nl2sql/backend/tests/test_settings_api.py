@@ -525,7 +525,7 @@ def test_model_settings_test_calls_enterprise_client(monkeypatch: MonkeyPatch) -
     assert captured["model_id"] == "cohere.command-r-plus"
     assert captured["api_key"] == "request-secret"
     assert captured["context"] == (
-        "これは Production Ready NL2SQL のモデル接続テスト用コンテキストです。"
+        "これは Private NL2SQL のモデル接続テスト用コンテキストです。"
     )
     deprecated_product_label = "Production Ready " + "RAG"
     assert deprecated_product_label not in captured["context"]

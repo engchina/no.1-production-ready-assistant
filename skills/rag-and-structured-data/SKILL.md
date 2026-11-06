@@ -1,7 +1,7 @@
 ---
 name: rag-and-structured-data
 description: "業務 RAG（MCP サーバー rag の rag_retrieve_evidence）と業務データの照会（MCP サーバー nl2sql の nl2sql_query）を、順序を決めずに必要なだけ往復して調べる。規程の基準・期限で業務データを絞る、業務データで見つかった区分・コードの意味を規程で確かめる、など資料（手順・規則・定義・条件）と業務データ（件数・金額・状態・記録の値）の両方が要るかもしれない調査に使う。資料だけで答えられる質問は business-rag-research、業務データだけなら structured-data-query を使う。"
-compatibility: "MCP サーバー rag（Private RAG）と nl2sql（Production Ready NL2SQL）の POST /api/mcp に接続していること。"
+compatibility: "MCP サーバー rag（Private RAG）と nl2sql（Private NL2SQL）の POST /api/mcp に接続していること。"
 license: MIT
 metadata:
   production-ready-display-name: "資料とデータの横断調査"

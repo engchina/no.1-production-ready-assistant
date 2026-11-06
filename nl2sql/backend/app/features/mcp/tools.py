@@ -167,7 +167,7 @@ _CLOSED_SESSION_STATUSES = frozenset(
 
 # 処理順の Step 形式（docs/agents/prompts.md。#3830）。
 _INSTRUCTIONS = (
-    "Production Ready NL2SQL のツールです。利用者が使える業務プロファイルの範囲で、"
+    "Private NL2SQL のツールです。利用者が使える業務プロファイルの範囲で、"
     "自然言語の質問から SQL を生成・実行します。\n\n"
     "## Step 1: 業務プロファイルを選ぶ\n"
     "業務プロファイルが分からないときは "
