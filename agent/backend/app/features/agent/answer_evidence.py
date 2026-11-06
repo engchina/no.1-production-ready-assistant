@@ -59,6 +59,7 @@ from app.features.agent.answer_passages import (
     passage_spans,
 )
 from app.features.agent.answer_validation import (
+    EVIDENCE_MARKER,
     FIGURE_IMAGE_READ,
     STATUS_COMPLETED,
     cited_chunk_ids,
@@ -459,11 +460,6 @@ def _pending_quotes(validation: Mapping[str, Any] | None) -> set[str]:
     return marked - {quote for quote, _chunk_id in _supported_claims(validation)}
 
 
-# 回答が本文に書いた根拠の ID の印（「【証拠 ID: 0f3a…:7】」「〔根拠: …〕」「[evidence_id: …]」）。
-# 中の ID を根拠に引き当てられた印だけを数える（Markdown のリンク `[文](URL)` は除く）。
-_MARKER = re.compile(r"【[^】\n]{1,200}】|〔[^〕\n]{1,200}〕|\[[^\]\n]{1,200}\](?!\()")
-
-
 def _ordered_ids(ids: set[str], order: Sequence[str]) -> list[str]:
     return [chunk_id for chunk_id in order if chunk_id in ids]
 
@@ -471,7 +467,7 @@ def _ordered_ids(ids: set[str], order: Sequence[str]) -> list[str]:
 def _markers(answer: str, chunk_ids: Sequence[str]) -> list[JsonObject]:
     """回答の中の根拠の ID の印と、引き当てた根拠（印の原文, chunk の一覧）。"""
     markers: list[JsonObject] = []
-    for text in dict.fromkeys(match.group(0) for match in _MARKER.finditer(answer)):
+    for text in dict.fromkeys(match.group(0) for match in EVIDENCE_MARKER.finditer(answer)):
         ids = cited_chunk_ids(text, chunk_ids)
         if ids:
             markers.append({"text": text, "chunk_ids": _ordered_ids(ids, chunk_ids)})

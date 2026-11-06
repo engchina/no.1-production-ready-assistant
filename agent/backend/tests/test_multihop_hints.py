@@ -1463,6 +1463,9 @@ def test_section_read_note_needs_a_grouped_question() -> None:
     assert asks_for_grouped_content(["確認する項目を挙げてください"]) is True
     assert asks_for_grouped_content(["ＨＲＭの申請の流れ"]) is True
     assert asks_for_grouped_content(["承認者は誰？", None]) is False
+    # 文書の名前の「〜手順書」はまとまりを求める語ではない（#169）。
+    assert asks_for_grouped_content(["手順書 A の受付時間は？"]) is False
+    assert asks_for_grouped_content(["手順書 A の手順を教えて"]) is True
     # 読み取りのツール以外・根拠の無い結果は案内しない。
     assert section_read_note("rag_read_source", output, [_GROUPED_GOAL]) is None
     assert section_read_note("rag_retrieve_evidence", {"evidence": []}, [_GROUPED_GOAL]) is None

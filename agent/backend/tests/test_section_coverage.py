@@ -425,6 +425,27 @@ def test_unread_continuation_after_the_retry_is_shown_in_the_answer(
     assert "unread_sections" in answer["outcome"]["signals"]
 
 
+def test_a_document_name_with_procedure_does_not_make_the_question_grouped(
+    monkeypatch: MonkeyPatch, mcp: FakeProductMcp
+) -> None:
+    """文書の名前の「手順書」だけでは、手順のまとまりを求める質問にしない（#169）。
+
+    1 つの値を聞く質問を差し戻すと、答えに要らない章節を読み、差し戻しの文の識別子を回答に
+    写すことがある。
+    """
+    model = _script(
+        monkeypatch,
+        _read("c1", section_id="sec-a"),
+        [assistant_message(PART_1)],
+    )
+
+    run = _run("手順書 A に定められた受付の時間帯を教えてください。")
+
+    assert len(model.calls) == 2
+    assert METADATA_KEY not in run.metadata
+    assert UNREAD_SECTIONS_HEADING not in _answer(run)["text"]
+
+
 def test_multiple_sections_are_sent_back_together_and_unused_ones_are_not(
     monkeypatch: MonkeyPatch, mcp: FakeProductMcp
 ) -> None:

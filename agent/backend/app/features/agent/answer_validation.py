@@ -70,7 +70,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -1518,23 +1518,114 @@ def withheld_labels(answer: str, quotes: set[str]) -> list[tuple[int, int, str]]
     return [(index, begin, text) for (index, begin), text in sorted(chosen.items())]
 
 
-def without_lookup_notes(answer: str) -> str:
+# RAG の公開の契約（platform/contracts/mcp/rag-tools.json）の出力の、内部の識別子と読み取りの状態の
+# 項目（#169。契約との一致は tests/test_answer_internal_ids.py が確かめる）。利用者に見せる回答には
+# 文書名と場所を書き、これらの名前と値は書かない。
+INTERNAL_ID_FIELDS = frozenset(
+    {
+        "chunk_id",
+        "chunk_set_id",
+        "document_id",
+        "evidence_id",
+        "next_cursor",
+        "parent_section_id",
+        "section_id",
+    }
+)
+_INTERNAL_FIELD_NAMES = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    + "|".join(sorted({*INTERNAL_ID_FIELDS, "section_complete"}))
+    + r")(?![A-Za-z0-9_])"
+)
+# 短い値（頁・番号）は本文の数・語と取り違えるので照合しない。
+_MIN_INTERNAL_ID_LENGTH = 8
+# 括弧の補足（Markdown のリンクの URL は除く）。
+_PARENTHETICAL = re.compile(r"[ \t]*(?<!\])[（(][^（）()\n]*[）)]")
+# 回答が本文に書いた根拠の ID の印（「【証拠 ID: 0f3a…:7】」「〔根拠: …〕」「[evidence_id: …]」）。
+# 中の ID を根拠に引き当てられた印だけを数える（Markdown のリンク `[文](URL)` は除く）。画面は印を
+# 文字で出さず根拠の行にする（`answer_evidence` の `markers`）ので、内部の識別子として外さない。
+EVIDENCE_MARKER = re.compile(r"【[^】\n]{1,200}】|〔[^〕\n]{1,200}〕|\[[^\]\n]{1,200}\](?!\()")
+# 根拠の ID の印に引き当てる項目。
+_EVIDENCE_ID_FIELDS = frozenset({"chunk_id", "evidence_id"})
+# 段落を外した後に本文の末尾に残る区切りの線。
+_TRAILING_RULES = re.compile(r"\s*(?:\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*)+\s*$")
+
+
+def internal_id_values(steps: Sequence[RunStep]) -> dict[str, str]:
+    """Run のツールの呼び出しと結果に出た内部の識別子の値と、その項目名（#169）。
+
+    照会のデータ行（`rows`）は業務の値なので見ない。資料の原文に出る値は、資料の内容として
+    回答に書いてよいので除く。
+    """
+    values: dict[str, str] = {}
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "rows":
+                    continue
+                if (
+                    key in INTERNAL_ID_FIELDS
+                    and isinstance(item, str)
+                    and len(item) >= _MIN_INTERNAL_ID_LENGTH
+                ):
+                    values.setdefault(item, key)
+                walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    for step in steps:
+        if step.tool_call is not None:
+            walk(step.tool_call.arguments)
+        if step.tool_result is not None:
+            walk(step.tool_result.output)
+    if not values:
+        return {}
+    sources = "\n".join(evidence_source_texts(steps))
+    return {value: key for value, key in values.items() if value not in sources}
+
+
+def _mentions_internal_id(text: str, internal_ids: Mapping[str, str]) -> bool:
+    chunk_ids = [value for value, key in internal_ids.items() if key in _EVIDENCE_ID_FIELDS]
+    text = EVIDENCE_MARKER.sub(
+        lambda match: "" if cited_chunk_ids(match[0], chunk_ids) else match[0], text
+    )
+    return bool(_INTERNAL_FIELD_NAMES.search(text)) or any(value in text for value in internal_ids)
+
+
+def without_lookup_notes(answer: str, internal_ids: Mapping[str, str] | None = None) -> str:
     """回答から、調べるのに使ったツール・プロファイル・内部の ID だけを述べる行を外す（#2328）。
 
     最終の検証の前（と、検証をしない設定でも）に組み込み Runtime が呼ぶ。資料の主張では
     ないので検証に渡さず、「資料で確認できず除いた内容」にも書かない（内部の ID を利用者に
     見せない）。外すと本文が残らない・位置を決められないときはそのまま返す。
+
+    `internal_ids`（`internal_id_values`）を渡すと、内部の識別子の値・契約の項目名を書いた括弧の
+    補足を消し、それでも残る段落も外す（#169。スキルの指示に従わないモデルでも利用者に見せない）。
+    外すと本文が残らないときは、値だけを消した本文を返す。根拠の ID の印（`EVIDENCE_MARKER`）は
+    残す。
     """
+    internal_ids = internal_ids or {}
+    if internal_ids or _INTERNAL_FIELD_NAMES.search(answer):
+        answer = _PARENTHETICAL.sub(
+            lambda match: "" if _mentions_internal_id(match[0], internal_ids) else match[0],
+            answer,
+        )
     quotes = {
         text
         for line in answer.split("\n")
         for _start, _end, text in passage_spans(line)
-        if is_lookup_note(text)
+        if is_lookup_note(text) or _mentions_internal_id(text, internal_ids)
     }
     if not quotes:
         return answer
     body = withhold_paragraphs(answer, quotes)
-    return body or answer
+    if body:
+        return _TRAILING_RULES.sub("", body)
+    for value in internal_ids:
+        answer = answer.replace(value, "")
+    return answer
 
 
 def error_findings(result: JsonObject) -> list[JsonObject]:
