@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RotateCcw, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   Banner,
   Button,
@@ -69,6 +70,7 @@ import { formatNumber } from "@/lib/format";
 import { mcpUrlCredentialProblem } from "@/lib/mcp-url";
 import { t } from "@/lib/i18n";
 import { useCapabilities } from "@/lib/permissions";
+import { APP_ROUTES } from "@/lib/routes";
 import { sameDraft, useEditorLeaveGuard } from "@/lib/leave-guard";
 import { formatDate } from "@/pages/shared/page-helpers";
 import { NonPersistentStorageNotice } from "@/components/system/StorageNotice";
@@ -491,6 +493,7 @@ export function McpConnectionsPage() {
   // 接続の追加・変更・削除は Agent 管理の権限（admin）だけ（#215）。
   const capabilities = useCapabilities();
   const canManage = capabilities.admin;
+  const navigate = useNavigate();
   const connections = useQuery({
     queryKey: ["mcp-connections"],
     queryFn: agentApi.listMcpConnections,
@@ -564,6 +567,16 @@ export function McpConnectionsPage() {
           actions={
             canManage
               ? [
+                  // ツール権限はナビに出さない管理者の画面（権限管理の機能の一覧をナビと同じにするため）。
+                  // 接続のツールの承認の決まりはここから開く（#170）。
+                  {
+                    id: "tool-policy",
+                    kind: "secondary",
+                    label: t("nav.settingsToolPolicy"),
+                    icon: ShieldCheck,
+                    onClick: () => navigate(APP_ROUTES.settingsToolPolicy),
+                    testId: "mcp-connections-open-tool-policy",
+                  },
                   {
                     id: "create",
                     kind: "primary",
