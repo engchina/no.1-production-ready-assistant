@@ -342,6 +342,12 @@ test.describe("Agent Runtime settings", () => {
     await expect(table.getByRole("row", { name: /ナレッジ検索（RAG）/ }).getByText("標準", { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
+    // ツール権限はナビに無いので、MCP 接続の見出しの操作から開く（#170）。
+    await page.getByTestId("mcp-connections-open-tool-policy").click();
+    await expect(page).toHaveURL(/\/settings\/tool-policy$/);
+    await expect(page.getByRole("heading", { name: "ツール権限", level: 1 })).toBeVisible();
+    await page.goto("/settings/mcp-connections");
+
     await page.getByRole("button", { name: "接続を追加" }).click();
     await expect(page).toHaveURL(/\/settings\/mcp-connections\?id=new$/);
     await page.locator("#mcp-server-id").fill("crm");

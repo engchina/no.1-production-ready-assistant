@@ -17,7 +17,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, string>> = routePermissi
 
 /** ナビに出さない画面（URL を直接開く管理者向けの画面）。 */
 const HIDDEN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
-  // ツール一覧・ツール権限はナビに出さない管理者だけの画面。
+  // ツール一覧・ツール権限はナビに出さない管理者だけの画面（ツール権限は MCP 接続の画面の見出しから開く。#170）。
   [APP_ROUTES.tools]: [CAPABILITY_PERMISSIONS.admin],
   [APP_ROUTES.settingsToolPolicy]: [CAPABILITY_PERMISSIONS.admin],
 };
