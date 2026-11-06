@@ -81,6 +81,7 @@ from app.features.agent.answer_passages import (
     is_lookup_note,
     is_operation_step,
     is_structure,
+    is_table_rule,
     label_operation_end,
     list_heading_lines,
     list_item_label,
@@ -1547,6 +1548,8 @@ _PARENTHETICAL = re.compile(r"[ \t]*(?<!\])[（(][^（）()\n]*[）)]")
 EVIDENCE_MARKER = re.compile(r"【[^】\n]{1,200}】|〔[^〕\n]{1,200}〕|\[[^\]\n]{1,200}\](?!\()")
 # 根拠の ID の印に引き当てる項目。
 _EVIDENCE_ID_FIELDS = frozenset({"chunk_id", "evidence_id"})
+# Markdown の見出しの行。
+_MARKDOWN_HEADING = re.compile(r"[ ]{0,3}#{1,6}[ \t]")
 # 段落を外した後に本文の末尾に残る区切りの線。
 _TRAILING_RULES = re.compile(r"\s*(?:\n[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*)+\s*$")
 
@@ -1586,12 +1589,78 @@ def internal_id_values(steps: Sequence[RunStep]) -> dict[str, str]:
     return {value: key for value, key in values.items() if value not in sources}
 
 
+def _id_index_numbers(internal_ids: Mapping[str, str]) -> dict[str, set[str]]:
+    """内部の識別子の項目名の語幹（`chunk_id` → `chunk`）と、その値の末尾の番号（`…:7` → `7`）。
+
+    根拠の項目（`chunk_id`・`evidence_id`）は同じ値を指すので、どちらの語幹にも番号を入れる。
+    """
+    numbers: dict[str, set[str]] = {}
+    for value, key in internal_ids.items():
+        _head, separator, tail = value.rpartition(":")
+        if not (separator and tail.isdigit()):
+            continue
+        keys = _EVIDENCE_ID_FIELDS if key in _EVIDENCE_ID_FIELDS else {key}
+        for name in keys:
+            numbers.setdefault(name.removesuffix("_id"), set()).add(tail)
+    return numbers
+
+
+def _mentions_id_index(text: str, internal_ids: Mapping[str, str]) -> bool:
+    """「chunk 0〜29」のように、項目名の語幹と識別子の値の末尾の番号で書いた参照か（#175）。
+
+    語幹だけ・番号だけは本文の語・数と区別できないので、両方がそろい、番号が Run のツールの
+    結果に出た値の番号のときに限る。
+    """
+    for stem, numbers in _id_index_numbers(internal_ids).items():
+        pattern = rf"(?<![A-Za-z0-9_]){re.escape(stem)}s?[ \t#:：]*([0-9][0-9 \t〜~～\-–、,]*)"
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            if numbers & set(re.findall(r"[0-9]+", match[1])):
+                return True
+    return False
+
+
 def _mentions_internal_id(text: str, internal_ids: Mapping[str, str]) -> bool:
     chunk_ids = [value for value, key in internal_ids.items() if key in _EVIDENCE_ID_FIELDS]
     text = EVIDENCE_MARKER.sub(
         lambda match: "" if cited_chunk_ids(match[0], chunk_ids) else match[0], text
     )
-    return bool(_INTERNAL_FIELD_NAMES.search(text)) or any(value in text for value in internal_ids)
+    return (
+        bool(_INTERNAL_FIELD_NAMES.search(text))
+        or any(value in text for value in internal_ids)
+        or _mentions_id_index(text, internal_ids)
+    )
+
+
+def _report_section_passages(answer: str, internal_ids: Mapping[str, str]) -> set[str]:
+    """見出しの下の段落がすべて内部の識別子を述べる節（作業の報告の節。#175）の、見出しと段落。
+
+    括弧の補足だけを消すと、「根拠箇所：…」のような作業の報告の段落と節の見出しが残る。節の
+    中身がすべて識別子を述べるなら、主張の節ではなく作業の報告として節ごと外す（見出しの文言では
+    決めない）。節は Markdown の見出しの行から、次の見出し・区切り線まで。見出しの前と区切り線の
+    後の段落は節に数えない（回答の本文の括弧の補足は消すだけ）。
+    """
+    quotes: set[str] = set()
+    # （見出しの段落, 中身の段落）。見出しの前・区切り線の後は None。
+    section: tuple[list[str], list[str]] | None = None
+
+    def close() -> None:
+        if section and section[1]:
+            heading, content = section
+            if all(_mentions_internal_id(text, internal_ids) for text in content):
+                quotes.update(heading, content)
+
+    for line in answer.split("\n"):
+        texts = [text for _start, _end, text in passage_spans(line)]
+        if _MARKDOWN_HEADING.match(line):
+            close()
+            section = (texts, [])
+        elif texts and all(is_table_rule(text) for text in texts):
+            close()
+            section = None
+        elif section is not None:
+            section[1].extend(texts)
+    close()
+    return quotes
 
 
 def without_lookup_notes(answer: str, internal_ids: Mapping[str, str] | None = None) -> str:
@@ -1604,9 +1673,15 @@ def without_lookup_notes(answer: str, internal_ids: Mapping[str, str] | None = N
     `internal_ids`（`internal_id_values`）を渡すと、内部の識別子の値・契約の項目名を書いた括弧の
     補足を消し、それでも残る段落も外す（#169。スキルの指示に従わないモデルでも利用者に見せない）。
     外すと本文が残らないときは、値だけを消した本文を返す。根拠の ID の印（`EVIDENCE_MARKER`）は
-    残す。
+    残す。中身がすべて識別子を述べる節（作業の報告の節）は、括弧を消す前に見出しごと外す（#175）。
     """
     internal_ids = internal_ids or {}
+    reported = False
+    report = _report_section_passages(answer, internal_ids)
+    if report:
+        body = withhold_paragraphs(answer, report)
+        if body:
+            answer, reported = body, True
     if internal_ids or _INTERNAL_FIELD_NAMES.search(answer):
         answer = _PARENTHETICAL.sub(
             lambda match: "" if _mentions_internal_id(match[0], internal_ids) else match[0],
@@ -1619,7 +1694,7 @@ def without_lookup_notes(answer: str, internal_ids: Mapping[str, str] | None = N
         if is_lookup_note(text) or _mentions_internal_id(text, internal_ids)
     }
     if not quotes:
-        return answer
+        return _TRAILING_RULES.sub("", answer) if reported else answer
     body = withhold_paragraphs(answer, quotes)
     if body:
         return _TRAILING_RULES.sub("", body)
