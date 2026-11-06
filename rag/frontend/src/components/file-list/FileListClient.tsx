@@ -33,7 +33,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { LanguagePackBulkReprocess } from "@/components/documents/LanguagePackBulkReprocess";
-import { LanguagePackUseSummary } from "@/components/documents/LanguagePackDocumentPanel";
 import { DegradedBanner } from "@/components/DegradedBanner";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -1069,7 +1068,6 @@ function documentColumns({
         </div>
       ),
     },
-    { key: "language_pack", header: t("settings.language.release.usedVersion"), render: (doc) => <LanguagePackUseSummary use={doc.language_pack} documentId={doc.id} /> },
     {
       key: "size",
       header: t("fileList.col.size"),

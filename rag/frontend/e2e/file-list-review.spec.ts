@@ -722,8 +722,7 @@ test("言語資源の対象条件・版の内訳を一覧とページ送りで�
   await mockFileListApi(page, documents, {}, url => requests.push(url));
   await page.goto("/file-list?language_pack_relation=different&current_release_id=release-current");
   await expect.poll(() => requests.some(url => url.searchParams.get("language_pack_relation") === "different" && url.searchParams.get("current_release_id") === "release-current")).toBe(true);
-  await expect(page.getByText("複数の版").first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "使用版と差分" }).first()).toHaveAttribute("href", "/documents/release-doc-0?language_pack=1");
+  await expect(page.getByRole("columnheader", { name: "言語資源の使用版" })).toHaveCount(0);
   await page.getByTestId("file-list-pagination").getByRole("button", { name: "次へ", exact: true }).click();
   await expect.poll(() => requests.filter(url => url.searchParams.get("language_pack_relation") === "different").at(-1)?.searchParams.get("offset")).toBe("25");
   await expectNoPageOverflow(page);
