@@ -52,7 +52,6 @@ def inputs() -> EvaluationResultExportRequest:
                     "standard_answer_preview": "短いプレビュー",
                     "required_answer_points": ["要点 A"],
                     "expected_response_decision": "answer",
-                    "answer_process": "手順 A",
                 }
             ],
             "cases": [
@@ -79,12 +78,11 @@ def test_export_keeps_full_inputs_scores_unassessed_and_comparison() -> None:
     assert sheet["B2"].value == "=2+2"
     assert sheet["B2"].data_type == "s"
     assert sheet["D2"].value == "合成の回答です。" * 100
-    assert sheet["G2"].value == "手順 A"
-    assert sheet["H2"].value == 0
-    assert sheet["I2"].value == 0.5
-    assert sheet["I2"].number_format == "0.0%"
-    assert sheet["J2"].value == "未評価"
-    assert sheet["P2"].value == "trace-a"
+    assert sheet["G2"].value == 0
+    assert sheet["H2"].value == 0.5
+    assert sheet["H2"].number_format == "0.0%"
+    assert sheet["I2"].value == "未評価"
+    assert sheet["O2"].value == "trace-a"
     assert sheet.freeze_panes == "B2"
     assert book["概要"]["C1"].value == "比較対象: プロファイル B"
 
@@ -120,7 +118,7 @@ def test_export_api_uses_authorized_job_and_rejects_unavailable_results(
     assert response.status_code == code
     if code == 200:
         book = load_workbook(BytesIO(response.content))
-        assert book["主条件の結果"]["I2"].value == 0.5
+        assert book["主条件の結果"]["H2"].value == 0.5
         assert "evaluation_results.xlsx" in response.headers["content-disposition"]
 
 

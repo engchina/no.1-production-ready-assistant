@@ -207,7 +207,7 @@ def test_all_runtime_instructions_use_markdown_sections() -> None:
 
 def test_evaluation_catalog_exposes_only_current_evaluation_stages() -> None:
     stages = {stage.id: stage for stage in PROMPT_STAGES if stage.phase == "evaluation"}
-    assert set(stages) == {"evaluation_process_draft", "evaluation"}
+    assert set(stages) == {"evaluation"}
     assert (
         next(stage for stage in PROMPT_STAGES if stage.id == "answer_validation").phase == "audit"
     )
@@ -222,7 +222,6 @@ def test_evaluation_catalog_exposes_only_current_evaluation_stages() -> None:
 def test_catalog_separates_independent_preparation_and_orders_evaluation_calls() -> None:
     stages = {stage.id: stage for stage in PROMPT_STAGES}
     assert stages["raptor_summary"].phase == "indexing"
-    assert stages["evaluation_process_draft"].phase == "evaluation"
     assert [part for part, _ in stages["evaluation"].parts] == [
         "scope",
         "coverage",

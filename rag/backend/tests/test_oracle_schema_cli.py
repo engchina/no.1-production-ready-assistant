@@ -444,16 +444,10 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "'ALTER TABLE rag_evaluation_runs DROP COLUMN best_experiment_id'" in compare_migration
     # 評価の結果の行は消さない。
     assert "DELETE FROM rag_evaluation_runs" not in compare_migration
-    # 過去の migration: 親の表があり、埋め込みの表が無いときだけ作る。
-    embeddings_migration = sql.split("-- migration: 20261018_001_support_guide_embeddings", 1)[
-        1
-    ].split("-- migration: ", 1)[0]
-    assert "CREATE TABLE rag_support_guide_embeddings" in embeddings_migration
-    assert "table_name = 'RAG_SUPPORT_GUIDE_REVISIONS'" in embeddings_migration
-    assert "table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS'" in embeddings_migration
-    assert "DROP" not in embeddings_migration
     # 廃止した 3 表を FK の子から順に消す。無い表では失敗しない（冪等）。
-    retired = sql.split("-- migration: 20261106_003_retire_support_guides", 1)[1]
+    retired = sql.split("-- migration: 20261106_003_retire_support_guides", 1)[1].split(
+        "-- migration: ", 1
+    )[0]
     drops = re.findall(r"DROP TABLE (\w+) PURGE", retired)
     assert drops == [
         "rag_support_guide_embeddings",
@@ -461,6 +455,12 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
         "rag_support_guides",
     ]
     assert retired.count("IF v_count > 0 THEN") == 3
+    # 言語資源の公開版・下書きを消し、参照を先に空にする（冪等）。
+    reset = sql.split("-- migration: 20261106_004_reset_language_pack_releases", 1)[1]
+    assert reset.index("UPDATE rag_chunk_sets SET language_pack_release_id = NULL") < reset.index(
+        "DELETE FROM rag_language_pack_releases"
+    )
+    assert "DELETE FROM rag_language_pack_state" in reset
     # 回答に付けた注意書きの列を無いときだけ足す（#2405。会話の回答と回答の記録）。
     for name, table in (
         ("20261018_002_message_answer_notice", "rag_messages"),
@@ -475,13 +475,6 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "'ALTER TABLE rag_messages ADD (attachments_json CLOB)'" in attachments_migration
     assert "column_name = 'ATTACHMENTS_JSON'" in attachments_migration
     assert "DROP" not in attachments_migration.split("-- migration:", 1)[0]
-    # 過去の migration: schema_version だけを書き換える。
-    guide_migration = sql.split("-- migration: 20261018_004_support_guide_schema_v2", 1)[1].split(
-        "-- migration: ", 1
-    )[0]
-    assert "JSON_TRANSFORM(draft_json, SET '$.schema_version' = 2)" in guide_migration
-    assert "JSON_TRANSFORM(content_json, SET '$.schema_version' = 2)" in guide_migration
-    assert "DELETE" not in guide_migration and "DROP" not in guide_migration
     # 取り消した migration（20261016_002）を当てた DB の分類の列を戻す（#2450）。列を足し、
     # effective_period の有効期間を classification が NULL の行にだけ写す。改名・削除はしない。
     restore_migration = sql.split("-- migration: 20261019_001_restore_document_classification", 1)[
@@ -513,7 +506,7 @@ def test_oracle_schema_migration_sql_adds_ingestion_job_attempt_counters() -> No
     assert "SET ''$.chunk_delimiter'' = ''\\n\\n''" in jsonl_migration
     assert "= ''fixed_delimiter''" in jsonl_migration
     assert "DROP" not in jsonl_migration and "DELETE" not in jsonl_migration
-    assert len(statements) == 131
+    assert len(statements) == 129
     assert all(
         statement.startswith(
             ("-- migration:", "DECLARE", "INSERT", "MERGE", "UPDATE", "COMMIT", "CREATE")
@@ -531,7 +524,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
     assert manifest["schema_name"] == "production-ready-rag-oracle-26ai"
     assert manifest["schema_version"] == "3"
     assert manifest["artifact_type"] == "migration"
-    assert manifest["migration_artifact_version"] == "20261106_003"
+    assert manifest["migration_artifact_version"] == "20261106_004"
     assert manifest["sha256"] == hashlib.sha256(sql.encode("utf-8")).hexdigest()
     assert manifest["statement_count"] == len(oracle_schema.split_sql_statements(sql))
     assert [migration["name"] for migration in manifest["migrations"]] == [
@@ -600,10 +593,8 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261015_004_ingestion_job_progress",
         "20261016_001_retire_evaluation_compare",
         "20261016_003_document_categories",
-        "20261018_001_support_guide_embeddings",
         "20261018_002_message_answer_notice",
         "20261018_003_answer_record_notice",
-        "20261018_004_support_guide_schema_v2",
         "20261019_001_restore_document_classification",
         "20261019_002_document_cleanups",
         "20261019_003_structured_records_jsonl_profiles",
@@ -624,6 +615,7 @@ def test_oracle_schema_migration_manifest_is_deterministic() -> None:
         "20261106_001_retire_document_graph",
         "20261106_002_retire_entity_index",
         "20261106_003_retire_support_guides",
+        "20261106_004_reset_language_pack_releases",
     ]
 
 

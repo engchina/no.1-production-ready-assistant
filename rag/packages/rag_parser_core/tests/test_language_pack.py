@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from importlib import resources
 
@@ -10,7 +9,6 @@ import pytest
 
 from rag_parser_core.language import (
     FIELD_SPECS,
-    REMOVED_DISPLAY_FIELDS,
     REMOVED_FIELDS,
     LanguagePackError,
     bind_pack,
@@ -399,7 +397,7 @@ def test_removed_entity_cues_are_dropped_without_changing_hashes() -> None:
     """削除した実体・別名索引の手がかり（#160）は、節ごと読み捨て、hash は削除の前のまま。"""
     pack = builtin_pack()
     # 組み込みのパックの hash。取込の hash は削除する前のまま（文書を作り直しにしない）。
-    assert (pack.hash, pack.ingest_hash) == ("44988eefaf8d5296", "cb126fa12406042d")
+    assert (pack.hash, pack.ingest_hash) == ("a99346a615f09b59", "cb126fa12406042d")
     removed = {
         key: list(value)
         for (section, key), value in REMOVED_FIELDS.items()
@@ -427,36 +425,3 @@ def test_removed_xml_tree_label_is_dropped_without_changing_hashes() -> None:
     assert (loaded.hash, loaded.ingest_hash) == (pack.hash, pack.ingest_hash)
     assert stored_pack_hash(legacy, loaded) == pack.hash
     assert resolve(pack, {"labels": {"xml_tree_document_type": "別の名前"}}).hash == pack.hash
-
-
-def test_saved_pack_with_removed_display_fields_keeps_stored_hash() -> None:
-    """削除した表示の項目・理由の値が残る保存済みの版も読め、保存時の hash で照合できる。
-
-    取込の hash は変わらない。
-    """
-    pack = builtin_pack()
-    legacy = pack.to_dict()
-    del legacy["evaluation_process_cues"]
-    legacy["guide_check_cues"] = {"approval_terms": ["合成の語"]}
-    legacy["answer_labels"] = {
-        **legacy["answer_labels"],
-        "guide_notes_section": "合成の節",
-        "passage_reason_labels": [
-            *legacy["answer_labels"]["passage_reason_labels"],
-            "合成の理由=guide_text",
-        ],
-    }
-    loaded = build_pack(legacy)
-    assert ("guide_check_cues", "approval_terms") in REMOVED_DISPLAY_FIELDS
-    assert loaded.to_dict() == pack.to_dict()
-    assert loaded.ingest_hash == pack.ingest_hash
-    entries = [
-        [section, key, value]
-        for section, fields in legacy.items()
-        if isinstance(fields, dict)
-        for key, value in fields.items()
-    ] + [[section, key, value] for (section, key), value in REMOVED_FIELDS.items()]
-    canonical = json.dumps(sorted(entries, key=lambda e: (e[0], e[1])), ensure_ascii=False)
-    expected = hashlib.sha256(f"{legacy['locale']}\n{canonical}".encode()).hexdigest()[:16]
-    assert stored_pack_hash(legacy, loaded) == expected
-    assert resolve(pack, {"guide_check_cues": {"approval_terms": ["別の語"]}}).hash == pack.hash

@@ -46,8 +46,6 @@ export type WorkspaceField =
   | "evaluation.compareEnabled"
   | "evaluation.compareProfileId"
   | "evaluation.runCompareName"
-  | "evaluation.processDrafts"
-  | "evaluation.useProcessDrafts"
   | "feedback.search"
   | "history.view"
   | "language-releases.paging"

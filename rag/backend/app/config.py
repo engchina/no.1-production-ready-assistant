@@ -1690,15 +1690,6 @@ class Settings(
             "下げ（最小 1）、送り直す。1 は 1 件ずつ（#2004 より前と同じ）。"
         ),
     )
-    rag_evaluation_process_concurrency: int = Field(
-        default=4,
-        ge=1,
-        le=8,
-        description=(
-            "評価のケースの回答の過程から期待の下書きを作るとき、同時に送る LLM の呼び出しの数の"
-            "上限（#2397。1 行で 1 回）。"
-        ),
-    )
     rag_ai_call_backoff_max_seconds: float = Field(
         default=60.0,
         ge=1.0,

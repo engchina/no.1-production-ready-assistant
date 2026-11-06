@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import logging
 import time
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
 from pathlib import PurePath
@@ -21,10 +21,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pr_backend_core.bounded_calls import Attempt, BoundedCallAborted
 from rag_engine.evaluation.answer_eval import standard_scope_cache
-from rag_parser_core.enterprise_ai import sdk_retries_disabled
-from rag_parser_core.language import current_pack
 
 from app.api.routes.search import (
     SEARCH_ANSWER_PROFILE_NOT_FOUND_PREFIX,
@@ -33,12 +30,9 @@ from app.api.routes.search import (
     ensure_search_answer_profile_not_archived,
     permitted_knowledge_base_ids,
 )
-from app.clients.ai_calls import make_ai_caller
-from app.clients.enterprise_ai import EnterpriseAiClient
 from app.clients.oracle import OracleClient
 from app.config import (
     ENTERPRISE_AI_TIMEOUT_MAX_SECONDS,
-    Settings,
     fixed_today,
     get_settings,
     settings_today,
@@ -71,12 +65,6 @@ from app.rag.evaluation_jobs import (
 )
 from app.rag.evaluation_manifest import build_run_manifest, with_run_check
 from app.rag.evaluation_paired import compare_paired
-from app.rag.evaluation_process import (
-    ProcessDraftLlm,
-    draft_process_expectations,
-    list_knowledge_documents,
-    process_headings,
-)
 from app.rag.evaluation_results_excel import evaluation_results_xlsx
 from app.rag.rate_limit import enforce_rate_limit
 from app.schemas.common import ApiResponse
@@ -89,9 +77,6 @@ from app.schemas.evaluation import (
     EvaluationJob,
     EvaluationJobKind,
     EvaluationMetrics,
-    EvaluationProcessDraftData,
-    EvaluationProcessDraftRequest,
-    EvaluationProcessRow,
     EvaluationResultExportRequest,
     EvaluationRunRequest,
 )
@@ -289,59 +274,6 @@ async def import_evaluation_cases(
     return ApiResponse(data=result)
 
 
-def evaluation_process_llm(settings: Settings) -> ProcessDraftLlm:
-    """回答の過程を構造化する LLM（テストで差し替える）。"""
-    return EnterpriseAiClient(settings=settings)
-
-
-@router.post("/cases/process-drafts", response_model=ApiResponse[EvaluationProcessDraftData])
-async def draft_evaluation_process_expectations(
-    http_request: Request,
-    body: EvaluationProcessDraftRequest,
-) -> ApiResponse[EvaluationProcessDraftData]:
-    """評価のケースの回答の過程から、期待（手順・条件・根拠・対応）の下書きを作る（#2402。保存しない）。
-
-    1 行でモデルの API を 1 回呼ぶ（上限つき並行。``RAG_EVALUATION_PROCESS_CONCURRENCY``）。
-    見出しの語は言語資源、資料の名前は選んだナレッジベースの文書で解決する。
-    画面は行を ``EVALUATION_PROCESS_MAX_REQUEST_ROWS`` 行ずつに分けて送る。
-    """
-    enforce_rate_limit("evaluation", http_request)
-    settings = get_settings()
-    documents = await list_knowledge_documents(OracleClient(), body.knowledge_base_ids)
-    llm = evaluation_process_llm(settings)
-    caller = make_ai_caller(settings, "evaluation_process")
-
-    async def run(
-        targets: Sequence[EvaluationProcessRow],
-        fn: Callable[[EvaluationProcessRow, Attempt], Awaitable[str]],
-    ) -> list[tuple[str | None, str | None]]:
-        async def call(row: EvaluationProcessRow, attempt: Attempt) -> str:
-            with sdk_retries_disabled():
-                return await fn(row, attempt)
-
-        outcomes = await caller.map(targets, call, labels=[f"row-{row.row}" for row in targets])
-        return [
-            (outcome.value, None)
-            if outcome.ok
-            else (None, f"下書きを作れませんでした（{outcome.error}）。")
-            for outcome in outcomes
-        ]
-
-    try:
-        drafts = await draft_process_expectations(
-            body.rows,
-            documents,
-            llm=llm,
-            headings=process_headings(current_pack()),
-            run=run,
-        )
-    except BoundedCallAborted as exc:
-        raise HTTPException(
-            status_code=503, detail=f"回答の過程から期待の下書きを作れませんでした。{exc}"
-        ) from exc
-    return ApiResponse(data=EvaluationProcessDraftData(drafts=drafts))
-
-
 def _with_issues(
     result: EvaluationImportResult, issues: Sequence[EvaluationImportIssue]
 ) -> EvaluationImportResult:
@@ -374,7 +306,6 @@ def _preview_row(row: EvaluationExcelRow) -> EvaluationImportRow:
         has_standard_answer=answer is not None,
         expected_response_decision=row.response_decision,
         required_answer_points=list(row.screen_lines),
-        answer_process=row.answer_process,
     )
 
 

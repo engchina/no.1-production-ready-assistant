@@ -7,8 +7,6 @@ import type {
   EvaluationCaseResult,
   EvaluationImportIssue,
   EvaluationImportResult,
-  EvaluationProcessDraft,
-  EvaluationProcessRow,
 } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
@@ -115,81 +113,6 @@ function documentIdForLine(
     ([id, name]) => relevant.includes(id) && name.trim().normalize("NFKC").toLowerCase() === fileName
   );
   return match?.[0] ?? null;
-}
-
-/** 1 つのケースの必要な根拠の上限（backend の `EvaluationCase.required_evidence`）。 */
-const REQUIRED_EVIDENCE_MAX = 30;
-
-/** 回答の過程のある行（期待の下書きを作る対象。#2402）。 */
-export function evaluationProcessRows(
-  result: Pick<EvaluationImportResult, "rows">
-): EvaluationProcessRow[] {
-  return result.rows.flatMap((row) =>
-    row.answer_process
-      ? [
-          {
-            case_id: row.case_id,
-            row: row.row,
-            question: row.question,
-            answer_process: row.answer_process,
-          },
-        ]
-      : []
-  );
-}
-
-/**
- * 確かめた期待の下書き（#2402）を、検証した Excel のケースに足す。作れなかった下書き（error）は
- * 足さない。手順・対応は Excel に無ければ下書きのもの、条件・正解の文書は合わせ、必要な根拠は
- * 後ろに足す（上限まで）。足した根拠と資料は、結果の表に出るよう行の「期待する根拠」にも足す。
- */
-export function applyProcessDrafts<
-  T extends Pick<EvaluationImportResult, "cases" | "rows" | "document_names">,
->(result: T, drafts: Readonly<Record<string, EvaluationProcessDraft>>): T {
-  const documentNames = { ...result.document_names };
-  const addedLines: Record<string, string[]> = {};
-  const cases = result.cases.map((item) => {
-    const draft = drafts[item.id];
-    if (!draft || draft.error) return item;
-    const evidence = [...(item.required_evidence ?? [])];
-    const lines: string[] = [];
-    for (const extra of draft.required_evidence) {
-      if (evidence.length >= REQUIRED_EVIDENCE_MAX) break;
-      if (evidence.some((current) => current.id === extra.id)) continue;
-      evidence.push(extra);
-      if (extra.label) lines.push(extra.label);
-    }
-    const relevant = [...(item.relevant_document_ids ?? [])];
-    for (const reference of draft.references) {
-      if (reference.status !== "resolved" || !reference.document_id) continue;
-      if (reference.file_name) documentNames[reference.document_id] = reference.file_name;
-      if (!relevant.includes(reference.document_id)) {
-        relevant.push(reference.document_id);
-        if (!draft.required_evidence.some((extra) => extra.document_id === reference.document_id)) {
-          lines.push(reference.file_name ?? reference.name);
-        }
-      }
-    }
-    addedLines[item.id] = lines;
-    return {
-      ...item,
-      required_answer_points: [...new Set([...(item.required_answer_points ?? []), ...draft.required_answer_points])],
-      expected_outcomes: item.expected_outcomes?.length
-        ? item.expected_outcomes
-        : draft.expected_outcomes,
-      required_conditions: [
-        ...new Set([...(item.required_conditions ?? []), ...draft.required_conditions]),
-      ],
-      relevant_document_ids: relevant,
-      required_evidence: evidence,
-    };
-  });
-  const rows = result.rows.map((row) =>
-    addedLines[row.case_id]?.length
-      ? { ...row, evidence: [...row.evidence, ...addedLines[row.case_id]] }
-      : row
-  );
-  return { ...result, cases, rows, document_names: documentNames };
 }
 
 function truncate(text: string, max: number): string {
