@@ -648,10 +648,47 @@ def _limit_citation_scope(
             if not selected and not is_premise_id(claim.source_id):
                 claim = _not_supported(claim, "unassessed", "uncited_evidence", "支持に使った資料の本文と実際の出典を確認できません。")
             elif documents and any(str(node.get("evidence_id") or "") not in actual for node in documents):
-                claim = _not_supported(
-                    claim, "unassessed", "uncited_evidence", "実際に引用した資料の集合では、この主張の裏付けを確認できません。"
-                )
+                cited = _cited_same_content(claim, documents, [catalog[eid] for eid in actual if eid in catalog], actual)
+                if cited:
+                    # 監査が引用の外の同じ内容の根拠を選んだだけなら、引用の根拠で裏付けたとする（#174）。
+                    ids = [str(node.get("evidence_id") or "") for node in cited]
+                    claim = claim.model_copy(update={"evidence_id": ",".join(ids), "source_id": str(cited[0].get("id") or "")})
+                else:
+                    claim = _not_supported(
+                        claim, "unassessed", "uncited_evidence", "実際に引用した資料の集合では、この主張の裏付けを確認できません。"
+                    )
         result.append(claim)
+    return result
+
+
+def _cited_same_content(
+    claim: ValidationClaimCheck,
+    documents: Sequence[Mapping[str, Any]],
+    cited: Sequence[Mapping[str, Any]],
+    actual: Collection[str],
+) -> list[Mapping[str, Any]]:
+    """監査が選んだ根拠を、同じ内容を持つ段落の実際の引用の根拠に読み替える（#174）。
+
+    引用の外の根拠ごとに、監査が写した原文（無ければその根拠の本文）が、同じ文書（``source``）の引用の根拠の本文に
+    あれば、その引用の根拠に読み替える。同じ文書が別の chunk 集合・別の章で同じ原文を持つときの選び違いだけを救い、
+    別の文書・別の内容の根拠は読み替えない。読み替えられない根拠が 1 つでもあれば空を返す。
+    """
+    # ponytail: 短い原文（数値だけなど）も同じ文書の中なら一致とみなす。誤った読み替えが出たら原文の長さの下限を足す。
+    quote = _without_audit_notes(claim.support_quote)
+    result = [node for node in documents if str(node.get("evidence_id") or "") in actual]
+    for node in documents:
+        if str(node.get("evidence_id") or "") in actual:
+            continue
+        source = str(node.get("source") or "")
+        same = [item for item in cited if source and str(item.get("source") or "") == source and not is_premise_id(item.get("id"))]
+        content = quote or str(node.get("text") or "")
+        texts = [str(item.get("text") or "") for item in same]
+        matched = [item for item, text in zip(same, texts, strict=True) if quote_in_text(content, text)]
+        if not matched and same and quote_in_text(content, "\n".join(texts)):
+            matched = same
+        if not content or not matched:
+            return []
+        result += [item for item in matched if item not in result]
     return result
 
 

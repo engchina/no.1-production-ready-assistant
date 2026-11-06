@@ -176,3 +176,28 @@ def test_caller_citations_outside_the_evidence_or_the_passage_are_ignored(citati
     with patch("rag_engine.evaluation.answer_eval.parse_text_response", side_effect=_supported_by(FIRST, [])):
         result = validate_answer_claims("設定手順は？", OPERATION, evidence, None, caller_citations=[citation])
     assert result["claim_checks"][0]["status"] == "unassessed"
+
+
+@pytest.mark.parametrize(
+    ("cited_source", "cited_text", "status"),
+    [
+        ("a.pdf", f"前の説明。{OPERATION}次の説明。", "supported"),  # 同じ文書の別の chunk 集合が同じ原文を持つ
+        ("a.pdf", RELATED, "unassessed"),  # 同じ文書でも内容が違う
+        ("b.pdf", OPERATION, "unassessed"),  # 同じ原文でも別の文書
+    ],
+    ids=["same-content", "other-content", "other-document"],
+)
+def test_audit_choosing_uncited_chunk_with_the_same_content_keeps_the_citation(cited_source, cited_text, status):
+    # 監査が引用の外の同じ内容の chunk を選んでも、引用の根拠が同じ原文を持てば引用で裏付けたとする（#174）。
+    evidence = [{"id": FIRST, "source": cited_source, "text": cited_text}, {"id": SECOND, "source": "a.pdf", "text": OPERATION}]
+    citations = [{"start": 0, "end": len(OPERATION), "chunk_ids": [FIRST]}]
+    with patch("rag_engine.evaluation.answer_eval.parse_text_response", side_effect=_supported_by(SECOND, [])):
+        result = validate_answer_claims("設定手順は？", OPERATION, evidence, None, caller_citations=citations)
+    claim = result["claim_checks"][0]
+    assert claim["status"] == status
+    assert claim["audit_status"] in {"", "supported"}
+    if status == "supported":
+        assert claim["source_id"] == FIRST
+        assert not claim["support_check"]
+    else:
+        assert claim["support_check"] == "uncited_evidence"
