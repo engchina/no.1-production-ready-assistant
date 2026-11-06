@@ -52,7 +52,7 @@ from app.rag.vector_index_adapter import default_vector_index_build
 
 SCHEMA_NAME = "production-ready-rag-oracle-26ai"
 SCHEMA_VERSION = "3"
-MIGRATION_ARTIFACT_VERSION = "20261106_003"
+MIGRATION_ARTIFACT_VERSION = "20261106_004"
 VECTOR_CONTRACT = EMBEDDING_VECTOR_COLUMN_TYPE
 # 新しい環境の主検索索引の契約(作成の DDL と同じく、既定の検索精度の推奨ビルドから作る。#1990)。
 _DEFAULT_VECTOR_INDEX_BUILD = default_vector_index_build()
@@ -414,13 +414,6 @@ def oracle_schema_migration_sections() -> list[OracleSchemaSection]:
     )
     sections.append(
         OracleSchemaSection(
-            name="20261018_001_support_guide_embeddings",
-            table_name="rag_support_guide_embeddings",
-            sql=support_guide_embeddings_migration_sql(),
-        )
-    )
-    sections.append(
-        OracleSchemaSection(
             name="20261018_002_message_answer_notice",
             table_name="rag_messages",
             sql=answer_notice_column_migration_sql("RAG_MESSAGES"),
@@ -431,13 +424,6 @@ def oracle_schema_migration_sections() -> list[OracleSchemaSection]:
             name="20261018_003_answer_record_notice",
             table_name="rag_answer_records",
             sql=answer_notice_column_migration_sql("RAG_ANSWER_RECORDS"),
-        )
-    )
-    sections.append(
-        OracleSchemaSection(
-            name="20261018_004_support_guide_schema_v2",
-            table_name="rag_support_guides",
-            sql=support_guide_schema_v2_migration_sql(),
         )
     )
     sections.append(
@@ -652,6 +638,20 @@ END;
             ),
         )
     )
+    sections.append(
+        OracleSchemaSection(
+            name="20261106_004_reset_language_pack_releases",
+            table_name="rag_language_pack_releases",
+            sql=reset_language_pack_releases_sql(),
+            destructive_note=(
+                "言語資源の公開版・履歴・下書き（RAG_LANGUAGE_PACK_RELEASES・"
+                "RAG_LANGUAGE_PACK_STATE）の全行を削除し、取込の job と成果物の公開版の参照を"
+                "空にします。削除した項目を含む保存済みの版は照合に通らないためです。"
+                "次の起動で組み込みの値から公開版を作り直します。画面で変えた言語資源は失われるので、"
+                "必要なら適用前に同表を export してください。"
+            ),
+        )
+    )
     return sections
 
 
@@ -691,6 +691,27 @@ BEGIN
 END;
 /
 """.strip()
+
+
+def reset_language_pack_releases_sql() -> str:
+    """言語資源の公開版・下書きを消す。参照を先に空にし、何度当てても同じ結果になる（冪等）。"""
+    return """
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_LANGUAGE_PACK_RELEASES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'UPDATE rag_ingestion_jobs SET language_pack_release_id = NULL '
+            || 'WHERE language_pack_release_id IS NOT NULL';
+        EXECUTE IMMEDIATE 'UPDATE rag_chunk_sets SET language_pack_release_id = NULL '
+            || 'WHERE language_pack_release_id IS NOT NULL';
+        EXECUTE IMMEDIATE 'DELETE FROM rag_language_pack_state';
+        EXECUTE IMMEDIATE 'UPDATE rag_language_pack_releases '
+            || 'SET previous_id = NULL, restored_from = NULL';
+        EXECUTE IMMEDIATE 'DELETE FROM rag_language_pack_releases';
+    END IF;
+END;
+"""
 
 
 def retire_support_guides_sql() -> str:
@@ -1275,38 +1296,6 @@ END;
 /"""
 
 
-def support_guide_embeddings_migration_sql() -> str:
-    """適用済みの環境の履歴を保つ過去の migration（表は `20261105_001` が消す）。
-
-    基準の schema にこの表の親が無いので、親の表があるときだけ作る（古い環境の更新でも失敗しない）。
-    """
-    return """DECLARE
-    v_count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
-    IF v_count = 0 THEN
-        RETURN;
-    END IF;
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS';
-    IF v_count = 0 THEN
-        EXECUTE IMMEDIATE
-            'CREATE TABLE rag_support_guide_embeddings ( '
-            || 'guide_id         VARCHAR2(64) NOT NULL, '
-            || 'revision         NUMBER(19) NOT NULL, '
-            || 'model_id         VARCHAR2(256) NOT NULL, '
-            || 'dimension        NUMBER(10) NOT NULL, '
-            || 'examples_sha256  CHAR(64) NOT NULL, '
-            || 'vectors_json     CLOB NOT NULL, '
-            || 'created_at       TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL, '
-            || 'CONSTRAINT rag_support_guide_embeddings_pk PRIMARY KEY (guide_id, revision), '
-            || 'CONSTRAINT rag_support_guide_embeddings_rev_fk FOREIGN KEY (guide_id, revision) '
-            || 'REFERENCES rag_support_guide_revisions (guide_id, revision) ON DELETE CASCADE '
-            || ')';
-    END IF;
-END;
-/"""
-
-
 def message_attachments_migration_sql() -> str:
     """質問に添付したファイルの列（USER のメッセージの attachments_json）を無ければ足す（#2517）。
 
@@ -1340,30 +1329,6 @@ BEGIN
     IF v_count = 0 THEN
         EXECUTE IMMEDIATE 'ALTER TABLE {table_name.lower()} ADD (answer_notice CLOB)';
     END IF;
-END;
-/"""
-
-
-def support_guide_schema_v2_migration_sql() -> str:
-    """適用済みの環境の履歴を保つ過去の migration（表が無ければ何もしない。SQL は変えない）。"""
-    updates = (
-        ("RAG_SUPPORT_GUIDES", "rag_support_guides", "draft_json"),
-        ("RAG_SUPPORT_GUIDE_REVISIONS", "rag_support_guide_revisions", "content_json"),
-    )
-    blocks = "\n".join(
-        f"""    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = '{table}';
-    IF v_count > 0 THEN
-        EXECUTE IMMEDIATE q'[UPDATE {name} SET {column} = JSON_TRANSFORM({column}, """
-        f"""SET '$.schema_version' = 2) WHERE JSON_VALUE({column}, '$.schema_version' """
-        f"""RETURNING NUMBER) = 1]';
-    END IF;"""
-        for table, name, column in updates
-    )
-    return f"""DECLARE
-    v_count NUMBER;
-BEGIN
-{blocks}
-    COMMIT;
 END;
 /"""
 

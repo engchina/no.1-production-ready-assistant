@@ -1,6 +1,6 @@
 {
   "artifact_type": "migration",
-  "migration_artifact_version": "20261106_003",
+  "migration_artifact_version": "20261106_004",
   "migrations": [
     {
       "destructive": false,
@@ -459,13 +459,6 @@
     },
     {
       "destructive": false,
-      "name": "20261018_001_support_guide_embeddings",
-      "sha256": "370e54e1fe292538a8daebb507c74c877b065454e4353690ef1bc671728fde52",
-      "statement_count": 1,
-      "table_name": "rag_support_guide_embeddings"
-    },
-    {
-      "destructive": false,
       "name": "20261018_002_message_answer_notice",
       "sha256": "c93cbd8fd15160d2e2316560acd2b086ed4f88801b9986a6b0ee4bb468c18fb0",
       "statement_count": 1,
@@ -477,13 +470,6 @@
       "sha256": "00c0a955219d3e5dc2415e070be250beef86debdc8f5abeeecbf4b83b4004a0c",
       "statement_count": 1,
       "table_name": "rag_answer_records"
-    },
-    {
-      "destructive": false,
-      "name": "20261018_004_support_guide_schema_v2",
-      "sha256": "043e7304e0cb965acbfe529cd738b438609af2b1de98ad551f5c36794c2fca86",
-      "statement_count": 1,
-      "table_name": "rag_support_guides"
     },
     {
       "destructive": false,
@@ -624,10 +610,17 @@
       "sha256": "a0a9a0a1276ca05e75fdaf2cef5b43ad3fbc52281b07fe193bcbac097900a30b",
       "statement_count": 1,
       "table_name": "rag_support_guides"
+    },
+    {
+      "destructive": true,
+      "name": "20261106_004_reset_language_pack_releases",
+      "sha256": "92f47beb9aff7f06b96031b56744bdf5d8c76c45962867024f42fc3f5677a48b",
+      "statement_count": 1,
+      "table_name": "rag_language_pack_releases"
     }
   ],
   "schema_name": "production-ready-rag-oracle-26ai",
   "schema_version": "3",
-  "sha256": "6b616cb70bb01d4cd8352944029f14c8344f0738242990e301c680ee79eada1c",
-  "statement_count": 131
+  "sha256": "0c012b4a4f11b6a4e52a157c50e62552ae0a247f5e64edeef0b9a8df16489fc4",
+  "statement_count": 129
 }

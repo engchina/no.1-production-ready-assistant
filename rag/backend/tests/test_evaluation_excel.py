@@ -76,7 +76,6 @@ def test_template_has_headers_guide_examples_and_document_sheets() -> None:
         "標準回答",
         "必須の回答要点",
         "期待する応答の判断",
-        "回答の過程",
     ]
     # 見出しのセルに意味・必須か任意か・書き方を注記する（形式ごとの位置の書き方も短く）。
     assert "必須" in cases["A1"].comment.text
@@ -800,7 +799,6 @@ def test_template_examples_keep_all_six_case_columns_and_round_trip() -> None:
     rows = list(examples.iter_rows(min_row=2, values_only=True))
     assert any(row[4] for row in rows)
     assert {row[5] for row in rows if row[5]} == {"回答", "確認", "保留"}
-    assert any(row[6] for row in rows)
     assert not any("別名:" in str(value) for row in rows for value in row if value)
     for row in rows:
         cases.append([*row[:3], *row[4:]])
@@ -815,7 +813,6 @@ def test_template_examples_keep_all_six_case_columns_and_round_trip() -> None:
         "hold",
     }
     assert any(row.screen_lines for row in parsed.rows)
-    assert any(row.answer_process for row in parsed.rows)
     documents = [
         EvaluationDocumentRef(document_id=f"synthetic-{index}", file_name=name)
         for index, name in enumerate(
@@ -849,7 +846,6 @@ def test_template_guide_describes_current_metrics_and_unassessed_results() -> No
         "同じ六指標・閾値",
         "所要時間は設定や処理状況",
         "表示用に丸める前",
-        "入力しただけでは評価の期待に追加されません",
     ]:
         assert phrase in text
     assert "約 2 倍" not in text

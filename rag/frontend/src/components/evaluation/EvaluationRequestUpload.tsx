@@ -357,12 +357,6 @@ function EvaluationImportPreview({ rows, cases }: { rows: EvaluationImportRow[];
           header: t("evaluation.import.column.decision"),
           render: (row) => row.expected_response_decision ? t(`evaluation.decision.${row.expected_response_decision}`) : t("evaluation.metric.unassessed"),
         },
-        {
-          key: "answer_process",
-          header: t("evaluation.import.column.process"),
-          className: "min-w-[16rem] whitespace-pre-wrap break-words text-xs text-fg-muted",
-          render: row => row.answer_process || "—",
-        },
       ]}
     />
   );

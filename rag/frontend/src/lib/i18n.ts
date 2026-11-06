@@ -1228,10 +1228,6 @@ export const ja = {
   "settings.language.field.native_operation_words.help": "画像の根拠を選ぶとき、原文の操作の文とみなす語です（例: 入力、押、選択）。",
   "settings.language.field.grounding_stopwords": "根拠との重なりに数えない語",
   "settings.language.field.grounding_stopwords.help": "安全チェックで回答と根拠の重なりを数えるとき、数えない一般的な語です（例: 根拠、質問、です）。",
-  "settings.language.section.evaluation_process_cues": "回答の過程の見出し",
-  "settings.language.section.evaluation_process_cues.help": "品質評価のケースの「回答の過程」の文から期待の下書きを作るときに、節の見出しを見分ける語です。下書きを作るときだけ使います。",
-  "settings.language.field.process_headings": "見出しと項目",
-  "settings.language.field.process_headings.help": "「見出し=項目」で書きます。項目は steps（手順）・conditions（確認事項と分岐）・references（資料と頁）・search_terms（検索の語）・notes（補足）です（例: 回答の手順=steps）。",
   "settings.language.section.field_value_cues": "項目抽出の値の書き方",
   "settings.language.section.field_value_cues.help": "項目抽出で抜き出した はい / いいえ の値をそろえる語です。取込で使うので、変えたら文書を分割し直すと反映します。",
   "settings.language.field.true_values": "「はい」とみなす値",
@@ -3706,8 +3702,6 @@ export const ja = {
   "settings.answerPrompts.stage.application": "規則の当てはめ",
   "settings.answerPrompts.stage.application.condition":
     "生成後の LLM 監査が有効で、結論が中立のまま、質問の事実と引用で裏付けた規則があるときに補助の当てはめと監査を行います。生成時の applications は回答生成の指示で扱います",
-  "settings.answerPrompts.stage.evaluation_process_draft": "回答の過程から評価の期待の下書きを作る",
-  "settings.answerPrompts.stage.evaluation_process_draft.condition": "品質評価で「回答の過程」から期待の下書きを作るとき（行ごと）",
   "settings.answerPrompts.stage.evaluation": "回答の品質評価",
   "settings.answerPrompts.stage.evaluation.condition":
     "品質評価と保存した回答の評価。正確性・網羅性は標準回答や必須要点などの期待があるとき、忠実性は取得した根拠があるときに測ります",
@@ -4158,7 +4152,7 @@ export const ja = {
   "evaluation.suite.settingsLink": "設定で既定の基準を変更",
   "evaluation.suite.applied": "評価の基準",
   "evaluation.input.description":
-    "1 行に 1 つの質問を書いた Excel をアップロードします。列は「質問」「期待する根拠」「標準回答」「必須の回答要点」「期待する応答の判断」「回答の過程」で、質問だけが必須です。書き方はテンプレートの「記入の説明」、形式ごとの例は「記入例」のシートにあります。",
+    "1 行に 1 つの質問を書いた Excel をアップロードします。列は「質問」「期待する根拠」「標準回答」「必須の回答要点」「期待する応答の判断」で、質問だけが必須です。書き方はテンプレートの「記入の説明」、形式ごとの例は「記入例」のシートにあります。",
   "evaluation.knowledgeBaseScope.required": "評価する検索・回答プロファイルを 1 つ選んでください。",
   "evaluation.knowledgeBaseScope.emptySelection": "未選択です。評価するナレッジベースを選んでください。",
   "evaluation.conditions.title": "評価の条件",
@@ -4170,7 +4164,7 @@ export const ja = {
   "evaluation.import.dropzoneHint": ".xlsx・{rows} 行・{size}MB まで",
   "evaluation.import.template": "テンプレートをダウンロード",
   "evaluation.import.templateHint":
-    "列は「質問」「期待する根拠」「標準回答」「必須の回答要点」「期待する応答の判断」「回答の過程」の 6 つで、質問だけが必須です。期待する判断には回答・確認・保留を指定します。評価に必要な入力や根拠が不足する指標は「未評価」となり、合格を意味しません。検索・回答プロファイルを選んでからダウンロードすると、参照する文書の一覧（ファイル名・文書 ID）が入ります。",
+    "列は「質問」「期待する根拠」「標準回答」「必須の回答要点」「期待する応答の判断」の 5 つで、質問だけが必須です。期待する判断には回答・確認・保留を指定します。評価に必要な入力や根拠が不足する指標は「未評価」となり、合格を意味しません。検索・回答プロファイルを選んでからダウンロードすると、参照する文書の一覧（ファイル名・文書 ID）が入ります。",
   "evaluation.import.templateDone": "テンプレートをダウンロードしました。",
   "evaluation.import.templateError":
     "テンプレートをダウンロードできませんでした。時間をおいて、もう一度試してください。",
@@ -4362,26 +4356,7 @@ export const ja = {
   "evaluation.compare.tab.base": "主条件: {name}",
   "evaluation.compare.tab.compared": "検索・回答プロファイル: {name}",
   "evaluation.import.column.screens": "必須の回答要点",
-  "evaluation.import.column.process": "回答の過程",
   "evaluation.import.column.decision": "期待する応答の判断",
-  "evaluation.process.title": "回答の過程から作る期待の下書き",
-  "evaluation.process.description":
-    "「回答の過程」のある {count} 行から、期待する手順・触れるべき条件・必要な根拠（資料と頁）・受け入れる対応の下書きを作ります。下書きは保存しません。行ごとに確かめてから評価に使います。",
-  "evaluation.process.build": "期待の下書きを作る",
-  "evaluation.process.rebuild": "下書きを作り直す",
-  "evaluation.process.building": "期待の下書きを作っています（{done} / {total} 行）",
-  "evaluation.process.error": "期待の下書きを作れませんでした。時間をおいて、もう一度作ってください。",
-  "evaluation.process.tableLabel": "期待の下書き。スクロールできます。",
-  "evaluation.process.column.steps": "期待する手順",
-  "evaluation.process.column.conditions": "触れるべき条件",
-  "evaluation.process.column.evidence": "必要な根拠",
-  "evaluation.process.column.outcomes": "受け入れる対応",
-  "evaluation.process.column.warnings": "確認すること",
-  "evaluation.process.failed": "作れませんでした",
-  "evaluation.process.unresolved": "{name}（ナレッジベースに無い資料）",
-  "evaluation.process.confirm": "確かめた下書き {count} 行を評価に使う",
-  "evaluation.process.confirmHelp":
-    "オンにすると、下書きの手順・条件・根拠・対応を評価のケースに足して評価します。作れなかった行とナレッジベースに無い資料は足しません。",
 
 
   "status.UPLOADED": "ファイル準備待ち",

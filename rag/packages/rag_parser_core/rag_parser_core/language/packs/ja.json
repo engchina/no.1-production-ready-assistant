@@ -3209,27 +3209,6 @@
       "億=100000000"
     ]
   },
-  "evaluation_process_cues": {
-    "process_headings": [
-      "回答の手順=steps",
-      "回答手順=steps",
-      "手順=steps",
-      "必要な確認事項=conditions",
-      "確認事項=conditions",
-      "確認すること=conditions",
-      "検索する資料=references",
-      "参照する資料=references",
-      "根拠の頁=references",
-      "根拠のページ=references",
-      "資料=references",
-      "検索の語=search_terms",
-      "検索キーワード=search_terms",
-      "キーワード=search_terms",
-      "補足=notes",
-      "備考=notes",
-      "注意=notes"
-    ]
-  },
   "field_value_cues": {
     "true_values": [
       "true",

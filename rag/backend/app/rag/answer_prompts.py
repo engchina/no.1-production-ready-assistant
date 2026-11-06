@@ -227,15 +227,6 @@ PROMPT_STAGES: tuple[PromptStage, ...] = (
             ),
         ),
     ),
-    # 評価のケースの回答の過程から期待の下書きを作る(#2397)。
-    PromptStage(
-        "evaluation_process_draft",
-        "evaluation",
-        (
-            ("system", "app.rag.evaluation_process:PROCESS_DRAFT_SYSTEM_PROMPT"),
-            ("instruction", "app.rag.evaluation_process:PROCESS_DRAFT_PROMPT"),
-        ),
-    ),
     PromptStage(
         "evaluation",
         "evaluation",

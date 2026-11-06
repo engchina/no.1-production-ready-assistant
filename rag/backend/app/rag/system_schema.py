@@ -291,8 +291,8 @@ RETIRED_MANAGED_OBJECTS: tuple[tuple[str, str], ...] = (
     ("RAG_ENTITIES", "TABLE"),
     ("RAG_ENTITY_ALIASES", "TABLE"),
     ("RAG_ENTITY_CHUNKS", "TABLE"),
-    # 更新では migration `20261106_003_retire_support_guides` が消す。全再作成のためにここにも
-    # 載せる。
+    # 業務ガイドの表（#161 で削除）。更新では migration `20261106_003_retire_support_guides` が
+    # 消す。全再作成のためにここにも載せる。
     ("RAG_SUPPORT_GUIDES", "TABLE"),
     ("RAG_SUPPORT_GUIDE_REVISIONS", "TABLE"),
     ("RAG_SUPPORT_GUIDE_EMBEDDINGS", "TABLE"),

@@ -5,14 +5,11 @@ import {
   type EvaluationCaseResult,
   type EvaluationImportResult,
   type EvaluationJob,
-  type EvaluationProcessDraft,
 } from "@/lib/api";
 import { evaluationJobRefetchInterval } from "@/lib/queries";
 
 import {
-  applyProcessDrafts,
   buildEvaluationCaseLabels,
-  evaluationProcessRows,
   evaluationCaseRow,
   evaluationCaseRowLabel,
   evaluationEvidenceSummary,
@@ -137,88 +134,6 @@ describe("期待する根拠の照合の結果", () => {
     expect(evaluationEvidenceSummary(result({ status: "error" }), labels["row-2"])?.measured).toBe(false);
     expect(evaluationEvidenceSummary(result({}), labels["row-3"])).toBeNull();
     expect(evaluationEvidenceSummary(result({}), undefined)).toBeNull();
-  });
-});
-
-describe("process drafts (issue 2402)", () => {
-  const draft: EvaluationProcessDraft = {
-    case_id: "row-3",
-    row: 3,
-    required_answer_points: ["画面A"],
-    required_conditions: ["条件X"],
-    expected_outcomes: ["answered", "conditional"],
-    relevant_document_ids: ["doc-a", "doc-b"],
-    required_evidence: [
-      { id: "p1", document_id: "doc-a", page_start: 2, label: "資料A.pdf | p.2" },
-    ],
-    references: [
-      {
-        name: "資料A",
-        pages: "2",
-        section: "",
-        status: "resolved",
-        document_id: "doc-a",
-        file_name: "資料A.pdf",
-        candidates: [],
-      },
-      {
-        name: "資料B",
-        pages: "",
-        section: "",
-        status: "resolved",
-        document_id: "doc-b",
-        file_name: "資料B.pdf",
-        candidates: [],
-      },
-      {
-        name: "資料Z",
-        pages: "",
-        section: "",
-        status: "unresolved",
-        document_id: null,
-        file_name: null,
-        candidates: [],
-      },
-    ],
-    warnings: ["資料Z は無い"],
-    error: null,
-  };
-
-  it("merges explicit and confirmed points without losing either input",()=>{
-    const source={...IMPORT,cases:[{...IMPORT.cases[0],required_answer_points:["既存の要点","画面A"]}]};
-    expect(applyProcessDrafts(source,{[source.cases[0].id]:draft}).cases[0].required_answer_points).toEqual(["既存の要点","画面A"]);
-  });
-  it("lists rows with an answer process", () => {
-    const rows = [
-      { ...IMPORT.rows[0], answer_process: null },
-      { ...IMPORT.rows[1], answer_process: "【回答の手順】画面A" },
-    ];
-    expect(evaluationProcessRows({ rows })).toEqual([
-      { case_id: "row-3", row: 3, question: "社員食堂の来月の献立は？", answer_process: "【回答の手順】画面A" },
-    ]);
-  });
-
-  it("adds confirmed drafts to the cases and the evidence labels", () => {
-    const merged = applyProcessDrafts(IMPORT, {
-      "row-3": draft,
-      "row-2": { ...draft, case_id: "row-2", error: "失敗" },
-    });
-    const target = merged.cases.find((item) => item.id === "row-3");
-    expect(target).toMatchObject({
-      required_answer_points: ["画面A"],
-      required_conditions: ["条件X"],
-      expected_outcomes: ["answered", "conditional"],
-      relevant_document_ids: ["doc-a", "doc-b"],
-    });
-    expect(target?.required_evidence?.map((item) => item.id)).toEqual(["p1"]);
-    // 作れなかった下書きは足さない。
-    expect(merged.cases[0]).toBe(IMPORT.cases[0]);
-    // 結果の表の見出しに、足した根拠と資料が出る。
-    const labels = buildEvaluationCaseLabels(merged);
-    expect(labels["row-3"]?.evidence).toEqual([
-      { label: "資料A.pdf | p.2", documentId: "doc-a", evidenceId: "p1" },
-      { label: "資料B.pdf", documentId: "doc-b", evidenceId: null },
-    ]);
   });
 });
 

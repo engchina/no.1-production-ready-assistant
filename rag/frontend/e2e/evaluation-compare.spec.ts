@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "./fixtures/test";
+import { expect, test } from "./fixtures/test";
 
 import {
   chooseEvaluationProfile,
@@ -15,7 +15,7 @@ import {
 } from "./_helpers";
 
 /**
- * 品質評価の回答の過程の下書き・案内した画面の指標・検索・回答プロファイルの比較（#2402）。
+ * 品質評価の案内した画面の指標・検索・回答プロファイルの比較（#2402）。
  * 内容は合成の例（架空の画面・資料の名前）。
  */
 
@@ -71,9 +71,7 @@ test.beforeEach(async ({ page }) => {
   await mockEvaluationProfiles(page);
 });
 
-const PROCESS = "【回答の手順】\n1. 設定画面Aを開く\n【検索する資料】\n操作手順書A.pdf p.12-14";
-
-function importWithProcess() {
+function importWithScreens() {
   const base = evaluationImportResult();
   return evaluationImportResult({
     cases: [
@@ -81,57 +79,10 @@ function importWithProcess() {
       base.cases[1],
     ],
     rows: [
-      { ...base.rows[0], required_answer_points: ["設定画面A"], answer_process: PROCESS },
+      { ...base.rows[0], required_answer_points: ["設定画面A"] },
       base.rows[1],
     ],
   });
-}
-
-async function mockProcessDrafts(page: Page) {
-  const requests: Record<string, unknown>[] = [];
-  await page.route("**/api/evaluation/cases/process-drafts", async (route) => {
-    requests.push(route.request().postDataJSON() as Record<string, unknown>);
-    await route.fulfill({
-      json: envelope({
-        drafts: [
-          {
-            case_id: "row-2",
-            row: 2,
-            required_answer_points: ["設定画面A", "通知の設定"],
-            required_conditions: ["利用者が管理者か"],
-            expected_outcomes: ["answered", "conditional"],
-            relevant_document_ids: ["doc-a"],
-            required_evidence: [
-              { id: "p1", document_id: "doc-a", page_start: 12, page_end: 14, label: "操作手順書A.pdf | p.12-14" },
-            ],
-            references: [
-              {
-                name: "操作手順書A.pdf",
-                pages: "12-14",
-                section: "",
-                status: "resolved",
-                document_id: "doc-a",
-                file_name: "操作手順書A.pdf",
-                candidates: [],
-              },
-              {
-                name: "未登録の資料B",
-                pages: "3",
-                section: "",
-                status: "unresolved",
-                document_id: null,
-                file_name: null,
-                candidates: [],
-              },
-            ],
-            warnings: ["資料「未登録の資料B」は、ナレッジベースの文書にありません。"],
-            error: null,
-          },
-        ],
-      }),
-    });
-  });
-  return requests;
 }
 
 function caseResult(overrides: Record<string, unknown>) {
@@ -187,12 +138,11 @@ for (const viewport of [
   { name: "desktop", width: 1280, height: 760 },
   { name: "mobile", width: 375, height: 812 },
 ]) {
-  test(`回答の過程の下書きを確かめて足し、プロファイルと比べた結果と案内した画面を出す (${viewport.name})`, { tag: "@responsive" }, async ({
+  test(`プロファイルと比べた結果と案内した画面を出す (${viewport.name})`, { tag: "@responsive" }, async ({
     page,
   }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await mockEvaluationImport(page, () => importWithProcess());
-    const draftRequests = await mockProcessDrafts(page);
+    await mockEvaluationImport(page, () => importWithScreens());
     const jobs = await mockEvaluationJobs(page, {
       runResult: () => ({
         ...metrics(
@@ -234,23 +184,6 @@ for (const viewport of [
     // 案内すべき画面の列をプレビューに出す。
     await expect(page.getByTestId("evaluation-import-preview")).toContainText("設定画面A");
 
-    // 回答の過程の下書きを作り、確かめてから評価に使う。
-    const process = page.getByTestId("evaluation-process");
-    await expect(process).toContainText("「回答の過程」のある 1 行");
-    await process.getByRole("button", { name: "期待の下書きを作る" }).click();
-    const drafts = page.getByTestId("evaluation-process-table");
-    await expect(drafts).toContainText("通知の設定");
-    await expect(drafts).toContainText("操作手順書A.pdf | p.12-14");
-    await expect(drafts).toContainText("未登録の資料B（ナレッジベースに無い資料）");
-    expect(draftRequests[0]).toMatchObject({
-      knowledge_base_ids: ["kb-1"],
-      rows: [{ case_id: "row-2", row: 2, answer_process: PROCESS }],
-    });
-    const confirm = page.getByRole("switch", { name: "確かめた下書き 1 行を評価に使う" });
-    await expect(confirm).toHaveAttribute("aria-checked", "false");
-    await confirm.click();
-    await expect(confirm).toHaveAttribute("aria-checked", "true");
-
     // 検索・回答プロファイルでも流して比べる（オンにしてから選ぶ。未選択なら欄の直下に出す）。
     await page.getByRole("switch", { name: "別の検索・回答プロファイルでも評価して比較する" }).click();
     await page.getByRole("button", { name: "評価実行" }).click();
@@ -266,14 +199,7 @@ for (const viewport of [
       cases: Record<string, unknown>[];
     };
     expect(payload).toMatchObject({search_answer_profile_id: "profile-base", compare_search_answer_profile_id: "profile-1"});
-    expect(payload.cases[0]).toMatchObject({
-      required_answer_points: ["設定画面A", "通知の設定"],
-      required_conditions: ["利用者が管理者か"],
-    });
-    expect((payload.cases[0].required_evidence as { id: string }[]).map((item) => item.id)).toEqual([
-      "e1",
-      "p1",
-    ]);
+    expect(payload.cases[0]).toMatchObject({ required_answer_points: ["設定画面A"] });
 
     // 比べる表: 差はポイントと文言（色だけに頼らない）。低いほどよい指標は向きを逆にする。
     const table = page.getByTestId("evaluation-compare-table");
@@ -296,9 +222,8 @@ for (const viewport of [
   });
 }
 
-test("比べないときは比べる表とタブを出さず、下書きは使うとしたときだけ足す", async ({ page }) => {
-  await mockEvaluationImport(page, () => importWithProcess());
-  await mockProcessDrafts(page);
+test("比べないときは比べる表とタブを出さない", async ({ page }) => {
+  await mockEvaluationImport(page, () => importWithScreens());
   const jobs = await mockEvaluationJobs(page, {
     runResult: () => metrics({}, {}),
     autoComplete: true,
@@ -307,8 +232,6 @@ test("比べないときは比べる表とタブを出さず、下書きは使�
   await page.goto("/evaluation");
   await chooseEvaluationProfile(page);
   await uploadEvaluationExcel(page);
-  await page.getByTestId("evaluation-process").getByRole("button", { name: "期待の下書きを作る" }).click();
-  await expect(page.getByTestId("evaluation-process-table")).toContainText("通知の設定");
   await page.getByRole("button", { name: "評価実行" }).click();
 
   await expect.poll(() => jobs.runPayloads.length).toBe(1);
@@ -316,7 +239,6 @@ test("比べないときは比べる表とタブを出さず、下書きは使�
   expect(payload.search_answer_profile_id).toBe("profile-base");
   expect(payload).not.toHaveProperty("knowledge_base_ids");
   expect(payload).not.toHaveProperty("compare_search_answer_profile_id");
-  expect((payload.cases as Record<string, unknown>[])[0]).not.toHaveProperty("required_conditions");
   await expect(page.getByTestId("evaluation-perspective-retrieval")).toBeVisible();
   await expect(page.getByTestId("evaluation-compare-table")).toHaveCount(0);
   // 比べる結果のタブは出さない。

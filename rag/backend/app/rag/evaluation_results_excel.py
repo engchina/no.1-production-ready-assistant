@@ -89,7 +89,6 @@ def evaluation_results_xlsx(
                 "標準回答",
                 "必須の回答要点",
                 "期待する応答の判断",
-                "回答の過程",
                 *[label for _, _, label in METRICS],
                 "状態",
                 "失敗理由",
@@ -126,7 +125,6 @@ def evaluation_results_xlsx(
                         or "",
                         "未評価",
                     ),
-                    row.answer_process or "" if row else "",
                     *[
                         getattr(item, key) if getattr(item, key) is not None else "未評価"
                         for _, key, _ in METRICS
@@ -137,9 +135,9 @@ def evaluation_results_xlsx(
                     item.error_message or "",
                 ],
             )
-            for cell in sheet[sheet.max_row][7:13]:
+            for cell in sheet[sheet.max_row][6:12]:
                 cell.number_format = "0.0%"
-        _format(sheet, [24, 48, 40, 60, 40, 20, 60, *([20] * 6), 16, 36, 36, 48])
+        _format(sheet, [24, 48, 40, 60, 40, 20, *([20] * 6), 16, 36, 36, 48])
     _format(overview, [36, *([36] * len(groups))])
     for row in overview.iter_rows(min_row=3, min_col=2):
         for cell in row:

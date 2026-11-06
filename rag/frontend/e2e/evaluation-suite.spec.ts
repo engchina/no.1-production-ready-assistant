@@ -661,14 +661,13 @@ for (const viewport of [{name:"desktop",width:1280,height:900},{name:"mobile",wi
 }
 
 
-test("Excel の六列を全幅で表示し、長い 1 行も表の中で縦横スクロールする", { tag: "@responsive" }, async ({ page }, testInfo) => {
+test("Excel の五列を全幅で表示し、長い 1 行も表の中で縦横スクロールする", { tag: "@responsive" }, async ({ page }, testInfo) => {
   const evidence = Array.from({length:30}, (_, i) => ({id:`e-${i}`,document_id:"doc-a",label:`資料 A.pdf | p.${i+1}`,page_start:i+1}));
   const standard = "合成の標準回答です。\n".repeat(60) + "標準回答の末尾";
-  const process = "合成の回答手順です。\n".repeat(30) + "回答の過程の末尾";
   await mockEvaluationImport(page, () => evaluationImportResult({
     row_count:1,
     cases:[{id:"row-2",query:"合成の質問",relevant_document_ids:["doc-a"],required_evidence:evidence,standard_answer:standard}],
-    rows:[{row:2,case_id:"row-2",question:"合成の質問",evidence:evidence.map(e=>e.label),standard_answer_preview:"短いプレビュー",has_standard_answer:true,required_answer_points:["合成の要点"],expected_response_decision:"answer",answer_process:process}],
+    rows:[{row:2,case_id:"row-2",question:"合成の質問",evidence:evidence.map(e=>e.label),standard_answer_preview:"短いプレビュー",has_standard_answer:true,required_answer_points:["合成の要点"],expected_response_decision:"answer"}],
     document_names:{"doc-a":"資料 A.pdf"},
   }));
   const metrics = evaluationMetrics("standard");
@@ -678,11 +677,10 @@ test("Excel の六列を全幅で表示し、長い 1 行も表の中で縦横�
   await uploadEvaluationExcel(page);
   const preview=page.getByTestId("evaluation-import-preview");
   await expect(preview).toBeVisible();
-  for(const name of ["質問","期待する根拠","標準回答","必須の回答要点","期待する応答の判断","回答の過程"]) {
+  for(const name of ["質問","期待する根拠","標準回答","必須の回答要点","期待する応答の判断"]) {
     await expect(preview.getByRole("columnheader",{name,exact:true})).toBeAttached();
   }
   await expect(preview).toContainText("標準回答の末尾");
-  await expect(preview).toContainText("回答の過程の末尾");
   const uploadBox=await page.getByTestId("evaluation-request-upload").boundingBox();
   const formBox=await page.getByRole("form",{name:"評価の条件"}).boundingBox();
   expect(Math.abs((uploadBox?.width ?? 0)-(formBox?.width ?? 0))).toBeLessThanOrEqual(1);
@@ -696,7 +694,7 @@ test("Excel の六列を全幅で表示し、長い 1 行も表の中で縦横�
   };
   await checkBounds(preview);
   await expectNoPageOverflow(page);
-  await preview.screenshot({path:testInfo.outputPath("excel-six-columns.png")});
+  await preview.screenshot({path:testInfo.outputPath("excel-five-columns.png")});
   await page.getByRole("button",{name:"評価実行"}).click();
   const result=page.getByTestId("evaluation-case-scroll-region");
   await expect(result).toBeVisible();
@@ -716,6 +714,6 @@ test("Excel の六列を全幅で表示し、長い 1 行も表の中で縦横�
   await page.getByRole("button",{name:"Excel をダウンロード",exact:true}).click();
   expect((await downloaded).suggestedFilename()).toBe("evaluation_results.xlsx");
   expect(exportRequests[0]).toMatchObject({cases:[{query:"合成の質問",standard_answer:standard}],
-    rows:[{question:"合成の質問",answer_process:process}],profile_name:"プロファイル A"});
+    rows:[{question:"合成の質問"}],profile_name:"プロファイル A"});
 
 });

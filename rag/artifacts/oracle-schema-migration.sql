@@ -3299,33 +3299,6 @@ BEGIN
 END;
 /
 
--- migration: 20261018_001_support_guide_embeddings
-DECLARE
-    v_count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
-    IF v_count = 0 THEN
-        RETURN;
-    END IF;
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_EMBEDDINGS';
-    IF v_count = 0 THEN
-        EXECUTE IMMEDIATE
-            'CREATE TABLE rag_support_guide_embeddings ( '
-            || 'guide_id         VARCHAR2(64) NOT NULL, '
-            || 'revision         NUMBER(19) NOT NULL, '
-            || 'model_id         VARCHAR2(256) NOT NULL, '
-            || 'dimension        NUMBER(10) NOT NULL, '
-            || 'examples_sha256  CHAR(64) NOT NULL, '
-            || 'vectors_json     CLOB NOT NULL, '
-            || 'created_at       TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP NOT NULL, '
-            || 'CONSTRAINT rag_support_guide_embeddings_pk PRIMARY KEY (guide_id, revision), '
-            || 'CONSTRAINT rag_support_guide_embeddings_rev_fk FOREIGN KEY (guide_id, revision) '
-            || 'REFERENCES rag_support_guide_revisions (guide_id, revision) ON DELETE CASCADE '
-            || ')';
-    END IF;
-END;
-/
-
 -- migration: 20261018_002_message_answer_notice
 DECLARE
     v_count NUMBER;
@@ -3349,22 +3322,6 @@ BEGIN
     IF v_count = 0 THEN
         EXECUTE IMMEDIATE 'ALTER TABLE rag_answer_records ADD (answer_notice CLOB)';
     END IF;
-END;
-/
-
--- migration: 20261018_004_support_guide_schema_v2
-DECLARE
-    v_count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDES';
-    IF v_count > 0 THEN
-        EXECUTE IMMEDIATE q'[UPDATE rag_support_guides SET draft_json = JSON_TRANSFORM(draft_json, SET '$.schema_version' = 2) WHERE JSON_VALUE(draft_json, '$.schema_version' RETURNING NUMBER) = 1]';
-    END IF;
-    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDE_REVISIONS';
-    IF v_count > 0 THEN
-        EXECUTE IMMEDIATE q'[UPDATE rag_support_guide_revisions SET content_json = JSON_TRANSFORM(content_json, SET '$.schema_version' = 2) WHERE JSON_VALUE(content_json, '$.schema_version' RETURNING NUMBER) = 1]';
-    END IF;
-    COMMIT;
 END;
 /
 
@@ -4053,5 +4010,23 @@ BEGIN
     SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_SUPPORT_GUIDES';
     IF v_count > 0 THEN
         EXECUTE IMMEDIATE 'DROP TABLE rag_support_guides PURGE';
+    END IF;
+END;
+
+-- migration: 20261106_004_reset_language_pack_releases
+
+DECLARE
+    v_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO v_count FROM user_tables WHERE table_name = 'RAG_LANGUAGE_PACK_RELEASES';
+    IF v_count > 0 THEN
+        EXECUTE IMMEDIATE 'UPDATE rag_ingestion_jobs SET language_pack_release_id = NULL '
+            || 'WHERE language_pack_release_id IS NOT NULL';
+        EXECUTE IMMEDIATE 'UPDATE rag_chunk_sets SET language_pack_release_id = NULL '
+            || 'WHERE language_pack_release_id IS NOT NULL';
+        EXECUTE IMMEDIATE 'DELETE FROM rag_language_pack_state';
+        EXECUTE IMMEDIATE 'UPDATE rag_language_pack_releases '
+            || 'SET previous_id = NULL, restored_from = NULL';
+        EXECUTE IMMEDIATE 'DELETE FROM rag_language_pack_releases';
     END IF;
 END;
