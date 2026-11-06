@@ -167,7 +167,7 @@
     "run_config": {
       "schema_version": 1,
       "instructions": {
-        "static_sha256": "54141785cfb881e3f711d951eb76d4fea08ed02eaf8c7b95b361521e38987e74"
+        "static_sha256": "ec5bf652170b87847fe618d9a223f4e9ea45be34ab6e52392be59486df71e883"
       },
       "tools": {
         "sha256": "4b7c6b98eb942e7475a4923724c8bc7b9e8ea1b97e05fb9bdeeedead5624bc0b",
@@ -205,7 +205,7 @@
         "sha256": null
       },
       "sdk_version": "0.24.0",
-      "fingerprint": "8ffcb436a7282c65"
+      "fingerprint": "1595beb6c57df014"
     },
     "outcome": {
       "status": "completed",
