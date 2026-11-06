@@ -330,10 +330,10 @@ class _PersistedParserAdapterSettings(BaseModel):
     API key は持たない（RAG の backend/.env の `RAG_PARSER_*_API_KEY`）。
     """
 
-    # 既定エンジンは Docling(#286)。選択中の engine の flag だけを既定で有効にする。
+    # 既定エンジンは Docling(#286)。Docling と Unstructured の flag は既定で有効にする。
     adapter_backend: ParserAdapterBackend = DEFAULT_PARSER_ADAPTER_BACKEND
     docling_enabled: bool = True
-    unstructured_enabled: bool = False
+    unstructured_enabled: bool = True
 
     # 削除済みエンジンの項目(marker_enabled・mineru_enabled 等)と、画面から外した
     # docling_vision_enabled(#497。Vision の既定は backend/.env の RAG_VISION_ENABLED で
@@ -1829,10 +1829,10 @@ class Settings(
         ),
     )
     rag_parser_unstructured_enabled: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Unstructured adapter を有効化する。既定 backend ではないため既定で False"
-            "(画面で Unstructured を選ぶと有効になる)。選択時は parser-unstructured の起動が前提。"
+            "Unstructured adapter を有効化する（既定で True）。既定の backend は Docling のまま。"
+            "Unstructured を選んだときは parser-unstructured の起動が前提。"
         ),
     )
     rag_parser_docling_service_url: str = Field(

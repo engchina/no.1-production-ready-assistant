@@ -904,7 +904,10 @@ def test_parser_adapter_contract_cli_default_records_unreachable_parser_service(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """既定設定(Docling 選択)で parser サービスが無い通常実行は、記録だけで exit 0 にする。"""
+    """既定設定(Docling 選択)で parser サービスが無い通常実行は、記録だけで exit 0 にする。
+
+    Unstructured は既定で有効だが選んでいないので、検査せず ignored にする。
+    """
     output_path = tmp_path / "adapter-contract-default.json"
     monkeypatch.setattr(parser_adapter_contract_cli, "get_settings", lambda: Settings())
     _patch_service_health(monkeypatch, healthy=set())
@@ -920,7 +923,7 @@ def test_parser_adapter_contract_cli_default_records_unreachable_parser_service(
     assert docling[0]["status"] == "missing"
     assert docling[0]["blocking"] is False
     unstructured = [case for case in payload["cases"] if case["backend"] == "unstructured"]
-    assert unstructured[0]["status"] == "disabled"
+    assert unstructured[0]["status"] == "ignored"
     assert unstructured[0]["blocking"] is False
 
 
