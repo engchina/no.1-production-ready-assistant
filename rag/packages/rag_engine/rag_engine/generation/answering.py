@@ -3320,7 +3320,7 @@ def synthesize_grounded_answer(
     for entry in grounded.cited_entries(shown):
         if entry.span is None:
             continue
-        exact, _candidates = grounded.citation_children(entry.span, entry.item.quote)
+        exact, _candidates = grounded.citation_children(entry.span, entry.item.quote, citation_resolution=entry.citation_resolution)
         ids = exact or [entry.span["source_id"]]
         shown_ids.append((entry, ids))
         for used_id in ids:

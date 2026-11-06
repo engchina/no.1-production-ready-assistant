@@ -3952,13 +3952,36 @@ def _quote_ranges(quote: str, span: dict) -> list[tuple[int, int]]:
     return ranges
 
 
-def citation_children(span: dict | None, quote: str = "") -> tuple[list[str], list[str]]:
+def _citation_coordinate_ranges(span: Mapping[str, Any], proof: Mapping[str, Any]) -> list[tuple[int, int]]:
+    """抽出時の座標（同じ出典・根拠 ID・本文のときだけ）を、親の本文の中の範囲にする。引用の文字列は探さない。"""
+    text = str(span.get("text") or "")
+    base = span.get("start")
+    if (
+        not isinstance(base, int)
+        or isinstance(base, bool)
+        or proof.get("status") != "extracted"
+        or proof.get("source_id") != str(span.get("source_id") or "")
+        or proof.get("resolved_evidence_id") != str(span.get("evidence_id") or "")
+        or proof.get("content_sha256") != hashlib.sha256(text.encode()).hexdigest()
+    ):
+        return []
+    try:
+        start, end = int(proof["char_start"]), int(proof["char_end"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    return [(base + start, base + end)] if 0 <= start < end <= len(text) else []
+
+
+def citation_children(
+    span: dict | None, quote: str = "", *, citation_resolution: Mapping[str, Any] | None = None
+) -> tuple[list[str], list[str]]:
     """出典の根拠（span）のうち、引用を支える子の chunk の ID と、決まらないときの候補の子の ID（#2710）。
 
     根拠は親の範囲（``source_id``）で、親の中の子は ``child_ranges``（子の ID と親の本文の中の範囲）に持つ。
     引用の位置に重なる子を、引用を支える子にする（確定）。引用の位置が決まらず、根拠の範囲が 1 つの子に
     収まらなければ、根拠の範囲に重なる子を候補に返し、どれかを確定の位置にしない。子の範囲を持たない根拠は、
     所属の照合で決まった子（``scope_source_ids``）だけを確定にする。
+    引用の位置は、抽出時の座標（``citation_resolution``）があればそれで決め、無いときだけ引用の文字列で探す。
     """
     if not span:
         return [], []
@@ -3966,7 +3989,7 @@ def citation_children(span: dict | None, quote: str = "") -> tuple[list[str], li
     ranges = [item for item in span.get("child_ranges") or () if isinstance(item, Mapping) and item.get("id")]
     if not ranges:
         return scoped, []
-    if located := _quote_ranges(quote, span):
+    if located := _citation_coordinate_ranges(span, citation_resolution or {}) or _quote_ranges(quote, span):
         hits = [str(item["id"]) for item in ranges if any(item["start"] < end and start < item["end"] for start, end in located)]
         # 引用が子の外（親だけにある前置きなど）にあれば、親の範囲の参照のまま（候補も無い）。
         return (list(dict.fromkeys(hits)), []) if hits else (scoped, [])
@@ -3994,7 +4017,7 @@ def citation_line_ref(entries: Sequence[CheckedItem]) -> dict[str, Any]:
     exact: list[str] = []
     candidates: list[str] = []
     for entry in entries:
-        ids, options = citation_children(entry.span, entry.item.quote)
+        ids, options = citation_children(entry.span, entry.item.quote, citation_resolution=entry.citation_resolution)
         exact.extend(ids)
         candidates.extend(options)
     exact = list(dict.fromkeys(exact))
